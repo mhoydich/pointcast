@@ -1,0 +1,326 @@
+---
+import type { KennelTodayPayload } from '../lib/kennel-today';
+
+interface NewsItem {
+  label: string;
+  line: string;
+  link: string;
+  date: string;
+}
+
+interface Props {
+  today: KennelTodayPayload;
+  news: NewsItem[];
+}
+
+const { today, news } = Astro.props;
+const displayDate = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date(`${today.date}T12:00:00-07:00`));
+---
+
+<section class="front-desk" data-front-door-desk aria-labelledby="front-desk-title">
+  <template data-director-desk-template>
+    <section class="director-desk" aria-labelledby="director-desk-title">
+      <div class="director-desk__head">
+        <div>
+          <p class="front-desk__kicker">Private · chain + registry + town operations</p>
+          <h2 id="director-desk-title">Director’s desk</h2>
+          <p>What needs Mike’s signature now. Chain rows clear themselves after the next 60-second read.</p>
+        </div>
+        <span class="director-desk__count" data-director-count></span>
+      </div>
+      <ol class="director-desk__rows" data-director-rows></ol>
+    </section>
+  </template>
+
+  <div class="front-desk__hero">
+    <figure class="front-desk__plate">
+      <img
+        src={today.image.webp}
+        alt={today.alt}
+        width="1080"
+        height="1350"
+        fetchpriority="high"
+        decoding="async"
+        data-kennel-today="image"
+      />
+      <figcaption>
+        <span data-kennel-today="text" data-kennel-text="{date}">{displayDate}</span>
+        <span>Plate {String(today.day).padStart(2, '0')} / 30</span>
+      </figcaption>
+    </figure>
+
+    <div class="front-desk__copy">
+      <p class="front-desk__kicker">PointCast · CH.FD · today’s sitting · El Segundo</p>
+      <h1 id="front-desk-title">Today’s dog. <em data-kennel-today="text" data-kennel-text="{name} is sitting.">{today.name} is sitting.</em></h1>
+      <p class="front-desk__dek" data-kennel-today="text" data-kennel-text="{breed} · {title}">{today.breed} · {today.title}</p>
+
+      <div class="front-desk__start" aria-label="Start here">
+        <p class="front-desk__start-label">Start here</p>
+        <a class="front-desk__primary" href="/kennel-club" data-front-primary>Claim today’s dog — free</a>
+        <div class="front-desk__secondary">
+          <a href="/collect">Get a dog a day by email</a>
+          <a href="/me" data-front-handle>Claim a handle</a>
+          <a href="/x402">Agents: pay a penny</a>
+        </div>
+      </div>
+
+      <div class="front-desk__person" data-front-person hidden aria-live="polite">
+        <a href="/me" data-front-person-handle>claim your handle</a>
+        <span><b data-front-seals>0</b> seals</span>
+        <a href="/me" data-front-held hidden>held for you: 0 dogs → link a wallet</a>
+      </div>
+
+      <p class="front-desk__live" aria-live="polite">
+        <span class:list={["chip", today.live ? 'chip--live' : 'chip--pending']} data-front-live>{today.live ? 'claim door live' : 'checking the claim door'}</span>
+        <span data-front-count data-kennel-today="text" data-kennel-text="{claimed} free claims today · {remaining} left">{today.claimsClaimed === null ? 'free claim count checking' : `${today.claimsClaimed} free claims today · ${today.claimsRemaining} left`}</span>
+      </p>
+    </div>
+  </div>
+
+  <div class="front-desk__news" aria-labelledby="front-news-title">
+    <div class="front-desk__news-head">
+      <p class="front-desk__kicker">Changed since Sep 02</p>
+      <h2 id="front-news-title">New this week</h2>
+    </div>
+    <ol>
+      {news.map((item) => (
+        <li>
+          <a href={item.link}>
+            <span class="front-desk__news-label">{item.label}</span>
+            <span class="front-desk__news-line">{item.line}</span>
+            <time datetime={item.date}>{item.date.slice(5).replace('-', '.')}</time>
+          </a>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<script>
+  import { claimedToday, isDirector } from '../lib/front-door-desk';
+  import { hydrateKennelToday } from '../lib/kennel-today-client';
+
+  interface CollectMe {
+    collector?: { wallets?: string[] };
+    today?: { day?: number; name?: string };
+    claimedDays?: number[];
+    streak?: number;
+    handle?: { status?: string; handle?: string; href?: string; label?: string };
+    heldDogs?: number;
+    objects?: { sealsEarned?: number };
+  }
+
+  interface DirectorRow {
+    id: string;
+    what: string;
+    why: string;
+    href: string;
+    done: boolean;
+    value?: string;
+    state?: string;
+  }
+
+  const mountFrontDoorDesk = () => {
+    const root = document.querySelector<HTMLElement>('[data-front-door-desk]');
+    if (!root) return;
+
+    const previous = (window as typeof window & { __pcFrontDoorDesk?: AbortController }).__pcFrontDoorDesk;
+    previous?.abort();
+    const lifetime = new AbortController();
+    (window as typeof window & { __pcFrontDoorDesk?: AbortController }).__pcFrontDoorDesk = lifetime;
+    let request: AbortController | null = null;
+
+    const primary = root.querySelector<HTMLAnchorElement>('[data-front-primary]');
+    const handle = root.querySelector<HTMLAnchorElement>('[data-front-handle]');
+    const person = root.querySelector<HTMLElement>('[data-front-person]');
+
+    const resetVisitor = () => {
+      if (primary) primary.textContent = 'Claim today’s dog — free';
+      if (handle) {
+        handle.textContent = 'Claim a handle';
+        handle.href = '/me';
+      }
+      if (person) person.hidden = true;
+      root.querySelector('[data-director-desk]')?.remove();
+    };
+
+    const renderPerson = (collect: CollectMe) => {
+      const day = Number(collect.today?.day ?? 0);
+      const name = collect.today?.name ?? 'today’s dog';
+      const streak = Math.max(0, Number(collect.streak ?? 0));
+      if (primary) {
+        primary.textContent = claimedToday(collect.claimedDays, day)
+          ? `Claimed ✓ · streak ${streak}`
+          : `Claim ${name} (today)`;
+      }
+
+      const handleLabel = collect.handle?.status === 'claimed' && collect.handle.handle
+        ? `@${collect.handle.handle}`
+        : 'claim your handle';
+      const handleHref = collect.handle?.href ?? '/me';
+      const personHandle = root.querySelector<HTMLAnchorElement>('[data-front-person-handle]');
+      if (personHandle) {
+        personHandle.textContent = handleLabel;
+        personHandle.href = handleHref;
+      }
+      if (handle) {
+        handle.textContent = handleLabel;
+        handle.href = handleHref;
+      }
+      const seals = root.querySelector<HTMLElement>('[data-front-seals]');
+      if (seals) seals.textContent = String(Math.max(0, Number(collect.objects?.sealsEarned ?? 0)));
+      const held = root.querySelector<HTMLAnchorElement>('[data-front-held]');
+      if (held) {
+        const heldDogs = Math.max(0, Number(collect.heldDogs ?? 0));
+        const needsWallet = heldDogs > 0 && (collect.collector?.wallets?.length ?? 0) === 0;
+        held.textContent = `held for you: ${heldDogs} dogs → link a wallet`;
+        held.hidden = !needsWallet;
+      }
+      if (person) person.hidden = false;
+    };
+
+    const renderDirector = (rows: DirectorRow[]) => {
+      root.querySelector('[data-director-desk]')?.remove();
+      const template = root.querySelector<HTMLTemplateElement>('[data-director-desk-template]');
+      if (!template) return;
+      const fragment = template.content.cloneNode(true) as DocumentFragment;
+      const panel = fragment.querySelector<HTMLElement>('.director-desk');
+      panel?.setAttribute('data-director-desk', '');
+      const open = rows.filter((row) => !row.done);
+      const count = fragment.querySelector<HTMLElement>('[data-director-count]');
+      if (count) count.textContent = `${open.length} open`;
+      const list = fragment.querySelector<HTMLOListElement>('[data-director-rows]');
+      if (list) {
+        for (const row of rows) {
+          const item = document.createElement('li');
+          item.className = row.done ? 'is-done' : '';
+          const link = document.createElement('a');
+          link.href = row.href;
+          const mark = document.createElement('span');
+          mark.className = 'director-desk__mark';
+          mark.textContent = row.done ? 'done ✓' : row.state === 'unknown' ? 'check' : 'sign';
+          const copy = document.createElement('span');
+          const strong = document.createElement('strong');
+          strong.textContent = row.what;
+          const why = document.createElement('small');
+          why.textContent = row.value ? `${row.why} · ${row.value}` : row.why;
+          copy.append(strong, why);
+          link.append(mark, copy);
+          item.append(link);
+          list.append(item);
+        }
+      }
+      root.prepend(fragment);
+    };
+
+    const refresh = async () => {
+      request?.abort();
+      request = new AbortController();
+      const signal = request.signal;
+      resetVisitor();
+      hydrateKennelToday().catch(() => {});
+      try {
+        const sessionResponse = await fetch('/api/auth/session', { credentials: 'same-origin', signal });
+        if (!sessionResponse.ok) return;
+        const session = await sessionResponse.json();
+        const [stateResponse, collectResponse] = await Promise.all([
+          fetch('/api/me/state', { credentials: 'same-origin', signal }),
+          fetch('/api/collect/me', { credentials: 'same-origin', signal }),
+        ]);
+        if (stateResponse.ok) {
+          const state = await stateResponse.json();
+          root.dataset.meStateVersion = String(state.version ?? 'current');
+        }
+        if (collectResponse.ok) renderPerson(await collectResponse.json() as CollectMe);
+        if (isDirector(session)) {
+          const queueResponse = await fetch('/api/director/queue', { credentials: 'same-origin', signal });
+          if (queueResponse.ok) {
+            const queue = await queueResponse.json();
+            if (Array.isArray(queue.rows)) renderDirector(queue.rows as DirectorRow[]);
+          }
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) resetVisitor();
+      }
+    };
+
+    window.addEventListener('pc:auth-change', refresh, { signal: lifetime.signal });
+    refresh();
+  };
+
+  mountFrontDoorDesk();
+  document.addEventListener('astro:page-load', mountFrontDoorDesk);
+</script>
+
+<style>
+  .front-desk {
+    --desk-red: #8a2432;
+    margin-top: 16px;
+    border: 2px solid #111;
+    background: #fffdf6;
+    box-shadow: 9px 9px 0 var(--desk-red);
+  }
+  .front-desk__hero { display: grid; grid-template-columns: minmax(280px, .78fr) minmax(0, 1.22fr); min-height: 560px; }
+  .front-desk__plate { display: flex; flex-direction: column; margin: 0; border-right: 2px solid #111; background: #f2e8dd; }
+  .front-desk__plate img { display: block; width: 100%; height: 100%; min-height: 500px; object-fit: cover; object-position: center 38%; }
+  .front-desk__plate figcaption { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; border-top: 2px solid #111; background: #fff; font: 700 9px var(--pc-font-mono); letter-spacing: .11em; text-transform: uppercase; }
+  .front-desk__copy { display: flex; flex-direction: column; padding: clamp(26px, 4.5vw, 62px); }
+  .front-desk__kicker { margin: 0 0 14px; color: var(--desk-red); font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; }
+  .front-desk h1 { max-width: 11ch; margin: 0; font-size: clamp(46px, 6.3vw, 88px); font-weight: 780; line-height: .9; letter-spacing: -.065em; text-wrap: balance; }
+  .front-desk h1 em { display: block; color: var(--desk-red); font-style: normal; }
+  .front-desk__dek { margin: 20px 0 0; font-size: 16px; line-height: 1.45; }
+  .front-desk__start { margin-top: auto; padding-top: 30px; }
+  .front-desk__start-label { margin: 0 0 8px; font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; }
+  .front-desk__primary { display: block; width: fit-content; max-width: 100%; padding: 14px 18px; border: 2px solid #111; background: #111; color: #fff; font: 750 15px var(--pc-font-sans); }
+  .front-desk__primary:hover { background: var(--desk-red); border-color: var(--desk-red); color: #fff; }
+  .front-desk__secondary { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 12px; }
+  .front-desk__secondary a { font: 700 10px var(--pc-font-mono); letter-spacing: .04em; text-decoration: underline; text-underline-offset: 3px; }
+  .front-desk__person { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .front-desk__person[hidden] { display: none; }
+  .front-desk__person > * { padding: 6px 8px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; }
+  .front-desk__live { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 0; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #5f5e5a; }
+  .front-desk__news { display: grid; grid-template-columns: 180px minmax(0, 1fr); border-top: 2px solid #111; }
+  .front-desk__news-head { padding: 18px; border-right: 2px solid #111; }
+  .front-desk__news h2 { margin: 0; font-size: 25px; line-height: 1; letter-spacing: -.04em; }
+  .front-desk__news ol { display: grid; grid-template-columns: repeat(7, minmax(145px, 1fr)); margin: 0; padding: 0; overflow-x: auto; list-style: none; }
+  .front-desk__news li { min-width: 0; border-right: 1px solid rgba(0, 0, 0, .18); }
+  .front-desk__news li:last-child { border-right: 0; }
+  .front-desk__news a { display: flex; flex-direction: column; min-height: 132px; height: 100%; padding: 15px 13px 12px; }
+  .front-desk__news a:hover { background: #f7efe6; }
+  .front-desk__news-label { color: var(--desk-red); font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .front-desk__news-line { margin-top: 8px; font-size: 12px; line-height: 1.35; }
+  .front-desk__news time { margin-top: auto; padding-top: 12px; color: #5f5e5a; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; }
+  :global(.director-desk) { border-bottom: 2px solid #111; background: #eef4fa; }
+  :global(.director-desk__head) { display: flex; justify-content: space-between; gap: 18px; align-items: end; padding: 18px 20px; border-bottom: 1px solid rgba(0, 0, 0, .22); }
+  :global(.director-desk__head h2) { margin: 0; font-size: 29px; letter-spacing: -.04em; }
+  :global(.director-desk__head p:last-child) { max-width: 70ch; margin: 6px 0 0; font-size: 12px; }
+  :global(.director-desk__count) { flex: none; padding: 7px 9px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  :global(.director-desk__rows) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+  :global(.director-desk__rows li) { border-right: 1px solid rgba(0, 0, 0, .18); border-bottom: 1px solid rgba(0, 0, 0, .18); }
+  :global(.director-desk__rows a) { display: grid; grid-template-columns: 52px 1fr; gap: 12px; min-height: 82px; padding: 13px 15px; }
+  :global(.director-desk__rows a:hover) { background: #fff; }
+  :global(.director-desk__rows strong), :global(.director-desk__rows small) { display: block; }
+  :global(.director-desk__rows strong) { font-size: 13px; line-height: 1.25; }
+  :global(.director-desk__rows small) { margin-top: 5px; color: #5f5e5a; font-size: 10px; line-height: 1.35; }
+  :global(.director-desk__mark) { align-self: start; padding: 4px 5px; border: 1px solid #111; background: #fff; color: var(--desk-red); font: 700 8px var(--pc-font-mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+  :global(.director-desk__rows .is-done) { opacity: .55; }
+  @media (max-width: 880px) {
+    .front-desk__hero { grid-template-columns: 1fr; }
+    .front-desk__plate { border-right: 0; border-bottom: 2px solid #111; }
+    .front-desk__plate img { max-height: 620px; }
+    .front-desk__news { grid-template-columns: 1fr; }
+    .front-desk__news-head { border-right: 0; border-bottom: 1px solid rgba(0, 0, 0, .18); }
+  }
+  @media (max-width: 560px) {
+    .front-desk { box-shadow: 5px 5px 0 var(--desk-red); }
+    .front-desk__plate img { min-height: 390px; }
+    .front-desk__copy { padding: 26px 18px; }
+    .front-desk h1 { font-size: clamp(44px, 14vw, 64px); }
+    :global(.director-desk__rows) { grid-template-columns: 1fr; }
+    :global(.director-desk__head) { align-items: start; }
+  }
+</style>

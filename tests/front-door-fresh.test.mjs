@@ -17,11 +17,12 @@ test('the PointCast front door is a catalog of the whole town with stable discov
   assert.match(home, /import '\.\.\/styles\/home-shelf\.css'/);
   assert.doesNotMatch(layout, /NetworkFirst100Strip/);
 
-  // front door rebuilt 2026-09-01: the three "fresh-door" cards became twelve shelf sections in a fixed order.
+  // The September desk is additive: the whole-town twelve-shelf catalog remains below it in the same fixed order.
   const sections = ['HomePlayFirst', 'HomeStartHere', 'HomeGlance', 'HomeMagazineRack', 'HomeDrumUniverse', 'HomeRoomsShelf', 'HomeConstellation', 'HomeAgentDesk', 'HomeShipLog', 'HomeScoreboard', 'HomeWire', 'HomeBackCatalog'];
   const positions = sections.map((name) => home.indexOf(`<${name}`, home.indexOf('<BlockLayout')));
   assert.ok(positions.every((p) => p > -1), `every section renders: ${sections.filter((_, i) => positions[i] === -1).join(', ')}`);
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'sections render in the documented order');
+  assert.ok(home.indexOf('<HomeFrontDoorDesk') < positions[0], 'the new role-aware desk sits above the unchanged town shelves');
   assert.match(home, /href="\/now"/);
   assert.match(home, /href(?:="|: ')\/win95-games["']/);
   assert.match(home, /href(?:="|: ')\/network-el-segundo["']/);
@@ -89,11 +90,9 @@ test('the Saturday field paper leads with the complete Division I atlas and keep
   assert.match(edition, /Build a Follow Shelf/);
   assert.doesNotMatch(edition, /qwen/i);
 
-  const socialMetadataRewrite = middleware.slice(
-    middleware.indexOf('.on(\'meta[property="og:title"]'),
-    middleware.indexOf('.on(\'[data-today-signal]\''),
-  );
-  assert.equal((socialMetadataRewrite.match(/if \(archived\) return;/g) ?? []).length, 5);
+  assert.match(middleware, /injectTodayDogMetadata/);
+  assert.match(middleware, /https:\/\/pointcast\.xyz\/og\/kennel-club\/today\.png/);
+  assert.match(middleware, /X-PointCast-Today-Dog/);
 });
 
 test('the current field edition gives the living magazine, Tone Bloom, Beach Commons, and the future book real homepage weight', async () => {
@@ -147,20 +146,21 @@ test('the freshness slot still feeds /now.json, and the front door links the twi
 });
 
 test('the fresh front door is responsive, accessible, and motion-safe by construction', async () => {
-  const [home, edition, play, shelf, css] = await Promise.all([
+  const [home, edition, desk, play, shelf, css] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
+    read('src/components/HomeFrontDoorDesk.astro'),
     read('src/components/HomePlayFirst.astro'),
     read('src/styles/home-shelf.css'),
     read('src/styles/front-door-fresh.css'),
   ]);
 
-  // front door rebuilt 2026-09-01: HomePlayFirst carries the page's only <h1>; index.astro itself has none.
+  // September's role-aware desk carries the page's only h1; Rosebud remains a labelled h2 shelf below it.
   assert.equal((home.match(/<h1\b/g) ?? []).length, 0);
-  assert.equal(((home + play).match(/<h1\b/g) ?? []).length, 1);
+  assert.equal(((home + desk + play).match(/<h1\b/g) ?? []).length, 1);
   assert.match(edition, /id="home-edition-title"/);
   assert.match(play, /aria-labelledby="play-title"/);
-  assert.match(play, /<h1 class="play__title" id="play-title"/);
+  assert.match(play, /<h2 class="play__title" id="play-title"/);
   assert.match(home, /aria-labelledby="channels-title"/);
   assert.match(home, /aria-label="PointCast channels"/);
   // front door rebuilt 2026-09-01: the signal tuner retired; the pads are a labelled group and the on-air line stays hidden until the booth answers.

@@ -4,7 +4,7 @@
  *
  * Output: public/images/og/
  *   ├── og-home-v2.png     (1200×630 legacy default; the wordmark + channel bar)
- *   ├── og-home-v4.png     (1200×630 the front door — used by / and BlockLayout's default; see og-home-card.mjs)
+ *   ├── og-home-v5.png     (1200×630 the September front door — used by / and BlockLayout's default; see og-home-card.mjs)
  *   └── b/{id}.png         (per-block card with channel color + title + Noun)
  *
  * We hand-roll SVG templates and let sharp rasterize to PNG. Satori would
@@ -1017,8 +1017,8 @@ async function main() {
   const publishedBlocks = (await fs.readdir(BLOCKS_DIR))
     .filter((f) => /^\d{4}\.json$/.test(f))
     .filter((f) => !JSON.parse(readFileSync(path.join(BLOCKS_DIR, f), 'utf8')).draft).length;
-  await svgToPng(homeCard({ blockCount: publishedBlocks }), path.join(OUT_DIR, 'og-home-v4.png'));
-  console.log(`  ✓ /images/og/og-home-v4.png (${publishedBlocks} blocks)`);
+  await svgToPng(homeCard({ blockCount: publishedBlocks }), path.join(OUT_DIR, 'og-home-v5.png'));
+  console.log(`  ✓ /images/og/og-home-v5.png (${publishedBlocks} blocks)`);
 
   console.log('[og] generating', PAGES.length, 'page cards...');
   for (const page of PAGES) {
