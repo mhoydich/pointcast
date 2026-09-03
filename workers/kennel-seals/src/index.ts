@@ -5,10 +5,20 @@ import contracts from '../../../src/data/contracts.json';
 import KENNEL_CLUB from '../../../src/data/kennel-club-september-sitting.json';
 
 const SHOWED_UP_KIND = 'showed-up';
+const STREAK_7_KIND = 'streak-7';
+const COMPLETE_30_KIND = 'complete-30';
+const MILESTONE_KINDS = [STREAK_7_KIND, COMPLETE_30_KIND] as const;
 const OPERATION_HASH = /^o[1-9A-HJ-NP-Za-km-z]{50}$/;
 const TEZOS_ADDRESS = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
+const TEZOS_CONTRACT = /^KT1[1-9A-HJ-NP-Za-km-z]{33}$/;
 
-type SealEnv = Env & { SEAL_ISSUER_SECRET_KEY?: string };
+type SealEnv = Env & {
+  SEAL_ISSUER_SECRET_KEY?: string;
+  SEAL_CONTRACT_V2?: string;
+  SEAL_V1_FROZEN?: string;
+};
+type SealKind = typeof SHOWED_UP_KIND | typeof STREAK_7_KIND | typeof COMPLETE_30_KIND;
+type SealContractVersion = 'v1' | 'v2';
 type ReceiptStatus = 'pending_wallet' | 'pending' | 'submitting' | 'submitted' | 'attested' | 'failed';
 
 type ClaimReceiptRow = {
@@ -19,6 +29,7 @@ type ClaimReceiptRow = {
   identity_provider: string | null;
   identity_id: string | null;
   receipt_id: string | null;
+  receipt_kind: SealKind | null;
   receipt_status: ReceiptStatus | null;
   receipt_holder: string | null;
   receipt_op_hash: string | null;
@@ -29,10 +40,22 @@ type CollapsedClaim = {
   userId: string;
   tokenId: number;
   holder: string | null;
-  receiptId: string | null;
+  receipts: Partial<Record<SealKind, {
+    id: string;
+    status: ReceiptStatus;
+    holder: string | null;
+    opHash: string | null;
+  }>>;
+};
+
+type PlannedReceipt = {
+  claimId: string;
+  userId: string;
+  tokenId: number;
+  kind: SealKind;
+  evidence: string;
+  holder: string | null;
   receiptStatus: ReceiptStatus | null;
-  receiptHolder: string | null;
-  receiptOpHash: string | null;
 };
 
 type ReservedReceipt = {
@@ -40,7 +63,7 @@ type ReservedReceipt = {
   claim_id: string;
   user_id: string;
   token_id: number;
-  kind: typeof SHOWED_UP_KIND;
+  kind: SealKind;
   evidence: string;
   holder: string;
 };
@@ -51,19 +74,27 @@ export type SealAttestation = {
   userId: string;
   tokenId: number;
   holder: string;
-  kind: typeof SHOWED_UP_KIND;
+  kind: SealKind;
   evidence: string;
+  evidenceUri: string | null;
 };
 
 export interface SealChain {
   issuerAddress: string;
+  contractAddress: string;
+  version: SealContractVersion;
   attestBatch(
     attestations: SealAttestation[],
     onInjected: (opHash: string) => Promise<void>,
   ): Promise<{ opHash: string }>;
 }
 
-export type SealChainFactory = (secretKey: string, rpc: string) => Promise<SealChain>;
+export type SealChainFactory = (
+  secretKey: string,
+  rpc: string,
+  contractAddress: string,
+  version: SealContractVersion,
+) => Promise<SealChain>;
 
 export type SealRunResult = {
   ok: boolean;
@@ -78,7 +109,12 @@ export type SealRunResult = {
   submitted: number;
   failed: number;
   opHash?: string;
+  opHashes?: Partial<Record<SealContractVersion, string>>;
   reason?: string;
+  contracts: {
+    v1: { address: string; enabled: boolean; frozen: boolean; attempted: number; attested: number };
+    v2: { address: string | null; enabled: boolean; attempted: number; attested: number };
+  };
 };
 
 function log(event: Record<string, unknown>): void {
@@ -142,13 +178,18 @@ export function collapseClaims(rows: ClaimReceiptRow[]): CollapsedClaim[] {
       userId: row.user_id,
       tokenId: Number(row.token_id),
       holder: null,
-      receiptId: row.receipt_id,
-      receiptStatus: row.receipt_status,
-      receiptHolder: row.receipt_holder,
-      receiptOpHash: row.receipt_op_hash,
+      receipts: {},
     };
     if (!existing.holder && isTezosIdentity(row.identity_provider, row.identity_id)) {
       existing.holder = row.identity_id;
+    }
+    if (row.receipt_id && row.receipt_kind && row.receipt_status) {
+      existing.receipts[row.receipt_kind] = {
+        id: row.receipt_id,
+        status: row.receipt_status,
+        holder: row.receipt_holder,
+        opHash: row.receipt_op_hash,
+      };
     }
     claims.set(row.claim_id, existing);
   }
@@ -159,27 +200,97 @@ function evidenceFor(claim: Pick<CollapsedClaim, 'tokenId' | 'claimId'>): string
   return `sitting:${String(claim.tokenId + 1).padStart(2, '0')} claim:${claim.claimId}`;
 }
 
+export function planReceipts(
+  claims: CollapsedClaim[],
+  options: { includeShowedUp: boolean; includeMilestones: boolean },
+): PlannedReceipt[] {
+  const planned: PlannedReceipt[] = [];
+  if (options.includeShowedUp) {
+    for (const claim of claims) {
+      planned.push({
+        claimId: claim.claimId,
+        userId: claim.userId,
+        tokenId: claim.tokenId,
+        holder: claim.holder,
+        kind: SHOWED_UP_KIND,
+        evidence: evidenceFor(claim),
+        receiptStatus: claim.receipts[SHOWED_UP_KIND]?.status ?? null,
+      });
+    }
+  }
+  if (!options.includeMilestones) return planned;
+
+  const byUser = new Map<string, CollapsedClaim[]>();
+  for (const claim of claims) {
+    const userClaims = byUser.get(claim.userId) ?? [];
+    userClaims.push(claim);
+    byUser.set(claim.userId, userClaims);
+  }
+  for (const userClaims of byUser.values()) {
+    const byTokenId = new Map<number, CollapsedClaim>();
+    for (const claim of userClaims) {
+      if (!byTokenId.has(claim.tokenId)) byTokenId.set(claim.tokenId, claim);
+    }
+    const ordered = [...byTokenId.values()].sort((a, b) => a.tokenId - b.tokenId);
+    let run = 0;
+    let previous = -2;
+    let streakClaim: CollapsedClaim | null = null;
+    for (const claim of ordered) {
+      run = claim.tokenId === previous + 1 ? run + 1 : 1;
+      previous = claim.tokenId;
+      if (run >= 7) {
+        streakClaim = claim;
+        break;
+      }
+    }
+    if (streakClaim) {
+      planned.push({
+        claimId: streakClaim.claimId,
+        userId: streakClaim.userId,
+        tokenId: streakClaim.tokenId,
+        holder: streakClaim.holder,
+        kind: STREAK_7_KIND,
+        evidence: `kennel-club streak:7 through-sitting:${String(streakClaim.tokenId + 1).padStart(2, '0')}`,
+        receiptStatus: streakClaim.receipts[STREAK_7_KIND]?.status ?? null,
+      });
+    }
+    if (ordered.length === 30 && ordered.every((claim, index) => claim.tokenId === index)) {
+      const completeClaim = ordered[29]!;
+      planned.push({
+        claimId: completeClaim.claimId,
+        userId: completeClaim.userId,
+        tokenId: completeClaim.tokenId,
+        holder: completeClaim.holder,
+        kind: COMPLETE_30_KIND,
+        evidence: 'kennel-club complete:30',
+        receiptStatus: completeClaim.receipts[COMPLETE_30_KIND]?.status ?? null,
+      });
+    }
+  }
+  return planned;
+}
+
 async function readClaims(db: D1Database, throughTokenId: number): Promise<CollapsedClaim[]> {
   const result = await db.prepare(`
     SELECT c.id AS claim_id, c.user_id, c.token_id, c.status AS claim_status,
            i.provider AS identity_provider, i.id AS identity_id,
-           r.id AS receipt_id, r.status AS receipt_status,
+           r.id AS receipt_id, r.kind AS receipt_kind, r.status AS receipt_status,
            r.holder AS receipt_holder, r.op_hash AS receipt_op_hash
     FROM claims c
     LEFT JOIN identities i ON i.user_id = c.user_id
-    LEFT JOIN seal_receipts r ON r.claim_id = c.id AND r.kind = 'showed-up'
+    LEFT JOIN seal_receipts r ON r.claim_id = c.id
     WHERE c.status IN ('held', 'delivered') AND c.token_id <= ?
     ORDER BY c.token_id, c.id, json_extract(i.payload, '$.verifiedAt') DESC, i.rowid DESC
   `).bind(throughTokenId).all<ClaimReceiptRow>();
   return collapseClaims(result.results ?? []);
 }
 
-async function stageReceipts(db: D1Database, claims: CollapsedClaim[], now: string): Promise<void> {
-  if (!claims.length) return;
-  const statements = claims.map((claim) => db.prepare(`
+async function stageReceipts(db: D1Database, receipts: PlannedReceipt[], now: string): Promise<void> {
+  if (!receipts.length) return;
+  const statements = receipts.map((receipt) => db.prepare(`
     INSERT INTO seal_receipts
       (id, claim_id, user_id, token_id, kind, evidence, status, holder, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'showed-up', ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(claim_id, kind) DO UPDATE SET
       holder = COALESCE(excluded.holder, seal_receipts.holder),
       evidence = excluded.evidence,
@@ -190,13 +301,14 @@ async function stageReceipts(db: D1Database, claims: CollapsedClaim[], now: stri
       END,
       updated_at = excluded.updated_at
   `).bind(
-    `seal:${claim.claimId}:${SHOWED_UP_KIND}`,
-    claim.claimId,
-    claim.userId,
-    claim.tokenId,
-    evidenceFor(claim),
-    claim.holder ? 'pending' : 'pending_wallet',
-    claim.holder,
+    `seal:${receipt.claimId}:${receipt.kind}`,
+    receipt.claimId,
+    receipt.userId,
+    receipt.tokenId,
+    receipt.kind,
+    receipt.evidence,
+    receipt.holder ? 'pending' : 'pending_wallet',
+    receipt.holder,
     now,
     now,
   ));
@@ -205,20 +317,20 @@ async function stageReceipts(db: D1Database, claims: CollapsedClaim[], now: stri
 
 async function reserveReceipts(
   db: D1Database,
-  claims: CollapsedClaim[],
+  receipts: PlannedReceipt[],
   runId: string,
   now: string,
 ): Promise<ReservedReceipt[]> {
   const reserved: ReservedReceipt[] = [];
-  for (const claim of claims) {
-    if (!claim.holder) continue;
+  for (const receipt of receipts) {
+    if (!receipt.holder) continue;
     const row = await db.prepare(`
       UPDATE seal_receipts
       SET status = 'submitting', holder = ?, run_id = ?, error = NULL, updated_at = ?
-      WHERE claim_id = ? AND kind = 'showed-up'
+      WHERE claim_id = ? AND kind = ?
         AND status IN ('pending', 'pending_wallet', 'failed')
       RETURNING id, claim_id, user_id, token_id, kind, evidence, holder
-    `).bind(claim.holder, runId, now, claim.claimId).first<ReservedReceipt>();
+    `).bind(receipt.holder, runId, now, receipt.claimId, receipt.kind).first<ReservedReceipt>();
     if (row) reserved.push(row);
   }
   return reserved;
@@ -273,26 +385,48 @@ function operationHash(operation: { hash?: string; opHash?: string }): string {
   return hash;
 }
 
-export async function createTaquitoSealChain(secretKey: string, rpc: string): Promise<SealChain> {
+export async function createTaquitoSealChain(
+  secretKey: string,
+  rpc: string,
+  contractAddress: string,
+  version: SealContractVersion,
+): Promise<SealChain> {
+  if (!TEZOS_CONTRACT.test(contractAddress)) throw new Error('invalid-seal-contract');
   const signer = await InMemorySigner.fromSecretKey(secretKey);
   const issuerAddress = await signer.publicKeyHash();
   const tezos = new TezosToolkit(rpc);
   tezos.setProvider({ signer });
-  const contract = await tezos.contract.at(contracts.seal_soulbound.mainnet);
+  const contract = await tezos.contract.at(contractAddress);
   const methodsObject = contract.methodsObject;
-  if (typeof methodsObject.attest !== 'function') throw new Error('attest-entrypoint-missing');
+  if (version === 'v1' && typeof methodsObject.attest !== 'function') {
+    throw new Error('attest-entrypoint-missing');
+  }
+  if (version === 'v2' && typeof methodsObject.attest_batch !== 'function') {
+    throw new Error('attest-batch-entrypoint-missing');
+  }
   return {
     issuerAddress,
+    contractAddress,
+    version,
     async attestBatch(attestations, onInjected) {
-      const batch = tezos.contract.batch();
-      for (const attestation of attestations) {
-        batch.withContractCall(methodsObject.attest!({
+      const operation = version === 'v1'
+        ? await (() => {
+          const batch = tezos.contract.batch();
+          for (const attestation of attestations) {
+            batch.withContractCall(methodsObject.attest!({
+              evidence: utf8Hex(attestation.evidence),
+              kind: utf8Hex(attestation.kind),
+              to_: attestation.holder,
+            }));
+          }
+          return batch.send();
+        })()
+        : await methodsObject.attest_batch!(attestations.map((attestation) => ({
           evidence: utf8Hex(attestation.evidence),
+          evidence_uri: attestation.evidenceUri ? utf8Hex(attestation.evidenceUri) : null,
           kind: utf8Hex(attestation.kind),
           to_: attestation.holder,
-        }));
-      }
-      const operation = await batch.send();
+        }))).send();
       const opHash = operationHash(operation);
       await onInjected(opHash);
       await operation.confirmation(1);
@@ -338,7 +472,11 @@ export async function runKennelSeals(
   const target = sealDay(clock);
   const dryRun = options.dryRun ?? String(env.SEAL_DRY_RUN) === 'true';
   const secretKey = env.SEAL_ISSUER_SECRET_KEY?.trim() ?? '';
-  const configured = Boolean(env.AUTH_DB && secretKey);
+  const v1Address = contracts.seal_soulbound.mainnet;
+  const v1Frozen = String(env.SEAL_V1_FROZEN) === '1';
+  const v2Address = env.SEAL_CONTRACT_V2?.trim() ?? '';
+  const v2Enabled = TEZOS_CONTRACT.test(v2Address);
+  const configured = Boolean(env.AUTH_DB && secretKey && (!v1Frozen || v2Enabled));
   const result: SealRunResult = {
     ok: true,
     day: target.day,
@@ -351,6 +489,10 @@ export async function runKennelSeals(
     attested: 0,
     submitted: 0,
     failed: 0,
+    contracts: {
+      v1: { address: v1Address, enabled: !v1Frozen, frozen: v1Frozen, attempted: 0, attested: 0 },
+      v2: { address: v2Enabled ? v2Address : null, enabled: v2Enabled, attempted: 0, attested: 0 },
+    },
   };
 
   if (!env.AUTH_DB) return { ...result, ok: false, reason: 'auth-db-not-configured' };
@@ -358,8 +500,16 @@ export async function runKennelSeals(
 
   const claims = await readClaims(env.AUTH_DB, target.throughTokenId);
   result.claims = claims.length;
-  result.pendingWallet = claims.filter((claim) => !claim.holder && !['submitted', 'attested'].includes(claim.receiptStatus ?? '')).length;
-  const candidates = claims.filter((claim) => claim.holder && !['submitting', 'submitted', 'attested'].includes(claim.receiptStatus ?? ''));
+  const planned = planReceipts(claims, {
+    includeShowedUp: !v1Frozen || v2Enabled,
+    includeMilestones: v2Enabled,
+  });
+  result.pendingWallet = planned.filter((receipt) => (
+    !receipt.holder && !['submitted', 'attested'].includes(receipt.receiptStatus ?? '')
+  )).length;
+  const candidates = planned.filter((receipt) => (
+    receipt.holder && !['submitting', 'submitted', 'attested'].includes(receipt.receiptStatus ?? '')
+  ));
   result.attempted = candidates.length;
   if (dryRun) {
     log({ message: 'kennel seals dry run complete', ...result });
@@ -367,67 +517,119 @@ export async function runKennelSeals(
   }
 
   const stagedAt = new Date().toISOString();
-  await stageReceipts(env.AUTH_DB, claims, stagedAt);
+  await stageReceipts(env.AUTH_DB, planned, stagedAt);
   if (!secretKey) return { ...result, ok: false, reason: 'seal-issuer-not-configured' };
   if (!candidates.length) return result;
 
-  let chain: SealChain;
-  try {
-    chain = await (options.chainFactory ?? createTaquitoSealChain)(secretKey, env.SEAL_RPC);
-  } catch (error) {
-    console.error(JSON.stringify({ message: 'kennel seals signer unavailable', error: errorMessage(error) }));
-    return { ...result, ok: false, failed: candidates.length, reason: 'seal-signer-unavailable' };
-  }
+  result.attempted = 0;
+  const failures: string[] = [];
+  const routes: Array<{
+    version: SealContractVersion;
+    address: string;
+    receipts: PlannedReceipt[];
+  }> = [
+    {
+      version: 'v1',
+      address: v1Address,
+      receipts: candidates.filter((receipt) => !v1Frozen && receipt.kind === SHOWED_UP_KIND),
+    },
+    {
+      version: 'v2',
+      address: v2Address,
+      receipts: candidates.filter((receipt) => (
+        receipt.kind !== SHOWED_UP_KIND || v1Frozen
+      )),
+    },
+  ];
 
-  const runId = `seals_${crypto.randomUUID().replaceAll('-', '')}`;
-  const reserved = await reserveReceipts(env.AUTH_DB, candidates, runId, new Date().toISOString());
-  result.attempted = reserved.length;
-  if (!reserved.length) return result;
-  const attestations = reserved.map((receipt) => ({
-    receiptId: receipt.id,
-    claimId: receipt.claim_id,
-    userId: receipt.user_id,
-    tokenId: Number(receipt.token_id),
-    holder: receipt.holder,
-    kind: SHOWED_UP_KIND,
-    evidence: receipt.evidence,
-  } satisfies SealAttestation));
-
-  let injectedHash = '';
-  try {
-    const operation = await chain.attestBatch(attestations, async (opHash) => {
-      injectedHash = opHash;
-      await markSubmitted(env.AUTH_DB, reserved, runId, opHash, new Date().toISOString());
-      result.submitted = reserved.length;
-    });
-    await markAttested(env.AUTH_DB, reserved, runId, operation.opHash, new Date().toISOString());
-    result.opHash = operation.opHash;
-    result.attested = reserved.length;
-    result.submitted = 0;
-    await publishSealBurst(env, result);
-    log({
-      message: 'kennel seals complete',
-      issuer: chain.issuerAddress,
-      ...result,
-    });
-    return result;
-  } catch (error) {
-    const reason = injectedHash ? 'seal-confirmation-pending' : 'seal-batch-failed';
-    if (!injectedHash) {
-      await markFailed(env.AUTH_DB, reserved, runId, reason, new Date().toISOString());
-      result.failed = reserved.length;
-    } else {
-      result.opHash = injectedHash;
-      result.submitted = reserved.length;
+  for (const route of routes) {
+    if (!route.receipts.length) continue;
+    let chain: SealChain;
+    try {
+      chain = await (options.chainFactory ?? createTaquitoSealChain)(
+        secretKey,
+        env.SEAL_RPC,
+        route.address,
+        route.version,
+      );
+    } catch (error) {
+      const reason = `seal-${route.version}-signer-unavailable`;
+      result.ok = false;
+      result.failed += route.receipts.length;
+      failures.push(reason);
+      console.error(JSON.stringify({ message: reason, error: errorMessage(error) }));
+      continue;
     }
-    console.error(JSON.stringify({
-      message: reason,
-      issuer: chain.issuerAddress,
-      opHash: injectedHash || undefined,
-      error: errorMessage(error),
-    }));
-    return { ...result, ok: false, reason };
+
+    const runId = `seals_${route.version}_${crypto.randomUUID().replaceAll('-', '')}`;
+    const reserved = await reserveReceipts(
+      env.AUTH_DB,
+      route.receipts,
+      runId,
+      new Date().toISOString(),
+    );
+    result.attempted += reserved.length;
+    result.contracts[route.version].attempted += reserved.length;
+    if (!reserved.length) continue;
+    const attestations = reserved.map((receipt) => ({
+      receiptId: receipt.id,
+      claimId: receipt.claim_id,
+      userId: receipt.user_id,
+      tokenId: Number(receipt.token_id),
+      holder: receipt.holder,
+      kind: receipt.kind,
+      evidence: receipt.evidence,
+      evidenceUri: null,
+    } satisfies SealAttestation));
+
+    let injectedHash = '';
+    try {
+      const operation = await chain.attestBatch(attestations, async (opHash) => {
+        injectedHash = opHash;
+        await markSubmitted(env.AUTH_DB, reserved, runId, opHash, new Date().toISOString());
+        result.submitted += reserved.length;
+      });
+      await markAttested(env.AUTH_DB, reserved, runId, operation.opHash, new Date().toISOString());
+      result.opHash ??= operation.opHash;
+      result.opHashes = { ...result.opHashes, [route.version]: operation.opHash };
+      result.attested += reserved.length;
+      result.contracts[route.version].attested += reserved.length;
+      result.submitted -= reserved.length;
+      log({
+        message: 'kennel seals contract complete',
+        issuer: chain.issuerAddress,
+        contract: chain.contractAddress,
+        version: chain.version,
+        count: reserved.length,
+        opHash: operation.opHash,
+      });
+    } catch (error) {
+      const reason = injectedHash
+        ? `seal-${route.version}-confirmation-pending`
+        : `seal-${route.version}-batch-failed`;
+      result.ok = false;
+      failures.push(reason);
+      if (!injectedHash) {
+        await markFailed(env.AUTH_DB, reserved, runId, reason, new Date().toISOString());
+        result.failed += reserved.length;
+      } else {
+        result.opHash ??= injectedHash;
+        result.opHashes = { ...result.opHashes, [route.version]: injectedHash };
+      }
+      console.error(JSON.stringify({
+        message: reason,
+        issuer: chain.issuerAddress,
+        contract: chain.contractAddress,
+        opHash: injectedHash || undefined,
+        error: errorMessage(error),
+      }));
+    }
   }
+
+  if (result.attested > 0) await publishSealBurst(env, result);
+  if (failures.length) result.reason = failures.join(',');
+  log({ message: 'kennel seals complete', ...result });
+  return result;
 }
 
 async function status(env: SealEnv): Promise<Response> {
@@ -444,18 +646,43 @@ async function status(env: SealEnv): Promise<Response> {
       // Status stays useful before migration 0005 is applied.
     }
   }
+  const v1Frozen = String(env.SEAL_V1_FROZEN) === '1';
+  const v2Address = env.SEAL_CONTRACT_V2?.trim() ?? '';
+  const v2Enabled = TEZOS_CONTRACT.test(v2Address);
   return Response.json({
     ok: true,
-    configured: Boolean(env.AUTH_DB && env.SEAL_ISSUER_SECRET_KEY?.trim()),
+    configured: Boolean(
+      env.AUTH_DB
+      && env.SEAL_ISSUER_SECRET_KEY?.trim()
+      && (!v1Frozen || v2Enabled)
+    ),
     migrationApplied,
     bindings: {
       authDb: Boolean(env.AUTH_DB),
       issuerSecret: Boolean(env.SEAL_ISSUER_SECRET_KEY?.trim()),
       presence: Boolean(env.PRESENCE_BUS),
+      sealContractV2: v2Enabled,
     },
-    contract: contracts.seal_soulbound.mainnet,
-    supportedKinds: [SHOWED_UP_KIND],
-    deferredKinds: ['streak-7', 'complete-30'],
+    contracts: {
+      v1: {
+        address: contracts.seal_soulbound.mainnet,
+        enabled: !v1Frozen,
+        frozen: v1Frozen,
+        kinds: [SHOWED_UP_KIND],
+      },
+      v2: {
+        address: v2Enabled ? v2Address : null,
+        enabled: v2Enabled,
+        kinds: [...(v1Frozen ? [SHOWED_UP_KIND] : []), ...MILESTONE_KINDS],
+      },
+    },
+    supportedKinds: [
+      ...(!v1Frozen ? [SHOWED_UP_KIND] : []),
+      ...(v2Enabled ? MILESTONE_KINDS : []),
+    ],
+    deferredKinds: v2Enabled
+      ? []
+      : [...(v1Frozen ? [SHOWED_UP_KIND] : []), ...MILESTONE_KINDS],
     cron: '15 7 * * *',
     timeZone: 'America/Los_Angeles',
     dryRun: String(env.SEAL_DRY_RUN) === 'true',
