@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 const root = new URL('../', import.meta.url);
 const WALLET_A = 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb';
 const WALLET_B = 'tz2CfwkUFqB9LYwhQ5zu6gH1hgbKYdNwmLQp';
+const V2_CONTRACT = 'KT1RJ6PbjHpwc3M5rw5s2Nbmefwbuwbdxton';
 const OP_HASH = `o${'1'.repeat(50)}`;
 
 async function withWorker(run) {
-  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
+  const server = await createServer({ root: fileURLToPath(root), configFile: false, appType: 'custom', logLevel: 'error' });
   try {
     const worker = await server.ssrLoadModule('/workers/kennel-seals/src/index.ts');
     return await run(worker);
@@ -37,20 +39,23 @@ class FakeD1Statement {
       for (const claim of db.claims.values()) {
         if (!['held', 'delivered'].includes(claim.status) || claim.token_id > Number(args[0])) continue;
         const identities = db.identities.filter((identity) => identity.user_id === claim.user_id);
-        const receipt = db.receipts.get(`${claim.id}:showed-up`) ?? null;
+        const receipts = [...db.receipts.values()].filter((receipt) => receipt.claim_id === claim.id);
         for (const identity of identities.length ? identities : [null]) {
-          rows.push({
-            claim_id: claim.id,
-            user_id: claim.user_id,
-            token_id: claim.token_id,
-            claim_status: claim.status,
-            identity_provider: identity?.provider ?? null,
-            identity_id: identity?.id ?? null,
-            receipt_id: receipt?.id ?? null,
-            receipt_status: receipt?.status ?? null,
-            receipt_holder: receipt?.holder ?? null,
-            receipt_op_hash: receipt?.op_hash ?? null,
-          });
+          for (const receipt of receipts.length ? receipts : [null]) {
+            rows.push({
+              claim_id: claim.id,
+              user_id: claim.user_id,
+              token_id: claim.token_id,
+              claim_status: claim.status,
+              identity_provider: identity?.provider ?? null,
+              identity_id: identity?.id ?? null,
+              receipt_id: receipt?.id ?? null,
+              receipt_kind: receipt?.kind ?? null,
+              receipt_status: receipt?.status ?? null,
+              receipt_holder: receipt?.holder ?? null,
+              receipt_op_hash: receipt?.op_hash ?? null,
+            });
+          }
         }
       }
       return { results: rows.sort((a, b) => a.token_id - b.token_id || a.claim_id.localeCompare(b.claim_id)) };
@@ -66,8 +71,8 @@ class FakeD1Statement {
   async first() {
     const { db, sql, args } = this;
     if (sql.startsWith("UPDATE seal_receipts SET status = 'submitting'")) {
-      const [holder, runId, updatedAt, claimId] = args;
-      const receipt = db.receipts.get(`${claimId}:showed-up`);
+      const [holder, runId, updatedAt, claimId, kind] = args;
+      const receipt = db.receipts.get(`${claimId}:${kind}`);
       if (!receipt || !['pending', 'pending_wallet', 'failed'].includes(receipt.status)) return null;
       Object.assign(receipt, { status: 'submitting', holder, run_id: runId, error: null, updated_at: updatedAt });
       return { ...receipt };
@@ -78,12 +83,12 @@ class FakeD1Statement {
   async run() {
     const { db, sql, args } = this;
     if (sql.startsWith('INSERT INTO seal_receipts')) {
-      const [id, claimId, userId, tokenId, evidence, status, holder, createdAt, updatedAt] = args;
-      const key = `${claimId}:showed-up`;
+      const [id, claimId, userId, tokenId, kind, evidence, status, holder, createdAt, updatedAt] = args;
+      const key = `${claimId}:${kind}`;
       const current = db.receipts.get(key);
       if (!current) {
         db.receipts.set(key, {
-          id, claim_id: claimId, user_id: userId, token_id: Number(tokenId), kind: 'showed-up',
+          id, claim_id: claimId, user_id: userId, token_id: Number(tokenId), kind,
           evidence, status, holder, op_hash: null, run_id: null, error: null,
           created_at: createdAt, updated_at: updatedAt, attested_at: null,
         });
@@ -144,9 +149,11 @@ class FakePresence {
 }
 
 class FakeTaquito {
-  constructor(mode = 'success') {
+  constructor(mode = 'success', version = 'v1', contractAddress = 'KT19DHCY5S9x48npRyAhUCM2SyLWZMNh3yQ1') {
     this.issuerAddress = 'tz1Rugft6gx3ZtSj8BUQSUnHEPbbUqVy7qXf';
     this.mode = mode;
+    this.version = version;
+    this.contractAddress = contractAddress;
     this.batches = [];
   }
 
@@ -159,13 +166,14 @@ class FakeTaquito {
   }
 }
 
-function env(db, presence = new FakePresence()) {
+function env(db, presence = new FakePresence(), overrides = {}) {
   return {
     AUTH_DB: db,
     PRESENCE_BUS: presence,
     SEAL_DRY_RUN: 'false',
     SEAL_RPC: 'https://mainnet.smartpy.io',
     SEAL_ISSUER_SECRET_KEY: 'unencrypted:fake',
+    ...overrides,
   };
 }
 
@@ -176,7 +184,7 @@ test('Los Angeles cron date, evidence bytes, and milestone helper are determinis
     });
     assert.equal(utf8Hex('showed-up'), '73686f7765642d7570');
   });
-  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
+  const server = await createServer({ root: fileURLToPath(root), configFile: false, appType: 'custom', logLevel: 'error' });
   try {
     const { longestClaimedStreak, nextSealAt } = await server.ssrLoadModule('/src/lib/collect-desk.ts');
     assert.equal(longestClaimedStreak([1, 2, 4, 5, 6, 7, 8, 9, 10]), 7);
@@ -257,7 +265,7 @@ test('dry run is read-only; failures before and after injection remain safely di
       now: new Date('2026-09-03T07:15:00Z'),
       chainFactory: async () => new FakeTaquito('before-injection'),
     });
-    assert.equal(failed.reason, 'seal-batch-failed');
+    assert.equal(failed.reason, 'seal-v1-batch-failed');
     assert.equal(failedDb.receipts.get('claim_failed:showed-up').status, 'failed');
 
     const submittedDb = new FakeD1();
@@ -267,7 +275,7 @@ test('dry run is read-only; failures before and after injection remain safely di
       now: new Date('2026-09-03T07:15:00Z'),
       chainFactory: async () => new FakeTaquito('after-injection'),
     });
-    assert.equal(submitted.reason, 'seal-confirmation-pending');
+    assert.equal(submitted.reason, 'seal-v1-confirmation-pending');
     assert.equal(submittedDb.receipts.get('claim_submitted:showed-up').status, 'submitted');
     assert.equal(submittedDb.receipts.get('claim_submitted:showed-up').op_hash, OP_HASH);
     const retryChain = new FakeTaquito();
@@ -280,12 +288,99 @@ test('dry run is read-only; failures before and after injection remain safely di
   });
 });
 
-test('migration, APIs, Worker config, presence bus, and immutable kind limitation are explicit', async () => {
-  const [migration, config, worker, contract, gateway, presence, decision, collectApi, holdingsApi, collectPage, mePage] = await Promise.all([
+test('v2 milestones route separately and freezing v1 moves showed-up writes to v2', async () => {
+  await withWorker(async ({ default: handler, runKennelSeals }) => {
+    const db = new FakeD1();
+    for (let tokenId = 0; tokenId < 30; tokenId += 1) {
+      db.addClaim(`claim_${tokenId}`, 'complete_user', tokenId);
+    }
+    db.link('complete_user', 'kukai', WALLET_A);
+    const chains = [];
+    const result = await runKennelSeals(env(db, new FakePresence(), {
+      SEAL_CONTRACT_V2: V2_CONTRACT,
+    }), {
+      now: new Date('2026-10-01T07:15:00Z'),
+      chainFactory: async (_secret, _rpc, address, version) => {
+        const chain = new FakeTaquito('success', version, address);
+        chains.push(chain);
+        return chain;
+      },
+    });
+    assert.equal(result.contracts.v1.attested, 30);
+    assert.equal(result.contracts.v2.attested, 2);
+    assert.deepEqual(chains.map((chain) => chain.version), ['v1', 'v2']);
+    assert.deepEqual(chains[1].batches[0].map(({ kind }) => kind), ['streak-7', 'complete-30']);
+    assert.equal(db.receipts.get('claim_6:streak-7').status, 'attested');
+    assert.equal(db.receipts.get('claim_29:complete-30').status, 'attested');
+
+    const frozenDb = new FakeD1();
+    for (let tokenId = 0; tokenId < 30; tokenId += 1) {
+      frozenDb.addClaim(`frozen_${tokenId}`, 'frozen_user', tokenId);
+    }
+    frozenDb.link('frozen_user', 'temple', WALLET_B);
+    const frozenChains = [];
+    const frozen = await runKennelSeals(env(frozenDb, new FakePresence(), {
+      SEAL_CONTRACT_V2: V2_CONTRACT,
+      SEAL_V1_FROZEN: '1',
+    }), {
+      now: new Date('2026-10-01T07:15:00Z'),
+      chainFactory: async (_secret, _rpc, address, version) => {
+        const chain = new FakeTaquito('success', version, address);
+        frozenChains.push(chain);
+        return chain;
+      },
+    });
+    assert.equal(frozen.contracts.v1.enabled, false);
+    assert.equal(frozen.contracts.v1.attested, 0);
+    assert.equal(frozen.contracts.v2.attested, 32);
+    assert.deepEqual(frozenChains.map((chain) => chain.version), ['v2']);
+    assert.equal([...frozenDb.receipts.values()].filter(({ kind }) => kind === 'showed-up').length, 30);
+    assert.equal([...frozenDb.receipts.values()].every(({ status }) => status === 'attested'), true);
+
+    const response = await handler.fetch(new Request('https://seals.test/status'), env(frozenDb, new FakePresence(), {
+      SEAL_CONTRACT_V2: V2_CONTRACT,
+      SEAL_V1_FROZEN: '1',
+    }));
+    const status = await response.json();
+    assert.deepEqual(status.contracts.v1, {
+      address: 'KT19DHCY5S9x48npRyAhUCM2SyLWZMNh3yQ1',
+      enabled: false,
+      frozen: true,
+      kinds: ['showed-up'],
+    });
+    assert.deepEqual(status.contracts.v2, {
+      address: V2_CONTRACT,
+      enabled: true,
+      kinds: ['showed-up', 'streak-7', 'complete-30'],
+    });
+  });
+});
+
+test('v2 origination prepares paused seeded storage and rejects ungated execution', async () => {
+  const { main, SEAL_V2_ADMIN, SEAL_V2_ISSUERS } = await import('../scripts/seal-v2-originate.mjs');
+  const prepared = await main([]);
+  assert.equal(prepared.executed, false);
+  assert.equal(prepared.prepared.admin, SEAL_V2_ADMIN);
+  assert.equal(prepared.prepared.paused, true);
+  const storage = JSON.stringify(prepared.storage);
+  for (const issuer of SEAL_V2_ISSUERS) assert.match(storage, new RegExp(issuer));
+  await assert.rejects(main(['--execute']), /Mainnet execution requires --confirm-mainnet/);
+  await assert.rejects(
+    main(['--admin', WALLET_A]),
+    /administrator must remain Mike/,
+  );
+});
+
+test('migration, APIs, Worker config, presence bus, and v2 path are explicit', async () => {
+  const [migration, config, worker, v1Contract, v2Contract, v2Code, v2Storage, originate, gateway, presence, decision, collectApi, holdingsApi, collectPage, mePage] = await Promise.all([
     readFile(new URL('migrations/auth/0005_seal_receipts.sql', root), 'utf8'),
     readFile(new URL('workers/kennel-seals/wrangler.jsonc', root), 'utf8'),
     readFile(new URL('workers/kennel-seals/src/index.ts', root), 'utf8'),
     readFile(new URL('contracts/v2/seal_soulbound_fa2.py', root), 'utf8'),
+    readFile(new URL('contracts/v2/seal_soulbound_v2_fa2.py', root), 'utf8'),
+    readFile(new URL('contracts/build/seal_soulbound_v2/step_003_cont_0_contract.json', root), 'utf8'),
+    readFile(new URL('contracts/build/seal_soulbound_v2/step_003_cont_0_storage.json', root), 'utf8'),
+    readFile(new URL('scripts/seal-v2-originate.mjs', root), 'utf8'),
     readFile(new URL('functions/api/burst.ts', root), 'utf8'),
     readFile(new URL('workers/presence/src/index.ts', root), 'utf8'),
     readFile(new URL('docs/decisions/2026-09-03-streak-seals.md', root), 'utf8'),
@@ -298,12 +393,25 @@ test('migration, APIs, Worker config, presence bus, and immutable kind limitatio
   assert.match(migration, /pending_wallet/);
   assert.match(config, /"15 7 \* \* \*"/);
   assert.doesNotMatch(config, /SEAL_ISSUER_SECRET_KEY/);
+  assert.match(config, /SEAL_CONTRACT_V2/);
+  assert.match(config, /SEAL_V1_FROZEN/);
   assert.match(worker, /methodsObject\.attest!?\(\{/);
+  assert.match(worker, /methodsObject\.attest_batch/);
   assert.match(worker, /kind: utf8Hex\(attestation\.kind\)/);
   assert.match(worker, /const batch = tezos\.contract\.batch\(\)/);
   assert.match(gateway, /seal-worker-only/);
   assert.match(presence, /'seal'/);
-  assert.doesNotMatch(contract, /def set_kind/);
+  assert.doesNotMatch(v1Contract, /def set_kind/);
+  assert.match(v2Contract, /def set_kind/);
+  assert.match(v2Contract, /def attest_batch/);
+  for (const entrypoint of ['attest', 'attest_batch', 'revoke', 'set_administrator', 'set_issuer', 'set_kind', 'set_metadata', 'set_paused', 'transfer']) {
+    assert.match(v2Code, new RegExp(`%${entrypoint}`));
+  }
+  for (const kind of ['showed-up', 'kennel-club-holder', 'resident', 'founding-100', 'streak-7', 'complete-30', 'post-office-alias', 'x402-receipt']) {
+    assert.match(v2Storage, new RegExp(Buffer.from(kind).toString('hex')));
+  }
+  assert.match(originate, /tz1PTUzbDzkddTh2uXMuxrGtRL6ty8aoeysY/);
+  assert.match(originate, /tz1UvNjifVKhP6Hm3ytVfWtmTiCxKozcYsSG/);
   assert.match(decision, /UNKNOWN_SEAL_KIND/);
   assert.match(decision, /tz1UvNjifVKhP6Hm3ytVfWtmTiCxKozcYsSG/);
   for (const source of [collectApi, holdingsApi]) {
