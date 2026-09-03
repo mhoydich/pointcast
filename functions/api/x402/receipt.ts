@@ -27,9 +27,9 @@
  *   X402_FACILITATOR_URL  default https://exp-faci.bubbletez.com
  *   X402_PRICE_UNITS      USDC base units (6 dec). default "10000" = $0.01
  *   X402_ASSET            ERC-20 address. default USDC on Etherlink
- *   X402_RECEIPT_SK       Ed25519 private key, base64 PKCS8 DER. If unset the
- *                         receipt is still returned but `signature` is null.
- *   X402_RECEIPT_AGENT_ID pcr_ id whose public key is in agent-identities.json
+ *   X402_RECEIPT_SK       Ed25519 private key, base64 PKCS8 DER. Required to
+ *                         accept payment; quotes remain available when unset.
+ *   X402_RECEIPT_AGENT_ID id whose public key is in agent-identities.json
  *   X402_MODE             "live" (default) | "test"  — labels the receipt only
  *
  * Storage: VISITS KV (already bound), keys `x402:receipt:<tx>` (1 year) and a
@@ -37,32 +37,36 @@
  * chain already makes public (payer address, tx hash, amount).
  */
 
-interface Env {
-  VISITS?: KVNamespace;
-  X402_PAY_TO?: string;
-  X402_FACILITATOR_URL?: string;
-  X402_PRICE_UNITS?: string;
-  X402_ASSET?: string;
-  X402_RECEIPT_SK?: string;
-  X402_RECEIPT_AGENT_ID?: string;
-  X402_MODE?: string;
-}
+import {
+  X402_CHAIN_ID,
+  X402_DEFAULT_ASSET,
+  X402_DEFAULT_FACILITATOR,
+  X402_DEFAULT_PAY_TO,
+  X402_DEFAULT_PRICE_UNITS,
+  X402_KEYS_ENDPOINT,
+  X402_NETWORK,
+  X402_PERMIT2,
+  X402_PROXY,
+  X402_SCHEME,
+  X402_SPEC,
+  X402_TREASURY_AGENT_ID,
+  X402_TREASURY_PUBLIC_KEY,
+  X402_VERIFY_ENDPOINT,
+  X402_VERSION,
+  buildCanonicalReceiptPayload,
+  buildSpendManifest,
+  decodeBase64Json,
+  encodeBase64Json,
+  importReceiptPrivateKey,
+  isJsonRecord,
+  signCanonicalPayload,
+  verifyCanonicalPayload,
+  type JsonRecord,
+} from '../../../src/lib/x402.ts';
 
-const NETWORK = 'eip155:42793'; // Etherlink mainnet
-const CHAIN_ID = 42793;
 const EXPLORER = 'https://explorer.etherlink.com/tx/';
-const DEFAULT_FACILITATOR = 'https://exp-faci.bubbletez.com';
-const DEFAULT_ASSET = '0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9'; // USDC.e on Etherlink, 6 dec
-const DEFAULT_PAY_TO = '0x48e8479b4906d45fbe702a18ac2454f800238b37'; // PointCast / DRUM MONEY owner wallet
-const DEFAULT_PRICE_UNITS = '10000'; // $0.01
-const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
-const X402_PROXY = '0xB6FD384A0626BfeF85f3dBaf5223Dd964684B09E';
 const MAX_HEADER_B64 = 16384;
-const SPEC = 'pointcast.agent-payments/v1';
-const MANIFEST_FIELDS = [
-  'agent', 'agent_id', 'amount_usd', 'currency', 'link_session_id', 'loop',
-  'merchant', 'merchant_url', 'mode', 'payee_agent', 'payee_agent_id', 'status',
-];
+const MAX_FACILITATOR_RESPONSE = 65_536;
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -75,26 +79,53 @@ const JSON_HEADERS = {
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(body, null, 2), { status, headers: { ...JSON_HEADERS, ...extra } });
 
-const b64e = (obj: unknown) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
-const b64d = (s: string) => JSON.parse(decodeURIComponent(escape(atob(s))));
-const sameAddr = (a?: string, b?: string) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+const sameAddr = (a: unknown, b: unknown) =>
+  typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 
-function requirements(env: Env) {
-  const amount = env.X402_PRICE_UNITS || DEFAULT_PRICE_UNITS;
+function unsignedInteger(value: unknown) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const text = String(value);
+  if (!/^\d+$/.test(text)) return null;
+  try { return BigInt(text); } catch { return null; }
+}
+
+async function readBoundedText(response: Response) {
+  const declared = Number(response.headers.get('content-length') || 0);
+  if (declared > MAX_FACILITATOR_RESPONSE) throw new Error('facilitator response too large');
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_FACILITATOR_RESPONSE) {
+      await reader.cancel();
+      throw new Error('facilitator response too large');
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+function requirements(env: Cloudflare.Env) {
+  const amount = env.X402_PRICE_UNITS || X402_DEFAULT_PRICE_UNITS;
   return {
-    scheme: 'exact',
-    network: NETWORK,
+    scheme: X402_SCHEME,
+    network: X402_NETWORK,
     amount,
-    payTo: env.X402_PAY_TO || DEFAULT_PAY_TO,
+    payTo: env.X402_PAY_TO || X402_DEFAULT_PAY_TO,
     maxTimeoutSeconds: 60,
-    asset: env.X402_ASSET || DEFAULT_ASSET,
+    asset: env.X402_ASSET || X402_DEFAULT_ASSET,
     extra: { name: 'USDC', version: '2', assetTransferMethod: 'permit2' },
   };
 }
 
-function paymentRequired(env: Env, url: string) {
+function paymentRequired(env: Cloudflare.Env, url: string) {
   return {
-    x402Version: 2,
+    x402Version: X402_VERSION,
     accepts: [requirements(env)],
     resource: {
       description: 'PointCast countersigned spend receipt (pointcast.agent-payments/v1) — proof you paid PointCast on Etherlink.',
@@ -105,37 +136,25 @@ function paymentRequired(env: Env, url: string) {
   };
 }
 
-async function signManifest(spend: Record<string, unknown>, blockId: string, timestamp: string, skB64?: string) {
-  const m: Record<string, unknown> = {};
-  for (const f of MANIFEST_FIELDS) if (spend[f] !== undefined && spend[f] !== null) m[f] = spend[f];
-  m.block_id = blockId; m.block_timestamp = timestamp; m.spec = SPEC;
-  const canonical = JSON.stringify(m, Object.keys(m).sort()) + '\n';
-  if (!skB64) return { manifest: canonical, signature: null };
-  try {
-    const der = Uint8Array.from(atob(skB64), (c) => c.charCodeAt(0));
-    const key = await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']);
-    const sig = await crypto.subtle.sign('Ed25519', key, new TextEncoder().encode(canonical));
-    return { manifest: canonical, signature: btoa(String.fromCharCode(...new Uint8Array(sig))) };
-  } catch {
-    return { manifest: canonical, signature: null };
-  }
-}
-
-async function listRecent(env: Env) {
+async function listRecent(env: Cloudflare.Env) {
   if (!env.VISITS) return json({ receipts: [], note: 'kv-not-bound' });
   const raw = await env.VISITS.get('x402:recent');
   const ids: string[] = raw ? JSON.parse(raw) : [];
   const receipts = (await Promise.all(ids.slice(0, 20).map((id) => env.VISITS!.get(`x402:receipt:${id}`, 'json')))).filter(Boolean);
-  return json({ spec: SPEC, rail: 'x402', network: NETWORK, total_count: ids.length, receipts });
+  return json({ spec: X402_SPEC, rail: 'x402', network: X402_NETWORK, total_count: ids.length, receipts });
 }
 
 export const onRequestOptions = async () => new Response(null, { status: 204, headers: JSON_HEADERS });
 
-export const onRequestGet = async ({ request, env }: { request: Request; env: Env }) => {
+export async function handleReceiptRequest(
+  request: Request,
+  env: Cloudflare.Env,
+  expectedPublicKey = X402_TREASURY_PUBLIC_KEY,
+) {
   const url = new URL(request.url);
   if (url.searchParams.get('list')) return listRecent(env);
 
-  const facilitator = (env.X402_FACILITATOR_URL || DEFAULT_FACILITATOR).replace(/\/$/, '');
+  const facilitator = (env.X402_FACILITATOR_URL || X402_DEFAULT_FACILITATOR).replace(/\/$/, '');
   const resourceUrl = `${url.origin}${url.pathname}`;
   const required = requirements(env);
   const header = request.headers.get('Payment-Signature') || request.headers.get('payment-signature');
@@ -146,58 +165,97 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: En
         error: 'Payment Required',
         message: 'Send a Payment-Signature header (x402 v2, Permit2 on Etherlink). Decode Payment-Required for terms.',
         price: { amount_units: required.amount, asset: required.asset, symbol: 'USDC', decimals: 6, usd: Number(required.amount) / 1e6 },
-        network: NETWORK,
+        network: X402_NETWORK,
         facilitator,
-        permit2: PERMIT2,
+        permit2: X402_PERMIT2,
         x402_proxy: X402_PROXY,
         how: 'https://pointcast.xyz/x402',
       },
       402,
-      { 'Payment-Required': b64e(paymentRequired(env, resourceUrl)), 'X-Facilitator-Url': facilitator },
+      { 'Payment-Required': encodeBase64Json(paymentRequired(env, resourceUrl)), 'X-Facilitator-Url': facilitator },
     );
   }
 
   if (header.length > MAX_HEADER_B64) return json({ error: 'Payment-Signature too large' }, 400);
-  let payload: any;
-  try { payload = b64d(header); } catch { return json({ error: 'Payment-Signature is not base64 JSON' }, 400); }
-  if (payload?.x402Version !== 2 || payload?.scheme !== 'exact') return json({ error: 'Unsupported x402 payload' }, 400);
+  let payload: JsonRecord;
+  try {
+    const decoded = decodeBase64Json(header);
+    if (!isJsonRecord(decoded)) throw new Error('payload is not an object');
+    payload = decoded;
+  } catch {
+    return json({ error: 'Payment-Signature is not base64 JSON' }, 400);
+  }
+  if (payload.x402Version !== X402_VERSION || payload.scheme !== X402_SCHEME) return json({ error: 'Unsupported x402 payload' }, 400);
 
-  const accepted = payload.accepted || {};
+  const accepted = isJsonRecord(payload.accepted) ? payload.accepted : {};
   for (const k of ['scheme', 'network', 'amount', 'payTo', 'asset'] as const) {
-    const a = String(accepted[k] ?? ''), r = String((required as any)[k]);
+    const a = String(accepted[k] ?? ''), r = String(required[k]);
     if (k === 'payTo' || k === 'asset' ? !sameAddr(a, r) : a !== r) return json({ error: `Accepted terms mismatch on ${k}`, required }, 402);
   }
-  const p2 = payload.payload?.permit2Authorization;
-  const sig = payload.payload?.signature;
-  if (!p2 || typeof sig !== 'string' || !sig.startsWith('0x')) return json({ error: 'Missing permit2Authorization/signature' }, 400);
+  const paymentBody = isJsonRecord(payload.payload) ? payload.payload : {};
+  const p2 = isJsonRecord(paymentBody.permit2Authorization) ? paymentBody.permit2Authorization : null;
+  const sig = paymentBody.signature;
+  if (!p2 || typeof sig !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(sig)) return json({ error: 'Missing or invalid permit2Authorization/signature' }, 400);
+  const permitted = isJsonRecord(p2.permitted) ? p2.permitted : {};
+  const witness = isJsonRecord(p2.witness) ? p2.witness : {};
   if (!sameAddr(p2.spender, X402_PROXY)) return json({ error: 'spender must be the x402 Permit2 proxy', expected: X402_PROXY }, 400);
-  if (!sameAddr(p2.permitted?.token, required.asset)) return json({ error: 'Payment asset mismatch' }, 402);
-  if (String(p2.permitted?.amount) !== required.amount) return json({ error: 'Payment amount mismatch' }, 402);
-  if (!sameAddr(p2.witness?.to, required.payTo)) return json({ error: 'witness.to must equal payTo' }, 400);
-  const deadline = Number(p2.deadline || 0), now = Math.floor(Date.now() / 1000);
-  if (!deadline || deadline > now + required.maxTimeoutSeconds + 6) return json({ error: 'Permit2 deadline invalid or exceeds maxTimeoutSeconds' }, 400);
+  if (!sameAddr(permitted.token, required.asset)) return json({ error: 'Payment asset mismatch' }, 402);
+  if (String(permitted.amount ?? '') !== required.amount) return json({ error: 'Payment amount mismatch' }, 402);
+  if (!sameAddr(witness.to, required.payTo)) return json({ error: 'witness.to must equal payTo' }, 400);
+  if (typeof p2.from !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(p2.from)) return json({ error: 'Permit2 payer address is invalid' }, 400);
+  const nonce = unsignedInteger(p2.nonce);
+  const deadline = unsignedInteger(p2.deadline);
+  const validAfter = unsignedInteger(witness.validAfter);
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (nonce === null || deadline === null || validAfter === null) return json({ error: 'Permit2 nonce/deadline/validAfter must be unsigned integers' }, 400);
+  if (deadline <= now || deadline > now + BigInt(required.maxTimeoutSeconds + 6)) return json({ error: 'Permit2 deadline is expired or exceeds maxTimeoutSeconds' }, 400);
+  if (validAfter > deadline || validAfter > now + 6n) return json({ error: 'Permit2 validAfter is outside the settlement window' }, 400);
+  if (witness.extra !== '0x') return json({ error: 'Permit2 witness.extra must be 0x' }, 400);
+
+  // Never settle a payment unless PointCast can issue the promised signed receipt.
+  let signingKey: CryptoKey;
+  try {
+    signingKey = await importReceiptPrivateKey(env.X402_RECEIPT_SK || '');
+    const signerId = env.X402_RECEIPT_AGENT_ID || X402_TREASURY_AGENT_ID;
+    if (signerId !== X402_TREASURY_AGENT_ID) throw new Error('receipt signer id does not match the published key');
+    const keyCheck = 'pointcast.x402/receipt-key-check/v1\n';
+    const keyCheckSignature = await signCanonicalPayload(keyCheck, signingKey);
+    if (!await verifyCanonicalPayload(keyCheck, keyCheckSignature, expectedPublicKey)) {
+      throw new Error('receipt private key does not match the published public key');
+    }
+  } catch {
+    return json({ error: 'Receipt signer unavailable; payment was not submitted for settlement' }, 503);
+  }
 
   // Settle via facilitator (it sponsors gas; payer only signed typed data).
-  let settle: any;
+  let settle: JsonRecord = {};
   try {
     const r = await fetch(`${facilitator}/settle`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ x402Version: 2, paymentPayload: payload, paymentRequirements: required }),
+      body: JSON.stringify({ x402Version: X402_VERSION, paymentPayload: payload, paymentRequirements: required }),
     });
-    const text = await r.text();
-    try { settle = JSON.parse(text); } catch { settle = { raw: text.slice(0, 2000) }; }
-    if (!r.ok || settle?.success === false) return json({ error: 'Facilitator refused settlement', facilitator_status: r.status, facilitator_response: settle }, 402);
-  } catch (e: any) {
-    return json({ error: 'Facilitator unreachable', detail: String(e?.message || e) }, 502);
+    const text = await readBoundedText(r);
+    try {
+      const decoded = JSON.parse(text) as unknown;
+      settle = isJsonRecord(decoded) ? decoded : { response: decoded };
+    } catch {
+      settle = { raw: text.slice(0, 2000) };
+    }
+    if (!r.ok || settle.success === false) return json({ error: 'Facilitator refused settlement', facilitator_status: r.status, facilitator_response: settle }, 402);
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return json({ error: 'Facilitator unreachable or returned an invalid response', detail }, 502);
   }
-  const tx: string | null = settle?.txHash || settle?.transaction?.hash || (typeof settle?.transaction === 'string' ? settle.transaction : null);
-  if (!tx) return json({ error: 'Settled but no tx hash returned', facilitator_response: settle }, 502);
+  const transaction = isJsonRecord(settle.transaction) ? settle.transaction : {};
+  const txCandidate = settle.txHash ?? transaction.hash ?? settle.transaction;
+  const tx = typeof txCandidate === 'string' ? txCandidate : null;
+  if (!tx || !/^0x[0-9a-fA-F]{64}$/.test(tx)) return json({ error: 'Settled but no valid tx hash returned', facilitator_response: settle }, 502);
 
   // Countersigned receipt — pointcast.agent-payments/v1 spend block + settlement extension.
   const timestamp = new Date().toISOString();
   const blockId = `x402-${tx.slice(2, 14)}`;
-  const spend: Record<string, unknown> = {
+  const spend: JsonRecord = {
     agent: 'external',
     agent_id: null,
     loop: 'x402',
@@ -206,36 +264,64 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: En
     merchant: 'pointcast.xyz',
     merchant_url: 'https://pointcast.xyz/x402',
     payee_agent: 'pointcast',
-    payee_agent_id: env.X402_RECEIPT_AGENT_ID || null,
+    payee_agent_id: X402_TREASURY_AGENT_ID,
     mode: env.X402_MODE === 'test' ? 'test' : 'live',
     status: 'settled',
     credential_type: 'onchain-permit2',
     context: 'x402 v2 payment on Etherlink settled through the TZ APAC facilitator; PointCast countersigns this receipt so the payer can prove the spend anywhere.',
   };
-  const { manifest, signature } = await signManifest(spend, blockId, timestamp, env.X402_RECEIPT_SK);
-  const receipt = {
+  const spendManifest = buildSpendManifest(spend, blockId, timestamp);
+  const spendSignature = await signCanonicalPayload(spendManifest, signingKey);
+  const signedSpend: JsonRecord = {
+    ...spend,
+    spec: X402_SPEC,
+    signature: spendSignature,
+    signing_alg: 'ed25519',
+  };
+  const receiptCore: JsonRecord = {
     id: blockId,
     timestamp,
     type: 'RECEIPT',
-    spend: { ...spend, signature, signing_alg: signature ? 'ed25519' : null, spec: SPEC },
+    spend: signedSpend,
     settlement: {
       rail: 'x402',
-      x402_version: 2,
-      scheme: 'exact',
-      network: NETWORK,
-      chain_id: CHAIN_ID,
+      x402_version: X402_VERSION,
+      scheme: X402_SCHEME,
+      network: X402_NETWORK,
+      chain_id: X402_CHAIN_ID,
       asset: required.asset,
       asset_symbol: 'USDC',
       amount_units: required.amount,
-      payer: p2.from || null,
+      payer: p2.from,
       pay_to: required.payTo,
       tx,
       explorer: `${EXPLORER}${tx}`,
       facilitator,
       gas_payer: 'facilitator',
     },
-    manifest_signed: manifest,
-    verify: { identities: 'https://pointcast.xyz/data/agent-identities.json', spec: 'https://pointcast.xyz/.well-known/agent-payments.json' },
+    verify: {
+      endpoint: X402_VERIFY_ENDPOINT,
+      keys: X402_KEYS_ENDPOINT,
+      identities: 'https://pointcast.xyz/data/agent-identities.json',
+      spec: 'https://pointcast.xyz/.well-known/agent-payments.json',
+    },
+    manifest_signed: spendManifest,
+  };
+
+  // Keep the original spend-block signature for pointcast.agent-payments/v1
+  // consumers, and add a full receipt signature binding every settled field.
+  const receiptPayload = buildCanonicalReceiptPayload(receiptCore);
+  const receiptSignature = await signCanonicalPayload(receiptPayload, signingKey);
+  const receipt: JsonRecord = {
+    ...receiptCore,
+    receipt_payload: receiptPayload,
+    receipt_signature: {
+      alg: 'EdDSA',
+      key_type: 'OKP',
+      crv: 'Ed25519',
+      kid: X402_TREASURY_AGENT_ID,
+      value: receiptSignature,
+    },
   };
 
   if (env.VISITS) {
@@ -247,6 +333,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: En
     } catch { /* ledger write is best-effort */ }
   }
 
-  const xpr = b64e({ success: true, txHash: tx, network: NETWORK, gasPayer: 'facilitator', explorer: `${EXPLORER}${tx}`, receipt_id: blockId });
+  const xpr = encodeBase64Json({ success: true, txHash: tx, network: X402_NETWORK, gasPayer: 'facilitator', explorer: `${EXPLORER}${tx}`, receipt_id: blockId });
   return json(receipt, 200, { 'X-Payment-Response': xpr, 'X-Facilitator-Url': facilitator });
-};
+}
+
+export const onRequestGet = async ({ request, env }: { request: Request; env: Cloudflare.Env }) =>
+  handleReceiptRequest(request, env);
