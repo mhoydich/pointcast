@@ -1,9 +1,29 @@
-import type { APIRoute } from 'astro';
-import contracts from '../data/contracts.json';
-import { collectSitting, kennelGrid } from '../lib/collect-desk';
-import { getKennelClubMintSnapshot } from '../lib/kennel-club-mint';
+/**
+ * /collect.json — the collecting desk's machine door, answered per request.
+ *
+ * Moved out of src/pages/collect.json.ts on 2026-09-03: as a prerendered
+ * endpoint it kept announcing the sitting from the last manual deploy, which
+ * is how /collect.json and /api/kennel-club/mint ended up naming two
+ * different dogs on the same morning. The static twin is deleted so this
+ * Function actually gets the route.
+ */
+import contracts from '../src/data/contracts.json';
+import { collectSitting, kennelGrid } from '../src/lib/collect-desk';
+import { getKennelClubMintSnapshot } from '../src/lib/kennel-club-mint';
 
-export const GET: APIRoute = async () => {
+const HEADERS = {
+  'Content-Type': 'application/json; charset=utf-8',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Cache-Control': 'public, max-age=60, s-maxage=60',
+};
+
+export const onRequestOptions: PagesFunction = () => new Response(null, {
+  status: 204,
+  headers: { ...HEADERS, 'Access-Control-Max-Age': '86400' },
+});
+
+export const onRequestGet: PagesFunction = async () => {
   const today = collectSitting();
   let minted: number | null = null;
   try {
@@ -15,6 +35,8 @@ export const GET: APIRoute = async () => {
     spec: 'pointcast.collect/v1',
     canonical: 'https://pointcast.xyz/collect',
     privacy: 'No subscriber email, user identity, or private session data is exposed here.',
+    resolvedAt: 'request',
+    todayUrl: 'https://pointcast.xyz/api/kennel-club/today',
     today: {
       day: today.day,
       tokenId: today.tokenId,
@@ -33,6 +55,7 @@ export const GET: APIRoute = async () => {
       soulboundSeals: contracts.seal_soulbound.mainnet,
     },
     endpoints: {
+      today: 'https://pointcast.xyz/api/kennel-club/today',
       signedInCollection: 'https://pointcast.xyz/api/collect/me',
       subscribe: 'https://pointcast.xyz/api/collect/subscribe',
       dailyStatus: 'https://pointcast.xyz/api/kennel-club/daily/status',
@@ -43,12 +66,5 @@ export const GET: APIRoute = async () => {
     calendar: kennelGrid(),
     generatedAt: new Date().toISOString(),
   };
-  return new Response(JSON.stringify(payload, null, 2), {
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, max-age=60, s-maxage=300',
-    },
-  });
+  return new Response(JSON.stringify(payload, null, 2), { headers: HEADERS });
 };
-

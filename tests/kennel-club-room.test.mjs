@@ -14,7 +14,7 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
     'src/components/KennelClubMint.astro',
     'functions/api/kennel-club/mint.ts',
     'src/pages/kennel-club.astro',
-    'src/pages/kennel-club.json.ts',
+    'functions/kennel-club.json.ts',
     'src/pages/kennel-club/[slug].astro',
     'src/pages/kennel-club/[slug].json.ts',
     'src/pages/send/kennel-club.astro',
@@ -30,7 +30,7 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
     read('functions/api/kennel-club/mint.ts'),
     read('src/pages/kennel-club/[slug].astro'),
     read('src/pages/kennel-club/[slug].json.ts'),
-    read('src/pages/kennel-club.json.ts'),
+    read('functions/kennel-club.json.ts'),
     read('src/lib/tezos.ts'),
   ]);
   assert.match(helper, /America\/Los_Angeles/);
@@ -150,22 +150,12 @@ test('the front door and send shelf expose today’s sitting', async () => {
   }
 });
 
-test('built Kennel Club routes have a resolved today, 30 calendar records, and plate OG metadata', { skip: !exists('dist/kennel-club.json') && 'run npm run build:bare first' }, async () => {
-  const calendar = JSON.parse(await read('dist/kennel-club.json'));
+test('built Kennel Club routes keep their plate JSON and OG metadata, and bake no calendar twin', { skip: !exists('dist/kennel-club/02-hartley.json') && 'run npm run build:bare first' }, async () => {
+  // /kennel-club.json is a Pages Function now. A file here would shadow it and
+  // put the stale build-time sitting back in front of every agent.
+  assert.ok(!exists('dist/kennel-club.json'), 'the calendar twin is not prerendered');
   const sitting = JSON.parse(await read('dist/kennel-club/02-hartley.json'));
   const page = await read('dist/kennel-club/02-hartley/index.html');
-  assert.equal(calendar.calendar.length, 30);
-  assert.ok(calendar.today?.sitting?.slug, 'today resolves to a sitting');
-  assert.equal(calendar.mint.contract, 'KT1JWNAKyiWVsbfNrHBQuuBDaGRBYqfehwdq');
-  assert.equal(calendar.mint.network, 'mainnet');
-  assert.equal(calendar.mint.priceMutez, 1_000_000);
-  assert.equal(calendar.mint.edition, 'open');
-  assert.equal(typeof calendar.mint.paused, 'boolean');
-  assert.equal(calendar.mint.today.tokenId, calendar.today.mint.tokenId);
-  assert.equal(typeof calendar.mint.today.windowOpen, 'boolean');
-  assert.equal(typeof calendar.mint.today.minted, 'number');
-  assert.equal(calendar.mint.liveUrl, 'https://pointcast.xyz/api/kennel-club/mint');
-  assert.ok(Date.parse(calendar.mint.snapshotAt), 'calendar mint has a build timestamp');
   assert.equal(sitting.mint.liveUrl, 'https://pointcast.xyz/api/kennel-club/mint');
   assert.ok(Date.parse(sitting.mint.snapshotAt), 'plate mint has a build timestamp');
   assert.equal(sitting.attributes.length, 5, 'TZIP-21-style attributes arrive in the JSON twin');

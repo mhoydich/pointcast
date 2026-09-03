@@ -1,12 +1,16 @@
 ---
 import { KENNEL_CLUB_CONTRACT, KENNEL_CLUB_PRICE_MUTEZ } from '../lib/kennel-club-mint';
 
-interface Props { tokenId: number; label?: string; }
+interface Props { tokenId: number; label?: string; live?: boolean; }
 // Default UI copy remains: Mint today&apos;s sitting · 1 ꜩ
-const { tokenId, label = "Mint today's sitting · 1 ꜩ" } = Astro.props;
+// `live` = this button follows the current sitting rather than one fixed
+// plate. KennelTodayLive rewrites data-token-id at request time and fires
+// pc:kennel-today; a per-plate button (the /kennel-club/[slug] pages) leaves
+// `live` off and keeps its own token forever.
+const { tokenId, label = "Mint today's sitting · 1 ꜩ", live = false } = Astro.props;
 ---
 
-<section class="kennel-mint" data-kennel-mint data-contract={KENNEL_CLUB_CONTRACT} data-token-id={tokenId} data-price-mutez={KENNEL_CLUB_PRICE_MUTEZ}>
+<section class="kennel-mint" data-kennel-mint data-contract={KENNEL_CLUB_CONTRACT} data-token-id={tokenId} data-price-mutez={KENNEL_CLUB_PRICE_MUTEZ} data-kennel-today={live ? 'token' : undefined}>
   <div class="kennel-mint__action">
     <button class="kennel-mint__button" type="button" data-kennel-mint-button data-kennel-mint-default={label}>{label}</button>
     <span class="kennel-mint__wallet" data-kennel-mint-wallet hidden></span>
@@ -179,6 +183,13 @@ const { tokenId, label = "Mint today's sitting · 1 ꜩ" } = Astro.props;
   document.querySelectorAll<HTMLElement>('[data-kennel-mint]').forEach(initialize);
   document.addEventListener('astro:page-load', () => {
     document.querySelectorAll<HTMLElement>('[data-kennel-mint]').forEach(initialize);
+  });
+  window.addEventListener('pc:kennel-today', () => {
+    document.querySelectorAll<HTMLElement>('[data-kennel-mint][data-kennel-today]').forEach((root) => {
+      if (root.dataset.kennelMintFeedback === 'confirmed') return;
+      root.dataset.kennelMintReady = 'false';
+      initialize(root);
+    });
   });
   window.addEventListener('pc:wallet-change', (event) => {
     const address = (event as CustomEvent<{ address?: string } | null>).detail?.address ?? null;
