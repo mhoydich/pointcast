@@ -5,10 +5,10 @@ import {
   dailyEmail,
   unsubscribeUrl,
 } from '../../../src/lib/collect-desk';
+import { sendMail, type MailEnv } from '../../../src/lib/mail';
 
-interface Env {
+interface Env extends MailEnv {
   AUTH_DB: D1Database;
-  SEND_EMAIL: SendEmail;
   PRESENCE_BUS: Fetcher;
   KENNEL_DAILY_DRY_RUN: string;
 }
@@ -32,9 +32,12 @@ export type DailyRunResult = {
 
 type OptionalDailyEnv = Env & {
   AUTH_DB?: D1Database;
-  SEND_EMAIL?: SendEmail;
   PRESENCE_BUS?: Fetcher;
 };
+
+function hasMail(env: OptionalDailyEnv): boolean {
+  return Boolean(env.RESEND_API_KEY || env.SEND_EMAIL);
+}
 
 function log(event: Record<string, unknown>): void {
   console.log(JSON.stringify(event));
@@ -108,7 +111,7 @@ export async function runKennelDaily(
   const day = collectDay(now);
   const sitting = collectSitting(now);
   const dryRun = options.dryRun ?? String(env.KENNEL_DAILY_DRY_RUN) === 'true';
-  const configured = Boolean(env.AUTH_DB && env.SEND_EMAIL);
+  const configured = Boolean(env.AUTH_DB && hasMail(env));
   const result: DailyRunResult = {
     ok: true,
     day,
@@ -124,7 +127,7 @@ export async function runKennelDaily(
     log({ message: 'kennel daily skipped', reason: 'auth-db-not-configured', ...result });
     return result;
   }
-  if (!env.SEND_EMAIL && !dryRun) {
+  if (!hasMail(env) && !dryRun) {
     log({ message: 'kennel daily skipped', reason: 'email-not-configured', ...result });
     await writeRun(env.AUTH_DB, result, startedAt);
     return result;
@@ -150,9 +153,9 @@ export async function runKennelDaily(
     if ((mark.meta.changes ?? 0) !== 1) continue;
     const content = dailyEmail(sitting, subscriber.token);
     try {
-      await env.SEND_EMAIL?.send({
+      await sendMail({
         to: subscriber.email,
-        from: { email: COLLECT_EMAIL_FROM, name: 'PointCast Kennel Club' },
+        from: `PointCast Kennel Club <${COLLECT_EMAIL_FROM}>`,
         subject: content.subject,
         text: content.text,
         html: content.html,
@@ -160,7 +163,7 @@ export async function runKennelDaily(
           'List-Unsubscribe': `<${unsubscribeUrl(subscriber.token)}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         },
-      });
+      }, env);
       result.sent += 1;
     } catch (error) {
       result.failed += 1;
@@ -193,10 +196,11 @@ async function status(rawEnv: Env): Promise<Response> {
   }
   return Response.json({
     ok: true,
-    configured: Boolean(env.AUTH_DB && env.SEND_EMAIL),
+    configured: Boolean(env.AUTH_DB && hasMail(env)),
     bindings: {
       authDb: Boolean(env.AUTH_DB),
-      email: Boolean(env.SEND_EMAIL),
+      email: hasMail(env),
+      resend: Boolean(env.RESEND_API_KEY),
       presence: Boolean(env.PRESENCE_BUS),
     },
     cron: '0 7 * * *',

@@ -4,9 +4,9 @@ import type { AuthEnv } from '../auth/session.ts';
 import {
   COLLECT_CONFIRM_PREFIX,
 } from '../../../src/lib/collect-email.ts';
+import type { MailEnv } from '../../../src/lib/mail.ts';
 
-export interface CollectEnv extends AuthEnv {
-  SEND_EMAIL?: SendEmail;
+export interface CollectEnv extends AuthEnv, MailEnv {
   PC_RATES_KV?: KVNamespace;
 }
 

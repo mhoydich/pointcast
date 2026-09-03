@@ -16,6 +16,7 @@ import {
   confirmationEmail,
   confirmationUrl,
 } from '../../../src/lib/collect-email.ts';
+import { sendMail } from '../../_lib/mail.ts';
 import {
   collectConfirmKey,
   createSubscriberToken,
@@ -28,7 +29,7 @@ import {
 export const onRequestPost: PagesFunction<CollectEnv> = async ({ request, env }) => {
   const db = requireCollectDb(env);
   if (!db) return authJson({ ok: false, reason: 'collect-db-not-configured' }, { status: 503 });
-  if (!env.SEND_EMAIL) {
+  if (!env.RESEND_API_KEY && !env.SEND_EMAIL) {
     return authJson({ ok: false, reason: 'collect-email-not-configured' }, { status: 503 });
   }
 
@@ -92,13 +93,13 @@ export const onRequestPost: PagesFunction<CollectEnv> = async ({ request, env })
   await writeAuthState(env, key, state, COLLECT_CONFIRM_TTL_SECONDS);
   const content = confirmationEmail(confirmationUrl(confirmToken));
   try {
-    await env.SEND_EMAIL.send({
+    await sendMail({
       to: email,
-      from: { email: COLLECT_EMAIL_FROM, name: 'PointCast Kennel Club' },
+      from: `PointCast Kennel Club <${COLLECT_EMAIL_FROM}>`,
       subject: content.subject,
       text: content.text,
       html: content.html,
-    });
+    }, env);
   } catch (error) {
     await consumeAuthState(env, key);
     console.error(JSON.stringify({

@@ -215,7 +215,7 @@ interface TugView {
   updatedAt: number;
 }
 
-type BurstKind = 'mint' | 'claim' | 'seal' | 'tug' | 'bell' | 'ping-answered' | 'cast' | 'daily';
+type BurstKind = 'mint' | 'claim' | 'seal' | 'tug' | 'bell' | 'ping-answered' | 'cast' | 'daily' | 'mail';
 
 interface BurstBy {
   handle?: string;
@@ -356,7 +356,7 @@ const TUG_KNOT_EPSILON = 0.0005; // below this the rope is simply centred
 const TUG_STORAGE_KEY = 'tug:v1';
 const TUG_BURST_THRESHOLD = 0.6;
 
-const BURST_KINDS = new Set<BurstKind>(['mint', 'claim', 'seal', 'tug', 'bell', 'ping-answered', 'cast', 'daily']);
+const BURST_KINDS = new Set<BurstKind>(['mint', 'claim', 'seal', 'tug', 'bell', 'ping-answered', 'cast', 'daily', 'mail']);
 const MAX_BURST_BUFFER = 20;
 const BURST_MIN_INTERVAL_MS = 1_000;
 const MAX_BURST_RATE_KEYS = 500;

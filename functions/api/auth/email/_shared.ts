@@ -1,5 +1,6 @@
 import { randomUrlSafeString, safeReturnTo } from '../_oauth.ts';
 import type { AuthEnv } from '../session.ts';
+import type { MailEnv } from '../../../../src/lib/mail.ts';
 
 export const EMAIL_TOKEN_TTL_SECONDS = 15 * 60;
 export const EMAIL_TOKEN_PREFIX = 'email-magic:';
@@ -9,8 +10,7 @@ export const EMAIL_RATE_IP_LIMIT = 10;
 export const EMAIL_FROM = 'hello@pointcast.xyz';
 export const EMAIL_PUBLIC_ORIGIN = 'https://pointcast.xyz';
 
-export interface EmailAuthEnv extends AuthEnv {
-  SEND_EMAIL?: SendEmail;
+export interface EmailAuthEnv extends AuthEnv, MailEnv {
   PC_RATES_KV?: KVNamespace;
   POINTCAST_BROADCAST_EMAIL?: string;
 }

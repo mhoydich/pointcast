@@ -5,6 +5,8 @@ declare namespace Cloudflare {
     GOOGLE_CLIENT_SECRET?: string;
     PASSKEY_ALLOWED_ORIGINS?: string;
     SEND_EMAIL?: SendEmail;
+    RESEND_API_KEY?: string;
+    RESEND_WEBHOOK_SECRET?: string;
     PC_RATES_KV?: KVNamespace;
     POINTCAST_BROADCAST_EMAIL?: string;
     SPOTIFY_CLIENT_ID?: string;
