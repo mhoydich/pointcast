@@ -148,10 +148,10 @@ test('the treasury cutover Beacon client bundles with the pinned wallet stack', 
   }
 });
 
-test('project multisig registry remains explicitly unoriginated', async () => {
+test('project multisig registry names the verified live 1-of-2 safe', async () => {
   const contracts = JSON.parse(await readFile(path.join(ROOT, 'src/data/contracts.json'), 'utf8'));
-  assert.equal(contracts.project_multisig.mainnet, '');
+  assert.equal(contracts.project_multisig.mainnet, 'KT19Xcb8UuUUUaYTJ2Z7cdqYAhRaFi7UThwG');
   assert.deepEqual(contracts.project_multisig.owners, [MIKE_KUKAI, CC_WALLET]);
   assert.equal(contracts.project_multisig.threshold, 1);
-  assert.match(contracts.project_multisig.status, /no mainnet origination yet/);
+  assert.match(contracts.project_multisig.status, /live on Tezos mainnet/);
 });
