@@ -34,6 +34,7 @@ import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
 import { POINTCAST_AGENT_KIT } from '../lib/pointcast-agent-kit';
 import { X402_DISCOVERY } from '../lib/x402';
 import { POST_OFFICE_DISCOVERY } from '../lib/post-office';
+import { PAID_TOWN_DISCOVERY } from '../../functions/_lib/paid-town-actions';
 // The MCP catalogue comes from the server file itself, so the manifest
 // advertises exactly what tools/list and resources/list serve.
 import { MCP_RESOURCE_URIS, MCP_SERVER_INFO, MCP_TOOL_NAMES } from '../../functions/api/mcp';
@@ -364,6 +365,7 @@ export const GET: APIRoute = async () => {
         zenCats: 'https://pointcast.xyz/zen-cats',
         x402: X402_DISCOVERY.human,
         postOffice: POST_OFFICE_DISCOVERY.page,
+        till: 'https://pointcast.xyz/till',
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
@@ -485,6 +487,7 @@ export const GET: APIRoute = async () => {
         zenCats: 'https://pointcast.xyz/zen-cats.json',
         x402: X402_DISCOVERY.json,
         postOffice: POST_OFFICE_DISCOVERY.json,
+        till: 'https://pointcast.xyz/till.json',
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',
@@ -555,6 +558,7 @@ export const GET: APIRoute = async () => {
         x402Keys: X402_DISCOVERY.keys,
         postOfficeAlias: POST_OFFICE_DISCOVERY.createOrRenew,
         postOfficeAliasStatus: POST_OFFICE_DISCOVERY.status,
+        paidTownActions: PAID_TOWN_DISCOVERY,
         mcp: 'https://pointcast.xyz/api/mcp',
         mcpV2: 'https://pointcast.xyz/api/mcp-v2',
       },
@@ -588,6 +592,7 @@ export const GET: APIRoute = async () => {
       },
       x402: X402_DISCOVERY,
       postOffice: POST_OFFICE_DISCOVERY,
+      paidTownActions: PAID_TOWN_DISCOVERY,
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
         postsOnly: 'https://pointcast.xyz/rss.xml',

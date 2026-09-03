@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-03
 
-**Status:** approved implementation; not originated; no treasury cutover sent
+**Status:** originated as `KT19Xcb8UuUUUaYTJ2Z7cdqYAhRaFi7UThwG`; TzKT verified 2026-09-03 as the reviewed 1-of-2 safe with zero proposals and zero balance
 
 **Source safe:** Standard Time TzSafe v0.3.4, `KT1UCkcX1kXDiM4ML22Ck2LJdGeo3sT1F4eD`
 
@@ -47,7 +47,9 @@ The script defaults to **1-of-2**. This gives operational continuity if one sign
 
 Choosing **2-of-2** makes the 50/50 relationship an execution rule: every proposal needs both owners. It also creates a liveness risk—loss, unavailability, or disagreement by either signer can freeze the safe. TzSafe thresholds can later be changed through the safe's proposal process, but changing from 1-of-2 initially can itself be approved by either owner. The selected origination threshold must therefore be recorded as a governance choice, not treated as a technical default.
 
-## Cutover runbook
+## Original cutover runbook
+
+The origination, TzKT verification, and registry steps below are complete as of 2026-09-03. They remain here as an audit record. Any Kennel Club treasury change is a separate mainnet action and still requires Mike's explicit approval.
 
 No command in this document is approval to sign. Mainnet actions remain separate, explicit sessions.
 

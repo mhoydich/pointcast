@@ -1,0 +1,88 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { PROJECT_SAFE_ADDRESS, PROJECT_SAFE_TZKT } from '../lib/till';
+
+const title = 'The Till';
+const description = 'The PointCast project safe and the 50/50 house/network ledger for paid town actions.';
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  alternates={[{ type: 'application/json', href: '/till.json', title: 'Till JSON' }]}
+>
+  <main class="till">
+    <nav><a href="/">Home</a><span>/</span><span>till</span><a href="/till.json">JSON</a></nav>
+    <header>
+      <p class="kicker">HOUSE / NETWORK · 50 / 50</p>
+      <h1>The till.</h1>
+      <p class="lede">One project safe on Tezos. One action ledger for USDC settled on Etherlink. The ledger records the split; it does not pretend the money crossed chains.</p>
+    </header>
+
+    <section class="safe" aria-labelledby="safe-title">
+      <p class="label" id="safe-title">PROJECT SAFE · TEZOS MAINNET · 1 OF 2</p>
+      <a class="address" href={PROJECT_SAFE_TZKT}>{PROJECT_SAFE_ADDRESS}</a>
+      <dl>
+        <div><dt>TzKT balance</dt><dd data-balance>loading…</dd></div>
+        <div><dt>cache</dt><dd>5 minutes</dd></div>
+      </dl>
+    </section>
+
+    <section class="ledger" aria-labelledby="ledger-title">
+      <p class="label" id="ledger-title">PAID TOWN ACTIONS · USDC ON ETHERLINK</p>
+      <dl>
+        <div><dt>settled actions</dt><dd data-count>—</dd></div>
+        <div><dt>house</dt><dd data-house>—</dd></div>
+        <div><dt>network</dt><dd data-network>—</dd></div>
+      </dl>
+      <div class="actions" data-actions></div>
+      <p class="note">Each 0.01 USDC action records 5,000 base units for the house and 5,000 for the network. Settlement still goes to <code>X402_PAY_TO</code>; no bridge or payout job exists yet.</p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const units = (value) => `${(Number(value || 0) / 1_000_000).toFixed(4)} USDC`;
+  fetch('/till.json', { headers: { Accept: 'application/json' } })
+    .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+    .then((data) => {
+      const balance = data?.safe?.balance;
+      document.querySelector('[data-balance]').textContent = balance?.available
+        ? `${Number(balance.balanceTez).toLocaleString()} ꜩ`
+        : 'unavailable';
+      const totals = data?.ledger?.totals || {};
+      document.querySelector('[data-count]').textContent = Number(totals.count || 0).toLocaleString();
+      document.querySelector('[data-house]').textContent = units(totals.houseUnits);
+      document.querySelector('[data-network]').textContent = units(totals.networkUnits);
+      const actions = document.querySelector('[data-actions]');
+      for (const row of data?.ledger?.byAction || []) {
+        const line = document.createElement('p');
+        line.textContent = `${row.action} · ${row.count} · ${units(row.houseUnits)} house / ${units(row.networkUnits)} network`;
+        actions.appendChild(line);
+      }
+    })
+    .catch(() => {
+      document.querySelector('[data-balance]').textContent = 'unavailable';
+    });
+</script>
+
+<style>
+  .till { max-width: 900px; margin: 0 auto; padding: 24px 16px 88px; color: #111; }
+  nav { display: flex; gap: 10px; align-items: center; font: 700 10px var(--pc-font-mono); text-transform: uppercase; }
+  nav a:last-child { margin-left: auto; }
+  header { padding: 72px 0 36px; }
+  .kicker, .label { margin: 0 0 10px; font: 700 10px var(--pc-font-mono); letter-spacing: .14em; color: #185FA5; }
+  h1 { margin: 0; font-size: clamp(52px, 12vw, 112px); line-height: .88; letter-spacing: -.07em; }
+  .lede { max-width: 58ch; margin: 24px 0 0; font-size: 18px; line-height: 1.45; }
+  section { border-top: 3px solid #111; padding: 22px 0 30px; }
+  .address { display: block; overflow-wrap: anywhere; font: 700 clamp(15px, 3vw, 24px) var(--pc-font-mono); color: #111; }
+  dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 24px 0 0; background: #111; border: 1px solid #111; }
+  dl div { padding: 14px; background: #fff; }
+  dt { font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #616975; }
+  dd { margin: 6px 0 0; font-size: 24px; font-weight: 750; }
+  .safe dl { grid-template-columns: repeat(2, 1fr); }
+  .actions { margin: 18px 0; font: 12px/1.6 var(--pc-font-mono); }
+  .actions p { margin: 0; padding: 6px 0; border-bottom: 1px solid #d9dde3; }
+  .note { max-width: 70ch; font-size: 14px; line-height: 1.5; }
+  @media (max-width: 640px) { dl, .safe dl { grid-template-columns: 1fr; } }
+</style>

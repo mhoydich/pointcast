@@ -36,7 +36,7 @@ import {
   ROSTER,
 } from '../../src/lib/bench-questions';
 
-interface Env extends VisitsEnv {
+export interface BenchEnv extends VisitsEnv {
   PC_RATES_KV?: KVNamespace;
 }
 
@@ -112,7 +112,7 @@ function clean(value: unknown, cap: number, singleLine: boolean): string {
   return s.trim().slice(0, cap).trim();
 }
 
-async function loadIndex(env: Env, day: string): Promise<string[]> {
+async function loadIndex(env: BenchEnv, day: string): Promise<string[]> {
   if (!env.VISITS) return [];
   const raw = await env.VISITS.get(indexKey(day));
   if (!raw) return [];
@@ -124,7 +124,7 @@ async function loadIndex(env: Env, day: string): Promise<string[]> {
   }
 }
 
-async function saveIndex(env: Env, day: string, ids: string[]): Promise<void> {
+async function saveIndex(env: BenchEnv, day: string, ids: string[]): Promise<void> {
   if (!env.VISITS) return;
   try {
     await env.VISITS.put(indexKey(day), JSON.stringify(ids.slice(0, MAX_SITS_PER_DAY)));
@@ -133,7 +133,7 @@ async function saveIndex(env: Env, day: string, ids: string[]): Promise<void> {
   }
 }
 
-async function loadSit(env: Env, id: string): Promise<Sit | null> {
+async function loadSit(env: BenchEnv, id: string): Promise<Sit | null> {
   if (!env.VISITS) return null;
   const raw = await env.VISITS.get(sitKey(id));
   if (!raw) return null;
@@ -188,7 +188,7 @@ function benchShape(day: string, now: number) {
   };
 }
 
-export const onRequestOptions: PagesFunction<Env> = () =>
+export const onRequestOptions: PagesFunction<BenchEnv> = () =>
   new Response(null, {
     status: 204,
     headers: {
@@ -205,7 +205,7 @@ export const onRequestOptions: PagesFunction<Env> = () =>
  *
  * → { ok, day, dayIndex, rosterSize, turnsInMs, question, caps, sits, count, kvBound }
  */
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+export async function handleBenchGet(request: Request, env: BenchEnv): Promise<Response> {
   const now = Date.now();
   const url = new URL(request.url);
   const requested = url.searchParams.get('day');
@@ -221,7 +221,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const sits = records.filter((s): s is Sit => s !== null);
 
   return json({ ok: true, ...shape, day, sits, count: sits.length, kvBound: true });
-};
+}
+
+export const onRequestGet: PagesFunction<BenchEnv> = async ({ request, env }) =>
+  handleBenchGet(request, env);
 
 /**
  * POST /api/bench  body: { name, answer, sessionId? }
@@ -233,7 +236,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
  * → 200 { ok: true, sit, count }
  * → 400 bad body · 409 already sat today · 429 rate limited
  */
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export async function handleBenchPost(
+  request: Request,
+  env: BenchEnv,
+  options: { skipRateLimit?: boolean } = {},
+): Promise<Response> {
   const now = Date.now();
   const day = benchDayKey(now);
   const question = questionForDate(now);
@@ -249,13 +256,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const via: Via = sessionId ? 'mcp' : 'hand';
   const seat = sessionId ? fnv1a(`mcp:${sessionId}`) : clientToken(request);
 
-  const limit = await rateLimit(request, env, {
-    bucket: 'bench:sit',
-    windowSec: 300,
-    maxRequests: 6,
-    clientId: sessionId ? `mcp:${sessionId}` : undefined,
-  });
-  if (!limit.allowed) {
+  const limit = options.skipRateLimit
+    ? null
+    : await rateLimit(request, env, {
+        bucket: 'bench:sit',
+        windowSec: 300,
+        maxRequests: 6,
+        clientId: sessionId ? `mcp:${sessionId}` : undefined,
+      });
+  if (limit && !limit.allowed) {
     return rateLimitResponse(limit, 'the bench is taking a breath. try again in a few minutes.');
   }
 
@@ -279,17 +288,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!kv) {
     // No KV bound (dev, first deploy). Echo the sit so the page can still
     // render what it would have looked like, and say so plainly.
-    return applyRateLimitHeaders(
-      json({ ok: true, sit, count: 1, kvBound: false }),
-      limit,
-    );
+    const response = json({ ok: true, sit, count: 1, kvBound: false });
+    return limit ? applyRateLimitHeaders(response, limit) : response;
   }
 
   // One seat per session (MCP) or per client (browser) per bench day.
   const taken = await kv.get(seatKey(day, seat));
   if (taken) {
-    return applyRateLimitHeaders(
-      json(
+    const response = json(
         {
           ok: false,
           error: 'already-sat',
@@ -297,17 +303,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           day,
         },
         { status: 409 },
-      ),
-      limit,
-    );
+      );
+    return limit ? applyRateLimitHeaders(response, limit) : response;
   }
 
   // The index is capped, and it is ordered oldest-first, so a full day has
   // to say so rather than silently swallow the newest answer.
   const ids = await loadIndex(env, day);
   if (ids.length >= MAX_SITS_PER_DAY) {
-    return applyRateLimitHeaders(
-      json(
+    const response = json(
         {
           ok: false,
           error: 'bench-full',
@@ -315,9 +319,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           day,
         },
         { status: 409 },
-      ),
-      limit,
-    );
+      );
+    return limit ? applyRateLimitHeaders(response, limit) : response;
   }
 
   try {
@@ -335,8 +338,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     /* non-fatal — worst case someone gets a second turn */
   }
 
-  return applyRateLimitHeaders(
-    json({ ok: true, sit, count: Math.min(ids.length, MAX_SITS_PER_DAY), kvBound: true }),
-    limit,
-  );
-};
+  const response = json({ ok: true, sit, count: Math.min(ids.length, MAX_SITS_PER_DAY), kvBound: true });
+  return limit ? applyRateLimitHeaders(response, limit) : response;
+}
+
+export const onRequestPost: PagesFunction<BenchEnv> = async ({ request, env }) =>
+  handleBenchPost(request, env);

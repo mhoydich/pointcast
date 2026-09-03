@@ -8,7 +8,7 @@
  */
 import { KENNEL_CLUB_CONTRACT } from '../../src/lib/kennel-club-mint';
 
-interface Env {
+export interface BurstEnv {
   PRESENCE?: DurableObjectNamespace;
   AUTH_DB?: D1Database;
 }
@@ -82,7 +82,7 @@ export async function verifyKennelMint(
   return transaction ? { ok: true, sender: addressOf(transaction.sender) || undefined } : { ok: false };
 }
 
-async function forward(request: Request, env: Env): Promise<Response> {
+export async function forwardBurst(request: Request, env: BurstEnv): Promise<Response> {
   if (!env.PRESENCE) return json({ ok: false, reason: 'presence-unbound' }, 503);
   const id = env.PRESENCE.idFromName('global');
   const stub = env.PRESENCE.get(id);
@@ -91,19 +91,19 @@ async function forward(request: Request, env: Env): Promise<Response> {
   return stub.fetch(new Request(url.toString(), request));
 }
 
-export const onRequestOptions: PagesFunction<Env> = () =>
+export const onRequestOptions: PagesFunction<BurstEnv> = () =>
   new Response(null, { status: 204, headers: { ...CORS_HEADERS, 'Access-Control-Max-Age': '86400' } });
 
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestGet: PagesFunction<BurstEnv> = async ({ request, env }) => {
   try {
-    return await forward(request, env);
+    return await forwardBurst(request, env);
   } catch (error) {
     console.error('[api/burst] presence forward failed', error);
     return json({ ok: false, reason: 'presence-unavailable' }, 503);
   }
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<BurstEnv> = async ({ request, env }) => {
   let body: BurstBody;
   try {
     body = await request.json();
@@ -139,7 +139,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   try {
-    return await forward(new Request(request.url, {
+    return await forwardBurst(new Request(request.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': request.headers.get('CF-Connecting-IP') || '' },
       body: JSON.stringify(body),

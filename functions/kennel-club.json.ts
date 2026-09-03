@@ -16,6 +16,9 @@ import {
   sittingPayload,
 } from '../src/lib/kennel-club';
 import { getKennelClubMintState, unavailableKennelClubMintState } from '../src/lib/kennel-club-mint';
+import { getPaidTotals, getRecentReceipts } from './_lib/x402-gate.ts';
+
+type KennelClubJsonEnv = Cloudflare.Env & { AUTH_DB?: D1Database; VISITS?: KVNamespace };
 
 const HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -24,12 +27,12 @@ const HEADERS = {
   'Cache-Control': 'public, max-age=60, s-maxage=60',
 };
 
-export const onRequestOptions: PagesFunction = () => new Response(null, {
+export const onRequestOptions: PagesFunction<KennelClubJsonEnv> = () => new Response(null, {
   status: 204,
   headers: { ...HEADERS, 'Access-Control-Max-Age': '86400' },
 });
 
-export const onRequestGet: PagesFunction = async () => {
+export const onRequestGet: PagesFunction<KennelClubJsonEnv> = async ({ env }) => {
   const date = losAngelesDate();
   const today = sittingOfTheDay(date);
   const snapshotAt = new Date().toISOString();
@@ -38,6 +41,10 @@ export const onRequestGet: PagesFunction = async () => {
     liveUrl: KENNEL_CLUB_MINT_LIVE_URL,
     snapshotAt,
   };
+  const [paid, receipts] = await Promise.all([
+    getPaidTotals(env.AUTH_DB, 'claim').catch(() => ({ count: 0, houseUnits: 0, networkUnits: 0 })),
+    getRecentReceipts(env, 'claim', 10).catch(() => []),
+  ]);
   return new Response(JSON.stringify({
     spec: 'pointcast.kennel-club-calendar/v1',
     canonical: KENNEL_CLUB_CANONICAL,
@@ -47,6 +54,10 @@ export const onRequestGet: PagesFunction = async () => {
     status: KENNEL_CLUB.status,
     resolvedAt: 'request',
     todayUrl: 'https://pointcast.xyz/api/kennel-club/today',
+    paidAction: 'https://pointcast.xyz/api/agent/claim',
+    receiptsUrl: 'https://pointcast.xyz/api/x402/receipt?list=1&action=claim',
+    receipts,
+    paid,
     today: { date, ...sittingPayload(today) },
     lateStartNote: 'The club opened two days late; the first two dogs were already waiting.',
     mint,
