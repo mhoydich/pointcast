@@ -20,7 +20,14 @@ const { profile } = Astro.props;
 const title = `@${profile.handle}`;
 const description = profile.page.bio || `Owned PointCast profile object @${profile.handle}.`;
 const ownerShort = `${profile.owner.slice(0, 7)}…${profile.owner.slice(-5)}`;
-const ipfs = (value: string) => value.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${value.slice(7).replace(/^ipfs\//, '')}` : value;
+import kennelSeries from '../../data/kennel-club-september-sitting.json';
+// Pinata's gateway answers where the public ipfs.io gateway times out (2026-09-02).
+const ipfs = (value: string) => value.startsWith('ipfs://') ? `https://gateway.pinata.cloud/ipfs/${value.slice(7).replace(/^ipfs\//, '')}` : value;
+// Kennel Club dogs are served from the site's own plates; the chain thumbnail is the fallback.
+const kennelPlate = (tokenId: number, fallback: string) => {
+  const sitting = (kennelSeries as any).sittings?.find((s: any) => s.tokenId === tokenId);
+  return sitting?.slug ? `/images/kennel-club/september-sitting/${sitting.slug}.webp` : ipfs(fallback);
+};
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'ProfilePage',
@@ -71,7 +78,7 @@ const jsonLd = {
       <div class="profile-object__shelf">
         <div>
           <h3>Kennel Club dogs</h3>
-          {profile.dogs.length ? <ul class="profile-object__dogs">{profile.dogs.map((dog: any) => <li><a href={dog.objktUrl} rel="noopener"><img src={ipfs(dog.image)} alt={dog.name} width="96" height="120" /><span>{dog.name}</span></a></li>)}</ul> : <p>None held by this owner.</p>}
+          {profile.dogs.length ? <ul class="profile-object__dogs">{profile.dogs.map((dog: any) => <li><a href={dog.objktUrl} rel="noopener"><img src={kennelPlate(dog.tokenId, dog.image)} alt={dog.name} width="96" height="120" loading="lazy" /><span>{dog.name}</span></a></li>)}</ul> : <p>None held by this owner.</p>}
         </div>
         <div>
           <h3>Soulbound seals</h3>
