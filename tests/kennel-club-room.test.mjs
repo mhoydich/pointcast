@@ -69,7 +69,9 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
   assert.match(tezos, /\.methodsObject as any\)\.mint\(params\.tokenId\)\.send/);
   assert.match(room, /calendar__grid/);
   assert.match(room, /data-sitting-date/);
-  assert.match(room, /imageWidth=\{1024\}/);
+  assert.match(room, /image="\/og\/kennel-club\/today\.png"/);
+  assert.match(room, /imageWidth=\{1200\}/);
+  assert.match(room, /imageHeight=\{630\}/);
   assert.match(plate, /TZIP-21-style metadata/);
   assert.match(plate, /image=\{sitting\.image\.png\}/);
   assert.match(plateJson, /sittingPayload/);
