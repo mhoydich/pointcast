@@ -157,3 +157,29 @@ test('both private holdings routes share the session gate and never accept a wal
   assert.match(api, /meHoldingsResponse/);
   assert.match(twin, /meHoldingsResponse/);
 });
+
+test('private holdings surface D1 claim streak and the next seal threshold', async () => {
+  await withHoldingsModule(async ({ getMeHoldingsPayload }) => {
+    const payload = await getMeHoldingsPayload({
+      userId: 'pcu_streak',
+      preferredName: 'Streak Member',
+      identities: [],
+      roles: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    }, {
+      now: new Date('2026-09-07T16:00:00Z'),
+      dogs: Array.from({ length: 7 }, (_, tokenId) => ({
+        id: `claim_${tokenId}`,
+        tokenId,
+        sitting: `Sitting ${tokenId + 1}`,
+        status: tokenId === 6 ? 'held' : 'delivered',
+        opHash: null,
+        deliveredTo: null,
+        createdAt: '2026-09-03T00:00:00.000Z',
+        seal: { kind: 'showed-up', status: tokenId === 6 ? 'pending_wallet' : 'attested', opHash: null },
+      })),
+    });
+    assert.equal(payload.streak, 7);
+    assert.equal(payload.nextSealAt, 30);
+  });
+});

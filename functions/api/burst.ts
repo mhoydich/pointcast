@@ -111,6 +111,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ ok: false, reason: 'invalid-json' }, 400);
   }
 
+  // Seal bursts are reserved for the issuer Worker over its service binding.
+  if (body.kind === 'seal') return json({ ok: false, reason: 'seal-worker-only' }, 403);
+
   if (body.kind === 'mint' || body.kind === 'claim') {
     const meta = body.meta && typeof body.meta === 'object' ? body.meta as Record<string, unknown> : {};
     const opHash = typeof meta.opHash === 'string' ? meta.opHash.trim() : '';

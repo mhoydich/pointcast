@@ -7,6 +7,7 @@ import {
   type AuthEnv,
 } from '../auth/session';
 import { getUserKennelClaims } from '../kennel-club/_claims';
+import { claimedStreak, collectSitting, nextSealAt } from '../../../src/lib/collect-desk';
 
 const TZKT_API = 'https://api.tzkt.io/v1';
 const CACHE_TTL_SECONDS = 60;
@@ -85,6 +86,8 @@ export type MeHoldingsPayload = {
   wallets: MeWalletHoldings[];
   collections: CollectionDescriptor[];
   dogs: Awaited<ReturnType<typeof getUserKennelClaims>>;
+  streak: number;
+  nextSealAt: 7 | 30 | null;
   generatedAt: string;
   cacheTtlSeconds: number;
 };
@@ -345,6 +348,7 @@ export async function getMeHoldingsPayload(
     fetcher?: Fetcher;
     cache?: CacheLike | null;
     dogs?: Awaited<ReturnType<typeof getUserKennelClaims>>;
+    now?: Date;
   } = {},
 ): Promise<MeHoldingsPayload> {
   const collections = pointCastCollections();
@@ -354,12 +358,18 @@ export async function getMeHoldingsPayload(
     fetcher: options.fetcher,
     cache: options.cache,
   })));
+  const dogs = options.dogs ?? [];
+  const claimedDays = dogs
+    .filter((dog) => dog.status === 'held' || dog.status === 'delivered')
+    .map((dog) => dog.tokenId + 1);
   return {
     ok: true,
     user,
     wallets,
     collections,
-    dogs: options.dogs ?? [],
+    dogs,
+    streak: claimedStreak(claimedDays, collectSitting(options.now).day),
+    nextSealAt: nextSealAt(claimedDays),
     generatedAt: new Date().toISOString(),
     cacheTtlSeconds: CACHE_TTL_SECONDS,
   };
