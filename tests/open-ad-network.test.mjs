@@ -6,7 +6,6 @@ const root = new URL('../', import.meta.url);
 
 test('all public layout families render the shared open-ad rail', async () => {
   const layouts = await Promise.all([
-    'BaseLayout.astro',
     'BlockLayout.astro',
     'DrumLayout.astro',
     'SparrowLayout.astro',
@@ -21,7 +20,6 @@ test('all public layout families render the shared open-ad rail', async () => {
 test('the first-100 Tezos signal remains available on its own page but is not sitewide chrome', async () => {
   const [layouts, strip] = await Promise.all([
     Promise.all([
-      'BaseLayout.astro',
       'BlockLayout.astro',
       'DrumLayout.astro',
       'SparrowLayout.astro',

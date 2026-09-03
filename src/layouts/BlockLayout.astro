@@ -1,14 +1,14 @@
 ---
 /**
- * BlockLayout — v2 layout used by every Blocks page (/, /b/*, /c/*).
+ * BlockLayout — the single PointCast site-chrome owner.
  *
  * Deliberately minimal: white background, self-hosted Inter + JetBrains
  * Mono (via @fontsource-variable), no serif, no warm palette, no v1 Footer.
  * BLOCKS.md compliance is easier when the layout has fewer opinions to
  * override.
  *
- * v1 pages (/about, /drum, /collect, /admin/*) continue to use BaseLayout
- * which keeps the legacy shell — that's intentional during the rebuild.
+ * Older pages opt into `legacy` to retain their warm palette, fonts, and
+ * utility CSS while sharing this layout's dock, room, and burst clients.
  */
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
@@ -21,6 +21,8 @@ import FirstSee from '../components/FirstSee.astro';
 import OpenAdRail from '../components/OpenAdRail.astro';
 import TezosSessionBridge from '../components/TezosSessionBridge.astro';
 import { DISCOVERY_LINKS, SITE_DESCRIPTION, SITE_KEYWORDS, buildIdentityJsonLd } from '../lib/seo';
+import legacyStylesheet from '../styles/global.css?url';
+import { ClientRouter } from 'astro:transitions';
 
 interface FrameButton {
   label: string;
@@ -45,6 +47,12 @@ interface Props {
   jsonLd?: Record<string, unknown> | null;
   /** Extra <link rel="alternate"> entries — per-block JSON, RSS per channel, etc. */
   alternates?: { type: string; href: string; title?: string }[];
+  /** Preserve the original BaseLayout palette, type, utilities, and body shell. */
+  legacy?: boolean;
+  /** Suppress only the ad rail. The shared dock remains mounted. */
+  hideAds?: boolean;
+  /** BaseLayout compatibility no-op; its old implementation never hid navigation. */
+  hideNav?: boolean;
   /**
    * Farcaster Frame — if provided, this page renders as a Frame when
    * embedded in Warpcast / any Farcaster client. Up to 4 buttons.
@@ -65,7 +73,7 @@ interface Props {
 const {
   title,
   description = SITE_DESCRIPTION,
-  image = '/images/og/og-home-v4.png',
+  image: imageProp,
   themeColor = '#ffffff',
   imageWidth = 1200,
   imageHeight = 630,
@@ -74,18 +82,36 @@ const {
   noindex = false,
   jsonLd,
   alternates = [],
+  legacy = false,
+  hideAds = false,
+  hideNav = false,
   frame,
 } = Astro.props;
 
+const image = imageProp ?? (legacy ? '/images/og-home-v3.png' : '/images/og/og-home-v4.png');
 const siteBase = Astro.site || new URL('https://pointcast.xyz');
 const canonicalURL = new URL(Astro.url.pathname, siteBase);
 const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
-const siteTitle = title === 'Home' || title === '' ? 'PointCast' : `${title} — PointCast`;
+const ogImagePath = new URL(ogImage).pathname.toLowerCase();
+const ogImageType = ogImagePath.endsWith('.jpg') || ogImagePath.endsWith('.jpeg')
+  ? 'image/jpeg'
+  : ogImagePath.endsWith('.webp')
+    ? 'image/webp'
+    : ogImagePath.endsWith('.gif')
+      ? 'image/gif'
+      : ogImagePath.endsWith('.svg')
+        ? 'image/svg+xml'
+        : 'image/png';
+const siteTitle = title === 'Home' || title === ''
+  ? 'PointCast'
+  : legacy
+    ? `${title} | PointCast`
+    : `${title} — PointCast`;
 const identityJsonLd = buildIdentityJsonLd();
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-pc-layout={legacy ? 'legacy' : 'block'} data-hide-nav={hideNav ? 'true' : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -106,7 +132,14 @@ const identityJsonLd = buildIdentityJsonLd();
     <meta name="geo.placename" content="El Segundo, California" />
     <meta name="geo.position" content="33.9192;-118.4165" />
     <meta name="ICBM" content="33.9192, -118.4165" />
-    <meta name="theme-color" content={themeColor} />
+    {legacy ? (
+      <>
+        <meta name="theme-color" content="#f5efe4" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#12110e" media="(prefers-color-scheme: dark)" />
+      </>
+    ) : (
+      <meta name="theme-color" content={themeColor} />
+    )}
     <meta name="pc-version" content="v2.1" />
     <meta name="pc-agents-manifest" content="https://pointcast.xyz/agents.json" />
     <meta name="pc-llms" content="https://pointcast.xyz/llms.txt" />
@@ -125,8 +158,10 @@ const identityJsonLd = buildIdentityJsonLd();
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:secure_url" content={ogImage} />
+    <meta property="og:image:type" content={ogImageType} />
     <meta property="og:image:width" content={String(imageWidth)} />
     <meta property="og:image:height" content={String(imageHeight)} />
+    <meta property="og:image:alt" content={siteTitle} />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="PointCast" />
     <meta property="og:url" content={canonicalURL} />
@@ -134,6 +169,7 @@ const identityJsonLd = buildIdentityJsonLd();
     <meta name="twitter:title" content={siteTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={siteTitle} />
     <meta name="twitter:site" content="@mhoydich" />
 
     {alternates.map((alt) => (
@@ -160,13 +196,27 @@ const identityJsonLd = buildIdentityJsonLd();
       </>
     )}
 
+    <slot name="head" />
+
     <script type="application/ld+json" is:inline set:html={JSON.stringify(identityJsonLd)} />
     {jsonLd && <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />}
 
     <title>{siteTitle}</title>
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {legacy && <link rel="alternate" type="application/rss+xml" title="PointCast" href="/rss.xml" />}
     <link rel="manifest" href="/manifest.webmanifest" />
+    {legacy && (
+      <>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,500&family=Outfit:wght@400&family=Syne:wght@700&family=JetBrains+Mono:wght@400;600;700&display=swap"
+          rel="stylesheet"
+        />
+        <link rel="stylesheet" href={legacyStylesheet} />
+      </>
+    )}
     <!-- Mood persistence — read pc:mood before paint so the page
          renders tinted from the first frame. Per Mike 2026-04-20 13:55
          PT: "rolling thru the site in that mood." -->
@@ -185,18 +235,25 @@ const identityJsonLd = buildIdentityJsonLd();
       html[data-pc-mood="flow"]    body { background: linear-gradient(180deg, #f5f0ff 0%, transparent 260px); }
       html[data-pc-mood="curious"] body { background: linear-gradient(180deg, #fff4ed 0%, transparent 260px); }
       html[data-pc-mood="quiet"]   body { background: linear-gradient(180deg, #f5f5f2 0%, transparent 260px); }
-      body { padding-bottom: 56px; }
-      @media (max-width: 680px) { body { padding-bottom: 64px; } }
+      body.pc-block-shell { padding-bottom: 56px; }
+      body.pc-legacy-shell { padding-bottom: 88px; }
+      @media (max-width: 680px) {
+        body.pc-block-shell { padding-bottom: 64px; }
+        body.pc-legacy-shell { padding-bottom: 112px; }
+      }
     </style>
+    {legacy && <ClientRouter />}
   </head>
-  <body>
+  <body class:list={[
+    legacy ? 'pc-legacy-shell min-h-screen flex flex-col bg-paper text-ink font-body' : 'pc-block-shell',
+  ]}>
     <a href="#main-content" class="skip-link">Skip to content</a>
-    <main id="main-content" role="main">
+    <main id="main-content" class:list={{ 'flex-1': legacy }} role="main">
       <slot />
     </main>
     {!immersive && (
       <>
-        <OpenAdRail />
+        {!hideAds && <OpenAdRail />}
         <FooterBar />
         <TugRope />
         <SpellLayer />
@@ -226,7 +283,8 @@ const identityJsonLd = buildIdentityJsonLd();
 
   *, *::before, *::after { box-sizing: border-box; }
 
-  html, body {
+  html[data-pc-layout='block'],
+  html[data-pc-layout='block'] body {
     margin: 0;
     padding: 0;
     background: var(--pc-bg);
@@ -238,18 +296,18 @@ const identityJsonLd = buildIdentityJsonLd();
     text-rendering: optimizeLegibility;
   }
 
-  body { min-height: 100vh; display: flex; flex-direction: column; }
-  main { flex: 1; }
+  body.pc-block-shell { min-height: 100vh; display: flex; flex-direction: column; }
+  body.pc-block-shell > main { flex: 1; }
 
   /* Two weights only per BLOCKS.md. No 600/700 overrides anywhere in v2. */
-  strong, b { font-weight: 500; }
+  body.pc-block-shell strong, body.pc-block-shell b { font-weight: 500; }
 
-  a { color: var(--pc-accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+  body.pc-block-shell a { color: var(--pc-accent); text-decoration: none; }
+  body.pc-block-shell a:hover { text-decoration: underline; }
 
-  img { max-width: 100%; display: block; }
+  body.pc-block-shell img { max-width: 100%; display: block; }
 
-  .skip-link {
+  body.pc-block-shell .skip-link {
     position: absolute;
     top: -40px;
     left: 0;
@@ -261,7 +319,7 @@ const identityJsonLd = buildIdentityJsonLd();
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
-  .skip-link:focus { top: 0; }
+  body.pc-block-shell .skip-link:focus { top: 0; }
 
-  ::selection { background: var(--pc-accent); color: #fff; }
+  body.pc-block-shell ::selection { background: var(--pc-accent); color: #fff; }
 </style>
