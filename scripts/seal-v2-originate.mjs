@@ -27,6 +27,10 @@ export async function main(argv = process.argv.slice(2)) {
     label: 'PointCast Soulbound Seals V2',
     buildDirectory: 'seal_soulbound_v2',
     argv,
+    // Validated against the compiled storage before any preparation output or
+    // mainnet broadcast — never against the returned result, whose shape differs
+    // between the prepared-only and executed paths (see profile-contract-origination.mjs).
+    validateStorage: assertSeededIssuers,
   });
   if (result.help) {
     printOriginationUsage('seal-v2-originate.mjs', 'PointCast Soulbound Seals V2');
@@ -38,7 +42,6 @@ export async function main(argv = process.argv.slice(2)) {
   if (!result.prepared.paused) {
     throw new Error('Seal v2 must originate paused.');
   }
-  assertSeededIssuers(result.storage);
   printPreparation(result);
   console.log(`Seeded issuers: ${SEAL_V2_ISSUERS.join(', ')}`);
   return result;
