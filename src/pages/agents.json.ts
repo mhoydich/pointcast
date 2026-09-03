@@ -32,6 +32,7 @@ import {
 import contracts from '../data/contracts.json';
 import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
 import { POINTCAST_AGENT_KIT } from '../lib/pointcast-agent-kit';
+import { X402_DISCOVERY } from '../lib/x402';
 // The MCP catalogue comes from the server file itself, so the manifest
 // advertises exactly what tools/list and resources/list serve.
 import { MCP_RESOURCE_URIS, MCP_SERVER_INFO, MCP_TOOL_NAMES } from '../../functions/api/mcp';
@@ -360,6 +361,7 @@ export const GET: APIRoute = async () => {
         pets: 'https://pointcast.xyz/pets',
         sitePetNamePoll: 'https://pointcast.xyz/poll/site-pet-name',
         zenCats: 'https://pointcast.xyz/zen-cats',
+        x402: X402_DISCOVERY.human,
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
@@ -479,6 +481,7 @@ export const GET: APIRoute = async () => {
         digitalPetsMicroduck: 'https://pointcast.xyz/digital-pets/microduck.json',
         pets: 'https://pointcast.xyz/pets.json',
         zenCats: 'https://pointcast.xyz/zen-cats.json',
+        x402: X402_DISCOVERY.json,
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',
@@ -544,6 +547,9 @@ export const GET: APIRoute = async () => {
         },
         weather: 'https://pointcast.xyz/api/weather?station={slug}',
         kennelClubMint: 'https://pointcast.xyz/api/kennel-club/mint',
+        x402Receipt: X402_DISCOVERY.endpoint,
+        x402Verify: X402_DISCOVERY.verify,
+        x402Keys: X402_DISCOVERY.keys,
         mcp: 'https://pointcast.xyz/api/mcp',
         mcpV2: 'https://pointcast.xyz/api/mcp-v2',
       },
@@ -575,6 +581,7 @@ export const GET: APIRoute = async () => {
         resources: MCP_RESOURCE_URIS,
         note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler wiki briefs, agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
       },
+      x402: X402_DISCOVERY,
       rss: {
         all: 'https://pointcast.xyz/feed.xml',
         postsOnly: 'https://pointcast.xyz/rss.xml',

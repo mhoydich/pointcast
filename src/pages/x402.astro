@@ -1,17 +1,15 @@
 ---
-/**
- * /x402 — PointCast's first paid HTTP endpoint, on Etherlink.
- *
- * Sibling to /money. /money is the ledger of what residents SPENT (Stripe
- * Link). /x402 is the desk where an agent PAYS PointCast — one cent of USDC
- * on Etherlink (Tezos' EVM L2) via HTTP 402 — and gets a countersigned
- * receipt in the same pointcast.agent-payments/v1 shape.
- *
- * Author: cc, 2026-08-17.
- */
+/** /x402 — PointCast's paid HTTP receipt endpoint on Etherlink. */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  X402_CLIENT_EXAMPLE,
+  X402_ENDPOINT,
+  X402_KEYS_ENDPOINT,
+  X402_TREASURY_AGENT_ID,
+  X402_TREASURY_PUBLIC_KEY,
+  X402_VERIFY_ENDPOINT,
+} from '../lib/x402';
 
-const ENDPOINT = 'https://pointcast.xyz/api/x402/receipt';
 const EMERALD = '#0B6B3A';
 const EMERALD_TINT = '#E7F3EC';
 const AMBER = '#BA7517';
@@ -21,92 +19,134 @@ const HAIR = '#D4CBB6';
 
 <BaseLayout
   title="x402 — PointCast"
-  description="Pay PointCast one cent of USDC on Etherlink over HTTP 402 and get a countersigned receipt. Tezos = identity of artifact. Rails = money of action."
+  description="Pay PointCast 0.01 USDC on Etherlink over x402 and receive a canonical, publicly verifiable Ed25519-signed receipt."
 >
   <main class="x">
     <header class="x__header">
-      <div class="x__chip">402</div>
-      <h1>Pay the town, get a receipt</h1>
+      <div class="x__chip">402 · AGENTS WELCOME</div>
+      <h1>Pay the town, get a signed receipt</h1>
       <p class="dek">
-        This is PointCast's first paid HTTP endpoint. An agent asks for it,
-        gets <code>402 Payment Required</code> with a machine-readable price
-        (one cent of USDC on Etherlink, Tezos' EVM layer), signs a Permit2
-        authorization off-chain, retries, and a facilitator settles it
-        on-chain and pays the gas. PointCast then countersigns a receipt in
-        the same <a href="/.well-known/agent-payments.json">agent-payments/v1</a>
-        shape the <a href="/money">Money</a> ledger already uses. The receipt
-        is the product.
+        PointCast exposes one small paid HTTP resource for agents. Ask for it,
+        receive <code>402 Payment Required</code>, pay 0.01 USDC on Etherlink
+        through an off-chain Permit2 signature, and receive a countersigned
+        receipt. The receipt is the product: a portable proof of the payer,
+        amount, recipient, network, facilitator, and settled transaction.
       </p>
+      <p class="machine"><a href="/x402.json">JSON twin →</a></p>
     </header>
 
-    <section class="terms">
+    <section class="terms" aria-label="x402 terms">
       <div class="cell"><span class="label">endpoint</span><code class="big">/api/x402/receipt</code></div>
-      <div class="cell"><span class="label">price</span><span class="big" style={`color:${EMERALD}`}>$0.01</span><span class="sub">USDC · Etherlink (eip155:42793)</span></div>
-      <div class="cell"><span class="label">rail</span><span class="big">x402 v2</span><span class="sub">Permit2 witness · facilitator pays gas</span></div>
-      <div class="cell"><span class="label">receipt</span><span class="big">Ed25519</span><span class="sub">pointcast.agent-payments/v1</span></div>
+      <div class="cell"><span class="label">price</span><span class="big green">$0.01</span><span class="sub">USDC · 10,000 base units</span></div>
+      <div class="cell"><span class="label">network</span><span class="big">Etherlink</span><span class="sub">eip155:42793</span></div>
+      <div class="cell"><span class="label">rail</span><span class="big">x402 v2</span><span class="sub">scheme exact · Permit2</span></div>
     </section>
 
-    <section class="how">
-      <h2>How an agent pays</h2>
+    <section>
+      <h2>The 402 flow</h2>
       <ol>
-        <li><code>GET {ENDPOINT}</code> → <code>402</code>. Read the <code>Payment-Required</code> header (base64 JSON). It names the network, the asset (USDC), the amount in base units, and the <code>payTo</code> address.</li>
-        <li>Sign a Permit2 <code>PermitWitnessTransferFrom</code> typed-data message with any EVM key that holds USDC on Etherlink — no gas, no transaction, just a signature. Spender is the x402 Permit2 proxy; witness <code>to</code> is <code>payTo</code>.</li>
-        <li>Retry the same GET with a <code>Payment-Signature</code> header carrying the x402 v2 payload.</li>
-        <li>PointCast checks the terms match, forwards to the TZ APAC facilitator's <code>/settle</code>, and on success returns <code>200</code> with a receipt JSON and an <code>X-Payment-Response</code> header containing the tx hash.</li>
+        <li><code>GET {X402_ENDPOINT}</code>. The response is <code>402</code>; decode its base64 JSON <code>Payment-Required</code> header.</li>
+        <li>Use those exact terms to sign Permit2 <code>PermitWitnessTransferFrom</code>. The x402 proxy is the spender and <code>witness.to</code> is the quoted <code>payTo</code>.</li>
+        <li>Retry the GET with the base64 JSON payload in <code>Payment-Signature</code>. The facilitator submits settlement and pays gas.</li>
+        <li>On settlement, PointCast returns <code>200</code>, <code>X-Payment-Response</code>, and a receipt with canonical JSON plus Ed25519 signatures.</li>
+        <li>Send the receipt to <a href={X402_VERIFY_ENDPOINT}><code>/api/x402/verify</code></a>, or verify it locally with the raw public key below.</li>
       </ol>
       <p class="fine">
-        Reference client + server: <a href="https://github.com/tzapac/tzapac-x402-permit2">tzapac/tzapac-x402-permit2</a>.
-        Protocol: <a href="https://github.com/x402-foundation/x402">x402-foundation/x402</a>.
-        The public ledger of receipts is at <a href="/api/x402/receipt?list=1"><code>/api/x402/receipt?list=1</code></a>.
+        A payer needs the quoted USDC asset on Etherlink and an existing token
+        allowance to canonical Permit2. No payer key is ever sent to PointCast.
+        The public receipt records only settlement data already visible on-chain.
       </p>
     </section>
 
-    <section class="try">
-      <h2>See the 402 yourself</h2>
-      <pre><code>curl -si {ENDPOINT} | head -20</code></pre>
-      <p class="fine">You'll get the price and a base64 <code>Payment-Required</code> header. Nothing is charged until a signature is sent.</p>
+    <section>
+      <h2>Quote it without paying</h2>
+      <pre><code>curl -si {X402_ENDPOINT}</code></pre>
+      <p class="fine">This only prints the 402 and its terms. It does not sign or submit a payment.</p>
     </section>
 
-    <section class="why">
-      <h2>Why this exists</h2>
+    <section>
+      <h2>Reference payer</h2>
       <p>
-        PointCast has said for a while that agent-issued receipts are about
-        to become a primitive of the open web, and that Tezos handles the
-        identity of an artifact while payment rails handle the money of an
-        action. Until today the only live rail was Stripe Link (card, human
-        approval). This is the first rail where the payer is a wallet, the
-        settlement is a public transaction, and no card, account, or human
-        click is involved. One cent, on purpose: the point is the proof, not
-        the revenue.
+        The repository includes a <a href={X402_CLIENT_EXAMPLE}><code>viem</code> payer example</a>.
+        With no key it is a dry run that fetches and prints the exact live terms.
+      </p>
+      <pre><code>node scripts/x402-client-example.mjs
+
+# Deliberately supplying a funded key signs and submits the payment:
+X402_PAYER_SK=0x… node scripts/x402-client-example.mjs</code></pre>
+      <p class="fine">The script never logs the payer private key or Permit2 signature. After settlement it prints the countersigned receipt and checks it through the verification endpoint.</p>
+    </section>
+
+    <section>
+      <h2>Verify any receipt</h2>
+      <pre><code>curl -sS -X POST {X402_VERIFY_ENDPOINT} \
+  -H 'content-type: application/json' \
+  --data '{`{"receipt":"<base64 receipt JSON>"}`}'</code></pre>
+      <p class="fine">
+        GET is also supported: <code>/api/x402/verify?receipt=&lt;base64&gt;</code>.
+        A valid response echoes the signed settlement fields. Public keys are
+        published as an hour-cached JWKS-style document at
+        <a href={X402_KEYS_ENDPOINT}><code>/api/x402/keys</code></a>.
+      </p>
+    </section>
+
+    <section class="key-card">
+      <h2>PointCast receipt signer</h2>
+      <dl>
+        <div><dt>agent id</dt><dd><code>{X402_TREASURY_AGENT_ID}</code></dd></div>
+        <div><dt>algorithm</dt><dd>Ed25519 / EdDSA</dd></div>
+        <div><dt>raw public key · base64</dt><dd><code>{X402_TREASURY_PUBLIC_KEY}</code></dd></div>
+      </dl>
+      <p class="fine">The full receipt signature covers canonical nested JSON, including the transaction hash, payer, asset, amount, payee, network, and facilitator. A separate compatible signature remains on the <code>pointcast.agent-payments/v1</code> spend block.</p>
+    </section>
+
+    <section class="welcome">
+      <div class="welcome__stamp">AGENTS WELCOME</div>
+      <h2>Come make the first external-agent receipt</h2>
+      <p>
+        Build against the endpoint, bring a collaboration idea, or tell us
+        where the protocol feels rough. Write
+        <a href="mailto:hello@pointcast.xyz">hello@pointcast.xyz</a> or
+        <a href="mailto:wallet@pointcast.xyz">wallet@pointcast.xyz</a>.
       </p>
       <p class="fine">
-        Money received here goes to the PointCast EVM treasury wallet. Receipts
-        store only what the chain already publishes (payer address, tx hash,
-        amount) — no IPs, no user agents.
+        Reference rail: <a href="https://github.com/tzapac/tzapac-x402-permit2">TZ APAC x402 Permit2</a> ·
+        protocol: <a href="https://github.com/x402-foundation/x402">x402 Foundation</a> ·
+        recent receipts: <a href="/api/x402/receipt?list=1">public ledger</a>
       </p>
     </section>
   </main>
 </BaseLayout>
 
 <style define:vars={{ EMERALD, EMERALD_TINT, AMBER, INK, HAIR }}>
-  .x { max-width: 820px; margin: 0 auto; padding: 32px 20px 96px; color: var(--INK); }
+  .x { max-width: 860px; margin: 0 auto; padding: 32px 20px 96px; color: var(--INK); }
   .x__header { border-bottom: 2px solid var(--INK); padding-bottom: 20px; margin-bottom: 24px; }
-  .x__chip { display: inline-block; font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; padding: 5px 8px; background: var(--INK); color: #fff; margin-bottom: 12px; }
-  h1 { font-size: 2rem; line-height: 1.1; margin: 0 0 12px; letter-spacing: -.01em; }
-  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .08em; margin: 36px 0 12px; }
-  .dek { font-size: 1.05rem; line-height: 1.5; max-width: 66ch; margin: 0; }
-  .terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--HAIR); border: 1px solid var(--HAIR); }
+  .x__chip, .welcome__stamp { display: inline-block; font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; padding: 6px 9px; background: var(--INK); color: #fff; margin-bottom: 12px; }
+  h1 { font-size: clamp(2rem, 6vw, 3.4rem); line-height: 1; margin: 0 0 14px; letter-spacing: -.03em; }
+  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .08em; margin: 38px 0 12px; }
+  .dek { font-size: 1.08rem; line-height: 1.55; max-width: 68ch; margin: 0; }
+  .machine { margin: 12px 0 0; font: 700 .8rem/1.3 ui-monospace, Menlo, monospace; }
+  .terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 1px; background: var(--HAIR); border: 1px solid var(--HAIR); }
   .cell { background: #fff; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 4px; }
-  .label { font: 700 10px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; color: #6b6b6b; }
-  .big { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  code.big { font-size: 1rem; }
+  .label, dt { font: 700 10px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; color: #6b6b6b; }
+  .big { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  code.big { font-size: .92rem; }
+  .green { color: var(--EMERALD); }
   .sub { font-size: .8rem; color: #6b6b6b; }
-  ol { padding-left: 1.2em; line-height: 1.55; max-width: 70ch; }
-  li { margin: .5em 0; }
-  code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; background: var(--EMERALD_TINT); padding: 1px 4px; }
-  pre { background: var(--INK); color: #fff; padding: 14px 16px; overflow-x: auto; }
-  pre code { background: none; color: inherit; padding: 0; }
-  .fine { font-size: .85rem; color: #555; line-height: 1.5; max-width: 70ch; }
-  .why p { line-height: 1.55; max-width: 68ch; }
+  ol { padding-left: 1.25em; line-height: 1.58; max-width: 72ch; }
+  li { margin: .55em 0; }
+  p { line-height: 1.55; max-width: 70ch; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: .88em; background: var(--EMERALD_TINT); padding: 1px 4px; overflow-wrap: anywhere; }
+  pre { background: var(--INK); color: #fff; padding: 16px 18px; overflow-x: auto; line-height: 1.55; }
+  pre code { background: none; color: inherit; padding: 0; overflow-wrap: normal; }
+  .fine { font-size: .86rem; color: #555; line-height: 1.55; }
   a { color: var(--EMERALD); }
+  .key-card, .welcome { margin-top: 38px; border: 1px solid var(--HAIR); padding: 0 18px 18px; background: #fffdf7; }
+  dl { margin: 0; }
+  dl div { display: grid; grid-template-columns: minmax(130px, .38fr) 1fr; gap: 14px; padding: 10px 0; border-top: 1px solid var(--HAIR); }
+  dt, dd { margin: 0; }
+  .welcome { border: 2px solid var(--AMBER); background: #fff8e9; }
+  .welcome__stamp { background: var(--AMBER); transform: translateY(-1px); }
+  .welcome h2 { margin-top: 8px; }
+  @media (max-width: 560px) { dl div { grid-template-columns: 1fr; gap: 5px; } }
 </style>
