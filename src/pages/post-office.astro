@@ -1,0 +1,145 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  POST_OFFICE_ALIAS_ENDPOINT,
+  POST_OFFICE_DOMAIN,
+  POST_OFFICE_JSON,
+  POST_OFFICE_PRICE_UNITS_DEFAULT,
+  POST_OFFICE_TERM_DAYS,
+} from '../lib/post-office';
+---
+
+<BaseLayout
+  title="Post Office — PointCast"
+  description="A paid forwarding registry for agent addresses at agents.pointcast.xyz. PointCast stores forwarding configuration and counters, never mail."
+>
+  <main class="office">
+    <header class="hero">
+      <p class="kicker">POINTCAST POST OFFICE · FORWARDING REGISTRY</p>
+      <h1>An address for an agent.<br />Never a mailbox.</h1>
+      <p class="dek">
+        Register <code>name@{POST_OFFICE_DOMAIN}</code> for 30 days. Incoming mail
+        is forwarded immediately to an email address or a signed HTTPS webhook.
+        PointCast retains no sender, recipient, subject, body, attachment, or raw message.
+      </p>
+      <p><a href={POST_OFFICE_JSON}>Live JSON registry →</a></p>
+    </header>
+
+    <section class="terms" aria-label="Registry terms">
+      <div><span>price</span><strong>$0.01</strong><small>USDC · {Number(POST_OFFICE_PRICE_UNITS_DEFAULT).toLocaleString()} base units</small></div>
+      <div><span>term</span><strong>{POST_OFFICE_TERM_DAYS} days</strong><small>renew with a new settled receipt</small></div>
+      <div><span>rail</span><strong>x402 v2</strong><small>Etherlink · exact · Permit2</small></div>
+      <div><span>delivery</span><strong>email / webhook</strong><small>one retry · counters only</small></div>
+    </section>
+
+    <section>
+      <h2>The 402 flow</h2>
+      <ol>
+        <li>POST the desired alias and private forwarding target.</li>
+        <li>Receive <code>402 Payment Required</code> plus exact terms in <code>Payment-Required</code>.</li>
+        <li>Sign those terms and repeat the same POST with <code>Payment-Signature</code>.</li>
+        <li>After settlement, PointCast creates or renews the alias and returns its expiry plus a signed receipt.</li>
+      </ol>
+      <p class="fine">An active alias may only be renewed by its current paying owner. Expired aliases stop forwarding and may be reclaimed. A renewal extends an active term by 30 days.</p>
+    </section>
+
+    <section>
+      <h2>Ask for terms</h2>
+      <pre><code>{`curl -si -X POST ${POST_OFFICE_ALIAS_ENDPOINT} \\
+  -H 'content-type: application/json' \\
+  --data '{"name":"field-agent","forward":{"kind":"webhook","target":"https://agent.example/inbox"}}'`}</code></pre>
+      <p class="fine">This call has no payment signature, so it only returns the 402 quote. It does not settle or register anything.</p>
+    </section>
+
+    <section class="registry" aria-labelledby="registry-title">
+      <div class="registry__head">
+        <div>
+          <p class="kicker">PUBLIC · TARGETS OMITTED</p>
+          <h2 id="registry-title">Live registry</h2>
+        </div>
+        <p data-registry-state aria-live="polite">Loading…</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>name</th><th>status</th><th>since</th><th>expires</th><th>receipt</th><th>forwarded</th></tr></thead>
+          <tbody data-registry-body><tr><td colspan="6">Loading registry…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="boundary">
+      <h2>The boundary</h2>
+      <p>
+        The registry stores the alias, private service configuration in D1,
+        owner address, current receipt hash, dates, status, and a delivery counter.
+        Message content only exists in memory while it is being forwarded. Unknown or
+        expired addresses receive one plain-text bounce with the x402 terms URL.
+      </p>
+      <p class="fine">Abuse, phishing, impersonation, bulk mail, harassment, malware, and attempts to evade delivery limits may be suspended. Report an alias to <a href="mailto:abuse@pointcast.xyz">abuse@pointcast.xyz</a>.</p>
+    </section>
+  </main>
+</BaseLayout>
+
+<script>
+  const body = document.querySelector<HTMLTableSectionElement>('[data-registry-body]');
+  const state = document.querySelector<HTMLElement>('[data-registry-state]');
+  const date = (value: string) => new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(new Date(value));
+  fetch('/post-office.json', { headers: { accept: 'application/json' } })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`registry ${response.status}`);
+      return response.json();
+    })
+    .then((payload) => {
+      const aliases = Array.isArray(payload.aliases) ? payload.aliases : [];
+      if (state) state.textContent = `${aliases.length} registered`;
+      if (!body) return;
+      body.replaceChildren();
+      if (aliases.length === 0) {
+        const row = body.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 6;
+        cell.textContent = 'No public aliases yet.';
+        return;
+      }
+      for (const alias of aliases) {
+        const row = body.insertRow();
+        const values = [alias.name, alias.status, date(alias.since), date(alias.expiresAt), alias.receiptHashShort, String(alias.forwardedCount)];
+        for (const value of values) row.insertCell().textContent = value;
+        row.dataset.status = alias.status;
+      }
+    })
+    .catch(() => {
+      if (state) state.textContent = 'Registry unavailable';
+      if (body) body.innerHTML = '<tr><td colspan="6">The live registry could not be loaded.</td></tr>';
+    });
+</script>
+
+<style>
+  .office { --ink:#171714; --paper:#f6f0df; --blue:#174c76; --red:#a4362d; max-width:1040px; margin:0 auto; padding:32px 20px 100px; color:var(--ink); }
+  .hero { padding:34px 0 30px; border-block:3px solid var(--ink); }
+  .kicker, th, .terms span { font:700 10px/1.2 ui-monospace,Menlo,monospace; letter-spacing:.14em; text-transform:uppercase; }
+  h1 { margin:.18em 0; font:800 clamp(2.7rem,8vw,6.7rem)/.88 system-ui,sans-serif; letter-spacing:-.065em; }
+  h2 { margin:0 0 14px; font:800 clamp(1.15rem,2.8vw,1.8rem)/1 system-ui,sans-serif; text-transform:uppercase; letter-spacing:-.02em; }
+  .dek { max-width:67ch; font-size:1.08rem; line-height:1.55; }
+  a { color:var(--blue); }
+  code { font-family:ui-monospace,Menlo,monospace; font-size:.88em; background:#e4dcc5; padding:2px 4px; overflow-wrap:anywhere; }
+  .terms { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--ink); }
+  .terms div { min-height:118px; padding:17px; border-right:1px solid var(--ink); display:flex; flex-direction:column; gap:7px; }
+  .terms div:last-child { border-right:0; }
+  .terms strong { font-size:1.35rem; }
+  .terms small, .fine { color:#5d594f; line-height:1.45; }
+  section:not(.terms) { padding:44px 0; border-bottom:1px solid var(--ink); }
+  ol, section p { max-width:72ch; line-height:1.6; }
+  pre { padding:18px; color:#f9f5e9; background:var(--ink); overflow:auto; line-height:1.6; }
+  pre code { padding:0; color:inherit; background:none; }
+  .registry__head { display:flex; align-items:end; justify-content:space-between; gap:20px; }
+  .registry__head .kicker { color:var(--red); }
+  .table-wrap { overflow:auto; border:1px solid var(--ink); }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { padding:11px 12px; border-bottom:1px solid #c9c1ac; text-align:left; white-space:nowrap; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr[data-status="expired"] { color:#777; }
+  td:first-child { font-weight:800; color:var(--blue); }
+  .boundary { background:var(--paper); margin-inline:-20px; padding-inline:20px !important; }
+  @media (max-width:760px) { .terms { grid-template-columns:1fr 1fr; } .terms div:nth-child(2) { border-right:0; } .terms div:nth-child(-n+2) { border-bottom:1px solid var(--ink); } .registry__head { align-items:start; flex-direction:column; } }
+</style>

@@ -1,20 +1,19 @@
 import type { AuthEnv } from '../auth/session.ts';
+import {
+  routePostOfficeInbound,
+  type PostOfficeInboundEnv,
+  type PostOfficeReceivedEmail,
+} from '../../_lib/post-office-inbound.ts';
 
-interface InboundEnv extends AuthEnv {
+interface InboundEnv extends AuthEnv, PostOfficeInboundEnv {
   RESEND_API_KEY?: string;
   RESEND_WEBHOOK_SECRET?: string;
   PRESENCE?: DurableObjectNamespace;
 }
 
-type ReceivedEmail = {
-  from: string;
-  to: string[];
-  subject: string;
-  text: string;
-  receivedAt: string;
-};
-
 const MAX_SIGNATURE_AGE_SECONDS = 5 * 60;
+const MAX_WEBHOOK_BYTES = 64 * 1024;
+const MAX_RECEIVED_JSON_BYTES = 512 * 1024;
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, {
@@ -72,7 +71,27 @@ function stringArray(value: unknown): string[] | null {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : null;
 }
 
-async function retrieveReceivedEmail(apiKey: string, emailId: string): Promise<ReceivedEmail> {
+async function readBoundedText(stream: ReadableStream<Uint8Array> | null, declared: number, limit: number): Promise<string> {
+  if (declared > limit) throw new Error('payload-too-large');
+  if (!stream) return '';
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      throw new Error('payload-too-large');
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+async function retrieveReceivedEmail(apiKey: string, emailId: string): Promise<PostOfficeReceivedEmail> {
   const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -80,7 +99,12 @@ async function retrieveReceivedEmail(apiKey: string, emailId: string): Promise<R
     },
   });
   if (!response.ok) throw new Error(`resend-receive-failed:${response.status}`);
-  const payload: unknown = await response.json();
+  const raw = await readBoundedText(
+    response.body,
+    Number(response.headers.get('content-length') || 0),
+    MAX_RECEIVED_JSON_BYTES,
+  );
+  const payload: unknown = JSON.parse(raw);
   if (!payload || typeof payload !== 'object') throw new Error('resend-receive-invalid');
   const record = payload as Record<string, unknown>;
   const from = stringField(record.from);
@@ -123,7 +147,16 @@ export const onRequestPost: PagesFunction<InboundEnv> = async ({ request, env })
   if (!env.RESEND_WEBHOOK_SECRET || !env.RESEND_API_KEY || !env.AUTH_DB) {
     return json({ ok: false, reason: 'mail-inbound-not-configured' }, 503);
   }
-  const payload = await request.text();
+  let payload: string;
+  try {
+    payload = await readBoundedText(
+      request.body,
+      Number(request.headers.get('content-length') || 0),
+      MAX_WEBHOOK_BYTES,
+    );
+  } catch {
+    return json({ ok: false, reason: 'payload-too-large' }, 413);
+  }
   if (!await verifySvixSignature(payload, request.headers, env.RESEND_WEBHOOK_SECRET)) {
     return json({ ok: false, reason: 'invalid-signature' }, 401);
   }
@@ -148,7 +181,7 @@ export const onRequestPost: PagesFunction<InboundEnv> = async ({ request, env })
   ).bind(webhookId).first<{ present: number }>();
   if (duplicate) return json({ ok: true, stored: false });
 
-  let email: ReceivedEmail;
+  let email: PostOfficeReceivedEmail;
   try {
     email = await retrieveReceivedEmail(env.RESEND_API_KEY, emailId);
   } catch (error) {
@@ -158,6 +191,9 @@ export const onRequestPost: PagesFunction<InboundEnv> = async ({ request, env })
     }));
     return json({ ok: false, reason: 'mail-retrieval-failed' }, 502);
   }
+
+  const postOffice = await routePostOfficeInbound(env, webhookId, email);
+  if (postOffice) return postOffice;
 
   const result = await env.AUTH_DB.prepare(`
     INSERT OR IGNORE INTO inbox
