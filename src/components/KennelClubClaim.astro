@@ -1,9 +1,17 @@
 ---
-interface Props { tokenId: number; sitting: string; }
-const { tokenId, sitting } = Astro.props;
+/**
+ * `live` marks this desk as "whatever sitting is current", not a fixed plate.
+ * The page it sits on is prerendered, so the token id baked in here is only a
+ * fallback; KennelTodayLive rewrites data-token-id / data-sitting from
+ * /api/kennel-club/today and then fires pc:kennel-today so the desk re-reads.
+ * Without that the claim desk reports "unavailable" on any stale deploy,
+ * because readClaimState() rejects a live payload for a different token.
+ */
+interface Props { tokenId: number; sitting: string; live?: boolean; }
+const { tokenId, sitting, live = false } = Astro.props;
 ---
 
-<section class="kennel-claim" data-kennel-claim data-token-id={tokenId} data-sitting={sitting}>
+<section class="kennel-claim" data-kennel-claim data-token-id={tokenId} data-sitting={sitting} data-kennel-today={live ? 'token' : undefined}>
   <button type="button" class="kennel-claim__button" data-kennel-claim-button>
     Claim today&apos;s dog — free
   </button>
@@ -201,6 +209,12 @@ const { tokenId, sitting } = Astro.props;
 
   roots().forEach((root) => void initialize(root));
   document.addEventListener('astro:page-load', () => roots().forEach((root) => void initialize(root)));
+  // Today just moved under us: drop the once-only guard and read the desk again.
+  window.addEventListener('pc:kennel-today', () => roots().forEach((root) => {
+    if (root.dataset.claimComplete === 'true') return;
+    delete root.dataset.claimReady;
+    void initialize(root);
+  }));
   document.addEventListener('click', (event) => {
     const button = (event.target as Element | null)?.closest('[data-kennel-claim-button]');
     const root = button?.closest<HTMLElement>('[data-kennel-claim]');

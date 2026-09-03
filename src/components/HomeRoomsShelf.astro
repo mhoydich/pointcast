@@ -8,8 +8,14 @@
  * meta line says so plainly. Deks are rendered verbatim.
  *
  * Avatars are real Nouns from noun.pics/{seed}.svg (seeds 0–1199), never a
- * procedural lookalike. No client JS: nothing here refreshes at runtime.
+ * procedural lookalike.
+ *
+ * One exception to "no client JS": a room marked `live: 'kennel'` shows which
+ * dog is sitting today, and the front door is prerendered and deployed by
+ * hand. Its counter line carries the KennelTodayLive hooks so the name comes
+ * from /api/kennel-club/today at request time instead of from the build.
  */
+import KennelTodayLive from './KennelTodayLive.astro';
 export interface Room {
   title: string;   // "Pour a cup"
   href: string;    // "/coffee"
@@ -18,6 +24,7 @@ export interface Room {
   noun: number;    // noun.pics seed, 0–1199
   color: string;   // channel hex, drives --cell-color
   use?: string;    // measured public counter, e.g. "69 prayers · 12 stations"
+  live?: 'kennel'; // this room's counter is repainted at request time
 }
 export interface Props { rooms: Room[] }
 const { rooms } = Astro.props;
@@ -48,13 +55,20 @@ const num = (i: number) => String(i + 1).padStart(2, '0');
             <span class="cell__tag">{room.tag}</span>
             <span class="cell__title">{room.title}</span>
             <span class="cell__note">{room.dek}</span>
-            {room.use ? <span class="cell__meta"><b>{room.use}</b></span> : null}
+            {room.use ? (
+              <span class="cell__meta">
+                {room.live === 'kennel'
+                  ? <b data-kennel-today="text" data-kennel-text="Today · {name} · sitting {day} of 30">{room.use}</b>
+                  : <b>{room.use}</b>}
+              </span>
+            ) : null}
           </span>
         </a>
       </li>
     ))}
   </ol>
   <a class="rooms__more" href="/rooms">24 more rooms on the full list →</a>
+  {rooms.some((room) => room.live === 'kennel') ? <KennelTodayLive /> : null}
   <p class="shelf__foot">
     <span>Nothing needs an account · resets at midnight PT where it resets at all</span>
     <span><a href="/today">today's drop</a> · <a href="/random">a random door</a> · <a href="/everything">the census</a></span>
