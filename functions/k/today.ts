@@ -18,8 +18,23 @@ function collectRedirect(request: Request, key?: string, value?: string): Respon
   return Response.redirect(target.toString(), 302);
 }
 
+/**
+ * A bare /k/today is the short link the room prints ("/k/today →"), and it is
+ * meant to land on the plate that is sitting right now. Pages prefers this
+ * static route over functions/k/[slug].ts, so that redirect has to live here
+ * too — otherwise the room's own link drops visitors on an invalid-daily-link
+ * error. Resolved per request, never at build; the import is deferred so this
+ * module stays loadable without JSON import attributes.
+ */
+async function todaySittingRedirect(request: Request): Promise<Response> {
+  const { losAngelesDate, sittingOfTheDay } = await import('../../src/lib/kennel-club');
+  const sitting = sittingOfTheDay(losAngelesDate());
+  return Response.redirect(new URL(`/kennel-club/${sitting.slug}`, request.url).toString(), 302);
+}
+
 export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) => {
   const token = new URL(request.url).searchParams.get('t') ?? '';
+  if (!token) return todaySittingRedirect(request);
   if (!validBearerToken(token)) return collectRedirect(request, 'collect_error', 'daily-link-invalid');
   const db = requireCollectDb(env);
   if (!db) return collectRedirect(request, 'collect_error', 'not-configured');
