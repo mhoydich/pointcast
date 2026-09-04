@@ -27,9 +27,10 @@ const jsonLd = buildWebPageJsonLd(title, description, '/collect');
         <p class="hero__dek">Today’s plate arrives here at midnight Pacific. Confirm one email, stay signed in, and we’ll hold each claim until your Tezos wallet is ready.</p>
 
         <form class="promise" data-subscribe-form>
-          <label for="collect-email">We’ll email you when tomorrow’s dog is ready</label>
+          <label for="collect-email">Ask for tomorrow’s dog by email</label>
           <div><input id="collect-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required /><button type="submit">Email me tomorrow’s dog</button></div>
           <p data-subscribe-status aria-live="polite">Double opt-in. One dog note a day. Unsubscribe in every email.</p>
+          <p data-daily-readiness aria-live="polite">Daily worker status: checking…</p>
         </form>
 
         <div class="signin" aria-label="Other sign-in options" data-kennel-unclaimed>
@@ -93,6 +94,7 @@ const jsonLd = buildWebPageJsonLd(title, description, '/collect');
   const root = document.querySelector<HTMLElement>('[data-collect-desk]');
   const subscribeForm = root?.querySelector<HTMLFormElement>('[data-subscribe-form]');
   const subscribeStatus = root?.querySelector<HTMLElement>('[data-subscribe-status]');
+  const dailyReadiness = root?.querySelector<HTMLElement>('[data-daily-readiness]');
   const authStatus = root?.querySelector<HTMLElement>('[data-auth-status]');
   const claimButton = root?.querySelector<HTMLButtonElement>('[data-claim-today]');
   const claimStatus = root?.querySelector<HTMLElement>('[data-claim-status]');
@@ -122,7 +124,7 @@ const jsonLd = buildWebPageJsonLd(title, description, '/collect');
     message(root.querySelector('[data-next-seal]'), payload.nextSealAt === null ? 'all milestones complete' : `next at ${payload.nextSealAt}`);
     message(root.querySelector('[data-objects]'), `${payload.objects.mugsHeld} / ${payload.objects.nounsHeld}`);
     message(root.querySelector('[data-completion]'), `${payload.completion.claimed} / ${payload.completion.total}`);
-    if (payload.subscription.status === 'confirmed') message(subscribeStatus, 'Dog-a-day delivery confirmed. Tomorrow is automatic.');
+    if (payload.subscription.status === 'confirmed') message(subscribeStatus, 'Subscription confirmed. Worker readiness is reported below.');
     if (!payload.claimedDays.includes(payload.today.tokenId + 1)) {
       if (claimButton) claimButton.textContent = `Claim ${payload.today.name} — free`;
       claimButton?.removeAttribute('hidden');
@@ -139,6 +141,32 @@ const jsonLd = buildWebPageJsonLd(title, description, '/collect');
     if (!response.ok) throw new Error(payload.reason || `collect-${response.status}`);
     showCollection(payload);
     return payload;
+  }
+
+  async function loadDailyReadiness(): Promise<void> {
+    try {
+      const response = await fetch('/api/kennel-club/daily/status', { cache: 'no-store' });
+      const status = await response.json() as {
+        ready?: boolean;
+        configured?: boolean;
+        state?: string;
+        lastRun?: { day?: string } | null;
+        providerAcceptance?: { accepted?: number; failed?: number } | null;
+      };
+      if (!response.ok || status.state === 'unavailable') {
+        message(dailyReadiness, 'Daily delivery status is unavailable. Tomorrow’s email is not currently verified.');
+        return;
+      }
+      if (!status.ready || !status.configured) {
+        message(dailyReadiness, 'Daily delivery is not ready. Subscriptions are recorded, but tomorrow’s email is not promised.');
+        return;
+      }
+      const run = status.lastRun?.day ? ` Last run: ${status.lastRun.day};` : ' No scheduled run is recorded yet;';
+      const accepted = status.providerAcceptance?.accepted ?? 0;
+      message(dailyReadiness, `Daily worker ready.${run} provider accepted ${accepted}. Inbox delivery is not independently verified.`);
+    } catch {
+      message(dailyReadiness, 'Daily delivery status is unavailable. Tomorrow’s email is not currently verified.');
+    }
   }
 
   async function claimToday(payload?: CollectPayload | null) {
@@ -208,7 +236,7 @@ const jsonLd = buildWebPageJsonLd(title, description, '/collect');
       if (!user) return;
       const payload = await loadCollection();
       const params = new URLSearchParams(window.location.search);
-      if (params.get('confirmed') === '1') message(subscribeStatus, 'Confirmed. You are signed in and tomorrow is automatic.');
+      if (params.get('confirmed') === '1') message(subscribeStatus, 'Confirmed. You are signed in; worker readiness is reported above.');
       if (params.get('claim') === '1') {
         params.delete('claim');
         params.delete('t');
@@ -219,6 +247,7 @@ const jsonLd = buildWebPageJsonLd(title, description, '/collect');
       message(authStatus, error instanceof Error ? error.message : 'Your desk could not load.');
     }
   }
+  void loadDailyReadiness();
   void initialize();
 </script>
 

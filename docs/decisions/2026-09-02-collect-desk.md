@@ -12,6 +12,14 @@ Decision: rebuild `/collect` as the low-friction Kennel Club collecting desk. Pr
 > rotation preserves it, and passkey registration/removal requires a fresh
 > sign-in. Migration: `migrations/auth/0011_collect_login_tokens.sql`.
 
+> Superseded 2026-09-04 (Astra finding 4): Pages no longer infers scheduled
+> delivery readiness from its own `SEND_EMAIL` binding. `KENNEL_DAILY` is a
+> service binding to the scheduled Worker, and the public status route proxies
+> that Worker's binding readiness, dry-run flag, last D1 run receipt, and
+> provider-acceptance counts. `/collect` says unavailable/unknown explicitly
+> and does not equate provider acceptance with inbox delivery. This source
+> change is not evidence that the binding was configured or deployed.
+
 ## Promise
 
 The front door makes one offer and asks for one field:
@@ -84,12 +92,14 @@ No public or agent JSON includes an email address. The worker does not write rec
 
 Worker: `workers/kennel-daily`  
 Cron: `0 7 * * *` UTC — midnight Pacific during September daylight time  
-Binding names: `AUTH_DB`, `SEND_EMAIL`, `PRESENCE_BUS`  
+Worker binding names: `AUTH_DB`, `SEND_EMAIL`, `PRESENCE_BUS`
+
+Pages-to-Worker binding name: `KENNEL_DAILY`
 Sender: `kennel@pointcast.xyz`
 
 The handler computes the sitting from `America/Los_Angeles`, sends HTML and text bodies, supplies `List-Unsubscribe` headers, writes the run receipt, and posts one presence `burst` with kind `daily`. The presence service is bound directly; there is no public Worker-to-Worker fetch.
 
-Set the non-secret `KENNEL_DAILY_DRY_RUN` var to `"true"` to query and render the run without email, delivery marks, or a burst. `GET /status` on the Worker and `GET /api/kennel-club/daily/status` report `configured:false` when email or D1 is unavailable. Missing email logs a structured skip and sends nothing.
+Set the non-secret `KENNEL_DAILY_DRY_RUN` var to `"true"` to query and render the run without email, delivery marks, or a burst. `GET /status` on the Worker reports its own readiness and last run; `GET /api/kennel-club/daily/status` reaches that exact endpoint through `KENNEL_DAILY`. A missing or unreachable binding is an explicit unavailable state. Provider acceptance counts remain separate from unknown inbox delivery. Missing email logs a structured skip and sends nothing.
 
 Director preview: `GET /api/kennel-club/daily/preview`. It requires the existing `broadcaster` role and renders today’s final HTML with a deliberately invalid preview token.
 
@@ -112,7 +122,7 @@ Daily body:
 No setup, migration, Worker deployment, secret, or production release was performed by this branch.
 
 1. In the `pointcast.xyz` Cloudflare zone, enable Email Routing and Email Sending. Confirm SPF, DKIM, DMARC, and bounce records have propagated and that `kennel@pointcast.xyz` is an allowed sender.
-2. Confirm the Pages project binding remains named `SEND_EMAIL`. The scheduled Worker also declares `SEND_EMAIL` and restricts it to `kennel@pointcast.xyz`.
+2. Confirm the scheduled Worker declares `SEND_EMAIL` (restricted to `kennel@pointcast.xyz`) and the Pages project resolves `KENNEL_DAILY` to `pointcast-kennel-daily`. Pages' own email binding is irrelevant to scheduled-worker readiness.
 3. Apply the new D1 migration before either surface can accept traffic:
 
    ```sh

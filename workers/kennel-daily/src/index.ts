@@ -272,15 +272,28 @@ export async function runKennelDaily(
 async function status(rawEnv: Env): Promise<Response> {
   const env: OptionalDailyEnv = rawEnv;
   let lastRun: Record<string, unknown> | null = null;
+  let lastRunState: 'available' | 'unavailable' = env.AUTH_DB ? 'available' : 'unavailable';
   if (env.AUTH_DB) {
-    lastRun = await env.AUTH_DB.prepare(`
-      SELECT day, started_at, finished_at, attempted, sent, failed, dry_run, configured
-      FROM kennel_daily_runs ORDER BY day DESC LIMIT 1
-    `).first<Record<string, unknown>>();
+    try {
+      lastRun = await env.AUTH_DB.prepare(`
+        SELECT day, started_at, finished_at, attempted, sent, failed, dry_run, configured
+        FROM kennel_daily_runs ORDER BY day DESC LIMIT 1
+      `).first<Record<string, unknown>>();
+    } catch {
+      lastRunState = 'unavailable';
+    }
   }
+  const configured = Boolean(env.AUTH_DB && hasMail(env));
+  const providerAcceptance = lastRun ? {
+    accepted: Number(lastRun.sent) || 0,
+    failed: Number(lastRun.failed) || 0,
+    attempted: Number(lastRun.attempted) || 0,
+  } : null;
   return Response.json({
     ok: true,
-    configured: Boolean(env.AUTH_DB && hasMail(env)),
+    configured,
+    ready: configured && lastRunState === 'available',
+    state: lastRunState === 'available' ? 'available' : 'unavailable',
     bindings: {
       authDb: Boolean(env.AUTH_DB),
       email: hasMail(env),
@@ -290,7 +303,13 @@ async function status(rawEnv: Env): Promise<Response> {
     cron: '0 7 * * *',
     timeZone: 'America/Los_Angeles',
     dryRun: String(env.KENNEL_DAILY_DRY_RUN) === 'true',
+    lastRunState,
     lastRun,
+    providerAcceptance,
+    deliveryOutcome: {
+      state: 'unknown',
+      note: 'Provider acceptance does not establish inbox delivery.',
+    },
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
