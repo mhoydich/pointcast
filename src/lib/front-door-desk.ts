@@ -1,12 +1,9 @@
 import type { AuthSession, PointCastUser } from './auth/types';
+export { hasDirectorDeskAccess, isDirector } from './director-access';
 
 export interface FrontDoorSession {
   session?: AuthSession;
   user?: PointCastUser;
-}
-
-export function isDirector(session: FrontDoorSession | null | undefined): boolean {
-  return Boolean(session?.user?.roles?.includes('broadcaster'));
 }
 
 export function claimedToday(claimedDays: unknown, day: number): boolean {

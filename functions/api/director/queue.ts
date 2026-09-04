@@ -1,6 +1,8 @@
 import contracts from '../../../src/data/contracts.json';
 import manualQueue from '../../../src/data/director-queue.json';
 import { collectSitting } from '../../../src/lib/collect-desk';
+import { hasDirectorDeskAccess } from '../../../src/lib/director-access';
+import type { DirectorOperation } from '../../../src/lib/director-operations';
 import { readSessionFromRequest, authJson, type AuthEnv } from '../auth/session';
 import { claimDailyCap } from '../kennel-club/_claims';
 
@@ -13,27 +15,60 @@ interface CacheLike {
   put(request: Request, response: Response): Promise<void>;
 }
 
-interface ChainSnapshot {
-  kennel: { treasury: string | null; available: boolean };
+interface WalletSnapshot {
+  address: string;
+  balanceMutez: number | null;
+  available: boolean;
+}
+
+export interface ChainSnapshot {
+  kennel: { treasury: string | null; mintedToday: number | null; available: boolean };
   sealsV2: { paused: boolean | null; available: boolean; address: string };
+  wallets: {
+    safe: WalletSnapshot;
+    claim: WalletSnapshot;
+    cc: WalletSnapshot;
+  };
   readAt: string;
   cached: boolean;
 }
 
 export interface DirectorQueueRow {
   id: string;
-  source: 'chain' | 'registry' | 'd1' | 'manual';
+  source: 'chain' | 'registry' | 'manual';
+  kind: 'signature' | 'setup' | 'manual' | 'check';
   what: string;
   why: string;
   href: string;
   done: boolean;
-  state: 'open' | 'done' | 'unknown' | 'info';
+  state: 'open' | 'done' | 'unknown';
   value?: string;
+  buttonLabel: string;
+  operation?: DirectorOperation;
+  toggleable?: boolean;
 }
 
-const TzKT = 'https://api.tzkt.io/v1/contracts';
+export interface DirectorTillItem extends WalletSnapshot {
+  id: string;
+  label: string;
+  detail: string;
+  matchesSafe?: boolean | null;
+}
+
+export interface DirectorTodayMetric {
+  id: 'claims' | 'mints' | 'subscribers' | 'aliases' | 'receipts';
+  label: string;
+  value: number | null;
+  detail: string;
+}
+
+const TZKT = 'https://api.tzkt.io/v1';
 const MAX_CHAIN_RESPONSE_BYTES = 65_536;
+const MAX_WRITE_BODY_BYTES = 1_024;
 const CHAIN_CACHE_SECONDS = 60;
+const CLAIM_WALLET = 'tz1UvNjifVKhP6Hm3ytVfWtmTiCxKozcYsSG';
+const CC_WALLET = 'tz1PTUzbDzkddTh2uXMuxrGtRL6ty8aoeysY';
+const MANUAL_IDS = new Set(manualQueue.map(({ id }) => id));
 
 function mainnetAddress(key: string): string {
   const record = (contracts as Record<string, { mainnet?: unknown }>)[key];
@@ -44,40 +79,71 @@ function betterCall(address: string): string {
   return `https://better-call.dev/mainnet/${address}`;
 }
 
-function cacheKey(kennel: string, sealsV2: string): Request {
-  return new Request(`https://pointcast.xyz/.edge-cache/director/chain-v1/${kennel}/${sealsV2 || 'unregistered'}`);
+function cacheKey(kennel: string, sealsV2: string, tokenId: number): Request {
+  return new Request(`https://pointcast.xyz/.edge-cache/director/chain-v2/${kennel}/${sealsV2 || 'unregistered'}/${tokenId}`);
 }
 
-async function boundedJson(response: Response): Promise<Record<string, unknown>> {
+async function boundedJson(response: Response): Promise<unknown> {
   if (!response.ok) throw new Error(`TzKT returned HTTP ${response.status}`);
   const declared = Number(response.headers.get('content-length') ?? 0);
   if (declared > MAX_CHAIN_RESPONSE_BYTES) throw new Error('TzKT response too large');
   const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > MAX_CHAIN_RESPONSE_BYTES) {
-    throw new Error('TzKT response too large');
-  }
-  const parsed = JSON.parse(text) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid TzKT storage');
-  return parsed as Record<string, unknown>;
+  if (new TextEncoder().encode(text).byteLength > MAX_CHAIN_RESPONSE_BYTES) throw new Error('TzKT response too large');
+  return JSON.parse(text) as unknown;
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid TzKT record');
+  return value as Record<string, unknown>;
+}
+
+async function readTzkt(path: string, fetcher: typeof fetch): Promise<unknown> {
+  return boundedJson(await fetcher(`${TZKT}${path}`, { headers: { Accept: 'application/json' } }));
 }
 
 async function readStorage(address: string, fetcher: typeof fetch): Promise<Record<string, unknown>> {
-  return boundedJson(await fetcher(`${TzKT}/${address}/storage`, {
-    headers: { Accept: 'application/json' },
-  }));
+  return recordValue(await readTzkt(`/contracts/${address}/storage`, fetcher));
 }
 
-async function cachedSnapshot(cache: CacheLike | undefined, kennel: string, sealsV2: string): Promise<ChainSnapshot | null> {
+function bigMapValue(payload: unknown): unknown {
+  if (Array.isArray(payload)) return (payload[0] as Record<string, unknown> | undefined)?.value;
+  return payload && typeof payload === 'object' ? (payload as Record<string, unknown>).value : null;
+}
+
+async function readKennel(address: string, tokenId: number, fetcher: typeof fetch) {
+  const storage = await readStorage(address, fetcher);
+  const supply = Number(storage.supply);
+  if (!Number.isSafeInteger(supply)) throw new Error('Kennel Club supply map unavailable');
+  const supplyKey = await readTzkt(`/bigmaps/${supply}/keys?key=${tokenId}`, fetcher);
+  const mintedToday = Number(bigMapValue(supplyKey) ?? 0);
+  return { storage, mintedToday: Number.isSafeInteger(mintedToday) && mintedToday >= 0 ? mintedToday : 0 };
+}
+
+async function readWallet(address: string, fetcher: typeof fetch): Promise<WalletSnapshot> {
+  const account = recordValue(await readTzkt(`/accounts/${address}`, fetcher));
+  const balance = Number(account.balance);
+  return {
+    address,
+    balanceMutez: Number.isSafeInteger(balance) && balance >= 0 ? balance : null,
+    available: Number.isSafeInteger(balance) && balance >= 0,
+  };
+}
+
+async function cachedSnapshot(cache: CacheLike | undefined, kennel: string, sealsV2: string, tokenId: number) {
   if (!cache) return null;
-  const hit = await cache.match(cacheKey(kennel, sealsV2));
+  const hit = await cache.match(cacheKey(kennel, sealsV2, tokenId));
   if (!hit) return null;
   try {
     const value = await hit.json() as ChainSnapshot;
-    if (!value?.kennel || !value?.sealsV2 || typeof value.readAt !== 'string') return null;
+    if (!value?.kennel || !value?.sealsV2 || !value?.wallets || typeof value.readAt !== 'string') return null;
     return { ...value, cached: true };
   } catch {
     return null;
   }
+}
+
+function settledWallet(result: PromiseSettledResult<WalletSnapshot>, address: string): WalletSnapshot {
+  return result.status === 'fulfilled' ? result.value : { address, balanceMutez: null, available: false };
 }
 
 export async function getDirectorChainSnapshot(
@@ -85,36 +151,48 @@ export async function getDirectorChainSnapshot(
     fetcher?: typeof fetch;
     cache?: CacheLike;
     waitUntil?: (promise: Promise<unknown>) => void;
+    tokenId?: number;
   } = {},
 ): Promise<ChainSnapshot> {
   const kennel = mainnetAddress('kennel_club');
   const sealsV2 = mainnetAddress('seal_soulbound_v2');
-  const hit = await cachedSnapshot(options.cache, kennel, sealsV2);
+  const safe = mainnetAddress('project_multisig');
+  const tokenId = options.tokenId ?? collectSitting().tokenId;
+  const hit = await cachedSnapshot(options.cache, kennel, sealsV2, tokenId);
   if (hit) return hit;
 
   const fetcher = options.fetcher ?? fetch;
-  const [kennelResult, sealsResult] = await Promise.allSettled([
-    kennel ? readStorage(kennel, fetcher) : Promise.reject(new Error('kennel contract unregistered')),
-    sealsV2 ? readStorage(sealsV2, fetcher) : Promise.resolve(null),
+  const [kennelResult, sealsResult, safeResult, claimResult, ccResult] = await Promise.allSettled([
+    kennel ? readKennel(kennel, tokenId, fetcher) : Promise.reject(new Error('kennel contract unregistered')),
+    sealsV2 ? readStorage(sealsV2, fetcher) : Promise.reject(new Error('seals v2 contract unregistered')),
+    readWallet(safe, fetcher),
+    readWallet(CLAIM_WALLET, fetcher),
+    readWallet(CC_WALLET, fetcher),
   ]);
-  const kennelStorage = kennelResult.status === 'fulfilled' ? kennelResult.value : null;
+  const kennelValue = kennelResult.status === 'fulfilled' ? kennelResult.value : null;
   const sealsStorage = sealsResult.status === 'fulfilled' ? sealsResult.value : null;
   const snapshot: ChainSnapshot = {
     kennel: {
-      treasury: typeof kennelStorage?.treasury === 'string' ? kennelStorage.treasury : null,
-      available: Boolean(kennelStorage),
+      treasury: typeof kennelValue?.storage.treasury === 'string' ? kennelValue.storage.treasury : null,
+      mintedToday: kennelValue?.mintedToday ?? null,
+      available: Boolean(kennelValue),
     },
     sealsV2: {
       paused: typeof sealsStorage?.paused === 'boolean' ? sealsStorage.paused : null,
-      available: sealsV2 ? Boolean(sealsStorage) : true,
+      available: Boolean(sealsStorage),
       address: sealsV2,
+    },
+    wallets: {
+      safe: settledWallet(safeResult, safe),
+      claim: settledWallet(claimResult, CLAIM_WALLET),
+      cc: settledWallet(ccResult, CC_WALLET),
     },
     readAt: new Date().toISOString(),
     cached: false,
   };
 
   if (options.cache) {
-    const write = options.cache.put(cacheKey(kennel, sealsV2), Response.json(snapshot, {
+    const write = options.cache.put(cacheKey(kennel, sealsV2, tokenId), Response.json(snapshot, {
       headers: { 'Cache-Control': `public, max-age=${CHAIN_CACHE_SECONDS}` },
     }));
     if (options.waitUntil) options.waitUntil(write);
@@ -123,16 +201,37 @@ export async function getDirectorChainSnapshot(
   return snapshot;
 }
 
-async function countRow(db: D1Database | undefined, sql: string, value?: unknown): Promise<number | null> {
+async function countRow(db: D1Database | undefined, sql: string, values: unknown[] = []): Promise<number | null> {
   if (!db) return null;
   try {
-    const statement = value === undefined ? db.prepare(sql) : db.prepare(sql).bind(value);
-    const row = await statement.first<{ count: number }>();
+    const row = await db.prepare(sql).bind(...values).first<{ count: number }>();
     const count = Number(row?.count);
     return Number.isSafeInteger(count) && count >= 0 ? count : 0;
   } catch {
     return null;
   }
+}
+
+async function readManualState(db: D1Database | undefined): Promise<Map<string, boolean>> {
+  if (!db || MANUAL_IDS.size === 0) return new Map();
+  try {
+    const placeholders = Array.from(MANUAL_IDS, () => '?').join(', ');
+    const result = await db.prepare(`SELECT id, done FROM director_state WHERE id IN (${placeholders})`)
+      .bind(...MANUAL_IDS)
+      .all<{ id: string; done: number }>();
+    return new Map((result.results ?? []).map((row) => [row.id, Boolean(row.done)]));
+  } catch {
+    return new Map();
+  }
+}
+
+function dayRange(day: string): [string, string] {
+  const start = new Date(`${day}T07:00:00.000Z`);
+  return [start.toISOString(), new Date(start.getTime() + 86_400_000).toISOString()];
+}
+
+function tillItem(id: string, label: string, wallet: WalletSnapshot, detail: string): DirectorTillItem {
+  return { id, label, ...wallet, detail };
 }
 
 export async function buildDirectorQueue(
@@ -142,135 +241,157 @@ export async function buildDirectorQueue(
     cache?: CacheLike;
     waitUntil?: (promise: Promise<unknown>) => void;
   } = {},
-): Promise<{ rows: DirectorQueueRow[]; chain: ChainSnapshot }> {
+): Promise<{ rows: DirectorQueueRow[]; chain: ChainSnapshot; till: DirectorTillItem[]; today: DirectorTodayMetric[] }> {
   const sitting = collectSitting();
   const cap = claimDailyCap(env.KENNEL_CLUB_CLAIM_DAILY_CAP);
-  const [chain, todayClaims, subscribers, aliases] = await Promise.all([
-    getDirectorChainSnapshot(options),
-    countRow(env.AUTH_DB, 'SELECT COUNT(*) AS count FROM claims WHERE token_id = ? AND status != \'failed\'', sitting.tokenId),
+  const [dayStart, dayEnd] = dayRange(sitting.mintDate);
+  const [chain, todayClaims, subscribers, aliases, receipts, manualState] = await Promise.all([
+    getDirectorChainSnapshot({ ...options, tokenId: sitting.tokenId }),
+    countRow(env.AUTH_DB, "SELECT COUNT(*) AS count FROM claims WHERE token_id = ? AND status != 'failed'", [sitting.tokenId]),
     countRow(env.AUTH_DB, "SELECT COUNT(*) AS count FROM subscribers WHERE status = 'confirmed'"),
-    countRow(env.AUTH_DB, "SELECT COUNT(*) AS count FROM aliases WHERE status = 'active' AND expires_at > ?", new Date().toISOString()),
+    countRow(env.AUTH_DB, "SELECT COUNT(*) AS count FROM aliases WHERE status = 'active' AND expires_at > ?", [new Date().toISOString()]),
+    countRow(env.AUTH_DB, 'SELECT COUNT(*) AS count FROM seal_receipts WHERE created_at >= ? AND created_at < ?', [dayStart, dayEnd]),
+    readManualState(env.AUTH_DB),
   ]);
 
   const safe = mainnetAddress('project_multisig');
   const kennel = mainnetAddress('kennel_club');
+  const rows: DirectorQueueRow[] = [];
   const treasuryKnown = chain.kennel.available && Boolean(chain.kennel.treasury);
   const treasuryDone = treasuryKnown && chain.kennel.treasury === safe;
-  const rows: DirectorQueueRow[] = [{
-    id: 'kennel-treasury-safe',
-    source: 'chain',
-    what: treasuryDone ? 'Kennel Club treasury points to the safe' : 'set_treasury → safe',
-    why: treasuryDone
-      ? 'Kennel Club mint proceeds now land at the project multisig.'
-      : 'Kennel Club mint proceeds still point somewhere other than the project multisig.',
-    href: betterCall(kennel),
-    done: treasuryDone,
-    state: treasuryKnown ? (treasuryDone ? 'done' : 'open') : 'unknown',
-    value: treasuryKnown ? `${chain.kennel.treasury} → ${safe}` : 'chain read unavailable',
-  }];
-
-  const sealsV2 = mainnetAddress('seal_soulbound_v2');
-  if (sealsV2) {
-    const pausedKnown = chain.sealsV2.available && chain.sealsV2.paused !== null;
-    const unpaused = pausedKnown && chain.sealsV2.paused === false;
+  if (!treasuryKnown) {
     rows.push({
-      id: 'seals-v2-unpause',
-      source: 'chain',
-      what: unpaused ? 'Seals v2 is unpaused' : 'unpause seals v2',
-      why: unpaused ? 'The v2 issuer path is open.' : 'The originated v2 contract is still paused.',
-      href: betterCall(sealsV2),
-      done: unpaused,
-      state: pausedKnown ? (unpaused ? 'done' : 'open') : 'unknown',
-      value: pausedKnown ? `paused = ${String(chain.sealsV2.paused)}` : 'chain read unavailable',
+      id: 'kennel-treasury-safe', source: 'chain', kind: 'check', what: 'Check Kennel Club treasury',
+      why: 'The chain read is unavailable, so PointCast will not offer a blind signature.',
+      href: betterCall(kennel), done: false, state: 'unknown', value: 'chain read unavailable', buttonLabel: 'Inspect',
+    });
+  } else if (!treasuryDone) {
+    rows.push({
+      id: 'kennel-treasury-safe', source: 'chain', kind: 'signature',
+      what: 'Set Kennel Club treasury to the project safe',
+      why: 'Route future 1 ꜩ mint proceeds to the 1-of-2 project safe.',
+      href: betterCall(kennel), done: false, state: 'open',
+      value: `${chain.kennel.treasury} → ${safe}`, buttonLabel: 'Sign',
+      operation: { contract: kennel, entrypoint: 'set_treasury', args: [safe] },
     });
   }
+
+  const sealsV2 = mainnetAddress('seal_soulbound_v2');
+  if (sealsV2 && !chain.sealsV2.available) {
+    rows.push({
+      id: 'seals-v2-unpause', source: 'chain', kind: 'check', what: 'Check Seals v2 pause state',
+      why: 'The chain read is unavailable, so PointCast will not offer a blind signature.',
+      href: betterCall(sealsV2), done: false, state: 'unknown', value: 'chain read unavailable', buttonLabel: 'Inspect',
+    });
+  } else if (sealsV2 && chain.sealsV2.paused === true) {
+    rows.push({
+      id: 'seals-v2-unpause', source: 'chain', kind: 'signature', what: 'Unpause Seals v2',
+      why: 'Open the configured v2 issuer path after the administrator approves the call.',
+      href: betterCall(sealsV2), done: false, state: 'open', value: 'set_paused(false)', buttonLabel: 'Sign',
+      operation: { contract: sealsV2, entrypoint: 'set_paused', args: [false] },
+    });
+  }
+
+  rows.push(...manualQueue.map((item) => {
+    const done = manualState.get(item.id) ?? false;
+    return {
+      ...item, source: 'manual' as const, kind: 'manual' as const, done,
+      state: done ? 'done' as const : 'open' as const,
+      buttonLabel: done ? 'Undo' : 'Done', toggleable: true,
+    };
+  }));
 
   for (const [key, record] of Object.entries(contracts)) {
     if (key.startsWith('_') || !record || typeof record !== 'object' || !('mainnet' in record)) continue;
     if (typeof record.mainnet === 'string' && record.mainnet.trim() === '') {
       rows.push({
-        id: `contract-${key}`,
-        source: 'registry',
-        what: `Register ${key.replaceAll('_', ' ')} on mainnet`,
+        id: `contract-${key}`, source: 'registry', kind: 'setup', what: `Prepare ${key.replaceAll('_', ' ')} for mainnet`,
         why: 'This registered contract still has an empty mainnet address.',
         href: `/admin/deploy/new?prefill=${encodeURIComponent(key)}`,
-        done: false,
-        state: 'open',
+        done: false, state: 'open', buttonLabel: 'Prepare',
       });
     }
   }
 
-  rows.push(
+  const treasury = chain.kennel.treasury;
+  const till: DirectorTillItem[] = [
+    tillItem('safe', 'Project safe', chain.wallets.safe, 'TzSafe v0.3.4 · 1-of-2'),
+    tillItem('claim-wallet', 'Claim wallet', chain.wallets.claim, 'Sponsors free Kennel Club claims'),
+    tillItem('cc-wallet', 'cc wallet', chain.wallets.cc, 'Project operations and seal issuance'),
     {
-      id: 'today-claims',
-      source: 'd1',
-      what: `${sitting.name}: today’s free claims`,
-      why: 'Daily free-claim capacity at the Kennel Club claim desk.',
-      href: '/kennel-club',
-      done: todayClaims !== null && todayClaims >= cap,
-      state: todayClaims === null ? 'unknown' : 'info',
-      value: todayClaims === null ? `unavailable / ${cap}` : `${todayClaims} / ${cap}`,
+      id: 'kennel-treasury', label: 'Kennel Club treasury', address: treasury ?? '', balanceMutez: null,
+      available: treasuryKnown,
+      detail: treasuryDone ? 'Matches the project safe' : treasuryKnown ? 'Does not match the project safe' : 'Chain read unavailable',
+      matchesSafe: treasuryKnown ? treasuryDone : null,
     },
-    {
-      id: 'confirmed-subscribers',
-      source: 'd1',
-      what: 'Confirmed dog-a-day subscribers',
-      why: 'People with a confirmed email subscription to the September sitting.',
-      href: '/collect',
-      done: true,
-      state: subscribers === null ? 'unknown' : 'info',
-      value: subscribers === null ? 'unavailable' : String(subscribers),
-    },
-    {
-      id: 'post-office-aliases',
-      source: 'd1',
-      what: 'Active post-office aliases',
-      why: 'Paid agent mailboxes currently registered in the town post office.',
-      href: '/post-office',
-      done: true,
-      state: aliases === null ? 'unknown' : 'info',
-      value: aliases === null ? 'unavailable' : String(aliases),
-    },
-  );
+  ];
+  const today: DirectorTodayMetric[] = [
+    { id: 'claims', label: 'Claims', value: todayClaims, detail: todayClaims === null ? `unavailable / ${cap}` : `${todayClaims} of ${cap} free claims` },
+    { id: 'mints', label: 'Mints', value: chain.kennel.mintedToday, detail: `${sitting.name} · token ${sitting.tokenId}` },
+    { id: 'subscribers', label: 'Subscribers', value: subscribers, detail: 'confirmed dog-a-day list' },
+    { id: 'aliases', label: 'Aliases', value: aliases, detail: 'active town post-office aliases' },
+    { id: 'receipts', label: 'Receipts', value: receipts, detail: 'seal receipts created today' },
+  ];
+  return { rows, chain, till, today };
+}
 
-  rows.push(...manualQueue.map((item) => ({
-    ...item,
-    source: 'manual' as const,
-    done: false,
-    state: 'open' as const,
-  })));
-  return { rows, chain };
+async function directorSession(request: Request, env: DirectorEnv) {
+  const current = await readSessionFromRequest(request, env);
+  return current && hasDirectorDeskAccess(current) ? current : null;
 }
 
 export async function handleDirectorQueue(
   request: Request,
   env: DirectorEnv,
-  options: {
-    fetcher?: typeof fetch;
-    cache?: CacheLike;
-    waitUntil?: (promise: Promise<unknown>) => void;
-  } = {},
+  options: { fetcher?: typeof fetch; cache?: CacheLike; waitUntil?: (promise: Promise<unknown>) => void } = {},
 ): Promise<Response> {
-  const current = await readSessionFromRequest(request, env);
-  if (!current?.user.roles?.includes('broadcaster')) {
-    return authJson({ ok: false, reason: 'forbidden' }, { status: 403 });
-  }
+  if (!await directorSession(request, env)) return authJson({ ok: false, reason: 'forbidden' }, { status: 403 });
   const result = await buildDirectorQueue(env, options);
   return authJson({
-    ok: true,
-    spec: 'pointcast.director-queue/v1',
-    cacheSeconds: CHAIN_CACHE_SECONDS,
-    generatedAt: new Date().toISOString(),
-    ...result,
+    ok: true, spec: 'pointcast.director-queue/v2', cacheSeconds: CHAIN_CACHE_SECONDS,
+    generatedAt: new Date().toISOString(), ...result,
   }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } });
 }
 
-export const onRequestGet: PagesFunction<DirectorEnv> = async (context) => {
-  const runtimeCaches = typeof caches === 'undefined'
-    ? undefined
-    : caches as CacheStorage & { default?: CacheLike };
-  return handleDirectorQueue(context.request, context.env, {
-    cache: runtimeCaches?.default,
-    waitUntil: (promise) => context.waitUntil(promise),
-  });
-};
+export async function handleDirectorQueueWrite(request: Request, env: DirectorEnv): Promise<Response> {
+  const current = await directorSession(request, env);
+  if (!current) return authJson({ ok: false, reason: 'forbidden' }, { status: 403 });
+  if (!env.AUTH_DB) return authJson({ ok: false, reason: 'd1-unbound' }, { status: 503 });
+  const origin = request.headers.get('origin');
+  if (origin && origin !== new URL(request.url).origin) return authJson({ ok: false, reason: 'origin-mismatch' }, { status: 403 });
+  const declared = Number(request.headers.get('content-length') ?? 0);
+  if (declared > MAX_WRITE_BODY_BYTES) return authJson({ ok: false, reason: 'body-too-large' }, { status: 413 });
+
+  let body: { id?: unknown; done?: unknown };
+  try {
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > MAX_WRITE_BODY_BYTES) throw new Error('too large');
+    body = JSON.parse(text) as typeof body;
+  } catch {
+    return authJson({ ok: false, reason: 'bad-body' }, { status: 400 });
+  }
+  if (typeof body.id !== 'string' || !MANUAL_IDS.has(body.id) || typeof body.done !== 'boolean') {
+    return authJson({ ok: false, reason: 'invalid-director-state' }, { status: 400 });
+  }
+
+  const updatedAt = new Date().toISOString();
+  await env.AUTH_DB.prepare(`
+    INSERT INTO director_state (id, done, updated_at, updated_by)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET done = excluded.done, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+  `).bind(body.id, body.done ? 1 : 0, updatedAt, current.user.userId).run();
+  return authJson({ ok: true, id: body.id, done: body.done, updatedAt });
+}
+
+function runtimeCache(): CacheLike | undefined {
+  if (typeof caches === 'undefined') return undefined;
+  return (caches as CacheStorage & { default?: CacheLike }).default;
+}
+
+export const onRequestGet: PagesFunction<DirectorEnv> = async (context) => handleDirectorQueue(
+  context.request,
+  context.env,
+  { cache: runtimeCache(), waitUntil: (promise) => context.waitUntil(promise) },
+);
+
+export const onRequestPost: PagesFunction<DirectorEnv> = async ({ request, env }) => handleDirectorQueueWrite(request, env);
