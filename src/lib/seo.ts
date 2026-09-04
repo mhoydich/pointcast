@@ -120,3 +120,38 @@ export function buildIdentityJsonLd() {
     ],
   };
 }
+
+export function buildBreadcrumbJsonLd(pathname: string, currentName: string) {
+  const parts = pathname.split('/').filter(Boolean);
+  const itemListElement = [{ '@type': 'ListItem', position: 1, name: 'PointCast', item: `${SITE_ORIGIN}/` }];
+  let current = '';
+  parts.forEach((part, index) => {
+    current += `/${part}`;
+    itemListElement.push({
+      '@type': 'ListItem',
+      position: index + 2,
+      name: index === parts.length - 1 ? currentName : part.replace(/-/g, ' '),
+      item: `${SITE_ORIGIN}${current}`,
+    });
+  });
+  return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement };
+}
+
+export function buildArticleJsonLd({ id, title, description, datePublished, channel, url }: {
+  id: string;
+  title: string;
+  description: string;
+  datePublished: string;
+  channel: { name: string; url: string };
+  url: string;
+}) {
+  return {
+    '@type': 'Article', '@id': url, identifier: id, headline: title, description, datePublished,
+    inLanguage: 'en-US', author: { '@id': `${SITE_ORIGIN}/#person` }, publisher: { '@id': `${SITE_ORIGIN}/#org` },
+    isPartOf: { '@type': 'Collection', name: channel.name, url: channel.url },
+  };
+}
+
+export function buildWebPageJsonLd(name: string, description: string, pathname: string) {
+  return { '@context': 'https://schema.org', '@type': 'WebPage', name, description, url: `${SITE_ORIGIN}${pathname}`, inLanguage: 'en-US' };
+}

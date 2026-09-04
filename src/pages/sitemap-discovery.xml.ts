@@ -5,8 +5,18 @@ import { POINTCAST_25_TEAMS } from '../lib/pointcast-25-audience';
 import { MASCOT_CARDS } from '../lib/mascot-battler';
 import { POINTCAST_2029_IDENTITIES } from '../lib/pointcast-2029';
 import afterimageExamples from '../data/afterimage-examples.json';
+import { isNoindexPath } from '../lib/seo-rules.mjs';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
+
+function canonicalSitemapUrl(loc: string) {
+  const url = new URL(loc);
+  const leaf = url.pathname.split('/').filter(Boolean).at(-1) ?? '';
+  // The rendered HTML canonical is slash-terminated; endpoint extensions are
+  // files and keep their extensionless form.
+  if (url.pathname !== '/' && !leaf.includes('.')) url.pathname = `${url.pathname.replace(/\/$/, '')}/`;
+  return url.href;
+}
 
 const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/', 'daily', '1.0'],
@@ -374,7 +384,10 @@ export const GET: APIRoute = async () => {
       '0.65',
     ] as SitemapEntry),
   ];
-  const urls = [...staticUrls, ...dynamicUrls];
+  // Keep this bespoke sitemap and @astrojs/sitemap on one noindex policy.
+  const urls = [...staticUrls, ...dynamicUrls]
+    .map(([loc, changefreq, priority]) => [canonicalSitemapUrl(loc), changefreq, priority] as SitemapEntry)
+    .filter(([loc]) => !isNoindexPath(new URL(loc).pathname));
   const today = new Date().toISOString().slice(0, 10);
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
