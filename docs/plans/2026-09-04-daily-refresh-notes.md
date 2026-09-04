@@ -34,6 +34,11 @@ That is eleven daily clocks. The front door lists them as rooms; it does not yet
 4. **The faucet as the reward lane.** Each daily thing can later earn a drip from a different 2019 token (bench → GRATITUDE, coffee → APIZZA, and so on); the ledger is already token-keyed. Not now.
 5. **Real-time where it costs nothing.** Weather, tide, fog, and presence are already computed; surface them in the checklist strip and in the OG image for `/` so the link preview changes daily too.
 
-## Smallest next step
+## Shipped in the same PR (#1049)
 
-`HomeFrontDoorDesk` already takes a `today` prop. Extend `frontDoorToday` with the weather line and add a `/api/today` Pages Function that returns the five checklist states for the session. One PR, no new tables: Kennel and faucet have their ledgers, bench and today can read KV.
+- `HomeTodayStrip` inside the front-door desk: one live El Segundo weather line (`/api/weather`, ten-minute edge cache) and the five rounds as chips.
+- `/api/today`: the rounds for the Los Angeles date of the request. Dog and HELLO are account-keyed and show done or not for a signed-in person; bench, today's block, and the race are listed as untracked because their state lives in the browser.
+
+## Next
+
+Move bench, today's block, and race state onto the account (a `rounds` KV key per user per day is enough) so all five track, then add the streak count from `claimedStreak`.
