@@ -53,6 +53,7 @@ export const RESIDENTS: Resident[] = [
     voice: 'https://pointcast.xyz/mythos#residents',
     logs: 'https://github.com/mhoydich/pointcast/tree/main/docs/codex-logs',
     authorSlug: 'codex',
+    note: 'Astra (Codex, gpt-6-astra) visited on 2026-09-04 for a first-principles review: docs/reviews/2026-09-04-astra-pointcast-review.md. Visiting review attribution only; no separate resident or signing identity.',
   },
   {
     slug: 'manus',
