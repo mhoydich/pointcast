@@ -25,6 +25,7 @@ for (const m of appsSrc.matchAll(/slug: '([^']+)'[\s\S]*?title: '([^']+)'[\s\S]*
 const roomsSrc = readFileSync('src/pages/rooms.astro', 'utf8');
 for (const m of roomsSrc.matchAll(/href: '([^']+)'[\s\S]*?name: '([^']+)'/g)) add(m[1], m[2], 'room');
 const hand = [
+  ['/','Front door'],
   ['/coffee','Coffee Mugs'],['/window','The Window'],['/race','Daily Race'],['/residents','Residents'],['/mythos','Mythos'],['/wire','The Wire'],['/briefs','Briefs'],
   ['/prayer-altars','Prayer Altars'],['/prayer-bells','Prayer Bells'],['/prayer-candles','Prayer Candles'],['/prayer-labyrinth','Prayer Labyrinth'],['/prayer-altars-evening','Prayer Altars Evening'],
   ['/bell-choir','Bell Choir'],['/bell-post','Bell Post'],['/win95-games','Win95 Arcade'],['/drum-hero','Drum Hero'],['/drum-says','Drum Says'],['/drum-house','Drum House'],['/drum-v8','Drum Room v8'],
@@ -36,10 +37,13 @@ const hand = [
   ['/dock','PointCast Dock'],
 ];
 for (const [p, n] of hand) add(p, n, 'room');
+projects.set('/', { path: '/', name: 'Front door', kind: 'journey' });
 
 // ---- live counters (fetched once, best effort)
 let live = {};
 try { live = JSON.parse(readFileSync('.score-live.json', 'utf8')); } catch { console.error('no .score-live.json — run scripts/score-live.mjs first; scoring without USE'); }
+let outcomes = {};
+try { outcomes = JSON.parse(readFileSync('.score-live.detail.json', 'utf8')); } catch { console.error('no .score-live.detail.json — front-door outcomes unmeasured'); }
 
 // ---- helpers
 const blocks = readdirSync('src/content/blocks').filter(f => f.endsWith('.json')).map(f => { try { return JSON.parse(readFileSync(join('src/content/blocks', f), 'utf8')); } catch { return null; } }).filter(Boolean);
@@ -51,6 +55,7 @@ const text = (f) => { if (!fileText.has(f)) { try { fileText.set(f, readFileSync
 
 const slugOf = (p) => p.replace(/^\//, '').replace(/\//g, '-');
 const filesFor = (p) => {
+  if (p === '/') return ['src/pages/index.astro', 'src/components/HomeFrontDoorDesk.astro', 'src/components/HomeFrontDoorNews.astro', 'src/lib/front-door-next-door.ts'].filter(existsSync);
   if (p === '/dock') return [
     'src/components/FooterBar.astro', 'src/components/DockBurstTicker.astro',
     'src/components/CursorRoom.astro', 'src/components/TugRope.astro',
@@ -92,20 +97,30 @@ for (const proj of projects.values()) {
   const blockRefs = blocks.filter(b => JSON.stringify(b).includes(`pointcast.xyz${proj.path}`) || JSON.stringify(b).includes(`"${proj.path}`)).length;
   const onHome = hrefRe.test(homeSrc) || homeSrc.includes(`href: '${proj.path}'`);  // data-driven doors (Start Here) use href: '/x'
   const use = live[proj.path] ?? null;
+  const frontDoor = proj.kind === 'journey' ? outcomes.frontDoor : null;
+  const completion = frontDoor && frontDoor.shown > 0
+    ? { shown: frontDoor.shown, completed: frontDoor.completed, rate: frontDoor.completed / frontDoor.shown }
+    : null;
+  const sevenDayReturn = frontDoor && frontDoor.eligibleForSevenDayReturn > 0
+    ? { eligible: frontDoor.eligibleForSevenDayReturn, returned: frontDoor.returnedAfterSevenDays, rate: frontDoor.returnedAfterSevenDays / frontDoor.eligibleForSevenDayReturn }
+    : null;
 
   const craft = Math.min(1, Math.log10(1 + loc) / 4.3) * 0.7 + Math.min(1, tests / 3) * 0.3;              // 20k LOC ≈ 1 (git history was flattened 2026-07-30, so commits are not a signal)
   const reach = Math.min(1, Math.log10(1 + inbound) / 1.6) * 0.5 + Math.min(1, blockRefs / 6) * 0.3 + (onHome ? 0.2 : 0);
   const fresh = Math.max(0, 1 - ageDays / 180);
   const useScore = use == null ? null : Math.min(1, Math.log10(1 + use) / 4.5);                            // ~30k ≈ 1
-  const total = Math.round(100 * (useScore == null
+  const outcomeScore = completion ? (completion.rate + (sevenDayReturn?.rate ?? completion.rate)) / 2 : null;
+  const total = Math.round(100 * (outcomeScore != null
+    ? (outcomeScore * 0.45 + craft * 0.275 + reach * 0.275)
+    : useScore == null
     ? (craft * 0.5 + reach * 0.5)
     : (useScore * 0.45 + craft * 0.275 + reach * 0.275)));
-  rows.push({ ...proj, files: srcFiles.length, loc, commits, authors, first, last, ageDays, lifeDays, tests, inbound, blockRefs, onHome, use, craft: +craft.toFixed(2), reach: +reach.toFixed(2), fresh: +fresh.toFixed(2), useScore: useScore == null ? null : +useScore.toFixed(2), total });
+  rows.push({ ...proj, files: srcFiles.length, loc, commits, authors, first, last, ageDays, lifeDays, tests, inbound, blockRefs, onHome, use, completion, sevenDayReturn, craft: +craft.toFixed(2), reach: +reach.toFixed(2), fresh: +fresh.toFixed(2), useScore: useScore == null ? null : +useScore.toFixed(2), total });
 }
 rows.sort((a, b) => b.total - a.total);
 const out = process.argv[2] || '.score-projects.json';
 writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), rows }, null, 2));
-const md = ['| # | project | path | score | use | LOC | files | tests | inbound | blocks | home |', '|--|--|--|--|--|--|--|--|--|--|--|'];
-rows.forEach((r, i) => md.push(`| ${i + 1} | ${r.name} | ${r.path} | **${r.total}** | ${r.use ?? '—'} | ${r.loc} | ${r.files} | ${r.tests} | ${r.inbound} | ${r.blockRefs} | ${r.onHome ? '●' : ''} |`));
+const md = ['| # | project | path | score | use | completion | 7-day return | LOC | files | tests | inbound | blocks | home |', '|--|--|--|--|--|--|--|--|--|--|--|--|--|'];
+rows.forEach((r, i) => md.push(`| ${i + 1} | ${r.name} | ${r.path} | **${r.total}** | ${r.use ?? '—'} | ${r.completion ? `${r.completion.completed}/${r.completion.shown}` : '—'} | ${r.sevenDayReturn ? `${r.sevenDayReturn.returned}/${r.sevenDayReturn.eligible}` : '—'} | ${r.loc} | ${r.files} | ${r.tests} | ${r.inbound} | ${r.blockRefs} | ${r.onHome ? '●' : ''} |`));
 writeFileSync(out.replace(/\.json$/, '.md'), md.join('\n'));
 console.log(`${rows.length} projects scored → ${out}`);

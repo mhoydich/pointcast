@@ -17,12 +17,15 @@ test('the PointCast front door is a catalog of the whole town with stable discov
   assert.match(home, /import '\.\.\/styles\/home-shelf\.css'/);
   assert.doesNotMatch(layout, /NetworkFirst100Strip/);
 
-  // The September desk is additive: the whole-town twelve-shelf catalog remains below it in the same fixed order.
+  // The primary desk comes first; the weekly strip and Start Here sit below its fold line, then every town shelf remains reachable.
   const sections = ['HomePlayFirst', 'HomeStartHere', 'HomeGlance', 'HomeMagazineRack', 'HomeDrumUniverse', 'HomeRoomsShelf', 'HomeConstellation', 'HomeAgentDesk', 'HomeShipLog', 'HomeScoreboard', 'HomeWire', 'HomeBackCatalog'];
   const positions = sections.map((name) => home.indexOf(`<${name}`, home.indexOf('<BlockLayout')));
   assert.ok(positions.every((p) => p > -1), `every section renders: ${sections.filter((_, i) => positions[i] === -1).join(', ')}`);
-  assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'sections render in the documented order');
-  assert.ok(home.indexOf('<HomeFrontDoorDesk') < positions[0], 'the new role-aware desk sits above the unchanged town shelves');
+  assert.ok(home.indexOf('<HomeFrontDoorDesk') < home.indexOf('<HomeFrontDoorNews'), 'weekly changes follow the primary desk');
+  assert.ok(home.indexOf('<HomeFrontDoorNews') < home.indexOf('<HomeStartHere'), 'Start Here follows the weekly strip');
+  const shelfPositions = [positions[0], ...positions.slice(2)];
+  assert.deepEqual(shelfPositions, [...shelfPositions].sort((a, b) => a - b), 'town shelves stay in their documented order after Start Here');
+  assert.ok(home.indexOf('<HomeStartHere') < positions[0], 'the role-aware desk and first-visit panel sit above the town shelves');
   assert.match(home, /href="\/now"/);
   assert.match(home, /href(?:="|: ')\/win95-games["']/);
   assert.match(home, /href(?:="|: ')\/network-el-segundo["']/);

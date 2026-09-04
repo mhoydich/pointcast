@@ -11,10 +11,10 @@ const endpointSource = await readFile(new URL('../src/pages/signals.json.ts', im
 const styleSource = await readFile(new URL('../src/styles/front-door-fresh.css', import.meta.url), 'utf8');
 
 test('front door exposes the four-pad Rosebud instrument', () => {
-  // September's role-aware desk mounts first; the four Rosebud pads still lead the unchanged town shelves below it.
+  // The daily desk mounts first; Rosebud remains a reachable shelf below the below-fold Start Here panel.
   assert.match(indexSource, /<HomePlayFirst taps=\{PINNED\.drumTaps\} blockCount=\{blockCount\} \/>/);
   assert.ok(indexSource.indexOf('<HomeFrontDoorDesk') < indexSource.indexOf('<HomePlayFirst'));
-  assert.ok(indexSource.indexOf('<HomePlayFirst') < indexSource.indexOf('<HomeStartHere'));
+  assert.ok(indexSource.indexOf('<HomeStartHere') < indexSource.indexOf('<HomePlayFirst'));
   assert.equal((indexSource.match(/<h1\b/g) ?? []).length, 0);
   assert.equal((`${indexSource}${deskSource}${playFirstSource}`.match(/<h1\b/g) ?? []).length, 1);
   assert.equal((playFirstSource.match(/\{ id: '[a-z]+', key: '[A-Z]', name: '[A-Za-z]+'/g) ?? []).length, 4);

@@ -7,6 +7,9 @@ export type AnalyticsEvent =
   | 'mood_set'
   | 'node_connect'
   | 'dock'
+  | 'front_door.primary_shown'
+  | 'front_door.primary_completed'
+  | 'front_door.next_door_taken'
   | 'page_view';
 
 /** Payload sent to the analytics endpoint. */
