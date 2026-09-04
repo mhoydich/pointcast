@@ -19,9 +19,15 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
   if (!db) return page('Email preferences are temporarily unavailable.', 503);
   const subscriber = await findSubscriberByToken(db, token);
   if (!subscriber) return page('That unsubscribe link is not valid.', 404);
-  await db.prepare("UPDATE subscribers SET status = 'unsubscribed' WHERE token = ?")
-    .bind(token)
-    .run();
+  const now = Date.now();
+  await db.batch([
+    db.prepare("UPDATE subscribers SET status = 'unsubscribed' WHERE token = ?")
+      .bind(token),
+    db.prepare(`
+      UPDATE collect_login_tokens
+      SET revoked_at = ?
+      WHERE subscriber_email = ? AND consumed_at IS NULL AND revoked_at IS NULL
+    `).bind(now, subscriber.email),
+  ]);
   return page('You are unsubscribed.');
 };
-

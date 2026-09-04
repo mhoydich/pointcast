@@ -5,7 +5,7 @@ import {
   withSessionCookie,
 } from '../api/auth/session.ts';
 import {
-  findSubscriberByToken,
+  consumeCollectLoginToken,
   requireCollectDb,
   validBearerToken,
   type CollectEnv,
@@ -38,7 +38,14 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
   if (!validBearerToken(token)) return collectRedirect(request, 'collect_error', 'daily-link-invalid');
   const db = requireCollectDb(env);
   if (!db) return collectRedirect(request, 'collect_error', 'not-configured');
-  const subscriber = await findSubscriberByToken(db, token);
+  const login = await consumeCollectLoginToken(db, token);
+  const subscriber = login
+    ? await db.prepare(`
+      SELECT email, user_id, status, token, created_at, confirmed_at, last_sent_day, tz
+      FROM subscribers
+      WHERE email = ?
+    `).bind(login.subscriber_email).first<import('../api/collect/_shared.ts').SubscriberRow>()
+    : null;
   if (!subscriber || subscriber.status !== 'confirmed') {
     return collectRedirect(request, 'collect_error', 'daily-link-invalid');
   }
@@ -57,4 +64,3 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
   const session = await issueSession(env, user.userId);
   return withSessionCookie(collectRedirect(request, 'from', 'daily-email'), session);
 };
-

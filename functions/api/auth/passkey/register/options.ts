@@ -3,6 +3,7 @@ import { generateRegistrationOptions } from '@simplewebauthn/server';
 import { randomUrlSafeString } from '../../_oauth.ts';
 import {
   authJson,
+  hasFreshAuthentication,
   readSessionFromRequest,
   writeAuthState,
 } from '../../session.ts';
@@ -31,6 +32,9 @@ export function createRegisterOptionsHandler(
     }
     const current = await readSessionFromRequest(request, env);
     if (!current) return authJson({ ok: false, reason: 'unauthorized' }, { status: 401 });
+    if (!await hasFreshAuthentication(env, current.session)) {
+      return authJson({ ok: false, reason: 'fresh-sign-in-required' }, { status: 403 });
+    }
 
     let body: { label?: unknown } = {};
     try {

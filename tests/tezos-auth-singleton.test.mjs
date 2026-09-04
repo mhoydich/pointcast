@@ -68,7 +68,8 @@ test('all public layout families restore the signed Tezos session', async () => 
 test('active PointCast sessions rotate inside a bounded renewal window', async () => {
   const route = await readFile(new URL('functions/api/auth/session.ts', root), 'utf8');
   assert.match(route, /SESSION_REFRESH_WINDOW_SECONDS/);
-  assert.match(route, /issueSession\(env, current\.user\.userId\)/);
+  assert.match(route, /const authenticatedAt = await sessionAuthenticatedAt\(env, current\.session\)/);
+  assert.match(route, /issueSession\([\s\S]*current\.user\.userId[\s\S]*new Date\(authenticatedAt\)\.toISOString\(\)/);
   assert.match(route, /deleteSession\(env, current\.session\.sessionToken\)/);
   assert.match(route, /renewed: true/);
 });

@@ -45,10 +45,14 @@ export function confirmationEmail(link: string): DailyEmailContent {
   };
 }
 
-export function dailyEmail(sitting: DailyEmailSitting, token: string): DailyEmailContent {
+export function dailyEmail(
+  sitting: DailyEmailSitting,
+  loginToken: string,
+  unsubscribeToken: string,
+): DailyEmailContent {
   const sittingNumber = String(sitting.day).padStart(2, '0');
-  const claimLink = dailyEntryUrl(token);
-  const leaveLink = unsubscribeUrl(token);
+  const claimLink = dailyEntryUrl(loginToken);
+  const leaveLink = unsubscribeUrl(unsubscribeToken);
   const plate = new URL(sitting.image.png, COLLECT_ORIGIN).toString();
   const safeClaim = escapeHtml(claimLink);
   const safeLeave = escapeHtml(leaveLink);
@@ -61,4 +65,3 @@ export function dailyEmail(sitting: DailyEmailSitting, token: string): DailyEmai
     html: `<div style="margin:0 auto;max-width:620px;padding:24px 16px;font-family:Arial,sans-serif;color:#171717"><p style="font:12px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#8a2432">Kennel Club · Sitting ${sittingNumber}</p><img src="${safePlate}" width="588" alt="${safeName}, ${safeBreed}" style="display:block;width:100%;height:auto;border:1px solid #171717"><h1 style="margin:24px 0 8px;font-size:42px;font-weight:500;line-height:1">${safeName} is ready.</h1><p style="margin:0;color:#555">${safeBreed} · ${escapeHtml(sitting.title)}</p><p style="margin:28px 0"><a href="${safeClaim}" style="display:inline-block;background:#8a2432;color:#fff;padding:15px 20px;text-decoration:none">Claim ${safeName} — free</a></p><p style="font-size:12px;color:#777">You asked PointCast to email you when each dog is ready. <a href="${safeLeave}" style="color:#777">Unsubscribe</a>.</p></div>`,
   };
 }
-

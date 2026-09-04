@@ -70,6 +70,10 @@ class FakeD1Statement {
       const row = db.sessions.get(args[0]);
       return row ? { ...row } : null;
     }
+    if (sql.startsWith('SELECT authenticated_at FROM sessions')) {
+      const row = db.sessions.get(args[0]);
+      return row ? { authenticated_at: row.authenticated_at ?? 0 } : null;
+    }
     if (sql.startsWith('SELECT payload, expires_at FROM oauth_states')) {
       const row = db.oauthStates.get(args[0]);
       return row ? { ...row } : null;
@@ -119,7 +123,9 @@ class FakeD1Statement {
     } else if (sql.startsWith('DELETE FROM identities')) {
       db.identities.delete(`${args[0]}:${args[1]}`);
     } else if (sql.startsWith('INSERT INTO sessions')) {
-      db.sessions.set(args[0], { token: args[0], user_id: args[1], expires_at: args[2] });
+      db.sessions.set(args[0], {
+        token: args[0], user_id: args[1], expires_at: args[2], authenticated_at: args[3] ?? 0,
+      });
     } else if (sql.startsWith('INSERT INTO oauth_states')) {
       db.oauthStates.set(args[0], { payload: args[1], expires_at: args[2] });
     } else if (sql.startsWith('INSERT INTO passkey_credentials')) {
@@ -366,6 +372,19 @@ test('passkey registration and discoverable login consume challenges once and re
     }),
   });
   assert.deepEqual((await listed.json()).passkeys.map((passkey) => passkey.label), ['Mike’s Mac']);
+  db.sessions.get(cookie).authenticated_at = Date.now() - 16 * 60 * 1000;
+  const staleRemoval = await deleteCredential({
+    env,
+    request: new Request('https://pointcast.xyz/api/auth/passkey/credentials', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json', cookie: `pc_session=${cookie}` },
+      body: JSON.stringify({ credentialId: 'credential-test' }),
+    }),
+  });
+  assert.equal(staleRemoval.status, 403);
+  assert.equal((await staleRemoval.json()).reason, 'fresh-sign-in-required');
+  assert.equal(db.passkeys.size, 1);
+  db.sessions.get(cookie).authenticated_at = Date.now();
   const removed = await deleteCredential({
     env,
     request: new Request('https://pointcast.xyz/api/auth/passkey/credentials', {

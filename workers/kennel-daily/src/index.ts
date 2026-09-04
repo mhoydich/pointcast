@@ -7,6 +7,8 @@ import {
 } from '../../../src/lib/collect-desk';
 import { sendMail, type MailEnv } from '../../../src/lib/mail';
 
+const COLLECT_LOGIN_TTL_MS = 15 * 60 * 1000;
+
 interface Env extends MailEnv {
   AUTH_DB: D1Database;
   PRESENCE_BUS: Fetcher;
@@ -46,6 +48,44 @@ function hasMail(env: OptionalDailyEnv): boolean {
 
 function log(event: Record<string, unknown>): void {
   console.log(JSON.stringify(event));
+}
+
+function createLoginToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function issueLoginToken(
+  db: D1Database,
+  subscriberEmail: string,
+  sentDay: string,
+  now = Date.now(),
+): Promise<{ raw: string; hash: string }> {
+  const raw = createLoginToken();
+  const hash = await sha256Hex(raw);
+  await db.batch([
+    db.prepare(`
+      UPDATE collect_login_tokens
+      SET revoked_at = ?
+      WHERE subscriber_email = ? AND consumed_at IS NULL AND revoked_at IS NULL
+    `).bind(now, subscriberEmail),
+    db.prepare(`
+      INSERT INTO collect_login_tokens
+        (token_hash, subscriber_email, issued_at, expires_at, consumed_at, revoked_at, sent_day)
+      VALUES (?, ?, ?, ?, NULL, NULL, ?)
+    `).bind(hash, subscriberEmail, now, now + COLLECT_LOGIN_TTL_MS, sentDay),
+  ]);
+  return { raw, hash };
 }
 
 async function postOfficeLine(db: D1Database, now: Date): Promise<DailyRunResult['postOffice']> {
@@ -187,7 +227,8 @@ export async function runKennelDaily(
         AND (last_sent_day IS NULL OR last_sent_day <> ?)
     `).bind(day, subscriber.email, day).run();
     if ((mark.meta.changes ?? 0) !== 1) continue;
-    const content = dailyEmail(sitting, subscriber.token);
+    const login = await issueLoginToken(env.AUTH_DB, subscriber.email, day);
+    const content = dailyEmail(sitting, login.raw, subscriber.token);
     try {
       await sendMail({
         to: subscriber.email,
@@ -203,10 +244,17 @@ export async function runKennelDaily(
       result.sent += 1;
     } catch (error) {
       result.failed += 1;
-      await env.AUTH_DB.prepare(`
-        UPDATE subscribers SET last_sent_day = ?
-        WHERE email = ? AND last_sent_day = ?
-      `).bind(subscriber.last_sent_day, subscriber.email, day).run();
+      await env.AUTH_DB.batch([
+        env.AUTH_DB.prepare(`
+          UPDATE subscribers SET last_sent_day = ?
+          WHERE email = ? AND last_sent_day = ?
+        `).bind(subscriber.last_sent_day, subscriber.email, day),
+        env.AUTH_DB.prepare(`
+          UPDATE collect_login_tokens
+          SET revoked_at = ?
+          WHERE token_hash = ? AND consumed_at IS NULL AND revoked_at IS NULL
+        `).bind(Date.now(), login.hash),
+      ]);
       console.error(JSON.stringify({
         message: 'kennel daily send failed',
         day,

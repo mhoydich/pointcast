@@ -1,5 +1,6 @@
 import {
   authJson,
+  hasFreshAuthentication,
   readSessionFromRequest,
 } from '../session.ts';
 import {
@@ -24,6 +25,9 @@ export const onRequestDelete: PagesFunction<PasskeyEnv> = async ({ request, env 
   if (!db) return authJson({ ok: false, reason: 'd1-not-bound' }, { status: 503 });
   const current = await readSessionFromRequest(request, env);
   if (!current) return authJson({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  if (!await hasFreshAuthentication(env, current.session)) {
+    return authJson({ ok: false, reason: 'fresh-sign-in-required' }, { status: 403 });
+  }
 
   let body: { credentialId?: unknown };
   try {
