@@ -14,6 +14,7 @@ import { TezosToolkit, MichelsonMap } from '@taquito/taquito';
 import { BeaconWallet } from '@taquito/beacon-wallet';
 import { getPkhfromPk, stringToBytes, verifySignature } from '@taquito/utils';
 import { claimProfileHandleWith, setProfilePageWith, utf8ToHex } from './profile-operations.mjs';
+import { sendDirectorOperationWith, type DirectorOperation } from './director-operations';
 
 export { utf8ToHex } from './profile-operations.mjs';
 
@@ -333,6 +334,17 @@ export async function mintKennelClubSitting(params: {
     mutez: true,
   });
   return { opHash: operation.opHash, confirmation: operation.confirmation(1) };
+}
+
+/** Submit one allowlisted director operation through the shared Beacon wallet. */
+export async function submitDirectorOperation(
+  operation: DirectorOperation,
+): Promise<{ address: string; opHash: string; confirmation: Promise<unknown> }> {
+  const { tezos, wallet } = getToolkit();
+  return sendDirectorOperationWith(operation, {
+    connect: () => ensurePointCastPermissions(wallet),
+    at: (address: string) => tezos.wallet.at(address) as any,
+  });
 }
 
 export async function claimProfileHandle(params: {

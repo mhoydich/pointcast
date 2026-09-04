@@ -50,8 +50,10 @@ test('director panel is absent for a visitor and rendered for a fake director se
   const director = { user: { roles: ['broadcaster'] } };
   assert.equal(isDirector(visitor), false);
   assert.equal(isDirector(director), true);
-  assert.match(desk, /if \(isDirector\(session\)\)[\s\S]*renderDirector\(queue\.rows/);
+  assert.match(desk, /if \(hasDirectorDeskAccess\(session\)\)[\s\S]*renderDirector\(queue\.rows/);
   assert.match(desk, /root\.prepend\(fragment\)/);
+  assert.match(desk, /\.slice\(0, 3\)/);
+  assert.match(desk, /link\.href = '\/desk'/);
   assert.equal(claimedToday([1, 2, 3], 3), true);
   assert.equal(claimedToday([1, 2], 3), false);
 });
@@ -62,17 +64,17 @@ test('director queue is gated, chain-derived, cached for 60 seconds, and private
     read('src/data/contracts.json'),
     read('src/data/director-queue.json'),
   ]);
-  assert.match(queue, /roles\?\.includes\('broadcaster'\)/);
+  assert.match(queue, /hasDirectorDeskAccess\(current\)/);
   assert.match(queue, /return authJson\(\{ ok: false, reason: 'forbidden' \}, \{ status: 403 \}\)/);
   assert.match(queue, /const CHAIN_CACHE_SECONDS = 60/);
-  assert.match(queue, /\.edge-cache\/director\/chain-v1/);
+  assert.match(queue, /\.edge-cache\/director\/chain-v2/);
   assert.match(queue, /context\.waitUntil\(promise\)/);
   assert.match(queue, /'Cache-Control': 'private, no-store'/);
-  assert.match(queue, /set_treasury → safe/);
-  assert.match(queue, /unpause seals v2/);
+  assert.match(queue, /entrypoint: 'set_treasury'/);
+  assert.match(queue, /entrypoint: 'set_paused'/);
   assert.match(queue, /SELECT COUNT\(\*\) AS count FROM subscribers/);
   assert.match(queue, /SELECT COUNT\(\*\) AS count FROM aliases/);
-  assert.match(contracts, /"seal_soulbound_v2"\s*:\s*\{\s*"mainnet": ""/s);
+  assert.match(contracts, /"seal_soulbound_v2"\s*:\s*\{\s*"mainnet": "KT1UVn9CDToAbyoxARLPfNtVkvKgzCwuroy3"/s);
   const manualItems = JSON.parse(manual);
   assert.deepEqual(manualItems.map((item) => item.id), ['board-001-sunday', 'mailbox-purchase', 'resend-dns']);
 });
