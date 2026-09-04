@@ -1,19 +1,21 @@
 # Sol brief — the two HELLO plates, through ChatGPT's image model
 
+**Redo (2026-09-04, Mike):** *"redo the images no humans as the one legs are messy."* Same two plates, same direction, **no people at all**. The chalk figures are replaced by things: an empty pool edge, a deck chair, a folded towel, a beach ball, a palm shadow. Overwrite the same paths.
+
 **Date filed:** 2026-09-04 PT
 **Filed by:** Claude Code (cc) for Mike to hand to Sol
-**Repo / branch / PR:** `mhoydich/pointcast` · `claude/custom-bitcoin-fork-32zal2` · PR #1049 · issue #1052
+**Repo:** `mhoydich/pointcast` · work from `main` on a new branch · redo tracked on issue #1074 (first round was #1052 / PR #1049)
 **Why Sol:** cc's sandbox has no route to OpenAI and cannot commit binary art it did not see. Sol has a machine, a network, and an `OPENAI_API_KEY`.
 
 ## The job in one line
 
-Make two original poster plates for the HELLO faucet with OpenAI's image model, save them into the repo at fixed paths, verify them by eye, commit, push, and say so on PR #1049.
+Make two original poster plates for the HELLO faucet with OpenAI's image model, no people in them, save them into the repo at fixed paths, verify them by eye, open a PR to `main`, and say so on issue #1074.
 
 ## Setup (once)
 
 ```
 git clone https://github.com/mhoydich/pointcast && cd pointcast
-git checkout claude/custom-bitcoin-fork-32zal2
+git checkout -b sol/hello-plates-no-people main
 npm ci
 echo 'OPENAI_API_KEY=sk-...' >> .env.local     # gitignored; never commit it
 ```
@@ -32,7 +34,7 @@ Tool call (MCP):
 
 ```
 plate_generate
-  prompt: "An original pop-art poster celebrating the single word HELLO. Large hand-cut screen-print letterforms repeated in a four-panel stacked grid down the left two-thirds, each panel slightly misregistered the way a silkscreen run drifts. Flat California pool-and-stucco light: hard-edged shadows, a sunlit wall, a swimming-pool plane, one palm-frond shadow crossing the wall softly. Along the lower edge, faint chalk-and-pastel figures in loose rehearsal motion, faces undetailed. Warm, positive, welcoming. Finished as a monochrome print: one deep ink blue on cream paper, visible halftone, no other hue. Asymmetrical composition, letters weighted left, clean negative space right. No words other than HELLO, no logos, no watermark, no signature, no frame border."
+  prompt: "An original pop-art poster celebrating the single word HELLO. Large hand-cut screen-print letterforms repeated in a four-panel stacked grid down the left two-thirds, each panel slightly misregistered the way a silkscreen run drifts. Flat California pool-and-stucco light: hard-edged shadows, a sunlit wall, a swimming-pool plane, one palm-frond shadow crossing the wall softly. Along the lower edge, the pool's edge with an empty deck chair, a folded towel, and a beach ball drawn in soft chalk-and-pastel strokes. No people anywhere. Warm, positive, welcoming. Finished as a monochrome print: one deep ink blue on cream paper, visible halftone, no other hue. Asymmetrical composition, letters weighted left, clean negative space right. No words other than HELLO, no humans, no figures, no hands, no logos, no watermark, no signature, no frame border."
   out: "public/images/faucet/hello-poster.png"
   og: "public/images/faucet/hello-og.png"
   aspect: "portrait"
@@ -44,18 +46,18 @@ plate_generate
 Same call with this prompt and these paths:
 
 ```
-  prompt: "An original pop-art poster celebrating the single word HELLO. Large hand-cut screen-print letterforms repeated in a four-panel stacked grid down the left two-thirds, each panel slightly misregistered the way a silkscreen run drifts. Flat California pool-and-stucco light: hard-edged shadows, a sunlit wall, a swimming-pool plane. In the quiet right third, one friendly fish swims past, drawn as a flat cut-paper silhouette with a single paper-white eye, fully inside the frame and not overlapping the letters. Along the lower edge, faint chalk-and-pastel figures in loose rehearsal motion, faces undetailed. Warm, positive, welcoming. Finished as a monochrome print: one deep ink blue on cream paper, visible halftone, no other hue. Asymmetrical composition, letters weighted left, negative space right. No words other than HELLO, no logos, no watermark, no signature, no frame border."
+  prompt: "An original pop-art poster celebrating the single word HELLO. Large hand-cut screen-print letterforms repeated in a four-panel stacked grid down the left two-thirds, each panel slightly misregistered the way a silkscreen run drifts. Flat California pool-and-stucco light: hard-edged shadows, a sunlit wall, a swimming-pool plane. In the quiet right third, one friendly fish swims past, drawn as a flat cut-paper silhouette with a single paper-white eye, fully inside the frame and not overlapping the letters. Along the lower edge, the pool's edge with rippling water and a single beach ball drawn in soft chalk-and-pastel strokes. No people anywhere. Warm, positive, welcoming. Finished as a monochrome print: one deep ink blue on cream paper, visible halftone, no other hue. Asymmetrical composition, letters weighted left, negative space right. No words other than HELLO, no humans, no figures, no hands, no logos, no watermark, no signature, no frame border."
   out: "public/images/faucet/hello-poster-fish.png"
   og: "public/images/faucet/hello-og-fish.png"
   aspect: "portrait"
   quality: "high"
 ```
 
-The tool writes the PNG, a `.webp` twin, and the 1200×630 OG crop. Run `plate_inspect` on each output to confirm 1024×1536 PNGs.
+The tool writes the PNG, a `.webp` twin, and a 1200×630 OG crop. Then recompose the OG cards the way commit `6866f75` did: `hello-og.png` is both plates side by side on cream, `hello-og-fish.png` is the fish plate alone on cream (a centre crop cuts the letters mid-word). Run `plate_inspect` on each output to confirm 1024×1536 PNGs.
 
 ## Verify by eye, then fix or regenerate
 
-Open all four PNGs. Reject and regenerate if: any word other than HELLO; a second colour survived the monochrome pass; the fish overlaps the letters or is cut by the frame; extra limbs on the chalk figures; a signature, frame, or watermark; the composition is dead-centre. Two regenerations per plate is the budget; if it is still wrong, say so on the PR rather than shipping it.
+Open all four PNGs. Reject and regenerate if: any person, figure, hand, or silhouette of a person; any word other than HELLO; a second colour survived the monochrome pass; the fish overlaps the letters or is cut by the frame; extra limbs on the chalk figures; a signature, frame, or watermark; the composition is dead-centre. Two regenerations per plate is the budget; if it is still wrong, say so on the PR rather than shipping it.
 
 If the final plate differs from the alt text, edit the `alt` on the `<img>` in `src/pages/faucet/hello.astro` to describe what is actually there.
 
@@ -63,16 +65,16 @@ If the final plate differs from the alt text, edit the `alt` on the `<img>` in `
 
 ```
 git add public/images/faucet src/pages/faucet/hello.astro
-git commit -m "faucet: HELLO plates, clean and fish, via OpenAI image model"
-git push origin claude/custom-bitcoin-fork-32zal2
+git commit -m "faucet: HELLO plates redone with no people"
+git push -u origin sol/hello-plates-no-people   # then open a PR to main
 ```
 
-Then one comment on PR #1049 and one on issue #1052: which model, how many regenerations, anything rejected and why. Write the same to `docs/codex-logs/2026-09-04-faucet-hello-plate.md` if you have write access, otherwise the PR comment is enough.
+Then one comment on issue #1074: which model, how many regenerations, anything rejected and why. Write the same to `docs/codex-logs/2026-09-04-faucet-hello-plate.md` if you have write access, otherwise the PR comment is enough.
 
 ## Do not
 
 - Do not open, copy, or paste anything from the `eth info` spreadsheet. The faucet does not need it and neither does this job.
-- Do not set Cloudflare secrets, apply migrations, or fund anything. That is Mike's step, after Codex's code review.
+- Do not touch Cloudflare secrets or fund anything.
 - Do not commit `.env.local` or any key.
 - Do not touch files outside `public/images/faucet/` and the one alt line.
 
