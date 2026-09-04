@@ -95,3 +95,19 @@ test('a signed-in account sees its dog and HELLO rounds flip as it does them', a
     assert.equal(after.rounds.find((r) => r.id === 'dog').label, `Claim ${sitting.name}`);
   });
 });
+
+test('a delivered HELLO still counts as today’s round', async () => {
+  await withModules(async ({ today, faucet, kennel, lib }) => {
+    const { db, user } = await freshDb();
+    const env = { AUTH_DB: db, USERS: new FakeKV() };
+    const request = new Request('https://pointcast.xyz/api/today', { headers: { cookie: 'pc_session=tok1' } });
+    const date = kennel.losAngelesDate();
+
+    await faucet.claimFaucetDrip({ env, user, faucet: lib.getFaucet('hello'), day: date });
+    db.db.prepare("UPDATE faucet_claims SET status = 'delivered', tx_hash = ?, delivered_to = ?, delivered_at = ? WHERE user_id = ?")
+      .run(`0x${'a'.repeat(64)}`, '0x000000000000000000000000000000000000dead', new Date().toISOString(), 'u1');
+
+    const payload = await today.readToday(request, env);
+    assert.equal(payload.rounds.find((r) => r.id === 'hello').done, true, 'the drip was claimed today, wherever it now lives');
+  });
+});

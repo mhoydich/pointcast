@@ -54,6 +54,10 @@ Two jobs, in this order.
 - **Nonce.** One hot wallet, concurrent Pages invocations. viem fills the nonce from `pending` at send time. The KV lock narrows the race; it does not eliminate it. Question for you: is that acceptable at a 50-drip/day cap, or should delivery go through a queue (`PC_QUEUE_KV` + cron) before the first funding?
 - **Broadcast, not confirmation.** `delivered` means broadcast with a tx hash; the page links Etherscan. A dropped tx would show as delivered with no receipt on chain. Acceptable for a valueless token, but say so if you disagree.
 
+### Already applied from cc's Opus pre-review (2026-09-04, later the same day)
+
+The broadcast-boundary double-pay was fixed (rows never return to `held` after `chain.send` resolves; a failed ledger write logs `faucet-delivery-unrecorded` with the hash); the KV courtesy lock became a D1 `faucet_locks` row (conditional `UPDATE … RETURNING`, 60 s expiry); stale `submitting` reclaim is 30 min and logs `faucet-reclaimed-submitting`; RPC transport is time-boxed (3 s, one retry) and misses are negative-cached 20 s; both POSTs have JSON error boundaries; pasted addresses get EIP-55 validation plus a denylist (zero, the token contract, the spigot itself); gas floor is 0.01 ETH with a 0.03 ETH warning band. Tests: 15/15. Please review the result rather than re-deriving these.
+
 ### Things to look hard at
 
 1. `deliverHeldFaucetDrips` ordering: reclaim stale → take rows → lock → snapshot → balance check → send → mark. Any path that leaves rows in `submitting`?

@@ -35,7 +35,20 @@ export async function handleFaucetClaim(request: Request, env: FaucetClaimEnv, s
   if (!userLimit.allowed) return rateLimitResponse(userLimit, 'This account has made too many claim attempts.');
 
   const day = losAngelesDate();
-  const result = await claimFaucetDrip({ env, user: current.user, faucet, day });
+  let result: Awaited<ReturnType<typeof claimFaucetDrip>>;
+  try {
+    result = await claimFaucetDrip({ env, user: current.user, faucet, day });
+  } catch (error) {
+    // The desk parses every response as JSON; a bare D1 error must not reach
+    // it as a platform 500 with an HTML body.
+    console.error(JSON.stringify({
+      message: 'faucet-claim-unavailable',
+      faucet: faucet.slug,
+      userId: current.user.userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return authJson({ ok: false, reason: 'claim-unavailable', day, faucet: faucet.slug }, { status: 503 });
+  }
   const body = {
     ...result,
     configured: spigotConfigured(env, faucet),

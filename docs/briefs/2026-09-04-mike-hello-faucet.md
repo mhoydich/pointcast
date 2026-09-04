@@ -29,7 +29,7 @@ The ledger uses the existing `AUTH_DB` D1 binding and `PC_RATES_KV`; nothing new
 
 ### 2. Make sure the wallet has gas
 
-The page refuses to send when the spigot holds under 0.002 ETH and shows "low" on the live panel. If the deployer has less than ~0.02 ETH, send it some from anywhere; 0.02 ETH is a few hundred sends at 2026 mainnet prices.
+The page refuses to send when the spigot holds under 0.01 ETH and shows "getting low" under 0.03 ETH. Keep it around 0.05 ETH and top up weekly: a fully used 50-drip day costs roughly 0.025 ETH at 10 gwei, so the cap bounds gas, not just tokens.
 
 ### 3. Apply the migration and redeploy
 
@@ -45,6 +45,6 @@ If you ever want the deployer key off the server: make a new wallet, send it 5,0
 
 ## Remaining risk
 
-- Two people pressing Send in the same second can race the wallet nonce; the KV lock narrows it and any failed send puts the drips back in the ledger. Codex may ask for a queue.
+- Sends are serialised by a D1 lock row, so two people pressing Send at once no longer race the wallet nonce. A send that fails before broadcast returns the drips to the ledger; a send that broadcasts is never un-delivered, even if the ledger write after it fails (the hash is logged for hand reconciliation).
 - "Delivered" means broadcast. A dropped transaction shows a receipt link that 404s on Etherscan. Rare; the fix is a re-send from the ledger, which cc can add if it ever happens.
 - The daily cap (50) is the only thing bounding outflow, and a cap is not a lock. That is the accepted trade.

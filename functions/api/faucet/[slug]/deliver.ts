@@ -50,13 +50,29 @@ export async function handleFaucetDelivery(
   });
   if (!limit.allowed) return rateLimitResponse(limit, 'This account has made too many delivery attempts.');
 
-  const result = await deliverHeldFaucetDrips({
-    env,
-    userId: current.user.userId,
-    faucet,
-    deliveredTo,
-    chainFactory: options.chainFactory,
-  });
+  let result: Awaited<ReturnType<typeof deliverHeldFaucetDrips>>;
+  try {
+    result = await deliverHeldFaucetDrips({
+      env,
+      userId: current.user.userId,
+      faucet,
+      deliveredTo,
+      chainFactory: options.chainFactory,
+    });
+  } catch (error) {
+    // The desk parses every response as JSON; a bare D1 error must not reach
+    // it as a platform 500 with an HTML body.
+    console.error(JSON.stringify({
+      message: 'faucet-delivery-unavailable',
+      faucet: faucet.slug,
+      userId: current.user.userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return applyRateLimitHeaders(
+      authJson({ ok: false, reason: 'delivery-unavailable', delivered: 0, faucet: faucet.slug }, { status: 503 }),
+      limit,
+    );
+  }
   const status = result.ok
     ? 200
     : result.reason === 'nothing-held' || result.reason === 'delivery-busy'

@@ -25,7 +25,10 @@ export interface FaucetToken {
   chainId: number;
   /** ERC-20 contract address, lowercase 0x. */
   contract: `0x${string}`;
-  /** The 2019 deployer, kept public for the story; never a signer here. */
+  /**
+   * The 2019 deployer. Mike chose this same key as the spigot signer, so it is
+   * both the public origin story and the wallet the server signs with.
+   */
   deployer: `0x${string}`;
   deployedYear: number;
   /** Whole tokens per drip. Decimals are read from the contract at send time. */
@@ -69,9 +72,13 @@ export function getFaucet(slug: string | undefined | null): FaucetToken | null {
   return FAUCETS.find((faucet) => faucet.slug === key) ?? null;
 }
 
-/** Ethereum address, either case; checksum is not enforced because pasting is the point. */
+/**
+ * Ethereum address, either case. Shape only — the delivery path additionally
+ * checks EIP-55 when the paste is mixed case (see checkedDestination).
+ */
 export const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
-export const EVM_TX_HASH = /^0x[0-9a-f]{64}$/;
+/** Either case: viem lowercases, but a hash is never rejected for its casing. */
+export const EVM_TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 
 export function isEvmAddress(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && EVM_ADDRESS.test(value);

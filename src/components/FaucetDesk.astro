@@ -16,7 +16,7 @@ interface Props { faucet: FaucetToken; returnTo?: string }
 const { faucet, returnTo = '/faucet/hello' } = Astro.props;
 ---
 
-<section class="desk" data-faucet-desk data-faucet={faucet.slug} data-ticker={faucet.ticker} data-return-to={returnTo}>
+<section class="desk" data-faucet-desk data-faucet={faucet.slug} data-ticker={faucet.ticker} data-contract={faucet.contract} data-return-to={returnTo}>
   <div class="desk__claim">
     <button type="button" class="desk__button" data-faucet-claim>
       Claim today’s {faucet.ticker} — free
@@ -52,7 +52,7 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
     ok: boolean;
     ledger: boolean;
     claims: { configured: boolean; cap: number; claimedToday: number; remainingToday: number };
-    spigot: { address: string; tokenBalance: number; lowGas: boolean } | null;
+    spigot: { address: string; tokenBalance: number; lowGas: boolean; lowGasWarning: boolean } | null;
     you: { today: { claimed: boolean }; held: number; delivered: number; linkedAddress: string | null; claims: LedgerLine[] } | null;
   };
   type ClaimResponse = { ok: boolean; reason?: string; claim?: { day: string; amount: number } };
@@ -108,6 +108,8 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
       status(root, '[data-faucet-send-state]', 'The spigot wallet is not funded yet. Your drips are safe in the ledger; sending opens once it is.');
     } else if (state.spigot?.lowGas) {
       status(root, '[data-faucet-send-state]', 'The spigot is low on gas. Drips stay in the ledger until it is topped up.');
+    } else if (state.spigot?.lowGasWarning) {
+      status(root, '[data-faucet-send-state]', 'The spigot is getting low on gas. Sending still works.');
     } else {
       status(root, '[data-faucet-send-state]', '');
     }
@@ -175,10 +177,12 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
   function deliverReason(reason: string | undefined): string {
     if (reason === 'address-required') return 'That is not an Ethereum address. It starts with 0x and is 42 characters long.';
     if (reason === 'nothing-held') return 'Nothing is owed right now.';
-    if (reason === 'delivery-busy') return 'The spigot is mid-send. Give it a minute and try again.';
+    if (reason === 'delivery-busy') return 'The spigot is mid-send. Give it a minute and try again; a send that has stalled clears within half an hour.';
     if (reason === 'spigot-not-configured') return 'The spigot wallet is not funded yet. Your drips stay in the ledger.';
     if (reason === 'spigot-low-gas') return 'The spigot is low on gas. Your drips stay in the ledger until it is topped up.';
     if (reason === 'spigot-empty') return 'The spigot is out of tokens. Your drips stay in the ledger until it is refilled.';
+    if (reason === 'spigot-unavailable') return 'The spigot can’t reach Ethereum right now. Your drips are safe; try again shortly.';
+    if (reason === 'delivery-unavailable') return 'The desk could not reach the ledger. Nothing was sent; try again shortly.';
     if (reason === 'delivery-failed') return 'Ethereum did not accept the send. Nothing was lost; try again shortly.';
     return 'The send did not go through. Nothing was lost; try again shortly.';
   }
@@ -220,6 +224,11 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
     const address = input.value.trim();
     if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
       status(root, '[data-faucet-send-state]', deliverReason('address-required'));
+      return;
+    }
+    const lower = address.toLowerCase();
+    if (lower === `0x${'0'.repeat(40)}` || lower === (root.dataset.contract ?? '').toLowerCase()) {
+      status(root, '[data-faucet-send-state]', 'That address would burn the drips — it is the token’s own contract or the zero address. Use a wallet you control.');
       return;
     }
     send.disabled = true;

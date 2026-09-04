@@ -13,7 +13,7 @@ import { losAngelesDate, sittingOfTheDay } from '../../src/lib/kennel-club';
 import { getFaucet } from '../../src/lib/faucet';
 import { authJson, readSessionFromRequest, type AuthEnv } from './auth/session';
 import { getUserKennelClaims } from './kennel-club/_claims';
-import { getUserFaucetLedger } from './faucet/_claims';
+import { hasClaimedFaucetToday } from './faucet/_claims';
 
 export interface TodayRound {
   id: 'dog' | 'hello' | 'bench' | 'block' | 'race';
@@ -55,12 +55,14 @@ export async function readToday(request: Request, env: AuthEnv): Promise<TodayPa
   if (session) {
     const sitting = sittingOfTheDay(date);
     const faucet = getFaucet('hello');
-    const [dogClaims, ledger] = await Promise.all([
+    const [dogClaims, claimedHello] = await Promise.all([
       getUserKennelClaims(env.AUTH_DB, session.user.userId).catch(() => []),
-      faucet ? getUserFaucetLedger(env.AUTH_DB, faucet, session.user, date).catch(() => null) : Promise.resolve(null),
+      faucet
+        ? hasClaimedFaucetToday(env.AUTH_DB, faucet, session.user.userId, date).catch(() => false)
+        : Promise.resolve(false),
     ]);
     dog = dogClaims.some((claim) => claim.tokenId === sitting.tokenId && claim.status !== 'failed');
-    hello = ledger ? ledger.today.claimed : false;
+    hello = claimedHello;
   }
   const rounds = buildRounds(date, { dog, hello });
   const tracked = rounds.filter((round) => round.done !== null);
