@@ -78,6 +78,16 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
     },
     calendar: kennelGrid(),
     claimedDays,
+    claims: dogs
+      .filter((dog) => dog.status === 'held' || dog.status === 'delivered')
+      .map((dog) => ({
+        tokenId: dog.tokenId,
+        sitting: dog.sitting,
+        status: dog.status,
+        opHash: dog.opHash,
+        deliveredTo: dog.deliveredTo,
+        createdAt: dog.createdAt,
+      })),
     heldDogs: dogs.filter((dog) => dog.status === 'held').length,
     streak: claimedStreak(claimedDays, sitting.day),
     nextSealAt: nextSealAt(claimedDays),
