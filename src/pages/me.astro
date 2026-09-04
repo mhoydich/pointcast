@@ -262,21 +262,36 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     unitBalance: string;
     tokens: HoldingToken[];
   };
+  type SealReceipt = {
+    key: string;
+    contract: string;
+    version: 'v1' | 'v2';
+    tokenId: string;
+    kind: string;
+    evidence: string;
+    issuedAt: string;
+    issuer: string;
+    revoked: boolean;
+    tzktUrl: string;
+  };
   type Wallet = {
     address: string;
     tzktUrl: string;
     totalTokenBalanceCount: number;
     everythingElseCount: number;
     collections: Collection[];
-    seals: Array<{
-      tokenId: string;
-      kind: string;
-      evidence: string;
-      issuedAt: string;
-      issuer: string;
-      revoked: boolean;
-      tzktUrl: string;
-    }>;
+    seals: SealReceipt[];
+    sealShelf: {
+      state: 'available' | 'partial' | 'unavailable';
+      groups: Array<{
+        kind: string;
+        total: number;
+        active: number;
+        revoked: number;
+        representative: SealReceipt;
+        seals: SealReceipt[];
+      }>;
+    };
     cache: 'hit' | 'miss' | 'unavailable';
     error?: string;
   };
@@ -662,19 +677,29 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   function renderSeals(root: HTMLElement, wallets: Wallet[]): void {
     const rows = root.querySelector<HTMLElement>('[data-me-seals]');
     if (!rows) return;
-    const seals = wallets.flatMap((wallet) => wallet.seals.map((seal) => ({ ...seal, holder: wallet.address })));
-    if (!seals.length) {
+    const groups = wallets.flatMap((wallet) => (wallet.sealShelf?.groups ?? []).map((group) => ({
+      ...group,
+      holder: wallet.address,
+    })));
+    const incomplete = wallets.filter((wallet) => wallet.sealShelf?.state !== 'available');
+    if (!groups.length) {
       const empty = create('div', 'me-empty');
-      empty.append(create('strong', '', 'No seals on linked wallets yet.'), create('p', '', 'Seals are issuer-attested, soulbound records read directly from Tezos.'));
+      empty.append(
+        create('strong', '', incomplete.length ? 'Seal index unavailable.' : 'No seals on linked wallets yet.'),
+        create('p', '', incomplete.length
+          ? 'PointCast could not read both seal contracts. No absence is inferred; try again later.'
+          : 'Seals are issuer-attested, soulbound records read directly from Tezos.'),
+      );
       rows.replaceChildren(empty);
       return;
     }
-    rows.replaceChildren(...seals.map((seal) => {
-      const card = create('article', `me-seal${seal.revoked ? ' me-seal--revoked' : ''}`);
+    const cards = groups.map((group) => {
+      const seal = group.representative;
+      const card = create('article', `me-seal${group.active ? '' : ' me-seal--revoked'}`);
       const copy = create('span', 'me-seal__copy');
       copy.append(
         create('strong', '', seal.kind || `Seal ${seal.tokenId}`),
-        create('small', '', `${seal.revoked ? 'revoked' : 'issued'} ${seal.issuedAt ? new Date(seal.issuedAt).toLocaleDateString() : 'on-chain'} · ${shortAddress(seal.holder)}`),
+        create('small', '', `${group.active} active · ${group.total} receipt${group.total === 1 ? '' : 's'} · ${shortAddress(group.holder)}`),
         create('p', '', seal.evidence || 'No public evidence note.'),
       );
       const link = create('a', 'me-seal__link', 'Receipt ↗');
@@ -683,7 +708,17 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
       link.rel = 'noopener';
       card.append(copy, link);
       return card;
-    }));
+    });
+    if (incomplete.length) {
+      const warning = create('div', 'me-empty');
+      warning.append(
+        create('strong', '', 'Seal shelf partially available.'),
+        create('p', '', 'At least one seal contract could not be read; visible receipts may be incomplete.'),
+      );
+      rows.replaceChildren(warning, ...cards);
+    } else {
+      rows.replaceChildren(...cards);
+    }
   }
 
   function renderCollections(root: HTMLElement, payload: HoldingsPayload): void {

@@ -8,6 +8,13 @@ import {
 } from '../auth/session';
 import { getUserKennelClaims } from '../kennel-club/_claims';
 import { claimedStreak, collectSitting, nextSealAt } from '../../../src/lib/collect-desk';
+import {
+  readSealShelf,
+  SEAL_SHELF_CONTRACTS,
+  unavailableSealShelf,
+  type SealShelfItem,
+  type SealShelfResult,
+} from '../../../src/lib/seal-shelf';
 
 const TZKT_API = 'https://api.tzkt.io/v1';
 const CACHE_TTL_SECONDS = 60;
@@ -65,19 +72,10 @@ export type MeWalletHoldings = {
   totalTokenBalanceCount: number;
   everythingElseCount: number;
   collections: MeCollectionHoldings[];
-  seals: MeSeal[];
+  seals: SealShelfItem[];
+  sealShelf: SealShelfResult;
   cache: 'hit' | 'miss' | 'unavailable';
   error?: string;
-};
-
-export type MeSeal = {
-  tokenId: string;
-  kind: string;
-  evidence: string;
-  issuedAt: string;
-  issuer: string;
-  revoked: boolean;
-  tzktUrl: string;
 };
 
 export type MeHoldingsPayload = {
@@ -191,40 +189,6 @@ function normalizeToken(
   };
 }
 
-function decodeBytes(value: unknown): string {
-  if (typeof value !== 'string' || !/^(?:[0-9a-fA-F]{2})*$/.test(value)) return '';
-  const bytes = new Uint8Array(value.match(/.{2}/g)?.map((pair) => Number.parseInt(pair, 16)) || []);
-  return new TextDecoder().decode(bytes);
-}
-
-function sealContract(): string {
-  return String((contracts as Record<string, ContractRecord>).seal_soulbound?.mainnet || '');
-}
-
-async function fetchSeals(address: string, fetcher: Fetcher): Promise<MeSeal[]> {
-  const contract = sealContract();
-  if (!contract.startsWith('KT1')) return [];
-  const url = new URL(`${TZKT_API}/contracts/${contract}/bigmaps/seals/keys`);
-  url.searchParams.set('active', 'true');
-  url.searchParams.set('value.holder', address);
-  url.searchParams.set('limit', '100');
-  const rows = await readJson<Array<{ key?: string; value?: Record<string, unknown> }>>(url.toString(), fetcher);
-  return rows.flatMap((row) => {
-    const value = row.value;
-    if (!value || String(value.holder || '') !== address) return [];
-    const tokenId = String(row.key ?? '');
-    return [{
-      tokenId,
-      kind: decodeBytes(value.kind),
-      evidence: decodeBytes(value.evidence),
-      issuedAt: String(value.attested_at || ''),
-      issuer: String(value.issuer || ''),
-      revoked: Boolean(value.revoked),
-      tzktUrl: `https://tzkt.io/${contract}/tokens/${encodeURIComponent(tokenId)}`,
-    }];
-  }).sort((a, b) => Number(a.tokenId) - Number(b.tokenId));
-}
-
 async function readJson<T>(url: string, fetcher: Fetcher): Promise<T> {
   const response = await fetcher(url, {
     headers: { Accept: 'application/json' },
@@ -234,7 +198,11 @@ async function readJson<T>(url: string, fetcher: Fetcher): Promise<T> {
 }
 
 function addressCacheKey(address: string, collections: CollectionDescriptor[]): Request {
-  const contractVersion = collections.map((collection) => collection.contract).sort().join('.');
+  const contractVersion = [
+    'seal-shelf-v2',
+    ...collections.map((collection) => collection.contract),
+    ...SEAL_SHELF_CONTRACTS.map((source) => source.contract),
+  ].sort().join('.');
   return new Request(`https://pointcast.internal/me/holdings/${address}?contracts=${encodeURIComponent(contractVersion)}`);
 }
 
@@ -267,10 +235,10 @@ async function fetchFreshWalletHoldings(
     } satisfies MeCollectionHoldings;
   });
 
-  const [totalTokenBalanceCount, collectionHoldings, seals] = await Promise.all([
+  const [totalTokenBalanceCount, collectionHoldings, sealShelf] = await Promise.all([
     readJson<number>(totalUrl.toString(), fetcher),
     Promise.all(collectionReads),
-    fetchSeals(address, fetcher),
+    readSealShelf(address, fetcher),
   ]);
   const pointCastTokenBalanceCount = collectionHoldings.reduce(
     (sum, collection) => sum + collection.tokenBalanceCount,
@@ -283,7 +251,8 @@ async function fetchFreshWalletHoldings(
     totalTokenBalanceCount,
     everythingElseCount: Math.max(0, totalTokenBalanceCount - pointCastTokenBalanceCount),
     collections: collectionHoldings,
-    seals,
+    seals: sealShelf.seals,
+    sealShelf,
   };
 }
 
@@ -336,6 +305,7 @@ export async function getWalletHoldings(
         tokens: [],
       })),
       seals: [],
+      sealShelf: unavailableSealShelf(error instanceof Error ? error.message : 'tzkt-unavailable'),
       cache: 'unavailable',
       error: error instanceof Error ? error.message : 'tzkt-unavailable',
     };
