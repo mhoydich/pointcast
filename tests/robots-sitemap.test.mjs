@@ -7,19 +7,13 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 const exists = (path) => existsSync(new URL(path, root));
 
-// Machine endpoints advertised by agents.json, llms.txt and the front door.
-// Every User-agent block must Allow each of these before it Disallows /api/.
-const ADVERTISED_API = [
-  '/api/mcp',
-  '/api/mcp-v2',
-  '/api/ping',
-  '/api/drum',
-  '/api/visit',
-  '/api/weather',
-  '/api/x402/',
-  '/api/blocks.jsonl',
-  '/api/products.jsonl',
+const AI_AGENTS = [
+  'GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-User',
+  'Claude-SearchBot', 'anthropic-ai', 'PerplexityBot', 'Perplexity-User',
+  'Google-Extended', 'Applebot-Extended', 'CCBot', 'Bytespider', 'Amazonbot',
+  'meta-externalagent', 'DuckAssistBot', 'cohere-ai', 'YouBot', 'MistralAI-User',
 ];
+const PRIVATE_RULES = ['/api/auth/', '/api/me/', '/me', '/_/', '/admin/', '/search?q=', '/api/spotify/search?q=', '/api/collect/confirm', '/api/collect/unsubscribe', '/api/shopify/auth', '/api/shopify/callback', '/api/spotify/auth', '/api/spotify/callback'];
 
 const SITEMAPS = [
   'https://pointcast.xyz/sitemap-index.xml',
@@ -65,9 +59,7 @@ function parseRedirects(text) {
 }
 
 test('robots.txt route serves public/robots.txt verbatim', async () => {
-  const route = await read('src/pages/robots.txt.ts');
-  assert.match(route, /from '\.\.\/\.\.\/public\/robots\.txt\?raw'/);
-  assert.match(route, /text\/plain; charset=utf-8/);
+  assert.ok(!exists('src/pages/robots.txt.ts'), 'robots.txt should have one static source of truth');
 
   // The build writes the same bytes to dist/. Only checkable after a build.
   if (exists('dist/robots.txt')) {
@@ -76,12 +68,12 @@ test('robots.txt route serves public/robots.txt verbatim', async () => {
   }
 });
 
-test('every User-agent block allows the advertised /api/ endpoints ahead of Disallow', async () => {
+test('named AI User-agent groups allow public crawling and retain private exceptions', async () => {
   const { groups } = parseRobots(await read('public/robots.txt'));
   const agents = groups.map((group) => group.agent);
 
-  assert.ok(groups.length >= 20, `expected at least 20 User-agent blocks, saw ${groups.length}`);
-  for (const agent of ['*', 'Googlebot', 'Bingbot', 'GPTBot', 'ClaudeBot', 'PerplexityBot', 'Claude-User']) {
+  assert.ok(groups.length >= 20, `expected wildcard plus named AI blocks, saw ${groups.length}`);
+  for (const agent of ['*', ...AI_AGENTS]) {
     assert.ok(agents.includes(agent), `missing User-agent block for ${agent}`);
   }
 
@@ -90,13 +82,8 @@ test('every User-agent block allows the advertised /api/ endpoints ahead of Disa
     const disallowed = rules.filter((rule) => rule.type === 'disallow').map((rule) => rule.path);
 
     assert.ok(allowed.includes('/'), `${agent}: missing Allow: /`);
-    for (const path of ADVERTISED_API) {
-      assert.ok(allowed.includes(path), `${agent}: missing Allow: ${path}`);
-    }
-    assert.deepEqual(disallowed, ['/admin/', '/api/'], `${agent}: unexpected Disallow set`);
+    assert.deepEqual(disallowed, PRIVATE_RULES, `${agent}: unexpected Disallow set`);
 
-    // First-match crawlers stop at the first rule that matches. Every Allow
-    // has to come before the /api/ Disallow or the endpoints stay closed.
     const lastAllow = rules.map((rule) => rule.type).lastIndexOf('allow');
     const firstDisallow = rules.map((rule) => rule.type).indexOf('disallow');
     assert.ok(

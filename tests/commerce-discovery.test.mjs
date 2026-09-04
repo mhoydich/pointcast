@@ -21,14 +21,12 @@ const commercePages = await Promise.all([
 
 test('every crawler group can reach public JSONL feeds', () => {
   const groups = robots.trim().split(/\n\s*\n/).filter((group) => group.startsWith('User-agent:'));
-  assert.ok(groups.length > 1, 'expected named crawler groups');
-
-  for (const group of groups) {
-    const agent = group.match(/^User-agent:\s*(.+)$/m)?.[1];
-    assert.match(group, /^Allow: \/api\/products\.jsonl$/m, `${agent} must allow the commerce feed`);
-    assert.match(group, /^Allow: \/api\/blocks\.jsonl$/m, `${agent} must allow the blocks feed`);
-    assert.match(group, /^Disallow: \/api\/$/m, `${agent} must keep other API routes private`);
-  }
+  assert.match(robots, /^User-agent: GPTBot$/m, 'expected named crawler groups');
+  assert.match(robots, /^User-agent: ClaudeBot$/m, 'expected named crawler groups');
+  assert.match(robots, /^Allow: \/$/m, 'public JSONL feeds inherit the friendly public policy');
+  assert.doesNotMatch(robots, /^Disallow: \/api\/$/m, 'the broad API block would hide public machine feeds');
+  assert.match(robots, /^Disallow: \/api\/auth\/$/m);
+  assert.match(robots, /^Disallow: \/api\/me\/$/m);
 });
 
 test('discovery sitemap advertises the public JSONL feeds', () => {
