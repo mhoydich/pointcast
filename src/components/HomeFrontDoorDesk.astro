@@ -1,20 +1,11 @@
 ---
 import type { KennelTodayPayload } from '../lib/kennel-today';
-import HomeTodayStrip from './HomeTodayStrip.astro';
-
-interface NewsItem {
-  label: string;
-  line: string;
-  link: string;
-  date: string;
-}
 
 interface Props {
   today: KennelTodayPayload;
-  news: NewsItem[];
 }
 
-const { today, news } = Astro.props;
+const { today } = Astro.props;
 const displayDate = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -22,7 +13,7 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
 }).format(new Date(`${today.date}T12:00:00-07:00`));
 ---
 
-<section class="front-desk" data-front-door-desk aria-labelledby="front-desk-title">
+<section class="front-desk" data-front-door-desk data-front-door-date={today.date} data-kennel-today="attr" data-kennel-attr="data-front-door-date" data-kennel-value="{date}" aria-labelledby="front-desk-title">
   <template data-director-desk-template>
     <section class="director-desk" aria-labelledby="director-desk-title">
       <div class="director-desk__head">
@@ -57,64 +48,36 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
     <div class="front-desk__copy">
       <p class="front-desk__kicker">PointCast · CH.FD · today’s sitting · El Segundo</p>
       <h1 id="front-desk-title">Today’s dog. <em data-kennel-today="text" data-kennel-text="{name} is sitting.">{today.name} is sitting.</em></h1>
-      <p class="front-desk__dek" data-kennel-today="text" data-kennel-text="{breed} · {title}">{today.breed} · {today.title}</p>
 
-      <div class="front-desk__start" aria-label="Start here">
-        <p class="front-desk__start-label">Start here</p>
-        <a class="front-desk__primary" href="/kennel-club" data-front-primary>Claim today’s dog — free</a>
-        <div class="front-desk__secondary">
-          <a href="/collect">Get a dog a day by email</a>
-          <a href="/me" data-front-handle>Claim a handle</a>
-          <a href="/x402">Agents: pay a penny</a>
-        </div>
+      <div class="front-desk__start" data-front-unclaimed aria-label="Start here">
+        <a class="front-desk__primary" href="/kennel-club" data-front-primary>Claim today’s dog, free</a>
       </div>
+      <p class="front-desk__dek" data-front-unclaimed data-kennel-today="text" data-kennel-text="{breed} · {title}">{today.breed} · {today.title}</p>
 
-      <div class="front-desk__person" data-front-person hidden aria-live="polite">
-        <a href="/me" data-front-person-handle>claim your handle</a>
-        <span><b data-front-seals>0</b> seals</span>
-        <a href="/me" data-front-held hidden>held for you: 0 dogs → link a wallet</a>
-      </div>
-
-      <p class="front-desk__live" aria-live="polite">
-        <span class:list={["chip", today.live ? 'chip--live' : 'chip--pending']} data-front-live>{today.live ? 'claim door live' : 'checking the claim door'}</span>
-        <span data-front-count data-kennel-today="people" hidden={(today.claimsClaimed ?? 0) < 3}>{(today.claimsClaimed ?? 0) >= 3 ? `${today.claimsClaimed} people claimed today` : ''}</span>
-      </p>
-
-      <HomeTodayStrip />
+      <section class="front-desk__completed" data-front-completed hidden aria-live="polite">
+        <p class="front-desk__holding" data-front-holding-line></p>
+        <a class="front-desk__next-door" href="/me" data-front-next-door>
+          <span data-front-next-door-reason>Next door</span>
+          <strong data-front-next-door-label>Make your handle</strong>
+        </a>
+      </section>
     </div>
-  </div>
-
-  <div class="front-desk__news" aria-labelledby="front-news-title">
-    <div class="front-desk__news-head">
-      <p class="front-desk__kicker">Changed since Sep 02</p>
-      <h2 id="front-news-title">New this week</h2>
-    </div>
-    <ol>
-      {news.map((item) => (
-        <li>
-          <a href={item.link}>
-            <span class="front-desk__news-label">{item.label}</span>
-            <span class="front-desk__news-line">{item.line}</span>
-            <time datetime={item.date}>{item.date.slice(5).replace('-', '.')}</time>
-          </a>
-        </li>
-      ))}
-    </ol>
   </div>
 </section>
 
 <script>
   import { claimedToday, hasDirectorDeskAccess } from '../lib/front-door-desk';
+  import { chooseFrontDoorNextDoor } from '../lib/front-door-next-door';
+  import { track } from '../lib/analytics';
   import { hydrateKennelToday } from '../lib/kennel-today-client';
 
   interface CollectMe {
-    collector?: { wallets?: string[] };
-    today?: { day?: number; name?: string };
+    collector?: { name?: string; wallets?: string[] };
+    today?: { day?: number; name?: string; date?: string; tokenId?: number };
     claimedDays?: number[];
     streak?: number;
     handle?: { status?: string; handle?: string; href?: string; label?: string };
-    heldDogs?: number;
-    objects?: { sealsEarned?: number };
+    claims?: Array<{ tokenId?: number; sitting?: string; status?: 'held' | 'delivered'; deliveredTo?: string | null; createdAt?: string }>;
   }
 
   interface DirectorRow {
@@ -139,52 +102,77 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
     let request: AbortController | null = null;
 
     const primary = root.querySelector<HTMLAnchorElement>('[data-front-primary]');
-    const handle = root.querySelector<HTMLAnchorElement>('[data-front-handle]');
-    const person = root.querySelector<HTMLElement>('[data-front-person]');
+    const completed = root.querySelector<HTMLElement>('[data-front-completed]');
+    const todayDate = () => root.dataset.frontDoorDate || new Date().toISOString().slice(0, 10);
+
+    const visitorId = () => {
+      const key = 'pc:frontDoorVisitor';
+      try {
+        let value = localStorage.getItem(key);
+        if (!value) {
+          value = crypto.randomUUID?.() ?? `fd-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem(key, value);
+        }
+        return value;
+      } catch { return 'anonymous'; }
+    };
+
+    const trackOnce = (event: 'front_door.primary_shown' | 'front_door.primary_completed', state: string) => {
+      const key = `pc:frontDoor:${event}:${todayDate()}`;
+      try {
+        if (localStorage.getItem(key) === '1') return;
+        localStorage.setItem(key, '1');
+      } catch {}
+      track(event, { path: '/', date: todayDate(), state, visitor: visitorId() });
+    };
+
+    const claimTime = (createdAt?: string) => {
+      if (!createdAt) return '';
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' }).formatToParts(new Date(createdAt));
+      const hour = parts.find((part) => part.type === 'hour')?.value ?? '';
+      const minute = parts.find((part) => part.type === 'minute')?.value ?? '';
+      const period = (parts.find((part) => part.type === 'dayPeriod')?.value ?? '').toLowerCase();
+      return hour && minute ? `${hour}:${minute}${period}` : '';
+    };
 
     const resetVisitor = () => {
-      if (primary) primary.textContent = 'Claim today’s dog — free';
-      if (handle) {
-        handle.textContent = 'Claim a handle';
-        handle.href = '/me';
-      }
-      if (person) person.hidden = true;
+      if (primary) primary.textContent = 'Claim today’s dog, free';
+      if (primary) primary.hidden = false;
+      root.querySelectorAll<HTMLElement>('[data-front-unclaimed]').forEach((node) => { node.hidden = false; });
+      if (completed) completed.hidden = true;
       root.querySelector('[data-director-desk]')?.remove();
     };
 
     const renderPerson = (collect: CollectMe) => {
       const day = Number(collect.today?.day ?? 0);
       const name = collect.today?.name ?? 'today’s dog';
-      const streak = Math.max(0, Number(collect.streak ?? 0));
-      if (primary) {
-        primary.textContent = claimedToday(collect.claimedDays, day)
-          ? `Claimed ✓ · streak ${streak}`
-          : `Claim ${name} (today)`;
+      const claimed = claimedToday(collect.claimedDays, day);
+      if (!claimed) {
+        if (primary) primary.textContent = `Claim ${name}, free`;
+        trackOnce('front_door.primary_shown', 'signed-in-unclaimed');
+        return;
       }
-
-      const handleLabel = collect.handle?.status === 'claimed' && collect.handle.handle
+      if (primary) primary.hidden = true;
+      root.querySelectorAll<HTMLElement>('[data-front-unclaimed]').forEach((node) => { node.hidden = true; });
+      if (completed) completed.hidden = false;
+      const claim = (collect.claims ?? []).find((item) => item.tokenId === Number(collect.today?.tokenId ?? day - 1));
+      const displayName = collect.handle?.status === 'claimed' && collect.handle.handle
         ? `@${collect.handle.handle}`
-        : 'claim your handle';
-      const handleHref = collect.handle?.href ?? '/me';
-      const personHandle = root.querySelector<HTMLAnchorElement>('[data-front-person-handle]');
-      if (personHandle) {
-        personHandle.textContent = handleLabel;
-        personHandle.href = handleHref;
-      }
-      if (handle) {
-        handle.textContent = handleLabel;
-        handle.href = handleHref;
-      }
-      const seals = root.querySelector<HTMLElement>('[data-front-seals]');
-      if (seals) seals.textContent = String(Math.max(0, Number(collect.objects?.sealsEarned ?? 0)));
-      const held = root.querySelector<HTMLAnchorElement>('[data-front-held]');
-      if (held) {
-        const heldDogs = Math.max(0, Number(collect.heldDogs ?? 0));
-        const needsWallet = heldDogs > 0 && (collect.collector?.wallets?.length ?? 0) === 0;
-        held.textContent = `held for you: ${heldDogs} dogs → link a wallet`;
-        held.hidden = !needsWallet;
-      }
-      if (person) person.hidden = false;
+        : (collect.collector?.name || 'you').trim().split(/\s+/)[0] || 'you';
+      const holding = root.querySelector<HTMLElement>('[data-front-holding-line]');
+      if (holding) holding.textContent = `${name} went home with ${displayName}${claimTime(claim?.createdAt) ? ` · ${claimTime(claim?.createdAt)}` : ''}`;
+      const next = chooseFrontDoorNextDoor({
+        claimedDays: collect.claimedDays,
+        hasHandle: collect.handle?.status === 'claimed' && Boolean(collect.handle.handle),
+        streak: collect.streak,
+      });
+      const nextLink = root.querySelector<HTMLAnchorElement>('[data-front-next-door]');
+      if (nextLink) nextLink.href = next.href;
+      const reason = root.querySelector<HTMLElement>('[data-front-next-door-reason]');
+      if (reason) reason.textContent = next.reason;
+      const label = root.querySelector<HTMLElement>('[data-front-next-door-label]');
+      if (label) label.textContent = next.label;
+      trackOnce('front_door.primary_completed', 'claimed');
     };
 
     const renderDirector = (rows: DirectorRow[]) => {
@@ -227,10 +215,13 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
       request = new AbortController();
       const signal = request.signal;
       resetVisitor();
-      hydrateKennelToday().catch(() => {});
+      await hydrateKennelToday().catch(() => {});
       try {
         const sessionResponse = await fetch('/api/auth/session', { credentials: 'same-origin', signal });
-        if (!sessionResponse.ok) return;
+        if (!sessionResponse.ok) {
+          trackOnce('front_door.primary_shown', 'signed-out');
+          return;
+        }
         const session = await sessionResponse.json();
         const [stateResponse, collectResponse] = await Promise.all([
           fetch('/api/me/state', { credentials: 'same-origin', signal }),
@@ -249,12 +240,20 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
           }
         }
       } catch (error) {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) resetVisitor();
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          resetVisitor();
+          trackOnce('front_door.primary_shown', 'signed-out');
+        }
       }
     };
 
     window.addEventListener('pc:auth-change', refresh, { signal: lifetime.signal });
-    refresh();
+    root.addEventListener('click', (event) => {
+      const link = (event.target as Element | null)?.closest<HTMLAnchorElement>('[data-front-next-door]');
+      if (!link || !root.contains(link)) return;
+      track('front_door.next_door_taken', { path: '/', date: todayDate(), visitor: visitorId(), door: link.getAttribute('href') || '' });
+    }, { signal: lifetime.signal });
+    void refresh();
   };
 
   mountFrontDoorDesk();
@@ -277,28 +276,17 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
   .front-desk__kicker { margin: 0 0 14px; color: var(--desk-red); font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; }
   .front-desk h1 { max-width: 11ch; margin: 0; font-size: clamp(46px, 6.3vw, 88px); font-weight: 780; line-height: .9; letter-spacing: -.065em; text-wrap: balance; }
   .front-desk h1 em { display: block; color: var(--desk-red); font-style: normal; }
-  .front-desk__dek { margin: 20px 0 0; font-size: 16px; line-height: 1.45; }
+  .front-desk__dek { margin: 12px 0 0; font-size: 16px; line-height: 1.45; }
   .front-desk__start { margin-top: auto; padding-top: 30px; }
-  .front-desk__start-label { margin: 0 0 8px; font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; }
   .front-desk__primary { display: block; width: fit-content; max-width: 100%; padding: 14px 18px; border: 2px solid #111; background: #111; color: #fff; font: 750 15px var(--pc-font-sans); }
   .front-desk__primary:hover { background: var(--desk-red); border-color: var(--desk-red); color: #fff; }
-  .front-desk__secondary { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 12px; }
-  .front-desk__secondary a { font: 700 10px var(--pc-font-mono); letter-spacing: .04em; text-decoration: underline; text-underline-offset: 3px; }
-  .front-desk__person { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-  .front-desk__person[hidden] { display: none; }
-  .front-desk__person > * { padding: 6px 8px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; }
-  .front-desk__live { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 0; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #5f5e5a; }
-  .front-desk__news { display: grid; grid-template-columns: 180px minmax(0, 1fr); border-top: 2px solid #111; }
-  .front-desk__news-head { padding: 18px; border-right: 2px solid #111; }
-  .front-desk__news h2 { margin: 0; font-size: 25px; line-height: 1; letter-spacing: -.04em; }
-  .front-desk__news ol { display: grid; grid-template-columns: repeat(7, minmax(145px, 1fr)); margin: 0; padding: 0; overflow-x: auto; list-style: none; }
-  .front-desk__news li { min-width: 0; border-right: 1px solid rgba(0, 0, 0, .18); }
-  .front-desk__news li:last-child { border-right: 0; }
-  .front-desk__news a { display: flex; flex-direction: column; min-height: 132px; height: 100%; padding: 15px 13px 12px; }
-  .front-desk__news a:hover { background: #f7efe6; }
-  .front-desk__news-label { color: var(--desk-red); font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  .front-desk__news-line { margin-top: 8px; font-size: 12px; line-height: 1.35; }
-  .front-desk__news time { margin-top: auto; padding-top: 12px; color: #5f5e5a; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; }
+  .front-desk__completed { margin-top: auto; padding-top: 30px; }
+  .front-desk__completed[hidden] { display: none; }
+  .front-desk__holding { margin: 0 0 12px; font: 600 13px/1.4 var(--pc-font-mono); }
+  .front-desk__next-door { display: grid; gap: 5px; width: min(100%, 330px); padding: 14px 16px; border: 2px solid #111; color: #111; background: #f2e8dd; }
+  .front-desk__next-door:hover { background: var(--desk-red); border-color: var(--desk-red); color: #fff; text-decoration: none; }
+  .front-desk__next-door span { font: 700 8px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; }
+  .front-desk__next-door strong { font-size: 18px; letter-spacing: -.03em; }
   :global(.director-desk) { border-bottom: 2px solid #111; background: #eef4fa; }
   :global(.director-desk__head) { display: flex; justify-content: space-between; gap: 18px; align-items: end; padding: 18px 20px; border-bottom: 1px solid rgba(0, 0, 0, .22); }
   :global(.director-desk__head h2) { margin: 0; font-size: 29px; letter-spacing: -.04em; }
@@ -317,8 +305,6 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
     .front-desk__hero { grid-template-columns: 1fr; }
     .front-desk__plate { border-right: 0; border-bottom: 2px solid #111; }
     .front-desk__plate img { max-height: 620px; }
-    .front-desk__news { grid-template-columns: 1fr; }
-    .front-desk__news-head { border-right: 0; border-bottom: 1px solid rgba(0, 0, 0, .18); }
   }
   @media (max-width: 560px) {
     .front-desk { box-shadow: 5px 5px 0 var(--desk-red); }

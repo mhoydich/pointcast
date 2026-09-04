@@ -6,22 +6,25 @@ import { isDirector, claimedToday } from '../src/lib/front-door-desk.ts';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('September landing hydrates today’s plate and keeps one visitor CTA with three deliberate secondary doors', async () => {
-  const [home, desk] = await Promise.all([
+test('September landing makes one request-time dog claim primary', async () => {
+  const [home, desk, news] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeFrontDoorDesk.astro'),
+    read('src/components/HomeFrontDoorNews.astro'),
   ]);
 
-  assert.match(home, /<HomeFrontDoorDesk today=\{frontDoorToday\} news=\{frontDoorNews\} \/>/);
+  assert.match(home, /<HomeFrontDoorDesk today=\{frontDoorToday\} \/>/);
+  assert.match(home, /<HomeFrontDoorNews news=\{frontDoorNews\} \/>/);
   assert.match(desk, /data-kennel-today="image"/);
   assert.match(desk, /hydrateKennelToday\(\)/);
-  assert.match(desk, />Claim today’s dog — free<\/a>/);
+  assert.match(desk, />Claim today’s dog, free<\/a>/);
   assert.equal((desk.match(/class="front-desk__primary"/g) ?? []).length, 1);
-  assert.match(desk, /href="\/collect">Get a dog a day by email/);
-  assert.match(desk, /href="\/me" data-front-handle>Claim a handle/);
-  assert.match(desk, /href="\/x402">Agents: pay a penny/);
+  assert.match(desk, /data-front-completed/);
+  assert.match(desk, /data-front-next-door/);
+  assert.doesNotMatch(desk, /Get a dog a day by email/);
+  assert.match(news, /New this week/);
   assert.match(desk, /addEventListener\('pc:auth-change', refresh/);
-  assert.match(desk, /\.front-desk__person\[hidden\] \{ display: none; \}/);
+  assert.match(desk, /data-front-unclaimed/);
   assert.match(desk, /fetch\('\/api\/me\/state'/);
   assert.match(desk, /fetch\('\/api\/collect\/me'/);
 });
@@ -42,6 +45,24 @@ test('New this week is maintained as a dated seven-item data contract', async ()
     assert.ok(item.line.length > 20);
     assert.match(item.link, /^\//);
   }
+});
+
+test('the post-claim card makes one deterministic next-door choice and records full-weight outcomes', async () => {
+  const [desk, chooser, analytics, live, scorer] = await Promise.all([
+    read('src/components/HomeFrontDoorDesk.astro'),
+    read('src/lib/front-door-next-door.ts'),
+    read('functions/api/analytics.ts'),
+    read('scripts/score-live.mjs'),
+    read('scripts/score-projects.mjs'),
+  ]);
+  for (const event of ['front_door.primary_shown', 'front_door.primary_completed', 'front_door.next_door_taken']) {
+    assert.match(desk, new RegExp(event.replace('.', '\\.'), 'g'));
+    assert.match(analytics, /const isPageview = event === 'pageview'/);
+    assert.match(live, new RegExp(event.replace('.', '\\.'), 'g'));
+  }
+  for (const href of ['/bench', '/collect', '/drum', '/me']) assert.match(chooser, new RegExp(`href: '${href}'`));
+  assert.match(scorer, /Front door/);
+  assert.match(scorer, /sevenDayReturn/);
 });
 
 test('director panel is absent for a visitor and rendered for a fake director session', async () => {
