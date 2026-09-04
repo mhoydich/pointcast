@@ -1,4 +1,5 @@
 import { canonicalJson, X402_NETWORK } from '../../src/lib/x402.ts';
+import { hashAgentActionRequest, verifyAgentRequest } from './agent-identity.ts';
 
 export const PAID_TOWN_PRICE_UNITS = '10000';
 export const PAID_TOWN_PRICE = {
@@ -43,7 +44,7 @@ export const PAID_ACTION_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Payment-Signature, Idempotency-Key',
+  'Access-Control-Allow-Headers': 'Content-Type, Payment-Signature, Idempotency-Key, PointCast-Agent-Id, PointCast-Agent-Timestamp, PointCast-Agent-Signature',
   'Access-Control-Expose-Headers': 'Payment-Required, X-Payment-Response, X-Facilitator-Url, X-Action-Id, Location',
   'Cache-Control': 'no-store',
 };
@@ -105,6 +106,8 @@ export interface PaidIntentRow {
   capacity_key: string | null;
   settlement_json: string | null;
   result_json: string | null;
+  tx_hash: string | null;
+  agent_id: string | null;
   error: string | null;
   created_at: string;
   updated_at: string;
@@ -115,11 +118,6 @@ export interface PaidIntentSettlement {
   receiptHash: string;
   payer: string;
   split: Record<string, unknown>;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export function paidIntentHeaders(intentId: string, source?: Headers): Headers {
@@ -161,6 +159,9 @@ export function publicPaidIntent(row: PaidIntentRow): Record<string, unknown> {
     ambiguous: row.status === 'settling' || row.status === 'settlement_ambiguous',
     resumable: row.status === 'settled' || row.status === 'action_failed',
     statusUrl: `/api/actions/${row.id}`,
+    requestHash: row.request_hash,
+    transactionHash: row.tx_hash,
+    agentId: row.agent_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     ...(row.error ? { error: row.error } : {}),
@@ -171,7 +172,8 @@ export function publicPaidIntent(row: PaidIntentRow): Record<string, unknown> {
 export async function loadPaidIntent(db: D1Database, intentId: string): Promise<PaidIntentRow | null> {
   return db.prepare(`
     SELECT id, action, idempotency_key, request_hash, request_json, status,
-           capacity_key, settlement_json, result_json, error, created_at, updated_at
+           capacity_key, settlement_json, result_json, tx_hash, agent_id,
+           error, created_at, updated_at
     FROM paid_action_intents WHERE id = ?
   `).bind(intentId).first<PaidIntentRow>();
 }
@@ -197,23 +199,32 @@ export async function beginPaidIntent(
     };
   }
   const requestJson = canonicalJson(payload);
-  const requestHash = await sha256Hex(`${action}\n${requestJson}`);
+  const requestHash = await hashAgentActionRequest(action, payload);
+  const identity = await verifyAgentRequest(db, request, requestHash, `action:${action}`);
+  if (identity.response) return { kind: 'response', response: identity.response };
   const id = `pai_${crypto.randomUUID().replaceAll('-', '')}`;
   const now = new Date().toISOString();
   await db.prepare(`
     INSERT INTO paid_action_intents
       (id, action, idempotency_key, request_hash, request_json, status, capacity_key,
-       settlement_json, result_json, error, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'created', NULL, NULL, NULL, NULL, ?, ?)
+       settlement_json, result_json, tx_hash, agent_id, error, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'created', NULL, NULL, NULL, NULL, ?, NULL, ?, ?)
     ON CONFLICT(action, idempotency_key) DO NOTHING
-  `).bind(id, action, idempotencyKey, requestHash, requestJson, now, now).run();
+  `).bind(id, action, idempotencyKey, requestHash, requestJson, identity.agentId, now, now).run();
   const intent = await db.prepare(`
     SELECT id, action, idempotency_key, request_hash, request_json, status,
-           capacity_key, settlement_json, result_json, error, created_at, updated_at
+           capacity_key, settlement_json, result_json, tx_hash, agent_id,
+           error, created_at, updated_at
     FROM paid_action_intents WHERE action = ? AND idempotency_key = ?
   `).bind(action, idempotencyKey).first<PaidIntentRow>();
   if (!intent) {
     return { kind: 'response', response: paidJson({ ok: false, error: 'The action intent could not be read.' }, 503) };
+  }
+  if (intent.agent_id !== identity.agentId && (intent.agent_id || identity.agentId)) {
+    return {
+      kind: 'response',
+      response: paidIntentJson(intent.id, { ok: false, error: 'agent-identity-conflict' }, 403),
+    };
   }
   if (intent.request_hash !== requestHash) {
     return {
@@ -259,6 +270,8 @@ export async function updatePaidIntent(
     capacityKey?: string | null;
     settlement?: PaidIntentSettlement | null;
     result?: unknown;
+    txHash?: string | null;
+    agentId?: string | null;
     error?: string | null;
   } = {},
 ): Promise<void> {
@@ -268,6 +281,8 @@ export async function updatePaidIntent(
       capacity_key = COALESCE(?, capacity_key),
       settlement_json = COALESCE(?, settlement_json),
       result_json = COALESCE(?, result_json),
+      tx_hash = COALESCE(?, tx_hash),
+      agent_id = COALESCE(?, agent_id),
       error = ?,
       updated_at = ?
     WHERE id = ?
@@ -276,6 +291,8 @@ export async function updatePaidIntent(
     values.capacityKey ?? null,
     values.settlement ? JSON.stringify(values.settlement) : null,
     values.result === undefined ? null : JSON.stringify(values.result),
+    values.txHash ?? null,
+    values.agentId ?? null,
     values.error ?? null,
     new Date().toISOString(),
     intentId,

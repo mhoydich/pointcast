@@ -20,7 +20,7 @@ export async function registryResponse(env: RegistryEnv, now = new Date()): Prom
     });
   }
   const query = await env.AUTH_DB.prepare(`
-    SELECT name, forward_kind, forward_target, owner, receipt_hash,
+    SELECT name, forward_kind, forward_target, owner, receipt_hash, agent_id,
            created_at, renewed_at, expires_at, forwarded_count, status
     FROM aliases
     ORDER BY created_at ASC, name ASC

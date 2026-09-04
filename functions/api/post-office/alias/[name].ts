@@ -30,7 +30,7 @@ export async function handleAliasStatus(
     return json({ error: 'alias-not-found' }, 404);
   }
   const row = await env.AUTH_DB.prepare(`
-    SELECT name, forward_kind, forward_target, owner, receipt_hash,
+    SELECT name, forward_kind, forward_target, owner, receipt_hash, agent_id,
            created_at, renewed_at, expires_at, forwarded_count, status
     FROM aliases WHERE name = ? LIMIT 1
   `).bind(name).first<PostOfficeAliasRow>();
@@ -42,6 +42,7 @@ export async function handleAliasStatus(
     since: visible.since,
     expiresAt: visible.expiresAt,
     count: visible.forwardedCount,
+    agentId: visible.agentId,
   });
 }
 
