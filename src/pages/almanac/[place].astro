@@ -1,0 +1,310 @@
+---
+/**
+ * /almanac/{place} — the whole day for one place.
+ *
+ * Sun, moon, daylight, and (from NOAA, never computed) water. This is the
+ * page someone lands on when they want the day rather than one number; the
+ * /{facet} children answer the single questions.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AlmanacLive from '../../components/AlmanacLive.astro';
+import AlmanacTide from '../../components/AlmanacTide.astro';
+import {
+  ALMANAC_PLACES,
+  FACETS,
+  buildDay,
+  buildRange,
+  fmtDateLong,
+  fmtDateShort,
+  fmtDuration,
+  fmtSignedDuration,
+  fmtTime,
+  fmtWeekday,
+  isoDate,
+  pacificDate,
+  yearExtremes,
+  type AlmanacPlace,
+} from '../../lib/almanac';
+
+export async function getStaticPaths() {
+  return ALMANAC_PLACES.map((place) => ({
+    params: { place: place.slug },
+    props: { place },
+  }));
+}
+
+interface Props {
+  place: AlmanacPlace;
+}
+
+const { place } = Astro.props;
+
+const today = pacificDate();
+const day = buildDay(place, today, new Date());
+const week = buildRange(place, today, 7);
+const year = today.getUTCFullYear();
+const extremes = yearExtremes(place, year);
+
+const canonical = `https://pointcast.xyz/almanac/${place.slug}`;
+const title = `${place.name} almanac — sun, moon, and tide`;
+const description = `Today in ${place.formalName}: sunrise ${fmtTime(day.sun.sunrise)}, sunset ${fmtTime(
+  day.sun.sunset,
+)}, ${fmtDuration(day.sun.dayLengthMs)} of daylight, and the moon at ${Math.round(
+  day.moon.illumination * 100,
+)}%. Tide from NOAA.`;
+
+const others = ALMANAC_PLACES.filter((p) => p.slug !== place.slug);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `${canonical}#page`,
+      url: canonical,
+      name: title,
+      description,
+      about: { '@id': `${canonical}#place` },
+      isPartOf: { '@id': 'https://pointcast.xyz/#website' },
+      dateModified: isoDate(today),
+    },
+    {
+      '@type': 'Place',
+      '@id': `${canonical}#place`,
+      name: place.formalName,
+      description: place.blurb,
+      geo: { '@type': 'GeoCoordinates', latitude: place.lat, longitude: place.lng },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Almanac', item: 'https://pointcast.xyz/almanac' },
+        { '@type': 'ListItem', position: 2, name: place.name, item: canonical },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: `/almanac/${place.slug}.json`, title: `${place.name} almanac data` }]}>
+  <AlmanacLive lat={place.lat} lng={place.lng} builtFor={isoDate(today)} place={place.name} facet="all" />
+
+  <main class="alm">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/almanac">Almanac</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{place.name}</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">
+        {place.formalName} · {place.lat.toFixed(2)}°N {Math.abs(place.lng).toFixed(2)}°W
+        {place.miles > 0 ? <> · {place.miles} mi {place.direction} of El Segundo</> : <> · the anchor</>}
+      </p>
+      <h1>The {place.name} almanac</h1>
+      <p class="answer">
+        <span data-live="date">{fmtDateLong(day.date)}</span> — sunrise at
+        <strong data-live="sunrise">{fmtTime(day.sun.sunrise)}</strong>, sunset at
+        <strong data-live="sunset">{fmtTime(day.sun.sunset)}</strong>,
+        <strong data-live="daylight">{fmtDuration(day.sun.dayLengthMs)}</strong> of daylight, and a
+        <strong data-live="moon-label">{day.moon.label}</strong> overhead.
+      </p>
+      <p class="blurb">{place.blurb}</p>
+    </header>
+
+    <section class="cards">
+      <article>
+        <h2>Sun</h2>
+        <dl>
+          <div><dt>Sunrise</dt><dd data-live="sunrise">{fmtTime(day.sun.sunrise)}</dd></div>
+          <div><dt>Solar noon</dt><dd data-live="solar-noon">{fmtTime(day.sun.solarNoon)}</dd></div>
+          <div><dt>Sunset</dt><dd data-live="sunset">{fmtTime(day.sun.sunset)}</dd></div>
+          <div><dt>Right now</dt><dd data-live="sun-state">{day.sun.isDay ? 'up' : 'down'}</dd></div>
+        </dl>
+        <p class="card-links">
+          <a href={`/almanac/${place.slug}/sunrise`}>Sunrise detail</a> ·
+          <a href={`/almanac/${place.slug}/sunset`}>Sunset detail</a>
+        </p>
+      </article>
+
+      <article>
+        <h2>Daylight</h2>
+        <dl>
+          <div><dt>Length</dt><dd data-live="daylight">{fmtDuration(day.sun.dayLengthMs)}</dd></div>
+          <div><dt>vs yesterday</dt><dd data-live="daylight-delta">{fmtSignedDuration(day.daylightDeltaMs)}</dd></div>
+          <div><dt>Longest {year}</dt><dd>{fmtDateShort(extremes.longest.date)}</dd></div>
+          <div><dt>Shortest {year}</dt><dd>{fmtDateShort(extremes.shortest.date)}</dd></div>
+        </dl>
+        <p class="card-links"><a href={`/almanac/${place.slug}/daylight`}>Daylight detail</a></p>
+      </article>
+
+      <article>
+        <h2>Moon</h2>
+        <dl>
+          <div><dt>Phase</dt><dd><span data-live="moon-glyph">{day.moon.glyph}</span> <span data-live="moon-label">{day.moon.label}</span></dd></div>
+          <div><dt>Illuminated</dt><dd data-live="moon-illum">{Math.round(day.moon.illumination * 100)}%</dd></div>
+          <div><dt>Next full</dt><dd>{fmtDateShort(day.moon.nextFullAt)}</dd></div>
+          <div><dt>Next new</dt><dd>{fmtDateShort(day.moon.nextNewAt)}</dd></div>
+        </dl>
+        <p class="card-links"><a href={`/almanac/${place.slug}/moon`}>Moon detail</a></p>
+      </article>
+    </section>
+
+    <AlmanacTide place={place} />
+
+    <section class="table-wrap" aria-labelledby="week-heading">
+      <h2 id="week-heading">The next seven days</h2>
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Sunrise</th>
+              <th scope="col">Sunset</th>
+              <th scope="col">Daylight</th>
+              <th scope="col">Moon</th>
+            </tr>
+          </thead>
+          <tbody>
+            {week.map((d) => (
+              <tr data-day-row={d.iso} class={d.iso === isoDate(today) ? 'is-today' : undefined}>
+                <th scope="row">{fmtWeekday(d.date)} {fmtDateShort(d.date)}</th>
+                <td>{fmtTime(d.sun.sunrise)}</td>
+                <td>{fmtTime(d.sun.sunset)}</td>
+                <td>{fmtDuration(d.sun.dayLengthMs)}</td>
+                <td>{d.moon.glyph} {Math.round(d.moon.illumination * 100)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <nav class="links" aria-label="Related almanac pages">
+      <div>
+        <h2>Single answers for {place.name}</h2>
+        <ul>
+          {FACETS.map((f) => (
+            <li><a href={`/almanac/${place.slug}/${f.slug}`}>{f.title(place)}</a></li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h2>Other places</h2>
+        <ul class="places">
+          {others.map((p) => (
+            <li><a href={`/almanac/${p.slug}`}>{p.name}</a></li>
+          ))}
+        </ul>
+      </div>
+    </nav>
+
+    <p class="method">
+      Sun and moon are computed here from the NOAA solar formulas and the standard synodic model,
+      so this page is as correct months from now as it was the day it built. Tide is never computed —
+      it comes live from NOAA or it is absent.
+      <a href={`/almanac/${place.slug}.json`}>Machine-readable version</a> ·
+      <a href="/almanac">All places</a>
+    </p>
+  </main>
+</BlockLayout>
+
+<style>
+  .alm { max-width: 62rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    display: flex; gap: 0.5rem; flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .crumb a { color: var(--pc-ink-muted); text-decoration: none; }
+  .crumb a:hover { color: var(--pc-accent); text-decoration: underline; }
+
+  .head { border-bottom: 1px solid var(--pc-rule); padding-bottom: 1.75rem; }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 0.6rem;
+  }
+  .head h1 {
+    font-size: clamp(1.7rem, 4.5vw, 2.6rem);
+    font-weight: 500; letter-spacing: -0.02em; line-height: 1.12;
+    margin: 0 0 0.9rem;
+  }
+  .answer {
+    font-size: clamp(1.02rem, 2.2vw, 1.2rem);
+    line-height: 1.55; color: var(--pc-ink-soft);
+    margin: 0 0 1rem; max-width: 58ch;
+  }
+  .answer strong { font-family: var(--pc-font-mono); font-weight: 500; color: var(--pc-ink); }
+  .blurb { margin: 0; max-width: 58ch; line-height: 1.6; color: var(--pc-ink-muted); }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1px;
+    background: var(--pc-rule);
+    border: 1px solid var(--pc-rule);
+    margin-top: 2.5rem;
+  }
+  .cards article { background: var(--pc-bg); padding: 1.25rem; }
+  .cards dl { margin: 0; }
+  .cards dl div {
+    display: flex; justify-content: space-between; gap: 1rem;
+    padding: 0.35rem 0; border-bottom: 1px solid var(--pc-rule-soft);
+  }
+  .cards dt {
+    font-family: var(--pc-font-mono); font-size: 0.68rem;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--pc-ink-muted);
+  }
+  .cards dd { margin: 0; font-family: var(--pc-font-mono); font-size: 0.92rem; }
+  .card-links { margin: 0.9rem 0 0; font-size: 0.82rem; color: var(--pc-ink-muted); }
+  .card-links a { color: var(--pc-accent); }
+
+  h2 {
+    font-family: var(--pc-font-mono); font-size: 0.78rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 0.9rem;
+  }
+
+  .table-wrap { margin-top: 2.75rem; }
+  .scroller { overflow-x: auto; }
+  table {
+    border-collapse: collapse; width: 100%; min-width: 32rem;
+    font-family: var(--pc-font-mono); font-size: 0.88rem;
+  }
+  thead th {
+    text-align: left; font-weight: 500; font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--pc-ink-muted);
+    border-bottom: 1px solid var(--pc-rule);
+    padding: 0.4rem 1rem 0.4rem 0; white-space: nowrap;
+  }
+  tbody th { text-align: left; font-weight: 400; color: var(--pc-ink); }
+  tbody th, tbody td {
+    padding: 0.4rem 1rem 0.4rem 0;
+    border-bottom: 1px solid var(--pc-rule-soft); white-space: nowrap;
+  }
+  tbody tr.is-today th, tbody tr.is-today td { background: #F4F7FB; font-weight: 500; }
+
+  .links {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 2rem; margin-top: 3.5rem;
+    border-top: 1px solid var(--pc-rule); padding-top: 1.5rem;
+  }
+  .links ul { list-style: none; margin: 0; padding: 0; }
+  .links li { margin-bottom: 0.4rem; }
+  .links a { color: var(--pc-accent); font-size: 0.92rem; }
+  .places { columns: 2; column-gap: 1.5rem; }
+
+  .method {
+    margin-top: 3rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--pc-rule-soft);
+    font-size: 0.85rem; line-height: 1.6; color: var(--pc-ink-muted); max-width: 64ch;
+  }
+  .method a { color: var(--pc-accent); }
+</style>

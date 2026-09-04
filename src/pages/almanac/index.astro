@@ -1,0 +1,219 @@
+---
+/**
+ * /almanac — the index of every place PointCast keeps a day for.
+ *
+ * Successor to the single-page v1 El Segundo almanac. Same principles: light,
+ * moon, water, and one local note; no forecast, no urgency, and no invented
+ * water. Now it covers the whole lens instead of the anchor alone.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  ALMANAC_PLACES,
+  FACETS,
+  buildDay,
+  fmtDateLong,
+  fmtDuration,
+  fmtTime,
+  isoDate,
+  pacificDate,
+} from '../../lib/almanac';
+
+const today = pacificDate();
+const rows = ALMANAC_PLACES.map((place) => ({ place, day: buildDay(place, today) }));
+const anchor = rows[0];
+
+const canonical = 'https://pointcast.xyz/almanac';
+const title = 'The PointCast Almanac — sun, moon, and tide across the South Bay';
+const description =
+  'Sunrise, sunset, daylight, and moon phase for El Segundo and fifteen other places in the PointCast lens. Computed from the NOAA solar formulas, so it does not go stale. Tide comes from NOAA or not at all.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'CollectionPage',
+      '@id': `${canonical}#page`,
+      url: canonical,
+      name: title,
+      description,
+      isPartOf: { '@id': 'https://pointcast.xyz/#website' },
+      dateModified: isoDate(today),
+    },
+    {
+      '@type': 'ItemList',
+      '@id': `${canonical}#places`,
+      numberOfItems: ALMANAC_PLACES.length,
+      itemListElement: ALMANAC_PLACES.map((place, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: place.formalName,
+        url: `${canonical}/${place.slug}`,
+      })),
+    },
+  ],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="alm">
+    <header class="head">
+      <p class="kicker">PointCast daily almanac · {fmtDateLong(today)}</p>
+      <h1>The Almanac</h1>
+      <p class="lede">
+        A small register of the day for sixteen places in the lens: light, moon, and water.
+        No forecast. No urgency. Just the page turning over.
+      </p>
+      <p class="lede">
+        Sun and moon are computed here — the NOAA solar formulas and the standard synodic
+        model — so these pages are as correct next month as they were the day they built.
+        Tide is the one thing we never compute. It comes from NOAA with the station named,
+        or it is absent. Do not invent the water.
+      </p>
+    </header>
+
+    <section class="today" aria-label="Today at the anchor">
+      <p class="today-kicker">Today in El Segundo</p>
+      <div class="today-grid">
+        <div><span>Sunrise</span><strong>{fmtTime(anchor.day.sun.sunrise)}</strong></div>
+        <div><span>Sunset</span><strong>{fmtTime(anchor.day.sun.sunset)}</strong></div>
+        <div><span>Daylight</span><strong>{fmtDuration(anchor.day.sun.dayLengthMs)}</strong></div>
+        <div><span>Moon</span><strong>{anchor.day.moon.glyph} {Math.round(anchor.day.moon.illumination * 100)}%</strong></div>
+      </div>
+    </section>
+
+    <section class="table-wrap" aria-labelledby="places-heading">
+      <h2 id="places-heading">Every place</h2>
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Place</th>
+              <th scope="col">From ES</th>
+              <th scope="col">Sunrise</th>
+              <th scope="col">Sunset</th>
+              <th scope="col">Daylight</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ place, day }) => (
+              <tr>
+                <th scope="row"><a href={`/almanac/${place.slug}`}>{place.name}</a></th>
+                <td>{place.miles === 0 ? '—' : `${place.miles} mi ${place.direction}`}</td>
+                <td>{fmtTime(day.sun.sunrise)}</td>
+                <td>{fmtTime(day.sun.sunset)}</td>
+                <td>{fmtDuration(day.sun.dayLengthMs)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="facets" aria-labelledby="facets-heading">
+      <h2 id="facets-heading">Straight answers</h2>
+      <div class="facet-grid">
+        {FACETS.map((facet) => (
+          <div>
+            <h3>{facet.label}</h3>
+            <ul>
+              {ALMANAC_PLACES.slice(0, 8).map((place) => (
+                <li><a href={`/almanac/${place.slug}/${facet.slug}`}>{place.name}</a></li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <p class="method">
+      Every place also publishes a machine-readable twin at
+      <code>/almanac/{'{place}'}.json</code> — see <a href="/agent-native">agent-native publishing</a>
+      for why every surface here has one.
+    </p>
+  </main>
+</BlockLayout>
+
+<style>
+  .alm { max-width: 62rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+
+  .head { border-bottom: 1px solid var(--pc-rule); padding-bottom: 1.75rem; }
+  .kicker {
+    font-family: var(--pc-font-mono); font-size: 0.72rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 0.6rem;
+  }
+  .head h1 {
+    font-size: clamp(1.9rem, 5vw, 3rem); font-weight: 500;
+    letter-spacing: -0.03em; line-height: 1.05; margin: 0 0 1rem;
+  }
+  .lede {
+    font-size: 1.02rem; line-height: 1.6; color: var(--pc-ink-soft);
+    margin: 0 0 0.85rem; max-width: 62ch;
+  }
+
+  .today {
+    margin-top: 2.5rem; border: 1px solid var(--pc-rule); padding: 1.25rem;
+  }
+  .today-kicker {
+    font-family: var(--pc-font-mono); font-size: 0.68rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 1rem;
+  }
+  .today-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 1.25rem;
+  }
+  .today-grid span {
+    display: block; font-family: var(--pc-font-mono); font-size: 0.66rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin-bottom: 0.3rem;
+  }
+  .today-grid strong {
+    font-family: var(--pc-font-mono); font-size: 1.3rem; font-weight: 500;
+  }
+
+  h2 {
+    font-family: var(--pc-font-mono); font-size: 0.78rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 0.9rem;
+  }
+
+  .table-wrap { margin-top: 2.75rem; }
+  .scroller { overflow-x: auto; }
+  table {
+    border-collapse: collapse; width: 100%; min-width: 34rem;
+    font-family: var(--pc-font-mono); font-size: 0.88rem;
+  }
+  thead th {
+    text-align: left; font-weight: 500; font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--pc-ink-muted);
+    border-bottom: 1px solid var(--pc-rule);
+    padding: 0.4rem 1rem 0.4rem 0; white-space: nowrap;
+  }
+  tbody th { text-align: left; font-weight: 400; }
+  tbody th, tbody td {
+    padding: 0.4rem 1rem 0.4rem 0;
+    border-bottom: 1px solid var(--pc-rule-soft); white-space: nowrap;
+  }
+  tbody a { color: var(--pc-accent); }
+
+  .facets { margin-top: 3rem; }
+  .facet-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1.75rem;
+  }
+  .facet-grid h3 {
+    font-family: var(--pc-font-mono); font-size: 0.72rem; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink); margin: 0 0 0.6rem;
+  }
+  .facet-grid ul { list-style: none; margin: 0; padding: 0; }
+  .facet-grid li { margin-bottom: 0.3rem; }
+  .facet-grid a { color: var(--pc-accent); font-size: 0.88rem; }
+
+  .method {
+    margin-top: 3rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--pc-rule-soft);
+    font-size: 0.85rem; line-height: 1.6; color: var(--pc-ink-muted); max-width: 64ch;
+  }
+  .method a { color: var(--pc-accent); }
+  .method code { font-family: var(--pc-font-mono); font-size: 0.9em; }
+</style>

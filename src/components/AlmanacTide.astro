@@ -1,0 +1,168 @@
+---
+/**
+ * AlmanacTide — today's high and low water, or an honest blank.
+ *
+ * Renders empty on the server and fills in from /api/tide (a NOAA CO-OPS
+ * proxy) on the client. That is deliberate: a statically-built page cannot
+ * hold a correct tide table, and a stale one is worse than none. Crawlers see
+ * the station attribution and the link to NOAA; humans see the numbers.
+ *
+ * Places without a station we are sure of get the station-finder link only.
+ * See the warning on AlmanacPlace.noaaStation in src/lib/almanac.ts.
+ */
+import { NOAA_STATION_FINDER, noaaStationUrl, type AlmanacPlace } from '../lib/almanac';
+
+interface Props {
+  place: AlmanacPlace;
+}
+
+const { place } = Astro.props;
+const station = place.noaaStation;
+---
+
+<section class="tide" aria-labelledby="tide-heading">
+  <h2 id="tide-heading">Tide</h2>
+
+  {
+    station ? (
+      <>
+        <p class="tide-lede">
+          Live from NOAA station <strong>{station.id}</strong> — {station.name}, the nearest
+          gauge to {place.name}. PointCast does not compute tide.
+        </p>
+        <div class="tide-slots" data-tide-station={station.id} aria-live="polite">
+          <p class="tide-status" data-tide-status>Loading today's tides from NOAA…</p>
+          <table class="tide-table" data-tide-table hidden>
+            <thead>
+              <tr><th scope="col">Tide</th><th scope="col">Time</th><th scope="col">Height</th></tr>
+            </thead>
+            <tbody data-tide-body></tbody>
+          </table>
+        </div>
+        <p class="tide-foot">
+          <a href={noaaStationUrl(station.id)} rel="noopener">Station {station.id} at NOAA</a>
+        </p>
+      </>
+    ) : (
+      <p class="tide-lede">
+        We do not name a tide gauge for {place.name} — guessing the nearest station would
+        produce confidently wrong water. Find the right one at{' '}
+        <a href={NOAA_STATION_FINDER} rel="noopener">NOAA's California station map</a>.
+      </p>
+    )
+  }
+</section>
+
+<script>
+  const host = document.querySelector<HTMLElement>('[data-tide-station]');
+  if (host) {
+    const station = host.dataset.tideStation!;
+    const status = host.querySelector<HTMLElement>('[data-tide-status]')!;
+    const table = host.querySelector<HTMLTableElement>('[data-tide-table]')!;
+    const body = host.querySelector<HTMLElement>('[data-tide-body]')!;
+
+    const todayInLA = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+    fetch(`/api/tide?station=${encodeURIComponent(station)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.ok || !Array.isArray(data.predictions)) {
+          status.textContent = "Couldn't reach NOAA just now. Check the station link below.";
+          return;
+        }
+        // NOAA returns "YYYY-MM-DD HH:MM" in station-local time already.
+        const today = data.predictions.filter((p: { time: string }) => p.time.startsWith(todayInLA));
+        if (!today.length) {
+          status.textContent = "Couldn't reach NOAA just now. Check the station link below.";
+          return;
+        }
+        body.innerHTML = today
+          .map((p: { time: string; heightFt: number; kind: string }) => {
+            const hm = p.time.slice(11);
+            const [h, m] = hm.split(':').map(Number);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `<tr><td class="tide-kind tide-${p.kind}">${p.kind}</td><td>${h12}:${String(m).padStart(2, '0')} ${ampm}</td><td>${p.heightFt.toFixed(2)} ft</td></tr>`;
+          })
+          .join('');
+        status.hidden = true;
+        table.hidden = false;
+      })
+      .catch(() => {
+        status.textContent = "Couldn't reach NOAA just now. Check the station link below.";
+      });
+  }
+</script>
+
+<style>
+  .tide {
+    border-top: 1px solid var(--pc-rule);
+    padding-top: 1.25rem;
+    margin-top: 2.5rem;
+  }
+  .tide h2 {
+    font-size: 0.78rem;
+    font-family: var(--pc-font-mono);
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 0.75rem;
+  }
+  .tide-lede {
+    margin: 0 0 1rem;
+    max-width: 60ch;
+    color: var(--pc-ink-soft);
+    line-height: 1.55;
+  }
+  .tide-lede strong {
+    font-family: var(--pc-font-mono);
+    font-weight: 500;
+    color: var(--pc-ink);
+  }
+  .tide-status {
+    font-family: var(--pc-font-mono);
+    font-size: 0.85rem;
+    color: var(--pc-ink-muted);
+    margin: 0;
+  }
+  .tide-table {
+    border-collapse: collapse;
+    font-family: var(--pc-font-mono);
+    font-size: 0.9rem;
+    min-width: 20rem;
+  }
+  .tide-table th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    border-bottom: 1px solid var(--pc-rule);
+    padding: 0.35rem 1.5rem 0.35rem 0;
+  }
+  .tide-table td {
+    padding: 0.35rem 1.5rem 0.35rem 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+  }
+  .tide-kind {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+  }
+  .tide-high { color: var(--pc-accent); }
+  .tide-low { color: var(--pc-ink-muted); }
+  .tide-foot {
+    margin: 0.85rem 0 0;
+    font-size: 0.85rem;
+  }
+  .tide a {
+    color: var(--pc-accent);
+  }
+</style>

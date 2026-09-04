@@ -1,0 +1,420 @@
+---
+/**
+ * /agent-readiness — the instrument for the essay at /agent-native-publishing.
+ *
+ * Point it at a URL and it scores how legible that site is to an agent:
+ * llms.txt, manifests, sitemap declaration, JSON-LD, machine twins, feeds.
+ * Deliberately built as a tool rather than another essay — the essay already
+ * exists, and what the pattern lacked was something people could run.
+ *
+ * The register at the bottom is live-verified: every row is scored by the same
+ * endpoint when the page loads, so it can never drift out of date the way a
+ * hand-maintained "sites that do this" list would.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const canonical = 'https://pointcast.xyz/agent-readiness';
+const title = 'Agent readiness checker — is your site legible to AI agents?';
+const description =
+  'Score any site on how readable it is to AI agents and crawlers: llms.txt, agent manifests, sitemap declaration, JSON-LD, machine-readable twins, and feeds. Free, no signup, and it tells you how to fix what is missing.';
+
+/**
+ * The register. Live-verified on load, so entries cannot go stale.
+ * Adding a site is one line here. Submissions come through /wire.
+ */
+const REGISTER: { url: string; name: string; note: string }[] = [
+  {
+    url: 'https://pointcast.xyz',
+    name: 'PointCast',
+    note: 'The reference implementation — every human surface has a JSON twin.',
+  },
+];
+
+const CHECKS_EXPLAINED: { name: string; why: string; snippet: string }[] = [
+  {
+    name: '/llms.txt',
+    why: 'A short markdown brief at a predictable path. The one file that most reliably changes how a model describes your site, because it is the only place you get to write that description yourself.',
+    snippet: `# Your Site
+> One sentence on what this is.
+
+## Key pages
+- [What we do](https://example.com/about): the short version
+- [The product](https://example.com/product): what it does and for whom
+
+## Machine surfaces
+- [JSON feed](https://example.com/feed.json)
+- [Sitemap](https://example.com/sitemap-index.xml)`,
+  },
+  {
+    name: 'Sitemap in robots.txt',
+    why: 'The cheapest discovery win available, and the one most often skipped. A crawler that finds your sitemap in the first file it fetches indexes deeper and faster.',
+    snippet: `User-agent: *
+Allow: /
+
+Sitemap: https://example.com/sitemap-index.xml`,
+  },
+  {
+    name: 'Machine-readable twins',
+    why: 'Every human page gets a JSON sibling, linked from the page itself. An agent that finds the twin stops guessing at your HTML and reads structured data instead — which means it quotes you correctly.',
+    snippet: `<link rel="alternate"
+      type="application/json"
+      href="/almanac/el-segundo.json"
+      title="Machine-readable version" />`,
+  },
+  {
+    name: 'JSON-LD identity',
+    why: 'Says who is behind the site in a form an entity graph can absorb. Without it you are a string; with it you are a thing that can be linked to other things.',
+    snippet: `<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Your Site",
+  "url": "https://example.com",
+  "publisher": { "@type": "Organization", "name": "Your Org" }
+}
+</script>`,
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebApplication',
+      '@id': `${canonical}#app`,
+      url: canonical,
+      name: 'Agent Readiness Checker',
+      description,
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Any',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      isPartOf: { '@id': 'https://pointcast.xyz/#website' },
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${canonical}#faq`,
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'What is an llms.txt file?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'A short markdown file at /llms.txt that summarises a site for language models: what it is, which pages matter, and where the machine-readable surfaces live. It is a convention rather than a ratified standard, but it is cheap to publish and it is the only place you get to write your own description.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Does being agent-readable help SEO?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'It overlaps heavily but is not the same goal. Classic SEO optimises for a ranked list of links; agent readability optimises for being quoted correctly inside an answer. Sitemaps, JSON-LD, and canonical URLs serve both. llms.txt and machine-readable twins serve the second.',
+          },
+        },
+        {
+          '@type': 'Question',
+          name: 'Should I block AI crawlers?',
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: 'That is a business decision, not a technical one. Blocking them protects your content from being trained on and summarised; it also removes you from the answers people increasingly read instead of search results. You cannot have both, and this tool only reports which one you have chosen.',
+          },
+        },
+      ],
+    },
+  ],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="ar">
+    <header class="head">
+      <p class="kicker">An instrument for <a href="/agent-native-publishing">agent-native publishing</a></p>
+      <h1>Is your site legible to an agent?</h1>
+      <p class="standfirst">
+        Twelve checks against the paths and markup an AI crawler actually looks for. Free, no
+        signup, nothing stored. It will also tell you how to fix whatever it finds.
+      </p>
+    </header>
+
+    <form class="runner" data-ar-form>
+      <label class="sr-only" for="ar-url">Site URL</label>
+      <input
+        id="ar-url"
+        name="url"
+        type="text"
+        inputmode="url"
+        placeholder="example.com"
+        autocomplete="url"
+        spellcheck="false"
+        required
+      />
+      <button type="submit">Check</button>
+    </form>
+    <p class="runner-note" data-ar-note>Public sites only. We fetch six paths and read the homepage head.</p>
+
+    <section class="result" data-ar-result hidden aria-live="polite">
+      <div class="score-head">
+        <p class="score" data-ar-score>—</p>
+        <div>
+          <p class="grade" data-ar-grade></p>
+          <p class="score-url" data-ar-url></p>
+        </div>
+      </div>
+      <ul class="checks" data-ar-checks></ul>
+      <p class="raw">
+        Same result as JSON: <a data-ar-json href="#">/api/agent-readiness</a>
+      </p>
+    </section>
+
+    <section class="explain" aria-labelledby="explain-h">
+      <h2 id="explain-h">The four that matter most</h2>
+      <p class="explain-lede">
+        The full check is twelve items, but these four carry most of the weight — and all four
+        are a single file or a single tag.
+      </p>
+      {
+        CHECKS_EXPLAINED.map((c) => (
+          <article class="explain-item">
+            <h3>{c.name}</h3>
+            <p>{c.why}</p>
+            <pre><code>{c.snippet}</code></pre>
+          </article>
+        ))
+      }
+    </section>
+
+    <section class="register" aria-labelledby="register-h">
+      <h2 id="register-h">The register</h2>
+      <p class="explain-lede">
+        Sites that publish the pattern. Every score below is fetched live when this page loads —
+        no hand-maintained list to go stale. To add yours, run the check and send the result
+        through <a href="/wire">the wire</a>.
+      </p>
+      <ul class="register-list" data-ar-register>
+        {
+          REGISTER.map((entry) => (
+            <li data-register-url={entry.url}>
+              <div class="reg-main">
+                <a href={entry.url} rel="noopener">{entry.name}</a>
+                <span class="reg-note">{entry.note}</span>
+              </div>
+              <span class="reg-score" data-register-score>checking…</span>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <p class="colophon">
+      Built because the <a href="/agent-native-publishing">essay</a> needed an instrument.
+      The checker itself is a Cloudflare Pages Function — it fetches only public hosts, follows
+      a fixed and small number of requests, and never echoes back the content of the site it
+      checked.
+    </p>
+  </main>
+</BlockLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-ar-form]');
+  const result = document.querySelector<HTMLElement>('[data-ar-result]');
+  const note = document.querySelector<HTMLElement>('[data-ar-note]');
+
+  type CheckResult = { id: string; label: string; weight: number; passed: boolean; detail: string; fix: string };
+
+  function render(data: {
+    score: number;
+    grade: string;
+    url: string;
+    checks: CheckResult[];
+  }) {
+    if (!result) return;
+    result.hidden = false;
+    result.querySelector<HTMLElement>('[data-ar-score]')!.textContent = String(data.score);
+    result.querySelector<HTMLElement>('[data-ar-grade]')!.textContent = data.grade;
+    result.querySelector<HTMLElement>('[data-ar-url]')!.textContent = data.url;
+
+    const json = result.querySelector<HTMLAnchorElement>('[data-ar-json]')!;
+    json.href = `/api/agent-readiness?url=${encodeURIComponent(data.url)}`;
+
+    result.querySelector<HTMLElement>('[data-ar-checks]')!.innerHTML = data.checks
+      .map(
+        (c) => `
+        <li class="${c.passed ? 'pass' : 'fail'}">
+          <span class="mark" aria-hidden="true">${c.passed ? '●' : '○'}</span>
+          <div>
+            <p class="check-label">${c.label}<span class="weight">${c.weight}</span></p>
+            <p class="check-detail">${escapeHtml(c.detail)}</p>
+            ${c.passed ? '' : `<p class="check-fix">${escapeHtml(c.fix)}</p>`}
+          </div>
+        </li>`,
+      )
+      .join('');
+    result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function escapeHtml(s: string) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = form.querySelector<HTMLInputElement>('#ar-url')!;
+    const button = form.querySelector<HTMLButtonElement>('button')!;
+    const value = input.value.trim();
+    if (!value) return;
+
+    button.disabled = true;
+    button.textContent = 'Checking…';
+    if (note) note.textContent = 'Fetching…';
+
+    try {
+      const res = await fetch(`/api/agent-readiness?url=${encodeURIComponent(value)}`);
+      const data = await res.json();
+      if (!data.ok) {
+        if (note) note.textContent = data.message ?? 'That did not work.';
+        if (result) result.hidden = true;
+      } else {
+        if (note) note.textContent = `Checked ${data.origin}.`;
+        render(data);
+      }
+    } catch {
+      if (note) note.textContent = 'Could not run the check just now.';
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Check';
+    }
+  });
+
+  // Live-verify the register.
+  document.querySelectorAll<HTMLElement>('[data-register-url]').forEach(async (row) => {
+    const slot = row.querySelector<HTMLElement>('[data-register-score]');
+    if (!slot) return;
+    try {
+      const res = await fetch(`/api/agent-readiness?url=${encodeURIComponent(row.dataset.registerUrl!)}`);
+      const data = await res.json();
+      slot.textContent = data.ok ? `${data.score} · ${data.grade}` : 'unreachable';
+    } catch {
+      slot.textContent = 'unreachable';
+    }
+  });
+</script>
+
+<style>
+  .ar { max-width: 48rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  .head { border-bottom: 1px solid var(--pc-rule); padding-bottom: 1.5rem; }
+  .kicker {
+    font-family: var(--pc-font-mono); font-size: 0.72rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 0.7rem;
+  }
+  .kicker a { color: var(--pc-accent); }
+  h1 {
+    font-size: clamp(1.9rem, 5.5vw, 3rem); font-weight: 500;
+    letter-spacing: -0.03em; line-height: 1.05; margin: 0 0 1rem;
+  }
+  .standfirst {
+    font-size: clamp(1.02rem, 2.3vw, 1.2rem); line-height: 1.55;
+    color: var(--pc-ink-soft); margin: 0; max-width: 56ch;
+  }
+
+  .runner { display: flex; gap: 0; margin: 2rem 0 0.6rem; }
+  .runner input {
+    flex: 1; min-width: 0;
+    font-family: var(--pc-font-mono); font-size: 1rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--pc-rule); border-right: 0;
+    background: var(--pc-bg); color: var(--pc-ink);
+    border-radius: 0;
+  }
+  .runner input:focus { outline: 2px solid var(--pc-accent); outline-offset: -2px; }
+  .runner button {
+    font-family: var(--pc-font-mono); font-size: 0.8rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.75rem 1.4rem;
+    border: 1px solid var(--pc-ink); background: var(--pc-ink); color: var(--pc-bg);
+    cursor: pointer; border-radius: 0;
+  }
+  .runner button:disabled { opacity: 0.5; cursor: progress; }
+  .runner-note { font-size: 0.8rem; color: var(--pc-ink-muted); margin: 0 0 2rem; }
+
+  .result { border: 1px solid var(--pc-rule); padding: 1.25rem; margin-bottom: 3rem; }
+  .score-head { display: flex; align-items: baseline; gap: 1.1rem; margin-bottom: 1.25rem; }
+  .score {
+    font-family: var(--pc-font-mono); font-size: 3.4rem; font-weight: 500;
+    line-height: 0.9; margin: 0; letter-spacing: -0.03em;
+  }
+  .grade {
+    font-family: var(--pc-font-mono); font-size: 0.78rem;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-accent); margin: 0 0 0.25rem;
+  }
+  .score-url { font-size: 0.82rem; color: var(--pc-ink-muted); margin: 0; word-break: break-all; }
+
+  .checks { list-style: none; margin: 0; padding: 0; }
+  .checks li {
+    display: flex; gap: 0.7rem; align-items: flex-start;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--pc-rule-soft);
+  }
+  .checks .mark { font-family: var(--pc-font-mono); line-height: 1.4; }
+  .checks .pass .mark { color: var(--pc-accent); }
+  .checks .fail .mark { color: var(--pc-ink-muted); }
+  .check-label {
+    font-family: var(--pc-font-mono); font-size: 0.85rem; margin: 0 0 0.15rem;
+    display: flex; gap: 0.6rem; align-items: baseline;
+  }
+  .weight { font-size: 0.66rem; color: var(--pc-ink-muted); }
+  .check-detail { font-size: 0.85rem; color: var(--pc-ink-muted); margin: 0; line-height: 1.45; }
+  .check-fix {
+    font-size: 0.85rem; color: var(--pc-ink-soft); margin: 0.3rem 0 0;
+    line-height: 1.5; border-left: 2px solid var(--pc-rule); padding-left: 0.6rem;
+  }
+  .raw { font-size: 0.8rem; color: var(--pc-ink-muted); margin: 1rem 0 0; }
+  .raw a { color: var(--pc-accent); }
+
+  h2 {
+    font-family: var(--pc-font-mono); font-size: 0.78rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 0.9rem;
+  }
+  .explain, .register { margin-top: 3rem; }
+  .explain-lede {
+    line-height: 1.65; color: var(--pc-ink-soft); margin: 0 0 1.75rem; max-width: 60ch;
+  }
+  .explain-lede a { color: var(--pc-accent); }
+
+  .explain-item { margin-bottom: 2rem; }
+  .explain-item h3 {
+    font-family: var(--pc-font-mono); font-size: 0.9rem; font-weight: 500;
+    margin: 0 0 0.5rem;
+  }
+  .explain-item p { line-height: 1.65; color: var(--pc-ink-soft); margin: 0 0 0.8rem; max-width: 60ch; }
+  pre {
+    background: #F7F7F5; border: 1px solid var(--pc-rule-soft);
+    padding: 0.9rem 1rem; overflow-x: auto; margin: 0;
+  }
+  code { font-family: var(--pc-font-mono); font-size: 0.8rem; line-height: 1.6; }
+
+  .register-list { list-style: none; margin: 0; padding: 0; }
+  .register-list li {
+    display: flex; justify-content: space-between; gap: 1rem; align-items: baseline;
+    padding: 0.7rem 0; border-bottom: 1px solid var(--pc-rule-soft);
+  }
+  .reg-main a { color: var(--pc-accent); font-size: 0.95rem; }
+  .reg-note { display: block; font-size: 0.82rem; color: var(--pc-ink-muted); margin-top: 0.15rem; }
+  .reg-score {
+    font-family: var(--pc-font-mono); font-size: 0.8rem;
+    color: var(--pc-ink-muted); white-space: nowrap;
+  }
+
+  .colophon {
+    margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--pc-rule);
+    font-size: 0.85rem; line-height: 1.6; color: var(--pc-ink-muted); max-width: 62ch;
+  }
+  .colophon a { color: var(--pc-accent); }
+</style>

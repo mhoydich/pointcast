@@ -1,0 +1,156 @@
+---
+/**
+ * AlmanacLive — corrects a statically-built almanac page to the real today.
+ *
+ * The site builds static, so a page rendered on Tuesday still says Tuesday on
+ * Friday. Rather than hide that, every almanac surface names the date it is
+ * describing, and this component recomputes the values in the browser and
+ * swaps them in when the visitor's Pacific date differs from the build date.
+ *
+ * The crawler gets correct, dated, self-consistent HTML. The human gets today.
+ * Nothing here invents data — it runs the same NOAA solar routine the server
+ * ran, just with a fresher date.
+ */
+interface Props {
+  lat: number;
+  lng: number;
+  /** Pacific calendar date the server rendered, "YYYY-MM-DD". */
+  builtFor: string;
+  /** Place name, for rebuilding the answer sentence. */
+  place: string;
+  /** Which value the hero readout shows. */
+  facet?: 'sunset' | 'sunrise' | 'moon' | 'daylight' | 'all';
+}
+
+const { lat, lng, builtFor, place, facet = 'all' } = Astro.props;
+---
+
+<div
+  data-almanac-live
+  data-lat={lat}
+  data-lng={lng}
+  data-built-for={builtFor}
+  data-place={place}
+  data-facet={facet}
+  hidden
+></div>
+
+<script>
+  import { moonPhase, sunTimes } from '../lib/sky';
+
+  const TZ = 'America/Los_Angeles';
+
+  function pacificDate(now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+    return new Date(Date.UTC(get('year'), get('month') - 1, get('day')));
+  }
+
+  const fmtTime = (d: Date | null) =>
+    d ? new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' }).format(d) : '—';
+
+  const fmtDateLong = (d: Date) =>
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(d);
+
+  const fmtDuration = (ms: number) => {
+    const total = Math.round(ms / 60000);
+    return `${Math.floor(total / 60)}h ${String(total % 60).padStart(2, '0')}m`;
+  };
+
+  const fmtSigned = (ms: number) => {
+    const sec = Math.round(ms / 1000);
+    if (sec === 0) return 'no change';
+    const abs = Math.abs(sec);
+    const m = Math.floor(abs / 60);
+    const s = abs % 60;
+    const sign = sec > 0 ? '+' : '−';
+    return m > 0 ? `${sign}${m}m ${String(s).padStart(2, '0')}s` : `${sign}${s}s`;
+  };
+
+  const root = document.querySelector<HTMLElement>('[data-almanac-live]');
+  if (root) {
+    const lat = Number(root.dataset.lat);
+    const lng = Number(root.dataset.lng);
+    const place = root.dataset.place ?? '';
+    const facet = root.dataset.facet ?? 'all';
+    const today = pacificDate();
+    const todayIso = today.toISOString().slice(0, 10);
+
+    // Only touch the DOM when the build is actually out of date. A same-day
+    // visitor sees the server HTML untouched, which keeps the page stable.
+    if (todayIso !== root.dataset.builtFor) {
+      const now = new Date();
+      const sun = sunTimes(today, lat, lng, now);
+      const prev = sunTimes(new Date(today.getTime() - 86_400_000), lat, lng);
+      const moon = moonPhase(new Date(today.getTime() + 12 * 3_600_000));
+      const daylightDelta = sun.dayLengthMs - prev.dayLengthMs;
+
+      const set = (sel: string, value: string) => {
+        document.querySelectorAll<HTMLElement>(sel).forEach((el) => {
+          el.textContent = value;
+        });
+      };
+
+      set('[data-live="sunrise"]', fmtTime(sun.sunrise));
+      set('[data-live="sunset"]', fmtTime(sun.sunset));
+      set('[data-live="solar-noon"]', fmtTime(sun.solarNoon));
+      set('[data-live="daylight"]', fmtDuration(sun.dayLengthMs));
+      set('[data-live="daylight-delta"]', fmtSigned(daylightDelta));
+      set('[data-live="moon-label"]', moon.label);
+      set('[data-live="moon-illum"]', `${Math.round(moon.illumination * 100)}%`);
+      set('[data-live="moon-glyph"]', moon.glyph);
+      set('[data-live="date"]', fmtDateLong(today));
+
+      const heroValue =
+        facet === 'sunset'
+          ? fmtTime(sun.sunset)
+          : facet === 'sunrise'
+            ? fmtTime(sun.sunrise)
+            : facet === 'moon'
+              ? `${Math.round(moon.illumination * 100)}%`
+              : facet === 'daylight'
+                ? fmtDuration(sun.dayLengthMs)
+                : '';
+      if (heroValue) set('[data-live="hero"]', heroValue);
+
+      const when = fmtDateLong(today);
+      const answer =
+        facet === 'sunset'
+          ? `Sunset in ${place} on ${when} is at ${fmtTime(sun.sunset)} Pacific time.`
+          : facet === 'sunrise'
+            ? `Sunrise in ${place} on ${when} is at ${fmtTime(sun.sunrise)} Pacific time.`
+            : facet === 'moon'
+              ? `The moon over ${place} on ${when} is a ${moon.label}, ${Math.round(moon.illumination * 100)}% illuminated.`
+              : facet === 'daylight'
+                ? `${place} gets ${fmtDuration(sun.dayLengthMs)} of daylight on ${when} — ${
+                    daylightDelta >= 0 ? 'longer' : 'shorter'
+                  } than yesterday by ${fmtSigned(Math.abs(daylightDelta)).replace('+', '')}.`
+                : '';
+      if (answer) set('[data-live="answer"]', answer);
+
+      // Move the "today" marker in any day table to the real current row.
+      document.querySelectorAll<HTMLElement>('[data-day-row]').forEach((row) => {
+        row.classList.toggle('is-today', row.dataset.dayRow === todayIso);
+      });
+    }
+
+    // The sun's current position is always live, never build-time.
+    const nowSun = sunTimes(today, lat, lng, new Date());
+    document.querySelectorAll<HTMLElement>('[data-live="sun-state"]').forEach((el) => {
+      el.textContent = nowSun.isDay
+        ? `up — ${nowSun.altitudeDeg.toFixed(1)}° above the horizon`
+        : `down — ${Math.abs(nowSun.altitudeDeg).toFixed(1)}° below the horizon`;
+    });
+  }
+</script>
