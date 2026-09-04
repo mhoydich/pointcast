@@ -57,7 +57,7 @@ Two jobs, in this order.
 ### Things to look hard at
 
 1. `deliverHeldFaucetDrips` ordering: reclaim stale → take rows → lock → snapshot → balance check → send → mark. Any path that leaves rows in `submitting`?
-2. `spigotSecretKey` shape check (`0x` + 64 hex). Should we also refuse a key whose address equals the HELLO deployer, as a tripwire against Mike pasting the 2019 key?
+2. `spigotSecretKey` shape check (`0x` + 64 hex). **Mike has decided the spigot is the 2019 deployer itself** (the tokens are valueless, he accepts the blast radius; see the Mike brief). So do *not* add a deployer tripwire. Instead confirm that the daily cap and per-user rate limits are the only things bounding outflow, and say whether that is enough or a hard per-day send ceiling in code is warranted.
 3. Rate limits: claim 6/h/user, 20/10 min/IP; deliver 5/10 min/user. Enough?
 4. `getPublicFaucetClaims` joins `users` for first names. Same exposure as Kennel Club's ticker. Fine?
 5. The GET desk returns `you` for any session; no CSRF concern on GET, and POSTs rely on the session cookie exactly as Kennel Club does. Confirm nothing new here.
