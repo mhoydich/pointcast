@@ -16,7 +16,7 @@ Two jobs, in this order.
 
 ## Job 1 — the plate
 
-- **Engine:** poster-image-engine, `gpt-image-1` or newest available
+- **Engine:** poster-image-engine, `gpt-image-1` or newest available (ChatGPT's image model, Mike's pick; Krea and Higgsfield are out of scope for now)
 - **Size:** 1024 × 1280 PNG (4:5), sRGB; also export `.webp` (q82) and a 1200 × 630 crop for `hello-og.png`
 - **Project dir:** `poster-image-engine/projects/faucet-hello-2026/`
 - **Public paths:** `public/images/faucet/hello-poster.png`, `hello-poster.webp`, `hello-og.png` (overwrite the placeholders; the page already points at them)
