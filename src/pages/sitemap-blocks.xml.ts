@@ -18,7 +18,8 @@ export const GET: APIRoute = async () => {
   const urls: { loc: string; lastmod: string; priority: string }[] = [];
   for (const b of blocks) {
     urls.push({
-      loc: `${base}/b/${b.data.id}`,
+      // Astro's rendered Block canonicals are directory URLs.
+      loc: `${base}/b/${b.data.id}/`,
       lastmod: b.data.timestamp.toISOString(),
       priority: b.data.type === 'READ' ? '0.8' : '0.6',
     });

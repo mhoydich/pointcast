@@ -1,12 +1,25 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import { readFileSync } from 'node:fs';
 
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { normalizeGeneratedSeo } from './src/lib/seo-build.mjs';
+import { isNoindexPath, isRedirectPath } from './src/lib/seo-rules.mjs';
 
 const githubPages = process.env.POINTCAST_GITHUB_PAGES === '1';
+// The bespoke discovery and Block sitemaps own these routes. Deriving the
+// literal portion from their source keeps the auto sitemap disjoint without
+// maintaining a second 300-entry hand list here.
+const discoverySitemapSource = readFileSync(new URL('./src/pages/sitemap-discovery.xml.ts', import.meta.url), 'utf8');
+const discoveryStaticPaths = new Set([...discoverySitemapSource.matchAll(/\['https:\/\/pointcast\.xyz([^']+)'/g)]
+  .map((match) => match[1].replace(/\/$/, '')));
+const discoveryDynamicPrefixes = ['/afterimage/', '/pairings/', '/products/', '/25/teams/', '/25/2029/', '/mascot-battler/'];
+const isBespokeSitemapPath = (pathname) => {
+  const normalized = pathname.replace(/\/$/, '');
+  return normalized.startsWith('/b/') || discoveryStaticPaths.has(normalized) || discoveryDynamicPrefixes.some((prefix) => normalized.startsWith(prefix));
+};
 
 // https://astro.build/config
 export default defineConfig({
@@ -17,7 +30,14 @@ export default defineConfig({
   // the entire public/ tree — games, _redirects, decks, static .well-known —
   // from every deploy for two weeks. Do not point this at scratch paths.
   integrations: [
-    sitemap(),
+    sitemap({
+      // Do not advertise retired URLs that Pages permanently redirects. This
+      // mirrors public/_redirects and functions/_middleware.ts.
+      filter: (page) => {
+        const path = new URL(page).pathname;
+        return !isNoindexPath(path) && !isRedirectPath(path) && !isBespokeSitemapPath(path);
+      },
+    }),
     {
       name: 'pointcast-on-page-seo',
       hooks: {

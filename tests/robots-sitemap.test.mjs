@@ -126,7 +126,7 @@ test('/sitemap.xml redirects to /sitemap-index.xml with a 301', async () => {
 
   // The target is real: @astrojs/sitemap writes sitemap-index.xml at build.
   const config = await read('astro.config.mjs');
-  assert.match(config, /integrations:\s*\[[^\]]*\bsitemap\(\)/);
+  assert.match(config, /integrations:\s*\[[^\]]*\bsitemap\(/);
 
   // A static file at /sitemap.xml would shadow the redirect. Astro has no
   // adapter here, so a src/pages/sitemap.xml.ts returning a 3xx would be
