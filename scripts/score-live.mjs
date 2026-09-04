@@ -13,7 +13,8 @@ const ACCOUNT = '699061394cac705067bad6a7a4bd2db5';
 // so read keys through the REST API with wrangler's own OAuth token.
 const tokenFile = [`${process.env.HOME}/.wrangler/config/default.toml`, `${process.env.HOME}/Library/Preferences/.wrangler/config/default.toml`].find((f) => { try { readFileSync(f); return true; } catch { return false; } });
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN || (tokenFile && (readFileSync(tokenFile, 'utf8').match(/oauth_token = "([^"]+)"/) || [])[1]);
-const live = { pageviews: {}, counters: {} };
+const live = { pageviews: {}, counters: {}, frontDoor: { shown: 0, completed: 0, nextDoorTaken: 0, eligibleForSevenDayReturn: 0, returnedAfterSevenDays: 0 } };
+const frontDoorVisits = new Map();
 if (NS && TOKEN) {
   let cursor = '';
   let pages = 0;
@@ -29,6 +30,20 @@ if (NS && TOKEN) {
       let records; try { records = await valueRes.json(); } catch { continue; }
       if (!Array.isArray(records)) continue;
       for (const record of records) {
+        if (typeof record?.event === 'string' && record.event.startsWith('front_door.')) {
+          if (record.event === 'front_door.primary_shown') {
+            live.frontDoor.shown += 1;
+            const visitor = typeof record?.meta?.visitor === 'string' ? record.meta.visitor.slice(0, 80) : '';
+            const at = Date.parse(record?.ts || '');
+            if (visitor && Number.isFinite(at)) {
+              const visits = frontDoorVisits.get(visitor) || [];
+              visits.push(at);
+              frontDoorVisits.set(visitor, visits);
+            }
+          } else if (record.event === 'front_door.primary_completed') live.frontDoor.completed += 1;
+          else if (record.event === 'front_door.next_door_taken') live.frontDoor.nextDoorTaken += 1;
+          continue;
+        }
         if (record?.event === 'dock') {
           live.counters['/dock'] = (live.counters['/dock'] || 0) + 1;
           continue;
@@ -44,6 +59,13 @@ if (NS && TOKEN) {
   } while (cursor && pages < 200);
 } else {
   console.error('no namespace id or token; skipping pageviews');
+}
+for (const visits of frontDoorVisits.values()) {
+  const ordered = visits.sort((a, b) => a - b);
+  const first = ordered[0];
+  const later = ordered.some((visit) => visit - first >= 7 * 24 * 60 * 60 * 1000);
+  if (Date.now() - first >= 7 * 24 * 60 * 60 * 1000) live.frontDoor.eligibleForSevenDayReturn += 1;
+  if (later) live.frontDoor.returnedAfterSevenDays += 1;
 }
 const j = async (u) => { try { const r = await fetch(u, { signal: AbortSignal.timeout(8000) }); return r.ok ? r.json() : null; } catch { return null; } };
 const drum = await j('https://pointcast.xyz/api/drum'); if (drum?.globalTotal) { live.counters['/drum-house'] = drum.globalTotal; live.counters['/drum-v8'] = drum.globalTotal; }
