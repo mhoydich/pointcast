@@ -331,16 +331,6 @@ export const JOIN_SYSTEM = {
       estimate: '1 week',
       status: 'open',
     },
-    {
-      id: 'cartography-yield-receipt-ledger',
-      lane: 'receipt',
-      owner: 'Codex plus operator',
-      project: 'cartography',
-      ask: 'Record lead yield, deal yield, campaign yield, and contribution receipts for the first 3 paid pilots.',
-      artifact: 'receipt JSON samples and weekly customer readout',
-      estimate: '2 hr initial',
-      status: 'open',
-    },
   ],
   claimProtocol: [
     'Pick one task id from /join or /join.json.',
