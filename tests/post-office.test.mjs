@@ -37,6 +37,24 @@ class FakeStatement {
   bind(...args) { this.args = args; return this; }
   async first() {
     if (this.sql.includes('FROM aliases WHERE name = ?')) return this.db.aliases.get(this.args[0]) ?? null;
+    if (this.sql.startsWith('SELECT delivery_id, outcome FROM post_office_deliveries')) {
+      return [...this.db.deliveries.values()].find((row) => (
+        row.webhook_hash === this.args[0] && row.alias_hash === this.args[1]
+      )) ?? null;
+    }
+    if (this.sql.startsWith('INSERT INTO post_office_counter_locks') && this.sql.includes('RETURNING holder')) {
+      const [day, holder, expiresAt, now] = this.args;
+      const current = this.db.locks.get(day);
+      if (current && current.holder !== holder && current.expires_at > now) return null;
+      this.db.locks.set(day, { holder, expires_at: expiresAt });
+      return { holder };
+    }
+    if (this.sql.startsWith('SELECT COALESCE((SELECT count FROM post_office_daily_counters')) {
+      return {
+        global_count: this.db.counters.get(`${this.args[0]}:global`) ?? 0,
+        alias_count: this.db.counters.get(`${this.args[1]}:${this.args[2]}`) ?? 0,
+      };
+    }
     throw new Error(`Unsupported first: ${this.sql}`);
   }
   async all() {
@@ -46,6 +64,45 @@ class FakeStatement {
     throw new Error(`Unsupported all: ${this.sql}`);
   }
   async run() {
+    if (this.sql.startsWith('INSERT INTO post_office_deliveries')) {
+      const [deliveryId, webhookHash, aliasHash, day, downstreamKey, acceptedAt, completedAt] = this.args;
+      if (this.db.deliveries.has(deliveryId)) return { success: true, meta: { changes: 0 } };
+      this.db.deliveries.set(deliveryId, {
+        delivery_id: deliveryId, webhook_hash: webhookHash, alias_hash: aliasHash, day,
+        downstream_idempotency_key: downstreamKey, provider_accepted: 1,
+        outcome: this.sql.includes("'rate_limited'") ? 'rate_limited' : 'reserved',
+        error: null, accepted_at: acceptedAt, completed_at: completedAt ?? null,
+      });
+      return { success: true, meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('INSERT INTO post_office_daily_counters')) {
+      const scope = this.sql.includes("VALUES (?, 'global'") ? 'global' : this.args[1];
+      const updatedAt = this.sql.includes("VALUES (?, 'global'") ? this.args[1] : this.args[2];
+      const key = `${this.args[0]}:${scope}`;
+      this.db.counters.set(key, (this.db.counters.get(key) ?? 0) + 1);
+      this.db.counterUpdates = [...(this.db.counterUpdates ?? []), updatedAt];
+      return { success: true, meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('UPDATE post_office_counter_locks SET holder = NULL')) {
+      const row = this.db.locks.get(this.args[0]);
+      if (row?.holder === this.args[1]) this.db.locks.delete(this.args[0]);
+      return { success: true, meta: { changes: row ? 1 : 0 } };
+    }
+    if (this.sql.startsWith('UPDATE post_office_deliveries')) {
+      const deliveryId = this.args.at(-1);
+      const row = this.db.deliveries.get(deliveryId);
+      if (!row || row.outcome !== 'reserved') return { success: true, meta: { changes: 0 } };
+      if (this.sql.includes("outcome = 'forwarded'")) {
+        Object.assign(row, { outcome: 'forwarded', error: null, completed_at: this.args[0] });
+      } else if (this.sql.includes("outcome = 'failed'")) {
+        Object.assign(row, { outcome: 'failed', error: this.args[0], completed_at: this.args[1] });
+      } else if (this.sql.includes('error = NULL')) {
+        Object.assign(row, { outcome: this.args[0], error: null, completed_at: this.args[1] });
+      } else {
+        Object.assign(row, { outcome: this.args[0], error: this.args[1], completed_at: this.args[2] });
+      }
+      return { success: true, meta: { changes: 1 } };
+    }
     if (this.sql.startsWith('INSERT INTO alias_receipts')) {
       const [hash, name, action, eventAt, aliasName = name, aliasHash = hash] = this.args;
       if (this.db.aliases.get(aliasName)?.receipt_hash !== aliasHash) return { success: true, meta: { changes: 0 } };
@@ -85,6 +142,9 @@ class FakeD1 {
   constructor() {
     this.aliases = new Map();
     this.receipts = new Map();
+    this.deliveries = new Map();
+    this.counters = new Map();
+    this.locks = new Map();
   }
   prepare(sql) { return new FakeStatement(this, sql); }
   async batch(statements) {
@@ -272,15 +332,19 @@ test('email aliases forward a quoted attachment-free body through a fake mail ad
     PC_RATES_KV: kv,
     SEND_EMAIL: { async send(message) { messages.push(message); return { messageId: 'mail-1' }; } },
   }, 'webhook-email-1', inboundEmail, { now: new Date('2026-09-03T19:01:00.000Z') });
-  assert.deepEqual(await response.json(), { ok: true, forwarded: 1, bounced: false, duplicate: 0, rateLimited: 0, stored: false });
+  const outcome = await response.json();
+  assert.deepEqual(outcome.providerAcceptance, { accepted: true });
+  assert.deepEqual(outcome.delivery, { forwarded: 1, bounced: false, duplicate: 0, rateLimited: 0, failed: 0 });
   assert.equal(messages[0].to, 'private@example.com');
   assert.equal(messages[0].from.email, 'post@agents.pointcast.xyz');
   assert.match(messages[0].text, /> First line\n> Second line/u);
   assert.equal('attachments' in messages[0], false);
+  assert.match(messages[0].headers['Idempotency-Key'], /^post-office:[0-9a-f]{64}$/u);
+  assert.equal(messages[0].headers['X-PointCast-Delivery-Id'], messages[0].headers['Idempotency-Key'].slice('post-office:'.length));
   assert.equal(db.aliases.get('field-agent').forwarded_count, 1);
 });
 
-test('webhook aliases sign canonical JSON, retry once, and suppress a replay with opaque KV state', async () => {
+test('webhook aliases sign canonical JSON, retry once, and suppress a replay with an opaque D1 reservation', async () => {
   const db = new FakeD1();
   db.aliases.set('field-agent', activeAlias('webhook', 'https://agent.example/hook'));
   const kv = new FakeKV();
@@ -299,14 +363,20 @@ test('webhook aliases sign canonical JSON, retry once, and suppress a replay wit
   assert.equal(calls.length, 2);
   assert.equal(calls[1].input, 'https://agent.example/hook');
   assert.equal(calls[1].init.headers['X-PointCast-Key-Id'], X402_TREASURY_AGENT_ID);
+  assert.equal(calls[1].init.headers['Idempotency-Key'], `post-office:${calls[1].init.headers['X-PointCast-Delivery-Id']}`);
   const envelope = JSON.parse(calls[1].init.body);
   assert.equal(envelope.spec, POST_OFFICE_ENVELOPE_SPEC);
   assert.equal(await verifyCanonicalPayload(calls[1].init.body, calls[1].init.headers['X-PointCast-Signature'], pair.publicKeyBase64), true);
 
   const replay = await routePostOfficeInbound(env, 'webhook-hook-1', inboundEmail, { fetcher });
-  assert.deepEqual(await replay.json(), { ok: true, forwarded: 0, bounced: false, duplicate: 1, rateLimited: 0, stored: false });
+  const replayBody = await replay.json();
+  assert.deepEqual(replayBody.providerAcceptance, { accepted: true });
+  assert.deepEqual(replayBody.delivery, { forwarded: 0, bounced: false, duplicate: 1, rateLimited: 0, failed: 0 });
   assert.equal(calls.length, 2);
   assert.equal([...kv.values.values()].some((value) => String(value).includes('sender@example.com')), false);
+  assert.equal(db.deliveries.size, 1);
+  assert.equal([...db.deliveries.values()][0].outcome, 'forwarded');
+  assert.doesNotMatch(JSON.stringify([...db.deliveries.values()][0]), /sender@example|Original note|First line/u);
 });
 
 test('unknown aliases bounce once with the 402 terms URL and store no message content', async () => {
@@ -327,7 +397,7 @@ test('unknown aliases bounce once with the 402 terms URL and store no message co
   assert.equal(db.aliases.size, 0);
 });
 
-test('KV enforces the per-alias daily forwarding cap', async () => {
+test('D1 enforces the per-alias daily forwarding cap atomically', async () => {
   const db = new FakeD1();
   db.aliases.set('field-agent', activeAlias('email', 'private@example.com'));
   const kv = new FakeKV();
@@ -345,13 +415,24 @@ test('KV enforces the per-alias daily forwarding cap', async () => {
   assert.equal(limited.rateLimited, 1);
   assert.equal(limited.forwarded, 0);
   assert.equal(messages.length, 1);
+  assert.equal(db.counters.get('2026-09-03:global'), 1);
+  assert.equal([...db.deliveries.values()].filter((row) => row.outcome === 'rate_limited').length, 1);
 });
 
 test('migration and registry surfaces explicitly preserve the registry-not-mailbox contract', async () => {
-  const migration = await readFile(new URL('../migrations/auth/0007_post_office_aliases.sql', import.meta.url), 'utf8');
+  const [migration, deliveryMigration, inbound] = await Promise.all([
+    readFile(new URL('../migrations/auth/0007_post_office_aliases.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../migrations/auth/0013_post_office_delivery_reservations.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../functions/_lib/post-office-inbound.ts', import.meta.url), 'utf8'),
+  ]);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS aliases/u);
   assert.match(migration, /forwarded_count INTEGER NOT NULL DEFAULT 0/u);
   assert.doesNotMatch(migration, /subject|body|attachment|raw_mime/u);
+  assert.match(deliveryMigration, /CREATE TABLE post_office_deliveries/u);
+  assert.match(deliveryMigration, /CREATE TABLE post_office_daily_counters/u);
+  assert.match(deliveryMigration, /UNIQUE/u);
+  assert.doesNotMatch(deliveryMigration, /from_address|to_addresses|subject|body|attachment|raw_mime/u);
+  assert.doesNotMatch(inbound, /post-office:processed|post-office:rate/u);
   const page = await readFile(new URL('../src/pages/post-office.astro', import.meta.url), 'utf8');
   assert.match(page, /An address for an agent/u);
   assert.match(page, /Never a mailbox/u);

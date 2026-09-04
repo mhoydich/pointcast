@@ -79,11 +79,11 @@ test('wallet holdings normalize TZIP-21 images and cache one snapshot per addres
       cache,
     });
     assert.equal(second.cache, 'hit');
-    assert.equal(calls, 3);
+    assert.equal(calls, 4);
   });
 });
 
-test('seal big-map is queried once per address and travels inside the address cache', async () => {
+test('v1 and v2 seal shelves are keyed by contract plus token id and cached per address', async () => {
   await withHoldingsModule(async ({ getWalletHoldings }) => {
     const address = 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb';
     const stored = new Map();
@@ -97,23 +97,57 @@ test('seal big-map is queried once per address and travels inside the address ca
       if (value.includes('/tokens/balances/count')) return Response.json(1);
       if (value.includes('/bigmaps/seals/keys')) {
         sealCalls += 1;
+        const v2 = value.includes('KT1UVn9CDToAbyoxARLPfNtVkvKgzCwuroy3');
         return Response.json([{ key: '4', value: {
           holder: address,
-          kind: '73686f7765642d7570',
-          evidence: '6669656c642d72656365697074',
+          kind: v2 ? '73747265616b2d37' : '73686f7765642d7570',
+          evidence: v2 ? '736576656e2d64617973' : '6669656c642d72656365697074',
           issuer: 'tz2CfwkUFqB9LYwhQ5zu6gH1hgbKYdNwmLQp',
           attested_at: '2026-09-02T21:30:55Z',
-          revoked: false,
+          revoked: v2,
         } }]);
       }
       return Response.json([]);
     };
     const first = await getWalletHoldings(address, { collections: [], fetcher, cache });
-    assert.equal(first.seals[0].kind, 'showed-up');
-    assert.equal(first.seals[0].evidence, 'field-receipt');
+    assert.equal(first.sealShelf.state, 'available');
+    assert.equal(first.seals.length, 2);
+    assert.equal(new Set(first.seals.map((seal) => seal.key)).size, 2);
+    assert.equal(first.seals.find((seal) => seal.version === 'v1').evidence, 'field-receipt');
+    assert.equal(first.sealShelf.groups.find((group) => group.kind === 'streak-7').revoked, 1);
     const second = await getWalletHoldings(address, { collections: [], fetcher, cache });
     assert.equal(second.seals[0].tokenId, '4');
-    assert.equal(sealCalls, 1);
+    assert.equal(sealCalls, 2);
+  });
+});
+
+test('seal shelf exposes partial and unavailable states instead of claiming an empty shelf', async () => {
+  await withHoldingsModule(async ({ getWalletHoldings }) => {
+    const address = 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb';
+    const partial = await getWalletHoldings(address, {
+      collections: [],
+      cache: null,
+      fetcher: async (url) => {
+        const value = String(url);
+        if (value.includes('/tokens/balances/count')) return Response.json(0);
+        if (value.includes('KT19DHCY5S9x48npRyAhUCM2SyLWZMNh3yQ1')) return Response.json([]);
+        return new Response('down', { status: 503 });
+      },
+    });
+    assert.equal(partial.cache, 'miss');
+    assert.equal(partial.sealShelf.state, 'partial');
+    assert.equal(partial.sealShelf.contracts[1].state, 'unavailable');
+
+    const unavailable = await getWalletHoldings(address, {
+      collections: [],
+      cache: null,
+      fetcher: async (url) => String(url).includes('/tokens/balances/count')
+        ? Response.json(0)
+        : new Response('down', { status: 503 }),
+    });
+    assert.equal(unavailable.cache, 'miss');
+    assert.equal(unavailable.sealShelf.state, 'unavailable');
+    assert.deepEqual(unavailable.seals, []);
   });
 });
 

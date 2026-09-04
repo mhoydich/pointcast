@@ -11,6 +11,9 @@ const MILESTONE_KINDS = [STREAK_7_KIND, COMPLETE_30_KIND] as const;
 const OPERATION_HASH = /^o[1-9A-HJ-NP-Za-km-z]{50}$/;
 const TEZOS_ADDRESS = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
 const TEZOS_CONTRACT = /^KT1[1-9A-HJ-NP-Za-km-z]{33}$/;
+const TZKT_API = 'https://api.tzkt.io/v1';
+const SIGNER_LOCK_TTL_MS = 15 * 60_000;
+const SEAL_SIGNER_LOCK = 'kennel-seal-wallet';
 
 type SealEnv = Env & {
   SEAL_ISSUER_SECRET_KEY?: string;
@@ -68,6 +71,14 @@ type ReservedReceipt = {
   holder: string;
 };
 
+type SubmittedReceipt = ReservedReceipt & {
+  op_hash: string;
+  contract_version: SealContractVersion;
+  contract_address: string;
+};
+
+type ChainOperationStatus = 'applied' | 'pending' | 'failed' | 'unknown';
+
 export type SealAttestation = {
   receiptId: string;
   claimId: string;
@@ -83,6 +94,7 @@ export interface SealChain {
   issuerAddress: string;
   contractAddress: string;
   version: SealContractVersion;
+  operationStatus(opHash: string): Promise<ChainOperationStatus>;
   attestBatch(
     attestations: SealAttestation[],
     onInjected: (opHash: string) => Promise<void>,
@@ -336,18 +348,73 @@ async function reserveReceipts(
   return reserved;
 }
 
+async function acquireSignerLock(db: D1Database, holder: string): Promise<boolean> {
+  const now = Date.now();
+  const row = await db.prepare(`
+    INSERT INTO kennel_signer_locks (lock_name, holder, expires_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(lock_name) DO UPDATE SET holder = excluded.holder, expires_at = excluded.expires_at
+    WHERE kennel_signer_locks.holder IS NULL
+       OR kennel_signer_locks.expires_at <= ?
+       OR kennel_signer_locks.holder = excluded.holder
+    RETURNING holder
+  `).bind(SEAL_SIGNER_LOCK, holder, now + SIGNER_LOCK_TTL_MS, now).first<{ holder: string }>();
+  return row?.holder === holder;
+}
+
+async function releaseSignerLock(db: D1Database, holder: string): Promise<void> {
+  await db.prepare(`
+    UPDATE kennel_signer_locks SET holder = NULL, expires_at = NULL
+    WHERE lock_name = ? AND holder = ?
+  `).bind(SEAL_SIGNER_LOCK, holder).run();
+}
+
+async function readTzktOperationStatus(opHash: string): Promise<ChainOperationStatus> {
+  try {
+    const response = await fetch(`${TZKT_API}/operations/${encodeURIComponent(opHash)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (response.status === 404 || response.status === 204) return 'pending';
+    if (!response.ok) return 'unknown';
+    const payload: unknown = await response.json();
+    const operations = Array.isArray(payload) ? payload : [payload];
+    const statuses = operations.flatMap((entry) => (
+      entry && typeof entry === 'object' && typeof (entry as { status?: unknown }).status === 'string'
+        ? [(entry as { status: string }).status]
+        : []
+    ));
+    if (!statuses.length) return 'unknown';
+    if (statuses.every((status) => status === 'applied')) return 'applied';
+    if (statuses.some((status) => ['failed', 'backtracked', 'skipped'].includes(status))) return 'failed';
+    return 'pending';
+  } catch {
+    return 'unknown';
+  }
+}
+
 async function markSubmitted(
   db: D1Database,
   receipts: ReservedReceipt[],
   runId: string,
   opHash: string,
+  version: SealContractVersion,
+  contractAddress: string,
   now: string,
 ): Promise<void> {
-  await db.batch(receipts.map((receipt) => db.prepare(`
-    UPDATE seal_receipts
-    SET status = 'submitted', op_hash = ?, updated_at = ?
-    WHERE id = ? AND run_id = ? AND status = 'submitting'
-  `).bind(opHash, now, receipt.id, runId)));
+  const operationId = `seal:${opHash}`;
+  await db.batch([
+    db.prepare(`
+      INSERT INTO kennel_chain_operations
+        (id, action, subject_id, op_hash, status, error, submitted_at, updated_at)
+      VALUES (?, ?, ?, ?, 'submitted', NULL, ?, ?)
+      ON CONFLICT(op_hash) DO UPDATE SET updated_at = excluded.updated_at
+    `).bind(operationId, `seal-${version}`, runId, opHash, now, now),
+    ...receipts.map((receipt) => db.prepare(`
+      UPDATE seal_receipts
+      SET status = 'submitted', op_hash = ?, contract_version = ?, contract_address = ?, updated_at = ?
+      WHERE id = ? AND run_id = ? AND status = 'submitting'
+    `).bind(opHash, version, contractAddress, now, receipt.id, runId)),
+  ]);
 }
 
 async function markAttested(
@@ -362,6 +429,77 @@ async function markAttested(
     SET status = 'attested', op_hash = ?, error = NULL, updated_at = ?, attested_at = ?
     WHERE id = ? AND run_id = ? AND status IN ('submitting', 'submitted')
   `).bind(opHash, now, now, receipt.id, runId)));
+  await db.prepare(`
+    UPDATE kennel_chain_operations SET status = 'applied', error = NULL, updated_at = ?
+    WHERE op_hash = ?
+  `).bind(now, opHash).run();
+}
+
+async function reconcileSubmittedReceipts(
+  env: SealEnv,
+  secretKey: string,
+  chainFactory: SealChainFactory,
+): Promise<{ applied: number; failed: number; pending: number }> {
+  const db = env.AUTH_DB;
+  if (!db) return { applied: 0, failed: 0, pending: 0 };
+  const rows = await db.prepare(`
+    SELECT id, claim_id, user_id, token_id, kind, evidence, holder, op_hash,
+           contract_version, contract_address
+    FROM seal_receipts
+    WHERE status = 'submitted' AND op_hash IS NOT NULL
+      AND contract_version IN ('v1', 'v2') AND contract_address IS NOT NULL
+    ORDER BY op_hash, id
+  `).all<SubmittedReceipt>();
+  const groups = new Map<string, SubmittedReceipt[]>();
+  for (const row of rows.results ?? []) {
+    const list = groups.get(row.op_hash) ?? [];
+    list.push(row);
+    groups.set(row.op_hash, list);
+  }
+  const result = { applied: 0, failed: 0, pending: 0 };
+  for (const [opHash, receipts] of groups) {
+    const first = receipts[0]!;
+    let status: ChainOperationStatus = 'unknown';
+    try {
+      const chain = await chainFactory(secretKey, env.SEAL_RPC, first.contract_address, first.contract_version);
+      status = await chain.operationStatus(opHash);
+    } catch {
+      status = 'unknown';
+    }
+    const now = new Date().toISOString();
+    if (status === 'applied') {
+      await db.batch([
+        ...receipts.map((receipt) => db.prepare(`
+          UPDATE seal_receipts
+          SET status = 'attested', error = NULL, updated_at = ?, attested_at = ?
+          WHERE id = ? AND status = 'submitted' AND op_hash = ?
+        `).bind(now, now, receipt.id, opHash)),
+        db.prepare(`
+          UPDATE kennel_chain_operations SET status = 'applied', error = NULL, updated_at = ? WHERE op_hash = ?
+        `).bind(now, opHash),
+      ]);
+      result.applied += receipts.length;
+    } else if (status === 'failed') {
+      await db.batch([
+        ...receipts.map((receipt) => db.prepare(`
+          UPDATE seal_receipts SET status = 'failed', error = 'chain-operation-failed', updated_at = ?
+          WHERE id = ? AND status = 'submitted' AND op_hash = ?
+        `).bind(now, receipt.id, opHash)),
+        db.prepare(`
+          UPDATE kennel_chain_operations SET status = 'failed', error = 'chain-operation-failed', updated_at = ? WHERE op_hash = ?
+        `).bind(now, opHash),
+      ]);
+      result.failed += receipts.length;
+    } else {
+      result.pending += receipts.length;
+      if (status === 'unknown') {
+        await db.prepare(`
+          UPDATE kennel_chain_operations SET status = 'unknown', error = 'reconciliation-unavailable', updated_at = ? WHERE op_hash = ?
+        `).bind(now, opHash).run();
+      }
+    }
+  }
+  return result;
 }
 
 async function markFailed(
@@ -408,6 +546,7 @@ export async function createTaquitoSealChain(
     issuerAddress,
     contractAddress,
     version,
+    operationStatus: readTzktOperationStatus,
     async attestBatch(attestations, onInjected) {
       const operation = version === 'v1'
         ? await (() => {
@@ -519,6 +658,14 @@ export async function runKennelSeals(
   const stagedAt = new Date().toISOString();
   await stageReceipts(env.AUTH_DB, planned, stagedAt);
   if (!secretKey) return { ...result, ok: false, reason: 'seal-issuer-not-configured' };
+  const reconciliation = await reconcileSubmittedReceipts(
+    env,
+    secretKey,
+    options.chainFactory ?? createTaquitoSealChain,
+  );
+  result.attested += reconciliation.applied;
+  result.failed += reconciliation.failed;
+  result.submitted += reconciliation.pending;
   if (!candidates.length) return result;
 
   result.attempted = 0;
@@ -571,6 +718,14 @@ export async function runKennelSeals(
     result.attempted += reserved.length;
     result.contracts[route.version].attempted += reserved.length;
     if (!reserved.length) continue;
+    if (!await acquireSignerLock(env.AUTH_DB, runId)) {
+      const reason = `seal-${route.version}-signer-busy`;
+      await markFailed(env.AUTH_DB, reserved, runId, reason, new Date().toISOString());
+      result.ok = false;
+      result.failed += reserved.length;
+      failures.push(reason);
+      continue;
+    }
     const attestations = reserved.map((receipt) => ({
       receiptId: receipt.id,
       claimId: receipt.claim_id,
@@ -586,7 +741,15 @@ export async function runKennelSeals(
     try {
       const operation = await chain.attestBatch(attestations, async (opHash) => {
         injectedHash = opHash;
-        await markSubmitted(env.AUTH_DB, reserved, runId, opHash, new Date().toISOString());
+        await markSubmitted(
+          env.AUTH_DB,
+          reserved,
+          runId,
+          opHash,
+          route.version,
+          route.address,
+          new Date().toISOString(),
+        );
         result.submitted += reserved.length;
       });
       await markAttested(env.AUTH_DB, reserved, runId, operation.opHash, new Date().toISOString());
@@ -623,6 +786,8 @@ export async function runKennelSeals(
         opHash: injectedHash || undefined,
         error: errorMessage(error),
       }));
+    } finally {
+      await releaseSignerLock(env.AUTH_DB, runId).catch(() => undefined);
     }
   }
 

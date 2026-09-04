@@ -87,6 +87,9 @@ test('profile routes expose aliases, chain shelves, OG handle art, and an unclai
   assert.match(og, /noun\.pics/);
   assert.match(og, /@\$\{handle\}/);
   assert.match(liveRoute, /readProfileHandle/);
+  assert.match(liveRoute, /readSealShelf/);
+  assert.match(liveRoute, /sealShelf\.state === 'unavailable'/);
+  assert.doesNotMatch(liveRoute, /listOwnerSeals/);
   assert.match(liveRoute, /reason: 'unclaimed'/);
   assert.match(liveRoute, /reason: 'tzkt-unavailable'/);
   assert.match(liveOg, /readProfileHandle/);

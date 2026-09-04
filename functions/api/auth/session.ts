@@ -29,6 +29,10 @@ interface SessionRow {
   expires_at: number;
 }
 
+interface SessionAuthenticationRow {
+  authenticated_at: number;
+}
+
 interface AuthStateRow {
   payload: string;
   expires_at: number;
@@ -218,15 +222,22 @@ async function loadIdentityUserId(
 
 async function writeSessionToD1(db: D1Database, session: AuthSession): Promise<void> {
   const expiresAt = Date.parse(session.expiresAt);
+  const authenticatedAt = Date.parse(session.authenticatedAt ?? '');
   await db.batch([
     ...cleanupStatements(db),
     db.prepare(`
-      INSERT INTO sessions (token, user_id, expires_at)
-      VALUES (?, ?, ?)
+      INSERT INTO sessions (token, user_id, expires_at, authenticated_at)
+      VALUES (?, ?, ?, ?)
       ON CONFLICT(token) DO UPDATE SET
         user_id = excluded.user_id,
-        expires_at = excluded.expires_at
-    `).bind(session.sessionToken, session.userId, expiresAt),
+        expires_at = excluded.expires_at,
+        authenticated_at = excluded.authenticated_at
+    `).bind(
+      session.sessionToken,
+      session.userId,
+      expiresAt,
+      Number.isFinite(authenticatedAt) ? authenticatedAt : 0,
+    ),
   ]);
 }
 
@@ -349,11 +360,13 @@ export async function issueSession(
   env: AuthEnv,
   userId: string,
   ttlSeconds = SESSION_TTL_SECONDS,
+  authenticatedAt = new Date().toISOString(),
 ): Promise<AuthSession> {
   const session: AuthSession = {
     userId,
     sessionToken: makeSessionToken(),
     expiresAt: futureIso(ttlSeconds),
+    authenticatedAt,
   };
 
   if (env.AUTH_DB) {
@@ -364,6 +377,30 @@ export async function issueSession(
     });
   }
   return session;
+}
+
+export async function sessionAuthenticatedAt(
+  env: AuthEnv,
+  session: AuthSession,
+): Promise<number> {
+  if (env.AUTH_DB) {
+    const row = await env.AUTH_DB.prepare(
+      'SELECT authenticated_at FROM sessions WHERE token = ?',
+    ).bind(session.sessionToken).first<SessionAuthenticationRow>();
+    return Number(row?.authenticated_at) || 0;
+  }
+  const parsed = Date.parse(session.authenticatedAt ?? '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export async function hasFreshAuthentication(
+  env: AuthEnv,
+  session: AuthSession,
+  maxAgeSeconds = 15 * 60,
+): Promise<boolean> {
+  const authenticatedAt = await sessionAuthenticatedAt(env, session);
+  const age = Date.now() - authenticatedAt;
+  return authenticatedAt > 0 && age >= 0 && age <= maxAgeSeconds * 1000;
 }
 
 export async function readSessionFromRequest(
@@ -491,7 +528,13 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
   const remainingSeconds = Math.floor((Date.parse(current.session.expiresAt) - Date.now()) / 1000);
   if (remainingSeconds > SESSION_REFRESH_WINDOW_SECONDS) return authJson(body);
 
-  const renewed = await issueSession(env, current.user.userId);
+  const authenticatedAt = await sessionAuthenticatedAt(env, current.session);
+  const renewed = await issueSession(
+    env,
+    current.user.userId,
+    SESSION_TTL_SECONDS,
+    new Date(authenticatedAt).toISOString(),
+  );
   await deleteSession(env, current.session.sessionToken);
   return withSessionCookie(
     authJson({ ...body, session: renewed, renewed: true }),

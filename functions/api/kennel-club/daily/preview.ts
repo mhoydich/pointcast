@@ -7,7 +7,11 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
   if (!current?.user.roles?.includes('broadcaster')) {
     return authJson({ ok: false, reason: 'broadcaster-only' }, { status: 403 });
   }
-  const content = dailyEmail(collectSitting(), 'preview-token-not-valid');
+  const content = dailyEmail(
+    collectSitting(),
+    'preview-login-token-not-valid',
+    'preview-unsubscribe-token-not-valid',
+  );
   return new Response(content.html, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
@@ -16,4 +20,3 @@ export const onRequestGet: PagesFunction<CollectEnv> = async ({ request, env }) 
     },
   });
 };
-

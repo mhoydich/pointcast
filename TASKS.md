@@ -9,18 +9,20 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ## Kennel Club — The September Sitting (2026-09-02)
 
-Thirty painted dog portraits in a heritage equestrian register, one assigned to each calendar day of September 2026, minted one per day on Tezos. Series data: `src/data/kennel-club-september-sitting.json`. Codex brief: `docs/briefs/2026-09-02-codex-kennel-club-september-sitting.md`. Manus brief: `docs/briefs/2026-09-02-manus-kennel-club-september-sitting-objkt.md`. Today is 2026-09-02, so Sittings 01 and 02 mint late; the calendar remains calendar-true.
+Thirty painted dog portraits in a heritage equestrian register, one assigned to each calendar day of September 2026, minted one per day on Tezos. Series data: `src/data/kennel-club-september-sitting.json`. Codex brief: `docs/briefs/2026-09-02-codex-kennel-club-september-sitting.md`. Manus brief: `docs/briefs/2026-09-02-manus-kennel-club-september-sitting-objkt.md`. Refreshed 2026-09-04 from the repository record; source-complete, configured, deployed, and independently verified remain separate states.
 
 - [x] (MH) Direct a daily-mint dog character series, regal heritage menswear register, one per day, on Tezos — `done` — chat 2026-09-02
 - [x] (CC) Name and cast 30 sittings with composed prompts, palette, composition rule, TZIP-21 attribute plan, and a series test — `done`
-- [ ] (X) Generate and verify the 30 plates at 1024×1280 through poster-image-engine, save PNG + WebP twins, flip `image.status` to `verified`, write the Codex log — `in-progress` — hydration polling started 2026-09-02; see Codex log
-- [ ] (MH) Answer: edition model per sitting (24-hour open edition or fixed cap, proposed 30), price in tez, and origination signer — `waiting-on-mh` — September 2026 and Tezos are confirmed
-- [ ] (CC) Write `contracts/v2/kennel_club_fa2.py` with a per-day mint window, wire `/api/tezos-metadata`, build `/kennel-club` + JSON twin + Block + discovery — `queued` — after X plates and MH answers
+- [x] (X) Generate and verify the 30 plates at 1024×1280 through poster-image-engine, save PNG + WebP twins, flip `image.status` to `verified`, write the Codex log — `done` — all 30 data rows are `verified`; see `docs/codex-logs/2026-09-02-kennel-club-september-sitting.md`
+- [x] (MH) Decide edition, price, and origination signer — `done` — live registry records open edition, 1 tez, Mike administrator; see `docs/decisions/2026-09-02-kennel-club-fa2.md`
+- [x] (CC/X) Implement the Kennel Club FA2, metadata, room, JSON twin, Block, and discovery — `done` — source shipped and registry records mainnet `KT1JWNAKyiWVsbfNrHBQuuBDaGRBYqfehwdq`; this row does not independently re-verify current production
 - [x] (X) Write and compile `contracts/v2/kennel_club_fa2.py` with per-day mint windows and placeholder TZIP-21 metadata — `done` — compile-only; SmartPy 0.24.1 scenarios and artifacts verified, no origination
 - [x] (X) Build extensible Soulbound Seals v2, gated origination preparation, and the Kennel Seals dual-contract migration path — `done` — compile-only; no origination, deployment, worker env change, v1 freeze, or merge
-- [ ] (CC) Wire `/api/tezos-metadata`, build `/kennel-club` + JSON twin + Block + discovery — `queued` — after X plates and MH answers
-- [ ] (M) objkt collection check, Shadownet then mainnet daily-window mint QA, mobile pass — `queued` — after the KT1 lands
-- [ ] (CC) Plan a decentralized project-owned wallet/multisig for the Kennel Club series treasury and signer — `queued` — later idea from MH 2026-09-02; do not build
+- [x] (CC) Wire `/api/tezos-metadata`, build `/kennel-club` + JSON twin + Block + discovery — `done` — duplicate historical row superseded by the implementation row above
+- [ ] (M) objkt collection check and mainnet daily-window/mobile QA — `queued` — mainnet KT1 exists; no current Manus QA receipt was found in `docs/manus-logs/`
+- [x] (X/MH) Establish the project-owned Kennel treasury/multisig — `done` — TzSafe `KT19Xcb8UuUUUaYTJ2Z7cdqYAhRaFi7UThwG` and treasury cutover recorded in `docs/decisions/2026-09-03-project-multisig.md`
+- [x] (X) Resolve Astra findings 1, 2, 3, 4, 6, and 7 in source with migrations and tests — `done` — six isolated commits on `codex/astra-fixes-20260904`; no migration application, binding change, Worker/Pages deployment, secret use, or chain operation
+- [ ] (CC/M) Apply migrations `0010`–`0013`, configure `KENNEL_DAILY`, deploy reviewed Worker/Pages versions, and record source SHA plus live probes — `handoff` — must happen only after review/merge; provider acceptance is not inbox delivery proof
 
 ---
 

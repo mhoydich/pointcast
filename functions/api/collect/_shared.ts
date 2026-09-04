@@ -27,6 +27,12 @@ export interface CollectConfirmState {
   issuedAt: string;
 }
 
+export interface CollectLoginTokenRow {
+  subscriber_email: string;
+}
+
+export const COLLECT_LOGIN_TTL_MS = 15 * 60 * 1000;
+
 export function createSubscriberToken(): string {
   return randomUrlSafeString(32);
 }
@@ -52,4 +58,20 @@ export async function findSubscriberByToken(
     FROM subscribers
     WHERE token = ?
   `).bind(token).first<SubscriberRow>();
+}
+
+export async function consumeCollectLoginToken(
+  db: D1Database,
+  token: string,
+  now = Date.now(),
+): Promise<CollectLoginTokenRow | null> {
+  return db.prepare(`
+    UPDATE collect_login_tokens
+    SET consumed_at = ?
+    WHERE token_hash = ?
+      AND consumed_at IS NULL
+      AND revoked_at IS NULL
+      AND expires_at > ?
+    RETURNING subscriber_email
+  `).bind(now, await sha256Hex(token), now).first<CollectLoginTokenRow>();
 }
