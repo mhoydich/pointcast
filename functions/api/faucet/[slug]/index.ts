@@ -15,6 +15,7 @@ import {
   getPublicFaucetClaims,
   getUserFaucetLedger,
   readSpigot,
+  settleFaucetSubmissions,
   spigotConfigured,
   type FaucetClaimEnv,
   type SpigotSnapshot,
@@ -57,6 +58,12 @@ export const onRequestGet: PagesFunction<FaucetClaimEnv> = async ({ request, env
     cachedSpigot(env, faucet.slug, () => readSpigot(env, faucet)),
     readSessionFromRequest(request, env).catch(() => null),
   ]);
+  // Settle anything this account has in flight before drawing the ledger, so
+  // the desk shows what the chain says rather than what the last click hoped.
+  // Costs one indexed count when there is nothing in flight, which is always.
+  if (session) {
+    await settleFaucetSubmissions(env, faucet, session.user.userId).catch(() => { /* the ledger is still worth drawing */ });
+  }
   const you = session
     ? await getUserFaucetLedger(env.AUTH_DB, faucet, session.user, day).catch(() => null)
     : null;

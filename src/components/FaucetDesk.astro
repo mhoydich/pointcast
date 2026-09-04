@@ -118,7 +118,14 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
       const day = document.createElement('b');
       day.textContent = line.day;
       const what = document.createElement('span');
-      what.textContent = `${line.amount} ${ticker} · ${line.status === 'delivered' ? `sent to ${shortAddr(line.deliveredTo ?? '')}` : line.status === 'submitting' ? 'sending…' : 'held for you'}`;
+      // A `submitting` line with a hash is already signed and on the wire: it
+      // is settling against Ethereum, not waiting on us.
+      const where = line.status === 'delivered'
+        ? `sent to ${shortAddr(line.deliveredTo ?? '')}`
+        : line.status === 'submitting'
+          ? (line.txHash ? 'settling…' : 'sending…')
+          : 'held for you';
+      what.textContent = `${line.amount} ${ticker} · ${where}`;
       item.append(day, what);
       if (line.txHash) item.append(etherscan(line.txHash));
       return item;
@@ -177,13 +184,14 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
   function deliverReason(reason: string | undefined): string {
     if (reason === 'address-required') return 'That is not an Ethereum address. It starts with 0x and is 42 characters long.';
     if (reason === 'nothing-held') return 'Nothing is owed right now.';
-    if (reason === 'delivery-busy') return 'The spigot is mid-send. Give it a minute and try again; a send that has stalled clears within half an hour.';
+    if (reason === 'delivery-busy') return 'The spigot is mid-send. Give it a minute and try again; a stalled send settles itself against Ethereum.';
     if (reason === 'spigot-not-configured') return 'The spigot wallet is not funded yet. Your drips stay in the ledger.';
     if (reason === 'spigot-low-gas') return 'The spigot is low on gas. Your drips stay in the ledger until it is topped up.';
     if (reason === 'spigot-empty') return 'The spigot is out of tokens. Your drips stay in the ledger until it is refilled.';
     if (reason === 'spigot-unavailable') return 'The spigot can’t reach Ethereum right now. Your drips are safe; try again shortly.';
     if (reason === 'delivery-unavailable') return 'The desk could not reach the ledger. Nothing was sent; try again shortly.';
     if (reason === 'delivery-failed') return 'Ethereum did not accept the send. Nothing was lost; try again shortly.';
+    if (reason === 'delivery-uncertain') return 'Ethereum didn’t confirm the send yet. Nothing was lost and nothing will be sent twice; this settles itself. Check back in a few minutes.';
     return 'The send did not go through. Nothing was lost; try again shortly.';
   }
 
@@ -246,7 +254,7 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
       if (!response.ok || !payload.ok) {
         send.disabled = false;
         send.textContent = label;
-        status(root, '[data-faucet-send-state]', deliverReason(payload.reason));
+        status(root, '[data-faucet-send-state]', deliverReason(payload.reason), payload.txHash);
         return;
       }
       status(root, '[data-faucet-send-state]', `${payload.delivered} ${root.dataset.ticker} sent to ${shortAddr(payload.deliveredTo ?? address)}.`, payload.txHash);
