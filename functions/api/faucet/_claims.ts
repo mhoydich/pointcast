@@ -32,10 +32,10 @@ const DEFAULT_RPC = 'https://cloudflare-eth.com';
 /** A public RPC that hangs must not hang the desk with it. */
 const RPC_TIMEOUT_MS = 3_000;
 const RPC_RETRY_COUNT = 1;
-/** Below this the spigot stops sending: ~20 ERC-20 transfers at ordinary 2026 gas. */
-const MINIMUM_SPIGOT_ETH_WEI = 10_000_000_000_000_000n; // 0.01 ETH
+/** Below this the spigot stops sending: a few ERC-20 transfers at ordinary 2026 gas. */
+const MINIMUM_SPIGOT_ETH_WEI = 1_000_000_000_000_000n; // 0.001 ETH
 /** Below this the desk says so out loud, while sending carries on. */
-const LOW_GAS_WARNING_WEI = 30_000_000_000_000_000n; // 0.03 ETH
+const LOW_GAS_WARNING_WEI = 5_000_000_000_000_000n; // 0.005 ETH
 const SEND_LOCK_TTL_MS = 60_000;
 /**
  * A healthy broadcast-to-ledger gap is milliseconds, so a `submitting` row this
@@ -149,6 +149,56 @@ function numberValue(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// ---------------------------------------------------------------------------
+// Self-provisioning schema. The tables mirror migrations/auth/0009 exactly;
+// this exists so a deploy needs no `wrangler d1 migrations apply` step. The
+// first request creates what is missing and every later request is a no-op.
+// `CREATE TABLE IF NOT EXISTS` is idempotent and D1 serialises writes, so
+// concurrent first requests cannot race each other into an error.
+// ---------------------------------------------------------------------------
+
+const FAUCET_SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS faucet_claims (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    faucet TEXT NOT NULL,
+    day TEXT NOT NULL CHECK (length(day) = 10),
+    amount INTEGER NOT NULL CHECK (amount > 0),
+    status TEXT NOT NULL CHECK (status IN ('held', 'submitting', 'delivered')),
+    tx_hash TEXT,
+    delivered_to TEXT,
+    created_at TEXT NOT NULL,
+    delivered_at TEXT,
+    UNIQUE (user_id, faucet, day),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS faucet_claims_faucet_day_idx ON faucet_claims(faucet, day)`,
+  `CREATE INDEX IF NOT EXISTS faucet_claims_user_status_idx ON faucet_claims(user_id, faucet, status)`,
+  `CREATE INDEX IF NOT EXISTS faucet_claims_created_at_idx ON faucet_claims(created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS faucet_locks (
+    faucet TEXT PRIMARY KEY,
+    holder TEXT,
+    acquired_at TEXT
+  )`,
+];
+
+const provisioned = new WeakMap<D1Database, Promise<void>>();
+
+/** Make sure the ledger tables exist; cached per binding so it runs once per isolate. */
+export function ensureFaucetSchema(db: D1Database): Promise<void> {
+  let pending = provisioned.get(db);
+  if (!pending) {
+    pending = (async () => {
+      for (const statement of FAUCET_SCHEMA) await db.prepare(statement).run();
+    })().catch((error) => {
+      provisioned.delete(db);
+      throw error;
+    });
+    provisioned.set(db, pending);
+  }
+  return pending;
+}
+
 export function emptyPublicFaucetClaims(day: string, cap: number, configured: boolean): PublicFaucetClaims {
   return { configured, day, cap, claimedToday: 0, remainingToday: cap, heldTotal: 0, deliveredTotal: 0, recent: [] };
 }
@@ -160,6 +210,7 @@ export async function getPublicFaucetClaims(
 ): Promise<PublicFaucetClaims> {
   const day = options.day ?? losAngelesDate();
   if (!db) return emptyPublicFaucetClaims(day, options.cap, options.configured);
+  await ensureFaucetSchema(db);
   const [counts, recent] = await Promise.all([
     db.prepare(`
       SELECT
@@ -204,6 +255,7 @@ export async function getUserFaucetLedger(
 ): Promise<UserFaucetLedger> {
   const linkedAddress = linkedEvmAddress(user);
   if (!db) return { today: { claimed: false, status: null }, held: 0, delivered: 0, linkedAddress, claims: [] };
+  await ensureFaucetSchema(db);
   // Totals come from an aggregate so the displayed lines can stay bounded.
   const [totals, result] = await Promise.all([
     db.prepare(`
@@ -249,6 +301,7 @@ export async function hasClaimedFaucetToday(
   day: string = losAngelesDate(),
 ): Promise<boolean> {
   if (!db) return false;
+  await ensureFaucetSchema(db);
   const row = await db.prepare(`
     SELECT 1 AS hit FROM faucet_claims WHERE user_id = ? AND faucet = ? AND day = ?
   `).bind(userId, faucet.slug, day).first<{ hit: number }>();
@@ -266,6 +319,7 @@ export async function claimFaucetDrip(options: {
 }): Promise<{ ok: boolean; reason?: ClaimReason; claim?: { id: string; day: string; amount: number; status: 'held'; createdAt: string } }> {
   const { env, user, faucet } = options;
   if (!env.AUTH_DB) return { ok: false, reason: 'claim-database-not-bound' };
+  await ensureFaucetSchema(env.AUTH_DB);
   const day = options.day ?? losAngelesDate();
   const cap = faucetCap(env, faucet);
   const id = `fct_${crypto.randomUUID().replaceAll('-', '')}`;
@@ -456,6 +510,7 @@ export async function deliverHeldFaucetDrips(options: {
   const deliveredTo = await checkedDestination(options.deliveredTo, faucet);
   if (!deliveredTo) return { ok: false, reason: 'address-required', delivered: 0 };
   const db = env.AUTH_DB;
+  await ensureFaucetSchema(db);
 
   // Reclaim rows a crashed send left mid-flight, then take ours. This is a
   // guess about a send we cannot see, so say so where Mike can read it.

@@ -3,7 +3,7 @@
 **Date filed:** 2026-09-04 PT · revised same day after Mike's call
 **Filed by:** Claude Code (cc)
 **Page:** `/faucet/hello`
-**Status after PR #1049 merges and deploys:** the desk is live and people can sign in and **claim** (ledger only). **Sending** opens the moment the one secret below is set and the migration is applied.
+**Status:** PR #1049 is merged. Once Cloudflare finishes the build from main, people can sign in and **claim** (ledger only). **Sending** opens the moment the one secret below is set and the site is redeployed. There is no migration step: the tables create themselves on first use.
 
 ## Mike's decision (2026-09-04)
 
@@ -27,17 +27,13 @@ Pages → pointcast → Settings → Environment variables → **Production** �
 
 The ledger uses the existing `AUTH_DB` D1 binding and `PC_RATES_KV`; nothing new to bind.
 
-### 2. Make sure the wallet has gas
+### 2. Redeploy, that's it
 
-The page refuses to send when the spigot holds under 0.01 ETH and shows "getting low" under 0.03 ETH. Keep it around 0.05 ETH and top up weekly: a fully used 50-drip day costs roughly 0.025 ETH at 10 gwei, so the cap bounds gas, not just tokens.
+Redeploy so the secret is picked up. The ledger tables create themselves on the first request (`CREATE TABLE IF NOT EXISTS`, same DDL as `migrations/auth/0009_faucet_claims.sql`, which stays for local work and tests). Then open `/api/faucet/hello`: `claims.configured` reads `true` and `spigot` shows `0x676a…186e` with its HELLO and ETH balances. Claim one, paste any address, press Send, follow the Etherscan link.
 
-### 3. Apply the migration and redeploy
+### Gas
 
-```
-npx wrangler d1 migrations apply <AUTH_DB name> --remote
-```
-
-(`migrations/auth/0009_faucet_claims.sql` is the only new file.) Redeploy so the secret is picked up. Then open `/api/faucet/hello`: `claims.configured` should read `true` and `spigot` should show `0x676a…186e` with its HELLO and ETH balances. Claim one yourself, paste any address, press Send, and follow the Etherscan link.
+The spigot is the deployer wallet `0x676a…186e`, not the MetaMask account. It stops sending under 0.001 ETH and the page says "getting low" under 0.005 ETH. A few thousandths of an ETH is dozens of sends at 2026 gas. If the live panel shows the spigot at 0 ETH, send it a little from anywhere.
 
 ## Alternative kept on file: a fresh spigot wallet
 

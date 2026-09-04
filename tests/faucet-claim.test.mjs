@@ -385,3 +385,21 @@ test('the daily cap clamps whatever the environment says', async () => {
     assert.equal(lib.faucetDailyCap('9999'), 500);
   });
 });
+
+test('the ledger provisions its own tables when the migration has not been applied', async () => {
+  await withModules(async ({ claims, lib }) => {
+    const init = await readFile(new URL('migrations/auth/0001_init.sql', root), 'utf8');
+    const db = new FakeD1([init]);
+    db.db.prepare('INSERT INTO users (id, payload, created_at) VALUES (?, ?, ?)')
+      .run('u1', JSON.stringify({ userId: 'u1', preferredName: 'Mike', identities: [] }), '2026-09-04T00:00:00Z');
+    const faucet = lib.getFaucet('hello');
+    const env = { AUTH_DB: db, HELLO_FAUCET_SECRET_KEY: SECRET };
+    const first = await claims.claimFaucetDrip({ env, user: user('u1'), faucet, day: '2026-09-04' });
+    assert.equal(first.ok, true);
+    const result = await claims.deliverHeldFaucetDrips({ env, userId: 'u1', faucet, deliveredTo: ADDRESS, chainFactory: async () => fakeChain() });
+    assert.equal(result.ok, true);
+    assert.equal(lockRow(db).holder, null);
+    const tables = db.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'faucet_%' ORDER BY name").all().map((r) => r.name);
+    assert.deepEqual(tables, ['faucet_claims', 'faucet_locks']);
+  });
+});
