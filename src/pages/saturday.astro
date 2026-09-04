@@ -1,0 +1,1494 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+/**
+ * /saturday — saturday-only golden-hour block.
+ *
+ * A tribute to 710 Labs and El Segundo on the only day of the week that
+ * really belongs to neither of them. Geocities chrome, sim-city iso, three
+ * persy mason jars on a counter, no business.
+ *
+ * CC0 forever. Real Nouns via noun.pics.
+ */
+
+const title = 'Saturday — PointCast';
+const description =
+  'A weekend-only block from El Segundo. Three persy jars, a golden-hour porch, and a tribute to 710 Labs — California number one.';
+const canonical = 'https://pointcast.xyz/saturday';
+
+// In PT, day-of-week. The page is technically reachable any day, but
+// content nudges harder when it's actually saturday.
+const now = new Date();
+const ptDay = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'America/Los_Angeles' }).format(now);
+const ptDate = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'America/Los_Angeles' }).format(now);
+const isSaturday = ptDay === 'Sat';
+
+// Three Nouns standing in for residents loafing on the porch.
+// Seeds chosen for the in-collection range (Visit Nouns FA2: 0–1199).
+const RESIDENTS = [
+  { id: 'claude',  noun: 137, role: 'leans on the railing' },
+  { id: 'codex',   noun: 444, role: 'on the steps, eyes closed' },
+  { id: 'manus',   noun: 819, role: 'pushes the screen door open' },
+];
+
+// Tier-1 jars. Strain names + lineage are tribute labels, not product
+// claims. The point is the flower — genetics, effects profile, the
+// thing 710 Labs gets so right.
+const JARS = [
+  {
+    strain: 'PERSY OG',
+    label: 'Tier 1',
+    hue: '#3aa84a',
+    glow: '#7be089',
+    cross: 'OG Kush × Triangle Kush',
+    type: 'Indica-leaning hybrid',
+    effects: ['relaxed', 'gassy', 'creative', 'porch-pace'],
+    terps: [
+      { name: 'myrcene',       pct: 0.92 },
+      { name: 'caryophyllene', pct: 0.61 },
+      { name: 'limonene',      pct: 0.34 },
+    ],
+    batch: { jarred: '2026-04-29', no: 'B-2026-049', flower: 'whole nug · hand-trimmed' },
+    log: 'Heavy on the lid-pop — pine needle, diesel, a bottom note like fresh cut grass. Settles you into the chair within four breaths and stays in the room a long time.',
+  },
+  {
+    strain: 'GOLDEN HOUR',
+    label: 'Tier 1',
+    hue: '#e09a2c',
+    glow: '#ffd680',
+    cross: 'Tangie × Sunset Sherbet',
+    type: 'Sativa-leaning hybrid',
+    effects: ['uplift', 'focus', 'citrus', 'long talk'],
+    terps: [
+      { name: 'limonene',      pct: 1.04 },
+      { name: 'terpinolene',   pct: 0.48 },
+      { name: 'pinene',        pct: 0.22 },
+    ],
+    batch: { jarred: '2026-05-02', no: 'B-2026-052', flower: 'whole nug · hand-trimmed' },
+    log: 'Tangerine peel and creamsicle. Easy on the lungs, fast on the conversation — the kind of jar that makes you want to walk somewhere with someone.',
+  },
+  {
+    strain: 'EL SEGUNDO PINK',
+    label: '1 of 1',
+    hue: '#d04680',
+    glow: '#ffb3d4',
+    cross: 'Pink Rozay × Ice Cream Cake',
+    type: 'Balanced hybrid',
+    effects: ['social', 'floral', 'dreamy', 'low-key'],
+    terps: [
+      { name: 'linalool',      pct: 0.71 },
+      { name: 'caryophyllene', pct: 0.55 },
+      { name: 'humulene',      pct: 0.28 },
+    ],
+    batch: { jarred: '2026-05-08', no: 'B-2026-058', flower: '1 of 1 · single-pheno run' },
+    log: 'Floral and sweet, rosewater on a sugar cube. The high is dreamy not heavy — golden-hour brain. Best shared, worst hoarded.',
+  },
+];
+
+// Highest pct across all jars — used to scale the terp bars consistently
+// so the visualization compares jars against each other, not in isolation.
+const TERP_MAX = Math.max(...JARS.flatMap((j) => j.terps.map((t) => t.pct)));
+
+// The cellar — retired jars from previous saturdays, faded glass. Adds
+// time depth to the counter without needing prose. Tribute names only.
+const CELLAR = [
+  { strain: 'CASSETTE GAS',    hue: '#7a8a3a', retired: '2026-04-19', epitaph: 'a tape-deck-and-driveway jar; gone in two weekends.' },
+  { strain: 'BLUE OYSTER',     hue: '#3a6a8a', retired: '2026-04-12', epitaph: 'salt air and a slow start; one-of-one pheno-hunt run.' },
+  { strain: 'PALETA',          hue: '#c46b8a', retired: '2026-04-05', epitaph: 'mango on the front, lavender on the back; sunset friend.' },
+];
+
+// Pick the most recently jarred entry — gets the FRESH sticker.
+const FRESHEST_JARRED = JARS.reduce((acc, j) => (j.batch.jarred > acc ? j.batch.jarred : acc), '0000-00-00');
+
+// Each jar as a CreativeWork (not Product — nothing for sale, this is a
+// tribute) with genetics and effects exposed as additionalProperty so
+// agents can pick them up without scraping the DOM.
+const jarItems = JARS.map((jar) => ({
+  '@type': 'CreativeWork',
+  name: jar.strain,
+  alternateName: jar.cross,
+  genre: jar.type,
+  about: 'Cannabis flower — tribute, not for sale',
+  keywords: jar.effects.join(', '),
+  additionalProperty: [
+    { '@type': 'PropertyValue', name: 'genetics', value: jar.cross },
+    { '@type': 'PropertyValue', name: 'type', value: jar.type },
+    { '@type': 'PropertyValue', name: 'tier', value: jar.label },
+    ...jar.terps.map((t) => ({
+      '@type': 'PropertyValue',
+      name: `terpene:${t.name}`,
+      value: t.pct,
+      unitText: '%',
+    })),
+    ...jar.effects.map((e) => ({
+      '@type': 'PropertyValue',
+      name: 'effect',
+      value: e,
+    })),
+    { '@type': 'PropertyValue', name: 'batch', value: jar.batch.no },
+    { '@type': 'PropertyValue', name: 'jarred', value: jar.batch.jarred },
+  ],
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': canonical,
+  name: title,
+  description,
+  url: canonical,
+  inLanguage: 'en-US',
+  isPartOf: { '@type': 'WebSite', '@id': 'https://pointcast.xyz/#website', name: 'PointCast' },
+  about: {
+    '@type': 'Organization',
+    name: '710 Labs',
+    url: 'https://710labs.com',
+  },
+  mainEntity: {
+    '@type': 'ItemList',
+    name: 'The Counter — three jars',
+    itemListElement: jarItems.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item,
+    })),
+  },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/saturday.json', title: 'Saturday (JSON)' }]}
+>
+  <main class="sat" data-saturday={isSaturday ? 'true' : 'false'}>
+    <nav class="sat__crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      <span>saturday</span>
+    </nav>
+
+    <div class="sat__marquee" role="presentation">
+      <div class="sat__marquee-track">
+        <span>★ EL SEGUNDO · SATURDAY HOURS ★ NO BUSINESS, JUST PERSY ★ TRIBUTE TO 710 LABS · CALIFORNIA №1 ★ CC0 FOREVER ★ POINTCAST.XYZ ★</span>
+        <span>★ EL SEGUNDO · SATURDAY HOURS ★ NO BUSINESS, JUST PERSY ★ TRIBUTE TO 710 LABS · CALIFORNIA №1 ★ CC0 FOREVER ★ POINTCAST.XYZ ★</span>
+      </div>
+    </div>
+
+    <header class="sat__head">
+      <p class="sat__kicker mono">SATURDAY · WEEKEND BLOCK · LIVING DOC</p>
+      <h1 class="sat__title">A Saturday <em>in El Segundo.</em></h1>
+      <p class="sat__lede">
+        A porch at golden hour. Three jars on the counter. The residents are loafing
+        and so are you. This block exists because saturdays deserve their own room.
+      </p>
+      <div class="sat__chips">
+        <span class={`sat__chip ${isSaturday ? 'is-on' : ''}`}>● {isSaturday ? 'open · it is saturday' : `closed · ${ptDay} (still here, lower lights)`}</span>
+        <span class="sat__chip">{ptDate} PT</span>
+        <span class="sat__chip">tribute to 710 labs</span>
+      </div>
+    </header>
+
+    {/* Iso pixel scene — pure CSS so it ships without art assets. */}
+    <section class="sat__scene" aria-label="Iso pixel scene of the El Segundo porch at golden hour">
+      <div class="sat__sky" aria-hidden="true">
+        <div class="sat__sun"></div>
+        <div class="sat__cloud sat__cloud--1"></div>
+        <div class="sat__cloud sat__cloud--2"></div>
+      </div>
+
+      <div class="sat__ground" aria-hidden="true">
+        <div class="sat__lawn"></div>
+        <div class="sat__path"></div>
+      </div>
+
+      <div class="sat__house" aria-hidden="true">
+        <div class="sat__roof"></div>
+        <div class="sat__wall"></div>
+        <div class="sat__porch"></div>
+        <div class="sat__door"></div>
+        <div class="sat__window sat__window--1"></div>
+        <div class="sat__window sat__window--2"></div>
+        <div class="sat__flag" title="el segundo">
+          <span>ES</span>
+        </div>
+        <div class="sat__lamp" aria-hidden="true">
+          <span class="sat__lamp-cord"></span>
+          <span class="sat__lamp-shade"></span>
+          <span class="sat__lamp-glow"></span>
+        </div>
+        <div class="sat__chime" aria-hidden="true">
+          <span class="sat__chime-bar sat__chime-bar--1"></span>
+          <span class="sat__chime-bar sat__chime-bar--2"></span>
+          <span class="sat__chime-bar sat__chime-bar--3"></span>
+        </div>
+        <div class="sat__table" aria-hidden="true">
+          <span class="sat__table-top"></span>
+          <span class="sat__table-leg sat__table-leg--l"></span>
+          <span class="sat__table-leg sat__table-leg--r"></span>
+          <span class="sat__cup" title="a cup of something">
+            <span class="sat__cup-body"></span>
+            <span class="sat__cup-handle"></span>
+            <span class="sat__cup-steam"></span>
+          </span>
+        </div>
+      </div>
+
+      <div class="sat__palm" aria-hidden="true">
+        <span class="sat__palm-trunk"></span>
+        <span class="sat__palm-frond sat__palm-frond--1"></span>
+        <span class="sat__palm-frond sat__palm-frond--2"></span>
+        <span class="sat__palm-frond sat__palm-frond--3"></span>
+        <span class="sat__palm-frond sat__palm-frond--4"></span>
+        <span class="sat__palm-frond sat__palm-frond--5"></span>
+      </div>
+
+      <div class="sat__residents">
+        {RESIDENTS.map((r, i) => (
+          <figure class={`sat__resident sat__resident--${i + 1}`} title={`${r.id} · ${r.role}`}>
+            <img
+              src={`https://noun.pics/${r.noun}.svg`}
+              alt={`${r.id} (Noun ${r.noun})`}
+              width="84"
+              height="84"
+              loading="lazy"
+            />
+            <figcaption class="mono">{r.id}</figcaption>
+          </figure>
+        ))}
+      </div>
+
+    </section>
+
+    {/* 710 Labs tribute counter */}
+    <section class="sat__counter" aria-labelledby="counter-h">
+      <div class="sat__counter-rail">
+        <h2 id="counter-h" class="sat__counter-title">The Counter</h2>
+        <p class="sat__counter-sub mono">FLOWER · GENETICS · EFFECTS PROFILE · NOT FOR SALE · A TRIBUTE</p>
+      </div>
+
+      <div class="sat__jars">
+        {JARS.map((jar, i) => (
+          <article
+            class={`sat__jar sat__jar--${i + 1}${jar.batch.jarred === FRESHEST_JARRED ? ' is-fresh' : ''}`}
+            style={`--jar-hue: ${jar.hue}; --jar-glow: ${jar.glow};`}
+          >
+            <div class="sat__jar-ribbon">{jar.label}</div>
+            {jar.batch.jarred === FRESHEST_JARRED && (
+              <button
+                type="button"
+                class="sat__jar-fresh"
+                aria-label={`Jump to porch log for ${jar.strain}`}
+                data-log-strain={jar.strain}
+              >FRESH</button>
+            )}
+            <div class="sat__jar-glass">
+              <div class="sat__jar-lid"></div>
+              <div class="sat__jar-body">
+                <div class="sat__jar-buds">
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="sat__jar-shine"></div>
+              </div>
+              <div class="sat__jar-base"></div>
+            </div>
+            <div class="sat__jar-card">
+              <p class="sat__jar-strain">{jar.strain}</p>
+              <p class="sat__jar-cross">{jar.cross}</p>
+              <p class="sat__jar-type mono">{jar.type}</p>
+
+              <ul class="sat__jar-effects" aria-label={`Effects of ${jar.strain}`}>
+                {jar.effects.map((e) => <li>{e}</li>)}
+              </ul>
+
+              <div class="sat__jar-terps" aria-label={`Top terpenes in ${jar.strain}`}>
+                <p class="sat__jar-terps-head mono">TERPENES · TOP 3</p>
+                <ul>
+                  {jar.terps.map((t) => (
+                    <li>
+                      <span class="sat__jar-terp-name">{t.name}</span>
+                      <span class="sat__jar-terp-bar" aria-hidden="true">
+                        <span style={`width: ${(t.pct / TERP_MAX) * 100}%`}></span>
+                      </span>
+                      <span class="sat__jar-terp-pct mono">{t.pct.toFixed(2)}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p class="sat__jar-batch mono">
+                jarred {jar.batch.jarred} · {jar.batch.no} · {jar.batch.flower}
+              </p>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <p class="sat__counter-foot">
+        710 Labs gets the part nobody else does — flower genetics done with
+        intent, and effects profiles you can actually feel from one jar to
+        the next. This counter is a love letter to that craft. No
+        transactions, no claims, just flower.
+      </p>
+    </section>
+
+    {/* The Cellar — retired jars from previous saturdays */}
+    <section class="sat__cellar" aria-labelledby="cellar-h">
+      <header class="sat__cellar-head">
+        <p class="sat__cellar-kicker mono">THE CELLAR · WHAT CAME BEFORE</p>
+        <h2 id="cellar-h" class="sat__cellar-title">Retired jars.</h2>
+      </header>
+      <ul class="sat__cellar-list">
+        {CELLAR.map((j) => (
+          <li class="sat__cellar-item" style={`--jar-hue: ${j.hue};`}>
+            <div class="sat__cellar-jar" aria-hidden="true">
+              <div class="sat__cellar-lid"></div>
+              <div class="sat__cellar-body"></div>
+            </div>
+            <div>
+              <p class="sat__cellar-strain">{j.strain}</p>
+              <p class="sat__cellar-retired mono">retired {j.retired}</p>
+              <p class="sat__cellar-epitaph">{j.epitaph}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    {/* Porch Log — tribute-voice tasting notes, one per jar */}
+    <section class="sat__log" aria-labelledby="log-h">
+      <header class="sat__log-head">
+        <p class="sat__log-kicker mono">PORCH LOG</p>
+        <h2 id="log-h" class="sat__log-title">How each one rides.</h2>
+        <p class="sat__log-sub">
+          Three short notes in liner-notes voice. Not Mike's words, not a
+          review — just an observation per jar, the way a tribute should
+          read.
+        </p>
+      </header>
+      <ol class="sat__log-list">
+        {JARS.map((jar) => (
+          <li class="sat__log-entry" data-log-strain={jar.strain} style={`--jar-glow: ${jar.glow};`}>
+            <p class="sat__log-strain mono">{jar.strain}</p>
+            <p class="sat__log-text">{jar.log}</p>
+          </li>
+        ))}
+      </ol>
+      <p class="sat__log-foot mono">— claude · porch log · saturday</p>
+    </section>
+
+    {/* Soundtrack pointer */}
+    <section class="sat__sound" aria-label="Saturday soundtrack">
+      <div class="sat__sound-rail">
+        <p class="sat__sound-kicker mono">PLAYING ON THE PORCH</p>
+        <h2 class="sat__sound-title">Low volume, long set.</h2>
+        <p class="sat__sound-lede">
+          Saturday at the altar runs slow — long pads, brushed drums, a single
+          Noun on the kit. The track loops until someone changes it.
+        </p>
+        <a class="sat__sound-cta" href="/drum-altar">Open the drum altar →</a>
+      </div>
+      <ol class="sat__sound-set" aria-label="Today's set">
+        <li><span class="mono">A1</span> warm-up · brushed kit · 78 bpm</li>
+        <li><span class="mono">A2</span> el segundo edge · pads + bass</li>
+        <li><span class="mono">B1</span> golden hour · longest cut, 11 min</li>
+        <li><span class="mono">B2</span> porch lights · ambient, fade out</li>
+      </ol>
+    </section>
+
+    {/* Saturday-only wire */}
+    <section class="sat__wire" aria-label="Saturday wire">
+      <h2 class="sat__wire-title">What's good today</h2>
+      <ul class="sat__wire-list">
+        <li><span class="mono">noon</span> kitchen quiet, kettle on, first jar opens — Persy OG if it's a slow start.</li>
+        <li><span class="mono">15:00</span> golden hour begins to slide; sky goes peach over the SoCal Edison stack. Move to the porch.</li>
+        <li><span class="mono">16:30</span> wind off the ocean cools things down; lids back on, music up a notch.</li>
+        <li><span class="mono">18:00</span> dinner at home, no agenda. Pink jar comes out for after.</li>
+        <li><span class="mono">21:00</span> drum altar opens for whoever's still around. Long set, low volume.</li>
+        <li><span class="mono">late</span> porch lights, no phone. Saturday earns its own room.</li>
+      </ul>
+    </section>
+
+    <footer class="sat__foot">
+      <p>
+        <strong>Tribute</strong> · <a href="https://710labs.com" rel="external noopener" target="_blank">710 Labs</a>
+        · my california number one. saturday is theirs and ours.
+      </p>
+      <p class="mono">
+        cc0 · made on a saturday in el segundo · {ptDate} PT
+      </p>
+    </footer>
+  </main>
+</BlockLayout>
+
+<script is:inline>
+  // FRESH sticker → scroll to that strain's porch log entry, briefly
+  // highlight it. Tiny, no framework, no listeners after page unload.
+  (function () {
+    const stickers = document.querySelectorAll('.sat__jar-fresh[data-log-strain]');
+    stickers.forEach((s) => {
+      s.addEventListener('click', () => {
+        const target = document.querySelector(
+          '.sat__log-entry[data-log-strain="' + s.getAttribute('data-log-strain') + '"]'
+        );
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('is-flash');
+        setTimeout(() => target.classList.remove('is-flash'), 1600);
+      });
+    });
+  })();
+</script>
+
+<style>
+  :root {
+    --sat-sky-1: #ffb56b;   /* high gold */
+    --sat-sky-2: #ff7a8a;   /* pink */
+    --sat-sky-3: #6b3a8a;   /* dusk violet */
+    --sat-sun:   #ffe07a;
+    --sat-grass: #6fbf6a;
+    --sat-grass-dk: #3f8e3f;
+    --sat-path:  #d9c08c;
+    --sat-wall:  #f4d3a1;
+    --sat-wall-dk: #c69a64;
+    --sat-roof:  #8a3a3a;
+    --sat-roof-dk: #561f1f;
+    --sat-door:  #5a2c1f;
+    --sat-win:   #ffe07a;
+
+    --sat-ink:   #1a1208;
+    --sat-paper: #fff7e6;
+    --sat-line:  #2b1a08;
+    --sat-accent: #ff5a8a;
+    --sat-accent-2: #1aa56b;
+  }
+
+  .sat {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    color: var(--sat-ink);
+    background:
+      repeating-linear-gradient(
+        45deg,
+        #fff7e6 0 8px,
+        #ffe7c2 8px 16px
+      );
+    border: 3px solid var(--sat-line);
+    box-shadow: 8px 8px 0 var(--sat-line);
+    margin-top: 16px;
+    margin-bottom: 32px;
+  }
+
+  .sat .mono { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; letter-spacing: 0.04em; }
+
+  .sat__crumb {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  .sat__crumb a { color: inherit; text-decoration: underline; }
+
+  /* Marquee */
+  .sat__marquee {
+    border: 2px solid var(--sat-line);
+    background: linear-gradient(90deg, #ffec5c, #ff7a8a, #6b3a8a, #ffec5c);
+    background-size: 400% 100%;
+    animation: sat-shift 18s linear infinite;
+    overflow: hidden;
+    color: var(--sat-line);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .sat__marquee-track {
+    display: flex;
+    gap: 48px;
+    white-space: nowrap;
+    padding: 8px 0;
+    animation: sat-marquee 38s linear infinite;
+  }
+  @keyframes sat-marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  @keyframes sat-shift {
+    from { background-position: 0% 0%; }
+    to   { background-position: 400% 0%; }
+  }
+
+  /* Header */
+  .sat__head { padding: 8px 4px 24px; }
+  .sat__kicker {
+    font-size: 12px;
+    color: var(--sat-line);
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  .sat__title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(36px, 6vw, 68px);
+    line-height: 1.05;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .sat__title em {
+    font-style: italic;
+    background: linear-gradient(90deg, #ff5a8a, #ffb56b);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sat__lede {
+    max-width: 56ch;
+    font-size: 17px;
+    line-height: 1.55;
+    margin: 0 0 16px;
+  }
+  .sat__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sat__chip {
+    display: inline-flex;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 2px solid var(--sat-line);
+    background: var(--sat-paper);
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .sat__chip.is-on { background: var(--sat-accent-2); color: #fff; }
+
+  /* Iso pixel scene */
+  .sat__scene {
+    position: relative;
+    height: clamp(360px, 52vw, 540px);
+    margin: 24px 0;
+    border: 3px solid var(--sat-line);
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--sat-sky-1), var(--sat-sky-2) 55%, var(--sat-sky-3));
+    image-rendering: pixelated;
+    box-shadow: inset 0 0 0 4px #fff, inset 0 0 0 6px var(--sat-line);
+  }
+  .sat__sky { position: absolute; inset: 0; }
+  .sat__sun {
+    position: absolute;
+    top: 16%;
+    right: 12%;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--sat-sun) 0 60%, #ffae3d 60% 100%);
+    box-shadow:
+      0 0 0 6px rgba(255, 224, 122, 0.35),
+      0 0 0 14px rgba(255, 224, 122, 0.18);
+  }
+  .sat__cloud {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.85);
+    height: 16px;
+    border-radius: 12px;
+  }
+  .sat__cloud--1 { top: 14%; left: 8%; width: 110px; }
+  .sat__cloud--2 { top: 22%; left: 38%; width: 70px; }
+
+  .sat__ground {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 38%;
+  }
+  .sat__lawn {
+    position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(
+        45deg,
+        var(--sat-grass) 0 18px,
+        var(--sat-grass-dk) 18px 22px
+      );
+  }
+  .sat__path {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 30%;
+    height: 100%;
+    transform: translateX(-50%) skewX(-30deg);
+    background:
+      repeating-linear-gradient(
+        90deg,
+        var(--sat-path) 0 16px,
+        #b89867 16px 18px
+      );
+    border-left: 3px solid var(--sat-line);
+    border-right: 3px solid var(--sat-line);
+  }
+
+  /* House — fake iso via skews */
+  .sat__house {
+    position: absolute;
+    left: 50%;
+    bottom: 24%;
+    transform: translateX(-50%);
+    width: 360px;
+    height: 220px;
+  }
+  .sat__wall {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 65%;
+    background: var(--sat-wall);
+    border: 3px solid var(--sat-line);
+    box-shadow: inset -16px 0 0 var(--sat-wall-dk);
+  }
+  .sat__roof {
+    position: absolute;
+    left: -14px; right: -14px;
+    top: 0;
+    height: 42%;
+    background: var(--sat-roof);
+    border: 3px solid var(--sat-line);
+    clip-path: polygon(8% 100%, 50% 0, 92% 100%);
+    box-shadow: inset 0 -14px 0 var(--sat-roof-dk);
+  }
+  .sat__porch {
+    position: absolute;
+    left: -10px; right: -10px;
+    bottom: -14px;
+    height: 18px;
+    background: #c69a64;
+    border: 3px solid var(--sat-line);
+  }
+  .sat__door {
+    position: absolute;
+    left: 50%; transform: translateX(-50%);
+    bottom: 0;
+    width: 56px;
+    height: 80px;
+    background: var(--sat-door);
+    border: 3px solid var(--sat-line);
+  }
+  .sat__door::after {
+    content: '';
+    position: absolute;
+    right: 8px; top: 40%;
+    width: 6px; height: 6px;
+    background: #f4d76b; border-radius: 50%;
+  }
+  .sat__window {
+    position: absolute;
+    width: 44px; height: 36px;
+    background: var(--sat-win);
+    border: 3px solid var(--sat-line);
+    box-shadow: inset 0 0 0 2px #fff;
+  }
+  .sat__window--1 { left: 32px; bottom: 70px; }
+  .sat__window--2 { right: 32px; bottom: 70px; }
+  .sat__flag {
+    position: absolute;
+    left: 50%; top: -28px;
+    transform: translateX(-50%);
+    width: 38px; height: 22px;
+    background: var(--sat-accent);
+    border: 3px solid var(--sat-line);
+    color: #fff;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    display: grid; place-items: center;
+    box-shadow: 0 6px 0 -2px var(--sat-line);
+  }
+
+  .sat__residents {
+    position: absolute;
+    left: 50%;
+    bottom: 18%;
+    transform: translateX(-50%);
+    width: 480px;
+    height: 110px;
+    pointer-events: none;
+  }
+  .sat__resident {
+    position: absolute;
+    margin: 0;
+    text-align: center;
+    pointer-events: auto;
+    image-rendering: pixelated;
+  }
+  .sat__resident img {
+    display: block;
+    width: 84px; height: 84px;
+    border: 3px solid var(--sat-line);
+    background: #fff;
+    box-shadow: 4px 4px 0 var(--sat-line);
+  }
+  .sat__resident figcaption {
+    margin-top: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 1px 0 var(--sat-line), 0 0 4px rgba(0,0,0,0.4);
+  }
+  .sat__resident--1 {
+    left: -20px; bottom: 12px;
+    transform: rotate(-3deg);
+    animation: sat-idle-a 7.4s ease-in-out infinite;
+    animation-delay: -1.2s;
+  }
+  .sat__resident--2 {
+    left: 50%; bottom: -8px;
+    transform: translateX(-50%) rotate(2deg);
+    animation: sat-idle-b 8.8s ease-in-out infinite;
+    animation-delay: -3.4s;
+  }
+  .sat__resident--3 {
+    right: -20px; bottom: 18px;
+    transform: rotate(4deg);
+    animation: sat-idle-c 9.2s ease-in-out infinite;
+    animation-delay: -5.7s;
+  }
+  @keyframes sat-idle-a {
+    0%, 100% { transform: rotate(-3deg) translateY(0); }
+    50%      { transform: rotate(-2deg) translateY(-3px); }
+  }
+  @keyframes sat-idle-b {
+    0%, 100% { transform: translateX(-50%) rotate(2deg)  translateY(0); }
+    50%      { transform: translateX(-50%) rotate(2.6deg) translateY(-2px); }
+  }
+  @keyframes sat-idle-c {
+    0%, 100% { transform: rotate(4deg) translateY(0); }
+    50%      { transform: rotate(3deg) translateY(-3px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sat__resident--1, .sat__resident--2, .sat__resident--3 { animation: none; }
+  }
+
+  /* FRESH sticker — corner badge on most-recently-jarred jar */
+  .sat__jar.is-fresh {
+    box-shadow: 0 0 0 2px var(--jar-glow), 0 0 24px var(--jar-glow);
+  }
+  .sat__jar-fresh {
+    position: absolute;
+    top: -10px; right: -10px;
+    background: #fff;
+    color: #1a0f08;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+    border: 2px solid var(--sat-line);
+    box-shadow: 3px 3px 0 var(--sat-accent);
+    transform: rotate(8deg);
+    animation: sat-fresh-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes sat-fresh-pulse {
+    0%, 100% { transform: rotate(8deg) scale(1); }
+    50%      { transform: rotate(8deg) scale(1.06); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sat__jar-fresh { animation: none; }
+  }
+
+  /* Counter */
+  .sat__counter {
+    margin: 36px 0 12px;
+    padding: 22px;
+    border: 3px solid var(--sat-line);
+    background: #1a0f08;
+    color: #ffe7c2;
+    box-shadow: 8px 8px 0 var(--sat-accent);
+  }
+  .sat__counter-rail { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .sat__counter-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(28px, 4vw, 44px);
+    margin: 0;
+    color: #ffd680;
+  }
+  .sat__counter-sub { font-size: 12px; color: #ff9ec0; }
+
+  .sat__jars {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 720px) {
+    .sat__jars { grid-template-columns: 1fr; }
+  }
+
+  .sat__jar {
+    position: relative;
+    padding: 18px 14px 14px;
+    border: 2px solid #ffd680;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,0.06), transparent 50%),
+      #2b1a0c;
+    text-align: center;
+  }
+  .sat__jar-ribbon {
+    position: absolute;
+    top: -10px; left: 50%; transform: translateX(-50%);
+    background: var(--sat-accent);
+    color: #fff;
+    border: 2px solid var(--sat-line);
+    padding: 3px 10px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Glass jar */
+  .sat__jar-glass {
+    position: relative;
+    width: 130px;
+    height: 170px;
+    margin: 8px auto 14px;
+    image-rendering: pixelated;
+  }
+  .sat__jar-lid {
+    position: absolute;
+    top: 0;
+    left: 50%; transform: translateX(-50%);
+    width: 90px; height: 22px;
+    background: linear-gradient(180deg, #d4a44c, #8a6324);
+    border: 3px solid var(--sat-line);
+    border-radius: 4px 4px 0 0;
+  }
+  .sat__jar-body {
+    position: absolute;
+    top: 22px;
+    left: 50%; transform: translateX(-50%);
+    width: 110px; height: 130px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.0)),
+      var(--jar-hue);
+    border: 3px solid var(--sat-line);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow:
+      inset 0 0 0 3px rgba(255,255,255,0.15),
+      0 0 22px var(--jar-glow);
+  }
+  .sat__jar-shine {
+    position: absolute;
+    top: 6px; left: 8px;
+    width: 14px; height: 90px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0));
+    transform: skewY(-6deg);
+  }
+  .sat__jar-buds {
+    position: absolute;
+    inset: 12px 8px 8px 8px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .sat__jar-buds span {
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 50% 60% 40% 50%;
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,0.5);
+  }
+  .sat__jar-buds span:nth-child(2) { transform: rotate(8deg) scale(1.05); }
+  .sat__jar-buds span:nth-child(4) { transform: rotate(-12deg); }
+  .sat__jar-buds span:nth-child(6) { transform: rotate(20deg) scale(0.95); }
+  .sat__jar-base {
+    position: absolute;
+    bottom: 0;
+    left: 50%; transform: translateX(-50%);
+    width: 116px; height: 8px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 50%;
+    filter: blur(3px);
+  }
+
+  .sat__jar-card { color: #ffe7c2; text-align: center; }
+  .sat__jar-strain {
+    margin: 0 0 4px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 20px;
+    color: #fff;
+    letter-spacing: 0.02em;
+  }
+  .sat__jar-cross {
+    margin: 0 0 2px;
+    font-size: 12px;
+    color: #ffd680;
+    font-style: italic;
+  }
+  .sat__jar-type {
+    margin: 0 0 10px;
+    font-size: 10px;
+    color: #ff9ec0;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .sat__jar-effects {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+  .sat__jar-effects li {
+    padding: 2px 8px;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 10px;
+    color: #ffe7c2;
+    background: rgba(255, 214, 128, 0.1);
+    border: 1px solid rgba(255, 214, 128, 0.4);
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+  }
+
+  .sat__counter-foot {
+    margin: 18px 0 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #ffd9b8;
+    max-width: 64ch;
+  }
+
+  /* Terpene profile */
+  .sat__jar-terps {
+    margin: 14px 0 8px;
+    padding: 10px 8px;
+    border-top: 1px dashed rgba(255, 214, 128, 0.35);
+    border-bottom: 1px dashed rgba(255, 214, 128, 0.35);
+  }
+  .sat__jar-terps-head {
+    font-size: 10px;
+    color: #ffd680;
+    margin: 0 0 8px;
+    text-align: left;
+  }
+  .sat__jar-terps ul {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: grid;
+    gap: 5px;
+  }
+  .sat__jar-terps li {
+    display: grid;
+    grid-template-columns: 88px 1fr 44px;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #ffe7c2;
+    text-align: left;
+  }
+  .sat__jar-terp-name {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    color: #fff;
+  }
+  .sat__jar-terp-bar {
+    position: relative;
+    height: 6px;
+    background: rgba(255, 214, 128, 0.12);
+    border: 1px solid rgba(255, 214, 128, 0.35);
+    overflow: hidden;
+  }
+  .sat__jar-terp-bar > span {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--jar-glow), #fff);
+    box-shadow: 0 0 8px var(--jar-glow);
+  }
+  .sat__jar-terp-pct {
+    font-size: 10px;
+    color: #ffd680;
+    text-align: right;
+  }
+
+  .sat__jar-batch {
+    margin: 8px 0 0;
+    font-size: 10px;
+    color: rgba(255, 231, 194, 0.6);
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+
+  /* Soundtrack section */
+  .sat__sound {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 24px;
+    margin: 28px 0;
+    padding: 22px;
+    border: 3px solid var(--sat-line);
+    background: linear-gradient(180deg, #fff7e6 0%, #ffe7c2 100%);
+    box-shadow: -8px 8px 0 var(--sat-accent-2);
+  }
+  @media (max-width: 720px) {
+    .sat__sound { grid-template-columns: 1fr; }
+  }
+  .sat__sound-kicker {
+    font-size: 11px;
+    color: var(--sat-accent);
+    margin: 0 0 6px;
+    letter-spacing: 0.08em;
+  }
+  .sat__sound-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(24px, 3vw, 36px);
+    margin: 0 0 10px;
+    line-height: 1.05;
+  }
+  .sat__sound-lede {
+    margin: 0 0 14px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--sat-ink);
+    max-width: 44ch;
+  }
+  .sat__sound-cta {
+    display: inline-block;
+    padding: 8px 14px;
+    background: var(--sat-line);
+    color: #ffe07a;
+    text-decoration: none;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border: 2px solid var(--sat-line);
+    box-shadow: 4px 4px 0 var(--sat-accent);
+  }
+  .sat__sound-cta:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--sat-accent);
+  }
+  .sat__sound-set {
+    list-style: none;
+    margin: 0; padding: 14px;
+    background: #fff;
+    border: 2px solid var(--sat-line);
+    display: grid;
+    gap: 6px;
+    align-content: start;
+  }
+  .sat__sound-set li {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 10px;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--sat-line);
+  }
+  .sat__sound-set li:last-child { border-bottom: 0; }
+  .sat__sound-set .mono {
+    color: var(--sat-accent-2);
+    font-weight: 700;
+    font-size: 11px;
+  }
+
+  /* The Cellar — retired jars strip */
+  .sat__cellar {
+    margin: 14px 0 28px;
+    padding: 18px 22px;
+    border: 3px solid var(--sat-line);
+    background:
+      repeating-linear-gradient(
+        135deg,
+        #1a0f08 0 16px,
+        #211309 16px 18px
+      );
+    color: #ffe7c2;
+  }
+  .sat__cellar-head { margin-bottom: 12px; }
+  .sat__cellar-kicker {
+    font-size: 11px;
+    color: #ffd680;
+    margin: 0 0 4px;
+    letter-spacing: 0.1em;
+  }
+  .sat__cellar-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(22px, 2.6vw, 30px);
+    margin: 0;
+    color: #fff;
+  }
+  .sat__cellar-list {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 720px) {
+    .sat__cellar-list { grid-template-columns: 1fr; }
+  }
+  .sat__cellar-item {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding: 10px;
+    border: 1px solid rgba(255, 214, 128, 0.25);
+    background: rgba(0, 0, 0, 0.25);
+    opacity: 0.78;
+    transition: opacity 0.2s ease;
+  }
+  .sat__cellar-item:hover { opacity: 1.0; }
+  .sat__cellar-jar {
+    position: relative;
+    width: 38px;
+    height: 56px;
+    image-rendering: pixelated;
+  }
+  .sat__cellar-lid {
+    position: absolute;
+    top: 0; left: 50%;
+    width: 28px; height: 8px;
+    background: linear-gradient(180deg, #8a6324, #3f1f0a);
+    border: 2px solid var(--sat-line);
+    transform: translateX(-50%);
+  }
+  .sat__cellar-body {
+    position: absolute;
+    top: 8px; left: 50%;
+    width: 36px; height: 46px;
+    background: var(--jar-hue);
+    border: 2px solid var(--sat-line);
+    border-radius: 4px;
+    transform: translateX(-50%);
+    filter: saturate(0.6) brightness(0.85);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08);
+  }
+  .sat__cellar-strain {
+    margin: 0 0 2px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 15px;
+    color: #fff;
+  }
+  .sat__cellar-retired {
+    margin: 0 0 4px;
+    font-size: 10px;
+    color: #ff9ec0;
+    letter-spacing: 0.06em;
+  }
+  .sat__cellar-epitaph {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(255, 231, 194, 0.78);
+    font-style: italic;
+  }
+
+  /* Porch Log */
+  .sat__log {
+    margin: 28px 0;
+    padding: 22px;
+    border: 3px solid var(--sat-line);
+    background:
+      radial-gradient(circle at 80% 0%, rgba(255, 90, 138, 0.08), transparent 50%),
+      var(--sat-paper);
+    box-shadow: 8px 8px 0 var(--sat-line);
+  }
+  .sat__log-head { margin-bottom: 14px; }
+  .sat__log-kicker {
+    font-size: 11px;
+    color: var(--sat-accent);
+    margin: 0 0 4px;
+    letter-spacing: 0.1em;
+  }
+  .sat__log-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(24px, 3vw, 36px);
+    margin: 0 0 8px;
+    line-height: 1.1;
+  }
+  .sat__log-sub {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 64ch;
+    color: rgba(26, 18, 8, 0.75);
+  }
+  .sat__log-list {
+    list-style: none;
+    padding: 0;
+    margin: 14px 0 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 720px) {
+    .sat__log-list { grid-template-columns: 1fr; }
+  }
+  .sat__log-entry {
+    padding: 14px;
+    background: #fff;
+    border: 2px solid var(--sat-line);
+    border-left: 4px solid var(--jar-glow);
+    box-shadow: 3px 3px 0 var(--sat-line);
+  }
+  .sat__log-strain {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: var(--sat-accent);
+    letter-spacing: 0.1em;
+    font-weight: 700;
+  }
+  .sat__log-text {
+    margin: 0;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 14px;
+    line-height: 1.55;
+    font-style: italic;
+    color: var(--sat-ink);
+  }
+  .sat__log-foot {
+    margin: 14px 0 0;
+    font-size: 11px;
+    color: rgba(26, 18, 8, 0.55);
+    text-align: right;
+  }
+
+  /* Wire */
+  .sat__wire {
+    margin: 28px 0;
+    padding: 18px;
+    border: 3px solid var(--sat-line);
+    background: var(--sat-paper);
+  }
+  .sat__wire-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 24px;
+    margin: 0 0 10px;
+  }
+  .sat__wire-list {
+    list-style: none;
+    padding: 0; margin: 0;
+    display: grid; gap: 6px;
+  }
+  .sat__wire-list li {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--sat-line);
+    font-size: 14px;
+  }
+  .sat__wire-list li:last-child { border-bottom: 0; }
+  .sat__wire-list .mono { font-size: 12px; color: var(--sat-accent); }
+
+  /* Foot */
+  .sat__foot {
+    margin-top: 24px;
+    padding: 16px;
+    border-top: 2px dashed var(--sat-line);
+    text-align: center;
+    font-size: 14px;
+  }
+  .sat__foot a { color: var(--sat-accent); }
+  .sat__foot .mono { font-size: 11px; opacity: 0.7; margin-top: 6px; }
+
+  /* Off-day softening */
+  .sat[data-saturday="false"] .sat__scene { filter: saturate(0.85) brightness(0.95); }
+  .sat[data-saturday="false"] .sat__marquee { filter: saturate(0.7); }
+
+  /* Palm tree, far left, leans toward the house */
+  .sat__palm {
+    position: absolute;
+    left: 6%;
+    bottom: 30%;
+    width: 60px;
+    height: 180px;
+    pointer-events: none;
+  }
+  .sat__palm-trunk {
+    position: absolute;
+    left: 50%; bottom: 0;
+    width: 10px; height: 130px;
+    background: linear-gradient(180deg, #6b3a1f, #3f1f0a);
+    border: 2px solid var(--sat-line);
+    transform: translateX(-50%) rotate(-2deg);
+  }
+  .sat__palm-frond {
+    position: absolute;
+    top: 0; left: 50%;
+    width: 70px; height: 18px;
+    background: #2f7a2f;
+    border: 2px solid var(--sat-line);
+    border-radius: 60% 6% 60% 6%;
+    transform-origin: 0% 50%;
+  }
+  .sat__palm-frond--1 { transform: translateX(-10%) rotate(-20deg); background: #3a8a3a; }
+  .sat__palm-frond--2 { transform: translateX(-10%) rotate(15deg);  background: #2f7a2f; }
+  .sat__palm-frond--3 { transform: translateX(-10%) rotate(-55deg); background: #4a994a; }
+  .sat__palm-frond--4 { transform: translateX(-10%) rotate(48deg);  background: #2a6f2a; }
+  .sat__palm-frond--5 { transform: translateX(-10%) rotate(0deg);   background: #3f8a3f; width: 78px; }
+  @keyframes sat-palm-sway {
+    0%, 100% { transform: translateX(-50%) rotate(-2deg); }
+    50%      { transform: translateX(-50%) rotate(-4deg); }
+  }
+  .sat__palm-trunk { animation: sat-palm-sway 6.4s ease-in-out infinite; }
+
+  /* Porch lamp — small glow above the door */
+  .sat__lamp {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28px;
+    height: 70px;
+    pointer-events: none;
+  }
+  .sat__lamp-cord {
+    position: absolute;
+    top: 0; left: 50%;
+    width: 2px; height: 24px;
+    background: var(--sat-line);
+    transform: translateX(-50%);
+  }
+  .sat__lamp-shade {
+    position: absolute;
+    top: 22px; left: 50%;
+    width: 22px; height: 18px;
+    background: linear-gradient(180deg, #2b1a08, #5a2c1f);
+    border: 2px solid var(--sat-line);
+    transform: translateX(-50%);
+    clip-path: polygon(15% 0, 85% 0, 100% 100%, 0 100%);
+  }
+  .sat__lamp-glow {
+    position: absolute;
+    top: 38px; left: 50%;
+    width: 28px; height: 28px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 224, 122, 0.85), rgba(255, 224, 122, 0));
+    animation: sat-lamp-flicker 4.2s ease-in-out infinite;
+  }
+  @keyframes sat-lamp-flicker {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1.0;  }
+  }
+
+  /* Wind chime — three little bars hanging from the eave */
+  .sat__chime {
+    position: absolute;
+    top: 14%;
+    right: 14%;
+    width: 28px;
+    height: 36px;
+    pointer-events: none;
+    transform-origin: 50% 0;
+    animation: sat-chime-sway 5.6s ease-in-out infinite;
+  }
+  .sat__chime-bar {
+    position: absolute;
+    top: 6px;
+    width: 3px;
+    background: #c7a05a;
+    border: 1px solid var(--sat-line);
+  }
+  .sat__chime-bar--1 { left: 4px;  height: 22px; }
+  .sat__chime-bar--2 { left: 12px; height: 28px; }
+  .sat__chime-bar--3 { left: 20px; height: 18px; }
+  @keyframes sat-chime-sway {
+    0%, 100% { transform: rotate(-3deg); }
+    50%      { transform: rotate(3deg);  }
+  }
+
+  /* Coffee table with a mug — on the porch, in front of the door */
+  .sat__table {
+    position: absolute;
+    bottom: -6px;
+    right: 20px;
+    width: 44px;
+    height: 30px;
+    pointer-events: none;
+  }
+  .sat__table-top {
+    position: absolute;
+    top: 6px; left: 0;
+    width: 44px; height: 5px;
+    background: #5a2c1f;
+    border: 2px solid var(--sat-line);
+  }
+  .sat__table-leg {
+    position: absolute;
+    top: 11px;
+    width: 3px; height: 14px;
+    background: #3f1f0a;
+    border: 1px solid var(--sat-line);
+  }
+  .sat__table-leg--l { left: 4px; }
+  .sat__table-leg--r { right: 4px; }
+  .sat__cup {
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    width: 14px;
+    height: 14px;
+  }
+  .sat__cup-body {
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 14px; height: 12px;
+    background: #fff;
+    border: 2px solid var(--sat-line);
+    border-radius: 2px 2px 4px 4px;
+  }
+  .sat__cup-handle {
+    position: absolute;
+    bottom: 3px; right: -5px;
+    width: 6px; height: 6px;
+    border: 2px solid var(--sat-line);
+    border-left: 0;
+    border-radius: 0 50% 50% 0;
+  }
+  .sat__cup-steam {
+    position: absolute;
+    bottom: 16px;
+    left: 5px;
+    width: 3px;
+    height: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0));
+    border-radius: 50%;
+    animation: sat-steam 3.4s ease-in-out infinite;
+  }
+  @keyframes sat-steam {
+    0%   { transform: translateY(0)  scaleX(1);   opacity: 0; }
+    30%  { opacity: 0.8; }
+    100% { transform: translateY(-10px) scaleX(0.6); opacity: 0; }
+  }
+
+  /* FRESH sticker is now a button — keep look, drop button defaults */
+  button.sat__jar-fresh {
+    cursor: pointer;
+    font: inherit;
+  }
+  button.sat__jar-fresh:focus-visible {
+    outline: 2px solid var(--sat-accent);
+    outline-offset: 3px;
+  }
+
+  /* Porch log entry flash when scrolled to from sticker */
+  .sat__log-entry.is-flash {
+    animation: sat-log-flash 1.6s ease-out;
+  }
+  @keyframes sat-log-flash {
+    0%   { box-shadow: 0 0 0 0 var(--jar-glow), 3px 3px 0 var(--sat-line); }
+    40%  { box-shadow: 0 0 0 8px var(--jar-glow), 3px 3px 0 var(--sat-line); }
+    100% { box-shadow: 0 0 0 0 var(--jar-glow), 3px 3px 0 var(--sat-line); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sat__palm-trunk,
+    .sat__lamp-glow,
+    .sat__chime,
+    .sat__cup-steam,
+    .sat__log-entry.is-flash { animation: none; }
+  }
+</style>
