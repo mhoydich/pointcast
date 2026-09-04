@@ -184,8 +184,9 @@ class FakeStatement {
       if (existing) return { success: true, meta: { changes: 0 } };
       db.intents.set(args[0], {
         id: args[0], action: args[1], idempotency_key: args[2], request_hash: args[3], request_json: args[4],
-        status: 'created', capacity_key: null, settlement_json: null, result_json: null, error: null,
-        created_at: args[5], updated_at: args[6],
+        status: 'created', capacity_key: null, settlement_json: null, result_json: null,
+        tx_hash: null, agent_id: args[5] ?? null, error: null,
+        created_at: args[6], updated_at: args[7],
       });
       return { success: true, meta: { changes: 1 } };
     }
@@ -243,14 +244,16 @@ class FakeStatement {
         if (row) Object.assign(row, { capacity_key: null, updated_at: args[0] });
         return { success: true, meta: { changes: row ? 1 : 0 } };
       }
-      const row = db.intents.get(args[6]);
+      const row = db.intents.get(args[8]);
       if (row) Object.assign(row, {
         status: args[0],
         capacity_key: args[1] ?? row.capacity_key,
         settlement_json: args[2] ?? row.settlement_json,
         result_json: args[3] ?? row.result_json,
-        error: args[4],
-        updated_at: args[5],
+        tx_hash: args[4] ?? row.tx_hash,
+        agent_id: args[5] ?? row.agent_id,
+        error: args[6],
+        updated_at: args[7],
       });
       return { success: true, meta: { changes: row ? 1 : 0 } };
     }

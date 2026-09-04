@@ -111,7 +111,7 @@ class FakeStatement {
       return { success: true, meta: { changes: 1 } };
     }
     if (this.sql.startsWith('INSERT INTO aliases')) {
-      const [name, kind, target, owner, hash, createdAt, renewedAt, expiresAt] = this.args;
+      const [name, kind, target, owner, hash, agentId, createdAt, renewedAt, expiresAt] = this.args;
       const prior = this.db.aliases.get(name);
       this.db.aliases.set(name, {
         name,
@@ -119,6 +119,7 @@ class FakeStatement {
         forward_target: target,
         owner,
         receipt_hash: hash,
+        agent_id: agentId ?? null,
         created_at: prior?.owner === owner ? prior.created_at : createdAt,
         renewed_at: renewedAt,
         expires_at: expiresAt,
@@ -257,7 +258,7 @@ test('public alias and registry responses omit owner and forwarding target', asy
   assert.doesNotMatch(statusText, /private@example|0x111111/u);
   assert.deepEqual(JSON.parse(statusText), {
     alias: 'field-agent@agents.pointcast.xyz', status: 'active', since: '2026-09-03T18:00:00.000Z',
-    expiresAt: '2026-10-03T18:00:00.000Z', count: 7,
+    expiresAt: '2026-10-03T18:00:00.000Z', count: 7, agentId: null,
   });
   const registryText = await (await registryResponse({ AUTH_DB: db }, now)).text();
   assert.doesNotMatch(registryText, /private@example|0x111111|forward_target/u);
