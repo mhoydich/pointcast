@@ -86,6 +86,22 @@ export interface X402ReceiptProduct {
   loop?: string;
   context?: string;
   action?: string;
+  beforeSettlement?: () => Promise<void>;
+}
+
+export class X402PreSettlementError extends Error {
+  readonly status: number;
+  readonly payload: Record<string, unknown>;
+
+  constructor(
+    status: number,
+    payload: Record<string, unknown>,
+  ) {
+    super(typeof payload.error === 'string' ? payload.error : 'pre-settlement check failed');
+    this.name = 'X402PreSettlementError';
+    this.status = status;
+    this.payload = payload;
+  }
 }
 
 type X402Env = Cloudflare.Env & {
@@ -268,6 +284,16 @@ export async function handleReceiptRequest(
     }
   } catch {
     return json({ error: 'Receipt signer unavailable; payment was not submitted for settlement' }, 503);
+  }
+
+  if (product.beforeSettlement) {
+    try {
+      await product.beforeSettlement();
+    } catch (error) {
+      if (error instanceof X402PreSettlementError) return json(error.payload, error.status);
+      console.error('[x402] pre-settlement reservation failed', error);
+      return json({ error: 'Pre-settlement reservation failed; payment was not submitted.' }, 503);
+    }
   }
 
   let settle: JsonRecord = {};
@@ -460,6 +486,7 @@ export interface X402GateOptions {
   merchantUrl?: string;
   context?: string;
   expectedPublicKey?: string;
+  beforeSettlement?: () => Promise<void>;
 }
 
 export type X402GateResult =
@@ -509,6 +536,7 @@ export async function withX402(
     merchantUrl: options.merchantUrl,
     loop: `paid-town-${options.action}`,
     context: options.context,
+    beforeSettlement: options.beforeSettlement,
   });
   if (response.status !== 200) return { settled: false, response };
 

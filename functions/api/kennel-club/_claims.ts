@@ -309,6 +309,35 @@ async function reserveClaim(
     : { row: null, reason: 'daily-cap-reached' };
 }
 
+export async function reserveKennelClubClaimCapacity(options: {
+  db: D1Database;
+  userId: string;
+  tokenId: number;
+  cap: number;
+}): Promise<{ ok: true; claimId: string } | { ok: false; reason: string }> {
+  const reservation = await reserveClaim(options.db, options.userId, options.tokenId, options.cap);
+  if (!reservation.row || reservation.reason) {
+    return { ok: false, reason: reservation.reason ?? 'claim-unavailable' };
+  }
+  return { ok: true, claimId: reservation.row.id };
+}
+
+export async function releaseKennelClubClaimCapacity(
+  db: D1Database,
+  claimId: string,
+): Promise<boolean> {
+  const released = await db.prepare(`
+    DELETE FROM claims
+    WHERE id = ? AND status = 'failed'
+      AND EXISTS (
+        SELECT 1 FROM kennel_claim_jobs
+        WHERE claim_id = claims.id AND state = 'reserved' AND operation_id IS NULL
+      )
+    RETURNING id
+  `).bind(claimId).first<{ id: string }>();
+  return released?.id === claimId;
+}
+
 function deliveredTarget(address: string | null): 'held' | 'delivered' {
   return address ? 'delivered' : 'held';
 }
@@ -509,6 +538,7 @@ export async function claimKennelClubDog(options: {
   user: PointCastUser;
   tokenId: number;
   chainFactory?: ClaimChainFactory;
+  reservedClaimId?: string;
 }): Promise<{
   ok: boolean;
   configured: boolean;
@@ -526,7 +556,29 @@ export async function claimKennelClubDog(options: {
   if (!env.AUTH_DB) return { ok: false, configured: claimConfigured(env), reason: 'claim-database-not-bound' };
   if (!claimConfigured(env)) return { ok: false, configured: false, reason: 'claim-wallet-not-configured' };
   const cap = claimDailyCap(env.KENNEL_CLUB_CLAIM_DAILY_CAP);
-  const reservation = await reserveClaim(env.AUTH_DB, user.userId, tokenId, cap);
+  const preReserved = options.reservedClaimId
+    ? await existingClaim(env.AUTH_DB, user.userId, tokenId)
+    : null;
+  if (options.reservedClaimId && (!preReserved || preReserved.id !== options.reservedClaimId)) {
+    return { ok: false, configured: true, reason: 'claim-reservation-invalid' };
+  }
+  if (preReserved && (preReserved.status === 'held' || preReserved.status === 'delivered')) {
+    return {
+      ok: true,
+      configured: true,
+      claim: {
+        id: preReserved.id,
+        tokenId,
+        sitting: dogName(tokenId),
+        status: preReserved.status,
+        opHash: preReserved.op_hash ?? '',
+        deliveredTo: preReserved.delivered_to,
+      },
+    };
+  }
+  const reservation = preReserved
+    ? { row: preReserved }
+    : await reserveClaim(env.AUTH_DB, user.userId, tokenId, cap);
   if (!reservation.row) return { ok: false, configured: true, reason: reservation.reason ?? 'claim-unavailable' };
   if (reservation.reason) {
     return { ok: false, configured: true, reason: reservation.reason };
