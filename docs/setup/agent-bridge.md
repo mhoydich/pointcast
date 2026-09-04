@@ -70,6 +70,19 @@ Codex coordinates from the repo:
 - Reviews Claude PRs before publish.
 - Keeps live publishing gated by Mike approval.
 
+### Local plates MCP server (2026-09-04)
+
+`scripts/mcp/plates.mjs` is a stdio MCP server that both Claude Code and
+Codex can load from the repo root. It generates poster plates with OpenAI's
+image model and writes them straight into `public/images/`, so Krea and
+Higgsfield are no longer in the loop for artwork. Claude Code picks it up
+from `.mcp.json`; Codex needs the block in `scripts/mcp/README.md` added to
+`~/.codex/config.toml`. `OPENAI_API_KEY` lives in `.env.local`. It also
+carries `codex_exec`, which runs the Codex CLI on a brief when it is
+installed, so a local Claude Code session can hand Codex a review without
+leaving the terminal. Tools: `plate_generate`, `plate_inspect`, `plate_list`,
+`codex_exec`.
+
 ## Handoff Flow
 
 ```text

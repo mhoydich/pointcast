@@ -1,0 +1,260 @@
+---
+/**
+ * /faucet — the PointCast faucet. One HELLO a day.
+ *
+ * A 2018-style spigot with 2026 onboarding. HELLO is an ERC-20 Mike
+ * deployed on Ethereum mainnet in 2019 (see /eth-legacy). It has no value.
+ * You claim it with a PointCast account, PointCast holds the drip in a
+ * ledger, and whenever you like you paste an Ethereum address and the
+ * spigot wallet sends everything you are owed in one transaction.
+ *
+ * Nobody signs anything on this page. That is the whole interface.
+ * Live state comes from /api/faucet/hello at request time; the prerendered
+ * markup is the no-JS fallback.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import FaucetDesk from '../../components/FaucetDesk.astro';
+import {
+  FAUCET_CANONICAL,
+  FAUCET_DEFAULT_DAILY_CAP,
+  FAUCET_STEPS,
+  explorerTokenUrl,
+  getFaucet,
+  shortAddress,
+} from '../../lib/faucet';
+
+const faucet = getFaucet('hello')!;
+const title = 'The Faucet · one HELLO a day';
+const description = 'Claim one HELLO a day with a PointCast account. No wallet, nothing to sign. Paste an Ethereum address whenever you like and the spigot sends what you are owed and pays the gas.';
+const poster = '/images/faucet/hello-poster.png';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': FAUCET_CANONICAL,
+  name: title,
+  description,
+  image: `https://pointcast.xyz${poster}`,
+  about: {
+    '@type': 'Thing',
+    name: faucet.name,
+    identifier: faucet.contract,
+    url: explorerTokenUrl(faucet),
+  },
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/faucet/hello-og.png" imageWidth={1200} imageHeight={630} themeColor={faucet.color} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/faucet/hello.json', title: 'Faucet JSON' }]}>
+  <main class="faucet" data-faucet-page style={`--spigot:${faucet.color}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a><span>/</span><a href="/faucet">The Faucet</a><span>/</span><span>HELLO</span><a href="/faucet/hello.json">JSON</a>
+    </nav>
+
+    <header class="mast">
+      <p class="kicker">The Faucet · Ethereum mainnet · one drip a day · resets midnight Pacific</p>
+      <h1>One <em>HELLO</em><br />a day.</h1>
+      <p>{faucet.greeting} Mike deployed it in {faucet.deployedYear}, it has no value, and it never will. Sign in, claim, come back tomorrow. When you want it somewhere, paste an address. Nothing to sign.</p>
+    </header>
+
+    <section class="hero" aria-labelledby="today-title">
+      <figure class="hero__plate">
+        <img src="/images/faucet/hello-poster.webp" alt="A monochrome screen-print poster: HELLO stacked four times in deep ink blue on cream paper with registration drift, four figures resting and stretching at the edge of a pool below, a palm-frond shadow across the sunlit wall." width="1024" height="1536" fetchpriority="high" />
+        <figcaption>HELLO · {shortAddress(faucet.contract)} · deployed {faucet.deployedYear} · <a href={explorerTokenUrl(faucet)} target="_blank" rel="noopener">etherscan ↗</a></figcaption>
+      </figure>
+      <div class="hero__desk">
+        <p class="kicker">Today · <span data-faucet-day>America/Los_Angeles</span></p>
+        <h2 id="today-title">Claim it.</h2>
+        <p class="hero__sub">{faucet.dailyAmount} {faucet.ticker} per account per day · {FAUCET_DEFAULT_DAILY_CAP} a day for the whole town</p>
+        <div class="hero__claim">
+          <FaucetDesk faucet={faucet} returnTo="/faucet/hello" />
+        </div>
+        <p class="hero__aside">Want an address of your own first? <a href="/me?link=wallet">Any wallet you already have works; the desk just needs the 0x.</a></p>
+      </div>
+    </section>
+
+    <section class="steps" aria-labelledby="steps-title">
+      <div class="steps__head">
+        <div><p class="kicker">What actually happens</p><h2 id="steps-title">Four steps, <em>zero signatures.</em></h2></div>
+        <a href="/eth-legacy">The 2019 tokens →</a>
+      </div>
+      <ol class="steps__grid">
+        {FAUCET_STEPS.map((step) => (
+          <li>
+            <span class="steps__n">{String(step.n).padStart(2, '0')}</span>
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))}
+      </ol>
+      <p class="steps__foot">
+        The only thing that touches Ethereum is step four, and the spigot wallet does it, not you. Every send has an Etherscan receipt on this page. The ledger is a table in PointCast’s database, the same one that holds your sign-in, and every line of it is shown to you here.
+      </p>
+    </section>
+
+    <section class="live" aria-labelledby="live-title">
+      <header class="live__head">
+        <div><p class="kicker">The spigot, live</p><h2 id="live-title">What the wallet <em>is holding.</em></h2></div>
+        <a href="/api/faucet/hello">Live JSON →</a>
+      </header>
+      <dl class="live__counts">
+        <div><dt>Drips claimed today</dt><dd data-live-claimed>—</dd></div>
+        <div><dt>Drips left today</dt><dd data-live-remaining>—</dd></div>
+        <div><dt>Owed, town-wide</dt><dd data-live-held>—</dd></div>
+        <div><dt>Delivered, ever</dt><dd data-live-delivered>—</dd></div>
+      </dl>
+      <dl class="live__spigot">
+        <div><dt>Spigot wallet</dt><dd data-live-spigot-address>not funded yet</dd></div>
+        <div><dt>{faucet.ticker} in the spigot</dt><dd data-live-spigot-balance>—</dd></div>
+        <div><dt>Gas</dt><dd data-live-spigot-gas>—</dd></div>
+      </dl>
+      <div class="ticker">
+        <p class="kicker">Last twelve claims · first names only</p>
+        <ol data-live-ticker><li>Waiting for the desk…</li></ol>
+      </div>
+    </section>
+
+    <section class="why" aria-labelledby="why-title">
+      <figure class="why__plate">
+        <img src="/images/faucet/hello-poster-fish.webp" alt="The same HELLO poster with one flat cut-paper fish swimming through the open right third, four figures at the pool edge below." width="1024" height="1536" loading="lazy" decoding="async" />
+        <figcaption>The fish plate · the same greeting, one visitor</figcaption>
+      </figure>
+      <div class="why__copy">
+      <p class="kicker">Why a faucet</p>
+      <h2 id="why-title">Faucets were the <em>front door</em> once.</h2>
+      <p>In 2018 a faucet was how you got your first coins: a captcha, a timer, a drip. It asked nothing of you. This one asks even less, because the account you already have is the ticket and the chain part is optional and always will be. HELLO is the first spigot. The other {faucet.deployedYear} tokens on the <a href="/eth-legacy">legacy shelf</a> are candidates for the next ones, each tied to something you did in town rather than something you bought.</p>
+      </div>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  type LiveState = {
+    day: string;
+    claims: { claimedToday: number; remainingToday: number; heldTotal: number; deliveredTotal: number; recent: Array<{ firstName: string; status: string }> };
+    spigot: { address: string; tokenBalance: number; ethBalance: string; lowGas: boolean; lowGasWarning: boolean } | null;
+  };
+
+  function text(root: HTMLElement, sel: string, value: string): void {
+    const node = root.querySelector<HTMLElement>(sel);
+    if (node) node.textContent = value;
+  }
+
+  async function refresh(root: HTMLElement): Promise<void> {
+    try {
+      const response = await fetch('/api/faucet/hello', { cache: 'no-store', credentials: 'include' });
+      if (!response.ok) throw new Error('live');
+      const state = await response.json() as LiveState;
+      text(root, '[data-faucet-day]', `${state.day} · America/Los_Angeles`);
+      text(root, '[data-live-claimed]', String(state.claims.claimedToday));
+      text(root, '[data-live-remaining]', String(state.claims.remainingToday));
+      text(root, '[data-live-held]', String(state.claims.heldTotal));
+      text(root, '[data-live-delivered]', String(state.claims.deliveredTotal));
+      if (state.spigot) {
+        const address = root.querySelector<HTMLElement>('[data-live-spigot-address]');
+        if (address) {
+          const link = document.createElement('a');
+          link.href = `https://etherscan.io/address/${state.spigot.address}`;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = `${state.spigot.address.slice(0, 6)}…${state.spigot.address.slice(-4)} ↗`;
+          address.replaceChildren(link);
+        }
+        text(root, '[data-live-spigot-balance]', state.spigot.tokenBalance.toLocaleString('en-US'));
+        const gas = state.spigot.lowGas ? ' · low' : state.spigot.lowGasWarning ? ' · getting low' : '';
+        text(root, '[data-live-spigot-gas]', `${Number(state.spigot.ethBalance).toFixed(4)} ETH${gas}`);
+      }
+      const ticker = root.querySelector<HTMLOListElement>('[data-live-ticker]');
+      if (ticker) {
+        const recent = state.claims.recent;
+        ticker.replaceChildren(...(recent.length ? recent : []).map((entry) => {
+          const item = document.createElement('li');
+          const who = document.createElement('strong');
+          who.textContent = entry.firstName;
+          const what = document.createElement('span');
+          what.textContent = entry.status === 'delivered' ? 'sent' : 'held';
+          item.append(who, what);
+          return item;
+        }));
+        if (!recent.length) {
+          const item = document.createElement('li');
+          item.textContent = 'No claims yet today. Be the first hello.';
+          ticker.replaceChildren(item);
+        }
+      }
+    } catch {
+      /* the prerendered dashes stay */
+    }
+  }
+
+  function mount(): void {
+    const root = document.querySelector<HTMLElement>('[data-faucet-page]');
+    if (!root) return;
+    void refresh(root);
+    window.addEventListener('pc:faucet-claim', () => void refresh(root));
+    window.addEventListener('pc:faucet-deliver', () => void refresh(root));
+  }
+  mount();
+  document.addEventListener('astro:page-load', mount);
+</script>
+
+<style>
+  .faucet { width: min(1180px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 90px; --spigot-wash: #eef3fa; }
+  .crumb, .kicker, figcaption, .hero__aside, .live dt, .live__spigot dd, .ticker, .steps__n { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .crumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; color: var(--pc-ink-muted); }
+  .crumb a:last-child { margin-left: auto; }
+  .mast { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .55fr); gap: 24px; align-items: end; border-top: 2px solid var(--pc-ink); padding: 20px 0 26px; }
+  .kicker { margin: 0 0 10px; color: var(--spigot); }
+  h1, h2 { margin: 0; font-weight: 400; letter-spacing: -.055em; line-height: .88; }
+  h1 { grid-column: 1; font-size: clamp(52px, 9vw, 116px); }
+  h1 em, h2 em { color: var(--spigot); font-style: normal; }
+  .mast > p:last-child { grid-column: 2; margin: 0; color: var(--pc-ink-soft); font-size: 16px; line-height: 1.5; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(330px, .95fr); border: 1.5px solid var(--pc-ink); }
+  .hero__plate { position: relative; min-height: 560px; margin: 0; background: #f3ecdc; }
+  .hero__plate img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .hero__plate figcaption { position: absolute; left: 12px; bottom: 12px; padding: 6px 8px; background: rgba(255,255,255,.88); color: var(--pc-ink); }
+  .hero__plate figcaption a { color: inherit; }
+  .hero__desk { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: clamp(24px, 5vw, 60px); border-left: 1.5px solid var(--pc-ink); background: var(--spigot); color: #fff; }
+  .hero__desk .kicker { color: rgba(255,255,255,.72); }
+  .hero__desk h2 { font-size: clamp(56px, 8vw, 100px); }
+  .hero__sub { margin: 14px 0 0; font-size: 15px; line-height: 1.4; color: rgba(255,255,255,.88); }
+  .hero__claim { margin-top: 28px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.36); }
+  .hero__aside { margin: 18px 0 0; color: rgba(255,255,255,.72); text-transform: none; letter-spacing: 0; font-size: 12px; }
+  .hero__aside a { color: #fff; }
+  .steps, .live, .why { margin-top: 46px; }
+  .steps__head, .live__head { display: flex; justify-content: space-between; align-items: end; gap: 16px; padding-bottom: 16px; border-bottom: 2px solid var(--pc-ink); }
+  .steps__head a, .live__head a { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--pc-ink); white-space: nowrap; }
+  h2 { font-size: clamp(34px, 5vw, 60px); }
+  .steps__grid { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0; list-style: none; border-left: 1px solid var(--pc-ink); }
+  .steps__grid li { padding: 18px 16px 22px; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); background: #fff; }
+  .steps__n { display: block; color: var(--spigot); }
+  .steps__grid h3 { margin: 14px 0 8px; font-size: 22px; font-weight: 400; letter-spacing: -.03em; line-height: 1; }
+  .steps__grid p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--pc-ink-soft); }
+  .steps__foot { max-width: 760px; margin: 18px 0 0; font-size: 15px; line-height: 1.55; color: var(--pc-ink-soft); }
+  .live__counts, .live__spigot { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; border-left: 1px solid var(--pc-ink); }
+  .live__spigot { grid-template-columns: repeat(3, 1fr); }
+  .live__counts div, .live__spigot div { min-height: 110px; padding: 14px; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); background: var(--spigot-wash); }
+  .live dt { color: var(--spigot); }
+  .live__counts dd { margin: 20px 0 0; font-size: 54px; line-height: 1; }
+  .live__spigot dd { margin: 20px 0 0; font-size: 14px; letter-spacing: .04em; }
+  .live__spigot dd a { color: var(--pc-ink); }
+  .ticker { padding: 18px 0; border-bottom: 1px solid var(--pc-ink); }
+  .ticker ol { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .ticker li { display: flex; gap: 7px; padding: 7px 9px; border: 1px solid #c9d6e8; background: #fff; }
+  .ticker strong { color: var(--spigot); font-weight: 500; }
+  .ticker span::before { content: '→ '; color: var(--pc-ink-muted); }
+  .why { display: grid; grid-template-columns: minmax(220px, .5fr) minmax(0, 1fr); gap: 28px; align-items: start; max-width: 1180px; }
+  .why__plate { margin: 0; border: 1.5px solid var(--pc-ink); background: #f3ecdc; }
+  .why__plate img { display: block; width: 100%; height: auto; }
+  .why__plate figcaption { padding: 8px 10px; border-top: 1px solid var(--pc-ink); }
+  .why__copy { max-width: 760px; }
+  .why__copy p:last-child { margin: 16px 0 0; font-size: 16px; line-height: 1.55; color: var(--pc-ink-soft); }
+  @media (max-width: 900px) { .steps__grid, .live__counts { grid-template-columns: repeat(2, 1fr); } .live__spigot { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) {
+    .faucet { width: min(100% - 20px, 1180px); }
+    .mast { grid-template-columns: 1fr; }
+    .mast > p:last-child { grid-column: 1; }
+    .hero { grid-template-columns: 1fr; }
+    .hero__plate { min-height: 0; }
+    .hero__desk { border-left: 0; border-top: 1.5px solid var(--pc-ink); }
+    .why { grid-template-columns: 1fr; }
+  }
+</style>

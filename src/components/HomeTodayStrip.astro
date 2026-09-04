@@ -1,0 +1,125 @@
+---
+/**
+ * HomeTodayStrip — the reason the front door is different from yesterday.
+ *
+ * One line of real El Segundo weather (from /api/weather, ten-minute edge
+ * cache) and the daily rounds (from /api/today, decided at request time).
+ * The prerendered markup is the no-JS fallback: the five rooms as plain
+ * links. With JS, the weather fills in and, for a signed-in account, the
+ * account-keyed rounds show as done or not.
+ */
+const ROUNDS = [
+  { id: 'dog', label: 'Today’s dog', href: '/kennel-club' },
+  { id: 'hello', label: 'Today’s HELLO', href: '/faucet/hello' },
+  { id: 'bench', label: 'The bench', href: '/bench' },
+  { id: 'block', label: 'Today’s block', href: '/today' },
+  { id: 'race', label: 'The race', href: '/race' },
+] as const;
+---
+
+<div class="today-strip" data-today-strip>
+  <p class="today-strip__weather" data-today-weather aria-live="polite">
+    <span class="today-strip__label">Today</span>
+    <span data-today-weather-line>El Segundo · reading the sky…</span>
+  </p>
+  <ol class="today-strip__rounds" data-today-rounds aria-label="Daily rounds">
+    {ROUNDS.map((round) => (
+      <li data-round={round.id}>
+        <a href={round.href}><span class="today-strip__box" aria-hidden="true"></span>{round.label}</a>
+      </li>
+    ))}
+  </ol>
+  <p class="today-strip__foot" data-today-foot>Five small rooms that reset at midnight Pacific. <a href="/api/auth/google?returnTo=/">Sign in</a> and the strip keeps your rounds.</p>
+</div>
+
+<script>
+  type Weather = { ok: boolean; tempF?: number; condition?: string; sunset?: string | null };
+  type Today = { ok: boolean; date: string; signedIn: boolean; rounds: Array<{ id: string; label: string; href: string; done: boolean | null }>; done: number; tracked: number };
+
+  const EL_SEGUNDO = { lat: 33.92, lng: -118.42 };
+
+  function sunsetLabel(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const match = /T(\d{2}):(\d{2})/.exec(iso);
+    if (!match) return '';
+    const hours = Number(match[1]);
+    const suffix = hours >= 12 ? 'pm' : 'am';
+    const twelve = hours % 12 === 0 ? 12 : hours % 12;
+    return `sunset ${twelve}:${match[2]} ${suffix}`;
+  }
+
+  async function paintWeather(root: HTMLElement): Promise<void> {
+    const line = root.querySelector<HTMLElement>('[data-today-weather-line]');
+    if (!line) return;
+    try {
+      const response = await fetch(`/api/weather?lat=${EL_SEGUNDO.lat}&lng=${EL_SEGUNDO.lng}&label=El%20Segundo`, { cache: 'default' });
+      if (!response.ok) throw new Error('weather');
+      const weather = await response.json() as Weather;
+      if (!weather.ok) throw new Error('weather');
+      const parts = ['El Segundo', `${weather.tempF}°F`, weather.condition ?? '', sunsetLabel(weather.sunset)].filter(Boolean);
+      line.textContent = parts.join(' · ');
+    } catch {
+      line.textContent = 'El Segundo · sky unavailable right now';
+    }
+  }
+
+  async function paintRounds(root: HTMLElement): Promise<void> {
+    try {
+      const response = await fetch('/api/today', { cache: 'no-store', credentials: 'include' });
+      if (!response.ok) throw new Error('today');
+      const today = await response.json() as Today;
+      for (const round of today.rounds) {
+        const item = root.querySelector<HTMLElement>(`[data-round="${round.id}"]`);
+        if (!item) continue;
+        const link = item.querySelector('a');
+        if (link) link.textContent = '';
+        const box = document.createElement('span');
+        box.className = 'today-strip__box';
+        box.setAttribute('aria-hidden', 'true');
+        if (round.done === true) { item.dataset.done = 'true'; box.textContent = '✓'; }
+        else if (round.done === false) { item.dataset.done = 'false'; }
+        else { item.dataset.done = 'untracked'; }
+        link?.append(box, round.label);
+      }
+      const foot = root.querySelector<HTMLElement>('[data-today-foot]');
+      if (foot) {
+        foot.textContent = today.signedIn
+          ? `${today.done} of ${today.tracked} tracked rounds done today · resets at midnight Pacific`
+          : '';
+        if (!today.signedIn) {
+          foot.append('Five small rooms that reset at midnight Pacific. ');
+          const signIn = document.createElement('a');
+          signIn.href = '/api/auth/google?returnTo=/';
+          signIn.textContent = 'Sign in';
+          foot.append(signIn, ' and the strip keeps your rounds.');
+        }
+      }
+    } catch {
+      /* the prerendered links stay */
+    }
+  }
+
+  function mount(): void {
+    const root = document.querySelector<HTMLElement>('[data-today-strip]');
+    if (!root || root.dataset.ready === 'true') return;
+    root.dataset.ready = 'true';
+    void paintWeather(root);
+    void paintRounds(root);
+  }
+  mount();
+  document.addEventListener('astro:page-load', mount);
+</script>
+
+<style>
+  .today-strip { margin-top: 18px; padding-top: 14px; border-top: 1px solid #111; }
+  .today-strip__weather { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #111; }
+  .today-strip__label { padding: 2px 6px; background: #111; color: #fff; }
+  .today-strip__rounds { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+  .today-strip__rounds a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; color: #111; text-decoration: none; background: #fff; }
+  .today-strip__box { display: inline-grid; place-items: center; width: 12px; height: 12px; border: 1px solid #111; font-size: 9px; line-height: 1; }
+  .today-strip__rounds [data-done="true"] a { background: #111; color: #fff; }
+  .today-strip__rounds [data-done="true"] .today-strip__box { border-color: #fff; }
+  .today-strip__rounds [data-done="untracked"] .today-strip__box { border-style: dashed; }
+  .today-strip__foot { margin: 10px 0 0; font: 400 11px var(--pc-font-sans, system-ui); line-height: 1.4; color: #5f5e5a; }
+  .today-strip__foot a { color: #111; }
+</style>
