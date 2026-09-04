@@ -1,0 +1,62 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { AGENT_CAPABILITIES } from '../lib/agent-capabilities.ts';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'PointCast Agent Capabilities',
+  url: 'https://pointcast.xyz/capabilities',
+  description: 'The compact, probed contract for agent transactions, receipts, identity, and recovery at PointCast.',
+};
+---
+
+<BlockLayout title="Agent capabilities" description="The small current contract for agents transacting with PointCast." jsonLd={jsonLd}>
+  <main class="cap-page">
+    <nav><a href="/for-agents">← Five-step guide</a> · <a href="/api/capabilities">Raw JSON</a></nav>
+    <header>
+      <p class="eyebrow">POINTCAST · AGENT CONTRACT · V1</p>
+      <h1>Small enough to read before acting.</h1>
+      <p>Every transactional, identity, receipt, verification, and recovery action is listed here. Readiness comes from safe probes and is cached for sixty seconds; a quote-only probe never spends money.</p>
+    </header>
+
+    <p id="summary" aria-live="polite">Loading current readiness…</p>
+    <div class="cards" id="capabilities">
+      {AGENT_CAPABILITIES.map((capability) => (
+        <article data-id={capability.id}>
+          <div class="row"><code>{capability.method} {capability.path}</code><span data-state>checking</span></div>
+          <h2>{capability.id}</h2>
+          <p>{capability.sideEffects.length ? capability.sideEffects.join('; ') : 'Read-only.'}</p>
+          <dl>
+            <div><dt>Auth</dt><dd>{capability.auth}</dd></div>
+            <div><dt>Cost</dt><dd>{capability.cost.type === 'free' ? 'free' : `${capability.cost.amount} ${capability.cost.currency}`}</dd></div>
+            <div><dt>Schema</dt><dd><a href={capability.schema}>JSON Schema</a></dd></div>
+          </dl>
+          <small data-observed>Not yet observed.</small>
+        </article>
+      ))}
+    </div>
+  </main>
+
+  <script>
+    fetch('/api/capabilities')
+      .then((response) => response.json())
+      .then((index) => {
+        let available = 0;
+        for (const capability of index.capabilities || []) {
+          const card = document.querySelector(`[data-id="${CSS.escape(capability.id)}"]`);
+          if (!card) continue;
+          card.querySelector('[data-state]').textContent = capability.readiness.state;
+          card.querySelector('[data-state]').className = `is-${capability.readiness.state}`;
+          card.querySelector('[data-observed]').textContent = `${capability.readiness.detail} · ${capability.readiness.observedAt}`;
+          if (capability.readiness.state !== 'unavailable') available += 1;
+        }
+        document.querySelector('#summary').textContent = `${available}/${index.capabilityCount} available or safely quoteable · observed ${index.generatedAt}`;
+      })
+      .catch(() => { document.querySelector('#summary').textContent = 'Readiness index is unavailable.'; });
+  </script>
+
+  <style>
+    .cap-page{max-width:72rem;margin:0 auto;padding:2rem 1rem 5rem;color:#17211a}.cap-page nav{font:600 .8rem/1.4 monospace;text-transform:uppercase}.cap-page header{max-width:48rem;margin:5rem 0 3rem}.eyebrow{font:700 .75rem/1.4 monospace;letter-spacing:.14em;color:#657064}.cap-page h1{font-size:clamp(2.8rem,7vw,6rem);line-height:.92;letter-spacing:-.055em;margin:.4rem 0 1.5rem}.cap-page header p:last-child{font-size:1.15rem;line-height:1.6}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(19rem,1fr));gap:1rem}.cards article{border:1px solid #bdc6bc;border-radius:.45rem;padding:1rem;background:#f7f5ee}.row{display:flex;justify-content:space-between;gap:1rem;align-items:start}.row code{font-size:.72rem;overflow-wrap:anywhere}.row span{font:700 .64rem/1.2 monospace;text-transform:uppercase;padding:.25rem .4rem;border:1px solid currentColor;border-radius:999px}.is-live{color:#18733b}.is-degraded{color:#9a6200}.is-unavailable{color:#a52828}.cards h2{font-size:1.1rem;margin:1.4rem 0 .5rem}.cards p{min-height:3.3rem;color:#4b554d}.cards dl{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:1rem 0}.cards dt{font:700 .62rem/1.3 monospace;text-transform:uppercase;color:#687168}.cards dd{margin:.2rem 0 0;font-size:.76rem;overflow-wrap:anywhere}.cards small{display:block;border-top:1px solid #d8ddd5;padding-top:.75rem;color:#687168;line-height:1.4}
+  </style>
+</BlockLayout>

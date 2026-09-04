@@ -11,7 +11,13 @@ import {
   settlementWasAmbiguous,
   updatePaidIntent,
 } from '../../_lib/paid-town-actions.ts';
-import { shortEvmAddress, withX402, X402PreSettlementError } from '../../_lib/x402-gate.ts';
+import {
+  finalizeX402Receipt,
+  shortEvmAddress,
+  withX402,
+  x402TransactionHash,
+  X402PreSettlementError,
+} from '../../_lib/x402-gate.ts';
 
 const QUESTION_CAP = 280;
 
@@ -60,6 +66,9 @@ export async function handleAgentBench(
       resourceDescription: 'Ask the PointCast bench one question (280 characters maximum).',
       merchantUrl: 'https://pointcast.xyz/bench',
       context: 'Paid town action: an agent asks one question on the shared PointCast bench.',
+      requestHash: begun.kind === 'quote' ? null : begun.intent.request_hash,
+      resourceId: intentId,
+      agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
       ...(intentId ? {
         beforeSettlement: async () => {
           if (!await acquirePaidSettlement(env.AUTH_DB!, intentId)) {
@@ -81,6 +90,8 @@ export async function handleAgentBench(
     }
     if (intentId) {
       await updatePaidIntent(env.AUTH_DB, intentId, 'settled', {
+        txHash: x402TransactionHash(gate.receipt),
+        agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
         settlement: {
           receipt: gate.receipt,
           receiptHash: gate.receiptHash,
@@ -106,21 +117,30 @@ export async function handleAgentBench(
   const stored = await handleBenchPost(benchRequest, env, { skipRateLimit: true });
   const bench = await stored.json().catch(() => ({ ok: false, error: 'unreadable bench response' }));
   if (!stored.ok) {
-    const result = {
+    const actionResult = {
       ok: false,
       actionCompleted: false,
       actionId: intentId,
       error: 'Payment settled but the bench could not store the question.',
       bench,
-      receipt: gate.receipt,
-      split: gate.split,
     };
-    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', { result, error: result.error });
+    gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+    const result = { ...actionResult, receipt: gate.receipt, split: gate.split };
+    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', {
+      settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
+      result,
+      error: result.error,
+    });
     return paidIntentJson(intentId, result, 502, gate.response.headers);
   }
 
-  const result = { ok: true, action: 'bench', actionId: intentId, bench, receipt: gate.receipt, split: gate.split };
-  await updatePaidIntent(env.AUTH_DB, intentId, 'succeeded', { result });
+  const actionResult = { ok: true, action: 'bench', actionId: intentId, bench };
+  gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+  const result = { ...actionResult, receipt: gate.receipt, split: gate.split };
+  await updatePaidIntent(env.AUTH_DB, intentId, 'succeeded', {
+    settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
+    result,
+  });
   return paidIntentJson(intentId, result, 200, gate.response.headers);
 }
 

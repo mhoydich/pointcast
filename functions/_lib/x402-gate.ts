@@ -15,7 +15,9 @@ import {
   X402_NETWORK,
   X402_PERMIT2,
   X402_PROXY,
+  X402_RECEIPT_SPEC,
   X402_SCHEME,
+  X402_SPLIT_POLICY_VERSION,
   X402_SPEC,
   X402_TREASURY_AGENT_ID,
   X402_TREASURY_PUBLIC_KEY,
@@ -86,7 +88,82 @@ export interface X402ReceiptProduct {
   loop?: string;
   context?: string;
   action?: string;
+  requestHash?: string | null;
+  resourceId?: string | null;
+  agentId?: string | null;
   beforeSettlement?: () => Promise<void>;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function receiptSigningKey(env: X402Env, expectedPublicKey: string): Promise<CryptoKey> {
+  const signingKey = await importReceiptPrivateKey(env.X402_RECEIPT_SK || '');
+  const signerId = env.X402_RECEIPT_AGENT_ID || X402_TREASURY_AGENT_ID;
+  if (signerId !== X402_TREASURY_AGENT_ID) throw new Error('receipt signer id does not match the published key');
+  const keyCheck = 'pointcast.x402/receipt-key-check/v1\n';
+  const keyCheckSignature = await signCanonicalPayload(keyCheck, signingKey);
+  if (!await verifyCanonicalPayload(keyCheck, keyCheckSignature, expectedPublicKey)) {
+    throw new Error('receipt private key does not match the published public key');
+  }
+  return signingKey;
+}
+
+async function retainReceipt(env: Pick<X402Env, 'VISITS'>, transactionHash: string, receipt: JsonRecord): Promise<void> {
+  if (!env.VISITS) return;
+  const normalized = transactionHash.toLowerCase();
+  await env.VISITS.put(`x402:receipt:${normalized}`, JSON.stringify(receipt), { expirationTtl: 60 * 60 * 24 * 365 });
+}
+
+export async function getReceiptByTransaction(
+  env: Pick<X402Env, 'VISITS'>,
+  transactionHash: string,
+): Promise<JsonRecord | null> {
+  if (!env.VISITS) return null;
+  const normalized = transactionHash.toLowerCase();
+  const found = await env.VISITS.get(`x402:receipt:${normalized}`, 'json');
+  if (isJsonRecord(found)) return found;
+  if (normalized !== transactionHash) {
+    const legacy = await env.VISITS.get(`x402:receipt:${transactionHash}`, 'json');
+    if (isJsonRecord(legacy)) return legacy;
+  }
+  return null;
+}
+
+export async function finalizeX402Receipt(
+  env: X402Env,
+  receipt: JsonRecord,
+  actionResult: unknown,
+  resourceId: string | null,
+  expectedPublicKey = X402_TREASURY_PUBLIC_KEY,
+): Promise<JsonRecord> {
+  const signingKey = await receiptSigningKey(env, expectedPublicKey);
+  const finalized: JsonRecord = {
+    ...receipt,
+    receipt_schema: X402_RECEIPT_SPEC,
+    action_result: actionResult,
+    resource_id: resourceId,
+  };
+  delete finalized.receipt_payload;
+  delete finalized.receipt_signature;
+  const receiptPayload = buildCanonicalReceiptPayload(finalized);
+  finalized.receipt_payload = receiptPayload;
+  finalized.receipt_signature = {
+    alg: 'EdDSA', key_type: 'OKP', crv: 'Ed25519', kid: X402_TREASURY_AGENT_ID,
+    value: await signCanonicalPayload(receiptPayload, signingKey),
+  };
+  const settlement = isJsonRecord(finalized.settlement) ? finalized.settlement : {};
+  if (typeof settlement.tx === 'string') await retainReceipt(env, settlement.tx, finalized);
+  return finalized;
+}
+
+export function x402TransactionHash(receipt: JsonRecord): string | null {
+  const settlement = isJsonRecord(receipt.settlement) ? receipt.settlement : {};
+  return typeof settlement.tx === 'string' && /^0x[0-9a-fA-F]{64}$/u.test(settlement.tx)
+    ? settlement.tx.toLowerCase()
+    : null;
 }
 
 export class X402PreSettlementError extends Error {
@@ -161,7 +238,7 @@ export async function getRecentReceipts(
   const raw = await env.VISITS.get('x402:recent');
   const ids: string[] = raw ? JSON.parse(raw) : [];
   const recent: JsonRecord[] = (await Promise.all(
-    ids.slice(0, 50).map((id) => env.VISITS!.get(`x402:receipt:${id}`, 'json')),
+    ids.slice(0, 50).map((id) => env.VISITS!.get(`x402:receipt:${id.toLowerCase()}`, 'json')),
   )).filter((receipt: unknown): receipt is JsonRecord => isJsonRecord(receipt));
   return (action ? recent.filter((receipt) => receipt.action === action) : recent)
     .slice(0, Math.max(0, Math.min(limit, 50)));
@@ -274,14 +351,7 @@ export async function handleReceiptRequest(
 
   let signingKey: CryptoKey;
   try {
-    signingKey = await importReceiptPrivateKey(env.X402_RECEIPT_SK || '');
-    const signerId = env.X402_RECEIPT_AGENT_ID || X402_TREASURY_AGENT_ID;
-    if (signerId !== X402_TREASURY_AGENT_ID) throw new Error('receipt signer id does not match the published key');
-    const keyCheck = 'pointcast.x402/receipt-key-check/v1\n';
-    const keyCheckSignature = await signCanonicalPayload(keyCheck, signingKey);
-    if (!await verifyCanonicalPayload(keyCheck, keyCheckSignature, expectedPublicKey)) {
-      throw new Error('receipt private key does not match the published public key');
-    }
+    signingKey = await receiptSigningKey(env, expectedPublicKey);
   } catch {
     return json({ error: 'Receipt signer unavailable; payment was not submitted for settlement' }, 503);
   }
@@ -327,8 +397,8 @@ export async function handleReceiptRequest(
   const timestamp = new Date().toISOString();
   const blockId = `x402-${transactionHash.slice(2, 14)}`;
   const spend: JsonRecord = {
-    agent: 'external',
-    agent_id: null,
+    agent: product.agentId ? 'registered-instance' : 'external',
+    agent_id: product.agentId ?? null,
     loop: product.loop || 'x402',
     amount_usd: Number(required.amount) / 1e6,
     currency: 'usd',
@@ -348,6 +418,12 @@ export async function handleReceiptRequest(
     id: blockId,
     timestamp,
     type: 'RECEIPT',
+    receipt_schema: X402_RECEIPT_SPEC,
+    request_hash: product.requestHash || await sha256Hex(`${request.method}\n${url.pathname}\n`),
+    action_result: product.action ? { status: 'pending' } : { status: 'settled' },
+    resource_id: product.resourceId ?? (product.action ? null : transactionHash),
+    split_policy_version: X402_SPLIT_POLICY_VERSION,
+    agent_id: product.agentId ?? null,
     ...(product.action ? { action: product.action } : {}),
     spend: signedSpend,
     settlement: {
@@ -387,10 +463,11 @@ export async function handleReceiptRequest(
 
   if (env.VISITS) {
     try {
-      await env.VISITS.put(`x402:receipt:${transactionHash}`, JSON.stringify(receipt), { expirationTtl: 60 * 60 * 24 * 365 });
+      await retainReceipt(env, transactionHash, receipt);
       const raw = await env.VISITS.get('x402:recent');
       const ids: string[] = raw ? JSON.parse(raw) : [];
-      await env.VISITS.put('x402:recent', JSON.stringify([transactionHash, ...ids.filter((id) => id !== transactionHash)].slice(0, 50)));
+      const normalizedHash = transactionHash.toLowerCase();
+      await env.VISITS.put('x402:recent', JSON.stringify([normalizedHash, ...ids.filter((id) => id.toLowerCase() !== normalizedHash)].slice(0, 50)));
     } catch {
       // Public receipt retention is best-effort; settlement itself is already final.
     }
@@ -487,6 +564,9 @@ export interface X402GateOptions {
   context?: string;
   expectedPublicKey?: string;
   beforeSettlement?: () => Promise<void>;
+  requestHash?: string | null;
+  resourceId?: string | null;
+  agentId?: string | null;
 }
 
 export type X402GateResult =
@@ -537,6 +617,9 @@ export async function withX402(
     loop: `paid-town-${options.action}`,
     context: options.context,
     beforeSettlement: options.beforeSettlement,
+    requestHash: options.requestHash,
+    resourceId: options.resourceId,
+    agentId: options.agentId,
   });
   if (response.status !== 200) return { settled: false, response };
 

@@ -87,6 +87,14 @@ export async function verifyReceiptRequest(
       recognized: receiptSignature.kid === X402_TREASURY_AGENT_ID,
     },
     settled: signed.settlement,
+    contract: {
+      schema: signed.receipt_schema ?? 'pointcast.agent-payments/v1',
+      request_hash: signed.request_hash ?? null,
+      action_result: signed.action_result ?? null,
+      resource_id: signed.resource_id ?? null,
+      split_policy_version: signed.split_policy_version ?? null,
+      agent_id: signed.agent_id ?? null,
+    },
   }, result.valid ? 200 : 422);
 }
 

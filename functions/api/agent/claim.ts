@@ -22,7 +22,13 @@ import {
   settlementWasAmbiguous,
   updatePaidIntent,
 } from '../../_lib/paid-town-actions.ts';
-import { shortEvmAddress, withX402, X402PreSettlementError } from '../../_lib/x402-gate.ts';
+import {
+  finalizeX402Receipt,
+  shortEvmAddress,
+  withX402,
+  x402TransactionHash,
+  X402PreSettlementError,
+} from '../../_lib/x402-gate.ts';
 
 const CLAIM_ADDRESS = /^tz[12][1-9A-HJ-NP-Za-km-z]{33}$/;
 const FAILED_RETRY_DELAY_MS = 60_000;
@@ -111,6 +117,9 @@ export async function handleAgentClaim(
       resourceDescription: `Sponsor today's Kennel Club claim to ${to}. One per address per sitting.`,
       merchantUrl: 'https://pointcast.xyz/kennel-club',
       context: `Paid town action: an agent sponsors today's Kennel Club dog for ${to}.`,
+      requestHash: begun.kind === 'quote' ? null : begun.intent.request_hash,
+      resourceId: intentId,
+      agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
       ...(intentId ? {
         beforeSettlement: async () => {
           if (!await acquirePaidSettlement(env.AUTH_DB!, intentId)) {
@@ -153,6 +162,8 @@ export async function handleAgentClaim(
     if (intentId) {
       await updatePaidIntent(env.AUTH_DB, intentId, 'settled', {
         capacityKey,
+        txHash: x402TransactionHash(gate.receipt),
+        agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
         settlement: {
           receipt: gate.receipt,
           receiptHash: gate.receiptHash,
@@ -182,6 +193,7 @@ export async function handleAgentClaim(
       rail: 'x402',
       payer: shortEvmAddress(gate.payer),
       receiptHash: gate.receiptHash,
+      agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
     },
   };
   try {
@@ -192,15 +204,19 @@ export async function handleAgentClaim(
     `).bind(userId, JSON.stringify(storedActor), actor.createdAt).run();
   } catch (error) {
     console.error('[api/agent/claim] actor write failed after settlement', error);
-    const result = {
+    const actionResult = {
       ok: false,
       actionCompleted: false,
       actionId: intentId,
       error: 'Payment settled but the claim actor could not be recorded.',
-      receipt: gate.receipt,
-      split: gate.split,
     };
-    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', { result, error: result.error });
+    gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+    const result = { ...actionResult, receipt: gate.receipt, split: gate.split };
+    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', {
+      settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
+      result,
+      error: result.error,
+    });
     return paidIntentJson(intentId, result, 502, gate.response.headers);
   }
 
@@ -217,33 +233,37 @@ export async function handleAgentClaim(
       || result.reason === 'daily-cap-reached'
       ? 409
       : 503;
-    const responseBody = {
+    const actionResult = {
       ok: false,
       actionCompleted: false,
       actionId: intentId,
       to,
       claim: result,
-      receipt: gate.receipt,
-      split: gate.split,
     };
+    gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+    const responseBody = { ...actionResult, receipt: gate.receipt, split: gate.split };
     await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', {
+      settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
       result: responseBody,
       error: result.reason ?? 'claim-action-failed',
     });
     return paidIntentJson(intentId, responseBody, status, gate.response.headers);
   }
 
-  const responseBody = {
+  const actionResult = {
     ok: true,
     action: 'claim',
     actionId: intentId,
     to,
     actor: { payer: shortEvmAddress(gate.payer), receiptHash: gate.receiptHash },
     claim: result.claim,
-    receipt: gate.receipt,
-    split: gate.split,
   };
-  await updatePaidIntent(env.AUTH_DB, intentId, 'succeeded', { result: responseBody });
+  gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+  const responseBody = { ...actionResult, receipt: gate.receipt, split: gate.split };
+  await updatePaidIntent(env.AUTH_DB, intentId, 'succeeded', {
+    settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
+    result: responseBody,
+  });
   return paidIntentJson(intentId, responseBody, 200, gate.response.headers);
 }
 

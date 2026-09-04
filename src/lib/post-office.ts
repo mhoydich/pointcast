@@ -40,6 +40,7 @@ export type PostOfficeAliasRow = {
   forward_target: string;
   owner: string;
   receipt_hash: string;
+  agent_id?: string | null;
   created_at: string;
   renewed_at: string;
   expires_at: string;
@@ -151,6 +152,7 @@ export function publicAlias(row: PostOfficeAliasRow, now = new Date()) {
     forwardedCount: Number(row.forwarded_count) || 0,
     receiptHash: row.receipt_hash,
     receiptHashShort: row.receipt_hash.slice(0, 12),
+    agentId: row.agent_id ?? null,
   };
 }
 

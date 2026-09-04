@@ -16,12 +16,14 @@ import {
   type PostOfficeAliasRow,
 } from '../../../src/lib/post-office.ts';
 import { handleReceiptRequest } from '../x402/receipt.ts';
+import { finalizeX402Receipt } from '../../_lib/x402-gate.ts';
+import { hashAgentActionRequest, verifyAgentRequest } from '../../_lib/agent-identity.ts';
 
 const MAX_BODY_BYTES = 16_384;
 const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Payment-Signature',
+  'Access-Control-Allow-Headers': 'Content-Type, Payment-Signature, PointCast-Agent-Id, PointCast-Agent-Timestamp, PointCast-Agent-Signature',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Expose-Headers': 'Payment-Required, X-Payment-Response, X-Facilitator-Url',
   'Cache-Control': 'no-store',
@@ -97,11 +99,14 @@ export async function handleAliasRequest(
   }
 
   const existing = await env.AUTH_DB.prepare(`
-    SELECT name, forward_kind, forward_target, owner, receipt_hash,
+    SELECT name, forward_kind, forward_target, owner, receipt_hash, agent_id,
            created_at, renewed_at, expires_at, forwarded_count, status
     FROM aliases WHERE name = ? LIMIT 1
   `).bind(input.name).first<PostOfficeAliasRow>();
   const paymentHeader = request.headers.get('Payment-Signature') || request.headers.get('payment-signature');
+  const requestHash = await hashAgentActionRequest('post-office-alias', input);
+  const identity = await verifyAgentRequest(env.AUTH_DB, request, requestHash, 'post-office:alias', now);
+  if (identity.response) return identity.response;
 
   let payer: string | null = null;
   if (paymentHeader) {
@@ -124,6 +129,9 @@ export async function handleAliasRequest(
     merchantUrl: POST_OFFICE_PAGE,
     loop: 'post-office-alias',
     context: `x402 v2 payment for the ${aliasAddress(input.name)} forwarding-registry alias; no mailbox or stored mail is included.`,
+    requestHash,
+    resourceId: aliasAddress(input.name),
+    agentId: identity.agentId,
   };
   const settlement = await handleReceiptRequest(request, env, expectedPublicKey, product);
   if (settlement.status !== 200) return settlement;
@@ -154,14 +162,15 @@ export async function handleAliasRequest(
     const results = await env.AUTH_DB.batch([
       env.AUTH_DB.prepare(`
         INSERT INTO aliases
-          (name, forward_kind, forward_target, owner, receipt_hash, created_at,
+          (name, forward_kind, forward_target, owner, receipt_hash, agent_id, created_at,
            renewed_at, expires_at, forwarded_count, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'active')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'active')
         ON CONFLICT(name) DO UPDATE SET
           forward_kind = excluded.forward_kind,
           forward_target = excluded.forward_target,
           owner = excluded.owner,
           receipt_hash = excluded.receipt_hash,
+          agent_id = excluded.agent_id,
           created_at = CASE
             WHEN lower(aliases.owner) = lower(excluded.owner) THEN aliases.created_at
             ELSE excluded.created_at
@@ -182,6 +191,7 @@ export async function handleAliasRequest(
         input.forward.target,
         owner,
         hash,
+        identity.agentId,
         timestamp,
         timestamp,
         expiresAt,
@@ -208,7 +218,15 @@ export async function handleAliasRequest(
     return json({ error: 'Payment settled but the registry write failed; contact abuse@pointcast.xyz.', receipt }, 502);
   }
 
-  return new Response(JSON.stringify({ alias: aliasAddress(input.name), expiresAt, receipt }, null, 2), {
+  receipt = await finalizeX402Receipt(
+    env,
+    receipt,
+    { ok: true, action, alias: aliasAddress(input.name), expiresAt },
+    aliasAddress(input.name),
+    expectedPublicKey,
+  );
+
+  return new Response(JSON.stringify({ alias: aliasAddress(input.name), expiresAt, agentId: identity.agentId, receipt }, null, 2), {
     status: 200,
     headers: settlement.headers,
   });

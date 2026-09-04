@@ -12,7 +12,13 @@ import {
   settlementWasAmbiguous,
   updatePaidIntent,
 } from '../../_lib/paid-town-actions.ts';
-import { shortEvmAddress, withX402, X402PreSettlementError } from '../../_lib/x402-gate.ts';
+import {
+  finalizeX402Receipt,
+  shortEvmAddress,
+  withX402,
+  x402TransactionHash,
+  X402PreSettlementError,
+} from '../../_lib/x402-gate.ts';
 
 type AgentCastEnv = Cloudflare.Env & BurstEnv & { AUTH_DB?: D1Database };
 
@@ -70,6 +76,9 @@ export async function handleAgentCast(
       resourceDescription: `Cast +${word} into PointCast's live presence room.`,
       merchantUrl: 'https://pointcast.xyz/spells',
       context: `Paid town action: an agent casts the +${word} magic word into the live room.`,
+      requestHash: begun.kind === 'quote' ? null : begun.intent.request_hash,
+      resourceId: intentId,
+      agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
       ...(intentId ? {
         beforeSettlement: async () => {
           if (!await acquirePaidSettlement(env.AUTH_DB!, intentId)) {
@@ -91,6 +100,8 @@ export async function handleAgentCast(
     }
     if (intentId) {
       await updatePaidIntent(env.AUTH_DB, intentId, 'settled', {
+        txHash: x402TransactionHash(gate.receipt),
+        agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
         settlement: {
           receipt: gate.receipt,
           receiptHash: gate.receiptHash,
@@ -119,34 +130,47 @@ export async function handleAgentCast(
     burstResponse = await forwardBurst(burstRequest, env);
   } catch (error) {
     console.error('[api/agent/cast] presence forward failed', error);
-    const result = {
+    const actionResult = {
       ok: false,
       actionCompleted: false,
       actionId: intentId,
       error: 'Payment settled but the room was unavailable.',
-      receipt: gate.receipt,
-      split: gate.split,
     };
-    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', { result, error: result.error });
+    gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+    const result = { ...actionResult, receipt: gate.receipt, split: gate.split };
+    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', {
+      settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
+      result,
+      error: result.error,
+    });
     return paidIntentJson(intentId, result, 502, gate.response.headers);
   }
   const burst = await burstResponse.json().catch(() => ({ ok: false, reason: 'unreadable presence response' }));
   if (!burstResponse.ok) {
-    const result = {
+    const actionResult = {
       ok: false,
       actionCompleted: false,
       actionId: intentId,
       error: 'Payment settled but the room refused the cast.',
       burst,
-      receipt: gate.receipt,
-      split: gate.split,
     };
-    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', { result, error: result.error });
+    gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+    const result = { ...actionResult, receipt: gate.receipt, split: gate.split };
+    await updatePaidIntent(env.AUTH_DB, intentId, 'action_failed', {
+      settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
+      result,
+      error: result.error,
+    });
     return paidIntentJson(intentId, result, 502, gate.response.headers);
   }
 
-  const result = { ok: true, action: 'cast', actionId: intentId, word, burst, receipt: gate.receipt, split: gate.split };
-  await updatePaidIntent(env.AUTH_DB, intentId, 'succeeded', { result });
+  const actionResult = { ok: true, action: 'cast', actionId: intentId, word, burst };
+  gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
+  const result = { ...actionResult, receipt: gate.receipt, split: gate.split };
+  await updatePaidIntent(env.AUTH_DB, intentId, 'succeeded', {
+    settlement: { receipt: gate.receipt, receiptHash: gate.receiptHash, payer: gate.payer, split: gate.split },
+    result,
+  });
   return paidIntentJson(intentId, result, 200, gate.response.headers);
 }
 
