@@ -22,6 +22,7 @@
  *   cell   — a calendar cell; data-kennel-day is its own day, and the node
  *            gets data-sitting-status="past|today|future"
  *   badge  — a "today" ring; hidden unless data-kennel-day is today
+ *   people — "N people claimed today" only after the count reaches three
  *
  * Every hydrated node also gets data-sitting-day, so a page can be inspected
  * (and asserted on) without guessing whether hydration ran.
@@ -103,6 +104,10 @@ function applyToNode(node: KennelTodayNode, today: KennelToday): void {
       );
     } else if (field === 'badge') {
       node.hidden = Number(node.dataset.kennelDay) !== today.day;
+    } else if (field === 'people') {
+      const claimed = Number(today.claimsClaimed ?? 0);
+      node.hidden = claimed < 3;
+      node.textContent = claimed >= 3 ? `${claimed} people claimed today` : '';
     }
   }
   node.setAttribute('data-sitting-day', String(today.day));

@@ -1,6 +1,7 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
 import KennelClubClaim from '../components/KennelClubClaim.astro';
+import KennelClubHolding from '../components/KennelClubHolding.astro';
 import KennelClubMint from '../components/KennelClubMint.astro';
 import KennelTodayLive from '../components/KennelTodayLive.astro';
 import {
@@ -35,7 +36,7 @@ const jsonLd = {
 ---
 
 <BlockLayout title={title} description={description} image="/og/kennel-club/today.png" imageWidth={1200} imageHeight={630} themeColor="#8A2432" jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/kennel-club.json', title: 'Kennel Club calendar JSON' }]}>
-  <main class="kennel" data-kennel-club data-today={todayDate}>
+  <main class="kennel" data-kennel-club data-kennel-claimed-surface data-today={todayDate}>
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a><span>/</span><span>Kennel Club</span><a href="/kennel-club.json">JSON</a>
     </nav>
@@ -49,6 +50,7 @@ const jsonLd = {
     <section class="hero" aria-labelledby="today-title">
       <figure class="hero__plate">
         <img src={today.image.webp} alt={today.alt} width="1024" height="1280" fetchpriority="high" data-kennel-today="image" />
+        <span class="hero__stamp" data-kennel-went-home-stamp hidden></span>
         <figcaption data-kennel-today="text" data-kennel-text="Sitting {day} · {date} · America/Los_Angeles">Sitting {String(today.day).padStart(2, '0')} · {today.mintDate} · America/Los_Angeles</figcaption>
       </figure>
       <div class="hero__desk">
@@ -57,13 +59,14 @@ const jsonLd = {
         <p class="hero__breed" data-kennel-today="text" data-kennel-text="{breed}">{today.breed}</p>
         <p class="hero__title" data-kennel-today="text" data-kennel-text="{title}">{today.title}</p>
         <p class="hero__wardrobe" data-kennel-today="text" data-kennel-text="{wardrobe}">{today.wardrobe}</p>
-        <div class="hero__claim">
+        <div class="hero__claim" data-kennel-unclaimed>
           <KennelClubClaim tokenId={today.tokenId} sitting={today.name} live />
         </div>
-        <div class="hero__wallet-mint">
+        <div class="hero__wallet-mint" data-kennel-unclaimed>
           <KennelClubMint tokenId={today.tokenId} label="I have a Tezos wallet · mint for 1 ꜩ" live />
         </div>
-        <p class="hero__kukai">Want to hold it yourself? <a href="/me?link=wallet">Kukai gives you a wallet with your Google login →</a></p>
+        <p class="hero__kukai" data-kennel-unclaimed>Want to hold it yourself? <a href="/me?link=wallet">Kukai gives you a wallet with your Google login →</a></p>
+        <KennelClubHolding />
         <a class="hero__open" href={`/kennel-club/${today.slug}`} data-kennel-today="href text" data-kennel-href="/kennel-club/{slug}" data-kennel-text="Open {name}’s full sitting →">Open {today.name}’s full sitting →</a>
       </div>
     </section>
@@ -75,12 +78,13 @@ const jsonLd = {
       </div>
       <ol class="calendar__grid" aria-label="September 2026 Kennel Club calendar">
         {days.map((day) => (
-          <li class:list={['calendar__day', `calendar__day--${day.status}`]} data-sitting-date={day.date}>
+          <li class:list={['calendar__day', `calendar__day--${day.status}`]} data-sitting-date={day.date} data-kennel-claimed-tile data-kennel-day={day.day}>
             <a href={`/kennel-club/${day.slug}`}>
               <img src={day.image.webp.replace('https://pointcast.xyz', '')} alt={day.status === 'today' ? day.image.alt : ''} width="1024" height="1280" loading={day.status === 'today' ? 'eager' : 'lazy'} />
               <span><b>{String(day.day).padStart(2, '0')}</b><em>Today</em></span>
             </a>
             <span class="calendar__future"><b>{String(day.day).padStart(2, '0')}</b><small>Held</small></span>
+            <span class="calendar__mine" data-kennel-owner-mark hidden></span>
           </li>
         ))}
       </ol>
@@ -92,7 +96,7 @@ const jsonLd = {
         <a href="/api/kennel-club/mint">Live JSON →</a>
       </header>
       <dl class="club-live__counts">
-        <div><dt>Free claims today</dt><dd data-claim-count>—</dd></div>
+        <div data-people-claimed-row hidden><dt>People claimed today</dt><dd data-claim-count>—</dd></div>
         <div><dt>On-chain minted today</dt><dd data-minted-count>—</dd></div>
       </dl>
       <div class="ticker">
@@ -108,7 +112,7 @@ const jsonLd = {
   type LiveClaim = { sitting: string; firstName: string };
   type LiveState = {
     today: { minted: number };
-    claims: { claimed: number; remaining: number; recent: LiveClaim[] };
+    claims: { claimed: number; recent: LiveClaim[] };
   };
 
   async function refreshKennelLive(root: HTMLElement): Promise<void> {
@@ -120,6 +124,8 @@ const jsonLd = {
       const minted = root.querySelector<HTMLElement>('[data-minted-count]');
       if (claimed) claimed.textContent = String(state.claims.claimed);
       if (minted) minted.textContent = String(state.today.minted);
+      const claimedRow = root.querySelector<HTMLElement>('[data-people-claimed-row]');
+      if (claimedRow) claimedRow.hidden = state.claims.claimed < 3;
       const ticker = root.querySelector<HTMLOListElement>('[data-claim-ticker]');
       if (ticker) {
         const entries = state.claims.recent.map((claim) => {
@@ -162,6 +168,7 @@ const jsonLd = {
 
 <style>
   .kennel { width: min(1180px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 90px; --club: #8a2432; --club-wash: #fbf1f1; }
+  .kennel[data-kennel-claimed-state] [data-kennel-unclaimed] { display: none !important; }
   .crumb, .kicker, figcaption, .hero__open, .hero__kukai, .calendar__future, .calendar__day span, .club-live dt, .ticker { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
   .crumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; color: var(--pc-ink-muted); }
   .crumb a:last-child { margin-left: auto; }
@@ -175,6 +182,7 @@ const jsonLd = {
   .hero__plate { position: relative; min-height: 680px; margin: 0; background: var(--club); }
   .hero__plate img { width: 100%; height: 100%; object-fit: cover; }
   .hero__plate figcaption { position: absolute; right: 10px; bottom: 10px; left: 10px; padding: 7px 9px; background: rgba(255,255,255,.94); }
+  .hero__stamp { position: absolute; top: 14px; right: 14px; max-width: calc(100% - 28px); padding: 7px 9px; border: 1.5px solid #fff; background: var(--club); color: #fff; font: 500 9px/1.2 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; transform: rotate(2deg); }
   .hero__desk { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: clamp(24px, 5vw, 60px); border-left: 1.5px solid var(--pc-ink); background: var(--club); color: #fff; }
   .hero__desk .kicker { color: rgba(255,255,255,.72); }
   .hero__desk h2 { font-size: clamp(56px, 8vw, 100px); }
@@ -190,6 +198,7 @@ const jsonLd = {
   .hero__kukai { margin: 14px 0 0; color: rgba(255,255,255,.72); line-height: 1.5; text-transform: none; letter-spacing: .02em; }
   .hero__kukai a, .hero__open { color: #fff; }
   .hero__open { margin-top: 18px; }
+  .hero__desk :global(.kennel-holding) { margin-top: 28px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.36); color: #fff; }
   .calendar { margin-top: 46px; }
   .calendar__head, .club-live__head { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 2px solid var(--pc-ink); }
   .calendar__head h2, .club-live__head h2 { font-size: clamp(38px, 6vw, 72px); }
@@ -206,8 +215,11 @@ const jsonLd = {
   .calendar__day:not(.calendar__day--future) .calendar__future { display: none; }
   .calendar__future { display: grid !important; height: 100%; place-content: center; gap: 7px; background: #fff; color: var(--pc-ink-muted); text-align: center; }
   .calendar__future b { color: var(--pc-ink); font-size: 25px; }
+  .calendar__mine { top: auto !important; right: 6px; bottom: 6px; left: auto !important; z-index: 2; width: 24px; height: 24px; justify-content: center; border: 1px solid var(--club); border-radius: 50%; background: var(--club) !important; color: #fff !important; font-size: 10px; }
+  .calendar__day[data-kennel-yours] { box-shadow: inset 0 0 0 3px var(--club); }
+  .calendar__day--today[data-kennel-yours] { box-shadow: inset 0 0 0 5px var(--club); }
   .club-live { margin-top: 46px; }
-  .club-live__counts { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; border-left: 1px solid var(--pc-ink); }
+  .club-live__counts { display: grid; grid-template-columns: repeat(2, 1fr); margin: 0; border-left: 1px solid var(--pc-ink); }
   .club-live__counts div { min-height: 128px; padding: 14px; border-right: 1px solid var(--pc-ink); border-bottom: 1px solid var(--pc-ink); background: var(--club-wash); }
   .club-live dt { color: var(--club); }
   .club-live dd { margin: 20px 0 0; font-size: 54px; line-height: 1; }

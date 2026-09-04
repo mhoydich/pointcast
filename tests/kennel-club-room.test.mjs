@@ -44,11 +44,11 @@ test('Kennel Club ships its room, all per-sitting routes, and JSON twins', async
   assert.doesNotMatch(mintComponent, /https:\/\/api\.tzkt\.io/);
   assert.match(mintComponent, /Confirm in Kukai/);
   assert.match(mintComponent, /Broadcast · waiting for 1 confirmation/);
-  assert.match(mintComponent, /You minted \$\{sittingName\(root\)\}/);
+  assert.match(mintComponent, /setTzktState\(root, 'in your wallet'/);
   assert.match(mintComponent, /POLL_MS = 5_000/);
   assert.match(mintComponent, /POLL_TRIES = 12/);
   assert.match(mintComponent, /connected · \$\{shortAddress/);
-  assert.match(mintComponent, /already minted by you/);
+  assert.doesNotMatch(mintComponent, /already minted by you/);
   assert.match(mintComponent, /pc:wallet-change/);
   assert.match(mintHelper, /walletHoldsKennelClubSitting/);
   assert.match(mintHelper, /v1\/tokens\/balances\?account=/);
