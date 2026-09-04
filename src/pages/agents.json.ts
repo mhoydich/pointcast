@@ -35,9 +35,35 @@ import { POINTCAST_AGENT_KIT } from '../lib/pointcast-agent-kit';
 import { X402_DISCOVERY } from '../lib/x402';
 import { POST_OFFICE_DISCOVERY } from '../lib/post-office';
 import { PAID_TOWN_DISCOVERY } from '../../functions/_lib/paid-town-actions';
+import { AGENT_SURFACES, RETIRED_AGENT_PATHS } from '../data/agent-surfaces';
 // The MCP catalogue comes from the server file itself, so the manifest
 // advertises exactly what tools/list and resources/list serve.
 import { MCP_RESOURCE_URIS, MCP_SERVER_INFO, MCP_TOOL_NAMES } from '../../functions/api/mcp';
+
+function contractKey(key: string) {
+  return key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function buildContractRegistry() {
+  return Object.fromEntries(Object.entries(contracts as Record<string, any>)
+    .filter(([key, value]) => !key.startsWith('_') && value && typeof value === 'object' && 'mainnet' in value)
+    .map(([key, value]) => {
+      const address = String(value.mainnet || '').trim() || null;
+      const statusText = String(value.status || '').trim();
+      return [contractKey(key), {
+        chain: 'tezos',
+        network: 'mainnet',
+        address,
+        symbol: value.symbol || null,
+        standard: value.standard || null,
+        entrypoint: value.mintEntrypoint || value.claimEntrypoint || value.attestEntrypoint || null,
+        status: statusText || (address ? 'live' : 'not-originated'),
+        paused: statusText ? /paused/i.test(statusText) : null,
+        tzkt: address ? `https://tzkt.io/${address}` : null,
+        source: value._notes?.contract || null,
+      }];
+    }));
+}
 
 export const GET: APIRoute = async () => {
   const blocks = await getCollection('blocks', ({ data }) => !data.draft);
@@ -52,6 +78,7 @@ export const GET: APIRoute = async () => {
   const zenCats = ((contracts as any).zen_cats?.mainnet ?? '').trim();
   const postcards = ((contracts as any).postcards?.mainnet ?? '').trim();
   const kennelClub = ((contracts as any).kennel_club?.mainnet ?? '').trim();
+  const contractSources = buildContractRegistry();
 
   const payload = {
     $schema: 'https://pointcast.xyz/BLOCKS.md',
@@ -93,6 +120,8 @@ export const GET: APIRoute = async () => {
     },
 
     endpoints: {
+      current: AGENT_SURFACES,
+      retired: RETIRED_AGENT_PATHS,
       discovery: {
         canonical: 'https://pointcast.xyz/agents.json',
         health: 'https://pointcast.xyz/health',
@@ -366,6 +395,8 @@ export const GET: APIRoute = async () => {
         x402: X402_DISCOVERY.human,
         postOffice: POST_OFFICE_DISCOVERY.page,
         till: 'https://pointcast.xyz/till',
+        kennelClub: AGENT_SURFACES.human.kennelClub,
+        profileShelf: AGENT_SURFACES.human.profileShelf,
       },
       json: {
         agents: 'https://pointcast.xyz/agents.json',
@@ -488,6 +519,10 @@ export const GET: APIRoute = async () => {
         x402: X402_DISCOVERY.json,
         postOffice: POST_OFFICE_DISCOVERY.json,
         till: 'https://pointcast.xyz/till.json',
+        kennelClub: AGENT_SURFACES.json.kennelClub,
+        collect: AGENT_SURFACES.json.collect,
+        me: AGENT_SURFACES.json.me,
+        profilePattern: AGENT_SURFACES.patterns.profileJson,
       },
       api: {
         ping: 'https://pointcast.xyz/api/ping',
@@ -552,7 +587,9 @@ export const GET: APIRoute = async () => {
           privacy: 'Broadcasts never include raw session ids. Agent entries omit mood/listening/where.',
         },
         weather: 'https://pointcast.xyz/api/weather?station={slug}',
+        kennelClubToday: AGENT_SURFACES.api.kennelClubToday,
         kennelClubMint: 'https://pointcast.xyz/api/kennel-club/mint',
+        kennelClubClaim: AGENT_SURFACES.api.kennelClubClaim,
         x402Receipt: X402_DISCOVERY.endpoint,
         x402Verify: X402_DISCOVERY.verify,
         x402Keys: X402_DISCOVERY.keys,
@@ -561,6 +598,9 @@ export const GET: APIRoute = async () => {
         paidTownActions: PAID_TOWN_DISCOVERY,
         mcp: 'https://pointcast.xyz/api/mcp',
         mcpV2: 'https://pointcast.xyz/api/mcp-v2',
+        agentBench: AGENT_SURFACES.api.agentBench,
+        agentCast: AGENT_SURFACES.api.agentCast,
+        agentClaim: AGENT_SURFACES.api.agentClaim,
       },
       mcp: {
         endpoint: 'https://pointcast.xyz/api/mcp-v2',
@@ -843,6 +883,7 @@ export const GET: APIRoute = async () => {
     })),
 
     contracts: {
+      ...contractSources,
       visitNouns: {
         chain: 'tezos',
         network: 'mainnet',
@@ -858,7 +899,8 @@ export const GET: APIRoute = async () => {
         network: 'mainnet',
         address: kennelClub || null,
         standard: 'FA2 / TZIP-21',
-        status: kennelClub ? 'live' : 'pending',
+        status: kennelClub ? String((contracts as any).kennel_club?.status || 'live') : 'pending',
+        paused: kennelClub ? /paused/i.test(String((contracts as any).kennel_club?.status || '')) : null,
         priceMutez: 1_000_000,
         edition: 'open',
         tokenIdConvention: 'day - 1 in America/Los_Angeles',
@@ -1014,7 +1056,7 @@ export const GET: APIRoute = async () => {
     // Single source of truth at src/data/residents.ts — same list powers /residents.
     // Plus-one agents can claim an `open` slot by opening a PR per RFC §7 Sprint C.
     residents: {
-      schema: 'https://pointcast.xyz/plans/2026-04-24-rfc-0003-plus-one-agents',
+      schema: 'https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-04-24-rfc-0003-plus-one-agents.md',
       page: 'https://pointcast.xyz/residents',
       agents: RESIDENTS.map((r) => ({
         slug: r.slug,
