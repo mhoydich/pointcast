@@ -4,6 +4,8 @@ export const NOINDEX_PATHS = new Set([
   '/auth/project/',
   '/beach-commons/v6/thanks/',
   '/desk/',
+  '/cartography/pilot/',
+  '/cartography/sprint/',
 ]);
 
 // Sources with permanent redirects in public/_redirects or Pages middleware.

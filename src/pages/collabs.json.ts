@@ -46,13 +46,9 @@ export const GET: APIRoute = async () => {
       announcementBlock: 'https://pointcast.xyz/b/0435',
       purpose: 'Turn startup and product ideas into claimable people tasks, agent tasks, sales tasks, fulfillment tasks, receipt tasks, and reviewable artifacts.',
     },
-    cartographyBusiness: {
+    cartographyArchive: {
       human: 'https://pointcast.xyz/cartography',
       json: 'https://pointcast.xyz/cartography.json',
-      pilot: 'https://pointcast.xyz/cartography/pilot',
-      pilotJson: 'https://pointcast.xyz/cartography/pilot.json',
-      sprint: 'https://pointcast.xyz/cartography/sprint',
-      sprintJson: 'https://pointcast.xyz/cartography/sprint.json',
       demo: 'https://pointcast.xyz/cartography/demo',
       demoJson: 'https://pointcast.xyz/cartography/demo.json',
       home: 'https://pointcast.xyz/cartography/home',
@@ -62,8 +58,7 @@ export const GET: APIRoute = async () => {
       homeFieldKit: 'https://pointcast.xyz/cartography/home/field-kit',
       homeFieldKitJson: 'https://pointcast.xyz/cartography/home/field-kit.json',
       announcementBlock: 'https://pointcast.xyz/b/0442',
-      sprintBlock: 'https://pointcast.xyz/b/0443',
-      purpose: 'Turn Digital Identity Cartography into a brand-first service-to-SaaS product board, $50k paid pilot offer, and May 7-15 pilot close sprint with non-financial yield artifacts.',
+      purpose: 'Archived Digital Identity Cartography concept with a fictional demo and preserved Home Cartography references.',
     },
     governance: {
       proposal: 'PC-0005',
