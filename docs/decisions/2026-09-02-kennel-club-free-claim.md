@@ -4,6 +4,13 @@
 
 **Status:** implementation ready for review; not deployed or configured
 
+**Supersession note (2026-09-04):** The retry model below is superseded by
+`migrations/auth/0010_kennel_operation_safety.sql`. Claim and delivery signers
+now use D1 compare-and-set locks; delivery rows are reserved before transfer;
+every injected operation hash is recorded before confirmation and retained on
+later failure; retries reconcile that hash through TzKT before any new spend.
+This note describes reviewed source only, not an applied migration or deploy.
+
 **Contract:** `KT1JWNAKyiWVsbfNrHBQuuBDaGRBYqfehwdq` on Tezos mainnet
 
 ## Decision
@@ -40,14 +47,14 @@ The UI treats a missing claim-wallet secret as a deliberate closed state and say
 
 ## Held-dog delivery
 
-The `claims` table stores `user_id`, `token_id`, `status`, `op_hash`, `delivered_to`, and `created_at`. A walletless claim is minted to the claim-wallet address and saved as `held`. When a Tezos identity is linked, the auth Function submits one FA2 `transfer` containing every held token for that user. Only after the operation confirms does D1 mark those rows `delivered` and record the delivery operation hash and destination.
+The `claims` table stores `user_id`, `token_id`, `status`, `op_hash`, `delivered_to`, and `created_at`. A walletless claim is minted to the claim-wallet address and saved as `held`. When a Tezos identity is linked, the auth Function first atomically assigns every held token to one opaque reservation, then submits one FA2 `transfer`. The injected hash and destination are persisted before confirmation. Only after confirmation, or a later TzKT reconciliation that proves `applied`, does D1 mark those rows `delivered`.
 
-If delivery fails, the rows stay `held` and can be retried. If the mint operation fails, the reserved row is marked `failed` without an operation hash.
+If submission fails before injection, the reservation can be retried. If an operation was injected, its hash remains append-only in `kennel_chain_operations`; a timeout is `submitted`/unknown, not retryable. Only a definitive on-chain failure permits another submission.
 
 ## Risks and controls
 
 - The claim signer is a hot key inside a Pages Function. Keep the wallet deliberately small, retain the balance floor, cap daily claims, and monitor its balance and operations.
-- Concurrent Functions can contend for the same Tezos manager counter. Failed claims remain visibly failed and retryable; do not treat a D1 reservation as proof of an on-chain mint.
+- Concurrent Functions serialize use of the Tezos manager through a D1 lock. A D1 reservation is still not proof of mint; only an applied operation and the resulting chain state are proof.
 - A held dog is custodial until delivery. `/me` labels that state explicitly: “held for you — link a wallet to take it home.”
 - D1 is the claim and delivery source of truth. The public ticker shows only a sanitized first name, never an email or full Tezos address.
 - TzKT verification and a matching D1 claim row are required before a public `claim` burst is broadcast.

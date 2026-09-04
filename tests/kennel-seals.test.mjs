@@ -65,6 +65,11 @@ class FakeD1Statement {
       for (const receipt of db.receipts.values()) counts.set(receipt.status, (counts.get(receipt.status) ?? 0) + 1);
       return { results: [...counts].map(([status, count]) => ({ status, count })) };
     }
+    if (sql.startsWith('SELECT id, claim_id, user_id, token_id, kind, evidence, holder, op_hash')) {
+      return { results: [...db.receipts.values()].filter((receipt) => (
+        receipt.status === 'submitted' && receipt.op_hash && receipt.contract_version && receipt.contract_address
+      )).map((receipt) => ({ ...receipt })) };
+    }
     throw new Error(`Unsupported fake D1 all(): ${sql}`);
   }
 
@@ -76,6 +81,14 @@ class FakeD1Statement {
       if (!receipt || !['pending', 'pending_wallet', 'failed'].includes(receipt.status)) return null;
       Object.assign(receipt, { status: 'submitting', holder, run_id: runId, error: null, updated_at: updatedAt });
       return { ...receipt };
+    }
+    if (sql.startsWith('INSERT INTO kennel_signer_locks')) {
+      const [_name, holder, expiresAt, now] = args;
+      if (!db.lock.holder || db.lock.expires_at <= now || db.lock.holder === holder) {
+        db.lock = { holder, expires_at: expiresAt };
+        return { holder };
+      }
+      return null;
     }
     throw new Error(`Unsupported fake D1 first(): ${sql}`);
   }
@@ -101,15 +114,20 @@ class FakeD1Statement {
       return { success: true, meta: { changes: 1 } };
     }
     if (sql.startsWith("UPDATE seal_receipts SET status = 'submitted'")) {
-      const [opHash, updatedAt, id, runId] = args;
+      const [opHash, version, address, updatedAt, id, runId] = args;
       const receipt = db.byId(id);
-      if (receipt?.run_id === runId && receipt.status === 'submitting') Object.assign(receipt, { status: 'submitted', op_hash: opHash, updated_at: updatedAt });
+      if (receipt?.run_id === runId && receipt.status === 'submitting') Object.assign(receipt, {
+        status: 'submitted', op_hash: opHash, contract_version: version, contract_address: address, updated_at: updatedAt,
+      });
       return { success: true, meta: { changes: receipt ? 1 : 0 } };
     }
     if (sql.startsWith("UPDATE seal_receipts SET status = 'attested'")) {
-      const [opHash, updatedAt, attestedAt, id, runId] = args;
+      const reconcile = sql.includes("status = 'submitted' AND op_hash = ?");
+      const [opHash, updatedAt, attestedAt, id, runId] = reconcile
+        ? [args[3], args[0], args[1], args[2], null]
+        : args;
       const receipt = db.byId(id);
-      if (receipt?.run_id === runId && ['submitting', 'submitted'].includes(receipt.status)) {
+      if (receipt && (reconcile ? receipt.status === 'submitted' && receipt.op_hash === opHash : receipt.run_id === runId && ['submitting', 'submitted'].includes(receipt.status))) {
         Object.assign(receipt, { status: 'attested', op_hash: opHash, error: null, updated_at: updatedAt, attested_at: attestedAt });
       }
       return { success: true, meta: { changes: receipt ? 1 : 0 } };
@@ -120,6 +138,21 @@ class FakeD1Statement {
       if (receipt?.run_id === runId && receipt.status === 'submitting') Object.assign(receipt, { status: 'failed', error, updated_at: updatedAt });
       return { success: true, meta: { changes: receipt ? 1 : 0 } };
     }
+    if (sql.startsWith('INSERT INTO kennel_chain_operations')) {
+      const [id, action, subjectId, opHash, submittedAt, updatedAt] = args;
+      db.operations.set(opHash, { id, action, subject_id: subjectId, op_hash: opHash, status: 'submitted', submitted_at: submittedAt, updated_at: updatedAt });
+      return { success: true, meta: { changes: 1 } };
+    }
+    if (sql.startsWith('UPDATE kennel_chain_operations SET status =')) {
+      const opHash = args.at(-1);
+      const operation = db.operations.get(opHash);
+      if (operation) operation.status = sql.includes("status = 'failed'") ? 'failed' : sql.includes("status = 'unknown'") ? 'unknown' : 'applied';
+      return { success: true, meta: { changes: operation ? 1 : 0 } };
+    }
+    if (sql.startsWith('UPDATE kennel_signer_locks SET holder = NULL')) {
+      if (db.lock.holder === args[1]) db.lock = { holder: null, expires_at: null };
+      return { success: true, meta: { changes: 1 } };
+    }
     throw new Error(`Unsupported fake D1 run(): ${sql}`);
   }
 }
@@ -129,6 +162,8 @@ class FakeD1 {
     this.claims = new Map();
     this.identities = [];
     this.receipts = new Map();
+    this.operations = new Map();
+    this.lock = { holder: null, expires_at: null };
   }
 
   prepare(sql) { return new FakeD1Statement(this, sql); }
@@ -155,7 +190,10 @@ class FakeTaquito {
     this.version = version;
     this.contractAddress = contractAddress;
     this.batches = [];
+    this.reconcileStatus = 'pending';
   }
+
+  async operationStatus() { return this.reconcileStatus; }
 
   async attestBatch(attestations, onInjected) {
     this.batches.push(attestations);
@@ -279,11 +317,14 @@ test('dry run is read-only; failures before and after injection remain safely di
     assert.equal(submittedDb.receipts.get('claim_submitted:showed-up').status, 'submitted');
     assert.equal(submittedDb.receipts.get('claim_submitted:showed-up').op_hash, OP_HASH);
     const retryChain = new FakeTaquito();
+    retryChain.reconcileStatus = 'applied';
     const retry = await runKennelSeals(env(submittedDb), {
       now: new Date('2026-09-03T07:15:00Z'),
       chainFactory: async () => retryChain,
     });
     assert.equal(retry.attempted, 0);
+    assert.equal(retry.attested, 1, 'retry reconciles the persisted operation hash');
+    assert.equal(submittedDb.receipts.get('claim_submitted:showed-up').status, 'attested');
     assert.equal(retryChain.batches.length, 0, 'an injected receipt is never submitted twice');
   });
 });
@@ -422,8 +463,9 @@ test('v2 storage builder seeds Mike, the cc wallet, and the claim wallet as issu
 });
 
 test('migration, APIs, Worker config, presence bus, and v2 path are explicit', async () => {
-  const [migration, config, worker, v1Contract, v2Contract, v2Code, v2Storage, originate, gateway, presence, decision, collectApi, holdingsApi, collectPage, mePage] = await Promise.all([
+  const [migration, safety, config, worker, v1Contract, v2Contract, v2Code, v2Storage, originate, gateway, presence, decision, collectApi, holdingsApi, collectPage, mePage] = await Promise.all([
     readFile(new URL('migrations/auth/0005_seal_receipts.sql', root), 'utf8'),
+    readFile(new URL('migrations/auth/0010_kennel_operation_safety.sql', root), 'utf8'),
     readFile(new URL('workers/kennel-seals/wrangler.jsonc', root), 'utf8'),
     readFile(new URL('workers/kennel-seals/src/index.ts', root), 'utf8'),
     readFile(new URL('contracts/v2/seal_soulbound_fa2.py', root), 'utf8'),
@@ -441,6 +483,8 @@ test('migration, APIs, Worker config, presence bus, and v2 path are explicit', a
   ]);
   assert.match(migration, /UNIQUE \(claim_id, kind\)/);
   assert.match(migration, /pending_wallet/);
+  assert.match(safety, /ALTER TABLE seal_receipts ADD COLUMN contract_version/);
+  assert.match(safety, /'seal-v1', 'seal-v2'/);
   assert.match(config, /"15 7 \* \* \*"/);
   assert.doesNotMatch(config, /SEAL_ISSUER_SECRET_KEY/);
   assert.match(config, /SEAL_CONTRACT_V2/);

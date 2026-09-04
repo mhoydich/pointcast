@@ -6,6 +6,9 @@ import type { AuthEnv } from '../auth/session';
 const CLAIM_RPC = 'https://mainnet.smartpy.io';
 const MINIMUM_CLAIM_WALLET_BALANCE_MUTEZ = 3_000_000;
 const FAILED_RETRY_DELAY_MS = 60_000;
+const SIGNER_LOCK_TTL_MS = 15 * 60_000;
+const CLAIM_SIGNER_LOCK = 'kennel-claim-wallet';
+const TZKT_API = 'https://api.tzkt.io/v1';
 const TEZOS_ADDRESS = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
 const OPERATION_HASH = /^o[1-9A-HJ-NP-Za-km-z]{50}$/;
 
@@ -63,11 +66,45 @@ export interface ClaimChain {
   address: string;
   balanceMutez(): Promise<number>;
   ensureRevealed(): Promise<void>;
-  mint(tokenId: number, deliveredTo: string | null): Promise<{ opHash: string }>;
-  deliver(tokenIds: number[], deliveredTo: string): Promise<{ opHash: string }>;
+  operationStatus(opHash: string): Promise<ChainOperationStatus>;
+  mint(
+    tokenId: number,
+    deliveredTo: string | null,
+    onInjected: (opHash: string) => Promise<void>,
+  ): Promise<{ opHash: string }>;
+  deliver(
+    tokenIds: number[],
+    deliveredTo: string,
+    onInjected: (opHash: string) => Promise<void>,
+  ): Promise<{ opHash: string }>;
 }
 
 export type ClaimChainFactory = (secretKey: string) => Promise<ClaimChain>;
+export type ChainOperationStatus = 'applied' | 'pending' | 'failed' | 'unknown';
+
+type ClaimJobRow = {
+  claim_id: string;
+  state: 'reserved' | 'submitting' | 'submitted' | 'confirmed' | 'failed';
+  target_status: 'held' | 'delivered';
+  delivered_to: string | null;
+  operation_id: string | null;
+  error: string | null;
+  updated_at: string;
+  op_hash?: string | null;
+};
+
+type DeliveryReservationRow = {
+  claim_id: string;
+  reservation_id: string;
+  user_id: string;
+  token_id: number;
+  delivered_to: string;
+  state: 'reserved' | 'submitting' | 'submitted' | 'confirmed' | 'failed';
+  operation_id: string | null;
+  op_hash: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export function claimDailyCap(value: string | undefined): number {
   const parsed = Number(value ?? 50);
@@ -239,18 +276,16 @@ async function reserveClaim(
   const existing = await existingClaim(db, userId, tokenId);
   if (existing && existing.status !== 'failed') return { row: existing, reason: 'already-claimed' };
   if (existing) {
-    const reservedAt = Date.parse(existing.created_at);
-    if (Number.isFinite(reservedAt) && Date.now() - reservedAt < FAILED_RETRY_DELAY_MS) {
+    const job = await readClaimJob(db, existing.id);
+    if (job?.state === 'submitted' || job?.state === 'submitting') {
+      return { row: existing };
+    }
+    const reservedAt = Date.parse(job?.updated_at ?? existing.created_at);
+    if (job?.state === 'reserved' && Number.isFinite(reservedAt) && Date.now() - reservedAt < FAILED_RETRY_DELAY_MS) {
       return { row: existing, reason: 'claim-in-progress' };
     }
-    const retriedAt = new Date().toISOString();
-    const retried = await db.prepare(`
-      UPDATE claims
-      SET op_hash = NULL, delivered_to = NULL, created_at = ?
-      WHERE id = ? AND status = 'failed' AND created_at = ?
-      RETURNING id, user_id, token_id, status, op_hash, delivered_to, created_at
-    `).bind(retriedAt, existing.id, existing.created_at).first<KennelClaimRow>();
-    return retried ? { row: retried } : { row: existing, reason: 'claim-in-progress' };
+    await writeClaimJob(db, existing.id, deliveredTarget(existing.delivered_to), existing.delivered_to, 'reserved');
+    return { row: existing };
   }
 
   const id = `kcc_${crypto.randomUUID().replaceAll('-', '')}`;
@@ -264,11 +299,119 @@ async function reserveClaim(
       )
     RETURNING id, user_id, token_id, status, op_hash, delivered_to, created_at
   `).bind(id, userId, tokenId, createdAt, tokenId, cap, userId, tokenId).first<KennelClaimRow>();
-  if (inserted) return { row: inserted };
+  if (inserted) {
+    await writeClaimJob(db, inserted.id, 'held', null, 'reserved');
+    return { row: inserted };
+  }
   const raced = await existingClaim(db, userId, tokenId);
   return raced
     ? { row: raced, reason: 'already-claimed' }
     : { row: null, reason: 'daily-cap-reached' };
+}
+
+function deliveredTarget(address: string | null): 'held' | 'delivered' {
+  return address ? 'delivered' : 'held';
+}
+
+async function readClaimJob(db: D1Database, claimId: string): Promise<ClaimJobRow | null> {
+  return db.prepare(`
+    SELECT j.claim_id, j.state, j.target_status, j.delivered_to, j.operation_id,
+           j.error, j.updated_at, o.op_hash
+    FROM kennel_claim_jobs j
+    LEFT JOIN kennel_chain_operations o ON o.id = j.operation_id
+    WHERE j.claim_id = ?
+  `).bind(claimId).first<ClaimJobRow>();
+}
+
+async function writeClaimJob(
+  db: D1Database,
+  claimId: string,
+  targetStatus: 'held' | 'delivered',
+  deliveredTo: string | null,
+  state: ClaimJobRow['state'],
+  error: string | null = null,
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO kennel_claim_jobs
+      (claim_id, state, target_status, delivered_to, operation_id, error, updated_at)
+    VALUES (?, ?, ?, ?, NULL, ?, ?)
+    ON CONFLICT(claim_id) DO UPDATE SET
+      state = excluded.state,
+      target_status = excluded.target_status,
+      delivered_to = excluded.delivered_to,
+      error = excluded.error,
+      updated_at = excluded.updated_at
+  `).bind(claimId, state, targetStatus, deliveredTo, error, new Date().toISOString()).run();
+}
+
+async function acquireSignerLock(db: D1Database, lockName: string, holder: string): Promise<boolean> {
+  const now = Date.now();
+  const row = await db.prepare(`
+    INSERT INTO kennel_signer_locks (lock_name, holder, expires_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(lock_name) DO UPDATE SET
+      holder = excluded.holder,
+      expires_at = excluded.expires_at
+    WHERE kennel_signer_locks.holder IS NULL
+       OR kennel_signer_locks.expires_at <= ?
+       OR kennel_signer_locks.holder = excluded.holder
+    RETURNING holder
+  `).bind(lockName, holder, now + SIGNER_LOCK_TTL_MS, now).first<{ holder: string }>();
+  return row?.holder === holder;
+}
+
+async function releaseSignerLock(db: D1Database, lockName: string, holder: string): Promise<void> {
+  await db.prepare(`
+    UPDATE kennel_signer_locks SET holder = NULL, expires_at = NULL
+    WHERE lock_name = ? AND holder = ?
+  `).bind(lockName, holder).run();
+}
+
+async function persistOperation(
+  db: D1Database,
+  input: { id: string; action: 'mint' | 'deliver'; subjectId: string; opHash: string },
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db.prepare(`
+    INSERT INTO kennel_chain_operations
+      (id, action, subject_id, op_hash, status, error, submitted_at, updated_at)
+    VALUES (?, ?, ?, ?, 'submitted', NULL, ?, ?)
+    ON CONFLICT(op_hash) DO UPDATE SET updated_at = excluded.updated_at
+  `).bind(input.id, input.action, input.subjectId, input.opHash, now, now).run();
+}
+
+async function markOperation(
+  db: D1Database,
+  operationId: string,
+  status: 'applied' | 'failed' | 'unknown',
+  error: string | null = null,
+): Promise<void> {
+  await db.prepare(`
+    UPDATE kennel_chain_operations SET status = ?, error = ?, updated_at = ? WHERE id = ?
+  `).bind(status, error, new Date().toISOString(), operationId).run();
+}
+
+async function readTzktOperationStatus(opHash: string): Promise<ChainOperationStatus> {
+  try {
+    const response = await fetch(`${TZKT_API}/operations/${encodeURIComponent(opHash)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (response.status === 404 || response.status === 204) return 'pending';
+    if (!response.ok) return 'unknown';
+    const payload: unknown = await response.json();
+    const operations = Array.isArray(payload) ? payload : [payload];
+    const statuses = operations.flatMap((entry) => (
+      entry && typeof entry === 'object' && typeof (entry as { status?: unknown }).status === 'string'
+        ? [(entry as { status: string }).status]
+        : []
+    ));
+    if (!statuses.length) return 'unknown';
+    if (statuses.every((status) => status === 'applied')) return 'applied';
+    if (statuses.some((status) => ['failed', 'backtracked', 'skipped'].includes(status))) return 'failed';
+    return 'pending';
+  } catch {
+    return 'unknown';
+  }
 }
 
 async function markClaim(
@@ -311,7 +454,8 @@ export async function createTaquitoClaimChain(secretKey: string): Promise<ClaimC
       const reveal = await tezos.contract.reveal({ fee: 4_000 });
       await reveal.confirmation(1);
     },
-    async mint(tokenId, deliveredTo) {
+    operationStatus: readTzktOperationStatus,
+    async mint(tokenId, deliveredTo, onInjected) {
       const contract = await tezos.contract.at(KENNEL_CLUB_CONTRACT);
       const batch = tezos.contract.batch().withContractCall(
         contract.methodsObject.mint(tokenId),
@@ -324,10 +468,12 @@ export async function createTaquitoClaimChain(secretKey: string): Promise<ClaimC
         }]));
       }
       const operation = await batch.send();
+      const opHash = operationHash(operation);
+      await onInjected(opHash);
       await operation.confirmation(1);
-      return { opHash: operationHash(operation) };
+      return { opHash };
     },
-    async deliver(tokenIds, deliveredTo) {
+    async deliver(tokenIds, deliveredTo, onInjected) {
       const contract = await tezos.contract.at(KENNEL_CLUB_CONTRACT);
       const operation = await tezos.contract.batch().withContractCall(
         contract.methodsObject.transfer([{
@@ -335,8 +481,10 @@ export async function createTaquitoClaimChain(secretKey: string): Promise<ClaimC
           txs: tokenIds.map((tokenId) => ({ to_: deliveredTo, token_id: tokenId, amount: 1 })),
         }]),
       ).send();
+      const opHash = operationHash(operation);
+      await onInjected(opHash);
       await operation.confirmation(1);
-      return { opHash: operationHash(operation) };
+      return { opHash };
     },
   };
 }
@@ -397,9 +545,81 @@ export async function claimKennelClubDog(options: {
 
   const deliveredTo = linkedTezosAddress(user);
   const status = deliveredTo ? 'delivered' : 'held';
+  const currentJob = await readClaimJob(env.AUTH_DB, reservation.row.id);
+  if (currentJob?.state === 'submitted' && currentJob.op_hash && currentJob.operation_id) {
+    const reconciled = await chain.operationStatus(currentJob.op_hash);
+    if (reconciled === 'applied') {
+      await env.AUTH_DB.batch([
+        env.AUTH_DB.prepare(`UPDATE claims SET status = ?, op_hash = ?, delivered_to = ? WHERE id = ?`)
+          .bind(currentJob.target_status, currentJob.op_hash, currentJob.delivered_to, reservation.row.id),
+        env.AUTH_DB.prepare(`UPDATE kennel_claim_jobs SET state = 'confirmed', error = NULL, updated_at = ? WHERE claim_id = ?`)
+          .bind(new Date().toISOString(), reservation.row.id),
+        env.AUTH_DB.prepare(`UPDATE kennel_chain_operations SET status = 'applied', error = NULL, updated_at = ? WHERE id = ?`)
+          .bind(new Date().toISOString(), currentJob.operation_id),
+      ]);
+      return {
+        ok: true,
+        configured: true,
+        claim: {
+          id: reservation.row.id,
+          tokenId,
+          sitting: dogName(tokenId),
+          status: currentJob.target_status,
+          opHash: currentJob.op_hash,
+          deliveredTo: currentJob.delivered_to,
+        },
+      };
+    }
+    if (reconciled !== 'failed') {
+      if (reconciled === 'unknown') await markOperation(env.AUTH_DB, currentJob.operation_id, 'unknown', 'reconciliation-unavailable');
+      return { ok: false, configured: true, reason: 'claim-in-progress' };
+    }
+    await markOperation(env.AUTH_DB, currentJob.operation_id, 'failed', 'chain-operation-failed');
+    await writeClaimJob(env.AUTH_DB, reservation.row.id, status, deliveredTo, 'reserved');
+  } else if (currentJob?.state === 'submitting') {
+    return { ok: false, configured: true, reason: 'claim-in-progress' };
+  }
+
+  const lockHolder = `claim:${reservation.row.id}:${crypto.randomUUID()}`;
+  if (!await acquireSignerLock(env.AUTH_DB, CLAIM_SIGNER_LOCK, lockHolder)) {
+    return { ok: false, configured: true, reason: 'claim-in-progress' };
+  }
+  const operationId = `kop_${crypto.randomUUID().replaceAll('-', '')}`;
+  let injectedHash: string | null = null;
   try {
-    const { opHash } = await chain.mint(tokenId, deliveredTo);
-    await markClaim(env.AUTH_DB, reservation.row.id, status, opHash, deliveredTo);
+    await env.AUTH_DB.prepare(`
+      UPDATE kennel_claim_jobs
+      SET state = 'submitting', target_status = ?, delivered_to = ?, error = NULL, updated_at = ?
+      WHERE claim_id = ? AND state IN ('reserved', 'failed')
+    `).bind(status, deliveredTo, new Date().toISOString(), reservation.row.id).run();
+    const onInjected = async (opHash: string) => {
+      injectedHash = opHash;
+      await persistOperation(env.AUTH_DB!, {
+        id: operationId,
+        action: 'mint',
+        subjectId: reservation.row!.id,
+        opHash,
+      });
+      await env.AUTH_DB!.batch([
+        env.AUTH_DB!.prepare(`
+          UPDATE kennel_claim_jobs
+          SET state = 'submitted', operation_id = ?, error = NULL, updated_at = ?
+          WHERE claim_id = ? AND state = 'submitting'
+        `).bind(operationId, new Date().toISOString(), reservation.row!.id),
+        env.AUTH_DB!.prepare(`UPDATE claims SET op_hash = ?, delivered_to = ? WHERE id = ?`)
+          .bind(opHash, deliveredTo, reservation.row!.id),
+      ]);
+    };
+    const { opHash } = await chain.mint(tokenId, deliveredTo, onInjected);
+    if (!injectedHash) await onInjected(opHash);
+    await env.AUTH_DB.batch([
+      env.AUTH_DB.prepare(`UPDATE claims SET status = ?, op_hash = ?, delivered_to = ? WHERE id = ?`)
+        .bind(status, opHash, deliveredTo, reservation.row.id),
+      env.AUTH_DB.prepare(`UPDATE kennel_claim_jobs SET state = 'confirmed', error = NULL, updated_at = ? WHERE claim_id = ?`)
+        .bind(new Date().toISOString(), reservation.row.id),
+      env.AUTH_DB.prepare(`UPDATE kennel_chain_operations SET status = 'applied', error = NULL, updated_at = ? WHERE id = ?`)
+        .bind(new Date().toISOString(), operationId),
+    ]);
     return {
       ok: true,
       configured: true,
@@ -413,14 +633,46 @@ export async function claimKennelClubDog(options: {
       },
     };
   } catch (error) {
-    await markClaim(env.AUTH_DB, reservation.row.id, 'failed', null, null);
+    const message = error instanceof Error ? error.message : String(error);
+    if (injectedHash) {
+      try {
+        await persistOperation(env.AUTH_DB, {
+          id: operationId,
+          action: 'mint',
+          subjectId: reservation.row.id,
+          opHash: injectedHash,
+        });
+        await env.AUTH_DB.batch([
+          env.AUTH_DB.prepare(`
+            UPDATE kennel_claim_jobs
+            SET state = 'submitted', operation_id = ?, error = ?, updated_at = ? WHERE claim_id = ?
+          `).bind(operationId, message.slice(0, 240), new Date().toISOString(), reservation.row.id),
+          env.AUTH_DB.prepare(`UPDATE claims SET op_hash = ?, delivered_to = ? WHERE id = ?`)
+            .bind(injectedHash, deliveredTo, reservation.row.id),
+        ]);
+        await markOperation(env.AUTH_DB, operationId, 'unknown', message.slice(0, 240));
+      } catch (persistError) {
+        console.error(JSON.stringify({
+          message: 'kennel-club-injected-operation-unrecorded',
+          claimId: reservation.row.id,
+          opHash: injectedHash,
+          error: persistError instanceof Error ? persistError.message : String(persistError),
+        }));
+      }
+    } else {
+      await writeClaimJob(env.AUTH_DB, reservation.row.id, status, deliveredTo, 'failed', message.slice(0, 240));
+      await markClaim(env.AUTH_DB, reservation.row.id, 'failed', reservation.row.op_hash, reservation.row.delivered_to);
+    }
     console.error(JSON.stringify({
       message: 'kennel-club-claim-failed',
       userId: user.userId,
       tokenId,
-      error: error instanceof Error ? error.message : String(error),
+      opHash: injectedHash,
+      error: message,
     }));
-    return { ok: false, configured: true, reason: 'mint-failed' };
+    return { ok: false, configured: true, reason: injectedHash ? 'claim-confirmation-pending' : 'mint-failed' };
+  } finally {
+    await releaseSignerLock(env.AUTH_DB, CLAIM_SIGNER_LOCK, lockHolder).catch(() => undefined);
   }
 }
 
@@ -441,13 +693,6 @@ export async function deliverHeldKennelClubDogs(options: {
   if (!env.AUTH_DB) return { ok: false, configured: claimConfigured(env), reason: 'claim-database-not-bound', delivered: 0, tokenIds: [] };
   if (!claimConfigured(env)) return { ok: false, configured: false, reason: 'claim-wallet-not-configured', delivered: 0, tokenIds: [] };
   if (!TEZOS_ADDRESS.test(deliveredTo)) return { ok: false, configured: true, reason: 'tezos-wallet-required', delivered: 0, tokenIds: [] };
-  const held = await env.AUTH_DB.prepare(`
-    SELECT id, user_id, token_id, status, op_hash, delivered_to, created_at
-    FROM claims
-    WHERE user_id = ? AND status = 'held'
-    ORDER BY token_id ASC
-  `).bind(userId).all<KennelClaimRow>();
-  if (!held.results.length) return { ok: true, configured: true, delivered: 0, tokenIds: [] };
 
   let chain: ClaimChain;
   try {
@@ -461,24 +706,186 @@ export async function deliverHeldKennelClubDogs(options: {
       tokenIds: [],
     };
   }
-  const tokenIds = held.results.map((claim) => Number(claim.token_id));
+
+  const outstanding = await env.AUTH_DB.prepare(`
+    SELECT r.claim_id, r.reservation_id, r.user_id, c.token_id, r.delivered_to,
+           r.state, r.operation_id, o.op_hash, r.created_at, r.updated_at
+    FROM kennel_delivery_reservations r
+    JOIN claims c ON c.id = r.claim_id
+    LEFT JOIN kennel_chain_operations o ON o.id = r.operation_id
+    WHERE r.user_id = ? AND r.state IN ('submitting', 'submitted')
+    ORDER BY r.created_at, c.token_id
+  `).bind(userId).all<DeliveryReservationRow>();
+  const groups = new Map<string, DeliveryReservationRow[]>();
+  for (const row of outstanding.results ?? []) {
+    const rows = groups.get(row.reservation_id) ?? [];
+    rows.push(row);
+    groups.set(row.reservation_id, rows);
+  }
+  for (const rows of groups.values()) {
+    const opHash = rows[0]?.op_hash;
+    const operationId = rows[0]?.operation_id;
+    if (!opHash || !operationId) {
+      return { ok: false, configured: true, reason: 'delivery-in-progress', delivered: 0, tokenIds: [] };
+    }
+    const status = await chain.operationStatus(opHash);
+    if (status === 'applied') {
+      const now = new Date().toISOString();
+      await env.AUTH_DB.batch([
+        ...rows.map((row) => env.AUTH_DB!.prepare(`
+          UPDATE claims SET status = 'delivered', op_hash = ?, delivered_to = ? WHERE id = ? AND status = 'held'
+        `).bind(opHash, row.delivered_to, row.claim_id)),
+        ...rows.map((row) => env.AUTH_DB!.prepare(`
+          UPDATE kennel_delivery_reservations SET state = 'confirmed', error = NULL, updated_at = ? WHERE claim_id = ?
+        `).bind(now, row.claim_id)),
+        env.AUTH_DB.prepare(`UPDATE kennel_chain_operations SET status = 'applied', error = NULL, updated_at = ? WHERE id = ?`)
+          .bind(now, operationId),
+      ]);
+      return {
+        ok: true,
+        configured: true,
+        delivered: rows.length,
+        tokenIds: rows.map((row) => Number(row.token_id)),
+        opHash,
+      };
+    }
+    if (status !== 'failed') {
+      if (status === 'unknown') await markOperation(env.AUTH_DB, operationId, 'unknown', 'reconciliation-unavailable');
+      return { ok: false, configured: true, reason: 'delivery-in-progress', delivered: 0, tokenIds: [] };
+    }
+    const now = new Date().toISOString();
+    await env.AUTH_DB.batch([
+      ...rows.map((row) => env.AUTH_DB!.prepare(`
+        UPDATE kennel_delivery_reservations SET state = 'failed', error = 'chain-operation-failed', updated_at = ? WHERE claim_id = ?
+      `).bind(now, row.claim_id)),
+      env.AUTH_DB.prepare(`UPDATE kennel_chain_operations SET status = 'failed', error = 'chain-operation-failed', updated_at = ? WHERE id = ?`)
+        .bind(now, operationId),
+    ]);
+  }
+
+  const held = await env.AUTH_DB.prepare(`
+    SELECT id, user_id, token_id, status, op_hash, delivered_to, created_at
+    FROM claims WHERE user_id = ? AND status = 'held' ORDER BY token_id ASC
+  `).bind(userId).all<KennelClaimRow>();
+  if (!held.results.length) return { ok: true, configured: true, delivered: 0, tokenIds: [] };
+
+  const reservationId = `kdr_${crypto.randomUUID().replaceAll('-', '')}`;
+  const reservedAt = new Date().toISOString();
+  await env.AUTH_DB.batch(held.results.map((claim) => env.AUTH_DB!.prepare(`
+    INSERT INTO kennel_delivery_reservations
+      (claim_id, reservation_id, user_id, delivered_to, state, operation_id, error, created_at, updated_at)
+    SELECT ?, ?, ?, ?, 'reserved', NULL, NULL, ?, ?
+    FROM claims WHERE id = ? AND user_id = ? AND status = 'held'
+    ON CONFLICT(claim_id) DO UPDATE SET
+      reservation_id = excluded.reservation_id,
+      delivered_to = excluded.delivered_to,
+      state = 'reserved',
+      operation_id = NULL,
+      error = NULL,
+      updated_at = excluded.updated_at
+    WHERE kennel_delivery_reservations.state = 'failed'
+  `).bind(
+    claim.id, reservationId, userId, deliveredTo, reservedAt, reservedAt,
+    claim.id, userId,
+  )));
+  const reserved = await env.AUTH_DB.prepare(`
+    SELECT r.claim_id, r.reservation_id, r.user_id, c.token_id, r.delivered_to,
+           r.state, r.operation_id, NULL AS op_hash, r.created_at, r.updated_at
+    FROM kennel_delivery_reservations r
+    JOIN claims c ON c.id = r.claim_id
+    WHERE r.reservation_id = ? AND r.state = 'reserved'
+    ORDER BY c.token_id
+  `).bind(reservationId).all<DeliveryReservationRow>();
+  if (!reserved.results.length) {
+    return { ok: false, configured: true, reason: 'delivery-in-progress', delivered: 0, tokenIds: [] };
+  }
+  const tokenIds = reserved.results.map((claim) => Number(claim.token_id));
+  const lockHolder = `delivery:${reservationId}`;
+  if (!await acquireSignerLock(env.AUTH_DB, CLAIM_SIGNER_LOCK, lockHolder)) {
+    return { ok: false, configured: true, reason: 'delivery-in-progress', delivered: 0, tokenIds: [] };
+  }
+  const operationId = `kop_${crypto.randomUUID().replaceAll('-', '')}`;
+  let injectedHash: string | null = null;
   try {
-    const { opHash } = await chain.deliver(tokenIds, deliveredTo);
-    const statements = held.results.map((claim) => env.AUTH_DB!.prepare(`
-      UPDATE claims
-      SET status = 'delivered', op_hash = ?, delivered_to = ?
-      WHERE id = ? AND status = 'held'
-    `).bind(opHash, deliveredTo, claim.id));
-    await env.AUTH_DB.batch(statements);
+    await env.AUTH_DB.prepare(`
+      UPDATE kennel_delivery_reservations SET state = 'submitting', updated_at = ?
+      WHERE reservation_id = ? AND state = 'reserved'
+    `).bind(new Date().toISOString(), reservationId).run();
+    const onInjected = async (opHash: string) => {
+      injectedHash = opHash;
+      await persistOperation(env.AUTH_DB!, { id: operationId, action: 'deliver', subjectId: reservationId, opHash });
+      const now = new Date().toISOString();
+      await env.AUTH_DB!.batch([
+        ...reserved.results.map((row) => env.AUTH_DB!.prepare(`
+          UPDATE kennel_delivery_reservations
+          SET state = 'submitted', operation_id = ?, error = NULL, updated_at = ?
+          WHERE claim_id = ? AND reservation_id = ? AND state = 'submitting'
+        `).bind(operationId, now, row.claim_id, reservationId)),
+        ...reserved.results.map((row) => env.AUTH_DB!.prepare(`UPDATE claims SET op_hash = ?, delivered_to = ? WHERE id = ?`)
+          .bind(opHash, deliveredTo, row.claim_id)),
+      ]);
+    };
+    const { opHash } = await chain.deliver(tokenIds, deliveredTo, onInjected);
+    if (!injectedHash) await onInjected(opHash);
+    const now = new Date().toISOString();
+    await env.AUTH_DB.batch([
+      ...reserved.results.map((row) => env.AUTH_DB!.prepare(`
+        UPDATE claims SET status = 'delivered', op_hash = ?, delivered_to = ?
+        WHERE id = ? AND status = 'held'
+      `).bind(opHash, deliveredTo, row.claim_id)),
+      ...reserved.results.map((row) => env.AUTH_DB!.prepare(`
+        UPDATE kennel_delivery_reservations SET state = 'confirmed', error = NULL, updated_at = ? WHERE claim_id = ?
+      `).bind(now, row.claim_id)),
+      env.AUTH_DB.prepare(`UPDATE kennel_chain_operations SET status = 'applied', error = NULL, updated_at = ? WHERE id = ?`)
+        .bind(now, operationId),
+    ]);
     return { ok: true, configured: true, delivered: tokenIds.length, tokenIds, opHash };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (injectedHash) {
+      try {
+        await persistOperation(env.AUTH_DB, { id: operationId, action: 'deliver', subjectId: reservationId, opHash: injectedHash });
+        const now = new Date().toISOString();
+        await env.AUTH_DB.batch([
+          ...reserved.results.map((row) => env.AUTH_DB!.prepare(`
+            UPDATE kennel_delivery_reservations
+            SET state = 'submitted', operation_id = ?, error = ?, updated_at = ? WHERE claim_id = ?
+          `).bind(operationId, message.slice(0, 240), now, row.claim_id)),
+          ...reserved.results.map((row) => env.AUTH_DB!.prepare(`UPDATE claims SET op_hash = ?, delivered_to = ? WHERE id = ?`)
+            .bind(injectedHash, deliveredTo, row.claim_id)),
+        ]);
+        await markOperation(env.AUTH_DB, operationId, 'unknown', message.slice(0, 240));
+      } catch (persistError) {
+        console.error(JSON.stringify({
+          message: 'kennel-club-injected-delivery-unrecorded',
+          reservationId,
+          opHash: injectedHash,
+          error: persistError instanceof Error ? persistError.message : String(persistError),
+        }));
+      }
+    } else {
+      await env.AUTH_DB.prepare(`
+        UPDATE kennel_delivery_reservations SET state = 'failed', error = ?, updated_at = ?
+        WHERE reservation_id = ? AND state = 'submitting'
+      `).bind(message.slice(0, 240), new Date().toISOString(), reservationId).run();
+    }
     console.error(JSON.stringify({
       message: 'kennel-club-delivery-failed',
       userId,
       deliveredTo,
       tokenIds,
-      error: error instanceof Error ? error.message : String(error),
+      opHash: injectedHash,
+      error: message,
     }));
-    return { ok: false, configured: true, reason: 'delivery-failed', delivered: 0, tokenIds: [] };
+    return {
+      ok: false,
+      configured: true,
+      reason: injectedHash ? 'delivery-in-progress' : 'delivery-failed',
+      delivered: 0,
+      tokenIds: [],
+      ...(injectedHash ? { opHash: injectedHash } : {}),
+    };
+  } finally {
+    await releaseSignerLock(env.AUTH_DB, CLAIM_SIGNER_LOCK, lockHolder).catch(() => undefined);
   }
 }
