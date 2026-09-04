@@ -1,5 +1,5 @@
 import type { AuthSession, PointCastUser } from './auth/types';
-export { hasDirectorDeskAccess, isDirector } from './director-access';
+export { hasDirectorDeskAccess, isDirector } from './director-access.ts';
 
 export interface FrontDoorSession {
   session?: AuthSession;

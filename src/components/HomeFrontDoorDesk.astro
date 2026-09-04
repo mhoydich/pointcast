@@ -27,8 +27,8 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
       <div class="director-desk__head">
         <div>
           <p class="front-desk__kicker">Private · chain + registry + town operations</p>
-          <h2 id="director-desk-title">Director’s desk</h2>
-          <p>What needs Mike’s signature now. Chain rows clear themselves after the next 60-second read.</p>
+          <h2 id="director-desk-title"><a href="/desk">Director’s desk →</a></h2>
+          <p>Three live rows from the executive desk. Open the desk to sign, inspect the till, or close an operating item.</p>
         </div>
         <span class="director-desk__count" data-director-count></span>
       </div>
@@ -101,7 +101,7 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
 </section>
 
 <script>
-  import { claimedToday, isDirector } from '../lib/front-door-desk';
+  import { claimedToday, hasDirectorDeskAccess } from '../lib/front-door-desk';
   import { hydrateKennelToday } from '../lib/kennel-today-client';
 
   interface CollectMe {
@@ -122,6 +122,7 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
     done: boolean;
     value?: string;
     state?: string;
+    kind?: string;
   }
 
   const mountFrontDoorDesk = () => {
@@ -195,14 +196,15 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
       if (count) count.textContent = `${open.length} open`;
       const list = fragment.querySelector<HTMLOListElement>('[data-director-rows]');
       if (list) {
-        for (const row of rows) {
+        const mirrorRows = [...open, ...rows.filter((row) => row.done)].slice(0, 3);
+        for (const row of mirrorRows) {
           const item = document.createElement('li');
           item.className = row.done ? 'is-done' : '';
           const link = document.createElement('a');
-          link.href = row.href;
+          link.href = '/desk';
           const mark = document.createElement('span');
           mark.className = 'director-desk__mark';
-          mark.textContent = row.done ? 'done ✓' : row.state === 'unknown' ? 'check' : 'sign';
+          mark.textContent = row.done ? 'done ✓' : row.state === 'unknown' ? 'check' : row.kind === 'signature' ? 'sign' : 'open';
           const copy = document.createElement('span');
           const strong = document.createElement('strong');
           strong.textContent = row.what;
@@ -236,7 +238,7 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
           root.dataset.meStateVersion = String(state.version ?? 'current');
         }
         if (collectResponse.ok) renderPerson(await collectResponse.json() as CollectMe);
-        if (isDirector(session)) {
+        if (hasDirectorDeskAccess(session)) {
           const queueResponse = await fetch('/api/director/queue', { credentials: 'same-origin', signal });
           if (queueResponse.ok) {
             const queue = await queueResponse.json();
@@ -299,7 +301,7 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
   :global(.director-desk__head h2) { margin: 0; font-size: 29px; letter-spacing: -.04em; }
   :global(.director-desk__head p:last-child) { max-width: 70ch; margin: 6px 0 0; font-size: 12px; }
   :global(.director-desk__count) { flex: none; padding: 7px 9px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  :global(.director-desk__rows) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+  :global(.director-desk__rows) { display: grid; grid-template-columns: 1fr; margin: 0; padding: 0; list-style: none; }
   :global(.director-desk__rows li) { border-right: 1px solid rgba(0, 0, 0, .18); border-bottom: 1px solid rgba(0, 0, 0, .18); }
   :global(.director-desk__rows a) { display: grid; grid-template-columns: 52px 1fr; gap: 12px; min-height: 82px; padding: 13px 15px; }
   :global(.director-desk__rows a:hover) { background: #fff; }
@@ -320,7 +322,6 @@ const displayDate = new Intl.DateTimeFormat('en-US', {
     .front-desk__plate img { min-height: 390px; }
     .front-desk__copy { padding: 26px 18px; }
     .front-desk h1 { font-size: clamp(44px, 14vw, 64px); }
-    :global(.director-desk__rows) { grid-template-columns: 1fr; }
     :global(.director-desk__head) { align-items: start; }
   }
 </style>

@@ -118,6 +118,7 @@ test('the chain-derived queue emits exact one-click operations plus till and tod
 test('a mocked Beacon operation uses methodsObject, broadcasts, and asks for one confirmation', async () => {
   await withModules(async ({ operations }) => {
     const calls = [];
+    const methodArgs = [];
     const confirmations = [];
     const result = await operations.sendDirectorOperationWith(
       { contract: SEALS_V2, entrypoint: 'set_issuer', args: { issuer: ADMIN, allowed: true } },
@@ -125,12 +126,15 @@ test('a mocked Beacon operation uses methodsObject, broadcasts, and asks for one
         connect: async () => ADMIN,
         at: async (address) => ({
           methodsObject: {
-            set_issuer: (...args) => ({
+            set_issuer: (...args) => {
+              methodArgs.push(args);
+              return ({
               send: async () => ({
                 opHash: OP_HASH,
                 confirmation: async (count) => { confirmations.push(count); },
               }),
-            }),
+              });
+            },
           },
           address,
         }),
@@ -139,8 +143,27 @@ test('a mocked Beacon operation uses methodsObject, broadcasts, and asks for one
     calls.push(result.address, result.opHash);
     await result.confirmation;
     assert.deepEqual(calls, [ADMIN, OP_HASH]);
+    assert.deepEqual(methodArgs, [[{ issuer: ADMIN, allowed: true }]]);
     assert.deepEqual(confirmations, [1]);
   });
+});
+
+test('/desk renders the signed-out door first and the three live dashboard columns after authorization', async () => {
+  const [page, home] = await Promise.all([
+    readFile(new URL('../src/pages/desk.astro', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/HomeFrontDoorDesk.astro', import.meta.url), 'utf8'),
+  ]);
+  assert.match(page, /data-director-door/);
+  assert.match(page, /data-director-board hidden/);
+  assert.match(page, />Signatures</);
+  assert.match(page, />The till</);
+  assert.match(page, />Today</);
+  assert.match(page, /submitDirectorOperation\(row\.operation\)/);
+  assert.match(page, /https:\/\/tzkt\.io\/\$\{state\.opHash\}/);
+  assert.match(page, /const POLL_MS = 60_000/);
+  assert.match(page, /method: 'POST'/);
+  assert.match(home, /href="\/desk">Director’s desk/);
+  assert.match(home, /\.slice\(0, 3\)/);
 });
 
 test('manual Done writes are director-only and persist only allowlisted queue ids', async () => {
