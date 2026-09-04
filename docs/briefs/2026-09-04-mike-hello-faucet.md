@@ -5,13 +5,9 @@
 **Page:** `/faucet/hello`
 **Status:** PR #1049 is merged. Once Cloudflare finishes the build from main, people can sign in and **claim** (ledger only). **Sending** opens the moment the one secret below is set and the site is redeployed. There is no migration step: the tables create themselves on first use.
 
-## Mike's decision (2026-09-04)
+## Correction (2026-09-04, later): the deployer is Leonar's
 
-> "there is no value to any of them and if you really wanted to say compromise, i have no recourse anyway, we are a team"
-
-So the spigot **is the 2019 deployer wallet** (`0x676a…186e`). It already holds the HELLO supply; nothing needs transferring, and no fresh wallet is created. The blast radius is the whole HELLO supply plus whatever ETH sits in that wallet, and Mike has accepted that. The original fresh-wallet path is kept below as the alternative if that ever changes.
-
-cc does not hold the key and did not read the spreadsheet; the sandbox's permission classifier blocks credential handling, and the sandbox cannot reach an Ethereum RPC or the Cloudflare API in any case. The paste is Mike's, one time, into Cloudflare.
+Mike: "leonar was the holder of the contract not me." So the HELLO deployer `0x676a…186e` is not Mike's wallet and its key is not in play. The spigot is a **fresh wallet**: Leonar sends it HELLO, Mike's MetaMask sends it a little ETH, and only that fresh key goes to Cloudflare. The runbook for that is `docs/briefs/2026-09-04-sol-hello-spigot.md`; the sections below are kept for the record but superseded where they say the spigot is the deployer.
 
 ## The three steps (about five minutes)
 
