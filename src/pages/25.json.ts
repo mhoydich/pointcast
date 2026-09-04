@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { POINTCAST_25 } from '../lib/pointcast-25';
+import { POINTCAST_25, POINTCAST_25_EDITIONS } from '../lib/pointcast-25';
 import { POINTCAST_25_TEAMS } from '../lib/pointcast-25-audience';
 
 export const GET: APIRoute = () =>
@@ -9,7 +9,7 @@ export const GET: APIRoute = () =>
         ...POINTCAST_25,
         canonical: 'https://pointcast.xyz/25',
         machineEdition: 'https://pointcast.xyz/25.json',
-        block: 'https://pointcast.xyz/b/0510',
+        block: `https://pointcast.xyz/b/${POINTCAST_25.block}`,
         discovery: {
           collegeFootballMagazine: 'https://pointcast.xyz/25/magazine',
           collegeFootballMagazineJson: 'https://pointcast.xyz/25/magazine.json',
@@ -22,8 +22,19 @@ export const GET: APIRoute = () =>
           disagreementIndexJson: 'https://pointcast.xyz/25/disagreements.json',
           receiptBook: 'https://pointcast.xyz/25/receipts',
           receiptBookJson: 'https://pointcast.xyz/25/receipts.json',
-          immutableBoard: 'https://pointcast.xyz/25/boards/000',
-          immutableBoardJson: 'https://pointcast.xyz/25/boards/000.json',
+          immutableBoard: 'https://pointcast.xyz/25/boards/001',
+          immutableBoardJson: 'https://pointcast.xyz/25/boards/001.json',
+          previousBoard: 'https://pointcast.xyz/25/boards/000',
+          previousBoardJson: 'https://pointcast.xyz/25/boards/000.json',
+          immutableBoards: POINTCAST_25_EDITIONS.map((edition) => ({
+            board: edition.board,
+            status: edition.status,
+            publishedAt: edition.publishedAt,
+            human: edition.snapshot,
+            json: edition.machine,
+            block: edition.human,
+            integrity: edition.integrity,
+          })),
           fieldFiles: [
             {
               title: 'The State of Alabama / The State of Nick Saban',

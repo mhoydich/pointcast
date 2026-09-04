@@ -3,6 +3,7 @@ import BlockLayout from '../../layouts/BlockLayout.astro';
 import {
   POINTCAST_25,
   POINTCAST_25_SIGNAL_LABELS,
+  type PointCast25Movement,
   type PointCast25Signal,
 } from '../../lib/pointcast-25';
 import {
@@ -14,6 +15,29 @@ import { POINTCAST_25_ALABAMA } from '../../lib/pointcast-25-alabama';
 const description =
   'PointCast 25 is a college-football poll with receipts: one case, one doubt, and one next proof for every ranked team.';
 const topFive = POINTCAST_25.teams.slice(0, 5);
+const statusLabel = POINTCAST_25.status.replace(/-/g, ' ').toUpperCase();
+const movementCounts: Record<PointCast25Movement, number> = { UP: 0, DOWN: 0, HOLD: 0, NEW: 0 };
+for (const team of POINTCAST_25.teams) movementCounts[team.movement] += 1;
+const gamesPlayed = POINTCAST_25.teams.filter((team) => team.result !== null).length;
+
+type BoardTeam = (typeof POINTCAST_25.teams)[number];
+
+function movementLabel(team: BoardTeam): string {
+  if (team.movement === 'NEW' || team.previousRank === null) return 'NEW';
+  if (team.movement === 'HOLD') return 'HOLD';
+  const delta = Math.abs(team.previousRank - team.rank);
+  return `${team.movement === 'UP' ? '▲' : '▼'} ${delta}`;
+}
+
+function movementTitle(team: BoardTeam): string {
+  return team.previousRank === null
+    ? `Not on Board ${POINTCAST_25.previousBoard}`
+    : `Board ${POINTCAST_25.previousBoard}: No. ${team.previousRank}`;
+}
+
+function sourceHost(url: string): string {
+  return new URL(url).hostname.replace(/^www\./, '');
+}
 const published = new Intl.DateTimeFormat('en-US', {
   month: 'long',
   day: 'numeric',
@@ -64,15 +88,15 @@ const jsonLd = {
 <BlockLayout
   title="25 FOR REASONS"
   description={description}
-  image="/images/pointcast-25/board-000.png"
+  image="/images/pointcast-25/board-001.png"
   themeColor="#f4ff3f"
   jsonLd={jsonLd}
   alternates={[
-    { type: 'application/json', href: '/25.json', title: 'PointCast 25 Board 000 JSON' },
+    { type: 'application/json', href: '/25.json', title: `PointCast 25 Board ${POINTCAST_25.board} JSON` },
     { type: 'application/rss+xml', href: '/c/spinning.rss', title: 'PointCast Spinning RSS' },
   ]}
   frame={{
-    image: 'https://pointcast.xyz/images/pointcast-25/board-000.png',
+    image: 'https://pointcast.xyz/images/pointcast-25/board-001.png',
     aspectRatio: '1.91:1',
     buttons: [
       { label: 'Open the 25', action: 'link', target: 'https://pointcast.xyz/25' },
@@ -104,7 +128,7 @@ const jsonLd = {
       <section class="hero" aria-labelledby="p25-title">
         <div class="hero__number" aria-hidden="true">25</div>
         <div class="hero__copy">
-          <p class="eyebrow">BOARD {POINTCAST_25.board} · PRESEASON · {published}</p>
+          <p class="eyebrow">BOARD {POINTCAST_25.board} · {statusLabel} · {published}</p>
           <h1 id="p25-title">FOR<br /><em>REASONS</em></h1>
           <p class="hero__dek">{POINTCAST_25.subtitle}</p>
           <p class="hero__question">{POINTCAST_25.question}</p>
@@ -252,6 +276,13 @@ const jsonLd = {
           <div>
             <p class="section-label">THE BELIEF BOARD</p>
             <h2 id="board-title">Board {POINTCAST_25.board}</h2>
+            <p class="board-head__moves" aria-label={`Board ${POINTCAST_25.board} movement summary`}>
+              <span data-move="UP">{movementCounts.UP} UP</span>
+              <span data-move="DOWN">{movementCounts.DOWN} DOWN</span>
+              <span data-move="HOLD">{movementCounts.HOLD} HOLD</span>
+              <span data-move="NEW">{movementCounts.NEW} NEW</span>
+              <span data-move="PLAYED">{gamesPlayed} OF {POINTCAST_25.teams.length} PLAYED</span>
+            </p>
           </div>
           <p class="board-head__note">
             Tap a team for its receipts. Pin teams locally for your Saturday board.
@@ -281,12 +312,16 @@ const jsonLd = {
               <article>
                 <div class="team__rank">
                   <span>{String(team.rank).padStart(2, '0')}</span>
-                  <small>{team.movement}</small>
+                  <small class="move" data-movement={team.movement} title={movementTitle(team)}>{movementLabel(team)}</small>
                 </div>
                 <div class="team__identity">
                   <p>{team.conference} · {POINTCAST_25_SIGNAL_LABELS[team.signal as PointCast25Signal]}</p>
                   <h3><a href={`/25/teams/${pointcast25TeamSlug(team.school)}`}>{team.school}</a></h3>
                   <p class="team__reason">{team.reason}</p>
+                  <p class="team__change">
+                    <span>CHANGE · FROM BOARD {POINTCAST_25.previousBoard}</span>
+                    {team.change}
+                  </p>
                 </div>
                 <button
                   class="pin"
@@ -312,6 +347,14 @@ const jsonLd = {
                     <div>
                       <span>NEXT PROOF</span>
                       <p>{team.proof}</p>
+                    </div>
+                    <div class="receipts__sources">
+                      <span>SOURCES · BOARD {POINTCAST_25.board}</span>
+                      <ul>
+                        {team.sources.map((url) => (
+                          <li><a href={url} target="_blank" rel="noopener">{sourceHost(url)} ↗</a></li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                 </details>
@@ -340,6 +383,10 @@ const jsonLd = {
             </li>
           ))}
         </ol>
+        <p class="method__note">
+          <span>EDITOR’S NOTE · BOARD {POINTCAST_25.board}</span>
+          {POINTCAST_25.editorsNote}
+        </p>
       </section>
 
       <section class="week" aria-labelledby="week-title">
@@ -406,7 +453,7 @@ const jsonLd = {
       <footer class="p25-footer">
         <div>
           <strong>25 FOR REASONS</strong>
-          <span>Board {POINTCAST_25.board} · Block 0510</span>
+          <span>Board {POINTCAST_25.board} · Block {POINTCAST_25.block}</span>
         </div>
       <nav aria-label="PointCast 25 footer navigation">
         <a href="/25/magazine">Magazine</a>
@@ -414,10 +461,12 @@ const jsonLd = {
         <a href="/25/disagreements">Disagreements</a>
         <a href="/25/receipts">Receipts</a>
         <a href="/25/boards/000">Permanent Board 000</a>
+        <a href="/25/boards/001">Permanent Board 001</a>
         <a href="/25/season">Season ledger</a>
         <a href="/25.json">JSON</a>
           <a href="/c/spinning.rss">RSS</a>
-          <a href="/b/0510">Permanent Block</a>
+          <a href={`/b/${POINTCAST_25.block}`}>Block {POINTCAST_25.block} · Board {POINTCAST_25.board}</a>
+          <a href="/b/0510">Block 0510 · Board 000</a>
           <a href="/">PointCast</a>
         </nav>
       </footer>
@@ -1233,6 +1282,110 @@ const jsonLd = {
     font-size: 14px;
     line-height: 1.5;
     margin: 10px 0 0;
+  }
+
+  .move {
+    border: 1px solid currentColor;
+    display: inline-block;
+    font-weight: 800;
+    margin-top: 6px;
+    padding: 2px 6px;
+  }
+
+  .move[data-movement='UP'] {
+    color: #0f6e3a;
+  }
+
+  .move[data-movement='DOWN'] {
+    color: #ba0c2f;
+  }
+
+  .move[data-movement='NEW'] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--signal);
+  }
+
+  .board-head__moves {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0 0;
+  }
+
+  .board-head__moves span {
+    border: 1px solid var(--ink);
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+  }
+
+  .board-head__moves span[data-move='HOLD'],
+  .board-head__moves span[data-move='PLAYED'] {
+    background: var(--ink);
+    color: var(--signal);
+  }
+
+  .team__change {
+    border-left: 2px solid var(--team-accent);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 12px 0 0;
+    max-width: 860px;
+    padding-left: 12px;
+  }
+
+  .team__change span {
+    color: #686762;
+    display: block;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .receipts__sources {
+    grid-column: 1 / -1;
+  }
+
+  .receipts__sources ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+  }
+
+  .receipts__sources a {
+    color: inherit;
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-underline-offset: 3px;
+  }
+
+  .method__note {
+    border-top: 1px solid #56554f;
+    color: #c8c7c0;
+    font-size: 15px;
+    grid-column: 1 / -1;
+    line-height: 1.55;
+    margin: 30px 0 0;
+    max-width: 900px;
+    padding-top: 22px;
+  }
+
+  .method__note span {
+    color: var(--signal);
+    display: block;
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    margin-bottom: 8px;
   }
 
   .method {

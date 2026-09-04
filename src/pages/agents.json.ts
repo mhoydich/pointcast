@@ -141,6 +141,8 @@ export const GET: APIRoute = async () => {
         pointcast25ReceiptsJson: 'https://pointcast.xyz/25/receipts.json',
         pointcast25Board000: 'https://pointcast.xyz/25/boards/000',
         pointcast25Board000Json: 'https://pointcast.xyz/25/boards/000.json',
+        pointcast25Board001: 'https://pointcast.xyz/25/boards/001',
+        pointcast25Board001Json: 'https://pointcast.xyz/25/boards/001.json',
         pointcast25TeamPattern: 'https://pointcast.xyz/25/teams/{team-slug}',
         pointcast25TeamJsonPattern: 'https://pointcast.xyz/25/teams/{team-slug}.json',
         pointcast25Season: 'https://pointcast.xyz/25/season',

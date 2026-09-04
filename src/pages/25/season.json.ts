@@ -11,6 +11,8 @@ export const GET: APIRoute = () =>
         canonical: 'https://pointcast.xyz/25/season',
         machineEdition: 'https://pointcast.xyz/25/season.json',
         currentBoard: 'https://pointcast.xyz/25.json',
+        currentBoardId: POINTCAST_25.board,
+        nextBoardAt: POINTCAST_25.nextBoardAt,
         cadence: POINTCAST_25.cadence,
         boards: POINTCAST_25_EDITIONS,
       },

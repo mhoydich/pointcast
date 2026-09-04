@@ -186,7 +186,8 @@ test('the public receipt book opens every preseason claim and defines durable gr
   assert.match(endpoint, /PROVEN/);
   assert.match(endpoint, /DEAD/);
   assert.match(boardPage, /IMMUTABLE EDITION/);
-  assert.match(boardPage, /POINTCAST_25_TEAMS\.map/);
+  assert.match(boardPage, /pointcast-25-board-000\.frozen\.json/);
+  assert.doesNotMatch(boardPage, /POINTCAST_25_TEAMS/);
 });
 
 test('the audience desk is advertised across human, machine, LLM, and homepage discovery', async () => {

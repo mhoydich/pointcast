@@ -4,6 +4,12 @@ import { POINTCAST_25, POINTCAST_25_EDITIONS } from '../../lib/pointcast-25';
 
 const description =
   'The permanent 2026 PointCast 25 season ledger: every board, every opening reason, and every movement kept for the final autopsy.';
+const nextBoard = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  timeZone: 'America/Los_Angeles',
+}).format(new Date(POINTCAST_25.nextBoardAt));
 ---
 
 <BlockLayout
@@ -52,7 +58,7 @@ const description =
               <div class="board-id">
                 <span>BOARD</span>
                 <strong>{edition.board}</strong>
-                <small>{edition.status}</small>
+                <small>{edition.status.replace(/-/g, ' ')}</small>
               </div>
               <div class="board-copy">
                 <time datetime={edition.publishedAt}>
@@ -64,6 +70,17 @@ const description =
                   }).format(new Date(edition.publishedAt))}
                 </time>
                 <h3>{edition.question}</h3>
+                {'movements' in edition && (
+                  <p class="movements" aria-label={`Board ${edition.board} movement summary`}>
+                    <span>{edition.movements.up} up</span>
+                    <span>{edition.movements.down} down</span>
+                    <span>{edition.movements.hold} hold</span>
+                    <span>{edition.movements.new} new</span>
+                    <span>{edition.movements.dropped} dropped</span>
+                    <span>{edition.movements.gamesPlayed} {edition.movements.gamesPlayed === 1 ? 'game' : 'games'} played</span>
+                    <em>{edition.biggestMove}</em>
+                  </p>
+                )}
                 <ol aria-label={`Board ${edition.board} top five`}>
                   {edition.leaders.map((team) => (
                     <li>
@@ -78,6 +95,9 @@ const description =
                   <a href={edition.snapshot}>Read permanent Board {edition.board}</a>
                   <a href={edition.human}>Permanent Block {edition.block}</a>
                   <a href={edition.machine}>Immutable board JSON</a>
+                  {'previous' in edition && (
+                    <a href={`/25/boards/${edition.previous}`}>From Board {edition.previous}</a>
+                  )}
                 </div>
                 {'integrity' in edition && (
                   <p class="integrity">
@@ -94,7 +114,7 @@ const description =
 
     <footer>
       <strong>NEXT BOARD</strong>
-      <span>Tuesday · 08:08 PT</span>
+      <span>{nextBoard} · 08:08 PT</span>
       <a href="/api/25/checkout" target="_blank" rel="noopener sponsored">Back the season · $25 ↗</a>
     </footer>
   </main>
@@ -253,6 +273,30 @@ const description =
     color: #aaa8a1;
     font-size: 12px;
     margin: 0;
+  }
+
+  .movements {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: -20px 0 24px;
+  }
+
+  .movements span {
+    border: 1px solid #77756f;
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    padding: 5px 8px;
+    text-transform: uppercase;
+  }
+
+  .movements em {
+    color: #aaa8a1;
+    flex-basis: 100%;
+    font-size: 13px;
+    font-style: normal;
+    margin-top: 6px;
   }
 
   .links {
