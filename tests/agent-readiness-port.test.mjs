@@ -69,3 +69,28 @@ test('agent readiness scores the local pointcast.xyz dist without network access
     }
   });
 });
+
+test('agent readiness re-validates every redirect hop and refuses redirects into private hosts', async () => {
+  await withChecker(async ({ onRequestGet }) => {
+    const originalFetch = globalThis.fetch;
+    const seen = [];
+    globalThis.fetch = async (input, init) => {
+      const url = new URL(String(input));
+      seen.push(url.toString());
+      assert.equal(init?.redirect, 'manual', 'checker must not auto-follow redirects');
+      if (url.hostname === 'redirector.example') {
+        return new Response('', { status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data/' } });
+      }
+      throw new Error(`private host reached: ${url}`);
+    };
+    try {
+      const response = await onRequestGet({ request: new Request('https://pointcast.xyz/api/agent-readiness?url=https%3A%2F%2Fredirector.example%2F') });
+      // The redirector itself is fetched once; the hop into the metadata host is refused, so the
+      // checker reports the target as unreachable (502) rather than following it.
+      assert.equal(response.status, 502);
+      assert.deepEqual(seen, ['https://redirector.example/']);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

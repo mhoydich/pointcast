@@ -78,20 +78,49 @@ function isBlockedHost(host: string): boolean {
   return false;
 }
 
+const MAX_REDIRECTS = 5;
+
+/** Only http(s) URLs whose host is not private/loopback/link-local may be fetched — checked on every hop. */
+export function isFetchableUrl(raw: string): URL | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  if (isBlockedHost(u.hostname)) return null;
+  return u;
+}
+
 async function get(url: string): Promise<{ ok: boolean; status: number; body: string; contentType: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      redirect: 'follow',
-      signal: controller.signal,
-      headers: {
-        // Identify honestly. We are a checker, not a browser.
-        'User-Agent': 'PointCast-AgentReadiness/1.0 (+https://pointcast.xyz/agent-readiness)',
-        Accept: '*/*',
-      },
-      cf: { cacheTtl: 300, cacheEverything: true },
-    });
+    // Redirects are followed by hand so every hop is re-validated against the
+    // host blocklist — `redirect: 'follow'` would let a public URL 302 us into
+    // 169.254.169.254 or localhost.
+    let current = isFetchableUrl(url);
+    if (!current) return { ok: false, status: 0, body: '', contentType: '' };
+    let res: Response | null = null;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      res = await fetch(current.toString(), {
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: {
+          // Identify honestly. We are a checker, not a browser.
+          'User-Agent': 'PointCast-AgentReadiness/1.0 (+https://pointcast.xyz/agent-readiness)',
+          Accept: '*/*',
+        },
+        cf: { cacheTtl: 300, cacheEverything: true },
+      });
+      const location = res.headers.get('location');
+      if (res.status < 300 || res.status > 399 || !location) break;
+      const next = isFetchableUrl(new URL(location, current).toString());
+      if (!next) return { ok: false, status: 0, body: '', contentType: '' };
+      current = next;
+    }
+    if (!res) return { ok: false, status: 0, body: '', contentType: '' };
     const contentType = res.headers.get('content-type') ?? '';
     // Read a bounded prefix — enough to inspect a <head>, not enough to be abused.
     const buf = await res.arrayBuffer();
