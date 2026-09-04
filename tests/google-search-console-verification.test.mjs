@@ -9,4 +9,5 @@ test('Google Search Console verification file ships and is crawlable', (t) => {
   assert.ok(existsSync(`dist/${verificationFile}`), `dist/${verificationFile} is missing`);
   assert.doesNotMatch(readFileSync('dist/robots.txt', 'utf8'), new RegExp(`^Disallow:\\s*/${verificationFile.replace('.', '\\.')}$`, 'mi'));
   assert.match(readFileSync('functions/_middleware.ts', 'utf8'), /STATIC_ASSET_REGEX = \/\\\.\([^)]*\bhtml\b[^)]*\)/);
+  assert.ok(existsSync(`functions/${verificationFile}.ts`), 'Pages Function must bypass the platform .html redirect');
 });
