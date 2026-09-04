@@ -79,6 +79,8 @@ export const GET: APIRoute = async () => {
   const contractSources = buildContractRegistry();
 
   const payload = {
+    capabilityIndex: 'https://pointcast.xyz/api/capabilities',
+    capabilitiesPage: 'https://pointcast.xyz/capabilities',
     $schema: 'https://pointcast.xyz/BLOCKS.md',
     name: 'PointCast',
     description: SITE_DESCRIPTION,
