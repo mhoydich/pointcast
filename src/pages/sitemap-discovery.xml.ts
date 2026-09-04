@@ -46,6 +46,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/nouns-nation/roadmap', 'weekly', '0.85'],
   ['https://pointcast.xyz/nouns-nation/roadmap.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/for-agents', 'weekly', '0.9'],
+  ['https://pointcast.xyz/wild', 'daily', '0.96'],
+  ['https://pointcast.xyz/wild.json', 'daily', '0.94'],
   ['https://pointcast.xyz/connectors', 'weekly', '0.92'],
   ['https://pointcast.xyz/connectors.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/agent-kit.md', 'weekly', '0.92'],

@@ -66,6 +66,10 @@ export const GET: APIRoute = () =>
           note: 'Commercial specifications and service terms use manufacturer sources; law uses regulator text; cultural and moral claims use original scholarship.',
         },
         companions: {
+          theWild: `${base}/wild`,
+          theWildJson: `${base}/wild.json`,
+          theWildCanonical: 'https://the-wild-x402.mhoydich.workers.dev/',
+          theWildAgentManifest: 'https://the-wild-x402.mhoydich.workers.dev/.well-known/the-wild.json',
           block: `${base}/b/${BOOK_META.blockId}`,
           pingLocalPet: `${base}/digital-pets/ping`,
           pingLocalPetJson: `${base}/digital-pets/ping.json`,
