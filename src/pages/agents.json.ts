@@ -17,9 +17,7 @@ import { BLOCK_TYPE_LIST } from '../lib/block-types';
 import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
-import { CARTOGRAPHY_BUSINESS, cartographyCoreSchemas } from '../lib/cartography-business';
 import { YARD_CHORES, YARD_GUARDRAILS, MEADOW_AFTER_DAYS } from '../lib/yard';
-import { CARTOGRAPHY_NEXT_SPRINT, cartographyPilotOffer } from '../lib/cartography-sprint';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
 import {
   AGENT_VALUE_SURFACE,
@@ -222,8 +220,6 @@ export const GET: APIRoute = async () => {
         join: 'https://pointcast.xyz/join',
         yard: 'https://pointcast.xyz/yard',
         cartography: 'https://pointcast.xyz/cartography',
-        cartographyPilot: 'https://pointcast.xyz/cartography/pilot',
-        cartographySprint: 'https://pointcast.xyz/cartography/sprint',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo',
         homeCartography: 'https://pointcast.xyz/cartography/home',
         homeCartographyDemo: 'https://pointcast.xyz/cartography/home/demo',
@@ -472,8 +468,6 @@ export const GET: APIRoute = async () => {
         join: 'https://pointcast.xyz/join.json',
         yard: 'https://pointcast.xyz/yard.json',
         cartography: 'https://pointcast.xyz/cartography.json',
-        cartographyPilot: 'https://pointcast.xyz/cartography/pilot.json',
-        cartographySprint: 'https://pointcast.xyz/cartography/sprint.json',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo.json',
         homeCartography: 'https://pointcast.xyz/cartography/home.json',
         homeCartographyDemo: 'https://pointcast.xyz/cartography/home/demo.json',
@@ -699,47 +693,14 @@ export const GET: APIRoute = async () => {
         version: PLAY_LAYER_VERSION,
         note: 'Local-first ritual layer: passport stamps, daily walk, quests, room weather, radio, routes, builder ghosts, civic wishes, pet care, Zen Cats, and Derby season.',
       },
-      cartographyBusiness: {
-        html: CARTOGRAPHY_BUSINESS.homepage,
-        json: CARTOGRAPHY_BUSINESS.json,
-        pilot: cartographyPilotOffer.human,
-        pilotJson: cartographyPilotOffer.json,
-        sprint: CARTOGRAPHY_NEXT_SPRINT.human,
-        sprintJson: CARTOGRAPHY_NEXT_SPRINT.json,
-        demo: CARTOGRAPHY_BUSINESS.demo,
-        demoJson: CARTOGRAPHY_BUSINESS.demoJson,
-        sourceBlock: CARTOGRAPHY_BUSINESS.sourceBlock,
-        sprintBlock: CARTOGRAPHY_NEXT_SPRINT.sourceBlock,
-        status: CARTOGRAPHY_BUSINESS.status,
-        goal: CARTOGRAPHY_BUSINESS.goal,
-        nextSprint: {
-          id: CARTOGRAPHY_NEXT_SPRINT.id,
-          status: CARTOGRAPHY_NEXT_SPRINT.status,
-          goal: CARTOGRAPHY_NEXT_SPRINT.goal,
-          scorecard: CARTOGRAPHY_NEXT_SPRINT.scorecard,
-          lanes: CARTOGRAPHY_NEXT_SPRINT.lanes,
-        },
-        pilotOffer: {
-          id: cartographyPilotOffer.id,
-          title: cartographyPilotOffer.title,
-          priceUsd: cartographyPilotOffer.priceUsd,
-          status: cartographyPilotOffer.status,
-          cta: cartographyPilotOffer.cta,
-        },
-        positioning: CARTOGRAPHY_BUSINESS.positioning,
-        revenueModel: CARTOGRAPHY_BUSINESS.revenueModel,
-        productPackages: CARTOGRAPHY_BUSINESS.packages.map((pkg) => ({
-          id: pkg.id,
-          name: pkg.name,
-          priceUsd: pkg.priceUsd,
-          billing: pkg.billing,
-          stripeMode: pkg.stripeMode,
-          stripeSurface: pkg.stripeSurface,
-          status: pkg.status,
-        })),
-        schemas: cartographyCoreSchemas,
-        guardrails: CARTOGRAPHY_BUSINESS.guardrails,
-        note: 'Brand-first service-to-SaaS product surface for Digital Identity Cartography. Yield means leads, deals, campaign proof, and contribution receipts, not financial return.',
+      cartographyArchive: {
+        html: 'https://pointcast.xyz/cartography',
+        json: 'https://pointcast.xyz/cartography.json',
+        demo: 'https://pointcast.xyz/cartography/demo',
+        demoJson: 'https://pointcast.xyz/cartography/demo.json',
+        home: 'https://pointcast.xyz/cartography/home',
+        homeJson: 'https://pointcast.xyz/cartography/home.json',
+        status: 'archived concept and fictional demo; no active sales offer or pilot sprint',
       },
       homeCartography: {
         html: 'https://pointcast.xyz/cartography/home',
