@@ -7,6 +7,16 @@
  * on-chain action is delivery, when the account names an address and the
  * spigot wallet sends every held drip in one ERC-20 transfer.
  *
+ * Delivery signs first, writes the transaction's identity down, and only then
+ * broadcasts. A thrown broadcast is not proof that nothing was sent — a public
+ * RPC can accept a signed transaction and lose the answer — so the ledger never
+ * guesses. Rows that have been signed for carry their nonce, hash and raw
+ * transaction, and `reconcileFaucetSubmissions` settles them against the chain
+ * itself: mined means delivered, a nonce spent by someone else means the
+ * transaction is dead and the drips go back, and anything still unknown is
+ * re-broadcast (same signature, same hash) until Ethereum answers. Nothing is
+ * ever signed twice, so no click and no clock can pay the same drip again.
+ *
  * Env:
  *   AUTH_DB                     D1, the ledger (faucet_claims) + the send lock
  *   PC_RATES_KV                 rate limits + the 60 s spigot snapshot cache
@@ -38,11 +48,17 @@ const MINIMUM_SPIGOT_ETH_WEI = 1_000_000_000_000_000n; // 0.001 ETH
 const LOW_GAS_WARNING_WEI = 5_000_000_000_000_000n; // 0.005 ETH
 const SEND_LOCK_TTL_MS = 60_000;
 /**
- * A healthy broadcast-to-ledger gap is milliseconds, so a `submitting` row this
- * old means an isolate died mid-send — on one side or the other of the
- * broadcast. Reclaiming is a guess, so make it a rare, loud one.
+ * A `submitting` row with no transaction on it this old means an isolate died
+ * before anything was signed. That is the one case where nothing can be in
+ * flight, so it is the one case a clock is allowed to reclaim.
  */
 const SUBMITTING_STALE_MS = 30 * 60_000;
+/**
+ * A transaction the node still has not heard of after this long has probably
+ * been dropped from the mempool. Re-broadcasting the same signed bytes is free
+ * and idempotent: same nonce, same hash, so at most one of them can ever mine.
+ */
+const REBROADCAST_AFTER_MS = 10 * 60_000;
 const ZERO_ADDRESS = `0x${'0'.repeat(40)}`;
 
 export type FaucetClaimStatus = 'held' | 'submitting' | 'delivered';
@@ -62,6 +78,10 @@ export interface FaucetClaimRow {
   amount: number;
   status: FaucetClaimStatus;
   tx_hash: string | null;
+  /** The spigot nonce this row's transaction was signed for; null until signed. */
+  nonce: number | null;
+  /** The raw signed transaction, kept so a stalled send can be re-broadcast verbatim. */
+  signed_tx: string | null;
   delivered_to: string | null;
   created_at: string;
   delivered_at: string | null;
@@ -79,11 +99,32 @@ export interface SpigotSnapshot {
   lowGasWarning: boolean;
 }
 
+/** A signed, un-broadcast ERC-20 transfer: everything needed to settle it later. */
+export interface FaucetPreparedTx {
+  nonce: number;
+  txHash: `0x${string}`;
+  signedTx: `0x${string}`;
+}
+
+/** What the chain says about one transaction we signed. */
+export interface FaucetTxProbe {
+  /** It has a receipt: the transfer happened. */
+  mined: boolean;
+  /** The node has it — mempool or block. Unknown means dropped, or never arrived. */
+  known: boolean;
+  /** The spigot has moved past this nonce, so this transaction can never mine now. */
+  nonceConsumed: boolean;
+}
+
 export interface FaucetChain {
   address: `0x${string}`;
   snapshot(): Promise<SpigotSnapshot>;
-  /** Send `amount` whole tokens; resolves once the transaction is broadcast. */
-  send(to: `0x${string}`, amount: number): Promise<{ txHash: `0x${string}` }>;
+  /** Build and sign the transfer of `amount` whole tokens. Nothing is broadcast. */
+  prepare(to: `0x${string}`, amount: number): Promise<FaucetPreparedTx>;
+  /** Put signed bytes on the wire. Idempotent: the same bytes are the same transaction. */
+  broadcast(signedTx: `0x${string}`): Promise<`0x${string}`>;
+  /** Ask the chain what became of one transaction we signed. */
+  probe(txHash: `0x${string}`, nonce: number): Promise<FaucetTxProbe>;
 }
 
 export type FaucetChainFactory = (secretKey: string, rpcUrl: string, faucet: FaucetToken) => Promise<FaucetChain>;
@@ -166,6 +207,8 @@ const FAUCET_SCHEMA = [
     amount INTEGER NOT NULL CHECK (amount > 0),
     status TEXT NOT NULL CHECK (status IN ('held', 'submitting', 'delivered')),
     tx_hash TEXT,
+    nonce INTEGER,
+    signed_tx TEXT,
     delivered_to TEXT,
     created_at TEXT NOT NULL,
     delivered_at TEXT,
@@ -182,6 +225,18 @@ const FAUCET_SCHEMA = [
   )`,
 ];
 
+/**
+ * Columns added after the table shipped. Production already has a
+ * `faucet_claims` that `CREATE TABLE IF NOT EXISTS` will not touch, so the
+ * sign-first columns arrive by guarded ALTER instead — mirroring
+ * migrations/auth/0010_faucet_signed_tx.sql, which does the same for local
+ * work and tests.
+ */
+const FAUCET_CLAIM_COLUMNS: Array<[string, string]> = [
+  ['nonce', 'INTEGER'],
+  ['signed_tx', 'TEXT'],
+];
+
 const provisioned = new WeakMap<D1Database, Promise<void>>();
 
 /** Make sure the ledger tables exist; cached per binding so it runs once per isolate. */
@@ -190,6 +245,12 @@ export function ensureFaucetSchema(db: D1Database): Promise<void> {
   if (!pending) {
     pending = (async () => {
       for (const statement of FAUCET_SCHEMA) await db.prepare(statement).run();
+      const info = await db.prepare(`PRAGMA table_info(faucet_claims)`).all<{ name: string }>();
+      const present = new Set((Array.isArray(info.results) ? info.results : []).map((column) => column.name));
+      for (const [name, type] of FAUCET_CLAIM_COLUMNS) {
+        // ADD COLUMN has no IF NOT EXISTS in SQLite, so ask first.
+        if (!present.has(name)) await db.prepare(`ALTER TABLE faucet_claims ADD COLUMN ${name} ${type}`).run();
+      }
     })().catch((error) => {
       provisioned.delete(db);
       throw error;
@@ -351,7 +412,11 @@ export async function claimFaucetDrip(options: {
 // ---------------------------------------------------------------------------
 
 export async function createViemFaucetChain(secretKey: string, rpcUrl: string, faucet: FaucetToken): Promise<FaucetChain> {
-  const [{ createPublicClient, createWalletClient, http, erc20Abi, parseUnits, formatEther }, { privateKeyToAccount }, { mainnet }] = await Promise.all([
+  const [
+    { createPublicClient, http, erc20Abi, encodeFunctionData, keccak256, parseUnits, formatEther },
+    { privateKeyToAccount },
+    { mainnet },
+  ] = await Promise.all([
     import('viem'),
     import('viem/accounts'),
     import('viem/chains'),
@@ -359,7 +424,6 @@ export async function createViemFaucetChain(secretKey: string, rpcUrl: string, f
   const account = privateKeyToAccount(secretKey as `0x${string}`);
   const transport = http(rpcUrl, { timeout: RPC_TIMEOUT_MS, retryCount: RPC_RETRY_COUNT });
   const publicClient = createPublicClient({ chain: mainnet, transport });
-  const walletClient = createWalletClient({ account, chain: mainnet, transport });
   let decimalsCache: number | null = null;
 
   async function decimals(): Promise<number> {
@@ -387,15 +451,45 @@ export async function createViemFaucetChain(secretKey: string, rpcUrl: string, f
         lowGasWarning: ethWei < LOW_GAS_WARNING_WEI,
       };
     },
-    async send(to, amount) {
+    async prepare(to, amount) {
       const dec = await decimals();
-      const txHash = await walletClient.writeContract({
-        address: faucet.contract,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [to, parseUnits(String(amount), dec)],
+      const data = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [to, parseUnits(String(amount), dec)] });
+      // `pending` so a transaction we sent seconds ago still counts: two
+      // deliveries in one minute must not be handed the same nonce.
+      const [nonce, fees] = await Promise.all([
+        publicClient.getTransactionCount({ address: account.address, blockTag: 'pending' }),
+        publicClient.estimateFeesPerGas(),
+      ]);
+      const gas = await publicClient.estimateGas({ account: account.address, to: faucet.contract, data });
+      // Signed with an explicit nonce and chain id, so the bytes below are the
+      // whole transaction: nothing is decided later, at broadcast time.
+      const signedTx = await account.signTransaction({
+        type: 'eip1559',
+        chainId: mainnet.id,
+        to: faucet.contract,
+        data,
+        nonce,
+        gas,
+        maxFeePerGas: fees.maxFeePerGas,
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
       });
-      return { txHash };
+      // A transaction's hash is the hash of its signed bytes, so we know the
+      // receipt to look for before anyone has heard of the transaction.
+      return { nonce, txHash: keccak256(signedTx), signedTx };
+    },
+    async broadcast(signedTx) {
+      return await publicClient.sendRawTransaction({ serializedTransaction: signedTx });
+    },
+    async probe(txHash, nonce) {
+      const [receipt, known, latestNonce] = await Promise.all([
+        publicClient.getTransactionReceipt({ hash: txHash }).catch(() => null),
+        publicClient.getTransaction({ hash: txHash }).then(() => true).catch(() => false),
+        publicClient.getTransactionCount({ address: account.address, blockTag: 'latest' }),
+      ]);
+      // A reverted transfer moved no tokens but did spend the nonce, so report
+      // it the way a replaced transaction is reported: dead, and safe to re-owe.
+      if (receipt && receipt.status !== 'success') return { mined: false, known: false, nonceConsumed: true };
+      return { mined: Boolean(receipt), known: Boolean(receipt) || known, nonceConsumed: latestNonce > nonce };
     },
   };
 }
@@ -486,6 +580,146 @@ async function checkedDestination(value: string, faucet: FaucetToken): Promise<`
   return lower;
 }
 
+// ---------------------------------------------------------------------------
+// Settlement. A `submitting` row is a question — did this transaction land? —
+// and the only thing entitled to answer it is Ethereum.
+// ---------------------------------------------------------------------------
+
+interface SubmissionGroup {
+  txHash: string | null;
+  nonce: number | null;
+  signedTx: string | null;
+  startedAt: string | null;
+  ids: string[];
+}
+
+const placeholders = (ids: string[]): string => ids.map(() => '?').join(', ');
+
+/**
+ * Settle every in-flight row this account has against the chain.
+ *
+ * Rows carrying a transaction are decided by that transaction: mined is
+ * delivered; a nonce spent by something else means ours can never mine, so the
+ * drips are owed again; anything still unknown after ten minutes is
+ * re-broadcast from the signed bytes we kept, which cannot double-spend because
+ * it is the same signature and the same hash. Rows carrying nothing were never
+ * signed for, so after half an hour they are safe to hand straight back.
+ *
+ * With no chain (spigot unconfigured, or the RPC unreachable) only that last,
+ * provably safe case is applied. Silence is better than a guess here.
+ */
+export async function reconcileFaucetSubmissions(
+  db: D1Database,
+  faucet: FaucetToken,
+  userId: string,
+  chain: FaucetChain | null,
+): Promise<void> {
+  const result = await db.prepare(`
+    SELECT id, tx_hash, nonce, signed_tx, delivered_at
+    FROM faucet_claims
+    WHERE user_id = ? AND faucet = ? AND status = 'submitting'
+  `).bind(userId, faucet.slug).all<{
+    id: string;
+    tx_hash: string | null;
+    nonce: number | null;
+    signed_tx: string | null;
+    delivered_at: string | null;
+  }>();
+  const rows = Array.isArray(result.results) ? result.results : [];
+  if (!rows.length) return;
+
+  // One delivery signs one transaction for every drip it took, so settle by
+  // attempt rather than by row: one probe, not one probe per drip.
+  const groups = new Map<string, SubmissionGroup>();
+  for (const row of rows) {
+    const key = `${row.delivered_at ?? ''}|${row.tx_hash ?? ''}`;
+    const group = groups.get(key) ?? {
+      txHash: row.tx_hash,
+      nonce: row.nonce,
+      signedTx: row.signed_tx,
+      startedAt: row.delivered_at,
+      ids: [],
+    };
+    group.ids.push(row.id);
+    groups.set(key, group);
+  }
+
+  const now = Date.now();
+  for (const group of groups.values()) {
+    const startedAt = group.startedAt ? Date.parse(group.startedAt) : Number.NaN;
+    const age = Number.isFinite(startedAt) ? now - startedAt : Number.POSITIVE_INFINITY;
+    const ids = group.ids;
+    const toHeld = async (message: string): Promise<void> => {
+      await db.prepare(`
+        UPDATE faucet_claims
+        SET status = 'held', tx_hash = NULL, nonce = NULL, signed_tx = NULL, delivered_to = NULL, delivered_at = NULL
+        WHERE status = 'submitting' AND id IN (${placeholders(ids)})
+      `).bind(...ids).run();
+      console.warn(JSON.stringify({ message, faucet: faucet.slug, userId, ids, txHash: group.txHash }));
+    };
+
+    if (!group.txHash) {
+      // Nothing was ever signed for these, so nothing can be in flight.
+      if (age > SUBMITTING_STALE_MS) await toHeld('faucet-reclaimed-unsigned').catch(() => {});
+      continue;
+    }
+    if (!chain || !EVM_TX_HASH.test(group.txHash)) continue;
+
+    let probe: FaucetTxProbe;
+    try {
+      probe = await chain.probe(group.txHash as `0x${string}`, group.nonce ?? 0);
+    } catch {
+      continue; // An unanswered question stays a question.
+    }
+    if (probe.mined) {
+      try {
+        await db.prepare(`
+          UPDATE faucet_claims SET status = 'delivered', delivered_at = ?
+          WHERE status = 'submitting' AND id IN (${placeholders(ids)})
+        `).bind(new Date().toISOString(), ...ids).run();
+        console.warn(JSON.stringify({ message: 'faucet-submission-settled', faucet: faucet.slug, userId, ids, txHash: group.txHash }));
+      } catch { /* still `submitting`; the next pass asks again */ }
+      continue;
+    }
+    if (probe.nonceConsumed && !probe.known) {
+      await toHeld('faucet-submission-dead').catch(() => {});
+      continue;
+    }
+    if (age > REBROADCAST_AFTER_MS && group.signedTx) {
+      // Same bytes, same hash. "already known" and "nonce too low" both mean
+      // the network has it, which is exactly what we were asking for.
+      try { await chain.broadcast(group.signedTx as `0x${string}`); } catch { /* asked, that is all */ }
+    }
+  }
+}
+
+/**
+ * Reconcile this account's in-flight rows, building a chain only when there is
+ * something in flight — the common path is a single indexed count, no RPC.
+ */
+export async function settleFaucetSubmissions(
+  env: FaucetClaimEnv,
+  faucet: FaucetToken,
+  userId: string,
+  chainFactory: FaucetChainFactory = createViemFaucetChain,
+): Promise<void> {
+  const db = env.AUTH_DB;
+  if (!db) return;
+  await ensureFaucetSchema(db);
+  const inFlight = await db.prepare(`
+    SELECT COUNT(*) AS n FROM faucet_claims WHERE user_id = ? AND faucet = ? AND status = 'submitting'
+  `).bind(userId, faucet.slug).first<{ n: number }>();
+  if (numberValue(inFlight?.n) === 0) return;
+  const secretKey = spigotSecretKey(env, faucet);
+  let chain: FaucetChain | null = null;
+  if (secretKey) {
+    try {
+      chain = await chainFactory(secretKey, env.FAUCET_ETH_RPC_URL?.trim() || DEFAULT_RPC, faucet);
+    } catch { chain = null; }
+  }
+  await reconcileFaucetSubmissions(db, faucet, userId, chain);
+}
+
 export type DeliverReason =
   | 'claim-database-not-bound'
   | 'spigot-not-configured'
@@ -495,7 +729,9 @@ export type DeliverReason =
   | 'address-required'
   | 'nothing-held'
   | 'delivery-busy'
-  | 'delivery-failed';
+  | 'delivery-failed'
+  /** Signed and probably broadcast, but the chain has not answered yet. Settles itself. */
+  | 'delivery-uncertain';
 
 export async function deliverHeldFaucetDrips(options: {
   env: FaucetClaimEnv;
@@ -512,26 +748,28 @@ export async function deliverHeldFaucetDrips(options: {
   const db = env.AUTH_DB;
   await ensureFaucetSchema(db);
 
-  // Reclaim rows a crashed send left mid-flight, then take ours. This is a
-  // guess about a send we cannot see, so say so where Mike can read it.
-  const staleBefore = new Date(Date.now() - SUBMITTING_STALE_MS).toISOString();
-  const reclaimed = await db.prepare(`
-    UPDATE faucet_claims SET status = 'held', delivered_to = NULL, delivered_at = NULL
-    WHERE user_id = ? AND faucet = ? AND status = 'submitting' AND delivered_at < ?
-    RETURNING id
-  `).bind(userId, faucet.slug, staleBefore).all<{ id: string }>();
-  const reclaimedIds = (Array.isArray(reclaimed.results) ? reclaimed.results : []).map((row) => row.id);
-  if (reclaimedIds.length) {
-    console.warn(JSON.stringify({
-      message: 'faucet-reclaimed-submitting',
-      faucet: faucet.slug,
-      userId,
-      ids: reclaimedIds,
-    }));
-  }
+  // Settle before we take. Rows still in flight from a previous attempt have to
+  // be decided by the chain first, or a drip that is already on its way would
+  // read as owed. This is the only ordering that works: after the take there is
+  // nothing left to settle, because a `submitting` row is never `held`.
+  await settleFaucetSubmissions(env, faucet, userId, options.chainFactory ?? createViemFaucetChain)
+    .catch((error) => {
+      // A reconcile that fails leaves rows `submitting`, which is the cautious
+      // side: the take below simply will not see them.
+      console.error(JSON.stringify({
+        message: 'faucet-reconcile-failed',
+        faucet: faucet.slug,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+
+  // A taken row carries this attempt's transaction or none at all, so a
+  // reconcile running beside us can never read a stale hash off it.
   const startedAt = new Date().toISOString();
   const taken = await db.prepare(`
-    UPDATE faucet_claims SET status = 'submitting', delivered_to = ?, delivered_at = ?
+    UPDATE faucet_claims
+    SET status = 'submitting', tx_hash = NULL, nonce = NULL, signed_tx = NULL, delivered_to = ?, delivered_at = ?
     WHERE user_id = ? AND faucet = ? AND status = 'held'
     RETURNING id, amount
   `).bind(deliveredTo, startedAt, userId, faucet.slug).all<{ id: string; amount: number }>();
@@ -549,7 +787,8 @@ export async function deliverHeldFaucetDrips(options: {
   // the rows this call claimed, with no room for a half-applied batch.
   const release = async (): Promise<void> => {
     await db.prepare(`
-      UPDATE faucet_claims SET status = 'held', delivered_to = NULL, delivered_at = NULL
+      UPDATE faucet_claims
+      SET status = 'held', tx_hash = NULL, nonce = NULL, signed_tx = NULL, delivered_to = NULL, delivered_at = NULL
       WHERE user_id = ? AND faucet = ? AND status = 'submitting' AND delivered_at = ?
     `).bind(userId, faucet.slug, startedAt).run();
   };
@@ -586,13 +825,16 @@ export async function deliverHeldFaucetDrips(options: {
       return { ok: false, reason: 'spigot-empty', delivered: 0 };
     }
 
-    let txHash: `0x${string}`;
+    // Sign, but do not send. Everything up to here can be released freely,
+    // because there is nothing on the wire to contradict us.
+    let prepared: FaucetPreparedTx;
     try {
-      ({ txHash } = await chain.send(deliveredTo, amount));
+      prepared = await chain.prepare(deliveredTo, amount);
+      if (!EVM_TX_HASH.test(prepared.txHash)) throw new Error('invalid-tx-hash');
     } catch (error) {
       await release();
       console.error(JSON.stringify({
-        message: 'faucet-delivery-failed',
+        message: 'faucet-prepare-failed',
         faucet: faucet.slug,
         userId,
         deliveredTo,
@@ -602,31 +844,87 @@ export async function deliverHeldFaucetDrips(options: {
       return { ok: false, reason: 'delivery-failed', delivered: 0 };
     }
 
-    // The broadcast happened. Those tokens are gone whatever the ledger does
-    // next, so these rows never go back to `held`: returning them would invite
-    // a second send of drips that have already left the wallet. If the write
-    // fails the rows stay `submitting` and the hash goes to the log, where it
-    // can be reconciled against the chain by hand.
-    const deliveredAt = new Date().toISOString();
+    // Write down what we are about to send before we send it. A row whose
+    // transaction we cannot name is a row nothing can ever settle, so this is
+    // the last moment the drips can safely go back to `held`.
     try {
-      if (!EVM_TX_HASH.test(txHash)) throw new Error('invalid-tx-hash');
       await db.prepare(`
-        UPDATE faucet_claims SET status = 'delivered', tx_hash = ?, delivered_to = ?, delivered_at = ?
+        UPDATE faucet_claims SET tx_hash = ?, nonce = ?, signed_tx = ?
         WHERE user_id = ? AND faucet = ? AND status = 'submitting' AND delivered_at = ?
-      `).bind(txHash, deliveredTo, deliveredAt, userId, faucet.slug, startedAt).run();
+      `).bind(prepared.txHash, prepared.nonce, prepared.signedTx, userId, faucet.slug, startedAt).run();
     } catch (error) {
+      await release();
       console.error(JSON.stringify({
-        message: 'faucet-delivery-unrecorded',
+        message: 'faucet-signature-unrecorded',
         faucet: faucet.slug,
         userId,
         deliveredTo,
         amount,
-        txHash,
-        ids,
+        txHash: prepared.txHash,
         error: error instanceof Error ? error.message : String(error),
       }));
+      return { ok: false, reason: 'delivery-failed', delivered: 0 };
     }
-    return { ok: true, delivered: amount, txHash, deliveredTo };
+
+    // The rows carry their transaction now. If the ledger write below fails the
+    // rows stay `submitting` with that hash on them, where the next reconcile
+    // picks them up — they never go back to `held`, because returning them
+    // would invite a second send of drips that may already have left.
+    const settle = async (): Promise<void> => {
+      try {
+        await db.prepare(`
+          UPDATE faucet_claims SET status = 'delivered', delivered_to = ?, delivered_at = ?
+          WHERE user_id = ? AND faucet = ? AND status = 'submitting' AND delivered_at = ?
+        `).bind(deliveredTo, new Date().toISOString(), userId, faucet.slug, startedAt).run();
+      } catch (error) {
+        console.error(JSON.stringify({
+          message: 'faucet-delivery-unrecorded',
+          faucet: faucet.slug,
+          userId,
+          deliveredTo,
+          amount,
+          txHash: prepared.txHash,
+          ids,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+    };
+
+    try {
+      await chain.broadcast(prepared.signedTx);
+    } catch (error) {
+      console.error(JSON.stringify({
+        message: 'faucet-broadcast-failed',
+        faucet: faucet.slug,
+        userId,
+        deliveredTo,
+        amount,
+        txHash: prepared.txHash,
+        nonce: prepared.nonce,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      // A thrown broadcast is not proof of no broadcast: a timeout or a lost
+      // response can hide an accepted transaction. Ask the chain about this
+      // exact transaction instead of assuming either way.
+      let probe: FaucetTxProbe | null = null;
+      try { probe = await chain.probe(prepared.txHash, prepared.nonce); } catch { probe = null; }
+      if (probe?.mined) {
+        await settle();
+        return { ok: true, delivered: amount, txHash: prepared.txHash, deliveredTo };
+      }
+      if (probe && probe.nonceConsumed && !probe.known) {
+        // Some other transaction owns that nonce now, so ours is dead and
+        // nothing left the wallet. Only here are the drips owed again.
+        await release();
+        return { ok: false, reason: 'delivery-failed', delivered: 0 };
+      }
+      // Unknown. The rows keep their hash and stay `submitting`; reconcile will
+      // either see it mined or re-broadcast the very same signature.
+      return { ok: false, reason: 'delivery-uncertain', delivered: 0, txHash: prepared.txHash, deliveredTo };
+    }
+
+    await settle();
+    return { ok: true, delivered: amount, txHash: prepared.txHash, deliveredTo };
   } finally {
     await unlock();
   }

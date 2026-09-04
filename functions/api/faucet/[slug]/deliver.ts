@@ -75,11 +75,14 @@ export async function handleFaucetDelivery(
   }
   const status = result.ok
     ? 200
-    : result.reason === 'nothing-held' || result.reason === 'delivery-busy'
-      ? 409
-      : result.reason === 'address-required'
-        ? 400
-        : 503;
+    // Signed, probably broadcast, not yet confirmed: accepted, not failed.
+    : result.reason === 'delivery-uncertain'
+      ? 202
+      : result.reason === 'nothing-held' || result.reason === 'delivery-busy'
+        ? 409
+        : result.reason === 'address-required'
+          ? 400
+          : 503;
   return applyRateLimitHeaders(authJson({ ...result, faucet: faucet.slug }, { status }), limit);
 }
 
