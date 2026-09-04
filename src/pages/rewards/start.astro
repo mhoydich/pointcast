@@ -1,0 +1,174 @@
+---
+/**
+ * /rewards/start?program=… — the sign-in and consent step for a rewarded run.
+ *
+ * This page exists so a completion receipt can be bound to an account before
+ * the person leaves. It explains the reward in one paragraph, signs them in,
+ * and then POSTs /api/reward-runs once. A GET creates nothing at all: no run,
+ * no ticket, no ledger line. Refreshing it is free.
+ *
+ * The page is prerendered, so the program is chosen on the client from the
+ * query string against the same allowlist the server uses. An unknown one gets
+ * a plain "no such program" instead of a guess.
+ *
+ * Referrer-Policy is no-referrer here and on the faucet desks: the launch
+ * ticket rides in the next page's fragment, and no third-party embed or script
+ * loads on either side of the handoff.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { REWARD_PROGRAMS } from '../../lib/rewards';
+import { getFaucet } from '../../lib/faucet';
+
+const title = 'Start a reward run';
+const description = 'Sign in on PointCast, then go do the thing. The reward is kept here when you come back.';
+const programs = REWARD_PROGRAMS.map((program) => ({
+  ...program,
+  faucetPath: `/faucet/${program.faucet}`,
+  ticker: getFaucet(program.faucet)?.ticker ?? program.faucet.toUpperCase(),
+  color: getFaucet(program.faucet)?.color ?? '#185FA5',
+}));
+---
+
+<BlockLayout title={title} description={description} noindex jsonLd={null}>
+  <meta slot="head" name="referrer" content="no-referrer" />
+  <main class="start" data-reward-start>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a><span>/</span><a href="/faucet">The Faucet</a><span>/</span><span>Start</span>
+    </nav>
+
+    <p class="loading" data-reward-loading>Reading the program…</p>
+
+    {programs.map((program) => (
+      <section class="card" data-reward-program={program.id} style={`--spigot:${program.color}`} hidden>
+        <p class="kicker">{program.ticker} · one per account per day · resets midnight Pacific</p>
+        <h1>{program.title}</h1>
+        <p class="blurb">{program.blurb}</p>
+        <button type="button" class="go" data-reward-go={program.id}>{program.cta}</button>
+        <p class="state" data-reward-state role="status" aria-live="polite"></p>
+        <p class="fine">
+          Nothing is written when this page loads. The line is written only when you bring the finished run back to
+          <a href={program.faucetPath}>{program.faucetPath}</a>. Sending is closed for every token right now, so what you keep stays here for the moment.
+        </p>
+      </section>
+    ))}
+
+    <section class="card card--missing" data-reward-missing hidden>
+      <p class="kicker">Nothing here</p>
+      <h1>No such program.</h1>
+      <p class="blurb">That link points at a reward that does not exist. The faucet desk is still open.</p>
+      <p class="fine"><a href="/faucet/hello">Go to the faucet desk</a></p>
+    </section>
+
+    <noscript>
+      <section class="card">
+        <p class="kicker">Scripts off</p>
+        <h1>This one needs JavaScript.</h1>
+        <p class="blurb">Starting a run signs a ticket for your account, which takes a round trip this page cannot make on its own. The faucet desk works without it.</p>
+        <p class="fine"><a href="/faucet/hello">Go to the faucet desk</a></p>
+      </section>
+    </noscript>
+  </main>
+</BlockLayout>
+
+<script>
+  import { getSession } from '../../lib/auth/client';
+
+  type RunResponse = { ok: boolean; reason?: string; launchUrl?: string };
+
+  const root = (): HTMLElement | null => document.querySelector<HTMLElement>('[data-reward-start]');
+
+  function currentProgram(): string {
+    return new URLSearchParams(window.location.search).get('program') ?? '';
+  }
+
+  function show(node: Element | null): void {
+    if (node instanceof HTMLElement) node.hidden = false;
+  }
+
+  function state(card: HTMLElement, message: string): void {
+    const node = card.querySelector<HTMLElement>('[data-reward-state]');
+    if (node) node.textContent = message;
+  }
+
+  function reason(code: string | undefined): string {
+    if (code === 'already-claimed-today') return 'Today’s one is already in your ledger. The room is still open; listening again is free.';
+    if (code === 'rewards-not-configured') return 'This reward is not switched on yet. Nothing was started.';
+    if (code === 'cross-site') return 'That request did not come from this page. Open /rewards/start directly and try again.';
+    if (code === 'unknown-program') return 'That reward does not exist.';
+    return 'The run did not start. Nothing was written; try again shortly.';
+  }
+
+  async function start(button: HTMLButtonElement, program: string): Promise<void> {
+    const card = button.closest<HTMLElement>('[data-reward-program]');
+    if (!card) return;
+    const label = button.textContent ?? '';
+    const user = await getSession().catch(() => null);
+    if (!user) {
+      // Same tab, straight back here, so the program survives the round trip.
+      const returnTo = `/rewards/start?program=${encodeURIComponent(program)}`;
+      window.location.assign(`/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`);
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Starting…';
+    state(card, '');
+    try {
+      const response = await fetch('/api/reward-runs', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ program }),
+      });
+      const payload = await response.json() as RunResponse;
+      if (!response.ok || !payload.ok || !payload.launchUrl) {
+        button.disabled = payload.reason === 'already-claimed-today';
+        button.textContent = label;
+        state(card, reason(payload.reason));
+        return;
+      }
+      state(card, 'Off you go. Come back when you’re done.');
+      window.location.assign(payload.launchUrl);
+    } catch {
+      button.disabled = false;
+      button.textContent = label;
+      state(card, 'The desk lost the connection. Nothing was written; try again shortly.');
+    }
+  }
+
+  function mount(): void {
+    const container = root();
+    if (!container) return;
+    const program = currentProgram();
+    const card = program ? container.querySelector(`[data-reward-program="${CSS.escape(program)}"]`) : null;
+    container.querySelector<HTMLElement>('[data-reward-loading]')?.setAttribute('hidden', '');
+    if (card) show(card);
+    else show(container.querySelector('[data-reward-missing]'));
+  }
+
+  mount();
+  document.addEventListener('astro:page-load', mount);
+  document.addEventListener('click', (event) => {
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-reward-go]');
+    if (!button) return;
+    void start(button, button.dataset.rewardGo ?? '');
+  });
+</script>
+
+<style>
+  .start { width: min(720px, calc(100vw - 28px)); margin: 0 auto; padding: 22px 0 90px; }
+  .crumb, .kicker, .fine { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .crumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; color: var(--pc-ink-muted); }
+  .loading { font: 400 12px var(--pc-font-mono); color: var(--pc-ink-muted); }
+  .card { border: 1.5px solid var(--pc-ink); padding: clamp(24px, 5vw, 48px); background: var(--spigot, #185FA5); color: #fff; }
+  .card--missing { background: #fff; color: var(--pc-ink); }
+  .kicker { margin: 0 0 14px; color: rgba(255,255,255,.72); }
+  .card--missing .kicker { color: var(--pc-ink-muted); }
+  h1 { margin: 0; font-weight: 400; font-size: clamp(34px, 7vw, 58px); letter-spacing: -.05em; line-height: .95; }
+  .blurb { margin: 18px 0 0; font-size: 16px; line-height: 1.5; }
+  .go { width: 100%; min-height: 58px; margin-top: 26px; border: 1.5px solid #fff; border-radius: 2px; background: #fff; color: var(--spigot, #185FA5); padding: 15px 18px; cursor: pointer; font: 500 14px var(--pc-font-mono); letter-spacing: .04em; text-transform: uppercase; box-shadow: 5px 5px 0 rgba(0,0,0,.22); }
+  .go:disabled { cursor: not-allowed; opacity: .62; box-shadow: none; }
+  .state { margin: 12px 0 0; font-size: 13px; line-height: 1.45; min-height: 1em; }
+  .fine { margin: 20px 0 0; line-height: 1.7; text-transform: none; letter-spacing: 0; font-size: 12px; color: rgba(255,255,255,.8); }
+  .card--missing .fine { color: var(--pc-ink-soft); }
+  .fine a, .blurb a { color: inherit; }
+</style>

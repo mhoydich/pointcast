@@ -27,6 +27,12 @@
  *                               Keep the ETH float small and topped up by hand.
  *   FAUCET_ETH_RPC_URL          optional JSON-RPC URL (default cloudflare-eth.com)
  *   HELLO_FAUCET_DAILY_CAP      optional claims per day (default 50, max 500)
+ *   FISHCLUB_FAUCET_SECRET_KEY  the FISHCLUB spigot key, when one is installed.
+ *                               Claims work with none: the line is held, and
+ *                               sending is closed for every faucet regardless.
+ *   FISHCLUB_FAUCET_DAILY_CAP   optional claims per day (default 50, max 500)
+ *   REWARDS_TONEBLOOM_SECRET    shared HMAC secret with the Tone Bloom satellite
+ *   REWARDS_INDUSTRYNEXT_SECRET shared HMAC secret with the Industry Next satellite
  */
 import type { PointCastUser } from '../../../src/lib/auth/types';
 import type { AuthEnv } from '../auth/session';
@@ -35,8 +41,16 @@ import {
   faucetDailyCap,
   isEvmAddress,
   losAngelesDate,
+  FAUCETS,
   type FaucetToken,
 } from '../../../src/lib/faucet';
+import {
+  REWARD_PROGRAMS,
+  getRewardProgram,
+  isRewardReceiptPayload,
+  verifyRewardToken,
+  type RewardReceiptPayload,
+} from '../../../src/lib/rewards';
 
 const DEFAULT_RPC = 'https://cloudflare-eth.com';
 /** A public RPC that hangs must not hang the desk with it. */
@@ -68,6 +82,36 @@ export interface FaucetClaimEnv extends AuthEnv {
   HELLO_FAUCET_SECRET_KEY?: string;
   FAUCET_ETH_RPC_URL?: string;
   HELLO_FAUCET_DAILY_CAP?: string;
+  FISHCLUB_FAUCET_SECRET_KEY?: string;
+  FISHCLUB_FAUCET_DAILY_CAP?: string;
+  REWARDS_TONEBLOOM_SECRET?: string;
+  REWARDS_INDUSTRYNEXT_SECRET?: string;
+}
+
+/**
+ * Each faucet names its own secrets. Renaming HELLO's bindings to something
+ * generic would silently unconfigure the live spigot on the next deploy, so a
+ * new token gets new variable names and the old ones never move.
+ */
+const FAUCET_ENV: Record<string, { secretKey: keyof FaucetClaimEnv; dailyCap: keyof FaucetClaimEnv }> = {
+  hello: { secretKey: 'HELLO_FAUCET_SECRET_KEY', dailyCap: 'HELLO_FAUCET_DAILY_CAP' },
+  fishclub: { secretKey: 'FISHCLUB_FAUCET_SECRET_KEY', dailyCap: 'FISHCLUB_FAUCET_DAILY_CAP' },
+};
+
+function envString(env: Partial<FaucetClaimEnv>, key: keyof FaucetClaimEnv | undefined): string | undefined {
+  if (!key) return undefined;
+  const value = env[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** The per-satellite receipt keys this deploy holds, keyed by `kid`. */
+export function rewardSecretsByKid(env: Partial<FaucetClaimEnv>): Record<string, string | undefined> {
+  const secrets: Record<string, string | undefined> = {};
+  for (const program of REWARD_PROGRAMS) {
+    const secret = envString(env, program.secretEnv)?.trim();
+    if (secret) secrets[program.kid] = secret;
+  }
+  return secrets;
 }
 
 export interface FaucetClaimRow {
@@ -85,6 +129,11 @@ export interface FaucetClaimRow {
   delivered_to: string | null;
   created_at: string;
   delivered_at: string | null;
+  /** Which satellite sent the person here, when a receipt earned this line. */
+  via: string | null;
+  /** The reward program id, for the person's own ledger. */
+  program: string | null;
+  reward_run_id: string | null;
 }
 
 export interface SpigotSnapshot {
@@ -153,21 +202,30 @@ export interface UserFaucetLedger {
     txHash: string | null;
     deliveredTo: string | null;
     createdAt: string;
+    via: string | null;
+    program: string | null;
   }>;
 }
 
-export function spigotSecretKey(env: Pick<FaucetClaimEnv, 'HELLO_FAUCET_SECRET_KEY'>, faucet: FaucetToken): string | null {
-  if (faucet.slug !== 'hello') return null;
-  const key = env.HELLO_FAUCET_SECRET_KEY?.trim();
+/** One line per faucet, so a desk can show both balances without a second fetch. */
+export interface FaucetBalance {
+  slug: string;
+  ticker: string;
+  held: number;
+  delivered: number;
+}
+
+export function spigotSecretKey(env: Partial<FaucetClaimEnv>, faucet: FaucetToken): string | null {
+  const key = envString(env, FAUCET_ENV[faucet.slug]?.secretKey)?.trim();
   return key && /^0x[0-9a-fA-F]{64}$/.test(key) ? key : null;
 }
 
-export function spigotConfigured(env: FaucetClaimEnv, faucet: FaucetToken): boolean {
+export function spigotConfigured(env: Partial<FaucetClaimEnv>, faucet: FaucetToken): boolean {
   return spigotSecretKey(env, faucet) !== null;
 }
 
-export function faucetCap(env: FaucetClaimEnv, faucet: FaucetToken): number {
-  return faucetDailyCap(faucet.slug === 'hello' ? env.HELLO_FAUCET_DAILY_CAP : undefined);
+export function faucetCap(env: Partial<FaucetClaimEnv>, faucet: FaucetToken): number {
+  return faucetDailyCap(envString(env, FAUCET_ENV[faucet.slug]?.dailyCap));
 }
 
 /** The most recently verified EVM identity on the account, if any. */
@@ -223,6 +281,38 @@ const FAUCET_SCHEMA = [
     holder TEXT,
     acquired_at TEXT
   )`,
+  // One row per rewarded trip to a satellite. PointCast keeps the account here
+  // and never tells the satellite whose run it is; the satellite knows only the
+  // run id. `status` is the whole life of it: open (launched), completed
+  // (receipt seen), redeemed (a line was written), resolved (finished but
+  // awarded nothing, truthfully), expired.
+  `CREATE TABLE IF NOT EXISTS reward_runs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    issuer TEXT NOT NULL,
+    program TEXT NOT NULL,
+    faucet TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('open', 'completed', 'redeemed', 'resolved', 'expired')),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    launch_nonce TEXT NOT NULL,
+    receipt_nonce TEXT,
+    redeemed_claim_id TEXT,
+    resolved_reason TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS reward_runs_user_program_idx ON reward_runs(user_id, program, status)`,
+  // The single-use record. The primary key is the whole mechanism: a second
+  // presentation of the same receipt loses on it inside a transaction, so it
+  // can never write a second ledger line, and `claim_id` hands the retry the
+  // line the first one wrote.
+  `CREATE TABLE IF NOT EXISTS reward_receipts (
+    issuer TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    consumed_at TEXT NOT NULL,
+    claim_id TEXT,
+    PRIMARY KEY (issuer, nonce)
+  )`,
 ];
 
 /**
@@ -235,6 +325,12 @@ const FAUCET_SCHEMA = [
 const FAUCET_CLAIM_COLUMNS: Array<[string, string]> = [
   ['nonce', 'INTEGER'],
   ['signed_tx', 'TEXT'],
+  // Server-written provenance for a reward claim. Null on every ordinary drip
+  // and on every row that predates migrations/auth/0011_reward_runs.sql. A
+  // `via` query parameter grants nothing; only a verified receipt writes these.
+  ['via', 'TEXT'],
+  ['program', 'TEXT'],
+  ['reward_run_id', 'TEXT'],
 ];
 
 const provisioned = new WeakMap<D1Database, Promise<void>>();
@@ -327,7 +423,8 @@ export async function getUserFaucetLedger(
       WHERE user_id = ? AND faucet = ?
     `).bind(user.userId, faucet.slug).first<{ held: number; delivered: number }>(),
     db.prepare(`
-      SELECT id, user_id, faucet, day, amount, status, tx_hash, delivered_to, created_at, delivered_at
+      SELECT id, user_id, faucet, day, amount, status, tx_hash, delivered_to, created_at, delivered_at,
+             via, program, reward_run_id
       FROM faucet_claims
       WHERE user_id = ? AND faucet = ?
       ORDER BY day DESC
@@ -350,8 +447,39 @@ export async function getUserFaucetLedger(
       txHash: row.tx_hash,
       deliveredTo: row.delivered_to,
       createdAt: row.created_at,
+      via: row.via ?? null,
+      program: row.program ?? null,
     })),
   };
+}
+
+/**
+ * Held and delivered across every faucet, in one grouped query. The desk shows
+ * both tokens together; the scope asked for them discoverable in one place
+ * rather than behind a second page.
+ */
+export async function getFaucetBalances(
+  db: D1Database | undefined,
+  userId: string,
+): Promise<FaucetBalance[]> {
+  const empty = FAUCETS.map((faucet) => ({ slug: faucet.slug, ticker: faucet.ticker, held: 0, delivered: 0 }));
+  if (!db) return empty;
+  await ensureFaucetSchema(db);
+  const result = await db.prepare(`
+    SELECT faucet,
+      SUM(CASE WHEN status != 'delivered' THEN amount ELSE 0 END) AS held,
+      SUM(CASE WHEN status = 'delivered' THEN amount ELSE 0 END) AS delivered
+    FROM faucet_claims
+    WHERE user_id = ?
+    GROUP BY faucet
+  `).bind(userId).all<{ faucet: string; held: number; delivered: number }>();
+  const rows = Array.isArray(result.results) ? result.results : [];
+  return empty.map((balance) => {
+    const row = rows.find((candidate) => candidate.faucet === balance.slug);
+    return row
+      ? { ...balance, held: numberValue(row.held), delivered: numberValue(row.delivered) }
+      : balance;
+  });
 }
 
 /** Did this account claim today? The one question /api/today needs. */
@@ -369,42 +497,292 @@ export async function hasClaimedFaucetToday(
   return Boolean(row);
 }
 
-export type ClaimReason = 'already-claimed' | 'daily-cap-reached' | 'claim-database-not-bound';
+export type ClaimReason =
+  | 'already-claimed'
+  | 'daily-cap-reached'
+  | 'claim-database-not-bound'
+  /** This faucet only pays against a completion receipt. */
+  | 'receipt-required'
+  | 'receipt-invalid'
+  | 'receipt-expired'
+  | 'receipt-program-mismatch'
+  /** The satellite's own numbers do not meet the program's duration rule. */
+  | 'receipt-too-short'
+  | 'run-not-found'
+  | 'run-expired'
+  | 'account-mismatch'
+  | 'rewards-not-configured';
 
-/** Write today's `held` row. Pure ledger; nothing is sent. */
+export interface FaucetClaimLine {
+  id: string;
+  day: string;
+  amount: number;
+  status: 'held';
+  createdAt: string;
+  via?: string | null;
+  program?: string | null;
+  rewardRunId?: string | null;
+}
+
+export interface FaucetClaimOutcome {
+  ok: boolean;
+  reason?: ClaimReason;
+  claim?: FaucetClaimLine;
+  /** True when this receipt had already been redeemed and this is its original line. */
+  replay?: boolean;
+}
+
+interface ClaimRowShape {
+  id: string;
+  day: string;
+  amount: number;
+  status: 'held';
+  created_at: string;
+  via: string | null;
+  program: string | null;
+  reward_run_id: string | null;
+}
+
+const CLAIM_COLUMNS = 'id, day, amount, status, created_at, via, program, reward_run_id';
+
+function claimLine(row: ClaimRowShape): FaucetClaimLine {
+  return {
+    id: row.id,
+    day: row.day,
+    amount: numberValue(row.amount),
+    status: 'held',
+    createdAt: row.created_at,
+    via: row.via ?? null,
+    program: row.program ?? null,
+    rewardRunId: row.reward_run_id ?? null,
+  };
+}
+
+/**
+ * The one insert that can write a ledger line, cap and one-per-day baked into
+ * the statement itself so the check and the write cannot drift apart. It is
+ * conditional rather than throwing: a blocked claim inserts nothing and leaves
+ * the transaction around it intact, which is what lets the reward path consume
+ * a receipt only when a line actually landed.
+ */
+function claimInsert(db: D1Database, values: {
+  id: string;
+  userId: string;
+  faucet: string;
+  day: string;
+  amount: number;
+  createdAt: string;
+  cap: number;
+  via: string | null;
+  program: string | null;
+  rewardRunId: string | null;
+}): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO faucet_claims (id, user_id, faucet, day, amount, status, tx_hash, delivered_to, created_at, delivered_at, via, program, reward_run_id)
+    SELECT ?, ?, ?, ?, ?, 'held', NULL, NULL, ?, NULL, ?, ?, ?
+    WHERE (SELECT COUNT(*) FROM faucet_claims WHERE faucet = ? AND day = ?) < ?
+      AND NOT EXISTS (
+        SELECT 1 FROM faucet_claims WHERE user_id = ? AND faucet = ? AND day = ?
+      )
+  `).bind(
+    values.id, values.userId, values.faucet, values.day, values.amount, values.createdAt,
+    values.via, values.program, values.rewardRunId,
+    values.faucet, values.day, values.cap,
+    values.userId, values.faucet, values.day,
+  );
+}
+
+/**
+ * Write today's `held` row. Pure ledger; nothing is sent.
+ *
+ * With a `receipt` this is the reward path instead: verify, consume the
+ * receipt and write the line in one transaction, or write nothing at all.
+ */
 export async function claimFaucetDrip(options: {
   env: FaucetClaimEnv;
   user: PointCastUser;
   faucet: FaucetToken;
   day?: string;
-}): Promise<{ ok: boolean; reason?: ClaimReason; claim?: { id: string; day: string; amount: number; status: 'held'; createdAt: string } }> {
+  /** A satellite's signed completion receipt, when the person carried one back. */
+  receipt?: string | null;
+}): Promise<FaucetClaimOutcome> {
   const { env, user, faucet } = options;
   if (!env.AUTH_DB) return { ok: false, reason: 'claim-database-not-bound' };
-  await ensureFaucetSchema(env.AUTH_DB);
+  const db = env.AUTH_DB;
+  await ensureFaucetSchema(db);
   const day = options.day ?? losAngelesDate();
+  const receipt = typeof options.receipt === 'string' ? options.receipt.trim() : '';
+  if (receipt) return redeemRewardReceipt({ env, db, user, faucet, day, receipt });
+  // FISHCLUB is the ending of five quiet minutes, not a daily allowance.
+  if (faucet.claim === 'receipt') return { ok: false, reason: 'receipt-required' };
+
   const cap = faucetCap(env, faucet);
   const id = `fct_${crypto.randomUUID().replaceAll('-', '')}`;
   const createdAt = new Date().toISOString();
-  const inserted = await env.AUTH_DB.prepare(`
-    INSERT INTO faucet_claims (id, user_id, faucet, day, amount, status, tx_hash, delivered_to, created_at, delivered_at)
-    SELECT ?, ?, ?, ?, ?, 'held', NULL, NULL, ?, NULL
-    WHERE (SELECT COUNT(*) FROM faucet_claims WHERE faucet = ? AND day = ?) < ?
-      AND NOT EXISTS (
-        SELECT 1 FROM faucet_claims WHERE user_id = ? AND faucet = ? AND day = ?
-      )
-    RETURNING id, day, amount, status, created_at
-  `).bind(
-    id, user.userId, faucet.slug, day, faucet.dailyAmount, createdAt,
-    faucet.slug, day, cap,
-    user.userId, faucet.slug, day,
-  ).first<{ id: string; day: string; amount: number; status: 'held'; created_at: string }>();
-  if (inserted) {
-    return { ok: true, claim: { id: inserted.id, day: inserted.day, amount: numberValue(inserted.amount), status: 'held', createdAt: inserted.created_at } };
-  }
-  const existing = await env.AUTH_DB.prepare(`
+  await claimInsert(db, {
+    id, userId: user.userId, faucet: faucet.slug, day, amount: faucet.dailyAmount, createdAt, cap,
+    via: null, program: null, rewardRunId: null,
+  }).run();
+  const inserted = await db.prepare(`SELECT ${CLAIM_COLUMNS} FROM faucet_claims WHERE id = ?`)
+    .bind(id).first<ClaimRowShape>();
+  if (inserted) return { ok: true, claim: claimLine(inserted) };
+  const existing = await db.prepare(`
     SELECT id FROM faucet_claims WHERE user_id = ? AND faucet = ? AND day = ?
   `).bind(user.userId, faucet.slug, day).first<{ id: string }>();
   return { ok: false, reason: existing ? 'already-claimed' : 'daily-cap-reached' };
+}
+
+interface RewardRunRow {
+  id: string;
+  user_id: string;
+  issuer: string;
+  program: string;
+  faucet: string;
+  status: string;
+  expires_at: string;
+}
+
+/** Hand back the line a receipt already produced, or say why it is not this account's. */
+async function replayRedeemedClaim(
+  db: D1Database,
+  userId: string,
+  claimId: string | null,
+): Promise<FaucetClaimOutcome> {
+  // A consumed record with no claim id cannot happen through the batch below;
+  // if it ever did, the honest answer is that this receipt is spent.
+  if (!claimId) return { ok: false, reason: 'already-claimed' };
+  const row = await db.prepare(`SELECT ${CLAIM_COLUMNS}, user_id FROM faucet_claims WHERE id = ?`)
+    .bind(claimId).first<ClaimRowShape & { user_id: string }>();
+  if (!row) return { ok: false, reason: 'already-claimed' };
+  if (row.user_id !== userId) return { ok: false, reason: 'account-mismatch' };
+  return { ok: true, claim: claimLine(row), replay: true };
+}
+
+/**
+ * The only award step for a rewarded run.
+ *
+ * Order matters. Everything cheap and stateless happens first — signature,
+ * audience, program, the satellite's own duration numbers — so a forged or
+ * stale receipt never reaches the database. Then the single-use record is
+ * checked, because a retry of a redeemed receipt has to return the original
+ * line rather than fail against its own now-redeemed run. Then the run, the
+ * account binding and the clock. Only then does anything get written.
+ *
+ * The write is one `db.batch`, which D1 runs in a single transaction:
+ *   1. insert the ledger line, conditional on cap and one-per-day;
+ *   2. insert the single-use record, conditional on that line existing;
+ *   3. mark the run redeemed, conditional on that line existing.
+ * A lost race on `(issuer, nonce)` throws at step 2 and rolls all three back,
+ * so exactly one of two concurrent claims can ever write a line. A ledger
+ * failure at step 1 rolls back too, which is what keeps the receipt good for a
+ * retry. And a claim blocked by policy writes nothing anywhere: the receipt is
+ * not consumed, and the run is resolved with the true reason so tomorrow cannot
+ * turn an old completion into a fresh entitlement.
+ */
+async function redeemRewardReceipt(options: {
+  env: FaucetClaimEnv;
+  db: D1Database;
+  user: PointCastUser;
+  faucet: FaucetToken;
+  day: string;
+  receipt: string;
+}): Promise<FaucetClaimOutcome> {
+  const { env, db, user, faucet, day, receipt } = options;
+  const secrets = rewardSecretsByKid(env);
+  if (Object.keys(secrets).length === 0) return { ok: false, reason: 'rewards-not-configured' };
+
+  const verified = await verifyRewardToken<RewardReceiptPayload>('receipt', receipt, secrets);
+  if (!verified.ok) {
+    return { ok: false, reason: verified.reason === 'expired' ? 'receipt-expired' : 'receipt-invalid' };
+  }
+  const payload = verified.payload;
+  if (!isRewardReceiptPayload(payload)) return { ok: false, reason: 'receipt-invalid' };
+
+  const program = getRewardProgram(payload.program);
+  if (
+    !program
+    || program.faucet !== faucet.slug
+    || program.issuer !== payload.iss
+    || program.kid !== payload.kid
+  ) {
+    return { ok: false, reason: 'receipt-program-mismatch' };
+  }
+  if (payload.finishedAt < payload.startedAt) return { ok: false, reason: 'receipt-too-short' };
+  if (payload.creditedSeconds < program.minCreditedSeconds) return { ok: false, reason: 'receipt-too-short' };
+  if (payload.finishedAt - payload.startedAt < program.minElapsedSeconds) {
+    return { ok: false, reason: 'receipt-too-short' };
+  }
+
+  const consumed = await db.prepare(`
+    SELECT claim_id FROM reward_receipts WHERE issuer = ? AND nonce = ?
+  `).bind(payload.iss, payload.nonce).first<{ claim_id: string | null }>();
+  if (consumed) return replayRedeemedClaim(db, user.userId, consumed.claim_id);
+
+  const run = await db.prepare(`
+    SELECT id, user_id, issuer, program, faucet, status, expires_at FROM reward_runs WHERE id = ?
+  `).bind(payload.run).first<RewardRunRow>();
+  if (!run) return { ok: false, reason: 'run-not-found' };
+  // Neutral, and never an automatic reassignment: the run belongs to whoever
+  // started it, and only they can finish it.
+  if (run.user_id !== user.userId) return { ok: false, reason: 'account-mismatch' };
+  if (run.program !== payload.program || run.faucet !== faucet.slug || run.issuer !== payload.iss) {
+    return { ok: false, reason: 'receipt-program-mismatch' };
+  }
+  if (run.status !== 'open' && run.status !== 'completed') return { ok: false, reason: 'run-expired' };
+  if (Date.parse(run.expires_at) <= Date.now()) return { ok: false, reason: 'run-expired' };
+
+  const id = `fct_${crypto.randomUUID().replaceAll('-', '')}`;
+  const createdAt = new Date().toISOString();
+  try {
+    await db.batch([
+      claimInsert(db, {
+        id,
+        userId: user.userId,
+        faucet: faucet.slug,
+        day,
+        amount: faucet.dailyAmount,
+        createdAt,
+        cap: faucetCap(env, faucet),
+        via: program.via,
+        program: program.id,
+        rewardRunId: run.id,
+      }),
+      db.prepare(`
+        INSERT INTO reward_receipts (issuer, nonce, run_id, consumed_at, claim_id)
+        SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM faucet_claims WHERE id = ?)
+      `).bind(payload.iss, payload.nonce, run.id, createdAt, id, id),
+      db.prepare(`
+        UPDATE reward_runs SET status = 'redeemed', receipt_nonce = ?, redeemed_claim_id = ?
+        WHERE id = ? AND status IN ('open', 'completed')
+          AND EXISTS (SELECT 1 FROM faucet_claims WHERE id = ?)
+      `).bind(payload.nonce, id, run.id, id),
+    ]);
+  } catch (error) {
+    // Either someone else took this receipt while we were checking it, or the
+    // ledger write failed. The first has a winner to point at; the second left
+    // nothing behind and is the caller's 503, with the receipt still good.
+    const winner = await db.prepare(`
+      SELECT claim_id FROM reward_receipts WHERE issuer = ? AND nonce = ?
+    `).bind(payload.iss, payload.nonce).first<{ claim_id: string | null }>().catch(() => null);
+    if (winner) return replayRedeemedClaim(db, user.userId, winner.claim_id);
+    throw error;
+  }
+
+  const written = await db.prepare(`SELECT ${CLAIM_COLUMNS} FROM faucet_claims WHERE id = ?`)
+    .bind(id).first<ClaimRowShape>();
+  if (written) return { ok: true, claim: claimLine(written) };
+
+  // Nothing landed, so nothing was consumed. Say which wall it hit, and close
+  // the run so the same completion cannot be presented again tomorrow.
+  const existing = await db.prepare(`
+    SELECT id FROM faucet_claims WHERE user_id = ? AND faucet = ? AND day = ?
+  `).bind(user.userId, faucet.slug, day).first<{ id: string }>();
+  const reason: ClaimReason = existing ? 'already-claimed' : 'daily-cap-reached';
+  await db.prepare(`
+    UPDATE reward_runs SET status = 'resolved', resolved_reason = ?
+    WHERE id = ? AND status IN ('open', 'completed')
+  `).bind(reason, run.id).run().catch(() => { /* the answer above is still true */ });
+  return { ok: false, reason };
 }
 
 // ---------------------------------------------------------------------------
