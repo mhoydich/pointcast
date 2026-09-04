@@ -4,6 +4,7 @@ import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import { normalizeGeneratedSeo } from './src/lib/seo-build.mjs';
 
 const githubPages = process.env.POINTCAST_GITHUB_PAGES === '1';
 
@@ -15,7 +16,15 @@ export default defineConfig({
   // commit (369554e4) pointed it at an empty tmp dir, which silently dropped
   // the entire public/ tree — games, _redirects, decks, static .well-known —
   // from every deploy for two weeks. Do not point this at scratch paths.
-  integrations: [sitemap()],
+  integrations: [
+    sitemap(),
+    {
+      name: 'pointcast-on-page-seo',
+      hooks: {
+        'astro:build:generated': ({ dir, logger }) => normalizeGeneratedSeo(dir, logger),
+      },
+    },
+  ],
   markdown: {
     syntaxHighlight: false,
   },
