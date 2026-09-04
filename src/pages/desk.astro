@@ -1,6 +1,7 @@
 ---
 import AuthMenu from '../components/AuthMenu.astro';
 import BlockLayout from '../layouts/BlockLayout.astro';
+import { DESK_LEGEND } from '../lib/desk-rows';
 
 const description = 'PointCast director-only executive desk for one-click Beacon signatures, treasury balances, and today’s operating counts.';
 ---
@@ -30,7 +31,7 @@ const description = 'PointCast director-only executive desk for one-click Beacon
         <div>
           <p class="desk__kicker">CH.FD · EXECUTIVE CONTROL · MAINNET</p>
           <h1>One desk.<br /><em>One click to Kukai.</em></h1>
-          <p>PointCast prepares the exact call. Kukai keeps the final signature. Chain rows disappear only after the queue’s next verified read.</p>
+          <p>PointCast prepares the exact call and shows you the value it replaces. Kukai keeps the final signature. Chain rows clear themselves after the queue’s next verified read.</p>
         </div>
         <div class="desk-head__live">
           <span data-desk-open>— open</span>
@@ -43,9 +44,13 @@ const description = 'PointCast director-only executive desk for one-click Beacon
           <header>
             <p class="desk__kicker">01 · APPROVAL RAIL</p>
             <h2 id="desk-signatures-title">Signatures</h2>
-            <p>Exact contract calls, setup doors, and operating checks.</p>
+            <dl class="desk-legend">
+              {DESK_LEGEND.map(({ column, meaning }) => (
+                <div><dt>{column}</dt><dd>{meaning}</dd></div>
+              ))}
+            </dl>
           </header>
-          <ol class="signature-list" data-desk-signatures></ol>
+          <ol class="desk-sig-list" data-desk-signatures></ol>
         </section>
 
         <section class="desk-column desk-column--till" aria-labelledby="desk-till-title">
@@ -54,7 +59,7 @@ const description = 'PointCast director-only executive desk for one-click Beacon
             <h2 id="desk-till-title">The till</h2>
             <p>Public balances and treasury routing, read from Tezos.</p>
           </header>
-          <dl class="till-list" data-desk-till></dl>
+          <dl class="desk-till-list" data-desk-till></dl>
         </section>
 
         <section class="desk-column desk-column--today" aria-labelledby="desk-today-title">
@@ -63,7 +68,7 @@ const description = 'PointCast director-only executive desk for one-click Beacon
             <h2 id="desk-today-title">Today</h2>
             <p>Claim, mint, subscriber, alias, and receipt signals.</p>
           </header>
-          <dl class="today-list" data-desk-today></dl>
+          <dl class="desk-today-list" data-desk-today></dl>
         </section>
       </section>
 
@@ -78,21 +83,8 @@ const description = 'PointCast director-only executive desk for one-click Beacon
 
 <script>
   import { hasDirectorDeskAccess } from '../lib/director-access';
+  import { createDeskList, shortAddress, type DeskList, type DeskRow } from '../lib/desk-rows';
   import type { DirectorOperation } from '../lib/director-operations';
-
-  interface QueueRow {
-    id: string;
-    kind: 'signature' | 'setup' | 'manual' | 'check';
-    what: string;
-    why: string;
-    href: string;
-    done: boolean;
-    state: 'open' | 'done' | 'unknown';
-    value?: string;
-    buttonLabel: string;
-    operation?: DirectorOperation;
-    toggleable?: boolean;
-  }
 
   interface TillItem {
     id: string;
@@ -106,20 +98,14 @@ const description = 'PointCast director-only executive desk for one-click Beacon
 
   interface TodayMetric { id: string; label: string; value: number | null; detail: string; }
   interface QueuePayload {
-    rows: QueueRow[];
+    rows: DeskRow[];
     till: TillItem[];
     today: TodayMetric[];
     generatedAt: string;
     chain: { readAt: string; cached: boolean };
   }
 
-  type OperationState = { stage: 'confirm' | 'broadcast' | 'confirmed' | 'failed'; opHash?: string; message?: string };
   const POLL_MS = 60_000;
-  const operationStates = new Map<string, OperationState>();
-
-  function shortAddress(address: string): string {
-    return address ? `${address.slice(0, 7)}…${address.slice(-5)}` : 'unavailable';
-  }
 
   function tez(balanceMutez: number | null): string {
     if (balanceMutez === null) return '—';
@@ -133,87 +119,28 @@ const description = 'PointCast director-only executive desk for one-click Beacon
     return node;
   }
 
-  function operationReceipt(row: QueueRow): HTMLElement {
-    const state = operationStates.get(row.id);
-    const output = element('p', 'signature-row__state');
-    output.setAttribute('role', 'status');
-    output.setAttribute('aria-live', 'polite');
-    if (!state) {
-      output.textContent = row.value ?? '';
-      return output;
-    }
-    if (state.stage === 'confirm') output.textContent = 'Confirm the prepared call in Kukai…';
-    if (state.stage === 'failed') output.textContent = state.message ?? 'The wallet did not broadcast the call.';
-    if (state.stage === 'broadcast' || state.stage === 'confirmed') {
-      output.textContent = state.stage === 'confirmed' ? 'Confirmed · waiting for queue to clear' : 'Broadcast · waiting for 1 confirmation';
-      if (state.opHash) {
-        const link = element('a', '', ` ${shortAddress(state.opHash)} ↗`);
-        link.href = `https://tzkt.io/${state.opHash}`;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        output.append(link);
-      }
-    }
-    return output;
-  }
-
-  function renderSignatures(root: HTMLElement, rows: QueueRow[]): void {
-    const list = root.querySelector<HTMLOListElement>('[data-desk-signatures]');
-    if (!list) return;
-    if (!rows.length) {
-      const clear = element('li', 'signature-row signature-row--clear');
-      clear.append(element('strong', '', 'No signatures waiting.'), element('p', '', 'The verified queue is clear.'));
-      list.replaceChildren(clear);
-      return;
-    }
-    list.replaceChildren(...rows.map((row) => {
-      const item = element('li', `signature-row signature-row--${row.kind}${row.done ? ' is-done' : ''}`);
-      item.dataset.queueId = row.id;
-      const top = element('div', 'signature-row__top');
-      const code = element('span', 'signature-row__code', row.kind === 'signature' ? 'CHAIN CALL' : row.kind.toUpperCase());
-      const action = row.kind === 'signature' ? element('button', 'signature-row__button', 'Sign')
-        : row.toggleable ? element('button', 'signature-row__button signature-row__button--done', row.done ? 'Undo' : 'Done')
-          : element('a', 'signature-row__button', row.buttonLabel);
-      if (action instanceof HTMLButtonElement) {
-        action.type = 'button';
-        action.dataset.deskAction = row.kind === 'signature' ? 'sign' : 'toggle';
-        action.disabled = operationStates.get(row.id)?.stage === 'confirm';
-      } else {
-        action.href = row.href;
-      }
-      top.append(code, action);
-      const title = element('strong', '', row.what);
-      const why = element('p', 'signature-row__why', row.why);
-      const receipt = operationReceipt(row);
-      item.append(top, title, why, receipt);
-      return item;
-    }));
-  }
-
   function renderTill(root: HTMLElement, items: TillItem[]): void {
     const list = root.querySelector<HTMLElement>('[data-desk-till]');
     if (!list) return;
-    const nodes: HTMLElement[] = [];
-    for (const item of items) {
-      const row = element('div', `till-row${item.matchesSafe === true ? ' is-match' : item.matchesSafe === false ? ' is-mismatch' : ''}`);
-      const dt = element('dt', '', item.label);
-      const amount = element('strong', 'till-row__amount', item.balanceMutez === null && item.id === 'kennel-treasury' ? (item.matchesSafe ? 'SAFE ✓' : 'CHECK') : tez(item.balanceMutez));
-      const address = element('a', 'till-row__address', shortAddress(item.address));
+    list.replaceChildren(...items.map((item) => {
+      const row = element('div', `desk-till-row${item.matchesSafe === true ? ' is-match' : item.matchesSafe === false ? ' is-mismatch' : ''}`);
+      const amount = element('strong', 'desk-till-row__amount', item.balanceMutez === null && item.id === 'kennel-treasury'
+        ? (item.matchesSafe ? 'SAFE ✓' : 'CHECK')
+        : tez(item.balanceMutez));
+      const address = element('a', 'desk-till-row__address', shortAddress(item.address));
       address.href = item.address ? `https://tzkt.io/${item.address}` : '#';
       address.target = '_blank';
       address.rel = 'noopener';
-      const detail = element('small', '', item.detail);
-      row.append(dt, amount, address, detail);
-      nodes.push(row);
-    }
-    list.replaceChildren(...nodes);
+      row.append(element('dt', '', item.label), amount, address, element('small', '', item.detail));
+      return row;
+    }));
   }
 
   function renderToday(root: HTMLElement, metrics: TodayMetric[]): void {
     const list = root.querySelector<HTMLElement>('[data-desk-today]');
     if (!list) return;
     list.replaceChildren(...metrics.map((metric, index) => {
-      const row = element('div', 'today-row');
+      const row = element('div', 'desk-today-row');
       row.append(
         element('dt', '', `${String(index + 1).padStart(2, '0')} · ${metric.label}`),
         element('dd', '', metric.value === null ? '—' : String(metric.value)),
@@ -230,7 +157,9 @@ const description = 'PointCast director-only executive desk for one-click Beacon
     prior?.abort();
     const lifetime = new AbortController();
     (window as typeof window & { __pcDirectorDesk?: AbortController }).__pcDirectorDesk = lifetime;
-    let payload: QueuePayload | null = null;
+
+    const signatures = root.querySelector<HTMLElement>('[data-desk-signatures]');
+    let desk: DeskList | null = null;
 
     const showDoor = (copy?: string) => {
       root.querySelector<HTMLElement>('[data-director-door]')?.removeAttribute('hidden');
@@ -239,16 +168,17 @@ const description = 'PointCast director-only executive desk for one-click Beacon
     };
 
     const showBoard = (next: QueuePayload) => {
-      payload = next;
       root.querySelector<HTMLElement>('[data-director-door]')?.setAttribute('hidden', '');
       root.querySelector<HTMLElement>('[data-director-board]')?.removeAttribute('hidden');
-      renderSignatures(root, next.rows);
-      renderTill(root, next.till);
-      renderToday(root, next.today);
-      const open = next.rows.filter((row) => !row.done).length;
+      desk?.setRows(next.rows ?? []);
+      renderTill(root, next.till ?? []);
+      renderToday(root, next.today ?? []);
+      const open = (next.rows ?? []).filter((row) => !row.done).length;
       root.querySelector<HTMLElement>('[data-desk-open]')?.replaceChildren(`${open} open`);
-      const read = new Date(next.chain.readAt || next.generatedAt);
-      root.querySelector<HTMLElement>('[data-desk-read]')?.replaceChildren(`chain ${read.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${next.chain.cached ? ' · cached' : ''}`);
+      const read = new Date(next.chain?.readAt || next.generatedAt);
+      root.querySelector<HTMLElement>('[data-desk-read]')?.replaceChildren(
+        `chain ${read.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${next.chain?.cached ? ' · cached' : ''}`,
+      );
     };
 
     const refresh = async () => {
@@ -265,47 +195,31 @@ const description = 'PointCast director-only executive desk for one-click Beacon
       }
     };
 
-    root.addEventListener('click', async (event) => {
-      const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-desk-action]');
-      const item = button?.closest<HTMLElement>('[data-queue-id]');
-      const row = payload?.rows.find(({ id }) => id === item?.dataset.queueId);
-      if (!button || !row || button.disabled) return;
-
-      if (button.dataset.deskAction === 'toggle') {
-        button.disabled = true;
-        try {
-          const response = await fetch('/api/director/queue', {
-            method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: row.id, done: !row.done }),
-          });
-          if (!response.ok) throw new Error(`Done state was not saved (${response.status}).`);
-          await refresh();
-        } catch (error) {
-          operationStates.set(row.id, { stage: 'failed', message: String((error as Error)?.message ?? error) });
-          if (payload) renderSignatures(root, payload.rows);
-        }
-        return;
-      }
-
-      if (button.dataset.deskAction === 'sign' && row.operation) {
-        operationStates.set(row.id, { stage: 'confirm' });
-        renderSignatures(root, payload?.rows ?? []);
-        try {
+    if (signatures) {
+      desk = createDeskList(signatures, {
+        doc: document,
+        // The wallet call connects on its own (ensurePointCastPermissions),
+        // so one click signs — there is no separate connect step.
+        submit: async (operation: DirectorOperation) => {
           const { submitDirectorOperation } = await import('../lib/tezos');
-          const result = await submitDirectorOperation(row.operation);
-          operationStates.set(row.id, { stage: 'broadcast', opHash: result.opHash });
-          renderSignatures(root, payload?.rows ?? []);
-          await result.confirmation;
-          operationStates.set(row.id, { stage: 'confirmed', opHash: result.opHash });
-          renderSignatures(root, payload?.rows ?? []);
-          await refresh();
-        } catch (error) {
-          const raw = String((error as any)?.message || (error as any)?.errorType || error || 'signature failed');
-          operationStates.set(row.id, { stage: 'failed', message: /reject|cancel|abort/i.test(raw) ? 'Wallet rejected the prepared call.' : raw.slice(0, 180) });
-          renderSignatures(root, payload?.rows ?? []);
-        }
-      }
-    }, { signal: lifetime.signal });
+          const result = await submitDirectorOperation(operation);
+          return { opHash: result.opHash, confirmation: result.confirmation };
+        },
+        toggle: async (id: string, done: boolean) => {
+          const response = await fetch('/api/director/queue', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, done }),
+          });
+          if (!response.ok) throw new Error(`The town could not save that (HTTP ${response.status}).`);
+        },
+        refresh,
+      });
+      // One delegated listener on the persistent list root — rows are
+      // rebuilt on every render, so per-node listeners would die.
+      signatures.addEventListener('click', (event) => { void desk?.handleClick(event); }, { signal: lifetime.signal });
+    }
 
     window.addEventListener('pc:auth-change', refresh, { signal: lifetime.signal });
     const timer = window.setInterval(refresh, POLL_MS);
@@ -317,8 +231,13 @@ const description = 'PointCast director-only executive desk for one-click Beacon
   document.addEventListener('astro:page-load', mountDirectorDesk);
 </script>
 
-<style>
-  .desk { --blue: #185fa5; --blue-dark: #0b3e73; --red: #8a2432; --paper: #fffdf6; width: min(1440px, calc(100vw - 28px)); margin: 0 auto; padding: 18px 0 100px; color: #111; }
+<!-- `is:global` on purpose. Every signature, till, and today row is built
+     by the client script with document.createElement, so those nodes never
+     carry Astro's scoped data-astro-cid-* attribute and scoped rules match
+     nothing (the PR #1053 bug: the row controls rendered as bare text).
+     Same fix as AgentLedger and drum-v2. All selectors are desk-* prefixed. -->
+<style is:global>
+  .desk { --blue: #185fa5; --blue-dark: #0b3e73; --red: #8a2432; --green: #1f6b3c; --paper: #fffdf6; width: min(1440px, calc(100vw - 28px)); margin: 0 auto; padding: 18px 0 100px; color: #111; }
   .desk [hidden] { display: none !important; }
   .desk__crumb { display: flex; gap: 10px; align-items: center; min-height: 38px; border-bottom: 2px solid #111; font: 500 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
   .desk__crumb a { color: var(--blue); }
@@ -339,40 +258,76 @@ const description = 'PointCast director-only executive desk for one-click Beacon
   .desk-head p:last-child { max-width: 70ch; margin: 22px 0 0; font-size: 14px; line-height: 1.5; }
   .desk-head__live { display: flex; flex-direction: column; gap: 7px; align-items: end; }
   .desk-head__live span { padding: 7px 9px; border: 1px solid #111; background: #fff; font: 500 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  .desk-grid { display: grid; grid-template-columns: 1.35fr .85fr .8fr; }
+  .desk-grid { display: grid; grid-template-columns: 1.7fr .72fr .68fr; }
   .desk-column { min-width: 0; }
   .desk-column + .desk-column { border-left: 2px solid #111; }
   .desk-column > header { min-height: 148px; padding: 19px; border-bottom: 1px solid #111; }
   .desk-column h2 { margin: 0; font-size: clamp(31px, 3vw, 48px); line-height: 1; letter-spacing: -.05em; }
   .desk-column > header > p:last-child { margin: 10px 0 0; color: #5f5e5a; font-size: 11px; line-height: 1.4; }
-  .signature-list { margin: 0; padding: 0; list-style: none; }
-  .signature-row { padding: 16px; border-bottom: 1px solid rgba(0,0,0,.24); }
-  .signature-row:last-child { border-bottom: 0; }
-  .signature-row--signature { background: #fff8e9; }
-  .signature-row--manual.is-done { opacity: .55; background: #eef5ef; }
-  .signature-row__top { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin-bottom: 12px; }
-  .signature-row__code { color: var(--red); font: 500 8px var(--pc-font-mono); letter-spacing: .1em; }
-  .signature-row strong { display: block; max-width: 30ch; font-size: 15px; line-height: 1.2; }
-  .signature-row__why { margin: 7px 0 0; color: #4f4e4a; font-size: 11px; line-height: 1.45; }
-  .signature-row__state { min-height: 14px; margin: 10px 0 0; overflow-wrap: anywhere; color: var(--blue-dark); font: 400 8px/1.45 var(--pc-font-mono); }
-  .signature-row__state a { color: var(--blue); text-decoration: underline; }
-  .signature-row__button { flex: none; min-width: 62px; padding: 8px 10px; border: 1px solid #111; border-radius: 0; background: #111; color: #fff; cursor: pointer; font: 500 9px var(--pc-font-mono); letter-spacing: .08em; text-align: center; text-transform: uppercase; }
-  .signature-row__button:hover { background: var(--blue); border-color: var(--blue); color: #fff; }
-  .signature-row__button:disabled { cursor: wait; opacity: .5; }
-  .signature-row__button--done { background: #fff; color: #111; }
-  .till-list, .today-list { margin: 0; }
-  .till-row, .today-row { display: grid; gap: 7px; padding: 16px; border-bottom: 1px solid rgba(0,0,0,.24); }
-  .till-row:last-child, .today-row:last-child { border-bottom: 0; }
-  .till-row dt, .today-row dt { color: var(--blue-dark); font: 500 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  .till-row__amount { font-size: 27px; letter-spacing: -.04em; }
-  .till-row__address { overflow: hidden; color: #222; font: 400 9px var(--pc-font-mono); text-decoration: underline; text-overflow: ellipsis; }
-  .till-row small, .today-row small { color: #5f5e5a; font: 400 8px/1.4 var(--pc-font-mono); }
-  .till-row.is-match { background: #eef5ef; }
-  .till-row.is-mismatch { background: #fff0ef; }
-  .today-row { grid-template-columns: minmax(0, 1fr) auto; min-height: 108px; align-content: center; }
-  .today-row dd { grid-row: 1 / span 2; grid-column: 2; margin: 0; color: var(--red); font-size: clamp(38px, 4vw, 60px); font-weight: 500; line-height: .8; letter-spacing: -.06em; }
-  .today-row small { grid-column: 1; }
+
+  /* Legend — names the four columns every row below prints. */
+  .desk-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 12px 0 0; }
+  .desk-legend > div { display: flex; gap: 5px; align-items: baseline; }
+  .desk-legend dt { color: var(--blue-dark); font: 500 8px var(--pc-font-mono); letter-spacing: .11em; }
+  .desk-legend dd { margin: 0; color: #5f5e5a; font: 400 10px var(--pc-font-sans); }
+
+  .desk-sig-list { margin: 0; padding: 0; list-style: none; }
+  .desk-sig { padding: 15px 16px 16px; border-bottom: 1px solid rgba(0,0,0,.24); transition: opacity .8s ease; }
+  .desk-sig:last-child { border-bottom: 0; }
+  .desk-sig--signature { background: #fff8e9; }
+  .desk-sig--check { background: #fbf7f7; }
+  .desk-sig.is-done { background: #eef5ef; opacity: .62; }
+  .desk-sig.is-cleared { opacity: .35; }
+  .desk-sig--clear { color: #4f4e4a; }
+  .desk-sig__head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 11px; }
+  .desk-sig__code { color: var(--red); font: 500 8px var(--pc-font-mono); letter-spacing: .1em; }
+  .desk-sig__go { flex: none; padding: 9px 13px; border: 1px solid #111; border-radius: 0; background: #111; color: #fff; cursor: pointer; font: 500 9px var(--pc-font-mono); letter-spacing: .08em; text-align: center; text-decoration: none; text-transform: uppercase; }
+  .desk-sig__go:hover { border-color: var(--blue); background: var(--blue); color: #fff; }
+  .desk-sig__go:disabled { cursor: wait; opacity: .45; }
+  .desk-sig__go--quiet { background: #fff; color: #111; }
+
+  /* WHAT / NOW / AFTER / STATUS */
+  .desk-sig__grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, .78fr); margin: 0; border: 1px solid rgba(0,0,0,.22); background: #fff; }
+  .desk-sig__cell { min-width: 0; padding: 9px 10px; }
+  .desk-sig__cell + .desk-sig__cell { border-left: 1px solid rgba(0,0,0,.16); }
+  .desk-sig__cell--now { background: #fdf3f1; }
+  .desk-sig__cell--after { background: #eef4fa; }
+  .desk-sig__col { color: var(--blue-dark); font: 500 8px var(--pc-font-mono); letter-spacing: .12em; }
+  .desk-sig__cell--now .desk-sig__col { color: var(--red); }
+  .desk-sig__cell--after .desk-sig__col::before { content: '→ '; }
+  .desk-sig__value { margin: 5px 0 0; overflow-wrap: anywhere; font: 400 11px/1.4 var(--pc-font-mono); }
+  .desk-sig__cell--what .desk-sig__value { font: 400 13px/1.3 var(--pc-font-sans); }
+  .desk-sig__note { display: block; margin-top: 2px; color: #5f5e5a; font: 400 9px var(--pc-font-mono); font-style: normal; }
+  .desk-sig__why { margin: 9px 0 0; color: #4f4e4a; font-size: 11px; line-height: 1.45; }
+  .desk-sig__error { margin: 8px 0 0; padding: 7px 9px; border-left: 3px solid var(--red); background: #fff0ef; color: #6d1b26; font: 400 10px/1.45 var(--pc-font-mono); overflow-wrap: anywhere; }
+
+  .desk-pill { display: inline-block; padding: 5px 7px; border: 1px solid #111; background: #fff; font: 500 8px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .desk-pill[data-desk-stage='confirm'] { border-color: var(--red); background: #fff0ef; color: var(--red); }
+  .desk-pill[data-desk-stage='broadcast'] { border-color: var(--blue); background: #eef4fa; color: var(--blue-dark); }
+  .desk-pill[data-desk-stage='confirmed'] { border-color: var(--green); background: #eef5ef; color: var(--green); }
+  .desk-pill[data-desk-stage='cleared'] { border-color: #7d7c78; background: #f2f1ec; color: #56554f; }
+  .desk-pill__op { color: inherit; text-decoration: underline; }
+
+  .desk-till-list, .desk-today-list { margin: 0; }
+  .desk-till-row, .desk-today-row { display: grid; gap: 7px; padding: 16px; border-bottom: 1px solid rgba(0,0,0,.24); }
+  .desk-till-row:last-child, .desk-today-row:last-child { border-bottom: 0; }
+  .desk-till-row dt, .desk-today-row dt { color: var(--blue-dark); font: 500 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .desk-till-row__amount { font-size: 27px; letter-spacing: -.04em; }
+  .desk-till-row__address { overflow: hidden; color: #222; font: 400 9px var(--pc-font-mono); text-decoration: underline; text-overflow: ellipsis; }
+  .desk-till-row small, .desk-today-row small { color: #5f5e5a; font: 400 8px/1.4 var(--pc-font-mono); }
+  .desk-till-row.is-match { background: #eef5ef; }
+  .desk-till-row.is-mismatch { background: #fff0ef; }
+  .desk-today-row { grid-template-columns: minmax(0, 1fr) auto; min-height: 108px; align-content: center; }
+  .desk-today-row dd { grid-row: 1 / span 2; grid-column: 2; margin: 0; color: var(--red); font-size: clamp(38px, 4vw, 60px); font-weight: 500; line-height: .8; letter-spacing: -.06em; }
+  .desk-today-row small { grid-column: 1; }
   .desk-foot { display: flex; justify-content: space-between; gap: 10px; padding: 11px 15px; border-top: 2px solid #111; background: #111; color: #fff; font: 400 8px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; }
+
+  @media (max-width: 1180px) {
+    .desk-sig__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .desk-sig__cell { border-top: 1px solid rgba(0,0,0,.16); }
+    .desk-sig__cell:nth-child(-n+2) { border-top: 0; }
+    .desk-sig__cell:nth-child(odd) { border-left: 0; }
+  }
   @media (max-width: 980px) {
     .desk-grid { grid-template-columns: 1fr 1fr; }
     .desk-column--signatures { grid-column: 1 / -1; border-bottom: 2px solid #111; }
@@ -388,6 +343,10 @@ const description = 'PointCast director-only executive desk for one-click Beacon
     .desk-grid { grid-template-columns: 1fr; }
     .desk-column--signatures { grid-column: auto; }
     .desk-column + .desk-column { border-left: 0; border-top: 2px solid #111; }
+    .desk-sig__grid { grid-template-columns: 1fr; }
+    .desk-sig__cell + .desk-sig__cell { border-left: 0; }
+    .desk-sig__cell:nth-child(-n+2) { border-top: 1px solid rgba(0,0,0,.16); }
+    .desk-sig__cell:first-child { border-top: 0; }
     .desk-foot { flex-direction: column; }
   }
 </style>
