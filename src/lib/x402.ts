@@ -1,9 +1,12 @@
 export const X402_SPEC = 'pointcast.agent-payments/v1';
+export const X402_RECEIPT_SPEC = 'pointcast.x402-receipt/v2';
+export const X402_SPLIT_POLICY_VERSION = 'pointcast.split-policy/v1';
 export const X402_VERSION = 2;
 export const X402_SCHEME = 'exact';
 export const X402_NETWORK = 'eip155:42793';
 export const X402_CHAIN_ID = 42793;
 export const X402_ENDPOINT = 'https://pointcast.xyz/api/x402/receipt';
+export const X402_RECEIPT_BY_TX = `${X402_ENDPOINT}/{txHash}`;
 export const X402_VERIFY_ENDPOINT = 'https://pointcast.xyz/api/x402/verify';
 export const X402_KEYS_ENDPOINT = 'https://pointcast.xyz/api/x402/keys';
 export const X402_PAGE = 'https://pointcast.xyz/x402';
@@ -139,13 +142,23 @@ export function buildSpendManifest(
 export function buildReceiptPayload(receipt: JsonRecord) {
   const spend = isJsonRecord(receipt.spend) ? receipt.spend : {};
   const settlement = isJsonRecord(receipt.settlement) ? receipt.settlement : {};
-  return {
+  const base = {
     id: receipt.id,
     settlement: pick(settlement, SETTLEMENT_FIELDS),
     spend: pick(spend, RECEIPT_SPEND_FIELDS),
     spec: X402_SPEC,
     timestamp: receipt.timestamp,
     type: receipt.type,
+  };
+  if (receipt.receipt_schema !== X402_RECEIPT_SPEC) return base;
+  return {
+    ...base,
+    receipt_schema: X402_RECEIPT_SPEC,
+    request_hash: receipt.request_hash ?? null,
+    action_result: receipt.action_result ?? null,
+    resource_id: receipt.resource_id ?? null,
+    split_policy_version: receipt.split_policy_version ?? null,
+    agent_id: receipt.agent_id ?? null,
   };
 }
 
@@ -228,6 +241,8 @@ export const X402_DISCOVERY = {
   paymentMethod: 'Permit2',
   verify: X402_VERIFY_ENDPOINT,
   keys: X402_KEYS_ENDPOINT,
+  receiptByTransaction: X402_RECEIPT_BY_TX,
+  receiptSchema: X402_RECEIPT_SPEC,
   human: X402_PAGE,
   json: X402_JSON,
   clientExample: X402_CLIENT_EXAMPLE,
