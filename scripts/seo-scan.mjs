@@ -17,7 +17,9 @@ const head = (html) => html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] ?? ''
 function walk(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    return entry.isDirectory() ? walk(path) : entry.name.endsWith('.html') ? [path] : [];
+    if (entry.isDirectory()) return walk(path);
+    if (/^google[a-z0-9]+\.html$/i.test(entry.name)) return [];
+    return entry.name.endsWith('.html') ? [path] : [];
   });
 }
 

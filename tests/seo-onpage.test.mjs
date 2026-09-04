@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -44,6 +44,18 @@ test('rendered HTML meets PointCast on-page SEO invariants', (t) => {
     examples.filter(({ path }) => !allowlist?.[kind]?.includes(path)).map(({ path, detail }) => `${kind}: ${path}${detail ? ` (${detail})` : ''}`),
   );
   assert.deepEqual(unexpected, [], `On-page SEO defects remain:\n${unexpected.slice(0, 50).join('\n')}`);
+});
+
+test('site-verification files are crawlable assets, not authored HTML pages', () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'pointcast-seo-verification-'));
+  try {
+    writeFileSync(join(fixture, 'googlef8cd34fe0ae765d9.html'), 'google-site-verification: googlef8cd34fe0ae765d9.html\n');
+    const result = scan({ distDir: fixture, publicDir: fixture, functionsDir: fixture });
+    assert.deepEqual(result.pages, []);
+    assert.deepEqual(result.defects, {});
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
 });
 
 test('normalizer is idempotent and preserves inline SVG titles', (t) => {
