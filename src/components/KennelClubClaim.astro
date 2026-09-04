@@ -113,7 +113,7 @@ const { tokenId, sitting, live = false } = Astro.props;
       }
       button.disabled = false;
       button.textContent = 'Claim today’s dog — free';
-      status(root, `${live.claims.claimed} free claim${live.claims.claimed === 1 ? '' : 's'} today · ${live.claims.remaining} left`);
+      status(root, live.claims.claimed >= 3 ? `${live.claims.claimed} people claimed today` : '');
     } catch {
       button.disabled = true;
       status(root, 'Claim desk unavailable — try again shortly.');
@@ -148,7 +148,7 @@ const { tokenId, sitting, live = false } = Astro.props;
   }
 
   function reasonMessage(reason: string | undefined): string {
-    if (reason === 'already-claimed') return 'You already claimed today’s dog.';
+    if (reason === 'already-claimed') return 'Loading your holding…';
     if (reason === 'claim-in-progress') return 'Your claim is already in progress. Check your shelf in a moment.';
     if (reason === 'daily-cap-reached') return 'Today’s free claims are all spoken for.';
     if (reason === 'claim-window-closed') return 'Today’s Kennel Club claim window is closed.';
@@ -176,20 +176,14 @@ const { tokenId, sitting, live = false } = Astro.props;
       });
       const payload = await response.json() as ClaimResponse;
       if (!response.ok || !payload.ok || !payload.claim) {
-        button.textContent = payload.reason === 'already-claimed' ? 'Already claimed' : 'Claim today’s dog — free';
+        button.textContent = 'Claim today’s dog — free';
         button.disabled = payload.reason === 'already-claimed' || payload.reason === 'daily-cap-reached';
         status(root, reasonMessage(payload.reason));
+        if (payload.reason === 'already-claimed') window.dispatchEvent(new CustomEvent('pc:kennel-claim'));
         return;
       }
-      button.textContent = 'Claimed';
       root.dataset.claimComplete = 'true';
-      status(
-        root,
-        payload.claim.status === 'held'
-          ? `${payload.claim.sitting} is held for you — link a wallet to take it home`
-          : `${payload.claim.sitting} is in your linked wallet`,
-        payload.claim.opHash,
-      );
+      root.hidden = true;
       void emitClaimBurst(root, payload.claim);
       window.dispatchEvent(new CustomEvent('pc:kennel-claim', { detail: payload.claim }));
     } catch {

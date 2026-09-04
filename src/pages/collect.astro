@@ -1,5 +1,6 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
+import KennelClubHolding from '../components/KennelClubHolding.astro';
 import KennelTodayLive from '../components/KennelTodayLive.astro';
 import { collectSitting, kennelGrid } from '../lib/collect-desk';
 
@@ -10,14 +11,14 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
 ---
 
 <BlockLayout legacy title={title} description={description} image="/og/collect/today.png" imageWidth={1200} imageHeight={630} hideAds>
-  <main class="desk" data-collect-desk data-today-token={today.tokenId} data-kennel-today="attr" data-kennel-attr="data-today-token" data-kennel-value="{tokenId}">
+  <main class="desk" data-collect-desk data-kennel-claimed-surface data-today-token={today.tokenId} data-kennel-today="attr" data-kennel-attr="data-today-token" data-kennel-value="{tokenId}">
     <nav class="desk__nav" aria-label="Collecting desk">
       <a href="/">PointCast</a><span>/</span><strong>Collect</strong>
       <a href="/collect.json">JSON</a><a href="/collect/shelf">Objkt shelf</a>
     </nav>
 
     <section class="hero" aria-labelledby="collect-title">
-      <figure><img src={today.image.webp} alt={today.alt} width="1024" height="1280" fetchpriority="high" data-kennel-today="image" /></figure>
+      <figure><img src={today.image.webp} alt={today.alt} width="1024" height="1280" fetchpriority="high" data-kennel-today="image" /><span class="hero__stamp" data-kennel-went-home-stamp hidden></span></figure>
       <div class="hero__copy">
         <p class="eyebrow" data-kennel-today="text" data-kennel-text="Sitting {day} · {name} · free today">Sitting {String(today.day).padStart(2, '0')} · {today.name} · free today</p>
         <h1 id="collect-title">Collect a dog a day. <em>Free.</em></h1>
@@ -29,14 +30,15 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
           <p data-subscribe-status aria-live="polite">Double opt-in. One dog note a day. Unsubscribe in every email.</p>
         </form>
 
-        <div class="signin" aria-label="Other sign-in options">
+        <div class="signin" aria-label="Other sign-in options" data-kennel-unclaimed>
           <button type="button" data-auth="google">Continue with Google</button>
           <button type="button" data-auth="passkey">Use a passkey</button>
           <span data-auth-status aria-live="polite"></span>
         </div>
 
-        <button class="claim" type="button" data-claim-today hidden data-kennel-today="text" data-kennel-text="Claim {name} — free">Claim {today.name} — free</button>
-        <p class="claim__status" data-claim-status aria-live="polite"></p>
+        <button class="claim" type="button" data-claim-today data-kennel-unclaimed hidden data-kennel-today="text" data-kennel-text="Claim {name} — free">Claim {today.name} — free</button>
+        <p class="claim__status" data-claim-status data-kennel-unclaimed aria-live="polite"></p>
+        <KennelClubHolding />
       </div>
     </section>
 
@@ -47,18 +49,18 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
       </header>
       <div class="stats" data-collect-stats hidden>
         <a data-handle href="/me"><span>Handle</span><strong>Claim yours</strong></a>
-        <div><span>Streak</span><strong data-streak>0 days</strong></div>
         <div><span>Seals</span><strong data-seals>0 earned</strong><small data-next-seal>next at 7</small></div>
         <div><span>Mugs / Nouns</span><strong data-objects>0 / 0</strong></div>
       </div>
       <ol class="tiles" aria-label="The thirty September sittings">
         {grid.map((sitting) => (
-          <li class="tile" data-day={sitting.day} data-token-id={sitting.tokenId} data-kennel-today="cell" data-kennel-day={sitting.day} data-sitting-status={sitting.day === today.day ? 'today' : sitting.day < today.day ? 'past' : 'future'}>
+          <li class="tile" data-day={sitting.day} data-token-id={sitting.tokenId} data-kennel-claimed-tile data-kennel-today="cell" data-kennel-day={sitting.day} data-sitting-status={sitting.day === today.day ? 'today' : sitting.day < today.day ? 'past' : 'future'}>
             <a href={sitting.href} aria-label={`Sitting ${sitting.day}: ${sitting.name}`}>
               <span class="tile__missing">{String(sitting.day).padStart(2, '0')}</span>
               <img src={sitting.image} alt={sitting.name} width="1024" height="1280" loading="lazy" />
               <small>{sitting.name}</small>
             </a>
+            <span class="tile__mine" data-kennel-owner-mark hidden></span>
           </li>
         ))}
       </ol>
@@ -83,6 +85,7 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
     handle: { status: string; handle?: string; label?: string; href: string };
     objects: { sealsEarned: number; mugsHeld: number; nounsHeld: number };
     today: { tokenId: number; name: string };
+    claims: Array<{ tokenId: number; sitting: string; status: 'held' | 'delivered'; opHash: string | null; deliveredTo: string | null; createdAt: string }>;
   };
 
   const root = document.querySelector<HTMLElement>('[data-collect-desk]');
@@ -105,7 +108,7 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
       tile.classList.toggle('tile--claimed', claimed.has(Number(tile.dataset.day)));
     });
     const state = root.querySelector<HTMLElement>('[data-collector-state]');
-    message(state, payload.claimedDays.length ? `${payload.claimedDays.length} plates held across your linked wallets.` : 'Signed in. Your first claim can be held before a wallet is linked.');
+    message(state, payload.claimedDays.length ? `Streak · ${payload.streak} day${payload.streak === 1 ? '' : 's'}` : 'Signed in. Your first sitting is waiting.');
     const stats = root.querySelector<HTMLElement>('[data-collect-stats]');
     stats?.removeAttribute('hidden');
     const handle = root.querySelector<HTMLAnchorElement>('[data-handle]');
@@ -113,7 +116,6 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
       handle.href = payload.handle.href;
       message(handle.querySelector('strong'), payload.handle.handle ? `@${payload.handle.handle}` : payload.handle.label || 'Claim yours');
     }
-    message(root.querySelector('[data-streak]'), `${payload.streak} day${payload.streak === 1 ? '' : 's'}`);
     message(root.querySelector('[data-seals]'), `${payload.objects.sealsEarned} earned`);
     message(root.querySelector('[data-next-seal]'), payload.nextSealAt === null ? 'all milestones complete' : `next at ${payload.nextSealAt}`);
     message(root.querySelector('[data-objects]'), `${payload.objects.mugsHeld} / ${payload.objects.nounsHeld}`);
@@ -124,7 +126,7 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
       claimButton?.removeAttribute('hidden');
     } else if (claimButton) {
       claimButton.hidden = true;
-      message(claimStatus, `${payload.today.name} is already on your shelf.`);
+      message(claimStatus, '');
     }
   }
 
@@ -220,12 +222,14 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
 
 <style>
   .desk { --club:#8a2432; --paper:#f6efe5; width:min(1180px,calc(100vw - 24px)); margin:0 auto; padding:18px 0 90px; color:#171717; }
+  .desk[data-kennel-claimed-state] [data-kennel-unclaimed] { display:none!important; }
   .desk__nav,.eyebrow,.promise label,.promise p,.signin,.claim,.collector header>p,.stats span,.tiles small,.collector footer { font-family:var(--pc-font-mono); letter-spacing:.09em; text-transform:uppercase; }
   .desk__nav { display:flex; gap:8px; align-items:center; padding:10px 0; border-bottom:2px solid #171717; font-size:10px; }
   .desk__nav a:nth-last-child(2) { margin-left:auto; }
   .hero { display:grid; grid-template-columns:minmax(280px,.82fr) minmax(0,1.18fr); border:1.5px solid #171717; border-top:0; background:#fff; }
-  .hero figure { margin:0; min-height:620px; background:var(--club); overflow:hidden; }
+  .hero figure { position:relative; margin:0; min-height:620px; background:var(--club); overflow:hidden; }
   .hero figure img { width:100%; height:100%; object-fit:cover; }
+  .hero__stamp { position:absolute; top:14px; right:14px; max-width:calc(100% - 28px); padding:7px 9px; border:1.5px solid #fff; background:var(--club); color:#fff; font:500 9px/1.2 var(--pc-font-mono); letter-spacing:.1em; text-transform:uppercase; transform:rotate(2deg); }
   .hero__copy { display:flex; flex-direction:column; padding:clamp(26px,5vw,68px); border-left:1.5px solid #171717; }
   .eyebrow { margin:0 0 14px; color:var(--club); font-size:10px; }
   h1,h2 { margin:0; font-weight:500; letter-spacing:-.06em; line-height:.88; }
@@ -244,11 +248,12 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
   .signin span { flex-basis:100%; min-height:1em; color:#67625d; }
   .claim { margin-top:18px; min-height:50px; }
   .claim__status { min-height:1.4em; margin:8px 0 0; color:var(--club); font-size:13px; }
+  .hero__copy :global(.kennel-holding) { margin-top:18px; color:var(--club); }
   .collector { margin-top:34px; border:1.5px solid #171717; background:#fff; }
   .collector>header { display:grid; grid-template-columns:1.2fr .8fr; gap:24px; align-items:end; padding:24px; border-bottom:1.5px solid #171717; }
   h2 { font-size:clamp(38px,6vw,76px); }
   .collector header>p { margin:0; color:#666; font-size:9px; text-align:right; }
-  .stats { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1.5px solid #171717; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); border-bottom:1.5px solid #171717; }
   .stats>* { display:grid; gap:7px; padding:13px; border-right:1px solid #171717; text-decoration:none; }
   .stats>*:last-child { border-right:0; } .stats span { color:#777; font-size:8px; } .stats strong { font-size:16px; font-weight:500; } .stats small { color:var(--club); font:500 8px/1.2 var(--pc-font-mono); text-transform:uppercase; }
   .tiles { display:grid; grid-template-columns:repeat(6,1fr); margin:0; padding:0; list-style:none; }
@@ -260,6 +265,8 @@ const description = 'Collect one free Kennel Club dog each day in September. Ema
   .tile--claimed img { display:block; width:100%; height:184px; object-fit:cover; }
   .tile--claimed .tile__missing { display:none; }
   .tile--claimed small { position:absolute; right:5px; bottom:5px; left:5px; display:block; padding:5px; background:rgba(255,255,255,.92); font-size:7px; }
+  .tile__mine { position:absolute; top:7px; right:7px; z-index:2; display:grid; width:25px; height:25px; place-items:center; border:1px solid #fff; border-radius:50%; background:var(--club); color:#fff; font:500 10px/1 var(--pc-font-mono); }
+  .tile[data-kennel-yours] { box-shadow:inset 0 0 0 3px var(--club); }
   .tile[data-sitting-status="today"] { box-shadow:inset 0 0 0 5px var(--club); z-index:1; }
   .tile[data-sitting-status="today"]::after { content:'today'; position:absolute; top:7px; left:7px; padding:4px 6px; background:var(--club); color:#fff; font:500 8px var(--pc-font-mono); letter-spacing:.1em; text-transform:uppercase; }
   .collector footer { display:flex; justify-content:space-between; gap:16px; padding:14px; color:#5f5a55; font-size:9px; }
