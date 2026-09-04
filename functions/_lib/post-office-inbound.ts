@@ -38,8 +38,19 @@ type ForwardDependencies = {
 
 const FROM = `PointCast Post Office <post@${POST_OFFICE_DOMAIN}>`;
 const MAX_QUOTED_TEXT = 100_000;
-const DEDUPE_TTL_SECONDS = 7 * 24 * 60 * 60;
-const COUNTER_TTL_SECONDS = 2 * 24 * 60 * 60;
+const COUNTER_LOCK_TTL_MS = 10_000;
+
+type DeliveryOutcome = 'reserved' | 'forwarded' | 'bounced' | 'unroutable' | 'rate_limited' | 'failed';
+
+interface DeliveryRow {
+  delivery_id: string;
+  outcome: DeliveryOutcome;
+}
+
+interface CounterRow {
+  global_count: number | string | null;
+  alias_count: number | string | null;
+}
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -90,12 +101,134 @@ function quotedBody(email: PostOfficeReceivedEmail, alias: string): string {
   ].join('\n');
 }
 
-async function claimCounter(kv: KVNamespace, key: string, limit: number): Promise<boolean> {
-  const raw = await kv.get(key);
-  const count = raw && /^\d+$/u.test(raw) ? Number(raw) : 0;
-  if (count >= limit) return false;
-  await kv.put(key, String(count + 1), { expirationTtl: COUNTER_TTL_SECONDS });
-  return true;
+async function acquireCounterLock(db: D1Database, day: string, holder: string): Promise<boolean> {
+  const now = Date.now();
+  const row = await db.prepare(`
+    INSERT INTO post_office_counter_locks (day, holder, expires_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(day) DO UPDATE SET holder = excluded.holder, expires_at = excluded.expires_at
+    WHERE post_office_counter_locks.holder IS NULL
+       OR post_office_counter_locks.expires_at <= ?
+       OR post_office_counter_locks.holder = excluded.holder
+    RETURNING holder
+  `).bind(day, holder, now + COUNTER_LOCK_TTL_MS, now).first<{ holder: string }>();
+  return row?.holder === holder;
+}
+
+async function releaseCounterLock(db: D1Database, day: string, holder: string): Promise<void> {
+  await db.prepare(`
+    UPDATE post_office_counter_locks SET holder = NULL, expires_at = NULL
+    WHERE day = ? AND holder = ?
+  `).bind(day, holder).run();
+}
+
+async function reserveDelivery(
+  db: D1Database,
+  webhookId: string,
+  aliasName: string,
+  day: string,
+  aliasCap: number,
+  globalCap: number,
+  now: Date,
+): Promise<{ state: 'reserved' | 'duplicate' | 'rate_limited' | 'busy'; deliveryId: string }> {
+  const [webhookHash, aliasHash] = await Promise.all([sha256(webhookId), sha256(aliasName)]);
+  const deliveryId = await sha256(`${webhookId}:${aliasName}`);
+  const existing = await db.prepare(`
+    SELECT delivery_id, outcome FROM post_office_deliveries
+    WHERE webhook_hash = ? AND alias_hash = ?
+  `).bind(webhookHash, aliasHash).first<DeliveryRow>();
+  if (existing) return { state: 'duplicate', deliveryId: existing.delivery_id };
+
+  const holder = `pod_${crypto.randomUUID().replaceAll('-', '')}`;
+  if (!await acquireCounterLock(db, day, holder)) return { state: 'busy', deliveryId };
+  try {
+    const raced = await db.prepare(`
+      SELECT delivery_id, outcome FROM post_office_deliveries
+      WHERE webhook_hash = ? AND alias_hash = ?
+    `).bind(webhookHash, aliasHash).first<DeliveryRow>();
+    if (raced) return { state: 'duplicate', deliveryId: raced.delivery_id };
+    const scope = `alias:${aliasHash}`;
+    const counts = await db.prepare(`
+      SELECT
+        COALESCE((SELECT count FROM post_office_daily_counters WHERE day = ? AND scope = 'global'), 0) AS global_count,
+        COALESCE((SELECT count FROM post_office_daily_counters WHERE day = ? AND scope = ?), 0) AS alias_count
+    `).bind(day, day, scope).first<CounterRow>();
+    const acceptedAt = now.toISOString();
+    const downstreamKey = `post-office:${deliveryId}`;
+    if (Number(counts?.global_count ?? 0) >= globalCap || Number(counts?.alias_count ?? 0) >= aliasCap) {
+      await db.prepare(`
+        INSERT INTO post_office_deliveries
+          (delivery_id, webhook_hash, alias_hash, day, downstream_idempotency_key,
+           provider_accepted, outcome, error, accepted_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, 1, 'rate_limited', NULL, ?, ?)
+        ON CONFLICT DO NOTHING
+      `).bind(deliveryId, webhookHash, aliasHash, day, downstreamKey, acceptedAt, acceptedAt).run();
+      return { state: 'rate_limited', deliveryId };
+    }
+    await db.batch([
+      db.prepare(`
+        INSERT INTO post_office_deliveries
+          (delivery_id, webhook_hash, alias_hash, day, downstream_idempotency_key,
+           provider_accepted, outcome, error, accepted_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, 1, 'reserved', NULL, ?, NULL)
+      `).bind(deliveryId, webhookHash, aliasHash, day, downstreamKey, acceptedAt),
+      db.prepare(`
+        INSERT INTO post_office_daily_counters (day, scope, count, updated_at)
+        VALUES (?, 'global', 1, ?)
+        ON CONFLICT(day, scope) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at
+      `).bind(day, acceptedAt),
+      db.prepare(`
+        INSERT INTO post_office_daily_counters (day, scope, count, updated_at)
+        VALUES (?, ?, 1, ?)
+        ON CONFLICT(day, scope) DO UPDATE SET count = count + 1, updated_at = excluded.updated_at
+      `).bind(day, scope, acceptedAt),
+    ]);
+    return { state: 'reserved', deliveryId };
+  } finally {
+    await releaseCounterLock(db, day, holder).catch(() => undefined);
+  }
+}
+
+async function completeDelivery(
+  db: D1Database,
+  deliveryId: string,
+  outcome: Exclude<DeliveryOutcome, 'reserved'>,
+  now: Date,
+  error: string | null = null,
+): Promise<void> {
+  await db.prepare(`
+    UPDATE post_office_deliveries
+    SET outcome = ?, error = ?, completed_at = ?
+    WHERE delivery_id = ? AND outcome = 'reserved'
+  `).bind(outcome, error, now.toISOString(), deliveryId).run();
+}
+
+function deliveryResponse(
+  values: {
+    forwarded: number;
+    bounced: boolean;
+    duplicate: number;
+    rateLimited: number;
+    failed?: number;
+    reason?: string;
+  },
+  status = 200,
+): Response {
+  const delivery = {
+    forwarded: values.forwarded,
+    bounced: values.bounced,
+    duplicate: values.duplicate,
+    rateLimited: values.rateLimited,
+    failed: values.failed ?? 0,
+  };
+  return json({
+    ok: status < 400,
+    providerAcceptance: { accepted: true },
+    delivery,
+    ...delivery,
+    ...(values.reason ? { reason: values.reason } : {}),
+    stored: false,
+  }, status);
 }
 
 async function retryTwice(operation: () => Promise<void>): Promise<void> {
@@ -116,6 +249,7 @@ async function forwardEmail(
   row: PostOfficeAliasRow,
   email: PostOfficeReceivedEmail,
   fetcher: typeof fetch,
+  deliveryId: string,
 ): Promise<void> {
   await retryTwice(async () => {
     const result = await sendMail({
@@ -123,7 +257,11 @@ async function forwardEmail(
       to: row.forward_target,
       subject: `Fwd: ${email.subject || '(no subject)'}`,
       text: quotedBody(email, aliasAddress(row.name)),
-      headers: { 'X-PointCast-Alias': aliasAddress(row.name) },
+      headers: {
+        'X-PointCast-Alias': aliasAddress(row.name),
+        'X-PointCast-Delivery-Id': deliveryId,
+        'Idempotency-Key': `post-office:${deliveryId}`,
+      },
     }, env, fetcher);
     if (!result.configured) throw new Error('mail-adapter-not-configured');
   });
@@ -160,6 +298,7 @@ async function forwardWebhook(
       headers: {
         'Content-Type': 'application/json',
         'X-PointCast-Delivery-Id': deliveryId,
+        'Idempotency-Key': `post-office:${deliveryId}`,
         'X-PointCast-Key-Id': X402_TREASURY_AGENT_ID,
         'X-PointCast-Signature': signature,
         'X-PointCast-Signature-Input': 'canonical-json',
@@ -179,6 +318,7 @@ async function bounce(
   email: PostOfficeReceivedEmail,
   names: string[],
   fetcher: typeof fetch,
+  deliveryId: string,
 ): Promise<boolean> {
   const to = senderAddress(email.from);
   if (!to) return false;
@@ -194,7 +334,11 @@ async function bounce(
         '',
         'PointCast did not retain the original message.',
       ].join('\n'),
-      headers: { 'X-Auto-Response-Suppress': 'All' },
+      headers: {
+        'X-Auto-Response-Suppress': 'All',
+        'X-PointCast-Delivery-Id': deliveryId,
+        'Idempotency-Key': `post-office:${deliveryId}`,
+      },
     }, env, fetcher);
     if (!result.configured) throw new Error('mail-adapter-not-configured');
   });
@@ -209,8 +353,15 @@ export async function routePostOfficeInbound(
 ): Promise<Response | null> {
   const names = postOfficeNames(email.to);
   if (names.length === 0) return null;
-  if (!env.AUTH_DB || !env.PC_RATES_KV) {
-    return json({ ok: false, reason: 'post-office-not-configured', stored: false }, 503);
+  if (!env.AUTH_DB) {
+    return deliveryResponse({
+      forwarded: 0,
+      bounced: false,
+      duplicate: 0,
+      rateLimited: 0,
+      failed: names.length,
+      reason: 'post-office-not-configured',
+    }, 503);
   }
   const fetcher = dependencies.fetcher ?? fetch;
   const now = dependencies.now ?? new Date();
@@ -220,15 +371,32 @@ export async function routePostOfficeInbound(
   let forwarded = 0;
   let duplicate = 0;
   let rateLimited = 0;
-  const missing: string[] = [];
-  const missingKeys: string[] = [];
+  let failed = 0;
+  const missing: Array<{ name: string; deliveryId: string }> = [];
 
   for (const name of names) {
-    const opaque = await sha256(`${webhookId}:${name}`);
-    const dedupeKey = `post-office:processed:${opaque}`;
-    if (await env.PC_RATES_KV.get(dedupeKey)) {
+    const reservation = await reserveDelivery(
+      env.AUTH_DB,
+      webhookId,
+      name,
+      day,
+      aliasCap,
+      globalCap,
+      now,
+    );
+    if (reservation.state === 'duplicate') {
       duplicate += 1;
       continue;
+    }
+    if (reservation.state === 'rate_limited') {
+      rateLimited += 1;
+      continue;
+    }
+    if (reservation.state === 'busy') {
+      return deliveryResponse({
+        forwarded, bounced: false, duplicate, rateLimited, failed,
+        reason: 'post-office-reservation-busy',
+      }, 503);
     }
     const row = await env.AUTH_DB.prepare(`
       SELECT name, forward_kind, forward_target, owner, receipt_hash,
@@ -236,77 +404,74 @@ export async function routePostOfficeInbound(
       FROM aliases WHERE name = ? LIMIT 1
     `).bind(name).first<PostOfficeAliasRow>();
     if (!row || !aliasIsActive(row, now)) {
-      missing.push(name);
-      missingKeys.push(dedupeKey);
-      continue;
-    }
-
-    const [globalAllowed, aliasAllowed] = await Promise.all([
-      claimCounter(env.PC_RATES_KV, `post-office:rate:${day}:global`, globalCap),
-      claimCounter(env.PC_RATES_KV, `post-office:rate:${day}:alias:${name}`, aliasCap),
-    ]);
-    if (!globalAllowed || !aliasAllowed) {
-      rateLimited += 1;
-      await env.PC_RATES_KV.put(dedupeKey, 'rate-limited', { expirationTtl: DEDUPE_TTL_SECONDS });
+      missing.push({ name, deliveryId: reservation.deliveryId });
       continue;
     }
 
     try {
       parseAliasInput({ name: row.name, forward: { kind: row.forward_kind, target: row.forward_target }, owner: row.owner });
       if (row.forward_kind === 'email') {
-        await forwardEmail(env, row, email, fetcher);
+        await forwardEmail(env, row, email, fetcher, reservation.deliveryId);
       } else {
-        await forwardWebhook(env, row, email, opaque, now, fetcher);
+        await forwardWebhook(env, row, email, reservation.deliveryId, now, fetcher);
       }
-      await env.AUTH_DB.prepare(`
-        UPDATE aliases SET forwarded_count = forwarded_count + 1
-        WHERE name = ? AND status = 'active' AND expires_at > ?
-      `).bind(name, now.toISOString()).run();
-      await env.PC_RATES_KV.put(dedupeKey, 'forwarded', { expirationTtl: DEDUPE_TTL_SECONDS });
+      await env.AUTH_DB.batch([
+        env.AUTH_DB.prepare(`
+          UPDATE aliases SET forwarded_count = forwarded_count + 1
+          WHERE name = ? AND status = 'active' AND expires_at > ?
+        `).bind(name, now.toISOString()),
+        env.AUTH_DB.prepare(`
+          UPDATE post_office_deliveries
+          SET outcome = 'forwarded', error = NULL, completed_at = ?
+          WHERE delivery_id = ? AND outcome = 'reserved'
+        `).bind(now.toISOString(), reservation.deliveryId),
+      ]);
       forwarded += 1;
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      failed += 1;
+      await completeDelivery(env.AUTH_DB, reservation.deliveryId, 'failed', now, detail.slice(0, 240));
       console.error(JSON.stringify({
         message: 'post office forward failed',
         alias: name,
-        error: error instanceof Error ? error.message : String(error),
+        error: detail,
       }));
-      return json({ ok: false, reason: 'post-office-forward-failed', stored: false }, 502);
+      return deliveryResponse({
+        forwarded, bounced: false, duplicate, rateLimited, failed,
+        reason: 'post-office-forward-failed',
+      }, 502);
     }
   }
 
   let bounced = false;
   if (missing.length > 0) {
-    const [globalAllowed, ...aliasAllowed] = await Promise.all([
-      claimCounter(env.PC_RATES_KV, `post-office:rate:${day}:global`, globalCap),
-      ...missing.map((name) => claimCounter(
-        env.PC_RATES_KV!,
-        `post-office:rate:${day}:alias:${name}`,
-        aliasCap,
-      )),
-    ]);
-    if (!globalAllowed || aliasAllowed.some((allowed) => !allowed)) {
-      rateLimited += missing.length;
-      await Promise.all(missingKeys.map((key) => env.PC_RATES_KV!.put(
-        key,
-        'rate-limited',
-        { expirationTtl: DEDUPE_TTL_SECONDS },
-      )));
-      return json({ ok: true, forwarded, bounced, duplicate, rateLimited, stored: false });
-    }
     try {
-      bounced = await bounce(env, email, missing, fetcher);
-      if (bounced) {
-        await Promise.all(missingKeys.map((key) => env.PC_RATES_KV!.put(key, 'bounced', { expirationTtl: DEDUPE_TTL_SECONDS })));
-      }
+      const bounceId = missing[0].deliveryId;
+      bounced = await bounce(env, email, missing.map((entry) => entry.name), fetcher, bounceId);
+      await env.AUTH_DB.batch(missing.map((entry) => env.AUTH_DB!.prepare(`
+        UPDATE post_office_deliveries
+        SET outcome = ?, error = NULL, completed_at = ?
+        WHERE delivery_id = ? AND outcome = 'reserved'
+      `).bind(bounced ? 'bounced' : 'unroutable', now.toISOString(), entry.deliveryId)));
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      failed += missing.length;
+      await env.AUTH_DB.batch(missing.map((entry) => env.AUTH_DB!.prepare(`
+        UPDATE post_office_deliveries
+        SET outcome = 'failed', error = ?, completed_at = ?
+        WHERE delivery_id = ? AND outcome = 'reserved'
+      `).bind(detail.slice(0, 240), now.toISOString(), entry.deliveryId)));
       console.error(JSON.stringify({
         message: 'post office bounce failed',
-        aliases: missing,
-        error: error instanceof Error ? error.message : String(error),
+        aliases: missing.map((entry) => entry.name),
+        error: detail,
       }));
-      return json({ ok: false, reason: 'post-office-bounce-failed', stored: false }, 502);
+      return deliveryResponse({
+        forwarded, bounced, duplicate, rateLimited, failed,
+        reason: 'post-office-bounce-failed',
+      }, 502);
     }
   }
 
-  return json({ ok: true, forwarded, bounced, duplicate, rateLimited, stored: false });
+  return deliveryResponse({ forwarded, bounced, duplicate, rateLimited, failed });
 }

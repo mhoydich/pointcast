@@ -8,9 +8,16 @@
 
 `agents.pointcast.xyz` is an x402-priced forwarding registry, not a mailbox service. A settled 0.01 USDC payment registers one `name@agents.pointcast.xyz` alias for 30 days and points it at either an email address or HTTPS webhook. PointCast stores the registry configuration, owner address, signed-receipt hash, dates, status, and forwarding counter in D1. It never writes inbound senders, recipients, subjects, bodies, HTML, attachments, headers, or raw MIME to D1, KV, R2, logs, or the existing town inbox.
 
+> Superseded in part 2026-09-04 (Astra finding 6): migration `0013` moves
+> delivery dedupe and daily counters from KV to D1. A compare-and-set D1 lock
+> serializes each UTC day's transactional reservation/counter batch; the
+> delivery row has unique opaque provider/alias hashes. Email and webhook
+> forwards receive a stable `Idempotency-Key`. Responses now report the
+> accepted provider event separately from downstream delivery outcome.
+
 Inbound delivery reuses the signed Resend `email.received` webhook at `/api/mail/inbound`. The Function retrieves the plain-text representation once, holds it only in request memory, and routes every `@agents.pointcast.xyz` recipient before the town-mail persistence path. Email targets receive an attachment-free quoted plain-text message from `post@agents.pointcast.xyz`. Webhook targets receive canonical JSON signed with the published PointCast Ed25519 receipt key. Each forward is attempted at most twice. A successful delivery increments only `aliases.forwarded_count`.
 
-KV stores daily counters and seven-day opaque SHA-256 deduplication keys. Those keys contain no mail content, address, target, or subject. Forwarding fails closed when the rate-limit KV binding is unavailable.
+D1 stores daily counters and permanent opaque SHA-256 delivery reservations. Those rows contain no mail content, address, target, or subject. A provider replay observes the unique reservation instead of repeating the forward. Delivery fails closed when the auth D1 binding is unavailable.
 
 ## Registration and renewal
 
@@ -29,7 +36,7 @@ There is an unavoidable settlement boundary: the facilitator settles before D1 c
 
 - Default per-alias cap: 100 delivered messages per UTC day (`POST_OFFICE_ALIAS_DAILY_CAP`).
 - Default global cap: 1,000 delivery attempts per UTC day (`POST_OFFICE_GLOBAL_DAILY_CAP`).
-- Both use `PC_RATES_KV`; attempts over either limit are acknowledged and not forwarded.
+- Both use `post_office_daily_counters`; attempts over either limit are recorded as `rate_limited` and not forwarded.
 - Unknown and expired recipients get one plain-text bounce per signed Resend event/alias. The bounce names the x402 terms URL, `https://pointcast.xyz/api/post-office/alias`, and states that PointCast retained no message.
 - Auto-generated senders such as `mailer-daemon`, `postmaster`, `bounce`, and `no-reply` do not receive a bounce, preventing loops.
 
