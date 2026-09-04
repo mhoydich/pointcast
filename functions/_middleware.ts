@@ -16,6 +16,8 @@
  */
 
 import { classifyUA, recordVisit, NOUN_ID_RANGE, type Env } from './api/visit';
+import { readSessionFromRequest, type AuthEnv } from './api/auth/session';
+import { hasDirectorDeskAccess } from '../src/lib/director-access';
 import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-bridge-script';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|mp3|mp4|webm)(\?|$)/i;
@@ -202,10 +204,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const queryToken = url.searchParams.get('k') ?? '';
       const ok = cookieToken === adminToken || queryToken === adminToken;
       if (!ok) {
-        return new Response('Not Found', {
-          status: 404,
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        });
+        // Second key: the director's own PointCast session. /desk links
+        // straight into the publisher and Mike never carries the token,
+        // so the same check the director queue uses opens the door here.
+        // Only tokenless /admin/* GETs pay for this session read.
+        const session = await readSessionFromRequest(request, env as AuthEnv);
+        if (!hasDirectorDeskAccess(session)) {
+          return new Response('Not Found', {
+            status: 404,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          });
+        }
       }
       // If the user supplied the token as ?k=, set a cookie + redirect to
       // the cleaner URL so the token doesn't stay in browser history /
