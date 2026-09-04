@@ -340,7 +340,12 @@ export async function mintKennelClubSitting(params: {
 export async function submitDirectorOperation(
   operation: DirectorOperation,
 ): Promise<{ address: string; opHash: string; confirmation: Promise<unknown> }> {
-  const { tezos, wallet } = getToolkit();
+  // walletReady() (not getToolkit()) so the ACTIVE_ACCOUNT_SET subscription
+  // has settled before we ask for permissions. Without it a restored Kukai
+  // pairing can be missed and the first desk click silently opens a second
+  // pairing prompt instead of signing.
+  const wallet = await walletReady();
+  const tezos = await tezosClient();
   return sendDirectorOperationWith(operation, {
     connect: () => ensurePointCastPermissions(wallet),
     at: (address: string) => tezos.wallet.at(address) as any,

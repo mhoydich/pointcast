@@ -1,8 +1,9 @@
 import contracts from '../../../src/data/contracts.json';
 import manualQueue from '../../../src/data/director-queue.json';
 import { collectSitting } from '../../../src/lib/collect-desk';
-import { hasDirectorDeskAccess } from '../../../src/lib/director-access';
-import type { DirectorOperation } from '../../../src/lib/director-operations';
+import { DIRECTOR_ADMIN_ADDRESS, hasDirectorDeskAccess } from '../../../src/lib/director-access';
+import { deskValueSummary, type DeskRowValue } from '../../../src/lib/desk-rows';
+import type { DirectorEntrypoint, DirectorOperation } from '../../../src/lib/director-operations';
 import { readSessionFromRequest, authJson, type AuthEnv } from '../auth/session';
 import { claimDailyCap } from '../kennel-club/_claims';
 
@@ -42,10 +43,46 @@ export interface DirectorQueueRow {
   href: string;
   done: boolean;
   state: 'open' | 'done' | 'unknown';
+  /** The value the chain (or the town) holds today. */
+  now: DeskRowValue;
+  /** The value this row writes once it is signed or closed. */
+  after: DeskRowValue;
+  /** Flattened `now → after` mirror kept for the home front-door desk. */
   value?: string;
   buttonLabel: string;
   operation?: DirectorOperation;
   toggleable?: boolean;
+}
+
+/**
+ * Every allowlisted chain call renders through one grammar: a plain
+ * WHAT sentence, the NOW value read from storage, the AFTER value the
+ * signature writes, and one `Sign with Kukai` button. set_treasury and
+ * set_paused use it today; set_issuer, set_window and set_price get the
+ * same row the moment a contract needs one.
+ */
+export function directorSignatureRow(input: {
+  id: string;
+  contract: string;
+  entrypoint: DirectorEntrypoint;
+  args?: unknown;
+  what: string;
+  why: string;
+  href: string;
+  now: DeskRowValue;
+  after: DeskRowValue;
+}): DirectorQueueRow {
+  const { contract, entrypoint, args, ...copy } = input;
+  return {
+    ...copy,
+    source: 'chain',
+    kind: 'signature',
+    done: false,
+    state: 'open',
+    value: deskValueSummary(copy),
+    buttonLabel: 'Sign with Kukai',
+    operation: { contract, entrypoint, ...(args === undefined ? {} : { args }) },
+  };
 }
 
 export interface DirectorTillItem extends WalletSnapshot {
@@ -261,42 +298,63 @@ export async function buildDirectorQueue(
   const treasuryDone = treasuryKnown && chain.kennel.treasury === safe;
   if (!treasuryKnown) {
     rows.push({
-      id: 'kennel-treasury-safe', source: 'chain', kind: 'check', what: 'Check Kennel Club treasury',
+      id: 'kennel-treasury-safe', source: 'chain', kind: 'check', what: 'Check the Kennel Club treasury by hand',
       why: 'The chain read is unavailable, so PointCast will not offer a blind signature.',
-      href: betterCall(kennel), done: false, state: 'unknown', value: 'chain read unavailable', buttonLabel: 'Inspect',
+      href: betterCall(kennel), done: false, state: 'unknown', buttonLabel: 'Inspect',
+      now: { label: 'treasury', value: 'chain read unavailable' },
+      after: { label: 'treasury', value: safe, note: 'project safe' },
+      value: 'chain read unavailable',
     });
   } else if (!treasuryDone) {
-    rows.push({
-      id: 'kennel-treasury-safe', source: 'chain', kind: 'signature',
-      what: 'Set Kennel Club treasury to the project safe',
-      why: 'Route future 1 ꜩ mint proceeds to the 1-of-2 project safe.',
-      href: betterCall(kennel), done: false, state: 'open',
-      value: `${chain.kennel.treasury} → ${safe}`, buttonLabel: 'Sign',
-      operation: { contract: kennel, entrypoint: 'set_treasury', args: [safe] },
-    });
+    rows.push(directorSignatureRow({
+      id: 'kennel-treasury-safe',
+      contract: kennel,
+      entrypoint: 'set_treasury',
+      args: [safe],
+      what: 'Send Kennel Club mint proceeds to the project safe',
+      why: 'Every 1 ꜩ sitting after this signature pays the 1-of-2 safe instead of a personal wallet.',
+      href: betterCall(kennel),
+      now: {
+        label: 'treasury',
+        value: chain.kennel.treasury as string,
+        note: chain.kennel.treasury === DIRECTOR_ADMIN_ADDRESS ? 'your Kukai' : 'current treasury',
+      },
+      after: { label: 'treasury', value: safe, note: 'project safe' },
+    }));
   }
 
   const sealsV2 = mainnetAddress('seal_soulbound_v2');
   if (sealsV2 && !chain.sealsV2.available) {
     rows.push({
-      id: 'seals-v2-unpause', source: 'chain', kind: 'check', what: 'Check Seals v2 pause state',
+      id: 'seals-v2-unpause', source: 'chain', kind: 'check', what: 'Check the Seals v2 pause state by hand',
       why: 'The chain read is unavailable, so PointCast will not offer a blind signature.',
-      href: betterCall(sealsV2), done: false, state: 'unknown', value: 'chain read unavailable', buttonLabel: 'Inspect',
+      href: betterCall(sealsV2), done: false, state: 'unknown', buttonLabel: 'Inspect',
+      now: { label: 'paused', value: 'chain read unavailable' },
+      after: { label: 'paused', value: 'false', note: 'issuing open' },
+      value: 'chain read unavailable',
     });
   } else if (sealsV2 && chain.sealsV2.paused === true) {
-    rows.push({
-      id: 'seals-v2-unpause', source: 'chain', kind: 'signature', what: 'Unpause Seals v2',
-      why: 'Open the configured v2 issuer path after the administrator approves the call.',
-      href: betterCall(sealsV2), done: false, state: 'open', value: 'set_paused(false)', buttonLabel: 'Sign',
-      operation: { contract: sealsV2, entrypoint: 'set_paused', args: [false] },
-    });
+    rows.push(directorSignatureRow({
+      id: 'seals-v2-unpause',
+      contract: sealsV2,
+      entrypoint: 'set_paused',
+      args: [false],
+      what: 'Unpause Seals v2 so the configured issuer can seal again',
+      why: 'The contract is paused, so every issuer call fails until the administrator opens it.',
+      href: betterCall(sealsV2),
+      now: { label: 'paused', value: 'true', note: 'issuing blocked' },
+      after: { label: 'paused', value: 'false', note: 'issuing open' },
+    }));
   }
 
   rows.push(...manualQueue.map((item) => {
     const done = manualState.get(item.id) ?? false;
+    const now: DeskRowValue = { label: 'town', value: item.now };
+    const after: DeskRowValue = { label: 'town', value: item.after };
     return {
-      ...item, source: 'manual' as const, kind: 'manual' as const, done,
+      ...item, source: 'manual' as const, kind: 'manual' as const, done, now, after,
       state: done ? 'done' as const : 'open' as const,
+      value: deskValueSummary({ now, after }),
       buttonLabel: done ? 'Undo' : 'Done', toggleable: true,
     };
   }));
@@ -305,10 +363,14 @@ export async function buildDirectorQueue(
     if (key.startsWith('_') || !record || typeof record !== 'object' || !('mainnet' in record)) continue;
     if (typeof record.mainnet === 'string' && record.mainnet.trim() === '') {
       rows.push({
-        id: `contract-${key}`, source: 'registry', kind: 'setup', what: `Prepare ${key.replaceAll('_', ' ')} for mainnet`,
-        why: 'This registered contract still has an empty mainnet address.',
+        id: `contract-${key}`, source: 'registry', kind: 'setup',
+        what: `Originate ${key.replaceAll('_', ' ')} so it has a mainnet address`,
+        why: 'This contract is registered in contracts.json but has never been originated on mainnet.',
         href: `/admin/deploy/new?prefill=${encodeURIComponent(key)}`,
-        done: false, state: 'open', buttonLabel: 'Prepare',
+        done: false, state: 'open', buttonLabel: 'Open publisher',
+        now: { label: 'mainnet', value: 'unset', note: 'registered, never originated' },
+        after: { label: 'mainnet', value: 'KT1…', note: 'written back to contracts.json' },
+        value: 'mainnet: unset → mainnet: KT1…',
       });
     }
   }
