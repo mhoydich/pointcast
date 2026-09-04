@@ -4,11 +4,25 @@
 **Filed by:** Claude Code (cc) for Mike to hand to Sol
 **Repo:** `mhoydich/pointcast` · faucet code is on `main` (PRs #1049, #1059)
 **Page:** `/faucet/hello` · live desk `/api/faucet/hello`
-**Correction from Mike:** the HELLO contract and its deployer wallet `0x676a…186e` belong to **Leonar**, not Mike. So the spigot is **not** the deployer. It is a fresh wallet that Leonar funds with HELLO and Mike funds with a little ETH.
+**Which path (Mike, later the same day):** "you have the keys, why do we need leonar." The `eth info` spreadsheet in Mike's password manager holds the private keys for his 2019 deployments. **Path A (primary):** if the HELLO row has the deployer key for `0x676a…186e`, that key is the spigot and Leonar is not needed. **Path B (fallback):** if it does not, make a fresh wallet and ask Leonar to send it HELLO. cc never read the sheet; the classifier blocked it and it stayed closed.
 
 ## The job in one line
 
-Make a fresh spigot wallet, put its key in Cloudflare, get Leonar to send it HELLO, get a few thousandths of an ETH into it, redeploy, and send one HELLO end to end.
+Put the spigot key in Cloudflare, make sure the spigot has HELLO and a few thousandths of an ETH, redeploy, and send one HELLO end to end.
+
+## Path A — the sheet has the HELLO deployer key
+
+1. Open the sheet (Mike hands it over; it never goes into the repo or chat). Find the HELLO row: contract `0x1fda96405dd8ee22631abcf4f61282eae802012f`, deployer `0x676ac0931de1ae311c47f3fa2f3f653e668c186e`.
+2. Confirm the key matches that deployer before trusting it:
+   ```
+   node -e "import('viem/accounts').then(({privateKeyToAccount}) => console.log(privateKeyToAccount(process.env.K).address))"
+   ```
+   run with `K=0x…` in the environment (add the `0x` if the sheet stores it bare). The printed address must equal `0x676a…186e`. If it does not, this is not the HELLO key; go to Path B.
+3. Cloudflare Pages → pointcast → Settings → Environment variables → Production: `HELLO_FAUCET_SECRET_KEY` = that key, marked Encrypted. Redeploy.
+4. Gas: check the deployer on Etherscan. If it holds under 0.005 ETH, send it 0.003 ETH from Mike's MetaMask (`0x48E8…38b37`); that is Mike's tap unless Sol holds that account.
+5. Skip to Step 5 below (verify and send one). Steps 1 to 4 below are Path B only.
+
+## Path B — fresh wallet, Leonar sends the supply
 
 ## Step 1 — make the spigot wallet
 
@@ -55,8 +69,8 @@ The spigot needs a few thousandths of an ETH. Mike's MetaMask (`0x48E8…38b37`)
 
 ## Do not
 
-- Do not use the deployer key, Leonar's key, or Mike's MetaMask key as the spigot. Fresh wallet only.
-- Do not open or copy the `eth info` spreadsheet. Nothing here needs it.
+- Path B only: do not use Leonar's key or Mike's MetaMask key as the spigot.
+- The spreadsheet is for Path A step 1 only. Copy one key into Cloudflare and nothing else; never into the repo, a log, or chat.
 - Do not commit any key or `.env.local`.
 
 ## If something is off
