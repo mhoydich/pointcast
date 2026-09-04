@@ -40,6 +40,13 @@ export interface FaucetToken {
   color: string;
   /** noun.pics seed for the front-door cell. */
   noun: number;
+  /**
+   * How a drip is earned. `button` is the 2018 faucet: sign in, click, done.
+   * `receipt` means the desk will not write a line without a signed completion
+   * receipt from an allowlisted satellite (see src/lib/rewards.ts), because the
+   * token is the ending of something you did rather than a daily allowance.
+   */
+  claim: 'button' | 'receipt';
 }
 
 export const FAUCET_CANONICAL = 'https://pointcast.xyz/faucet/hello';
@@ -63,6 +70,25 @@ export const FAUCETS: FaucetToken[] = [
     legacyHref: '/eth-legacy',
     color: '#185FA5',
     noun: 1,
+    claim: 'button',
+  },
+  {
+    slug: 'fishclub',
+    name: 'FishClub | All things fishing',
+    ticker: 'FISHCLUB',
+    chain: 'ethereum',
+    chainId: 1,
+    // A different 2019 address from HELLO's. See src/content/eth-legacy/fishclub.json;
+    // the catalog is provenance, not a fresh balance or key check.
+    contract: '0x3bca69e033b3605a714dd815f51cb4e9d5b4693a',
+    deployer: '0xe62e0219053ddc0c5a1dafbdfb947310a528a3a7',
+    deployedYear: 2019,
+    dailyAmount: 1,
+    greeting: 'One FISHCLUB for five quiet minutes. The room is still open.',
+    legacyHref: '/eth-legacy',
+    color: '#0F6E56',
+    noun: 1088,
+    claim: 'receipt',
   },
 ];
 

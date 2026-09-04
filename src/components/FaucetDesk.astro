@@ -2,21 +2,41 @@
 /**
  * FaucetDesk — the claim-and-deliver desk for one faucet.
  *
- * Three states, all spelled out in plain English rather than a contract
- * explorer:
- *   signed out  → one button that sends you to Google sign-in and back
- *   signed in   → "Claim today's HELLO" (a ledger write, nothing on chain)
- *   owed drips  → an address field and "Send my HELLO" (the spigot pays gas)
+ * States, all spelled out in plain English rather than a contract explorer:
+ *   signed out       → one button that sends you to Google sign-in and back
+ *   signed in        → "Claim today's HELLO" (a ledger write, nothing on chain)
+ *   receipt in hand  → "Keep this fish" (the same write, earned somewhere else)
+ *   receipt needed   → a pointer at /rewards/start, because FISHCLUB has no
+ *                      button of its own
+ *   owed drips       → an address field and "Send my HELLO" (the spigot pays gas)
+ *
+ * A satellite sends people back to /faucet/{slug}#receipt=…. The fragment is
+ * read once and stripped before anything else runs, and the receipt is kept in
+ * this tab's sessionStorage so a sign-in on the way back does not lose it. It
+ * never goes in a link, a query string or a log.
  *
  * Nobody signs anything on this desk. That is the design, not a gap.
  */
 import type { FaucetToken } from '../lib/faucet';
+import { rewardProgramsForFaucet } from '../lib/rewards';
 
 interface Props { faucet: FaucetToken; returnTo?: string }
-const { faucet, returnTo = '/faucet/hello' } = Astro.props;
+const { faucet, returnTo = `/faucet/${Astro.props.faucet.slug}` } = Astro.props;
+/** The program that pays out of this faucet, when there is one. */
+const program = rewardProgramsForFaucet(faucet.slug)[0] ?? null;
+const startHref = program ? `/rewards/start?program=${encodeURIComponent(program.id)}` : '';
 ---
 
-<section class="desk" data-faucet-desk data-faucet={faucet.slug} data-ticker={faucet.ticker} data-contract={faucet.contract} data-return-to={returnTo}>
+<section
+  class="desk"
+  data-faucet-desk
+  data-faucet={faucet.slug}
+  data-ticker={faucet.ticker}
+  data-contract={faucet.contract}
+  data-return-to={returnTo}
+  data-claim-mode={faucet.claim}
+  data-start-href={startHref}
+>
   <div class="desk__claim">
     <button type="button" class="desk__button" data-faucet-claim>
       Claim today’s {faucet.ticker} — free
@@ -25,14 +45,15 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
     <p class="desk__door" data-faucet-door hidden>
       Sign in with Google to claim. No wallet needed; PointCast keeps a ledger line for you.
     </p>
+    <p class="desk__balances" data-faucet-balances hidden></p>
   </div>
 
   <div class="desk__owed" data-faucet-owed hidden>
     <p class="desk__owed-line">You are owed <b data-faucet-held>0</b> {faucet.ticker} · <span data-faucet-delivered-line>0 delivered</span></p>
     <form class="desk__send" data-faucet-send-form>
-      <label class="desk__label" for="faucet-address">Send everything you are owed to this Ethereum address</label>
+      <label class="desk__label" for={`faucet-address-${faucet.slug}`}>Send everything you are owed to this Ethereum address</label>
       <div class="desk__send-row">
-        <input id="faucet-address" name="address" class="desk__input" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…" pattern="^0x[0-9a-fA-F]{40}$" data-faucet-address />
+        <input id={`faucet-address-${faucet.slug}`} name="address" class="desk__input" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x…" pattern="^0x[0-9a-fA-F]{40}$" data-faucet-address />
         <button type="submit" class="desk__button desk__button--send" data-faucet-send>Send my {faucet.ticker}</button>
       </div>
       <p class="desk__fine">The spigot wallet sends one transaction and pays the gas. You sign nothing. Any Ethereum address works: a hardware wallet, an exchange deposit address, a friend.</p>
@@ -47,19 +68,60 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
   import type { PointCastUser } from '../lib/auth/types';
   import { getSession } from '../lib/auth/client';
 
-  type LedgerLine = { day: string; amount: number; status: 'held' | 'submitting' | 'delivered'; txHash: string | null; deliveredTo: string | null };
+  type LedgerLine = {
+    day: string;
+    amount: number;
+    status: 'held' | 'submitting' | 'delivered';
+    txHash: string | null;
+    deliveredTo: string | null;
+    via: string | null;
+    program: string | null;
+  };
+  type Balance = { slug: string; ticker: string; held: number; delivered: number };
   type DeskState = {
     ok: boolean;
     ledger: boolean;
     claims: { configured: boolean; cap: number; claimedToday: number; remainingToday: number };
     spigot: { address: string; tokenBalance: number; lowGas: boolean; lowGasWarning: boolean } | null;
     you: { today: { claimed: boolean }; held: number; delivered: number; linkedAddress: string | null; claims: LedgerLine[] } | null;
+    balances: Balance[] | null;
   };
   type ClaimResponse = { ok: boolean; reason?: string; claim?: { day: string; amount: number } };
   type DeliverResponse = { ok: boolean; reason?: string; delivered: number; txHash?: string; deliveredTo?: string };
 
+  /** Satellite ids to the names people actually use for them. */
+  const VIA_NAMES: Record<string, string> = { industrynext: 'Industry Next', tonebloom: 'Tone Bloom' };
+
   const roots = (): HTMLElement[] => Array.from(document.querySelectorAll('[data-faucet-desk]'));
   const q = <T extends HTMLElement>(root: HTMLElement, sel: string): T | null => root.querySelector<T>(sel);
+  const receiptKey = (slug: string): string => `pc:reward-receipt:${slug}`;
+
+  function readStore(key: string): string {
+    try { return window.sessionStorage.getItem(key) ?? ''; } catch { return ''; }
+  }
+  function writeStore(key: string, value: string): void {
+    try { window.sessionStorage.setItem(key, value); } catch { /* private mode; the claim still works this tab */ }
+  }
+  function clearStore(key: string): void {
+    try { window.sessionStorage.removeItem(key); } catch { /* nothing to do */ }
+  }
+
+  /**
+   * Take the receipt out of the URL before anything else can see it. Fragments
+   * never reach a server, but they do sit in the address bar, in history and in
+   * anything that reads location later, so this runs first and once.
+   */
+  function captureReceipt(root: HTMLElement): string {
+    const slug = root.dataset.faucet ?? '';
+    const key = receiptKey(slug);
+    const hash = window.location.hash;
+    const match = /^#receipt=(.+)$/.exec(hash);
+    if (match) {
+      writeStore(key, decodeURIComponent(match[1]));
+      history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
+    return readStore(key);
+  }
 
   function etherscan(hash: string): HTMLAnchorElement {
     const link = document.createElement('a');
@@ -81,16 +143,46 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
     return `${address.slice(0, 6)}…${address.slice(-4)}`;
   }
 
+  /** Sending is closed for every faucet right now, so say so in the room's own words. */
+  function heldHere(root: HTMLElement): string {
+    return root.dataset.faucet === 'fishclub'
+      ? 'Your fish is held here. Sending comes later.'
+      : 'The spigot wallet is not funded yet. Your drips are safe in the ledger; sending opens once it is.';
+  }
+
+  /** "Keep this fish" for FISHCLUB, the plain thing for anything else. */
+  function keepLabel(root: HTMLElement): string {
+    return root.dataset.faucet === 'fishclub' ? 'Keep this fish' : `Keep this ${root.dataset.ticker}`;
+  }
+
   async function readState(root: HTMLElement): Promise<DeskState> {
     const response = await fetch(`/api/faucet/${root.dataset.faucet}`, { cache: 'no-store', credentials: 'include' });
     if (!response.ok) throw new Error(`desk-state-${response.status}`);
     return await response.json() as DeskState;
   }
 
+  function paintBalances(root: HTMLElement, state: DeskState): void {
+    const node = q(root, '[data-faucet-balances]');
+    if (!node) return;
+    const balances = state.balances ?? [];
+    // Both tokens together, or neither: the scope asked for them discoverable
+    // in one place, and a row of zeroes is noise on a first visit.
+    if (!balances.some((balance) => balance.held > 0 || balance.delivered > 0)) {
+      node.hidden = true;
+      node.textContent = '';
+      return;
+    }
+    node.textContent = balances
+      .map((balance) => `${balance.ticker} ${balance.held} held${balance.delivered ? ` · ${balance.delivered} sent` : ''}`)
+      .join(' · ');
+    node.hidden = false;
+  }
+
   function paintLedger(root: HTMLElement, state: DeskState): void {
     const ticker = root.dataset.ticker ?? '';
     const owed = q(root, '[data-faucet-owed]');
     const ledger = q<HTMLOListElement>(root, '[data-faucet-ledger]');
+    paintBalances(root, state);
     if (!owed || !ledger || !state.you) return;
     const held = q(root, '[data-faucet-held]');
     if (held) held.textContent = String(state.you.held);
@@ -105,7 +197,7 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
       send.textContent = state.you.held > 0 ? `Send my ${state.you.held} ${ticker}` : `Send my ${ticker}`;
     }
     if (!state.claims.configured) {
-      status(root, '[data-faucet-send-state]', 'The spigot wallet is not funded yet. Your drips are safe in the ledger; sending opens once it is.');
+      status(root, '[data-faucet-send-state]', heldHere(root));
     } else if (state.spigot?.lowGas) {
       status(root, '[data-faucet-send-state]', 'The spigot is low on gas. Drips stay in the ledger until it is topped up.');
     } else if (state.spigot?.lowGasWarning) {
@@ -127,6 +219,11 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
           : 'held for you';
       what.textContent = `${line.amount} ${ticker} · ${where}`;
       item.append(day, what);
+      if (line.via) {
+        const via = document.createElement('em');
+        via.textContent = `via ${VIA_NAMES[line.via] ?? line.via}`;
+        item.append(via);
+      }
       if (line.txHash) item.append(etherscan(line.txHash));
       return item;
     }));
@@ -137,8 +234,26 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
     root.dataset.session = 'signed-out';
     q(root, '[data-faucet-door]')?.removeAttribute('hidden');
     const button = q<HTMLButtonElement>(root, '[data-faucet-claim]');
-    if (button) { button.disabled = false; button.textContent = `Sign in to claim today’s ${root.dataset.ticker}`; }
-    status(root, '[data-faucet-state]', 'Google sign-in is the claim ticket. No wallet.');
+    const receipt = readStore(receiptKey(root.dataset.faucet ?? ''));
+    if (button) {
+      button.disabled = false;
+      button.textContent = receipt ? `Sign in to keep this ${root.dataset.ticker}` : `Sign in to claim today’s ${root.dataset.ticker}`;
+    }
+    status(
+      root,
+      '[data-faucet-state]',
+      receipt
+        ? 'Sign in with the account that started the run. It is waiting in this tab.'
+        : 'Google sign-in is the claim ticket. No wallet.',
+    );
+  }
+
+  /** The FISHCLUB desk with nothing in hand: point at the run, do not pretend. */
+  function needsRun(root: HTMLElement, button: HTMLButtonElement): void {
+    root.dataset.mode = 'needs-run';
+    button.disabled = false;
+    button.textContent = root.dataset.faucet === 'fishclub' ? 'Start and keep a fish' : 'Start a run';
+    status(root, '[data-faucet-state]', 'Five quiet minutes on Tone Bloom earn one. Start there.');
   }
 
   async function signedIn(root: HTMLElement, _user: PointCastUser): Promise<void> {
@@ -146,6 +261,7 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
     q(root, '[data-faucet-door]')?.setAttribute('hidden', '');
     const button = q<HTMLButtonElement>(root, '[data-faucet-claim]');
     if (!button) return;
+    const receipt = readStore(receiptKey(root.dataset.faucet ?? ''));
     try {
       const state = await readState(root);
       paintLedger(root, state);
@@ -157,7 +273,15 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
       if (state.you?.today.claimed) {
         button.disabled = true;
         button.textContent = 'Claimed today';
-        status(root, '[data-faucet-state]', `Today’s ${root.dataset.ticker} is in your ledger. The spigot resets at midnight Pacific.`);
+        // A receipt kept past its own redemption is just clutter in the tab.
+        if (receipt) clearStore(receiptKey(root.dataset.faucet ?? ''));
+        status(
+          root,
+          '[data-faucet-state]',
+          root.dataset.faucet === 'fishclub'
+            ? 'Today’s fish is already here. The room is still open.'
+            : `Today’s ${root.dataset.ticker} is in your ledger. The spigot resets at midnight Pacific.`,
+        );
         return;
       }
       if (state.claims.remainingToday <= 0) {
@@ -165,6 +289,18 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
         status(root, '[data-faucet-state]', 'Today’s drips are all spoken for. Tomorrow at midnight Pacific.');
         return;
       }
+      if (receipt) {
+        root.dataset.mode = 'receipt';
+        button.disabled = false;
+        button.textContent = keepLabel(root);
+        status(root, '[data-faucet-state]', 'Your run came back with you. Keep it.');
+        return;
+      }
+      if (root.dataset.claimMode === 'receipt' && root.dataset.startHref) {
+        needsRun(root, button);
+        return;
+      }
+      root.dataset.mode = 'claim';
       button.disabled = false;
       button.textContent = `Claim today’s ${root.dataset.ticker} — free`;
       status(root, '[data-faucet-state]', `${state.claims.claimedToday} claimed today · ${state.claims.remainingToday} left`);
@@ -174,10 +310,22 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
     }
   }
 
-  function claimReason(reason: string | undefined): string {
-    if (reason === 'already-claimed') return 'You already claimed today’s drip.';
+  function claimReason(root: HTMLElement, reason: string | undefined): string {
+    if (reason === 'already-claimed') {
+      return root.dataset.faucet === 'fishclub'
+        ? 'Today’s fish is already here. The room is still open.'
+        : 'Today’s HELLO is already here.';
+    }
     if (reason === 'daily-cap-reached') return 'Today’s drips are all spoken for.';
     if (reason === 'claim-database-not-bound') return 'The ledger is not bound on this deploy.';
+    if (reason === 'account-mismatch') return 'This fish was started by a different account. Sign in with that one to keep it.';
+    if (reason === 'receipt-required') return 'Five quiet minutes on Tone Bloom earn one. Start there.';
+    if (reason === 'receipt-expired') return 'That run took too long to come back. Start a fresh one and it will keep.';
+    if (reason === 'receipt-invalid' || reason === 'receipt-program-mismatch') return 'That run did not check out. Start a fresh one.';
+    if (reason === 'receipt-too-short') return 'The run did not reach five credited minutes. The room is still open.';
+    if (reason === 'run-not-found' || reason === 'run-expired') return 'PointCast has no open run for that. Start a fresh one.';
+    if (reason === 'rewards-not-configured') return 'This reward is not switched on yet. Nothing was written.';
+    if (reason === 'claim-unavailable') return 'The desk could not reach the ledger. Nothing was written; try again shortly.';
     return 'The claim did not go through. Try again shortly.';
   }
 
@@ -198,29 +346,56 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
   async function claim(root: HTMLElement): Promise<void> {
     const button = q<HTMLButtonElement>(root, '[data-faucet-claim]');
     if (!button || button.disabled) return;
+    const slug = root.dataset.faucet ?? '';
+    const key = receiptKey(slug);
     if (root.dataset.session !== 'signed-in') {
-      window.location.assign(`/api/auth/google?returnTo=${encodeURIComponent(root.dataset.returnTo || '/faucet/hello')}`);
+      window.location.assign(`/api/auth/google?returnTo=${encodeURIComponent(root.dataset.returnTo || `/faucet/${slug}`)}`);
       return;
     }
+    if (root.dataset.mode === 'needs-run' && root.dataset.startHref) {
+      window.location.assign(root.dataset.startHref);
+      return;
+    }
+    const receipt = readStore(key);
+    const label = receipt ? keepLabel(root) : `Claim today’s ${root.dataset.ticker} — free`;
     button.disabled = true;
     button.textContent = 'Writing the ledger line…';
     try {
-      const response = await fetch(`/api/faucet/${root.dataset.faucet}/claim`, { method: 'POST', credentials: 'include', headers: { Accept: 'application/json' } });
+      const response = await fetch(`/api/faucet/${slug}/claim`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(receipt ? { receipt } : {}),
+      });
       const payload = await response.json() as ClaimResponse;
       if (!response.ok || !payload.ok) {
-        button.textContent = payload.reason === 'already-claimed' ? 'Claimed today' : `Claim today’s ${root.dataset.ticker} — free`;
+        // A receipt that will never work again is cleared; one that only needs
+        // a different account, or a retry, stays where it is.
+        if (receipt && payload.reason !== 'account-mismatch' && payload.reason !== 'claim-unavailable') clearStore(key);
+        if (payload.reason === 'receipt-required' && root.dataset.startHref) {
+          needsRun(root, button);
+          return;
+        }
+        button.textContent = payload.reason === 'already-claimed' ? 'Claimed today' : label;
         button.disabled = payload.reason === 'already-claimed' || payload.reason === 'daily-cap-reached';
-        status(root, '[data-faucet-state]', claimReason(payload.reason));
+        status(root, '[data-faucet-state]', claimReason(root, payload.reason));
         return;
       }
+      clearStore(key);
       button.textContent = 'Claimed today';
-      status(root, '[data-faucet-state]', `${payload.claim?.amount ?? 1} ${root.dataset.ticker} is in your ledger. Send it anywhere below, or let it stack.`);
+      status(
+        root,
+        '[data-faucet-state]',
+        receipt
+          ? `One ${root.dataset.ticker} is in your ledger. Leave it here. Come back when you like.`
+          : `${payload.claim?.amount ?? 1} ${root.dataset.ticker} is in your ledger. Send it anywhere below, or let it stack.`,
+      );
       window.dispatchEvent(new CustomEvent('pc:faucet-claim', { detail: payload.claim }));
       const state = await readState(root).catch(() => null);
       if (state) paintLedger(root, state);
     } catch {
       button.disabled = false;
-      button.textContent = `Claim today’s ${root.dataset.ticker} — free`;
+      button.textContent = label;
       status(root, '[data-faucet-state]', 'The desk lost the connection. Check your ledger before trying again.');
     }
   }
@@ -271,6 +446,7 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
   async function initialize(root: HTMLElement): Promise<void> {
     if (root.dataset.ready === 'true') return;
     root.dataset.ready = 'true';
+    captureReceipt(root);
     const user = await getSession().catch(() => null);
     if (user) await signedIn(root, user);
     else signedOut(root);
@@ -299,6 +475,7 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
   .desk__button--send { width: auto; min-height: 46px; padding: 10px 16px; font-size: 12px; white-space: nowrap; }
   .desk__state, .desk__door, .desk__fine, .desk__label, .desk__owed-line { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: #fff; }
   .desk__door { color: rgba(255,255,255,.82); }
+  .desk__balances { margin: 10px 0 0; font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.82); }
   .desk__state a, .desk__ledger a { color: #fff; }
   .desk__owed { padding-top: 16px; border-top: 1px solid rgba(255,255,255,.36); }
   .desk__owed-line { margin: 0 0 12px; font-size: 15px; }
@@ -311,5 +488,6 @@ const { faucet, returnTo = '/faucet/hello' } = Astro.props;
   .desk__ledger { margin: 0; padding: 14px 0 0; border-top: 1px solid rgba(255,255,255,.36); list-style: none; display: grid; gap: 6px; }
   .desk__ledger li { display: flex; flex-wrap: wrap; gap: 10px; font: 400 12px var(--pc-font-mono); color: #fff; }
   .desk__ledger b { font-weight: 500; }
+  .desk__ledger em { font-style: normal; color: rgba(255,255,255,.72); }
   @media (max-width: 560px) { .desk__send-row { flex-direction: column; } .desk__button--send { width: 100%; } }
 </style>

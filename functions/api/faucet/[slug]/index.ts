@@ -5,13 +5,17 @@
  * claimed today and how many remain, the spigot wallet and its balances
  * (cached one minute in KV), and the last dozen claimants by first name.
  * With a session cookie it also carries `you`: today's claim state, what
- * you are owed, what has been delivered, and every ledger line.
+ * you are owed, what has been delivered, every ledger line, and `balances`
+ * across every faucet, so one desk can show both tokens without a second
+ * fetch. Ledger lines carry `via` and `program` when a satellite's receipt
+ * earned them; that provenance is the account's own, never a public feed.
  */
 import { FAUCET_SPEC, getFaucet, losAngelesDate } from '../../../../src/lib/faucet';
 import { authJson, readSessionFromRequest } from '../../auth/session';
 import {
   emptyPublicFaucetClaims,
   faucetCap,
+  getFaucetBalances,
   getPublicFaucetClaims,
   getUserFaucetLedger,
   readSpigot,
@@ -64,9 +68,12 @@ export const onRequestGet: PagesFunction<FaucetClaimEnv> = async ({ request, env
   if (session) {
     await settleFaucetSubmissions(env, faucet, session.user.userId).catch(() => { /* the ledger is still worth drawing */ });
   }
-  const you = session
-    ? await getUserFaucetLedger(env.AUTH_DB, faucet, session.user, day).catch(() => null)
-    : null;
+  const [you, balances] = session
+    ? await Promise.all([
+      getUserFaucetLedger(env.AUTH_DB, faucet, session.user, day).catch(() => null),
+      getFaucetBalances(env.AUTH_DB, session.user.userId).catch(() => null),
+    ])
+    : [null, null];
 
   return authJson({
     ok: true,
@@ -81,6 +88,9 @@ export const onRequestGet: PagesFunction<FaucetClaimEnv> = async ({ request, env
       deployedYear: faucet.deployedYear,
       dailyAmount: faucet.dailyAmount,
       greeting: faucet.greeting,
+      // `receipt` means the desk needs a completion receipt from an
+      // allowlisted satellite before it will write anything.
+      claim: faucet.claim,
     },
     day,
     ledger: Boolean(env.AUTH_DB),
@@ -95,6 +105,7 @@ export const onRequestGet: PagesFunction<FaucetClaimEnv> = async ({ request, env
       }
       : null,
     you,
+    balances,
     updatedAt: new Date().toISOString(),
   }, { headers: { 'Cache-Control': 'no-store' } });
 };
