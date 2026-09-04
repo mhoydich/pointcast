@@ -12,7 +12,7 @@ const AI_AGENTS = [
   'Google-Extended', 'Applebot-Extended', 'CCBot', 'Bytespider', 'Amazonbot',
   'meta-externalagent', 'DuckAssistBot', 'cohere-ai', 'YouBot', 'MistralAI-User',
 ];
-const PRIVATE_RULES = ['/api/auth/', '/api/me/', '/me', '/_/', '/admin/', '/search?q=', '/api/spotify/search?q='];
+const PRIVATE_RULES = ['/api/auth/', '/api/me/', '/me', '/_/', '/admin/', '/search?q=', '/api/spotify/search?q=', '/api/collect/confirm', '/api/collect/unsubscribe', '/api/shopify/auth', '/api/shopify/callback', '/api/spotify/auth', '/api/spotify/callback'];
 
 function pointcastUrls(value, output = [], key = '') {
   if (typeof value === 'string' && value.startsWith('https://pointcast.xyz') && key !== 'metadataBase') output.push(value);
