@@ -29,16 +29,16 @@ test('September landing hydrates today’s plate and keeps one visitor CTA with 
 test('New this week is maintained as a dated seven-item data contract', async () => {
   const news = JSON.parse(await read('src/data/front-door-news.json'));
   assert.deepEqual(news.map((item) => item.label), [
+    'Almanac',
     'Kennel Club',
     'Handles + profiles',
     'Seals',
     'Post office',
     'Paid town actions',
     'Passkeys',
-    'The safe',
   ]);
   for (const item of news) {
-    assert.match(item.date, /^2026-09-0[23]$/);
+    assert.match(item.date, /^2026-09-0[234]$/);
     assert.ok(item.line.length > 20);
     assert.match(item.link, /^\//);
   }
