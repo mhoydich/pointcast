@@ -1,0 +1,379 @@
+---
+/**
+ * /el-segundo — the canonical page for the place the whole site is anchored to.
+ *
+ * PointCast has been broadcasting from inside this city for a year and there
+ * is still no good general resource for it: the Wikipedia article is a stub of
+ * civic statistics, and everything else is either a real-estate listing or a
+ * breathless take on the hard-tech scene. This page is the thing we can write
+ * that nobody else can — what the city is, why it is shaped the way it is, and
+ * why people keep moving here — with the live instruments attached.
+ *
+ * Editorial rule for anyone extending this page: assert only what you can
+ * stand behind. Long-established civic and geographic facts, yes. A roster of
+ * which startup is headquartered on which street this quarter, no — that goes
+ * stale in weeks and being confidently wrong about it costs more than the
+ * traffic is worth. Describe the mechanism instead of the leaderboard.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { buildDay, fmtDuration, fmtTime, getPlace, pacificDate } from '../lib/almanac';
+
+const place = getPlace('el-segundo')!;
+const today = pacificDate();
+const day = buildDay(place, today, new Date());
+
+const canonical = 'https://pointcast.xyz/el-segundo';
+const title = 'El Segundo, California — the city, the scene, and why people keep moving here';
+const description =
+  'A working guide to El Segundo, California: how a refinery town between LAX and the sand became the center of gravity for West Coast hard tech, what it is actually like to be here, and the live local instruments PointCast keeps running from inside it.';
+
+/** Long-established facts. Nothing here turns over on a quarterly cycle. */
+const FACTS: { k: string; v: string }[] = [
+  { k: 'Incorporated', v: 'January 18, 1917' },
+  { k: 'Named for', v: "Standard Oil's second California refinery — 'the second'" },
+  { k: 'Area', v: 'About 5.5 square miles' },
+  { k: 'Population', v: 'Roughly 17,000 residents' },
+  { k: 'County', v: 'Los Angeles County, South Bay' },
+  { k: 'Bordered by', v: 'LAX north, Manhattan Beach south, Hawthorne east, Santa Monica Bay west' },
+  { k: 'Coordinates', v: '33.92°N, 118.42°W' },
+  { k: 'Local nickname', v: 'Mayberry by the Sea' },
+];
+
+const SECTIONS: { id: string; q: string }[] = [
+  { id: 'what', q: 'What El Segundo actually is' },
+  { id: 'why-here', q: 'Why hard tech keeps landing here' },
+  { id: 'geography', q: 'The geography that explains the city' },
+  { id: 'living', q: 'What it is like on the ground' },
+  { id: 'instruments', q: 'Live instruments from inside the city' },
+];
+
+const FAQ: { q: string; a: string }[] = [
+  {
+    q: 'Why is it called El Segundo?',
+    a: "Spanish for 'the second.' Standard Oil built its second California refinery on this stretch of dune in 1911, the town grew up around it, and the name stuck when the city incorporated in 1917. The refinery is still there, now Chevron's, and it is still the largest thing in the city by footprint.",
+  },
+  {
+    q: 'Why are so many hard-tech and defense companies moving to El Segundo?',
+    a: 'Four things stack up here that almost never stack up together: a seventy-year aerospace talent pool left over from the Cold War build-out, industrial zoning with large-floorplate buildings you can actually put machines in, an international airport on the north fence, and a location inside Los Angeles County that engineers will move to. Software can be anywhere. Anything that has to be physically built wants all four.',
+  },
+  {
+    q: 'Is El Segundo a good place to live?',
+    a: 'It is a small grid of walkable, low-rise streets with a real downtown, a beach at the end of it, and its own school district — unusual for anywhere inside LA County. The trade-offs are a refinery you can sometimes smell, a flight path you can always hear, and housing priced like the beach city it is.',
+  },
+  {
+    q: 'What is the weather like in El Segundo?',
+    a: `Mild and gray more often than the postcard suggests. The marine layer arrives here first and leaves last, so mornings burn off later than they do a few miles inland. Today the sun rose at ${fmtTime(day.sun.sunrise)} and sets at ${fmtTime(day.sun.sunset)}, giving ${fmtDuration(day.sun.dayLengthMs)} of daylight.`,
+  },
+  {
+    q: 'What is the El Segundo blue butterfly?',
+    a: 'A federally endangered butterfly that lives on coast buckwheat in the dunes beside LAX, and one of the last remnants of the dune ecosystem the whole South Bay used to be. The habitat next to the runways is one of the few places left where it survives.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `${canonical}#page`,
+      url: canonical,
+      name: title,
+      description,
+      about: { '@id': `${canonical}#place` },
+      isPartOf: { '@id': 'https://pointcast.xyz/#website' },
+    },
+    {
+      '@type': 'City',
+      '@id': `${canonical}#place`,
+      name: 'El Segundo',
+      alternateName: 'El Segundo, California',
+      description:
+        'A 5.5-square-mile city in the South Bay of Los Angeles County, between LAX and Manhattan Beach, historically built around oil refining and aerospace.',
+      geo: { '@type': 'GeoCoordinates', latitude: place.lat, longitude: place.lng },
+      containedInPlace: { '@type': 'AdministrativeArea', name: 'Los Angeles County, California' },
+      sameAs: ['https://en.wikipedia.org/wiki/El_Segundo,_California'],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${canonical}#faq`,
+      mainEntity: FAQ.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    },
+  ],
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="es">
+    <header class="head">
+      <p class="kicker">33.92°N 118.42°W · Los Angeles County · the PointCast anchor</p>
+      <h1>El Segundo</h1>
+      <p class="standfirst">
+        A five-and-a-half square mile grid between an international airport and the Pacific,
+        built around a refinery, staffed for seventy years by the aerospace industry, and
+        currently absorbing more hardware companies per square foot than anywhere else on the
+        West Coast. This is the guide we can write because we broadcast from inside it.
+      </p>
+      <nav class="toc" aria-label="On this page">
+        <ul>
+          {SECTIONS.map((s) => <li><a href={`#${s.id}`}>{s.q}</a></li>)}
+        </ul>
+      </nav>
+    </header>
+
+    <section class="facts" aria-label="Quick facts">
+      <dl>
+        {FACTS.map((f) => (
+          <div><dt>{f.k}</dt><dd>{f.v}</dd></div>
+        ))}
+      </dl>
+    </section>
+
+    <section id="what" aria-labelledby="what-h">
+      <h2 id="what-h">What El Segundo actually is</h2>
+      <p>
+        Standard Oil put its second California refinery on this dune in 1911 and the town
+        arrived afterward, which is the opposite of how most beach cities happen. That order of
+        operations explains nearly everything about the place. The street grid is industrial and
+        rectilinear rather than curved to a view. The zoning east of Sepulveda is heavy, with
+        big-floorplate buildings and truck access, because it was drawn for refining and then
+        inherited by aerospace. The residential west side is small, flat, and walkable, because
+        it was built to house people who worked a short distance away.
+      </p>
+      <p>
+        The city incorporated in 1917 and has stayed roughly 17,000 people since. It has its own
+        school district, its own police and fire, and a downtown on Main Street with an actual
+        hardware store on it — none of which is normal for a city this size inside Los Angeles
+        County. Locals call it Mayberry by the Sea and mean it affectionately and slightly
+        defensively at the same time.
+      </p>
+      <p>
+        Then aerospace arrived. Los Angeles Air Force Base — now the home of Space Systems
+        Command — sits in the middle of the city, and the contractor ecosystem grew around it
+        through the Cold War: The Aerospace Corporation, Northrop, Raytheon, Boeing, and the
+        long tail of suppliers underneath them. Mattel has been headquartered here for decades.
+        The Lakers and the Kings both practice here. For most of the last fifty years, El Segundo
+        was a company town where the company happened to be the entire American space program.
+      </p>
+    </section>
+
+    <section id="why-here" aria-labelledby="why-h">
+      <h2 id="why-h">Why hard tech keeps landing here</h2>
+      <p>
+        The current wave — defense, space, robotics, advanced manufacturing, anything with a
+        machine shop attached — is not a coincidence and it is not really about vibes, though
+        there is now a considerable amount of vibe. Four conditions stack here that almost never
+        stack together:
+      </p>
+      <ol class="reasons">
+        <li>
+          <strong>A talent pool that was already here.</strong> Seventy years of aerospace means
+          a dense local supply of people who know how to build and qualify physical hardware —
+          machinists, test engineers, RF people, program managers who have shipped things that
+          have to work the first time. That is the input you cannot spin up by hiring remotely.
+        </li>
+        <li>
+          <strong>Buildings you can put machines in.</strong> The industrial east side has
+          high-clear-height, large-floorplate space with power and loading. Software companies
+          need desks. Hardware companies need floors that will take a five-ton machine, and
+          those are effectively unbuildable in most of coastal California now.
+        </li>
+        <li>
+          <strong>An airport on the north fence.</strong> LAX is not near El Segundo; LAX is
+          adjacent to it. When your business involves flying parts, customers, and inspectors
+          around constantly, a fifteen-minute door-to-terminal time is a structural advantage.
+        </li>
+        <li>
+          <strong>Somewhere engineers will actually move.</strong> The beach is at the end of
+          the street. That sounds trivial and is not — it is the reason a hardware company here
+          can recruit against a hardware company somewhere with cheaper rent.
+        </li>
+      </ol>
+      <p>
+        The result is a genuine agglomeration effect. Suppliers move in to be near the buyers,
+        the buyers stay because the suppliers are close, and people leave one company to start
+        the next one four blocks away. The same loop built Detroit and then Santa Clara. It is
+        running here now, at a smaller scale and with much more of it aimed at things that go up.
+      </p>
+      <aside class="note">
+        <p>
+          <strong>We deliberately do not keep a company roster on this page.</strong> Who is
+          headquartered where turns over faster than a static page can honestly track, and a
+          stale list read as current is worse than no list. If you want the current map, go
+          walk Nash Street.
+        </p>
+      </aside>
+    </section>
+
+    <section id="geography" aria-labelledby="geo-h">
+      <h2 id="geo-h">The geography that explains the city</h2>
+      <p>
+        El Segundo sits on the last of the great El Segundo dune system, which once ran for
+        miles along this coast and is now almost entirely built over. The surviving fragment is
+        beside the LAX runways, and it is the last real habitat of the El Segundo blue butterfly
+        — a federally endangered species that lives on coast buckwheat and essentially nowhere
+        else. There is something exactly right about the rarest thing in the city living in the
+        strip of sand between a refinery and an international airport.
+      </p>
+      <p>
+        The marine layer is the other geographic fact that governs daily life. Cold water offshore
+        and warm air above it produce a low cloud deck that pushes inland overnight and burns off
+        during the day — later here than a few miles east, because the ocean is right there.
+        From late spring into summer this is persistent enough to have a name, June gloom, and
+        it is why visitors who booked a beach week in June often spend it in a gray room.
+      </p>
+      <p>
+        The city runs west to the sand and stops. North is the airport. That hard boundary on two
+        sides is why El Segundo stayed small while everything around it did not.
+      </p>
+    </section>
+
+    <section id="living" aria-labelledby="living-h">
+      <h2 id="living-h">What it is like on the ground</h2>
+      <p>
+        Quiet, low, and unexpectedly walkable. Main Street is a genuine downtown, a few blocks
+        long, with places that have been there for decades sitting next to places that opened
+        last year to serve the engineers. The residential streets are numbered and flat and you
+        can cross the whole city on foot in under an hour.
+      </p>
+      <p>
+        The trade-offs are real and worth naming. You can sometimes smell the refinery, mostly
+        depending on wind. You can always hear LAX, and under certain approach patterns you can
+        hear it a lot. Housing is priced like the beach city it is, not like the industrial town
+        it used to be. And the thing that makes it pleasant — that it is small and self-contained
+        and slightly apart — is exactly what the current growth is testing.
+      </p>
+    </section>
+
+    <section id="instruments" aria-labelledby="inst-h">
+      <h2 id="inst-h">Live instruments from inside the city</h2>
+      <p>
+        PointCast broadcasts from here. These are running right now, from the anchor point at
+        33.92°N, 118.42°W:
+      </p>
+      <div class="live">
+        <div><span>Sunrise today</span><strong>{fmtTime(day.sun.sunrise)}</strong></div>
+        <div><span>Sunset today</span><strong>{fmtTime(day.sun.sunset)}</strong></div>
+        <div><span>Daylight</span><strong>{fmtDuration(day.sun.dayLengthMs)}</strong></div>
+        <div><span>Moon</span><strong>{day.moon.glyph} {Math.round(day.moon.illumination * 100)}%</strong></div>
+      </div>
+      <ul class="surfaces">
+        <li><a href="/almanac/el-segundo">The El Segundo almanac</a> — sun, moon, and NOAA tide, every day</li>
+        <li><a href="/almanac">The almanac for sixteen places</a> in the South Bay and beyond</li>
+        <li><a href="/local">The 100-mile lens</a> — stations, name-drops, and what is in range</li>
+        <li><a href="/window">The window</a> — live conditions over the city</li>
+        <li><a href="/university-of-el-segundo">The University of El Segundo</a> — the civic-experiment wing</li>
+        <li><a href="/network-el-segundo">Network El Segundo</a> — the mesh proposal</li>
+      </ul>
+    </section>
+
+    <section class="faq" aria-labelledby="faq-h">
+      <h2 id="faq-h">Questions</h2>
+      <dl>
+        {FAQ.map((f) => (
+          <div>
+            <dt>{f.q}</dt>
+            <dd>{f.a}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+
+    <p class="colophon">
+      Written from inside the city by <a href="/about">Mike Hoydich</a>, who lives and works here.
+      Corrections are welcome and get made — <a href="/wire">the wire</a> is the fastest way to send one.
+    </p>
+  </main>
+</BlockLayout>
+
+<style>
+  .es { max-width: 46rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+
+  .head { border-bottom: 1px solid var(--pc-rule); padding-bottom: 1.75rem; }
+  .kicker {
+    font-family: var(--pc-font-mono); font-size: 0.72rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 0.7rem;
+  }
+  h1 {
+    font-size: clamp(2.2rem, 7vw, 3.6rem); font-weight: 500;
+    letter-spacing: -0.035em; line-height: 1; margin: 0 0 1.1rem;
+  }
+  .standfirst {
+    font-size: clamp(1.05rem, 2.4vw, 1.25rem); line-height: 1.55;
+    color: var(--pc-ink-soft); margin: 0 0 1.5rem;
+  }
+
+  .toc ul { list-style: none; margin: 0; padding: 0; }
+  .toc li { margin-bottom: 0.3rem; }
+  .toc a {
+    font-family: var(--pc-font-mono); font-size: 0.8rem;
+    color: var(--pc-accent); text-decoration: none;
+  }
+  .toc a:hover { text-decoration: underline; }
+
+  .facts { margin: 2rem 0 0; border: 1px solid var(--pc-rule); }
+  .facts dl { margin: 0; }
+  .facts dl div {
+    display: grid; grid-template-columns: 10rem 1fr; gap: 1rem;
+    padding: 0.55rem 1rem; border-bottom: 1px solid var(--pc-rule-soft);
+  }
+  .facts dl div:last-child { border-bottom: 0; }
+  .facts dt {
+    font-family: var(--pc-font-mono); font-size: 0.68rem;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--pc-ink-muted);
+    padding-top: 0.15rem;
+  }
+  .facts dd { margin: 0; font-size: 0.92rem; line-height: 1.45; }
+
+  section { margin-top: 3rem; }
+  h2 {
+    font-family: var(--pc-font-mono); font-size: 0.78rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin: 0 0 1rem;
+  }
+  section p { line-height: 1.7; margin: 0 0 1.1rem; color: var(--pc-ink-soft); }
+  section p strong { color: var(--pc-ink); font-weight: 500; }
+
+  .reasons { margin: 0 0 1.1rem; padding-left: 1.2rem; }
+  .reasons li { line-height: 1.7; margin-bottom: 0.9rem; color: var(--pc-ink-soft); }
+  .reasons strong { color: var(--pc-ink); font-weight: 500; }
+
+  .note {
+    border-left: 2px solid var(--pc-accent);
+    padding: 0.2rem 0 0.2rem 1rem; margin: 1.5rem 0;
+  }
+  .note p { margin: 0; font-size: 0.92rem; color: var(--pc-ink-muted); }
+
+  .live {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 1.25rem; border: 1px solid var(--pc-rule); padding: 1.15rem; margin-bottom: 1.5rem;
+  }
+  .live span {
+    display: block; font-family: var(--pc-font-mono); font-size: 0.65rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--pc-ink-muted); margin-bottom: 0.3rem;
+  }
+  .live strong { font-family: var(--pc-font-mono); font-size: 1.25rem; font-weight: 500; }
+
+  .surfaces { list-style: none; margin: 0; padding: 0; }
+  .surfaces li {
+    padding: 0.45rem 0; border-bottom: 1px solid var(--pc-rule-soft);
+    font-size: 0.92rem; color: var(--pc-ink-muted);
+  }
+  .surfaces a { color: var(--pc-accent); }
+
+  .faq dl { margin: 0; }
+  .faq dt { font-weight: 500; margin-top: 1.4rem; line-height: 1.45; }
+  .faq dd { margin: 0.4rem 0 0; color: var(--pc-ink-soft); line-height: 1.7; }
+
+  .colophon {
+    margin-top: 3.5rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--pc-rule);
+    font-size: 0.85rem; line-height: 1.6; color: var(--pc-ink-muted);
+  }
+  .colophon a { color: var(--pc-accent); }
+</style>

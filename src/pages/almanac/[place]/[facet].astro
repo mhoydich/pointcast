@@ -1,0 +1,536 @@
+---
+/**
+ * /almanac/{place}/{facet} — the direct-answer page.
+ *
+ * One question, answered in the first sentence, in the format a featured
+ * snippet or an AI answer can lift whole: subject, place, date, value.
+ * Everything below the answer is the context that makes the page worth
+ * linking to rather than scraping — the two-week table, the yearly turning
+ * points, and the local note that only someone standing here would write.
+ *
+ * Static build + AlmanacLive: the server names the date it computed, the
+ * browser corrects it to today. See src/components/AlmanacLive.astro.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import AlmanacLive from '../../../components/AlmanacLive.astro';
+import {
+  ALMANAC_PLACES,
+  FACETS,
+  buildDay,
+  buildRange,
+  directAnswer,
+  facetValue,
+  fmtDateLong,
+  fmtDateShort,
+  fmtDuration,
+  fmtSignedDuration,
+  fmtTime,
+  fmtWeekday,
+  isoDate,
+  pacificDate,
+  yearExtremes,
+  type AlmanacPlace,
+  type Facet,
+} from '../../../lib/almanac';
+
+export async function getStaticPaths() {
+  return ALMANAC_PLACES.flatMap((place) =>
+    FACETS.map((facet) => ({
+      params: { place: place.slug, facet: facet.slug },
+      props: { place, facet },
+    })),
+  );
+}
+
+interface Props {
+  place: AlmanacPlace;
+  facet: Facet;
+}
+
+const { place, facet } = Astro.props;
+
+const today = pacificDate();
+const day = buildDay(place, today, new Date());
+const fortnight = buildRange(place, today, 14);
+const year = today.getUTCFullYear();
+const extremes = yearExtremes(place, year);
+
+// One row per month, taken on the 1st — the "through the year" view people
+// actually want when planning something months out.
+const months = Array.from({ length: 12 }, (_, m) => buildDay(place, new Date(Date.UTC(year, m, 1))));
+
+const answer = directAnswer(place, facet.slug, day);
+const heroValue = facetValue(facet.slug, day);
+const canonical = `https://pointcast.xyz/almanac/${place.slug}/${facet.slug}`;
+const title = facet.title(place);
+const description = facet.description(place);
+
+const otherFacets = FACETS.filter((f) => f.slug !== facet.slug);
+const nearby = ALMANAC_PLACES.filter((p) => p.slug !== place.slug)
+  .sort((a, b) => Math.abs(a.miles - place.miles) - Math.abs(b.miles - place.miles))
+  .slice(0, 6);
+
+/** Facet-specific Q&A. Real questions, answered in one sentence each. */
+type QA = { q: string; a: string };
+const faq: QA[] = (() => {
+  const common: QA[] = [
+    {
+      q: `What time zone are these times in?`,
+      a: `Pacific time — PDT in summer, PST in winter. ${place.name} observes daylight saving, so the clock times here already account for the shift.`,
+    },
+    {
+      q: `How accurate are these times?`,
+      a: `Within about a minute. They come from the NOAA solar position formulas computed for ${place.lat.toFixed(2)}°N, ${Math.abs(place.lng).toFixed(2)}°W, and they assume a flat horizon — hills, buildings, or marine layer will move what you actually see.`,
+    },
+  ];
+  switch (facet.slug) {
+    case 'sunset':
+      return [
+        {
+          q: `What time is sunset in ${place.name} today?`,
+          a: answer,
+        },
+        {
+          q: `When is the latest sunset of the year in ${place.name}?`,
+          a: `${fmtDateLong(extremes.latestSunset.date)}, at ${fmtTime(extremes.latestSunset.sun.sunset)} — a few days after the June solstice, not on it.`,
+        },
+        {
+          q: `When is the earliest sunset in ${place.name}?`,
+          a: `${fmtDateLong(extremes.earliestSunset.date)}, at ${fmtTime(extremes.earliestSunset.sun.sunset)}. It comes about three weeks before the winter solstice, which is why December afternoons feel dark before the shortest day arrives.`,
+        },
+        ...common,
+      ];
+    case 'sunrise':
+      return [
+        { q: `What time is sunrise in ${place.name} today?`, a: answer },
+        {
+          q: `When is the earliest sunrise of the year in ${place.name}?`,
+          a: `${fmtDateLong(extremes.earliestSunrise.date)}, at ${fmtTime(extremes.earliestSunrise.sun.sunrise)}.`,
+        },
+        {
+          q: `When is the latest sunrise in ${place.name}?`,
+          a: `${fmtDateLong(extremes.latestSunrise.date)}, at ${fmtTime(extremes.latestSunrise.sun.sunrise)} — the clock jump at the start of daylight saving puts the latest sunrise in March, not midwinter.`,
+        },
+        ...common,
+      ];
+    case 'moon':
+      return [
+        { q: `What is the moon phase tonight in ${place.name}?`, a: answer },
+        {
+          q: `When is the next full moon?`,
+          a: `${fmtDateLong(day.moon.nextFullAt)} — the moon is the same phase everywhere on Earth, so this holds well beyond ${place.name}.`,
+        },
+        {
+          q: `When is the next new moon?`,
+          a: `${fmtDateLong(day.moon.nextNewAt)}. New moon is the darkest sky of the month, which is what you want for stars.`,
+        },
+        ...common,
+      ];
+    case 'daylight':
+      return [
+        { q: `How many hours of daylight does ${place.name} get today?`, a: answer },
+        {
+          q: `What is the longest day of the year in ${place.name}?`,
+          a: `${fmtDateLong(extremes.longest.date)}, with ${fmtDuration(extremes.longest.sun.dayLengthMs)} between sunrise and sunset.`,
+        },
+        {
+          q: `What is the shortest day of the year in ${place.name}?`,
+          a: `${fmtDateLong(extremes.shortest.date)}, with ${fmtDuration(extremes.shortest.sun.dayLengthMs)} — about ${Math.round(
+            (extremes.longest.sun.dayLengthMs - extremes.shortest.sun.dayLengthMs) / 3_600_000,
+          )} hours and a half less than midsummer.`,
+        },
+        ...common,
+      ];
+  }
+})();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `${canonical}#page`,
+      url: canonical,
+      name: title,
+      description,
+      about: { '@id': `${canonical}#place` },
+      isPartOf: { '@id': 'https://pointcast.xyz/#website' },
+      dateModified: isoDate(today),
+    },
+    {
+      '@type': 'Place',
+      '@id': `${canonical}#place`,
+      name: place.formalName,
+      geo: {
+        '@type': 'GeoCoordinates',
+        latitude: place.lat,
+        longitude: place.lng,
+      },
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Almanac', item: 'https://pointcast.xyz/almanac' },
+        { '@type': 'ListItem', position: 2, name: place.name, item: `https://pointcast.xyz/almanac/${place.slug}` },
+        { '@type': 'ListItem', position: 3, name: facet.label, item: canonical },
+      ],
+    },
+    {
+      '@type': 'FAQPage',
+      '@id': `${canonical}#faq`,
+      mainEntity: faq.map((item) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: { '@type': 'Answer', text: item.a },
+      })),
+    },
+  ],
+};
+
+const heroUnit =
+  facet.slug === 'moon' ? 'illuminated' : facet.slug === 'daylight' ? 'of daylight' : 'Pacific time';
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: `/almanac/${place.slug}.json`, title: `${place.name} almanac data` }]}>
+  <AlmanacLive lat={place.lat} lng={place.lng} builtFor={isoDate(today)} place={place.name} facet={facet.slug} />
+
+  <main class="alm">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/almanac">Almanac</a>
+      <span aria-hidden="true">/</span>
+      <a href={`/almanac/${place.slug}`}>{place.name}</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{facet.label}</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">
+        {place.formalName} · {place.lat.toFixed(2)}°N {Math.abs(place.lng).toFixed(2)}°W
+        {place.miles > 0 && <> · {place.miles} mi {place.direction} of El Segundo</>}
+      </p>
+      <h1>{title}</h1>
+      <p class="answer" data-live="answer">{answer}</p>
+    </header>
+
+    <section class="hero" aria-label={`${facet.label} readout`}>
+      <p class="hero-value" data-live="hero">{heroValue}</p>
+      <p class="hero-unit">{heroUnit}</p>
+      <p class="hero-date">for <span data-live="date">{fmtDateLong(day.date)}</span></p>
+    </section>
+
+    <section class="stats" aria-label="Today at a glance">
+      <dl>
+        <div><dt>Sunrise</dt><dd data-live="sunrise">{fmtTime(day.sun.sunrise)}</dd></div>
+        <div><dt>Solar noon</dt><dd data-live="solar-noon">{fmtTime(day.sun.solarNoon)}</dd></div>
+        <div><dt>Sunset</dt><dd data-live="sunset">{fmtTime(day.sun.sunset)}</dd></div>
+        <div><dt>Daylight</dt><dd data-live="daylight">{fmtDuration(day.sun.dayLengthMs)}</dd></div>
+        <div><dt>Change vs yesterday</dt><dd data-live="daylight-delta">{fmtSignedDuration(day.daylightDeltaMs)}</dd></div>
+        <div><dt>Moon</dt><dd><span data-live="moon-glyph">{day.moon.glyph}</span> <span data-live="moon-label">{day.moon.label}</span></dd></div>
+        <div><dt>Sun right now</dt><dd data-live="sun-state">{day.sun.isDay ? 'up' : 'down'}</dd></div>
+      </dl>
+    </section>
+
+    <section class="local-note">
+      <h2>What it's like here</h2>
+      <p>{place.blurb}</p>
+    </section>
+
+    <section class="table-wrap" aria-labelledby="fortnight-heading">
+      <h2 id="fortnight-heading">The next two weeks</h2>
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Sunrise</th>
+              <th scope="col">Sunset</th>
+              <th scope="col">Daylight</th>
+              <th scope="col">Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fortnight.map((d) => (
+              <tr data-day-row={d.iso} class={d.iso === isoDate(today) ? 'is-today' : undefined}>
+                <th scope="row">{fmtWeekday(d.date)} {fmtDateShort(d.date)}</th>
+                <td>{fmtTime(d.sun.sunrise)}</td>
+                <td>{fmtTime(d.sun.sunset)}</td>
+                <td>{fmtDuration(d.sun.dayLengthMs)}</td>
+                <td class={d.daylightDeltaMs >= 0 ? 'up' : 'down'}>{fmtSignedDuration(d.daylightDeltaMs)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="table-wrap" aria-labelledby="year-heading">
+      <h2 id="year-heading">{place.name} through {year}</h2>
+      <div class="scroller">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Month</th>
+              <th scope="col">Sunrise</th>
+              <th scope="col">Sunset</th>
+              <th scope="col">Daylight</th>
+            </tr>
+          </thead>
+          <tbody>
+            {months.map((d) => (
+              <tr>
+                <th scope="row">{fmtDateShort(d.date)}</th>
+                <td>{fmtTime(d.sun.sunrise)}</td>
+                <td>{fmtTime(d.sun.sunset)}</td>
+                <td>{fmtDuration(d.sun.dayLengthMs)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="table-wrap" aria-labelledby="extremes-heading">
+      <h2 id="extremes-heading">Turning points in {year}</h2>
+      <div class="scroller">
+        <table>
+          <tbody>
+            <tr><th scope="row">Longest day</th><td>{fmtDateLong(extremes.longest.date)}</td><td>{fmtDuration(extremes.longest.sun.dayLengthMs)}</td></tr>
+            <tr><th scope="row">Shortest day</th><td>{fmtDateLong(extremes.shortest.date)}</td><td>{fmtDuration(extremes.shortest.sun.dayLengthMs)}</td></tr>
+            <tr><th scope="row">Latest sunset</th><td>{fmtDateLong(extremes.latestSunset.date)}</td><td>{fmtTime(extremes.latestSunset.sun.sunset)}</td></tr>
+            <tr><th scope="row">Earliest sunset</th><td>{fmtDateLong(extremes.earliestSunset.date)}</td><td>{fmtTime(extremes.earliestSunset.sun.sunset)}</td></tr>
+            <tr><th scope="row">Earliest sunrise</th><td>{fmtDateLong(extremes.earliestSunrise.date)}</td><td>{fmtTime(extremes.earliestSunrise.sun.sunrise)}</td></tr>
+            <tr><th scope="row">Latest sunrise</th><td>{fmtDateLong(extremes.latestSunrise.date)}</td><td>{fmtTime(extremes.latestSunrise.sun.sunrise)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="faq" aria-labelledby="faq-heading">
+      <h2 id="faq-heading">Questions</h2>
+      <dl>
+        {faq.map((item) => (
+          <div>
+            <dt>{item.q}</dt>
+            <dd>{item.a}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+
+    <nav class="links" aria-label="Related almanac pages">
+      <div>
+        <h2>Also for {place.name}</h2>
+        <ul>
+          <li><a href={`/almanac/${place.slug}`}>Full {place.name} almanac</a></li>
+          {otherFacets.map((f) => (
+            <li><a href={`/almanac/${place.slug}/${f.slug}`}>{f.title(place)}</a></li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h2>{facet.label} nearby</h2>
+        <ul>
+          {nearby.map((p) => (
+            <li><a href={`/almanac/${p.slug}/${facet.slug}`}>{p.name}</a></li>
+          ))}
+        </ul>
+      </div>
+    </nav>
+
+    <p class="method">
+      Sun and moon are computed from the NOAA solar formulas and the standard synodic model —
+      no forecast, no API, nothing to go stale. Tide is never computed here; it comes from NOAA
+      or it is absent. <a href={`/almanac/${place.slug}.json`}>Machine-readable version</a>.
+    </p>
+  </main>
+</BlockLayout>
+
+<style>
+  .alm {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 5rem;
+  }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .crumb a { color: var(--pc-ink-muted); text-decoration: none; }
+  .crumb a:hover { color: var(--pc-accent); text-decoration: underline; }
+
+  .head { border-bottom: 1px solid var(--pc-rule); padding-bottom: 1.5rem; }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 0.6rem;
+  }
+  .head h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 0.9rem;
+  }
+  .answer {
+    font-size: clamp(1.02rem, 2.2vw, 1.2rem);
+    line-height: 1.5;
+    color: var(--pc-ink-soft);
+    margin: 0;
+    max-width: 54ch;
+  }
+
+  .hero {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 2rem 0;
+    border-bottom: 1px solid var(--pc-rule);
+  }
+  .hero-value {
+    font-family: var(--pc-font-mono);
+    font-size: clamp(3rem, 12vw, 5.5rem);
+    font-weight: 500;
+    line-height: 0.9;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .hero-unit {
+    font-family: var(--pc-font-mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0;
+  }
+  .hero-date {
+    margin: 0 0 0 auto;
+    font-size: 0.85rem;
+    color: var(--pc-ink-muted);
+  }
+
+  .stats { padding: 1.5rem 0; border-bottom: 1px solid var(--pc-rule); }
+  .stats dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1.25rem 1.5rem;
+    margin: 0;
+  }
+  .stats dt {
+    font-family: var(--pc-font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 0.3rem;
+  }
+  .stats dd {
+    margin: 0;
+    font-family: var(--pc-font-mono);
+    font-size: 1.05rem;
+  }
+
+  .local-note { padding: 2rem 0 0; }
+  .local-note p {
+    margin: 0;
+    max-width: 56ch;
+    line-height: 1.6;
+    color: var(--pc-ink-soft);
+  }
+
+  h2 {
+    font-family: var(--pc-font-mono);
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 0.9rem;
+  }
+
+  .table-wrap { margin-top: 2.75rem; }
+  .scroller { overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 30rem;
+    font-family: var(--pc-font-mono);
+    font-size: 0.88rem;
+  }
+  thead th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    border-bottom: 1px solid var(--pc-rule);
+    padding: 0.4rem 1rem 0.4rem 0;
+    white-space: nowrap;
+  }
+  tbody th {
+    text-align: left;
+    font-weight: 400;
+    color: var(--pc-ink);
+  }
+  tbody th, tbody td {
+    padding: 0.4rem 1rem 0.4rem 0;
+    border-bottom: 1px solid var(--pc-rule-soft);
+    white-space: nowrap;
+  }
+  tbody tr.is-today th, tbody tr.is-today td {
+    background: #F4F7FB;
+    font-weight: 500;
+  }
+  .up { color: var(--pc-accent); }
+  .down { color: var(--pc-ink-muted); }
+
+  .faq { margin-top: 3rem; }
+  .faq dl { margin: 0; }
+  .faq dt {
+    font-weight: 500;
+    margin-top: 1.25rem;
+    line-height: 1.4;
+  }
+  .faq dd {
+    margin: 0.35rem 0 0;
+    color: var(--pc-ink-soft);
+    line-height: 1.6;
+    max-width: 62ch;
+  }
+
+  .links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 2rem;
+    margin-top: 3.5rem;
+    border-top: 1px solid var(--pc-rule);
+    padding-top: 1.5rem;
+  }
+  .links ul { list-style: none; margin: 0; padding: 0; }
+  .links li { margin-bottom: 0.4rem; }
+  .links a { color: var(--pc-accent); font-size: 0.92rem; }
+
+  .method {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--pc-rule-soft);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--pc-ink-muted);
+    max-width: 62ch;
+  }
+  .method a { color: var(--pc-accent); }
+</style>
