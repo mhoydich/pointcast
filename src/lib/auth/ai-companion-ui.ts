@@ -2,6 +2,44 @@ const ENDPOINT = '/api/me/ai-companions';
 const LABELS: Record<string, string> = { claude: 'Claude', chatgpt: 'ChatGPT', codex: 'Codex', 'claude-code': 'Claude Code', other: 'Another AI' };
 type Receipt = { invitationId: string; provider: string; status: string; confirmedAt: string | null };
 
+const AI_UNAVAILABLE_MESSAGE = 'AI visit confirmation is unavailable. You can still use the public connector.';
+
+export class AiCompanionRequestError extends Error {
+  readonly status: number;
+  readonly reason: string;
+  constructor(status: number, reason: string) {
+    const message = status === 401 || reason === 'unauthorized'
+      ? 'Sign in to confirm a private AI visit.'
+      : status === 413 || reason === 'body-too-large'
+        ? 'The invitation request was too large. Please try again.'
+        : status === 403 || reason === 'origin-not-allowed'
+          ? 'Open your PointCast profile directly and try again.'
+          : status === 400
+            ? 'Your invitation could not be created. Check your choices and try again.'
+            : AI_UNAVAILABLE_MESSAGE;
+    super(message);
+    this.name = 'AiCompanionRequestError';
+    this.status = status;
+    this.reason = reason;
+  }
+}
+
+/** Error metadata stays available to callers; upstream HTML and parser details never become UI copy. */
+export async function readAiCompanionResponse(response: Response) {
+  let data: Record<string, any> | null = null;
+  try {
+    const value = await response.json();
+    if (value && typeof value === 'object' && !Array.isArray(value)) data = value;
+  } catch {
+    // An edge error or proxy may return HTML even for a JSON endpoint.
+  }
+  if (!response.ok || !data || data.ok === false) {
+    const reason = typeof data?.reason === 'string' ? data.reason : response.ok ? 'invalid-response' : 'request-failed';
+    throw new AiCompanionRequestError(response.status, reason);
+  }
+  return data;
+}
+
 export function mountAiCompanion(root: HTMLElement): () => void {
   const form = root.querySelector<HTMLFormElement>('[data-ai-form]')!;
   const create = root.querySelector<HTMLButtonElement>('[data-ai-create]')!;
@@ -28,14 +66,19 @@ export function mountAiCompanion(root: HTMLElement): () => void {
     clearTimeout(expiryTimer);
   }
   async function request(method = 'GET', body?: unknown) {
-    const response = await fetch(ENDPOINT, {
-      method, credentials: 'include', cache: 'no-store', signal: controller.signal,
-      ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(response.status === 401 ? 'Sign in to confirm a private AI visit.' : 'AI visit confirmation is unavailable. You can still use the public connector.');
-    return data;
+    let response: Response;
+    try {
+      response = await fetch(ENDPOINT, {
+        method, credentials: 'include', cache: 'no-store', signal: controller.signal,
+        ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+      });
+    } catch (error) {
+      if (controller.signal.aborted) throw error;
+      throw new AiCompanionRequestError(0, 'network-error');
+    }
+    return readAiCompanionResponse(response);
   }
+
   function setBusy(value: boolean) {
     busy = value; create.disabled = value || !available; refresh.disabled = value;
     root.querySelectorAll<HTMLButtonElement>('[data-ai-remove]').forEach((button) => { button.disabled = value; });

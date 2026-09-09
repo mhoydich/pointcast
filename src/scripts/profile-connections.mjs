@@ -11,6 +11,12 @@ export function mountProfileConnections(root, api) {
   let revision = 0;
   let busy = false;
   let notice = xCallbackMessage(win.location.search);
+  let needsReauth = new URLSearchParams(win.location.search).get('auth_error') === 'x-fresh-sign-in-required';
+  const reauthMethods = [
+    ['passkey', 'Passkey'], ['google', 'Google'], ['email', 'Email'],
+    ['kukai', 'Kukai'], ['metamask', 'MetaMask'], ['phantom', 'Phantom'],
+  ];
+  const recoveryMethod = () => reauthMethods.find(([provider]) => user?.identities?.some((identity) => identity.provider === provider));
   const live = () => !signal.aborted && root.isConnected;
   const text = (selector, value) => {
     const element = root.querySelector(selector);
@@ -26,6 +32,17 @@ export function mountProfileConnections(root, api) {
     text('[data-x-badge]', view.badge);
     text('[data-x-notice]', notice);
     text('[data-x-disconnect-hint]', view.disconnectHint);
+    const method = recoveryMethod();
+    const recovery = root.querySelector('[data-x-recovery]');
+    if (recovery) recovery.hidden = !needsReauth;
+    const reauth = root.querySelector('[data-x-action="reauth"]');
+    if (reauth) {
+      reauth.disabled = busy || user === undefined || !method;
+      reauth.textContent = method ? `Sign in again with ${method[1]}` : 'Sign in again';
+    }
+    text('[data-x-recovery-hint]', method
+      ? `Use your linked ${method[1]} sign-in. Then check the PointCast account name and retry X.`
+      : 'Use a sign-in method already linked to this PointCast account, then retry X.');
     const link = root.querySelector('[data-x-handle]');
     if (link) {
       link.hidden = !view.href;
@@ -68,6 +85,34 @@ export function mountProfileConnections(root, api) {
     const button = event.target?.closest?.('[data-x-action]');
     if (!button || button.disabled || !root.contains(button) || busy) return;
     event.preventDefault();
+    if (button.dataset.xAction === 'reauth') {
+      // Reuse the existing menu, pointing only at an already-linked method.
+      // Stop the initiating click from immediately closing it as an outside click.
+      event.stopPropagation();
+      const method = recoveryMethod();
+      if (!method) return;
+      const menu = root.closest('[data-me-root]')?.querySelector('[data-me-private] .me-auth-bridge [data-auth-menu]')
+        || doc.querySelector('[data-auth-menu]');
+      const trigger = menu?.querySelector('[data-auth-trigger]');
+      const control = method[0] === 'email'
+        ? menu?.querySelector('[data-auth-email]')
+        : menu?.querySelector(`[data-provider="${method[0]}"]`);
+      if (!trigger || !control || control.disabled) {
+        notice = 'Open Manage sign-in methods and use your existing linked account, then return here to retry X.';
+        render();
+        return;
+      }
+      // Avoid carrying this old failure through the provider's return URL.
+      const next = new URL(win.location.href);
+      next.searchParams.delete('auth_error');
+      next.searchParams.delete('auth');
+      win.history.replaceState(win.history.state, '', next.pathname + next.search + next.hash);
+      if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+      menu.scrollIntoView?.({ block: 'nearest' });
+      control.focus();
+      return;
+    }
+    needsReauth = false;
     const view = buildXConnectionView(user, available);
     const request = revision;
     busy = true;
@@ -93,7 +138,9 @@ export function mountProfileConnections(root, api) {
       }
     } catch (error) {
       if (!live() || request !== revision) return;
-      notice = xConnectionMessage(error instanceof Error ? error.message : '');
+      const reason = error instanceof Error ? error.message : '';
+      needsReauth = reason === 'fresh-sign-in-required' || reason === 'x-fresh-sign-in-required';
+      notice = xConnectionMessage(reason);
     } finally {
       if (live() && request === revision) {
         busy = false;
@@ -104,7 +151,7 @@ export function mountProfileConnections(root, api) {
 
   win.addEventListener('pc:auth-change', (event) => {
     if (event.detail?.source === 'profile-connections') return;
-    notice = '';
+    if (!needsReauth) notice = '';
     void refreshSession();
   }, { signal });
   win.addEventListener('pc:auth-refresh', () => void refreshSession(), { signal });

@@ -15,12 +15,12 @@ The roadmap describes selected informational inputs, the first personal context 
 
 ## Validation
 
-- `npm run build:bare`: passed; 2,155 pages built.
+- Initial `npm run build:bare`: passed; 2,155 pages built. A later build including the review fixes compiled both bundles, then the unchanged profile prerender lookup received an external TzKT 429. A final retry is recorded below.
 - `npm run audit:agents`: passed.
 - `npm run audit:publishing`: passed at the branch baseline.
 - Workers-only TypeScript check of new private AI routes, X routes, and shared session code: passed.
 - Changed Astro components and browser modules compiled successfully.
-- Final `npm test`: 1,039 tests; 1,037 passed, 2 failed, 0 skipped.
+- Final `npm test`: 1,045 tests; 1,043 passed, 2 failed, 0 skipped.
 - `git diff --check`: passed.
 
 Remaining suite failures are outside the changed feature:
@@ -49,3 +49,13 @@ Automated tests additionally exercise owner isolation, CSRF/body limits, concurr
 Configure the X developer application and environment secrets; apply auth migrations 0015 and 0016; deploy functions and UI together; then verify actual provider-client tool calls and X browser consent, sign-in, explicit linking, recovery, cancellation, and unlinking. Configuration readiness does not prove provider consent or delivery.
 
 No persistent provider OAuth grants, API keys, hosted inference, saved private inputs, external sends, or background schedules are created by this branch.
+
+## Independent Fable review and follow-up
+
+The requested read-only review completed using Claude Fable 5.1 through the local Claude bridge. The Claude CLI was updated from 2.1.119 to 2.1.267 to meet the provider's model requirement. Model identity was verified from runtime metadata, not the reviewer's self-description. This was local execution using the existing signed-in account.
+
+Fable identified an existing public session POST that trusted a client-supplied header. No source caller required that endpoint. The branch now rejects POST with 405 and issues sessions only through verified sign-in handlers. Three behavioral tests cover forged headers, no storage/session side effects, malformed requests, and continued direct issuance by legitimate handlers. Fable independently re-read the narrow fix and confirmed the path is closed. The fix is a separate commit and is not deployed.
+
+Also addressed: friendly handling of non-JSON AI service errors, a visible warning that another invitation replaces the same provider's receipt, X read-permission/token-discard disclosure, and an actionable reauthentication path using an already-linked method. Fable's selected-context suggestion remains in the roadmap.
+
+After Mike clarified the Zo sign-in experience, official Zo and provider docs confirmed the native-runtime approach. The roadmap now makes guided provider sign-in the primary next milestone and keeps current manual connector setup as a fallback. That native sign-in/runtime service has not been built by this PR.

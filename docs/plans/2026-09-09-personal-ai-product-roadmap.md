@@ -1,91 +1,80 @@
 # Personal PointCast: product roadmap and gameplan
 
 Date: 2026-09-09
-Status: proposed product sequence. Current implementation remains local and un-deployed; this roadmap creates no external connections, message-sending permissions, or background schedules.
+Status: proposed product sequence, with an implementation draft in [PR #1084](https://github.com/mhoydich/pointcast/pull/1084). Nothing in that PR is deployed.
 
-## Product thesis
+## The product
 
 **My own AI, with information I choose, communicating where I choose.**
 
-PointCast should give someone a personal place to explore and act with the AI they already use. Start inside that AI's supported subscription experience. Let the person choose useful inputs, experience the result, and add deeper permissions only when a concrete behavior needs them.
+The primary connection experience should match what Mike used in Zo:
 
-The Zo screenshots contribute the direction of informational inputs alongside one's own AI. They are not proof of a PointCast integration or authorization to connect an account. This proposal includes no personal contact details from them.
+1. Choose **ChatGPT** or **Claude**.
+2. Sign in with that provider, approve, and enter a confirmation code if requested.
+3. Choose an available model and optional interaction preferences.
+4. Complete one small PointCast task together.
 
-The private profile becomes the control center for three distinct things:
+The person should not need to understand MCP or find an API key for this path. Provider-native sign-in and a real agent runtime must sit behind the interface. A PointCast visit code is a different feature and cannot substitute for provider authentication.
 
-| Area | The person's choice | PointCast's responsibility |
+Zo's current changelog confirms an in-app subscription sign-in dialog for Claude Code, Codex, and Gemini, and a subscription-first AI settings layout. Its older terminal-oriented guides describe the underlying native login. [Zo updates](https://www.zo.computer/updates), [Codex setup](https://www.zo.computer/guide/codex), [Claude Code setup](https://www.zo.computer/guide/claude-code).
+
+## What we have now
+
+The draft adds public AI connector guidance, a private one-time AI visit receipt, optional gentler invitation wording, and X sign-in/linking with private profile controls. Local build and synthetic-account checks prove those limited behaviors. The receipt proves that a code was used; it does not verify a subscription or establish a persistent execution connection.
+
+The local Claude/Codex bridge has also demonstrated a real Fable 5.1 review using the owner's existing Claude account. That proves the local runtime route on this Mac. It does not yet supply a multi-user PointCast service or execution while the Mac is asleep.
+
+The guided provider sign-in, runtime pairing, embedded conversation, selected context packet, saved inputs, external sending, and proactive operation remain to be built. The current connector page is a useful fallback for people who want PointCast tools inside their existing AI app.
+
+## Next release: three tracks in parallel
+
+| Track | Work | Completion evidence |
 | --- | --- | --- |
-| My AI | Existing AI app, provider, or agent runtime; optional interaction preferences | Explain where it runs and how to connect, distinguish self-reported setup from verified activity, and respect the provider's supported access route |
-| My inputs | Selected PointCast spaces, public links, personal notes, and later explicitly connected private sources | Show exactly what is available to the AI, how fresh it is, what is retained, and how to pause or remove it |
-| My channels | Onsite conversation and later X, email, or messaging | Separate account identity, reading access, sending authority, and evidence of delivery and replies |
+| Guided AI connection | Prototype native subscription sign-in against an owner-controlled runtime; bind it to the correct PointCast profile; list actual available models; handle cancellation, expiry, reconnect, and disconnect | Provider login completes, runtime reports its authenticated state, and one real task runs on the selected model. An accepted job or copied code never shows as connected |
+| Profile and X | Finish X app configuration and real consent checks; make identity, recovery, and AI connection controls understandable; allow explicit profile visibility choices | Existing member links X to the same profile, returns successfully, sees the verified handle, and can disconnect while retaining a way to sign in |
+| First personal result | Let someone choose one PointCast space, one public link, and a short note; preview exactly what will be shared | Their chosen AI recommends one useful thing, explains why, cites working sources, and asks one good question |
 
-## What the current branch actually contains
+X setup can proceed independently and should not hold up the first useful AI experience.
 
-Implemented and tested locally: subscription-oriented connector guidance; anonymous public PointCast MCP tools; an optional one-time private AI visit receipt; and X sign-in, deliberate linking, and private profile connection UI. The receipt proves that a one-time code was used. It does not verify the chosen AI provider, subscription, or continued agent activity.
+The first acceptance demo is: **connect my existing AI, tell it “something quiet and interesting for this evening,” choose a few inputs, and receive a good suggestion I can actually open.** Optional gentle preferences should be visible, removable, and phrased as an invitation for this interaction.
 
-The X flow verifies an identity and handle. It does not retain an X token or authorize ongoing reading, posting, or direct messages. App configuration, auth migrations, deployment, and real external consent tests remain necessary. Local tests do not demonstrate a live integration.
+## The runtime decision
 
-Persistent profile OAuth scopes and client grants, embedded or hosted inference, input ingestion, private-source connectors, onsite AI conversation, external sending, and proactive execution are **not built** by this branch. A pasted setup prompt is not a connection; a visit receipt is not ongoing authorization.
+For a quick owner pilot, reuse an existing Zo or local Claude/Codex installation. Avoid building a whole cloud-computer service before proving the behavior.
 
-## First experience to build
+- **Codex:** its App Server documents a device-code login start that returns a provider URL, one-time code, and login ID, followed by completion/account events. Native Codex owns credential storage and refresh. App Server is documented as experimental, so prototype behind an authenticated private bridge and establish a supported production path before a public rollout. [App Server authentication](https://learn.chatgpt.com/docs/app-server#authentication-modes), [Codex authentication](https://learn.chatgpt.com/docs/auth).
+- **Claude Code:** run Anthropic's unmodified binary in the owner's isolated runtime and present its native sign-in flow. Anthropic expressly permits that hosting arrangement under its documented conditions, with each user signing into their own account. This does not authorize a separate service to collect Claude.ai credentials and proxy inference itself. [Authentication](https://code.claude.com/docs/en/authentication), [hosting conditions](https://code.claude.com/docs/en/legal-and-compliance).
+- **Existing Zo:** its API supports an explicit model, streaming, and conversation continuity, including subscription-backed coding agents. Query available models and use the actual returned identifier. Zo's access token gives full computer access, so keep it on the owner's runtime behind a limited PointCast bridge; do not put it in browser code or treat it as a narrow profile token. A published third-party Zo subscription-login API has not been verified. [Zo API](https://www.zo.computer/guide/api), [available models](https://www.zo.computer/reference/api-reference/models).
 
-A person signs in, chooses the AI they already use, and sees the shortest supported setup for that client. They choose one PointCast space, one public link, and a short note such as “I want something quiet and interesting for this evening.” PointCast previews the information that will be shared.
+For a browser-only experience for visitors who have no runtime, PointCast would need isolated persistent execution per owner, authenticated job transport, native credential storage, tool/approval events, and lifecycle controls. Hosting is a separate cost from the AI subscription. The pilot should establish whether to reuse an existing host or provide that infrastructure.
 
-They ask their AI: “Use these to choose one thing for us to explore. Tell me why, cite what you used, and ask me one good question.” The result leads to a real PointCast page. The person can adjust their choices and try again.
+API keys and separately billed inference remain an advanced parallel route. They should have distinct setup and usage disclosure.
 
-For the initial version, the person can deliberately copy a previewed context packet into their existing AI conversation. That manual action is explicit sharing for this interaction; it does not require pretending the AI has persistent profile access. A later automatic retrieval path needs actual scoped grants and revocation.
+## After the first useful visit
 
-An optional gentler experience is visible wording beside the AI choice: curious, concise, attentive, and comfortable with quiet. It is a removable preference for the interaction, not a claim that PointCast permanently changes an assistant.
-
-Success is a useful, personal visit with an understandable source trail. The person should be able to explain which AI helped, which information it used, and what it was allowed to do.
-
-## Sequence and exit tests
-
-| Stage | Product work | Exit test |
+| Stage | Product | Exit test |
 | --- | --- | --- |
-| 1. One private profile | Make identity, connected methods, and recovery understandable; finish X configuration and genuine consent testing; give the AI, input, and channel areas a coherent home | Sign in with an existing method, deliberately link X to that same profile, show the verified handle, return successfully, and disconnect without losing the last sign-in method. A different account cannot acquire the identity |
-| 2. Bring an existing AI | Lead with supported subscription-client setup and public exploration; introduce the first personal context packet and optional preferences; keep API and owned-agent routes available as advanced choices | A real supported client successfully calls a PointCast tool, uses the previewed personal context, cites a working page, and leaves a private visit receipt when requested. Copying instructions alone never appears as a completed visit |
-| 3. Choose the inputs | Build a small library of curated public links and PointCast spaces, then saved notes; add one useful private source only after public-input value is demonstrated | The AI uses only selected content, shows source and retrieval time, reports stale or unavailable data honestly, and stops future retrieval when the input is paused or removed. Private-source access is isolated to its authorized owner |
-| 4. Talk and reply | Establish onsite conversation continuity and user control first; then add one external channel, with X and email treated as independent integrations | Receive a message, compose an authorized response, send through the chosen channel, verify delivery, and attach the incoming reply to the same conversation. Retries do not produce duplicate sends |
-| 5. Return proactively | Add a user-selected schedule and runtime that can execute while the computer sleeps; reuse an owned runtime where supported and keep its inference/account boundary explicit | With the local computer asleep, the chosen host runs the task once, uses only permitted inputs, delivers an authorized meaningful update, accepts the reply, and honors pause/revocation. An ordinary desktop MCP installation does not satisfy this test |
+| Selected inputs | Saved PointCast spaces, curated links, and notes; then one useful private source | Show selected content, source, retrieval time, retention, and pause/remove controls. Retrieval is isolated to its owner and stops when access is removed |
+| Conversation continuity | Continue the same interaction onsite using the connected runtime | A follow-up has the right context and the person understands what history is retained |
+| Programmatic X or email | Add one external channel with separate reading/sending authorization | Receive, send an authorized response, verify delivery, and associate the reply with the same conversation; retries do not duplicate messages |
+| Proactive help | A user-selected purpose, schedule, quiet hours, and hosted runtime | It runs while the computer is asleep, sends only meaningful authorized updates, accepts replies, and honors pause/revocation |
 
-Stages are ordered by dependency and demonstrated value, without speculative dates or prices. A later stage should remain visibly unavailable until its actual behavior is proven.
+Choose the first private source and first external channel from actual use of the initial experience. Do not expand the connector catalogue before we can demonstrate why the first inputs improve a visit.
 
-## Parallel work for the next release
+## Product rules
 
-Run three bounded tracks together:
+The private profile has three understandable areas: **My AI, My inputs, My channels**. Each shows its own actual state and controls.
 
-1. **Profile and identity:** finish X configuration and consent checks, recovery, and clear private-profile controls.
-2. **AI setup:** prove the actual Claude and ChatGPT client routes, keep an API/owned-agent option, and make the optional visit receipt understandable.
-3. **First useful experience:** design and build the public-content selector, one link, one note, shared-context preview, and a result with sources.
+Provider login, PointCast runtime pairing, a one-time visit receipt, X identity, and permission to send are separate authorizations. Use “connected” only when the particular connection is verified, and say what it enables.
 
-These tracks converge on the same acceptance demo: a person brings an existing AI to their PointCast profile, deliberately shares a few inputs, receives one useful recommendation, and can see what happened. X posting and proactive messaging follow after this demo works.
+For the first context packet, preview the selected space, link, note, and preference before sharing. It can be passed through the connected runtime or, for the manual connector fallback, returned once through the existing visit tool after explicit consent. This needs no permanent private-profile grant. Persistent retrieval comes later with scoped access and revocation.
 
-## Implementation decisions that keep the product understandable
+X identity setup currently requests the read scopes documented for profile lookup and discards the token afterward. It enables no ongoing reading, posting, or direct messages. Those require separate permissions and token lifecycle work.
 
-**AI access:** keep inference inside the provider client or owned runtime unless a separate, supported hosted-inference product is deliberately selected. A subscription setup route does not imply transferable credits, API entitlement, third-party token collection, or a cloud runtime. Never ask someone to paste a provider session token into their profile.
-
-**Profile access:** use the one-visit context packet first. Before enabling persistent AI retrieval, define the exact profile/input scopes, register compatible client grants, enforce authorization on every request, and test expiry and revocation. The current visit code cannot become an account-access token.
-
-**Input controls:** every saved input needs a stable source record, a preview of shared content, enabled/paused status, refresh policy, last successful retrieval or failure, and a retention rule. Begin with manual refresh. Removing a source stops future retrieval; deletion of retained copies must also be clear. Decide how private notes and imported material are retained before collecting them.
-
-**Channels:** “Sign in with X” means identity. Reading selected X material and sending through X require separate scopes and controls. The same separation applies to email and messaging: a contact address alone supplies neither inbox access nor sending authority. Show each permission independently; never label the entire channel connected because only authentication works.
-
-**Communication proof:** record sender, permitted recipient or conversation, provider receipt, delivery result, and reply identity. Support deduplication and a stop control. Before automatic sending, make its permitted purpose, audience, schedule, and quiet hours understandable. No external-send authorization is created by this roadmap.
-
-**Onsite conversation:** decide whether PointCast stores the conversation, retains only a short user-approved summary, or passes it through. State which runtime answers and what is retained. Public MCP tools and a profile receipt do not supply an embedded chat backend.
-
-**Proactivity:** the selected runtime must own execution, scheduling, and inference access. Show the last run, next planned run, meaningful outcomes, and failures. Quiet operation is a product feature; unchanged or non-actionable results should not produce repeated notifications.
-
-## Recommended next build and remaining choices
-
-Finish and demonstrate stage 1, then build the small stage-2 experience with selected public PointCast content, one public link, and a note. Use that experience to determine whether saved inputs improve the next visit before expanding the connector list.
-
-For stage 3, start with links and notes instead of choosing a private account integration prematurely. For stage 4, prove onsite continuity, then pick whichever single external channel has the clearest user need and supported delivery/reply path. For stage 5, evaluate the person's existing owned runtime before proposing new hosting.
-
-The decisions still needed are the first recurring personal use case, the first private source worth connecting, which external channel should come first, how much conversation/input history to retain, and which runtime should handle future background work. Each can be resolved when its preceding experience produces evidence.
+Reuse existing subscription access through supported native clients and owner-controlled runtimes. Keep provider credentials in their native runtime storage. Keep API billing and compute costs clear.
 
 ## Related implementation notes
 
-- [Bring your AI setup and provider routes](../setup/bring-your-ai.md)
-- [X identity setup and consent boundary](../setup/x-auth.md)
+- [Current connector setup](../setup/bring-your-ai.md)
+- [One-time AI visit confirmation](../setup/ai-visit-confirmation.md)
+- [X setup and consent](../setup/x-auth.md)

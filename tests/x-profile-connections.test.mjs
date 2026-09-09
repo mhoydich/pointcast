@@ -17,7 +17,7 @@ const deferred = () => {
 };
 const component = await readFile(new URL('../src/components/ProfileConnections.astro', import.meta.url), 'utf8');
 function fixture(overrides = {}) {
-  const dom = new JSDOM(component.split('<script>')[0], { url: 'https://pointcast.test/me' });
+  const dom = new JSDOM(component.split('<script>')[0].replace(/^---[\s\S]*?---/, ''), { url: 'https://pointcast.test/me' });
   const root = dom.window.document.querySelector('[data-profile-connections]');
   const api = {
     getSession: async () => linked,
@@ -92,6 +92,8 @@ test('disconnect freshness error preserves the verified identity and gives recov
   assert.equal(f.find('[data-x-handle]').getAttribute('href'), 'https://x.com/pointcast_test');
   assert.match(f.find('[data-x-notice]').textContent, /Sign in again/);
   assert.equal(f.find('[data-x-action="disconnect"]').disabled, false);
+  assert.equal(f.find('[data-x-recovery]').hidden, false);
+  assert.equal(f.find('[data-x-action="reauth"]').textContent, 'Sign in again with Google');
   f.cleanup();
 });
 
@@ -147,4 +149,34 @@ test('X callback failures are readable and never echo arbitrary URL text', () =>
   assert.match(xCallbackMessage('?auth_error=x-already-linked'), /another PointCast account/);
   assert.match(xCallbackMessage('?auth_error=x-fresh-sign-in-required'), /Sign in again/);
   assert.equal(xCallbackMessage('?auth_error=x-%3Cscript%3E'), 'The X connection could not be updated. Please try again.');
+});
+
+
+test('X freshness recovery opens and focuses an already-linked method without starting a new login or link', async () => {
+  let starts = 0;
+  const f = fixture({
+    disconnectX: async () => { throw new Error('fresh-sign-in-required'); },
+    loginWithX: async () => { starts += 1; },
+  });
+  const menu = f.dom.window.document.createElement('div');
+  menu.dataset.authMenu = '';
+  menu.innerHTML = '<button data-auth-trigger aria-expanded="false">Account</button><button data-provider="passkey">Passkey</button><button data-provider="google">Google</button>';
+  f.dom.window.document.body.append(menu);
+  const trigger = menu.querySelector('[data-auth-trigger]');
+  trigger.addEventListener('click', () => trigger.setAttribute('aria-expanded', 'true'));
+  f.dom.window.history.replaceState({}, '', '/me?auth_error=x-fresh-sign-in-required');
+  await tick();
+  f.find('[data-x-action="disconnect"]').click();
+  await tick();
+  f.find('[data-x-action="reauth"]').click();
+  assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+  assert.equal(f.dom.window.document.activeElement, menu.querySelector('[data-provider="google"]'));
+  assert.equal(starts, 0);
+  assert.equal(f.dom.window.location.search, '');
+  assert.equal(f.root.dataset.state, 'connected');
+  // An ordinary session refresh is not proof of fresh authentication.
+  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: linked } }));
+  await tick();
+  assert.equal(f.find('[data-x-recovery]').hidden, false);
+  f.cleanup();
 });

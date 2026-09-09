@@ -5,7 +5,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { onRequestGet, onRequestPost, onRequestDelete } from '../functions/api/me/ai-companions.ts';
 import { confirmAiVisit, GENTLE_INVITATION } from '../functions/_lib/ai-companions.ts';
-import { mountAiCompanion } from '../src/lib/auth/ai-companion-ui.ts';
+import { mountAiCompanion, readAiCompanionResponse, AiCompanionRequestError } from '../src/lib/auth/ai-companion-ui.ts';
 
 function environment(t) {
   const db = new DatabaseSync(':memory:');
@@ -183,4 +183,43 @@ test('AI UI removes stale invitations after cross-tab deletion or replacement', 
   receipt.invitationId = 'replaced-in-another-tab';
   root.querySelector('[data-ai-refresh]').click(); await tick();
   assert.equal(root.querySelector('textarea').value, '');
+});
+
+
+test('AI response errors keep status and reason while replacing upstream HTML and JSON parser details', async () => {
+  for (const [status, body, reason, message] of [
+    [503, '<html>upstream outage</html>', 'request-failed', /unavailable/],
+    [413, '<html>request too large</html>', 'request-failed', /too large/],
+    [401, JSON.stringify({ ok: false, reason: 'unauthorized' }), 'unauthorized', /Sign in/],
+    [403, JSON.stringify({ ok: false, reason: 'origin-not-allowed' }), 'origin-not-allowed', /profile directly/],
+    [400, JSON.stringify({ ok: false, reason: 'invalid-provider' }), 'invalid-provider', /Check your choices/],
+    [200, '<html>unexpected success page</html>', 'invalid-response', /unavailable/],
+  ]) {
+    await assert.rejects(readAiCompanionResponse(new Response(body, { status })), (error) => {
+      assert.ok(error instanceof AiCompanionRequestError);
+      assert.equal(error.status, status);
+      assert.equal(error.reason, reason);
+      assert.match(error.message, message);
+      assert.doesNotMatch(error.message, /Unexpected token|SyntaxError|<html>|upstream outage/);
+      return true;
+    });
+  }
+  assert.deepEqual(await readAiCompanionResponse(Response.json({ ok: true, companions: [] })), { ok: true, companions: [] });
+});
+
+test('AI UI shows a human error for an HTML failure and never renders a failed invitation', async (t) => {
+  const dom = domEnvironment(t);
+  t.mock.method(globalThis, 'fetch', async (_url, init) => init.method === 'POST'
+    ? new Response('<html>edge error</html>', { status: 503 })
+    : Response.json({ companions: [] }));
+  const root = dom.window.document.querySelector('section');
+  const cleanup = mountAiCompanion(root); t.after(cleanup);
+  await tick();
+  root.querySelector('form').dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  await tick(); await tick();
+  assert.match(root.querySelector('output').textContent, /AI visit confirmation is unavailable/);
+  assert.doesNotMatch(root.querySelector('output').textContent, /Unexpected token|SyntaxError|<html>/);
+  assert.equal(root.querySelector('[data-ai-invitation]').hidden, true);
+  assert.equal(root.querySelector('textarea').value, '');
+  assert.equal(root.querySelector('[data-ai-create]').disabled, false);
 });

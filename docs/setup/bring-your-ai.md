@@ -8,6 +8,10 @@ The AI stays in the app or agent its owner already uses. That app supplies infer
 
 The `/connectors` page leads with Claude and ChatGPT, keeps a copyable public invitation, and places coding/API/hosted-agent setup in an advanced section. `/agent-kit.md` and `/connectors.json` expose the same setup data. Existing `/api/mcp` clients remain supported.
 
+## Desired guided subscription setup
+
+The next product target is a Zo-like sequence: choose ChatGPT or Claude, use the provider-native sign-in/approval/code flow, confirm an owner-bound runtime connection, and run one useful PointCast task. Zo confirms this in its [current changelog](https://www.zo.computer/updates). This requires a real Codex or unmodified Claude Code runtime behind the interface. The current MCP instructions and visit receipt do not implement that login flow. See the [revised product roadmap](../plans/2026-09-09-personal-ai-product-roadmap.md) for the runtime pilot and provider boundaries.
+
 ## Verified provider routes
 
 | Client | Plan/access | Setup and limits | Official source |

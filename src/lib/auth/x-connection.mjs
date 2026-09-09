@@ -1,3 +1,5 @@
+export const X_IDENTITY_PERMISSION_COPY = 'X asks for permission to read posts and your profile for this identity lookup. PointCast discards the access token afterward without storing it. This sign-in does not authorize posts or direct messages.';
+
 /** Session identity is the only source for an X handle. Never use profile links or browser storage. */
 export function buildXConnectionView(user, available = null) {
   const identities = Array.isArray(user?.identities) ? user.identities : [];
