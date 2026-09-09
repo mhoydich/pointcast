@@ -20,19 +20,21 @@ Zo's current changelog confirms an in-app subscription sign-in dialog for Claude
 
 ## What we have now
 
-The draft adds public AI connector guidance, a private one-time AI visit receipt, optional gentler invitation wording, and X sign-in/linking with private profile controls. Local build and synthetic-account checks prove those limited behaviors. The receipt proves that a code was used; it does not verify a subscription or establish a persistent execution connection.
+The draft now includes an owner pilot with a real native AI runtime: pair this computer to the private PointCast profile, check its subscription sign-in, choose a model, preview selected text and an optional gentle preference, and run one text-only task. Both Codex (GPT-5.6 Luna) and Claude (Fable 5.1) returned real results through the owner's existing subscriptions. The profile-to-companion-to-model-to-profile path has been exercised locally with a synthetic PointCast account and real native clients.
 
-The local Claude/Codex bridge has also demonstrated a real Fable 5.1 review using the owner's existing Claude account. That proves the local runtime route on this Mac. It does not yet supply a multi-user PointCast service or execution while the Mac is asleep.
+The companion starts native provider sign-in and relays approved provider URLs and confirmation codes when the provider uses them. Fresh-account consent has not yet been exercised: these native clients were already signed in. Initial setup currently requires the source companion on the owner's Mac. This proves the execution path; the installer and a browser-only hosted experience still need product work. The Mac must remain awake and the companion running.
 
-The guided provider sign-in, runtime pairing, embedded conversation, selected context packet, saved inputs, connected-agent x402 purchasing, external sending, and proactive operation remain to be built. The current connector page is a useful fallback for people who want PointCast tools inside their existing AI app.
+PointCast stores an opaque, hashed, expiring companion credential and scoped job data. Provider credentials stay in their native stores. Tasks have no external tools, automatic inference retries, or API-billing fallback. Codex model choices come from its native catalogue; Claude choices are configured and the actual model usage is reported after execution. See the [pilot setup guide](../setup/ai-runtime.md).
+
+The draft also includes manual AI connector guidance, optional one-time visit receipts, X sign-in/linking and recovery controls, and x402 settlement-retry safeguards. X consent is still unverified with a configured developer application. Buying with an agent, saved private inputs, ongoing conversations, external sending, and proactive operation remain proposed.
 
 ## Next release: three tracks in parallel
 
 | Track | Work | Completion evidence |
 | --- | --- | --- |
-| Guided AI connection | Prototype native subscription sign-in against an owner-controlled runtime; bind it to the correct PointCast profile; list actual available models; handle cancellation, expiry, reconnect, and disconnect | Provider login completes, runtime reports its authenticated state, and one real task runs on the selected model. An accepted job or copied code never shows as connected |
+| Guided AI connection | Pilot implemented locally; finish fresh native sign-in consent tests, package installation, and verify deployed transport with the intended owner | Provider login completes, runtime reports its authenticated state, and one real task runs on the selected model. An accepted job or copied code never shows as connected |
 | Profile and X | Finish X app configuration and real consent checks; make identity, recovery, and AI connection controls understandable; allow explicit profile visibility choices | Existing member links X to the same profile, returns successfully, sees the verified handle, and can disconnect while retaining a way to sign in |
-| First personal result | Let someone choose one PointCast space, one public link, and a short note; preview exactly what will be shared | Their chosen AI recommends one useful thing, explains why, cites working sources, and asks one good question |
+| First personal result | Local pilot shares one curated PointCast description plus a note and optional preference; add approved retrieval of a chosen public link next | Current proof: a real AI recommendation using the provided text, with a reference link and one question. Live retrieval and source verification remain next |
 
 X setup can proceed independently and should not hold up the first useful AI experience.
 
@@ -70,7 +72,9 @@ Retries must reconcile the original purchase before issuing another payment. Per
 
 Reuse the existing PointCast server intake before adding another payment stack: `src/lib/x402.ts` describes Etherlink USDC payment requirements; `functions/_lib/x402-gate.ts` performs settlement and signs receipts; `functions/_lib/paid-town-actions.ts` persists action state; `/api/actions/{id}` supports recovery. A Bench or Cast action is a candidate first purchase, subject to current configuration and live proof. These existing pieces do not provide a visitor-owned spending wallet or a profile spending grant.
 
-Before enabling a generic x402 client, address two observed source gaps: preserve an unknown settlement outcome when the facilitator returns HTTP 5xx (the gate currently converts non-success responses to 402, which action handlers can classify as retryable failure), and return/expose the standard `Payment-Response` header alongside any legacy `X-Payment-Response` alias. Add a regression for a facilitator error after submission; a timeout exception alone is not sufficient. Receipt signature verification and chain settlement verification must remain distinct checks. Confirm that the selected facilitator supports the chosen mainnet before live testing. [Official x402 flow](https://docs.x402.org/core-concepts/client-server), [facilitator guidance](https://docs.x402.org/core-concepts/facilitator).
+The draft now preserves unknown settlement outcomes across facilitator HTTP 5xx, 408/429, malformed success, missing or conflicting transaction evidence, and ambiguous broadcast responses. A held action cannot silently acquire a second authorization. It also returns and exposes the standard `Payment-Response` header alongside the legacy alias. Behavioral regressions exercise these paths without making payments. Reconciliation of an unknown outcome is still a release requirement: holding the purchase prevents an unsafe retry but does not itself resolve it.
+
+Receipt signature verification and chain settlement verification remain distinct checks. Confirm that the selected facilitator supports the chosen mainnet before live testing. [Official x402 flow](https://docs.x402.org/core-concepts/client-server), [facilitator guidance](https://docs.x402.org/core-concepts/facilitator).
 
 ## After the first useful visit
 
@@ -97,6 +101,8 @@ X identity setup currently requests the read scopes documented for profile looku
 Reuse existing subscription access through supported native clients and owner-controlled runtimes. Keep provider credentials in their native runtime storage. Keep API billing and compute costs clear.
 
 ## Related implementation notes
+
+- [Native AI owner pilot](../setup/ai-runtime.md)
 
 - [Current connector setup](../setup/bring-your-ai.md)
 - [One-time AI visit confirmation](../setup/ai-visit-confirmation.md)
