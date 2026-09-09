@@ -1,8 +1,11 @@
+import { buildXConnectionView } from './x-connection.mjs';
+
 const TEZOS_PROVIDERS = new Set(['kukai', 'temple', 'umami']);
 
 const PROVIDER_LABELS = {
   kukai: 'Kukai',
   google: 'Google',
+  x: 'X',
   apple: 'Apple',
   metamask: 'MetaMask',
   phantom: 'Phantom',
@@ -18,12 +21,14 @@ function providerLabel(provider) {
  * Build the single view model used by the /auth hero and provider cards.
  * The session user is authoritative for account and linked-identity state.
  *
- * @param {import('./types').PointCastUser | null} user
+ * @param {import('./types').PointCastUser | null | undefined} user
+ * @param {{ xAvailable?: boolean | null }} options
  */
-export function buildAccountDeskView(user) {
+export function buildAccountDeskView(user, { xAvailable = null } = {}) {
   const identities = Array.isArray(user?.identities) ? user.identities : [];
   const identityProviders = new Set(identities.map((identity) => identity.provider));
   const signedIn = Boolean(user);
+  const xConnection = buildXConnectionView(user, xAvailable);
   const googleConnected = identityProviders.has('google');
   const tezosProviders = identities
     .filter((identity) => TEZOS_PROVIDERS.has(identity.provider))
@@ -56,6 +61,10 @@ export function buildAccountDeskView(user) {
       : 'No account is required to look around.',
     providers: {
       google: providerState('google', 'Sign in with Google →'),
+      x: {
+        ...xConnection,
+        status: xConnection.connected ? 'X is linked to this account. Manage it on your private profile.' : xConnection.status,
+      },
       apple: providerState('apple', 'Sign in with Apple →'),
       kukai: {
         connected: tezosProviders.length > 0,

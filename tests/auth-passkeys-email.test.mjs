@@ -115,13 +115,21 @@ class FakeD1Statement {
       db.users.set(args[0], { id: args[0], payload: args[1], created_at: args[2] });
     } else if (sql.startsWith('UPDATE users SET payload')) {
       const current = db.users.get(args[1]);
-      if (current) db.users.set(args[1], { ...current, payload: args[0] });
+      if (current && sql.includes('json_set')) {
+        const user = JSON.parse(current.payload);
+        user.identities = [...db.identities.values()]
+          .filter((identity) => identity.user_id === args[0])
+          .map((identity) => JSON.parse(identity.payload));
+        db.users.set(args[1], { ...current, payload: JSON.stringify(user) });
+      } else if (current) db.users.set(args[1], { ...current, payload: args[0] });
     } else if (sql.startsWith('INSERT INTO identities')) {
       db.identities.set(`${args[0]}:${args[1]}`, {
         provider: args[0], id: args[1], user_id: args[2], payload: args[3],
       });
     } else if (sql.startsWith('DELETE FROM identities')) {
-      db.identities.delete(`${args[0]}:${args[1]}`);
+      if (!sql.includes('NOT EXISTS') || !db.passkeys.has(args[3])) {
+        db.identities.delete(`${args[0]}:${args[1]}`);
+      }
     } else if (sql.startsWith('INSERT INTO sessions')) {
       db.sessions.set(args[0], {
         token: args[0], user_id: args[1], expires_at: args[2], authenticated_at: args[3] ?? 0,
@@ -143,7 +151,9 @@ class FakeD1Statement {
       const row = db.passkeys.get(args[2]);
       if (row) db.passkeys.set(args[2], { ...row, counter: args[0], last_used_at: args[1] });
     } else if (sql.startsWith('DELETE FROM passkey_credentials')) {
-      db.passkeys.delete(args[0]);
+      const hasOther = [...db.identities.values()].some((identity) => identity.user_id === args[1]
+        && !(identity.provider === 'passkey' && identity.id === args[0]));
+      if (!sql.includes('EXISTS') || hasOther) db.passkeys.delete(args[0]);
     } else if (sql === 'DELETE FROM sessions WHERE token = ?') {
       db.sessions.delete(args[0]);
     } else if (sql === 'DELETE FROM oauth_states WHERE state = ?') {

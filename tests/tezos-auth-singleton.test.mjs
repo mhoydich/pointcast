@@ -123,7 +123,7 @@ test('PointCast issues bounded one-use Tezos project tickets', async () => {
   assert.match(authMenu, /data-auth-auto-open/);
   assert.match(authMenu, /then choose Use Browser/);
   assert.match(authMenu, /root\.dataset\.authAutoOpen === 'true'/);
-  assert.match(authMenu, /if \(!user[\s\S]*openMenu\(root\)/);
+  assert.match(authMenu, /if \(!signal\.aborted && root\.isConnected && !user && root\.dataset\.authAutoOpen === 'true'\) openMenu\(root\)/);
   assert.match(popupFallback, /target !== '_blank'/);
   assert.match(popupFallback, /window\.location\.assign\(next\)/);
   assert.match(popupFallback, /Object\.defineProperty\(fallbackLocation, 'href'/);

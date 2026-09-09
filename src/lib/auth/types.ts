@@ -1,6 +1,7 @@
 export type AuthProvider =
   | 'kukai'
   | 'google'
+  | 'x'
   | 'passkey'
   | 'email'
   | 'apple'
@@ -16,6 +17,7 @@ export interface AuthIdentity {
   id: string;
   name: string;
   avatar?: string;
+  username?: string;
   verifiedAt: string;
 }
 

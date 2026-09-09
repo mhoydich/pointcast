@@ -5,7 +5,7 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('agent kit gives ChatGPT, Codex, Claude, and Firecrawl truthful setup paths', async () => {
+test('agent kit keeps subscription setup, public fallback, and profile visit boundaries consistent', async () => {
   const [kit, page, connectorPage, connectors, agents, sitemap, forAgents, llms] = await Promise.all([
     read('src/lib/pointcast-agent-kit.ts'),
     read('src/pages/agent-kit.md.ts'),
@@ -20,7 +20,14 @@ test('agent kit gives ChatGPT, Codex, Claude, and Firecrawl truthful setup paths
   assert.match(kit, /ChatGPT web does not read local Codex MCP settings/);
   assert.match(kit, /codex mcp add pointcast-v2 --url/);
   assert.match(kit, /claude mcp add --transport http pointcast-v2/);
-  assert.match(kit, /Remote connectors are added in Settings, not in claude_desktop_config\.json/);
+  assert.match(kit, /Remote connectors are configured in Claude’s Connectors menu, not in claude_desktop_config\.json/);
+  assert.ok(kit.indexOf("    slug: 'claude'") < kit.indexOf("    slug: 'chatgpt'"));
+  assert.ok(kit.indexOf("    slug: 'chatgpt'") < kit.indexOf("    slug: 'codex'"));
+  assert.match(kit, /one-time-visit-confirmation/);
+  assert.match(kit, /does not grant ongoing authorization or access to private profile data/);
+  assert.doesNotMatch(kit, /Codex \+ ChatGPT desktop|share MCP configuration/);
+  assert.match(connectorPage, /href="\/me#ai-companion"/);
+  assert.match(connectors, /authentication: 'none'/);
   assert.match(kit, /npx -y firecrawl-cli@latest init --all --browser/);
   assert.match(kit, /firecrawl scrape https:\/\/pointcast\.xyz\/llms\.txt/);
   assert.match(kit, /prefer \/agent-kit\.md, \/agents\.json/);

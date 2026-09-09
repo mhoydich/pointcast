@@ -5,6 +5,7 @@ import {
 } from '../session.ts';
 import {
   deleteOwnedPasskey,
+  PasskeyLastSignInError,
   listPasskeyRows,
   passkeySummary,
   requirePasskeyDb,
@@ -37,7 +38,14 @@ export const onRequestDelete: PagesFunction<PasskeyEnv> = async ({ request, env 
   }
   const credentialId = typeof body.credentialId === 'string' ? body.credentialId : '';
   if (!credentialId) return authJson({ ok: false, reason: 'missing-credential-id' }, { status: 400 });
-  const removed = await deleteOwnedPasskey(db, current.user, credentialId);
-  if (!removed) return authJson({ ok: false, reason: 'passkey-not-found' }, { status: 404 });
-  return authJson({ ok: true, removed: credentialId });
+  try {
+    const removed = await deleteOwnedPasskey(db, current.user, credentialId);
+    if (!removed) return authJson({ ok: false, reason: 'passkey-not-found' }, { status: 404 });
+    return authJson({ ok: true, removed: credentialId });
+  } catch (error) {
+    if (error instanceof PasskeyLastSignInError) {
+      return authJson({ ok: false, reason: 'passkey-last-sign-in-method' }, { status: 409 });
+    }
+    throw error;
+  }
 };

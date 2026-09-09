@@ -2,6 +2,8 @@
 import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
   import {
     getSession,
+    getXAuthAvailability,
+    loginWithX,
     loginWithApple,
     loginWithGoogle,
     loginWithKukai,
@@ -11,6 +13,24 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
     logout,
     requestEmailMagicLink,
   } from '../../lib/auth/client';
+
+  import { buildXConnectionView, xCallbackMessage, xConnectionMessage } from '../../lib/auth/x-connection.mjs';
+
+  const menuStates = new WeakMap();
+
+  function renderX(root) {
+    const state = menuStates.get(root);
+    if (!state) return;
+    const view = buildXConnectionView(state.user, state.available);
+    const button = root.querySelector('[data-provider="x"]');
+    if (button) button.disabled = view.disabled || state.xPending;
+    const name = root.querySelector('[data-auth-x-name]');
+    const detail = root.querySelector('[data-auth-x-detail]');
+    const badge = root.querySelector('[data-auth-x-badge]');
+    if (name) name.textContent = view.connected ? 'X linked' : state.user ? 'Link X' : 'X';
+    if (detail) detail.textContent = `${view.status} No posts or DMs.`;
+    if (badge) badge.textContent = view.badge.toLowerCase();
+  }
 
   const actions: Partial<Record<AuthProvider, () => Promise<PointCastUser | null>>> = {
     passkey: loginWithPasskey,
@@ -32,6 +52,7 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
     email: 'Email',
     kukai: 'Kukai',
     google: 'Google',
+    x: 'X',
     apple: 'Apple',
     metamask: 'MetaMask',
     phantom: 'Phantom',
@@ -63,6 +84,13 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
     user: PointCastUser | null,
     announce = true,
   ): void {
+    const state = menuStates.get(root);
+    if (state) {
+      state.user = user;
+      state.revision += 1;
+      state.xPending = false;
+      renderX(root);
+    }
     const triggerLabel = root.querySelector('[data-auth-trigger-label]');
     const account = root.querySelector('[data-auth-account]') as HTMLElement | null;
     const userName = root.querySelector('[data-auth-user-name]');
@@ -93,18 +121,36 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
   }
 
   async function refreshSession(root: HTMLElement): Promise<PointCastUser | null> {
+    const state = menuStates.get(root);
+    const revision = state?.revision;
+    const live = () => state && !state.signal.aborted && root.isConnected && state.revision === revision;
     try {
       const user = await getSession();
+      if (!live()) return state?.user ?? null;
       renderSession(root, user);
       return user;
     } catch {
-      renderSession(root, null);
+      if (!live()) return state?.user ?? null;
+      // Leave X disabled when the session is unknown; never guess login vs linking.
       setStatus(root, 'Sign-in requires the live session service.');
       return null;
     }
   }
 
   function initAuthMenu(root: HTMLElement, signal: AbortSignal): void {
+    const state = { user: undefined, available: null, revision: 0, xPending: false, signal };
+    menuStates.set(root, state);
+    renderX(root);
+    setStatus(root, xCallbackMessage(window.location.search));
+    void getXAuthAvailability().then((available) => {
+      if (signal.aborted || !root.isConnected) return;
+      state.available = available;
+      renderX(root);
+    }).catch(() => {
+      if (signal.aborted || !root.isConnected) return;
+      state.available = false;
+      renderX(root);
+    });
     root.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target : null;
       if (!target) return;
@@ -134,7 +180,13 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
       if (!button || button.disabled) return;
       event.preventDefault();
       const provider = button.dataset.provider as AuthProvider;
-      const action = actions[provider];
+      const action = provider === 'x'
+        ? () => loginWithX({ intent: state.user ? 'link' : 'login', returnTo: '/me' })
+        : actions[provider];
+      if (provider === 'x') {
+        state.xPending = true;
+        renderX(root);
+      }
       if (!action) return;
       setStatus(
         root,
@@ -145,6 +197,7 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
 
       void action()
         .then((user) => {
+          if (signal.aborted || !root.isConnected) return;
           if (user) {
             renderSession(root, user);
             setStatus(root, `${providerLabels[provider]} ready`);
@@ -154,7 +207,10 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
           setStatus(root, `${providerLabels[provider]} redirecting…`);
         })
         .catch((error) => {
-          setStatus(root, error instanceof Error ? error.message : `${providerLabels[provider]} failed`);
+          if (signal.aborted || !root.isConnected) return;
+          state.xPending = false;
+          renderX(root);
+          setStatus(root, provider === 'x' ? xConnectionMessage(error instanceof Error ? error.message : '') : error instanceof Error ? error.message : `${providerLabels[provider]} failed`);
         });
     }, { signal });
 
@@ -193,7 +249,7 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
     }, { signal });
 
     void refreshSession(root).then((user) => {
-      if (!user && root.dataset.authAutoOpen === 'true') openMenu(root);
+      if (!signal.aborted && root.isConnected && !user && root.dataset.authAutoOpen === 'true') openMenu(root);
     });
   }
 

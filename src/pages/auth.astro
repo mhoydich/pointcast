@@ -19,8 +19,8 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
         <p class="account-desk__kicker">POINTCAST ACCOUNT</p>
         <h1>Sign in to <em>PointCast.</em></h1>
         <p>
-          Use Google or a wallet. You can look around without an account and choose
-          exactly what to link.
+          Use a passkey, email, Google, X, or a wallet. You can look around without an account and choose
+          exactly what to link. X sign-in becomes available when this site is configured.
         </p>
         <div class="account-desk__actions">
           <button type="button" data-account-action="google">Sign in with Google</button>
@@ -52,7 +52,7 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
       <header>
         <p class="account-desk__kicker">YOUR CHOICES</p>
         <h2>Sign in or link a wallet.</h2>
-        <p>Each choice is separate. PointCast shows only the provider names on this page.</p>
+        <p>Each choice is separate. X sign-in does not authorize posts or direct messages. Manage your linked X handle on your private profile.</p>
       </header>
 
       <div class="account-desk__provider-grid">
@@ -60,16 +60,17 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
           <article data-account-provider={provider.id} data-state={provider.availability}>
             <div class="account-desk__provider-top">
               <span>{String(index + 1).padStart(2, '0')}</span>
-              <span data-account-provider-badge>{provider.availability === 'available' ? 'AVAILABLE' : 'PREVIEW'}</span>
+              <span data-account-provider-badge>{provider.availability === 'available' ? 'AVAILABLE' : provider.id === 'x' ? 'CHECKING' : 'PREVIEW'}</span>
             </div>
             <p>{provider.provider} / {provider.kind}</p>
             <h3>{provider.provider}</h3>
             <small data-account-provider-state>
-              {provider.availability === 'available' ? 'Ready when you choose it.' : 'Setup is still in progress.'}
+              {provider.availability === 'available' ? 'Ready when you choose it.' : provider.id === 'x' ? 'Checking X sign-in availability…' : 'Setup is still in progress.'}
             </small>
-            <button type="button" data-account-action={provider.id} data-account-provider-action>
-              {provider.availability === 'available' ? `Continue with ${provider.provider} →` : `Try ${provider.provider} →`}
+            <button type="button" data-account-action={provider.id} data-account-provider-action disabled={provider.id === 'x'}>
+              {provider.id === 'x' ? 'Checking X…' : provider.availability === 'available' ? `Continue with ${provider.provider} →` : `Try ${provider.provider} →`}
             </button>
+            {provider.id === 'x' && <a class="account-desk__profile-link" href="/me">Manage on your profile →</a>}
           </article>
         ))}
       </div>
@@ -92,6 +93,8 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
     import type { PointCastUser } from '../lib/auth/types';
     import {
       getSession,
+      getXAuthAvailability,
+      loginWithX,
       loginWithApple,
       loginWithKukai,
       loginWithMetaMask,
@@ -99,6 +102,7 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
       logout,
     } from '../lib/auth/client';
     import { buildAccountDeskView } from '../lib/auth/account-desk.mjs';
+    import { xCallbackMessage, xConnectionMessage } from '../lib/auth/x-connection.mjs';
 
     type AccountDeskWindow = Window & {
       __pointCastAccountDeskCleanup?: () => void;
@@ -110,8 +114,8 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
       if (element) element.textContent = value;
     }
 
-    function renderAccountDesk(root: HTMLElement, user: PointCastUser | null): void {
-      const view = buildAccountDeskView(user);
+    function renderAccountDesk(root: HTMLElement, user: PointCastUser | null | undefined, xAvailable: boolean | null): void {
+      const view = buildAccountDeskView(user, { xAvailable });
       const hero = root.querySelector<HTMLElement>('.account-desk__hero');
       const signedOut = root.querySelector<HTMLElement>('[data-account-signed-out]');
       const signedIn = root.querySelector<HTMLElement>('[data-account-signed-in]');
@@ -141,35 +145,22 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
         const action = card.querySelector<HTMLButtonElement>('[data-account-provider-action]');
         if (action) {
           action.textContent = state.action;
-          action.disabled = state.connected && provider !== 'kukai';
+          action.disabled = provider === 'x' ? ('disabled' in state && state.disabled) : state.connected && provider !== 'kukai';
         }
       });
-    }
-
-    function renderAllAccountDesks(user: PointCastUser | null): void {
-      document.querySelectorAll<HTMLElement>('[data-account-desk]').forEach((root) => {
-        renderAccountDesk(root, user);
-      });
-    }
-
-    async function refreshAccountDesk(): Promise<void> {
-      try {
-        renderAllAccountDesks(await getSession());
-      } catch {
-        renderAllAccountDesks(null);
-        document.querySelectorAll<HTMLElement>('[data-account-result]').forEach((result) => {
-          result.textContent = 'The account service is unavailable. You can still look around.';
-        });
-      }
     }
 
     function showActionStatus(root: HTMLElement, message: string): void {
       setText(root, '[data-account-result]', message);
     }
 
-    async function performAccountAction(root: HTMLElement, action: string): Promise<void> {
+    async function performAccountAction(root: HTMLElement, action: string, current: PointCastUser | null | undefined): Promise<void> {
       let user: PointCastUser | null = null;
-      if (action === 'kukai') {
+      if (action === 'x') {
+        if (current === undefined) return;
+        showActionStatus(root, 'Opening X sign-in…');
+        await loginWithX({ intent: current ? 'link' : 'login', returnTo: '/me' });
+      } else if (action === 'kukai') {
         showActionStatus(root, 'Opening Kukai for one wallet-control signature…');
         user = await loginWithKukai({ force: true });
       } else if (action === 'metamask') {
@@ -186,8 +177,7 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
         await logout();
         return;
       }
-
-      if (user) {
+      if (user && root.isConnected) {
         window.dispatchEvent(new CustomEvent('pc:auth-change', {
           detail: { user, source: 'account-desk' },
         }));
@@ -197,41 +187,76 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
     function initializeAccountDesk(): void {
       const accountWindow = window as AccountDeskWindow;
       accountWindow.__pointCastAccountDeskCleanup?.();
-      const roots = document.querySelectorAll<HTMLElement>('[data-account-desk]');
+      const roots = [...document.querySelectorAll<HTMLElement>('[data-account-desk]')];
       if (!roots.length) return;
-
+      const controller = new AbortController();
+      const { signal } = controller;
+      let revision = 0;
+      let user: PointCastUser | null | undefined;
+      let xAvailable: boolean | null = null;
+      const pending = new Set<HTMLButtonElement>();
+      const render = () => {
+        if (signal.aborted) return;
+        roots.forEach((root) => {
+          if (!root.isConnected) return;
+          renderAccountDesk(root, user, xAvailable);
+          const callback = xCallbackMessage(window.location.search);
+          if (callback) showActionStatus(root, callback);
+        });
+        pending.forEach((button) => { button.disabled = true; });
+      };
+      const refresh = async () => {
+        const request = ++revision;
+        user = undefined;
+        render();
+        try {
+          const next = await getSession();
+          if (signal.aborted || request !== revision) return;
+          user = next;
+          render();
+        } catch {
+          if (signal.aborted || request !== revision) return;
+          roots.forEach((root) => showActionStatus(root, 'The account service is unavailable. You can still look around.'));
+        }
+      };
       const handleAccountClick = (event: MouseEvent): void => {
         const target = event.target instanceof Element ? event.target : null;
         const actionButton = target?.closest<HTMLButtonElement>('[data-account-action]');
         const root = actionButton?.closest<HTMLElement>('[data-account-desk]');
-        if (!actionButton || !root || actionButton.disabled) return;
-
+        if (!actionButton || !root || actionButton.disabled || pending.has(actionButton)) return;
         event.preventDefault();
-        // Preserve the account-desk interaction contract: these delegated
-        // buttons must not bubble into AuthMenu's outside-click closer.
         event.stopPropagation();
         const action = actionButton.dataset.accountAction || '';
         if (action === 'google') {
           window.location.assign('/api/auth/google?returnTo=/auth');
           return;
         }
-        void performAccountAction(root, action).catch((error) => {
-          showActionStatus(root, error instanceof Error ? error.message : 'Account action stopped.');
+        const request = revision;
+        pending.add(actionButton);
+        actionButton.disabled = true;
+        void performAccountAction(root, action, user).catch((error) => {
+          if (signal.aborted || request !== revision || !root.isConnected) return;
+          showActionStatus(root, action === 'x' ? xConnectionMessage(error instanceof Error ? error.message : '') : error instanceof Error ? error.message : 'Account action stopped.');
+        }).finally(() => {
+          pending.delete(actionButton);
+          if (signal.aborted || request !== revision || !root.isConnected) return;
+          if (action !== 'x') actionButton.disabled = false;
         });
       };
-
-      const handleAccountChange = (): void => {
-        void refreshAccountDesk();
-      };
-
-      document.addEventListener('click', handleAccountClick, { capture: true });
-      window.addEventListener('pc:auth-change', handleAccountChange);
-      accountWindow.__pointCastAccountDeskCleanup = () => {
-        document.removeEventListener('click', handleAccountClick, { capture: true });
-        window.removeEventListener('pc:auth-change', handleAccountChange);
-      };
-
-      void refreshAccountDesk();
+      document.addEventListener('click', handleAccountClick, { capture: true, signal });
+      window.addEventListener('pc:auth-change', () => void refresh(), { signal });
+      document.addEventListener('astro:before-swap', () => controller.abort(), { signal });
+      accountWindow.__pointCastAccountDeskCleanup = () => controller.abort();
+      void refresh();
+      void getXAuthAvailability().then((available) => {
+        if (signal.aborted) return;
+        xAvailable = available;
+        render();
+      }).catch(() => {
+        if (signal.aborted) return;
+        xAvailable = false;
+        render();
+      });
     }
 
     const accountWindow = window as AccountDeskWindow;
@@ -312,7 +337,7 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
   .account-desk__provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--account-ink); }
   .account-desk__provider-grid article { min-height: 300px; display: flex; flex-direction: column; padding: clamp(24px, 4vw, 48px); border-right: 1px solid var(--account-ink); border-bottom: 1px solid var(--account-ink); background: #fffdf4; }
   .account-desk__provider-grid article:nth-child(2n) { border-right: 0; }
-  .account-desk__provider-grid article:last-child { grid-column: 1 / -1; border-right: 0; border-bottom: 0; }
+  .account-desk__provider-grid article:last-child {  border-right: 0; border-bottom: 0; }
   .account-desk__provider-grid article[data-state='connected'] { background: linear-gradient(150deg, #fffdf4 62%, rgba(234,255,87,0.6)); }
   .account-desk__provider-top { display: flex; justify-content: space-between; font-size: 8px; }
   .account-desk__provider-top span:last-child { padding: 5px 7px; border: 1px solid var(--account-ink); background: #fff; }
@@ -320,6 +345,7 @@ import { ACCOUNT_PROVIDERS } from '../data/super-auth';
   .account-desk__provider-grid h3 { margin: 0; font-size: clamp(34px, 4vw, 56px); line-height: 0.9; letter-spacing: -0.045em; text-transform: uppercase; }
   .account-desk__provider-grid small { margin: 18px 0 24px; color: #676b63; font-size: 7px; line-height: 1.45; }
   .account-desk__provider-grid button { align-self: flex-start; margin-top: auto; }
+  .account-desk__profile-link { margin-top: 14px; color: var(--account-blue); font-size: 13px; }
   .account-desk__provider-grid button:disabled { background: #5e625a; cursor: default; opacity: 0.65; }
   .account-desk__footer { display: flex; justify-content: space-between; gap: 24px; padding: 24px 0; font-size: 8px; line-height: 1.5; }
   .account-desk__footer p { margin: 0; }

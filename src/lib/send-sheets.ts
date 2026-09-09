@@ -110,7 +110,7 @@ const MCP_SHEET: SendSheet = {
     },
     {
       heading: 'Pick your client',
-      lead: 'Four recipes as written on /connectors, plus the Cursor line from /connectors.json. The ChatGPT one needs no install: it is the starter prompt from /agent-kit.md.',
+      lead: 'Four recipes as written on /connectors, plus the Cursor line from /connectors.json. For a simple public-web start without adding a connector, copy the invitation from /agent-kit.md.',
       columns: 2,
       items: [
         ...POINTCAST_CLIENT_SETUPS.map((client) => ({
@@ -135,7 +135,7 @@ const MCP_SHEET: SendSheet = {
       lines: [
         POINTCAST_AGENT_KIT.safety[0],
         // source: src/pages/agent-kit.md.ts, "Citation and safety"
-        'Read tools are the default. PointCast MCP tools that tap, post, claim, or otherwise participate are visible public actions; get human approval first.',
+        'Read tools are the default. For tools that tap, post, claim, or create other public activity, get human approval first. A private visit code does not grant ongoing authorization.',
         POINTCAST_AGENT_KIT.safety[1],
       ],
     },
@@ -194,7 +194,7 @@ const DESK_SECTIONS: SendSection[] = [
     heading: 'Chat',
     columns: 3,
     items: [
-      tool('daily', 'Claude', "Mike's daily chat and content co-author. Claude Code carries most of the code and content work.", 'custom connectors on paid plans per /connectors', '/ai-stack'),
+      tool('daily', 'Claude', "Mike's daily chat and content co-author. Claude Code carries most of the code and content work.", 'free: one custom connector; Pro and Max also supported, per /connectors', '/ai-stack'),
       tool('weekly', 'ChatGPT', 'Cross-check, image-prompt refinement, occasional voice brainstorms.', NOT_STATED, '/ai-stack'),
       tool('occasional', 'Gemini', 'When a brief PDF or transcript is too large for Claude. Open resident slot at /residents.', NOT_STATED, '/ai-stack'),
       tool('occasional', 'DeepSeek', 'Second opinion on tricky code diffs.', NOT_STATED, '/ai-stack'),

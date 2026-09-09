@@ -3,6 +3,8 @@ declare namespace Cloudflare {
     VISITS?: KVNamespace;
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
+    X_CLIENT_ID?: string;
+    X_CLIENT_SECRET?: string;
     PASSKEY_ALLOWED_ORIGINS?: string;
     SEND_EMAIL?: SendEmail;
     KENNEL_DAILY?: Fetcher;

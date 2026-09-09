@@ -20,7 +20,8 @@ test('Account is a focused human and machine-readable PointCast surface', async 
   assert.match(page, /MetaMask/);
   assert.match(page, /Apple/);
   assert.match(page, /Phantom/);
-  assert.doesNotMatch(page, /signal|Spotify|Shopify|broadcaster/i);
+  assert.doesNotMatch(page.split('<script>')[0], /signal|Spotify|Shopify|broadcaster/i);
+  assert.match(registry, /provider: 'X'/);
   assert.match(endpoint, /Access-Control-Allow-Origin/);
   assert.match(endpoint, /Sign in, review linked identities, link a wallet, or sign out/);
   assert.match(registry, /provider: 'Google'/);

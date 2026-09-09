@@ -199,6 +199,10 @@ export async function updatePasskeyUse(
   `).bind(counter, new Date().toISOString(), credentialId).run();
 }
 
+export class PasskeyLastSignInError extends Error {
+  constructor() { super('passkey-last-sign-in-method'); }
+}
+
 export async function deleteOwnedPasskey(
   db: D1Database,
   user: PointCastUser,
@@ -207,18 +211,22 @@ export async function deleteOwnedPasskey(
   const row = await getPasskeyRow(db, credentialId);
   if (!row || row.user_id !== user.userId) return false;
 
-  const identities = user.identities.filter((identity) => !(
-    identity.provider === 'passkey' && identity.id === credentialId
-  ));
-  const nextUser: PointCastUser = { ...user, identities };
+  // Count authoritative identities inside the deletion transaction. A stale
+  // profile cannot bypass the last-method guard when X is disconnected at
+  // the same time, nor restore a detached X link through a whole-user write.
   await db.batch([
-    db.prepare('DELETE FROM passkey_credentials WHERE credential_id = ? AND user_id = ?')
-      .bind(credentialId, user.userId),
-    db.prepare('DELETE FROM identities WHERE provider = ? AND id = ? AND user_id = ?')
-      .bind('passkey', credentialId, user.userId),
-    db.prepare('UPDATE users SET payload = ? WHERE id = ?')
-      .bind(JSON.stringify(nextUser), user.userId),
+    db.prepare(`DELETE FROM passkey_credentials WHERE credential_id = ? AND user_id = ?
+      AND EXISTS (SELECT 1 FROM identities WHERE user_id = ?
+        AND NOT (provider = 'passkey' AND id = ?))`)
+      .bind(credentialId, user.userId, user.userId, credentialId),
+    db.prepare(`DELETE FROM identities WHERE provider = ? AND id = ? AND user_id = ?
+      AND NOT EXISTS (SELECT 1 FROM passkey_credentials WHERE credential_id = ? AND user_id = ?)`)
+      .bind('passkey', credentialId, user.userId, credentialId, user.userId),
+    db.prepare(`UPDATE users SET payload = json_set(payload, '$.identities',
+      json(COALESCE((SELECT json_group_array(json(payload)) FROM identities WHERE user_id = ?), '[]')))
+      WHERE id = ?`).bind(user.userId, user.userId),
   ]);
+  if (await getPasskeyRow(db, credentialId)) throw new PasskeyLastSignInError();
   return true;
 }
 
