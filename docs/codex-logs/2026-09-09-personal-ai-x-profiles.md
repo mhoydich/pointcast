@@ -15,7 +15,7 @@ The roadmap describes selected informational inputs, the first personal context 
 
 ## Validation
 
-- Initial `npm run build:bare`: passed; 2,155 pages built. A later build including the review fixes compiled both bundles, then the unchanged profile prerender lookup received an external TzKT 429. A final retry is recorded below.
+- Initial `npm run build:bare`: passed; 2,155 pages built. A later build including the review fixes compiled both bundles, then the unchanged profile prerender lookup received an external TzKT 429. The final retry passed: 2,155 pages built from the reviewed source.
 - `npm run audit:agents`: passed.
 - `npm run audit:publishing`: passed at the branch baseline.
 - Workers-only TypeScript check of new private AI routes, X routes, and shared session code: passed.
