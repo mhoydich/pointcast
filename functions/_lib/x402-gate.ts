@@ -43,12 +43,25 @@ export const X402_JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Payment-Signature, Content-Type',
-  'Access-Control-Expose-Headers': 'Payment-Required, X-Payment-Response, X-Facilitator-Url',
+  'Access-Control-Expose-Headers': 'Payment-Required, Payment-Response, X-Payment-Response, X-Facilitator-Url',
   'Cache-Control': 'no-store',
 };
 
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(body, null, 2), { status, headers: { ...X402_JSON_HEADERS, ...extra } });
+
+// Only responses created before the facilitator call may relax the default
+// unknown-outcome hold. Do not trust a remote response body or header claiming
+// no submission; the local Response identity carries this classification.
+const notSubmittedResponses = new WeakSet<Response>();
+function notSubmitted(body: Record<string, unknown>, status = 503): Response {
+  const response = json({ ...body, settlement: 'not-submitted' }, status);
+  notSubmittedResponses.add(response);
+  return response;
+}
+export function x402PaymentWasNotSubmitted(response: Response): boolean {
+  return notSubmittedResponses.has(response);
+}
 
 const sameAddr = (a: unknown, b: unknown) =>
   typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
@@ -353,45 +366,76 @@ export async function handleReceiptRequest(
   try {
     signingKey = await receiptSigningKey(env, expectedPublicKey);
   } catch {
-    return json({ error: 'Receipt signer unavailable; payment was not submitted for settlement' }, 503);
+    return notSubmitted({ error: 'Receipt signer unavailable; payment was not submitted for settlement' });
   }
 
   if (product.beforeSettlement) {
     try {
       await product.beforeSettlement();
     } catch (error) {
-      if (error instanceof X402PreSettlementError) return json(error.payload, error.status);
+      if (error instanceof X402PreSettlementError) return notSubmitted(error.payload, error.status);
       console.error('[x402] pre-settlement reservation failed', error);
-      return json({ error: 'Pre-settlement reservation failed; payment was not submitted.' }, 503);
+      return notSubmitted({ error: 'Pre-settlement reservation failed; payment was not submitted.' });
     }
   }
 
-  let settle: JsonRecord = {};
+  let transactionHash: string;
   try {
     const response = await fetch(`${facilitator}/settle`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ x402Version: X402_VERSION, paymentPayload: payload, paymentRequirements: required }),
     });
-    const text = await readBoundedText(response);
-    try {
-      const decoded = JSON.parse(text) as unknown;
-      settle = isJsonRecord(decoded) ? decoded : { response: decoded };
-    } catch {
-      settle = { raw: text.slice(0, 2000) };
-    }
-    if (!response.ok || settle.success === false) {
+    const decoded: unknown = JSON.parse(await readBoundedText(response));
+    if (!isJsonRecord(decoded)) throw new Error('facilitator settlement response is not an object');
+    const settle = decoded;
+    const transaction = isJsonRecord(settle.transaction) ? settle.transaction.hash : settle.transaction;
+    const transactionFields = [settle.txHash, transaction]
+      .filter((value) => value !== undefined && value !== null && value !== '');
+    const candidate = transactionFields[0];
+    const malformedTransaction = (settle.transaction !== undefined && typeof transaction !== 'string')
+      || (settle.txHash !== undefined && typeof settle.txHash !== 'string');
+    const conflictingEmptyTransaction = transactionFields.length > 0
+      && (settle.transaction === '' || settle.txHash === '');
+    const errorReason = settle.errorReason ?? settle.reason;
+    const reportedErrors = [settle.errorReason, settle.reason, settle.error]
+      .filter((value) => value !== undefined && value !== null && value !== '');
+    const pending = reportedErrors.includes('settlement_pending');
+    const matchingDetails = (settle.network === undefined || settle.network === required.network)
+      && (settle.payer === undefined || sameAddr(settle.payer, permit.from))
+      && (settle.amount === undefined || settle.amount === required.amount);
+
+    // A gateway failure or pending response can arrive after broadcast. Only an
+    // explicit no-broadcast rejection is safe to retry with a new authorization.
+    // x402 v2 represents that condition with transaction: ''. Missing is unknown.
+    const noBroadcast = settle.transaction === '' && settle.network === required.network;
+    if ((response.ok || (response.status >= 400 && response.status < 500))
+      && ![202, 408, 429].includes(response.status)
+      && settle.success === false && !pending && !malformedTransaction && matchingDetails
+      && typeof errorReason === 'string' && errorReason.length > 0
+      && noBroadcast && transactionFields.length === 0) {
       return json({ error: 'Facilitator refused settlement', facilitator_status: response.status, facilitator_response: settle }, 402);
     }
+
+    if (response.status !== 200 || settle.success !== true || !matchingDetails
+      || reportedErrors.length > 0 || malformedTransaction || conflictingEmptyTransaction
+      || typeof candidate !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(candidate)
+      || transactionFields.some((value) => typeof value !== 'string' || value.toLowerCase() !== candidate.toLowerCase())) {
+      return json({
+        error: 'Settlement outcome is unknown; reconcile this payment before retrying.',
+        settlement: 'ambiguous',
+        facilitator_status: response.status,
+        facilitator_response: settle,
+      }, 502);
+    }
+    transactionHash = candidate.toLowerCase();
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : String(error);
-    return json({ error: 'Facilitator unreachable or returned an invalid response', detail }, 502);
-  }
-  const transaction = isJsonRecord(settle.transaction) ? settle.transaction : {};
-  const transactionCandidate = settle.txHash ?? transaction.hash ?? settle.transaction;
-  const transactionHash = typeof transactionCandidate === 'string' ? transactionCandidate : null;
-  if (!transactionHash || !/^0x[0-9a-fA-F]{64}$/.test(transactionHash)) {
-    return json({ error: 'Settled but no valid tx hash returned', facilitator_response: settle }, 502);
+    return json({
+      error: 'Settlement outcome is unknown; reconcile this payment before retrying.',
+      settlement: 'ambiguous',
+      detail,
+    }, 502);
   }
 
   const timestamp = new Date().toISOString();
@@ -475,13 +519,19 @@ export async function handleReceiptRequest(
 
   const paymentResponse = encodeBase64Json({
     success: true,
+    transaction: transactionHash,
     txHash: transactionHash,
     network: X402_NETWORK,
+    payer: permit.from,
     gasPayer: 'facilitator',
     explorer: `${EXPLORER}${transactionHash}`,
     receipt_id: blockId,
   });
-  return json(receipt, 200, { 'X-Payment-Response': paymentResponse, 'X-Facilitator-Url': facilitator });
+  return json(receipt, 200, {
+    'Payment-Response': paymentResponse,
+    'X-Payment-Response': paymentResponse,
+    'X-Facilitator-Url': facilitator,
+  });
 }
 
 export interface PaidTotals {
@@ -595,18 +645,18 @@ export async function withX402(
   options: X402GateOptions,
 ): Promise<X402GateResult> {
   if (!env.AUTH_DB) {
-    return { settled: false, response: json({ error: 'Split ledger is not configured; no payment was submitted.' }, 503) };
+    return { settled: false, response: notSubmitted({ error: 'Split ledger is not configured; no payment was submitted.' }) };
   }
   if (!/^\d+$/.test(options.priceUnits)) {
-    return { settled: false, response: json({ error: 'Action price is not configured; no payment was submitted.' }, 503) };
+    return { settled: false, response: notSubmitted({ error: 'Action price is not configured; no payment was submitted.' }) };
   }
   const amount = Number(options.priceUnits);
   if (!Number.isSafeInteger(amount) || amount < 1) {
-    return { settled: false, response: json({ error: 'Action price is not configured; no payment was submitted.' }, 503) };
+    return { settled: false, response: notSubmitted({ error: 'Action price is not configured; no payment was submitted.' }) };
   }
   const maker = options.maker.trim().slice(0, 120);
   if (!maker) {
-    return { settled: false, response: json({ error: 'Action maker is not configured; no payment was submitted.' }, 503) };
+    return { settled: false, response: notSubmitted({ error: 'Action maker is not configured; no payment was submitted.' }) };
   }
 
   const response = await handleReceiptRequest(request, env, options.expectedPublicKey || X402_TREASURY_PUBLIC_KEY, {
