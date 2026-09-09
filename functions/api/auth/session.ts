@@ -39,7 +39,6 @@ interface AuthStateRow {
 }
 
 const SESSION_COOKIE_NAME = 'pc_session';
-const INTERNAL_AUTH_HEADER = 'x-pointcast-internal-auth';
 const USER_PREFIX = 'user:';
 const IDENTITY_PREFIX = 'identity:';
 const SESSION_PREFIX = 'session:';
@@ -590,45 +589,12 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
   );
 };
 
-export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) => {
-  if (!hasAuthStorage(env)) {
-    return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
-  }
-
-  if (request.headers.get(INTERNAL_AUTH_HEADER) !== '1') {
-    return authJson({ ok: false, reason: 'internal-only' }, { status: 403 });
-  }
-
-  let body: { userId?: unknown; ttlSeconds?: unknown };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return authJson({ ok: false, reason: 'bad-body' }, { status: 400 });
-  }
-
-  const userId = typeof body.userId === 'string' ? body.userId : '';
-  if (!userId) {
-    return authJson({ ok: false, reason: 'missing-user-id' }, { status: 400 });
-  }
-
-  const user = await loadUser(env, userId);
-  if (!user) {
-    return authJson({ ok: false, reason: 'user-not-found' }, { status: 404 });
-  }
-
-  const ttlSeconds = typeof body.ttlSeconds === 'number' && Number.isFinite(body.ttlSeconds)
-    ? Math.max(60, Math.floor(body.ttlSeconds))
-    : SESSION_TTL_SECONDS;
-  const session = await issueSession(env, userId, ttlSeconds);
-  return withSessionCookie(
-    authJson({
-      ok: true,
-      session,
-      user,
-    }),
-    session,
-  );
-};
+// A public request header is not authentication. Provider callbacks and
+// verified sign-in handlers call issueSession directly after verification.
+export const onRequestPost: PagesFunction<AuthEnv> = async () => authJson(
+  { ok: false, reason: 'method-not-allowed' },
+  { status: 405, headers: { Allow: 'GET, DELETE' } },
+);
 
 export const onRequestDelete: PagesFunction<AuthEnv> = async ({ request, env }) => {
   await destroySessionFromRequest(request, env);
