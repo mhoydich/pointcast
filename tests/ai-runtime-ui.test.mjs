@@ -483,3 +483,26 @@ for (const failure of ['read-401', 'mutate-401', 'initial-network']) {
     assert.equal(writes, failure === 'mutate-401' ? 1 : 0);
   });
 }
+
+
+test('an authoritative runtime 401 discards a late invite response from the invalidated session', async t => {
+  let finishInvite, failRead = false, submittedSignal;
+  const f = fixture(t, init => {
+    if (init.method === 'POST') { submittedSignal = init.signal; return new Promise(resolve => { finishInvite = resolve; }); }
+    return failRead ? Response.json({ ok: false, reason: 'unauthorized' }, { status: 401 })
+      : Response.json({ ok: true, runtimes: [], jobs: [] });
+  });
+  bridgeSession(f.dom, 'pcu_owner_a'); await tick(); await tick();
+  f.q('[data-runtime-invite]').click(); await tick();
+  failRead = true; f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange')); await tick(); await tick();
+  assert.equal(f.q('[data-runtime-badge]').textContent, 'Sign-in required');
+  assert.equal(submittedSignal.aborted, true);
+  const privateCode = 'S'.repeat(43);
+  finishInvite(Response.json({ ok: true, runtimeId: 'private-runtime', code: privateCode, expiresAt: future() }, { status: 201 }));
+  await tick(); await tick();
+  assert.equal(f.q('[data-runtime-badge]').textContent, 'Sign-in required');
+  assert.equal(f.q('[data-runtime-code]').value, '');
+  assert.equal(f.q('[data-runtime-pair-code]').hidden, true);
+  assert.equal(f.q('[data-runtime-invite]').disabled, true);
+  assert.doesNotMatch(f.q('[data-runtime-status]').textContent, /Pairing code created/);
+});

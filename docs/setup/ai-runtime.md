@@ -152,7 +152,7 @@ A token expires thirty days after pairing; it is not silently renewed. Disconnec
 
 Local owner-pilot validation on **2026-09-09** confirmed real subscription-backed text inference using Codex CLI **0.144.6** with actual model **`gpt-5.6-luna`**, and Claude Code **2.1.267** with explicit **`claude-fable-5-1`**. Claude's actual usage metadata included Fable and an auxiliary Haiku model. The full local browser profile → queued job → native result path completed for both providers, and the real Codex client passed the inherited-MCP-disabled checks.
 
-Those runs used existing signed-in native accounts. A fresh provider sign-in flow has **not** been completed locally for this pilot; its implementation and simulated tests are not proof of real new-account consent. This also does not establish public deployment, support for every subscription tier/client version, or execution while the computer sleeps.
+Those runs used existing signed-in native accounts. A fresh provider sign-in flow has **not** been completed locally for this pilot; its implementation and simulated tests are not proof of real new-account consent. The owner pilot is published on PointCast. Those local runs do not establish a production pairing and task, support for every subscription tier/client version, or execution while the computer sleeps.
 
 Separately billed API access remains an advanced manual route outside this pilot. There is no automatic fallback to it, and agent spending or wallet payments remain unavailable.
 
