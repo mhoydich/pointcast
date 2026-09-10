@@ -18,7 +18,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   memoContract: {
     fields: { lot: 'open lot id, currently 000', agent: '1-40 characters: letters, digits, dot, underscore, dash', apn: 'Los Angeles County assessor parcel number, 4-3-3 digits, dashes optional', address: `up to ${LIMITS.memoAddressChars} characters; give apn or address`, kind: MEMO_KINDS, source: `http(s) URL to a public record, up to ${LIMITS.sourceUrlChars} characters`, note: `up to ${LIMITS.memoNoteChars} characters` },
     canonical: 'The paid route hashes the normalized memo with sorted keys and nulls omitted: { agent, kind, lot, note, apn?, address?, source? }. Strings trimmed, whitespace collapsed, apn as 4-3-3 with dashes.',
-    freeLimit: `${LIMITS.memosPerIpPerDay} per client address per day and per handle, counted in the register; the KV rate limit in front is best effort`,
+    freeLimit: `${LIMITS.memosPerIpPerDay} per client address per day and per handle, counted in the register at filing time (a burst can slip a few past); the KV rate limit in front is best effort`,
+    registerCap: `${LIMITS.memosKept} memos, then the survey is full until a human prunes it`,
     verifiedAgents: 'Sign the request with PointCast agent identity headers (scope action:memo) over the canonical body and the memo is recorded under that agent id.',
     goalEligible: 'Only memos with an assessor parcel number and a public source count toward a lot goal.',
     kept: LIMITS.memosKept,

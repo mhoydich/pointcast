@@ -49,7 +49,8 @@ test('Pool Together wires the free memo desk, the paid memo action, and the pled
   assert.match(paid, /insertMemo\(env\.AUTH_DB, memo, null\)/);
   assert.match(pledge, /verifySignature\(michelineStringPayload\(message\), publicKey, signature\)/);
   assert.match(pledge, /verifyMessage\(\{ address/);
-  assert.match(pledge, /consumeNonce\(db, nonce\)/);
+  assert.match(pledge, /recordPledge\(db, nonce, pledge\)/);
+  assert.match(store, /db\.batch\(\[/);
   assert.match(pledge, /buildPledgeMessage\(\{ lot, wallet, amountUsd, via, issuedAt, nonce \}\) !== message/);
   assert.match(store, /ON CONFLICT\(lot, chain, address\) DO UPDATE/);
   assert.match(store, /INSERT OR IGNORE INTO pool_together_nonces/);

@@ -20,13 +20,14 @@ import { verifyMessage } from 'viem';
 import { rateLimit, rateLimitResponse } from '../../_rate-limit';
 import { buildPledgeMessage, LIMITS, LOTS, PLEDGE_MESSAGE_PREFIX } from '../../../src/lib/pool-together.ts';
 import {
-  consumeNonce,
+  countPledges,
   json,
+  nonceUsed,
   OPEN_LOT_IDS,
   publicPledge,
   recentPledges,
+  recordPledge,
   summarizeLot,
-  upsertPledge,
   type Pledge,
   type PoolTogetherEnv,
 } from './_store';
@@ -138,9 +139,11 @@ export async function handlePledgePost(request: Request, env: PoolTogetherEnv): 
     if (!valid) return json({ ok: false, error: 'invalid signature' }, 401);
   }
 
-  if (!await consumeNonce(db, nonce)) return json({ ok: false, error: 'replayed message' }, 409);
+  if (await nonceUsed(db, nonce)) return json({ ok: false, error: 'replayed message' }, 409);
+  if (await countPledges(db, lot) >= LIMITS.pledgesPerLot) return json({ ok: false, error: `Lot ${lot} already holds ${LIMITS.pledgesPerLot} pledges.` }, 409);
   const pledge: Pledge = { lot, chain, address, amountUsd, via, issuedAt, t: Date.now() };
-  const stored = await upsertPledge(db, pledge);
+  const stored = await recordPledge(db, nonce, pledge);
+  if (stored.replayed) return json({ ok: false, error: 'replayed message' }, 409);
   const summary = await summarizeLot(db, lot);
   return json({ ok: true, created: stored.created, applied: stored.applied, pledge: publicPledge(stored.pledge), summary, collects: false });
 }

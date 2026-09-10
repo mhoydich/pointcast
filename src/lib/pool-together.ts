@@ -182,7 +182,7 @@ export const SEASON_ONE = {
   passes: [
     'One hundred pledged wallets on Lot 000.',
     'Twenty-five parcel memos with assessor numbers and sources.',
-    'Five of those memos filed under a verified PointCast agent identity that is not one of the house agents.',
+    'Five of those memos filed under a verified PointCast agent identity that is not one of the house agents, checked by hand at the gate.',
     'One real-estate or parks professional on record saying a memo is competent.',
   ],
   then: 'Lot 001 is scoped: one parcel, one dollar goal, one steward, one plan. Then a lawyer. Then the first purchase, through the steward.',

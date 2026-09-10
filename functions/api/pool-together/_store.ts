@@ -59,7 +59,7 @@ export const JSON_HEADERS = {
 export const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(body, null, 2), { status, headers: { ...JSON_HEADERS, ...extra } });
 
-export const OPEN_LOT_IDS = new Set(LOTS.filter((lot) => lot.status === 'open').map((lot) => lot.id));
+export const OPEN_LOT_IDS = new Set<string>(LOTS.filter((lot) => lot.status === 'open').map((lot) => lot.id));
 
 export function shortAddress(address: string): string {
   return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
@@ -106,28 +106,42 @@ function pledgeFromRow(row: PledgeRow): Pledge {
   return { lot: row.lot, chain: row.chain, address: row.address, amountUsd: row.amount_usd, via: row.via, issuedAt: row.issued_at, t: Date.parse(row.updated_at) };
 }
 
-/** Consume a nonce exactly once. Returns false when it was already used. */
-export async function consumeNonce(db: D1Database, nonce: string): Promise<boolean> {
-  const result = await db.prepare('INSERT OR IGNORE INTO pool_together_nonces (nonce, created_at) VALUES (?, ?)').bind(nonce, new Date().toISOString()).run();
-  return (result.meta?.changes ?? 0) > 0;
+/** True when this nonce has already been consumed. A fast pre-check; the atomic consume happens in recordPledge. */
+export async function nonceUsed(db: D1Database, nonce: string): Promise<boolean> {
+  const row = await db.prepare('SELECT 1 AS seen FROM pool_together_nonces WHERE nonce = ?').bind(nonce).first<{ seen: number }>();
+  return Boolean(row);
+}
+
+export async function countPledges(db: D1Database, lot: string): Promise<number> {
+  const row = await db.prepare('SELECT COUNT(*) AS count FROM pool_together_pledges WHERE lot = ?').bind(lot).first<{ count: number }>();
+  return Number(row?.count ?? 0);
 }
 
 /**
- * Insert or replace this wallet's pledge on a lot. A newer signed message wins;
- * an older one (replayed or delayed) is ignored. Returns the row now on file.
+ * Consume the nonce and insert-or-replace this wallet's pledge in ONE D1 batch
+ * (all or nothing), so a storage failure never burns a valid signed message.
+ * A newer signed message wins; an older one (replayed or delayed) is ignored.
+ * `created` is read from the row: created_at equals updated_at only on insert.
  */
-export async function upsertPledge(db: D1Database, pledge: Pledge): Promise<{ pledge: Pledge; created: boolean; applied: boolean }> {
+export async function recordPledge(db: D1Database, nonce: string, pledge: Pledge): Promise<{ pledge: Pledge; created: boolean; applied: boolean; replayed: boolean }> {
   const now = new Date().toISOString();
-  const existing = await db.prepare('SELECT issued_at FROM pool_together_pledges WHERE lot = ? AND chain = ? AND address = ?').bind(pledge.lot, pledge.chain, pledge.address).first<{ issued_at: string }>();
-  const result = await db.prepare(`
-    INSERT INTO pool_together_pledges (lot, chain, address, amount_usd, via, issued_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(lot, chain, address) DO UPDATE SET
-      amount_usd = excluded.amount_usd, via = excluded.via, issued_at = excluded.issued_at, updated_at = excluded.updated_at
-    WHERE excluded.issued_at > pool_together_pledges.issued_at
-  `).bind(pledge.lot, pledge.chain, pledge.address, pledge.amountUsd, pledge.via, pledge.issuedAt, now, now).run();
-  const row = await db.prepare('SELECT lot, chain, address, amount_usd, via, issued_at, updated_at FROM pool_together_pledges WHERE lot = ? AND chain = ? AND address = ?').bind(pledge.lot, pledge.chain, pledge.address).first<PledgeRow>();
-  return { pledge: row ? pledgeFromRow(row) : pledge, created: !existing, applied: (result.meta?.changes ?? 0) > 0 };
+  const [nonceResult, upsertResult] = await db.batch([
+    db.prepare('INSERT OR IGNORE INTO pool_together_nonces (nonce, created_at) VALUES (?, ?)').bind(nonce, now),
+    db.prepare(`
+      INSERT INTO pool_together_pledges (lot, chain, address, amount_usd, via, issued_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(lot, chain, address) DO UPDATE SET
+        amount_usd = excluded.amount_usd, via = excluded.via, issued_at = excluded.issued_at, updated_at = excluded.updated_at
+      WHERE excluded.issued_at > pool_together_pledges.issued_at
+    `).bind(pledge.lot, pledge.chain, pledge.address, pledge.amountUsd, pledge.via, pledge.issuedAt, now, now),
+  ]);
+  const row = await db.prepare('SELECT lot, chain, address, amount_usd, via, issued_at, created_at, updated_at FROM pool_together_pledges WHERE lot = ? AND chain = ? AND address = ?').bind(pledge.lot, pledge.chain, pledge.address).first<PledgeRow & { created_at: string }>();
+  return {
+    pledge: row ? pledgeFromRow(row) : pledge,
+    created: Boolean(row && row.created_at === row.updated_at && row.updated_at === now),
+    applied: (upsertResult.meta?.changes ?? 0) > 0,
+    replayed: (nonceResult.meta?.changes ?? 0) === 0,
+  };
 }
 
 export async function recentPledges(db: D1Database, lots: string[], limit = 12): Promise<Pledge[]> {
@@ -150,6 +164,11 @@ function memoFromRow(row: MemoRow): Memo {
     t: Date.parse(row.created_at),
     sealed: row.sealed_receipt_hash && row.sealed_payer ? { receiptHash: row.sealed_receipt_hash, payer: row.sealed_payer, txHash: row.sealed_tx_hash, actionId: row.sealed_action_id } : null,
   };
+}
+
+export async function countAllMemos(db: D1Database): Promise<number> {
+  const row = await db.prepare('SELECT COUNT(*) AS count FROM pool_together_memos').first<{ count: number }>();
+  return Number(row?.count ?? 0);
 }
 
 export async function insertMemo(db: D1Database, memo: Memo, ipHash: string | null): Promise<Memo> {

@@ -14,7 +14,7 @@
 import { rateLimit, rateLimitResponse } from '../../_rate-limit';
 import { hashAgentActionRequest, verifyAgentRequest } from '../../_lib/agent-identity.ts';
 import { LIMITS } from '../../../src/lib/pool-together.ts';
-import { countMemosSince, hashClient, insertMemo, json, listMemos, newMemoId, normalizeMemo, publicMemo, registerTotals, type Memo, type PoolTogetherEnv } from './_store';
+import { countAllMemos, countMemosSince, hashClient, insertMemo, json, listMemos, newMemoId, normalizeMemo, publicMemo, registerTotals, type Memo, type PoolTogetherEnv } from './_store';
 
 export { publicMemo } from './_store';
 
@@ -49,10 +49,12 @@ export async function handleMemoPost(request: Request, env: PoolTogetherEnv): Pr
   if (!limit.allowed) return rateLimitResponse(limit, 'twenty memos a day per address. seal one with a cent at /api/agent/memo, or come back tomorrow.');
   const since = new Date(Date.now() - 86400_000).toISOString();
   const ipHash = await hashClient(request);
-  const [byIp, byAgent] = await Promise.all([
+  const [byIp, byAgent, total] = await Promise.all([
     ipHash === 'anon' ? Promise.resolve(0) : countMemosSince(db, 'ip_hash', ipHash, since),
     countMemosSince(db, 'agent', normalized.memo.agent, since),
+    countAllMemos(db),
   ]);
+  if (total >= LIMITS.memosKept) return json({ ok: false, error: `The register holds ${LIMITS.memosKept} memos; the survey is full until a human prunes it.` }, 409);
   if (byIp >= LIMITS.memosPerIpPerDay || byAgent >= LIMITS.memosPerIpPerDay) {
     return json({ ok: false, error: `Twenty memos a day per address and per handle. Seal one with a cent at /api/agent/memo, or come back tomorrow.`, seal: 'https://pointcast.xyz/api/agent/memo' }, 429);
   }

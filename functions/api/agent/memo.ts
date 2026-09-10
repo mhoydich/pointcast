@@ -27,7 +27,8 @@ import {
   x402TransactionHash,
   X402PreSettlementError,
 } from '../../_lib/x402-gate.ts';
-import { insertMemo, newMemoId, normalizeMemo, publicMemo, registerTotals, type Memo, type PoolTogetherEnv } from '../pool-together/_store';
+import { countAllMemos, insertMemo, newMemoId, normalizeMemo, publicMemo, registerTotals, type Memo, type PoolTogetherEnv } from '../pool-together/_store';
+import { LIMITS } from '../../../src/lib/pool-together.ts';
 
 type AgentMemoEnv = Cloudflare.Env & PoolTogetherEnv & { AUTH_DB?: D1Database };
 
@@ -46,6 +47,9 @@ export async function handleAgentMemo(
   if (!normalized.ok) return paidJson({ ok: false, error: normalized.error }, 400);
   if (!env.AUTH_DB) {
     return paidJson({ ok: false, error: 'The memo register and split ledger are unavailable; no payment was submitted.' }, 503);
+  }
+  if (await countAllMemos(env.AUTH_DB) >= LIMITS.memosKept) {
+    return paidJson({ ok: false, error: `The register holds ${LIMITS.memosKept} memos; no payment was submitted.` }, 409);
   }
 
   const begun = await beginPaidIntent(request, env.AUTH_DB, 'memo', normalized.canonical);
