@@ -193,3 +193,123 @@ test('all X launch and callback failures provide a specific recovery message', (
   };
   for (const [reason, expected] of Object.entries(reasons)) assert.match(xCallbackMessage(`?auth_error=${reason}`), expected);
 });
+
+
+test('identical real-shaped bridge reports do not starve a pending X session read', async (t) => {
+  const initial = deferred(), refreshed = deferred();
+  let reads = 0;
+  const f = fixture({ getSession: () => ++reads === 1 ? initial.promise : refreshed.promise, getXAuthAvailability: async () => false });
+  t.after(f.cleanup);
+  const report = () => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: linked, source: 'tezos-session-bridge' },
+  }));
+  for (let count = 0; count < 10; count++) report();
+  assert.equal(reads, 2);
+  refreshed.resolve(linked);
+  await tick();
+  assert.equal(f.root.dataset.state, 'connected');
+  report();
+  assert.equal(reads, 2);
+  initial.resolve({ userId: 'pcu_old', identities: [] });
+  await tick();
+  assert.equal(f.find('[data-x-handle]').getAttribute('href'), 'https://x.com/pointcast_test');
+});
+
+test('X bridge reports refresh changed owners and changed identities on the same owner', async (t) => {
+  const changed = [
+    { ...linked, identities: [{ ...xIdentity, username: 'updated_handle' }, alternate] },
+    { userId: 'pcu_another', identities: [alternate] },
+  ];
+  const pending = changed.map(() => deferred());
+  let reads = 0;
+  const f = fixture({ getSession: () => ++reads === 1 ? Promise.resolve(linked) : pending[reads - 2].promise });
+  t.after(f.cleanup);
+  await tick();
+  for (let index = 0; index < changed.length; index++) {
+    f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+      detail: { user: changed[index], source: 'tezos-session-bridge' },
+    }));
+    assert.equal(f.find('[data-x-handle]').hasAttribute('href'), false, 'old verified handle is scrubbed immediately');
+    assert.equal(reads, index + 2);
+    pending[index].resolve(changed[index]);
+    await tick();
+  }
+  assert.equal(f.root.dataset.state, 'available');
+  assert.equal(f.find('[data-x-handle]').hidden, true);
+});
+
+test('unchanged bridge reports preserve an active X disconnect', async (t) => {
+  const removed = deferred();
+  let reads = 0;
+  const f = fixture({
+    getSession: async () => ++reads === 1 ? linked : { ...linked, identities: [alternate] },
+    disconnectX: () => removed.promise,
+  });
+  t.after(f.cleanup);
+  await tick();
+  f.find('[data-x-action="disconnect"]').click();
+  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: linked, source: 'tezos-session-bridge' },
+  }));
+  assert.equal(reads, 1);
+  assert.equal(f.find('[data-x-action="disconnect"]').disabled, true);
+  removed.resolve();
+  await tick();
+  assert.equal(reads, 2);
+  assert.equal(f.root.dataset.state, 'available');
+  assert.equal(f.find('[data-x-notice]').textContent, 'X disconnected from PointCast.');
+});
+
+test('X session lookup recovers on the same bridge owner after failure and honors explicit refresh', async (t) => {
+  let reads = 0;
+  const f = fixture({ getSession: async () => {
+    reads++;
+    if (reads === 2) throw new Error('offline');
+    return linked;
+  } });
+  t.after(f.cleanup);
+  await tick();
+  f.dom.window.dispatchEvent(new f.dom.window.Event('pc:auth-refresh'));
+  await tick();
+  assert.equal(reads, 2);
+  assert.equal(f.find('[data-x-handle]').hasAttribute('href'), false);
+  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: linked, source: 'tezos-session-bridge' },
+  }));
+  await tick();
+  assert.equal(reads, 3);
+  assert.equal(f.root.dataset.state, 'connected');
+  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: linked, source: 'auth-client' },
+  }));
+  await tick();
+  assert.equal(reads, 4, 'explicit auth action is never deduplicated');
+});
+
+
+for (const outcome of ['anonymous', 'unavailable']) {
+  test(`X bridge retries a repeated owner after the session lookup becomes ${outcome}`, async (t) => {
+    const changed = { ...linked, identities: [{ ...xIdentity, username: 'updated_handle' }, alternate] };
+    let reads = 0;
+    const f = fixture({ getSession: async () => {
+      reads++;
+      if (reads === 1) return linked;
+      if (reads === 2) {
+        if (outcome === 'unavailable') throw new Error('offline');
+        return null;
+      }
+      return changed;
+    } });
+    t.after(f.cleanup);
+    await tick();
+    const report = () => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+      detail: { user: changed, source: 'tezos-session-bridge' },
+    }));
+    report(); await tick();
+    assert.equal(reads, 2);
+    assert.equal(f.find('[data-x-handle]').hasAttribute('href'), false);
+    report(); await tick();
+    assert.equal(reads, 3);
+    assert.equal(f.find('[data-x-handle]').getAttribute('href'), 'https://x.com/updated_handle');
+  });
+}

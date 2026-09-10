@@ -6,6 +6,8 @@ import { transform } from 'esbuild';
 import { buildRuntimePrompt, buildRuntimeView, mountAiRuntime, nativeLoginUrl, readRuntimeResponse } from '../src/lib/auth/ai-runtime-ui.ts';
 
 const component = readFileSync(new URL('../src/components/AiRuntime.astro', import.meta.url), 'utf8').split('<script>')[0].replace(/^---[\s\S]*?---/, '');
+const sessionUser = userId => ({ userId, createdAt: '2026-09-09T00:00:00.000Z', identities: [{ provider: 'kukai', id: 'tz1-verified-wallet', name: 'Wallet', verifiedAt: '2026-09-09T00:00:00.000Z' }], preferredName: 'PointCast member' });
+const bridgeSession = (dom, userId) => dom.window.dispatchEvent(new dom.window.CustomEvent('pc:auth-change', { detail: { user: userId ? sessionUser(userId) : null, source: 'tezos-session-bridge' } }));
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const now = () => new Date().toISOString();
 const future = () => new Date(Date.now() + 600000).toISOString();
@@ -300,7 +302,7 @@ test('native sign-in uses a stable retry identifier which is cleared on account 
   f.q('[data-runtime-login]').click(); await tick();
   assert.deepEqual(writes[1], writes[0]);
   assert.equal(writes[0].kind, 'login');
-  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: { id: 'different-profile' } } }));
+  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: sessionUser('different-profile') } }));
   await tick(); f.q('[data-runtime-login]').click(); await tick();
   assert.notEqual(writes[2].requestId, writes[0].requestId);
 });
@@ -412,7 +414,7 @@ test('repeated same-owner wallet bridge notifications do not starve the initial 
   const reads = [];
   const f = fixture(t, init => new Promise(resolve => reads.push({ resolve, signal: init.signal })));
   const notify = () => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
-    detail: { user: { id: 'owner-a' }, source: 'tezos-session-bridge' },
+    detail: { user: sessionUser('owner-a'), source: 'tezos-session-bridge' },
   }));
   notify();
   const currentRead = reads.at(-1);
@@ -433,7 +435,7 @@ test('runtime bridge dedup still resets changed owners, explicit refresh, and si
   const reads = [];
   const f = fixture(t, init => new Promise(resolve => reads.push({ resolve, signal: init.signal })));
   const notify = (id, source = 'tezos-session-bridge') => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
-    detail: { user: id ? { id } : null, source },
+    detail: { user: id ? sessionUser(id) : null, source },
   }));
   notify('owner-a');
   const previousOwner = reads.at(-1);
@@ -455,3 +457,29 @@ test('runtime bridge dedup still resets changed owners, explicit refresh, and si
   assert.equal(f.q('[data-runtime-badge]').textContent, 'Sign-in required');
   assert.equal(f.q('[data-runtime-invite]').disabled, true);
 });
+
+
+for (const failure of ['read-401', 'mutate-401', 'initial-network']) {
+  test(`same-owner runtime session recovers after ${failure}`, async t => {
+    let failRead = failure === 'initial-network', writes = 0, reads = 0;
+    const f = fixture(t, init => {
+      if (init.method === 'POST') { writes += 1; return Response.json({ ok: false, reason: 'unauthorized' }, { status: 401 }); }
+      reads += 1;
+      if (failRead && failure === 'initial-network') throw new TypeError('Offline');
+      if (failRead) return Response.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+      return Response.json({ ok: true, runtimes: [ready()], jobs: [] });
+    });
+    bridgeSession(f.dom, 'pcu_owner_a'); await tick(); await tick();
+    if (failure === 'read-401') { failRead = true; f.q('[data-runtime-refresh]').click(); }
+    if (failure === 'mutate-401') f.q('[data-runtime-invite]').click();
+    await tick(); await tick();
+    assert.equal(f.q('[data-runtime-badge]').textContent, failure === 'initial-network' ? 'Status unavailable' : 'Sign-in required');
+    assert.equal(f.q('[data-runtime-invite]').disabled, true);
+    const beforeRecovery = reads;
+    failRead = false; bridgeSession(f.dom, 'pcu_owner_a'); await tick(); await tick();
+    assert.equal(reads, beforeRecovery + 1);
+    assert.equal(f.q('[data-runtime-badge]').textContent, 'Ready to try');
+    assert.equal(f.q('[data-runtime-invite]').disabled, false);
+    assert.equal(writes, failure === 'mutate-401' ? 1 : 0);
+  });
+}

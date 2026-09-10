@@ -1,3 +1,4 @@
+import type { PointCastUser } from './types.ts';
 import type { NativeProvider, ProviderState } from '../../../functions/_lib/ai-runtimes.ts';
 
 const ENDPOINT = '/api/me/ai-runtimes';
@@ -95,6 +96,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   const win = doc.defaultView!;
   const lifetime = new win.AbortController();
   let requests = new win.AbortController();
+  let lastAuthOwner: string | null = null;
   let epoch = 0;
   let readVersion = 0;
   let busy = false;
@@ -270,7 +272,8 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     } catch (error) {
       if (!live(version) || read !== readVersion) return;
       available = false;
-      if (error instanceof AiRuntimeRequestError && error.status === 401) { acceptedSession = false; authMissing = true; clearSensitive(); }
+      if (error instanceof AiRuntimeRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; clearSensitive(); }
+      if (!acceptedSession) lastAuthOwner = null;
       notice = error instanceof AiRuntimeRequestError ? error.message : runtimeErrorMessage('');
     }
     if (!live(version) || read !== readVersion) return;
@@ -324,7 +327,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
         cancelled.delete(id);
         if (previous && !snapshot?.jobs.some((job) => job.id === id)) pending = { ...previous, status: 'queued' };
       }
-      if (error instanceof AiRuntimeRequestError && error.status === 401) { acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
+      if (error instanceof AiRuntimeRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
       notice = error instanceof AiRuntimeRequestError ? error.message : runtimeErrorMessage('');
     } finally {
       if (live(version)) { busy = false; render(); schedule(); }
@@ -362,10 +365,9 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   q('[data-runtime-copy-code]').addEventListener('click', () => void copyPairingValue('[data-runtime-code]', '[data-runtime-copy-code]', 'Select and copy private code'), { signal: lifetime.signal });
   // The wallet bridge also reports unchanged sessions during cross-tab storage sync.
   // Only duplicate bridge reports are inert; explicit auth actions always invalidate.
-  let lastAuthOwner: string | null = null;
   function authChanged(event: Event) {
-    const detail = (event as CustomEvent<{ user?: { id?: unknown } | null; source?: string }>).detail;
-    const owner = typeof detail?.user?.id === 'string' && detail.user.id ? detail.user.id : null;
+    const detail = (event as CustomEvent<{ user?: Partial<Pick<PointCastUser, 'userId'>> | null; source?: string }>).detail;
+    const owner = typeof detail?.user?.userId === 'string' && detail.user.userId ? detail.user.userId : null;
     if (event.type === 'pc:auth-change' && detail?.source === 'tezos-session-bridge' && owner && owner === lastAuthOwner) return;
     lastAuthOwner = owner;
     ++epoch; ++readVersion; requests.abort(); requests = new win.AbortController(); clearTimeout(timer);
