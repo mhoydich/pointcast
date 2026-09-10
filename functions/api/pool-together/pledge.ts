@@ -4,25 +4,27 @@
  * GET  → totals for every lot plus the twelve most recent pledges (short wallets).
  * POST → one wallet-signed pledge of intent. Body:
  *        { chain: 'tezos' | 'evm', address, message, signature, publicKey? }
- *        The message is the exact text produced by buildPledgeMessage() in
- *        src/lib/pool-together.ts; the server re-parses it, checks the lot is
- *        open, the wallet matches, the amount is within bounds, the timestamp
- *        is fresh, and the nonce is unused, then verifies the signature
- *        (Tezos: Beacon micheline string payload; EVM: EIP-191 personal_sign).
+ *        The message must be byte-for-byte what buildPledgeMessage() in
+ *        src/lib/pool-together.ts produces: the server parses the seven lines,
+ *        rebuilds the canonical message from them, and rejects anything else.
+ *        Then: the lot must be open, the wallet must match, the amount must be
+ *        a whole number within bounds, the timestamp fresh, the nonce unused
+ *        (consumed atomically in D1), and the signature valid (Tezos: Beacon
+ *        micheline string payload; EVM: EIP-191 personal_sign).
  *
- * A pledge is a statement of intent. Nothing is collected here.
+ * A pledge is a statement of intent. Nothing is collected here. One row per
+ * wallet per lot; a newer signed message replaces an older one.
  */
 import { getPkhfromPk, verifySignature } from '@taquito/utils';
 import { verifyMessage } from 'viem';
 import { rateLimit, rateLimitResponse } from '../../_rate-limit';
-import { LIMITS, LOTS, PLEDGE_MESSAGE_PREFIX } from '../../../src/lib/pool-together.ts';
+import { buildPledgeMessage, LIMITS, LOTS, PLEDGE_MESSAGE_PREFIX } from '../../../src/lib/pool-together.ts';
 import {
+  consumeNonce,
   json,
-  listPledges,
-  markNonce,
-  nonceSeen,
   OPEN_LOT_IDS,
   publicPledge,
+  recentPledges,
   summarizeLot,
   upsertPledge,
   type Pledge,
@@ -30,9 +32,10 @@ import {
 } from './_store';
 
 const TEZOS_ADDRESS = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
-const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const EVM_ADDRESS = /^0x[0-9a-f]{40}$/;
 const NONCE = /^[A-Za-z0-9-]{16,128}$/;
 const VIA = /^[a-z0-9][a-z0-9._-]{0,39}$/i;
+const AMOUNT = /^(0|[1-9]\d{0,3})$/;
 
 function michelineStringPayload(value: string): string {
   const bytes = Array.from(new TextEncoder().encode(value)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -40,16 +43,26 @@ function michelineStringPayload(value: string): string {
   return `0501${byteLength}${bytes}`;
 }
 
-function parseMessage(message: string): Record<string, string> | null {
+interface ParsedPledge { lot: string; wallet: string; amountUsd: number; via: string; issuedAt: string; nonce: string }
+
+/** Strict parse: exactly the seven lines buildPledgeMessage() writes, and the rebuilt message must equal the signed one. */
+function parseMessage(message: string): { ok: true; fields: ParsedPledge } | { ok: false; error: string } {
   const lines = message.split('\n');
-  if (lines[0]?.trim() !== PLEDGE_MESSAGE_PREFIX) return null;
-  const fields: Record<string, string> = {};
-  for (const line of lines.slice(1)) {
-    const index = line.indexOf(':');
-    if (index <= 0) continue;
-    fields[line.slice(0, index).trim()] = line.slice(index + 1).trim();
-  }
-  return fields;
+  if (lines.length !== 8 || lines[0] !== PLEDGE_MESSAGE_PREFIX) return { ok: false, error: 'unrecognized message' };
+  const take = (index: number, label: string) => (lines[index].startsWith(`${label}: `) ? lines[index].slice(label.length + 2) : null);
+  const lot = take(1, 'Lot'); const wallet = take(2, 'Wallet'); const amount = take(3, 'Amount'); const viaRaw = take(4, 'Via'); const issuedAt = take(5, 'Issued At'); const nonce = take(6, 'Nonce');
+  if (lot === null || wallet === null || amount === null || viaRaw === null || issuedAt === null || nonce === null) return { ok: false, error: 'unrecognized message' };
+  if (!AMOUNT.test(amount)) return { ok: false, error: `Amount must be a whole number of dollars from 0 to ${LIMITS.pledgeMaxUsd}.` };
+  const amountUsd = Number(amount);
+  if (amountUsd > LIMITS.pledgeMaxUsd) return { ok: false, error: `Amount must be a whole number of dollars from 0 to ${LIMITS.pledgeMaxUsd}.` };
+  const via = viaRaw === '-' ? '' : viaRaw;
+  if (via && !VIA.test(via)) return { ok: false, error: 'Via must be a handle of 40 characters or fewer.' };
+  const issued = Date.parse(issuedAt);
+  if (!Number.isFinite(issued) || new Date(issued).toISOString() !== issuedAt) return { ok: false, error: 'Issued At must be a canonical ISO timestamp.' };
+  if (!NONCE.test(nonce)) return { ok: false, error: 'bad nonce' };
+  const fields: ParsedPledge = { lot, wallet, amountUsd, via, issuedAt, nonce };
+  if (buildPledgeMessage({ lot, wallet, amountUsd, via, issuedAt, nonce }) !== message) return { ok: false, error: 'message is not canonical' };
+  return { ok: true, fields };
 }
 
 async function readBody(request: Request): Promise<Record<string, unknown>> {
@@ -62,14 +75,11 @@ async function readBody(request: Request): Promise<Record<string, unknown>> {
 }
 
 export async function handlePledgeGet(env: PoolTogetherEnv): Promise<Response> {
-  const lots = await Promise.all(LOTS.map((lot) => summarizeLot(env, lot.id)));
-  const openLots = LOTS.filter((lot) => lot.status === 'open');
-  const recent = (await Promise.all(openLots.map((lot) => listPledges(env, lot.id))))
-    .flat()
-    .sort((a, b) => b.t - a.t)
-    .slice(0, 12)
-    .map(publicPledge);
-  return json({ ok: true, kvBound: Boolean(env.VISITS), lots: lots.filter(Boolean), recent, collects: false, generatedAt: new Date().toISOString() });
+  if (!env.AUTH_DB) return json({ ok: true, dbBound: false, lots: [], recent: [], collects: false, generatedAt: new Date().toISOString() });
+  const db = env.AUTH_DB;
+  const lots = await Promise.all(LOTS.map((lot) => summarizeLot(db, lot.id)));
+  const recent = (await recentPledges(db, [...OPEN_LOT_IDS])).map(publicPledge);
+  return json({ ok: true, dbBound: true, lots: lots.filter(Boolean), recent, collects: false, generatedAt: new Date().toISOString() });
 }
 
 export async function handlePledgePost(request: Request, env: PoolTogetherEnv): Promise<Response> {
@@ -79,10 +89,12 @@ export async function handlePledgePost(request: Request, env: PoolTogetherEnv): 
   } catch (error) {
     return json({ ok: false, error: error instanceof Error ? error.message : 'invalid request body' }, 400);
   }
-  if (!env.VISITS) return json({ ok: false, error: 'The pledge register is unavailable; nothing was recorded.' }, 503);
+  if (!env.AUTH_DB) return json({ ok: false, error: 'The pledge register is unavailable; nothing was recorded.' }, 503);
+  const db = env.AUTH_DB;
 
   const chain = body.chain === 'evm' ? 'evm' : body.chain === 'tezos' ? 'tezos' : null;
-  const address = typeof body.address === 'string' ? body.address.trim() : '';
+  const rawAddress = typeof body.address === 'string' ? body.address.trim() : '';
+  const address = chain === 'evm' ? rawAddress.toLowerCase() : rawAddress;
   const message = typeof body.message === 'string' ? body.message : '';
   const signature = typeof body.signature === 'string' ? body.signature.trim() : '';
   const publicKey = typeof body.publicKey === 'string' ? body.publicKey.trim() : '';
@@ -90,26 +102,15 @@ export async function handlePledgePost(request: Request, env: PoolTogetherEnv): 
   if (chain === 'tezos' ? !TEZOS_ADDRESS.test(address) : !EVM_ADDRESS.test(address)) return json({ ok: false, error: 'bad address' }, 400);
   if (!message || message.length > 2000 || !signature) return json({ ok: false, error: 'message and signature are required' }, 400);
 
-  const fields = parseMessage(message);
-  if (!fields) return json({ ok: false, error: 'unrecognized message' }, 400);
-  const lot = fields.Lot ?? '';
-  if (!OPEN_LOT_IDS.has(lot)) return json({ ok: false, error: `Lot ${lot || '?'} is not open for pledges.` }, 400);
-  if ((fields.Wallet ?? '').toLowerCase() !== address.toLowerCase()) return json({ ok: false, error: 'wallet in message does not match address' }, 400);
-  const amountUsd = Number(fields.Amount ?? '');
-  if (!Number.isInteger(amountUsd) || amountUsd < 0 || amountUsd > LIMITS.pledgeMaxUsd) {
-    return json({ ok: false, error: `Amount must be a whole number of dollars from 0 to ${LIMITS.pledgeMaxUsd}.` }, 400);
-  }
-  const viaRaw = fields.Via ?? '';
-  const via = viaRaw === '-' || viaRaw === '' ? '' : viaRaw;
-  if (via && !VIA.test(via)) return json({ ok: false, error: 'Via must be a handle of 40 characters or fewer.' }, 400);
-  const issuedAt = Date.parse(fields['Issued At'] ?? '');
-  if (!Number.isFinite(issuedAt) || Math.abs(Date.now() - issuedAt) > LIMITS.messageTtlMs) return json({ ok: false, error: 'stale message' }, 400);
-  const nonce = fields.Nonce ?? '';
-  if (!NONCE.test(nonce)) return json({ ok: false, error: 'bad nonce' }, 400);
+  const parsed = parseMessage(message);
+  if (!parsed.ok) return json({ ok: false, error: parsed.error }, 400);
+  const { lot, wallet, amountUsd, via, issuedAt, nonce } = parsed.fields;
+  if (!OPEN_LOT_IDS.has(lot)) return json({ ok: false, error: `Lot ${lot} is not open for pledges.` }, 400);
+  if (wallet !== address) return json({ ok: false, error: 'wallet in message does not match address' }, 400);
+  if (Math.abs(Date.now() - Date.parse(issuedAt)) > LIMITS.messageTtlMs) return json({ ok: false, error: 'stale message' }, 400);
 
   const limit = await rateLimit(request, env, { bucket: 'pool-together-pledge', windowSec: 3600, maxRequests: LIMITS.pledgesPerIpPerHour });
   if (!limit.allowed) return rateLimitResponse(limit, 'the pledge desk is busy. try again in a few minutes.');
-  if (await nonceSeen(env, nonce)) return json({ ok: false, error: 'replayed message' }, 409);
 
   if (chain === 'tezos') {
     if (!publicKey) return json({ ok: false, error: 'publicKey is required for a Tezos pledge' }, 400);
@@ -137,15 +138,11 @@ export async function handlePledgePost(request: Request, env: PoolTogetherEnv): 
     if (!valid) return json({ ok: false, error: 'invalid signature' }, 401);
   }
 
-  await markNonce(env, nonce);
-  const pledge: Pledge = { lot, chain, address: chain === 'evm' ? address.toLowerCase() : address, amountUsd, via, t: Date.now() };
-  try {
-    const stored = await upsertPledge(env, pledge);
-    const summary = await summarizeLot(env, lot);
-    return json({ ok: true, created: stored.created, pledge: publicPledge(stored.pledge), summary, collects: false });
-  } catch (error) {
-    return json({ ok: false, error: error instanceof Error ? error.message : 'could not store pledge' }, 409);
-  }
+  if (!await consumeNonce(db, nonce)) return json({ ok: false, error: 'replayed message' }, 409);
+  const pledge: Pledge = { lot, chain, address, amountUsd, via, issuedAt, t: Date.now() };
+  const stored = await upsertPledge(db, pledge);
+  const summary = await summarizeLot(db, lot);
+  return json({ ok: true, created: stored.created, applied: stored.applied, pledge: publicPledge(stored.pledge), summary, collects: false });
 }
 
 export const onRequestOptions = async () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });

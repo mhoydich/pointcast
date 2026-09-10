@@ -27,8 +27,7 @@ import {
   x402TransactionHash,
   X402PreSettlementError,
 } from '../../_lib/x402-gate.ts';
-import { newMemoId, normalizeMemo, storeMemo, type Memo, type PoolTogetherEnv } from '../pool-together/_store';
-import { publicMemo } from '../pool-together/memo';
+import { insertMemo, newMemoId, normalizeMemo, publicMemo, registerTotals, type Memo, type PoolTogetherEnv } from '../pool-together/_store';
 
 type AgentMemoEnv = Cloudflare.Env & PoolTogetherEnv & { AUTH_DB?: D1Database };
 
@@ -45,11 +44,8 @@ export async function handleAgentMemo(
   }
   const normalized = normalizeMemo(input);
   if (!normalized.ok) return paidJson({ ok: false, error: normalized.error }, 400);
-  if (!env.VISITS) {
-    return paidJson({ ok: false, error: 'The memo register is unavailable; no payment was submitted.' }, 503);
-  }
   if (!env.AUTH_DB) {
-    return paidJson({ ok: false, error: 'The split ledger is unavailable; no payment was submitted.' }, 503);
+    return paidJson({ ok: false, error: 'The memo register and split ledger are unavailable; no payment was submitted.' }, 503);
   }
 
   const begun = await beginPaidIntent(request, env.AUTH_DB, 'memo', normalized.canonical);
@@ -113,12 +109,13 @@ export async function handleAgentMemo(
   const memo: Memo = {
     id: newMemoId(),
     ...normalized.memo,
+    agentId: begun.kind === 'quote' ? null : begun.intent.agent_id,
     t: Date.now(),
     sealed: { receiptHash: gate.receiptHash, payer: gate.payer, txHash: x402TransactionHash(gate.receipt) ?? null, actionId: intentId },
   };
-  let stored: { memo: Memo; count: number } | null = null;
+  let stored: Memo | null = null;
   try {
-    stored = await storeMemo(env, memo);
+    stored = await insertMemo(env.AUTH_DB, memo, null);
   } catch {
     stored = null;
   }
@@ -139,7 +136,8 @@ export async function handleAgentMemo(
     return paidIntentJson(intentId, result, 502, gate.response.headers);
   }
 
-  const actionResult = { ok: true, action: 'memo', actionId: intentId, memo: publicMemo(stored.memo), register: stored.count };
+  const totals = await registerTotals(env.AUTH_DB).catch(() => null);
+  const actionResult = { ok: true, action: 'memo', actionId: intentId, memo: publicMemo(stored), register: totals?.count ?? null, eligible: totals?.eligible ?? null };
   gate.receipt = await finalizeX402Receipt(env, gate.receipt, actionResult, intentId, options.expectedPublicKey);
   const result = { ...actionResult, receipt: gate.receipt, split: gate.split };
   await updatePaidIntent(env.AUTH_DB, intentId, 'succeeded', {

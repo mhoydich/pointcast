@@ -1,18 +1,19 @@
 /**
- * Pool Together storage — pledges and parcel memos in the VISITS KV namespace.
+ * Pool Together storage — pledges, nonces, and parcel memos in AUTH_DB (D1).
  *
- * Keys:
- *   pt:pledges:<lot>   JSON array of Pledge, newest first, one per wallet per lot
- *   pt:memos           JSON array of Memo, newest first, capped at LIMITS.memosKept
- *   pt:nonce:<nonce>   replay guard for signed pledge messages (TTL)
+ * Tables (migrations/auth/0019_pool_together.sql):
+ *   pool_together_pledges  one row per wallet per lot, atomic upsert, newest issued_at wins
+ *   pool_together_nonces   a signed pledge message is accepted once (primary-key insert)
+ *   pool_together_memos    one row per memo; a sealed (paid) memo can never be lost to a list rewrite
  *
  * Nothing here moves money. A pledge is a signed statement of intent; a memo
- * is a filed parcel. Both are public by design.
+ * is a filed parcel. Both are public by design. The client address hash on a
+ * memo is kept for the daily cap and never published.
  */
 import { LIMITS, LOTS, MEMO_KINDS, type MemoKind } from '../../../src/lib/pool-together.ts';
 
 export interface PoolTogetherEnv {
-  VISITS?: KVNamespace;
+  AUTH_DB?: D1Database;
   PC_RATES_KV?: KVNamespace;
 }
 
@@ -22,27 +23,36 @@ export interface Pledge {
   address: string;
   amountUsd: number;
   via: string;
+  issuedAt: string;
   t: number;
+}
+
+export interface MemoSeal {
+  receiptHash: string;
+  payer: string;
+  txHash: string | null;
+  actionId: string | null;
 }
 
 export interface Memo {
   id: string;
   lot: string;
   agent: string;
+  agentId: string | null;
   apn: string | null;
   address: string | null;
   kind: MemoKind;
   source: string | null;
   note: string;
   t: number;
-  sealed: null | { receiptHash: string; payer: string; txHash: string | null; actionId: string | null };
+  sealed: MemoSeal | null;
 }
 
 export const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, PointCast-Agent-Id, PointCast-Agent-Timestamp, PointCast-Agent-Signature',
   'Cache-Control': 'no-store',
 };
 
@@ -50,22 +60,6 @@ export const json = (body: unknown, status = 200, extra: Record<string, string> 
   new Response(JSON.stringify(body, null, 2), { status, headers: { ...JSON_HEADERS, ...extra } });
 
 export const OPEN_LOT_IDS = new Set(LOTS.filter((lot) => lot.status === 'open').map((lot) => lot.id));
-
-const pledgesKey = (lot: string) => `pt:pledges:${lot}`;
-const MEMOS_KEY = 'pt:memos';
-const nonceKey = (nonce: string) => `pt:nonce:${nonce}`;
-
-async function readList<T>(kv: KVNamespace | undefined, key: string): Promise<T[]> {
-  if (!kv) return [];
-  const raw = await kv.get(key);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed as T[] : [];
-  } catch {
-    return [];
-  }
-}
 
 export function shortAddress(address: string): string {
   return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
@@ -75,81 +69,162 @@ export function publicPledge(pledge: Pledge) {
   return { lot: pledge.lot, chain: pledge.chain, wallet: shortAddress(pledge.address), amountUsd: pledge.amountUsd, via: pledge.via || null, t: pledge.t };
 }
 
-export async function listPledges(env: PoolTogetherEnv, lot: string): Promise<Pledge[]> {
-  return readList<Pledge>(env.VISITS, pledgesKey(lot));
+/** Goal-eligible: a parcel number and a public source. Address-only memos are kept but do not count. */
+export function memoIsEligible(memo: Pick<Memo, 'apn' | 'source'>): boolean {
+  return Boolean(memo.apn && memo.source);
 }
 
-export async function listMemos(env: PoolTogetherEnv): Promise<Memo[]> {
-  return readList<Memo>(env.VISITS, MEMOS_KEY);
+export function publicMemo(memo: Memo) {
+  return {
+    id: memo.id,
+    lot: memo.lot,
+    agent: memo.agent,
+    verifiedAgent: Boolean(memo.agentId),
+    apn: memo.apn,
+    address: memo.address,
+    kind: memo.kind,
+    source: memo.source,
+    note: memo.note,
+    eligible: memoIsEligible(memo),
+    t: memo.t,
+    sealed: memo.sealed,
+  };
 }
 
-export async function nonceSeen(env: PoolTogetherEnv, nonce: string): Promise<boolean> {
-  if (!env.VISITS) return false;
-  return Boolean(await env.VISITS.get(nonceKey(nonce)));
+export async function hashClient(request: Request): Promise<string> {
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '';
+  if (!ip) return 'anon';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`pool-together:${ip}`));
+  return Array.from(new Uint8Array(digest)).slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export async function markNonce(env: PoolTogetherEnv, nonce: string): Promise<void> {
-  if (!env.VISITS) return;
-  await env.VISITS.put(nonceKey(nonce), '1', { expirationTtl: Math.ceil(LIMITS.messageTtlMs / 1000) * 2 });
+/* ---------- pledges ---------- */
+
+interface PledgeRow { lot: string; chain: 'tezos' | 'evm'; address: string; amount_usd: number; via: string; issued_at: string; updated_at: string }
+
+function pledgeFromRow(row: PledgeRow): Pledge {
+  return { lot: row.lot, chain: row.chain, address: row.address, amountUsd: row.amount_usd, via: row.via, issuedAt: row.issued_at, t: Date.parse(row.updated_at) };
 }
 
-/** Insert or replace this wallet's pledge on a lot. Returns the stored pledge and whether it was new. */
-export async function upsertPledge(env: PoolTogetherEnv, pledge: Pledge): Promise<{ pledge: Pledge; created: boolean; count: number }> {
-  const current = await listPledges(env, pledge.lot);
-  const key = `${pledge.chain}:${pledge.address.toLowerCase()}`;
-  const existingIndex = current.findIndex((row) => `${row.chain}:${row.address.toLowerCase()}` === key);
-  const created = existingIndex === -1;
-  const next = created ? current : current.filter((_, index) => index !== existingIndex);
-  if (created && next.length >= LIMITS.pledgesPerLot) {
-    throw new Error(`Lot ${pledge.lot} already holds ${LIMITS.pledgesPerLot} pledges.`);
-  }
-  next.unshift(pledge);
-  if (env.VISITS) await env.VISITS.put(pledgesKey(pledge.lot), JSON.stringify(next));
-  return { pledge, created, count: next.length };
+/** Consume a nonce exactly once. Returns false when it was already used. */
+export async function consumeNonce(db: D1Database, nonce: string): Promise<boolean> {
+  const result = await db.prepare('INSERT OR IGNORE INTO pool_together_nonces (nonce, created_at) VALUES (?, ?)').bind(nonce, new Date().toISOString()).run();
+  return (result.meta?.changes ?? 0) > 0;
 }
 
-export async function storeMemo(env: PoolTogetherEnv, memo: Memo): Promise<{ memo: Memo; count: number }> {
-  const current = await listMemos(env);
-  const next = [memo, ...current].slice(0, LIMITS.memosKept);
-  if (env.VISITS) await env.VISITS.put(MEMOS_KEY, JSON.stringify(next));
-  return { memo, count: next.length };
+/**
+ * Insert or replace this wallet's pledge on a lot. A newer signed message wins;
+ * an older one (replayed or delayed) is ignored. Returns the row now on file.
+ */
+export async function upsertPledge(db: D1Database, pledge: Pledge): Promise<{ pledge: Pledge; created: boolean; applied: boolean }> {
+  const now = new Date().toISOString();
+  const existing = await db.prepare('SELECT issued_at FROM pool_together_pledges WHERE lot = ? AND chain = ? AND address = ?').bind(pledge.lot, pledge.chain, pledge.address).first<{ issued_at: string }>();
+  const result = await db.prepare(`
+    INSERT INTO pool_together_pledges (lot, chain, address, amount_usd, via, issued_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(lot, chain, address) DO UPDATE SET
+      amount_usd = excluded.amount_usd, via = excluded.via, issued_at = excluded.issued_at, updated_at = excluded.updated_at
+    WHERE excluded.issued_at > pool_together_pledges.issued_at
+  `).bind(pledge.lot, pledge.chain, pledge.address, pledge.amountUsd, pledge.via, pledge.issuedAt, now, now).run();
+  const row = await db.prepare('SELECT lot, chain, address, amount_usd, via, issued_at, updated_at FROM pool_together_pledges WHERE lot = ? AND chain = ? AND address = ?').bind(pledge.lot, pledge.chain, pledge.address).first<PledgeRow>();
+  return { pledge: row ? pledgeFromRow(row) : pledge, created: !existing, applied: (result.meta?.changes ?? 0) > 0 };
 }
 
-export function sortMemos(memos: Memo[]): Memo[] {
-  return [...memos].sort((a, b) => (Number(Boolean(b.sealed)) - Number(Boolean(a.sealed))) || (b.t - a.t));
+export async function recentPledges(db: D1Database, lots: string[], limit = 12): Promise<Pledge[]> {
+  if (!lots.length) return [];
+  const placeholders = lots.map(() => '?').join(', ');
+  const result = await db.prepare(`SELECT lot, chain, address, amount_usd, via, issued_at, updated_at FROM pool_together_pledges WHERE lot IN (${placeholders}) ORDER BY updated_at DESC LIMIT ?`).bind(...lots, limit).all<PledgeRow>();
+  return (result.results ?? []).map(pledgeFromRow);
+}
+
+/* ---------- memos ---------- */
+
+interface MemoRow {
+  id: string; lot: string; agent: string; agent_id: string | null; apn: string | null; address: string | null; kind: MemoKind; source: string | null; note: string;
+  sealed_receipt_hash: string | null; sealed_payer: string | null; sealed_tx_hash: string | null; sealed_action_id: string | null; created_at: string;
+}
+
+function memoFromRow(row: MemoRow): Memo {
+  return {
+    id: row.id, lot: row.lot, agent: row.agent, agentId: row.agent_id, apn: row.apn, address: row.address, kind: row.kind, source: row.source, note: row.note,
+    t: Date.parse(row.created_at),
+    sealed: row.sealed_receipt_hash && row.sealed_payer ? { receiptHash: row.sealed_receipt_hash, payer: row.sealed_payer, txHash: row.sealed_tx_hash, actionId: row.sealed_action_id } : null,
+  };
+}
+
+export async function insertMemo(db: D1Database, memo: Memo, ipHash: string | null): Promise<Memo> {
+  await db.prepare(`
+    INSERT INTO pool_together_memos (id, lot, agent, agent_id, apn, address, kind, source, note, ip_hash, sealed_receipt_hash, sealed_payer, sealed_tx_hash, sealed_action_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    memo.id, memo.lot, memo.agent, memo.agentId, memo.apn, memo.address, memo.kind, memo.source, memo.note, ipHash,
+    memo.sealed?.receiptHash ?? null, memo.sealed?.payer ?? null, memo.sealed?.txHash ?? null, memo.sealed?.actionId ?? null, new Date(memo.t).toISOString(),
+  ).run();
+  return memo;
+}
+
+export async function listMemos(db: D1Database, limit = 200): Promise<Memo[]> {
+  const result = await db.prepare(`
+    SELECT id, lot, agent, agent_id, apn, address, kind, source, note, sealed_receipt_hash, sealed_payer, sealed_tx_hash, sealed_action_id, created_at
+    FROM pool_together_memos ORDER BY (sealed_receipt_hash IS NOT NULL) DESC, created_at DESC LIMIT ?
+  `).bind(limit).all<MemoRow>();
+  return (result.results ?? []).map(memoFromRow);
+}
+
+export async function countMemosSince(db: D1Database, column: 'ip_hash' | 'agent', value: string, sinceIso: string): Promise<number> {
+  const row = await db.prepare(`SELECT COUNT(*) AS count FROM pool_together_memos WHERE ${column} = ? AND created_at >= ?`).bind(value, sinceIso).first<{ count: number }>();
+  return Number(row?.count ?? 0);
+}
+
+export interface RegisterTotals { count: number; sealed: number; eligible: number; agents: number; verifiedAgents: number }
+
+export async function registerTotals(db: D1Database, lot?: string): Promise<RegisterTotals> {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS count,
+           SUM(CASE WHEN sealed_receipt_hash IS NOT NULL THEN 1 ELSE 0 END) AS sealed,
+           SUM(CASE WHEN apn IS NOT NULL AND source IS NOT NULL THEN 1 ELSE 0 END) AS eligible,
+           COUNT(DISTINCT lower(agent)) AS agents,
+           COUNT(DISTINCT agent_id) AS verified_agents
+    FROM pool_together_memos ${lot ? 'WHERE lot = ?' : ''}
+  `).bind(...(lot ? [lot] : [])).first<{ count: number; sealed: number | null; eligible: number | null; agents: number; verified_agents: number }>();
+  return { count: Number(row?.count ?? 0), sealed: Number(row?.sealed ?? 0), eligible: Number(row?.eligible ?? 0), agents: Number(row?.agents ?? 0), verifiedAgents: Number(row?.verified_agents ?? 0) };
 }
 
 export interface LotSummary {
   lot: string;
+  status: string;
+  deadline: string | null;
+  goal: { hands: number; memos: number } | null;
   pledgedWallets: number;
   pledgedUsd: number;
   recruited: number;
   memos: number;
-  memosWithApn: number;
+  memosEligible: number;
   sealedMemos: number;
   agents: number;
-  goal: { hands: number; memos: number } | null;
-  deadline: string | null;
-  status: string;
+  verifiedAgents: number;
 }
 
-export async function summarizeLot(env: PoolTogetherEnv, lotId: string): Promise<LotSummary | null> {
+export async function summarizeLot(db: D1Database, lotId: string): Promise<LotSummary | null> {
   const lot = LOTS.find((row) => row.id === lotId);
   if (!lot) return null;
-  const [pledges, memos] = await Promise.all([listPledges(env, lotId), listMemos(env)]);
-  const lotMemos = memos.filter((memo) => memo.lot === lotId);
+  const [pledges, memos] = await Promise.all([
+    db.prepare(`SELECT COUNT(*) AS wallets, COALESCE(SUM(amount_usd), 0) AS usd, SUM(CASE WHEN via <> '' THEN 1 ELSE 0 END) AS recruited FROM pool_together_pledges WHERE lot = ?`).bind(lotId).first<{ wallets: number; usd: number; recruited: number | null }>(),
+    registerTotals(db, lotId),
+  ]);
   return {
     lot: lotId,
-    pledgedWallets: pledges.length,
-    pledgedUsd: pledges.reduce((sum, row) => sum + (Number.isFinite(row.amountUsd) ? row.amountUsd : 0), 0),
-    recruited: pledges.filter((row) => Boolean(row.via)).length,
-    memos: lotMemos.length,
-    memosWithApn: lotMemos.filter((memo) => Boolean(memo.apn)).length,
-    sealedMemos: lotMemos.filter((memo) => Boolean(memo.sealed)).length,
-    agents: new Set(lotMemos.map((memo) => memo.agent.toLowerCase())).size,
-    goal: lot.goal ? { hands: lot.goal.hands, memos: lot.goal.memos } : null,
-    deadline: lot.deadline,
     status: lot.status,
+    deadline: lot.deadline,
+    goal: lot.goal ? { hands: lot.goal.hands, memos: lot.goal.memos } : null,
+    pledgedWallets: Number(pledges?.wallets ?? 0),
+    pledgedUsd: Number(pledges?.usd ?? 0),
+    recruited: Number(pledges?.recruited ?? 0),
+    memos: memos.count,
+    memosEligible: memos.eligible,
+    sealedMemos: memos.sealed,
+    agents: memos.agents,
+    verifiedAgents: memos.verifiedAgents,
   };
 }
 
@@ -176,7 +251,7 @@ function cleanText(value: unknown, max: number): string {
 /**
  * Normalize a memo body. The canonical shape (sorted keys, omitted nulls) is
  * what the paid route hashes into its x402 intent, so buyers can reproduce it:
- * { lot, agent, kind, note, apn?, address?, source? } — strings trimmed,
+ * { agent, kind, lot, note, apn?, address?, source? } — strings trimmed,
  * whitespace collapsed, APN as 4-3-3 with dashes.
  */
 export function normalizeMemo(input: unknown): { ok: true; memo: MemoInput; canonical: Record<string, unknown> } | { ok: false; error: string } {

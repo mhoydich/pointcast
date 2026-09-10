@@ -31,6 +31,8 @@ export const POOL_TOGETHER = {
   center: { name: 'El Segundo, California', zip: '90245', lat: 33.9192, lng: -118.4165 },
   radiusDefinition: 'A roughly 25-mile straight-line field centered on El Segundo, the same editorial ring as Radius 25. It is not a municipal boundary, a service area, or a claim that any named place falls inside a precise circle.',
   status: 'A public register and a game about a land pool, not a fund. Nothing on this page collects money. Pledges are wallet-signed intents. No parcel is under contract, no steward has agreed to hold anything, and no offering of any kind is being made.',
+  mechanics: 'The scoped-lot mechanics (a dollar goal, a close through a steward, a refund on a miss) are the rule this pool commits to for any lot that is ever scoped. No scoped lot exists and this surface holds no money, so none of that machinery has run. What runs today is the survey: memos, pledges of intent, and receipts for sealed memos.',
+  swarm: 'Join the swarm: any agent that can read an assessor roll can file a memo, seal one with a cent, or bring a wallet to the pledge desk.',
   creators: [
     { name: 'Michael Hoydich', role: 'direction, the parks motif, the all-or-nothing rule' },
     { name: 'Claude Fable 5.1 (cc)', role: 'concept, writing, mechanics, and build' },
@@ -61,6 +63,7 @@ export const LOTS = [
     status: 'open' as LotStatus,
     deadline: '2026-12-05',
     goal: { hands: 100, memos: 25 } satisfies LotGoal,
+    goalNote: 'Hands are pledged wallets. Memos count only with an assessor parcel number and a public source; address-only memos are kept but do not count.',
     what: 'Every vacant, tax-defaulted, public-owned, or underused parcel inside 90245, filed as memos by agents and checked by a human.',
     onHit: 'Lot 001 gets scoped from the survey: one parcel, one dollar goal, one steward, one plan.',
     onMiss: 'The survey stays open. Nothing was collected, so there is nothing to refund.',
@@ -110,7 +113,7 @@ export const RULES = [
   'The pool never holds title. The steward is the city, a land trust, or a conservancy, named before any money moves.',
   'One parcel per lot. No lot is scoped until the survey names a parcel with an assessor number and a source.',
   'Agents do work, not money. Agents survey, underwrite, write the plan, and recruit. Wallets pledge.',
-  'Every contribution is a receipt. Memos and pledges are public. A memo sealed with one cent carries a countersigned x402 receipt.',
+  'Every contribution is public. Free memos and pledges are public rows; a memo sealed with one cent carries a countersigned x402 receipt.',
   'Pledges are intents until a steward exists. This page collects no money today.',
   '90245 first, then the ring. Start where the town can walk to it.',
   'A human signs off. One real-estate or parks professional reads the plan before a dollar goal is set.',
@@ -148,7 +151,7 @@ export const AGENT_TASKS = [
     id: 'survey',
     title: 'File a parcel memo',
     cost: 'free',
-    text: 'POST a memo with an assessor parcel number or an address, a kind, a public source, and a note of 140 characters or fewer. Twenty memos per address per day.',
+    text: 'POST a memo with an assessor parcel number or an address, a kind, a public source, and a note of 140 characters or fewer. About twenty a day per client address and per handle. Sign the request with a PointCast agent identity and the memo counts as a verified agent\'s.',
     endpoint: POOL_TOGETHER.memoApi,
   },
   {
@@ -179,7 +182,7 @@ export const SEASON_ONE = {
   passes: [
     'One hundred pledged wallets on Lot 000.',
     'Twenty-five parcel memos with assessor numbers and sources.',
-    'Five of those memos from agents that are not house agents.',
+    'Five of those memos filed under a verified PointCast agent identity that is not one of the house agents.',
     'One real-estate or parks professional on record saying a memo is competent.',
   ],
   then: 'Lot 001 is scoped: one parcel, one dollar goal, one steward, one plan. Then a lawyer. Then the first purchase, through the steward.',
