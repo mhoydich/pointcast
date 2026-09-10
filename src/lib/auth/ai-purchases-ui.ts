@@ -141,6 +141,12 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
     catch { throw new PurchaseRequestError(0, 'network-error'); }
     return readPurchaseResponse(response);
   }
+  function invalidateSession(message: string) {
+    ++epoch; ++readVersion; requests.abort(); requests = new win.AbortController(); clearTimeout(timer);
+    lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; loading = false;
+    busy = ''; notice = message; clearSensitive(); render();
+  }
+
   function render() {
     if (!live()) return;
     const p = current();
@@ -243,7 +249,7 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
     } catch (error) {
       if (!live(version) || read !== readVersion) return false;
       available = false; loading = false;
-      if (error instanceof PurchaseRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; clearSensitive(); }
+      if (error instanceof PurchaseRequestError && error.status === 401) { invalidateSession(error.message); return false; }
       if (!acceptedSession) lastAuthOwner = null;
       notice = error instanceof PurchaseRequestError ? error.message : purchaseError(''); render(); schedule(); return false;
     }
@@ -266,7 +272,7 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
       return data.purchase;
     } catch (error) {
       if (!live(version)) return null;
-      if (error instanceof PurchaseRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
+      if (error instanceof PurchaseRequestError && error.status === 401) { invalidateSession(error.message); return null; }
       notice = error instanceof PurchaseRequestError ? error.message : purchaseError('');
       return null;
     } finally { if (live(version)) { busy = ''; render(); schedule(); } }
@@ -320,7 +326,7 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
       acceptPurchase(data.purchase); resetApproval(); notice = '';
     } catch (error) {
       if (!live(version)) return;
-      if (error instanceof PurchaseRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
+      if (error instanceof PurchaseRequestError && error.status === 401) { invalidateSession(error.message); return; }
       if (error instanceof PurchaseRequestError && error.status >= 400 && error.status < 600 && UNSUBMITTED_REASONS.has(error.reason)) {
         uncertain.delete(id); mustRefresh.add(id); resetApproval();
       }

@@ -161,6 +161,12 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     text('[data-runtime-login-code]', '');
   }
 
+  function invalidateSession(message: string) {
+    ++epoch; ++readVersion; requests.abort(); requests = new win.AbortController(); clearTimeout(timer);
+    lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; loading = false;
+    busy = false; notice = message; clearSensitive(); render();
+  }
+
   function render() {
     if (!live()) return;
     const runtime = current();
@@ -272,7 +278,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     } catch (error) {
       if (!live(version) || read !== readVersion) return;
       available = false;
-      if (error instanceof AiRuntimeRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; clearSensitive(); }
+      if (error instanceof AiRuntimeRequestError && error.status === 401) { invalidateSession(error.message); return; }
       if (!acceptedSession) lastAuthOwner = null;
       notice = error instanceof AiRuntimeRequestError ? error.message : runtimeErrorMessage('');
     }
@@ -327,7 +333,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
         cancelled.delete(id);
         if (previous && !snapshot?.jobs.some((job) => job.id === id)) pending = { ...previous, status: 'queued' };
       }
-      if (error instanceof AiRuntimeRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
+      if (error instanceof AiRuntimeRequestError && error.status === 401) { invalidateSession(error.message); return; }
       notice = error instanceof AiRuntimeRequestError ? error.message : runtimeErrorMessage('');
     } finally {
       if (live(version)) { busy = false; render(); schedule(); }

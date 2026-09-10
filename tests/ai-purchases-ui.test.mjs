@@ -481,3 +481,44 @@ test('a real-shaped owner change discards an earlier owner wallet signature', as
   assert.equal(f.q('[data-purchase-public-consent]').checked, false);
   assert.equal(f.q('[data-purchase-review]').hidden, true);
 });
+
+
+test('an authoritative purchase 401 discards a late quote from the invalidated session', async t => {
+  const quoted = deferred(); let failRead = false;
+  const f = fixture(t, {}, {
+    read: state => failRead ? Response.json({ ok: false, reason: 'unauthorized' }, { status: 401 }) : Response.json(state.snapshot),
+    write: () => quoted.promise,
+  });
+  bridgeSession(f.dom, 'pcu_owner_a'); await settle();
+  f.q('[data-purchase-question]').value = 'Private draft before session loss';
+  f.q('[data-purchase-quote]').click(); await settle();
+  failRead = true; f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange')); await settle();
+  assert.equal(f.q('[data-purchase-badge]').textContent, 'Sign-in required');
+  quoted.resolve(Response.json({ ok: true, purchase: purchase({ question: 'Private draft before session loss' }) }, { status: 201 }));
+  await settle();
+  assert.equal(f.q('[data-purchase-badge]').textContent, 'Sign-in required');
+  assert.equal(f.q('[data-purchase-review]').hidden, true);
+  assert.equal(f.q('[data-purchase-public-text]').textContent, '');
+  assert.equal(f.q('[data-purchase-history]').children.length, 0);
+  assert.equal(f.q('[data-purchase-question]').value.includes('Private draft before session loss'), false);
+  assert.equal(f.q('[data-purchase-approve]').disabled, true);
+});
+
+test('an authoritative purchase 401 aborts wallet approval and discards its late signature', async t => {
+  const signed = deferred(); let failRead = false, signingSignal;
+  const f = fixture(t, { purchases: [purchase()] }, {
+    read: state => failRead ? Response.json({ ok: false, reason: 'unauthorized' }, { status: 401 }) : Response.json(state.snapshot),
+    walletApi: { signBuyerPayment: ({ signal }) => { signingSignal = signal; return signed.promise; } },
+  });
+  bridgeSession(f.dom, 'pcu_owner_a'); await settle();
+  await f.chooseAndConnect(); f.consentAndApprove(); await settle();
+  failRead = true; f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange')); await settle();
+  assert.equal(signingSignal.aborted, true);
+  assert.equal(f.q('[data-purchase-badge]').textContent, 'Sign-in required');
+  signed.resolve({ paymentSignature: 'previous-session-signature' }); await settle();
+  assert.deepEqual(f.state.writes, []);
+  assert.equal(f.q('[data-purchase-review]').hidden, true);
+  assert.equal(f.q('[data-purchase-payer]').textContent, '');
+  assert.equal(f.q('[data-purchase-public-consent]').checked, false);
+  assert.equal(f.root.getAttribute('aria-busy'), 'false');
+});
