@@ -167,6 +167,8 @@ import {
   dispatchBenchTool,
 } from '../../src/lib/bench-mcp';
 import type { Env } from './visit';
+import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
+import type { AuthEnv } from './auth/session.ts';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
@@ -184,6 +186,7 @@ const JSON_HEADERS = {
 
 const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
 const WRITE_TOOL_NAMES = new Set([
+  'pointcast_pair',
   'drum_tap',
   'drum_play_instrument',
   'drum_sing_voice',
@@ -219,6 +222,7 @@ function toolAnnotations(name: string) {
 // Each tool has a name, description, and JSON-Schema input shape.
 // Tools that take no arguments use `{ type: 'object', properties: {} }`.
 const TOOL_DEFINITIONS = [
+  AI_PAIR_TOOL,
   {
     name: 'drum_list_rooms',
     description:
@@ -926,7 +930,7 @@ const TOOLS = [
   ...BENCH_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
-  annotations: toolAnnotations(tool.name),
+  annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
 }));
 
 // ── Resources ────────────────────────────────────────────────────────
@@ -2910,7 +2914,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
 export const onRequestOptions: PagesFunction<Env> = () =>
   new Response(null, { status: 204, headers: { ...JSON_HEADERS, 'Access-Control-Max-Age': '86400' } });
 
-export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
+export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env }) => {
   let msg: any;
   try { msg = await request.json(); } catch { return rpcError(null, -32700, 'parse error'); }
   if (!msg || msg.jsonrpc !== '2.0') return rpcError(null, -32600, 'invalid request');
@@ -2947,6 +2951,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request }) => {
     if (method === 'tools/call') {
       const name = String(params.name || '');
       const args = (params.arguments || {}) as Record<string, unknown>;
+      if (name === 'pointcast_pair') return rpcResult(id, await confirmAiVisit(env, args));
       const result = await dispatchTool(name, args, base, sessionId);
       return rpcResult(id, result);
     }

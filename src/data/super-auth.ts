@@ -1,12 +1,21 @@
 export interface AccountProvider {
-  id: 'google' | 'apple' | 'kukai' | 'metamask' | 'phantom';
+  id: 'x' | 'google' | 'apple' | 'kukai' | 'metamask' | 'phantom';
   provider: string;
   kind: string;
-  availability: 'available' | 'preview';
+  availability: 'available' | 'preview' | 'configuration-required';
   keeps: string[];
+  availabilityEndpoint?: string;
 }
 
 export const ACCOUNT_PROVIDERS: AccountProvider[] = [
+  {
+    id: 'x',
+    provider: 'X',
+    kind: 'Account · sign-in only',
+    availability: 'configuration-required',
+    availabilityEndpoint: '/api/auth/x?status=1',
+    keeps: ['verified X user ID', 'username', 'display name', 'profile image'],
+  },
   {
     id: 'google',
     provider: 'Google',

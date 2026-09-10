@@ -1,5 +1,6 @@
 import { canonicalJson, X402_NETWORK } from '../../src/lib/x402.ts';
 import { hashAgentActionRequest, verifyAgentRequest } from './agent-identity.ts';
+import { x402PaymentWasNotSubmitted } from './x402-gate.ts';
 
 export const PAID_TOWN_PRICE_UNITS = '10000';
 export const PAID_TOWN_PRICE = {
@@ -45,14 +46,14 @@ export const PAID_ACTION_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Payment-Signature, Idempotency-Key, PointCast-Agent-Id, PointCast-Agent-Timestamp, PointCast-Agent-Signature',
-  'Access-Control-Expose-Headers': 'Payment-Required, X-Payment-Response, X-Facilitator-Url, X-Action-Id, Location',
+  'Access-Control-Expose-Headers': 'Payment-Required, Payment-Response, X-Payment-Response, X-Facilitator-Url, X-Action-Id, Location',
   'Cache-Control': 'no-store',
 };
 
 export function paidJson(body: unknown, status = 200, sourceHeaders?: Headers): Response {
   const headers = new Headers(PAID_ACTION_HEADERS);
   if (sourceHeaders) {
-    for (const name of ['Payment-Required', 'X-Payment-Response', 'X-Facilitator-Url']) {
+    for (const name of ['Payment-Required', 'Payment-Response', 'X-Payment-Response', 'X-Facilitator-Url']) {
       const value = sourceHeaders.get(name);
       if (value) headers.set(name, value);
     }
@@ -121,7 +122,13 @@ export interface PaidIntentSettlement {
 }
 
 export function paidIntentHeaders(intentId: string, source?: Headers): Headers {
-  const headers = new Headers(source ?? PAID_ACTION_HEADERS);
+  const headers = new Headers(PAID_ACTION_HEADERS);
+  source?.forEach((value, name) => headers.set(name, value));
+  const exposed = new Set([
+    ...PAID_ACTION_HEADERS['Access-Control-Expose-Headers'].split(', '),
+    ...(source?.get('Access-Control-Expose-Headers')?.split(/,\s*/u) ?? []),
+  ]);
+  headers.set('Access-Control-Expose-Headers', [...exposed].join(', '));
   headers.set('X-Action-Id', intentId);
   headers.set('Location', `/api/actions/${intentId}`);
   return headers;
@@ -316,5 +323,5 @@ export async function clearPaidIntentCapacity(db: D1Database, intentId: string):
 }
 
 export function settlementWasAmbiguous(response: Response): boolean {
-  return response.status >= 500 && response.status < 600;
+  return response.status >= 500 && response.status < 600 && !x402PaymentWasNotSubmitted(response);
 }

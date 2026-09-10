@@ -48,7 +48,7 @@ const JSON_HEADERS = {
   'Cache-Control': 'no-store',
 };
 
-const MAX_SITS_PER_DAY = 200;
+export const MAX_SITS_PER_DAY = 200;
 const SEAT_TTL_SEC = 60 * 60 * 24 * 3; // three days — long enough to outlive the day
 const DEFAULT_NAME = 'unnamed';
 

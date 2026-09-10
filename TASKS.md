@@ -7,6 +7,20 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Personal AI, X profiles, and approved purchases (2026-09-09)
+
+Draft [PR #1084](https://github.com/mhoydich/pointcast/pull/1084); source and local proof only, not deployed. Roadmap: `docs/plans/2026-09-09-personal-ai-product-roadmap.md`.
+
+- [x] (X) Implement and locally exercise paired native Codex/Claude text tasks from My AI, including actual Fable 5.1 execution — `done` — existing subscription accounts; no provider credentials copied to PointCast
+- [x] (X) Add selected text/note preview, optional gentle preference, idempotent task creation, model evidence, cancellation, and revocation — `done` — local pilot
+- [x] (X) Implement X identity sign-in/linking with recovery and scoped profile controls — `done` — source/tests; real developer-app consent remains unverified
+- [x] (X) Preserve ambiguous x402 settlement and standard payment response headers — `done` — mocked regression proof, no payment
+- [ ] (X/MH) Complete fresh native login, installer/hosting decision, X configuration/consent, migration and release checks — `handoff`
+- [x] (X) Build one explicit-approval x402 purchase with separate receipt, chain observation, and delivery checks — `done` — local simulated Bench contribution pilot; deployment flag remains off
+- [ ] (X/MH) Complete operator recovery tooling, an explicitly approved real-wallet purchase, and deployment activation checks — `handoff` — unknown settlement and failed paid delivery remain held; no spending authority or funded wallet assumed
+
+---
+
 ## Kennel Club — The September Sitting (2026-09-02)
 
 Thirty painted dog portraits in a heritage equestrian register, one assigned to each calendar day of September 2026, minted one per day on Tezos. Series data: `src/data/kennel-club-september-sitting.json`. Codex brief: `docs/briefs/2026-09-02-codex-kennel-club-september-sitting.md`. Manus brief: `docs/briefs/2026-09-02-manus-kennel-club-september-sitting-objkt.md`. Refreshed 2026-09-04 from the repository record; source-complete, configured, deployed, and independently verified remain separate states.

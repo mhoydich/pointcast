@@ -7,7 +7,7 @@ export const GET: APIRoute = async () => {
     $schema: 'https://pointcast.xyz/connectors.schema.json',
     name: 'PointCast Connector Links',
     description:
-      'Addable MCP connector links for AI clients. Paste the endpoint URL into a custom connector flow, or use the client-specific setup notes.',
+      'Bring an existing AI app to PointCast: subscription-first setup, a public prompt fallback, and advanced agent routes. Profile visit confirmation is optional and does not grant ongoing authorization.',
     generatedAt: new Date().toISOString(),
     canonical: 'https://pointcast.xyz/connectors',
     agentKit: POINTCAST_AGENT_KIT,
@@ -17,6 +17,9 @@ export const GET: APIRoute = async () => {
       mcp: {
         endpoint: connector.endpoint,
         transport: 'http',
+        authentication: 'none',
+        privateProfileReadAccess: false,
+        ongoingAuthorization: false,
         protocol: 'json-rpc-2.0',
       },
     })),

@@ -32,18 +32,23 @@ function block(source, open) {
 const toolNames = (text) => [...text.matchAll(/^ {4}name: '([a-z0-9_]+)',$/gm)].map((m) => m[1]);
 
 async function servedCatalogue() {
-  const [mcp, bench, tug] = await Promise.all([
+  const [mcp, bench, tug, aiCompanions] = await Promise.all([
     read('functions/api/mcp.ts'),
     read('src/lib/bench-mcp.ts'),
     read('src/lib/tug-mcp.ts'),
+    read('functions/_lib/ai-companions.ts'),
   ]);
-  const core = toolNames(block(mcp, 'const TOOL_DEFINITIONS = ['));
+  const definitions = block(mcp, 'const TOOL_DEFINITIONS = [');
+  const core = toolNames(definitions);
+  const aiPairName = aiCompanions.match(/export const AI_PAIR_TOOL = \{\s*name: '([a-z_]+)'/)?.[1];
+  assert.ok(aiPairName, 'ai-companions.ts exports AI_PAIR_TOOL with a name');
+  assert.match(definitions, /^const TOOL_DEFINITIONS = \[\s*AI_PAIR_TOOL,/, 'the imported pairing tool is first in the served core definitions');
   const benchNames = toolNames(bench.slice(bench.indexOf('export const BENCH_TOOL_DEFINITIONS = ['), bench.indexOf('];')));
   const tugName = tug.match(/export const TUG_PULL_TOOL = \{\s*name: '([a-z_]+)'/)?.[1];
   assert.ok(tugName, 'tug-mcp.ts exports TUG_PULL_TOOL with a name');
   assert.ok(core.length >= 40, `TOOL_DEFINITIONS parsed (${core.length} names)`);
   assert.equal(benchNames.length, 2, 'bench registers two tools');
-  const tools = [...core, tugName, ...benchNames];
+  const tools = [aiPairName, ...core, tugName, ...benchNames];
   assert.equal(new Set(tools).size, tools.length, 'tool names are unique');
   const resources = [...block(mcp, 'const RESOURCES = [').matchAll(/^ {4}uri: '([a-z-]+:\/\/[a-z-]+)',$/gm)].map((m) => m[1]);
   assert.ok(resources.length >= 10, `RESOURCES parsed (${resources.length} uris)`);
@@ -58,6 +63,10 @@ test('functions/api/mcp.ts exports the catalogue it serves', async () => {
   assert.match(mcp, /return rpcResult\(id, \{ tools: TOOLS \}\);/);
   assert.match(mcp, /return rpcResult\(id, \{ resources: RESOURCES \}\);/);
   assert.match(mcp, /TUG_PULL_TOOL,\s*\.\.\.BENCH_TOOL_DEFINITIONS,/, 'tug and bench tools are folded into TOOLS');
+  assert.match(mcp, /import \{ AI_PAIR_TOOL, confirmAiVisit \} from '\.\.\/_lib\/ai-companions\.ts';/, 'the pairing definition and handler come from the same module');
+  assert.match(mcp, /const TOOL_DEFINITIONS = \[\s*AI_PAIR_TOOL,/, 'the pairing tool is registered in the core catalogue');
+  assert.match(mcp, /const TOOLS = \[\s*\.\.\.TOOL_DEFINITIONS,/, 'the served list includes the core catalogue');
+  assert.match(mcp, /if \(name === 'pointcast_pair'\) return rpcResult\(id, await confirmAiVisit\(env, args\)\);/, 'the advertised pairing tool dispatches to its handler');
 });
 
 test('/agents.json derives its MCP tools, resources, and server info from the server file', async () => {

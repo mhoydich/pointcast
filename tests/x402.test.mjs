@@ -154,6 +154,18 @@ test('receipt endpoint quotes exact terms and countersigns a mocked settled tran
       pair.publicKeyBase64,
     );
     assert.equal(response.status, 200);
+    const paymentResponse = response.headers.get('Payment-Response');
+    assert.ok(paymentResponse, 'standard x402 v2 settlement header is present');
+    assert.equal(response.headers.get('X-Payment-Response'), paymentResponse);
+    const settled = decodeBase64Json(paymentResponse);
+    assert.equal(settled.success, true);
+    assert.equal(settled.transaction, `0x${'ab'.repeat(32)}`);
+    assert.equal(settled.txHash, settled.transaction, 'legacy transaction alias is retained');
+    assert.equal(settled.network, accepted.network);
+    assert.equal(settled.payer, payment.payload.permit2Authorization.from);
+    const exposed = response.headers.get('Access-Control-Expose-Headers').toLowerCase().split(/,\s*/u);
+    assert.ok(exposed.includes('payment-response'));
+    assert.ok(exposed.includes('x-payment-response'));
     const receipt = await response.json();
     assert.equal(receipt.spend.payee_agent_id, X402_TREASURY_AGENT_ID);
     assert.equal(receipt.settlement.tx, `0x${'ab'.repeat(32)}`);
@@ -207,7 +219,9 @@ test('receipt endpoint refuses settlement when the receipt key cannot be publish
     );
     assert.equal(response.status, 503);
     assert.equal(facilitatorCalls, 0);
-    assert.match((await response.json()).error, /not submitted for settlement/);
+    const body = await response.json();
+    assert.match(body.error, /not submitted for settlement/);
+    assert.equal(body.settlement, 'not-submitted');
   } finally {
     globalThis.fetch = originalFetch;
   }

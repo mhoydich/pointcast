@@ -286,6 +286,29 @@ export async function loginWithGoogle(): Promise<PointCastUser | null> {
   return openServerAuth(`${endpoint.pathname}${endpoint.search}`);
 }
 
+/** X availability is checked against this deployment; no provider credentials enter the browser. */
+export async function getXAuthAvailability(): Promise<boolean> {
+  if (!isBrowser()) return false;
+  const response = await fetch('/api/auth/x?status=1', {
+    credentials: 'include', cache: 'no-store',
+  });
+  if (!response.ok) return false;
+  const payload = await response.json() as { ok?: boolean; available?: boolean; provider?: string };
+  return payload.ok === true && payload.provider === 'x' && payload.available === true;
+}
+
+export async function loginWithX(options: { intent: 'login' | 'link'; returnTo?: string }): Promise<null> {
+  if (!isBrowser()) return null;
+  const endpoint = new URL('/api/auth/x', window.location.origin);
+  endpoint.searchParams.set('intent', options.intent);
+  endpoint.searchParams.set('returnTo', options.returnTo || '/me');
+  return openServerAuth(`${endpoint.pathname}${endpoint.search}`);
+}
+
+export async function disconnectX(id: string): Promise<void> {
+  await postJson<{ ok: true; removed: string }>('/api/auth/x', { id }, 'DELETE');
+}
+
 async function performPasskeyLogin(): Promise<PointCastUser | null> {
   if (!isBrowser()) return null;
   if (!window.PublicKeyCredential || !navigator.credentials) {

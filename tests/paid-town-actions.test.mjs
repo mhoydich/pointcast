@@ -13,12 +13,14 @@ const OP_HASH = `o${'1'.repeat(50)}`;
 
 async function loadModules() {
   const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
-  const [bench, cast, claim, till, actions] = await Promise.all([
+  const [bench, cast, claim, till, actions, paid, gate] = await Promise.all([
     server.ssrLoadModule('/functions/api/agent/bench.ts'),
     server.ssrLoadModule('/functions/api/agent/cast.ts'),
     server.ssrLoadModule('/functions/api/agent/claim.ts'),
     server.ssrLoadModule('/functions/till.json.ts'),
     server.ssrLoadModule('/functions/api/actions/[id].ts'),
+    server.ssrLoadModule('/functions/_lib/paid-town-actions.ts'),
+    server.ssrLoadModule('/functions/_lib/x402-gate.ts'),
   ]);
   return {
     handleAgentBench: bench.handleAgentBench,
@@ -27,6 +29,11 @@ async function loadModules() {
     getProjectSafeBalance: till.getProjectSafeBalance,
     handleTillJson: till.handleTillJson,
     handleActionStatus: actions.onRequestGet,
+    acquirePaidSettlement: paid.acquirePaidSettlement,
+    paidJson: paid.paidJson,
+    settlementWasAmbiguous: paid.settlementWasAmbiguous,
+    withX402: gate.withX402,
+    X402PreSettlementError: gate.X402PreSettlementError,
     close: () => server.close(),
   };
 }
@@ -359,7 +366,12 @@ test('three agent actions quote 0.01 USDC, settle through a fake facilitator, ac
     settlements += 1;
     if (settlements === 3) assert.equal(db.claims.size, 1, 'claim capacity is reserved before settlement');
     const byte = ['ab', 'cd', 'ef'][settlements - 1];
-    return Response.json({ success: true, txHash: `0x${byte.repeat(32)}` });
+    const hash = `0x${byte.repeat(32)}`;
+    return Response.json(settlements === 1
+      ? { success: true, transaction: hash, network: 'eip155:42793', payer: PAYER }
+      : settlements === 2
+        ? { success: true, transaction: { hash } }
+        : { success: true, txHash: hash });
   };
   try {
     const benchBody = { question: 'What should the town build next?' };
@@ -373,6 +385,16 @@ test('three agent actions quote 0.01 USDC, settle through a fake facilitator, ac
       { expectedPublicKey: pair.publicKeyBase64 },
     );
     assert.equal(bench.status, 200);
+    const paymentResponse = bench.headers.get('Payment-Response');
+    assert.ok(paymentResponse);
+    assert.equal(bench.headers.get('X-Payment-Response'), paymentResponse);
+    const exposed = bench.headers.get('Access-Control-Expose-Headers').toLowerCase().split(/,\s*/u);
+    for (const name of ['payment-response', 'x-payment-response', 'x-action-id', 'location']) {
+      assert.ok(exposed.includes(name), `${name} is readable by browser clients`);
+    }
+    const forwarded = modules.paidJson({ ok: true }, 200, bench.headers);
+    assert.equal(forwarded.headers.get('Payment-Response'), paymentResponse);
+    assert.equal(forwarded.headers.get('X-Payment-Response'), paymentResponse);
     assert.equal((await bench.json()).bench.sit.answer, benchBody.question);
     assert.ok([...visits.values.keys()].some((key) => key.startsWith('bench:sit:')));
     const repeatedBench = await handleAgentBench(
@@ -486,6 +508,163 @@ test('ambiguous settlement is durable, queryable, and never submitted twice', as
   }
 });
 
+test('uncertain facilitator responses hold the intent even when a retry supplies a new authorization', async (t) => {
+  const modules = await loadModules();
+  t.after(modules.close);
+  const pair = testKeypair();
+  const tx = `0x${'ab'.repeat(32)}`;
+  const noBroadcast = { success: false, errorReason: 'invalid_signature', transaction: '', network: 'eip155:42793' };
+  const cases = [
+    ['HTTP 500 claiming rejection', () => Response.json(noBroadcast, { status: 500 })],
+    ['HTTP 502 claiming success', () => Response.json({ success: true, txHash: tx }, { status: 502 })],
+    ['HTTP 503 gateway page', () => new Response('<h1>Unavailable</h1>', { status: 503 })],
+    ['HTTP 503 claiming local no-submission', () => Response.json({ ...noBroadcast, settlement: 'not-submitted' }, { status: 503, headers: { 'X-PointCast-Settlement': 'not-submitted' } })],
+    ['HTTP 408 timeout', () => Response.json(noBroadcast, { status: 408 })],
+    ['HTTP 429 rate limit', () => Response.json(noBroadcast, { status: 429 })],
+    ['HTTP 202 accepted', () => Response.json({ success: true, txHash: tx }, { status: 202 })],
+    ['missing success flag', () => Response.json({ txHash: tx })],
+    ['non-boolean success flag', () => Response.json({ success: 'true', txHash: tx })],
+    ['missing transaction hash', () => Response.json({ success: true })],
+    ['malformed JSON', () => new Response('{"success":true')],
+    ['non-object response', () => Response.json([{ success: true, txHash: tx }])],
+    ['malformed transaction hash', () => Response.json({ success: true, txHash: '0x1234' })],
+    ['pending broadcast', () => Response.json({ success: false, errorReason: 'settlement_pending', transaction: tx, network: 'eip155:42793' })],
+    ['pending without broadcast hash', () => Response.json({ ...noBroadcast, errorReason: 'settlement_pending' })],
+    ['failure without explicit no-broadcast proof', () => Response.json({ success: false, reason: 'invalid-signature' })],
+    ['failure with broadcast hash', () => Response.json({ ...noBroadcast, transaction: tx })],
+    ['contradictory success and error', () => Response.json({ success: true, txHash: tx, errorReason: 'settlement_pending' })],
+    ['conflicting transaction aliases', () => Response.json({ success: true, txHash: tx, transaction: `0x${'cd'.repeat(32)}` })],
+    ['empty transaction conflicts with hash', () => Response.json({ success: true, txHash: tx, transaction: '' })],
+    ['malformed transaction alias', () => Response.json({ success: true, txHash: tx, transaction: {} })],
+    ['wrong network', () => Response.json({ success: true, txHash: tx, network: 'eip155:8453' })],
+    ['wrong payer', () => Response.json({ success: true, txHash: tx, payer: `0x${'22'.repeat(20)}` })],
+    ['wrong amount', () => Response.json({ success: true, txHash: tx, amount: '20000' })],
+  ];
+  for (const [name, response] of cases) {
+    await t.test(name, async () => {
+      const db = new FakeD1();
+      const visits = new FakeKV();
+      const env = { AUTH_DB: db, VISITS: visits, X402_RECEIPT_SK: pair.privateKeyBase64, X402_MODE: 'test' };
+      const body = { question: 'Was this purchase already submitted?' };
+      const options = { expectedPublicKey: pair.publicKeyBase64 };
+      const terms = await termsFrom(await modules.handleAgentBench(actionRequest('/api/agent/bench', body), env, options));
+      const key = 'uncertain-payment-0001';
+      let settlements = 0;
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async () => { settlements += 1; return response(); };
+      try {
+        const first = await modules.handleAgentBench(actionRequest('/api/agent/bench', body, paymentFor(terms, 90), key), env, options);
+        assert.equal(first.status, 502);
+        assert.equal((await first.json()).settlement, 'ambiguous');
+        assert.equal(first.headers.get('Payment-Response'), null, 'uncertain payment has no success header');
+        const actionId = first.headers.get('X-Action-Id');
+        assert.equal(db.intents.get(actionId).status, 'settlement_ambiguous');
+        assert.equal(await modules.acquirePaidSettlement(db, actionId), false, 'ambiguous intent cannot reacquire settlement');
+        const retry = await modules.handleAgentBench(actionRequest('/api/agent/bench', body, paymentFor(terms, 91), key), env, options);
+        assert.equal(retry.status, 202);
+        assert.equal(retry.headers.get('X-Action-Id'), actionId);
+        assert.equal(settlements, 1, 'new signature on the same intent cannot trigger another charge');
+        assert.equal(db.splits.size, 0);
+        assert.equal(visits.values.size, 0, 'neither receipt nor paid action is falsely recorded as successful');
+        const status = await modules.handleActionStatus({ env, params: { id: actionId } });
+        const current = await status.json();
+        assert.equal(current.charged, 'unknown');
+        assert.equal(current.actionCompleted, false);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  }
+});
+
+test('known pre-submission failures permit the same intent to retry without any prior facilitator call', async (t) => {
+  const modules = await loadModules();
+  t.after(modules.close);
+  const pair = testKeypair();
+  const cases = ['missing signer', 'mismatched signer', 'signer identity configuration', 'reservation exception', 'typed reservation failure'];
+  for (const failure of cases) await t.test(failure, async () => {
+    const db = new FakeD1();
+    const env = { AUTH_DB: db, VISITS: new FakeKV(), X402_RECEIPT_SK: pair.privateKeyBase64, X402_MODE: 'test' };
+    const body = { question: 'Can I retry a payment that was never submitted?' };
+    const options = { expectedPublicKey: pair.publicKeyBase64 };
+    const key = 'not-submitted-bench-0001';
+    const terms = await termsFrom(await modules.handleAgentBench(actionRequest('/api/agent/bench', body), env, options));
+    if (failure === 'missing signer') delete env.X402_RECEIPT_SK;
+    if (failure === 'mismatched signer') env.X402_RECEIPT_SK = testKeypair().privateKeyBase64;
+    if (failure === 'signer identity configuration') env.X402_RECEIPT_AGENT_ID = 'unpublished-signer';
+    const prepare = db.prepare.bind(db);
+    let reservationFailed = false;
+    if (failure.includes('reservation')) db.prepare = (sql) => {
+      if (!reservationFailed && sql.includes("SET status = 'settling'") && sql.includes('RETURNING id')) {
+        reservationFailed = true;
+        throw failure === 'typed reservation failure'
+          ? new modules.X402PreSettlementError(503, { error: 'reservation-unavailable', settlement: 'ambiguous' })
+          : new Error('reservation-unavailable');
+      }
+      return prepare(sql);
+    };
+    let settlements = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      settlements++;
+      return Response.json({ success: true, transaction: `0x${'ac'.repeat(32)}`, network: terms.network });
+    };
+    try {
+      const first = await modules.handleAgentBench(actionRequest('/api/agent/bench', body, paymentFor(terms, 120), key), env, options);
+      assert.equal(first.status, 503);
+      assert.equal((await first.json()).settlement, 'not-submitted');
+      assert.equal(settlements, 0);
+      const actionId = first.headers.get('X-Action-Id');
+      assert.equal(db.intents.get(actionId).status, 'settlement_failed');
+      const status = await (await modules.handleActionStatus({ env, params: { id: actionId } })).json();
+      assert.equal(status.charged, false);
+      assert.equal(status.ambiguous, false);
+      env.X402_RECEIPT_SK = pair.privateKeyBase64;
+      delete env.X402_RECEIPT_AGENT_ID;
+      const retry = await modules.handleAgentBench(actionRequest('/api/agent/bench', body, paymentFor(terms, 121), key), env, options);
+      assert.equal(retry.status, 200);
+      assert.equal(retry.headers.get('X-Action-Id'), actionId);
+      assert.equal(settlements, 1);
+      assert.equal(db.intents.size, 1);
+      assert.equal(db.intents.get(actionId).status, 'succeeded');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test('only trusted pre-submission responses release 5xx holds, including gate configuration failures', async (t) => {
+  const modules = await loadModules();
+  t.after(modules.close);
+  for (const status of [500, 502, 503, 504, 599]) {
+    assert.equal(modules.settlementWasAmbiguous(new Response(null, { status })), true);
+    assert.equal(modules.settlementWasAmbiguous(Response.json({ settlement: 'not-submitted' }, {
+      status, headers: { 'X-PointCast-Settlement': 'not-submitted' },
+    })), true, 'an arbitrary response cannot forge local pre-submission proof');
+  }
+  let facilitatorCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { facilitatorCalls++; throw new Error('must-not-submit'); };
+  try {
+    const configured = { action: 'bench', priceUnits: '10000', maker: 'town' };
+    for (const [env, options] of [
+      [{}, configured],
+      [{ AUTH_DB: new FakeD1() }, { ...configured, priceUnits: 'invalid' }],
+      [{ AUTH_DB: new FakeD1() }, { ...configured, priceUnits: '0' }],
+      [{ AUTH_DB: new FakeD1() }, { ...configured, maker: '' }],
+    ]) {
+      const gate = await modules.withX402(actionRequest('/api/agent/bench', {}), env, options);
+      assert.equal(gate.settled, false);
+      assert.equal(gate.response.status, 503);
+      assert.equal((await gate.response.clone().json()).settlement, 'not-submitted');
+      assert.equal(modules.settlementWasAmbiguous(gate.response), false);
+    }
+    assert.equal(facilitatorCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('definitively refused paid claims release scarce capacity before retry', async (t) => {
   const modules = await loadModules();
   t.after(modules.close);
@@ -507,7 +686,13 @@ test('definitively refused paid claims release scarce capacity before retry', as
     actionRequest('/api/agent/claim', body), env, options,
   ));
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => Response.json({ success: false, reason: 'invalid-signature' });
+  let settlements = 0;
+  globalThis.fetch = async () => {
+    settlements += 1;
+    return Response.json(settlements === 1
+      ? { success: false, errorReason: 'invalid_signature', transaction: '', network: terms.network }
+      : { success: true, transaction: `0x${'de'.repeat(32)}`, network: terms.network });
+  };
   try {
     const response = await modules.handleAgentClaim(
       actionRequest('/api/agent/claim', body, paymentFor(terms, 83), 'refused-claim-0001'),
@@ -519,6 +704,12 @@ test('definitively refused paid claims release scarce capacity before retry', as
     const intent = db.intents.get(response.headers.get('x-action-id'));
     assert.equal(intent.status, 'settlement_failed');
     assert.equal(intent.capacity_key, null);
+    const retried = await modules.handleAgentClaim(
+      actionRequest('/api/agent/claim', body, paymentFor(terms, 84), 'refused-claim-0001'), env, options,
+    );
+    assert.equal(retried.status, 200, 'explicit non-broadcast rejection permits a corrected authorization');
+    assert.equal(retried.headers.get('X-Action-Id'), intent.id);
+    assert.equal(settlements, 2, 'one refusal followed by one settlement');
   } finally {
     globalThis.fetch = originalFetch;
   }

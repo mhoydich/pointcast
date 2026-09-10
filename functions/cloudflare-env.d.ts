@@ -3,6 +3,8 @@ declare namespace Cloudflare {
     VISITS?: KVNamespace;
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
+    X_CLIENT_ID?: string;
+    X_CLIENT_SECRET?: string;
     PASSKEY_ALLOWED_ORIGINS?: string;
     SEND_EMAIL?: SendEmail;
     KENNEL_DAILY?: Fetcher;
@@ -26,6 +28,7 @@ declare namespace Cloudflare {
     X402_RECEIPT_SK?: string;
     X402_RECEIPT_AGENT_ID?: string;
     X402_MODE?: string;
+    AI_PURCHASES_ENABLED?: string;
     POST_OFFICE_PRICE_UNITS?: string;
     POST_OFFICE_ALIAS_DAILY_CAP?: string;
     POST_OFFICE_GLOBAL_DAILY_CAP?: string;

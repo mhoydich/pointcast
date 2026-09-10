@@ -39,7 +39,6 @@ interface AuthStateRow {
 }
 
 const SESSION_COOKIE_NAME = 'pc_session';
-const INTERNAL_AUTH_HEADER = 'x-pointcast-internal-auth';
 const USER_PREFIX = 'user:';
 const IDENTITY_PREFIX = 'identity:';
 const SESSION_PREFIX = 'session:';
@@ -149,23 +148,69 @@ function cleanupStatements(db: D1Database, now = Date.now()): D1PreparedStatemen
   ];
 }
 
-async function writeUserToD1(db: D1Database, user: PointCastUser): Promise<void> {
+async function writeUserToD1(
+  db: D1Database,
+  user: PointCastUser,
+  incomingIdentity?: AuthIdentity,
+  incomingRoles: AuthRole[] = [],
+): Promise<PointCastUser> {
+  // A normal sign-in may only write the identity it just verified. Older
+  // profile snapshots cannot resurrect a removed identity. X is exclusively
+  // owned by its D1 OAuth flow and is never imported from legacy KV payloads.
+  const identities = (incomingIdentity ? [incomingIdentity] : user.identities)
+    .filter((identity) => identity.provider !== 'x');
+  const serialized = JSON.stringify(user);
   const statements = [
     ...cleanupStatements(db),
     db.prepare(`
       INSERT INTO users (id, payload, created_at)
       VALUES (?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET payload = excluded.payload
-    `).bind(user.userId, JSON.stringify(user), user.createdAt),
-    ...user.identities.map((identity) => db.prepare(`
+      ON CONFLICT(id) DO NOTHING
+    `).bind(user.userId, serialized, user.createdAt),
+    ...identities.map((identity) => db.prepare(`
       INSERT INTO identities (provider, id, user_id, payload)
       VALUES (?, ?, ?, ?)
-      ON CONFLICT(provider, id) DO UPDATE SET
-        user_id = excluded.user_id,
-        payload = excluded.payload
+      ON CONFLICT(provider, id) DO UPDATE SET payload = CASE
+        WHEN identities.user_id = excluded.user_id THEN excluded.payload
+        ELSE NULL END
     `).bind(identity.provider, identity.id, user.userId, JSON.stringify(identity))),
+    // Rebuild the identity list from the ownership table within this same
+    // transaction, preserving profile fields edited since our initial read.
+    // A conflicting owner fails the NOT NULL guard above and rolls back all
+    // statements, including creation of a would-be duplicate account.
+    db.prepare(`
+      INSERT INTO users (id, payload, created_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET payload = json_set(users.payload,
+        '$.identities', json(COALESCE((
+          SELECT json_group_array(json(payload)) FROM identities WHERE user_id = excluded.id
+        ), '[]')),
+        '$.roles', json(COALESCE((SELECT json_group_array(value) FROM (
+          SELECT value FROM json_each(users.payload, '$.roles')
+          UNION SELECT value FROM json_each(?)
+        )), '[]')),
+        '$.preferredName', CASE
+          WHEN trim(COALESCE(json_extract(users.payload, '$.preferredName'), '')) != ''
+          THEN json_extract(users.payload, '$.preferredName')
+          ELSE json_extract(excluded.payload, '$.preferredName') END
+      )
+    `).bind(user.userId, serialized, user.createdAt, JSON.stringify(incomingRoles)),
   ];
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    for (const identity of identities) {
+      const owner = await db.prepare('SELECT user_id FROM identities WHERE provider = ? AND id = ?')
+        .bind(identity.provider, identity.id).first<IdentityRow>();
+      if (owner && owner.user_id !== user.userId) throw new IdentityConflictError();
+    }
+    throw error;
+  }
+  const saved = await db.prepare('SELECT payload FROM users WHERE id = ?')
+    .bind(user.userId).first<UserRow>();
+  const result = saved ? parseUser(saved.payload) : null;
+  if (!result) throw new Error('user-save-failed');
+  return result;
 }
 
 async function loadUser(env: AuthEnv, userId: string): Promise<PointCastUser | null> {
@@ -180,8 +225,7 @@ async function loadUser(env: AuthEnv, userId: string): Promise<PointCastUser | n
     if (env.USERS) {
       const legacyUser = await readKvUser(env.USERS, userKey(userId));
       if (legacyUser) {
-        await writeUserToD1(env.AUTH_DB, legacyUser);
-        return legacyUser;
+        return writeUserToD1(env.AUTH_DB, legacyUser);
       }
     }
     return null;
@@ -204,6 +248,7 @@ async function loadIdentityUserId(
       'SELECT user_id FROM identities WHERE provider = ? AND id = ?',
     ).bind(provider, id).first<IdentityRow>();
     if (row) return row.user_id;
+    if (provider === 'x') return null;
 
     // Preserve returning users whose old cookie has expired: migrate the KV
     // identity mapping and its user before treating the login as a new account.
@@ -469,6 +514,7 @@ export async function upsertUserForIdentity(
   },
 ): Promise<PointCastUser> {
   if (!hasAuthStorage(env)) throw new Error('kv-not-bound');
+  if (identity.provider === 'x') throw new Error('x-oauth-required');
 
   const existingUserId = await loadIdentityUserId(env, identity.provider, identity.id);
   const currentUserId = options?.currentUserId ?? null;
@@ -483,6 +529,7 @@ export async function upsertUserForIdentity(
   const baseUser = currentUser ?? mappedUser;
 
   const nextUser: PointCastUser = {
+    ...baseUser,
     userId: targetUserId,
     createdAt: baseUser?.createdAt ?? nowIso(),
     identities: mergeIdentity(baseUser?.identities ?? [], identity),
@@ -494,7 +541,7 @@ export async function upsertUserForIdentity(
   };
 
   if (env.AUTH_DB) {
-    await writeUserToD1(env.AUTH_DB, nextUser);
+    return writeUserToD1(env.AUTH_DB, nextUser, identity, options?.roles ?? []);
   } else {
     const kv = requireUsers(env);
     await Promise.all([
@@ -542,45 +589,12 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
   );
 };
 
-export const onRequestPost: PagesFunction<AuthEnv> = async ({ request, env }) => {
-  if (!hasAuthStorage(env)) {
-    return authJson({ ok: false, reason: 'kv-not-bound' }, { status: 500 });
-  }
-
-  if (request.headers.get(INTERNAL_AUTH_HEADER) !== '1') {
-    return authJson({ ok: false, reason: 'internal-only' }, { status: 403 });
-  }
-
-  let body: { userId?: unknown; ttlSeconds?: unknown };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return authJson({ ok: false, reason: 'bad-body' }, { status: 400 });
-  }
-
-  const userId = typeof body.userId === 'string' ? body.userId : '';
-  if (!userId) {
-    return authJson({ ok: false, reason: 'missing-user-id' }, { status: 400 });
-  }
-
-  const user = await loadUser(env, userId);
-  if (!user) {
-    return authJson({ ok: false, reason: 'user-not-found' }, { status: 404 });
-  }
-
-  const ttlSeconds = typeof body.ttlSeconds === 'number' && Number.isFinite(body.ttlSeconds)
-    ? Math.max(60, Math.floor(body.ttlSeconds))
-    : SESSION_TTL_SECONDS;
-  const session = await issueSession(env, userId, ttlSeconds);
-  return withSessionCookie(
-    authJson({
-      ok: true,
-      session,
-      user,
-    }),
-    session,
-  );
-};
+// A public request header is not authentication. Provider callbacks and
+// verified sign-in handlers call issueSession directly after verification.
+export const onRequestPost: PagesFunction<AuthEnv> = async () => authJson(
+  { ok: false, reason: 'method-not-allowed' },
+  { status: 405, headers: { Allow: 'GET, DELETE' } },
+);
 
 export const onRequestDelete: PagesFunction<AuthEnv> = async ({ request, env }) => {
   await destroySessionFromRequest(request, env);

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -16,6 +18,28 @@ const OWN_FILES = [
 ];
 // PointCast voice: never these, in any form.
 const BANNED = /\b(unlock|discover|explore|experience|seamless|elevate)\w*/i;
+
+test('all send sheets evaluate with the current connector catalog and render their twins', async () => {
+  const compiled = await build({
+    entryPoints: [fileURLToPath(new URL('src/lib/send-sheets.ts', root))],
+    bundle: true,
+    write: false,
+    platform: 'node',
+    format: 'esm',
+  });
+  const { SEND_SHEETS, renderSheetText, sheetPayload } = await import(
+    `data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString('base64')}`
+  );
+  for (const slug of SLUGS) {
+    const sheet = SEND_SHEETS[slug];
+    const text = renderSheetText(sheet);
+    assert.ok(text.includes(sheet.title.toUpperCase()), `${slug} title renders`);
+    assert.doesNotMatch(text, /\bundefined\b/, `${slug} has no missing catalog values`);
+    assert.equal(sheetPayload(sheet).text, text, `${slug} JSON and text twins agree`);
+  }
+  const clientRows = SEND_SHEETS.mcp.sections.find((section) => section.heading === 'Pick your client').items;
+  assert.ok(clientRows.some((item) => item.title === 'Cursor' && item.command.includes('pointcastV2')));
+});
 
 test('the /send shelf ships a hub and four sheets, each with JSON and plain-text twins', () => {
   assert.ok(exists('src/lib/send-sheets.ts'));
