@@ -4,16 +4,16 @@ This pilot lets a signed-in PointCast profile submit one text task to Codex or C
 
 **The computer must stay awake and the companion must remain open.** This is a local source install, not cloud hosting. It does not work while the Mac is asleep. Agent payments, wallet actions, automatic API billing, private-source ingestion, and outbound messages are not enabled.
 
-This guide describes the implementation in the `codex/bring-ai-x-profiles-20260909` branch. Use a PointCast origin where the pilot UI, authenticated APIs, and database migration `0017_ai_runtimes.sql` are enabled together. Local verification is not a claim that the public site has been deployed.
+This guide describes the owner pilot on `main`. Use a PointCast origin where the pilot UI, authenticated APIs, and database migrations `0015`–`0018` are enabled together. Provider consent and live task execution must be verified separately from deployment.
 
 ## Get the source and native clients
 
 Use Node.js **22.12.0 or later**, matching this repository's supported engine, and Git. The companion itself uses Node built-ins and the source files under `scripts/ai-companion`; it does not require this site's `npm ci` or an Astro build to run. Building or serving PointCast is a separate setup.
 
-If you already have this branch checked out, use that folder. Otherwise:
+If you already have the current PointCast source checked out, use that folder. Otherwise:
 
 ```sh
-git clone --depth 1 --single-branch --branch codex/bring-ai-x-profiles-20260909 https://github.com/mhoydich/pointcast.git pointcast-ai-pilot
+git clone --depth 1 --single-branch --branch main https://github.com/mhoydich/pointcast.git pointcast-ai-pilot
 cd pointcast-ai-pilot
 node --version
 node scripts/ai-companion/runner.mjs --help
