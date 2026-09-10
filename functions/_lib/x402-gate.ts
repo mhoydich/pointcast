@@ -383,6 +383,8 @@ export async function handleReceiptRequest(
   try {
     const response = await fetch(`${facilitator}/settle`, {
       method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ x402Version: X402_VERSION, paymentPayload: payload, paymentRequirements: required }),
     });

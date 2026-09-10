@@ -16,7 +16,8 @@ Draft [PR #1084](https://github.com/mhoydich/pointcast/pull/1084); source and lo
 - [x] (X) Implement X identity sign-in/linking with recovery and scoped profile controls — `done` — source/tests; real developer-app consent remains unverified
 - [x] (X) Preserve ambiguous x402 settlement and standard payment response headers — `done` — mocked regression proof, no payment
 - [ ] (X/MH) Complete fresh native login, installer/hosting decision, X configuration/consent, migration and release checks — `handoff`
-- [ ] (X/MH) Build one explicit-approval x402 purchase with settlement reconciliation and delivered receipt — `queued` — no spending authority or wallet assumed
+- [x] (X) Build one explicit-approval x402 purchase with separate receipt, chain observation, and delivery checks — `done` — local simulated Bench contribution pilot; deployment flag remains off
+- [ ] (X/MH) Complete operator recovery tooling, an explicitly approved real-wallet purchase, and deployment activation checks — `handoff` — unknown settlement and failed paid delivery remain held; no spending authority or funded wallet assumed
 
 ---
 

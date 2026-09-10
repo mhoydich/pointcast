@@ -28,6 +28,7 @@ declare namespace Cloudflare {
     X402_RECEIPT_SK?: string;
     X402_RECEIPT_AGENT_ID?: string;
     X402_MODE?: string;
+    AI_PURCHASES_ENABLED?: string;
     POST_OFFICE_PRICE_UNITS?: string;
     POST_OFFICE_ALIAS_DAILY_CAP?: string;
     POST_OFFICE_GLOBAL_DAILY_CAP?: string;
