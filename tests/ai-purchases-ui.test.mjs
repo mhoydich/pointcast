@@ -384,3 +384,52 @@ test('generic server failure after submission keeps the original purchase held f
   assert.match(f.q('[data-purchase-notice]').textContent, /outcome could not be confirmed/);
   assert.equal(f.state.signatures, 1); assert.equal(f.state.writes.length, 1);
 });
+
+
+test('repeated same-owner wallet bridge notifications do not starve purchase reads or clear a draft', async t => {
+  const reads = [];
+  const f = fixture(t, {}, { read: (_state, init) => new Promise(resolve => reads.push({ resolve, signal: init.signal })) });
+  const notify = () => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: { id: 'owner-a' }, source: 'tezos-session-bridge' },
+  }));
+  notify();
+  const currentRead = reads.at(-1);
+  for (let i = 0; i < 12; i += 1) { notify(); await tick(); }
+  assert.equal(currentRead.signal.aborted, false);
+  assert.equal(reads.length, 2);
+  currentRead.resolve(Response.json(f.state.snapshot)); await settle();
+  assert.equal(f.q('[data-purchase-badge]').textContent, 'Optional paid participation');
+  f.q('[data-purchase-question]').value = 'Keep my draft question';
+  notify();
+  assert.equal(f.q('[data-purchase-question]').value, 'Keep my draft question');
+  assert.equal(reads.length, 2);
+  assert.equal(f.state.signatures, 0); assert.deepEqual(f.state.writes, []);
+});
+
+test('purchase bridge dedup still resets changed owners, explicit refresh, and sign-out', async t => {
+  const reads = [];
+  const f = fixture(t, {}, { read: (_state, init) => new Promise(resolve => reads.push({ resolve, signal: init.signal })) });
+  const notify = (id, source = 'tezos-session-bridge') => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: id ? { id } : null, source },
+  }));
+  notify('owner-a');
+  const previousOwner = reads.at(-1);
+  f.q('[data-purchase-question]').value = 'Owner A private draft';
+  notify('owner-b');
+  assert.equal(previousOwner.signal.aborted, true);
+  assert.notEqual(f.q('[data-purchase-question]').value, 'Owner A private draft');
+  const ownerB = reads.at(-1);
+  f.dom.window.dispatchEvent(new f.dom.window.Event('pc:auth-refresh'));
+  assert.equal(ownerB.signal.aborted, true);
+  const refreshed = reads.at(-1);
+  notify('owner-b', 'explicit-sign-in');
+  assert.equal(refreshed.signal.aborted, true);
+  const latest = reads.at(-1);
+  notify(null);
+  assert.equal(latest.signal.aborted, true);
+  for (const read of reads) read.resolve(Response.json(f.state.snapshot));
+  await settle();
+  assert.equal(f.q('[data-purchase-badge]').textContent, 'Sign-in required');
+  assert.equal(f.q('[data-purchase-quote]').disabled, true);
+  assert.equal(f.state.signatures, 0); assert.deepEqual(f.state.writes, []);
+});

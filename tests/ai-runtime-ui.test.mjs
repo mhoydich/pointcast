@@ -406,3 +406,52 @@ test('Claude terminal fallback gives exact local recovery steps and Check status
   assert.equal(f.q('[data-runtime-run]').disabled, false);
   assert.equal(f.q('[data-runtime-badge]').textContent, 'Ready to try');
 });
+
+
+test('repeated same-owner wallet bridge notifications do not starve the initial runtime read', async t => {
+  const reads = [];
+  const f = fixture(t, init => new Promise(resolve => reads.push({ resolve, signal: init.signal })));
+  const notify = () => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: { id: 'owner-a' }, source: 'tezos-session-bridge' },
+  }));
+  notify();
+  const currentRead = reads.at(-1);
+  for (let i = 0; i < 12; i += 1) { notify(); await tick(); }
+  assert.equal(currentRead.signal.aborted, false);
+  assert.equal(reads.length, 2);
+  currentRead.resolve(Response.json({ ok: true, runtimes: [ready()], jobs: [] }));
+  await tick(); await tick();
+  assert.equal(f.q('[data-runtime-badge]').textContent, 'Ready to try');
+  assert.equal(f.q('[data-runtime-invite]').disabled, false);
+  f.q('[data-runtime-note]').value = 'Keep my current note';
+  notify();
+  assert.equal(f.q('[data-runtime-note]').value, 'Keep my current note');
+  assert.equal(reads.length, 2);
+});
+
+test('runtime bridge dedup still resets changed owners, explicit refresh, and sign-out', async t => {
+  const reads = [];
+  const f = fixture(t, init => new Promise(resolve => reads.push({ resolve, signal: init.signal })));
+  const notify = (id, source = 'tezos-session-bridge') => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: id ? { id } : null, source },
+  }));
+  notify('owner-a');
+  const previousOwner = reads.at(-1);
+  f.q('[data-runtime-note]').value = 'Owner A private note';
+  notify('owner-b');
+  assert.equal(previousOwner.signal.aborted, true);
+  assert.equal(f.q('[data-runtime-note]').value, '');
+  const ownerB = reads.at(-1);
+  f.dom.window.dispatchEvent(new f.dom.window.Event('pc:auth-refresh'));
+  assert.equal(ownerB.signal.aborted, true);
+  const refreshed = reads.at(-1);
+  notify('owner-b', 'explicit-sign-in');
+  assert.equal(refreshed.signal.aborted, true);
+  const latest = reads.at(-1);
+  notify(null);
+  assert.equal(latest.signal.aborted, true);
+  for (const read of reads) read.resolve(Response.json({ ok: true, runtimes: [ready()], jobs: [] }));
+  await tick(); await tick();
+  assert.equal(f.q('[data-runtime-badge]').textContent, 'Sign-in required');
+  assert.equal(f.q('[data-runtime-invite]').disabled, true);
+});

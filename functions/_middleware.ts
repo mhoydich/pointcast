@@ -118,6 +118,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
+  // Both legacy sign-in URLs must redirect before directory rewriting.
+  // Preserve returnTo and other query parameters for the current auth desk.
+  if ((isGet || request.method === 'HEAD') && (url.pathname === '/login' || url.pathname === '/login/')) {
+    const target = new URL('/auth', url.origin);
+    target.search = url.search;
+    return Response.redirect(target.toString(), 301);
+  }
+
   const retiredProfileTarget = RETIRED_PROFILE_ROUTES.get(url.pathname);
   if (isGet && retiredProfileTarget) {
     return Response.redirect(new URL(retiredProfileTarget, url.origin).toString(), 301);

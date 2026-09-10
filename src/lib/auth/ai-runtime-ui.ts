@@ -360,10 +360,16 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   }
   q('[data-runtime-copy]').addEventListener('click', () => void copyPairingValue('[data-runtime-command]', '[data-runtime-copy]', 'Select and copy command'), { signal: lifetime.signal });
   q('[data-runtime-copy-code]').addEventListener('click', () => void copyPairingValue('[data-runtime-code]', '[data-runtime-copy-code]', 'Select and copy private code'), { signal: lifetime.signal });
+  // The wallet bridge also reports unchanged sessions during cross-tab storage sync.
+  // Only duplicate bridge reports are inert; explicit auth actions always invalidate.
+  let lastAuthOwner: string | null = null;
   function authChanged(event: Event) {
+    const detail = (event as CustomEvent<{ user?: { id?: unknown } | null; source?: string }>).detail;
+    const owner = typeof detail?.user?.id === 'string' && detail.user.id ? detail.user.id : null;
+    if (event.type === 'pc:auth-change' && detail?.source === 'tezos-session-bridge' && owner && owner === lastAuthOwner) return;
+    lastAuthOwner = owner;
     ++epoch; ++readVersion; requests.abort(); requests = new win.AbortController(); clearTimeout(timer);
     busy = false; available = false; acceptedSession = false; loading = true; authMissing = false; notice = ''; clearSensitive(); render();
-    const detail = (event as CustomEvent).detail;
     if (event.type === 'pc:auth-change' && detail && detail.user === null) {
       loading = false; authMissing = true; notice = 'Sign in to PointCast to manage your AI.'; render(); return;
     }

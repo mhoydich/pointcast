@@ -1,6 +1,6 @@
 # X sign-in and profile connection
 
-Implemented locally on 2026-09-09. Enabling the feature requires the configuration and live checks below; a local test result does not demonstrate a working production X application.
+Source deployed on 2026-09-09; X credentials are not configured. Enabling sign-in requires the configuration and live checks below; deployment and local tests do not demonstrate a working production X application.
 
 ## Enable
 

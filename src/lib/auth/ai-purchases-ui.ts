@@ -366,9 +366,16 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
     if (p?.status === 'quoted') { question.value = p.question; if (snapshot.runtimes.some(r => r.id === p.runtimeId)) selectedRuntime = p.runtimeId; }
     notice = ''; render();
   }, { signal: lifetime.signal });
+  // The wallet bridge also reports unchanged sessions during cross-tab storage sync.
+  // Only duplicate bridge reports are inert; explicit auth actions always invalidate.
+  let lastAuthOwner: string | null = null;
   function authChanged(event: Event) {
+    const detail = (event as CustomEvent<{ user?: { id?: unknown } | null; source?: string }>).detail;
+    const owner = typeof detail?.user?.id === 'string' && detail.user.id ? detail.user.id : null;
+    if (event.type === 'pc:auth-change' && detail?.source === 'tezos-session-bridge' && owner && owner === lastAuthOwner) return;
+    lastAuthOwner = owner;
     ++epoch; ++readVersion; requests.abort(); requests = new win.AbortController(); clearTimeout(timer); busy = ''; notice = ''; available = false; acceptedSession = false; authMissing = false; loading = true; clearSensitive(); render();
-    if (event.type === 'pc:auth-change' && (event as CustomEvent).detail?.user === null) { loading = false; authMissing = true; render(); return; }
+    if (event.type === 'pc:auth-change' && detail?.user === null) { loading = false; authMissing = true; render(); return; }
     void load();
   }
   win.addEventListener('pc:auth-change', authChanged, { signal: lifetime.signal });
