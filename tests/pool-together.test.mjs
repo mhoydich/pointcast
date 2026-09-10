@@ -61,8 +61,8 @@ test('Pool Together wires the free memo desk, the paid memo action, and the pled
   assert.match(free, /countMemosSince\(db, 'ip_hash'/);
   assert.match(actions, /endpoint: 'https:\/\/pointcast\.xyz\/api\/agent\/memo'/);
   assert.match(actions, /room: 'https:\/\/pointcast\.xyz\/pool-together'/);
-  assert.match(buyer, /'bench' \| 'cast' \| 'claim' \| 'memo'/);
-  assert.match(buyer, /\['bench', 'cast', 'claim', 'memo'\]\.includes/);
+  assert.match(buyer, /action: 'bench' \| 'cast' \| 'claim'(?: \| '[a-z]+')* \| 'memo'/);
+  assert.match(buyer, /\['bench', 'cast', 'claim'(?:, '[a-z]+')*, 'memo'\]\.includes/);
 });
 
 test('Pool Together has nine plates at the right sizes and all publication twins', async () => {
