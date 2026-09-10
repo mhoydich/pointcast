@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { createServer } from 'vite';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -57,4 +58,43 @@ test('profile entry points use /me and generic visitor collection links are reti
   }
   assert.match(footer, /href="\/me">View profile/);
   assert.match(dock, /href="\/me"[^>]*data-dock-title="Profile"/);
+});
+
+
+test('both legacy login URLs redirect before rewriting and preserve the auth query', async (t) => {
+  const redirects = (await read('public/_redirects')).split('\n')
+    .filter((line) => line.trim() && !line.trim().startsWith('#'))
+    .map((line) => line.trim().split(/\s+/));
+  for (const path of ['/login', '/login/']) {
+    assert.deepEqual(redirects.filter(([from]) => from === path), [[path, '/auth', '301']]);
+  }
+  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
+  t.after(() => server.close());
+  const { onRequest } = await server.ssrLoadModule('/functions/_middleware.ts');
+  t.mock.method(globalThis, 'fetch', () => { throw new Error('login must redirect before fetching a directory'); });
+  const query = '?returnTo=%2Fme%3Fpanel%3Dconnections%23my-ai&source=old+link&source=again';
+  for (const path of ['/login', '/login/']) {
+    for (const method of ['GET', 'HEAD']) {
+      for (const search of ['', query, '?returnTo=https%3A%2F%2Fexample.invalid%2F']) {
+        const response = await onRequest({
+          request: new Request(`https://pointcast.xyz${path}${search}`, { method }),
+          env: {},
+          next: () => { throw new Error('login must redirect before static routing'); },
+          waitUntil: () => { throw new Error('login must redirect before visit logging'); },
+        });
+        assert.equal(response.status, 301);
+        assert.equal(response.headers.get('location'), `https://pointcast.xyz/auth${search}`);
+      }
+    }
+  }
+  // Existing profile aliases retain their destinations and fragment behavior.
+  for (const [path, target] of [['/profile', '/me'], ['/profile/', '/me'], ['/minted', '/me#holdings'],
+    ['/minted/', '/me#holdings'], ['/dashboard', '/me'], ['/dashboard/', '/me']]) {
+    const response = await onRequest({
+      request: new Request(`https://pointcast.xyz${path}?old=1`), env: {},
+      next: () => { throw new Error('profile alias must redirect'); }, waitUntil: () => {},
+    });
+    assert.equal(response.status, 301);
+    assert.equal(response.headers.get('location'), `https://pointcast.xyz${target}`);
+  }
 });

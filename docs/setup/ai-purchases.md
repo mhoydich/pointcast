@@ -1,6 +1,6 @@
 # Optional AI purchase pilot
 
-Status: implemented locally for the private profile at `/me#ai-purchases`; disabled unless explicitly enabled for a deployment. Validation uses mock wallets, fake settlement responses, fixture signatures and local integration tests. No real wallet authorization, live payment, or production deployment is established by this work.
+Status: deployed with the private profile at `/me#ai-purchases`; new purchases remain disabled unless explicitly enabled for a deployment. Payment validation uses mock wallets, fake settlement responses, fixture signatures and local integration tests. Deployment does not establish real wallet authorization or a live payment.
 
 The first service is an optional **0.01 USDC contribution to publish one question on PointCast’s public Bench**. It does not purchase an AI answer. Free participation remains available at `/bench`, and using an AI connection does not require a wallet. A ChatGPT or Claude subscription does not fund USDC or authorize spending.
 

@@ -1,3 +1,4 @@
+import type { PointCastUser } from './types.ts';
 import * as buyer from '../x402-buyer.ts';
 import type { BuyerQuote, BuyerWallet } from '../x402-buyer.ts';
 import { X402_CHAIN_ID } from '../x402.ts';
@@ -89,6 +90,7 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
   const walletApi = options.walletApi ?? buyer;
   const lifetime = new win.AbortController();
   let requests = new win.AbortController(), approval = new win.AbortController();
+  let lastAuthOwner: string | null = null;
   let epoch = 0, readVersion = 0, intent = 0;
   let acceptedSession = false, authMissing = false, loading = true, available = false, busy = '', notice = '';
   let draftDirty = false;
@@ -241,7 +243,8 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
     } catch (error) {
       if (!live(version) || read !== readVersion) return false;
       available = false; loading = false;
-      if (error instanceof PurchaseRequestError && error.status === 401) { acceptedSession = false; authMissing = true; clearSensitive(); }
+      if (error instanceof PurchaseRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; clearSensitive(); }
+      if (!acceptedSession) lastAuthOwner = null;
       notice = error instanceof PurchaseRequestError ? error.message : purchaseError(''); render(); schedule(); return false;
     }
   }
@@ -263,7 +266,7 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
       return data.purchase;
     } catch (error) {
       if (!live(version)) return null;
-      if (error instanceof PurchaseRequestError && error.status === 401) { acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
+      if (error instanceof PurchaseRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
       notice = error instanceof PurchaseRequestError ? error.message : purchaseError('');
       return null;
     } finally { if (live(version)) { busy = ''; render(); schedule(); } }
@@ -317,7 +320,7 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
       acceptPurchase(data.purchase); resetApproval(); notice = '';
     } catch (error) {
       if (!live(version)) return;
-      if (error instanceof PurchaseRequestError && error.status === 401) { acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
+      if (error instanceof PurchaseRequestError && error.status === 401) { lastAuthOwner = null; acceptedSession = false; authMissing = true; available = false; clearSensitive(); }
       if (error instanceof PurchaseRequestError && error.status >= 400 && error.status < 600 && UNSUBMITTED_REASONS.has(error.reason)) {
         uncertain.delete(id); mustRefresh.add(id); resetApproval();
       }
@@ -366,9 +369,15 @@ export function mountAiPurchases(root: HTMLElement, options: { walletApi?: Walle
     if (p?.status === 'quoted') { question.value = p.question; if (snapshot.runtimes.some(r => r.id === p.runtimeId)) selectedRuntime = p.runtimeId; }
     notice = ''; render();
   }, { signal: lifetime.signal });
+  // The wallet bridge also reports unchanged sessions during cross-tab storage sync.
+  // Only duplicate bridge reports are inert; explicit auth actions always invalidate.
   function authChanged(event: Event) {
+    const detail = (event as CustomEvent<{ user?: Partial<Pick<PointCastUser, 'userId'>> | null; source?: string }>).detail;
+    const owner = typeof detail?.user?.userId === 'string' && detail.user.userId ? detail.user.userId : null;
+    if (event.type === 'pc:auth-change' && detail?.source === 'tezos-session-bridge' && owner && owner === lastAuthOwner) return;
+    lastAuthOwner = owner;
     ++epoch; ++readVersion; requests.abort(); requests = new win.AbortController(); clearTimeout(timer); busy = ''; notice = ''; available = false; acceptedSession = false; authMissing = false; loading = true; clearSensitive(); render();
-    if (event.type === 'pc:auth-change' && (event as CustomEvent).detail?.user === null) { loading = false; authMissing = true; render(); return; }
+    if (event.type === 'pc:auth-change' && detail?.user === null) { loading = false; authMissing = true; render(); return; }
     void load();
   }
   win.addEventListener('pc:auth-change', authChanged, { signal: lifetime.signal });

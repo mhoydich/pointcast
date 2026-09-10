@@ -1,7 +1,7 @@
 # Personal PointCast: product roadmap and gameplan
 
 Date: 2026-09-09
-Status: proposed product sequence, with an implementation draft in [PR #1084](https://github.com/mhoydich/pointcast/pull/1084). Nothing in that PR is deployed.
+Status: owner pilot published through [PR #1084](https://github.com/mhoydich/pointcast/pull/1084). Guided installation, fresh provider consent, X configuration, and live payment validation remain rollout work. New purchases stay disabled; later stages below remain proposed.
 
 ## The product
 
@@ -20,7 +20,7 @@ Zo's current changelog confirms an in-app subscription sign-in dialog for Claude
 
 ## What we have now
 
-The draft now includes an owner pilot with a real native AI runtime: pair this computer to the private PointCast profile, check its subscription sign-in, choose a model, preview selected text and an optional gentle preference, and run one text-only task. Both Codex (GPT-5.6 Luna) and Claude (Fable 5.1) returned real results through the owner's existing subscriptions. The profile-to-companion-to-model-to-profile path has been exercised locally with a synthetic PointCast account and real native clients.
+The published owner pilot includes a real native AI runtime: pair this computer to the private PointCast profile, check its subscription sign-in, choose a model, preview selected text and an optional gentle preference, and run one text-only task. Both Codex (GPT-5.6 Luna) and Claude (Fable 5.1) returned real results through the owner's existing subscriptions. The profile-to-companion-to-model-to-profile path has been exercised locally with a synthetic PointCast account and real native clients; that proof is distinct from a new production pairing or fresh provider consent.
 
 The companion starts native provider sign-in and relays approved provider URLs and confirmation codes when the provider uses them. Fresh-account consent has not yet been exercised: these native clients were already signed in. Initial setup currently requires the source companion on the owner's Mac. This proves the execution path; the installer and a browser-only hosted experience still need product work. The Mac must remain awake and the companion running.
 

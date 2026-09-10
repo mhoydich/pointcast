@@ -6,6 +6,8 @@ import { mountAiPurchases, purchaseStatus, readPurchaseResponse, safeBenchUrl } 
 import { X402_DEFAULT_ASSET, X402_DEFAULT_PAY_TO } from '../src/lib/x402.ts';
 
 const component = readFileSync(new URL('../src/components/AiPurchases.astro', import.meta.url), 'utf8').split('<script>')[0];
+const sessionUser = userId => ({ userId, createdAt: '2026-09-09T00:00:00.000Z', identities: [{ provider: 'kukai', id: 'tz1-verified-wallet', name: 'Wallet', verifiedAt: '2026-09-09T00:00:00.000Z' }], preferredName: 'PointCast member' });
+const bridgeSession = (dom, userId) => dom.window.dispatchEvent(new dom.window.CustomEvent('pc:auth-change', { detail: { user: userId ? sessionUser(userId) : null, source: 'tezos-session-bridge' } }));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const settle = async () => { await tick(); await tick(); await tick(); };
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
@@ -383,4 +385,99 @@ test('generic server failure after submission keeps the original purchase held f
   assert.equal(f.q('[data-purchase-approval]').hidden, true);
   assert.match(f.q('[data-purchase-notice]').textContent, /outcome could not be confirmed/);
   assert.equal(f.state.signatures, 1); assert.equal(f.state.writes.length, 1);
+});
+
+
+test('repeated same-owner wallet bridge notifications do not starve purchase reads or clear a draft', async t => {
+  const reads = [];
+  const f = fixture(t, {}, { read: (_state, init) => new Promise(resolve => reads.push({ resolve, signal: init.signal })) });
+  const notify = () => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: sessionUser('owner-a'), source: 'tezos-session-bridge' },
+  }));
+  notify();
+  const currentRead = reads.at(-1);
+  for (let i = 0; i < 12; i += 1) { notify(); await tick(); }
+  assert.equal(currentRead.signal.aborted, false);
+  assert.equal(reads.length, 2);
+  currentRead.resolve(Response.json(f.state.snapshot)); await settle();
+  assert.equal(f.q('[data-purchase-badge]').textContent, 'Optional paid participation');
+  f.q('[data-purchase-question]').value = 'Keep my draft question';
+  notify();
+  assert.equal(f.q('[data-purchase-question]').value, 'Keep my draft question');
+  assert.equal(reads.length, 2);
+  assert.equal(f.state.signatures, 0); assert.deepEqual(f.state.writes, []);
+});
+
+test('purchase bridge dedup still resets changed owners, explicit refresh, and sign-out', async t => {
+  const reads = [];
+  const f = fixture(t, {}, { read: (_state, init) => new Promise(resolve => reads.push({ resolve, signal: init.signal })) });
+  const notify = (id, source = 'tezos-session-bridge') => f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', {
+    detail: { user: id ? sessionUser(id) : null, source },
+  }));
+  notify('owner-a');
+  const previousOwner = reads.at(-1);
+  f.q('[data-purchase-question]').value = 'Owner A private draft';
+  notify('owner-b');
+  assert.equal(previousOwner.signal.aborted, true);
+  assert.notEqual(f.q('[data-purchase-question]').value, 'Owner A private draft');
+  const ownerB = reads.at(-1);
+  f.dom.window.dispatchEvent(new f.dom.window.Event('pc:auth-refresh'));
+  assert.equal(ownerB.signal.aborted, true);
+  const refreshed = reads.at(-1);
+  notify('owner-b', 'explicit-sign-in');
+  assert.equal(refreshed.signal.aborted, true);
+  const latest = reads.at(-1);
+  notify(null);
+  assert.equal(latest.signal.aborted, true);
+  for (const read of reads) read.resolve(Response.json(f.state.snapshot));
+  await settle();
+  assert.equal(f.q('[data-purchase-badge]').textContent, 'Sign-in required');
+  assert.equal(f.q('[data-purchase-quote]').disabled, true);
+  assert.equal(f.state.signatures, 0); assert.deepEqual(f.state.writes, []);
+});
+
+
+for (const failure of ['read-401', 'mutate-401', 'submit-401', 'initial-network']) {
+  test(`same-owner purchase session recovers after ${failure}`, async t => {
+    let failRead = failure === 'initial-network';
+    const f = fixture(t, { purchases: failure === 'submit-401' ? [purchase()] : [] }, {
+      read: state => {
+        if (failRead && failure === 'initial-network') throw new TypeError('Offline');
+        if (failRead) return Response.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+        return Response.json(state.snapshot);
+      },
+      write: () => Response.json({ ok: false, reason: 'unauthorized' }, { status: 401 }),
+    });
+    bridgeSession(f.dom, 'pcu_owner_a'); await settle();
+    if (failure === 'read-401') { failRead = true; f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange')); }
+    if (failure === 'mutate-401') { f.q('[data-purchase-question]').value = 'Public question'; f.q('[data-purchase-quote]').click(); }
+    if (failure === 'submit-401') { await f.chooseAndConnect(); f.consentAndApprove(); }
+    await settle();
+    assert.equal(f.q('[data-purchase-badge]').textContent, failure === 'initial-network' ? 'Status unavailable' : 'Sign-in required');
+    assert.equal(f.q('[data-purchase-quote]').disabled, true);
+    assert.equal(f.q('[data-purchase-payer]').textContent, '');
+    const beforeRecovery = f.state.reads;
+    failRead = false; bridgeSession(f.dom, 'pcu_owner_a'); await settle();
+    assert.equal(f.state.reads, beforeRecovery + 1);
+    assert.notEqual(f.q('[data-purchase-badge]').textContent, 'Sign-in required');
+    assert.notEqual(f.q('[data-purchase-badge]').textContent, 'Status unavailable');
+    assert.equal(f.q('[data-purchase-public-consent]').checked, false);
+    assert.equal(f.q('[data-purchase-approve]').disabled, true);
+    assert.equal(f.state.writes.length, ['mutate-401', 'submit-401'].includes(failure) ? 1 : 0);
+    assert.equal(f.state.signatures, failure === 'submit-401' ? 1 : 0);
+  });
+}
+
+test('a real-shaped owner change discards an earlier owner wallet signature', async t => {
+  const signed = deferred();
+  const f = fixture(t, { purchases: [purchase()] }, { walletApi: { signBuyerPayment: () => signed.promise } });
+  bridgeSession(f.dom, 'pcu_owner_a'); await settle();
+  await f.chooseAndConnect(); f.consentAndApprove(); await settle();
+  f.state.snapshot = { ok: true, available: true, runtimes: [], purchases: [] };
+  bridgeSession(f.dom, 'pcu_owner_b'); await settle();
+  signed.resolve({ paymentSignature: 'earlier-owner-signature' }); await settle();
+  assert.deepEqual(f.state.writes, []);
+  assert.equal(f.q('[data-purchase-payer]').textContent, '');
+  assert.equal(f.q('[data-purchase-public-consent]').checked, false);
+  assert.equal(f.q('[data-purchase-review]').hidden, true);
 });

@@ -9,6 +9,10 @@ export function mountProfileConnections(root, api) {
   let user;
   let available = null;
   let revision = 0;
+  let lastBridgeUser = null;
+  const sessionFingerprint = (value) => typeof value?.userId === 'string' && value.userId
+    ? JSON.stringify([value.userId, Array.isArray(value.identities)
+      ? value.identities.map((identity) => [identity?.provider, identity?.id, identity?.username, identity?.verifiedAt]) : []]) : null;
   let busy = false;
   let notice = xCallbackMessage(win.location.search);
   let needsReauth = new URLSearchParams(win.location.search).get('auth_error') === 'x-fresh-sign-in-required';
@@ -73,9 +77,11 @@ export function mountProfileConnections(root, api) {
       const next = await api.getSession();
       if (!live() || request !== revision) return;
       user = next;
+      lastBridgeUser = sessionFingerprint(next);
     } catch {
       if (!live() || request !== revision) return;
       user = undefined;
+      lastBridgeUser = null;
       notice = 'Your session could not be checked. Reload before managing X.';
     }
     render();
@@ -151,10 +157,16 @@ export function mountProfileConnections(root, api) {
 
   win.addEventListener('pc:auth-change', (event) => {
     if (event.detail?.source === 'profile-connections') return;
+    const bridgeUser = event.detail?.source === 'tezos-session-bridge'
+      ? sessionFingerprint(event.detail.user) : null;
+    // Coalesce unchanged bridge reports, including while the first read waits.
+    // Real account/identity changes and explicit auth actions still invalidate.
+    if (bridgeUser && bridgeUser === lastBridgeUser) return;
+    lastBridgeUser = bridgeUser;
     if (!needsReauth) notice = '';
     void refreshSession();
   }, { signal });
-  win.addEventListener('pc:auth-refresh', () => void refreshSession(), { signal });
+  win.addEventListener('pc:auth-refresh', () => { lastBridgeUser = null; void refreshSession(); }, { signal });
   doc.addEventListener('astro:before-swap', () => controller.abort(), { signal });
   void refreshSession();
   void api.getXAuthAvailability().then((value) => {

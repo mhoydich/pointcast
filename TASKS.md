@@ -9,13 +9,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ## Personal AI, X profiles, and approved purchases (2026-09-09)
 
-Draft [PR #1084](https://github.com/mhoydich/pointcast/pull/1084); source and local proof only, not deployed. Roadmap: `docs/plans/2026-09-09-personal-ai-product-roadmap.md`.
+Released [PR #1084](https://github.com/mhoydich/pointcast/pull/1084) at `b4d335ea`; UI, Functions, and auth migrations 0015–0018 are deployed. X remains unconfigured and new purchases remain disabled. Roadmap: `docs/plans/2026-09-09-personal-ai-product-roadmap.md`.
 
 - [x] (X) Implement and locally exercise paired native Codex/Claude text tasks from My AI, including actual Fable 5.1 execution — `done` — existing subscription accounts; no provider credentials copied to PointCast
 - [x] (X) Add selected text/note preview, optional gentle preference, idempotent task creation, model evidence, cancellation, and revocation — `done` — local pilot
 - [x] (X) Implement X identity sign-in/linking with recovery and scoped profile controls — `done` — source/tests; real developer-app consent remains unverified
 - [x] (X) Preserve ambiguous x402 settlement and standard payment response headers — `done` — mocked regression proof, no payment
-- [ ] (X/MH) Complete fresh native login, installer/hosting decision, X configuration/consent, migration and release checks — `handoff`
+- [x] (X) Merge the approved source, apply scoped migrations 0015–0018, and deploy matching UI/Functions — `done` — initial release `b4d335ea`; live QA follow-up fixes repeated session confirmations and the trailing-slash login alias
+- [ ] (X/MH) Complete fresh native login, installer/hosting decision, and X configuration/consent — `handoff`
 - [x] (X) Build one explicit-approval x402 purchase with separate receipt, chain observation, and delivery checks — `done` — local simulated Bench contribution pilot; deployment flag remains off
 - [ ] (X/MH) Complete operator recovery tooling, an explicitly approved real-wallet purchase, and deployment activation checks — `handoff` — unknown settlement and failed paid delivery remain held; no spending authority or funded wallet assumed
 
