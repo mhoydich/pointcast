@@ -149,18 +149,19 @@ test('the freshness slot still feeds /now.json, and the front door links the twi
 });
 
 test('the fresh front door is responsive, accessible, and motion-safe by construction', async () => {
-  const [home, edition, desk, play, shelf, css] = await Promise.all([
+  const [home, edition, desk, play, shelf, css, welcome] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
     read('src/components/HomeFrontDoorDesk.astro'),
     read('src/components/HomePlayFirst.astro'),
     read('src/styles/home-shelf.css'),
     read('src/styles/front-door-fresh.css'),
+    read('src/components/HomeWelcome.astro'),
   ]);
 
-  // September's role-aware desk carries the page's only h1; Rosebud remains a labelled h2 shelf below it.
+  // The project welcome carries the page's only h1; Rosebud remains a labelled h2 shelf below it.
   assert.equal((home.match(/<h1\b/g) ?? []).length, 0);
-  assert.equal(((home + desk + play).match(/<h1\b/g) ?? []).length, 1);
+  assert.equal(((home + desk + play + welcome).match(/<h1\b/g) ?? []).length, 1);
   assert.match(edition, /id="home-edition-title"/);
   assert.match(play, /aria-labelledby="play-title"/);
   assert.match(play, /<h2 class="play__title" id="play-title"/);
