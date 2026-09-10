@@ -151,6 +151,7 @@ export async function finalizeX402Receipt(
   actionResult: unknown,
   resourceId: string | null,
   expectedPublicKey = X402_TREASURY_PUBLIC_KEY,
+  options: { retain?: boolean } = {},
 ): Promise<JsonRecord> {
   const signingKey = await receiptSigningKey(env, expectedPublicKey);
   const finalized: JsonRecord = {
@@ -168,7 +169,7 @@ export async function finalizeX402Receipt(
     value: await signCanonicalPayload(receiptPayload, signingKey),
   };
   const settlement = isJsonRecord(finalized.settlement) ? finalized.settlement : {};
-  if (typeof settlement.tx === 'string') await retainReceipt(env, settlement.tx, finalized);
+  if (options.retain !== false && typeof settlement.tx === 'string') await retainReceipt(env, settlement.tx, finalized);
   return finalized;
 }
 

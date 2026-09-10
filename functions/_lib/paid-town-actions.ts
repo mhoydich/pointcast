@@ -176,12 +176,19 @@ export function publicPaidIntent(row: PaidIntentRow): Record<string, unknown> {
   };
 }
 
-export async function loadPaidIntent(db: D1Database, intentId: string): Promise<PaidIntentRow | null> {
+export type PaidIntentTable = "paid_action_intents" | "nouns_battler_records";
+function checkedIntentTable(table: PaidIntentTable): PaidIntentTable {
+  if (table !== "paid_action_intents" && table !== "nouns_battler_records") throw new Error("invalid-intent-table");
+  return table;
+}
+
+export async function loadPaidIntent(db: D1Database, intentId: string, table: PaidIntentTable = "paid_action_intents"): Promise<PaidIntentRow | null> {
+  checkedIntentTable(table);
   return db.prepare(`
     SELECT id, action, idempotency_key, request_hash, request_json, status,
            capacity_key, settlement_json, result_json, tx_hash, agent_id,
            error, created_at, updated_at
-    FROM paid_action_intents WHERE id = ?
+    FROM ${table} WHERE id = ?
   `).bind(intentId).first<PaidIntentRow>();
 }
 
@@ -196,7 +203,9 @@ export async function beginPaidIntent(
   db: D1Database,
   action: string,
   payload: Record<string, unknown>,
+  table: PaidIntentTable = "paid_action_intents",
 ): Promise<BeginPaidIntentResult> {
+  checkedIntentTable(table);
   if (!request.headers.get('Payment-Signature')) return { kind: 'quote' };
   const idempotencyKey = request.headers.get('Idempotency-Key')?.trim() ?? '';
   if (!/^[A-Za-z0-9._:-]{8,128}$/u.test(idempotencyKey)) {
@@ -212,7 +221,7 @@ export async function beginPaidIntent(
   const id = `pai_${crypto.randomUUID().replaceAll('-', '')}`;
   const now = new Date().toISOString();
   await db.prepare(`
-    INSERT INTO paid_action_intents
+    INSERT INTO ${table}
       (id, action, idempotency_key, request_hash, request_json, status, capacity_key,
        settlement_json, result_json, tx_hash, agent_id, error, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 'created', NULL, NULL, NULL, NULL, ?, NULL, ?, ?)
@@ -222,7 +231,7 @@ export async function beginPaidIntent(
     SELECT id, action, idempotency_key, request_hash, request_json, status,
            capacity_key, settlement_json, result_json, tx_hash, agent_id,
            error, created_at, updated_at
-    FROM paid_action_intents WHERE action = ? AND idempotency_key = ?
+    FROM ${table} WHERE action = ? AND idempotency_key = ?
   `).bind(action, idempotencyKey).first<PaidIntentRow>();
   if (!intent) {
     return { kind: 'response', response: paidJson({ ok: false, error: 'The action intent could not be read.' }, 503) };
@@ -281,9 +290,11 @@ export async function updatePaidIntent(
     agentId?: string | null;
     error?: string | null;
   } = {},
+  table: PaidIntentTable = "paid_action_intents",
 ): Promise<void> {
+  checkedIntentTable(table);
   await db.prepare(`
-    UPDATE paid_action_intents SET
+    UPDATE ${table} SET
       status = ?,
       capacity_key = COALESCE(?, capacity_key),
       settlement_json = COALESCE(?, settlement_json),
@@ -306,9 +317,10 @@ export async function updatePaidIntent(
   ).run();
 }
 
-export async function acquirePaidSettlement(db: D1Database, intentId: string): Promise<boolean> {
+export async function acquirePaidSettlement(db: D1Database, intentId: string, table: PaidIntentTable = "paid_action_intents"): Promise<boolean> {
+  checkedIntentTable(table);
   const row = await db.prepare(`
-    UPDATE paid_action_intents
+    UPDATE ${table}
     SET status = 'settling', error = NULL, updated_at = ?
     WHERE id = ? AND status IN ('created', 'settlement_failed')
     RETURNING id
