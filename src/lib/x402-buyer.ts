@@ -264,10 +264,10 @@ export async function signBuyerPayment({ wallet, quote, expectedAccount, now = D
 }
 
 export interface BuyerReceiptExpectation {
-  quote: BuyerQuote; payer: string; action: 'bench' | 'cast' | 'claim'; requestBody: JsonRecord;
+  quote: BuyerQuote; payer: string; action: 'bench' | 'cast' | 'claim' | 'memo'; requestBody: JsonRecord;
   actionId: string; transactionHash?: string; publicKey?: string;
 }
-/** Canonical server action body: trimmed {question}, normalized {word}, or {to,tokenId}. */
+/** Canonical server action body: trimmed {question}, normalized {word}, {to,tokenId}, or the normalized memo {agent,kind,lot,note,apn?,address?,source?}. */
 export async function hashBuyerRequest(action: string, requestBody: JsonRecord) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${action}\n${canonicalJson(requestBody)}`));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -293,7 +293,7 @@ export async function verifyBuyerReceipt(receipt: unknown, expected: BuyerReceip
       || typeof settled.tx !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(settled.tx)
       || (expected.transactionHash !== undefined && settled.tx.toLowerCase() !== expected.transactionHash.toLowerCase())) return invalid('receipt-payment-terms-mismatch', true);
     const actionResult = isJsonRecord(receipt.action_result) ? receipt.action_result : {};
-    if (!['bench', 'cast', 'claim'].includes(expected.action) || new URL(expected.quote.endpoint).pathname !== `/api/agent/${expected.action}`
+    if (!['bench', 'cast', 'claim', 'memo'].includes(expected.action) || new URL(expected.quote.endpoint).pathname !== `/api/agent/${expected.action}`
       || !/^pai_[0-9a-f]{32}$/.test(expected.actionId) || receipt.resource_id !== expected.actionId
       || receipt.request_hash !== await hashBuyerRequest(expected.action, expected.requestBody)
       || actionResult.ok !== true || actionResult.action !== expected.action || actionResult.actionId !== expected.actionId
