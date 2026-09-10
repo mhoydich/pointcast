@@ -29,7 +29,7 @@ export interface BuyerWallet {
 }
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ACTION_PATH = /^\/api\/agent\/(bench|cast|claim)$/;
+const ACTION_PATH = /^\/api\/agent\/(bench|cast|claim|battler)$/;
 const sameAddress = (a: unknown, b: unknown) => typeof a === 'string' && typeof b === 'string'
   && ADDRESS.test(a) && ADDRESS.test(b) && a.toLowerCase() === b.toLowerCase();
 function fail(code: string): never { throw new Error(code); }
@@ -264,7 +264,7 @@ export async function signBuyerPayment({ wallet, quote, expectedAccount, now = D
 }
 
 export interface BuyerReceiptExpectation {
-  quote: BuyerQuote; payer: string; action: 'bench' | 'cast' | 'claim'; requestBody: JsonRecord;
+  quote: BuyerQuote; payer: string; action: 'bench' | 'cast' | 'claim' | 'battler'; requestBody: JsonRecord;
   actionId: string; transactionHash?: string; publicKey?: string;
 }
 /** Canonical server action body: trimmed {question}, normalized {word}, or {to,tokenId}. */
@@ -293,7 +293,7 @@ export async function verifyBuyerReceipt(receipt: unknown, expected: BuyerReceip
       || typeof settled.tx !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(settled.tx)
       || (expected.transactionHash !== undefined && settled.tx.toLowerCase() !== expected.transactionHash.toLowerCase())) return invalid('receipt-payment-terms-mismatch', true);
     const actionResult = isJsonRecord(receipt.action_result) ? receipt.action_result : {};
-    if (!['bench', 'cast', 'claim'].includes(expected.action) || new URL(expected.quote.endpoint).pathname !== `/api/agent/${expected.action}`
+    if (!['bench', 'cast', 'claim', 'battler'].includes(expected.action) || new URL(expected.quote.endpoint).pathname !== `/api/agent/${expected.action}`
       || !/^pai_[0-9a-f]{32}$/.test(expected.actionId) || receipt.resource_id !== expected.actionId
       || receipt.request_hash !== await hashBuyerRequest(expected.action, expected.requestBody)
       || actionResult.ok !== true || actionResult.action !== expected.action || actionResult.actionId !== expected.actionId

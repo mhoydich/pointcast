@@ -1,3 +1,4 @@
+import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
  *
@@ -481,6 +482,24 @@ const TOOL_DEFINITIONS = [
       },
       additionalProperties: false,
     },
+  },
+  {
+    name: 'nouns_battler_arena',
+    description: 'Get the playable Nouns Nation agent exhibition catalog: gangs, roles, 12-unit roster limits, tactics, free match API and optional one-cent x402 record terms. No payment or model call.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: 'nouns_battler_play',
+    description: 'Run a free reproducible 12v12 Nouns Nation exhibition. Choose a uint32 seed and optional left/right gang, tactic (rush, guard, flank) and five-role roster totaling 12. Get the outcome, event trace and replay frames. Does not alter the old browser league, save a paid record, move money or invoke another model.',
+    inputSchema: { type: 'object', properties: { seed: { type: 'integer', minimum: 0, maximum: 4294967295 }, left: { type: 'object' }, right: { type: 'object' } }, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: 'nouns_battler_record',
+    description: 'Read a commissioned Nouns Nation match record and payment status by action ID. A pending or ambiguous payment is not proof of completion. This tool never pays or retries settlement.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', pattern: '^pai_[0-9a-f]{32}$' } }, required: ['id'], additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
   {
     name: 'nouns_battler_manifest',
@@ -1758,6 +1777,17 @@ async function dispatchTool(
         ],
       };
     }
+    case 'nouns_battler_arena': return textContent(JSON.stringify(arenaDiscovery()));
+    case 'nouns_battler_play': {
+      const response = await runArena(new Request(`${base}/api/nouns-battler/arena`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) }));
+      return { ...textContent(await response.text()), ...(!response.ok ? { isError: true } : {}) };
+    }
+    case 'nouns_battler_record': {
+      if (typeof args.id !== 'string' || !/^pai_[0-9a-f]{32}$/.test(args.id)) return { ...textContent('Invalid match record ID.'), isError: true };
+      const data = await callJson(`${base}/api/actions/${args.id}`);
+      if (data?.action !== 'battler') return { ...textContent('Nouns Nation match record not found.'), isError: true };
+      return textContent(JSON.stringify(data));
+    }
     case 'nouns_battler_manifest': {
       const data = await callJson(`${base}/nouns-nation-battler.json`);
       const systems = Array.isArray(data?.game?.systems) ? data.game.systems.slice(0, 10).join(', ') : 'league systems';
@@ -2935,7 +2965,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {

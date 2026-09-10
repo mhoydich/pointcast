@@ -26,7 +26,8 @@ export const onRequestGet: PagesFunction<ActionsEnv> = async ({ env, params }) =
       headers: PAID_ACTION_HEADERS,
     });
   }
-  const intent = await loadPaidIntent(env.AUTH_DB, id);
+  const intent = await loadPaidIntent(env.AUTH_DB, id)
+    ?? await loadPaidIntent(env.AUTH_DB, id, "nouns_battler_records");
   if (!intent) {
     return paidIntentJson(id, { ok: false, error: 'action-not-found' }, 404);
   }
