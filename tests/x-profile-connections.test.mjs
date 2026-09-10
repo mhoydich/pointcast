@@ -180,3 +180,16 @@ test('X freshness recovery opens and focuses an already-linked method without st
   assert.equal(f.find('[data-x-recovery]').hidden, false);
   f.cleanup();
 });
+
+test('all X launch and callback failures provide a specific recovery message', () => {
+  const reasons = {
+    'x-secure-origin-required': /HTTPS/,
+    'x-start-failed': /could not start/,
+    'x-invalid-intent': /profile.*Sign in with X or Link X/,
+    'x-missing-callback': /complete sign-in response/,
+    'x-token-failed': /complete the sign-in request/,
+    'x-profile-failed': /profile could not be read/,
+    'x-verification-failed': /could not be verified/,
+  };
+  for (const [reason, expected] of Object.entries(reasons)) assert.match(xCallbackMessage(`?auth_error=${reason}`), expected);
+});

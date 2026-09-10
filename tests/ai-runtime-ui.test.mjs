@@ -7,7 +7,6 @@ import { buildRuntimePrompt, buildRuntimeView, mountAiRuntime, nativeLoginUrl, r
 
 const component = readFileSync(new URL('../src/components/AiRuntime.astro', import.meta.url), 'utf8').split('<script>')[0].replace(/^---[\s\S]*?---/, '');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const now = () => new Date().toISOString();
 const future = () => new Date(Date.now() + 600000).toISOString();
 function runtime(overrides = {}) {
@@ -198,17 +197,26 @@ test('disconnect scrubs an in-flight result and cannot be undone by an older sta
 });
 
 test('polling pauses when hidden and stays stopped after sign-out', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let reads = 0;
   const f = fixture(t, () => { reads += 1; return Response.json({ ok: true, runtimes: [], jobs: [] }); }, { pollMs: 12 });
   let visibility = 'visible';
   Object.defineProperty(f.dom.window.document, 'visibilityState', { configurable: true, get: () => visibility });
-  await delay(35);
-  assert.ok(reads >= 2);
+  // Let the initial fetch/JSON/render promises finish before advancing the
+  // timer they schedule. Host load must not decide whether the poll runs.
+  await tick();
+  assert.equal(reads, 1);
+  t.mock.timers.tick(11); await tick();
+  assert.equal(reads, 1);
+  t.mock.timers.tick(1); await tick();
+  assert.equal(reads, 2);
   visibility = 'hidden'; f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange')); await tick();
-  const count = reads; await delay(35); assert.equal(reads, count);
+  t.mock.timers.tick(120); await tick();
+  assert.equal(reads, 2);
   f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: null } }));
-  visibility = 'visible'; f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange')); await delay(25);
-  assert.equal(reads, count);
+  visibility = 'visible'; f.dom.window.document.dispatchEvent(new f.dom.window.Event('visibilitychange')); await tick();
+  t.mock.timers.tick(120); await tick();
+  assert.equal(reads, 2);
 });
 
 test('HTML service failures have a human error and retain status without enabling controls', async (t) => {
@@ -368,4 +376,33 @@ test('Astro initial page-load keeps one mount and a page swap mounts the replace
   assert.equal(mounted, 2);
   dom.window.document.dispatchEvent(new dom.window.Event('astro:before-swap'));
   assert.equal(cleaned, 2);
+});
+
+test('Claude terminal fallback gives exact local recovery steps and Check status requires fresh native proof', async (t) => {
+  let signedIn = false, writes = 0, reads = 0;
+  const f = fixture(t, (init) => {
+    if (init.method === 'POST') writes++;
+    else reads++;
+    const r = runtime({ providers: [{ provider: 'claude', available: true, authenticated: signedIn,
+      authMode: signedIn ? 'subscription' : 'unknown', models: [], modelDiscovery: 'unavailable' }] });
+    return Response.json({ ok: true, runtimes: [r], jobs: [job({ kind: 'login', provider: 'claude', status: 'failed',
+      error: 'claude-login-native-terminal-required', login: { verificationUrl: 'https://claude.ai/oauth?state=OLD' } })] });
+  });
+  await tick();
+  f.q('[data-runtime-provider]').value = 'claude';
+  f.q('[data-runtime-provider]').dispatchEvent(new f.dom.window.Event('change', { bubbles: true }));
+  const guidance = f.q('[data-runtime-job-status]').textContent;
+  assert.match(guidance, /claude auth login --claudeai/);
+  assert.match(guidance, /terminal on the paired computer/);
+  assert.match(guidance, /finish sign-in there, then choose Check status/);
+  assert.equal(f.q('[data-runtime-login-panel]').hidden, true);
+  assert.equal(f.q('[data-runtime-login-link]').hasAttribute('href'), false);
+  assert.equal(f.q('[data-runtime-run]').disabled, true);
+  assert.equal(f.q('[data-runtime-refresh]').disabled, false);
+  assert.notEqual(f.q('[data-runtime-badge]').textContent, 'Connected · task verified');
+  signedIn = true;
+  f.q('[data-runtime-refresh]').click(); await tick();
+  assert.equal(reads, 2); assert.equal(writes, 0);
+  assert.equal(f.q('[data-runtime-run]').disabled, false);
+  assert.equal(f.q('[data-runtime-badge]').textContent, 'Ready to try');
 });

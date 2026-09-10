@@ -103,10 +103,18 @@ export async function providerStates(adapters) {
 export class CompanionRunner {
   constructor({ client, adapters, heartbeatMs = 15_000, log = () => {} } = {}) {
     this.client = client; this.adapters = adapters; this.heartbeatMs = heartbeatMs; this.log = log;
-    this.active = null; this.closed = false;
+    this.active = null; this.closed = false; this.providerStatus = new Map();
   }
   async heartbeat() {
-    const response = await this.client.call('heartbeat', { providers: await providerStates(this.adapters) });
+    // Native login owns the provider's auth flow. Reuse its last status while
+    // polling cancellations so concurrent status/model commands cannot race it.
+    const loginProvider = this.active?.kind === 'login' ? this.active.provider : null;
+    const inspect = Object.fromEntries(Object.entries(this.adapters).filter(([provider]) => provider !== loginProvider));
+    for (const state of await providerStates(inspect)) this.providerStatus.set(state.provider, state);
+    const providers = Object.keys(this.adapters).map((provider) => this.providerStatus.get(provider) || {
+      provider, available: false, authenticated: false, authMode: 'unknown', models: [], modelDiscovery: 'unavailable',
+    });
+    const response = await this.client.call('heartbeat', { providers });
     if (this.active && response.cancelledJobIds?.includes(this.active.id)) this.active.controller.abort();
     return response;
   }
@@ -119,7 +127,7 @@ export class CompanionRunner {
       || !this.adapters[job.provider] || !SECRET.test(job.leaseToken)) throw new Error('runtime-job-invalid');
     const expiresAt = Date.parse(job.expiresAt);
     const controller = new AbortController();
-    this.active = { id: job.id, controller };
+    this.active = { id: job.id, controller, provider: job.provider, kind: job.kind };
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();

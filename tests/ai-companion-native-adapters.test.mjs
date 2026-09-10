@@ -267,3 +267,85 @@ test('Codex transport stops a single oversized pending message and rejects outst
     assert.equal(f.stops, 2);
   } finally { await f.rpc.close(); }
 });
+
+test('Claude native login URLs survive OSC-8 hyperlinks split across stdout chunks', async () => {
+  const url = 'https://claude.ai/oauth/authorize?state=TEST&redirect_uri=http%3A%2F%2Flocalhost%3A12345%2Fcallback';
+  for (const terminator of ['\x07', '\x1b\\', '\x9c']) {
+    let loggedIn = false; const progress = [];
+    const adapter = new ClaudeNative({ capture: async (_binary, args, options) => {
+      if (args[1] === 'status') return { code: 0, stdout: JSON.stringify({ ...account, loggedIn }) };
+      const chunks = [
+        `If the browser didn't open, visit: \x1b]8;;${url.slice(0, 40)}`,
+        `${url.slice(40)}${terminator}${url.slice(0, 35)}`,
+        `${url.slice(35)}\x1b]8;;${terminator}\nPaste code here if prompted > `,
+      ];
+      await options.onChunk(chunks[0]); assert.equal(progress.length, 0);
+      await options.onChunk(chunks[1]); await options.onChunk(chunks[2]); loggedIn = true;
+      return { code: 0, stdout: '' };
+    } });
+    await adapter.login({ onProgress: value => progress.push(value) });
+    assert.deepEqual(progress, [{ verificationUrl: url }]);
+  }
+});
+
+test('native login URL validation refuses hidden terminal control characters', () => {
+  for (const value of ['https://claude.ai/oauth?state=TEST\x07', 'https://claude.ai/oauth\n/authorize', ' https://claude.ai/oauth', 'https://claude.ai/\x9c']) {
+    assert.equal(safeLoginUrl(value, 'claude'), null);
+  }
+});
+
+test('Claude login reports a URL over ordinary process pipes with stdin closed, then honors cancellation', async () => {
+  const controller = new AbortController(); let child, spawnOptions; const progress = [];
+  const adapter = new ClaudeNative({ capture: async (binary, args, options) => {
+    if (args[1] === 'status') return { code: 1, stdout: JSON.stringify({ loggedIn: false, authMethod: 'none' }) };
+    return captureNative(binary, args, { ...options,
+      spawnImpl: (_binary, _args, procOptions) => {
+        spawnOptions = procOptions;
+        child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+        child.stdin.on('finish', () => queueMicrotask(() => {
+          child.stdout.write('Opening browser to sign in…\n');
+          child.stdout.write('If the browser did not open, visit: \x1b]8;;https://claude.ai/oauth?state=TEST\x07https://claude.ai/oauth?state=TEST\x1b]8;;\x07\n');
+        }));
+        return child;
+      }, stopImpl: proc => proc.emit('close', 0),
+    });
+  } });
+  await assert.rejects(adapter.login({ signal: controller.signal, onProgress: value => {
+    progress.push(value); controller.abort();
+  } }), /cancelled/);
+  assert.deepEqual(spawnOptions.stdio, ['pipe', 'pipe', 'pipe']);
+  assert.equal(child.stdin.writableEnded, true);
+  assert.deepEqual(progress, [{ verificationUrl: 'https://claude.ai/oauth?state=TEST' }]);
+});
+
+test('Claude flushes a final undelimited URL only after native process completion', async () => {
+  const progress = []; let loggedIn = false;
+  const adapter = new ClaudeNative({ capture: async (_binary, args, options) => {
+    if (args[1] === 'status') return { code: 0, stdout: JSON.stringify({ ...account, loggedIn }) };
+    await options.onChunk('https://claude.ai/oauth?state=FINAL');
+    assert.equal(progress.length, 0);
+    loggedIn = true; return { code: 0, stdout: '' };
+  } });
+  assert.equal((await adapter.login({ onProgress: value => progress.push(value) })).status, 'succeeded');
+  assert.deepEqual(progress, [{ verificationUrl: 'https://claude.ai/oauth?state=FINAL' }]);
+});
+
+test('Claude native paste-code fallback reports actionable failure without aborting a normal callback', async () => {
+  for (const outcome of ['timeout', 'failed-exit', 'unconfirmed']) {
+    const adapter = new ClaudeNative({ capture: async (_binary, args, options) => {
+      if (args[1] === 'status') return { code: 1, stdout: JSON.stringify({ loggedIn: false }) };
+      await options.onChunk('https://claude.ai/oauth?state=TEST\nPaste code here ');
+      await options.onChunk('if prompted > ');
+      if (outcome === 'timeout') throw new Error('native-timeout');
+      return { code: outcome === 'failed-exit' ? 1 : 0, stdout: '' };
+    } });
+    await assert.rejects(adapter.login(), /claude-login-native-terminal-required/);
+  }
+  let loggedIn = false;
+  const adapter = new ClaudeNative({ capture: async (_binary, args, options) => {
+    if (args[1] === 'status') return { code: 0, stdout: JSON.stringify({ ...account, loggedIn }) };
+    await options.onChunk('https://claude.ai/oauth?state=TEST\nPaste code here if prompted > ');
+    loggedIn = true; return { code: 0, stdout: '' };
+  } });
+  assert.equal((await adapter.login()).status, 'succeeded');
+});

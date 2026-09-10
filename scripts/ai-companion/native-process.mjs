@@ -83,6 +83,7 @@ export function parseJson(stdout) {
   throw new Error('native-json-unavailable');
 }
 export function safeLoginUrl(value, provider) {
+  if (typeof value !== 'string' || /[\u0000-\u0020\u007f-\u009f]/u.test(value)) return null;
   try {
     const url = new URL(value);
     const hosts = provider === 'codex' ? ['auth.openai.com', 'chatgpt.com']

@@ -60,7 +60,7 @@ Keep any binary/model options you used on the first run. Those options are not s
 
 In My AI, choose the paired computer and **ChatGPT · Codex** or **Claude · Claude Code**. If the installed client is already signed in through a supported subscription, the profile can show **Ready to try** immediately.
 
-Otherwise choose **Sign in with ChatGPT** or **Sign in with Claude**. Finish the provider's native sign-in page and enter a device code if one is shown. The profile allows only the provider's recognized HTTPS sign-in destinations. **Check status** refreshes the result. A completed sign-in job alone does not verify a task.
+Otherwise choose **Sign in with ChatGPT** or **Sign in with Claude**. Finish the provider's native sign-in page and enter a device code if one is shown. For Claude, use a browser on the paired computer so its localhost callback can complete. The profile allows only the provider's recognized HTTPS sign-in destinations. **Check status** refreshes the result. A completed sign-in job alone does not verify a task.
 
 You can also initiate the same native flow directly, without pairing:
 
@@ -70,6 +70,16 @@ node scripts/ai-companion/runner.mjs --login claude
 ```
 
 Run only the command for the provider you want. If a native client is already authenticated with API or unrecognized access, this companion does not silently replace that account. Switch to a subscription account in the provider's own client, then restart the companion or check status.
+
+If Claude returns a code that must be pasted into a terminal, or PointCast says the native terminal is required, cancel any still-pending sign-in request. On the paired computer, run the provider command directly:
+
+```sh
+claude auth login --claudeai
+```
+
+Use the same Claude executable selected by `--claude-bin`, if one was supplied. Finish sign-in and paste any provider code only into that native terminal. Then return to PointCast and choose **Check status**. This is the native command, not the companion's `--login claude` wrapper: the companion uses noninteractive pipes and cannot accept the paste-code fallback. It never asks you to send a provider login code through PointCast.
+
+The native CLI can print its paste-code prompt while a normal browser callback is still pending. The companion allows that callback to complete; a timeout, unsuccessful exit, or unconfirmed sign-in after this prompt produces the terminal-recovery message. Fresh provider consent remains unverified in this pilot, as detailed below.
 
 **Do not copy provider API keys, OAuth tokens, cookies, or native auth files into PointCast.** Provider credentials remain in the native client's own store. The companion reports authentication state, model choices, temporary sign-in links/codes, and reviewed task results. It strips supported API-key, gateway, and OAuth-token environment overrides before launching the native clients. A provider subscription remains subject to that provider's account access and usage limits; the pilot does not unlock models or capacity.
 

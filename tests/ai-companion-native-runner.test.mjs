@@ -325,3 +325,21 @@ test('valid pairing codes beginning with two dashes are accepted without accepti
   assert.throws(() => parseOptions(['--pair', '--once']), /missing-option-value/);
   assert.throws(() => parseOptions(['--state-file', '--once']), /missing-option-value/);
 });
+
+test('login heartbeats reuse the active provider status while still polling cancellation', { timeout: 2000 }, async () => {
+  let accountReads = 0, modelReads = 0, heartbeatCalls = 0, finishLogin;
+  const f = fixture({ job: { kind: 'login' }, heartbeatMs: 5,
+    call(operation) {
+      if (operation === 'heartbeat' && ++heartbeatCalls === 3) finishLogin({ text: 'Signed in', actualModels: [] });
+    },
+    login() { return new Promise(resolve => { finishLogin = resolve; }); },
+  });
+  f.runner.adapters.codex.inspectAccount = async () => { accountReads++; return { available: true, authenticated: false, authMode: 'unknown' }; };
+  f.runner.adapters.codex.listModels = async () => { modelReads++; return { models: [], modelDiscovery: 'native' }; };
+  assert.equal((await f.runner.once()).status, 'succeeded');
+  assert.equal(accountReads, 1); assert.equal(modelReads, 1); assert.equal(heartbeatCalls, 3);
+  for (const call of f.calls.filter(call => call.operation === 'heartbeat')) assert.equal(call.values.providers[0].available, true);
+  await f.runner.heartbeat();
+  assert.equal(accountReads, 2); assert.equal(modelReads, 2);
+  await f.runner.close();
+});

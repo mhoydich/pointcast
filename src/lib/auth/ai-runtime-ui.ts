@@ -42,6 +42,7 @@ export function runtimeErrorMessage(reason: string): string {
     'request-conflict': 'This retry no longer matches the original request. Change the task before submitting a new request.',
     'runtime-busy': 'This companion already has a task in progress. Wait or cancel it first.',
     'provider-unavailable': 'The native AI client is unavailable on this computer. Check the companion setup guide.',
+    'claude-login-native-terminal-required': 'Claude needs its native terminal to finish sign-in. Run claude auth login --claudeai in a terminal on the paired computer, finish sign-in there, then choose Check status.',
     'provider-not-ready': 'Finish signing in to your AI, then check status.',
     'subscription-required': 'Use native subscription sign-in for this pilot. Separately billed API access remains an advanced manual option.',
     'model-not-available': 'That model is no longer available. Check status and choose a listed model.',

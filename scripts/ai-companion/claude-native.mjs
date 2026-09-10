@@ -33,22 +33,37 @@ export class ClaudeNative {
       return { status: 'succeeded', text: 'Claude is already signed in through its native subscription.', actualModels: [] };
     }
     if (!existing.available) throw new Error('claude-cli-unavailable');
-    let buffer = '', shown = new Set();
-    const result = await this.capture(this.binary, ['auth', 'login', '--claudeai'], {
-      env: this.env, signal, timeoutMs: Math.min(timeoutMs, 300_000),
-      onChunk: async (chunk) => {
-        buffer = (buffer + chunk).slice(-16_384);
-        for (const candidate of buffer.match(/https:\/\/[^\s<>"\u001b]+(?=[\s<>"\u001b])/g) || []) {
-          const verificationUrl = safeLoginUrl(candidate, 'claude');
-          if (verificationUrl && !shown.has(verificationUrl)) {
-            shown.add(verificationUrl); await onProgress({ verificationUrl });
-          }
+    let buffer = '', shown = new Set(), sawPastePrompt = false;
+    const progress = async (chunk, ended = false) => {
+      buffer = (buffer + chunk).slice(-16_384);
+      sawPastePrompt ||= /paste code here if prompted/i.test(buffer);
+      // OSC-8 hyperlinks may terminate with BEL, ST, or C1 ST. Treat all
+      // terminal controls as boundaries, never as part of an OAuth URL.
+      const pattern = ended
+        ? /https:\/\/[^\s<>"\u0000-\u001f\u007f-\u009f]+(?=[\s<>"\u0000-\u001f\u007f-\u009f]|$)/g
+        : /https:\/\/[^\s<>"\u0000-\u001f\u007f-\u009f]+(?=[\s<>"\u0000-\u001f\u007f-\u009f])/g;
+      for (const candidate of buffer.match(pattern) || []) {
+        const verificationUrl = safeLoginUrl(candidate, 'claude');
+        if (verificationUrl && !shown.has(verificationUrl)) {
+          shown.add(verificationUrl); await onProgress({ verificationUrl });
         }
-      },
-    });
-    if (result.code !== 0) throw new Error('claude-login-failed');
+      }
+    };
+    let result;
+    try {
+      result = await this.capture(this.binary, ['auth', 'login', '--claudeai'], {
+        env: this.env, signal, timeoutMs: Math.min(timeoutMs, 300_000), onChunk: progress,
+      });
+      // Flush only at EOF. Flushing an unfinished chunk would publish a
+      // truncated URL while the native process is still writing it.
+      await progress('', true);
+    } catch (error) {
+      if (sawPastePrompt && error.message === 'native-timeout') throw new Error('claude-login-native-terminal-required');
+      throw error;
+    }
+    if (result.code !== 0) throw new Error(sawPastePrompt ? 'claude-login-native-terminal-required' : 'claude-login-failed');
     const account = await this.inspectAccount();
-    if (!account.authenticated || account.authMode !== 'subscription') throw new Error('claude-login-not-confirmed');
+    if (!account.authenticated || account.authMode !== 'subscription') throw new Error(sawPastePrompt ? 'claude-login-native-terminal-required' : 'claude-login-not-confirmed');
     return { status: 'succeeded', text: 'Claude native subscription sign-in confirmed.', actualModels: [] };
   }
   async runText({ prompt, model = null, signal, timeoutMs = 120_000 } = {}) {

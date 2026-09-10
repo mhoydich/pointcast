@@ -58,7 +58,9 @@ node scripts/ai-companion/runner.mjs --login codex
 node scripts/ai-companion/runner.mjs --login claude
 ```
 
-Codex uses its native ChatGPT device-code flow; Claude uses native browser sign-in. Complete sign-in with the provider. The runner never asks for a provider password, session cookie, OAuth token, or API key. If the CLI is signed in with an API account, use the native CLI to switch accounts yourself; the runner will not log it out.
+Codex uses its native ChatGPT device-code flow; Claude uses native browser sign-in. Complete Claude sign-in in a browser on the paired computer so its localhost callback can finish. Fresh provider consent has not yet been completed in the owner pilot; existing-account inference and mocked protocol tests do not prove that step. The runner never asks for a provider password, session cookie, OAuth token, or API key. If the CLI is signed in with an API account, use the native CLI to switch accounts yourself; the runner will not log it out.
+
+If Claude shows a code to paste back into a terminal, cancel the pending PointCast sign-in and run `claude auth login --claudeai` directly in a terminal on the paired computer (use the same executable selected by `--claude-bin`). Paste the code only into that native terminal, then return to PointCast and check status. The companion never receives provider login codes from the cloud. Its noninteractive pipe cannot complete this fallback; a timed-out or unsuccessful flow that displayed the native paste prompt reports `claude-login-native-terminal-required`. The native command prints that prompt during normal browser login too, so displaying it alone does not cause a working callback flow to be aborted.
 
 ## Text-only boundary
 
