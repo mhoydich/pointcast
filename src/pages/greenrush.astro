@@ -1,0 +1,211 @@
+---
+/**
+ * /greenrush — live progress board for the agent-to-agent collaboration
+ * between Mike's Claude (Mike-GreenRush-Tester) and Jason's product agent
+ * (GreenRushPM), designing an agent-friendly interface for greenrush.click.
+ *
+ * The board is data-driven: everything renders from
+ * src/data/greenrush-relay.json, which cc appends to as the work advances
+ * (new timeline entries, /agent contract test results, notices). Milestone
+ * emails to Mike + Jason are sent separately and noted in the timeline.
+ *
+ * Machine mirror: /greenrush.json
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import log from '../data/greenrush-relay.json';
+
+const title = 'Green Rush · agent-access collaboration';
+const description = log.summary;
+
+const STATUS_LABEL: Record<string, string> = {
+  connecting: 'Connecting',
+  live: 'Live',
+  testing: 'Testing the /agent contract',
+  paused: 'Paused',
+  done: 'Wrapped',
+};
+
+const timeline = [...(log.timeline ?? [])].reverse();
+
+function fmt(at: string): string {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return at;
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  }) + ' UTC';
+}
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  alternates={[
+    { type: 'application/json', href: '/greenrush.json', title: 'Green Rush collaboration log (machine)' },
+  ]}
+>
+  <div class="page">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <span aria-hidden="true">›</span>
+      <span>greenrush</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">AGENT × AGENT · {(STATUS_LABEL[log.status] ?? log.status).toUpperCase()}</p>
+      <h1>Two agents building a way to play.</h1>
+      <p class="dek">{log.summary}</p>
+      <p class="channel">
+        Channel <code>{log.channel}</code> · via {log.transport} ·
+        target <a href="https://greenrush.click" rel="nofollow noreferrer external">greenrush.click</a>
+      </p>
+    </header>
+
+    <section class="who" aria-labelledby="who-title">
+      <h2 id="who-title">Who's in the room</h2>
+      <ul>
+        {(log.participants ?? []).map((p) => (
+          <li>
+            <span class="who__handle"><code>{p.handle}</code></span>
+            <span class="who__side">{p.side}</span>
+            <span class="who__role">{p.role}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="objective">
+      <p class="eyebrow">The objective</p>
+      <p>{log.objective}</p>
+    </section>
+
+    <section class="timeline" aria-labelledby="timeline-title">
+      <h2 id="timeline-title">Progress</h2>
+      <ol class="feed">
+        {timeline.map((e) => (
+          <li class={`feed__item feed__item--${e.kind}`}>
+            <div class="feed__meta">
+              <time datetime={e.at}>{fmt(e.at)}</time>
+              <span class="feed__kind">{e.kind}</span>
+              <span class="feed__from">{e.from}</span>
+            </div>
+            <p class="feed__body">{e.summary}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    {(log.contractTests ?? []).length > 0 && (
+      <section class="tests" aria-labelledby="tests-title">
+        <h2 id="tests-title">/agent contract tests</h2>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Attempted</th>
+              <th scope="col">Expected</th>
+              <th scope="col">Actual</th>
+              <th scope="col">Verdict</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(log.contractTests ?? []).map((t) => (
+              <tr>
+                <td><time datetime={t.at}>{t.at?.slice(0, 10)}</time></td>
+                <td><code>{t.attempted}</code></td>
+                <td>{t.expected}</td>
+                <td>{t.actual}</td>
+                <td><span class={`verdict verdict--${t.pass ? 'ok' : 'no'}`}>{t.pass ? 'pass' : 'gap'}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    )}
+
+    <section class="rails" aria-labelledby="rails-title">
+      <h2 id="rails-title">Guardrails</h2>
+      <ul class="rails__list">
+        {(log.guardrails ?? []).map((g) => (<li>{g}</li>))}
+      </ul>
+    </section>
+
+    <section class="meta">
+      <p>
+        This board updates as the two agents work. Milestone summaries go to
+        Mike and Jason by email · Machine mirror: <a href="/greenrush.json">/greenrush.json</a>
+      </p>
+    </section>
+  </div>
+</BlockLayout>
+
+<style>
+  .page { max-width: 940px; margin: 0 auto; padding: 18px 20px 72px; }
+
+  .crumb {
+    display: flex; gap: 8px; margin-bottom: 28px;
+    font-family: var(--pc-font-mono); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--pc-ink-muted);
+  }
+  .crumb a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  .hero { margin-bottom: 40px; }
+  .hero .kicker {
+    font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--pc-accent, #2e8b57); margin: 0 0 8px;
+  }
+  .hero h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.05; margin: 0 0 16px; }
+  .hero .dek { font-size: 18px; line-height: 1.55; max-width: 64ch; color: var(--pc-ink-muted); margin: 0 0 14px; }
+  .channel { font-family: var(--pc-font-mono); font-size: 12.5px; color: var(--pc-ink-muted); margin: 0; }
+  .channel a { color: inherit; }
+  code { font-family: var(--pc-font-mono); font-size: 0.92em; }
+
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; font-family: var(--pc-font-mono); margin: 0 0 18px; }
+
+  .who { margin: 0 0 40px; }
+  .who ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .who li {
+    display: grid; grid-template-columns: minmax(180px, 1fr) minmax(120px, auto) 2fr;
+    gap: 14px; align-items: baseline; padding: 12px 14px;
+    border: 1px solid var(--pc-rule, #e5e5e5); border-radius: 8px;
+  }
+  .who__side { font-size: 13px; color: var(--pc-ink-muted); }
+  .who__role { font-size: 13.5px; }
+
+  .objective, .callout { margin: 0 0 40px; padding: 18px 20px; border-left: 3px solid var(--pc-accent, #2e8b57); background: color-mix(in srgb, var(--pc-accent, #2e8b57) 6%, transparent); border-radius: 0 8px 8px 0; }
+  .objective .eyebrow, .callout .eyebrow { font-family: var(--pc-font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--pc-accent, #2e8b57); margin: 0 0 8px; }
+  .objective p:last-child { margin: 0; font-size: 16px; line-height: 1.55; }
+
+  .timeline { margin: 0 0 40px; }
+  .feed { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; }
+  .feed__item { padding: 16px 0 16px 20px; border-left: 2px solid var(--pc-rule, #e5e5e5); position: relative; }
+  .feed__item::before { content: ''; position: absolute; left: -6px; top: 22px; width: 10px; height: 10px; border-radius: 50%; background: var(--pc-ink-muted, #999); }
+  .feed__item--reply::before, .feed__item--ack::before { background: var(--pc-accent, #2e8b57); }
+  .feed__item--request::before { background: #c44; }
+  .feed__meta { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; font-family: var(--pc-font-mono); font-size: 11px; margin-bottom: 6px; }
+  .feed__meta time { color: var(--pc-ink-muted); }
+  .feed__kind { text-transform: uppercase; letter-spacing: 0.08em; padding: 1px 7px; border-radius: 999px; background: var(--pc-rule, #eee); }
+  .feed__from { color: var(--pc-ink-muted); }
+  .feed__body { margin: 0; font-size: 15.5px; line-height: 1.55; max-width: 70ch; }
+
+  .tests { margin: 0 0 40px; overflow-x: auto; }
+  .tests table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .tests th, .tests td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--pc-rule, #e5e5e5); vertical-align: top; }
+  .tests th { font-family: var(--pc-font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--pc-ink-muted); }
+  .verdict { font-family: var(--pc-font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+  .verdict--ok { background: color-mix(in srgb, #2e8b57 18%, transparent); }
+  .verdict--no { background: color-mix(in srgb, #c44 18%, transparent); }
+
+  .rails { margin: 0 0 40px; }
+  .rails__list { margin: 0; padding-left: 20px; display: grid; gap: 7px; font-size: 14.5px; line-height: 1.5; color: var(--pc-ink-muted); }
+
+  .meta { font-size: 13px; color: var(--pc-ink-muted); border-top: 1px solid var(--pc-rule, #e5e5e5); padding-top: 18px; }
+  .meta a { color: inherit; }
+
+  @media (max-width: 640px) {
+    .who li { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
