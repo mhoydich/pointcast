@@ -1,0 +1,481 @@
+---
+/**
+ * /boil — The Kettle · pour-to-boil prize game on Tezos.
+ *
+ * Anyone pours a fixed 0.5ꜩ sip. The Nth pour boils the kettle and wins
+ * the pot minus a 10% carryover that seeds the next, bigger round. No
+ * randomness, no rake — the public race to the boiling pour is the game.
+ *
+ * Lives at /boil because /kettle is the cozy multiplayer kitchen kettle
+ * (same lore, no money). The two pages cross-link.
+ *
+ * Until contracts.json's `kettle.mainnet` is populated, this page renders
+ * a preview-only surface with the pour button asleep. Once the KT1 lands,
+ * the same page becomes the live game without a code change — round HUD
+ * and past boils hydrate from TzKT. Mirrors /postcards pattern.
+ *
+ * Contract: contracts/v2/the_kettle.py (SmartPy 0.24.1, tested).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import contracts from '../data/contracts.json';
+
+const k = ((contracts as any).kettle ?? {}) as Record<string, any>;
+const kKt1 = ((k.mainnet ?? '') as string).trim();
+const kLive = kKt1.startsWith('KT1');
+
+const SIP_TEZ = 0.5;
+
+const title = '/boil — The Kettle · pour-to-boil prize game';
+const description =
+  'Pour a 0.5ꜩ sip into the kettle. The Nth pour boils it and wins the whole pot minus a 10% carryover that seeds the next, bigger round. Deterministic, no randomness, no rake — the race to the boiling pour is the game.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Game',
+  '@id': 'https://pointcast.xyz/boil',
+  name: 'The Kettle',
+  description,
+  url: 'https://pointcast.xyz/boil',
+  gamePlatform: 'Tezos',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="bl" id="bl-main">
+
+    <header class="bl__head">
+      <p class="bl__kicker mono">CH.ESC · THE KETTLE · POUR-TO-BOIL · TEZOS</p>
+      <h1 class="bl__title"><em>The Nth pour wins the pot.</em></h1>
+      <p class="bl__dek">
+        Pour a {SIP_TEZ}ꜩ sip. When the kettle hits its boil count, that pour takes everything —
+        minus a 10% carryover that seeds the next round, which needs two more pours to boil.
+        No randomness. No rake. Everyone can see the count. The race is the game.
+      </p>
+      <p class="bl__status mono" data-state={kLive ? 'live' : 'pending'}>
+        <span class="bl__status-dot" aria-hidden="true"></span>
+        {kLive
+          ? <>kettle on the stove · <code>{kKt1.slice(0, 12)}…{kKt1.slice(-6)}</code> · {SIP_TEZ}ꜩ per pour</>
+          : <>contract not yet originated · preview only · the stove is cold</>
+        }
+      </p>
+    </header>
+
+    <section class="bl__hud" aria-label="Live round">
+      <div class="bl__stat">
+        <span class="bl__stat-label mono">ROUND</span>
+        <span class="bl__stat-value mono" id="bl-round">{kLive ? '…' : '—'}</span>
+      </div>
+      <div class="bl__stat">
+        <span class="bl__stat-label mono">POURS</span>
+        <span class="bl__stat-value mono" id="bl-pours">{kLive ? '…' : '—'}</span>
+      </div>
+      <div class="bl__stat">
+        <span class="bl__stat-label mono">BOILS AT</span>
+        <span class="bl__stat-value mono" id="bl-threshold">{kLive ? '…' : '—'}</span>
+      </div>
+      <div class="bl__stat bl__stat--pot">
+        <span class="bl__stat-label mono">POT</span>
+        <span class="bl__stat-value mono" id="bl-pot">{kLive ? '…' : '—'}</span>
+      </div>
+    </section>
+
+    <section class="bl__gauge" aria-hidden="true">
+      <div class="bl__gauge-fill" id="bl-gauge" style="width:0%"></div>
+    </section>
+
+    <section class="bl__action">
+      <button
+        type="button"
+        class="bl__pour mono"
+        id="bl-pour"
+        disabled={!kLive}
+        aria-label={kLive ? `Pour ${SIP_TEZ} tez` : 'Pour (soon)'}
+      >
+        {kLive ? `POUR · ${SIP_TEZ} ꜩ` : 'ORIGINATING SOON'}
+      </button>
+      <p class="bl__fine mono">exact amount enforced on-chain · the only tez that ever leaves is the winner payout</p>
+    </section>
+
+    <section class="bl__boils" aria-label="Past boils">
+      <h2 class="bl__boils-title mono">PAST BOILS</h2>
+      <ol class="bl__boils-list" id="bl-boils">
+        <li class="bl__boil bl__boil--empty mono">{kLive ? 'loading…' : 'no boils yet — the kettle has never been on'}</li>
+      </ol>
+    </section>
+
+    <section class="bl__texture">
+      <p>
+        The Kettle is the first game contract on PointCast where real tez moves. It is intentionally
+        tiny: one payable entrypoint, a counter, and a threshold. Round 0 boils at 5 pours (max pot
+        2.5ꜩ), and every boil makes the next round two pours longer and seeds it with 10% of the pot —
+        so the kettle gets structurally bigger the longer the town keeps it on.
+      </p>
+      <p>
+        Deterministic by design. Weak on-chain randomness is how prize games get exploited, so this
+        one has none: the state is public, the boiling pour is knowable, and racing bots for it is a
+        legitimate strategy. Play accordingly.
+      </p>
+    </section>
+
+    <nav class="bl__links" aria-label="Other rooms">
+      <a class="bl__link" href="/kettle"><span class="bl__link-label mono">/KETTLE</span><span class="bl__link-desc">the cozy kettle · no money, just steam</span></a>
+      <a class="bl__link" href="/coffee"><span class="bl__link-label mono">/COFFEE</span><span class="bl__link-desc">the other kind of pour</span></a>
+      <a class="bl__link" href="/visit-nouns"><span class="bl__link-label mono">/VISIT-NOUNS</span><span class="bl__link-desc">noun-by-noun · one per visit</span></a>
+      <a class="bl__link" href="/market"><span class="bl__link-label mono">/MARKET</span><span class="bl__link-desc">trade every PointCast FA2</span></a>
+      <a class="bl__link" href="/town"><span class="bl__link-label mono">/TOWN</span><span class="bl__link-desc">the iso town map</span></a>
+      <a class="bl__link" href="/"><span class="bl__link-label mono">/</span><span class="bl__link-desc">back to the broadcast</span></a>
+    </nav>
+
+    <footer class="bl__foot mono">
+      <span>on air · el segundo · fm 96.1 · cc0</span>
+      <span id="bl-clock">—</span>
+    </footer>
+
+  </main>
+</BlockLayout>
+
+<script is:inline define:vars={{ kKt1, SIP_TEZ }}>
+  window.__pcKettleKt1 = kKt1 || '';
+  window.__pcKettleSip = SIP_TEZ;
+</script>
+
+<script is:inline>
+  (function () {
+    'use strict';
+
+    function tick() {
+      var el = document.getElementById('bl-clock');
+      if (!el) return;
+      var n = new Date();
+      el.textContent = String(n.getHours()).padStart(2, '0') + ':' +
+        String(n.getMinutes()).padStart(2, '0') + ' PT';
+    }
+    tick();
+    setInterval(tick, 60 * 1000);
+
+    var kt1 = window.__pcKettleKt1 || '';
+    if (!kt1) return; // preview mode — nothing to hydrate
+
+    var TZKT = 'https://api.tzkt.io/v1';
+
+    function tez(mutez) {
+      return (Number(mutez) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' ꜩ';
+    }
+
+    function short(addr) {
+      return addr ? addr.slice(0, 6) + '…' + addr.slice(-4) : '?';
+    }
+
+    async function hydrate() {
+      try {
+        var res = await fetch(TZKT + '/contracts/' + kt1 + '/storage');
+        var s = await res.json();
+        var pours = Number(s.pour_count);
+        var threshold = Number(s.boil_threshold);
+        document.getElementById('bl-round').textContent = String(s.round_id);
+        document.getElementById('bl-pours').textContent = pours + ' / ' + threshold;
+        document.getElementById('bl-threshold').textContent = String(threshold);
+        document.getElementById('bl-pot').textContent = tez(s.pot);
+        var pct = threshold > 0 ? Math.min(100, Math.round((pours / threshold) * 100)) : 0;
+        document.getElementById('bl-gauge').style.width = pct + '%';
+
+        var boilsRes = await fetch(
+          TZKT + '/contracts/' + kt1 + '/bigmaps/boils/keys?active=true&sort.desc=key&limit=8'
+        );
+        var boils = await boilsRes.json();
+        var list = document.getElementById('bl-boils');
+        if (Array.isArray(boils) && boils.length) {
+          list.innerHTML = '';
+          boils.forEach(function (b) {
+            var li = document.createElement('li');
+            li.className = 'bl__boil mono';
+            li.textContent =
+              'ROUND ' + b.key + ' · ' + short(b.value.winner) + ' won ' + tez(b.value.prize) +
+              ' on pour ' + b.value.pours;
+            list.appendChild(li);
+          });
+        } else {
+          list.innerHTML = '<li class="bl__boil bl__boil--empty mono">no boils yet — be the first</li>';
+        }
+      } catch (e) {
+        /* leave HUD as-is; TzKT hiccups are transient */
+      }
+    }
+    hydrate();
+    setInterval(hydrate, 15 * 1000);
+
+    var btn = document.getElementById('bl-pour');
+    if (!btn || btn.disabled) return;
+    btn.addEventListener('click', async function () {
+      var origLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'AWAITING KUKAI…';
+      try {
+        var taquito = await import('@taquito/taquito');
+        var beacon = await import('@taquito/beacon-wallet');
+        var tezos = new taquito.TezosToolkit('https://mainnet.api.tez.ie');
+        var bw = new beacon.BeaconWallet({ name: 'The Kettle', network: { type: 'mainnet' } });
+        tezos.setWalletProvider(bw);
+        var active = await bw.client.getActiveAccount();
+        if (!active) await bw.client.requestPermissions();
+        var contract = await tezos.wallet.at(kt1);
+        var op = await contract.methodsObject.pour().send({ amount: window.__pcKettleSip });
+        btn.textContent = 'POURING · ' + (op.opHash || '').slice(0, 8) + '…';
+        await op.confirmation();
+        btn.textContent = 'POURED ✓';
+        hydrate();
+        setTimeout(function () { btn.disabled = false; btn.textContent = origLabel; }, 2400);
+      } catch (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        btn.textContent = /reject|cancel|abort/i.test(msg) ? 'CANCELLED' : 'ERROR · TRY AGAIN';
+        setTimeout(function () { btn.disabled = false; btn.textContent = origLabel; }, 2400);
+      }
+    });
+  })();
+</script>
+
+<style>
+  .bl {
+    min-height: calc(100vh - 60px);
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 16px 60px;
+    background: #fffaf0;
+    color: #12110e;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+
+  .mono { font-family: 'JetBrains Mono Variable', ui-monospace, monospace; letter-spacing: 0.06em; }
+
+  .bl__head {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px dashed #12110e;
+  }
+
+  .bl__kicker {
+    margin: 0 0 8px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8431a;
+    font-weight: 700;
+  }
+
+  .bl__title {
+    margin: 0 0 8px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(28px, 4.4vw, 56px);
+    line-height: 1.05;
+    font-weight: 400;
+  }
+
+  .bl__title em { font-style: italic; }
+
+  .bl__dek {
+    margin: 0 0 14px;
+    font-size: 16px;
+    line-height: 1.5;
+    max-width: 70ch;
+    color: #5f5e5a;
+  }
+
+  .bl__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    padding: 5px 12px;
+    border: 1.5px solid #12110e;
+    background: #fff;
+    box-shadow: 2px 2px 0 0 #12110e;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .bl__status-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #b8431a;
+  }
+
+  .bl__status[data-state='live'] .bl__status-dot { background: #3b6e3b; }
+
+  .bl__status code {
+    background: #ffd400;
+    padding: 1px 6px;
+    color: #12110e;
+    font-size: 11px;
+  }
+
+  .bl__hud {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  @media (max-width: 560px) {
+    .bl__hud { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .bl__stat {
+    padding: 12px 14px;
+    border: 2px solid #12110e;
+    background: #fff;
+    box-shadow: 3px 3px 0 0 #12110e;
+  }
+
+  .bl__stat--pot { background: #ffd400; }
+
+  .bl__stat-label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: #5f5e5a;
+    margin-bottom: 4px;
+  }
+
+  .bl__stat--pot .bl__stat-label { color: #12110e; }
+
+  .bl__stat-value {
+    display: block;
+    font-size: clamp(18px, 2.6vw, 28px);
+    font-weight: 700;
+  }
+
+  .bl__gauge {
+    height: 14px;
+    border: 2px solid #12110e;
+    background: #fff;
+    box-shadow: 3px 3px 0 0 #12110e;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+
+  .bl__gauge-fill {
+    height: 100%;
+    background: repeating-linear-gradient(
+      -45deg, #b8431a, #b8431a 8px, #ffd400 8px, #ffd400 16px
+    );
+    transition: width 600ms ease;
+  }
+
+  .bl__action {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .bl__pour {
+    display: inline-block;
+    padding: 16px 40px;
+    border: 2px solid #12110e;
+    background: #ffd400;
+    color: #12110e;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 4px 4px 0 0 #12110e;
+    transition: transform 100ms;
+  }
+
+  .bl__pour:hover:not(:disabled) {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 0 #12110e;
+  }
+
+  .bl__pour:disabled {
+    background: #e5e3de;
+    color: #5f5e5a;
+    cursor: default;
+    box-shadow: 4px 4px 0 0 #5f5e5a;
+  }
+
+  .bl__fine {
+    margin: 10px 0 0;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+
+  .bl__boils { margin-bottom: 24px; }
+
+  .bl__boils-title {
+    margin: 0 0 10px;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+
+  .bl__boils-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1.5px solid #12110e;
+    background: #fff;
+    box-shadow: 3px 3px 0 0 #12110e;
+  }
+
+  .bl__boil {
+    padding: 10px 14px;
+    font-size: 12px;
+    border-bottom: 1px dashed #12110e;
+  }
+
+  .bl__boil:last-child { border-bottom: none; }
+
+  .bl__boil--empty { color: #5f5e5a; }
+
+  .bl__texture {
+    margin: 24px 0;
+    padding: 18px 20px;
+    background: #f7f3e6;
+    border: 1.5px solid #12110e;
+    box-shadow: 3px 3px 0 0 #12110e;
+  }
+
+  .bl__texture p {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.55;
+    max-width: 70ch;
+  }
+
+  .bl__texture p:last-child { margin-bottom: 0; }
+
+  .bl__links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .bl__link {
+    display: block;
+    padding: 12px 14px;
+    border: 1.5px solid #12110e;
+    background: #fff;
+    text-decoration: none;
+    color: #12110e;
+    transition: background 120ms;
+  }
+
+  .bl__link:hover { background: #ffd400; }
+
+  .bl__link-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; }
+  .bl__link-desc { display: block; font-size: 12px; color: #5f5e5a; margin-top: 4px; }
+
+  .bl__foot {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0 0;
+    border-top: 1px dashed #12110e;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5f5e5a;
+  }
+</style>
