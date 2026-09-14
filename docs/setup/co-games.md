@@ -5,7 +5,7 @@ Human route: `/co-games`. Machine rules and move contract: `/co-games.json`.
 The free browser game uses a shared deterministic rules engine for both modes:
 
 - **Practice partner:** a local search over the visible remaining cards. No account or inference.
-- **Your AI:** the profile's existing paired Codex or Claude subscription runtime. Each round is one user-requested text job; the owner reviews the proposed support and explicitly casts the pair. The paired computer must remain awake and its companion must run.
+- **Your AI:** the profile's existing paired Codex or Claude subscription runtime. Each click on **Play with AI** authorizes one text job and automatically resolves that one turn after validating the returned support. No second cast confirmation is needed. Each following round requires another explicit click. The paired computer must remain awake and its companion must run.
 
 The browser owns this unranked practice state in memory. Reloading starts over. There are no prizes, purchases, server scores, automatic inference retries, or public room messages. The existing Unity arena project remains a separate private prototype.
 
@@ -13,9 +13,17 @@ The browser owns this unranked practice state in memory. Reloading starts over. 
 
 `co-games-engine.mjs` owns damage, block, healing, inventory, terminal conditions, and legal support validation. `co-games-runtime.ts` sends a bounded game observation through the existing `/api/me/ai-runtimes` owner API. It requires a successful exact job, reported `actualModels`, and a valid structured reply. The game computes effects from its own definitions; returned stats or unrecognized fields cannot change the rules.
 
-Every response must echo the per-run `gameId`, zero-based `revision`, and `selectedHuman`, and name a remaining legal `support`. Validate against the current observation before displaying a native move. Replays get a new game ID. Changing the selected spell discards its previous support. Late replies after auth changes or page unmount cannot restore the move.
+Every response must echo the per-run `gameId`, zero-based `revision`, and `selectedHuman`, and name a remaining legal `support`. Validate against the current observation before resolving a native turn. Replays get a new game ID. Changing the selected spell invalidates a pending request identity. The last native explanation and actual model stay visible after a resolved turn until the next request, replay, provider change, or sign-in change. Late replies after auth changes or page unmount cannot restore the move.
 
 An uncertain transport retry reuses the same request ID and body. Confirmed terminal failures allow an explicit fresh request. Cancellation is limited to this page's submitted job. Acknowledgement means cancellation was requested, not proof that inference stopped; an unconfirmed request is reported as such. A failed native move never silently becomes a practice move.
+
+## HUD controls and turn events
+
+Choose one of the three spells, then use **Play turn** in practice or **Play with AI** for the paired runtime. The optional **Help me choose** button selects the best legal human spell using the same deterministic engine search as the practice partner; it does not request inference or change the rules. Buttons are disabled during a native request. Native failure or cancellation leaves the round untouched.
+
+The page may expose `[data-current-threat]`, `[data-partner-choice]`, `[data-quick-tip]`, and `[data-outcome]` for compact HUD text. `[data-hint]` is the optional recommendation button. All are safe to omit. The existing detailed controls remain available to the page layout.
+
+Every successfully resolved turn dispatches a bubbling `co-games:turn` event from the game root with a frozen, plain-data detail: `{human, support, damage, taken, healing, hp, enemy, round, status, model, reason}`. Human/support values are engine card IDs; `round` is the one-based round just resolved; `model` is the actual model names joined as text, or `null` for practice. This event supports animation only; the deterministic engine remains authoritative. Event detail contains no request IDs, credentials, or profile data. Render `reason` as text, never HTML.
 
 ## Verification
 
