@@ -17,6 +17,8 @@ Drift, Groove and Arcade run at 72, 96 and 120 BPM with progressively tighter ti
 
 This mode uses local practice support only, with no inference, remote score, purchase or wallet calls. The spell battle at `/co-games` continues to offer the paired native AI. STARJAM shares the four story backgrounds and authentic Nouns roster, while keeping its own bounded engine, audio lifecycle and controls. Original Web Audio pads and lane tones follow game beat events; optional haptics are off until enabled. Reduced motion removes decorative movement while keeping the notes required for timing.
 
+The Sound and feel dialog includes **Test sound**, a short three-note check that does not start or advance a battle. The mix is calibrated above the original very quiet level. On browsers exposing Audio Session, a trusted playback gesture requests the playback category before creating or resuming Web Audio; this avoids iPhone ambient audio being silenced by the Ring/Silent setting. Session ownership is restored when playback ends. Start authorization survives the native browser's microtask checkpoints between capture and target listeners. Audio interruptions pause the track and require a fresh Resume tap. See [WebKit issue 237322](https://bugs.webkit.org/show_bug.cgi?id=237322) for the iPhone behavior. Actual phone audibility still requires a physical-device check; AudioContext running alone is not sound-output proof.
+
 Run `node --test tests/nouns-flow*.test.mjs` for timing, pause/resume, input, terminal-state and audio lifecycle coverage.
 
 ## Four worlds, one little journey

@@ -134,6 +134,53 @@ test('leaving the page and opening a dialog pause without unseen misses or autom
   assert.equal(f.root.dataset.state, 'paused');
 });
 
+test('audio interruption freezes the last presented frame and only explicit Resume retries the battle', t => {
+  const f = fixture(t), first = createFlow().notes[0];
+  f.q('[data-flow-start]').click(); f.frame(1000);
+  const progress = f.q('[data-flow-progress]').value;
+  f.at(60000);
+  f.root.dispatchEvent(new f.win.CustomEvent('nouns-flow:audio-interrupted', { detail: { reason: 'interrupted' } }));
+  assert.equal(f.root.dataset.state, 'paused');
+  assert.equal(f.frames.size, 0);
+  assert.equal(f.q('[data-flow-progress]').value, progress);
+  assert.equal(f.q('[data-flow-health]').textContent, '100');
+  const pause = f.events.filter(event => event.name === 'pause').at(-1);
+  assert.equal(pause.detail.reason, 'audio');
+  assert.equal(pause.detail.elapsedMs, 1000);
+  f.frame(100000);
+  f.root.dispatchEvent(new f.win.CustomEvent('nouns-flow:audio-interrupted', { detail: { reason: 'resume-failed' } }));
+  assert.equal(f.root.dataset.state, 'paused');
+  assert.equal(f.frames.size, 0);
+  assert.equal(f.events.filter(event => event.name === 'pause').length, 1);
+  assert.equal(f.events.filter(event => event.name === 'start').length, 1);
+  f.q('[data-flow-start]').click();
+  assert.equal(f.root.dataset.state, 'playing');
+  assert.equal(f.events.filter(event => event.name === 'start').at(-1).detail.resumed, true);
+  f.at(100000 + first.at - 1000); f.tap(first.lane);
+  assert.equal(f.events.find(event => event.name === 'hit').detail.grade, 'perfect');
+  assert.equal(f.q('[data-flow-health]').textContent, '100');
+});
+
+test('audio interruption is inert before play, while already paused, and after completion', t => {
+  const f = fixture(t);
+  const interrupt = () => f.root.dispatchEvent(new f.win.CustomEvent('nouns-flow:audio-interrupted', { detail: { reason: 'resume-failed' } }));
+  interrupt();
+  assert.equal(f.root.dataset.state, 'ready');
+  assert.equal(f.events.length, 0);
+  f.q('[data-flow-start]').click(); f.q('[data-flow-pause]').click();
+  const events = f.events.length;
+  interrupt();
+  assert.equal(f.root.dataset.state, 'paused');
+  assert.equal(f.events.length, events);
+  f.q('[data-flow-start]').click(); f.frame(35000);
+  assert.equal(f.root.dataset.state, 'lost');
+  const finished = f.events.length;
+  interrupt();
+  assert.equal(f.root.dataset.state, 'lost');
+  assert.equal(f.events.length, finished);
+  assert.equal(f.frames.size, 0);
+});
+
 test('keyboard input ignores repeat, modifiers, form fields, and open dialogs; Escape pauses', t => {
   const f = fixture(t), first = createFlow().notes[0];
   f.q('[data-flow-start]').click(); f.at(first.at);
