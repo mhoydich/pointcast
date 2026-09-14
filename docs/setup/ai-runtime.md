@@ -118,6 +118,18 @@ The profile states mean:
 
 An optional **visit receipt** lower on the profile records a separate one-time visit through PointCast tools. It does not pair this runtime or authenticate a provider.
 
+## Shwa in the site dock
+
+The homepage header reports the current connection, and the **My AI** dock button opens Shwa using the same paired native provider. Type `/ai your question` in the bottom bar to open a draft; this does not send to the provider or public room chat. Submit from the preview when ready.
+
+Prompt starters use provided text: the displayed song title, a description you supply for an image, or public purchase terms you paste. The companion does not receive image pixels or audio and cannot execute an NFT or x402 purchase. Optional page context contains only public title, path, and description, with private profile pages and URL queries/fragments excluded. The complete submitted text is visible in the preview.
+
+**Include the last AI reply** adds up to 1,600 characters of the selected provider’s previous reply to a new task. The previous reply is available when navigating to another page, but this is not a durable shared conversation or native client memory. Sign-out clears private UI state.
+
+**Tap to speak** uses browser speech recognition where available and fills an editable draft. Browser speech services may process audio remotely; microphone permission and an explicit click are required. **Read reply aloud** uses browser speech synthesis. Voice stops on panel close, navigation, tab hiding, or account change. There is no always-listening voice session.
+
+**Invite Mike to this page** prepares a public PointCast-inbox note with the page link and instructions to join its shared SAY chat. It does not include private AI replies, submit automatically, notify Mike by email, or guarantee he is present. Shwa here is the paired-AI conversation surface; it does not activate the separate hosted Shwa email experiment.
+
 ## Limits, stopping, and retries
 
 - Up to five paired computers or active waiting invitations per profile; remove an old computer before adding another. Expired unpaired invitations are removed during runtime API activity. Paired computers are preserved until you disconnect them.
