@@ -50,7 +50,7 @@ export function mountCoGamesHud(root: HTMLElement): () => void {
     if (rift) rift.textContent = turn.damage ? `−${turn.damage}` : '×2';
     if (team) team.textContent = turn.taken ? `−${turn.taken}` : turn.healing ? `+${turn.healing}` : 'BLOCK';
     root.classList.add('cg-animating');
-    animationTimer = win.setTimeout(resetAnimation, win.matchMedia('(prefers-reduced-motion: reduce)').matches ? 350 : 1100);
+    animationTimer = win.setTimeout(resetAnimation, win.matchMedia('(prefers-reduced-motion: reduce)').matches ? 350 : 1800);
   }, options);
   root.querySelector('[data-replay]')?.addEventListener('click', resetAnimation, options);
   doc.addEventListener('keydown', event => {
