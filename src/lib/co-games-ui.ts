@@ -103,6 +103,7 @@ export function mountCoGames(root: HTMLElement): () => void {
     q('[data-native-controls]').hidden = mode !== 'native';
     q('[data-native-actions]').hidden = mode !== 'native';
     q('[data-runtime-status]').textContent = notice;
+    q('[data-runtime-status]').hidden = mode !== 'native';
     const runtimeSelect = q<HTMLSelectElement>('[data-runtime]');
     const optionsKey = choices.map(item => `${item.id}:${item.label}:${item.busy}`).join('|');
     if (runtimeSelect.dataset.options !== optionsKey) {

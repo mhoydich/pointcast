@@ -68,6 +68,8 @@ test('practice is explicitly simulated, wins through real moves, and replay rese
   assert.match(f.q('.cg-footer .cg-simulation').textContent, /SIMULATED BUDDY/);
   assert.match(f.q('[data-team-name]').textContent, /Practice partner/);
   assert.equal(f.q('[data-native-controls]').hidden, true);
+  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: { userId: 'practice-owner' } } }));
+  assert.equal(f.q('[data-runtime-status]').hidden, true, 'Account initialization must not show an AI notice in practice');
   winPractice(f);
   assert.equal(f.root.dataset.status, 'won');
   assert.equal(f.q('[data-health]').textContent, '1 / 14');
@@ -173,6 +175,7 @@ test('logout invalidates an in-flight reply even when the provider resolves afte
   f.setMode('native'); await tick();
   f.q('[data-request]').click();
   f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: null } }));
+  assert.equal(f.q('[data-runtime-status]').hidden, false, 'Native auth errors stay visible');
   assert.equal(request.options.signal.aborted, true);
   late.resolve({ response: answer(request.observation), actualModels: ['native-model'], jobId: 'job-one', requestId: request.options.requestId });
   await tick();
