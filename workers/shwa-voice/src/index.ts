@@ -12,7 +12,7 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
 function denied(reason: string, status = 503): Response {
-  const message = reason === 'busy' ? 'Shwa is talking with a couple of people. Try again shortly.' : reason === 'rate_limited' ? 'This network has reached its hourly call allowance.' : reason === 'limit_reached' ? 'Today’s voice demo has reached its call limit.' : reason === 'invalid_offer' ? 'The audio connection could not be prepared. Please try again.' : 'Shwa’s voice is temporarily unavailable. Please try again later.';
+  const message = reason === 'busy' ? 'Shwa is talking with a couple of people. Try again shortly.' : reason === 'rate_limited' ? 'This network has reached its hourly call allowance.' : reason === 'limit_reached' ? 'This voice trial has used its call allowance.' : reason === 'invalid_offer' ? 'The audio connection could not be prepared. Please try again.' : 'Shwa’s voice is temporarily unavailable. Please try again later.';
   return json({ error: reason, reason, message }, status);
 }
 async function discardBody(request: Request): Promise<void> {
@@ -104,7 +104,7 @@ export class VoiceSupervisor extends DurableObject<Env> {
         closeAttempts: records.reduce((sum, record) => sum + (record.closeAttempts ?? 0), 0),
         failures: records.filter(record => record.failurePhase).map(record => ({phase: record.failurePhase, code: record.failureCode, status: record.failureStatus})),
       } : undefined;
-      return json({ ...status, available: !reason, reason, diagnostics, retryAt, remainingCalls: Math.max(0, maxSessions(this.env)-ledger.attempts), networkCallsRemaining: Math.max(0, MAX_PER_IP-recent.length), message: !reason ? status.message : ['setup_required', 'paused', 'expired'].includes(reason) ? status.message : reason === 'busy' ? 'Shwa is talking with a couple of people. Try again shortly.' : reason === 'limit_reached' ? 'Today’s voice demo has reached its call limit.' : reason === 'rate_limited' ? 'This network has reached its hourly allowance. The countdown shows when you can return.' : reason === 'needs_attention' ? 'The previous call is still closing. We’re checking it before opening the line.' : 'Shwa’s voice is temporarily unavailable.' });
+      return json({ ...status, available: !reason, reason, diagnostics, retryAt, remainingCalls: Math.max(0, maxSessions(this.env)-ledger.attempts), networkCallsRemaining: Math.max(0, MAX_PER_IP-recent.length), message: !reason ? status.message : ['setup_required', 'paused', 'expired'].includes(reason) ? status.message : reason === 'busy' ? 'Shwa is talking with a couple of people. Try again shortly.' : reason === 'limit_reached' ? 'This voice trial has used its call allowance.' : reason === 'rate_limited' ? 'This network has reached its hourly allowance. The countdown shows when you can return.' : reason === 'needs_attention' ? 'The previous call is still closing. We’re checking it before opening the line.' : 'Shwa’s voice is temporarily unavailable.' });
     }
     if (!validOrigin(request.headers.get('Origin'), this.env)) return denied('origin_not_allowed', 403);
     if (path === '/session' && request.method === 'POST') return this.createSession(request);

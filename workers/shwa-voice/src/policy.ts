@@ -1,4 +1,5 @@
 export const MAX_SESSION_SECONDS = 120;
+export const MAX_TOTAL_SESSIONS = 50;
 export const MAX_CONCURRENT = 2;
 export const MAX_PER_IP = 10;
 export const IP_WINDOW_MS = 60 * 60 * 1000;
@@ -23,7 +24,7 @@ export function recoverUnsupportedRedirect(ledger: Ledger): boolean {
   delete ledger.haltReason;
   return true;
 }
-export const maxSessions = (env: Settings) => Math.max(0, Math.min(10, Number.parseInt(env.MAX_SESSIONS ?? '10', 10) || 0));
+export const maxSessions = (env: Settings) => Math.max(0, Math.min(MAX_TOTAL_SESSIONS, Number.parseInt(env.MAX_SESSIONS ?? '10', 10) || 0));
 export function validOrigin(origin: string | null, env: Settings): boolean {
   if (!origin || origin === 'null') return false;
   if (env.SITE_ORIGIN && origin === env.SITE_ORIGIN) return true;

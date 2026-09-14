@@ -155,6 +155,39 @@ test('status checks the same client allowance as admission',async t=>{
  const status=await(await gateway.fetch(f.request('/status'),f.env)).json();assert.equal(status.available,false);assert.equal(status.reason,'rate_limited');assert.ok(status.retryAt>Date.now());assert.equal(status.remainingCalls,9);
 });
 
+test('expanded configuration reuses persisted ledger after restart and exposes forty additional calls',async t=>{
+ const f=await fixture();const api=mockAPI(t);
+ const state=await f.storage.get('voice-ledger-v1');state.attempts=10;
+ state.sessions.prior={id:'prior',tokenHash:'old-hash',createdAt:1,deadline:2,status:'closed',imageAttempts:2,researchAttempts:1};
+ await f.storage.put('voice-ledger-v1',state);
+ const before=await(await gateway.fetch(f.request('/status'),f.env)).json();
+ assert.equal(before.available,false);assert.equal(before.remainingCalls,0);
+ f.env.MAX_SESSIONS='50';let ready;
+ const restored=new VoiceSupervisor({storage:f.storage,blockConcurrencyWhile:fn=>(ready=fn()),waitUntil:p=>f.pending.push(p)},f.env);await ready;
+ f.env.VOICE_SUPERVISOR={getByName:()=>restored};
+ const after=await(await gateway.fetch(f.request('/status'),f.env)).json();
+ assert.equal(after.available,true);assert.equal(after.remainingCalls,40);assert.equal(after.maxSessionSeconds,120);
+ assert.equal(api.calls.length,0);assert.deepEqual(await f.storage.get('voice-ledger-v1'),state);
+ const call=await gateway.fetch(f.request('/session',{sdp}),f.env);assert.equal(call.status,201);
+ assert.equal((await f.storage.get('voice-ledger-v1')).attempts,11);
+ assert.deepEqual((await f.storage.get('voice-ledger-v1')).sessions.prior,state.sessions.prior);
+ await gateway.fetch(f.request('/session/close',(await call.json()).control),f.env);
+ assert.equal((await(await gateway.fetch(f.request('/status'),f.env)).json()).remainingCalls,39);
+});
+
+test('simultaneous requests cannot overspend the last expanded call unit',async t=>{
+ const f=await fixture({MAX_SESSIONS:'50'});const api=mockAPI(t);
+ const state=await f.storage.get('voice-ledger-v1');state.attempts=49;await f.storage.put('voice-ledger-v1',state);
+ const responses=await Promise.all([1,2,3,4,5].map(()=>gateway.fetch(f.request('/session',{sdp}),f.env)));
+ assert.equal(responses.filter(r=>r.status===201).length,1);assert.equal(responses.filter(r=>r.status===429).length,4);
+ assert.equal(api.calls.filter(c=>c.url.endsWith('/sessions')).length,1);
+ assert.equal((await f.storage.get('voice-ledger-v1')).attempts,50);
+ for(const response of responses){const body=await response.json();if(response.status===201)await gateway.fetch(f.request('/session/close',body.control),f.env);else assert.equal(body.reason,'limit_reached');}
+ const status=await(await gateway.fetch(f.request('/status'),f.env)).json();
+ assert.equal(status.available,false);assert.equal(status.remainingCalls,0);assert.equal(status.reason,'limit_reached');
+ assert.equal(status.message,'This voice trial has used its call allowance.');
+});
+
 test('context is authenticated, size/rate/count bounded, acknowledged, and never persisted',async t=>{
  const f=await fixture();const api=mockAPI(t);const call=await(await gateway.fetch(f.request('/session',{sdp}),f.env)).json();
  const tooBig=await gateway.fetch(f.request('/context',{...call.control,context:'a'.repeat(481)}),f.env);assert.equal(tooBig.status,400);
