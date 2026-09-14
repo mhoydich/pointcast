@@ -1,4 +1,5 @@
 import { nounRoster } from './co-games-roster';
+import { mountCoGamesWorlds } from './co-games-worlds-ui';
 
 /** Presentation only: game state and AI requests remain in co-games-ui. */
 export function mountCoGamesHud(root: HTMLElement): () => void {
@@ -6,6 +7,7 @@ export function mountCoGamesHud(root: HTMLElement): () => void {
   const win = doc.defaultView!;
   const lifetime = new win.AbortController();
   const options = { signal: lifetime.signal };
+  const stopWorlds = mountCoGamesWorlds(root);
   let animationTimer: number | undefined;
   let opener: HTMLElement | null = null;
   const dialogs = [...root.querySelectorAll<HTMLDialogElement>('dialog')];
@@ -144,6 +146,6 @@ export function mountCoGamesHud(root: HTMLElement): () => void {
   return () => {
     resetAnimation(); observer.disconnect(); busyObserver.disconnect();
     dialogs.forEach(dialog => { if (dialog.open) dialog.close(); });
-    lifetime.abort(); rosterButtons.forEach(button => button.remove());
+    stopWorlds(); lifetime.abort(); rosterButtons.forEach(button => button.remove());
   };
 }
