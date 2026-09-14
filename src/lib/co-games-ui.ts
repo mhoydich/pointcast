@@ -190,7 +190,7 @@ export function mountCoGames(root: HTMLElement): () => void {
       });
       if (!live(version) || mode !== 'native' || choice()?.id !== target.id) return;
       const checked = validateSupportResponse(observe(state, selected, gameId), result.response);
-      if (!checked.ok) throw new Error(`Your AI’s move was not applied: ${checked.reason}`);
+      if (checked.ok === false) throw new Error(`Your AI’s move was not applied: ${checked.reason}`);
       support = checked.support; reason = typeof result.response.reason === 'string' ? result.response.reason : '';
       actualModels = result.actualModels; pending = null; notice = `Support received from ${actualModels.join(', ')}. Review the pair before casting.`;
     } catch (error) {
