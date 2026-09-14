@@ -2,13 +2,13 @@ import {
   OAUTH_STATE_TTL_SECONDS,
   randomUrlSafeString,
   safeReturnTo,
-  type OAuthStateRecord,
-} from '../auth/_oauth';
+} from '../auth/_oauth.ts';
 import {
   authJson,
   readSessionFromRequest,
-} from '../auth/session';
+} from '../auth/session.ts';
 import type { SpotifyBroadcastEnv } from './_broadcast';
+import type { SpotifyOAuthStateRecord } from './_personal.ts';
 
 const STATE_PREFIX = 'oauth-state:spotify:';
 
@@ -30,6 +30,7 @@ export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ request
   }
 
   const url = new URL(request.url);
+  const personal = url.searchParams.get('personal') === '1';
   const current = await readSessionFromRequest(request, env);
   if (!current) {
     const returnTo = safeReturnTo(`${url.pathname}${url.search}`, '/api/spotify/auth');
@@ -37,17 +38,18 @@ export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ request
     google.searchParams.set('returnTo', returnTo);
     return Response.redirect(google.toString(), 302);
   }
-  if (!current.user.roles?.includes('broadcaster')) {
+  if (!personal && !current.user.roles?.includes('broadcaster')) {
     return authJson({ ok: false, reason: 'broadcaster-only' }, { status: 403 });
   }
 
   const redirectUri = `${url.origin}/api/spotify/callback`;
   const state = randomUrlSafeString();
-  const stateRecord: OAuthStateRecord = {
+  const stateRecord: SpotifyOAuthStateRecord = {
     nonce: randomUrlSafeString(),
     returnTo: safeReturnTo(url.searchParams.get('returnTo'), '/me'),
     currentUserId: current.user.userId,
     createdAt: new Date().toISOString(),
+    ...(personal ? { personal: true } : {}),
   };
   await env.USERS.put(`${STATE_PREFIX}${state}`, JSON.stringify(stateRecord), {
     expirationTtl: OAUTH_STATE_TTL_SECONDS,

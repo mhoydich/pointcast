@@ -19,6 +19,8 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/shwa/', 'weekly', '0.85'],
+  ['https://pointcast.xyz/shwa.json', 'weekly', '0.75'],
   ['https://pointcast.xyz/co-games', 'weekly', '0.95'],
   ['https://pointcast.xyz/co-games.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/downloads', 'daily', '0.9'],
