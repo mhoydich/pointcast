@@ -296,6 +296,8 @@ export const GET: APIRoute = async () => {
         nounsNationRoadmap: 'https://pointcast.xyz/nouns-nation/roadmap',
         nounsNationFederation: 'https://pointcast.xyz/nouns-nation/federation/',
         nounsNationJoin: 'https://pointcast.xyz/nouns-nation/join/',
+        shwaRoom: 'https://pointcast.xyz/shwa/',
+        shwaRoomManifest: 'https://pointcast.xyz/shwa.json',
         nounsNationBattler: 'https://pointcast.xyz/nouns-nation-battler/',
         nounBattlerAnnual: 'https://pointcast.xyz/noun-battler-annual',
         nounBattlerAnnualPromotionDesk: 'https://pointcast.xyz/noun-battler-annual/share',

@@ -1,17 +1,17 @@
 import {
   appendResult,
   safeReturnTo,
-  type OAuthStateRecord,
-} from '../auth/_oauth';
+} from '../auth/_oauth.ts';
 import {
   authJson,
   readSessionFromRequest,
-} from '../auth/session';
+} from '../auth/session.ts';
 import {
   resolveNowPlaying,
   storeSpotifyCredentials,
   type SpotifyBroadcastEnv,
-} from './_broadcast';
+} from './_broadcast.ts';
+import { storePersonalSpotifyCredentials, type SpotifyOAuthStateRecord } from './_personal.ts';
 
 interface SpotifyTokenResponse {
   access_token?: string;
@@ -38,22 +38,23 @@ export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ request
   }
 
   const url = new URL(request.url);
-  if (url.searchParams.get('error')) return errorRedirect(request, 'spotify-denied');
+  const providerError = url.searchParams.get('error');
   const code = url.searchParams.get('code') ?? '';
   const state = url.searchParams.get('state') ?? '';
-  if (!code || !state) return errorRedirect(request, 'spotify-missing-callback');
+  if (!state || (!code && !providerError)) return errorRedirect(request, 'spotify-missing-callback');
 
   const stateKey = `${STATE_PREFIX}${state}`;
-  const stateRecord = await env.USERS.get<OAuthStateRecord>(stateKey, 'json');
+  const stateRecord = await env.USERS.get<SpotifyOAuthStateRecord>(stateKey, 'json');
   if (!stateRecord) return errorRedirect(request, 'spotify-state-expired');
   await env.USERS.delete(stateKey);
 
   const current = await readSessionFromRequest(request, env);
   if (!current
     || current.user.userId !== stateRecord.currentUserId
-    || !current.user.roles?.includes('broadcaster')) {
+    || (stateRecord.personal !== true && !current.user.roles?.includes('broadcaster'))) {
     return errorRedirect(request, 'spotify-session-mismatch', stateRecord.returnTo);
   }
+  if (providerError) return errorRedirect(request, 'spotify-denied', stateRecord.returnTo);
 
   const redirectUri = `${url.origin}/api/spotify/callback`;
   let response: Response;
@@ -74,18 +75,32 @@ export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ request
     return errorRedirect(request, 'spotify-token-unreachable', stateRecord.returnTo);
   }
 
-  const token = await response.json() as SpotifyTokenResponse;
+  let token: SpotifyTokenResponse;
+  try {
+    token = await response.json() as SpotifyTokenResponse;
+  } catch {
+    return errorRedirect(request, 'spotify-token-failed', stateRecord.returnTo);
+  }
   if (!response.ok || !token.access_token || !token.refresh_token) {
+    return errorRedirect(request, 'spotify-token-failed', stateRecord.returnTo);
+  }
+  if (stateRecord.personal === true && (typeof token.expires_in !== 'number'
+    || !Number.isSafeInteger(token.expires_in) || token.expires_in <= 0)) {
     return errorRedirect(request, 'spotify-token-failed', stateRecord.returnTo);
   }
 
   try {
-    await storeSpotifyCredentials(env, {
+    const credentials = {
       accessToken: token.access_token,
       refreshToken: token.refresh_token,
       expiresAt: Date.now() + (token.expires_in ?? 3600) * 1000,
-    });
-    await resolveNowPlaying(env, { force: true });
+    };
+    if (stateRecord.personal === true) {
+      await storePersonalSpotifyCredentials(env, current.user.userId, credentials);
+    } else {
+      await storeSpotifyCredentials(env, credentials);
+      await resolveNowPlaying(env, { force: true });
+    }
   } catch {
     return errorRedirect(request, 'spotify-storage-failed', stateRecord.returnTo);
   }

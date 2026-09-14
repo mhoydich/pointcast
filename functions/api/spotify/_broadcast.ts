@@ -1,4 +1,4 @@
-import { NOW_PLAYING } from '../../../src/data/now-playing';
+import { NOW_PLAYING } from '../../../src/data/now-playing.ts';
 
 export type SpotifyBroadcastEnv = Cloudflare.Env;
 
