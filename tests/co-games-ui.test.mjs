@@ -117,6 +117,8 @@ test('native support requires an explicit request and a separate cast, with actu
   assert.equal(f.q('[data-enemy]').textContent, '14');
   assert.match(f.q('[data-log-items]').textContent, /ChatGPT · Codex \(native-model\): Ward/);
   assert.equal(f.q('[data-cast]').disabled, true, 'the next round must obtain its own support');
+  assert.match(f.q('[data-runtime-status]').textContent, /Choose your next spell/);
+  assert.doesNotMatch(f.q('[data-runtime-status]').textContent, /Support received|Review the pair/);
   assert.equal(f.calls.filter(call => call.method === 'POST').length, 1);
 });
 
