@@ -29,6 +29,24 @@ function clientWith(respond, options = {}) {
 }
 const failure = reason => error => error instanceof CoGamesRuntimeError && error.reason === reason;
 
+test('default browser fetch keeps its global receiver for discovery, submission, and polling', async (t) => {
+  const methods = [];
+  t.mock.method(globalThis, 'fetch', async function (url, init) {
+    // Browser fetch can reject calls whose receiver is a client instance.
+    if (this !== globalThis) throw new TypeError('Illegal invocation');
+    assert.equal(url, '/api/me/ai-runtimes');
+    assert.equal(init.credentials, 'include');
+    methods.push(init.method);
+    return init.method === 'POST' ? accepted() : snapshot([job()]);
+  });
+  const client = new CoGamesRuntimeClient({ pollMs: 0 });
+  const choices = await client.discover();
+  assert.equal(choices[0].runtimeId, 'runtime-one');
+  const result = await client.requestSupport(choices[0], observation(), { requestId });
+  assert.equal(result.response.support, 'echo');
+  assert.deepEqual(methods, ['GET', 'POST', 'GET']);
+});
+
 test('discovers only live native subscription choices and reports runtime contention', async () => {
   const r = runtime();
   r.providers.push({ provider: 'claude', available: true, authenticated: true, authMode: 'subscription', models: [] });
