@@ -131,7 +131,7 @@ test('reduced motion settles new Nouns without continuous travel and retains tap
   assert.equal(newest.style.top, '30%');
   f.tap(newest);
   assert.equal(f.q('[data-flow-score]').textContent, '1');
-  assert.match(source, /prefers-reduced-motion:reduce\)\{\.drip-particles\{display:none/);
+  assert.match(readFileSync(new URL('../src/styles/starjam-pixel.css', import.meta.url), 'utf8'), /prefers-reduced-motion:reduce\)\{\.drip-particles\{display:none/);
 });
 
 test('a shower finishes once, focuses Encore, and reset starts with three fresh Nouns', t => {
