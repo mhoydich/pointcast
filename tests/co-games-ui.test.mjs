@@ -5,6 +5,8 @@ import { JSDOM } from 'jsdom';
 import { mountCoGames } from '../src/lib/co-games-ui.ts';
 import { choose } from '../src/lib/co-games-engine.mjs';
 import { CoGamesRuntimeClient } from '../src/lib/co-games-runtime.ts';
+import { coGameWorlds } from '../src/lib/co-games-worlds.ts';
+import { GET as getGameRules } from '../src/pages/co-games.json.ts';
 
 const page = readFileSync(new URL('../src/pages/co-games.astro', import.meta.url), 'utf8');
 const markup = page.match(/<article class="co-games-page">[\s\S]*?<\/article>/)[0];
@@ -62,6 +64,21 @@ function winPractice(f) {
   }
 }
 
+function worldVisit(f, encounter) {
+  const dialog = f.q('#cg-worlds');
+  // JSDOM does not implement dialog.close(); model only its open-state effect.
+  dialog.close = () => dialog.removeAttribute('open');
+  dialog.setAttribute('open', '');
+  const button = f.dom.window.document.createElement('button');
+  button.type = 'button';
+  button.dataset.visitEncounter = encounter;
+  const label = f.dom.window.document.createElement('span');
+  label.textContent = 'Visit this world';
+  button.append(label);
+  f.q('[data-world-grid]').append(button);
+  return { dialog, button, label };
+}
+
 test('practice is explicitly simulated, wins through real moves, and replay resets the board', { timeout: 3000 }, t => {
   const f = fixture(t);
   assert.equal(f.root.dataset.mode, 'practice');
@@ -75,6 +92,7 @@ test('practice is explicitly simulated, wins through real moves, and replay rese
   assert.equal(f.root.dataset.status, 'won');
   assert.equal(f.q('[data-health]').textContent, '5 / 14');
   assert.equal(f.q('[data-enemy]').textContent, '0');
+  assert.equal(f.q('[data-result-copy]').textContent, 'The grove lights a path to a diner floating in the night. 5 health left.');
   assert.equal(f.q('[data-count]').textContent, '4');
   assert.match(f.q('[data-log-items]').textContent, /Practice partner/);
   assert.equal(f.dom.window.document.activeElement, f.q('[data-replay]'));
@@ -366,6 +384,7 @@ test('Garden starts with live encounter stats and exposes a real combo in its tu
   assert.equal(f.q('[data-current-armor]').textContent, '0');
   assert.equal(f.q('[data-wins]').textContent, '0');
   assert.equal(f.q('[data-match-number]').textContent, '1');
+  assert.equal(f.q('[data-outcome]').textContent, 'The lanterns are waking. Win a friendly duel to find the trail.');
   assert.match(f.q('[data-combo-preview]').textContent, /Fireworks.*\+2 damage/);
   f.q('[data-cast]').click();
   assert.equal(turns.length, 1);
@@ -472,6 +491,116 @@ test('new native battle clears model attribution and uses a fresh game identity 
   assert.equal(second.revision, 0);
   assert.equal(f.q('[data-count]').textContent, '1');
   assert.equal(f.q('[data-health]').textContent, '11 / 14');
+});
+
+test('visiting Tideglass from Garden starts a fresh native battle without inference or old attribution', { timeout: 3000 }, async t => {
+  let submitted;
+  const f = fixture(t, ({ method, body }) => {
+    if (method === 'POST') { submitted = body; return accepted(); }
+    if (!submitted) return snapshot();
+    const result = { text: JSON.stringify(answer(observationOf(submitted), { support: 'echo' })), actualModels: ['native-model'] };
+    return snapshot([job(submitted, { result })]);
+  });
+  const matches = [];
+  f.root.addEventListener('co-games:match', event => matches.push(event.detail));
+  f.setMode('native'); await tick();
+  f.q('[data-request]').click(); await tick();
+  const first = observationOf(submitted);
+  assert.equal(first.encounter.id, 'garden');
+  assert.equal(f.q('[data-health]').textContent, '11 / 14');
+  assert.equal(f.q('[data-enemy]').textContent, '10');
+  assert.equal(f.q('[data-count]').textContent, '1');
+  assert.match(f.q('[data-log-items]').textContent, /native-model/);
+  assert.match(f.q('[data-actual-model]').textContent, /native-model/);
+  const visit = worldVisit(f, 'shell');
+  visit.label.click(); await tick(); // The delegated handler also accepts a nested label.
+  assert.equal(visit.dialog.open, false);
+  assert.deepEqual(matches, [{ encounter: 'shell', matchNumber: 2, retry: false }]);
+  assert.equal(Object.isFrozen(matches[0]), true);
+  assert.equal(f.root.dataset.encounter, 'shell');
+  assert.equal(f.root.dataset.mode, 'native');
+  assert.equal(f.root.dataset.status, 'playing');
+  assert.equal(f.q('[data-health]').textContent, '14 / 14');
+  assert.equal(f.q('[data-enemy]').textContent, '20');
+  assert.equal(f.q('[data-enemy-max]').textContent, '20');
+  assert.equal(f.q('[data-current-armor]').textContent, '2');
+  assert.equal(f.q('[data-round]').textContent, 'ROUND 1 / 4');
+  assert.equal(f.q('[data-uses="ember"]').textContent, '3 casts left');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(f.q('[data-log]').hidden, true);
+  assert.equal(f.q('[data-log-items]').textContent, '');
+  assert.equal(f.q('[data-wins]').textContent, '0');
+  assert.equal(f.q('[data-match-number]').textContent, '2');
+  assert.equal(f.q('[data-actual-model]').textContent, '');
+  assert.doesNotMatch(f.q('[data-partner]').textContent, /native-model/);
+  assert.equal(f.q('[data-outcome]').textContent, 'The gate is wearing a shell. Time your strongest spell.');
+  const next = observationOf({ prompt: f.q('[data-prompt-preview]').textContent });
+  assert.notEqual(next.gameId, first.gameId);
+  assert.equal(next.encounter.id, 'shell');
+  assert.equal(next.revision, 0);
+  assert.equal(next.selectedHuman, 'ember');
+  assert.equal(next.state.echo, 2);
+  assert.equal(f.calls.filter(call => call.body?.operation === 'job').length, 1, 'travel may discover a connection but cannot request another turn');
+});
+
+test('world travel cannot close the picker or replace an in-flight native battle', { timeout: 3000 }, async t => {
+  const late = deferred();
+  let request;
+  t.mock.method(CoGamesRuntimeClient.prototype, 'requestSupport', async (choice, observation, options) => {
+    request = { observation, options }; return late.promise;
+  });
+  const f = fixture(t, () => snapshot());
+  const matches = [];
+  f.root.addEventListener('co-games:match', event => matches.push(event.detail));
+  f.setMode('native'); await tick();
+  f.q('[data-request]').click();
+  const visit = worldVisit(f, 'shell');
+  visit.label.click(); await tick();
+  assert.equal(visit.dialog.open, true);
+  assert.equal(f.root.dataset.encounter, 'garden');
+  assert.equal(f.q('[data-match-number]').textContent, '1');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(request.options.signal.aborted, false);
+  assert.deepEqual(matches, []);
+  late.resolve({ response: answer(request.observation), actualModels: ['native-model'], jobId: 'job-one', requestId: request.options.requestId });
+  await tick();
+  assert.equal(f.root.dataset.encounter, 'garden', 'blocked travel is not queued for after the reply');
+  assert.equal(f.q('[data-count]').textContent, '1');
+  assert.deepEqual(matches, []);
+});
+
+test('world exploration preserves earned session wins and ignores unknown destinations', { timeout: 3000 }, t => {
+  const f = fixture(t);
+  winPractice(f);
+  assert.equal(f.q('[data-wins]').textContent, '1');
+  worldVisit(f, 'storm').label.click();
+  assert.equal(f.root.dataset.encounter, 'storm');
+  assert.equal(f.q('[data-enemy]').textContent, '22');
+  assert.equal(f.q('[data-wins]').textContent, '1');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(f.q('[data-outcome]').textContent, 'One last friendly duel before the moonlight train leaves.');
+  const invalid = worldVisit(f, 'missing-world');
+  invalid.label.click();
+  assert.equal(invalid.dialog.open, true);
+  assert.equal(f.root.dataset.encounter, 'storm');
+  assert.equal(f.q('[data-match-number]').textContent, '2');
+  assert.equal(f.calls.length, 0);
+});
+
+test('machine rules publish the four source-backed story worlds and explicit travel/audio boundaries', async () => {
+  const response = getGameRules();
+  assert.equal(response.headers.get('Content-Type'), 'application/json; charset=utf-8');
+  const rules = await response.json();
+  assert.deepEqual(rules.story.chapters, Object.entries(coGameWorlds).map(([encounter, world]) => ({
+    encounter, chapter: world.chapter, name: world.name, image: world.src,
+    story: world.story, arrival: world.arrival, victory: world.victory,
+  })));
+  assert.equal(rules.story.freeExploration, true);
+  assert.equal(rules.story.travelRequestsInference, false);
+  assert.deepEqual(rules.presentation.audio.moods, ['drift', 'gentle', 'playful']);
+  assert.equal(rules.presentation.audio.requiresUserGesture, true);
+  assert.equal(rules.presentation.haptics.defaultEnabled, false);
+  assert.equal(rules.presentation.haptics.requiresDeviceSupport, true);
 });
 
 test('new battle cancels an uncertain owned request before resetting and never submits another automatically', { timeout: 3000 }, async t => {

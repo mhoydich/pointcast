@@ -1,4 +1,5 @@
 import { initial, legalHuman, legalPartner, simulate, choose, score, human, partner, encounters, encounterFor, currentIntent, combos, observe, validateSupportResponse } from './co-games-engine.mjs';
+import { coGameWorlds, type CoGameWorldId } from './co-games-worlds.ts';
 import { CoGamesRuntimeClient, CoGamesRuntimeError, buildCoGamesPrompt, type RuntimeChoice } from './co-games-runtime.ts';
 
 import type { EncounterId, GameState, Forecast, ComboId } from './co-games-engine.mjs';
@@ -114,7 +115,7 @@ export function mountCoGames(root: HTMLElement): () => void {
     q('.cg-health').setAttribute('aria-valuenow', String(state.hp));
     q('.cg-health-fill').style.width = `${state.hp / 14 * 100}%`;
     optionalText('[data-current-threat]', String(intent?.attack ?? 0));
-    optionalText('[data-outcome]', outcome || 'Beat the rival crew. Keep your team alive.');
+    optionalText('[data-outcome]', outcome || coGameWorlds[encounter.id as CoGameWorldId]?.arrival || 'Beat the rival crew. Keep your team alive.');
     optionalText('[data-quick-tip]', !active ? 'Play again to try a different path.' : busy ? 'Your AI is choosing its card.'
       : state.focused ? 'Charged up: your next attack does double damage.' : 'Pick a card. Your partner adds support.');
     root.querySelectorAll<HTMLElement>('[data-threat]').forEach(node => {
@@ -188,7 +189,7 @@ export function mountCoGames(root: HTMLElement): () => void {
       q<HTMLButtonElement>('[data-cast]').disabled = true;
       const won = state.status === 'won';
       q('[data-result-title]').textContent = won ? 'You did it. Together.' : 'One more try?';
-      q('[data-result-copy]').textContent = won ? `${encounter.name} beaten in ${state.round} turns. ${state.hp} health left.` : state.hp === 0 ? 'Your team ran out of health. Try more protection.' : 'The rival crew survived. Try a little more damage.';
+      q('[data-result-copy]').textContent = won ? `${coGameWorlds[encounter.id as CoGameWorldId]?.victory || encounter.name + ' beaten.'} ${state.hp} health left.` : state.hp === 0 ? 'Your team ran out of health. Try more protection.' : 'The rival crew survived. Try a little more damage.';
     }
     if (mode === 'native') {
       q('[data-partner]').textContent = busy ? cancelling ? 'Stopping this turn…' : 'Choosing my card…' : lastNativeMove
@@ -220,6 +221,15 @@ export function mountCoGames(root: HTMLElement): () => void {
     const current = encounterFor(state)!.id;
     return battleOrder[(battleOrder.indexOf(current) + 1) % battleOrder.length];
   }
+
+  root.addEventListener('click', event => {
+    const target = event.target instanceof win.Element ? event.target.closest<HTMLButtonElement>('[data-visit-encounter]') : null;
+    if (!target || busy) return;
+    const id = target.dataset.visitEncounter as CoGameWorldId;
+    if (!Object.hasOwn(coGameWorlds, id)) return;
+    root.querySelector<HTMLDialogElement>('#cg-worlds')?.close();
+    void startBattle(id, false);
+  }, { signal: lifetime.signal });
 
   async function startBattle(encounterId: EncounterId, retry: boolean) {
     if (busy) return;

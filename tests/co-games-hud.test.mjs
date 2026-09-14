@@ -19,7 +19,10 @@ function fixture(t) {
   t.mock.method(Math, 'random', () => 0);
   const dom = new JSDOM(markup, { url: 'https://pointcast.test/co-games', pretendToBeVisual: true });
   const win = dom.window;
-  win.matchMedia = () => ({ matches: true });
+  const motion = new win.EventTarget();
+  motion.matches = true;
+  motion.media = '(prefers-reduced-motion: reduce)';
+  win.matchMedia = () => motion;
   // JSDOM has dialog elements but does not implement their browser methods.
   win.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   win.HTMLDialogElement.prototype.close = function () {
