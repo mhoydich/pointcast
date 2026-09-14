@@ -10,7 +10,7 @@ export function CanvasPanel(p:Props){
  const [samples,setSamples]=useState(false),[follow,setFollow]=useState(true),[answerNotice,setAnswerNotice]=useState('');
  const feed=useRef<HTMLDivElement>(null),last=useRef(0);
  const items=p.items.length?p.items:samples?sampleCards():[];
- useEffect(()=>{if(follow&&items.length>last.current&&feed.current)feed.current.scrollTop=feed.current.scrollHeight;last.current=items.length;},[items.length,follow]);
+ useEffect(()=>{if(follow&&p.items.length>last.current&&feed.current)feed.current.scrollTop=feed.current.scrollHeight;last.current=p.items.length;},[p.items.length,follow]);
  return <section className="canvas-panel panel" aria-labelledby="canvas-title">
   <div className="panel-heading"><span className="eyebrow">THE CONVERSATION CANVAS</span><span className="canvas-count">{p.items.length?'LIVE CONVERSATION':samples?'SAMPLE / NO API COST':'READY'} · {items.length} pieces</span></div>
   <div className="canvas-heading"><h2 id="canvas-title">Ideas land here.</h2><button className="text-button" aria-pressed={p.enabled} onClick={()=>p.setEnabled(!p.enabled)}>{p.enabled?'Auto · on':'Auto · paused'}</button></div>
