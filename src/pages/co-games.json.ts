@@ -5,6 +5,10 @@ import { coGameWorlds } from '../lib/co-games-worlds.ts';
 export const GET: APIRoute = () => new Response(JSON.stringify({
   name: 'Co-games: Noun battles',
   url: 'https://pointcast.xyz/co-games',
+  rhythmArcade: { name: 'NOUNS: STARJAM', url: 'https://pointcast.xyz/co-games/flow',
+    description: 'Three-lane rhythm battles through the four story worlds. Tap timed notes, build streaks and beat the rival crew.',
+    support: 'Local practice buddy; no inference requests in rhythm mode.',
+    maximumTrackSeconds: 35, paces: { drift: 72, groove: 96, arcade: 120 } },
   status: 'free-browser-practice',
   description: 'Help a little lost star find its way home through four pixel-art worlds. Play quick co-op Noun battles with visible attacks, armor and spell combos, or freely visit any chapter. Choose a spell; your partner adds support and one click resolves the turn.',
   availability: {
