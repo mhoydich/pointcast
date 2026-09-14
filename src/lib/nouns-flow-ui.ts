@@ -4,7 +4,13 @@ import { nounRoster } from './co-games-roster';
 
 type Pace = keyof typeof FLOW_PACES;
 type FlowState = ReturnType<typeof createFlow>;
-type Transition = ReturnType<typeof advanceFlow>;
+type Transition = ReturnType<typeof advanceFlow> | ReturnType<typeof hitFlow>;
+type HitEvent = Transition['events'][number] & { type: 'hit'; grade: 'good' | 'perfect'; rescue: boolean };
+// The JavaScript engine's inferred event shape starts with misses; narrow the
+// additional successful-hit fields at this boundary instead of asserting them.
+const isHitEvent = (event: Transition['events'][number]): event is HitEvent => event.type === 'hit'
+  && 'grade' in event && (event.grade === 'good' || event.grade === 'perfect')
+  && 'rescue' in event && typeof event.rescue === 'boolean';
 
 /** Local practice only. Never connects to a model, wallet, or remote service. */
 export function mountNounsFlow(root: HTMLElement): () => void {
@@ -12,11 +18,14 @@ export function mountNounsFlow(root: HTMLElement): () => void {
   const lifetime = new win.AbortController(), options = { signal: lifetime.signal };
   const q = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector);
   const notesLayer = q('[data-flow-notes]');
+  const effectsLayer = q('[data-flow-effects]');
+  const mediaTrack = q<HTMLAudioElement>('[data-flow-track]');
   const paceSelect = q<HTMLSelectElement>('[data-flow-pace]');
   const firstPace = paceSelect?.value;
   let state: FlowState = createFlow({ pace: firstPace && Object.hasOwn(FLOW_PACES, firstPace) ? firstPace : 'gentle', world: 'garden' });
   let frame: number | null = null, anchor = 0, anchorElapsed = 0, lastBeat = -1;
   let closed = false, imageVersion = 0;
+  let cheerTimer: number | null = null;
   let pendingImage: HTMLImageElement | null = null;
   const notes = new Map<number, HTMLElement>();
   const flashes = new Map<number, number>();
@@ -28,7 +37,9 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     bubbles: true, detail: Object.freeze({ pace: state.pace, world: state.world, ...detail }),
   }));
   const dialogOpen = () => Boolean(root.querySelector('dialog[open]'));
-  const activeTime = () => anchorElapsed + Math.max(0, win.performance.now() - anchor);
+  const activeTime = () => root.dataset.flowAudioClock === 'media' && mediaTrack && Number.isFinite(mediaTrack.currentTime)
+    ? Math.max(anchorElapsed, mediaTrack.currentTime * 1000)
+    : anchorElapsed + Math.max(0, win.performance.now() - anchor);
 
   function shuffle() {
     const pool = [...nounRoster];
@@ -80,7 +91,7 @@ export function mountNounsFlow(root: HTMLElement): () => void {
   }
 
   function render() {
-    root.dataset.state = state.status; root.dataset.pace = state.pace;
+    root.dataset.state = state.status; root.dataset.pace = state.pace; root.dataset.flowElapsedMs = String(state.elapsedMs);
     text('[data-flow-score]', state.score); text('[data-flow-health]', Math.ceil(state.health));
     text('[data-flow-enemy]', Math.ceil(state.enemy)); text('[data-flow-streak]', state.combo);
     text('[data-flow-time]', `${Math.ceil((state.durationMs - state.elapsedMs) / 1000)}s`);
@@ -95,17 +106,20 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     const playing = state.status === 'playing', paused = state.status === 'paused';
     root.querySelectorAll<HTMLButtonElement>('[data-flow-lane]').forEach(button => { button.disabled = !playing; });
     const start = q<HTMLButtonElement>('[data-flow-start]');
-    if (start) { start.disabled = state.status === 'won' || state.status === 'lost'; start.textContent = playing ? 'Pause jam' : paused ? 'Resume jam' : 'Start jam'; }
+    if (start) { start.disabled = state.status === 'won' || state.status === 'lost'; start.textContent = playing ? 'Pause jam' : paused ? 'Resume jam' : 'Let’s jam!'; }
     const pause = q<HTMLButtonElement>('[data-flow-pause]'); if (pause) pause.disabled = !playing;
     if (paceSelect) paceSelect.disabled = playing;
     root.querySelectorAll<HTMLButtonElement>('[data-flow-world],[data-flow-next-world],[data-flow-shuffle]').forEach(button => { button.disabled = playing; });
     const result = q('[data-flow-result]');
     if (result) result.hidden = state.status !== 'won' && state.status !== 'lost';
     if (state.status === 'won' || state.status === 'lost') {
-      text('[data-flow-result-title]', state.status === 'won' ? 'You rocked this world!' : 'Another jam?');
+      text('[data-flow-result-kicker]', state.status === 'won' ? 'THE WHOLE CREW IS DANCING' : 'THERE’S ANOTHER BEAT WAITING');
+      text('[data-flow-result-title]', state.status === 'won' ? 'You made it pop!' : 'Keep the good notes.');
       text('[data-flow-result-copy]', state.status === 'won'
         ? `${coGameWorlds[state.world as CoGameWorldId].victory} ${state.score} points · best streak ${state.bestCombo}.`
-        : `${state.hits} notes caught · best streak ${state.bestCombo}. Try Drift for a little more room.`);
+        : state.hits > 0
+          ? `${state.hits} notes caught · best streak ${state.bestCombo}. Your crew is ready for an encore.`
+          : 'Your crew is still with you. Try Drift for a little more room to catch the light.');
     }
     renderNotes();
   }
@@ -115,14 +129,40 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     for (const timer of flashes.values()) win.clearTimeout(timer);
     flashes.clear();
     root.querySelectorAll<HTMLElement>('[data-flow-lane]').forEach(button => { delete button.dataset.active; });
+    if (cheerTimer !== null) win.clearTimeout(cheerTimer);
+    cheerTimer = null; delete root.dataset.cheer;
+    effectsLayer?.replaceChildren();
     delete root.dataset.lastGrade; delete root.dataset.hitLane;
+  }
+  function celebrate(lane: number, streak: boolean) {
+    if (effectsLayer) {
+      const burst = doc.createElement('span');
+      burst.className = 'flow-hit-burst'; burst.dataset.lane = String(lane);
+      burst.dataset.streak = String(streak);
+      burst.style.left = `${(lane + .5) / 3 * 100}%`;
+      for (const symbol of ['✦', '♪', '✧']) {
+        const spark = doc.createElement('i'); spark.textContent = symbol; burst.append(spark);
+      }
+      // One small burst at a time keeps the falling notes easy to follow.
+      effectsLayer.replaceChildren(burst);
+    }
+    if (streak) {
+      root.dataset.cheer = 'true';
+      if (cheerTimer !== null) win.clearTimeout(cheerTimer);
+      cheerTimer = win.setTimeout(() => { delete root.dataset.cheer; cheerTimer = null; }, 520);
+    }
   }
   function apply(result: Transition) {
     state = result.state;
     for (const event of result.events) {
       const { type, ...detail } = event;
-      if (type === 'hit') {
-        text('[data-flow-feedback]', `${event.grade === 'perfect' ? 'Perfect!' : 'Nice!'}${event.rescue ? ' Buddy +5 health.' : ''} ${event.combo} streak`);
+      if (isHitEvent(event)) {
+        const streak = event.combo > 0 && event.combo % 5 === 0;
+        const cheer = streak ? (event.combo >= 15 ? 'STAR POWER!' : event.combo >= 10 ? 'What a groove!' : 'You’re on a roll!')
+          : event.grade === 'perfect' ? ['Pop! Perfect.', 'Right on the beat!', 'Sweet spot!'][state.hits % 3]
+            : ['Lovely!', 'Keep it rolling!', 'That’s the groove!'][state.hits % 3];
+        text('[data-flow-feedback]', `${cheer} ${event.combo} streak${event.rescue ? ' · Buddy +5' : ''}`);
+        celebrate(event.lane, streak);
         root.dataset.lastGrade = event.grade; root.dataset.hitLane = String(event.lane);
         const pad = q(`[data-flow-lane="${event.lane}"]`);
         if (pad) {
@@ -130,10 +170,10 @@ export function mountNounsFlow(root: HTMLElement): () => void {
           flashes.set(event.lane, win.setTimeout(() => { delete pad.dataset.active; flashes.delete(event.lane); }, 120));
         }
       }
-      if (type === 'miss') text('[data-flow-feedback]', 'Missed one. Catch the next beat.');
-      if (type === 'mistap') text('[data-flow-feedback]', 'Follow the light. One lane per note.');
+      if (type === 'miss') text('[data-flow-feedback]', 'Here comes your next beat.');
+      if (type === 'mistap') text('[data-flow-feedback]', 'Wait for the glow — then tap!');
       if (type === 'finish') {
-        stopFrame(); text('[data-flow-feedback]', state.status === 'won' ? 'World cleared!' : 'Jam complete. Give it another go.');
+        stopFrame(); text('[data-flow-feedback]', state.status === 'won' ? 'One world. All that joy!' : 'One more for the good feeling?');
       }
       emit(type, detail);
     }
@@ -159,7 +199,7 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     if (closed || doc.hidden || dialogOpen() || (state.status !== 'ready' && state.status !== 'paused')) return;
     const resumed = state.status === 'paused';
     state = startFlow(state); anchorElapsed = state.elapsedMs; anchor = win.performance.now();
-    text('[data-flow-feedback]', resumed ? 'Back in the flow.' : 'Tap when a note reaches the glowing line.');
+    text('[data-flow-feedback]', resumed ? 'And we’re back! Find the glow.' : 'Here we go! Tap each note at the glow.');
     render(); emit('start', { resumed, bpm: FLOW_PACES[state.pace as Pace].bpm, durationMs: state.durationMs }); schedule();
   }
 
@@ -169,7 +209,7 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     // can never create a batch of unseen misses.
     if (reason === 'manual') apply(advanceFlow(state, activeTime()));
     if (state.status !== 'playing') return;
-    state = pauseFlow(state); anchorElapsed = state.elapsedMs; stopFrame();
+    state = pauseFlow(state); anchorElapsed = state.elapsedMs; stopFrame(); clearFlashes();
     text('[data-flow-feedback]', 'Paused. Resume whenever you’re ready.');
     render(); emit('pause', { paused: true, reason, elapsedMs: state.elapsedMs });
   }
@@ -221,6 +261,9 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     event.preventDefault(); strike(lane);
   }, options);
   root.addEventListener('nouns-flow:audio-interrupted', () => pause('audio'), options);
+  root.addEventListener('nouns-flow:audio-clock', () => {
+    anchorElapsed = state.elapsedMs; anchor = win.performance.now();
+  }, options);
   doc.addEventListener('visibilitychange', () => { if (doc.hidden) pause('hidden'); }, options);
   const dialogs = new win.MutationObserver(() => { if (dialogOpen()) pause('dialog'); });
   root.querySelectorAll('dialog').forEach(dialog => dialogs.observe(dialog, { attributes: true, attributeFilter: ['open'] }));

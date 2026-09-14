@@ -20,6 +20,9 @@ function fixture(t) {
   const dom = new JSDOM(markup, { url: 'https://pointcast.test/co-games/flow', pretendToBeVisual: true });
   const win = dom.window, root = win.document.getElementById('nouns-flow');
   const q = selector => root.querySelector(selector);
+  const mediaTrack = q('[data-flow-track]') ?? win.document.createElement('audio');
+  mediaTrack.dataset.flowTrack = ''; mediaTrack.hidden = true;
+  if (!mediaTrack.parentElement) root.append(mediaTrack);
   // Render the one Astro loop; all other elements come from the actual page.
   q('.flow-world-grid').innerHTML = Object.entries(coGameWorlds).map(([id, world]) => `<button type="button" data-flow-world="${id}">${world.name}</button>`).join('');
   win.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -51,7 +54,7 @@ function fixture(t) {
   const tap = lane => q(`[data-flow-lane="${lane}"]`).dispatchEvent(new win.MouseEvent('pointerdown', { button: 0, bubbles: true }));
   const hide = value => { hidden = value; win.document.dispatchEvent(new win.Event('visibilitychange')); };
   t.after(() => { cleanup(); win.close(); });
-  return { win, root, q, frames, timers, images, events, cleanup, remount, at, frame, key, tap, hide };
+  return { win, root, q, mediaTrack, frames, timers, images, events, cleanup, remount, at, frame, key, tap, hide };
 }
 
 test('mount is idle, the explicit Start/Pause/Resume button controls exactly one frame loop', t => {
@@ -112,6 +115,44 @@ test('pause freezes active time across a long interruption and resume preserves 
   f.q('[data-flow-start]').click();
   f.at(1000000 + first.at - 1000); f.tap(first.lane);
   assert.equal(f.events.find(event => event.name === 'hit').detail.grade, 'perfect');
+  assert.equal(f.q('[data-flow-health]').textContent, '100');
+});
+
+test('the media clock waits at zero and pauses note travel while its audio is buffering', t => {
+  const f = fixture(t), chart = createFlow().notes;
+  f.root.dataset.flowAudioClock = 'media';
+  f.q('[data-flow-start]').click();
+  f.frame(60000);
+  assert.equal(f.root.dataset.state, 'playing');
+  assert.equal(f.q('[data-flow-progress]').value, 0, 'waiting for audio must not advance the chart');
+  assert.equal(f.events.filter(event => event.name === 'miss').length, 0);
+  f.mediaTrack.currentTime = chart[0].at / 1000;
+  f.frame(60001); f.tap(chart[0].lane);
+  assert.equal(f.events.find(event => event.name === 'hit').detail.grade, 'perfect');
+  const progress = f.q('[data-flow-progress]').value;
+  f.frame(120000);
+  assert.equal(f.q('[data-flow-progress]').value, progress, 'a stalled audio clock must freeze note travel');
+  assert.equal(f.events.filter(event => event.name === 'miss').length, 0);
+  f.mediaTrack.currentTime = chart[1].at / 1000;
+  f.frame(120001); f.tap(chart[1].lane);
+  assert.equal(f.events.filter(event => event.name === 'hit').length, 2);
+  assert.equal(f.events.filter(event => event.name === 'hit').at(-1).detail.grade, 'perfect');
+});
+
+test('muting switches from media to wall time without skipping ahead after buffering', t => {
+  const f = fixture(t), first = createFlow().notes[0], elapsed = first.at / 2;
+  f.root.dataset.flowAudioClock = 'media';
+  f.q('[data-flow-start]').click();
+  f.mediaTrack.currentTime = elapsed / 1000;
+  f.frame(60000);
+  const progress = f.q('[data-flow-progress]').value;
+  delete f.root.dataset.flowAudioClock;
+  f.root.dispatchEvent(new f.win.CustomEvent('nouns-flow:audio-clock'));
+  f.frame(60000);
+  assert.equal(f.q('[data-flow-progress]').value, progress);
+  f.at(60000 + first.at - elapsed); f.tap(first.lane);
+  assert.equal(f.events.find(event => event.name === 'hit').detail.grade, 'perfect');
+  assert.equal(f.events.filter(event => event.name === 'miss').length, 0);
   assert.equal(f.q('[data-flow-health]').textContent, '100');
 });
 
