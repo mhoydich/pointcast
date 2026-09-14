@@ -90,7 +90,7 @@ export function mountCoGames(root: HTMLElement): () => void {
     q('.cg-health').setAttribute('aria-valuenow', String(state.hp));
     q('.cg-health-fill').style.width = `${state.hp / 14 * 100}%`;
     optionalText('[data-current-threat]', String(active ? threats[state.round] : 0));
-    optionalText('[data-outcome]', outcome || 'Get the rift to 0. Keep your team alive.');
+    optionalText('[data-outcome]', outcome || 'Beat the rival crew. Keep your team alive.');
     optionalText('[data-quick-tip]', !active ? 'Play again to try a different path.' : busy ? 'Your AI is choosing its card.'
       : state.focused ? 'Charged up: your next attack does double damage.' : 'Pick a card. Your partner adds support.');
     root.querySelectorAll<HTMLElement>('[data-threat]').forEach(node => {
