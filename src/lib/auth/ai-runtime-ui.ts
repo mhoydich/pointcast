@@ -1,3 +1,4 @@
+import { mountShwaDashboard } from './shwa-dashboard.ts';
 import { mountShwaTools } from './shwa-tools.ts';
 import type { PointCastUser } from './types.ts';
 import type { NativeProvider, ProviderState } from '../../../functions/_lib/ai-runtimes.ts';
@@ -13,7 +14,7 @@ export type RuntimeSummary = {
   expiresAt: string | null; lastSeenAt: string | null; lastSuccessAt: string | null; providers: ProviderState[];
 };
 export type RuntimeJobSummary = {
-  id: string; requestId?: string; runtimeId: string; kind: 'login' | 'prompt'; provider: NativeProvider; model?: string | null;
+  id: string; question?: string; requestId?: string; runtimeId: string; kind: 'login' | 'prompt'; provider: NativeProvider; model?: string | null;
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'; createdAt: string; expiresAt: string;
   login?: { verificationUrl: string; userCode?: string };
   result?: { text: string; requestedModel?: string; actualModels?: string[] }; error?: string;
@@ -128,6 +129,8 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   let notice = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
   let scrollForJob = '';
+  let rememberedReply = '';
+  let dashboard: ReturnType<typeof mountShwaDashboard> | undefined;
   const q = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const text = (selector: string, value: string) => { q(selector).textContent = value; };
   const live = (version = epoch) => !lifetime.signal.aborted && root.isConnected && version === epoch;
@@ -144,8 +147,8 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   const pageContext = compact ? runtimePageContext(doc) : '';
   if (page) { page.disabled = !pageContext; page.checked = false; }
   const followup = root.querySelector<HTMLInputElement>('[data-runtime-followup]');
-  const previousReply = () => snapshot?.jobs.find((job) => job.runtimeId === selectedId && job.provider === provider && job.kind === 'prompt' && job.status === 'succeeded' && job.result?.text)?.result?.text || '';
-  const completePrompt = () => [compact ? 'You are Shwa, a warm, thoughtful PointCast companion powered by the user’s paired AI. Answer warmly and directly in about 150 words. You may use your general knowledge alongside the supplied context. Be honest about uncertainty; never invent historical facts or sources. Do not claim to see an image, hear audio, browse, contact a person, or execute a purchase.' : '', buildRuntimePrompt(prompt.value, context.value, note.value), compact && page?.checked ? pageContext : '', compact && followup?.checked && previousReply() ? `Previous AI reply (provided for this follow-up):\n${previousReply().slice(0, 1600)}` : ''].filter(Boolean).join('\n\n');
+  const previousReply = () => rememberedReply || snapshot?.jobs.find((job) => job.runtimeId === selectedId && job.provider === provider && job.kind === 'prompt' && job.status === 'succeeded' && job.result?.text)?.result?.text || '';
+  const completePrompt = () => [compact ? 'You are Shwa, a warm, thoughtful PointCast companion powered by the user’s paired AI. Answer warmly and directly in about 150 words. You may use your general knowledge alongside the supplied context. Be honest about uncertainty; never invent historical facts or sources. Do not claim to see an image, hear audio, browse, contact a person, or execute a purchase.' : '', buildRuntimePrompt(compact ? `[[SHWA_QUESTION]]${prompt.value}[[/SHWA_QUESTION]]` : prompt.value, context.value, note.value), compact && page?.checked ? pageContext : '', compact && followup?.checked && previousReply() ? `Previous AI reply (provided for this follow-up):\n${previousReply().slice(0, 1600)}` : ''].filter(Boolean).join('\n\n');
   const jobBody = (kind: 'login' | 'prompt'): Record<string, unknown> => ({ operation: 'job', kind, runtimeId: selectedId, provider,
     ...(kind === 'prompt' ? { ...(model.value ? { model: model.value } : {}), prompt: completePrompt(), gentle: gentle.checked } : {}) });
   const isRetry = (kind: 'login' | 'prompt') => Boolean(submission?.retryable && submission.kind === kind && submission.fingerprint === JSON.stringify(jobBody(kind)));
@@ -171,6 +174,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   }
 
   function clearSensitive() {
+    rememberedReply = ''; dashboard?.clear();
     pairing = null; pending = null; submission = null; snapshot = null; selectedId = ''; provider = 'codex'; cancelled.clear(); confirmedCancellations.clear(); hiddenRuntime = '';
     form.reset(); q<HTMLFormElement>('[data-runtime-pair-form]').reset(); model.replaceChildren(); computer.replaceChildren(); providerSelect.value = 'codex';
     q<HTMLTextAreaElement>('[data-runtime-command]').value = '';
@@ -278,11 +282,12 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     text('[data-runtime-login-code]', userCode ? `Enter this code on the provider page: ${userCode}` : '');
     q('[data-runtime-login-code]').hidden = !userCode;
     text('[data-runtime-login-expiry]', loginUrl ? `Finish before ${new Date(active!.expiresAt).toLocaleTimeString()}.` : '');
-    const result = runtime ? selectedJobs.find((job) => job.kind === 'prompt' && job.status === 'succeeded' && job.result?.text && job.result.actualModels?.length) : null;
+    const result = runtime ? selectedJobs.find((job) => (!compact || !job.question?.startsWith('SHWA DISCOVERY')) && job.kind === 'prompt' && job.status === 'succeeded' && job.result?.text && job.result.actualModels?.length) : null;
     q('[data-runtime-result]').hidden = !result || Boolean(hiddenRuntime);
     text('[data-runtime-result-title]', result && latest?.id !== result.id ? 'Previous AI response' : 'Your AI’s response');
     text('[data-runtime-result-text]', result?.result?.text || '');
     if (compact && result?.id === scrollForJob && !root.closest('[hidden]')) { scrollForJob = ''; q('[data-runtime-result]').scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }
+    dashboard?.render(available ? selectedJobs : [], available && !busy && !active && view.subscriptionReady);
     text('[data-runtime-result-model]', result ? `${PROVIDER_NAMES[result.provider]} · actual model: ${result.result!.actualModels!.join(', ')}${result.model ? ` · requested: ${result.model}` : ' · native default requested'}` : '');
   }
 
@@ -354,7 +359,8 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
       } else if (body.operation === 'cancel') notice = 'Cancellation requested. The previous request will not be retried automatically.';
       else if (method === 'DELETE') {
         snapshot = { runtimes: (snapshot?.runtimes ?? []).filter((item) => item.id !== body.runtimeId), jobs: (snapshot?.jobs ?? []).filter((job) => job.runtimeId !== body.runtimeId) };
-        pairing = null; pending = null; selectedId = ''; notice = 'Computer disconnected. Pair it again to start new tasks.';
+        rememberedReply = ''; dashboard?.clear();
+    pairing = null; pending = null; selectedId = ''; notice = 'Computer disconnected. Pair it again to start new tasks.';
       }
       hiddenRuntime = ''; await load();
     } catch (error) {
@@ -423,6 +429,11 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     if ((event as CustomEvent).detail?.tray === 'my-ai') { void load(); }
   }, { signal: lifetime.signal });
   const stopShwa = compact ? mountShwaTools(root) : () => {};
+  if (compact) dashboard = mountShwaDashboard(root, (question, prior = '', draft = false) => {
+    rememberedReply = prior; prompt.value = question; note.value = ''; context.value = ''; gentle.checked = false;
+    if (page) page.checked = false; if (followup) followup.checked = Boolean(prior);
+    inputsChanged(); if (!draft) form.requestSubmit();
+  });
   render(); void load();
-  return () => { ++epoch; ++readVersion; clearTimeout(timer); requests.abort(); clearSensitive(); stopShwa(); lifetime.abort(); };
+  return () => { ++epoch; ++readVersion; clearTimeout(timer); requests.abort(); clearSensitive(); stopShwa(); dashboard?.stop(); lifetime.abort(); };
 }

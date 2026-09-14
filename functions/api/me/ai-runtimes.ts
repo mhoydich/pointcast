@@ -17,7 +17,10 @@ export const onRequestGet: PagesFunction<AuthEnv> = async ({ request, env }) => 
       .bind(userId).all<RuntimeRow>();
     const jobs = await env.AUTH_DB.prepare('SELECT * FROM ai_runtime_jobs WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 20')
       .bind(userId).all<RuntimeJob>();
-    return authJson({ ok: true, runtimes: runtimes.results.map((row) => runtimeView(row)), jobs: jobs.results.map(jobView) });
+    return authJson({ ok: true, runtimes: runtimes.results.map((row) => runtimeView(row)), jobs: jobs.results.map(row => {
+      const question = row.prompt?.match(/\[\[SHWA_QUESTION\]\]([\s\S]*?)\[\[\/SHWA_QUESTION\]\]/)?.[1];
+      return { ...jobView(row), ...(question ? { question: question.slice(0, 4000) } : {}) };
+    }) });
   } catch { return runtimeFailure('ai-runtimes-unavailable', 503); }
 };
 
