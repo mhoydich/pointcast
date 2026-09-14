@@ -24,18 +24,55 @@ export function mountShwaTools(root: HTMLElement): () => void {
   dictate.disabled = !Recognition;
   read.disabled = !win.speechSynthesis;
   if (!Recognition) status.textContent = 'Voice input is unavailable in this browser. You can type your question.';
+  const form = root.querySelector<HTMLFormElement>('[data-runtime-task-form]');
+  if (root.dataset.compact === 'true' && form && !root.querySelector('.ai-runtime__options')) {
+    const options = doc.createElement('details');
+    options.className = 'ai-runtime__options';
+    const summary = doc.createElement('summary'); summary.textContent = 'Voice & options';
+    for (const attribute of form.getAttributeNames().filter(name => name.startsWith('data-astro-cid-'))) {
+      options.setAttribute(attribute, ''); summary.setAttribute(attribute, '');
+    }
+    options.append(summary);
+    for (const selector of ['.ai-runtime__voice', '.ai-runtime__followup', '.ai-runtime__page', '.ai-runtime__model', '[data-runtime-model-source]', '.ai-runtime__fields', '.ai-runtime__actions', '.ai-runtime__login', '.ai-runtime__gentle', '.ai-runtime__gentle-detail', '.ai-runtime__preview', '.ai-runtime__invite', '.ai-runtime__pilot', '.ai-runtime__manage']) {
+      const element = root.querySelector(selector); if (element) options.append(element);
+    }
+    form.append(options);
+  }
+  const starterStatus = root.querySelector<HTMLElement>('[data-ai-starter-status]');
+  const songTitle = () => doc.querySelector('[data-live-now-title]')?.textContent?.trim().slice(0, 200) || '';
+  const updateSong = () => {
+    const label = root.querySelector('[data-ai-song-label]');
+    if (label) label.textContent = songTitle() || 'Play a song to explore its story';
+  };
+  const songElement = doc.querySelector('[data-live-now-title]');
+  const observer = new win.MutationObserver(updateSong);
+  if (songElement) observer.observe(songElement, { childList: true, subtree: true, characterData: true });
+  updateSong();
   root.querySelectorAll<HTMLButtonElement>('[data-ai-starter]').forEach((button) => {
     button.addEventListener('click', () => {
-      const song = doc.querySelector('[data-live-now-title]')?.textContent?.trim().slice(0, 200);
+      if (button.disabled) return;
+      const song = songTitle();
+      if (button.dataset.aiStarter === 'song' && !song) {
+        if (starterStatus) starterStatus.textContent = 'No song title is showing yet. Play a song, or type its title and artist below.';
+        return;
+      }
+      if (starterStatus) starterStatus.textContent = '';
       const starters: Record<string, string> = {
-        page: 'Help me explore this PointCast page. Suggest one interesting thing to notice and one question worth asking.',
-        song: song ? `Tell me about “${song}”. Share one interesting detail and ask what I notice when listening. Do not imply you have heard the audio.` : 'Tell me about this song: [add its title and artist]. Share one interesting detail and ask what I notice when listening.',
-        image: 'Let’s discuss an image. I’ll describe what I see: [add your description]. What stands out, and what question would help me look more closely? You have not received the image itself.',
-        purchase: 'Help me review this NFT or x402 offer: [paste the public offer and terms]. Identify the item, seller, network, exact price, fees, and what I receive. List missing information. Prepare a review only; do not buy, sign, or send funds.',
+        song: `What is the history of “${song}”? Use your general music knowledge to tell me its album and release era, the people behind it, and one memorable story or musical detail. Make it an interesting short read. Say when you are unsure about a fact. Do not imply you have heard the audio or looked anything up.`,
+        activity: 'Give me three small, inviting things to do now: one creative, one away from the screen, and one on PointCast. Make each concrete and easy to start, in one or two sentences. Choose the PointCast activity from these available places: /rosebud (browser drum playground), /open-road (one minute of stillness), /room (listening room), /downloads/ (original downloadable artworks). Include its full https://pointcast.xyz link. No setup or purchases.',
+        surprise: 'Surprise me with one lovely, unexpected little detour I can try in the next two minutes. It might be a creative experiment, a way of noticing my surroundings, or a playful question. Be specific, warm, and original. No setup or purchases. Give me the invitation directly, without a preamble.',
       };
       prompt.value = starters[button.dataset.aiStarter!] || '';
-      page.checked = button.dataset.aiStarter === 'page' && !page.disabled;
-      changed(); prompt.focus();
+      page.checked = false;
+      for (const selector of ['[data-runtime-followup]', '[data-runtime-gentle]']) {
+        const input = root.querySelector<HTMLInputElement>(selector); if (input) input.checked = false;
+      }
+      for (const selector of ['[data-runtime-note]', '[data-runtime-context]']) {
+        const input = root.querySelector<HTMLInputElement>(selector); if (input) input.value = '';
+      }
+      changed();
+      if (button.hasAttribute('data-ai-quick') && form) form.requestSubmit();
+      else prompt.focus();
     }, { signal: lifetime.signal });
   });
   dictate.addEventListener('click', () => {
@@ -68,5 +105,5 @@ export function mountShwaTools(root: HTMLElement): () => void {
   win.addEventListener('pc:auth-refresh', reset, { signal: lifetime.signal });
   win.addEventListener('pc:dock-visibility', (event) => { if (!(event as CustomEvent).detail?.open || (event as CustomEvent).detail?.tray !== 'my-ai') reset(); }, { signal: lifetime.signal });
   doc.addEventListener('visibilitychange', () => { if (doc.visibilityState !== 'visible') reset(); }, { signal: lifetime.signal });
-  return () => { stop(); lifetime.abort(); };
+  return () => { stop(); observer.disconnect(); lifetime.abort(); };
 }

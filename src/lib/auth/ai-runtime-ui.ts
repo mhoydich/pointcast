@@ -127,6 +127,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   let hiddenRuntime = '';
   let notice = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let scrollForJob = '';
   const q = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const text = (selector: string, value: string) => { q(selector).textContent = value; };
   const live = (version = epoch) => !lifetime.signal.aborted && root.isConnected && version === epoch;
@@ -144,7 +145,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   if (page) { page.disabled = !pageContext; page.checked = false; }
   const followup = root.querySelector<HTMLInputElement>('[data-runtime-followup]');
   const previousReply = () => snapshot?.jobs.find((job) => job.runtimeId === selectedId && job.provider === provider && job.kind === 'prompt' && job.status === 'succeeded' && job.result?.text)?.result?.text || '';
-  const completePrompt = () => [compact ? 'You are Shwa, a warm, thoughtful PointCast companion powered by the user’s paired AI. Answer conversationally. Use only the supplied text; be clear when you cannot see an image, hear audio, contact a person, or execute a purchase.' : '', buildRuntimePrompt(prompt.value, context.value, note.value), compact && page?.checked ? pageContext : '', compact && followup?.checked && previousReply() ? `Previous AI reply (provided for this follow-up):\n${previousReply().slice(0, 1600)}` : ''].filter(Boolean).join('\n\n');
+  const completePrompt = () => [compact ? 'You are Shwa, a warm, thoughtful PointCast companion powered by the user’s paired AI. Answer warmly and directly in about 150 words. You may use your general knowledge alongside the supplied context. Be honest about uncertainty; never invent historical facts or sources. Do not claim to see an image, hear audio, browse, contact a person, or execute a purchase.' : '', buildRuntimePrompt(prompt.value, context.value, note.value), compact && page?.checked ? pageContext : '', compact && followup?.checked && previousReply() ? `Previous AI reply (provided for this follow-up):\n${previousReply().slice(0, 1600)}` : ''].filter(Boolean).join('\n\n');
   const jobBody = (kind: 'login' | 'prompt'): Record<string, unknown> => ({ operation: 'job', kind, runtimeId: selectedId, provider,
     ...(kind === 'prompt' ? { ...(model.value ? { model: model.value } : {}), prompt: completePrompt(), gentle: gentle.checked } : {}) });
   const isRetry = (kind: 'login' | 'prompt') => Boolean(submission?.retryable && submission.kind === kind && submission.fingerprint === JSON.stringify(jobBody(kind)));
@@ -207,7 +208,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     const blocked = busy || !available;
     root.dataset.state = !available ? loading ? 'checking' : authMissing ? 'signed-out' : 'unavailable' : view.state;
     root.setAttribute('aria-busy', String(busy || loading));
-    text('[data-runtime-badge]', !available ? loading ? 'Checking…' : authMissing ? 'Sign-in required' : 'Status unavailable' : view.badge);
+    text('[data-runtime-badge]', !available ? loading ? 'Checking…' : authMissing ? 'Sign-in required' : 'Status unavailable' : compact && view.subscriptionReady ? 'Online' : view.badge);
     text('[data-runtime-status]', notice || (latest?.status === 'cancelled' ? cancellationText : !runtime ? 'Pair your computer to begin. Pairing does not sign in to an AI provider.'
       : view.state === 'waiting' ? pairing ? 'Run the pairing command on your computer. This invitation expires after ten minutes.' : 'Pairing is waiting. If you no longer have its one-use code, cancel this pairing and create another.'
         : active ? `${active.kind === 'login' ? 'Native sign-in' : 'Your task'} is ${active.status}. Waiting for your companion.`
@@ -256,8 +257,9 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     text('[data-runtime-preview]', body || 'Your task preview will appear here.');
     text('[data-runtime-count]', `${body.length.toLocaleString()} / 4,000 characters${body.length > 4000 ? ' · shorten the task or note' : ''}`);
     q('[data-runtime-gentle-preview]').hidden = !gentle.checked;
-    text('[data-runtime-run]', isRetry('prompt') ? 'Retry same task' : 'Try this task with my AI');
+    text('[data-runtime-run]', isRetry('prompt') ? 'Retry same task' : compact ? active || busy ? 'Asking…' : 'Ask Shwa' : 'Try this task with my AI');
     q<HTMLButtonElement>('[data-runtime-run]').disabled = blocked || !view.subscriptionReady || Boolean(active) || !prompt.value.trim() || body.length > 4000;
+    root.querySelectorAll<HTMLButtonElement>('[data-ai-quick]').forEach((button) => { button.disabled = blocked || !view.subscriptionReady || Boolean(active); });
     q('[data-runtime-job]').hidden = !latest;
     text('[data-runtime-job-status]', latest ? latest.status === 'queued' ? `${latest.kind === 'login' ? 'Sign-in' : 'Task'} queued. Waiting for your companion.`
       : latest.status === 'running' ? latest.kind === 'login' ? 'Native sign-in is in progress.' : 'Your AI is working on this task.'
@@ -279,6 +281,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     q('[data-runtime-result]').hidden = !result || Boolean(hiddenRuntime);
     text('[data-runtime-result-title]', result && latest?.id !== result.id ? 'Previous AI response' : 'Your AI’s response');
     text('[data-runtime-result-text]', result?.result?.text || '');
+    if (compact && result?.id === scrollForJob && !root.closest('[hidden]')) { scrollForJob = ''; q('[data-runtime-result]').scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }
     text('[data-runtime-result-model]', result ? `${PROVIDER_NAMES[result.provider]} · actual model: ${result.result!.actualModels!.join(', ')}${result.model ? ` · requested: ${result.model}` : ' · native default requested'}` : '');
   }
 
@@ -344,7 +347,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
         notice = 'Pairing code created. Run the command, then paste the private code into the waiting terminal.';
       } else if (body.operation === 'job') {
         if (typeof data.jobId !== 'string' || !data.jobId) throw new AiRuntimeRequestError(201, 'invalid-response');
-        submission = null;
+        submission = null; scrollForJob = compact ? data.jobId : '';
         pending = { id: data.jobId, requestId: String(body.requestId), runtimeId: String(body.runtimeId), provider: body.provider as NativeProvider, kind: body.kind as 'login' | 'prompt', status: 'queued', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 600_000).toISOString() };
         notice = body.kind === 'login' ? 'Sign-in requested. Waiting for the native provider flow.' : 'Task submitted. Waiting for a real result from your AI.';
       } else if (body.operation === 'cancel') notice = 'Cancellation requested. The previous request will not be retried automatically.';
