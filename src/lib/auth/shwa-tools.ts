@@ -38,16 +38,28 @@ export function mountShwaTools(root: HTMLElement): () => void {
     }
     form.append(options);
   }
+  if (root.dataset.compact === 'true' && form && !root.querySelector('[data-shwa-conversation]')) {
+    const conversation = doc.createElement('details'); conversation.dataset.shwaConversation = ''; conversation.className = 'shwa-conversation';
+    const summary = doc.createElement('summary'); summary.textContent = 'Ask Shwa · song stories & conversation'; conversation.append(summary);
+    const parent = form.parentElement!;
+    for (const selector of ['.ai-runtime__shwa', '.ai-runtime__task', '[data-runtime-job]', '[data-runtime-result]']) {
+      const element = root.querySelector(selector); if (element) conversation.append(element);
+    }
+    parent.append(conversation);
+  }
   const starterStatus = root.querySelector<HTMLElement>('[data-ai-starter-status]');
   const songTitle = () => doc.querySelector('[data-live-now-title]')?.textContent?.trim().slice(0, 200) || '';
   const updateSong = () => {
-    const label = root.querySelector('[data-ai-song-label]');
-    if (label) label.textContent = songTitle() || 'Play a song to explore its story';
+    root.querySelectorAll('[data-ai-song-label]').forEach(label => { label.textContent = songTitle() || 'Play a song to explore its story'; });
   };
   const songElement = doc.querySelector('[data-live-now-title]');
   const observer = new win.MutationObserver(updateSong);
   if (songElement) observer.observe(songElement, { childList: true, subtree: true, characterData: true });
   updateSong();
+  root.querySelector('[data-shwa-song]')?.addEventListener('click', () => {
+    const conversation = root.querySelector<HTMLDetailsElement>('[data-shwa-conversation]'); if (conversation) conversation.open = true;
+    root.querySelector<HTMLButtonElement>('[data-ai-starter="song"]')?.click();
+  }, { signal: lifetime.signal });
   root.querySelectorAll<HTMLButtonElement>('[data-ai-starter]').forEach((button) => {
     button.addEventListener('click', () => {
       if (button.disabled) return;

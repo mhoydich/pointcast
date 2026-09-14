@@ -188,3 +188,11 @@ test('pair and runtime tokens expire, and retained task context is purged after 
   env.db.prepare('UPDATE ai_runtimes SET token_expires_at=? WHERE id=?').run(Date.now()-1,connection.runtimeId);
   assert.equal((await native(env,{operation:'claim'},connection.token)).status,401);
 });
+
+test('owner history exposes only the marked Shwa question, never the full runtime prompt',async t=>{
+ const env=environment(t);const connection=await ready(env);
+ await enqueue(env,connection,{prompt:'Private system context\n[[SHWA_QUESTION]]Show me something interesting[[/SHWA_QUESTION]]\nOther context'});
+ const data=await list(env);
+ assert.equal(data.jobs[0].question,'Show me something interesting');
+ assert.ok(!('prompt' in data.jobs[0]));assert.ok(!JSON.stringify(data).includes('Private system context'));
+});
