@@ -1,4 +1,7 @@
 /** Original STARJAM instruments. The game emits the beat clock; audio never runs its own. */
+type PlaybackSession = EventTarget & { type: string; readonly state?: string };
+const playbackOwners = new WeakMap<PlaybackSession, { previous: string; owners: Set<symbol> }>();
+
 export function mountNounsFlowAudio(root: HTMLElement): () => void {
   const doc = root.ownerDocument, win = doc.defaultView!;
   const lifetime = new win.AbortController(), options = { signal: lifetime.signal };
@@ -6,6 +9,7 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
   const sound = root.querySelector<HTMLButtonElement>('[data-flow-sound]');
   const volumeControl = root.querySelector<HTMLInputElement>('[data-flow-volume]');
   const haptics = root.querySelector<HTMLButtonElement>('[data-flow-haptics]');
+  const testSound = root.querySelector<HTMLButtonElement>('[data-flow-test-sound]');
   type Pace = 'drift' | 'gentle' | 'playful';
   type World = 'garden' | 'rush' | 'shell' | 'storm';
   const bases: Record<World, number> = { garden: 48, rush: 50, shell: 53, storm: 45 };
@@ -18,6 +22,14 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
   let lastBeat = -1, epoch = 0;
   let context: AudioContext | null = null, master: GainNode | null = null, filter: BiquadFilterNode | null = null;
   let unlocking: Promise<boolean> | null = null;
+  let unlockSerial = 0, unlockTimer: number | null = null, pendingUnlock = false;
+  let startSerial = 0, startTimer: number | null = null, failureSerial = 0, failureTimer: number | null = null;
+  const suspendingContexts = new WeakMap<AudioContext, number>();
+  let preview = false, previewDialog: HTMLDialogElement | null = null, stoppingSources = false;
+  let statusMessage = '', hadRunningContext = false;
+  const sessionToken = Symbol('STARJAM playback');
+  let ownedSession: PlaybackSession | null = null;
+  const watchedSessions = new Set<PlaybackSession>();
   const voices = new Set<{ source: OscillatorNode; gain: GainNode }>();
   const pads = new Set<{ source: OscillatorNode; gain: GainNode }>();
   const hits = new Set<string>();
@@ -34,6 +46,17 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
 
   function render() {
     root.dataset.flowAudioState = unavailable ? 'unavailable' : context?.state || 'locked';
+    const output = unavailable ? 'unavailable' : !enabled ? 'muted' : !volume ? 'zero-volume' : pendingUnlock ? 'starting'
+      : audible() && (voices.size || pads.size) ? preview ? 'test' : 'playing' : 'idle';
+    root.dataset.flowAudioOutput = output;
+    const status = root.querySelector('[data-flow-audio-status]');
+    if (status) status.textContent = statusMessage || (output === 'unavailable' ? 'Audio is unavailable in this browser.'
+      : output === 'muted' ? 'Sound is muted. Turn sound on, then tap Test sound.'
+      : output === 'zero-volume' ? 'Volume is zero. Raise it, then tap Test sound.'
+      : output === 'starting' ? 'Starting audio…'
+      : output === 'test' ? 'Playing three test notes. Check your media volume and audio output if you hear nothing.'
+      : output === 'playing' ? 'Game sound is active.' : 'No sound is playing. Tap Test sound to check this device.');
+    if (testSound) testSound.disabled = unavailable || running || root.dataset.state === 'playing';
     root.dataset.flowAudioPace = pace; root.dataset.flowAudioWorld = world;
     root.dataset.flowHaptics = hapticsAvailable ? hapticsOn ? 'on' : 'off' : 'unavailable';
     if (sound) {
@@ -56,6 +79,77 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
     const note = root.querySelector('[data-flow-haptics-note]');
     if (note) note.textContent = !hapticsAvailable ? 'Haptics are unavailable in this browser or device.' : hapticsOn ? 'On for your hits. Requires device vibration hardware.' : 'Optional on devices with vibration hardware.';
   }
+  function claimPlayback() {
+    try {
+      const session = (win.navigator as Navigator & { audioSession?: PlaybackSession }).audioSession;
+      if (!session || typeof session.type !== 'string') return;
+      if (!watchedSessions.has(session)) {
+        session.addEventListener?.('statechange', () => {
+          if (!closed && ownedSession === session && !gestureRequired && session.state === 'interrupted') audioFailed('interrupted');
+        }, options);
+        watchedSessions.add(session);
+      }
+      const currentType = session.type;
+      const existing = playbackOwners.get(session);
+      if (existing && currentType === 'playback') {
+        existing.owners.add(sessionToken); ownedSession = session; return;
+      }
+      // Do not replace an explicit recording or other app's exclusive session.
+      if (!['auto', 'ambient', 'playback'].includes(currentType)) return;
+      session.type = 'playback';
+      if (session.type !== 'playback') return; // Some browsers silently reject the assignment.
+      playbackOwners.set(session, { previous: currentType, owners: new Set([sessionToken]) });
+      ownedSession = session;
+    } catch { /* Older browsers may expose an unusable Audio Session API. Web Audio can still work. */ }
+  }
+  function releasePlayback() {
+    const session = ownedSession; ownedSession = null;
+    if (!session) return;
+    const lease = playbackOwners.get(session);
+    if (!lease || !lease.owners.delete(sessionToken) || lease.owners.size) return;
+    playbackOwners.delete(session);
+    try { if (session.type === 'playback' && lease.previous !== 'playback') session.type = lease.previous; }
+    catch { /* Never overwrite a newer type or fail cleanup on an unsupported setter. */ }
+  }
+  function clearUnlockTimer() { if (unlockTimer !== null) win.clearTimeout(unlockTimer); unlockTimer = null; }
+  function clearStart() { ++startSerial; pendingStart = false; if (startTimer !== null) win.clearTimeout(startTimer); startTimer = null; }
+  function clearFailure() { ++failureSerial; if (failureTimer !== null) win.clearTimeout(failureTimer); failureTimer = null; }
+  function suspendContext(current: AudioContext) {
+    suspendingContexts.set(current, (suspendingContexts.get(current) || 0) + 1);
+    const settled = () => {
+      const count = (suspendingContexts.get(current) || 1) - 1;
+      if (count) suspendingContexts.set(current, count); else suspendingContexts.delete(current);
+    };
+    try { void current.suspend().then(settled, settled); } catch { settled(); }
+  }
+  function audioFailed(reason: 'interrupted' | 'resume-failed') {
+    if (closed) return;
+    const pauseGame = (running && ownedRun) || pendingStart || root.dataset.state === 'playing';
+    stopRun();
+    statusMessage = reason === 'interrupted' ? 'Sound was interrupted. Tap Test sound or Resume jam to try again.' : 'Audio could not start. Tap Test sound to try again.';
+    render();
+    if (pauseGame) {
+      const failure = ++failureSerial;
+      failureTimer = win.setTimeout(() => {
+        if (failure !== failureSerial) return;
+        failureTimer = null;
+        if (!closed && root.dataset.state === 'playing') root.dispatchEvent(new win.CustomEvent('nouns-flow:audio-interrupted', { bubbles: true, detail: Object.freeze({ reason }) }));
+      }, 0);
+    }
+  }
+  function contextChanged(current: AudioContext) {
+    if (closed || !context || context !== current) return;
+    const state = String(context.state);
+    if (state === 'running') hadRunningContext = true;
+    const hasAudioIntent = (running && ownedRun) || preview || voices.size > 0 || pads.size > 0;
+    if (hasAudioIntent && !gestureRequired && (state === 'interrupted' || (state === 'suspended' && hadRunningContext && !pendingUnlock))) audioFailed('interrupted');
+    else render();
+  }
+  function sourcesEnded() {
+    if (stoppingSources || voices.size || pads.size || running || closed) return;
+    if (preview) { preview = false; previewDialog = null; statusMessage = 'Test finished. Tap Test sound to play it again.'; }
+    releasePlayback(); render();
+  }
   function stopHaptics() { if (typeof win.navigator.vibrate === 'function') { try { win.navigator.vibrate(0); } catch { /* Nothing left to stop. */ } } }
   function pulse(lane: number, perfect: boolean) {
     const at = pendingLanes.get(lane); pendingLanes.delete(lane);
@@ -69,19 +163,20 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
   }
   function stopPads() { for (const voice of pads) stopSource(voice); pads.clear(); }
   function stopAll() {
-    ++epoch; stopPads();
+    ++epoch; stoppingSources = true; stopPads();
     for (const voice of [...voices]) stopSource(voice);
-    voices.clear();
+    voices.clear(); stoppingSources = false;
   }
   function applyVolume() {
     if (!context || !master) return;
     master.gain.cancelScheduledValues(context.currentTime);
-    master.gain.setValueAtTime(enabled && !hidden() ? 0.32 * volume / 100 : 0, context.currentTime);
+    master.gain.setValueAtTime(enabled && !hidden() ? 1.2 * volume / 100 : 0, context.currentTime);
   }
   function suspendAudio() {
-    gestureRequired = true; stopAll(); pendingLanes.clear(); stopHaptics();
+    ++unlockSerial; clearUnlockTimer(); clearStart(); clearFailure(); pendingUnlock = false; gestureRequired = true;
+    preview = false; previewDialog = null; stopAll(); pendingLanes.clear(); stopHaptics(); releasePlayback();
     if (context && master) master.gain.setValueAtTime(0, context.currentTime);
-    void context?.suspend().catch(() => {});
+    if (context) suspendContext(context);
   }
   function stopRun() { running = false; ownedRun = false; pendingStart = false; suspendAudio(); render(); }
   function startPads() {
@@ -95,42 +190,64 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
     }
   }
   // Only callers handling trusted player gestures may invoke unlock().
-  function unlock() {
-    if (closed || hidden() || unavailable || !Audio || !enabled || !volume) return;
+  function unlock(): Promise<boolean> {
+    if (closed || hidden() || unavailable || !Audio || !enabled || !volume) return Promise.resolve(false);
+    const attempt = ++unlockSerial; clearUnlockTimer(); clearFailure();
     gestureRequired = false;
     try {
+      claimPlayback(); // iOS media playback must be requested before creating or resuming Web Audio.
+      if (attempt !== unlockSerial) return Promise.resolve(false);
+      if (context && suspendingContexts.has(context)) {
+        // A pending suspend may still report running. A fresh context keeps retry
+        // wholly inside this trusted gesture instead of resuming asynchronously.
+        const previous = context; context = null; stopAll();
+        master?.disconnect(); filter?.disconnect(); master = null; filter = null;
+        void previous.close().catch(() => {});
+      }
       if (!context) {
-        context = new Audio(); context.addEventListener('statechange', render, options);
+        context = new Audio(); const created = context;
+        hadRunningContext = false; context.addEventListener('statechange', () => contextChanged(created), options);
         master = context.createGain(); filter = context.createBiquadFilter();
         filter.type = 'lowpass'; filter.frequency.value = 2800; filter.Q.value = 0.3;
         master.connect(filter); filter.connect(context.destination);
       }
       const current = context;
       applyVolume();
+      pendingUnlock = current.state !== 'running';
       const ready = current.state === 'running' ? Promise.resolve() : current.resume();
+      if (pendingUnlock) unlockTimer = win.setTimeout(() => { if (attempt === unlockSerial) audioFailed('resume-failed'); }, 2000);
       unlocking = ready.then(() => {
         if (closed || current !== context) { if (current.state !== 'closed') void current.close().catch(() => {}); return false; }
-        if (!audible()) { void current.suspend().catch(() => {}); return false; }
+        if (attempt !== unlockSerial) { if (gestureRequired || !enabled || hidden()) suspendContext(current); return false; }
+        clearUnlockTimer(); pendingUnlock = false;
+        if (!audible()) { audioFailed('resume-failed'); return false; }
         startPads(); render(); return true;
-      }, () => false);
-    } catch { unavailable = true; stopAll(); render(); }
+      }, () => { if (attempt === unlockSerial) audioFailed('resume-failed'); return false; });
+      return unlocking;
+    } catch {
+      audioFailed('resume-failed');
+      const failed = context; context = null; master?.disconnect(); filter?.disconnect(); master = null; filter = null;
+      void failed?.close().catch(() => {}); render(); return Promise.resolve(false);
+    }
   }
   function whenReady(effect: () => void) {
     const version = epoch, requestedAt = win.performance.now();
     if (audible()) effect();
     else if (unlocking) void unlocking.then(ready => { if (ready && version === epoch && audible() && win.performance.now() - requestedAt < 250) effect(); });
   }
-  function note(midi: number, duration: number, level: number, delay = 0, wave: OscillatorType = 'triangle') {
+  function note(midi: number, duration: number, level: number, delay = 0, wave: OscillatorType = 'triangle', hold = 0) {
     if (!audible() || !context || !master) return;
     while (voices.size >= 6) { const old = voices.values().next().value!; voices.delete(old); stopSource(old); }
     const source = context.createOscillator(), gain = context.createGain(), at = context.currentTime + delay;
     source.type = wave; source.frequency.setValueAtTime(pitch(midi), at);
     gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(Math.min(0.1, level), at + 0.008);
+    if (hold) gain.gain.setValueAtTime(Math.min(0.1, level), at + Math.min(hold, duration - 0.02));
     gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
     source.connect(gain); gain.connect(master);
     const voice = { source, gain }; voices.add(voice);
-    source.addEventListener('ended', () => { voices.delete(voice); source.disconnect(); gain.disconnect(); }, { once: true });
+    source.addEventListener('ended', () => { const currentVoice = voices.delete(voice); source.disconnect(); gain.disconnect(); if (currentVoice) sourcesEnded(); }, { once: true });
     source.start(at); source.stop(at + duration + 0.01);
+    render();
   }
   function detail(event: Event): Record<string, unknown> | null {
     const value = (event as CustomEvent<unknown>).detail;
@@ -142,6 +259,23 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
     if (running && ownedRun) pendingLanes.set(lane, win.performance.now());
     unlock();
   }
+  function cancelPreview() {
+    if (!preview) return;
+    suspendAudio(); statusMessage = 'Test stopped. Tap Test sound to try again.'; render();
+  }
+  function playTest(target: HTMLButtonElement) {
+    if (running || root.dataset.state === 'playing') { statusMessage = 'Pause the jam before testing sound.'; render(); return; }
+    statusMessage = '';
+    if (!enabled || !volume || unavailable) { render(); return; }
+    stopAll(); preview = true; previewDialog = target.closest('dialog');
+    // A cold iPhone audio route may need more than the 250ms allowed for game beat cues.
+    const ready = unlock(), version = epoch; render();
+    void ready.then(ok => {
+      if (!ok || closed || !preview || version !== epoch || !audible()) return;
+      for (const [index, midi] of [72, 76, 79].entries()) note(midi, 0.42, 0.09, index * 0.28, 'sine', 0.12);
+      render();
+    });
+  }
   root.addEventListener('pointerdown', event => {
     const target = event.target instanceof win.Element ? event.target.closest<HTMLButtonElement>('[data-flow-lane]') : null;
     if (!event.isTrusted || event.button !== 0 || !target || target.disabled || root.querySelector('dialog[open]')) return;
@@ -150,12 +284,19 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
   root.addEventListener('click', event => {
     const target = event.target instanceof win.Element ? event.target.closest<HTMLButtonElement>('button') : null;
     if (!event.isTrusted || !target || target.disabled || closed || hidden()) return;
-    if (target.matches('[data-flow-start]')) {
+    if (target.matches('[data-flow-test-sound]')) playTest(target);
+    else if (target.matches('[data-flow-start]')) {
       if (root.dataset.state === 'playing') return; // The main control is Pause while a run is active.
-      pendingStart = true; unlock();
-      void Promise.resolve().then(() => { pendingStart = false; });
+      statusMessage = ''; cancelPreview(); statusMessage = '';
+      clearStart(); const start = startSerial; pendingStart = true;
+      startTimer = win.setTimeout(() => {
+        if (start !== startSerial) return;
+        startTimer = null;
+        if (pendingStart) { pendingStart = false; if (!running && !preview) suspendAudio(); }
+      }, 0);
+      unlock();
     } else if (target.matches('[data-flow-sound]') && !unavailable) {
-      enabled = !enabled; persist('sound', enabled ? 'on' : 'off');
+      statusMessage = ''; enabled = !enabled; persist('sound', enabled ? 'on' : 'off');
       if (!enabled) suspendAudio(); else if (running && ownedRun) unlock();
       render();
     } else if (target.matches('[data-flow-haptics]') && hapticsAvailable) {
@@ -172,7 +313,7 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
   }, { ...options, capture: true });
   volumeControl?.addEventListener('input', () => {
     if (!Number.isFinite(Number(volumeControl.value))) { render(); return; }
-    volume = Math.round(Math.max(0, Math.min(100, Number(volumeControl.value)))); persist('volume', String(volume));
+    statusMessage = ''; volume = Math.round(Math.max(0, Math.min(100, Number(volumeControl.value)))); persist('volume', String(volume));
     applyVolume(); if (!volume) suspendAudio(); render();
   }, options);
   root.querySelector<HTMLSelectElement>('[data-flow-pace]')?.addEventListener('change', event => {
@@ -183,7 +324,7 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
     const value = detail(event); if (!value || !pendingStart || closed || hidden()) return;
     theme(value); stopAll(); pendingLanes.clear();
     if (value.resumed !== true) { lastBeat = -1; hits.clear(); }
-    pendingStart = false; running = true; ownedRun = true; whenReady(startPads); render();
+    clearStart(); running = true; ownedRun = true; whenReady(startPads); render();
   }, options);
   root.addEventListener('nouns-flow:beat', event => {
     const value = detail(event); if (!value || !running || !ownedRun || hidden()) return;
@@ -227,12 +368,19 @@ export function mountNounsFlowAudio(root: HTMLElement): () => void {
     }); render();
   }, options);
   root.addEventListener('nouns-flow:world', event => { const value = detail(event); stopRun(); if (value) theme(value); lastBeat = -1; hits.clear(); render(); }, options);
+  const dialogs = new win.MutationObserver(() => { if (preview && previewDialog && !previewDialog.open) cancelPreview(); });
+  root.querySelectorAll('dialog').forEach(dialog => {
+    dialogs.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+    dialog.addEventListener('close', cancelPreview, options);
+    dialog.addEventListener('cancel', cancelPreview, options);
+  });
   doc.addEventListener('visibilitychange', () => { if (hidden()) stopRun(); render(); }, options);
   win.addEventListener('pagehide', stopRun, options);
   render();
   return () => {
     if (closed) return;
-    closed = true; lifetime.abort(); stopAll(); pendingLanes.clear(); stopHaptics();
+    closed = true; lifetime.abort(); dialogs.disconnect(); ++unlockSerial; clearUnlockTimer(); clearStart(); clearFailure(); pendingUnlock = false;
+    preview = false; previewDialog = null; stopAll(); pendingLanes.clear(); stopHaptics(); releasePlayback();
     master?.disconnect(); filter?.disconnect(); const previous = context;
     context = null; master = null; filter = null; void previous?.close().catch(() => {}); render();
   };

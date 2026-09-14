@@ -220,6 +220,7 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     if (lane === undefined || state.status !== 'playing') return;
     event.preventDefault(); strike(lane);
   }, options);
+  root.addEventListener('nouns-flow:audio-interrupted', () => pause('audio'), options);
   doc.addEventListener('visibilitychange', () => { if (doc.hidden) pause('hidden'); }, options);
   const dialogs = new win.MutationObserver(() => { if (dialogOpen()) pause('dialog'); });
   root.querySelectorAll('dialog').forEach(dialog => dialogs.observe(dialog, { attributes: true, attributeFilter: ['open'] }));
