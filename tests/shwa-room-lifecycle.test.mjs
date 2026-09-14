@@ -12,7 +12,7 @@ async function component(file, stubs = {}) {
   const compiled = await build({
     entryPoints: [fileURLToPath(new URL('../src/components/shwa/' + file, import.meta.url))],
     bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external',
-    jsx: 'transform', jsxFactory: 'React.createElement', jsxFragment: 'React.Fragment',
+    loader: { '.css': 'empty' }, jsx: 'transform', jsxFactory: 'React.createElement', jsxFragment: 'React.Fragment',
     plugins: [{ name: 'isolated-room-services', setup(builder) {
       builder.onResolve({ filter: /^\.\/(wallet-panel|account-panel|canvas-panel|station-panels)$/ }, args =>
         stubs[args.path] ? { path: args.path, namespace: 'room-test' } : undefined);

@@ -1,0 +1,9 @@
+export type ResourceRoute = 'house' | 'own' | 'x402';
+export type RoomMember = { id: string; name: string; resource: ResourceRoute; online: boolean };
+export type SharedPiece = { id: string; authorId: string; author: string; kind: 'note' | 'proposal' | 'image-idea'; text: string; createdAt: number; votes: Record<string, 'yes' | 'no'> };
+export type SharedRoom = { revision: number; expiresAt: number; members: RoomMember[]; pieces: SharedPiece[] };
+export const ROOM_ENDPOINT = 'https://pointcast-shwa-rooms.mhoydich.workers.dev';
+export const ROOM_TOKEN = /^[a-f0-9]{64}$/;
+export const resourceNames: Record<ResourceRoute, string> = { house: 'House account', own: 'My AI', x402: 'x402' };
+export function roomFromHash(hash: string): string { const value = new URLSearchParams(hash.replace(/^#/, '')).get('room') || ''; return ROOM_TOKEN.test(value) ? value : ''; }
+export function roomInvite(origin: string, token: string): string { return ROOM_TOKEN.test(token) ? `${origin}/shwa/#room=${token}` : ''; }
