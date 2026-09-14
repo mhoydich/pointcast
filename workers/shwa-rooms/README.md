@@ -2,7 +2,7 @@
 
 A dedicated SQLite Durable Object per cryptographic invite token. No dependency on the voice trial, private PointCast sessions, or the public presence room. The Worker accepts PointCast and the two existing localhost preview origins. Browser names are self-selected. Anyone with a link can read/join; links expire after 24 hours.
 
-The server enforces five seats and forty pieces, bounds payloads and per-socket message rate, hashes reconnect secrets, and persists before broadcasting. Hibernating sockets use automatic ping replies. Disconnected seats get ninety seconds to reconnect; explicit leave releases immediately and removes that participant’s votes. Board content and participant data are cleared at expiry, retaining only expiry/revision metadata so an expired link cannot be resurrected. Invocation URL logging is disabled. Creation has a per-IP edge limit of six per minute.
+The server enforces five seats and forty pieces, bounds payloads and per-socket message rate, hashes reconnect secrets, and persists before broadcasting. Hibernating sockets use automatic ping replies. Disconnected seats get ninety seconds to reconnect; explicit leave releases immediately and removes that participant’s votes. Board content and participant data are cleared at expiry, retaining only expiry/revision metadata so an expired link cannot be resurrected. Invocation URL logging is disabled. Creation has a per-IP edge limit of six per minute; connection attempts are limited to sixty per minute.
 
 Resources (`house`, `own`, `x402`) are preferences only. No provider call, balance, purchase or wallet authorization is performed. Text enters this browser’s Shwa context only through the explicit Discuss button. Personal calls, images and Spotify are not broadcast.
 
