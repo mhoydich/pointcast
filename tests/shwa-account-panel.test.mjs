@@ -81,6 +81,6 @@ test('account restoration shows the verified identity and keeps outages distinct
     assert.equal(view.container.querySelector('a'), null);
     response = () => new Response(null, { status: 401 });
     await act(async () => window.dispatchEvent(new window.Event('pc:auth-change')));
-    assert.equal(view.container.querySelector('a').getAttribute('href'), '/api/auth/google?returnTo=%2Fshwa%2F');
+    assert.equal(view.container.querySelector('a').getAttribute('href'), '/auth?returnTo=%2Fshwa%2F');
   } finally { await view.close(); }
 });

@@ -1,10 +1,12 @@
 import { buildXConnectionView } from './x-connection.mjs';
+import { buildGitHubConnectionView } from './github-connection.mjs';
 
 const TEZOS_PROVIDERS = new Set(['kukai', 'temple', 'umami']);
 
 const PROVIDER_LABELS = {
   kukai: 'Kukai',
   google: 'Google',
+  github: 'GitHub',
   x: 'X',
   apple: 'Apple',
   metamask: 'MetaMask',
@@ -22,9 +24,9 @@ function providerLabel(provider) {
  * The session user is authoritative for account and linked-identity state.
  *
  * @param {import('./types').PointCastUser | null | undefined} user
- * @param {{ xAvailable?: boolean | null }} options
+ * @param {{ xAvailable?: boolean | null, githubAvailable?: boolean | null }} options
  */
-export function buildAccountDeskView(user, { xAvailable = null } = {}) {
+export function buildAccountDeskView(user, { xAvailable = null, githubAvailable = null } = {}) {
   const identities = Array.isArray(user?.identities) ? user.identities : [];
   const identityProviders = new Set(identities.map((identity) => identity.provider));
   const signedIn = Boolean(user);
@@ -61,6 +63,7 @@ export function buildAccountDeskView(user, { xAvailable = null } = {}) {
       : 'No account is required to look around.',
     providers: {
       google: providerState('google', 'Sign in with Google →'),
+      github: buildGitHubConnectionView(user, githubAvailable),
       x: {
         ...xConnection,
         status: xConnection.connected ? 'X is linked to this account. Manage it on your private profile.' : xConnection.status,

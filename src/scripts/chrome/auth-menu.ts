@@ -3,6 +3,8 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
   import {
     getSession,
     getXAuthAvailability,
+    getGitHubAuthAvailability,
+    loginWithGitHub,
     loginWithX,
     loginWithApple,
     loginWithGoogle,
@@ -15,6 +17,7 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
   } from '../../lib/auth/client';
 
   import { buildXConnectionView, xCallbackMessage, xConnectionMessage } from '../../lib/auth/x-connection.mjs';
+  import { buildGitHubConnectionView, githubCallbackMessage, githubConnectionMessage } from '../../lib/auth/github-connection.mjs';
 
   const menuStates = new WeakMap();
 
@@ -29,6 +32,20 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
     const badge = root.querySelector('[data-auth-x-badge]');
     if (name) name.textContent = view.connected ? 'X linked' : state.user ? 'Link X' : 'X';
     if (detail) detail.textContent = `${view.status} No posts or DMs.`;
+    if (badge) badge.textContent = view.badge.toLowerCase();
+  }
+
+  function renderGitHub(root) {
+    const state = menuStates.get(root);
+    if (!state) return;
+    const view = buildGitHubConnectionView(state.user, state.githubAvailable);
+    const button = root.querySelector('[data-provider="github"]');
+    if (button) button.disabled = view.disabled || state.githubPending;
+    const name = root.querySelector('[data-auth-github-name]');
+    const detail = root.querySelector('[data-auth-github-detail]');
+    const badge = root.querySelector('[data-auth-github-badge]');
+    if (name) name.textContent = view.connected ? 'GitHub linked' : state.user ? 'Link GitHub' : 'GitHub';
+    if (detail) detail.textContent = view.status;
     if (badge) badge.textContent = view.badge.toLowerCase();
   }
 
@@ -52,6 +69,7 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
     email: 'Email',
     kukai: 'Kukai',
     google: 'Google',
+    github: 'GitHub',
     x: 'X',
     apple: 'Apple',
     metamask: 'MetaMask',
@@ -89,7 +107,9 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
       state.user = user;
       state.revision += 1;
       state.xPending = false;
+      state.githubPending = false;
       renderX(root);
+      renderGitHub(root);
     }
     const triggerLabel = root.querySelector('[data-auth-trigger-label]');
     const account = root.querySelector('[data-auth-account]') as HTMLElement | null;
@@ -138,10 +158,20 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
   }
 
   function initAuthMenu(root: HTMLElement, signal: AbortSignal): void {
-    const state = { user: undefined, available: null, revision: 0, xPending: false, signal };
+    const state = { user: undefined, available: null, githubAvailable: null, revision: 0, xPending: false, githubPending: false, signal };
     menuStates.set(root, state);
     renderX(root);
-    setStatus(root, xCallbackMessage(window.location.search));
+    renderGitHub(root);
+    setStatus(root, githubCallbackMessage(window.location.search) || xCallbackMessage(window.location.search));
+    void getGitHubAuthAvailability().then((available) => {
+      if (signal.aborted || !root.isConnected) return;
+      state.githubAvailable = available;
+      renderGitHub(root);
+    }).catch(() => {
+      if (signal.aborted || !root.isConnected) return;
+      state.githubAvailable = false;
+      renderGitHub(root);
+    });
     void getXAuthAvailability().then((available) => {
       if (signal.aborted || !root.isConnected) return;
       state.available = available;
@@ -182,10 +212,16 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
       const provider = button.dataset.provider as AuthProvider;
       const action = provider === 'x'
         ? () => loginWithX({ intent: state.user ? 'link' : 'login', returnTo: '/me' })
-        : actions[provider];
+        : provider === 'github'
+          ? () => loginWithGitHub({ intent: state.user ? 'link' : 'login' })
+          : actions[provider];
       if (provider === 'x') {
         state.xPending = true;
         renderX(root);
+      }
+      if (provider === 'github') {
+        state.githubPending = true;
+        renderGitHub(root);
       }
       if (!action) return;
       setStatus(
@@ -209,8 +245,10 @@ import type { AuthProvider, PointCastUser } from '../../lib/auth/types';
         .catch((error) => {
           if (signal.aborted || !root.isConnected) return;
           state.xPending = false;
+          state.githubPending = false;
           renderX(root);
-          setStatus(root, provider === 'x' ? xConnectionMessage(error instanceof Error ? error.message : '') : error instanceof Error ? error.message : `${providerLabels[provider]} failed`);
+          renderGitHub(root);
+          setStatus(root, provider === 'github' ? githubConnectionMessage(error instanceof Error ? error.message : '') : provider === 'x' ? xConnectionMessage(error instanceof Error ? error.message : '') : error instanceof Error ? error.message : `${providerLabels[provider]} failed`);
         });
     }, { signal });
 

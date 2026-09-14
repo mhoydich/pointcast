@@ -3,6 +3,7 @@ import AuthMenu from '../components/AuthMenu.astro';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { ACCOUNT_PROVIDERS } from '../data/super-auth';
 import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
+import { GITHUB_IDENTITY_PERMISSION_COPY } from '../lib/auth/github-connection.mjs';
 ---
 
 <BlockLayout
@@ -20,8 +21,8 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
         <p class="account-desk__kicker">POINTCAST ACCOUNT</p>
         <h1>Sign in to <em>PointCast.</em></h1>
         <p>
-          Use a passkey, email, Google, X, or a wallet. You can look around without an account and choose
-          exactly what to link. X sign-in becomes available when this site is configured.
+          Use a passkey, email, Google, GitHub, X, or a wallet. You can look around without an account and choose
+          exactly what to link. GitHub and X show their current sign-in availability below.
         </p>
         <div class="account-desk__actions">
           <button type="button" data-account-action="google">Sign in with Google</button>
@@ -61,17 +62,18 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
           <article data-account-provider={provider.id} data-state={provider.availability}>
             <div class="account-desk__provider-top">
               <span>{String(index + 1).padStart(2, '0')}</span>
-              <span data-account-provider-badge>{provider.availability === 'available' ? 'AVAILABLE' : provider.id === 'x' ? 'CHECKING' : 'PREVIEW'}</span>
+              <span data-account-provider-badge>{provider.availability === 'available' ? 'AVAILABLE' : provider.availabilityEndpoint ? 'CHECKING' : 'PREVIEW'}</span>
             </div>
             <p>{provider.provider} / {provider.kind}</p>
             <h3>{provider.provider}</h3>
             <small data-account-provider-state>
-              {provider.availability === 'available' ? 'Ready when you choose it.' : provider.id === 'x' ? 'Checking X sign-in availability…' : 'Setup is still in progress.'}
+              {provider.availability === 'available' ? 'Ready when you choose it.' : provider.availabilityEndpoint ? `Checking ${provider.provider} sign-in availability…` : 'Setup is still in progress.'}
             </small>
-            <button type="button" data-account-action={provider.id} data-account-provider-action disabled={provider.id === 'x'}>
-              {provider.id === 'x' ? 'Checking X…' : provider.availability === 'available' ? `Continue with ${provider.provider} →` : `Try ${provider.provider} →`}
+            <button type="button" data-account-action={provider.id} data-account-provider-action disabled={Boolean(provider.availabilityEndpoint)}>
+              {provider.availabilityEndpoint ? `Checking ${provider.provider}…` : provider.availability === 'available' ? `Continue with ${provider.provider} →` : `Try ${provider.provider} →`}
             </button>
             {provider.id === 'x' && <div class="account-desk__permission-note">{X_IDENTITY_PERMISSION_COPY}</div>}
+            {provider.id === 'github' && <div class="account-desk__permission-note">{GITHUB_IDENTITY_PERMISSION_COPY}</div>}
             {provider.id === 'x' && <a class="account-desk__profile-link" href="/me">Manage on your profile →</a>}
           </article>
         ))}
@@ -96,6 +98,8 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
     import {
       getSession,
       getXAuthAvailability,
+      getGitHubAuthAvailability,
+      loginWithGitHub,
       loginWithX,
       loginWithApple,
       loginWithKukai,
@@ -105,6 +109,8 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
     } from '../lib/auth/client';
     import { buildAccountDeskView } from '../lib/auth/account-desk.mjs';
     import { xCallbackMessage, xConnectionMessage } from '../lib/auth/x-connection.mjs';
+    import { githubCallbackMessage, githubConnectionMessage } from '../lib/auth/github-connection.mjs';
+    import { authReturnTo } from '../lib/auth/return-to.mjs';
 
     type AccountDeskWindow = Window & {
       __pointCastAccountDeskCleanup?: () => void;
@@ -116,8 +122,8 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
       if (element) element.textContent = value;
     }
 
-    function renderAccountDesk(root: HTMLElement, user: PointCastUser | null | undefined, xAvailable: boolean | null): void {
-      const view = buildAccountDeskView(user, { xAvailable });
+    function renderAccountDesk(root: HTMLElement, user: PointCastUser | null | undefined, xAvailable: boolean | null, githubAvailable: boolean | null): void {
+      const view = buildAccountDeskView(user, { xAvailable, githubAvailable });
       const hero = root.querySelector<HTMLElement>('.account-desk__hero');
       const signedOut = root.querySelector<HTMLElement>('[data-account-signed-out]');
       const signedIn = root.querySelector<HTMLElement>('[data-account-signed-in]');
@@ -147,7 +153,7 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
         const action = card.querySelector<HTMLButtonElement>('[data-account-provider-action]');
         if (action) {
           action.textContent = state.action;
-          action.disabled = provider === 'x' ? ('disabled' in state && state.disabled) : state.connected && provider !== 'kukai';
+          action.disabled = provider === 'x' || provider === 'github' ? ('disabled' in state && state.disabled) : state.connected && provider !== 'kukai';
         }
       });
     }
@@ -158,7 +164,11 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
 
     async function performAccountAction(root: HTMLElement, action: string, current: PointCastUser | null | undefined): Promise<void> {
       let user: PointCastUser | null = null;
-      if (action === 'x') {
+      if (action === 'github') {
+        if (current === undefined) return;
+        showActionStatus(root, 'Opening GitHub sign-in…');
+        await loginWithGitHub({ intent: current ? 'link' : 'login', returnTo: authReturnTo(window.location.search) });
+      } else if (action === 'x') {
         if (current === undefined) return;
         showActionStatus(root, 'Opening X sign-in…');
         await loginWithX({ intent: current ? 'link' : 'login', returnTo: '/me' });
@@ -196,13 +206,14 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
       let revision = 0;
       let user: PointCastUser | null | undefined;
       let xAvailable: boolean | null = null;
+      let githubAvailable: boolean | null = null;
       const pending = new Set<HTMLButtonElement>();
       const render = () => {
         if (signal.aborted) return;
         roots.forEach((root) => {
           if (!root.isConnected) return;
-          renderAccountDesk(root, user, xAvailable);
-          const callback = xCallbackMessage(window.location.search);
+          renderAccountDesk(root, user, xAvailable, githubAvailable);
+          const callback = githubCallbackMessage(window.location.search) || xCallbackMessage(window.location.search);
           if (callback) showActionStatus(root, callback);
         });
         pending.forEach((button) => { button.disabled = true; });
@@ -230,7 +241,7 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
         event.stopPropagation();
         const action = actionButton.dataset.accountAction || '';
         if (action === 'google') {
-          window.location.assign('/api/auth/google?returnTo=/auth');
+          window.location.assign('/api/auth/google?' + new URLSearchParams({ returnTo: authReturnTo(window.location.search) }));
           return;
         }
         const request = revision;
@@ -238,11 +249,11 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
         actionButton.disabled = true;
         void performAccountAction(root, action, user).catch((error) => {
           if (signal.aborted || request !== revision || !root.isConnected) return;
-          showActionStatus(root, action === 'x' ? xConnectionMessage(error instanceof Error ? error.message : '') : error instanceof Error ? error.message : 'Account action stopped.');
+          showActionStatus(root, action === 'github' ? githubConnectionMessage(error instanceof Error ? error.message : '') : action === 'x' ? xConnectionMessage(error instanceof Error ? error.message : '') : error instanceof Error ? error.message : 'Account action stopped.');
         }).finally(() => {
           pending.delete(actionButton);
           if (signal.aborted || request !== revision || !root.isConnected) return;
-          if (action !== 'x') actionButton.disabled = false;
+          if (action !== 'x' && action !== 'github') actionButton.disabled = false;
         });
       };
       document.addEventListener('click', handleAccountClick, { capture: true, signal });
@@ -250,6 +261,15 @@ import { X_IDENTITY_PERMISSION_COPY } from '../lib/auth/x-connection.mjs';
       document.addEventListener('astro:before-swap', () => controller.abort(), { signal });
       accountWindow.__pointCastAccountDeskCleanup = () => controller.abort();
       void refresh();
+      void getGitHubAuthAvailability().then((available) => {
+        if (signal.aborted) return;
+        githubAvailable = available;
+        render();
+      }).catch(() => {
+        if (signal.aborted) return;
+        githubAvailable = false;
+        render();
+      });
       void getXAuthAvailability().then((available) => {
         if (signal.aborted) return;
         xAvailable = available;

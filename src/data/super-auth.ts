@@ -1,5 +1,5 @@
 export interface AccountProvider {
-  id: 'x' | 'google' | 'apple' | 'kukai' | 'metamask' | 'phantom';
+  id: 'x' | 'google' | 'github' | 'apple' | 'kukai' | 'metamask' | 'phantom';
   provider: string;
   kind: string;
   availability: 'available' | 'preview' | 'configuration-required';
@@ -8,6 +8,14 @@ export interface AccountProvider {
 }
 
 export const ACCOUNT_PROVIDERS: AccountProvider[] = [
+  {
+    id: 'github',
+    provider: 'GitHub',
+    kind: 'Account · public identity only',
+    availability: 'configuration-required',
+    availabilityEndpoint: '/api/auth/github?status=1',
+    keeps: ['verified GitHub user ID', 'username', 'display name', 'profile image'],
+  },
   {
     id: 'x',
     provider: 'X',
