@@ -8,7 +8,7 @@ type AccountState = { status: 'loading' | 'ready' | 'error'; user: PointCastUser
 type SpotifySelection = { url: string; embed: string };
 type PersonalTrack = { id: string; title: string; artist: string; album: string; imageUrl: string | null; spotifyUrl: string; isPlaying: boolean; progressMs: number; durationMs: number };
 type SpotifyAccount = { connected: boolean; configured?: boolean; status: 'connected' | 'disconnected' | 'reconnect_required' | 'unavailable'; track: PersonalTrack | null; checkedAt: string };
-const SIGN_IN = '/api/auth/google?returnTo=%2Fshwa%2F';
+const SIGN_IN = '/auth?returnTo=%2Fshwa%2F';
 const SPOTIFY_AUTH = '/api/spotify/auth?personal=1&returnTo=%2Fshwa%2F';
 const SAVED_LINK = 'pc:shwa:spotify-url:v1';
 const MUSIC_PRESENCE = 'A Spotify player panel is available in the room. Spotify handles the music separately. You cannot hear, inspect, or control its audio or identify its selection.';
@@ -69,7 +69,7 @@ export function RoomAccount({ onActivity, live = false }: Props) {
     activity.current?.('account', account.user ? 'The visitor is signed in to PointCast. Their account identity and connected-service data are not provided to you.' : 'No signed-in PointCast account is currently confirmed for this room.');
   }, [account.user]);
   return <div className="account-chip" aria-label="PointCast account">
-    {account.status === 'loading' ? <span role="status">Restoring account…</span> : account.status === 'error' ? <><span role="status">Account unavailable</span><button type="button" className="small-button" onClick={() => setRevision(value => value + 1)}>Retry</button></> : account.user ? <a href="/auth" aria-label="Manage PointCast account">{account.user.preferredName || 'Your account'} · PointCast</a> : live ? <span>Guest · sign in after your call</span> : <a href={SIGN_IN}>Sign in with Google</a>}
+    {account.status === 'loading' ? <span role="status">Restoring account…</span> : account.status === 'error' ? <><span role="status">Account unavailable</span><button type="button" className="small-button" onClick={() => setRevision(value => value + 1)}>Retry</button></> : account.user ? <a href="/auth" aria-label="Manage PointCast account">{account.user.preferredName || 'Your account'} · PointCast</a> : live ? <span>Guest · sign in after your call</span> : <a href={SIGN_IN}>Sign in</a>}
   </div>;
 }
 
@@ -168,7 +168,7 @@ export function RoomMusic({ onActivity, live = false }: Props) {
     <h2 id="room-music-title">Bring your music.</h2>
     <p className="section-note" role="status">{connectionNote}</p>
     {state === 'error' && <button type="button" className="small-button" onClick={() => setRevision(value => value + 1)}>Check again</button>}
-    {state === 'anonymous' && !live && <a className="small-button" href={SIGN_IN}>Sign in with Google</a>}
+    {state === 'anonymous' && !live && <a className="small-button" href={SIGN_IN}>Sign in</a>}
     {state === 'ready' && spotify?.configured !== false && !live && <a className="small-button" href={SPOTIFY_AUTH}>{spotify?.connected || spotify?.status === 'reconnect_required' ? 'Reconnect Spotify' : 'Connect Spotify'}</a>}
     {spotify?.connected && !live && <button type="button" className="small-button" disabled={disconnecting} onClick={() => { void disconnect(); }}>{disconnecting ? 'Disconnecting…' : 'Disconnect Spotify'}</button>}
     <form className="spotify-form" onSubmit={choose}>

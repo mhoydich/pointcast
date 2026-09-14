@@ -1,6 +1,7 @@
 export type AuthProvider =
   | 'kukai'
   | 'google'
+  | 'github'
   | 'x'
   | 'passkey'
   | 'email'

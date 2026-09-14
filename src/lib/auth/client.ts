@@ -286,6 +286,22 @@ export async function loginWithGoogle(): Promise<PointCastUser | null> {
   return openServerAuth(`${endpoint.pathname}${endpoint.search}`);
 }
 
+export async function getGitHubAuthAvailability(): Promise<boolean> {
+  if (!isBrowser()) return false;
+  const response = await fetch('/api/auth/github?status=1', { credentials: 'include', cache: 'no-store' });
+  if (!response.ok) return false;
+  const payload = await response.json() as { ok?: boolean; available?: boolean; provider?: string };
+  return payload.ok === true && payload.provider === 'github' && payload.available === true;
+}
+
+export async function loginWithGitHub(options: { intent: 'login' | 'link'; returnTo?: string }): Promise<null> {
+  if (!isBrowser()) return null;
+  const endpoint = new URL('/api/auth/github', window.location.origin);
+  endpoint.searchParams.set('intent', options.intent);
+  endpoint.searchParams.set('returnTo', options.returnTo || `${window.location.pathname}${window.location.search}${window.location.hash}`);
+  return openServerAuth(`${endpoint.pathname}${endpoint.search}`);
+}
+
 /** X availability is checked against this deployment; no provider credentials enter the browser. */
 export async function getXAuthAvailability(): Promise<boolean> {
   if (!isBrowser()) return false;

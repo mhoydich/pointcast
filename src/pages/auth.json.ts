@@ -7,11 +7,14 @@ export const prerender = true;
 export const GET: APIRoute = () => new Response(JSON.stringify({
   name: 'PointCast Account',
   canonical: 'https://pointcast.xyz/auth',
-  version: 3,
+  version: 4,
   purpose: 'Sign in, review linked identities, link a wallet, or sign out.',
   providers: ACCOUNT_PROVIDERS,
   endpoints: {
     session: '/api/auth/session',
+    githubAvailability: '/api/auth/github?status=1',
+    githubSignIn: '/api/auth/github?intent=login',
+    githubLink: '/api/auth/github?intent=link',
     xAvailability: '/api/auth/x?status=1',
     xSignIn: '/api/auth/x?intent=login',
     xLink: '/api/auth/x?intent=link',
@@ -21,6 +24,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   },
   boundaries: [
     'Looking around PointCast requires no account.',
+    'GitHub sign-in verifies public identity with no repository or email scopes; provider tokens are not stored.',
     'X linking is a sign-in identity; it grants no posting or DM permission.',
     'AI visits are private, one-time receipts; app and plan choices are self-reported.',
     'Linked identities are shown by provider name without exposing their identifiers here.',
