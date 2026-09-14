@@ -1,8 +1,11 @@
+import manifest from '../../../public/audio/starjam/manifest.json';
+
 // Pages currently serves full 200s for Range requests. Keep this fallback
 // limited to STARJAM's finite, original AAC assets (each under 300 KB).
 // https://developers.cloudflare.com/pages/configuration/serving-pages/#behavior
 const STARJAM_AUDIO = /^\/audio\/starjam\/(?:welcome|hit-[0-2]|(?:garden|rush|shell|storm)-(?:drift|gentle|playful))\.m4a$/;
 const MAX_BYTES = 512 * 1024;
+const ASSET_BYTES = new Map(manifest.tracks.map(track => [`/audio/starjam/${track.file}`, track.bytes]));
 
 export async function withStarjamAudioRange(request: Request, response: Response): Promise<Response> {
   if (!STARJAM_AUDIO.test(new URL(request.url).pathname)
@@ -10,12 +13,16 @@ export async function withStarjamAudioRange(request: Request, response: Response
       || !/^audio\/mp4(?:;|$)/i.test(response.headers.get('content-type') || '')) return response;
   const encoding = response.headers.get('content-encoding');
   const lengthHeader = response.headers.get('content-length');
-  const size = Number(lengthHeader);
-  if ((encoding && encoding !== 'identity') || !lengthHeader || !/^\d+$/.test(lengthHeader)
+  // Pages can add Content-Length only after the Function returns. The shipped
+  // manifest supplies the verified size when next() has not exposed it yet.
+  const size = lengthHeader === null ? ASSET_BYTES.get(new URL(request.url).pathname) : Number(lengthHeader);
+  if ((encoding && encoding !== 'identity') || (lengthHeader !== null && !/^\d+$/.test(lengthHeader))
+      || size === undefined
       || !Number.isSafeInteger(size) || size < 1 || size > MAX_BYTES) return response;
 
   const headers = new Headers(response.headers);
   headers.set('Accept-Ranges', 'bytes');
+  headers.set('Content-Length', String(size));
   const full = () => new Response(response.body, { status: 200, headers });
   const range = request.headers.get('range');
   if (request.method === 'HEAD' || !range) return full();
