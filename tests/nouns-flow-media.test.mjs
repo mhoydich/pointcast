@@ -21,6 +21,7 @@ const markup = `<section id="nouns-flow" data-state="ready" data-world="garden" 
 <select data-flow-pace><option value="drift">Drift</option><option value="gentle" selected>Groove</option><option value="playful">Arcade</option></select>
 <input type="range" data-flow-volume min="0" max="100"><span data-flow-volume-value></span>
 <button data-flow-lane="0">D</button><button data-flow-lane="1">F</button><button data-flow-lane="2">J</button>
+<button data-drip-noun="drop-1" data-drip-lane="0">Cookie</button><button data-drip-noun="drop-2" data-drip-lane="2">Cloud</button>
 </section>`;
 
 function fixture(t, { storage = {}, vibration = true } = {}) {
@@ -91,6 +92,7 @@ function fixture(t, { storage = {}, vibration = true } = {}) {
   };
   const click = selector => trusted(root, 'click', q(selector));
   const lane = (value, fields = {}) => trusted(root, 'pointerdown', q(`[data-flow-lane="${value}"]`), { button: 0, ...fields });
+  const noun = (value, fields = {}) => trusted(root, 'pointerdown', q(`[data-drip-noun="${value}"]`), { button: 0, ...fields });
   const key = (value, fields = {}) => trusted(doc, 'keydown', doc.body, { key: value, ...fields });
   const emit = (type, detail = {}) => {
     if (type === 'start') root.dataset.state = 'playing';
@@ -108,8 +110,57 @@ function fixture(t, { storage = {}, vibration = true } = {}) {
   };
   const visible = value => { visibility = value ? 'visible' : 'hidden'; doc.dispatchEvent(new win.Event('visibilitychange')); };
   const volume = value => { q('[data-flow-volume]').value = String(value); q('[data-flow-volume]').dispatchEvent(new win.Event('input')); };
-  return { win, doc, root, q, track, welcome, effects, media, timers, interruptions, clocks, vibrations, cleanup, click, lane, key, emit, start, hit, flushMedia, advance, visible, volume };
+  return { win, doc, root, q, track, welcome, effects, media, timers, interruptions, clocks, vibrations, cleanup, click, lane, noun, key, emit, start, hit, flushMedia, advance, visible, volume };
 }
+
+function pop(f, nodeId = 'drop-1', lane = 0) {
+  f.root.dispatchEvent(new f.win.CustomEvent('nouns-drip:pop', { detail: { nodeId, lane, count: 1, score: 100 } }));
+}
+
+test('Drip accents require the matching trusted Noun and consume that gesture once', async t => {
+  const f = fixture(t); f.root.dataset.mode = 'drip'; f.start();
+  pop(f); assert.equal(f.effects[0].plays.length, 0);
+  f.noun('drop-1');
+  pop(f, 'wrong-id', 0); pop(f, 'drop-1', 2);
+  assert.equal(f.effects[0].plays.length, 0); assert.equal(f.effects[2].plays.length, 0);
+  await Promise.resolve(); pop(f); pop(f);
+  assert.equal(f.effects[0].plays.length, 1);
+  f.noun('drop-2'); pop(f, 'drop-2', 2);
+  assert.equal(f.effects[2].plays.length, 1, 'a second distinct rapid target can sound');
+});
+
+test('Drip supports native keyboard clicks and lane keys but never late or synthetic gestures', t => {
+  const f = fixture(t); f.root.dataset.mode = 'drip'; f.start();
+  f.q('[data-drip-noun="drop-1"]').click(); pop(f);
+  assert.equal(f.effects[0].plays.length, 0);
+  f.click('[data-drip-noun="drop-1"]'); pop(f);
+  assert.equal(f.effects[0].plays.length, 1);
+  f.key('j'); pop(f, 'drop-2', 2);
+  assert.equal(f.effects[2].plays.length, 1);
+  f.key('d'); f.advance(0); pop(f);
+  assert.equal(f.effects[0].plays.length, 1);
+});
+
+test('mode switches, menus, and hidden pages cannot keep Drip gestures alive', t => {
+  const f = fixture(t); f.root.dataset.mode = 'drip'; f.start();
+  f.noun('drop-1'); f.emit('world'); pop(f);
+  assert.equal(f.effects[0].plays.length, 0);
+  f.start(); f.q('dialog').open = true; f.noun('drop-1'); pop(f);
+  assert.equal(f.effects[0].plays.length, 0);
+  f.q('dialog').open = false; f.noun('drop-1'); f.visible(false); pop(f);
+  assert.equal(f.effects[0].plays.length, 0);
+  assert.equal(f.track.paused, true);
+});
+
+test('Drip and rhythm events cannot trigger each other or bypass mute', t => {
+  const f = fixture(t); f.root.dataset.mode = 'drip'; f.start();
+  f.noun('drop-1'); f.hit(); assert.equal(f.effects[0].plays.length, 0);
+  f.click('[data-flow-sound]'); f.noun('drop-1'); pop(f);
+  assert.equal(f.effects[0].plays.length, 0);
+  f.emit('world'); f.root.dataset.mode = 'rhythm'; f.click('[data-flow-sound]'); f.start();
+  f.lane(0); pop(f); assert.equal(f.effects[0].plays.length, 0);
+  f.hit(); assert.equal(f.effects[0].plays.length, 1);
+});
 
 test('production audio dispatch uses native media and never autoplays on mount or synthetic game events', async t => {
   const f = fixture(t, { storage: { volume: '120' } });

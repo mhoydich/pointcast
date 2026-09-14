@@ -19,6 +19,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 function fixture(t) {
   const dom = new JSDOM(markup, { url: 'https://pointcast.test/co-games/flow', pretendToBeVisual: true });
   const win = dom.window, root = win.document.getElementById('nouns-flow');
+  root.dataset.mode = 'rhythm';
   const q = selector => root.querySelector(selector);
   const mediaTrack = q('[data-flow-track]') ?? win.document.createElement('audio');
   mediaTrack.dataset.flowTrack = ''; mediaTrack.hidden = true;
