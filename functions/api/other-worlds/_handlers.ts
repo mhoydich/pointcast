@@ -33,18 +33,18 @@ export async function handleStatus(request: Request, env: OtherWorldsEnv, option
     const address = new URL(request.url).searchParams.get('address');
     const existing = address && env.AUTH_DB ? await walletClaim(env.AUTH_DB, wallet(address)) : null;
     let enabled = Boolean(config); let unavailable = false;
-    if (config && now(options) < CLOSES_MS) {
+    if (config && (CLOSES_MS === null || now(options) < CLOSES_MS)) {
       try { await readiness(env, config, options); } catch { enabled = false; unavailable = true; }
     }
     return json({ ...base, enabled,
-      phase: now(options) >= CLOSES_MS ? 'closed' : unavailable ? 'unavailable' : enabled ? 'open' : 'preview',
+      phase: CLOSES_MS !== null && now(options) >= CLOSES_MS ? 'closed' : unavailable ? 'unavailable' : enabled ? 'open' : 'preview',
       artworks: Array.from({ length: 9 }, (_, index) => ({ artworkId: index + 1, editionSize: EDITIONS,
         remaining: Math.max(0, EDITIONS - (counts.results.find(row => row.artwork_id === index + 1)?.claimed || 0)) })),
       claim: existing ? receipt(existing) : null,
     });
   } catch {
     // Missing migration or unavailable D1 is explicitly unavailable, never open.
-    return json({ ...base, enabled: false, phase: now(options) >= CLOSES_MS ? 'closed' : 'unavailable', artworks: [], claim: null }, 503);
+    return json({ ...base, enabled: false, phase: CLOSES_MS !== null && now(options) >= CLOSES_MS ? 'closed' : 'unavailable', artworks: [], claim: null }, 503);
   }
 }
 
@@ -55,7 +55,7 @@ export async function handleChallenge(request: Request, env: OtherWorldsEnv, opt
     const config = await configured(env, options); const db = env.AUTH_DB!;
     const existing = await walletClaim(db, address);
     if (existing && existing.artwork_id !== artworkId) return json({ ok: false, reason: 'already-claimed', claim: receipt(existing) }, 409);
-    if (!existing && now(options) >= CLOSES_MS) throw new ClaimError('claims-closed', 410);
+    if (!existing && CLOSES_MS !== null && now(options) >= CLOSES_MS) throw new ClaimError('claims-closed', 410);
     if (existing && existing.config_hash !== config.hash) throw new ClaimError('claim-configuration-changed', 503);
     if (!existing) await readiness(env, config, options);
     const issuedAt = now(options);
@@ -64,7 +64,7 @@ export async function handleChallenge(request: Request, env: OtherWorldsEnv, opt
     const recent = await db.prepare('SELECT COUNT(*) AS count FROM other_worlds_challenges WHERE address = ? AND created_at > ?').bind(address, issuedAt - 60_000).first<{count:number}>();
     if (Number(recent?.count) >= 10) throw new ClaimError('too-many-challenges', 429);
     const nonce = crypto.randomUUID();
-    const expiresAt = existing ? issuedAt + 5 * 60_000 : Math.min(issuedAt + 5 * 60_000, CLOSES_MS);
+    const expiresAt = existing || CLOSES_MS === null ? issuedAt + 5 * 60_000 : Math.min(issuedAt + 5 * 60_000, CLOSES_MS);
     const item = config.items.find(item => item.id === artworkId)!;
     const message = [
       'LOS ANGELES / OTHER WORLDS — Free Claim', 'BY MICHAEL HOYDICH',
@@ -74,7 +74,7 @@ export async function handleChallenge(request: Request, env: OtherWorldsEnv, opt
       `Sponsor: ${config.sponsor}`, 'Collector pays: 0 mutez. Pointcast pays transaction fees.',
       'One artwork per wallet. This signature authorizes only the selected free claim.',
       `Nonce: ${nonce}`, `Issued At: ${new Date(issuedAt).toISOString()}`,
-      `Expires At: ${new Date(expiresAt).toISOString()}`, `Claims Close: ${CLOSES_AT}`,
+      `Expires At: ${new Date(expiresAt).toISOString()}`, `Claims Close: ${CLOSES_AT ?? 'No closing date'}`,
     ].join('\n');
     await db.prepare(`INSERT INTO other_worlds_challenges(nonce,address,artwork_id,origin,message,config_hash,expires_at,created_at)
       SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM other_worlds_challenges WHERE address=? AND created_at>?) < 10`)
@@ -164,7 +164,7 @@ export async function handleClaim(request: Request, env: OtherWorldsEnv, options
     if (challenge.proof_hash && challenge.proof_hash !== proofHash) throw new ClaimError('proof-already-used',409);
     let row = await walletClaim(db,address);
     if (row && row.artwork_id !== artworkId) return json({ ok:false,reason:'already-claimed',claim:receipt(row) },409);
-    if (!row && now(options) >= CLOSES_MS) throw new ClaimError('claims-closed',410);
+    if (!row && CLOSES_MS !== null && now(options) >= CLOSES_MS) throw new ClaimError('claims-closed',410);
     if ((!row || !challenge.proof_hash) && now(options) >= challenge.expires_at) throw new ClaimError('challenge-expired',401);
     if (row && row.config_hash !== config.hash) throw new ClaimError('claim-configuration-changed',503);
     if (!row) await readiness(env,config,options);
@@ -176,12 +176,12 @@ export async function handleClaim(request: Request, env: OtherWorldsEnv, options
       const id = crypto.randomUUID(); const item = config.items.find(item => item.id === artworkId)!;
       await db.prepare(`INSERT OR IGNORE INTO other_worlds_claims(id,address,artwork_id,nonce,config_hash,contract,token_id,sponsor,metadata_sha256,status,created_at,updated_at)
         SELECT ?,?,?,?,?,?,?,?,?,'reserved',?,? FROM other_worlds_challenges
-        WHERE nonce=? AND proof_hash=? AND expires_at>? AND ?<?
+        WHERE nonce=? AND proof_hash=? AND expires_at>? AND (? IS NULL OR ?<?)
         AND (SELECT COUNT(*) FROM other_worlds_claims WHERE artwork_id=?)<27`)
-        .bind(id,address,artworkId,challenge.nonce,config.hash,config.contract,config.tokens[artworkId],config.sponsor,item.metadataSha256,createdAt,createdAt,challenge.nonce,proofHash,createdAt,createdAt,CLOSES_MS,artworkId).run();
+        .bind(id,address,artworkId,challenge.nonce,config.hash,config.contract,config.tokens[artworkId],config.sponsor,item.metadataSha256,createdAt,createdAt,challenge.nonce,proofHash,createdAt,CLOSES_MS,createdAt,CLOSES_MS,artworkId).run();
       row = await walletClaim(db,address);
       if (!row) {
-        if (now(options)>=CLOSES_MS) throw new ClaimError('claims-closed',410);
+        if (CLOSES_MS !== null && now(options)>=CLOSES_MS) throw new ClaimError('claims-closed',410);
         throw new ClaimError('artwork-sold-out',409);
       }
       if (row.artwork_id !== artworkId) return json({ok:false,reason:'already-claimed',claim:receipt(row)},409);

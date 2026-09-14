@@ -3,8 +3,8 @@ import provenance from '../../../src/data/other-worlds-provenance.json';
 import exhibition from '../../../src/data/other-worlds.json';
 
 export const COLLECTION = 'los-angeles-other-worlds-2026';
-export const CLOSES_AT = exhibition.closesAt;
-export const CLOSES_MS = Date.parse(CLOSES_AT);
+export const CLOSES_AT: string | null = exhibition.closesAt;
+export const CLOSES_MS = CLOSES_AT === null ? null : Date.parse(CLOSES_AT);
 export const EDITIONS = 27;
 export const CHAIN_ID = 'NetXdQprcVkpaWU';
 export interface OtherWorldsEnv {
