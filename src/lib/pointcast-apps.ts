@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'co-games',
+    name: 'Co-games: Two against the rift',
+    kicker: 'SPELLFRAME · FOUR ROUNDS · PLAY WITH YOUR AI',
+    description: 'A four-round Spellframe co-op card battle. Choose a spell and face the rift with your paired AI or a built-in practice partner.',
+    url: 'https://pointcast.xyz/co-games',
+    path: '/co-games',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.BTL',
+    kind: 'pointcast',
+  },
+  {
     slug: 'second-shift',
     name: 'Second Shift',
     kicker: '6 LOCAL ORDERS · 5 CAPABILITIES · ONE FINITE NIGHT SHIFT',
