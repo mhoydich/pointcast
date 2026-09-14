@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { active, admissionReason, baseStatus, CLIENT_EVENTS, fixedSessionConfig, IP_WINDOW_MS, MAX_REQUEST_BYTES, parseOffer, readBoundedBody, recoverUnsupportedRedirect, reserve, validOrigin } from '../src/policy.ts';
+import { active, admissionReason, baseStatus, CLIENT_EVENTS, fixedSessionConfig, IP_WINDOW_MS, MAX_REQUEST_BYTES, maxSessions, parseOffer, readBoundedBody, recoverUnsupportedRedirect, reserve, validOrigin } from '../src/policy.ts';
 import type { Ledger, SessionRecord } from '../src/policy.ts';
 const env = { VOICE_ENABLED:'true', OPENAI_API_KEY:'fixture-only', SITE_ORIGIN:'https://example.test', EXPERIMENT_END:'2099-01-01T00:00:00Z', MAX_SESSIONS:'10' };
 const fresh = (): Ledger => ({attempts:0,salt:'salt',ipAttempts:{},sessions:{}});
@@ -37,8 +37,23 @@ test('counts all attempts; failed calls never refund total allowance', () => {
   for(let i=0;i<10;i++){ assert.equal(reserve(ledger,env,String(i),record(String(i)),100),null); ledger.sessions[String(i)].status='failed'; }
   assert.equal(ledger.attempts,10); assert.equal(reserve(ledger,env,'next',record('next'),100),'limit_reached');
 });
-test('configuration cannot increase fixed ten-attempt ceiling', () => {
-  const ledger=fresh(); ledger.attempts=10; assert.equal(admissionReason(ledger,{...env,MAX_SESSIONS:'100'}),'limit_reached');
+test('expanded pool retains a fixed fifty-attempt ceiling and conservative default', () => {
+  assert.equal(maxSessions({}),10);
+  assert.equal(maxSessions({MAX_SESSIONS:'50'}),50);
+  assert.equal(maxSessions({MAX_SESSIONS:'100'}),50);
+  for(const value of ['0','-1','invalid']) assert.equal(maxSessions({MAX_SESSIONS:value}),0);
+  const ledger=fresh(); ledger.attempts=50;
+  assert.equal(admissionReason(ledger,{...env,MAX_SESSIONS:'100'}),'limit_reached');
+});
+test('adding capacity preserves debits and the hourly network allowance', () => {
+  const ledger=fresh();
+  for(let i=0;i<10;i++){ assert.equal(reserve(ledger,env,'same',record(String(i)),100),null); ledger.sessions[String(i)].status='closed'; }
+  const expanded={...env,MAX_SESSIONS:'50'};
+  assert.equal(reserve(ledger,expanded,'same',record('next'),101),'rate_limited');
+  assert.equal(ledger.attempts,10);
+  assert.equal(reserve(ledger,expanded,'same',record('next'),100+IP_WINDOW_MS+1),null);
+  assert.equal(ledger.attempts,11);
+  assert.equal(Object.keys(ledger.sessions).length,11);
 });
 test('two pending creates consume concurrency; uncertainty blocks intake', () => {
   const ledger=fresh();
