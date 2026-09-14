@@ -11,7 +11,9 @@ The browser starts in Lantern grove against Garden gang and keeps the battle sta
 
 ## NOUNS: STARJAM
 
-`/co-games/flow` is the mobile rhythm arcade. Three lanes share a visible hit line; tap a pad or press D/F/J (1/2/3 also works). Each finite track lasts at most 35 seconds. Perfect and good hits deal damage, streaks increase score, and the local practice buddy heals 5 every eight successful hits. Missed notes and off-beat taps cost health. A short shared input debounce prevents simultaneous lane mashing; tracks have no chords.
+`/co-games/flow` opens with **Noun Drip**, a forgiving musical toy. Nouns float down and wait on the canvas: tap any visible Noun at any height, or press D/F/J (1/2/3) to pop a Noun in that column. Native buttons also support Tab and Enter/Space. Distinct quick taps count independently; each Noun can be collected once. There are no missed-note penalties or health loss. Each shower lasts 35 seconds, holds at most six Nouns, and gathers a little crew for its ending. Pause, menus, hidden pages, and switching modes stop the active shower and audio. Reduced motion settles the Nouns without decorative travel.
+
+**Rhythm** remains one tap away. Three lanes share a visible hit line; tap a pad or press D/F/J (1/2/3 also works). Each finite track lasts at most 35 seconds. Perfect and good hits deal damage, streaks increase score, and the local practice buddy heals 5 every eight successful hits. Missed notes and off-beat taps cost health. Its short shared input debounce prevents simultaneous lane mashing; tracks have no chords.
 
 Drift, Groove and Arcade run at 72, 96 and 120 BPM with progressively tighter timing windows. All notes align with the musical beat clock. The main control changes from Start to Pause to Resume. Dialogs and hidden pages freeze the active clock; returning never resumes automatically. Restarting or changing worlds resets the track and waits for Start.
 
@@ -21,11 +23,15 @@ The Sound and feel dialog includes **Test sound**, an original three-second welc
 
 Start and Resume call `play()` synchronously inside a trusted gesture. Intent survives capture/target microtask checkpoints. The gameplay clock follows actual media `currentTime`, so loading or buffering cannot run the notes ahead of the music; muting reanchors the visual-only clock. Explicit pause resumes from the last presented position. Hidden pages, menus, reset, finish and cleanup stop owned playback; late play outcomes cannot restart or pause a newer run. Valid lane hits may play one short accent only within the matching trusted input. Native interruptions or playback rejection pause the game and offer recovery. The iPhone's physical volume buttons control its media output.
 
+Noun Drip accents use the same native AAC elements, authorized by a matching trusted Noun tap or lane key. Duplicate pop events and stale input cannot replay an accent. Mode changes stop the previous controller before mounting the next.
+
+Cloudflare Pages currently [returns full 200 responses for byte-range requests](https://developers.cloudflare.com/pages/configuration/serving-pages/#behavior). A scoped middleware fallback serves correct 206 slices for the sixteen known STARJAM AAC files, preserving audio MIME, exact Content-Range and Content-Length. The fallback bounds actual reads to the declared asset length (at most 512 KiB), supports prefix, open-ended and suffix ranges, and preserves existing partial/error responses. Strong If-Range ETags are checked; unvalidated conditions send the full file. Other PointCast resources retain their existing delivery behavior.
+
 The previous synthesized path remains for consumers mounting the controller without the new media elements, with its existing bounded lifecycle tests. WebKit documents differences between media and Web Audio output in [issue 237322](https://bugs.webkit.org/show_bug.cgi?id=237322), and reports a running-but-silent AudioContext in [issue 276687](https://bugs.webkit.org/show_bug.cgi?id=276687). Neither a resolved play promise nor an advancing media clock proves physical audibility; a real iPhone listening check remains separate.
 
 Successful hits add small lane bursts, each five-hit streak gives the crew a hop, and results offer an Encore. Decorations cancel on pause/reset/cleanup, and reduced motion disables movement and hides bursts. Gameplay scoring and timing windows are unchanged.
 
-Run `node --test tests/nouns-flow*.test.mjs` for timing, pause/resume, input, terminal-state and audio lifecycle coverage.
+Run `node --test tests/nouns-flow*.test.mjs tests/nouns-drip*.test.mjs tests/starjam-audio-routing.test.mjs` for timing, free-tap collection, pause/resume, input, terminal-state, native audio lifecycle and byte-range coverage.
 
 ## Four worlds, one little journey
 

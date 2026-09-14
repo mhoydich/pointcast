@@ -15,6 +15,7 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
   let running = false, pendingStart = false, preview = false, elapsed = 0;
   let version = 0, startTimer: number | undefined, loadTimer: number | undefined, failureTimer: number | undefined;
   let laneTimer: number | undefined, gestureLane: number | undefined, gestureUsed = false;
+  let gestureNoun: string | undefined;
   let hapticsOn = false, hapticsAvailable = typeof win.navigator.vibrate === 'function';
   let message = 'Tap Test sound for a little welcome tune.';
   const hidden = () => doc.visibilityState === 'hidden';
@@ -61,7 +62,7 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
   }
   function pauseElements() { for (const media of [track, test, ...effects]) media?.pause(); }
   function stop() {
-    ++version; clearTimers(); pendingStart = false; running = false; preview = false; gestureLane = undefined;
+    ++version; clearTimers(); pendingStart = false; running = false; preview = false; gestureLane = undefined; gestureNoun = undefined;
     pauseElements(); clock(false);
     if (hapticsOn) { try { win.navigator.vibrate?.(0); } catch { /* Optional. */ } }
   }
@@ -110,13 +111,16 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
     try { void Promise.resolve(test.play()).catch(() => { if (!closed && token === version) { preview = false; message = 'Tap the native player below, or open the tune directly.'; render(); } }); }
     catch { preview = false; message = 'Use the native player below to try the tune.'; render(); }
   }
-  function rememberLane(lane: number) {
-    gestureLane = lane; gestureUsed = false; win.clearTimeout(laneTimer);
-    laneTimer = win.setTimeout(() => { gestureLane = undefined; }, 0);
+  function rememberLane(lane: number, noun?: string) {
+    gestureLane = lane; gestureNoun = noun; gestureUsed = false; win.clearTimeout(laneTimer);
+    laneTimer = win.setTimeout(() => { gestureLane = undefined; gestureNoun = undefined; }, 0);
   }
   root.addEventListener('click', event => {
     const target = event.target instanceof win.Element ? event.target.closest<HTMLButtonElement>('button') : null;
     if (!event.isTrusted || !target || target.disabled || closed || hidden()) return;
+    if (root.dataset.mode === 'drip' && target.matches('[data-drip-noun]') && running && !root.querySelector('dialog[open]')) {
+      rememberLane(Number(target.dataset.dripLane), target.dataset.dripNoun);
+    }
     if (target.matches('[data-flow-test-sound]')) playTest();
     else if (target.matches('[data-flow-start]') && ['ready', 'paused'].includes(root.dataset.state || '') && !root.querySelector('dialog[open]')) {
       const resume = root.dataset.state === 'paused'; stop(); if (!resume) elapsed = 0;
@@ -133,6 +137,11 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
     } else if (target.matches('[data-flow-haptics]') && hapticsAvailable) { hapticsOn = !hapticsOn; render(); }
   }, { ...options, capture: true });
   root.addEventListener('pointerdown', event => {
+    if (root.dataset.mode === 'drip') {
+      const noun = event.target instanceof win.Element ? event.target.closest<HTMLButtonElement>('[data-drip-noun]') : null;
+      if (event.isTrusted && event.button === 0 && noun && !noun.disabled && running && !hidden() && !root.querySelector('dialog[open]')) rememberLane(Number(noun.dataset.dripLane), noun.dataset.dripNoun);
+      return;
+    }
     const target = event.target instanceof win.Element ? event.target.closest<HTMLButtonElement>('[data-flow-lane]') : null;
     if (event.isTrusted && event.button === 0 && target && !target.disabled && running && !hidden() && !root.querySelector('dialog[open]')) rememberLane(Number(target.dataset.flowLane));
   }, { ...options, capture: true });
@@ -154,13 +163,21 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
   root.addEventListener('nouns-flow:beat', event => { const value = detail(event); const ms = Number(value.index) * Number(value.intervalMs); if (running && Number.isFinite(ms)) elapsed = Math.max(elapsed, Math.min(35000, ms)); }, options);
   root.addEventListener('nouns-flow:finish', () => { stop(); elapsed = 0; message = 'That was your jam. Ready for an encore?'; render(); }, options);
   root.addEventListener('nouns-flow:world', () => { stop(); elapsed = 0; configure(); render(); }, options);
-  root.addEventListener('nouns-flow:hit', event => {
-    const value = detail(event), lane = Number(value.lane);
-    if (!running || closed || hidden() || gestureLane !== lane || gestureUsed || !Number.isInteger(lane) || ![0, 1, 2].includes(lane) || !['good', 'perfect'].includes(String(value.grade))) return;
+  function accent(lane: number, perfect: boolean) {
+    if (!running || closed || hidden() || gestureLane !== lane || gestureUsed || !Number.isInteger(lane) || ![0, 1, 2].includes(lane)) return;
     gestureUsed = true;
-    if (hapticsOn) { try { if (win.navigator.vibrate(value.grade === 'perfect' ? 12 : 8) === false) hapticsAvailable = hapticsOn = false; } catch { hapticsAvailable = hapticsOn = false; } }
+    if (hapticsOn) { try { if (win.navigator.vibrate(perfect ? 12 : 8) === false) hapticsAvailable = hapticsOn = false; } catch { hapticsAvailable = hapticsOn = false; } }
     const effect = effects[lane];
     if (effect && enabled && volume) { effect.currentTime = 0; try { void Promise.resolve(effect.play()).catch(() => {}); } catch { /* Optional accent cannot stop the soundtrack. */ } }
+  }
+  root.addEventListener('nouns-flow:hit', event => {
+    const value = detail(event);
+    if (root.dataset.mode !== 'drip' && ['good', 'perfect'].includes(String(value.grade))) accent(Number(value.lane), value.grade === 'perfect');
+  }, options);
+  root.addEventListener('nouns-drip:pop', event => {
+    const value = detail(event);
+    if (root.dataset.mode !== 'drip' || (gestureNoun !== undefined && gestureNoun !== String(value.nodeId))) return;
+    accent(Number(value.lane), true);
   }, options);
   track.addEventListener('loadedmetadata', () => { if (pendingStart || running) seek(elapsed / 1000); }, options);
   track.addEventListener('playing', () => { if (!closed && (running || pendingStart) && enabled && volume && !hidden()) { win.clearTimeout(loadTimer); message = 'Soundtrack playback started. Phone volume follows your volume buttons.'; render(); } else track.pause(); }, options);

@@ -1,6 +1,7 @@
 import { advanceFlow, createFlow, FLOW_LOOKAHEAD_MS, FLOW_PACES, hitFlow, pauseFlow, startFlow } from './nouns-flow-engine.mjs';
 import { coGameWorlds, type CoGameWorldId } from './co-games-worlds';
 import { nounRoster } from './co-games-roster';
+import { mountNounsDrip } from './nouns-drip-ui';
 
 type Pace = keyof typeof FLOW_PACES;
 type FlowState = ReturnType<typeof createFlow>;
@@ -12,8 +13,38 @@ const isHitEvent = (event: Transition['events'][number]): event is HitEvent => e
   && 'grade' in event && (event.grade === 'good' || event.grade === 'perfect')
   && 'rescue' in event && typeof event.rescue === 'boolean';
 
-/** Local practice only. Never connects to a model, wallet, or remote service. */
+/** Switch small local toys without leaving listeners or soundtrack intent behind. */
 export function mountNounsFlow(root: HTMLElement): () => void {
+  const win = root.ownerDocument.defaultView!, lifetime = new win.AbortController();
+  let stopMode = () => {}, initialized = false;
+  const text = (selector: string, value: string) => { const element = root.querySelector(selector); if (element) element.textContent = value; };
+  function select(mode: 'drip' | 'rhythm') {
+    stopMode(); root.dataset.mode = mode; root.dataset.state = 'ready'; root.dataset.flowElapsedMs = '0';
+    root.querySelectorAll<HTMLElement>('[data-flow-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.flowMode === mode)));
+    const drip = mode === 'drip';
+    text('[data-flow-score-label]', drip ? 'POPS' : 'SCORE');
+    text('[data-flow-streak-label]', drip ? 'FRIENDS' : 'STREAK');
+    text('[data-flow-streak-unit]', drip ? '/8' : '×');
+    text('[data-flow-game-title]', drip ? 'DRIP' : 'STARJAM');
+    text('[data-flow-ready-copy]', drip ? 'Tap any Noun.\nLet the good feelings pop.' : 'Catch the beat.\nLight up the universe.');
+    text('[data-flow-ready-tip-one]', drip ? 'Tap a Noun anywhere on the stage.' : 'Tap a lane as the note hits its light.');
+    text('[data-flow-ready-tip-two]', drip ? 'No rush. Every pop is a little win.' : 'Chain your hits. Make the crew dance.');
+    text('[data-flow-practice]', drip ? 'TAP · TAB + ENTER · OR D / F / J' : 'YOU + A LOCAL PRACTICE BUDDY');
+    text('[data-flow-pause-title]', drip ? 'Your friends are right here.' : 'Still in the groove.');
+    stopMode = drip ? mountNounsDrip(root) : mountNounsRhythm(root);
+    if (!drip && initialized) root.dispatchEvent(new win.CustomEvent('nouns-flow:world', { detail: { mode, world: root.dataset.world, pace: root.dataset.pace } }));
+    initialized = true;
+  }
+  root.querySelectorAll<HTMLButtonElement>('[data-flow-mode]').forEach(button => button.addEventListener('click', () => {
+    const mode = button.dataset.flowMode;
+    if ((mode === 'drip' || mode === 'rhythm') && mode !== root.dataset.mode) select(mode);
+  }, { signal: lifetime.signal }));
+  select(root.dataset.mode === 'drip' ? 'drip' : 'rhythm');
+  return () => { lifetime.abort(); stopMode(); };
+}
+
+/** Local rhythm practice. Never connects to a model, wallet, or remote service. */
+function mountNounsRhythm(root: HTMLElement): () => void {
   const doc = root.ownerDocument, win = doc.defaultView!;
   const lifetime = new win.AbortController(), options = { signal: lifetime.signal };
   const q = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector);
