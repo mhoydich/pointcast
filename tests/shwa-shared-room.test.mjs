@@ -37,7 +37,7 @@ test('shared proposals require explicit votes, image preparation and AI context 
     await click(button(view.container, 'Yes')); assert.deepEqual(sent.pop(), { type: 'vote', id: 'p1', vote: 'yes' });
     await click(button(view.container, 'Prepare image')); assert.deepEqual(images, ['A green room with radio lights.']); assert.equal(discussed.length, 0);
     await click(button(view.container, 'Discuss with Shwa')); assert.equal(discussed.length, 1);
-    await click(button(view.container, 'My seat')); await click(button(view.container, 'x402')); assert.deepEqual(sent.pop(), { type: 'profile', name: 'Test human', resource: 'x402' });
+    await click(button(view.container, 'My seat')); await click(button(view.container, 'My AI')); assert.equal(view.container.querySelector('.shared-setup-actions a').getAttribute('href'), '/me#my-ai'); await click(button(view.container, 'x402')); assert.deepEqual(sent.pop(), { type: 'profile', name: 'Test human', resource: 'x402' });
     assert.match(view.container.textContent, /automatic AI purchases are not connected yet/);
     await view.render({ ...props, group: { ...group, phase: 'disconnected' } }); assert.equal(button(view.container, 'Yes').disabled, true);
     assert.match(view.container.textContent, /edits paused/);
