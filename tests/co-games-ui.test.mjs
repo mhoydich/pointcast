@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { mountCoGames } from '../src/lib/co-games-ui.ts';
+import { choose } from '../src/lib/co-games-engine.mjs';
 import { CoGamesRuntimeClient } from '../src/lib/co-games-runtime.ts';
 
 const page = readFileSync(new URL('../src/pages/co-games.astro', import.meta.url), 'utf8');
@@ -72,7 +73,7 @@ test('practice is explicitly simulated, wins through real moves, and replay rese
   assert.equal(f.q('[data-runtime-status]').hidden, true, 'Account initialization must not show an AI notice in practice');
   winPractice(f);
   assert.equal(f.root.dataset.status, 'won');
-  assert.equal(f.q('[data-health]').textContent, '1 / 14');
+  assert.equal(f.q('[data-health]').textContent, '5 / 14');
   assert.equal(f.q('[data-enemy]').textContent, '0');
   assert.equal(f.q('[data-count]').textContent, '4');
   assert.match(f.q('[data-log-items]').textContent, /Practice partner/);
@@ -112,7 +113,7 @@ test('one native Play click resolves exactly one validated turn and keeps the mo
   assert.equal(submitted.kind, 'prompt');
   assert.equal(submitted.provider, 'codex');
   assert.equal(f.q('[data-round]').textContent, 'ROUND 2 / 4');
-  assert.equal(f.q('[data-health]').textContent, '13 / 14');
+  assert.equal(f.q('[data-health]').textContent, '14 / 14');
   assert.equal(f.q('[data-enemy]').textContent, '14');
   assert.equal(f.q('[data-cast]').hidden, true);
   assert.equal(f.q('[data-cast]').disabled, true);
@@ -123,8 +124,8 @@ test('one native Play click resolves exactly one validated turn and keeps the mo
   assert.match(f.q('[data-team-name]').textContent, /ChatGPT · Codex/);
   assert.match(f.q('[data-log-items]').textContent, /ChatGPT · Codex \(native-model\): Ward/);
   assert.equal(turns.length, 1);
-  assert.deepEqual(turns[0], { human: 'ember', support: 'ward', damage: 4, taken: 1, healing: 0,
-    hp: 13, enemy: 14, round: 1, status: 'playing', model: 'native-model', reason: 'Save our health for the larger attacks.' });
+  assert.deepEqual(turns[0], { human: 'ember', support: 'ward', damage: 4, taken: 0, healing: 0,
+    hp: 14, enemy: 14, round: 1, status: 'playing', model: 'native-model', reason: 'Save our health for the larger attacks.', combo: null, armor: 0 });
   assert.equal(Object.isFrozen(turns[0]), true);
   f.q('[data-cast]').click();
   f.q('[data-card="root"]').click(); await tick();
@@ -234,7 +235,7 @@ for (const availability of ['busy', 'offline']) {
     assert.equal(submissions.length, 2);
     assert.deepEqual(submissions[0].body, submissions[1].body);
     assert.equal(f.q('[data-cast]').disabled, true);
-    assert.equal(f.q('[data-health]').textContent, '13 / 14');
+    assert.equal(f.q('[data-health]').textContent, '14 / 14');
     assert.equal(f.q('[data-round]').textContent, 'ROUND 2 / 4');
     assert.match(f.q('[data-partner]').textContent, /native-model/);
     assert.equal(f.q('[data-count]').textContent, '1');
@@ -353,3 +354,189 @@ test('runtime going offline at submission clears its stale ready badge without p
   assert.equal(f.q('[data-round]').textContent, 'ROUND 1 / 4');
   assert.equal(f.q('[data-count]').textContent, '0');
 });
+
+test('Garden starts with live encounter stats and exposes a real combo in its turn event', { timeout: 3000 }, t => {
+  const f = fixture(t);
+  const turns = [];
+  f.root.addEventListener('co-games:turn', event => turns.push(event.detail));
+  assert.equal(f.root.dataset.encounter, 'garden');
+  assert.equal(f.q('[data-encounter-name]').textContent, 'Garden gang');
+  assert.equal(f.q('[data-enemy-max]').textContent, '18');
+  assert.equal(f.q('[data-current-threat]').textContent, '3');
+  assert.equal(f.q('[data-current-armor]').textContent, '0');
+  assert.equal(f.q('[data-wins]').textContent, '0');
+  assert.equal(f.q('[data-match-number]').textContent, '1');
+  assert.match(f.q('[data-combo-preview]').textContent, /Fireworks.*\+2 damage/);
+  f.q('[data-cast]').click();
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].damage, 8);
+  assert.equal(turns[0].armor, 0);
+  assert.equal(turns[0].combo.name, 'Fireworks');
+  assert.equal(f.q('[data-enemy]').textContent, '10');
+  assert.equal(f.q('[data-health]').textContent, '11 / 14');
+  assert.equal(f.q('[data-current-threat]').textContent, '4');
+  assert.match(f.q('[data-outcome]').textContent, /Fireworks.*\+2 damage/);
+  assert.equal(f.calls.length, 0);
+});
+
+test('wins advance to a different encounter and keep session wins without inference', { timeout: 3000 }, t => {
+  const f = fixture(t);
+  const matches = [];
+  f.root.addEventListener('co-games:match', event => matches.push(event.detail));
+  winPractice(f);
+  assert.equal(f.q('[data-wins]').textContent, '1');
+  assert.equal(f.q('[data-replay]').textContent, 'Next battle →');
+  f.q('[data-replay]').click();
+  assert.deepEqual(matches, [{ encounter: 'rush', matchNumber: 2, retry: false }]);
+  assert.equal(Object.isFrozen(matches[0]), true);
+  assert.equal(f.root.dataset.encounter, 'rush');
+  assert.equal(f.q('[data-encounter-name]').textContent, 'Snack attack');
+  assert.equal(f.q('[data-current-threat]').textContent, '6');
+  assert.equal(f.q('[data-health]').textContent, '14 / 14');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(f.q('[data-wins]').textContent, '1');
+  assert.equal(f.calls.length, 0);
+});
+
+test('losing retries the same encounter and resets health and cards without awarding a win', { timeout: 3000 }, t => {
+  const f = fixture(t);
+  const matches = [];
+  f.root.addEventListener('co-games:match', event => matches.push(event.detail));
+  f.q('[data-card="root"]').click();
+  for (let round = 0; round < 4; round++) f.q('[data-cast]').click();
+  assert.equal(f.root.dataset.status, 'lost');
+  assert.equal(f.q('[data-replay]').textContent, 'Try again ↻');
+  f.q('[data-replay]').click();
+  assert.deepEqual(matches, [{ encounter: 'garden', matchNumber: 2, retry: true }]);
+  assert.equal(f.root.dataset.status, 'playing');
+  assert.equal(f.root.dataset.encounter, 'garden');
+  assert.equal(f.q('[data-health]').textContent, '14 / 14');
+  assert.equal(f.q('[data-enemy]').textContent, '18');
+  assert.equal(f.q('[data-uses="ember"]').textContent, '3 casts left');
+  assert.equal(f.q('[data-wins]').textContent, '0');
+  assert.equal(f.q('[data-count]').textContent, '0');
+});
+
+test('fresh battles rotate rivals and expose Shell armor and variable maximum health', { timeout: 3000 }, t => {
+  const f = fixture(t);
+  const turns = [];
+  f.root.addEventListener('co-games:turn', event => turns.push(event.detail));
+  f.q('[data-new-battle]').click();
+  assert.equal(f.root.dataset.encounter, 'rush');
+  f.q('[data-new-battle]').click();
+  assert.equal(f.root.dataset.encounter, 'shell');
+  assert.equal(f.q('[data-match-number]').textContent, '3');
+  assert.equal(f.q('[data-enemy-max]').textContent, '20');
+  assert.equal(f.q('[data-enemy]').textContent, '20');
+  assert.equal(f.q('[data-current-armor]').textContent, '2');
+  assert.match(f.q('[data-battle-intent]').textContent, /Armor 2/);
+  f.q('[data-cast]').click();
+  assert.equal(turns[0].damage, 6);
+  assert.equal(turns[0].armor, 2);
+  assert.equal(turns[0].combo.name, 'Fireworks');
+  assert.equal(f.q('[data-enemy]').textContent, '14');
+  f.q('[data-new-battle]').click();
+  assert.equal(f.root.dataset.encounter, 'storm');
+  assert.equal(f.q('[data-enemy-max]').textContent, '22');
+  assert.equal(f.q('[data-enemy]').textContent, '22');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(f.q('[data-current-armor]').textContent, '0');
+  f.q('[data-new-battle]').click();
+  assert.equal(f.root.dataset.encounter, 'garden');
+  assert.equal(f.calls.length, 0);
+});
+
+test('new native battle clears model attribution and uses a fresh game identity without automatically requesting', { timeout: 3000 }, async t => {
+  let submitted;
+  const f = fixture(t, ({ method, body }) => {
+    if (method === 'POST') { submitted = body; return accepted(); }
+    return snapshot(submitted ? [job(submitted)] : []);
+  });
+  f.setMode('native'); await tick();
+  f.q('[data-request]').click(); await tick();
+  const first = observationOf(submitted);
+  assert.equal(first.encounter.id, 'garden');
+  assert.match(f.q('[data-actual-model]').textContent, /native-model/);
+  f.q('[data-card="root"]').click();
+  assert.match(f.q('[data-actual-model]').textContent, /native-model/, 'card selection retains the actual last model');
+  f.q('[data-new-battle]').click(); await tick();
+  assert.equal(f.root.dataset.encounter, 'rush');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(f.q('[data-actual-model]').textContent, '');
+  assert.doesNotMatch(f.q('[data-partner]').textContent, /native-model/);
+  assert.equal(f.calls.filter(call => call.body?.operation === 'job').length, 1);
+  f.q('[data-request]').click(); await tick();
+  const second = observationOf(submitted);
+  assert.equal(second.encounter.id, 'rush');
+  assert.notEqual(second.gameId, first.gameId);
+  assert.equal(second.revision, 0);
+  assert.equal(f.q('[data-count]').textContent, '1');
+  assert.equal(f.q('[data-health]').textContent, '11 / 14');
+});
+
+test('new battle cancels an uncertain owned request before resetting and never submits another automatically', { timeout: 3000 }, async t => {
+  let submitted, cancelled = false;
+  const cancellation = deferred();
+  const f = fixture(t, ({ method, body }) => {
+    if (method === 'POST' && body.operation === 'job') { submitted = body; throw new TypeError('lost response after acceptance'); }
+    if (method === 'POST' && body.operation === 'cancel') return cancellation.promise;
+    return snapshot(submitted ? [job(submitted, { status: cancelled ? 'cancelled' : 'running' })] : []);
+  });
+  f.setMode('native'); await tick();
+  f.q('[data-request]').click(); await tick();
+  f.q('[data-new-battle]').click(); await tick();
+  assert.equal(f.root.dataset.encounter, 'garden', 'reset waits for the cancellation attempt');
+  assert.equal(f.q('[data-new-battle]').disabled, true);
+  assert.equal(f.calls.filter(call => call.body?.operation === 'cancel').length, 1);
+  assert.equal(f.calls.find(call => call.body?.operation === 'cancel').body.jobId, 'job-one');
+  cancelled = true; cancellation.resolve(Response.json({ ok: true })); await tick();
+  assert.equal(f.root.dataset.encounter, 'rush');
+  assert.equal(f.q('[data-match-number]').textContent, '2');
+  assert.equal(f.q('[data-new-battle]').disabled, false);
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(f.calls.filter(call => call.body?.operation === 'job').length, 1);
+});
+
+test('new battle is disabled while a native turn is in flight and cannot invalidate its board', { timeout: 3000 }, async t => {
+  const late = deferred();
+  let request;
+  t.mock.method(CoGamesRuntimeClient.prototype, 'requestSupport', async (choice, observation, options) => {
+    request = { observation, options }; return late.promise;
+  });
+  const f = fixture(t, () => snapshot());
+  f.setMode('native'); await tick();
+  f.q('[data-request]').click();
+  assert.equal(f.q('[data-new-battle]').disabled, true);
+  f.q('[data-new-battle]').dispatchEvent(new f.dom.window.Event('click'));
+  assert.equal(f.root.dataset.encounter, 'garden');
+  assert.equal(f.q('[data-match-number]').textContent, '1');
+  late.resolve({ response: answer(request.observation), actualModels: ['native-model'], jobId: 'job-one', requestId: request.options.requestId });
+  await tick();
+  assert.equal(f.q('[data-round]').textContent, 'ROUND 2 / 4');
+  assert.equal(f.q('[data-match-number]').textContent, '1');
+  assert.equal(f.q('[data-new-battle]').disabled, false);
+});
+
+
+for (const terminal of ['won', 'lost']) {
+  test(`native ${terminal} result focuses the enabled replay control after the request finishes`, { timeout: 3000 }, async t => {
+    let submitted;
+    const f = fixture(t, ({ method, body }) => {
+      if (method === 'POST') { submitted = body; return accepted(); }
+      if (!submitted) return snapshot();
+      const observation = observationOf(submitted);
+      const result = { text: JSON.stringify(answer(observation, { support: choose(observation.state, observation.selectedHuman) })), actualModels: ['native-model'] };
+      return snapshot([job(submitted, { result })]);
+    });
+    f.setMode('native'); await tick();
+    for (const card of terminal === 'won' ? ['ember', 'root', 'ember', 'ember'] : ['root', 'root', 'root', 'root']) {
+      f.q(`[data-card="${card}"]`).click();
+      f.q('[data-request]').focus();
+      f.q('[data-request]').click(); await tick();
+    }
+    assert.equal(f.root.dataset.status, terminal);
+    assert.equal(f.root.dataset.busy, 'false');
+    assert.equal(f.q('[data-replay]').disabled, false);
+    assert.equal(f.dom.window.document.activeElement, f.q('[data-replay]'));
+  });
+}
