@@ -208,6 +208,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     const blocked = busy || !available;
     root.dataset.state = !available ? loading ? 'checking' : authMissing ? 'signed-out' : 'unavailable' : view.state;
     root.setAttribute('aria-busy', String(busy || loading));
+    root.dataset.hasNotice = String(Boolean(notice));
     text('[data-runtime-badge]', !available ? loading ? 'Checking…' : authMissing ? 'Sign-in required' : 'Status unavailable' : compact && view.subscriptionReady ? 'Online' : view.badge);
     text('[data-runtime-status]', notice || (latest?.status === 'cancelled' ? cancellationText : !runtime ? 'Pair your computer to begin. Pairing does not sign in to an AI provider.'
       : view.state === 'waiting' ? pairing ? 'Run the pairing command on your computer. This invitation expires after ten minutes.' : 'Pairing is waiting. If you no longer have its one-use code, cancel this pairing and create another.'
