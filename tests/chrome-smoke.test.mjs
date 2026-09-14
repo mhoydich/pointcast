@@ -12,6 +12,8 @@ const fixture = `<!doctype html><html><body>
     <form data-pc-ref="fb-omni-form"><span data-pc-ref="fb-omni-mode"></span><input data-pc-ref="fb-omni"></form>
     <button class="fb__stamp" data-pc-ref="fb-stamp-room" data-stamp-id="room" data-tray="room" aria-expanded="false"></button>
     <span data-pc-ref="fb-stamp-dot-room"></span>
+    <button class="fb__stamp" data-pc-ref="fb-stamp-my-ai" data-stamp-id="my-ai"></button>
+    <section class="fb__tray" data-pc-ref="fb-tray-my-ai" hidden><div data-ai-runtime data-compact="true"><textarea data-runtime-prompt></textarea></div></section>
     <section class="fb__tray" data-pc-ref="fb-tray-room" hidden>
       <button class="fb__action" data-tray="room" data-action="here">who is here</button>
       <button data-pc-ref="fb-tray-room-toggle"></button>
@@ -132,6 +134,18 @@ test('jsdom chrome smoke: lifecycle, dock analytics, room de-dupe, visible tug, 
 
     window.dispatchEvent(new CustomEvent('pc:burst', { detail: { kind: 'bell', at: Date.now(), by: {}, meta: { color: '#185fa5' } } }));
     assert.equal(document.querySelectorAll('.spell-burst-pulse').length, 1, 'burst renders into the spell layer');
+
+    let publicChats = 0;
+    window.addEventListener('pc:room:chat', () => publicChats++);
+    const omni = document.querySelector('[data-pc-ref="fb-omni"]');
+    omni.value = '/ai Tell me about the song';
+    omni.dispatchEvent(new Event('input', { bubbles: true }));
+    assert.equal(document.querySelector('[data-pc-ref="fb-omni-mode"]').textContent, 'AI');
+    document.querySelector('[data-pc-ref="fb-omni-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(document.querySelector('[data-pc-ref="fb-tray-my-ai"]').hidden, false);
+    assert.equal(document.querySelector('[data-runtime-prompt]').value, 'Tell me about the song');
+    assert.equal(publicChats, 0, '/ai never broadcasts the prompt to room chat');
+    assert.equal(requests.filter(({ url }) => url === '/api/me/ai-runtimes' || url === '/api/ping').length, 0, '/ai only composes a draft');
 
     const moodOptionCount = document.querySelector('[data-pc-ref="fb-mood-select"]').options.length;
     document.dispatchEvent(new CustomEvent('astro:page-load'));
