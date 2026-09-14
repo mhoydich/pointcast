@@ -1,0 +1,113 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { ART_DOWNLOAD_COLLECTIONS as collections, ART_DOWNLOAD_COUNT as imageCount, ART_DOWNLOAD_URL } from '../lib/art-downloads';
+
+const title = 'Art downloads';
+const description = 'A running collection of PointCast artwork. Every picture together, newest first, with original PNGs and a ZIP for each set.';
+const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
+const dateLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const newest = collections[0];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ImageGallery',
+  name: 'PointCast art downloads',
+  description,
+  url: ART_DOWNLOAD_URL,
+  associatedMedia: collections.flatMap((set) => set.images.map((art) => ({
+    '@type': 'ImageObject',
+    name: `${set.title} — ${art.title}`,
+    description: art.alt,
+    contentUrl: `https://pointcast.xyz${art.download}`,
+    thumbnailUrl: `https://pointcast.xyz${art.preview}`,
+    encodingFormat: 'image/png',
+    width: art.width,
+    height: art.height,
+    contentSize: String(art.bytes),
+    creditText: set.credit,
+  }))),
+};
+---
+
+<BlockLayout title={title} description={description} image={`/images/og/b/${newest.blockId}.png`} imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds={true} alternates={[{ type: 'application/json', href: '/downloads.json', title: 'All artwork downloads' }]}>
+  <div class="downloads">
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span aria-hidden="true">/</span><span>Downloads</span></nav>
+    <header class="intro">
+      <p class="eyebrow">THE RUNNING PICTURE COLLECTION</p>
+      <h1>Pictures to take with you.</h1>
+      <p class="dek">New pictures at the top. Every original stays here.</p>
+      <p class="details">{imageCount} pictures · {collections.length} sets · Free original PNGs</p>
+      <nav class="jump-links" aria-label="Jump to a download set">
+        {collections.map((set) => <a href={`#set-${set.blockId}`}>{set.title} <span>{dateLabel(set.published)}</span></a>)}
+      </nav>
+    </header>
+
+    {collections.map((set, setIndex) => (
+      <section class="set" id={`set-${set.blockId}`} aria-labelledby={`title-${set.blockId}`}>
+        <header class="set-head">
+          <div>
+            <p class="eyebrow"><time datetime={set.published}>{dateLabel(set.published)}</time>{setIndex === 0 && <span class="latest">LATEST</span>}</p>
+            <h2 id={`title-${set.blockId}`}>{set.title}</h2>
+            <p class="details">{set.images.length} pictures · Original PNGs</p>
+          </div>
+          <a class="download set-download" href={set.archive.url} download={set.archive.url.split('/').pop()} data-astro-reload aria-label={`Download the ${set.title} set as a ZIP`}>
+            <span>Download this set <span aria-hidden="true">↓</span></span>
+            <small>{set.images.length} PNGs · ZIP · {megabytes(set.archive.bytes)}</small>
+          </a>
+        </header>
+        <div class="gallery">
+          {set.images.map((art, index) => (
+            <figure>
+              <img src={art.preview} alt={art.alt} width={art.width} height={art.height} loading={setIndex === 0 && index < 3 ? 'eager' : 'lazy'} decoding="async" />
+              <figcaption>
+                <div class="caption"><span class="number">{String(art.number).padStart(2, '0')}</span><h3>{art.title}</h3></div>
+                <p class="file-details">Original PNG · {art.width} × {art.height} · {megabytes(art.bytes)}</p>
+                <a class="download single-download" href={art.download} download={art.filename} data-astro-reload aria-label={`Download ${art.title} as an original PNG`}>Download PNG <span aria-hidden="true">↓</span></a>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+        <p class="set-note"><span>{set.credit}</span><a href={set.canonical}>View this set’s page <span aria-hidden="true">↗</span></a></p>
+      </section>
+    ))}
+    <footer class="colophon">All pictures on this page are available as their original files. Check back here for the next set.</footer>
+  </div>
+</BlockLayout>
+
+<style>
+  .downloads { width: min(1440px, 100%); margin: 0 auto; padding: 32px clamp(20px, 4vw, 64px) 72px; color: #18291e; }
+  .crumb { display: flex; gap: 12px; align-items: center; font-size: 13px; margin-bottom: 48px; }
+  .crumb a { color: inherit; }
+  .intro { padding-bottom: 36px; }
+  .eyebrow, .number, .file-details, .set-note, .colophon { font-family: var(--font-mono, monospace); }
+  .eyebrow { display: flex; align-items: center; gap: 14px; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 16px; line-height: 1.7; }
+  h1 { font-size: clamp(36px, 5.2vw, 72px); font-weight: 500; line-height: 1.02; letter-spacing: -.055em; margin: 0 0 20px; }
+  .dek { font-size: clamp(18px, 2vw, 23px); margin: 0 0 12px; line-height: 1.4; }
+  .details { color: #596354; font-size: 13px; line-height: 1.7; margin: 0; }
+  .jump-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+  .jump-links a { display: flex; flex-direction: column; gap: 6px; color: #18291e; border: 1px solid #cbd8c5; padding: 12px 16px; font-size: 13px; }
+  .jump-links a:hover { background: #f1f5e8; text-decoration: none; }
+  .jump-links span { color: #596354; font-size: 11px; }
+  .set { border-top: 1px solid #cbd8c5; padding: 32px 0 40px; scroll-margin-top: 24px; }
+  .set-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; margin-bottom: 28px; }
+  .latest { background: #d9eea7; padding: 3px 7px; letter-spacing: .08em; }
+  h2 { font-size: clamp(28px, 3vw, 42px); font-weight: 500; line-height: 1.1; letter-spacing: -.045em; margin: 0 0 10px; }
+  a.download { display: flex; color: #18291e; text-decoration: none; border: 1px solid #18291e; font-size: 14px; min-height: 48px; transition: background .15s; }
+  a.download:hover { background: #e6edcf; text-decoration: none; }
+  a:focus-visible { outline: 3px solid #5063cf; outline-offset: 4px; }
+  a.set-download { flex: 0 0 236px; flex-direction: column; gap: 9px; padding: 18px 20px; background: #d9eea7; }
+  .set-download > span { display: flex; justify-content: space-between; gap: 24px; }
+  .set-download small { font-size: 11px; color: #485339; }
+  .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px 24px; }
+  figure { min-width: 0; margin: 0; }
+  figure > img { display: block; width: 100%; height: auto; aspect-ratio: 1; background: #d9eea7; }
+  figcaption { padding: 19px 0 0; }
+  .caption { display: flex; align-items: baseline; gap: 12px; }
+  .number { font-size: 11px; color: #66755d; }
+  h3 { font-size: 20px; font-weight: 500; letter-spacing: -.03em; margin: 0; }
+  .file-details { font-size: 10px; color: #596354; margin: 10px 0 18px; line-height: 1.7; }
+  a.single-download { align-items: center; justify-content: space-between; padding: 12px 16px; }
+  .set-note { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; margin: 24px 0 0; font-size: 11px; line-height: 1.7; color: #596354; }
+  .set-note a { color: inherit; }
+  .colophon { border-top: 1px solid #cbd8c5; padding-top: 20px; font-size: 11px; line-height: 1.7; color: #596354; }
+  @media (max-width: 760px) { .set-head { display: block; } a.set-download { margin-top: 24px; max-width: 300px; } .gallery { grid-template-columns: 1fr; gap: 40px; } .crumb { margin-bottom: 32px; } }
+</style>
