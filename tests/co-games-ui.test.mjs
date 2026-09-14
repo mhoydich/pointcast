@@ -6,7 +6,7 @@ import { mountCoGames } from '../src/lib/co-games-ui.ts';
 import { CoGamesRuntimeClient } from '../src/lib/co-games-runtime.ts';
 
 const page = readFileSync(new URL('../src/pages/co-games.astro', import.meta.url), 'utf8');
-const markup = page.match(/<main[\s\S]*?<\/main>/)[0];
+const markup = page.match(/<article class="co-games-page">[\s\S]*?<\/article>/)[0];
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const future = () => new Date(Date.now() + 600000).toISOString();
 function deferred() {
