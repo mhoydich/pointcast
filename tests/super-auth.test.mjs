@@ -47,7 +47,7 @@ test('Account signed-out hero and provider cards share the empty session state',
   assert.equal(view.providers.kukai.action, 'Sign in with Kukai →');
   assert.match(page, /Sign in with Google/);
   assert.match(page, /Sign in with Kukai/);
-  assert.match(page, /window\.location\.assign\('\/api\/auth\/google\?returnTo=\/auth'\)/);
+  assert.match(page, /window\.location\.assign\('\/api\/auth\/google\?' \+ new URLSearchParams\(\{ returnTo: authReturnTo\(window\.location\.search\) \}\)\)/);
 });
 
 test('Account signed-in hero and provider cards share one fake JSON session', async () => {
