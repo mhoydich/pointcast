@@ -156,9 +156,24 @@ test('range fallback leaves other paths, methods, encodings, types, statuses and
       assert.equal(response, upstream, JSON.stringify(options));
       assert.equal(upstream.bodyUsed, false, 'unmatched responses are never read');
     }
-    const missingLength = assetResponse();
-    missingLength.headers.delete('content-length');
-    assert.equal(await withStarjamAudioRange(assetRequest({ range: 'bytes=0-1' }), missingLength), missingLength);
+  });
+});
+
+test('missing upstream Content-Length uses the verified manifest and still checks actual bytes', async () => {
+  await withMiddleware(async ({ onRequest }) => {
+    for (const [file, bytes] of [['welcome.m4a', welcomeBytes], ['garden-gentle.m4a', backingBytes]]) {
+      const upstream = assetResponse(bytes);
+      upstream.headers.delete('content-length');
+      const response = await route(onRequest, assetRequest({ file, range: 'bytes=0-63' }), upstream);
+      assert.equal(response.status, 206);
+      assert.equal(response.headers.get('content-range'), `bytes 0-63/${bytes.length}`);
+      assert.equal(response.headers.get('content-length'), '64');
+      assert.equal(response.headers.get('accept-ranges'), 'bytes');
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes.subarray(0, 64));
+    }
+    const truncated = assetResponse(welcomeBytes, { body: welcomeBytes.subarray(0, 100) });
+    truncated.headers.delete('content-length');
+    assert.equal((await route(onRequest, assetRequest({ range: 'bytes=0-1' }), truncated)).status, 502);
   });
 });
 
