@@ -1,9 +1,10 @@
 import { AiRuntimeRequestError, readRuntimeResponse, runtimeErrorMessage } from './auth/ai-runtime-ui.ts';
 import type { NativeProvider } from '../../functions/_lib/ai-runtimes.ts';
-import type { MatchObservation, SupportResponse } from './co-games-engine.mjs';
+import type { MatchObservation, SupportResponse, SupportCardId } from './co-games-engine.mjs';
 
 const ENDPOINT = '/api/me/ai-runtimes';
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/;
+const isSupport = (value: unknown): value is SupportCardId => value === 'echo' || value === 'ward' || value === 'mend';
 const REQUEST_ID = /^[A-Za-z0-9_-]{16,80}$/;
 const PROVIDER_LABELS = { codex: 'ChatGPT · Codex', claude: 'Claude · Claude Code' };
 const object = (value: unknown): value is Record<string, any> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -72,7 +73,7 @@ export function parseCoGamesResponse(text: string, observation: CoGamesObservati
   let value: unknown;
   try { value = JSON.parse(fenced ? fenced[1] : trimmed); } catch { throw new CoGamesRuntimeError('invalid-game-response'); }
   if (!object(value) || value.gameId !== observation.gameId || value.revision !== observation.revision
-    || value.selectedHuman !== observation.selectedHuman || typeof value.support !== 'string'
+    || value.selectedHuman !== observation.selectedHuman || !isSupport(value.support)
     || !observation.legalSupports.includes(value.support)
     || (value.reason !== undefined && (typeof value.reason !== 'string' || value.reason.length > 240))) {
     throw new CoGamesRuntimeError('invalid-game-response');
