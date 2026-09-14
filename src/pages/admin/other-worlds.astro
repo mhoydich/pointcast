@@ -1,0 +1,129 @@
+---
+import provenance from '../../data/other-worlds-provenance.json';
+import { PUBLICATION } from '../../lib/other-worlds-publication';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Publish Other Worlds · Pointcast</title>
+  </head>
+  <body>
+    <main>
+      <nav><a href="/other-worlds">← Exhibition</a><span>Pointcast · Publisher</span></nav>
+      <p class="eyebrow">LOS ANGELES / OTHER WORLDS</p>
+      <h1>Publish nine transmissions.</h1>
+      <p class="credit">BY MICHAEL HOYDICH</p>
+      <p>Review the artwork inventory, then confirm the exact publication in Kukai. This creates 27 editions of each of the nine still images: 243 editions in total.</p>
+      <dl>
+        <div><dt>Existing collection contract</dt><dd><a href={`https://tzkt.io/${PUBLICATION.contract}`} target="_blank" rel="noreferrer">El Segundo · {PUBLICATION.contract}</a></dd></div>
+        <div><dt>Administrator · setup payer</dt><dd>{PUBLICATION.administrator}</dd></div>
+        <div><dt>Pointcast inventory wallet</dt><dd>{PUBLICATION.sponsor}</dd></div>
+        <div><dt>Publication</dt><dd>9 new token registrations (IDs 1–9), then one mint of 27 each</dd></div>
+        <div><dt>Setup limit</dt><dd>1.6 ꜩ, including transaction fees and storage</dd></div>
+      </dl>
+      <p class="note">The existing contract name remains El Segundo. Its administrator can mint additional copies; this publication creates exactly 27 per artwork. Free collector claims activate separately after inventory and the project fee payer are verified.</p>
+      <section class="artworks" aria-label="The nine artworks">
+        {provenance.items.map(art => <article><a href={art.artifactUri} target="_blank" rel="noreferrer"><img src={art.previewUri} alt={art.title} width="240" height="360" loading="lazy" /></a><h2>{String(art.id).padStart(2, '0')} · {art.title}</h2><a href={art.metadataUri} target="_blank" rel="noreferrer">27 editions · metadata ↗</a></article>)}
+      </section>
+      <section class="review" aria-labelledby="review-heading">
+        <h2 id="review-heading">Wallet review</h2>
+        <p>Verification checks all nine published original images and metadata against their SHA-256 records, confirms unused token IDs, and estimates the exact operation cost.</p>
+        <button id="verify">Connect administrator &amp; verify</button>
+        <p id="status" role="status" aria-live="polite">No publication has been requested by this page.</p>
+        <div id="approval" hidden>
+          <p id="estimate"></p>
+          <label><input id="understood" type="checkbox" /> I have reviewed these 243 editions and the setup fee. Request the publication in my wallet.</label>
+          <button id="publish" disabled>Review publication in Kukai</button>
+          <p class="note">Kukai will ask for the final transaction confirmation. Opening this page or verifying the files does not publish anything.</p>
+        </div>
+        <a id="receipt" hidden target="_blank" rel="noreferrer">View operation on Tezos ↗</a>
+      </section>
+    </main>
+    <script>
+      import { connectPublicationAdapter, prepareInventoryPublication, requestInventoryPublication } from '../../lib/other-worlds-publication';
+      const verify = document.querySelector<HTMLButtonElement>('#verify')!;
+      const publish = document.querySelector<HTMLButtonElement>('#publish')!;
+      const status = document.querySelector<HTMLParagraphElement>('#status')!;
+      const approval = document.querySelector<HTMLDivElement>('#approval')!;
+      const understood = document.querySelector<HTMLInputElement>('#understood')!;
+      const receipt = document.querySelector<HTMLAnchorElement>('#receipt')!;
+      const storageKey = 'pc:other-worlds:inventory-publication-v1';
+      let adapter: Awaited<ReturnType<typeof connectPublicationAdapter>> | null = null;
+      let plan: Awaited<ReturnType<typeof prepareInventoryPublication>> | null = null;
+      const report = (message: string) => { status.textContent = message; };
+      const showReceipt = (hash: string) => {
+        receipt.href = `https://tzkt.io/${encodeURIComponent(hash)}`;
+        receipt.hidden = false;
+      };
+      let previous: string | null = null;
+      try { previous = localStorage.getItem(storageKey); } catch { /* chain checks still prevent repeated registrations */ }
+      if (previous) {
+        verify.disabled = true;
+        report('A publication was already requested from this browser. Check Kukai and the chain before attempting another publication.');
+        if (/^o[1-9A-HJ-NP-Za-km-z]{50}$/.test(previous)) showReceipt(previous);
+      }
+      understood.addEventListener('change', () => { publish.disabled = !understood.checked || !plan; });
+      verify.addEventListener('click', async () => {
+        verify.disabled = true; approval.hidden = true; understood.checked = false; publish.disabled = true;
+        try {
+          report('Connect the administrator wallet in Kukai…');
+          adapter = await connectPublicationAdapter();
+          plan = await prepareInventoryPublication(adapter, report);
+          document.querySelector('#estimate')!.textContent = `Fresh setup estimate: ${(plan.maximumCostMutez / 1e6).toFixed(6)} ꜩ including storage. 243 editions go to the Pointcast inventory wallet.`;
+          approval.hidden = false;
+          report('All nine original images and metadata records verified. The exact ten operations are ready for wallet review.');
+        } catch (error) {
+          plan = null;
+          report(error instanceof Error ? error.message : 'Verification could not finish. Nothing was published.');
+        } finally { verify.disabled = false; }
+      });
+      publish.addEventListener('click', async () => {
+        if (!adapter || !plan || !understood.checked) return;
+        publish.disabled = true; verify.disabled = true; understood.disabled = true;
+        let requested = false;
+        try {
+          const guarded = { ...adapter, request: async (operations: Parameters<typeof adapter.request>[0]) => {
+            requested = true;
+            try { localStorage.setItem(storageKey, 'wallet-requested'); } catch { /* UI stays locked */ }
+            report('Confirm the publication in Kukai. This is the final transaction approval.');
+            return adapter!.request(operations);
+          } };
+          const operation = await requestInventoryPublication(guarded, plan);
+          try { localStorage.setItem(storageKey, operation.opHash); } catch { /* receipt remains visible */ }
+          showReceipt(operation.opHash);
+          report('Publication submitted. Waiting for confirmation; collector claims are not activated by this page.');
+          await operation.confirmation(2);
+          report('The wallet reports two confirmations. Verify all nine token supplies and project inventory before enabling collector claims.');
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : 'The wallet did not return a confirmed result.';
+          report(requested ? `${detail} Check Kukai and Tezos before retrying; this page will not submit another publication automatically.` : detail);
+          if (!requested) { verify.disabled = false; understood.disabled = false; }
+        }
+      });
+    </script>
+  </body>
+</html>
+<style>
+  :global(body) { margin: 0; background: #f4f1e9; color: #252820; font-family: system-ui, sans-serif; }
+  main { max-width: 940px; margin: auto; padding: 32px 24px 100px; }
+  nav { display: flex; justify-content: space-between; margin-bottom: 72px; font-size: 12px; }
+  a { color: inherit; text-underline-offset: 4px; }
+  .eyebrow, .credit { font-size: 12px; letter-spacing: .15em; }
+  h1 { font-family: Georgia, serif; font-size: clamp(38px, 6vw, 62px); font-weight: 400; letter-spacing: -.04em; margin: 16px 0; }
+  p { line-height: 1.6; max-width: 750px; }
+  dl { margin: 32px 0; border-top: 1px solid #d3d1c9; }
+  dl div { display: grid; grid-template-columns: 210px 1fr; gap: 16px; padding: 15px 0; border-bottom: 1px solid #d3d1c9; }
+  dt { font-size: 13px; color: #66695f; } dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+  .note { color: #686b62; font-size: 13px; }
+  .artworks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px 20px; margin: 44px 0; }
+  img { width: 100%; height: auto; display: block; } article h2 { font-size: 13px; font-weight: 500; margin: 12px 0 5px; } article a { font-size: 11px; }
+  .review { padding: 28px; background: #fffdf7; border: 1px solid #d3d1c9; }
+  .review h2 { font: 30px Georgia, serif; margin-top: 0; }
+  button { display: block; border: 0; border-radius: 3px; background: #303b32; color: #fffdf7; padding: 15px 20px; font: inherit; font-size: 14px; cursor: pointer; margin: 20px 0; }
+  button:disabled { opacity: .45; cursor: default; } label { display: block; line-height: 1.6; } input { margin-right: 8px; }
+  #status { overflow-wrap: anywhere; } [hidden] { display: none !important; }
+  @media(max-width: 600px) { nav { margin-bottom: 48px; } dl div { grid-template-columns: 1fr; gap: 8px; } .artworks { grid-template-columns: repeat(2, 1fr); } .review { padding: 20px; } }
+</style>
