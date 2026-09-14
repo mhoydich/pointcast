@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { transform } from 'esbuild';
-import { buildRuntimePrompt, buildRuntimeView, mountAiRuntime, nativeLoginUrl, readRuntimeResponse } from '../src/lib/auth/ai-runtime-ui.ts';
+import { buildRuntimePrompt, buildRuntimeView, mountAiRuntime, nativeLoginUrl, readRuntimeResponse, runtimePageContext } from '../src/lib/auth/ai-runtime-ui.ts';
 
 const component = readFileSync(new URL('../src/components/AiRuntime.astro', import.meta.url), 'utf8').split('<script>')[0].replace(/^---[\s\S]*?---/, '');
 const sessionUser = userId => ({ userId, createdAt: '2026-09-09T00:00:00.000Z', identities: [{ provider: 'kukai', id: 'tz1-verified-wallet', name: 'Wallet', verifiedAt: '2026-09-09T00:00:00.000Z' }], preferredName: 'PointCast member' });
@@ -29,6 +29,7 @@ function fixture(t, respond, options = {}) {
     return respond(init);
   });
   const root = dom.window.document.querySelector('[data-ai-runtime]');
+  if (options.compact) { root.dataset.compact = 'true'; dom.reconfigure({ url: 'https://pointcast.test/elemental-shrine?private=value#secret' }); dom.window.document.title = 'Elemental Shrine'; }
   const cleanup = mountAiRuntime(root, { pollMs: 100000, ...options });
   t.after(() => { cleanup(); dom.window.close(); });
   return { dom, root, q: (selector) => root.querySelector(selector), cleanup };
@@ -505,4 +506,46 @@ test('an authoritative runtime 401 discards a late invite response from the inva
   assert.equal(f.q('[data-runtime-pair-code]').hidden, true);
   assert.equal(f.q('[data-runtime-invite]').disabled, true);
   assert.doesNotMatch(f.q('[data-runtime-status]').textContent, /Pairing code created/);
+});
+
+
+test('page context excludes private pages, body text, and URL secrets', () => {
+  const dom = new JSDOM('<title>Public work</title><meta name="description" content="A quiet room"><main>PRIVATE FORM VALUE</main>', { url: 'https://pointcast.test/room?token=secret#private' });
+  const packet = runtimePageContext(dom.window.document);
+  assert.match(packet, /Public work/);
+  assert.match(packet, /https:\/\/pointcast.test\/room/);
+  assert.doesNotMatch(packet, /secret|private|PRIVATE FORM/);
+  dom.reconfigure({ url: 'https://pointcast.test/me?token=secret' });
+  assert.equal(runtimePageContext(dom.window.document), '');
+  dom.window.close();
+});
+
+test('dock prompt starters are drafts, page sharing is opt-in, and sign-out clears the reply', async (t) => {
+  const calls = [];
+  const f = fixture(t, (init) => {
+    if (init.method === 'POST') { calls.push(JSON.parse(init.body)); return Response.json({ ok: true, jobId: 'next' }); }
+    return Response.json({ ok: true, runtimes: [ready()], jobs: [] });
+  }, { compact: true });
+  await tick();
+  assert.equal(f.q('[data-runtime-prompt]').value, '');
+  assert.equal(f.q('[data-runtime-page]').checked, false);
+  f.q('[data-ai-starter="page"]').click();
+  assert.equal(calls.length, 0);
+  assert.match(f.q('[data-runtime-preview]').textContent, /Elemental Shrine/);
+  assert.doesNotMatch(f.q('[data-runtime-preview]').textContent, /private=value|#secret/);
+  f.q('[data-runtime-run]').click(); await tick(); await tick();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].prompt, f.q('[data-runtime-preview]').textContent);
+  f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: null } }));
+  assert.equal(f.q('[data-runtime-result-text]').textContent, '');
+  assert.equal(f.q('[data-runtime-page]').checked, false);
+});
+
+test('follow-up includes only the selected provider reply when explicitly checked', async (t) => {
+  const reply = job({ status: 'succeeded', result: { text: 'A quiet room.', actualModels: ['native-model'] } });
+  const f = fixture(t, () => Response.json({ ok: true, runtimes: [ready()], jobs: [reply] }), { compact: true });
+  await tick();
+  assert.doesNotMatch(f.q('[data-runtime-preview]').textContent, /Previous AI reply/);
+  f.q('[data-runtime-followup]').click();
+  assert.match(f.q('[data-runtime-preview]').textContent, /Previous AI reply.*\nA quiet room/s);
 });

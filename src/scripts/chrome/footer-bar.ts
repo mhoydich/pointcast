@@ -186,6 +186,19 @@ export function mountFooterBar(root, scope) {
     on($close, 'click', closeAll);
     on($scrim, 'click', closeAll);
 
+    var inviteMike = root.querySelector('[data-ai-invite]');
+    if (inviteMike) on(inviteMike, 'click', function () {
+      var path = /^\/(?:me|profile|auth|api|signin|login|callback)(?:\/|$)/i.test(location.pathname) ? '/' : location.pathname;
+      var roomLink = location.origin + path;
+      openTray('ask');
+      var body = root.querySelector('[data-pc-ref="fb-ask-body"]');
+      var to = root.querySelector('[data-pc-ref="fb-ask-to"]');
+      if (to) to.value = 'mh';
+      if (body) { body.value = 'Mike, would you join me on this PointCast page? ' + roomLink + '\nWe can talk using the page’s shared SAY chat. My private AI conversation is not included in this invitation.'; body.dispatchEvent(new Event('input', { bubbles: true })); }
+      var form = root.querySelector('[data-pc-ref="fb-ask-form"]');
+      if (form) form.removeAttribute('data-expand');
+    });
+
     var KIT = PC_DOCK_KIT || [];
 
     on(document, 'keydown', function (e) {
@@ -209,6 +222,7 @@ export function mountFooterBar(root, scope) {
     function inferOmniMode(value) {
       var v = String(value || '').trim();
       if (!v) return roomOn ? 'SAY' : 'GO';
+      if (/^\/ai(?:\s|$)/i.test(v)) return 'AI';
       if (v.charAt(0) === '+') return 'CAST';
       if (v.charAt(0) === '>') return 'OP';
       if (v.charAt(0) === '?') return 'ASK';
@@ -245,6 +259,13 @@ export function mountFooterBar(root, scope) {
       var raw = String($omni.value || '').trim();
       if (!raw) return;
       var mode = inferOmniMode(raw);
+      if (mode === 'AI') {
+        openTray('my-ai');
+        var aiPrompt = root.querySelector('[data-ai-runtime][data-compact="true"] [data-runtime-prompt]');
+        if (aiPrompt) { aiPrompt.value = raw.replace(/^\/ai\s*/i, ''); aiPrompt.dispatchEvent(new Event('input', { bubbles: true })); }
+        $omni.value = ''; applyOmniMode();
+        return;
+      }
       if (mode === 'CAST') {
         // Magic word — `+confetti`, `+cat`, `+breath`, `+candle`, `+clear`.
         // Strip the prefix, take first word, emit pc:spell:cast.

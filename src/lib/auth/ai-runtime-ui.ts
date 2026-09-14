@@ -1,3 +1,4 @@
+import { mountShwaTools } from './shwa-tools.ts';
 import type { PointCastUser } from './types.ts';
 import type { NativeProvider, ProviderState } from '../../../functions/_lib/ai-runtimes.ts';
 
@@ -22,6 +23,16 @@ type Pairing = { runtimeId: string; code: string; expiresAt: string };
 
 export function buildRuntimePrompt(prompt: string, context: string, note: string): string {
   return [prompt.trim(), CONTEXTS[context] ? `Selected PointCast context (provided text only):\n${CONTEXTS[context]}` : '', note.trim() ? `My note for this task:\n${note.trim()}` : ''].filter(Boolean).join('\n\n');
+}
+
+// Only public page metadata is eligible. Never collect body text, form values,
+// private profile titles, or URL query/hash values for this optional packet.
+export function runtimePageContext(doc: Document): string {
+  const url = new URL(doc.URL);
+  if (/^\/(?:me|profile|auth|api|signin|login|callback)(?:\/|$)/i.test(url.pathname)) return '';
+  const title = doc.title.trim().slice(0, 200);
+  const description = (doc.querySelector<HTMLMetaElement>('meta[name="description"]')?.content || '').trim().slice(0, 700);
+  return `Page reference (provided metadata only; page not fetched):\n${title}\n${url.origin}${url.pathname}${description ? `\n${description}` : ''}`;
 }
 
 export function nativeLoginUrl(value: unknown, provider: NativeProvider): string | null {
@@ -94,6 +105,7 @@ export function buildRuntimeView(runtime: RuntimeSummary | null, provider: Nativ
 export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } = {}): () => void {
   const doc = root.ownerDocument;
   const win = doc.defaultView!;
+  const compact = root.dataset.compact === "true";
   const lifetime = new win.AbortController();
   let requests = new win.AbortController();
   let lastAuthOwner: string | null = null;
@@ -126,7 +138,13 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   const model = q<HTMLSelectElement>('[data-runtime-model]');
   const computer = q<HTMLSelectElement>('[data-runtime-select]');
   const providerSelect = q<HTMLSelectElement>('[data-runtime-provider]');
-  const completePrompt = () => buildRuntimePrompt(prompt.value, context.value, note.value);
+  const page = root.querySelector<HTMLInputElement>('[data-runtime-page]');
+  if (compact) { prompt.value = ''; prompt.defaultValue = ''; prompt.placeholder = 'What would you like to ask?'; }
+  const pageContext = compact ? runtimePageContext(doc) : '';
+  if (page) { page.disabled = !pageContext; page.checked = false; }
+  const followup = root.querySelector<HTMLInputElement>('[data-runtime-followup]');
+  const previousReply = () => snapshot?.jobs.find((job) => job.runtimeId === selectedId && job.provider === provider && job.kind === 'prompt' && job.status === 'succeeded' && job.result?.text)?.result?.text || '';
+  const completePrompt = () => [compact ? 'You are Shwa, a warm, thoughtful PointCast companion powered by the user’s paired AI. Answer conversationally. Use only the supplied text; be clear when you cannot see an image, hear audio, contact a person, or execute a purchase.' : '', buildRuntimePrompt(prompt.value, context.value, note.value), compact && page?.checked ? pageContext : '', compact && followup?.checked && previousReply() ? `Previous AI reply (provided for this follow-up):\n${previousReply().slice(0, 1600)}` : ''].filter(Boolean).join('\n\n');
   const jobBody = (kind: 'login' | 'prompt'): Record<string, unknown> => ({ operation: 'job', kind, runtimeId: selectedId, provider,
     ...(kind === 'prompt' ? { ...(model.value ? { model: model.value } : {}), prompt: completePrompt(), gentle: gentle.checked } : {}) });
   const isRetry = (kind: 'login' | 'prompt') => Boolean(submission?.retryable && submission.kind === kind && submission.fingerprint === JSON.stringify(jobBody(kind)));
@@ -171,6 +189,16 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     if (!live()) return;
     const runtime = current();
     const view = buildRuntimeView(runtime, provider, jobs());
+    if (compact) {
+      const state = !available ? loading ? 'checking' : authMissing ? 'signed-out' : 'unavailable' : view.state;
+      const label = { checking: 'My AI · checking', 'signed-out': 'Bring your AI', unavailable: 'My AI · unavailable', unpaired: 'Bring your AI', waiting: 'My AI · pairing', offline: 'My AI · offline', online: 'My AI · sign in', ready: 'My AI · online', verified: 'My AI · online' }[state];
+      doc.querySelectorAll<HTMLElement>('[data-ai-header]').forEach((el) => { el.textContent = label; el.dataset.aiState = state; });
+      doc.querySelectorAll<HTMLElement>('[data-ai-dock-label]').forEach((el) => {
+        el.textContent = view.subscriptionReady && available ? 'ASK MY AI' : 'MY AI';
+        const button = el.closest('button');
+        if (button) { button.dataset.aiState = state; button.setAttribute('aria-label', `Ask my AI — ${label}`); }
+      });
+    }
     const active = runtime ? activeJob() : null;
     const selectedJobs = jobs().filter((job) => job.runtimeId === selectedId && job.provider === provider);
     const latest = active ?? selectedJobs[0] ?? null;
@@ -223,6 +251,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     model.disabled = blocked || !view.subscriptionReady || Boolean(active);
     text('[data-runtime-model-source]', view.client?.modelDiscovery === 'native' ? 'Model choices reported by the native client.'
       : view.client?.modelDiscovery === 'configured' ? 'These model choices are configured on your companion; they are not a provider discovery result.' : 'Model discovery is unavailable. The native client default can be tested after subscription sign-in.');
+    if (followup) { followup.disabled = !compact || !previousReply(); if (followup.disabled) followup.checked = false; }
     const body = completePrompt();
     text('[data-runtime-preview]', body || 'Your task preview will appear here.');
     text('[data-runtime-count]', `${body.length.toLocaleString()} / 4,000 characters${body.length > 4000 ? ' · shorten the task or note' : ''}`);
@@ -255,7 +284,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
 
   function schedule() {
     clearTimeout(timer);
-    if (live() && acceptedSession && doc.visibilityState === 'visible') timer = setTimeout(() => void load(), options.pollMs ?? 3000);
+    if (live() && acceptedSession && doc.visibilityState === 'visible') timer = setTimeout(() => void load(), options.pollMs ?? (compact && !activeJob() && root.closest('[hidden]') ? 15000 : 3000));
   }
 
   async function load() {
@@ -267,7 +296,7 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
       if (!Array.isArray(data.runtimes) || !Array.isArray(data.jobs)) throw new AiRuntimeRequestError(200, 'invalid-response');
       if (!available || JSON.stringify(snapshot?.jobs.map((job) => [job.id, job.status])) !== JSON.stringify(data.jobs.map((job: RuntimeJobSummary) => [job.id, job.status]))) notice = '';
       acceptedSession = true; authMissing = false; available = true; snapshot = { runtimes: data.runtimes, jobs: data.jobs };
-      if (!snapshot.runtimes.some((item) => item.id === selectedId)) selectedId = snapshot.runtimes[0]?.id ?? '';
+      if (!snapshot.runtimes.some((item) => item.id === selectedId)) selectedId = (compact ? snapshot.runtimes.find((item) => item.status === 'online' && item.providers.some((client) => client.authenticated && client.authMode === 'subscription')) : null)?.id ?? snapshot.runtimes[0]?.id ?? '';
       for (const job of snapshot.jobs) if (job.status === 'cancelled') confirmedCancellations.add(job.id);
       if (pending && snapshot.jobs.some((job) => job.id === pending!.id)) pending = null;
       if (submission && snapshot.jobs.some((job) => job.requestId === submission!.requestId)) {
@@ -386,6 +415,10 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   win.addEventListener('pc:auth-change', authChanged, { signal: lifetime.signal });
   win.addEventListener('pc:auth-refresh', authChanged, { signal: lifetime.signal });
   doc.addEventListener('visibilitychange', () => { clearTimeout(timer); if (doc.visibilityState === 'visible' && acceptedSession) void load(); }, { signal: lifetime.signal });
+  if (compact) win.addEventListener('pc:dock-visibility', (event) => {
+    if ((event as CustomEvent).detail?.tray === 'my-ai') { void load(); }
+  }, { signal: lifetime.signal });
+  const stopShwa = compact ? mountShwaTools(root) : () => {};
   render(); void load();
-  return () => { ++epoch; ++readVersion; clearTimeout(timer); requests.abort(); clearSensitive(); lifetime.abort(); };
+  return () => { ++epoch; ++readVersion; clearTimeout(timer); requests.abort(); clearSensitive(); stopShwa(); lifetime.abort(); };
 }
