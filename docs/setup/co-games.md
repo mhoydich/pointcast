@@ -9,6 +9,16 @@ The free browser game uses a shared deterministic rules engine for both modes:
 
 The browser starts in Lantern grove against Garden gang and keeps the battle state, battle number, and win count in memory. Reloading starts over. A loss retries the same encounter; a win offers the next chapter. **New battle** starts the next different encounter with fresh health/cards and a new game ID. **Worlds** lets the player visit any chapter without first winning. No travel or restart submits an AI task. There are no prizes, purchases, server scores, automatic inference retries, or public room messages. The existing Unity arena project remains a separate private prototype.
 
+## NOUNS: STARJAM
+
+`/co-games/flow` is the mobile rhythm arcade. Three lanes share a visible hit line; tap a pad or press D/F/J (1/2/3 also works). Each finite track lasts at most 35 seconds. Perfect and good hits deal damage, streaks increase score, and the local practice buddy heals 5 every eight successful hits. Missed notes and off-beat taps cost health. A short shared input debounce prevents simultaneous lane mashing; tracks have no chords.
+
+Drift, Groove and Arcade run at 72, 96 and 120 BPM with progressively tighter timing windows. All notes align with the musical beat clock. The main control changes from Start to Pause to Resume. Dialogs and hidden pages freeze the active clock; returning never resumes automatically. Restarting or changing worlds resets the track and waits for Start.
+
+This mode uses local practice support only, with no inference, remote score, purchase or wallet calls. The spell battle at `/co-games` continues to offer the paired native AI. STARJAM shares the four story backgrounds and authentic Nouns roster, while keeping its own bounded engine, audio lifecycle and controls. Original Web Audio pads and lane tones follow game beat events; optional haptics are off until enabled. Reduced motion removes decorative movement while keeping the notes required for timing.
+
+Run `node --test tests/nouns-flow*.test.mjs` for timing, pause/resume, input, terminal-state and audio lifecycle coverage.
+
 ## Four worlds, one little journey
 
 The backgrounds follow a lost golden star on its way home. `co-games-worlds.ts` supplies each chapter's name, story, arrival and victory copy, image path, crop position and visual theme. Both the HUD and `/co-games.json` use that shared source; battle rules remain in the engine.
