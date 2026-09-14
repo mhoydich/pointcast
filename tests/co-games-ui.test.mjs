@@ -64,7 +64,8 @@ function winPractice(f) {
 test('practice is explicitly simulated, wins through real moves, and replay resets the board', { timeout: 3000 }, t => {
   const f = fixture(t);
   assert.equal(f.root.dataset.mode, 'practice');
-  assert.match(f.q('[data-mode] option:checked').textContent, /simulated/);
+  assert.match(f.q('[data-mode] option:checked').textContent, /Practice/);
+  assert.match(f.q('.cg-footer .cg-simulation').textContent, /SIMULATED BUDDY/);
   assert.match(f.q('[data-team-name]').textContent, /Practice partner/);
   assert.equal(f.q('[data-native-controls]').hidden, true);
   winPractice(f);
@@ -85,41 +86,54 @@ test('practice is explicitly simulated, wins through real moves, and replay rese
   assert.equal(f.calls.length, 0);
 });
 
-test('native support requires an explicit request and a separate cast, with actual model attribution', { timeout: 3000 }, async t => {
+test('one native Play click resolves exactly one validated turn and keeps the model explanation', { timeout: 3000 }, async t => {
   let submitted;
   const f = fixture(t, ({ method, body }) => {
     if (method === 'POST') { submitted = body; return accepted(); }
     return snapshot(submitted ? [job(submitted)] : []);
   });
+  const turns = [];
+  f.root.addEventListener('co-games:turn', event => turns.push(event.detail));
   f.setMode('native'); await tick();
   assert.equal(f.root.dataset.mode, 'native');
   assert.equal(f.q('[data-another]').hidden, true);
-  assert.equal(f.q('[data-cast]').disabled, true);
+  assert.equal(f.q('[data-cast]').hidden, true);
   assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
   const preview = f.q('[data-prompt-preview]').textContent;
   f.q('[data-request]').click();
+  f.q('[data-request]').click();
   assert.equal(f.q('[data-card="ember"]').disabled, true);
   assert.equal(f.q('[data-cast]').disabled, true);
+  assert.equal(f.q('[data-request]').disabled, true);
   await tick();
   assert.equal(submitted.prompt, preview);
   assert.equal(submitted.kind, 'prompt');
   assert.equal(submitted.provider, 'codex');
-  assert.equal(f.q('[data-round]').textContent, 'ROUND 1 / 4');
-  assert.equal(f.q('[data-health]').textContent, '14 / 14');
-  assert.equal(f.q('[data-enemy]').textContent, '18');
-  assert.equal(f.q('[data-cast]').disabled, false);
-  assert.match(f.q('[data-partner]').textContent, /Ward:.*native-model/);
-  assert.match(f.q('[data-team-name]').textContent, /ChatGPT · Codex/);
-  assert.equal(f.q('[data-request]').hidden, true);
-  f.q('[data-cast]').click();
   assert.equal(f.q('[data-round]').textContent, 'ROUND 2 / 4');
   assert.equal(f.q('[data-health]').textContent, '13 / 14');
   assert.equal(f.q('[data-enemy]').textContent, '14');
+  assert.equal(f.q('[data-cast]').hidden, true);
+  assert.equal(f.q('[data-cast]').disabled, true);
+  assert.equal(f.q('[data-request]').hidden, false);
+  assert.equal(f.q('[data-request]').disabled, false);
+  assert.equal(f.q('[data-request]').textContent, 'Play with AI');
+  assert.match(f.q('[data-partner]').textContent, /Ward: Save our health.*native-model/);
+  assert.match(f.q('[data-team-name]').textContent, /ChatGPT · Codex/);
   assert.match(f.q('[data-log-items]').textContent, /ChatGPT · Codex \(native-model\): Ward/);
-  assert.equal(f.q('[data-cast]').disabled, true, 'the next round must obtain its own support');
-  assert.match(f.q('[data-runtime-status]').textContent, /Choose your next spell/);
-  assert.doesNotMatch(f.q('[data-runtime-status]').textContent, /Support received|Review the pair/);
-  assert.equal(f.calls.filter(call => call.method === 'POST').length, 1);
+  assert.equal(turns.length, 1);
+  assert.deepEqual(turns[0], { human: 'ember', support: 'ward', damage: 4, taken: 1, healing: 0,
+    hp: 13, enemy: 14, round: 1, status: 'playing', model: 'native-model', reason: 'Save our health for the larger attacks.' });
+  assert.equal(Object.isFrozen(turns[0]), true);
+  f.q('[data-cast]').click();
+  f.q('[data-card="root"]').click(); await tick();
+  assert.equal(f.q('[data-round]').textContent, 'ROUND 2 / 4');
+  assert.match(f.q('[data-partner]').textContent, /Ward: Save our health.*native-model/, 'last actual response stays until the next request');
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 1, 'no second confirmation or automatic next-round inference');
+  assert.equal(turns.length, 1);
+  f.q('[data-request]').click(); await tick();
+  assert.equal(f.q('[data-round]').textContent, 'ROUND 3 / 4');
+  assert.equal(turns.length, 2, 'the next explicit click plays one more turn');
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 2);
 });
 
 for (const invalid of ['model proof', 'support response']) {
@@ -140,7 +154,7 @@ for (const invalid of ['model proof', 'support response']) {
     assert.equal(f.q('[data-health]').textContent, '14 / 14');
     assert.equal(f.q('[data-enemy]').textContent, '18');
     assert.match(f.q('[data-runtime-status]').textContent, /No move was played/);
-    assert.equal(f.q('[data-request]').textContent, 'Ask my AI for support');
+    assert.equal(f.q('[data-request]').textContent, 'Play with AI');
     assert.equal(f.q('[data-request]').disabled, false);
     const firstId = submitted.requestId;
     f.q('[data-request]').click(); await tick();
@@ -206,7 +220,8 @@ for (const availability of ['busy', 'offline']) {
     });
     f.setMode('native'); await tick();
     f.q('[data-request]').click(); await tick();
-    assert.equal(f.q('[data-request]').textContent, 'Retry the same support request');
+    assert.equal(f.q('[data-request]').textContent, 'Retry this turn');
+    assert.equal(f.q('[data-partner-choice]').textContent, 'Check turn');
     f.q('[data-refresh]').click(); await tick();
     assert.equal(f.q('[data-runtime]').options.length, 1);
     if (availability === 'busy') assert.match(f.q('[data-runtime] option').textContent, /busy/);
@@ -215,9 +230,11 @@ for (const availability of ['busy', 'offline']) {
     const submissions = f.calls.filter(call => call.body?.operation === 'job');
     assert.equal(submissions.length, 2);
     assert.deepEqual(submissions[0].body, submissions[1].body);
-    assert.equal(f.q('[data-cast]').disabled, false);
-    assert.equal(f.q('[data-health]').textContent, '14 / 14');
-    assert.match(f.q('[data-runtime-status]').textContent, /Support received from native-model/);
+    assert.equal(f.q('[data-cast]').disabled, true);
+    assert.equal(f.q('[data-health]').textContent, '13 / 14');
+    assert.equal(f.q('[data-round]').textContent, 'ROUND 2 / 4');
+    assert.match(f.q('[data-partner]').textContent, /native-model/);
+    assert.equal(f.q('[data-count]').textContent, '1');
   });
 }
 
@@ -232,7 +249,7 @@ test('unmount attempts cancellation of an uncertain submitted job even after wai
   });
   f.setMode('native'); await tick();
   f.q('[data-request]').click(); await tick();
-  assert.equal(f.q('[data-request]').textContent, 'Retry the same support request');
+  assert.equal(f.q('[data-request]').textContent, 'Retry this turn');
   assert.equal(f.q('[data-cancel]').hidden, true, 'the UI is no longer actively waiting');
   f.cleanup(); await tick();
   const cancellations = f.calls.filter(call => call.body?.operation === 'cancel');
@@ -241,4 +258,95 @@ test('unmount attempts cancellation of an uncertain submitted job even after wai
   const requests = f.calls.length;
   f.q('[data-request]').click(); await tick();
   assert.equal(f.calls.length, requests, 'unmount removes all UI listeners');
+});
+
+
+test('hint selects a winning legal practice path without spending a turn or contacting AI', { timeout: 3000 }, t => {
+  const f = fixture(t);
+  const turns = [];
+  f.root.addEventListener('co-games:turn', event => turns.push(event.detail));
+  for (let round = 0; round < 4 && f.root.dataset.status === 'playing'; round++) {
+    f.q('[data-hint]').click();
+    assert.equal(f.q('[data-round]').textContent, `ROUND ${round + 1} / 4`);
+    assert.equal(f.q('[data-count]').textContent, String(round));
+    const selected = f.root.querySelector('[data-card][aria-pressed="true"]');
+    assert.equal(selected.disabled, false);
+    f.q('[data-cast]').click();
+  }
+  assert.equal(f.root.dataset.status, 'won');
+  assert.ok(turns.length > 0 && turns.length <= 4);
+  assert.ok(turns.every(turn => turn.model === null && turn.reason === ''));
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.q('[data-hint]').disabled, true);
+});
+
+test('a native hint only chooses a human card and never starts a provider task', { timeout: 3000 }, async t => {
+  const f = fixture(t, () => snapshot());
+  f.setMode('native'); await tick();
+  f.q('[data-hint]').click(); await tick();
+  assert.equal(f.q('[data-round]').textContent, 'ROUND 1 / 4');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+  assert.equal(f.q('[data-cast]').hidden, true);
+  assert.equal(f.q('[data-request]').disabled, false);
+});
+
+test('cancellation prevents a late native reply from automatically resolving the turn', { timeout: 3000 }, async t => {
+  const late = deferred();
+  let request;
+  t.mock.method(CoGamesRuntimeClient.prototype, 'requestSupport', async (choice, observation, options) => {
+    request = { observation, options }; return late.promise;
+  });
+  const cancellations = [];
+  t.mock.method(CoGamesRuntimeClient.prototype, 'cancel', async id => { cancellations.push(id); return { cancelled: true, jobId: 'job-one' }; });
+  const f = fixture(t, () => snapshot());
+  const turns = [];
+  f.root.addEventListener('co-games:turn', event => turns.push(event.detail));
+  f.setMode('native'); await tick();
+  f.q('[data-request]').click();
+  f.q('[data-cancel]').click(); await tick();
+  assert.equal(request.options.signal.aborted, true);
+  assert.deepEqual(cancellations, [request.options.requestId]);
+  late.resolve({ response: answer(request.observation), actualModels: ['native-model'], jobId: 'job-one', requestId: request.options.requestId });
+  await tick();
+  assert.equal(turns.length, 0);
+  assert.equal(f.q('[data-round]').textContent, 'ROUND 1 / 4');
+  assert.equal(f.q('[data-health]').textContent, '14 / 14');
+  assert.equal(f.q('[data-count]').textContent, '0');
+  assert.doesNotMatch(f.q('[data-partner]').textContent, /native-model/);
+  assert.match(f.q('[data-runtime-status]').textContent, /Turn cancelled here/);
+});
+
+
+test('native badge distinguishes checking, offline, another task, and ready without claiming a connection early', { timeout: 3000 }, async t => {
+  const first = deferred();
+  let reads = 0;
+  const f = fixture(t, () => ++reads === 1 ? first.promise : reads === 2
+    ? snapshot([{ id: 'other-job', runtimeId: 'runtime-one', status: 'running' }]) : snapshot());
+  f.setMode('native');
+  assert.equal(f.q('[data-partner-choice]').textContent, 'Checking…');
+  assert.equal(f.q('[data-request]').disabled, true);
+  first.resolve(snapshot([], [])); await tick();
+  assert.equal(f.q('[data-partner-choice]').textContent, 'Offline');
+  assert.match(f.q('[data-partner]').textContent, /Connect your AI/);
+  assert.equal(f.q('[data-request]').disabled, true);
+  f.q('[data-refresh]').click(); await tick();
+  assert.equal(f.q('[data-partner-choice]').textContent, 'Busy');
+  assert.equal(f.q('[data-request]').disabled, true);
+  f.q('[data-refresh]').click(); await tick();
+  assert.equal(f.q('[data-partner-choice]').textContent, 'Ready');
+  assert.equal(f.q('[data-request]').disabled, false);
+  assert.equal(f.calls.filter(call => call.method === 'POST').length, 0);
+});
+
+test('runtime going offline at submission clears its stale ready badge without playing a turn', { timeout: 3000 }, async t => {
+  const f = fixture(t, ({ method }) => method === 'GET' ? snapshot()
+    : Response.json({ ok: false, reason: 'runtime-offline' }, { status: 409 }));
+  f.setMode('native'); await tick();
+  assert.equal(f.q('[data-partner-choice]').textContent, 'Ready');
+  f.q('[data-request]').click(); await tick();
+  assert.equal(f.q('[data-partner-choice]').textContent, 'Offline');
+  assert.equal(f.q('[data-request]').disabled, true);
+  assert.equal(f.q('[data-round]').textContent, 'ROUND 1 / 4');
+  assert.equal(f.q('[data-count]').textContent, '0');
 });

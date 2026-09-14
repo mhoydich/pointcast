@@ -1,8 +1,9 @@
-import { initial, legalHuman, legalPartner, simulate, choose, score, human, partner, observe, validateSupportResponse } from './co-games-engine.mjs';
+import { initial, legalHuman, legalPartner, simulate, choose, score, human, partner, threats, observe, validateSupportResponse } from './co-games-engine.mjs';
 import { CoGamesRuntimeClient, CoGamesRuntimeError, buildCoGamesPrompt, type RuntimeChoice } from './co-games-runtime.ts';
 
 type HumanId = keyof typeof human;
 type SupportId = keyof typeof partner;
+type NativeMove = { support: SupportId; reason: string; models: string[] };
 
 export function mountCoGames(root: HTMLElement): () => void {
   const doc = root.ownerDocument;
@@ -10,17 +11,18 @@ export function mountCoGames(root: HTMLElement): () => void {
   const lifetime = new win.AbortController();
   const client = new CoGamesRuntimeClient();
   const q = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
+  const optionalText = (selector: string, value: string) => { const node = root.querySelector(selector); if (node) node.textContent = value; };
   let state = initial();
   let gameId = crypto.randomUUID();
   let selected: HumanId = 'ember';
   let support: SupportId | null = choose(state, selected);
   let history: string[] = [];
+  let outcome = '';
   let mode: 'practice' | 'native' = 'practice';
   let choices: RuntimeChoice[] = [];
   let choiceId = '';
   let notice = '';
-  let reason = '';
-  let actualModels: string[] = [];
+  let lastNativeMove: NativeMove | null = null;
   let busy = false;
   let cancelling = false;
   let loading = false;
@@ -35,28 +37,39 @@ export function mountCoGames(root: HTMLElement): () => void {
   const live = (version = epoch) => !lifetime.signal.aborted && root.isConnected && version === epoch;
   const partnerName = () => mode === 'practice' ? 'Practice partner' : choice()?.providerLabel || 'Your AI';
 
-  function clearMove() {
-    if (actualModels.length) notice = '';
+  function clearMove(clearAttribution = true) {
+    if (clearAttribution && lastNativeMove) notice = '';
     support = mode === 'practice' ? choose(state, selected) : null;
-    reason = ''; actualModels = []; pending = null;
+    if (clearAttribution) lastNativeMove = null;
+    pending = null;
+  }
+
+  function recommendedHuman(): HumanId | null {
+    let best: HumanId | null = null, bestScore = -Infinity;
+    for (const candidate of legalHuman(state)) {
+      const companion = choose(state, candidate);
+      const forecast = companion ? simulate(state, candidate, companion) : null;
+      if (forecast && score(forecast.state) > bestScore) { best = candidate; bestScore = score(forecast.state); }
+    }
+    return best;
   }
 
   async function load() {
     if (mode !== 'native' || busy) return;
     const version = epoch, sequence = ++loadEpoch;
     discoveryController?.abort(); discoveryController = new AbortController();
-    loading = true; notice = 'Checking your paired AI…'; render();
+    loading = true; notice = 'Finding your AI…'; render();
     try {
       const next = await client.discover(discoveryController.signal);
       if (!live(version) || sequence !== loadEpoch || mode !== 'native') return;
       choices = next;
       if (retryMatches() && pending && !choices.some(item => item.id === pending!.choice.id)) choices.push(pending.choice);
       if (!choices.some(item => item.id === choiceId)) { choiceId = choices[0]?.id || ''; clearMove(); }
-      notice = choices.length ? 'Choose your spell, then ask your AI for a support move.' : 'No ready AI is online. Open My AI to pair or start your computer companion.';
+      notice = choices.length ? 'Choose a card. Play a turn together.' : 'Your AI is offline. Open My AI to connect it.';
     } catch (error) {
       if (!live(version) || sequence !== loadEpoch) return;
       if (!(retryMatches() && pending)) { choices = []; choiceId = ''; clearMove(); }
-      notice = error instanceof Error ? error.message : 'Could not check your AI.';
+      notice = error instanceof Error ? error.message : 'Could not find your AI.';
     } finally {
       if (live(version) && sequence === loadEpoch) { loading = false; render(); }
     }
@@ -67,13 +80,19 @@ export function mountCoGames(root: HTMLElement): () => void {
     const active = state.status === 'playing';
     root.dataset.mode = mode;
     root.dataset.status = state.status;
+    root.dataset.busy = String(busy);
     q('[data-round]').textContent = active ? `ROUND ${state.round + 1} / 4` : `FINISHED · ${state.round} ROUNDS`;
     q('[data-enemy]').textContent = String(state.enemy);
     q('[data-health]').textContent = `${state.hp} / 14`;
     q('[data-team-name]').textContent = `You + ${partnerName()}`;
     q('[data-partner-name]').textContent = partnerName();
+    optionalText('[data-actual-model]', mode === 'native' && lastNativeMove ? lastNativeMove.models.join(', ') : '');
     q('.cg-health').setAttribute('aria-valuenow', String(state.hp));
     q('.cg-health-fill').style.width = `${state.hp / 14 * 100}%`;
+    optionalText('[data-current-threat]', String(active ? threats[state.round] : 0));
+    optionalText('[data-outcome]', outcome || 'Get the rift to 0. Keep your team alive.');
+    optionalText('[data-quick-tip]', !active ? 'Play again to try a different path.' : busy ? 'Your AI is choosing its card.'
+      : state.focused ? 'Charged up: your next attack does double damage.' : 'Pick a card. Your partner adds support.');
     root.querySelectorAll<HTMLElement>('[data-threat]').forEach(node => {
       node.dataset.now = String(active && Number(node.dataset.threat) === state.round);
       node.dataset.past = String(Number(node.dataset.threat) < state.round);
@@ -97,11 +116,14 @@ export function mountCoGames(root: HTMLElement): () => void {
     runtimeSelect.value = choiceId; runtimeSelect.hidden = !choices.length; runtimeSelect.disabled = busy || loading;
     q<HTMLButtonElement>('[data-refresh]').disabled = busy || loading;
     q<HTMLButtonElement>('[data-request]').disabled = busy || loading || !choice() || (Boolean(choice()?.busy) && !retryMatches()) || !active;
-    q('[data-request]').textContent = pending && !busy ? 'Retry the same support request' : 'Ask my AI for support';
-    q('[data-request]').hidden = Boolean(support && mode === 'native');
+    q('[data-request]').textContent = busy ? 'Your AI is playing…' : pending ? 'Retry this turn' : 'Play with AI';
+    q('[data-request]').hidden = mode !== 'native' || !active;
+    q('[data-cast]').hidden = mode !== 'practice' || !active;
     q('[data-cancel]').hidden = !busy;
     q<HTMLButtonElement>('[data-cancel]').disabled = cancelling;
-    q('[data-turn-state]').textContent = busy ? 'Your AI’s turn · choosing support' : mode === 'native' && !support ? 'Your turn · ask for support' : 'Your turn · confirm the pair';
+    q('[data-turn-state]').textContent = !active ? 'Match complete' : busy ? 'Your AI is choosing…' : 'Pick a card · play a turn';
+    const hint = root.querySelector<HTMLButtonElement>('[data-hint]');
+    if (hint) hint.disabled = busy || !active;
     if (active) {
       const legal = legalHuman(state);
       root.querySelectorAll<HTMLButtonElement>('[data-card]').forEach(button => {
@@ -112,30 +134,42 @@ export function mountCoGames(root: HTMLElement): () => void {
       q('[data-uses="focus"]').textContent = state.focus ? '1 cast left' : 'Used';
       q('[data-effect="ember"]').textContent = `Deal ${state.focused ? 8 : 4} damage.`;
       q('[data-effect="root"]').textContent = `Deal ${state.focused ? 4 : 2}. Block 3.`;
-      q('[data-focus-status]').textContent = state.focused ? 'Focused · next damage ×2' : 'Choose one card';
-      q('[data-stock]').textContent = `Support left: Echo ${state.echo} · Ward ${state.ward} · Mend ${state.mend}`;
+      q('[data-focus-status]').textContent = state.focused ? 'Next attack ×2' : 'Choose one card';
+      q('[data-stock]').textContent = `Echo ${state.echo} · Ward ${state.ward} · Mend ${state.mend}`;
       q('[data-another]').hidden = mode !== 'practice';
-      q<HTMLButtonElement>('[data-another]').disabled = legalPartner(state).length < 2;
-      const forecast = q('[data-forecast]'); forecast.replaceChildren(); forecast.hidden = !support;
-      const f = support ? simulate(state, selected, support) : null;
+      q<HTMLButtonElement>('[data-another]').disabled = busy || legalPartner(state).length < 2;
+      const forecast = q('[data-forecast]'); forecast.replaceChildren(); forecast.hidden = mode === 'native' || !support;
+      const f = mode === 'practice' && support ? simulate(state, selected, support) : null;
       if (f && support) {
-        const effect = support === 'echo' ? 'add 2 damage' : support === 'ward' ? 'block 3 damage' : `restore ${f.healing} health`;
-        const comment = f.state.status === 'won' ? 'This pair closes the rift and keeps us standing.' : f.state.hp === 0 ? 'This pair would knock us out. Try another spell or support.' : score(f.state) >= 10000 ? 'We still have a path to close it in time.' : 'We can try it, but I can’t find a winning finish from this pair.';
-        q('[data-partner]').textContent = mode === 'native' ? `${partner[support].name}: ${reason || `I’ll ${effect}.`} · ${actualModels.join(', ')}` : `I’ll cast ${partner[support].name} to ${effect}. ${comment}`;
-        for (const text of [`Together: ${f.damage} damage`, `Block: ${Math.min(f.block, f.incoming)} / ${f.incoming}`, `Our health: ${state.hp} → ${f.state.hp}`, `Rift: ${state.enemy} → ${f.state.enemy}`]) {
+        const effect = support === 'echo' ? '+2 damage' : support === 'ward' ? 'block 3' : `heal ${f.healing}`;
+        q('[data-partner]').textContent = `I’ll play ${partner[support].name}: ${effect}.`;
+        optionalText('[data-partner-choice]', partner[support].name);
+        for (const text of [`Damage ${f.damage}`, `Block ${Math.min(f.block, f.incoming)}`, `Health ${state.hp} → ${f.state.hp}`, `Rift ${state.enemy} → ${f.state.enemy}`]) {
           const span = doc.createElement('span'); span.textContent = text; forecast.append(span);
         }
-        q('[data-cast]').textContent = `Cast ${human[selected].name} + ${partner[support].name} ↗`;
-      } else {
-        q('[data-partner]').textContent = busy ? 'Your AI has the board and your chosen spell. Waiting for its support move.' : 'Choose a spell, then ask your AI to complete the play.';
-        q('[data-cast]').textContent = 'Waiting for a support move';
       }
-      q<HTMLButtonElement>('[data-cast]').disabled = busy || !f;
+      q('[data-cast]').textContent = 'Play turn';
+      q<HTMLButtonElement>('[data-cast]').disabled = busy || !f || mode !== 'practice';
       if (mode === 'native') q('[data-prompt-preview]').textContent = buildCoGamesPrompt(observe(state, selected, gameId));
     } else {
+      root.querySelectorAll<HTMLButtonElement>('[data-card]').forEach(button => { button.disabled = true; });
+      q<HTMLButtonElement>('[data-cast]').disabled = true;
       const won = state.status === 'won';
-      q('[data-result-title]').textContent = won ? 'You closed it. Together.' : state.hp === 0 ? 'The rift took you both.' : 'The rift is still open.';
-      q('[data-result-copy]').textContent = won ? `Four rounds. Two roles. ${state.hp} health left. Your spells and your partner’s support made the difference.` : state.hp === 0 ? 'Try timing your protection for the larger attacks. The forecast shows whether both of you survive.' : 'You stayed standing, but ran out of rounds. Try adding more damage or setting up Focus early.';
+      q('[data-result-title]').textContent = won ? 'You did it. Together.' : 'One more try?';
+      q('[data-result-copy]').textContent = won ? `Rift closed. ${state.hp} health left.` : state.hp === 0 ? 'Your team ran out of health. Try more protection.' : 'The rift survived. Try a little more damage.';
+    }
+    if (mode === 'native') {
+      q('[data-partner]').textContent = busy ? cancelling ? 'Stopping this turn…' : 'Choosing my card…' : lastNativeMove
+        ? `${partner[lastNativeMove.support].name}: ${lastNativeMove.reason || 'Played together.'} · ${lastNativeMove.models.join(', ')}`
+        : loading ? 'Finding your AI…' : retryMatches() ? 'Check this turn before starting another.'
+          : !choice() ? 'Connect your AI to play together.' : choice()?.busy ? 'Your AI is finishing another task.'
+            : 'Choose your card. I’ll add support when you play.';
+      optionalText('[data-partner-choice]', busy ? cancelling ? 'Stopping…' : 'Choosing…' : loading ? 'Checking…'
+        : lastNativeMove ? partner[lastNativeMove.support].name : retryMatches() ? 'Check turn'
+          : !choice() ? 'Offline' : choice()?.busy ? 'Busy' : 'Ready');
+    } else if (!active) {
+      q('[data-partner]').textContent = state.status === 'won' ? 'We did it. Nice teamwork.' : 'We can try another path.';
+      optionalText('[data-partner-choice]', 'Ready');
     }
     q('[data-log]').hidden = history.length === 0;
     q('[data-count]').textContent = String(history.length);
@@ -144,31 +178,53 @@ export function mountCoGames(root: HTMLElement): () => void {
     q('[data-last]').textContent = history.at(-1) || 'Close the rift within four rounds and keep your team alive.';
   }
 
+  function playTurn(supportId: SupportId): boolean {
+    const f = simulate(state, selected, supportId); if (!f) return false;
+    const playedHuman = selected;
+    const native = mode === 'native' ? lastNativeMove : null;
+    const model = native?.models.join(', ') || null;
+    const reason = native?.reason || '';
+    history.push(`Round ${state.round + 1} · You: ${human[playedHuman].name}. ${partnerName()}${model ? ` (${model})` : ''}: ${partner[supportId].name}. Dealt ${f.damage}, took ${f.taken}${f.healing ? `, healed ${f.healing}` : ''}. Health ${f.state.hp} / 14.`);
+    state = f.state;
+    outcome = state.status === 'won' ? `Rift closed! ${state.hp} health left.` : state.status === 'lost' ? state.hp === 0 ? 'Your team ran out of health.' : 'Out of turns. The rift is still open.'
+      : `${f.damage} damage · ${f.taken} taken${f.healing ? ` · ${f.healing} healed` : ''}`;
+    if (state.status === 'playing' && !legalHuman(state).includes(selected)) selected = legalHuman(state)[0];
+    clearMove(false);
+    notice = mode === 'native' ? (state.status === 'playing' ? 'Turn played. Choose your next card.' : 'Match complete.') : '';
+    render();
+    root.dispatchEvent(new win.CustomEvent('co-games:turn', { bubbles: true, detail: Object.freeze({
+      human: playedHuman, support: supportId, damage: f.damage, taken: f.taken, healing: f.healing,
+      hp: state.hp, enemy: state.enemy, round: state.round, status: state.status, model, reason,
+    }) }));
+    if (state.status !== 'playing') q('[data-replay]').focus();
+    return true;
+  }
+
   const listener = { signal: lifetime.signal };
   root.querySelectorAll<HTMLButtonElement>('[data-card]').forEach(button => button.addEventListener('click', () => {
     if (busy || !legalHuman(state).includes(button.dataset.card as HumanId)) return;
-    if (selected !== button.dataset.card) { selected = button.dataset.card as HumanId; clearMove(); }
+    if (selected !== button.dataset.card) { selected = button.dataset.card as HumanId; clearMove(false); }
     render();
   }, listener));
+  root.querySelector('[data-hint]')?.addEventListener('click', () => {
+    if (busy || state.status !== 'playing') return;
+    const recommended = recommendedHuman(); if (!recommended) return;
+    selected = recommended; clearMove(false); render();
+    optionalText('[data-quick-tip]', `${human[selected].name} selected. This keeps our best path open.`);
+  }, listener);
   q('[data-another]').addEventListener('click', () => {
-    if (mode !== 'practice') return;
+    if (busy || mode !== 'practice') return;
     const legal = legalPartner(state); if (!legal.length) return;
     support = legal[(legal.indexOf(support!) + 1) % legal.length]; render();
   }, listener);
   q('[data-cast]').addEventListener('click', () => {
-    if (busy || !support) return;
-    const f = simulate(state, selected, support); if (!f) return;
-    history.push(`Round ${state.round + 1} · You: ${human[selected].name}. ${partnerName()}${actualModels.length ? ` (${actualModels.join(', ')})` : ''}: ${partner[support].name}. Dealt ${f.damage}, took ${f.taken}${f.healing ? `, healed ${f.healing}` : ''}. Health ${f.state.hp} / 14.`);
-    state = f.state;
-    if (state.status === 'playing' && !legalHuman(state).includes(selected)) selected = legalHuman(state)[0];
-    clearMove();
-    notice = mode === 'native' ? (state.status === 'playing' ? 'Choose your next spell, then ask your AI for support.' : 'Match complete. Each AI support is recorded in Our moves.') : '';
-    render();
-    if (state.status !== 'playing') q('[data-replay]').focus();
+    if (busy || mode !== 'practice' || !support) return;
+    playTurn(support);
   }, listener);
   q('[data-replay]').addEventListener('click', () => {
+    if (busy) return;
     ++epoch; ++loadEpoch; discoveryController?.abort(); loading = false;
-    state = initial(); gameId = crypto.randomUUID(); history = []; selected = 'ember'; clearMove(); render(); q('[data-card="ember"]').focus();
+    state = initial(); gameId = crypto.randomUUID(); history = []; outcome = ''; selected = 'ember'; clearMove(); render(); q('[data-card="ember"]').focus();
     if (mode === 'native') void load();
   }, listener);
   q<HTMLSelectElement>('[data-mode]').addEventListener('change', () => {
@@ -177,32 +233,38 @@ export function mountCoGames(root: HTMLElement): () => void {
     mode = q<HTMLSelectElement>('[data-mode]').value === 'native' ? 'native' : 'practice';
     notice = ''; clearMove(); render(); if (mode === 'native') void load();
   }, listener);
-  q<HTMLSelectElement>('[data-runtime]').addEventListener('change', () => { choiceId = q<HTMLSelectElement>('[data-runtime]').value; clearMove(); render(); }, listener);
+  q<HTMLSelectElement>('[data-runtime]').addEventListener('change', () => {
+    if (busy) return;
+    choiceId = q<HTMLSelectElement>('[data-runtime]').value; clearMove(); render();
+  }, listener);
   q('[data-refresh]').addEventListener('click', () => void load(), listener);
   q('[data-request]').addEventListener('click', async () => {
-    const target = choice(); if (busy || !target || (target.busy && !retryMatches()) || state.status !== 'playing') return;
+    const target = choice(); if (busy || loading || mode !== 'native' || !target || (target.busy && !retryMatches()) || state.status !== 'playing') return;
     const observation = observe(state, selected, gameId);
     const fingerprint = JSON.stringify([target.id, observation]);
     if (!pending || pending.fingerprint !== fingerprint) pending = { id: crypto.randomUUID(), fingerprint, choice: target };
     const requestId = pending.id, version = ++epoch;
-    requestController = new AbortController(); busy = true; support = null; reason = ''; actualModels = []; notice = 'Sending this round to your AI…'; render();
+    requestController = new AbortController(); busy = true; support = null; lastNativeMove = null; notice = 'Playing this turn with your AI…'; render();
     try {
       const result = await client.requestSupport(target, observation, {
         requestId, signal: requestController.signal,
-        onProgress: progress => { if (live(version)) { notice = progress.status === 'running' ? 'Your AI is choosing a support card…' : 'Request queued. Waiting for your computer companion…'; render(); } },
+        onProgress: progress => { if (live(version)) { notice = progress.status === 'running' ? 'Your AI is choosing its card…' : 'Waiting for your AI…'; render(); } },
       });
       if (!live(version) || mode !== 'native' || choice()?.id !== target.id) return;
       const checked = validateSupportResponse(observe(state, selected, gameId), result.response);
       if (checked.ok === false) throw new Error(`Your AI’s move was not applied: ${checked.reason}`);
-      support = checked.support; reason = typeof result.response.reason === 'string' ? result.response.reason : '';
-      actualModels = result.actualModels; pending = null; notice = `Support received from ${actualModels.join(', ')}. Review the pair before casting.`;
+      lastNativeMove = { support: checked.support, reason: typeof result.response.reason === 'string' ? result.response.reason : '', models: [...result.actualModels] };
+      if (!playTurn(checked.support)) throw new Error('This turn could not be played. Choose a card and try again.');
     } catch (error) {
       if (!live(version)) return;
       notice = error instanceof Error ? error.message : 'Your AI did not return a usable move.';
-      support = null; actualModels = [];
+      support = null; lastNativeMove = null;
       const uncertain = error instanceof CoGamesRuntimeError && ['network-error', 'request-timeout', 'support-request-timeout', 'job-missing', 'invalid-response', 'aborted'].includes(error.reason);
       if (!uncertain) pending = null;
       if (error instanceof CoGamesRuntimeError && error.reason === 'unauthorized') { choices = []; choiceId = ''; }
+      else if (error instanceof CoGamesRuntimeError && ['runtime-offline', 'runtime-not-found', 'provider-unavailable', 'provider-not-ready', 'subscription-required'].includes(error.reason)) {
+        choices = choices.filter(item => item.id !== target.id); choiceId = '';
+      }
     } finally { if (live(version)) { busy = false; requestController = null; render(); } }
   }, listener);
   q('[data-cancel]').addEventListener('click', async () => {
@@ -210,8 +272,8 @@ export function mountCoGames(root: HTMLElement): () => void {
     const requestId = pending.id, version = ++epoch;
     requestController?.abort(); requestController = null;
     cancelling = true;
-    notice = 'Cancelling the support request…'; render();
-    try { await client.cancel(requestId); if (live(version)) notice = 'Cancellation requested. This move will not be used; check My AI for the task’s final status.'; }
+    notice = 'Cancelling this turn…'; render();
+    try { await client.cancel(requestId); if (live(version)) notice = 'Turn cancelled here. Check My AI for the task’s final status.'; }
     catch { if (live(version)) notice = 'Stopped waiting. Cancellation is unconfirmed; check My AI before starting another request.'; }
     finally { if (live(version)) { busy = false; cancelling = false; pending = null; support = null; render(); } }
   }, listener);
@@ -230,6 +292,6 @@ export function mountCoGames(root: HTMLElement): () => void {
     ++epoch; ++loadEpoch;
     if (pending) void client.cancel(pending.id).catch(() => {});
     requestController?.abort(); discoveryController?.abort(); lifetime.abort();
-    choices = []; actualModels = []; reason = ''; pending = null;
+    choices = []; lastNativeMove = null; pending = null;
   };
 }

@@ -5,7 +5,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   name: 'Co-games: Two against the rift',
   url: 'https://pointcast.xyz/co-games',
   status: 'free-browser-practice',
-  description: 'A four-round Spellframe card encounter: a human chooses a spell, a partner proposes support, and the human confirms the pair.',
+  description: 'A four-round Spellframe card encounter: choose a spell and play one turn. Your partner adds support and the pair resolves together.',
   availability: {
     practicePartner: true,
     pairedNativeSupport: true,
@@ -28,7 +28,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     protocol: 'pointcast.co-games.v1',
     observationExample: observe(initial(), 'ember', 'example-game'),
     responseExample: { gameId: 'example-game', revision: 0, selectedHuman: 'ember', support: 'ward', reason: 'Protect the team while your spell damages the rift.' },
-    constraints: 'Echo gameId, revision, and selectedHuman exactly. Choose only from legalSupports. Do not provide changed stats. The human confirms the pair. Each round is an explicitly requested native text task; no automatic next-round inference.',
+    constraints: 'Echo gameId, revision, and selectedHuman exactly. Choose only from legalSupports. Do not provide changed stats. Clicking Play with AI authorizes one support request and automatic resolution of that single validated turn. Each following round requires another explicit click; no automatic next-round inference.',
     transport: 'The signed-in game uses /api/me/ai-runtimes. There is no public game mutation endpoint.',
     setup: 'https://pointcast.xyz/me#my-ai',
   },
