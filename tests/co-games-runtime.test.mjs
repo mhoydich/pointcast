@@ -68,6 +68,9 @@ test('prompt carries all rules and bounded game data; invalid or oversized packe
   const prompt = buildCoGamesPrompt(observation());
   assert.ok(prompt.length < 4000);
   assert.match(prompt, /Both sides attack even on the final blow/);
+  assert.match(prompt, /zero-based indexes: 0 is round 1 and 3 is round 4/);
+  assert.match(prompt, /current incoming attack is threats\[state.round\]/);
+  assert.match(prompt, /without numerical health, damage, or round forecasts/);
   assert.match(prompt, /Focus doubles the human's next damaging spell/);
   assert.ok(prompt.includes(JSON.stringify(observation())));
   assert.throws(() => buildCoGamesPrompt({ ...observation(), legalSupports: [] }), failure('invalid-observation'));

@@ -36,6 +36,7 @@ export function mountCoGames(root: HTMLElement): () => void {
   const partnerName = () => mode === 'practice' ? 'Practice partner' : choice()?.providerLabel || 'Your AI';
 
   function clearMove() {
+    if (actualModels.length) notice = '';
     support = mode === 'practice' ? choose(state, selected) : null;
     reason = ''; actualModels = []; pending = null;
   }
@@ -160,7 +161,9 @@ export function mountCoGames(root: HTMLElement): () => void {
     history.push(`Round ${state.round + 1} · You: ${human[selected].name}. ${partnerName()}${actualModels.length ? ` (${actualModels.join(', ')})` : ''}: ${partner[support].name}. Dealt ${f.damage}, took ${f.taken}${f.healing ? `, healed ${f.healing}` : ''}. Health ${f.state.hp} / 14.`);
     state = f.state;
     if (state.status === 'playing' && !legalHuman(state).includes(selected)) selected = legalHuman(state)[0];
-    clearMove(); render();
+    clearMove();
+    notice = mode === 'native' ? (state.status === 'playing' ? 'Choose your next spell, then ask your AI for support.' : 'Match complete. Each AI support is recorded in Our moves.') : '';
+    render();
     if (state.status !== 'playing') q('[data-replay]').focus();
   }, listener);
   q('[data-replay]').addEventListener('click', () => {
