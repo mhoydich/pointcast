@@ -85,7 +85,7 @@ async function write(request: Request, env: AuthEnv, remove: boolean) {
         if (!validModel(body.model) || !provider.models.some((item) => item.id === body.model)) return runtimeFailure('model-not-available');
         model = body.model;
       }
-      prompt = `This is a text-only PointCast visit. Answer using only the information in this request. No tools, files, external requests, purchases, or messages are available. Do not claim to have opened a URL or taken an action.\n${body.gentle ? GENTLE_INVITATION + '\n' : ''}\nThe user chose to share:\n${body.prompt.trim()}`;
+      prompt = `This is a text-only PointCast visit. Answer the user’s question using the supplied context and your general knowledge. Be clear about uncertain or unverified details; do not invent facts or sources. No tools, files, external requests, purchases, or messages are available. Do not claim to have opened a URL or taken an action.\n${body.gentle ? GENTLE_INVITATION + '\n' : ''}\nThe user chose to share:\n${body.prompt.trim()}`;
     }
     const count = await db.prepare('SELECT COUNT(*) AS total FROM ai_runtime_jobs WHERE user_id = ? AND created_at > ?')
       .bind(userId, now - 60 * 60_000).first<{ total: number }>();

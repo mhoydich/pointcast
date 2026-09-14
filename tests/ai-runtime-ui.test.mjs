@@ -520,7 +520,7 @@ test('page context excludes private pages, body text, and URL secrets', () => {
   dom.window.close();
 });
 
-test('dock prompt starters are drafts, page sharing is opt-in, and sign-out clears the reply', async (t) => {
+test('dock quick starters submit once, clear optional context, and sign-out clears the reply', async (t) => {
   const calls = [];
   const f = fixture(t, (init) => {
     if (init.method === 'POST') { calls.push(JSON.parse(init.body)); return Response.json({ ok: true, jobId: 'next' }); }
@@ -529,11 +529,14 @@ test('dock prompt starters are drafts, page sharing is opt-in, and sign-out clea
   await tick();
   assert.equal(f.q('[data-runtime-prompt]').value, '');
   assert.equal(f.q('[data-runtime-page]').checked, false);
-  f.q('[data-ai-starter="page"]').click();
-  assert.equal(calls.length, 0);
-  assert.match(f.q('[data-runtime-preview]').textContent, /Elemental Shrine/);
-  assert.doesNotMatch(f.q('[data-runtime-preview]').textContent, /private=value|#secret/);
-  f.q('[data-runtime-run]').click(); await tick(); await tick();
+  f.q('[data-runtime-page]').checked = true;
+  f.q('[data-runtime-note]').value = 'PRIVATE NOTE';
+  assert.equal(f.q('.ai-runtime__options').open, false);
+  f.q('[data-ai-starter="activity"]').click();
+  f.q('[data-ai-starter="activity"]').click();
+  await tick(); await tick();
+  assert.doesNotMatch(calls[0].prompt, /PRIVATE NOTE|Elemental Shrine|private=value|#secret/);
+  assert.match(calls[0].prompt, /three small.*PointCast/s);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].prompt, f.q('[data-runtime-preview]').textContent);
   f.dom.window.dispatchEvent(new f.dom.window.CustomEvent('pc:auth-change', { detail: { user: null } }));
@@ -548,4 +551,25 @@ test('follow-up includes only the selected provider reply when explicitly checke
   assert.doesNotMatch(f.q('[data-runtime-preview]').textContent, /Previous AI reply/);
   f.q('[data-runtime-followup]').click();
   assert.match(f.q('[data-runtime-preview]').textContent, /Previous AI reply.*\nA quiet room/s);
+});
+
+
+test('song history uses the current displayed title and missing titles do not submit', async (t) => {
+  const calls = [];
+  const f = fixture(t, (init) => {
+    if (init.method === 'POST') { calls.push(JSON.parse(init.body)); return Response.json({ ok: true, jobId: 'song' }); }
+    return Response.json({ ok: true, runtimes: [ready()], jobs: [] });
+  }, { compact: true });
+  await tick();
+  f.q('[data-ai-starter="song"]').click();
+  assert.equal(calls.length, 0);
+  assert.match(f.q('[data-ai-starter-status]').textContent, /No song title/);
+  const title = f.dom.window.document.createElement('span');
+  title.dataset.liveNowTitle = ''; title.textContent = 'Door of the Cosmos — Sun Ra';
+  f.dom.window.document.body.append(title);
+  f.q('[data-ai-starter="song"]').click();
+  await tick(); await tick();
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].prompt, /history of “Door of the Cosmos — Sun Ra”/);
+  assert.match(calls[0].prompt, /general music knowledge/);
 });
