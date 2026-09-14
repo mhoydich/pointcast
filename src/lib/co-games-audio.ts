@@ -128,7 +128,7 @@ export function mountCoGamesAudio(root: HTMLElement): () => void {
     for (const [delay, midi, duration] of notes) later(delay, () => tone(pitch(midi), duration, wave, volume));
   }
 
-  type Turn = { human: 'ember' | 'root' | 'focus'; support: 'echo' | 'ward' | 'mend'; round: number; taken: number; healing: number; status: 'playing' | 'won' | 'lost' };
+  type Turn = { human: 'ember' | 'root' | 'focus'; support: 'echo' | 'ward' | 'mend'; round: number; taken: number; healing: number; status: 'playing' | 'won' | 'lost'; combo?: { name: string } | null };
   function turnSound(turn: Turn) {
     if (turn.human === 'ember') { tone(196, 0.14, 'square', 0.06, 784); later(35, () => softNoise(0.055, 0.025)); }
     else if (turn.human === 'root') { tone(98, 0.16, 'square', 0.055, 82); later(40, () => tone(196, 0.09, 'triangle', 0.065)); }
@@ -139,6 +139,7 @@ export function mountCoGamesAudio(root: HTMLElement): () => void {
       else if (turn.support === 'ward') { tone(196, 0.16, 'triangle', 0.085); later(45, () => tone(294, 0.12, 'triangle', 0.05)); }
       else melody([[0, 64, 0.09], [55, 67, 0.09], [110, 72, 0.12]], 'sine', 0.08);
     });
+    if (turn.combo) later(330, () => melody([[0, 79, 0.08], [65, 84, 0.12], [135, 88, 0.16]], 'triangle', 0.055));
     later(550, () => {
       if (turn.taken > 0) { tone(110, 0.14, 'triangle', 0.085, 55); softNoise(0.07, 0.04); }
       else tone(311, 0.09, 'sine', 0.06);
@@ -209,6 +210,8 @@ export function mountCoGamesAudio(root: HTMLElement): () => void {
     stopAll();
     afterUnlock(() => turnSound(turn));
   }, { signal: lifetime.signal });
+
+  root.addEventListener('co-games:match', () => { lastRound = 0; stopAll(); }, { signal: lifetime.signal });
 
   renderToggle();
   return () => {

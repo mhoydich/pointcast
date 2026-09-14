@@ -1,5 +1,7 @@
-import { initial, legalHuman, legalPartner, simulate, choose, score, human, partner, threats, observe, validateSupportResponse } from './co-games-engine.mjs';
+import { initial, legalHuman, legalPartner, simulate, choose, score, human, partner, encounters, encounterFor, currentIntent, combos, observe, validateSupportResponse } from './co-games-engine.mjs';
 import { CoGamesRuntimeClient, CoGamesRuntimeError, buildCoGamesPrompt, type RuntimeChoice } from './co-games-runtime.ts';
+
+import type { EncounterId, GameState, Forecast, ComboId } from './co-games-engine.mjs';
 
 type HumanId = keyof typeof human;
 type SupportId = keyof typeof partner;
@@ -12,7 +14,18 @@ export function mountCoGames(root: HTMLElement): () => void {
   const client = new CoGamesRuntimeClient();
   const q = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const optionalText = (selector: string, value: string) => { const node = root.querySelector(selector); if (node) node.textContent = value; };
-  let state = initial();
+  let state: GameState = initial('garden');
+  let wins = 0;
+  let matchNumber = 1;
+  let lastCombo = '';
+  const battleOrder = (Object.keys(encounters) as EncounterId[]).filter(id => id !== 'classic');
+  const encounterTips: Record<EncounterId, string> = {
+    classic: 'Four turns. Make every card count.',
+    garden: 'A gentle start. Match cards for bonus effects.',
+    rush: 'The first hit is heavy. Protect early.',
+    shell: 'Armor fades after two turns. Set up your big hit.',
+    storm: 'Quiet turns, heavy hits. Time your protection.',
+  };
   let gameId = crypto.randomUUID();
   let selected: HumanId = 'ember';
   let support: SupportId | null = choose(state, selected);
@@ -78,24 +91,37 @@ export function mountCoGames(root: HTMLElement): () => void {
   function render() {
     if (!live()) return;
     const active = state.status === 'playing';
+    const encounter = encounterFor(state)!;
+    const intent = currentIntent(state);
     root.dataset.mode = mode;
     root.dataset.status = state.status;
+    root.dataset.encounter = encounter.id;
     root.dataset.busy = String(busy);
     q('[data-round]').textContent = active ? `ROUND ${state.round + 1} / 4` : `FINISHED · ${state.round} ROUNDS`;
     q('[data-enemy]').textContent = String(state.enemy);
+    optionalText('[data-enemy-max]', String(encounter.enemy));
+    optionalText('[data-wins]', String(wins));
+    optionalText('[data-match-number]', String(matchNumber));
+    optionalText('[data-encounter-name]', encounter.name);
+    optionalText('[data-encounter-tip]', encounterTips[encounter.id]);
+    optionalText('[data-current-armor]', String(intent?.armor ?? 0));
+    optionalText('[data-battle-intent]', intent ? `Incoming ${intent.attack}${intent.armor ? ` · Armor ${intent.armor}` : ''}` : 'Battle complete');
+    optionalText('[data-combo-preview]', (mode === 'native' && lastNativeMove) || !active ? lastCombo : '');
     q('[data-health]').textContent = `${state.hp} / 14`;
     q('[data-team-name]').textContent = `You + ${partnerName()}`;
     q('[data-partner-name]').textContent = partnerName();
     optionalText('[data-actual-model]', mode === 'native' && lastNativeMove ? lastNativeMove.models.join(', ') : '');
     q('.cg-health').setAttribute('aria-valuenow', String(state.hp));
     q('.cg-health-fill').style.width = `${state.hp / 14 * 100}%`;
-    optionalText('[data-current-threat]', String(active ? threats[state.round] : 0));
+    optionalText('[data-current-threat]', String(intent?.attack ?? 0));
     optionalText('[data-outcome]', outcome || 'Beat the rival crew. Keep your team alive.');
     optionalText('[data-quick-tip]', !active ? 'Play again to try a different path.' : busy ? 'Your AI is choosing its card.'
       : state.focused ? 'Charged up: your next attack does double damage.' : 'Pick a card. Your partner adds support.');
     root.querySelectorAll<HTMLElement>('[data-threat]').forEach(node => {
       node.dataset.now = String(active && Number(node.dataset.threat) === state.round);
       node.dataset.past = String(Number(node.dataset.threat) < state.round);
+      const attack = encounter.threats[Number(node.dataset.threat)];
+      if (attack !== undefined) node.textContent = String(attack);
     });
     q('[data-play]').hidden = !active;
     q('[data-result]').hidden = active;
@@ -125,6 +151,10 @@ export function mountCoGames(root: HTMLElement): () => void {
     q('[data-turn-state]').textContent = !active ? 'Match complete' : busy ? 'Your AI is choosing…' : 'Pick a card · play a turn';
     const hint = root.querySelector<HTMLButtonElement>('[data-hint]');
     if (hint) hint.disabled = busy || !active;
+    const freshBattle = root.querySelector<HTMLButtonElement>('[data-new-battle]');
+    if (freshBattle) freshBattle.disabled = busy;
+    q<HTMLButtonElement>('[data-replay]').disabled = busy;
+    q('[data-replay]').textContent = state.status === 'won' ? 'Next battle →' : 'Try again ↻';
     if (active) {
       const legal = legalHuman(state);
       root.querySelectorAll<HTMLButtonElement>('[data-card]').forEach(button => {
@@ -145,7 +175,8 @@ export function mountCoGames(root: HTMLElement): () => void {
         const effect = support === 'echo' ? '+2 damage' : support === 'ward' ? 'block 3' : `heal ${f.healing}`;
         q('[data-partner]').textContent = `I’ll play ${partner[support].name}: ${effect}.`;
         optionalText('[data-partner-choice]', partner[support].name);
-        for (const text of [`Damage ${f.damage}`, `Block ${Math.min(f.block, f.incoming)}`, `Health ${state.hp} → ${f.state.hp}`, `Rift ${state.enemy} → ${f.state.enemy}`]) {
+        optionalText('[data-combo-preview]', comboSummary(f, selected, support));
+        for (const text of [`Damage ${f.damage}`, `Block ${Math.min(f.block, f.incoming)}`, `Health ${state.hp} → ${f.state.hp}`, `Rivals ${state.enemy} → ${f.state.enemy}`, ...(f.armor ? [`Armor absorbs ${f.armor}`] : [])]) {
           const span = doc.createElement('span'); span.textContent = text; forecast.append(span);
         }
       }
@@ -157,7 +188,7 @@ export function mountCoGames(root: HTMLElement): () => void {
       q<HTMLButtonElement>('[data-cast]').disabled = true;
       const won = state.status === 'won';
       q('[data-result-title]').textContent = won ? 'You did it. Together.' : 'One more try?';
-      q('[data-result-copy]').textContent = won ? `Rift closed. ${state.hp} health left.` : state.hp === 0 ? 'Your team ran out of health. Try more protection.' : 'The rift survived. Try a little more damage.';
+      q('[data-result-copy]').textContent = won ? `${encounter.name} beaten in ${state.round} turns. ${state.hp} health left.` : state.hp === 0 ? 'Your team ran out of health. Try more protection.' : 'The rival crew survived. Try a little more damage.';
     }
     if (mode === 'native') {
       q('[data-partner]').textContent = busy ? cancelling ? 'Stopping this turn…' : 'Choosing my card…' : lastNativeMove
@@ -176,7 +207,42 @@ export function mountCoGames(root: HTMLElement): () => void {
     q('[data-count]').textContent = String(history.length);
     const log = q('[data-log-items]'); log.replaceChildren();
     for (const item of history) { const li = doc.createElement('li'); li.textContent = item; log.append(li); }
-    q('[data-last]').textContent = history.at(-1) || 'Close the rift within four rounds and keep your team alive.';
+    q('[data-last]').textContent = history.at(-1) || `Beat ${encounter.name} within four turns and keep your team alive.`;
+  }
+
+  function comboSummary(forecast: Forecast, humanId: HumanId, supportId: SupportId): string {
+    if (!forecast.combo) return '';
+    const bonus = combos[`${humanId}:${supportId}` as ComboId];
+    return `${forecast.combo.name} · ${bonus.bonusDamage ? `+${bonus.bonusDamage} damage` : `+${bonus.bonusHealing} healing`}`;
+  }
+
+  function nextEncounter(): EncounterId {
+    const current = encounterFor(state)!.id;
+    return battleOrder[(battleOrder.indexOf(current) + 1) % battleOrder.length];
+  }
+
+  async function startBattle(encounterId: EncounterId, retry: boolean) {
+    if (busy) return;
+    const version = ++epoch; ++loadEpoch;
+    discoveryController?.abort(); requestController?.abort(); loading = false;
+    const oldRequest = pending?.id;
+    let warning = '';
+    if (oldRequest) {
+      busy = true; cancelling = true; notice = 'Closing the previous AI turn…'; render();
+      try { await client.cancel(oldRequest); }
+      catch { warning = 'Previous AI task may still be running. Check My AI before requesting another turn.'; }
+      if (!live(version)) return;
+      busy = false; cancelling = false;
+    }
+    state = initial(encounterId); gameId = crypto.randomUUID(); matchNumber++;
+    history = []; outcome = ''; lastCombo = ''; selected = 'ember'; clearMove();
+    notice = mode === 'native' ? warning : ''; render();
+    root.dispatchEvent(new win.CustomEvent('co-games:match', { bubbles: true, detail: Object.freeze({ encounter: encounterId, matchNumber, retry }) }));
+    q('[data-card="ember"]').focus();
+    if (mode === 'native') {
+      await load();
+      if (warning && live(version)) { notice = warning; render(); }
+    }
   }
 
   function playTurn(supportId: SupportId): boolean {
@@ -185,19 +251,22 @@ export function mountCoGames(root: HTMLElement): () => void {
     const native = mode === 'native' ? lastNativeMove : null;
     const model = native?.models.join(', ') || null;
     const reason = native?.reason || '';
-    history.push(`Round ${state.round + 1} · You: ${human[playedHuman].name}. ${partnerName()}${model ? ` (${model})` : ''}: ${partner[supportId].name}. Dealt ${f.damage}, took ${f.taken}${f.healing ? `, healed ${f.healing}` : ''}. Health ${f.state.hp} / 14.`);
+    lastCombo = comboSummary(f, playedHuman, supportId);
+    history.push(`Round ${state.round + 1} · You: ${human[playedHuman].name}. ${partnerName()}${model ? ` (${model})` : ''}: ${partner[supportId].name}. Dealt ${f.damage}, took ${f.taken}${f.healing ? `, healed ${f.healing}` : ''}. Health ${f.state.hp} / 14.${lastCombo ? ` ${lastCombo}.` : ''}${f.armor ? ` Armor absorbed ${f.armor}.` : ''}`);
     state = f.state;
-    outcome = state.status === 'won' ? `Rift closed! ${state.hp} health left.` : state.status === 'lost' ? state.hp === 0 ? 'Your team ran out of health.' : 'Out of turns. The rift is still open.'
+    if (state.status === 'won') wins++;
+    outcome = state.status === 'won' ? `Rivals beaten! ${state.hp} health left.` : state.status === 'lost' ? state.hp === 0 ? 'Your team ran out of health.' : 'Out of turns. The rival crew is still standing.'
       : `${f.damage} damage · ${f.taken} taken${f.healing ? ` · ${f.healing} healed` : ''}`;
+    if (lastCombo) outcome += ` · ${lastCombo}`;
     if (state.status === 'playing' && !legalHuman(state).includes(selected)) selected = legalHuman(state)[0];
     clearMove(false);
     notice = mode === 'native' ? (state.status === 'playing' ? 'Turn played. Choose your next card.' : 'Match complete.') : '';
     render();
     root.dispatchEvent(new win.CustomEvent('co-games:turn', { bubbles: true, detail: Object.freeze({
       human: playedHuman, support: supportId, damage: f.damage, taken: f.taken, healing: f.healing,
-      hp: state.hp, enemy: state.enemy, round: state.round, status: state.status, model, reason,
+      hp: state.hp, enemy: state.enemy, round: state.round, status: state.status, model, reason, combo: f.combo, armor: f.armor,
     }) }));
-    if (state.status !== 'playing') q('[data-replay]').focus();
+    if (state.status !== 'playing' && !busy) q('[data-replay]').focus();
     return true;
   }
 
@@ -223,11 +292,11 @@ export function mountCoGames(root: HTMLElement): () => void {
     playTurn(support);
   }, listener);
   q('[data-replay]').addEventListener('click', () => {
-    if (busy) return;
-    ++epoch; ++loadEpoch; discoveryController?.abort(); loading = false;
-    state = initial(); gameId = crypto.randomUUID(); history = []; outcome = ''; selected = 'ember'; clearMove(); render(); q('[data-card="ember"]').focus();
-    if (mode === 'native') void load();
+    if (busy || state.status === 'playing') return;
+    const retry = state.status === 'lost';
+    void startBattle(retry ? encounterFor(state)!.id : nextEncounter(), retry);
   }, listener);
+  root.querySelector('[data-new-battle]')?.addEventListener('click', () => { if (!busy) void startBattle(nextEncounter(), false); }, listener);
   q<HTMLSelectElement>('[data-mode]').addEventListener('change', () => {
     if (busy) return;
     ++epoch; ++loadEpoch; discoveryController?.abort(); loading = false;
@@ -266,7 +335,12 @@ export function mountCoGames(root: HTMLElement): () => void {
       else if (error instanceof CoGamesRuntimeError && ['runtime-offline', 'runtime-not-found', 'provider-unavailable', 'provider-not-ready', 'subscription-required'].includes(error.reason)) {
         choices = choices.filter(item => item.id !== target.id); choiceId = '';
       }
-    } finally { if (live(version)) { busy = false; requestController = null; render(); } }
+    } finally {
+      if (live(version)) {
+        busy = false; requestController = null; render();
+        if (state.status !== 'playing') q('[data-replay]').focus();
+      }
+    }
   }, listener);
   q('[data-cancel]').addEventListener('click', async () => {
     if (!busy || !pending || cancelling) return;

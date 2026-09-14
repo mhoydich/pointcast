@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initial, observe } from '../src/lib/co-games-engine.mjs';
+import { initial, observe, encounters } from '../src/lib/co-games-engine.mjs';
 import { CoGamesRuntimeClient, CoGamesRuntimeError, buildCoGamesPrompt, parseCoGamesResponse } from '../src/lib/co-games-runtime.ts';
 
 const requestId = 'request-1234567890';
@@ -215,4 +215,19 @@ test('bounded polling times out with identity preserved and no automatic inferen
   const { client, calls } = clientWith(({ method }) => method === 'POST' ? accepted() : snapshot([job({ status: 'running' })]), { timeoutMs: 5, pollMs: 10 });
   await assert.rejects(client.requestSupport(choice(), observation(), { requestId }), error => failure('support-request-timeout')(error) && error.jobId === 'job-one');
   assert.equal(calls.filter(c => c.method === 'POST').length, 1);
+});
+
+
+test('every encounter prompt carries its exact armor, attacks, and allowed combos within the native limit', () => {
+  for (const id of Object.keys(encounters)) {
+    const current = observe(initial(id), 'ember', `game-${id}`);
+    const prompt = buildCoGamesPrompt(current);
+    assert.ok(prompt.length <= 4000, id);
+    const sent = JSON.parse(prompt.split('\nObservation:\n')[1]);
+    assert.deepEqual(sent.encounter, encounters[id]);
+    assert.deepEqual(sent.threats, encounters[id].threats);
+    assert.deepEqual(sent.armor, encounters[id].armor);
+    assert.equal(Object.keys(sent.combos).length, id === 'classic' ? 0 : 3);
+    assert.match(prompt, /damage bonus is added after Focus and before armor/);
+  }
 });
