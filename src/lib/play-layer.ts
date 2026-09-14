@@ -1,9 +1,16 @@
 export const PLAY_LAYER_VERSION = '0.4.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
+  {
+    id: 'co-games',
+    code: 'COOP',
+    title: 'Co-games: Two against the rift',
+    route: '/co-games',
+    summary: 'Four rounds of Spellframe co-op cards. Choose a spell and face the rift with your paired AI or a built-in practice partner.',
+  },
   {
     id: 'second-shift',
     code: 'MAKE',
