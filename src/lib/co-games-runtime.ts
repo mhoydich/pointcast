@@ -107,7 +107,8 @@ export class CoGamesRuntimeClient {
   private submissions = new Map<string, Submission>();
   private visibilityDocument: VisibilityDocument | null;
   constructor(options: { fetchImpl?: typeof fetch; pollMs?: number; timeoutMs?: number; visibilityDocument?: VisibilityDocument | null } = {}) {
-    this.fetchImpl = options.fetchImpl ?? fetch; this.pollMs = options.pollMs ?? 3000; this.timeoutMs = options.timeoutMs ?? 610000;
+    // Native browser fetch requires its global receiver when stored on a client.
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis); this.pollMs = options.pollMs ?? 3000; this.timeoutMs = options.timeoutMs ?? 610000;
     this.visibilityDocument = options.visibilityDocument === undefined ? (typeof document === 'undefined' ? null : document) : options.visibilityDocument;
   }
 
