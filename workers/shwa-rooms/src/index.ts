@@ -84,7 +84,7 @@ export class ShwaRoom extends DurableObject<Env> {
     if (typeof raw !== 'string' || new TextEncoder().encode(raw).length > 6000) { this.error(ws, 'That message is too large.', 1009); return; }
     if (now - a.window > 10_000) { a.window = now; a.count = 0; }
     a.count++; a.seen = now; ws.serializeAttachment(a);
-    if (a.count > 30) { this.error(ws, 'Please slow down.'); return; }
+    if (a.count > 30) { this.error(ws, 'Please slow down.', 1008); return; }
     let event: Record<string, unknown>; try { event = JSON.parse(raw); if (!event || typeof event !== 'object' || Array.isArray(event)) throw Error(); } catch { this.error(ws, 'Invalid room message.'); return; }
     // Hash the reconnect secret before publishing any identity. Never store or broadcast the secret itself.
     let joiningId: string | undefined;
