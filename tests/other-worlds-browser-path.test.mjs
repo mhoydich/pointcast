@@ -75,7 +75,7 @@ test('full gallery claim path uses a genuine disposable Tezos signature, durable
       OTHER_WORLDS_MAX_OPERATION_MUTEZ: '10000', OTHER_WORLDS_TOTAL_BUDGET_MUTEZ: '1000000',
     };
     let chainState = 'pending';
-    let timestamp = Date.parse('2026-09-14T06:59:50.000Z');
+    let timestamp = shared.CLOSES_MS - 10_000;
     const operationHash = `o${'1'.repeat(50)}`;
     const transfers = [];
     const broadcasts = [];
@@ -131,7 +131,7 @@ test('full gallery claim path uses a genuine disposable Tezos signature, durable
     assert.equal($('[data-edition-count="7"]').textContent, '26 of 27 available');
 
     // Midnight closes NEW claims but cannot strand an already authorized claim.
-    timestamp = Date.parse('2026-09-14T07:00:01.000Z');
+    timestamp = shared.CLOSES_MS + 1000;
     await client.refreshStatus();
     assert.equal(root.dataset.phase, 'closed');
     await client.pollReceipt(true);

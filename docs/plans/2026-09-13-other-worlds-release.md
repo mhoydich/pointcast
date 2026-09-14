@@ -3,6 +3,21 @@
 Nine Transmissions by Michael Hoydich. **BY MICHAEL HOYDICH.**
 **SAME CITY. OTHER WORLDS.** Pointcast is the publisher and gallery.
 
+## September 14 publication
+
+Mike authorized going live on September 14. The public exhibition, claim APIs,
+and wallet-controlled inventory review page may be published. The scoped
+`0020_other_worlds.sql` migration has been applied to the existing production
+AUTH_DB; no claim rows exist. The prior September 13 deadline remains in force
+until Mike supplies a replacement. NFT inventory has not yet been created.
+
+Fresh read-only checks found the administrator unchanged, only token 0 present,
+and the proposed sponsor revealed with 25.782858 tez. Setup simulation remains
+1.437500 tez, below the proposed 1.6 tez setup ceiling. No funds were moved.
+The claim sponsor key is not configured in Pages. The existing sponsor is also
+a seals issuer, so its signing counter must be coordinated before enabling this
+drop. A live collector delivery has not been performed.
+
 ## Release boundary
 
 This implementation is prepared for review. It does not assert that any of the

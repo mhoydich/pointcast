@@ -19,9 +19,10 @@ if (args.some((arg, i) => !['--verify', '--input'].includes(arg) && !(inputFlag 
   throw new Error('Usage: node scripts/prepare-other-worlds.mjs [--input DIRECTORY] [--verify]');
 }
 const series = JSON.parse(await readFile(path.join(root, 'src/data/other-worlds.json'), 'utf8'));
+const closesMs = Date.parse(series.closesAt);
 if (series.artworks.length !== 9 || series.editionsPerArtwork !== 27 || series.totalEditions !== 243 ||
-    series.closesAt !== '2026-09-14T07:00:00.000Z' || new Set(series.artworks.map((a) => a.id)).size !== 9) {
-  throw new Error('The exhibition must contain exactly nine works, 27 editions each, and the fixed PT deadline.');
+    !Number.isFinite(closesMs) || new Date(closesMs).toISOString() !== series.closesAt || new Set(series.artworks.map((a) => a.id)).size !== 9) {
+  throw new Error('The exhibition must contain exactly nine works, 27 editions each, and an explicit ISO closing instant.');
 }
 const base = path.join(root, 'public/collectibles/other-worlds');
 const images = path.join(root, 'public/images/other-worlds');

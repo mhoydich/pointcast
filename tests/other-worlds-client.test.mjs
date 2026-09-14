@@ -7,7 +7,7 @@ import { createServer } from 'vite';
 const exhibition = JSON.parse(await readFile(new URL('../src/data/other-worlds.json', import.meta.url), 'utf8'));
 const ADDRESS = 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb';
 const HASH = `o${'1'.repeat(50)}`;
-const SERVER_TIME = '2026-09-14T06:55:00.000Z';
+const SERVER_TIME = new Date(Date.parse(exhibition.closesAt) - 5 * 60_000).toISOString();
 const statuses = (extra = {}) => ({
   ok: true, enabled: true, phase: 'open', serverTime: SERVER_TIME,
   closesAt: exhibition.closesAt, collectorCostMutez: 0,
@@ -145,7 +145,7 @@ test('preview, unavailable, nonzero collector cost and closed states cannot ask 
     statuses({ enabled: false, phase: 'preview' }),
     statuses({ enabled: false, phase: 'unavailable' }),
     statuses({ collectorCostMutez: 1 }),
-    statuses({ serverTime: '2026-09-14T07:00:00.000Z' }),
+    statuses({ serverTime: exhibition.closesAt }),
   ]) {
     await withClient(async ({ client, $, signatures }) => {
       client.showArtwork(1);

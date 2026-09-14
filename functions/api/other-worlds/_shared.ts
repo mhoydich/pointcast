@@ -1,8 +1,9 @@
 import { getPkhfromPk, validateAddress, validateContractAddress, ValidationResult, verifySignature } from '@taquito/utils';
 import provenance from '../../../src/data/other-worlds-provenance.json';
+import exhibition from '../../../src/data/other-worlds.json';
 
 export const COLLECTION = 'los-angeles-other-worlds-2026';
-export const CLOSES_AT = '2026-09-14T07:00:00.000Z';
+export const CLOSES_AT = exhibition.closesAt;
 export const CLOSES_MS = Date.parse(CLOSES_AT);
 export const EDITIONS = 27;
 export const CHAIN_ID = 'NetXdQprcVkpaWU';

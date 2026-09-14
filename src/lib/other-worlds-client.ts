@@ -1,4 +1,5 @@
 /** Exhibition-only client. Collector authorization is a message signature, never an operation. */
+import { formatOtherWorldsDeadline } from './other-worlds-deadline';
 export type Artwork = {
   id: number; number: number; title: string; slug: string; description: string;
   alt: string; image: string; preview: string; metadata: string;
@@ -133,7 +134,7 @@ export function mountOtherWorlds(root: HTMLElement, artworks: Artwork[], options
     claimButton.disabled = currentPhase !== 'open' || !inventory || inventory.remaining <= 0;
     if (currentPhase === 'closed') {
       claimButton.textContent = 'Claims have closed';
-      say('This exhibition’s claim window ended at midnight Pacific time on September 13, 2026. The gallery remains open.');
+      say(`This exhibition’s claim window ended on ${formatOtherWorldsDeadline(status!.closesAt)}. The gallery remains open.`);
     } else if (currentPhase === 'preview') {
       claimButton.textContent = 'Claims are not open yet';
       say('The exhibition is on view. Free claims will become available when the publisher opens the claim desk.');
