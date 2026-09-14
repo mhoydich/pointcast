@@ -1,8 +1,11 @@
+import { mountNounsFlowMedia } from './nouns-flow-media.ts';
+
 /** Original STARJAM instruments. The game emits the beat clock; audio never runs its own. */
 type PlaybackSession = EventTarget & { type: string; readonly state?: string };
 const playbackOwners = new WeakMap<PlaybackSession, { previous: string; owners: Set<symbol> }>();
 
 export function mountNounsFlowAudio(root: HTMLElement): () => void {
+  if (root.querySelector('[data-flow-track]') && root.querySelector('[data-flow-speaker-test]')) return mountNounsFlowMedia(root);
   const doc = root.ownerDocument, win = doc.defaultView!;
   const lifetime = new win.AbortController(), options = { signal: lifetime.signal };
   const Audio = win.AudioContext ?? (win as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
