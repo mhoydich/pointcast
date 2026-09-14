@@ -7,7 +7,7 @@ import { createServer } from 'vite';
 const exhibition = JSON.parse(await readFile(new URL('../src/data/other-worlds.json', import.meta.url), 'utf8'));
 const ADDRESS = 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb';
 const HASH = `o${'1'.repeat(50)}`;
-const SERVER_TIME = new Date(Date.parse(exhibition.closesAt) - 5 * 60_000).toISOString();
+const SERVER_TIME = '2026-09-15T07:00:00.000Z';
 const statuses = (extra = {}) => ({
   ok: true, enabled: true, phase: 'open', serverTime: SERVER_TIME,
   closesAt: exhibition.closesAt, collectorCostMutez: 0,
@@ -103,6 +103,18 @@ test('collector selects a transmission, signs the exact server message, and rece
   });
 });
 
+test('null closing date remains claimable years after the original deadline', async () => {
+  assert.equal(exhibition.closesAt, null);
+  const future = '2036-09-14T07:00:00.000Z';
+  await withClient(async ({ client, root, $, signatures }) => {
+    client.showArtwork(4);
+    assert.equal(root.dataset.phase, 'open');
+    assert.equal($('[data-claim-button]').disabled, false);
+    await client.claimArtwork();
+    assert.deepEqual(signatures, ['Claim artwork 4']);
+  }, { status: statuses({ serverTime: future }), now: () => Date.parse(future) });
+});
+
 test('a reservation or submitted operation never renders delivery success; confirmed chain receipt does', async () => {
   await withClient(async ({ client, $, api }) => {
     client.showArtwork(3);
@@ -145,7 +157,10 @@ test('preview, unavailable, nonzero collector cost and closed states cannot ask 
     statuses({ enabled: false, phase: 'preview' }),
     statuses({ enabled: false, phase: 'unavailable' }),
     statuses({ collectorCostMutez: 1 }),
-    statuses({ serverTime: exhibition.closesAt }),
+    statuses({ serverTime: '2026-09-14T07:00:00.000Z', closesAt: '2026-09-14T07:00:00.000Z' }),
+    statuses({ phase: 'closed' }),
+    statuses({ closesAt: undefined }),
+    statuses({ closesAt: 'invalid' }),
   ]) {
     await withClient(async ({ client, $, signatures }) => {
       client.showArtwork(1);

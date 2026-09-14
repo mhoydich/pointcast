@@ -1,5 +1,6 @@
-/** Explicit Pacific date/time so the closing instant is unambiguous after rescheduling. */
-export function formatOtherWorldsDeadline(closesAt: string, compact = false): string {
+/** Null keeps the exhibition open without an artificial closing date. */
+export function formatOtherWorldsDeadline(closesAt: string | null, compact = false): string {
+  if (closesAt === null) return 'No closing date';
   const date = new Date(closesAt);
   if (!Number.isFinite(date.getTime())) return 'the published closing time';
   return new Intl.DateTimeFormat('en-US', {

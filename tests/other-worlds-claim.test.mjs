@@ -52,7 +52,7 @@ async function setup() {
   const sponsor=await key(99);
   const items=await Promise.all(Array.from({length:9},async(_,i)=>{const metadata=JSON.stringify({name:`Transmission ${i+1}`,artifactUri:`https://pointcast.xyz/art/${i+1}.png`,creators:['Michael Hoydich']});return {id:i+1,slug:`transmission-${i+1}`,artifactUri:`https://pointcast.xyz/art/${i+1}.png`,artifactSha256:'a'.repeat(64),metadataUri:`https://pointcast.xyz/metadata/${i+1}.json`,metadataSha256:await shared.sha256(metadata),metadata};}));
   const env={AUTH_DB:db,OTHER_WORLDS_ENABLED:'true',OTHER_WORLDS_MAINNET_APPROVED:'true',OTHER_WORLDS_FA2_CONTRACT:'KT1N1U6esJHuhLpUKiebpyW9MJUCoqJyREtb',OTHER_WORLDS_SPONSOR_ADDRESS:sponsor.address,OTHER_WORLDS_SPONSOR_SECRET_KEY:'test-only-never-loaded-by-mock',OTHER_WORLDS_RPC_URL:'https://rpc.invalid',OTHER_WORLDS_TOKEN_MAP:JSON.stringify(Object.fromEntries(items.map(item=>[item.id,String(item.id)]))),OTHER_WORLDS_MAX_OPERATION_MUTEZ:'5000',OTHER_WORLDS_TOTAL_BUDGET_MUTEZ:'500000'};
-  const adapter=fakeChain();let time=Date.parse('2026-09-13T22:00:00Z');
+  const adapter=fakeChain();let time=Date.parse('2026-09-15T22:00:00Z');
   const opts={now:()=>time,items,chainFactory:async()=>adapter};
   return {db,env,adapter,opts,items,sponsor,advance(ms){time+=ms;},at(ms){time=ms;},async proof(seed,artworkId=1){const identity=await key(seed);const response=await api.handleChallenge(post('challenge',{address:identity.address,artworkId}),env,opts);const challenge=await response.json();assert.equal(response.status,200,JSON.stringify(challenge));const signature=(await identity.signer.sign(challenge.payload)).prefixSig;return {address:identity.address,publicKey:identity.publicKey,artworkId,nonce:challenge.nonce,signature};}};
 }
@@ -89,12 +89,19 @@ test('wallet substitution, artwork substitution, cross-origin and forged signatu
   assert.equal((await api.handleClaim(post('claim',proof,'https://evil.invalid'),s.env,s.opts)).status,403);
   assert.equal(rows(s.db).length,0);assert.equal(s.adapter.prepares.length,0);
 });
-test('strict midnight server boundary rejects new claims and stale signatures',async()=>{
-  const s=await setup();s.at(shared.CLOSES_MS-1000);const proof=await s.proof(1);s.at(shared.CLOSES_MS);
-  assert.equal((await claim(s,proof)).reason,'claims-closed');assert.equal(rows(s.db).length,0);
-  const response=await api.handleChallenge(post('challenge',{address:proof.address,artworkId:1}),s.env,s.opts);assert.equal(response.status,410);
-  const status=await api.handleStatus(new Request(`${ORIGIN}/api/other-worlds`),s.env,s.opts);assert.equal((await status.json()).phase,'closed');
-  const another=await setup();const expired=await another.proof(2);another.advance(300_000);assert.equal((await claim(another,expired)).reason,'challenge-expired');
+test('no closing date keeps new claims open after the original deadline and years later, with five-minute signatures',async()=>{
+  assert.equal(shared.CLOSES_AT,null);assert.equal(shared.CLOSES_MS,null);
+  for (const instant of ['2026-09-14T07:00:00.000Z','2036-09-14T07:00:00.000Z']) {
+    const s=await setup();s.at(Date.parse(instant));const proof=await s.proof(1,7);
+    const challenge=s.db.db.prepare('SELECT * FROM other_worlds_challenges WHERE nonce=?').get(proof.nonce);
+    assert.equal(challenge.expires_at-challenge.created_at,300_000);
+    assert.match(challenge.message,/Claims Close: No closing date/);
+    const response=await api.handleStatus(new Request(`${ORIGIN}/api/other-worlds`),s.env,s.opts);const status=await response.json();
+    assert.equal(status.closesAt,null);assert.equal(status.phase,'open');
+    assert.equal((await claim(s,proof)).claim.artworkId,7);assert.equal(rows(s.db).length,1);
+    const expired=await s.proof(2);s.advance(300_000);
+    assert.equal((await claim(s,expired)).reason,'challenge-expired');assert.equal(rows(s.db).length,1);
+  }
 });
 test('one wallet across all nine artworks survives simultaneous different-art claims',async()=>{
   const s=await setup();const first=await s.proof(1,1),second=await s.proof(1,2);
@@ -120,9 +127,9 @@ test('uncertain broadcast keeps exact operation, inventory, wallet, budget and g
   s.adapter.statuses.set(original.operation_hash,'confirmed');s.adapter.broadcastError=null;
   await claim(s,await s.proof(2,2));assert.equal(s.adapter.prepares.length,2,'new collector reconciles departed collector');
 });
-test('fresh wallet signature resumes original reservation after deadline and browser refresh',async()=>{
+test('fresh wallet signature resumes original reservation after a long delay and browser refresh',async()=>{
   const s=await setup();s.adapter.prepareError=new Error('sponsor-low');const first=await claim(s,await s.proof(1,5));assert.equal(first.claim.status,'reserved');
-  s.at(shared.CLOSES_MS+1000);s.adapter.prepareError=null;const fresh=await s.proof(1,5);const resumed=await claim(s,fresh);assert.equal(resumed.claim.id,first.claim.id);assert.equal(rows(s.db).length,1);assert.equal(resumed.claim.status,'submitted');
+  s.at(Date.parse('2027-09-14T07:00:00.000Z'));s.adapter.prepareError=null;const fresh=await s.proof(1,5);const resumed=await claim(s,fresh);assert.equal(resumed.claim.id,first.claim.id);assert.equal(rows(s.db).length,1);assert.equal(resumed.claim.status,'submitted');
 });
 test('persistence failure after signing never broadcasts and never releases counter lock',async()=>{
   const s=await setup();const proof=await s.proof(1);s.db.failOn=sql=>sql.includes("SET status='signed'");

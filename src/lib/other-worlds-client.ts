@@ -11,7 +11,7 @@ type Claim = {
 };
 type DropStatus = {
   ok: boolean; enabled: boolean; phase: 'open' | 'closed' | 'preview' | 'unavailable';
-  serverTime: string; closesAt: string; collectorCostMutez: number;
+  serverTime: string; closesAt: string | null; collectorCostMutez: number;
   artworks: { artworkId: number; editionSize: number; remaining: number }[];
   claim?: Claim | null;
 };
@@ -68,7 +68,7 @@ export function mountOtherWorlds(root: HTMLElement, artworks: Artwork[], options
   function phase() {
     if (!status) return 'unavailable';
     const trustedTime = serverClock + Math.max(0, now() - clockReceived);
-    if (Number.isFinite(serverClock) && trustedTime >= Date.parse(status.closesAt)) return 'closed';
+    if (status.closesAt !== null && Number.isFinite(serverClock) && trustedTime >= Date.parse(status.closesAt)) return 'closed';
     if (status.collectorCostMutez !== 0 || !Number.isFinite(serverClock)) return 'unavailable';
     return status.enabled && status.phase === 'open' ? 'open' : status.phase === 'closed' ? 'closed' : status.phase === 'preview' ? 'preview' : 'unavailable';
   }
@@ -134,7 +134,8 @@ export function mountOtherWorlds(root: HTMLElement, artworks: Artwork[], options
     claimButton.disabled = currentPhase !== 'open' || !inventory || inventory.remaining <= 0;
     if (currentPhase === 'closed') {
       claimButton.textContent = 'Claims have closed';
-      say(`This exhibition’s claim window ended on ${formatOtherWorldsDeadline(status!.closesAt)}. The gallery remains open.`);
+      say(status!.closesAt === null ? 'Claims are currently closed. The gallery remains open.'
+        : `This exhibition’s claim window ended on ${formatOtherWorldsDeadline(status!.closesAt)}. The gallery remains open.`);
     } else if (currentPhase === 'preview') {
       claimButton.textContent = 'Claims are not open yet';
       say('The exhibition is on view. Free claims will become available when the publisher opens the claim desk.');
@@ -199,7 +200,10 @@ export function mountOtherWorlds(root: HTMLElement, artworks: Artwork[], options
     try {
       const next = await request(`/api/other-worlds${currentAddress ? `?address=${encodeURIComponent(currentAddress)}` : ''}`) as DropStatus;
       if (destroyed || requestId !== statusRequest || address !== currentAddress) return;
-      if (!Array.isArray(next.artworks) || !next.closesAt || !next.serverTime) throw new Error('Invalid availability response.');
+      if (!Array.isArray(next.artworks) || !next.serverTime ||
+          (next.closesAt !== null && (typeof next.closesAt !== 'string' || !Number.isFinite(Date.parse(next.closesAt))))) {
+        throw new Error('Invalid availability response.');
+      }
       status = next;
       serverClock = Date.parse(next.serverTime);
       clockReceived = now();

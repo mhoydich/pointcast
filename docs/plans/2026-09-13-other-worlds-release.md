@@ -5,29 +5,41 @@ Nine Transmissions by Michael Hoydich. **BY MICHAEL HOYDICH.**
 
 ## September 14 publication
 
-Mike authorized going live on September 14. The public exhibition, claim APIs,
-and wallet-controlled inventory review page may be published. The scoped
-`0020_other_worlds.sql` migration has been applied to the existing production
-AUTH_DB; no claim rows exist. The prior September 13 deadline remains in force
-until Mike supplies a replacement. NFT inventory has not yet been created.
+Mike authorized going live on September 14. PR #1091 published the exhibition,
+claim APIs, and wallet-controlled inventory review page. The scoped
+`0020_other_worlds.sql` migration is applied to production AUTH_DB.
 
-Fresh read-only checks found the administrator unchanged, only token 0 present,
-and the proposed sponsor revealed with 25.782858 tez. Setup simulation remains
-1.437500 tez, below the proposed 1.6 tez setup ceiling. No funds were moved.
-The claim sponsor key is not configured in Pages. The existing sponsor is also
-a seals issuer, so its signing counter must be coordinated before enabling this
-drop. A live collector delivery has not been performed.
+Mike then confirmed the inventory operation in Kukai. Operation
+[`opYpoJfDsgyRujPwp2RzqCJ9vEgbjBU6DYZSzVFbpzTDvuY5JxM`](https://tzkt.io/opYpoJfDsgyRujPwp2RzqCJ9vEgbjBU6DYZSzVFbpzTDvuY5JxM)
+applied at level 14943605: nine new tokens, IDs 1–9, and exactly 27 editions of
+each transferred to the project inventory wallet. Verification at head 14943620
+matched all supplies, inventory balances, metadata URIs, and on-chain SHA-256
+anchors. Actual setup cost was **1.386506 ꜩ**. The publication record is
+`src/data/other-worlds-publication.json`. **Do not repeat inventory minting.**
+
+Mike subsequently requested that the drop stay open because visitors have not
+arrived yet. The collection now has **no closing date** (`closesAt: null`). This
+changes claim availability timing only; edition limits, one claim per wallet,
+signature expiry, and configured delivery spending caps remain unchanged.
+
+The claim sponsor key is not configured in Pages. Public activity for the
+scheduled seals service points to a different wallet; its secret must not be
+assumed to control this inventory. Any signer shared with another service needs
+coordinated transaction counters before activation. The gallery and minted inventory are live; collector claims remain in
+preview until secure sponsorship is configured. A live collector delivery has
+not been performed.
 
 ## Release boundary
 
-This implementation is prepared for review. It does not assert that any of the
-nine artworks have been minted or that sponsored claims are live. Mainnet
-inventory creation, signer configuration, funding, and claim activation require
-the director's approval. No signing key belongs in the repository or this file.
+The nine artworks are minted, and the exhibition is public. Sponsored claim
+activation remains separate from publication. No signing key belongs in the
+repository or this file. No additional contract deployment or mint is needed.
 
-Claims close at the **end of September 13, 2026 in Los Angeles**:
-`2026-09-14T07:00:00.000Z` (September 14, 12:00 a.m. PDT). The server owns the
-deadline; browser clocks do not extend it. The exhibition remains viewable.
+There is **no closing deadline**. Once sponsorship is enabled, new claims may
+continue while editions and the configured delivery budget remain available.
+The server remains authoritative; the exhibition stays viewable after inventory
+is claimed. The original end-of-September-13 deadline was superseded by Mike's
+September 14 instruction.
 
 ## Collector experience
 
@@ -48,8 +60,8 @@ showing confirmed delivery.
 The first valid signed claim returns a durable reservation. The client then
 repeats the exact signed proof to start sponsored delivery. This separates the
 all-nine inventory audit from Taquito preparation to stay within the Cloudflare
-Workers Free external-request allowance. Existing reservations may finish after
-midnight; new ones cannot be created then.
+Workers Free external-request allowance. Wallet-control challenges still expire
+after five minutes; an open-ended collection does not make signatures permanent.
 
 One wallet is not one person. The stated limit is per Tezos wallet. Transferring
 an edition away does not restore eligibility.
@@ -63,12 +75,12 @@ an edition away does not restore eligibility.
   `KT1N1U6esJHuhLpUKiebpyW9MJUCoqJyREtb`, currently named **El Segundo**.
   Read-only inspection on September 13 verified Mike's administrator address,
   `create_token`, `mint_tokens`, `transfer`, and `update_operators` entrypoints.
-  Only token 0 was registered. The prepared plan proposes new IDs 1–9 and does
-  not rename the contract or modify its existing token. Indexers may show these
+  Only token 0 was registered at that inspection. The approved publication added
+  IDs 1–9 without renaming the contract or modifying its existing token. Indexers may show these
   works under El Segundo; the exhibition title lives in each artwork's metadata.
 - SHA-256 hashes of exact canonical artwork and metadata bytes. Metadata is
   TZIP-21-shaped JSON, also written to a content-addressed filename. Hashes are
-  anchored in the proposed on-chain token-info map.
+  anchored in each artwork's on-chain token-info map.
 
 The existing FA2 is administrator-mintable. This release mints exactly 27 copies
 per work and refuses claims if observed supply differs from 27. It does not

@@ -19,10 +19,13 @@ if (args.some((arg, i) => !['--verify', '--input'].includes(arg) && !(inputFlag 
   throw new Error('Usage: node scripts/prepare-other-worlds.mjs [--input DIRECTORY] [--verify]');
 }
 const series = JSON.parse(await readFile(path.join(root, 'src/data/other-worlds.json'), 'utf8'));
-const closesMs = Date.parse(series.closesAt);
+const publication = JSON.parse(await readFile(path.join(root, 'src/data/other-worlds-publication.json'), 'utf8'));
+const closesMs = series.closesAt === null ? null : Date.parse(series.closesAt);
+const validClosingTime = series.closesAt === null ||
+  (typeof series.closesAt === 'string' && Number.isFinite(closesMs) && new Date(closesMs).toISOString() === series.closesAt);
 if (series.artworks.length !== 9 || series.editionsPerArtwork !== 27 || series.totalEditions !== 243 ||
-    !Number.isFinite(closesMs) || new Date(closesMs).toISOString() !== series.closesAt || new Set(series.artworks.map((a) => a.id)).size !== 9) {
-  throw new Error('The exhibition must contain exactly nine works, 27 editions each, and an explicit ISO closing instant.');
+    !validClosingTime || new Set(series.artworks.map((a) => a.id)).size !== 9) {
+  throw new Error('The exhibition must contain exactly nine works, 27 editions each, and either an explicit ISO closing instant or null for no closing date.');
 }
 const base = path.join(root, 'public/collectibles/other-worlds');
 const images = path.join(root, 'public/images/other-worlds');
@@ -93,7 +96,7 @@ const manifest = { schema: 'pointcast.other-worlds.provenance/v1', collection: s
   collectionLine: series.collectionLine, closesAt: series.closesAt,
   editionSupply: 243, editionSupplyPerArtwork: 27,
   canonicalImages: 'still PNG', generatedWith: 'Codex built-in image generator',
-  publicationStatus: 'prepared; not minted', items };
+  publicationStatus: publication.status, inventoryPublication: publication, items };
 const files = [path.join(base, 'manifest.json'), path.join(root, 'src/data/other-worlds-provenance.json')];
 for (const file of files) {
   if (verify) {
