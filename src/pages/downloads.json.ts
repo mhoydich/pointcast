@@ -10,7 +10,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   collections: ART_DOWNLOAD_COLLECTIONS.map((set) => ({
     ...set,
     runningPage: `${ART_DOWNLOAD_URL}#set-${set.blockId}`,
-    archive: { ...set.archive, url: `https://pointcast.xyz${set.archive.url}` },
+    ...('archive' in set && set.archive ? { archive: { ...set.archive, url: `https://pointcast.xyz${set.archive.url}` } } : {}),
+    archives: set.archives.map((archive) => ({ ...archive, url: `https://pointcast.xyz${archive.url}` })),
     images: set.images.map((art) => ({
       ...art,
       preview: `https://pointcast.xyz${art.preview}`,

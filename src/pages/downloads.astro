@@ -3,7 +3,7 @@ import BlockLayout from '../layouts/BlockLayout.astro';
 import { ART_DOWNLOAD_COLLECTIONS as collections, ART_DOWNLOAD_COUNT as imageCount, ART_DOWNLOAD_URL } from '../lib/art-downloads';
 
 const title = 'Art downloads';
-const description = 'A running collection of PointCast artwork. Every picture together, newest first, with original PNGs and a ZIP for each set.';
+const description = 'A running collection of PointCast artwork. Every picture together, newest first, with original PNGs and ZIP downloads for each set.';
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
 const dateLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const newest = collections[0];
@@ -43,16 +43,21 @@ const jsonLd = {
 
     {collections.map((set, setIndex) => (
       <section class="set" id={`set-${set.blockId}`} aria-labelledby={`title-${set.blockId}`}>
-        <header class="set-head">
+        <header class:list={['set-head', { 'has-bundles': set.archives.length > 1 }]}>
           <div>
             <p class="eyebrow"><time datetime={set.published}>{dateLabel(set.published)}</time>{setIndex === 0 && <span class="latest">LATEST</span>}</p>
             <h2 id={`title-${set.blockId}`}>{set.title}</h2>
             <p class="details">{set.images.length} pictures · Original PNGs</p>
           </div>
-          <a class="download set-download" href={set.archive.url} download={set.archive.url.split('/').pop()} data-astro-reload aria-label={`Download the ${set.title} set as a ZIP`}>
-            <span>Download this set <span aria-hidden="true">↓</span></span>
-            <small>{set.images.length} PNGs · ZIP · {megabytes(set.archive.bytes)}</small>
-          </a>
+          <div class="set-downloads">
+            {set.archives.map((archive) => (
+              <a class="download set-download" href={archive.url} download={archive.url.split('/').pop()} data-astro-reload aria-label={set.archives.length > 1 ? `Download ${set.title} ${archive.label}, pictures ${archive.firstImage} to ${archive.lastImage}, as a ZIP` : `Download the ${set.title} set as a ZIP`}>
+                <span>{set.archives.length > 1 ? `Download ${archive.label}` : 'Download this set'} <span aria-hidden="true">↓</span></span>
+                {set.archives.length > 1 && <small>Pictures {archive.firstImage}–{archive.lastImage}</small>}
+                <small>{archive.imageCount} PNGs · ZIP · {megabytes(archive.bytes)}</small>
+              </a>
+            ))}
+          </div>
         </header>
         <div class="gallery">
           {set.images.map((art, index) => (
@@ -66,7 +71,7 @@ const jsonLd = {
             </figure>
           ))}
         </div>
-        <p class="set-note"><span>{set.credit}</span><a href={set.canonical}>View this set’s page <span aria-hidden="true">↗</span></a></p>
+        <p class="set-note"><span>{set.credit}</span>{set.canonical.split('#')[0] !== ART_DOWNLOAD_URL && <a href={set.canonical}>View this set’s page <span aria-hidden="true">↗</span></a>}</p>
       </section>
     ))}
     <footer class="colophon">All pictures on this page are available as their original files. Check back here for the next set.</footer>
@@ -94,7 +99,10 @@ const jsonLd = {
   a.download { display: flex; color: #18291e; text-decoration: none; border: 1px solid #18291e; font-size: 14px; min-height: 48px; transition: background .15s; }
   a.download:hover { background: #e6edcf; text-decoration: none; }
   a:focus-visible { outline: 3px solid #5063cf; outline-offset: 4px; }
-  a.set-download { flex: 0 0 236px; flex-direction: column; gap: 9px; padding: 18px 20px; background: #d9eea7; }
+  .set-downloads { display: grid; gap: 12px; flex: 0 0 236px; }
+  .has-bundles { flex-wrap: wrap; }
+  .has-bundles .set-downloads { flex: 1 1 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  a.set-download { flex-direction: column; gap: 9px; padding: 18px 20px; background: #d9eea7; }
   .set-download > span { display: flex; justify-content: space-between; gap: 24px; }
   .set-download small { font-size: 11px; color: #485339; }
   .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px 24px; }
@@ -109,5 +117,5 @@ const jsonLd = {
   .set-note { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; margin: 24px 0 0; font-size: 11px; line-height: 1.7; color: #596354; }
   .set-note a { color: inherit; }
   .colophon { border-top: 1px solid #cbd8c5; padding-top: 20px; font-size: 11px; line-height: 1.7; color: #596354; }
-  @media (max-width: 760px) { .set-head { display: block; } a.set-download { margin-top: 24px; max-width: 300px; } .gallery { grid-template-columns: 1fr; gap: 40px; } .crumb { margin-bottom: 32px; } }
+  @media (max-width: 760px) { .set-head { display: block; } .set-downloads { margin-top: 24px; max-width: 360px; } .has-bundles .set-downloads { grid-template-columns: 1fr; } .gallery { grid-template-columns: 1fr; gap: 40px; } .crumb { margin-bottom: 32px; } }
 </style>
