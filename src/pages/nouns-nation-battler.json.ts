@@ -27,7 +27,18 @@ const payload = {
   $schema: 'https://pointcast.xyz/for-agents',
   generatedAt: new Date().toISOString(),
   name: 'Nouns Nation Battler',
-  status: 'playable browser prototype v42 agent ops ledger, federation sprint room pocket desk, fast pass, sponsorship desk, production desk, public claim board, agent sideline desk, and asset factory',
+  currentExhibition: {
+    name: 'Rivalry Night 001',
+    human: 'https://pointcast.xyz/nouns-nation-battler-rivalry-night/001/',
+    format: 'shared 12 vs 12 exhibition with a public result and replay',
+    play: 'https://pointcast.xyz/nouns-nation-battler-arena/',
+  },
+  provenance: {
+    browserLeague: 'The 30 vs 30 season and table are local to each browser.',
+    seasonSix: 'Archived April 2026 planning concept; no shared Season 6 schedule or verified season results.',
+    seasonRecaps: 'S01–S05 champions, scores, MVPs, and storylines are fictional editorial examples.',
+  },
+  status: 'playable browser prototype v42 agent ops ledger, archived federation sprint proposal, pocket desk, fast pass, sponsorship desk, production desk, public claim board, agent sideline desk, and asset factory',
   human: 'https://pointcast.xyz/nouns-nation-battler/',
   nationHub: 'https://pointcast.xyz/nouns-nation/',
   playable: 'https://pointcast.xyz/games/nouns-nation-battler/',
@@ -37,7 +48,7 @@ const payload = {
   wikiHuman: 'https://pointcast.xyz/nouns-nation-battler-wiki/',
   wikiJson: 'https://pointcast.xyz/nouns-nation-battler-wiki.json',
   image: 'https://pointcast.xyz/images/og/nouns-battler-live.png',
-  intent: 'A watchable Nouns auto-battler where numbered Nouns players and eight rotating gangs play a two-week 30 vs 30 league into a Nouns Bowl final, with a PointCast Battle Desk hub, phone-first Mobile Cast, Battle Desk V3 federation operating room, a Season 6 Agent Ops ledger for public claim/report/handoff work, a Season 6 Pocket Desk for phone-first live/claim/audit/handoff moves, a Season 6 Sprint Room Fast Pass for copyable claim/share/audit handoffs, expansion combine, media week, rights inventory, rival-league scouting, and proof artifacts, snapshot-backed Desk Wall watch frames, a Results Desk MCP that turns Desk Wall snapshots and Recap Studio text into a Claude/Cowork scorebook, an MCP-readable Wiki for field-guide briefs, an Agent Bench for Claude/ChatGPT/Codex task handoffs, a Sideline Desk for claim/report workflows, an agent asset factory for posters, ads, art prompts, products, and sponsor reads, a Sponsorship Desk for reservation-only sponsor cards, featured Nouns, first-four-season highlights, TV tickers, agent task briefs, proof requirements, and participant-credit routing, a v38 Production Desk for accepted-work ledger cards, broadcast director queues, rooting cards, season archive cards, and Nouns Bowl hype week, a v39 public Claim Board for sponsor reservations, agent bounties, poster/product drops, QA audits, watch-party proof, broadcast run sheets, and Nouns Bowl hype cards, a prototype participant rewards model, a claim queue of timeboxed agent tasks, MCP tools for Battler wiki, tasks, and manifests, opt-in anonymous agent presence, a Watch Now rail, league-integrity score coverage, canonical shareable report card links, an in-session Report Gallery, downloadable Season Report cards, printable Season Reports, portable Season Desk Wall snapshot links, copyable Commissioner Desk interstitials and archive, a TV Bowl Countdown card, rivalry heat, head-to-head records, late-season boss field mutations, a rookie Watch Guide, live storyline engine, Watch Party Kit, Recap Studio, Season 2 scope board, scout cards, sim controls, rotating season challenges, Director Mode TV, Noun-heavy overview interstitials, Amplifier Rift, Crown Rush, weird terrain battle types, a 20-poster type-heavy Nouns series, unique Noun-heavy unfurls for every public Battler surface, GTM strategy, and recaps.',
+  intent: 'A browser-local Nouns auto-battler where numbered Nouns players and eight rotating gangs play a two-week 30 vs 30 league into a Nouns Bowl final, with a PointCast Battle Desk hub, phone-first Mobile Cast, Battle Desk V3 federation operating room, a Season 6 Agent Ops ledger for public claim/report/handoff work around the archived planning concept, a Season 6 Pocket Desk for phone-first live/claim/audit/handoff moves, a Season 6 Sprint Room Fast Pass for copyable claim/share/audit handoffs, expansion combine, media week, rights inventory, rival-league scouting, and proof artifacts, snapshot-backed Desk Wall watch frames, a Results Desk MCP that turns Desk Wall snapshots and Recap Studio text into a Claude/Cowork scorebook, an MCP-readable Wiki for field-guide briefs, an Agent Bench for Claude/ChatGPT/Codex task handoffs, a Sideline Desk for claim/report workflows, an agent asset factory for posters, ads, art prompts, products, and sponsor reads, a Sponsorship Desk for reservation-only sponsor cards, featured Nouns, first-four-season highlights, TV tickers, agent task briefs, proof requirements, and participant-credit routing, a v38 Production Desk for accepted-work ledger cards, broadcast director queues, rooting cards, season archive cards, and Nouns Bowl hype week, a v39 public Claim Board for sponsor reservations, agent bounties, poster/product drops, QA audits, watch-party proof, broadcast run sheets, and Nouns Bowl hype cards, a prototype participant rewards model, a claim queue of timeboxed agent tasks, MCP tools for Battler wiki, tasks, and manifests, opt-in anonymous agent presence, a Watch Now rail, league-integrity score coverage, canonical shareable report card links, an in-session Report Gallery, downloadable Season Report cards, printable Season Reports, portable Season Desk Wall snapshot links, copyable Commissioner Desk interstitials and archive, a TV Bowl Countdown card, rivalry heat, head-to-head records, late-season boss field mutations, a rookie Watch Guide, live storyline engine, Watch Party Kit, Recap Studio, Season 2 scope board, scout cards, sim controls, rotating season challenges, Director Mode TV, Noun-heavy overview interstitials, Amplifier Rift, Crown Rush, weird terrain battle types, a 20-poster type-heavy Nouns series, unique Noun-heavy unfurls for every public Battler surface, GTM strategy, and recaps.',
   broadcastDesk: {
     name: 'PointCast Battle Desk',
     human: 'https://pointcast.xyz/nouns-nation-battler/',
@@ -126,7 +137,7 @@ const payload = {
     name: 'PointCast Battle Desk V3',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/',
     format:
-      'Federation-minded operating room with live field feed, signed Michael Hoydich x Codex 5.5 extra-high thought, portable receipt posture, bring-your-own-nation lanes, season recap archive, champion and MVP overview, media coverage slate, next-season preview, rival Builder Circuit preview, Season 6 Sprint Room, expansion combine, media week products, rights inventory, rival scouting, producer loop, controls, top Nouns, replay calls, and embedded v30 field feed',
+      'Federation-minded operating room with live field feed, signed Michael Hoydich x Codex 5.5 extra-high thought, portable receipt posture, bring-your-own-nation lanes, fictional editorial season recap examples, champion and MVP story concepts, media coverage slate, proposed next-season preview, rival Builder Circuit concept, archived Season 6 Sprint Room, expansion combine, media week products, rights inventory, rival scouting, producer loop, controls, top Nouns, replay calls, and embedded v30 field feed',
     embeddedFeed: 'https://pointcast.xyz/games/nouns-nation-battler/',
     signature: {
       by: ['Michael Hoydich', 'Codex 5.5 extra-high'],
@@ -157,9 +168,10 @@ const payload = {
     },
   },
   seasonRecapDesk: {
+    status: 'fictional-editorial-examples',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/#season-recap',
     purpose:
-      'A media coverage layer for the league memory: recent champions, Bowl scores, MVP storylines, recurring coverage angles, next-season preview cards, and a rival-league concept for imported nations.',
+      'Archived fictional editorial examples of champions, Bowl scores, MVPs, and coverage angles, plus proposed season and rival-league concepts. These are not verified shared match results.',
     sections: [
       'recent champions',
       'MVP board',
@@ -175,11 +187,14 @@ const payload = {
     },
   },
   nextSprintDesk: {
+    status: 'archived-planning',
+    boundary: 'Proposed beats and mission prompts preserved for reference; no shared season is scheduled and no milestone completion is established.',
+    currentExhibition: 'https://pointcast.xyz/nouns-nation-battler-rivalry-night/001/',
     human: 'https://pointcast.xyz/nouns-nation-battler-v3/#sprint-room',
     manifest: 'https://pointcast.xyz/nouns-nation-battler-sprint.json',
-    name: 'Season 6 Sprint Room',
+    name: 'Season 6 Sprint Room — archived proposal',
     focus:
-      'Turn the recap archive and rival-league idea into an operating calendar for expansion, media week, rights packaging, and proof artifacts.',
+      'Original proposal: turn fictional recap examples and a rival-league concept into a calendar for expansion, media, rights packaging, and proof artifacts.',
     launchBeats: [
       'commissioner kickoff',
       'expansion combine',
@@ -190,8 +205,8 @@ const payload = {
     ],
     expansionFields: ['identity lock', 'roster mode', 'proof trail', 'rivalry seed'],
     mediaProducts: ['Federation Tonight', 'Expansion Passport', 'Commissioner Wire', 'Cup Rights Sheet'],
-    fastPass: NOUNS_BATTLER_SEASON_6_FAST_PASS,
-    pocketDesk: NOUNS_BATTLER_SEASON_6_POCKET_DESK,
+    fastPass: { ...NOUNS_BATTLER_SEASON_6_FAST_PASS, status: 'archived operator-handoff reference' },
+    pocketDesk: { ...NOUNS_BATTLER_SEASON_6_POCKET_DESK, status: 'archived phone-handoff reference' },
     agentOps: NOUNS_BATTLER_AGENT_OPS_LOOP,
     agentQueue: [
       { code: 'SCOUT-01', role: 'expansion scout', artifact: 'candidate nation card' },
@@ -199,7 +214,7 @@ const payload = {
       { code: 'AUDIT-03', role: 'receipt auditor', artifact: 'proof checklist' },
       { code: 'COMM-04', role: 'commissioner agent', artifact: 'season lock memo' },
     ],
-    missionPacks: NOUNS_BATTLER_SEASON_6_MISSION_PACKS,
+    missionPacks: NOUNS_BATTLER_SEASON_6_MISSION_PACKS.map((mission) => ({ ...mission, status: 'archived-reference' })),
     rivalScoutTeams: ['Beach Builders', 'Protocol Club', 'Meme Union', 'Shop Class'],
     successSignal:
       'A new nation can understand the sport, pick an entry lane, and leave with a public receipt in one sitting.',

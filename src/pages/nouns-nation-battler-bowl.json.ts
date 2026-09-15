@@ -20,9 +20,10 @@ export const GET: APIRoute = () => {
         kind: 'pointcast.battler-bowl',
         url: 'https://pointcast.xyz/nouns-nation-battler-bowl/',
         intent:
-          'Structural surface for the Nouns Nation Battler S6 Bowl path: per-gang lock status, championship history, the 14-day Sprint Room calendar with the current day marked, and the days-to-Bowl countdown.',
+          'Archived April 2026 Season 6 planning concept: pending lock statuses, fictional editorial championship examples, and a proposed 14-day sequence. Elapsed dates are historical context, not a live schedule or verified results.',
         ...snapshot,
         related: {
+          rivalryNight: 'https://pointcast.xyz/nouns-nation-battler-rivalry-night/001/',
           page: 'https://pointcast.xyz/nouns-nation-battler-bowl/',
           battleDesk: 'https://pointcast.xyz/nouns-nation-battler/',
           battleDeskV3: 'https://pointcast.xyz/nouns-nation-battler-v3/',

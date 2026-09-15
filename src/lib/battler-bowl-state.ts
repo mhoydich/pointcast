@@ -4,9 +4,9 @@
  * surfaces — the page reads these constants, the JSON endpoint serializes
  * them.
  *
- * Anchored to a real season start date (D0). The Bowl page computes the
- * current sprint day from `Date.now()` against this anchor — no hardcoded
- * day pin to drift out of sync.
+ * Archived April 2026 planning concept. The anchor is the proposed start,
+ * not evidence of a season being played. Elapsed-day helpers remain for
+ * historical consumers; public pages must not present them as a live schedule.
  *
  * `lockStatus` per gang stays at 'pending' until a real result source is
  * wired (browser-side match engine snapshots → curated post-beat manifest
@@ -18,6 +18,9 @@
 export const SEASON_6 = {
   code: 'S06',
   name: 'Season 6',
+  status: 'archived-planning',
+  resultsProvenance: 'fictional editorial season examples; no verified shared season results',
+  nextExhibition: '/nouns-nation-battler-rivalry-night/001/',
   // D0 = Monday 2026-04-27 PT. Sprint Room calendar runs 14 days from here.
   // Today (2026-05-05) lands as D8 — Rivalry test night.
   d0Iso: '2026-04-27T07:00:00.000Z', // 2026-04-27T00:00:00 PT
@@ -32,7 +35,7 @@ export interface GangState {
   color: string;
   noun: number;
   line: string;
-  // Real, factual history pulled from V3 season-recap data. Do not invent.
+  // Fictional editorial history from V3 recap examples; not verified match results.
   championships: string[]; // ['S01'] etc — empty array if no title
   defending?: boolean;     // true only for the most recent champion
   // Live lock status. 'pending' = no real source yet; do not surface a band
@@ -114,14 +117,18 @@ export function bowlStateSnapshot(now: Date = new Date()) {
   return {
     season: SEASON_6.code,
     name: SEASON_6.name,
+    status: SEASON_6.status,
+    resultsProvenance: SEASON_6.resultsProvenance,
+    nextExhibition: `https://pointcast.xyz${SEASON_6.nextExhibition}`,
     d0: SEASON_6.d0Iso,
     lengthDays: SEASON_6.lengthDays,
     today: {
+      meaning: 'Elapsed time since the archived proposed start; not live season progress.',
       iso: now.toISOString(),
       day: dayNumber(now),
       daysToLock: daysToLock(now),
     },
-    calendar: annotateCalendar(now),
+    calendar: SPRINT_DAYS.map((milestone) => ({ ...milestone, state: 'proposed' })),
     gangs: FOUNDING_GANGS.map((g) => ({
       short: g.short,
       name: g.name,

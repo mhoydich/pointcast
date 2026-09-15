@@ -23,6 +23,13 @@ export const GET: APIRoute = async () => {
     description: meta.description,
     canonical: meta.canonical,
     publishedAt: meta.publishedAt,
+    nextChapter: {
+      title: "Rivalry Night 001",
+      url: "https://pointcast.xyz/nouns-nation-battler-rivalry-night/001/",
+      format: "shared 12 vs 12 exhibition with a public result and replay",
+      play: "https://pointcast.xyz/nouns-nation-battler-arena/",
+      boundary: "Free exhibitions are separate from the browser-local 30 vs 30 season and the annual's editorial matchup lab.",
+    },
     editorialBoundary: {
       history:
         "The chronology is reconstructed from checked-in design notes, PRDs, route manifests, and repository history.",
@@ -75,6 +82,7 @@ export const GET: APIRoute = async () => {
       fields: NOUN_BATTLER_FIELDS,
       gangs: NOUN_BATTLER_GANGS.map((gang) => ({
         ...gang,
+        play: `https://pointcast.xyz/nouns-nation-battler-arena/?gang=${gang.arenaId}`,
         nounSprite: `https://pointcast.xyz/games/nouns-nation-battler/assets/noun-${gang.noun}.svg`,
         ratingsBoundary:
           "Annual editorial scouting rating used only by the matchup lab, not an official live league stat.",

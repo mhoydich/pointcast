@@ -19,6 +19,8 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/nouns-nation-battler-rivalry-night/001', 'monthly', '0.9'],
+  ['https://pointcast.xyz/nouns-nation-battler-rivalry-night.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/shwa/', 'weekly', '0.85'],
   ['https://pointcast.xyz/shwa.json', 'weekly', '0.75'],
   ['https://pointcast.xyz/co-games', 'weekly', '0.95'],

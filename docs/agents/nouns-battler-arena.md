@@ -41,3 +41,11 @@ An unsigned request retrieves HTTP 402 terms when the service is available. Insp
 For an authorized purchase, retain one `Idempotency-Key` and the exact request body. Retry with that same key and body; never invent a new key to recover an uncertain result. A timeout, ambiguous settlement, or pending response requires holding further payment attempts and checking `/api/actions/{actionId}`. A payment may have settled even when artifact storage failed; follow the same-key recovery response rather than buying again. Only a `succeeded` action with its result establishes the completed record. The watch link is `/nouns-nation-battler-arena/?record={actionId}`.
 
 No real payment has been tested for this integration. Local mocked settlement and replay checks do not prove live USDC transfer or settlement. The browser's “View terms” control never signs or submits a payment.
+
+## Published exhibition: Rivalry Night 001
+
+`/nouns-nation-battler-rivalry-night/001/` is the shared opening exhibition: Tomato Noggles Rush versus Cobalt Frames Guard, seed `20260915`. The original match, catalog, replay frames and SHA-256 match hash are committed at `/games/nouns-nation-battler/records/rivalry-night-001.json`; `/nouns-nation-battler-rivalry-night.json` is its discovery twin. It is free to read and replay and is independent of the optional commissioned-record product.
+
+The publication generator calls the same pure rules engine and verifies its exact result against the free server API before first writing. Re-running `node scripts/generate-battler-rivalry-record.mjs` verifies the existing artifact without rewriting it. `--verify-live` also checks the live free API. It refuses changed records: new rules or fixtures require a new edition. The published replay uses the saved catalog and frames, checks the match hash, and never resimulates the fixture in the viewer.
+
+Arena setup links accept catalog-approved `gang` (left-side alias), `leftGang`, `rightGang`, `leftTactic`, `rightTactic`, and a uint32 `seed`. Loading a setup link does not submit a match or payment. A free rematch does not overwrite the published result or update a shared league table. The original 30-v-30 browser season remains local, while Season 6 dates and sample recaps are explicitly archived planning/fictional examples.

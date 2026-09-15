@@ -8,6 +8,7 @@ export interface BattlerHistoryEntry {
 
 export interface BattlerGang {
   id: string;
+  arenaId: string;
   short: string;
   name: string;
   color: string;
@@ -127,6 +128,7 @@ export const NOUN_BATTLER_HISTORY: readonly BattlerHistoryEntry[] = [
 export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   {
     id: "tomato",
+    arenaId: "tomato-noggles",
     short: "TN",
     name: "Tomato Noggles",
     color: "#b63d32",
@@ -142,6 +144,7 @@ export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   },
   {
     id: "cobalt",
+    arenaId: "cobalt-frames",
     short: "CF",
     name: "Cobalt Frames",
     color: "#2865aa",
@@ -157,6 +160,7 @@ export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   },
   {
     id: "golden",
+    arenaId: "golden-nouncil",
     short: "GN",
     name: "Golden Nouncil",
     color: "#b27b16",
@@ -172,6 +176,7 @@ export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   },
   {
     id: "garden",
+    arenaId: "garden-stack",
     short: "GS",
     name: "Garden Stack",
     color: "#397d43",
@@ -187,6 +192,7 @@ export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   },
   {
     id: "pixel",
+    arenaId: "pixel-union",
     short: "PU",
     name: "Pixel Union",
     color: "#7150a6",
@@ -202,6 +208,7 @@ export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   },
   {
     id: "night",
+    arenaId: "night-auction",
     short: "NA",
     name: "Night Auction",
     color: "#303742",
@@ -217,6 +224,7 @@ export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   },
   {
     id: "sunset",
+    arenaId: "sunset-prop-house",
     short: "SP",
     name: "Sunset Prop House",
     color: "#c96925",
@@ -232,6 +240,7 @@ export const NOUN_BATTLER_GANGS: readonly BattlerGang[] = [
   },
   {
     id: "mint",
+    arenaId: "mint-condition",
     short: "MC",
     name: "Mint Condition",
     color: "#19877f",
