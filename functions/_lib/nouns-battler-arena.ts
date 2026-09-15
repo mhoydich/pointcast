@@ -7,6 +7,7 @@ export const BATTLE_PRICE_UNITS = '10000';
 export const BATTLE_TABLE = 'nouns_battler_records' as const;
 export const arenaLinks = {
   arena: '/nouns-nation-battler-arena',
+  rivalryNight: '/nouns-nation-battler-rivalry-night/001/',
   catalog: '/api/nouns-battler/arena',
   practice: '/api/nouns-battler/arena',
   commission: '/api/agent/battler',
