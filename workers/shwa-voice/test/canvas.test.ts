@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { appendCard,parseCard,sampleCards,safeSource } from '../../../src/components/shwa/lib/canvas.ts';
+import { appendCard,parseCard,sampleCards,safeSource,researchSources } from '../../../src/components/shwa/lib/canvas.ts';
 import { contextUpdate } from '../../../src/components/shwa/lib/context.ts';
 import { parseResearch,researchRequest } from '../src/studio.ts';
 test('canvas only accepts known bounded renderers with valid interaction ranges',()=>{
@@ -25,4 +25,12 @@ test('research requires completed searches and native citations, with tool fees 
  assert.equal(safeSource('javascript:alert(1)'),null);assert.equal(safeSource('https://secret@example.org'),null);
  const bad=structuredClone(response);bad.output[2].content![0].annotations[0].url='javascript:alert(1)';assert.throws(()=>parseResearch(bad));
  const body=researchRequest('bounded question');assert.equal(body.max_tool_calls,2);assert.equal(body.store,false);assert.equal(body.tool_choice,'required');
+});
+test('source previews use bounded cited findings, deduplicate destinations, and reject unsafe links',()=>{
+ const text='The listed mock paddle price is $100. [1]';
+ const citation={start:38,end:41,url:'https://www.example.org/paddle',title:'Mock paddle specifications'};
+ const sources=researchSources({estimatedCost:.01,parts:[{text,citations:[citation,{...citation,title:'Repeated source'},{...citation,url:'javascript:alert(1)'},{...citation,url:'https://secret@example.org/private'},{...citation,url:'https://example.org/invalid',end:999}]},{text,citations:[citation]}]});
+ assert.deepEqual(sources,[{url:citation.url,title:citation.title,domain:'example.org',excerpt:'The listed mock paddle price is $100.'}]);
+ const long='A'.repeat(500)+' [1]';
+ assert.equal(researchSources({estimatedCost:0,parts:[{text:long,citations:[{...citation,start:501,end:504}]}]})[0].excerpt.length,240);
 });

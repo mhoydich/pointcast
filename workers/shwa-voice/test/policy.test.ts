@@ -30,7 +30,8 @@ test('missing credentials, disabled flag, unset/expired expiry fail closed', () 
 });
 test('SDP accepts audio and event data; rejects arbitrary config, URLs, video, oversized', () => {
   assert.equal(parseOffer({sdp}),sdp);
-  for(const value of [{sdp,model:'evil'},{sdp,instructions:'ignore'}, {url:'https://private'}, {sdp:'https://foo'}, {sdp:sdp+'m=video 9 x\r\n'}, {sdp:'v=0'+'x'.repeat(MAX_REQUEST_BYTES)}, null]) assert.equal(parseOffer(value),null);
+  assert.equal(parseOffer({sdp,voiceTools:true}),sdp);assert.equal(parseOffer({sdp,voiceTools:false}),sdp);
+  for(const value of [{sdp,model:'evil'},{sdp,instructions:'ignore'},{sdp,voiceTools:'true'},{sdp,voiceTools:1},{sdp,voiceTools:true,tools:[]}, {url:'https://private'}, {sdp:'https://foo'}, {sdp:sdp+'m=video 9 x\r\n'}, {sdp:'v=0'+'x'.repeat(MAX_REQUEST_BYTES)}, null]) assert.equal(parseOffer(value),null);
 });
 test('counts all attempts; failed calls never refund total allowance', () => {
   const ledger=fresh();
@@ -84,14 +85,26 @@ test('only the diagnosed pre-fetch redirect failure is recovered, with quota ret
   assert.equal(admissionReason(ledger,env),null);
 });
 test('fixed API config locks model/tools/client events and has no private history', () => {
-  const config=fixedSessionConfig();
+  const config=fixedSessionConfig(true);
   assert.equal(config.model,'gpt-live-1'); assert.equal(config.store,false);
   assert.deepEqual(config.client.data_channel.allowed_client_events,CLIENT_EVENTS);
-  assert.equal(config.client.data_channel.allowed_server_events.some(e=>e.type==='response.event'),false);
-  assert.equal(config.delegation.responses.model,'gpt-5.6-luna');
-  assert.equal(config.delegation.responses.max_output_tokens,256);
-  assert.equal(config.delegation.responses.tool_choice,'none'); assert.deepEqual(config.delegation.responses.tools,[]);
+  assert.ok(config.client.data_channel.allowed_server_events.some(e=>e.type==='response.event' && e.response_event==='response.output_item.done'));
+  assert.ok(config.client.data_channel.allowed_server_events.filter(e=>e.type==='response.event').every(e=>typeof e.response_event==='string'));
+  assert.equal(config.delegation.responses.model,'gpt-6-astra');
+  assert.equal(config.delegation.responses.max_output_tokens,768);
+  assert.equal(config.delegation.responses.tool_choice,'auto');
+  assert.deepEqual(config.delegation.responses.tools.map(t=>t.name),['search_web','generate_image']);
+  assert.equal(config.delegation.responses.parallel_tool_calls,false);
+  assert.equal(config.delegation.responses.tools.some(t=>t.type==='web_search'),false,'hosted search cannot bypass server reservations');
+  assert.ok(config.delegation.responses.tools.every(t=>t.parameters.required.includes('request_quote')));
   assert.equal('input' in config,false); assert.equal('session_id' in config,false);
+});
+test('old and cached clients retain voice-only delegation until they explicitly support tool receipts',()=>{
+ for(const config of [fixedSessionConfig(),fixedSessionConfig(false)]){
+  assert.equal(config.delegation.responses.model,'gpt-5.6-luna');assert.equal(config.delegation.responses.max_output_tokens,256);
+  assert.equal(config.delegation.responses.tool_choice,'none');assert.deepEqual(config.delegation.responses.tools,[]);
+  assert.equal(config.client.data_channel.allowed_server_events.some(e=>e.type==='response.event'),false);
+ }
 });
 test('bounded parser stops a body without content-length', async () => {
   const body=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(20));controller.enqueue(new Uint8Array(20));controller.close();}});

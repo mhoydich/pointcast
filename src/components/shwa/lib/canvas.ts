@@ -1,9 +1,10 @@
 export const CARD_KINDS = ['poll','slider','survey','chart','confirmation','image','research'] as const;
 export type CardKind = typeof CARD_KINDS[number];
 export type CanvasCard = { kind:CardKind; title:string; text:string; options:string[]; questions:string[]; points:{label:string;value:number}[]; unit:string; min:number; max:number; step:number; value:number; lowLabel:string; highLabel:string; prompt:string; basis:'conversation'|'illustrative' };
-export type CanvasItem = CanvasCard & {id:string;createdAt:number;sample?:boolean;imageUrl?:string};
+export type CanvasItem = CanvasCard & {id:string;createdAt:number;sample?:boolean;imageUrl?:string;workState?:'pending'|'complete'|'error';workMessage?:string;researchResult?:ResearchResult;researchedAt?:number};
 export type ResearchPart = {text:string;citations:{start:number;end:number;url:string;title:string}[]};
 export type ResearchResult = {parts:ResearchPart[];estimatedCost:number};
+export type ResearchSource = {url:string;title:string;domain:string;excerpt:string};
 const string={type:'string'};
 export const CARD_SCHEMA = {type:'object',additionalProperties:false,properties:{
  kind:{type:'string',enum:CARD_KINDS},title:string,text:string,
@@ -32,6 +33,22 @@ export function appendCard(items:CanvasItem[],card:CanvasCard,now=Date.now()):Ca
  return [...items,{...card,id:`card-${now}-${items.length}`,createdAt:now}].slice(-24);
 }
 export function safeSource(raw:string):string|null {try{const u=new URL(raw);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}
+/** Previews use only returned citations and their associated findings; no metadata fetch. */
+export function researchSources(result:ResearchResult):ResearchSource[]{
+ const sources=new Map<string,ResearchSource>();
+ for(const part of result.parts)for(const citation of part.citations){
+  const url=safeSource(citation.url);
+  if(!url||sources.has(url)||!Number.isInteger(citation.start)||!Number.isInteger(citation.end)||citation.start<0||citation.end<=citation.start||citation.end>part.text.length)continue;
+  const before=part.text.slice(0,citation.start).trim();
+  const paragraph=before.split(/\n\s*\n/).at(-1)||part.text.slice(citation.start,citation.end);
+  const finding=paragraph.replace(/^\s*(?:[-*#]+|\d+\.)\s*/, '').replace(/\s+/g,' ').trim();
+  const excerpt=finding.length>240?'…'+finding.slice(-239):finding;
+  const domain=new URL(url).hostname.replace(/^www\./,'');
+  sources.set(url,{url,title:citation.title.trim().slice(0,300)||domain,domain,excerpt});
+  if(sources.size>=8)return [...sources.values()];
+ }
+ return [...sources.values()];
+}
 export function sampleCards():CanvasItem[]{
  const base={text:'',options:[],questions:[],points:[],unit:'',min:0,max:100,step:1,value:50,lowLabel:'',highLabel:'',prompt:'',basis:'illustrative' as const};
  const cards:CanvasCard[]=[

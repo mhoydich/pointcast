@@ -37,9 +37,13 @@ function mockAPI(t,behavior={}) {
       const socket=new Socket();if(behavior.dropClose)socket.shouldClose=false;sockets.push(socket);
       return {status:101,webSocket:socket};
     }
-    if(String(url).endsWith('/responses')&&JSON.parse(init.body).tools?.[0]?.type==='web_search')return Response.json({status:'completed',output:[{type:'web_search_call',status:'completed',action:{type:'search'}},{type:'message',content:[{type:'output_text',text:'A sourced fact [1]',annotations:[{type:'url_citation',start_index:15,end_index:18,url:'https://example.org/research',title:'Primary source'}]}]}],usage:{input_tokens:100,output_tokens:20}});
+    if(String(url).endsWith('/responses')&&JSON.parse(init.body).tools?.[0]?.type==='web_search'){
+      if(behavior.researchWait)await behavior.researchWait;
+      if(behavior.researchFails)return new Response('private provider error',{status:503});
+      return Response.json({status:'completed',output:[{type:'web_search_call',status:'completed',action:{type:'search'}},{type:'message',content:[{type:'output_text',text:'A sourced fact [1]',annotations:[{type:'url_citation',start_index:15,end_index:18,url:'https://example.org/research',title:'Primary source'}]}]}],usage:{input_tokens:100,output_tokens:20}});
+    }
     if(String(url).endsWith('/responses'))return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({summary:'Garden idea',topics:['Garden'],questions:[],imageIdea:'Garden in space'})}]}],usage:{input_tokens:10,output_tokens:20}});
-    if(String(url).endsWith('/images/generations'))return Response.json({data:[{b64_json:'UklGRg=='}],usage:{input_tokens:10}});
+    if(String(url).endsWith('/images/generations')){if(behavior.imageWait)await behavior.imageWait;return Response.json({data:[{b64_json:'UklGRg=='}],usage:{input_tokens:10}});}
     if(behavior.createThrows)throw Error('upstream transport failed with confidential data');
     if(behavior.status)return new Response('secret provider error',{status:behavior.status});
     return Response.json({session:{id:'live_'+calls.length,private:'do not forward'},transport:{type:'webrtc',sdp}});
@@ -82,6 +86,18 @@ test('PointCast and Sites share admission state without cookie forwarding or cre
 });
 test('invalid prompt override cannot create upstream session',async t=>{
   const f=await fixture();const api=mockAPI(t);const response=await gateway.fetch(f.request('/session',{sdp,instructions:'evil'}),f.env);assert.equal(response.status,400);assert.equal(api.calls.length,0);
+});
+test('only an explicit boolean client capability enables fixed Astra voice tools',async t=>{
+ const f=await fixture(),api=mockAPI(t);
+ const legacy=await gateway.fetch(f.request('/session',{sdp}),f.env);assert.equal(legacy.status,201);
+ const oldConfig=JSON.parse(api.calls.find(c=>c.url.endsWith('/sessions')).init.body).session;
+ assert.equal(oldConfig.delegation.responses.model,'gpt-5.6-luna');assert.deepEqual(oldConfig.delegation.responses.tools,[]);
+ const native=await gateway.fetch(f.request('/session',{sdp,voiceTools:true}),f.env);assert.equal(native.status,201);
+ const newConfig=JSON.parse(api.calls.filter(c=>c.url.endsWith('/sessions')).at(-1).init.body).session;
+ assert.equal(newConfig.delegation.responses.model,'gpt-6-astra');assert.deepEqual(newConfig.delegation.responses.tools.map(t=>t.name),['search_web','generate_image']);
+ assert.deepEqual(newConfig.client.data_channel.allowed_client_events,['session.close','session.input_audio.mute','session.input_audio.unmute']);
+ const rejected=await gateway.fetch(f.request('/session',{sdp,voiceTools:'true'}),f.env);assert.equal(rejected.status,400);
+ assert.equal(api.calls.filter(c=>c.url.endsWith('/sessions')).length,2);
 });
 test('sideband connected before SDP returns; control token is opaque and stored hashed',async t=>{
   const f=await fixture();const api=mockAPI(t);const response=await gateway.fetch(f.request('/session',{sdp}),f.env);assert.equal(response.status,201);const result=await response.json();
@@ -145,7 +161,9 @@ test('studio requires call control and never saves transcripts, prompts, or gene
  const response=await gateway.fetch(f.request('/notes',{...call.control,transcript:'private note sentinel'}),f.env);assert.equal(response.status,200);assert.equal((await response.json()).notes.summary,'Garden idea');
  const tooSoon=await gateway.fetch(f.request('/notes',{...call.control,transcript:'more text'}),f.env);assert.equal(tooSoon.status,429);
  const images=await Promise.all([1,2,3].map(()=>gateway.fetch(f.request('/image',{...call.control,prompt:'private image sentinel'}),f.env)));
- assert.equal(images.filter(r=>r.status===200).length,2);assert.equal(images.filter(r=>r.status===429).length,1);
+ const accepted=images.filter(r=>r.status===200).length;assert.ok(accepted>=1&&accepted<=2);assert.ok(images.every(r=>[200,409,429].includes(r.status)));
+ for(let i=accepted;i<2;i++){const second=await gateway.fetch(f.request('/image',{...call.control,prompt:'a different private image sentinel'}),f.env);assert.equal(second.status,200);}
+ const third=await gateway.fetch(f.request('/image',{...call.control,prompt:'third image'}),f.env);assert.equal(third.status,429);
  const saved=JSON.stringify(await f.storage.get('voice-ledger-v1'));assert.equal(saved.includes('sentinel'),false);assert.equal(saved.includes('Garden idea'),false);assert.equal(saved.includes('UklGRg'),false);
  assert.equal(api.calls.filter(c=>String(c.url).endsWith('/responses')).length,1);assert.equal(api.calls.filter(c=>String(c.url).endsWith('/images/generations')).length,2);
 });
@@ -204,4 +222,81 @@ test('research has separate atomic quotas and does not persist question or resul
  const responses=await Promise.all([1,2,3].map(()=>gateway.fetch(f.request('/research',{...call.control,question:'private research sentinel'}),f.env)));
  assert.equal(responses.filter(r=>r.status===200).length,2);assert.equal(responses.filter(r=>r.status===429).length,1);
  assert.equal(JSON.stringify(await f.storage.get('voice-ledger-v1')).includes('sentinel'),false);
+});
+
+function voiceCall(socket,{callId='call_research',name='search_web',quote='Look up Honolulu pickleball paddle prices',responseId='resp_research',terminal=true}={}) {
+ const emit=body=>socket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(body)}));
+ const startMs=socket.transcriptTime??0;socket.transcriptTime=startMs+4000;
+ emit({type:'session.input_transcript.delta',delta:quote,start_ms:startMs,end_ms:startMs+1000});
+ const event=body=>emit({type:'response.event',delegation_id:'item_delegation',event:body});
+ event({type:'response.created',response:{id:responseId}});
+ event({type:'response.output_item.done',item:{type:'function_call',call_id:callId,name,arguments:JSON.stringify({[name==='generate_image'?'prompt':'question']:quote,request_quote:quote})}});
+ if(terminal)event({type:'response.completed',response:{id:responseId,output:[]}});
+ return callId;
+}
+const toolRequests=api=>api.calls.filter(c=>String(c.url).endsWith('/responses')||String(c.url).endsWith('/images/generations'));
+async function until(check){for(let i=0;i<100&&!check();i++)await new Promise(resolve=>setTimeout(resolve,1));assert.ok(check());}
+
+test('voice research authenticates provider call, bills once across duplicate requests, and returns sources to board and voice',async t=>{
+ const f=await fixture(),api=mockAPI(t),call=await(await gateway.fetch(f.request('/session',{sdp,voiceTools:true}),f.env)).json();
+ const callId=voiceCall(api.sockets[0]);
+ const responses=await Promise.all([1,2,3].map(()=>gateway.fetch(f.request('/tool',{...call.control,callId}),f.env)));
+ const receipts=await Promise.all(responses.map(r=>r.json()));
+ assert.ok(receipts.every(r=>r.status==='completed'&&r.name==='search_web'&&r.voiceDelivery==='queued'));
+ assert.deepEqual(receipts[0],receipts[1]);assert.equal(receipts[0].result.parts[0].citations[0].url,'https://example.org/research');
+ assert.equal(toolRequests(api).length,1);
+ const output=api.sockets[0].sent.find(e=>e.type==='response.item.create');assert.equal(output.item.call_id,callId);
+ const summary=JSON.parse(output.item.output);assert.equal(summary.status,'completed');assert.equal(summary.sources[0].url,'https://example.org/research');
+ assert.equal(api.sockets[0].sent.filter(e=>e.type==='response.create').length,1);
+ const ledger=await f.storage.get('voice-ledger-v1');assert.equal(ledger.sessions[call.control.id].researchAttempts,1);
+ assert.equal(JSON.stringify(ledger).includes('Honolulu'),false);assert.equal(JSON.stringify(ledger).includes('sourced'),false);assert.equal(JSON.stringify(receipts).includes('fixture-value'),false);
+});
+test('voice tools reject wrong token, invented calls, and client-supplied argument overrides without paid work',async t=>{
+ const f=await fixture(),api=mockAPI(t),call=await(await gateway.fetch(f.request('/session',{sdp,voiceTools:true}),f.env)).json();
+ const callId=voiceCall(api.sockets[0]);
+ const bad=await gateway.fetch(f.request('/tool',{...call.control,token:`${crypto.randomUUID()}-${crypto.randomUUID()}`,callId}),f.env);assert.equal(bad.status,403);
+ const override=await gateway.fetch(f.request('/tool',{...call.control,callId,prompt:'injected'}),f.env);assert.equal(override.status,400);
+ const invented=await gateway.fetch(f.request('/tool',{...call.control,callId:'call_invented'}),f.env);assert.equal(invented.status,409);
+ assert.equal(toolRequests(api).length,0);
+});
+test('voice and manual research consume the same cap; failure also returns to the spoken conversation',async t=>{
+ const f=await fixture(),api=mockAPI(t),call=await(await gateway.fetch(f.request('/session',{sdp,voiceTools:true}),f.env)).json();
+ for(let i=0;i<2;i++)assert.equal((await gateway.fetch(f.request('/research',{...call.control,question:'paddle specification '+i}),f.env)).status,200);
+ const callId=voiceCall(api.sockets[0]);const receipt=await(await gateway.fetch(f.request('/tool',{...call.control,callId}),f.env)).json();
+ assert.equal(receipt.status,'failed');assert.equal(receipt.reason,'research_limit');assert.equal(toolRequests(api).length,2);
+ assert.equal(JSON.parse(api.sockets[0].sent.find(e=>e.type==='response.item.create').item.output).reason,'research_limit');
+ assert.equal(api.sockets[0].sent.filter(e=>e.type==='response.create').length,1);
+});
+test('incidental topic does not trigger billed research and uncertain provider outcome is never retried',async t=>{
+ const f=await fixture(),api=mockAPI(t,{researchFails:true}),call=await(await gateway.fetch(f.request('/session',{sdp,voiceTools:true}),f.env)).json();
+ const incidental=voiceCall(api.sockets[0],{callId:'call_incidental',quote:'Paddle prices are interesting'});
+ const declined=await(await gateway.fetch(f.request('/tool',{...call.control,callId:incidental}),f.env)).json();assert.equal(declined.reason,'needs_confirmation');assert.equal(toolRequests(api).length,0);
+ const callId=voiceCall(api.sockets[0],{callId:'call_explicit',responseId:'resp_explicit'});
+ const first=await(await gateway.fetch(f.request('/tool',{...call.control,callId}),f.env)).json();const second=await(await gateway.fetch(f.request('/tool',{...call.control,callId}),f.env)).json();
+ assert.equal(first.status,'failed');assert.equal(first.reason,'provider_rejected');assert.deepEqual(first,second);assert.equal(toolRequests(api).length,1);assert.equal(JSON.stringify(first).includes('private provider'),false);
+});
+test('manual image in flight blocks voice duplicate without quota debit; a later different image still works',async t=>{
+ let release;const imageWait=new Promise(resolve=>release=resolve);
+ const f=await fixture(),api=mockAPI(t,{imageWait}),call=await(await gateway.fetch(f.request('/session',{sdp,voiceTools:true}),f.env)).json();
+ const manual=gateway.fetch(f.request('/image',{...call.control,prompt:'a pickleball paddle'}),f.env);
+ await until(()=>toolRequests(api).length===1);
+ const callId=voiceCall(api.sockets[0],{name:'generate_image',quote:'Generate an image of a pickleball paddle'});
+ const duplicate=await(await gateway.fetch(f.request('/tool',{...call.control,callId}),f.env)).json();assert.equal(duplicate.reason,'image_busy');assert.equal(toolRequests(api).length,1);
+ assert.equal((await f.storage.get('voice-ledger-v1')).sessions[call.control.id].imageAttempts,1);
+ release();assert.equal((await manual).status,200);
+ const nextId=voiceCall(api.sockets[0],{callId:'call_second_image',responseId:'resp_second_image',name:'generate_image',quote:'Make an image of a neon pickleball court'});
+ const next=await(await gateway.fetch(f.request('/tool',{...call.control,callId:nextId}),f.env)).json();assert.equal(next.status,'completed');assert.equal(next.result.image,'UklGRg==');
+ assert.equal((await f.storage.get('voice-ledger-v1')).sessions[call.control.id].imageAttempts,2);
+ const imageResult=api.sockets[0].sent.filter(e=>e.type==='response.item.create').at(-1);assert.equal(imageResult.item.output.includes('UklGRg'),false);
+});
+test('ending a call preserves already-started research for its board, blocks new work and sends no voice continuation',async t=>{
+ let release;const researchWait=new Promise(resolve=>release=resolve);
+ const f=await fixture(),api=mockAPI(t,{researchWait}),call=await(await gateway.fetch(f.request('/session',{sdp,voiceTools:true}),f.env)).json();
+ const callId=voiceCall(api.sockets[0]);const pending=gateway.fetch(f.request('/tool',{...call.control,callId}),f.env);
+ await until(()=>toolRequests(api).length===1);
+ await gateway.fetch(f.request('/session/close',call.control),f.env);
+ assert.equal(toolRequests(api)[0].init.signal.aborted,false);release();
+ const late=await(await pending).json();assert.equal(late.status,'completed');assert.equal(late.voiceDelivery,'unavailable');assert.equal(late.result.parts[0].citations[0].url,'https://example.org/research');
+ assert.equal(api.sockets[0].sent.some(e=>e.type==='response.create'||e.type==='response.item.create'),false);
+ const again=await gateway.fetch(f.request('/tool',{...call.control,callId}),f.env);assert.equal(again.status,403);assert.equal(toolRequests(api).length,1);
 });
