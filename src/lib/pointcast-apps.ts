@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'beach-commons-extra-chair',
+    name: 'The Extra Chair',
+    kicker: 'BEACH COMMONS V19 · 12 SEATS · POCKET SEATS',
+    description: 'Twelve researched seats and three ways to gather. From telescoping pickleball stools to a spare chair by the sea.',
+    url: 'https://pointcast.xyz/beach-commons/v19',
+    path: '/beach-commons/v19',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.GDN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'co-games',
     name: 'Co-games: Two against the rift',
     kicker: 'SPELLFRAME · FOUR ROUNDS · PLAY WITH YOUR AI',
