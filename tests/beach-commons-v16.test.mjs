@@ -142,10 +142,10 @@ test('V16 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.match(homeEdition, /href: '\/beach-commons\/v16'/);
   assert.match(homeEdition, /id: '0544'/);
   // front door rebuilt 2026-09-01: index.astro shelves V16 as a Beach Commons chip; the
-  // "All eighteen …" link now renders from HomeMagazineRack, which index.astro imports.
+  // "All nineteen …" link now renders from HomeMagazineRack, which index.astro imports.
   assert.match(homepage, /href: '\/beach-commons\/v16'/);
   assert.match(homepage, /HomeMagazineRack/);
-  assert.match(homeRack, /All eighteen Beach Commons editions/);
+  assert.match(homeRack, /All nineteen Beach Commons editions/);
 });
 
 test('V16 images have intended edition and social dimensions', async () => {

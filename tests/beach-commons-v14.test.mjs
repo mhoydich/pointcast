@@ -140,10 +140,10 @@ test('The Hardpoint League has JSON, Block, series, homepage, and discovery twin
   assert.match(homeEdition, /href: '\/beach-commons\/v14'/);
   assert.match(homeEdition, /id: '0540'/);
   // front door rebuilt 2026-09-01: the V14 chip lives in index.astro's beachCommonsVolumes,
-  // and the "All eighteen" door is rendered by HomeMagazineRack from that array.
+  // and the "All nineteen" door is rendered by HomeMagazineRack from that array.
   assert.match(homepage, /href: '\/beach-commons\/v14'/);
   assert.match(homepage, /<HomeMagazineRack\b[^>]*volumes=\{beachCommonsVolumes\}/);
-  assert.match(homeRack, /All eighteen Beach Commons editions/);
+  assert.match(homeRack, /All nineteen Beach Commons editions/);
 });
 
 test('Hardpoint League images have intended edition and social dimensions', async () => {

@@ -18,15 +18,15 @@ export const BEACH_COMMONS_SERIES = {
   schema: 'https://pointcast.xyz/schemas/creative-work-series/v1',
   id: 'PC-BEACH-COMMONS',
   title: 'Beach Commons',
-  subtitle: 'Eighteen field studies for making public life at the edge.',
-  dek: 'Architecture, games, weather, useful objects, radio, ecology, relays, a working harbor, fermentation, restoration, a public science fair, and a 25-mile regional atlas—organized as a growing coastal commons.',
+  subtitle: 'Nineteen field studies for making public life at the edge.',
+  dek: 'Architecture, games, weather, useful objects, radio, ecology, relays, a working harbor, fermentation, restoration, a public science fair, a 25-mile regional atlas, and a room for one more—organized as a growing coastal commons.',
   url: 'https://pointcast.xyz/beach-commons',
   jsonUrl: 'https://pointcast.xyz/beach-commons.json',
-  currentEdition: 18,
-  currentUrl: 'https://pointcast.xyz/beach-commons/v18',
+  currentEdition: 19,
+  currentUrl: 'https://pointcast.xyz/beach-commons/v19',
   firstEditionUrl: 'https://pointcast.xyz/beach-commons/v1',
   publishedAt: '2026-07-26',
-  updatedAt: '2026-07-31',
+  updatedAt: '2026-09-15',
   status:
     'An unofficial speculative editorial series. No physical event, installation, permit, purchase requirement, contribution drive, restoration action, or municipal affiliation is announced by this index.',
   creators: [
@@ -66,7 +66,7 @@ export const BEACH_COMMONS_PATHS = [
     title: 'Bring a Kit',
     shortTitle: 'Utility',
     description:
-      'Move from shopping lists and blanket systems through a public electronics bench into a scored field kit where utility becomes culture.',
+      'Move from shopping lists and blanket systems through a public electronics bench, useful field gear, and a place to sit between games.',
     color: '#92b6a6',
   },
   {
@@ -299,7 +299,20 @@ export const BEACH_COMMONS_EDITIONS: readonly BeachCommonsEdition[] = [
     image: '/beach-commons/v18/assets/poster-01.png',
     alt: 'A circular physical relief map centered on El Segundo gathers regional makers around a glowing radius ring.',
     path: 'region',
-    blockId: '0548', measure: '8 strengths · 40 routes', current: true,
+    blockId: '0548', measure: '8 strengths · 40 routes',
+  },
+  {
+    edition: 19,
+    slug: 'v19',
+    title: 'The Extra Chair',
+    subtitle: 'A place between games. A room for one more.',
+    invitation: 'Explore twelve seats and three ways to gather—from telescoping pickleball stools to a spare chair by the sea.',
+    image: '/beach-commons/v19/assets/the-extra-chair.webp',
+    alt: 'An original editorial illustration of a welcoming group of portable chairs beside the sea.',
+    path: 'kit',
+    blockId: '0591',
+    measure: '12 seats · 6 Pocket Seats picks · 3 gatherings',
+    current: true,
   },
 ];
 

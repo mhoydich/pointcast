@@ -197,7 +197,7 @@ test('V17 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.equal(block.id, '0546');
   assert.equal(block.author, 'codex');
   assert.equal(block.external.url, 'https://pointcast.xyz/beach-commons/v17');
-  assert.match(series, /currentEdition: 18/);
+  assert.match(series, /currentEdition: 19/);
   assert.match(series, /blockId: '0546'/);
   assert.match(sitemap, /pointcast\.xyz\/beach-commons\/v17'/);
   assert.match(llms, /PointCast Field Study 017/);
@@ -206,5 +206,5 @@ test('V17 has JSON, Block, series, homepage, and discovery twins', async () => {
   assert.match(homeEdition, /href: '\/beach-commons\/v18\/skills'/);
   assert.match(homeEdition, /id: '0548'/);
   assert.match(homeEdition, /id: '0549'/);
-  assert.match(indexPage, /Foundation → room → proof → radius → skill → engineering → outside\./);
+  assert.match(indexPage, /Foundation → room → proof → radius → skill → engineering → outside → one more\./);
 });
