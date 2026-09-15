@@ -14,6 +14,7 @@ const markup = `<section id="nouns-flow" data-state="ready" data-world="garden" 
 <audio data-flow-hit-audio="0" src="/audio/starjam/hit-0.m4a"></audio>
 <audio data-flow-hit-audio="1" src="/audio/starjam/hit-1.m4a"></audio>
 <audio data-flow-hit-audio="2" src="/audio/starjam/hit-2.m4a"></audio>
+<audio data-drip-clear-audio src="/audio/starjam/level-clear.m4a" preload="none"></audio>
 <button data-flow-start>Start</button><button data-flow-sound></button>
 <button data-flow-haptics></button><span data-flow-haptics-note></span>
 <dialog><button data-flow-test-sound>Test sound</button><p data-flow-audio-status></p>
@@ -65,6 +66,7 @@ function fixture(t, { storage = {}, vibration = true } = {}) {
   });
   const getMedia = selector => media.find(item => item.element.matches(selector));
   const track = getMedia('[data-flow-track]'), welcome = getMedia('[data-flow-speaker-test]');
+  const clear = getMedia('[data-drip-clear-audio]');
   const effects = [0, 1, 2].map(lane => getMedia(`[data-flow-hit-audio="${lane}"]`));
   const handlers = new Map();
   for (const node of [root, doc]) {
@@ -110,12 +112,108 @@ function fixture(t, { storage = {}, vibration = true } = {}) {
   };
   const visible = value => { visibility = value ? 'visible' : 'hidden'; doc.dispatchEvent(new win.Event('visibilitychange')); };
   const volume = value => { q('[data-flow-volume]').value = String(value); q('[data-flow-volume]').dispatchEvent(new win.Event('input')); };
-  return { win, doc, root, q, track, welcome, effects, media, timers, interruptions, clocks, vibrations, cleanup, click, lane, noun, key, emit, start, hit, flushMedia, advance, visible, volume };
+  return { win, doc, root, q, track, welcome, clear, effects, media, timers, interruptions, clocks, vibrations, cleanup, click, lane, noun, key, emit, start, hit, flushMedia, advance, visible, volume };
 }
 
-function pop(f, nodeId = 'drop-1', lane = 0) {
-  f.root.dispatchEvent(new f.win.CustomEvent('nouns-drip:pop', { detail: { nodeId, lane, count: 1, score: 100 } }));
+function pop(f, nodeId = 'drop-1', lane = 0, count = 1) {
+  f.root.dispatchEvent(new f.win.CustomEvent('nouns-drip:pop', { detail: { nodeId, lane, count, score: count * 10 } }));
 }
+
+test('the twelfth trusted pop plays one finite celebration without restarting or pausing its backing', async t => {
+  const f = fixture(t); f.root.dataset.mode = 'drip'; f.start(); await tick(); f.flushMedia();
+  f.track.currentTime = 13.25;
+  f.noun('drop-1'); pop(f, 'drop-1', 0, 11);
+  assert.equal(f.clear.plays.length, 0);
+  f.noun('drop-2'); await Promise.resolve(); pop(f, 'drop-2', 2, 12);
+  assert.equal(f.clear.plays.length, 1, 'play stays in the matching gesture before awaiting a media result');
+  pop(f, 'drop-2', 2, 12);
+  f.noun('drop-1'); pop(f, 'drop-1', 0, 12);
+  f.noun('drop-2'); pop(f, 'drop-2', 2, 13);
+  await tick(); f.flushMedia();
+  assert.equal(f.clear.plays.length, 1);
+  assert.equal(f.track.plays.length, 1);
+  assert.equal(f.track.currentTime, 13.25);
+  assert.equal(f.track.paused, false);
+  assert.equal(f.root.dataset.flowAudioClock, 'media');
+  assert.equal(f.root.dataset.state, 'playing');
+  assert.deepEqual(f.interruptions, []);
+  f.clear.ended = true; f.clear.paused = true; f.clear.event('ended');
+  f.advance(0);
+  assert.equal(f.timers.size, 0);
+});
+
+test('the celebration requires a current matching gesture and never plays from stale, synthetic, or wrong-mode events', t => {
+  const f = fixture(t); f.root.dataset.mode = 'drip'; f.start();
+  pop(f, 'drop-1', 0, 12);
+  f.q('[data-drip-noun="drop-1"]').click(); pop(f, 'drop-1', 0, 12);
+  f.noun('drop-1'); pop(f, 'drop-2', 0, 12); pop(f, 'drop-1', 2, 12);
+  f.advance(0); pop(f, 'drop-1', 0, 12);
+  f.noun('drop-1'); f.root.dataset.mode = 'rhythm'; pop(f, 'drop-1', 0, 12);
+  assert.equal(f.clear.plays.length, 0);
+  f.root.dataset.mode = 'drip'; f.key('j'); pop(f, 'drop-2', 2, 12);
+  assert.equal(f.clear.plays.length, 1, 'a current keyboard pop can celebrate');
+});
+
+test('Resume preserves the one-time clear latch while a fresh world can celebrate again', async t => {
+  const f = fixture(t); f.root.dataset.mode = 'drip'; f.start();
+  f.noun('drop-1'); pop(f, 'drop-1', 0, 12); await tick();
+  f.emit('pause', { elapsedMs: 15000 }); f.start();
+  f.noun('drop-2'); pop(f, 'drop-2', 2, 12);
+  assert.equal(f.clear.plays.length, 1);
+  f.emit('world'); f.start(); f.noun('drop-1'); pop(f, 'drop-1', 0, 12);
+  assert.equal(f.clear.plays.length, 2);
+});
+
+for (const boundary of ['pause', 'world', 'mode', 'hidden', 'mute', 'zero', 'cleanup']) {
+  test(`${boundary} cancels a pending celebration and late native playback cannot revive it`, async t => {
+    const f = fixture(t), pending = deferred(); f.root.dataset.mode = 'drip'; f.start();
+    f.clear.plans.push(pending); f.noun('drop-1'); pop(f, 'drop-1', 0, 12);
+    if (boundary === 'pause') f.emit('pause', { elapsedMs: 14000 });
+    else if (boundary === 'world') f.emit('world');
+    else if (boundary === 'mode') { f.emit('pause', { reason: 'cleanup' }); f.root.dataset.mode = 'rhythm'; }
+    else if (boundary === 'hidden') f.visible(false);
+    else if (boundary === 'mute') f.click('[data-flow-sound]');
+    else if (boundary === 'zero') f.volume(0);
+    else f.cleanup();
+    assert.equal(f.clear.paused, true);
+    assert.equal(f.clear.currentTime, 0);
+    pending.resolve(); await tick(); f.flushMedia(); f.advance(0);
+    assert.equal(f.clear.paused, true);
+    assert.equal(f.clear.plays.length, 1);
+    if (boundary !== 'cleanup') { f.clear.ready(); f.flushMedia(); assert.equal(f.clear.paused, true); }
+    assert.equal(f.timers.size, 0);
+  });
+}
+
+test('muted milestones stay silent after unmute, and a rejected or stalled fanfare cannot stop the track', async t => {
+  const f = fixture(t, { storage: { sound: 'off' } }); f.root.dataset.mode = 'drip'; f.start();
+  f.noun('drop-1'); pop(f, 'drop-1', 0, 12); f.click('[data-flow-sound]');
+  f.noun('drop-2'); pop(f, 'drop-2', 2, 12);
+  assert.equal(f.clear.plays.length, 0);
+  for (const failure of ['reject', 'stall']) {
+    f.emit('world'); f.start(); await tick(); f.flushMedia();
+    const pending = deferred(); f.clear.plans.push(pending);
+    f.noun('drop-1'); pop(f, 'drop-1', 0, 12);
+    if (failure === 'reject') pending.reject(new Error('Optional cue blocked'));
+    else f.advance(2000);
+    await tick(); f.flushMedia();
+    assert.equal(f.clear.paused, true);
+    assert.equal(f.track.paused, false);
+    assert.deepEqual(f.interruptions, []);
+    if (failure === 'stall') { pending.resolve(); await tick(); f.clear.ready(); f.flushMedia(); assert.equal(f.clear.paused, true); }
+  }
+});
+
+test('an old fanfare rejection cannot cancel a new level celebration', async t => {
+  const f = fixture(t), pending = deferred(); f.root.dataset.mode = 'drip'; f.start();
+  f.clear.plans.push(pending); f.noun('drop-1'); pop(f, 'drop-1', 0, 12);
+  f.emit('world'); f.start(); f.noun('drop-2'); pop(f, 'drop-2', 2, 12); await tick();
+  pending.reject(new Error('Previous level aborted')); await tick(); f.flushMedia();
+  assert.equal(f.clear.plays.length, 2);
+  assert.equal(f.clear.paused, false);
+  assert.equal(f.track.paused, false);
+  assert.deepEqual(f.interruptions, []);
+});
 
 test('Drip accents require the matching trusted Noun and consume that gesture once', async t => {
   const f = fixture(t); f.root.dataset.mode = 'drip'; f.start();

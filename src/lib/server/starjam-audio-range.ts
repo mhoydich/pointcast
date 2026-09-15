@@ -3,7 +3,7 @@ import manifest from '../../../public/audio/starjam/manifest.json';
 // Pages currently serves full 200s for Range requests. Keep this fallback
 // limited to STARJAM's finite, original AAC assets (each under 300 KB).
 // https://developers.cloudflare.com/pages/configuration/serving-pages/#behavior
-const STARJAM_AUDIO = /^\/audio\/starjam\/(?:welcome|hit-[0-2]|(?:garden|rush|shell|storm)-(?:drift|gentle|playful))\.m4a$/;
+const STARJAM_AUDIO = /^\/audio\/starjam\/(?:welcome|level-clear|hit-[0-2]|(?:garden|rush|shell|storm)-(?:drift|gentle|playful))\.m4a$/;
 const MAX_BYTES = 512 * 1024;
 const ASSET_BYTES = new Map(manifest.tracks.map(track => [`/audio/starjam/${track.file}`, track.bytes]));
 
