@@ -3,6 +3,7 @@ import { active, admissionReason, baseStatus, fixedSessionConfig, isRecord, MAX_
 import type { Ledger, SessionRecord } from './policy.ts';
 import { notesRequest, parseNotes, imageRequest, researchRequest, parseResearch } from './studio.ts';
 import { IP_WINDOW_MS, MAX_PER_IP, maxSessions } from './policy.ts';
+import { VoiceToolBridge, type VoiceToolReceipt } from './voice-tools.ts';
 
 const API_ORIGIN = 'https://api.openai.com';
 const LEDGER_KEY = 'voice-ledger-v1';
@@ -30,9 +31,9 @@ export default {
     if (path !== '/status' && !allowed) { await discardBody(request); return denied('origin_not_allowed', 403); }
     let response: Response;
     if (request.method === 'OPTIONS') {
-      if (!allowed || !['/status', '/session', '/session/close', '/notes', '/image', '/research', '/context'].includes(path)) return denied('origin_not_allowed', 403);
+      if (!allowed || !['/status', '/session', '/session/close', '/notes', '/image', '/research', '/context', '/tool'].includes(path)) return denied('origin_not_allowed', 403);
       response = new Response(null, { status: 204, headers: { 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '300' } });
-    } else if ((path === '/status' && request.method === 'GET') || (['/session', '/session/close', '/notes', '/image', '/research', '/context'].includes(path) && request.method === 'POST')) {
+    } else if ((path === '/status' && request.method === 'GET') || (['/session', '/session/close', '/notes', '/image', '/research', '/context', '/tool'].includes(path) && request.method === 'POST')) {
       try {
         // Buffer only the small, bounded control payload before crossing the DO boundary.
         // Forwarding an unread client stream can outlive an early DO rejection.
@@ -54,11 +55,12 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-type Sideband = { socket: WebSocket; finalized: boolean; finished: Promise<boolean>; finish: (confirmed: boolean) => void };
+type Sideband = { socket: WebSocket; finalized: boolean; finished: Promise<boolean>; finish: (confirmed: boolean) => void; tools: VoiceToolBridge };
 export class VoiceSupervisor extends DurableObject<Env> {
   private connections = new Map<string, Sideband>();
   private contextReplies=new Map<string,(accepted:boolean)=>void>();
   private closing = new Map<string, Promise<boolean>>();
+  private imageJobs = new Set<string>();
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
@@ -110,6 +112,7 @@ export class VoiceSupervisor extends DurableObject<Env> {
     if (path === '/session' && request.method === 'POST') return this.createSession(request);
     if (path === '/session/close' && request.method === 'POST') return this.requestClose(request);
     if (path === '/context' && request.method === 'POST') return this.contextUpdate(request);
+    if (path === '/tool' && request.method === 'POST') return this.tool(request);
     if (['/notes','/image','/research'].includes(path) && request.method === 'POST') return this.studio(request, path.slice(1) as 'notes'|'image'|'research');
     return denied('not_found', 404);
   }
@@ -117,8 +120,8 @@ export class VoiceSupervisor extends DurableObject<Env> {
     const status = baseStatus(this.env);
     if (!status.available) { await discardBody(request); return json({ ...status, error: status.reason }, 503); }
     if (request.headers.get('Content-Type')?.split(';')[0] !== 'application/json') { await discardBody(request); return denied('invalid_offer', 415); }
-    let sdp: string | null;
-    try { sdp = parseOffer(await parseJSON(request)); } catch { return denied('invalid_offer', 400); }
+    let sdp: string | null, voiceTools=false;
+    try { const offer=await parseJSON(request);sdp=parseOffer(offer);voiceTools=isRecord(offer)&&offer.voiceTools===true; } catch { return denied('invalid_offer', 400); }
     if (!sdp) return denied('invalid_offer', 400);
     const ip = request.headers.get('CF-Connecting-IP') ?? (this.env.ENVIRONMENT === 'development' ? 'local' : null);
     if (!ip || ip.length > 64) return denied('client_unavailable', 403);
@@ -136,7 +139,7 @@ export class VoiceSupervisor extends DurableObject<Env> {
       const upstream = await fetch(`${API_ORIGIN}/v1/live/sessions`, {
         method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15000),
         headers: { Authorization: `Bearer ${this.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session: fixedSessionConfig(), transport: { type: 'webrtc', sdp } }),
+        body: JSON.stringify({ session: fixedSessionConfig(voiceTools), transport: { type: 'webrtc', sdp } }),
       });
       if (!upstream.ok) {
         await upstream.body?.cancel();
@@ -199,8 +202,44 @@ export class VoiceSupervisor extends DurableObject<Env> {
     const hash = await sha256(data.token);
     if (!record || !record.upstreamId || !['open','closing','closed'].includes(record.status) || !crypto.subtle.timingSafeEqual(new TextEncoder().encode(hash), new TextEncoder().encode(record.tokenHash))) return denied('invalid_control',403);
     if (Date.now() > record.createdAt + 10 * 60 * 1000) return json({message:'This conversation’s creative tools have expired. Start a new call.'},403);
+    return this.runStudio(id,kind,content);
+  }
+  private async tool(request: Request): Promise<Response> {
+    if (!baseStatus(this.env).available) return denied('unavailable');
+    if (request.headers.get('Content-Type')?.split(';')[0] !== 'application/json') return denied('invalid_request',415);
+    let data: unknown; try { data = await parseJSON(request,2048); } catch { return denied('invalid_request',400); }
+    if (!isRecord(data) || Object.keys(data).length !== 3 || typeof data.id !== 'string' || !UUID.test(data.id) || typeof data.token !== 'string' || !TOKEN.test(data.token) || typeof data.callId !== 'string' || !/^[a-zA-Z0-9_-]{1,256}$/.test(data.callId)) return denied('invalid_control',400);
+    const id=data.id, callId=data.callId, record=(await this.ledger()).sessions[id], hash=await sha256(data.token);
+    if (!record || record.status !== 'open' || record.deadline <= Date.now() || !crypto.subtle.timingSafeEqual(new TextEncoder().encode(hash),new TextEncoder().encode(record.tokenHash))) return denied('invalid_control',403);
+    const connection=this.connections.get(id);
+    if (!connection || connection.finalized || connection.socket.readyState !== 1) return json({reason:'voice_unavailable',message:'The call has ended; no new voice tool work was started.'},409);
+    // The browser and sideband receive the same event independently. Wait briefly
+    // for its authenticated provider copy, never accept browser-supplied arguments.
+    const call=await connection.tools.waitForCall(callId);
+    if (!call) return json({reason:'unknown_tool_call',message:'This voice tool request could not be verified. Please ask Shwa again.'},409);
+    const receipt=await connection.tools.run(callId,async (pending,signal):Promise<VoiceToolReceipt> => {
+      if (!['search_web','generate_image'].includes(pending.name)) return {callId,name:pending.name,status:'failed',result:{},reason:'unsupported_tool',message:'That tool is not available in this room.'};
+      const response=await this.runStudio(id,pending.name==='search_web'?'research':'image',pending.content,{signal,connection});
+      const body: unknown=await response.json();
+      const result=isRecord(body)?body:{};
+      return {callId,name:pending.name,status:response.ok?'completed':'failed',result:response.ok?result:{},...(response.ok?{}:{reason:typeof result.reason==='string'?result.reason:'tool_failed',message:typeof result.message==='string'?result.message:'The requested work could not finish.'})};
+    });
+    return json(receipt);
+  }
+  private async runStudio(id: string, kind: 'notes'|'image'|'research', content: string, voice?: {signal: AbortSignal; connection: Sideband}): Promise<Response> {
+    if (kind !== 'image') return this.runStudioOnce(id,kind,content,voice);
+    // Shared by manual controls and voice tools. A second image request cannot
+    // reserve another paid attempt while the first image is still running.
+    if (this.imageJobs.has(id)) return json({reason:'image_busy',message:'An image is already being made for this call. No second image was started.'},409);
+    this.imageJobs.add(id);
+    try { return await this.runStudioOnce(id,kind,content,voice); }
+    finally { this.imageJobs.delete(id); }
+  }
+  private async runStudioOnce(id: string, kind: 'notes'|'image'|'research', content: string, voice?: {signal: AbortSignal; connection: Sideband}): Promise<Response> {
+    const image=kind==='image', research=kind==='research';
     const reason = await this.update(ledger => {
       const current = ledger.sessions[id];
+      if (!current || (voice && (voice.signal.aborted || this.connections.get(id)!==voice.connection || voice.connection.finalized || current.status!=='open' || current.deadline<=Date.now()))) return 'call_ended';
       if (image) {
         if ((current.imageAttempts ?? 0) >= 2 || Object.values(ledger.sessions).reduce((sum,item)=>sum+(item.imageAttempts??0),0) >= 10) return 'image_limit';
         current.imageAttempts = (current.imageAttempts ?? 0)+1;
@@ -214,11 +253,11 @@ export class VoiceSupervisor extends DurableObject<Env> {
       }
       return null;
     });
-    if (reason) return json({reason,message:reason==='image_limit'?'The image allowance is used up (two per call, ten for this trial).':reason==='research_limit'?'The research allowance is used up (two per call, ten for this trial).':reason==='notes_limit'?'The live notes for this call are complete.':'Notes will refresh in a moment.'},429);
+    if (reason) return json({reason,message:reason==='call_ended'?'The call ended before this work could start.':reason==='image_limit'?'The image allowance is used up (two per call, ten for this trial).':reason==='research_limit'?'The research allowance is used up (two per call, ten for this trial).':reason==='notes_limit'?'The live notes for this call are complete.':'Notes will refresh in a moment.'},reason==='call_ended'?409:429);
     // Persist only quota counters. Transcript, prompt, model output and image bytes are never stored.
     try {
       const response = await fetch(`${API_ORIGIN}/v1/${image?'images/generations':'responses'}`, {
-        method:'POST', redirect:'manual', signal:AbortSignal.timeout(image?90000:research?60000:30000),
+        method:'POST', redirect:'manual', signal:voice?AbortSignal.any([voice.signal,AbortSignal.timeout(image?90000:research?60000:30000)]):AbortSignal.timeout(image?90000:research?60000:30000),
         headers:{Authorization:`Bearer ${this.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
         body:JSON.stringify(image?imageRequest(content):research?researchRequest(content):notesRequest(content)),
       });
@@ -261,6 +300,7 @@ export class VoiceSupervisor extends DurableObject<Env> {
     });
     const connection = this.connections.get(id);
     if (connection) {
+      connection.tools.dispose();
       this.connections.delete(id);
       if (connection.socket.readyState < 2) connection.socket.close(1000, 'Session finalized');
     }
@@ -282,16 +322,22 @@ export class VoiceSupervisor extends DurableObject<Env> {
     const socket = response.webSocket;
     let finish!: (confirmed: boolean) => void;
     const finished = new Promise<boolean>(resolve => { finish = resolve; });
-    const sideband: Sideband = { socket, finalized: false, finished, finish };
+    const record=(await this.ledger()).sessions[id];
+    const deadline=record?.deadline??0;
+    const tools=new VoiceToolBridge({send:event=>socket.send(JSON.stringify(event)),active:()=>Date.now()<deadline && this.connections.get(id)===sideband && !sideband.finalized && socket.readyState===1});
+    const sideband: Sideband = { socket, finalized: false, finished, finish, tools };
     this.connections.set(id, sideband);
     socket.addEventListener('message', event => {
-      // Ignore audio, transcripts and backend content: nothing is recorded or logged.
+      // Conversation/tool state is ephemeral and bounded. Only quota counters are
+      // persisted; no audio, transcript, prompt, result, or credential is logged.
       if (typeof event.data !== 'string' || event.data.length > 128 * 1024) return;
       try {
         const message: unknown = JSON.parse(event.data);
+        sideband.tools.observe(message);
         if(isRecord(message)&&typeof message.client_event_id==='string'&&['session.thinking.appended','error'].includes(String(message.type))) this.contextReplies.get(message.client_event_id)?.(message.type==='session.thinking.appended');
         if (isRecord(message) && message.type === 'session.closed') {
           sideband.finalized = true;
+          sideband.tools.dispose();
           finish(true);
           this.ctx.waitUntil(this.finalize(id));
         }
@@ -299,6 +345,7 @@ export class VoiceSupervisor extends DurableObject<Env> {
     });
     const lost = () => {
       if (sideband.finalized) return;
+      sideband.tools.dispose();
       finish(false);
       if (this.connections.get(id) === sideband) this.connections.delete(id);
       this.ctx.waitUntil(this.markUncertain(id));
@@ -309,6 +356,7 @@ export class VoiceSupervisor extends DurableObject<Env> {
     return sideband;
   }
   private async closeSession(id: string): Promise<boolean> {
+    this.connections.get(id)?.tools.dispose();
     const underway = this.closing.get(id);
     if (underway) return underway;
     const job = this.performClose(id);

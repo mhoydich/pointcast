@@ -98,7 +98,11 @@ function mediaServices(win, state) {
     createAnalyser() { return { fftSize: 256, getByteTimeDomainData(bytes) { bytes.fill(128); } }; }
     createMediaStreamSource() { return { connect() {} }; }
   }
-  class Audio { async play() {} pause() {} }
+  class Audio extends win.EventTarget {
+    paused = true; muted = false; volume = 1;
+    async play() { this.paused = false; this.dispatchEvent(new win.Event('playing')); }
+    pause() { this.paused = true; this.dispatchEvent(new win.Event('pause')); }
+  }
   Object.defineProperty(win.navigator, 'mediaDevices', { value: { async getUserMedia() {
     const track = { stopped: false, enabled: true, stop() { this.stopped = true; } }; state.tracks.push(track);
     return { active: true, getTracks: () => [track], getAudioTracks: () => [track] };
@@ -167,6 +171,91 @@ test('a canvas image remains a proposal until its explicit Greenlight button is 
     assert.equal(generations, 0);
     await click([...view.container.querySelectorAll('button')].find(button => button.textContent.includes('Greenlight image')));
     assert.equal(generations, 1);
+  } finally { await view.close(); }
+});
+
+test('voice-requested work stays on the same piece and displays sourced results without another request', async () => {
+  const research = { ...liveCard('research'), workState: 'pending', workMessage: 'Checking the requested paddle prices.' };
+  const picture = { ...liveCard('image'), workState: 'pending', workMessage: 'Making the requested paddle artwork.' };
+  const text = 'The listed mock price is $100. [1]';
+  const start = text.indexOf('[1]');
+  const result = { estimatedCost: .01, parts: [{ text, citations: [
+    { start, end: start + 3, url: 'https://example.org/paddle', title: 'Mock paddle product page' },
+    { start, end: start + 3, url: 'https://example.org/paddle', title: 'Repeated product page' },
+    { start, end: start + 3, url: 'javascript:alert(1)', title: 'Unsafe source' },
+  ] }] };
+  let requests = 0;
+  const props = { items: [research, picture], state: '', enabled: true, setEnabled: noop, canGenerate: true, imageBusy: false,
+    onAnswer: noop, onImage: async () => { requests++; }, onResearch: async () => { requests++; return result; } };
+  const view = await mount(CanvasPanel, props);
+  try {
+    const researchNode = view.container.querySelector(`[data-canvas-card="${research.id}"]`);
+    const pictureNode = view.container.querySelector(`[data-canvas-card="${picture.id}"]`);
+    assert.match(researchNode.textContent, /Checking the requested paddle prices/);
+    for (const node of [researchNode, pictureNode]) {
+      assert.equal(node.dataset.workState, 'pending');
+      const action = node.querySelector('.piece-response-actions button');
+      assert.equal(action.disabled, true);
+      await click(action);
+    }
+    assert.equal(requests, 0);
+    await click(byLabel(researchNode, 'Pin ' + research.title));
+    await click(byLabel(researchNode, 'Hide ' + research.title));
+    await view.render({ ...props, background: 'reading', items: [
+      { ...research, workState: 'complete', workMessage: '', researchResult: result, researchedAt: Date.UTC(2026, 8, 15) },
+      { ...picture, workState: 'complete', workMessage: '', imageUrl: 'data:image/webp;base64,UklGRgAAAABXRUJQ' },
+    ] });
+    await click(byText(view.container, 'Undo hide'));
+    assert.equal(view.container.querySelector(`[data-canvas-card="${research.id}"]`), researchNode);
+    assert.equal(researchNode.dataset.workState, 'complete');
+    assert.ok(byLabel(researchNode, 'Unpin ' + research.title));
+    assert.match(researchNode.textContent, /WEB SOURCES/);
+    assert.match(researchNode.textContent, /The listed mock price is \$100/);
+    const sources = researchNode.querySelectorAll('.research-source');
+    assert.equal(sources.length, 1);
+    assert.equal(sources[0].getAttribute('href'), 'https://example.org/paddle');
+    assert.match(sources[0].textContent, /example.org.*Mock paddle product page.*Cited finding/);
+    assert.equal(researchNode.querySelector('[href^="javascript:"]'), null);
+    assert.equal(researchNode.querySelector('.piece-response-actions button'), null);
+    assert.equal(pictureNode.dataset.workState, 'complete');
+    assert.equal(pictureNode.querySelector('img').alt, picture.prompt);
+    assert.ok(pictureNode.querySelector('[download="shwa-canvas.webp"]'));
+    assert.equal(requests, 0, 'Rendering and arranging finished work cannot launch another paid request');
+  } finally { await view.close(); }
+});
+
+test('a failed voice lookup exposes an explicit retry and clears the error after manual recovery', async () => {
+  const card = { ...liveCard('research'), workState: 'error', workMessage: 'The source lookup could not finish.' };
+  let searches = 0;
+  const props = { items: [card], state: '', enabled: true, setEnabled: noop, canGenerate: true, imageBusy: false,
+    onAnswer: noop, onImage: async () => {}, onResearch: async () => { searches++; return { estimatedCost: .01, parts: [{ text: 'Recovered result.', citations: [] }] }; } };
+  const view = await mount(CanvasPanel, props);
+  try {
+    assert.match(view.container.querySelector('[role="alert"]').textContent, /could not finish/);
+    assert.equal(searches, 0);
+    await click([...view.container.querySelectorAll('button')].find(button => button.textContent.includes('Try research again')));
+    assert.equal(searches, 1);
+    assert.match(view.container.textContent, /Recovered result/);
+    assert.equal(view.container.querySelector('[role="alert"]'), null);
+    assert.equal(view.container.querySelector('[data-canvas-card]').dataset.workState, 'complete');
+  } finally { await view.close(); }
+});
+
+test('manual retry progress and its latest failure replace a prior voice-tool failure', async () => {
+  const card = { ...liveCard('research'), workState: 'error', workMessage: 'The voice request was unclear.' };
+  let failRetry;
+  const props = { items: [card], state: '', enabled: true, setEnabled: noop, canGenerate: true, imageBusy: false,
+    onAnswer: noop, onImage: async () => {}, onResearch: () => new Promise((_, reject) => { failRetry = reject; }) };
+  const view = await mount(CanvasPanel, props);
+  try {
+    assert.match(view.container.querySelector('[role="alert"]').textContent, /voice request was unclear/);
+    await click([...view.container.querySelectorAll('button')].find(button => button.textContent.includes('Try research again')));
+    assert.match(view.container.querySelector('.piece-work-status').textContent, /Looking it up and checking sources/);
+    assert.doesNotMatch(view.container.querySelector('.piece-work-status').textContent, /unclear/);
+    assert.equal(view.container.querySelector('[role="alert"]'), null);
+    await act(async () => failRetry(Error('The research allowance is used up.')));
+    assert.match(view.container.querySelector('[role="alert"]').textContent, /research allowance is used up/);
+    assert.doesNotMatch(view.container.querySelector('[role="alert"]').textContent, /unclear/);
   } finally { await view.close(); }
 });
 

@@ -35,13 +35,19 @@ const { StationPanels } = await component('station-panels.tsx', {
     }`,
 });
 const { default: Home } = await component('page.tsx', {
-  './station-panels': `import React from 'react'; export function StationPanels(p){return <main><output data-phase>{p.phase}</output><output data-control>{String(p.canGenerate)}</output>{p.children}</main>;}`,
+  './station-panels': `import React from 'react'; export function StationPanels(p){return <main>
+    <output data-phase>{p.phase}</output><output data-control>{String(p.canGenerate)}</output><output data-playback>{p.voicePlayback?.status}</output>
+    <output data-canvas>{JSON.stringify(p.canvas)}</output><output data-image-busy>{String(p.imageBusy)}</output><output data-images>{JSON.stringify(p.images)}</output>
+    <textarea aria-label="Image draft" value={p.prompt} onInput={event=>p.setPrompt(event.currentTarget.value)}/>
+    <button data-manual-generate onClick={()=>p.generate(p.prompt)}>Manual image handler</button>
+    {p.children}</main>;}`,
 });
 
 const panelProps = {
   canvas: [], canvasEnabled: true, setCanvasEnabled() {}, contextState: '', onActivity() {},
   onAnswer() {}, async onCanvasImage() {}, async onResearch() {}, phase: 'idle',
   line: { available: true, remainingCalls: 10 }, message: '', seconds: 120, muted: false,
+  voicePlayback: { status: 'waiting', message: 'Waiting for Shwa’s voice.' },
   signals: { input: 0, output: 0, inputPath: '', outputPath: '' }, captions: [], notes: null,
   notesState: '', costs: { voice: 0, notes: 0, images: 0, research: 0 }, prompt: '',
   setPrompt() {}, images: [], imageState: '', imageBusy: false, canGenerate: false, generate() {},
@@ -117,8 +123,14 @@ test('Shift+Tab from the dialog container wraps inside and excludes the hidden w
   } finally { await view.close(); }
 });
 
-test('cached page restoration clears the old call and control before allowing an explicit restart', async () => {
-  const requests = [], peers = [], tracks = [], beacons = [];
+test('connected voice recovers without another session and cached restoration rejects stale playback updates', async () => {
+  const requests = [], peers = [], tracks = [], beacons = [], audios = [];
+  const deferred = () => {
+    let resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    return { promise, resolve, reject };
+  };
+  let makeRemoteTrack;
   const view = await mount(Home, {}, win => {
     class Channel extends win.EventTarget {
       readyState = 'open'; sent = [];
@@ -140,14 +152,35 @@ test('cached page restoration clears the old call and control before allowing an
       createAnalyser() { return { fftSize: 256, getByteTimeDomainData(bytes) { bytes.fill(128); } }; }
       createMediaStreamSource() { return { connect() {} }; }
     }
-    class Audio { async play() {} pause() {} }
+    class Audio extends win.EventTarget {
+      paused = true; muted = false; volume = 1; srcObject = null; plans = []; plays = 0; pauses = 0;
+      constructor() { super(); audios.push(this); }
+      setAttribute() {}
+      play() {
+        this.plays++;
+        return (this.plans.shift()?.promise ?? Promise.resolve()).then(() => { this.paused = false; });
+      }
+      pause() { this.pauses++; this.paused = true; this.dispatchEvent(new win.Event('pause')); }
+    }
+    class Track extends win.EventTarget {
+      kind = 'audio'; readyState = 'live'; muted = false; enabled = true; stopped = false;
+      stop() { this.stopped = true; this.readyState = 'ended'; }
+    }
+    class MediaStream {
+      active = true;
+      constructor(tracks) { this.tracks = tracks; }
+      getTracks() { return this.tracks; }
+      getAudioTracks() { return this.tracks.filter(track => track.kind === 'audio'); }
+    }
+    makeRemoteTrack = () => new Track();
     Object.defineProperty(win.navigator, 'mediaDevices', { value: { async getUserMedia() {
-      const track = { stopped: false, enabled: true, stop() { this.stopped = true; } }; tracks.push(track);
-      return { active: true, getTracks: () => [track], getAudioTracks: () => [track] };
+      const track = new Track(); tracks.push(track);
+      return new MediaStream([track]);
     } } });
     Object.defineProperty(win.navigator, 'sendBeacon', { value: (url, body) => { beacons.push({ url, body }); return true; } });
     win.RTCPeerConnection = Peer;
-    return { RTCPeerConnection: Peer, AudioContext, Audio, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, fetch: async (url, options) => {
+    win.AudioContext = AudioContext;
+    return { RTCPeerConnection: Peer, AudioContext, Audio, MediaStream, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, fetch: async (url, options) => {
       requests.push({ url, options });
       assert.equal(options.credentials, 'omit');
       if (url.endsWith('/status')) return Response.json({ available: true, remainingCalls: 10 });
@@ -158,20 +191,165 @@ test('cached page restoration clears the old call and control before allowing an
   });
   try {
     const button = () => view.container.querySelector('.call-button');
+    const playback = () => view.container.querySelector('[data-playback]').textContent;
+    const sound = () => view.container.querySelector('[aria-label="Retry Shwa sound"]');
+    const sessions = () => requests.filter(item => item.url.endsWith('/session')).length;
+    const connected = index => act(async () => peers[index].channel.dispatchEvent(new view.dom.window.MessageEvent('message', { data: JSON.stringify({ type: 'session.started' }) })));
+    const remote = index => act(async () => {
+      const event = new view.dom.window.Event('track');
+      Object.defineProperty(event, 'track', { value: makeRemoteTrack() });
+      peers[index].dispatchEvent(event);
+    });
     await click(button());
-    await act(async () => peers[0].channel.dispatchEvent(new view.dom.window.MessageEvent('message', { data: JSON.stringify({ type: 'session.started' }) })));
+    await connected(0);
     assert.equal(view.container.querySelector('[data-phase]').textContent, 'connected');
     assert.equal(view.container.querySelector('[data-control]').textContent, 'true');
+    assert.equal(playback(), 'waiting', 'Session started is not evidence of remote voice playback');
+    await click(sound());
+    assert.equal(audios[0].plays, 0, 'Without a remote track, retry does not play an empty source');
+    assert.equal(sessions(), 1);
+
+    const denied = deferred(); audios[0].plans.push(denied);
+    await remote(0);
+    await act(async () => denied.reject(new DOMException('Playback blocked', 'NotAllowedError')));
+    assert.equal(playback(), 'blocked');
+    await click(sound());
+    assert.equal(playback(), 'ready');
+    assert.equal(audios[0].plays, 2);
+    assert.equal(sessions(), 1, 'Sound recovery must reuse this call, without another billable session');
+
+    const late = deferred(); audios[0].plans.push(late);
+    await click(sound());
     await act(async () => window.dispatchEvent(new view.dom.window.PageTransitionEvent('pagehide', { persisted: true })));
     await act(async () => window.dispatchEvent(new view.dom.window.PageTransitionEvent('pageshow', { persisted: true })));
     assert.equal(tracks[0].stopped, true);
     assert.equal(peers[0].connectionState, 'closed');
+    assert.equal(audios[0].paused, true);
+    assert.equal(audios[0].srcObject, null);
     assert.ok(beacons.some(item => item.url.endsWith('/session/close')));
     assert.equal(view.container.querySelector('[data-phase]').textContent, 'ended');
     assert.equal(view.container.querySelector('[data-control]').textContent, 'false');
-    assert.equal(requests.filter(item => item.url.endsWith('/session')).length, 1, 'Restoration must not start another paid call');
+    assert.equal(sessions(), 1, 'Restoration must not start another paid call');
     assert.equal(button().disabled, false);
     await click(button());
-    assert.equal(requests.filter(item => item.url.endsWith('/session')).length, 2, 'A deliberate new click can restart');
+    assert.equal(sessions(), 2, 'A deliberate new click can restart');
+    await connected(1);
+    assert.equal(playback(), 'waiting');
+    await remote(1);
+    assert.equal(playback(), 'ready');
+    await act(async () => {
+      late.reject(new DOMException('Old playback denial', 'NotAllowedError'));
+      audios[0].dispatchEvent(new view.dom.window.Event('error'));
+    });
+    assert.equal(playback(), 'ready', 'Old play promises and media events cannot change the new call');
+    assert.equal(view.container.querySelector('[data-phase]').textContent, 'connected');
+    assert.equal(sessions(), 2);
+  } finally { await view.close(); }
+});
+
+test('native voice tools populate the board once and image work preserves drafts and restart availability', async () => {
+  const requests = [], peers = [], pending = [];
+  const view = await mount(Home, {}, win => {
+    class Channel extends win.EventTarget {
+      readyState = 'open';
+      send() {}
+      close() { this.readyState = 'closed'; this.dispatchEvent(new win.Event('close')); }
+    }
+    class Peer extends win.EventTarget {
+      iceGatheringState = 'complete'; connectionState = 'new'; channel = new Channel();
+      constructor() { super(); peers.push(this); }
+      createDataChannel() { return this.channel; }
+      addTrack() {}
+      async createOffer() { return { type: 'offer', sdp: 'v=0\r\nm=audio 9 mock\r\n' }; }
+      async setLocalDescription(value) { this.localDescription = value; }
+      async setRemoteDescription() {}
+      close() { this.connectionState = 'closed'; }
+    }
+    class Audio extends win.EventTarget {
+      paused = true; muted = false; volume = 1;
+      async play() { this.paused = false; }
+      pause() { this.paused = true; }
+    }
+    class AudioContext {
+      state = 'running'; async resume() {} async close() { this.state = 'closed'; }
+      createAnalyser() { return { fftSize: 256, getByteTimeDomainData(bytes) { bytes.fill(128); } }; }
+      createMediaStreamSource() { return { connect() {} }; }
+    }
+    Object.defineProperty(win.navigator, 'mediaDevices', { value: { async getUserMedia() {
+      const track = { enabled: true, stop() {} };
+      return { active: true, getTracks: () => [track], getAudioTracks: () => [track] };
+    } } });
+    Object.defineProperty(win.navigator, 'sendBeacon', { value: () => true });
+    win.RTCPeerConnection = Peer; win.AudioContext = AudioContext;
+    return { RTCPeerConnection: Peer, AudioContext, Audio, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, fetch: async (url, options) => {
+      requests.push({ url, options });
+      assert.equal(options.credentials, 'omit');
+      if (url.endsWith('/status')) return Response.json({ available: true, remainingCalls: 10 });
+      if (url.endsWith('/session/close')) return Response.json({ closed: true });
+      if (url.endsWith('/session')) {
+        const index = requests.filter(request => request.url.endsWith('/session')).length;
+        assert.equal(JSON.parse(options.body).voiceTools, true, 'New calls explicitly enable native voice tools');
+        return Response.json({ transport: { sdp: 'v=0' }, control: { id: `mock-call-${index}`, token: `mock-control-${index}` }, expiresAt: Date.now() + 120000 });
+      }
+      if (url.endsWith('/tool')) return new Promise((resolve, reject) => pending.push({ body: JSON.parse(options.body), resolve, reject }));
+      throw Error(`Unexpected provider operation: ${url}`);
+    } };
+  });
+  const tool = (callId, name, arguments_) => ({ type: 'response.event', event: {
+    type: 'response.output_item.done', item: { type: 'function_call', call_id: callId, name, arguments: JSON.stringify(arguments_) },
+  } });
+  const receipt = (index, name, result) => act(async () => pending[index].resolve(Response.json({ callId: pending[index].body.callId, name, status: 'completed', voiceDelivery: 'queued', result })));
+  const send = (event, peer = 0) => act(async () => peers[peer].channel.dispatchEvent(new view.dom.window.MessageEvent('message', { data: JSON.stringify(event) })));
+  const canvas = () => JSON.parse(view.container.querySelector('[data-canvas]').textContent);
+  const images = () => JSON.parse(view.container.querySelector('[data-images]').textContent);
+  const busy = () => view.container.querySelector('[data-image-busy]').textContent === 'true';
+  const sessions = () => requests.filter(request => request.url.endsWith('/session')).length;
+  try {
+    await click(view.container.querySelector('.call-button'));
+    await send({ type: 'session.started' });
+    const researchEvent = tool('research_one', 'search_web', { question: 'Look up paddle prices', request_quote: 'look up paddle prices' });
+    await send(researchEvent); await send(researchEvent);
+    assert.equal(pending.length, 1, 'A repeated provider function event executes only once');
+    assert.deepEqual(pending[0].body, { id: 'mock-call-1', token: 'mock-control-1', callId: 'research_one' });
+    assert.equal(canvas()[0].kind, 'research'); assert.equal(canvas()[0].workState, 'pending');
+    const text = 'The paddle costs $99. [1]';
+    const research = { parts: [{ text, citations: [{ start: text.indexOf('[1]'), end: text.length, url: 'https://example.org/paddle', title: 'Paddle maker' }] }], estimatedCost: .01 };
+    await receipt(0, 'search_web', research);
+    assert.equal(canvas()[0].workState, 'complete');
+    assert.deepEqual(canvas()[0].researchResult, research);
+    assert.equal(requests.filter(request => request.url.endsWith('/tool')).length, 1);
+
+    await send(tool('image_one', 'generate_image', { prompt: 'A sunny paddle court', request_quote: 'generate an image of a sunny paddle court' }));
+    assert.equal(pending.length, 2); assert.equal(busy(), true);
+    assert.equal(canvas()[1].workState, 'pending');
+    const draft = view.container.querySelector('[aria-label="Image draft"]');
+    await act(async () => {
+      draft.value = 'A separate draft I am still writing';
+      draft.dispatchEvent(new view.dom.window.Event('input', { bubbles: true }));
+    });
+    await click(view.container.querySelector('[data-manual-generate]'));
+    assert.equal(requests.filter(request => request.url.endsWith('/image')).length, 0, 'Home guards the manual handler while voice image work is busy');
+    const image = { image: 'UklGRg==', mimeType: 'image/webp', estimatedCost: .005 };
+    await receipt(1, 'generate_image', image);
+    assert.equal(busy(), false);
+    assert.equal(canvas()[1].workState, 'complete');
+    assert.equal(canvas()[1].imageUrl, 'data:image/webp;base64,UklGRg==');
+    assert.equal(images()[0].prompt, 'A sunny paddle court');
+    assert.equal(draft.value, 'A separate draft I am still writing', 'Voice completion never overwrites a typed draft');
+
+    await send(tool('image_late', 'generate_image', { prompt: 'Another sunny court', request_quote: 'generate another sunny court' }));
+    assert.equal(busy(), true); assert.equal(pending.length, 3);
+    await act(async () => window.dispatchEvent(new view.dom.window.PageTransitionEvent('pagehide', { persisted: true })));
+    await act(async () => window.dispatchEvent(new view.dom.window.PageTransitionEvent('pageshow', { persisted: true })));
+    assert.equal(busy(), false, 'Leaving the call releases its image busy state');
+    assert.equal(view.container.querySelector('.call-button').disabled, false);
+    await click(view.container.querySelector('.call-button'));
+    assert.equal(sessions(), 2);
+    await send({ type: 'session.started' }, 1);
+    await receipt(2, 'generate_image', image);
+    assert.equal(busy(), false);
+    assert.deepEqual(canvas(), []); assert.deepEqual(images(), []);
+    assert.equal(draft.value, 'A separate draft I am still writing');
+    assert.equal(pending.length, 3, 'No hidden automatic retry after returning');
   } finally { await view.close(); }
 });
