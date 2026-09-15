@@ -54,3 +54,7 @@ test('Astra usage is billed once per response, including cached input and reason
 test('board success preserves unconfirmed voice delivery instead of claiming spoken completion',async()=>{
  const f=fixture();f.actions.handle(tool());f.requests[0].resolve({callId:'call_one',name:'search_web',status:'completed',result:research,voiceDelivery:'unavailable'});await tick();assert.equal(f.results[0].r.voiceDelivery,'unavailable');
 });
+
+ test('reused operations retain a shared board identity and zero duplicate cost',async()=>{
+ const f=fixture();f.actions.handle(tool('alias'));f.requests[0].resolve({callId:'alias',name:'search_web',operationId:'original',reused:true,status:'completed',voiceDelivery:'queued',result:{...research,estimatedCost:0}});await tick();assert.equal(f.results[0].r.operationId,'original');assert.equal(f.results[0].r.reused,true);assert.equal(f.costs[0].value,0);
+});

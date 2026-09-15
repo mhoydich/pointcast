@@ -226,7 +226,8 @@ test('research has separate atomic quotas and does not persist question or resul
 
 function voiceCall(socket,{callId='call_research',name='search_web',quote='Look up Honolulu pickleball paddle prices',responseId='resp_research',terminal=true}={}) {
  const emit=body=>socket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(body)}));
- emit({type:'session.input_transcript.delta',delta:quote});
+ const startMs=socket.transcriptTime??0;socket.transcriptTime=startMs+4000;
+ emit({type:'session.input_transcript.delta',delta:quote,start_ms:startMs,end_ms:startMs+1000});
  const event=body=>emit({type:'response.event',delegation_id:'item_delegation',event:body});
  event({type:'response.created',response:{id:responseId}});
  event({type:'response.output_item.done',item:{type:'function_call',call_id:callId,name,arguments:JSON.stringify({[name==='generate_image'?'prompt':'question']:quote,request_quote:quote})}});

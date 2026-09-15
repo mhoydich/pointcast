@@ -7,9 +7,11 @@ const normalize = (value: string) => value.toLowerCase().replace(/[’‘]/g, "'
 
 export type VoiceToolName = 'search_web' | 'generate_image';
 export type VoiceToolCall = { callId: string; name: string; content: string; requestQuote: string; responseId: string; invalid?: string };
-export type VoiceToolReceipt = { callId: string; name: string; status: 'completed' | 'failed'; result: Record<string, unknown>; message?: string; reason?: string; voiceDelivery?: 'queued' | 'unavailable' };
+export type VoiceToolReceipt = { callId: string; name: string; status: 'completed' | 'failed'; result: Record<string, unknown>; message?: string; reason?: string; voiceDelivery?: 'queued' | 'unavailable'; operationId?: string; reused?: boolean };
 type Pending = VoiceToolCall & { receipt?: VoiceToolReceipt; promise?: Promise<VoiceToolReceipt>; delivered: boolean };
 type BackendResponse = { id: string; delegationId: string; calls: Set<string>; terminal: boolean; failed: boolean; continued: boolean };
+type UserTurn = { id: number; text: string; at: number; startedAt: number; endMs?: number; truncated: boolean };
+type ToolOperation = { id: string; turnId: number; settledAt?: number; promise: Promise<VoiceToolReceipt> };
 
 export const VOICE_TOOLS = [
   { type: 'function', name: 'search_web', description: 'Look up current public facts, products, prices, sources, or links when the visitor explicitly asks. Return verified findings with citations to the room and voice. Do not call for incidental mentions, hypothetical examples, your own suggestions, or an unclear request. request_quote must quote the actual visitor request verbatim. Ask one useful question if the product or task is unclear.', strict: true,
@@ -20,10 +22,18 @@ export const VOICE_TOOLS = [
 
 export function explicitToolRequest(name: string, quote: string): boolean {
   const text = normalize(quote);
-  if (/\b(?:do not|don't|dont|never|stop|cancel)\b.{0,30}\b(?:search|look|check|find|research|generat\w*|creat\w*|make|draw|paint)\b/.test(text)) return false;
-  if (/\b(?:for example|hypothetically|imagine i|if i (?:asked|said)|someone (?:said|asked))\b/.test(text)) return false;
+  if (toolRequestVeto(name,text)) return false;
   if (name === 'search_web') return /\b(?:look\s+(?:it\s+)?up|search|research|find|check|compare)\b/.test(text) || /\b(?:how much|what(?:'s| is| are) (?:the )?(?:current )?(?:prices?|costs?))\b/.test(text);
   return name === 'generate_image' && (/\b(?:generate|create|make|draw|paint|render|show)\b.{0,100}\b(?:image|picture|illustration|art|artwork|poster|drawing|painting|visual|design|logo)\b/.test(text) || /\b(?:draw|paint|illustrate)\s+(?:me\s+)?(?:a|an|the)\s+\w/.test(text));
+}
+
+function toolRequestVeto(name: string, context: string): boolean {
+  const text=normalize(context);
+  const verbs=name==='search_web'?'search|look|check|find|research|compare':'generat\\w*|creat\\w*|make|draw|paint|render|show|illustrat\\w*';
+  if (new RegExp(`\\b(?:do not|don't|dont|never|not|no need to|need not|shouldn't|should not|mustn't|must not|can't|cannot|stop|cancel|avoid|hold off|wait before)\\b.{0,80}\\b(?:${verbs})\\b`).test(text)) return true;
+  if (/\b(?:for example|hypothetically|imagine (?:i|you|someone)|if (?:i|you|someone) (?:asked|said|were to|wanted|ask|say)|(?:someone|he|she|they|my friend) (?:said|asked)|(?:i|we) (?:could|might|would) (?:say|ask)|what if|suppose|pretend)\b/.test(text)) return true;
+  const subject=name==='search_web'?'search|lookup|research':'image|picture|generation|drawing|painting|render';
+  return /\b(?:never mind|nevermind|forget (?:it|that)|cancel (?:it|that)|stop (?:it|that)|hold on)\b/.test(text) || new RegExp(`\\b(?:cancel|stop|skip|forget)\\s+(?:(?:that|this|the|my|our)\\s+)?(?:${subject}|request|task)\\b`).test(text);
 }
 
 export function voiceToolSummary(receipt: VoiceToolReceipt): Record<string, unknown> {
@@ -37,7 +47,10 @@ export class VoiceToolBridge {
   private calls = new Map<string, Pending>();
   private responses = new Map<string, BackendResponse>();
   private current = new Map<string, string>();
-  private transcript: { text: string; at: number }[] = [];
+  private transcript: UserTurn[] = [];
+  private turnSerial = 0;
+  private operations = new Map<string, ToolOperation>();
+  private turnOperations = new Map<string, ToolOperation>();
   private waiters = new Map<string, Set<() => void>>();
   private stopped = false;
   private workSignal = new AbortController().signal;
@@ -49,8 +62,17 @@ export class VoiceToolBridge {
   observe(message: unknown): void {
     if (!this.active() || !record(message)) return;
     if (message.type === 'session.input_transcript.delta' && typeof message.delta === 'string') {
-      this.transcript.push({ text: message.delta.slice(0,2000), at: this.now() });
-      this.transcript = this.transcript.filter(part => part.at > this.now()-90000).slice(-80);
+      const now=this.now(), previous=this.transcript.at(-1);
+      const startMs=typeof message.start_ms==='number'&&Number.isFinite(message.start_ms)?message.start_ms:undefined;
+      const endMs=typeof message.end_ms==='number'&&Number.isFinite(message.end_ms)?message.end_ms:undefined;
+      // Live has no authoritative turn-completed event. These conservative
+      // groups only limit authorization reuse; they never trigger work.
+      const newTurn=!previous || (startMs!==undefined&&previous.endMs!==undefined?startMs-previous.endMs>1500:now-previous.at>4000);
+      const turn: UserTurn=newTurn?{id:++this.turnSerial,text:'',at:now,startedAt:now,truncated:false}:previous;
+      turn.text+=message.delta;turn.at=now;if(endMs!==undefined)turn.endMs=endMs;
+      if (turn.text.length>4000) {turn.text=turn.text.slice(-4000);turn.truncated=true;}
+      if(newTurn)this.transcript.push(turn);
+      this.transcript = this.transcript.filter(part => part.at > now-90000).slice(-24);
       while (this.transcript.reduce((n,part) => n+part.text.length,0) > 12000) this.transcript.shift();
       return;
     }
@@ -109,13 +131,30 @@ export class VoiceToolBridge {
     call.promise = (async () => {
       let receipt: VoiceToolReceipt;
       const response = this.responses.get(call.responseId);
-      const fragments=this.transcript.filter(part => part.at > this.now()-90000).map(part => part.text);
       const quoted=normalize(call.requestQuote);
-      const heard=normalize(fragments.join('')).includes(quoted) || normalize(fragments.join(' ')).includes(quoted);
+      const turns=this.transcript.filter(part=>part.at>this.now()-90000);
+      const turn=[...turns].reverse().find(part=>!part.truncated&&normalize(part.text).includes(quoted));
+      // Inspect the whole surrounding utterance and all later corrections,
+      // not merely the model-selected substring (which may omit "do not").
+      const context=turn?turns.filter(part=>part.id>=turn.id).map(part=>part.text).join(' '):'';
       if (!this.active() || response?.failed) receipt = this.failure(call,'call_ended','This call has ended. No new work was started.');
-      else if (!explicitToolRequest(call.name,call.requestQuote) || !heard) receipt = this.failure(call,'needs_confirmation','Please explicitly ask Shwa to look this up or generate the image. No tool was charged for this unclear request.');
-      else try { receipt = await execute(call,this.workSignal); }
-      catch { receipt = this.failure(call,'generation_unconfirmed','The work did not return a confirmed result. It may have been charged; it was not retried.'); }
+      else if (!turn || !explicitToolRequest(call.name,call.requestQuote) || toolRequestVeto(call.name,context)) receipt = this.failure(call,'needs_confirmation','Please explicitly ask Shwa to look this up or generate the image. No tool was charged for this unclear request.');
+      else {
+        const operationKey=call.name+':'+normalize(call.content), turnKey=call.name+':'+turn.id;
+        const prior=this.operations.get(operationKey);
+        const deliberateRepeat=prior&&prior.settledAt!==undefined&&turn.id>prior.turnId&&turn.startedAt>prior.settledAt&&/\b(?:again|another|new|different|refresh|redo|regenerate|one more|instead)\b/.test(normalize(turn.text));
+        let operation=this.turnOperations.get(turnKey) ?? (deliberateRepeat?undefined:prior);
+        const reused=Boolean(operation);
+        if (!operation) {
+          operation={id:call.callId,turnId:turn.id,promise:Promise.resolve().then(()=>execute(call,this.workSignal)).catch(()=>this.failure(call,'generation_unconfirmed','The work did not return a confirmed result. It may have been charged; it was not retried.'))};
+          const current=operation;
+          operation.promise=operation.promise.then(result=>{current.settledAt=this.now();return result;});
+          this.operations.set(operationKey,operation);
+        }
+        this.turnOperations.set(turnKey,operation);
+        const result=await operation.promise;
+        receipt={...result,callId:call.callId,name:call.name,operationId:operation.id,...(reused?{reused:true,result:{...result.result,estimatedCost:0}}:{})};
+      }
       this.complete(call,receipt);
       return call.receipt!;
     })();
@@ -142,6 +181,6 @@ export class VoiceToolBridge {
     // finish under its own timeout so its paid result can reach the same board.
     this.stopped = true; this.transcript = [];
     for (const pending of this.waiters.values()) for (const done of pending) done();
-    this.waiters.clear(); this.calls.clear(); this.responses.clear(); this.current.clear();
+    this.waiters.clear(); this.calls.clear(); this.responses.clear(); this.current.clear();this.operations.clear();this.turnOperations.clear();
   }
 }

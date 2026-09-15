@@ -11,7 +11,7 @@ const researchSchema = z.object({
   })).max(100) })).max(20), estimatedCost: z.number().finite().nonnegative(),
 }).refine(result => result.parts.some(part => part.citations.length) && result.parts.every(part => part.citations.every(c => c.start < c.end && c.end <= part.text.length)));
 const imageSchema = z.object({ image: z.string().max(14000000).regex(/^[A-Za-z0-9+/=]+$/), mimeType: z.literal('image/webp'), estimatedCost: z.number().finite().nonnegative() });
-export type VoiceActionResult = ({ research: ResearchResult } | { imageUrl: string; estimatedCost: number }) & { voiceDelivery: 'queued' | 'unavailable' };
+export type VoiceActionResult = ({ research: ResearchResult } | { imageUrl: string; estimatedCost: number }) & { voiceDelivery: 'queued' | 'unavailable'; operationId?: string; reused?: boolean };
 
 /** A per-call dispatcher. Only provider-issued completed function items can request work. */
 export function createVoiceActions(options: {
@@ -36,8 +36,9 @@ export function createVoiceActions(options: {
       options.onCost(action.name === 'search_web' ? 'research' : 'images', result.estimatedCost);
       if (!options.isCurrent()) return;
       const voiceDelivery = receipt.voiceDelivery === 'queued' ? 'queued' : 'unavailable';
-      if ('parts' in result) options.onResult(action, { research: result, voiceDelivery });
-      else options.onResult(action, { imageUrl: `data:image/webp;base64,${result.image}`, estimatedCost: result.estimatedCost, voiceDelivery });
+      const operation = typeof receipt.operationId === 'string' && /^[\w-]{1,200}$/.test(receipt.operationId) ? { operationId: receipt.operationId, reused: receipt.reused === true } : {};
+      if ('parts' in result) options.onResult(action, { research: result, voiceDelivery, ...operation });
+      else options.onResult(action, { imageUrl: `data:image/webp;base64,${result.image}`, estimatedCost: result.estimatedCost, voiceDelivery, ...operation });
     } catch (error) {
       if (!options.isCurrent()) return;
       options.onError(action, error instanceof Error && error.name !== 'ZodError' ? error.message : 'The tool result was not usable. It may have been charged; no automatic retry.');
