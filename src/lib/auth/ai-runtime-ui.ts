@@ -199,9 +199,9 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
       const label = { checking: 'My AI · checking', 'signed-out': 'Bring your AI', unavailable: 'My AI · unavailable', unpaired: 'Bring your AI', waiting: 'My AI · pairing', offline: 'My AI · offline', online: 'My AI · sign in', ready: 'My AI · online', verified: 'My AI · online' }[state];
       doc.querySelectorAll<HTMLElement>('[data-ai-header]').forEach((el) => { el.textContent = label; el.dataset.aiState = state; });
       doc.querySelectorAll<HTMLElement>('[data-ai-dock-label]').forEach((el) => {
-        el.textContent = view.subscriptionReady && available ? 'ASK MY AI' : 'MY AI';
+        el.textContent = 'ASK SHWA';
         const button = el.closest('button');
-        if (button) { button.dataset.aiState = state; button.setAttribute('aria-label', `Ask my AI — ${label}`); }
+        if (button) { button.dataset.aiState = state; button.setAttribute('aria-label', `Ask Shwa — ${label}`); }
       });
     }
     const active = runtime ? activeJob() : null;

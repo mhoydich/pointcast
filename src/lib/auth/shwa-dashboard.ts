@@ -38,14 +38,23 @@ export function mountShwaDashboard(root: HTMLElement, ask: (question: string, pr
     for (const pick of data.picks) {
       const item = SHWA_CATALOG.find(c => c.id === pick.id)!;
       const card = make('article', '', 'shwa-card');
-      card.append(make('p', `${item.kind} · ${item.time}`, 'shwa-eyebrow'), make('h3', pick.title), make('p', pick.reason), make('p', pick.firstStep, 'shwa-step'));
-      const actions = make('div', '', 'shwa-card-actions'); const link = make('a', 'Go explore ↗') as HTMLAnchorElement;
-      link.href = item.path; actions.append(link);
+      const link = make('a', '', 'shwa-card-link') as HTMLAnchorElement;
+      link.href = item.path;
+      const heading = make('h3', pick.title);
+      const arrow = make('span', '↗', 'shwa-card-arrow'); arrow.setAttribute('aria-hidden', 'true');
+      heading.append(arrow);
+      link.append(make('p', `${item.kind} · ${item.time}`, 'shwa-eyebrow'), heading);
+      card.append(link);
+      const actions = make('div', '', 'shwa-card-actions');
       if (interactive) {
-        const more = make('button', 'More like this') as HTMLButtonElement; more.type = 'button'; more.dataset.shwaRefresh = ''; more.disabled = !ready;
+        const more = make('button', 'More like this') as HTMLButtonElement; more.type = 'button'; more.dataset.shwaRefresh = ''; more.dataset.shwaReaction = ''; more.disabled = !ready; more.hidden = !ready;
+        more.setAttribute('aria-label', `More like ${pick.title}`);
         more.addEventListener('click', () => refresh(`I like ${item.title}. Find related experiences with a different angle.`)); actions.append(more);
+      } else {
+        card.append(make('p', pick.reason), make('p', pick.firstStep, 'shwa-step'));
       }
-      card.append(actions); target.append(card);
+      if (interactive) card.append(actions);
+      target.append(card);
     }
   }
   function refresh(reaction = '') {
@@ -60,27 +69,30 @@ export function mountShwaDashboard(root: HTMLElement, ask: (question: string, pr
     const detail = (event as CustomEvent).detail;
     opened = Boolean(detail?.open && detail?.tray === 'my-ai'); if (opened) maybeStart();
   }, {signal:controller.signal});
+  function composing() {
+    return Boolean(root.querySelector<HTMLTextAreaElement>('[data-runtime-prompt]')?.value.trim() || root.querySelector<HTMLDetailsElement>('[data-shwa-conversation]')?.open);
+  }
   function maybeStart() {
-    if (!opened || !ready || attempted || scheduled || jobs.some(j => j.question?.startsWith('SHWA DISCOVERY') && Date.now() - Date.parse(j.createdAt) < 30 * 60_000) || root.querySelector<HTMLTextAreaElement>('[data-runtime-prompt]')?.value.trim()) return;
+    if (!opened || !ready || attempted || scheduled || composing() || jobs.some(j => j.question?.startsWith('SHWA DISCOVERY') && Date.now() - Date.parse(j.createdAt) < 30 * 60_000)) return;
     scheduled = true;
-    win.queueMicrotask(() => { scheduled = false; if (!controller.signal.aborted && opened && ready && !attempted) refresh(); });
+    // A question can be composed after opening and before this queued callback.
+    win.queueMicrotask(() => { scheduled = false; if (!controller.signal.aborted && opened && ready && !attempted && !composing()) refresh(); });
   }
   function render(next: RuntimeJobSummary[], canAsk: boolean) {
     ready = canAsk; jobs = next.filter(j => j.question && j.kind === 'prompt');
     host.querySelectorAll<HTMLButtonElement>('[data-shwa-refresh]').forEach(b => b.disabled = !ready);
+    host.querySelectorAll<HTMLButtonElement>('[data-shwa-reaction]').forEach(b => b.hidden = !ready);
     const completed = jobs.filter(j => j.status === 'succeeded' && j.result?.text && j.result.actualModels?.length);
     const discovery = completed.find(j => j.question?.startsWith('SHWA DISCOVERY') && parseShwaPicks(j.result!.text));
     const parsed = discovery ? parseShwaPicks(discovery.result!.text)! : null;
     const pending = jobs.find(j => j.question?.startsWith('SHWA DISCOVERY') && ['queued','running'].includes(j.status));
-    q('[data-shwa-picks-label]').textContent = pending ? 'Shwa is choosing a few good things…' : parsed ? `Chosen by Shwa · ${new Date(discovery!.createdAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}` : 'A few doors worth opening';
+    q('[data-shwa-picks-label]').textContent = pending ? 'Choosing a few places…' : parsed ? 'Picked for you' : 'A few places to start';
     const nextKey = JSON.stringify(completed.map(j => [j.id, j.result?.text]));
     if (nextKey !== key) {
       key = nextKey;
-      q('[data-shwa-headline]').textContent = parsed?.headline || 'There’s something good here.';
-      q('[data-shwa-note]').textContent = parsed?.note || 'A little art, a little play, a place to pause. Shwa will choose from these and other corners of PointCast when your AI is ready.';
       createCards(cards, parsed || {headline:'', note:'', picks:SHWA_CATALOG.filter(c => c.path !== new URL(doc.URL).pathname).slice(0,3).map(c => ({id:c.id,title:c.title,reason:c.detail,firstStep:''}))});
       history.replaceChildren();
-      q('[data-shwa-history-count]').textContent = `Your history · ${completed.length}`;
+      q('[data-shwa-history-count]').textContent = completed.length ? `History · ${completed.length}` : 'History';
       if (!completed.length) history.append(make('p', 'Your Shwa answers will collect here.'));
       for (const job of completed) {
         const details = make('details'), summary = make('summary', `${new Date(job.createdAt).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${job.question!.startsWith('SHWA DISCOVERY') ? 'A few good things to do' : job.question!.slice(0,95)}`);
