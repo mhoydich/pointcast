@@ -25,7 +25,7 @@ function fixture(t, { reduced = false } = {}) {
   win.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId; };
   win.cancelAnimationFrame = id => frames.delete(id);
   win.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new win.Event('close')); };
-  for (const type of ['nouns-flow:start', 'nouns-flow:pause', 'nouns-flow:finish', 'nouns-flow:world', 'nouns-drip:pop']) root.addEventListener(type, event => events.push({ type, detail: event.detail }));
+  for (const type of ['nouns-flow:start', 'nouns-flow:pause', 'nouns-flow:finish', 'nouns-flow:world', 'nouns-drip:pop', 'nouns-drip:milestone']) root.addEventListener(type, event => events.push({ type, detail: event.detail }));
   let mounted = true; const unmount = mountNounsFlow(root);
   const cleanup = () => { if (mounted) { mounted = false; unmount(); } };
   t.after(() => { cleanup(); win.close(); });
@@ -42,10 +42,15 @@ test('Drip is the explicit initial mode and Start makes its first three Nouns im
   const f = fixture(t);
   assert.equal(f.root.dataset.mode, 'drip');
   assert.equal(f.q('[data-flow-mode="drip"]').getAttribute('aria-pressed'), 'true');
-  assert.equal(f.q('[data-flow-start]').textContent, 'Let it drip!');
+  assert.equal(f.q('[data-flow-start]').textContent, 'Start parade');
   assert.equal(f.frames.size, 0);
   assert.equal(f.nouns().length, 3);
   assert.ok(f.nouns().every(button => button.disabled));
+  assert.equal(f.root.dataset.dripPhase, 'gather'); assert.equal(f.root.dataset.levelComplete, 'false');
+  assert.equal(f.q('[data-drip-goal-count]').textContent, '0 / 12');
+  assert.equal(f.q('[data-drip-goal-fill]').max, 12);
+  assert.equal(f.q('[data-drip-goal-fill]').value, 0);
+  assert.equal(f.q('[data-drip-parade]').children.length, 0);
   f.q('[data-flow-start]').click();
   assert.equal(f.frames.size, 1);
   assert.ok(f.nouns().every(button => !button.disabled));
@@ -134,10 +139,12 @@ test('reduced motion settles new Nouns without continuous travel and retains tap
   assert.match(readFileSync(new URL('../src/styles/starjam-pixel.css', import.meta.url), 'utf8'), /prefers-reduced-motion:reduce\)\{\.drip-particles\{display:none/);
 });
 
-test('a shower finishes once, focuses Encore, and reset starts with three fresh Nouns', t => {
+test('an incomplete parade finishes honestly once, focuses Encore, and resets the goal and crew', t => {
   const f = fixture(t);
   f.q('[data-flow-start]').click(); f.tap(f.nouns()[0]); f.frame(35000);
-  assert.equal(f.root.dataset.state, 'won');
+  assert.equal(f.root.dataset.state, 'lost');
+  assert.equal(f.root.dataset.levelComplete, 'false');
+  assert.match(f.q('[data-flow-result-copy]').textContent, /1 of 12 pops/);
   assert.equal(f.frames.size, 0);
   assert.equal(f.q('[data-flow-result]').hidden, false);
   assert.equal(f.doc.activeElement, f.q('[data-flow-restart]'));
@@ -147,6 +154,62 @@ test('a shower finishes once, focuses Encore, and reset starts with three fresh 
   assert.equal(f.root.dataset.state, 'ready');
   assert.equal(f.nouns().length, 3);
   assert.equal(f.q('[data-flow-score]').textContent, '0');
+  assert.equal(f.root.dataset.dripPhase, 'gather');
+  assert.equal(f.q('[data-drip-goal-fill]').value, 0);
+  assert.equal(f.q('[data-drip-parade]').children.length, 0);
+});
+
+test('milestones grow an authentic bounded parade, goal12 keeps bonus play, and the ending earns completion', t => {
+  const f = fixture(t);
+  f.q('[data-flow-start]').click();
+  for (let count = 1; count <= 15; count++) {
+    f.frame((count - 1) * 500); f.tap(f.nouns()[0]);
+    assert.equal(f.root.dataset.dripPhase, count < 4 ? 'gather' : count < 8 ? 'groove' : count < 12 ? 'fire' : 'finale');
+    assert.equal(f.root.dataset.levelComplete, String(count >= 12));
+    assert.equal(f.q('[data-drip-goal-fill]').value, Math.min(12, count));
+    assert.equal(f.root.dataset.state, 'playing');
+    assert.equal(f.q('[data-flow-result]').hidden, true);
+  }
+  const milestones = f.events.filter(event => event.type === 'nouns-drip:milestone').map(event => event.detail);
+  assert.deepEqual(milestones.map(event => event.count), [4, 8, 12]);
+  assert.deepEqual(milestones.map(event => event.phase), ['groove', 'fire', 'finale']);
+  assert.ok(milestones.every(event => event.world === 'garden' && event.goal === 12 && typeof event.nodeId === 'string'));
+  assert.equal(f.q('[data-drip-goal-count]').textContent, '12 / 12');
+  assert.equal(f.q('[data-flow-score]').textContent, '15', 'bonus pops remain visible in the total');
+  assert.equal(f.q('[data-drip-phase-label]').textContent, 'Bonus parade!');
+  const friends = [...f.q('[data-drip-parade]').children];
+  assert.equal(friends.length, 8); assert.equal(new Set(friends.map(friend => friend.dataset.dripFriend)).size, 8);
+  for (const friend of friends) {
+    assert.equal(friend.tagName, 'IMG'); assert.equal(friend.alt, '');
+    assert.match(friend.getAttribute('src'), /^\/images\/co-games\/roster\/[^/]+\.svg$/);
+  }
+  f.q('[data-flow-pause]').click(); f.frame(60000);
+  assert.equal(f.root.dataset.state, 'paused'); assert.equal(f.root.dataset.levelComplete, 'true');
+  f.q('[data-flow-start]').click(); f.frame(88000);
+  assert.equal(f.root.dataset.state, 'won');
+  assert.match(f.q('[data-flow-result-kicker]').textContent, /LEVEL 1 COMPLETE/);
+  assert.match(f.q('[data-flow-result-copy]').textContent, /3 bonus pops/);
+  const endings = f.events.filter(event => event.type === 'nouns-flow:finish');
+  assert.equal(endings.length, 1); assert.equal(endings[0].detail.levelComplete, true);
+  assert.equal(endings[0].detail.goal, 12);
+  assert.equal(f.events.filter(event => event.type === 'nouns-drip:milestone').length, 3, 'Resume never repeats a milestone');
+  f.q('[data-flow-next-world]').click();
+  assert.equal(f.root.dataset.world, 'rush'); assert.equal(f.root.dataset.state, 'ready');
+  assert.equal(f.root.dataset.dripPhase, 'gather'); assert.equal(f.root.dataset.levelComplete, 'false');
+  assert.equal(f.q('[data-drip-parade]').children.length, 0);
+  assert.equal(f.q('[data-drip-goal-fill]').value, 0);
+  assert.equal(f.q('[data-drip-level-number]').textContent, '2');
+  assert.match(f.q('[data-drip-objective]').textContent, /midnight party/);
+});
+
+test('letting a round play with zero taps never reports a completed level', t => {
+  const f = fixture(t);
+  f.q('[data-flow-start]').click(); f.frame(35000);
+  assert.equal(f.root.dataset.state, 'lost');
+  assert.equal(f.root.dataset.levelComplete, 'false');
+  assert.match(f.q('[data-flow-result-copy]').textContent, /0 of 12 pops/);
+  const ending = f.events.find(event => event.type === 'nouns-flow:finish').detail;
+  assert.equal(ending.status, 'lost'); assert.equal(ending.levelComplete, false);
 });
 
 test('switching modes releases the prior loop and keeps rhythm and Drip independently usable', t => {
@@ -157,6 +220,8 @@ test('switching modes releases the prior loop and keeps rhythm and Drip independ
   assert.equal(f.root.dataset.state, 'ready');
   assert.equal(f.nouns().length, 0);
   assert.equal(f.frames.size, 0);
+  assert.equal(f.root.dataset.dripPhase, undefined); assert.equal(f.root.dataset.levelComplete, undefined);
+  assert.equal(f.q('[data-drip-parade]').children.length, 0);
   f.q('[data-flow-start]').click(); f.frame(1000);
   assert.equal(f.frames.size, 1);
   assert.ok(f.root.querySelectorAll('.flow-note').length > 0);
@@ -169,6 +234,8 @@ test('switching modes releases the prior loop and keeps rhythm and Drip independ
   assert.equal(f.frames.size, 1);
   f.cleanup();
   assert.equal(f.nouns().length, 0); assert.equal(f.frames.size, 0);
+  assert.equal(f.q('[data-drip-parade]').children.length, 0);
+  assert.equal(f.root.dataset.dripPhase, undefined); assert.equal(f.root.dataset.levelComplete, undefined);
   const count = f.events.length;
   f.q('[data-flow-start]').click(); f.key('D'); f.hide(true);
   assert.equal(f.events.length, count);

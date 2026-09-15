@@ -10,12 +10,14 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
   const slider = q<HTMLInputElement>('[data-flow-volume]');
   const haptics = q<HTMLButtonElement>('[data-flow-haptics]');
   const effects = [0, 1, 2].map(lane => q<HTMLAudioElement>(`[data-flow-hit-audio="${lane}"]`));
+  const levelClear = q<HTMLAudioElement>('[data-drip-clear-audio]');
   const worlds = ['garden', 'rush', 'shell', 'storm'], paces = ['drift', 'gentle', 'playful'];
   let world = 'garden', pace = 'gentle', volume = 35, enabled = true, closed = false;
   let running = false, pendingStart = false, preview = false, elapsed = 0;
   let version = 0, startTimer: number | undefined, loadTimer: number | undefined, failureTimer: number | undefined;
   let laneTimer: number | undefined, gestureLane: number | undefined, gestureUsed = false;
   let gestureNoun: string | undefined;
+  let cleared = false, clearActive = false, clearVersion = 0, clearTimer: number | undefined;
   let hapticsOn = false, hapticsAvailable = typeof win.navigator.vibrate === 'function';
   let message = 'Tap Test sound for a little welcome tune.';
   const hidden = () => doc.visibilityState === 'hidden';
@@ -54,13 +56,18 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
     const note = q('[data-flow-haptics-note]'); if (note) note.textContent = hapticsAvailable ? 'Optional little taps on your successful hits.' : 'Haptics are unavailable in this browser or device.';
   }
   function gains() {
-    for (const media of [track, test, ...effects]) if (media) { media.volume = volume / 100; media.muted = !enabled || !volume; }
+    for (const media of [track, test, ...effects, levelClear]) if (media) { media.volume = volume / 100; media.muted = !enabled || !volume; }
   }
   function clearTimers() {
     win.clearTimeout(startTimer); win.clearTimeout(loadTimer); win.clearTimeout(failureTimer); win.clearTimeout(laneTimer);
     startTimer = loadTimer = failureTimer = laneTimer = undefined;
   }
-  function pauseElements() { for (const media of [track, test, ...effects]) media?.pause(); }
+  function cancelClear() {
+    ++clearVersion; clearActive = false; win.clearTimeout(clearTimer); clearTimer = undefined;
+    levelClear?.pause();
+    if (levelClear) { try { levelClear.currentTime = 0; } catch { /* An unloaded optional cue has no position to reset. */ } }
+  }
+  function pauseElements() { cancelClear(); for (const media of [track, test, ...effects]) media?.pause(); }
   function stop() {
     ++version; clearTimers(); pendingStart = false; running = false; preview = false; gestureLane = undefined; gestureNoun = undefined;
     pauseElements(); clock(false);
@@ -123,7 +130,7 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
     }
     if (target.matches('[data-flow-test-sound]')) playTest();
     else if (target.matches('[data-flow-start]') && ['ready', 'paused'].includes(root.dataset.state || '') && !root.querySelector('dialog[open]')) {
-      const resume = root.dataset.state === 'paused'; stop(); if (!resume) elapsed = 0;
+      const resume = root.dataset.state === 'paused'; stop(); if (!resume) { elapsed = 0; cleared = false; }
       pendingStart = true;
       // Keep intent through native capture/target microtask checkpoints.
       startTimer = win.setTimeout(() => { if (pendingStart) { stop(); render(); } }, 0);
@@ -162,13 +169,31 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
   root.addEventListener('nouns-flow:pause', event => { const ms = Number(detail(event).elapsedMs); if (Number.isFinite(ms)) elapsed = Math.max(0, Math.min(35000, ms)); stop(); render(); }, options);
   root.addEventListener('nouns-flow:beat', event => { const value = detail(event); const ms = Number(value.index) * Number(value.intervalMs); if (running && Number.isFinite(ms)) elapsed = Math.max(elapsed, Math.min(35000, ms)); }, options);
   root.addEventListener('nouns-flow:finish', () => { stop(); elapsed = 0; message = 'That was your jam. Ready for an encore?'; render(); }, options);
-  root.addEventListener('nouns-flow:world', () => { stop(); elapsed = 0; configure(); render(); }, options);
+  root.addEventListener('nouns-flow:world', () => { stop(); elapsed = 0; cleared = false; configure(); render(); }, options);
   function accent(lane: number, perfect: boolean) {
-    if (!running || closed || hidden() || gestureLane !== lane || gestureUsed || !Number.isInteger(lane) || ![0, 1, 2].includes(lane)) return;
+    if (!running || closed || hidden() || root.querySelector('dialog[open]') || gestureLane !== lane || gestureUsed || !Number.isInteger(lane) || ![0, 1, 2].includes(lane)) return false;
     gestureUsed = true;
     if (hapticsOn) { try { if (win.navigator.vibrate(perfect ? 12 : 8) === false) hapticsAvailable = hapticsOn = false; } catch { hapticsAvailable = hapticsOn = false; } }
     const effect = effects[lane];
     if (effect && enabled && volume) { effect.currentTime = 0; try { void Promise.resolve(effect.play()).catch(() => {}); } catch { /* Optional accent cannot stop the soundtrack. */ } }
+    return true;
+  }
+  function celebrateClear() {
+    if (cleared) return;
+    cleared = true; // A muted milestone must not replay later on Resume or unmute.
+    if (!levelClear || !enabled || !volume) return;
+    cancelClear(); const token = clearVersion; clearActive = true;
+    try {
+      // Called only while consuming the matching trusted twelfth-pop gesture.
+      // Keep the backing track and its clock untouched while this finite cue plays.
+      const requested = levelClear.play();
+      clearTimer = win.setTimeout(() => { if (token === clearVersion && !playing(levelClear)) cancelClear(); }, 2000);
+      void Promise.resolve(requested).then(() => {
+        if (closed || token !== clearVersion) return;
+        win.clearTimeout(clearTimer); clearTimer = undefined;
+        if (!running || hidden() || !enabled || !volume || root.dataset.mode !== 'drip') cancelClear();
+      }, () => { if (token === clearVersion) cancelClear(); });
+    } catch { cancelClear(); } // An optional celebration cannot interrupt the jam.
   }
   root.addEventListener('nouns-flow:hit', event => {
     const value = detail(event);
@@ -177,8 +202,14 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
   root.addEventListener('nouns-drip:pop', event => {
     const value = detail(event);
     if (root.dataset.mode !== 'drip' || (gestureNoun !== undefined && gestureNoun !== String(value.nodeId))) return;
-    accent(Number(value.lane), true);
+    if (accent(Number(value.lane), true) && value.count === 12) celebrateClear();
   }, options);
+  levelClear?.addEventListener('playing', () => {
+    if (!clearActive || closed || !running || hidden() || !enabled || !volume || root.dataset.mode !== 'drip') { levelClear.pause(); return; }
+    win.clearTimeout(clearTimer); clearTimer = undefined;
+  }, options);
+  levelClear?.addEventListener('ended', () => { if (levelClear.ended) { clearActive = false; win.clearTimeout(clearTimer); clearTimer = undefined; } }, options);
+  levelClear?.addEventListener('error', cancelClear, options);
   track.addEventListener('loadedmetadata', () => { if (pendingStart || running) seek(elapsed / 1000); }, options);
   track.addEventListener('playing', () => { if (!closed && (running || pendingStart) && enabled && volume && !hidden()) { win.clearTimeout(loadTimer); message = 'Soundtrack playback started. Phone volume follows your volume buttons.'; render(); } else track.pause(); }, options);
   track.addEventListener('pause', () => { if (running && root.dataset.flowAudioClock === 'media' && track.paused && !track.ended && !hidden()) fail('Sound was interrupted. Tap Resume jam to pick it back up.'); }, options);
@@ -199,5 +230,5 @@ export function mountNounsFlowMedia(root: HTMLElement): () => void {
   doc.addEventListener('visibilitychange', () => { if (hidden()) { if (running || pendingStart) fail('Paused while away. Tap Resume jam when you return.'); else stop(); } render(); }, options);
   win.addEventListener('pagehide', () => { stop(); render(); }, options);
   configure(); gains(); render();
-  return () => { if (closed) return; stop(); closed = true; lifetime.abort(); dialogs.disconnect(); for (const media of [track, test, ...effects]) if (media) { media.removeAttribute('src'); media.load(); } render(); };
+  return () => { if (closed) return; stop(); closed = true; lifetime.abort(); dialogs.disconnect(); for (const media of [track, test, ...effects, levelClear]) if (media) { media.removeAttribute('src'); media.load(); } render(); };
 }

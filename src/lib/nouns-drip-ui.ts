@@ -1,6 +1,19 @@
-import { advanceDrip, createDrip, pauseDrip, popDrip, startDrip, type DripTransition } from './nouns-drip-engine.ts';
+import { advanceDrip, createDrip, DRIP_GOAL, pauseDrip, popDrip, startDrip, type DripTransition } from './nouns-drip-engine.ts';
 import { coGameWorlds, type CoGameWorldId } from './co-games-worlds';
 import { nounRoster } from './co-games-roster';
+
+const phases = {
+  gather: { label: 'Gather the parade', copy: 'Collect 4 sparks to get the party moving.' },
+  groove: { label: 'Find the groove', copy: 'The crew is here! Reach 8 pops to light it up.' },
+  fire: { label: 'Light the heartfire', copy: 'So much sparkle. Reach 12 pops for the big parade!' },
+  finale: { label: 'Bonus parade!', copy: 'Level complete! Keep popping until the music ends.' },
+} as const;
+const objectives: Record<CoGameWorldId, string> = {
+  garden: 'Gather 12 sparks and wake the lanterns.',
+  rush: 'Bring 12 sparks to the midnight party.',
+  shell: 'Gather 12 sparks and light the tideglass gate.',
+  storm: 'Collect 12 sparks for a moonlight parade.',
+};
 
 /** Noun Drip shares only the stage, controls and explicit native-audio contract. */
 export function mountNounsDrip(root: HTMLElement): () => void {
@@ -8,12 +21,14 @@ export function mountNounsDrip(root: HTMLElement): () => void {
   const lifetime = new win.AbortController(), options = { signal: lifetime.signal };
   const q = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector);
   const canvas = q('[data-drip-canvas]'), particles = q('[data-drip-particles]');
+  const parade = q('[data-drip-parade]');
   const media = q<HTMLAudioElement>('[data-flow-track]');
   const pace = q<HTMLSelectElement>('[data-flow-pace]');
   let world: CoGameWorldId = Object.hasOwn(coGameWorlds, root.dataset.world || '') ? root.dataset.world as CoGameWorldId : 'garden';
   let state = createDrip(Object.keys(coGameWorlds).indexOf(world));
   let anchor = 0, anchorElapsed = 0, frame: number | null = null, closed = false;
   const nodes = new Map<number, HTMLButtonElement>();
+  const friends = new Map<number, HTMLImageElement>();
   const reduceMotion = win.matchMedia?.('(prefers-reduced-motion: reduce)');
   const text = (selector: string, value: string | number) => {
     const element = q(selector), next = String(value);
@@ -28,24 +43,44 @@ export function mountNounsDrip(root: HTMLElement): () => void {
   const stopFrame = () => { if (frame !== null) win.cancelAnimationFrame(frame); frame = null; };
 
   function render() {
-    root.dataset.state = state.status === 'finished' ? 'won' : state.status;
+    root.dataset.state = state.status === 'finished' ? state.levelComplete ? 'won' : 'lost' : state.status;
+    root.dataset.dripPhase = state.phase;
+    root.dataset.levelComplete = String(state.levelComplete);
     root.dataset.pace = pace?.value || 'gentle';
     root.dataset.flowElapsedMs = String(state.elapsedMs);
     text('[data-flow-score]', state.count); text('[data-flow-streak]', state.collected.length);
     text('[data-flow-time]', `${Math.ceil((state.durationMs - state.elapsedMs) / 1000)}s`);
     text('[data-flow-world-name]', coGameWorlds[world].name);
+    text('[data-drip-level-number]', coGameWorlds[world].chapter);
+    text('[data-drip-objective]', objectives[world]);
+    text('[data-drip-goal-count]', `${Math.min(DRIP_GOAL, state.count)} / ${DRIP_GOAL}`);
+    text('[data-drip-phase-label]', phases[state.phase].label);
+    text('[data-drip-phase-copy]', phases[state.phase].copy);
+    const goal = q<HTMLProgressElement>('[data-drip-goal-fill]');
+    if (goal) { goal.max = DRIP_GOAL; goal.value = Math.min(DRIP_GOAL, state.count); }
+    for (const [index, image] of friends) if (!state.collected.includes(index)) { image.remove(); friends.delete(index); }
+    if (parade) for (const index of state.collected) {
+      if (friends.has(index)) continue;
+      const portrait = nounRoster[index], image = doc.createElement('img');
+      image.className = 'drip-parade-friend'; image.dataset.dripFriend = portrait.id;
+      image.src = portrait.src; image.alt = ''; image.draggable = false; image.width = image.height = 48;
+      image.style.setProperty('--friend-index', String(friends.size));
+      parade.append(image); friends.set(index, image);
+    }
     const progress = q<HTMLProgressElement>('[data-flow-progress]'); if (progress) progress.value = state.elapsedMs / state.durationMs * 100;
     const playing = state.status === 'playing';
     const start = q<HTMLButtonElement>('[data-flow-start]');
-    if (start) { start.disabled = state.status === 'finished'; start.textContent = playing ? 'Pause the drip' : state.status === 'paused' ? 'Keep dripping!' : 'Let it drip!'; }
+    if (start) { start.disabled = state.status === 'finished'; start.textContent = playing ? 'Pause parade' : state.status === 'paused' ? 'Keep parading' : 'Start parade'; }
     const pause = q<HTMLButtonElement>('[data-flow-pause]'); if (pause) pause.disabled = !playing;
     if (pace) pace.disabled = playing;
     root.querySelectorAll<HTMLButtonElement>('[data-flow-world],[data-flow-next-world],[data-flow-shuffle]').forEach(button => { button.disabled = playing; });
     const result = q('[data-flow-result]'); if (result) result.hidden = state.status !== 'finished';
     if (state.status === 'finished') {
-      text('[data-flow-result-kicker]', 'A LITTLE SHOWER OF GOOD FEELINGS');
-      text('[data-flow-result-title]', state.count ? 'Look at your little crew!' : 'A lovely little drift.');
-      text('[data-flow-result-copy]', state.count ? `${state.count} pops · ${state.collected.length} different friends. Every tap was a good one.` : 'The Nouns will wait for you. Start another shower whenever you like.');
+      text('[data-flow-result-kicker]', state.levelComplete ? `LEVEL ${coGameWorlds[world].chapter} COMPLETE` : 'THE PARADE IS WAITING');
+      text('[data-flow-result-title]', state.levelComplete ? 'Heartfire Parade!' : state.count ? 'Your crew is warming up.' : 'Give the parade a little spark.');
+      text('[data-flow-result-copy]', state.levelComplete
+        ? `${DRIP_GOAL} sparks gathered${state.count > DRIP_GOAL ? ` + ${state.count - DRIP_GOAL} bonus pops` : ''} · ${state.collected.length} different Nouns. Take your parade to the next world!`
+        : `${state.count} of ${DRIP_GOAL} pops. Tap any Noun as soon as you see it. Try an encore to complete the parade!`);
     }
     if (!canvas) return;
     const visible = new Set(state.nouns.map(item => item.id));
@@ -63,19 +98,21 @@ export function mountNounsDrip(root: HTMLElement): () => void {
       }
       button.disabled = !playing;
       const settled = item.slot < 3 ? 83 : 30;
-      const progress = reduceMotion?.matches ? 1 : Math.min(1, Math.max(0, (state.elapsedMs - item.bornAt) / 5500));
+      const progress = reduceMotion?.matches ? 1 : Math.min(1, Math.max(0, (state.elapsedMs - item.bornAt) / 3200));
+      const settledProgress = 1 - (1 - progress) ** 3;
       button.style.left = `${18 + item.lane * 32}%`;
-      button.style.top = `${6 + (settled - 6) * progress}%`;
+      button.style.top = `${6 + (settled - 6) * settledProgress}%`;
       button.dataset.settled = String(progress === 1);
     }
   }
 
   function burst(lane: number, at: string, count: number) {
-    if (!particles) return;
-    const pop = doc.createElement('span'); pop.className = 'drip-pop';
-    pop.style.left = `${18 + lane * 32}%`; pop.style.top = at;
-    for (const symbol of ['✦', '+1', '♪']) { const spark = doc.createElement('i'); spark.textContent = symbol; pop.append(spark); }
-    particles.replaceChildren(pop);
+    if (particles) {
+      const pop = doc.createElement('span'); pop.className = 'drip-pop';
+      pop.style.left = `${18 + lane * 32}%`; pop.style.top = at;
+      for (const symbol of ['✦', '+1', '♪']) { const spark = doc.createElement('i'); spark.textContent = symbol; pop.append(spark); }
+      particles.replaceChildren(pop);
+    }
     text('[data-flow-feedback]', count % 5 === 0 ? `${count} pops! What a little party.` : ['Pop! Hello, friend.', 'A tiny burst of joy.', 'That one had sparkle.', 'Oh, good Noun!'][count % 4]);
   }
   function apply(transition: DripTransition) {
@@ -85,13 +122,19 @@ export function mountNounsDrip(root: HTMLElement): () => void {
       if (event.type === 'pop') {
         const button = nodes.get(event.nodeId), focused = doc.activeElement === button;
         burst(event.lane, button?.style.top || '50%', event.count);
-        root.dispatchEvent(new win.CustomEvent('nouns-drip:pop', { bubbles: true, detail: { ...event, nodeId: String(event.nodeId) } }));
+        const detail = Object.freeze({ ...event, nodeId: String(event.nodeId), world, mode: 'drip' });
+        root.dispatchEvent(new win.CustomEvent('nouns-drip:pop', { bubbles: true, detail }));
+        if (event.milestone !== null) {
+          text('[data-flow-feedback]', event.milestone === DRIP_GOAL ? '12 pops! Heartfire lit. Keep the parade going!' : `${event.count} pops! ${phases[event.phase].label}.`);
+          root.dispatchEvent(new win.CustomEvent('nouns-drip:milestone', { bubbles: true, detail }));
+        }
         if (focused) {
           const next = state.nouns.find(item => item.lane === event.lane) || state.nouns[0];
           focusNext = next?.id ?? null;
         }
       } else {
-        stopFrame(); render(); emit('finish', { status: 'won', count: state.count, score: state.score });
+        stopFrame(); render(); emit('finish', { status: state.levelComplete ? 'won' : 'lost', count: state.count, score: state.score,
+          goal: DRIP_GOAL, levelComplete: state.levelComplete, phase: state.phase });
       }
     }
     render();
@@ -109,7 +152,7 @@ export function mountNounsDrip(root: HTMLElement): () => void {
     if (closed || doc.hidden || dialogOpen() || !['ready', 'paused'].includes(state.status)) return;
     const resumed = state.status === 'paused';
     state = startDrip(state); anchorElapsed = state.elapsedMs; anchor = win.performance.now();
-    text('[data-flow-feedback]', 'Tap any Noun, any time. They’re happy to wait.');
+    text('[data-flow-feedback]', state.levelComplete ? 'Bonus parade! Keep popping.' : 'Tap any Noun. Gather 12 sparks.');
     render(); emit('start', { resumed, durationMs: state.durationMs }); schedule();
   }
   function pause(reason: string) {
@@ -125,6 +168,7 @@ export function mountNounsDrip(root: HTMLElement): () => void {
     for (const button of nodes.values()) button.remove(); nodes.clear();
     state = createDrip(Object.keys(coGameWorlds).indexOf(world)); anchorElapsed = 0;
     root.dataset.world = world;
+    text('[data-flow-feedback]', objectives[world]);
     const image = q<HTMLImageElement>('[data-flow-landscape]'); if (image) image.src = coGameWorlds[world].src;
     root.querySelectorAll<HTMLElement>('[data-flow-world]').forEach(button => button.setAttribute('aria-current', String(button.dataset.flowWorld === world)));
     render(); emit('world');
@@ -156,6 +200,7 @@ export function mountNounsDrip(root: HTMLElement): () => void {
   q('[data-flow-pause]')?.addEventListener('click', () => pause('manual'), options);
   q('[data-flow-restart]')?.addEventListener('click', () => reset(), options);
   q('[data-flow-next-world]')?.addEventListener('click', () => {
+    if (state.status === 'playing') return;
     const worlds = Object.keys(coGameWorlds) as CoGameWorldId[];
     reset(worlds[(worlds.indexOf(world) + 1) % worlds.length]);
   }, options);
@@ -178,5 +223,7 @@ export function mountNounsDrip(root: HTMLElement): () => void {
     if (closed) return;
     pause('mode'); closed = true; stopFrame(); lifetime.abort(); dialogs.disconnect();
     particles?.replaceChildren(); for (const button of nodes.values()) button.remove(); nodes.clear();
+    for (const image of friends.values()) image.remove(); friends.clear();
+    delete root.dataset.dripPhase; delete root.dataset.levelComplete;
   };
 }

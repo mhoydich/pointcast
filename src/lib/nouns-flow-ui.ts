@@ -26,9 +26,9 @@ export function mountNounsFlow(root: HTMLElement): () => void {
     text('[data-flow-streak-label]', drip ? 'FRIENDS' : 'STREAK');
     text('[data-flow-streak-unit]', drip ? '/8' : '×');
     text('[data-flow-game-title]', drip ? 'DRIP' : 'STARJAM');
-    text('[data-flow-ready-copy]', drip ? 'Tap any Noun.\nLet the good feelings pop.' : 'Catch the beat.\nLight up the universe.');
+    text('[data-flow-ready-copy]', drip ? 'Heartfire Parade.\nGather 12 sparks. Light it up.' : 'Catch the beat.\nLight up the universe.');
     text('[data-flow-ready-tip-one]', drip ? 'Tap a Noun anywhere on the stage.' : 'Tap a lane as the note hits its light.');
-    text('[data-flow-ready-tip-two]', drip ? 'No rush. Every pop is a little win.' : 'Chain your hits. Make the crew dance.');
+    text('[data-flow-ready-tip-two]', drip ? '12 sparks, then a bonus parade. 35 seconds.' : 'Chain your hits. Make the crew dance.');
     text('[data-flow-practice]', drip ? 'TAP · TAB + ENTER · OR D / F / J' : 'YOU + A LOCAL PRACTICE BUDDY');
     text('[data-flow-pause-title]', drip ? 'Your friends are right here.' : 'Still in the groove.');
     stopMode = drip ? mountNounsDrip(root) : mountNounsRhythm(root);

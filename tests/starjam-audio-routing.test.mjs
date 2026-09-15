@@ -177,6 +177,45 @@ test('missing upstream Content-Length uses the verified manifest and still check
   });
 });
 
+test('all seventeen shipped assets retain exact prefix ranges when Pages omits Content-Length', async () => {
+  const manifest = JSON.parse(readFileSync(new URL('../public/audio/starjam/manifest.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.tracks.length, 17);
+  await withMiddleware(async ({ onRequest }) => {
+    for (const { file, bytes: expectedSize } of manifest.tracks) {
+      const bytes = readFileSync(new URL(`../public/audio/starjam/${file}`, import.meta.url));
+      assert.equal(bytes.length, expectedSize, file);
+      const upstream = assetResponse(bytes); upstream.headers.delete('content-length');
+      const response = await route(onRequest, assetRequest({ file, range: 'bytes=0-63' }), upstream);
+      assert.equal(response.status, 206, file);
+      assert.equal(response.headers.get('content-range'), `bytes 0-63/${bytes.length}`, file);
+      assert.equal(response.headers.get('content-length'), '64', file);
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes.subarray(0, 64), file);
+    }
+  });
+});
+
+test('level-clear AAC supports suffix and HEAD requests, and a mismatched manifest body is never served as partial audio', async () => {
+  const file = 'level-clear.m4a';
+  const bytes = readFileSync(new URL(`../public/audio/starjam/${file}`, import.meta.url));
+  await withMiddleware(async ({ onRequest }) => {
+    const suffix = await route(onRequest, assetRequest({ file, range: 'bytes=-32' }), assetResponse(bytes));
+    assert.equal(suffix.status, 206);
+    assert.equal(suffix.headers.get('content-type'), 'audio/mp4');
+    assert.equal(suffix.headers.get('content-range'), `bytes ${bytes.length - 32}-${bytes.length - 1}/${bytes.length}`);
+    assert.equal(suffix.headers.get('content-length'), '32');
+    assert.deepEqual(Buffer.from(await suffix.arrayBuffer()), bytes.subarray(-32));
+    const headUpstream = assetResponse(bytes, { body: null }); headUpstream.headers.delete('content-length');
+    const head = await route(onRequest, assetRequest({ file, method: 'HEAD', range: 'bytes=0-1' }), headUpstream);
+    assert.equal(head.status, 200); assert.equal(head.body, null);
+    assert.equal(head.headers.get('content-length'), String(bytes.length));
+    assert.equal(head.headers.get('content-range'), null);
+    const short = assetResponse(bytes, { body: bytes.subarray(0, bytes.length - 1) }); short.headers.delete('content-length');
+    const failure = await route(onRequest, assetRequest({ file, range: 'bytes=0-1' }), short);
+    assert.equal(failure.status, 502);
+    assert.equal(failure.headers.get('content-range'), null);
+  });
+});
+
 test('an actual body larger than its declared bounded length cancels without returning partial audio', async () => {
   await withMiddleware(async (_, { withStarjamAudioRange }) => {
     let cancelled = false;
