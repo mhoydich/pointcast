@@ -12,8 +12,8 @@ const fixture = `<!doctype html><html><body>
     <form data-pc-ref="fb-omni-form"><span data-pc-ref="fb-omni-mode"></span><input data-pc-ref="fb-omni"></form>
     <button class="fb__stamp" data-pc-ref="fb-stamp-room" data-stamp-id="room" data-tray="room" aria-expanded="false"></button>
     <span data-pc-ref="fb-stamp-dot-room"></span>
-    <button class="fb__stamp" data-pc-ref="fb-stamp-my-ai" data-stamp-id="my-ai"></button>
-    <section class="fb__tray" data-pc-ref="fb-tray-my-ai" hidden><div data-ai-runtime data-compact="true"><textarea data-runtime-prompt></textarea></div></section>
+    <button class="fb__stamp" data-pc-ref="fb-stamp-my-ai" data-stamp-id="my-ai" aria-expanded="false"></button>
+    <section class="fb__tray" data-pc-ref="fb-tray-my-ai" hidden><button class="fb__tray-close">Close</button><div data-ai-runtime data-compact="true"><textarea data-runtime-prompt></textarea></div></section>
     <section class="fb__tray" data-pc-ref="fb-tray-room" hidden>
       <button class="fb__action" data-tray="room" data-action="here">who is here</button>
       <button data-pc-ref="fb-tray-room-toggle"></button>
@@ -25,6 +25,7 @@ const fixture = `<!doctype html><html><body>
     <button data-pc-ref="fb-btn-soundtrack"><span data-pc-ref="fb-soundtrack-label"></span></button>
     <div data-pc-ref="fb-soundtrack" hidden></div><span data-pc-ref="fb-live-here"></span>
   </aside>
+  <button id="outside-dock">Page action</button>
   <aside class="tug" data-lead="slack">
     <span data-pc-ref="pc-tug-human"></span><button data-pc-ref="pc-tug-pull"></button>
     <span data-pc-ref="pc-tug-machine"></span><p data-pc-ref="pc-tug-read"></p>
@@ -37,6 +38,7 @@ const fixture = `<!doctype html><html><body>
 </body></html>`;
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
 
 test('jsdom chrome smoke: lifecycle, dock analytics, room de-dupe, visible tug, and bursts', async () => {
   const dom = new JSDOM(fixture, { url: 'https://pointcast.xyz/about', pretendToBeVisual: true });
@@ -108,7 +110,35 @@ test('jsdom chrome smoke: lifecycle, dock analytics, room de-dupe, visible tug, 
   const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
   try {
     await server.ssrLoadModule('/src/scripts/chrome.ts');
-    await tick();
+    await settle();
+
+    const aiTray = document.querySelector('[data-pc-ref="fb-tray-my-ai"]');
+    const aiLauncher = document.querySelector('[data-pc-ref="fb-stamp-my-ai"]');
+    const aiClose = aiTray.querySelector('.fb__tray-close');
+    assert.equal(aiTray.hidden, true, 'Shwa stays collapsed after initial page load');
+    aiLauncher.focus();
+    aiLauncher.click();
+    assert.equal(aiTray.hidden, false, 'Shwa opens from its launcher');
+    aiClose.focus();
+    aiClose.click();
+    assert.equal(aiTray.getAttribute('data-open'), 'false', 'close button dismisses Shwa');
+    assert.equal(document.activeElement, aiLauncher, 'explicit close returns focus to launcher');
+
+    aiLauncher.click();
+    await settle();
+    assert.equal(aiTray.hidden, false, 'a pending close animation cannot hide a reopened tray');
+    document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(aiTray.getAttribute('data-open'), 'false', 'Escape dismisses Shwa');
+    assert.equal(document.activeElement, aiLauncher, 'Escape returns focus to launcher');
+
+    aiLauncher.click();
+    const outsideAction = document.querySelector('#outside-dock');
+    outsideAction.focus();
+    outsideAction.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    assert.equal(aiTray.getAttribute('data-open'), 'false', 'clicking the page dismisses Shwa');
+    assert.equal(document.activeElement, outsideAction, 'outside dismissal preserves page focus');
+    await settle();
+    assert.equal(document.activeElement, outsideAction, 'a pending opening timer cannot steal focus after dismissal');
 
     const tray = document.querySelector('[data-pc-ref="fb-tray-room"]');
     document.querySelector('[data-pc-ref="fb-stamp-room"]').click();
@@ -149,7 +179,9 @@ test('jsdom chrome smoke: lifecycle, dock analytics, room de-dupe, visible tug, 
 
     const moodOptionCount = document.querySelector('[data-pc-ref="fb-mood-select"]').options.length;
     document.dispatchEvent(new CustomEvent('astro:page-load'));
-    await tick();
+    await settle();
+    assert.equal(aiTray.hidden, true, 'navigation does not restore the previously open Shwa tray');
+    assert.equal(aiLauncher.getAttribute('aria-expanded'), 'false', 'navigation resets the launcher state');
     assert.equal(document.querySelector('[data-pc-ref="fb-mood-select"]').options.length, moodOptionCount, 'remount is idempotent');
     assert.equal(document.querySelectorAll('.spell-burst-pulse').length, 0, 'remount cleans up old burst DOM');
     const activeSockets = FakeWebSocket.instances.filter((socket) => socket.readyState !== 3);

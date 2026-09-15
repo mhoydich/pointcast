@@ -40,12 +40,14 @@ export function mountShwaTools(root: HTMLElement): () => void {
   }
   if (root.dataset.compact === 'true' && form && !root.querySelector('[data-shwa-conversation]')) {
     const conversation = doc.createElement('details'); conversation.dataset.shwaConversation = ''; conversation.className = 'shwa-conversation';
-    const summary = doc.createElement('summary'); summary.textContent = 'Ask Shwa · song stories & conversation'; conversation.append(summary);
+    const summary = doc.createElement('summary'); summary.textContent = 'Ask a question'; conversation.append(summary);
     const parent = form.parentElement!;
     for (const selector of ['.ai-runtime__shwa', '.ai-runtime__task', '[data-runtime-job]', '[data-runtime-result]']) {
       const element = root.querySelector(selector); if (element) conversation.append(element);
     }
     parent.append(conversation);
+    // Put the question composer before secondary history/help disclosures.
+    root.querySelector('.shwa-history')?.before(parent);
   }
   const starterStatus = root.querySelector<HTMLElement>('[data-ai-starter-status]');
   const songTitle = () => doc.querySelector('[data-live-now-title]')?.textContent?.trim().slice(0, 200) || '';

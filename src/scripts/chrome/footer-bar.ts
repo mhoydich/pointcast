@@ -57,17 +57,17 @@ export function mountFooterBar(root, scope) {
     function getTrayEl(id) { return root.querySelector('[data-pc-ref="fb-tray-' + id + '"]'); }
     function getStampEl(id) { return root.querySelector('[data-pc-ref="fb-stamp-' + id + '"]'); }
 
-    function closeAll() {
+    function closeAll(restoreFocus) {
       if ($menu.getAttribute('data-open') === 'true') {
         $menu.setAttribute('data-open', 'false');
-        setTimeout(function () { $menu.hidden = true; }, 220);
+        setTimeout(function () { if ($menu.getAttribute('data-open') !== 'true') $menu.hidden = true; }, 220);
         $menuBtn.setAttribute('aria-expanded', 'false');
         $you.setAttribute('aria-expanded', 'false');
       }
       root.querySelectorAll('.fb__tray').forEach(function (tr) {
         if (tr.getAttribute('data-open') === 'true') {
           tr.setAttribute('data-open', 'false');
-          setTimeout(function () { tr.hidden = true; }, 200);
+          setTimeout(function () { if (tr.getAttribute('data-open') !== 'true') tr.hidden = true; }, 200);
           var stampId = String(tr.getAttribute('data-pc-ref') || '').replace('fb-tray-', '');
           var st = getStampEl(stampId);
           if (st) st.setAttribute('aria-expanded', 'false');
@@ -77,41 +77,37 @@ export function mountFooterBar(root, scope) {
       document.removeEventListener('keydown', onEsc);
       document.documentElement.classList.remove('pc-dock-open');
       window.dispatchEvent(new CustomEvent('pc:dock-visibility', { detail: { open: false } }));
-      if (lastFocused && typeof lastFocused.focus === 'function') {
-        try { lastFocused.focus(); } catch (e) {}
+      var focusTarget = lastFocused;
+      lastFocused = null;
+      if (restoreFocus !== false && focusTarget && focusTarget.isConnected && typeof focusTarget.focus === 'function') {
+        try { focusTarget.focus({ preventScroll: true }); } catch (e) {}
       }
     }
 
     function onEsc(e) {
-      if (e.key === 'Escape') { e.preventDefault(); if (openPopover === 'tray:my-ai') try { sessionStorage.setItem('pc-shwa-minimized','1'); } catch(e) {} closeAll(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeAll(); }
     }
 
     function openMenu() {
-      closeAll();
+      closeAll(false);
       lastFocused = document.activeElement;
       $menu.hidden = false;
       void $menu.offsetWidth;
       $menu.setAttribute('data-open', 'true');
       $menuBtn.setAttribute('aria-expanded', 'true');
       $you.setAttribute('aria-expanded', 'true');
-      setTimeout(function () { try { $panel.focus(); } catch (e) {} }, 10);
+      setTimeout(function () { if (openPopover === 'menu') try { $panel.focus(); } catch (e) {} }, 10);
       openPopover = 'menu';
       on(document, 'keydown', onEsc);
       document.documentElement.classList.add('pc-dock-open');
       window.dispatchEvent(new CustomEvent('pc:dock-visibility', { detail: { open: true } }));
     }
 
-    function openTray(id, quiet) {
+    function positionTray(id) {
       var tray = getTrayEl(id);
       var stamp = getStampEl(id);
       if (!tray) return;
       var anchor = stamp || $menuBtn;
-      closeAll();
-      lastFocused = document.activeElement;
-      tray.hidden = false;
-      void tray.offsetWidth;
-      tray.setAttribute('data-open', 'true');
-      if (stamp) stamp.setAttribute('aria-expanded', 'true');
       try {
         var rect = anchor.getBoundingClientRect();
         var trayWidth = tray.getBoundingClientRect().width || 320;
@@ -123,7 +119,22 @@ export function mountFooterBar(root, scope) {
         var arrow = tray.querySelector('.fb__tray-arrow');
         if (arrow) arrow.style.left = (center - leftPx) + 'px';
       } catch (e) {}
-      if (!quiet) setTimeout(function () {
+    }
+
+    function openTray(id) {
+      var tray = getTrayEl(id);
+      var stamp = getStampEl(id);
+      if (!tray) return;
+      closeAll(false);
+      var active = document.activeElement;
+      lastFocused = active && active !== document.body && !active.closest('.fb__tray, .fb__menu-panel') ? active : stamp || $menuBtn;
+      tray.hidden = false;
+      void tray.offsetWidth;
+      tray.setAttribute('data-open', 'true');
+      if (stamp) stamp.setAttribute('aria-expanded', 'true');
+      positionTray(id);
+      setTimeout(function () {
+        if (openPopover !== 'tray:' + id) return;
         var focusable = tray.querySelector('input, textarea, button, select, a[href]');
         if (focusable) try { focusable.focus(); } catch (e) {}
       }, 30);
@@ -147,11 +158,15 @@ export function mountFooterBar(root, scope) {
       } catch (e) {}
     }
 
+    on(window, 'resize', function () {
+      if (openPopover && openPopover.indexOf('tray:') === 0) positionTray(openPopover.slice(5));
+    });
+
     root.querySelectorAll('.fb__stamp').forEach(function (st) {
       on(st, 'click', function () {
         var id = st.getAttribute('data-stamp-id');
-        if (openPopover === 'tray:' + id) { if (id === 'my-ai') try { sessionStorage.setItem('pc-shwa-minimized','1'); } catch(e) {} closeAll(); }
-        else { if (id === 'my-ai') try { sessionStorage.removeItem('pc-shwa-minimized'); } catch(e) {} openTray(id); }
+        if (openPopover === 'tray:' + id) closeAll();
+        else openTray(id);
       });
     });
     root.querySelectorAll('.fb-binder__open').forEach(function (bc) {
@@ -163,19 +178,18 @@ export function mountFooterBar(root, scope) {
     });
     root.querySelectorAll('.fb__tray-close').forEach(function (btn) {
       on(btn, 'click', function () {
-        if (openPopover === 'tray:my-ai') try { sessionStorage.setItem('pc-shwa-minimized', '1'); } catch(e) {}
         closeAll();
       });
     });
 
-    on(document, 'mousedown', function (e) {
-      if (!openPopover || openPopover === 'tray:my-ai') return;
+    on(document, 'pointerdown', function (e) {
+      if (!openPopover) return;
       var t = e.target;
       if (!(t instanceof Element)) return;
       if (t.closest('.fb__tray') || t.closest('.fb__menu-panel') ||
           t.closest('.fb__stamp') || t.closest('.fb-binder__open') ||
           t.closest('[data-pc-ref="fb-menu-btn"]') || t.closest('[data-pc-ref="fb-you"]')) return;
-      closeAll();
+      closeAll(false);
     });
 
     on($menuBtn, 'click', function () {
@@ -263,10 +277,10 @@ export function mountFooterBar(root, scope) {
       if (!raw) return;
       var mode = inferOmniMode(raw);
       if (mode === 'AI') {
-        openTray('my-ai');
         var conversation = root.querySelector('[data-shwa-conversation]'); if (conversation) conversation.open = true;
         var aiPrompt = root.querySelector('[data-ai-runtime][data-compact="true"] [data-runtime-prompt]');
         if (aiPrompt) { aiPrompt.value = raw.replace(/^\/ai\s*/i, ''); aiPrompt.dispatchEvent(new Event('input', { bubbles: true })); }
+        openTray('my-ai');
         $omni.value = ''; applyOmniMode();
         return;
       }
@@ -1790,10 +1804,6 @@ export function mountFooterBar(root, scope) {
       ppPaintDot();
     }, 0);
     on(window, 'pc:me-state', renderPassport);
-    setTimeout(function () {
-      var minimized = false; try { minimized = sessionStorage.getItem('pc-shwa-minimized') === '1'; } catch(e) {}
-      if (!minimized && !openPopover) openTray('my-ai', true);
-    }, 250);
     scope.cleanup(function () {
       document.documentElement.classList.remove('pc-dock-open');
       root.querySelectorAll('.fb__tray').forEach(function (tray) {
@@ -1806,5 +1816,6 @@ export function mountFooterBar(root, scope) {
       }
       if ($menuBtn) $menuBtn.setAttribute('aria-expanded', 'false');
       if ($you) $you.setAttribute('aria-expanded', 'false');
+      root.querySelectorAll('.fb__stamp').forEach(function (stamp) { stamp.setAttribute('aria-expanded', 'false'); });
     });
 }

@@ -22,6 +22,19 @@ test('opening the HUD starts one inference, excludes URL secrets, and polling ne
  assert.equal(f.calls.length,1);assert.doesNotMatch(f.calls[0][0],/token=secret|#private/);assert.match(f.calls[0][0],/Sun Ra/);
  f.dash.render([],true);f.open();await new Promise(r=>setImmediate(r));assert.equal(f.calls.length,1);
 });
+test('a draft composed while opening is never replaced by a queued discovery',async t=>{
+ const f=fixture(t);f.dash.render([],true);f.open();
+ const prompt=f.root.querySelector('[data-runtime-prompt]');prompt.value='Tell me about the song';
+ await new Promise(r=>setImmediate(r));
+ assert.equal(f.calls.length,0,'opening must not submit discovery over a new question');
+ assert.equal(prompt.value,'Tell me about the song');
+});
+test('opening the question composer with an empty /ai command remains draft-only',async t=>{
+ const f=fixture(t);f.dash.render([],true);
+ f.root.querySelector('[data-shwa-conversation]').open=true;
+ f.open();await new Promise(r=>setImmediate(r));
+ assert.equal(f.calls.length,0,'an open question composer does not request automatic suggestions');
+});
 test('history survives rendering, drives explicit follow-up, and clears on session loss',async t=>{
  const f=fixture(t);const job={id:'one',kind:'prompt',question:'SHWA DISCOVERY\n...',status:'succeeded',createdAt:new Date().toISOString(),result:{text:response,actualModels:['real-model']}};
  f.dash.render([job],true);f.open();await new Promise(r=>setImmediate(r));assert.equal(f.calls.length,0);
