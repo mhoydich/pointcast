@@ -130,9 +130,23 @@ test('completed operation is reused across later provider responses without fres
  f.begin('resp_2');f.call('call_2');f.done('resp_2');const reused=await f.bridge.run('call_2',execute);
  assert.equal(count,1);assert.equal(reused.reused,true);assert.equal(reused.result.estimatedCost,0);
 });
-test('same spoken request cannot be split into duplicate tools by paraphrasing arguments',async()=>{
+test('changed arguments under one spoken request fail without relabeling existing findings',async()=>{
  const f=fixture();f.begin();f.transcript('Look up Honolulu pickleball paddle prices');f.call('call_a');f.call('call_b','search_web','Look up Honolulu pickleball paddle prices',{question:'Find the current prices for Honolulu pickleball paddles'});f.done();let count=0;
- const execute=async call=>{count++;return f.result(call);};await f.bridge.run('call_a',execute);const second=await f.bridge.run('call_b',execute);assert.equal(count,1);assert.equal(second.reused,true);
+ const execute=async call=>{count++;return f.result(call);};await f.bridge.run('call_a',execute);const second=await f.bridge.run('call_b',execute);assert.equal(count,1);assert.equal(second.status,'failed');assert.equal(second.reason,'combine_request');assert.deepEqual(second.result,{});assert.equal(second.reused,undefined);
+});
+test('a split comparison never reports Honolulu data as a completed CRBN lookup',async()=>{
+ const f=fixture(),quote='Compare Honolulu and CRBN paddle prices';f.begin();f.transcript(quote);
+ f.call('call_honolulu','search_web',quote,{question:'Honolulu paddle prices'});f.call('call_crbn','search_web',quote,{question:'CRBN paddle prices'});f.done();
+ let count=0;const execute=async call=>{count++;return {callId:call.callId,name:call.name,status:'completed',result:{parts:[{text:'Honolulu costs $145.',citations:[]}],estimatedCost:.01}};};
+ const first=await f.bridge.run('call_honolulu',execute),second=await f.bridge.run('call_crbn',execute);
+ assert.equal(count,1);assert.equal(first.status,'completed');assert.equal(second.status,'failed');assert.equal(second.reason,'combine_request');assert.deepEqual(second.result,{});
+ const spoken=f.sent.find(e=>e.type==='response.item.create'&&e.item.call_id==='call_crbn');assert.equal(JSON.parse(spoken.item.output).status,'failed');assert.equal(spoken.item.output.includes('145'),false);
+});
+test('different numeric constraints cannot collide through speech-style normalization',async()=>{
+ const f=fixture(),quote='Find paddles priced above and below one hundred dollars';f.begin();f.transcript(quote);
+ f.call('call_less','search_web',quote,{question:'paddle price < $100'});f.call('call_more','search_web',quote,{question:'paddle price > $100'});f.done();let count=0;
+ const execute=async call=>{count++;return f.result(call);};await f.bridge.run('call_less',execute);const second=await f.bridge.run('call_more',execute);
+ assert.equal(count,1);assert.equal(second.status,'failed');assert.equal(second.reason,'combine_request');assert.deepEqual(second.result,{});
 });
 test('a fresh explicit repeat after completion can start a new operation; same-turn again cannot',async()=>{
  const f=fixture();f.begin();f.transcript('Look up Honolulu pickleball paddle prices');f.call();f.done();let count=0;

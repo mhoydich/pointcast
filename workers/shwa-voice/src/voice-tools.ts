@@ -4,6 +4,9 @@
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const opaque = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 256 && /^[a-zA-Z0-9_-]+$/.test(value);
 const normalize = (value: string) => value.toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' ]/g, ' ').replace(/\s+/g, ' ').trim();
+// Preserve operators, numbers, URL case, and punctuation in operation identity.
+// The looser speech matcher is not safe for comparing requested work.
+const operationContent = (value: string) => value.normalize('NFKC').replace(/\s+/g,' ').trim();
 
 export type VoiceToolName = 'search_web' | 'generate_image';
 export type VoiceToolCall = { callId: string; name: string; content: string; requestQuote: string; responseId: string; invalid?: string };
@@ -11,7 +14,7 @@ export type VoiceToolReceipt = { callId: string; name: string; status: 'complete
 type Pending = VoiceToolCall & { receipt?: VoiceToolReceipt; promise?: Promise<VoiceToolReceipt>; delivered: boolean };
 type BackendResponse = { id: string; delegationId: string; calls: Set<string>; terminal: boolean; failed: boolean; continued: boolean };
 type UserTurn = { id: number; text: string; at: number; startedAt: number; endMs?: number; truncated: boolean };
-type ToolOperation = { id: string; turnId: number; settledAt?: number; promise: Promise<VoiceToolReceipt> };
+type ToolOperation = { id: string; turnId: number; contentKey: string; settledAt?: number; promise: Promise<VoiceToolReceipt> };
 
 export const VOICE_TOOLS = [
   { type: 'function', name: 'search_web', description: 'Look up current public facts, products, prices, sources, or links when the visitor explicitly asks. Return verified findings with citations to the room and voice. Do not call for incidental mentions, hypothetical examples, your own suggestions, or an unclear request. request_quote must quote the actual visitor request verbatim. Ask one useful question if the product or task is unclear.', strict: true,
@@ -140,20 +143,27 @@ export class VoiceToolBridge {
       if (!this.active() || response?.failed) receipt = this.failure(call,'call_ended','This call has ended. No new work was started.');
       else if (!turn || !explicitToolRequest(call.name,call.requestQuote) || toolRequestVeto(call.name,context)) receipt = this.failure(call,'needs_confirmation','Please explicitly ask Shwa to look this up or generate the image. No tool was charged for this unclear request.');
       else {
-        const operationKey=call.name+':'+normalize(call.content), turnKey=call.name+':'+turn.id;
+        const operationKey=call.name+':'+operationContent(call.content), turnKey=call.name+':'+turn.id;
         const prior=this.operations.get(operationKey);
         const deliberateRepeat=prior&&prior.settledAt!==undefined&&turn.id>prior.turnId&&turn.startedAt>prior.settledAt&&/\b(?:again|another|new|different|refresh|redo|regenerate|one more|instead)\b/.test(normalize(turn.text));
-        let operation=this.turnOperations.get(turnKey) ?? (deliberateRepeat?undefined:prior);
-        const reused=Boolean(operation);
-        if (!operation) {
-          operation={id:call.callId,turnId:turn.id,promise:Promise.resolve().then(()=>execute(call,this.workSignal)).catch(()=>this.failure(call,'generation_unconfirmed','The work did not return a confirmed result. It may have been charged; it was not retried.'))};
-          const current=operation;
-          operation.promise=operation.promise.then(result=>{current.settledAt=this.now();return result;});
-          this.operations.set(operationKey,operation);
+        const sameTurn=this.turnOperations.get(turnKey);
+        if (sameTurn && sameTurn.contentKey!==operationKey) {
+          // Similar-looking arguments are not necessarily the same task. Never
+          // return one product's findings as a successful lookup for another.
+          receipt=this.failure(call,'combine_request','This spoken request already started a different task of this kind. No second tool was charged, and the existing result does not answer this new task. Ask for one combined request containing every product or comparison detail.');
+        } else {
+          let operation=sameTurn ?? (deliberateRepeat?undefined:prior);
+          const reused=Boolean(operation);
+          if (!operation) {
+            operation={id:call.callId,turnId:turn.id,contentKey:operationKey,promise:Promise.resolve().then(()=>execute(call,this.workSignal)).catch(()=>this.failure(call,'generation_unconfirmed','The work did not return a confirmed result. It may have been charged; it was not retried.'))};
+            const current=operation;
+            operation.promise=operation.promise.then(result=>{current.settledAt=this.now();return result;});
+            this.operations.set(operationKey,operation);
+          }
+          this.turnOperations.set(turnKey,operation);
+          const result=await operation.promise;
+          receipt={...result,callId:call.callId,name:call.name,operationId:operation.id,...(reused?{reused:true,result:{...result.result,estimatedCost:0}}:{})};
         }
-        this.turnOperations.set(turnKey,operation);
-        const result=await operation.promise;
-        receipt={...result,callId:call.callId,name:call.name,operationId:operation.id,...(reused?{reused:true,result:{...result.result,estimatedCost:0}}:{})};
       }
       this.complete(call,receipt);
       return call.receipt!;
