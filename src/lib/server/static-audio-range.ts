@@ -1,24 +1,32 @@
 import manifest from '../../../public/audio/starjam/manifest.json';
+import chimeChecks from '../../../public/chime/chime-checks.json';
 
 // Pages currently serves full 200s for Range requests. Keep this fallback
-// limited to STARJAM's finite, original AAC assets (each under 300 KB).
+// limited to STARJAM's finite AAC assets and Chime's one demonstration WAV.
 // https://developers.cloudflare.com/pages/configuration/serving-pages/#behavior
 const STARJAM_AUDIO = /^\/audio\/starjam\/(?:welcome|level-clear|hit-[0-2]|(?:garden|rush|shell|storm)-(?:drift|gentle|playful))\.m4a$/;
 const MAX_BYTES = 512 * 1024;
 const ASSET_BYTES = new Map(manifest.tracks.map(track => [`/audio/starjam/${track.file}`, track.bytes]));
+const CHIME_AUDIO = '/chime/chime-demo.wav';
+// The shipped WAV is 526,252 bytes: just above STARJAM's unchanged ceiling.
+const CHIME_MAX_BYTES = 600 * 1024;
 
-export async function withStarjamAudioRange(request: Request, response: Response): Promise<Response> {
-  if (!STARJAM_AUDIO.test(new URL(request.url).pathname)
+export async function withStaticAudioRange(request: Request, response: Response): Promise<Response> {
+  const pathname = new URL(request.url).pathname;
+  const isChime = pathname === CHIME_AUDIO;
+  const contentType = isChime ? /^audio\/wav(?:;|$)/i : /^audio\/mp4(?:;|$)/i;
+  if ((!isChime && !STARJAM_AUDIO.test(pathname))
       || !['GET', 'HEAD'].includes(request.method) || response.status !== 200
-      || !/^audio\/mp4(?:;|$)/i.test(response.headers.get('content-type') || '')) return response;
+      || !contentType.test(response.headers.get('content-type') || '')) return response;
   const encoding = response.headers.get('content-encoding');
   const lengthHeader = response.headers.get('content-length');
   // Pages can add Content-Length only after the Function returns. The shipped
-  // manifest supplies the verified size when next() has not exposed it yet.
-  const size = lengthHeader === null ? ASSET_BYTES.get(new URL(request.url).pathname) : Number(lengthHeader);
+  // manifest/check report supplies the verified size when next() omits it.
+  const size = lengthHeader === null ? (isChime ? chimeChecks.audio.bytes : ASSET_BYTES.get(pathname)) : Number(lengthHeader);
+  const maxBytes = isChime ? CHIME_MAX_BYTES : MAX_BYTES;
   if ((encoding && encoding !== 'identity') || (lengthHeader !== null && !/^\d+$/.test(lengthHeader))
       || size === undefined
-      || !Number.isSafeInteger(size) || size < 1 || size > MAX_BYTES) return response;
+      || !Number.isSafeInteger(size) || size < 1 || size > maxBytes) return response;
 
   const headers = new Headers(response.headers);
   headers.set('Accept-Ranges', 'bytes');
