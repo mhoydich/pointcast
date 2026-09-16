@@ -5,6 +5,8 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    chime: 'https://pointcast.xyz/chime',
+    chimeBrief: 'https://pointcast.xyz/chime/brief.md',
     home: 'https://pointcast.xyz/',
     about: 'https://pointcast.xyz/about',
     manifesto: 'https://pointcast.xyz/manifesto',
@@ -24,6 +26,7 @@ export const AGENT_SURFACES = {
     status: 'https://pointcast.xyz/status',
   },
   json: {
+    chime: 'https://pointcast.xyz/chime.json',
     agents: 'https://pointcast.xyz/agents.json',
     wellKnownAgents: 'https://pointcast.xyz/.well-known/agents.json',
     wellKnownAi: 'https://pointcast.xyz/.well-known/ai.json',
@@ -38,6 +41,7 @@ export const AGENT_SURFACES = {
     feedJson: 'https://pointcast.xyz/feed.json',
   },
   api: {
+    chimeNotebook: 'https://pointcast.xyz/api/chime/log',
     kennelClubToday: 'https://pointcast.xyz/api/kennel-club/today',
     kennelClubMint: 'https://pointcast.xyz/api/kennel-club/mint',
     kennelClubClaim: 'https://pointcast.xyz/api/kennel-club/claim',
