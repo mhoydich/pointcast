@@ -27,6 +27,7 @@ export const GET: APIRoute = () =>
           firstToTryForPickleball: POCKET_SEATS_SHORTLIST,
           suggestedFieldTests: POCKET_SEAT_TESTS,
         },
+        shopping: { pocketUrl: '/beach-commons/v19#shopping-pocket', profileUrl: '/me#shopping-pocket', savedItems: 'browser-local, not account-synced', checkout: 'external merchant', attribution: 'anonymous outbound clicks only', confirmedSales: null, commission: null, reportUrl: '/api/shopping-metrics' },
         roomLayouts: ROOM_LAYOUTS,
         methodology: {
           researchCheckedAt: BEACH_COMMONS_V19.priceCheckedAt,

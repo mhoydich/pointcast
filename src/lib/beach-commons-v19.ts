@@ -44,7 +44,7 @@ export const BEACH_COMMONS_V19 = {
   testingBoundary:
     'This is a specification-led editorial field study, with no hands-on testing. Product roles and suggested uses are editorial inferences. Capacity, comfort, setup speed and surface-performance claims have not been independently tested here.',
   linkBoundary:
-    'Shopping links are plain links without affiliate parameters. No merchant relationship or affiliation is asserted.',
+    'Shopping links go directly to merchants without affiliate parameters. PointCast records anonymous outbound click events, respecting browser privacy signals; clicks are not confirmed purchases. No merchant relationship or affiliation is asserted.',
   illustrationBoundary:
     'Original editorial illustration generated with OpenAI image generation. It represents an imagined scene, not product photography or evidence of a field test.',
   fieldBoundary:
