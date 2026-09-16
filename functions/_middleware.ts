@@ -19,9 +19,9 @@ import { classifyUA, recordVisit, NOUN_ID_RANGE, type Env } from './api/visit';
 import { readSessionFromRequest, type AuthEnv } from './api/auth/session';
 import { hasDirectorDeskAccess } from '../src/lib/director-access';
 import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-bridge-script';
-import { withStarjamAudioRange } from '../src/lib/server/starjam-audio-range';
+import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
 
-const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|webm|zip)(\?|$)/i;
+const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
 const RETIRED_PROFILE_ROUTES = new Map([
   ['/profile', '/me'],
@@ -276,7 +276,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
-  const staticResponse = await withStarjamAudioRange(request, await next());
+  const staticResponse = await withStaticAudioRange(request, await next());
   const staticResponseContentType = staticResponse.headers.get('content-type') ?? '';
   const response = staticResponse.status === 200 && staticResponseContentType.startsWith('text/html')
     ? injectTodayDogMetadata(staticResponse, url.pathname)

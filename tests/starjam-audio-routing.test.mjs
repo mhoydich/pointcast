@@ -8,7 +8,7 @@ async function withMiddleware(run) {
   try {
     return await run(
       await server.ssrLoadModule('/functions/_middleware.ts'),
-      await server.ssrLoadModule('/src/lib/server/starjam-audio-range.ts'),
+      await server.ssrLoadModule('/src/lib/server/static-audio-range.ts'),
     );
   } finally {
     await server.close();
@@ -17,6 +17,8 @@ async function withMiddleware(run) {
 
 const welcomeBytes = readFileSync(new URL('../public/audio/starjam/welcome.m4a', import.meta.url));
 const backingBytes = readFileSync(new URL('../public/audio/starjam/garden-gentle.m4a', import.meta.url));
+const chimeBytes = readFileSync(new URL('../public/chime/chime-demo.wav', import.meta.url));
+const chimePath = '/chime/chime-demo.wav';
 
 function assetResponse(bytes = welcomeBytes, { status = 200, headers = {}, body = bytes } = {}) {
   return new Response(body, {
@@ -136,7 +138,7 @@ test('ordinary GET and HEAD advertise ranges without slicing the response', asyn
 });
 
 test('range fallback leaves other paths, methods, encodings, types, statuses and sizes untouched', async () => {
-  await withMiddleware(async (_, { withStarjamAudioRange }) => {
+  await withMiddleware(async (_, { withStaticAudioRange }) => {
     for (const options of [
       { request: { pathname: '/audio/starjam/unknown.m4a' } },
       { request: { pathname: '/another/welcome.m4a' } },
@@ -152,7 +154,7 @@ test('range fallback leaves other paths, methods, encodings, types, statuses and
       { status: 503 },
     ]) {
       const upstream = assetResponse(welcomeBytes, options);
-      const response = await withStarjamAudioRange(assetRequest({ range: 'bytes=0-1', ...options.request }), upstream);
+      const response = await withStaticAudioRange(assetRequest({ range: 'bytes=0-1', ...options.request }), upstream);
       assert.equal(response, upstream, JSON.stringify(options));
       assert.equal(upstream.bodyUsed, false, 'unmatched responses are never read');
     }
@@ -217,14 +219,14 @@ test('level-clear AAC supports suffix and HEAD requests, and a mismatched manife
 });
 
 test('an actual body larger than its declared bounded length cancels without returning partial audio', async () => {
-  await withMiddleware(async (_, { withStarjamAudioRange }) => {
+  await withMiddleware(async (_, { withStaticAudioRange }) => {
     let cancelled = false;
     const body = new ReadableStream({
       start(controller) { controller.enqueue(new Uint8Array(12)); },
       cancel() { cancelled = true; },
     });
     const upstream = assetResponse(Buffer.alloc(4), { body });
-    const response = await withStarjamAudioRange(assetRequest({ range: 'bytes=0-1' }), upstream);
+    const response = await withStaticAudioRange(assetRequest({ range: 'bytes=0-1' }), upstream);
     assert.equal(response.status, 502);
     assert.equal(cancelled, true);
     assert.equal(response.headers.get('content-range'), null);
@@ -233,9 +235,9 @@ test('an actual body larger than its declared bounded length cancels without ret
 });
 
 test('a truncated full body cannot be relabeled as a successful partial response', async () => {
-  await withMiddleware(async (_, { withStarjamAudioRange }) => {
+  await withMiddleware(async (_, { withStaticAudioRange }) => {
     const upstream = assetResponse(Buffer.alloc(12), { body: Buffer.alloc(4) });
-    const response = await withStarjamAudioRange(assetRequest({ range: 'bytes=0-1' }), upstream);
+    const response = await withStaticAudioRange(assetRequest({ range: 'bytes=0-1' }), upstream);
     assert.equal(response.status, 502);
     assert.equal(response.headers.get('content-range'), null);
     assert.match(await response.text(), /unavailable/i);
@@ -243,12 +245,94 @@ test('a truncated full body cannot be relabeled as a successful partial response
 });
 
 test('an upstream body read failure returns a controlled unavailable response', async () => {
-  await withMiddleware(async (_, { withStarjamAudioRange }) => {
+  await withMiddleware(async (_, { withStaticAudioRange }) => {
     const body = new ReadableStream({ start(controller) { controller.error(new Error('upstream disconnected')); } });
-    const response = await withStarjamAudioRange(assetRequest({ range: 'bytes=0-1' }), assetResponse(Buffer.alloc(4), { body }));
+    const response = await withStaticAudioRange(assetRequest({ range: 'bytes=0-1' }), assetResponse(Buffer.alloc(4), { body }));
     assert.equal(response.status, 502);
     assert.equal(response.headers.get('content-range'), null);
     assert.match(await response.text(), /unavailable/i);
+  });
+});
+
+test('Chime WAV serves exact first-two-byte, suffix and open-ended ranges through middleware', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => assert.fail('Chime ranges must not fetch another URL'));
+  assert.equal(chimeBytes.length, 526252);
+  await withMiddleware(async ({ onRequest }) => {
+    for (const [range, start, end] of [
+      ['bytes=0-1', 0, 1],
+      ['bytes=-32', chimeBytes.length - 32, chimeBytes.length - 1],
+      ['bytes=526240-', 526240, chimeBytes.length - 1],
+    ]) {
+      const upstream = assetResponse(chimeBytes, { headers: { 'Content-Type': 'audio/wav', ETag: '"chime-demo"' } });
+      const response = await route(onRequest, assetRequest({ pathname: chimePath, range }), upstream);
+      assert.equal(response.status, 206, range);
+      assert.equal(response.headers.get('content-type'), 'audio/wav');
+      assert.equal(response.headers.get('content-range'), `bytes ${start}-${end}/${chimeBytes.length}`);
+      assert.equal(response.headers.get('content-length'), String(end - start + 1));
+      assert.equal(response.headers.get('accept-ranges'), 'bytes');
+      assert.equal(response.headers.get('etag'), '"chime-demo"');
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), chimeBytes.subarray(start, end + 1));
+    }
+  });
+});
+
+test('Chime unsatisfiable ranges return empty 416 and the correct WAV size', async () => {
+  await withMiddleware(async ({ onRequest }) => {
+    for (const range of [`bytes=${chimeBytes.length}-`, 'bytes=-0', 'bytes=20-1']) {
+      const upstream = assetResponse(chimeBytes, { headers: { 'Content-Type': 'audio/wav' } });
+      const response = await route(onRequest, assetRequest({ pathname: chimePath, range }), upstream);
+      assert.equal(response.status, 416, range);
+      assert.equal(response.headers.get('content-range'), `bytes */${chimeBytes.length}`);
+      assert.equal(response.headers.get('content-length'), '0');
+      assert.equal((await response.arrayBuffer()).byteLength, 0);
+    }
+  });
+});
+
+test('Chime uses the verified artifact size when Pages omits Content-Length and rejects a truncated body', async () => {
+  const checks = JSON.parse(readFileSync(new URL('../public/chime/chime-checks.json', import.meta.url), 'utf8'));
+  assert.equal(checks.audio.bytes, chimeBytes.length);
+  await withMiddleware(async ({ onRequest }) => {
+    const upstream = assetResponse(chimeBytes, { headers: { 'Content-Type': 'audio/wav' } });
+    upstream.headers.delete('content-length');
+    const response = await route(onRequest, assetRequest({ pathname: chimePath, range: 'bytes=0-1' }), upstream);
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get('content-range'), `bytes 0-1/${chimeBytes.length}`);
+    assert.equal(response.headers.get('content-length'), '2');
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), chimeBytes.subarray(0, 2));
+
+    const headUpstream = assetResponse(chimeBytes, { headers: { 'Content-Type': 'audio/wav' }, body: null });
+    headUpstream.headers.delete('content-length');
+    const head = await route(onRequest, assetRequest({ pathname: chimePath, method: 'HEAD', range: 'bytes=0-1' }), headUpstream);
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get('content-length'), String(chimeBytes.length));
+    assert.equal(head.headers.get('accept-ranges'), 'bytes');
+    assert.equal(head.body, null);
+
+    const truncated = assetResponse(chimeBytes, { headers: { 'Content-Type': 'audio/wav' }, body: chimeBytes.subarray(0, 100) });
+    truncated.headers.delete('content-length');
+    const failure = await route(onRequest, assetRequest({ pathname: chimePath, range: 'bytes=0-1' }), truncated);
+    assert.equal(failure.status, 502);
+    assert.equal(failure.headers.get('content-range'), null);
+  });
+});
+
+test('Chime fallback leaves unrelated WAVs, oversized bodies, wrong MIME and native partial responses untouched', async () => {
+  await withMiddleware(async (_, { withStaticAudioRange }) => {
+    for (const options of [
+      { pathname: '/chime/other.wav' },
+      { pathname: '/audio/chime-demo.wav' },
+      { pathname: '/chime/chime-demo.wav/' },
+      { headers: { 'Content-Length': String(600 * 1024 + 1) } },
+      { headers: { 'Content-Type': 'audio/mp4' } },
+      { headers: { 'Content-Encoding': 'gzip' } },
+      { status: 206 },
+    ]) {
+      const upstream = assetResponse(chimeBytes, { status: options.status, headers: { 'Content-Type': 'audio/wav', ...options.headers } });
+      const response = await withStaticAudioRange(assetRequest({ pathname: options.pathname || chimePath, range: 'bytes=0-1' }), upstream);
+      assert.equal(response, upstream, JSON.stringify(options));
+      assert.equal(upstream.bodyUsed, false);
+    }
   });
 });
 
