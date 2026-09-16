@@ -16,14 +16,14 @@ test('corrupt, duplicate and unknown saved items are safely normalized', () => {
 });
 
 test('save, reload, cross-tab clear, filter and blocked storage work with the production controller', t => {
-  const dom = new JSDOM(`<section data-shopping-root><p data-pocket-storage></p><p data-pocket-status></p><span data-pocket-count></span><div data-shopping-tools hidden></div><button data-shopping-filter="saved"></button><button data-pocket-clear></button><p data-pocket-empty hidden></p>${SHOPPING_ITEMS.map(item => `<article data-shopping-item="${item.id}"><button hidden data-pocket-save="${item.id}"></button><a data-shop-link="${item.id}" href="${item.url}">Shop</a></article>`).join('')}</section>`, { url: 'https://pointcast.xyz', runScripts: 'outside-only' });
+  const dom = new JSDOM(`<section data-shopping-root data-ready="true"><p data-pocket-storage></p><p data-pocket-status></p><span data-pocket-count></span><div data-shopping-tools hidden></div><button data-shopping-filter="saved"></button><button data-pocket-clear></button><p data-pocket-empty hidden></p>${SHOPPING_ITEMS.map(item => `<article data-shopping-item="${item.id}"><button hidden data-pocket-save="${item.id}"></button><a data-shop-link="${item.id}" href="${item.url}">Shop</a></article>`).join('')}</section>`, { url: 'https://pointcast.xyz', runScripts: 'outside-only' });
   t.after(() => dom.window.close());
   const w = dom.window;
   const d = w.document;
   w.localStorage.setItem(POCKET_KEY, '["btr-20"]');
   const calls = [];
   w.fetch = (...args) => { calls.push(args); return Promise.resolve({}); };
-  w.eval(script + '\nPocket.initShoppingPocket();');
+  w.eval(script + '\nwindow.initPocket = Pocket.initShoppingPocket; window.initPocket();');
   d.querySelector('[data-pocket-save="numanu"]').click();
   assert.ok(JSON.parse(w.localStorage.getItem(POCKET_KEY)).includes('numanu'));
   assert.equal(d.querySelector('[data-pocket-save="numanu"]').textContent, 'Saved ✓');
@@ -32,6 +32,11 @@ test('save, reload, cross-tab clear, filter and blocked storage work with the pr
   assert.equal(d.querySelector('[data-shopping-item="campwell"]').hidden, true);
   w.dispatchEvent(new w.StorageEvent('storage', { key: POCKET_KEY, newValue: '[]' }));
   assert.equal(d.querySelector('[data-pocket-empty]').hidden, false);
+  d.dispatchEvent(new w.Event('astro:before-swap'));
+  w.initPocket();
+  w.initPocket();
+  d.querySelector('[data-pocket-save="numanu"]').click();
+  assert.equal(d.querySelector('[data-pocket-save="numanu"]').getAttribute('aria-pressed'), 'false', 'reinitializes after abort without duplicate handlers');
   Object.defineProperty(w, 'localStorage', { get() { throw new Error('blocked'); } });
   d.querySelector('[data-pocket-save="numanu"]').click();
   assert.match(d.querySelector('[data-pocket-storage]').textContent, /only for this page visit/);

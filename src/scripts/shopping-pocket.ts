@@ -1,12 +1,20 @@
 import { POCKET_KEY, readPocket, SHOPPING_ITEMS, SHOPPING_STUDY } from '../lib/shopping';
 
+const controllers = new WeakMap<HTMLElement, AbortController>();
+
 export function initShoppingPocket() {
   const root = document.querySelector<HTMLElement>('[data-shopping-root]');
-  if (!root || root.dataset.ready) return;
+  if (!root) return;
+  const previous = controllers.get(root);
+  if (previous && !previous.signal.aborted) return;
   root.dataset.ready = 'true';
   const controller = new AbortController();
+  controllers.set(root, controller);
   const options = { signal: controller.signal };
-  document.addEventListener('astro:before-swap', () => controller.abort(), { once: true, ...options });
+  document.addEventListener('astro:before-swap', () => {
+    controller.abort();
+    delete root.dataset.ready;
+  }, { once: true, ...options });
   let saved: string[] = [];
   let persistent = true;
   let filter = root.dataset.shoppingDefault === 'saved' ? 'saved' : 'all';

@@ -11,7 +11,7 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 - [x] (X) Add direct merchant shopping, browser-local saved finds across V19 and `/me`, and anonymous outbound-click reporting — `done` — source and focused tests; no confirmed-sales integration
 - [x] (X) Specify merchant conversion evidence and the one-profile wallet/receipt path — `done` — `docs/plans/2026-09-15-shopping-pocket.md`
-- [ ] (MH/X) Review and approve shopping PR, build complete checkout, deploy UI/Functions and verify live analytics binding — `waiting-on-mh`
+- [x] (MH/X) Review and approve shopping PR, build complete checkout, deploy UI/Functions and verify live analytics binding — `done` — PR #1126; production click-write/read/cleanup verified; profile navigation correction follows
 - [ ] (MH/X) Establish one merchant reporting integration and verify a test conversion/refund before enabling confirmed-sales totals — `handoff`
 
 ---
