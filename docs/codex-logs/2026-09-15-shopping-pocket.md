@@ -11,8 +11,8 @@ The complete site's server and client bundles compiled, but full prerender stopp
 Release: review/approve PR, then build from the complete main checkout and deploy UI + Functions together. Confirm analytics KV and use preview storage for synthetic click tests. See `docs/plans/2026-09-15-shopping-pocket.md` for conversion integration acceptance and the one-profile wallet direction.
 
 
-## Production release and navigation correction
+## Production release and navigation hardening
 
 Mike approved publication on September 15. PR #1126 merged as `ce60fa747587dd6da91c8f5cdd138edac5739f5e`; Cloudflare production deployment `1d2b8270-c728-42da-b692-eb1e0ef69439` succeeded. The complete build passed (2,186 pages). Canonical V19 and `/me` HTML match the build after removing only the injected wallet-session bridge; the JSON twin and cover image match byte-for-byte. The live API rejects cross-origin writes, honors DNT/GPC, and accepted a temporary click that was independently found in KV, then removed with absence verified.
 
-Live profile navigation exposed a lifecycle bug: a DOM readiness attribute could survive after event handlers were aborted. The follow-up tracks live controllers with a WeakMap, reinitializes aborted roots and clears the stale marker. The controller test now starts with a stale marker, simulates a page swap and verifies reinitialization does not duplicate listeners. All 25 focused tests and TypeScript checks pass.
+A live click initially appeared inert; visual inspection showed the open Shwa dashboard covering the shopping control. Removal worked after minimizing that panel, so that observation did not establish a shopping-code defect. Separately, a regression fixture showed that trusting a stale DOM readiness marker could prevent initialization. The follow-up hardens this lifecycle by tracking live controllers with a WeakMap, reinitializing aborted roots and clearing the stale marker. The controller test now starts with a stale marker, simulates a page swap and verifies reinitialization does not duplicate listeners. All 25 focused tests and TypeScript checks pass.
