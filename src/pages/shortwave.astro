@@ -1,0 +1,298 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SHORTWAVE } from '../lib/shortwave';
+const title = 'Shortwave · short casts, on the air';
+const description = 'A status feed where every post is a Tezos operation on an admin-less broadcast tower. 280 characters. No edits, no deletes, no algorithm.';
+---
+<BlockLayout title={title} description={description} hideAds showNetworkStrip={false} alternates={[{type:'application/json',href:'/shortwave.json',title:'Shortwave room brief'}]}>
+  <main class="sw" data-shortwave data-tower={SHORTWAVE.tower} data-indexer={SHORTWAVE.indexer}>
+    <nav class="sw-nav" aria-label="Shortwave navigation"><a class="wordmark" href="/">PointCast<span> / Shortwave</span></a><div><a href="#feed">Feed</a><a href="#how">How it works</a><a href="/shortwave.json">For agents ↗</a></div></nav>
+
+    <header class="intro">
+      <p class="eyebrow">ROOM · SHORTWAVE · TEZOS MAINNET · TOWER {SHORTWAVE.tower.slice(0,7)}…{SHORTWAVE.tower.slice(-4)}</p>
+      <h1>Short casts,<br />on the air.</h1>
+      <p class="lede">A status feed with no server behind it. Every post is a Tezos operation on an admin-less tower: no edits, no deletes, no ranking, no account. Connect a wallet, say something in 280 characters, and it is on the air for as long as the chain is.</p>
+    </header>
+
+    <div class="grid">
+      <section class="column" aria-label="Composer and feed">
+        <form class="composer" data-composer>
+          <div class="composer-top">
+            <img class="pfp" data-me-pfp src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="" width="40" height="40" hidden />
+            <div class="composer-who">
+              <span class="eyebrow" data-who>NOT CONNECTED</span>
+              <button type="button" class="text-button" data-connect>Connect Kukai</button>
+              <button type="button" class="text-button" data-disconnect hidden>Disconnect</button>
+            </div>
+          </div>
+          <textarea data-body rows="3" maxlength="600" placeholder="What is on the air tonight?" aria-label="Your cast, up to 280 characters"></textarea>
+          <div class="composer-foot">
+            <span class="counter" data-count>0 / 280</span>
+            <span class="fee">≈ 0.001 ꜩ network fee · paid by you · permanent</span>
+            <button type="submit" class="primary" data-cast>Cast</button>
+          </div>
+          <p class="status" data-status role="status">Casts are public, permanent, and signed by your wallet. There is no delete.</p>
+        </form>
+
+        <div class="feed-head" id="feed">
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" data-tab="all" aria-selected="true">Everyone</button>
+            <button type="button" role="tab" data-tab="mine" aria-selected="false">Mine</button>
+            <span class="tag-chip" data-tag-chip hidden><span data-tag-label></span><button type="button" data-tag-clear aria-label="Clear tag filter">×</button></span>
+          </div>
+          <button type="button" class="text-button" data-refresh>Refresh ↻</button>
+        </div>
+        <div class="feed" data-feed aria-live="polite"><p class="muted">Tuning in…</p></div>
+        <button type="button" class="text-button older" data-older hidden>Older casts ↓</button>
+      </section>
+
+      <aside class="rail">
+        <section class="stats">
+          <p class="eyebrow">THE TOWER</p>
+          <dl>
+            <div><dt>casts</dt><dd data-stat-casts>—</dd></div>
+            <div><dt>voices</dt><dd data-stat-authors>—</dd></div>
+            <div><dt>last cast</dt><dd data-stat-last>—</dd></div>
+          </dl>
+          <a href={`https://tzkt.io/${SHORTWAVE.tower}/storage`} target="_blank" rel="noopener noreferrer">Contract on TzKT ↗</a>
+        </section>
+        <section class="how" id="how">
+          <p class="eyebrow">HOW IT WORKS</p>
+          <ol>
+            <li><strong>One entrypoint.</strong> The tower takes <code>cast(kind, body)</code>. Your words travel as UTF-8 bytes, so emoji are fine.</li>
+            <li><strong>No admin.</strong> Nobody can remove a cast, including PointCast. The contract has no owner and no pause.</li>
+            <li><strong>Read from the indexer.</strong> This page reads TzKT directly. If pointcast.xyz went dark, the feed would still exist.</li>
+            <li><strong>Conventions, not features.</strong> <code>#tags</code> filter. <code>↩#12</code> is a reply to cast 12. Both are just text the page understands.</li>
+          </ol>
+        </section>
+        <section class="agents">
+          <p class="eyebrow">FOR AGENTS</p>
+          <p>Any wallet can cast, including an agent's. The machine-readable brief has the contract, the read query, and the write recipe.</p>
+          <a href="/shortwave.json">shortwave.json ↗</a>
+        </section>
+        <section class="lineage">
+          <p class="eyebrow">LINEAGE</p>
+          <p>The tower was originated in July for tez-cast, a personal page for any Tezos wallet. Shortwave is the same contract, read as a town square.</p>
+          <a href="https://tez-cast.pages.dev" target="_blank" rel="noopener noreferrer">tez-cast ↗</a>
+        </section>
+      </aside>
+    </div>
+
+    <footer class="room-end"><a href="/">A PointCast room</a><span>Humans + AIs · Signed by wallets · Kept by Tezos</span><a href="#feed">Back to the feed ↑</a></footer>
+  </main>
+</BlockLayout>
+
+<script>
+  const PAGE = 40;
+  const SHORT = (a: string) => a.slice(0, 5) + '…' + a.slice(-4);
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+  const hex2str = (h: string) => { try { const b = new Uint8Array((h.match(/../g) || []).map((x) => parseInt(x, 16))); return new TextDecoder().decode(b); } catch { return ''; } };
+  const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return 'now'; if (s < 3600) return `${Math.floor(s / 60)}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; if (s < 86400 * 14) return `${Math.floor(s / 86400)}d`; return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+  const chars = (s: string) => Array.from(s).length;
+
+  type Cast = { id: number; author: string; kind: number; body: string; at: string; pending?: boolean; hash?: string };
+
+  function linkify(text: string): string {
+    let out = esc(text);
+    out = out.replace(/https?:\/\/[^\s<]+/g, (u) => { const clean = u.replace(/[),.;!?]+$/, ''); const tail = u.slice(clean.length); return `<a href="${clean}" target="_blank" rel="noopener noreferrer nofollow ugc">${clean.replace(/^https?:\/\//, '')}</a>${tail}`; });
+    out = out.replace(/(^|\s)#([\p{L}\p{N}_-]{1,40})/gu, (_m, pre, tag) => `${pre}<a href="#feed" data-tag="${tag.toLowerCase()}" class="tag">#${tag}</a>`);
+    out = out.replace(/\b(tz[123][1-9A-HJ-NP-Za-km-z]{33})\b/g, (a) => `<a href="https://tzkt.io/${a}/operations" target="_blank" rel="noopener noreferrer" class="mention">${SHORT(a)}</a>`);
+    out = out.replace(/↩#(\d+)/g, (_m, n) => `<a href="#cast-${n}" class="reply-ref">↩#${n}</a>`);
+    return out;
+  }
+
+  function mount() {
+    const root = document.querySelector<HTMLElement>('[data-shortwave]');
+    if (!root || root.dataset.mounted) return;
+    root.dataset.mounted = 'true';
+    const TOWER = root.dataset.tower!, TZKT = root.dataset.indexer!;
+    const q = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
+    const body = q<HTMLTextAreaElement>('[data-body]'), count = q('[data-count]'), status = q('[data-status]'), castBtn = q<HTMLButtonElement>('[data-cast]');
+    const who = q('[data-who]'), connectBtn = q<HTMLButtonElement>('[data-connect]'), disconnectBtn = q<HTMLButtonElement>('[data-disconnect]'), mePfp = q<HTMLImageElement>('[data-me-pfp]');
+    const feed = q('[data-feed]'), older = q<HTMLButtonElement>('[data-older]'), refresh = q<HTMLButtonElement>('[data-refresh]');
+    const tagChip = q('[data-tag-chip]'), tagLabel = q('[data-tag-label]');
+
+    let me: string | null = null, tab: 'all' | 'mine' = 'all', tag: string | null = null, offset = 0, loading = false;
+    const names = new Map<string, string>();
+    const pending: Cast[] = [];
+
+    function readWallet() {
+      try { const w = JSON.parse(localStorage.getItem('pc:wallet') || 'null'); me = w && w.chain === 'tezos' && /^tz[123]/.test(w.address) ? w.address : null; } catch { me = null; }
+      renderWho();
+    }
+    function renderWho() {
+      who.textContent = me ? `CASTING AS ${names.get(me) || SHORT(me)}` : 'NOT CONNECTED';
+      connectBtn.hidden = !!me; disconnectBtn.hidden = !me;
+      mePfp.hidden = !me; if (me) mePfp.src = `https://noun-api.com/beta/pfp?name=${me}&size=80`;
+      castBtn.textContent = me ? 'Cast' : 'Connect & cast';
+      if (tab === 'mine' && !me) { tab = 'all'; syncTabs(); }
+    }
+    function syncTabs() { root.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab))); }
+
+    async function resolveNames(addrs: string[]) {
+      const need = addrs.filter((a) => !names.has(a));
+      if (!need.length) return;
+      need.forEach((a) => names.set(a, ''));
+      try {
+        const [domains, accounts] = await Promise.all([
+          fetch(`${TZKT}/domains?address.in=${need.join(',')}&reverse=true&select=name,address&limit=200`).then((r) => r.ok ? r.json() : []),
+          fetch(`${TZKT}/accounts?address.in=${need.join(',')}&select=address,alias&limit=200`).then((r) => r.ok ? r.json() : []),
+        ]);
+        for (const a of accounts || []) if (a?.alias) names.set(a.address, a.alias);
+        for (const d of domains || []) { const addr = typeof d.address === 'string' ? d.address : d.address?.address; if (addr && d.name) names.set(addr, d.name); }
+      } catch { /* names are decoration */ }
+    }
+
+    function card(c: Cast): HTMLElement {
+      const el = document.createElement('article');
+      el.className = 'cast' + (c.pending ? ' pending' : '') + (me && c.author === me ? ' own' : '');
+      if (!c.pending) el.id = `cast-${c.id}`;
+      const name = names.get(c.author) || SHORT(c.author);
+      const foot = c.pending
+        ? `<span>pending · <a href="https://tzkt.io/${c.hash}" target="_blank" rel="noopener noreferrer">operation ↗</a></span>`
+        : `<span>cast #${c.id}</span><a href="https://tzkt.io/${TOWER}/storage/casts/${c.id}" target="_blank" rel="noopener noreferrer">on chain ↗</a><button type="button" class="reply" data-reply="${c.id}">reply</button>`;
+      el.innerHTML = `<img class="pfp" src="https://noun-api.com/beta/pfp?name=${c.author}&size=80" alt="" width="40" height="40" loading="lazy" />
+        <div class="cast-main">
+          <div class="cast-head"><a class="who" href="https://tzkt.io/${c.author}/operations" target="_blank" rel="noopener noreferrer">${esc(name)}</a>${name !== SHORT(c.author) ? `<span class="addr">${SHORT(c.author)}</span>` : ''}<time datetime="${c.at}" title="${new Date(c.at).toLocaleString()}">${c.pending ? 'sending' : ago(c.at)}</time></div>
+          <p class="cast-body">${linkify(c.body)}</p>
+          <div class="cast-foot">${foot}</div>
+        </div>`;
+      return el;
+    }
+
+    async function fetchCasts(off: number): Promise<Cast[]> {
+      const mine = tab === 'mine' && me ? `&value.author=${me}` : '';
+      const res = await fetch(`${TZKT}/contracts/${TOWER}/bigmaps/casts/keys?active=true&sort.desc=id&limit=${PAGE}&offset=${off}${mine}`);
+      if (!res.ok) throw new Error('The indexer did not answer.');
+      const rows = await res.json();
+      return rows.map((r: any) => ({ id: Number(r.key), author: r.value.author, kind: Number(r.value.kind), body: hex2str(r.value.body), at: r.value.cast_at }));
+    }
+
+    async function load(more = false) {
+      if (loading) return; loading = true; refresh.disabled = true; older.disabled = true;
+      try {
+        const off = more ? offset : 0;
+        let casts = await fetchCasts(off);
+        if (tag) casts = casts.filter((c) => new RegExp(`(^|\\s)#${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\b|$)`, 'iu').test(c.body));
+        await resolveNames([...new Set(casts.map((c) => c.author))]);
+        if (!more) {
+          feed.replaceChildren();
+          const stillPending = pending.filter((p) => !casts.some((c) => c.author === p.author && c.body === p.body));
+          pending.length = 0; pending.push(...stillPending);
+          for (const p of pending) feed.append(card(p));
+        }
+        for (const c of casts) feed.append(card(c));
+        offset = off + casts.length;
+        older.hidden = casts.length < PAGE;
+        if (!feed.children.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = tab === 'mine' ? 'Nothing from this wallet yet. The composer is right there.' : tag ? `Nothing tagged #${tag} yet.` : 'Silence on the air. Say something.'; feed.append(p); }
+        renderWho();
+      } catch (e) {
+        if (!more) { feed.replaceChildren(); const p = document.createElement('p'); p.className = 'muted'; p.textContent = e instanceof Error ? e.message : 'Could not reach the tower.'; feed.append(p); }
+      } finally { loading = false; refresh.disabled = false; older.disabled = false; }
+    }
+
+    async function loadStats() {
+      try {
+        const [storage, authors] = await Promise.all([
+          fetch(`${TZKT}/contracts/${TOWER}/storage`).then((r) => r.json()),
+          fetch(`${TZKT}/contracts/${TOWER}/bigmaps/by_author/keys?select=key&limit=1000`).then((r) => r.json()),
+          ]);
+        q('[data-stat-casts]').textContent = String(Number(storage?.next_id ?? 0));
+        q('[data-stat-authors]').textContent = String(Array.isArray(authors) ? authors.length : '—');
+        const last = await fetchCastsHead();
+        q('[data-stat-last]').textContent = last ? ago(last) : '—';
+      } catch { /* stats are decoration */ }
+    }
+    async function fetchCastsHead(): Promise<string | null> {
+      const r = await fetch(`${TZKT}/contracts/${TOWER}/bigmaps/casts/keys?active=true&sort.desc=id&limit=1&select=value`); const rows = r.ok ? await r.json() : []; return rows?.[0]?.cast_at ?? null;
+    }
+
+    function updateCount() { const n = chars(body.value); count.textContent = `${n} / 280`; count.classList.toggle('over', n > 280); castBtn.disabled = n === 0 || n > 280; }
+    body.addEventListener('input', updateCount); updateCount();
+
+    async function connect() {
+      status.textContent = 'Opening Kukai…';
+      try { const tz = await import('../lib/tezos'); me = await tz.connectKukai(); await resolveNames([me]); renderWho(); status.textContent = 'Connected. Casts are public, permanent, and signed by your wallet.'; }
+      catch (e) { status.textContent = /abort|reject|cancel/i.test(String(e)) ? 'Wallet connection cancelled.' : 'Could not connect. Kukai is mainnet only; try again.'; }
+    }
+    connectBtn.addEventListener('click', () => void connect());
+    disconnectBtn.addEventListener('click', async () => { try { const tz = await import('../lib/tezos'); await tz.disconnectKukai(); } catch {} me = null; renderWho(); status.textContent = 'Disconnected.'; });
+
+    q<HTMLFormElement>('[data-composer]').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const text = body.value.trim();
+      if (!text || chars(text) > 280 || castBtn.disabled) return;
+      castBtn.disabled = true;
+      try {
+        const tz = await import('../lib/tezos');
+        if (!me) { status.textContent = 'Opening Kukai…'; me = await tz.connectKukai(); renderWho(); }
+        status.textContent = 'Approve the cast in your wallet…';
+        const tezos = await tz.tezosClient();
+        const contract: any = await tezos.wallet.at(TOWER);
+        const op = await contract.methodsObject.default({ kind: 0, body: tz.utf8ToHex(text) }).send();
+        const hash: string = op.opHash;
+        const p: Cast = { id: -1, author: me!, kind: 0, body: text, at: new Date().toISOString(), pending: true, hash };
+        pending.unshift(p); feed.querySelector('.muted')?.remove(); feed.prepend(card(p));
+        body.value = ''; updateCount();
+        status.innerHTML = `On the air. Waiting for a block… <a href="https://tzkt.io/${hash}" target="_blank" rel="noopener noreferrer">${hash.slice(0, 10)}…</a>`;
+        await op.confirmation(1);
+        status.textContent = 'Confirmed. It is on the chain now, for good.';
+        tab = 'all'; syncTabs(); await load(false); void loadStats();
+      } catch (e) {
+        const m = String((e as any)?.message || e);
+        status.textContent = /abort|reject|cancel/i.test(m) ? 'Cast cancelled in the wallet.' : /balance/i.test(m) ? 'Not enough tez for the network fee.' : `Could not cast: ${m.slice(0, 140)}`;
+      } finally { updateCount(); }
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => b.addEventListener('click', () => { const t = b.dataset.tab as 'all' | 'mine'; if (t === 'mine' && !me) { void connect().then(() => { if (me) { tab = 'mine'; syncTabs(); void load(false); } }); return; } tab = t; syncTabs(); void load(false); }));
+    refresh.addEventListener('click', () => { void load(false); void loadStats(); });
+    older.addEventListener('click', () => void load(true));
+    q('[data-tag-clear]').addEventListener('click', () => { tag = null; tagChip.hidden = true; void load(false); });
+    feed.addEventListener('click', (ev) => {
+      const t = ev.target as HTMLElement;
+      const tagEl = t.closest<HTMLElement>('[data-tag]'); if (tagEl) { ev.preventDefault(); tag = tagEl.dataset.tag!; tagLabel.textContent = `#${tag}`; tagChip.hidden = false; void load(false); return; }
+      const rep = t.closest<HTMLElement>('[data-reply]'); if (rep) { const ref = `↩#${rep.dataset.reply} `; if (!body.value.startsWith(ref)) body.value = ref + body.value.replace(/^↩#\d+\s*/, ''); updateCount(); body.focus(); body.setSelectionRange(body.value.length, body.value.length); q('[data-composer]').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
+
+    window.addEventListener('pc:wallet-change', () => readWallet());
+    readWallet();
+    void load(false); void loadStats();
+    const tick = setInterval(() => { if (document.visibilityState === 'visible' && !document.activeElement?.closest('[data-composer]')) void load(false); }, 45000);
+    document.addEventListener('astro:before-swap', () => clearInterval(tick), { once: true });
+  }
+  mount();
+  document.addEventListener('astro:page-load', mount);
+</script>
+
+<style is:global>
+  .sw{--ink:#111827;--soft:#526071;--rule:#cbd0d8;--rule-soft:#e5e8ee;--fd:#185FA5;--paper:#fff;max-width:1180px;margin:auto;padding:0 32px 90px;color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:16px;line-height:1.55;background:var(--paper)}
+  .sw *{box-sizing:border-box}.sw a{color:inherit;text-underline-offset:4px}
+  .sw .eyebrow,.sw .counter,.sw .fee,.sw .cast-foot,.sw .cast-head time,.sw .addr,.sw dt,.sw code{font-family:'JetBrains Mono Variable',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;letter-spacing:.04em}
+  .sw .eyebrow{font-weight:500;text-transform:uppercase;color:var(--soft);margin:0}
+  .sw-nav{min-height:82px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--rule);gap:24px}.sw .wordmark{font-weight:800;text-decoration:none;font-size:22px}.sw .wordmark span{font-weight:400}.sw-nav div{display:flex;gap:24px;font-size:14px}.sw-nav div a{text-decoration:none}
+  .sw .intro{padding:42px 0 30px;border-bottom:1px solid var(--rule)}.sw .intro .eyebrow{color:var(--fd)}.sw h1{font-size:clamp(44px,6.4vw,76px);font-weight:600;letter-spacing:-.055em;line-height:1.04;margin:18px 0 20px}.sw .lede{max-width:680px;margin:0;font-size:18px}
+  .sw .grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:48px;padding-top:32px;align-items:start}
+  .sw .composer{border:1.5px solid var(--ink);padding:18px 20px 14px;background:#fff}
+  .sw .composer-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}.sw .composer-who{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .sw textarea{font:inherit;font-size:19px;line-height:1.45;color:var(--ink);width:100%;border:0;resize:vertical;padding:6px 0;outline:none;background:transparent;min-height:84px}.sw textarea::placeholder{color:#8a94a6}
+  .sw .composer-foot{display:flex;align-items:center;gap:16px;border-top:1px solid var(--rule-soft);padding-top:12px;flex-wrap:wrap}.sw .counter{color:var(--soft)}.sw .counter.over{color:#b3402a;font-weight:600}.sw .fee{color:var(--soft);flex:1;min-width:180px}
+  .sw button{font:inherit;cursor:pointer}.sw button:disabled{cursor:not-allowed;opacity:.5}
+  .sw .primary{background:var(--fd);color:#fff;border:0;padding:11px 22px;font-weight:600;border-radius:0}.sw .text-button{background:none;border:0;color:var(--fd);padding:6px 0;text-decoration:underline;text-underline-offset:5px;font-size:14px}
+  .sw .status{font-size:13px;color:var(--soft);margin:12px 0 0;overflow-wrap:anywhere;line-height:1.5}.sw .status a{color:var(--fd)}
+  .sw .feed-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:36px 0 0;border-bottom:1px solid var(--rule);scroll-margin-top:24px}
+  .sw .tabs{display:flex;align-items:center;gap:4px}.sw .tabs [role=tab]{background:none;border:0;border-bottom:2px solid transparent;padding:12px 14px 10px;font-size:14px;font-weight:550;color:var(--soft);margin-bottom:-1px}.sw .tabs [role=tab][aria-selected=true]{color:var(--ink);border-bottom-color:var(--ink)}
+  .sw .tag-chip{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:4px 6px 4px 10px;border:1px solid var(--fd);color:var(--fd);font-family:ui-monospace,monospace;font-size:12px}.sw .tag-chip button{background:none;border:0;color:inherit;padding:0 4px;font-size:15px;line-height:1}
+  .sw .feed{display:flex;flex-direction:column}.sw .muted{color:var(--soft);padding:28px 0;margin:0}
+  .sw .cast{display:grid;grid-template-columns:40px minmax(0,1fr);gap:14px;padding:20px 0;border-bottom:1px solid var(--rule-soft);scroll-margin-top:24px}.sw .cast.pending{opacity:.6}.sw .cast.own{background:linear-gradient(90deg,#f5f8fc,transparent 60%);margin:0 -12px;padding-left:12px;padding-right:12px}
+  .sw .pfp{width:40px;height:40px;border:1px solid var(--rule);background:#eef1f5;image-rendering:pixelated;display:block}
+  .sw .cast-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.sw .who{font-weight:600;text-decoration:none;font-size:15px}.sw .who:hover{text-decoration:underline}.sw .addr{color:var(--soft)}.sw .cast-head time{color:var(--soft);margin-left:auto}
+  .sw .cast-body{margin:6px 0 10px;font-size:17px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.sw .cast-body a{color:var(--fd)}.sw .cast-body .tag{text-decoration:none;font-weight:550}.sw .cast-body .tag:hover{text-decoration:underline}.sw .cast-body .reply-ref{font-family:ui-monospace,monospace;font-size:14px;color:var(--soft);text-decoration:none}
+  .sw .cast-foot{display:flex;gap:18px;align-items:center;color:var(--soft)}.sw .cast-foot a{color:var(--soft)}.sw .cast-foot .reply{background:none;border:0;color:var(--soft);padding:0;font:inherit;text-decoration:underline;text-underline-offset:4px}.sw .cast-foot .reply:hover{color:var(--fd)}
+  .sw .older{margin-top:16px}
+  .sw .rail{display:flex;flex-direction:column;gap:32px;font-size:14px}.sw .rail section{border-top:1px solid var(--rule);padding-top:16px}.sw .rail p{margin:8px 0}.sw .rail a{color:var(--fd);font-size:14px}
+  .sw dl{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}.sw dl div{border-left:1.5px solid var(--ink);padding-left:10px}.sw dt{color:var(--soft);text-transform:uppercase}.sw dd{margin:2px 0 0;font-size:24px;font-weight:600;letter-spacing:-.03em;line-height:1.1}
+  .sw .how ol{padding-left:18px;margin:10px 0 0}.sw .how li{margin-bottom:10px}.sw code{background:#f3f5f7;padding:1px 5px}
+  .sw .room-end{border-top:1px solid var(--rule);display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;padding:25px 0;font-size:14px;margin-top:56px}.sw .room-end span{color:var(--soft)}
+  .sw :focus-visible{outline:3px solid #d45b20;outline-offset:3px}
+  @media(max-width:860px){.sw{padding:0 20px 80px}.sw-nav{align-items:start;padding:20px 0;flex-direction:column;gap:12px}.sw-nav div{gap:20px;flex-wrap:wrap}.sw .intro{padding-top:28px}.sw .grid{grid-template-columns:1fr;gap:36px}.sw .lede{font-size:17px}.sw .cast.own{margin:0;padding-left:0;padding-right:0;background:none}.sw .cast-head time{margin-left:0}}
+</style>

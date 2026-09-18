@@ -400,6 +400,7 @@ export const GET: APIRoute = async () => {
         postOffice: POST_OFFICE_DISCOVERY.page,
         till: 'https://pointcast.xyz/till',
         kennelClub: AGENT_SURFACES.human.kennelClub,
+        shortwave: AGENT_SURFACES.human.shortwave,
         profileShelf: AGENT_SURFACES.human.profileShelf,
       },
       json: {
@@ -524,6 +525,7 @@ export const GET: APIRoute = async () => {
         postOffice: POST_OFFICE_DISCOVERY.json,
         till: 'https://pointcast.xyz/till.json',
         kennelClub: AGENT_SURFACES.json.kennelClub,
+        shortwave: AGENT_SURFACES.json.shortwave,
         collect: AGENT_SURFACES.json.collect,
         me: AGENT_SURFACES.json.me,
         profilePattern: AGENT_SURFACES.patterns.profileJson,
