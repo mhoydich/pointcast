@@ -592,6 +592,18 @@ export function mountCursorRoom(ROOT, scope) {
       var msg = e && e.detail && e.detail.msg;
       if (msg) submitChat(msg);
     });
+    // Shortwave posts from anywhere in town echo into this ticker so they
+    // are seen on screen, not only on /shortwave. Own posts already arrive
+    // through submitChat; repeats of a recent line are dropped.
+    on(window, 'pc:shortwave:post', function (e) {
+      var d = (e && e.detail) || {};
+      var p = d.post;
+      if (!p || d.own) return;
+      var msg = String(p.text || '').slice(0, 120);
+      if (!msg) return;
+      if (loadLog().slice(-8).some(function (x) { return x && x.msg === msg; })) return;
+      if (pushLocalLogEntry({ id: 'sw:' + p.id, who: '◉ ' + String(p.who || 'visitor').slice(0, 24), nounId: p.noun || 0, msg: msg, at: Date.parse(p.at) || Date.now() })) renderLog();
+    });
     on(window, 'pc:burst:request', function (e) {
       postBurst(e && e.detail);
     });

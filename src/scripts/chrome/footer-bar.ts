@@ -234,7 +234,8 @@ export function mountFooterBar(root, scope) {
       if (v.charAt(0) === '?') return 'ASK';
       if (v.charAt(0) === '@') return 'AGT';
       if (v.charAt(0) === '/' || /^https?:\/\//.test(v)) return 'GO';
-      if (roomOn) return 'SAY';
+      // Shortwave: a sentence is something said, even with the room off.
+      if (roomOn || /\s/.test(v) || /[📍♫]/u.test(v)) return 'SAY';
       return 'GO';
     }
 
@@ -278,23 +279,25 @@ export function mountFooterBar(root, scope) {
     }
     function airAppend(fragment) {
       var cur = String($omni.value || '');
-      if (!/^!/.test(cur)) cur = '!' + cur;
       if (cur.indexOf(fragment) !== -1) return;
-      $omni.value = cur.replace(/\s+$/, '') + (cur.length > 1 ? ' ' : '') + fragment + ' ';
+      var bare = cur.replace(/\s+$/, '');
+      $omni.value = bare + (bare && bare !== '!' ? ' ' : '') + fragment + ' ';
       $omni.focus();
       applyOmniMode();
     }
-    function airHere() {
+    function airHere(ev) {
+      var $btn = (ev && ev.currentTarget) || $airHere;
+      var label = $btn.textContent;
       if (!navigator.geolocation) { airToast('no location on this device'); return; }
-      $airHere.disabled = true; $airHere.textContent = '📍 …';
+      $btn.disabled = true; $btn.textContent = '…';
       navigator.geolocation.getCurrentPosition(function (pos) {
         // Two decimals ≈ 1 km. Enough for "near El Segundo", not a doorstep.
         var lat = pos.coords.latitude.toFixed(2), lon = pos.coords.longitude.toFixed(2);
         airAppend('📍 ' + lat + ',' + lon);
-        $airHere.disabled = false; $airHere.textContent = '📍 here';
+        $btn.disabled = false; $btn.textContent = label;
       }, function () {
         airToast('location was declined — nothing added');
-        $airHere.disabled = false; $airHere.textContent = '📍 here';
+        $btn.disabled = false; $btn.textContent = label;
       }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
     }
     function airPlaying() {
@@ -344,6 +347,58 @@ export function mountFooterBar(root, scope) {
         airToast(/abort|reject|cancel/i.test(m) ? 'cancelled in the wallet' : /balance/i.test(m) ? 'not enough tez for the network fee' : 'could not cast: ' + m.slice(0, 80), 8000);
       }).then(function () { airBusy = false; syncAirStrip(inferOmniMode($omni.value)); });
     }
+    // ─── Shortwave v1 — the main bar is the composer (2026-09-18) ────
+    // Whatever is said in the bar (SAY) shows on screen in the room and is
+    // posted to /api/shortwave, no wallet needed. New posts from anywhere
+    // in town echo into the room ticker via pc:shortwave:post. The Tezos
+    // tower (`!words`) stays as the optional permanent layer.
+    var $omniHere    = root.querySelector('[data-pc-ref="fb-omni-here"]');
+    var $omniPlaying = root.querySelector('[data-pc-ref="fb-omni-playing"]');
+    var $omniFeed    = root.querySelector('.fb__omni-chip--feed');
+    if ($omniHere) on($omniHere, 'click', airHere);
+    if ($omniPlaying) on($omniPlaying, 'click', airPlaying);
+    var swSeen = {}, swPrimed = false;
+    function swOwnIds() { try { return JSON.parse(sessionStorage.getItem('pc:shortwave:own') || '[]'); } catch (e) { return []; } }
+    function swRememberOwn(id) { try { var a = swOwnIds(); a.push(id); sessionStorage.setItem('pc:shortwave:own', JSON.stringify(a.slice(-30))); } catch (e) {} }
+    function swWho() {
+      try { var a = localStorage.getItem('pc:wallet-active'); if (a) return a.slice(0, 6) + '…' + a.slice(-4); } catch (e) {}
+      var label = $youLabel ? String($youLabel.textContent || '').trim() : '';
+      return label || 'visitor';
+    }
+    function swNoun() { var m = $noun && String($noun.getAttribute('src') || '').match(/(\d+)\.svg/); return m ? Math.min(1199, parseInt(m[1], 10) || 0) : 0; }
+    function postShortwave(text) {
+      var body = Array.from(String(text || '')).slice(0, AIR_MAX).join('');
+      if (!body.trim()) return;
+      fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: body, who: swWho(), noun: swNoun(), via: 'bar' }) })
+        .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); })
+        .then(function (res) {
+          if (res.j && res.j.ok && res.j.post) {
+            swSeen[res.j.post.id] = 1; swRememberOwn(res.j.post.id);
+            window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: res.j.post, own: true } }));
+            airToast('said · on shortwave ◉', 2500);
+          } else if (res.status === 429) { airToast('shown in the room · shortwave limit reached for this hour', 5000); }
+        }).catch(function () { /* the room still heard it */ });
+    }
+    function swPoll(force) {
+      if (force !== true && document.visibilityState !== 'visible') return;
+      fetch('/api/shortwave?limit=8').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (!j || !j.posts) return;
+        var own = swOwnIds(), fresh = [];
+        j.posts.forEach(function (p) {
+          if (!p || !p.id || swSeen[p.id]) return;
+          swSeen[p.id] = 1;
+          if (own.indexOf(p.id) !== -1) return;
+          // First poll only surfaces the last two minutes; later polls surface anything new.
+          if (swPrimed || (Date.now() - Date.parse(p.at)) < 120000) fresh.push(p);
+        });
+        swPrimed = true;
+        fresh.reverse().forEach(function (p) { window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: p, own: false } })); });
+        if (fresh.length && $omniFeed) { $omniFeed.setAttribute('data-fresh', 'true'); setTimeout(function () { $omniFeed.removeAttribute('data-fresh'); }, 8000); }
+      }).catch(function () {});
+    }
+    setTimeout(function () { swPoll(true); }, 2500);
+    setInterval(swPoll, 60000);
+
     if ($airHere) on($airHere, 'click', airHere);
     if ($airPlaying) on($airPlaying, 'click', airPlaying);
     if ($airSend) on($airSend, 'click', function () { castOnAir(airText()); });
@@ -361,6 +416,15 @@ export function mountFooterBar(root, scope) {
       if (!bubbleState.persistUntil || Date.now() >= bubbleState.persistUntil) {
         if (!String($omni.value || '').trim()) hideBubble();
       }
+    });
+
+    // Enter always submits. Implicit form submission is not reliable across
+    // mobile keyboards and automation, and the bar is now the town composer.
+    on($omni, 'keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing || e.shiftKey) return;
+      e.preventDefault();
+      if ($omniForm.requestSubmit) $omniForm.requestSubmit();
+      else $omniForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     });
 
     on($omniForm, 'submit', function (e) {
@@ -433,10 +497,8 @@ export function mountFooterBar(root, scope) {
         window.dispatchEvent(new CustomEvent('pc:room:chat', { detail: { msg: raw } }));
         // Snapshot the sent message into the bubble for ~4s if anyone
         // else is here to read it. Same gates as live-typing preview.
-        try {
-          if (roomOn && bubbleState.othersPresent) showBubble(raw, 4000);
-          else hideBubble();
-        } catch (e) {}
+        try { showBubble(raw, 4000, true); } catch (e) {}
+        try { postShortwave(raw); } catch (e) {}
         $omni.value = '';
         $omni.placeholder = 'say something…';
         applyOmniMode();
@@ -1009,9 +1071,10 @@ export function mountFooterBar(root, scope) {
       }, 200);
     }
 
-    function showBubble(text, persistMs) {
+    function showBubble(text, persistMs, force) {
       if (!$bubble || !$bubbleBody) return;
-      if (!roomOn || !bubbleState.othersPresent) { hideBubble(); return; }
+      // `force`: a sent line always shows for its snapshot, even alone in the room.
+      if (!force && (!roomOn || !bubbleState.othersPresent)) { hideBubble(); return; }
       $bubbleBody.textContent = clampBubble(text, 100);
       $bubble.hidden = false;
       void $bubble.offsetWidth;
