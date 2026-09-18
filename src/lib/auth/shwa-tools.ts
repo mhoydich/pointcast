@@ -33,14 +33,14 @@ export function mountShwaTools(root: HTMLElement): () => void {
       options.setAttribute(attribute, ''); summary.setAttribute(attribute, '');
     }
     options.append(summary);
-    for (const selector of ['.ai-runtime__voice', '.ai-runtime__followup', '.ai-runtime__page', '.ai-runtime__model', '[data-runtime-model-source]', '.ai-runtime__fields', '.ai-runtime__actions', '.ai-runtime__login', '.ai-runtime__gentle', '.ai-runtime__gentle-detail', '.ai-runtime__preview', '.ai-runtime__invite', '.ai-runtime__pilot', '.ai-runtime__manage']) {
+    for (const selector of ['.ai-runtime__voice', '.ai-runtime__followup', '.ai-runtime__model', '[data-runtime-model-source]', '.ai-runtime__fields', '.ai-runtime__actions', '.ai-runtime__login', '.ai-runtime__gentle', '.ai-runtime__gentle-detail', '.ai-runtime__preview', '.ai-runtime__invite', '.ai-runtime__pilot', '.ai-runtime__manage']) {
       const element = root.querySelector(selector); if (element) options.append(element);
     }
     form.append(options);
   }
   if (root.dataset.compact === 'true' && form && !root.querySelector('[data-shwa-conversation]')) {
-    const conversation = doc.createElement('details'); conversation.dataset.shwaConversation = ''; conversation.className = 'shwa-conversation';
-    const summary = doc.createElement('summary'); summary.textContent = 'Ask Shwa · song stories & conversation'; conversation.append(summary);
+    const conversation = doc.createElement('details'); conversation.dataset.shwaConversation = ''; conversation.className = 'shwa-conversation'; conversation.open = true;
+    const summary = doc.createElement('summary'); summary.textContent = 'Ask'; conversation.append(summary);
     const parent = form.parentElement!;
     for (const selector of ['.ai-runtime__shwa', '.ai-runtime__task', '[data-runtime-job]', '[data-runtime-result]']) {
       const element = root.querySelector(selector); if (element) conversation.append(element);

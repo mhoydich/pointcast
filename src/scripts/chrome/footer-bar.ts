@@ -83,7 +83,7 @@ export function mountFooterBar(root, scope) {
     }
 
     function onEsc(e) {
-      if (e.key === 'Escape') { e.preventDefault(); if (openPopover === 'tray:my-ai') try { sessionStorage.setItem('pc-shwa-minimized','1'); } catch(e) {} closeAll(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeAll(); }
     }
 
     function openMenu() {
@@ -143,6 +143,8 @@ export function mountFooterBar(root, scope) {
           renderPassport();
         } else if (id === 'seismo') {
           seismoOpen();
+        } else if (id === 'my-ai') {
+          renderAiHere();
         }
       } catch (e) {}
     }
@@ -150,8 +152,8 @@ export function mountFooterBar(root, scope) {
     root.querySelectorAll('.fb__stamp').forEach(function (st) {
       on(st, 'click', function () {
         var id = st.getAttribute('data-stamp-id');
-        if (openPopover === 'tray:' + id) { if (id === 'my-ai') try { sessionStorage.setItem('pc-shwa-minimized','1'); } catch(e) {} closeAll(); }
-        else { if (id === 'my-ai') try { sessionStorage.removeItem('pc-shwa-minimized'); } catch(e) {} openTray(id); }
+        if (openPopover === 'tray:' + id) closeAll();
+        else openTray(id);
       });
     });
     root.querySelectorAll('.fb-binder__open').forEach(function (bc) {
@@ -162,14 +164,11 @@ export function mountFooterBar(root, scope) {
       });
     });
     root.querySelectorAll('.fb__tray-close').forEach(function (btn) {
-      on(btn, 'click', function () {
-        if (openPopover === 'tray:my-ai') try { sessionStorage.setItem('pc-shwa-minimized', '1'); } catch(e) {}
-        closeAll();
-      });
+      on(btn, 'click', closeAll);
     });
 
     on(document, 'mousedown', function (e) {
-      if (!openPopover || openPopover === 'tray:my-ai') return;
+      if (!openPopover) return;
       var t = e.target;
       if (!(t instanceof Element)) return;
       if (t.closest('.fb__tray') || t.closest('.fb__menu-panel') ||
@@ -182,9 +181,11 @@ export function mountFooterBar(root, scope) {
       if (openPopover === 'menu') closeAll();
       else openMenu();
     });
+    // YOU chip → the Account view (profile, access, mood). ≡ stays the launcher.
     on($you, 'click', function () {
-      if (openPopover === 'menu') closeAll();
-      else openMenu();
+      if (openPopover === 'menu') { closeAll(); return; }
+      openMenu();
+      window.dispatchEvent(new CustomEvent('pc:dock-show', { detail: { view: 'account' } }));
     });
     on($close, 'click', closeAll);
     on($scrim, 'click', closeAll);
@@ -666,6 +667,32 @@ export function mountFooterBar(root, scope) {
       });
     });
 
+    // HERE line inside the YOUR AI panel: public page title + who's here.
+    // Detail for the visitor, and the same public packet the AI may get.
+    function renderAiHere() {
+      var titleEl = root.querySelector('[data-ai-here-title]');
+      var countEl = root.querySelector('[data-ai-here-count]');
+      if (titleEl) {
+        var isPrivate = /^\/(?:me|profile|auth|api|signin|login|callback)(?:\/|$)/i.test(location.pathname);
+        var title = isPrivate ? 'A private page' : String(document.title || location.pathname).replace(/\s*[·—|-]\s*PointCast\s*$/i, '').trim();
+        titleEl.textContent = title || location.pathname;
+        titleEl.setAttribute('title', title || location.pathname);
+      }
+      if (countEl) {
+        var here = $liveHere ? String($liveHere.textContent || '').trim() : '';
+        countEl.textContent = /^\d+$/.test(here) ? here + ' here' : '';
+      }
+      var signin = root.querySelector('[data-ai-signin]');
+      if (signin) {
+        var back = /^\/(?:me|profile|auth|api|signin|login|callback)(?:\/|$)/i.test(location.pathname) ? '/' : location.pathname;
+        signin.setAttribute('href', '/auth?returnTo=' + encodeURIComponent(back));
+      }
+    }
+
+    var $youDot = root.querySelector('[data-pc-ref="fb-you-dot"]');
+    var accountOn = false;
+    function setAccess(kind) { if ($youDot) $youDot.setAttribute('data-access', accountOn ? 'account' : kind); }
+
     function refreshWalletUI() {
       try {
         var wallets = JSON.parse(localStorage.getItem('pc:wallets') || '[]');
@@ -683,11 +710,13 @@ export function mountFooterBar(root, scope) {
           $walletBtn.setAttribute('data-state', 'connected');
           $menuName.textContent = short;
           $youLabel.textContent = short.slice(0, 7);
+          setAccess('wallet');
         } else {
           $menuWallet.textContent = 'no wallet connected';
           $walletBtn.textContent = 'Connect wallet (Beacon)';
           $walletBtn.setAttribute('data-state', 'disconnected');
           $youLabel.textContent = 'visitor';
+          setAccess('none');
         }
       } catch (e) {}
     }
@@ -707,6 +736,7 @@ export function mountFooterBar(root, scope) {
     on(window, 'pc:wallet-change', refreshWalletUI);
     on(window, 'pc:auth-change', function (event) {
       var user = event && event.detail && event.detail.user;
+      accountOn = Boolean(user);
       if (!user) {
         refreshWalletUI();
         return;
@@ -718,6 +748,7 @@ export function mountFooterBar(root, scope) {
       $youLabel.textContent = name.slice(0, 12);
       $walletBtn.textContent = 'Manage account';
       $walletBtn.setAttribute('data-state', 'account');
+      setAccess('account');
     });
     refreshWalletUI();
 
@@ -909,6 +940,7 @@ export function mountFooterBar(root, scope) {
         var a = Number(j.agents ?? 0);
         var total = h + a;
         if ($liveHere) $liveHere.textContent = String(total);
+        if (openPopover === 'tray:my-ai') try { renderAiHere(); } catch (e) {}
         var here = root.querySelector('[data-pc-ref="fb-tray-room-here"]');
         if (here) here.textContent = String(total);
         // Bubble cares whether anyone else is here (>1 means at least one peer).
@@ -1790,10 +1822,12 @@ export function mountFooterBar(root, scope) {
       ppPaintDot();
     }, 0);
     on(window, 'pc:me-state', renderPassport);
-    setTimeout(function () {
-      var minimized = false; try { minimized = sessionStorage.getItem('pc-shwa-minimized') === '1'; } catch(e) {}
-      if (!minimized && !openPopover) openTray('my-ai', true);
-    }, 250);
+    // The YOUR AI panel never opens on its own. Mike 2026-09-17: the
+    // observatory tray was auto-opening over the front door on every
+    // visit. It opens on the chip, on /ai in the bar, or on #my-ai.
+    if (location.hash === '#my-ai' && !/^\/me(?:\/|$)/.test(location.pathname)) {
+      setTimeout(function () { if (!openPopover) openTray('my-ai'); }, 250);
+    }
     scope.cleanup(function () {
       document.documentElement.classList.remove('pc-dock-open');
       root.querySelectorAll('.fb__tray').forEach(function (tray) {
