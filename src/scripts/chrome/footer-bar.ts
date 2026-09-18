@@ -4,6 +4,7 @@ import { MOOD_SPELLS as PC_MOOD_SPELLS } from '../../data/mood-spells';
 import { DOCK_KIT as PC_DOCK_KIT } from '../../data/dock-kit';
 import { FEDERATION_PEERS } from '../../data/federation-peers';
 import { NOW_PLAYING } from '../../data/now-playing';
+import { SHORTWAVE } from '../../lib/shortwave';
 
 const PC_FED_PEERS_COUNT = FEDERATION_PEERS.length;
 
@@ -227,6 +228,7 @@ export function mountFooterBar(root, scope) {
       var v = String(value || '').trim();
       if (!v) return roomOn ? 'SAY' : 'GO';
       if (/^\/ai(?:\s|$)/i.test(v)) return 'AI';
+      if (v.charAt(0) === '!') return 'AIR';
       if (v.charAt(0) === '+') return 'CAST';
       if (v.charAt(0) === '>') return 'OP';
       if (v.charAt(0) === '?') return 'ASK';
@@ -241,7 +243,110 @@ export function mountFooterBar(root, scope) {
       var mode = inferOmniMode($omni.value);
       $omniMode.textContent = mode;
       $omniMode.setAttribute('data-mode', mode.toLowerCase());
+      try { syncAirStrip(mode); } catch (e) {}
     }
+
+    // ─── AIR — Shortwave from the bar (2026-09-17) ───────────────────
+    // `!words` casts on the Tezos broadcast tower through the visitor's
+    // own wallet. No server, no delete. The strip above the omnibox
+    // shows the count and two chips: 📍 here (approximate location) and
+    // ♫ playing (a Spotify link). /shortwave renders both.
+    var $air        = root.querySelector('[data-pc-ref="fb-air"]');
+    var $airCount   = root.querySelector('[data-pc-ref="fb-air-count"]');
+    var $airHere    = root.querySelector('[data-pc-ref="fb-air-here"]');
+    var $airPlaying = root.querySelector('[data-pc-ref="fb-air-playing"]');
+    var $airSend    = root.querySelector('[data-pc-ref="fb-air-send"]');
+    var airBusy = false;
+    var AIR_MAX = (SHORTWAVE && SHORTWAVE.maxChars) || 280;
+    function airText() { return String($omni.value || '').replace(/^!\s*/, '').trim(); }
+    function airLen(t) { return Array.from(t).length; }
+    function syncAirStrip(mode) {
+      if (!$air) return;
+      var onAir = mode === 'AIR';
+      $air.hidden = !onAir;
+      if (!onAir) return;
+      var n = airLen(airText());
+      if ($airCount) { $airCount.textContent = n + '/' + AIR_MAX; $airCount.setAttribute('data-over', n > AIR_MAX ? 'true' : 'false'); }
+      if ($airSend) $airSend.disabled = airBusy || n === 0 || n > AIR_MAX;
+    }
+    function airToast(msg, ms) {
+      var prev = $omni.getAttribute('data-air-prev-placeholder') || $omni.placeholder;
+      $omni.setAttribute('data-air-prev-placeholder', prev);
+      $omni.placeholder = msg;
+      clearTimeout($omni._airToast);
+      $omni._airToast = setTimeout(function () { $omni.placeholder = prev; $omni.removeAttribute('data-air-prev-placeholder'); }, ms || 4000);
+    }
+    function airAppend(fragment) {
+      var cur = String($omni.value || '');
+      if (!/^!/.test(cur)) cur = '!' + cur;
+      if (cur.indexOf(fragment) !== -1) return;
+      $omni.value = cur.replace(/\s+$/, '') + (cur.length > 1 ? ' ' : '') + fragment + ' ';
+      $omni.focus();
+      applyOmniMode();
+    }
+    function airHere() {
+      if (!navigator.geolocation) { airToast('no location on this device'); return; }
+      $airHere.disabled = true; $airHere.textContent = '📍 …';
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        // Two decimals ≈ 1 km. Enough for "near El Segundo", not a doorstep.
+        var lat = pos.coords.latitude.toFixed(2), lon = pos.coords.longitude.toFixed(2);
+        airAppend('📍 ' + lat + ',' + lon);
+        $airHere.disabled = false; $airHere.textContent = '📍 here';
+      }, function () {
+        airToast('location was declined — nothing added');
+        $airHere.disabled = false; $airHere.textContent = '📍 here';
+      }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+    }
+    function airPlaying() {
+      var done = function (url, note) { if (url) airAppend('♫ ' + url); if (note) airToast(note, 6000); };
+      var fromClipboard = function (t) { var m = String(t || '').match(/https?:\/\/open\.spotify\.com\/[^\s]+/); return m ? m[0].replace(/[?&]si=[^&]*/, '') : ''; };
+      var house = (PC_NOW_PLAYING && PC_NOW_PLAYING.url) || '';
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then(function (t) {
+            var u = fromClipboard(t);
+            if (u) done(u); else done(house, 'no Spotify link on the clipboard — using the house track. Share → Copy link in Spotify, then tap ♫ again.');
+          }, function () { done(house, 'clipboard not allowed — using the house track. Paste a Spotify share link to broadcast yours.'); });
+          return;
+        }
+      } catch (e) {}
+      done(house, 'paste a Spotify share link to broadcast yours');
+    }
+    function castOnAir(text) {
+      if (airBusy) return;
+      var n = airLen(text);
+      if (!n) return;
+      if (n > AIR_MAX) { airToast('too long — ' + n + '/' + AIR_MAX); return; }
+      airBusy = true; syncAirStrip('AIR');
+      airToast('opening your wallet…', 20000);
+      var announce = function (phase, extra) {
+        try { window.dispatchEvent(new CustomEvent('pc:shortwave:cast', { detail: Object.assign({ phase: phase, body: text }, extra || {}) })); } catch (e) {}
+      };
+      import('../../lib/tezos').then(function (tz) {
+        return tz.connectKukai().then(function (addr) {
+          airToast('approve the cast in your wallet…', 60000);
+          return tz.tezosClient().then(function (tezos) { return tezos.wallet.at(SHORTWAVE.tower); }).then(function (c) {
+            return c.methodsObject.default({ kind: 0, body: tz.utf8ToHex(text) }).send();
+          }).then(function (op) {
+            var hash = op.opHash;
+            announce('pending', { author: addr, hash: hash });
+            $omni.value = ''; applyOmniMode();
+            airToast('on the air — waiting for a block (' + String(hash).slice(0, 8) + '…)', 90000);
+            return op.confirmation(1).then(function () {
+              announce('confirmed', { author: addr, hash: hash });
+              airToast('confirmed. it is on the chain for good → /shortwave', 8000);
+            });
+          });
+        });
+      }).catch(function (e) {
+        var m = String((e && e.message) || e || '');
+        announce('failed', { error: m.slice(0, 140) });
+        airToast(/abort|reject|cancel/i.test(m) ? 'cancelled in the wallet' : /balance/i.test(m) ? 'not enough tez for the network fee' : 'could not cast: ' + m.slice(0, 80), 8000);
+      }).then(function () { airBusy = false; syncAirStrip(inferOmniMode($omni.value)); });
+    }
+    if ($airHere) on($airHere, 'click', airHere);
+    if ($airPlaying) on($airPlaying, 'click', airPlaying);
+    if ($airSend) on($airSend, 'click', function () { castOnAir(airText()); });
 
     on($omni, 'input', function () {
       applyOmniMode();
@@ -269,6 +374,10 @@ export function mountFooterBar(root, scope) {
         var aiPrompt = root.querySelector('[data-ai-runtime][data-compact="true"] [data-runtime-prompt]');
         if (aiPrompt) { aiPrompt.value = raw.replace(/^\/ai\s*/i, ''); aiPrompt.dispatchEvent(new Event('input', { bubbles: true })); }
         $omni.value = ''; applyOmniMode();
+        return;
+      }
+      if (mode === 'AIR') {
+        castOnAir(airText());
         return;
       }
       if (mode === 'CAST') {

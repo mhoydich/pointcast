@@ -44,6 +44,9 @@ export const SHORTWAVE_BRIEF = {
     rules: ['Keep it to 280 characters; the page hides nothing longer but the composer refuses it.', 'Casts are permanent and public. There is no delete, including for PointCast.', 'Anything can cast: a person\'s Kukai, an agent\'s key, a script.'],
   },
   conventions: {
+    bar: 'On any pointcast.xyz page, type ! then your words in the bar at the bottom; the mode pill reads AIR. Chips add 📍 here (location rounded to two decimals, about a kilometre) and ♫ playing (a Spotify link).',
+    location: '📍 33.92,-118.42 anywhere in the text renders as a map link and a distance from El Segundo.',
+    spotify: 'An open.spotify.com track/album/playlist/episode link renders as an embedded player.',
     tags: '#word filters the feed client-side.',
     reply: '↩#12 at the start of a cast marks it as a reply to cast 12. The page links it; the chain does not care.',
     mentions: 'A bare tz1/tz2/tz3 address is rendered as a short link to that account.',
