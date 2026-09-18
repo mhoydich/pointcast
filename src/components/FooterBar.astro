@@ -80,17 +80,21 @@ const pingable = RESIDENTS.filter(
       data-pc-ref="fb-you"
       aria-haspopup="dialog"
       aria-expanded="false"
-
+      title="You — profile, access, mood"
     >
-      <img
-        class="fb__noun"
-        data-pc-ref="fb-noun"
-        src={`https://noun.pics/${defaultNounId}.svg`}
-        alt="Your Noun"
-        width="28"
-        height="28"
-        loading="eager"
-      />
+      <span class="fb__you-avatar">
+        <img
+          class="fb__noun"
+          data-pc-ref="fb-noun"
+          src={`https://noun.pics/${defaultNounId}.svg`}
+          alt="Your Noun"
+          width="28"
+          height="28"
+          loading="eager"
+        />
+        <!-- Access dot: none · wallet (local Beacon/MetaMask) · account (D1 session). -->
+        <span class="fb__you-dot" data-pc-ref="fb-you-dot" data-access="none" aria-hidden="true"></span>
+      </span>
       <span class="fb__you-text">
         <span class="fb__you-label mono" data-pc-ref="fb-you-label">visitor</span>
         <span class="fb__mood-label mono" data-pc-ref="fb-mood-label">set mood →</span>
@@ -131,7 +135,8 @@ const pingable = RESIDENTS.filter(
     </form>
 
     <div class="fb__right">
-    <button type="button" class="fb__ai-button fb__stamp" data-stamp-id="my-ai" data-pc-ref="fb-stamp-my-ai" aria-haspopup="dialog" aria-expanded="false" title="Ask your paired AI; /ai also opens this panel">
+    <button type="button" class="fb__ai-button fb__stamp" data-stamp-id="my-ai" data-pc-ref="fb-stamp-my-ai" aria-haspopup="dialog" aria-expanded="false" title="Your AI — bring your own Claude Code or Codex; /ai in the bar also opens this">
+      <span class="fb__ai-dot" aria-hidden="true"></span>
       <span data-ai-dock-label>MY AI</span>
     </button>
 
@@ -183,8 +188,14 @@ const pingable = RESIDENTS.filter(
     </div>
   </div>
 
-  <div class="fb__tray fb__tray--my-ai" data-pc-ref="fb-tray-my-ai" role="dialog" aria-modal="false" aria-label="Shwa observatory dashboard" hidden>
-    <header class="fb__tray-head"><h3 class="fb__tray-title">✧ SHWA · Ask my AI</h3><button type="button" class="fb__tray-close" aria-label="Minimize Shwa dashboard">−</button></header>
+  <!-- YOUR AI — the bring-your-own-AI panel. Opens only on the chip,
+       on `/ai …` in the bar, or on a #my-ai link. Never on page load. -->
+  <div class="fb__tray fb__tray--my-ai" data-pc-ref="fb-tray-my-ai" role="dialog" aria-modal="false" aria-label="Your AI" hidden>
+    <header class="fb__tray-head">
+      <span class="fb__tray-kicker mono">YOUR AI</span>
+      <span class="fb__tray-status mono" data-ai-header data-ai-state="checking">Checking…</span>
+      <button type="button" class="fb__tray-close" aria-label="Close">×</button>
+    </header>
     <AiRuntime compact />
   </div>
   <div class="fb__tray" data-pc-ref="fb-tray-room" role="dialog" aria-modal="false" aria-label="Room — cursors and chat" hidden>
@@ -907,6 +918,15 @@ const pingable = RESIDENTS.filter(
     box-shadow: inset 0 0 0 2px #4e3a16, 0 0 8px rgba(255, 150, 60, 0.5);
     flex-shrink: 0;
   }
+  .fb__you-avatar { position: relative; display: inline-flex; flex-shrink: 0; }
+  .fb__you-dot {
+    position: absolute; right: -2px; bottom: -2px;
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid #1a1713; background: #5c5346;
+    transition: background 0.2s ease;
+  }
+  .fb__you-dot[data-access='wallet'] { background: #f9c56c; }
+  .fb__you-dot[data-access='account'] { background: #7be495; box-shadow: 0 0 6px rgba(123, 228, 149, 0.6); }
   .fb__you-text { display: flex; flex-direction: column; gap: 0; line-height: 1.1; min-width: 0; }
   .fb__you-label { font-size: 10px; letter-spacing: 0.12em; color: #fdf2d6; font-weight: 700; white-space: nowrap; }
   .fb__mood-label { font-size: 9px; letter-spacing: 0.1em; color: #f9c56c; white-space: nowrap; opacity: 0.85; }
@@ -1091,9 +1111,23 @@ const pingable = RESIDENTS.filter(
   }
   .fb__menu-btn:hover { background: rgba(255, 220, 160, 0.12); border-color: rgba(255, 220, 160, 0.55); }
 
-  .fb .fb__ai-button { display: inline-flex; width: auto; flex: 0 0 auto; min-height: 32px; padding: 0 10px; color: #f8f3dc; background: #284c3a; border-color: #8fa68a; box-shadow: none; font: 700 10px/1.2 monospace; letter-spacing: .02em; }
-  .fb .fb__ai-button[data-ai-state="verified"], .fb .fb__ai-button[data-ai-state="ready"] { color: #c9f4b5; }
-  .fb .fb__tray--my-ai { width: min(1120px, calc(100vw - 24px)); max-height: min(590px, 68dvh); }
+  /* YOUR AI chip — one label, one dot, state-driven by ai-runtime-ui. */
+  .fb .fb__ai-button {
+    display: inline-flex; align-items: center; gap: 7px; width: auto; flex: 0 0 auto;
+    height: 28px; min-height: 28px; padding: 0 10px; margin-right: 8px;
+    color: #fdf2d6; background: rgba(255, 253, 246, 0.06);
+    border: 1px solid rgba(255, 200, 120, 0.3); border-radius: 3px; box-shadow: none;
+    font: 700 9.5px/1 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.12em;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .fb .fb__ai-button:hover, .fb .fb__ai-button[aria-expanded='true'] { transform: none; background: rgba(255, 253, 246, 0.13); border-color: rgba(255, 200, 120, 0.7); box-shadow: none; }
+  .fb .fb__ai-button[data-ai-state='signed-out'], .fb .fb__ai-button[data-ai-state='unpaired'] { color: #fff; background: rgba(249, 197, 108, 0.14); border-color: rgba(249, 197, 108, 0.7); }
+  .fb__ai-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(253, 242, 214, 0.35); flex-shrink: 0; }
+  .fb .fb__ai-button[data-ai-state='signed-out'] .fb__ai-dot, .fb .fb__ai-button[data-ai-state='unpaired'] .fb__ai-dot { background: #f9c56c; }
+  .fb .fb__ai-button[data-ai-state='waiting'] .fb__ai-dot, .fb .fb__ai-button[data-ai-state='online'] .fb__ai-dot { background: #f9c56c; animation: fb-pulse 1.6s ease-in-out infinite; }
+  .fb .fb__ai-button[data-ai-state='offline'] .fb__ai-dot { background: #e0644f; }
+  .fb .fb__ai-button[data-ai-state='ready'] .fb__ai-dot, .fb .fb__ai-button[data-ai-state='verified'] .fb__ai-dot { background: #7be495; box-shadow: 0 0 6px rgba(123, 228, 149, 0.7); }
+  @media (max-width: 480px) { .fb .fb__ai-button { padding: 0 7px; letter-spacing: 0.08em; } }
   .fb__tray {
     pointer-events: auto;
     position: fixed;

@@ -146,6 +146,13 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
   if (compact) { prompt.value = ''; prompt.defaultValue = ''; prompt.placeholder = 'What would you like to ask?'; }
   const pageContext = compact ? runtimePageContext(doc) : '';
   if (page) { page.disabled = !pageContext; page.checked = false; }
+  if (compact) {
+    root.querySelectorAll<HTMLButtonElement>('[data-ai-check]').forEach((button) => button.addEventListener('click', () => { q<HTMLButtonElement>('[data-runtime-refresh]').click(); }, { signal: lifetime.signal }));
+    root.querySelectorAll<HTMLButtonElement>('[data-ai-login]').forEach((button) => button.addEventListener('click', () => {
+      const options = root.querySelector<HTMLDetailsElement>('.ai-runtime__options'); if (options) options.open = true;
+      q<HTMLButtonElement>('[data-runtime-login]').click();
+    }, { signal: lifetime.signal }));
+  }
   const followup = root.querySelector<HTMLInputElement>('[data-runtime-followup]');
   const previousReply = () => rememberedReply || snapshot?.jobs.find((job) => job.runtimeId === selectedId && job.provider === provider && job.kind === 'prompt' && job.status === 'succeeded' && job.result?.text)?.result?.text || '';
   const completePrompt = () => [compact ? 'You are Shwa, a warm, thoughtful PointCast companion powered by the user’s paired AI. Answer warmly and directly in about 150 words. You may use your general knowledge alongside the supplied context. Be honest about uncertainty; never invent historical facts or sources. Do not claim to see an image, hear audio, browse, contact a person, or execute a purchase.' : '', buildRuntimePrompt(compact ? `[[SHWA_QUESTION]]${prompt.value}[[/SHWA_QUESTION]]` : prompt.value, context.value, note.value), compact && page?.checked ? pageContext : '', compact && followup?.checked && previousReply() ? `Previous AI reply (provided for this follow-up):\n${previousReply().slice(0, 1600)}` : ''].filter(Boolean).join('\n\n');
@@ -198,11 +205,13 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
       const state = !available ? loading ? 'checking' : authMissing ? 'signed-out' : 'unavailable' : view.state;
       const label = { checking: 'My AI · checking', 'signed-out': 'Bring your AI', unavailable: 'My AI · unavailable', unpaired: 'Bring your AI', waiting: 'My AI · pairing', offline: 'My AI · offline', online: 'My AI · sign in', ready: 'My AI · online', verified: 'My AI · online' }[state];
       doc.querySelectorAll<HTMLElement>('[data-ai-header]').forEach((el) => { el.textContent = label; el.dataset.aiState = state; });
+      const dockLabel = { checking: 'MY AI', 'signed-out': 'BRING YOUR AI', unavailable: 'MY AI', unpaired: 'BRING YOUR AI', waiting: 'PAIRING…', offline: 'MY AI · OFFLINE', online: 'MY AI · SIGN IN', ready: 'ASK MY AI', verified: 'ASK MY AI' }[state];
       doc.querySelectorAll<HTMLElement>('[data-ai-dock-label]').forEach((el) => {
-        el.textContent = view.subscriptionReady && available ? 'ASK MY AI' : 'MY AI';
+        el.textContent = dockLabel;
         const button = el.closest('button');
-        if (button) { button.dataset.aiState = state; button.setAttribute('aria-label', `Ask my AI — ${label}`); }
+        if (button) { button.dataset.aiState = state; button.setAttribute('aria-label', `Your AI — ${label}`); }
       });
+      root.querySelectorAll<HTMLElement>('[data-ai-when]').forEach((el) => { el.hidden = !(el.dataset.aiWhen || '').split(' ').includes(state); });
     }
     const active = runtime ? activeJob() : null;
     const selectedJobs = jobs().filter((job) => job.runtimeId === selectedId && job.provider === provider);
