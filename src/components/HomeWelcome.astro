@@ -10,8 +10,15 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
       <a class="welcome__primary" href="#new-projects">See what we’re making <span aria-hidden="true">↘</span></a>
       <a class="welcome__secondary" href="/connectors">Bring your AI <span aria-hidden="true">↗</span></a>
     </div>
-    <p class="welcome__invitation">Wander freely. <a href="/auth">Sign in</a> when you want a shelf of your own.</p>
-    <a class="welcome__co-games" href="/co-games"><strong>Play together <span aria-hidden="true">↗</span></strong><span>Two against the rift · Your AI can play too</span></a>
+    <section class="welcome__here" data-home-here aria-label="Who is in town right now">
+      <p class="welcome__here-head"><span class="welcome__here-dot" aria-hidden="true"></span><b data-here-count>In town right now</b><a href="/shortwave" data-here-say>Say hi <span aria-hidden="true">↗</span></a></p>
+      <ol class="welcome__faces" data-here-faces aria-live="polite"><li class="welcome__faces-empty">Counting heads…</li></ol>
+    </section>
+    <ol class="welcome__doors" aria-label="Ways in">
+      <li><span class="welcome__door-no" aria-hidden="true">01</span><div><h2>Make yourself at home.</h2><p>A profile, linked identities, the posts and links you keep, and the objects you collect.</p></div><a href="/auth">Sign in <span aria-hidden="true">↗</span></a></li>
+      <li><span class="welcome__door-no" aria-hidden="true">02</span><div><h2>Your AI can come too.</h2><p>Public tools for your usual app. My AI is a limited pilot on your own computer.</p></div><a href="/me#my-ai">Explore My AI <span aria-hidden="true">↗</span></a></li>
+      <li><span class="welcome__door-no" aria-hidden="true">03</span><div><h2>Play together.</h2><p>Two against the rift. Your AI can take the other seat.</p></div><a href="/co-games">Open co-games <span aria-hidden="true">↗</span></a></li>
+    </ol>
   </div>
   <div class="welcome__side">
   <HomeShortwaveLive />
@@ -27,14 +34,64 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   </div>
 </section>
 
-<section class="home-membership" aria-label="Your PointCast account and AI">
-  <div><span class="home-membership__number" aria-hidden="true">01</span><div><h2>Make yourself at home.</h2><p>Your profile, linked identities and collected objects.</p></div><a href="/auth">Sign in to PointCast <span aria-hidden="true">↗</span></a></div>
-  <div><span class="home-membership__number" aria-hidden="true">02</span><div><h2>Your AI can come too.</h2><p>Public tools for your usual app. My AI is a limited pilot on your own computer.</p></div><a href="/me#my-ai">Explore My AI <span aria-hidden="true">↗</span></a></div>
-</section>
+
+<script>
+  type Session = { nounId?: number; kind?: string; country?: string; deviceClass?: string; joinedAt?: string };
+  const since = (iso?: string) => { const m = Math.max(0, Math.floor((Date.now() - new Date(iso || Date.now()).getTime()) / 60000)); return m < 1 ? 'just arrived' : m < 60 ? `here ${m}m` : `here ${Math.floor(m / 60)}h`; };
+  function mountHere() {
+    const root = document.querySelector<HTMLElement>('[data-home-here]');
+    if (!root || root.dataset.mounted) return; root.dataset.mounted = 'true';
+    const faces = root.querySelector<HTMLElement>('[data-here-faces]')!, count = root.querySelector<HTMLElement>('[data-here-count]')!;
+    const MAX = 14; let known = new Set<string>(); let first = true;
+    const key = (s: Session) => `${s.kind}:${s.nounId}:${s.joinedAt}`;
+    async function load() {
+      try {
+        const j = await (await fetch('/api/presence/snapshot', { cache: 'no-store' })).json();
+        const sessions: Session[] = Array.isArray(j.sessions) ? j.sessions : [];
+        const h = Number(j.humans ?? 0), a = Number(j.agents ?? 0);
+        count.textContent = h + a === 0 ? 'Quiet in town right now' : `${h} ${h === 1 ? 'person' : 'people'}${a ? ` · ${a} AI${a === 1 ? '' : 's'}` : ''} in town right now`;
+        if (!sessions.length) { const li = document.createElement('li'); li.className = 'welcome__faces-empty'; li.textContent = 'Nobody on the map this minute. The door is open.'; faces.replaceChildren(li); known = new Set(); first = false; return; }
+        const next = new Set(sessions.map(key));
+        const items = sessions.slice(0, MAX).map((s) => {
+          const li = document.createElement('li'); li.className = 'welcome__face'; li.dataset.noun = String(s.nounId ?? 0); li.dataset.kind = s.kind === 'agent' ? 'agent' : 'human';
+          if (!first && !known.has(key(s))) li.dataset.arrived = 'true';
+          const img = document.createElement('img'); img.src = `https://noun.pics/${Number(s.nounId) || 0}.svg`; img.alt = ''; img.width = 40; img.height = 40; img.loading = 'lazy';
+          const label = `${s.kind === 'agent' ? 'An AI' : 'A visitor'}${s.country ? ` from ${s.country}` : ''}${s.deviceClass ? ` · ${s.deviceClass}` : ''} · ${since(s.joinedAt)}`;
+          li.title = label; li.setAttribute('aria-label', label); li.append(img);
+          if (s.kind === 'agent') { const tag = document.createElement('i'); tag.textContent = 'AI'; li.append(tag); }
+          return li;
+        });
+        if (sessions.length > MAX) { const more = document.createElement('li'); more.className = 'welcome__face welcome__face--more'; more.textContent = `+${sessions.length - MAX}`; items.push(more); }
+        faces.replaceChildren(...items); known = next; first = false;
+      } catch { if (first) { count.textContent = 'In town right now'; faces.replaceChildren(); } }
+    }
+    // When someone speaks on Shortwave, their face lights up and says it.
+    window.addEventListener('pc:shortwave:post', async (ev: Event) => {
+      const p = (ev as CustomEvent).detail?.post; if (!p) return;
+      const find = () => faces.querySelector<HTMLElement>(`.welcome__face[data-noun="${Number(p.noun) || 0}"]`);
+      // A voice we have not drawn yet probably just walked in: look again before giving up.
+      let face = find(); if (!face) { await load(); face = find(); } if (!face) return;
+      face.querySelector('.welcome__said')?.remove();
+      const said = document.createElement('span'); said.className = 'welcome__said'; said.textContent = String(p.text || '').replace(/https?:\/\/\S+/g, '↗').slice(0, 70);
+      face.append(said); face.dataset.speaking = 'true';
+      setTimeout(() => { said.remove(); delete face.dataset.speaking; }, 6000);
+    });
+    root.querySelector('[data-here-say]')?.addEventListener('click', (ev) => {
+      const input = document.querySelector<HTMLInputElement>('[data-hsw-input]'); if (!input) return;
+      ev.preventDefault(); input.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); input.focus({ preventScroll: true });
+    });
+    void load();
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void load(); });
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 20000);
+    document.addEventListener('astro:before-swap', () => clearInterval(t), { once: true });
+  }
+  mountHere();
+  document.addEventListener('astro:page-load', mountHere);
+</script>
 
 <style>
   .welcome { display: grid; grid-template-columns: 1.05fr 1fr; align-items: start; gap: 54px; padding: 44px 0 44px; }
-  .welcome__copy { padding-top: clamp(10px, 5.2vw, 78px); }
+  .welcome__copy { padding-top: clamp(4px, 1.6vw, 22px); }
   .welcome__eyebrow { margin: 0 0 26px; display: flex; align-items: center; gap: 9px; font: 550 9px/1.5 var(--pc-font-mono); text-transform: uppercase; letter-spacing: .06em; color: #6d6659; }
   .welcome__eyebrow span { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #75805b; }
   .welcome h1 { margin: 0; font-size: clamp(42px,5.2vw,70px); line-height: 1.01; font-weight: 620; letter-spacing: -.06em; text-wrap: balance; }
@@ -46,13 +103,22 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   .welcome__primary { background: #343d30; color: #fffdf6 !important; border: 1px solid #343d30; }
   .welcome__secondary { border: 1px solid #bbb29f; }
   .welcome__actions a:hover { box-shadow: 0 3px 0 #d9c8ae; }
-  .welcome__invitation { margin: 22px 0 0; font-size: 11px; line-height: 1.6; color: #766c5c; }
-  .welcome__invitation a { text-decoration: underline; text-underline-offset: 3px; color: #4e5944; }
-  .welcome__co-games { display: inline-flex; flex-direction: column; gap: 5px; margin-top: 14px; padding-left: 12px; border-left: 2px solid #75805b; color: #4e5944; }
-  .welcome__co-games strong { font-size: 12px; font-weight: 650; }
-  .welcome__co-games strong span { margin-left: 8px; }
-  .welcome__co-games > span { font-size: 10px; line-height: 1.5; color: #766c5c; }
-  .welcome__co-games:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+  .welcome__here { margin-top: 30px; padding: 13px 15px 14px; border: 1px solid #cfc5b5; background: #fffdf7; }
+  .welcome__here-head { margin: 0 0 11px; display: flex; align-items: center; gap: 9px; font: 550 9.5px/1.4 var(--pc-font-mono); text-transform: uppercase; letter-spacing: .07em; color: #5d5749; }
+  .welcome__here-head b { font-weight: 600; }
+  .welcome__here-head a { margin-left: auto; font: 600 11px var(--pc-font-sans); letter-spacing: 0; text-transform: none; color: #76523a; white-space: nowrap; }
+  .welcome__here-head a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .welcome__here-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #5f8a3f; animation: welcome-here 2.4s ease-out infinite; }
+  @keyframes welcome-here { 0% { box-shadow: 0 0 0 0 #5f8a3f66; } 70%, 100% { box-shadow: 0 0 0 7px #5f8a3f00; } }
+  .welcome__faces { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; min-height: 42px; }
+  .welcome__doors { list-style: none; margin: 22px 0 0; padding: 0; border-top: 1px solid #cfc5b5; }
+  .welcome__doors li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 15px 0; border-bottom: 1px solid #cfc5b5; }
+  .welcome__door-no { font: 500 10px var(--pc-font-mono); color: #9b896e; }
+  .welcome__doors h2 { margin: 0 0 4px; font-size: 15px; font-weight: 620; letter-spacing: -.025em; }
+  .welcome__doors p { margin: 0; max-width: 46ch; font-size: 11.5px; line-height: 1.5; color: #766b5a; }
+  .welcome__doors a { font-size: 11px; font-weight: 600; white-space: nowrap; color: #76523a; }
+  .welcome__doors a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .welcome__doors li:hover .welcome__door-no { color: #a85b3d; }
   .welcome__side { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
   .welcome__feature { display: block; transform: rotate(1deg); background: #fffdf7; border: 1px solid #c4bcae; box-shadow: 8px 11px 0 #e9dfcf; }
   .welcome__art { position: relative; aspect-ratio: 1.62; overflow: hidden; background: #173648; }
@@ -68,14 +134,22 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   .welcome__caption strong { font-size: 26px; font-weight: 600; letter-spacing: -.05em; }
   .welcome__caption > span:last-child { font-size: 11px; line-height: 1.5; color: #746553; }
   .welcome__caption b { padding-left: 18px; color: #995536; }
-  .home-membership { display: grid; grid-template-columns: 1fr 1fr; border-block: 1px solid #cfc5b5; }
-  .home-membership > div { display: flex; align-items: center; gap: 13px; padding: 22px 0; }
-  .home-membership > div + div { border-left: 1px solid #cfc5b5; padding-left: 25px; margin-left: 25px; }
-  .home-membership__number { font: 500 10px var(--pc-font-mono); color: #9b896e; }
-  .home-membership h2 { margin: 0 0 7px; font-size: 15px; font-weight: 620; letter-spacing: -.025em; }
-  .home-membership p { margin: 0; max-width: 29ch; font-size: 11px; line-height: 1.5; color: #766b5a; }
-  .home-membership a { margin-left: auto; padding-right: 15px; font-size: 11px; font-weight: 600; line-height: 1.5; white-space: nowrap; color: #76523a; }
-  .home-membership a span { display: block; margin-top: 3px; }
-  @media(max-width:1020px) { .welcome { gap: 28px; } .home-membership > div { flex-wrap: wrap; } .home-membership a { margin-left: 24px; white-space: normal; } }
-  @media(max-width:680px) { .welcome { grid-template-columns: 1fr; padding-top: 32px; gap: 32px; } .welcome__copy { padding-top: 0; } .welcome__feature { max-width: 500px; width: calc(100% - 8px); margin-bottom: 10px; } .welcome h1 { font-size: clamp(44px,10vw,62px); } .welcome__intro { font-size: 15px; } .welcome__eyebrow { font-size: 8px; } .home-membership { grid-template-columns: 1fr; } .home-membership > div + div { margin: 0; padding-left: 0; border-left: 0; border-top: 1px solid #d6cbbb; } .home-membership a { margin-left: auto; } }
+  @media(max-width:1020px) { .welcome { gap: 28px; } }
+  @media(max-width:680px) { .welcome { grid-template-columns: 1fr; padding-top: 32px; gap: 32px; } .welcome__copy { padding-top: 0; } .welcome__feature { max-width: 500px; width: calc(100% - 8px); margin-bottom: 10px; } .welcome h1 { font-size: clamp(44px,10vw,62px); } .welcome__intro { font-size: 15px; } .welcome__eyebrow { font-size: 8px; } .welcome__doors li { grid-template-columns: 22px minmax(0, 1fr); } .welcome__doors a { grid-column: 2; } }
+</style>
+
+<style is:global>
+  .welcome__faces-empty { font-size: 12px; color: #766c5c; align-self: center; }
+  .welcome__face { position: relative; width: 40px; height: 40px; border: 1px solid #cfc3ad; background: #efe7d8; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+  .welcome__face img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  .welcome__face:hover { transform: translateY(-2px); border-color: #a85b3d; box-shadow: 0 3px 0 #e4d9c6; }
+  .welcome__face i { position: absolute; right: -4px; bottom: -4px; padding: 1px 3px; background: #2f3829; color: #fffdf6; font: 600 7px var(--pc-font-mono); font-style: normal; letter-spacing: .06em; }
+  .welcome__face[data-arrived='true'] { animation: welcome-arrive .7s cubic-bezier(.18,.89,.32,1.28); }
+  @keyframes welcome-arrive { 0% { transform: scale(.3); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  .welcome__face[data-speaking='true'] { border-color: #a85b3d; box-shadow: 0 0 0 3px #a85b3d33; z-index: 2; }
+  .welcome__face--more { display: grid; place-items: center; font: 600 10px var(--pc-font-mono); color: #5d5749; }
+  .welcome__said { position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 220px; padding: 6px 9px; background: #2f3829; color: #fffdf6; font-size: 11.5px; line-height: 1.35; box-shadow: 3px 3px 0 #e4d9c6; animation: welcome-said .25s ease-out; pointer-events: none; }
+  .welcome__said::after { content: ''; position: absolute; left: 50%; top: 100%; margin-left: -5px; border: 5px solid transparent; border-top-color: #2f3829; }
+  @keyframes welcome-said { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .welcome__here-dot, .welcome__face[data-arrived='true'], .welcome__said { animation: none; } }
 </style>
