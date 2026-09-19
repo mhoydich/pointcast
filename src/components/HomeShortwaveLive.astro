@@ -2,18 +2,20 @@
 /**
  * HomeShortwaveLive — the town status feed, live, top right of the front door.
  *
- * First paint loads the latest posts from /api/shortwave. After that it is
- * push, not poll: the bar re-emits every post the presence bus announces as
- * `pc:shortwave:post`, so a line said on any page lands here in about a
- * second. A slow poll stays as the fallback. The say box hands the text to
- * the dock bar, so it takes the same path as everything else (room bubble,
- * ticker, Shortwave). Lines are rendered with textContent only.
+ * A small receiver: a dark band with a signal meter that kicks when a post
+ * lands, the latest three lines with link previews (album art for Spotify,
+ * a thumbnail for anything with Open Graph), a keep toggle on each, and a
+ * say box. First paint loads /api/shortwave; after that it is push — the
+ * bar re-emits every post the presence bus announces as `pc:shortwave:post`.
+ * The say box uses the bar's own say path. Text goes in with textContent.
  */
+import '../styles/shortwave-shared.css';
 ---
 <section class="hsw" data-home-shortwave aria-labelledby="hsw-title">
-  <header class="hsw__head">
-    <h2 id="hsw-title"><span class="hsw__dot" aria-hidden="true"></span>Shortwave <small>live</small></h2>
-    <span class="hsw__here" data-hsw-here aria-live="polite"></span>
+  <header class="hsw__band">
+    <h2 id="hsw-title"><span class="hsw__dot" aria-hidden="true"></span>Shortwave</h2>
+    <span class="hsw__meter" data-hsw-meter aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    <span class="hsw__here" data-hsw-here aria-live="polite">live</span>
     <a href="/shortwave">All of it <span aria-hidden="true">↗</span></a>
   </header>
   <ol class="hsw__list" data-hsw-list aria-live="polite">
@@ -21,75 +23,76 @@
   </ol>
   <form class="hsw__say" data-hsw-form autocomplete="off">
     <input data-hsw-input type="text" maxlength="280" placeholder="Say something to the town…" aria-label="Say something on Shortwave" enterkeyhint="send" />
-    <button type="submit">Say</button>
+    <button type="submit">Say <span aria-hidden="true">↑</span></button>
   </form>
-  <p class="hsw__note" data-hsw-note role="status">Seen on every open page within a second, then kept on Shortwave.</p>
+  <p class="hsw__note"><span data-hsw-note role="status">Seen on every open page within a second, then kept on Shortwave.</span> <a href="/shortwave#kept" data-hsw-kept hidden></a></p>
 </section>
 
 <script>
-  const ES = { lat: 33.9192, lon: -118.4165 };
-  const miles = (lat: number, lon: number) => { const r = Math.PI / 180, a = Math.sin(((lat - ES.lat) * r) / 2) ** 2 + Math.cos(ES.lat * r) * Math.cos(lat * r) * Math.sin(((lon - ES.lon) * r) / 2) ** 2; return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); };
-  const ago = (iso: string) => { const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000); if (s < 45) return 'now'; if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}d`; };
-  const tidy = (text: string) => text
-    .replace(/📍\s*(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/g, (_m, la, lo) => { const mi = miles(Number(la), Number(lo)); return mi < 1 ? '📍 El Segundo' : `📍 ${Math.round(mi)} mi out`; })
-    .replace(/https?:\/\/open\.spotify\.com\/\S+/g, 'spotify ↗')
-    .replace(/https?:\/\/(\S{1,28})\S*/g, '$1…');
+  import { ago, fetchPreview, firstUrl, previewCard, tidyText, type LinkPreview } from '../lib/shortwave-client';
+  import { keepButton, loadKeeps } from '../lib/keeps-client';
   type Post = { id: string; at: string; who: string; noun: number; text: string };
 
   function mount() {
     const root = document.querySelector<HTMLElement>('[data-home-shortwave]');
     if (!root || root.dataset.mounted) return;
     root.dataset.mounted = 'true';
-    const list = root.querySelector<HTMLElement>('[data-hsw-list]')!, here = root.querySelector<HTMLElement>('[data-hsw-here]')!;
-    const form = root.querySelector<HTMLFormElement>('[data-hsw-form]')!, input = root.querySelector<HTMLInputElement>('[data-hsw-input]')!, note = root.querySelector<HTMLElement>('[data-hsw-note]')!;
+    const q = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
+    const list = q('[data-hsw-list]'), here = q('[data-hsw-here]'), meter = q('[data-hsw-meter]'), kept = q<HTMLAnchorElement>('[data-hsw-kept]');
+    const form = q<HTMLFormElement>('[data-hsw-form]'), input = q<HTMLInputElement>('[data-hsw-input]'), note = q('[data-hsw-note]');
     const KEEP = 3;
     let posts: Post[] = [];
+    const previews = new Map<string, LinkPreview | null>();
 
     function row(p: Post, fresh: boolean): HTMLElement {
       const li = document.createElement('li'); li.className = 'hsw__post'; if (fresh) li.dataset.fresh = 'true';
-      const img = document.createElement('img'); img.src = `https://noun.pics/${Number(p.noun) || 0}.svg`; img.alt = ''; img.width = 26; img.height = 26; img.loading = 'lazy';
-      const body = document.createElement('div');
+      const img = document.createElement('img'); img.className = 'hsw__noun'; img.src = `https://noun.pics/${Number(p.noun) || 0}.svg`; img.alt = ''; img.width = 30; img.height = 30; img.loading = 'lazy';
+      const body = document.createElement('div'); body.className = 'hsw__body';
       const meta = document.createElement('p'); meta.className = 'hsw__meta';
       const who = document.createElement('b'); who.textContent = p.who || 'visitor';
       const time = document.createElement('time'); time.dateTime = p.at; time.textContent = ago(p.at);
       meta.append(who, time);
-      const text = document.createElement('p'); text.className = 'hsw__text'; text.textContent = tidy(p.text);
-      body.append(meta, text); li.append(img, body);
+      const url = firstUrl(p.text), preview = url ? previews.get(url) : null;
+      const line = tidyText(p.text, preview, true);
+      if (line && line !== '♫') { const text = document.createElement('p'); text.className = 'hsw__text'; text.textContent = line; body.append(meta, text); } else body.append(meta);
+      if (preview) body.append(previewCard(preview, true));
+      const draft = { kind: 'post' as const, postId: p.id, postAt: p.at, text: p.text, who: p.who, noun: p.noun, source: 'bar' as const, url, title: preview?.title || '', site: preview?.site || '', image: preview?.image || '', description: preview?.description || '' };
+      li.append(img, body, keepButton(draft, `${p.who || 'visitor'}'s post`));
       return li;
     }
     function render(freshId?: string) {
       if (!posts.length) { const li = document.createElement('li'); li.className = 'hsw__empty'; li.textContent = 'Quiet on the air. Say the first thing.'; list.replaceChildren(li); return; }
-      list.replaceChildren(...posts.slice(0, KEEP).map((p) => row(p, p.id === freshId)));
+      const shown = posts.slice(0, KEEP);
+      list.replaceChildren(...shown.map((p) => row(p, p.id === freshId)));
+      for (const p of shown) { const url = firstUrl(p.text); if (url && !previews.has(url)) { previews.set(url, null); void fetchPreview(url).then((v) => { if (v) { previews.set(url, v); render(); } }); } }
     }
+    function ping() { meter.dataset.ping = 'true'; setTimeout(() => { delete meter.dataset.ping; }, 1400); }
     function add(p: Post, fresh: boolean) {
       if (!p?.id || posts.some((x) => x.id === p.id)) return;
       posts = [p, ...posts].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
-      render(fresh ? p.id : undefined);
+      render(fresh ? p.id : undefined); if (fresh) ping();
     }
     async function load() {
       try {
-        const res = await fetch('/api/shortwave?limit=8', { headers: { accept: 'application/json' } });
-        const data = await res.json();
+        const data = await (await fetch('/api/shortwave?limit=8', { headers: { accept: 'application/json' } })).json();
         if (!data?.ok || !Array.isArray(data.posts)) throw new Error('unavailable');
         const known = new Set(posts.map((p) => p.id));
-        const incoming: Post[] = data.posts.filter((p: Post) => p?.id && !known.has(p.id));
-        posts = [...incoming, ...posts].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
+        posts = [...data.posts.filter((p: Post) => p?.id && !known.has(p.id)), ...posts].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
         render();
       } catch { if (!posts.length) { const li = document.createElement('li'); li.className = 'hsw__empty'; li.textContent = 'Shortwave is out of range right now.'; list.replaceChildren(li); } }
     }
     async function presence() {
-      try {
-        const j = await (await fetch('/api/presence/snapshot', { cache: 'no-store' })).json();
-        const h = Number(j.humans ?? 0), a = Number(j.agents ?? 0);
-        here.textContent = h + a > 0 ? `${h + a} here now${a ? ` · ${a} AI` : ''}` : '';
-      } catch { here.textContent = ''; }
+      try { const j = await (await fetch('/api/presence/snapshot', { cache: 'no-store' })).json(); const h = Number(j.humans ?? 0), a = Number(j.agents ?? 0); here.textContent = h + a > 0 ? `${h + a} here now${a ? ` · ${a} AI` : ''}` : 'live'; }
+      catch { here.textContent = 'live'; }
     }
+    function paintKept(n: number) { kept.hidden = n === 0; kept.textContent = n ? `${n} kept on your shelf ↗` : ''; }
 
     window.addEventListener('pc:shortwave:post', (ev: Event) => {
       const d = (ev as CustomEvent).detail || {};
       if (d.post) add(d.post as Post, true);
       if (d.own) note.textContent = d.live === false ? 'Said. It is on Shortwave.' : 'Said. Live across town, and kept on Shortwave.';
     });
+    window.addEventListener('pc:keeps:change', (ev: Event) => paintKept(((ev as CustomEvent).detail?.keeps || []).length));
 
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -97,21 +100,14 @@
       if (!text) { input.focus(); return; }
       input.value = '';
       // The dock bar owns the say path (room bubble, ticker, Shortwave). Without it, post directly.
-      if (document.querySelector('[data-pc-ref="fb-omni-form"]')) {
-        window.dispatchEvent(new CustomEvent('pc:shortwave:say', { detail: { text } }));
-        note.textContent = 'Sending…';
-        return;
-      }
-      const safe = text;
+      if (document.querySelector('[data-pc-ref="fb-omni-form"]')) { window.dispatchEvent(new CustomEvent('pc:shortwave:say', { detail: { text } })); note.textContent = 'Sending…'; return; }
       try {
-        const res = await fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: safe || text, via: 'page' }) });
-        const data = await res.json();
-        if (data?.ok && data.post) { add(data.post, true); note.textContent = 'Said. It is on Shortwave.'; }
-        else note.textContent = data?.error || 'Could not send that. Try the bar at the bottom.';
+        const data = await (await fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, via: 'page' }) })).json();
+        if (data?.ok && data.post) { add(data.post, true); note.textContent = 'Said. It is on Shortwave.'; } else note.textContent = data?.error || 'Could not send that. Try the bar at the bottom.';
       } catch { note.textContent = 'Could not send that. Try the bar at the bottom.'; }
     });
 
-    void load(); void presence();
+    void load(); void presence(); void loadKeeps().then((s) => { paintKept(s.keeps.length); render(); });
     const timers = [
       setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 60000),
       setInterval(() => { if (document.visibilityState === 'visible') void presence(); }, 30000),
@@ -124,30 +120,40 @@
 </script>
 
 <style is:global>
-  .hsw { background: #fffdf7; border: 1px solid #c4bcae; box-shadow: 5px 7px 0 #e9dfcf; padding: 14px 16px 12px; color: #2d302a; min-width: 0; }
-  .hsw__head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
-  .hsw__head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 620; letter-spacing: -.025em; }
-  .hsw__head h2 small { font: 600 8px var(--pc-font-mono); letter-spacing: .14em; text-transform: uppercase; color: #4e5944; border: 1px solid #a9b394; padding: 2px 5px; }
-  .hsw__dot { width: 7px; height: 7px; border-radius: 50%; background: #5f8a3f; box-shadow: 0 0 0 0 #5f8a3f66; animation: hsw-pulse 2.4s ease-out infinite; }
-  @keyframes hsw-pulse { 0% { box-shadow: 0 0 0 0 #5f8a3f66; } 70%, 100% { box-shadow: 0 0 0 7px #5f8a3f00; } }
-  .hsw__here { font: 500 9px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; color: #6d6659; }
-  .hsw__head a { margin-left: auto; font-size: 11px; font-weight: 600; color: #76523a; white-space: nowrap; }
-  .hsw__head a:hover { text-decoration: underline; text-underline-offset: 3px; }
-  .hsw__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 132px; }
-  .hsw__post { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-top: 1px solid #e6dccb; }
-  .hsw__post img { width: 26px; height: 26px; border: 1px solid #d6cbbb; background: #efe7d8; image-rendering: pixelated; }
-  .hsw__post[data-fresh='true'] { animation: hsw-in 1.6s ease-out; }
-  @keyframes hsw-in { 0% { background: #f3e6b8; transform: translateY(-4px); opacity: 0; } 18% { opacity: 1; transform: none; } 100% { background: transparent; } }
-  .hsw__meta { margin: 0; display: flex; gap: 8px; align-items: baseline; font: 500 9px var(--pc-font-mono); letter-spacing: .04em; color: #8a7d69; }
-  .hsw__meta b { font-weight: 650; color: #4e5944; max-width: 20ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hsw__text { margin: 2px 0 0; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .hsw__empty { padding: 14px 0; border-top: 1px solid #e6dccb; font-size: 12px; color: #766c5c; }
-  .hsw__say { display: flex; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid #cfc5b5; }
-  .hsw__say input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 9px 10px; border: 1px solid #bbb29f; background: #fff; color: inherit; border-radius: 0; }
-  .hsw__say input:focus-visible { outline: 2px solid #a85b3d; outline-offset: 1px; }
-  .hsw__say button { font: inherit; font-size: 11px; font-weight: 650; padding: 0 16px; border: 1px solid #343d30; background: #343d30; color: #fffdf6; cursor: pointer; border-radius: 0; }
-  .hsw__say button:hover { box-shadow: 0 3px 0 #d9c8ae; }
-  .hsw__note { margin: 8px 0 0; font-size: 10px; line-height: 1.5; color: #766c5c; }
-  @media (prefers-reduced-motion: reduce) { .hsw__dot, .hsw__post[data-fresh='true'] { animation: none; } }
-  @media (max-width: 680px) { .hsw { box-shadow: 4px 5px 0 #e9dfcf; } .hsw__say input { font-size: 16px; } }
+  .hsw { --sw-accent: #a85b3d; --sw-rule: #ddd2c0; --sw-soft: #7b705e; --sw-shadow: #e9dfcf; --sw-card-bg: #fff; position: relative; background: #fffdf7; border: 1px solid #2f3829; box-shadow: 6px 8px 0 #e4d9c6, 6px 8px 0 1px #cfc3ad; color: #2d302a; min-width: 0; }
+  .hsw__band { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: #2f3829; color: #f4eed9; }
+  .hsw__band h2 { margin: 0; display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 620; letter-spacing: -.02em; color: #fffdf6; }
+  .hsw__dot { width: 8px; height: 8px; border-radius: 50%; background: #9fd36a; box-shadow: 0 0 0 0 #9fd36a88; animation: hsw-pulse 2.4s ease-out infinite; }
+  @keyframes hsw-pulse { 0% { box-shadow: 0 0 0 0 #9fd36a88; } 70%, 100% { box-shadow: 0 0 0 8px #9fd36a00; } }
+  .hsw__meter { display: inline-flex; align-items: end; gap: 2px; height: 14px; }
+  .hsw__meter i { width: 3px; background: #9fd36a; opacity: .75; transform-origin: bottom; animation: hsw-bar 1.8s ease-in-out infinite; }
+  .hsw__meter i:nth-child(1) { height: 30%; animation-delay: -.2s; } .hsw__meter i:nth-child(2) { height: 55%; animation-delay: -.9s; } .hsw__meter i:nth-child(3) { height: 80%; animation-delay: -.5s; } .hsw__meter i:nth-child(4) { height: 100%; animation-delay: -1.3s; } .hsw__meter i:nth-child(5) { height: 70%; animation-delay: -.7s; } .hsw__meter i:nth-child(6) { height: 45%; animation-delay: -1.6s; } .hsw__meter i:nth-child(7) { height: 25%; animation-delay: -.4s; }
+  @keyframes hsw-bar { 0%, 100% { transform: scaleY(.45); } 50% { transform: scaleY(1); } }
+  .hsw__meter[data-ping='true'] i { background: #ffd27a; opacity: 1; animation-duration: .35s; }
+  .hsw__here { font: 500 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #cfd8bd; }
+  .hsw .hsw__band a, .hsw .hsw__band a:visited { margin-left: auto; font-size: 11px; font-weight: 600; color: #ffe2b0; white-space: nowrap; }
+  .hsw__band a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .hsw__list { list-style: none; margin: 0; padding: 2px 14px 0; display: flex; flex-direction: column; min-height: 150px; }
+  .hsw__post { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 11px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--sw-rule); }
+  .hsw__post:last-child { border-bottom: 0; }
+  .hsw__noun { width: 30px; height: 30px; border: 1px solid #cfc3ad; background: #efe7d8; image-rendering: pixelated; }
+  .hsw__post[data-fresh='true'] { animation: hsw-in 1.8s ease-out; }
+  .hsw__post[data-fresh='true']::before { content: ''; position: absolute; left: -14px; top: 0; bottom: 0; width: 3px; background: var(--sw-accent); animation: hsw-mark 2.6s ease-out forwards; }
+  @keyframes hsw-in { 0% { background: #f6e9bd; transform: translateY(-5px); opacity: 0; } 15% { opacity: 1; transform: none; } 100% { background: transparent; } }
+  @keyframes hsw-mark { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+  .hsw__meta { margin: 0; display: flex; gap: 8px; align-items: baseline; font: 500 9.5px var(--pc-font-mono); letter-spacing: .04em; color: #94876f; }
+  .hsw__meta b { font-weight: 650; color: #4e5944; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hsw__text { margin: 3px 0 0; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .hsw .sw-keep { opacity: 0; margin-top: 1px; } .hsw__post:hover .sw-keep, .hsw .sw-keep:focus-visible, .hsw .sw-keep[aria-pressed='true'] { opacity: 1; }
+  @media (hover: none) { .hsw .sw-keep { opacity: .7; } }
+  .hsw__empty { padding: 18px 0; font-size: 12px; color: var(--sw-soft); }
+  .hsw__say { display: flex; gap: 0; margin: 0; padding: 10px 14px; background: #f6efe0; border-top: 1px solid #cfc3ad; }
+  .hsw__say input { flex: 1; min-width: 0; font: inherit; font-size: 13.5px; padding: 10px 12px; border: 1px solid #b3a88f; border-right: 0; background: #fffdf7; color: inherit; border-radius: 0; }
+  .hsw__say input:focus-visible { outline: 2px solid var(--sw-accent); outline-offset: -2px; }
+  .hsw__say button { font: inherit; font-size: 11.5px; font-weight: 650; padding: 0 18px; border: 1px solid #2f3829; background: #2f3829; color: #fffdf6; cursor: pointer; border-radius: 0; white-space: nowrap; }
+  .hsw__say button:hover { background: #3d4a35; }
+  .hsw__note { margin: 0; padding: 0 14px 10px; background: #f6efe0; font-size: 10.5px; line-height: 1.5; color: var(--sw-soft); display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; }
+  .hsw .hsw__note a { color: #76523a; font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { .hsw__dot, .hsw__meter i, .hsw__post[data-fresh='true'], .hsw__post[data-fresh='true']::before { animation: none; } }
+  @media (max-width: 680px) { .hsw { box-shadow: 4px 5px 0 #e4d9c6; } .hsw__say input { font-size: 16px; } .hsw__here { display: none; } }
 </style>

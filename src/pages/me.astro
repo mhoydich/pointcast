@@ -12,6 +12,7 @@ import { isProfileContractConfigured } from '../lib/profile-object.mjs';
 const description = 'Your private PointCast identity and Tezos holdings, keyed only to wallets linked to this signed session.';
 const profileContract = contracts.profile_objects.mainnet;
 const profileClaimOpen = isProfileContractConfigured(profileContract);
+import '../styles/shortwave-shared.css';
 ---
 
 <BlockLayout title="Me" description={description}>
@@ -153,6 +154,22 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
         <div class="me-seals__rows" data-me-seals></div>
       </section>
 
+      <section class="me-keeps" data-me-kept aria-label="Your kept Shortwave posts and links">
+        <header class="me-section-head">
+          <div>
+            <p class="me__kicker">SHORTWAVE · YOUR SHELF</p>
+            <h2>Kept</h2>
+          </div>
+          <a class="me-keeps__feed" href="/shortwave#kept">Open Shortwave ↗</a>
+        </header>
+        <form class="me-keeps__add" data-me-keep-form autocomplete="off">
+          <input type="url" name="url" required maxlength="600" placeholder="Paste a link to keep: a song, a page, a video…" aria-label="A link to keep on your shelf" />
+          <button type="submit">Keep</button>
+        </form>
+        <p class="me-keeps__status" data-me-keep-status role="status">Posts you bookmark on Shortwave land here too. Private to your account.</p>
+        <div class="me-keeps__rows" data-me-keeps></div>
+      </section>
+
       <section
         class="me-claim"
         data-me-claim
@@ -259,6 +276,8 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     type PasskeySummary,
   } from '../lib/auth/client';
   import { readPetSnapshot } from '../lib/pet-state';
+  import { addKeep, loadKeeps, removeKeep, type Keep } from '../lib/keeps-client';
+  import { ago as keptAgo, fetchPreview, previewCard, tidyText } from '../lib/shortwave-client';
   import { decodeProfileBytes, decodeProfileLink } from '../lib/profile-object.mjs';
 
   type HoldingToken = {
@@ -857,6 +876,52 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     return profile;
   }
 
+  function keepRow(k: Keep): HTMLElement {
+    const row = document.createElement('article'); row.className = 'me-keep';
+    const art = document.createElement('img'); art.alt = ''; art.loading = 'lazy'; art.width = 44; art.height = 44;
+    art.src = k.kind === 'post' ? `https://noun.pics/${k.noun || 0}.svg` : (k.image || 'https://noun.pics/0.svg'); art.referrerPolicy = 'no-referrer';
+    const main = document.createElement('div');
+    const meta = document.createElement('p'); meta.className = 'me-keep__meta';
+    meta.textContent = `${k.kind === 'post' ? `${k.who || 'visitor'} · ${k.source === 'chain' ? 'on Tezos' : 'said in the bar'}` : (k.site || 'link')} · kept ${keptAgo(k.keptAt)}`;
+    main.append(meta);
+    if (k.text) { const text = document.createElement('p'); text.className = 'me-keep__text'; text.textContent = tidyText(k.text, k.url && k.title ? { url: k.url, kind: 'page', site: k.site, title: k.title, description: '', image: '' } : null, true); if (text.textContent) main.append(text); }
+    if (k.url && k.title) main.append(previewCard({ url: k.url, kind: /open\.spotify\.com/.test(k.url) ? 'spotify' : /youtu\.?be/.test(k.url) ? 'youtube' : 'page', site: k.site, title: k.title, description: k.description, image: k.image }, true));
+    else if (k.url) { const a = document.createElement('a'); a.href = k.url; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow'; a.textContent = k.url.replace(/^https:\/\//, ''); a.className = 'me-keep__link'; main.append(a); }
+    const drop = document.createElement('button'); drop.type = 'button'; drop.className = 'me-keep__drop'; drop.textContent = 'Let go'; drop.setAttribute('aria-label', 'Remove from your shelf');
+    drop.addEventListener('click', async () => { drop.disabled = true; await removeKeep(k.id); });
+    row.append(art, main, drop);
+    return row;
+  }
+
+  let keepsWired = false;
+  function renderKeeps(root: HTMLElement): void {
+    const rows = root.querySelector<HTMLElement>('[data-me-keeps]');
+    const form = root.querySelector<HTMLFormElement>('[data-me-keep-form]');
+    const status = root.querySelector<HTMLElement>('[data-me-keep-status]');
+    if (!rows || !form || !status) return;
+    const paint = (keeps: Keep[]) => {
+      if (!keeps.length) { const p = document.createElement('p'); p.className = 'me-keeps__empty'; p.textContent = 'Nothing kept yet. Bookmark a post on Shortwave, or paste a link above.'; rows.replaceChildren(p); return; }
+      rows.replaceChildren(...keeps.map(keepRow));
+    };
+    if (!keepsWired) {
+      keepsWired = true;
+      window.addEventListener('pc:keeps:change', (event) => paint(((event as CustomEvent).detail?.keeps || []) as Keep[]));
+    }
+    if (form.dataset.wired) { void loadKeeps(true).then((shelf) => paint(shelf.keeps)); return; }
+    form.dataset.wired = 'true';
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const field = form.elements.namedItem('url') as HTMLInputElement;
+      let url: URL; try { url = new URL(field.value.trim()); if (url.protocol !== 'https:') throw new Error('https'); } catch { status.textContent = 'That needs to be a full https link.'; return; }
+      status.textContent = 'Looking at the link…';
+      const preview = await fetchPreview(url.toString());
+      const ok = await addKeep({ kind: 'link', url: url.toString(), title: preview?.title || url.hostname.replace(/^www\./, ''), site: preview?.site || url.hostname.replace(/^www\./, ''), image: preview?.image || '', description: preview?.description || '', source: 'web' });
+      status.textContent = ok ? 'Kept.' : 'Could not keep that right now.';
+      if (ok) field.value = '';
+    });
+    void loadKeeps(true).then((shelf) => { paint(shelf.keeps); if (window.location.hash === '#kept') root.querySelector<HTMLElement>('[data-me-kept]')?.scrollIntoView({ block: 'start' }); });
+  }
+
   function showSignedOut(root: HTMLElement): void {
     root.dataset.meState = 'signed-out';
     const loading = root.querySelector<HTMLElement>('[data-me-loading]');
@@ -891,6 +956,7 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
     renderWallets(root, payload.wallets);
     renderCollections(root, payload);
     renderSeals(root, payload.wallets);
+    renderKeeps(root);
     void renderClaimDoor(root, payload.wallets);
     renderLocalState(root);
     void refreshPasskeys(root);
@@ -1282,6 +1348,21 @@ const profileClaimOpen = isProfileContractConfigured(profileContract);
   .me-seals { border-color: #7152a4; background: #fbf8ff; }
   .me-seals__contract { color: #7152a4; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
   .me-seals__rows { display: grid; gap: 6px; }
+  .me-keeps { --sw-accent: #185fa5; --sw-rule: #c9d3dd; --sw-soft: #667078; --sw-shadow: #dfe6ee; }
+  .me-keeps__feed { color: #185fa5; font: 500 9px/1 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .me-keeps__add { display: flex; margin-bottom: 8px; }
+  .me-keeps__add input { flex: 1; min-width: 0; padding: 11px 12px; border: 1px solid #9fb0c0; border-right: 0; border-radius: 0; background: #fff; font: inherit; font-size: 14px; }
+  .me-keeps__add button { padding: 0 18px; border: 1px solid #185fa5; border-radius: 0; background: #185fa5; color: #fff; font: 600 12px var(--pc-font-sans); cursor: pointer; }
+  .me-keeps__status, .me-keeps__empty { margin: 0 0 12px; color: #667078; font-size: 12px; }
+  .me-keeps__rows { display: grid; gap: 6px; }
+  .me-keep { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px; border: 1px solid #c9d3dd; background: #fff; }
+  .me-keep > img { width: 44px; height: 44px; object-fit: cover; border: 1px solid #c9d3dd; background: #eef2f6; image-rendering: pixelated; }
+  .me-keep__meta { margin: 0; color: #667078; font: 500 9px/1.4 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .me-keep__text { margin: 4px 0 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+  .me-keep__link { display: inline-block; margin-top: 4px; color: #185fa5; font-size: 13px; overflow-wrap: anywhere; }
+  .me-keep__drop { border: 0; background: none; padding: 4px 0; color: #667078; font: 500 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .me-keep__drop:hover { color: #b3402a; }
+  @media (max-width: 560px) { .me-keeps__add input { font-size: 16px; } }
   .me-seal { display: flex; justify-content: space-between; gap: 18px; padding: 12px; border: 1px solid #cbbbe2; background: #fff; }
   .me-seal--revoked { opacity: .58; }
   .me-seal__copy { display: grid; gap: 4px; }

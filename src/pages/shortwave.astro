@@ -1,6 +1,7 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { SHORTWAVE } from '../lib/shortwave';
+import '../styles/shortwave-shared.css';
 const title = 'Shortwave · short casts, on the air';
 const description = 'The PointCast status feed. Say something in the bar at the bottom of any page: it shows on screen for whoever is around, then it lives here. 280 characters, no account, no algorithm.';
 ---
@@ -36,6 +37,7 @@ const description = 'The PointCast status feed. Say something in the bar at the 
           <div class="tabs" role="tablist">
             <button type="button" role="tab" data-tab="all" aria-selected="true">Everyone</button>
             <button type="button" role="tab" data-tab="chain" aria-selected="false">On Tezos ⛓</button>
+            <button type="button" role="tab" data-tab="kept" aria-selected="false" id="kept">Kept <span data-kept-count></span></button>
             <span class="tag-chip" data-tag-chip hidden><span data-tag-label></span><button type="button" data-tag-clear aria-label="Clear tag filter">×</button></span>
           </div>
           <button type="button" class="text-button" data-refresh>Refresh ↻</button>
@@ -61,6 +63,8 @@ const description = 'The PointCast status feed. Say something in the bar at the 
             <li><strong>Seen across town.</strong> Each post rides the town's live presence bus, so every open PointCast page shows it within about a second. The front door keeps a live panel of the latest three.</li>
             <li><strong>Kept here.</strong> Posts stay a year at <code>/api/shortwave</code>. Names are self-reported; treat the feed as public chatter.</li>
             <li><strong>Permanent if you want.</strong> <code>!words</code> signs the cast onto an admin-less Tezos tower. Those carry a ⛓ and can never be removed.</li>
+            <li><strong>Links open up.</strong> A Spotify link becomes a player, a video or page becomes a card with its title and picture.</li>
+            <li><strong>Keep what you like.</strong> The bookmark on any post puts it on your shelf: the Kept tab here, and your profile at <code>/me</code> once you sign in.</li>
             <li><strong>Conventions, not features.</strong> <code>#tags</code> filter. <code>📍 lat,lon</code> becomes a map link. A Spotify link becomes a player.</li>
           </ol>
         </section>
@@ -82,6 +86,8 @@ const description = 'The PointCast status feed. Say something in the bar at the 
 </BlockLayout>
 
 <script>
+  import { fetchPreview, firstUrl, previewCard } from '../lib/shortwave-client';
+  import { keepButton, loadKeeps, removeKeep, shelfMode, type Keep } from '../lib/keeps-client';
   const SHORT = (a: string) => a.slice(0, 5) + '…' + a.slice(-4);
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
   const hex2str = (h: string) => { try { const b = new Uint8Array((h.match(/../g) || []).map((x) => parseInt(x, 16))); return new TextDecoder().decode(b); } catch { return ''; } };
@@ -121,10 +127,11 @@ const description = 'The PointCast status feed. Say something in the bar at the 
     const feed = q('[data-feed]'), older = q<HTMLButtonElement>('[data-older]'), refresh = q<HTMLButtonElement>('[data-refresh]');
     const tagChip = q('[data-tag-chip]'), tagLabel = q('[data-tag-label]');
 
-    let tab: 'all' | 'chain' = 'all', tag: string | null = null, cursor: string | null = null, loading = false;
+    let tab: 'all' | 'chain' | 'kept' = 'all', tag: string | null = null, cursor: string | null = null, loading = false;
     let barItems: Item[] = [], chainItems: Item[] = [];
     const live: Item[] = [];            // own/pending lines not yet in a fetched page
     const names = new Map<string, string>();
+    let keeps: Keep[] = [];
 
     function barIdentity() {
       const label = document.querySelector('[data-pc-ref="fb-you-label"]')?.textContent?.trim() || 'visitor';
@@ -166,10 +173,46 @@ const description = 'The PointCast status feed. Say something in the bar at the 
           <p class="cast-body">${linkify(c.body)}</p>${spotifyEmbed(c.body)}
           <div class="cast-foot">${foot}</div>
         </div>`;
+      if (!c.pending) {
+        const url = firstUrl(c.body), who = c.source === 'chain' ? name : c.who;
+        const draft = { kind: 'post' as const, postId: c.key, postAt: c.at, text: c.body, who, noun: c.noun ?? 0, source: c.source, url, title: '', site: '', image: '', description: '' };
+        el.querySelector('.cast-foot')!.append(keepButton(draft, `${who}'s post`));
+        // Spotify already gets a player. Everything else gets a preview card.
+        if (url && !/open\.spotify\.com\//.test(url)) void fetchPreview(url).then((pv) => { if (!pv || !el.isConnected) return; Object.assign(draft, { title: pv.title, site: pv.site, image: pv.image, description: pv.description }); el.querySelector('.cast-body')!.after(previewCard(pv)); });
+        else if (url) void fetchPreview(url).then((pv) => { if (pv) Object.assign(draft, { title: pv.title, site: pv.site, image: pv.image, description: pv.description }); });
+      }
       return el;
     }
 
+    function keptCard(k: Keep): HTMLElement {
+      const el = document.createElement('article'); el.className = 'cast kept';
+      const img = document.createElement('img'); img.className = 'pfp'; img.alt = ''; img.width = 40; img.height = 40; img.loading = 'lazy';
+      img.src = k.kind === 'post' ? (k.source === 'chain' ? `https://noun-api.com/beta/pfp?name=${encodeURIComponent(k.who)}&size=80` : `https://noun.pics/${k.noun || 0}.svg`) : (k.image || 'https://noun.pics/0.svg');
+      const main = document.createElement('div'); main.className = 'cast-main';
+      const head = document.createElement('div'); head.className = 'cast-head';
+      const who = document.createElement('span'); who.className = 'who'; who.textContent = k.kind === 'post' ? (k.who || 'visitor') : (k.site || 'link');
+      const time = document.createElement('time'); time.dateTime = k.keptAt; time.textContent = `kept ${ago(k.keptAt)}`;
+      head.append(who, time); main.append(head);
+      if (k.text) { const body = document.createElement('p'); body.className = 'cast-body'; body.innerHTML = linkify(k.text); main.append(body); }
+      if (k.url && k.title) main.append(previewCard({ url: k.url, kind: /open\.spotify\.com/.test(k.url) ? 'spotify' : /youtu\.?be/.test(k.url) ? 'youtube' : 'page', site: k.site, title: k.title, description: k.description, image: k.image }));
+      const foot = document.createElement('div'); foot.className = 'cast-foot';
+      const label = document.createElement('span'); label.textContent = k.kind === 'post' ? (k.source === 'chain' ? '⛓ from the tower' : 'said in the bar') : 'a link';
+      const drop = document.createElement('button'); drop.type = 'button'; drop.className = 'reply'; drop.textContent = 'let it go';
+      drop.addEventListener('click', async () => { drop.disabled = true; await removeKeep(k.id); });
+      foot.append(label, drop); main.append(foot); el.append(img, main);
+      return el;
+    }
+    function renderKept() {
+      older.hidden = true;
+      const intro = document.createElement('p'); intro.className = 'muted kept-intro';
+      intro.textContent = shelfMode() === 'account' ? 'Your shelf. It also lives on your profile at /me.' : 'Your shelf, kept in this browser. Sign in and it moves onto your profile.';
+      const link = document.createElement('a'); link.href = shelfMode() === 'account' ? '/me#kept' : '/auth'; link.textContent = shelfMode() === 'account' ? ' Open /me ↗' : ' Sign in ↗'; intro.append(link);
+      if (!keeps.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Nothing kept yet. The bookmark on any post puts it here.'; feed.replaceChildren(intro, p); return; }
+      feed.replaceChildren(intro, ...keeps.map(keptCard));
+    }
+
     function render() {
+      if (tab === 'kept') { renderKept(); return; }
       const seen = new Set<string>();
       let items = (tab === 'chain' ? [...live.filter((i) => i.source === 'chain'), ...chainItems] : [...live, ...barItems, ...chainItems])
         .filter((i) => (seen.has(i.key) ? false : (seen.add(i.key), true)))
@@ -245,7 +288,7 @@ const description = 'The PointCast status feed. Say something in the bar at the 
       else if (d.phase === 'failed') { status.textContent = d.error ? `Could not cast: ${d.error}` : 'Cast cancelled.'; }
     });
 
-    root.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab as 'all' | 'chain'; syncTabs(); render(); }));
+    root.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab as 'all' | 'chain' | 'kept'; syncTabs(); render(); }));
     refresh.addEventListener('click', () => { void load(false).then(loadStats); });
     older.addEventListener('click', () => void load(true));
     q('[data-tag-clear]').addEventListener('click', () => { tag = null; tagChip.hidden = true; render(); });
@@ -257,6 +300,8 @@ const description = 'The PointCast status feed. Say something in the bar at the 
       const repBar = t.closest<HTMLElement>('[data-reply-bar]'); if (repBar && omni) { omni.value = `↩ ${repBar.dataset.replyBar} · `; primeBar(''); }
     });
 
+    window.addEventListener('pc:keeps:change', (ev: Event) => { keeps = (ev as CustomEvent).detail?.keeps || []; q('[data-kept-count]').textContent = keeps.length ? String(keeps.length) : ''; if (tab === 'kept') render(); });
+    void loadKeeps().then(() => { if (location.hash === '#kept') { tab = 'kept'; syncTabs(); render(); } });
     window.addEventListener('pc:wallet-change', () => setTimeout(barIdentity, 300));
     setTimeout(barIdentity, 600);
     void load(false).then(loadStats);
@@ -291,6 +336,7 @@ const description = 'The PointCast status feed. Say something in the bar at the 
   .sw .cast-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.sw .who{font-weight:600;text-decoration:none;font-size:15px}.sw .who:hover{text-decoration:underline}.sw .addr{color:var(--soft)}.sw .cast-head time{color:var(--soft);margin-left:auto}
   .sw .cast-body{margin:6px 0 10px;font-size:17px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.sw .cast-body a{color:var(--fd)}.sw .cast-body .tag{text-decoration:none;font-weight:550}.sw .cast-body .tag:hover{text-decoration:underline}.sw .cast-body .reply-ref{font-family:ui-monospace,monospace;font-size:14px;color:var(--soft);text-decoration:none}
   .sw .cast-foot{display:flex;gap:18px;align-items:center;color:var(--soft);flex-wrap:wrap}.sw .cast-foot .badge{color:var(--fd);font-weight:600}.sw .cast.chain{border-left:2px solid var(--fd);padding-left:12px;margin-left:-14px}.sw .cast-foot a{color:var(--soft)}.sw .cast-foot .reply{background:none;border:0;color:var(--soft);padding:0;font:inherit;text-decoration:underline;text-underline-offset:4px}.sw .cast-foot .reply:hover{color:var(--fd)}
+  .sw{--sw-ink:#111827;--sw-accent:#185FA5;--sw-rule:#cbd0d8;--sw-soft:#526071;--sw-shadow:#e5e8ee;--sw-card-bg:#fff}.sw .cast-foot .sw-keep{margin-left:auto}.sw .tabs [data-kept-count]:not(:empty){margin-left:4px;padding:1px 6px;background:var(--fd);color:#fff;font:600 10px ui-monospace,monospace}.sw .kept-intro{padding:18px 0 6px}.sw .kept-intro a{color:var(--fd)}.sw .cast.kept .pfp{object-fit:cover}
   .sw .older{margin-top:16px}
   .sw .rail{display:flex;flex-direction:column;gap:32px;font-size:14px}.sw .rail section{border-top:1px solid var(--rule);padding-top:16px}.sw .rail p{margin:8px 0}.sw .rail a{color:var(--fd);font-size:14px}
   .sw dl{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}.sw dl div{border-left:1.5px solid var(--ink);padding-left:10px}.sw dt{color:var(--soft);text-transform:uppercase}.sw dd{margin:2px 0 0;font-size:24px;font-weight:600;letter-spacing:-.03em;line-height:1.1}
