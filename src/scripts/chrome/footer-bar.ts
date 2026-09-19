@@ -366,16 +366,31 @@ export function mountFooterBar(root, scope) {
       return label || 'visitor';
     }
     function swNoun() { var m = $noun && String($noun.getAttribute('src') || '').match(/(\d+)\.svg/); return m ? Math.min(1199, parseInt(m[1], 10) || 0) : 0; }
+    function swSid() { try { return String(localStorage.getItem('pc:room:sid') || '').slice(0, 96); } catch (e) { return ''; } }
+    function swFlashFeed() { if (!$omniFeed) return; $omniFeed.setAttribute('data-fresh', 'true'); setTimeout(function () { $omniFeed.removeAttribute('data-fresh'); }, 8000); }
+    // Real time: the API announces every saved post on the sitewide burst bus.
+    // cursor-room re-emits each burst as pc:burst:seen; Shortwave ones become
+    // pc:shortwave:post for the room ticker, the homepage panel and /shortwave.
+    on(window, 'pc:burst:seen', function (e) {
+      var b = e && e.detail; var m = b && b.meta;
+      if (!b || b.kind !== 'cast' || !m || !m.shortwave || !m.id || swSeen[m.id]) return;
+      swSeen[m.id] = 1;
+      var own = (m.clientId && m.clientId === swSid()) || swOwnIds().indexOf(m.id) !== -1;
+      if (own) return;
+      var post = { id: String(m.id), at: String(m.postedAt || new Date(b.at || Date.now()).toISOString()), who: String((b.by && b.by.handle) || 'visitor'), noun: Number(b.by && b.by.noun) || 0, text: String(m.t1 || '') + String(m.t2 || ''), via: String(m.via || 'bar') };
+      window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: post, own: false, live: true } }));
+      swFlashFeed();
+    });
     function postShortwave(text) {
       var body = Array.from(String(text || '')).slice(0, AIR_MAX).join('');
       if (!body.trim()) return;
-      fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: body, who: swWho(), noun: swNoun(), via: 'bar' }) })
+      fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: body, who: swWho(), noun: swNoun(), via: 'bar', clientId: swSid() }) })
         .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); })
         .then(function (res) {
           if (res.j && res.j.ok && res.j.post) {
             swSeen[res.j.post.id] = 1; swRememberOwn(res.j.post.id);
             window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: res.j.post, own: true } }));
-            airToast('said · on shortwave ◉', 2500);
+            airToast(res.j.live ? 'said · live across town · on shortwave ◉' : 'said · on shortwave ◉', 3200); swFlashFeed();
           } else if (res.status === 429) { airToast('shown in the room · shortwave limit reached for this hour', 5000); }
         }).catch(function () { /* the room still heard it */ });
     }
@@ -393,7 +408,7 @@ export function mountFooterBar(root, scope) {
         });
         swPrimed = true;
         fresh.reverse().forEach(function (p) { window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: p, own: false } })); });
-        if (fresh.length && $omniFeed) { $omniFeed.setAttribute('data-fresh', 'true'); setTimeout(function () { $omniFeed.removeAttribute('data-fresh'); }, 8000); }
+        if (fresh.length) swFlashFeed();
       }).catch(function () {});
     }
     setTimeout(function () { swPoll(true); }, 2500);
@@ -417,6 +432,18 @@ export function mountFooterBar(root, scope) {
         if (!String($omni.value || '').trim()) hideBubble();
       }
     });
+
+    // One path for anything said: the room hears it (bubble + ticker), and
+    // Shortwave keeps it. The homepage panel uses the same path via
+    // pc:shortwave:say so a single word can never be mistaken for a route.
+    function sayLine(raw) {
+      raw = String(raw || '').trim();
+      if (!raw) return;
+      window.dispatchEvent(new CustomEvent('pc:room:chat', { detail: { msg: raw } }));
+      try { showBubble(raw, 4000, true); } catch (e) {}
+      try { postShortwave(raw); } catch (e) {}
+    }
+    on(window, 'pc:shortwave:say', function (e) { sayLine(e && e.detail && e.detail.text); });
 
     // Enter always submits. Implicit form submission is not reliable across
     // mobile keyboards and automation, and the bar is now the town composer.
@@ -494,11 +521,7 @@ export function mountFooterBar(root, scope) {
         return;
       }
       if (mode === 'SAY') {
-        window.dispatchEvent(new CustomEvent('pc:room:chat', { detail: { msg: raw } }));
-        // Snapshot the sent message into the bubble for ~4s if anyone
-        // else is here to read it. Same gates as live-typing preview.
-        try { showBubble(raw, 4000, true); } catch (e) {}
-        try { postShortwave(raw); } catch (e) {}
+        sayLine(raw);
         $omni.value = '';
         $omni.placeholder = 'say something…';
         applyOmniMode();

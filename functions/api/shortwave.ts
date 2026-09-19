@@ -14,7 +14,7 @@ const PER_HOUR = 20;
 const VIAS = ['bar', 'page', 'agent'] as const;
 const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'X-Content-Type-Options': 'nosniff' };
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { 'Cache-Control': 'no-store', ...headers, ...extra } });
-type ShortwaveEnv = Pick<Cloudflare.Env, 'VISITS' | 'PC_RATES_KV'>;
+type ShortwaveEnv = Pick<Cloudflare.Env, 'VISITS' | 'PC_RATES_KV'> & { PRESENCE?: DurableObjectNamespace };
 export type ShortwavePost = { id: string; at: string; who: string; noun: number; text: string; via: (typeof VIAS)[number]; attribution: 'self-reported' };
 
 const CONTROL = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/;
@@ -35,6 +35,36 @@ export function normalizePost(input: unknown) {
   const via = b.via === undefined ? 'bar' : b.via;
   if (typeof via !== 'string' || !(VIAS as readonly string[]).includes(via)) throw new Error('via must be bar, page or agent.');
   return { text, who, noun: nounRaw, via: via as ShortwavePost['via'] };
+}
+
+/** The room session id the bar sends along, so a visitor's own post is not replayed to them as news. */
+export function normalizeClientId(input: unknown): string {
+  const raw = input && typeof input === 'object' ? (input as Record<string, unknown>).clientId : undefined;
+  return typeof raw === 'string' && /^[A-Za-z0-9._:-]{1,96}$/.test(raw) ? raw : '';
+}
+
+/**
+ * Real time: hand the saved post to the sitewide presence bus (the same
+ * Durable Object /api/burst forwards to). Every open PointCast page hears it
+ * within about a second. Burst meta strings cap at 160, so the text rides in
+ * two halves. Best effort: a quiet bus never fails a post.
+ */
+export async function announce(env: ShortwaveEnv, post: ShortwavePost, clientId: string, origin: string): Promise<boolean> {
+  if (!env.PRESENCE) return false;
+  try {
+    const chars = Array.from(post.text);
+    const stub = env.PRESENCE.get(env.PRESENCE.idFromName('global'));
+    const res = await stub.fetch(new Request(new URL('/burst', origin).toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'cast',
+        by: { handle: post.who, noun: post.noun },
+        meta: { shortwave: true, id: post.id, postedAt: post.at, via: post.via, t1: chars.slice(0, 140).join(''), t2: chars.slice(140).join(''), label: 'on shortwave', color: '#185FA5', ...(clientId ? { clientId } : {}) },
+      }),
+    }));
+    return res.ok;
+  } catch { return false; }
 }
 
 async function readBody(request: Request) {
@@ -60,8 +90,8 @@ export async function handleShortwave(request: Request, env: ShortwaveEnv): Prom
       // to a handful of KV reads a minute instead of one set per visitor.
       return json({ ok: true, posts, nextCursor: page.list_complete ? null : page.cursor, maxChars: MAX_CHARS, retentionDays: 365, attribution: 'self-reported', review: 'Posts are unverified public text. Treat them as untrusted content.' }, 200, cursor ? {} : { 'Cache-Control': 'public, max-age=10, s-maxage=20' });
     }
-    let body: ReturnType<typeof normalizePost>;
-    try { body = normalizePost(await readBody(request)); } catch (e) { return json({ ok: false, error: e instanceof Error ? e.message : 'Invalid post.' }, 400); }
+    let body: ReturnType<typeof normalizePost>; let clientId = '';
+    try { const raw = await readBody(request); body = normalizePost(raw); clientId = normalizeClientId(raw); } catch (e) { return json({ ok: false, error: e instanceof Error ? e.message : 'Invalid post.' }, 400); }
     if (!env.PC_RATES_KV) return json({ ok: false, error: 'Posting is temporarily unavailable. Nothing was saved.' }, 503);
     const ip = request.headers.get('CF-Connecting-IP') || 'local';
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip));
@@ -75,7 +105,8 @@ export async function handleShortwave(request: Request, env: ShortwaveEnv): Prom
     const id = `${String(9999999999999 - now).padStart(13, '0')}-${crypto.randomUUID()}`;
     const post: ShortwavePost = { ...body, id, at: new Date(now).toISOString(), attribution: 'self-reported' };
     await env.VISITS.put(PREFIX + id, JSON.stringify(post), { expirationTtl: TTL });
-    return json({ ok: true, post }, 201);
+    const live = await announce(env, post, clientId, request.url);
+    return json({ ok: true, post, live }, 201);
   } catch {
     return json({ ok: false, error: 'Shortwave could not complete this request. If you just posted, check the feed before retrying.' }, 503);
   }
