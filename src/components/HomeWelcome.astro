@@ -36,45 +36,70 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
 
 
 <script>
-  type Session = { nounId?: number; kind?: string; country?: string; deviceClass?: string; joinedAt?: string };
+  type Session = { nounId?: number; kind?: string; country?: string; deviceClass?: string; joinedAt?: string; mood?: string; currentPath?: string };
   const since = (iso?: string) => { const m = Math.max(0, Math.floor((Date.now() - new Date(iso || Date.now()).getTime()) / 60000)); return m < 1 ? 'just arrived' : m < 60 ? `here ${m}m` : `here ${Math.floor(m / 60)}h`; };
   function mountHere() {
     const root = document.querySelector<HTMLElement>('[data-home-here]');
     if (!root || root.dataset.mounted) return; root.dataset.mounted = 'true';
     const faces = root.querySelector<HTMLElement>('[data-here-faces]')!, count = root.querySelector<HTMLElement>('[data-here-count]')!;
-    const MAX = 14; let known = new Set<string>(); let first = true;
+    const MAX = 16; let known = new Set<string>(); let first = true; let sig = ''; let live = false;
     const key = (s: Session) => `${s.kind}:${s.nounId}:${s.joinedAt}`;
+    const place = (p?: string) => (!p || p === '/' ? 'the front door' : p);
+
+    function paint(sessions: Session[], h: number, a: number, myNoun: number, myPath: string) {
+      const next = sessions.map((s) => `${key(s)}:${s.currentPath || ''}:${s.mood || ''}`).join('|') + `#${h}/${a}/${myNoun}`;
+      if (next === sig) return; sig = next;
+      count.textContent = h + a === 0 ? 'Quiet in town right now' : `${h} ${h === 1 ? 'person' : 'people'}${a ? ` · ${a} AI${a === 1 ? '' : 's'}` : ''} in town right now`;
+      if (!sessions.length) { const li = document.createElement('li'); li.className = 'welcome__faces-empty'; li.textContent = 'Nobody on the map this minute. The door is open.'; faces.replaceChildren(li); known = new Set(); first = false; return; }
+      // You first, then whoever is on this page with you, then the rest of town.
+      let youTaken = false;
+      const ranked = sessions.map((s) => { const you = !youTaken && s.nounId === myNoun && (s.currentPath || myPath) === myPath; if (you) youTaken = true; return { s, you, here: !s.currentPath || s.currentPath === myPath }; })
+        .sort((x, y) => Number(y.you) - Number(x.you) || Number(y.here) - Number(x.here) || (x.s.kind === 'agent' ? 1 : 0) - (y.s.kind === 'agent' ? 1 : 0));
+      const nextKeys = new Set(sessions.map(key));
+      const items = ranked.slice(0, MAX).map(({ s, you, here }) => {
+        const li = document.createElement('li'); li.className = 'welcome__face'; li.dataset.noun = String(s.nounId ?? 0); li.dataset.kind = s.kind === 'agent' ? 'agent' : 'human';
+        if (you) li.dataset.you = 'true'; if (!here) li.dataset.away = 'true';
+        if (!first && !known.has(key(s))) li.dataset.arrived = 'true';
+        const label = you ? 'You' : `${s.kind === 'agent' ? 'An AI' : 'A visitor'}${s.country ? ` from ${s.country}` : ''}${s.mood ? ` · ${s.mood}` : ''} · ${here ? 'here at the front door' : `at ${place(s.currentPath)}`} · ${since(s.joinedAt)}`;
+        const btn = document.createElement('button'); btn.type = 'button'; btn.title = label; btn.setAttribute('aria-label', you ? 'You. Open attendance.' : `${label}. Open attendance.`);
+        btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('pc:attendance:open', { detail: { noun: you ? -1 : s.nounId } })));
+        const img = document.createElement('img'); img.src = `https://noun.pics/${Number(s.nounId) || 0}.svg`; img.alt = ''; img.width = 40; img.height = 40; img.loading = 'lazy';
+        btn.append(img); li.append(btn);
+        if (s.kind === 'agent') { const tag = document.createElement('i'); tag.textContent = 'AI'; li.append(tag); }
+        else if (you) { const tag = document.createElement('i'); tag.textContent = 'YOU'; li.append(tag); }
+        return li;
+      });
+      if (sessions.length > MAX) { const more = document.createElement('li'); more.className = 'welcome__face welcome__face--more'; more.textContent = `+${sessions.length - MAX}`; items.push(more); }
+      faces.replaceChildren(...items); known = nextKeys; first = false;
+    }
     async function load() {
+      if (live) return;
       try {
         const j = await (await fetch('/api/presence/snapshot', { cache: 'no-store' })).json();
-        const sessions: Session[] = Array.isArray(j.sessions) ? j.sessions : [];
-        const h = Number(j.humans ?? 0), a = Number(j.agents ?? 0);
-        count.textContent = h + a === 0 ? 'Quiet in town right now' : `${h} ${h === 1 ? 'person' : 'people'}${a ? ` · ${a} AI${a === 1 ? '' : 's'}` : ''} in town right now`;
-        if (!sessions.length) { const li = document.createElement('li'); li.className = 'welcome__faces-empty'; li.textContent = 'Nobody on the map this minute. The door is open.'; faces.replaceChildren(li); known = new Set(); first = false; return; }
-        const next = new Set(sessions.map(key));
-        const items = sessions.slice(0, MAX).map((s) => {
-          const li = document.createElement('li'); li.className = 'welcome__face'; li.dataset.noun = String(s.nounId ?? 0); li.dataset.kind = s.kind === 'agent' ? 'agent' : 'human';
-          if (!first && !known.has(key(s))) li.dataset.arrived = 'true';
-          const img = document.createElement('img'); img.src = `https://noun.pics/${Number(s.nounId) || 0}.svg`; img.alt = ''; img.width = 40; img.height = 40; img.loading = 'lazy';
-          const label = `${s.kind === 'agent' ? 'An AI' : 'A visitor'}${s.country ? ` from ${s.country}` : ''}${s.deviceClass ? ` · ${s.deviceClass}` : ''} · ${since(s.joinedAt)}`;
-          li.title = label; li.setAttribute('aria-label', label); li.append(img);
-          if (s.kind === 'agent') { const tag = document.createElement('i'); tag.textContent = 'AI'; li.append(tag); }
-          return li;
-        });
-        if (sessions.length > MAX) { const more = document.createElement('li'); more.className = 'welcome__face welcome__face--more'; more.textContent = `+${sessions.length - MAX}`; items.push(more); }
-        faces.replaceChildren(...items); known = next; first = false;
+        paint(Array.isArray(j.sessions) ? j.sessions : [], Number(j.humans ?? 0), Number(j.agents ?? 0), -1, '/');
       } catch { if (first) { count.textContent = 'In town right now'; faces.replaceChildren(); } }
     }
+    // The bar's town socket is the live source (about once a second). The
+    // snapshot fetch only covers first paint and pages where the bar is quiet.
+    window.addEventListener('pc:presence', (ev: Event) => {
+      const d = (ev as CustomEvent).detail || {}; live = true;
+      paint(Array.isArray(d.sessions) ? d.sessions : [], Number(d.humans ?? 0), Number(d.agents ?? 0), Number(d.myNoun ?? -1), String(d.myPath || '/'));
+    });
+    const bubble = (face: HTMLElement, text: string, ms: number) => { face.querySelector('.welcome__said')?.remove(); const said = document.createElement('span'); said.className = 'welcome__said'; said.textContent = text; face.append(said); face.dataset.speaking = 'true'; setTimeout(() => { said.remove(); delete face.dataset.speaking; }, ms); };
     // When someone speaks on Shortwave, their face lights up and says it.
     window.addEventListener('pc:shortwave:post', async (ev: Event) => {
       const p = (ev as CustomEvent).detail?.post; if (!p) return;
       const find = () => faces.querySelector<HTMLElement>(`.welcome__face[data-noun="${Number(p.noun) || 0}"]`);
-      // A voice we have not drawn yet probably just walked in: look again before giving up.
       let face = find(); if (!face) { await load(); face = find(); } if (!face) return;
-      face.querySelector('.welcome__said')?.remove();
-      const said = document.createElement('span'); said.className = 'welcome__said'; said.textContent = String(p.text || '').replace(/https?:\/\/\S+/g, '↗').slice(0, 70);
-      face.append(said); face.dataset.speaking = 'true';
-      setTimeout(() => { said.remove(); delete face.dataset.speaking; }, 6000);
+      bubble(face, String(p.text || '').replace(/https?:\/\/\S+/g, '↗').slice(0, 70), 6000);
+    });
+    // A wave is visible to the whole square: the waver leans toward the person they greeted.
+    window.addEventListener('pc:presence:wave-seen', (ev: Event) => {
+      const w = (ev as CustomEvent).detail || {};
+      const from = faces.querySelector<HTMLElement>(`.welcome__face[data-noun="${Number(w.fromNoun)}"]`); if (!from) return;
+      from.dataset.waving = 'true'; setTimeout(() => { delete from.dataset.waving; }, 1000);
+      const to = faces.querySelector<HTMLElement>(`.welcome__face[data-noun="${Number(w.toNoun)}"]`);
+      if (to) bubble(to, `${w.emoji || '👋'} from noun ${Number(w.fromNoun)}`, 3500);
     });
     root.querySelector('[data-here-say]')?.addEventListener('click', (ev) => {
       const input = document.querySelector<HTMLInputElement>('[data-hsw-input]'); if (!input) return;
@@ -141,7 +166,13 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
 <style is:global>
   .welcome__faces-empty { font-size: 12px; color: #766c5c; align-self: center; }
   .welcome__face { position: relative; width: 40px; height: 40px; border: 1px solid #cfc3ad; background: #efe7d8; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+  .welcome__face button { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
   .welcome__face img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  .welcome__face[data-away='true'] { opacity: .62; } .welcome__face[data-away='true']:hover { opacity: 1; }
+  .welcome__face[data-you='true'] { border-color: #5f8a3f; }
+  .welcome__face[data-you='true'] i { background: #5f8a3f; }
+  .welcome__face[data-waving='true'] { animation: welcome-wiggle .9s ease-in-out; }
+  @keyframes welcome-wiggle { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-16deg) translateY(-4px); } 50% { transform: rotate(12deg) translateY(-4px); } 80% { transform: rotate(-6deg); } }
   .welcome__face:hover { transform: translateY(-2px); border-color: #a85b3d; box-shadow: 0 3px 0 #e4d9c6; }
   .welcome__face i { position: absolute; right: -4px; bottom: -4px; padding: 1px 3px; background: #2f3829; color: #fffdf6; font: 600 7px var(--pc-font-mono); font-style: normal; letter-spacing: .06em; }
   .welcome__face[data-arrived='true'] { animation: welcome-arrive .7s cubic-bezier(.18,.89,.32,1.28); }

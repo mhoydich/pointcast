@@ -146,6 +146,8 @@ export function mountFooterBar(root, scope) {
           seismoOpen();
         } else if (id === 'my-ai') {
           renderAiHere();
+        } else if (id === 'attendance') {
+          renderAttendance();
         }
       } catch (e) {}
     }
@@ -432,6 +434,158 @@ export function mountFooterBar(root, scope) {
         if (!String($omni.value || '').trim()) hideBubble();
       }
     });
+
+    // ─── Attendance — many people and agents in the same town ────────
+    // The town socket (cursor-room) publishes `pc:presence` about once a
+    // second: every session's Noun, kind, mood and page, plus waves and
+    // vibes. The bar turns that into a crowd cluster, a tray of who is where,
+    // wave toasts and floating reactions. People on your page come first.
+    var $crowd      = root.querySelector('[data-pc-ref="fb-stamp-attendance"]');
+    var $crowdFaces = root.querySelector('[data-pc-ref="fb-crowd-faces"]');
+    var $crowdCount = root.querySelector('[data-pc-ref="fb-crowd-count"]');
+    var $attSum     = root.querySelector('[data-pc-ref="fb-att-sum"]');
+    var $attList    = root.querySelector('[data-pc-ref="fb-att-list"]');
+    var $attYou     = root.querySelector('[data-pc-ref="fb-att-you"]');
+    var $wave       = root.querySelector('[data-pc-ref="fb-wave"]');
+    var $vibes      = root.querySelector('[data-pc-ref="fb-vibes"]');
+    var att = { sessions: [], humans: 0, agents: 0, myNoun: -1, myPath: '/', said: {}, seen: {}, sig: '', focus: -1, primed: false, waveFrom: -1 };
+
+    function attSince(iso) { var m = Math.max(0, Math.floor((Date.now() - Date.parse(iso || '')) / 60000)); return !isFinite(m) || m < 1 ? 'just arrived' : m < 60 ? m + 'm here' : Math.floor(m / 60) + 'h here'; }
+    function attPlace(path) { return !path || path === '/' ? 'the front door' : path; }
+    function attName(s) { var k = att.said[s.nounId]; return k && k.who && k.who !== 'visitor' ? k.who : 'noun ' + s.nounId; }
+    function attOthers() {
+      var skippedSelf = false;
+      return att.sessions.filter(function (s) {
+        // The first session that matches this Noun on this page is you.
+        if (!skippedSelf && s.nounId === att.myNoun && (s.currentPath || att.myPath) === att.myPath) { skippedSelf = true; return false; }
+        return true;
+      }).sort(function (a, b) {
+        var ah = a.currentPath === att.myPath ? 0 : 1, bh = b.currentPath === att.myPath ? 0 : 1;
+        return ah - bh || (a.kind === 'agent' ? 1 : 0) - (b.kind === 'agent' ? 1 : 0) || String(b.joinedAt).localeCompare(String(a.joinedAt));
+      });
+    }
+    function attFace(s) {
+      var f = document.createElement('span'); f.className = 'fb__crowd-face';
+      f.setAttribute('data-noun', String(s.nounId)); f.setAttribute('data-kind', s.kind === 'agent' ? 'agent' : 'human');
+      if (s.currentPath === att.myPath) f.setAttribute('data-here', 'true');
+      var img = document.createElement('img'); img.src = 'https://noun.pics/' + s.nounId + '.svg'; img.alt = ''; img.width = 22; img.height = 22;
+      f.appendChild(img); return f;
+    }
+    function renderCrowd() {
+      if (!$crowd) return;
+      var others = attOthers(), total = att.humans + att.agents, here = others.filter(function (s) { return s.currentPath === att.myPath; }).length;
+      $crowdFaces.replaceChildren.apply($crowdFaces, others.slice(0, 4).map(attFace));
+      $crowdCount.textContent = String(Math.max(1, total));
+      $crowd.setAttribute('data-alone', others.length ? 'false' : 'true');
+      $crowd.title = others.length ? (total + ' in town' + (att.agents ? ' · ' + att.agents + ' AI' : '') + (here ? ' · ' + here + ' on this page with you' : '') + ' — open attendance') : 'Just you in town right now';
+      $crowd.setAttribute('aria-label', $crowd.title);
+    }
+    function attRow(s) {
+      var row = document.createElement('div'); row.className = 'fb-att__row'; row.setAttribute('data-noun', String(s.nounId));
+      if (s.nounId === att.focus) row.setAttribute('data-focus', 'true');
+      var img = document.createElement('img'); img.src = 'https://noun.pics/' + s.nounId + '.svg'; img.alt = ''; img.width = 34; img.height = 34;
+      var main = document.createElement('div');
+      var name = document.createElement('p'); name.className = 'fb-att__name'; var nm = document.createElement('span'); nm.textContent = attName(s); name.appendChild(nm);
+      if (s.kind === 'agent') { var ai = document.createElement('i'); ai.textContent = 'AI'; name.appendChild(ai); }
+      var sub = document.createElement('p'); sub.className = 'fb-att__sub';
+      var same = s.currentPath === att.myPath;
+      sub.textContent = [s.mood || '', s.kind === 'agent' ? 'reading along' : (same ? 'on this page' : 'at ' + attPlace(s.currentPath)), s.country || '', attSince(s.joinedAt)].filter(Boolean).join(' · ');
+      main.appendChild(name); main.appendChild(sub);
+      var k = att.said[s.nounId];
+      if (k && k.text && Date.now() - k.at < 30 * 60000) { var said = document.createElement('p'); said.className = 'fb-att__said'; said.textContent = '“' + k.text.slice(0, 120) + '”'; main.appendChild(said); }
+      var acts = document.createElement('div'); acts.className = 'fb-att__acts';
+      var wave = document.createElement('button'); wave.type = 'button'; wave.textContent = '👋'; wave.title = 'Wave'; wave.setAttribute('aria-label', 'Wave at ' + attName(s));
+      on(wave, 'click', function () { sendWave(s.nounId, ''); wave.disabled = true; wave.textContent = '✓'; setTimeout(function () { wave.disabled = false; wave.textContent = '👋'; }, 2500); });
+      acts.appendChild(wave);
+      if (s.kind !== 'agent' && !same) {
+        var bring = document.createElement('button'); bring.type = 'button'; bring.textContent = '⤵'; bring.title = 'Invite them to this page'; bring.setAttribute('aria-label', 'Invite ' + attName(s) + ' to this page');
+        on(bring, 'click', function () { sendWave(s.nounId, att.myPath); bring.disabled = true; bring.textContent = '✓'; setTimeout(function () { bring.disabled = false; bring.textContent = '⤵'; }, 2500); });
+        acts.appendChild(bring);
+        if (s.currentPath) { var go = document.createElement('a'); go.href = s.currentPath; go.textContent = 'join ↗'; go.title = 'Go to ' + attPlace(s.currentPath); acts.appendChild(go); }
+      }
+      var to = document.createElement('button'); to.type = 'button'; to.textContent = '↩'; to.title = 'Say something to them'; to.setAttribute('aria-label', 'Say something to ' + attName(s));
+      on(to, 'click', function () { closeAll(); $omni.value = '↩ ' + attName(s) + ' · '; applyOmniMode(); $omni.focus(); try { $omni.setSelectionRange($omni.value.length, $omni.value.length); } catch (e) {} });
+      acts.appendChild(to);
+      row.appendChild(img); row.appendChild(main); row.appendChild(acts);
+      return row;
+    }
+    function renderAttendance() {
+      if (!$attList) return;
+      var others = attOthers(), total = att.humans + att.agents;
+      $attSum.textContent = others.length ? (att.humans + (att.humans === 1 ? ' person' : ' people') + (att.agents ? ' · ' + att.agents + ' AI' + (att.agents === 1 ? '' : 's') : '') + ' in town, you included') : 'Just you in town right now';
+      var nodes = [];
+      if (!others.length) { var e = document.createElement('p'); e.className = 'fb-att__empty'; e.textContent = 'When someone else arrives, on any page, they show up here. You can wave, join them where they are, or say something to them.'; nodes.push(e); }
+      var ais = others.filter(function (s) { return s.kind === 'agent'; }), people = others.filter(function (s) { return s.kind !== 'agent'; });
+      var here = people.filter(function (s) { return s.currentPath === att.myPath; }), away = people.filter(function (s) { return s.currentPath !== att.myPath; });
+      if (here.length) { var h = document.createElement('p'); h.className = 'fb-att__group'; h.textContent = 'On this page with you · ' + here.length; nodes.push(h); here.forEach(function (s) { nodes.push(attRow(s)); }); }
+      if (away.length) { var a = document.createElement('p'); a.className = 'fb-att__group'; a.textContent = 'Elsewhere in town · ' + away.length; nodes.push(a); away.slice(0, 30).forEach(function (s) { nodes.push(attRow(s)); }); }
+      if (ais.length) { var g = document.createElement('p'); g.className = 'fb-att__group'; g.textContent = 'AIs in attendance · ' + ais.length; nodes.push(g); ais.slice(0, 20).forEach(function (s) { nodes.push(attRow(s)); }); }
+      $attList.replaceChildren.apply($attList, nodes);
+      if ($attYou) $attYou.textContent = 'You · noun ' + att.myNoun + ' · at ' + attPlace(att.myPath) + ' · as ' + swWho();
+      var focused = $attList.querySelector('[data-focus="true"]'); if (focused) try { focused.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+    }
+    function sendWave(toNoun, targetPath) {
+      var d = { type: 'wave', to: toNoun, emoji: targetPath ? '🫴' : '👋' }; if (targetPath) d.targetPath = targetPath;
+      window.dispatchEvent(new CustomEvent('pc:presence:send', { detail: d }));
+    }
+    function flashFace(noun, attr, ms) {
+      root.querySelectorAll('.fb__crowd-face[data-noun="' + noun + '"]').forEach(function (f) { f.setAttribute(attr, 'true'); setTimeout(function () { f.removeAttribute(attr); }, ms); });
+    }
+    function showWave(w) {
+      if (!$wave) return;
+      att.waveFrom = w.fromNoun;
+      var s = att.sessions.filter(function (x) { return x.nounId === w.fromNoun; })[0] || { nounId: w.fromNoun, kind: 'human' };
+      root.querySelector('[data-pc-ref="fb-wave-noun"]').src = 'https://noun.pics/' + w.fromNoun + '.svg';
+      var go = root.querySelector('[data-pc-ref="fb-wave-go"]');
+      var invited = w.targetPath && w.targetPath !== att.myPath;
+      root.querySelector('[data-pc-ref="fb-wave-text"]').textContent = invited ? attName(s) + ' is inviting you to ' + attPlace(w.targetPath) + '.' : attName(s) + ' waved at you ' + (w.emoji || '👋');
+      go.hidden = !invited; if (invited) { go.href = w.targetPath; go.textContent = 'go to ' + attPlace(w.targetPath) + ' →'; }
+      $wave.hidden = false;
+      clearTimeout($wave._t); $wave._t = setTimeout(function () { $wave.hidden = true; }, 9000);
+    }
+    function floatVibe(emoji) {
+      if (!$vibes || $vibes.childElementCount > 14) return;
+      var v = document.createElement('span'); v.className = 'fb-vibe'; v.textContent = emoji;
+      v.style.left = (8 + Math.random() * 84) + '%'; v.style.animationDuration = (2.2 + Math.random() * 1.2) + 's';
+      $vibes.appendChild(v); setTimeout(function () { try { v.remove(); } catch (e) {} }, 3600);
+    }
+    on(window, 'pc:presence', function (e) {
+      var d = (e && e.detail) || {};
+      att.sessions = Array.isArray(d.sessions) ? d.sessions : []; att.humans = d.humans || 0; att.agents = d.agents || 0;
+      att.myNoun = typeof d.myNoun === 'number' ? d.myNoun : swNoun(); att.myPath = d.myPath || '/';
+      var sig = att.sessions.map(function (s) { return s.nounId + s.kind + (s.currentPath || '') + (s.mood || ''); }).join('|') + '#' + att.humans + '/' + att.agents;
+      if (sig !== att.sig) { att.sig = sig; renderCrowd(); if (openPopover === 'tray:attendance') renderAttendance(); }
+      (d.waves || []).forEach(function (w) {
+        var key = 'w' + w.fromNoun + ':' + w.toNoun + ':' + w.at; if (att.seen[key]) return; att.seen[key] = 1;
+        if (!att.primed && Date.now() - w.at > 4000) return;
+        flashFace(w.fromNoun, 'data-waving', 1000);
+        window.dispatchEvent(new CustomEvent('pc:presence:wave-seen', { detail: w }));
+        if (w.toNoun === att.myNoun && w.fromNoun !== att.myNoun) showWave(w);
+      });
+      (d.vibes || []).forEach(function (v) {
+        var key = 'v' + v.fromNoun + ':' + v.at + ':' + v.emoji; if (att.seen[key]) return; att.seen[key] = 1;
+        if (!att.primed && Date.now() - v.at > 3000) return;
+        if (v.fromNoun === att.myNoun) return; // yours already floated when you tapped it
+        floatVibe(String(v.emoji || '✨'));
+      });
+      att.primed = true;
+    });
+    on(window, 'pc:shortwave:post', function (e) {
+      var p = e && e.detail && e.detail.post; if (!p) return;
+      att.said[Number(p.noun) || 0] = { who: String(p.who || ''), text: String(p.text || ''), at: Date.now() };
+      flashFace(Number(p.noun) || 0, 'data-speaking', 5000);
+      if (openPopover === 'tray:attendance') renderAttendance();
+    });
+    on(window, 'pc:attendance:open', function (e) { att.focus = Number(e && e.detail && e.detail.noun); if (isNaN(att.focus)) att.focus = -1; openTray('attendance'); });
+    if ($crowd) on($crowd, 'click', function () { att.focus = -1; if (openPopover === 'tray:attendance') closeAll(); else openTray('attendance'); });
+    root.querySelectorAll('.fb-att__vibes [data-vibe]').forEach(function (b) {
+      on(b, 'click', function () { var emoji = b.getAttribute('data-vibe'); window.dispatchEvent(new CustomEvent('pc:presence:send', { detail: { type: 'vibe', emoji: emoji } })); floatVibe(emoji); });
+    });
+    if ($wave) {
+      on(root.querySelector('[data-pc-ref="fb-wave-back"]'), 'click', function () { if (att.waveFrom >= 0) sendWave(att.waveFrom, ''); $wave.hidden = true; });
+      on(root.querySelector('[data-pc-ref="fb-wave-close"]'), 'click', function () { $wave.hidden = true; });
+    }
+    renderCrowd();
 
     // One path for anything said: the room hears it (bubble + ticker), and
     // Shortwave keeps it. The homepage panel uses the same path via

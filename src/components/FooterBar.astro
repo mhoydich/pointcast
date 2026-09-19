@@ -104,6 +104,14 @@ const pingable = RESIDENTS.filter(
       <span class="fb__dir-badge mono" data-pc-ref="fb-dir-badge" data-on="false" aria-hidden="true">★ DIR</span>
     </button>
 
+    <!-- ─── Attendance — who is in town (2026-09-19) ─────────────────
+         A cluster of the Nouns present, people on this page first. Opens the
+         attendance tray: who is here, where they are, wave, join, address. -->
+    <button type="button" class="fb__crowd" data-pc-ref="fb-stamp-attendance" aria-haspopup="dialog" aria-expanded="false" title="Who is in town">
+      <span class="fb__crowd-faces" data-pc-ref="fb-crowd-faces" aria-hidden="true"></span>
+      <span class="fb__crowd-count mono" data-pc-ref="fb-crowd-count">1</span>
+    </button>
+
     <!-- ─── Speech bubble — Mike 2026-04-30 ──────────────────────
          Appears above the YOU chip when room is on, others are
          present, and the omnibox is in SAY mode. typing → live
@@ -218,6 +226,32 @@ const pingable = RESIDENTS.filter(
     </header>
     <AiRuntime compact />
   </div>
+  <div class="fb__tray fb__tray--attendance" data-pc-ref="fb-tray-attendance" role="dialog" aria-modal="false" aria-label="Attendance — who is in town" hidden>
+    <div class="fb__tray-arrow" aria-hidden="true"></div>
+    <header class="fb__tray-head">
+      <span class="fb__tray-num mono">◉</span>
+      <h3 class="fb__tray-title">In town now</h3>
+      <button type="button" class="fb__tray-close" aria-label="Close">×</button>
+    </header>
+    <div class="fb__tray-body">
+      <p class="fb-att__sum mono" data-pc-ref="fb-att-sum">Counting heads…</p>
+      <div data-pc-ref="fb-att-list"></div>
+      <div class="fb-att__vibes" role="toolbar" aria-label="Send a reaction to everyone in town">
+        <span class="mono">TO THE WHOLE TOWN</span>
+        <button type="button" data-vibe="👏" aria-label="Clap">👏</button><button type="button" data-vibe="🔥" aria-label="Fire">🔥</button><button type="button" data-vibe="☕" aria-label="Coffee">☕</button><button type="button" data-vibe="🌊" aria-label="Wave of the sea">🌊</button><button type="button" data-vibe="❤️" aria-label="Heart">❤️</button>
+      </div>
+      <p class="fb-att__you mono" data-pc-ref="fb-att-you"></p>
+    </div>
+  </div>
+
+  <!-- Someone waved at you. Server-rendered so styles apply; text set by script. -->
+  <div class="fb-wave" data-pc-ref="fb-wave" role="status" aria-live="polite" hidden>
+    <img data-pc-ref="fb-wave-noun" src="https://noun.pics/0.svg" alt="" width="34" height="34" />
+    <p data-pc-ref="fb-wave-text"></p>
+    <div><button type="button" data-pc-ref="fb-wave-back">wave back 👋</button><a data-pc-ref="fb-wave-go" href="/" hidden>go →</a><button type="button" class="fb-wave__x" data-pc-ref="fb-wave-close" aria-label="Dismiss">×</button></div>
+  </div>
+  <div class="fb-vibes" data-pc-ref="fb-vibes" aria-hidden="true"></div>
+
   <div class="fb__tray" data-pc-ref="fb-tray-room" role="dialog" aria-modal="false" aria-label="Room — cursors and chat" hidden>
     <div class="fb__tray-arrow" aria-hidden="true"></div>
     <header class="fb__tray-head">
@@ -903,7 +937,7 @@ const pingable = RESIDENTS.filter(
   .fb__bar {
     pointer-events: auto;
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto auto 1fr auto;
     align-items: center;
     gap: 8px;
     padding: 4px 10px;
@@ -2364,4 +2398,62 @@ const pingable = RESIDENTS.filter(
     .fb-holo[data-earned='true'] .fb-holo__foil { animation: none; }
     .fb-holo { transition: none; }
   }
+</style>
+
+<style is:global>
+  /* Attendance — rows and faces are made by script, so these are global. */
+  .fb__crowd { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px 0 5px; border: 1px solid rgba(255, 200, 120, 0.22); border-radius: 3px; background: rgba(255, 253, 246, 0.06); color: #fdf2d6; cursor: pointer; }
+  .fb__crowd:hover, .fb__crowd[aria-expanded='true'] { background: rgba(255, 253, 246, 0.14); border-color: rgba(255, 200, 120, 0.6); }
+  .fb__crowd-faces { display: inline-flex; align-items: center; }
+  .fb__crowd-face { width: 22px; height: 22px; margin-left: -7px; border: 1.5px solid #1a1713; border-radius: 50%; background: #efe7d8; overflow: hidden; transition: transform .2s ease, box-shadow .2s ease; }
+  .fb__crowd-face:first-child { margin-left: 0; }
+  .fb__crowd-face img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  .fb__crowd-face[data-here='true'] { border-color: #9fd36a; }
+  .fb__crowd-face[data-kind='agent'] { border-color: #a78bfa; }
+  .fb__crowd-face[data-speaking='true'] { transform: translateY(-3px) scale(1.15); box-shadow: 0 0 0 3px rgba(255, 210, 122, 0.55); z-index: 2; }
+  .fb__crowd-face[data-waving='true'] { animation: fb-wiggle .9s ease-in-out; }
+  @keyframes fb-wiggle { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-18deg) translateY(-3px); } 50% { transform: rotate(14deg) translateY(-3px); } 80% { transform: rotate(-8deg); } }
+  .fb__crowd-count { font-size: 10px; letter-spacing: 0.08em; font-weight: 700; color: #f9c56c; }
+  .fb__crowd[data-alone='true'] .fb__crowd-count { color: rgba(253, 242, 214, 0.5); }
+
+  .fb__tray--attendance { width: min(380px, calc(100vw - 16px)); }
+  .fb-att__sum { margin: 0 0 10px; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #7a5a1e; }
+  .fb-att__group { margin: 12px 0 5px; font: 700 9px var(--pc-font-mono, ui-monospace, monospace); letter-spacing: 0.16em; text-transform: uppercase; color: #4e3a16; }
+  .fb-att__group:first-child { margin-top: 0; }
+  .fb-att__row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 6px; border: 1px solid #e3d5b4; background: #fffdf6; margin-bottom: 4px; }
+  .fb-att__row[data-focus='true'] { border-color: #185fa5; box-shadow: 0 0 0 2px rgba(24, 95, 165, 0.2); }
+  .fb-att__row > img { width: 34px; height: 34px; border: 1px solid #d4c6a4; background: #efe7d8; image-rendering: pixelated; }
+  .fb-att__name { margin: 0; font-size: 13px; font-weight: 650; color: #2d1f08; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .fb-att__name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fb-att__name i { flex-shrink: 0; padding: 1px 4px; background: #6d4fc2; color: #fff; font: 700 8px var(--pc-font-mono, monospace); font-style: normal; letter-spacing: 0.08em; }
+  .fb-att__sub { margin: 1px 0 0; font: 500 9.5px/1.4 var(--pc-font-mono, monospace); letter-spacing: 0.03em; color: #7a6a48; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fb-att__said { margin: 3px 0 0; font: italic 12px/1.35 Georgia, serif; color: #4e3a16; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .fb-att__acts { display: flex; gap: 3px; }
+  .fb-att__acts button, .fb-att__acts a { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border: 1px solid #d4c6a4; background: #fff; color: #2d1f08; font-size: 13px; line-height: 1; text-decoration: none; cursor: pointer; border-radius: 2px; }
+  .fb-att__acts button:hover, .fb-att__acts a:hover { border-color: #4e3a16; background: #faf2dc; }
+  .fb-att__acts button:disabled { opacity: 0.45; cursor: default; }
+  .fb-att__acts a { font: 600 10px var(--pc-font-mono, monospace); letter-spacing: 0.04em; }
+  .fb-att__empty { margin: 4px 0 8px; font-size: 13px; line-height: 1.45; color: #4e3a16; }
+  .fb-att__vibes { display: flex; align-items: center; gap: 4px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e3d5b4; }
+  .fb-att__vibes span { margin-right: auto; font-size: 8.5px; letter-spacing: 0.14em; color: #7a5a1e; }
+  .fb-att__vibes button { width: 34px; height: 32px; border: 1px solid #d4c6a4; background: #fff; border-radius: 2px; font-size: 16px; cursor: pointer; }
+  .fb-att__vibes button:hover { border-color: #4e3a16; transform: translateY(-1px); }
+  .fb-att__you { margin: 9px 0 0; font-size: 9px; letter-spacing: 0.08em; color: #7a6a48; text-transform: uppercase; }
+
+  .fb-wave { pointer-events: auto; position: fixed; left: 12px; bottom: 52px; z-index: 48; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 4px 10px; align-items: center; width: min(320px, calc(100vw - 24px)); padding: 10px 12px; background: #fffdf6; color: #2d1f08; border: 1px solid #4e3a16; border-radius: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); animation: fb-wave-in .3s cubic-bezier(.18,.89,.32,1.28); }
+  .fb-wave[hidden] { display: none; }
+  @keyframes fb-wave-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+  .fb-wave img { width: 34px; height: 34px; border: 1px solid #d4c6a4; background: #efe7d8; image-rendering: pixelated; }
+  .fb-wave p { margin: 0; font-size: 13.5px; line-height: 1.35; }
+  .fb-wave div { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+  .fb-wave button, .fb-wave a { padding: 6px 10px; border: 1px solid #4e3a16; background: #2f3829; color: #fffdf6; font: 600 11px var(--pc-font-mono, monospace); letter-spacing: 0.04em; text-decoration: none; border-radius: 2px; cursor: pointer; }
+  .fb-wave a[hidden] { display: none; }
+  .fb-wave a { background: #185fa5; border-color: #185fa5; }
+  .fb-wave .fb-wave__x { margin-left: auto; background: none; color: #7a6a48; border-color: transparent; font-size: 15px; padding: 2px 6px; }
+
+  .fb-vibes { position: fixed; left: 0; right: 0; bottom: 44px; height: 0; z-index: 47; pointer-events: none; }
+  .fb-vibe { position: absolute; bottom: 0; font-size: 26px; line-height: 1; animation: fb-vibe-up 2.6s ease-out forwards; will-change: transform, opacity; }
+  @keyframes fb-vibe-up { 0% { transform: translateY(0) scale(.6); opacity: 0; } 12% { opacity: 1; transform: translateY(-24px) scale(1.1); } 100% { transform: translateY(-46vh) scale(1); opacity: 0; } }
+  @media (max-width: 640px) { .fb__crowd { padding: 0 6px 0 4px; } .fb__crowd-face:nth-child(n+3) { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .fb__crowd-face[data-waving='true'], .fb-wave, .fb-vibe { animation: none; } .fb-vibe { opacity: .9; transform: translateY(-80px); } }
 </style>
