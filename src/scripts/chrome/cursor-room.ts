@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { fetchPreview, firstUrl, tidyText } from '../../lib/shortwave-client';
 export function mountCursorRoom(ROOT, scope) {
     const {
       on, setTimeout, clearTimeout, setInterval, clearInterval,
@@ -146,7 +147,12 @@ export function mountCursorRoom(ROOT, scope) {
         who.textContent = entry.who || 'visitor';
         var msg = document.createElement('span');
         msg.className = 'cr-log__msg';
-        msg.textContent = entry.msg;
+        // One readable line: a place instead of coordinates, a title instead of a long link.
+        msg.textContent = tidyText(entry.msg);
+        (function (el, raw) {
+          var url = firstUrl(raw);
+          if (url) fetchPreview(url).then(function (preview) { if (preview && el.isConnected) el.textContent = tidyText(raw, preview); });
+        })(msg, String(entry.msg || ''));
         li.appendChild(who);
         li.appendChild(msg);
         $logList.appendChild(li);
@@ -612,8 +618,7 @@ export function mountCursorRoom(ROOT, scope) {
       var d = (e && e.detail) || {};
       var p = d.post;
       if (!p || d.own) return;
-      // The ticker is one short line: a pin instead of coordinates, a note instead of a long link.
-      var msg = String(p.text || '').replace(/📍\s*-?\d{1,2}\.\d+,\s*-?\d{1,3}\.\d+/g, '📍').replace(/https?:\/\/open\.spotify\.com\/\S+/g, 'spotify').slice(0, 120);
+      var msg = String(p.text || '').slice(0, 120);
       if (!msg) return;
       // Someone on this same page also arrives as a room chat line. Let that
       // land first, then only add the post if the ticker does not have it.
