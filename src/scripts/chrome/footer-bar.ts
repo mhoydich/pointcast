@@ -381,10 +381,10 @@ export function mountFooterBar(root, scope) {
       window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: post, own: false, live: true } }));
       swFlashFeed();
     });
-    function postShortwave(text) {
+    function postShortwave(text, via) {
       var body = Array.from(String(text || '')).slice(0, AIR_MAX).join('');
       if (!body.trim()) return;
-      fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: body, who: swWho(), noun: swNoun(), via: 'bar', clientId: swSid() }) })
+      fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: body, who: swWho(), noun: swNoun(), via: via === 'page' ? 'page' : 'bar', clientId: swSid() }) })
         .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); })
         .then(function (res) {
           if (res.j && res.j.ok && res.j.post) {
@@ -436,14 +436,14 @@ export function mountFooterBar(root, scope) {
     // One path for anything said: the room hears it (bubble + ticker), and
     // Shortwave keeps it. The homepage panel uses the same path via
     // pc:shortwave:say so a single word can never be mistaken for a route.
-    function sayLine(raw) {
+    function sayLine(raw, via) {
       raw = String(raw || '').trim();
       if (!raw) return;
       window.dispatchEvent(new CustomEvent('pc:room:chat', { detail: { msg: raw } }));
       try { showBubble(raw, 4000, true); } catch (e) {}
-      try { postShortwave(raw); } catch (e) {}
+      try { postShortwave(raw, via); } catch (e) {}
     }
-    on(window, 'pc:shortwave:say', function (e) { sayLine(e && e.detail && e.detail.text); });
+    on(window, 'pc:shortwave:say', function (e) { var d = (e && e.detail) || {}; sayLine(d.text, d.via === 'page' ? 'page' : 'bar'); });
 
     // Enter always submits. Implicit form submission is not reliable across
     // mobile keyboards and automation, and the bar is now the town composer.

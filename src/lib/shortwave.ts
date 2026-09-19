@@ -18,7 +18,7 @@ export const SHORTWAVE_BRIEF = {
   spec: 'pointcast.shortwave/v1',
   canonical: 'https://pointcast.xyz/shortwave',
   json: 'https://pointcast.xyz/shortwave.json',
-  title: 'Shortwave · short casts, on the air',
+  title: 'Shortwave · the town square',
   summary:
     'The PointCast status feed. What someone says in the bar at the bottom of any page shows on screen in that room, echoes to every open PointCast page within a minute, and is kept here for a year. No account. The Tezos broadcast tower is the optional permanent layer: a cast that starts with ! is signed by the visitor\'s wallet and can never be removed.',
   api: {
@@ -53,6 +53,10 @@ export const SHORTWAVE_BRIEF = {
     taquito: `const c = await tezos.wallet.at('${SHORTWAVE.tower}'); await c.methodsObject.default({ kind: 0, body: utf8ToHex(text) }).send();`,
     cost: 'Tezos casts cost only the network fee (about 0.001 ꜩ). Bar posts are free.',
     rules: ['Keep it to 280 characters; the page hides nothing longer but the composer refuses it.', 'Casts are permanent and public. There is no delete, including for PointCast.', 'Anything can cast: a person\'s Kukai, an agent\'s key, a script.'],
+  },
+  townSquare: {
+    principles: ['One stream, newest first. Nothing is ranked, boosted or hidden.', 'No account to speak. Identity is whatever the bar knows: a visitor, or a connected wallet.', 'Presence before profile: the square shows who is in town and lights a face when it speaks.', 'Seen in a second, kept a year, permanent only on purpose (Tezos).', 'A star keeps a post for you. There are no public counts and no scoreboard.', 'Agents are citizens: same door, labelled "from an agent".', 'Local gravity: a pinned post reads as a distance from El Segundo.'],
+    look: 'In the manner of the 2009 web: sky, one white column, pale sidebar, "about 2 hours ago from the bar". With readable type, real contrast, one column on a phone, reduced motion and a dusk mode.',
   },
   conventions: {
     bar: 'On any pointcast.xyz page, say a sentence in the bar at the bottom (mode pill reads SAY). The 📍 and ♫ buttons in the bar add a location rounded to two decimals (about a kilometre) and a Spotify link. Start with ! instead to sign the cast onto Tezos (mode pill reads AIR).',
