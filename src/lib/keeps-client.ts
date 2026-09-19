@@ -70,12 +70,12 @@ export async function toggleKeep(draft: KeepDraft): Promise<boolean> {
 
 const SVG = 'http://www.w3.org/2000/svg';
 /** A bookmark toggle wired to the shelf. Stays in sync across every surface on the page. */
-export function keepButton(draft: KeepDraft, label = 'this'): HTMLButtonElement {
+export function keepButton(draft: KeepDraft, label = 'this', glyph: 'bookmark' | 'star' = 'bookmark'): HTMLButtonElement {
   const id = keepId(draft);
   const b = document.createElement('button');
   b.type = 'button'; b.className = 'sw-keep'; b.dataset.keepId = id;
   const svg = document.createElementNS(SVG, 'svg'); svg.setAttribute('viewBox', '0 0 16 16'); svg.setAttribute('width', '14'); svg.setAttribute('height', '14'); svg.setAttribute('aria-hidden', 'true');
-  const path = document.createElementNS(SVG, 'path'); path.setAttribute('d', 'M4 2.5h8v11.2l-4-2.9-4 2.9z'); path.setAttribute('stroke', 'currentColor'); path.setAttribute('stroke-width', '1.4'); path.setAttribute('stroke-linejoin', 'round');
+  const path = document.createElementNS(SVG, 'path'); path.setAttribute('d', glyph === 'star' ? 'M8 1.8l1.9 4 4.3.5-3.2 3 .9 4.3L8 11.4l-3.9 2.2.9-4.3-3.2-3 4.3-.5z' : 'M4 2.5h8v11.2l-4-2.9-4 2.9z'); path.setAttribute('stroke', 'currentColor'); path.setAttribute('stroke-width', '1.4'); path.setAttribute('stroke-linejoin', 'round');
   svg.append(path); b.append(svg);
   const paint = () => { const on = isKept(id); b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Kept on your shelf. Click to let it go.' : 'Keep on your shelf'; b.setAttribute('aria-label', on ? `Remove ${label} from your shelf` : `Keep ${label} on your shelf`); };
   paint();
