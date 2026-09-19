@@ -82,6 +82,7 @@ import '../styles/shortwave-shared.css';
       } catch { if (!posts.length) { const li = document.createElement('li'); li.className = 'hsw__empty'; li.textContent = 'Shortwave is out of range right now.'; list.replaceChildren(li); } }
     }
     async function presence() {
+      if (livePresence) return;
       try { const j = await (await fetch('/api/presence/snapshot', { cache: 'no-store' })).json(); const h = Number(j.humans ?? 0), a = Number(j.agents ?? 0); here.textContent = h + a > 0 ? `${h + a} here now${a ? ` · ${a} AI` : ''}` : 'live'; }
       catch { here.textContent = 'live'; }
     }
@@ -92,6 +93,8 @@ import '../styles/shortwave-shared.css';
       if (d.post) add(d.post as Post, true);
       if (d.own) note.textContent = d.live === false ? 'Said. It is on Shortwave.' : 'Said. Live across town, and kept on Shortwave.';
     });
+    let livePresence = false;
+    window.addEventListener('pc:presence', (ev: Event) => { const d = (ev as CustomEvent).detail || {}; livePresence = true; const h = Number(d.humans ?? 0), a = Number(d.agents ?? 0); here.textContent = h + a > 0 ? `${h + a} here now${a ? ` · ${a} AI` : ''}` : 'live'; });
     window.addEventListener('pc:keeps:change', (ev: Event) => paintKept(((ev as CustomEvent).detail?.keeps || []).length));
 
     form.addEventListener('submit', async (ev) => {

@@ -384,7 +384,32 @@ export function mountCursorRoom(ROOT, scope) {
       }
     }
 
+    // ─── attendance (the town socket) ───────────────────────────
+    function townNoun() {
+      var m = String((document.querySelector('[data-pc-ref="fb-noun"]') || {}).src || '').match(/(\d+)\.svg/);
+      var n = m ? parseInt(m[1], 10) : mySeedNoun();
+      return n >= 0 && n < 1200 ? n : mySeedNoun();
+    }
+    function townPath() { var p = String(location.pathname || '/'); return /^\/[A-Za-z0-9/_\-.]*$/.test(p) && p.indexOf('//') === -1 && p.length <= 200 ? p : '/'; }
+    function sendTown(type) {
+      if (state.burstWsState !== 'open' || !state.burstWs) return;
+      var mood = ''; try { mood = String(localStorage.getItem('pc:music:mood') || '').slice(0, 32); } catch (e) {}
+      try { state.burstWs.send(JSON.stringify({ type: type, nounId: townNoun(), tag: resolveMeTag(), mood: mood, currentPath: townPath() })); } catch (e) {}
+    }
+    on(window, 'pc:mood-changed', function () { setTimeout(function () { sendTown('update'); }, 50); });
+    on(window, 'pc:wallet-change', function () { setTimeout(function () { sendTown('update'); }, 400); });
+    // The bar and the front door ask the town socket to carry a wave or a vibe.
+    on(window, 'pc:presence:send', function (e) {
+      var d = (e && e.detail) || {};
+      if (d.type !== 'wave' && d.type !== 'vibe') return;
+      if (state.burstWsState !== 'open' || !state.burstWs) return;
+      try { state.burstWs.send(JSON.stringify(d)); } catch (err) {}
+    });
+
     function applyBurstPayload(payload) {
+      if (payload && Array.isArray(payload.sessions)) {
+        window.dispatchEvent(new CustomEvent('pc:presence', { detail: { humans: payload.humans || 0, agents: payload.agents || 0, sessions: payload.sessions, waves: payload.waves || [], vibes: payload.vibes || [], you: payload.you || null, myNoun: townNoun(), myPath: townPath() } }));
+      }
       if (!payload || !Array.isArray(payload.bursts)) return;
       var fresh = [];
       for (var i = 0; i < payload.bursts.length; i++) {
@@ -417,6 +442,9 @@ export function mountCursorRoom(ROOT, scope) {
       on(ws, 'open', function () {
         state.burstWsState = 'open';
         state.burstBackoffMs = 800;
+        // Attendance: tell the town which Noun this is, its mood and its page,
+        // so faces match posts everywhere and people can find each other.
+        sendTown('identify');
         if (state.burstPingTimer) clearInterval(state.burstPingTimer);
         state.burstPingTimer = setInterval(function () {
           if (state.burstWsState === 'open') try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
