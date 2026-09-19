@@ -47,3 +47,18 @@ test('the list is cacheable for the bar poll, pages are not, CORS is open', asyn
   const o = await handleShortwave(new Request(URL_, { method: 'OPTIONS' }), e);
   assert.equal(o.status, 204); assert.equal(o.headers.get('Access-Control-Allow-Origin'), '*');
 });
+test('a saved post is announced on the presence bus in two halves, and a quiet bus never fails the post', async () => {
+  const sent = [];
+  const PRESENCE = { idFromName: (n) => n, get: () => ({ fetch: async (req) => { sent.push({ url: req.url, body: await req.json() }); return new Response('{"ok":true}'); } }) };
+  const e = { ...env(), PRESENCE };
+  const long = 'x'.repeat(150) + ' tail';
+  const res = await (await handleShortwave(post({ text: long, who: 'frog', noun: 779, clientId: 'abc-123' }), e)).json();
+  assert.equal(res.live, true); assert.equal(sent.length, 1);
+  assert.match(sent[0].url, /\/burst$/); assert.equal(sent[0].body.kind, 'cast');
+  assert.deepEqual(sent[0].body.by, { handle: 'frog', noun: 779 });
+  const m = sent[0].body.meta; assert.equal(m.shortwave, true); assert.equal(m.id, res.post.id); assert.equal(m.t1 + m.t2, long); assert.ok(m.t1.length <= 160); assert.equal(m.clientId, 'abc-123');
+  const broken = { ...env(), PRESENCE: { idFromName: () => 'g', get: () => ({ fetch: async () => { throw Error('down'); } }) } };
+  const quiet = await handleShortwave(post({ text: 'still saved', clientId: '<bad id>' }), broken);
+  assert.equal(quiet.status, 201); assert.equal((await quiet.json()).live, false);
+  assert.equal((await (await handleShortwave(post({ text: 'no bus bound' }), env())).json()).live, false);
+});

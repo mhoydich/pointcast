@@ -152,6 +152,19 @@ export function mountCursorRoom(ROOT, scope) {
         $logList.appendChild(li);
       });
       window.dispatchEvent(new CustomEvent('pc:room:log-update', { detail: { log: log } }));
+      // The ticker is a notification, not furniture: it shows for new lines,
+      // then tucks away so it stops covering the page. Hover keeps it open.
+      var newest = log[log.length - 1];
+      var newestKey = newest ? String(newest.id || '') + '|' + String(newest.at || '') + '|' + String(newest.msg || '') : '';
+      if (newestKey !== state.logNewestKey) {
+        state.logNewestKey = newestKey;
+        $log.removeAttribute('data-tucked');
+        if (state.logTuckTimer) clearTimeout(state.logTuckTimer);
+        state.logTuckTimer = setTimeout(function tuck() {
+          if ($log.matches(':hover')) { state.logTuckTimer = setTimeout(tuck, 4000); return; }
+          $log.setAttribute('data-tucked', 'true');
+        }, 14000);
+      }
     }
 
     function pushLocalLogEntry(entry) {
@@ -599,10 +612,15 @@ export function mountCursorRoom(ROOT, scope) {
       var d = (e && e.detail) || {};
       var p = d.post;
       if (!p || d.own) return;
-      var msg = String(p.text || '').slice(0, 120);
+      // The ticker is one short line: a pin instead of coordinates, a note instead of a long link.
+      var msg = String(p.text || '').replace(/📍\s*-?\d{1,2}\.\d+,\s*-?\d{1,3}\.\d+/g, '📍').replace(/https?:\/\/open\.spotify\.com\/\S+/g, 'spotify').slice(0, 120);
       if (!msg) return;
-      if (loadLog().slice(-8).some(function (x) { return x && x.msg === msg; })) return;
-      if (pushLocalLogEntry({ id: 'sw:' + p.id, who: '◉ ' + String(p.who || 'visitor').slice(0, 24), nounId: p.noun || 0, msg: msg, at: Date.parse(p.at) || Date.now() })) renderLog();
+      // Someone on this same page also arrives as a room chat line. Let that
+      // land first, then only add the post if the ticker does not have it.
+      setTimeout(function () {
+        if (loadLog().slice(-8).some(function (x) { return x && x.msg === msg; })) return;
+        if (pushLocalLogEntry({ id: 'sw:' + p.id, who: '◉ ' + String(p.who || 'visitor').slice(0, 24), nounId: p.noun || 0, msg: msg, at: Date.parse(p.at) || Date.now() })) renderLog();
+      }, 1500);
     });
     on(window, 'pc:burst:request', function (e) {
       postBurst(e && e.detail);

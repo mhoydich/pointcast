@@ -40,6 +40,8 @@ export function mountDockBurstTicker(scope) {
   on(window, 'pc:burst:seen', (event) => {
     const burst = (event as CustomEvent<Burst>).detail;
     if (!burst) return;
+    // A Shortwave post shows as a full line in the room ticker (same corner); skip the one-line toast.
+    if (burst.kind === 'cast' && burst.meta?.shortwave) { track('dock', { path: location.pathname.slice(0, 120), action: 'burst_seen', burstKind: 'shortwave' }); return; }
     document.querySelectorAll<HTMLElement>('[data-pc-ref="fb-burst"]').forEach((ticker) => {
       ticker.textContent = describe(burst);
       ticker.hidden = false;
