@@ -162,7 +162,11 @@ export function mountCursorRoom(ROOT, scope) {
       // then tucks away so it stops covering the page. Hover keeps it open.
       var newest = log[log.length - 1];
       var newestKey = newest ? String(newest.id || '') + '|' + String(newest.at || '') + '|' + String(newest.msg || '') : '';
-      if (newestKey !== state.logNewestKey) {
+      if (state.logNewestKey === undefined) {
+        // First paint: these are lines from before you arrived. Stay tucked until something new is said.
+        state.logNewestKey = newestKey;
+        $log.setAttribute('data-tucked', 'true');
+      } else if (newestKey !== state.logNewestKey) {
         state.logNewestKey = newestKey;
         $log.removeAttribute('data-tucked');
         if (state.logTuckTimer) clearTimeout(state.logTuckTimer);
@@ -401,14 +405,15 @@ export function mountCursorRoom(ROOT, scope) {
     // The bar and the front door ask the town socket to carry a wave or a vibe.
     on(window, 'pc:presence:send', function (e) {
       var d = (e && e.detail) || {};
-      if (d.type !== 'wave' && d.type !== 'vibe') return;
+      // wave, vibe, or a drum hit (the only signal the page may send on the town socket)
+      if (d.type !== 'wave' && d.type !== 'vibe' && !(d.type === 'signal' && /^drum:(kick|bloom|dew|thorn)$/.test(String(d.event || '')))) return;
       if (state.burstWsState !== 'open' || !state.burstWs) return;
       try { state.burstWs.send(JSON.stringify(d)); } catch (err) {}
     });
 
     function applyBurstPayload(payload) {
       if (payload && Array.isArray(payload.sessions)) {
-        window.dispatchEvent(new CustomEvent('pc:presence', { detail: { humans: payload.humans || 0, agents: payload.agents || 0, sessions: payload.sessions, waves: payload.waves || [], vibes: payload.vibes || [], you: payload.you || null, myNoun: townNoun(), myPath: townPath() } }));
+        window.dispatchEvent(new CustomEvent('pc:presence', { detail: { humans: payload.humans || 0, agents: payload.agents || 0, sessions: payload.sessions, waves: payload.waves || [], vibes: payload.vibes || [], signals: payload.signals || [], mySid: String(state.sid || '').slice(0, 8), you: payload.you || null, myNoun: townNoun(), myPath: townPath() } }));
       }
       if (!payload || !Array.isArray(payload.bursts)) return;
       var fresh = [];

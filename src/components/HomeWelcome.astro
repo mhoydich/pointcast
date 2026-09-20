@@ -13,6 +13,15 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
     <section class="welcome__here" data-home-here aria-label="Who is in town right now">
       <p class="welcome__here-head"><span class="welcome__here-dot" aria-hidden="true"></span><b data-here-count>In town right now</b><a href="/shortwave" data-here-say>Say hi <span aria-hidden="true">↗</span></a></p>
       <ol class="welcome__faces" data-here-faces aria-live="polite"><li class="welcome__faces-empty">Counting heads…</li></ol>
+      <div class="welcome__drums" data-home-drums role="group" aria-label="Drum with the town: four pads">
+        <p class="welcome__drums-head"><b>Drum with the town</b><span data-drum-state>tap a pad · everyone here hears it</span><a href="/drum">the drum house <span aria-hidden="true">↗</span></a></p>
+        <div class="welcome__pads">
+          <button type="button" data-pad="kick" style="--pad:#efe6ce" aria-label="Root: low and round. Keyboard A"><i aria-hidden="true"></i><strong>Root</strong><small>A</small></button>
+          <button type="button" data-pad="bloom" style="--pad:#f3a0a6" aria-label="Bloom: paper snap. Keyboard S"><i aria-hidden="true"></i><strong>Bloom</strong><small>S</small></button>
+          <button type="button" data-pad="dew" style="--pad:#f4d83e" aria-label="Dew: silver air. Keyboard K"><i aria-hidden="true"></i><strong>Dew</strong><small>K</small></button>
+          <button type="button" data-pad="thorn" style="--pad:#7aa279" aria-label="Thorn: dry bite. Keyboard L"><i aria-hidden="true"></i><strong>Thorn</strong><small>L</small></button>
+        </div>
+      </div>
     </section>
     <ol class="welcome__doors" aria-label="Ways in">
       <li><span class="welcome__door-no" aria-hidden="true">01</span><div><h2>Make yourself at home.</h2><p>A profile, linked identities, the posts and links you keep, and the objects you collect.</p></div><a href="/auth">Sign in <span aria-hidden="true">↗</span></a></li>
@@ -105,6 +114,59 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
       const input = document.querySelector<HTMLInputElement>('[data-hsw-input]'); if (!input) return;
       ev.preventDefault(); input.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); input.focus({ preventScroll: true });
     });
+    // ── Drum with the town ─────────────────────────────────────────
+    // The pads play through the Rosebud synth further down this page (one
+    // engine, one count). Every real hit also rides the town socket as a
+    // `drum:<pad>` signal, so other people hear it softly and see who hit it.
+    const drums = root.querySelector<HTMLElement>('[data-home-drums]');
+    if (drums) {
+      const state = drums.querySelector<HTMLElement>('[data-drum-state]')!;
+      const hues: Record<string, number> = { kick: 45, bloom: 355, dew: 52, thorn: 120 };
+      const seenSignals = new Set<string>(); const drummers = new Map<number, number>();
+      let lastSent = 0, primed = false, mine = 0, hasSynth = !!document.querySelector('[data-play-first]');
+      const padEl = (d: string) => drums.querySelector<HTMLElement>(`[data-pad="${d}"]`);
+      const flash = (d: string, noun?: number) => {
+        const pad = padEl(d); if (!pad) return;
+        pad.dataset.hit = 'true'; setTimeout(() => { delete pad.dataset.hit; }, 110);
+        if (noun === undefined) return;
+        const chip = document.createElement('img'); chip.className = 'welcome__pad-noun'; chip.src = `https://noun.pics/${noun}.svg`; chip.alt = ''; chip.width = 22; chip.height = 22;
+        chip.style.left = `${18 + Math.random() * 64}%`; pad.append(chip); setTimeout(() => chip.remove(), 900);
+      };
+      const paintState = () => {
+        const now = Date.now(); for (const [n, t] of drummers) if (now - t > 8000) drummers.delete(n);
+        const others = drummers.size;
+        state.textContent = others ? `${others} ${others === 1 ? 'other is' : 'others are'} drumming right now${mine ? ` · you: ${mine}` : ''}` : mine ? `you: ${mine} hit${mine === 1 ? '' : 's'} · they count in the drum house` : 'tap a pad · everyone here hears it';
+        drums.dataset.live = others ? 'true' : 'false';
+      };
+      drums.querySelectorAll<HTMLButtonElement>('[data-pad]').forEach((b) => {
+        const go = (ev: Event) => { ev.preventDefault(); const d = b.dataset.pad!; if (hasSynth) window.dispatchEvent(new CustomEvent('pc:rosebud:hit', { detail: { drum: d } })); else flash(d); };
+        b.addEventListener('pointerdown', go);
+        b.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') go(ev); });
+      });
+      // Any real hit on this page (these pads, the big pads below, or A S K L).
+      window.addEventListener('pc:rosebud:played', (ev: Event) => {
+        const d = String((ev as CustomEvent).detail?.drum || ''); if (!(d in hues)) return;
+        flash(d); mine += 1; paintState();
+        const now = Date.now(); if (now - lastSent < 130) return; lastSent = now;
+        window.dispatchEvent(new CustomEvent('pc:presence:send', { detail: { type: 'signal', event: `drum:${d}`, hue: hues[d] } }));
+      });
+      window.addEventListener('pc:presence', (ev: Event) => {
+        const det = (ev as CustomEvent).detail || {}; const mySid = String(det.mySid || '');
+        for (const sg of (det.signals || []) as { id: string; event: string; sid: string; fromNoun: number; at: number }[]) {
+          if (!sg?.id || seenSignals.has(sg.id)) continue; seenSignals.add(sg.id);
+          const m = /^drum:(kick|bloom|dew|thorn)$/.exec(String(sg.event)); if (!m) continue;
+          if (!primed || sg.sid === mySid || Date.now() - sg.at > 2500) continue;
+          drummers.set(Number(sg.fromNoun), Date.now());
+          flash(m[1], Number(sg.fromNoun));
+          window.dispatchEvent(new CustomEvent('pc:rosebud:hit', { detail: { drum: m[1], level: 0.4, remote: true } }));
+          const face = faces.querySelector<HTMLElement>(`.welcome__face[data-noun="${Number(sg.fromNoun)}"]`); if (face) { face.dataset.drumming = 'true'; setTimeout(() => { delete face.dataset.drumming; }, 260); }
+        }
+        primed = true; if (seenSignals.size > 600) seenSignals.clear();
+        paintState();
+      });
+      setInterval(paintState, 3000);
+    }
+
     void load();
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void load(); });
     const t = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 20000);
@@ -136,6 +198,21 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   .welcome__here-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #5f8a3f; animation: welcome-here 2.4s ease-out infinite; }
   @keyframes welcome-here { 0% { box-shadow: 0 0 0 0 #5f8a3f66; } 70%, 100% { box-shadow: 0 0 0 7px #5f8a3f00; } }
   .welcome__faces { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; min-height: 42px; }
+  .welcome__drums { margin-top: 13px; padding-top: 12px; border-top: 1px solid #e3d9c8; }
+  .welcome__drums-head { margin: 0 0 9px; display: flex; align-items: baseline; gap: 10px; font: 550 9.5px/1.4 var(--pc-font-mono); text-transform: uppercase; letter-spacing: .07em; color: #5d5749; }
+  .welcome__drums-head b { font-weight: 650; color: #2d302a; white-space: nowrap; }
+  .welcome__drums-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .welcome__drums[data-live='true'] .welcome__drums-head span { color: #a85b3d; }
+  .welcome__drums-head a { margin-left: auto; font: 600 11px var(--pc-font-sans); letter-spacing: 0; text-transform: none; color: #76523a; white-space: nowrap; }
+  .welcome__pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .welcome__pads button { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 1px; min-height: 66px; padding: 8px 9px; border: 1.5px solid #2a2d27; background: var(--pad); color: #231d19; cursor: pointer; border-radius: 0; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; box-shadow: 0 3px 0 #2a2d27; transition: transform .06s ease, box-shadow .06s ease, filter .06s ease; overflow: hidden; }
+  .welcome__pads button i { position: absolute; right: 8px; top: 8px; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #231d19; background: #fffdf7; }
+  .welcome__pads button strong { font-size: 13px; font-weight: 700; letter-spacing: -.02em; }
+  .welcome__pads button small { font: 600 8.5px var(--pc-font-mono); letter-spacing: .1em; opacity: .6; }
+  .welcome__pads button:hover { filter: brightness(1.04); }
+  .welcome__pads button:active, .welcome__pads button[data-hit='true'] { transform: translateY(3px); box-shadow: 0 0 0 #2a2d27; filter: brightness(1.12) saturate(1.2); }
+  .welcome__pads button[data-hit='true'] i { background: #231d19; }
+  .welcome__pads button:focus-visible { outline: 3px solid #a85b3d; outline-offset: 2px; }
   .welcome__doors { list-style: none; margin: 22px 0 0; padding: 0; border-top: 1px solid #cfc5b5; }
   .welcome__doors li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 15px 0; border-bottom: 1px solid #cfc5b5; }
   .welcome__door-no { font: 500 10px var(--pc-font-mono); color: #9b896e; }
@@ -146,7 +223,7 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   .welcome__doors li:hover .welcome__door-no { color: #a85b3d; }
   .welcome__side { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
   .welcome__feature { display: block; transform: rotate(1deg); background: #fffdf7; border: 1px solid #c4bcae; box-shadow: 8px 11px 0 #e9dfcf; }
-  .welcome__art { position: relative; aspect-ratio: 1.62; overflow: hidden; background: #173648; }
+  .welcome__art { position: relative; aspect-ratio: 1.36; overflow: hidden; background: #173648; }
   .welcome__arena { width: 100%; height: 100%; object-fit: cover; opacity: .80; }
   .welcome__card { position: absolute; width: 55%; height: 55%; object-fit: cover; border: 5px solid #e4d6ad; border-bottom-width: 22px; box-shadow: 0 9px 19px #06101d99; }
   .welcome__card--back { left: 13%; top: 13%; transform: rotate(-13deg); }
@@ -160,7 +237,16 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   .welcome__caption > span:last-child { font-size: 11px; line-height: 1.5; color: #746553; }
   .welcome__caption b { padding-left: 18px; color: #995536; }
   @media(max-width:1020px) { .welcome { gap: 28px; } }
-  @media(max-width:680px) { .welcome { grid-template-columns: 1fr; padding-top: 32px; gap: 32px; } .welcome__copy { padding-top: 0; } .welcome__feature { max-width: 500px; width: calc(100% - 8px); margin-bottom: 10px; } .welcome h1 { font-size: clamp(44px,10vw,62px); } .welcome__intro { font-size: 15px; } .welcome__eyebrow { font-size: 8px; } .welcome__doors li { grid-template-columns: 22px minmax(0, 1fr); } .welcome__doors a { grid-column: 2; } }
+  @media(max-width:680px) {
+    /* Communication first: a short headline, then Shortwave, then the town and its drums, then the pitch. */
+    .welcome { display: flex; flex-direction: column; padding-top: 20px; gap: 0; }
+    .welcome__copy, .welcome__side { display: contents; }
+    .welcome__eyebrow { order: 1; margin-bottom: 12px; } .welcome h1 { order: 2; font-size: clamp(32px, 9.4vw, 42px) !important; }
+    .welcome__side > :global(.hsw) { order: 3; margin-top: 18px; } .welcome__here { order: 4; margin-top: 18px; }
+    .welcome__intro { order: 5; margin: 26px 0 20px; } .welcome__actions { order: 6; } .welcome__doors { order: 7; } .welcome__feature { order: 8; margin-top: 30px; }
+    .welcome__pads button { min-height: 74px; } .welcome__drums-head span { display: none; }
+  }
+  @media(max-width:680px) { .welcome__copy { padding-top: 0; } .welcome__feature { max-width: 500px; width: calc(100% - 8px); margin-bottom: 10px; } .welcome h1 { font-size: clamp(44px,10vw,62px); } .welcome__intro { font-size: 15px; } .welcome__eyebrow { font-size: 8px; } .welcome__doors li { grid-template-columns: 22px minmax(0, 1fr); } .welcome__doors a { grid-column: 2; } }
 </style>
 
 <style is:global>
@@ -171,6 +257,9 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   .welcome__face[data-away='true'] { opacity: .62; } .welcome__face[data-away='true']:hover { opacity: 1; }
   .welcome__face[data-you='true'] { border-color: #5f8a3f; }
   .welcome__face[data-you='true'] i { background: #5f8a3f; }
+  .welcome__face[data-drumming='true'] { transform: translateY(-5px) scale(1.08); border-color: #a85b3d; }
+  .welcome__pad-noun { position: absolute; bottom: 6px; width: 22px; height: 22px; border: 1px solid #231d19; background: #fffdf7; image-rendering: pixelated; pointer-events: none; animation: welcome-pad-noun .9s ease-out forwards; }
+  @keyframes welcome-pad-noun { 0% { transform: translateY(8px) scale(.5); opacity: 0; } 20% { transform: translateY(-6px) scale(1.1); opacity: 1; } 100% { transform: translateY(-40px) scale(1); opacity: 0; } }
   .welcome__face[data-waving='true'] { animation: welcome-wiggle .9s ease-in-out; }
   @keyframes welcome-wiggle { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-16deg) translateY(-4px); } 50% { transform: rotate(12deg) translateY(-4px); } 80% { transform: rotate(-6deg); } }
   .welcome__face:hover { transform: translateY(-2px); border-color: #a85b3d; box-shadow: 0 3px 0 #e4d9c6; }

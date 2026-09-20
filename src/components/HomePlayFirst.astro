@@ -139,16 +139,30 @@ const pads = [
         }).catch(() => {});
       } catch {}
     };
+    const flashPad = (drum) => {
+      const pad = root.querySelector(`[data-drum="${drum}"]`);
+      pad?.classList.add('is-hit');
+      window.setTimeout(() => pad?.classList.remove('is-hit'), 105);
+    };
     const ensureAudio = () => {
       if (!audio) audio = new AudioContext();
       if (audio.state === 'suspended') audio.resume();
       return audio;
     };
-    const hit = (drum) => {
+    // opts.level scales the voice; opts.remote is someone else's hit arriving from
+    // across town: it sounds (softly, and only once this visitor has made a sound
+    // themselves, since a browser will not start audio uninvited) but never counts.
+    const hit = (drum) => play(drum);
+    const play = (drum, opts) => {
+      const remote = !!(opts && opts.remote);
+      if (remote && (!audio || audio.state !== 'running')) { flashPad(drum); return; }
       const ctx = ensureAudio();
       const now = ctx.currentTime;
       const gain = ctx.createGain();
-      gain.connect(ctx.destination);
+      const out = ctx.createGain();
+      out.gain.value = Math.max(0.05, Math.min(1, Number(opts && opts.level) || 1));
+      gain.connect(out);
+      out.connect(ctx.destination);
       if (drum === 'kick') {
         const osc = ctx.createOscillator();
         osc.type = 'sine';
@@ -177,9 +191,10 @@ const pads = [
         noise.start(now);
         noise.stop(now + 0.38);
       }
-      const pad = root.querySelector(`[data-drum="${drum}"]`);
-      pad?.classList.add('is-hit');
-      window.setTimeout(() => pad?.classList.remove('is-hit'), 105);
+      flashPad(drum);
+      if (remote) return;
+      // Tell the rest of the page a real hit happened (the front-door pads flash and carry it across town).
+      window.dispatchEvent(new CustomEvent('pc:rosebud:played', { detail: { drum } }));
       hits += 1;
       const count = root.querySelector('[data-hit-count]');
       if (count) count.textContent = String(hits).padStart(3, '0');
@@ -189,6 +204,11 @@ const pads = [
     root.querySelectorAll('[data-drum]').forEach((button) => {
       button.addEventListener('pointerdown', (event) => { event.preventDefault(); hit(button.dataset.drum); });
       button.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); hit(button.dataset.drum); } });
+    });
+    // Other pads on the page (the front-door drum line) play through this one synth.
+    window.addEventListener('pc:rosebud:hit', (event) => {
+      const d = event.detail || {};
+      if (padOrder.includes(d.drum)) play(d.drum, { level: d.level, remote: d.remote });
     });
     window.addEventListener('keydown', (event) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
