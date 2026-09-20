@@ -1,0 +1,315 @@
+---
+/**
+ * HomeMusicOn — the run sheet for a visitor who arrives with music already on.
+ * Spotify (or anything) keeps playing in its own tab; the town adds the rest:
+ * find the tempo, drum over it, tell the square what is on, open the playlist
+ * as a room, invite someone. No new endpoints. Every action rides something
+ * that already exists:
+ *   pads          → pc:rosebud:hit (the one Rosebud synth; hits reach the town as drum:* signals)
+ *   tell the town → pc:shortwave:say (the dock bar's sayLine → /api/shortwave, unfurled as a card)
+ *   playlist room → /listening-room?pl={id}
+ *   town radio    → pc:nowplaying, fetched once by the page script from /now-playing.json
+ * The tapped tempo is kept in localStorage `pc:music:bpm` and announced as
+ * `pc:music:tempo {bpm}`; the link you shared is kept in `pc:music:listening`.
+ */
+const pads = [
+  { id: 'kick', name: 'Root', key: 'A', color: '#efe6ce' },
+  { id: 'bloom', name: 'Bloom', key: 'S', color: '#f3a0a6' },
+  { id: 'dew', name: 'Dew', key: 'K', color: '#f4d83e' },
+  { id: 'thorn', name: 'Thorn', key: 'L', color: '#7aa279' },
+];
+
+// Rooms that make no sound of their own, so your soundtrack stays in charge.
+const quietRooms = [
+  { href: '/window', title: 'The window', note: 'Live El Segundo sky and marine layer.' },
+  { href: '/coffee', title: 'The coffee pot', note: 'Pour a cup, count the cups.' },
+  { href: '/tug', title: 'The tug', note: 'One rope, two sides, the whole town pulling.' },
+  { href: '/bench', title: 'The bench', note: 'Sit a minute. Read the question.' },
+  { href: '/win95-games', title: 'The Win95 arcade', note: 'A desktop of small games.' },
+  { href: '/race', title: 'The daily race', note: 'New every day, no account.' },
+];
+
+// Ways to get a second person in. Each of these makes its own link or code.
+const invites = [
+  { href: '/drum-vs', title: 'DRUM VS', note: 'Send a link, tap together, first to fifty.' },
+  { href: '/bell-choir', title: 'Bell Choir', note: 'A room code and a wall of bells.' },
+  { href: '/co-games', title: 'Co-games', note: 'Two seats. Your AI can take the other one.' },
+  { href: '/send', title: 'Send a one-sheet', note: 'A page made for one person.' },
+];
+---
+
+<section class="shelf musicon" id="music-on" aria-labelledby="musicon-title" data-music-on style="--shelf-color:#993C1D;--shelf-color-2:#3B6D11">
+  <div class="shelf__head">
+    <div>
+      <p class="shelf__kicker">Music on · Spinning · your player keeps playing · the town adds the rest</p>
+      <h2 class="shelf__title" id="musicon-title">Music on? <em>Leave it on.</em></h2>
+      <p class="shelf__dek">
+        PointCast does not take over your speakers. Keep Spotify going in its own tab, then use the town around it:
+        <b>find the tempo, drum over it, say what is on, open the playlist as a room, bring someone in.</b>
+      </p>
+    </div>
+    <p class="musicon__radio" data-mo-radio hidden>
+      <span>Town radio · on air</span>
+      <a data-mo-radio-link href="/c/spinning"><b data-mo-radio-title></b><i data-mo-radio-artist></i></a>
+    </p>
+  </div>
+
+  <ol class="musicon__steps">
+    <li class="musicon__step musicon__step--tempo">
+      <p class="musicon__no" aria-hidden="true">01</p>
+      <h3>Find the tempo</h3>
+      <p>Tap along to your song, four taps or more. The dot keeps the beat, silently.</p>
+      <div class="musicon__tempo">
+        <button type="button" class="musicon__tap" data-mo-tap aria-describedby="musicon-bpm">
+          <span class="musicon__pulse" data-mo-pulse aria-hidden="true"></span>
+          <strong>Tap</strong><small>or press T</small>
+        </button>
+        <p class="musicon__bpm" id="musicon-bpm" aria-live="polite"><b data-mo-bpm>—</b><span>BPM</span><i data-mo-feel>tap to your music</i></p>
+      </div>
+    </li>
+
+    <li class="musicon__step">
+      <p class="musicon__no" aria-hidden="true">02</p>
+      <h3>Drum over it</h3>
+      <p>Four pads, one synth. Your music stays in your ears; your hits go out to whoever is in town.</p>
+      <div class="musicon__pads" role="group" aria-label="Drum over your music: four pads">
+        {pads.map((p) => (
+          <button type="button" data-mo-pad={p.id} style={`--pad:${p.color}`} aria-label={`${p.name}. Keyboard ${p.key}`}><strong>{p.name}</strong><small>{p.key}</small></button>
+        ))}
+      </div>
+      <p class="musicon__more"><a href="/rosebud">Sixteen-step garden ↗</a><a href="/drum-steady">Steady Hands ↗</a><a href="/drum">Drum house ↗</a></p>
+    </li>
+
+    <li class="musicon__step musicon__step--tell">
+      <p class="musicon__no" aria-hidden="true">03 · 04</p>
+      <h3>Say what is on · open it as a room</h3>
+      <p>In Spotify: Share → Copy link. Paste it here. A track goes to the town square as a card; a playlist can also open as a listening room.</p>
+      <form class="musicon__form" data-mo-form novalidate>
+        <label class="musicon__label" for="musicon-link">Spotify link</label>
+        <input id="musicon-link" data-mo-link type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/track/…" />
+        <div class="musicon__buttons">
+          <button type="submit" class="shelf__button shelf__button--primary" data-mo-tell>Tell the town ♫</button>
+          <a class="shelf__button" data-mo-room href="/listening-room" aria-disabled="true">Open as a listening room</a>
+        </div>
+        <p class="musicon__status" data-mo-status role="status">Nothing is posted until you press the button.</p>
+      </form>
+    </li>
+
+    <li class="musicon__step">
+      <p class="musicon__no" aria-hidden="true">05</p>
+      <h3>Bring someone in</h3>
+      <p>The town is better with two. Send the door, or pick a room that makes its own invite.</p>
+      <div class="musicon__buttons">
+        <button type="button" class="shelf__button shelf__button--primary" data-mo-invite>Copy an invite</button>
+        <a class="shelf__button" href="/shortwave">Who is in town ↗</a>
+      </div>
+      <ul class="musicon__list">
+        {invites.map((r) => <li><a href={r.href}><b>{r.title}</b><span>{r.note}</span></a></li>)}
+      </ul>
+    </li>
+  </ol>
+
+  <div class="musicon__quiet">
+    <p class="musicon__quiet-head">Good with a soundtrack · rooms that make no sound of their own</p>
+    <ul>
+      {quietRooms.map((r) => <li><a href={r.href}><b>{r.title}</b><span>{r.note}</span></a></li>)}
+    </ul>
+  </div>
+
+  <p class="shelf__foot">
+    <span>Nothing here reads your Spotify. You paste a link, or you do not.</span>
+    <span><a href="/listening-room">Listening room</a> · <a href="/c/spinning">Spinning channel</a> · <a href="/now-playing.json">now-playing.json</a></span>
+  </p>
+</section>
+
+<script>
+  function mountMusicOn() {
+    const root = document.querySelector<HTMLElement>('[data-music-on]');
+    if (!root || root.dataset.mounted) return; root.dataset.mounted = 'true';
+    const $ = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
+    const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+
+    // ── 01 · tap tempo ─────────────────────────────────────────────
+    const tap = $<HTMLButtonElement>('[data-mo-tap]'), bpmEl = $('[data-mo-bpm]'), feelEl = $('[data-mo-feel]'), pulse = $('[data-mo-pulse]');
+    const feel = (b: number) => (b < 76 ? 'slow burn' : b < 96 ? 'head nod' : b < 116 ? 'walking pace' : b < 132 ? 'four on the floor' : b < 156 ? 'running' : 'sprint');
+    let taps: number[] = [];
+    const showBpm = (bpm: number, note?: string) => {
+      bpmEl.textContent = String(bpm); feelEl.textContent = note || feel(bpm);
+      root.style.setProperty('--mo-beat', `${(60 / bpm).toFixed(3)}s`);
+      // Restart the animation on the tap so the dot lands on your downbeat.
+      pulse.dataset.on = 'false'; void pulse.offsetWidth; pulse.dataset.on = 'true';
+    };
+    const onTap = () => {
+      const now = performance.now();
+      if (taps.length && now - taps[taps.length - 1] > 2500) taps = [];
+      taps.push(now); if (taps.length > 9) taps.shift();
+      tap.dataset.hit = 'true'; setTimeout(() => { delete tap.dataset.hit; }, 90);
+      if (taps.length < 4) { feelEl.textContent = `${4 - taps.length} more…`; return; }
+      const gaps = taps.slice(1).map((t, i) => t - taps[i]).sort((a, b) => a - b);
+      const bpm = Math.round(60000 / gaps[Math.floor(gaps.length / 2)]); // median gap shrugs off one sloppy tap
+      if (bpm < 40 || bpm > 240) { feelEl.textContent = 'keep tapping…'; return; }
+      showBpm(bpm);
+      try { localStorage.setItem('pc:music:bpm', String(bpm)); } catch {}
+      window.dispatchEvent(new CustomEvent('pc:music:tempo', { detail: { bpm } }));
+    };
+    tap.addEventListener('pointerdown', (ev) => { ev.preventDefault(); onTap(); });
+    tap.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onTap(); } });
+    const onKey = (ev: KeyboardEvent) => { if ((ev.key === 't' || ev.key === 'T') && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !ev.repeat && !typing(ev.target)) onTap(); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('astro:before-swap', () => document.removeEventListener('keydown', onKey), { once: true });
+    try { const kept = Number(localStorage.getItem('pc:music:bpm')); if (kept >= 40 && kept <= 240) showBpm(kept, `${feel(kept)} · from last time`); } catch {}
+
+    // ── 02 · pads (the one Rosebud synth plays them; the hero relays them to town) ──
+    root.querySelectorAll<HTMLButtonElement>('[data-mo-pad]').forEach((b) => {
+      const go = (ev: Event) => { ev.preventDefault(); window.dispatchEvent(new CustomEvent('pc:rosebud:hit', { detail: { drum: b.dataset.moPad } })); };
+      b.addEventListener('pointerdown', go);
+      b.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') go(ev); });
+    });
+    window.addEventListener('pc:rosebud:played', (ev: Event) => {
+      const pad = root.querySelector<HTMLElement>(`[data-mo-pad="${String((ev as CustomEvent).detail?.drum || '')}"]`); if (!pad) return;
+      pad.dataset.hit = 'true'; setTimeout(() => { delete pad.dataset.hit; }, 110);
+    });
+
+    // ── 03 · 04 · the link ─────────────────────────────────────────
+    const form = $<HTMLFormElement>('[data-mo-form]'), input = $<HTMLInputElement>('[data-mo-link]'), status = $('[data-mo-status]'), room = $<HTMLAnchorElement>('[data-mo-room]');
+    type Parsed = { kind: string; id: string; url: string };
+    const parse = (raw: string): Parsed | null => {
+      const s = raw.trim();
+      const m = /^https?:\/\/open\.spotify\.com\/(?:intl-[a-z]{2,5}\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]{10,40})(?:[/?#].*)?$/.exec(s) || /^spotify:(track|album|playlist|episode|show):([A-Za-z0-9]{10,40})$/.exec(s);
+      return m ? { kind: m[1], id: m[2], url: `https://open.spotify.com/${m[1]}/${m[2]}` } : null; // share-tracking params are dropped
+    };
+    const say = (t: string, tone = '') => { status.textContent = t; status.dataset.tone = tone; };
+    const sync = () => {
+      const p = parse(input.value); const isList = p?.kind === 'playlist';
+      room.href = isList ? `/listening-room?pl=${encodeURIComponent(p!.id)}` : '/listening-room';
+      room.setAttribute('aria-disabled', isList ? 'false' : 'true');
+      room.textContent = isList ? 'Open as a listening room ↗' : 'Open as a listening room';
+      if (!input.value.trim()) say('Nothing is posted until you press the button.');
+      else if (!p) say('That does not look like a Spotify share link yet.', 'warn');
+      else say(isList ? 'A playlist. Tell the town, open it as a room, or both.' : `A Spotify ${p.kind}. Ready when you are.`, 'ok');
+      return p;
+    };
+    input.addEventListener('input', sync);
+    room.addEventListener('click', (ev) => { if (room.getAttribute('aria-disabled') === 'true') { ev.preventDefault(); say('Paste a playlist link first. The house mix is at /listening-room.', 'warn'); input.focus(); } });
+    let waiting = 0;
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const p = sync(); if (!p) { input.focus(); return; }
+      if (!document.querySelector('[data-pc-ref="fb-noun"]')) { say('The town bar is not on this page. Say it at /shortwave instead.', 'warn'); return; }
+      const bpm = Number(bpmEl.textContent);
+      window.dispatchEvent(new CustomEvent('pc:shortwave:say', { detail: { text: `♫ on now${bpm ? ` · ${bpm} bpm` : ''} · ${p.url}`, via: 'page' } }));
+      try { localStorage.setItem('pc:music:listening', p.url); } catch {}
+      window.dispatchEvent(new CustomEvent('pc:music:listening', { detail: { url: p.url, kind: p.kind } }));
+      say('Said in the room. Filing it on Shortwave…', 'ok');
+      clearTimeout(waiting); waiting = window.setTimeout(() => say('Said in the room. Shortwave is slow or over its hourly limit; check the square.', 'warn'), 6000);
+    });
+    window.addEventListener('pc:shortwave:post', (ev: Event) => {
+      const d = (ev as CustomEvent).detail || {}; if (!d.own || !waiting) return;
+      clearTimeout(waiting); waiting = 0; say('On the town square now, with a card. ◉ /shortwave', 'ok');
+    });
+
+    // ── 05 · invite ────────────────────────────────────────────────
+    const invite = $<HTMLButtonElement>('[data-mo-invite]');
+    invite.addEventListener('click', async () => {
+      const text = 'I am in a small internet town with my music on. Come drum with me:'; const url = 'https://pointcast.xyz/#music-on';
+      const done = (t: string) => { invite.textContent = t; setTimeout(() => { invite.textContent = 'Copy an invite'; }, 2600); };
+      try {
+        if (navigator.share && matchMedia('(pointer: coarse)').matches) { await navigator.share({ title: 'PointCast', text, url }); return; }
+        await navigator.clipboard.writeText(`${text} ${url}`); done('Copied · paste it to a friend');
+      } catch (err) { if ((err as Error)?.name !== 'AbortError') done('Copy failed · pointcast.xyz/#music-on'); }
+    });
+
+    // ── town radio (the page script fetches /now-playing.json once and fans it out) ──
+    const radio = (n: Record<string, unknown>) => {
+      if (!n || !n.live || !n.title) return;
+      $('[data-mo-radio-title]').textContent = String(n.title).slice(0, 60);
+      $('[data-mo-radio-artist]').textContent = n.artist ? ` · ${String(n.artist).slice(0, 40)}` : '';
+      const link = $<HTMLAnchorElement>('[data-mo-radio-link]'); if (typeof n.url === 'string' && n.url.startsWith('https://open.spotify.com/')) { link.href = n.url; link.target = '_blank'; link.rel = 'noopener'; }
+      $('[data-mo-radio]').hidden = false;
+    };
+    document.addEventListener('pc:nowplaying', (ev: Event) => radio((ev as CustomEvent).detail || {}));
+    radio((window as unknown as { __pcNowPlaying?: Record<string, unknown> }).__pcNowPlaying || {});
+  }
+  mountMusicOn();
+  document.addEventListener('astro:page-load', mountMusicOn);
+</script>
+
+<style>
+  .musicon { --mo-beat: 0.5s; }
+  .musicon__radio { margin: 0; display: grid; gap: 4px; max-width: 30ch; padding: 10px 12px; border: 1px solid var(--home-ink); background: var(--home-paper-warm); font-size: 13px; line-height: 1.3; }
+  .musicon__radio[hidden] { display: none; }
+  .musicon__radio span { font: 700 8px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--shelf-color); }
+  .musicon__radio span::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #c0392b; }
+  .musicon__radio i { font-style: normal; color: var(--home-muted); }
+
+  .musicon__steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+  .musicon__step { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 18px clamp(14px, 1.6vw, 20px) 20px; border-right: 1px solid var(--home-rule); }
+  .musicon__step:last-child { border-right: 0; }
+  .musicon__no { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; color: var(--shelf-color); }
+  .musicon__step h3 { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; }
+  .musicon__step > p:not(.musicon__no) { margin: 0; font-size: 13px; line-height: 1.45; color: var(--home-muted); }
+
+  .musicon__tempo { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; margin-top: auto; }
+  .musicon__tap { position: relative; display: grid; place-content: center; gap: 2px; width: 104px; height: 104px; border: 2px solid var(--home-ink); border-radius: 50%; background: var(--home-paper-warm); color: var(--home-ink); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; box-shadow: 4px 4px 0 var(--home-ink); }
+  .musicon__tap[data-hit='true'] { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--home-ink); background: #f4d83e; }
+  .musicon__tap strong { font-size: 20px; letter-spacing: -.02em; }
+  .musicon__tap small { font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--home-faint); }
+  .musicon__pulse { position: absolute; top: 10px; right: 10px; width: 12px; height: 12px; border-radius: 50%; background: var(--shelf-color); opacity: .18; }
+  .musicon__pulse[data-on='true'] { animation: musicon-beat var(--mo-beat) linear infinite; }
+  @keyframes musicon-beat { 0% { opacity: 1; transform: scale(1.5); } 35% { opacity: .25; transform: scale(1); } 100% { opacity: .18; transform: scale(1); } }
+  .musicon__bpm { margin: 0; display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; column-gap: 6px; }
+  .musicon__bpm b { font-size: 44px; font-weight: 730; line-height: 1; letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+  .musicon__bpm span { font: 700 9px var(--pc-font-mono); letter-spacing: .12em; color: var(--home-faint); }
+  .musicon__bpm i { grid-column: 1 / -1; font: 700 9px var(--pc-font-mono); font-style: normal; letter-spacing: .1em; text-transform: uppercase; color: var(--shelf-color-2); }
+
+  .musicon__pads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: auto; }
+  .musicon__pads button { display: flex; justify-content: space-between; align-items: baseline; min-height: 46px; padding: 10px; border: 2px solid var(--home-ink); background: var(--pad); color: #111; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; box-shadow: 3px 3px 0 var(--home-ink); }
+  .musicon__pads button[data-hit='true'] { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--home-ink); filter: brightness(1.12); }
+  .musicon__pads strong { font-size: 14px; }
+  .musicon__pads small { font: 700 9px var(--pc-font-mono); opacity: .7; }
+  .musicon__more { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .musicon__more a:hover { color: var(--shelf-color); }
+
+  .musicon__form { display: grid; gap: 8px; margin-top: auto; }
+  .musicon__label { font: 700 8px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--home-faint); }
+  .musicon__form input { width: 100%; min-width: 0; padding: 10px; border: 2px solid var(--home-ink); border-radius: 0; background: #fff; color: #111; font: 500 16px var(--pc-font-mono); }
+  .musicon__form input:focus-visible { outline: 2px solid var(--pc-accent, #185FA5); outline-offset: 2px; }
+  .musicon__buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+  .musicon__buttons [aria-disabled='true'] { opacity: .5; }
+  .musicon__status { margin: 0; min-height: 2.6em; font-size: 12px; line-height: 1.35; color: var(--home-faint); }
+  .musicon__status[data-tone='ok'] { color: #2f5a0d; }
+  .musicon__status[data-tone='warn'] { color: #8a2f12; }
+
+  .musicon__list, .musicon__quiet ul { margin: 0; padding: 0; list-style: none; }
+  .musicon__list { display: grid; margin-top: auto; border-top: 1px solid var(--home-rule); }
+  .musicon__list a { display: grid; gap: 1px; padding: 7px 0; border-bottom: 1px solid var(--home-rule); font-size: 12px; line-height: 1.3; }
+  .musicon__list li:last-child a { border-bottom: 0; }
+  .musicon__list span, .musicon__quiet span { color: var(--home-muted); }
+  .musicon__list a:hover b, .musicon__quiet a:hover b { color: var(--shelf-color); }
+
+  .musicon__quiet { border-top: 2px solid var(--home-ink); background: var(--home-paper-warm); }
+  .musicon__quiet-head { margin: 0; padding: 10px clamp(16px, 3vw, 28px) 0; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--shelf-color-2); }
+  .musicon__quiet ul { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 4px clamp(8px, 2vw, 20px) 8px; }
+  .musicon__quiet a { display: grid; gap: 2px; height: 100%; padding: 8px; font-size: 12px; line-height: 1.3; }
+
+  @media (max-width: 1080px) {
+    .musicon__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .musicon__step:nth-child(2n) { border-right: 0; }
+    .musicon__step:nth-child(-n+2) { border-bottom: 1px solid var(--home-rule); }
+    .musicon__quiet ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 680px) {
+    .musicon__steps { grid-template-columns: 1fr; }
+    .musicon__step { border-right: 0; border-bottom: 1px solid var(--home-rule); }
+    .musicon__step:last-child { border-bottom: 0; }
+    .musicon__pads { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .musicon__pads button { flex-direction: column; min-height: 58px; }
+    .musicon__quiet ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .musicon__quiet span { display: none; }
+    .musicon__radio { max-width: none; }
+  }
+  @media (pointer: coarse) { .musicon__tap small { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .musicon__pulse[data-on='true'] { animation: none; opacity: .8; }
+  }
+</style>
