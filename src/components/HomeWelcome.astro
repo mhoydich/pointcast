@@ -45,7 +45,7 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
 
 
 <script>
-  type Session = { nounId?: number; kind?: string; country?: string; deviceClass?: string; joinedAt?: string; mood?: string; currentPath?: string };
+  type Session = { nounId?: number; kind?: string; country?: string; deviceClass?: string; joinedAt?: string; mood?: string; listening?: string; currentPath?: string };
   const since = (iso?: string) => { const m = Math.max(0, Math.floor((Date.now() - new Date(iso || Date.now()).getTime()) / 60000)); return m < 1 ? 'just arrived' : m < 60 ? `here ${m}m` : `here ${Math.floor(m / 60)}h`; };
   function mountHere() {
     const root = document.querySelector<HTMLElement>('[data-home-here]');
@@ -56,7 +56,7 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
     const place = (p?: string) => (!p || p === '/' ? 'the front door' : p);
 
     function paint(sessions: Session[], h: number, a: number, myNoun: number, myPath: string) {
-      const next = sessions.map((s) => `${key(s)}:${s.currentPath || ''}:${s.mood || ''}`).join('|') + `#${h}/${a}/${myNoun}`;
+      const next = sessions.map((s) => `${key(s)}:${s.currentPath || ''}:${s.mood || ''}:${s.listening || ''}`).join('|') + `#${h}/${a}/${myNoun}`;
       if (next === sig) return; sig = next;
       count.textContent = h + a === 0 ? 'Quiet in town right now' : `${h} ${h === 1 ? 'person' : 'people'}${a ? ` · ${a} AI${a === 1 ? '' : 's'}` : ''} in town right now`;
       if (!sessions.length) { const li = document.createElement('li'); li.className = 'welcome__faces-empty'; li.textContent = 'Nobody on the map this minute. The door is open.'; faces.replaceChildren(li); known = new Set(); first = false; return; }
@@ -69,7 +69,8 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
         const li = document.createElement('li'); li.className = 'welcome__face'; li.dataset.noun = String(s.nounId ?? 0); li.dataset.kind = s.kind === 'agent' ? 'agent' : 'human';
         if (you) li.dataset.you = 'true'; if (!here) li.dataset.away = 'true';
         if (!first && !known.has(key(s))) li.dataset.arrived = 'true';
-        const label = you ? 'You' : `${s.kind === 'agent' ? 'An AI' : 'A visitor'}${s.country ? ` from ${s.country}` : ''}${s.mood ? ` · ${s.mood}` : ''} · ${here ? 'here at the front door' : `at ${place(s.currentPath)}`} · ${since(s.joinedAt)}`;
+        const label = you ? 'You' : `${s.kind === 'agent' ? 'An AI' : 'A visitor'}${s.country ? ` from ${s.country}` : ''}${s.mood ? ` · ${s.mood}` : ''} · ${here ? 'here at the front door' : `at ${place(s.currentPath)}`} · ${since(s.joinedAt)}${s.listening ? ` · ♫ ${s.listening}` : ''}`;
+        if (s.listening) li.dataset.tune = 'true';
         const btn = document.createElement('button'); btn.type = 'button'; btn.title = label; btn.setAttribute('aria-label', you ? 'You. Open attendance.' : `${label}. Open attendance.`);
         btn.addEventListener('click', () => window.dispatchEvent(new CustomEvent('pc:attendance:open', { detail: { noun: you ? -1 : s.nounId } })));
         const img = document.createElement('img'); img.src = `https://noun.pics/${Number(s.nounId) || 0}.svg`; img.alt = ''; img.width = 40; img.height = 40; img.loading = 'lazy';
@@ -264,6 +265,7 @@ import HomeShortwaveLive from './HomeShortwaveLive.astro';
   @keyframes welcome-wiggle { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-16deg) translateY(-4px); } 50% { transform: rotate(12deg) translateY(-4px); } 80% { transform: rotate(-6deg); } }
   .welcome__face:hover { transform: translateY(-2px); border-color: #a85b3d; box-shadow: 0 3px 0 #e4d9c6; }
   .welcome__face i { position: absolute; right: -4px; bottom: -4px; padding: 1px 3px; background: #2f3829; color: #fffdf6; font: 600 7px var(--pc-font-mono); font-style: normal; letter-spacing: .06em; }
+  .welcome__face[data-tune='true']::before { content: '♫'; position: absolute; left: -4px; top: -5px; z-index: 1; padding: 0 3px; background: #993C1D; color: #fffdf6; font: 700 9px/13px var(--pc-font-mono); }
   .welcome__face[data-arrived='true'] { animation: welcome-arrive .7s cubic-bezier(.18,.89,.32,1.28); }
   @keyframes welcome-arrive { 0% { transform: scale(.3); opacity: 0; } 100% { transform: none; opacity: 1; } }
   .welcome__face[data-speaking='true'] { border-color: #a85b3d; box-shadow: 0 0 0 3px #a85b3d33; z-index: 2; }

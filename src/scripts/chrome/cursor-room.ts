@@ -398,8 +398,19 @@ export function mountCursorRoom(ROOT, scope) {
     function sendTown(type) {
       if (state.burstWsState !== 'open' || !state.burstWs) return;
       var mood = ''; try { mood = String(localStorage.getItem('pc:music:mood') || '').slice(0, 32); } catch (e) {}
-      try { state.burstWs.send(JSON.stringify({ type: type, nounId: townNoun(), tag: resolveMeTag(), mood: mood, currentPath: townPath() })); } catch (e) {}
+      try { state.burstWs.send(JSON.stringify({ type: type, nounId: townNoun(), tag: resolveMeTag(), mood: mood, listening: townListening(), currentPath: townPath() })); } catch (e) {}
     }
+    // What this visitor said they have on (the front door's Music on shelf writes
+    // it, only after they press Tell the town). A song is short: after an hour
+    // the label goes stale and the town stops showing it. '' clears it server-side.
+    function townListening() {
+      try {
+        var rec = JSON.parse(localStorage.getItem('pc:music:listening') || 'null');
+        if (!rec || typeof rec.label !== 'string' || !(Date.now() - Number(rec.at) < 3600000)) return '';
+        return rec.label.replace(/\s+/g, ' ').trim().slice(0, 120);
+      } catch (e) { return ''; }
+    }
+    on(window, 'pc:music:listening', function () { setTimeout(function () { sendTown('update'); }, 50); });
     on(window, 'pc:mood-changed', function () { setTimeout(function () { sendTown('update'); }, 50); });
     on(window, 'pc:wallet-change', function () { setTimeout(function () { sendTown('update'); }, 400); });
     // The bar and the front door ask the town socket to carry a wave or a vibe.
