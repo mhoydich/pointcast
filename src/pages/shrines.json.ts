@@ -12,6 +12,11 @@ export const GET: APIRoute = async () => {
     updatedAt: new Date().toISOString(),
     source: absoluteUrl('/unfurls.json'),
     builder: absoluteUrl('/unfurls#builder'),
+    representations: {
+      html: absoluteUrl('/shrines'),
+      markdown: absoluteUrl('/shrines.md'),
+      unfurlManifest: absoluteUrl('/unfurls.json'),
+    },
     backgrounds: {
       sheet: absoluteImage('/images/shrines/shrine-background-sheet.png'),
       elementSheet: absoluteImage('/images/shrines/element-shrine-background-sheet.png'),
@@ -41,6 +46,11 @@ export const GET: APIRoute = async () => {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300',
+      'Access-Control-Allow-Origin': '*',
+      Link: [
+        `<${absoluteUrl('/shrines')}>; rel="canonical"; type="text/html"`,
+        `<${absoluteUrl('/shrines.md')}>; rel="alternate"; type="text/markdown"`,
+      ].join(', '),
     },
   });
 };
