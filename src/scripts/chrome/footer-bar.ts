@@ -491,6 +491,7 @@ export function mountFooterBar(root, scope) {
       var same = s.currentPath === att.myPath;
       sub.textContent = [s.mood || '', s.kind === 'agent' ? 'reading along' : (same ? 'on this page' : 'at ' + attPlace(s.currentPath)), s.country || '', attSince(s.joinedAt)].filter(Boolean).join(' · ');
       main.appendChild(name); main.appendChild(sub);
+      if (s.listening) { var tune = document.createElement('p'); tune.className = 'fb-att__tune'; tune.textContent = '♫ ' + String(s.listening).slice(0, 120); main.appendChild(tune); }
       var k = att.said[s.nounId];
       if (k && k.text && Date.now() - k.at < 30 * 60000) { var said = document.createElement('p'); said.className = 'fb-att__said'; said.textContent = '“' + k.text.slice(0, 120) + '”'; main.appendChild(said); }
       var acts = document.createElement('div'); acts.className = 'fb-att__acts';
@@ -553,7 +554,7 @@ export function mountFooterBar(root, scope) {
       var d = (e && e.detail) || {};
       att.sessions = Array.isArray(d.sessions) ? d.sessions : []; att.humans = d.humans || 0; att.agents = d.agents || 0;
       att.myNoun = typeof d.myNoun === 'number' ? d.myNoun : swNoun(); att.myPath = d.myPath || '/';
-      var sig = att.sessions.map(function (s) { return s.nounId + s.kind + (s.currentPath || '') + (s.mood || ''); }).join('|') + '#' + att.humans + '/' + att.agents;
+      var sig = att.sessions.map(function (s) { return s.nounId + s.kind + (s.currentPath || '') + (s.mood || '') + (s.listening || ''); }).join('|') + '#' + att.humans + '/' + att.agents;
       if (sig !== att.sig) { att.sig = sig; renderCrowd(); if (openPopover === 'tray:attendance') renderAttendance(); }
       (d.waves || []).forEach(function (w) {
         var key = 'w' + w.fromNoun + ':' + w.toNoun + ':' + w.at; if (att.seen[key]) return; att.seen[key] = 1;

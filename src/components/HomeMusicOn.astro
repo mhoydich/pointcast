@@ -10,7 +10,10 @@
  *   playlist room → /listening-room?pl={id}
  *   town radio    → pc:nowplaying, fetched once by the page script from /now-playing.json
  * The tapped tempo is kept in localStorage `pc:music:bpm` and announced as
- * `pc:music:tempo {bpm}`; the link you shared is kept in `pc:music:listening`.
+ * `pc:music:tempo {bpm}`. What you shared is kept in `pc:music:listening` as
+ * {url, label, at}; cursor-room.ts sends the label on the town socket as the
+ * presence `listening` field for an hour, so the attendance tray, the hero
+ * faces and the strip below can show who has what on. Clearing it is one button.
  */
 const pads = [
   { id: 'kick', name: 'Root', key: 'A', color: '#efe6ce' },
@@ -92,6 +95,7 @@ const invites = [
           <a class="shelf__button" data-mo-room href="/listening-room" aria-disabled="true">Open as a listening room</a>
         </div>
         <p class="musicon__status" data-mo-status role="status">Nothing is posted until you press the button.</p>
+        <p class="musicon__mine" data-mo-mine hidden><span>Next to your face in town for an hour: <b data-mo-mine-label></b></span><button type="button" data-mo-clear>Stop showing it</button></p>
       </form>
     </li>
 
@@ -109,6 +113,11 @@ const invites = [
     </li>
   </ol>
 
+  <div class="musicon__town" data-mo-town aria-live="polite">
+    <p class="musicon__town-head">On in town right now</p>
+    <ul data-mo-town-list><li class="musicon__town-empty">Nobody has said what they have on. Paste a link above and be the first.</li></ul>
+  </div>
+
   <div class="musicon__quiet">
     <p class="musicon__quiet-head">Good with a soundtrack · rooms that make no sound of their own</p>
     <ul>
@@ -123,6 +132,7 @@ const invites = [
 </section>
 
 <script>
+  import { fetchPreview } from '../lib/shortwave-client';
   function mountMusicOn() {
     const root = document.querySelector<HTMLElement>('[data-music-on]');
     if (!root || root.dataset.mounted) return; root.dataset.mounted = 'true';
@@ -198,14 +208,49 @@ const invites = [
       if (!document.querySelector('[data-pc-ref="fb-noun"]')) { say('The town bar is not on this page. Say it at /shortwave instead.', 'warn'); return; }
       const bpm = Number(bpmEl.textContent);
       window.dispatchEvent(new CustomEvent('pc:shortwave:say', { detail: { text: `♫ on now${bpm ? ` · ${bpm} bpm` : ''} · ${p.url}`, via: 'page' } }));
-      try { localStorage.setItem('pc:music:listening', p.url); } catch {}
-      window.dispatchEvent(new CustomEvent('pc:music:listening', { detail: { url: p.url, kind: p.kind } }));
+      void keepListening(p);
       say('Said in the room. Filing it on Shortwave…', 'ok');
       clearTimeout(waiting); waiting = window.setTimeout(() => say('Said in the room. Shortwave is slow or over its hourly limit; check the square.', 'warn'), 6000);
     });
     window.addEventListener('pc:shortwave:post', (ev: Event) => {
       const d = (ev as CustomEvent).detail || {}; if (!d.own || !waiting) return;
       clearTimeout(waiting); waiting = 0; say('On the town square now, with a card. ◉ /shortwave', 'ok');
+    });
+
+    // What you shared rides the town socket as your presence `listening` label for an hour.
+    const mine = $('[data-mo-mine]'), mineLabel = $('[data-mo-mine-label]');
+    const HOUR = 3600000;
+    const readMine = (): { url: string; label: string; at: number } | null => { try { const r = JSON.parse(localStorage.getItem('pc:music:listening') || 'null'); return r && typeof r.label === 'string' && Date.now() - Number(r.at) < HOUR ? r : null; } catch { return null; } };
+    const paintMine = () => { const r = readMine(); mine.hidden = !r; if (r) mineLabel.textContent = r.label; };
+    async function keepListening(p: Parsed) {
+      let label = `a Spotify ${p.kind}`;
+      try { const pv = await fetchPreview(p.url); if (pv?.title) label = pv.description && pv.description.length <= 60 ? `${pv.title} — ${pv.description}` : pv.title; } catch {}
+      try { localStorage.setItem('pc:music:listening', JSON.stringify({ url: p.url, label: label.slice(0, 120), at: Date.now() })); } catch {}
+      window.dispatchEvent(new CustomEvent('pc:music:listening', { detail: { url: p.url, kind: p.kind, label } }));
+      paintMine();
+    }
+    $<HTMLButtonElement>('[data-mo-clear]').addEventListener('click', () => {
+      try { localStorage.removeItem('pc:music:listening'); } catch {}
+      window.dispatchEvent(new CustomEvent('pc:music:listening', { detail: { url: '', label: '' } }));
+      paintMine(); say('Cleared. The town no longer shows what you have on.');
+    });
+    paintMine();
+
+    // ── on in town right now (from the town socket; no fetch of its own) ──
+    const townList = $('[data-mo-town-list]'); let townSig = '';
+    window.addEventListener('pc:presence', (ev: Event) => {
+      const d = (ev as CustomEvent).detail || {};
+      const on = ((d.sessions || []) as { nounId?: number; listening?: string; currentPath?: string }[]).filter((s) => s.listening).slice(0, 8);
+      const sig = on.map((s) => `${s.nounId}:${s.listening}`).join('|'); if (sig === townSig) return; townSig = sig;
+      if (!on.length) { const li = document.createElement('li'); li.className = 'musicon__town-empty'; li.textContent = 'Nobody has said what they have on. Paste a link above and be the first.'; townList.replaceChildren(li); return; }
+      townList.replaceChildren(...on.map((s) => {
+        const li = document.createElement('li'); const b = document.createElement('button'); b.type = 'button'; b.className = 'musicon__town-row';
+        const img = document.createElement('img'); img.src = `https://noun.pics/${Number(s.nounId) || 0}.svg`; img.alt = ''; img.width = 28; img.height = 28; img.loading = 'lazy';
+        const t = document.createElement('span'); t.textContent = `♫ ${String(s.listening).slice(0, 120)}`;
+        b.setAttribute('aria-label', `Noun ${Number(s.nounId) || 0} has on: ${s.listening}. Open attendance.`);
+        b.addEventListener('click', () => window.dispatchEvent(new CustomEvent('pc:attendance:open', { detail: { noun: s.nounId } })));
+        b.append(img, t); li.append(b); return li;
+      }));
     });
 
     // ── 05 · invite ────────────────────────────────────────────────
@@ -280,6 +325,21 @@ const invites = [
   .musicon__status[data-tone='ok'] { color: #2f5a0d; }
   .musicon__status[data-tone='warn'] { color: #8a2f12; }
 
+  .musicon__mine { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 12px; line-height: 1.35; color: var(--home-muted); }
+  .musicon__mine[hidden] { display: none; }
+  .musicon__mine b { color: var(--shelf-color); font-weight: 600; }
+  .musicon__mine button { padding: 0; border: 0; background: none; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; text-decoration: underline; color: var(--home-ink); cursor: pointer; }
+
+  .musicon__town { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; align-items: center; padding: 10px clamp(16px, 3vw, 28px); border-top: 2px solid var(--home-ink); }
+  .musicon__town-head { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--shelf-color); }
+  .musicon__town-head::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #3B6D11; }
+  .musicon__town ul { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+  .musicon__town :global(.musicon__town-empty) { font-size: 12px; color: var(--home-faint); }
+  .musicon__town :global(.musicon__town-row) { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 0 8px 0 0; border: 1px solid var(--home-ink); background: var(--home-paper-warm); color: var(--home-ink); font: 600 12px var(--pc-font-sans); cursor: pointer; }
+  .musicon__town :global(.musicon__town-row img) { display: block; width: 28px; height: 28px; border-right: 1px solid var(--home-ink); background: #fff; image-rendering: pixelated; }
+  .musicon__town :global(.musicon__town-row span) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .musicon__town :global(.musicon__town-row:hover) { background: var(--shelf-color); color: #fff; }
+
   .musicon__list, .musicon__quiet ul { margin: 0; padding: 0; list-style: none; }
   .musicon__list { display: grid; margin-top: auto; border-top: 1px solid var(--home-rule); }
   .musicon__list a { display: grid; gap: 1px; padding: 7px 0; border-bottom: 1px solid var(--home-rule); font-size: 12px; line-height: 1.3; }
@@ -306,6 +366,7 @@ const invites = [
     .musicon__pads button { flex-direction: column; min-height: 58px; }
     .musicon__quiet ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .musicon__quiet span { display: none; }
+    .musicon__town { grid-template-columns: 1fr; }
     .musicon__radio { max-width: none; }
   }
   @media (pointer: coarse) { .musicon__tap small { display: none; } }
