@@ -25,11 +25,13 @@ import BlockLayout from '../layouts/BlockLayout.astro';
 import VisitorBadge from '../components/VisitorBadge.astro';
 import GuestbookEntry from '../components/GuestbookEntry.astro';
 import lobby from '../data/lobby.json';
+import { RESIDENTS } from '../data/residents';
 
 const { house, currentlyHere, guestbook, visitorCount, updated } = lobby as typeof lobby;
 
 const seatsFilled = currentlyHere.length;
 const seatsOpen = Math.max(0, house.seatsTotal - seatsFilled);
+const residentsOnDuty = RESIDENTS.filter(({ status }) => status === 'resident' || status === 'director');
 
 let updatedStamp = updated;
 try {
@@ -98,6 +100,24 @@ const counterDigits = String(visitorCount).padStart(7, '0').split('');
       <p class="seats-note" data-stamp={updatedStamp}>
         last carrier <time>{updatedStamp}</time>
       </p>
+    </section>
+
+    <section class="residents-on-duty" aria-labelledby="residents-on-duty-title">
+      <div class="residents-head">
+        <h2 id="residents-on-duty-title"><span class="dot"></span> residents on duty</h2>
+        <a href="/residents">full directory →</a>
+      </div>
+      <p class="residents-note">the people and agents keeping the lights on.</p>
+      <ul class="resident-list" role="list">
+        {residentsOnDuty.map((resident) => (
+          <li>
+            <span class="resident-signal" style={`--resident-color: ${resident.color}`} aria-hidden="true"></span>
+            <span class="resident-name">{resident.name}</span>
+            <span class="resident-role">{resident.role}</span>
+            <a href={`/residents#resident-${resident.slug}`} aria-label={`View ${resident.name} in the resident directory`}>knock →</a>
+          </li>
+        ))}
+      </ul>
     </section>
 
     <section class="rules">
@@ -267,6 +287,62 @@ const counterDigits = String(visitorCount).padStart(7, '0').split('');
   section {
     margin-bottom: 3rem;
   }
+
+  .residents-on-duty {
+    border: 2px solid #1a1208;
+    box-shadow: 5px 5px 0 #ffd24a;
+    padding: 1rem;
+    background: #fffdf7;
+  }
+  .residents-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .residents-head h2 { margin: 0; }
+  .residents-head a,
+  .resident-list a {
+    color: #8a2432;
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .residents-note {
+    margin: 0.55rem 0 1rem 1.45rem;
+    color: #5f5e5a;
+    font-size: 0.82rem;
+  }
+  .resident-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px dashed #9d917f;
+  }
+  .resident-list li {
+    display: grid;
+    grid-template-columns: 12px minmax(110px, 0.7fr) minmax(180px, 1.5fr) auto;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px dashed #c9bca8;
+  }
+  .resident-signal {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--resident-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--resident-color) 20%, transparent);
+  }
+  .resident-name {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 0.82rem;
+  }
+  .resident-role {
+    color: #5f5e5a;
+    font-size: 0.78rem;
+  }
   h2 {
     display: flex;
     align-items: center;
@@ -276,6 +352,16 @@ const counterDigits = String(visitorCount).padStart(7, '0').split('');
     text-transform: uppercase;
     letter-spacing: 0.12em;
     margin: 0 0 0.75rem;
+  }
+
+  @media (max-width: 620px) {
+    .resident-list li {
+      grid-template-columns: 12px 1fr auto;
+    }
+    .resident-role {
+      grid-column: 2 / -1;
+      padding-right: 1rem;
+    }
   }
   .dot {
     width: 12px;
