@@ -7,10 +7,9 @@
  * by PrizeCast (the no-loss savings lottery). The dock slot is still
  * named CAST — these are the spells it casts.
  *
- * Exit-condition wrap-up: catalog hit ≥20 shipped spells, so this page
- * is the natural landing for "what magic words exist?" Live in PR #324
- * too, landing here when that merges. This page is the sketch; #324 is
- * the richer production pass.
+ * v2 wrap-up (catalog ≥20): added compact table view. Toggle between
+ * the card grid (browsing) and a flat "every spell + Cast button per
+ * row" table (reference). View preference is persisted in localStorage.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { SPELLS } from '../data/spells';
@@ -55,7 +54,7 @@ const jsonLd = {
   jsonLd={jsonLd}
   alternates={[{ type: 'application/json', href: '/spells.json', title: 'Spells JSON' }]}
 >
-  <div class="pg">
+  <div class="pg" data-view="grid" id="js-pg">
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/">Home</a>
       <span aria-hidden="true">›</span>
@@ -63,7 +62,7 @@ const jsonLd = {
     </nav>
 
     <header class="head">
-      <p class="kicker">06 CAST · MAGIC WORDS · v1</p>
+      <p class="kicker">06 CAST · MAGIC WORDS · v2</p>
       <h1 class="display">Spells.</h1>
       <p class="dek">
         Type <code>+spell</code> in the omnibox, or click a chip in slot&nbsp;06&nbsp;CAST.
@@ -72,33 +71,85 @@ const jsonLd = {
       <div class="head-actions">
         <button class="btn btn--clear" id="js-clear-all" type="button">🌪 clear all</button>
         <button class="btn btn--cast-all" id="js-cast-all" type="button">✨ cast everything</button>
+        <div class="view-toggle" role="group" aria-label="View mode">
+          <button class="btn btn--view is-active" id="js-view-grid" type="button" data-view-mode="grid" aria-pressed="true">grid</button>
+          <button class="btn btn--view" id="js-view-table" type="button" data-view-mode="table" aria-pressed="false">list</button>
+        </div>
       </div>
     </header>
 
-    {(['burst', 'companion', 'ambient'] as const).map(kind => (
-      <section class="section" aria-label={kindLabel[kind]}>
-        <div class="section-head">
-          <p class="section-kicker">{kindLabel[kind]}</p>
-          <p class="section-note">{kindBlurb[kind]}</p>
-        </div>
-        <div class="grid" role="list">
-          {byKind[kind].map(spell => (
-            <article
-              class="card"
-              id={spell.id}
-              role="listitem"
-              style={`--accent: ${spell.accent}`}
-              data-spell-id={spell.id}
-            >
-              <div class="card-top">
-                <span class="glyph" aria-hidden="true">{spell.glyph}</span>
-                <div class="card-meta">
-                  <p class="spell-id mono">+{spell.id}</p>
-                  <span class={`pill pill--${kind}`}>{kind}{spell.durationMs ? ` · ${(spell.durationMs / 1000).toFixed(0)}s` : ''}</span>
+    {/* ── GRID VIEW ──────────────────────────────────────────────────── */}
+    <div class="grid-view" aria-label="Spell grid">
+      {(['burst', 'companion', 'ambient'] as const).map(kind => (
+        <section class="section" aria-label={kindLabel[kind]}>
+          <div class="section-head">
+            <p class="section-kicker">{kindLabel[kind]}</p>
+            <p class="section-note">{kindBlurb[kind]}</p>
+          </div>
+          <div class="grid" role="list">
+            {byKind[kind].map(spell => (
+              <article
+                class="card"
+                id={spell.id}
+                role="listitem"
+                style={`--accent: ${spell.accent}`}
+                data-spell-id={spell.id}
+              >
+                <div class="card-top">
+                  <span class="glyph" aria-hidden="true">{spell.glyph}</span>
+                  <div class="card-meta">
+                    <p class="spell-id mono">+{spell.id}</p>
+                    <span class={`pill pill--${kind}`}>{kind}{spell.durationMs ? ` · ${(spell.durationMs / 1000).toFixed(0)}s` : ''}</span>
+                  </div>
                 </div>
-              </div>
-              <p class="blurb">{spell.blurb}</p>
-              <div class="card-actions">
+                <p class="blurb">{spell.blurb}</p>
+                <div class="card-actions">
+                  <button
+                    class="btn btn--cast"
+                    type="button"
+                    data-cast={spell.id}
+                    aria-label={`Cast ${spell.label}`}
+                  >cast</button>
+                  <button
+                    class="btn btn--copy"
+                    type="button"
+                    data-copy={spell.id}
+                    aria-label={`Copy +${spell.id} to clipboard`}
+                  >copy</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    {/* ── TABLE VIEW ─────────────────────────────────────────────────── */}
+    <div class="table-view" aria-label="Spell table" hidden>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th class="th th--glyph" scope="col" aria-label="Glyph"></th>
+            <th class="th th--id"   scope="col">spell</th>
+            <th class="th th--kind" scope="col">kind</th>
+            <th class="th th--blurb th--wide" scope="col">feel</th>
+            <th class="th th--actions" scope="col" aria-label="Actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {SPELLS.map(spell => (
+            <tr class="trow" id={`t-${spell.id}`} style={`--accent: ${spell.accent}`}>
+              <td class="td td--glyph" aria-hidden="true">{spell.glyph}</td>
+              <td class="td td--id">
+                <span class="mono tbl-id">+{spell.id}</span>
+              </td>
+              <td class="td td--kind">
+                <span class={`pill pill--${spell.kind}`}>
+                  {spell.kind}{spell.durationMs ? ` · ${(spell.durationMs / 1000).toFixed(0)}s` : ''}
+                </span>
+              </td>
+              <td class="td td--blurb">{spell.blurb}</td>
+              <td class="td td--actions">
                 <button
                   class="btn btn--cast"
                   type="button"
@@ -111,12 +162,12 @@ const jsonLd = {
                   data-copy={spell.id}
                   aria-label={`Copy +${spell.id} to clipboard`}
                 >copy</button>
-              </div>
-            </article>
+              </td>
+            </tr>
           ))}
-        </div>
-      </section>
-    ))}
+        </tbody>
+      </table>
+    </div>
 
     <footer class="pg-footer">
       <p class="pg-footer__note">
@@ -142,6 +193,8 @@ const jsonLd = {
     (function () {
       'use strict';
 
+      var LS_KEY = 'pc-spells-view';
+
       function dispatch(id) {
         // SpellLayer listens on window (SpellLayer.astro), and a CustomEvent
         // does not bubble by default — dispatching this on document meant every
@@ -149,20 +202,52 @@ const jsonLd = {
         window.dispatchEvent(new CustomEvent('pc:spell:cast', { detail: { id: id } }));
       }
 
+      function setView(mode) {
+        var pg        = document.getElementById('js-pg');
+        var gridView  = pg && pg.querySelector('.grid-view');
+        var tableView = pg && pg.querySelector('.table-view');
+        var btnGrid   = document.getElementById('js-view-grid');
+        var btnTable  = document.getElementById('js-view-table');
+        if (!pg || !gridView || !tableView) return;
+
+        pg.dataset.view = mode;
+        if (mode === 'table') {
+          gridView.hidden  = true;
+          tableView.hidden = false;
+          if (btnGrid)  { btnGrid.classList.remove('is-active');  btnGrid.setAttribute('aria-pressed', 'false'); }
+          if (btnTable) { btnTable.classList.add('is-active');    btnTable.setAttribute('aria-pressed', 'true'); }
+        } else {
+          gridView.hidden  = false;
+          tableView.hidden = true;
+          if (btnGrid)  { btnGrid.classList.add('is-active');     btnGrid.setAttribute('aria-pressed', 'true'); }
+          if (btnTable) { btnTable.classList.remove('is-active'); btnTable.setAttribute('aria-pressed', 'false'); }
+        }
+        try { localStorage.setItem(LS_KEY, mode); } catch (_) {}
+      }
+
+      // restore saved view
+      (function () {
+        try {
+          var saved = localStorage.getItem(LS_KEY);
+          if (saved === 'table') setView('table');
+        } catch (_) {}
+      })();
+
       document.addEventListener('click', function (e) {
         var t = e.target;
 
+        // view toggle
+        var viewBtn = t.closest('[data-view-mode]');
+        if (viewBtn) { setView(viewBtn.dataset.viewMode); return; }
+
         // cast button
-        var castId = t.closest('[data-cast]') && t.closest('[data-cast]').dataset.cast;
-        if (castId) {
-          dispatch(castId);
-          return;
-        }
+        var castEl = t.closest('[data-cast]');
+        if (castEl) { dispatch(castEl.dataset.cast); return; }
 
         // copy button
         var copyEl = t.closest('[data-copy]');
         if (copyEl) {
-          var id = copyEl.dataset.copy;
+          var id   = copyEl.dataset.copy;
           var text = '+' + id;
           try {
             navigator.clipboard.writeText(text).then(function () {
@@ -173,7 +258,7 @@ const jsonLd = {
             var ta = document.createElement('textarea');
             ta.value = text;
             ta.style.position = 'fixed';
-            ta.style.opacity = '0';
+            ta.style.opacity  = '0';
             document.body.appendChild(ta);
             ta.select();
             document.execCommand('copy');
@@ -192,9 +277,9 @@ const jsonLd = {
 
         // cast everything — stagger 250ms apart
         if (t.closest('#js-cast-all')) {
-          var ids = Array.from(document.querySelectorAll('[data-cast]')).map(function (el) {
-            return el.dataset.cast;
-          });
+          var ids = Array.from(document.querySelectorAll('[data-cast]'))
+            .map(function (el) { return el.dataset.cast; })
+            .filter(function (id, i, arr) { return arr.indexOf(id) === i; });
           ids.forEach(function (id, i) {
             setTimeout(function () { dispatch(id); }, i * 250);
           });
@@ -266,9 +351,32 @@ const jsonLd = {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
+    align-items: center;
     padding-bottom: 28px;
     border-bottom: 1.5px solid var(--pc-ink);
     margin-bottom: 32px;
+  }
+
+  /* ─── view toggle ─── */
+  .view-toggle {
+    display: flex;
+    gap: 0;
+    margin-left: auto;
+  }
+
+  .btn--view {
+    border-radius: 0;
+    border-color: var(--pc-rule, #d8d4cc);
+    color: var(--pc-ink-muted);
+  }
+
+  .btn--view:first-child { border-radius: 2px 0 0 2px; }
+  .btn--view:last-child  { border-radius: 0 2px 2px 0; border-left: none; }
+
+  .btn--view.is-active {
+    background: var(--pc-ink);
+    color: #fff;
+    border-color: var(--pc-ink);
   }
 
   /* ─── section ─── */
@@ -383,6 +491,63 @@ const jsonLd = {
     gap: 7px;
   }
 
+  /* ─── table view ─── */
+  .table-view {
+    overflow-x: auto;
+    margin-bottom: 40px;
+  }
+
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .th {
+    font-family: var(--pc-font-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    text-align: left;
+    padding: 0 10px 8px;
+    border-bottom: 1.5px solid var(--pc-ink);
+    white-space: nowrap;
+  }
+
+  .th--glyph   { width: 36px; padding-left: 0; }
+  .th--id      { width: 120px; }
+  .th--kind    { width: 130px; }
+  .th--wide    { }
+  .th--actions { width: 120px; text-align: right; }
+
+  .trow {
+    border-bottom: 1px solid var(--pc-rule, #d8d4cc);
+    transition: background 0.1s;
+  }
+
+  .trow:hover { background: #faf8f4; }
+
+  .td {
+    padding: 9px 10px;
+    vertical-align: middle;
+    color: var(--pc-ink-soft);
+    line-height: 1.4;
+  }
+
+  .td--glyph   { font-size: 20px; padding-left: 0; line-height: 1; }
+  .td--id      { }
+  .td--kind    { }
+  .td--blurb   { color: var(--pc-ink-soft); }
+  .td--actions { text-align: right; white-space: nowrap; }
+
+  .tbl-id {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--pc-ink);
+  }
+
   /* ─── buttons ─── */
   .btn {
     display: inline-flex;
@@ -475,5 +640,8 @@ const jsonLd = {
   @media (max-width: 400px) {
     .grid { grid-template-columns: 1fr; }
     .section-head { flex-direction: column; gap: 4px; }
+    .view-toggle { margin-left: 0; }
+    .th--blurb { display: none; }
+    .td--blurb { display: none; }
   }
 </style>
