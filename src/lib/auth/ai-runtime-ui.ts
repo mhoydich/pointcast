@@ -203,9 +203,9 @@ export function mountAiRuntime(root: HTMLElement, options: { pollMs?: number } =
     const view = buildRuntimeView(runtime, provider, jobs());
     if (compact) {
       const state = !available ? loading ? 'checking' : authMissing ? 'signed-out' : 'unavailable' : view.state;
-      const label = { checking: 'My AI · checking', 'signed-out': 'Bring your AI', unavailable: 'My AI · unavailable', unpaired: 'Bring your AI', waiting: 'My AI · pairing', offline: 'My AI · offline', online: 'My AI · sign in', ready: 'My AI · online', verified: 'My AI · online' }[state];
+      const label = { checking: 'My AI · checking', 'signed-out': 'Bring your AI', unavailable: 'My AI · unavailable', unpaired: 'Bring your AI', waiting: 'My AI · pairing', offline: 'My AI · not running', online: 'My AI · sign in', ready: 'My AI · online', verified: 'My AI · online' }[state];
       doc.querySelectorAll<HTMLElement>('[data-ai-header]').forEach((el) => { el.textContent = label; el.dataset.aiState = state; });
-      const dockLabel = { checking: 'MY AI', 'signed-out': 'BRING YOUR AI', unavailable: 'MY AI', unpaired: 'BRING YOUR AI', waiting: 'PAIRING…', offline: 'MY AI · OFFLINE', online: 'MY AI · SIGN IN', ready: 'ASK MY AI', verified: 'ASK MY AI' }[state];
+      const dockLabel = { checking: 'MY AI', 'signed-out': 'BRING YOUR AI', unavailable: 'MY AI', unpaired: 'BRING YOUR AI', waiting: 'PAIRING…', offline: 'MY AI · NOT RUNNING', online: 'MY AI · SIGN IN', ready: 'ASK MY AI', verified: 'ASK MY AI' }[state];
       doc.querySelectorAll<HTMLElement>('[data-ai-dock-label]').forEach((el) => {
         el.textContent = dockLabel;
         const button = el.closest('button');
