@@ -5,7 +5,7 @@
  * article (CC BY-SA 4.0), shown with its link, and only when the article can be
  * shown to be the right one:
  *   song    the article's short description says song/single AND names the artist,
- *           and the article title starts with the track title
+ *           and the article title (minus its parenthetical) equals the track title
  *   record  same, for album/EP/soundtrack
  *   artist  the article title IS the artist's name and the description is a kind of
  *           musician or group
@@ -16,6 +16,8 @@
  *
  * Results live in the edge cache for a week. No KV.
  */
+import { rateLimit } from '../../_rate-limit.ts';
+
 const UA = 'PointCastStation/1.0 (https://pointcast.xyz/station)';
 const WEEK = 7 * 24 * 60 * 60;
 const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' };
@@ -47,7 +49,9 @@ export function accept(kind: Note['kind'], s: Summary, want: { title: string; ar
   if (!KINDS[kind].test(s.description)) return false;
   const page = norm(bare(s.title)), artist = norm(want.artist);
   if (kind === 'artist') return page === artist || page === `the ${artist}` || `the ${page}` === artist;
-  if (!page.startsWith(norm(want.title)) || !norm(want.title)) return false;
+  // The article's title (minus its parenthetical) must BE the title. A prefix is not enough:
+  // "Money" is not "Money for Nothing", even though both are singles by bands with a "Money" song.
+  const title = norm(want.title); if (!title || (page !== title && page !== `the ${title}` && `the ${page}` !== title)) return false;
   return ` ${norm(`${s.description} ${s.extract}`)} `.includes(` ${artist} `);
 }
 
@@ -95,7 +99,7 @@ export async function linerNotes(input: { title: string; artist: string; album?:
   return { focus: { title, artist, album }, notes };
 }
 
-export async function handleNotes(request: Request, fetcher: typeof fetch = fetch): Promise<Response> {
+export async function handleNotes(request: Request, fetcher: typeof fetch = fetch, env?: { PC_RATES_KV?: KVNamespace }): Promise<Response> {
   if (request.method !== 'GET') return new Response(JSON.stringify({ ok: false, error: 'Method not allowed.' }), { status: 405, headers });
   const u = new URL(request.url), cap = (k: string) => (u.searchParams.get(k) ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
   const title = cap('title'), artist = cap('artist'), album = cap('album');
@@ -103,10 +107,12 @@ export async function handleNotes(request: Request, fetcher: typeof fetch = fetc
   const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
   const key = new Request(`https://pointcast.xyz/__station/notes/v1?${new URLSearchParams({ t: norm(title), a: norm(artist), al: norm(album) })}`);
   const hit = await cache?.match(key).catch(() => undefined); if (hit) return hit;
+  // A miss fans out to Wikipedia (up to ~20 requests). Meter misses per address; hits stay free.
+  if (env) { const limit = await rateLimit(request, env, { bucket: 'station:notes', windowSec: 60, maxRequests: 12 }); if (!limit.allowed) return new Response(JSON.stringify({ ok: false, error: 'Too many lookups. Try again in a minute.' }), { status: 429, headers: { ...headers, 'Retry-After': String(limit.retryAfter) } }); }
   const found = await linerNotes({ title, artist, album }, fetcher);
   const res = new Response(JSON.stringify({ ok: true, ...found, source: 'Wikipedia', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/', method: 'Opening text of the matching English Wikipedia articles. A note appears only when the article’s own description names the right artist and the right kind of thing. Nothing is generated.' }), { headers: { ...headers, 'Cache-Control': `public, max-age=3600, s-maxage=${found.notes.length ? WEEK : 3600}` } });
   if (cache) await cache.put(key, res.clone()).catch(() => undefined);
   return res;
 }
 
-export const onRequest: PagesFunction = ({ request }) => handleNotes(request);
+export const onRequest: PagesFunction<{ PC_RATES_KV?: KVNamespace }> = ({ request, env }) => handleNotes(request, fetch, env);

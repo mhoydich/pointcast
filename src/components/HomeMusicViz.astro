@@ -45,6 +45,7 @@
     const modeEl = $('[data-mviz-mode]'), noteEl = $('[data-mviz-note]'), lamp = $('[data-mviz-lamp]');
     const micBtn = $<HTMLButtonElement>('[data-mviz-mic]'), tabBtn = $<HTMLButtonElement>('[data-mviz-tab]'), stopBtn = $<HTMLButtonElement>('[data-mviz-stop]');
     const calm = matchMedia('(prefers-reduced-motion: reduce)');
+    const life = new AbortController(), sig = { signal: life.signal }; // every listener below dies with this page
 
     // ── the wall ───────────────────────────────────────────────────
     const ROWS = 10; let cols = 40, W = 0, H = 0, dpr = 1;
@@ -188,20 +189,20 @@
       kick();
     }
     function kick() { if (!raf && onScreen && document.visibilityState === 'visible') raf = requestAnimationFrame(frame); }
-    new IntersectionObserver((es) => { onScreen = es.some((e) => e.isIntersecting); kick(); }, { rootMargin: '80px' }).observe(root);
-    document.addEventListener('visibilitychange', kick);
-    new ResizeObserver(() => { resize(); paint(); }).observe(canvas);
+    const seen = new IntersectionObserver((es) => { onScreen = es.some((e) => e.isIntersecting); kick(); }, { rootMargin: '80px' }); seen.observe(root);
+    document.addEventListener('visibilitychange', kick, sig);
+    const sized = new ResizeObserver(() => { resize(); paint(); }); sized.observe(canvas);
 
     // ── the rest of the shelf talks to the wall ────────────────────
-    window.addEventListener('pc:music:tempo', (ev: Event) => { const d = (ev as CustomEvent).detail || {}; const b = Number(d.bpm); if (b >= 40 && b <= 240) { bpm = b; t0 = Number(d.at) || performance.now(); describe(); } });
+    window.addEventListener('pc:music:tempo', (ev: Event) => { const d = (ev as CustomEvent).detail || {}; const b = Number(d.bpm); if (b >= 40 && b <= 240) { bpm = b; t0 = Number(d.at) || performance.now(); describe(); } }, sig);
     window.addEventListener('pc:rosebud:played', (ev: Event) => {
       const z = PAD[String((ev as CustomEvent).detail?.drum || '')]; if (!z) return;
       for (let c = Math.floor(z.from * cols); c < Math.ceil(z.to * cols); c++) { const x = (c / cols - z.from) / (z.to - z.from); tint[c] = Math.max(tint[c], .55 + .45 * Math.sin(Math.PI * x)); tintHue[c] = z.color; }
       if (calm.matches) { last = 0; } kick();
-    });
+    }, sig);
     root.addEventListener('pc:viz:frame', () => frame(performance.now())); // one frame on demand (hidden-tab checks)
-    document.addEventListener('astro:before-swap', () => { stop(true); cancelAnimationFrame(raf); }, { once: true });
-    window.addEventListener('pagehide', () => stop(true));
+    document.addEventListener('astro:before-swap', () => { stop(true); cancelAnimationFrame(raf); seen.disconnect(); sized.disconnect(); life.abort(); }, { once: true });
+    window.addEventListener('pagehide', () => stop(true), sig);
     resize(); describe(); paint();
   }
   mountMusicViz();
