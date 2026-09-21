@@ -7,6 +7,7 @@ export const AGENT_SURFACES = {
   human: {
     chime: 'https://pointcast.xyz/chime',
     shortwave: 'https://pointcast.xyz/shortwave',
+    station: 'https://pointcast.xyz/station',
     chimeBrief: 'https://pointcast.xyz/chime/brief.md',
     home: 'https://pointcast.xyz/',
     about: 'https://pointcast.xyz/about',
@@ -29,6 +30,7 @@ export const AGENT_SURFACES = {
   json: {
     chime: 'https://pointcast.xyz/chime.json',
     shortwave: 'https://pointcast.xyz/shortwave.json',
+    station: 'https://pointcast.xyz/station.json',
     agents: 'https://pointcast.xyz/agents.json',
     wellKnownAgents: 'https://pointcast.xyz/.well-known/agents.json',
     wellKnownAi: 'https://pointcast.xyz/.well-known/ai.json',

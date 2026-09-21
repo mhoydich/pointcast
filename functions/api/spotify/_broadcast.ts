@@ -1,3 +1,4 @@
+import { clearStation, recordSeen } from './_station.ts';
 import { NOW_PLAYING } from '../../../src/data/now-playing.ts';
 
 export type SpotifyBroadcastEnv = Cloudflare.Env;
@@ -51,7 +52,12 @@ interface SpotifyCurrentlyPlaying {
     type?: string;
     external_urls?: { spotify?: string };
     artists?: Array<{ name?: string }>;
+    duration_ms?: number;
+    popularity?: number;
+    explicit?: boolean;
     album?: {
+      name?: string;
+      release_date?: string;
       images?: Array<{ url?: string; height?: number; width?: number }>;
     };
     show?: {
@@ -234,6 +240,22 @@ async function fetchCurrentlyPlaying(
   return response;
 }
 
+/** One authorised GET against the broadcaster's Spotify account, with a single refresh-and-retry on 401. */
+export async function spotifyBroadcastFetch(
+  env: SpotifyBroadcastEnv,
+  url: string,
+): Promise<Response | null> {
+  if (!url.startsWith('https://api.spotify.com/v1/me/')) return null;
+  let token = await userAccessToken(env);
+  if (!token) return null;
+  let response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (response.status !== 401) return response;
+  token = await userAccessToken(env, true);
+  if (!token) return null;
+  response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  return response;
+}
+
 function bestImage(
   images: Array<{ url?: string; height?: number; width?: number }> | undefined,
 ): string | null {
@@ -320,9 +342,12 @@ export async function resolveNowPlaying(
     }
     if (!response.ok) return cached?.record ?? fallback;
 
-    const record = publicRecord(await response.json() as SpotifyCurrentlyPlaying);
+    const payload = await response.json() as SpotifyCurrentlyPlaying;
+    const record = publicRecord(payload);
     if (!record) return cached?.record ?? fallback;
     await storeSignal(env, record).catch(() => undefined);
+    // The station log: a track the signal saw playing. Music only (episodes have no artists).
+    if (record.live && payload.item?.type === 'track') await recordSeen(env, payload.item);
     return record;
   } catch {
     return cached?.record ?? fallback;
@@ -334,5 +359,6 @@ export async function clearSpotifyBroadcast(env: SpotifyBroadcastEnv): Promise<v
   await Promise.all([
     kv.delete(CREDENTIALS_KEY),
     kv.delete(SIGNAL_KEY),
+    clearStation(env), // disconnecting also erases the /station play log
   ]);
 }
