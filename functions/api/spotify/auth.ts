@@ -60,11 +60,11 @@ export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ request
   authorize.searchParams.set('response_type', 'code');
   authorize.searchParams.set('redirect_uri', redirectUri);
   // A personal connection only ever shows the current track. The broadcaster's station
-  // (/station) also reads play history and top lists, so that flow asks for them; a
+  // (/station) also reads play history, top lists and the saved library, so that flow asks for them; a
   // broadcaster token granted before 2026-09-21 keeps working with the narrow scope.
   authorize.searchParams.set('scope', personal
     ? 'user-read-currently-playing'
-    : 'user-read-currently-playing user-read-recently-played user-top-read');
+    : 'user-read-currently-playing user-read-recently-played user-top-read user-library-read');
   authorize.searchParams.set('state', state);
   authorize.searchParams.set('show_dialog', 'true');
   return Response.redirect(authorize.toString(), 302);

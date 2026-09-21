@@ -56,7 +56,8 @@ test('the signal logs a sighting with one KV write, never two for the same play,
 
 test('only the broadcaster flow asks Spotify for history; a personal connection stays narrow; the policy says so', () => {
   const auth = read('functions/api/spotify/auth.ts'), privacy = read('src/pages/privacy.astro'), api = read('functions/api/station.ts'), bc = read('functions/api/spotify/_broadcast.ts');
-  assert.match(auth, /personal\s+\? 'user-read-currently-playing'\s+: 'user-read-currently-playing user-read-recently-played user-top-read'/);
+  assert.match(auth, /personal\s+\? 'user-read-currently-playing'\s+: 'user-read-currently-playing user-read-recently-played user-top-read user-library-read'/);
+  assert.match(privacy, /user-library-read/);
   assert.match(privacy, /user-read-recently-played/); assert.match(privacy, /A personal Spotify connection never has a\s+play log/);
   assert.match(api, /roles\?\.includes\('broadcaster'\)/); assert.match(api, /same-origin-required/);
   assert.match(bc, /clearStation\(env\)/, 'disconnecting Spotify erases the log');
@@ -163,4 +164,21 @@ test('the notes endpoint returns attributed Wikipedia text, Commons pictures for
   const none = await (await handleNotes(new Request('https://pointcast.xyz/api/station/notes?title=Zzz&artist=Nobody'), async () => Response.json({ query: { search: [] } }))).json();
   assert.deepEqual(none.notes, []); assert.equal((await handleNotes(new Request('https://pointcast.xyz/api/station/notes?title=x'), fake)).status, 400);
   const page = read('src/pages/station.astro'); assert.match(page, /Nothing here is generated\./); assert.match(page, /Better blank than wrong\./);
+});
+
+// ── rewind: Spotify's three windows side by side (2026-09-21) ──
+import { computeRewind } from '../functions/api/spotify/_station.ts';
+
+test('rewind is set arithmetic on Spotify’s three lists: no play counts are invented', () => {
+  const A = (name, genres = []) => ({ name, url: `https://open.spotify.com/artist/${name}`, genres });
+  const top = { fetchedAt: Date.parse('2026-09-21T12:00:00Z'), library: { total: 4321, first: { t: 'Brick', a: 'Ben Folds Five', url: 'https://open.spotify.com/track/x', savedAt: '2012-03-03T00:00:00.000Z' }, latest: [] },
+    artists: { weeks: [A('Ben Folds Five'), A('Genesis'), A('Khruangbin')], months: [A('Genesis'), A('Pink Floyd')], years: [A('Genesis', ['progressive rock', 'art rock']), A('Pink Floyd', ['progressive rock']), A('Jethro Tull', ['folk rock'])] },
+    tracks: { weeks: [], months: [], years: [{ t: 'Firth of Fifth', a: 'Genesis', url: 'u', yr: 1973 }, { t: 'Fearless', a: 'Pink Floyd', url: 'u', yr: 1971 }, { t: 'Brick', a: 'Ben Folds Five', url: 'u', yr: 1997 }] } };
+  const rw = computeRewind(top);
+  assert.deepEqual(rw.newObsessions.map((x) => x.name), ['Ben Folds Five', 'Khruangbin']);
+  assert.deepEqual(rw.alwaysThere.map((x) => x.name), ['Genesis']);
+  assert.deepEqual(rw.faded.map((x) => x.name), ['Jethro Tull'], 'Pink Floyd is still in the six-month list, so it has not gone quiet');
+  assert.equal(rw.genres[0], 'progressive rock'); assert.deepEqual(rw.topTrackDecades, [{ decade: 1970, tracks: 2 }, { decade: 1990, tracks: 1 }]);
+  assert.equal(rw.library.total, 4321); assert.doesNotMatch(JSON.stringify(rw), /"plays"/);
+  const page = read('src/pages/station.astro'); assert.match(page, /It gives ranks, not play counts/); assert.match(page, /data-rw hidden/);
 });

@@ -51,6 +51,30 @@ const description = 'One listener’s radio station from El Segundo: what is on 
       <p class="stn-note" data-window></p>
     </section>
 
+    <section class="stn-panel stn-rw" id="rewind" aria-labelledby="stn-rw-title" data-rw hidden>
+      <div class="stn-rw__head">
+        <div>
+          <p class="stn-notes__kicker">Rewind · Spotify’s own long view of this one account</p>
+          <h2 id="stn-rw-title">The long view</h2>
+          <p class="stn-sub">Spotify ranks an account’s artists and tracks over three windows: about four weeks, about six months, and a year or more. It gives ranks, not play counts, and does not say how it ranks. Everything below is those three lists set side by side.</p>
+        </div>
+        <div class="stn-rw__tabs" role="tablist" aria-label="Window"><button type="button" role="tab" data-rw-tab="years" aria-selected="true">All time</button><button type="button" role="tab" data-rw-tab="months" aria-selected="false">Six months</button><button type="button" role="tab" data-rw-tab="weeks" aria-selected="false">Four weeks</button></div>
+      </div>
+      <ol class="stn-rw__faces" data-rw-artists></ol>
+      <div class="stn-rw__cols">
+        <div><h3 data-rw-tracks-title>Top tracks</h3><ol class="stn-rw__tracks" data-rw-tracks></ol></div>
+        <div class="stn-rw__moves">
+          <div data-rw-box="newObsessions" hidden><h3>New lately</h3><p class="stn-sub">In the four-week list, in neither of the longer ones.</p><p class="stn-rw__chips"></p></div>
+          <div data-rw-box="alwaysThere" hidden><h3>Always there</h3><p class="stn-sub">In all three windows at once.</p><p class="stn-rw__chips"></p></div>
+          <div data-rw-box="faded" hidden><h3>Gone quiet</h3><p class="stn-sub">All-time top fifteen, absent from the last six months.</p><p class="stn-rw__chips"></p></div>
+          <div data-rw-box="genres" hidden><h3>Spotify’s genre tags</h3><p class="stn-sub">From the all-time artists, weighted by rank. Spotify leaves many artists untagged.</p><p class="stn-rw__chips"></p></div>
+          <div data-rw-box="decades" hidden><h3>All-time top tracks by decade</h3><div class="stn-bars" data-rw-decades></div></div>
+        </div>
+      </div>
+      <div class="stn-rw__lib" data-rw-lib hidden></div>
+      <p class="stn-notes__src" data-rw-asof></p>
+    </section>
+
     <section class="stn-panel stn-req" id="requests" aria-labelledby="stn-req-title" data-req>
       <div class="stn-req__head">
         <div>
@@ -101,10 +125,6 @@ const description = 'One listener’s radio station from El Segundo: what is on 
         <div><h3>New this week</h3><ol data-list="newThisWeek"><li class="stn-empty">Nothing new in the log yet.</li></ol></div>
         <div><h3>Deep cuts</h3><ol data-list="deepCuts"><li class="stn-empty">Needs popularity data from Spotify.</li></ol></div>
         <div><h3>Artists on the station</h3><ol data-list="topArtists"><li class="stn-empty">No artists in the log yet.</li></ol></div>
-      </div>
-      <div class="stn-long" data-long hidden>
-        <h3>The long view · Spotify’s own count for this account</h3>
-        <ul data-long-list></ul>
       </div>
     </section>
 
@@ -245,6 +265,31 @@ const description = 'One listener’s radio station from El Segundo: what is on 
     }
     $('[data-notes-back]').addEventListener('click', () => { pinned = false; shownKey = ''; if (airFocus) void showNotes(airFocus); });
 
+    // ── rewind: Spotify's three windows, side by side (needs user-top-read; library needs user-library-read) ──
+    let rewind: Record<string, any> | null = null, rwTab = 'years';
+    function paintRewind(rw: Record<string, any> | null) {
+      const box = $('[data-rw]'); rewind = rw;
+      const any = rw && ['weeks', 'months', 'years'].some((k) => (rw.artists?.[k] || []).length || (rw.tracks?.[k] || []).length);
+      box.hidden = !any; if (!any || !rw) return;
+      const faces = (rw.artists[rwTab] || []) as Card[];
+      $('[data-rw-artists]').replaceChildren(...faces.map((c, i) => { const li = el('li'), a = el('a'); a.href = spotify(c.url) || '#'; a.target = '_blank'; a.rel = 'noopener'; a.append(cover(c.img, 120), el('small', '', String(i + 1).padStart(2, '0')), el('b', '', c.name || ''), el('span', '', (c.genres || []).slice(0, 2).join(' · '))); li.append(a); return li; }));
+      $('[data-rw-tracks-title]').textContent = `Top tracks · ${rw.windows?.[rwTab] || ''}`;
+      $('[data-rw-tracks]').replaceChildren(...((rw.tracks[rwTab] || []) as (Card & { yr?: number })[]).map((c) => { const li = el('li'), a = el('a'); a.href = spotify(c.url) || '#'; a.target = '_blank'; a.rel = 'noopener'; const sp = el('span'); sp.append(el('b', '', c.t || ''), el('small', '', [c.a, c.yr].filter(Boolean).join(' · '))); a.append(cover(c.img, 44), sp); li.append(a); const nb = el('button', 'stn-log__notes', 'notes'); nb.type = 'button'; nb.addEventListener('click', () => { void showNotes({ t: c.t || '', a: c.a || '', yr: c.yr }, true); }); li.append(nb); return li; }));
+      const chips = (name: string, items: string[]) => { const b = root.querySelector<HTMLElement>(`[data-rw-box="${name}"]`)!; b.hidden = !items.length; b.querySelector('.stn-rw__chips')!.replaceChildren(...items.map((t) => el('span', '', t))); };
+      chips('newObsessions', (rw.newObsessions || []).map((x: Card) => x.name)); chips('alwaysThere', (rw.alwaysThere || []).map((x: Card) => x.name)); chips('faded', (rw.faded || []).map((x: Card) => x.name)); chips('genres', rw.genres || []);
+      const dec = (rw.topTrackDecades || []) as { decade: number; tracks: number }[], dbox = root.querySelector<HTMLElement>('[data-rw-box="decades"]')!; dbox.hidden = !dec.length;
+      if (dec.length) { const max = Math.max(...dec.map((d) => d.tracks)); $('[data-rw-decades]').replaceChildren(...dec.map((d) => { const row = el('p'), bar = el('i'); bar.style.width = `${Math.max(3, 100 * d.tracks / max)}%`; row.append(el('span', '', `${d.decade}s`), bar, el('b', '', String(d.tracks))); return row; })); }
+      const lib = $('[data-rw-lib]'), L = rw.library; lib.hidden = !L;
+      if (L) {
+        const fmt = (iso: string) => new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: TZ }).format(new Date(iso)); const nodes: HTMLElement[] = [el('h3', '', 'The saved library')];
+        const line = el('p', 'stn-rw__first'); line.append(el('b', '', `${Number(L.total).toLocaleString('en-US')} saved songs.`)); if (L.first) { line.append(' The first one ever saved: '); const a = el('a', '', `${L.first.t} — ${L.first.a}`); a.href = spotify(L.first.url) || '#'; a.target = '_blank'; a.rel = 'noopener'; line.append(a, `, on ${fmt(L.first.savedAt)}.`); } nodes.push(line);
+        if ((L.latest || []).length) { const ol = el('ol', 'stn-rw__saves'); ol.append(...L.latest.map((x: Record<string, string>) => { const li = el('li'), a = el('a'); a.href = spotify(x.url) || '#'; a.target = '_blank'; a.rel = 'noopener'; a.append(cover(x.img, 40), el('b', '', x.t), el('span', '', x.a), el('small', '', fmt(x.savedAt))); li.append(a); return li; })); nodes.push(el('p', 'stn-sub', 'Latest saves'), ol); }
+        lib.replaceChildren(...nodes);
+      }
+      $('[data-rw-asof]').textContent = `As Spotify had it on ${new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short', timeZone: TZ }).format(new Date(rw.asOf))} Pacific. Refreshed twice a day.`;
+    }
+    root.querySelectorAll<HTMLButtonElement>('[data-rw-tab]').forEach((b) => b.addEventListener('click', () => { rwTab = b.dataset.rwTab!; root.querySelectorAll('[data-rw-tab]').forEach((x) => x.setAttribute('aria-selected', String(x === b))); paintRewind(rewind); }));
+
     async function load() {
       let j: Record<string, any> | null = null;
       try { const r = await fetch('/api/station', { headers: { accept: 'application/json' } }); j = r.ok ? await r.json() : null; } catch { /* below */ }
@@ -258,8 +303,7 @@ const description = 'One listener’s radio station from El Segundo: what is on 
       paintClock(s.byHour || new Array(24).fill(0), s.byWeekday || new Array(7).fill(0), s.signature ? `${s.signature === 'Late night' ? 'A late-night' : `A${/^[AE]/.test(s.signature) ? 'n' : ''} ${String(s.signature).toLowerCase()}`} station. Busiest around ${hourName(Number(s.peakHour))}, Pacific.` : 'When the station is on, hour by hour. Fills in as the log grows.');
       paintEra(s.decades || [], s.averagePopularity ?? null, s.explicitShare || 0);
       for (const name of ['heavyRotation', 'newThisWeek', 'deepCuts', 'topArtists']) paintList(name, s[name] || []);
-      const long: Card[] = j.top?.artistsAllTime || [];
-      if (long.length) { $('[data-long]').hidden = false; $('[data-long-list]').replaceChildren(...long.slice(0, 10).map((c) => { const li = el('li'), a = el('a'); a.href = spotify(c.url) || '#'; a.target = '_blank'; a.rel = 'noopener'; a.append(cover(c.img, 64), el('b', '', c.name || ''), el('small', '', (c.genres || []).join(' · '))); li.append(a); return li; })); }
+      paintRewind(j.rewind || null);
       const covers: string[] = Array.isArray(j.covers) ? j.covers : [];
       if (covers.length) $('[data-sleeves]').replaceChildren(...covers.map((c) => cover(c, 96)));
       const scope = $('[data-scope-note]'), src = j.sources || {};
@@ -372,6 +416,23 @@ const description = 'One listener’s radio station from El Segundo: what is on 
   .stn-log__notes:hover { background: var(--ink); border-color: var(--ink); color: var(--paper); }
   @media (max-width: 560px) { .stn-notes__head { grid-template-columns: 1fr; } .stn-liner { border-right: 0; border-bottom: 1px solid rgba(0, 0, 0, .18); } }
 
+  .stn-rw { box-shadow: 7px 7px 0 var(--yellow); } .stn-rw[hidden], .stn-rw [hidden] { display: none; }
+  .stn-rw__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; }
+  .stn-rw__tabs { display: inline-flex; } .stn-rw__tabs button { padding: 9px 12px; border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; cursor: pointer; } .stn-rw__tabs button + button { border-left: 0; } .stn-rw__tabs button[aria-selected='true'] { background: var(--ink); color: var(--paper); }
+  .stn-rw__faces { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+  .stn-rw__faces li:first-child { grid-column: span 2; grid-row: span 2; }
+  .stn-rw__faces a { display: grid; gap: 2px; text-decoration: none; } .stn-rw__faces img { width: 100%; height: auto; aspect-ratio: 1; } .stn-rw__faces small { font: 700 9px var(--pc-font-mono); color: var(--rust); } .stn-rw__faces b { font-size: 13px; line-height: 1.15; overflow-wrap: anywhere; } .stn-rw__faces li:first-child b { font-size: 22px; letter-spacing: -.02em; } .stn-rw__faces span { font-size: 11px; color: rgba(0, 0, 0, .66); }
+  .stn-rw__cols { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; }
+  .stn-rw__tracks, .stn-rw__saves { margin: 0; padding: 0; list-style: none; counter-reset: rw; }
+  .stn-rw__tracks li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(0, 0, 0, .12); counter-increment: rw; } .stn-rw__tracks li::before { content: counter(rw, decimal-leading-zero); font: 700 9px var(--pc-font-mono); color: var(--rust); }
+  .stn-rw__tracks a { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: center; text-decoration: none; } .stn-rw__tracks span { display: grid; min-width: 0; } .stn-rw__tracks b, .stn-rw__tracks small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .stn-rw__tracks b { font-size: 14px; } .stn-rw__tracks small { font-size: 12px; color: rgba(0, 0, 0, .68); }
+  .stn-rw__moves { display: grid; gap: 16px; align-content: start; } .stn-rw__moves .stn-sub { margin: 0 0 6px; font-size: 12px; }
+  .stn-rw__chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; } .stn-rw__chips span { padding: 4px 8px; border: 1px solid var(--ink); background: #fff; font-size: 12.5px; font-weight: 600; }
+  .stn-rw__lib { margin-top: 20px; padding-top: 16px; border-top: 2px solid var(--ink); } .stn-rw__first { margin: 0 0 10px; font: 19px/1.4 Georgia, serif; max-width: 70ch; } body.pc-block-shell .stn .stn-rw__first a { text-decoration: underline; }
+  .stn-rw__saves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; } .stn-rw__saves a { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 1px 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(0, 0, 0, .12); text-decoration: none; font-size: 13px; } .stn-rw__saves img { grid-row: span 2; } .stn-rw__saves span { grid-column: 2; font-size: 12px; color: rgba(0, 0, 0, .68); } .stn-rw__saves small { grid-row: 1; grid-column: 3; font: 700 9px var(--pc-font-mono); color: #5F5E5A; }
+  @media (max-width: 960px) { .stn-rw__head, .stn-rw__cols { grid-template-columns: 1fr; } .stn-rw__faces { grid-template-columns: repeat(5, minmax(0, 1fr)); } .stn-rw__saves { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .stn-rw__faces { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stn-rw__faces li:first-child { grid-column: span 3; grid-row: auto; } }
+
   .stn-nums { margin-top: 16px; border: 2px solid var(--ink); background: var(--paper); box-shadow: 7px 7px 0 var(--rust); }
   .stn-nums ul { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
   .stn-nums li { display: grid; gap: 2px; align-content: start; padding: 16px 14px; border-right: 1px solid rgba(0, 0, 0, .18); }
@@ -449,10 +510,6 @@ const description = 'One listener’s radio station from El Segundo: what is on 
   .stn-shelves li span { display: grid; min-width: 0; } .stn-shelves li b, .stn-shelves li small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .stn-shelves li b { font-size: 13.5px; font-weight: 640; } .stn-shelves li small { font-size: 11.5px; color: rgba(0, 0, 0, .68); }
   .stn-shelves li a:hover b { color: var(--rust); }
-  .stn-long { margin-top: 22px; padding-top: 16px; border-top: 2px solid var(--ink); } .stn-long[hidden] { display: none; }
-  .stn-long ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
-  .stn-long a { display: grid; gap: 4px; text-decoration: none; } .stn-long img { width: 100%; height: auto; aspect-ratio: 1; }
-  .stn-long b { font-size: 13px; } .stn-long small { font-size: 11px; color: rgba(0, 0, 0, .66); }
 
   .stn-sleeves { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 4px; }
   .stn-sleeves img { width: 100%; height: auto; aspect-ratio: 1; border: 0; transition: transform .15s; } .stn-sleeves img:hover { transform: scale(1.06); position: relative; z-index: 1; }

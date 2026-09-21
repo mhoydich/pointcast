@@ -42,7 +42,7 @@ export interface SpotifyTrackLike {
 
 const STATION = 'broadcast';
 const LOG_PREFIX = `station:v1:${STATION}:log:`;
-const TOP_KEY = `station:v1:${STATION}:top`;
+const TOP_KEY = `station:v1:${STATION}:top:v2`;
 const SCOPE_KEY = `station:v1:${STATION}:scopes`;
 const SYNC_MARK = 'https://pointcast.xyz/__station/sync-mark';
 const SYNC_EVERY_S = 600;
@@ -132,12 +132,17 @@ export async function syncStation(env: SpotifyBroadcastEnv): Promise<{ ran: bool
   } catch { return { ran: false, added: 0 }; }
 }
 
+type TopArtist = { name: string; img?: string; url: string; genres: string[] };
+type TopTrack = { t: string; a: string; img?: string; url: string; yr?: number };
+export type TopRange = 'weeks' | 'months' | 'years'; // Spotify: short_term ≈ 4 weeks, medium_term ≈ 6 months, long_term ≈ a year or more
 export interface StationTop {
   fetchedAt: number;
-  tracks: Array<{ t: string; a: string; img?: string; url: string }>;
-  artists: Array<{ name: string; img?: string; url: string; genres: string[] }>;
-  artistsAllTime: Array<{ name: string; img?: string; url: string; genres: string[] }>;
+  artists: Record<TopRange, TopArtist[]>;
+  tracks: Record<TopRange, TopTrack[]>;
+  library: { total: number; first?: { t: string; a: string; url: string; savedAt: string }; latest: Array<{ t: string; a: string; img?: string; url: string; savedAt: string }> } | null;
 }
+const RANGES: Record<TopRange, string> = { weeks: 'short_term', months: 'medium_term', years: 'long_term' };
+
 async function readTop(env: SpotifyBroadcastEnv): Promise<StationTop | null> {
   const cached = await env.USERS?.get<StationTop>(TOP_KEY, 'json').catch(() => null);
   if (cached && Date.now() - cached.fetchedAt < TOP_EVERY_MS) return cached;
@@ -146,20 +151,65 @@ async function readTop(env: SpotifyBroadcastEnv): Promise<StationTop | null> {
   const scopes = await readScopes(env);
   if (scopes.top === false && Date.now() - Date.parse(scopes.checkedAt || '0') < 24 * 60 * 60 * 1000) return cached ?? null;
   try {
-    const get = async (path: string) => { const r = await spotifyBroadcastFetch(env, `https://api.spotify.com/v1/me/top/${path}`); if (!r) return null; if (r.status === 401 || r.status === 403) { await noteScope(env, { top: false }); return null; } return r.ok ? r.json() as Promise<{ items?: unknown[] }> : null; };
-    const [tr, ar, arAll] = await Promise.all([get('tracks?time_range=short_term&limit=10'), get('artists?time_range=short_term&limit=10'), get('artists?time_range=long_term&limit=10')]);
-    if (!tr && !ar && !arAll) return cached ?? null;
-    const artist = (x: { name?: string; images?: Array<{ url?: string }>; external_urls?: { spotify?: string }; genres?: string[] }) => ({ name: String(x.name ?? '').slice(0, 120), img: x.images?.[1]?.url ?? x.images?.[0]?.url, url: x.external_urls?.spotify ?? '', genres: (x.genres ?? []).slice(0, 3) });
+    let refused = false;
+    const get = async <T>(url: string): Promise<T | null> => { const r = await spotifyBroadcastFetch(env, url); if (!r) return null; if (r.status === 401 || r.status === 403) { refused = true; return null; } return r.ok ? await r.json() as T : null; };
+    const keys = Object.keys(RANGES) as TopRange[];
+    const [artistLists, trackLists] = await Promise.all([
+      Promise.all(keys.map((k) => get<{ items?: unknown[] }>(`https://api.spotify.com/v1/me/top/artists?time_range=${RANGES[k]}&limit=25`))),
+      Promise.all(keys.map((k) => get<{ items?: unknown[] }>(`https://api.spotify.com/v1/me/top/tracks?time_range=${RANGES[k]}&limit=25`))),
+    ]);
+    if (refused) await noteScope(env, { top: false });
+    if (artistLists.every((x) => !x) && trackLists.every((x) => !x)) return cached ?? null;
+    const artist = (x: { name?: string; images?: Array<{ url?: string }>; external_urls?: { spotify?: string }; genres?: string[] }): TopArtist => ({ name: String(x.name ?? '').slice(0, 120), img: x.images?.[1]?.url ?? x.images?.[0]?.url, url: x.external_urls?.spotify ?? '', genres: (x.genres ?? []).slice(0, 4) });
+    const okUrl = (x: { url: string; name?: string; t?: string }) => x.url.startsWith('https://open.spotify.com/');
+    const track = (x: SpotifyTrackLike): TopTrack | null => { const p = playFromTrack(x, new Date().toISOString(), 'spotify'); return p ? { t: p.t, a: p.a, img: p.img, url: p.url, yr: p.yr } : null; };
+    // The saved library needs its own permission (user-library-read). Two small calls: the newest
+    // saves and the very first one. A refusal here is not a refusal of the top lists.
+    let library: StationTop['library'] = null;
+    try {
+      type Saved = { total?: number; items?: Array<{ added_at?: string; track?: SpotifyTrackLike }> };
+      const r = await spotifyBroadcastFetch(env, 'https://api.spotify.com/v1/me/tracks?limit=10&offset=0'); const newest = r?.ok ? await r.json() as Saved : null;
+      if (newest && typeof newest.total === 'number') {
+        const saved = (i: { added_at?: string; track?: SpotifyTrackLike }) => { const p = playFromTrack(i.track, i.added_at ?? '', 'spotify'); return p ? { t: p.t, a: p.a, img: p.img, url: p.url, savedAt: p.at } : null; };
+        const r2 = newest.total > 1 ? await spotifyBroadcastFetch(env, `https://api.spotify.com/v1/me/tracks?limit=1&offset=${newest.total - 1}`) : null; const oldest = r2?.ok ? await r2.json() as Saved : null;
+        const first = oldest?.items?.[0] ? saved(oldest.items[0]) : null;
+        library = { total: newest.total, ...(first ? { first: { t: first.t, a: first.a, url: first.url, savedAt: first.savedAt } } : {}), latest: (newest.items ?? []).map(saved).filter((x): x is NonNullable<ReturnType<typeof saved>> => Boolean(x)) };
+      }
+    } catch { /* the library is a bonus */ }
     const top: StationTop = {
       fetchedAt: Date.now(),
-      tracks: ((tr?.items ?? []) as SpotifyTrackLike[]).map((x) => playFromTrack(x, new Date().toISOString(), 'spotify')).filter((p): p is StationPlay => Boolean(p)).map((p) => ({ t: p.t, a: p.a, img: p.img, url: p.url })),
-      artists: ((ar?.items ?? []) as Parameters<typeof artist>[0][]).map(artist).filter((x) => x.name && x.url.startsWith('https://open.spotify.com/')),
-      artistsAllTime: ((arAll?.items ?? []) as Parameters<typeof artist>[0][]).map(artist).filter((x) => x.name && x.url.startsWith('https://open.spotify.com/')),
+      artists: Object.fromEntries(keys.map((k, i) => [k, ((artistLists[i]?.items ?? []) as Parameters<typeof artist>[0][]).map(artist).filter((x) => x.name && okUrl(x))])) as StationTop['artists'],
+      tracks: Object.fromEntries(keys.map((k, i) => [k, ((trackLists[i]?.items ?? []) as SpotifyTrackLike[]).map(track).filter((x): x is TopTrack => Boolean(x))])) as StationTop['tracks'],
+      library,
     };
     await noteScope(env, { top: true });
     await env.USERS?.put(TOP_KEY, JSON.stringify(top));
     return top;
   } catch { return cached ?? null; }
+}
+
+/**
+ * Rewind: what Spotify's own long view says about this one account, compared across its three
+ * windows. Spotify does not say how it ranks, and gives ranks, not play counts, so nothing here
+ * is a number of plays. "New" and "faded" are set differences between the windows, nothing more.
+ */
+export function computeRewind(top: StationTop) {
+  const names = (list: TopArtist[]) => new Set(list.map((x) => x.name));
+  const years = names(top.artists.years), weeks = names(top.artists.weeks), months = names(top.artists.months);
+  const genres = new Map<string, number>(); top.artists.years.forEach((x, i) => x.genres.forEach((g) => genres.set(g, (genres.get(g) ?? 0) + (25 - i))));
+  const decades = new Map<number, number>(); top.tracks.years.forEach((x) => { if (x.yr) decades.set(Math.floor(x.yr / 10) * 10, (decades.get(Math.floor(x.yr / 10) * 10) ?? 0) + 1); });
+  return {
+    asOf: new Date(top.fetchedAt).toISOString(),
+    windows: { weeks: 'about the last four weeks', months: 'about the last six months', years: 'a year or more' },
+    artists: { weeks: top.artists.weeks.slice(0, 17), months: top.artists.months.slice(0, 17), years: top.artists.years.slice(0, 17) }, // one large tile + two rows of eight
+    tracks: { weeks: top.tracks.weeks.slice(0, 10), months: top.tracks.months.slice(0, 10), years: top.tracks.years.slice(0, 10) },
+    newObsessions: top.artists.weeks.filter((x) => !years.has(x.name) && !months.has(x.name)).slice(0, 8),
+    alwaysThere: top.artists.years.filter((x) => weeks.has(x.name) && months.has(x.name)).slice(0, 8),
+    faded: top.artists.years.slice(0, 15).filter((x) => !weeks.has(x.name) && !months.has(x.name)).slice(0, 8),
+    genres: [...genres.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name]) => name),
+    topTrackDecades: [...decades.entries()].sort((a, b) => a[0] - b[0]).map(([decade, tracks]) => ({ decade, tracks })),
+    library: top.library,
+  };
 }
 
 // ── what can be said from the log ─────────────────────────────────
@@ -225,7 +275,7 @@ export async function readStation(env: SpotifyBroadcastEnv, now = Date.now()) {
     stats: computeStats(plays, now),
     recent: plays.slice(-60).reverse(),
     covers,
-    top: top ? { asOf: new Date(top.fetchedAt).toISOString(), tracks: top.tracks, artists: top.artists, artistsAllTime: top.artistsAllTime } : null,
+    rewind: top ? computeRewind(top) : null,
   };
 }
 
