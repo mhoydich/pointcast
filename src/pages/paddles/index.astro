@@ -1,0 +1,241 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { BUILDS, priceLabel, type Build } from '../../lib/paddle-calendar';
+import { paddlePlate } from '../../lib/paddle-drawing.mjs';
+import {
+  BRANDS,
+  CERT_WORDS,
+  LIFECYCLE_WORDS,
+  PADDLES,
+  PADDLE_BAG_URL,
+  PADDLE_REGISTER_BLOCK,
+  PADDLE_REGISTER_URL,
+  REGISTER_STATS,
+  brandUrl,
+  leadVariant,
+  paddleUrl,
+  whenLabel,
+} from '../../lib/paddle-register';
+
+const S = REGISTER_STATS;
+const title = 'The Paddle Register';
+const description = `One permanent page for every pickleball paddle: release date, list price, where it is legal (USA Pickleball, UPA-A, quiet list, patents), how it is built, what happened to it since, a to-scale drawing, and links to every lab that measured it. ${S.paddles} paddles from ${S.brands} brands, ${S.years[0]} to now. Open data, every fact sourced.`;
+const court = CHANNELS.CRT;
+const builds = (Object.keys(BUILDS) as Build[]).filter((b) => PADDLES.some((p) => p.build === b));
+
+const cards = PADDLES.map((p, i) => ({
+  p,
+  thumb: paddlePlate({ variant: leadVariant(p), shapes: p.shapes, build: p.build, layers: p.core.layers, color: BUILDS[p.build].color, id: `t${i}`, dims: false }).svg,
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  '@id': PADDLE_REGISTER_URL,
+  name: title,
+  description,
+  url: PADDLE_REGISTER_URL,
+  dateModified: S.asOf,
+  keywords: ['pickleball paddle database', 'paddle release dates', 'USA Pickleball approved paddles', 'UPA-A approved paddles', 'foam core paddles'],
+  isAccessibleForFree: true,
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+  distribution: [{ '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: 'https://pointcast.xyz/paddles.json' }],
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="reg" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/c/court">court</a><span>/</span><span>paddles</span>
+      <a href={`/b/${PADDLE_REGISTER_BLOCK}`}>BLOCK {PADDLE_REGISTER_BLOCK}</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">CH.CRT · COURT · THE PADDLE REGISTER · OPEN DATA</p>
+      <h1>The labs measure paddles. This keeps the record.</h1>
+      <p class="dek">
+        One permanent page per paddle: when it launched, what it cost, where it is legal, how it is
+        built, and what has happened to it since. Each page links out to every lab that put it on a
+        radar gun. Every fact carries its source.
+      </p>
+    </header>
+
+    <section class="stats" aria-label="The register in four numbers">
+      <div><strong>{S.paddles}</strong><span>paddles · {S.brands} brands · {S.years[0]}–{S.years[S.years.length - 1]}</span></div>
+      <div><strong>{S.events}</strong><span>dated timeline events</span></div>
+      <div><strong>{S.labLinks}</strong><span>links out to lab reviews</span></div>
+      <div><strong>{S.withOutline}</strong><span>drawn from published dimensions</span></div>
+    </section>
+
+    <section class="sec" aria-label="Find a paddle">
+      <form class="filters" id="reg-filters" aria-label="Filter the register">
+        <label class="grow">Search
+          <input type="search" name="q" placeholder="Brand or model" autocomplete="off" />
+        </label>
+        <label>Brand
+          <select name="brand"><option value="">All {S.brands}</option>{BRANDS.map((b) => (<option value={b.brand}>{b.brand} ({b.paddles.length})</option>))}</select>
+        </label>
+        <label>Year
+          <select name="year"><option value="">Any</option>{[...S.years].reverse().map((y) => (<option value={String(y)}>{y}</option>))}</select>
+        </label>
+        <label>Build
+          <select name="build"><option value="">Any</option>{builds.map((b) => (<option value={b}>{BUILDS[b].label}</option>))}</select>
+        </label>
+        <label>Legal for
+          <select name="legal"><option value="">Anything</option><option value="usap">USA Pickleball play</option><option value="upaa">The pro tours (UPA-A)</option><option value="quiet">Quiet-list courts</option></select>
+        </label>
+        <output id="reg-count" aria-live="polite">{S.paddles} paddles</output>
+      </form>
+
+      <div class="grid">
+        {cards.map(({ p, thumb }) => (
+          <a
+            class="card"
+            href={paddleUrl(p)}
+            data-card
+            data-text={`${p.brand} ${p.model} ${p.short}`.toLowerCase()}
+            data-brand={p.brand}
+            data-year={String(p.year)}
+            data-build={p.build}
+            data-usap={p.reg.usap === 'yes' || p.reg.usap === 'split' ? '1' : '0'}
+            data-upaa={p.reg.upaa === 'yes' || p.reg.upaa === 'split' ? '1' : '0'}
+            data-quiet={p.reg.quiet ? '1' : '0'}
+            style={`--b:${BUILDS[p.build].color}`}
+          >
+            <div class="card__plate" set:html={thumb} />
+            <div class="card__body">
+              <small>{p.brand} · {whenLabel(p)}</small>
+              <strong>{p.model}</strong>
+              <span class="card__price">{priceLabel(p as any)}</span>
+              <span class="card__tags">
+                <i class="tag tag--build">{BUILDS[p.build].short}</i>
+                {p.reg.usap !== 'unknown' && <i class="tag">USAP {p.reg.usap === 'yes' ? '✓' : CERT_WORDS[p.reg.usap].toLowerCase()}</i>}
+                {p.reg.upaa !== 'unknown' && <i class="tag">UPA-A {p.reg.upaa === 'yes' ? '✓' : CERT_WORDS[p.reg.upaa].toLowerCase()}</i>}
+                {p.reg.lifecycle !== 'current' && <i class="tag tag--life">{LIFECYCLE_WORDS[p.reg.lifecycle || 'current']}</i>}
+              </span>
+            </div>
+          </a>
+        ))}
+      </div>
+      <p class="empty" id="reg-empty" hidden>Nothing in the register matches that yet.</p>
+    </section>
+
+    <section class="sec" aria-label="By brand">
+      <p class="kicker">BY BRAND</p>
+      <div class="brands">
+        {BRANDS.map((b) => (<a href={brandUrl(b.brand)}><strong>{b.brand}</strong><span>{b.paddles.length}</span></a>))}
+      </div>
+    </section>
+
+    <section class="sec about" aria-label="What the register is">
+      <div>
+        <p class="kicker">WHAT THIS IS, AND IS NOT</p>
+        <div class="rows">
+          <div class="row"><strong>It is the record</strong><span>Release dates with their precision stated, list prices, certification on both rulebooks, the quiet list, patent status, delistings, phase-outs. The things no lab database keeps.</span></div>
+          <div class="row"><strong>It is not a lab</strong><span>John Kew, Pickleball Effect, Pickleball Studio and Matt's Pickleball own the radar guns. The register links to their page for each paddle and shows swingweight and twistweight only with the lab's name on it.</span></div>
+          <div class="row"><strong>The pictures are drawings</strong><span>Each paddle is drawn to scale from its published dimensions, cut away to show the core. Product photos belong to the brands; every page links to theirs.</span></div>
+          <div class="row"><strong>It is open</strong><span>CC0. The whole register is <a href="/paddles.json">one JSON file</a>, each paddle has its own, and agents can read both. The register carries no affiliate links and no discount codes.</span></div>
+        </div>
+      </div>
+      <div class="bag">
+        <p class="kicker">THE OTHER HALF · ON RALLY</p>
+        <h2>What happens after you buy it.</h2>
+        <p>Keep a bag: the hours on each paddle, when the grit fades, when it goes dead. It lives on your device. Enough bags and the register can publish real lifespans.</p>
+        <a class="btn" href={PADDLE_BAG_URL} rel="noopener">Open the bag ↗</a>
+      </div>
+    </section>
+
+    <p class="foot">
+      <a href="/paddle-calendar">the 2026 calendar</a> · <a href="/paddles.json">paddles.json</a> · <a href="/paddle-fund">the Paddle Fund</a> · status checked {S.asOf} · CC0
+    </p>
+  </main>
+</BlockLayout>
+
+<script>
+  const form = document.getElementById('reg-filters') as HTMLFormElement | null;
+  if (form) {
+    const cards = [...document.querySelectorAll<HTMLElement>('[data-card]')];
+    const count = document.getElementById('reg-count')!, empty = document.getElementById('reg-empty')!;
+    const apply = () => {
+      const f = new FormData(form);
+      const q = String(f.get('q') || '').trim().toLowerCase();
+      const brand = String(f.get('brand') || ''), year = String(f.get('year') || ''), build = String(f.get('build') || ''), legal = String(f.get('legal') || '');
+      let shown = 0;
+      for (const el of cards) {
+        const d = el.dataset;
+        const ok = (!q || q.split(/\s+/).every((w) => (d.text || '').includes(w))) && (!brand || d.brand === brand) && (!year || d.year === year) && (!build || d.build === build) && (!legal || d[legal] === '1');
+        el.hidden = !ok;
+        if (ok) shown += 1;
+      }
+      count.textContent = `${shown} paddle${shown === 1 ? '' : 's'}`;
+      empty.hidden = shown !== 0;
+    };
+    form.addEventListener('input', apply);
+    form.addEventListener('submit', (event) => event.preventDefault());
+    const preset = new URLSearchParams(location.search).get('q');
+    if (preset) { (form.elements.namedItem('q') as HTMLInputElement).value = preset.slice(0, 60); apply(); }
+  }
+</script>
+
+<style>
+  .reg{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .reg [hidden]{display:none!important}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:48px 0 28px;max-width:860px}
+  .hero h1{margin:0;font:500 clamp(38px,6vw,72px)/.97 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
+  .dek{margin:20px 0 0;max-width:720px;font:400 18px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--c600)}
+  .stats div{padding:16px;border-right:1.5px solid var(--c600)}
+  .stats div:last-child{border-right:0;background:var(--c50)}
+  .stats strong{display:block;font:500 clamp(24px,3.2vw,36px)/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c800);font-variant-numeric:tabular-nums}
+  .stats span{display:block;margin-top:8px;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .sec{padding-top:40px}
+  .filters{position:sticky;top:0;z-index:3;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end;padding:12px;margin:0 0 12px;border:1.5px solid var(--c600);background:#fff}
+  .filters label{display:grid;gap:4px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .filters .grow{flex:1 1 200px}
+  .filters select,.filters input{min-width:120px;padding:7px 8px;border:1px solid var(--pc-rule);border-radius:0;background:#fff;font:400 14px var(--pc-font-sans);color:var(--pc-ink)}
+  .filters input{width:100%}
+  .filters output{margin-left:auto;padding-bottom:8px;font:500 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800);font-variant-numeric:tabular-nums}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .card{display:grid;grid-template-columns:74px 1fr;gap:12px;padding:12px;border:1px solid var(--pc-rule);border-top:4px solid var(--b);color:var(--pc-ink);background:#fff}
+  .card:hover{background:var(--c50);text-decoration:none}
+  .card__plate :global(svg){display:block;width:100%;height:auto}
+  .card small{display:block;font:400 10px/1.4 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .card strong{display:block;margin:4px 0 6px;font:500 16px/1.15 var(--pc-font-sans);letter-spacing:-.01em}
+  .card__price{display:block;font:500 14px var(--pc-font-sans);font-variant-numeric:tabular-nums}
+  .card__tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+  .tag{padding:2px 5px;border:1px solid var(--pc-rule);font:400 9px var(--pc-font-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--pc-ink-soft)}
+  .tag--build{border-color:var(--b);background:var(--b);color:#fff}
+  .tag--life{border-style:dashed}
+  .empty{padding:32px 0;font:400 15px var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .brands{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:1.5px solid var(--c600);border-left:1px solid var(--pc-rule-soft)}
+  .brands a{display:flex;justify-content:space-between;gap:8px;padding:11px 12px;border-right:1px solid var(--pc-rule-soft);border-bottom:1px solid var(--pc-rule-soft);color:var(--pc-ink)}
+  .brands a:hover{background:var(--c50);text-decoration:none}
+  .brands strong{font:500 14px var(--pc-font-sans)}
+  .brands span{font:400 11px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .about{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.6fr);gap:32px;align-items:start}
+  .rows{border-top:1.5px solid var(--c600)}
+  .row{display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .row strong{font:500 16px/1.3 var(--pc-font-sans)}
+  .row span{font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .row a{color:var(--c800)}
+  .bag{border:1.5px solid var(--c600);background:var(--c50);padding:20px}
+  .bag h2{margin:0 0 10px;font:500 24px/1.15 var(--pc-font-sans);letter-spacing:-.02em}
+  .bag p:not(.kicker){margin:0 0 16px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .btn{display:inline-block;padding:10px 14px;background:var(--c800);color:#fff!important;font:500 11px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
+  .btn:hover{background:var(--pc-ink);text-decoration:none}
+  .foot{margin:40px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:1000px){.grid{grid-template-columns:repeat(3,1fr)}.brands{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:820px){
+    .stats{grid-template-columns:1fr 1fr}.stats div:nth-child(2){border-right:0}.stats div:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}
+    .grid{grid-template-columns:1fr 1fr}.about{grid-template-columns:1fr}.row{grid-template-columns:1fr;gap:4px}
+    .filters{position:static}.filters label{flex:1 1 130px}.filters select{min-width:0;width:100%}.filters output{margin-left:0}
+    .hero{padding-top:32px}
+  }
+  @media(max-width:520px){.grid{grid-template-columns:1fr}.brands{grid-template-columns:1fr 1fr}}
+</style>
