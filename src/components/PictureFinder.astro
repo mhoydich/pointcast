@@ -1,0 +1,354 @@
+---
+/**
+ * PictureFinder — live public-domain picture search for /downloads/.
+ *
+ * Queries four keyless, CORS-open collections straight from the visitor's
+ * browser (Art Institute of Chicago, Cleveland, The Met, NASA). PointCast
+ * proxies nothing and stores nothing: thumbnails load from the source, and
+ * the file is always the source's own. Chicago and The Met serve images with
+ * open CORS headers, so those save in place; Cleveland's CDN and NASA's asset
+ * host don't, so those open the original in a new tab instead.
+ *
+ * Result cards are created in JS, so their styles are global (Astro scoped
+ * CSS never reaches script-created nodes) and prefixed `.finder`.
+ */
+import { FINDER_SOURCES, FINDER_STARTERS } from '../lib/download-sources';
+---
+
+<section class="finder" id="finder" aria-labelledby="finder-title" data-finder>
+  <header class="finder-head">
+    <p class="finder-eyebrow">PUBLIC-DOMAIN PICTURE FINDER</p>
+    <h2 id="finder-title">Find a picture anyone can use.</h2>
+    <p class="finder-dek">One search across four open collections. Every result is public domain or CC0 at the source, and the file comes from them — not from us.</p>
+  </header>
+
+  <form class="finder-form" role="search" data-finder-form>
+    <label class="finder-label" for="finder-q">Search the collections</label>
+    <div class="finder-row">
+      <input id="finder-q" name="q" type="search" autocomplete="off" spellcheck="false" placeholder="hummingbird, lighthouse, moon…" maxlength="80" required />
+      <button type="submit">Search <span aria-hidden="true">→</span></button>
+    </div>
+    <fieldset class="finder-sources">
+      <legend>Collections</legend>
+      {FINDER_SOURCES.map((source) => (
+        <label><input type="checkbox" name="source" value={source.id} checked /> <span>{source.short}</span></label>
+      ))}
+    </fieldset>
+    <p class="finder-starters">
+      <span>Try</span>
+      {FINDER_STARTERS.map((word) => <button type="button" data-finder-starter={word}>{word}</button>)}
+    </p>
+  </form>
+
+  <p class="finder-status" role="status" aria-live="polite" data-finder-status></p>
+  <ul class="finder-results" data-finder-results></ul>
+  <p class="finder-fine">Rights belong to each source to state: the museums mark these works CC0; NASA media is generally not copyrighted, with exceptions for logos and identifiable people. Open the source page before you print it on a shirt. Your search goes from your browser to the collections directly — PointCast doesn't see it.</p>
+</section>
+
+<script>
+  type Hit = {
+    source: string; sourceLabel: string; rights: string;
+    title: string; maker: string; date: string;
+    thumb: string; page: string; filename: string;
+    /** Candidate file URLs, best first. Async only where the source needs a second lookup. */
+    files: string[] | (() => Promise<string[]>);
+    /** True when the image host sends Access-Control-Allow-Origin, so the file can be saved in place. */
+    saveable: boolean;
+  };
+
+  const PER_SOURCE = 8;
+  const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'picture';
+  const firstLine = (text?: string | null) => (text || '').split('\n')[0].trim();
+  const getJson = async (url: string, signal: AbortSignal) => {
+    const response = await fetch(url, { signal, headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  };
+
+  const SEARCHERS: Record<string, (q: string, signal: AbortSignal) => Promise<Hit[]>> = {
+    // A bool query, not `q=` — the simple form only scores by the term and
+    // pads the list with unrelated public-domain works.
+    async aic(q, signal) {
+      const p = new URLSearchParams({ limit: String(PER_SOURCE + 4), fields: 'id,title,artist_display,date_display,image_id,is_public_domain' });
+      p.set('query[bool][must][0][multi_match][query]', q);
+      ['title^3', 'subject_titles', 'term_titles', 'artist_title', 'classification_titles'].forEach((field, i) => p.set(`query[bool][must][0][multi_match][fields][${i}]`, field));
+      p.set('query[bool][filter][0][term][is_public_domain]', 'true');
+      const data = await getJson(`https://api.artic.edu/api/v1/artworks/search?${p}`, signal);
+      return (data.data || []).filter((a: any) => a.image_id && a.is_public_domain).slice(0, PER_SOURCE).map((a: any): Hit => ({
+        source: 'aic', sourceLabel: 'Art Institute of Chicago', rights: 'CC0',
+        title: a.title || 'Untitled', maker: firstLine(a.artist_display), date: a.date_display || '',
+        thumb: `https://www.artic.edu/iiif/2/${a.image_id}/full/400,/0/default.jpg`,
+        page: `https://www.artic.edu/artworks/${a.id}`,
+        filename: `aic-${a.id}-${slug(a.title || '')}.jpg`,
+        // The IIIF server refuses to upscale, so fall back for small scans.
+        files: [1686, 843].map((w) => `https://www.artic.edu/iiif/2/${a.image_id}/full/${w},/0/default.jpg`),
+        saveable: true,
+      }));
+    },
+    async cma(q, signal) {
+      const p = new URLSearchParams({ q, cc0: '1', has_image: '1', limit: String(PER_SOURCE), fields: 'id,title,creators,creation_date,images,url,share_license_status' });
+      const data = await getJson(`https://openaccess-api.clevelandart.org/api/artworks/?${p}`, signal);
+      return (data.data || []).filter((a: any) => a.images?.web?.url && a.share_license_status === 'CC0').map((a: any): Hit => ({
+        source: 'cma', sourceLabel: 'Cleveland Museum of Art', rights: 'CC0',
+        title: (a.title || 'Untitled').trim(), maker: firstLine(a.creators?.[0]?.description), date: a.creation_date || '',
+        thumb: a.images.web.url, page: a.url,
+        filename: `cleveland-${a.id}-${slug(a.title || '')}.jpg`,
+        files: [a.images.print?.url, a.images.web.url].filter(Boolean),
+        saveable: false,
+      }));
+    },
+    // The Met search returns ids only; each object is a second request.
+    async met(q, signal) {
+      const p = new URLSearchParams({ q, hasImages: 'true' });
+      const found = await getJson(`https://collectionapi.metmuseum.org/public/collection/v1/search?${p}`, signal);
+      const ids: number[] = (found.objectIDs || []).slice(0, PER_SOURCE + 6);
+      const objects = await Promise.all(ids.map((id) => getJson(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`, signal).catch(() => null)));
+      return objects.filter((o: any) => o && o.isPublicDomain && o.primaryImageSmall).slice(0, PER_SOURCE).map((o: any): Hit => ({
+        source: 'met', sourceLabel: 'The Metropolitan Museum of Art', rights: 'CC0',
+        title: o.title || 'Untitled', maker: o.artistDisplayName || o.culture || '', date: o.objectDate || '',
+        thumb: o.primaryImageSmall, page: o.objectURL,
+        filename: `met-${o.objectID}-${slug(o.title || '')}.jpg`,
+        files: [o.primaryImage, o.primaryImageSmall].filter(Boolean),
+        saveable: true,
+      }));
+    },
+    async nasa(q, signal) {
+      const p = new URLSearchParams({ q, media_type: 'image', page_size: String(PER_SOURCE) });
+      const data = await getJson(`https://images-api.nasa.gov/search?${p}`, signal);
+      return (data.collection?.items || []).filter((item: any) => item.data?.[0]?.nasa_id && item.links?.[0]?.href).slice(0, PER_SOURCE).map((item: any): Hit => {
+        const meta = item.data[0];
+        return {
+          source: 'nasa', sourceLabel: 'NASA Image Library', rights: 'NASA media',
+          title: meta.title || meta.nasa_id, maker: meta.photographer || meta.secondary_creator || meta.center || 'NASA', date: (meta.date_created || '').slice(0, 4),
+          thumb: item.links[0].href.replace(/^http:/, 'https:'),
+          page: `https://images.nasa.gov/details/${encodeURIComponent(meta.nasa_id)}`,
+          filename: `nasa-${slug(meta.nasa_id)}.jpg`,
+          saveable: false,
+          // The asset endpoint lists every rendition; take the original, then step down.
+          // (The manifest on images-assets.nasa.gov has no CORS header — this one does.)
+          files: async () => {
+            const data = await getJson(`https://images-api.nasa.gov/asset/${encodeURIComponent(meta.nasa_id)}`, new AbortController().signal);
+            const https: string[] = (data.collection?.items || []).map((item: any) => String(item.href).replace(/^http:/, 'https:'));
+            const pick = (tag: string) => https.find((url) => new RegExp(`~${tag}\\.(jpe?g|png)$`, 'i').test(url));
+            return [pick('orig'), pick('large'), pick('medium')].filter(Boolean) as string[];
+          },
+        };
+      });
+    },
+  };
+
+  const root = document.querySelector<HTMLElement>('[data-finder]');
+  if (root) {
+    const form = root.querySelector<HTMLFormElement>('[data-finder-form]')!;
+    const input = root.querySelector<HTMLInputElement>('#finder-q')!;
+    const status = root.querySelector<HTMLElement>('[data-finder-status]')!;
+    const results = root.querySelector<HTMLUListElement>('[data-finder-results]')!;
+    let inflight: AbortController | null = null;
+
+    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text) node.textContent = text;
+      return node;
+    };
+
+    const ORDER = ['met', 'aic', 'cma', 'nasa'];
+    const shortName = (id: string) => form.querySelector(`input[value="${id}"] + span`)?.textContent || id;
+    let lastQuery = '';
+    let unreachable: string[] = [];
+    const found = new Map<string, number>();
+
+    // The status line counts what is actually on screen. A collection whose
+    // thumbnails are refused (some networks and bots get challenged) reads
+    // as blocked, not as eight results nobody can see.
+    const recount = () => {
+      if (root.dataset.state !== 'done') return;
+      const counts = new Map<string, number>();
+      results.querySelectorAll<HTMLElement>('.finder-card').forEach((node) => counts.set(node.dataset.source!, (counts.get(node.dataset.source!) || 0) + 1));
+      const asked = [...form.querySelectorAll<HTMLInputElement>('input[name="source"]')].filter((box) => box.dataset.asked === '1').map((box) => box.value);
+      const tally = ORDER.filter((id) => asked.includes(id)).map((id) => unreachable.includes(id) ? `${shortName(id)} unreachable` : found.get(id) && !counts.get(id) ? `${shortName(id)} refused the thumbnails` : `${shortName(id)} ${counts.get(id) || 0}`);
+      const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
+      status.textContent = total
+        ? `${total} pictures for “${lastQuery}” — ${tally.join(' · ')}`
+        : `Nothing for “${lastQuery}” (${tally.join(' · ')}). Try a plainer word — these are museum catalogs, not search engines.`;
+    };
+
+    const openLink = (url: string, text = 'Open original ↗') => {
+      const link = el('a', 'finder-save', text);
+      link.href = url; link.target = '_blank'; link.rel = 'noopener';
+      return link;
+    };
+
+    // Save in place. Some CDN edges cache a variant without the CORS header,
+    // so each file gets one retry under a fresh cache key before stepping
+    // down a size. If nothing can be read, the button becomes a plain link
+    // to the source's file — a click the popup blocker can't eat.
+    const save = async (hit: Hit, button: HTMLButtonElement) => {
+      button.disabled = true;
+      button.textContent = 'Fetching…';
+      const urls = hit.files as string[];
+      for (const url of urls.flatMap((file) => [file, `${file}?via=pointcast`])) {
+        const response = await fetch(url, { referrerPolicy: 'no-referrer' }).catch(() => null);
+        if (!response || !response.ok) continue;
+        const blob = await response.blob();
+        const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+        const link = el('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = hit.filename.replace(/\.jpg$/, `.${ext}`);
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+        button.textContent = 'Saved ✓';
+        setTimeout(() => { button.disabled = false; button.textContent = 'Download ↓'; }, 2400);
+        return;
+      }
+      button.replaceWith(openLink(urls[0] || hit.page));
+    };
+
+    // NASA needs a lookup before the file URL is known. Open the tab inside
+    // the click, then point it at the file, so the gesture isn't lost.
+    const openResolved = async (hit: Hit, button: HTMLButtonElement) => {
+      const tab = window.open('about:blank', '_blank');
+      button.disabled = true;
+      let target = hit.page;
+      try { target = (await (hit.files as () => Promise<string[]>)())[0] || hit.page; } catch { /* fall back to the source page */ }
+      if (tab) { tab.opener = null; tab.location.replace(target); }
+      button.replaceWith(openLink(target));
+    };
+
+    const card = (hit: Hit) => {
+      const item = el('li', 'finder-card');
+      item.dataset.source = hit.source;
+      const frame = el('a', 'finder-thumb');
+      frame.href = hit.page; frame.target = '_blank'; frame.rel = 'noopener';
+      const img = el('img');
+      img.src = hit.thumb; img.alt = `${hit.title}${hit.maker ? `, ${hit.maker}` : ''}`; img.loading = 'lazy'; img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('error', () => { item.dataset.dropped = '1'; item.remove(); recount(); }, { once: true });
+      frame.append(img);
+      const body = el('div', 'finder-body');
+      body.append(el('p', 'finder-source', `${hit.sourceLabel} · ${hit.rights}`), el('h3', '', hit.title));
+      const byline = [hit.maker, hit.date].filter(Boolean).join(' · ');
+      if (byline) body.append(el('p', 'finder-byline', byline));
+      const actions = el('div', 'finder-actions');
+      if (Array.isArray(hit.files) && !hit.saveable) {
+        actions.append(openLink(hit.files[0] || hit.page));
+      } else {
+        const button = el('button', 'finder-save', hit.saveable ? 'Download ↓' : 'Open original ↗');
+        button.type = 'button';
+        button.addEventListener('click', () => hit.saveable ? save(hit, button) : openResolved(hit, button));
+        actions.append(button);
+      }
+      const source = el('a', 'finder-page', 'Source page ↗');
+      source.href = hit.page; source.target = '_blank'; source.rel = 'noopener';
+      actions.append(source);
+      body.append(actions);
+      item.append(frame, body);
+      return item;
+    };
+
+    // Shelf links further down the page follow the current query.
+    const syncShelfLinks = (q: string) => {
+      document.querySelectorAll<HTMLAnchorElement>('a[data-search-template]').forEach((link) => {
+        link.href = q ? link.dataset.searchTemplate!.replace('{q}', encodeURIComponent(q)) : link.dataset.home!;
+        const tag = link.querySelector('[data-search-label]');
+        if (tag) tag.textContent = q ? `Search “${q}” there ↗` : 'Visit ↗';
+      });
+    };
+
+    const run = async (raw: string) => {
+      const q = raw.trim().slice(0, 80);
+      if (!q) return;
+      const picked = [...form.querySelectorAll<HTMLInputElement>('input[name="source"]:checked')].map((box) => box.value);
+      if (!picked.length) { status.textContent = 'Pick at least one collection.'; return; }
+      inflight?.abort();
+      const controller = inflight = new AbortController();
+      input.value = q;
+      results.replaceChildren();
+      root.dataset.state = 'loading';
+      status.textContent = `Asking ${picked.length} collection${picked.length > 1 ? 's' : ''} for “${q}”…`;
+      const url = new URL(location.href);
+      url.searchParams.set('q', q);
+      history.replaceState(null, '', url);
+      syncShelfLinks(q);
+
+      lastQuery = q;
+      unreachable = [];
+      found.clear();
+      form.querySelectorAll<HTMLInputElement>('input[name="source"]').forEach((box) => { box.dataset.asked = box.checked ? '1' : '0'; });
+
+      // Deal the collections out like cards — Met, Chicago, Cleveland, NASA,
+      // repeat — so the first row is never just whichever API answered first.
+      const cards = new Map<string, HTMLLIElement[]>();
+      const deal = () => {
+        const rows = ORDER.map((id) => cards.get(id) || []);
+        const dealt: HTMLLIElement[] = [];
+        for (let i = 0; i < PER_SOURCE; i++) rows.forEach((row) => { if (row[i] && row[i].dataset.dropped !== '1') dealt.push(row[i]); });
+        results.replaceChildren(...dealt);
+      };
+      await Promise.all(picked.map(async (id) => {
+        try {
+          const hits = await SEARCHERS[id](q, controller.signal);
+          if (controller.signal.aborted) return;
+          found.set(id, hits.length);
+          cards.set(id, hits.map(card));
+          deal();
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') unreachable.push(id);
+        }
+      }));
+      if (controller.signal.aborted) return;
+      root.dataset.state = 'done';
+      recount();
+    };
+
+    form.addEventListener('submit', (event) => { event.preventDefault(); run(input.value); });
+    root.querySelectorAll<HTMLButtonElement>('[data-finder-starter]').forEach((chip) => chip.addEventListener('click', () => run(chip.dataset.finderStarter!)));
+    const initial = new URLSearchParams(location.search).get('q');
+    if (initial) run(initial);
+  }
+</script>
+
+<style is:global>
+  .finder { border-top: 1px solid #cbd8c5; padding: 32px 0 40px; scroll-margin-top: 24px; }
+  .finder-eyebrow, .finder-label, .finder-sources, .finder-starters, .finder-status, .finder-fine, .finder-source, .finder-byline { font-family: var(--font-mono, monospace); }
+  .finder-eyebrow { font-size: 10px; letter-spacing: .09em; margin: 0 0 16px; }
+  .finder h2 { font-size: clamp(28px, 3vw, 42px); font-weight: 500; line-height: 1.1; letter-spacing: -.045em; margin: 0 0 10px; }
+  .finder-dek { max-width: 62ch; font-size: 16px; line-height: 1.5; color: #3d4a3c; margin: 0 0 24px; }
+  .finder-label { display: block; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 8px; }
+  .finder-row { display: flex; max-width: 720px; border: 1px solid #18291e; background: #fff; }
+  .finder-row input { flex: 1; min-width: 0; border: 0; padding: 14px 16px; font: inherit; font-size: 18px; color: #18291e; background: transparent; }
+  .finder-row input:focus-visible { outline: 3px solid #5063cf; outline-offset: 2px; }
+  .finder-row button { border: 0; border-left: 1px solid #18291e; background: #d9eea7; color: #18291e; padding: 0 22px; font: inherit; font-size: 15px; cursor: pointer; }
+  .finder-row button:hover { background: #c9e388; }
+  .finder-sources { display: flex; flex-wrap: wrap; gap: 6px 18px; border: 0; padding: 0; margin: 14px 0 0; font-size: 12px; }
+  .finder-sources legend { float: left; margin-right: 18px; padding: 0; color: #596354; }
+  .finder-sources label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .finder-sources input { accent-color: #18291e; }
+  .finder-starters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 0; font-size: 12px; color: #596354; }
+  .finder-starters button { border: 1px solid #cbd8c5; background: transparent; color: #18291e; padding: 5px 10px; font: inherit; cursor: pointer; }
+  .finder-starters button:hover { background: #f1f5e8; }
+  .finder-status { min-height: 1.7em; margin: 24px 0 0; font-size: 12px; line-height: 1.7; color: #3d4a3c; }
+  .finder[data-state="loading"] .finder-status::after { content: ' ▍'; animation: finder-blink 1s steps(2) infinite; }
+  @keyframes finder-blink { 50% { opacity: 0; } }
+  .finder-results { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 20px; padding: 0; margin: 16px 0 0; }
+  .finder-results:empty { margin: 0; }
+  .finder-card { min-width: 0; display: flex; flex-direction: column; }
+  .finder-thumb { display: block; background: #eef3e3; aspect-ratio: 1; overflow: hidden; }
+  .finder-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .finder-body { padding-top: 12px; display: flex; flex-direction: column; flex: 1; }
+  .finder-source { font-size: 10px; letter-spacing: .04em; color: #596354; margin: 0 0 6px; }
+  .finder-card h3 { font-size: 16px; font-weight: 500; line-height: 1.25; letter-spacing: -.02em; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .finder-byline { font-size: 10px; line-height: 1.6; color: #596354; margin: 6px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .finder-actions { display: flex; align-items: center; gap: 14px; margin-top: auto; padding-top: 12px; }
+  .finder-save { border: 1px solid #18291e; background: transparent; color: #18291e; padding: 9px 12px; font: inherit; font-size: 13px; line-height: 1.2; cursor: pointer; text-decoration: none; }
+  a.finder-save:hover { background: #e6edcf; text-decoration: none; }
+  .finder-save:hover:not(:disabled) { background: #e6edcf; }
+  .finder-save:disabled { opacity: .7; cursor: progress; }
+  .finder-page { font-size: 12px; color: #18291e; }
+  .finder-fine { max-width: 86ch; margin: 28px 0 0; font-size: 11px; line-height: 1.7; color: #596354; }
+  @media (max-width: 1100px) { .finder-results { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .finder-results { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 14px; } .finder-row button { padding: 0 16px; } }
+  @media (prefers-reduced-motion: reduce) { .finder[data-state="loading"] .finder-status::after { animation: none; } }
+</style>
