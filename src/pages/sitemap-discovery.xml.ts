@@ -80,6 +80,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/send/kennel-club.txt', 'weekly', '0.85'],
   ['https://pointcast.xyz/paddle-fund', 'weekly', '0.85'],
   ['https://pointcast.xyz/paddle-fund.json', 'weekly', '0.8'],
+  ['https://pointcast.xyz/paddle-calendar', 'weekly', '0.9'],
+  ['https://pointcast.xyz/paddle-calendar.json', 'weekly', '0.8'],
   ['https://pointcast.xyz/kennel-club', 'daily', '0.94'],
   ['https://pointcast.xyz/kennel-club.json', 'daily', '0.92'],
   ['https://pointcast.xyz/federation', 'weekly', '0.94'],
