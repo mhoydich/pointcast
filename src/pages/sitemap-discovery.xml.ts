@@ -6,6 +6,7 @@ import { MASCOT_CARDS } from '../lib/mascot-battler';
 import { POINTCAST_2029_IDENTITIES } from '../lib/pointcast-2029';
 import afterimageExamples from '../data/afterimage-examples.json';
 import { isNoindexPath } from '../lib/seo-rules.mjs';
+import { BRANDS, PADDLES } from '../lib/paddle-register';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
 
@@ -82,6 +83,10 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/paddle-fund.json', 'weekly', '0.8'],
   ['https://pointcast.xyz/paddle-calendar', 'weekly', '0.9'],
   ['https://pointcast.xyz/paddle-calendar.json', 'weekly', '0.8'],
+  ['https://pointcast.xyz/paddles', 'weekly', '0.92'],
+  ['https://pointcast.xyz/paddles.json', 'weekly', '0.85'],
+  ...PADDLES.map((paddle) => [`https://pointcast.xyz/paddles/${paddle.id}`, 'weekly', '0.8'] as SitemapEntry),
+  ...BRANDS.map((brand) => [`https://pointcast.xyz/paddles/brand/${brand.slug}`, 'weekly', '0.7'] as SitemapEntry),
   ['https://pointcast.xyz/kennel-club', 'daily', '0.94'],
   ['https://pointcast.xyz/kennel-club.json', 'daily', '0.92'],
   ['https://pointcast.xyz/federation', 'weekly', '0.94'],
