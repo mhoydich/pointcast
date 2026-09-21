@@ -363,3 +363,13 @@ test('CLI: missing --out without --dry-run fails loudly instead of guessing', ()
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /--out/);
 });
+
+// Added in review (cc): the merge rule changed on main the same day; the copy has to follow it.
+test('a track on repeat keeps every imported play, and an import folds into the live row of the same play', async () => {
+  const { mergePlaysLikeStation } = await import('../scripts/import-spotify-history.mjs');
+  const row = (at, extra = {}) => ({ id: 'rep', t: 'Short Song', a: 'Band', url: 'https://open.spotify.com/track/rep', at, ms: 120000, src: 'spotify', ...extra });
+  const imported = [row('2024-05-01T10:00:00.000Z', { imp: true }), row('2024-05-01T10:02:00.000Z', { imp: true }), row('2024-05-01T10:04:00.000Z', { imp: true })];
+  assert.equal(mergePlaysLikeStation([], imported).plays.length, 3, 'three back-to-back plays stay three');
+  assert.equal(mergePlaysLikeStation(imported, [row('2024-05-01T10:02:00.000Z', { imp: true })]).added, 0, 'the identical imported row is a duplicate');
+  assert.equal(mergePlaysLikeStation([row('2024-05-01T10:01:55.000Z')], [row('2024-05-01T10:00:00.000Z', { imp: true })]).added, 0, 'live stamp vs import start time: same play');
+});

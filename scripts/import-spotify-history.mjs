@@ -210,8 +210,12 @@ export function capMonthRows(rows, cap = MAX_PER_MONTH) {
 export function mergePlaysLikeStation(existing, incoming) {
   const plays = [...existing];
   let added = 0;
-  const near = (x, y) => x.id === y.id
-    && Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000);
+  // Same rule as mergePlays in functions/api/spotify/_station.ts (2026-09-21): two Spotify rows of
+  // the same provenance (both imported, or both live) are duplicates only at the identical
+  // timestamp, so a track on repeat keeps every play; anything else matches within the track's length.
+  const near = (x, y) => x.id === y.id && (x.src === 'spotify' && y.src === 'spotify' && Boolean(x.imp) === Boolean(y.imp)
+    ? x.at === y.at
+    : Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000));
   for (const p of incoming) {
     const i = plays.findIndex((q) => near(q, p));
     if (i === -1) { plays.push(p); added++; continue; }
