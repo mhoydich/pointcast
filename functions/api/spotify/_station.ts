@@ -31,6 +31,7 @@ export interface StationPlay {
   pop?: number;      // Spotify popularity 0-100
   ex?: boolean;      // explicit
   src: 'seen' | 'spotify';
+  imp?: boolean;     // true for rows backfilled by scripts/import-spotify-history.mjs
 }
 
 export interface SpotifyTrackLike {
