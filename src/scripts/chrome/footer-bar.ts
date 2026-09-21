@@ -1550,6 +1550,17 @@ export function mountFooterBar(root, scope) {
           ? 'ON AIR'
           : 'STANDBY';
       }
+      // Next — the station's request line (people and agents share it).
+      var $next = root.querySelector('[data-pc-ref="fb-bcast-next"]'), $nextSub = root.querySelector('[data-pc-ref="fb-bcast-next-sub"]');
+      if ($next) {
+        try {
+          var lineResponse = await fetch('/api/station/requests', { headers: { accept: 'application/json' } });
+          var line = lineResponse.ok ? await lineResponse.json() : null;
+          var waiting = line && Array.isArray(line.requests) ? line.requests.filter(function (r) { return !r.playedAt; }) : [];
+          $next.textContent = waiting.length ? String(waiting[0].title || '').slice(0, 40) : 'request a track';
+          if ($nextSub) $nextSub.textContent = waiting.length ? (waiting.length + ' waiting · from ' + String(waiting[0].who || 'a visitor').slice(0, 24) + ' →') : 'the request line →';
+        } catch (e) { /* the link still works */ }
+      }
       // Audience — reuse the live-here number we already poll.
       if ($hereOut && $liveHere) {
         $hereOut.textContent = $liveHere.textContent || '—';

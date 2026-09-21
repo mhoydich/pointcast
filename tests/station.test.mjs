@@ -125,3 +125,42 @@ test('the companion is an opt-in switch: nothing about your music rides the town
   assert.match(me, /No history, no playlists\./); assert.doesNotMatch(me.slice(me.indexOf('data-me-music'), me.indexOf('data-me-kept')), /\sid="/, '/me forbids element ids');
   assert.match(page, /href="\/api\/spotify\/auth\?returnTo=\/station"/); assert.match(page, /id="requests"/);
 });
+
+// ── liner notes: sourced, matched strictly, never generated (2026-09-21) ──
+import { accept, cleanTitle, handleNotes, leadArtist, norm } from '../functions/api/station/notes.ts';
+
+test('titles are cleaned of remaster and feature clutter before anything is looked up', () => {
+  assert.equal(cleanTitle('Mama - 2007 Remaster'), 'Mama'); assert.equal(cleanTitle('Watcher of the Skies - 2007 Stereo Mix'), 'Watcher of the Skies');
+  assert.equal(cleanTitle('Bitch Better Have My Money'), 'Bitch Better Have My Money'); assert.equal(cleanTitle('Song (feat. Someone) [Live]'), 'Song');
+  assert.equal(cleanTitle('Svefn-g-englar'), 'Svefn-g-englar', 'a hyphen inside a title is not a suffix');
+  assert.equal(leadArtist('Floating Points, Pharoah Sanders'), 'Floating Points'); assert.equal(norm('Sigur Rós'), 'sigur ros');
+});
+
+test('a note is shown only when the article describes the right kind of thing by the right artist', () => {
+  const page = (title, description, extract = 'x', type = 'standard') => ({ type, title, description, extract });
+  const want = { title: 'Mama', artist: 'Genesis' };
+  assert.ok(accept('song', page('Mama (Genesis song)', '1983 single by Genesis', '"Mama" is a song by the English rock band Genesis.'), want));
+  assert.ok(!accept('song', page('Mama (Spice Girls song)', '1997 single by the Spice Girls'), want), 'same title, wrong artist');
+  assert.ok(!accept('song', page('Mama', 'Topics referred to by the same term', 'x', 'disambiguation'), want));
+  assert.ok(!accept('song', page('Genesis (Genesis album)', '1983 studio album by Genesis'), want), 'an album is not the song');
+  assert.ok(accept('record', page('Pink Moon', '1972 studio album by Nick Drake'), { title: 'Pink Moon', artist: 'Nick Drake' }));
+  assert.ok(accept('artist', page('Genesis (band)', 'English rock band'), { title: 'Genesis', artist: 'Genesis' }));
+  assert.ok(!accept('artist', page('Book of Genesis', 'First book of the Bible'), { title: 'Genesis', artist: 'Genesis' }));
+  assert.ok(!accept('artist', page('Genesis Rodriguez', 'American actress'), { title: 'Genesis', artist: 'Genesis' }));
+  assert.ok(accept('artist', page('The Meters', 'American funk band'), { title: 'Meters', artist: 'Meters' }));
+});
+
+test('the notes endpoint returns attributed Wikipedia text, Commons pictures for artists only, and nothing when nothing matches', async () => {
+  const pages = {
+    'Mama_(Genesis_song)': { type: 'standard', title: 'Mama (Genesis song)', description: '1983 single by Genesis', extract: '"Mama" is a song by the English rock band Genesis. '.repeat(20), content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Mama_(Genesis_song)' } }, thumbnail: { source: 'https://upload.wikimedia.org/wikipedia/en/4/4c/cover.jpg' } },
+    'Genesis_(band)': { type: 'standard', title: 'Genesis (band)', description: 'English rock band', extract: 'Genesis are an English rock band formed in 1967.', content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Genesis_(band)' } }, thumbnail: { source: 'https://upload.wikimedia.org/wikipedia/commons/a/a1/Genesis.jpg' } },
+  };
+  const fake = async (url) => { const u = String(url); if (u.includes('list=search')) return Response.json({ query: { search: u.includes('song') ? [{ title: 'Mama (Genesis song)' }] : u.includes('musician') ? [{ title: 'Genesis (band)' }] : [] } }); const key = decodeURIComponent(u.split('/summary/')[1]); return pages[key] ? Response.json(pages[key]) : new Response('{}', { status: 404 }); };
+  const j = await (await handleNotes(new Request('https://pointcast.xyz/api/station/notes?title=Mama%20-%202007%20Remaster&artist=Genesis&album=Genesis'), fake)).json();
+  assert.deepEqual(j.notes.map((n) => n.kind), ['song', 'artist']); assert.equal(j.source, 'Wikipedia'); assert.equal(j.license, 'CC BY-SA 4.0');
+  assert.equal(j.notes[0].image, undefined, 'a fair-use single sleeve is never hotlinked'); assert.match(j.notes[1].image, /wikipedia\/commons\//);
+  assert.ok(j.notes[0].extract.length <= 461); assert.match(j.notes[0].url, /^https:\/\/en\.wikipedia\.org\/wiki\//);
+  const none = await (await handleNotes(new Request('https://pointcast.xyz/api/station/notes?title=Zzz&artist=Nobody'), async () => Response.json({ query: { search: [] } }))).json();
+  assert.deepEqual(none.notes, []); assert.equal((await handleNotes(new Request('https://pointcast.xyz/api/station/notes?title=x'), fake)).status, 400);
+  const page = read('src/pages/station.astro'); assert.match(page, /Nothing here is generated\./); assert.match(page, /Better blank than wrong\./);
+});
