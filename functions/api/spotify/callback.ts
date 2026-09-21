@@ -12,6 +12,7 @@ import {
   type SpotifyBroadcastEnv,
 } from './_broadcast.ts';
 import { storePersonalSpotifyCredentials, type SpotifyOAuthStateRecord } from './_personal.ts';
+import { resetStationScopes } from './_station.ts';
 
 interface SpotifyTokenResponse {
   access_token?: string;
@@ -99,6 +100,7 @@ export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ request
       await storePersonalSpotifyCredentials(env, current.user.userId, credentials);
     } else {
       await storeSpotifyCredentials(env, credentials);
+      await resetStationScopes(env); // a reconnect may carry new scopes: let /station look again
       await resolveNowPlaying(env, { force: true });
     }
   } catch {

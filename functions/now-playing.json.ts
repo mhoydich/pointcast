@@ -1,7 +1,9 @@
 import { resolveNowPlaying, type SpotifyBroadcastEnv } from './api/spotify/_broadcast';
+import { syncStation } from './api/spotify/_station';
 
-export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ env }) => {
+export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ env, waitUntil }) => {
   const nowPlaying = await resolveNowPlaying(env);
+  waitUntil(syncStation(env)); // keeps the /station log filling while people browse; throttled, never throws
   return new Response(JSON.stringify({
     name: 'PointCast Now Playing',
     canonical: 'https://pointcast.xyz/now-playing.json',
