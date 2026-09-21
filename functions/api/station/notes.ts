@@ -4,7 +4,8 @@
  * Nothing here is written by a model. Each note is the opening of a Wikipedia
  * article (CC BY-SA 4.0), shown with its link, and only when the article can be
  * shown to be the right one:
- *   song    the article's short description says song/single AND names the artist,
+ *   song    the article's short description says song/single AND attributes it to the artist
+ *           (after "by", or failing that in the first sentence; never merely mentioned later),
  *           and the article title (minus its parenthetical) equals the track title
  *   record  same, for album/EP/soundtrack
  *   artist  the article title IS the artist's name and the description is a kind of
@@ -52,7 +53,12 @@ export function accept(kind: Note['kind'], s: Summary, want: { title: string; ar
   // The article's title (minus its parenthetical) must BE the title. A prefix is not enough:
   // "Money" is not "Money for Nothing", even though both are singles by bands with a "Money" song.
   const title = norm(want.title); if (!title || (page !== title && page !== `the ${title}` && `the ${page}` !== title)) return false;
-  return ` ${norm(`${s.description} ${s.extract}`)} `.includes(` ${artist} `);
+  // Attribution must be attribution. "1983 single by Genesis" names its artist after "by": that
+  // must be ours, and a different name there is a conflict, however often ours turns up later in
+  // the text. With no "by" ("1959 composition"), only the article's first sentence may vouch.
+  const by = /\bby\s+(.+)$/i.exec(s.description);
+  const where = by ? by[1] : (s.extract.split(/(?<=[.!?])\s/)[0] ?? '');
+  return ` ${norm(where)} `.includes(` ${artist} `);
 }
 
 function trimExtract(text: string, max = 460): string {

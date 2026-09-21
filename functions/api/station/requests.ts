@@ -43,7 +43,9 @@ export function normalizeRequest(raw: Record<string, unknown>) {
 
 async function readLine(env: Env): Promise<StationRequest[]> {
   const rows = await env.VISITS.get<StationRequest[]>(KEY, 'json').catch(() => null);
-  return Array.isArray(rows) ? rows : [];
+  // Rows written before the any-link change (2026-09-21) have a Spotify trackId but no service/key: give them one on read,
+  // so re-requesting one of those tracks is still caught as a duplicate.
+  return (Array.isArray(rows) ? rows : []).map((r) => (r.key ? r : { ...r, service: r.service ?? 'spotify', key: r.trackId ? `spotify:${r.trackId}` : `legacy:${r.id}` }));
 }
 
 /**

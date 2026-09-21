@@ -208,19 +208,27 @@ export function capMonthRows(rows, cap = MAX_PER_MONTH) {
  * from what uploading to KV would actually produce.
  */
 export function mergePlaysLikeStation(existing, incoming) {
-  const plays = [...existing];
-  let added = 0;
-  // Same rule as mergePlays in functions/api/spotify/_station.ts (2026-09-21): two Spotify rows of
-  // the same provenance (both imported, or both live) are duplicates only at the identical
-  // timestamp, so a track on repeat keeps every play; anything else matches within the track's length.
-  const exact = (p) => (p.src === 'seen' ? '' : `${p.src}:${p.imp ? 'imp' : 'live'}`);
-  const near = (x, y) => x.id === y.id && (exact(x) && exact(x) === exact(y)
-    ? x.at === y.at
-    : Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000));
+  // Same algorithm as mergePlays in functions/api/spotify/_station.ts (one-to-one across exact
+  // sources, 2026-09-21). Keep the two in step: see the comment above.
+  const plays = existing.map((p) => ({ ...p })); let added = 0;
+  const prov = (p) => (p.src === 'seen' ? '' : `${p.src}:${p.imp ? 'imp' : 'live'}`);
+  const gap = (x, y) => Math.abs(Date.parse(x.at) - Date.parse(y.at));
+  const within = (x, y) => gap(x, y) < Math.max(10 * 60000, (y.ms ?? x.ms ?? 0) + 3 * 60000);
   for (const p of incoming) {
-    const i = plays.findIndex((q) => near(q, p));
-    if (i === -1) { plays.push(p); added++; continue; }
-    if (plays[i].src === 'seen' && p.src !== 'seen') { plays[i] = p; added++; }
+    const pp = prov(p);
+    if (pp && plays.some((q) => q.id === p.id && prov(q) === pp && q.at === p.at)) continue;
+    let best = -1;
+    plays.forEach((q, i) => {
+      if (q.id !== p.id || !within(q, p)) return;
+      const qp = prov(q);
+      if (pp && qp === pp) return;
+      if (pp && qp && (q.also ?? []).includes(pp)) return;
+      if (best === -1 || gap(q, p) < gap(plays[best], p)) best = i;
+    });
+    if (best === -1) { plays.push({ ...p }); added++; continue; }
+    const q = plays[best], qp = prov(q);
+    if (!qp && pp) { plays[best] = { ...p }; added++; }
+    else if (qp && pp) plays[best] = { ...q, also: [...(q.also ?? []), pp] };
   }
   plays.sort((x, y) => Date.parse(x.at) - Date.parse(y.at));
   return { plays: plays.slice(-MAX_PER_MONTH), added };

@@ -25,6 +25,27 @@ review is closed to individuals. So the sprint's thesis:
 | **25-mile radius / collectives** | A station can belong to a household, a team, a shop, a block. Shared stations are the collective form of this. |
 | **Register, not arcade** | Every number counted, every note sourced, every simulation labelled. |
 
+## Astra's dissent (2026-09-21, same day) — and what changes because of it
+Astra (GPT-6, outside review: `docs/reviews/2026-09-21-astra-music-layer.md`) read the code and this plan and said:
+**"Two weeks of the full music roadmap is the wrong bet now."** Ten scripted listeners demonstrate a possibility, not
+demand; overlap between listeners needs simultaneous listeners, which is the hardest prerequisite and the plan assumed
+it. 26,103 drum hits are not 26,103 visitors. Its recommendation: **stabilise the collector, then test one hosted
+gathering before expanding the platform.** cc agrees. So:
+
+- **The sprint's centre moves to one experiment:** a scheduled, Mike-hosted *drum-and-request session* (an hour, a
+  handful of people invited directly, the request line open, the wall listening, the pads out), then a second one a
+  week later to see who comes back. What gets measured: first successful sound, requests filed, things said, and
+  voluntary return. Everything in Track B waits on what those two sessions show.
+- **Deferred until after the sessions:** generated beds, signed receipts, agent standing, year pages, automatic room
+  ranking, cross-service recording identity. None is needed to learn whether people want to come back.
+- **Kept:** source independence (done), the request line (done), one resolved on-air signal (done), the header trim
+  (done), measurement (the pageview beacon is back on both layouts), removing invented presence (done), and the
+  minimum chrome cleanup from the design doc. The module registry is sensible maintenance; its ranking formula is
+  premature.
+- Corrections to the chrome plan it caught: the beacon must cover `DrumLayout` (done), invented presence on `/rooms`
+  should go now rather than wait for the manifest (done), and the test migration must not swap assertions for
+  `dist` checks that silently skip when there is no build.
+
 ## Tracks
 
 ### Track A — Source independence (week 1) · mostly Fable + Sonnet

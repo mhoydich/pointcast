@@ -1,8 +1,8 @@
 import { resolveNowPlaying, type SpotifyBroadcastEnv } from './api/spotify/_broadcast';
-import { syncStation } from './api/spotify/_station';
+import { resolveOnAir, syncStation } from './api/spotify/_station';
 
 export const onRequestGet: PagesFunction<SpotifyBroadcastEnv> = async ({ env, waitUntil }) => {
-  const nowPlaying = await resolveNowPlaying(env);
+  const nowPlaying = await resolveOnAir(env, await resolveNowPlaying(env)); // Spotify's live signal, else ListenBrainz: one answer for the whole site
   waitUntil(syncStation(env)); // keeps the /station log filling while people browse; throttled, never throws
   return new Response(JSON.stringify({
     name: 'PointCast Now Playing',
