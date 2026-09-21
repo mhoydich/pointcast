@@ -38,6 +38,24 @@ const description = 'One listener’s radio station from El Segundo: what is on 
       <p class="stn-note" data-window></p>
     </section>
 
+    <section class="stn-panel stn-req" id="requests" aria-labelledby="stn-req-title" data-req>
+      <div class="stn-req__head">
+        <div>
+          <h2 id="stn-req-title">The request line</h2>
+          <p class="stn-sub">Put a track in front of the station: a Spotify link and one sentence of why. People and AI agents use the same line (agents come in over <a href="/for-agents">MCP</a> as <code>station_request</code>). If the station plays it, the line says so.</p>
+        </div>
+        <p class="stn-req__count" data-req-count></p>
+      </div>
+      <form class="stn-req__form" data-req-form novalidate>
+        <label><span>Spotify track link</span><input data-req-url type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/track/…" required /></label>
+        <label><span>Why this one, for this station?</span><input data-req-why type="text" maxlength="200" placeholder="It sits right between the Nick Drake and the Boards of Canada." required /></label>
+        <label class="stn-req__who"><span>From</span><input data-req-who type="text" maxlength="40" placeholder="your name" autocomplete="nickname" /></label>
+        <button type="submit" class="stn-more">Put it on the line</button>
+        <p class="stn-req__status" data-req-status role="status">Public and unverified, like the town square. A few requests an hour.</p>
+      </form>
+      <ol class="stn-req__list" data-req-list><li class="stn-empty">Reading the line…</li></ol>
+    </section>
+
     <div class="stn-cols">
       <section class="stn-panel" aria-labelledby="stn-log-title">
         <h2 id="stn-log-title">What has been playing</h2>
@@ -87,7 +105,7 @@ const description = 'One listener’s radio station from El Segundo: what is on 
       <h2 id="stn-how-title">How the station works</h2>
       <p>PointCast does not stream audio. The station is a public log of what Mike’s Spotify account played, kept on purpose by the broadcaster. Two sources feed it: what the town’s now-playing signal saw while someone was here to ask, and Spotify’s recently-played list when the broadcaster has allowed it. Every number on this page is counted from that log. Nothing here guesses how a track sounds.</p>
       <p data-scope-note hidden></p>
-      <p class="stn-how__links"><a href="/station.json">station.json</a><a href="/now-playing.json">now-playing.json</a><a href="/listening-room">The listening room</a><a href="/privacy">Privacy</a><a href="/auth#spotify" data-manage hidden>Broadcaster: reconnect Spotify</a><button type="button" data-erase hidden>Broadcaster: erase the log</button></p>
+      <p class="stn-how__links"><a href="/station.json">station.json</a><a href="/now-playing.json">now-playing.json</a><a href="/listening-room">The listening room</a><a href="/privacy">Privacy</a><a href="/api/spotify/auth?returnTo=/station" data-manage hidden>Broadcaster: reauthorize Spotify (adds history)</a><button type="button" data-companion hidden aria-pressed="false">Broadcaster: show what is on air next to my face in town</button><button type="button" data-erase hidden>Broadcaster: erase the log</button></p>
     </section>
   </main>
 </BlockLayout>
@@ -204,9 +222,54 @@ const description = 'One listener’s radio station from El Segundo: what is on 
     const t = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 90000);
     document.addEventListener('astro:before-swap', () => clearInterval(t), { once: true });
 
+    // ── the request line ───────────────────────────────────────────
+    const reqList = $('[data-req-list]'), reqStatus = $('[data-req-status]'), reqForm = $<HTMLFormElement>('[data-req-form]');
+    const who = $<HTMLInputElement>('[data-req-who]'); try { who.value = localStorage.getItem('pc:station:who') || ''; } catch {}
+    let canManage = false;
+    const art = (src?: string) => { const i = el('img'); i.alt = ''; i.width = 48; i.height = 48; i.loading = 'lazy'; if (src && /^https:\/\/(i\.scdn\.co|[a-z0-9-]+\.spotifycdn\.com)\//.test(src)) i.src = src; else i.dataset.blank = 'true'; return i; };
+    async function loadRequests() {
+      let j: Record<string, any> | null = null; try { const r = await fetch('/api/station/requests', { headers: { accept: 'application/json' } }); j = r.ok ? await r.json() : null; } catch { /* below */ }
+      if (!j) { reqList.replaceChildren(el('li', 'stn-empty', 'The line could not be read just now.')); return; }
+      $('[data-req-count]').textContent = j.requests.length ? `${j.open} waiting · ${j.played} played` : '';
+      if (!j.requests.length) { reqList.replaceChildren(el('li', 'stn-empty', 'Nobody has asked for anything yet. The first request is yours.')); return; }
+      reqList.replaceChildren(...j.requests.map((r: Record<string, any>) => {
+        const li = el('li'); if (r.playedAt) li.dataset.played = 'true';
+        const a = el('a'); a.href = spotify(r.url) || '#'; a.target = '_blank'; a.rel = 'noopener'; a.append(el('b', '', r.title), el('span', '', r.artist));
+        const from = el('p', 'stn-req__from'); from.append(el('span', '', `${r.who}`)); if (r.via === 'agent') from.append(el('i', '', 'AI')); from.append(el('small', '', ` · ${ago(r.at)}`));
+        const body = el('div'); body.append(a, el('p', 'stn-req__why', `“${r.why}”`), from);
+        const state = el('p', 'stn-req__state', r.playedAt ? `✓ played ${new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: TZ }).format(new Date(r.playedAt))}` : 'waiting');
+        li.append(art(r.image), body, state);
+        if (canManage) { const x = el('button', 'stn-req__x', 'remove'); x.type = 'button'; x.addEventListener('click', async () => { const d = await fetch(`/api/station/requests?id=${encodeURIComponent(r.id)}`, { method: 'DELETE' }); if (d.ok) void loadRequests(); }); li.append(x); }
+        return li;
+      }));
+    }
+    reqForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const url = $<HTMLInputElement>('[data-req-url]'), why = $<HTMLInputElement>('[data-req-why]');
+      const say = (t: string, tone = '') => { reqStatus.textContent = t; reqStatus.dataset.tone = tone; };
+      if (!/^(https?:\/\/open\.spotify\.com\/(intl-[a-z]{2,5}\/)?track\/|spotify:track:)/.test(url.value.trim())) { say('That needs to be a Spotify track link. In Spotify: Share → Copy song link.', 'warn'); url.focus(); return; }
+      if (why.value.trim().length < 8) { say('Say why in a sentence. The reason is the point of a request.', 'warn'); why.focus(); return; }
+      try { localStorage.setItem('pc:station:who', who.value.trim()); } catch {}
+      const noun = Number((document.querySelector<HTMLImageElement>('[data-pc-ref="fb-noun"]')?.src.match(/(\d+)\.svg/) || [])[1]);
+      say('Looking it up with Spotify…');
+      try {
+        const r = await fetch('/api/station/requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url.value.trim(), why: why.value.trim(), who: who.value.trim(), ...(Number.isInteger(noun) ? { noun } : {}), via: 'page' }) });
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j?.ok) { say(j?.error || 'The line did not take that. Nothing was saved.', 'warn'); return; }
+        say(`On the line: ${j.request.title} — ${j.request.artist}. If the station plays it, this page will say so.`, 'ok'); url.value = ''; why.value = ''; void loadRequests();
+      } catch { say('The line could not be reached. Nothing was saved.', 'warn'); }
+    });
+    void loadRequests();
+
     // Broadcaster-only controls. The server checks the role again on every action.
     fetch('/api/spotify/broadcast', { headers: { accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((b) => {
-      if (!b?.canManage) return; $('[data-manage]').hidden = false; const erase = $<HTMLButtonElement>('[data-erase]'); erase.hidden = false;
+      if (!b?.canManage) return; canManage = true; void loadRequests();
+      $('[data-manage]').hidden = false; const erase = $<HTMLButtonElement>('[data-erase]'); erase.hidden = false;
+      // The companion: the on-air track rides next to the broadcaster's face everywhere in town (cursor-room reads pc:music:auto).
+      const comp = $<HTMLButtonElement>('[data-companion]'); comp.hidden = false;
+      const paintComp = () => { let on = false; try { on = localStorage.getItem('pc:music:auto') === 'station'; } catch {} comp.setAttribute('aria-pressed', String(on)); comp.textContent = on ? 'Broadcaster: on-air track is showing next to my face · turn off' : 'Broadcaster: show what is on air next to my face in town'; };
+      comp.addEventListener('click', () => { try { if (localStorage.getItem('pc:music:auto') === 'station') localStorage.removeItem('pc:music:auto'); else localStorage.setItem('pc:music:auto', 'station'); } catch {} paintComp(); window.dispatchEvent(new CustomEvent('pc:music:auto')); });
+      paintComp();
       erase.addEventListener('click', async () => { if (!confirm('Erase the whole station log? This cannot be undone.')) return; const r = await fetch('/api/station', { method: 'DELETE' }); erase.textContent = r.ok ? 'Log erased' : 'Could not erase'; if (r.ok) void load(); });
     }).catch(() => {});
   }
@@ -290,6 +353,28 @@ const description = 'One listener’s radio station from El Segundo: what is on 
   .stn-meter[hidden], .stn-sub[hidden] { display: none; }
   .stn-meter i { position: relative; height: 10px; border: 1px solid var(--ink); background: linear-gradient(90deg, var(--green), var(--yellow), var(--pink)); }
   .stn-meter b { position: absolute; top: -5px; bottom: -5px; width: 4px; margin-left: -2px; background: var(--ink); }
+
+  .stn-req__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+  .stn-req__head code { font: 600 12px var(--pc-font-mono); background: var(--warm); padding: 1px 4px; }
+  body.pc-block-shell .stn .stn-req__head a { text-decoration: underline; }
+  .stn-req__count { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--rust); white-space: nowrap; }
+  .stn-req__form { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) minmax(0, .6fr) auto; gap: 8px; align-items: end; padding: 12px; border: 2px solid var(--ink); background: var(--warm); }
+  .stn-req__form label { display: grid; gap: 4px; min-width: 0; }
+  .stn-req__form label span { font: 700 8px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: #5F5E5A; }
+  .stn-req__form input { width: 100%; min-width: 0; padding: 9px; border: 2px solid var(--ink); border-radius: 0; background: #fff; color: #111; font: 500 16px var(--pc-font-sans); }
+  .stn-req__form input:focus-visible { outline: 2px solid #185FA5; outline-offset: 2px; }
+  .stn-req__form .stn-more { margin: 0; height: 42px; }
+  .stn-req__status { grid-column: 1 / -1; margin: 0; font-size: 12px; color: #5F5E5A; } .stn-req__status[data-tone='ok'] { color: #2f5a0d; } .stn-req__status[data-tone='warn'] { color: #8a2f12; }
+  .stn-req__list { margin: 12px 0 0; padding: 0; list-style: none; }
+  .stn-req__list > li:not(.stn-empty) { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(0, 0, 0, .12); }
+  .stn-req__list a { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; text-decoration: none; } .stn-req__list a b { font-size: 15px; } .stn-req__list a span { font-size: 13px; color: rgba(0, 0, 0, .7); } .stn-req__list a:hover b { color: var(--rust); }
+  .stn-req__why { margin: 3px 0 0; font: italic 14px/1.4 Georgia, serif; color: #3a3426; }
+  .stn-req__from { margin: 3px 0 0; font-size: 12px; color: #5F5E5A; } .stn-req__from i { margin-left: 5px; padding: 0 4px; background: var(--ink); color: var(--paper); font: 700 8px/14px var(--pc-font-mono); font-style: normal; letter-spacing: .08em; }
+  .stn-req__state { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #5F5E5A; white-space: nowrap; }
+  .stn-req__list li[data-played='true'] .stn-req__state { color: #2f5a0d; } .stn-req__list li[data-played='true'] { background: linear-gradient(90deg, rgba(122, 162, 121, .16), transparent 60%); }
+  .stn-req__x { padding: 4px 6px; border: 1px solid var(--ink); background: none; font: 700 8px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  @media (max-width: 960px) { .stn-req__form { grid-template-columns: 1fr 1fr; } .stn-req__form label:nth-of-type(2) { grid-column: 1 / -1; order: 2; } .stn-req__who { order: 3; } .stn-req__form .stn-more { order: 4; } .stn-req__status { order: 5; } }
+  @media (max-width: 560px) { .stn-req__form { grid-template-columns: 1fr; } .stn-req__head { grid-template-columns: 1fr; } .stn-req__list > li:not(.stn-empty) { grid-template-columns: 48px minmax(0, 1fr); } .stn-req__state, .stn-req__x { grid-column: 2; justify-self: start; } }
 
   .stn-shelves { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
   .stn-shelves ol { margin: 0; padding: 0; list-style: none; }

@@ -68,3 +68,60 @@ test('the page draws only from /api/station, through textContent, with covers fr
   assert.match(page, /fetch\('\/api\/station'/); assert.doesNotMatch(page, /innerHTML|insertAdjacentHTML|set:html/);
   assert.match(page, /src\.startsWith\('https:\/\/i\.scdn\.co\/'\)/); assert.match(page, /href: '\/station\.json'/);
 });
+
+// ── the request line, the agent door, the companion (2026-09-21) ──
+import { handleRequests, markPlayed, normalizeRequest, parseTrack } from '../functions/api/station/requests.ts';
+import { STATION_TOOL_DEFINITIONS, STATION_WRITE_TOOL_NAMES, dispatchStationTool } from '../src/lib/station-mcp.ts';
+
+const TRACK = 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC';
+const lineEnv = () => { const m = new Map(); const ns = { async get(k, t) { const v = m.get(k) ?? null; return t === 'json' && v ? JSON.parse(v) : v; }, async put(k, v) { m.set(k, v); }, async delete(k) { m.delete(k); } }; return { m, VISITS: ns, PC_RATES_KV: ns, USERS: ns }; };
+const spotifySays = async (input) => { const u = String(input); if (u.includes('/oembed')) return new Response(JSON.stringify({ title: 'Never Gonna Give You Up', thumbnail_url: 'https://image-cdn-ak.spotifycdn.com/image/x' }), { headers: { 'content-type': 'application/json' } }); return new Response('<meta property="og:description" content="Rick Astley · Whenever You Need Somebody · Song · 1987">', { headers: { 'content-type': 'text/html' } }); };
+const post = (body, headersIn = {}) => new Request('https://pointcast.xyz/api/station/requests', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.9', ...headersIn }, body: JSON.stringify(body) });
+
+test('a request is a Spotify track and a reason; nothing else gets on the line', () => {
+  assert.deepEqual(parseTrack(`${TRACK}?si=abc`), { id: '4uLU6hMCjMI75M1A2tKUQC', url: TRACK });
+  assert.deepEqual(parseTrack('spotify:track:4uLU6hMCjMI75M1A2tKUQC'), { id: '4uLU6hMCjMI75M1A2tKUQC', url: TRACK });
+  for (const bad of ['https://open.spotify.com/playlist/35WC68tu9rrBoRrW3N2n0M', 'https://evil.example/open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC', 'javascript:alert(1)', '']) assert.equal(parseTrack(bad), null, bad);
+  assert.throws(() => normalizeRequest({ url: TRACK, why: 'good' }), /Say why/);
+  const n = normalizeRequest({ url: TRACK, why: '  It answers\nthe Nick Drake.  ', who: 'x'.repeat(90), noun: 5000, via: 'agent' });
+  assert.equal(n.why, 'It answers the Nick Drake.'); assert.equal(n.who.length, 40); assert.equal(n.noun, undefined); assert.equal(n.via, 'agent');
+});
+
+test('the line takes the title from Spotify, refuses a duplicate, and marks a request played from the log', async () => {
+  const env = lineEnv();
+  const made = await handleRequests(post({ url: TRACK, why: 'It belongs after the Genesis run.', who: 'cc', via: 'agent', title: 'My Own Title' }), env, spotifySays);
+  assert.equal(made.status, 201); const row = (await made.json()).request;
+  assert.equal(row.title, 'Never Gonna Give You Up'); assert.equal(row.via, 'agent'); assert.equal(row.attribution, 'self-reported');
+  assert.equal((await handleRequests(post({ url: TRACK, why: 'Asking again, louder.' }), env, spotifySays)).status, 409);
+  assert.equal((await handleRequests(post({ url: 'https://open.spotify.com/album/x', why: 'A whole album please.' }), env, spotifySays)).status, 400);
+  const played = markPlayed([row], [{ id: row.trackId, t: 'x', a: 'y', url: TRACK, at: new Date(Date.now() + 60000).toISOString(), src: 'spotify' }]);
+  assert.ok(played[0].playedAt); assert.equal(markPlayed([row], [{ id: row.trackId, t: 'x', a: 'y', url: TRACK, at: '2020-01-01T00:00:00Z', src: 'spotify' }])[0].playedAt, null, 'a play from before the request does not count');
+  const list = await (await handleRequests(new Request('https://pointcast.xyz/api/station/requests'), env, spotifySays)).json();
+  assert.equal(list.open, 1); assert.match(list.review, /untrusted/);
+  const del = await handleRequests(new Request(`https://pointcast.xyz/api/station/requests?id=${row.id}`, { method: 'DELETE', headers: { Origin: 'https://pointcast.xyz' } }), env, spotifySays);
+  assert.equal(del.status, 403, 'only the broadcaster removes a request');
+});
+
+test('the request line rate-limits per address', async () => {
+  const env = lineEnv(); let last = 0;
+  for (let i = 0; i < 8; i++) last = (await handleRequests(post({ url: `https://open.spotify.com/track/${'a'.repeat(21)}${i}`, why: `Reason number ${i} for the station.` }), env, spotifySays)).status;
+  assert.equal(last, 429);
+});
+
+test('agents get the same line over MCP: one read tool, one write tool, wired into the server', async () => {
+  assert.deepEqual(STATION_TOOL_DEFINITIONS.map((t) => t.name), ['station_on_air', 'station_request']); assert.deepEqual(STATION_WRITE_TOOL_NAMES, ['station_request']);
+  const mcp = read('functions/api/mcp.ts');
+  for (const bit of ['...STATION_TOOL_DEFINITIONS,', '...STATION_WRITE_TOOL_NAMES,', "case 'station_request':", 'dispatchStationTool(name, args, base)']) assert.ok(mcp.includes(bit), bit);
+  const real = globalThis.fetch; let sent = null;
+  globalThis.fetch = async (url, init) => { sent = { url: String(url), body: JSON.parse(init.body) }; return new Response(JSON.stringify({ ok: true, request: { title: 'Pink Moon', artist: 'Nick Drake' } }), { status: 201 }); };
+  try { const out = await dispatchStationTool('station_request', { url: TRACK, why: 'Because of the heavy rotation.', name: 'claude-fable-5-1' }, 'https://pointcast.xyz'); assert.match(out.content[0].text, /On the line: Pink Moon — Nick Drake/); } finally { globalThis.fetch = real; }
+  assert.equal(sent.url, 'https://pointcast.xyz/api/station/requests'); assert.equal(sent.body.via, 'agent'); assert.equal(sent.body.who, 'claude-fable-5-1');
+});
+
+test('the companion is an opt-in switch: nothing about your music rides the town socket until you flip it', () => {
+  const room = read('src/scripts/chrome/cursor-room.ts'), me = read('src/pages/me.astro'), page = read('src/pages/station.astro');
+  assert.match(room, /m === 'station' \|\| m === 'personal' \? m : ''/); assert.match(room, /if \(autoMode\(\) && autoLabel\) return autoLabel;/);
+  assert.match(me, /localStorage\.setItem\('pc:music:auto', 'personal'\)/); assert.match(me, /href="\/api\/spotify\/auth\?personal=1&returnTo=\/me"/);
+  assert.match(me, /No history, no playlists\./); assert.doesNotMatch(me.slice(me.indexOf('data-me-music'), me.indexOf('data-me-kept')), /\sid="/, '/me forbids element ids');
+  assert.match(page, /href="\/api\/spotify\/auth\?returnTo=\/station"/); assert.match(page, /id="requests"/);
+});
