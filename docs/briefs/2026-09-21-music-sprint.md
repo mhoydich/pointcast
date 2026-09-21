@@ -33,9 +33,13 @@ review is closed to individuals. So the sprint's thesis:
    direct. `/me` says plainly that Spotify seats five.
 2. **Any music link** (Sonnet, in flight): request line and shelf accept Apple Music, YouTube,
    SoundCloud, Bandcamp, Tidal, Deezer.
-3. **Last.fm adapter** (Sonnet): same interface as `_listenbrainz.ts`; needs one API key from Mike.
-4. **Open identity** (Opus decides, Sonnet builds): MBID/ISRC as the town's track identity so a request
-   from any service can flip to "played" by a play from any other.
+3. ~~Last.fm adapter~~ **Held.** Opus's map (`2026-09-21-music-services-map.md`) found Last.fm's ToS §2.8 requires written
+   approval before its data appears on public pages, plus a storage cap. Build only after Mike writes to them. The
+   scrobbling bridges (Web Scrobbler, Pano Scrobbler, multi-scrobbler, Navidrome/Jellyfin) feed ListenBrainz from
+   nearly every service, so one adapter already covers them.
+4. **Open identity** (decided by the map, Sonnet builds): MusicBrainz recording MBID → ISRC (lookup key only) →
+   normalised hash. Odesli/song.link's public API has been retired (returns 401), so there is no shortcut: resolve
+   links to MBIDs through MusicBrainz so a request from any service can flip to "played" by a play from any other.
 5. **History import** (done, untested on real data): run it when Mike's export arrives; then year pages.
 6. Retire the scheduled-ping idea: ListenBrainz makes it unnecessary.
 
@@ -76,7 +80,10 @@ litigation, provenance marks, what may be streamed publicly. The town already sy
 its own audio; generated music has to clear the same bar as everything else here: labelled,
 rights-clean, not passed off as a person's work. Candidate first build, if the research supports
 it: **a bed for the drum circle at the room's tempo**, clearly marked as generated, so a listening
-party has something it is allowed to hear together. Decided only after the map lands.
+party has something it is allowed to hear together. The map's verdict: Google Lyria (about $0.08 a song, SynthID-watermarked) or Stable Audio Open run locally are the
+honest options; Suno has no public API and was sued again on 2026-09-18, Udio has disabled export, MusicGen's
+weights are non-commercial. Purely prompted output is very likely not copyrightable, which makes it fine as labelled
+radio material and a poor thing to mint. So: beds and idents yes, labelled; generated music as scarce objects no.
 
 ### Track E — Standing, receipts, the column (week 2, stops at Mike's keys)
 - Agent standing from public facts (requests filed / played / first seen).
