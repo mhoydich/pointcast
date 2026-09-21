@@ -529,17 +529,13 @@ const alternates = [
       <p class="masthead__meta">
         <span>El Segundo · 33.92°N 118.42°W</span>
         <span id="home-clock">—:— PT</span>
-        <span class="masthead__air" data-live-now-playing hidden>on air · <b data-live-now-title></b></span>
+        <a class="masthead__air" href="/station" data-live-now-playing hidden>on air · <b data-live-now-title></b></a>
       </p>
-      <nav class="masthead__utility" aria-label="Quick exits">
+      {/* The header is for who you are and what is happening. Places to go live in the dock and at the foot of the page. */}
+      <nav class="masthead__utility" aria-label="You">
         <AuthMenu />
         <a href="/me#my-ai" data-ai-header>Bring your AI</a>
-        <span class="masthead__wallet"><WalletChip /></span>
-        <a href="/now">Now</a>
-        <a href="/rooms">Rooms</a>
-        <a href="/archive">Archive</a>
-        <a href="/downloads/">Downloads</a>
-        <a href="/for-agents">For agents</a>
+        <span class="masthead__wallet" data-masthead-wallet><WalletChip /></span>
       </nav>
     </header>
 
@@ -626,6 +622,7 @@ const alternates = [
         <li><a href="/signals.json">/signals.json</a><span>the four field signals, as JSON</span></li>
         <li><a href="/me" title="Private PointCast identity and holdings">Your profile</a><span>/me · linked identities + holdings</span></li>
       </ul>
+      <p class="shelf__foot home-places"><span>Places</span><span><a href="/now">Now</a> · <a href="/rooms">Rooms</a> · <a href="/archive">Archive</a> · <a href="/downloads/">Downloads</a> · <a href="/for-agents">For agents</a> · <a href="/station">Station</a></span></p>
       <p class="shelf__foot">
         <span>A garden is slow on purpose. A broadcast is too.</span>
         <span>the coffee pot, still on · <a href="/mythos">what is this place</a> · <a href="/about">about</a> · <a href="/residents">who lives here</a></span>
@@ -639,6 +636,18 @@ const alternates = [
     const root = document.querySelector('[data-front-door]');
     if (!root || root.dataset.ready === 'true') return;
     root.dataset.ready = 'true';
+
+    // Signed in WITH a wallet, the sign-in chip already shows the address as your name.
+    // Showing it again in the wallet chip is noise: hide the second one while they match.
+    (() => {
+      const walletBox = root.querySelector('[data-masthead-wallet]'), who = root.querySelector('[data-auth-trigger-label]'), wallet = root.querySelector('#wallet-chip-label');
+      if (!walletBox || !who || !wallet) return;
+      const key = (t) => String(t || '').split('·')[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const sync = () => { const a = key(who.textContent), b = key(wallet.textContent); walletBox.hidden = a.length >= 8 && a === b; };
+      new MutationObserver(sync).observe(who, { childList: true, characterData: true, subtree: true });
+      new MutationObserver(sync).observe(wallet, { childList: true, characterData: true, subtree: true });
+      sync();
+    })();
 
     // PT clock in the masthead.
     const clock = document.getElementById('home-clock');
@@ -696,7 +705,9 @@ const alternates = [
   .masthead__utility { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   .masthead__utility a { padding: 7px 9px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; color: #111; }
   .masthead__utility a:hover { background: #111; color: #fff; text-decoration: none; }
-  .masthead__wallet { display: inline-flex; }
+  .masthead__wallet { display: inline-flex; } .masthead__wallet[hidden] { display: none; }
+  a.masthead__air { color: inherit; text-decoration: none; } a.masthead__air:hover b { text-decoration: underline; }
+  .masthead__utility a[data-ai-state='offline'] { border-style: dashed; color: #5F5E5A; }
   #start-here { scroll-margin-top: 12px; }
 
   .channels__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
