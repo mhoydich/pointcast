@@ -121,7 +121,7 @@ test('agents get the same line over MCP: one read tool, one write tool, wired in
 
 test('the companion is an opt-in switch: nothing about your music rides the town socket until you flip it', () => {
   const room = read('src/scripts/chrome/cursor-room.ts'), me = read('src/pages/me.astro'), page = read('src/pages/station.astro');
-  assert.match(room, /m === 'station' \|\| m === 'personal' \? m : ''/); assert.match(room, /if \(autoMode\(\) && autoLabel\) return autoLabel;/);
+  assert.match(room, /m === 'station' \|\| m === 'personal' \|\| m === 'listenbrainz' \? m : ''/); assert.match(room, /if \(autoMode\(\) && autoLabel\) return autoLabel;/);
   assert.match(me, /localStorage\.setItem\('pc:music:auto', 'personal'\)/); assert.match(me, /href="\/api\/spotify\/auth\?personal=1&returnTo=\/me"/);
   assert.match(me, /No history, no playlists\./); assert.doesNotMatch(me.slice(me.indexOf('data-me-music'), me.indexOf('data-me-kept')), /\sid="/, '/me forbids element ids');
   assert.match(page, /href="\/api\/spotify\/auth\?returnTo=\/station"/); assert.match(page, /id="requests"/);

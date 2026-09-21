@@ -5,6 +5,8 @@
  *   seen     what the town's now-playing signal observed (works with the original
  *            `user-read-currently-playing` scope; only sees a track if someone was
  *            in town to ask what was on).
+ *   lb       ListenBrainz public listens for the username the broadcaster set (no key, no cap,
+ *            every play, any service that scrobbles). The source the log should lean on.
  *   spotify  `me/player/recently-played` (needs `user-read-recently-played`; exact
  *            timestamps, last 50 plays per sync). A spotify row replaces the seen
  *            row for the same play.
@@ -17,6 +19,7 @@
  * and the sync throttle lives in the edge cache, not KV.
  */
 import { spotifyBroadcastFetch, type SpotifyBroadcastEnv } from './_broadcast.ts';
+import { LB_USER, fetchCounted, fetchListens, fetchPlayingNow, type LbCounted } from './_listenbrainz.ts';
 
 export interface StationPlay {
   id: string;        // Spotify track id
@@ -30,7 +33,7 @@ export interface StationPlay {
   yr?: number;       // release year
   pop?: number;      // Spotify popularity 0-100
   ex?: boolean;      // explicit
-  src: 'seen' | 'spotify';
+  src: 'seen' | 'spotify' | 'lb'; // lb = ListenBrainz (open scrobbler; see _listenbrainz.ts)
   imp?: boolean;     // true for rows backfilled by scripts/import-spotify-history.mjs
 }
 
@@ -80,13 +83,14 @@ export function mergePlays(existing: StationPlay[], incoming: StationPlay[]): { 
   // into any row of the same track within the track's length.
   // (An imported row times the START of a play and a live row uses Spotify's own stamp, so across
   // those two the match stays fuzzy: only rows of the same provenance compare exactly.)
-  const near = (x: StationPlay, y: StationPlay) => x.id === y.id && (x.src === 'spotify' && y.src === 'spotify' && Boolean(x.imp) === Boolean(y.imp)
+  const exact = (p: StationPlay) => (p.src === 'seen' ? '' : `${p.src}:${p.imp ? 'imp' : 'live'}`); // sightings are never exact
+  const near = (x: StationPlay, y: StationPlay) => x.id === y.id && (exact(x) && exact(x) === exact(y)
     ? x.at === y.at
     : Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000));
   for (const p of incoming) {
     const i = plays.findIndex((q) => near(q, p));
     if (i === -1) { plays.push(p); added++; continue; }
-    if (plays[i].src === 'seen' && p.src === 'spotify') { plays[i] = p; added++; }
+    if (plays[i].src === 'seen' && p.src !== 'seen') { plays[i] = p; added++; } // an exact row replaces a sighting
   }
   plays.sort((x, y) => Date.parse(x.at) - Date.parse(y.at));
   return { plays: plays.slice(-MAX_PER_MONTH), added };
@@ -119,6 +123,29 @@ export async function recordSeen(env: SpotifyBroadcastEnv, track: SpotifyTrackLi
   try { const play = playFromTrack(track, new Date().toISOString(), 'seen'); if (play) await appendPlays(env, [play]); } catch { /* the signal matters more than the log */ }
 }
 
+// ── where the log comes from ──────────────────────────────────────
+// Kept outside the `station:v1:` prefix so erasing the log does not forget the broadcaster's settings.
+const CONFIG_KEY = `station:config:v1:${STATION}`;
+const LB_COUNTED_KEY = `station:v1:${STATION}:lb-counted`;
+export interface StationConfig { listenbrainz?: string }
+export async function readStationConfig(env: SpotifyBroadcastEnv): Promise<StationConfig> {
+  const c = await env.USERS?.get<StationConfig>(CONFIG_KEY, 'json').catch(() => null);
+  return c && typeof c.listenbrainz === 'string' && LB_USER.test(c.listenbrainz) ? { listenbrainz: c.listenbrainz } : {};
+}
+export async function writeStationConfig(env: SpotifyBroadcastEnv, next: StationConfig): Promise<void> {
+  if (!env.USERS) throw new Error('station-storage-unavailable');
+  await env.USERS.put(CONFIG_KEY, JSON.stringify(next.listenbrainz && LB_USER.test(next.listenbrainz) ? { listenbrainz: next.listenbrainz } : {}));
+  await env.USERS.delete(LB_COUNTED_KEY).catch(() => undefined);
+  await resetStationScopes(env); // clears the sync mark so the new source is read on the next request
+}
+
+async function syncListenBrainz(env: SpotifyBroadcastEnv, fetcher: typeof fetch = fetch): Promise<number> {
+  const { listenbrainz: user } = await readStationConfig(env); if (!user) return 0;
+  const month = await readMonth(env, new Date().toISOString().slice(0, 7));
+  const lastLb = [...month].reverse().find((p) => p.src === 'lb');
+  return appendPlays(env, await fetchListens(user, lastLb ? Date.parse(lastLb.at) : 0, fetcher));
+}
+
 type Scopes = { history: boolean | null; top: boolean | null; checkedAt: string };
 async function readScopes(env: SpotifyBroadcastEnv): Promise<Scopes> {
   return (await env.USERS?.get<Scopes>(SCOPE_KEY, 'json').catch(() => null)) ?? { history: null, top: null, checkedAt: '' };
@@ -135,14 +162,15 @@ export async function syncStation(env: SpotifyBroadcastEnv): Promise<{ ran: bool
     const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
     if (cache && await cache.match(SYNC_MARK)) return { ran: false, added: 0 };
     await cache?.put(SYNC_MARK, new Response('1', { headers: { 'Cache-Control': `public, max-age=${SYNC_EVERY_S}` } }));
+    const fromLb = await syncListenBrainz(env).catch(() => 0); // independent of Spotify: either source alone keeps the log alive
     const res = await spotifyBroadcastFetch(env, 'https://api.spotify.com/v1/me/player/recently-played?limit=50');
-    if (!res) return { ran: true, added: 0 };
-    if (res.status === 401 || res.status === 403) { await noteScope(env, { history: false }); return { ran: true, added: 0 }; }
-    if (!res.ok) return { ran: true, added: 0 };
+    if (!res) return { ran: true, added: fromLb };
+    if (res.status === 401 || res.status === 403) { await noteScope(env, { history: false }); return { ran: true, added: fromLb }; }
+    if (!res.ok) return { ran: true, added: fromLb };
     const body = await res.json() as { items?: Array<{ played_at?: string; track?: SpotifyTrackLike }> };
     const plays = (body.items ?? []).map((i) => playFromTrack(i.track, i.played_at ?? '', 'spotify')).filter((p): p is StationPlay => Boolean(p));
     await noteScope(env, { history: true });
-    return { ran: true, added: await appendPlays(env, plays) };
+    return { ran: true, added: fromLb + await appendPlays(env, plays) };
   } catch { return { ran: false, added: 0 }; }
 }
 
@@ -281,17 +309,29 @@ export function computeStats(plays: StationPlay[], now = Date.now()) {
 
 export async function readStation(env: SpotifyBroadcastEnv, now = Date.now()) {
   const thisMonth = new Date(now).toISOString().slice(0, 7), prev = new Date(Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
-  const [a, b, top, scopes] = await Promise.all([readMonth(env, prev), readMonth(env, thisMonth), readTop(env), readScopes(env)]);
+  const [a, b, top, scopes, lb] = await Promise.all([readMonth(env, prev), readMonth(env, thisMonth), readTop(env), readScopes(env), readListenBrainz(env)]);
   const plays = [...a, ...b];
   const covers: string[] = []; for (let i = plays.length - 1; i >= 0 && covers.length < 48; i--) { const c = plays[i].img; if (c && !covers.includes(c)) covers.push(c); }
   return {
     window: { from: plays[0]?.at ?? null, months: [prev, thisMonth], timezone: STATION_TZ },
-    sources: { seen: plays.filter((p) => p.src === 'seen').length, spotify: plays.filter((p) => p.src === 'spotify').length, history: scopes.history, top: scopes.top },
+    sources: { seen: plays.filter((p) => p.src === 'seen').length, spotify: plays.filter((p) => p.src === 'spotify').length, lb: plays.filter((p) => p.src === 'lb').length, history: scopes.history, top: scopes.top },
+    listenbrainz: lb,
     stats: computeStats(plays, now),
     recent: plays.slice(-60).reverse(),
     covers,
     rewind: top ? computeRewind(top) : null,
   };
+}
+
+/** The ListenBrainz side of the payload: who, what is playing there now (edge-cached a minute), and the counted long view (KV, twice a day). */
+async function readListenBrainz(env: SpotifyBroadcastEnv) {
+  const { listenbrainz: user } = await readStationConfig(env); if (!user) return null;
+  const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default, nowKey = new Request(`https://pointcast.xyz/__station/lb-now/${encodeURIComponent(user)}`);
+  let playingNow: Awaited<ReturnType<typeof fetchPlayingNow>> = null;
+  try { const hit = await cache?.match(nowKey); if (hit) playingNow = await hit.json(); else { playingNow = await fetchPlayingNow(user); await cache?.put(nowKey, new Response(JSON.stringify(playingNow), { headers: { 'Cache-Control': 'public, max-age=60', 'Content-Type': 'application/json' } })); } } catch { /* optional */ }
+  let counted = await env.USERS?.get<LbCounted>(LB_COUNTED_KEY, 'json').catch(() => null) ?? null;
+  if (!counted || counted.user !== user || Date.now() - counted.fetchedAt > TOP_EVERY_MS) { const fresh = await fetchCounted(user).catch(() => null); if (fresh) { counted = fresh; await env.USERS?.put(LB_COUNTED_KEY, JSON.stringify(fresh)).catch(() => undefined); } }
+  return { user, profile: `https://listenbrainz.org/user/${encodeURIComponent(user)}/`, playingNow, counted: counted && counted.user === user ? { asOf: new Date(counted.fetchedAt).toISOString(), totalListens: counted.totalListens, artists: counted.artists, recordings: counted.recordings } : null };
 }
 
 /** After the broadcaster reconnects Spotify, forget which scopes were missing so the station looks again. */

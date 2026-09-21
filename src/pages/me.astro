@@ -174,7 +174,13 @@ import '../styles/shortwave-shared.css';
           <button type="button" class="me-music__btn" data-me-music-auto aria-pressed="false" hidden>Show what I am playing next to my face in town</button>
           <button type="button" class="me-music__btn" data-me-music-disconnect hidden>Disconnect</button>
         </div>
-        <p class="me-keeps__status" data-me-music-note role="status">Connecting asks Spotify for one permission: the track you are playing right now. No history, no playlists. Nothing shows in town until you turn it on, and it only shows while you are here.</p>
+        <form class="me-music__lb" data-me-music-lb autocomplete="off">
+          <label><span>ListenBrainz username · works for everyone, with any music service</span><input type="text" name="lb" maxlength="64" placeholder="your ListenBrainz username" spellcheck="false" autocapitalize="off" /></label>
+          <button type="submit" class="me-music__btn">Use this</button>
+          <button type="button" class="me-music__btn" data-me-music-lb-auto aria-pressed="false" hidden>Show what I am playing next to my face in town</button>
+        </form>
+        <p class="me-keeps__status" data-me-music-lb-note role="status"><a href="https://listenbrainz.org/" target="_blank" rel="noopener">ListenBrainz</a> is an open, free scrobbler. Link Spotify, Apple Music, YouTube Music or a local player to it once and it knows what you are playing. Your username stays in this browser; your browser asks ListenBrainz directly, and only while the switch is on.</p>
+        <p class="me-keeps__status" data-me-music-note role="status">Connecting asks Spotify for one permission: the track you are playing right now. No history, no playlists. Nothing shows in town until you turn it on, and it only shows while you are here. Spotify lets a small independent site like this one seat only five Spotify accounts, named by hand, so for most people ListenBrainz above is the way in.</p>
         <p class="me-music__links"><a href="/#music-on">The Music on shelf: tap a tempo, drum over it, let the wall listen →</a><a href="/station#requests">Request a track on the station →</a></p>
       </section>
 
@@ -929,11 +935,12 @@ import '../styles/shortwave-shared.css';
     const setOn = (on: boolean) => { try { if (on) localStorage.setItem('pc:music:auto', 'personal'); else if (isOn()) localStorage.removeItem('pc:music:auto'); } catch { /* no storage */ } window.dispatchEvent(new CustomEvent('pc:music:auto')); paintAuto(); };
     const paintAuto = () => { const on = isOn(); auto.setAttribute('aria-pressed', String(on)); auto.textContent = on ? 'Showing what I am playing in town · turn off' : 'Show what I am playing next to my face in town'; };
     async function load(): Promise<void> {
-      let j: { connected?: boolean; configured?: boolean; status?: string; track?: { title: string; artist: string; imageUrl: string | null; isPlaying: boolean } | null } | null = null;
+      let j: { connected?: boolean; configured?: boolean; status?: string | 'not_seated'; track?: { title: string; artist: string; imageUrl: string | null; isPlaying: boolean } | null } | null = null;
       try { const r = await fetch('/api/me/spotify', { headers: { accept: 'application/json' }, credentials: 'same-origin' }); j = await r.json(); } catch { /* below */ }
       const connected = Boolean(j?.connected);
       connect.hidden = connected; auto.hidden = !connected; disconnect.hidden = !connected; cover.hidden = true; track.textContent = '';
       if (!j || j.status === 'unavailable') { state.textContent = 'Spotify connections are not available right now.'; connect.hidden = true; return; }
+      if (j.status === 'not_seated') { state.textContent = 'Spotify let you sign in, but will not share your track with this site.'; note.textContent = 'This is Spotify’s rule, not yours: a small independent site may only seat five Spotify accounts, each added by hand, and yours is not one of them. Signing in again will not change it. ListenBrainz above works for everyone; or paste a link on the Music on shelf.'; connect.hidden = true; auto.hidden = true; disconnect.hidden = false; if (isOn()) setOn(false); return; }
       if (j.status === 'reconnect_required') { state.textContent = 'Spotify asked for a fresh sign-in.'; connect.hidden = false; connect.textContent = 'Reconnect Spotify'; auto.hidden = true; return; }
       if (!connected) { state.textContent = 'Spotify is not connected.'; if (isOn()) setOn(false); return; }
       state.textContent = j.track ? (j.track.isPlaying ? 'Playing now' : 'Paused') : 'Connected · nothing playing';
@@ -941,6 +948,27 @@ import '../styles/shortwave-shared.css';
       paintAuto();
     }
     auto.addEventListener('click', () => setOn(!isOn()));
+    // ListenBrainz: no account link on our side at all. The username lives in this browser.
+    const lbForm = q<HTMLFormElement>('[data-me-music-lb]'), lbInput = lbForm.querySelector<HTMLInputElement>('input')!, lbAuto = q<HTMLButtonElement>('[data-me-music-lb-auto]'), lbNote = q('[data-me-music-lb-note]');
+    const lbUser = () => { try { return localStorage.getItem('pc:music:lb') || ''; } catch { return ''; } };
+    const lbOn = () => { try { return localStorage.getItem('pc:music:auto') === 'listenbrainz'; } catch { return false; } };
+    const paintLb = () => { lbInput.value = lbUser(); lbAuto.hidden = !lbUser(); lbAuto.setAttribute('aria-pressed', String(lbOn())); lbAuto.textContent = lbOn() ? 'Showing what I am playing in town · turn off' : 'Show what I am playing next to my face in town'; paintAuto(); };
+    lbForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault(); const u = lbInput.value.trim();
+      if (!u) { try { localStorage.removeItem('pc:music:lb'); if (lbOn()) localStorage.removeItem('pc:music:auto'); } catch { /* no storage */ } window.dispatchEvent(new CustomEvent('pc:music:auto')); lbNote.textContent = 'Cleared.'; paintLb(); return; }
+      if (!/^[A-Za-z0-9_.-]{1,64}$/.test(u)) { lbNote.textContent = 'That does not look like a ListenBrainz username.'; return; }
+      lbNote.textContent = 'Asking ListenBrainz…';
+      try {
+        const r = await fetch(`https://api.listenbrainz.org/1/user/${encodeURIComponent(u)}/playing-now`, { headers: { accept: 'application/json' } });
+        if (!r.ok) { lbNote.textContent = 'ListenBrainz has no public user by that name.'; return; }
+        const tm = (await r.json())?.payload?.listens?.[0]?.track_metadata;
+        try { localStorage.setItem('pc:music:lb', u); } catch { /* no storage */ }
+        lbNote.textContent = tm?.track_name ? `Found you. Playing now: ${tm.track_name} — ${tm.artist_name}.` : 'Found you. Nothing playing this second; it will show when something is.';
+      } catch { lbNote.textContent = 'ListenBrainz is not answering right now.'; }
+      paintLb();
+    });
+    lbAuto.addEventListener('click', () => { try { if (lbOn()) localStorage.removeItem('pc:music:auto'); else localStorage.setItem('pc:music:auto', 'listenbrainz'); } catch { /* no storage */ } window.dispatchEvent(new CustomEvent('pc:music:auto')); paintLb(); });
+    paintLb();
     disconnect.addEventListener('click', async () => {
       disconnect.disabled = true;
       try { const r = await fetch('/api/me/spotify', { method: 'DELETE', credentials: 'same-origin' }); note.textContent = r.ok ? 'Disconnected. The stored Spotify credentials were deleted.' : 'Could not disconnect just now.'; if (r.ok) setOn(false); } catch { note.textContent = 'Could not disconnect just now.'; }
@@ -1413,6 +1441,10 @@ import '../styles/shortwave-shared.css';
   .me-music__btn { display: inline-block; padding: 10px 14px; border: 1px solid #111; border-radius: 0; background: #fff; color: #111; font: 600 12px var(--pc-font-sans); text-decoration: none; cursor: pointer; }
   .me-music__btn[hidden] { display: none; }
   .me-music__btn--primary, .me-music__btn[aria-pressed='true'] { background: #111; color: #fff; }
+  .me-music__lb { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: end; margin: 12px 0 6px; padding: 12px; border: 1px solid #111; background: #fff; }
+  .me-music__lb label { display: grid; gap: 4px; min-width: 0; } .me-music__lb label span { color: #3B6D11; font: 600 9px/1.4 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .me-music__lb input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #9fb0c0; border-radius: 0; font: inherit; font-size: 16px; }
+  .me-music__lb [data-me-music-lb-auto] { grid-column: 1 / -1; justify-self: start; }
   .me-music__links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; font-size: 13px; }
   .me-music__links a { color: #185fa5; }
   .me-keeps { --sw-accent: #185fa5; --sw-rule: #c9d3dd; --sw-soft: #667078; --sw-shadow: #dfe6ee; }

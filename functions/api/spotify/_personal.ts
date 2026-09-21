@@ -20,7 +20,7 @@ export interface PersonalSpotifyTrack {
 export interface PersonalSpotifyStatus {
   configured: boolean;
   connected: boolean;
-  status: 'connected' | 'disconnected' | 'reconnect_required' | 'unavailable';
+  status: 'connected' | 'disconnected' | 'reconnect_required' | 'not_seated' | 'unavailable';
   track: PersonalSpotifyTrack | null;
   checkedAt: string;
 }
@@ -234,7 +234,9 @@ export async function resolvePersonalSpotify(env: SpotifyBroadcastEnv, userId: s
     if (response.status === 204) return result('connected');
     if (!response.ok) {
       await response.body?.cancel();
-      return result(response.status === 401 || response.status === 403 ? 'reconnect_required' : 'unavailable');
+      // 403 after a valid sign-in is Spotify's development-mode allowlist: this app may seat five
+      // accounts, named by hand. Signing in again cannot fix it, so do not ask the person to.
+      return result(response.status === 403 ? 'not_seated' : response.status === 401 ? 'reconnect_required' : 'unavailable');
     }
     return result('connected', trackMetadata(await providerJson(response)));
   } catch (error) {

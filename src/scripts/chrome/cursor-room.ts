@@ -405,20 +405,23 @@ export function mountCursorRoom(ROOT, scope) {
     // the label goes stale and the town stops showing it. '' clears it server-side.
     // The companion: with pc:music:auto set, the label keeps itself current instead of
     // waiting for a pasted link. 'station' = the broadcaster's on-air track (public
-    // /now-playing.json); 'personal' = this signed-in visitor's own Spotify
+    // /now-playing.json); 'listenbrainz' = the visitor's public ListenBrainz username, asked
+    // straight from their browser (no PointCast server in between); 'personal' = this signed-in visitor's own Spotify
     // (/api/me/spotify, their session only). Both are opt-in switches the visitor
     // flips on /station or /me; off-air or paused means no label.
     var autoLabel = '', autoTimer = 0, autoAt = 0;
-    function autoMode() { try { var m = localStorage.getItem('pc:music:auto'); return m === 'station' || m === 'personal' ? m : ''; } catch (e) { return ''; } }
+    function autoMode() { try { var m = localStorage.getItem('pc:music:auto'); return m === 'station' || m === 'personal' || m === 'listenbrainz' ? m : ''; } catch (e) { return ''; } }
     function pollAuto() {
       var mode = autoMode();
       if (!mode) { if (autoLabel) { autoLabel = ''; sendTown('update'); } return; }
       // A hidden tab stops polling, so it must not keep vouching for a track it can no longer see.
       if (document.visibilityState !== 'visible') { if (autoLabel && Date.now() - autoAt > 5 * 60000) { autoLabel = ''; sendTown('update'); } return; }
-      fetch(mode === 'station' ? '/now-playing.json' : '/api/me/spotify', { headers: { accept: 'application/json' }, credentials: 'same-origin' })
+      var lbUser = ''; if (mode === 'listenbrainz') { try { lbUser = String(localStorage.getItem('pc:music:lb') || ''); } catch (e) {} if (!/^[A-Za-z0-9_.-]{1,64}$/.test(lbUser)) return; }
+      fetch(mode === 'station' ? '/now-playing.json' : mode === 'listenbrainz' ? 'https://api.listenbrainz.org/1/user/' + encodeURIComponent(lbUser) + '/playing-now' : '/api/me/spotify', { headers: { accept: 'application/json' }, credentials: mode === 'listenbrainz' ? 'omit' : 'same-origin' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
-          var t = mode === 'station' ? (j && j.live ? j : null) : (j && j.connected && j.track && j.track.isPlaying !== false && j.status !== 'paused' ? j.track : null);
+          if (mode === 'listenbrainz') { var tm = j && j.payload && j.payload.listens && j.payload.listens[0] && j.payload.listens[0].track_metadata; j = tm ? { live: true, title: tm.track_name, artist: tm.artist_name } : null; }
+          var t = mode !== 'personal' ? (j && j.live ? j : null) : (j && j.connected && j.track && j.track.isPlaying !== false && j.status !== 'paused' ? j.track : null);
           var title = t ? String(t.title || t.name || '') : '', artist = t ? String(t.artist || '') : '';
           var next = title ? (artist ? title + ' — ' + artist : title).replace(/\s+/g, ' ').trim().slice(0, 120) : '';
           autoAt = Date.now();
