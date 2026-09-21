@@ -71,7 +71,8 @@ test('the page draws only from /api/station, through textContent, with covers fr
 });
 
 // ── the request line, the agent door, the companion (2026-09-21) ──
-import { handleRequests, markPlayed, normalizeRequest, parseTrack } from '../functions/api/station/requests.ts';
+import { handleRequests, markPlayed, normalizeRequest } from '../functions/api/station/requests.ts';
+import { parseMusicLink } from '../functions/_lib/music-links.ts';
 import { STATION_TOOL_DEFINITIONS, STATION_WRITE_TOOL_NAMES, dispatchStationTool } from '../src/lib/station-mcp.ts';
 
 const TRACK = 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC';
@@ -79,13 +80,15 @@ const lineEnv = () => { const m = new Map(); const ns = { async get(k, t) { cons
 const spotifySays = async (input) => { const u = String(input); if (u.includes('/oembed')) return new Response(JSON.stringify({ title: 'Never Gonna Give You Up', thumbnail_url: 'https://image-cdn-ak.spotifycdn.com/image/x' }), { headers: { 'content-type': 'application/json' } }); return new Response('<meta property="og:description" content="Rick Astley · Whenever You Need Somebody · Song · 1987">', { headers: { 'content-type': 'text/html' } }); };
 const post = (body, headersIn = {}) => new Request('https://pointcast.xyz/api/station/requests', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.9', ...headersIn }, body: JSON.stringify(body) });
 
-test('a request is a Spotify track and a reason; nothing else gets on the line', () => {
-  assert.deepEqual(parseTrack(`${TRACK}?si=abc`), { id: '4uLU6hMCjMI75M1A2tKUQC', url: TRACK });
-  assert.deepEqual(parseTrack('spotify:track:4uLU6hMCjMI75M1A2tKUQC'), { id: '4uLU6hMCjMI75M1A2tKUQC', url: TRACK });
-  for (const bad of ['https://open.spotify.com/playlist/35WC68tu9rrBoRrW3N2n0M', 'https://evil.example/open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC', 'javascript:alert(1)', '']) assert.equal(parseTrack(bad), null, bad);
+test('a request is a track link (any accepted service) and a reason; nothing else gets on the line', () => {
+  // Spotify parsing itself now lives in functions/_lib/music-links.ts (tests/music-links.test.mjs); this
+  // file keeps only the request-line-shaped checks: normalizeRequest's own errors and its use of the parser.
+  assert.deepEqual(parseMusicLink(`${TRACK}?si=abc`), { service: 'spotify', kind: 'track', id: '4uLU6hMCjMI75M1A2tKUQC', url: TRACK });
+  for (const bad of ['https://open.spotify.com/playlist/35WC68tu9rrBoRrW3N2n0M', 'https://evil.example/open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC', 'javascript:alert(1)', '']) assert.equal(parseMusicLink(bad), null, bad);
   assert.throws(() => normalizeRequest({ url: TRACK, why: 'good' }), /Say why/);
+  assert.throws(() => normalizeRequest({ url: 'https://open.spotify.com/album/x', why: 'good enough' }), /Send a track link from Spotify, Apple Music/);
   const n = normalizeRequest({ url: TRACK, why: '  It answers\nthe Nick Drake.  ', who: 'x'.repeat(90), noun: 5000, via: 'agent' });
-  assert.equal(n.why, 'It answers the Nick Drake.'); assert.equal(n.who.length, 40); assert.equal(n.noun, undefined); assert.equal(n.via, 'agent');
+  assert.equal(n.why, 'It answers the Nick Drake.'); assert.equal(n.who.length, 40); assert.equal(n.noun, undefined); assert.equal(n.via, 'agent'); assert.equal(n.track.service, 'spotify');
 });
 
 test('the line takes the title from Spotify, refuses a duplicate, and marks a request played from the log', async () => {

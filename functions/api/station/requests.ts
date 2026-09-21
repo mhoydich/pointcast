@@ -1,41 +1,40 @@
 /**
  * /api/station/requests — the station's request line.
  *
- * Anyone in town, person or agent, can put a track in front of the broadcaster:
- * a Spotify track link and one sentence of why. The line is public and unverified
- * (names are self-reported, like Shortwave). When a requested track later turns up
- * in the station's play log, the line marks it played: that is the whole loop.
+ * Anyone in town, person or agent, can put a track in front of the broadcaster: a
+ * track link (Spotify, Apple Music, YouTube, SoundCloud, Bandcamp, Tidal or Deezer —
+ * see functions/_lib/music-links.ts) and one sentence of why. The line is public and
+ * unverified (names are self-reported, like Shortwave). When a requested Spotify
+ * track later turns up in the station's own Spotify play log, the line marks it
+ * played: that is the whole loop. The broadcaster's log is Spotify-only, so a
+ * request on any other service can never flip to played — it is still public,
+ * still real, it just never gets that checkmark.
  *
  * One KV document (VISITS), newest first, capped. One write per request plus the
  * hourly rate counter. Removing a request is the broadcaster's alone.
  */
 import { authJson, readSessionFromRequest } from '../auth/session.ts';
 import { unfurl } from '../unfurl.ts';
+import { musicLinkKey, parseMusicLink, SERVICE_LABEL, type MusicService } from '../../_lib/music-links.ts';
 import type { StationPlay } from '../spotify/_station.ts';
 
 type Env = Pick<Cloudflare.Env, 'VISITS' | 'PC_RATES_KV' | 'USERS'>;
 
 export interface StationRequest {
-  id: string; at: string; trackId: string; url: string; title: string; artist: string; image?: string;
+  id: string; at: string; service: MusicService; key: string; trackId?: string; url: string; title: string; artist: string; image?: string;
   why: string; who: string; noun?: number; via: 'page' | 'agent'; attribution: 'self-reported';
 }
 
 const KEY = 'station:v1:broadcast:requests';
 const CAP = 120, PER_HOUR = 6, WHY_MAX = 200, WHO_MAX = 40;
+const SERVICE_NAMES = Object.values(SERVICE_LABEL).join(', ').replace(/, ([^,]*)$/, ' or $1');
 const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { ...headers, ...extra } });
 const clean = (v: unknown, max: number) => Array.from(String(v ?? '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, max).join('');
 
-/** A Spotify track link or URI, reduced to its id. Albums, playlists and anything else are not requests. */
-export function parseTrack(raw: unknown): { id: string; url: string } | null {
-  const s = String(raw ?? '').trim();
-  const m = /^https?:\/\/open\.spotify\.com\/(?:intl-[a-z]{2,5}\/)?track\/([A-Za-z0-9]{10,40})(?:[/?#].*)?$/.exec(s) || /^spotify:track:([A-Za-z0-9]{10,40})$/.exec(s);
-  return m ? { id: m[1], url: `https://open.spotify.com/track/${m[1]}` } : null;
-}
-
 export function normalizeRequest(raw: Record<string, unknown>) {
-  const track = parseTrack(raw?.url);
-  if (!track) throw new Error('Send a Spotify track link: https://open.spotify.com/track/…');
+  const track = parseMusicLink(raw?.url);
+  if (!track) throw new Error(`Send a track link from ${SERVICE_NAMES}.`);
   const why = clean(raw?.why, WHY_MAX);
   if (why.length < 8) throw new Error('Say why in a sentence (8 to 200 characters). The reason is the point of a request.');
   const noun = Number(raw?.noun);
@@ -47,12 +46,18 @@ async function readLine(env: Env): Promise<StationRequest[]> {
   return Array.isArray(rows) ? rows : [];
 }
 
-/** Join the line against the play log: a request is played once its track shows up after it was asked for. */
+/**
+ * Join the line against the play log: a request is played once its track shows up after it was
+ * asked for. The play log is the station's own Spotify history, so only a request that kept its
+ * Spotify trackId can ever be matched here — a request for a track on another service simply
+ * never flips to played (there is nothing to fake this against; that is honest, not a bug).
+ */
 export function markPlayed(line: StationRequest[], plays: StationPlay[]) {
   // Index the log once: the line is short, the log can be thousands of rows.
-  const wanted = new Set(line.map((r) => r.trackId)), byTrack = new Map<string, string[]>();
+  const wanted = new Set(line.map((r) => r.trackId).filter((id): id is string => Boolean(id))), byTrack = new Map<string, string[]>();
   for (const p of plays) if (wanted.has(p.id)) byTrack.set(p.id, [...(byTrack.get(p.id) ?? []), p.at]);
   return line.map((r) => {
+    if (!r.trackId) return { ...r, playedAt: null };
     const floor = Date.parse(r.at) - 60000, hit = (byTrack.get(r.trackId) ?? []).find((at) => Date.parse(at) >= floor);
     return { ...r, playedAt: hit ?? null };
   });
@@ -101,13 +106,13 @@ export async function handleRequests(request: Request, env: Env, fetcher: typeof
     // a Spotify fetch, so it must still cost quota (otherwise this is an unmetered fetch relay).
     await env.PC_RATES_KV.put(rateKey, String(count + 1), { expirationTtl: 3700 });
 
-    const line = await readLine(env);
-    if (line.some((r) => r.trackId === body.track.id && Date.now() - Date.parse(r.at) < 24 * 3600000)) return json({ ok: false, error: 'That track is already on the line from the last day. Pick another, or wait for it to play.' }, 409);
+    const line = await readLine(env), key = musicLinkKey(body.track);
+    if (line.some((r) => r.key === key && Date.now() - Date.parse(r.at) < 24 * 3600000)) return json({ ok: false, error: 'That track is already on the line from the last day. Pick another, or wait for it to play.' }, 409);
 
-    // The title comes from Spotify, not from the requester: a request cannot name itself.
+    // The title comes from the link's own preview, not from the requester: a request cannot name itself.
     const seen = await unfurl(new URL(body.track.url), fetcher).catch(() => null);
-    if (!seen?.title) return json({ ok: false, error: 'Spotify did not recognise that track. Nothing was saved.' }, 422);
-    const row: StationRequest = { id: `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`, at: new Date().toISOString(), trackId: body.track.id, url: body.track.url, title: clean(seen.title, 160), artist: clean(seen.description, 160), ...(seen.image?.startsWith('https://') ? { image: seen.image } : {}), why: body.why, who: body.who, ...(body.noun !== undefined ? { noun: body.noun } : {}), via: body.via, attribution: 'self-reported' };
+    if (!seen?.title) return json({ ok: false, error: `${SERVICE_LABEL[body.track.service]} did not recognise that track. Nothing was saved.` }, 422);
+    const row: StationRequest = { id: `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`, at: new Date().toISOString(), service: body.track.service, key, ...(body.track.service === 'spotify' ? { trackId: body.track.id } : {}), url: body.track.url, title: clean(seen.title, 160), artist: clean(seen.description, 160), ...(seen.image?.startsWith('https://') ? { image: seen.image } : {}), why: body.why, who: body.who, ...(body.noun !== undefined ? { noun: body.noun } : {}), via: body.via, attribution: 'self-reported' };
     await env.VISITS.put(KEY, JSON.stringify([row, ...line].slice(0, CAP)));
     return json({ ok: true, request: row }, 201);
   } catch {

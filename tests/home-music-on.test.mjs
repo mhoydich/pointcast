@@ -20,10 +20,12 @@ test('the shelf adds no endpoints: now-playing rides the page fetch, presence ri
   for (const ev of ['pc:rosebud:hit', 'pc:shortwave:say', 'pc:presence', 'pc:nowplaying']) assert.ok(shelf.includes(ev), ev);
 });
 
-test('only a real open.spotify.com share link (or spotify: URI) is accepted, and tracking params are dropped', () => {
+test('a Spotify share link (or spotify: URI) keeps its full kind detection, tracking params are dropped, and the other six accepted services are a host check, never fetch() of their own', () => {
   assert.ok(shelf.includes(String.raw`/^https?:\/\/open\.spotify\.com\/(?:intl-[a-z]{2,5}\/)?(track|album|playlist|episode|show)\/`));
   assert.ok(shelf.includes('url: `https://open.spotify.com/${m[1]}/${m[2]}`'));
   assert.match(shelf, /Nothing is posted until you press the button\./);
+  for (const host of [String.raw`music\.apple\.com`, String.raw`youtube\.com`, String.raw`soundcloud\.com`, String.raw`bandcamp\.com`, String.raw`tidal\.com`, String.raw`deezer\.com`]) assert.ok(shelf.includes(host), host);
+  assert.match(shelf, /a link from Spotify, Apple Music, YouTube, SoundCloud, Bandcamp, Tidal or Deezer/);
 });
 
 test('what you have on reaches the town as the presence listening field, for an hour, and can be cleared', () => {

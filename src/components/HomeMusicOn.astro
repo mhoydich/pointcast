@@ -93,10 +93,10 @@ const invites = [
     <li class="musicon__step musicon__step--tell">
       <p class="musicon__no" aria-hidden="true">03 · 04</p>
       <h3>Say what is on · open it as a room</h3>
-      <p>In Spotify: Share → Copy link. Paste it here. A track goes to the town square as a card; a playlist can also open as a listening room.</p>
+      <p>Paste a link from Spotify, Apple Music, YouTube, SoundCloud, Bandcamp, Tidal or Deezer. A track goes to the town square as a card; a Spotify playlist can also open as a listening room.</p>
       <form class="musicon__form" data-mo-form novalidate>
-        <label class="musicon__label" for="musicon-link">Spotify link</label>
-        <input id="musicon-link" data-mo-link type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/track/…" />
+        <label class="musicon__label" for="musicon-link">Music link</label>
+        <input id="musicon-link" data-mo-link type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Spotify, Apple Music, YouTube, SoundCloud, Bandcamp, Tidal or Deezer…" />
         <div class="musicon__buttons">
           <button type="submit" class="shelf__button shelf__button--primary" data-mo-tell>Tell the town ♫</button>
           <a class="shelf__button" data-mo-room href="/listening-room" aria-disabled="true">Open as a listening room</a>
@@ -196,12 +196,21 @@ const invites = [
     });
 
     // ── 03 · 04 · the link ─────────────────────────────────────────
+    // Spotify keeps its full kind detection (track/album/playlist/episode/show), since "Open as a
+    // listening room" only lights up for a playlist. Every other service is a loose host check only:
+    // functions/_lib/music-links.ts is the strict parser the request line uses (this shelf has no
+    // server of its own to defer to — it just says what you have on), and only track-level links
+    // are meant to make sense here, so a good-faith host match is enough. Kept in sync by hand with
+    // the same list in src/pages/station.astro and the accepted-services copy above.
+    const OTHER_MUSIC_HOSTS = /^(music\.apple\.com|(?:www\.)?youtube\.com|music\.youtube\.com|youtu\.be|(?:www\.)?soundcloud\.com|[a-z0-9-]+\.bandcamp\.com|(?:listen\.)?tidal\.com|(?:www\.)?deezer\.com)$/i;
     const form = $<HTMLFormElement>('[data-mo-form]'), input = $<HTMLInputElement>('[data-mo-link]'), status = $('[data-mo-status]'), room = $<HTMLAnchorElement>('[data-mo-room]');
     type Parsed = { kind: string; id: string; url: string };
     const parse = (raw: string): Parsed | null => {
       const s = raw.trim();
       const m = /^https?:\/\/open\.spotify\.com\/(?:intl-[a-z]{2,5}\/)?(track|album|playlist|episode|show)\/([A-Za-z0-9]{10,40})(?:[/?#].*)?$/.exec(s) || /^spotify:(track|album|playlist|episode|show):([A-Za-z0-9]{10,40})$/.exec(s);
-      return m ? { kind: m[1], id: m[2], url: `https://open.spotify.com/${m[1]}/${m[2]}` } : null; // share-tracking params are dropped
+      if (m) return { kind: m[1], id: m[2], url: `https://open.spotify.com/${m[1]}/${m[2]}` }; // share-tracking params are dropped
+      try { const u = new URL(s); if (u.protocol === 'https:' && OTHER_MUSIC_HOSTS.test(u.hostname)) { u.hash = ''; return { kind: 'track', id: '', url: u.toString() }; } } catch { /* not a link at all */ }
+      return null;
     };
     const say = (t: string, tone = '') => { status.textContent = t; status.dataset.tone = tone; };
     const sync = () => {
@@ -210,8 +219,8 @@ const invites = [
       room.setAttribute('aria-disabled', isList ? 'false' : 'true');
       room.textContent = isList ? 'Open as a listening room ↗' : 'Open as a listening room';
       if (!input.value.trim()) say('Nothing is posted until you press the button.');
-      else if (!p) say('That does not look like a Spotify share link yet.', 'warn');
-      else say(isList ? 'A playlist. Tell the town, open it as a room, or both.' : `A Spotify ${p.kind}. Ready when you are.`, 'ok');
+      else if (!p) say('That does not look like a link from Spotify, Apple Music, YouTube, SoundCloud, Bandcamp, Tidal or Deezer yet.', 'warn');
+      else say(isList ? 'A playlist. Tell the town, open it as a room, or both.' : p.url.startsWith('https://open.spotify.com/') ? `A Spotify ${p.kind}. Ready when you are.` : 'A track link. Ready when you are.', 'ok');
       return p;
     };
     input.addEventListener('input', sync);
@@ -238,7 +247,7 @@ const invites = [
     const readMine = (): { url: string; label: string; at: number } | null => { try { const r = JSON.parse(localStorage.getItem('pc:music:listening') || 'null'); return r && typeof r.label === 'string' && Date.now() - Number(r.at) < HOUR ? r : null; } catch { return null; } };
     const paintMine = () => { const r = readMine(); mine.hidden = !r; if (r) mineLabel.textContent = r.label; };
     async function keepListening(p: Parsed) {
-      let label = `a Spotify ${p.kind}`;
+      let label = p.url.startsWith('https://open.spotify.com/') ? `a Spotify ${p.kind}` : 'a track';
       try { const pv = await fetchPreview(p.url); if (pv?.title) label = pv.description && pv.description.length <= 60 ? `${pv.title} — ${pv.description}` : pv.title; } catch {}
       try { localStorage.setItem('pc:music:listening', JSON.stringify({ url: p.url, label: label.slice(0, 120), at: Date.now() })); } catch {}
       window.dispatchEvent(new CustomEvent('pc:music:listening', { detail: { url: p.url, kind: p.kind, label } }));
