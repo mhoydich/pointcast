@@ -1,0 +1,617 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+import {
+  BUILDS,
+  MONTHS,
+  MONTH_NAMES,
+  PADDLE_CALENDAR,
+  PADDLE_CALENDAR_BLOCK,
+  PADDLE_CALENDAR_JSON_URL,
+  PADDLE_CALENDAR_RALLY_URL,
+  PADDLE_CALENDAR_STATS,
+  PADDLE_CALENDAR_URL,
+  PADDLE_FUND_CAP_USD,
+  RELEASES,
+  hostOf,
+  priceLabel,
+  tierOf,
+  type Build,
+} from '../lib/paddle-calendar';
+
+const title = 'The 2026 Paddle Calendar';
+const description =
+  `Every pickleball paddle release of 2026 on one calendar: ${PADDLE_CALENDAR_STATS.releases} launches from ${PADDLE_CALENDAR_STATS.brands} brands, dated, priced and sourced, with the rules, lawsuits and signings that shaped them, company files, and a labeled forecast through spring 2027.`;
+const court = CHANNELS.CRT;
+const { meta, anchors, ahead, signals, forecasts, trends, grit, moves, companies, undated, method } = PADDLE_CALENDAR;
+const S = PADDLE_CALENDAR_STATS;
+
+const monthKey = (iso: string) => iso.slice(0, 7);
+const shortDate = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
+const chip = (r: (typeof RELEASES)[number]) => r.short;
+
+// The ledger: releases and the news that shaped them, one list per month.
+type Row = { kind: 'release'; date: string; r: (typeof RELEASES)[number] } | { kind: 'wire'; date: string; a: (typeof anchors)[number] };
+const rows: Row[] = [
+  ...RELEASES.map((r) => ({ kind: 'release' as const, date: r.date, r })),
+  ...anchors.map((a) => ({ kind: 'wire' as const, date: a.date, a })),
+].sort((x, y) => x.date.localeCompare(y.date));
+const ledgerKeys = [...new Set(rows.map((row) => (row.date < '2026-01-01' ? 'before' : monthKey(row.date))))];
+const ledger = ledgerKeys.map((key) => ({
+  key,
+  label: key === 'before' ? 'Before the year' : `${MONTH_NAMES[Number(key.slice(5)) - 1]} ${key.slice(0, 4)}`,
+  rows: rows.filter((row) => (row.date < '2026-01-01' ? 'before' : monthKey(row.date)) === key),
+}));
+
+// Year at a glance: twelve months, releases as chips, the road ahead dashed.
+const year = MONTHS.map((m, i) => {
+  const key = `2026-${String(i + 1).padStart(2, '0')}`;
+  return {
+    m,
+    key,
+    releases: RELEASES.filter((r) => monthKey(r.date) === key),
+    wires: anchors.filter((a) => monthKey(a.date) === key),
+    ahead: ahead.filter((a) => monthKey(a.date) === key && a.kind !== 'release'),
+  };
+});
+const busiest = Math.max(...year.map((y) => y.releases.length));
+
+// Price ladder: launch date against list price. One axis, colour = build.
+const W = 1000, H = 380, L = 56, R = 18, T = 20, B = 40;
+const t0 = Date.UTC(2026, 0, 1), t1 = Date.UTC(2026, 11, 31);
+const x = (iso: string) => L + ((Date.parse(`${iso}T00:00:00Z`) - t0) / (t1 - t0)) * (W - L - R);
+const yMin = 60, yMax = 350;
+const y = (usd: number) => T + (1 - (usd - yMin) / (yMax - yMin)) * (H - T - B);
+const dots = RELEASES.filter((r) => r.msrp != null);
+const labelled = new Set(['joola-rally-rocket', 'spartus-spitfire', 'joola-power-fx', 'selkirk-omni']);
+const builds = (Object.keys(BUILDS) as Build[]).filter((b) => RELEASES.some((r) => r.build === b));
+const brands = [...new Set(RELEASES.map((r) => r.brand))].sort((a, b) => a.localeCompare(b));
+const kindMark: Record<string, string> = { rule: 'RULE', legal: 'LEGAL', deal: 'MONEY', event: 'TOUR', market: 'MARKET', release: 'DROP' };
+const basisLabel: Record<string, string> = { rule: 'RESTS ON A RULE', pattern: 'RESTS ON A PATTERN', inference: 'INFERENCE', legal: 'RESTS ON A CASE', open: 'OPEN QUESTION' };
+
+const certBadges = (r: (typeof RELEASES)[number]) => [
+  r.usap === 'yes' && 'USAP ✓',
+  r.usap === 'no' && 'NOT USAP · TOUR ONLY',
+  r.usap === 'split' && 'USAP: 16MM ONLY',
+  r.usap === 'pending' && 'USAP PENDING',
+  r.upaa === 'yes' && 'UPA-A ✓',
+  r.upaa === 'split' && 'UPA-A: PRO VERSION',
+  r.upaa === 'pending' && 'UPA-A PENDING',
+].filter(Boolean) as string[];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  '@id': PADDLE_CALENDAR_URL,
+  name: title,
+  description,
+  url: PADDLE_CALENDAR_URL,
+  dateModified: meta.asOf,
+  temporalCoverage: '2026-01-01/2027-05-16',
+  keywords: ['pickleball paddles', 'paddle release dates', 'foam core paddles', 'USA Pickleball', 'UPA-A', 'durable grit'],
+  isAccessibleForFree: true,
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+  distribution: [{ '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: PADDLE_CALENDAR_JSON_URL }],
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  sameAs: PADDLE_CALENDAR_RALLY_URL,
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <main class="cal" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/c/court">court</a><span>/</span><span>paddle calendar</span>
+      <a href={`/b/${PADDLE_CALENDAR_BLOCK}`}>BLOCK {PADDLE_CALENDAR_BLOCK}</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">CH.CRT · COURT · REFERENCE · AS OF SEP 21, 2026</p>
+      <h1>Every paddle of 2026, on one calendar.</h1>
+      <p class="dek">
+        {S.releases} launches from {S.brands} brands, dated, priced and sourced. The rules, lawsuits and
+        signings that shaped them run alongside. Then the company files, ten trends, and a forecast
+        through next spring that says what each call rests on.
+      </p>
+      <p class="jump">
+        <a href="#year">the year</a><a href="#prices">prices</a><a href="#ledger">the ledger</a><a href="#ahead">what's next</a><a href="#trends">trends</a><a href="#moves">signings</a><a href="#companies">company files</a><a href="#method">method</a>
+      </p>
+    </header>
+
+    <section class="stats" aria-label="The year in four numbers">
+      <div><strong>{S.releases}</strong><span>releases tracked · {S.brands} brands</span></div>
+      <div><strong>{S.foam} of {S.releases}</strong><span>are full-foam builds</span></div>
+      <div><strong>${S.medianUsd}</strong><span>median list price at launch</span></div>
+      <div class="next"><strong id="next-drop">Sep 30</strong><span id="next-drop-note">next drop · JOOLA POWER FX</span></div>
+    </section>
+
+    <section id="year" class="sec" aria-label="The year at a glance">
+      <div class="sec__head">
+        <p class="kicker">THE YEAR AT A GLANCE</p>
+        <ul class="legend" aria-label="Build type">
+          {builds.map((b) => (<li><i style={`background:${BUILDS[b].color}`}></i>{BUILDS[b].label}</li>))}
+        </ul>
+      </div>
+      <div class="year">
+        {year.map((mo) => (
+          <div class:list={['mo', { 'mo--now': mo.key === '2026-09', 'mo--future': mo.key > '2026-09' }]}>
+            <div class="mo__name">
+              <b>{mo.m}</b>
+              <span class="mo__bar" aria-hidden="true"><i style={`width:${(mo.releases.length / busiest) * 100}%`}></i></span>
+              <small>{mo.releases.length || '·'}</small>
+            </div>
+            <div class="mo__chips">
+              {mo.releases.map((r) => (
+                <a class:list={['chip', { 'chip--soon': r.status === 'upcoming' }]} href={`#${r.id}`} style={`--b:${BUILDS[r.build as Build].color}`} title={`${r.dateLabel} · ${priceLabel(r)}`}>{chip(r)}</a>
+              ))}
+              {mo.wires.map((a) => (<span class="chip chip--wire">{kindMark[a.kind]} · {a.title}</span>))}
+              {mo.ahead.map((a) => (<span class="chip chip--ahead">{a.dateLabel} · {a.title}</span>))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p class="note">
+        March was the peak: seven launches in four weeks. July was the quietest month. August and
+        September filled back up ahead of the October 1 spin-test deadline, and two more dated drops
+        land in the next ten days.
+      </p>
+    </section>
+
+    <section id="prices" class="sec" aria-label="Launch price by date">
+      <div class="sec__head">
+        <p class="kicker">THE PRICE LADDER · LIST PRICE AT LAUNCH, BY DATE</p>
+        <ul class="legend" aria-label="Build type">
+          {builds.map((b) => (<li><i style={`background:${BUILDS[b].color}`}></i>{BUILDS[b].short}</li>))}
+        </ul>
+      </div>
+      <figure class="ladder">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Scatter of ${dots.length} paddle releases by launch date and list price. Prices run from $99 to $329.95, with clusters at $100 to $120, around $200, and $250 to $300.`}>
+          <rect x={L} y={y(PADDLE_FUND_CAP_USD)} width={W - L - R} height={y(yMin) - y(PADDLE_FUND_CAP_USD)} class="ladder__fund" />
+          {[100, 200, 300].map((usd) => (
+            <g>
+              <line x1={L} x2={W - R} y1={y(usd)} y2={y(usd)} class="ladder__grid" />
+              <text x={L - 10} y={y(usd) + 4} text-anchor="end" class="ladder__tick">${usd}</text>
+            </g>
+          ))}
+          {MONTHS.map((m, i) => (
+            <text x={x(`2026-${String(i + 1).padStart(2, '0')}-15`)} y={H - 14} text-anchor="middle" class="ladder__tick">{m}</text>
+          ))}
+          <line x1={x(meta.asOf)} x2={x(meta.asOf)} y1={T} y2={H - B} class="ladder__now" />
+          <text x={x(meta.asOf) + 6} y={T + 10} class="ladder__tick">today</text>
+          <text x={L + 8} y={y(yMin) - 8} class="ladder__tick">shaded: under the Paddle Fund's $200</text>
+          {dots.map((r) => (
+            <a href={`#${r.id}`} class="dot" data-tip={`${r.brand} ${r.model}|${priceLabel(r)} · ${r.dateLabel}|${BUILDS[r.build as Build].label}`}>
+              <circle cx={x(r.date)} cy={y(r.msrp as number)} r="16" fill="transparent" />
+              <circle cx={x(r.date)} cy={y(r.msrp as number)} r="6.5" fill={r.status === 'upcoming' ? '#fff' : BUILDS[r.build as Build].color} stroke={r.status === 'upcoming' ? BUILDS[r.build as Build].color : '#fff'} stroke-width="2" />
+            </a>
+          ))}
+          {dots.filter((r) => labelled.has(r.id)).map((r) => (
+            <text x={x(r.date) + 11} y={y(r.msrp as number) + 4} class="ladder__label">{chip(r)} {priceLabel(r).split(' ')[0]}</text>
+          ))}
+        </svg>
+        <div class="tip" id="ladder-tip" hidden></div>
+        <figcaption>
+          Each dot is a release; hollow dots have not shipped yet. Multi-model launches plot at their
+          headline price. The shaded band is what one turn in <a href="/paddle-fund">the Paddle Fund</a> buys:
+          {S.underFundCap} of this year's {S.releases} releases fit under $200. Every dot is a row in the ledger below.
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="ledger" class="sec" aria-label="The ledger, month by month">
+      <p class="kicker">THE LEDGER · MONTH BY MONTH</p>
+      <form class="filters" id="filters" aria-label="Filter the ledger">
+        <label>Brand
+          <select name="brand">
+            <option value="">All {S.brands}</option>
+            {brands.map((b) => (<option value={b}>{b}</option>))}
+          </select>
+        </label>
+        <label>Build
+          <select name="build">
+            <option value="">Any</option>
+            {builds.map((b) => (<option value={b}>{BUILDS[b].label}</option>))}
+          </select>
+        </label>
+        <label>Price
+          <select name="tier">
+            <option value="">Any</option>
+            <option value="floor">Floor · $120 and under</option>
+            <option value="middle">Middle · $121 – $229</option>
+            <option value="top">Top · $230 and up</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" name="fund" /> Under $200</label>
+        <label class="check"><input type="checkbox" name="wire" checked /> Show the news</label>
+        <output id="filter-count" aria-live="polite">{S.releases} releases</output>
+      </form>
+
+      {ledger.map((mo) => (
+        <div class="month" data-month>
+          <h2 class="month__name">{mo.label}<small data-month-count>{mo.rows.filter((row) => row.kind === 'release').length || ''}</small></h2>
+          {mo.rows.map((row) => row.kind === 'wire' ? (
+            <article class="wire" data-wire>
+              <p class="wire__date">{mo.key === 'before' ? `${shortDate(row.a.date)}, ${row.a.date.slice(0, 4)}` : shortDate(row.a.date)}<b>{kindMark[row.a.kind]}</b></p>
+              <div>
+                <h3>{row.a.title}</h3>
+                <p>{row.a.body} <a href={row.a.source} rel="noopener">{hostOf(row.a.source)} ↗</a></p>
+              </div>
+            </article>
+          ) : (
+            <article
+              class:list={['rel', { 'rel--soon': row.r.status === 'upcoming' }]}
+              id={row.r.id}
+              data-release
+              data-brand={row.r.brand}
+              data-build={row.r.build}
+              data-tier={tierOf(row.r.msrp)}
+              data-fund={row.r.msrp != null && row.r.msrp <= PADDLE_FUND_CAP_USD ? '1' : '0'}
+              style={`--b:${BUILDS[row.r.build as Build].color}`}
+            >
+              <p class="rel__date">{row.r.dateLabel}<b>{priceLabel(row.r)}</b></p>
+              <div class="rel__body">
+                <h3><span>{row.r.brand}</span> {row.r.model}</h3>
+                <p class="rel__meta">
+                  {[row.r.thickness, row.r.shapes, row.r.pro && `Pro: ${row.r.pro}`].filter(Boolean).join('  ·  ')}
+                </p>
+                <p class="rel__take">{row.r.take}</p>
+                <p class="rel__tech"><b>Build.</b> {row.r.tech}{row.r.specs && (<> <b>Measured.</b> {row.r.specs}.</>)}{row.r.certNote && (<> <b>Cert.</b> {row.r.certNote}</>)}</p>
+                <p class="rel__tags">
+                  <span class="tag tag--build">{BUILDS[row.r.build as Build].short}</span>
+                  {row.r.status === 'upcoming' && <span class="tag tag--soon">NOT OUT YET</span>}
+                  {row.r.status === 'limited' && <span class="tag">LIMITED RUN</span>}
+                  {certBadges(row.r).map((c) => (<span class="tag">{c}</span>))}
+                  <span class={`tag tag--conf tag--${row.r.confidence}`}>{row.r.confidence.toUpperCase()} CONFIDENCE · DATE TO THE {row.r.precision.toUpperCase()}</span>
+                  {row.r.sources.map((s) => (<a href={s} rel="noopener">{hostOf(s)} ↗</a>))}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      ))}
+      <p class="empty" id="filter-empty" hidden>Nothing on the calendar matches that. Loosen a filter.</p>
+
+      <div class="shelf">
+        <p class="kicker">ON SHELVES THIS YEAR, DATE NOT PINNED</p>
+        <div class="rows">
+          {undated.map((u) => (
+            <a class="row row--link" href={u.source} rel="noopener"><strong>{u.brand} {u.model}</strong><span>{u.note}</span><b aria-hidden="true">↗</b></a>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section id="ahead" class="sec" aria-label="What is next">
+      <p class="kicker">WHAT'S NEXT · THE ROAD TO SPRING 2027</p>
+      <h2 class="h2">Two dated drops, one rule change, and a lot of names on approval lists.</h2>
+      <div class="road">
+        {ahead.map((a) => (
+          <div class:list={['road__row', `road__row--${a.kind}`]} data-ahead={a.date} data-ahead-kind={a.kind} data-ahead-title={a.title}>
+            <span class="road__date">{a.dateLabel}</span>
+            <b>{kindMark[a.kind]}</b>
+            <span><strong>{a.title}</strong>{a.body && <> — {a.body}</>}</span>
+          </div>
+        ))}
+      </div>
+
+      <p class="kicker kicker--gap">CERTIFIED, NOT YET LAUNCHED · NAMES ON THE APPROVAL LISTS</p>
+      <div class="rows">
+        {signals.map((s) => (
+          <div class="row"><strong>{s.brand} {s.model}</strong><span>{s.signal}</span></div>
+        ))}
+      </div>
+      <p class="note">An approval gives you the name, not the launch date or the reason to buy. Treat these as a watchlist.</p>
+
+      <p class="kicker kicker--gap">THE FORECAST · EACH CALL SAYS WHAT IT RESTS ON</p>
+      <div class="calls">
+        {forecasts.map((f) => (
+          <article class="call">
+            <p class="call__when">{f.window}<b>{basisLabel[f.basis]}</b></p>
+            <h3>{f.call}</h3>
+            <p>{f.body}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section id="trends" class="sec" aria-label="Ten trends">
+      <p class="kicker">TEN TRENDS · WHAT THE CALENDAR SAYS WHEN YOU READ IT WHOLE</p>
+      <div class="trends">
+        {trends.map((t) => (
+          <article class="trend">
+            <p class="trend__n">{t.n}</p>
+            <div>
+              <h3>{t.title}</h3>
+              <p>{t.body} <a href={t.source} rel="noopener">{hostOf(t.source)} ↗</a></p>
+              {t.n === '02' && (
+                <figure class="grit">
+                  {grit.rows.map((g) => (
+                    <div class="grit__row">
+                      <span>{g.surface}</span>
+                      <span class="grit__track"><i class:list={[{ base: g.retained < 85 }]} style={`width:${g.retained}%`}></i></span>
+                      <b>{g.retained}%</b>
+                    </div>
+                  ))}
+                  <figcaption>{grit.note} <a href={grit.source} rel="noopener">{hostOf(grit.source)} ↗</a></figcaption>
+                </figure>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section id="moves" class="sec" aria-label="Pro paddle signings">
+      <p class="kicker">SIGNING SEASON · WHO CHANGED PADDLES IN 2026</p>
+      <div class="rows rows--moves">
+        {moves.map((m) => (
+          <div class="row"><strong>{m.player}</strong><span>{m.from ? `${m.from} → ` : '→ '}<em>{m.to}</em>{m.note && ` · ${m.note}`}</span></div>
+        ))}
+      </div>
+      <p class="note">Most paddle contracts end December 31. The next round of these lands in the first two weeks of January.</p>
+    </section>
+
+    <section id="companies" class="sec" aria-label="Company files">
+      <p class="kicker">COMPANY FILES · {companies.length} BRANDS</p>
+      <div class="cos">
+        {companies.map((c) => {
+          const theirs = RELEASES.filter((r) => r.brand === c.brand);
+          return (
+            <article class="co">
+              <h3>{c.brand}</h3>
+              <p class="co__facts">{[c.hq, c.founded && `est. ${c.founded}`, c.owner].filter(Boolean).join(' · ')}</p>
+              <p class="co__story">{c.story}</p>
+              <dl>
+                {c.lines && (<><dt>Lines</dt><dd>{c.lines}</dd></>)}
+                {c.pros && (<><dt>Pros</dt><dd>{c.pros}</dd></>)}
+                {c.cadence && (<><dt>Cadence</dt><dd>{c.cadence}</dd></>)}
+                {theirs.length > 0 && (<><dt>2026</dt><dd>{theirs.map((r, i) => (<>{i > 0 && ' · '}<a href={`#${r.id}`}>{r.model.split(/[:(]/)[0].trim()}</a></>))}</dd></>)}
+              </dl>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+
+    <section id="method" class="sec" aria-label="Method">
+      <p class="kicker">METHOD · HOW TO READ THIS</p>
+      <ol class="method">
+        {method.map((line) => (<li>{line}</li>))}
+      </ol>
+      <p class="foot">
+        <a href="/paddle-calendar.json">the whole calendar as JSON</a> · <a href={PADDLE_CALENDAR_RALLY_URL}>the same calendar on Rally ↗</a> · <a href="/paddle-fund">the Paddle Fund</a> · compiled {meta.asOf} · CC0
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  // Filters: the ledger is server-rendered; this only hides rows.
+  const form = document.getElementById('filters') as HTMLFormElement | null;
+  if (form) {
+    const releases = [...document.querySelectorAll<HTMLElement>('[data-release]')];
+    const wires = [...document.querySelectorAll<HTMLElement>('[data-wire]')];
+    const months = [...document.querySelectorAll<HTMLElement>('[data-month]')];
+    const count = document.getElementById('filter-count')!;
+    const empty = document.getElementById('filter-empty')!;
+    const apply = () => {
+      const f = new FormData(form);
+      const brand = String(f.get('brand') || ''), build = String(f.get('build') || ''), tier = String(f.get('tier') || '');
+      const fund = f.get('fund') === 'on', wire = f.get('wire') === 'on';
+      const narrowed = Boolean(brand || build || tier || fund);
+      let shown = 0;
+      for (const el of releases) {
+        const ok = (!brand || el.dataset.brand === brand) && (!build || el.dataset.build === build) && (!tier || el.dataset.tier === tier) && (!fund || el.dataset.fund === '1');
+        el.hidden = !ok;
+        if (ok) shown += 1;
+      }
+      for (const el of wires) el.hidden = !wire || narrowed;
+      for (const mo of months) {
+        const n = mo.querySelectorAll('[data-release]:not([hidden])').length;
+        mo.hidden = n === 0 && mo.querySelectorAll('[data-wire]:not([hidden])').length === 0;
+        const badge = mo.querySelector('[data-month-count]');
+        if (badge) badge.textContent = n ? String(n) : '';
+      }
+      count.textContent = `${shown} release${shown === 1 ? '' : 's'}`;
+      empty.hidden = shown !== 0;
+    };
+    form.addEventListener('input', apply);
+    form.addEventListener('submit', (event) => event.preventDefault());
+  }
+
+  // Next drop: the first dated release still ahead of the reader's clock.
+  const today = new Date().toISOString().slice(0, 10);
+  const next = [...document.querySelectorAll<HTMLElement>('[data-ahead]')]
+    .find((el) => el.dataset.aheadKind === 'release' && (el.dataset.ahead || '') >= today);
+  const big = document.getElementById('next-drop'), small = document.getElementById('next-drop-note');
+  if (big && small) {
+    if (next) {
+      const days = Math.round((Date.parse(next.dataset.ahead!) - Date.parse(today)) / 864e5);
+      big.textContent = days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'}`;
+      small.textContent = `to the next dated drop · ${next.dataset.aheadTitle}`;
+    } else {
+      big.textContent = '—';
+      small.textContent = 'no dated drop on the calendar right now';
+    }
+  }
+  for (const el of document.querySelectorAll<HTMLElement>('[data-ahead]')) if ((el.dataset.ahead || '') < today) el.classList.add('is-past');
+
+  // Price ladder tooltip.
+  const tip = document.getElementById('ladder-tip');
+  const ladder = tip?.parentElement;
+  if (tip && ladder) {
+    const show = (dot: Element) => {
+      const [name, line, build] = (dot.getAttribute('data-tip') || '').split('|');
+      tip.replaceChildren();
+      for (const [tag, text] of [['strong', name], ['span', line], ['small', build]] as const) {
+        const node = document.createElement(tag);
+        node.textContent = text;
+        tip.append(node);
+      }
+      const box = ladder.getBoundingClientRect(), at = dot.getBoundingClientRect();
+      tip.hidden = false;
+      const left = Math.min(Math.max(at.left - box.left + at.width / 2, 90), box.width - 90);
+      tip.style.left = `${left}px`;
+      tip.style.top = `${at.top - box.top}px`;
+    };
+    for (const dot of ladder.querySelectorAll('.dot')) {
+      dot.addEventListener('pointerenter', () => show(dot));
+      dot.addEventListener('focus', () => show(dot));
+      dot.addEventListener('pointerleave', () => { tip.hidden = true; });
+      dot.addEventListener('blur', () => { tip.hidden = true; });
+    }
+  }
+</script>
+
+<style>
+  .cal{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .cal [hidden]{display:none!important}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .kicker--gap{margin-top:44px}
+  .hero{padding:48px 0 28px;max-width:820px}
+  .hero h1{margin:0;font:500 clamp(40px,6.4vw,76px)/.96 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
+  .dek{margin:20px 0 0;font:400 18px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .jump{display:flex;flex-wrap:wrap;gap:6px 16px;margin:22px 0 0;font:400 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
+  .jump a{color:var(--c800);border-bottom:1px solid var(--c600)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--c600);margin:8px 0 8px}
+  .stats div{padding:16px;border-right:1.5px solid var(--c600)}
+  .stats div:last-child{border-right:0;background:var(--c50)}
+  .stats strong{display:block;font:500 clamp(24px,3.2vw,36px)/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c800);font-variant-numeric:tabular-nums}
+  .stats span{display:block;margin-top:8px;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .sec{padding-top:56px;scroll-margin-top:12px}
+  .sec__head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .h2{margin:0 0 20px;max-width:760px;font:500 clamp(24px,3vw,34px)/1.1 var(--pc-font-sans);letter-spacing:-.02em;text-wrap:balance}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0 0 12px;padding:0;list-style:none;font:400 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .legend i{display:inline-block;width:9px;height:9px;margin-right:6px}
+  .note{max-width:720px;margin:14px 0 0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+
+  .year{border-top:1.5px solid var(--c600)}
+  .mo{display:grid;grid-template-columns:128px 1fr;gap:14px;padding:9px 0;border-bottom:1px solid var(--pc-rule-soft);align-items:start}
+  .mo--now{background:var(--c50)}
+  .mo__name{display:grid;grid-template-columns:34px 1fr 16px;gap:8px;align-items:center;padding-top:4px;font:500 11px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
+  .mo--now .mo__name{padding-left:6px}
+  .mo__bar{height:4px;background:var(--pc-rule-soft)}
+  .mo__bar i{display:block;height:100%;background:var(--c600)}
+  .mo__name small{font:400 11px var(--pc-font-mono);color:var(--pc-ink-muted);text-align:right}
+  .mo__chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{display:inline-block;padding:4px 8px 4px 7px;border:1px solid var(--pc-rule);border-left:4px solid var(--b,var(--pc-rule));font:400 12px/1.25 var(--pc-font-sans);color:var(--pc-ink)!important;background:#fff}
+  a.chip:hover{background:var(--c50);text-decoration:none}
+  .chip--soon{border-style:dashed;border-left-style:solid}
+  .chip--wire{border:0;padding:4px 2px;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.04em;color:var(--pc-ink-muted)!important;background:none}
+  .chip--ahead{border:1px dashed var(--pc-rule);font:400 11px/1.3 var(--pc-font-mono);color:var(--pc-ink-muted)!important;background:none}
+
+  .ladder{position:relative;margin:0;border:1.5px solid var(--c600);padding:8px 4px 0}
+  .ladder svg{display:block;width:100%;height:auto}
+  .ladder :global(.ladder__grid){stroke:var(--pc-rule-soft);stroke-width:1}
+  .ladder :global(.ladder__now){stroke:var(--pc-ink-muted);stroke-width:1;stroke-dasharray:3 4}
+  .ladder :global(.ladder__fund){fill:var(--c50)}
+  .ladder :global(.ladder__tick){font:400 11px var(--pc-font-mono);fill:var(--pc-ink-muted)}
+  .ladder :global(.ladder__label){font:500 12px var(--pc-font-sans);fill:var(--pc-ink)}
+  .ladder :global(.dot:focus){outline:none}
+  .ladder :global(.dot:hover circle:last-child),.ladder :global(.dot:focus circle:last-child){stroke:var(--pc-ink)}
+  .ladder figcaption{padding:12px 12px 14px;border-top:1px solid var(--pc-rule-soft);font:400 13px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .tip{position:absolute;transform:translate(-50%,calc(-100% - 6px));min-width:150px;max-width:220px;padding:8px 10px;background:var(--pc-ink);color:#fff;pointer-events:none;z-index:2}
+  .tip :global(strong){display:block;font:500 13px/1.25 var(--pc-font-sans)}
+  .tip :global(span){display:block;margin-top:3px;font:400 11px/1.4 var(--pc-font-mono)}
+  .tip :global(small){display:block;margin-top:3px;font:400 10px/1.4 var(--pc-font-mono);opacity:.7;text-transform:uppercase;letter-spacing:.06em}
+
+  .filters{position:sticky;top:0;z-index:3;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end;padding:12px;margin:0 0 8px;border:1.5px solid var(--c600);background:#fff}
+  .filters label{display:grid;gap:4px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .filters select{min-width:150px;padding:7px 8px;border:1px solid var(--pc-rule);border-radius:0;background:#fff;font:400 14px var(--pc-font-sans);color:var(--pc-ink)}
+  .filters .check{display:flex;align-items:center;gap:7px;padding-bottom:9px;color:var(--pc-ink)}
+  .filters input{accent-color:var(--c600);width:15px;height:15px;margin:0}
+  .filters output{margin-left:auto;padding-bottom:8px;font:500 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800);font-variant-numeric:tabular-nums}
+
+  .month__name{display:flex;align-items:baseline;gap:10px;margin:36px 0 0;padding-bottom:8px;border-bottom:1.5px solid var(--c600);font:500 22px/1 var(--pc-font-sans);letter-spacing:-.02em}
+  .month__name small{font:400 11px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .rel,.wire{display:grid;grid-template-columns:170px 1fr;gap:18px;padding:18px 0;border-bottom:1px solid var(--pc-rule-soft);scroll-margin-top:96px}
+  .rel{border-left:4px solid var(--b);padding-left:14px}
+  .rel--soon{background:repeating-linear-gradient(135deg,transparent 0 10px,var(--c50) 10px 11px)}
+  .rel:target{background:var(--c50)}
+  .rel__date,.wire__date{margin:3px 0 0;font:400 11px/1.5 var(--pc-font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .rel__date b{display:block;margin-top:6px;font:500 20px/1 var(--pc-font-sans);letter-spacing:-.01em;text-transform:none;color:var(--pc-ink);font-variant-numeric:tabular-nums}
+  .wire__date b{display:block;margin-top:4px;font-weight:500;letter-spacing:.12em;color:var(--c800)}
+  .rel h3{margin:0;font:500 21px/1.15 var(--pc-font-sans);letter-spacing:-.015em}
+  .rel h3 span{color:var(--pc-ink-muted)}
+  .rel__meta{margin:5px 0 0;font:400 12px/1.5 var(--pc-font-mono);color:var(--pc-ink-muted);white-space:pre-wrap}
+  .rel__take{margin:10px 0 0;max-width:720px;font:400 16px/1.55 var(--pc-font-sans);color:var(--pc-ink)}
+  .rel__tech{margin:8px 0 0;max-width:720px;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rel__tech b{font-weight:500;color:var(--pc-ink)}
+  .rel__tags{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:12px 0 0;font:400 10px var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase}
+  .tag{padding:3px 6px;border:1px solid var(--pc-rule);color:var(--pc-ink-soft)}
+  .tag--build{border-color:var(--b);color:#fff;background:var(--b)}
+  .tag--soon{border-color:var(--pc-ink);color:var(--pc-ink)}
+  .tag--conf{border-style:dashed}
+  .tag--low{color:#8a4b00;border-color:#8a4b00}
+  .rel__tags a{color:var(--c800);text-transform:none;letter-spacing:0}
+  .wire{padding:12px 0 12px 18px;background:#fafaf8}
+  .wire h3{margin:0;font:500 15px/1.3 var(--pc-font-sans)}
+  .wire p:not(.wire__date){margin:4px 0 0;max-width:720px;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .wire a,.trend a,.grit a{color:var(--c800);white-space:nowrap}
+  .empty{padding:32px 0;font:400 15px var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .shelf{margin-top:44px}
+
+  .rows{border-top:1.5px solid var(--c600)}
+  .row{display:grid;grid-template-columns:300px 1fr 24px;gap:16px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--pc-rule-soft);color:var(--pc-ink)}
+  .row strong{font:500 15px/1.3 var(--pc-font-sans)}
+  .row span{font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .row em{font-style:normal;font-weight:500;color:var(--pc-ink)}
+  .row b{font-weight:400;color:var(--c800)}
+  .row--link:hover{background:var(--c50);text-decoration:none}
+
+  .road{border-top:1.5px solid var(--c600)}
+  .road__row{display:grid;grid-template-columns:170px 64px 1fr;gap:14px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .road__row strong{font-weight:500;color:var(--pc-ink)}
+  .road__date{font:400 11px var(--pc-font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .road__row b{font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  .road__row--release,.road__row--rule{background:var(--c50)}
+  .road__row--release .road__date,.road__row--rule .road__date{padding-left:8px}
+  .road__row.is-past{opacity:.45}
+
+  .calls{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .call{border:1.5px solid var(--c600);padding:16px}
+  .call__when{display:flex;justify-content:space-between;gap:10px;margin:0 0 10px;font:400 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .call__when b{font-weight:500;color:var(--c800);text-align:right}
+  .call h3{margin:0 0 8px;font:500 19px/1.2 var(--pc-font-sans);letter-spacing:-.01em}
+  .call p:last-child{margin:0;font:400 14.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+
+  .trends{border-top:1.5px solid var(--c600)}
+  .trend{display:grid;grid-template-columns:64px 1fr;gap:18px;padding:22px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .trend__n{margin:2px 0 0;font:500 28px/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c600);font-variant-numeric:tabular-nums}
+  .trend h3{margin:0 0 8px;font:500 22px/1.15 var(--pc-font-sans);letter-spacing:-.015em}
+  .trend p{margin:0;max-width:760px;font:400 16px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .grit{max-width:620px;margin:18px 0 0;padding:14px;border:1px solid var(--pc-rule)}
+  .grit__row{display:grid;grid-template-columns:190px 1fr 44px;gap:10px;align-items:center;padding:4px 0;font:400 13px var(--pc-font-sans)}
+  .grit__track{height:10px;background:var(--pc-rule-soft)}
+  .grit__track i{display:block;height:100%;background:var(--c600)}
+  .grit__track i.base{background:var(--pc-ink-muted)}
+  .grit__row b{font:500 12px var(--pc-font-mono);text-align:right;font-variant-numeric:tabular-nums}
+  .grit figcaption{margin-top:10px;font:400 12px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
+
+  .cos{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .co{border:1px solid var(--pc-rule);padding:16px}
+  .co h3{margin:0;font:500 20px/1.1 var(--pc-font-sans);letter-spacing:-.015em}
+  .co__facts{margin:6px 0 0;font:400 11px/1.5 var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .co__story{margin:10px 0 12px;font:400 14.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .co dl{display:grid;grid-template-columns:64px 1fr;gap:4px 10px;margin:0;padding-top:10px;border-top:1px solid var(--pc-rule-soft);font:400 12.5px/1.5 var(--pc-font-sans)}
+  .co dt{font:500 10px/1.9 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .co dd{margin:0;color:var(--pc-ink-soft)}
+  .co dd a{color:var(--c800)}
+
+  .method{max-width:760px;margin:0;padding:0 0 0 20px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .method li{padding:5px 0}
+  .foot{margin:24px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+
+  @media(max-width:820px){
+    .stats{grid-template-columns:1fr 1fr}.stats div:nth-child(2){border-right:0}.stats div:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}
+    .mo{grid-template-columns:1fr;gap:6px}.mo__name{grid-template-columns:34px 90px 16px}
+    .rel,.wire{grid-template-columns:1fr;gap:6px}.rel__date b{display:inline;margin-left:10px;font-size:16px}.wire__date b{display:inline;margin-left:10px}
+    .row{grid-template-columns:1fr;gap:4px}.road__row{grid-template-columns:1fr;gap:2px}
+    .calls,.cos{grid-template-columns:1fr}.trend{grid-template-columns:1fr;gap:6px}
+    .filters{position:static}.filters label:not(.check){flex:1 1 140px}.filters select{min-width:0;width:100%}.filters output{margin-left:0}
+    .grit__row{grid-template-columns:130px 1fr 40px}.hero{padding-top:32px}
+    .ladder :global(.ladder__label){display:none}
+  }
+</style>
