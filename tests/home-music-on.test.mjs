@@ -39,3 +39,27 @@ test('every door on the shelf is a real page', () => {
   assert.ok(hrefs.length >= 10);
   for (const h of hrefs) assert.ok(existsSync(new URL(`../src/pages${h}.astro`, import.meta.url)) || existsSync(new URL(`../src/pages${h}/index.astro`, import.meta.url)), `${h} has no page`);
 });
+
+// The listening wall (2026-09-21): opt-in, local-only analysis.
+const viz = read('src/components/HomeMusicViz.astro');
+
+test('the shelf opens with the wall, and listening is the way in', () => {
+  assert.match(shelf, /<HomeMusicViz \/>\s+<ol class="musicon__steps">/);
+  assert.match(viz, /class="mviz__cta" data-mviz-mic/);
+  assert.match(viz, /Nothing is recorded and nothing leaves this browser\./);
+});
+
+test('the microphone is only opened by a click, is never played back, recorded or sent, and is always released', () => {
+  assert.equal([...viz.matchAll(/getUserMedia\(/g)].length, 1);
+  assert.match(viz, /micBtn\.addEventListener\('click', \(\) => void listen\('mic'\)\)/);
+  assert.doesNotMatch(viz, /\.destination|MediaRecorder|\bfetch\(|sendBeacon|WebSocket|XMLHttpRequest/);
+  assert.match(viz, /echoCancellation: false, noiseSuppression: false, autoGainControl: false/);
+  assert.match(viz, /stream\?\.getTracks\(\)\.forEach\(\(t\) => t\.stop\(\)\)/);
+  for (const hook of ["'astro:before-swap'", "'pagehide'", "addEventListener('ended'"]) assert.ok(viz.includes(hook), hook);
+});
+
+test('the wall only animates while it is on screen, and calms down for reduced motion', () => {
+  assert.match(viz, /new IntersectionObserver\(/);
+  assert.match(viz, /document\.visibilityState === 'visible'/);
+  assert.match(viz, /prefers-reduced-motion: reduce/);
+});
