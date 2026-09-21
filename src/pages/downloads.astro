@@ -1,16 +1,20 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
+import PictureFinder from '../components/PictureFinder.astro';
 import { ART_DOWNLOAD_COLLECTIONS as collections, ART_DOWNLOAD_COUNT as imageCount, ART_DOWNLOAD_URL } from '../lib/art-downloads';
+import { DOWNLOAD_SHELVES as shelves, DOWNLOAD_SOURCE_COUNT as sourceCount, DOWNLOAD_SOURCES_REVIEWED, DOWNLOAD_SOURCES_RULE, FINDER_SOURCES, POINTCAST_TO_GO } from '../lib/download-sources';
 
-const title = 'Art downloads';
-const description = 'A running collection of PointCast artwork. Every picture together, newest first, with original PNGs and ZIP downloads for each set.';
+const title = 'Downloads';
+const description = 'The PointCast downloads desk: original artwork as PNGs and ZIPs, a live finder for public-domain pictures from The Met, Chicago, Cleveland and NASA, and a short directory of trusted free photos, museum collections, fonts, sound, data and open-source software.';
+const host = (url: string) => new URL(url).hostname.replace(/^www\./, '');
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
 const dateLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const newest = collections[0];
+const reviewedLabel = dateLabel(DOWNLOAD_SOURCES_REVIEWED);
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'ImageGallery',
-  name: 'PointCast art downloads',
+  name: 'PointCast downloads',
   description,
   url: ART_DOWNLOAD_URL,
   associatedMedia: collections.flatMap((set) => set.images.map((art) => ({
@@ -32,21 +36,36 @@ const jsonLd = {
   <div class="downloads">
     <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span aria-hidden="true">/</span><span>Downloads</span></nav>
     <header class="intro">
-      <p class="eyebrow">THE RUNNING PICTURE COLLECTION</p>
-      <h1>Pictures to take with you.</h1>
-      <p class="dek">New pictures at the top. Every original stays here.</p>
-      <p class="details">{imageCount} pictures · {collections.length} sets · Free original PNGs</p>
-      <nav class="jump-links" aria-label="Jump to a download set">
-        {collections.map((set) => <a href={`#set-${set.blockId}`}>{set.title} <span>{dateLabel(set.published)}</span></a>)}
+      <p class="eyebrow">THE DOWNLOADS DESK</p>
+      <h1>Things to take with you.</h1>
+      <p class="dek">Our own pictures, a finder for public-domain ones, and the short list of places we trust for everything else.</p>
+      <p class="details">{imageCount} PointCast originals · {FINDER_SOURCES.length} live collections · {sourceCount} trusted sources · Nothing to sign up for</p>
+      <nav class="doors" aria-label="Sections of the downloads desk">
+        <a href="#finder"><b>Find a picture</b><span>Search The Met, Chicago, Cleveland, NASA</span></a>
+        <a href="#originals"><b>PointCast originals</b><span>{imageCount} pictures · {collections.length} sets · PNG + ZIP</span></a>
+        <a href="#shelves"><b>Trusted shelves</b><span>Photos, museums, type, sound, data, software</span></a>
+        <a href="#to-go"><b>PointCast to go</b><span>Printed matter and open feeds</span></a>
       </nav>
     </header>
+
+    <PictureFinder />
+
+    <section class="originals" id="originals" aria-labelledby="originals-title">
+      <header class="part-head">
+        <p class="eyebrow">THE RUNNING PICTURE COLLECTION</p>
+        <h2 id="originals-title">PointCast originals.</h2>
+        <p class="dek">New pictures at the top. Every original stays here.</p>
+        <nav class="jump-links" aria-label="Jump to a download set">
+          {collections.map((set) => <a href={`#set-${set.blockId}`}>{set.title} <span>{dateLabel(set.published)}</span></a>)}
+        </nav>
+      </header>
 
     {collections.map((set, setIndex) => (
       <section class="set" id={`set-${set.blockId}`} aria-labelledby={`title-${set.blockId}`}>
         <header class:list={['set-head', { 'has-bundles': set.archives.length > 1 }]}>
           <div>
             <p class="eyebrow"><time datetime={set.published}>{dateLabel(set.published)}</time>{setIndex === 0 && <span class="latest">LATEST</span>}</p>
-            <h2 id={`title-${set.blockId}`}>{set.title}</h2>
+            <h3 class="set-title" id={`title-${set.blockId}`}>{set.title}</h3>
             <p class="details">{set.images.length} pictures · Original PNGs</p>
           </div>
           <div class="set-downloads">
@@ -64,7 +83,7 @@ const jsonLd = {
             <figure>
               <img src={art.preview} alt={art.alt} width={art.width} height={art.height} loading={setIndex === 0 && index < 3 ? 'eager' : 'lazy'} decoding="async" />
               <figcaption>
-                <div class="caption"><span class="number">{String(art.number).padStart(2, '0')}</span><h3>{art.title}</h3></div>
+                <div class="caption"><span class="number">{String(art.number).padStart(2, '0')}</span><h4>{art.title}</h4></div>
                 <p class="file-details">Original PNG · {art.width} × {art.height} · {megabytes(art.bytes)}</p>
                 <a class="download single-download" href={art.download} download={art.filename} data-astro-reload aria-label={`Download ${art.title} as an original PNG`}>Download PNG <span aria-hidden="true">↓</span></a>
               </figcaption>
@@ -74,7 +93,67 @@ const jsonLd = {
         <p class="set-note"><span>{set.credit}</span>{set.canonical.split('#')[0] !== ART_DOWNLOAD_URL && <a href={set.canonical}>View this set’s page <span aria-hidden="true">↗</span></a>}</p>
       </section>
     ))}
-    <footer class="colophon">All pictures on this page are available as their original files. Check back here for the next set.</footer>
+    </section>
+
+    <section class="shelves" id="shelves" aria-labelledby="shelves-title">
+      <header class="part-head">
+        <p class="eyebrow">THE TRUSTED SHELVES · REVIEWED {reviewedLabel.toUpperCase()}</p>
+        <h2 id="shelves-title">Where we'd send a friend.</h2>
+        <p class="dek">{sourceCount} sources, each one the maker's own site. Search a word in the finder and the photo and museum links below will carry it with them.</p>
+        <nav class="jump-links" aria-label="Jump to a shelf">
+          {shelves.map((shelf) => <a href={`#shelf-${shelf.id}`}>{shelf.title} <span>{shelf.entries.length} sources</span></a>)}
+        </nav>
+      </header>
+      {shelves.map((shelf) => (
+        <section class="shelf" id={`shelf-${shelf.id}`} aria-labelledby={`shelf-title-${shelf.id}`}>
+          <div class="shelf-head">
+            <h3 id={`shelf-title-${shelf.id}`}>{shelf.title}</h3>
+            <p>{shelf.dek}</p>
+          </div>
+          <ul class="sources">
+            {shelf.entries.map((entry) => (
+              <li>
+                <a class="source" href={entry.url} target="_blank" rel="noopener" data-home={entry.url} data-search-template={entry.search}>
+                  <span class="source-top"><b>{entry.name}</b>{entry.finder && <i>IN THE FINDER</i>}</span>
+                  <span class="source-rights">{entry.rights}</span>
+                  <span class="source-note">{entry.note}</span>
+                  <span class="source-host"><span>{host(entry.url)}</span><span data-search-label>Visit ↗</span></span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      <p class="set-note"><span>{DOWNLOAD_SOURCES_RULE}</span></p>
+    </section>
+
+    <section class="to-go" id="to-go" aria-labelledby="to-go-title">
+      <header class="part-head">
+        <p class="eyebrow">POINTCAST TO GO</p>
+        <h2 id="to-go-title">The town, as files.</h2>
+        <p class="dek">Printed matter, and the open feeds the whole site runs on.</p>
+      </header>
+      <div class="to-go-grid">
+        <div>
+          <h3>Printed matter</h3>
+          <ul class="files">
+            {POINTCAST_TO_GO.print.map((file) => (
+              <li><a href={file.url} download data-astro-reload><b>{file.name} <span aria-hidden="true">↓</span></b><span>{file.note}</span><small>{file.format}</small></a></li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3>Feeds and data</h3>
+          <ul class="files">
+            {POINTCAST_TO_GO.feeds.map((file) => (
+              <li><a href={file.url} data-astro-reload><b>{file.name}</b><span>{file.note}</span><small>{file.format} · {file.url}</small></a></li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer class="colophon">PointCast originals are served from this site as their original files. Everything else on this page lives on its maker's site and is theirs to license — we only point. Know a source that belongs here? Say so on <a href="/shortwave">Shortwave</a>.</footer>
   </div>
 </BlockLayout>
 
@@ -83,6 +162,40 @@ const jsonLd = {
   .crumb { display: flex; gap: 12px; align-items: center; font-size: 13px; margin-bottom: 48px; }
   .crumb a { color: inherit; }
   .intro { padding-bottom: 36px; }
+  .doors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 28px; }
+  .doors a { display: flex; flex-direction: column; gap: 8px; min-height: 92px; padding: 16px 18px; border: 1px solid #18291e; color: #18291e; }
+  .doors a:first-child { background: #d9eea7; }
+  .doors a:hover { background: #e6edcf; text-decoration: none; }
+  .doors b { font-size: 17px; font-weight: 500; letter-spacing: -.02em; }
+  .doors span { font-size: 12px; line-height: 1.5; color: #485339; }
+  .originals, .shelves, .to-go { border-top: 1px solid #18291e; padding-top: 32px; scroll-margin-top: 24px; }
+  .part-head { padding-bottom: 32px; }
+  .part-head .dek { font-size: 16px; line-height: 1.5; color: #3d4a3c; max-width: 62ch; margin: 0; }
+  h3.set-title { font-size: clamp(24px, 2.4vw, 34px); font-weight: 500; line-height: 1.1; letter-spacing: -.04em; margin: 0 0 10px; }
+  .shelf { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px 32px; border-top: 1px solid #cbd8c5; padding: 28px 0 32px; scroll-margin-top: 24px; }
+  .shelf-head h3 { font-size: 22px; margin: 0 0 8px; }
+  .shelf-head p { font-size: 13px; line-height: 1.6; color: #596354; margin: 0; }
+  .sources { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; }
+  .sources li { display: flex; min-width: 0; }
+  a.source { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 14px 16px; border: 1px solid #cbd8c5; color: #18291e; }
+  a.source:hover { border-color: #18291e; background: #f7f9f0; text-decoration: none; }
+  .source-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .source-top b { font-size: 16px; font-weight: 500; letter-spacing: -.02em; }
+  .source-top i { flex: none; font-family: var(--font-mono, monospace); font-style: normal; font-size: 9px; letter-spacing: .08em; background: #d9eea7; padding: 2px 6px; }
+  .source-rights, .source-host { font-family: var(--font-mono, monospace); font-size: 10px; letter-spacing: .03em; }
+  .source-rights { color: #3b6d11; }
+  .source-note { font-size: 13px; line-height: 1.55; color: #3d4a3c; }
+  .source-host { display: flex; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 6px; color: #596354; }
+  .to-go { padding-bottom: 40px; }
+  .to-go-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+  .to-go h3 { font-size: 22px; margin: 0 0 14px; }
+  .files { list-style: none; padding: 0; margin: 0; border-top: 1px solid #cbd8c5; }
+  .files a { display: grid; gap: 4px; padding: 14px 0; border-bottom: 1px solid #cbd8c5; color: #18291e; }
+  .files a:hover { background: #f7f9f0; text-decoration: none; }
+  .files b { font-size: 16px; font-weight: 500; letter-spacing: -.02em; }
+  .files span { font-size: 13px; line-height: 1.5; color: #3d4a3c; }
+  .files small { font-family: var(--font-mono, monospace); font-size: 10px; color: #596354; }
+  .colophon a { color: inherit; }
   .eyebrow, .number, .file-details, .set-note, .colophon { font-family: var(--font-mono, monospace); }
   .eyebrow { display: flex; align-items: center; gap: 14px; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; margin: 0 0 16px; line-height: 1.7; }
   h1 { font-size: clamp(36px, 5.2vw, 72px); font-weight: 500; line-height: 1.02; letter-spacing: -.055em; margin: 0 0 20px; }
@@ -111,11 +224,12 @@ const jsonLd = {
   figcaption { padding: 19px 0 0; }
   .caption { display: flex; align-items: baseline; gap: 12px; }
   .number { font-size: 11px; color: #66755d; }
-  h3 { font-size: 20px; font-weight: 500; letter-spacing: -.03em; margin: 0; }
+  h3, h4 { font-size: 20px; font-weight: 500; letter-spacing: -.03em; margin: 0; }
   .file-details { font-size: 10px; color: #596354; margin: 10px 0 18px; line-height: 1.7; }
   a.single-download { align-items: center; justify-content: space-between; padding: 12px 16px; }
   .set-note { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; margin: 24px 0 0; font-size: 11px; line-height: 1.7; color: #596354; }
   .set-note a { color: inherit; }
   .colophon { border-top: 1px solid #cbd8c5; padding-top: 20px; font-size: 11px; line-height: 1.7; color: #596354; }
-  @media (max-width: 760px) { .set-head { display: block; } .set-downloads { margin-top: 24px; max-width: 360px; } .has-bundles .set-downloads { grid-template-columns: 1fr; } .gallery { grid-template-columns: 1fr; gap: 40px; } .crumb { margin-bottom: 32px; } }
+  @media (max-width: 1100px) { .doors { grid-template-columns: repeat(2, minmax(0, 1fr)); } .shelf { grid-template-columns: 1fr; } .sources { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .sources, .to-go-grid { grid-template-columns: 1fr; } .doors a { min-height: 0; } .set-head { display: block; } .set-downloads { margin-top: 24px; max-width: 360px; } .has-bundles .set-downloads { grid-template-columns: 1fr; } .gallery { grid-template-columns: 1fr; gap: 40px; } .crumb { margin-bottom: 32px; } }
 </style>
