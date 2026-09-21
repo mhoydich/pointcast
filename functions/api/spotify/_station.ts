@@ -33,6 +33,7 @@ export interface StationPlay {
   yr?: number;       // release year
   pop?: number;      // Spotify popularity 0-100
   ex?: boolean;      // explicit
+  also?: string[];   // other exact sources that reported this same play (so each can only be absorbed once)
   src: 'seen' | 'spotify' | 'lb'; // lb = ListenBrainz (open scrobbler; see _listenbrainz.ts)
   imp?: boolean;     // true for rows backfilled by scripts/import-spotify-history.mjs
 }
@@ -76,24 +77,37 @@ export function playFromTrack(track: SpotifyTrackLike | null | undefined, at: st
 }
 
 /** Merge new plays into a log. A spotify row replaces a seen row of the same play; exact duplicates are dropped. */
-export function mergePlays(existing: StationPlay[], incoming: StationPlay[]): { plays: StationPlay[]; added: number } {
-  const plays = [...existing]; let added = 0;
-  // Two Spotify rows carry exact timestamps: only the identical one is a duplicate, so a track on
-  // repeat logs every play. A sighting is fuzzy (we saw it some time during the play), so it folds
-  // into any row of the same track within the track's length.
-  // (An imported row times the START of a play and a live row uses Spotify's own stamp, so across
-  // those two the match stays fuzzy: only rows of the same provenance compare exactly.)
-  const exact = (p: StationPlay) => (p.src === 'seen' ? '' : `${p.src}:${p.imp ? 'imp' : 'live'}`); // sightings are never exact
-  const near = (x: StationPlay, y: StationPlay) => x.id === y.id && (exact(x) && exact(x) === exact(y)
-    ? x.at === y.at
-    : Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000));
+export function mergePlays(existing: StationPlay[], incoming: StationPlay[]): { plays: StationPlay[]; added: number; changed: boolean } {
+  const plays = existing.map((p) => ({ ...p })); let added = 0, changed = false;
+  // Provenance of an exact timestamp: '' for a sighting (we only know it was playing around then).
+  const prov = (p: StationPlay) => (p.src === 'seen' ? '' : `${p.src}:${p.imp ? 'imp' : 'live'}`);
+  const gap = (x: StationPlay, y: StationPlay) => Math.abs(Date.parse(x.at) - Date.parse(y.at));
+  const within = (x: StationPlay, y: StationPlay) => gap(x, y) < Math.max(10 * 60000, (y.ms ?? x.ms ?? 0) + 3 * 60000);
   for (const p of incoming) {
-    const i = plays.findIndex((q) => near(q, p));
-    if (i === -1) { plays.push(p); added++; continue; }
-    if (plays[i].src === 'seen' && p.src !== 'seen') { plays[i] = p; added++; } // an exact row replaces a sighting
+    const pp = prov(p);
+    // 1. The identical row from the same exact source: a duplicate, nothing to do.
+    if (pp && plays.some((q) => q.id === p.id && prov(q) === pp && q.at === p.at)) continue;
+    // 2. Otherwise look for ONE counterpart: the nearest row of the same track, in the window, that
+    //    this source has not already been matched to. A sighting may fold into anything (it is
+    //    many-to-one by nature); an exact row never folds into another row of its own source, and
+    //    folds into a row of a different exact source only once. That is what keeps a track on
+    //    repeat as three plays when Spotify reported one of them and ListenBrainz all three.
+    let best = -1;
+    plays.forEach((q, i) => {
+      if (q.id !== p.id || !within(q, p)) return;
+      const qp = prov(q);
+      if (pp && qp === pp) return;                                   // same exact source, different time: a different play
+      if (pp && qp && (q.also ?? []).includes(pp)) return;           // already absorbed one row from this source
+      if (best === -1 || gap(q, p) < gap(plays[best], p)) best = i;
+    });
+    if (best === -1) { plays.push({ ...p }); added++; changed = true; continue; }
+    const q = plays[best], qp = prov(q);
+    if (!qp && pp) { plays[best] = { ...p }; added++; changed = true; }                       // an exact row replaces a sighting
+    else if (qp && pp) { plays[best] = { ...q, also: [...(q.also ?? []), pp] }; changed = true; } // two exact sources, one play: remember the pairing
+    // a sighting folding into anything changes nothing
   }
   plays.sort((x, y) => Date.parse(x.at) - Date.parse(y.at));
-  return { plays: plays.slice(-MAX_PER_MONTH), added };
+  return { plays: plays.slice(-MAX_PER_MONTH), added, changed };
 }
 
 async function readMonth(env: SpotifyBroadcastEnv, month: string): Promise<StationPlay[]> {
@@ -112,8 +126,8 @@ async function appendPlays(env: SpotifyBroadcastEnv, all: StationPlay[]): Promis
   for (const p of incoming) byMonth.set(monthOf(p.at), [...(byMonth.get(monthOf(p.at)) ?? []), p]);
   let total = 0;
   for (const [month, rows] of byMonth) {
-    const { plays, added } = mergePlays(await readMonth(env, month), rows);
-    if (added) { await env.USERS.put(logKey(month), JSON.stringify(plays)); total += added; } // written only when something is new
+    const { plays, added, changed } = mergePlays(await readMonth(env, month), rows);
+    if (changed) { await env.USERS.put(logKey(month), JSON.stringify(plays)); total += added; } // written only when something is new
   }
   return total;
 }
@@ -139,11 +153,21 @@ export async function writeStationConfig(env: SpotifyBroadcastEnv, next: Station
   await resetStationScopes(env); // clears the sync mark so the new source is read on the next request
 }
 
+const lbCursorKey = (user: string) => `station:cursor:v1:${STATION}:lb:${user}`; // outside the swept prefix; not derived from the log
 async function syncListenBrainz(env: SpotifyBroadcastEnv, fetcher: typeof fetch = fetch): Promise<number> {
-  const { listenbrainz: user } = await readStationConfig(env); if (!user) return 0;
-  const month = await readMonth(env, new Date().toISOString().slice(0, 7));
-  const lastLb = [...month].reverse().find((p) => p.src === 'lb');
-  return appendPlays(env, await fetchListens(user, lastLb ? Date.parse(lastLb.at) : 0, fetcher));
+  const { listenbrainz: user } = await readStationConfig(env); if (!user || !env.USERS) return 0;
+  let cursor = Number(await env.USERS.get(lbCursorKey(user)).catch(() => null)) || 0, total = 0;
+  // ListenBrainz returns the listens immediately AFTER min_ts (verified live 2026-09-21), so a
+  // backlog drains forward without skipping. Three pages per sync bounds the work; the rest waits.
+  for (let page = 0; page < 3; page++) {
+    const rows = await fetchListens(user, cursor, fetcher); if (!rows.length) break;
+    total += await appendPlays(env, rows);
+    const newest = Math.max(...rows.map((r) => Date.parse(r.at)));
+    if (!(newest > cursor)) break;
+    cursor = newest; await env.USERS.put(lbCursorKey(user), String(cursor)); // only after the rows are safely in the log
+    if (rows.length < 100) break;
+  }
+  return total;
 }
 
 type Scopes = { history: boolean | null; top: boolean | null; checkedAt: string };
@@ -323,14 +347,34 @@ export async function readStation(env: SpotifyBroadcastEnv, now = Date.now()) {
   };
 }
 
+/**
+ * What is on air, resolved once for everyone: Spotify's live signal if there is one, otherwise
+ * what ListenBrainz says is playing. The masthead, the dock, the companion label, the shelf and
+ * the station all read this through /now-playing.json, so they cannot disagree.
+ */
+export async function resolveOnAir<T extends { live?: boolean; title?: string; artist?: string }>(env: SpotifyBroadcastEnv, spotify: T): Promise<T & { via?: 'spotify' | 'listenbrainz' }> {
+  if (spotify?.live) return { ...spotify, via: 'spotify' };
+  const lb = await readListenBrainzNow(env).catch(() => null); if (!lb) return spotify;
+  return { ...spotify, live: true, status: 'playing', mode: 'listenbrainz', title: lb.title, artist: lb.artist, image: null, url: lb.profile, embedUrl: '', trackId: '', source: 'Now playing, from the broadcaster’s public ListenBrainz profile.', updatedAt: new Date().toISOString(), via: 'listenbrainz' } as T & { via: 'listenbrainz' };
+}
+async function readListenBrainzNow(env: SpotifyBroadcastEnv): Promise<{ title: string; artist: string; album?: string; profile: string } | null> {
+  const { listenbrainz: user } = await readStationConfig(env); if (!user) return null;
+  const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default, key = new Request(`https://pointcast.xyz/__station/lb-now/${encodeURIComponent(user)}`);
+  const hit = await cache?.match(key).catch(() => undefined); let now: Awaited<ReturnType<typeof fetchPlayingNow>> = null;
+  if (hit) now = await hit.json(); else { now = await fetchPlayingNow(user); await cache?.put(key, new Response(JSON.stringify(now), { headers: { 'Cache-Control': 'public, max-age=60', 'Content-Type': 'application/json' } })).catch(() => undefined); }
+  return now ? { ...now, profile: `https://listenbrainz.org/user/${encodeURIComponent(user)}/` } : null;
+}
+
 /** The ListenBrainz side of the payload: who, what is playing there now (edge-cached a minute), and the counted long view (KV, twice a day). */
 async function readListenBrainz(env: SpotifyBroadcastEnv) {
   const { listenbrainz: user } = await readStationConfig(env); if (!user) return null;
-  const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default, nowKey = new Request(`https://pointcast.xyz/__station/lb-now/${encodeURIComponent(user)}`);
-  let playingNow: Awaited<ReturnType<typeof fetchPlayingNow>> = null;
-  try { const hit = await cache?.match(nowKey); if (hit) playingNow = await hit.json(); else { playingNow = await fetchPlayingNow(user); await cache?.put(nowKey, new Response(JSON.stringify(playingNow), { headers: { 'Cache-Control': 'public, max-age=60', 'Content-Type': 'application/json' } })); } } catch { /* optional */ }
+  const cache = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default;
+  const lbNow = await readListenBrainzNow(env).catch(() => null), playingNow = lbNow ? { title: lbNow.title, artist: lbNow.artist, ...(lbNow.album ? { album: lbNow.album } : {}) } : null;
   let counted = await env.USERS?.get<LbCounted>(LB_COUNTED_KEY, 'json').catch(() => null) ?? null;
-  if (!counted || counted.user !== user || Date.now() - counted.fetchedAt > TOP_EVERY_MS) { const fresh = await fetchCounted(user).catch(() => null); if (fresh) { counted = fresh; await env.USERS?.put(LB_COUNTED_KEY, JSON.stringify(fresh)).catch(() => undefined); } }
+  const tryKey = new Request(`https://pointcast.xyz/__station/lb-counted-try/${encodeURIComponent(user)}`);
+  if ((!counted || counted.user !== user || Date.now() - counted.fetchedAt > TOP_EVERY_MS) && !(await cache?.match(tryKey).catch(() => undefined))) {
+    await cache?.put(tryKey, new Response('1', { headers: { 'Cache-Control': 'public, max-age=600' } })).catch(() => undefined); // a failed upstream is not retried by every reader
+    const fresh = await fetchCounted(user).catch(() => null); if (fresh) { counted = fresh; await env.USERS?.put(LB_COUNTED_KEY, JSON.stringify(fresh)).catch(() => undefined); } }
   return { user, profile: `https://listenbrainz.org/user/${encodeURIComponent(user)}/`, playingNow, counted: counted && counted.user === user ? { asOf: new Date(counted.fetchedAt).toISOString(), totalListens: counted.totalListens, artists: counted.artists, recordings: counted.recordings } : null };
 }
 

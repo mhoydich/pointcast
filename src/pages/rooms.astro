@@ -14,6 +14,8 @@
  * Aesthetic per /Users/michaelhoydich/.claude/projects/-Users-michaelhoydich/memory/feedback_pointcast_aesthetic.md:
  *   geocities + sim city, late-90s web chrome, saturated, NOT clean AI product.
  *
+ * Presence is REAL as of 2026-09-21: the "N here" badges are counted from
+ * /api/presence/snapshot by path. They used to be invented numbers.
  * Data is hard-coded for v0 — the rooms list is curated, presence/now-playing
  * fields will get wired to real signals in v1 (DRUM_ROOM DO, /api/presence
  * already exposes a count; per-room presence + per-room mood propagation
@@ -49,7 +51,7 @@ const rooms: Room[] = [
     name: 'The Bath',
     meta: '8 palettes · web-audio drone · spotify sync',
     now: '▶ palette: SUNSET · drone D-flat',
-    presence: '3 here',
+    presence: 'open',
     variant: 'bath',
   },
   {
@@ -59,7 +61,7 @@ const rooms: Room[] = [
     name: 'The Drum Room',
     meta: 'orchestra · trophies on-chain · loop studio',
     now: '▶ 42-piece orchestra · BPM 96',
-    presence: '12 here',
+    presence: 'open',
     variant: 'drum',
   },
   {
@@ -69,7 +71,7 @@ const rooms: Room[] = [
     name: 'Anytime',
     meta: 'listening room · one track · come and go',
     now: '▶ Harrison · "All Things Must Pass"',
-    presence: '2 here',
+    presence: 'open',
     variant: 'anytime',
   },
   {
@@ -79,7 +81,7 @@ const rooms: Room[] = [
     name: 'Coffee Mugs',
     meta: '5 tiers · cup-count gated · live mint',
     now: 'cup count: you have 3 · tier 2 unlocked',
-    presence: '1 here',
+    presence: 'open',
     variant: 'coffee',
   },
   {
@@ -89,7 +91,7 @@ const rooms: Room[] = [
     name: 'Zen Cats',
     meta: 'genesis + world · daily ritual',
     now: 'cat 002 awaits a ritual',
-    presence: '0 here',
+    presence: 'open',
     cold: true,
     variant: 'zen',
   },
@@ -176,7 +178,7 @@ const rooms: Room[] = [
               <div class="win-body">
                 <div class={`iso room-${r.variant}`}>
                   <span class="iso-label">{r.label}</span>
-                  <span class={`iso-live${r.cold ? ' cold' : ''}`}>{r.presence}</span>
+                  <span class={`iso-live${r.cold ? ' cold' : ''}`} data-room-here={r.href.startsWith('/') ? r.href : undefined}>{r.presence}</span>
                   <div class="bldg"></div>
                   <div class="iso-now">{r.now}</div>
                 </div>
@@ -253,6 +255,15 @@ const rooms: Room[] = [
   <footer class="rooms-foot">
     pointcast.xyz · /rooms · v0 · pixel-iso town
   </footer>
+
+<script>
+  // Real presence or none: count the town's sessions by the page they are on.
+  fetch('/api/presence/snapshot', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    if (!j || !Array.isArray(j.sessions)) return; const at = new Map<string, number>();
+    for (const s of j.sessions) { const p = String(s?.currentPath || '').replace(/\/+$/, '') || '/'; at.set(p, (at.get(p) ?? 0) + 1); }
+    document.querySelectorAll<HTMLElement>('[data-room-here]').forEach((el) => { const n = at.get(String(el.dataset.roomHere).replace(/\/+$/, '')) ?? 0; if (n > 0) el.textContent = `${n} here`; });
+  }).catch(() => {});
+</script>
 </BlockLayout>
 
 <script>

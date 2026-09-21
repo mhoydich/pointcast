@@ -35,17 +35,19 @@ const hex = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.d
  * the line still flip to "played"), the MusicBrainz recording id, a hash of artist + title.
  */
 export async function playFromListen(l: LbListen, user: string): Promise<StationPlay | null> {
-  const tm = l.track_metadata, t = tm?.track_name?.trim() ?? '', a = tm?.artist_name?.trim() ?? '';
-  if (!t || !a || typeof l.listened_at !== 'number' || !(l.listened_at > 0)) return null;
+  const tm = l?.track_metadata, str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const t = str(tm?.track_name), a = str(tm?.artist_name);
+  // 2005-01-01 … a day from now: anything else is a bad row, not a play (and would throw in toISOString).
+  if (!t || !a || typeof l.listened_at !== 'number' || !Number.isFinite(l.listened_at) || l.listened_at < 1104537600 || l.listened_at > Date.now() / 1000 + 86400) return null;
   const ai = tm?.additional_info ?? {}, map = tm?.mbid_mapping ?? {};
-  const sp = /^https:\/\/open\.spotify\.com\/track\/([A-Za-z0-9]{10,40})/.exec(ai.spotify_id ?? '')?.[1];
-  const rec = [map.recording_mbid, ai.recording_mbid].find((x) => x && MBID.test(x));
+  const sp = /^https:\/\/open\.spotify\.com\/track\/([A-Za-z0-9]{10,40})/.exec(str(ai.spotify_id))?.[1];
+  const rec = [map.recording_mbid, ai.recording_mbid].find((x) => typeof x === 'string' && MBID.test(x));
   const id = sp ?? (rec ? `mb-${rec}` : `lb-${(await hex(`${a.toLowerCase()}|${t.toLowerCase()}`)).slice(0, 22)}`);
   const url = sp ? `https://open.spotify.com/track/${sp}` : rec ? `https://musicbrainz.org/recording/${rec}` : `https://listenbrainz.org/user/${encodeURIComponent(user)}/`;
   const play: StationPlay = { id, t: t.slice(0, 160), a: a.slice(0, 160), url, at: new Date(l.listened_at * 1000).toISOString(), src: 'lb' };
-  if (tm?.release_name) play.al = tm.release_name.slice(0, 160);
+  if (str(tm?.release_name)) play.al = str(tm?.release_name).slice(0, 160);
   const ms = typeof ai.duration_ms === 'number' ? ai.duration_ms : typeof ai.duration === 'number' ? ai.duration * 1000 : 0; if (ms > 0 && ms < 4 * 3600000) play.ms = Math.round(ms);
-  if (map.caa_release_mbid && MBID.test(map.caa_release_mbid)) play.img = `https://coverartarchive.org/release/${map.caa_release_mbid}/front-250`; // open archive; redirects to archive.org
+  if (typeof map.caa_release_mbid === 'string' && MBID.test(map.caa_release_mbid)) play.img = `https://coverartarchive.org/release/${map.caa_release_mbid}/front-250`; // open archive; redirects to archive.org
   return play;
 }
 
@@ -58,15 +60,16 @@ export async function fetchListens(user: string, sinceMs: number, fetcher: typeo
   if (!LB_USER.test(user)) return [];
   const q = sinceMs > 0 ? `min_ts=${Math.floor(sinceMs / 1000)}&count=100` : 'count=100';
   const j = await lb<{ payload?: { listens?: LbListen[] } }>(`/user/${encodeURIComponent(user)}/listens?${q}`, fetcher);
-  const rows = await Promise.all((j?.payload?.listens ?? []).map((l) => playFromListen(l, user)));
+  const list = Array.isArray(j?.payload?.listens) ? j!.payload!.listens! : [];
+  const rows = await Promise.all(list.map((l) => playFromListen(l, user).catch(() => null))); // one malformed row is dropped, not the batch
   return rows.filter((p): p is StationPlay => Boolean(p)).sort((x, y) => Date.parse(x.at) - Date.parse(y.at));
 }
 
 export async function fetchPlayingNow(user: string, fetcher: typeof fetch = fetch): Promise<{ title: string; artist: string; album?: string } | null> {
   if (!LB_USER.test(user)) return null;
   const j = await lb<{ payload?: { listens?: LbListen[] } }>(`/user/${encodeURIComponent(user)}/playing-now`, fetcher);
-  const tm = j?.payload?.listens?.[0]?.track_metadata; if (!tm?.track_name || !tm.artist_name) return null;
-  return { title: tm.track_name.slice(0, 160), artist: tm.artist_name.slice(0, 160), ...(tm.release_name ? { album: tm.release_name.slice(0, 160) } : {}) };
+  const tm = j?.payload?.listens?.[0]?.track_metadata; if (typeof tm?.track_name !== 'string' || typeof tm?.artist_name !== 'string' || !tm.track_name || !tm.artist_name) return null;
+  return { title: tm.track_name.slice(0, 160), artist: tm.artist_name.slice(0, 160), ...(typeof tm.release_name === 'string' && tm.release_name ? { album: tm.release_name.slice(0, 160) } : {}) };
 }
 
 export interface LbCounted {

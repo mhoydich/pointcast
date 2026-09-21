@@ -57,7 +57,7 @@ export async function dispatchStationTool(name: string, args: Record<string, unk
       const [sRes, rRes] = await Promise.all([fetch(`${base}/api/station`, { headers: { accept: 'application/json' } }), fetch(`${base}/api/station/requests`, { headers: { accept: 'application/json' } })]);
       if (!sRes.ok) return { content: [text('The station desk is not answering right now. Try again in a minute.')], isError: true };
       const s = await sRes.json() as Record<string, any>, r = rRes.ok ? await rRes.json() as Record<string, any> : { requests: [] };
-      const lbNow = s.listenbrainz?.playingNow, st = s.stats || {}, air = s.onAir?.live ? s.onAir : lbNow ? { live: true, title: lbNow.title, artist: lbNow.artist, source: 'ListenBrainz' } : (s.onAir || {}), recent = (s.recent || []).slice(0, 12), open = (r.requests || []).filter((x: any) => !x.playedAt).slice(0, 8);
+      const st = s.stats || {}, air = s.onAir || {}, recent = (s.recent || []).slice(0, 12), open = (r.requests || []).filter((x: any) => !x.playedAt).slice(0, 8);
       const lines = [
         `${s.name} · ${base}/station`,
         air.live ? `ON AIR: ${air.title} — ${air.artist}` : recent[0] ? `Off air. Last played: ${recent[0].t} — ${recent[0].a} (${pt(recent[0].at)} PT)` : 'Off air. The log is empty so far.',

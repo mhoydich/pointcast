@@ -5,7 +5,7 @@
  */
 import { authJson, readSessionFromRequest } from './auth/session.ts';
 import { resolveNowPlaying, type SpotifyBroadcastEnv } from './spotify/_broadcast.ts';
-import { clearStation, readStation, syncStation } from './spotify/_station.ts';
+import { clearStation, readStation, resolveOnAir, syncStation } from './spotify/_station.ts';
 
 export const STATION = {
   name: 'Mike Hoydich Radio',
@@ -18,7 +18,7 @@ export const STATION = {
 
 export async function stationPayload(env: SpotifyBroadcastEnv) {
   await syncStation(env); // throttled in the edge cache; a no-op most of the time
-  const [nowPlaying, station] = await Promise.all([resolveNowPlaying(env), readStation(env)]);
+  const [nowPlaying, station] = await Promise.all([resolveNowPlaying(env).then((n) => resolveOnAir(env, n)), readStation(env)]);
   return {
     ...STATION,
     generatedAt: new Date().toISOString(),

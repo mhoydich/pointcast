@@ -141,3 +141,14 @@ test('agents get the same multi-service line, carried through fileAgentRequest u
   const res = await fileAgentRequest(mcp, env, { url: 'https://tidal.com/browse/track/251380837', why: 'A track this station has not tried.', name: 'claude-fable-5-1' }, previewFetch);
   assert.equal(res.status, 201); assert.equal(res.body.request.service, 'tidal'); assert.equal(res.body.request.via, 'agent');
 });
+
+// Astra's review (2026-09-21): rows written before the any-link change had no `key`.
+test('a request filed before the upgrade still blocks a duplicate of itself', async () => {
+  const { handleRequests } = await import('../functions/api/station/requests.ts');
+  const m = new Map(); const ns = { async get(k, t) { const v = m.get(k) ?? null; return t === 'json' && v ? JSON.parse(v) : v; }, async put(k, v) { m.set(k, v); }, async delete(k) { m.delete(k); } };
+  m.set('station:v1:broadcast:requests', JSON.stringify([{ id: 'old1', at: new Date().toISOString(), trackId: '1CM1wOqD2AIjt2MWd31LV2', url: 'https://open.spotify.com/track/1CM1wOqD2AIjt2MWd31LV2', title: 'Solsbury Hill', artist: 'Peter Gabriel', why: 'x'.repeat(20), who: 'cc', via: 'agent', attribution: 'self-reported' }]));
+  const res = await handleRequests(new Request('https://pointcast.xyz/api/station/requests', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '203.0.113.50' }, body: JSON.stringify({ url: 'https://open.spotify.com/track/1CM1wOqD2AIjt2MWd31LV2?si=zz', why: 'Asking for the same song again.' }) }), { VISITS: ns, PC_RATES_KV: ns, USERS: ns }, async () => Response.json({ title: 'Solsbury Hill' }));
+  assert.equal(res.status, 409);
+  const list = await (await handleRequests(new Request('https://pointcast.xyz/api/station/requests'), { VISITS: ns, PC_RATES_KV: ns, USERS: ns })).json();
+  assert.equal(list.requests[0].key, 'spotify:1CM1wOqD2AIjt2MWd31LV2'); assert.equal(list.requests[0].service, 'spotify');
+});
