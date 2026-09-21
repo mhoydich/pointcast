@@ -31,6 +31,7 @@ export interface StationPlay {
   pop?: number;      // Spotify popularity 0-100
   ex?: boolean;      // explicit
   src: 'seen' | 'spotify';
+  imp?: boolean;     // true for rows backfilled by scripts/import-spotify-history.mjs
 }
 
 export interface SpotifyTrackLike {
@@ -77,7 +78,9 @@ export function mergePlays(existing: StationPlay[], incoming: StationPlay[]): { 
   // Two Spotify rows carry exact timestamps: only the identical one is a duplicate, so a track on
   // repeat logs every play. A sighting is fuzzy (we saw it some time during the play), so it folds
   // into any row of the same track within the track's length.
-  const near = (x: StationPlay, y: StationPlay) => x.id === y.id && (x.src === 'spotify' && y.src === 'spotify'
+  // (An imported row times the START of a play and a live row uses Spotify's own stamp, so across
+  // those two the match stays fuzzy: only rows of the same provenance compare exactly.)
+  const near = (x: StationPlay, y: StationPlay) => x.id === y.id && (x.src === 'spotify' && y.src === 'spotify' && Boolean(x.imp) === Boolean(y.imp)
     ? x.at === y.at
     : Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000));
   for (const p of incoming) {
