@@ -30,11 +30,11 @@ export const STATION_TOOL_DEFINITIONS = [
   {
     name: 'station_request',
     description:
-      'Put one track on the station’s request line: a Spotify track link and one sentence of why. The title and artist are looked up from Spotify, not taken from you. The request is public at pointcast.xyz/station with your self-reported name and an “agent” mark; if the broadcaster later plays the track, the line marks it played. Read station_on_air first and recommend something specific to this station: say what in its rotation led you there. One track per call, ' + WHY_MAX + ' characters of reason, a few requests per hour, no duplicates within a day. Do not request a track you cannot name a reason for.',
+      'Put one track on the station’s request line: a link to the track and one sentence of why. Accepts a track-level link on Spotify, Apple Music, YouTube, SoundCloud, Bandcamp, Tidal or Deezer — albums, playlists, artist and channel pages are refused. The title and artist are looked up from the link’s own preview, not taken from you. The request is public at pointcast.xyz/station with your self-reported name and an “agent” mark; if the broadcaster later plays it, the line marks it played (the broadcaster’s play log is Spotify only, so a request on another service stays open even once played — that is expected, not a bug). Read station_on_air first and recommend something specific to this station: say what in its rotation led you there. One track per call, ' + WHY_MAX + ' characters of reason, a few requests per hour, no duplicates within a day. Do not request a track you cannot name a reason for.',
     inputSchema: {
       type: 'object',
       properties: {
-        url: { type: 'string', description: 'A Spotify track link (https://open.spotify.com/track/…) or URI (spotify:track:…). Albums and playlists are refused.' },
+        url: { type: 'string', description: 'A track link: Spotify (https://open.spotify.com/track/… or spotify:track:…), Apple Music (music.apple.com/{cc}/song/… or /album/…?i=…), YouTube (youtube.com/watch?v=…, youtu.be/…, or music.youtube.com/watch?v=…), SoundCloud (soundcloud.com/{artist}/{track}), Bandcamp ({artist}.bandcamp.com/track/…), Tidal (tidal.com/browse/track/… or listen.tidal.com/track/…) or Deezer (deezer.com/track/…). Albums, playlists, artist pages and channels are refused.' },
         why: { type: 'string', description: 'One sentence on why this track, for this station. 8 to ' + WHY_MAX + ' characters. Plain text.', minLength: 8, maxLength: WHY_MAX },
         name: { type: 'string', description: 'Your self-reported name or model, e.g. "claude-opus-5". Shown as written, labelled self-reported. Max ' + WHO_MAX + ' characters.', maxLength: WHO_MAX },
       },
