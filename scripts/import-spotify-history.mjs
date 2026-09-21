@@ -213,13 +213,14 @@ export function mergePlaysLikeStation(existing, incoming) {
   // Same rule as mergePlays in functions/api/spotify/_station.ts (2026-09-21): two Spotify rows of
   // the same provenance (both imported, or both live) are duplicates only at the identical
   // timestamp, so a track on repeat keeps every play; anything else matches within the track's length.
-  const near = (x, y) => x.id === y.id && (x.src === 'spotify' && y.src === 'spotify' && Boolean(x.imp) === Boolean(y.imp)
+  const exact = (p) => (p.src === 'seen' ? '' : `${p.src}:${p.imp ? 'imp' : 'live'}`);
+  const near = (x, y) => x.id === y.id && (exact(x) && exact(x) === exact(y)
     ? x.at === y.at
     : Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000));
   for (const p of incoming) {
     const i = plays.findIndex((q) => near(q, p));
     if (i === -1) { plays.push(p); added++; continue; }
-    if (plays[i].src === 'seen' && p.src === 'spotify') { plays[i] = p; added++; }
+    if (plays[i].src === 'seen' && p.src !== 'seen') { plays[i] = p; added++; }
   }
   plays.sort((x, y) => Date.parse(x.at) - Date.parse(y.at));
   return { plays: plays.slice(-MAX_PER_MONTH), added };
