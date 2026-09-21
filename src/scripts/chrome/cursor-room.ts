@@ -403,7 +403,33 @@ export function mountCursorRoom(ROOT, scope) {
     // What this visitor said they have on (the front door's Music on shelf writes
     // it, only after they press Tell the town). A song is short: after an hour
     // the label goes stale and the town stops showing it. '' clears it server-side.
+    // The companion: with pc:music:auto set, the label keeps itself current instead of
+    // waiting for a pasted link. 'station' = the broadcaster's on-air track (public
+    // /now-playing.json); 'personal' = this signed-in visitor's own Spotify
+    // (/api/me/spotify, their session only). Both are opt-in switches the visitor
+    // flips on /station or /me; off-air or paused means no label.
+    var autoLabel = '', autoTimer = 0;
+    function autoMode() { try { var m = localStorage.getItem('pc:music:auto'); return m === 'station' || m === 'personal' ? m : ''; } catch (e) { return ''; } }
+    function pollAuto() {
+      var mode = autoMode();
+      if (!mode) { if (autoLabel) { autoLabel = ''; sendTown('update'); } return; }
+      if (document.visibilityState !== 'visible') return;
+      fetch(mode === 'station' ? '/now-playing.json' : '/api/me/spotify', { headers: { accept: 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          var t = mode === 'station' ? (j && j.live ? j : null) : (j && j.connected && j.track && j.track.isPlaying !== false && j.status !== 'paused' ? j.track : null);
+          var title = t ? String(t.title || t.name || '') : '', artist = t ? String(t.artist || '') : '';
+          var next = title ? (artist ? title + ' — ' + artist : title).replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+          if (next !== autoLabel) { autoLabel = next; sendTown('update'); window.dispatchEvent(new CustomEvent('pc:music:auto-label', { detail: { label: next, mode: mode } })); }
+        }).catch(function () {});
+    }
+    function armAuto() { clearInterval(autoTimer); autoTimer = 0; if (autoMode()) { pollAuto(); autoTimer = setInterval(pollAuto, 75000); } else pollAuto(); }
+    on(window, 'pc:music:auto', armAuto);
+    on(document, 'visibilitychange', function () { if (document.visibilityState === 'visible' && autoMode()) pollAuto(); });
+    setTimeout(armAuto, 3000);
+
     function townListening() {
+      if (autoMode() && autoLabel) return autoLabel;
       try {
         var rec = JSON.parse(localStorage.getItem('pc:music:listening') || 'null');
         if (!rec || typeof rec.label !== 'string' || !(Date.now() - Number(rec.at) < 3600000)) return '';

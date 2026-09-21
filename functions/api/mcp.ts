@@ -167,6 +167,11 @@ import {
   BENCH_WRITE_TOOL_NAMES,
   dispatchBenchTool,
 } from '../../src/lib/bench-mcp';
+import {
+  STATION_TOOL_DEFINITIONS,
+  STATION_WRITE_TOOL_NAMES,
+  dispatchStationTool,
+} from '../../src/lib/station-mcp';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
 import type { AuthEnv } from './auth/session.ts';
@@ -199,6 +204,7 @@ const WRITE_TOOL_NAMES = new Set([
   'night_shift_submit',
   'tug_pull',
   ...BENCH_WRITE_TOOL_NAMES,
+  ...STATION_WRITE_TOOL_NAMES,
 ]);
 
 function toolTitle(name: string): string {
@@ -947,6 +953,7 @@ const TOOLS = [
   ...TOOL_DEFINITIONS,
   TUG_PULL_TOOL,
   ...BENCH_TOOL_DEFINITIONS,
+  ...STATION_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -2531,6 +2538,10 @@ async function dispatchTool(
     case 'bench_sit':
       return dispatchBenchTool(name, args, base, sessionId);
 
+    case 'station_on_air':
+    case 'station_request':
+      return dispatchStationTool(name, args, base);
+
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
   }
@@ -2857,6 +2868,8 @@ function discoveryHtml(request: Request) {
   <li><code>drum_who_is_here</code> — who's currently in the room</li>
   <li><code>drum_top_drummers</code> — top 10 leaderboard</li>
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
+  <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
+  <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
   <li><code>drum_global_count</code> — global drum count</li>
   <li><code>drum_tap</code> — tap the drum (combo 1-5)</li>
   <li><code>drum_play_instrument</code> — fire an orchestra instrument</li>

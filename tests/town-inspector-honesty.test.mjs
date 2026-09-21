@@ -32,11 +32,12 @@ function block(source, open) {
 const toolNames = (text) => [...text.matchAll(/^ {4}name: '([a-z0-9_]+)',$/gm)].map((m) => m[1]);
 
 async function servedCatalogue() {
-  const [mcp, bench, tug, aiCompanions] = await Promise.all([
+  const [mcp, bench, tug, aiCompanions, station] = await Promise.all([
     read('functions/api/mcp.ts'),
     read('src/lib/bench-mcp.ts'),
     read('src/lib/tug-mcp.ts'),
     read('functions/_lib/ai-companions.ts'),
+    read('src/lib/station-mcp.ts'), // /station tools (2026-09-21)
   ]);
   const definitions = block(mcp, 'const TOOL_DEFINITIONS = [');
   const core = toolNames(definitions);
@@ -48,7 +49,10 @@ async function servedCatalogue() {
   assert.ok(tugName, 'tug-mcp.ts exports TUG_PULL_TOOL with a name');
   assert.ok(core.length >= 40, `TOOL_DEFINITIONS parsed (${core.length} names)`);
   assert.equal(benchNames.length, 2, 'bench registers two tools');
-  const tools = [aiPairName, ...core, tugName, ...benchNames];
+  const stationNames = toolNames(station.slice(station.indexOf('export const STATION_TOOL_DEFINITIONS = ['), station.indexOf('];')));
+  assert.equal(stationNames.length, 2, 'the station registers two tools');
+  assert.match(mcp, /\.\.\.BENCH_TOOL_DEFINITIONS,\s*\.\.\.STATION_TOOL_DEFINITIONS,/, 'station tools are folded into TOOLS after the bench');
+  const tools = [aiPairName, ...core, tugName, ...benchNames, ...stationNames];
   assert.equal(new Set(tools).size, tools.length, 'tool names are unique');
   const resources = [...block(mcp, 'const RESOURCES = [').matchAll(/^ {4}uri: '([a-z-]+:\/\/[a-z-]+)',$/gm)].map((m) => m[1]);
   assert.ok(resources.length >= 10, `RESOURCES parsed (${resources.length} uris)`);
