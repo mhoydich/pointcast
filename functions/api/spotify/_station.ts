@@ -44,6 +44,7 @@ const STATION = 'broadcast';
 const LOG_PREFIX = `station:v1:${STATION}:log:`;
 const TOP_KEY = `station:v1:${STATION}:top:v2`;
 const SCOPE_KEY = `station:v1:${STATION}:scopes`;
+const ERASED_KEY = `station:erased:v1:${STATION}`; // outside the station:v1 prefix on purpose: it must survive the sweep
 const SYNC_MARK = 'https://pointcast.xyz/__station/sync-mark';
 const SYNC_EVERY_S = 600;
 const TOP_EVERY_MS = 12 * 60 * 60 * 1000;
@@ -73,7 +74,12 @@ export function playFromTrack(track: SpotifyTrackLike | null | undefined, at: st
 /** Merge new plays into a log. A spotify row replaces a seen row of the same play; exact duplicates are dropped. */
 export function mergePlays(existing: StationPlay[], incoming: StationPlay[]): { plays: StationPlay[]; added: number } {
   const plays = [...existing]; let added = 0;
-  const near = (x: StationPlay, y: StationPlay) => x.id === y.id && Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000);
+  // Two Spotify rows carry exact timestamps: only the identical one is a duplicate, so a track on
+  // repeat logs every play. A sighting is fuzzy (we saw it some time during the play), so it folds
+  // into any row of the same track within the track's length.
+  const near = (x: StationPlay, y: StationPlay) => x.id === y.id && (x.src === 'spotify' && y.src === 'spotify'
+    ? x.at === y.at
+    : Math.abs(Date.parse(x.at) - Date.parse(y.at)) < Math.max(10 * 60000, (y.ms ?? 0) + 3 * 60000));
   for (const p of incoming) {
     const i = plays.findIndex((q) => near(q, p));
     if (i === -1) { plays.push(p); added++; continue; }
@@ -88,8 +94,13 @@ async function readMonth(env: SpotifyBroadcastEnv, month: string): Promise<Stati
   return Array.isArray(rows) ? rows : [];
 }
 
-async function appendPlays(env: SpotifyBroadcastEnv, incoming: StationPlay[]): Promise<number> {
-  if (!env.USERS || !incoming.length) return 0;
+async function appendPlays(env: SpotifyBroadcastEnv, all: StationPlay[]): Promise<number> {
+  if (!env.USERS || !all.length) return 0;
+  // Erasure holds: Spotify still remembers the last 50 plays, so without this a sync would
+  // quietly put back what the broadcaster just erased.
+  const erasedAt = Date.parse((await env.USERS.get(ERASED_KEY).catch(() => null)) || '') || 0;
+  const incoming = erasedAt ? all.filter((p) => Date.parse(p.at) > erasedAt) : all;
+  if (!incoming.length) return 0;
   const byMonth = new Map<string, StationPlay[]>();
   for (const p of incoming) byMonth.set(monthOf(p.at), [...(byMonth.get(monthOf(p.at)) ?? []), p]);
   let total = 0;
@@ -235,8 +246,9 @@ export function computeStats(plays: StationPlay[], now = Date.now()) {
     if (p.yr) decades.set(Math.floor(p.yr / 10) * 10, (decades.get(Math.floor(p.yr / 10) * 10) ?? 0) + 1);
     ms += p.ms ?? 0; if (typeof p.pop === 'number') { popSum += p.pop; popN++; } if (p.ex) explicit++;
   }
-  // Consecutive station-local days with at least one play, ending today or yesterday.
-  let streak = 0; { const d = new Date(now); for (let i = 0; i < 400; i++) { const key = local(d.toISOString()).day; if (days.has(key)) streak++; else if (i > 0) break; d.setUTCDate(d.getUTCDate() - 1); } }
+  // Consecutive station-local days with at least one play, ending today or yesterday. Pure calendar
+  // arithmetic from today's LOCAL date, so a 24 h step can never skip a day across a DST change.
+  let streak = 0; { const d = new Date(`${local(new Date(now).toISOString()).day}T12:00:00Z`); for (let i = 0; i < 400; i++) { if (days.has(d.toISOString().slice(0, 10))) streak++; else if (i > 0) break; d.setUTCDate(d.getUTCDate() - 1); } }
   const dayparts = DAYPARTS.map((d) => ({ name: d.name, plays: byHour.slice(d.from, d.to).reduce((a, b) => a + b, 0) }));
   const weekAgo = now - 7 * 86400000;
   const card = (p: StationPlay, n: number) => ({ t: p.t, a: p.a, img: p.img, url: p.url, plays: n });
@@ -287,5 +299,6 @@ export async function resetStationScopes(env: SpotifyBroadcastEnv): Promise<void
 export async function clearStation(env: SpotifyBroadcastEnv): Promise<number> {
   if (!env.USERS) return 0; let n = 0, cursor: string | undefined;
   do { const page = await env.USERS.list({ prefix: `station:v1:${STATION}:`, cursor }); for (const k of page.keys) { await env.USERS.delete(k.name); n++; } cursor = page.list_complete ? undefined : page.cursor; } while (cursor);
+  await env.USERS.put(ERASED_KEY, new Date().toISOString()); // nothing played before this moment may come back
   return n;
 }

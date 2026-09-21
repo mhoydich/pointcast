@@ -172,6 +172,7 @@ import {
   STATION_WRITE_TOOL_NAMES,
   dispatchStationTool,
 } from '../../src/lib/station-mcp';
+import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
 import type { AuthEnv } from './auth/session.ts';
@@ -2995,6 +2996,12 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
       const name = String(params.name || '');
       const args = (params.arguments || {}) as Record<string, unknown>;
       if (name === 'pointcast_pair') return rpcResult(id, await confirmAiVisit(env, args));
+      if (name === 'station_request') { // in-process, so the caller's own address is rate-limited, not a shared one
+        const filed = await fileAgentRequest(request, env as never, args);
+        return rpcResult(id, filed.body?.ok && filed.body.request
+          ? { content: [{ type: 'text', text: `On the line: ${filed.body.request.title} — ${filed.body.request.artist}. It is public at ${base}/station#requests. If the station plays it, the line will say so.` }] }
+          : { content: [{ type: 'text', text: filed.body?.error || `The request line refused that (${filed.status}).` }], isError: true });
+      }
       const result = await dispatchTool(name, args, base, sessionId);
       return rpcResult(id, result);
     }

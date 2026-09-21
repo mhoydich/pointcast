@@ -58,7 +58,7 @@ test('only the broadcaster flow asks Spotify for history; a personal connection 
   const auth = read('functions/api/spotify/auth.ts'), privacy = read('src/pages/privacy.astro'), api = read('functions/api/station.ts'), bc = read('functions/api/spotify/_broadcast.ts');
   assert.match(auth, /personal\s+\? 'user-read-currently-playing'\s+: 'user-read-currently-playing user-read-recently-played user-top-read user-library-read'/);
   assert.match(privacy, /user-library-read/);
-  assert.match(privacy, /user-read-recently-played/); assert.match(privacy, /A personal Spotify connection never has a\s+play log/);
+  assert.match(privacy, /user-read-recently-played/); assert.match(privacy, /A personal Spotify connection never has a\s+play log and is never asked for listening history/); assert.match(privacy, /It is off by default/); assert.match(privacy, /request line is public/);
   assert.match(api, /roles\?\.includes\('broadcaster'\)/); assert.match(api, /same-origin-required/);
   assert.match(bc, /clearStation\(env\)/, 'disconnecting Spotify erases the log');
   assert.match(bc, /startsWith\('https:\/\/api\.spotify\.com\/v1\/me\/'\)/);
@@ -181,4 +181,49 @@ test('rewind is set arithmetic on Spotify’s three lists: no play counts are in
   assert.equal(rw.genres[0], 'progressive rock'); assert.deepEqual(rw.topTrackDecades, [{ decade: 1970, tracks: 2 }, { decade: 1990, tracks: 1 }]);
   assert.equal(rw.library.total, 4321); assert.doesNotMatch(JSON.stringify(rw), /"plays"/);
   const page = read('src/pages/station.astro'); assert.match(page, /It gives ranks, not play counts/); assert.match(page, /data-rw hidden/);
+});
+
+// ── fixes from the Opus review of #1143–#1148 (2026-09-21) ──
+import { fileAgentRequest } from '../functions/api/station/requests.ts';
+import { syncStation } from '../functions/api/spotify/_station.ts';
+
+test('a request that fails to resolve still costs quota: the line is not an unmetered fetch relay', async () => {
+  const env = lineEnv(); let fetched = 0; const nothing = async () => { fetched++; return Response.json({}); }; let last = 0;
+  for (let i = 0; i < 9; i++) last = (await handleRequests(post({ url: `https://open.spotify.com/track/${'b'.repeat(21)}${i}`, why: 'A track id that does not exist.' }), env, nothing)).status;
+  assert.equal(last, 429); assert.ok(fetched <= 12, `outbound lookups stay bounded (${fetched})`);
+});
+
+test('agents are rate-limited by their own address, carried in-process, never by a header a caller can set', async () => {
+  const env = lineEnv(); const mcp = (ip) => new Request('https://pointcast.xyz/api/mcp', { method: 'POST', headers: { 'CF-Connecting-IP': ip, 'X-PC-Agent-Key': 'anything' } });
+  for (let i = 0; i < 6; i++) assert.equal((await fileAgentRequest(mcp('198.51.100.1'), env, { url: `https://open.spotify.com/track/${'c'.repeat(21)}${i}`, why: 'Agent one fills its own hour.', name: 'one' }, spotifySays)).status, 201);
+  assert.equal((await fileAgentRequest(mcp('198.51.100.1'), env, { url: `https://open.spotify.com/track/${'c'.repeat(21)}9`, why: 'Agent one is over its limit.', name: 'one' }, spotifySays)).status, 429);
+  const other = await fileAgentRequest(mcp('198.51.100.2'), env, { url: `https://open.spotify.com/track/${'d'.repeat(22)}`, why: 'Agent two is not starved by agent one.', name: 'two' }, spotifySays);
+  assert.equal(other.status, 201); assert.equal(other.body.request.via, 'agent');
+  assert.doesNotMatch(read('functions/api/station/requests.ts'), /headers\.get\('X-PC-Agent-Key'\)/);
+});
+
+test('a track on repeat logs every play when Spotify gives exact times; a sighting still folds in', () => {
+  const at = (m) => new Date(Date.parse('2026-09-21T03:00:00Z') + m * 60000).toISOString(), sp = (m) => playFromTrack(track('rep1', 'Short Song', { duration_ms: 120000 }), at(m), 'spotify');
+  const r = mergePlays([], [sp(0), sp(2), sp(4), sp(4)]); assert.equal(r.plays.length, 3, 'three distinct plays, one exact duplicate dropped');
+  assert.equal(mergePlays(r.plays, [playFromTrack(track('rep1', 'Short Song', { duration_ms: 120000 }), at(5), 'seen')]).added, 0);
+});
+
+test('erasing the log holds: what Spotify still remembers from before the erasure does not come back', async () => {
+  const env = kv(); await recordSeen(env, track('old1', 'Before')); assert.equal((await readStation(env)).stats.plays, 1);
+  await clearStation(env); assert.equal((await readStation(env)).stats.plays, 0);
+  const room = read('functions/api/spotify/_station.ts'); assert.match(room, /const incoming = erasedAt \? all\.filter\(\(p\) => Date\.parse\(p\.at\) > erasedAt\) : all;/);
+  assert.ok(env.m.has('station:erased:v1:broadcast'), 'the marker lives outside the swept prefix');
+  await new Promise((r) => setTimeout(r, 5)); await recordSeen(env, track('new1', 'After')); assert.equal((await readStation(env)).stats.plays, 1, 'new plays still log');
+  assert.equal(typeof syncStation, 'function');
+});
+
+test('liner notes match whole words, the streak survives a DST change, and the wall lets go of its listeners', () => {
+  const page = (title, description, extract = 'x') => ({ type: 'standard', title, description, extract });
+  assert.ok(!accept('song', page('Money for Nothing', '1985 single by Dire Straits', 'A song by Dire Straits.'), { title: 'Money', artist: 'Dire Straits' }));
+  assert.ok(accept('song', page('Money (Pink Floyd song)', '1973 single by Pink Floyd', 'A song by Pink Floyd.'), { title: 'Money', artist: 'Pink Floyd' }));
+  const days = ['2026-03-06', '2026-03-07', '2026-03-08', '2026-03-09'].map((d, i) => playFromTrack(track(`dst${i}`, `Day ${i}`), `${d}T20:00:00Z`, 'spotify'));
+  assert.equal(computeStats(days, Date.parse('2026-03-09T21:00:00Z')).streakDays, 4, 'spring forward (Mar 8) is not skipped');
+  assert.equal(computeStats(days, Date.parse('2026-03-10T03:00:00Z')).streakDays, 4, 'still Mar 9 in Pacific at 03:00 UTC');
+  const viz = read('src/components/HomeMusicViz.astro'); assert.match(viz, /seen\.disconnect\(\); sized\.disconnect\(\); life\.abort\(\);/);
+  assert.match(read('src/scripts/chrome/cursor-room.ts'), /Date\.now\(\) - autoAt > 5 \* 60000/);
 });
