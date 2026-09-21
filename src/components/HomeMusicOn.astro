@@ -9,12 +9,16 @@
  *   tell the town → pc:shortwave:say (the dock bar's sayLine → /api/shortwave, unfurled as a card)
  *   playlist room → /listening-room?pl={id}
  *   town radio    → pc:nowplaying, fetched once by the page script from /now-playing.json
+ * The shelf opens with HomeMusicViz, an LED wall that keeps the tapped tempo and,
+ * with the visitor's OK, shows a real spectrum through the mic or a shared tab.
  * The tapped tempo is kept in localStorage `pc:music:bpm` and announced as
- * `pc:music:tempo {bpm}`. What you shared is kept in `pc:music:listening` as
+ * `pc:music:tempo {bpm, at}`. What you shared is kept in `pc:music:listening` as
  * {url, label, at}; cursor-room.ts sends the label on the town socket as the
  * presence `listening` field for an hour, so the attendance tray, the hero
  * faces and the strip below can show who has what on. Clearing it is one button.
  */
+import HomeMusicViz from './HomeMusicViz.astro';
+
 const pads = [
   { id: 'kick', name: 'Root', key: 'A', color: '#efe6ce' },
   { id: 'bloom', name: 'Bloom', key: 'S', color: '#f3a0a6' },
@@ -47,8 +51,8 @@ const invites = [
       <p class="shelf__kicker">Music on · Spinning · your player keeps playing · the town adds the rest</p>
       <h2 class="shelf__title" id="musicon-title">Music on? <em>Leave it on.</em></h2>
       <p class="shelf__dek">
-        PointCast does not take over your speakers. Keep Spotify going in its own tab, then use the town around it:
-        <b>find the tempo, drum over it, say what is on, open the playlist as a room, bring someone in.</b>
+        PointCast does not take over your speakers. Keep Spotify going in its own tab, <b>let the wall listen</b>, then use the town around it:
+        <b>drum over it, say what is on, open the playlist as a room, bring someone in.</b>
       </p>
     </div>
     <p class="musicon__radio" data-mo-radio hidden>
@@ -57,11 +61,13 @@ const invites = [
     </p>
   </div>
 
+  <HomeMusicViz />
+
   <ol class="musicon__steps">
     <li class="musicon__step musicon__step--tempo">
       <p class="musicon__no" aria-hidden="true">01</p>
       <h3>Find the tempo</h3>
-      <p>Tap along to your song, four taps or more. The dot keeps the beat, silently.</p>
+      <p>If the wall is listening it works this out for you. Or tap along, four taps or more, and the dot keeps the beat.</p>
       <div class="musicon__tempo">
         <button type="button" class="musicon__tap" data-mo-tap aria-describedby="musicon-bpm">
           <span class="musicon__pulse" data-mo-pulse aria-hidden="true"></span>
@@ -142,7 +148,7 @@ const invites = [
     // ── 01 · tap tempo ─────────────────────────────────────────────
     const tap = $<HTMLButtonElement>('[data-mo-tap]'), bpmEl = $('[data-mo-bpm]'), feelEl = $('[data-mo-feel]'), pulse = $('[data-mo-pulse]');
     const feel = (b: number) => (b < 76 ? 'slow burn' : b < 96 ? 'head nod' : b < 116 ? 'walking pace' : b < 132 ? 'four on the floor' : b < 156 ? 'running' : 'sprint');
-    let taps: number[] = [];
+    let taps: number[] = [], lastTapped = 0;
     const showBpm = (bpm: number, note?: string) => {
       bpmEl.textContent = String(bpm); feelEl.textContent = note || feel(bpm);
       root.style.setProperty('--mo-beat', `${(60 / bpm).toFixed(3)}s`);
@@ -160,8 +166,16 @@ const invites = [
       if (bpm < 40 || bpm > 240) { feelEl.textContent = 'keep tapping…'; return; }
       showBpm(bpm);
       try { localStorage.setItem('pc:music:bpm', String(bpm)); } catch {}
-      window.dispatchEvent(new CustomEvent('pc:music:tempo', { detail: { bpm } }));
+      lastTapped = Date.now();
+      window.dispatchEvent(new CustomEvent('pc:music:tempo', { detail: { bpm, at: now } })); // `at` = your last tap, so the wall lands on your downbeat
     };
+    // The wall can hear a tempo through the mic. Your own taps win for a while; otherwise take its word.
+    window.addEventListener('pc:music:beat', () => { if (Date.now() - lastTapped < 20000) return; pulse.dataset.on = 'false'; void pulse.offsetWidth; pulse.dataset.on = 'true'; });
+    window.addEventListener('pc:music:heard', (ev: Event) => {
+      const b = Number((ev as CustomEvent).detail?.bpm); if (!(b >= 40 && b <= 240) || Date.now() - lastTapped < 20000) return;
+      showBpm(b, `${feel(b)} · heard through the mic`);
+      try { localStorage.setItem('pc:music:bpm', String(b)); } catch {}
+    });
     tap.addEventListener('pointerdown', (ev) => { ev.preventDefault(); onTap(); });
     tap.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onTap(); } });
     const onKey = (ev: KeyboardEvent) => { if ((ev.key === 't' || ev.key === 'T') && !ev.metaKey && !ev.ctrlKey && !ev.altKey && !ev.repeat && !typing(ev.target)) onTap(); };
