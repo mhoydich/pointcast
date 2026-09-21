@@ -23,9 +23,10 @@ function pointcastUrls(value, output = [], key = '') {
 
 function replaceTemplate(pathname) {
   const id = pathname.startsWith('/yee/') ? '0236' : pathname.startsWith('/verify/spend/') ? '0412' : '0159';
+  const handle = pathname.startsWith('/agents/') ? 'codex' : 'mike';
   return pathname
     .replaceAll('{id}', id)
-    .replaceAll('{handle}', 'mike')
+    .replaceAll('{handle}', handle)
     .replaceAll('{name}', 'field-agent')
     .replaceAll('{slug}', pathname.startsWith('/products/') ? 'grapefruit' : pathname.startsWith('/mood/') ? 'matins' : 'front-door')
     .replaceAll('{team-slug}', 'ohio-state')
