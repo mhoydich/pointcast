@@ -1,11 +1,19 @@
-import { createTezosChain, type ChainFactory, type ClaimChain } from './_chain';
+import { createTezosChain, otherWorldsClaimStatus, type ChainFactory, type ClaimChain } from './_chain';
+import { cabinetIntentStatus } from '../agent-cabinet/_chain';
+import type { CabinetIntentRow } from '../agent-cabinet/_shared';
 import {
   artwork, body, CHAIN_ID, ClaimError, CLOSES_AT, CLOSES_MS, COLLECTION, configuration, EDITIONS,
   fail, getClaim, json, payload, receipt, sameOrigin, verifyProof, wallet, walletClaim,
   type ArtworkProvenance, type ChallengeRow, type ClaimRow, type Config, type OtherWorldsEnv,
 } from './_shared';
 
-export interface Options { now?: () => number; chainFactory?: ChainFactory; items?: ArtworkProvenance[] }
+export interface Options {
+  now?: () => number;
+  chainFactory?: ChainFactory;
+  items?: ArtworkProvenance[];
+  statusChain?: Pick<ClaimChain, 'status'>;
+  cabinetStatus?: (row: CabinetIntentRow) => Promise<'pending'|'confirmed'|'failed'>;
+}
 const now = (options: Options) => (options.now || Date.now)();
 async function configured(env: OtherWorldsEnv, options: Options): Promise<Config> {
   const config = await configuration(env, options.items);
@@ -86,7 +94,7 @@ export async function handleChallenge(request: Request, env: OtherWorldsEnv, opt
 
 /** Persist-before-broadcast and never-expiring locks follow Pointcast's faucet
  * sign-first delivery approach. Uncertainty retains inventory, wallet and budget. */
-async function reconcile(db: D1Database, row: ClaimRow, adapter: ClaimChain, options: Options): Promise<ClaimRow> {
+async function reconcile(db: D1Database, row: ClaimRow, adapter: Pick<ClaimChain, 'status'>, options: Options): Promise<ClaimRow> {
   if (!row.operation_hash || row.status === 'confirmed' || row.status === 'failed') return row;
   let state: 'pending'|'confirmed'|'failed';
   try { state = await adapter.status(row); } catch { return row; }
@@ -94,7 +102,7 @@ async function reconcile(db: D1Database, row: ClaimRow, adapter: ClaimChain, opt
   await db.batch([
     db.prepare(`UPDATE other_worlds_claims SET status=?, confirmed_at=?, updated_at=?, last_error=? WHERE id=? AND operation_hash=? AND status IN ('signed','submitted')`)
       .bind(state,state === 'confirmed' ? now(options) : null,now(options),state === 'failed' ? 'on-chain-operation-failed' : null,row.id,row.operation_hash),
-    db.prepare(`DELETE FROM other_worlds_sponsor_locks WHERE claim_id=? AND EXISTS(SELECT 1 FROM other_worlds_claims WHERE id=? AND status IN ('confirmed','failed'))`).bind(row.id,row.id),
+    db.prepare(`DELETE FROM tezos_sponsor_locks WHERE owner_kind='other-worlds' AND owner_id=? AND EXISTS(SELECT 1 FROM other_worlds_claims WHERE id=? AND status IN ('confirmed','failed'))`).bind(row.id,row.id),
   ]);
   return (await getClaim(db,row.id))!;
 }
@@ -103,16 +111,43 @@ async function deliver(env: OtherWorldsEnv, config: Config, initial: ClaimRow, o
   let row = await reconcile(db,initial,adapter,options);
   if (row.status === 'confirmed' || row.status === 'failed') return row;
   if (row.status === 'reserved') {
-    const acquire = () => db.prepare(`INSERT OR IGNORE INTO other_worlds_sponsor_locks(sponsor,claim_id,acquired_at) VALUES(?,?,?) RETURNING claim_id`)
-      .bind(config.sponsor,row.id,now(options)).first<{claim_id:string}>();
+    const acquire = () => db.prepare(`INSERT OR IGNORE INTO tezos_sponsor_locks(sponsor,owner_kind,owner_id,acquired_at) VALUES(?,'other-worlds',?,?) RETURNING owner_id`)
+      .bind(config.sponsor,row.id,now(options)).first<{owner_id:string}>();
     let acquired = await acquire();
     if (!acquired) {
       // A different collector can advance the queue after the prior collector
       // leaves. This only probes the holder's stored hash; never re-signs it.
-      const lock = await db.prepare('SELECT claim_id FROM other_worlds_sponsor_locks WHERE sponsor=?').bind(config.sponsor).first<{claim_id:string}>();
-      const holder = lock ? await getClaim(db,lock.claim_id) : null;
-      if (holder?.operation_hash && holder.config_hash === config.hash) await reconcile(db,holder,adapter,options);
-      acquired = await acquire();
+      const lock = await db.prepare('SELECT owner_kind,owner_id FROM tezos_sponsor_locks WHERE sponsor=?').bind(config.sponsor).first<{owner_kind:string;owner_id:string}>();
+      if (lock?.owner_kind === 'other-worlds' && lock.owner_id === row.id) {
+        // A retry after a Worker interruption may already own the durable
+        // counter lock but not yet have advanced reserved -> preparing.
+        acquired = { owner_id: row.id };
+      } else {
+        const holder = lock?.owner_kind === 'other-worlds' ? await getClaim(db,lock.owner_id) : null;
+        if (holder?.operation_hash) await reconcile(db,holder,adapter,options);
+        if (lock?.owner_kind === 'agent-cabinet') {
+          const cabinet = await db.prepare('SELECT * FROM agent_cabinet_intents WHERE id=?')
+            .bind(lock.owner_id).first<CabinetIntentRow>();
+          if (cabinet?.operation_hash && (cabinet.delivery_status === 'signed' || cabinet.delivery_status === 'submitted')) {
+            let state: 'pending'|'confirmed'|'failed' = 'pending';
+            try { state = await (options.cabinetStatus || cabinetIntentStatus)(cabinet); } catch { state = 'pending'; }
+            if (state !== 'pending') {
+              await db.batch([
+                db.prepare(`UPDATE agent_cabinet_intents
+                  SET delivery_status=?,confirmed_at=?,last_error=?,updated_at=?,version=version+1
+                  WHERE id=? AND operation_hash=? AND delivery_status IN ('signed','submitted')`)
+                  .bind(state,state === 'confirmed' ? now(options) : null,
+                    state === 'failed' ? 'on-chain-operation-failed' : null,now(options),cabinet.id,cabinet.operation_hash),
+                db.prepare(`DELETE FROM tezos_sponsor_locks
+                  WHERE sponsor=? AND owner_kind='agent-cabinet' AND owner_id=?
+                    AND EXISTS(SELECT 1 FROM agent_cabinet_intents WHERE id=? AND delivery_status IN ('confirmed','failed'))`)
+                  .bind(config.sponsor,cabinet.id,cabinet.id),
+              ]);
+            }
+          }
+        }
+        acquired = await acquire();
+      }
     }
     if (!acquired) return row;
     const preparing = await db.prepare(`UPDATE other_worlds_claims SET status='preparing',updated_at=? WHERE id=? AND status='reserved' RETURNING id`)
@@ -127,15 +162,32 @@ async function deliver(env: OtherWorldsEnv, config: Config, initial: ClaimRow, o
       // prepare() never injects: failures here can safely free the counter lock.
       await db.batch([
         db.prepare(`UPDATE other_worlds_claims SET status='reserved',updated_at=?,last_error=? WHERE id=? AND status='preparing'`).bind(now(options),error instanceof ClaimError ? error.reason : 'sponsor-preparation-unavailable',row.id),
-        db.prepare('DELETE FROM other_worlds_sponsor_locks WHERE claim_id=?').bind(row.id),
+        db.prepare("DELETE FROM tezos_sponsor_locks WHERE owner_kind='other-worlds' AND owner_id=?").bind(row.id),
       ]);
       return (await getClaim(db,row.id))!;
     }
-    // A failed persistence retains the lock. No operation is injected until its
-    // exact signed bytes, deterministic hash and maximum spend exist durably.
-    await db.prepare(`UPDATE other_worlds_claims SET status='signed',signed_bytes=?,operation_hash=?,maximum_cost_mutez=?,updated_at=?,last_error=NULL
-      WHERE id=? AND status='preparing' AND ?+(SELECT COALESCE(SUM(maximum_cost_mutez),0) FROM other_worlds_claims)<=?`)
-      .bind(signed.bytes,signed.hash,signed.maximumCostMutez,now(options),row.id,signed.maximumCostMutez,config.totalBudgetMutez).run();
+    try {
+      // No operation is injected until its exact signed bytes, deterministic
+      // hash and maximum spend exist durably.
+      const persisted = await db.prepare(`UPDATE other_worlds_claims SET status='signed',signed_bytes=?,operation_hash=?,maximum_cost_mutez=?,updated_at=?,last_error=NULL
+        WHERE id=? AND status='preparing' AND ?+(SELECT COALESCE(SUM(maximum_cost_mutez),0) FROM other_worlds_claims)<=? RETURNING id`)
+        .bind(signed.bytes,signed.hash,signed.maximumCostMutez,now(options),row.id,signed.maximumCostMutez,config.totalBudgetMutez).first();
+      if (!persisted) throw new ClaimError('signed-operation-not-persisted',503);
+    } catch {
+      // A D1 response can fail after the signed-row write committed. Roll back
+      // only when the durable row still proves that no signed bytes/hash exist;
+      // release the counter lock only after that exact rollback is visible.
+      await db.batch([
+        db.prepare(`UPDATE other_worlds_claims SET status='reserved',updated_at=?,last_error='signed-operation-not-persisted'
+          WHERE id=? AND status='preparing' AND signed_bytes IS NULL AND operation_hash IS NULL`).bind(now(options),row.id),
+        db.prepare(`DELETE FROM tezos_sponsor_locks
+          WHERE sponsor=? AND owner_kind='other-worlds' AND owner_id=?
+            AND EXISTS(SELECT 1 FROM other_worlds_claims WHERE id=? AND status='reserved' AND signed_bytes IS NULL AND operation_hash IS NULL)`)
+          .bind(row.sponsor,row.id,row.id),
+      ]);
+    }
+    // If the write committed but its response was lost, this reload observes
+    // the durable signed operation and safely continues with those exact bytes.
     row = (await getClaim(db,row.id))!;
   }
   if ((row.status === 'signed' || row.status === 'submitted') && row.signed_bytes && row.operation_hash) {
@@ -202,8 +254,10 @@ export async function handleReceipt(request: Request, env: OtherWorldsEnv, optio
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new ClaimError('invalid-receipt');
     let row = await getClaim(env.AUTH_DB,id);
     if (!row) throw new ClaimError('receipt-not-found',404);
-    const config = await configuration(env,options.items);
-    if (config && row.config_hash===config.hash) row = await reconcile(env.AUTH_DB,row,await chain(env,config,options),options);
+    if (row.operation_hash && row.status !== 'confirmed' && row.status !== 'failed') {
+      const status = options.statusChain || { status: otherWorldsClaimStatus };
+      row = await reconcile(env.AUTH_DB,row,status,options);
+    }
     return json({ok:true,claim:receipt(row)});
   } catch(error) { return fail(error); }
 }

@@ -22,9 +22,12 @@ class SqliteD1 {
     const execute = mode => {
       if (owner.failOn?.(sql)) throw new Error('database-unavailable');
       const stmt=owner.db.prepare(sql);
-      if(mode==='first') return stmt.get(...args) ?? null;
-      if(mode==='all') return {results:stmt.all(...args)};
-      return {meta:{changes:Number(stmt.run(...args).changes)}};
+      let result;
+      if(mode==='first') result=stmt.get(...args) ?? null;
+      else if(mode==='all') result={results:stmt.all(...args)};
+      else result={meta:{changes:Number(stmt.run(...args).changes)}};
+      if (owner.failAfter?.(sql)) throw new Error('database-response-lost');
+      return result;
     };
     const out={bind(...values){args=values;return out;},async first(){return execute('first');},async all(){return execute('all');},async run(){return execute('run');},execute};return out;
   }
@@ -37,7 +40,7 @@ class SqliteD1 {
 const ORIGIN='https://pointcast.xyz';
 const post=(path,value,origin=ORIGIN)=>new Request(`${ORIGIN}/api/other-worlds/${path}`,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(value)});
 const rows=db=>db.db.prepare('SELECT * FROM other_worlds_claims ORDER BY created_at,id').all();
-const locks=db=>db.db.prepare('SELECT * FROM other_worlds_sponsor_locks').all();
+const locks=db=>db.db.prepare('SELECT * FROM tezos_sponsor_locks').all();
 async function key(seed) { const signer=await InMemorySigner.fromSecretKey(b58Encode(new Uint8Array(32).fill(seed),PrefixV2.Ed25519Seed));return {signer,address:await signer.publicKeyHash(),publicKey:await signer.publicKey()}; }
 function fakeChain() {
   const adapter={prepares:[],broadcasts:[],readies:[],statuses:new Map(),cost:1200,autoConfirm:false,
@@ -48,7 +51,11 @@ function fakeChain() {
   };return adapter;
 }
 async function setup() {
-  const db=new SqliteD1(await readFile(new URL('../migrations/auth/0020_other_worlds.sql',import.meta.url),'utf8'));
+  const migrations=await Promise.all([
+    readFile(new URL('../migrations/auth/0020_other_worlds.sql',import.meta.url),'utf8'),
+    readFile(new URL('../migrations/auth/0021_agent_cabinet.sql',import.meta.url),'utf8'),
+  ]);
+  const db=new SqliteD1(migrations.join('\n'));
   const sponsor=await key(99);
   const items=await Promise.all(Array.from({length:9},async(_,i)=>{const metadata=JSON.stringify({name:`Transmission ${i+1}`,artifactUri:`https://pointcast.xyz/art/${i+1}.png`,creators:['Michael Hoydich']});return {id:i+1,slug:`transmission-${i+1}`,artifactUri:`https://pointcast.xyz/art/${i+1}.png`,artifactSha256:'a'.repeat(64),metadataUri:`https://pointcast.xyz/metadata/${i+1}.json`,metadataSha256:await shared.sha256(metadata),metadata};}));
   const env={AUTH_DB:db,OTHER_WORLDS_ENABLED:'true',OTHER_WORLDS_MAINNET_APPROVED:'true',OTHER_WORLDS_FA2_CONTRACT:'KT1N1U6esJHuhLpUKiebpyW9MJUCoqJyREtb',OTHER_WORLDS_SPONSOR_ADDRESS:sponsor.address,OTHER_WORLDS_SPONSOR_SECRET_KEY:'test-only-never-loaded-by-mock',OTHER_WORLDS_RPC_URL:'https://rpc.invalid',OTHER_WORLDS_TOKEN_MAP:JSON.stringify(Object.fromEntries(items.map(item=>[item.id,String(item.id)]))),OTHER_WORLDS_MAX_OPERATION_MUTEZ:'5000',OTHER_WORLDS_TOTAL_BUDGET_MUTEZ:'500000'};
@@ -63,9 +70,13 @@ test('full claim path: real wallet proof, chosen artwork, durable signed bytes, 
   const result=await claim(s,proof);assert.equal(result.status,202);assert.equal(result.claim.artworkId,7);assert.equal(result.claim.status,'submitted');assert.equal(result.claim.collectorCostMutez,0);
   assert.equal(s.adapter.prepares.length,1);assert.equal(rows(s.db)[0].signed_bytes,s.adapter.broadcasts[0]);assert.equal(locks(s.db).length,1);
   s.adapter.statuses.set(result.claim.operationHash,'confirmed');
+  const sponsorSecret=s.env.OTHER_WORLDS_SPONSOR_SECRET_KEY;
+  s.env.OTHER_WORLDS_ENABLED='false';delete s.env.OTHER_WORLDS_SPONSOR_SECRET_KEY;
+  s.opts.statusChain=s.adapter;
   const response=await api.handleReceipt(new Request(`${ORIGIN}${result.claim.receiptUrl}`),s.env,s.opts);const receipt=await response.json();
   assert.equal(receipt.claim.status,'confirmed');assert.equal(locks(s.db).length,0);assert.equal(s.adapter.broadcasts.length,1,'GET never broadcasts');
   assert.equal(rows(s.db)[0].maximum_cost_mutez,1200,'confirmed cost remains reserved');
+  s.env.OTHER_WORLDS_ENABLED='true';s.env.OTHER_WORLDS_SPONSOR_SECRET_KEY=sponsorSecret;
   const repeat=await claim(s,proof);assert.equal(repeat.claim.id,result.claim.id);assert.equal(s.adapter.prepares.length,1);
 });
 test('launch gates and incomplete provenance fail closed without chain signing',async()=>{
@@ -118,6 +129,69 @@ test('same proof concurrent replay prepares one operation and does not duplicate
   const s=await setup();const proof=await s.proof(1);const results=await Promise.all(Array.from({length:5},()=>claim(s,proof)));
   assert.equal(rows(s.db).length,1);assert.equal(s.adapter.prepares.length,1);assert.ok(results.every(result=>result.ok));
 });
+test('an Agent Cabinet sponsor lock blocks Other Worlds until that rail releases it',async()=>{
+  const s=await setup();
+  const cabinetId='aci_'+'1'.repeat(32), cabinetOperation=encodeOpHash('fe'.repeat(160));
+  s.db.db.prepare(`INSERT INTO agent_cabinet_intents(
+    id,challenge_id,idempotency_key,request_hash,offer_slug,offer_revision,config_hash,recipient,contract,token_id,sponsor,
+    supply_cap,artifact_uri,artifact_sha256,metadata_uri,metadata_sha256,price_units,payment_network,payment_asset,payment_pay_to,
+    challenge_nonce,challenge_message,challenge_payload,challenge_expires_at,approval_status,payment_status,payment_tx_hash,
+    delivery_status,signed_bytes,operation_hash,maximum_cost_mutez,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'settled',?,'submitted',?,?,1200,?,?)`)
+    .run(cabinetId,'acc_'+'2'.repeat(32),'cabinet-lock-owner','a'.repeat(64),'listening-tile-001','b'.repeat(64),'c'.repeat(64),
+      (await key(77)).address,s.env.OTHER_WORLDS_FA2_CONTRACT,'10',s.env.OTHER_WORLDS_SPONSOR_ADDRESS,27,
+      'https://pointcast.xyz/art/cabinet.svg','d'.repeat(64),'https://pointcast.xyz/metadata/cabinet.json','e'.repeat(64),
+      10000,'eip155:42793','0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9','0x48e8479b4906d45fbe702a18ac2454f800238b37',
+      'cabinet-lock-nonce','message','050100000000',Date.now()+300000,'verified','0x'+'12'.repeat(32),
+      'ab'.repeat(160),cabinetOperation,Date.now(),Date.now());
+  s.db.db.prepare(`INSERT INTO tezos_sponsor_locks(sponsor,owner_kind,owner_id,acquired_at) VALUES(?,'agent-cabinet',?,?)`)
+    .run(s.env.OTHER_WORLDS_SPONSOR_ADDRESS,cabinetId,Date.parse('2026-09-15T21:59:00Z'));
+  let cabinetFinal=false;
+  s.opts.cabinetStatus=async row=>row.operation_hash===cabinetOperation&&cabinetFinal?'confirmed':'pending';
+  const proof=await s.proof(1);
+  const blocked=await claim(s,proof);
+  assert.equal(blocked.claim.status,'reserved');assert.equal(s.adapter.prepares.length,0);
+  assert.deepEqual(locks(s.db).map(lock=>lock.owner_kind),['agent-cabinet']);
+  cabinetFinal=true;
+  const resumed=await claim(s,proof);
+  assert.equal(resumed.claim.status,'submitted');assert.equal(s.adapter.prepares.length,1);assert.equal(locks(s.db).length,1);
+  assert.equal(s.db.db.prepare('SELECT delivery_status FROM agent_cabinet_intents WHERE id=?').get(cabinetId).delivery_status,'confirmed');
+  assert.equal(locks(s.db)[0].owner_kind,'other-worlds');
+});
+test('Other Worlds resumes when its reserved claim already owns the shared sponsor lock',async()=>{
+  const s=await setup();const proof=await s.proof(42,4);
+  const first=await api.handleClaim(post('claim',proof),s.env,s.opts);const reserved=await first.json();
+  assert.equal(reserved.claim.status,'reserved');const row=rows(s.db)[0];
+  s.db.db.prepare("INSERT INTO tezos_sponsor_locks(sponsor,owner_kind,owner_id,acquired_at) VALUES(?,'other-worlds',?,?)")
+    .run(row.sponsor,row.id,row.created_at);
+  const resumed=await api.handleClaim(post('claim',proof),s.env,s.opts);const result=await resumed.json();
+  assert.equal(result.claim.status,'submitted');assert.equal(s.adapter.prepares.length,1);
+  assert.equal(locks(s.db)[0].owner_id,row.id);
+});
+test('migration compatibility keeps old and new Other Worlds lock writers in one counter domain',async()=>{
+  const s=await setup();const proof=await s.proof(41);
+  const reservedResponse=await api.handleClaim(post('claim',proof),s.env,s.opts);const reserved=await reservedResponse.json();
+  assert.equal(reserved.claim.status,'reserved');const row=rows(s.db)[0];
+  let result=s.db.db.prepare('INSERT OR IGNORE INTO other_worlds_sponsor_locks(sponsor,claim_id,acquired_at) VALUES(?,?,?)')
+    .run(row.sponsor,row.id,row.created_at);
+  assert.equal(Number(result.changes),1);assert.equal(locks(s.db)[0].owner_id,row.id);
+  s.db.db.prepare('DELETE FROM other_worlds_sponsor_locks WHERE sponsor=?').run(row.sponsor);
+  assert.equal(locks(s.db).length,0,'old-code delete mirrors to the global table');
+
+  s.db.db.prepare("INSERT INTO tezos_sponsor_locks(sponsor,owner_kind,owner_id,acquired_at) VALUES(?,'agent-cabinet',?,?)")
+    .run(row.sponsor,'aci_migration-window',row.created_at);
+  result=s.db.db.prepare('INSERT OR IGNORE INTO other_worlds_sponsor_locks(sponsor,claim_id,acquired_at) VALUES(?,?,?)')
+    .run(row.sponsor,row.id,row.created_at);
+  assert.equal(Number(result.changes),0,'old code cannot acquire beside a Cabinet lock');
+  assert.equal(locks(s.db)[0].owner_kind,'agent-cabinet');
+  s.db.db.prepare("DELETE FROM tezos_sponsor_locks WHERE owner_kind='agent-cabinet'").run();
+
+  s.db.db.prepare("INSERT INTO tezos_sponsor_locks(sponsor,owner_kind,owner_id,acquired_at) VALUES(?,'other-worlds',?,?)")
+    .run(row.sponsor,row.id,row.created_at);
+  assert.equal(s.db.db.prepare('SELECT claim_id FROM other_worlds_sponsor_locks WHERE sponsor=?').get(row.sponsor).claim_id,row.id);
+  s.db.db.prepare("DELETE FROM tezos_sponsor_locks WHERE owner_kind='other-worlds'").run();
+  assert.equal(s.db.db.prepare('SELECT COUNT(*) AS count FROM other_worlds_sponsor_locks').get().count,0,'new-code delete mirrors for rollback');
+});
 test('uncertain broadcast keeps exact operation, inventory, wallet, budget and global counter lock',async()=>{
   const s=await setup();s.adapter.broadcastError=new Error('timeout');const proof=await s.proof(1);
   const first=await claim(s,proof);assert.equal(first.claim.status,'signed');const original=rows(s.db)[0];
@@ -131,10 +205,16 @@ test('fresh wallet signature resumes original reservation after a long delay and
   const s=await setup();s.adapter.prepareError=new Error('sponsor-low');const first=await claim(s,await s.proof(1,5));assert.equal(first.claim.status,'reserved');
   s.at(Date.parse('2027-09-14T07:00:00.000Z'));s.adapter.prepareError=null;const fresh=await s.proof(1,5);const resumed=await claim(s,fresh);assert.equal(resumed.claim.id,first.claim.id);assert.equal(rows(s.db).length,1);assert.equal(resumed.claim.status,'submitted');
 });
-test('persistence failure after signing never broadcasts and never releases counter lock',async()=>{
+test('signed persistence failure rolls back only the unsigned preparing row and safely retries',async()=>{
   const s=await setup();const proof=await s.proof(1);s.db.failOn=sql=>sql.includes("SET status='signed'");
-  const result=await claim(s,proof);assert.equal(result.status,503);assert.equal(s.adapter.broadcasts.length,0);assert.equal(locks(s.db).length,1);assert.equal(rows(s.db)[0].status,'preparing');
-  s.db.failOn=null;await claim(s,proof);assert.equal(s.adapter.prepares.length,1,'no speculative signing retry');
+  const result=await claim(s,proof);assert.equal(result.status,202);assert.equal(result.claim.status,'reserved');assert.equal(s.adapter.broadcasts.length,0);assert.equal(locks(s.db).length,0);assert.equal(rows(s.db)[0].status,'reserved');
+  s.db.failOn=null;const retried=await claim(s,proof);assert.equal(retried.claim.status,'submitted');assert.equal(s.adapter.prepares.length,2);assert.equal(s.adapter.broadcasts.length,1);
+});
+test('lost D1 response after signed persistence retains the lock and broadcasts the durable exact bytes',async()=>{
+  const s=await setup();const proof=await s.proof(1);s.db.failAfter=sql=>sql.includes("SET status='signed'");
+  const result=await claim(s,proof);assert.equal(result.status,202);assert.equal(result.claim.status,'submitted');
+  assert.equal(s.adapter.prepares.length,1);assert.equal(s.adapter.broadcasts.length,1);assert.equal(locks(s.db).length,1);
+  const row=rows(s.db)[0];assert.equal(row.status,'submitted');assert.equal(row.signed_bytes,s.adapter.broadcasts[0]);assert.equal(row.operation_hash,encodeOpHash(row.signed_bytes));
 });
 test('per-operation and campaign maximum costs fail closed; confirmed and failed costs remain charged',async()=>{
   const s=await setup();s.adapter.cost=5001;const first=await claim(s,await s.proof(1));assert.equal(first.claim.status,'reserved');assert.equal(s.adapter.broadcasts.length,0);assert.equal(locks(s.db).length,0);

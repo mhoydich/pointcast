@@ -172,13 +172,14 @@ function aliasRequest(body, payment) {
   });
 }
 
-function paymentFor(accepted, nonce = '1', payer = '0x1111111111111111111111111111111111111111') {
+function paymentFor(quote, nonce = '1', payer = '0x1111111111111111111111111111111111111111') {
+  const accepted = quote.accepts[0];
   const now = Math.floor(Date.now() / 1000);
   return encodeBase64Json({
     x402Version: 2,
-    scheme: 'exact',
-    network: accepted.network,
     accepted,
+    resource: quote.resource,
+    extensions: quote.extensions,
     payload: {
       signature: `0x${'11'.repeat(65)}`,
       permit2Authorization: {
@@ -220,11 +221,11 @@ test('alias endpoint quotes x402, settles through a fake facilitator, and writes
   globalThis.fetch = async (input) => {
     assert.equal(String(input), 'https://exp-faci.bubbletez.com/settle');
     facilitatorCalls += 1;
-    return Response.json({ success: true, txHash: `0x${'ab'.repeat(32)}` });
+    return Response.json({ success: true, transaction: `0x${'ab'.repeat(32)}`, network: terms.accepts[0].network });
   };
   try {
     const response = await handleAliasRequest(
-      aliasRequest(body, paymentFor(terms.accepts[0])),
+      aliasRequest(body, paymentFor(terms)),
       env,
       pair.publicKeyBase64,
       new Date('2026-09-03T18:00:00.000Z'),
@@ -272,17 +273,17 @@ test('active renewal is payer-owned, uses a new receipt, and extends the current
   const env = { AUTH_DB: db, X402_RECEIPT_SK: pair.privateKeyBase64, X402_MODE: 'test' };
   const renewalBody = { ...body, forward: { kind: 'email', target: 'new@example.com' } };
   const quote = await handleAliasRequest(aliasRequest(renewalBody), env, pair.publicKeyBase64);
-  const accepted = decodeBase64Json(quote.headers.get('payment-required')).accepts[0];
+  const terms = decodeBase64Json(quote.headers.get('payment-required'));
 
   let facilitatorCalls = 0;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => {
     facilitatorCalls += 1;
-    return Response.json({ success: true, txHash: `0x${'cd'.repeat(32)}` });
+    return Response.json({ success: true, transaction: `0x${'cd'.repeat(32)}`, network: terms.accepts[0].network });
   };
   try {
     const denied = await handleAliasRequest(
-      aliasRequest(renewalBody, paymentFor(accepted, '2', '0x2222222222222222222222222222222222222222')),
+      aliasRequest(renewalBody, paymentFor(terms, '2', '0x2222222222222222222222222222222222222222')),
       env,
       pair.publicKeyBase64,
       new Date('2026-09-10T18:00:00.000Z'),
@@ -291,7 +292,7 @@ test('active renewal is payer-owned, uses a new receipt, and extends the current
     assert.equal(facilitatorCalls, 0);
 
     const renewed = await handleAliasRequest(
-      aliasRequest(renewalBody, paymentFor(accepted, '3')),
+      aliasRequest(renewalBody, paymentFor(terms, '3')),
       env,
       pair.publicKeyBase64,
       new Date('2026-09-10T18:00:00.000Z'),

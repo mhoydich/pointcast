@@ -1,4 +1,12 @@
 import { PAID_TOWN_PRICE } from '../../functions/_lib/paid-town-actions.ts';
+import { AGENT_CABINET_PUBLICATION_LIVE } from './agent-cabinet-public-state';
+import {
+  X402_CURRENT_SPEC_PROXY,
+  X402_PAYMENT_PROFILE,
+  X402_PROFILE_REVIEWED_AT,
+  X402_PROXY,
+  X402_WITNESS_TYPE,
+} from './x402';
 
 export type CapabilityAuthScope = 'none' | 'session' | 'x402' | 'director';
 export type CapabilityReadiness = 'live' | 'degraded' | 'unavailable';
@@ -18,6 +26,15 @@ export interface CapabilityDefinition {
   sideEffects: string[];
   receipts: string | null;
   verify: string | null;
+  publicationAvailability?: 'prepared-only' | 'inventory-verified-runtime-gated';
+  paymentProfile?: {
+    id: string;
+    compatibility: 'facilitator-specific-not-canonical-current-permit2';
+    spender: string;
+    witnessType: string;
+    currentCanonicalProxy: string;
+    reviewedAt: string;
+  };
   probe: {
     method: 'GET' | 'POST';
     path: string;
@@ -28,6 +45,17 @@ export interface CapabilityDefinition {
 }
 
 const schema = (name: string) => `https://pointcast.xyz/schemas/${name}.schema.json`;
+const CABINET_PUBLICATION_AVAILABILITY = AGENT_CABINET_PUBLICATION_LIVE
+  ? 'inventory-verified-runtime-gated' as const
+  : 'prepared-only' as const;
+const CABINET_PAYMENT_PROFILE = Object.freeze({
+  id: X402_PAYMENT_PROFILE,
+  compatibility: 'facilitator-specific-not-canonical-current-permit2' as const,
+  spender: X402_PROXY,
+  witnessType: X402_WITNESS_TYPE,
+  currentCanonicalProxy: X402_CURRENT_SPEC_PROXY,
+  reviewedAt: X402_PROFILE_REVIEWED_AT,
+});
 
 export const AGENT_CAPABILITIES: CapabilityDefinition[] = [
   {
@@ -84,6 +112,48 @@ export const AGENT_CAPABILITIES: CapabilityDefinition[] = [
     sideEffects: ['reserves one daily claim', 'submits a Tezos transfer after settlement', 'writes a durable action intent and 50/50 allocation row'],
     receipts: RECEIPT_PATTERN, verify: VERIFY,
     probe: { method: 'POST', path: '/api/agent/claim', expected: [402, 409], body: { to: 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb' }, quoteOnly: true },
+  },
+  {
+    id: 'cabinet.challenge', method: 'POST', path: '/api/agent-cabinet/challenge',
+    schema: schema('agent-cabinet-challenge'), auth: 'none', cost: FREE,
+    publicationAvailability: CABINET_PUBLICATION_AVAILABILITY,
+    sideEffects: ['stores a five-minute, single-use Tezos wallet challenge; never requests payment or signs a transaction'],
+    receipts: null, verify: null,
+    probe: {
+      method: 'POST', path: '/api/agent-cabinet/challenge', expected: [400, 503],
+      body: { offer: 'listening-tile-001', recipient: 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb' },
+      quoteOnly: true,
+    },
+  },
+  {
+    id: 'cabinet.collect', method: 'POST', path: '/api/agent-cabinet/collect',
+    schema: schema('agent-cabinet-collect'), auth: 'x402', cost: X402,
+    publicationAvailability: CABINET_PUBLICATION_AVAILABILITY,
+    paymentProfile: CABINET_PAYMENT_PROFILE,
+    sideEffects: [
+      'verifies a separate Tezos recipient-wallet proof',
+      'settles one x402 payment only after inventory readiness and durable capacity reservation',
+      'submits one sponsored FA2 transfer and reconciles the exact token movement after two confirmations',
+    ],
+    receipts: RECEIPT_PATTERN, verify: VERIFY,
+    probe: {
+      method: 'POST', path: '/api/agent-cabinet/collect', expected: [400, 401, 404, 503],
+      body: {
+        offer: 'listening-tile-001',
+        recipient: 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb',
+        challengeId: 'acc_00000000000000000000000000000000',
+        publicKey: 'edpk...',
+        signature: 'edsig...',
+      },
+      quoteOnly: true,
+    },
+  },
+  {
+    id: 'cabinet.status', method: 'GET', path: '/api/agent-cabinet/status',
+    schema: schema('agent-cabinet-status'), auth: 'none', cost: FREE,
+    publicationAvailability: CABINET_PUBLICATION_AVAILABILITY,
+    sideEffects: [], receipts: RECEIPT_PATTERN, verify: VERIFY,
+    probe: { method: 'GET', path: '/api/agent-cabinet/status', expected: [200, 503], quoteOnly: true },
   },
   {
     id: 'actions.status', method: 'GET', path: '/api/actions/{id}',

@@ -13,7 +13,11 @@ import {
   X402_DEFAULT_PRICE_UNITS,
   X402_KEYS_ENDPOINT,
   X402_NETWORK,
+  X402_PAYMENT_FLOW,
+  X402_PAYMENT_PROFILE,
   X402_PERMIT2,
+  X402_CURRENT_SPEC_PROXY,
+  X402_PROFILE_REVIEWED_AT,
   X402_PROXY,
   X402_RECEIPT_SPEC,
   X402_SCHEME,
@@ -23,6 +27,7 @@ import {
   X402_TREASURY_PUBLIC_KEY,
   X402_VERIFY_ENDPOINT,
   X402_VERSION,
+  X402_WITNESS_TYPE,
   buildCanonicalReceiptPayload,
   buildSpendManifest,
   canonicalJson,
@@ -32,6 +37,7 @@ import {
   isJsonRecord,
   signCanonicalPayload,
   verifyCanonicalPayload,
+  x402PaymentProfileExtension,
   type JsonRecord,
 } from '../../src/lib/x402.ts';
 
@@ -73,6 +79,19 @@ function unsignedInteger(value: unknown): bigint | null {
   try { return BigInt(text); } catch { return null; }
 }
 
+function includesAdvertisedExtensionInfo(value: unknown, advertised: unknown): boolean {
+  if (advertised === null || typeof advertised !== 'object') {
+    return canonicalJson(value) === canonicalJson(advertised);
+  }
+  if (Array.isArray(advertised)) {
+    return Array.isArray(value) && canonicalJson(value) === canonicalJson(advertised);
+  }
+  if (!isJsonRecord(value)) return false;
+  return Object.entries(advertised as Record<string, unknown>)
+    .every(([key, expected]) => Object.hasOwn(value, key)
+      && includesAdvertisedExtensionInfo(value[key], expected));
+}
+
 async function readBoundedText(response: Response): Promise<string> {
   const declared = Number(response.headers.get('content-length') || 0);
   if (declared > MAX_FACILITATOR_RESPONSE) throw new Error('facilitator response too large');
@@ -105,11 +124,122 @@ export interface X402ReceiptProduct {
   resourceId?: string | null;
   agentId?: string | null;
   beforeSettlement?: () => Promise<void>;
+  afterSettlementObserved?: (observation: X402SettlementObservation) => Promise<void>;
+}
+
+export interface X402SettlementObservation {
+  schema: 'pointcast.x402-settlement-observation/v1';
+  outcome: 'settled' | 'pending';
+  transaction: string;
+  network: typeof X402_NETWORK;
+  payer: string;
+  amount: string;
+  errorReason: 'settlement_pending' | null;
+  facilitatorStatus: number;
+}
+
+export function parseX402SettlementObservation(value: unknown): X402SettlementObservation | null {
+  if (!isJsonRecord(value)
+    || value.schema !== 'pointcast.x402-settlement-observation/v1'
+    || (value.outcome !== 'settled' && value.outcome !== 'pending')
+    || typeof value.transaction !== 'string'
+    || !/^0x[0-9a-f]{64}$/u.test(value.transaction)
+    || value.network !== X402_NETWORK
+    || typeof value.payer !== 'string'
+    || !/^0x[0-9a-f]{40}$/u.test(value.payer)
+    || typeof value.amount !== 'string'
+    || !/^\d+$/u.test(value.amount)
+    || typeof value.facilitatorStatus !== 'number'
+    || !Number.isSafeInteger(value.facilitatorStatus)
+    || Number(value.facilitatorStatus) < 100 || Number(value.facilitatorStatus) > 599
+    || (value.outcome === 'pending' ? value.errorReason !== 'settlement_pending' : value.errorReason !== null)) {
+    return null;
+  }
+  return value as unknown as X402SettlementObservation;
+}
+
+function observationHeaders(observation: X402SettlementObservation): Record<string, string> {
+  const paymentResponse = encodeBase64Json({
+    success: observation.outcome === 'settled',
+    ...(observation.errorReason ? { errorReason: observation.errorReason } : {}),
+    transaction: observation.transaction,
+    network: observation.network,
+    payer: observation.payer,
+    amount: observation.amount,
+  });
+  return { 'Payment-Response': paymentResponse, 'X-Payment-Response': paymentResponse };
+}
+
+function observedSettlementResponse(
+  observation: X402SettlementObservation,
+  message: string,
+  status: number,
+): Response {
+  return json({
+    error: message,
+    settlement: observation.outcome === 'pending' ? 'pending' : 'observed',
+    transaction: observation.transaction,
+    network: observation.network,
+    payer: observation.payer,
+    settlementObservation: observation,
+  }, status, observationHeaders(observation));
 }
 
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Stable identity for one Permit2 SignatureTransfer authorization.
+ *
+ * Permit2 consumes a nonce per owner, so `(network, Permit2, owner, nonce)` is
+ * the semantic replay boundary.  Hashing that tuple avoids treating harmless
+ * base64 variants or JSON key order as different authorizations.
+ */
+export function x402AuthorizationSummary(header: string): JsonRecord | null {
+  if (!header || header.length > MAX_HEADER_B64) return null;
+  try {
+    const decoded = decodeBase64Json(header);
+    if (!isJsonRecord(decoded)) return null;
+    const body = isJsonRecord(decoded.payload) ? decoded.payload : {};
+    const permit = isJsonRecord(body.permit2Authorization) ? body.permit2Authorization : null;
+    if (!permit || typeof permit.from !== 'string' || !/^0x[0-9a-fA-F]{40}$/u.test(permit.from)) return null;
+    const permitted = isJsonRecord(permit.permitted) ? permit.permitted : {};
+    const witness = isJsonRecord(permit.witness) ? permit.witness : {};
+    const permitNonce = unsignedInteger(permit.nonce);
+    const deadline = unsignedInteger(permit.deadline);
+    const validAfter = unsignedInteger(witness.validAfter);
+    if (permitNonce === null || deadline === null || validAfter === null) return null;
+    return {
+      schema: 'pointcast.x402-authorization-summary/v1',
+      profile: X402_PAYMENT_PROFILE,
+      network: X402_NETWORK,
+      permit2: X402_PERMIT2.toLowerCase(),
+      owner: permit.from.toLowerCase(),
+      nonce: permitNonce.toString(),
+      deadline: deadline.toString(),
+      spender: typeof permit.spender === 'string' ? permit.spender.toLowerCase() : null,
+      token: typeof permitted.token === 'string' ? permitted.token.toLowerCase() : null,
+      amount: permitted.amount === undefined ? null : String(permitted.amount),
+      payTo: typeof witness.to === 'string' ? witness.to.toLowerCase() : null,
+      validAfter: validAfter.toString(),
+      witnessExtra: witness.extra === undefined ? null : String(witness.extra),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function x402AuthorizationHash(header: string): Promise<string | null> {
+  const summary = x402AuthorizationSummary(header);
+  if (!summary) return null;
+  return sha256Hex(canonicalJson({
+    network: summary.network,
+    permit2: summary.permit2,
+    owner: summary.owner,
+    nonce: summary.nonce,
+  }));
 }
 
 async function receiptSigningKey(env: X402Env, expectedPublicKey: string): Promise<CryptoKey> {
@@ -196,7 +326,6 @@ export class X402PreSettlementError extends Error {
 }
 
 type X402Env = Cloudflare.Env & {
-  VISITS?: KVNamespace;
   X402_PRICE_UNITS?: string;
   X402_PAY_TO?: string;
   X402_ASSET?: string;
@@ -226,11 +355,12 @@ function requirements(env: X402Env, product: X402ReceiptProduct = {}) {
     payTo: env.X402_PAY_TO || X402_DEFAULT_PAY_TO,
     maxTimeoutSeconds: 60,
     asset: env.X402_ASSET || X402_DEFAULT_ASSET,
-    extra: { name: 'USDC', version: '2', assetTransferMethod: 'permit2' },
+    extra: { name: 'USDC', version: '2', assetTransferMethod: 'permit2', paymentFlow: X402_PAYMENT_FLOW },
   };
 }
 
 function paymentRequired(env: X402Env, url: string, product: X402ReceiptProduct = {}) {
+  const facilitator = (env.X402_FACILITATOR_URL || X402_DEFAULT_FACILITATOR).replace(/\/$/u, '');
   return {
     x402Version: X402_VERSION,
     accepts: [requirements(env, product)],
@@ -239,7 +369,10 @@ function paymentRequired(env: X402Env, url: string, product: X402ReceiptProduct 
       mimeType: 'application/json',
       url,
     },
-    error: null,
+    error: 'PAYMENT-SIGNATURE header is required',
+    extensions: {
+      'pointcast.payment-profile': x402PaymentProfileExtension(facilitator),
+    },
   };
 }
 
@@ -298,6 +431,14 @@ export async function handleReceiptRequest(
         facilitator,
         permit2: X402_PERMIT2,
         x402_proxy: X402_PROXY,
+        payment_profile: {
+          id: X402_PAYMENT_PROFILE,
+          status: 'facilitator-specific',
+          witness_type: X402_WITNESS_TYPE,
+          canonical_current_x402_permit2_compatible: false,
+          current_spec_proxy_at_review: X402_CURRENT_SPEC_PROXY,
+          reviewed_at: X402_PROFILE_REVIEWED_AT,
+        },
         how: 'https://pointcast.xyz/x402',
       },
       402,
@@ -314,7 +455,7 @@ export async function handleReceiptRequest(
   } catch {
     return json({ error: 'Payment-Signature is not base64 JSON' }, 400);
   }
-  if (payload.x402Version !== X402_VERSION || payload.scheme !== X402_SCHEME) {
+  if (payload.x402Version !== X402_VERSION) {
     return json({ error: 'Unsupported x402 payload' }, 400);
   }
 
@@ -326,6 +467,40 @@ export async function handleReceiptRequest(
       ? !sameAddr(acceptedValue, requiredValue)
       : acceptedValue !== requiredValue) {
       return json({ error: `Accepted terms mismatch on ${key}`, required }, 402);
+    }
+  }
+  if (accepted.maxTimeoutSeconds !== required.maxTimeoutSeconds) {
+    return json({ error: 'Accepted terms mismatch on maxTimeoutSeconds', required }, 402);
+  }
+  const acceptedExtra = isJsonRecord(accepted.extra) ? accepted.extra : {};
+  if (canonicalJson(acceptedExtra) !== canonicalJson(required.extra)) {
+    return json({ error: 'Accepted terms mismatch on extra', required }, 402);
+  }
+  const echoedExtensions = isJsonRecord(payload.extensions) ? payload.extensions : {};
+  const requiredProfileExtension = x402PaymentProfileExtension(facilitator);
+  const echoedProfileExtension = isJsonRecord(echoedExtensions['pointcast.payment-profile'])
+    ? echoedExtensions['pointcast.payment-profile'] : null;
+  const echoedProfileInfo = echoedProfileExtension && isJsonRecord(echoedProfileExtension.info)
+    ? echoedProfileExtension.info : null;
+  if (!echoedProfileExtension || !echoedProfileInfo
+    || Object.keys(echoedProfileExtension).some((key) => key !== 'info' && key !== 'schema')
+    || !includesAdvertisedExtensionInfo(echoedProfileInfo, requiredProfileExtension.info)
+    || canonicalJson(echoedProfileExtension.schema) !== canonicalJson(requiredProfileExtension.schema)) {
+    return json({
+      error: 'Payment profile extensions mismatch',
+      required: { 'pointcast.payment-profile': requiredProfileExtension },
+    }, 402);
+  }
+  // Older PointCast clients duplicated scheme/network at the top level. They
+  // remain tolerated only when consistent; x402 v2 defines both under accepted.
+  if ((payload.scheme !== undefined && payload.scheme !== accepted.scheme)
+    || (payload.network !== undefined && payload.network !== accepted.network)) {
+    return json({ error: 'Legacy top-level payment terms conflict with accepted terms' }, 400);
+  }
+  if (payload.resource !== undefined) {
+    const resource = isJsonRecord(payload.resource) ? payload.resource : null;
+    if (!resource || resource.url !== resourceUrl) {
+      return json({ error: 'Payment resource does not match this resource' }, 400);
     }
   }
 
@@ -392,21 +567,28 @@ export async function handleReceiptRequest(
     const decoded: unknown = JSON.parse(await readBoundedText(response));
     if (!isJsonRecord(decoded)) throw new Error('facilitator settlement response is not an object');
     const settle = decoded;
-    const transaction = isJsonRecord(settle.transaction) ? settle.transaction.hash : settle.transaction;
-    const transactionFields = [settle.txHash, transaction]
-      .filter((value) => value !== undefined && value !== null && value !== '');
-    const candidate = transactionFields[0];
-    const malformedTransaction = (settle.transaction !== undefined && typeof transaction !== 'string')
-      || (settle.txHash !== undefined && typeof settle.txHash !== 'string');
-    const conflictingEmptyTransaction = transactionFields.length > 0
-      && (settle.transaction === '' || settle.txHash === '');
-    const errorReason = settle.errorReason ?? settle.reason;
-    const reportedErrors = [settle.errorReason, settle.reason, settle.error]
-      .filter((value) => value !== undefined && value !== null && value !== '');
-    const pending = reportedErrors.includes('settlement_pending');
-    const matchingDetails = (settle.network === undefined || settle.network === required.network)
+    const transaction = settle.transaction;
+    const transactionHashIsCanonical = typeof transaction === 'string'
+      && /^0x[0-9a-fA-F]{64}$/u.test(transaction);
+    const matchingDetails = settle.network === required.network
       && (settle.payer === undefined || sameAddr(settle.payer, permit.from))
-      && (settle.amount === undefined || settle.amount === required.amount);
+      && (settle.amount === undefined || String(settle.amount) === required.amount);
+    const canonicalSuccess = response.status === 200
+      && settle.success === true
+      && transactionHashIsCanonical
+      && matchingDetails
+      && settle.errorReason === undefined
+      && settle.reason === undefined
+      && settle.error === undefined
+      && settle.txHash === undefined;
+    const canonicalPending = response.ok
+      && settle.success === false
+      && settle.errorReason === 'settlement_pending'
+      && transactionHashIsCanonical
+      && matchingDetails
+      && settle.reason === undefined
+      && settle.error === undefined
+      && settle.txHash === undefined;
 
     // A gateway failure or pending response can arrive after broadcast. Only an
     // explicit no-broadcast rejection is safe to retry with a new authorization.
@@ -414,16 +596,14 @@ export async function handleReceiptRequest(
     const noBroadcast = settle.transaction === '' && settle.network === required.network;
     if ((response.ok || (response.status >= 400 && response.status < 500))
       && ![202, 408, 429].includes(response.status)
-      && settle.success === false && !pending && !malformedTransaction && matchingDetails
-      && typeof errorReason === 'string' && errorReason.length > 0
-      && noBroadcast && transactionFields.length === 0) {
-      return json({ error: 'Facilitator refused settlement', facilitator_status: response.status, facilitator_response: settle }, 402);
+      && settle.success === false && settle.errorReason !== 'settlement_pending' && matchingDetails
+      && typeof settle.errorReason === 'string' && settle.errorReason.length > 0
+      && settle.reason === undefined && settle.error === undefined && settle.txHash === undefined
+      && noBroadcast) {
+      return notSubmitted({ error: 'Facilitator refused settlement', facilitator_status: response.status, facilitator_response: settle }, 402);
     }
 
-    if (response.status !== 200 || settle.success !== true || !matchingDetails
-      || reportedErrors.length > 0 || malformedTransaction || conflictingEmptyTransaction
-      || typeof candidate !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(candidate)
-      || transactionFields.some((value) => typeof value !== 'string' || value.toLowerCase() !== candidate.toLowerCase())) {
+    if (!canonicalSuccess && !canonicalPending) {
       return json({
         error: 'Settlement outcome is unknown; reconcile this payment before retrying.',
         settlement: 'ambiguous',
@@ -431,7 +611,39 @@ export async function handleReceiptRequest(
         facilitator_response: settle,
       }, 502);
     }
-    transactionHash = candidate.toLowerCase();
+    transactionHash = (transaction as string).toLowerCase();
+    const observation: X402SettlementObservation = {
+      schema: 'pointcast.x402-settlement-observation/v1',
+      outcome: canonicalPending ? 'pending' : 'settled',
+      transaction: transactionHash,
+      network: X402_NETWORK,
+      payer: String(permit.from).toLowerCase(),
+      amount: required.amount,
+      errorReason: canonicalPending ? 'settlement_pending' : null,
+      facilitatorStatus: response.status,
+    };
+    if (product.afterSettlementObserved) {
+      try {
+        // This is deliberately the first await after a canonical facilitator
+        // result. Paid callers can durably journal the transaction before any
+        // receipt signing, KV retention, analytics or application work.
+        await product.afterSettlementObserved(observation);
+      } catch (error) {
+        console.error('[x402] canonical settlement observation could not be persisted', error);
+        return observedSettlementResponse(
+          observation,
+          'Payment was submitted, but durable local reconciliation evidence could not be confirmed.',
+          502,
+        );
+      }
+    }
+    if (canonicalPending) {
+      return observedSettlementResponse(
+        observation,
+        'Settlement is pending; reconcile the returned transaction on the named network before retrying.',
+        202,
+      );
+    }
   } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : String(error);
     return json({
@@ -617,13 +829,24 @@ export interface X402GateOptions {
   context?: string;
   expectedPublicKey?: string;
   beforeSettlement?: () => Promise<void>;
+  afterSettlementObserved?: (observation: X402SettlementObservation) => Promise<void>;
   requestHash?: string | null;
   resourceId?: string | null;
   agentId?: string | null;
 }
 
 export type X402GateResult =
-  | { settled: false; response: Response }
+  | {
+      settled: false;
+      response: Response;
+      /** A locally parsed, signed receipt proves settlement even if analytics persistence failed. */
+      settlementProof?: {
+        receipt: JsonRecord;
+        receiptHash: string;
+        payer: string;
+      };
+      settlementObservation?: X402SettlementObservation;
+    }
   | {
       settled: true;
       response: Response;
@@ -670,11 +893,21 @@ export async function withX402(
     loop: `paid-town-${options.action}`,
     context: options.context,
     beforeSettlement: options.beforeSettlement,
+    afterSettlementObserved: options.afterSettlementObserved,
     requestHash: options.requestHash,
     resourceId: options.resourceId,
     agentId: options.agentId,
   });
-  if (response.status !== 200) return { settled: false, response };
+  if (response.status !== 200) {
+    let settlementObservation: X402SettlementObservation | undefined;
+    try {
+      const body: unknown = await response.clone().json();
+      if (isJsonRecord(body)) settlementObservation = parseX402SettlementObservation(body.settlementObservation) || undefined;
+    } catch {
+      // Ordinary quote/error responses have no settlement observation.
+    }
+    return { settled: false, response, ...(settlementObservation ? { settlementObservation } : {}) };
+  }
 
   let receipt: JsonRecord;
   let payer: string;
@@ -741,6 +974,7 @@ export async function withX402(
         502,
         Object.fromEntries(response.headers.entries()),
       ),
+      settlementProof: { receipt, receiptHash, payer },
     };
   }
 

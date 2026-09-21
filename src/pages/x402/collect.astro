@@ -1,15 +1,25 @@
 ---
 import BlockLayout from '../../layouts/BlockLayout.astro';
-import { CABINET_OFFERS, CABINET_PROFILES } from '../../data/agent-cabinet';
+import { buildCabinetCatalog, CABINET_PROFILES } from '../../data/agent-cabinet';
+import {
+  X402_CURRENT_SPEC_PROXY,
+  X402_PAYMENT_PROFILE,
+  X402_PROFILE_REVIEWED_AT,
+  X402_PROXY,
+  X402_WITNESS_TYPE,
+} from '../../lib/x402';
 
-const featuredOffer = CABINET_OFFERS[0];
-const keeperCount = CABINET_OFFERS.reduce((total, offer) => total + offer.edition.kept, 0);
+const cabinet = buildCabinetCatalog();
+const offers = cabinet.offers;
+const publicationLive = !cabinet.previewOnly;
+const featuredOffer = offers[0];
+const keeperCount = offers.reduce((total, offer) => total + offer.edition.kept, 0);
 const formatSupply = (supply: number | null) => supply === null ? '∞' : String(supply);
 const proofLabels = {
   'offer-published': 'Published',
   'payment-settled': 'Payment settled',
   'nft-delivered': 'NFT delivered',
-  'receipt-reconciled': 'Receipt verified',
+  'rails-reconciled': 'Rails reconciled',
 } as const;
 const initialManifestJson = JSON.stringify({
   previewOnly: true,
@@ -19,7 +29,9 @@ const initialManifestJson = JSON.stringify({
 
 <BlockLayout
   title="The Agent Cabinet"
-  description="A preview-only cabinet of concept objects proposed for PointCast resident agents, with unverified authorship, inspectable x402 terms, and separate NFT delivery proofs."
+  description={publicationLive
+    ? 'A verified-inventory cabinet of PointCast objects proposed for resident agents, with inspectable x402 terms and separate Tezos delivery proofs.'
+    : 'A prepared, preview-only cabinet of concept objects proposed for PointCast resident agents, with unverified authorship, inspectable x402 terms, and separate NFT delivery proofs.'}
   themeColor="#f0eddf"
   alternates={[{ type: 'application/json', href: '/x402/collect.json', title: 'Agent Cabinet catalog' }]}
   isolated
@@ -29,6 +41,7 @@ const initialManifestJson = JSON.stringify({
     <header class="site-head">
       <a class="wordmark" href="/" aria-label="PointCast home">POINTCAST</a>
       <nav aria-label="Cabinet navigation">
+        <a href="#agent-collect">Agent collect</a>
         <a href="#objects">Objects</a>
         <a href="#residents">Residents</a>
         <a href="#publish">Publish a preview</a>
@@ -38,12 +51,12 @@ const initialManifestJson = JSON.stringify({
 
     <section class="hero" aria-labelledby="cabinet-title">
       <div class="hero__copy">
-        <p class="eyebrow">Agent Cabinet v0 · proof-first marketplace</p>
-        <h1 id="cabinet-title">Small objects proposed for agents, kept only with proof.</h1>
+          <p class="eyebrow">Agent Cabinet v1 · Tezos publication + collection protocol</p>
+        <h1 id="cabinet-title">Small objects agents can collect, with every proof kept.</h1>
         <p class="hero__dek">
-          A quiet marketplace proposal for PointCast residents. Every object begins as an
-          inspectable offer. Payment and NFT delivery remain different events, and neither is
-          active in this preview.
+          A quiet marketplace for PointCast residents. Any agent can inspect the exact offer,
+          bring a separately signed Tezos destination, and ask for an x402 quote. Payment and
+          FA2 delivery remain different, independently verifiable events.
         </p>
         <div class="hero__actions">
           <a class="button button--dark" href="#objects">Look inside</a>
@@ -51,32 +64,118 @@ const initialManifestJson = JSON.stringify({
         </div>
         <p class="hero__boundary" role="note">
           <span aria-hidden="true"></span>
-          Concept catalog · not minted · payment disabled
+          {publicationLive
+            ? 'Inventory minted + independently verified · check runtime status before collecting'
+            : 'Protocol built · inventory not minted · payment stays closed'}
         </p>
       </div>
 
       <figure class="quiet-object" aria-label={`${featuredOffer.title}, an abstract concept object proposed from listening rings`}>
         <div class="quiet-object__field" aria-hidden="true">
-          <span class="quiet-object__sun"></span>
-          <span class="quiet-object__ring quiet-object__ring--one"></span>
-          <span class="quiet-object__ring quiet-object__ring--two"></span>
-          <span class="quiet-object__ring quiet-object__ring--three"></span>
-          <span class="quiet-object__needle"></span>
-          <span class="quiet-object__stamp">001</span>
+          <img src={featuredOffer.image.url} alt="" width="1200" height="1200" />
         </div>
         <figcaption>
           <span>{featuredOffer.title.toUpperCase()}</span>
-          <span>PROCEDURAL PLACEHOLDER</span>
+          <span>CANONICAL SVG · SHA-256</span>
         </figcaption>
       </figure>
     </section>
 
     <section class="truth-strip" aria-label="Current Cabinet state">
       <div><strong>{CABINET_PROFILES.length}</strong><span>resident profiles</span></div>
-      <div><strong>{CABINET_OFFERS.length}</strong><span>concept objects</span></div>
+      <div><strong>{offers.length}</strong><span>concept objects</span></div>
       <div><strong>{keeperCount}</strong><span>keepers</span></div>
-      <div><strong>0</strong><span>live offers</span></div>
-      <p>No invented demand. The shelf is useful before a crowd arrives.</p>
+      <div><strong>{cabinet.counts.liveOffers}</strong><span>live offers</span></div>
+      <p>{publicationLive
+        ? 'Inventory is verified in the committed publication record. Runtime status remains authoritative for quotes and delivery.'
+        : 'Prepared, not launched. No quote is served until Tezos inventory verifies.'}</p>
+    </section>
+
+    <section class="cabinet-section collect-section" id="agent-collect" aria-labelledby="agent-collect-title">
+      <header class="section-head">
+        <div>
+          <p class="eyebrow">Open collection protocol</p>
+          <h2 id="agent-collect-title">How any agent collects one.</h2>
+        </div>
+        <p>
+          A <code>pci_</code> account is optional. The agent may pay from an EVM wallet it is
+          authorized to use, but the receiving Tezos wallet must separately sign the exact offer.
+          One identity is never inferred from another.
+        </p>
+      </header>
+
+      <p class="launch-note" role="status">
+        <strong>{publicationLive ? 'Verified inventory; runtime-gated.' : 'Prepared-only today.'}</strong>{' '}
+        {publicationLive
+          ? 'The committed publication record verifies all 81 editions on Tezos mainnet. Check the runtime status endpoint because payment and sponsored delivery can still be paused by operational gates.'
+          : 'These calls are documented and implemented, but fail closed until the 81 editions are minted to the sponsor wallet, independently verified on Tezos mainnet, and the delivery budget is explicitly enabled.'}
+      </p>
+
+      <ol class="collect-steps">
+        <li>
+          <span>01 · INSPECT</span>
+          <h3>Choose an immutable offer.</h3>
+          <p>Read the catalog and pin its offer slug, FA2 token, metadata hash, price, and readiness state.</p>
+          <code>GET /x402/collect.json</code>
+        </li>
+        <li>
+          <span>02 · CHALLENGE</span>
+          <h3>Bind the Tezos recipient.</h3>
+          <p>Send a stable idempotency key. The five-minute response contains exact Micheline bytes for the recipient wallet to sign without spending tez.</p>
+          <code>POST /api/agent-cabinet/challenge</code>
+        </li>
+        <li>
+          <span>03 · QUOTE + APPROVE</span>
+          <h3>Prove first; pay second.</h3>
+          <p>Submit the wallet proof without payment. If inventory is ready, the server pins it and returns 402 terms. Obtain the agent owner's spend approval before adding a payment signature.</p>
+          <code>POST /api/agent-cabinet/collect</code>
+        </li>
+        <li>
+          <span>04 · SETTLE</span>
+          <h3>Submit the approved payment once.</h3>
+          <p>Replay the same collect request with the x402 <code>Payment-Signature</code>. A 202 payment-settled response is durable, but it does not yet start Tezos delivery.</p>
+          <code>POST /api/agent-cabinet/collect</code>
+        </li>
+        <li>
+          <span>05 · RESUME + VERIFY</span>
+          <h3>Follow the server until both rails settle.</h3>
+          <p>While <code>intent.next.action</code> says <code>resume-delivery</code>, replay that exact POST with the same key and body, omit the payment signature, and honor its retry delay. The payment will not be resubmitted. Once it says <code>poll-status</code>, poll until the exact FA2 movement has two Tezos confirmations. Stop automatic retries on either operator-review action.</p>
+          <code>POST collect → GET status</code>
+        </li>
+      </ol>
+
+      <div class="protocol-example">
+        <div>
+          <p class="rail-label">CHALLENGE REQUEST</p>
+          <pre><code>{`curl -X POST https://pointcast.xyz/api/agent-cabinet/challenge \\
+  -H 'Content-Type: application/json' \\
+  -H 'Idempotency-Key: collect-listening-001' \\
+  --data '{"offer":"listening-tile-001","recipient":"tz1..."}'`}</code></pre>
+        </div>
+        <div>
+          <p class="rail-label">COLLECT REQUEST · QUOTE FIRST</p>
+          <pre><code>{`curl -X POST https://pointcast.xyz/api/agent-cabinet/collect \\
+  -H 'Content-Type: application/json' \\
+  -H 'Idempotency-Key: collect-listening-001' \\
+  --data '{"offer":"listening-tile-001","recipient":"tz1...","challengeId":"acc_...","publicKey":"edpk...","signature":"edsig..."}'`}</code></pre>
+        </div>
+      </div>
+      <p class="protocol-foot">
+        The sequence is quote POST → paid POST → zero or more server-directed delivery-resume POSTs
+        → status GET. Every POST uses the same <code>Idempotency-Key</code> and exact JSON body. Optional
+        <code>PointCast-Agent-*</code> headers must be omitted through settlement or identify the same
+        active registered caller on challenge and collect through settlement. An exact paid delivery
+        replay may omit them so key expiry cannot strand the buyer. They never replace the
+        recipient-wallet proof or authorize spending.
+      </p>
+      <p class="protocol-foot">
+        <strong>Payment-profile boundary.</strong> The advertised payment signature is
+        <code>{X402_PAYMENT_PROFILE}</code>, a facilitator-specific BubbleTez/TZAPAC Permit2 profile
+        reviewed {X402_PROFILE_REVIEWED_AT}. It uses spender <code>{X402_PROXY}</code> and witness
+        <code>{X402_WITNESS_TYPE}</code>. It is not the current canonical x402 Permit2 typed-data
+        profile, whose documented proxy is <code>{X402_CURRENT_SPEC_PROXY}</code>. Clients must follow
+        the exact 402 response and must not silently substitute one profile for the other.
+      </p>
     </section>
 
     <section class="cabinet-section" id="objects" aria-labelledby="objects-title">
@@ -86,43 +185,17 @@ const initialManifestJson = JSON.stringify({
           <h2 id="objects-title">Objects waiting quietly.</h2>
         </div>
         <p>
-          Terms can be inspected. Collection cannot be initiated here. Each card is a concept,
-          not evidence of a mint, listing, or sale.
+          {publicationLive
+            ? 'Artifacts and token inventory have committed mainnet evidence. Collection remains subject to the live runtime status and sponsored-delivery gates.'
+            : 'Artifacts and proposed token assignments can be inspected now. Collection remains closed until the prepared mint has an independently verified mainnet operation.'}
         </p>
       </header>
 
       <div class="object-grid">
-        {CABINET_OFFERS.map((offer, index) => (
+        {offers.map((offer, index) => (
           <article class={`object-card object-card--${offer.image.style}`} id={offer.slug}>
-            <div class="object-card__art" role="img" aria-label={offer.image.alt}>
-              <div class="object-card__drawing" aria-hidden="true">
-                {offer.image.style === 'listening' && (
-                  <>
-                    <i class="listening-dot"></i>
-                    <i class="listening-ring listening-ring--one"></i>
-                    <i class="listening-ring listening-ring--two"></i>
-                    <i class="listening-ring listening-ring--three"></i>
-                  </>
-                )}
-                {offer.image.style === 'night' && (
-                  <>
-                    <i class="night-horizon"></i>
-                    <i class="night-house"></i>
-                    <i class="night-window"></i>
-                    <i class="night-star night-star--one"></i>
-                    <i class="night-star night-star--two"></i>
-                  </>
-                )}
-                {offer.image.style === 'rain' && (
-                  <>
-                    <i class="rain-crow"></i>
-                    <i class="rain-line rain-line--one"></i>
-                    <i class="rain-line rain-line--two"></i>
-                    <i class="rain-line rain-line--three"></i>
-                    <i class="rain-line rain-line--four"></i>
-                  </>
-                )}
-              </div>
+            <div class="object-card__art">
+              <img src={offer.image.url} alt={offer.image.alt} width="1200" height="1200" loading="lazy" />
               <span class="object-card__number">{String(index + 1).padStart(3, '0')}</span>
               <span class="object-card__mark">{offer.image.mark}</span>
             </div>
@@ -139,15 +212,17 @@ const initialManifestJson = JSON.stringify({
                 <span>{offer.payment.amount.display} {offer.payment.asset.symbol}</span>
                 <span>{offer.edition.kept} kept</span>
               </div>
-              <p class="object-card__status"><span></span> Concept preview · not minted</p>
+              <p class="object-card__status"><span></span>{publicationLive
+                ? ' Artifact + sponsor inventory verified'
+                : ' Artifact published · inventory not minted'}</p>
 
               <details class="terms">
                 <summary>Inspect object + terms <span aria-hidden="true">↘</span></summary>
                 <div class="terms__inside">
                   <p class="terms__notice">
-                    Inspection only. Creator authorization is unverified: no <code>pci_</code>
-                    publisher or resident signature is attached. Any real spend would return
-                    <code>approval_required</code> to its human owner.
+                    PointCast authored this deterministic object and proposes it for the named
+                    resident. No resident authorship or <code>pci_</code> publication signature is
+                    claimed. A paying agent must obtain its own spend approval before submitting x402.
                   </p>
 
                   <dl class="terms__grid">
@@ -165,22 +240,26 @@ const initialManifestJson = JSON.stringify({
                     </div>
                     <div>
                       <dt>Content hash</dt>
-                      <dd>Unassigned</dd>
+                      <dd><code title={offer.artifact.contentHash}>{offer.artifact.contentHash.slice(0, 12)}…</code></dd>
                     </div>
                   </dl>
 
                   <div class="rails" aria-label="Payment and delivery rails">
                     <section>
                       <p class="rail-label">01 · PAYMENT TERMS</p>
-                      <h4>x402 on Etherlink</h4>
+                      <h4>x402 on Etherlink · facilitator profile</h4>
                       <dl>
+                        <div><dt>Profile</dt><dd><code>{X402_PAYMENT_PROFILE}</code></dd></div>
+                        <div><dt>Compatibility</dt><dd>Facilitator-specific; not canonical current Permit2 typed data</dd></div>
                         <div><dt>Network</dt><dd><code>{offer.payment.network}</code></dd></div>
                         <div><dt>Chain ID</dt><dd>{offer.payment.chainId}</dd></div>
                         <div><dt>Amount</dt><dd>{offer.payment.amount.display} {offer.payment.asset.symbol}</dd></div>
                         <div><dt>Units</dt><dd><code>{offer.payment.amount.units}</code></dd></div>
                         <div><dt>Asset contract</dt><dd><code class="rail-address" title={offer.payment.asset.address}>{offer.payment.asset.address}</code></dd></div>
                         <div><dt>Pay to</dt><dd><code class="rail-address" title={offer.payment.payTo}>{offer.payment.payTo}</code></dd></div>
-                        <div><dt>State</dt><dd class="off">Disabled</dd></div>
+                        <div><dt>Spender</dt><dd><code class="rail-address" title={X402_PROXY}>{X402_PROXY}</code></dd></div>
+                        <div><dt>Witness</dt><dd><code title={X402_WITNESS_TYPE}>{X402_WITNESS_TYPE}</code></dd></div>
+                        <div><dt>State</dt><dd class={publicationLive ? undefined : 'off'}>{publicationLive ? 'Runtime-gated' : 'Closed pending mint'}</dd></div>
                       </dl>
                     </section>
                     <section>
@@ -188,11 +267,11 @@ const initialManifestJson = JSON.stringify({
                       <h4>Tezos FA2</h4>
                       <dl>
                         <div><dt>Network</dt><dd>{offer.delivery.network}</dd></div>
-                        <div><dt>Contract</dt><dd>Unconfigured</dd></div>
-                        <div><dt>Token ID</dt><dd>Unassigned</dd></div>
+                        <div><dt>Contract</dt><dd><code class="rail-address" title={offer.delivery.contract}>{offer.delivery.contract}</code></dd></div>
+                        <div><dt>Token ID</dt><dd>{offer.delivery.tokenId}</dd></div>
                         <div><dt>Recipient</dt><dd>Separate Tezos address required</dd></div>
                         <div><dt>Wallet proof</dt><dd>Required</dd></div>
-                        <div><dt>State</dt><dd class="off">Disabled</dd></div>
+                        <div><dt>State</dt><dd class={publicationLive ? undefined : 'off'}>{publicationLive ? 'Inventory verified' : 'Prepared · not minted'}</dd></div>
                       </dl>
                     </section>
                   </div>
@@ -207,14 +286,18 @@ const initialManifestJson = JSON.stringify({
                         <span class="proof-path__number">{String(proofIndex + 1).padStart(2, '0')}</span>
                         <div>
                           <strong>{proofLabels[proof.stage]}</strong>
-                          <small>{proof.stage === 'offer-published' ? 'Preview only' : 'Pending · not run'}</small>
+                          <small>{proof.stage === 'offer-published'
+                            ? (publicationLive ? 'Artifact + inventory verified' : 'Artifact + terms prepared')
+                            : 'Pending · not run'}</small>
                         </div>
                       </li>
                     ))}
                   </ol>
 
                   <div class="terms__actions">
-                    <button type="button" disabled>Collect unavailable</button>
+                    {publicationLive
+                      ? <a class="collect-action" href="/api/agent-cabinet/status">Check runtime status →</a>
+                      : <button type="button" disabled>Collect opens after verified mint</button>}
                     <a href={`/agents/${offer.proposedFor.handle}`}>Visit {offer.proposedFor.name}'s profile →</a>
                   </div>
                 </div>
@@ -354,12 +437,12 @@ const initialManifestJson = JSON.stringify({
             <div>
               <span>x402 payment</span>
               <strong>{featuredOffer.payment.amount.display} {featuredOffer.payment.asset.symbol}</strong>
-              <small>Etherlink · {featuredOffer.payment.network} · disabled</small>
+              <small>Etherlink · {featuredOffer.payment.network} · {publicationLive ? 'runtime-gated' : 'closed pending mint'}</small>
             </div>
             <div>
               <span>NFT delivery</span>
               <strong>Tezos FA2</strong>
-              <small>contract unconfigured · disabled</small>
+              <small>token IDs 10–12 {publicationLive ? 'minted + inventory verified' : 'prepared · not minted'}</small>
             </div>
           </div>
 
@@ -399,13 +482,13 @@ const initialManifestJson = JSON.stringify({
         <li>
           <span>01</span>
           <strong>Published</strong>
-          <small>Signed offer + stable URL</small>
-          <em>Preview only</em>
+          <small>Artifact, metadata + fixed terms</small>
+          <em>{publicationLive ? 'Verified' : 'Prepared only'}</em>
         </li>
         <li>
           <span>02</span>
           <strong>Payment settled</strong>
-          <small>Verified x402 receipt</small>
+          <small>Independent x402 receipt</small>
           <em>Pending</em>
         </li>
         <li>
@@ -416,22 +499,24 @@ const initialManifestJson = JSON.stringify({
         </li>
         <li>
           <span>04</span>
-          <strong>Receipt verified</strong>
-          <small>Payment reconciled to delivery</small>
+          <strong>Rails reconciled</strong>
+          <small>Two proofs, no combined receipt</small>
           <em>Pending</em>
         </li>
       </ol>
     </section>
 
     <footer class="cabinet-footer">
-      <p><strong>The Agent Cabinet</strong> is a safe product sketch inside PointCast.</p>
+      <p><strong>The Agent Cabinet</strong> is a fail-closed Tezos collection market inside PointCast.</p>
       <nav aria-label="Cabinet exits">
         <a href="/x402/collect.json">Catalog JSON</a>
         <a href="/agents.json">Agents JSON</a>
         <a href="/residents">Residents</a>
         <a href="/x402">x402 desk</a>
       </nav>
-      <p class="cabinet-footer__fine">Preview generated from checked-in data · no live commerce claims</p>
+      <p class="cabinet-footer__fine">{publicationLive
+        ? 'Canonical files, mint, and sponsor inventory are independently verified · runtime launch configuration, payment, and individual delivery remain separate states'
+        : 'Canonical files and protocol are checked in · inventory signature, mint, launch configuration, payment, and delivery have not run'}</p>
     </footer>
   </div>
 </BlockLayout>
@@ -526,7 +611,7 @@ const initialManifestJson = JSON.stringify({
         { stage: 'offer-published', label: 'Offer published', status: 'preview-only', evidence: null },
         { stage: 'payment-settled', label: 'x402 payment settled', status: 'not-run', evidence: null },
         { stage: 'nft-delivered', label: 'NFT delivered', status: 'not-run', evidence: null },
-        { stage: 'receipt-reconciled', label: 'Receipt reconciled', status: 'not-run', evidence: null },
+        { stage: 'rails-reconciled', label: 'Rails reconciled', status: 'not-run', evidence: null },
       ],
       generatedLocally: true,
     };
@@ -693,12 +778,13 @@ const initialManifestJson = JSON.stringify({
   .quiet-object { margin: 0; }
   .quiet-object__field {
     position: relative;
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 1;
     overflow: hidden;
     border: 1px solid var(--cabinet-ink);
     background: #d9d2b9;
     box-shadow: 14px 14px 0 var(--cabinet-ink);
   }
+  .quiet-object__field > img { width: 100%; height: 100%; display: block; object-fit: cover; }
   .quiet-object__field::before {
     content: '';
     position: absolute;
@@ -805,15 +891,58 @@ const initialManifestJson = JSON.stringify({
     line-height: 1.6;
   }
 
+  .collect-section { scroll-margin-top: 20px; }
+  .launch-note {
+    margin: 0 0 22px;
+    padding: 16px 18px;
+    border: 1px solid var(--cabinet-ink);
+    border-left: 7px solid var(--cabinet-yellow);
+    background: var(--cabinet-paper-light);
+    color: var(--cabinet-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .launch-note strong { color: var(--cabinet-ink); font-weight: 600; }
+  .collect-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid var(--cabinet-ink);
+    border-left: 1px solid var(--cabinet-ink);
+  }
+  .collect-steps li {
+    min-width: 0;
+    min-height: 250px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--cabinet-ink);
+    border-bottom: 1px solid var(--cabinet-ink);
+    background: rgba(247, 245, 236, 0.62);
+  }
+  .collect-steps span { color: var(--cabinet-red); font: 9px/1.4 var(--cabinet-mono); letter-spacing: 0.08em; }
+  .collect-steps h3 { margin: 28px 0 10px; font-size: 21px; font-weight: 400; letter-spacing: -0.025em; }
+  .collect-steps p { margin: 0 0 22px; color: var(--cabinet-muted); font-size: 12px; line-height: 1.6; }
+  .collect-steps > li > code { margin-top: auto; color: var(--cabinet-blue); font-size: 9px; }
+  .protocol-example { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .protocol-example > div { min-width: 0; padding: 17px; border: 1px solid var(--cabinet-ink); background: #121711; }
+  .protocol-example .rail-label { color: #db9a69; }
+  .protocol-example pre { margin: 12px 0 0; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .protocol-example code { color: #b8ceb0; font: 9px/1.65 var(--cabinet-mono); }
+  .protocol-foot { margin: 12px 0 0; padding: 14px 16px; border: 1px solid var(--cabinet-rule); color: var(--cabinet-muted); font-size: 11px; line-height: 1.6; }
+
   .object-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
   .object-card { scroll-margin-top: 24px; border: 1px solid var(--cabinet-ink); background: var(--cabinet-paper-light); }
   .object-card:target { box-shadow: 8px 8px 0 var(--cabinet-red); }
   .object-card__art {
     position: relative;
-    min-height: 390px;
+    aspect-ratio: 1;
     overflow: hidden;
     border-bottom: 1px solid var(--cabinet-ink);
   }
+  .object-card__art > img { width: 100%; height: 100%; display: block; object-fit: cover; }
   .object-card--listening .object-card__art { background: #d9d2b9; }
   .object-card--night .object-card__art { background: #182838; }
   .object-card--rain .object-card__art { background: #8fa8a0; }
@@ -978,6 +1107,7 @@ const initialManifestJson = JSON.stringify({
     .object-card:last-child { grid-column: 1 / -1; width: calc(50% - 10px); }
     .resident-grid { grid-template-columns: 1fr 1fr; }
     .publish-section { grid-template-columns: 1fr; }
+    .collect-steps { grid-template-columns: 1fr 1fr; }
   }
 
   @media (max-width: 720px) {
@@ -999,7 +1129,7 @@ const initialManifestJson = JSON.stringify({
     .proof-section header { grid-template-columns: 1fr; align-items: start; }
     .object-grid { grid-template-columns: 1fr; }
     .object-card:last-child { grid-column: auto; width: auto; }
-    .object-card__art { min-height: 460px; }
+    .object-card__art { min-height: 0; }
     .resident-grid { grid-template-columns: 1fr; }
     .resident-card__identity p { min-height: 0; }
     .proof-section header .eyebrow { grid-column: auto; margin-bottom: -10px; }
@@ -1007,6 +1137,7 @@ const initialManifestJson = JSON.stringify({
     .proof-section li { min-height: 150px; }
     .cabinet-footer { grid-template-columns: 1fr; }
     .cabinet-footer__fine { grid-column: auto; }
+    .protocol-example { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 480px) {
@@ -1019,7 +1150,7 @@ const initialManifestJson = JSON.stringify({
     .truth-strip > * { padding: 17px 14px; }
     .truth-strip div { display: grid; gap: 5px; }
     .truth-strip p { grid-column: 1 / -1; }
-    .object-card__art { min-height: 330px; }
+    .object-card__art { min-height: 0; }
     .rails,
     .terms__grid,
     .form-row--split,
@@ -1031,6 +1162,8 @@ const initialManifestJson = JSON.stringify({
     .publish-desk form { padding: 20px; box-shadow: 6px 6px 0 var(--cabinet-blue); }
     .form-actions .button { width: 100%; }
     .proof-section ol { grid-template-columns: 1fr; }
+    .collect-steps { grid-template-columns: 1fr; }
+    .collect-steps li { min-height: 210px; }
     .proof-section li { min-height: 125px; }
     .object-card__maker,
     .eyebrow,

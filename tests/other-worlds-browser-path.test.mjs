@@ -47,7 +47,11 @@ function galleryDom(artworks) {
 test('full gallery claim path uses a genuine disposable Tezos signature, durable reservation and verified receipt', async () => {
   const vite = await createServer({ configFile: false, appType: 'custom', logLevel: 'error' });
   const data = JSON.parse(await readFile(new URL('../src/data/other-worlds.json', import.meta.url), 'utf8'));
-  const db = new LocalD1(await readFile(new URL('../migrations/auth/0020_other_worlds.sql', import.meta.url), 'utf8'));
+  const migrations = await Promise.all([
+    readFile(new URL('../migrations/auth/0020_other_worlds.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../migrations/auth/0021_agent_cabinet.sql', import.meta.url), 'utf8'),
+  ]);
+  const db = new LocalD1(migrations.join('\n'));
   const dom = galleryDom(data.artworks);
   let client;
   try {
@@ -87,7 +91,7 @@ test('full gallery claim path uses a genuine disposable Tezos signature, durable
       async broadcast(bytes) { broadcasts.push(bytes); return operationHash; },
       async status() { return chainState; },
     };
-    const opts = { now: () => timestamp, items, chainFactory: async () => chain };
+    const opts = { now: () => timestamp, items, chainFactory: async () => chain, statusChain: chain };
     const fetcher = async (url, init) => {
       const request = new Request(`https://pointcast.xyz${url}`, { ...init, headers: { ...init.headers, origin: 'https://pointcast.xyz' } });
       if (url.startsWith('/api/other-worlds/receipt')) return handlers.handleReceipt(request, env, opts);

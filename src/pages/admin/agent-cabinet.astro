@@ -1,0 +1,250 @@
+---
+import provenance from '../../data/agent-cabinet-provenance.json';
+import prepared from '../../data/agent-cabinet-publication.json';
+import {
+  AGENT_CABINET_APPROVAL_PHRASE,
+  AGENT_CABINET_PUBLICATION,
+} from '../../lib/agent-cabinet-publication';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Prepare The Agent Cabinet on Tezos · PointCast</title>
+  </head>
+  <body>
+    <main>
+      <nav><a href="/x402/collect">← Agent Cabinet</a><span>PointCast · Publication review</span></nav>
+      <p class="eyebrow">THE AGENT CABINET / TEZOS PREPARATION</p>
+      <h1>Three objects. One careful boundary.</h1>
+      <p class="lede">
+        Review deterministic SVG artifacts, TZIP-21 metadata, and a proposed inventory of 27 editions
+        per object. PointCast is the publisher. Codex, cc, and Manus are proposed resident associations;
+        none has authorized authorship or publication.
+      </p>
+
+      <section class="state" aria-labelledby="state-heading">
+        <div>
+          <p class="kicker">Checked-in state</p>
+          <h2 id="state-heading">Prepared only</h2>
+        </div>
+        <dl>
+          <div><dt>Network</dt><dd>Tezos mainnet · <code>{prepared.chainId}</code></dd></div>
+          <div><dt>Existing FA2</dt><dd><a href={`https://tzkt.io/${prepared.contract}`} target="_blank" rel="noreferrer">El Segundo · {prepared.contract}</a></dd></div>
+          <div><dt>Administrator</dt><dd><code>{prepared.administrator}</code></dd></div>
+          <div><dt>Inventory recipient</dt><dd><code>{prepared.inventoryRecipient}</code></dd></div>
+          <div><dt>Tokens</dt><dd>10, 11, 12 · 27 editions each · 81 total</dd></div>
+          <div><dt>Publisher</dt><dd>PointCast</dd></div>
+          <div><dt>Resident creator authorization</dt><dd>Unverified</dd></div>
+          <div><dt>Automatic mainnet approval</dt><dd>{prepared.mainnetApproved ? 'Approved' : 'Disabled · action-time human review required'}</dd></div>
+          <div><dt>Operation</dt><dd>{prepared.operationHash ?? 'None requested'}</dd></div>
+        </dl>
+        <p class="warning">
+          The contract is still indexed as “El Segundo.” This review does not rename it. A separate
+          decision is required before publishing Cabinet tokens inside that existing collection.
+        </p>
+      </section>
+
+      <section class="objects" aria-label="Prepared Agent Cabinet objects">
+        {provenance.items.map((item) => (
+          <article>
+            <a href={item.artifactUri} target="_blank" rel="noreferrer">
+              <img src={item.artifactUri} alt={`${item.title}, a deterministic PointCast SVG`} width="1200" height="1200" loading="lazy" />
+            </a>
+            <p class="token">TOKEN {item.id} · OBJECT {String(item.objectNumber).padStart(3, '0')}</p>
+            <h2>{item.title}</h2>
+            <p>PointCast proposal for <strong>{item.proposedFor.name}</strong> · resident authorship unverified</p>
+            <p><a href={item.metadataUri} target="_blank" rel="noreferrer">TZIP-21 metadata ↗</a></p>
+            <code>{item.metadataSha256}</code>
+          </article>
+        ))}
+      </section>
+
+      <section class="review" aria-labelledby="review-heading">
+        <p class="kicker">Administrator review</p>
+        <h2 id="review-heading">Verify first. Request separately.</h2>
+        <p>
+          The verification step reads the live FA2 administrator and token registry, checks TzKT-backed
+          published files against their SHA-256 records, and estimates exactly three token registrations
+          plus one 81-edition inventory mint. It cannot sign or submit an operation.
+        </p>
+        <button id="verify" type="button">Connect administrator &amp; run read-only review</button>
+        <p id="status" role="status" aria-live="polite">No wallet request or Tezos operation has been made.</p>
+        <div id="reviewed" hidden>
+          <p id="estimate"></p>
+          <p id="digest" class="digest"></p>
+          <div class="gate">
+            <strong>No automatic publication.</strong>
+            <span>The checked-in plan remains <code>mainnetApproved: false</code> and <code>requestable: false</code>. Only the fresh review, explicit acknowledgement below, and the separate wallet button can create one action-time request.</span>
+          </div>
+          <label><input id="understood" type="checkbox" /> I reviewed the exact tokens, quantities, recipient, metadata hashes, existing collection context, resident-attribution boundary, and maximum setup cost.</label>
+          <label class="phrase" for="acknowledgement">
+            Type this exact acknowledgement:
+            <code>{AGENT_CABINET_APPROVAL_PHRASE}</code>
+            <input id="acknowledgement" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <button id="publish" type="button" disabled>Review publication in wallet</button>
+        </div>
+        <a id="receipt" hidden target="_blank" rel="noreferrer">View operation on Tezos ↗</a>
+      </section>
+
+      <section class="boundaries" aria-labelledby="boundaries-heading">
+        <h2 id="boundaries-heading">What this page does not prove</h2>
+        <ul>
+          {prepared.approvalBlockers.map((blocker) => <li>{blocker}</li>)}
+          <li>Even a confirmed inventory operation would not activate public collection, sponsor delivery, or resident authorship.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script>
+      import {
+        AGENT_CABINET_APPROVAL_PHRASE,
+        approveAgentCabinetPublication,
+        connectAgentCabinetPublicationAdapter,
+        prepareAgentCabinetPublication,
+        requestAgentCabinetPublication,
+      } from '../../lib/agent-cabinet-publication';
+
+      const verify = document.querySelector<HTMLButtonElement>('#verify')!;
+      const status = document.querySelector<HTMLParagraphElement>('#status')!;
+      const reviewed = document.querySelector<HTMLDivElement>('#reviewed')!;
+      const estimate = document.querySelector<HTMLParagraphElement>('#estimate')!;
+      const digest = document.querySelector<HTMLParagraphElement>('#digest')!;
+      const understood = document.querySelector<HTMLInputElement>('#understood')!;
+      const acknowledgement = document.querySelector<HTMLInputElement>('#acknowledgement')!;
+      const publish = document.querySelector<HTMLButtonElement>('#publish')!;
+      const receipt = document.querySelector<HTMLAnchorElement>('#receipt')!;
+      const storageKey = 'pc:agent-cabinet:inventory-publication-v1';
+      let adapter: Awaited<ReturnType<typeof connectAgentCabinetPublicationAdapter>> | null = null;
+      let plan: Awaited<ReturnType<typeof prepareAgentCabinetPublication>> | null = null;
+      const report = (message: string) => { status.textContent = message; };
+      const showReceipt = (hash: string) => {
+        receipt.href = `https://tzkt.io/${encodeURIComponent(hash)}`;
+        receipt.hidden = false;
+      };
+
+      let previous: string | null = null;
+      try { previous = localStorage.getItem(storageKey); } catch { /* live chain checks remain authoritative */ }
+      if (previous) {
+        verify.disabled = true;
+        report('This browser previously opened a publication request. Check the wallet and chain before doing anything else.');
+        if (/^o[1-9A-HJ-NP-Za-km-z]{50}$/u.test(previous)) showReceipt(previous);
+      }
+
+      const refreshApproval = () => {
+        publish.disabled = !understood.checked
+          || acknowledgement.value.trim() !== AGENT_CABINET_APPROVAL_PHRASE
+          || !plan;
+      };
+      understood.addEventListener('change', refreshApproval);
+      acknowledgement.addEventListener('input', refreshApproval);
+
+      verify.addEventListener('click', async () => {
+        verify.disabled = true;
+        reviewed.hidden = true;
+        understood.checked = false;
+        acknowledgement.value = '';
+        publish.disabled = true;
+        try {
+          report('Connect the PointCast administrator wallet for read-only verification…');
+          adapter = await connectAgentCabinetPublicationAdapter();
+          plan = await prepareAgentCabinetPublication(adapter, report);
+          estimate.textContent = `Fresh maximum setup estimate: ${(plan.maximumCostMutez / 1e6).toFixed(6)} ꜩ, including maximum storage cost. 81 editions would go to the listed inventory recipient.`;
+          digest.textContent = `Review digest: ${plan.reviewDigest}`;
+          reviewed.hidden = false;
+          report('Artifacts, metadata, empty token IDs, administrator, and exact operation terms verified. Explicit action-time acknowledgement is now available; no wallet request has been made.');
+        } catch (error) {
+          adapter = null;
+          plan = null;
+          report(error instanceof Error ? error.message : 'Read-only verification could not finish. Nothing was requested.');
+        } finally {
+          if (!previous) verify.disabled = false;
+        }
+      });
+
+      publish.addEventListener('click', async () => {
+        if (!adapter || !plan || !understood.checked
+          || acknowledgement.value.trim() !== AGENT_CABINET_APPROVAL_PHRASE) return;
+        publish.disabled = true;
+        verify.disabled = true;
+        understood.disabled = true;
+        acknowledgement.disabled = true;
+        let requested = false;
+        try {
+          const approval = await approveAgentCabinetPublication(plan, acknowledgement.value);
+          const guarded = {
+            ...adapter,
+            request: async (operations: Parameters<typeof adapter.request>[0]) => {
+              requested = true;
+              try { localStorage.setItem(storageKey, 'wallet-requested'); } catch { /* UI stays locked */ }
+              report('Review the exact publication in your wallet. This is the only operation-approval step.');
+              return adapter!.request(operations);
+            },
+          };
+          const operation = await requestAgentCabinetPublication(guarded, plan, approval);
+          try { localStorage.setItem(storageKey, operation.opHash); } catch { /* receipt remains visible */ }
+          showReceipt(operation.opHash);
+          report('Publication submitted. Public collection and sponsor delivery remain disabled.');
+          await operation.confirmation(2);
+          report('The wallet reports two confirmations. Independently verify exact metadata, supply, and inventory before enabling collection.');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'The wallet did not return a result.';
+          report(requested ? `${message} Check the wallet and Tezos before retrying.` : message);
+          if (!requested) {
+            verify.disabled = false;
+            understood.disabled = false;
+            acknowledgement.disabled = false;
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
+
+<style>
+  :global(body) { margin: 0; background: #f1ede2; color: #20231e; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  main { max-width: 1040px; margin: auto; padding: 32px 24px 112px; }
+  nav { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 72px; font-size: 12px; }
+  a { color: inherit; text-underline-offset: 4px; }
+  .eyebrow, .kicker, .token { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
+  h1 { max-width: 850px; margin: 14px 0; font: 400 clamp(42px, 7vw, 78px)/.96 Georgia, serif; letter-spacing: -.045em; }
+  h2 { font: 400 30px/1.1 Georgia, serif; }
+  .lede { max-width: 780px; font-size: 18px; line-height: 1.65; }
+  .state { margin: 54px 0; padding: 28px; border: 1px solid #bbb6a8; background: #faf7ef; }
+  .state > div { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+  .state h2 { margin: 0; }
+  dl { margin: 26px 0 0; border-top: 1px solid #d1ccbf; }
+  dl div { display: grid; grid-template-columns: 220px 1fr; gap: 18px; padding: 13px 0; border-bottom: 1px solid #d1ccbf; }
+  dt { color: #66695f; font-size: 13px; } dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; }
+  code { font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .warning { margin: 24px 0 0; padding: 14px 16px; border-left: 4px solid #c44f3b; background: #f5e6dc; line-height: 1.55; }
+  .objects { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin: 52px 0; }
+  article { min-width: 0; }
+  article img { display: block; width: 100%; height: auto; border: 1px solid #aaa598; background: #fff; }
+  article h2 { margin: 8px 0; font-size: 24px; }
+  article p { font-size: 13px; line-height: 1.55; }
+  article code { display: block; color: #6c6e66; }
+  .review { padding: 32px; border: 1px solid #9fa69a; background: #f9fbf5; }
+  .review h2 { margin-top: 8px; }
+  .review > p { max-width: 780px; line-height: 1.6; }
+  button { display: block; margin: 20px 0; padding: 15px 20px; border: 0; border-radius: 3px; background: #2e3b32; color: #fff; font: inherit; cursor: pointer; }
+  button:disabled { opacity: .48; cursor: default; }
+  label { display: block; line-height: 1.6; }
+  input { margin-right: 8px; }
+  .phrase { display: grid; gap: 9px; margin: 22px 0; }
+  .phrase input { width: 100%; box-sizing: border-box; margin: 0; padding: 12px; border: 1px solid #8c9188; background: #fff; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .digest { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; overflow-wrap: anywhere; }
+  .gate { display: grid; gap: 7px; padding: 18px; border: 1px solid #c8a99c; background: #fff4ed; }
+  .boundaries { margin-top: 36px; }
+  .boundaries li { margin: 10px 0; line-height: 1.5; }
+  [hidden] { display: none !important; }
+  @media (max-width: 760px) {
+    nav { margin-bottom: 48px; }
+    .objects { grid-template-columns: 1fr; }
+    dl div { grid-template-columns: 1fr; gap: 6px; }
+    .state, .review { padding: 20px; }
+  }
+</style>
