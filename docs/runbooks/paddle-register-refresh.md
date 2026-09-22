@@ -44,6 +44,24 @@ current. This is the weekly pass. It is written to be run by an agent
    KV, not in the data files. Do not edit them. If a paddle's aggregates look
    gamed, note it in the changes feed and leave the panel's "unaudited" line
    to do its work.
+10. **Corrections desk** (`/api/paddles/correct`). Readers file corrections
+    from the "Report a correction" form on each paddle page; each one names a
+    field, a claim and a source URL. Read the open queue:
+
+    ```
+    curl "https://pointcast.xyz/api/paddles/correct?queue=1&key=$CORRECTIONS_KEY"
+    ```
+
+    The key lives in the Pages project secrets. Never scan the filesystem for
+    it; if it is not in your environment, ask. One-time setup, done by Mike:
+    `wrangler pages secret put CORRECTIONS_KEY --project-name pointcast`
+    (until it is set the endpoint answers 503 `key-not-set`). For each open
+    item, open the source and check that it says what the claim says. Apply
+    accepted claims to the data files with a `changes` row: `kind: corrected`,
+    `paddle: <id>`, `text` in your own words, `source` = the submitter's source
+    URL. Rejected claims are simply left in the queue; there is no reply
+    channel yet, and the queue drops the oldest past 500. The queue response
+    never includes contact fields, and neither does any public GET.
 
 ## Rules
 
@@ -54,12 +72,13 @@ current. This is the weekly pass. It is written to be run by an agent
   quoted per variant with `specSource`; power, pop and spin numbers stay with
   the lab and get a link.
 - Do not copy product photos. The images are the generated drawings.
-- Never scan the filesystem for credentials; this pass needs none.
+- Never scan the filesystem for credentials. The only secret this pass touches
+  is `CORRECTIONS_KEY` for step 10, and it is handed to you or it is not.
 
 ## Ship
 
 ```
-node --test tests/paddle-calendar-room.test.mjs tests/paddle-register.test.mjs tests/paddle-wear-api.test.mjs
+node --test tests/paddle-calendar-room.test.mjs tests/paddle-register.test.mjs tests/paddle-wear-api.test.mjs tests/paddle-corrections-api.test.mjs
 npm run build          # regenerates /images/og/paddles/*.png
 ```
 
