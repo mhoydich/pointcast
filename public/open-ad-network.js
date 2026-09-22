@@ -12,6 +12,35 @@
   var soundEnabled = false;
   var soundButtons = [];
   var playedMelodies = Object.create(null);
+  var fixedSizes = {
+    '300x250': [300, 250],
+    '336x280': [336, 280],
+    '728x90': [728, 90],
+    '970x250': [970, 250],
+    '300x600': [300, 600],
+    '160x600': [160, 600],
+    '320x50': [320, 50],
+    '320x100': [320, 100],
+    '1080x1080': [1080, 1080],
+    '1080x1920': [1080, 1920],
+  };
+  var nounsCreativeRoutes = {
+    'PC-NOUNS-EVERYBODY-001': 'everybody',
+    'PC-NOUNS-EVERYBODY-002': 'no-audition',
+    'PC-NOUNS-EVERYBODY-003': 'one-more',
+  };
+
+  function fixedSizeForMount(mount) {
+    var key = String(mount.dataset.size || '').trim();
+    var dimensions = fixedSizes[key];
+    return dimensions ? { key: key, width: dimensions[0], height: dimensions[1] } : null;
+  }
+
+  function fixedCreativeAsset(ad, fixedSize) {
+    if (!fixedSize || String(ad.campaign || '') !== 'PC-NOUNS-EVERYBODY-2026') return '';
+    var creative = nounsCreativeRoutes[ad.id];
+    return creative ? networkOrigin + '/ads/nouns-drum-club/' + creative + '-' + fixedSize.key + '.png' : '';
+  }
 
   function trackingDisabled() {
     try {
@@ -166,6 +195,14 @@
       }
     }, { threshold: [0.5] });
     observer.observe(element);
+  }
+
+  function reportDisplayWidth(mount, element) {
+    function measure() {
+      mount.dataset.networkDisplayWidth = String(Math.round(element.getBoundingClientRect().width));
+    }
+    measure();
+    if ('ResizeObserver' in window) new ResizeObserver(measure).observe(element);
   }
 
   function addText(parent, name, value, className) {
@@ -326,12 +363,19 @@
     var placement = mount.dataset.placement || 'site-footer';
     var destination = destinationFor(ad, publisher, placement);
     if (!destination) return;
+    var fixedSize = fixedSizeForMount(mount);
+    var fixedAsset = fixedCreativeAsset(ad, fixedSize);
     var root = mount.shadowRoot || mount.attachShadow({ mode: 'open' });
     var style = document.createElement('style');
     style.textContent = [
       ':host{display:block;--ink:#f7f5ed;--paper:#08080d;--accent:#c8ff2f;--mid:#2857ff;--deep:#060c31;color-scheme:dark}',
       '*{box-sizing:border-box}',
       '.unit{width:min(1120px,calc(100% - 24px));margin:32px auto;padding:12px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:28px;background:radial-gradient(circle at 50% 0%,color-mix(in srgb,var(--mid) 24%,var(--paper)),var(--paper) 62%);box-shadow:0 28px 90px color-mix(in srgb,var(--deep) 62%,transparent);color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}',
+      '.unit--fixed{width:min(var(--fixed-width),100%);padding:0;border:0;border-radius:0;background:none;box-shadow:none}',
+      '.unit--fixed .head{padding:6px 8px;background:#f5f0e7;color:#171717;font-size:10px;letter-spacing:.04em;border:0}',
+      '.fixed-link{display:block;color:inherit;text-decoration:none}',
+      '.fixed-link:focus-visible{outline:3px solid var(--accent);outline-offset:4px}',
+      '.fixed-image{display:block;width:100%;height:auto;object-fit:contain;object-position:center;background:#000}',
       '.head,.boundary{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:8px;line-height:1.45;letter-spacing:.12em;text-transform:uppercase}',
       '.head{padding:3px 6px 10px;color:color-mix(in srgb,var(--accent) 78%,#fff);border-bottom:1px solid color-mix(in srgb,var(--accent) 24%,transparent)}',
       '.head a,.boundary a{color:inherit;text-underline-offset:3px}',
@@ -371,7 +415,7 @@
       '.hint{margin:9px 5px 0;color:#85828e;font-size:7px;letter-spacing:.11em;text-align:center;text-transform:uppercase}',
       '.boundary{padding:10px 6px 2px;color:#85828e}',
       ':host([data-theme="light"]) .unit{--paper:#11111a}',
-      '@media(max-width:640px){.unit{width:min(100% - 16px,1120px);margin:18px auto;border-radius:22px}.now{grid-template-columns:auto minmax(0,1fr)}.now__cta{grid-column:2}.scene{min-height:480px}.creative{grid-template-columns:1fr auto;grid-template-rows:auto 1fr auto auto;gap:14px;padding:24px}.creative h2,.copy{grid-column:1/-1}.number{font-size:40px}.head,.boundary{align-items:flex-start;flex-direction:column}}',
+      '@media(max-width:640px){.unit{width:min(100% - 16px,1120px);margin:18px auto;border-radius:22px}.unit--fixed{width:min(var(--fixed-width),100%);margin:18px auto;border-radius:0}.now{grid-template-columns:auto minmax(0,1fr)}.now__cta{grid-column:2}.scene{min-height:480px}.creative{grid-template-columns:1fr auto;grid-template-rows:auto 1fr auto auto;gap:14px;padding:24px}.creative h2,.copy{grid-column:1/-1}.number{font-size:40px}.head,.boundary{align-items:flex-start;flex-direction:column}}',
       '@media(prefers-reduced-motion:reduce){.back,.middle,.creative{transition:none;transform:none}.hint{display:none}}',
     ].join('');
 
@@ -399,6 +443,38 @@
     }
     head.appendChild(inspect);
     unit.appendChild(head);
+
+    if (fixedSize && fixedAsset) {
+      unit.classList.add('unit--fixed');
+      unit.style.setProperty('--fixed-width', fixedSize.width + 'px');
+      unit.style.setProperty('--fixed-height', fixedSize.height + 'px');
+      var fixedLink = document.createElement('a');
+      fixedLink.className = 'fixed-link';
+      fixedLink.href = destination;
+      fixedLink.dataset.adRecord = ad.id;
+      fixedLink.setAttribute('aria-label', 'Advertisement: ' + ad.headline + ' ' + ad.cta + '.');
+      fixedLink.addEventListener('click', function () { sendMetric('click', ad.id, publisher, placement); });
+      var fixedImage = document.createElement('img');
+      fixedImage.className = 'fixed-image';
+      fixedImage.src = fixedAsset;
+      fixedImage.alt = '';
+      fixedImage.width = fixedSize.width;
+      fixedImage.height = fixedSize.height;
+      fixedImage.loading = 'lazy';
+      fixedImage.decoding = 'async';
+      fixedLink.appendChild(fixedImage);
+      unit.appendChild(fixedLink);
+      root.replaceChildren(style, unit);
+      mount.dataset.networkReady = 'true';
+      mount.dataset.networkPublisher = publisher;
+      mount.dataset.networkCampaign = String(ad.campaign || ad.id);
+      mount.dataset.networkSize = fixedSize.key;
+      mount.dataset.networkAssetWidth = String(fixedSize.width);
+      mount.dataset.networkAssetHeight = String(fixedSize.height);
+      reportDisplayWidth(mount, unit);
+      observeImpression(fixedLink, ad, publisher, placement);
+      return;
+    }
 
     var playing = feed && feed.nowPlaying;
     var playingUrl = playing ? spotifyUrl(playing.url) : '';

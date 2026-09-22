@@ -197,7 +197,7 @@ test('portable network transparently declares campaign preferences across owned 
   assert.match(registry, /PC-A-LITTLE-MORE-LIGHT-2026/);
   assert.match(registry, /const isAdDesk = pathname\.replace/);
   assert.match(registry, /!isAdDesk \|\| Boolean\(ad\.melody\)/);
-  assert.match(registry, /id: 'industrynext'[^}]*campaigns: \[LITTLE_WONDERS_CAMPAIGN\.id\]/);
+  assert.match(registry, /id: 'industrynext'[^}]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id, NOUNS_EVERYBODY_CAMPAIGN\.id, LITTLE_WONDERS_CAMPAIGN\.id\]/);
   assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
   assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
   assert.match(registry, /id: 'rally'/);
@@ -391,4 +391,35 @@ test('Post Office opens with a flowing latest-across-the-wire strip', async () =
   assert.match(press, /post-office-wire-flow/);
   assert.match(press, /wireLatest/);
   assert.match(press, /prefers-reduced-motion/);
+});
+
+test('Nouns Drum Club campaign is selectable on music and Nouns surfaces, with bounded fixed creative formats', async () => {
+  const [registry, receipt, widget] = await Promise.all([
+    readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
+    readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
+    readFile(new URL('public/open-ad-network.js', root), 'utf8'),
+  ]);
+
+  assert.match(registry, /PC-NOUNS-EVERYBODY-2026/);
+  assert.equal((registry.match(/id: 'PC-NOUNS-EVERYBODY-\d{3}'/g) || []).length, 3);
+  assert.match(registry, /everybody-band\.webp/);
+  assert.match(registry, /no-audition\.webp/);
+  assert.match(registry, /one-more\.webp/);
+  assert.match(registry, /const isNounsMusicSurface/);
+  assert.match(registry, /const isNounsDrumClubSurface/);
+  assert.match(registry, /nounsEverybodyCreative,/);
+  assert.match(receipt, /NOUNS_EVERYBODY_CAMPAIGN/);
+
+  for (const size of ['300x250', '336x280', '728x90', '970x250', '300x600', '160x600', '320x50', '320x100', '1080x1080', '1080x1920']) {
+    assert.ok(widget.includes("'" + size + "': ["));
+  }
+  assert.match(widget, /mount\.dataset\.size/);
+  assert.match(widget, /\/ads\/nouns-drum-club\//);
+  assert.match(widget, /object-fit:contain/);
+  assert.match(widget, /\.unit--fixed\{width:min\(var\(--fixed-width\),100%\);padding:0;border:0/);
+  assert.match(widget, /mount\.dataset\.networkAssetWidth/);
+  assert.match(widget, /mount\.dataset\.networkAssetHeight/);
+  assert.match(widget, /mount\.dataset\.networkDisplayWidth/);
+  assert.match(widget, /SOUND OFF/);
+  assert.match(widget, /prefers-reduced-motion/);
 });

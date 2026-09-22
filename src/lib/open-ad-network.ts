@@ -102,7 +102,7 @@ export const A_LITTLE_MORE_LIGHT_CAMPAIGN = {
   advertiser: 'A Little More Light',
   creativeCount: 6,
   melodicCreativeCount: 4,
-  placement: 'PointCast companion rail and reciprocal rotation on Allworthy, Passportz, Rally, and Common Hours',
+  placement: 'Current rotation across PointCast and every reciprocal Open Ad Network publisher',
   tracking: 'aggregate impressions + clicks',
   sound: 'Four browser-synthesized miniatures play on view only after a visitor turns sound on. No audio file, microphone, playback identifier, or sound telemetry is used.',
   status: 'house',
@@ -120,6 +120,20 @@ export const LITTLE_WONDERS_CAMPAIGN = {
   note: 'Three original image-generated house creatives for six digital spirit-animal concepts. Collection preview only: no new acquisition, edition count, price, token, physical product, or autonomous behavior is enabled.',
 } as const;
 
+export const NOUNS_EVERYBODY_CAMPAIGN = {
+  id: 'PC-NOUNS-EVERYBODY-2026',
+  label: "EVERYBODY'S IN THE BAND",
+  advertiser: 'PointCast Nouns Drum Club',
+  creativeCount: 3,
+  placement: 'Configured for PointCast Nouns and music rails plus the Industry Next footer mount',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  technicalStatus: 'house',
+  networkRotation: 'Available in the public inventory; publisher preference is configured for PointCast and Industry Next.',
+  sourceVerifiedMounts: ['PointCast native contextual rail', 'Industry Next footer source'],
+  note: 'A first-party invitation to a public browser instrument. No purchase, wallet, NFT claim, or mint is required or offered by this campaign.',
+} as const;
+
 export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
   {
     id: 'pointcast',
@@ -128,7 +142,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'pointcast.xyz',
     surface: 'Native sitewide contextual rail',
     advertiserAliases: ['PointCast', "PointCast Today's Art"],
-    campaigns: [LITTLE_WONDERS_CAMPAIGN.id],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -136,9 +150,9 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     name: 'Industry Next',
     url: 'https://www.industrynext.xyz/',
     hostname: 'www.industrynext.xyz',
-    surface: 'A labeled Little Wonders collection-preview card in the Industry Next footer',
+    surface: 'Labeled contextual house campaigns in the Industry Next footer',
     advertiserAliases: ['Industry Next'],
-    campaigns: [LITTLE_WONDERS_CAMPAIGN.id],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -346,7 +360,7 @@ export const POINTCAST_ADS: PointCastAd[] = [
     href: 'https://wild-little-wonders.mhoydich.workers.dev/',
     cta: 'Meet the spirits',
     tone: 'garden',
-    contexts: ['art', 'nature', 'collect', 'agents'],
+    contexts: ['art', 'nature', 'collect', 'agents', 'studio', 'development'],
     image: '/images/campaigns/the-wild-little-wonders/network-01-rain-snail.jpg',
     sourceTool: 'OpenAI ImageGen',
     campaign: LITTLE_WONDERS_CAMPAIGN.id,
@@ -361,7 +375,7 @@ export const POINTCAST_ADS: PointCastAd[] = [
     href: 'https://wild-little-wonders.mhoydich.workers.dev/',
     cta: 'Explore the preview',
     tone: 'garden',
-    contexts: ['art', 'nature', 'collect', 'agents'],
+    contexts: ['art', 'nature', 'collect', 'agents', 'studio', 'development'],
     image: '/images/campaigns/the-wild-little-wonders/network-02-lantern-hedgehog.jpg',
     sourceTool: 'OpenAI ImageGen',
     campaign: LITTLE_WONDERS_CAMPAIGN.id,
@@ -376,7 +390,7 @@ export const POINTCAST_ADS: PointCastAd[] = [
     href: 'https://wild-little-wonders.mhoydich.workers.dev/',
     cta: 'Meet Little Wonders',
     tone: 'garden',
-    contexts: ['art', 'nature', 'collect', 'agents'],
+    contexts: ['art', 'nature', 'collect', 'agents', 'studio', 'development'],
     image: '/images/campaigns/the-wild-little-wonders/network-03-tide-nautilus.jpg',
     sourceTool: 'OpenAI ImageGen',
     campaign: LITTLE_WONDERS_CAMPAIGN.id,
@@ -881,6 +895,54 @@ export const POINTCAST_ADS: PointCastAd[] = [
     status: 'house',
   },
   {
+    id: 'PC-NOUNS-EVERYBODY-001',
+    advertiser: NOUNS_EVERYBODY_CAMPAIGN.advertiser,
+    headline: "EVERYBODY'S IN THE BAND.",
+    copy: 'Pick a pad, make a sound, and let the room answer. The Nouns Drum Club is a public browser instrument for people arriving right now.',
+    href: '/nouns/drum-club/',
+    cta: 'Open Nouns Drum Club',
+    tone: 'play',
+    contexts: ['nouns', 'noun', 'drum', 'music', 'sound', 'band', 'play', 'club', 'cc0'],
+    image: '/images/nouns-drum-club/campaign/everybody-band.webp',
+    sourceTool: 'PointCast Nouns Drum Club campaign art',
+    campaign: NOUNS_EVERYBODY_CAMPAIGN.id,
+    seriesLabel: NOUNS_EVERYBODY_CAMPAIGN.label,
+    seriesIndex: 1,
+    status: 'house',
+  },
+  {
+    id: 'PC-NOUNS-EVERYBODY-002',
+    advertiser: NOUNS_EVERYBODY_CAMPAIGN.advertiser,
+    headline: 'No audition. No wrong notes.',
+    copy: 'Choose one of 36 pads and add your small part. The beat changes when another person joins it.',
+    href: '/nouns/drum-club/',
+    cta: 'Play your part',
+    tone: 'signal',
+    contexts: ['nouns', 'noun', 'drum', 'music', 'sound', 'band', 'play', 'club', 'keyboard'],
+    image: '/images/nouns-drum-club/campaign/no-audition.webp',
+    sourceTool: 'PointCast Nouns Drum Club campaign art',
+    campaign: NOUNS_EVERYBODY_CAMPAIGN.id,
+    seriesLabel: NOUNS_EVERYBODY_CAMPAIGN.label,
+    seriesIndex: 2,
+    status: 'house',
+  },
+  {
+    id: 'PC-NOUNS-EVERYBODY-003',
+    advertiser: NOUNS_EVERYBODY_CAMPAIGN.advertiser,
+    headline: 'One more person changes the song.',
+    copy: 'Bring a friend into the room and hear what happens when the next rhythm arrives.',
+    href: '/nouns/drum-club/',
+    cta: 'Bring in one more',
+    tone: 'garden',
+    contexts: ['nouns', 'noun', 'drum', 'music', 'sound', 'band', 'friend', 'together', 'club'],
+    image: '/images/nouns-drum-club/campaign/one-more.webp',
+    sourceTool: 'PointCast Nouns Drum Club campaign art',
+    campaign: NOUNS_EVERYBODY_CAMPAIGN.id,
+    seriesLabel: NOUNS_EVERYBODY_CAMPAIGN.label,
+    seriesIndex: 3,
+    status: 'house',
+  },
+  {
     id: 'PC-HOUSE-001',
     advertiser: 'Bell & Signal',
     headline: 'Seventeen castings. No samples.',
@@ -1099,6 +1161,8 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const isBeachCommonsV5Surface = /^\/beach-commons\/v5(?:\/|$)/.test(pathname);
   const isBeachBlanketSurface = /^\/beach-commons\/v8(?:\/|$)/.test(pathname);
   const isCounselSurface = /^\/digital-pets\/counsel(?:\/|$)/.test(pathname);
+  const isNounsDrumClubSurface = /^\/nouns\/drum-club(?:\/|$)/.test(pathname);
+  const isNounsMusicSurface = /^\/(?:nouns(?:\/|$)|drum(?:-|\/|$)|station(?:\/|$)|radio(?:\/|$)|playlist(?:s|\/|$)|now(?:\/|$))/.test(pathname);
   const counselCreative = ranked.find((ad) => ad.campaign === DIGITAL_PETS_COUNSEL_CAMPAIGN.id);
   const annualCreative = ranked.find((ad) => ad.campaign === NOUN_BATTLER_ANNUAL_CAMPAIGN.id);
   const beachCommonsCreative = ranked.find((ad) => ad.campaign === BEACH_COMMONS_V5_CAMPAIGN.id);
@@ -1106,6 +1170,9 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
   const commonsCreative = ranked.find((ad) => ad.campaign === LOCAL_STAR_COMMONS_CAMPAIGN.id);
   const littleWondersCreative = ranked.find((ad) => ad.campaign === LITTLE_WONDERS_CAMPAIGN.id);
+  const nounsEverybodyCreative = !isNounsDrumClubSurface && isNounsMusicSurface
+    ? ranked.find((ad) => ad.campaign === NOUNS_EVERYBODY_CAMPAIGN.id)
+    : undefined;
   const isAdDesk = pathname.replace(/\/+$/, '') === '/ads';
   const upliftCreative = ranked.find((ad) => (
     ad.campaign === A_LITTLE_MORE_LIGHT_CAMPAIGN.id
@@ -1125,6 +1192,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       &&
       ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
       && ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
+      && ad.campaign !== NOUNS_EVERYBODY_CAMPAIGN.id
       && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
       && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
@@ -1137,6 +1205,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       isBeachBlanketSurface ? undefined : blanketCreative,
       isNounBattlerAnnualSurface ? undefined : annualCreative,
       isBeachCommonsV5Surface ? undefined : beachCommonsCreative,
+      nounsEverybodyCreative,
       universeCreative,
       networkCreative,
       commonsCreative,
@@ -1158,6 +1227,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     &&
     ad.campaign !== DRUM_COMPENDIUM_CAMPAIGN.id
     && ad.campaign !== DRUM_NOUN_UNIVERSE_CAMPAIGN.id
+    && ad.campaign !== NOUNS_EVERYBODY_CAMPAIGN.id
     && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
     && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
     && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
@@ -1169,6 +1239,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     isCounselSurface ? undefined : counselCreative,
     isBeachBlanketSurface ? undefined : blanketCreative,
     isNounBattlerAnnualSurface ? undefined : annualCreative,
+    nounsEverybodyCreative,
     drumCreative,
     networkCreative,
     commonsCreative,

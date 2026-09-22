@@ -23,7 +23,7 @@ const bundle = await build({
   }],
 });
 const registry = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
-const { POINTCAST_ADS, OPEN_AD_PUBLISHERS, LITTLE_WONDERS_CAMPAIGN, A_LITTLE_MORE_LIGHT_CAMPAIGN, selectAdsForPath, adDestination } = registry;
+const { POINTCAST_ADS, OPEN_AD_PUBLISHERS, LITTLE_WONDERS_CAMPAIGN, A_LITTLE_MORE_LIGHT_CAMPAIGN, NOUNS_EVERYBODY_CAMPAIGN, selectAdsForPath, adDestination } = registry;
 const ads = POINTCAST_ADS.filter((ad) => ad.campaign === LITTLE_WONDERS_CAMPAIGN.id);
 const destination = 'https://wild-little-wonders.mhoydich.workers.dev/';
 const widget = await readFile(new URL('public/open-ad-network.js', root), 'utf8');
@@ -59,13 +59,11 @@ test('native public rails visibly select exactly one Little Wonders creative wit
   }
 });
 
-test('only PointCast and Industry Next switch their portable campaign preference', () => {
+test('only PointCast and Industry Next add Little Wonders while retaining both existing campaigns', () => {
   for (const publisher of OPEN_AD_PUBLISHERS) {
-    assert.deepEqual(publisher.campaigns, [
-      ['pointcast', 'industrynext'].includes(publisher.id)
-        ? LITTLE_WONDERS_CAMPAIGN.id
-        : A_LITTLE_MORE_LIGHT_CAMPAIGN.id,
-    ], publisher.id);
+    assert.deepEqual(publisher.campaigns, ['pointcast', 'industrynext'].includes(publisher.id)
+      ? [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id]
+      : [A_LITTLE_MORE_LIGHT_CAMPAIGN.id], publisher.id);
   }
 });
 
@@ -73,7 +71,7 @@ test('the existing Industry Next footer pin selects a Wild creative with portabl
   const window = { location: new URL('https://www.industrynext.xyz/') };
   const document = { currentScript: null, readyState: 'loading', addEventListener() {} };
   runInNewContext(widget.replace('  if (document.readyState', '  window.selection = { selectCreative, destinationFor };\n  if (document.readyState'), { window, document, URL });
-  const mount = { dataset: { publisher: 'industrynext', placement: 'footer', campaign: 'PC-NETWORK-EL-SEGUNDO-2026' } };
+  const mount = { dataset: { publisher: 'industrynext', placement: 'footer', campaign: 'PC-NETWORK-EL-SEGUNDO-2026', context: 'public development studio playable media local systems useful work enjoyable contribution tone bloom pointcast satellite picnic' } };
   const feed = { campaigns: POINTCAST_ADS, network: { publishers: OPEN_AD_PUBLISHERS } };
   const creative = window.selection.selectCreative(feed, mount, 'industrynext');
   assert.equal(creative.campaign, LITTLE_WONDERS_CAMPAIGN.id);
