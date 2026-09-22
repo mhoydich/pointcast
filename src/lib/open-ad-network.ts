@@ -1142,11 +1142,11 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     ));
     return [
       upliftCreative,
+      nounsEverybodyCreative,
       isCounselSurface ? undefined : counselCreative,
       isBeachBlanketSurface ? undefined : blanketCreative,
       isNounBattlerAnnualSurface ? undefined : annualCreative,
       isBeachCommonsV5Surface ? undefined : beachCommonsCreative,
-      nounsEverybodyCreative,
       universeCreative,
       networkCreative,
       commonsCreative,
