@@ -12,6 +12,14 @@ The reciprocal layer shares PointCast's checked-in house inventory across indepe
 
 The authoritative registry and campaign inventory are published at `https://pointcast.xyz/ads.json`.
 
+## Little Wonders collection-preview campaign
+
+`PC-THE-WILD-LITTLE-WONDERS-2026` contains three original image-generated creatives pointing to `https://wild-little-wonders.mhoydich.workers.dev/`. The public destination previews six digital spirit-animal concepts; no new acquisition, edition count, price, token, physical product, or autonomous behavior is enabled.
+
+PointCast reserves one native rail position after its uplifting companion card. PointCast and Industry Next prefer Little Wonders in the portable renderer; the three creatives retain contextual daily selection. Other publishers keep their existing campaign preferences. Industry Next's existing footer mount remains in place; its retired Network El Segundo pin already migrates to current preferences in the portable script.
+
+The clean backgrounds live under `/images/campaigns/the-wild-little-wonders/`. Essential copy stays in HTML because the portable card and native rail crop the image differently. The public receipt and ad desk expose the campaign's activation scope and preview boundary.
+
 ## Portable mount
 
 ```html

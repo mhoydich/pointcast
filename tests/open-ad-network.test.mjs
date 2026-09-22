@@ -185,7 +185,7 @@ test('Industry Next has a direct PointCast house ad in addition to its project s
   assert.match(receipt, /INDUSTRY_NEXT_CAMPAIGN/);
 });
 
-test('portable network transparently pins the current uplifting campaign across owned publishers', async () => {
+test('portable network transparently declares campaign preferences across owned publishers', async () => {
   const [registry, receipt, widget, route, endpoint] = await Promise.all([
     readFile(new URL('src/lib/open-ad-network.ts', root), 'utf8'),
     readFile(new URL('src/pages/ads.json.ts', root), 'utf8'),
@@ -197,7 +197,7 @@ test('portable network transparently pins the current uplifting campaign across 
   assert.match(registry, /PC-A-LITTLE-MORE-LIGHT-2026/);
   assert.match(registry, /const isAdDesk = pathname\.replace/);
   assert.match(registry, /!isAdDesk \|\| Boolean\(ad\.melody\)/);
-  assert.match(registry, /id: 'industrynext'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
+  assert.match(registry, /id: 'industrynext'[^}]*campaigns: \[LITTLE_WONDERS_CAMPAIGN\.id\]/);
   assert.match(registry, /id: 'allworthy'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
   assert.match(registry, /id: 'passportz'[\s\S]*campaigns: \[A_LITTLE_MORE_LIGHT_CAMPAIGN\.id\]/);
   assert.match(registry, /id: 'rally'/);
