@@ -80,6 +80,8 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   blocks_search         ({q})        full-text search blocks
  *   local_snapshot        (no input)   100-mile El Segundo lens
  *   weather_get           ({station})  station weather
+ *   paddle_lookup         ({query})    The Paddle Register: dates, price, approvals, timeline, lab links
+ *   paddle_calendar       ()           2026 paddle releases, the road ahead, labeled forecasts
  *   editions_summary      (no input)   mintables overview
  *   contracts_status      (no input)   live Tezos contract addresses
  *   channels_list         (no input)   9 channels with codes/slugs
@@ -439,6 +441,23 @@ const TOOL_DEFINITIONS = [
       },
       additionalProperties: false,
     },
+  },
+  {
+    name: 'paddle_lookup',
+    description: 'Look up a pickleball paddle in The Paddle Register (pointcast.xyz/paddles): launch date with its precision, list price, build, USA Pickleball and UPA-A approval status, quiet-list and patent status, timeline, core layers, and links to each lab that measured it. Every fact carries a source URL. Use for "when did X come out", "is X USAP approved", "is X legal on the pro tour". Returns up to five matches.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Brand and/or model words, e.g. "six zero coral pro" or "joola".' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'paddle_calendar',
+    description: 'The 2026 pickleball paddle release calendar: every tracked release in date order (id, brand, model, date, price, build), the dated drops and rule changes still ahead, and the labeled forecasts. Mirror of /paddle-calendar.json, trimmed.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'editions_summary',
@@ -1709,6 +1728,40 @@ async function dispatchTool(
         ],
       };
     }
+    case 'paddle_lookup': {
+      const words = String(args.query || '').toLowerCase().split(/[^a-z0-9.+]+/).filter(Boolean).slice(0, 8);
+      if (!words.length) throw new Error('query is required');
+      const data = await callJson(`${base}/paddles.json`);
+      const paddles: any[] = Array.isArray(data?.paddles) ? data.paddles : [];
+      const matches = paddles
+        .map((p) => ({ p, hay: `${p.brand} ${p.model} ${p.id}`.toLowerCase() }))
+        .map(({ p, hay }) => ({ p, score: words.filter((w) => hay.includes(w)).length }))
+        .filter((m) => m.score > 0)
+        .sort((a, b) => b.score - a.score || String(b.p.launch?.date).localeCompare(String(a.p.launch?.date)))
+        .slice(0, 5)
+        .map((m) => m.p);
+      return {
+        content: [
+          { type: 'text', text: `The Paddle Register · ${matches.length} match${matches.length === 1 ? '' : 'es'} for "${words.join(' ')}" · status checked ${data?.stats?.asOf ?? 'unknown'}` },
+          { type: 'text', text: JSON.stringify(matches, null, 2) },
+        ],
+      };
+    }
+    case 'paddle_calendar': {
+      const data = await callJson(`${base}/paddle-calendar.json`);
+      const trimmed = {
+        asOf: data?.meta?.asOf,
+        releases: (data?.releases ?? []).map((r: any) => ({ id: r.id, brand: r.brand, model: r.model, date: r.date, precision: r.precision, status: r.status, listPriceUsd: r.msrp, build: r.build, url: `${base}/paddles/${r.id}` })),
+        ahead: data?.ahead ?? [],
+        forecasts: data?.forecasts ?? [],
+      };
+      return {
+        content: [
+          { type: 'text', text: 'The 2026 Paddle Calendar' },
+          { type: 'text', text: JSON.stringify(trimmed, null, 2) },
+        ],
+      };
+    }
     case 'editions_summary': {
       const data = await callJson(`${base}/editions.json`);
       return {
@@ -2892,6 +2945,8 @@ function discoveryHtml(request: Request) {
   <li><code>blocks_search</code> — full-text search blocks</li>
   <li><code>local_snapshot</code> — El Segundo 100-mile lens · /local.json</li>
   <li><code>weather_get</code> — weather for a station</li>
+  <li><code>paddle_lookup</code> — a pickleball paddle's launch date, price, approval status, timeline and lab links</li>
+  <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
   <li><code>editions_summary</code> — every mintable</li>
   <li><code>contracts_status</code> — live Tezos contracts</li>
   <li><code>channels_list</code> — 9 channels</li>

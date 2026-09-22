@@ -15,7 +15,7 @@ const githubPages = process.env.POINTCAST_GITHUB_PAGES === '1';
 const discoverySitemapSource = readFileSync(new URL('./src/pages/sitemap-discovery.xml.ts', import.meta.url), 'utf8');
 const discoveryStaticPaths = new Set([...discoverySitemapSource.matchAll(/\['https:\/\/pointcast\.xyz([^']+)'/g)]
   .map((match) => match[1].replace(/\/$/, '')));
-const discoveryDynamicPrefixes = ['/afterimage/', '/agents/', '/pairings/', '/products/', '/25/teams/', '/25/2029/', '/mascot-battler/'];
+const discoveryDynamicPrefixes = ['/paddles/', '/afterimage/', '/agents/', '/pairings/', '/products/', '/25/teams/', '/25/2029/', '/mascot-battler/'];
 const isBespokeSitemapPath = (pathname) => {
   const normalized = pathname.replace(/\/$/, '');
   return normalized.startsWith('/b/') || discoveryStaticPaths.has(normalized) || discoveryDynamicPrefixes.some((prefix) => normalized.startsWith(prefix));

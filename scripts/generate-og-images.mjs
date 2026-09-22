@@ -18,6 +18,7 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
 import { homeCard } from './og-home-card.mjs';
+import { calendarCard, loadPaddles, paddleCard, registerCard } from './og-paddle-cards.mjs';
 
 const OUT_DIR = path.resolve(process.cwd(), 'public/images/og');
 const BLOCKS_DIR = path.resolve(process.cwd(), 'src/content/blocks');
@@ -1038,6 +1039,16 @@ async function main() {
   console.log('[og] generating What I Keep Noticing Issue 03 card...');
   await generateCrossingIssueCard();
   console.log('  ✓ /images/noticing/animal-crossing-issue-03-og.png');
+
+  // The paddle register: one card per paddle, plus the index and the calendar.
+  const { paddles, calendar } = loadPaddles();
+  console.log('[og] generating', paddles.length, 'paddle cards...');
+  for (const paddle of paddles) {
+    await svgToPng(paddleCard(paddle), path.join(OUT_DIR, 'paddles', `${paddle.id}.png`));
+  }
+  await svgToPng(registerCard(paddles), path.join(OUT_DIR, 'paddles.png'));
+  await svgToPng(calendarCard(calendar), path.join(OUT_DIR, 'paddle-calendar.png'));
+  console.log('  ✓ /images/og/paddles/*.png, /images/og/paddles.png, /images/og/paddle-calendar.png');
 
   const blockFiles = (await fs.readdir(BLOCKS_DIR)).filter((f) => f.endsWith('.json'));
   console.log('[og] generating', blockFiles.length, 'block cards...');

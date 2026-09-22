@@ -1,0 +1,220 @@
+---
+/**
+ * /charts — The Chart Room. Three public charts side by side (ListenBrainz's open data, Apple's
+ * most-played feed by country, Deezer's worldwide chart), what they agree on, how entries moved
+ * since the last daily snapshot, debuts (entries new to a chart since that snapshot), this week's album
+ * reviews as a reading list of headlines, and how the station's own rotation sits against all of it.
+ * PointCast ranks nothing here. Everything is drawn from /api/charts and /api/charts/reviews
+ * through textContent; images only from the three sources' own hosts.
+ * Lyrics are under copyright: the town links to them and does not copy them.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+const title = 'The Chart Room';
+const description = 'Three public music charts side by side, what they agree on, what moved, what debuted, and this week’s album reviews as a reading list.';
+---
+<BlockLayout title={title} description={description} hideAds showNetworkStrip={false} alternates={[{ type: 'application/json', href: '/charts.json', title: 'The charts as JSON' }]}>
+  <main class="cht" data-charts>
+    <header class="cht-head">
+      <p class="cht-kicker"><a href="/">PointCast</a> · <a href="/c/spinning">Spinning</a> · <a href="/station">Mike Hoydich Radio</a></p>
+      <h1>The Chart <em>Room</em></h1>
+      <p class="cht-dek">Three charts, three different crowds, shown the way their owners publish them. The town ranks nothing. It only shows where they agree, what moved, and what is new.</p>
+      <p class="cht-meta"><span data-ch-asof>Reading the charts…</span><label>Apple’s chart for <select data-ch-country aria-label="Country for Apple’s chart"></select></label></p>
+    </header>
+
+    <section class="cht-panel cht-consensus" aria-labelledby="cht-con-title">
+      <h2 id="cht-con-title">Where the charts agree</h2>
+      <p class="cht-sub">The same song on two or more of the three charts right now. Set arithmetic, no weighting.</p>
+      <ol class="cht-con" data-ch-consensus><li class="cht-empty">Comparing…</li></ol>
+    </section>
+
+    <section aria-labelledby="cht-songs-title">
+      <h2 id="cht-songs-title" class="cht-h2">Songs</h2>
+      <div class="cht-cols" data-ch-songs></div>
+    </section>
+
+    <section class="cht-panel cht-station" aria-labelledby="cht-st-title" data-ch-station hidden>
+      <h2 id="cht-st-title">The station against the charts</h2>
+      <p class="cht-sub" data-ch-station-sub></p>
+      <p class="cht-chips" data-ch-station-chips></p>
+    </section>
+
+    <div class="cht-two">
+      <section class="cht-panel" aria-labelledby="cht-fresh-title">
+        <h2 id="cht-fresh-title">Debuts</h2>
+        <p class="cht-sub">Songs and records that were not on their chart at the last snapshot. A set difference, nothing more.</p>
+        <ol class="cht-fresh" data-ch-fresh><li class="cht-empty">Looking…</li></ol>
+      </section>
+      <section class="cht-panel" aria-labelledby="cht-rev-title">
+        <h2 id="cht-rev-title">This week’s reviews</h2>
+        <p class="cht-sub">A reading list: headline, publication, date, link. No review text is copied here. Read them where they were written.</p>
+        <p class="cht-filter" data-ch-rev-filter></p>
+        <ol class="cht-rev" data-ch-reviews><li class="cht-empty">Fetching the feeds…</li></ol>
+      </section>
+    </div>
+
+    <section aria-labelledby="cht-more-title">
+      <h2 id="cht-more-title" class="cht-h2">Artists and records</h2>
+      <div class="cht-cols" data-ch-others></div>
+    </section>
+
+    <section class="cht-panel cht-notes" data-ch-notes hidden aria-live="polite">
+      <div class="cht-notes__head"><h2 data-ch-notes-title>—</h2><button type="button" data-ch-notes-close>Close</button></div>
+      <div class="cht-notes__grid" data-ch-notes-grid></div>
+      <p class="cht-sub">Text from Wikipedia, CC BY-SA 4.0, shown only when the article can be matched to this artist with confidence. Nothing is generated.</p>
+    </section>
+
+    <section class="cht-panel cht-how" aria-labelledby="cht-how-title">
+      <h2 id="cht-how-title">What this is, and is not</h2>
+      <p><b>The sources.</b> ListenBrainz publishes site-wide statistics as open data: real play counts from the people who scrobble there, which is a particular crowd and not the world. Apple publishes a most-played feed for each country, and the iTunes Store a top chart of what is being bought; the chart’s header says which one you are looking at. Deezer publishes a worldwide chart. Billboard and Spotify publish no open chart feed, so they are not here, and the town does not scrape them.</p>
+      <p><b>Movement.</b> Once a day the town keeps a small snapshot of the ranks. The arrows compare today with the most recent earlier snapshot. Until there is one, there are no arrows.</p>
+      <p><b>Lyrics.</b> Song lyrics are under copyright, and the databases that show them do so under licence. The town does not copy lyrics. The <i>lyrics</i> link on each song opens a search on Genius, where they are licensed.</p>
+      <p class="cht-links"><a href="/charts.json">charts.json</a><a href="/api/charts/reviews">reviews feed</a><a href="/station">The station</a><a href="/station#requests">Request a track</a></p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  type Row = { rank: number; title: string; artist: string; url: string; img?: string; count?: number; key: string; move?: number | 'new' | null };
+  type Chart = { id: string; name: string; source: string; sourceUrl: string; unit: string; note: string; rows: Row[] };
+  const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  const LINK = /^https:\/\/((music\.apple\.com|itunes\.apple\.com|www\.apple\.com|musicbrainz\.org|listenbrainz\.org)\/|([a-z0-9-]+\.)?deezer\.com\/)/;
+  const IMG = /^https:\/\/(([a-z0-9-]+\.)+mzstatic\.com|([a-z0-9-]+\.)+dzcdn\.net|coverartarchive\.org)\//;
+  const REVIEW = /^https:\/\/([a-z0-9-]+\.)*(pitchfork\.com|theguardian\.com|nme\.com|stereogum\.com|loudandquiet\.com|thequietus\.com|bandcamp\.com|aquariumdrunkard\.com|npr\.org)\//;
+  const art = (src: string | undefined, size: number) => { const i = el('img'); i.alt = ''; i.width = size; i.height = size; i.loading = 'lazy'; i.decoding = 'async'; if (src && IMG.test(src)) { i.src = src; i.addEventListener('error', () => { i.removeAttribute('src'); i.dataset.blank = 'true'; }, { once: true }); } else i.dataset.blank = 'true'; return i; };
+  const out = (href: string, ok: RegExp) => { const a = el('a'); if (ok.test(href)) { a.href = href; a.target = '_blank'; a.rel = 'noopener'; } return a; };
+  const lyricsUrl = (t: string, a: string) => `https://genius.com/search?q=${encodeURIComponent(`${a} ${t}`)}`;
+
+  function mountCharts() {
+    const root = document.querySelector<HTMLElement>('[data-charts]'); if (!root || root.dataset.mounted) return; root.dataset.mounted = 'true';
+    const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
+    const select = $<HTMLSelectElement>('[data-ch-country]'); let country = 'us'; try { country = localStorage.getItem('pc:charts:country') || 'us'; } catch { /* no storage */ }
+
+    const move = (m: Row['move']) => { const s = el('span', 'cht-move'); if (m === 'new') { s.textContent = 'NEW'; s.dataset.dir = 'new'; } else if (typeof m === 'number' && m !== 0) { s.textContent = `${m > 0 ? '▲' : '▼'}${Math.abs(m)}`; s.dataset.dir = m > 0 ? 'up' : 'down'; } else if (m === 0) { s.textContent = '–'; s.dataset.dir = 'same'; } return s; };
+
+    function chartCard(c: Chart, songs: boolean) {
+      const card = el('article', 'cht-chart'); card.dataset.source = c.source;
+      const head = el('header'); const src = out(c.sourceUrl, LINK); src.textContent = c.source; head.append(el('h3', '', c.name), src, el('p', '', c.note)); card.append(head);
+      const ol = el('ol');
+      c.rows.forEach((r) => {
+        const li = el('li'); if (r.rank <= 3) li.dataset.top = 'true';
+        const a = out(r.url, LINK); a.className = 'cht-row'; const txt = el('span', 'cht-txt'); txt.append(el('b', '', r.title)); if (r.artist) txt.append(el('small', '', r.artist));
+        a.append(el('span', 'cht-rank', String(r.rank)), art(r.img, 44), txt); li.append(a);
+        const side = el('span', 'cht-side'); side.append(move(r.move)); if (r.count) side.append(el('em', '', r.count.toLocaleString('en-US')));
+        if (songs || r.artist) { const nb = el('button', '', 'notes'); nb.type = 'button'; nb.addEventListener('click', () => void showNotes(songs ? r.title : '', r.artist || r.title, songs ? '' : r.title)); side.append(nb); } else { const nb = el('button', '', 'notes'); nb.type = 'button'; nb.addEventListener('click', () => void showNotes('', r.title, '')); side.append(nb); }
+        if (songs) { const ly = el('a', '', 'lyrics ↗'); ly.href = lyricsUrl(r.title, r.artist); ly.target = '_blank'; ly.rel = 'noopener'; ly.title = 'Search for the lyrics on Genius, where they are licensed'; side.append(ly); }
+        li.append(side); ol.append(li);
+      });
+      card.append(ol); return card;
+    }
+
+    // Liner notes, reused from the station: sourced or blank.
+    async function showNotes(titleText: string, artist: string, album: string) {
+      const box = $('[data-ch-notes]'), grid = $('[data-ch-notes-grid]'); box.hidden = false; $('[data-ch-notes-title]').textContent = [titleText || album, artist].filter(Boolean).join(' — '); grid.replaceChildren(el('p', 'cht-empty', 'Looking through the stacks…'));
+      box.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      let j: { notes?: { kind: string; title: string; description: string; extract: string; url: string }[] } | null = null;
+      try { const r = await fetch(`/api/station/notes?${new URLSearchParams({ title: titleText || album || artist, artist, ...(album ? { album } : {}) })}`); j = r.ok ? await r.json() : null; } catch { /* below */ }
+      const notes = (j?.notes ?? []).filter((n) => titleText || n.kind !== 'song');
+      if (!notes.length) { grid.replaceChildren(el('p', 'cht-empty', 'No article could be matched with confidence, so there is nothing to show. Better blank than wrong.')); return; }
+      const label: Record<string, string> = { song: 'The song', record: 'The record', artist: 'The artist' };
+      grid.replaceChildren(...notes.map((n) => { const card = el('article'); const a = el('a', '', 'Read the rest on Wikipedia ↗'); a.href = n.url.startsWith('https://en.wikipedia.org/wiki/') ? n.url : 'https://en.wikipedia.org/'; a.target = '_blank'; a.rel = 'noopener'; card.append(el('h3', '', label[n.kind] || n.kind), el('b', '', n.title), el('small', '', n.description), el('p', '', n.extract), a); return card; }));
+    }
+    $('[data-ch-notes-close]').addEventListener('click', () => { $('[data-ch-notes]').hidden = true; });
+
+    async function load() {
+      $('[data-ch-asof]').textContent = 'Reading the charts…';
+      let j: Record<string, any> | null = null; try { const r = await fetch(`/api/charts?country=${encodeURIComponent(country)}`); j = await r.json(); } catch { /* below */ }
+      if (!j || !j.ok) { $('[data-ch-asof]').textContent = 'The charts are not answering right now. Try again in a few minutes.'; return; }
+      if (!select.options.length) { for (const [code, name] of Object.entries(j.countries as Record<string, string>)) { const o = el('option', '', name); o.value = code; select.append(o); } }
+      select.value = j.country;
+      $('[data-ch-asof]').textContent = `As of ${new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(j.generatedAt))}${j.movedSince ? ` · arrows compare with ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${j.movedSince}T12:00:00Z`))}` : ' · arrows start tomorrow, once there is a snapshot to compare with'}`;
+      $('[data-ch-songs]').replaceChildren(...(j.songs as Chart[]).map((c) => chartCard(c, true)));
+      $('[data-ch-others]').replaceChildren(...(j.others as Chart[]).map((c) => chartCard(c, false)));
+      const con = j.consensus as { title: string; artist: string; img?: string; on: { source: string; rank: number }[] }[];
+      $('[data-ch-consensus]').replaceChildren(...(con.length ? con.map((c) => { const li = el('li'); const txt = el('span', 'cht-txt'); txt.append(el('b', '', c.title), el('small', '', c.artist)); const on = el('span', 'cht-on'); c.on.forEach((o) => on.append(el('i', '', `${o.source} #${o.rank}`))); li.append(art(c.img, 56), txt, on); return li; }) : [el('li', 'cht-empty', 'No song is on more than one of the three charts right now. Three crowds, three different weeks.')]));
+      const fresh = (j.debuts || []) as { title: string; artist: string; rank: number; chart: string; url: string; img?: string }[];
+      $('[data-ch-fresh]').replaceChildren(...(fresh.length ? fresh.map((f) => { const li = el('li'), a = out(f.url, LINK); const txt = el('span', 'cht-txt'); txt.append(el('b', '', f.title), el('small', '', [f.artist, f.chart].filter(Boolean).join(' · '))); a.append(art(f.img, 56), txt, el('em', '', `in at #${f.rank}`)); li.append(a); return li; }) : [el('li', 'cht-empty', j.movedSince ? 'No debuts since the last snapshot: every chart is the same cast as before.' : 'Debuts start tomorrow. The town keeps one small snapshot of the ranks a day, and today is the first.')]));
+      void station(j);
+    }
+
+    // How the station's own rotation sits against the charts: counted overlap, nothing more.
+    async function station(j: Record<string, any>) {
+      let s: Record<string, any> | null = null; try { const r = await fetch('/api/station'); s = r.ok ? await r.json() : null; } catch { /* optional */ }
+      const mine = new Map<string, string>(); const add = (n?: string) => { const k = String(n || '').toLowerCase().trim(); if (k) mine.set(k, String(n)); };
+      (s?.stats?.topArtists || []).forEach((a: { name: string }) => add(a.name)); (s?.listenbrainz?.counted?.artists?.year || []).forEach((a: { name: string }) => add(a.name)); (s?.rewind?.artists?.months || []).forEach((a: { name: string }) => add(a.name));
+      if (mine.size < 3) return;
+      const charted = new Set<string>(); [...(j.songs as Chart[]), ...(j.others as Chart[])].forEach((c) => c.rows.forEach((r) => charted.add((r.artist || r.title).toLowerCase().split(/,| feat\.? | & /)[0].trim())));
+      const hits = [...mine.entries()].filter(([k]) => charted.has(k)).map(([, n]) => n);
+      $('[data-ch-station]').hidden = false;
+      $('[data-ch-station-sub]').textContent = `${hits.length} of the station’s ${mine.size} most-played artists are on any of these charts this week${hits.length === 0 ? '. The station is somewhere else entirely, which is the point of having one.' : '.'}`;
+      $('[data-ch-station-chips]').replaceChildren(...hits.map((n) => el('span', '', n)));
+    }
+
+    // Reviews: a reading list of headlines.
+    let reviews: { source: string; sourceId: string; title: string; url: string; at: string; reviewsOnly: boolean }[] = [], only = 'reviews';
+    function paintReviews() {
+      const list = reviews.filter((h) => (only === 'reviews' ? h.reviewsOnly : only ? h.sourceId === only : true)).slice(0, 28), fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+      $('[data-ch-reviews]').replaceChildren(...(list.length ? list.map((h) => { const li = el('li'), a = out(h.url, REVIEW); a.append(el('b', '', h.title)); const meta = el('small', '', `${h.source} · ${fmt.format(new Date(h.at))}`); li.append(a, meta); return li; }) : [el('li', 'cht-empty', 'No headlines from that one this week.')]));
+    }
+    async function loadReviews() {
+      let j: Record<string, any> | null = null; try { const r = await fetch('/api/charts/reviews'); j = await r.json(); } catch { /* below */ }
+      if (!j?.ok) { $('[data-ch-reviews]').replaceChildren(el('li', 'cht-empty', 'The feeds are not answering right now.')); return; }
+      reviews = j.headlines; const bar = $('[data-ch-rev-filter]');
+      const chip = (id: string, name: string) => { const b = el('button', '', name); b.type = 'button'; b.setAttribute('aria-pressed', String(only === id)); b.addEventListener('click', () => { only = id; bar.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); paintReviews(); }); return b; };
+      bar.replaceChildren(chip('reviews', 'Album reviews'), chip('', 'Everything'), ...(j.sources as { id: string; name: string; count: number }[]).filter((s) => s.count).map((s) => chip(s.id, s.name.split(' · ')[0])));
+      paintReviews();
+    }
+
+    select.addEventListener('change', () => { country = select.value; try { localStorage.setItem('pc:charts:country', country); } catch { /* no storage */ } void load(); });
+    void load(); void loadReviews();
+  }
+  mountCharts();
+  document.addEventListener('astro:page-load', mountCharts);
+</script>
+
+<style is:global>
+  .cht { --ink: #12110E; --paper: #fffdf6; --warm: #f3ecdb; --rust: #993C1D; --yellow: #f4d83e; --green: #2f5a0d; --blue: #185FA5; max-width: 1280px; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, 28px) 72px; color: var(--ink); font-family: var(--pc-font-sans); }
+  body.pc-block-shell .cht a { color: inherit; text-decoration: none; }
+  .cht-head { padding: clamp(20px, 4vw, 40px) 0 8px; }
+  .cht-kicker { margin: 0 0 10px; font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--rust); }
+  .cht-head h1 { margin: 0; font-size: clamp(44px, 8vw, 108px); font-weight: 780; line-height: .88; letter-spacing: -.06em; } .cht-head h1 em { font-style: normal; color: var(--rust); }
+  .cht-dek { margin: 14px 0 0; max-width: 64ch; font-size: 16px; line-height: 1.5; }
+  .cht-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; margin: 16px 0 0; padding: 10px 0; border-top: 2px solid var(--ink); border-bottom: 1px solid rgba(0, 0, 0, .2); font: 700 9.5px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #5F5E5A; }
+  .cht-meta select { margin-left: 6px; padding: 5px 6px; border: 1px solid var(--ink); border-radius: 0; background: var(--paper); font: 700 11px var(--pc-font-mono); color: var(--ink); }
+  .cht-h2 { margin: 28px 0 10px; font-size: clamp(24px, 2.8vw, 34px); font-weight: 740; letter-spacing: -.04em; }
+  .cht-panel { margin-top: 16px; padding: clamp(14px, 2.2vw, 22px); border: 2px solid var(--ink); background: var(--paper); box-shadow: 7px 7px 0 var(--blue); } .cht-panel[hidden] { display: none; }
+  .cht-panel h2 { margin: 0; font-size: clamp(21px, 2.3vw, 28px); font-weight: 730; line-height: 1; letter-spacing: -.035em; }
+  .cht-sub { margin: 8px 0 12px; max-width: 80ch; font-size: 13px; line-height: 1.45; color: rgba(0, 0, 0, .72); }
+  .cht-empty { list-style: none; padding: 8px 0; font-size: 13px; color: #5F5E5A; }
+  .cht img { display: block; background: var(--warm); border: 1px solid var(--ink); object-fit: cover; } .cht img[data-blank='true'] { visibility: hidden; }
+  .cht-txt { display: grid; min-width: 0; } .cht-txt b, .cht-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .cht-txt b { font-size: 14px; font-weight: 650; } .cht-txt small { font-size: 12px; color: rgba(0, 0, 0, .68); }
+
+  .cht-consensus { box-shadow: 7px 7px 0 var(--yellow); }
+  .cht-con { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0 22px; margin: 0; padding: 0; list-style: none; }
+  .cht-con li:not(.cht-empty) { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(0, 0, 0, .12); } .cht-con img { grid-row: span 2; }
+  .cht-con .cht-txt b { font-size: 16px; } .cht-on { display: flex; flex-wrap: wrap; gap: 4px; } .cht-on i { padding: 2px 6px; border: 1px solid var(--ink); background: #fff; font: 700 9px var(--pc-font-mono); font-style: normal; letter-spacing: .04em; }
+
+  .cht-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .cht-chart { border: 2px solid var(--ink); background: var(--paper); box-shadow: 7px 7px 0 var(--rust); } .cht-chart[data-source='Apple Music'] { box-shadow: 7px 7px 0 #c0392b; } .cht-chart[data-source='Deezer'] { box-shadow: 7px 7px 0 #6B2139; } .cht-chart[data-source='ListenBrainz'] { box-shadow: 7px 7px 0 var(--green); }
+  .cht-chart header { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; padding: 14px 14px 10px; border-bottom: 2px solid var(--ink); background: var(--ink); color: var(--paper); }
+  .cht-chart h3 { margin: 0; font-size: 22px; font-weight: 740; letter-spacing: -.03em; } body.pc-block-shell .cht .cht-chart header a { font: 700 9px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--yellow); } .cht-chart header p { grid-column: 1 / -1; margin: 4px 0 0; font-size: 11.5px; line-height: 1.4; color: rgba(255, 253, 246, .78); }
+  .cht-chart ol { margin: 0; padding: 0; list-style: none; }
+  .cht-chart li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 12px 6px 0; border-bottom: 1px solid rgba(0, 0, 0, .12); } .cht-chart li:last-child { border-bottom: 0; }
+  .cht-row { display: grid; grid-template-columns: 44px 44px minmax(0, 1fr); gap: 10px; align-items: center; min-width: 0; } .cht-row:hover b { color: var(--rust); }
+  .cht-rank { text-align: center; font-size: 22px; font-weight: 760; letter-spacing: -.05em; font-variant-numeric: tabular-nums; color: #5F5E5A; } .cht-chart li[data-top='true'] .cht-rank { font-size: 30px; color: var(--ink); }
+  .cht-side { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 6px; max-width: 132px; } .cht-side em { font: 700 10px var(--pc-font-mono); font-style: normal; font-variant-numeric: tabular-nums; color: #5F5E5A; }
+  .cht-side button, body.pc-block-shell .cht .cht-side a { padding: 2px 5px; border: 1px solid rgba(0, 0, 0, .35); border-radius: 0; background: none; color: #5F5E5A; font: 700 8px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; } .cht-side button:hover, body.pc-block-shell .cht .cht-side a:hover { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  @media (hover: hover) and (min-width: 1041px) { .cht-chart .cht-side button, .cht-chart .cht-side a { display: none; } .cht-chart li:hover .cht-side button, .cht-chart li:hover .cht-side a, .cht-chart li:focus-within .cht-side button, .cht-chart li:focus-within .cht-side a { display: inline-block; } .cht-chart li:hover .cht-side em, .cht-chart li:focus-within .cht-side em { display: none; } }
+  .cht-move { min-width: 30px; text-align: right; font: 700 10px var(--pc-font-mono); } .cht-move[data-dir='up'] { color: var(--green); } .cht-move[data-dir='down'] { color: #a3281b; } .cht-move[data-dir='new'] { padding: 1px 4px; background: var(--yellow); border: 1px solid var(--ink); font-size: 8px; letter-spacing: .08em; } .cht-move[data-dir='same'] { color: #8a887f; }
+
+  .cht-station { box-shadow: 7px 7px 0 var(--rust); } .cht-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; } .cht-chips span { padding: 4px 8px; border: 1px solid var(--ink); background: #fff; font-size: 12.5px; font-weight: 600; }
+  .cht-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .cht-fresh, .cht-rev { margin: 0; padding: 0; list-style: none; }
+  .cht-fresh li a { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(0, 0, 0, .12); } .cht-fresh em { font: 700 10px var(--pc-font-mono); font-style: normal; color: var(--green); white-space: nowrap; } .cht-fresh a:hover b { color: var(--rust); }
+  .cht-filter { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; } .cht-filter button { padding: 4px 7px; border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); font: 700 8.5px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; } .cht-filter button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+  .cht-rev li:not(.cht-empty) { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid rgba(0, 0, 0, .12); } .cht-rev b { font: 600 15px/1.3 Georgia, 'Times New Roman', serif; } .cht-rev a:hover b { color: var(--rust); } .cht-rev small { font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #5F5E5A; }
+  .cht-notes { position: sticky; bottom: 78px; z-index: 5; box-shadow: 7px 7px 0 var(--green); max-height: 60vh; overflow: auto; } .cht-notes__head { display: flex; justify-content: space-between; gap: 12px; align-items: start; } .cht-notes__head button { padding: 6px 9px; border: 1px solid var(--ink); border-radius: 0; background: var(--ink); color: var(--paper); font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .cht-notes__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 12px 0 4px; } .cht-notes__grid article { display: grid; gap: 4px; align-content: start; } .cht-notes__grid h3 { margin: 0; font: 700 9px var(--pc-font-mono); letter-spacing: .13em; text-transform: uppercase; color: var(--rust); } .cht-notes__grid small { font: 700 9px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; color: #5F5E5A; } .cht-notes__grid p { margin: 2px 0; font: 14.5px/1.5 Georgia, serif; } body.pc-block-shell .cht .cht-notes__grid a { font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--rust); }
+  .cht-how p { max-width: 82ch; font-size: 14px; line-height: 1.55; } .cht-links { display: flex; flex-wrap: wrap; gap: 6px; } body.pc-block-shell .cht .cht-links a { padding: 8px 10px; border: 1px solid var(--ink); font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; } body.pc-block-shell .cht .cht-links a:hover { background: var(--ink); color: var(--paper); }
+  @media (max-width: 1040px) { .cht-cols { grid-template-columns: 1fr; } .cht-two { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .cht-row { grid-template-columns: 30px 38px minmax(0, 1fr); gap: 8px; } .cht-row img { width: 38px; height: 38px; } .cht-rank { font-size: 17px; } .cht-chart li[data-top='true'] .cht-rank { font-size: 22px; } .cht-side { max-width: 96px; } }
+</style>

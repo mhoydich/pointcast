@@ -1,0 +1,324 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { BUILDS, MONTHS, hostOf, priceLabel } from '../../lib/paddle-calendar';
+import { paddlePlate } from '../../lib/paddle-drawing.mjs';
+import {
+  CERT_WORDS,
+  LIFECYCLE_WORDS,
+  PADDLES,
+  PADDLE_BAG_URL,
+  PADDLE_REGISTER_URL,
+  PATENT_WORDS,
+  REGISTER_STATS,
+  brandUrl,
+  neighbours,
+  paddleUrl,
+  plateVariants,
+  type Paddle,
+} from '../../lib/paddle-register';
+
+export function getStaticPaths() {
+  return PADDLES.map((paddle) => ({ params: { id: paddle.id }, props: { paddle } }));
+}
+
+const { paddle: p } = Astro.props as { paddle: Paddle };
+const court = CHANNELS.CRT;
+const build = BUILDS[p.build];
+const price = priceLabel(p as any);
+const fullDate = (iso: string, precision?: string) =>
+  precision === 'day' || !precision ? `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}` : `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
+
+const title = `${p.brand} ${p.model}: release date, price, approval status`;
+const description = `${p.brand} ${p.model}: ${p.status === 'upcoming' ? 'on sale' : 'launched'} ${p.dateLabel} ${p.year}, ${price} list. ${build.label}. USA Pickleball: ${CERT_WORDS[p.reg.usap].toLowerCase()}. UPA-A: ${CERT_WORDS[p.reg.upaa].toLowerCase()}. Timeline, construction, a to-scale drawing, and links to every lab that measured it.`;
+
+const variants = plateVariants(p);
+const plates = variants.map((v, i) => ({
+  v,
+  plate: paddlePlate({ variant: v, shapes: p.shapes, build: p.build, layers: p.core.layers, color: build.color, id: `pl${i}`, dims: true }),
+}));
+const lead = plates[0].plate;
+const measured = p.variants.filter((v) => v.sw || v.tw || v.weightOz || v.lengthIn);
+const near = neighbours(p);
+const kindWord: Record<string, string> = {
+  teaser: 'TEASED', approval: 'APPROVAL', preorder: 'PREORDER', launch: 'LAUNCH', ship: 'SHIPPED', variant: 'NEW VARIANT',
+  delist: 'DELISTED', legal: 'LEGAL', price: 'PRICE', upcoming: 'ON SALE',
+};
+const certTone = (v: string) => (v === 'yes' ? 'ok' : v === 'no' ? 'no' : v === 'split' ? 'split' : 'quiet');
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  '@id': `${PADDLE_REGISTER_URL}/${p.id}`,
+  name: `${p.brand} ${p.model}`,
+  brand: { '@type': 'Brand', name: p.brand },
+  category: 'Pickleball paddle',
+  description: p.take,
+  releaseDate: p.date,
+  image: `https://pointcast.xyz/images/og/paddles/${p.id}.png`,
+  url: `${PADDLE_REGISTER_URL}/${p.id}`,
+  ...(p.msrp != null ? { offers: { '@type': 'Offer', price: p.msrp, priceCurrency: 'USD', ...(p.productUrl ? { url: p.productUrl } : {}) } } : {}),
+  isPartOf: { '@type': 'Dataset', name: 'The Paddle Register', url: PADDLE_REGISTER_URL },
+};
+---
+
+<BlockLayout title={title} description={description} image={`/images/og/paddles/${p.id}.png`} jsonLd={jsonLd}>
+  <main class="pad" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800};--b:${build.color}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/paddles">paddles</a><span>/</span><a href={brandUrl(p.brand)}>{p.brand}</a><span>/</span><span>{p.model}</span>
+      <a href={`/paddles/${p.id}.json`}>JSON</a>
+    </nav>
+
+    <header class="hero">
+      <div class="hero__copy">
+        <p class="kicker">THE PADDLE REGISTER · {p.year} · {LIFECYCLE_WORDS[p.reg.lifecycle || 'current'].toUpperCase()}</p>
+        <h1><span>{p.brand}</span> {p.model}</h1>
+        <p class="dek">{p.take}</p>
+        <dl class="facts">
+          <div><dt>List price</dt><dd>{price}</dd></div>
+          <div><dt>{p.status === 'upcoming' ? 'On sale' : 'Launched'}</dt><dd>{p.dateLabel}, {p.year}<small>date known to the {p.precision}</small></dd></div>
+          <div><dt>Build</dt><dd>{build.label}</dd></div>
+          {p.thickness && <div><dt>Thickness</dt><dd>{p.thickness}</dd></div>}
+          {p.shapes && <div><dt>Shapes</dt><dd>{p.shapes}</dd></div>}
+          {p.pro && <div><dt>Pro</dt><dd>{p.pro}</dd></div>}
+          {p.madeIn && <div><dt>Made in</dt><dd>{p.madeIn}</dd></div>}
+          {p.warranty && <div><dt>Warranty</dt><dd>{p.warranty}</dd></div>}
+        </dl>
+        <p class="hero__links">
+          {p.productUrl && <a href={p.productUrl} rel="noopener">photos and colorways at {hostOf(p.productUrl)} ↗</a>}
+          {p.year === 2026 && <a href={`/paddle-calendar#${p.id}`}>its row on the 2026 calendar</a>}
+        </p>
+      </div>
+      <figure class="plate">
+        <div class="plate__svg" set:html={lead.svg} />
+        <figcaption>
+          Drawn to scale from {lead.geometry.own ? 'the published dimensions' : `a nominal ${lead.geometry.shape} outline; this paddle's own dimensions are not published`}.
+          Left: the face. Right: cut away to the core. An original drawing, not a product photo.
+        </figcaption>
+      </figure>
+    </header>
+
+    <section class="status" aria-label="Where it is legal">
+      <div class={`cell cell--${certTone(p.reg.usap)}`}>
+        <small>USA PICKLEBALL</small><strong>{CERT_WORDS[p.reg.usap]}</strong>
+        <span>Sanctioned amateur play.{p.reg.usapSource && <> <a href={p.reg.usapSource} rel="noopener">{hostOf(p.reg.usapSource)} ↗</a></>}</span>
+      </div>
+      <div class={`cell cell--${certTone(p.reg.upaa)}`}>
+        <small>UPA-A</small><strong>{CERT_WORDS[p.reg.upaa]}</strong>
+        <span>PPA Tour and MLP.{p.reg.upaaSource && <> <a href={p.reg.upaaSource} rel="noopener">{hostOf(p.reg.upaaSource)} ↗</a></>}</span>
+      </div>
+      <div class={`cell cell--${p.reg.quiet ? 'ok' : 'quiet'}`}>
+        <small>QUIET CATEGORY</small><strong>{p.reg.quiet ? 'Listed' : 'Not listed'}</strong>
+        <span>USAP's under-80 dB list for noise-restricted courts.</span>
+      </div>
+      <div class={`cell cell--${p.reg.patent === 'none-known' ? 'quiet' : 'split'}`}>
+        <small>PATENTS</small><strong>{PATENT_WORDS[p.reg.patent || 'none-known']}</strong>
+        <span>{p.reg.investigation ? p.reg.investigation : 'Brand-level status, from the ITC case file and settlements.'}</span>
+      </div>
+    </section>
+    {p.certNote && <p class="certnote"><b>Certification note.</b> {p.certNote}</p>}
+    <p class="checked">Status checked {fullDate(REGISTER_STATS.asOf)}. Lists change; confirm on the USAP and UPA-A lists before a tournament.</p>
+
+    <section class="sec" aria-label="Timeline">
+      <p class="kicker">TIMELINE</p>
+      <ol class="timeline">
+        {p.timeline.map((t) => (
+          <li>
+            <span class="timeline__date">{fullDate(t.date, t.precision)}</span>
+            <b>{kindWord[t.kind] ?? t.kind.toUpperCase()}</b>
+            <span>{t.text}{t.source && <> <a href={t.source} rel="noopener">{hostOf(t.source)} ↗</a></>}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="sec build" aria-label="Construction">
+      <div>
+        <p class="kicker">HOW IT IS BUILT</p>
+        <p class="build__tech">{p.tech}</p>
+        <ol class="layers">
+          {lead.layers.map((l) => (<li><i>{l.n}</i><span>{l.text}</span></li>))}
+        </ol>
+        {p.core.layers.length === 0 && <p class="fine">No layer-by-layer core description is on file for this paddle yet. The drawing shows the general construction for this build type.</p>}
+        <dl class="kv">
+          {p.core.face && (<><dt>Face</dt><dd>{p.core.face}</dd></>)}
+          {p.core.edge && (<><dt>Edge</dt><dd>{p.core.edge}</dd></>)}
+          {p.colorways.length > 0 && (<><dt>Colorways</dt><dd>{p.colorways.join(' · ')}</dd></>)}
+        </dl>
+        {p.core.source && <p class="fine">Construction per <a href={p.core.source} rel="noopener">{hostOf(p.core.source)} ↗</a></p>}
+        {p.notes && <p class="build__note">{p.notes}</p>}
+      </div>
+      {plates.length > 1 && (
+        <div class="shapes">
+          {plates.slice(1).map(({ v, plate }) => (
+            <figure>
+              <div set:html={plate.svg} />
+              <figcaption>{v.name || plate.geometry.shape}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+    </section>
+
+    {measured.length > 0 && (
+      <section class="sec" aria-label="Variants and measurements">
+        <p class="kicker">VARIANTS · PUBLISHED AND MEASURED NUMBERS</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Variant</th><th>Shape</th><th>Length × width</th><th>Handle</th><th>Core</th><th>Weight</th><th>Swingweight</th><th>Twistweight</th><th>From</th></tr></thead>
+            <tbody>
+              {measured.map((v) => (
+                <tr>
+                  <th>{v.name || '—'}</th>
+                  <td>{v.shape || '—'}</td>
+                  <td>{v.lengthIn && v.widthIn ? `${v.lengthIn} × ${v.widthIn} in` : '—'}</td>
+                  <td>{v.handleIn ? `${v.handleIn} in` : '—'}</td>
+                  <td>{v.thicknessMm ? `${v.thicknessMm} mm` : '—'}</td>
+                  <td>{v.weightOz ? `${v.weightOz} oz` : '—'}</td>
+                  <td>{v.sw ?? '—'}</td>
+                  <td>{v.tw ?? '—'}</td>
+                  <td>{v.specSource ? <a href={v.specSource} rel="noopener">{hostOf(v.specSource)} ↗</a> : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="fine">Swingweight and twistweight are each lab's own measurement of its own sample. Unit-to-unit variance is normal.</p>
+      </section>
+    )}
+
+    <section class="sec" aria-label="The labs">
+      <p class="kicker">MEASURED BY THE LABS</p>
+      {p.labs.length > 0 ? (
+        <div class="rows">
+          {p.labs.map((l) => (
+            <a class="row row--link" href={l.url} rel="noopener"><strong>{l.lab}</strong><span>{l.kind === 'database-entry' ? 'Database entry' : l.kind === 'video' ? 'Video review' : 'Review'} · {hostOf(l.url)}</span><b aria-hidden="true">↗</b></a>
+          ))}
+        </div>
+      ) : (
+        <p class="fine">No lab page linked yet. If you know of one, the dataset is open.</p>
+      )}
+      <p class="fine">The register does not re-measure paddles or copy a lab's numbers wholesale. Power, pop and spin belong to the people with the radar guns; go read them.</p>
+    </section>
+
+    <section class="sec split" aria-label="After purchase">
+      <div class="bag">
+        <p class="kicker">AFTER YOU BUY IT</p>
+        <h2>Reviewers measure a paddle new. Nobody measures it at hour sixty.</h2>
+        <p>Keep a bag on Rally: log the hours you put on this paddle, when the grit fades, and when it goes dead. It stays on your device.</p>
+        <a class="btn" href={PADDLE_BAG_URL} rel="noopener">Open the bag on Rally ↗</a>
+      </div>
+      <div>
+        <p class="kicker">SOURCES · {p.confidence.toUpperCase()} CONFIDENCE</p>
+        <ul class="sources">
+          {p.sources.map((s) => (<li><a href={s} rel="noopener">{hostOf(s)} ↗</a></li>))}
+        </ul>
+      </div>
+    </section>
+
+    <section class="sec" aria-label="Nearby in the register">
+      <p class="kicker">NEARBY IN THE REGISTER</p>
+      <div class="near">
+        {near.map((q) => (
+          <a href={paddleUrl(q)} style={`--b:${BUILDS[q.build].color}`}>
+            <small>{q.brand} · {q.year}</small>
+            <strong>{q.model}</strong>
+            <span>{priceLabel(q as any)} · {BUILDS[q.build].short}</span>
+          </a>
+        ))}
+      </div>
+      <p class="foot"><a href="/paddles">the whole register</a> · <a href={brandUrl(p.brand)}>everything from {p.brand}</a> · <a href="/paddle-calendar">the 2026 calendar</a> · CC0</p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .pad{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .crumb{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:32px;padding:40px 0 32px;align-items:start}
+  .hero h1{margin:0;font:500 clamp(34px,5.2vw,62px)/.98 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
+  .hero h1 span{display:block;font-size:.5em;letter-spacing:-.01em;color:var(--pc-ink-muted);margin-bottom:6px}
+  .dek{margin:18px 0 0;font:400 17px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .facts{display:grid;grid-template-columns:repeat(2,1fr);gap:0;margin:24px 0 0;border-top:1.5px solid var(--c600)}
+  .facts div{padding:10px 12px 10px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .facts dt{font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .facts dd{margin:4px 0 0;font:500 16px/1.3 var(--pc-font-sans);font-variant-numeric:tabular-nums}
+  .facts small{display:block;margin-top:2px;font:400 10px var(--pc-font-mono);letter-spacing:.04em;color:var(--pc-ink-muted);text-transform:uppercase}
+  .hero__links{display:flex;flex-wrap:wrap;gap:6px 18px;margin:16px 0 0;font:400 13px var(--pc-font-sans)}
+  .hero__links a{color:var(--c800)}
+  .plate{margin:0;border:1.5px solid var(--c600);background:#fff}
+  .plate__svg{padding:14px 10px 6px;border-left:6px solid var(--b)}
+  .plate :global(svg){display:block;width:100%;height:auto;max-height:560px}
+  .plate figcaption{padding:10px 12px;border-top:1px solid var(--pc-rule-soft);font:400 12px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .status{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--c600)}
+  .cell{padding:14px;border-right:1.5px solid var(--c600)}
+  .cell:last-child{border-right:0}
+  .cell small{display:block;font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--pc-ink-muted)}
+  .cell strong{display:block;margin:8px 0 6px;font:500 19px/1.15 var(--pc-font-sans);letter-spacing:-.01em}
+  .cell span{font:400 12.5px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .cell a{color:var(--c800)}
+  .cell--ok{background:var(--c50)}.cell--ok strong{color:var(--c800)}
+  .cell--no strong{color:#8a2432}.cell--split strong{color:#8a4b00}.cell--quiet strong{color:var(--pc-ink-soft)}
+  .certnote{margin:12px 0 0;max-width:760px;font:400 14.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .certnote b{font-weight:500;color:var(--pc-ink)}
+  .checked,.fine{margin:10px 0 0;max-width:720px;font:400 12.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .fine a{color:var(--c800)}
+  .sec{padding-top:48px}
+  .timeline{margin:0;padding:0;list-style:none;border-top:1.5px solid var(--c600)}
+  .timeline li{display:grid;grid-template-columns:150px 110px 1fr;gap:14px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 15px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .timeline__date{font:400 11px var(--pc-font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .timeline b{font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  .timeline a{color:var(--c800);white-space:nowrap}
+  .build{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:32px}
+  .build__tech{margin:0 0 16px;max-width:640px;font:400 17px/1.55 var(--pc-font-sans)}
+  .build__note{margin:16px 0 0;max-width:640px;padding-left:12px;border-left:3px solid var(--b);font:400 14.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .layers{margin:0;padding:0;list-style:none;border-top:1px solid var(--pc-rule)}
+  .layers li{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 15px/1.4 var(--pc-font-sans)}
+  .layers i{display:grid;place-items:center;width:24px;height:24px;border:1.5px solid var(--pc-ink);border-radius:50%;font:500 12px var(--pc-font-mono);font-style:normal}
+  .kv{display:grid;grid-template-columns:90px 1fr;gap:6px 12px;margin:16px 0 0;font:400 14px/1.5 var(--pc-font-sans)}
+  .kv dt{font:500 10px/2.1 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .kv dd{margin:0;color:var(--pc-ink-soft)}
+  .shapes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;align-content:start}
+  .shapes figure{margin:0;border:1px solid var(--pc-rule);padding:8px}
+  .shapes :global(svg){display:block;width:100%;height:auto}
+  .shapes figcaption{margin-top:6px;font:400 10px var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--pc-ink-muted);text-align:center}
+  .tablewrap{overflow-x:auto;border:1.5px solid var(--c600)}
+  table{width:100%;border-collapse:collapse;font:400 13.5px var(--pc-font-sans);font-variant-numeric:tabular-nums}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--pc-rule-soft);white-space:nowrap}
+  thead th{font:500 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted);background:var(--c50)}
+  tbody th{font-weight:500}
+  tbody tr:last-child th,tbody tr:last-child td{border-bottom:0}
+  td a{color:var(--c800)}
+  .rows{border-top:1.5px solid var(--c600)}
+  .row{display:grid;grid-template-columns:260px 1fr 24px;gap:16px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--pc-rule-soft);color:var(--pc-ink)}
+  .row strong{font:500 16px/1.3 var(--pc-font-sans)}
+  .row span{font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .row b{font-weight:400;color:var(--c800)}
+  .row--link:hover{background:var(--c50);text-decoration:none}
+  .split{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:32px}
+  .bag{border:1.5px solid var(--c600);background:var(--c50);padding:20px}
+  .bag h2{margin:0 0 10px;font:500 24px/1.15 var(--pc-font-sans);letter-spacing:-.02em;text-wrap:balance}
+  .bag p:not(.kicker){margin:0 0 16px;max-width:520px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .btn{display:inline-block;padding:10px 14px;background:var(--c800);color:#fff!important;font:500 11px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
+  .btn:hover{background:var(--pc-ink);text-decoration:none}
+  .sources{margin:0;padding:0;list-style:none;border-top:1px solid var(--pc-rule)}
+  .sources li{padding:9px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px var(--pc-font-sans)}
+  .sources a{color:var(--c800)}
+  .near{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .near a{display:block;padding:12px 12px 12px 14px;border:1px solid var(--pc-rule);border-left:4px solid var(--b);color:var(--pc-ink)}
+  .near a:hover{background:var(--c50);text-decoration:none}
+  .near small{display:block;font:400 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .near strong{display:block;margin:4px 0;font:500 16px/1.2 var(--pc-font-sans)}
+  .near span{font:400 12px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .foot{margin:24px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:820px){
+    .hero,.build,.split{grid-template-columns:1fr;gap:24px}.hero{padding-top:28px}
+    .plate :global(svg){max-height:420px}
+    .status{grid-template-columns:1fr 1fr}.cell:nth-child(2){border-right:0}.cell:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}
+    .timeline li{grid-template-columns:1fr;gap:2px}.row{grid-template-columns:1fr;gap:4px}
+    .near{grid-template-columns:1fr}
+  }
+</style>

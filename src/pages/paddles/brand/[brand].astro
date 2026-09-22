@@ -1,0 +1,117 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../../lib/channels';
+import { BUILDS, MONTHS, hostOf, priceLabel } from '../../../lib/paddle-calendar';
+import { paddlePlate } from '../../../lib/paddle-drawing.mjs';
+import { BRANDS, CERT_WORDS, PADDLE_REGISTER_URL, PATENT_WORDS, leadVariant, paddleUrl, whenLabel, type BrandFile } from '../../../lib/paddle-register';
+
+export function getStaticPaths() {
+  return BRANDS.map((brand) => ({ params: { brand: brand.slug }, props: { brand } }));
+}
+
+const { brand: b } = Astro.props as { brand: BrandFile };
+const court = CHANNELS.CRT;
+const f = b.file;
+const newest = b.paddles[0];
+const title = `${b.brand} pickleball paddles: every release, dated`;
+const description = `${b.brand}: ${b.paddles.length} paddle${b.paddles.length === 1 ? '' : 's'} in the register, newest ${newest.model} (${whenLabel(newest)}). Release dates, list prices, approval status and construction for each.${f?.story ? ` ${f.story}` : ''}`.slice(0, 300);
+const events = b.paddles
+  .flatMap((p) => p.timeline.map((t) => ({ ...t, paddle: p })))
+  .sort((x, y) => y.date.localeCompare(x.date));
+const when = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
+const patent = b.paddles[0].reg.patent || 'none-known';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': `${PADDLE_REGISTER_URL}/brand/${b.slug}`,
+  name: title,
+  description,
+  about: { '@type': 'Brand', name: b.brand },
+  isPartOf: { '@type': 'Dataset', name: 'The Paddle Register', url: PADDLE_REGISTER_URL },
+};
+---
+
+<BlockLayout title={title} description={description} image={`/images/og/paddles/${newest.id}.png`} jsonLd={jsonLd}>
+  <main class="brand" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/paddles">paddles</a><span>/</span><span>{b.brand}</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">THE PADDLE REGISTER · COMPANY FILE</p>
+      <h1>{b.brand}</h1>
+      {f?.story && <p class="dek">{f.story}</p>}
+      <dl class="facts">
+        {f?.hq && <div><dt>Based</dt><dd>{f.hq}</dd></div>}
+        {f?.founded && <div><dt>Founded</dt><dd>{f.founded}</dd></div>}
+        {f?.owner && <div><dt>Ownership</dt><dd>{f.owner}</dd></div>}
+        {f?.lines && <div><dt>Lines</dt><dd>{f.lines}</dd></div>}
+        {f?.pros && <div><dt>Pros</dt><dd>{f.pros}</dd></div>}
+        {f?.cadence && <div><dt>Release cadence</dt><dd>{f.cadence}</dd></div>}
+        <div><dt>Patents</dt><dd>{PATENT_WORDS[patent]}</dd></div>
+      </dl>
+    </header>
+
+    <section class="sec" aria-label="Paddles">
+      <p class="kicker">{b.paddles.length} IN THE REGISTER · NEWEST FIRST</p>
+      <div class="list">
+        {b.paddles.map((p, i) => (
+          <a class="item" href={paddleUrl(p)} style={`--b:${BUILDS[p.build].color}`}>
+            <div class="item__plate" set:html={paddlePlate({ variant: leadVariant(p), shapes: p.shapes, build: p.build, layers: p.core.layers, color: BUILDS[p.build].color, id: `b${i}`, dims: false }).svg} />
+            <div>
+              <small>{whenLabel(p)} · {priceLabel(p as any)} · {BUILDS[p.build].label}</small>
+              <strong>{p.model}</strong>
+              <span>{p.take}</span>
+              <em>USA Pickleball: {CERT_WORDS[p.reg.usap].toLowerCase()} · UPA-A: {CERT_WORDS[p.reg.upaa].toLowerCase()}</em>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section class="sec" aria-label="Timeline">
+      <p class="kicker">EVERYTHING DATED, NEWEST FIRST</p>
+      <ol class="timeline">
+        {events.map((t) => (
+          <li>
+            <span class="timeline__date">{when(t.date)}</span>
+            <a href={paddleUrl(t.paddle)}>{t.paddle.model}</a>
+            <span>{t.text}{t.source && <> <a href={t.source} rel="noopener">{hostOf(t.source)} ↗</a></>}</span>
+          </li>
+        ))}
+      </ol>
+      <p class="foot"><a href="/paddles">the whole register</a> · <a href="/paddle-calendar">the 2026 calendar</a> · CC0</p>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .brand{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:44px 0 8px;max-width:860px}
+  .hero h1{margin:0;font:500 clamp(40px,6.4vw,76px)/.96 var(--pc-font-sans);letter-spacing:-.035em}
+  .dek{margin:18px 0 0;font:400 18px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .facts{margin:24px 0 0;border-top:1.5px solid var(--c600)}
+  .facts div{display:grid;grid-template-columns:160px 1fr;gap:16px;padding:10px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .facts dt{font:500 10px/2 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .facts dd{margin:0;font:400 15px/1.5 var(--pc-font-sans)}
+  .sec{padding-top:48px}
+  .list{border-top:1.5px solid var(--c600)}
+  .item{display:grid;grid-template-columns:70px 1fr;gap:18px;padding:16px 0 16px 14px;border-bottom:1px solid var(--pc-rule-soft);border-left:4px solid var(--b);color:var(--pc-ink)}
+  .item:hover{background:var(--c50);text-decoration:none}
+  .item__plate :global(svg){display:block;width:100%;height:auto}
+  .item small{display:block;font:400 11px var(--pc-font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .item strong{display:block;margin:4px 0 6px;font:500 22px/1.1 var(--pc-font-sans);letter-spacing:-.015em}
+  .item span{display:block;max-width:760px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .item em{display:block;margin-top:8px;font:400 10px var(--pc-font-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--c800)}
+  .timeline{margin:0;padding:0;list-style:none;border-top:1.5px solid var(--c600)}
+  .timeline li{display:grid;grid-template-columns:130px 200px 1fr;gap:14px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14.5px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .timeline__date{font:400 11px var(--pc-font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .timeline a{color:var(--c800)}
+  .foot{margin:24px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:820px){.facts div{grid-template-columns:1fr;gap:2px}.timeline li{grid-template-columns:1fr;gap:2px}.item{grid-template-columns:54px 1fr;gap:12px}.hero{padding-top:28px}}
+</style>
