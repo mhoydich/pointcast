@@ -1,0 +1,60 @@
+---
+import type { NounsDrumClubBandmate } from '../lib/nouns-drum-club-bandmates';
+import type { BandmateArrangement } from '../lib/nouns-drum-club-arrangements';
+
+interface Props {
+  arrangement: BandmateArrangement;
+  bandmates: readonly NounsDrumClubBandmate[];
+}
+
+const { arrangement, bandmates } = Astro.props;
+const roleLabels = ['drum', 'bass', 'mallet', 'chord'] as const;
+const roleNames = { drum: 'Drums', bass: 'Bass', mallet: 'Mallets', chord: 'Chords' } as const;
+const optionsFor = (role: (typeof roleLabels)[number]) => bandmates.filter((item) => item.role === role);
+const bandQuery = arrangement.quartet.join(',');
+const arrangementUrl = new URL(arrangement.playUrl);
+const playUrl = `${arrangementUrl.pathname}${arrangementUrl.search}`;
+const creativePrompt = arrangement.prompt.split('. ').slice(-1)[0];
+const combinedTempo = arrangement.score.tempo;
+---
+
+<section class="band-builder" id="make-a-band" data-band-builder data-date={arrangement.dateKey} data-default-band={bandQuery} data-play-url={playUrl} aria-labelledby="band-builder-title">
+  <div class="band-builder__intro">
+    <p class="band-builder__eyebrow"><span data-band-label>STARTER BAND</span> · <span data-band-date>{arrangement.dateKey}</span></p>
+    <h2 id="band-builder-title">Pick four.<br /><em>Hear one band.</em></h2>
+    <p>One drum, one bass, one color, one little surprise. Choose the players, then take them to the keyboard.</p>
+    <p class="band-builder__prompt"><strong>TODAY’S LITTLE MOVE</strong><span data-band-prompt>{creativePrompt}</span></p>
+  </div>
+  <div class="band-builder__stage">
+    {roleLabels.map((role) => {
+      const selected = arrangement.members.find((item) => item.role === role) ?? optionsFor(role)[0];
+      return <article class="band-builder__slot" data-band-slot={role} style={`--band-color:${selected.color}`}>
+        <div class="band-builder__portrait"><img data-band-image src={selected.artwork.webp} alt={selected.name} width="180" height="180" loading="lazy" /></div>
+        <div class="band-builder__slot-copy"><span class="band-builder__role">{roleNames[role]}</span><strong data-band-name>{selected.name}</strong><span>PART OF THE BAND</span></div>
+        <label><span class="sr-only">Choose {roleNames[role]} bandmate</span><select data-band-select={role} aria-label={`Choose ${roleNames[role]} bandmate`} disabled>
+          {optionsFor(role).map((item) => <option value={item.id} data-name={item.name} data-tempo={item.tempo} data-color={item.color} data-webp={item.artwork.webp} selected={item.id === selected.id}>{item.name}</option>)}
+        </select></label>
+      </article>;
+    })}
+  </div>
+  <div class="band-builder__actions">
+    <a class="band-builder__play" data-band-play href={playUrl}>Play &amp; remix ↗</a>
+    <button type="button" class="band-builder__shuffle" data-band-shuffle disabled>Shuffle the band</button>
+    <button type="button" class="band-builder__reset" data-band-reset disabled>Today’s band</button>
+  </div>
+  <p class="band-builder__tempo" data-band-tempo-summary>Combined feel · {combinedTempo} BPM</p>
+  <p class="band-builder__note" data-band-status role="status">Sound starts when you choose it in the Drum Club. No autoplay, no wallet.</p>
+  <noscript><p class="band-builder__note">JavaScript is needed to choose a different quartet. Play &amp; remix opens this starter band in the Drum Club.</p></noscript>
+</section>
+
+<script>
+  import '../lib/nouns-band-builder-ui';
+</script>
+
+<style>
+  .band-builder{margin:34px 0 64px;padding:clamp(22px,4vw,46px);background:#171717;color:#f5f0e7;border:2px solid #171717;box-shadow:10px 10px 0 #b9a4dc}
+  .band-builder__intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.7fr);gap:16px 40px;align-items:end}.band-builder__eyebrow{grid-column:1/-1;margin:0;color:#f0e94a;font:700 11px/1.2 'JetBrains Mono',monospace;letter-spacing:.1em}.band-builder h2{margin:0;font:900 clamp(42px,6vw,86px)/.82 Inter,Arial,sans-serif;letter-spacing:-.08em}.band-builder h2 em{color:#ff7a45;font-style:normal}.band-builder__intro>p:not(.band-builder__eyebrow):not(.band-builder__prompt){max-width:32ch;margin:0;font-size:17px;line-height:1.4}.band-builder__prompt{display:flex;flex-direction:column;gap:8px;margin:24px 0 0;padding:14px;background:#f0e94a;color:#171717;font-size:14px;line-height:1.4}.band-builder__prompt strong{font:700 10px/1 'JetBrains Mono',monospace;letter-spacing:.08em}.band-builder__stage{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:32px}.band-builder__slot{min-width:0;padding:10px;background:#f5f0e7;color:#171717;border:2px solid #f5f0e7}.band-builder__portrait{aspect-ratio:1;background:var(--band-color);display:grid;place-items:center}.band-builder__portrait img{display:block;width:100%;height:100%;object-fit:contain}.band-builder__slot-copy{display:grid;gap:4px;padding:12px 2px 8px}.band-builder__role,.band-builder__slot-copy>span:last-child{font:700 10px/1.2 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em}.band-builder__role{color:#7256bd}.band-builder__slot-copy strong{font-size:19px;line-height:1;letter-spacing:-.04em}.band-builder select{width:100%;min-height:44px;padding:8px;border:2px solid #171717;background:#fff;color:#171717;font:700 12px/1.1 Inter,Arial,sans-serif}.band-builder__actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:24px}.band-builder__play,.band-builder__shuffle,.band-builder__reset{min-height:46px;padding:13px 16px;border:2px solid #f5f0e7;color:#f5f0e7;background:transparent;font:700 12px/1 'JetBrains Mono',monospace;text-decoration:none}.band-builder__play{background:#ff5c35;color:#171717;border-color:#ff5c35}.band-builder__shuffle,.band-builder__reset{cursor:pointer}.band-builder__note{margin:16px 0 0;color:#cfc7bc;font-size:13px;line-height:1.4}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:700px){.band-builder{box-shadow:6px 6px 0 #b9a4dc}.band-builder__intro{grid-template-columns:1fr}.band-builder__stage{grid-template-columns:repeat(2,minmax(0,1fr))}.band-builder__actions{display:grid;grid-template-columns:1fr 1fr}.band-builder__play{grid-column:1/-1;text-align:center}.band-builder__shuffle,.band-builder__reset{width:100%}}@media(max-width:390px){.band-builder{padding:18px 14px}.band-builder__stage{gap:8px}.band-builder__slot{padding:7px}.band-builder__slot-copy strong{font-size:16px}.band-builder__actions{display:flex;flex-direction:column;align-items:stretch}.band-builder__play,.band-builder__shuffle,.band-builder__reset{text-align:center}.band-builder h2{font-size:46px}}
+  @media(prefers-reduced-motion:reduce){.band-builder *{scroll-behavior:auto!important;transition:none!important}}
+  .band-builder :focus-visible{outline:3px solid #f0e94a;outline-offset:3px}
+  .band-builder button:disabled,.band-builder select:disabled{cursor:not-allowed;opacity:.72}
+</style>
