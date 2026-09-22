@@ -22,6 +22,14 @@ test('The Paddle Register ships its pages, JSON twins, runbook, MCP tools, and d
     'src/pages/paddles.json.ts',
     'scripts/og-paddle-cards.mjs',
     'docs/runbooks/paddle-register-refresh.md',
+    'src/pages/paddles/compare.astro',
+    'src/pages/paddles/legal.astro',
+    'src/pages/paddles/pros.astro',
+    'src/pages/paddles/changes.astro',
+    'src/pages/paddles/changes.xml.ts',
+    'functions/api/paddles/wear.ts',
+    'functions/_lib/paddle-wear.mjs',
+    'docs/briefs/2026-09-21-paddle-register-v2.md',
   ]) assert.ok(exists(path), path);
 
   const [page, index, mcp, sitemap, llms, og] = await Promise.all([
@@ -93,6 +101,16 @@ test('register data: every paddle is sourced, every enrichment points at a real 
   }
 
   // every brand in the register has a company file somewhere
+  // the changes feed: dated, sourced, and pointing at paddles that exist
+  const known = new Set([...calendar.releases, ...register.backfill].map((p) => p.id));
+  assert.ok(Array.isArray(register.changes) && register.changes.length > 0, 'changes feed is seeded');
+  for (const c of register.changes) {
+    assert.match(c.date, /^\d{4}-\d{2}-\d{2}$/, 'change date');
+    assert.ok(['added', 'shipped', 'approved', 'delisted', 'price', 'corrected', 'signed'].includes(c.kind), `change kind ${c.kind}`);
+    assert.ok(c.paddle === null || known.has(c.paddle), `change points at unknown paddle ${c.paddle}`);
+    assert.ok(c.text && (!c.source || isUrl(c.source)), 'change text/source');
+  }
+
   const filed = new Set([...calendar.companies, ...(register.companies ?? [])].map((c) => c.brand));
   for (const p of register.backfill) assert.ok(filed.has(p.brand), `no company file for ${p.brand}`);
 });

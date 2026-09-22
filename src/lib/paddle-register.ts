@@ -11,7 +11,7 @@
 
 import calendar from '../data/paddle-calendar.json';
 import register from '../data/paddle-register.json';
-import { BUILDS, type Build } from './paddle-calendar';
+import { BUILDS, hostOf, type Build } from './paddle-calendar';
 
 export const PADDLE_REGISTER_URL = 'https://pointcast.xyz/paddles';
 export const PADDLE_BAG_URL = 'https://tez-rally.pages.dev/bag/';
@@ -166,4 +166,49 @@ export const publicPaddle = (p: Paddle) => ({
   core: p.core, variants: p.variants, status: p.reg, certNote: p.certNote ?? null, timeline: p.timeline, labs: p.labs,
   colorways: p.colorways, madeIn: p.madeIn, warranty: p.warranty, notes: p.notes, productUrl: p.productUrl,
   sources: p.sources, confidence: p.confidence, image: `https://pointcast.xyz/images/og/paddles/${p.id}.png`,
+});
+
+// ── v2 ─────────────────────────────────────────────────────────────────────
+
+export interface Change { date: string; kind: string; paddle: string | null; text: string; source?: string | null }
+export const CHANGES: Change[] = (((register as Raw).changes as Change[]) ?? [])
+  .filter((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.date) && c.text)
+  .sort((a, b) => b.date.localeCompare(a.date));
+export const CHANGE_WORDS: Record<string, string> = {
+  added: 'ADDED', shipped: 'SHIPPED', approved: 'APPROVED', delisted: 'DELISTED', price: 'PRICE', corrected: 'CORRECTED', signed: 'SIGNED',
+};
+export const changesFor = (id: string) => CHANGES.filter((c) => c.paddle === id);
+
+/** Legal buckets per rulebook. "on" means the source list carried it on asOf. */
+export type LegalBucket = 'on' | 'some' | 'pending' | 'off' | 'unknown';
+export const legalUsap = (p: Paddle): LegalBucket =>
+  p.reg.usap === 'yes' ? 'on' : p.reg.usap === 'split' ? 'some' : p.reg.usap === 'pending' ? 'pending' : p.reg.usap === 'no' ? 'off' : 'unknown';
+export const legalUpaa = (p: Paddle): LegalBucket =>
+  p.reg.upaa === 'yes' ? 'on' : p.reg.upaa === 'split' ? 'some' : p.reg.upaa === 'pending' ? 'pending' : p.reg.upaa === 'no' ? 'off' : 'unknown';
+/** Paddles legal under one rulebook and not the other, with the reason the record gives. */
+export const splitRulebook = (): { paddle: Paddle; usap: LegalBucket; upaa: LegalBucket; why: string }[] =>
+  PADDLES.filter((p) => (legalUsap(p) === 'off' && legalUpaa(p) === 'on') || (legalUsap(p) === 'on' && legalUpaa(p) === 'off') || legalUsap(p) === 'some' || legalUpaa(p) === 'some')
+    .map((p) => ({ paddle: p, usap: legalUsap(p), upaa: legalUpaa(p), why: p.certNote || 'No reason on file.' }));
+
+/** Who plays what: one row per pro named on a paddle, joined to the signings table. */
+export interface ProRow { player: string; paddle: Paddle; from: string | null; note: string | null }
+export const PRO_ROWS: ProRow[] = PADDLES.flatMap((p) =>
+  (p.pro || '')
+    .split('·')
+    .map((s) => s.replace(/\(.*?\)/g, '').trim())
+    .filter(Boolean)
+    .map((player) => {
+      const move = (calendar.moves as { player: string; from: string; to: string; note: string }[]).find((m) => m.player.split('·').map((x) => x.trim()).includes(player));
+      return { player, paddle: p, from: move?.from || null, note: move?.note || null };
+    }),
+).sort((a, b) => a.player.localeCompare(b.player));
+
+/** The rows a compare table needs, plain values only. */
+export const compareRow = (p: Paddle) => ({
+  id: p.id, brand: p.brand, model: p.model, year: p.year, url: paddleUrl(p),
+  launch: whenLabel(p), price: p.msrpLabel ?? (p.msrp == null ? 'n/a' : `$${p.msrp}`), build: BUILDS[p.build].label, color: BUILDS[p.build].color,
+  thickness: p.thickness || '—', shapes: p.shapes || '—', usap: CERT_WORDS[p.reg.usap], upaa: CERT_WORDS[p.reg.upaa], quiet: p.reg.quiet ? 'Listed' : 'Not listed',
+  layers: p.core.layers, face: p.core.face || '—', lead: leadVariant(p),
+  variants: p.variants.filter((v) => typeof v.lengthIn === 'number' || v.sw || v.tw).map((v) => ({ name: v.name || v.shape || '', dims: typeof v.lengthIn === 'number' && typeof v.widthIn === 'number' ? `${v.lengthIn} × ${v.widthIn} in` : '—', handle: typeof v.handleIn === 'number' ? `${v.handleIn} in` : '—', sw: v.sw ?? '—', tw: v.tw ?? '—', lab: v.specSource ? hostOf(v.specSource) : '' })),
+  labs: p.labs.map((l) => ({ lab: l.lab, url: l.url })),
 });

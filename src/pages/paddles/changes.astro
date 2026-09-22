@@ -1,0 +1,58 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { BUILDS, MONTHS, hostOf } from '../../lib/paddle-calendar';
+import { CHANGES, CHANGE_WORDS, PADDLE_REGISTER_URL, paddleById, paddleUrl } from '../../lib/paddle-register';
+
+const title = 'What changed in the Paddle Register';
+const description = `Every correction, price cut, approval, delisting and addition to the register, newest first, each with a source. ${CHANGES.length} entries. Also an RSS feed at /paddles/changes.xml.`;
+const court = CHANNELS.CRT;
+const when = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
+const days = [...new Set(CHANGES.map((c) => c.date))].map((date) => ({ date, items: CHANGES.filter((c) => c.date === date) }));
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', name: title, description, url: `${PADDLE_REGISTER_URL}/changes`, isPartOf: { '@type': 'Dataset', name: 'The Paddle Register', url: PADDLE_REGISTER_URL } };
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="chg" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><a href="/paddles">paddles</a><span>/</span><span>changes</span><a href="/paddles/changes.xml">RSS</a></nav>
+    <header class="hero">
+      <p class="kicker">THE PADDLE REGISTER · WHAT CHANGED · NEWEST FIRST</p>
+      <h1>The record of the record.</h1>
+      <p class="dek">A register is only definitive while it is current, and only honest if it says what it got wrong. Every correction, price cut, approval, delisting and addition lands here with a source. The weekly refresh writes to this list; nothing changes silently.</p>
+    </header>
+    {days.map((d) => (
+      <section class="day">
+        <h2>{when(d.date)}<small>{d.items.length}</small></h2>
+        <ol>
+          {d.items.map((c) => { const p = c.paddle ? paddleById(c.paddle) : undefined; return (
+            <li style={p ? `--b:${BUILDS[p.build].color}` : ''}>
+              <b>{CHANGE_WORDS[c.kind] ?? c.kind.toUpperCase()}</b>
+              <span>{p ? <a class="pad" href={paddleUrl(p)}>{p.brand} {p.model}</a> : null}{c.text}{c.source && <> <a href={c.source} rel="noopener">{hostOf(c.source)} ↗</a></>}</span>
+            </li>
+          ); })}
+        </ol>
+      </section>
+    ))}
+    <p class="foot"><a href="/paddles/changes.xml">subscribe by RSS</a> · <a href="/paddles">the whole register</a> · <a href="/paddles.json">paddles.json</a> · CC0</p>
+  </main>
+</BlockLayout>
+
+<style>
+  .chg{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:44px 0 24px;max-width:820px}
+  .hero h1{margin:0;font:500 clamp(40px,6.4vw,72px)/.96 var(--pc-font-sans);letter-spacing:-.035em}
+  .dek{margin:18px 0 0;font:400 17px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .day h2{display:flex;align-items:baseline;gap:10px;margin:28px 0 0;padding-bottom:8px;border-bottom:1.5px solid var(--c600);font:500 20px/1 var(--pc-font-sans);letter-spacing:-.015em}
+  .day small{font:400 11px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  ol{margin:0;padding:0;list-style:none}
+  li{display:grid;grid-template-columns:110px 1fr;gap:14px;align-items:baseline;padding:11px 0 11px 12px;border-bottom:1px solid var(--pc-rule-soft);border-left:3px solid var(--b,transparent);font:400 15px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  li b{font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  li a{color:var(--c800)}
+  .pad{display:block;font-weight:500;color:var(--pc-ink)!important}
+  .foot{margin:40px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:820px){li{grid-template-columns:1fr;gap:2px}.hero{padding-top:28px}}
+</style>

@@ -88,6 +88,8 @@ const jsonLd = {
         </label>
         <output id="reg-count" aria-live="polite">{S.paddles} paddles</output>
       </form>
+      <p class="tools"><a href="/paddles/compare">Compare two to four, to scale →</a><a href="/paddles/legal">Where each one is legal →</a><a href="/paddles/pros">Who plays what →</a><a href="/paddles/changes">What changed →</a></p>
+      <div class="cmpbar" id="cmpbar" hidden><span id="cmpbar-text"></span><a id="cmpbar-go" href="/paddles/compare">Compare →</a><button type="button" id="cmpbar-clear">Clear</button></div>
 
       <div class="grid">
         {cards.map(({ p, thumb }) => (
@@ -105,6 +107,7 @@ const jsonLd = {
             style={`--b:${BUILDS[p.build].color}`}
           >
             <div class="card__plate" set:html={thumb} />
+            <label class="card__cmp" title="Add to compare"><input type="checkbox" data-cmp={p.id} aria-label={`Compare ${p.brand} ${p.model}`} /></label>
             <div class="card__body">
               <small>{p.brand} · {whenLabel(p)}</small>
               <strong>{p.model}</strong>
@@ -114,6 +117,7 @@ const jsonLd = {
                 {p.reg.usap !== 'unknown' && <i class="tag">USAP {p.reg.usap === 'yes' ? '✓' : CERT_WORDS[p.reg.usap].toLowerCase()}</i>}
                 {p.reg.upaa !== 'unknown' && <i class="tag">UPA-A {p.reg.upaa === 'yes' ? '✓' : CERT_WORDS[p.reg.upaa].toLowerCase()}</i>}
                 {p.reg.lifecycle !== 'current' && <i class="tag tag--life">{LIFECYCLE_WORDS[p.reg.lifecycle || 'current']}</i>}
+                {!p.variants.some((v) => typeof v.lengthIn === 'number' && typeof v.widthIn === 'number') && <i class="tag tag--nom" title="Dimensions not published; drawn from a nominal outline">nominal outline</i>}
               </span>
             </div>
           </a>
@@ -174,6 +178,13 @@ const jsonLd = {
     };
     form.addEventListener('input', apply);
     form.addEventListener('submit', (event) => event.preventDefault());
+    // Compare picker: checkboxes on the cards feed a sticky bar.
+    const boxes = [...document.querySelectorAll<HTMLInputElement>('[data-cmp]')];
+    const bar = document.getElementById('cmpbar')!, barText = document.getElementById('cmpbar-text')!, go = document.getElementById('cmpbar-go') as HTMLAnchorElement;
+    const sync = () => { const ids = boxes.filter((b) => b.checked).map((b) => b.dataset.cmp!); bar.hidden = ids.length === 0; barText.textContent = `${ids.length} picked${ids.length < 2 ? ' · pick at least two' : ids.length > 4 ? ' · first four compare' : ''}`; go.href = `/paddles/compare?ids=${ids.slice(0, 4).join(',')}`; go.classList.toggle('is-off', ids.length < 2); };
+    for (const b of boxes) { b.addEventListener('click', (e) => e.stopPropagation()); b.addEventListener('change', sync); }
+    for (const l of document.querySelectorAll<HTMLElement>('.card__cmp')) l.addEventListener('click', (e) => e.stopPropagation());
+    document.getElementById('cmpbar-clear')!.addEventListener('click', () => { for (const b of boxes) b.checked = false; sync(); });
     const preset = new URLSearchParams(location.search).get('q');
     if (preset) { (form.elements.namedItem('q') as HTMLInputElement).value = preset.slice(0, 60); apply(); }
   }
@@ -201,7 +212,16 @@ const jsonLd = {
   .filters input{width:100%}
   .filters output{margin-left:auto;padding-bottom:8px;font:500 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800);font-variant-numeric:tabular-nums}
   .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-  .card{display:grid;grid-template-columns:74px 1fr;gap:12px;padding:12px;border:1px solid var(--pc-rule);border-top:4px solid var(--b);color:var(--pc-ink);background:#fff}
+  .tools{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0 0 14px;font:400 12px var(--pc-font-sans)}
+  .tools a{color:var(--c800)}
+  .cmpbar{position:sticky;bottom:12px;z-index:4;display:flex;gap:12px;align-items:center;margin:12px 0 0;padding:10px 12px;background:var(--pc-ink);color:#fff;font:500 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase}
+  .cmpbar a{margin-left:auto;padding:6px 10px;background:#fff;color:var(--pc-ink)!important}
+  .cmpbar a.is-off{opacity:.4;pointer-events:none}
+  .cmpbar button{background:none;border:1px solid #fff;color:#fff;padding:5px 9px;font:inherit;cursor:pointer}
+  .card{position:relative;display:grid;grid-template-columns:74px 1fr;gap:12px;padding:12px;border:1px solid var(--pc-rule);border-top:4px solid var(--b);color:var(--pc-ink);background:#fff}
+  .card__cmp{position:absolute;top:8px;right:8px;display:grid;place-items:center;width:24px;height:24px}
+  .card__cmp input{width:16px;height:16px;margin:0;accent-color:var(--c600)}
+  .tag--nom{border-style:dotted;color:var(--pc-ink-muted)}
   .card:hover{background:var(--c50);text-decoration:none}
   .card__plate :global(svg){display:block;width:100%;height:auto}
   .card small{display:block;font:400 10px/1.4 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--pc-ink-muted)}
