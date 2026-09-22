@@ -28,6 +28,7 @@ export const AGENT_SURFACES = {
     almanac: 'https://pointcast.xyz/archive',
     elSegundo: 'https://pointcast.xyz/local',
     status: 'https://pointcast.xyz/status',
+    nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
   },
   json: {
     chime: 'https://pointcast.xyz/chime.json',
@@ -47,6 +48,7 @@ export const AGENT_SURFACES = {
     postOffice: 'https://pointcast.xyz/post-office.json',
     blocks: 'https://pointcast.xyz/blocks.json',
     feedJson: 'https://pointcast.xyz/feed.json',
+    nounsDrumClub: 'https://pointcast.xyz/nouns-drum-club.json',
   },
   api: {
     chimeNotebook: 'https://pointcast.xyz/api/chime/log',

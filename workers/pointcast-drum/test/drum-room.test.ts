@@ -10,6 +10,7 @@ interface ServerMessage {
   pad?: string;
   totalHits?: number;
   hibernation?: boolean;
+  features?: string[];
 }
 
 class SocketInbox {
@@ -46,6 +47,10 @@ class SocketInbox {
       this.waiters.add(check);
     });
   }
+
+  has(predicate: (message: ServerMessage) => boolean): boolean {
+    return this.messages.some(predicate);
+  }
 }
 
 async function connect(room: string, sid: string): Promise<SocketInbox> {
@@ -68,6 +73,19 @@ describe("drum room protocol", () => {
     expect(decodeClientMessage("x".repeat(513))).toBeNull();
   });
 
+  it("accepts the bounded 36-voice Drum Club extension", () => {
+    const pads = [
+      "kick", "snare", "clap", "hat-closed", "hat-open", "tom-low", "tom-high", "rim", "shaker", "tambourine",
+      "bass-c", "bass-d", "bass-e", "bass-f", "bass-g", "bass-a", "bass-b", "bass-c2", "bass-d2", "bass-e2",
+      "mallet-c", "mallet-d", "mallet-e", "mallet-f", "mallet-g", "mallet-a", "mallet-b", "mallet-c2", "mallet-d2",
+      "chord-c", "chord-dm", "chord-em", "chord-f", "chord-g", "chord-am", "sparkle",
+    ];
+    expect(pads).toHaveLength(36);
+    for (const pad of pads) {
+      expect(decodeClientMessage(JSON.stringify({ v: 1, type: "hit", pad, velocity: 0.5, seq: 1 }))).toMatchObject({ pad });
+    }
+  });
+
   it("fans a bounded hit out to peers and persists stats", async () => {
     const room = "fanout-test";
     const first = await connect(room, "first");
@@ -84,6 +102,36 @@ describe("drum room protocol", () => {
     const stats = await statsResponse.json<ServerMessage>();
     expect(stats.totalHits).toBe(1);
     expect(stats.hibernation).toBe(true);
+
+    first.socket.close(1000, "done");
+    second.socket.close(1000, "done");
+  });
+
+  it("fans a 36-voice Drum Club hit only inside its namespaced room", async () => {
+    const first = await connect("ndc-sunshine", "club-first");
+    const second = await connect("ndc-sunshine", "club-second");
+    const welcome = await first.waitFor((message) => message.type === "welcome");
+    expect(welcome.features).toContain("ndc-36");
+    await second.waitFor((message) => message.type === "welcome");
+
+    first.socket.send(JSON.stringify({ v: 1, type: "hit", pad: "chord-am", velocity: 0.8, seq: 36 }));
+    await expect(second.waitFor((message) => message.type === "hit" && message.pad === "chord-am"))
+      .resolves.toMatchObject({ pad: "chord-am", velocity: 0.8, seq: 36 });
+
+    first.socket.close(1000, "done");
+    second.socket.close(1000, "done");
+  });
+
+  it("rejects a Drum Club-only pad from a legacy room", async () => {
+    const first = await connect("legacy-pad-test", "legacy-first");
+    const second = await connect("legacy-pad-test", "legacy-second");
+    await first.waitFor((message) => message.type === "welcome");
+    await second.waitFor((message) => message.type === "welcome");
+
+    first.socket.send(JSON.stringify({ v: 1, type: "hit", pad: "hat-open", velocity: 0.8, seq: 1 }));
+    await expect(first.waitFor((message) => message.type === "error")).resolves.toMatchObject({ code: "invalid-pad" });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(second.has((message) => message.type === "hit" && message.pad === "hat-open")).toBe(false);
 
     first.socket.close(1000, "done");
     second.socket.close(1000, "done");
