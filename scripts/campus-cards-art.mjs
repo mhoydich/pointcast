@@ -417,6 +417,296 @@ const SCENES = {
     // sun trying to break through
     c.disc(74, 10, 4, '#f3efe0', 'glow');
   },
+  // ------------------------------------------------ Set 02 · Berkeley
+  campanile(c) {
+    c.bands(0, [[9, '#243a7a'], [9, '#3f5aa8'], [8, '#8a6fc0'], [7, '#e68aa0'], [6, '#f6b57a']]);
+    c.dot(8, 4, '#ffffff', 'twinkle'); c.dot(70, 6, '#ffffff', 'twinkle'); c.dot(80, 3, '#ffffff', 'twinkle');
+    // bay + far hills of the city
+    c.px(0, 39, GW, 5, '#6c7fb8');
+    c.silhouette((x) => 38 - (x > 60 && x < 84 ? Math.round(2 * Math.sin((x - 60) / 7.6)) : 0), '#58648f', 40);
+    // campus canopy + roofs
+    c.silhouette((x) => 46 - Math.round(2 * Math.sin(x / 5) + (x % 13 < 4 ? 2 : 0)), '#2c4a3a');
+    c.px(0, 56, GW, 8, '#1f3329');
+    for (let x = 4; x < GW; x += 17) { c.px(x, 49, 9, 7, '#d8c9a8'); c.px(x - 1, 48, 11, 1, '#9b4a36'); c.px(x + 2, 51, 2, 2, '#ffd98a', 'twinkle'); }
+    // the tower: slender granite shaft, clock stage, pyramid spire, lantern
+    const tx = 40; const tw = 9;
+    c.px(tx, 20, tw, 36, '#e9e2d2');
+    c.px(tx + tw - 2, 20, 2, 36, '#c8bea8');
+    for (let y = 26; y < 52; y += 5) c.px(tx + 3, y, 2, 2, '#9d9380');
+    c.px(tx - 1, 13, tw + 2, 7, '#efe8d8');
+    c.px(tx + 1, 14, 2, 5, '#2a2a40'); c.px(tx + 4, 14, 2, 5, '#2a2a40'); c.px(tx + 7, 14, 2, 5, '#2a2a40');
+    c.px(tx + 4, 16, 1, 1, '#ffcf5a', 'bell');
+    c.disc(tx + 4, 23, 2, '#fbf6e8'); c.dot(tx + 4, 22, '#2a2a40'); c.dot(tx + 5, 23, '#2a2a40');
+    for (let i = 0; i < 7; i++) c.px(tx + i, 12 - i, tw - i * 2, 1, i % 2 ? '#8fa89a' : '#a4bcae');
+    c.px(tx + 4, 3, 1, 3, '#c8bea8');
+    [[tx - 7, 15], [tx + tw + 6, 15]].forEach(([x, y]) => { c.px(x, y, 1, 3, '#ffe7a8', 'ring'); c.px(x + (x < tx ? -2 : 2), y - 1, 1, 5, '#ffe7a8', 'ring'); });
+    for (let i = 0; i < 3; i++) bird(c, 14 + i * 6, 10 + (i % 2) * 2, '#1b2440', 'drift');
+  },
+
+  gate(c) {
+    c.bands(0, [[10, '#8fcaf0'], [8, '#bfe2f6']]);
+    // tree canopy framing
+    c.silhouette((x) => 12 + Math.round(4 * Math.sin(x / 6) + 2 * Math.sin(x / 2.5)), '#3d6b3a', 30);
+    for (let i = 0; i < 50; i++) c.dot(Math.floor(c.rand() * GW), 10 + Math.floor(c.rand() * 14), '#5a8f4a', 'sway');
+    // plaza
+    c.px(0, 44, GW, 20, '#cdbb98');
+    for (let y = 46; y < GH; y += 4) c.px(0, y, GW, 1, '#bba985');
+    // granite pillars
+    [[14, 9], [65, 9]].forEach(([x, w]) => { c.px(x, 18, w, 30, '#e3dccb'); c.px(x + w - 2, 18, 2, 30, '#bfb6a2'); c.px(x - 1, 16, w + 2, 2, '#d1c9b6'); c.px(x + 3, 12, 3, 4, '#2f2a24'); c.disc(x + 4, 11, 2, '#ffe39a', 'glow'); });
+    // bronze arch + grille
+    for (let x = 23; x < 65; x++) {
+      const t = (x - 44) / 21;
+      const y = 22 + Math.round(t * t * 8);
+      c.px(x, y, 1, 2, '#7a5a2e');
+      if (x % 3 === 0) c.px(x, y + 2, 1, 2, '#9a7a44');
+    }
+    c.px(23, 30, 42, 1, '#7a5a2e');
+    for (let x = 25; x < 64; x += 4) c.px(x, 31, 1, 6, '#8a6a38');
+    c.px(40, 18, 8, 5, '#9a7a44'); c.px(42, 19, 4, 3, '#c9a15a');
+    // walkers
+    [[30, '#e05a4a'], [46, '#3f6fd1'], [56, '#f0b82a'], [36, '#4a9a6a']].forEach(([x, col], i) => { c.px(x, 46 + (i % 2), 2, 5, col, i % 2 ? 'ride' : 'ride2'); c.px(x, 44 + (i % 2), 2, 2, '#e0aa80', i % 2 ? 'ride' : 'ride2'); });
+  },
+
+  bayview(c) {
+    c.bands(0, [[7, '#4b3f8e'], [7, '#a2549a'], [7, '#ec7a6a'], [6, '#f7a95a'], [5, '#ffd27a']]);
+    c.disc(24, 31, 4, '#fff0b0');
+    // bay water
+    c.bands(32, [[3, '#e89a6a'], [5, '#8c6f9e'], [6, '#5a5f8e']]);
+    for (let y = 33; y < 44; y += 2) c.px(20 + (y % 3), y, 8 - (y - 33) / 2, 1, '#ffd98a', 'glint');
+    // Golden Gate bridge silhouette far left
+    c.px(2, 31, 26, 1, '#b8452e');
+    [6, 22].forEach((x) => c.px(x, 24, 1, 8, '#b8452e'));
+    for (let x = 6; x <= 22; x++) c.dot(x, 24 + Math.round(((x - 14) ** 2) / 12) - 5 + 5, '#b8452e');
+    // city headlands
+    c.silhouette((x) => (x < 30 ? 31 - Math.round(2 * Math.sin(x / 4)) : 33), '#5a3f5e', 34, 'base', 0, 34);
+    // flatlands grid of lights
+    c.px(0, 44, GW, 8, '#3a3050');
+    for (let i = 0; i < 60; i++) c.dot(Math.floor(c.rand() * GW), 44 + Math.floor(c.rand() * 8), c.rand() > 0.3 ? '#ffd98a' : '#ffffff', 'twinkle');
+    // golden grass hillside + fire trail + oak
+    c.silhouette((x) => 50 + Math.round((GW - x) / 22) - Math.round(Math.sin(x / 7) * 2), '#c99a4a');
+    c.silhouette((x) => 55 + Math.round((GW - x) / 22) - Math.round(Math.sin(x / 7) * 2), '#a97a3a');
+    for (let x = 40; x < GW; x++) c.dot(x, 57 + Math.round((GW - x) / 22) - Math.round(Math.sin(x / 7) * 2), '#e8c98a');
+    c.px(71, 42, 2, 9, '#4a3526'); c.disc(72, 40, 5, '#3e4a2a'); c.disc(70, 38, 3, '#51603a');
+    c.px(58, 50, 2, 4, '#2a5aa8'); c.px(58, 48, 2, 2, '#e0aa80'); c.px(61, 50, 2, 4, '#d84a4a'); c.px(61, 48, 2, 2, '#b07850');
+  },
+
+  sproul(c) {
+    c.bands(0, [[12, '#9fd3f5'], [6, '#cdebf8']]);
+    // white columned hall
+    c.px(8, 8, 72, 32, '#f1ede2');
+    c.px(6, 6, 76, 3, '#d9d3c4');
+    c.px(8, 11, 72, 2, '#d9d3c4');
+    for (let x = 14; x < 76; x += 7) { c.px(x, 14, 3, 22, '#ffffff'); c.px(x + 2, 14, 1, 22, '#d6d0c0'); }
+    for (let x = 17; x < 76; x += 7) c.px(x, 16, 4, 16, '#6a86a8');
+    // steps
+    for (let i = 0; i < 6; i++) c.px(4 - i, 40 + i * 2, 80 + i * 2, 2, i % 2 ? '#d9d3c4' : '#e7e2d6');
+    c.px(0, 52, GW, 12, '#c8b894');
+    // speaker at the top step, a banner, a crowd
+    c.px(42, 34, 3, 6, '#d84a4a'); c.px(42, 32, 3, 2, '#e0aa80'); c.px(45, 33, 2, 1, '#1d1d2b');
+    c.px(26, 26, 36, 5, '#ffd23f', 'sway'); for (let x = 29; x < 60; x += 5) c.px(x, 28, 3, 1, '#1d1d2b', 'sway');
+    const shirts = ['#3f6fd1', '#e05a4a', '#4a9a6a', '#f0b82a', '#8e3fd0', '#1d1d2b', '#ff8fc4'];
+    for (let i = 0; i < 34; i++) {
+      const x = 2 + Math.floor(c.rand() * 84); const y = 51 + Math.floor(c.rand() * 10);
+      c.px(x, y, 2, 3, shirts[i % shirts.length]); c.px(x, y - 1, 2, 1, i % 3 ? '#e0aa80' : '#8a5a3a', i % 4 ? undefined : 'bob');
+    }
+  },
+
+  greek(c) {
+    c.bands(0, [[10, '#141a3a'], [10, '#232a55'], [8, '#343c70']]);
+    for (let i = 0; i < 16; i++) c.dot(Math.floor(c.rand() * GW), Math.floor(c.rand() * 18), '#ffffff', 'twinkle');
+    c.disc(76, 7, 3, '#f4f1dc');
+    // eucalyptus silhouettes
+    c.silhouette((x) => 20 + Math.round(5 * Math.sin(x / 3.2) + 3 * Math.sin(x / 1.7)), '#162a24', 44);
+    // stage building with columns
+    c.px(22, 24, 44, 16, '#e5dcc4');
+    c.px(20, 22, 48, 2, '#cfc5aa');
+    for (let x = 26; x < 64; x += 6) { c.px(x, 26, 2, 14, '#fbf6e6'); }
+    c.px(30, 30, 28, 10, '#7a3a4a');
+    c.px(0, 40, GW, 3, '#bdb298');
+    // stage lights + performer
+    c.px(42, 34, 2, 6, '#ffd23f'); c.px(42, 32, 2, 2, '#e0aa80');
+    [[26, 20], [60, 20]].forEach(([x, y]) => { c.px(x, y, 2, 2, '#fff3c8', 'glow'); });
+    for (let y = 22; y < 40; y++) { const w = Math.round((y - 22) / 2); c.px(43 - w, y, w * 2 + 1, 1, '#fff3c8', 'glow'); }
+    // tiers of stone seats in a bowl
+    for (let i = 0; i < 7; i++) {
+      const y = 44 + i * 3; const inset = 18 - i * 3;
+      c.px(inset, y, GW - inset * 2, 2, i % 2 ? '#9a917c' : '#aba28c');
+      c.px(inset, y + 2, GW - inset * 2, 1, '#6e6756');
+    }
+    for (let i = 0; i < 40; i++) { const row = Math.floor(c.rand() * 6); const inset = 18 - row * 3; c.dot(inset + Math.floor(c.rand() * (GW - inset * 2)), 43 + row * 3, ['#e05a4a', '#3f6fd1', '#f0b82a', '#ffffff'][i % 4], i % 5 ? undefined : 'bob'); }
+  },
+
+  glade(c) {
+    c.bands(0, [[10, '#7fc2f0'], [6, '#b4dcf6']]);
+    // library facade with colonnade
+    c.px(10, 6, 68, 20, '#efe7d4');
+    c.px(8, 4, 72, 3, '#d9cfb8');
+    for (let x = 16; x < 74; x += 5) c.px(x, 9, 2, 15, '#ffffff');
+    for (let x = 18; x < 74; x += 5) c.px(x, 11, 3, 11, '#8aa3bd');
+    c.px(36, 0, 16, 5, '#c9d9c8'); c.px(40, -1, 8, 2, '#b3c7b3');
+    c.px(0, 26, GW, 2, '#d8cdb2');
+    // trees at the edges
+    c.disc(4, 22, 8, '#2f6b3a'); c.disc(84, 22, 8, '#2f6b3a'); c.disc(6, 20, 5, '#3f8a4a'); c.disc(82, 20, 5, '#3f8a4a');
+    // lawn with mow stripes
+    c.px(0, 28, GW, 36, '#6fae4a');
+    for (let y = 30; y < GH; y += 6) c.px(0, y, GW, 3, '#7cbc56');
+    // blankets + people
+    [[12, 40, '#e05a4a'], [36, 48, '#f0b82a'], [60, 38, '#3f6fd1'], [70, 54, '#ff8fc4']].forEach(([x, y, col]) => { c.px(x, y, 9, 5, col); c.px(x + 2, y + 1, 2, 2, '#e0aa80'); c.px(x + 5, y + 2, 3, 2, '#ffffff'); });
+    c.px(28, 34, 2, 4, '#1d1d2b'); c.px(28, 32, 2, 2, '#e0aa80'); c.px(50, 36, 2, 4, '#8e3fd0'); c.px(50, 34, 2, 2, '#8a5a3a');
+    c.px(38, 30, 3, 1, '#ffffff', 'drift');
+    // one person actually studying, with a stack of books
+    c.px(22, 54, 2, 3, '#4a9a6a'); c.px(22, 52, 2, 2, '#e0aa80'); c.px(25, 55, 3, 1, '#d84a4a'); c.px(25, 54, 3, 1, '#3f6fd1');
+  },
+
+  creek(c) {
+    c.px(0, 0, GW, GH, '#2f5a3a');
+    for (let i = 0; i < 140; i++) c.dot(Math.floor(c.rand() * GW), Math.floor(c.rand() * 30), c.rand() > 0.5 ? '#3f7a4a' : '#264a30', 'sway');
+    // light shafts
+    for (let i = 0; i < 3; i++) for (let y = 0; y < 36; y += 2) c.dot(20 + i * 22 + Math.floor(y / 3), y, '#cfe8a8', 'glow');
+    // banks
+    c.silhouette((x) => 30 + Math.round(3 * Math.sin(x / 8)), '#5a4a36');
+    // creek meander
+    for (let y = 32; y < GH; y++) {
+      const cx = 44 + Math.round(12 * Math.sin(y / 9));
+      const w = 6 + Math.round((y - 32) / 3);
+      c.px(cx - w, y, w * 2, 1, y % 3 ? '#4f8fb0' : '#5fa3c4');
+    }
+    for (let y = 34; y < GH; y += 4) { const cx = 44 + Math.round(12 * Math.sin(y / 9)); c.px(cx - 2 + (y % 5), y, 3, 1, '#d8f0ff', 'waves'); }
+    // rocks
+    [[34, 44], [52, 50], [40, 58], [58, 40]].forEach(([x, y]) => { c.px(x, y, 4, 2, '#8a8a80'); c.px(x + 1, y - 1, 2, 1, '#a8a89c'); });
+    // footbridge
+    c.px(14, 38, 60, 2, '#8a5e3c');
+    for (let x = 14; x < 74; x += 6) c.px(x, 34, 1, 4, '#6a4a2e');
+    c.px(14, 34, 60, 1, '#a07048');
+    c.px(30, 32, 2, 2, '#e0aa80'); c.px(30, 34, 2, 4, '#f0b82a');
+    // ferns
+    for (let x = 2; x < GW; x += 7) { c.px(x, 58, 1, 6, '#4a8a3a', 'sway'); c.dot(x - 1, 59, '#5aa04a', 'sway'); c.dot(x + 1, 60, '#5aa04a', 'sway'); }
+  },
+
+  grove(c) {
+    c.bands(0, [[20, '#dcebd8'], [16, '#c4dcc4'], [10, '#aac8ae']]);
+    // mist
+    for (let y = 8; y < 44; y += 9) for (let x = -8; x < GW; x += 26) c.px(x + (y % 7), y, 14, 2, '#f1f7ee', 'drift');
+    // tall trunks, peeling bark
+    [[6, 5], [18, 4], [30, 6], [47, 5], [60, 4], [73, 6], [84, 3]].forEach(([x, w], i) => {
+      c.px(x, 0, w, 56, i % 2 ? '#b9ab94' : '#cabda6');
+      c.px(x + w - 1, 0, 1, 56, '#8f826c');
+      for (let y = 4; y < 56; y += 7) c.px(x + (y % 3), y, 2, 3, '#e8dcc6');
+      for (let y = 8; y < 56; y += 11) c.px(x + 1, y, 1, 4, '#7a6a52');
+    });
+    // canopy tatters
+    for (let i = 0; i < 70; i++) c.dot(Math.floor(c.rand() * GW), Math.floor(c.rand() * 10), '#6f8f6a', 'sway');
+    // leaf litter floor + a path
+    c.px(0, 56, GW, 8, '#8a7a5a');
+    for (let i = 0; i < 60; i++) c.dot(Math.floor(c.rand() * GW), 56 + Math.floor(c.rand() * 8), c.rand() > 0.5 ? '#a8946a' : '#6e5e42');
+    c.px(36, 58, 16, 6, '#c9b88f');
+    c.px(42, 49, 2, 7, '#3f6fd1', 'ride'); c.px(42, 47, 2, 2, '#e0aa80', 'ride');
+  },
+
+  telegraph(c) {
+    c.bands(0, [[8, '#8fcaf0'], [4, '#bfe2f6']]);
+    // shopfronts
+    const fronts = [['#e05a4a', 12], ['#f0b82a', 10], ['#3fb8a8', 12], ['#8e3fd0', 11], ['#ff8fc4', 10], ['#3f6fd1', 12], ['#6aa84f', 11], ['#f28c3a', 10]];
+    let x = 0;
+    fronts.forEach(([col, w], i) => {
+      const h = 26 + (i % 3) * 4;
+      c.px(x, 38 - h, w, h, col);
+      c.px(x, 38 - h, w, 2, '#1d1d2b');
+      for (let wy = 38 - h + 4; wy < 28; wy += 6) c.px(x + 2, wy, w - 4, 3, '#e8f4ff');
+      c.px(x + 1, 30, w - 2, 3, i % 2 ? '#ffffff' : '#1d1d2b');
+      c.px(x + 2, 33, w - 4, 5, '#3a3040');
+      x += w;
+    });
+    // sidewalk + vendor tables with tie-dye
+    c.px(0, 38, GW, 8, '#bdb6a8');
+    [[4, 40], [30, 41], [58, 40]].forEach(([tx, ty], i) => {
+      c.px(tx, ty, 14, 2, '#8a5e3c');
+      for (let k = 0; k < 14; k++) c.dot(tx + k, ty - 1, ['#e05a4a', '#f0b82a', '#3fb8a8', '#8e3fd0', '#ff8fc4'][(k + i) % 5], 'twinkle');
+      c.px(tx + 4, ty - 5, 2, 4, '#1d1d2b'); c.px(tx + 4, ty - 7, 2, 2, '#e0aa80');
+    });
+    // street + bus
+    c.px(0, 46, GW, 18, '#5a5a62');
+    for (let sx = 2; sx < GW; sx += 10) c.px(sx, 55, 5, 1, '#f0d060');
+    c.px(10, 46, 30, 8, '#f4f4f4', 'ride'); c.px(10, 46, 30, 2, '#3f6fd1', 'ride');
+    for (let wx = 13; wx < 38; wx += 5) c.px(wx, 48, 3, 3, '#6a86a8', 'ride');
+    c.px(13, 54, 3, 2, '#1d1d2b', 'ride'); c.px(34, 54, 3, 2, '#1d1d2b', 'ride');
+    rider(c, 60, 61, '#f0b82a', 'ride2');
+  },
+
+  bart(c) {
+    c.px(0, 0, GW, GH, '#2a2e36');
+    // tiled back wall
+    c.px(0, 4, GW, 30, '#d9d4c4');
+    for (let y = 4; y < 34; y += 4) c.px(0, y, GW, 1, '#bdb8a8');
+    for (let tx = 0; tx < GW; tx += 8) c.px(tx, 4, 1, 30, '#c9c4b4');
+    c.px(0, 16, GW, 3, '#2a7ac8');
+    c.px(30, 8, 28, 6, '#1d1d2b'); c.px(32, 10, 24, 2, '#f0f0f0');
+    // ceiling lights
+    for (let lx = 6; lx < GW; lx += 20) c.px(lx, 1, 10, 2, '#fff6d0', 'glow');
+    // track bed
+    c.px(0, 34, GW, 14, '#16181e');
+    c.px(0, 44, GW, 1, '#8a8a90'); c.px(0, 40, GW, 1, '#8a8a90');
+    // train arriving
+    c.px(20, 26, 68, 18, '#c9ccd2', 'ride2');
+    c.px(20, 26, 68, 2, '#8a8e96', 'ride2');
+    for (let wx = 28; wx < 88; wx += 9) c.px(wx, 30, 6, 5, '#3a4a64', 'ride2');
+    c.px(20, 38, 68, 2, '#2a7ac8', 'ride2');
+    c.px(20, 30, 4, 8, '#e0e4ea', 'ride2'); c.px(21, 36, 2, 1, '#ffe39a', 'ride2');
+    // platform edge with yellow strip + riders
+    c.px(0, 48, GW, 16, '#8f8b82');
+    c.px(0, 48, GW, 2, '#f0d060');
+    for (let dx = 2; dx < GW; dx += 3) c.dot(dx, 49, '#c9a830');
+    [[10, '#e05a4a'], [26, '#3f6fd1'], [44, '#f0b82a'], [66, '#4a9a6a'], [78, '#8e3fd0']].forEach(([px_, col], i) => { c.px(px_, 52 + (i % 2), 3, 7, col); c.px(px_, 50 + (i % 2), 3, 2, i % 2 ? '#8a5a3a' : '#e0aa80'); });
+  },
+
+  carousel(c) {
+    c.bands(0, [[10, '#8fd0f0'], [8, '#bfe6f6']]);
+    c.silhouette((x) => 16 + Math.round(3 * Math.sin(x / 5) + 2 * Math.sin(x / 2)), '#3d6b3a', 40);
+    c.px(0, 50, GW, 14, '#7aae52');
+    // canopy: striped cone
+    for (let i = 0; i < 10; i++) { const w = 12 + i * 5; for (let s = 0; s < w; s++) c.dot(44 - Math.floor(w / 2) + s, 10 + i, Math.floor((s - (44 - w / 2)) / 3) % 2 ? '#e0453a' : '#fff4e0'); }
+    c.px(43, 6, 3, 4, '#f0b82a'); c.px(44, 4, 1, 2, '#e0453a');
+    c.px(17, 20, 54, 3, '#f0b82a'); for (let x = 18; x < 70; x += 4) c.disc(x, 22, 1, '#fff3c8', 'twinkle');
+    // poles + bobbing horses
+    for (let x = 20; x < 70; x += 8) {
+      c.px(x + 1, 23, 1, 24, '#d9c070');
+      const layer = (x / 8) % 2 ? 'bob' : 'peck';
+      c.px(x - 1, 33, 6, 3, ['#ffffff', '#f2c28a', '#9a6a4a'][x % 3], layer);
+      c.px(x + 4, 31, 2, 3, ['#ffffff', '#f2c28a', '#9a6a4a'][x % 3], layer);
+      c.px(x - 1, 36, 1, 3, '#5a4a3a', layer); c.px(x + 3, 36, 1, 3, '#5a4a3a', layer);
+      c.px(x, 32, 2, 1, ['#e0453a', '#3f6fd1', '#3fb8a8'][x % 3], layer);
+    }
+    c.px(16, 46, 56, 3, '#b9a47a'); c.px(14, 49, 60, 2, '#8a7a5a');
+    // kids watching
+    c.px(8, 52, 2, 4, '#f0b82a'); c.px(8, 50, 2, 2, '#e0aa80'); c.px(78, 52, 2, 4, '#3fb8a8'); c.px(78, 50, 2, 2, '#8a5a3a');
+  },
+
+  gatefog(c) {
+    c.bands(0, [[10, '#8ec3e6'], [8, '#b9d9ee'], [6, '#dcebf3']]);
+    // headlands both sides
+    c.silhouette((x) => (x < 22 ? 22 + Math.round(x / 5) : GH), '#6a7a5a', 40, 'base', 0, 26);
+    c.silhouette((x) => (x > 64 ? 20 + Math.round((GW - x) / 5) : GH), '#5f6f50', 40, 'base', 62, GW);
+    c.bands(30, [[6, '#3f79a8'], [8, '#4f8cba'], [10, '#62a0cc']]);
+    glints(c, 32, 52, 12, '#ffffff');
+    // bridge: two towers, deck, cables
+    c.px(0, 29, GW, 2, '#c0472e');
+    [[24, 12], [62, 12]].forEach(([x, y]) => { c.px(x, y, 3, 18, '#c0472e'); c.px(x, y + 4, 3, 1, '#9a3622'); c.px(x, y + 10, 3, 1, '#9a3622'); });
+    for (let x = 0; x < GW; x++) {
+      let y;
+      if (x < 25) y = 13 + Math.round(((25 - x) / 25) * 15);
+      else if (x > 63) y = 13 + Math.round(((x - 63) / 25) * 15);
+      else y = 13 + Math.round(((x - 44) ** 2) / 26);
+      if (y < 29) c.dot(x, y, '#d0573a');
+    }
+    // fog pouring through, in two drifting layers
+    for (let y = 16; y < 40; y += 3) for (let x = -20; x < GW; x += 18) c.px(x + (y % 5) * 2, y, 14, 2, '#f7f8f8', y % 2 ? 'drift' : 'drift2');
+    c.px(0, 36, GW, 3, '#eef1f2', 'drift2');
+    // a ship heading out
+    c.px(36, 46, 12, 3, '#3a3a44', 'ride2'); c.px(40, 42, 4, 4, '#e8e8e8', 'ride2'); c.px(41, 40, 1, 2, '#c0472e', 'ride2');
+    c.px(0, 56, GW, 8, '#8a7a5a');
+    for (let x = 2; x < GW; x += 5) c.px(x, 54, 1, 3, '#6a8a4a', 'sway');
+  },
+
 };
 
 // ------------------------------------------------------------- the card
@@ -535,9 +825,10 @@ console.log(`campus-cards: painted ${count} cards${sharp ? ' (+png)' : ''}`);
 // Landscape unfurl card for /campus-cards: five cards fanned on the set accent.
 if (sharp) {
   const set = DATA.sets[0];
-  const picks = [1, 2, 5, 4, 7].map((n) => set.cards.find((c) => c.n === n));
-  const tiles = await Promise.all(picks.map((c) => sharp(Buffer.from(card(DATA, set, c)), { density: 144 }).resize(300, 420).png().toBuffer()));
-  const bg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" shape-rendering="crispEdges"><rect width="1200" height="630" fill="${set.accent}"/>${Array.from({ length: 40 }, (_, i) => `<rect x="0" y="${i * 16}" width="1200" height="2" fill="#000" fill-opacity=".08"/>`).join('')}<rect x="0" y="560" width="1200" height="70" fill="#12121c"/><text x="40" y="604" font-family="${MONO}" font-size="30" font-weight="700" fill="#fff">CAMPUS CARDS · SET 01 · SANTA BARBARA</text><text x="1160" y="604" font-family="${MONO}" font-size="20" font-weight="700" fill="#ffd23f" text-anchor="end">TEZOS · POINTCAST</text></svg>`;
+  const pick = (si, n) => [DATA.sets[si], DATA.sets[si].cards.find((c) => c.n === n)];
+  const picks = DATA.sets.length > 1 ? [pick(0, 2), pick(1, 3), pick(0, 1), pick(1, 1), pick(1, 12)] : [1, 2, 5, 4, 7].map((n) => pick(0, n));
+  const tiles = await Promise.all(picks.map(([st, c]) => sharp(Buffer.from(card(DATA, st, c)), { density: 144 }).resize(300, 420).png().toBuffer()));
+  const bg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" shape-rendering="crispEdges"><rect width="1200" height="630" fill="${set.accent}"/>${Array.from({ length: 40 }, (_, i) => `<rect x="0" y="${i * 16}" width="1200" height="2" fill="#000" fill-opacity=".08"/>`).join('')}<rect x="0" y="560" width="1200" height="70" fill="#12121c"/><text x="40" y="604" font-family="${MONO}" font-size="30" font-weight="700" fill="#fff">CAMPUS CARDS · ${DATA.sets.map((x) => x.title.split(' · ')[1].toUpperCase()).join(' · ')}</text><text x="1160" y="604" font-family="${MONO}" font-size="20" font-weight="700" fill="#ffd23f" text-anchor="end">TEZOS · POINTCAST</text></svg>`;
   const x = [40, 265, 450, 635, 860];
   const y = [110, 70, 40, 70, 110];
   await sharp(Buffer.from(bg)).composite(tiles.map((input, i) => ({ input, left: x[i], top: y[i] - 20 }))).png().toFile(path.join(ROOT, 'public/images/campus-cards/og.png'));
