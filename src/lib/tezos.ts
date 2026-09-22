@@ -336,6 +336,24 @@ export async function mintKennelClubSitting(params: {
   return { opHash: operation.opHash, confirmation: operation.confirmation(1) };
 }
 
+export async function mintCampusCard(params: {
+  contract: string;
+  tokenId: number;
+  quantity: number;
+  priceMutez: number;
+}): Promise<{ opHash: string; confirmation: Promise<unknown> }> {
+  if (!params.contract.startsWith('KT1')) throw new Error('Campus Cards contract is not configured.');
+  if (!Number.isInteger(params.tokenId) || params.tokenId < 0) throw new Error('Invalid Campus Cards token id.');
+  if (!Number.isInteger(params.quantity) || params.quantity < 1 || params.quantity > 10) throw new Error('Mint 1 to 10 cards at a time.');
+  const { tezos, wallet } = getToolkit();
+  await ensurePointCastPermissions(wallet);
+  const contract = await tezos.wallet.at(params.contract);
+  const operation = await (contract.methodsObject as any)
+    .mint({ token_id: params.tokenId, quantity: params.quantity })
+    .send({ amount: params.priceMutez * params.quantity, mutez: true });
+  return { opHash: operation.opHash, confirmation: operation.confirmation(1) };
+}
+
 /** Submit one allowlisted director operation through the shared Beacon wallet. */
 export async function submitDirectorOperation(
   operation: DirectorOperation,

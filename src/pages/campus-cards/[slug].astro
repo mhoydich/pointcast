@@ -1,0 +1,65 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import CampusCardMint from '../../components/CampusCardMint.astro';
+import { CAMPUS_CARDS, CAMPUS_CARD_LIST, type CampusCard } from '../../lib/campus-cards';
+
+export function getStaticPaths() {
+  return CAMPUS_CARD_LIST.map((card) => ({ params: { slug: card.slug }, props: { card } }));
+}
+
+const { card } = Astro.props as { card: CampusCard };
+const siblings = CAMPUS_CARD_LIST.filter((c) => c.setId === card.setId);
+const i = siblings.findIndex((c) => c.slug === card.slug);
+const prev = siblings[(i - 1 + siblings.length) % siblings.length];
+const next = siblings[(i + 1) % siblings.length];
+const title = `${card.title} · Campus Cards ${card.setTitle.replace('Set ', 'Set ')}`;
+const description = `${card.flavor} ${card.rarityLabel}, ${card.edition}, ${card.priceTez} on Tezos. Unofficial place card.`;
+---
+
+<BlockLayout title={title} description={description} image={card.png} imageWidth={1200} imageHeight={1680} themeColor={card.rarityColor} alternates={[{ type: 'application/json', href: `${card.url}.json`, title: `${card.title} JSON` }]}>
+  <main class="card">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a><span>/</span><a href="/campus-cards">Campus Cards</a><span>/</span><span>{card.title}</span><a href={`${card.url}.json`}>JSON</a>
+    </nav>
+    <div class="card__body">
+      <figure>
+        <img src={card.svg} alt={`${card.title}, ${card.rarityLabel} card ${card.number}: ${card.flavor}`} width="400" height="560" fetchpriority="high" />
+        <figcaption><a href={card.png} download>PNG, 1200 × 1680</a> · <a href={card.svg}>animated SVG</a> · CC0</figcaption>
+      </figure>
+      <div class="desk" style={`--r:${card.rarityColor}`}>
+        <p class="kicker">{card.setTitle} · card {card.number} · token {card.tokenId}</p>
+        <h1>{card.title}</h1>
+        <p class="tier"><i></i>{card.rarityLabel} · {card.edition} · {card.priceTez}</p>
+        <p class="flavor">{card.flavor}</p>
+        <p class="place">{card.place}, near the {card.campus} campus of the University of California.</p>
+        <CampusCardMint card={card} />
+        <nav class="step" aria-label="Other cards in this set">
+          <a href={prev.url}>← {prev.title}</a>
+          <a href={next.url}>{next.title} →</a>
+        </nav>
+        <p class="notice">{CAMPUS_CARDS.notice}</p>
+      </div>
+    </div>
+  </main>
+</BlockLayout>
+
+<style>
+  .card { width: min(1100px, calc(100vw - 32px)); margin: 0 auto; padding: 22px 0 90px; }
+  .crumb, .kicker, figcaption, .tier, .step { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .crumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; color: var(--pc-ink-muted); }
+  .crumb a:last-child { margin-left: auto; }
+  .card__body { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: clamp(20px, 5vw, 60px); align-items: start; }
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; height: auto; image-rendering: pixelated; box-shadow: 8px 8px 0 var(--pc-ink); }
+  figcaption { margin-top: 18px; color: var(--pc-ink-muted); }
+  .desk { border-top: 2px solid var(--pc-ink); padding-top: 16px; display: grid; gap: 14px; }
+  .kicker { margin: 0; color: var(--r); }
+  h1 { margin: 0; font-weight: 400; letter-spacing: -.055em; line-height: .9; font-size: clamp(48px, 7vw, 92px); }
+  .tier { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--pc-ink); font-size: 11px; }
+  .tier i { width: 12px; height: 12px; background: var(--r); border: 1px solid var(--pc-ink); }
+  .flavor { margin: 0; font-size: 20px; line-height: 1.4; letter-spacing: -.01em; max-width: 34ch; }
+  .place { margin: 0 0 8px; color: var(--pc-ink-soft); font-size: 14px; }
+  .step { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--pc-rule, #ddd); }
+  .notice { margin: 0; color: var(--pc-ink-muted); font-size: 12px; line-height: 1.5; }
+  @media (max-width: 760px) { .card__body { grid-template-columns: 1fr; } figure img { box-shadow: 5px 5px 0 var(--pc-ink); } }
+</style>

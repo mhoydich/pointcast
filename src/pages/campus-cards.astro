@@ -1,0 +1,134 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CAMPUS_CARDS, CAMPUS_CARDS_CANONICAL, CAMPUS_CARDS_LIVE, CAMPUS_CARD_LIST, tez } from '../lib/campus-cards';
+
+const set = CAMPUS_CARDS.sets[0];
+const cards = CAMPUS_CARD_LIST.filter((c) => c.setId === set.id);
+const title = 'Campus Cards · Set 01 · Santa Barbara';
+const description = 'Twelve pixel-art place cards from the UC Santa Barbara campus and Isla Vista, collectible on Tezos. The first of ten campus sets. Unofficial, places only, CC0.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': CAMPUS_CARDS_CANONICAL,
+  name: title,
+  description,
+  numberOfItems: cards.length,
+  hasPart: cards.map((c) => ({ '@type': 'VisualArtwork', name: `${c.title} (${c.rarityLabel})`, image: `https://pointcast.xyz${c.png}`, url: `https://pointcast.xyz${c.url}` })),
+};
+const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key, ...r, count: cards.filter((c) => c.rarity === key).length }));
+---
+
+<BlockLayout title={title} description={description} image="/images/campus-cards/og.png" imageWidth={1200} imageHeight={630} themeColor="#0f61ff" jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/campus-cards.json', title: 'Campus Cards JSON' }]}>
+  <main class="cc">
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">Home</a><span>/</span><span>Campus Cards</span><a href="/campus-cards.json">JSON</a>
+    </nav>
+
+    <header class="mast">
+      <div>
+        <p class="kicker">Campus Cards · a PointCast set on Tezos</p>
+        <h1>Ten campuses.<br /><em>Set 01 is Santa Barbara.</em></h1>
+      </div>
+      <p>Twelve pixel-art place cards from the Goleta bluffs and Isla Vista: the carillon tower, the lagoon, the bike tunnel, the sunset everyone watches from the same cliff. Six common, three uncommon, two rare, one legendary. The other nine campuses come one set at a time, on the same contract.</p>
+    </header>
+
+    <p class="notice"><b>Unofficial.</b> {CAMPUS_CARDS.notice.replace(/^Unofficial\.\s*/, '')}</p>
+
+    <section class="set" aria-labelledby="set-title">
+      <div class="set__head">
+        <div><p class="kicker">{set.title}</p><h2 id="set-title">{set.subtitle}</h2></div>
+        <p class="set__status">{CAMPUS_CARDS_LIVE ? 'Minting on Tezos mainnet' : 'Compiled · awaiting origination'}</p>
+      </div>
+      <ol class="grid">
+        {cards.map((c) => (
+          <li class={`grid__card grid__card--${c.rarity}`}>
+            <a href={c.url}>
+              <img src={c.svg} alt={`${c.title}, ${c.rarityLabel} card ${c.number}: ${c.flavor}`} width="400" height="560" loading={c.n <= 4 ? 'eager' : 'lazy'} />
+              <span class="grid__meta"><b>{c.number}</b><span>{c.rarityLabel}</span><span>{c.edition} · {c.priceTez}</span></span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="rarity" aria-labelledby="rarity-title">
+      <p class="kicker">Rarity</p>
+      <h2 id="rarity-title">Four tiers, <em>priced by how many can exist.</em></h2>
+      <table>
+        <thead><tr><th>Tier</th><th>Cards in set</th><th>Edition</th><th>Mint</th></tr></thead>
+        <tbody>
+          {rarities.map((r) => (
+            <tr><td><i style={`background:${r.color}`}></i>{r.label}</td><td>{r.count}</td><td>{r.cap ? `${r.cap} max per card` : 'open'}</td><td>{tez(r.priceMutez)}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p class="fine">A full Set 01 is one of every card. There can only ever be five complete sets, because Storke Tower caps at five.</p>
+    </section>
+
+    <section class="campuses" aria-labelledby="campuses-title">
+      <p class="kicker">The ten</p>
+      <h2 id="campuses-title">One set per campus, <em>in the order we can get them right.</em></h2>
+      <ol>
+        {CAMPUS_CARDS.campuses.map((c, i) => (
+          <li class={c.status === 'queued' ? 'queued' : 'live'}>
+            <b>{String(i + 1).padStart(2, '0')}</b>
+            <span>{c.name}</span>
+            <small>{c.status === 'queued' ? 'queued' : `${c.status.replace('set-', 'set ')} · ${c.place}`}</small>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="how" aria-labelledby="how-title">
+      <p class="kicker">How it works</p>
+      <h2 id="how-title">One contract, <em>every campus.</em></h2>
+      <ul>
+        <li>Each card is an FA2 token on Tezos mainnet. Token ids run in set order: Set 01 is 0 through 11.</li>
+        <li>Mint takes a card id and a quantity, up to ten at a time, at the card's price. Caps are enforced on chain.</li>
+        <li>New campus sets are added to the same contract and start closed until their cards are ready.</li>
+        <li>The art is original pixel painting generated from one data file, animated SVG with a PNG twin, released CC0.</li>
+      </ul>
+    </section>
+  </main>
+</BlockLayout>
+
+<style>
+  .cc { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 22px 0 90px; --cc: #0f61ff; }
+  .crumb, .kicker, .set__status, .grid__meta, .campuses small, .fine, th { font: 400 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .crumb { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; color: var(--pc-ink-muted); }
+  .crumb a:last-child { margin-left: auto; }
+  .kicker { margin: 0 0 10px; color: var(--cc); }
+  h1, h2 { margin: 0; font-weight: 400; letter-spacing: -.05em; line-height: .92; }
+  h1 { font-size: clamp(46px, 8vw, 104px); }
+  h2 { font-size: clamp(28px, 4vw, 48px); }
+  h1 em, h2 em { color: var(--cc); font-style: normal; }
+  .mast { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, .6fr); gap: 24px; align-items: end; border-top: 2px solid var(--pc-ink); padding: 20px 0 22px; }
+  .mast > p { margin: 0; color: var(--pc-ink-soft); font-size: 16px; line-height: 1.5; }
+  .notice { margin: 0 0 34px; padding: 10px 12px; border: 1.5px dashed var(--pc-ink); font-size: 13px; line-height: 1.45; color: var(--pc-ink-soft); }
+  .set__head { display: flex; justify-content: space-between; align-items: end; gap: 16px; border-top: 1.5px solid var(--pc-ink); padding-top: 16px; margin-bottom: 18px; }
+  .set__status { margin: 0; padding: 6px 8px; background: var(--pc-ink); color: #fff; white-space: nowrap; }
+  .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+  .grid__card a { display: block; color: inherit; text-decoration: none; }
+  .grid__card img { display: block; width: 100%; height: auto; image-rendering: pixelated; transition: transform .15s steps(3); }
+  .grid__card a:hover img, .grid__card a:focus-visible img { transform: translate(-3px, -3px); box-shadow: 6px 6px 0 var(--pc-ink); }
+  .grid__meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 8px; color: var(--pc-ink-muted); }
+  .grid__meta b { color: var(--pc-ink); }
+  .rarity, .campuses, .how { margin-top: 56px; border-top: 1.5px solid var(--pc-ink); padding-top: 16px; }
+  table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--pc-rule, #ddd); }
+  td i { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border: 1px solid var(--pc-ink); }
+  .fine { margin: 12px 0 0; color: var(--pc-ink-muted); text-transform: none; letter-spacing: .02em; font-size: 12px; }
+  .campuses ol { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  .campuses li { display: grid; gap: 4px; padding: 12px; border: 1.5px solid var(--pc-ink); }
+  .campuses li.live { background: var(--cc); color: #fff; }
+  .campuses li.queued { color: var(--pc-ink-muted); border-style: dashed; }
+  .campuses li b { font: 600 11px var(--pc-font-mono); }
+  .campuses li span { font-size: 18px; letter-spacing: -.02em; }
+  .how ul { margin: 18px 0 0; padding-left: 18px; max-width: 70ch; color: var(--pc-ink-soft); line-height: 1.6; }
+  @media (max-width: 760px) {
+    .mast { grid-template-columns: 1fr; }
+    .set__head { flex-direction: column; align-items: start; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .grid__meta span:last-child { display: none; }
+  }
+</style>
