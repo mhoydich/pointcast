@@ -1,0 +1,271 @@
+---
+/**
+ * HomeV2SignalDeck — the first small piece of the proposed Now / New / Town
+ * front door. It is fed by the immutable blocks collection, so publishing a
+ * block refreshes this deck without another hand-maintained homepage list.
+ */
+import { CHANNELS } from '../lib/channels';
+import type { WireItem } from './HomeWire.astro';
+
+interface Props {
+  drops: WireItem[];
+  total: number;
+}
+
+const { drops, total } = Astro.props;
+const visible = drops.slice(0, 6);
+const first = visible[0];
+const channel = (code: string) => CHANNELS[code as keyof typeof CHANNELS];
+const accent = (code: string) => channel(code)?.color600 ?? '#185FA5';
+const tint = (code: string) => channel(code)?.color50 ?? '#EEF4FA';
+const channelName = (code: string) => channel(code)?.name ?? code;
+const action = (item: WireItem) => item.action || 'Open the drop';
+const destination = (item: WireItem) => item.destination || item.href;
+---
+
+{first && (
+  <section
+    class="signal-deck"
+    id="new"
+    data-signal-deck
+    data-latest-id={first.id}
+    aria-labelledby="signal-deck-title"
+    style={`--signal:${accent(first.channel)};--signal-tint:${tint(first.channel)}`}
+  >
+    <div class="signal-deck__intro">
+      <p class="signal-deck__eyebrow">El Segundo · live from the town</p>
+      <h1 id="signal-deck-title">A little more<br /><em>is happening.</em></h1>
+      <p class="signal-deck__lede">Music, rooms, and experiments, still warm.</p>
+      <nav class="signal-deck__live" aria-label="Live PointCast doors">
+        <a href="/station" data-signal-radio>
+          <span class="signal-deck__pulse" aria-hidden="true"></span>
+          <span data-signal-radio-label>On air · listen in</span>
+        </a>
+        <a href="/shortwave">Shortwave · say hello</a>
+      </nav>
+    </div>
+
+    <article
+      class="signal-deck__stage"
+      role="tabpanel"
+      id="signal-drop-panel"
+      aria-labelledby={`signal-drop-${first.id}`}
+      aria-live="polite"
+    >
+      <a class="signal-deck__stage-link" href={destination(first)} data-signal-stage-link>
+        <span class="signal-deck__picture">
+          <img src={first.image} alt="" width="640" height="336" decoding="async" fetchpriority="high" data-signal-stage-image />
+          <span class="signal-deck__number" data-signal-stage-number>№ {first.id}</span>
+        </span>
+        <span class="signal-deck__copy">
+          <span class="signal-deck__meta" data-signal-stage-meta>CH.{first.channel} · {channelName(first.channel)} · {first.date}</span>
+          <strong data-signal-stage-title>{first.title}</strong>
+          <span class="signal-deck__dek" data-signal-stage-dek>{first.dek}</span>
+          <span class="signal-deck__action" data-signal-stage-action>{action(first)} <b aria-hidden="true">↗</b></span>
+        </span>
+      </a>
+    </article>
+
+    <div class="signal-deck__rail">
+      <div class="signal-deck__rail-head">
+        <p><b>New</b> · latest {visible.length}</p>
+        <a href="/archive">All {total} blocks</a>
+      </div>
+      <div class="signal-deck__tabs" role="tablist" aria-label="Newest PointCast drops">
+        {visible.map((item, index) => (
+          <button
+            type="button"
+            role="tab"
+            id={`signal-drop-${item.id}`}
+            aria-controls="signal-drop-panel"
+            aria-selected={index === 0 ? 'true' : 'false'}
+            tabindex={index === 0 ? '0' : '-1'}
+            data-signal-drop
+            data-id={item.id}
+            data-title={item.title}
+            data-dek={item.dek}
+            data-href={destination(item)}
+            data-image={item.image}
+            data-action={action(item)}
+            data-meta={`CH.${item.channel} · ${channelName(item.channel)} · ${item.date}`}
+            data-accent={accent(item.channel)}
+            data-tint={tint(item.channel)}
+          >
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <b>{item.title}</b>
+            <small>№ {item.id} · {action(item)}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <footer class="signal-deck__foot">
+      <span data-signal-since>Newest door · № {first.id}</span>
+      <span>
+        <button type="button" data-signal-shuffle>Shuffle · turn the dial</button>
+        <a href="/random">Random door ↗</a>
+      </span>
+    </footer>
+  </section>
+)}
+
+<script>
+  type DropButton = HTMLButtonElement & { dataset: DOMStringMap & {
+    id?: string; title?: string; dek?: string; href?: string; image?: string;
+    action?: string; meta?: string; accent?: string; tint?: string;
+  } };
+
+  function mountSignalDeck() {
+    const root = document.querySelector<HTMLElement>('[data-signal-deck]');
+    if (!root || root.dataset.mounted === 'true') return;
+    root.dataset.mounted = 'true';
+    const controller = new AbortController();
+
+    const tabs = [...root.querySelectorAll<DropButton>('[data-signal-drop]')];
+    const panel = root.querySelector<HTMLElement>('[role="tabpanel"]');
+    const link = root.querySelector<HTMLAnchorElement>('[data-signal-stage-link]');
+    const image = root.querySelector<HTMLImageElement>('[data-signal-stage-image]');
+    const number = root.querySelector<HTMLElement>('[data-signal-stage-number]');
+    const meta = root.querySelector<HTMLElement>('[data-signal-stage-meta]');
+    const title = root.querySelector<HTMLElement>('[data-signal-stage-title]');
+    const dek = root.querySelector<HTMLElement>('[data-signal-stage-dek]');
+    const action = root.querySelector<HTMLElement>('[data-signal-stage-action]');
+    const since = root.querySelector<HTMLElement>('[data-signal-since]');
+    if (!tabs.length || !panel || !link || !image || !number || !meta || !title || !dek || !action) return;
+
+    const select = (tab: DropButton, focus = false) => {
+      for (const item of tabs) {
+        const active = item === tab;
+        item.setAttribute('aria-selected', String(active));
+        item.tabIndex = active ? 0 : -1;
+      }
+      link.href = tab.dataset.href || '#';
+      image.src = tab.dataset.image || '';
+      number.textContent = `№ ${tab.dataset.id || ''}`;
+      meta.textContent = tab.dataset.meta || '';
+      title.textContent = tab.dataset.title || '';
+      dek.textContent = tab.dataset.dek || '';
+      action.firstChild!.textContent = `${tab.dataset.action || 'Open the drop'} `;
+      panel.setAttribute('aria-labelledby', tab.id);
+      root.style.setProperty('--signal', tab.dataset.accent || '#185FA5');
+      root.style.setProperty('--signal-tint', tab.dataset.tint || '#EEF4FA');
+      if (focus) tab.focus();
+    };
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => select(tab));
+      tab.addEventListener('keydown', (event) => {
+        if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + delta + tabs.length) % tabs.length;
+        select(tabs[next], true);
+      });
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-signal-shuffle]')?.addEventListener('click', () => {
+      const current = Math.max(0, tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true'));
+      const step = tabs.length > 1 ? 1 + Math.floor(Math.random() * (tabs.length - 1)) : 0;
+      select(tabs[(current + step) % tabs.length], true);
+    });
+
+    // A tiny returning-visitor affordance: local only, no account and no request.
+    try {
+      const key = 'pc:front-door:last-block';
+      const previous = Number(localStorage.getItem(key) || 0);
+      const ids = tabs.map((tab) => Number(tab.dataset.id || 0));
+      const fresh = previous ? ids.filter((id) => id > previous).length : ids.length;
+      if (since) since.textContent = previous
+        ? fresh
+          ? `Since your last look · ${fresh} new ${fresh === 1 ? 'door' : 'doors'} opened.`
+          : 'Since your last look · nothing new, still worth a look.'
+        : `${ids.length} fresh doors at the front of town.`;
+      window.setTimeout(() => localStorage.setItem(key, root.dataset.latestId || ''), 1800);
+    } catch {}
+
+    const radio = root.querySelector<HTMLElement>('[data-signal-radio-label]');
+    const paintRadio = (payload: any) => {
+      const track = payload?.title || payload?.track?.title || payload?.nowPlaying?.title || payload?.item?.title;
+      if (radio && track) radio.textContent = `On air · ${String(track)}`;
+    };
+    document.addEventListener('pc:nowplaying', (event) => paintRadio((event as CustomEvent).detail), { signal: controller.signal });
+    document.addEventListener('astro:before-swap', () => controller.abort(), { once: true });
+    paintRadio((window as any).__pcNowPlaying);
+  }
+
+  mountSignalDeck();
+  document.addEventListener('astro:page-load', mountSignalDeck);
+</script>
+
+<style>
+  .signal-deck { display: grid; grid-template-columns: minmax(190px,.72fr) minmax(340px,1.45fr) minmax(250px,.88fr); margin-top: 14px; border: 2px solid #111; background: #fffdf7; box-shadow: 7px 7px 0 var(--signal); transition: box-shadow .18s ease; }
+  .signal-deck__intro { display: flex; flex-direction: column; min-width: 0; padding: clamp(18px,2.5vw,30px); border-right: 2px solid #111; background: var(--signal-tint); transition: background .18s ease; }
+  .signal-deck__eyebrow, .signal-deck__meta, .signal-deck__rail-head, .signal-deck__foot { font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .signal-deck__eyebrow { margin: 0 0 24px; color: var(--signal); }
+  .signal-deck h1 { margin: 0; font-size: clamp(30px,3.4vw,50px); line-height: .95; letter-spacing: -.055em; }
+  .signal-deck h1 em { color: var(--signal); font-style: normal; }
+  .signal-deck__lede { margin: 18px 0 24px; max-width: 26ch; font-size: 14px; line-height: 1.5; }
+  .signal-deck__live { display: grid; gap: 7px; margin-top: auto; }
+  .signal-deck__live a { display: flex; align-items: center; gap: 8px; padding: 10px 11px; border: 1px solid #111; background: #fff; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+  .signal-deck__live a:first-child { background: #111; color: #fff; }
+  .signal-deck__live a:hover { background: var(--signal); border-color: var(--signal); color: #fff; }
+  .signal-deck__pulse { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #ff806e; box-shadow: 0 0 0 0 rgba(255,128,110,.55); animation: signal-pulse 2s ease-out infinite; }
+  @keyframes signal-pulse { 65%,100% { box-shadow: 0 0 0 8px rgba(255,128,110,0); } }
+
+  .signal-deck__stage { min-width: 0; border-right: 2px solid #111; background: #fff; }
+  .signal-deck__stage-link { display: grid; height: 100%; grid-template-rows: auto 1fr; color: #111; }
+  .signal-deck__stage-link:hover .signal-deck__action { background: var(--signal); color: #fff; }
+  .signal-deck__picture { position: relative; display: block; overflow: hidden; border-bottom: 1px solid #111; background: var(--signal-tint); }
+  .signal-deck__picture img { display: block; width: 100%; height: auto; aspect-ratio: 1.91 / 1; object-fit: cover; transition: transform .3s ease; }
+  .signal-deck__stage-link:hover img { transform: scale(1.018); }
+  .signal-deck__number { position: absolute; right: 10px; bottom: 10px; padding: 5px 7px; background: #111; color: #fff; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; }
+  .signal-deck__copy { display: flex; flex-direction: column; align-items: flex-start; min-height: 190px; padding: 18px 20px 20px; }
+  .signal-deck__meta { color: var(--signal); }
+  .signal-deck__copy > strong { margin-top: 9px; font-size: clamp(22px,2.4vw,34px); line-height: 1.02; letter-spacing: -.045em; }
+  .signal-deck__dek { margin-top: 10px; max-width: 48ch; font-size: 13px; line-height: 1.45; color: rgba(0,0,0,.7); }
+  .signal-deck__action { margin-top: auto; padding: 8px 10px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; transition: background .14s ease, color .14s ease; }
+
+  .signal-deck__rail { min-width: 0; display: flex; flex-direction: column; }
+  .signal-deck__rail-head { display: flex; justify-content: space-between; gap: 10px; padding: 12px 13px; border-bottom: 1px solid #111; }
+  .signal-deck__rail-head p { margin: 0; }
+  .signal-deck__rail-head b { color: var(--signal); }
+  .signal-deck__rail-head a { text-decoration: underline; text-underline-offset: 3px; }
+  .signal-deck__tabs { display: grid; height: 100%; }
+  .signal-deck__tabs button { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 2px 9px; align-content: center; min-width: 0; padding: 10px 12px; border: 0; border-bottom: 1px solid rgba(0,0,0,.18); border-radius: 0; background: transparent; color: #111; text-align: left; cursor: pointer; }
+  .signal-deck__tabs button:last-child { border-bottom: 0; }
+  .signal-deck__tabs button:hover { background: var(--signal-tint); }
+  .signal-deck__tabs button[aria-selected='true'] { background: var(--signal-tint); box-shadow: inset 5px 0 0 var(--signal); }
+  .signal-deck__tabs button > span { grid-row: 1 / 3; font: 700 9px var(--pc-font-mono); color: var(--signal); }
+  .signal-deck__tabs b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 1.2; }
+  .signal-deck__tabs small { font: 650 8px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; color: #5f5e5a; }
+
+  .signal-deck__foot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; padding: 10px 12px; border-top: 2px solid #111; color: #5f5e5a; }
+  .signal-deck__foot > span:last-child { display: flex; align-items: center; gap: 14px; }
+  .signal-deck__foot button { padding: 0; border: 0; background: none; color: #111; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+  .signal-deck__foot :is(button,a):hover { color: var(--signal); text-decoration: underline; text-underline-offset: 3px; }
+
+  @media (max-width: 980px) {
+    .signal-deck { grid-template-columns: minmax(210px,.72fr) minmax(0,1.28fr); }
+    .signal-deck__stage { border-right: 0; }
+    .signal-deck__rail { grid-column: 1 / -1; border-top: 2px solid #111; }
+    .signal-deck__tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    .signal-deck__tabs button { min-height: 72px; border-right: 1px solid rgba(0,0,0,.18); }
+    .signal-deck__tabs button:nth-child(3n) { border-right: 0; }
+  }
+  @media (max-width: 620px) {
+    .signal-deck { grid-template-columns: 1fr; box-shadow: 5px 5px 0 var(--signal); }
+    .signal-deck__intro { border-right: 0; border-bottom: 2px solid #111; }
+    .signal-deck__eyebrow { margin-bottom: 16px; }
+    .signal-deck__live { grid-template-columns: 1fr 1fr; margin-top: 4px; }
+    .signal-deck__stage { border-bottom: 0; }
+    .signal-deck__copy { min-height: 180px; }
+    .signal-deck__rail { grid-column: auto; }
+    .signal-deck__tabs { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
+    .signal-deck__tabs button { flex: 0 0 78%; min-height: 82px; border-right: 1px solid rgba(0,0,0,.18); scroll-snap-align: start; }
+    .signal-deck__foot { grid-column: auto; align-items: flex-start; flex-direction: column; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .signal-deck__pulse { animation: none; }
+    .signal-deck__picture img { transition: none; }
+  }
+</style>

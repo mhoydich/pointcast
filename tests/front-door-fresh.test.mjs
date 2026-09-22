@@ -115,7 +115,7 @@ test('the current field edition gives the living magazine, Tone Bloom, Beach Com
   assert.match(home, /href="\/me"/);
   assert.match(home, /href="\/super-follow"/);
   // front door rebuilt 2026-09-01: the Beach Commons index door now sits at the foot of the rack component.
-  assert.match(rack, /All eighteen Beach Commons editions →/);
+  assert.match(rack, /All nineteen Beach Commons editions →/);
   assert.match(rack, /href="\/beach-commons\.json"/);
   assert.doesNotMatch(home, /fresh-qwen/);
   assert.doesNotMatch(home, /href="\/qwen-/);
@@ -149,7 +149,7 @@ test('the freshness slot still feeds /now.json, and the front door links the twi
 });
 
 test('the fresh front door is responsive, accessible, and motion-safe by construction', async () => {
-  const [home, edition, desk, play, shelf, css, welcome] = await Promise.all([
+  const [home, edition, desk, play, shelf, css, welcome, deck] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
     read('src/components/HomeFrontDoorDesk.astro'),
@@ -157,11 +157,12 @@ test('the fresh front door is responsive, accessible, and motion-safe by constru
     read('src/styles/home-shelf.css'),
     read('src/styles/front-door-fresh.css'),
     read('src/components/HomeWelcome.astro'),
+    read('src/components/HomeV2SignalDeck.astro'),
   ]);
 
-  // The project welcome carries the page's only h1; Rosebud remains a labelled h2 shelf below it.
+  // The live V2 signal deck carries the page's only h1; the welcome and Rosebud are labelled h2 shelves below it.
   assert.equal((home.match(/<h1\b/g) ?? []).length, 0);
-  assert.equal(((home + desk + play + welcome).match(/<h1\b/g) ?? []).length, 1);
+  assert.equal(((home + desk + play + welcome + deck).match(/<h1\b/g) ?? []).length, 1);
   assert.match(edition, /id="home-edition-title"/);
   assert.match(play, /aria-labelledby="play-title"/);
   assert.match(play, /<h2 class="play__title" id="play-title"/);
