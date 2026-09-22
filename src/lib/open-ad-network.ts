@@ -109,6 +109,17 @@ export const A_LITTLE_MORE_LIGHT_CAMPAIGN = {
   note: 'An uplifting first-party house campaign for six already-public PointCast rooms. No purchase, signup, wallet, or paid media is involved.',
 } as const;
 
+export const LITTLE_WONDERS_CAMPAIGN = {
+  id: 'PC-THE-WILD-LITTLE-WONDERS-2026',
+  label: 'The Wild — Little Wonders',
+  advertiser: 'The Wild',
+  creativeCount: 3,
+  placement: 'PointCast native house rail and preferred portable rotation on PointCast and Industry Next',
+  tracking: 'aggregate impressions + clicks',
+  status: 'house',
+  note: 'Three original image-generated house creatives for six digital spirit-animal concepts. Collection preview only: no new acquisition, edition count, price, token, physical product, or autonomous behavior is enabled.',
+} as const;
+
 export const NOUNS_EVERYBODY_CAMPAIGN = {
   id: 'PC-NOUNS-EVERYBODY-2026',
   label: "EVERYBODY'S IN THE BAND",
@@ -131,7 +142,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'pointcast.xyz',
     surface: 'Native sitewide contextual rail',
     advertiserAliases: ['PointCast', "PointCast Today's Art"],
-    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -139,9 +150,9 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     name: 'Industry Next',
     url: 'https://www.industrynext.xyz/',
     hostname: 'www.industrynext.xyz',
-    surface: 'A first-100 Tezos wallet lead across the Nouns studio, Permission Lab, and Made stream',
+    surface: 'Labeled contextual house campaigns in the Industry Next footer',
     advertiserAliases: ['Industry Next'],
-    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -341,6 +352,51 @@ export const NETWORK_FIRST_100_SIGNAL = {
 } as const;
 
 export const POINTCAST_ADS: PointCastAd[] = [
+  {
+    id: 'PC-WILD-LW-001',
+    advertiser: LITTLE_WONDERS_CAMPAIGN.advertiser,
+    headline: 'Your agent needs a hobby.',
+    copy: 'Little Wonders: a new digital spirit-animal collection preview. A little less artificial. A little more wild.',
+    href: 'https://wild-little-wonders.mhoydich.workers.dev/',
+    cta: 'Meet the spirits',
+    tone: 'garden',
+    contexts: ['art', 'nature', 'collect', 'agents', 'studio', 'development'],
+    image: '/images/campaigns/the-wild-little-wonders/network-01-rain-snail.jpg',
+    sourceTool: 'OpenAI ImageGen',
+    campaign: LITTLE_WONDERS_CAMPAIGN.id,
+    seriesLabel: 'Little Wonders — collection preview',
+    status: 'house',
+  },
+  {
+    id: 'PC-WILD-LW-002',
+    advertiser: LITTLE_WONDERS_CAMPAIGN.advertiser,
+    headline: 'Less dashboard. More hedgehog.',
+    copy: 'A small wonder for a very connected world. Explore The Wild’s next digital collection preview.',
+    href: 'https://wild-little-wonders.mhoydich.workers.dev/',
+    cta: 'Explore the preview',
+    tone: 'garden',
+    contexts: ['art', 'nature', 'collect', 'agents', 'studio', 'development'],
+    image: '/images/campaigns/the-wild-little-wonders/network-02-lantern-hedgehog.jpg',
+    sourceTool: 'OpenAI ImageGen',
+    campaign: LITTLE_WONDERS_CAMPAIGN.id,
+    seriesLabel: 'Little Wonders — collection preview',
+    status: 'house',
+  },
+  {
+    id: 'PC-WILD-LW-003',
+    advertiser: LITTLE_WONDERS_CAMPAIGN.advertiser,
+    headline: 'Not everything needs to be useful.',
+    copy: 'Some things are worth keeping. Little Wonders, a digital collection preview from The Wild.',
+    href: 'https://wild-little-wonders.mhoydich.workers.dev/',
+    cta: 'Meet Little Wonders',
+    tone: 'garden',
+    contexts: ['art', 'nature', 'collect', 'agents', 'studio', 'development'],
+    image: '/images/campaigns/the-wild-little-wonders/network-03-tide-nautilus.jpg',
+    sourceTool: 'OpenAI ImageGen',
+    campaign: LITTLE_WONDERS_CAMPAIGN.id,
+    seriesLabel: 'Little Wonders — collection preview',
+    status: 'house',
+  },
   {
     id: 'PC-LIGHT-001',
     advertiser: A_LITTLE_MORE_LIGHT_CAMPAIGN.advertiser,
@@ -1113,6 +1169,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const blanketCreative = ranked.find((ad) => ad.campaign === BEACH_BLANKET_PROMOTION_CAMPAIGN.id);
   const networkCreative = ranked.find((ad) => ad.campaign === NETWORK_EL_SEGUNDO_CAMPAIGN.id);
   const commonsCreative = ranked.find((ad) => ad.campaign === LOCAL_STAR_COMMONS_CAMPAIGN.id);
+  const littleWondersCreative = ranked.find((ad) => ad.campaign === LITTLE_WONDERS_CAMPAIGN.id);
   const nounsEverybodyCreative = !isNounsDrumClubSurface && isNounsMusicSurface
     ? ranked.find((ad) => ad.campaign === NOUNS_EVERYBODY_CAMPAIGN.id)
     : undefined;
@@ -1139,10 +1196,12 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
       && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
+      && ad.campaign !== LITTLE_WONDERS_CAMPAIGN.id
     ));
     return [
       upliftCreative,
       nounsEverybodyCreative,
+      littleWondersCreative,
       isCounselSurface ? undefined : counselCreative,
       isBeachBlanketSurface ? undefined : blanketCreative,
       isNounBattlerAnnualSurface ? undefined : annualCreative,
@@ -1172,9 +1231,11 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
     && ad.campaign !== BEACH_COMMONS_V5_CAMPAIGN.id
     && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
     && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
+    && ad.campaign !== LITTLE_WONDERS_CAMPAIGN.id
   ));
   return [
     upliftCreative,
+    littleWondersCreative,
     isCounselSurface ? undefined : counselCreative,
     isBeachBlanketSurface ? undefined : blanketCreative,
     isNounBattlerAnnualSurface ? undefined : annualCreative,
