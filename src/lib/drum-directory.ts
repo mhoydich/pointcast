@@ -219,6 +219,23 @@ export const DRUM_DIRECTORY_ENTRIES: readonly DrumDirectoryEntry[] = [
     tags: ["Nouns", "memory", "retro"],
   },
   {
+    slug: "nouns-drum-club",
+    name: "Nouns Drum Club",
+    path: "/nouns/drum-club",
+    chapter: "nouns",
+    eyebrow: "SHARED ROOM / FULL KEYBOARD",
+    description:
+      "Play a full browser keyboard beneath a reactive Noun band, build a loop, and invite other drummers into a shared live room without an account.",
+    fieldNote:
+      "The club keeps the instrument close to the hand: a Noun at the edge of the keyboard, a loop you can hear before you share it, and a room that only becomes lively when somebody else arrives.",
+    players: "1–many",
+    duration: "Open-ended",
+    controls: "Keyboard / tap",
+    accent: "#e65a45",
+    nounId: 23,
+    tags: ["Nouns", "shared room", "loop", "instrument"],
+  },
+  {
     slug: "nouns-mines-v2",
     name: "Nouns Mines v2",
     path: "/nouns-mines-v2",

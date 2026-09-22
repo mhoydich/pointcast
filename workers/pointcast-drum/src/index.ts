@@ -6,12 +6,30 @@ const MAX_CONNECTIONS = 125;
 const TARGET_CONNECTIONS = 100;
 const MAX_FRAME_BYTES = 512;
 const MAX_MESSAGES_PER_SECOND = 8;
+// Drum Club keeps the legacy rooms deliberately quiet while allowing a
+// human-sized flourish on its 36 voices. The room-wide ceiling still protects
+// a coordination atom from a noisy crowd.
+const MAX_NDC_MESSAGES_PER_SECOND = 24;
 const MAX_ROOM_MESSAGES_PER_SECOND = 300;
 const RECENT_HIT_LIMIT = 24;
-const PADS = new Set(["kick", "snare", "hat", "tom", "clap", "bell"]);
+const LEGACY_PADS = new Set(["kick", "snare", "hat", "tom", "clap", "bell"]);
+const NDC_PADS = new Set([
+  "kick", "snare", "clap", "hat-closed", "hat-open", "tom-low", "tom-high", "rim", "shaker", "tambourine",
+  "bass-c", "bass-d", "bass-e", "bass-f", "bass-g", "bass-a", "bass-b", "bass-c2", "bass-d2", "bass-e2",
+  "mallet-c", "mallet-d", "mallet-e", "mallet-f", "mallet-g", "mallet-a", "mallet-b", "mallet-c2", "mallet-d2",
+  "chord-c", "chord-dm", "chord-em", "chord-f", "chord-g", "chord-am", "sparkle",
+]);
 const REACTIONS = new Set(["⚡", "✦", "♥", "☻", "🔥", "🪩"]);
+const NDC_FEATURE = "ndc-36";
 
-type Pad = "kick" | "snare" | "hat" | "tom" | "clap" | "bell";
+type LegacyPad = "kick" | "snare" | "hat" | "tom" | "clap" | "bell";
+type NdcPad =
+  | "hat-closed" | "hat-open" | "tom-low" | "tom-high" | "rim" | "shaker" | "tambourine"
+  | "bass-c" | "bass-d" | "bass-e" | "bass-f" | "bass-g" | "bass-a" | "bass-b" | "bass-c2" | "bass-d2" | "bass-e2"
+  | "mallet-c" | "mallet-d" | "mallet-e" | "mallet-f" | "mallet-g" | "mallet-a" | "mallet-b" | "mallet-c2" | "mallet-d2"
+  | "chord-c" | "chord-dm" | "chord-em" | "chord-f" | "chord-g" | "chord-am" | "sparkle"
+  | "kick" | "snare" | "clap";
+type Pad = LegacyPad | NdcPad;
 type Reaction = "⚡" | "✦" | "♥" | "☻" | "🔥" | "🪩";
 
 interface SocketAttachment {
@@ -66,7 +84,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isPad(value: unknown): value is Pad {
-  return typeof value === "string" && PADS.has(value);
+  return typeof value === "string" && (LEGACY_PADS.has(value) || NDC_PADS.has(value));
+}
+
+function isLegacyPad(value: Pad): value is LegacyPad {
+  return LEGACY_PADS.has(value);
+}
+
+function isNdcRoom(room: string): boolean {
+  return room.startsWith("ndc-");
+}
+
+function peerMessageLimit(room: string): number {
+  return isNdcRoom(room) ? MAX_NDC_MESSAGES_PER_SECOND : MAX_MESSAGES_PER_SECOND;
 }
 
 function isReaction(value: unknown): value is Reaction {
@@ -230,6 +260,10 @@ export class DrumRoomV2 extends DurableObject<Env> {
       v: 1,
       type: "welcome",
       room,
+      // A client must see this before it claims an NDC room is playable.
+      // This lets a Pages deploy and a Worker deploy roll independently
+      // without turning a rejected hit into a misleading local success.
+      features: isNdcRoom(room) ? [NDC_FEATURE] : [],
       you: identity,
       connected: active.length + 1,
       target: TARGET_CONNECTIONS,
@@ -256,6 +290,11 @@ export class DrumRoomV2 extends DurableObject<Env> {
       this.send(socket, { v: 1, type: "error", code: "invalid-message" });
       return;
     }
+    const room = this.roomFromSocket(socket);
+    if (message.type === "hit" && !isNdcRoom(room) && !isLegacyPad(message.pad)) {
+      this.send(socket, { v: 1, type: "error", code: "invalid-pad" });
+      return;
+    }
 
     const now = Date.now();
     if (now - attachment.rateStartedAt >= 1_000) {
@@ -264,7 +303,7 @@ export class DrumRoomV2 extends DurableObject<Env> {
       attachment.strikes = Math.max(0, attachment.strikes - 1);
     }
     attachment.rateCount += 1;
-    if (attachment.rateCount > MAX_MESSAGES_PER_SECOND) {
+    if (attachment.rateCount > peerMessageLimit(room)) {
       attachment.strikes += 1;
       socket.serializeAttachment(attachment);
       this.send(socket, { v: 1, type: "rate-limit", retryAfterMs: 1_000 });

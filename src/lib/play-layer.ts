@@ -112,6 +112,13 @@ export const PLAY_SURFACES = [
     summary: 'A pixel collect loop where visitors chop trees, bank wood bundles, plant seeds, and unlock local Nouns stamps.',
   },
   {
+    id: 'nouns-drum-club',
+    code: 'NOUNS',
+    title: 'Nouns Drum Club',
+    route: '/nouns/drum-club/',
+    summary: 'Play a full browser keyboard beneath a reactive Noun band, build a local loop, and join a shared live room without an account.',
+  },
+  {
     id: 'derby-season',
     code: 'LIGA',
     title: 'Agent Derby Season',

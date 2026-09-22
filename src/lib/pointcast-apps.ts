@@ -496,6 +496,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'nouns-drum-club',
+    name: 'Nouns Drum Club',
+    kicker: 'FULL KEYBOARD · SHARED ROOMS · NO LOGIN',
+    description: 'A playful browser drum room: play a full keyboard beneath a reactive Noun band, build a local loop, and join a shared live room without an account.',
+    url: 'https://pointcast.xyz/nouns/drum-club/',
+    path: '/nouns/drum-club/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.DR',
+    kind: 'pointcast',
+  },
+  {
     slug: 'elemental-shrine',
     name: 'Elemental Shrine',
     kicker: 'STONE · LIGHT · FIRE · WATER',
