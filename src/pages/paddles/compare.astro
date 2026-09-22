@@ -1,0 +1,166 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { BUILDS, type Build } from '../../lib/paddle-calendar';
+import { plateGeometry } from '../../lib/paddle-drawing.mjs';
+import { PADDLES, PADDLE_REGISTER_URL, compareRow } from '../../lib/paddle-register';
+
+const title = 'Compare paddles, to scale';
+const description = 'Pick two to four pickleball paddles and see their outlines superimposed to scale, with launch dates, list prices, approval status, published dimensions, each lab\'s swingweight and twistweight, and core construction side by side. From The Paddle Register.';
+const court = CHANNELS.CRT;
+
+// Everything the page needs, pre-rendered as JSON so the compare runs on the
+// client without a second fetch. Outlines come from the same geometry the
+// drawings use; the overlay draws them itself.
+const rows = PADDLES.map((p) => {
+  const row = compareRow(p);
+  const g = plateGeometry(row.lead, p.shapes);
+  return { ...row, lead: undefined, geometry: { shape: g.shape, own: g.own, lengthIn: g.lengthIn, widthIn: g.widthIn, handleIn: g.handleIn, thicknessMm: g.thicknessMm } };
+});
+const palette = ['#12110E', '#185FA5', '#993556', '#B5651D'];
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebApplication', name: title, description, url: `${PADDLE_REGISTER_URL}/compare`, applicationCategory: 'ReferenceApplication', isAccessibleForFree: true, isPartOf: { '@type': 'Dataset', name: 'The Paddle Register', url: PADDLE_REGISTER_URL } };
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="cmp" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><a href="/paddles">paddles</a><span>/</span><span>compare</span></nav>
+    <header class="hero">
+      <p class="kicker">THE PADDLE REGISTER · COMPARE · TWO TO FOUR PADDLES</p>
+      <h1>Lay them over each other.</h1>
+      <p class="dek">Outlines drawn to scale from published dimensions, handles aligned at the butt. Then the record side by side: dates, prices, approvals, dimensions, the labs' numbers with the lab's name on them.</p>
+    </header>
+
+    <form class="pick" id="pick" aria-label="Choose paddles">
+      {[0, 1, 2, 3].map((i) => (
+        <label style={`--s:${palette[i]}`}><span>Paddle {i + 1}{i > 1 ? ' (optional)' : ''}</span>
+          <select name={`p${i}`}><option value="">—</option>{PADDLES.map((p) => (<option value={p.id}>{p.brand} {p.model} ({p.year})</option>))}</select>
+        </label>
+      ))}
+      <button type="button" id="share">Copy link</button>
+    </form>
+
+    <div id="stage" hidden>
+      <figure class="overlay">
+        <svg id="overlay-svg" viewBox="-6 -1 12 19" role="img" aria-label="Paddle outlines superimposed to scale"></svg>
+        <figcaption id="overlay-cap"></figcaption>
+      </figure>
+      <div class="tablewrap"><table id="table"><tbody></tbody></table></div>
+      <p class="fine">Swingweight and twistweight are each lab's own measurement of its own sample on its own rig; numbers from different labs are not directly comparable. Power, pop and spin belong to the labs. The register does not re-measure.</p>
+    </div>
+    <p class="empty" id="empty">Pick at least two paddles above. Or start from a paddle's page and press "compare with".</p>
+
+    <p class="foot"><a href="/paddles">the whole register</a> · <a href="/paddles/legal">where each one is legal</a> · <a href="/paddles.json">paddles.json</a> · CC0</p>
+  </main>
+  <script type="application/json" id="rows" set:html={JSON.stringify(rows)} />
+</BlockLayout>
+
+<script>
+  const rows: any[] = JSON.parse(document.getElementById('rows')!.textContent || '[]');
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const form = document.getElementById('pick') as HTMLFormElement;
+  const selects = [...form.querySelectorAll<HTMLSelectElement>('select')];
+  const stage = document.getElementById('stage')!, empty = document.getElementById('empty')!;
+  const svg = document.getElementById('overlay-svg')!, cap = document.getElementById('overlay-cap')!;
+  const tbody = document.querySelector('#table tbody')!;
+  const palette = ['#12110E', '#185FA5', '#993556', '#B5651D'];
+  const TOP: Record<string, [number, number]> = { elongated: [1.5, 1], hybrid: [2.5, 1.3], widebody: [2.1, 1.05], standard: [1.9, 1] };
+  const n = (v: number) => Number(v.toFixed(2));
+  const outline = (g: any) => {
+    const L = g.lengthIn, W = g.widthIn, Hh = g.handleIn, F = L - Hh, hw = 1.3, sh = Math.min(2.6, F * 0.24);
+    const [r, st] = TOP[g.shape] || TOP.elongated, ry = r * st, x = W / 2;
+    // y measured from the butt so handles align at 0; face top at L
+    const Y = (y: number) => n(L - y);
+    return `M${n(-hw / 2)} ${Y(L)}L${n(-hw / 2)} ${Y(F)}C${n(-hw / 2)} ${Y(F - sh * 0.55)} ${n(-x)} ${Y(F - sh * 0.4)} ${n(-x)} ${Y(F - sh)}L${n(-x)} ${Y(ry)}A${n(r)} ${n(ry)} 0 0 1 ${n(-x + r)} ${Y(0)}L${n(x - r)} ${Y(0)}A${n(r)} ${n(ry)} 0 0 1 ${n(x)} ${Y(ry)}L${n(x)} ${Y(F - sh)}C${n(x)} ${Y(F - sh * 0.4)} ${n(hw / 2)} ${Y(F - sh * 0.55)} ${n(hw / 2)} ${Y(F)}L${n(hw / 2)} ${Y(L)}Z`;
+  };
+  const el = (tag: string, attrs: Record<string, string> = {}, text?: string) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; return e; };
+  const link = (href: string, text: string) => { const a = el('a', { href, rel: 'noopener' }, text); return a; };
+
+  function render() {
+    const picked = selects.map((s) => byId.get(s.value)).filter(Boolean) as any[];
+    const ok = picked.length >= 2;
+    stage.hidden = !ok; empty.hidden = ok;
+    const ids = selects.map((s) => s.value).filter(Boolean);
+    history.replaceState(null, '', ids.length ? `?ids=${ids.join(',')}` : location.pathname);
+    if (!ok) return;
+
+    // overlay: paths in an SVG whose y runs down from the top of the tallest paddle
+    const maxL = Math.max(...picked.map((p) => p.geometry.lengthIn));
+    svg.setAttribute('viewBox', `-4.6 -0.6 9.2 ${n(maxL + 1.2)}`);
+    svg.replaceChildren();
+    picked.forEach((p, i) => {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('transform', `translate(0 ${n(maxL - p.geometry.lengthIn)})`);
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', outline(p.geometry)); path.setAttribute('fill', palette[i]); path.setAttribute('fill-opacity', '0.08');
+      path.setAttribute('stroke', palette[i]); path.setAttribute('stroke-width', '0.09'); path.setAttribute('stroke-linejoin', 'round');
+      if (!p.geometry.own) path.setAttribute('stroke-dasharray', '0.28 0.16');
+      g.append(path); svg.append(g);
+    });
+    cap.replaceChildren();
+    picked.forEach((p, i) => {
+      const s = el('span', { class: 'key' }); const dot = el('i'); dot.style.background = palette[i];
+      s.append(dot, document.createTextNode(`${p.brand} ${p.model}: ${p.geometry.lengthIn} × ${p.geometry.widthIn} in${p.geometry.own ? '' : ' (nominal outline, dashed)'}`));
+      cap.append(s);
+    });
+
+    // table
+    tbody.replaceChildren();
+    const head = el('tr'); head.append(el('th', {}, ''));
+    picked.forEach((p, i) => { const th = el('th'); th.style.setProperty('--s', palette[i]); th.append(link(p.url, `${p.brand} ${p.model}`)); head.append(th); });
+    tbody.append(head);
+    const row = (label: string, cells: (string | Node)[]) => { const tr = el('tr'); tr.append(el('th', {}, label)); for (const c of cells) { const td = el('td'); if (typeof c === 'string') td.textContent = c; else td.append(c); tr.append(td); } tbody.append(tr); };
+    row('Launched', picked.map((p) => p.launch));
+    row('List price', picked.map((p) => p.price));
+    row('Build', picked.map((p) => p.build));
+    row('Thickness', picked.map((p) => p.thickness));
+    row('Shapes', picked.map((p) => p.shapes));
+    row('USA Pickleball', picked.map((p) => p.usap));
+    row('UPA-A (pro tours)', picked.map((p) => p.upaa));
+    row('Quiet category', picked.map((p) => p.quiet));
+    row('Core, center out', picked.map((p) => { const ol = el('ol'); (p.layers.length ? p.layers : ['Not published']).forEach((l: string) => ol.append(el('li', {}, l))); return ol; }));
+    row('Face', picked.map((p) => p.face));
+    row('Variants measured', picked.map((p) => { const d = el('div'); if (!p.variants.length) return 'Not published'; p.variants.forEach((v: any) => { const s = el('small'); s.textContent = `${v.name}: ${v.dims}, handle ${v.handle}, SW ${v.sw}, TW ${v.tw}${v.lab ? ` (${v.lab})` : ''}`; d.append(s); }); return d; }));
+    row('Measured by', picked.map((p) => { const d = el('div'); if (!p.labs.length) return 'No lab page linked yet'; p.labs.forEach((l: any) => d.append(link(l.url, l.lab + ' ↗'))); return d; }));
+  }
+
+  const preset = new URLSearchParams(location.search).get('ids');
+  if (preset) preset.split(',').slice(0, 4).forEach((id, i) => { if (byId.has(id)) selects[i].value = id; });
+  form.addEventListener('input', render);
+  document.getElementById('share')!.addEventListener('click', async () => { try { await navigator.clipboard.writeText(location.href); (document.getElementById('share') as HTMLButtonElement).textContent = 'Copied'; } catch { prompt('Copy this link', location.href); } });
+  render();
+</script>
+
+<style>
+  .cmp{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .cmp [hidden]{display:none!important}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:44px 0 24px;max-width:820px}
+  .hero h1{margin:0;font:500 clamp(38px,6vw,68px)/.97 var(--pc-font-sans);letter-spacing:-.035em}
+  .dek{margin:18px 0 0;font:400 17px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .pick{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:10px;align-items:end;padding:12px;border:1.5px solid var(--c600);background:#fff;position:sticky;top:0;z-index:3}
+  .pick label{display:grid;gap:4px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted);border-top:4px solid var(--s);padding-top:6px}
+  .pick select{padding:7px 8px;border:1px solid var(--pc-rule);border-radius:0;background:#fff;font:400 14px var(--pc-font-sans);color:var(--pc-ink);min-width:0;width:100%}
+  .pick button{padding:9px 12px;background:var(--c800);color:#fff;border:0;font:500 11px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+  #stage{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:24px;margin-top:24px;align-items:start}
+  .overlay{margin:0;border:1.5px solid var(--c600);background:#fff;padding:12px}
+  .overlay svg{display:block;width:100%;height:auto;max-height:640px}
+  .overlay figcaption{display:grid;gap:6px;margin-top:10px;font:400 12.5px/1.4 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .overlay :global(.key){display:flex;gap:8px;align-items:center}
+  .overlay :global(.key i){display:inline-block;width:10px;height:10px;flex:none}
+  .tablewrap{overflow-x:auto;border:1.5px solid var(--c600)}
+  table{width:100%;border-collapse:collapse;font:400 13.5px/1.45 var(--pc-font-sans)}
+  th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--pc-rule-soft)}
+  tbody tr:first-child th{border-top:4px solid var(--s,transparent);font:500 14px var(--pc-font-sans);background:var(--c50)}
+  tbody tr:first-child th:first-child{border-top-color:transparent;background:#fff}
+  tbody th:first-child{width:150px;font:500 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  td a{color:var(--c800);display:block}
+  td :global(ol){margin:0;padding-left:18px}
+  td :global(small){display:block;font-size:12px;color:var(--pc-ink-soft);margin-bottom:4px}
+  .fine{grid-column:1/-1;margin:0;max-width:760px;font:400 12.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .empty{margin:32px 0;font:400 15px var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .foot{margin:40px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:820px){.pick{grid-template-columns:1fr 1fr;position:static}.pick button{grid-column:1/-1}#stage{grid-template-columns:1fr}.hero{padding-top:28px}}
+</style>

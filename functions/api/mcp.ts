@@ -1733,13 +1733,14 @@ async function dispatchTool(
       if (!words.length) throw new Error('query is required');
       const data = await callJson(`${base}/paddles.json`);
       const paddles: any[] = Array.isArray(data?.paddles) ? data.paddles : [];
+      const changes: any[] = Array.isArray(data?.changes) ? data.changes : [];
       const matches = paddles
         .map((p) => ({ p, hay: `${p.brand} ${p.model} ${p.id}`.toLowerCase() }))
         .map(({ p, hay }) => ({ p, score: words.filter((w) => hay.includes(w)).length }))
         .filter((m) => m.score > 0)
         .sort((a, b) => b.score - a.score || String(b.p.launch?.date).localeCompare(String(a.p.launch?.date)))
         .slice(0, 5)
-        .map((m) => m.p);
+        .map((m) => ({ ...m.p, changes: changes.filter((c) => c.paddle === m.p.id), compare: `${base}/paddles/compare?ids=${m.p.id}`, legal: `${base}/paddles/legal`, fieldReports: `${base}/api/paddles/wear?id=${m.p.id}` }));
       return {
         content: [
           { type: 'text', text: `The Paddle Register · ${matches.length} match${matches.length === 1 ? '' : 'es'} for "${words.join(' ')}" · status checked ${data?.stats?.asOf ?? 'unknown'}` },

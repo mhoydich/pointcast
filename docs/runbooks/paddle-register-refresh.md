@@ -32,7 +32,18 @@ current. This is the weekly pass. It is written to be run by an agent
    limited runs that sold out stay `limited`.
 6. **Forecasts.** Do not delete a forecast that missed. Mark what happened in
    its body and leave it. New calls must name what they rest on.
-7. Bump `meta.asOf`. Keep block `0596`'s `meta.releases` equal to the count.
+7. **The changes feed.** Every edit that changes a fact gets a row in
+   `paddle-register.json` `changes`: `{date, kind: added|shipped|approved|
+   delisted|price|corrected|signed, paddle: <id or null>, text, source}`.
+   This is what /paddles/changes and the RSS feed show, and what
+   `paddle_lookup` returns per paddle. No silent edits.
+8. Bump `meta.asOf` in both data files. Keep block `0596`'s `meta.releases`
+   equal to the release count and block `0598`'s `meta.paddles` equal to
+   releases + backfill. Rewrite the Rally `register.json` (slim list) too.
+9. **Field reports** (`/api/paddles/wear`) are player-submitted and live in
+   KV, not in the data files. Do not edit them. If a paddle's aggregates look
+   gamed, note it in the changes feed and leave the panel's "unaudited" line
+   to do its work.
 
 ## Rules
 
@@ -48,7 +59,7 @@ current. This is the weekly pass. It is written to be run by an agent
 ## Ship
 
 ```
-node --test tests/paddle-calendar-room.test.mjs tests/paddle-register.test.mjs
+node --test tests/paddle-calendar-room.test.mjs tests/paddle-register.test.mjs tests/paddle-wear-api.test.mjs
 npm run build          # regenerates /images/og/paddles/*.png
 ```
 

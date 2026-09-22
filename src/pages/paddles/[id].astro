@@ -11,7 +11,9 @@ import {
   PADDLE_REGISTER_URL,
   PATENT_WORDS,
   REGISTER_STATS,
+  CHANGE_WORDS,
   brandUrl,
+  changesFor,
   neighbours,
   paddleUrl,
   plateVariants,
@@ -202,11 +204,14 @@ const jsonLd = {
     </section>
 
     <section class="sec split" aria-label="After purchase">
-      <div class="bag">
-        <p class="kicker">AFTER YOU BUY IT</p>
+      <div class="bag" id="field" data-paddle={p.id}>
+        <p class="kicker">FIELD REPORTS · AFTER YOU BUY IT</p>
         <h2>Reviewers measure a paddle new. Nobody measures it at hour sixty.</h2>
-        <p>Keep a bag on Rally: log the hours you put on this paddle, when the grit fades, and when it goes dead. It stays on your device.</p>
-        <a class="btn" href={PADDLE_BAG_URL} rel="noopener">Open the bag on Rally ↗</a>
+        <div class="field" id="field-body"><p>Loading field reports…</p></div>
+        <noscript><p>Field reports load with JavaScript. The aggregates are also at <a href={`/api/paddles/wear?id=${p.id}`}>/api/paddles/wear?id={p.id}</a>.</p></noscript>
+        <p>Keep a bag on Rally: log the hours you put on this paddle, when the grit fades, and when it goes dead. It stays on your device until you press "send a wear report", and the report carries no name.</p>
+        <a class="btn" href={`${PADDLE_BAG_URL}?add=${p.id}`} rel="noopener">Open the bag on Rally ↗</a>
+        <a class="btn btn--quiet" href={`/paddles/compare?ids=${p.id}`}>Compare with…</a>
       </div>
       <div>
         <p class="kicker">SOURCES · {p.confidence.toUpperCase()} CONFIDENCE</p>
@@ -215,6 +220,16 @@ const jsonLd = {
         </ul>
       </div>
     </section>
+
+    {changesFor(p.id).length > 0 && (
+      <section class="sec" aria-label="Changes to this record">
+        <p class="kicker">CHANGES TO THIS RECORD</p>
+        <ol class="timeline">
+          {changesFor(p.id).map((c) => (<li><span class="timeline__date">{fullDate(c.date)}</span><b>{CHANGE_WORDS[c.kind] ?? c.kind.toUpperCase()}</b><span>{c.text}{c.source && <> <a href={c.source} rel="noopener">{hostOf(c.source)} ↗</a></>}</span></li>))}
+        </ol>
+        <p class="fine"><a href="/paddles/changes">Every change to the register</a>, with an RSS feed.</p>
+      </section>
+    )}
 
     <section class="sec" aria-label="Nearby in the register">
       <p class="kicker">NEARBY IN THE REGISTER</p>
@@ -303,6 +318,14 @@ const jsonLd = {
   .bag p:not(.kicker){margin:0 0 16px;max-width:520px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
   .btn{display:inline-block;padding:10px 14px;background:var(--c800);color:#fff!important;font:500 11px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
   .btn:hover{background:var(--pc-ink);text-decoration:none}
+  .btn--quiet{margin-left:8px;background:#fff;color:var(--c800)!important;border:1.5px solid var(--c600)}
+  .field{margin:0 0 16px;border:1px solid var(--c600);background:#fff;padding:12px 14px}
+  .field p{margin:0;font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .field :global(.stat){display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 10px}
+  .field :global(.stat div){padding:8px 10px;border:1px solid var(--pc-rule-soft)}
+  .field :global(.stat strong){display:block;font:500 22px/1 var(--pc-font-sans);color:var(--c800);font-variant-numeric:tabular-nums}
+  .field :global(.stat span){display:block;margin-top:4px;font:400 10px/1.4 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .field :global(small){display:block;margin-top:8px;font:400 11.5px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
   .sources{margin:0;padding:0;list-style:none;border-top:1px solid var(--pc-rule)}
   .sources li{padding:9px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px var(--pc-font-sans)}
   .sources a{color:var(--c800)}
