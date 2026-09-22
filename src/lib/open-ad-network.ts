@@ -907,7 +907,6 @@ export const POINTCAST_ADS: PointCastAd[] = [
     sourceTool: 'PointCast Nouns Drum Club campaign art',
     campaign: NOUNS_EVERYBODY_CAMPAIGN.id,
     seriesLabel: NOUNS_EVERYBODY_CAMPAIGN.label,
-    seriesIndex: 1,
     status: 'house',
   },
   {
@@ -923,7 +922,6 @@ export const POINTCAST_ADS: PointCastAd[] = [
     sourceTool: 'PointCast Nouns Drum Club campaign art',
     campaign: NOUNS_EVERYBODY_CAMPAIGN.id,
     seriesLabel: NOUNS_EVERYBODY_CAMPAIGN.label,
-    seriesIndex: 2,
     status: 'house',
   },
   {
@@ -939,7 +937,6 @@ export const POINTCAST_ADS: PointCastAd[] = [
     sourceTool: 'PointCast Nouns Drum Club campaign art',
     campaign: NOUNS_EVERYBODY_CAMPAIGN.id,
     seriesLabel: NOUNS_EVERYBODY_CAMPAIGN.label,
-    seriesIndex: 3,
     status: 'house',
   },
   {

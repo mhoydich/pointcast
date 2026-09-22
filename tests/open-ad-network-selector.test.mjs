@@ -39,8 +39,12 @@ async function loadSelector() {
 }
 
 test('Nouns Drum Club campaign is inside the normal native rail count on Nouns and music paths only', async () => {
-  const { selectAdsForPath } = await loadSelector();
+  const { selectAdsForPath, POINTCAST_ADS } = await loadSelector();
   const campaign = 'PC-NOUNS-EVERYBODY-2026';
+
+  for (const ad of POINTCAST_ADS.filter(ad => ad.campaign === campaign)) {
+    assert.equal(ad.seriesIndex, undefined, 'Nouns image ads must not render unrelated six-part Drum Compendium art');
+  }
 
   for (const path of ['/nouns/', '/station/party/', '/now']) {
     const normalRail = selectAdsForPath(path, 3);
