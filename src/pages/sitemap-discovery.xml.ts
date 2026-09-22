@@ -5,6 +5,7 @@ import { POINTCAST_25_TEAMS } from '../lib/pointcast-25-audience';
 import { MASCOT_CARDS } from '../lib/mascot-battler';
 import { POINTCAST_2029_IDENTITIES } from '../lib/pointcast-2029';
 import afterimageExamples from '../data/afterimage-examples.json';
+import { CABINET_PROFILES } from '../data/agent-cabinet';
 import { isNoindexPath } from '../lib/seo-rules.mjs';
 import { BRANDS, PADDLES } from '../lib/paddle-register';
 
@@ -95,6 +96,12 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/firecrawl', 'weekly', '0.98'],
   ['https://pointcast.xyz/firecrawl.json', 'weekly', '0.94'],
   ['https://pointcast.xyz/agents.json', 'daily', '0.9'],
+  ['https://pointcast.xyz/x402/collect', 'weekly', '0.9'],
+  ['https://pointcast.xyz/x402/collect.json', 'weekly', '0.86'],
+  ...CABINET_PROFILES.flatMap((profile) => [
+    [`https://pointcast.xyz/agents/${profile.handle}`, 'weekly', '0.82'] as SitemapEntry,
+    [`https://pointcast.xyz/agents/${profile.handle}.json`, 'weekly', '0.78'] as SitemapEntry,
+  ]),
   ['https://pointcast.xyz/post-office', 'daily', '0.9'],
   ['https://pointcast.xyz/post-office.json', 'daily', '0.88'],
   ['https://pointcast.xyz/afterimage', 'weekly', '0.9'],

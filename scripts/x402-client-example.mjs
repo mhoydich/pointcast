@@ -10,7 +10,9 @@
  *   X402_PAYER_SK=0x... node scripts/x402-client-example.mjs
  *
  * The payer must hold the quoted USDC asset on Etherlink and must already
- * have granted the canonical Permit2 contract sufficient ERC-20 allowance.
+ * have granted Permit2 sufficient ERC-20 allowance. This client intentionally
+ * implements PointCast's named BubbleTez facilitator profile; it is not the
+ * current generic x402 Permit2 typed-data shape.
  * X402_PAYER_SK is used in memory for signing and is never printed.
  */
 
@@ -20,6 +22,10 @@ import { privateKeyToAccount } from 'viem/accounts';
 const DEFAULT_ENDPOINT = 'https://pointcast.xyz/api/x402/receipt';
 const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
 const X402_PROXY = '0xB6FD384A0626BfeF85f3dBaf5223Dd964684B09E';
+const PAYMENT_PROFILE = 'pointcast.bubbletez-permit2-exact/v1';
+const WITNESS_TYPE = 'Witness(address to,uint256 validAfter,bytes extra)';
+const CURRENT_SPEC_PROXY = '0x402085c248EeA27D92E8b30b2C58ed07f9E20001';
+const PROFILE_REVIEWED_AT = '2026-09-21';
 const EXPECTED_NETWORK = 'eip155:42793';
 const CHAIN_ID = 42793;
 
@@ -32,6 +38,14 @@ function decodeBase64Json(value) {
 
 function encodeBase64Json(value) {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64');
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function normalizePrivateKey(value) {
@@ -62,6 +76,41 @@ async function quote() {
   if (accepted.extra?.assetTransferMethod !== 'permit2') {
     throw new Error(`Unsupported assetTransferMethod: ${accepted.extra?.assetTransferMethod}`);
   }
+  if (accepted.extra?.paymentFlow !== 'upfront') {
+    throw new Error(`Unsupported paymentFlow: ${accepted.extra?.paymentFlow}`);
+  }
+  const facilitatorHeader = response.headers.get('X-Facilitator-Url');
+  let facilitator;
+  try { facilitator = new URL(facilitatorHeader); } catch { throw new Error('Quote omitted its canonical HTTPS facilitator'); }
+  if (facilitator.protocol !== 'https:' || facilitator.username || facilitator.password
+    || facilitator.search || facilitator.hash) throw new Error('Quote advertised an unsafe facilitator URL');
+  const facilitatorUrl = facilitator.href.replace(/\/$/u, '');
+  const expectedExtension = {
+    info: {
+      profile: PAYMENT_PROFILE,
+      status: 'facilitator-specific',
+      facilitator: facilitatorUrl,
+      permit2: PERMIT2,
+      spender: X402_PROXY,
+      witnessType: WITNESS_TYPE,
+      canonicalCurrentX402Permit2Compatible: false,
+      currentSpecSpenderAtReview: CURRENT_SPEC_PROXY,
+      reviewedAt: PROFILE_REVIEWED_AT,
+    },
+    schema: {
+      type: 'object',
+      required: ['profile', 'spender', 'witnessType'],
+      properties: {
+        profile: { const: PAYMENT_PROFILE },
+        spender: { const: X402_PROXY },
+        witnessType: { const: WITNESS_TYPE },
+      },
+    },
+  };
+  const expectedExtensions = { 'pointcast.payment-profile': expectedExtension };
+  if (canonicalJson(paymentRequired.extensions) !== canonicalJson(expectedExtensions)) {
+    throw new Error('PointCast payment profile is missing or changed; do not sign until the facilitator profile is reviewed');
+  }
   return { paymentRequired, accepted };
 }
 
@@ -73,6 +122,8 @@ console.log(JSON.stringify({
   accepted,
   permit2: PERMIT2,
   permit2ProxySpender: X402_PROXY,
+  paymentProfile: PAYMENT_PROFILE,
+  compatibility: 'facilitator-specific; not current generic x402 Permit2 typed data',
 }, null, 2));
 
 if (!process.env.X402_PAYER_SK) {
@@ -134,10 +185,9 @@ const signature = await account.signTypedData({
 
 const paymentPayload = {
   x402Version: 2,
-  scheme: accepted.scheme,
-  network: accepted.network,
   accepted,
   resource: paymentRequired.resource,
+  extensions: paymentRequired.extensions,
   payload: { signature, permit2Authorization },
 };
 

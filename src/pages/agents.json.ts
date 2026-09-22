@@ -30,10 +30,18 @@ import {
 import contracts from '../data/contracts.json';
 import { RESIDENTS, RESIDENTS_CONTRACT } from '../data/residents';
 import { POINTCAST_AGENT_KIT } from '../lib/pointcast-agent-kit';
-import { X402_DISCOVERY } from '../lib/x402';
+import {
+  X402_CURRENT_SPEC_PROXY,
+  X402_DISCOVERY,
+  X402_PAYMENT_PROFILE,
+  X402_PROFILE_REVIEWED_AT,
+  X402_PROXY,
+  X402_WITNESS_TYPE,
+} from '../lib/x402';
 import { POST_OFFICE_DISCOVERY } from '../lib/post-office';
 import { PAID_TOWN_DISCOVERY } from '../../functions/_lib/paid-town-actions';
 import { AGENT_SURFACES, RETIRED_AGENT_PATHS } from '../data/agent-surfaces';
+import { CABINET_COLLECT_PROTOCOL } from '../data/agent-cabinet';
 // The MCP catalogue comes from the server file itself, so the manifest
 // advertises exactly what tools/list and resources/list serve.
 import { MCP_RESOURCE_URIS, MCP_SERVER_INFO, MCP_TOOL_NAMES } from '../../functions/api/mcp';
@@ -142,6 +150,10 @@ export const GET: APIRoute = async () => {
         collectJson: 'https://pointcast.xyz/collect.json',
         publicCollectorPattern: 'https://pointcast.xyz/collect/@{handle}',
         publicCollectorJsonPattern: 'https://pointcast.xyz/collect/@{handle}.json',
+        agentCabinet: 'https://pointcast.xyz/x402/collect',
+        agentCabinetJson: 'https://pointcast.xyz/x402/collect.json',
+        agentProfilePattern: 'https://pointcast.xyz/agents/{handle}',
+        agentProfileJsonPattern: 'https://pointcast.xyz/agents/{handle}.json',
         protocol: 'https://pointcast.xyz/protocol',
         protocolJson: 'https://pointcast.xyz/protocol.json',
         llms: 'https://pointcast.xyz/llms.txt',
@@ -607,6 +619,9 @@ export const GET: APIRoute = async () => {
         agentBench: AGENT_SURFACES.api.agentBench,
         agentCast: AGENT_SURFACES.api.agentCast,
         agentClaim: AGENT_SURFACES.api.agentClaim,
+        agentCabinetChallenge: AGENT_SURFACES.api.agentCabinetChallenge,
+        agentCabinetCollect: AGENT_SURFACES.api.agentCabinetCollect,
+        agentCabinetStatus: AGENT_SURFACES.api.agentCabinetStatus,
       },
       mcp: {
         endpoint: 'https://pointcast.xyz/api/mcp-v2',
@@ -637,6 +652,17 @@ export const GET: APIRoute = async () => {
         note: 'Stateless MCP server wrapping the entire PointCast surface. Open CORS, no auth. POST JSON-RPC; GET returns HTML discovery page. PointCast v2 is the preferred fresh install URL for AI clients that cached the original connector; it puts addable connector links first, then exposes the PointCast app shelf, Nouns Nation Battler wiki briefs, agent tasks, asset factory, Sponsorship Desk, Production Desk, Claim Board, Results Desk scorebook tools, drum hub, town map, presence, blocks, channels, contracts, weather, and editions.',
       },
       x402: X402_DISCOVERY,
+      agentCabinet: {
+        ...CABINET_COLLECT_PROTOCOL,
+        paymentProfile: {
+          id: X402_PAYMENT_PROFILE,
+          compatibility: 'facilitator-specific-not-canonical-current-permit2',
+          spender: X402_PROXY,
+          witnessType: X402_WITNESS_TYPE,
+          currentCanonicalProxy: X402_CURRENT_SPEC_PROXY,
+          reviewedAt: X402_PROFILE_REVIEWED_AT,
+        },
+      },
       postOffice: POST_OFFICE_DISCOVERY,
       paidTownActions: PAID_TOWN_DISCOVERY,
       rss: {

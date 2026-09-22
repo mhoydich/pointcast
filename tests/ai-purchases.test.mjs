@@ -66,7 +66,7 @@ async function data(f,body,user){const response=await call(f,body,user);const js
 async function quote(f,overrides={}) {return (await data(f,{operation:'quote',requestId:crypto.randomUUID(),runtimeId:'native',question:'What should we make next?',...overrides})).purchase;}
 function signature(p,nonce='1') {
   const now=Math.floor(Date.now()/1000);
-  return encodeBase64Json({x402Version:2,scheme:'exact',network:p.network,accepted:p.quote.accepts[0],resource:p.quote.resource,
+  return encodeBase64Json({x402Version:2,accepted:p.quote.accepts[0],resource:p.quote.resource,extensions:p.quote.extensions,
     payload:{signature:'0x'+'11'.repeat(65),permit2Authorization:{from:PAYER,permitted:{token:p.asset,amount:p.amount},spender:X402_PROXY,
       nonce,deadline:String(Math.min(now+30,Math.floor(p.expiresAt/1000))),witness:{to:p.payTo,validAfter:String(now),extra:'0x'}}}});
 }
@@ -125,7 +125,7 @@ test('public consent, changed terms, expired review and disconnected runtime pre
 test('concurrent submit, lost response and read-only checks submit the facilitator at most once',async t=>{
   const f=fixture(t),p=await quote(f);let release;let reached;
   const entered=new Promise(resolve=>{reached=resolve;});
-  f.setSettlement(async()=>{reached();await new Promise(resolve=>{release=resolve;});return Response.json({success:true,transaction:TX});});
+  f.setSettlement(async()=>{reached();await new Promise(resolve=>{release=resolve;});return Response.json({success:true,transaction:TX,network:p.network,payer:PAYER});});
   const first=call(f,submit(p));await entered;
   const second=await call(f,submit(p));assert.ok([200,409].includes(second.status));
   const pending=(await data(f,{operation:'reconcile',purchaseId:p.id})).purchase;

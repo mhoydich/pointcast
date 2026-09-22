@@ -10,8 +10,11 @@
 import { recoverTypedDataAddress } from 'viem';
 import {
   X402_CHAIN_ID, X402_DEFAULT_ASSET, X402_DEFAULT_PAY_TO, X402_DEFAULT_PRICE_UNITS,
-  X402_NETWORK, X402_PERMIT2, X402_PROXY, X402_RECEIPT_SPEC, X402_TREASURY_AGENT_ID,
+  X402_CURRENT_SPEC_PROXY, X402_NETWORK, X402_PAYMENT_FLOW, X402_PAYMENT_PROFILE, X402_PERMIT2,
+  X402_PROFILE_REVIEWED_AT, X402_PROXY, X402_RECEIPT_SPEC, X402_TREASURY_AGENT_ID,
+  X402_WITNESS_TYPE,
   canonicalJson, decodeBase64Json, encodeBase64Json, isJsonRecord, verifyX402Receipt,
+  x402PaymentProfileExtension,
   type JsonRecord,
 } from './x402.ts';
 
@@ -112,13 +115,15 @@ export async function connectBuyerWallet(wallet: BuyerWallet): Promise<{ payer: 
 export interface BuyerAccepted {
   readonly scheme: 'exact'; readonly network: typeof X402_NETWORK; readonly amount: string;
   readonly payTo: typeof X402_DEFAULT_PAY_TO; readonly asset: typeof X402_DEFAULT_ASSET; readonly maxTimeoutSeconds: number;
-  readonly extra: { readonly name: 'USDC'; readonly version: '2'; readonly assetTransferMethod: 'permit2' };
+  readonly extra: { readonly name: 'USDC'; readonly version: '2'; readonly assetTransferMethod: 'permit2'; readonly paymentFlow: typeof X402_PAYMENT_FLOW };
 }
 export interface BuyerQuote {
   readonly endpoint: string; readonly amountUnits: string; readonly quotedAt: number; readonly expiresAt: number;
   readonly permit2: typeof X402_PERMIT2; readonly proxy: typeof X402_PROXY;
+  readonly paymentProfile: typeof X402_PAYMENT_PROFILE;
   readonly accepted: BuyerAccepted;
   readonly resource: { readonly url: string; readonly description: string; readonly mimeType: 'application/json' };
+  readonly extensions: Readonly<JsonRecord>;
 }
 const reviewedQuotes = new WeakSet<BuyerQuote>();
 // Reserve time for the authenticated submit and facilitator transfer. A wallet
@@ -126,6 +131,13 @@ const reviewedQuotes = new WeakSet<BuyerQuote>();
 export const MIN_BUYER_SUBMISSION_MS = 15_000;
 function exactKeys(object: JsonRecord, allowed: string[]) {
   if (Object.keys(object).some(key => !allowed.includes(key))) fail('unsupported-quote-fields');
+}
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
+    Object.freeze(value);
+  }
+  return value;
 }
 export function validateBuyerQuote(input: unknown, { endpoint, amountUnits = X402_DEFAULT_PRICE_UNITS, nowMs = Date.now(), expiresAt }:
   { endpoint: string; amountUnits?: string; nowMs?: number; expiresAt?: string | number | Date }): BuyerQuote {
@@ -149,11 +161,35 @@ export function validateBuyerQuote(input: unknown, { endpoint, amountUnits = X40
     || !isJsonRecord(raw.accepts[0]) || !isJsonRecord(raw.resource)) fail('unsupported-payment-quote');
   const accepted = raw.accepts[0];
   const extra = accepted.extra;
+  const extensions = raw.extensions;
+  const profileExtension = isJsonRecord(extensions)
+    && isJsonRecord(extensions['pointcast.payment-profile'])
+    ? extensions['pointcast.payment-profile'] : null;
+  const profile = profileExtension && isJsonRecord(profileExtension.info) ? profileExtension.info : null;
   exactKeys(accepted, ['scheme', 'network', 'amount', 'payTo', 'asset', 'maxTimeoutSeconds', 'extra']);
   if (accepted.scheme !== 'exact' || accepted.network !== X402_NETWORK || accepted.amount !== amountUnits
     || !sameAddress(accepted.asset, X402_DEFAULT_ASSET) || !sameAddress(accepted.payTo, X402_DEFAULT_PAY_TO)
-    || !isJsonRecord(extra) || extra.name !== 'USDC' || extra.version !== '2' || extra.assetTransferMethod !== 'permit2') fail('payment-terms-mismatch');
-  exactKeys(extra, ['name', 'version', 'assetTransferMethod']);
+    || !isJsonRecord(extra) || extra.name !== 'USDC' || extra.version !== '2'
+    || extra.assetTransferMethod !== 'permit2' || extra.paymentFlow !== X402_PAYMENT_FLOW) fail('payment-terms-mismatch');
+  if (!profile || profile.profile !== X402_PAYMENT_PROFILE || profile.status !== 'facilitator-specific'
+    || !sameAddress(profile.permit2, X402_PERMIT2) || !sameAddress(profile.spender, X402_PROXY)
+    || profile.witnessType !== X402_WITNESS_TYPE
+    || profile.canonicalCurrentX402Permit2Compatible !== false
+    || !sameAddress(profile.currentSpecSpenderAtReview, X402_CURRENT_SPEC_PROXY)
+    || profile.reviewedAt !== X402_PROFILE_REVIEWED_AT
+    || typeof profile.facilitator !== 'string') fail('payment-profile-mismatch');
+  let facilitator: URL;
+  try { facilitator = new URL(profile.facilitator); } catch { fail('payment-profile-mismatch'); }
+  if (facilitator.protocol !== 'https:' || facilitator.username || facilitator.password
+    || facilitator.search || facilitator.hash || facilitator.href.replace(/\/$/u, '') !== profile.facilitator.replace(/\/$/u, '')) {
+    fail('payment-profile-mismatch');
+  }
+  const expectedExtension = x402PaymentProfileExtension(profile.facilitator.replace(/\/$/u, ''));
+  if (canonicalJson(profileExtension) !== canonicalJson(expectedExtension)
+    || canonicalJson(extensions) !== canonicalJson({ 'pointcast.payment-profile': expectedExtension })) {
+    fail('payment-profile-mismatch');
+  }
+  exactKeys(extra, ['name', 'version', 'assetTransferMethod', 'paymentFlow']);
   if (typeof accepted.maxTimeoutSeconds !== 'number' || !Number.isSafeInteger(accepted.maxTimeoutSeconds)
     || accepted.maxTimeoutSeconds < 5 || accepted.maxTimeoutSeconds > 60) fail('invalid-payment-timeout');
   if (raw.resource.url !== url.href || raw.resource.mimeType !== 'application/json'
@@ -164,10 +200,12 @@ export function validateBuyerQuote(input: unknown, { endpoint, amountUnits = X40
   currentTime(serverExpiry);
   const quote: BuyerQuote = Object.freeze({ endpoint: url.href, amountUnits, quotedAt,
     expiresAt: Math.min(serverExpiry, quotedAt + accepted.maxTimeoutSeconds * 1000), permit2: X402_PERMIT2, proxy: X402_PROXY,
+    paymentProfile: X402_PAYMENT_PROFILE,
     accepted: Object.freeze({ scheme: 'exact', network: X402_NETWORK, amount: amountUnits,
       payTo: X402_DEFAULT_PAY_TO, asset: X402_DEFAULT_ASSET, maxTimeoutSeconds: accepted.maxTimeoutSeconds,
-      extra: Object.freeze({ name: 'USDC', version: '2', assetTransferMethod: 'permit2' }) }),
+      extra: Object.freeze({ name: 'USDC', version: '2', assetTransferMethod: 'permit2', paymentFlow: X402_PAYMENT_FLOW }) }),
     resource: Object.freeze({ url: url.href, description: raw.resource.description, mimeType: 'application/json' }),
+    extensions: deepFreeze(JSON.parse(canonicalJson({ 'pointcast.payment-profile': expectedExtension })) as JsonRecord),
   });
   reviewedQuotes.add(quote);
   return quote;
@@ -255,8 +293,9 @@ export async function signBuyerPayment({ wallet, quote, expectedAccount, now = D
     if (!sameAddress(selectedAccount(await provider.request({ method: 'eth_accounts' })), payer)) fail('wallet-changed');
     checkCurrent();
     if (Math.floor(now() / 1000) >= Number(built.permit2Authorization.deadline) - MIN_BUYER_SUBMISSION_MS / 1000) fail('payment-window-too-short');
-    const paymentPayload = { x402Version: 2, scheme: 'exact', network: X402_NETWORK,
+    const paymentPayload = { x402Version: 2,
       accepted: quote.accepted, resource: quote.resource,
+      extensions: quote.extensions,
       payload: { signature, permit2Authorization: built.permit2Authorization } };
     return { paymentPayload, paymentSignature: encodeBase64Json(paymentPayload), payer,
       deadline: Number(built.permit2Authorization.deadline) };

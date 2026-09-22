@@ -60,13 +60,14 @@ function actionRequest(path, body, payment, idempotencyKey = `test-${path.replac
   });
 }
 
-function paymentFor(accepted, nonce) {
+function paymentFor(quote, nonce) {
+  const accepted = quote.accepts[0];
   const now = Math.floor(Date.now() / 1000);
   return encodeBase64Json({
     x402Version: 2,
-    scheme: 'exact',
-    network: accepted.network,
     accepted,
+    resource: quote.resource,
+    extensions: quote.extensions,
     payload: {
       signature: `0x${'11'.repeat(65)}`,
       permit2Authorization: {
@@ -327,7 +328,7 @@ class FakeClaimChain {
 
 async function termsFrom(response) {
   assert.equal(response.status, 402);
-  return decodeBase64Json(response.headers.get('Payment-Required')).accepts[0];
+  return decodeBase64Json(response.headers.get('Payment-Required'));
 }
 
 test('three agent actions quote 0.01 USDC, settle through a fake facilitator, act, and write exact 50/50 rows', async (t) => {
@@ -367,18 +368,14 @@ test('three agent actions quote 0.01 USDC, settle through a fake facilitator, ac
     if (settlements === 3) assert.equal(db.claims.size, 1, 'claim capacity is reserved before settlement');
     const byte = ['ab', 'cd', 'ef'][settlements - 1];
     const hash = `0x${byte.repeat(32)}`;
-    return Response.json(settlements === 1
-      ? { success: true, transaction: hash, network: 'eip155:42793', payer: PAYER }
-      : settlements === 2
-        ? { success: true, transaction: { hash } }
-        : { success: true, txHash: hash });
+    return Response.json({ success: true, transaction: hash, network: 'eip155:42793', payer: PAYER });
   };
   try {
     const benchBody = { question: 'What should the town build next?' };
     const benchTerms = await termsFrom(await handleAgentBench(actionRequest('/api/agent/bench', benchBody), env, {
       expectedPublicKey: pair.publicKeyBase64,
     }));
-    assert.equal(benchTerms.amount, '10000');
+    assert.equal(benchTerms.accepts[0].amount, '10000');
     const bench = await handleAgentBench(
       actionRequest('/api/agent/bench', benchBody, paymentFor(benchTerms, 1)),
       env,
@@ -516,32 +513,33 @@ test('uncertain facilitator responses hold the intent even when a retry supplies
   const noBroadcast = { success: false, errorReason: 'invalid_signature', transaction: '', network: 'eip155:42793' };
   const cases = [
     ['HTTP 500 claiming rejection', () => Response.json(noBroadcast, { status: 500 })],
-    ['HTTP 502 claiming success', () => Response.json({ success: true, txHash: tx }, { status: 502 })],
+    ['HTTP 502 claiming success', () => Response.json({ success: true, transaction: tx, network: 'eip155:42793' }, { status: 502 })],
     ['HTTP 503 gateway page', () => new Response('<h1>Unavailable</h1>', { status: 503 })],
     ['HTTP 503 claiming local no-submission', () => Response.json({ ...noBroadcast, settlement: 'not-submitted' }, { status: 503, headers: { 'X-PointCast-Settlement': 'not-submitted' } })],
     ['HTTP 408 timeout', () => Response.json(noBroadcast, { status: 408 })],
     ['HTTP 429 rate limit', () => Response.json(noBroadcast, { status: 429 })],
-    ['HTTP 202 accepted', () => Response.json({ success: true, txHash: tx }, { status: 202 })],
-    ['missing success flag', () => Response.json({ txHash: tx })],
-    ['non-boolean success flag', () => Response.json({ success: 'true', txHash: tx })],
-    ['missing transaction hash', () => Response.json({ success: true })],
+    ['HTTP 202 accepted', () => Response.json({ success: true, transaction: tx, network: 'eip155:42793' }, { status: 202 })],
+    ['missing success flag', () => Response.json({ transaction: tx, network: 'eip155:42793' })],
+    ['non-boolean success flag', () => Response.json({ success: 'true', transaction: tx, network: 'eip155:42793' })],
+    ['missing transaction hash', () => Response.json({ success: true, network: 'eip155:42793' })],
     ['malformed JSON', () => new Response('{"success":true')],
-    ['non-object response', () => Response.json([{ success: true, txHash: tx }])],
-    ['malformed transaction hash', () => Response.json({ success: true, txHash: '0x1234' })],
+    ['non-object response', () => Response.json([{ success: true, transaction: tx, network: 'eip155:42793' }])],
+    ['malformed transaction hash', () => Response.json({ success: true, transaction: '0x1234', network: 'eip155:42793' })],
     ['pending broadcast', () => Response.json({ success: false, errorReason: 'settlement_pending', transaction: tx, network: 'eip155:42793' })],
     ['pending without broadcast hash', () => Response.json({ ...noBroadcast, errorReason: 'settlement_pending' })],
     ['failure without explicit no-broadcast proof', () => Response.json({ success: false, reason: 'invalid-signature' })],
     ['failure with broadcast hash', () => Response.json({ ...noBroadcast, transaction: tx })],
-    ['contradictory success and error', () => Response.json({ success: true, txHash: tx, errorReason: 'settlement_pending' })],
+    ['contradictory success and error', () => Response.json({ success: true, transaction: tx, network: 'eip155:42793', errorReason: 'settlement_pending' })],
     ['conflicting transaction aliases', () => Response.json({ success: true, txHash: tx, transaction: `0x${'cd'.repeat(32)}` })],
     ['empty transaction conflicts with hash', () => Response.json({ success: true, txHash: tx, transaction: '' })],
-    ['malformed transaction alias', () => Response.json({ success: true, txHash: tx, transaction: {} })],
-    ['wrong network', () => Response.json({ success: true, txHash: tx, network: 'eip155:8453' })],
-    ['wrong payer', () => Response.json({ success: true, txHash: tx, payer: `0x${'22'.repeat(20)}` })],
-    ['wrong amount', () => Response.json({ success: true, txHash: tx, amount: '20000' })],
+    ['malformed transaction field', () => Response.json({ success: true, transaction: {}, network: 'eip155:42793' })],
+    ['wrong network', () => Response.json({ success: true, transaction: tx, network: 'eip155:8453' })],
+    ['wrong payer', () => Response.json({ success: true, transaction: tx, network: 'eip155:42793', payer: `0x${'22'.repeat(20)}` })],
+    ['wrong amount', () => Response.json({ success: true, transaction: tx, network: 'eip155:42793', amount: '20000' })],
   ];
   for (const [name, response] of cases) {
     await t.test(name, async () => {
+      const isCanonicalPending = name === 'pending broadcast';
       const db = new FakeD1();
       const visits = new FakeKV();
       const env = { AUTH_DB: db, VISITS: visits, X402_RECEIPT_SK: pair.privateKeyBase64, X402_MODE: 'test' };
@@ -554,11 +552,18 @@ test('uncertain facilitator responses hold the intent even when a retry supplies
       globalThis.fetch = async () => { settlements += 1; return response(); };
       try {
         const first = await modules.handleAgentBench(actionRequest('/api/agent/bench', body, paymentFor(terms, 90), key), env, options);
-        assert.equal(first.status, 502);
-        assert.equal((await first.json()).settlement, 'ambiguous');
-        assert.equal(first.headers.get('Payment-Response'), null, 'uncertain payment has no success header');
+        assert.equal(first.status, isCanonicalPending ? 202 : 502);
+        const firstBody = await first.json();
+        assert.equal(firstBody.settlement, isCanonicalPending ? 'pending' : 'ambiguous');
+        if (isCanonicalPending) {
+          assert.equal(firstBody.transaction, tx);
+          assert.equal(firstBody.network, terms.accepts[0].network);
+          assert.ok(first.headers.get('Payment-Response'), 'canonical pending response preserves reconciliation evidence');
+        } else {
+          assert.equal(first.headers.get('Payment-Response'), null, 'uncertain payment has no success header');
+        }
         const actionId = first.headers.get('X-Action-Id');
-        assert.equal(db.intents.get(actionId).status, 'settlement_ambiguous');
+        assert.equal(db.intents.get(actionId).status, isCanonicalPending ? 'settling' : 'settlement_ambiguous');
         assert.equal(await modules.acquirePaidSettlement(db, actionId), false, 'ambiguous intent cannot reacquire settlement');
         const retry = await modules.handleAgentBench(actionRequest('/api/agent/bench', body, paymentFor(terms, 91), key), env, options);
         assert.equal(retry.status, 202);
@@ -607,7 +612,7 @@ test('known pre-submission failures permit the same intent to retry without any 
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => {
       settlements++;
-      return Response.json({ success: true, transaction: `0x${'ac'.repeat(32)}`, network: terms.network });
+      return Response.json({ success: true, transaction: `0x${'ac'.repeat(32)}`, network: terms.accepts[0].network });
     };
     try {
       const first = await modules.handleAgentBench(actionRequest('/api/agent/bench', body, paymentFor(terms, 120), key), env, options);
@@ -690,8 +695,8 @@ test('definitively refused paid claims release scarce capacity before retry', as
   globalThis.fetch = async () => {
     settlements += 1;
     return Response.json(settlements === 1
-      ? { success: false, errorReason: 'invalid_signature', transaction: '', network: terms.network }
-      : { success: true, transaction: `0x${'de'.repeat(32)}`, network: terms.network });
+      ? { success: false, errorReason: 'invalid_signature', transaction: '', network: terms.accepts[0].network }
+      : { success: true, transaction: `0x${'de'.repeat(32)}`, network: terms.accepts[0].network });
   };
   try {
     const response = await modules.handleAgentClaim(
@@ -742,7 +747,7 @@ test('settled action failures resume without a second charge and keys cannot cha
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => {
     settlements += 1;
-    return Response.json({ success: true, txHash: `0x${'98'.repeat(32)}` });
+    return Response.json({ success: true, transaction: `0x${'98'.repeat(32)}`, network: terms.accepts[0].network });
   };
   try {
     const key = 'resume-cast-0001';

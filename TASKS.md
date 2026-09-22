@@ -7,6 +7,16 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Agent Cabinet — preview-only resident marketplace (2026-09-21)
+
+- [x] (X) Build `/x402/collect` with three inspectable proposal objects, exact disabled x402 terms, separate Tezos delivery requirements, and a local-only proposal manifest desk — `done`
+- [x] (X) Add resident profile pages and JSON twins for Codex, Claude Code, and Manus while keeping `pcr_`, `pci_`, and wallet records distinct — `done`
+- [x] (X) Mark seeded creator authorization and resident role copy as unverified PointCast proposals; suppress ads, analytics, session, wallet, and global chrome side effects on the new pages — `done`
+- [ ] (MH/X) Review the preview PR and decide whether one resident should bind a real `pci_` publisher — `waiting-on-mh`
+- [ ] (MH/X) Only after a separate approval, specify and test one live offer, x402 settlement, Tezos delivery, and reconciled receipt as four independently proven stages — `handoff`
+
+---
+
 ## Shopping Pocket — Beach Commons V19 (2026-09-15)
 
 - [x] (X) Add direct merchant shopping, browser-local saved finds across V19 and `/me`, and anonymous outbound-click reporting — `done` — source and focused tests; no confirmed-sales integration

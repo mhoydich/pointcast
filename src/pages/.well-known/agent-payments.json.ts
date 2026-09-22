@@ -40,8 +40,17 @@ import {
   SIGNING_ALG,
   MANIFEST_FIELDS,
 } from '../../lib/agent-signing.mjs';
+import { buildCabinetCatalog } from '../../data/agent-cabinet';
+import {
+  X402_CURRENT_SPEC_PROXY,
+  X402_PAYMENT_PROFILE,
+  X402_PROFILE_REVIEWED_AT,
+  X402_PROXY,
+  X402_WITNESS_TYPE,
+} from '../../lib/x402';
 
 export const GET: APIRoute = async () => {
+  const cabinet = buildCabinetCatalog();
   const body = {
     spec: SPEC_VERSION,
     spec_url: 'https://github.com/mhoydich/pointcast/blob/main/docs/proposals/2026-05-02-pointcast-agent-payments-spec.md',
@@ -96,6 +105,33 @@ export const GET: APIRoute = async () => {
       endpoints: { receipt: '/api/x402/receipt', ledger: '/api/x402/receipt?list=1', human: '/x402' },
       receipt_shape: 'pointcast.agent-payments/v1 spend block + settlement{rail,network,tx,asset,payer,pay_to}',
       note: 'First live on-chain rail. One cent USDC; the countersigned receipt is the product.',
+    },
+    agent_cabinet: {
+      status: cabinet.status.offers,
+      preview_only: cabinet.previewOnly,
+      live_offers: cabinet.counts.liveOffers,
+      catalog: '/x402/collect.json',
+      human: '/x402/collect',
+      challenge: '/api/agent-cabinet/challenge',
+      collect: '/api/agent-cabinet/collect',
+      status_endpoint: '/api/agent-cabinet/status',
+      payment: 'x402 exact Permit2 on Etherlink USDC',
+      payment_profile: {
+        id: X402_PAYMENT_PROFILE,
+        compatibility: 'facilitator-specific-not-canonical-current-permit2',
+        spender: X402_PROXY,
+        witness_type: X402_WITNESS_TYPE,
+        current_canonical_proxy: X402_CURRENT_SPEC_PROXY,
+        reviewed_at: X402_PROFILE_REVIEWED_AT,
+      },
+      delivery: 'sponsored Tezos mainnet FA2 transfer to a separately proven tz1/tz2/tz3/tz4 recipient',
+      post_payment_delivery: 'After durable settlement, repeat the exact collect POST while intent.next.action is resume-delivery, honoring retryAfterSeconds or Retry-After; it never resubmits payment. Poll GET status only after next.action becomes poll-status. Stop on operator review actions.',
+      completion_proofs: 'The x402 receipt and Tezos operation are independently verifiable. PointCast does not issue a combined countersigned completion receipt.',
+      identity_boundary: 'The EVM payer, optional pci_ caller, pcr_ resident profile, and Tezos recipient are independent identities.',
+      attribution_recovery: 'A pci_ key is checked through settlement only. An exact already-paid delivery replay may omit attribution so key expiry or revocation cannot strand the proven Tezos recipient.',
+      launch_boundary: cabinet.previewOnly
+        ? 'The endpoints fail closed until fixed metadata, minted sponsor inventory, fee budgets, and mainnet launch approval all verify.'
+        : 'The committed publication overlay verifies fixed metadata and sponsor inventory. Current quote and delivery availability still requires a successful runtime status check and enabled operational gates.',
     },
     offers: [
       {

@@ -15,11 +15,50 @@ export const X402_CLIENT_EXAMPLE =
   'https://github.com/mhoydich/pointcast/blob/main/scripts/x402-client-example.mjs';
 
 export const X402_PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+// The live BubbleTez/TZ APAC facilitator currently expects this older,
+// facilitator-specific spender and three-field witness. It is deliberately
+// named and advertised instead of being presented as the current generic x402
+// Permit2 profile.
 export const X402_PROXY = '0xB6FD384A0626BfeF85f3dBaf5223Dd964684B09E';
+export const X402_PAYMENT_PROFILE = 'pointcast.bubbletez-permit2-exact/v1';
+export const X402_PAYMENT_FLOW = 'upfront';
+export const X402_WITNESS_TYPE = 'Witness(address to,uint256 validAfter,bytes extra)';
+export const X402_CURRENT_SPEC_PROXY = '0x402085c248EeA27D92E8b30b2C58ed07f9E20001';
+export const X402_PROFILE_REVIEWED_AT = '2026-09-21';
 export const X402_DEFAULT_ASSET = '0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9';
 export const X402_DEFAULT_PAY_TO = '0x48e8479b4906d45fbe702a18ac2454f800238b37';
 export const X402_DEFAULT_PRICE_UNITS = '10000';
 export const X402_DEFAULT_FACILITATOR = 'https://exp-faci.bubbletez.com';
+
+/**
+ * The named BubbleTez profile is a required wire-level extension, not merely
+ * human-facing discovery text. Servers advertise this exact object and payers
+ * echo it so neither side can silently substitute generic Permit2 typed data.
+ */
+export function x402PaymentProfileExtension(facilitator = X402_DEFAULT_FACILITATOR) {
+  return {
+    info: {
+      profile: X402_PAYMENT_PROFILE,
+      status: 'facilitator-specific',
+      facilitator,
+      permit2: X402_PERMIT2,
+      spender: X402_PROXY,
+      witnessType: X402_WITNESS_TYPE,
+      canonicalCurrentX402Permit2Compatible: false,
+      currentSpecSpenderAtReview: X402_CURRENT_SPEC_PROXY,
+      reviewedAt: X402_PROFILE_REVIEWED_AT,
+    },
+    schema: {
+      type: 'object',
+      required: ['profile', 'spender', 'witnessType'],
+      properties: {
+        profile: { const: X402_PAYMENT_PROFILE },
+        spender: { const: X402_PROXY },
+        witnessType: { const: X402_WITNESS_TYPE },
+      },
+    },
+  } as const;
+}
 
 export const X402_TREASURY_AGENT_ID = 'pointcast-treasury-x402';
 export const X402_TREASURY_PUBLIC_KEY = 'SLtbNyBQXwCgVr6L+qDemrRXmKJSWrZgECyW3RK2VkY=';
@@ -239,6 +278,14 @@ export const X402_DISCOVERY = {
   network: X402_NETWORK,
   scheme: X402_SCHEME,
   paymentMethod: 'Permit2',
+  paymentFlow: X402_PAYMENT_FLOW,
+  paymentProfile: X402_PAYMENT_PROFILE,
+  paymentProfileCompatibility: 'facilitator-specific-not-current-generic-x402-permit2',
+  permit2: X402_PERMIT2,
+  spender: X402_PROXY,
+  witnessType: X402_WITNESS_TYPE,
+  currentSpecSpenderAtReview: X402_CURRENT_SPEC_PROXY,
+  profileReviewedAt: X402_PROFILE_REVIEWED_AT,
   verify: X402_VERIFY_ENDPOINT,
   keys: X402_KEYS_ENDPOINT,
   receiptByTransaction: X402_RECEIPT_BY_TX,

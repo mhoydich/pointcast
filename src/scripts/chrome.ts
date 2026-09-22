@@ -138,6 +138,9 @@ let pageScope: ChromeScope | null = null;
 
 export function initChrome() {
   pageScope?.abort();
+  pageScope = null;
+  if (document.documentElement.dataset.pcIsolated === 'true') return;
+
   pageScope = createChromeScope();
   const scope = pageScope;
 
@@ -156,6 +159,8 @@ export function initChrome() {
   if (room) mountCursorRoom(room, scope);
 }
 
-document.addEventListener('astro:before-swap', () => pageScope?.abort());
-document.addEventListener('astro:page-load', initChrome);
-initChrome();
+if (document.documentElement.dataset.pcIsolated !== 'true') {
+  document.addEventListener('astro:before-swap', () => pageScope?.abort());
+  document.addEventListener('astro:page-load', initChrome);
+  initChrome();
+}

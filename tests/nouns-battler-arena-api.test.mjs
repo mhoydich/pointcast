@@ -24,9 +24,10 @@ class DB {
 }
 class KV { values = new Map(); async get(k, type) { const v = this.values.get(k) ?? null; return type === 'json' && v ? JSON.parse(v) : v; } async put(k,v) { if(this.values.has(k)) throw new Error('KV same-key write rate exceeded'); this.values.set(k,v); } }
 const req = (body, payment, key='battler-test-0001') => new Request('https://pointcast.xyz/api/agent/battler', { method:'POST', headers:{'Content-Type':'application/json', ...(payment ? {'Payment-Signature':payment,'Idempotency-Key':key} : {})},body:JSON.stringify(body)});
-function pay(terms, nonce='17') {
+function pay(quote, nonce='17') {
+  const terms=quote.accepts[0];
   const now=Math.floor(Date.now()/1000);
-  return encodeBase64Json({x402Version:2,scheme:'exact',network:terms.network,accepted:terms,payload:{signature:'0x'+'11'.repeat(65),permit2Authorization:{from:'0x'+'12'.repeat(20),permitted:{token:terms.asset,amount:terms.amount},spender:'0xB6FD384A0626BfeF85f3dBaf5223Dd964684B09E',nonce,deadline:String(now+30),witness:{to:terms.payTo,validAfter:String(now),extra:'0x'}}}});
+  return encodeBase64Json({x402Version:2,accepted:terms,resource:quote.resource,extensions:quote.extensions,payload:{signature:'0x'+'11'.repeat(65),permit2Authorization:{from:'0x'+'12'.repeat(20),permitted:{token:terms.asset,amount:terms.amount},spender:'0xB6FD384A0626BfeF85f3dBaf5223Dd964684B09E',nonce,deadline:String(now+30),witness:{to:terms.payTo,validAfter:String(now),extra:'0x'}}}});
 }
 
 test('agent arena validates, quotes without charging, settles once, recovers and holds ambiguous payments', async t => {
@@ -53,7 +54,7 @@ test('agent arena validates, quotes without charging, settles once, recovers and
     assert.equal(String(url),'https://fixture.invalid/settle');calls++;
     if(mode==='wait') await new Promise(resolve=>{unblock=resolve; block?.();});
     if(mode==='ambiguous') throw new Error('fixture timeout after possible broadcast');
-    return new Response(JSON.stringify({success:true,transaction:'0x'+String(calls).padStart(64,'0')}),{headers:{'content-type':'application/json'}});
+    return new Response(JSON.stringify({success:true,transaction:'0x'+String(calls).padStart(64,'0'),network:'eip155:42793'}),{headers:{'content-type':'application/json'}});
   };
   await t.test('free seed zero is reproducible and input/CPU are bounded',async()=>{
     const free=()=>arena.runArena(new Request('https://pointcast.xyz/api/nouns-battler/arena',{method:'POST',body:JSON.stringify({seed:0})}));
@@ -76,8 +77,8 @@ test('agent arena validates, quotes without charging, settles once, recovers and
     assert.equal((await paid.handleAgentBattler(req({...body,rulesVersion:'unknown'}),env,options)).status,400);
     assert.equal((await paid.handleAgentBattler(req(body),{},options)).status,503);
     const quote=await paid.handleAgentBattler(req(body),env,options);assert.equal(quote.status,402);
-    const q=decodeBase64Json(quote.headers.get('Payment-Required'));terms=q.accepts[0];
-    assert.equal(terms.amount,'10000'); assert.equal(calls,0);
+    const q=decodeBase64Json(quote.headers.get('Payment-Required'));terms=q;
+    assert.equal(terms.accepts[0].amount,'10000'); assert.equal(calls,0);
     assert.equal(buyers.validateBuyerQuote(q,{endpoint:'https://pointcast.xyz/api/agent/battler'}).amountUnits,'10000');
   });
   let completed;

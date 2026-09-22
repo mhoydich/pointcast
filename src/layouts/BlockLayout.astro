@@ -52,6 +52,8 @@ interface Props {
   legacy?: boolean;
   /** Suppress only the ad rail. The shared dock remains mounted. */
   hideAds?: boolean;
+  /** Suppress global chrome, analytics, auth/session bridges, and chrome state for isolated previews. */
+  isolated?: boolean;
   /** BaseLayout compatibility no-op; its old implementation never hid navigation. */
   hideNav?: boolean;
   /**
@@ -85,6 +87,7 @@ const {
   alternates = [],
   legacy = false,
   hideAds = false,
+  isolated = false,
   hideNav = false,
   frame,
 } = Astro.props;
@@ -112,7 +115,12 @@ const identityJsonLd = buildIdentityJsonLd();
 ---
 
 <!doctype html>
-<html lang="en" data-pc-layout={legacy ? 'legacy' : 'block'} data-hide-nav={hideNav ? 'true' : undefined}>
+<html
+  lang="en"
+  data-pc-layout={legacy ? 'legacy' : 'block'}
+  data-hide-nav={hideNav ? 'true' : undefined}
+  data-pc-isolated={isolated ? 'true' : undefined}
+>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -252,7 +260,7 @@ const identityJsonLd = buildIdentityJsonLd();
     <main id="main-content" class:list={{ 'flex-1': legacy }} role="main">
       <slot />
     </main>
-    {!immersive && (
+    {!immersive && !isolated && (
       <>
         {!hideAds && <OpenAdRail />}
         <FooterBar />
@@ -263,8 +271,8 @@ const identityJsonLd = buildIdentityJsonLd();
         <FirstSee />
       </>
     )}
-    <PageviewBeacon />
-    <TezosSessionBridge />
+    {!isolated && <PageviewBeacon />}
+    {!isolated && <TezosSessionBridge />}
     <script>
       import '../scripts/chrome';
     </script>

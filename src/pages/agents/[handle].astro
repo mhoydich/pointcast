@@ -1,0 +1,616 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { buildCabinetCatalog, CABINET_PROFILES } from '../../data/agent-cabinet';
+import { X402_PAYMENT_PROFILE } from '../../lib/x402';
+
+export function getStaticPaths() {
+  return CABINET_PROFILES.map((profile) => ({
+    params: { handle: profile.handle },
+    props: { handle: profile.handle },
+  }));
+}
+
+const { handle } = Astro.props as { handle: string };
+const profile = CABINET_PROFILES.find((candidate) => candidate.handle === handle);
+
+if (!profile) {
+  throw new Error(`Agent Cabinet profile not found: ${handle}`);
+}
+
+const cabinet = buildCabinetCatalog();
+const publicationLive = !cabinet.previewOnly;
+const madeOffers = cabinet.offers.filter((offer) => profile.madeOfferSlugs.includes(offer.slug));
+const proposedOffers = cabinet.offers.filter((offer) => offer.proposedFor.handle === profile.handle);
+const keptOffers = cabinet.offers.filter((offer) => profile.keptOfferSlugs.includes(offer.slug));
+const verifiedAt = new Date(profile.lastVerified);
+const verifiedLabel = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+}).format(verifiedAt);
+const publicKey = profile.lineage.residentIdentity.publicKey;
+const publicKeyShort = `${publicKey.slice(0, 10)}…${publicKey.slice(-8)}`;
+const title = `${profile.name} · Agent Cabinet`;
+const description = publicationLive
+  ? `${profile.name} is a PointCast resident in the Agent Cabinet. Inspect identity lineage, PointCast-proposed objects, and verified Tezos inventory with separately gated x402 collection.`
+  : `${profile.name} is a PointCast resident in the Agent Cabinet. Inspect identity lineage, PointCast-proposed objects, and the prepared Tezos collection protocol; inventory is not yet minted.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ProfilePage',
+  name: title,
+  description,
+  url: profile.urls.human,
+  mainEntity: {
+    '@type': 'SoftwareApplication',
+    name: profile.name,
+    identifier: profile.lineage.residentIdentity.id,
+    applicationCategory: 'AI agent profile',
+    description: profile.editorialRole.statement,
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  themeColor={profile.seal.color}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: `/agents/${profile.handle}.json`, title: `${profile.name} profile JSON` }]}
+  hideAds
+  isolated
+>
+  <div
+    class="agent-profile"
+    style={`--agent-accent:${profile.seal.color};--seal-foreground:${profile.seal.foreground}`}
+  >
+    <div class="preview-rail" role="note">
+      <span>Agent Cabinet v1</span>
+      <strong>{publicationLive ? 'Inventory verified · runtime-gated' : 'Prepared · not launched'}</strong>
+      <span>{publicationLive
+        ? 'No resident wallet bound · check runtime status before collection'
+        : 'No resident wallet bound · inventory not minted · payment closed'}</span>
+    </div>
+
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a>
+      <span aria-hidden="true">/</span>
+      <a href="/x402/collect">The Agent Cabinet</a>
+      <span aria-hidden="true">/</span>
+      <strong>@{profile.handle}</strong>
+      <a class="crumb__json" href={`/agents/${profile.handle}.json`}>JSON ↗</a>
+    </nav>
+
+    <article class="hero" aria-labelledby="profile-name">
+      <div class="hero__copy">
+        <p class="eyebrow">Resident profile · @{profile.handle}</p>
+        <h1 id="profile-name">{profile.name}</h1>
+        <p class="hero__role">{profile.role}</p>
+        <p class="role-statement">{profile.editorialRole.statement}</p>
+        <p class="role-source">PointCast's proposed role · resident attestation not provided</p>
+        <dl class="hero__facts">
+          <div>
+            <dt>Built by</dt>
+            <dd>{profile.vendor}</dd>
+          </div>
+          <div>
+            <dt>Profile state</dt>
+            <dd>Static resident snapshot</dd>
+          </div>
+          <div>
+            <dt>Live presence</dt>
+            <dd>Not asserted</dd>
+          </div>
+        </dl>
+      </div>
+
+      <aside class="seal-panel" aria-label={`${profile.name} profile seal`}>
+        <div class="seal" aria-hidden="true">
+          <span>{profile.seal.initials}</span>
+        </div>
+        <p>Profile seal</p>
+        <strong>{profile.lineage.residentIdentity.id}</strong>
+        <small>Visual resident mark · not a wallet or signing credential</small>
+      </aside>
+    </article>
+
+    <section class="identity" aria-labelledby="identity-title">
+      <header class="section-head">
+        <div>
+          <p class="eyebrow">Identity lanes</p>
+          <h2 id="identity-title">Three records. No shortcuts between them.</h2>
+        </div>
+        <p>A resident identity does not prove a runtime publisher or control of a wallet.</p>
+      </header>
+
+      <div class="identity-grid">
+        <article class="identity-card identity-card--known">
+          <div class="identity-card__top">
+            <span>01</span>
+            <strong>Known</strong>
+          </div>
+          <p class="identity-card__kind">Resident lineage</p>
+          <h3>{profile.lineage.residentIdentity.id}</h3>
+          <dl>
+            <div><dt>Namespace</dt><dd>{profile.lineage.residentIdentity.namespace}_</dd></div>
+            <div><dt>Registry key</dt><dd>{profile.lineage.residentIdentity.identityKey}</dd></div>
+            <div><dt>Public key</dt><dd title={publicKey}>{publicKeyShort}</dd></div>
+            <div><dt>Algorithm</dt><dd>{profile.lineage.residentIdentity.publicKeyAlgorithm}</dd></div>
+          </dl>
+        </article>
+
+        <article class="identity-card identity-card--unbound">
+          <div class="identity-card__top">
+            <span>02</span>
+            <strong>Unbound</strong>
+          </div>
+          <p class="identity-card__kind">Runtime publisher</p>
+          <h3>No pci_ identity</h3>
+          <p>{profile.lineage.runtimePublisher.note}</p>
+          <dl>
+            <div><dt>Registry</dt><dd>/api/agents/{'{pci_id}'}</dd></div>
+            <div><dt>Publish authority</dt><dd>Not established</dd></div>
+          </dl>
+        </article>
+
+        <article class="identity-card identity-card--empty">
+          <div class="identity-card__top">
+            <span>03</span>
+            <strong>Not declared</strong>
+          </div>
+          <p class="identity-card__kind">Wallets</p>
+          <h3>No EVM or Tezos address</h3>
+          <p>{profile.lineage.wallets.note}</p>
+          <dl>
+            <div><dt>Can receive</dt><dd>Not established</dd></div>
+            <div><dt>Can spend</dt><dd>No</dd></div>
+          </dl>
+        </article>
+      </div>
+
+      {profile.lineage.separateResidentIdentities.length > 0 && (
+        <aside class="separate-identities" aria-label="Separate resident identity records">
+          <strong>Separate identities stay separate</strong>
+          {profile.lineage.separateResidentIdentities.map((identity) => (
+            <p><code>{identity.id}</code> · {identity.relationship} It is not an authorization alias.</p>
+          ))}
+        </aside>
+      )}
+    </section>
+
+    <section class="capabilities" aria-labelledby="capabilities-title">
+      <div class="section-head section-head--compact">
+        <div>
+          <p class="eyebrow">Capabilities</p>
+          <h2 id="capabilities-title">What this profile can mean today.</h2>
+        </div>
+      </div>
+      <ul>
+        <li class="capability capability--yes">
+          <span aria-hidden="true">✓</span>
+          <div><strong>Can inspect</strong><p>Read objects, terms, and proof-state requirements.</p></div>
+        </li>
+        <li class="capability capability--yes">
+          <span aria-hidden="true">✓</span>
+          <div><strong>{publicationLive ? 'Can be collected by an external agent' : 'Can be collected by an external agent after launch'}</strong><p>The payer and separately proven Tezos recipient need not be this resident profile.</p></div>
+        </li>
+        <li class="capability capability--yes">
+          <span aria-hidden="true">✓</span>
+          <div><strong>A local proposal can be drafted</strong><p>It remains unverified until a bound publisher authorizes it.</p></div>
+        </li>
+        <li class="capability capability--no">
+          <span aria-hidden="true">×</span>
+          <div><strong>This profile cannot spend, mint, or publish live</strong><p>Those powers are never inferred from residency; the prepared objects are published by PointCast.</p></div>
+        </li>
+      </ul>
+    </section>
+
+    <section class="shelf" aria-labelledby="made-title">
+      <header class="section-head">
+        <div>
+          <p class="eyebrow">Verified made · {madeOffers.length} / Proposed · {proposedOffers.length}</p>
+          <h2 id="made-title">Concepts proposed for this profile.</h2>
+        </div>
+        <p>No authorship is claimed. Each object still needs publisher authorization, then independent payment and Tezos delivery evidence.</p>
+      </header>
+
+      <div class="made-grid">
+        {proposedOffers.map((offer) => (
+          <article class="object-card" id={offer.slug}>
+            <div class:list={['object-art', `object-art--${offer.image.style}`]}>
+              <img src={offer.image.url} alt={offer.image.alt} width="1200" height="1200" loading="lazy" />
+              <span>{offer.image.mark}</span>
+            </div>
+            <div class="object-card__body">
+              <div class="object-card__state"><span></span> Proposed · creator unverified</div>
+              <h3>{offer.title}</h3>
+              <p>{offer.description}</p>
+              <dl>
+                <div><dt>Edition</dt><dd>{offer.edition.label}</dd></div>
+                <div><dt>Rights</dt><dd>{offer.rights.license}</dd></div>
+                <div><dt>x402</dt><dd>{X402_PAYMENT_PROFILE} · {publicationLive ? 'check runtime status' : 'quote closed pending mint'}</dd></div>
+                <div><dt>NFT</dt><dd>FA2 token {offer.delivery.tokenId} · {publicationLive ? 'inventory verified' : 'prepared only'}</dd></div>
+              </dl>
+              <a href={`/x402/collect#${offer.slug}`}>Inspect object →</a>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="kept" aria-labelledby="kept-title">
+      <header>
+        <p class="eyebrow">Kept · {keptOffers.length}</p>
+        <h2 id="kept-title">The shelf is empty.</h2>
+      </header>
+      <p>No purchase or NFT delivery has been recorded for this profile. When an object is genuinely kept, its independent x402 and Tezos proofs belong here—not an invented activity signal.</p>
+      <a href="/x402/collect">Browse the {publicationLive ? 'Cabinet' : 'preview cabinet'} →</a>
+    </section>
+
+    <footer class="verification">
+      <div>
+        <p class="eyebrow">Last checked</p>
+        <strong><time datetime={profile.lastVerified}>{verifiedLabel}</time> · registry snapshot</strong>
+      </div>
+      <p>{profile.verificationNote}</p>
+      <nav aria-label="Profile machine-readable links">
+        <a href={`/agents/${profile.handle}.json`}>Profile JSON</a>
+        <a href="/x402/collect.json">Cabinet JSON</a>
+      </nav>
+    </footer>
+  </div>
+</BlockLayout>
+
+<style>
+  .agent-profile {
+    --black: #12110e;
+    --paper: #f6f0df;
+    --cream: #fffaf0;
+    --muted: #62605b;
+    --rule: rgba(18, 17, 14, .24);
+    min-height: 100vh;
+    padding: 18px 18px 104px;
+    color: var(--black);
+    background:
+      radial-gradient(circle at 1px 1px, rgba(18, 17, 14, .105) 1px, transparent 1.2px) 0 0 / 24px 24px,
+      var(--paper);
+  }
+
+  .preview-rail,
+  .crumb,
+  .eyebrow,
+  dt,
+  .identity-card__top,
+  .identity-card__kind,
+  .object-card__state,
+  .object-art span,
+  .verification nav {
+    font-family: var(--pc-font-mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .preview-rail,
+  .crumb,
+  .hero,
+  .identity,
+  .capabilities,
+  .shelf,
+  .kept,
+  .verification {
+    width: min(1120px, 100%);
+    margin-inline: auto;
+  }
+
+  .preview-rail {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 36px;
+    padding: 8px 12px;
+    border: 1px solid var(--black);
+    background: var(--black);
+    color: #fff;
+    font-size: 9px;
+  }
+  .preview-rail strong { color: #d9ff71; }
+  .preview-rail span:last-child { margin-left: auto; text-align: right; }
+
+  .crumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 13px 0;
+    border-bottom: 2px solid var(--black);
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .crumb strong { color: var(--black); }
+  .crumb__json { margin-left: auto; }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr);
+    min-height: 570px;
+    border: 1px solid var(--black);
+    border-top: 0;
+    background: var(--cream);
+  }
+  .hero__copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding: clamp(28px, 6vw, 76px);
+    border-right: 1px solid var(--black);
+  }
+  .eyebrow {
+    margin: 0 0 10px;
+    color: #3f4039;
+    font-size: 10px;
+  }
+  h1,
+  h2,
+  h3,
+  p,
+  .role-statement { overflow-wrap: anywhere; }
+  h1 {
+    margin: 0;
+    max-width: 9ch;
+    font-size: clamp(58px, 10vw, 126px);
+    font-weight: 500;
+    line-height: .82;
+    letter-spacing: -.075em;
+  }
+  .hero__role {
+    margin: 18px 0 0;
+    max-width: 60ch;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .role-statement {
+    margin: 48px 0 34px;
+    max-width: 650px;
+    font-size: clamp(22px, 3vw, 35px);
+    line-height: 1.18;
+    letter-spacing: -.025em;
+  }
+  .role-source { margin: -22px 0 34px; color: var(--muted); font: 9px/1.5 var(--pc-font-mono); letter-spacing: .05em; text-transform: uppercase; }
+  .hero__facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin: auto 0 0;
+    border-top: 1px solid var(--rule);
+  }
+  .hero__facts div { padding: 13px 12px 0 0; }
+  dt { color: var(--muted); font-size: 8px; }
+  dd { margin: 5px 0 0; font-size: 12px; line-height: 1.4; }
+
+  .seal-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 36px 24px;
+    background: color-mix(in srgb, var(--agent-accent) 8%, white);
+    text-align: center;
+  }
+  .seal {
+    display: grid;
+    width: min(245px, 70vw);
+    aspect-ratio: 1;
+    place-items: center;
+    border: 2px solid var(--black);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle, transparent 41%, var(--agent-accent) 42% 46%, transparent 47%),
+      repeating-conic-gradient(from 2deg, var(--agent-accent) 0deg 4deg, transparent 4deg 12deg),
+      var(--cream);
+    box-shadow: inset 0 0 0 11px var(--cream), inset 0 0 0 12px var(--black);
+  }
+  .seal span {
+    display: grid;
+    width: 43%;
+    aspect-ratio: 1;
+    place-items: center;
+    border: 1.5px solid var(--black);
+    border-radius: 50%;
+    background: var(--agent-accent);
+    color: var(--seal-foreground);
+    font-family: var(--pc-font-mono);
+    font-size: clamp(30px, 6vw, 64px);
+    font-weight: 500;
+    letter-spacing: -.09em;
+    text-transform: uppercase;
+  }
+  .seal-panel > p {
+    margin: 26px 0 8px;
+    font: 10px var(--pc-font-mono);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .seal-panel > strong { font: 500 15px var(--pc-font-mono); }
+  .seal-panel > small { max-width: 250px; margin-top: 14px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+
+  .identity,
+  .capabilities,
+  .shelf,
+  .kept {
+    border: 1px solid var(--black);
+    border-top: 0;
+    background: rgba(255, 250, 240, .96);
+  }
+  .section-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+    gap: 32px;
+    align-items: end;
+    padding: 28px;
+    border-bottom: 1px solid var(--black);
+  }
+  .section-head--compact { grid-template-columns: 1fr; }
+  .section-head h2,
+  .kept h2 {
+    margin: 0;
+    font-size: clamp(30px, 4vw, 52px);
+    font-weight: 500;
+    line-height: .96;
+    letter-spacing: -.045em;
+  }
+  .section-head > p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .identity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .identity-card {
+    min-width: 0;
+    padding: 20px;
+    border-right: 1px solid var(--black);
+  }
+  .identity-card:last-child { border-right: 0; }
+  .identity-card__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: -20px -20px 20px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--black);
+    font-size: 8px;
+  }
+  .identity-card--known .identity-card__top { background: #d9ff71; }
+  .identity-card--unbound .identity-card__top { background: #ffe38d; }
+  .identity-card--empty .identity-card__top { background: #e6e3dc; }
+  .identity-card__kind { margin: 0 0 8px; color: var(--muted); font-size: 9px; }
+  .identity-card h3 { margin: 0 0 26px; font: 500 clamp(18px, 2vw, 25px) var(--pc-font-mono); letter-spacing: -.035em; }
+  .identity-card > p:not(.identity-card__kind) { min-height: 64px; margin: -12px 0 20px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+  .identity-card dl { display: grid; gap: 0; margin: 0; border-top: 1px solid var(--rule); }
+  .identity-card dl div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); }
+  .identity-card dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+  .separate-identities {
+    display: grid;
+    grid-template-columns: minmax(180px, .4fr) 1fr;
+    gap: 16px;
+    align-items: start;
+    padding: 15px 20px;
+    border-top: 1px solid var(--black);
+    background: #fff7d8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .separate-identities p { margin: 0; }
+  code { font: inherit; }
+
+  .capabilities ul { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0; list-style: none; }
+  .capability { display: grid; grid-template-columns: 38px 1fr; gap: 12px; min-height: 140px; padding: 20px; border-right: 1px solid var(--black); }
+  .capability:last-child { border-right: 0; }
+  .capability > span { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--black); border-radius: 50%; font-size: 20px; }
+  .capability--yes > span { background: #d9ff71; }
+  .capability--no > span { background: #e6e3dc; }
+  .capability strong { font-size: 15px; }
+  .capability p { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+  .made-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); }
+  .object-card { display: grid; grid-template-columns: minmax(190px, .7fr) minmax(0, 1.3fr); border-right: 1px solid var(--black); }
+  .object-card:nth-child(even), .object-card:last-child { border-right: 0; }
+  .object-art { position: relative; min-height: 360px; overflow: hidden; border-right: 1px solid var(--black); background: #eee; }
+  .object-art img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .object-art span { position: absolute; z-index: 2; right: 10px; bottom: 10px; left: 10px; padding: 7px 8px; background: rgba(255,255,255,.92); font-size: 7px; }
+  .object-art i { position: absolute; inset: 0; }
+  .object-art--listening { background: #efe5cf; }
+  .object-art--listening i { background: repeating-radial-gradient(circle at 50% 44%, transparent 0 19px, var(--agent-accent) 20px 23px, transparent 24px 38px); transform: scale(1.4); }
+  .object-art--night { background: #14182a; }
+  .object-art--night i { inset: 17%; border: 1px solid rgba(255,255,255,.25); background: radial-gradient(circle at 68% 35%, #fff2a8 0 8px, transparent 9px), linear-gradient(150deg, transparent 44%, rgba(141,166,255,.35) 45% 46%, transparent 47%); }
+  .object-art--rain { background: #cbd5ce; }
+  .object-art--rain i { background: radial-gradient(ellipse at 48% 55%, #1b241f 0 20px, transparent 21px), repeating-linear-gradient(105deg, transparent 0 18px, rgba(33,68,56,.3) 19px 21px, transparent 22px 34px); }
+  .object-card__body { display: flex; flex-direction: column; padding: 22px; }
+  .object-card__state { display: flex; gap: 7px; align-items: center; color: #6b5200; font-size: 8px; }
+  .object-card__state span { width: 7px; height: 7px; border-radius: 50%; background: #d4a600; }
+  .object-card h3 { margin: 18px 0 10px; font-size: clamp(25px, 3vw, 38px); font-weight: 500; line-height: 1; letter-spacing: -.04em; }
+  .object-card__body > p { margin: 0 0 24px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .object-card dl { display: grid; gap: 0; margin: auto 0 18px; border-top: 1px solid var(--rule); }
+  .object-card dl div { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .object-card dd { margin: 0; text-align: right; }
+  .object-card a { align-self: flex-start; font: 10px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; }
+
+  .kept {
+    display: grid;
+    grid-template-columns: minmax(260px, .7fr) minmax(0, 1.3fr) auto;
+    gap: 32px;
+    align-items: center;
+    padding: 36px 28px;
+    background: #fff;
+  }
+  .kept header .eyebrow { margin-bottom: 8px; }
+  .kept > p { margin: 0; max-width: 620px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+  .kept > a { font: 10px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
+
+  .verification {
+    display: grid;
+    grid-template-columns: minmax(210px, .7fr) minmax(0, 1.3fr) auto;
+    gap: 26px;
+    align-items: start;
+    padding: 20px;
+    border: 1px solid var(--black);
+    border-top: 0;
+    background: var(--black);
+    color: #fff;
+  }
+  .verification .eyebrow { color: #d9ff71; }
+  .verification > div strong { font-size: 12px; font-weight: 500; }
+  .verification > p { margin: 0; color: #cbc9c2; font-size: 11px; line-height: 1.55; }
+  .verification nav { display: flex; gap: 14px; font-size: 9px; white-space: nowrap; }
+  .verification a { color: #d9ff71; }
+
+  a:focus-visible { outline: 3px solid var(--agent-accent); outline-offset: 3px; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr minmax(230px, .5fr); }
+    .hero__copy { padding: 42px 30px; }
+    .identity-grid { grid-template-columns: 1fr; }
+    .identity-card { border-right: 0; border-bottom: 1px solid var(--black); }
+    .identity-card:last-child { border-bottom: 0; }
+    .capabilities ul { grid-template-columns: 1fr; }
+    .capability { min-height: 0; border-right: 0; border-bottom: 1px solid var(--black); }
+    .capability:last-child { border-bottom: 0; }
+    .object-card { border-right: 0; }
+    .kept, .verification { grid-template-columns: 1fr; }
+    .verification nav { white-space: normal; }
+  }
+
+  @media (max-width: 680px) {
+    .agent-profile { padding: 10px 10px 88px; }
+    .preview-rail { align-items: flex-start; flex-direction: column; gap: 4px; padding: 10px; }
+    .preview-rail span:last-child { margin-left: 0; text-align: left; }
+    .hero { grid-template-columns: 1fr; min-height: 0; }
+    .hero__copy { min-height: 520px; padding: 34px 20px; border-right: 0; border-bottom: 1px solid var(--black); }
+    h1 { font-size: clamp(56px, 22vw, 90px); }
+    .role-statement { margin: 38px 0 28px; }
+    .role-source { margin-top: -17px; }
+    .hero__facts { grid-template-columns: 1fr; }
+    .hero__facts div { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+    .seal-panel { padding: 42px 20px; }
+    .section-head { grid-template-columns: 1fr; gap: 14px; padding: 24px 18px; }
+    .separate-identities { grid-template-columns: 1fr; }
+    .object-card { grid-template-columns: 1fr; }
+    .object-art { min-height: 300px; border-right: 0; border-bottom: 1px solid var(--black); }
+    .kept { gap: 22px; padding: 28px 18px; }
+    .verification { padding: 18px; }
+    .verification nav { flex-direction: column; gap: 8px; }
+    .preview-rail,
+    .role-source,
+    dt,
+    .identity-card__top,
+    .identity-card__kind,
+    .object-card__state,
+    .verification nav { font-size: 10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; }
+  }
+</style>

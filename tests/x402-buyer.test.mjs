@@ -9,8 +9,10 @@ import {
 } from '../src/lib/x402-buyer.ts';
 import {
   X402_CHAIN_ID, X402_DEFAULT_ASSET, X402_DEFAULT_PAY_TO, X402_NETWORK, X402_PERMIT2,
+  X402_PAYMENT_FLOW, X402_PAYMENT_PROFILE,
   X402_PROXY, X402_RECEIPT_SPEC, X402_TREASURY_AGENT_ID,
   buildCanonicalReceiptPayload, decodeBase64Json, encodeBase64Json, importReceiptPrivateKey, signCanonicalPayload,
+  x402PaymentProfileExtension,
 } from '../src/lib/x402.ts';
 
 // Offline, deterministic fixture signer. Never connected to a wallet or chain.
@@ -25,8 +27,10 @@ const ID2 = '12345678-1234-4123-8123-123456789def';
 function rawQuote() {
   return { x402Version: 2, accepts: [{ scheme: 'exact', network: X402_NETWORK, amount: '10000',
     asset: X402_DEFAULT_ASSET, payTo: X402_DEFAULT_PAY_TO, maxTimeoutSeconds: 60,
-    extra: { name: 'USDC', version: '2', assetTransferMethod: 'permit2' } }],
-  resource: { url: ENDPOINT, description: 'One bench question.', mimeType: 'application/json' }, error: null };
+    extra: { name: 'USDC', version: '2', assetTransferMethod: 'permit2', paymentFlow: X402_PAYMENT_FLOW } }],
+  resource: { url: ENDPOINT, description: 'One bench question.', mimeType: 'application/json' },
+  extensions: { 'pointcast.payment-profile': x402PaymentProfileExtension() },
+  error: 'PAYMENT-SIGNATURE header is required' };
 }
 function quote(options = {}, raw = rawQuote()) {
   return validateBuyerQuote(raw, { endpoint: ENDPOINT, nowMs: NOW, ...options });
@@ -114,9 +118,13 @@ test('quote accepts object or encoded header, pins all economics, freezes nested
   const q = quote({ expiresAt: NOW + 20_000 });
   assert.equal(q.expiresAt, NOW + 20_000);
   assert.equal(q.permit2, X402_PERMIT2); assert.equal(q.proxy, X402_PROXY);
+  assert.equal(q.paymentProfile, X402_PAYMENT_PROFILE);
   assert.equal(q.accepted.amount, '10000'); assert.equal(q.accepted.payTo, X402_DEFAULT_PAY_TO);
+  assert.equal(q.accepted.extra.paymentFlow, 'upfront');
+  assert.deepEqual(q.extensions, rawQuote().extensions);
   assert.throws(() => { q.accepted.asset = otherAccount.address; }, TypeError);
   assert.throws(() => { q.accepted.extra.assetTransferMethod = 'eip3009'; }, TypeError);
+  assert.throws(() => { q.extensions['pointcast.payment-profile'].info.profile = 'changed'; }, TypeError);
   assert.equal(quote({ expiresAt: new Date(NOW + 20_000).toISOString() }).expiresAt, NOW + 20_000);
   assert.equal(quote({ expiresAt: NOW + 600_000 }).expiresAt, NOW + 60_000);
   assert.deepEqual(quote({}, encodeBase64Json(rawQuote())), quote());
@@ -130,7 +138,12 @@ test('quote rejects changed economic terms, unknown proxy fields, unsafe URLs an
     q => { q.accepts[0].amount = '10001'; }, q => { q.accepts[0].amount = 10000; },
     q => { q.accepts[0].maxTimeoutSeconds = 61; }, q => { q.accepts[0].maxTimeoutSeconds = 0; },
     q => { q.accepts[0].maxTimeoutSeconds = '60'; }, q => { q.accepts[0].extra.assetTransferMethod = 'eip3009'; },
+    q => { delete q.accepts[0].extra.paymentFlow; }, q => { q.accepts[0].extra.paymentFlow = 'after'; },
     q => { q.accepts[0].extra.proxy = otherAccount.address; }, q => { q.accepts[0].spender = otherAccount.address; },
+    q => { q.extensions['pointcast.payment-profile'].info.profile = 'generic'; },
+    q => { q.extensions['pointcast.payment-profile'].info.spender = otherAccount.address; },
+    q => { q.extensions['pointcast.payment-profile'].schema.properties.profile.const = 'generic'; },
+    q => { delete q.extensions['pointcast.payment-profile']; },
     q => { q.resource.url = 'https://attacker.example/api/agent/bench'; }, q => { q.resource.mimeType = 'text/html'; },
   ];
   for (const change of changes) { const raw = rawQuote(); change(raw); assert.throws(() => quote({}, raw)); }
@@ -165,6 +178,8 @@ test('a click signs exactly once, verifies the recovered EOA and only returns an
   assert.deepEqual(w.provider.calls.map(c => c.method), ['eth_chainId', 'eth_accounts', 'eth_signTypedData_v4', 'eth_chainId', 'eth_accounts']);
   assert.deepEqual(decodeBase64Json(signed.paymentSignature), signed.paymentPayload);
   assert.equal(signed.paymentPayload.accepted.asset, X402_DEFAULT_ASSET);
+  assert.equal(signed.paymentPayload.accepted.extra.paymentFlow, 'upfront');
+  assert.deepEqual(signed.paymentPayload.extensions, rawQuote().extensions);
   assert.equal(signed.paymentPayload.payload.permit2Authorization.spender, X402_PROXY);
   assert.equal(signed.payer, account.address.toLowerCase());
   assert.equal(signed.deadline, NOW / 1000 + 60);

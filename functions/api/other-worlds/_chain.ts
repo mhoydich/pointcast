@@ -37,6 +37,32 @@ function object(value: unknown): Record<string, unknown> {
 }
 function address(value: unknown): string { return String(object(value).address || ''); }
 
+/** Receipt reconciliation depends only on immutable terms stored in the claim. */
+export async function otherWorldsClaimStatus(claim: ClaimRow): Promise<'pending'|'confirmed'|'failed'> {
+  if (!claim.operation_hash) return 'pending';
+  const data = await readJson(`https://api.tzkt.io/v1/operations/transactions/${claim.operation_hash}`);
+  if (!Array.isArray(data) || !data.length) return 'pending';
+  const matching = data.map(object).filter(op => op.hash === claim.operation_hash && address(op.sender) === claim.sponsor && address(op.target) === claim.contract);
+  if (matching.length !== 1) return 'pending';
+  const operation = matching[0];
+  const head = object(await readJson('https://api.tzkt.io/v1/head'));
+  const headLevel=Number(head.level), operationLevel=Number(operation.level), operationId=Number(operation.id);
+  if (typeof head.level !== 'number' || typeof operation.level !== 'number' || typeof operation.id !== 'number' || !Number.isSafeInteger(headLevel) || !Number.isSafeInteger(operationLevel) || !Number.isSafeInteger(operationId) || operationId<=0 || operationLevel<0 || headLevel-operationLevel<2) return 'pending';
+  if (operation.status === 'failed' || operation.status === 'backtracked' || operation.status === 'skipped') return 'failed';
+  if (operation.status !== 'applied' || String(operation.amount) !== '0') return 'pending';
+  const parameter = object(operation.parameter);
+  const transfers = parameter.value;
+  if (parameter.entrypoint !== 'transfer' || !Array.isArray(transfers) || transfers.length !== 1) return 'pending';
+  const transfer = object(transfers[0]); const txs = transfer.txs;
+  if (transfer.from_ !== claim.sponsor || !Array.isArray(txs) || txs.length !== 1) return 'pending';
+  const tx = object(txs[0]);
+  if (tx.to_ !== claim.address || String(tx.token_id) !== claim.token_id || String(tx.amount) !== '1') return 'pending';
+  const movements = await readJson(`https://api.tzkt.io/v1/tokens/transfers?transactionId=${operationId}&token.contract=${claim.contract}&token.tokenId=${claim.token_id}&limit=10`);
+  if (!Array.isArray(movements) || movements.length !== 1) return 'pending';
+  const movement = object(movements[0]);
+  return address(movement.from) === claim.sponsor && address(movement.to) === claim.address && String(movement.amount) === '1' ? 'confirmed' : 'pending';
+}
+
 export const createTezosChain: ChainFactory = async (env, config) => ({
   async ready(claimed) {
     const id = await readJson(`${config.rpcUrl.replace(/\/$/, '')}/chains/main/chain_id`);
@@ -129,28 +155,5 @@ export const createTezosChain: ChainFactory = async (env, config) => ({
     if (hash !== expected) throw new Error('broadcast-hash-mismatch');
     return expected;
   },
-  async status(claim) {
-    if (!claim.operation_hash) return 'pending';
-    const data = await readJson(`https://api.tzkt.io/v1/operations/transactions/${claim.operation_hash}`);
-    if (!Array.isArray(data) || !data.length) return 'pending';
-    const matching = data.map(object).filter(op => op.hash === claim.operation_hash && address(op.sender) === claim.sponsor && address(op.target) === claim.contract);
-    if (matching.length !== 1) return 'pending';
-    const operation = matching[0];
-    const head = object(await readJson('https://api.tzkt.io/v1/head'));
-    const headLevel=Number(head.level), operationLevel=Number(operation.level), operationId=Number(operation.id);
-    if (typeof head.level !== 'number' || typeof operation.level !== 'number' || typeof operation.id !== 'number' || !Number.isSafeInteger(headLevel) || !Number.isSafeInteger(operationLevel) || !Number.isSafeInteger(operationId) || operationId<=0 || operationLevel<0 || headLevel-operationLevel<2) return 'pending';
-    if (operation.status === 'failed' || operation.status === 'backtracked' || operation.status === 'skipped') return 'failed';
-    if (operation.status !== 'applied' || String(operation.amount) !== '0') return 'pending';
-    const parameter = object(operation.parameter);
-    const transfers = parameter.value;
-    if (parameter.entrypoint !== 'transfer' || !Array.isArray(transfers) || transfers.length !== 1) return 'pending';
-    const transfer = object(transfers[0]); const txs = transfer.txs;
-    if (transfer.from_ !== claim.sponsor || !Array.isArray(txs) || txs.length !== 1) return 'pending';
-    const tx = object(txs[0]);
-    if (tx.to_ !== claim.address || String(tx.token_id) !== claim.token_id || String(tx.amount) !== '1') return 'pending';
-    const movements = await readJson(`https://api.tzkt.io/v1/tokens/transfers?transactionId=${operation.id}&token.contract=${claim.contract}&token.tokenId=${claim.token_id}&limit=10`);
-    if (!Array.isArray(movements) || movements.length !== 1) return 'pending';
-    const movement = object(movements[0]);
-    return address(movement.from) === claim.sponsor && address(movement.to) === claim.address && String(movement.amount) === '1' ? 'confirmed' : 'pending';
-  },
+  status: otherWorldsClaimStatus,
 });
