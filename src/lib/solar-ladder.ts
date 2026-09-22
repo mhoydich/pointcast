@@ -1,7 +1,8 @@
 // Small Solar — a low-cost solar ladder for El Segundo, on the El Segundo channel.
 // One dataset (src/data/solar-ladder.json) feeds the room at /solar, the JSON
 // twin at /solar.json, the block, and the test. Four rungs from one panel to a
-// block, storage that is and is not a battery, five ways to move the power, and
+// block, storage that is and is not a battery, five ways to move the power, a
+// local mesh layer that is not the internet (phones, LoRa, a Wi-Fi commons), and
 // shelves of vendors we verified on a stated day. We point, the vendor sells.
 // Nothing here is electrical advice or inside information.
 
@@ -16,6 +17,12 @@ export type Rung = (typeof data.rungs)[number];
 export type Shelf = (typeof data.sources.shelves)[number];
 export type SourceItem = Shelf['items'][number];
 export type Rule = (typeof data.rules)[number];
+export type MeshLayer = (typeof data.mesh.layers)[number];
+export type MeshApp = (typeof data.mesh.apps)[number];
+
+export const MESH = data.mesh;
+export const MESH_LAYERS = data.mesh.layers as MeshLayer[];
+export const MESH_APPS = data.mesh.apps as MeshApp[];
 
 export const RUNGS = data.rungs as Rung[];
 export const SHELVES = data.sources.shelves as Shelf[];
@@ -45,6 +52,8 @@ export const SOLAR_STATS = {
   shelves: SHELVES.length,
   sources: SOURCE_COUNT,
   rules: data.rules.length,
+  meshLayers: data.mesh.layers.length,
+  meshApps: data.mesh.apps.length,
   peakSunHours: data.meta.peakSunHours,
   cheapestRungUsd: RUNGS[0].budget[0],
   houseRungUsd: RUNGS[2].budget,
@@ -66,6 +75,7 @@ export const SOLAR_BRIEF = {
   rungs: RUNGS,
   storage: data.storage,
   distribution: data.distribution,
+  mesh: data.mesh,
   safety: data.safety,
   sources: data.sources,
   rules: data.rules,

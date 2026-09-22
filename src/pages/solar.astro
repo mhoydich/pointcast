@@ -1,10 +1,10 @@
 ---
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CHANNELS } from '../lib/channels';
-import { RUNGS, SHELVES, SOLAR, SOLAR_BLOCK, SOLAR_JSON_URL, SOLAR_STATS, SOLAR_URL, hostOf, range, shelfById, sizeFor, usd, watts } from '../lib/solar-ladder';
+import { MESH, MESH_APPS, MESH_LAYERS, RUNGS, SHELVES, SOLAR, SOLAR_BLOCK, SOLAR_JSON_URL, SOLAR_STATS, SOLAR_URL, hostOf, range, shelfById, sizeFor, usd, watts } from '../lib/solar-ladder';
 
 const title = 'Small Solar';
-const description = `A low-cost solar ladder for El Segundo: four rungs from a $${SOLAR_STATS.cheapestRungUsd} panel to a block that shares one battery, storage that is and is not a battery, five ways to move the power, and ${SOLAR_STATS.sources} vendors and agencies we checked on a stated day.`;
+const description = `A low-cost solar ladder for El Segundo: four rungs from a $${SOLAR_STATS.cheapestRungUsd} panel to a block that shares one battery, storage that is and is not a battery, five ways to move the power, a local mesh network that is not the internet for iPhones, Androids and Linux boxes, and ${SOLAR_STATS.sources} vendors and agencies we checked on a stated day.`;
 const ch = CHANNELS.ESC;
 const { meta, numbers, sizing, storage, distribution, safety, rules, learn, method } = SOLAR;
 const asOfLabel = new Date(`${meta.asOf}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).toUpperCase();
@@ -40,11 +40,12 @@ const jsonLd = {
       <p class="dek">
         Four rungs from one panel on a desk to a block that shares a battery. Built from used panels and
         listed parts, nothing custom. Storage sized to the night, not to the roof. Five ways to move the
-        power, ranked by how much friction each one buys. Then the shelves: where to actually buy it, and
+        power, ranked by how much friction each one buys. A local network that is not the internet, for
+        the phones and laptops the block already owns. Then the shelves: where to actually buy it, and
         what the rules said on the day we checked.
       </p>
       <p class="jump">
-        <a href="#ladder">the ladder</a><a href="#size">size it</a><a href="#storage">storage</a><a href="#moving">moving power</a><a href="#buy">where to buy</a><a href="#rules">rules &amp; money</a><a href="#learn">learn</a><a href="#method">method</a>
+        <a href="#ladder">the ladder</a><a href="#size">size it</a><a href="#storage">storage</a><a href="#moving">moving power</a><a href="#mesh">the mesh</a><a href="#buy">where to buy</a><a href="#rules">rules &amp; money</a><a href="#learn">learn</a><a href="#method">method</a>
       </p>
     </header>
 
@@ -142,6 +143,59 @@ const jsonLd = {
           </article>
         ))}
       </div>
+    </section>
+
+    <section id="mesh" class="sec" aria-label="The local network">
+      <p class="kicker">THE LOCAL NETWORK · NOT THE INTERNET · {MESH_LAYERS.length} LAYERS · PHONES, LINUX, LAPTOPS</p>
+      <h2 class="h2">{MESH.line}</h2>
+      <p class="note">{MESH.intro}</p>
+      <div class="layers">
+        {MESH_LAYERS.map((l) => (
+          <article class="layer" id={`mesh-${l.id}`}>
+            <p class="layer__n">LAYER {l.n}</p>
+            <h3>{l.name}</h3>
+            <p class="layer__reach">REACH · {l.reach.toUpperCase()}</p>
+            <p class="layer__body">{l.body}</p>
+            <dl class="layer__facts">
+              <dt>Cost</dt><dd>{l.cost[1] === 0 ? 'free, apps only' : `${range(l.cost, usd)} a node`}</dd>
+              <dt>Power</dt><dd>{l.watts[1] === 0 ? 'the phone you already charge' : `${range(l.watts)} W a node`}</dd>
+              <dt>iPhone</dt><dd>{l.phones.iphone}</dd>
+              <dt>Android</dt><dd>{l.phones.android}</dd>
+              <dt>Linux</dt><dd>{l.phones.linux}</dd>
+              <dt>Rung</dt><dd><a href={`#rung-${l.rung}`}>{l.rung} ↑</a></dd>
+            </dl>
+          </article>
+        ))}
+      </div>
+
+      <p class="kicker kicker--gap">THE APPS · WHAT RUNS ON WHAT · CHECKED {asOfLabel}</p>
+      <div class="apps">
+        {MESH_APPS.map((a) => (
+          <a class="app" href={a.url} rel="noopener" data-mesh-app>
+            <span class="app__layer">LAYER {a.layer} · {hostOf(a.url)}</span>
+            <strong>{a.name}</strong>
+            <span class="app__body">{a.body}</span>
+            <span class="app__plat">{a.platforms.map((pl) => (<i>{pl}</i>))}</span>
+            <span class="item__seen">{'partial' in a && a.partial ? `ADDRESS CONFIRMED ${a.verified} · PAGE BLOCKS ROBOTS` : `SEEN ${a.verified}`}</span>
+          </a>
+        ))}
+      </div>
+
+      <p class="kicker kicker--gap">THE GROUPS · WHO IS ALREADY ON THE AIR AROUND HERE</p>
+      <div class="rows">
+        {MESH.groups.map((g) => (<a class="row row--link" href={g.url} rel="noopener"><strong>{g.name}</strong><span>{g.body}</span><b>↗</b></a>))}
+      </div>
+
+      <p class="kicker kicker--gap">WATTS PER NODE · WHAT THE MESH COSTS THE BATTERY</p>
+      <div class="rows">
+        {MESH.nodes.map((n) => (<div class="row"><strong>{n.name}</strong><span>{n.note}</span><b>{n.watts} W</b></div>))}
+      </div>
+      <p class="note">A LoRa node draws less in a day than a phone charge. A whole commons hub, router and Pi together, is under a quarter of a kWh a day, which the pocket rung covers on a winter day. The mesh is the cheapest thing on this page to keep on.</p>
+
+      <p class="kicker kicker--gap">METHOD · THE MESH</p>
+      <ol class="method">
+        {MESH.method.map((line) => (<li>{line}</li>))}
+      </ol>
     </section>
 
     <section id="buy" class="sec" aria-label="Where to buy">
@@ -318,6 +372,25 @@ const jsonLd = {
   .dist__meta b{margin-left:14px;font-weight:500;color:var(--c800)}
   .dist__row p:last-child{margin:0;max-width:760px;font:400 16px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
 
+  .layers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:20px}
+  .layer{display:flex;flex-direction:column;min-width:0;border:1.5px solid var(--c600);padding:16px;overflow-wrap:anywhere;scroll-margin-top:12px}
+  .layer__n{margin:0;font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  .layer h3{margin:6px 0 0;font:500 22px/1.05 var(--pc-font-sans);letter-spacing:-.02em}
+  .layer__reach{margin:8px 0 0;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;color:var(--pc-ink-muted)}
+  .layer__body{margin:10px 0 0;font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .layer__facts{display:grid;grid-template-columns:58px 1fr;gap:5px 10px;margin:auto 0 0;padding-top:12px;border-top:1px solid var(--pc-rule-soft);font:400 13px/1.45 var(--pc-font-sans)}
+  .layer__facts dt{font:500 10px/1.9 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .layer__facts dd{margin:0;color:var(--pc-ink-soft)}
+  .layer__facts dd a{color:var(--c800)}
+  .apps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .app{display:flex;flex-direction:column;gap:4px;min-width:0;padding:14px;border:1px solid var(--pc-rule);color:var(--pc-ink);text-decoration:none;overflow-wrap:anywhere}
+  .app:hover{background:var(--c50);border-color:var(--c600);text-decoration:none}
+  .app__layer{font:400 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800)}
+  .app strong{font:500 16px/1.2 var(--pc-font-sans);letter-spacing:-.01em}
+  .app__body{font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .app__plat{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .app__plat i{font:500 10px var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;padding:3px 6px;border:1px solid var(--c600);color:var(--c800);font-style:normal}
+
   .shelf{margin-top:36px;scroll-margin-top:12px}
   .shelf__head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1.5px solid var(--c600)}
   .shelf__head h3{margin:0;font:500 22px/1 var(--pc-font-sans);letter-spacing:-.02em}
@@ -344,12 +417,12 @@ const jsonLd = {
   .foot a{color:var(--c800)}
 
   @media(max-width:920px){
-    .rungs,.chem{grid-template-columns:1fr 1fr}
-    .items{grid-template-columns:1fr 1fr}
+    .rungs,.chem,.layers{grid-template-columns:1fr 1fr}
+    .items,.apps{grid-template-columns:1fr 1fr}
   }
   @media(max-width:640px){
     .stats{grid-template-columns:1fr 1fr}.stats div:nth-child(2){border-right:0}.stats div:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}
-    .rungs,.chem,.items,.rules{grid-template-columns:1fr}
+    .rungs,.chem,.items,.rules,.layers,.apps{grid-template-columns:1fr}
     .sizer{grid-template-columns:1fr}.sizer fieldset{border-right:0;border-bottom:1.5px solid var(--c600)}
     .sizer__out{grid-template-columns:1fr 1fr}.sizer__out>div:nth-child(2){border-right:0}.sizer__out>div:nth-child(-n+2){border-bottom:1px solid var(--pc-rule)}
     .row{grid-template-columns:1fr;gap:4px}.dist__row{grid-template-columns:1fr;gap:6px}
