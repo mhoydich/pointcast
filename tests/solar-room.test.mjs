@@ -76,7 +76,8 @@ test('Small Solar ships its room, dataset, JSON twin, block, and discovery lines
     assert.ok(layerNs.has(a.layer), `${a.name} names a real layer`);
     assert.match(a.verified, /^\d{4}-\d{2}-\d{2}$/, a.name);
   }
-  assert.ok(shelfIds.has('mesh'), 'a mesh hardware shelf');
+  assert.ok(shelfIds.has('mesh') && shelfIds.has('commons'), 'mesh and commons hardware shelves');
+  assert.ok(data.mesh.groups.length >= 3 && data.mesh.groups.every((g) => g.url.startsWith('https://')), 'local groups');
   assert.ok(data.mesh.nodes.length >= 4 && data.mesh.nodes.every((n) => n.watts > 0), 'watts per node');
   assert.match(room, /id="mesh"/);
   assert.match(room, /data-mesh-app/);
