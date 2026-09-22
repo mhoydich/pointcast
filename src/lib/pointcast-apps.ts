@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'railroad-time',
+    name: 'Railroad Time',
+    kicker: '4 SOURCED ERAS · SPEAK OR TYPE · LOCAL ROUTING',
+    description: 'A voice-and-type railroad-history room spanning public steam, transcontinental labor, railway time, and the Shinkansen, with four original generated plates and direct sources.',
+    url: 'https://pointcast.xyz/railroads',
+    path: '/railroads',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
+  {
     slug: 'beach-commons-extra-chair',
     name: 'The Extra Chair',
     kicker: 'BEACH COMMONS V19 · 12 SEATS · POCKET SEATS',
