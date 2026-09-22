@@ -44,10 +44,11 @@ const markup = `
   <input id="typing"><textarea id="writing"></textarea><div id="editing" contenteditable="true"></div>
 </main>`;
 
-async function fixture(t) {
-  const dom = new JSDOM(markup, { url: 'https://pointcast.test/nouns/drum-club/', pretendToBeVisual: true });
+async function fixture(t, url = 'https://pointcast.test/nouns/drum-club/') {
+  const dom = new JSDOM(markup, { url, pretendToBeVisual: true });
   const { window: win } = dom;
   const contexts = [];
+  const copied = [];
   class Context {
     state = 'suspended'; currentTime = 10; sampleRate = 8000; destination = new Node(); sources = []; closeCalls = 0;
     constructor() { contexts.push(this); }
@@ -67,6 +68,7 @@ async function fixture(t) {
   class ResizeObserver { observe() {} disconnect() {} }
   const values = {
     window: win, document: win.document, location: win.location, localStorage: win.localStorage,
+    navigator: { clipboard: { async writeText(text) { copied.push(text); } } },
     HTMLElement: win.HTMLElement, HTMLButtonElement: win.HTMLButtonElement, HTMLInputElement: win.HTMLInputElement,
     HTMLSelectElement: win.HTMLSelectElement, HTMLCanvasElement: win.HTMLCanvasElement, Element: win.Element,
     Event: win.Event, CustomEvent: win.CustomEvent, KeyboardEvent: win.KeyboardEvent, MouseEvent: win.MouseEvent,
@@ -96,8 +98,17 @@ async function fixture(t) {
     dispose(); dom.window.close();
     for (const [name, descriptor] of previous) descriptor ? Object.defineProperty(globalThis, name, descriptor) : delete globalThis[name];
   });
-  return { win, q, key, click, contexts, dispose };
+  return { win, q, key, click, contexts, copied, dispose };
 }
+
+test('room invites preserve valid names with repeated namespace prefixes', async t => {
+  const invite = 'https://pointcast.test/nouns/drum-club/?room=ndc-ndc-jam';
+  const f = await fixture(t, invite);
+  assert.equal(f.q('room-code').value, 'ndc-ndc-jam');
+  f.click('invite'); await tick();
+  assert.deepEqual(f.copied, [invite], 'opening and copying an invite retains the same room');
+  assert.equal(f.contexts.length, 0, 'an invite does not automatically start audio');
+});
 
 test('mount is silent and keyboard handling excludes editing, repeats, and modifiers', async t => {
   const f = await fixture(t);
