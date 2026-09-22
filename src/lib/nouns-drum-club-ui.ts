@@ -63,7 +63,7 @@ function mountClub() {
     /* Storage is optional. */
   }
   const roomInput = el<HTMLInputElement>("room-code");
-  const requestedRoom = params.get("room")?.replace(/^ndc-/, "");
+  const requestedRoom = params.get("room");
   if (
     requestedRoom &&
     /^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$/i.test(requestedRoom)
