@@ -60,6 +60,27 @@ test('Small Solar ships its room, dataset, JSON twin, block, and discovery lines
   assert.ok(count >= 30, `at least thirty places on the shelves, got ${count}`);
   assert.ok(data.sources.shelves.length >= 6, 'at least six shelves');
 
+  // the mesh: layers say what each phone can do and which rung powers them; apps carry platforms and a day
+  assert.ok(data.mesh.layers.length >= 3, 'at least three mesh layers');
+  const rungIds = new Set(data.rungs.map((r) => r.id));
+  for (const l of data.mesh.layers) {
+    for (const k of ['iphone', 'android', 'linux']) assert.ok(l.phones[k], `${l.id} says what ${k} can do`);
+    assert.ok(rungIds.has(l.rung), `${l.id} names a real rung`);
+    assert.ok(l.cost.length === 2 && l.watts.length === 2, l.id);
+  }
+  assert.ok(data.mesh.apps.length >= 8, 'at least eight mesh apps');
+  const layerNs = new Set(data.mesh.layers.map((l) => l.n));
+  for (const a of data.mesh.apps) {
+    assert.ok(a.url.startsWith('https://'), a.name);
+    assert.ok(Array.isArray(a.platforms) && a.platforms.length > 0, `${a.name} platforms`);
+    assert.ok(layerNs.has(a.layer), `${a.name} names a real layer`);
+    assert.match(a.verified, /^\d{4}-\d{2}-\d{2}$/, a.name);
+  }
+  assert.ok(shelfIds.has('mesh'), 'a mesh hardware shelf');
+  assert.ok(data.mesh.nodes.length >= 4 && data.mesh.nodes.every((n) => n.watts > 0), 'watts per node');
+  assert.match(room, /id="mesh"/);
+  assert.match(room, /data-mesh-app/);
+
   // rules and learning carry a source and a day
   assert.ok(data.rules.length >= 6, 'at least six rules');
   for (const r of data.rules) {
