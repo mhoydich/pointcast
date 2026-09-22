@@ -1,0 +1,67 @@
+---
+import { CAMPUS_CARDS_CONTRACT, CAMPUS_CARDS_LIVE, type CampusCard } from '../lib/campus-cards';
+
+interface Props { card: CampusCard }
+const { card } = Astro.props;
+---
+
+<div class="cc-mint" data-cc-mint data-contract={CAMPUS_CARDS_CONTRACT} data-token-id={card.tokenId} data-price={card.priceMutez} data-live={CAMPUS_CARDS_LIVE ? '1' : '0'}>
+  {CAMPUS_CARDS_LIVE ? (
+    <>
+      <label class="cc-mint__qty">
+        <span>Qty</span>
+        <select data-cc-qty>
+          {[1, 2, 3, 5, 10].map((n) => <option value={n}>{n}</option>)}
+        </select>
+      </label>
+      <button type="button" class="cc-mint__button" data-cc-button>Mint for {card.priceTez}</button>
+    </>
+  ) : (
+    <button type="button" class="cc-mint__button" disabled>Mint opens at origination</button>
+  )}
+  <p class="cc-mint__state" data-cc-state>
+    {CAMPUS_CARDS_LIVE
+      ? <>Kukai or any Tezos wallet. {card.edition}. Proceeds go to the PointCast treasury.</>
+      : <>The contract is compiled and waiting on its signer. {card.edition}, {card.priceTez} each.</>}
+  </p>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-cc-mint][data-live="1"]').forEach((root) => {
+    const button = root.querySelector<HTMLButtonElement>('[data-cc-button]');
+    const qty = root.querySelector<HTMLSelectElement>('[data-cc-qty]');
+    const state = root.querySelector<HTMLElement>('[data-cc-state]');
+    if (!button || !qty || !state) return;
+    const idle = button.textContent;
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      button.textContent = 'Opening wallet…';
+      try {
+        const { mintCampusCard } = await import('../lib/tezos');
+        const result = await mintCampusCard({
+          contract: root.dataset.contract ?? '',
+          tokenId: Number(root.dataset.tokenId),
+          quantity: Number(qty.value),
+          priceMutez: Number(root.dataset.price),
+        });
+        button.textContent = 'Waiting for a block…';
+        state.innerHTML = `Sent. <a href="https://tzkt.io/${result.opHash}" target="_blank" rel="noopener">Watch it on TzKT →</a>`;
+        await result.confirmation;
+        button.textContent = 'In your wallet';
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = idle;
+        state.textContent = error instanceof Error ? error.message : 'The wallet did not send it.';
+      }
+    });
+  });
+</script>
+
+<style>
+  .cc-mint { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .cc-mint__qty { display: inline-flex; align-items: center; gap: 6px; font: 500 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .cc-mint__qty select { font: inherit; padding: 8px; border: 1.5px solid var(--pc-ink); background: #fff; border-radius: 0; }
+  .cc-mint__button { padding: 11px 16px; border: 1.5px solid var(--pc-ink); background: var(--pc-ink); color: #fff; font: 600 12px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border-radius: 0; }
+  .cc-mint__button:disabled { background: #fff; color: var(--pc-ink-muted); cursor: not-allowed; }
+  .cc-mint__state { flex-basis: 100%; margin: 0; color: var(--pc-ink-soft); font-size: 13px; line-height: 1.45; }
+</style>
