@@ -110,6 +110,15 @@ test('room invites preserve valid names with repeated namespace prefixes', async
   assert.equal(f.contexts.length, 0, 'an invite does not automatically start audio');
 });
 
+test('a bandmate beat keeps its name and tempo without selecting an unrelated preset', async t => {
+  const score = { version: 1, name: 'Low & Slow', tempo: 88, swing: 0.18, lanes: [{padId:'bass-c',steps:[0.76,0,0,0,0,0,0,0,0.76,0,0,0,0,0,0,0]}] };
+  const f = await fixture(t, `https://pointcast.test/nouns/drum-club/?beat=${Buffer.from(JSON.stringify(score)).toString('base64url')}`);
+  assert.equal(f.q('tempo').value, '88');
+  assert.match(f.q('status').textContent, /Low & Slow is ready/);
+  assert.equal(f.win.document.querySelectorAll('[data-preset][aria-pressed="true"]').length, 0);
+  assert.equal(f.contexts.length, 0, 'a shared bandmate stays silent until played');
+});
+
 test('mount is silent and keyboard handling excludes editing, repeats, and modifiers', async t => {
   const f = await fixture(t);
   assert.equal(f.contexts.length, 0, 'mounting does not create or resume Web Audio');

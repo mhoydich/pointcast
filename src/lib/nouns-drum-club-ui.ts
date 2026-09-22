@@ -105,10 +105,12 @@ function mountClub() {
   const meterTimer = setInterval(() => {
     if (meter) meter.value = document.hidden ? 0 : Math.min(1, audio.level * 5);
   }, 80);
-  if (params.has("beat"))
+  if (params.has("beat")) {
+    clearPresetSelection();
     say(
-      "A beat from a friend. Press Play loop to hear it, then make it yours.",
+      `${score.name} is ready. Press Play loop to hear it, then make it yours.`,
     );
+  }
 
   const canvas = el<HTMLCanvasElement>("canvas");
   const context = canvas.getContext("2d");
