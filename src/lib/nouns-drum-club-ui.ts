@@ -15,13 +15,18 @@ import {
   stepTime,
   type DrumScore,
 } from "./nouns-drum-club-score";
+import {
+  decodeBandmateQuartet,
+  encodeBandmateQuartet,
+} from "./nouns-drum-club-arrangements";
+import { getNounsDrumClubBandmate } from "./nouns-drum-club-bandmates";
 import { NounsDrumClubRoom } from "./nouns-drum-club-room";
 
 let disposeClub: (() => void) | undefined;
 
 function mountClub() {
   disposeClub?.();
-  const app = document.querySelector<HTMLElement>("#ndc");
+  const app = document.querySelector<HTMLElement>("#ndc") as HTMLElement;
   if (!app) return;
   const control = new AbortController();
   const listen = (target: EventTarget, type: string, fn: EventListener) =>
@@ -55,20 +60,90 @@ function mountClub() {
   let calm = media.matches;
   let score: DrumScore = normalizeScore(SCORE_PRESETS.clubhouse);
   const params = new URLSearchParams(location.search);
+  const savedBeatKey = "nouns-drum-club-beat-v1";
+  const savedQuartetKey = "nouns-drum-club-beat-quartet-v1";
+  let restoredSavedBeat = false;
   try {
-    score = params.has("beat")
-      ? decodeScore(params.get("beat"))
-      : decodeScore(localStorage.getItem("nouns-drum-club-beat-v1"));
+    if (params.has("beat")) score = decodeScore(params.get("beat"));
+    else {
+      const savedBeat = localStorage.getItem(savedBeatKey);
+      if (savedBeat) {
+        score = decodeScore(savedBeat);
+        restoredSavedBeat = true;
+      }
+    }
   } catch {
     /* Storage is optional. */
   }
   const roomInput = el<HTMLInputElement>("room-code");
-  const requestedRoom = params.get("room");
+  const originalStageMembers = Array.from(
+    app.querySelectorAll<HTMLElement>("[data-member]"),
+  ).map((slot) => ({
+    slot,
+    portrait: slot.querySelector<HTMLImageElement>("img")?.getAttribute("src") ?? "",
+    name: slot.querySelector<HTMLElement>("b")?.textContent ?? "",
+    role: slot.querySelector<HTMLElement>("i")?.textContent ?? "",
+  }));
+  let quartet = decodeBandmateQuartet(params.get("band"));
+  if (!quartet && !params.has("beat") && !params.has("band")) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(savedQuartetKey) ?? "null");
+      if (
+        saved &&
+        typeof saved === "object" &&
+        saved.beat === encodeScore(score) &&
+        typeof saved.band === "string"
+      )
+        quartet = decodeBandmateQuartet(saved.band);
+    } catch {
+      /* The saved line-up is optional. */
+    }
+  }
+  const quartetMembers = quartet
+    ?.map((id) => getNounsDrumClubBandmate(id))
+    .filter((member): member is NonNullable<typeof member> => Boolean(member));
+  const quartetContext = el("quartet-context");
+  const clearQuartet = () => {
+    quartet = null;
+    quartetContext.hidden = true;
+    quartetContext.textContent = "";
+    originalStageMembers.forEach(({ slot, portrait, name, role }) => {
+      const image = slot.querySelector<HTMLImageElement>("img");
+      if (image) image.src = portrait;
+      const nameLabel = slot.querySelector<HTMLElement>("b");
+      if (nameLabel) nameLabel.textContent = name;
+      const roleLabel = slot.querySelector<HTMLElement>("i");
+      if (roleLabel) roleLabel.textContent = role;
+    });
+  };
+  if (quartetMembers?.length === 4) {
+    quartetContext.hidden = false;
+    quartetContext.textContent = `YOUR FOUR · ${quartetMembers.map((member) => member.name).join(" · ")}`;
+    quartetMembers.forEach((member, index) => {
+      const slot = app.querySelector<HTMLElement>(`[data-member="${index}"]`);
+      const portrait = slot?.querySelector<HTMLImageElement>("img");
+      if (portrait) portrait.src = `/games/nouns-nation-battler/assets/noun-${member.nounId}.svg`;
+      const name = slot?.querySelector<HTMLElement>("b");
+      if (name) name.textContent = member.name.toUpperCase();
+      const role = slot?.querySelector<HTMLElement>("i");
+      if (role)
+        role.textContent = {
+          drum: "Drums",
+          bass: "Bass",
+          mallet: "Mallets",
+          chord: "Chords",
+        }[member.role];
+    });
+  }
+  let requestedRoom: string | null = null;
+  const roomParam = params.get("room");
   if (
-    requestedRoom &&
-    /^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$/i.test(requestedRoom)
-  )
-    roomInput.value = requestedRoom.toLowerCase();
+    roomParam &&
+    /^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$/i.test(roomParam)
+  ) {
+    requestedRoom = roomParam.toLowerCase();
+    roomInput.value = requestedRoom;
+  }
   const defaultLanes = [
     "kick",
     "snare",
@@ -85,11 +160,25 @@ function mountClub() {
   const say = (text: string) => {
     el("status").textContent = text;
   };
-  const persist = () => {
+  let autosaveEnabled = !params.has("beat");
+  const persist = (adoptSharedBeat = false) => {
+    if (!autosaveEnabled) {
+      if (!adoptSharedBeat) return false;
+      autosaveEnabled = true;
+    }
     try {
-      localStorage.setItem("nouns-drum-club-beat-v1", encodeScore(score));
+      const beat = encodeScore(score);
+      localStorage.setItem(savedBeatKey, beat);
+      if (quartet)
+        localStorage.setItem(
+          savedQuartetKey,
+          JSON.stringify({ beat, band: encodeBandmateQuartet(quartet) }),
+        );
+      else localStorage.removeItem(savedQuartetKey);
+      return true;
     } catch {
       /* The instrument works without storage. */
+      return false;
     }
   };
   const clearPresetSelection = () =>
@@ -105,10 +194,10 @@ function mountClub() {
   const meterTimer = setInterval(() => {
     if (meter) meter.value = document.hidden ? 0 : Math.min(1, audio.level * 5);
   }, 80);
-  if (params.has("beat")) {
+  if (params.has("beat") || restoredSavedBeat) {
     clearPresetSelection();
     say(
-      `${score.name} is ready. Press Play loop to hear it, then make it yours.`,
+      `${score.name} is ready on this device.${params.has("beat") ? " It will not replace your saved beat until you choose Save beat here." : ""}${requestedRoom ? ` Choose Join to enter ${requestedRoom.toUpperCase()} when you are ready.` : ""} Press Play loop to hear it, then make it yours.`,
     );
   }
 
@@ -497,6 +586,7 @@ function mountClub() {
       const preset = SCORE_PRESETS[button.dataset.preset!];
       if (!preset) return;
       score = normalizeScore(preset);
+      clearQuartet();
       visibleLanes = [
         ...new Set([...defaultLanes, ...score.lanes.map((l) => l.padId)]),
       ];
@@ -512,6 +602,7 @@ function mountClub() {
     });
   listen(el("clear"), "click", () => {
     score = { ...score, name: "My beat", lanes: [] };
+    clearQuartet();
     renderGrid();
     persist();
     clearPresetSelection();
@@ -591,10 +682,21 @@ function mountClub() {
       field.select();
     }
   }
+  const addQuartetToLink = (url: URL) => {
+    if (quartet) url.searchParams.set("band", encodeBandmateQuartet(quartet));
+  };
   listen(el("copy-beat"), "click", () => {
     const url = new URL(location.pathname, location.origin);
     url.searchParams.set("beat", encodeScore(score));
+    addQuartetToLink(url);
     void copyLink(url, "Beat link");
+  });
+  listen(el("save-beat"), "click", () => {
+    say(
+      persist(true)
+        ? `${score.name} is saved on this device. Future edits will update it here.`
+        : "This browser could not save your beat. Copy a beat link to keep it.",
+    );
   });
   listen(el("invite"), "click", () => {
     const url = new URL(location.pathname, location.origin);
@@ -605,7 +707,9 @@ function mountClub() {
       return;
     }
     url.searchParams.set("room", code);
-    void copyLink(url, "Room invite");
+    url.searchParams.set("beat", encodeScore(score));
+    addQuartetToLink(url);
+    void copyLink(url, "Room + beat invite");
   });
   function leaveRoom() {
     roomLive = false;
