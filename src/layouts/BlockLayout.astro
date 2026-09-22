@@ -11,6 +11,7 @@
  * utility CSS while sharing this layout's dock, room, and burst clients.
  */
 import '@fontsource-variable/inter';
+import { versionedImageUrl } from '../lib/og-version.mjs';
 import '@fontsource-variable/jetbrains-mono';
 import FooterBar from '../components/FooterBar.astro';
 import SpellLayer from '../components/SpellLayer.astro';
@@ -95,7 +96,9 @@ const {
 const image = imageProp ?? (legacy ? '/images/og-home-v3.png' : '/images/og/og-home-v5.png');
 const siteBase = Astro.site || new URL('https://pointcast.xyz');
 const canonicalURL = new URL(Astro.url.pathname, siteBase);
-const ogImage = image.startsWith('http') ? image : new URL(image, siteBase).href;
+// Content-hash the card URL so X / iMessage / Slack refetch when the pixels change (src/lib/og-version.mjs).
+const ogImage = versionedImageUrl(image.startsWith('http') ? image : new URL(image, siteBase).href, siteBase.href);
+const frameImage = frame?.image ? versionedImageUrl(frame.image.startsWith('http') ? frame.image : new URL(frame.image, siteBase).href, siteBase.href) : ogImage;
 const ogImagePath = new URL(ogImage).pathname.toLowerCase();
 const ogImageType = ogImagePath.endsWith('.jpg') || ogImagePath.endsWith('.jpeg')
   ? 'image/jpeg'
@@ -192,7 +195,7 @@ const identityJsonLd = buildIdentityJsonLd();
     {frame && (
       <>
         <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content={frame.image ?? ogImage} />
+        <meta property="fc:frame:image" content={frameImage} />
         <meta property="fc:frame:image:aspect_ratio" content={frame.aspectRatio ?? '1.91:1'} />
         <meta property="of:accepts:xmtp" content="2024-02-09" />
         {(frame.buttons ?? []).slice(0, 4).map((btn, i) => (

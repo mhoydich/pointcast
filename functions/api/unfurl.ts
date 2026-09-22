@@ -12,6 +12,9 @@ const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Access-Con
 const json = (body: unknown, status: number, cache: string) => new Response(JSON.stringify(body), { status, headers: { ...headers, 'Cache-Control': cache } });
 const OK_CACHE = 'public, max-age=3600, s-maxage=86400';
 const MISS_CACHE = 'public, max-age=120, s-maxage=600';
+// Our own pages change during the day (today's dog, live rooms); keep their previews fresh.
+const SELF_CACHE = 'public, max-age=300, s-maxage=300';
+const SELF_HOSTS = new Set(['pointcast.xyz', 'www.pointcast.xyz']);
 const UA = 'PointCastBot/1.0 (+https://pointcast.xyz/shortwave; link preview)';
 type UnfurlEnv = Pick<Cloudflare.Env, 'PC_RATES_KV'>;
 export type Unfurl = { ok: true; url: string; kind: 'spotify' | 'youtube' | 'page'; site: string; title: string; description: string; image: string };
@@ -105,7 +108,8 @@ export async function handleUnfurl(request: Request, env: UnfurlEnv, fetcher: ty
   const page = safeUrl(new URL(request.url).searchParams.get('url'));
   if (!page) return json({ ok: false, error: 'Send a public https URL.' }, 400, MISS_CACHE);
   const edge = typeof caches !== 'undefined' ? (caches as unknown as { default?: Cache }).default : undefined;
-  const key = new Request(`https://pointcast.xyz/api/unfurl?url=${encodeURIComponent(page.toString())}`);
+  // v2: bumped 2026-09-21 so previews cached before the self-host TTL change fall away.
+  const key = new Request(`https://pointcast.xyz/api/unfurl?v=2&url=${encodeURIComponent(page.toString())}`);
   if (edge) { const hit = await edge.match(key); if (hit) return hit; }
   // Only cache misses spend quota, so a busy link never locks anyone out.
   if (env.PC_RATES_KV) {
@@ -121,7 +125,8 @@ export async function handleUnfurl(request: Request, env: UnfurlEnv, fetcher: ty
   }
   let result: Unfurl | null = null;
   try { result = await unfurl(page, fetcher); } catch { result = null; }
-  const response = result ? json(result, 200, OK_CACHE) : json({ ok: false, url: page.toString(), error: 'No preview for this link.' }, 404, MISS_CACHE);
+  const okCache = SELF_HOSTS.has(page.hostname.toLowerCase()) ? SELF_CACHE : OK_CACHE;
+  const response = result ? json(result, 200, okCache) : json({ ok: false, url: page.toString(), error: 'No preview for this link.' }, 404, MISS_CACHE);
   if (edge) { try { await edge.put(key, response.clone()); } catch { /* cache is best effort */ } }
   return response;
 }

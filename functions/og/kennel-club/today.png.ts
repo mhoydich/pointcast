@@ -78,3 +78,10 @@ export async function renderKennelTodayOg(
 }
 
 export const onRequestGet: PagesFunction = ({ request }) => renderKennelTodayOg(request);
+
+// Unfurl crawlers (iMessage, Slack, LinkedIn) probe images with HEAD before
+// they GET. A 404 there reads as "no image" and the old cached card stays up.
+export const onRequestHead: PagesFunction = async ({ request }) => {
+  const full = await renderKennelTodayOg(request);
+  return new Response(null, { status: full.status, headers: full.headers });
+};

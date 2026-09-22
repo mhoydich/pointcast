@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 import tailwindcss from '@tailwindcss/vite';
@@ -71,6 +72,9 @@ export default defineConfig({
       // branch explicit and provide a harmless fallback for nested dependencies.
       'process.browser': 'true',
       'process.version': JSON.stringify('v22.0.0'),
+      // Absolute public dir for src/lib/og-version.mjs — the process polyfill
+      // above makes process.cwd() unreliable inside the production SSR bundle.
+      __PC_PUBLIC_DIR__: JSON.stringify(fileURLToPath(new URL('./public', import.meta.url))),
     },
   },
 });

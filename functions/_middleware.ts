@@ -20,6 +20,8 @@ import { readSessionFromRequest, type AuthEnv } from './api/auth/session';
 import { hasDirectorDeskAccess } from '../src/lib/director-access';
 import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-bridge-script';
 import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
+import { losAngelesDate } from '../src/lib/kennel-club';
+import { datedImageUrl } from '../src/lib/og-version.mjs';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
@@ -56,7 +58,9 @@ function injectTezosSessionBridge(response: Response): Response {
 function injectTodayDogMetadata(response: Response, pathname: string): Response {
   if (pathname !== '/') return response;
 
-  const image = 'https://pointcast.xyz/og/kennel-club/today.png';
+  // Dated so unfurl caches (X, iMessage, Slack) roll over with the Los Angeles
+  // day instead of pinning the first dog they ever fetched.
+  const image = datedImageUrl('https://pointcast.xyz/og/kennel-club/today.png', losAngelesDate());
   const title = 'Today’s dog is sitting — PointCast';
   const description = 'A new Kennel Club portrait is sitting now. Claim today’s dog free, then walk the whole PointCast town.';
 
