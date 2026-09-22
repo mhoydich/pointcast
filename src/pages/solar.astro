@@ -1,0 +1,358 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+import { RUNGS, SHELVES, SOLAR, SOLAR_BLOCK, SOLAR_JSON_URL, SOLAR_STATS, SOLAR_URL, hostOf, range, shelfById, sizeFor, usd, watts } from '../lib/solar-ladder';
+
+const title = 'Small Solar';
+const description = `A low-cost solar ladder for El Segundo: four rungs from a $${SOLAR_STATS.cheapestRungUsd} panel to a block that shares one battery, storage that is and is not a battery, five ways to move the power, and ${SOLAR_STATS.sources} vendors and agencies we checked on a stated day.`;
+const ch = CHANNELS.ESC;
+const { meta, numbers, sizing, storage, distribution, safety, rules, learn, method } = SOLAR;
+const asOfLabel = new Date(`${meta.asOf}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).toUpperCase();
+const example = sizeFor(1.6, 1.0);
+const rungFor = (w: number) => RUNGS.find((r) => w <= r.panelsW[1]) ?? RUNGS[RUNGS.length - 1];
+const maxBudget = Math.max(...RUNGS.map((r) => r.budget[1]));
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  '@id': SOLAR_URL,
+  name: `${title}: a low-cost solar ladder for El Segundo`,
+  description,
+  url: SOLAR_URL,
+  dateModified: meta.asOf,
+  estimatedCost: { '@type': 'MonetaryAmount', currency: 'USD', minValue: RUNGS[0].budget[0], maxValue: maxBudget },
+  step: RUNGS.map((r, i) => ({ '@type': 'HowToStep', position: i + 1, name: `Rung ${r.n}: ${r.name}`, text: `${r.line} ${range(r.budget, usd)}, ${range(r.panelsW, watts)} of panels, ${range(r.storage.kwh)} kWh of storage.`, url: `${SOLAR_URL}#rung-${r.id}` })),
+  isAccessibleForFree: true,
+  license: 'https://creativecommons.org/publicdomain/zero/1.0/',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout title={title} description={description} image={`/images/og/b/${SOLAR_BLOCK}.png`} imageWidth={1200} imageHeight={630} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/solar.json', title: 'Small Solar as JSON' }]}>
+  <main class="sol" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/c/el-segundo">el segundo</a><span>/</span><span>solar</span>
+      <a href={`/b/${SOLAR_BLOCK}`}>BLOCK {SOLAR_BLOCK}</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">CH.ESC · EL SEGUNDO · FIELD GUIDE · AS OF {asOfLabel}</p>
+      <h1>Small solar, for here.</h1>
+      <p class="dek">
+        Four rungs from one panel on a desk to a block that shares a battery. Built from used panels and
+        listed parts, nothing custom. Storage sized to the night, not to the roof. Five ways to move the
+        power, ranked by how much friction each one buys. Then the shelves: where to actually buy it, and
+        what the rules said on the day we checked.
+      </p>
+      <p class="jump">
+        <a href="#ladder">the ladder</a><a href="#size">size it</a><a href="#storage">storage</a><a href="#moving">moving power</a><a href="#buy">where to buy</a><a href="#rules">rules &amp; money</a><a href="#learn">learn</a><a href="#method">method</a>
+      </p>
+    </header>
+
+    <section class="stats" aria-label="Four numbers">
+      {numbers.map((n) => (
+        <div><strong>{n.value}</strong><span>{n.label}</span><small>{n.note}{n.source && <> · <a href={n.source} rel="noopener">{hostOf(n.source)} ↗</a></>}</small></div>
+      ))}
+    </section>
+
+    <section id="ladder" class="sec" aria-label="The ladder">
+      <p class="kicker">THE LADDER · FOUR RUNGS · EVERY PART NAMES A SHELF</p>
+      <h2 class="h2">Climb by adding, not replacing.</h2>
+      <div class="rungs">
+        {RUNGS.map((r) => (
+          <article class="rung" id={`rung-${r.id}`} data-rung={r.id} data-max-w={r.panelsW[1]}>
+            <header class="rung__head">
+              <p class="rung__n">RUNG {r.n}</p>
+              <h3>{r.name}</h3>
+              <p class="rung__line">{r.line}</p>
+              <span class="rung__bar" aria-hidden="true"><i style={`width:${Math.max(6, (r.budget[1] / maxBudget) * 100)}%`}></i></span>
+            </header>
+            <dl class="rung__facts">
+              <dt>Budget</dt><dd><b>{range(r.budget, usd)}</b></dd>
+              <dt>Panels</dt><dd>{range(r.panelsW, watts)}</dd>
+              <dt>Storage</dt><dd>{range(r.storage.kwh)} kWh · {r.storage.voltage}<small>{r.storage.note}</small></dd>
+              <dt>Yield</dt><dd>{range(r.yieldKwh)} kWh a day</dd>
+              <dt>Runs</dt><dd>{r.runs.join(', ')}</dd>
+              <dt>Permit</dt><dd>{r.permit}</dd>
+            </dl>
+            <p class="rung__k">PARTS</p>
+            <ul class="rung__parts">
+              {r.parts.map((p) => {
+                const shelf = shelfById(p.shelf);
+                return (<li>{p.item}{shelf && <> <a href={`#shelf-${shelf.id}`}>{shelf.title.toLowerCase()} ↓</a></>}</li>);
+              })}
+            </ul>
+            <p class="rung__climb"><b>CLIMB</b> {r.climb}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section id="size" class="sec" aria-label="Size it">
+      <p class="kicker">SIZE IT · EL SEGUNDO SUN · {sizing.peakSunHours} PEAK-SUN HOURS · {Math.round(sizing.systemEfficiency * 100)}% SYSTEM EFFICIENCY</p>
+      <h2 class="h2">Tick what has to stay on. The page does the arithmetic.</h2>
+      <form id="sizer" class="sizer" data-sun={sizing.peakSunHours} data-eff={sizing.systemEfficiency} data-depth={sizing.usableDepth} data-days={sizing.autonomyDays}>
+        <fieldset class="sizer__loads">
+          <legend class="rung__k">LOADS · kWh A DAY</legend>
+          {sizing.loads.map((l, i) => (
+            <label class="load"><input type="checkbox" name="load" value={l.kwhPerDay} checked={i < 3} /> <span>{l.name}</span><b>{l.kwhPerDay}</b></label>
+          ))}
+          <label class="load load--custom"><span>something else</span><input type="number" name="custom" min="0" step="0.1" placeholder="0.0" inputmode="decimal" /></label>
+        </fieldset>
+        <fieldset class="sizer__dials">
+          <legend class="rung__k">DIALS</legend>
+          <label class="dial"><span>share of the load that runs after dark</span><input type="range" name="night" min="20" max="100" step="5" value="60" /><output name="night-out">60%</output></label>
+          <label class="dial"><span>days of autonomy the battery should cover</span><input type="range" name="days" min="0.5" max="3" step="0.5" value={sizing.autonomyDays} /><output name="days-out">{sizing.autonomyDays}</output></label>
+        </fieldset>
+        <div class="sizer__out" aria-live="polite">
+          <div><small>DAILY LOAD</small><strong id="out-load">{(1.2 + 0.9 + 0.4).toFixed(1)}</strong><span>kWh</span></div>
+          <div><small>PANELS</small><strong id="out-panels">{sizeFor(2.5, 1.5).panelsW.toLocaleString()}</strong><span>W</span></div>
+          <div><small>BATTERY</small><strong id="out-battery">{sizeFor(2.5, 1.5).batteryKwh}</strong><span>kWh</span></div>
+          <div class="sizer__rung"><small>LANDS ON</small><strong id="out-rung">Rung {rungFor(sizeFor(2.5, 1.5).panelsW).n} · {rungFor(sizeFor(2.5, 1.5).panelsW).name}</strong><a id="out-rung-link" href={`#rung-${rungFor(sizeFor(2.5, 1.5).panelsW).id}`}>see the rung ↑</a></div>
+        </div>
+        <p class="note">{sizing.note} Worked example: a fridge and the internet, 1.6 kWh a day with 1.0 of it at night, wants {example.panelsW.toLocaleString()} W of panels and a {example.batteryKwh} kWh battery. That is the shed rung.</p>
+      </form>
+    </section>
+
+    <section id="storage" class="sec" aria-label="Storage">
+      <p class="kicker">STORAGE · SIZE TO THE NIGHT, NOT THE ROOF</p>
+      <h2 class="h2">One chemistry to buy. Three kinds of storage that cost nothing.</h2>
+      <div class="chem">
+        {storage.chemistry.map((c) => (
+          <article class="chem__card"><p class="chem__verdict">{c.verdict.toUpperCase()}</p><h3>{c.name}</h3><p>{c.body}</p></article>
+        ))}
+      </div>
+      <p class="kicker kicker--gap">STORAGE THAT IS NOT A BATTERY</p>
+      <div class="rows">
+        {storage.notBattery.map((s) => (<div class="row"><strong>{s.name}</strong><span>{s.body}</span></div>))}
+      </div>
+    </section>
+
+    <section id="moving" class="sec" aria-label="Moving the power">
+      <p class="kicker">MOVING THE POWER · FIVE WAYS · CLIMB ONLY AS FAR AS YOU NEED</p>
+      <h2 class="h2">Each step adds reach and adds friction.</h2>
+      <div class="dist">
+        {distribution.map((d) => (
+          <article class="dist__row">
+            <p class="dist__n">{d.n}</p>
+            <div>
+              <h3>{d.name}</h3>
+              <p class="dist__meta">REACH · {d.reach.toUpperCase()} <b>FRICTION · {d.friction.toUpperCase()}</b></p>
+              <p>{d.body}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section id="buy" class="sec" aria-label="Where to buy">
+      <p class="kicker">WHERE TO BUY · {SOLAR_STATS.sources} PLACES ON {SHELVES.length} SHELVES · CHECKED {asOfLabel}</p>
+      <h2 class="h2">We point. The vendor sells.</h2>
+      <p class="note">{meta.rule}</p>
+      {SHELVES.map((shelf) => (
+        <div class="shelf" id={`shelf-${shelf.id}`}>
+          <div class="shelf__head"><h3>{shelf.title}</h3><p>{shelf.rule}</p></div>
+          <div class="items">
+            {shelf.items.map((it) => (
+              <a class="item" href={it.url} rel="noopener" data-source>
+                <span class="item__host">{hostOf(it.url)} · {it.region.toUpperCase()}</span>
+                <strong>{it.name}</strong>
+                <span class="item__sells">{it.sells}</span>
+                {it.price && <span class="item__price">{it.price}</span>}
+                <span class="item__seen">{'partial' in it && it.partial ? `ADDRESS CONFIRMED ${it.verified} · PAGE BLOCKS ROBOTS` : `SEEN ${it.verified}`}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+
+    <section id="rules" class="sec" aria-label="Rules and money">
+      <p class="kicker">RULES &amp; MONEY · EL SEGUNDO · CALIFORNIA · FEDERAL · WHAT WE COULD VERIFY, AND WHEN</p>
+      <h2 class="h2">The rules changed in 2025 and 2026. Here is where they stood.</h2>
+      <div class="rules">
+        {rules.map((r) => (
+          <article class="rule">
+            <p class="rule__scope">{r.scope.toUpperCase()} · {'partial' in r && r.partial ? `ADDRESS CONFIRMED ${r.verified} · PAGE BLOCKS ROBOTS` : `SEEN ${r.verified}`}</p>
+            <h3>{r.name}</h3>
+            <p>{r.body}</p>
+            <a href={r.url} rel="noopener">{hostOf(r.url)} ↗</a>
+          </article>
+        ))}
+      </div>
+      <p class="kicker kicker--gap">SAFETY · THE SHORT LIST</p>
+      <ol class="method">
+        {safety.map((line) => (<li>{line}</li>))}
+      </ol>
+    </section>
+
+    <section id="learn" class="sec" aria-label="Learn">
+      <p class="kicker">LEARN · THE PEOPLE WHO TAUGHT US</p>
+      <div class="rows">
+        {learn.map((l) => (<a class="row row--link" href={l.url} rel="noopener"><strong>{l.name}</strong><span>{l.body}</span><b>↗</b></a>))}
+      </div>
+    </section>
+
+    <section id="method" class="sec" aria-label="Method">
+      <p class="kicker">METHOD · HOW TO READ THIS</p>
+      <ol class="method">
+        {method.map((line) => (<li>{line}</li>))}
+      </ol>
+      <p class="foot">
+        <a href="/solar.json">the whole guide as JSON</a> · <a href={`/b/${SOLAR_BLOCK}`}>block {SOLAR_BLOCK}</a> · <a href="/pool-together">pool together</a> · <a href="/el-segundo">el segundo</a> · compiled {meta.asOf} · CC0
+      </p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  // The sizer: panels = load / (sun × efficiency); battery = night load × days / depth.
+  const form = document.getElementById('sizer') as HTMLFormElement | null;
+  if (form) {
+    const sun = Number(form.dataset.sun), eff = Number(form.dataset.eff), depth = Number(form.dataset.depth);
+    const rungs = [...document.querySelectorAll<HTMLElement>('[data-rung]')].map((el) => ({ id: el.dataset.rung!, maxW: Number(el.dataset.maxW), n: el.querySelector('.rung__n')!.textContent!.replace('RUNG ', ''), name: el.querySelector('h3')!.textContent! }));
+    const out = (id: string) => document.getElementById(id)!;
+    const night = form.elements.namedItem('night') as HTMLInputElement, days = form.elements.namedItem('days') as HTMLInputElement;
+    const nightOut = form.querySelector('output[name="night-out"]')!, daysOut = form.querySelector('output[name="days-out"]')!;
+    const apply = () => {
+      let load = 0;
+      for (const el of form.querySelectorAll<HTMLInputElement>('input[name="load"]:checked')) load += Number(el.value);
+      load += Number((form.elements.namedItem('custom') as HTMLInputElement).value) || 0;
+      const share = Number(night.value) / 100, autonomy = Number(days.value);
+      const panelsW = load > 0 ? Math.ceil((load / (sun * eff)) * 1000 / 50) * 50 : 0;
+      const batteryKwh = Math.ceil(((load * share * autonomy) / depth) * 10) / 10;
+      const rung = rungs.find((r) => panelsW <= r.maxW) ?? rungs[rungs.length - 1];
+      nightOut.textContent = `${night.value}%`;
+      daysOut.textContent = days.value;
+      out('out-load').textContent = load.toFixed(1);
+      out('out-panels').textContent = panelsW.toLocaleString();
+      out('out-battery').textContent = String(batteryKwh);
+      out('out-rung').textContent = load > 0 ? `Rung ${rung.n} · ${rung.name}` : 'nothing yet';
+      (out('out-rung-link') as HTMLAnchorElement).href = `#rung-${rung.id}`;
+    };
+    form.addEventListener('input', apply);
+    form.addEventListener('submit', (e) => e.preventDefault());
+    apply();
+  }
+</script>
+
+<style>
+  .sol{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .kicker--gap{margin-top:44px}
+  .hero{padding:48px 0 28px;max-width:820px}
+  .hero h1{margin:0;font:500 clamp(40px,6.4vw,76px)/.96 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
+  .dek{margin:20px 0 0;font:400 18px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .jump{display:flex;flex-wrap:wrap;gap:6px 16px;margin:22px 0 0;font:400 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
+  .jump a{color:var(--c800);border-bottom:1px solid var(--c600)}
+  .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1.5px solid var(--c600);margin:8px 0}
+  .stats div{padding:16px;border-right:1.5px solid var(--c600)}
+  .stats div:last-child{border-right:0;background:var(--c50)}
+  .stats strong{display:block;font:500 clamp(24px,3.2vw,36px)/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c800);font-variant-numeric:tabular-nums}
+  .stats span{display:block;margin-top:8px;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .stats small{display:block;margin-top:6px;font:400 12px/1.45 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .stats small a{color:var(--c800)}
+  .sec{padding-top:56px;scroll-margin-top:12px}
+  .h2{margin:0 0 20px;max-width:760px;font:500 clamp(24px,3vw,34px)/1.1 var(--pc-font-sans);letter-spacing:-.02em;text-wrap:balance}
+  .note{max-width:760px;margin:14px 0 0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+
+  .rungs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .rung{display:flex;flex-direction:column;min-width:0;border:1.5px solid var(--c600);padding:16px;scroll-margin-top:12px;overflow-wrap:anywhere}
+  .rung:target{background:var(--c50)}
+  .rung__n{margin:0;font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  .rung h3{margin:6px 0 0;font:500 26px/1 var(--pc-font-sans);letter-spacing:-.02em}
+  .rung__line{margin:8px 0 0;min-height:2.9em;font:400 14px/1.45 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rung__bar{display:block;height:4px;margin:12px 0 0;background:var(--pc-rule-soft)}
+  .rung__bar i{display:block;height:100%;background:var(--c600)}
+  .rung__facts{display:grid;grid-template-columns:58px 1fr;gap:6px 10px;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--pc-rule-soft);font:400 13px/1.45 var(--pc-font-sans)}
+  .rung__facts dt{font:500 10px/1.9 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .rung__facts dd{margin:0;color:var(--pc-ink-soft)}
+  .rung__facts dd b{font-weight:500;color:var(--c800);font-size:18px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .rung__facts dd small{display:block;margin-top:2px;font-size:12px;color:var(--pc-ink-muted)}
+  .rung__k{margin:16px 0 6px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .rung__parts{margin:0;padding:0 0 0 16px;font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rung__parts a{color:var(--c800)}
+  .rung__climb{margin:auto 0 0;padding-top:14px;font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink)}
+  .rung__climb b{display:block;margin-bottom:2px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;color:var(--c800)}
+
+  .sizer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;border:1.5px solid var(--c600)}
+  .sizer fieldset{margin:0;padding:16px;border:0;border-right:1.5px solid var(--c600)}
+  .sizer legend{padding:0;margin:0 0 6px}
+  .sizer__dials{border-right:0!important}
+  .load{display:grid;grid-template-columns:18px 1fr 44px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px var(--pc-font-sans);color:var(--pc-ink)}
+  .load input[type=checkbox]{accent-color:var(--c600);width:15px;height:15px;margin:0}
+  .load b{font:500 12px var(--pc-font-mono);text-align:right;font-variant-numeric:tabular-nums}
+  .load--custom{grid-template-columns:1fr 90px}
+  .load--custom input{padding:6px 8px;border:1px solid var(--pc-rule);border-radius:0;font:400 14px var(--pc-font-sans);text-align:right}
+  .dial{display:grid;gap:6px;padding:12px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 13px var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .dial input{accent-color:var(--c600);width:100%}
+  .dial output{font:500 14px var(--pc-font-mono);color:var(--c800);font-variant-numeric:tabular-nums}
+  .sizer__out{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1.5px solid var(--c600);background:var(--c50)}
+  .sizer__out>div{padding:16px;border-right:1px solid var(--pc-rule)}
+  .sizer__out>div:last-child{border-right:0}
+  .sizer__out small{display:block;font:500 10px var(--pc-font-mono);letter-spacing:.1em;color:var(--pc-ink-muted)}
+  .sizer__out strong{display:block;margin-top:6px;font:500 clamp(22px,3vw,34px)/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c800);font-variant-numeric:tabular-nums}
+  .sizer__out span{font:400 11px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .sizer__rung strong{font-size:clamp(16px,2vw,22px)}
+  .sizer__rung a{display:block;margin-top:6px;font:400 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+
+  .chem{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .chem__card{border:1px solid var(--pc-rule);padding:16px}
+  .chem__verdict{margin:0 0 6px;font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  .chem__card h3{margin:0 0 8px;font:500 20px/1.1 var(--pc-font-sans);letter-spacing:-.015em}
+  .chem__card p:last-child{margin:0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+
+  .rows{border-top:1.5px solid var(--c600)}
+  .row{display:grid;grid-template-columns:220px 1fr 24px;gap:16px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--pc-rule-soft);color:var(--pc-ink)}
+  .row strong{font:500 15px/1.3 var(--pc-font-sans)}
+  .row span{font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .row b{font-weight:400;color:var(--c800)}
+  .row--link:hover{background:var(--c50);text-decoration:none}
+
+  .dist{border-top:1.5px solid var(--c600)}
+  .dist__row{display:grid;grid-template-columns:64px 1fr;gap:18px;padding:22px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .dist__n{margin:2px 0 0;font:500 28px/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c600);font-variant-numeric:tabular-nums}
+  .dist__row h3{margin:0 0 6px;font:500 22px/1.15 var(--pc-font-sans);letter-spacing:-.015em}
+  .dist__meta{margin:0 0 8px;font:400 10px var(--pc-font-mono);letter-spacing:.1em;color:var(--pc-ink-muted)}
+  .dist__meta b{margin-left:14px;font-weight:500;color:var(--c800)}
+  .dist__row p:last-child{margin:0;max-width:760px;font:400 16px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+
+  .shelf{margin-top:36px;scroll-margin-top:12px}
+  .shelf__head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding-bottom:8px;border-bottom:1.5px solid var(--c600)}
+  .shelf__head h3{margin:0;font:500 22px/1 var(--pc-font-sans);letter-spacing:-.02em}
+  .shelf__head p{margin:0;font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+  .item{display:flex;flex-direction:column;gap:4px;min-width:0;padding:14px;border:1px solid var(--pc-rule);color:var(--pc-ink);text-decoration:none;overflow-wrap:anywhere}
+  .item:hover{background:var(--c50);border-color:var(--c600);text-decoration:none}
+  .item__host{font:400 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800)}
+  .item strong{font:500 16px/1.2 var(--pc-font-sans);letter-spacing:-.01em}
+  .item__sells{font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .item__price{margin-top:4px;font:500 12px/1.4 var(--pc-font-mono);color:var(--pc-ink);font-variant-numeric:tabular-nums}
+  .item__seen{margin-top:auto;padding-top:8px;font:400 9px var(--pc-font-mono);letter-spacing:.1em;color:var(--pc-ink-muted)}
+
+  .rules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .rule{border:1.5px solid var(--c600);padding:16px}
+  .rule__scope{margin:0 0 8px;font:400 10px var(--pc-font-mono);letter-spacing:.1em;color:var(--pc-ink-muted)}
+  .rule h3{margin:0 0 8px;font:500 19px/1.2 var(--pc-font-sans);letter-spacing:-.01em}
+  .rule p:not(.rule__scope){margin:0 0 10px;font:400 14.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rule a{font:400 11px var(--pc-font-mono);letter-spacing:.06em;color:var(--c800)}
+
+  .method{max-width:760px;margin:0;padding:0 0 0 20px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .method li{padding:5px 0}
+  .foot{margin:24px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+
+  @media(max-width:920px){
+    .rungs,.chem{grid-template-columns:1fr 1fr}
+    .items{grid-template-columns:1fr 1fr}
+  }
+  @media(max-width:640px){
+    .stats{grid-template-columns:1fr 1fr}.stats div:nth-child(2){border-right:0}.stats div:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}
+    .rungs,.chem,.items,.rules{grid-template-columns:1fr}
+    .sizer{grid-template-columns:1fr}.sizer fieldset{border-right:0;border-bottom:1.5px solid var(--c600)}
+    .sizer__out{grid-template-columns:1fr 1fr}.sizer__out>div:nth-child(2){border-right:0}.sizer__out>div:nth-child(-n+2){border-bottom:1px solid var(--pc-rule)}
+    .row{grid-template-columns:1fr;gap:4px}.dist__row{grid-template-columns:1fr;gap:6px}
+    .hero{padding-top:32px}
+  }
+</style>
