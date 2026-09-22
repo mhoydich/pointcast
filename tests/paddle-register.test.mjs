@@ -29,6 +29,9 @@ test('The Paddle Register ships its pages, JSON twins, runbook, MCP tools, and d
     'src/pages/paddles/changes.xml.ts',
     'functions/api/paddles/wear.ts',
     'functions/_lib/paddle-wear.mjs',
+    'functions/api/paddles/correct.ts',
+    'functions/_lib/paddle-correct.mjs',
+    'tests/paddle-corrections-api.test.mjs',
     'docs/briefs/2026-09-21-paddle-register-v2.md',
   ]) assert.ok(exists(path), path);
 
@@ -53,6 +56,7 @@ test('The Paddle Register ships its pages, JSON twins, runbook, MCP tools, and d
   assert.match(og, /paddleCard\(paddle\)/);
   assert.match(sitemap, /pointcast\.xyz\/paddles'/);
   assert.match(llms, /pointcast\.xyz\/paddles\)/);
+  assert.match(sitemap, /pointcast\.xyz\/paddles\/fund'/);
 });
 
 test('register data: every paddle is sourced, every enrichment points at a real paddle', async () => {

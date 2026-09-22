@@ -218,6 +218,38 @@ const jsonLd = {
         <ul class="sources">
           {p.sources.map((s) => (<li><a href={s} rel="noopener">{hostOf(s)} ↗</a></li>))}
         </ul>
+        <details class="correct" id="correct" data-paddle={p.id}>
+          <summary><span>Report a correction</span><small id="correct-open" hidden></small></summary>
+          <form id="correct-form" novalidate>
+            <p class="fine">Something on this page is wrong? Say which fact and paste the page that shows it. Corrections without a source are not accepted. Accepted ones show in <a href="/paddles/changes">the changes feed</a>.</p>
+            <label><span>Field</span>
+              <select name="field" required>
+                <option value="launch-date">Launch date</option>
+                <option value="price">Price</option>
+                <option value="usap">USA Pickleball status</option>
+                <option value="upaa">UPA-A status</option>
+                <option value="dimensions">Dimensions</option>
+                <option value="construction">Construction</option>
+                <option value="pro">Pro</option>
+                <option value="lifecycle">Lifecycle</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label><span>What is wrong, and what is right</span>
+              <textarea name="claim" rows="4" minlength="10" maxlength="600" required placeholder="The list price is $229, not $249."></textarea>
+            </label>
+            <label><span>Source URL (required)</span>
+              <input name="source" type="url" inputmode="url" maxlength="500" required placeholder="https://" />
+            </label>
+            <label><span>Contact (optional, never published)</span>
+              <input name="contact" type="text" maxlength="120" autocomplete="off" placeholder="email or handle, if you want a reply someday" />
+            </label>
+            <div class="correct__row">
+              <button class="btn" type="submit">Send</button>
+              <output id="correct-out" aria-live="polite"></output>
+            </div>
+          </form>
+        </details>
       </div>
     </section>
 
@@ -246,6 +278,110 @@ const jsonLd = {
     </section>
   </main>
 </BlockLayout>
+
+<script>
+  // Corrections desk. Posts to /api/paddles/correct; the reviewer reads the
+  // queue in the weekly refresh. Nothing here is applied automatically.
+  const box = document.getElementById('correct') as HTMLDetailsElement | null;
+  const form = document.getElementById('correct-form') as HTMLFormElement | null;
+  const out = document.getElementById('correct-out');
+  const openTag = document.getElementById('correct-open');
+  const paddleId = box?.dataset.paddle || '';
+
+  const SID_KEY = 'pc:paddles:sid';
+  let memSid = '';
+  const randomHex = () => {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  };
+  const sessionId = () => {
+    try {
+      const have = localStorage.getItem(SID_KEY);
+      if (have && /^[0-9a-f]{16,64}$/.test(have)) return have;
+      const fresh = randomHex();
+      localStorage.setItem(SID_KEY, fresh);
+      return fresh;
+    } catch {
+      if (!memSid) memSid = randomHex();
+      return memSid;
+    }
+  };
+
+  const say = (text: string) => { if (out) out.textContent = text; };
+
+  if (box && form && paddleId) {
+    fetch(`/api/paddles/correct?id=${encodeURIComponent(paddleId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const n = d && d.ok && typeof d.open === 'number' ? d.open : 0;
+        if (n > 0 && openTag) {
+          openTag.textContent = `${n} correction${n === 1 ? '' : 's'} waiting for review`;
+          openTag.hidden = false;
+        }
+      })
+      .catch(() => {});
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const claim = String(fd.get('claim') || '').trim();
+      const source = String(fd.get('source') || '').trim();
+      const contact = String(fd.get('contact') || '').trim();
+      if (claim.length < 10) return say('Not sent: say what is wrong in at least ten characters.');
+      if (!/^https:\/\//.test(source)) return say('Not sent: a source URL starting with https:// is required.');
+      const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+      if (btn) btn.disabled = true;
+      say('Sending…');
+      try {
+        const r = await fetch('/api/paddles/correct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sessionId(), paddleId, field: String(fd.get('field') || 'other'), claim, source, ...(contact ? { contact } : {}) }),
+        });
+        const d = await r.json().catch(() => null);
+        if (r.status === 429) say('Try again in about a minute.');
+        else if (r.ok && d && d.ok) {
+          say('Sent. It goes into the weekly review; the changes feed shows what was accepted.');
+          form.reset();
+          if (openTag && typeof d.open === 'number' && d.open > 0) {
+            openTag.textContent = `${d.open} correction${d.open === 1 ? '' : 's'} waiting for review`;
+            openTag.hidden = false;
+          }
+        } else say(`Not sent: ${(d && d.reason) || `the desk answered ${r.status}`}`);
+      } catch {
+        say('Not sent: the desk did not answer. Check the connection and try again.');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+  }
+  // Field reports: aggregates only, shown once three reports are in. This
+  // script was meant to ship with v2 and did not; the panel read "Loading"
+  // until the corrections desk review caught it.
+  const field = document.getElementById('field');
+  const fieldBody = document.getElementById('field-body');
+  if (field && fieldBody) {
+    const stat = (v: string | number, label: string) => { const d = document.createElement('div'); const st = document.createElement('strong'); st.textContent = String(v); const l = document.createElement('span'); l.textContent = label; d.append(st, l); return d; };
+    fetch(`/api/paddles/wear?id=${encodeURIComponent(field.dataset.paddle || '')}`).then((r) => r.json()).then((d) => {
+      fieldBody.replaceChildren();
+      const a = d?.aggregates;
+      if (!a) {
+        const p = document.createElement('p');
+        p.textContent = d?.n ? `${d.n} report${d.n === 1 ? '' : 's'} in so far. The panel opens at ${d.minShown ?? 3}.` : 'No field reports yet. Be the first: keep a bag on Rally and send one when you have hours on it.';
+        fieldBody.append(p);
+        return;
+      }
+      const grid = document.createElement('div'); grid.className = 'stat';
+      grid.append(stat(a.medianHours, `median hours · ${a.n} reports`), stat(a.fade ? a.fade.medianHours : '—', a.fade ? `median hours to grit fading · ${a.fade.n}` : 'grit fading · under 3 reports'), stat(`${Math.round(a.dead.share * 100)}%`, a.dead.n ? `report it went dead · median ${a.dead.medianHours} h` : 'report it went dead'));
+      fieldBody.append(grid);
+      const note = document.createElement('small');
+      const ratings = Object.entries(a.ratings || {}).sort().map(([k, v]) => `${k}: ${v}`).join(', ');
+      note.textContent = `Self-reported by players from The Bag on Rally, unaudited. Median ${a.medianSessions} sessions over ${a.medianMonths} months.${ratings ? ` Rating buckets: ${ratings}.` : ''} Aggregates only; raw reports are never published.`;
+      fieldBody.append(note);
+    }).catch(() => { fieldBody.replaceChildren(); const p = document.createElement('p'); p.textContent = 'Field reports could not be loaded right now.'; fieldBody.append(p); });
+  }
+</script>
 
 <style>
   .pad{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
@@ -329,6 +465,19 @@ const jsonLd = {
   .sources{margin:0;padding:0;list-style:none;border-top:1px solid var(--pc-rule)}
   .sources li{padding:9px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px var(--pc-font-sans)}
   .sources a{color:var(--c800)}
+  .correct{margin:18px 0 0;border:1px solid var(--c600);background:#fff}
+  .correct summary{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;padding:10px 12px;cursor:pointer;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .correct summary small{font:400 10px var(--pc-font-mono);letter-spacing:.06em;text-transform:none;color:var(--pc-ink-muted)}
+  .correct form{padding:0 12px 12px;border-top:1px solid var(--pc-rule-soft)}
+  .correct .fine{margin:10px 0 12px}
+  .correct label{display:block;margin:0 0 10px}
+  .correct label span{display:block;margin:0 0 4px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .correct select,.correct textarea,.correct input{display:block;width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--pc-rule);border-radius:0;background:#fff;color:var(--pc-ink);font:400 14px/1.4 var(--pc-font-sans)}
+  .correct textarea{resize:vertical}
+  .correct select:focus,.correct textarea:focus,.correct input:focus{outline:1.5px solid var(--c600);outline-offset:0}
+  .correct__row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+  .correct .btn{border:0;cursor:pointer}
+  .correct output{font:400 12.5px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
   .near{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .near a{display:block;padding:12px 12px 12px 14px;border:1px solid var(--pc-rule);border-left:4px solid var(--b);color:var(--pc-ink)}
   .near a:hover{background:var(--c50);text-decoration:none}

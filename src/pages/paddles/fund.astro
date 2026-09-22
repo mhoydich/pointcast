@@ -1,0 +1,216 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { CHANNELS } from '../../lib/channels';
+import { MONTHS, hostOf } from '../../lib/paddle-calendar';
+import { PADDLE_REGISTER_URL, REGISTER_STATS } from '../../lib/paddle-register';
+import { ledgerTotals } from '../../../functions/_lib/paddle-fund.mjs';
+import ledger from '../../data/court-fund-ledger.json';
+
+const { meta, candidates, wall } = ledger;
+const totals = ledgerTotals(ledger);
+const court = CHANNELS.CRT;
+const when = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
+const usd = (v: number) => `$${v.toLocaleString('en-US', Number.isInteger(v) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const title = 'The Court Fund: a patron pass for the record, half of it to local courts';
+const description = `The Paddle Register is free and has no affiliate links. A $${meta.prices.patron} patron pass keeps it that way: half to the house that keeps the record current, half into a fund that buys concrete things for local courts, chosen by patrons and paid out with receipts on a public ledger. ${totals.passes} passes so far, ${usd(totals.fundBalance)} in the fund.`;
+const entries = [...(ledger.entries as any[])].sort((a, b) => b.date.localeCompare(a.date));
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebPage', name: 'The Court Fund', description, url: `${PADDLE_REGISTER_URL}/fund`, isPartOf: { '@type': 'Dataset', name: 'The Paddle Register', url: PADDLE_REGISTER_URL } };
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="fund" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span>/</span><a href="/paddles">paddles</a><span>/</span><span>the court fund</span><a href="/paddles/fund.json">JSON</a></nav>
+
+    <header class="hero">
+      <p class="kicker">THE PADDLE REGISTER · THE COURT FUND · {meta.season.label.toUpperCase()}</p>
+      <h1>Keep the record. Fund a court.</h1>
+      <p class="dek">Nothing on the register is paywalled and nothing on it is an affiliate link. That is why it can be trusted, and it costs money to keep current. A patron pass pays for that in a way you can watch: half to the house that keeps the record, half into a fund that buys real things for local courts. Every dollar in and out is a line on this page.</p>
+    </header>
+
+    <section class="offer" aria-label="The patron pass">
+      <div class="offer__card">
+        <p class="kicker">PATRON OF THE RECORD · ONE SEASON · {usd(meta.prices.patron)}</p>
+        <h2>{usd(meta.prices.patron)} a season.</h2>
+        <p class="offer__split"><b>{usd(meta.prices.patron * meta.split.house)}</b> keeps the register current<br /><b>{usd(meta.prices.patron * meta.split.fund)}</b> goes into the Court Fund</p>
+        <ul class="offer__list">
+          <li>A vote on this season's court pick.</li>
+          <li>Your name on the wall, if you want it there.</li>
+          <li>Your corrections reviewed first.</li>
+          <li>Nothing else. A pass buys nothing on the register that others cannot read.</li>
+        </ul>
+        <div class="buy" data-tier="patron">
+          <a class="btn" href="/api/paddles/fund/checkout" data-checkout>Become a patron · {usd(meta.prices.patron)} ↗</a>
+          <button type="button" class="btn btn--pledge" data-pledge="patron" hidden>I'd buy this · pledge, no money</button>
+          <p class="buy__note" data-note>A season is a season. No auto-renew, no email required.</p>
+        </div>
+      </div>
+      <div class="offer__card offer__card--club">
+        <p class="kicker">CLUB SEAT · ONE SEASON · {usd(meta.prices.club)}</p>
+        <h2>{usd(meta.prices.club)} for a crew.</h2>
+        <p>Four patron passes and your crew's <a href="/paddle-fund">Paddle Fund</a> listed here. Crews buy paddles together; patrons buy courts together.</p>
+        <div class="buy" data-tier="club">
+          <a class="btn" href="/api/paddles/fund/checkout?tier=club" data-checkout>Take a club seat · {usd(meta.prices.club)} ↗</a>
+          <button type="button" class="btn btn--pledge" data-pledge="club" hidden>Our crew would · pledge</button>
+          <p class="buy__note" data-note></p>
+        </div>
+      </div>
+    </section>
+    <p class="pledges" id="pledges" hidden></p>
+
+    <section class="sec ledger" aria-label="The ledger">
+      <p class="kicker">THE LEDGER · MONEY IN, THE SPLIT, MONEY OUT</p>
+      <div class="totals">
+        <div><strong>{usd(totals.inUsd)}</strong><span>in · {totals.passes} pass{totals.passes === 1 ? '' : 'es'}</span></div>
+        <div><strong>{usd(totals.houseIn)}</strong><span>to the house · {Math.round(meta.split.house * 100)}%</span></div>
+        <div><strong>{usd(totals.fundIn)}</strong><span>to the fund · {Math.round(meta.split.fund * 100)}%</span></div>
+        <div class="totals__fund"><strong>{usd(totals.fundBalance)}</strong><span>in the fund now · {usd(totals.outUsd)} paid out</span></div>
+      </div>
+      {entries.length ? (
+        <ol class="lines">
+          {entries.map((e) => (
+            <li class={`line line--${e.kind}`}>
+              <span class="line__date">{when(e.date)}</span>
+              <b>{e.kind === 'in' ? 'IN' : 'OUT'}</b>
+              <span class="line__usd">{e.kind === 'in' ? '+' : '−'}{usd(e.usd)}</span>
+              <span>{e.note}{e.name && <> · <em>{e.name}</em></>}{e.receipt && <> · <a href={e.receipt} rel="noopener">receipt · {hostOf(e.receipt)} ↗</a></>}{e.photo && <> · <a href={e.photo}>photo</a></>}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p class="empty">No lines yet. The fund opened {when(meta.season.starts)}. The first patron pass will be the first line.</p>
+      )}
+      <ul class="rules">{meta.rules.map((r) => (<li>{r}</li>))}</ul>
+    </section>
+
+    <section class="sec" aria-label="The vote">
+      <p class="kicker">THIS SEASON'S PICK · PATRONS VOTE · ONE VOTE, CHANGEABLE</p>
+      <h2 class="h2">Three courts within a few miles of where this is written.</h2>
+      <div class="cands" id="cands">
+        {candidates.map((c) => (
+          <button type="button" class="cand" data-vote={c.slug}>
+            <small>{c.court}</small>
+            <strong>{c.pick}</strong>
+            <span>about {usd(c.estimateUsd)}</span>
+            <em data-tally={c.slug}></em>
+          </button>
+        ))}
+      </div>
+      <p class="fine" id="vote-note">The tally is a signal for the pick, not a binding result. When the fund can cover a pick, it gets bought, and the receipt and a photo land on the ledger above.</p>
+    </section>
+
+    <section class="sec" aria-label="Kept by">
+      <p class="kicker">KEPT BY</p>
+      {wall.length ? (<p class="wall">{(wall as string[]).join(' · ')}</p>) : (<p class="empty">Nobody yet. A patron who wants their name here says so at checkout, and it goes on with the ledger line.</p>)}
+    </section>
+
+    <section class="sec" aria-label="Where this fits">
+      <p class="kicker">WHERE THIS FITS</p>
+      <div class="rows">
+        <a class="row" href="/paddles"><strong>The register</strong><span>{REGISTER_STATS.paddles} paddles, dated, priced, sourced, free. This is what the house half keeps current.</span></a>
+        <a class="row" href="/paddle-fund"><strong>The Paddle Fund</strong><span>The crew version: ten seats, twenty dollars a week, a paddle every week. Same ledger habit, pretend money for now.</span></a>
+        <a class="row" href="/paddles/changes"><strong>What changed</strong><span>Corrections with sources. Patrons' go to the front of the review.</span></a>
+        <a class="row" href="/money"><strong>The town's money page</strong><span>Where PointCast keeps its other ledgers.</span></a>
+      </div>
+      <p class="foot">Passes are purchases, not donations. Checkout is hosted by Stripe; PointCast never sees card data. Ledger and rules: <a href="/paddles/fund.json">fund.json</a> · CC0</p>
+    </section>
+  </main>
+</BlockLayout>
+
+<script>
+  const sidKey = 'pc:paddles:sid';
+  const sid = (() => { try { const s = localStorage.getItem(sidKey); if (s) return s; const n = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem(sidKey, n); return n; } catch { return [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join(''); } })();
+  const post = (body: Record<string, unknown>) => fetch('/api/paddles/fund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sid, ...body }) }).then(async (r) => ({ status: r.status, data: await r.json().catch(() => null) }));
+  const pledgesEl = document.getElementById('pledges')!;
+  const paint = (d: any, mine?: any) => {
+    if (!d?.ok) return;
+    const p = d.pledges || {};
+    const total = (p.patron || 0) + (p.club || 0);
+    pledgesEl.hidden = total === 0;
+    pledgesEl.textContent = total ? `${p.patron || 0} would buy a patron pass · ${p.club || 0} crew${(p.club || 0) === 1 ? '' : 's'} would take a seat. Pledges, not money, until the checkout opens.` : '';
+    for (const el of document.querySelectorAll<HTMLElement>('[data-tally]')) { const n = d.votes?.[el.dataset.tally!] ?? 0; el.textContent = n ? `${n} vote${n === 1 ? '' : 's'}` : 'no votes yet'; }
+    if (mine?.vote) for (const b of document.querySelectorAll<HTMLElement>('[data-vote]')) b.classList.toggle('is-mine', b.dataset.vote === mine.vote);
+  };
+  fetch('/api/paddles/fund').then((r) => r.json()).then((d) => paint(d)).catch(() => {});
+
+  // Checkout: if the hosted link is not configured yet, swap to the pledge button.
+  for (const box of document.querySelectorAll<HTMLElement>('.buy')) {
+    const a = box.querySelector<HTMLAnchorElement>('[data-checkout]')!, b = box.querySelector<HTMLButtonElement>('[data-pledge]')!, note = box.querySelector<HTMLElement>('[data-note]')!;
+    fetch(a.href, { method: 'GET', redirect: 'manual' }).then((r) => {
+      if (r.status === 503) { a.hidden = true; b.hidden = false; note.textContent = 'The checkout is not open yet. A pledge is the demand signal that opens it; it sends nothing but a count.'; }
+    }).catch(() => {});
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      const { status, data } = await post({ kind: 'pledge', tier: b.dataset.pledge });
+      if (status === 429) note.textContent = 'Try again in a moment.';
+      else if (!data?.ok) note.textContent = `Not counted: ${data?.reason || 'the fund could not be reached'}.`;
+      else { note.textContent = 'Counted. Thank you. Your pledge replaces any earlier one from this browser.'; paint(data, data.yours); }
+      b.disabled = false;
+    });
+  }
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-vote]')) btn.addEventListener('click', async () => {
+    const note = document.getElementById('vote-note')!;
+    const { status, data } = await post({ kind: 'vote', court: btn.dataset.vote });
+    if (status === 429) note.textContent = 'Try again in a moment.';
+    else if (!data?.ok) note.textContent = `Not counted: ${data?.reason || 'the fund could not be reached'}.`;
+    else { paint(data, data.yours); note.textContent = 'Counted. One vote per browser; press another to change it. The tally is a signal for the pick, not a binding result.'; }
+  });
+</script>
+
+<style>
+  .fund{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .fund [hidden]{display:none!important}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:44px 0 28px;max-width:860px}
+  .hero h1{margin:0;font:500 clamp(40px,6.4vw,76px)/.96 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
+  .dek{margin:18px 0 0;font:400 17px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .offer{display:grid;grid-template-columns:1.2fr .8fr;gap:8px}
+  .offer__card{border:1.5px solid var(--c600);padding:20px;background:var(--c50)}
+  .offer__card--club{background:#fff}
+  .offer h2{margin:0 0 10px;font:500 clamp(28px,4vw,44px)/1 var(--pc-font-sans);letter-spacing:-.03em}
+  .offer__split{margin:0 0 14px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .offer__split b{font-weight:500;color:var(--pc-ink);font-variant-numeric:tabular-nums}
+  .offer__list{margin:0 0 18px;padding-left:18px;font:400 14.5px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .offer p:not(.kicker):not(.offer__split):not(.buy__note){margin:0 0 16px;font:400 14.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .offer a:not(.btn){color:var(--c800)}
+  .btn{display:inline-block;padding:11px 16px;background:var(--c800);color:#fff!important;border:0;font:500 11px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+  .btn:hover{background:var(--pc-ink);text-decoration:none}
+  .btn--pledge{background:#fff;color:var(--c800)!important;border:1.5px solid var(--c600)}
+  .buy__note{margin:10px 0 0;font:400 12.5px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .pledges{margin:12px 0 0;font:400 13px var(--pc-font-mono);color:var(--c800)}
+  .sec{padding-top:48px}
+  .h2{margin:0 0 16px;font:500 clamp(22px,3vw,32px)/1.1 var(--pc-font-sans);letter-spacing:-.02em}
+  .totals{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--c600)}
+  .totals div{padding:16px;border-right:1.5px solid var(--c600)}
+  .totals div:last-child{border-right:0}
+  .totals__fund{background:var(--c50)}
+  .totals strong{display:block;font:500 clamp(24px,3.2vw,36px)/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c800);font-variant-numeric:tabular-nums}
+  .totals span{display:block;margin-top:8px;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .lines{margin:12px 0 0;padding:0;list-style:none;border-top:1.5px solid var(--c600)}
+  .line{display:grid;grid-template-columns:130px 40px 100px 1fr;gap:14px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14.5px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .line__date{font:400 11px var(--pc-font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .line b{font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  .line--out b{color:#8a4b00}
+  .line__usd{font:500 15px var(--pc-font-sans);font-variant-numeric:tabular-nums;color:var(--pc-ink)}
+  .line a{color:var(--c800)}
+  .rules{margin:20px 0 0;padding-left:18px;max-width:760px;font:400 13.5px/1.6 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .empty{margin:12px 0 0;font:400 15px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .cands{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cand{text-align:left;padding:16px;border:1.5px solid var(--c600);background:#fff;font:inherit;color:var(--pc-ink);cursor:pointer}
+  .cand:hover{background:var(--c50)}.cand.is-mine{background:var(--c50);box-shadow:inset 0 0 0 2px var(--c600)}
+  .cand small{display:block;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .cand strong{display:block;margin:8px 0;font:500 17px/1.3 var(--pc-font-sans)}
+  .cand span{display:block;font:400 12px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .cand em{display:block;margin-top:10px;font:500 11px var(--pc-font-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--c800)}
+  .fine{margin:14px 0 0;max-width:760px;font:400 12.5px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .wall{font:400 18px/1.6 var(--pc-font-sans)}
+  .rows{border-top:1.5px solid var(--c600)}
+  .row{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--pc-rule-soft);color:var(--pc-ink)}
+  .row:hover{background:var(--c50);text-decoration:none}
+  .row strong{font:500 16px/1.3 var(--pc-font-sans)}
+  .row span{font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .foot{margin:24px 0 0;font:400 11px/1.7 var(--pc-font-mono);letter-spacing:.06em;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:820px){.offer,.cands{grid-template-columns:1fr}.totals{grid-template-columns:1fr 1fr}.totals div:nth-child(2){border-right:0}.totals div:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}.line{grid-template-columns:1fr;gap:2px}.row{grid-template-columns:1fr;gap:4px}.hero{padding-top:28px}}
+</style>

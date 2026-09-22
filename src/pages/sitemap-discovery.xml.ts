@@ -95,6 +95,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/paddles/pros', 'weekly', '0.85'],
   ['https://pointcast.xyz/paddles/changes', 'daily', '0.8'],
   ['https://pointcast.xyz/paddles/changes.xml', 'daily', '0.7'],
+  ['https://pointcast.xyz/paddles/fund', 'weekly', '0.9'],
+  ['https://pointcast.xyz/paddles/fund.json', 'weekly', '0.7'],
   ...PADDLES.map((paddle) => [`https://pointcast.xyz/paddles/${paddle.id}`, 'weekly', '0.8'] as SitemapEntry),
   ...BRANDS.map((brand) => [`https://pointcast.xyz/paddles/brand/${brand.slug}`, 'weekly', '0.7'] as SitemapEntry),
   ['https://pointcast.xyz/kennel-club', 'daily', '0.94'],
