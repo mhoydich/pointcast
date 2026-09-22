@@ -8,12 +8,22 @@ interface NewsItem {
 
 interface Props { news: NewsItem[] }
 const { news } = Astro.props;
+const dated = news.map((item) => item.date).filter(Boolean).sort();
+const shortDate = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' }).format(new Date(`${iso}T12:00:00Z`));
+const range = dated.length ? `${shortDate(dated[0])}–${shortDate(dated[dated.length - 1]).replace(/^[A-Za-z]+\s/, '')}` : 'Earlier';
+const monthParts = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: '2-digit', timeZone: 'America/Los_Angeles' }).formatToParts(new Date());
+const currentMonth = `${monthParts.find((part) => part.type === 'year')?.value}-${monthParts.find((part) => part.type === 'month')?.value}`;
+const filedMonth = dated.at(-1)?.slice(0, 7);
+const filedMonthName = dated.length
+  ? new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(new Date(`${dated.at(-1)}T12:00:00Z`))
+  : '';
+const heading = filedMonth === currentMonth ? 'Earlier this month' : filedMonthName ? `Filed in ${filedMonthName}` : 'Filed earlier';
 ---
 
 <section class="front-news" aria-labelledby="front-news-title">
   <div class="front-news__head">
-    <p>Changed since Sep 02</p>
-    <h2 id="front-news-title">New this week</h2>
+    <p>Filed {range}</p>
+    <h2 id="front-news-title">{heading}</h2>
   </div>
   <ol>
     {news.map((item) => (

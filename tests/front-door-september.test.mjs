@@ -22,16 +22,19 @@ test('September landing makes one request-time dog claim primary', async () => {
   assert.match(desk, /data-front-completed/);
   assert.match(desk, /data-front-next-door/);
   assert.doesNotMatch(desk, /Get a dog a day by email/);
-  assert.match(news, /New this week/);
+  assert.match(news, /Earlier this month/);
+  assert.match(news, /Filed in \$\{filedMonthName\}/);
+  assert.match(news, /timeZone: 'America\/Los_Angeles'/);
   assert.match(desk, /addEventListener\('pc:auth-change', refresh/);
   assert.match(desk, /data-front-unclaimed/);
   assert.match(desk, /fetch\('\/api\/me\/state'/);
   assert.match(desk, /fetch\('\/api\/collect\/me'/);
 });
 
-test('New this week is maintained as a dated seven-item data contract', async () => {
+test('earlier September notes remain a dated data contract', async () => {
   const news = JSON.parse(await read('src/data/front-door-news.json'));
   assert.deepEqual(news.map((item) => item.label), [
+    'Faucet',
     'Almanac',
     'Kennel Club',
     'Handles + profiles',

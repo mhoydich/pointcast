@@ -20,6 +20,7 @@
 import { getCollection } from 'astro:content';
 import { existsSync } from 'node:fs';
 import BlockLayout from '../layouts/BlockLayout.astro';
+import HomeV2SignalDeck from '../components/HomeV2SignalDeck.astro';
 import HomeWelcome from '../components/HomeWelcome.astro';
 import HomeCurrentProjects from '../components/HomeCurrentProjects.astro';
 import AuthMenu from '../components/AuthMenu.astro';
@@ -90,6 +91,13 @@ const hostOf = (url?: string) => {
 };
 const latestWire: WireItem[] = allBlocks.slice(0, 8).map((block) => {
   const d = block.data;
+  const media = d.media as { src?: string; thumbnail?: string } | undefined;
+  const declaredImage = media?.thumbnail ?? media?.src;
+  const localImage = declaredImage?.startsWith('/') && existsSync(`public${declaredImage}`) ? declaredImage : undefined;
+  const ogImage = `/images/og/b/${d.id}.png`;
+  const destination = d.external?.url
+    ? (() => { try { const u = new URL(d.external.url); return u.host === 'pointcast.xyz' ? `${u.pathname}${u.search}${u.hash}` : u.href; } catch { return `/b/${d.id}`; } })()
+    : `/b/${d.id}`;
   return {
     id: d.id,
     title: d.title,
@@ -97,9 +105,11 @@ const latestWire: WireItem[] = allBlocks.slice(0, 8).map((block) => {
     type: d.type,
     date: ptMonthDay.format(d.timestamp),
     href: `/b/${d.id}`,
-    image: `/images/og/b/${d.id}.png`,
+    image: localImage ?? (existsSync(`public${ogImage}`) ? ogImage : `https://noun.pics/${d.noun ?? Number(d.id)}.svg`),
     dek: d.dek ?? '',
     external: d.external?.url ? hostOf(d.external.url) : undefined,
+    destination,
+    action: d.external?.label ?? (d.type === 'READ' ? 'Read the piece' : 'Open the drop'),
   };
 });
 
@@ -540,6 +550,8 @@ const alternates = [
       </nav>
     </header>
 
+    <HomeV2SignalDeck drops={latestWire} total={blockCount} />
+
     <HomeWelcome />
 
     <HomeMusicOn />
@@ -600,35 +612,48 @@ const alternates = [
       </nav>
     </section>
 
-    <section class="shelf machine" aria-labelledby="machine-title" style="--shelf-color:#185FA5;--shelf-color-2:#993C1D">
-      <div class="shelf__head shelf__head--stack">
+    <footer class="shelf machine home-end" aria-labelledby="machine-title" style="--shelf-color:#185FA5;--shelf-color-2:#993C1D">
+      <div class="shelf__head">
         <div>
-          <p class="shelf__kicker">Editorial and machine-readable endpoints · every page has a JSON twin</p>
-          <h2 class="shelf__title" id="machine-title">Read it however <em>you read.</em></h2>
+          <p class="shelf__kicker">The foot of the page · six honest exits · no dead end</p>
+          <h2 class="shelf__title" id="machine-title">Keep <em>wandering.</em></h2>
+          <p class="shelf__dek">Leave with a picture, an older story, a room to share, or the machine-readable version. The whole town stays open.</p>
         </div>
+        <a class="home-end__up" href="#main-content">Back to the signal ↑</a>
       </div>
-      <ul class="machine__list">
-        <li><a href="/press">/press</a><span>the press wire</span></li>
-        <li><a href="/archive">/archive</a><span>every block, newest first</span></li>
-        <li><a href="/blocks.json">/blocks.json</a><span>the whole archive as JSON</span></li>
-        <li><a href="/feed.json">/feed.json</a><span>JSON Feed 1.1</span></li>
-        <li><a href="/feed.xml">/feed.xml</a><span>RSS</span></li>
-        <li><a href="/agents.json">/agents.json</a><span>the machine door</span></li>
-        <li><a href="/for-agents">/for-agents</a><span>the same door, in prose</span></li>
-        <li><a href="/llms.txt">/llms.txt</a><span>orientation for language models</span></li>
-        <li><a href="/super-follow">/super-follow</a><span>a company is not one feed</span></li>
-        <li><a href="/send.json">/send.json</a><span>the one-sheets · plain text at /send/&lt;slug&gt;.txt</span></li>
-        <li><a href="/register.json">/register.json</a><span>the experiment register</span></li>
-        <li><a href="/now.json">/now.json</a><span>right now, as JSON</span></li>
-        <li><a href="/signals.json">/signals.json</a><span>the four field signals, as JSON</span></li>
-        <li><a href="/me" title="Private PointCast identity and holdings">Your profile</a><span>/me · linked identities + holdings</span></li>
-      </ul>
+      <nav class="home-end__doors" aria-label="Keep wandering around PointCast">
+        <a href="/downloads/"><span>Take something home</span><strong>Downloads</strong><small>Original art and trustworthy open collections.</small></a>
+        <a href="/archive"><span>Older, still open</span><strong>Archive</strong><small>{blockCount} numbered blocks, newest first.</small></a>
+        <a href="/random"><span>Turn the dial</span><strong>Random door</strong><small>Land somewhere you did not plan.</small></a>
+        <a href="/shortwave"><span>Leave a small signal</span><strong>Shortwave</strong><small>Say one thing to whoever is around.</small></a>
+        <a href="/for-agents"><span>Bring good company</span><strong>For agents</strong><small>Public tools, plain instructions, honest limits.</small></a>
+        <a href="/about"><span>Why this place exists</span><strong>About</strong><small>Mike, the residents, and the long game.</small></a>
+      </nav>
+      <details class="home-end__machine">
+        <summary>Editorial and machine-readable endpoints <span>open ↓</span></summary>
+        <ul class="machine__list">
+          <li><a href="/press">/press</a><span>the press wire</span></li>
+          <li><a href="/archive">/archive</a><span>every block, newest first</span></li>
+          <li><a href="/blocks.json">/blocks.json</a><span>the whole archive as JSON</span></li>
+          <li><a href="/feed.json">/feed.json</a><span>JSON Feed 1.1</span></li>
+          <li><a href="/feed.xml">/feed.xml</a><span>RSS</span></li>
+          <li><a href="/agents.json">/agents.json</a><span>the machine door</span></li>
+          <li><a href="/for-agents">/for-agents</a><span>the same door, in prose</span></li>
+          <li><a href="/llms.txt">/llms.txt</a><span>orientation for language models</span></li>
+          <li><a href="/super-follow">/super-follow</a><span>a company is not one feed</span></li>
+          <li><a href="/send.json">/send.json</a><span>the one-sheets · plain text at /send/&lt;slug&gt;.txt</span></li>
+          <li><a href="/register.json">/register.json</a><span>the experiment register</span></li>
+          <li><a href="/now.json">/now.json</a><span>right now, as JSON</span></li>
+          <li><a href="/signals.json">/signals.json</a><span>the four field signals, as JSON</span></li>
+          <li><a href="/me" title="Private PointCast identity and holdings">Your profile</a><span>/me · linked identities + holdings</span></li>
+        </ul>
+      </details>
       <p class="shelf__foot home-places"><span>Places</span><span><a href="/now">Now</a> · <a href="/rooms">Rooms</a> · <a href="/archive">Archive</a> · <a href="/downloads/">Downloads</a> · <a href="/for-agents">For agents</a> · <a href="/station">Station</a></span></p>
       <p class="shelf__foot">
         <span>A garden is slow on purpose. A broadcast is too.</span>
         <span>the coffee pot, still on · <a href="/mythos">what is this place</a> · <a href="/about">about</a> · <a href="/residents">who lives here</a></span>
       </p>
-    </section>
+    </footer>
   </div>
 </BlockLayout>
 
@@ -722,6 +747,19 @@ const alternates = [
   .channels__feeds { margin-top: auto; padding-top: 8px; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #5F5E5A; }
   .channels__feeds span { color: #111; }
 
+  .home-end__up { align-self: end; padding: 9px 11px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .09em; text-transform: uppercase; }
+  .home-end__up:hover { background: #111; color: #fff; }
+  .home-end__doors { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .home-end__doors a { display: flex; flex-direction: column; min-height: 150px; padding: 17px 18px; border-right: 1px solid rgba(0,0,0,.18); border-bottom: 1px solid rgba(0,0,0,.18); background: #fff; }
+  .home-end__doors a:nth-child(3n) { border-right: 0; }
+  .home-end__doors a:hover { background: #eef4fa; box-shadow: inset 0 -5px 0 #185fa5; }
+  .home-end__doors span { font: 700 8px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #185fa5; }
+  .home-end__doors strong { margin-top: 9px; font-size: 22px; letter-spacing: -.035em; }
+  .home-end__doors small { margin-top: auto; padding-top: 18px; font-size: 11.5px; line-height: 1.4; color: rgba(0,0,0,.7); }
+  .home-end__machine { border-bottom: 1px solid rgba(0,0,0,.18); }
+  .home-end__machine summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; background: #111; color: #fff; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; list-style: none; }
+  .home-end__machine summary::-webkit-details-marker { display: none; }
+  .home-end__machine[open] summary span { transform: rotate(180deg); }
   .machine__list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
   .machine__list li { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 14px; border-right: 1px solid rgba(0,0,0,.18); border-bottom: 1px solid rgba(0,0,0,.18); overflow-wrap: anywhere; }
   .machine__list li:nth-child(4n) { border-right: 0; }
@@ -740,6 +778,9 @@ const alternates = [
     .machine__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .machine__list li:nth-child(4n) { border-right: 1px solid rgba(0,0,0,.18); }
     .machine__list li:nth-child(2n) { border-right: 0; }
+    .home-end__doors { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .home-end__doors a:nth-child(3n) { border-right: 1px solid rgba(0,0,0,.18); }
+    .home-end__doors a:nth-child(2n) { border-right: 0; }
   }
   @media (min-width: 461px) and (max-width: 560px) {
     .masthead__utility :global(.auth-menu__panel) { left:0;right:auto;max-width:calc(100vw - 36px); }
@@ -747,6 +788,8 @@ const alternates = [
   @media (max-width: 560px) {
     .masthead { grid-template-columns: 1fr; }
     .channels__grid, .machine__list { grid-template-columns: 1fr; }
+    .home-end__doors { grid-template-columns: 1fr; }
+    .home-end__doors a { min-height: 126px; border-right: 0 !important; }
     .channels__cell, .machine__list li { border-right: 0 !important; border-bottom: 1px solid rgba(0,0,0,.18) !important; }
     .channels__cell:last-child { border-bottom: 0 !important; }
   }
