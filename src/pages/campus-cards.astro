@@ -2,10 +2,10 @@
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { CAMPUS_CARDS, CAMPUS_CARDS_CANONICAL, CAMPUS_CARDS_LIVE, CAMPUS_CARD_LIST, tez } from '../lib/campus-cards';
 
-const set = CAMPUS_CARDS.sets[0];
-const cards = CAMPUS_CARD_LIST.filter((c) => c.setId === set.id);
-const title = 'Campus Cards · Set 01 · Santa Barbara';
-const description = 'Twelve pixel-art place cards from the UC Santa Barbara campus and Isla Vista, collectible on Tezos. The first of ten campus sets. Unofficial, places only, CC0.';
+const sets = CAMPUS_CARDS.sets.map((set) => ({ ...set, cards: CAMPUS_CARD_LIST.filter((c) => c.setId === set.id) }));
+const cards = CAMPUS_CARD_LIST;
+const title = 'Campus Cards · Santa Barbara & Berkeley';
+const description = 'Pixel-art place cards for the University of California campuses, collectible on Tezos. Set 01 is Santa Barbara, Set 02 is Berkeley; eight campuses to go. Unofficial, places only, CC0.';
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -15,7 +15,7 @@ const jsonLd = {
   numberOfItems: cards.length,
   hasPart: cards.map((c) => ({ '@type': 'VisualArtwork', name: `${c.title} (${c.rarityLabel})`, image: `https://pointcast.xyz${c.png}`, url: `https://pointcast.xyz${c.url}` })),
 };
-const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key, ...r, count: cards.filter((c) => c.rarity === key).length }));
+const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key, ...r, count: sets[0].cards.filter((c) => c.rarity === key).length }));
 ---
 
 <BlockLayout title={title} description={description} image="/images/campus-cards/og.png" imageWidth={1200} imageHeight={630} themeColor="#0f61ff" jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/campus-cards.json', title: 'Campus Cards JSON' }]}>
@@ -27,42 +27,44 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
     <header class="mast">
       <div>
         <p class="kicker">Campus Cards · a PointCast set on Tezos</p>
-        <h1>Ten campuses.<br /><em>Set 01 is Santa Barbara.</em></h1>
+        <h1>Ten campuses.<br /><em>Two sets in.</em></h1>
       </div>
-      <p>Twelve pixel-art place cards from the Goleta bluffs and Isla Vista: the carillon tower, the lagoon, the bike tunnel, the sunset everyone watches from the same cliff. Six common, three uncommon, two rare, one legendary. The other nine campuses come one set at a time, on the same contract.</p>
+      <p>Twelve pixel-art place cards per campus, drawn from the places instead of the logos. Santa Barbara is the bluffs, the lagoon, and the bike tunnel. Berkeley is the campanile, the creek, and the fog coming through the Golden Gate. Every set has six common, three uncommon, two rare, and one legendary. The other eight campuses come one set at a time, on the same contract.</p>
     </header>
 
     <p class="notice"><b>Unofficial.</b> {CAMPUS_CARDS.notice.replace(/^Unofficial\.\s*/, '')}</p>
 
-    <section class="set" aria-labelledby="set-title">
-      <div class="set__head">
-        <div><p class="kicker">{set.title}</p><h2 id="set-title">{set.subtitle}</h2></div>
-        <p class="set__status">{CAMPUS_CARDS_LIVE ? 'Minting on Tezos mainnet' : 'Compiled · awaiting origination'}</p>
-      </div>
-      <ol class="grid">
-        {cards.map((c) => (
-          <li class={`grid__card grid__card--${c.rarity}`}>
-            <a href={c.url}>
-              <img src={c.svg} alt={`${c.title}, ${c.rarityLabel} card ${c.number}: ${c.flavor}`} width="400" height="560" loading={c.n <= 4 ? 'eager' : 'lazy'} />
-              <span class="grid__meta"><b>{c.number}</b><span>{c.rarityLabel}</span><span>{c.edition} · {c.priceTez}</span></span>
-            </a>
-          </li>
-        ))}
-      </ol>
-    </section>
+    {sets.map((set) => (
+      <section class="set" id={set.campus} aria-labelledby={`${set.id}-title`} style={`--set:${set.accent}`}>
+        <div class="set__head">
+          <div><p class="kicker">{set.title}</p><h2 id={`${set.id}-title`}>{set.subtitle}</h2></div>
+          <p class="set__status">{CAMPUS_CARDS_LIVE ? 'Minting on Tezos mainnet' : 'Compiled · awaiting origination'}</p>
+        </div>
+        <ol class="grid">
+          {set.cards.map((c) => (
+            <li class={`grid__card grid__card--${c.rarity}`}>
+              <a href={c.url}>
+                <img src={c.svg} alt={`${c.title}, ${c.rarityLabel} card ${c.number}: ${c.flavor}`} width="400" height="560" loading={set.id === 'set-01' && c.n <= 4 ? 'eager' : 'lazy'} />
+                <span class="grid__meta"><b>{c.number}</b><span>{c.rarityLabel}</span><span>{c.edition} · {c.priceTez}</span></span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))}
 
     <section class="rarity" aria-labelledby="rarity-title">
       <p class="kicker">Rarity</p>
       <h2 id="rarity-title">Four tiers, <em>priced by how many can exist.</em></h2>
       <table>
-        <thead><tr><th>Tier</th><th>Cards in set</th><th>Edition</th><th>Mint</th></tr></thead>
+        <thead><tr><th>Tier</th><th>Cards per set</th><th>Edition</th><th>Mint</th></tr></thead>
         <tbody>
           {rarities.map((r) => (
             <tr><td><i style={`background:${r.color}`}></i>{r.label}</td><td>{r.count}</td><td>{r.cap ? `${r.cap} max per card` : 'open'}</td><td>{tez(r.priceMutez)}</td></tr>
           ))}
         </tbody>
       </table>
-      <p class="fine">A full Set 01 is one of every card. There can only ever be five complete sets, because Storke Tower caps at five.</p>
+      <p class="fine">A complete set is one of every card. Each campus can only ever have five complete sets, because its legendary caps at five.</p>
     </section>
 
     <section class="campuses" aria-labelledby="campuses-title">
@@ -70,7 +72,7 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
       <h2 id="campuses-title">One set per campus, <em>in the order we can get them right.</em></h2>
       <ol>
         {CAMPUS_CARDS.campuses.map((c, i) => (
-          <li class={c.status === 'queued' ? 'queued' : 'live'}>
+          <li class={c.status === 'queued' ? 'queued' : 'live'}>{c.status !== 'queued' && <a class="campuses__link" href={`#${c.slug}`} aria-label={`Jump to ${c.name}`}></a>}
             <b>{String(i + 1).padStart(2, '0')}</b>
             <span>{c.name}</span>
             <small>{c.status === 'queued' ? 'queued' : `${c.status.replace('set-', 'set ')} · ${c.place}`}</small>
@@ -83,7 +85,7 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
       <p class="kicker">How it works</p>
       <h2 id="how-title">One contract, <em>every campus.</em></h2>
       <ul>
-        <li>Each card is an FA2 token on Tezos mainnet. Token ids run in set order: Set 01 is 0 through 11.</li>
+        <li>Each card is an FA2 token on Tezos mainnet. Token ids run in set order: Santa Barbara is 0 through 11, Berkeley is 12 through 23.</li>
         <li>Mint takes a card id and a quantity, up to ten at a time, at the card's price. Caps are enforced on chain.</li>
         <li>New campus sets are added to the same contract and start closed until their cards are ready.</li>
         <li>The art is original pixel painting generated from one data file, animated SVG with a PNG twin, released CC0.</li>
@@ -105,6 +107,8 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
   .mast { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, .6fr); gap: 24px; align-items: end; border-top: 2px solid var(--pc-ink); padding: 20px 0 22px; }
   .mast > p { margin: 0; color: var(--pc-ink-soft); font-size: 16px; line-height: 1.5; }
   .notice { margin: 0 0 34px; padding: 10px 12px; border: 1.5px dashed var(--pc-ink); font-size: 13px; line-height: 1.45; color: var(--pc-ink-soft); }
+  .set { margin-top: 44px; }
+  .set .kicker { color: var(--set, var(--cc)); }
   .set__head { display: flex; justify-content: space-between; align-items: end; gap: 16px; border-top: 1.5px solid var(--pc-ink); padding-top: 16px; margin-bottom: 18px; }
   .set__status { margin: 0; padding: 6px 8px; background: var(--pc-ink); color: #fff; white-space: nowrap; }
   .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
@@ -119,9 +123,10 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
   td i { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border: 1px solid var(--pc-ink); }
   .fine { margin: 12px 0 0; color: var(--pc-ink-muted); text-transform: none; letter-spacing: .02em; font-size: 12px; }
   .campuses ol { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
-  .campuses li { display: grid; gap: 4px; padding: 12px; border: 1.5px solid var(--pc-ink); }
+  .campuses li { position: relative; display: grid; gap: 4px; padding: 12px; border: 1.5px solid var(--pc-ink); }
   .campuses li.live { background: var(--cc); color: #fff; }
   .campuses li.queued { color: var(--pc-ink-muted); border-style: dashed; }
+  .campuses__link { position: absolute; inset: 0; }
   .campuses li b { font: 600 11px var(--pc-font-mono); }
   .campuses li span { font-size: 18px; letter-spacing: -.02em; }
   .how ul { margin: 18px 0 0; padding-left: 18px; max-width: 70ch; color: var(--pc-ink-soft); line-height: 1.6; }

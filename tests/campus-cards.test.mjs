@@ -5,12 +5,24 @@ import { cards, prepareStorage, tokenMetadata } from '../scripts/campus-cards-mi
 
 const series = JSON.parse(readFileSync(new URL('../src/data/campus-cards.json', import.meta.url), 'utf8'));
 
-test('set 01 is twelve cards with the published rarity mix', () => {
-  const set = series.sets[0];
-  assert.equal(set.cards.length, 12);
-  const count = (r) => set.cards.filter((c) => c.rarity === r).length;
-  assert.deepEqual([count('common'), count('uncommon'), count('rare'), count('legendary')], [6, 3, 2, 1]);
-  assert.equal(new Set(set.cards.map((c) => c.slug)).size, 12);
+test('every set is twelve cards with the published rarity mix', () => {
+  assert.deepEqual(series.sets.map((set) => set.campus), ['santa-barbara', 'berkeley']);
+  for (const set of series.sets) {
+    assert.equal(set.cards.length, 12, set.id);
+    const count = (r) => set.cards.filter((c) => c.rarity === r).length;
+    assert.deepEqual([count('common'), count('uncommon'), count('rare'), count('legendary')], [6, 3, 2, 1], set.id);
+  }
+});
+
+test('card slugs are unique across sets (they share /campus-cards/{slug})', () => {
+  const slugs = series.sets.flatMap((set) => set.cards.map((c) => c.slug));
+  assert.equal(new Set(slugs).size, slugs.length);
+});
+
+test('token ids run in set order: Berkeley starts at 12', () => {
+  const berkeley = cards().filter((c) => c.set.id === 'set-02');
+  assert.equal(berkeley[0].tokenId, 12);
+  assert.equal(berkeley.at(-1).tokenId, 23);
 });
 
 test('every card has its painted svg and png', () => {

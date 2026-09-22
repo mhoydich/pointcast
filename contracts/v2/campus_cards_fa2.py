@@ -8,8 +8,9 @@ card. A card carries its own price, supply cap (0 = open edition), and an
 open flag, so a new campus set is an `add_card` call per card, not a new
 origination.
 
-Set 01's twelve cards are registered at origination from
-src/data/campus-cards.json. The compiled storage carries inline placeholders;
+Every set in src/data/campus-cards.json is registered at origination
+(Set 01 Santa Barbara = tokens 0-11, Set 02 Berkeley = 12-23); later sets
+come in through add_card. The compiled storage carries inline placeholders;
 scripts/campus-cards-mint-desk.mjs swaps each token's metadata for a TZIP-16
 pointer to its pinned JSON before origination. set_token_info repairs a
 card's metadata later without a new contract.
@@ -65,27 +66,36 @@ def card_token_info(series, card_set, card):
     )
 
 
-def set_01_token_metadata():
+def all_token_metadata():
     series = load_series()
-    card_set = series["sets"][0]
-    return [card_token_info(series, card_set, card) for card in card_set["cards"]]
+    return [
+        card_token_info(series, card_set, card)
+        for card_set in series["sets"]
+        for card in card_set["cards"]
+    ]
 
 
-def set_01_terms():
+def all_terms():
     series = load_series()
-    card_set = series["sets"][0]
     terms = []
-    for index, card in enumerate(card_set["cards"]):
-        rarity = series["rarities"][card["rarity"]]
-        terms.append(
-            sp.record(
-                token_id=sp.nat(index),
-                set_id=card_set["id"],
-                price=sp.mutez(rarity["priceMutez"]),
-                cap=sp.nat(rarity["cap"]),
+    token_id = 0
+    for card_set in series["sets"]:
+        for card in card_set["cards"]:
+            rarity = series["rarities"][card["rarity"]]
+            terms.append(
+                sp.record(
+                    token_id=sp.nat(token_id),
+                    set_id=card_set["id"],
+                    price=sp.mutez(rarity["priceMutez"]),
+                    cap=sp.nat(rarity["cap"]),
+                )
             )
-        )
+            token_id += 1
     return terms
+
+
+def card_count():
+    return sum(len(card_set["cards"]) for card_set in load_series()["sets"])
 
 
 @sp.module
@@ -252,12 +262,12 @@ def test_campus_cards_fa2():
         administrator=admin.address,
         treasury=treasury.address,
         metadata=sp.scenario_utils.metadata_of_url("ipfs://PLACEHOLDER_CAMPUS_CARDS_CONTRACT_METADATA"),
-        token_metadata=set_01_token_metadata(),
-        terms=set_01_terms(),
+        token_metadata=all_token_metadata(),
+        terms=all_terms(),
         paused=False,
     )
     scenario += contract
-    scenario.verify(contract.data.next_token_id == 12)
+    scenario.verify(contract.data.next_token_id == card_count())
 
     scenario.h2("Common card: open edition at 0.5 tez each, quantity pricing")
     common = 6  # Pardall Tunnel
@@ -288,7 +298,7 @@ def test_campus_cards_fa2():
 
     scenario.h2("Admin adds a new campus card: starts closed")
     contract.add_card(
-        token_info=sp.map(l={"name": sp.scenario_utils.bytes_of_string("Campus Cards · Berkeley · 01")}),
+        token_info=sp.map(l={"name": sp.scenario_utils.bytes_of_string("Campus Cards · Davis · 01")}),
         set_id="set-02",
         price=sp.mutez(1_000_000),
         cap=sp.nat(0),
@@ -298,14 +308,21 @@ def test_campus_cards_fa2():
         token_info=sp.map(l={}), set_id="x", price=sp.mutez(0), cap=sp.nat(0),
         _sender=alice, _valid=False, _exception="NOT_ADMIN",
     )
-    scenario.verify(contract.data.next_token_id == 13)
+    scenario.verify(contract.data.next_token_id == card_count() + 1)
     contract.mint(
-        token_id=12, quantity=1, _sender=bob, _amount=sp.mutez(1_000_000),
+        token_id=card_count(), quantity=1, _sender=bob, _amount=sp.mutez(1_000_000),
         _valid=False, _exception="CARD_CLOSED",
     )
-    contract.set_card(token_id=12, price=sp.mutez(0), cap=sp.nat(0), open=True, _sender=admin)
-    contract.mint(token_id=12, quantity=1, _sender=bob)
-    scenario.verify(contract.minted(12) == 1)
+    contract.set_card(token_id=card_count(), price=sp.mutez(0), cap=sp.nat(0), open=True, _sender=admin)
+    contract.mint(token_id=card_count(), quantity=1, _sender=bob)
+    scenario.verify(contract.minted(card_count()) == 1)
+
+    scenario.h2("Set 02 Berkeley legendary is token 12 with its own cap")
+    contract.mint(token_id=12, quantity=5, _sender=bob, _amount=sp.mutez(50_000_000))
+    contract.mint(
+        token_id=12, quantity=1, _sender=alice, _amount=sp.mutez(10_000_000),
+        _valid=False, _exception="EDITION_CAP_REACHED",
+    )
 
     scenario.h2("Cap cannot drop below supply")
     contract.set_card(
@@ -336,10 +353,10 @@ def compile_campus_cards_fa2():
         administrator=mike,
         treasury=mike,
         metadata=sp.scenario_utils.metadata_of_url("ipfs://PLACEHOLDER_CAMPUS_CARDS_CONTRACT_METADATA"),
-        token_metadata=set_01_token_metadata(),
-        terms=set_01_terms(),
+        token_metadata=all_token_metadata(),
+        terms=all_terms(),
         paused=True,
     )
     scenario += contract
-    scenario.verify(contract.data.next_token_id == 12)
+    scenario.verify(contract.data.next_token_id == card_count())
     scenario.verify(contract.data.paused)
