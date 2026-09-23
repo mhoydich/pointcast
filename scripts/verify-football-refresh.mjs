@@ -22,7 +22,7 @@ assert.deepEqual(receipts.openingReceipts.map(t=>t.claim),opening.teams.map(t=>t
 const directory = await json('25/directory.json');
 const programs = directory.programs;
 assert.equal(programs.length,266);
-assert.deepEqual(programs.filter(t=>t.pointcastRank).map(t=>t.displayName),current.teams.map(t=>t.school));
+assert.deepEqual(programs.filter(t=>t.pointcastRank).map(t=>t.name),current.teams.map(t=>t.school));
 const teamCases = current.discovery.teamCases;
 for(const entry of teamCases) {
  const route=new URL(entry.json).pathname.slice(1);
