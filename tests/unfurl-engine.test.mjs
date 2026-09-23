@@ -197,4 +197,23 @@ test('the light dial names periods, and only real unfurlers are counted', async 
   assert.match(wall, /fetch\('\/unfurl-wall\.json'\)/);
   assert.match(wall, /planUnfurl\(/);
   assert.match(JSON.parse(pkg).scripts.build, /astro\.mjs build && node scripts\/unfurl-wall-manifest\.mjs$/);
+
+test('keyboard quartet invites pick a seat, never words', async () => {
+  const { quartetSeat, quartetCardUrl } = await import('../src/lib/unfurl/urls.mjs');
+  const { unfurlWords } = await import('../src/lib/unfurl/plan.mjs');
+  const { quartetCard } = await import('../src/lib/unfurl/cards.mjs');
+  const { lightAt } = await import('../src/lib/unfurl/light.mjs');
+  const now = new Date('2026-09-23T17:41:00Z');
+  assert.equal(quartetSeat('?seat=2&from=Mike'), 2);
+  assert.equal(quartetSeat('?seat=7'), null);
+  assert.equal(quartetSeat('?seat=1%3Cb'), null);
+  assert.equal(quartetCardUrl(null), 'https://pointcast.xyz/og/quartet.png');
+  const plan = planUnfurl({ pathname: '/keyboard-quartet', search: '?seat=1&from=<b>hi</b>', currentImage: 'https://pointcast.xyz/og/quartet.png', now });
+  assert.match(plan.image, /^https:\/\/pointcast\.xyz\/og\/quartet\.png\?seat=1\&b=2026-09-23\.[a-z]+$/);
+  assert.equal(unfurlWords({ pathname: '/keyboard-quartet', search: '' }), null);
+  assert.equal(unfurlWords({ pathname: '/keyboard', search: '?seat=1' }), null);
+  const words = unfurlWords({ pathname: '/keyboard-quartet/', search: '?seat=1&from=Evil' });
+  assert.match(words.description, /Gold seat/);
+  assert.doesNotMatch(JSON.stringify(words), /Evil/);
+  for (const seat of [null, 0, 3]) renders(quartetCard({ seat, light: lightAt(now), client: 'slack', serial: 3 }));
 });

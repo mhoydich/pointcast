@@ -27,11 +27,24 @@ export function liveCardUrl(room, bucket = '', origin = SITE) {
   return url.href;
 }
 
+/** The saved seat (0–3) in a /keyboard-quartet invite query, or null. */
+export function quartetSeat(search = '') {
+  const v = new URLSearchParams(String(search)).get('seat');
+  return v !== null && /^[0-3]$/.test(v) ? Number(v) : null;
+}
+
+export function quartetCardUrl(seat = null, bucket = '', origin = SITE) {
+  const url = new URL('/og/quartet.png', origin);
+  if (seat !== null && /^[0-3]$/.test(String(seat))) url.searchParams.set('seat', String(seat));
+  if (validBucket(bucket)) url.searchParams.set('b', bucket);
+  return url.href;
+}
+
 /** Is this og:image one of ours that takes a bucket? */
 export function isGeneratedCard(href) {
   try {
     const { pathname } = new URL(href, SITE);
-    return pathname === '/og/page.png' || pathname.startsWith('/og/live/');
+    return pathname === '/og/page.png' || pathname === '/og/quartet.png' || pathname.startsWith('/og/live/');
   } catch {
     return false;
   }

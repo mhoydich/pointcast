@@ -1,0 +1,692 @@
+---
+// /keyboard-quartet — Keyboard Quartet. Four people, one keyboard (or one
+// tablet laid flat on a table). Each seat owns five keys: Q–T, Y–P, Z–B, N–/.
+// A round is call-and-echo: one seat plays a phrase, every other seat echoes
+// it on their own five keys, and each clean echo grows the table's garden.
+// Kid rules from /bell-choir: pentatonic (nothing sounds wrong), no timer,
+// no elimination, the score belongs to the table. Sibling of /keyboard.
+// Built 2026-09-23 by Claude Code on a brief from Mike.
+---
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Keyboard Quartet · PointCast</title>
+<meta name="description" content="Four people, one keyboard. Each seat gets five keys; one plays a phrase, the others echo it, and every clean echo grows the table's garden.">
+<meta property="og:title" content="Keyboard Quartet">
+<meta property="og:description" content="Four people, one keyboard. Call, echo, grow the garden.">
+<meta property="og:url" content="https://pointcast.xyz/keyboard-quartet">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://pointcast.xyz/og/quartet.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A drawn keyboard split into four colored seats: Coral, Gold, Sea and Violet.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Keyboard Quartet">
+<meta name="twitter:description" content="Four people, one keyboard. Call, echo, grow the garden.">
+<meta name="twitter:image" content="https://pointcast.xyz/og/quartet.png">
+<link rel="canonical" href="https://pointcast.xyz/keyboard-quartet">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style is:inline>
+  [hidden]{display:none!important;}
+  :root{
+    --ground:#0b1412;
+    --ground-2:#101c19;
+    --key:#16241f;
+    --key-edge:#243630;
+    --ink:#dfe9e3;
+    --ink-dim:#7f9a90;
+    --ink-faint:#42584f;
+    --accent:#e6c98a;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+    color-scheme:dark;
+  }
+  html,body{min-height:100%;}
+  body{
+    margin:0;background:var(--ground);color:var(--ink);
+    font-family:var(--mono);font-size:13px;
+    display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;
+    padding-inline:16px;padding-block:14px 12px;box-sizing:border-box;
+    -webkit-user-select:none;user-select:none;
+  }
+  a{color:var(--accent);}
+
+  header{
+    display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
+    padding-bottom:10px;border-bottom:1px solid var(--key-edge);
+  }
+  h1{font-family:var(--serif);font-weight:400;font-size:30px;line-height:1;margin:0;}
+  h1 em{color:var(--accent);font-style:italic;}
+  .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-left:auto;}
+  .ctl{display:flex;align-items:center;gap:6px;}
+  .ctl label{color:var(--ink-dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase;}
+  select,button{
+    font-family:var(--mono);font-size:12px;color:var(--ink);
+    background:var(--ground-2);border:1px solid var(--key-edge);border-radius:4px;
+    padding:5px 9px;cursor:pointer;
+  }
+  select:disabled,button:disabled{opacity:.45;cursor:default;}
+  select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  button[aria-pressed="true"]{background:var(--accent);color:var(--ground);border-color:var(--accent);}
+  .primary{background:var(--accent);color:var(--ground);border-color:var(--accent);font-weight:500;}
+  .back{font-size:12px;color:var(--ink-dim);text-decoration:none;}
+  .back:hover{color:var(--accent);}
+
+  /* the table: seats sit where their keys sit on a real keyboard */
+  .table{
+    flex:1;display:grid;gap:14px;padding-block:14px;
+    grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(170px,1fr) auto;
+  }
+  .seat{
+    --c:#888;
+    border:1px solid var(--key-edge);border-radius:10px;background:var(--ground-2);
+    padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0;
+    transition:border-color .2s ease, box-shadow .2s ease, opacity .2s ease, transform .3s ease;
+  }
+  .seat[data-seat="0"]{grid-area:1 / 1;}
+  .seat[data-seat="1"]{grid-area:1 / 2;}
+  .seat[data-seat="2"]{grid-area:3 / 1;}
+  .seat[data-seat="3"]{grid-area:3 / 2;}
+  .seat.empty{opacity:.55;}
+  .seat.sitting{border-color:color-mix(in oklab, var(--c) 45%, var(--key-edge));}
+  .seat.turn{border-color:var(--c);box-shadow:0 0 0 1px var(--c), 0 0 34px color-mix(in oklab, var(--c) 30%, transparent);opacity:1;}
+  .seat.idle{opacity:.6;}
+  .seat.nope{animation:nope .28s ease;}
+  @keyframes nope{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  body.flat .seat[data-seat="0"].nope,body.flat .seat[data-seat="1"].nope{animation:none;}
+  .seat-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+  .seat-name{font-family:var(--serif);font-size:24px;line-height:1;color:var(--c);}
+  .seat-keys{font-size:11px;color:var(--ink-faint);letter-spacing:.12em;}
+  .seat-petals{margin-left:auto;font-size:12px;color:var(--ink-dim);font-variant-numeric:tabular-nums;}
+  .seat-petals b{color:var(--c);font-weight:500;}
+  .seat-say{font-size:12px;color:var(--ink-dim);min-height:1.3em;}
+  .seat.turn .seat-say{color:var(--ink);}
+
+  .pads{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+  .pad{
+    --d:#888;
+    position:relative;aspect-ratio:1 / 1.1;min-height:44px;
+    border-radius:10px;border:1px solid var(--key-edge);
+    background:color-mix(in oklab, var(--d) 12%, var(--key));
+    box-shadow:inset 0 -3px 0 rgba(0,0,0,.35);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    color:var(--ink);cursor:pointer;touch-action:none;padding:0;
+    transition:transform .05s ease, background .12s ease, box-shadow .15s ease;
+  }
+  .pad::before{
+    content:"";position:absolute;left:18%;right:18%;top:10%;height:4px;border-radius:2px;background:var(--d);opacity:.7;
+  }
+  .pad .cap{font-size:clamp(14px,2.2vw,22px);font-weight:500;}
+  .pad .nm{font-family:var(--serif);font-size:clamp(12px,1.5vw,16px);color:var(--d);}
+  .pad.on{
+    transform:translateY(2px);
+    background:color-mix(in oklab, var(--d) 70%, var(--key));
+    box-shadow:0 0 26px var(--d);color:var(--ground);
+  }
+  .pad.on .nm{color:var(--ground);}
+  .pad.hint{box-shadow:0 0 0 2px var(--d), inset 0 -3px 0 rgba(0,0,0,.35);}
+
+  /* the middle of the table */
+  .middle{
+    grid-area:2 / 1 / 3 / 3;
+    border:1px dashed var(--key-edge);border-radius:12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    padding:14px;text-align:center;position:relative;overflow:hidden;
+  }
+  #prompt{font-family:var(--serif);font-size:clamp(22px,3.4vw,38px);line-height:1.1;margin:0;max-width:30ch;}
+  #prompt em{font-style:italic;}
+  #sub{color:var(--ink-dim);font-size:12px;max-width:62ch;line-height:1.5;margin:0;}
+  .track{display:flex;gap:10px;min-height:26px;align-items:center;}
+  .slot{
+    width:22px;height:22px;border-radius:50%;border:2px solid var(--ring,var(--key-edge));
+    box-sizing:border-box;transition:background .15s ease, transform .15s ease;
+  }
+  .slot.fill{background:var(--fill);border-color:var(--fill);transform:scale(1.12);}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  #garden{
+    display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:2px;
+    max-width:100%;min-height:10px;
+  }
+  #garden svg{width:26px;height:36px;transform-origin:50% 100%;animation:grow .7s cubic-bezier(.2,1.4,.4,1) both;}
+  @keyframes grow{from{transform:scale(0)}to{transform:scale(1)}}
+  .results{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;font-size:12px;color:var(--ink-dim);}
+  .results b{font-family:var(--serif);font-size:22px;font-weight:400;display:block;}
+
+  footer{
+    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding-top:10px;border-top:1px solid var(--key-edge);
+    color:var(--ink-dim);font-size:11px;letter-spacing:.03em;
+  }
+  footer b{color:var(--ink);font-weight:500;}
+
+  /* flat mode: a tablet on a table, the top two seats face the far side */
+  body.flat .seat[data-seat="0"],body.flat .seat[data-seat="1"]{transform:rotate(180deg);}
+  body.flat .seat[data-seat="0"]{grid-area:1 / 2;}
+  body.flat .seat[data-seat="1"]{grid-area:1 / 1;}
+
+  /* invites */
+  .seat.saved{border-color:var(--c);animation:saved 1.6s ease-in-out infinite;}
+  @keyframes saved{50%{box-shadow:0 0 0 3px color-mix(in oklab, var(--c) 55%, transparent), 0 0 40px color-mix(in oklab, var(--c) 35%, transparent);}}
+  dialog{
+    background:var(--ground-2);color:var(--ink);border:1px solid var(--key-edge);border-radius:12px;
+    padding:18px;width:min(520px, calc(100vw - 32px));box-sizing:border-box;
+  }
+  dialog::backdrop{background:rgba(4,9,8,.72);}
+  dialog h2{font-family:var(--serif);font-weight:400;font-size:28px;margin:0 0 4px;}
+  dialog h2 em{color:var(--accent);}
+  dialog p{color:var(--ink-dim);font-size:12px;line-height:1.5;margin:0 0 12px;}
+  .inv-lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);margin:12px 0 6px;}
+  .inv-seats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .inv-seats button{border-color:var(--c);color:var(--c);padding:8px 4px;}
+  .inv-seats button small{display:block;font-size:10px;color:var(--ink-faint);letter-spacing:.14em;margin-top:2px;white-space:nowrap;}
+  .inv-seats button[aria-pressed="true"]{background:var(--c);color:var(--ground);}
+  .inv-seats button[aria-pressed="true"] small{color:var(--ground);}
+  dialog input[type=text]{
+    font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--ground);
+    border:1px solid var(--key-edge);border-radius:4px;padding:7px 9px;width:100%;box-sizing:border-box;
+    -webkit-user-select:text;user-select:text;
+  }
+  dialog input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .inv-card{width:100%;height:auto;aspect-ratio:1200 / 630;border-radius:8px;border:1px solid var(--key-edge);margin-top:12px;display:block;background:var(--ground);}
+  .inv-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .inv-row button{flex:1 1 auto;}
+  #invStatus{font-size:11px;color:var(--ink-dim);min-height:1.3em;margin-top:8px;}
+
+  @media (max-width:640px){
+    h1{font-size:24px;}
+    .controls{margin-left:0;gap:8px;}
+    .table{gap:10px;}
+    .seat{padding:9px;gap:8px;}
+    .seat-name{font-size:19px;}
+    .seat-keys{display:none;}
+    .pads{gap:5px;}
+    .pad{aspect-ratio:auto;height:58px;min-height:0;}
+    .pad .nm{display:none;}
+    footer{font-size:10px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .pad,.seat,.slot{transition:none;}
+    #garden svg,.seat.nope{animation:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Keyboard <em>Quartet</em></h1>
+  <a class="back" href="/keyboard">← solo keyboard</a>
+  <div class="controls">
+    <div class="ctl"><label for="scale">Scale</label>
+      <select id="scale">
+        <option value="majpent" selected>Major pentatonic</option>
+        <option value="minpent">Minor pentatonic</option>
+        <option value="hirajoshi">Hirajoshi</option>
+        <option value="yo">Yo</option>
+      </select></div>
+    <div class="ctl"><label for="root">Root</label>
+      <select id="root">
+        <option>C</option><option>C♯</option><option selected>D</option><option>E♭</option><option>E</option><option>F</option>
+        <option>F♯</option><option>G</option><option>A♭</option><option>A</option><option>B♭</option><option>B</option>
+      </select></div>
+    <div class="ctl"><label for="rounds">Rounds</label>
+      <select id="rounds">
+        <option value="2">Short</option>
+        <option value="3" selected>Full</option>
+        <option value="5">Long</option>
+      </select></div>
+    <button id="inviteBtn" class="primary" title="Save a seat and send someone the link">Invite</button>
+    <button id="flatBtn" aria-pressed="false" title="Tablet flat on a table: the top two seats face the far side">Table mode</button>
+  </div>
+</header>
+
+<main class="table" id="table">
+  <section class="middle" aria-live="polite">
+    <p id="prompt">Four seats. <em>Press a key in yours to sit down.</em></p>
+    <p id="sub">Coral plays Q W E R T · Gold plays Y U I O P · Sea plays Z X C V B · Violet plays N M , . /<br>Two to four players. Everyone can jam freely until someone presses Enter.</p>
+    <div class="track" id="track"></div>
+    <div class="actions">
+      <button id="startBtn" class="primary" disabled>Start the round (Enter)</button>
+      <button id="againBtn" hidden>Hear it again (Space)</button>
+      <button id="playbackBtn" hidden>Hear the whole game back</button>
+      <button id="jamBtn" hidden>Back to jam (Esc)</button>
+      <button id="clearBtn">Clear seats</button>
+    </div>
+    <div id="results" class="results" hidden></div>
+    <div id="garden" aria-label="The table's garden"></div>
+  </section>
+</main>
+
+<dialog id="invite" aria-labelledby="invTitle">
+  <h2 id="invTitle">Save a <em>seat</em></h2>
+  <p>Quartet is played around one keyboard or one tablet. Send the link to whoever you want at the table — it opens with their seat lit up, and the preview shows it too.</p>
+  <div class="inv-lbl">Which seat</div>
+  <div class="inv-seats" id="invSeats"></div>
+  <div class="inv-lbl"><label for="invFrom">From (shown on the page, not on the preview card)</label></div>
+  <input id="invFrom" type="text" maxlength="24" placeholder="Your name" autocomplete="off">
+  <img id="invCard" class="inv-card" alt="The link preview for this invite" width="1200" height="630">
+  <div class="inv-row">
+    <button id="invShare" class="primary" hidden>Share…</button>
+    <button id="invCopy">Copy link</button>
+    <button id="invClose">Done</button>
+  </div>
+  <div id="invStatus" aria-live="polite"></div>
+</dialog>
+
+<footer>
+  <span><b>Enter</b> start &nbsp; <b>Space</b> hear the phrase again &nbsp; <b>Esc</b> back to jam</span>
+  <span id="meter">call and echo · clean echo = 2 petals · second try = 1 · the caller gets 1 for every echo</span>
+</footer>
+
+<script is:inline>
+(() => {
+'use strict';
+
+/* ---------- seats + scale ---------- */
+const SEATS = [
+  {name:'Coral',  color:'#ff8f70', codes:['KeyQ','KeyW','KeyE','KeyR','KeyT'],            caps:'QWERT', voice:'bloom',  oct:12},
+  {name:'Gold',   color:'#e6c98a', codes:['KeyY','KeyU','KeyI','KeyO','KeyP'],            caps:'YUIOP', voice:'glass',  oct:24},
+  {name:'Sea',    color:'#6fd3c1', codes:['KeyZ','KeyX','KeyC','KeyV','KeyB'],            caps:'ZXCVB', voice:'reed',   oct:0},
+  {name:'Violet', color:'#b69cff', codes:['KeyN','KeyM','Comma','Period','Slash'],        caps:'NM,./', voice:'mallet', oct:12},
+];
+const SCALES = {
+  majpent:[0,2,4,7,9],
+  minpent:[0,3,5,7,10],
+  hirajoshi:[0,2,3,7,8],
+  yo:[0,2,5,7,9],
+};
+const NAMES = ['C','C♯','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+const DEG_COLORS = ['#f2c14e','#ef7d6b','#6fc9e6','#8fdc7a','#c8a2ff'];
+const BASE = 48;
+const TOUCH = matchMedia('(pointer:coarse)').matches;
+const SIT = TOUCH ? 'tap a pad to sit' : 'press a key to sit';
+
+const codeMap = new Map(); // code -> [seat, deg]
+SEATS.forEach((s,si)=>s.codes.forEach((c,d)=>codeMap.set(c,[si,d])));
+
+const $ = id => document.getElementById(id);
+const table = $('table'), promptEl = $('prompt'), sub = $('sub'), track = $('track'), garden = $('garden');
+const startBtn = $('startBtn'), againBtn = $('againBtn'), playbackBtn = $('playbackBtn'), jamBtn = $('jamBtn'), clearBtn = $('clearBtn');
+const results = $('results'), scaleSel = $('scale'), rootSel = $('root'), roundsSel = $('rounds'), flatBtn = $('flatBtn');
+
+let scaleKey = scaleSel.value, root = rootSel.selectedIndex;
+
+/* ---------- build the seats ---------- */
+const seatEls = [], padEls = [];
+SEATS.forEach((s,si)=>{
+  const el = document.createElement('section');
+  el.className = 'seat empty'; el.dataset.seat = si; el.style.setProperty('--c',s.color);
+  el.innerHTML = `<div class="seat-head"><span class="seat-name">${s.name}</span><span class="seat-keys">${s.caps.split('').join(' ')}</span><span class="seat-petals"><b>0</b> petals</span></div>
+    <div class="pads"></div><div class="seat-say">press a key to sit</div>`;
+  const pads = el.querySelector('.pads'); padEls[si] = [];
+  s.codes.forEach((c,d)=>{
+    const p = document.createElement('button');
+    p.className = 'pad'; p.type = 'button'; p.dataset.seat = si; p.dataset.deg = d; p.tabIndex = -1;
+    p.style.setProperty('--d',DEG_COLORS[d]);
+    p.innerHTML = `<span class="cap">${s.caps[d]}</span><span class="nm"></span>`;
+    p.setAttribute('aria-label',`${s.name} key ${d+1}`);
+    pads.appendChild(p); padEls[si][d] = p;
+  });
+  table.appendChild(el); seatEls[si] = el;
+});
+const midiOf = (seat,deg) => BASE + root + SEATS[seat].oct + SCALES[scaleKey][deg];
+function relabel(){
+  SEATS.forEach((s,si)=>padEls[si].forEach((p,d)=>{ const m=midiOf(si,d); p.querySelector('.nm').textContent = NAMES[m%12]+(Math.floor(m/12)-1); }));
+}
+relabel();
+scaleSel.onchange = ()=>{ scaleKey=scaleSel.value; relabel(); scaleSel.blur(); };
+rootSel.onchange = ()=>{ root=rootSel.selectedIndex; relabel(); rootSel.blur(); };
+roundsSel.onchange = ()=>roundsSel.blur();
+
+/* ---------- audio ---------- */
+let ctx, master, wet;
+function makeIR(seconds, decay){
+  const rate=ctx.sampleRate, len=rate*seconds, buf=ctx.createBuffer(2,len,rate);
+  for(let ch=0;ch<2;ch++){ const d=buf.getChannelData(ch); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay); }
+  return buf;
+}
+function boot(){
+  if(ctx){ if(ctx.state==='suspended') ctx.resume(); return; }
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value=-14; comp.knee.value=18; comp.ratio.value=5;
+  master = ctx.createGain(); master.gain.value=0.7; master.connect(comp); comp.connect(ctx.destination);
+  const conv = ctx.createConvolver(); conv.buffer = makeIR(2.6,3.2);
+  wet = ctx.createGain(); wet.gain.value=0.32; wet.connect(conv); conv.connect(master);
+}
+const mtof = m => 440*Math.pow(2,(m-69)/12);
+const PANS = [-0.45, 0.45, -0.3, 0.3];
+function tone(seat, midi, vel=0.9, t){
+  boot(); t = t ?? ctx.currentTime;
+  const f = mtof(midi), kind = SEATS[seat].voice;
+  const out = ctx.createGain(); const pan = ctx.createStereoPanner(); pan.pan.value = PANS[seat];
+  out.connect(pan); pan.connect(master); pan.connect(wet);
+  const osc = (type, freq, gain, dec, det=0) => {
+    const o=ctx.createOscillator(); o.type=type; o.frequency.value=freq; o.detune.value=det;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(gain*vel,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+dec);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t+dec+0.05); return o;
+  };
+  out.gain.value = 1;
+  if(kind==='bloom'){ osc('triangle',f,0.42,1.3); osc('sine',f,0.25,1.6,6); osc('sine',f*2,0.08,0.5); }
+  else if(kind==='glass'){ osc('sine',f,0.32,1.9); osc('sine',f*3.01,0.09,0.6); osc('sine',f*5.4,0.03,0.25); }
+  else if(kind==='reed'){
+    const flt=ctx.createBiquadFilter(); flt.type='lowpass'; flt.Q.value=1.6;
+    flt.frequency.setValueAtTime(2400,t); flt.frequency.exponentialRampToValueAtTime(600,t+0.6);
+    out.disconnect(); out.connect(flt); flt.connect(pan);
+    osc('sawtooth',f,0.2,0.95); osc('square',f,0.08,0.8,8);
+  } else { osc('sine',f,0.5,0.7); osc('sine',f*4,0.14,0.12); osc('triangle',f*2,0.06,0.3); }
+}
+function bonk(){
+  boot(); const t=ctx.currentTime;
+  const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(80,t+0.2);
+  const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.35,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.28);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.3);
+}
+function flourish(seat){
+  boot(); const t=ctx.currentTime;
+  [0,2,4].forEach((d,i)=>tone(seat, midiOf(seat,d)+12, 0.55, t+i*0.07));
+}
+
+/* ---------- lights ---------- */
+function flash(seat,deg,ms=180){
+  const p = padEls[seat][deg]; p.classList.add('on');
+  clearTimeout(p._t); p._t = setTimeout(()=>p.classList.remove('on'), ms);
+}
+function nope(seat){
+  const el = seatEls[seat]; el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope');
+}
+
+/* ---------- game state ---------- */
+const sitting = [false,false,false,false];
+let mode = 'jam';          // jam | lead | echo | wait | done
+let order = [], cycle = 0, leadIdx = 0, leader = -1, phraseLen = 3, phrase = [];
+let echoQueue = [], echoer = -1, pos = 0, tries = 0, cycles = 3;
+let petals = [0,0,0,0], log = [], t0 = 0, timers = [];
+const later = (fn,ms) => { const id=setTimeout(fn,ms); timers.push(id); return id; };
+const clearTimers = () => { timers.forEach(clearTimeout); timers=[]; };
+
+function say(seat, text){ seatEls[seat].querySelector('.seat-say').textContent = text; }
+function setPetals(){ SEATS.forEach((s,si)=>seatEls[si].querySelector('.seat-petals b').textContent = petals[si]); }
+function seatClasses(){
+  SEATS.forEach((s,si)=>{
+    const el = seatEls[si];
+    el.classList.toggle('sitting', sitting[si]);
+    el.classList.toggle('empty', !sitting[si]);
+    const turn = (mode==='lead' && si===leader) || (mode==='echo' && si===echoer);
+    el.classList.toggle('turn', turn);
+    el.classList.toggle('idle', (mode==='lead'||mode==='echo'||mode==='wait') && sitting[si] && !turn);
+  });
+}
+function updateLobby(){
+  const n = sitting.filter(Boolean).length;
+  startBtn.disabled = n < 2;
+  if(mode!=='jam') return;
+  SEATS.forEach((s,si)=>say(si, sitting[si] ? 'seated · play freely' : SIT));
+  if(n===0){ promptEl.innerHTML = `Four seats. <em>${TOUCH ? 'Tap a pad' : 'Press a key'} in yours to sit down.</em>`; }
+  else if(n===1){ promptEl.innerHTML = `${SEATS[sitting.indexOf(true)].name} is here. <em>Who else is playing?</em>`; }
+  else { promptEl.innerHTML = `${n} at the table. <em>${TOUCH ? 'Tap Start' : 'Press Enter'} to begin.</em>`; }
+  seatClasses();
+}
+function renderTrack(len, fills, ring){
+  track.innerHTML = '';
+  for(let i=0;i<len;i++){
+    const s = document.createElement('span'); s.className = 'slot';
+    s.style.setProperty('--ring', ring || 'var(--key-edge)');
+    if(fills[i] != null){ s.classList.add('fill'); s.style.setProperty('--fill', DEG_COLORS[fills[i]]); }
+    track.appendChild(s);
+  }
+}
+function lockControls(on){ [scaleSel,rootSel,roundsSel].forEach(el=>el.disabled=on); }
+
+function start(){
+  order = sitting.map((v,i)=>v?i:-1).filter(i=>i>=0);
+  if(order.length < 2) return;
+  boot(); clearTimers(); stopPlayback();
+  cycles = +roundsSel.value; cycle = 0; leadIdx = 0; petals = [0,0,0,0]; log = []; t0 = performance.now();
+  garden.innerHTML = ''; results.hidden = true; playbackBtn.hidden = true;
+  startBtn.hidden = true; clearBtn.hidden = true; jamBtn.hidden = false;
+  sub.textContent = 'The caller makes up a phrase on their five keys. Everyone else echoes it on theirs — same spots, their own voice.';
+  lockControls(true); setPetals(); beginLead();
+}
+function beginLead(){
+  mode = 'lead'; leader = order[leadIdx]; phraseLen = Math.min(3 + cycle, 7); phrase = [];
+  againBtn.hidden = true;
+  promptEl.innerHTML = `<span style="color:${SEATS[leader].color}">${SEATS[leader].name}</span>, play <em>${phraseLen} notes</em>.`;
+  order.forEach(si=>say(si, si===leader ? `your call · ${phraseLen} notes, any order` : 'listen and watch'));
+  renderTrack(phraseLen, [], SEATS[leader].color); seatClasses();
+}
+function beginEchoes(){
+  const i = order.indexOf(leader);
+  echoQueue = order.slice(i+1).concat(order.slice(0,i));
+  nextEcho();
+}
+function nextEcho(){
+  hintOff();
+  if(!echoQueue.length){ return nextLeader(); }
+  echoer = echoQueue.shift(); pos = 0; tries = 0; mode = 'echo';
+  againBtn.hidden = false;
+  promptEl.innerHTML = `<span style="color:${SEATS[echoer].color}">${SEATS[echoer].name}</span>, <em>echo it.</em>`;
+  order.forEach(si=>say(si, si===echoer ? 'your echo · same spots on your keys' : si===leader ? 'your phrase is out there' : 'wait your turn'));
+  renderTrack(phraseLen, [], SEATS[echoer].color); seatClasses();
+}
+function nextLeader(){
+  leadIdx++;
+  if(leadIdx >= order.length){ leadIdx = 0; cycle++; }
+  if(cycle >= cycles) return finish();
+  mode = 'wait'; seatClasses();
+  promptEl.innerHTML = cycle>0 && leadIdx===0 ? `Round ${cycle+1}. <em>Phrases get longer.</em>` : '<em>Next caller…</em>';
+  later(beginLead, 1100);
+}
+function echoed(){
+  const got = tries===0 ? 2 : 1;
+  petals[echoer] += got; petals[leader] += 1; setPetals();
+  for(let i=0;i<got;i++) later(()=>bloom(echoer), i*140);
+  later(()=>bloom(leader), got*140);
+  flourish(echoer);
+  mode = 'wait'; seatClasses();
+  promptEl.innerHTML = tries===0 ? `<em>Clean echo!</em> +2 for ${SEATS[echoer].name}, +1 for ${SEATS[leader].name}.` : `<em>Got it.</em> +1 each.`;
+  say(echoer, tries===0 ? 'clean echo · +2' : 'got it · +1');
+  later(nextEcho, 1300);
+}
+function missed(){
+  bonk(); tries++; mode = 'wait'; seatClasses();
+  if(tries >= 2){
+    promptEl.innerHTML = `<em>So close.</em> Passing it on.`;
+    say(echoer, 'so close · next time');
+    renderTrack(phraseLen, phrase, SEATS[echoer].color);
+    later(nextEcho, 1700);
+  } else {
+    promptEl.innerHTML = `<em>Almost.</em> Listen once more, ${SEATS[echoer].name}.`;
+    later(()=>replayPhrase(true, ()=>{ if(mode!=='wait') return; mode='echo'; pos=0; seatClasses(); renderTrack(phraseLen, [], SEATS[echoer].color); promptEl.innerHTML = `<span style="color:${SEATS[echoer].color}">${SEATS[echoer].name}</span>, <em>one more try.</em>`; }), 450);
+  }
+}
+let hinting = [];
+function hintOff(){ hinting.forEach(p=>p.classList.remove('hint')); hinting = []; }
+function replayPhrase(showHint, done){
+  const step = 430;
+  phrase.forEach((d,i)=>later(()=>{
+    tone(leader, midiOf(leader,d), 0.8); flash(leader,d,260);
+    if(showHint && echoer>=0){ const p = padEls[echoer][d]; p.classList.add('hint'); hinting.push(p); later(()=>p.classList.remove('hint'), 320); }
+  }, i*step));
+  if(done) later(done, phrase.length*step + 150);
+}
+function finish(){
+  mode = 'done'; leader = -1; echoer = -1; seatClasses(); lockControls(false);
+  const total = petals.reduce((a,b)=>a+b,0);
+  promptEl.innerHTML = `The table grew <em>${total} petals.</em>`;
+  sub.textContent = 'Everyone can jam again. Enter plays another game with the same seats.';
+  track.innerHTML = '';
+  const best = Math.max(...order.map(si=>petals[si]));
+  results.innerHTML = order.map(si=>`<span style="color:${SEATS[si].color}"><b>${petals[si]}</b>${SEATS[si].name}${petals[si]===best?' ✿':''}</span>`).join('');
+  results.hidden = false; againBtn.hidden = true; jamBtn.hidden = true;
+  startBtn.hidden = false; startBtn.textContent = 'Play again (Enter)'; clearBtn.hidden = false;
+  playbackBtn.hidden = log.length < 2;
+  order.forEach(si=>say(si, petals[si]===best ? 'most petals ✿' : `${petals[si]} petals`));
+}
+function toJam(){
+  clearTimers(); stopPlayback(); hintOff();
+  mode = 'jam'; leader = -1; echoer = -1; lockControls(false);
+  startBtn.hidden = false; startBtn.textContent = 'Start the round (Enter)'; clearBtn.hidden = false;
+  againBtn.hidden = true; jamBtn.hidden = true; results.hidden = true; playbackBtn.hidden = log.length < 2;
+  sub.innerHTML = 'Coral plays Q W E R T · Gold plays Y U I O P · Sea plays Z X C V B · Violet plays N M , . /<br>Two to four players. Everyone can jam freely until someone presses Enter.';
+  track.innerHTML = ''; updateLobby();
+}
+
+/* ---------- the garden ---------- */
+function bloom(seat){
+  const c = SEATS[seat].color, h = 22 + Math.random()*10, lean = (Math.random()*10-5).toFixed(1);
+  const petalsSvg = [0,72,144,216,288].map(a=>{ const r=a*Math.PI/180; return `<circle cx="${(13+Math.cos(r)*4.6).toFixed(1)}" cy="${(36-h+Math.sin(r)*4.6).toFixed(1)}" r="3.6" fill="${c}"/>`; }).join('');
+  garden.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 26 36" aria-hidden="true"><path d="M13 36 Q ${13+ +lean} ${36-h/2} 13 ${36-h}" stroke="#3f6b58" stroke-width="1.6" fill="none"/>${petalsSvg}<circle cx="13" cy="${36-h}" r="2.4" fill="#fff4d6"/></svg>`);
+  while(garden.children.length > 80) garden.firstElementChild.remove();
+}
+
+/* ---------- playing a key ---------- */
+let hit = function(seat, deg){
+  boot();
+  if(mode==='jam' || mode==='done'){
+    if(mode==='jam' && !sitting[seat]){ sitting[seat] = true; updateLobby(); }
+    tone(seat, midiOf(seat,deg)); flash(seat,deg);
+    return;
+  }
+  if(mode==='lead'){
+    if(seat!==leader){ nope(seat); return; }
+    tone(seat, midiOf(seat,deg)); flash(seat,deg);
+    phrase.push(deg); log.push([performance.now()-t0, seat, deg]);
+    renderTrack(phraseLen, phrase, SEATS[leader].color);
+    if(phrase.length >= phraseLen){
+      mode = 'wait'; seatClasses(); say(leader, 'phrase sent');
+      promptEl.innerHTML = '<em>Got the phrase.</em>';
+      later(beginEchoes, 900);
+    }
+    return;
+  }
+  if(mode==='echo'){
+    if(seat!==echoer){ nope(seat); return; }
+    tone(seat, midiOf(seat,deg)); flash(seat,deg);
+    if(deg===phrase[pos]){
+      log.push([performance.now()-t0, seat, deg]);
+      pos++; renderTrack(phraseLen, phrase.slice(0,pos), SEATS[echoer].color);
+      if(pos >= phraseLen) echoed();
+    } else missed();
+    return;
+  }
+  nope(seat); // 'wait'
+};
+
+/* ---------- whole-game playback ---------- */
+let playTimers = [];
+function stopPlayback(){ playTimers.forEach(clearTimeout); playTimers = []; playbackBtn.textContent = 'Hear the whole game back'; }
+function playback(){
+  if(playTimers.length){ stopPlayback(); return; }
+  boot(); playbackBtn.textContent = 'Stop';
+  let at = 0, prev = log.length ? log[0][0] : 0;
+  log.forEach(([t,seat,deg])=>{
+    at += Math.min(Math.max(t-prev, 140), 520); prev = t;
+    playTimers.push(setTimeout(()=>{ tone(seat, midiOf(seat,deg), 0.75); flash(seat,deg,220); }, at));
+  });
+  playTimers.push(setTimeout(stopPlayback, at+1200));
+}
+
+/* ---------- input ---------- */
+addEventListener('keydown', e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  if(inviteDlg.open) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if(tag==='INPUT' || tag==='TEXTAREA') return;
+  if(tag==='SELECT' && !codeMap.has(e.code)) return;
+  if(e.code==='Enter' || e.code==='NumpadEnter'){
+    e.preventDefault();
+    if((mode==='jam'||mode==='done') && !e.repeat) start();
+    return;
+  }
+  if(e.code==='Space'){
+    e.preventDefault();
+    if(mode==='echo' && !e.repeat){ mode='wait'; seatClasses(); replayPhrase(false, ()=>{ if(mode==='wait'){ mode='echo'; seatClasses(); } }); }
+    return;
+  }
+  if(e.code==='Escape'){ e.preventDefault(); if(mode!=='jam') toJam(); return; }
+  if(!codeMap.has(e.code)) return;
+  e.preventDefault(); if(e.repeat) return;
+  if(document.activeElement && document.activeElement!==document.body) document.activeElement.blur();
+  const [seat,deg] = codeMap.get(e.code); hit(seat,deg);
+});
+table.addEventListener('pointerdown', e=>{
+  const p = e.target.closest('.pad'); if(!p) return;
+  e.preventDefault(); hit(+p.dataset.seat, +p.dataset.deg);
+});
+startBtn.onclick = ()=>{ start(); startBtn.blur(); };
+againBtn.onclick = ()=>{ if(mode==='echo'){ mode='wait'; seatClasses(); replayPhrase(false, ()=>{ if(mode==='wait'){ mode='echo'; seatClasses(); } }); } againBtn.blur(); };
+jamBtn.onclick = ()=>{ toJam(); jamBtn.blur(); };
+playbackBtn.onclick = ()=>{ playback(); playbackBtn.blur(); };
+clearBtn.onclick = ()=>{ sitting.fill(false); updateLobby(); clearBtn.blur(); };
+const setFlat = on => { document.body.classList.toggle('flat',on); flatBtn.setAttribute('aria-pressed',on); try{ localStorage.setItem('kq:flat', on?'1':'0'); }catch(_){} };
+flatBtn.onclick = ()=>{ setFlat(!document.body.classList.contains('flat')); flatBtn.blur(); };
+try{ const f = localStorage.getItem('kq:flat'); if(f==='1') setFlat(true); }catch(_){}
+document.addEventListener('pointerdown', ()=>boot(), {once:true});
+
+/* ---------- invites ---------- */
+const inviteDlg = $('invite'), invSeats = $('invSeats'), invFrom = $('invFrom'), invCard = $('invCard'), invStatus = $('invStatus');
+const invShare = $('invShare');
+const cleanName = v => String(v||'').replace(/[<>]/g,'').replace(/\s+/g,' ').trim().slice(0,24);
+let invSeat = 1;
+const invSeatBtns = SEATS.map((s,si)=>{
+  const b = document.createElement('button'); b.type='button'; b.style.setProperty('--c',s.color);
+  b.innerHTML = `${s.name}<small>${s.caps}</small>`;
+  b.onclick = ()=>{ invSeat = si; refreshInvite(); };
+  invSeats.appendChild(b); return b;
+});
+function inviteUrl(){
+  const u = new URL('/keyboard-quartet', location.origin);
+  u.searchParams.set('seat', invSeat);
+  const from = cleanName(invFrom.value); if(from) u.searchParams.set('from', from);
+  return u.href;
+}
+let cardT;
+function refreshInvite(){
+  invSeatBtns.forEach((b,i)=>b.setAttribute('aria-pressed', i===invSeat));
+  invStatus.textContent = '';
+  clearTimeout(cardT);
+  cardT = setTimeout(()=>{ invCard.hidden = false; invCard.src = `/og/quartet.png?seat=${invSeat}`; }, 60);
+}
+invCard.onerror = ()=>{ invCard.hidden = true; };
+$('inviteBtn').onclick = ()=>{
+  const open = SEATS.findIndex((s,i)=>!sitting[i] && i!==0);
+  invSeat = open >= 0 ? open : 1;
+  try{ invFrom.value = localStorage.getItem('kq:from') || ''; }catch(_){}
+  invShare.hidden = !navigator.share;
+  refreshInvite(); inviteDlg.showModal(); $('inviteBtn').blur();
+};
+invFrom.addEventListener('input', ()=>{ try{ localStorage.setItem('kq:from', cleanName(invFrom.value)); }catch(_){} });
+$('invCopy').onclick = async ()=>{
+  const url = inviteUrl();
+  try{ await navigator.clipboard.writeText(url); invStatus.textContent = 'Copied — paste it anywhere.'; }
+  catch(_){ invStatus.textContent = url; }
+};
+invShare.onclick = async ()=>{
+  const s = SEATS[invSeat];
+  try{ await navigator.share({ title:'Keyboard Quartet', text:`I saved you the ${s.name} seat — your keys are ${s.caps.split('').join(' ')}.`, url: inviteUrl() }); invStatus.textContent = 'Sent.'; }
+  catch(e){ if(e && e.name!=='AbortError') invStatus.textContent = 'Share didn\'t open — copy the link instead.'; }
+};
+$('invClose').onclick = ()=>inviteDlg.close();
+
+/* arriving on an invite */
+const q = new URLSearchParams(location.search);
+const savedSeat = /^[0-3]$/.test(q.get('seat')||'') ? +q.get('seat') : -1;
+if(savedSeat >= 0){
+  const s = SEATS[savedSeat], from = cleanName(q.get('from')) || 'Someone';
+  seatEls[savedSeat].classList.add('saved');
+  const clearSaved = ()=>{ seatEls[savedSeat].classList.remove('saved'); };
+  const origHit = hit;
+  hit = (seat,deg)=>{ if(seat===savedSeat) clearSaved(); origHit(seat,deg); };
+  updateLobby();
+  say(savedSeat, 'saved for you');
+  promptEl.textContent = `${from} saved you the `;
+  const em = document.createElement('em'); em.style.color = s.color; em.textContent = `${s.name} seat.`; promptEl.appendChild(em);
+  sub.textContent = `Your keys are ${s.caps.split('').join(' ')}${TOUCH ? ' — tap one' : ' — press one'} to sit. It's one keyboard for everyone, so pull up a chair next to whoever sent this.`;
+} else {
+  updateLobby();
+}
+})();
+</script>
+</body>
+</html>
