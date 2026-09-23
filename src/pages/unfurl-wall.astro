@@ -1,0 +1,427 @@
+---
+/**
+ * /unfurl-wall — the Unfurl Wall. One giant scroll of every PointCast page's
+ * social card, exactly as a chat app would show it right now.
+ *
+ * Data: /unfurl-wall.json, written after the build by
+ * scripts/unfurl-wall-manifest.mjs from each built page's own og:image. The
+ * browser then applies the same request-time plan the middleware uses
+ * (src/lib/unfurl/plan.mjs): live rooms get their five-minute card, pages
+ * without art get their drawn card in El Segundo's current light, motion
+ * rooms play their loop. The light dial re-lights every drawn card
+ * (?light=golden on /og/page.png and /og/live/*).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'The Unfurl Wall';
+const description = 'Every PointCast link, unfurled: one giant scroll of every social card in town, with live rooms, motion loops, and a dial that re-lights them all.';
+const LIGHTS = [
+  ['', 'Now'], ['dawn', 'Dawn'], ['morning', 'Morning'], ['noon', 'Noon'], ['afternoon', 'Afternoon'],
+  ['golden', 'Golden'], ['blue', 'Blue hour'], ['night', 'Night'], ['marine', 'Fog'],
+];
+const KINDS = [
+  ['all', 'Everything'], ['live', 'Live'], ['motion', 'Moving'], ['drawn', 'Drawn fresh'], ['art', 'Own art'],
+];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/unfurl-wall',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd} hideAds alternates={[{ type: 'application/json', href: '/unfurl-wall.json', title: 'Every PointCast unfurl' }]}>
+  <div class="uw" data-uw>
+    <header class="uw-hero" data-hero>
+      <p class="uw-kicker"><span>CH.FD · THE UNFURL WALL</span><span data-clock>El Segundo</span></p>
+      <h1>Every link in town, unfurled.</h1>
+      <p class="uw-lede">This is what every PointCast page looks like when you paste it into a chat, all in one scroll. Live rooms redraw every five minutes. Pages without their own art get a card drawn in El Segundo's light. A few rooms move.</p>
+      <dl class="uw-stats" data-stats>
+        <div><dt>Unfurls</dt><dd data-stat="all">…</dd></div>
+        <div><dt>Live</dt><dd data-stat="live">…</dd></div>
+        <div><dt>Moving</dt><dd data-stat="motion">…</dd></div>
+        <div><dt>Drawn fresh</dt><dd data-stat="drawn">…</dd></div>
+        <div><dt>Own art</dt><dd data-stat="art">…</dd></div>
+      </dl>
+    </header>
+
+    <div class="uw-bar" data-bar>
+      <div class="uw-row">
+        <label class="uw-search"><span class="uw-sr">Search unfurls</span><input type="search" placeholder="Search 2,000+ cards: drum, paddle, prayer…" data-search autocomplete="off" /></label>
+        <div class="uw-seg" role="group" aria-label="View">
+          <button type="button" data-view="wall" aria-pressed="true">Wall</button>
+          <button type="button" data-view="reel" aria-pressed="false">Reel</button>
+        </div>
+        <button type="button" class="uw-btn" data-shuffle>Shuffle</button>
+      </div>
+      <div class="uw-row uw-chips" role="group" aria-label="Kind">
+        {KINDS.map(([id, label]) => <button type="button" class="uw-chip" data-kind={id} aria-pressed={id === 'all' ? 'true' : 'false'}>{label}</button>)}
+        <span class="uw-gap" aria-hidden="true"></span>
+        <span class="uw-label">Channel</span>
+        <span data-channels class="uw-chips-inner"></span>
+      </div>
+      <div class="uw-row uw-chips" role="group" aria-label="Light">
+        <span class="uw-label">See it at</span>
+        {LIGHTS.map(([id, label]) => <button type="button" class="uw-chip uw-light" data-light={id} aria-pressed={id === '' ? 'true' : 'false'}>{label}</button>)}
+      </div>
+      <div class="uw-progress" aria-live="polite"><span data-progress-bar></span><b data-progress>Loading the wall…</b></div>
+    </div>
+
+    <main class="uw-grid" data-grid data-mode="wall" aria-label="Unfurl cards"></main>
+    <p class="uw-empty" data-empty hidden>No unfurls match. Try fewer words.</p>
+    <div class="uw-sentinel" data-sentinel aria-hidden="true"></div>
+    <p class="uw-foot">Cards are fetched live from pointcast.xyz. Drawn cards come from <code>/og/page.png</code>, live ones from <code>/og/live/…</code>. The list is <a href="/unfurl-wall.json">/unfurl-wall.json</a>, rebuilt with every deploy. The older shrine builder is at <a href="/unfurls">/unfurls</a>.</p>
+    <noscript><p class="uw-foot">The wall needs JavaScript to scroll. The full list is at <a href="/unfurl-wall.json">/unfurl-wall.json</a>.</p></noscript>
+  </div>
+</BlockLayout>
+
+<script>
+  import { planUnfurl } from '../lib/unfurl/plan.mjs';
+  import { lightAt, lightForPeriod } from '../lib/unfurl/light.mjs';
+  import { CHANNEL_COLORS, channelForPath, liveRoomFor, motionFor } from '../lib/unfurl/rooms.mjs';
+  import { isGeneratedCard } from '../lib/unfurl/urls.mjs';
+
+  type Raw = { p: string; t: string; i?: string };
+  type Card = { p: string; t: string; src: string; kind: 'live' | 'motion' | 'drawn' | 'art'; ch: string; video?: string; hay: string };
+
+  const root = document.querySelector<HTMLElement>('[data-uw]');
+  const BATCH = 30;
+
+  function seeded(seed: number) {
+    return () => {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function shuffle<T>(list: T[], rand: () => number): T[] {
+    const a = list.slice();
+    for (let i = a.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rand() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function toCard(raw: Raw): Card {
+    const abs = raw.i ? new URL(raw.i, location.origin).href : '';
+    const plan = planUnfurl({ pathname: raw.p, currentImage: abs, missing: !abs });
+    const src = plan.image || abs;
+    const kind = liveRoomFor(raw.p) ? 'live' : motionFor(raw.p) ? 'motion' : isGeneratedCard(src) ? 'drawn' : 'art';
+    const motion = motionFor(raw.p);
+    return {
+      p: raw.p,
+      t: raw.t,
+      src,
+      kind,
+      ch: channelForPath(raw.p),
+      video: motion ? motion.src : undefined,
+      hay: `${raw.p} ${raw.t}`.toLowerCase(),
+    };
+  }
+
+  if (root) {
+    const grid = root.querySelector<HTMLElement>('[data-grid]')!;
+    const sentinel = root.querySelector<HTMLElement>('[data-sentinel]')!;
+    const empty = root.querySelector<HTMLElement>('[data-empty]')!;
+    const search = root.querySelector<HTMLInputElement>('[data-search]')!;
+    const progress = root.querySelector<HTMLElement>('[data-progress]')!;
+    const progressBar = root.querySelector<HTMLElement>('[data-progress-bar]')!;
+    const hero = root.querySelector<HTMLElement>('[data-hero]')!;
+    const clock = root.querySelector<HTMLElement>('[data-clock]')!;
+
+    const state = { kind: 'all', ch: '', light: '', q: '', mode: 'wall', order: [] as Card[], shown: 0 };
+    let all: Card[] = [];
+    let list: Card[] = [];
+    const seen = new Set<string>();
+
+    // The hero wears the same light as the cards; the clock itself stays honest.
+    function paintSky(period = '') {
+      const now = lightAt();
+      const shown = (period && lightForPeriod(period)) || now;
+      hero.style.setProperty('--uw-sky', shown.sky);
+      hero.style.setProperty('--uw-glow', shown.glow);
+      hero.style.setProperty('--uw-ink', shown.ink);
+      clock.textContent = `${shown.name} · ${now.clock.label} in El Segundo`;
+    }
+
+    function srcFor(card: Card) {
+      if (!state.light || !isGeneratedCard(card.src)) return card.src;
+      const u = new URL(card.src);
+      u.searchParams.set('light', state.light);
+      return u.href;
+    }
+
+    const videoWatch = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const v = e.target as HTMLVideoElement;
+        if (e.isIntersecting) v.play().catch(() => {}); else v.pause();
+      }
+    }, { rootMargin: '200px' });
+
+    const seenWatch = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        seen.add((e.target as HTMLElement).dataset.path!);
+        seenWatch.unobserve(e.target);
+      }
+      updateProgress();
+    }, { threshold: 0.5 });
+
+    function updateProgress() {
+      const total = list.length;
+      const n = list.reduce((sum, c) => sum + (seen.has(c.p) ? 1 : 0), 0);
+      progress.textContent = total
+        ? `${n.toLocaleString()} of ${total.toLocaleString()} unfurls scrolled past${n === total ? '. That’s the whole town.' : ''}`
+        : '';
+      progressBar.style.width = total ? `${(n / total) * 100}%` : '0';
+    }
+
+    function el(tag: string, cls: string, text?: string) {
+      const node = document.createElement(tag);
+      node.className = cls;
+      if (text) node.textContent = text;
+      return node;
+    }
+
+    const BADGE: Record<Card['kind'], string> = { live: 'LIVE', motion: 'MOVING', drawn: 'DRAWN', art: 'OWN ART' };
+
+    function render(card: Card) {
+      const a = document.createElement('a');
+      a.className = `uw-card uw-${card.kind}`;
+      a.href = card.p;
+      a.dataset.path = card.p;
+      a.style.setProperty('--uw-ch', CHANNEL_COLORS[card.ch]?.c600 ?? '#185FA5');
+      const frame = el('div', 'uw-frame');
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.width = 1200;
+      img.height = 630;
+      img.alt = `Unfurl card for ${card.t}`;
+      img.src = srcFor(card);
+      img.dataset.card = '1';
+      img.addEventListener('error', () => { a.classList.add('uw-broken'); frame.dataset.broken = 'No card came back'; }, { once: true });
+      frame.append(img);
+      if (card.video) {
+        const v = document.createElement('video');
+        v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'none';
+        v.setAttribute('aria-label', `Motion loop for ${card.t}`);
+        v.src = card.video;
+        v.poster = img.src;
+        v.className = 'uw-video';
+        frame.append(v);
+        videoWatch.observe(v);
+      }
+      const cap = el('div', 'uw-cap');
+      cap.append(el('span', `uw-badge uw-badge-${card.kind}`, BADGE[card.kind]));
+      if (card.video && card.kind !== 'motion') cap.append(el('span', 'uw-badge uw-badge-motion', 'MOVING'));
+      cap.append(el('span', 'uw-path', card.p), el('span', 'uw-title', card.t));
+      a.append(frame, cap);
+      seenWatch.observe(a);
+      return a;
+    }
+
+    function more() {
+      const next = list.slice(state.shown, state.shown + BATCH);
+      if (!next.length) return;
+      const frag = document.createDocumentFragment();
+      next.forEach((c) => frag.append(render(c)));
+      grid.append(frag);
+      state.shown += next.length;
+    }
+
+    function apply() {
+      const words = state.q.toLowerCase().split(/\s+/).filter(Boolean);
+      list = state.order.filter((c) =>
+        (state.kind === 'all' || c.kind === state.kind || (state.kind === 'motion' && c.video))
+        && (!state.ch || c.ch === state.ch)
+        && words.every((w) => c.hay.includes(w)));
+      grid.replaceChildren();
+      state.shown = 0;
+      empty.hidden = list.length > 0;
+      more();
+      updateProgress();
+    }
+
+    function order(rand: () => number) {
+      // Live and moving rooms lead; everything else is dealt like a deck.
+      const lead = all.filter((c) => c.kind === 'live' || c.kind === 'motion');
+      const rest = all.filter((c) => c.kind !== 'live' && c.kind !== 'motion');
+      state.order = [...lead, ...shuffle(rest, rand)];
+    }
+
+    new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) more();
+    }, { rootMargin: '1600px' }).observe(sentinel);
+
+    function press(selector: string, attr: string, value: string) {
+      root!.querySelectorAll<HTMLButtonElement>(selector).forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute(attr) === value)));
+    }
+
+    root.querySelectorAll<HTMLButtonElement>('[data-kind]').forEach((b) => b.addEventListener('click', () => {
+      state.kind = b.dataset.kind!;
+      press('[data-kind]', 'data-kind', state.kind);
+      apply();
+    }));
+    root.querySelectorAll<HTMLButtonElement>('[data-light]').forEach((b) => b.addEventListener('click', () => {
+      state.light = b.dataset.light ?? '';
+      press('[data-light]', 'data-light', state.light);
+      paintSky(state.light);
+      grid.querySelectorAll<HTMLImageElement>('img[data-card]').forEach((img) => {
+        const card = all.find((c) => c.p === (img.closest('[data-path]') as HTMLElement).dataset.path);
+        if (card) img.src = srcFor(card);
+      });
+    }));
+    root.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => b.addEventListener('click', () => {
+      state.mode = b.dataset.view!;
+      grid.dataset.mode = state.mode;
+      press('[data-view]', 'data-view', state.mode);
+    }));
+    root.querySelector('[data-shuffle]')!.addEventListener('click', () => {
+      order(seeded(Math.floor(Math.random() * 2 ** 31)));
+      apply();
+      grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    let typing = 0;
+    search.addEventListener('input', () => {
+      clearTimeout(typing);
+      typing = window.setTimeout(() => { state.q = search.value.trim(); apply(); }, 160);
+    });
+
+    // Live cards roll to a new five-minute bucket while the page is open.
+    setInterval(() => {
+      grid.querySelectorAll<HTMLAnchorElement>('.uw-live').forEach((a) => {
+        const card = all.find((c) => c.p === a.dataset.path);
+        const img = a.querySelector<HTMLImageElement>('img[data-card]');
+        if (!card || !img) return;
+        card.src = planUnfurl({ pathname: card.p, currentImage: card.src }).image || card.src;
+        img.src = srcFor(card);
+      });
+      paintSky(state.light);
+    }, 5 * 60_000);
+
+    paintSky();
+    fetch('/unfurl-wall.json')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((data: { cards: Raw[] }) => {
+        all = data.cards.map(toCard);
+        // A live room that also moves counts in both.
+        const count = (k: string) => all.filter((c) => c.kind === k || (k === 'motion' && c.video)).length.toLocaleString();
+        root.querySelector('[data-stat="all"]')!.textContent = all.length.toLocaleString();
+        (['live', 'motion', 'drawn', 'art'] as const).forEach((k) => { root.querySelector(`[data-stat="${k}"]`)!.textContent = count(k); });
+        search.placeholder = `Search ${all.length.toLocaleString()} cards: drum, paddle, prayer…`;
+
+        const channels = root.querySelector('[data-channels]')!;
+        const present = new Set(all.map((c) => c.ch));
+        const mk = (code: string, label: string) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'uw-chip uw-ch';
+          b.dataset.ch = code;
+          b.setAttribute('aria-pressed', String(code === ''));
+          if (code) b.style.setProperty('--uw-ch', CHANNEL_COLORS[code].c600);
+          b.textContent = label;
+          b.addEventListener('click', () => {
+            state.ch = state.ch === code ? '' : code;
+            press('[data-ch]', 'data-ch', state.ch);
+            apply();
+          });
+          return b;
+        };
+        channels.append(mk('', 'All'), ...Object.entries(CHANNEL_COLORS).filter(([code]) => present.has(code)).map(([code, c]) => mk(code, c.name)));
+
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+        order(seeded([...today].reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261)));
+        apply();
+      })
+      .catch(() => {
+        progress.textContent = 'The wall’s list is missing from this build. It is written by scripts/unfurl-wall-manifest.mjs after npm run build.';
+      });
+  }
+</script>
+
+<style is:global>
+  .uw { max-width: 1440px; margin: 0 auto; padding: 0 16px 64px; }
+  .uw-hero {
+    --uw-sky: #BFD9EA; --uw-glow: #F4F1E6; --uw-ink: #12110E;
+    margin: 16px 0 0; padding: 28px 28px 24px;
+    background: linear-gradient(180deg, var(--uw-sky), var(--uw-glow));
+    color: var(--uw-ink); border: 3px solid #12110E; box-shadow: 10px 10px 0 #185FA5;
+    transition: background 0.6s ease, color 0.6s ease;
+  }
+  .uw-kicker { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 0 0 12px; font: 700 13px/1.4 var(--pc-font-mono); letter-spacing: 0.18em; text-transform: uppercase; }
+  .uw-hero h1 { margin: 0; font: 800 clamp(40px, 7vw, 96px)/0.95 var(--pc-font-sans); letter-spacing: -0.04em; }
+  .uw-lede { max-width: 62ch; margin: 16px 0 20px; font: 400 clamp(16px, 1.6vw, 20px)/1.45 var(--pc-font-sans); }
+  .uw-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0; }
+  .uw-stats div { background: #fff; color: #12110E; border: 2px solid #12110E; padding: 10px 12px; }
+  .uw-stats dt { font: 700 11px/1 var(--pc-font-mono); letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A; }
+  .uw-stats dd { margin: 6px 0 0; font: 800 28px/1 var(--pc-font-sans); letter-spacing: -0.02em; }
+
+  .uw-bar { position: sticky; top: 0; z-index: 20; margin: 22px 0 18px; padding: 12px 0 10px; background: rgba(255,255,255,0.96); border-bottom: 2px solid #12110E; backdrop-filter: blur(6px); }
+  .uw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .uw-search { flex: 1 1 260px; }
+  .uw-search input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 2px solid #12110E; border-radius: 0; font: 500 16px/1.2 var(--pc-font-sans); background: #fff; color: #12110E; }
+  .uw-search input:focus { outline: 3px solid #185FA5; outline-offset: 1px; }
+  .uw-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .uw-seg { display: inline-flex; border: 2px solid #12110E; }
+  .uw-seg button, .uw-btn, .uw-chip { font: 700 12px/1 var(--pc-font-mono); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; border-radius: 0; color: #12110E; background: #fff; }
+  .uw-seg button { border: 0; padding: 10px 14px; }
+  .uw-seg button + button { border-left: 2px solid #12110E; }
+  .uw-seg button[aria-pressed="true"], .uw-chip[aria-pressed="true"] { background: #12110E; color: #fff; }
+  .uw-btn { border: 2px solid #12110E; padding: 10px 14px; box-shadow: 3px 3px 0 #BA7517; }
+  .uw-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #BA7517; }
+  .uw-chips { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; padding-bottom: 2px; }
+  .uw-chips-inner { display: inline-flex; gap: 6px; }
+  .uw-chip { flex: 0 0 auto; border: 2px solid #12110E; padding: 7px 10px; white-space: nowrap; }
+  .uw-ch { box-shadow: inset 4px 0 0 var(--uw-ch, #12110E); padding-left: 12px; }
+  .uw-ch[aria-pressed="true"] { background: var(--uw-ch, #12110E); }
+  .uw-label { flex: 0 0 auto; font: 700 11px/1 var(--pc-font-mono); letter-spacing: 0.16em; text-transform: uppercase; color: #5F5E5A; }
+  .uw-gap { flex: 0 0 10px; }
+  .uw-progress { position: relative; height: 22px; border: 2px solid #12110E; background: #F3F3F1; overflow: hidden; }
+  .uw-progress span { position: absolute; inset: 0 auto 0 0; width: 0; background: #185FA5; transition: width 0.3s ease; }
+  .uw-progress b { position: relative; display: block; padding: 3px 8px; font: 700 11px/14px var(--pc-font-mono); letter-spacing: 0.08em; color: #12110E; mix-blend-mode: normal; text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
+
+  .uw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 22px; }
+  .uw-grid[data-mode="reel"] { grid-template-columns: 1fr; max-width: 1200px; margin: 0 auto; gap: 40px; }
+  .uw-card { display: block; color: #12110E !important; text-decoration: none; border: 2px solid #12110E; background: #fff; box-shadow: 6px 6px 0 var(--uw-ch); transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  .uw-card:hover, .uw-card:focus-visible { transform: translate(-3px, -3px); box-shadow: 9px 9px 0 var(--uw-ch); outline: none; }
+  .uw-frame { position: relative; aspect-ratio: 1200 / 630; background: repeating-linear-gradient(45deg, #F3F3F1 0 10px, #fff 10px 20px); overflow: hidden; }
+  .uw-frame img, .uw-frame .uw-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .uw-frame .uw-video { transition: opacity 0.25s ease; }
+  /* Hover a moving room to see its live still underneath the loop. */
+  .uw-card:hover .uw-video, .uw-card:focus-visible .uw-video { opacity: 0; }
+  .uw-broken .uw-frame img { opacity: 0; }
+  .uw-broken .uw-frame::after { content: attr(data-broken); position: absolute; inset: auto 0 0 0; padding: 8px; font: 700 11px/1 var(--pc-font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: #5F5E5A; }
+  .uw-cap { display: flex; align-items: baseline; gap: 8px; padding: 9px 11px 10px; border-top: 2px solid #12110E; min-width: 0; }
+  .uw-badge { flex: 0 0 auto; padding: 3px 6px; font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.12em; border: 1.5px solid #12110E; }
+  .uw-badge-live { background: #C8102E; color: #fff; border-color: #C8102E; }
+  .uw-badge-motion { background: #BA7517; color: #fff; border-color: #BA7517; }
+  .uw-badge-drawn { background: #EEF4FA; }
+  .uw-badge-art { background: #fff; }
+  .uw-path { flex: 0 1 auto; font: 700 12px/1.3 var(--pc-font-mono); color: var(--uw-ch); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+  .uw-title { flex: 1 1 auto; font: 500 14px/1.3 var(--pc-font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .uw-grid[data-mode="reel"] .uw-title { font-size: 18px; }
+  .uw-live .uw-badge-live::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: #fff; vertical-align: 1px; animation: uw-blink 1.2s steps(2) infinite; }
+  @keyframes uw-blink { 50% { opacity: 0; } }
+  .uw-empty { margin: 40px 0; font: 700 14px/1.4 var(--pc-font-mono); text-align: center; color: #5F5E5A; }
+  .uw-sentinel { height: 1px; }
+  .uw-foot { max-width: 70ch; margin: 40px auto 0; font: 400 14px/1.5 var(--pc-font-sans); color: #5F5E5A; text-align: center; }
+  .uw-foot code { font-family: var(--pc-font-mono); font-size: 12px; }
+  /* On small or short screens the controls scroll away instead of covering the wall. */
+  @media (max-width: 760px), (max-height: 760px) {
+    .uw-bar { position: static; }
+  }
+  @media (max-width: 640px) {
+    .uw-hero { padding: 20px 18px; box-shadow: 6px 6px 0 #185FA5; }
+    .uw-grid { gap: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .uw-card, .uw-hero, .uw-progress span { transition: none; }
+    .uw-live .uw-badge-live::before { animation: none; }
+  }
+</style>

@@ -159,3 +159,42 @@ test('a full build keeps committed block cards instead of redrawing them', async
   assert.match(generator, /git', \['ls-files'/);
   assert.match(generator, /if \(tracked\.has\(out\)\) \{ kept\+\+; continue; \}/);
 });
+
+test('the Unfurl Wall manifest reads each built page’s own card and skips hidden pages', async () => {
+  const { mkdtemp, mkdir, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const path = (await import('node:path')).default;
+  const { buildManifest } = await import('../scripts/unfurl-wall-manifest.mjs');
+  const dist = await mkdtemp(path.join(tmpdir(), 'pc-wall-'));
+  const page = async (dir, head) => {
+    await mkdir(path.join(dist, dir), { recursive: true });
+    await writeFile(path.join(dist, dir, 'index.html'), `<html><head>${head}</head><body></body></html>`);
+  };
+  await page('tug', '<meta property="og:title" content="The Tug — PointCast"><meta property="og:image" content="https://pointcast.xyz/images/og/og-home-v5.png?v=1">');
+  await page('solar', '<title>Small Solar &amp; You · PointCast</title><meta property="og:image" content="https://pointcast.xyz/images/og/b/0602.png">');
+  await page('secret', '<meta name="robots" content="noindex, nofollow"><title>Secret</title>');
+  await page('old', '<meta http-equiv="refresh" content="0; url=/new"><title>Old</title>');
+  await page('unfurl-wall', '<title>The Unfurl Wall</title>');
+  const manifest = await buildManifest(dist);
+  assert.deepEqual(manifest.cards, [
+    { p: '/solar', t: 'Small Solar & You', i: '/images/og/b/0602.png' },
+    { p: '/tug', t: 'The Tug', i: '/images/og/og-home-v5.png?v=1' },
+  ]);
+});
+
+test('the light dial names periods, and only real unfurlers are counted', async () => {
+  const { lightForPeriod } = await import('../src/lib/unfurl/light.mjs');
+  assert.equal(lightForPeriod('golden').id, 'golden');
+  assert.equal(lightForPeriod('marine').id, 'marine');
+  assert.equal(lightForPeriod('"><x'), null);
+  const [page, live, wall, pkg] = await Promise.all([
+    read('functions/og/page.png.ts'), read('functions/og/live/[room].ts'), read('src/pages/unfurl-wall.astro'), read('package.json'),
+  ]);
+  for (const route of [page, live]) {
+    assert.match(route, /client \? bumpUnfurlCounter\(env\) : Promise\.resolve\(0\)/);
+    assert.match(route, /&l=\$\{forced \|\| 'now'\}/);
+  }
+  assert.match(wall, /fetch\('\/unfurl-wall\.json'\)/);
+  assert.match(wall, /planUnfurl\(/);
+  assert.match(JSON.parse(pkg).scripts.build, /astro\.mjs build && node scripts\/unfurl-wall-manifest\.mjs$/);
+});

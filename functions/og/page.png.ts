@@ -8,7 +8,7 @@
  * The card wears El Segundo's current light, a Noun picked from the path,
  * a quip that rotates with the light, and a hello to whichever app asked.
  */
-import { lightAt, lightBucket } from '../../src/lib/unfurl/light.mjs';
+import { lightAt, lightBucket, lightForPeriod } from '../../src/lib/unfurl/light.mjs';
 import { cardPath, nounForPath, channelForPath } from '../../src/lib/unfurl/rooms.mjs';
 import { unfurlClient } from '../../src/lib/unfurl/client.mjs';
 import { validBucket } from '../../src/lib/unfurl/urls.mjs';
@@ -42,7 +42,7 @@ function decodeEntities(s: string): string {
     .replace(/&amp;/g, '&');
 }
 
-async function build(request: Request, env: Env, path: string, bucket: string, client: string): Promise<Response> {
+async function build(request: Request, env: Env, path: string, bucket: string, client: string, forced: string): Promise<Response> {
   const origin = new URL(request.url).origin;
   const page = await fetchSoft(new URL(path, origin), { headers: { accept: 'text/html', 'x-pointcast-card-probe': '1' } }, 3000);
   if (!page || !(page.headers.get('content-type') ?? '').startsWith('text/html')) return fallback(request, 'page');
@@ -54,18 +54,19 @@ async function build(request: Request, env: Env, path: string, bucket: string, c
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', hourCycle: 'h23' }).format(now));
   // The marine layer only matters in the morning; skip the weather call otherwise.
   const [weather, nounHref, serial] = await Promise.all([
-    hour >= 5 && hour < 13
+    !forced && hour >= 5 && hour < 13
       ? jsonSoft<{ condition?: string }>(`${origin}/api/weather?lat=33.9192&lng=-118.4165&label=El%20Segundo`, 1500)
       : Promise.resolve(null),
     imageDataUri(`https://noun.pics/${nounForPath(path)}.svg`, 2000),
-    bumpUnfurlCounter(env),
+    // Only real unfurlers count; a browser scrolling /unfurl-wall is not an unfurl.
+    client ? bumpUnfurlCounter(env) : Promise.resolve(0),
   ]);
 
   const svg = pageCard({
     path,
     title,
     description,
-    light: lightAt(now, weather?.condition ?? ''),
+    light: lightForPeriod(forced) ?? lightAt(now, weather?.condition ?? ''),
     nounHref,
     bucket,
     client,
@@ -81,9 +82,11 @@ async function handle({ request, env, waitUntil }: { request: Request; env: Env;
   if (!path || path.startsWith('/og/') || path.startsWith('/api/')) return fallback(request, 'path');
   const bucket = validBucket(url.searchParams.get('b') ?? '') || lightBucket();
   const client = unfurlClient(request.headers.get('user-agent') ?? '');
-  const key = `https://pointcast.xyz/og/page.png?p=${encodeURIComponent(path)}&b=${bucket}&c=${client || 'none'}`;
+  // ?light=golden re-lights the card (the /unfurl-wall dial); unknown values are ignored.
+  const forced = lightForPeriod(url.searchParams.get('light') ?? '') ? url.searchParams.get('light')! : '';
+  const key = `https://pointcast.xyz/og/page.png?p=${encodeURIComponent(path)}&b=${bucket}&c=${client || 'none'}&l=${forced || 'now'}`;
   try {
-    return await cached(request, key, waitUntil, () => build(request, env, path, bucket, client));
+    return await cached(request, key, waitUntil, () => build(request, env, path, bucket, client, forced));
   } catch {
     return fallback(request, 'render');
   }
