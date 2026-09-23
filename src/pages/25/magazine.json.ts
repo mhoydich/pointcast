@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { POINTCAST_25 } from '../../lib/pointcast-25';
 import {
   COLLEGE_FOOTBALL_MAGAZINE,
   COLLEGE_FOOTBALL_RESEARCH_SOURCES,
@@ -52,6 +53,7 @@ import {
 } from '../../lib/pointcast-division-one-directory';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
+      currentBoard: { board: POINTCAST_25.board, asOf: POINTCAST_25.asOf, resultsThrough: POINTCAST_25.resultsThrough, url: 'https://pointcast.xyz/25' },
   ...COLLEGE_FOOTBALL_MAGAZINE,
   counts: {
     departments: COLLEGE_FOOTBALL_MAGAZINE.departments.length,

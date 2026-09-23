@@ -22,8 +22,8 @@ export const GET: APIRoute = () =>
           disagreementIndexJson: 'https://pointcast.xyz/25/disagreements.json',
           receiptBook: 'https://pointcast.xyz/25/receipts',
           receiptBookJson: 'https://pointcast.xyz/25/receipts.json',
-          immutableBoard: 'https://pointcast.xyz/25/boards/000',
-          immutableBoardJson: 'https://pointcast.xyz/25/boards/000.json',
+          immutableBoard: 'https://pointcast.xyz/25/boards/001',
+          immutableBoardJson: 'https://pointcast.xyz/25/boards/001.json',
           fieldFiles: [
             {
               title: 'The State of Alabama / The State of Nick Saban',

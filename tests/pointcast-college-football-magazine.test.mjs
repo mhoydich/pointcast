@@ -13,7 +13,7 @@ function pngSize(buffer) {
   };
 }
 
-test('Issue 001 defines a nine-desk college-football magazine', async () => {
+test('Issue 002 defines a nine-desk college-football magazine', async () => {
   const data = await read('src/lib/pointcast-college-football-magazine.ts');
   const page = await read('src/pages/25/magazine/index.astro');
 
@@ -31,7 +31,7 @@ test('Issue 001 defines a nine-desk college-football magazine', async () => {
     assert.match(data, new RegExp(`name: '${desk}'`));
   }
 
-  assert.match(data, /issue: '001'/);
+  assert.match(data, /issue: '002'/);
   assert.match(data, /The ranking is one department/);
   assert.match(page, /COLLEGE_FOOTBALL_MAGAZINE\.departments\.length/);
   assert.match(page, /THE HOUSE/);

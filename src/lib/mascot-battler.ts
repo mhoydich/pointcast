@@ -1,5 +1,8 @@
-import { POINTCAST_25, type PointCast25Team } from './pointcast-25';
-import { POINTCAST_25_TEAMS } from './pointcast-25-audience';
+import POINTCAST_25 from './pointcast-25-board-000.frozen.json';
+import type { PointCast25Team } from './pointcast-25';
+import { pointcast25TeamSlug } from './pointcast-25-audience';
+// The game roster and 2029 identity studies retain their original Board 000 seeds.
+const POINTCAST_25_TEAMS = POINTCAST_25.teams.map(team => ({...team, slug: pointcast25TeamSlug(team.school)}));
 
 export type MascotClass =
   | 'flora'

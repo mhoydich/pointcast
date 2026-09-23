@@ -1,40 +1,40 @@
+import openingBoard from './pointcast-25-board-000.frozen.json';
 import { POINTCAST_25 } from './pointcast-25';
 
 export const POINTCAST_25_REFERENCE = {
-  name: 'ESPN preseason FPI Top 25',
-  shortName: 'ESPN FPI',
-  publishedAt: '2026-07-09',
-  checkedAt: '2026-07-27',
-  url: 'https://www.si.com/fannation/college/cfb-hq/rankings/college-football-rankings-espn-top-25-preseason-poll-2026',
-  note:
-    'ESPN Football Power Index order as reported by College Football HQ on SI. FPI is a predictive model, not an opinion poll; PointCast uses it here as one legible reference board, not as a universal consensus.',
-  rankings: [
-    'Ohio State',
-    'Texas',
-    'Notre Dame',
-    'Oregon',
-    'Georgia',
-    'Indiana',
-    'Miami',
-    'Alabama',
-    'LSU',
-    'Texas Tech',
-    'Texas A&M',
-    'Oklahoma',
-    'USC',
-    'Ole Miss',
-    'Michigan',
-    'Tennessee',
-    'Penn State',
-    'Florida',
-    'Clemson',
-    'BYU',
-    'Missouri',
-    'Auburn',
-    'South Carolina',
-    'SMU',
-    'Iowa',
-  ],
+  "name": "AP Top 25 \u00b7 September 20, 2026",
+  "shortName": "AP Top 25",
+  "publishedAt": "2026-09-20",
+  "checkedAt": "2026-09-23",
+  "url": "https://www.collegepollarchive.com/football/ap/seasons.cfm?appollid=1271",
+  "note": "The September 20 AP poll, as archived by College Poll Archive and cross-checked against CFB App. An opinion poll, not a predictive model: one legible reference board, not as a universal consensus.",
+  "rankings": [
+    "Texas",
+    "Georgia",
+    "Notre Dame",
+    "Ole Miss",
+    "Indiana",
+    "Miami",
+    "Ohio State",
+    "Alabama",
+    "BYU",
+    "LSU",
+    "Texas Tech",
+    "USC",
+    "Penn State",
+    "Tennessee",
+    "Utah",
+    "Louisville",
+    "Iowa",
+    "Michigan",
+    "Missouri",
+    "Oregon",
+    "Florida",
+    "SMU",
+    "Texas A&M",
+    "Mississippi State",
+    "Houston"
+  ]
 } as const;
 
 export function pointcast25TeamSlug(school: string): string {
@@ -71,29 +71,12 @@ export const POINTCAST_25_TEAMS = POINTCAST_25.teams.map((team) => {
   };
 });
 
-const dissentNotes: Record<string, string> = {
-  'Penn State':
-    'PointCast is buying Matt Campbell’s organizing power before 39 transfers look like one connected team.',
-  BYU:
-    'Consecutive 11-win seasons are evidence. The Cougars have earned more than outsider courtesy.',
-  Utah:
-    'PointCast is betting that years of developmental competence survive the end of the Kyle Whittingham era.',
-  Washington:
-    'The roster and returning structure are stronger than the volume of the national conversation.',
-  'Boise State':
-    'A national board needs an outsider benchmark. Boise is the first test of whether the poll watches beyond the largest brands.',
-};
-
-const dissentSchools = ['Penn State', 'BYU', 'Utah', 'Washington', 'Boise State'] as const;
-
-export const POINTCAST_25_DISSENTS = dissentSchools.map((school) => {
-  const team = POINTCAST_25_TEAMS.find((candidate) => candidate.school === school);
-  if (!team) throw new Error(`Missing PointCast 25 dissent team: ${school}`);
-  return {
-    ...team,
-    dissent: dissentNotes[school],
-  };
-});
+// Select the largest positive differences, with current PointCast rank as tie-breaker.
+export const POINTCAST_25_DISSENTS = POINTCAST_25_TEAMS
+  .filter(team => team.rankDelta !== null && team.rankDelta > 0)
+  .sort((a, b) => b.rankDelta! - a.rankDelta! || a.rank - b.rank)
+  .slice(0, 5)
+  .map(team => ({ ...team, dissent: team.reason }));
 
 export const POINTCAST_25_RECEIPTS = POINTCAST_25_TEAMS.map((team) => ({
   id: `${POINTCAST_25.board}-${team.slug}`,
@@ -110,3 +93,20 @@ export const POINTCAST_25_RECEIPTS = POINTCAST_25_TEAMS.map((team) => ({
 export function getPointcast25Team(slug: string) {
   return POINTCAST_25_TEAMS.find((team) => team.slug === slug);
 }
+
+// Retain old team URLs even when a team drops out of the current 25.
+export const POINTCAST_25_ALL_TEAM_PAGES = [
+  ...POINTCAST_25_TEAMS.map(team => ({...team, isCurrent: true})),
+  ...openingBoard.teams.filter(team => !POINTCAST_25_TEAMS.some(now => now.school === team.school))
+    .map(team => ({...team, slug: pointcast25TeamSlug(team.school), referenceRank: null, rankDelta: null,
+      comparison: 'Outside the current PointCast 25. This is the preserved Board 000 case.',
+      record: null, lastResult: null, movementReason: 'Dropped from the current board; the original case remains below.',
+      isCurrent: false})),
+];
+export const POINTCAST_25_OPENING_RECEIPTS = openingBoard.teams.map(team => ({
+  id: `000-${pointcast25TeamSlug(team.school)}`, board: '000', team: team.school,
+  teamUrl: `https://pointcast.xyz/25/teams/${pointcast25TeamSlug(team.school)}`,
+  rank: team.rank, openedAt: openingBoard.publishedAt, status: 'OPEN',
+  claim: team.reason, nextProof: team.proof,
+  review: 'Original claim retained. Ranking changes are not proof that a specific football claim was proven or disproven.',
+}));

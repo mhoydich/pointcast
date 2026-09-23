@@ -17,6 +17,7 @@ interface DivisionOneProgramSource {
 }
 
 const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+  'Southern Methodist University': 'SMU',
   'Brigham Young University': 'BYU',
   'California Polytechnic State University, San Luis Obispo': 'Cal Poly',
   'Georgia Institute of Technology': 'Georgia Tech',
@@ -180,7 +181,7 @@ export const DIVISION_ONE_DIRECTORY = {
       checkedAt: '2026-08-12',
     },
     {
-      label: 'PointCast 25 · Board 000 methodology and receipts',
+      label: 'PointCast 25 · current board methodology and receipts',
       url: 'https://pointcast.xyz/25',
       checkedAt: '2026-08-12',
     },
