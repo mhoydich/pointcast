@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 export const GET: APIRoute = () => new Response(JSON.stringify({
   title: 'Ghost Town · Skyward',
   url: 'https://pointcast.xyz/ghost-town/',
-  block: 'https://pointcast.xyz/b/0609',
+  block: 'https://pointcast.xyz/b/0610',
   video: {
     title: 'Kanye West - Ghost Town but it will make you ascend to the fourth dimension',
     creator: 'JonJeffJon Edits',

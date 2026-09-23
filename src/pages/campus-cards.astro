@@ -4,8 +4,8 @@ import { CAMPUS_CARDS, CAMPUS_CARDS_CANONICAL, CAMPUS_CARDS_LIVE, CAMPUS_CARD_LI
 
 const sets = CAMPUS_CARDS.sets.map((set) => ({ ...set, cards: CAMPUS_CARD_LIST.filter((c) => c.setId === set.id) }));
 const cards = CAMPUS_CARD_LIST;
-const title = 'Campus Cards · Santa Barbara & Berkeley';
-const description = 'Pixel-art place cards for the University of California campuses, collectible on Tezos. Set 01 is Santa Barbara, Set 02 is Berkeley; eight campuses to go. Unofficial, places only, CC0.';
+const title = 'Campus Cards · all ten UC campuses';
+const description = '120 pixel-art place cards, twelve for each of the ten University of California campuses, collectible on Tezos. Unofficial, places only, CC0.';
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -27,10 +27,14 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
     <header class="mast">
       <div>
         <p class="kicker">Campus Cards · a PointCast set on Tezos</p>
-        <h1>Ten campuses.<br /><em>Two sets in.</em></h1>
+        <h1>Ten campuses.<br /><em>A hundred and twenty places.</em></h1>
       </div>
-      <p>Twelve pixel-art place cards per campus, drawn from the places instead of the logos. Santa Barbara is the bluffs, the lagoon, and the bike tunnel. Berkeley is the campanile, the creek, and the fog coming through the Golden Gate. Every set has six common, three uncommon, two rare, and one legendary. The other eight campuses come one set at a time, on the same contract.</p>
+      <p>Twelve pixel-art place cards for each University of California campus, drawn from the places instead of the logos: the bluffs at Santa Barbara, the fog through the Golden Gate, the double-decker in Davis, the ring at Irvine, Royce's towers, Lake Yosemite, the citrus rows at Riverside, the cliffs at La Jolla, the N Judah up Parnassus, the redwoods at Santa Cruz. Every set has six common, three uncommon, two rare, and one legendary. All of it sits on one Tezos contract.</p>
     </header>
+
+    <nav class="jump" aria-label="Campuses">
+      {sets.map((set) => <a href={`#${set.campus}`} style={`--set:${set.accent}`}><b>{set.id.replace('set-', '')}</b>{CAMPUS_CARDS.campuses.find((c) => c.slug === set.campus)?.name}</a>)}
+    </nav>
 
     <p class="notice"><b>Unofficial.</b> {CAMPUS_CARDS.notice.replace(/^Unofficial\.\s*/, '')}</p>
 
@@ -38,7 +42,7 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
       <section class="set" id={set.campus} aria-labelledby={`${set.id}-title`} style={`--set:${set.accent}`}>
         <div class="set__head">
           <div><p class="kicker">{set.title}</p><h2 id={`${set.id}-title`}>{set.subtitle}</h2></div>
-          <p class="set__status">{CAMPUS_CARDS_LIVE ? 'Minting on Tezos mainnet' : 'Compiled · awaiting origination'}</p>
+          <p class="set__status" data-cc-status>{CAMPUS_CARDS_LIVE ? 'On Tezos mainnet' : 'Compiled · awaiting origination'}</p>
         </div>
         <ol class="grid">
           {set.cards.map((c) => (
@@ -69,7 +73,7 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
 
     <section class="campuses" aria-labelledby="campuses-title">
       <p class="kicker">The ten</p>
-      <h2 id="campuses-title">One set per campus, <em>in the order we can get them right.</em></h2>
+      <h2 id="campuses-title">One set per campus, <em>all ten.</em></h2>
       <ol>
         {CAMPUS_CARDS.campuses.map((c, i) => (
           <li class={c.status === 'queued' ? 'queued' : 'live'}>{c.status !== 'queued' && <a class="campuses__link" href={`#${c.slug}`} aria-label={`Jump to ${c.name}`}></a>}
@@ -85,14 +89,31 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
       <p class="kicker">How it works</p>
       <h2 id="how-title">One contract, <em>every campus.</em></h2>
       <ul>
-        <li>Each card is an FA2 token on Tezos mainnet. Token ids run in set order: Santa Barbara is 0 through 11, Berkeley is 12 through 23.</li>
+        <li>Each card is an FA2 token on Tezos mainnet. Token ids run in set order, twelve per campus: Santa Barbara is 0 through 11, Berkeley 12 through 23, and so on to Santa Cruz at 108 through 119.</li>
         <li>Mint takes a card id and a quantity, up to ten at a time, at the card's price. Caps are enforced on chain.</li>
-        <li>New campus sets are added to the same contract and start closed until their cards are ready.</li>
+        <li>Every card is registered when the contract is created. Anything added later, like a second season, comes in closed until it is ready.</li>
         <li>The art is original pixel painting generated from one data file, animated SVG with a PNG twin, released CC0.</li>
       </ul>
     </section>
   </main>
 </BlockLayout>
+
+<script>
+  // Status pills follow the console-owned state, so origination shows up without a redeploy.
+  async function campusStatus(): Promise<void> {
+    const pills = document.querySelectorAll<HTMLElement>('[data-cc-status]');
+    if (!pills.length) return;
+    try {
+      const state = await fetch('/api/campus-cards/state').then((r) => (r.ok ? r.json() : null));
+      if (!state?.contract) return;
+      const storage = await fetch(`https://api.tzkt.io/v1/contracts/${state.contract}/storage`).then((r) => (r.ok ? r.json() : null));
+      const text = storage && !storage.paused ? 'Minting on Tezos mainnet' : 'On chain · opening soon';
+      pills.forEach((pill) => { pill.textContent = text; });
+    } catch {}
+  }
+  void campusStatus();
+  document.addEventListener('astro:page-load', () => { void campusStatus(); });
+</script>
 
 <style>
   .cc { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 22px 0 90px; --cc: #0f61ff; }
@@ -106,6 +127,12 @@ const rarities = Object.entries(CAMPUS_CARDS.rarities).map(([key, r]) => ({ key,
   h1 em, h2 em { color: var(--cc); font-style: normal; }
   .mast { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, .6fr); gap: 24px; align-items: end; border-top: 2px solid var(--pc-ink); padding: 20px 0 22px; }
   .mast > p { margin: 0; color: var(--pc-ink-soft); font-size: 16px; line-height: 1.5; }
+  .jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+  .jump a { display: inline-flex; gap: 6px; align-items: center; padding: 6px 9px; border: 1.5px solid var(--pc-ink); color: var(--pc-ink); text-decoration: none; font: 500 11px var(--pc-font-mono); letter-spacing: .04em; }
+  .jump a b { color: var(--set); }
+  .jump a:hover { background: var(--set); color: #fff; }
+  .jump a:hover b { color: #fff; }
+  .set { scroll-margin-top: 16px; }
   .notice { margin: 0 0 34px; padding: 10px 12px; border: 1.5px dashed var(--pc-ink); font-size: 13px; line-height: 1.45; color: var(--pc-ink-soft); }
   .set { margin-top: 44px; }
   .set .kicker { color: var(--set, var(--cc)); }
