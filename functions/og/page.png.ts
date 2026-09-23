@@ -47,7 +47,7 @@ async function build(request: Request, env: Env, path: string, bucket: string, c
   const page = await fetchSoft(new URL(path, origin), { headers: { accept: 'text/html', 'x-pointcast-card-probe': '1' } }, 3000);
   if (!page || !(page.headers.get('content-type') ?? '').startsWith('text/html')) return fallback(request, 'page');
   const meta = await readPageMeta(page);
-  const title = decodeEntities(meta.ogTitle || meta.title).replace(/\s+[—|–-]\s+PointCast$/i, '').replace(/\s+\|\s+PointCast$/i, '');
+  const title = decodeEntities(meta.ogTitle || meta.title).replace(/\s+[—|–·:-]\s+PointCast$/i, '');
   const description = decodeEntities(meta.ogDescription || meta.description);
 
   const now = new Date();

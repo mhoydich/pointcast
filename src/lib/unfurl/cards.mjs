@@ -188,7 +188,7 @@ function framedImage(href, { x, y, size, tint, color }) {
 export function pageCard({ path, title, description = '', light, nounHref = '', bucket = '', client = '', serial = 0, channel }) {
   const code = channel ?? channelForPath(path);
   const ch = CHANNEL_COLORS[code] ?? CHANNEL_COLORS.FD;
-  const titleText = clean(title, 'PointCast').replace(/\s+[—|–-]\s+PointCast$/i, '');
+  const titleText = clean(title, 'PointCast').replace(/\s+[—|–·:-]\s+PointCast$/i, '');
   const textW = nounHref ? 740 : 1020;
   const t = fitTitle(titleText, textW, 3);
   const titleTop = CY + 60 + t.size;
