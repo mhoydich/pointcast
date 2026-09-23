@@ -14,13 +14,17 @@
  * Everything here is original, CC0, and deliberately uses no university
  * marks: places only.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = JSON.parse(readFileSync(path.join(ROOT, 'src/data/campus-cards.json'), 'utf8'));
 const WANT_PNG = !process.argv.includes('--no-png');
+const argValue = (flag) => { const i = process.argv.indexOf(flag); return i > 0 ? process.argv[i + 1] : null; };
+const ONLY_SET = argValue('--set');        // e.g. --set set-03 paints one set
+const CONTACT = argValue('--contact');     // e.g. --contact /tmp/sheet.png writes a contact sheet of the painted set(s)
 
 // Card geometry (SVG units). The art window is a GW x GH pixel grid.
 const W = 400;
@@ -709,6 +713,25 @@ const SCENES = {
 
 };
 
+// Per-campus scene modules: scripts/campus-cards-scenes/{campus}.mjs export
+// `scenes` ({ name(c, kit) }) and, while a set is being drafted, `set` (the set
+// object, used only if src/data/campus-cards.json does not have it yet).
+const KIT = { GW, GH, P, rng, palm, bike, rider, bird, glints, waves };
+const SCENE_DIR = path.join(ROOT, 'scripts/campus-cards-scenes');
+for (const file of readdirSync(SCENE_DIR).filter((f) => f.endsWith('.mjs')).sort()) {
+  const mod = await import(pathToFileURL(path.join(SCENE_DIR, file)).href);
+  for (const [name, fn] of Object.entries(mod.scenes ?? {})) {
+    if (SCENES[name]) throw new Error(`scene name collision: ${name} (${file})`);
+    SCENES[name] = (c) => fn(c, KIT);
+  }
+  if (mod.set && !DATA.sets.some((x) => x.id === mod.set.id)) {
+    DATA.sets.push(mod.set);
+    const campus = DATA.campuses.find((x) => x.slug === mod.set.campus);
+    if (campus && campus.status === 'queued') campus.status = mod.set.id;
+  }
+}
+DATA.sets.sort((a, b) => a.id.localeCompare(b.id));
+
 // ------------------------------------------------------------- the card
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -809,26 +832,38 @@ ${[['EDITION', edition], ['MINT', price], ['CARD', no]].map(([k, v], i) => { con
 // ------------------------------------------------------------------ main
 const sharp = WANT_PNG ? (await import('sharp')).default : null;
 let count = 0;
+const painted = [];
 for (const set of DATA.sets) {
+  if (ONLY_SET && set.id !== ONLY_SET) continue;
   const dir = path.join(ROOT, 'public/images/campus-cards', set.id);
   mkdirSync(dir, { recursive: true });
   for (const c of set.cards) {
     const base = `${String(c.n).padStart(2, '0')}-${c.slug}`;
     const svg = card(DATA, set, c);
     writeFileSync(path.join(dir, `${base}.svg`), svg);
+    if (!SCENES[c.scene]) throw new Error(`missing scene "${c.scene}" for ${set.id} ${c.slug}`);
     if (sharp) await sharp(Buffer.from(svg), { density: 216 }).resize(1200, 1680).png({ compressionLevel: 9 }).toFile(path.join(dir, `${base}.png`));
+    painted.push(path.join(dir, `${base}.png`));
     count++;
   }
 }
 console.log(`campus-cards: painted ${count} cards${sharp ? ' (+png)' : ''}`);
 
+if (sharp && CONTACT) {
+  const tiles = await Promise.all(painted.map((f) => sharp(f).resize(300, 420).toBuffer()));
+  const rows = Math.ceil(tiles.length / 6);
+  await sharp({ create: { width: 1800, height: rows * 420, channels: 3, background: '#222' } })
+    .composite(tiles.map((input, i) => ({ input, left: (i % 6) * 300, top: Math.floor(i / 6) * 420 }))).png().toFile(CONTACT);
+  console.log(`campus-cards: contact sheet ${CONTACT}`);
+}
+
 // Landscape unfurl card for /campus-cards: five cards fanned on the set accent.
-if (sharp) {
+if (sharp && !ONLY_SET) {
   const set = DATA.sets[0];
   const pick = (si, n) => [DATA.sets[si], DATA.sets[si].cards.find((c) => c.n === n)];
-  const picks = DATA.sets.length > 1 ? [pick(0, 2), pick(1, 3), pick(0, 1), pick(1, 1), pick(1, 12)] : [1, 2, 5, 4, 7].map((n) => pick(0, n));
+  const picks = DATA.sets.length >= 10 ? [pick(4, 1), pick(1, 1), pick(0, 1), pick(9, 1), pick(7, 1)] : DATA.sets.length > 1 ? [pick(0, 2), pick(1, 3), pick(0, 1), pick(1, 1), pick(1, 12)] : [1, 2, 5, 4, 7].map((n) => pick(0, n));
   const tiles = await Promise.all(picks.map(([st, c]) => sharp(Buffer.from(card(DATA, st, c)), { density: 144 }).resize(300, 420).png().toBuffer()));
-  const bg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" shape-rendering="crispEdges"><rect width="1200" height="630" fill="${set.accent}"/>${Array.from({ length: 40 }, (_, i) => `<rect x="0" y="${i * 16}" width="1200" height="2" fill="#000" fill-opacity=".08"/>`).join('')}<rect x="0" y="560" width="1200" height="70" fill="#12121c"/><text x="40" y="604" font-family="${MONO}" font-size="30" font-weight="700" fill="#fff">CAMPUS CARDS · ${DATA.sets.map((x) => x.title.split(' · ')[1].toUpperCase()).join(' · ')}</text><text x="1160" y="604" font-family="${MONO}" font-size="20" font-weight="700" fill="#ffd23f" text-anchor="end">TEZOS · POINTCAST</text></svg>`;
+  const bg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" shape-rendering="crispEdges"><rect width="1200" height="630" fill="${set.accent}"/>${Array.from({ length: 40 }, (_, i) => `<rect x="0" y="${i * 16}" width="1200" height="2" fill="#000" fill-opacity=".08"/>`).join('')}<rect x="0" y="560" width="1200" height="70" fill="#12121c"/><text x="40" y="604" font-family="${MONO}" font-size="30" font-weight="700" fill="#fff">CAMPUS CARDS · ${DATA.sets.length > 2 ? `${DATA.sets.length} CAMPUSES · ${DATA.sets.reduce((n, x) => n + x.cards.length, 0)} CARDS` : DATA.sets.map((x) => x.title.split(' · ')[1].toUpperCase()).join(' · ')}</text><text x="1160" y="604" font-family="${MONO}" font-size="20" font-weight="700" fill="#ffd23f" text-anchor="end">TEZOS · POINTCAST</text></svg>`;
   const x = [40, 265, 450, 635, 860];
   const y = [110, 70, 40, 70, 110];
   await sharp(Buffer.from(bg)).composite(tiles.map((input, i) => ({ input, left: x[i], top: y[i] - 20 }))).png().toFile(path.join(ROOT, 'public/images/campus-cards/og.png'));

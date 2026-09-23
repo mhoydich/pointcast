@@ -1,0 +1,259 @@
+---
+/**
+ * /desk · Campus Cards console. Three buttons, in order:
+ *   1. Pin to IPFS  — the browser uploads every card image, token JSON and the
+ *                     contract JSON to Pinata with the director's key, and
+ *                     records each CID in /api/campus-cards/state.
+ *   2. Originate    — builds storage from the pinned CIDs and asks Kukai to
+ *                     originate (admin + treasury = the admin wallet, paused).
+ *   3. Open minting — set_paused(false) through the director operation path.
+ * Nothing here holds a key: Pinata's JWT stays in this browser, Kukai signs.
+ */
+---
+
+<section class="desk-panel cc-console" data-cc-console aria-labelledby="cc-console-title">
+  <header class="desk-panel__head">
+    <div>
+      <p class="desk-kicker">Contracts · Campus Cards</p>
+      <h2 id="cc-console-title">Campus Cards, <em data-ccc-headline>reading…</em></h2>
+    </div>
+    <a href="/campus-cards">Room →</a>
+  </header>
+
+  <ol class="cc-steps">
+    <li class="cc-step" data-ccc-step="pin">
+      <div class="cc-step__num">1</div>
+      <div class="cc-step__body">
+        <h3>Pin to IPFS</h3>
+        <p data-ccc-pin-status>Checking pins…</p>
+        <div class="cc-step__progress"><span data-ccc-pin-bar></span></div>
+        <label class="cc-step__field">
+          <span>Pinata JWT</span>
+          <input type="password" autocomplete="off" spellcheck="false" data-ccc-jwt placeholder="paste once; stays in this browser" />
+        </label>
+        <label class="cc-step__check"><input type="checkbox" data-ccc-remember /> remember on this device</label>
+        <button type="button" class="cc-btn" data-ccc-pin disabled>Pin to IPFS</button>
+      </div>
+    </li>
+    <li class="cc-step" data-ccc-step="originate">
+      <div class="cc-step__num">2</div>
+      <div class="cc-step__body">
+        <h3>Originate the contract</h3>
+        <p data-ccc-orig-status>Waits for step 1.</p>
+        <button type="button" class="cc-btn" data-ccc-originate disabled>Originate with Kukai</button>
+      </div>
+    </li>
+    <li class="cc-step" data-ccc-step="open">
+      <div class="cc-step__num">3</div>
+      <div class="cc-step__body">
+        <h3>Open minting</h3>
+        <p data-ccc-open-status>Waits for step 2.</p>
+        <button type="button" class="cc-btn" data-ccc-open disabled>Open minting</button>
+      </div>
+    </li>
+  </ol>
+  <pre class="cc-log" data-ccc-log hidden></pre>
+</section>
+
+<script>
+  import series from '../data/campus-cards.json';
+  import { pinPlan, prepareStorage } from '../lib/campus-cards-mint.mjs';
+
+  type State = {
+    contract: string | null; opHash: string | null; admin: string;
+    pinnedCount: number; pinTotal: number; complete: boolean; cards: number; pins: any;
+  };
+  const JWT_KEY = 'pc:pinata-jwt';
+
+  function mountCampusConsole(): void {
+    const root = document.querySelector<HTMLElement>('[data-cc-console]');
+    if (!root || root.dataset.mounted) return;
+    root.dataset.mounted = '1';
+    const $ = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
+    const jwt = $<HTMLInputElement>('[data-ccc-jwt]');
+    const remember = $<HTMLInputElement>('[data-ccc-remember]');
+    const pinBtn = $<HTMLButtonElement>('[data-ccc-pin]');
+    const origBtn = $<HTMLButtonElement>('[data-ccc-originate]');
+    const openBtn = $<HTMLButtonElement>('[data-ccc-open]');
+    const log = $<HTMLPreElement>('[data-ccc-log]');
+    let state: State | null = null;
+    let paused: boolean | null = null;
+    let busy = false;
+
+    try { const saved = localStorage.getItem(JWT_KEY); if (saved) { jwt.value = saved; remember.checked = true; } } catch {}
+
+    const say = (line: string) => { log.hidden = false; log.textContent = `${new Date().toLocaleTimeString()}  ${line}\n${log.textContent ?? ''}`.slice(0, 6000); };
+
+    async function readState(): Promise<State> {
+      const response = await fetch('/api/campus-cards/state', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`state read failed (${response.status})`);
+      return response.json();
+    }
+
+    async function readPaused(contract: string): Promise<boolean | null> {
+      try {
+        const response = await fetch(`https://api.tzkt.io/v1/contracts/${contract}/storage`);
+        if (!response.ok) return null;
+        return Boolean((await response.json()).paused);
+      } catch { return null; }
+    }
+
+    async function saveState(body: unknown): Promise<State> {
+      const response = await fetch('/api/campus-cards/state', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw Object.assign(new Error(json.detail || json.reason || `HTTP ${response.status}`), { status: response.status });
+      return json;
+    }
+
+    function render(): void {
+      if (!state) return;
+      const pct = state.pinTotal ? Math.round((state.pinnedCount / state.pinTotal) * 100) : 0;
+      $('[data-ccc-pin-bar]').style.width = `${pct}%`;
+      $('[data-ccc-pin-status]').textContent = state.complete
+        ? `All ${state.pinTotal} files pinned (${state.cards} cards).`
+        : `${state.pinnedCount} of ${state.pinTotal} files pinned (${state.cards} cards). Resumable: stop any time.`;
+      pinBtn.disabled = busy || state.complete || Boolean(state.contract);
+      pinBtn.textContent = state.complete ? 'Pinned ✓' : state.pinnedCount ? 'Resume pinning' : 'Pin to IPFS';
+
+      const orig = $('[data-ccc-orig-status]');
+      if (state.contract) {
+        orig.innerHTML = '';
+        const a = document.createElement('a');
+        a.href = `https://tzkt.io/${state.contract}`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = state.contract;
+        orig.append('Live at ', a, '.');
+      } else {
+        orig.textContent = state.complete ? `Ready. Kukai will ask you to sign one origination as ${state.admin.slice(0, 7)}…; it starts paused.` : 'Waits for step 1.';
+      }
+      origBtn.disabled = busy || !state.complete || Boolean(state.contract);
+      origBtn.textContent = state.contract ? 'Originated ✓' : 'Originate with Kukai';
+
+      const open = $('[data-ccc-open-status]');
+      if (!state.contract) { open.textContent = 'Waits for step 2.'; openBtn.disabled = true; }
+      else if (paused === null) { open.textContent = 'Reading the contract…'; openBtn.disabled = true; }
+      else {
+        open.textContent = paused ? 'Paused. One signature opens every card for minting.' : 'Minting is open. The same button pauses it again.';
+        openBtn.disabled = busy;
+        openBtn.textContent = paused ? 'Open minting' : 'Pause minting';
+      }
+      $('[data-ccc-headline]').textContent = state.contract ? (paused === false ? 'minting' : 'on chain, paused') : state.complete ? 'pinned, ready to originate' : 'not yet pinned';
+    }
+
+    async function refresh(): Promise<void> {
+      try {
+        state = await readState();
+        paused = state.contract ? await readPaused(state.contract) : null;
+      } catch (error) { say(`Could not read state: ${(error as Error).message}`); }
+      render();
+    }
+
+    async function pinataUpload(token: string, blob: Blob, name: string): Promise<string> {
+      const form = new FormData();
+      form.append('file', blob, name);
+      form.append('pinataMetadata', JSON.stringify({ name }));
+      form.append('pinataOptions', JSON.stringify({ cidVersion: 1 }));
+      let response: Response;
+      try {
+        response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+      } catch {
+        throw new Error('The browser could not reach Pinata (network or CORS). Nothing was lost; press Resume.');
+      }
+      const text = await response.text();
+      if (response.status === 401 || response.status === 403) throw new Error('Pinata refused the key. Check the JWT has pinFileToIPFS scope.');
+      if (!response.ok) throw new Error(`Pinata ${response.status}: ${text.slice(0, 160)}`);
+      return JSON.parse(text).IpfsHash;
+    }
+
+    pinBtn.addEventListener('click', async () => {
+      const token = jwt.value.trim();
+      if (!token) { say('Paste a Pinata JWT first.'); jwt.focus(); return; }
+      try { remember.checked ? localStorage.setItem(JWT_KEY, token) : localStorage.removeItem(JWT_KEY); } catch {}
+      busy = true; render();
+      try {
+        // Three passes: token JSON embeds image CIDs, contract JSON comes last.
+        for (const phase of ['images.', 'tokens.', 'contract']) {
+          state = await readState();
+          const steps = pinPlan(series, state.pins).filter((step: any) => !step.done && step.key.startsWith(phase));
+          for (const step of steps as any[]) {
+            const blob = step.url
+              ? await fetch(step.url).then((r) => { if (!r.ok) throw new Error(`missing ${step.url}`); return r.blob(); })
+              : new Blob([JSON.stringify(step.json(), null, 2)], { type: 'application/json' });
+            const cid = await pinataUpload(token, blob, step.name);
+            state = await saveState({ pins: { [step.key]: cid } });
+            render();
+            say(`pinned ${step.name} → ${cid}`);
+          }
+        }
+        say('Pinning complete.');
+      } catch (error) { say(`Stopped: ${(error as Error).message}`); }
+      busy = false; await refresh();
+    });
+
+    origBtn.addEventListener('click', async () => {
+      if (!state?.complete) return;
+      busy = true; render();
+      try {
+        say('Preparing storage from the pinned metadata…');
+        const [code, template] = await Promise.all([
+          fetch('/contracts/campus-cards/code.json').then((r) => r.json()),
+          fetch('/contracts/campus-cards/storage.json').then((r) => r.json()),
+        ]);
+        const prepared = prepareStorage(series, code, template, state.pins, { admin: state.admin, treasury: state.admin });
+        if (!prepared.complete) throw new Error('Storage still has placeholders; finish step 1.');
+        say('Asking Kukai to sign the origination…');
+        const { originateCampusCards } = await import('../lib/tezos');
+        const result = await originateCampusCards({ code, storage: prepared.storage, admin: state.admin });
+        say(`Broadcast ${result.opHash}. Waiting for a block…`);
+        const address = await result.contract;
+        say(`Originated ${address}. Recording it for the site…`);
+        for (let attempt = 0; attempt < 12; attempt++) {
+          try { state = await saveState({ contract: address, opHash: result.opHash }); break; }
+          catch (error) { if ((error as any).status !== 409 || attempt === 11) throw error; await new Promise((r) => setTimeout(r, 5000)); }
+        }
+        say('Recorded. The room now points at the new contract.');
+      } catch (error) { say(`Stopped: ${(error as Error).message}`); }
+      busy = false; await refresh();
+    });
+
+    openBtn.addEventListener('click', async () => {
+      if (!state?.contract || paused === null) return;
+      busy = true; render();
+      try {
+        const { submitDirectorOperation } = await import('../lib/tezos');
+        say(paused ? 'Asking Kukai to open minting…' : 'Asking Kukai to pause minting…');
+        const result = await submitDirectorOperation({ contract: state.contract, entrypoint: 'set_paused', args: [!paused] });
+        say(`Broadcast ${result.opHash}. Waiting for a block…`);
+        await result.confirmation;
+        say('Confirmed.');
+      } catch (error) { say(`Stopped: ${(error as Error).message}`); }
+      busy = false;
+      await new Promise((r) => setTimeout(r, 4000));
+      await refresh();
+    });
+
+    void refresh();
+  }
+
+  mountCampusConsole();
+  document.addEventListener('astro:page-load', mountCampusConsole);
+</script>
+
+<style is:global>
+  .cc-console .desk-panel__head { display: flex; justify-content: space-between; align-items: end; gap: 12px; }
+  .cc-console h2 em { font-style: normal; color: #0f61ff; }
+  .cc-steps { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+  .cc-step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 12px; border: 1.5px solid var(--pc-ink); background: #fff; }
+  .cc-step__num { display: grid; place-items: center; width: 30px; height: 30px; background: var(--pc-ink); color: #fff; font: 700 13px var(--pc-font-mono); }
+  .cc-step h3 { margin: 0 0 4px; font-size: 17px; font-weight: 500; letter-spacing: -.01em; }
+  .cc-step p { margin: 0 0 10px; color: var(--pc-ink-soft); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+  .cc-step__progress { height: 6px; margin-bottom: 10px; background: #eceae4; }
+  .cc-step__progress span { display: block; height: 100%; width: 0; background: #0f61ff; transition: width .2s; }
+  .cc-step__field { display: grid; gap: 4px; margin-bottom: 6px; font: 500 10px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .cc-step__field input { font: 13px var(--pc-font-mono); padding: 8px; border: 1.5px solid var(--pc-ink); border-radius: 0; min-width: 0; }
+  .cc-step__check { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; font-size: 12px; color: var(--pc-ink-soft); }
+  .cc-btn { padding: 10px 14px; border: 1.5px solid var(--pc-ink); background: var(--pc-ink); color: #fff; font: 600 12px var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border-radius: 0; }
+  .cc-btn:disabled { background: #fff; color: var(--pc-ink-muted); cursor: not-allowed; }
+  .cc-log { margin: 10px 0 0; padding: 10px; max-height: 180px; overflow: auto; background: #12121c; color: #cfe8a8; font: 11px/1.5 var(--pc-font-mono); white-space: pre-wrap; }
+  .cc-console [hidden] { display: none !important; }
+</style>

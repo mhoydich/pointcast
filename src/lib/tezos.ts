@@ -369,6 +369,23 @@ export async function mintNounsBandmate(tokenId: number, expectedAddress?: strin
   return { address, opHash: operation.opHash, confirmation: operation.confirmation(1) };
 }
 
+/**
+ * Originate the Campus Cards FA2 from the /desk console. The connected wallet
+ * must be the PointCast admin (it becomes admin + treasury in `storage`).
+ */
+export async function originateCampusCards(params: {
+  code: unknown[];
+  storage: unknown;
+  admin: string;
+}): Promise<{ opHash: string; contract: Promise<string> }> {
+  const wallet = await walletReady();
+  const tezos = await tezosClient();
+  const address = await ensurePointCastPermissions(wallet);
+  if (address !== params.admin) throw new Error('Connected wallet is not the PointCast contract admin.');
+  const operation = await tezos.wallet.originate({ code: params.code as any, init: params.storage as any }).send();
+  return { opHash: operation.opHash, contract: operation.contract().then((c) => c.address) };
+}
+
 /** Submit one allowlisted director operation through the shared Beacon wallet. */
 export async function submitDirectorOperation(
   operation: DirectorOperation,

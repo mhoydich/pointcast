@@ -30,7 +30,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import * as mint from '../src/lib/campus-cards-mint.mjs';
+
 const execFileAsync = promisify(execFile);
+const { CID } = mint;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERIES = JSON.parse(readFileSync(path.join(ROOT, 'src/data/campus-cards.json'), 'utf8'));
 const OUT = path.join(ROOT, 'contracts/campus-cards');
@@ -39,72 +42,15 @@ const PINS = path.join(OUT, 'pins.json');
 const BUILD = path.join(ROOT, 'contracts/build/campus_cards');
 const MIKE_KUKAI = 'tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw';
 const RPC = 'https://mainnet.smartpy.io';
-const CID = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})$/;
 
-const hex = (s) => Buffer.from(s, 'utf8').toString('hex');
+export const cards = () => mint.cards(SERIES);
+export const tokenMetadata = (card, pins) => mint.tokenMetadata(SERIES, card, pins);
+export const contractMetadata = () => mint.contractMetadata(SERIES);
+export const prepareStorage = (code, template, pins, opts) => mint.prepareStorage(SERIES, code, template, pins, opts);
 const sha = (v) => createHash('sha256').update(typeof v === 'string' ? v : JSON.stringify(v)).digest('hex');
-
-export function cards() {
-  const out = [];
-  let tokenId = 0;
-  for (const set of SERIES.sets) {
-    const campus = SERIES.campuses.find((c) => c.slug === set.campus);
-    for (const card of set.cards) {
-      const base = `${String(card.n).padStart(2, '0')}-${card.slug}`;
-      out.push({ ...card, tokenId: tokenId++, set, campus, base, svg: `public/images/campus-cards/${set.id}/${base}.svg`, png: `public/images/campus-cards/${set.id}/${base}.png` });
-    }
-  }
-  return out;
-}
 
 function loadPins() {
   return existsSync(PINS) ? JSON.parse(readFileSync(PINS, 'utf8')) : { version: 1, series: SERIES.series, images: {}, tokens: {}, contract: null };
-}
-
-export function tokenMetadata(card, pins) {
-  const rarity = SERIES.rarities[card.rarity];
-  const img = pins.images?.[card.tokenId] ?? {};
-  const svg = img.svg?.cid ? `ipfs://${img.svg.cid}` : `ipfs://PLACEHOLDER_${card.base}.svg`;
-  const png = img.png?.cid ? `ipfs://${img.png.cid}` : `ipfs://PLACEHOLDER_${card.base}.png`;
-  return {
-    name: `Campus Cards · ${card.campus.name} · ${String(card.n).padStart(2, '0')} ${card.title}`,
-    description: `${card.flavor} ${card.set.title}, card ${card.n} of ${card.set.cards.length}. ${SERIES.notice}`,
-    symbol: SERIES.symbol,
-    decimals: 0,
-    artifactUri: svg,
-    displayUri: png,
-    thumbnailUri: png,
-    rights: 'CC0-1.0',
-    isBooleanAmount: false,
-    shouldPreferSymbol: false,
-    tags: ['campus-cards', card.set.campus, card.rarity, 'pixel-art', 'pointcast'],
-    attributes: [
-      { name: 'Set', value: card.set.title },
-      { name: 'Campus', value: card.campus.name },
-      { name: 'Place', value: card.campus.place },
-      { name: 'Card', value: `${String(card.n).padStart(2, '0')}/${String(card.set.cards.length).padStart(2, '0')}` },
-      { name: 'Rarity', value: rarity.label },
-      { name: 'Edition', value: rarity.cap ? `${rarity.cap} max` : 'open' },
-    ],
-    formats: [
-      { uri: svg, mimeType: 'image/svg+xml', fileName: `${card.base}.svg`, dimensions: { value: '400x560', unit: 'px' } },
-      { uri: png, mimeType: 'image/png', fileName: `${card.base}.png`, dimensions: { value: '1200x1680', unit: 'px' } },
-    ],
-    creators: [SERIES.creator],
-    minter: SERIES.creator,
-  };
-}
-
-export function contractMetadata() {
-  return {
-    name: SERIES.name,
-    description: `${SERIES.tagline} ${SERIES.notice}`,
-    version: '1.0.0',
-    license: { name: SERIES.license },
-    homepage: 'https://pointcast.xyz/campus-cards',
-    authors: ['PointCast <https://pointcast.xyz>'],
-    interfaces: ['TZIP-012', 'TZIP-016', 'TZIP-021'],
-  };
 }
 
 function writeMetadata() {
@@ -155,43 +101,6 @@ async function pin() {
     save();
   }
   console.log(`[pin] done: ${cards().length * 3 + 1} files recorded in ${path.relative(ROOT, PINS)}`);
-}
-
-function annotated(type, value, fields = new Map()) {
-  const name = type?.annots?.find((a) => a.startsWith('%'))?.slice(1);
-  if (name) fields.set(name, { type, value });
-  if (type?.prim === 'pair') {
-    if (value?.prim !== 'Pair' || value.args?.length !== 2 || type.args?.length !== 2) throw new Error('Compiled storage shape does not match its type.');
-    annotated(type.args[0], value.args[0], fields);
-    annotated(type.args[1], value.args[1], fields);
-  }
-  return fields;
-}
-
-export function prepareStorage(code, template, pins, { admin, treasury }) {
-  const storageType = code.find((i) => i?.prim === 'storage').args[0];
-  const storage = structuredClone(template);
-  const f = annotated(storageType, storage);
-  const need = (name, prim) => {
-    const field = f.get(name);
-    if (!field || field.type.prim !== prim) throw new Error(`Compiled storage is missing %${name}:${prim}`);
-    return field.value;
-  };
-  need('administrator', 'address').string = admin;
-  need('treasury', 'address').string = treasury;
-  need('paused', 'bool').prim = 'True';
-  const all = cards();
-  const complete = CID.test(pins.contract?.cid || '') && all.every((c) => CID.test(pins.tokens?.[c.tokenId]?.cid || ''));
-  const meta = need('metadata', 'big_map');
-  meta[0].args[1].bytes = hex(`ipfs://${pins.contract?.cid || '__CAMPUS_CARDS_CONTRACT_CID__'}`);
-  const tokens = need('token_metadata', 'big_map');
-  if (tokens.length !== all.length) throw new Error(`Compiled token_metadata has ${tokens.length} entries; series has ${all.length}. Recompile the contract.`);
-  for (const entry of tokens) {
-    const id = Number(entry.args[0].int);
-    const cid = pins.tokens?.[id]?.cid || `__CAMPUS_CARDS_TOKEN_${id}_CID__`;
-    entry.args[1].args[1] = [{ prim: 'Elt', args: [{ string: '' }, { bytes: hex(`ipfs://${cid}`) }] }];
-  }
-  return { storage, storageType, complete };
 }
 
 function signingPage(payload) {
