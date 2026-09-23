@@ -6,24 +6,15 @@
  * embed that plate in the shared SVG, then rasterize it to the PNG expected by
  * the broadest set of unfurl clients.
  */
-import { Resvg, initWasm } from '@resvg/resvg-wasm';
-import wasm from '@resvg/resvg-wasm/index_bg.wasm?module';
-import interFont from './inter-latin.bin';
-import jetBrainsMonoFont from './jetbrains-mono-latin.bin';
+// One resvg-wasm instance serves every Function in the bundle (functions/_lib/og-render.ts);
+// initialising it twice throws, which is why this route no longer owns its own.
+import { renderPng } from '../../_lib/og-render';
 import { sittingOfTheDay, losAngelesDate } from '../../../src/lib/kennel-club';
 import { buildKennelClubCollectionCard } from '../../../src/lib/og-kennel-card.mjs';
 import { requestedKennelOgDate } from '../../../src/lib/og-kennel-today.mjs';
 import series from '../../../src/data/kennel-club-september-sitting.json';
 
 const CACHE_CONTROL = 'public, max-age=300';
-let wasmReady: Promise<void> | undefined;
-
-function prepareWasm(): Promise<void> {
-  // Pages keeps one module instance warm per isolate. Resvg itself rejects a
-  // second initialization, so all requests share this promise.
-  wasmReady ??= initWasm(wasm);
-  return wasmReady;
-}
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -51,19 +42,7 @@ export async function renderKennelTodayOg(
       today,
       plateHref: await plateDataUri(request, today.image.png),
     });
-    await prepareWasm();
-    const renderer = new Resvg(svg, {
-      fitTo: { mode: 'width', value: 1200 },
-      font: {
-        loadSystemFonts: false,
-        fontBuffers: [new Uint8Array(interFont), new Uint8Array(jetBrainsMonoFont)],
-        defaultFontFamily: 'Inter',
-        sansSerifFamily: 'Inter',
-        monospaceFamily: 'JetBrains Mono Variable',
-      },
-    });
-    const png = renderer.render().asPng();
-    renderer.free();
+    const png = await renderPng(svg);
     return new Response(png, {
       headers: {
         'Content-Type': 'image/png',
