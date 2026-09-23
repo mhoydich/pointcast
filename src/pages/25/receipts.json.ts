@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { POINTCAST_25 } from '../../lib/pointcast-25';
-import { POINTCAST_25_RECEIPTS } from '../../lib/pointcast-25-audience';
+import { POINTCAST_25_RECEIPTS, POINTCAST_25_OPENING_RECEIPTS } from '../../lib/pointcast-25-audience';
 
 export const GET: APIRoute = () => new Response(JSON.stringify({
   spec: 'pointcast.25-receipt-book/v1',
@@ -18,6 +18,8 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   },
   policy: 'Revision is allowed. Disappearance is not. Every status change remains attached to its originating board.',
   receipts: POINTCAST_25_RECEIPTS,
+  openingReceipts: POINTCAST_25_OPENING_RECEIPTS,
+  reviewPolicy: "Specific claims remain OPEN unless the stated proof has been verified; a rank movement alone does not grade a football claim.",
 }, null, 2), {
   headers: {
     'Content-Type': 'application/json; charset=utf-8',

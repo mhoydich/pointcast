@@ -3,22 +3,23 @@ import BlockLayout from '../../../layouts/BlockLayout.astro';
 import { POINTCAST_25, POINTCAST_25_SIGNAL_LABELS } from '../../../lib/pointcast-25';
 import {
   POINTCAST_25_REFERENCE,
-  POINTCAST_25_TEAMS,
+  POINTCAST_25_ALL_TEAM_PAGES,
 } from '../../../lib/pointcast-25-audience';
 
 export function getStaticPaths() {
-  return POINTCAST_25_TEAMS.map((team) => ({
+  return POINTCAST_25_ALL_TEAM_PAGES.map((team) => ({
     params: { slug: team.slug },
     props: { team },
   }));
 }
 
-const { team } = Astro.props as { team: (typeof POINTCAST_25_TEAMS)[number] };
-const teamIndex = POINTCAST_25_TEAMS.findIndex((candidate) => candidate.slug === team.slug);
-const previous = teamIndex > 0 ? POINTCAST_25_TEAMS[teamIndex - 1] : null;
-const next = teamIndex < POINTCAST_25_TEAMS.length - 1 ? POINTCAST_25_TEAMS[teamIndex + 1] : null;
+const { team } = Astro.props as { team: (typeof POINTCAST_25_ALL_TEAM_PAGES)[number] };
+const navigationTeams = POINTCAST_25_ALL_TEAM_PAGES.filter(candidate => candidate.isCurrent);
+const teamIndex = navigationTeams.findIndex((candidate) => candidate.slug === team.slug);
+const previous = teamIndex > 0 ? navigationTeams[teamIndex - 1] : null;
+const next = teamIndex >= 0 && teamIndex < navigationTeams.length - 1 ? navigationTeams[teamIndex + 1] : null;
 const signalLabel = POINTCAST_25_SIGNAL_LABELS[team.signal];
-const description = `${team.school} enters the 2026 college-football season No. ${team.rank} in the PointCast 25. Read the case, doubt, next proof, and preseason ranking comparison.`;
+const description = `${team.school} has a ${team.isCurrent ? "current" : "historical Board 000"} position of No. ${team.rank} in the PointCast 25. Read the case, doubt, next proof, and dated ranking comparison.`;
 const pageUrl = `https://pointcast.xyz/25/teams/${team.slug}`;
 
 const jsonLd = {
@@ -29,7 +30,7 @@ const jsonLd = {
       '@id': `${pageUrl}#article`,
       headline: `${team.school} 2026 football outlook and PointCast ranking`,
       description,
-      datePublished: POINTCAST_25.publishedAt,
+      datePublished: team.isCurrent ? POINTCAST_25.publishedAt : "2026-07-27T11:25:00-07:00",
       dateModified: POINTCAST_25.publishedAt,
       url: pageUrl,
       mainEntityOfPage: pageUrl,
@@ -64,7 +65,7 @@ const jsonLd = {
 <BlockLayout
   title={`${team.school} 2026 Football Outlook & Ranking`}
   description={description}
-  image="/images/pointcast-25/board-000.png"
+  image="/images/pointcast-25/board-001.png"
   themeColor={team.accent}
   jsonLd={jsonLd}
   immersive={true}
@@ -90,13 +91,13 @@ const jsonLd = {
 
     <section class="hero">
       <div class="rank" aria-label={`PointCast rank ${team.rank}`}>
-        <small>POINTCAST RANK</small>
+        <small>{team.isCurrent ? "POINTCAST RANK" : "BOARD 000 RANK"}</small>
         <strong>{String(team.rank).padStart(2, '0')}</strong>
       </div>
       <div class="identity">
-        <p>{team.conference} · {signalLabel} · Board {POINTCAST_25.board}</p>
+        <p>{team.conference} · {signalLabel} · Board {team.isCurrent ? POINTCAST_25.board : "000"}</p>
         <h1>{team.school}</h1>
-        <p class="reason">{team.reason}</p>
+        <p class="reason">{team.reason}</p><p>{team.isCurrent ? `${team.record} · ${team.lastResult}` : "ARCHIVE · Outside the current 25"}</p><p>{team.movementReason}</p>
       </div>
     </section>
 
@@ -142,9 +143,9 @@ const jsonLd = {
       <span class="status__mark">OPEN</span>
       <div>
         <p class="label">CLAIM STATUS</p>
-        <h2 id="status-title">No games yet. No victory lap yet.</h2>
+        <h2 id="status-title">{team.isCurrent ? "A new claim, with a dated starting point." : "The original case stays on the record."}</h2>
         <p>
-          This claim opened with Board {POINTCAST_25.board} on July 27, 2026.
+          This claim opened with Board {team.isCurrent ? POINTCAST_25.board : "000"} on {team.isCurrent ? "September 23, 2026" : "July 27, 2026"}.
           PointCast will mark it proven, alive, complicated, or dead as evidence arrives.
         </p>
         <a href="/25/receipts">Open the complete receipt book →</a>
@@ -159,7 +160,7 @@ const jsonLd = {
       <p>
         {POINTCAST_25_REFERENCE.note}
         <a href={POINTCAST_25_REFERENCE.url} target="_blank" rel="noopener">
-          Read the reported FPI board ↗
+          Read the dated AP comparison ↗
         </a>
       </p>
     </section>
@@ -190,6 +191,8 @@ const jsonLd = {
   }
 
   .team-page {
+    background: #f5f2e8;
+    color: #11110f;
     margin: 0 auto;
     max-width: 1500px;
     min-height: 100vh;

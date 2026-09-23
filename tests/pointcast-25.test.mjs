@@ -13,20 +13,31 @@ function pngSize(buffer) {
   };
 }
 
-test('Board 000 publishes exactly 25 consecutive, unique teams with receipts', async () => {
-  const data = await read('src/lib/pointcast-25.ts');
-  const ranks = [...data.matchAll(/^\s{6}rank: (\d+),$/gm)].map((match) => Number(match[1]));
-  const schools = [...data.matchAll(/^\s{6}school: '([^']+)',$/gm)].map((match) => match[1]);
+test('current board keeps 25 unique consecutive teams with dated evidence and valid movement', async () => {
+  const current = JSON.parse(await read('src/lib/pointcast-25-board-001.frozen.json'));
+  const opening = JSON.parse(await read('src/lib/pointcast-25-board-000.frozen.json'));
+  assert.equal(current.board, '001');
+  assert.equal(current.asOf, '2026-09-23');
+  assert.deepEqual(current.teams.map(t => t.rank), Array.from({length:25}, (_,i) => i+1));
+  assert.equal(new Set(current.teams.map(t => t.school)).size, 25);
+  for (const team of current.teams) {
+    assert.ok(team.case && team.doubt && team.proof && team.record && team.lastResult && team.sourceUrl);
+    const prior = opening.teams.find(t => t.school === team.school);
+    assert.equal(team.previousRank, prior?.rank ?? null);
+    const delta = prior ? prior.rank - team.rank : null;
+    assert.equal(team.movement, delta === null ? 'NEW' : delta === 0 ? '—' : delta > 0 ? `+${delta}` : `${delta}`);
+  }
+  assert.equal(current.sale.recurring, false);
+  assert.equal(current.sale.pointCastCardCapture, false);
+});
 
-  assert.deepEqual(ranks, Array.from({ length: 25 }, (_, index) => index + 1));
-  assert.equal(schools.length, 25);
-  assert.equal(new Set(schools).size, 25);
-  assert.equal((data.match(/^\s{6}case: /gm) || []).length, 25);
-  assert.equal((data.match(/^\s{6}doubt: /gm) || []).length, 25);
-  assert.equal((data.match(/^\s{6}proof: /gm) || []).length, 25);
-  assert.match(data, /pointcast\.25-for-reasons\/v1/);
-  assert.match(data, /recurring: false/);
-  assert.match(data, /pointCastCardCapture: false/);
+test('the original snapshot bytes and human archive cannot follow the current board', async () => {
+  const {createHash} = await import('node:crypto');
+  const frozen = await read('src/lib/pointcast-25-board-000.frozen.json');
+  assert.equal(createHash('sha256').update(frozen).digest('hex'), '2b34a571dfe7063517a8405a801b5b7c544f97f3d4b8a2feec4336cdfdf3333f');
+  const page = await read('src/pages/25/boards/000.astro');
+  assert.match(page, /pointcast-25-board-000.frozen.json/);
+  assert.doesNotMatch(page, /import \{ POINTCAST_25 \} from/);
 });
 
 test('25 FOR REASONS is an interactive public board with a local-only watchlist', async () => {
@@ -157,9 +168,11 @@ test('the Disagreement Index is a sourced, bounded comparison rather than fake c
   ]);
   const release = JSON.parse(block);
 
-  assert.match(audience, /dissentSchools = \['Penn State', 'BYU', 'Utah', 'Washington', 'Boise State'\]/);
+  assert.match(audience, /team.rankDelta > 0/);
+  assert.match(audience, /AP Top 25/);
+  assert.match(audience, /2026-09-20/);
   assert.match(audience, /one legible reference board, not as a universal consensus/);
-  assert.match(page, /Not anti-model/);
+  assert.match(page, /A different ballot/);
   assert.match(page, /data-copy-team/);
   assert.match(endpoint, /pointcast\.25-disagreement-index\/v1/);
   assert.match(endpoint, /not a claim of universal consensus/);
@@ -205,7 +218,7 @@ test('the audience desk is advertised across human, machine, LLM, and homepage d
     assert.match(text, /25\/disagreements/);
     assert.match(text, /25\/receipts/);
   }
-  assert.match(home, /25 permanent team pages/);
+  assert.match(home, /Current rankings \+ permanent team cases/);
   assert.match(current, /POINTCAST_25_DISSENTS/);
   assert.match(forAgents, /25\/teams/);
   assert.match(llms, /https:\/\/pointcast\.xyz\/b\/0510/);

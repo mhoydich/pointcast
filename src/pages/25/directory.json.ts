@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { POINTCAST_25 } from '../../lib/pointcast-25';
 import {
   DIVISION_ONE_CONFERENCES,
   DIVISION_ONE_DIRECTORY,
@@ -10,6 +11,7 @@ export const prerender = true;
 
 export const GET: APIRoute = () => {
   const payload = {
+    rankingEdition: { board: POINTCAST_25.board, asOf: POINTCAST_25.asOf },
     $schema: 'https://schema.org/Dataset',
     spec: DIVISION_ONE_DIRECTORY.spec,
     status: 'published',

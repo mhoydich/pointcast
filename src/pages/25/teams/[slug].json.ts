@@ -2,23 +2,23 @@ import type { APIRoute } from 'astro';
 import { POINTCAST_25 } from '../../../lib/pointcast-25';
 import {
   POINTCAST_25_REFERENCE,
-  POINTCAST_25_TEAMS,
+  POINTCAST_25_ALL_TEAM_PAGES,
 } from '../../../lib/pointcast-25-audience';
 
 export function getStaticPaths() {
-  return POINTCAST_25_TEAMS.map((team) => ({
+  return POINTCAST_25_ALL_TEAM_PAGES.map((team) => ({
     params: { slug: team.slug },
     props: { team },
   }));
 }
 
 export const GET: APIRoute = ({ props }) => {
-  const team = props.team as (typeof POINTCAST_25_TEAMS)[number];
+  const team = props.team as (typeof POINTCAST_25_ALL_TEAM_PAGES)[number];
   return new Response(JSON.stringify({
     spec: 'pointcast.25-team-receipt/v1',
     season: POINTCAST_25.season,
-    board: POINTCAST_25.board,
-    status: POINTCAST_25.status,
+    board: team.isCurrent ? POINTCAST_25.board : "000",
+    status: team.isCurrent ? POINTCAST_25.status : "archived-outside-current-25",
     canonical: `https://pointcast.xyz/25/teams/${team.slug}`,
     machineEdition: `https://pointcast.xyz/25/teams/${team.slug}.json`,
     team,
