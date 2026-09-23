@@ -1,0 +1,293 @@
+---
+/**
+ * HomeKeyboardStrip — Keyboard Bloom, folded into the front-door deck.
+ * The whole letter/number board plays while this strip is on screen; scroll
+ * away and the page's other key instruments (Rosebud a/s/k/l, tap-tempo T)
+ * get their keys back. Space, Tab, Enter, arrows and Esc are never taken.
+ * Recording, takes and the full controls live at /keyboard.
+ */
+const ROWS = [
+  { kind: 'drum', offset: 0, keys: [['Digit1', '1', 'kick'], ['Digit2', '2', 'snare'], ['Digit3', '3', 'hat'], ['Digit4', '4', 'open'], ['Digit5', '5', 'clap'], ['Digit6', '6', 'rim'], ['Digit7', '7', 'tom'], ['Digit8', '8', 'high'], ['Digit9', '9', 'shaker'], ['Digit0', '0', 'crash']] },
+  { kind: 'tone', offset: 0.5, row: 2, keys: 'QWERTYUIOP[]'.split('').map((c, i) => [['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP', 'BracketLeft', 'BracketRight'][i], c, '']) },
+  { kind: 'tone', offset: 0.75, row: 1, keys: "ASDFGHJKL;'".split('').map((c, i) => [['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL', 'Semicolon', 'Quote'][i], c, '']) },
+  { kind: 'tone', offset: 1.25, row: 0, keys: 'ZXCVBNM,./'.split('').map((c, i) => [['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Comma', 'Period', 'Slash'][i], c, '']) },
+] as const;
+---
+
+<section class="kbs" data-kbs aria-labelledby="kbs-title">
+  <div class="kbs__label">
+    <p class="kbs__eyebrow"><span class="kbs__dot" aria-hidden="true"></span> Keyboard Bloom · try it</p>
+    <h2 id="kbs-title">Your keyboard is <em>the instrument.</em></h2>
+    <p class="kbs__hint" data-kbs-hint>Type anything. Numbers are drums, letters bloom.</p>
+    <p class="kbs__controls">
+      <button type="button" data-kbs-scale>D minor pentatonic</button>
+      <a href="/keyboard">Record a take ↗</a>
+    </p>
+  </div>
+  <div class="kbs__board" role="group" aria-label="Keyboard Bloom keys" data-kbs-board>
+    {ROWS.map((row) => (
+      <div class={`kbs__row kbs__row--${row.kind}`} style={`--off:${row.offset}`}>
+        {row.keys.map(([code, cap, note]) => (
+          <button
+            type="button"
+            class={`kbs__key kbs__key--${row.kind}`}
+            data-code={code}
+            data-kind={row.kind}
+            data-row={'row' in row ? row.row : undefined}
+            tabindex="-1"
+            aria-label={row.kind === 'drum' ? `${cap} ${note}` : cap}
+          >
+            <span class="kbs__cap">{cap}</span>
+            <span class="kbs__note">{note}</span>
+          </button>
+        ))}
+      </div>
+    ))}
+  </div>
+</section>
+
+<script>
+  // Sound engine ported (trimmed) from /keyboard: the Bloom voice, ten drums, one room reverb, a dotted delay.
+  const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+  const SCALES = [
+    { name: 'minor pentatonic', steps: [0, 3, 5, 7, 10], rowOff: 2 },
+    { name: 'major pentatonic', steps: [0, 2, 4, 7, 9], rowOff: 2 },
+    { name: 'hirajoshi', steps: [0, 2, 3, 7, 8], rowOff: 2 },
+    { name: 'dorian', steps: [0, 2, 3, 5, 7, 9, 10], rowOff: 3 },
+    { name: 'lydian', steps: [0, 2, 4, 5, 7, 9, 11], rowOff: 3 },
+  ];
+  const DRUMS = ['kick', 'snare', 'hat', 'open', 'clap', 'rim', 'tom', 'high', 'shaker', 'crash'];
+  const ROOT = 2; // D
+  const BASE = 48;
+
+  let ctx: AudioContext | null = null;
+  let master: GainNode, wet: GainNode, delaySend: GainNode;
+
+  const boot = () => {
+    if (ctx) { if (ctx.state === 'suspended') void ctx.resume(); return ctx; }
+    const AC = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 5;
+    master = ctx.createGain(); master.gain.value = 0.62;
+    master.connect(comp); comp.connect(ctx.destination);
+    const len = ctx.sampleRate * 2.6, ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.5); }
+    const conv = ctx.createConvolver(); conv.buffer = ir;
+    wet = ctx.createGain(); wet.gain.value = 0.34; wet.connect(conv); conv.connect(master);
+    const dl = ctx.createDelay(2); dl.delayTime.value = 60 / 104 * 0.75;
+    const fb = ctx.createGain(); fb.gain.value = 0.32;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+    delaySend = ctx.createGain(); delaySend.gain.value = 0.2;
+    delaySend.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(master);
+    return ctx;
+  };
+
+  const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
+
+  type Voice = { release: () => void };
+  const held = new Map<string, Voice>();
+
+  const noteOn = (midi: number, vel: number): Voice => {
+    const c = ctx!, t = c.currentTime, f = mtof(midi);
+    const out = c.createGain(); out.gain.value = 0;
+    const pan = c.createStereoPanner(); pan.pan.value = Math.random() * 0.6 - 0.3;
+    const flt = c.createBiquadFilter(); flt.type = 'lowpass'; flt.Q.value = 0.8;
+    const cut = 1800 + 3200 * vel;
+    flt.frequency.setValueAtTime(cut, t); flt.frequency.exponentialRampToValueAtTime(cut * 0.45, t + 0.65);
+    const o1 = c.createOscillator(), o2 = c.createOscillator(), mod = c.createOscillator(), mg = c.createGain();
+    o1.type = 'triangle'; o2.type = 'sine'; o1.frequency.value = f; o2.frequency.value = f; o2.detune.value = 6;
+    mod.frequency.value = f * 2; mg.gain.setValueAtTime(f * 1.6 * vel, t); mg.gain.exponentialRampToValueAtTime(f * 0.02, t + 0.65);
+    mod.connect(mg); mg.connect(o1.frequency);
+    const g2 = c.createGain(); g2.gain.value = 0.5;
+    o1.connect(flt); o2.connect(g2); g2.connect(flt); flt.connect(out); out.connect(pan);
+    pan.connect(master); pan.connect(wet); pan.connect(delaySend);
+    const peak = 0.42 * (0.35 + 0.65 * vel);
+    out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(peak, t + 0.006);
+    out.gain.exponentialRampToValueAtTime(peak * 0.45, t + 0.26);
+    out.gain.linearRampToValueAtTime(peak * 0.75, t + 2.7);
+    [o1, o2, mod].forEach((o) => o.start(t));
+    let done = false;
+    return {
+      release: () => {
+        if (done) return; done = true;
+        const now = Math.max(c.currentTime, t + 0.02);
+        out.gain.cancelScheduledValues(now); out.gain.setValueAtTime(out.gain.value, now);
+        out.gain.exponentialRampToValueAtTime(0.0005, now + 1.4);
+        [o1, o2, mod].forEach((o) => o.stop(now + 1.5));
+      },
+    };
+  };
+
+  const drum = (i: number, vel: number) => {
+    const c = ctx!, t = c.currentTime, v = 0.4 + 0.6 * vel;
+    const g = c.createGain(); g.connect(master);
+    const send = c.createGain(); send.gain.value = 0.3; g.connect(send); send.connect(wet);
+    const env = (gn: GainNode, at: number, pk: number, dec: number) => { gn.gain.setValueAtTime(0.0001, at); gn.gain.exponentialRampToValueAtTime(pk, at + 0.003); gn.gain.exponentialRampToValueAtTime(0.0001, at + dec); };
+    const noise = (dur: number) => { const b = c.createBuffer(1, c.sampleRate * dur, c.sampleRate), d = b.getChannelData(0); for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1; const s = c.createBufferSource(); s.buffer = b; return s; };
+    const tone = (type: OscillatorType, f0: number, f1: number, dec: number, pk: number) => { const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dec * 0.5); const og = c.createGain(); env(og, t, pk, dec); o.connect(og); og.connect(g); o.start(t); o.stop(t + dec + 0.05); };
+    const hiss = (dec: number, pk: number, type: BiquadFilterType, fr: number, q = 1, at = t) => { const n = noise(dec + 0.05), bf = c.createBiquadFilter(); bf.type = type; bf.frequency.value = fr; bf.Q.value = q; const ng = c.createGain(); env(ng, at, pk, dec); n.connect(bf); bf.connect(ng); ng.connect(g); n.start(at); n.stop(at + dec + 0.05); };
+    switch (DRUMS[i]) {
+      case 'kick': tone('sine', 150, 42, 0.42, v); hiss(0.03, 0.3 * v, 'lowpass', 900); break;
+      case 'snare': tone('triangle', 210, 150, 0.14, 0.5 * v); hiss(0.2, 0.55 * v, 'highpass', 1600); break;
+      case 'hat': hiss(0.06, 0.32 * v, 'highpass', 7500); break;
+      case 'open': hiss(0.42, 0.3 * v, 'highpass', 6500); break;
+      case 'clap': [0, 0.012, 0.024, 0.036].forEach((o, k) => hiss(k === 3 ? 0.22 : 0.03, (k === 3 ? 0.5 : 0.25) * v, 'bandpass', 1800, 1.2, t + o)); break;
+      case 'rim': tone('square', 1200, 900, 0.04, 0.25 * v); tone('sine', 500, 400, 0.03, 0.35 * v); break;
+      case 'tom': tone('sine', 140, 80, 0.35, 0.7 * v); break;
+      case 'high': tone('sine', 220, 140, 0.28, 0.6 * v); break;
+      case 'shaker': hiss(0.09, 0.22 * v, 'bandpass', 9000, 2); break;
+      case 'crash': hiss(1.6, 0.35 * v, 'highpass', 5000); hiss(1.2, 0.2 * v, 'bandpass', 3200, 3); break;
+    }
+  };
+
+  // Faster playing hits harder, like the full instrument.
+  let lastHit = 0;
+  const velocity = () => { const now = performance.now(), dt = now - lastHit; lastHit = now; return Math.max(0.35, Math.min(1, 1 - (dt - 70) / 700)); };
+
+  function mountKeyboardStrip() {
+    const root = document.querySelector<HTMLElement>('[data-kbs]');
+    if (!root || root.dataset.mounted === 'true') return;
+    root.dataset.mounted = 'true';
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    const keys = new Map<string, HTMLButtonElement>();
+    root.querySelectorAll<HTMLButtonElement>('.kbs__key').forEach((el) => keys.set(el.dataset.code!, el));
+    const toneKeys = [...keys.values()].filter((el) => el.dataset.kind === 'tone');
+    const scaleBtn = root.querySelector<HTMLButtonElement>('[data-kbs-scale]');
+    const hint = root.querySelector<HTMLElement>('[data-kbs-hint]');
+    let scale = 0;
+
+    const midiFor = (el: HTMLButtonElement) => {
+      const s = SCALES[scale];
+      const rowKeys = toneKeys.filter((k) => k.dataset.row === el.dataset.row);
+      const deg = rowKeys.indexOf(el) + Number(el.dataset.row) * s.rowOff;
+      return BASE + ROOT + Math.floor(deg / s.steps.length) * 12 + s.steps[deg % s.steps.length];
+    };
+    const relabel = () => {
+      for (const el of toneKeys) {
+        const m = midiFor(el);
+        el.style.setProperty('--tint', `oklch(70% 0.15 ${((m % 12) * 30 + 20) % 360})`);
+        el.querySelector('.kbs__note')!.textContent = NAMES[m % 12];
+        el.classList.toggle('is-root', (m - ROOT) % 12 === 0);
+      }
+      if (scaleBtn) scaleBtn.textContent = `${NAMES[ROOT]} ${SCALES[scale].name}`;
+    };
+    relabel();
+
+    let plays = 0;
+    const press = (code: string) => {
+      const el = keys.get(code);
+      if (!el || held.has(code) || !boot()) return;
+      const vel = velocity();
+      if (el.dataset.kind === 'drum') {
+        drum(DRUMS.indexOf(el.querySelector('.kbs__note')!.textContent || ''), vel);
+        held.set(code, { release: () => {} });
+      } else {
+        held.set(code, noteOn(midiFor(el), vel));
+        root.style.setProperty('--kbs-glow', el.style.getPropertyValue('--tint'));
+      }
+      el.classList.add('is-on');
+      if (++plays === 1 && hint) hint.textContent = 'That’s it. Hold a letter and it swells.';
+      if (plays === 24 && hint) hint.innerHTML = 'Sounding good. <a href="/keyboard">Record it over a song ↗</a>';
+    };
+    const release = (code: string) => {
+      held.get(code)?.release(); held.delete(code);
+      keys.get(code)?.classList.remove('is-on');
+    };
+    const releaseAll = () => [...held.keys()].forEach(release);
+
+    // The board only owns the keyboard while it is on screen.
+    let visible = false;
+    new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; root.classList.toggle('is-live', visible); if (!visible) releaseAll(); }, { threshold: 0.35 }).observe(root);
+
+    const typing = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+    };
+    // Capture phase so other front-door key instruments don't double-sound while this one is on screen.
+    window.addEventListener('keydown', (e) => {
+      if (!visible || e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || !keys.has(e.code)) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (!e.repeat) press(e.code);
+    }, { capture: true, signal });
+    window.addEventListener('keyup', (e) => {
+      if (!held.has(e.code)) return;
+      e.stopImmediatePropagation(); release(e.code);
+    }, { capture: true, signal });
+    window.addEventListener('blur', releaseAll, { signal });
+
+    // Pointer: tap or slide across keys.
+    const board = root.querySelector<HTMLElement>('[data-kbs-board]')!;
+    const pointerKey = new Map<number, string>();
+    const keyAt = (e: PointerEvent) => (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLButtonElement>('.kbs__key')?.dataset.code;
+    board.addEventListener('pointerdown', (e) => {
+      const code = keyAt(e); if (!code) return;
+      e.preventDefault(); board.setPointerCapture(e.pointerId);
+      pointerKey.set(e.pointerId, code); press(code);
+    }, { signal });
+    board.addEventListener('pointermove', (e) => {
+      if (!pointerKey.has(e.pointerId)) return;
+      const code = keyAt(e), prev = pointerKey.get(e.pointerId);
+      if (!code || code === prev) return;
+      release(prev!); pointerKey.set(e.pointerId, code); press(code);
+    }, { signal });
+    const up = (e: PointerEvent) => { const code = pointerKey.get(e.pointerId); if (code) release(code); pointerKey.delete(e.pointerId); };
+    board.addEventListener('pointerup', up, { signal });
+    board.addEventListener('pointercancel', up, { signal });
+
+    scaleBtn?.addEventListener('click', () => { scale = (scale + 1) % SCALES.length; relabel(); }, { signal });
+    document.addEventListener('astro:before-swap', () => { releaseAll(); controller.abort(); }, { once: true });
+  }
+
+  mountKeyboardStrip();
+  document.addEventListener('astro:page-load', mountKeyboardStrip);
+</script>
+
+<style>
+  .kbs { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(190px,.72fr) minmax(0,2.33fr); border-top: 2px solid #111; background: #fffdf7; --kbs-glow: var(--signal, #185FA5); }
+  .kbs__label { display: flex; flex-direction: column; min-width: 0; padding: 14px clamp(18px,2.5vw,30px); border-right: 2px solid #111; }
+  .kbs__eyebrow { display: flex; align-items: center; gap: 7px; margin: 0; font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--signal, #185FA5); }
+  .kbs__dot { width: 7px; height: 7px; border-radius: 50%; background: #c9c6bd; transition: background .2s ease; }
+  .kbs.is-live .kbs__dot { background: var(--kbs-glow); }
+  .kbs h2 { margin: 8px 0 0; font-size: clamp(17px,1.6vw,22px); line-height: 1.05; letter-spacing: -.035em; }
+  .kbs h2 em { font-style: normal; color: var(--kbs-glow); transition: color .15s ease; }
+  .kbs__hint { margin: 6px 0 10px; font-size: 12px; line-height: 1.4; color: rgba(0,0,0,.65); }
+  .kbs__hint a { text-decoration: underline; text-underline-offset: 3px; }
+  .kbs__controls { display: flex; flex-wrap: wrap; gap: 6px; margin: auto 0 0; }
+  .kbs__controls :is(button,a) { padding: 6px 8px; border: 1px solid #111; border-radius: 0; background: #fff; color: #111; font: 700 8.5px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .kbs__controls :is(button,a):hover { background: #111; color: #fff; }
+
+  .kbs__board { --gap: 4px; --u: calc((100cqw - 12 * var(--gap)) / 12.75); container-type: inline-size; display: grid; gap: var(--gap); align-content: center; padding: 12px 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .kbs__row { display: flex; gap: var(--gap); padding-left: calc(var(--u) * var(--off)); }
+  .kbs__key { position: relative; flex: 0 0 var(--u); height: 32px; min-width: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 2px; padding: 0 5px 4px; border: 1px solid #111; border-radius: 0; background: #fff; color: #111; cursor: pointer; overflow: hidden; transition: background .12s ease, transform .05s ease; }
+  .kbs__key--tone::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: var(--tint); opacity: .7; }
+  .kbs__key--tone.is-root::before { height: 5px; opacity: 1; }
+  .kbs__key--drum { background: #f3f1ea; }
+  .kbs__cap { font: 700 10px var(--pc-font-mono); }
+  .kbs__note { font: 650 9px var(--pc-font-mono); letter-spacing: .04em; text-transform: uppercase; color: #5f5e5a; white-space: nowrap; overflow: hidden; }
+  .kbs__key.is-on { transform: translateY(1px); background: var(--tint, #111); color: #fff; }
+  .kbs__key.is-on .kbs__note { color: #fff; }
+  .kbs__key:focus-visible { outline: 2px solid var(--signal, #185FA5); outline-offset: 1px; }
+
+  @container (max-width: 560px) {
+    .kbs__note { display: none; }
+    .kbs__key { justify-content: center; padding: 0 0 4px; }
+  }
+  @media (max-width: 980px) {
+    .kbs { grid-template-columns: 1fr; }
+    .kbs__label { border-right: 0; border-bottom: 1px solid #111; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 12px 14px; }
+    .kbs h2 { margin: 0; }
+    .kbs__hint { margin: 0; flex: 1 1 220px; }
+    .kbs__controls { margin: 0; }
+  }
+  @media (max-width: 620px) {
+    .kbs__board { --gap: 3px; padding: 10px; }
+    .kbs__key { height: 38px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .kbs__key, .kbs__dot, .kbs h2 em { transition: none; }
+  }
+</style>
