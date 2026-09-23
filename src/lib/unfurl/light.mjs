@@ -81,3 +81,20 @@ export function liveBucket(date = new Date(), minutes = 5) {
   const m = Math.floor(clock.minute / minutes) * minutes;
   return `${clock.date}T${String(clock.hour).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
+
+/** A representative El Segundo hour for each period — the wall's "see it at" dial. */
+export const PERIOD_HOURS = { dawn: 6, morning: 9, noon: 12, afternoon: 15, golden: 18, blue: 20, night: 23, marine: 8 };
+
+/**
+ * The light for a named period instead of the clock, e.g. `light=golden` on
+ * a card URL. Returns null for anything that isn't a period id.
+ */
+export function lightForPeriod(id) {
+  const hour = PERIOD_HOURS[id];
+  if (hour === undefined) return null;
+  // Build a Date at that hour today, in El Segundo, by walking from now.
+  const now = new Date();
+  const { hour: h, minute: m } = laClock(now);
+  const at = new Date(now.getTime() + ((hour - h) * 60 - m) * 60_000);
+  return lightAt(at, id === 'marine' ? 'fog' : '');
+}

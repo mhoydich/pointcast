@@ -6,7 +6,7 @@
  * with a five-minute bucket, so a link shared twice an hour apart unfurls
  * with two different cards.
  */
-import { lightAt, liveBucket } from '../../../src/lib/unfurl/light.mjs';
+import { lightAt, lightForPeriod, liveBucket } from '../../../src/lib/unfurl/light.mjs';
 import { unfurlClient } from '../../../src/lib/unfurl/client.mjs';
 import { validBucket } from '../../../src/lib/unfurl/urls.mjs';
 import { LIVE_ROOM_IDS, liveCard } from '../../../src/lib/unfurl/cards.mjs';
@@ -52,13 +52,14 @@ function wrap(data: unknown) {
   return data ? { data, images: [] } : null;
 }
 
-async function build(request: Request, env: Env, room: string, client: string): Promise<Response> {
+async function build(request: Request, env: Env, room: string, client: string, forced: string): Promise<Response> {
   const origin = new URL(request.url).origin;
   const [live, presence, weather, serial] = await Promise.all([
     roomData(room, origin),
     jsonSoft<{ humans?: number; agents?: number }>(`${origin}/api/presence/snapshot`, 1500),
     room === 'window' ? Promise.resolve(null) : jsonSoft<{ condition?: string }>(`${origin}${WEATHER}`, 1500),
-    bumpUnfurlCounter(env),
+    // Only real unfurlers count; a browser scrolling /unfurl-wall is not an unfurl.
+    client ? bumpUnfurlCounter(env) : Promise.resolve(0),
   ]);
   if (!live) return fallback(request, 'data', ROOM_FALLBACK[room]);
   const condition = room === 'window' ? live.data?.condition : weather?.condition;
@@ -66,7 +67,7 @@ async function build(request: Request, env: Env, room: string, client: string): 
     room,
     data: live.data,
     images: live.images,
-    light: lightAt(new Date(), condition ?? ''),
+    light: lightForPeriod(forced) ?? lightAt(new Date(), condition ?? ''),
     now: Date.now(),
     client,
     serial,
@@ -84,9 +85,10 @@ async function handle({ request, env, params, waitUntil }: {
   const url = new URL(request.url);
   const bucket = validBucket(url.searchParams.get('b') ?? '') || liveBucket();
   const client = unfurlClient(request.headers.get('user-agent') ?? '');
-  const key = `https://pointcast.xyz/og/live/${room}.png?b=${bucket}&c=${client || 'none'}`;
+  const forced = lightForPeriod(url.searchParams.get('light') ?? '') ? url.searchParams.get('light')! : '';
+  const key = `https://pointcast.xyz/og/live/${room}.png?b=${bucket}&c=${client || 'none'}&l=${forced || 'now'}`;
   try {
-    return await cached(request, key, waitUntil, () => build(request, env, room, client));
+    return await cached(request, key, waitUntil, () => build(request, env, room, client, forced));
   } catch {
     return fallback(request, 'render', ROOM_FALLBACK[room]);
   }
