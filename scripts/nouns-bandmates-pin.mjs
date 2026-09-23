@@ -8,7 +8,6 @@ import {
   BASE,
   BANDMATES_PATH,
   CREATOR,
-  METADATA_DIR,
   TOKEN_COUNT,
   buildContractMetadata,
   buildTokenMetadata,
@@ -18,7 +17,8 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pinsPath = path.join(root, 'contracts/nouns-bandmates/pins.json');
-const metadataDir = path.join(root, METADATA_DIR);
+// Optional IPFS documents stay separate from the frozen on-chain JSON.
+const metadataDir = path.join(root, 'contracts/nouns-bandmates/ipfs-metadata');
 const pinCount = TOKEN_COUNT * 3 + 1;
 
 function parseArgs(argv) {

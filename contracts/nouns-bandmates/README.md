@@ -5,6 +5,9 @@ TZIP-21 token documents used by the Nouns Drum Club Bandmates FA2 preparation.
 They are compiled into the contract storage at origination. There is no metadata
 update entrypoint.
 
+The optional Pinata workflow writes to `ipfs-metadata/`, leaving the frozen
+on-chain documents and the reviewed launch payload untouched.
+
 ## Local compile and review
 
 Run the compile script with an explicit temporary output directory:
