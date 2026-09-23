@@ -183,7 +183,7 @@ export const DIVISION_ONE_DIRECTORY = {
     {
       label: 'PointCast 25 · current board methodology and receipts',
       url: 'https://pointcast.xyz/25',
-      checkedAt: '2026-08-12',
+      checkedAt: POINTCAST_25.asOf,
     },
   ],
   boundaries: {

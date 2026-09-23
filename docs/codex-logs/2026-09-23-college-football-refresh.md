@@ -9,3 +9,5 @@ Board 000's human archive previously imported mutable live data. It now reads it
 Validation: 57 focused tests passed across the board, directory, magazine, Alabama file, mascot game, 2029 identities, field kit, Song Yard, and coach desks. `scripts/verify-football-refresh.mjs` checks the final build for snapshot integrity, directory/ranking parity, current and retained team URLs, original claims, and internal football links.
 
 Sources are linked in Board 001. Directory institutional data retains its August 12 snapshot date. No payment, wallet, voting, or identity contracts changed.
+
+Rendered verification passed for 83 football HTML pages, every internal football link, 25 current and 5 retained team cases, 50 claims, 266 directory programs, and both snapshots. Browser QA confirmed copy interaction and directory search (SMU resolves to its current rank); phone-width navigation fits. Browser review caught a shared-style contrast collision, fixed by setting each core page’s own background and text colors. Full initial site build completed (2,533 generated pages); release build must use the final merged commit.
