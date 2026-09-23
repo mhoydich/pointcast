@@ -40,7 +40,7 @@ test('pages cannot import the retired BaseLayout or PeerCursors stack', () => {
 test('BlockLayout is the only owner of the dock, room client, burst layer, and tug chrome', () => {
   const blockPath = join(layoutsRoot, 'BlockLayout.astro');
   const block = readFileSync(blockPath, 'utf8');
-  const chrome = ['FooterBar', 'CursorRoom', 'SpellLayer', 'TugRope'];
+  const chrome = ['FooterBar', 'CursorRoom', 'SpellLayer', 'TownLine']; // TownLine carries TugRope as the deck's top edge (Bar v2)
 
   for (const component of chrome) {
     assert.equal(occurrences(block, new RegExp(`<${component}\\b`, 'g')), 1, `${component} must mount exactly once`);

@@ -6,6 +6,7 @@ import { mountDockLauncher } from './chrome/dock-launcher';
 import { mountFooterBar } from './chrome/footer-bar';
 import { mountSpellLayer } from './chrome/spell-layer';
 import { mountTugRope } from './chrome/tug-rope';
+import { mountTownLine } from './chrome/town-line';
 
 type EventOptions = boolean | AddEventListenerOptions;
 
@@ -151,6 +152,7 @@ export function initChrome() {
   document.querySelectorAll<HTMLElement>('[data-dock]').forEach((root) => mountFooterBar(root, scope));
   document.querySelectorAll<HTMLElement>('[data-dock-launcher]').forEach((root) => mountDockLauncher(root, scope));
   document.querySelectorAll<HTMLElement>('.tug').forEach((root) => mountTugRope(root, scope));
+  document.querySelectorAll<HTMLElement>('[data-town-line]').forEach((root) => mountTownLine(root, scope));
   document.querySelectorAll<HTMLElement>('.spell-layer').forEach((root) => mountSpellLayer(root, scope));
 
   // Presence is a page singleton. If a transition temporarily leaves two room

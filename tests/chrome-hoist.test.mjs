@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const guarded = ['FooterBar', 'DockLauncher', 'CursorRoom', 'TugRope', 'SpellLayer'];
+const guarded = ['FooterBar', 'DockLauncher', 'CursorRoom', 'TugRope', 'TownLine', 'SpellLayer'];
 
 test('chrome components cannot regress to large inline scripts', async () => {
   for (const name of guarded) {
