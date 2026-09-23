@@ -197,6 +197,7 @@ test('the light dial names periods, and only real unfurlers are counted', async 
   assert.match(wall, /fetch\('\/unfurl-wall\.json'\)/);
   assert.match(wall, /planUnfurl\(/);
   assert.match(JSON.parse(pkg).scripts.build, /astro\.mjs build && node scripts\/unfurl-wall-manifest\.mjs$/);
+});
 
 test('keyboard quartet invites pick a seat, never words', async () => {
   const { quartetSeat, quartetCardUrl } = await import('../src/lib/unfurl/urls.mjs');
