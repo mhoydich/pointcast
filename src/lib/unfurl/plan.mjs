@@ -13,13 +13,16 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
+/** The four-seat keyboard games and which card each wears. */
+const QUARTET_PAGES = { '/keyboard-quartet': 'quartet', '/keyboard-rush': 'rush' };
+
 /**
  * Words a page's unfurl should wear for this request, or null to leave its
  * own. Only /keyboard-quartet invites today, and only from a seat number.
  */
 export function unfurlWords({ pathname, search = '' }) {
-  if (cardPath(pathname) !== '/keyboard-quartet') return null;
-  return quartetWords(quartetSeat(search));
+  const game = QUARTET_PAGES[cardPath(pathname)];
+  return game ? quartetWords(quartetSeat(search), game) : null;
 }
 
 export function planUnfurl({ pathname, search = '', currentImage = '', missing = false, now = new Date() }) {
@@ -30,7 +33,7 @@ export function planUnfurl({ pathname, search = '', currentImage = '', missing =
   let image = '';
   const room = liveRoomFor(path);
   if (room) image = liveCardUrl(room, liveBucket(now));
-  else if (path === '/keyboard-quartet') image = quartetCardUrl(quartetSeat(search), lightBucket(now));
+  else if (QUARTET_PAGES[path]) image = quartetCardUrl(quartetSeat(search), lightBucket(now), SITE, QUARTET_PAGES[path]);
   else if (currentImage && isGeneratedCard(currentImage)) image = withBucket(currentImage, lightBucket(now));
   else if (missing || wantsOwnCard(path, currentImage)) image = pageCardUrl(path, lightBucket(now));
 
