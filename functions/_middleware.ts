@@ -22,7 +22,7 @@ import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-b
 import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
 import { losAngelesDate } from '../src/lib/kennel-club';
 import { datedImageUrl } from '../src/lib/og-version.mjs';
-import { planUnfurl } from '../src/lib/unfurl/plan.mjs';
+import { planUnfurl, unfurlWords } from '../src/lib/unfurl/plan.mjs';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
@@ -110,12 +110,17 @@ function injectTodayDogMetadata(response: Response, pathname: string): Response 
  * their own /og/page.png card, generated cards get the current bucket so
  * caches roll with the light, and motion rooms carry an og:video loop.
  */
-function injectUnfurlCards(response: Response, pathname: string): Response {
+function injectUnfurlCards(response: Response, pathname: string, search = ''): Response {
   // The plan is made from the first image tag seen (og:image leads in every
   // layout; twitter:image stands in on the odd standalone page) and applied
   // to the rest as they stream past.
   let plan: ReturnType<typeof planUnfurl> | null = null;
-  const decide = (seen = '', missing = false) => (plan ??= planUnfurl({ pathname, currentImage: seen, missing }));
+  const decide = (seen = '', missing = false) => (plan ??= planUnfurl({ pathname, search, currentImage: seen, missing }));
+  // Invite links (a saved seat on /keyboard-quartet) retitle the unfurl too.
+  const words = unfurlWords({ pathname, search });
+  const setWords = (value: string) => ({
+    element(element: Element) { if (words) element.setAttribute('content', value); },
+  });
   const sizeTag = (value: string) => ({
     element(element: Element) { if (plan?.image) element.setAttribute('content', value); },
   });
@@ -126,6 +131,8 @@ function injectUnfurlCards(response: Response, pathname: string): Response {
         if (p.image) element.setAttribute('content', p.image);
       },
     })
+    .on('meta[property="og:title"], meta[name="twitter:title"]', setWords(words?.title ?? ''))
+    .on('meta[property="og:description"], meta[name="twitter:description"]', setWords(words?.description ?? ''))
     .on('meta[property="og:image:type"]', sizeTag('image/png'))
     .on('meta[property="og:image:width"]', sizeTag('1200'))
     .on('meta[property="og:image:height"]', sizeTag('630'))
@@ -326,7 +333,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const staticResponse = await withStaticAudioRange(request, await next());
   const staticResponseContentType = staticResponse.headers.get('content-type') ?? '';
   const response = staticResponse.status === 200 && staticResponseContentType.startsWith('text/html')
-    ? injectUnfurlCards(injectTodayDogMetadata(staticResponse, url.pathname), url.pathname)
+    ? injectUnfurlCards(injectTodayDogMetadata(staticResponse, url.pathname), url.pathname, url.search)
     : staticResponse;
   const responseContentType = response.headers.get('content-type') ?? '';
   const isHtmlResponse = response.status === 200 && responseContentType.startsWith('text/html');

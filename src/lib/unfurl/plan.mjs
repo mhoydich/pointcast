@@ -6,13 +6,23 @@
  */
 import { lightBucket, liveBucket } from './light.mjs';
 import { cardPath, liveRoomFor, motionFor, wantsOwnCard } from './rooms.mjs';
-import { SITE, isGeneratedCard, liveCardUrl, pageCardUrl, withBucket } from './urls.mjs';
+import { SITE, isGeneratedCard, liveCardUrl, pageCardUrl, quartetCardUrl, quartetSeat, withBucket } from './urls.mjs';
+import { quartetWords } from './cards.mjs';
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
-export function planUnfurl({ pathname, currentImage = '', missing = false, now = new Date() }) {
+/**
+ * Words a page's unfurl should wear for this request, or null to leave its
+ * own. Only /keyboard-quartet invites today, and only from a seat number.
+ */
+export function unfurlWords({ pathname, search = '' }) {
+  if (cardPath(pathname) !== '/keyboard-quartet') return null;
+  return quartetWords(quartetSeat(search));
+}
+
+export function planUnfurl({ pathname, search = '', currentImage = '', missing = false, now = new Date() }) {
   const path = cardPath(pathname);
   // The homepage keeps its request-time Kennel Club card (injectTodayDogMetadata).
   if (!path || path === '/') return { image: '', headHtml: '' };
@@ -20,6 +30,7 @@ export function planUnfurl({ pathname, currentImage = '', missing = false, now =
   let image = '';
   const room = liveRoomFor(path);
   if (room) image = liveCardUrl(room, liveBucket(now));
+  else if (path === '/keyboard-quartet') image = quartetCardUrl(quartetSeat(search), lightBucket(now));
   else if (currentImage && isGeneratedCard(currentImage)) image = withBucket(currentImage, lightBucket(now));
   else if (missing || wantsOwnCard(path, currentImage)) image = pageCardUrl(path, lightBucket(now));
 
