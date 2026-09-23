@@ -1,60 +1,74 @@
 ---
-import { CAMPUS_CARDS_CONTRACT, CAMPUS_CARDS_LIVE, type CampusCard } from '../lib/campus-cards';
+import { CAMPUS_CARDS_CONTRACT, type CampusCard } from '../lib/campus-cards';
 
 interface Props { card: CampusCard }
 const { card } = Astro.props;
 ---
 
-<div class="cc-mint" data-cc-mint data-contract={CAMPUS_CARDS_CONTRACT} data-token-id={card.tokenId} data-price={card.priceMutez} data-live={CAMPUS_CARDS_LIVE ? '1' : '0'}>
-  {CAMPUS_CARDS_LIVE ? (
-    <>
-      <label class="cc-mint__qty">
-        <span>Qty</span>
-        <select data-cc-qty>
-          {[1, 2, 3, 5, 10].map((n) => <option value={n}>{n}</option>)}
-        </select>
-      </label>
-      <button type="button" class="cc-mint__button" data-cc-button>Mint for {card.priceTez}</button>
-    </>
-  ) : (
-    <button type="button" class="cc-mint__button" disabled>Mint opens at origination</button>
-  )}
-  <p class="cc-mint__state" data-cc-state>
-    {CAMPUS_CARDS_LIVE
-      ? <>Kukai or any Tezos wallet. {card.edition}. Proceeds go to the PointCast treasury.</>
-      : <>The contract is compiled and waiting on its signer. {card.edition}, {card.priceTez} each.</>}
-  </p>
+<div class="cc-mint" data-cc-mint data-contract={CAMPUS_CARDS_CONTRACT} data-token-id={card.tokenId} data-price={card.priceMutez} data-price-label={card.priceTez} data-edition={card.edition}>
+  <label class="cc-mint__qty">
+    <span>Qty</span>
+    <select data-cc-qty disabled>
+      {[1, 2, 3, 5, 10].map((n) => <option value={n}>{n}</option>)}
+    </select>
+  </label>
+  <button type="button" class="cc-mint__button" data-cc-button disabled>Checking the contract…</button>
+  <p class="cc-mint__state" data-cc-state>{card.edition}, {card.priceTez} each.</p>
 </div>
 
 <script>
-  document.querySelectorAll<HTMLElement>('[data-cc-mint][data-live="1"]').forEach((root) => {
-    const button = root.querySelector<HTMLButtonElement>('[data-cc-button]');
-    const qty = root.querySelector<HTMLSelectElement>('[data-cc-qty]');
-    const state = root.querySelector<HTMLElement>('[data-cc-state]');
-    if (!button || !qty || !state) return;
-    const idle = button.textContent;
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      button.textContent = 'Opening wallet…';
-      try {
-        const { mintCampusCard } = await import('../lib/tezos');
-        const result = await mintCampusCard({
-          contract: root.dataset.contract ?? '',
-          tokenId: Number(root.dataset.tokenId),
-          quantity: Number(qty.value),
-          priceMutez: Number(root.dataset.price),
-        });
-        button.textContent = 'Waiting for a block…';
-        state.innerHTML = `Sent. <a href="https://tzkt.io/${result.opHash}" target="_blank" rel="noopener">Watch it on TzKT →</a>`;
-        await result.confirmation;
-        button.textContent = 'In your wallet';
-      } catch (error) {
-        button.disabled = false;
-        button.textContent = idle;
-        state.textContent = error instanceof Error ? error.message : 'The wallet did not send it.';
-      }
-    });
-  });
+  // The contract address lives in /api/campus-cards/state (set from /desk the
+  // moment it is originated), so the room goes live without a redeploy.
+  async function liveContract(fallback: string): Promise<{ contract: string; paused: boolean } | null> {
+    let contract = fallback;
+    try {
+      const state = await fetch('/api/campus-cards/state').then((r) => (r.ok ? r.json() : null));
+      if (state?.contract) contract = state.contract;
+    } catch {}
+    if (!contract.startsWith('KT1')) return null;
+    try {
+      const storage = await fetch(`https://api.tzkt.io/v1/contracts/${contract}/storage`).then((r) => (r.ok ? r.json() : null));
+      return { contract, paused: Boolean(storage?.paused) };
+    } catch { return { contract, paused: true }; }
+  }
+
+  async function mountCampusMint(): Promise<void> {
+    const roots = [...document.querySelectorAll<HTMLElement>('[data-cc-mint]')].filter((r) => !r.dataset.mounted);
+    if (!roots.length) return;
+    roots.forEach((r) => { r.dataset.mounted = '1'; });
+    const live = await liveContract(roots[0].dataset.contract ?? '');
+    for (const root of roots) {
+      const button = root.querySelector<HTMLButtonElement>('[data-cc-button]')!;
+      const qty = root.querySelector<HTMLSelectElement>('[data-cc-qty]')!;
+      const state = root.querySelector<HTMLElement>('[data-cc-state]')!;
+      const price = root.dataset.priceLabel;
+      if (!live) { button.textContent = 'Mint opens at origination'; state.textContent = `The contract is compiled and waiting on its signer. ${root.dataset.edition}, ${price} each.`; continue; }
+      if (live.paused) { button.textContent = 'Minting opens soon'; state.textContent = `On chain and paused. ${root.dataset.edition}, ${price} each.`; continue; }
+      button.disabled = false; qty.disabled = false;
+      button.textContent = `Mint for ${price}`;
+      state.textContent = `Kukai or any Tezos wallet. ${root.dataset.edition}. Proceeds go to the PointCast treasury.`;
+      const idle = button.textContent;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = 'Opening wallet…';
+        try {
+          const { mintCampusCard } = await import('../lib/tezos');
+          const result = await mintCampusCard({ contract: live.contract, tokenId: Number(root.dataset.tokenId), quantity: Number(qty.value), priceMutez: Number(root.dataset.price) });
+          button.textContent = 'Waiting for a block…';
+          state.innerHTML = `Sent. <a href="https://tzkt.io/${result.opHash}" target="_blank" rel="noopener">Watch it on TzKT →</a>`;
+          await result.confirmation;
+          button.textContent = 'In your wallet';
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = idle;
+          state.textContent = error instanceof Error ? error.message : 'The wallet did not send it.';
+        }
+      });
+    }
+  }
+
+  void mountCampusMint();
+  document.addEventListener('astro:page-load', () => { void mountCampusMint(); });
 </script>
 
 <style>
