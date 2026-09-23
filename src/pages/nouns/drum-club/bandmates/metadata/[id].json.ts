@@ -15,19 +15,20 @@ export const getStaticPaths: GetStaticPaths = () => NOUNS_DRUM_CLUB_BANDMATES.ma
 export const GET: APIRoute<{ id: number }> = ({ props }) => {
   const bandmate = getNounsDrumClubBandmate(props.id);
   if (!bandmate) {
-    return new Response(JSON.stringify({ error: 'bandmate-not-found', status: 'not-minted' }, null, 2), {
+    return new Response(JSON.stringify({ error: 'bandmate-not-found', status: 'prepared' }, null, 2), {
       status: 404,
       headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff' },
     });
   }
-  return new Response(JSON.stringify(nounsDrumClubBandmateMetadata(bandmate), null, 2), {
+  const metadata = nounsDrumClubBandmateMetadata(bandmate);
+  return new Response(JSON.stringify(metadata, null, 2), {
     status: 200,
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'public, max-age=300, s-maxage=3600',
       'Access-Control-Allow-Origin': '*',
       'X-Content-Type-Options': 'nosniff',
-      'X-PointCast-Collectible-Status': 'not-minted',
+      'X-PointCast-Collectible-Status': metadata.status,
     },
   });
 };

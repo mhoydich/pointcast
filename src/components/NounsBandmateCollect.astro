@@ -1,0 +1,153 @@
+---
+import { NOUNS_BANDMATES_RELEASE } from '../lib/nouns-bandmates-mint';
+
+interface Props { tokenId: number; name: string; }
+const { tokenId, name } = Astro.props;
+const configured = NOUNS_BANDMATES_RELEASE.status === 'live' && Boolean(NOUNS_BANDMATES_RELEASE.contract);
+---
+
+<section class="bandmate-collect" data-bandmate-collect data-token-id={tokenId} data-name={name}>
+  <button type="button" data-bandmate-collect-button disabled={!configured}>
+    {configured ? 'Connect & collect · free + gas' : 'Collecting prepared'}
+  </button>
+  <p data-bandmate-collect-state role="status" aria-live="polite">
+    {configured ? 'Verifying the mainnet contract…' : 'Preview only · no collectible contract is live.'}
+  </p>
+</section>
+
+<script>
+  const POLL_TRIES = 12;
+  const POLL_MS = 5_000;
+  let sharedReadiness: Promise<import('../lib/nouns-bandmates-mint').NounsBandmatesMintReadiness> | null = null;
+
+  function state(root: HTMLElement, text: string, href?: string): void {
+    const node = root.querySelector<HTMLElement>('[data-bandmate-collect-state]');
+    if (!node) return;
+    if (!href) return void node.replaceChildren(text);
+    const link = document.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'View on TzKT';
+    node.replaceChildren(text, ' · ', link);
+  }
+
+  function friendlyError(error: unknown): string {
+    const text = String((error as any)?.message || error || 'collect failed');
+    if (/reject|cancel|abort/i.test(text)) return 'Wallet request canceled.';
+    return text.slice(0, 160);
+  }
+
+  async function verify(root: HTMLElement, fresh = false): Promise<boolean> {
+    const button = root.querySelector<HTMLButtonElement>('[data-bandmate-collect-button]');
+    if (!button) return false;
+    const { getNounsBandmatesMintReadiness } = await import('../lib/nouns-bandmates-mint');
+    // All twelve cards share the initial four chain reads. A collection click
+    // bypasses that snapshot so stale readiness can never authorize a mint.
+    if (fresh || !sharedReadiness) sharedReadiness = getNounsBandmatesMintReadiness();
+    const ready = await sharedReadiness;
+    if (!ready.mintEnabled) {
+      button.disabled = true;
+      button.textContent = 'Collecting prepared';
+      state(root, ready.status === 'prepared' ? 'Preview only · no collectible contract is live.' : 'Collecting unavailable · contract verification failed.');
+      return false;
+    }
+    button.disabled = false;
+    button.textContent = 'Connect & collect · free + gas';
+    state(root, 'Free open edition · quantity 1 · Tezos network fee applies.');
+    return true;
+  }
+
+  async function indexedBalance(tokenId: number, address: string): Promise<number> {
+    const { getNounsBandmateWalletBalance } = await import('../lib/nouns-bandmates-mint');
+    return getNounsBandmateWalletBalance(tokenId, address);
+  }
+
+  async function pollBalance(tokenId: number, address: string, before: number): Promise<number | null> {
+    for (let attempt = 0; attempt < POLL_TRIES; attempt += 1) {
+      const balance = await indexedBalance(tokenId, address).catch(() => before);
+      if (balance > before) return balance;
+      await new Promise((resolve) => window.setTimeout(resolve, POLL_MS));
+    }
+    return null;
+  }
+
+  function initialize(root: HTMLElement): void {
+    if (root.dataset.bandmateCollectReady === 'true') return;
+    root.dataset.bandmateCollectReady = 'true';
+    const tokenId = Number(root.dataset.tokenId);
+    const pending = Object.keys(localStorage).find((key) => key.startsWith(`pointcast:bandmate-collect:${tokenId}:`));
+    if (pending) {
+      const button = root.querySelector<HTMLButtonElement>('[data-bandmate-collect-button]');
+      if (button) { button.disabled = true; button.textContent = 'Check collection'; }
+      try {
+        const record = JSON.parse(localStorage.getItem(pending) || '{}');
+        state(root, 'A collection was started in this browser. Check its wallet receipt before another attempt.', /^o[1-9A-HJ-NP-Za-km-z]{50}$/.test(record.opHash) ? `https://tzkt.io/${record.opHash}` : undefined);
+      } catch { state(root, 'A collection was started in this browser. Check your wallet before another attempt.'); }
+      return;
+    }
+    void verify(root).catch(() => state(root, 'Collecting unavailable · try again.'));
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-bandmate-collect]').forEach(initialize);
+  document.addEventListener('astro:page-load', () => document.querySelectorAll<HTMLElement>('[data-bandmate-collect]').forEach(initialize));
+
+  document.addEventListener('click', async (event) => {
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-bandmate-collect-button]');
+    const root = button?.closest<HTMLElement>('[data-bandmate-collect]');
+    if (!button || !root || button.disabled) return;
+    const tokenId = Number(root.dataset.tokenId);
+    button.disabled = true;
+    let guardKey = '';
+    let submitted = false;
+    try {
+      if (!(await verify(root, true))) return;
+      button.disabled = true;
+      button.textContent = 'Connect in wallet…';
+      const { connectKukai, mintNounsBandmate } = await import('../lib/tezos');
+      const address = await connectKukai();
+      const before = await indexedBalance(tokenId, address);
+      guardKey = `pointcast:bandmate-collect:${tokenId}:${address}`;
+      if (localStorage.getItem(guardKey)) throw new Error('This collection was already started. Check your wallet before trying again.');
+      localStorage.setItem(guardKey, JSON.stringify({ state: 'wallet-requested', before, at: new Date().toISOString() }));
+      state(root, 'Confirm the collection in your wallet.');
+      const operation = await mintNounsBandmate(tokenId, address);
+      submitted = true;
+      localStorage.setItem(guardKey, JSON.stringify({ state: 'submitted', opHash: operation.opHash, before }));
+      const receipt = `https://tzkt.io/${operation.opHash}`;
+      state(root, 'Submitted · waiting for confirmation', receipt);
+      await operation.confirmation;
+      state(root, 'Confirmed on-chain · checking your indexed balance', receipt);
+      const balance = await pollBalance(tokenId, address, before);
+      if (balance !== null) {
+        button.hidden = true;
+        localStorage.removeItem(guardKey);
+        state(root, `Collected · wallet balance ${balance}`, receipt);
+      } else {
+        button.disabled = true;
+        button.textContent = 'Indexer updating';
+        state(root, 'Confirmed on-chain · indexer balance is still pending', receipt);
+      }
+    } catch (error) {
+      const canceled = !submitted && /reject|cancel|abort/i.test(String((error as any)?.name || '') + String((error as any)?.message || ''));
+      if (canceled && guardKey) localStorage.removeItem(guardKey);
+      if (guardKey && !canceled) {
+        button.disabled = true;
+        button.textContent = 'Check collection';
+        state(root, 'Wallet outcome is uncertain. Check the wallet and TzKT before another attempt.');
+      } else {
+        button.disabled = false;
+        button.textContent = 'Try collecting again';
+        state(root, `Collect failed · ${friendlyError(error)}`);
+      }
+    }
+  });
+</script>
+
+<style>
+  .bandmate-collect { display: grid; gap: 8px; }
+  button { min-height: 44px; width: fit-content; border: 1px solid currentColor; background: var(--club, #5b35d5); color: white; padding: 10px 12px; cursor: pointer; font: 700 12px/1.3 var(--pc-font-mono); letter-spacing: .04em; text-transform: uppercase; }
+  button:disabled { cursor: not-allowed; opacity: .55; }
+  p { margin: 0; color: var(--pc-ink-soft); font: 500 12px/1.45 var(--pc-font-mono); letter-spacing: .01em; }
+  a { color: inherit; }
+</style>

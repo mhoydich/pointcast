@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { NOUNS_DRUM_CLUB_BANDMATES_STATUS } from '../lib/nouns-drum-club-bandmates';
 import { PAD_DEFINITIONS } from '../lib/nouns-drum-club-audio';
 import { SCORE_PRESET_OPTIONS } from '../lib/nouns-drum-club-score';
 
@@ -18,7 +19,7 @@ export const GET: APIRoute = () => {
     controls: { keyboard: '1–0 drums; Q–P bass; A–L mallets; Z–M chords and sparkle; Shift plays softly; Space toggles the loop; Escape stops.', touch: 'Tap the visible pads. On phones each sound family expands into larger touch targets.' },
     pads: PAD_DEFINITIONS,
     presets: SCORE_PRESET_OPTIONS,
-    bandmates: { human: `${base}/nouns/drum-club/bandmates/`, count: 12, status: 'not-minted', kit: `${base}/images/nouns-drum-club/bandmates/bandmates-kit.zip`, metadataTemplate: `${base}/nouns/drum-club/bandmates/metadata/{catalogId}.json`, note: 'Twelve companion artworks with playable scores. No contract, mint, or purchase is required to play.' },
+    bandmates: { human: `${base}/nouns/drum-club/bandmates/`, count: 12, status: NOUNS_DRUM_CLUB_BANDMATES_STATUS, kit: `${base}/images/nouns-drum-club/bandmates/bandmates-kit.zip`, metadataTemplate: `${base}/nouns/drum-club/bandmates/metadata/{catalogId}.json`, note: 'Twelve companion artworks with playable scores. Every beat is free to play.' },
     campaign: { id: 'PC-NOUNS-EVERYBODY-2026', human: `${base}/nouns/drum-club/campaign/`, manifest: `${base}/ads/nouns-drum-club/campaign.json`, kit: `${base}/ads/nouns-drum-club/campaign-kit.zip`, concepts: 3, formats: 10, assets: 30, audio: 'none' },
     loops: { steps: 16, tempo: {min:60,max:180}, storage:'this browser only', sharing:'The beat query parameter carries the score; opening a link never autoplays it.' },
     arrangements: { human: `${base}/nouns/drum-club/bandmates/#make-a-band`, roles: ['drum', 'bass', 'mallet', 'chord'], membersPerRole: 3, combinations: 81, daily: 'One shared starting quartet per UTC day; computed in the browser, with no streaks or account.', lineup: 'band query parameter: four catalog IDs ordered drum, bass, mallet, chord', playback: 'The beat query parameter carries the exact arrangement; press Play to hear it.' },

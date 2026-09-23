@@ -354,6 +354,21 @@ export async function mintCampusCard(params: {
   return { opHash: operation.opHash, confirmation: operation.confirmation(1) };
 }
 
+/** Submit one verified, zero-price Nouns Bandmate mint through the shared wallet. */
+export async function mintNounsBandmate(tokenId: number, expectedAddress?: string): Promise<{ address: string; opHash: string; confirmation: Promise<unknown> }> {
+  const { assertNounsBandmateMintReady } = await import('./nouns-bandmates-mint');
+  const readiness = await assertNounsBandmateMintReady(tokenId);
+  const wallet = await walletReady();
+  const tezos = await tezosClient();
+  const address = await ensurePointCastPermissions(wallet);
+  if (expectedAddress && address !== expectedAddress) throw new Error('Wallet account changed before collection. Please try again.');
+  const contract = await tezos.wallet.at(readiness.contract);
+  const mint = (contract.methodsObject as any).mint;
+  if (typeof mint !== 'function') throw new Error('Verified contract does not expose mint.');
+  const operation = await mint(tokenId).send({ amount: 0, mutez: true });
+  return { address, opHash: operation.opHash, confirmation: operation.confirmation(1) };
+}
+
 /** Submit one allowlisted director operation through the shared Beacon wallet. */
 export async function submitDirectorOperation(
   operation: DirectorOperation,
