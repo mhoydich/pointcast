@@ -448,7 +448,7 @@ export function mountFooterBar(root, scope) {
     var $attYou     = root.querySelector('[data-pc-ref="fb-att-you"]');
     var $wave       = root.querySelector('[data-pc-ref="fb-wave"]');
     var $vibes      = root.querySelector('[data-pc-ref="fb-vibes"]');
-    var att = { sessions: [], humans: 0, agents: 0, myNoun: -1, myPath: '/', said: {}, seen: {}, sig: '', focus: -1, primed: false, waveFrom: -1 };
+    var att = { sessions: [], humans: 0, agents: 0, myNoun: -1, myPath: '/', said: {}, seen: {}, sig: '', faceSeen: {}, focus: -1, primed: false, waveFrom: -1 };
 
     function attSince(iso) { var m = Math.max(0, Math.floor((Date.now() - Date.parse(iso || '')) / 60000)); return !isFinite(m) || m < 1 ? 'just arrived' : m < 60 ? m + 'm here' : Math.floor(m / 60) + 'h here'; }
     function attPlace(path) { return !path || path === '/' ? 'the front door' : path; }
@@ -474,8 +474,26 @@ export function mountFooterBar(root, scope) {
     function renderCrowd() {
       if (!$crowd) return;
       var others = attOthers(), total = att.humans + att.agents, here = others.filter(function (s) { return s.currentPath === att.myPath; }).length;
-      $crowdFaces.replaceChildren.apply($crowdFaces, others.slice(0, 4).map(attFace));
-      $crowdCount.textContent = String(Math.max(1, total));
+      // Reconcile faces by Noun instead of rebuilding them: the chip keeps a
+      // fixed width (CSS) and the same <img> nodes, so a join, a leave or a
+      // tab reconnecting never nudges the bar. Someone who drops off lingers
+      // for a few seconds, which also swallows socket blips.
+      var now = Date.now(), shown = others.slice(0, 4), keep = {};
+      shown.forEach(function (s) { keep[s.nounId] = 1; att.faceSeen[s.nounId] = now; });
+      Array.prototype.slice.call($crowdFaces.children).forEach(function (f) {
+        var n = Number(f.getAttribute('data-noun'));
+        if (keep[n]) { f.removeAttribute('data-leaving'); return; }
+        if (now - (att.faceSeen[n] || 0) < 6000 && $crowdFaces.childElementCount > shown.length) { f.setAttribute('data-leaving', 'true'); return; }
+        f.remove();
+      });
+      shown.forEach(function (s, i) {
+        var f = $crowdFaces.querySelector('.fb__crowd-face[data-noun="' + s.nounId + '"]');
+        if (!f) f = attFace(s);
+        else { f.setAttribute('data-kind', s.kind === 'agent' ? 'agent' : 'human'); if (s.currentPath === att.myPath) f.setAttribute('data-here', 'true'); else f.removeAttribute('data-here'); }
+        if ($crowdFaces.children[i] !== f) $crowdFaces.insertBefore(f, $crowdFaces.children[i] || null);
+      });
+      while ($crowdFaces.childElementCount > 4) $crowdFaces.lastElementChild.remove();
+      $crowdCount.textContent = total > 999 ? '1k+' : String(Math.max(1, total));
       $crowd.setAttribute('data-alone', others.length ? 'false' : 'true');
       $crowd.title = others.length ? (total + ' in town' + (att.agents ? ' · ' + att.agents + ' AI' : '') + (here ? ' · ' + here + ' on this page with you' : '') + ' — open attendance') : 'Just you in town right now';
       $crowd.setAttribute('aria-label', $crowd.title);
