@@ -1,0 +1,188 @@
+<ghost-town-skyward class="skyward">
+  <div class="skyward-heading">
+    <div><span class="skyward-eyebrow">A small game for the long way up</span><h2>Skyward</h2></div>
+    <span class="skyward-sky" data-sky>01 / 03 · Snow hush</span>
+  </div>
+  <p class="skyward-intro">Float into the little lights. Seven open another sky. Take your time.</p>
+  <div class="skyward-field" tabindex="0" role="group" aria-label="Skyward play area. Use left and right arrows or A and D to float; space to pause.">
+    <canvas aria-hidden="true"></canvas>
+    <div class="skyward-overlay" data-overlay><span>Take a little flight.</span><small>Press start, then drift toward the lights.</small></div>
+    <div class="skyward-meter" aria-hidden="true"><span data-dots>○ ○ ○ ○ ○ ○ ○</span><span data-count>0 / 7 lights</span></div>
+  </div>
+  <div class="skyward-controls">
+    <div class="skyward-actions"><button type="button" class="skyward-primary" data-toggle>Start floating</button><button type="button" data-reset>Start over</button></div>
+    <div class="skyward-directions" aria-label="Drift controls"><button type="button" data-left aria-label="Drift left">←</button><button type="button" data-right aria-label="Drift right">→</button></div>
+  </div>
+  <p class="skyward-help">Drag across the sky, tap the arrows, or use <kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> while the game is focused. <kbd>Space</kbd> pauses.</p>
+  <p class="skyward-status" role="status" aria-live="polite" data-status>Ready. Collect seven lights to open the next sky.</p>
+  <noscript><p>Skyward needs JavaScript. You can still enjoy the video above.</p></noscript>
+</ghost-town-skyward>
+
+<script>
+  import { createSkyward, resumeSkyward, pauseSkyward, resizeSkyward, stepSkyward, SKIES } from '../lib/ghost-town-skyward.mjs';
+
+  class GhostTownSkyward extends HTMLElement {
+    cleanup: (() => void) | null = null;
+    connectedCallback() {
+      if (this.cleanup) return;
+      const field = this.querySelector<HTMLElement>('.skyward-field')!;
+      const canvas = this.querySelector<HTMLCanvasElement>('canvas')!;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { this.querySelector('[data-status]')!.textContent = 'This sky could not open. Enjoy the music and try again later.'; return; }
+      const toggle = this.querySelector<HTMLButtonElement>('[data-toggle]')!;
+      const overlay = this.querySelector<HTMLElement>('[data-overlay]')!;
+      const status = this.querySelector<HTMLElement>('[data-status]')!;
+      const controller = new AbortController();
+      const options = { signal: controller.signal };
+      const motion = matchMedia('(prefers-reduced-motion: reduce)');
+      let reduced = motion.matches, state = createSkyward(), frame = 0, last = 0;
+      let targetX: number | null = null, dragging = false, signature = '';
+      const keys = new Set<string>();
+      const palettes = [
+        { top: '#292b48', bottom: '#979abb', cliff: '#3e405c', far: '#64667f', light: '#e6e3ff' },
+        { top: '#23192f', bottom: '#8d6d9a', cliff: '#47364f', far: '#725b7c', light: '#ffdcfc' },
+        { top: '#564b6e', bottom: '#efc5ab', cliff: '#6c607b', far: '#a28a99', light: '#fff0c9' },
+      ];
+      const circle = (x: number, y: number, radius: number, color: string) => {
+        ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+      };
+      const paint = () => {
+        const { width: w, height: h, time, stage } = state, p = palettes[stage];
+        const sky = ctx.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, p.top); sky.addColorStop(1, p.bottom);
+        ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+        const halo = ctx.createRadialGradient(w * 0.52, h * 0.32, 1, w * 0.52, h * 0.32, h * 0.65);
+        halo.addColorStop(0, stage === 2 ? '#ffe4b52b' : '#c5b7ff20'); halo.addColorStop(1, '#ffffff00');
+        ctx.fillStyle = halo; ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 35; i++) {
+          const x = ((i * 173.31 + 18) % 997) / 997 * w;
+          const y = ((i * 87.71 + 24) % 263) / 263 * h * 0.76;
+          const alpha = reduced ? 0.38 : 0.25 + Math.sin(time * 0.6 + i) * 0.13;
+          circle(x, y, i % 4 === 0 ? 1.1 : 0.65, `rgba(247,239,255,${alpha})`);
+        }
+        circle(w * 0.77, h * 0.19, stage === 2 ? 21 : 15, stage === 2 ? '#ffeac6c9' : '#ece4ff9c');
+        const ridge = (color: string, points: number[][]) => {
+          ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0, h);
+          for (const [x, y] of points) ctx.lineTo(x * w, y * h);
+          ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+        };
+        ridge(p.far, [[0,.66],[.12,.57],[.24,.64],[.37,.49],[.5,.7],[.61,.59],[.72,.65],[.86,.48],[1,.62]]);
+        ridge(p.cliff, [[0,.5],[.12,.48],[.13,.55],[.24,.56],[.25,.74],[.34,.77],[.36,1],[.69,1],[.72,.81],[.82,.79],[.84,.57],[1,.53]]);
+        ctx.strokeStyle = '#e5e1ef38'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0,h*.5); ctx.lineTo(w*.12,h*.48); ctx.lineTo(w*.13,h*.55); ctx.lineTo(w*.24,h*.56);
+        ctx.moveTo(w*.84,h*.57); ctx.lineTo(w,h*.53); ctx.stroke();
+        for (const orb of state.orbs) {
+          ctx.shadowBlur = reduced ? 0 : 14; ctx.shadowColor = p.light;
+          circle(orb.x, orb.y, 5, p.light); ctx.shadowBlur = 0;
+          ctx.strokeStyle = `${p.light}52`; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(orb.x, orb.y, 10, 0, Math.PI * 2); ctx.stroke();
+        }
+        if (!reduced) for (const spark of state.sparks) {
+          ctx.strokeStyle = `rgba(255,242,221,${spark.life})`; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(spark.x, spark.y, (0.7 - spark.life) * 44 + 7, 0, Math.PI * 2); ctx.stroke();
+        }
+        const gx = state.x, gy = h - 57 + (reduced ? 0 : Math.sin(time * 2) * 2);
+        ctx.save(); ctx.translate(gx, gy);
+        ctx.fillStyle = '#eeeaff'; ctx.shadowBlur = reduced ? 0 : 18; ctx.shadowColor = '#dfd7ff55';
+        ctx.beginPath(); ctx.moveTo(-16, 13); ctx.lineTo(-16, -2); ctx.bezierCurveTo(-16,-23,16,-23,16,-2);
+        ctx.lineTo(16,13); ctx.quadraticCurveTo(11,6,6,13); ctx.quadraticCurveTo(0,6,-5,13); ctx.quadraticCurveTo(-11,6,-16,13); ctx.fill();
+        ctx.shadowBlur = 0; circle(-5,-3,1.8,'#514665'); circle(5,-3,1.8,'#514665');
+        ctx.strokeStyle = '#9180a2'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.arc(0,1,3,0.2,Math.PI-.2); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = '#f0e9ff32'; ctx.fillRect(20, h - 23, w - 40, 1);
+      };
+      const sync = () => {
+        const next = `${state.phase}:${state.stage}:${state.lights}`;
+        if (next === signature) return;
+        signature = next;
+        this.querySelector('[data-sky]')!.textContent = `0${state.stage + 1} / 03 · ${SKIES[state.stage]}`;
+        this.querySelector('[data-count]')!.textContent = `${state.lights} / 7 lights`;
+        this.querySelector('[data-dots]')!.textContent = Array.from({ length: 7 }, (_, i) => i < state.lights ? '●' : '○').join(' ');
+        toggle.textContent = ({ ready: 'Start floating', playing: 'Pause', paused: 'Keep floating', complete: 'Float again' })[state.phase];
+        overlay.hidden = state.phase === 'playing';
+        const words = ({ ready: ['Take a little flight.', 'Press start, then drift toward the lights.'], paused: ['A moment of quiet.', 'Your lights are right here.'], complete: ['You found the first light.', 'Stay awhile. Or take another flight.'] })[state.phase];
+        if (words) { overlay.querySelector('span')!.textContent = words[0]; overlay.querySelector('small')!.textContent = words[1]; }
+        status.textContent = state.phase === 'complete' ? 'All three skies found. You collected 21 lights. Float again whenever you like.'
+          : `${SKIES[state.stage]}. ${state.lights} of 7 lights. ${state.phase === 'paused' ? 'Paused.' : state.phase === 'ready' ? 'Ready to float.' : ''}`;
+      };
+      const tick = (now: number) => {
+        frame = 0;
+        if (state.phase !== 'playing') return;
+        const direction = Number(keys.has('right')) - Number(keys.has('left'));
+        stepSkyward(state, last ? (now - last) / 1000 : 0, direction, targetX); last = now;
+        paint(); sync();
+        if (state.phase === 'playing') frame = requestAnimationFrame(tick);
+      };
+      const pause = () => {
+        pauseSkyward(state); keys.clear(); targetX = null; dragging = false;
+        cancelAnimationFrame(frame); frame = 0; last = 0; sync(); paint();
+      };
+      const play = () => {
+        if (state.phase === 'complete') state = createSkyward(state.width, state.height);
+        if (document.hidden) return;
+        resumeSkyward(state); last = 0; cancelAnimationFrame(frame); frame = requestAnimationFrame(tick); sync();
+      };
+      const switchPlay = () => { state.phase === 'playing' ? pause() : play(); };
+      toggle.addEventListener('click', () => { switchPlay(); if (state.phase === 'playing') field.focus({ preventScroll: true }); }, options);
+      this.querySelector('[data-reset]')!.addEventListener('click', () => {
+        pause(); state = createSkyward(state.width, state.height); signature = ''; sync(); paint();
+      }, options);
+      field.addEventListener('keydown', event => {
+        if (event.target !== field || event.metaKey || event.ctrlKey || event.altKey) return;
+        const key = event.key.toLowerCase();
+        if (['arrowleft', 'a', 'arrowright', 'd'].includes(key)) {
+          event.preventDefault(); if (state.phase === 'complete') return;
+          if (state.phase !== 'playing') play(); targetX = null;
+          keys.add(['arrowleft','a'].includes(key) ? 'left' : 'right');
+        } else if (key === ' ') { event.preventDefault(); if (!event.repeat) switchPlay(); }
+        else if (key === 'escape') pause();
+      }, options);
+      window.addEventListener('keyup', event => {
+        if (['ArrowLeft','a','A'].includes(event.key)) keys.delete('left');
+        if (['ArrowRight','d','D'].includes(event.key)) keys.delete('right');
+      }, options);
+      field.addEventListener('blur', () => keys.clear(), options);
+      const aim = (event: PointerEvent) => { targetX = event.clientX - field.getBoundingClientRect().left; };
+      field.addEventListener('pointerdown', event => {
+        if (!event.isPrimary || event.button !== 0 || state.phase === 'complete') return;
+        field.focus({ preventScroll: true }); field.setPointerCapture(event.pointerId); dragging = true;
+        if (state.phase !== 'playing') play(); aim(event);
+      }, options);
+      field.addEventListener('pointermove', event => { if (dragging) aim(event); }, options);
+      const stopDrag = () => { dragging = false; };
+      field.addEventListener('pointerup', stopDrag, options); field.addEventListener('pointercancel', stopDrag, options);
+      for (const [selector, direction] of [['[data-left]', -1], ['[data-right]', 1]] as const) {
+        this.querySelector(selector)!.addEventListener('click', () => {
+          if (state.phase === 'complete') return;
+          if (state.phase !== 'playing') play(); targetX = state.x + direction * state.width * 0.15;
+        }, options);
+      }
+      document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); }, options);
+      window.addEventListener('blur', pause, options);
+      motion.addEventListener('change', event => { reduced = event.matches; paint(); }, options);
+      const observer = new ResizeObserver(() => {
+        const bounds = field.getBoundingClientRect();
+        if (bounds.width < 1 || bounds.height < 1) return;
+        resizeSkyward(state, bounds.width, bounds.height); targetX = null;
+        const ratio = Math.min(devicePixelRatio || 1, 2);
+        canvas.width = Math.round(bounds.width * ratio); canvas.height = Math.round(bounds.height * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0); paint();
+      });
+      observer.observe(field); sync();
+      this.cleanup = () => { cancelAnimationFrame(frame); observer.disconnect(); controller.abort(); };
+    }
+    disconnectedCallback() { this.cleanup?.(); this.cleanup = null; }
+  }
+  if (!customElements.get('ghost-town-skyward')) customElements.define('ghost-town-skyward', GhostTownSkyward);
+</script>
+
+<style>
+  .skyward{display:block;padding:clamp(18px,3vw,30px);color:#eee9fc;background:#181621;border:1px solid #a191c12b;border-radius:24px;font-family:var(--pc-font-sans,Inter,sans-serif)}
+  .skyward-heading{display:flex;justify-content:space-between;align-items:end;gap:16px}.skyward-eyebrow,.skyward-sky{font-family:var(--pc-font-mono,monospace);font-size:10px;letter-spacing:.08em;line-height:1.6}.skyward-eyebrow{color:#b2a6ca;text-transform:uppercase}.skyward-sky{color:#d3c7e8;text-align:right;white-space:nowrap}
+  h2{margin:7px 0 0;font-size:clamp(27px,4vw,38px);font-weight:500;letter-spacing:-.04em}.skyward-intro{margin:13px 0 21px;color:#c1b7d1;font-size:14px;line-height:1.65}
+  .skyward-field{position:relative;height:360px;overflow:hidden;border:1px solid #b4a0d12e;border-radius:14px;touch-action:pan-y;outline-offset:5px;background:#353449;cursor:crosshair}.skyward-field:focus-visible{outline:2px solid #e1cffa}.skyward-field canvas{display:block;width:100%;height:100%}
+  .skyward-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:24px;text-align:center;background:#17122420;pointer-events:none}.skyward-overlay[hidden]{display:none}.skyward-overlay span{font-size:clamp(21px,3vw,30px);font-weight:500;text-shadow:0 2px 20px #171224}.skyward-overlay small{font-size:12px;color:#f0eafb;text-shadow:0 1px 8px #171224}
+  .skyward-meter{position:absolute;top:18px;left:20px;right:20px;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:none;color:#f3edff;font-family:var(--pc-font-mono,monospace);font-size:11px}.skyward-meter [data-dots]{font-size:13px;letter-spacing:3px}
+  .skyward-controls,.skyward-actions,.skyward-directions{display:flex;align-items:center;gap:9px}.skyward-controls{justify-content:space-between;flex-wrap:wrap;margin-top:16px}.skyward-directions{margin-left:auto}.skyward button{min-height:44px;border:1px solid #c2b1d638;border-radius:999px;background:#ffffff06;color:#e6ddf5;padding:10px 16px;font:inherit;font-size:12px;cursor:pointer;transition:background .15s}.skyward button:hover{background:#ffffff14}.skyward button:focus-visible{outline:2px solid #dec8ff;outline-offset:3px}.skyward .skyward-primary{background:#d8caee;color:#261c37;border-color:#d8caee;font-weight:600}.skyward .skyward-primary:hover{background:#edddff}.skyward-directions button{width:46px;font-size:19px;padding:8px}
+  .skyward-help{font-size:11px;line-height:1.8;color:#a99dbb;margin:14px 0 0}.skyward-help kbd{font:inherit;color:#d0c2e0}.skyward-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  @media(max-width:600px){.skyward{padding:17px;border-radius:18px}.skyward-field{height:300px}.skyward-heading{align-items:start}.skyward-eyebrow{font-size:8px}.skyward-sky{font-size:9px;max-width:95px;white-space:normal}.skyward-intro{font-size:12px}.skyward button{padding:10px 12px;font-size:11px}.skyward-directions{gap:5px}.skyward-directions button{width:44px}.skyward-meter{left:14px;right:14px}.skyward-meter [data-dots]{letter-spacing:2px;font-size:11px}}
+  @media(prefers-reduced-motion:reduce){.skyward button{transition:none}}
+</style>

@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'ghost-town',
+    name: 'Ghost Town · Skyward',
+    kicker: 'WATCH + PLAY · THREE SKIES · TAKE YOUR TIME',
+    description: 'The Ghost Town video edit by JonJeffJon Edits beside Skyward, a gentle ghost-and-lights game with touch and keyboard controls.',
+    url: 'https://pointcast.xyz/ghost-town/',
+    path: '/ghost-town',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'railroad-time',
     name: 'Railroad Time',
     kicker: '4 SOURCED ERAS · SPEAK OR TYPE · LOCAL ROUTING',
