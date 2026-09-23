@@ -1,0 +1,604 @@
+---
+// /keyboard-rush — Bloom Rush. Four people, one keyboard (or a tablet flat on
+// a table). Each seat owns five keys; one of them glows, the same spot for
+// everybody, and hops every couple of seconds. Mash your glowing key to grow
+// your flower, climbing a pentatonic run; full flower = a bloom in the garden.
+// Twice a game the sun comes out and the whole table mashes together.
+// Easier sibling of /keyboard-quartet (no memory, no turns). Built 2026-09-23
+// by Claude Code on a brief from Mike.
+---
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bloom Rush · PointCast</title>
+<meta name="description" content="Four people, one keyboard. Mash your glowing key to grow your flower; when the sun comes out, the whole table mashes together.">
+<meta property="og:title" content="Bloom Rush">
+<meta property="og:description" content="Four people, one keyboard. Mash the glowing key, grow the biggest flower.">
+<meta property="og:url" content="https://pointcast.xyz/keyboard-rush">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://pointcast.xyz/og/quartet.png?game=rush">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A drawn keyboard split into four colored seats, one key glowing in each.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bloom Rush">
+<meta name="twitter:description" content="Four people, one keyboard. Mash the glowing key, grow the biggest flower.">
+<meta name="twitter:image" content="https://pointcast.xyz/og/quartet.png?game=rush">
+<link rel="canonical" href="https://pointcast.xyz/keyboard-rush">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style is:inline>
+  [hidden]{display:none!important;}
+  :root{
+    --ground:#0b1412;
+    --ground-2:#101c19;
+    --key:#16241f;
+    --key-edge:#243630;
+    --ink:#dfe9e3;
+    --ink-dim:#7f9a90;
+    --ink-faint:#42584f;
+    --accent:#e6c98a;
+    --sun:#ffd166;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+    color-scheme:dark;
+  }
+  html,body{min-height:100%;}
+  body{
+    margin:0;background:var(--ground);color:var(--ink);
+    font-family:var(--mono);font-size:13px;
+    display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;
+    padding-inline:16px;padding-block:14px 12px;box-sizing:border-box;
+    -webkit-user-select:none;user-select:none;
+    transition:background .6s ease;
+  }
+  body.sunny{background:#1a1a0e;}
+  a{color:var(--accent);}
+
+  header{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--key-edge);}
+  h1{font-family:var(--serif);font-weight:400;font-size:30px;line-height:1;margin:0;}
+  h1 em{color:var(--accent);font-style:italic;}
+  .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-left:auto;}
+  .ctl{display:flex;align-items:center;gap:6px;}
+  .ctl label{color:var(--ink-dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase;}
+  select,button{
+    font-family:var(--mono);font-size:12px;color:var(--ink);
+    background:var(--ground-2);border:1px solid var(--key-edge);border-radius:4px;
+    padding:5px 9px;cursor:pointer;
+  }
+  select:disabled,button:disabled{opacity:.45;cursor:default;}
+  select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  button[aria-pressed="true"]{background:var(--accent);color:var(--ground);border-color:var(--accent);}
+  .primary{background:var(--accent);color:var(--ground);border-color:var(--accent);font-weight:500;}
+  .back{font-size:12px;color:var(--ink-dim);text-decoration:none;}
+  .back:hover{color:var(--accent);}
+
+  .table{
+    flex:1;display:grid;gap:14px;padding-block:14px;
+    grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(190px,1fr) auto;
+  }
+  .seat{
+    --c:#888;
+    border:1px solid var(--key-edge);border-radius:10px;background:var(--ground-2);
+    padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0;
+    transition:border-color .2s ease, box-shadow .2s ease, opacity .2s ease, transform .3s ease;
+  }
+  .seat[data-seat="0"]{grid-area:1 / 1;}
+  .seat[data-seat="1"]{grid-area:1 / 2;}
+  .seat[data-seat="2"]{grid-area:3 / 1;}
+  .seat[data-seat="3"]{grid-area:3 / 2;}
+  .seat.empty{opacity:.5;}
+  .seat.sitting{border-color:color-mix(in oklab, var(--c) 55%, var(--key-edge));}
+  .seat.bloomed{box-shadow:0 0 0 2px var(--c), 0 0 50px color-mix(in oklab, var(--c) 45%, transparent);}
+  .seat-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+  .seat-name{font-family:var(--serif);font-size:24px;line-height:1;color:var(--c);}
+  .seat-keys{font-size:11px;color:var(--ink-faint);letter-spacing:.12em;}
+  .seat-score{margin-left:auto;font-size:12px;color:var(--ink-dim);font-variant-numeric:tabular-nums;}
+  .seat-score b{color:var(--c);font-weight:500;font-size:16px;}
+  .seat-say{font-size:12px;color:var(--ink-dim);min-height:1.3em;}
+
+  .pads{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+  .pad{
+    --d:#888;
+    position:relative;aspect-ratio:1 / 1.1;min-height:44px;
+    border-radius:10px;border:1px solid var(--key-edge);
+    background:color-mix(in oklab, var(--d) 10%, var(--key));
+    box-shadow:inset 0 -3px 0 rgba(0,0,0,.35);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    color:var(--ink-dim);cursor:pointer;touch-action:none;padding:0;
+    transition:transform .05s ease, background .12s ease, box-shadow .15s ease, opacity .2s ease;
+  }
+  .pad .cap{font-size:clamp(14px,2.2vw,22px);font-weight:500;}
+  .playing .pad{opacity:.4;}
+  .playing .pad.lit{
+    opacity:1;color:var(--ground);
+    background:var(--d);border-color:var(--d);
+    box-shadow:0 0 0 3px color-mix(in oklab, var(--d) 50%, transparent), 0 0 30px var(--d);
+    animation:throb .5s ease-in-out infinite alternate;
+  }
+  .sunny .playing .pad{opacity:1;background:color-mix(in oklab, var(--sun) 55%, var(--key));color:var(--ground);border-color:var(--sun);animation:none;box-shadow:0 0 18px color-mix(in oklab, var(--sun) 60%, transparent);}
+  @keyframes throb{to{transform:scale(1.06);}}
+  .pad.on{transform:translateY(3px) scale(.96)!important;filter:brightness(1.35);}
+
+  /* the flower meter under each seat's pads */
+  .grow{position:relative;height:16px;border-radius:999px;background:var(--key);border:1px solid var(--key-edge);overflow:hidden;}
+  .grow i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg, color-mix(in oklab, var(--c) 45%, var(--key)), var(--c));border-radius:999px;transition:width .08s linear;}
+  .grow span{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:12px;line-height:1;}
+
+  .middle{
+    grid-area:2 / 1 / 3 / 3;
+    border:1px dashed var(--key-edge);border-radius:12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    padding:14px;text-align:center;position:relative;overflow:hidden;
+  }
+  #prompt{font-family:var(--serif);font-size:clamp(24px,3.8vw,44px);line-height:1.08;margin:0;max-width:26ch;}
+  #prompt em{font-style:italic;}
+  #sub{color:var(--ink-dim);font-size:12px;max-width:62ch;line-height:1.5;margin:0;}
+  .clock{width:min(520px,90%);height:6px;border-radius:999px;background:var(--key);overflow:hidden;}
+  .clock i{display:block;height:100%;width:100%;background:var(--accent);transform-origin:left;}
+  .sunmeter{width:min(520px,90%);height:22px;border-radius:999px;background:var(--key);border:1px solid var(--sun);overflow:hidden;position:relative;}
+  .sunmeter i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,#ff9f43,var(--sun));transition:width .06s linear;}
+  .dots{display:flex;gap:10px;}
+  .dots span{width:20px;height:20px;border-radius:50%;border:2px solid var(--key-edge);box-sizing:border-box;}
+  .dots span.lit{background:var(--d);border-color:var(--d);box-shadow:0 0 14px var(--d);}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  #garden{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-end;gap:2px;max-width:100%;min-height:10px;}
+  #garden svg{width:24px;height:34px;transform-origin:50% 100%;animation:grow .6s cubic-bezier(.2,1.4,.4,1) both;}
+  @keyframes grow{from{transform:scale(0)}to{transform:scale(1)}}
+  .results{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;font-size:12px;color:var(--ink-dim);}
+  .results b{font-family:var(--serif);font-size:24px;font-weight:400;display:block;}
+
+  footer{
+    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding-top:10px;border-top:1px solid var(--key-edge);
+    color:var(--ink-dim);font-size:11px;letter-spacing:.03em;
+  }
+  footer b{color:var(--ink);font-weight:500;}
+
+  body.flat .seat[data-seat="0"],body.flat .seat[data-seat="1"]{transform:rotate(180deg);}
+  body.flat .seat[data-seat="0"]{grid-area:1 / 2;}
+  body.flat .seat[data-seat="1"]{grid-area:1 / 1;}
+
+  /* invites */
+  .seat.saved{border-color:var(--c);animation:saved 1.6s ease-in-out infinite;}
+  @keyframes saved{50%{box-shadow:0 0 0 3px color-mix(in oklab, var(--c) 55%, transparent), 0 0 40px color-mix(in oklab, var(--c) 35%, transparent);}}
+  dialog{background:var(--ground-2);color:var(--ink);border:1px solid var(--key-edge);border-radius:12px;padding:18px;width:min(520px, calc(100vw - 32px));box-sizing:border-box;}
+  dialog::backdrop{background:rgba(4,9,8,.72);}
+  dialog h2{font-family:var(--serif);font-weight:400;font-size:28px;margin:0 0 4px;}
+  dialog h2 em{color:var(--accent);}
+  dialog p{color:var(--ink-dim);font-size:12px;line-height:1.5;margin:0 0 12px;}
+  .inv-lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);margin:12px 0 6px;}
+  .inv-seats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .inv-seats button{border-color:var(--c);color:var(--c);padding:8px 4px;}
+  .inv-seats button small{display:block;font-size:10px;color:var(--ink-faint);letter-spacing:.14em;margin-top:2px;white-space:nowrap;}
+  .inv-seats button[aria-pressed="true"]{background:var(--c);color:var(--ground);}
+  .inv-seats button[aria-pressed="true"] small{color:var(--ground);}
+  dialog input[type=text]{font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--ground);border:1px solid var(--key-edge);border-radius:4px;padding:7px 9px;width:100%;box-sizing:border-box;-webkit-user-select:text;user-select:text;}
+  dialog input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .inv-card{width:100%;height:auto;aspect-ratio:1200 / 630;border-radius:8px;border:1px solid var(--key-edge);margin-top:12px;display:block;background:var(--ground);}
+  .inv-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .inv-row button{flex:1 1 auto;}
+  #invStatus{font-size:11px;color:var(--ink-dim);min-height:1.3em;margin-top:8px;}
+
+  @media (max-width:640px){
+    h1{font-size:24px;}
+    .controls{margin-left:0;gap:8px;}
+    .table{gap:10px;}
+    .seat{padding:9px;gap:8px;}
+    .seat-name{font-size:19px;}
+    .seat-keys{display:none;}
+    .pads{gap:5px;}
+    .pad{aspect-ratio:auto;height:60px;min-height:0;}
+    footer{font-size:10px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .pad,.seat{transition:none;}
+    .playing .pad.lit,#garden svg,.seat.saved{animation:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bloom <em>Rush</em></h1>
+  <a class="back" href="/keyboard-quartet">Quartet</a>
+  <a class="back" href="/keyboard">Solo keyboard</a>
+  <div class="controls">
+    <div class="ctl"><label for="length">Length</label>
+      <select id="length">
+        <option value="30">30 s</option>
+        <option value="45" selected>45 s</option>
+        <option value="60">60 s</option>
+      </select></div>
+    <button id="inviteBtn" class="primary" title="Save a seat and send someone the link">Invite</button>
+    <button id="flatBtn" aria-pressed="false" title="Tablet flat on a table: the top two seats face the far side">Table mode</button>
+  </div>
+</header>
+
+<main class="table" id="table">
+  <section class="middle" aria-live="polite">
+    <p id="prompt">Four seats. <em>Press a key in yours to sit down.</em></p>
+    <p id="sub">Coral Q W E R T · Gold Y U I O P · Sea Z X C V B · Violet N M , . /<br>One key glows. Mash it. Your flower grows. That's the whole game.</p>
+    <div class="dots" id="dots" hidden></div>
+    <div class="clock" id="clock" hidden><i></i></div>
+    <div class="sunmeter" id="sunmeter" hidden><i></i></div>
+    <div class="actions">
+      <button id="startBtn" class="primary" disabled>Start (Enter)</button>
+      <button id="clearBtn">Clear seats</button>
+    </div>
+    <div id="results" class="results" hidden></div>
+    <div id="garden" aria-label="The table's garden"></div>
+  </section>
+</main>
+
+<dialog id="invite" aria-labelledby="invTitle">
+  <h2 id="invTitle">Save a <em>seat</em></h2>
+  <p>Bloom Rush is played around one keyboard or one tablet. Send the link to whoever you want at the table. It opens with their seat lit up, and the preview shows it too.</p>
+  <div class="inv-lbl">Which seat</div>
+  <div class="inv-seats" id="invSeats"></div>
+  <div class="inv-lbl"><label for="invFrom">From (shown on the page, not on the preview card)</label></div>
+  <input id="invFrom" type="text" maxlength="24" placeholder="Your name" autocomplete="off">
+  <img id="invCard" class="inv-card" alt="The link preview for this invite" width="1200" height="630">
+  <div class="inv-row">
+    <button id="invShare" class="primary" hidden>Share…</button>
+    <button id="invCopy">Copy link</button>
+    <button id="invClose">Done</button>
+  </div>
+  <div id="invStatus" aria-live="polite"></div>
+</dialog>
+
+<footer>
+  <span><b>Enter</b> start &nbsp; <b>Esc</b> stop &nbsp; mash the glowing key · holding it down doesn't count</span>
+  <span>a full flower = one bloom · when the sun comes out, every key counts</span>
+</footer>
+
+<script is:inline>
+(() => {
+'use strict';
+
+/* ---------- seats ---------- */
+const SEATS = [
+  {name:'Coral',  color:'#ff8f70', codes:['KeyQ','KeyW','KeyE','KeyR','KeyT'],     caps:'QWERT', voice:'bloom',  oct:12},
+  {name:'Gold',   color:'#e6c98a', codes:['KeyY','KeyU','KeyI','KeyO','KeyP'],     caps:'YUIOP', voice:'glass',  oct:24},
+  {name:'Sea',    color:'#6fd3c1', codes:['KeyZ','KeyX','KeyC','KeyV','KeyB'],     caps:'ZXCVB', voice:'reed',   oct:0},
+  {name:'Violet', color:'#b69cff', codes:['KeyN','KeyM','Comma','Period','Slash'], caps:'NM,./', voice:'mallet', oct:12},
+];
+const STEPS = [0,2,4,7,9];                 // major pentatonic
+const ROOT = 50;                           // D3
+const DEG_COLORS = ['#f2c14e','#ef7d6b','#6fc9e6','#8fdc7a','#c8a2ff'];
+const TO_BLOOM = 12;                       // lit-key hits per flower
+const HOP_MS = 1800;                       // the glow moves this often
+const SUN_MS = 4500;                       // how long a sun burst lasts
+const SUN_PER_SEAT = 22;                   // hits per seated player to fill the sun
+const TOUCH = matchMedia('(pointer:coarse)').matches;
+
+const codeMap = new Map();
+SEATS.forEach((s,si)=>s.codes.forEach((c,d)=>codeMap.set(c,[si,d])));
+
+const $ = id => document.getElementById(id);
+const table = $('table'), promptEl = $('prompt'), sub = $('sub'), garden = $('garden'), dots = $('dots');
+const clock = $('clock'), clockBar = clock.firstElementChild, sunmeter = $('sunmeter'), sunBar = sunmeter.firstElementChild;
+const startBtn = $('startBtn'), clearBtn = $('clearBtn'), results = $('results'), lengthSel = $('length'), flatBtn = $('flatBtn');
+lengthSel.onchange = ()=>lengthSel.blur();
+
+const seatEls = [], padEls = [], growEls = [];
+SEATS.forEach((s,si)=>{
+  const el = document.createElement('section');
+  el.className = 'seat empty'; el.dataset.seat = si; el.style.setProperty('--c',s.color);
+  el.innerHTML = `<div class="seat-head"><span class="seat-name">${s.name}</span><span class="seat-keys">${s.caps.split('').join(' ')}</span><span class="seat-score"><b>0</b> blooms</span></div>
+    <div class="pads"></div><div class="grow"><i></i><span>✿</span></div><div class="seat-say"></div>`;
+  const pads = el.querySelector('.pads'); padEls[si] = [];
+  s.codes.forEach((c,d)=>{
+    const p = document.createElement('button');
+    p.className = 'pad'; p.type = 'button'; p.dataset.seat = si; p.dataset.deg = d; p.tabIndex = -1;
+    p.style.setProperty('--d',DEG_COLORS[d]);
+    p.innerHTML = `<span class="cap">${s.caps[d]}</span>`;
+    p.setAttribute('aria-label',`${s.name} key ${s.caps[d]}`);
+    pads.appendChild(p); padEls[si][d] = p;
+  });
+  growEls[si] = el.querySelector('.grow i');
+  table.appendChild(el); seatEls[si] = el;
+});
+for(let d=0; d<5; d++){ const s=document.createElement('span'); s.style.setProperty('--d',DEG_COLORS[d]); dots.appendChild(s); }
+
+/* ---------- audio ---------- */
+let ctx, master, wet;
+function makeIR(seconds, decay){
+  const rate=ctx.sampleRate, len=rate*seconds, buf=ctx.createBuffer(2,len,rate);
+  for(let ch=0;ch<2;ch++){ const d=buf.getChannelData(ch); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay); }
+  return buf;
+}
+function boot(){
+  if(ctx){ if(ctx.state==='suspended') ctx.resume(); return; }
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.knee.value=12; comp.ratio.value=8; comp.attack.value=0.003; comp.release.value=0.2;
+  master = ctx.createGain(); master.gain.value=0.55; master.connect(comp); comp.connect(ctx.destination);
+  const conv = ctx.createConvolver(); conv.buffer = makeIR(2.2,3.4);
+  wet = ctx.createGain(); wet.gain.value=0.28; wet.connect(conv); conv.connect(master);
+}
+const mtof = m => 440*Math.pow(2,(m-69)/12);
+const PANS = [-0.45, 0.45, -0.3, 0.3];
+function tone(seat, midi, vel=0.8, t, len=1){
+  boot(); t = t ?? ctx.currentTime;
+  const f = mtof(midi), kind = SEATS[seat].voice;
+  const out = ctx.createGain(); const pan = ctx.createStereoPanner(); pan.pan.value = PANS[seat];
+  out.connect(pan); pan.connect(master); pan.connect(wet);
+  const osc = (type, freq, gain, dec, det=0) => {
+    const o=ctx.createOscillator(); o.type=type; o.frequency.value=freq; o.detune.value=det;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(gain*vel,t+0.005); g.gain.exponentialRampToValueAtTime(0.0001,t+dec*len);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t+dec*len+0.05);
+  };
+  if(kind==='bloom'){ osc('triangle',f,0.36,0.6); osc('sine',f*2,0.08,0.3); }
+  else if(kind==='glass'){ osc('sine',f,0.3,0.8); osc('sine',f*3.01,0.08,0.3); }
+  else if(kind==='reed'){
+    const flt=ctx.createBiquadFilter(); flt.type='lowpass'; flt.Q.value=1.4; flt.frequency.setValueAtTime(2600,t); flt.frequency.exponentialRampToValueAtTime(700,t+0.3);
+    out.disconnect(); out.connect(flt); flt.connect(pan);
+    osc('sawtooth',f,0.16,0.45); osc('square',f,0.06,0.35,8);
+  } else { osc('sine',f,0.44,0.4); osc('sine',f*4,0.12,0.08); }
+}
+function tick(hi){
+  boot(); const t=ctx.currentTime;
+  const o=ctx.createOscillator(); o.type='square'; o.frequency.value=hi?1760:880;
+  const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.12,t+0.003); g.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.1);
+}
+function thud(seat){
+  boot(); const t=ctx.currentTime;
+  const o=ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(180,t); o.frequency.exponentialRampToValueAtTime(90,t+0.08);
+  const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.1,t+0.004); g.gain.exponentialRampToValueAtTime(0.0001,t+0.1);
+  const pan=ctx.createStereoPanner(); pan.pan.value=PANS[seat];
+  o.connect(g); g.connect(pan); pan.connect(master); o.start(t); o.stop(t+0.12);
+}
+/** The climbing run: hit n of a flower plays pentatonic step n, two octaves up. */
+const runMidi = (seat, n) => ROOT + SEATS[seat].oct + Math.floor(n/5)*12 + STEPS[n%5];
+function chord(seat, t){
+  boot(); t = t ?? ctx.currentTime;
+  [0,2,4,5].forEach((n,i)=>tone(seat, runMidi(seat,n)+12, 0.5, t+i*0.045, 2.2));
+}
+
+/* ---------- state ---------- */
+const sitting = [false,false,false,false];
+let mode = 'jam';                 // jam | count | play | sun | done
+let order = [], lit = 2, grow = [0,0,0,0], blooms = [0,0,0,0], hits = [0,0,0,0];
+let gameMs = 45000, startAt = 0, nextHop = 0, sunAt = [], sunEnd = 0, sunFill = 0, sunNeed = 0, suns = 0;
+let raf = 0, timers = [];
+const later = (fn,ms)=>{ const id=setTimeout(fn,ms); timers.push(id); return id; };
+
+function say(seat, text){ seatEls[seat].querySelector('.seat-say').textContent = text; }
+function paintScores(){ SEATS.forEach((s,si)=>{ seatEls[si].querySelector('.seat-score b').textContent = blooms[si]; growEls[si].style.width = (grow[si]/TO_BLOOM*100)+'%'; }); }
+function paintSeats(){
+  SEATS.forEach((s,si)=>{ seatEls[si].classList.toggle('sitting',sitting[si]); seatEls[si].classList.toggle('empty',!sitting[si]); });
+}
+function updateLobby(){
+  const n = sitting.filter(Boolean).length;
+  startBtn.disabled = n < 1;
+  paintSeats();
+  if(mode!=='jam') return;
+  SEATS.forEach((s,si)=>say(si, sitting[si] ? 'seated · warm up those fingers' : (TOUCH?'tap a pad to sit':'press a key to sit')));
+  if(n===0) promptEl.innerHTML = `Four seats. <em>${TOUCH?'Tap a pad':'Press a key'} in yours to sit down.</em>`;
+  else if(n===1) promptEl.innerHTML = `${SEATS[sitting.indexOf(true)].name} is here. <em>Anyone else? Or ${TOUCH?'tap Start':'press Enter'}.</em>`;
+  else promptEl.innerHTML = `${n} at the table. <em>${TOUCH?'Tap Start':'Press Enter'} to rush.</em>`;
+}
+function setLit(d){
+  lit = d;
+  SEATS.forEach((s,si)=>padEls[si].forEach((p,i)=>p.classList.toggle('lit', i===d)));
+  [...dots.children].forEach((s,i)=>s.classList.toggle('lit', i===d));
+}
+function hop(){
+  let d; do{ d = Math.floor(Math.random()*5); } while(d===lit);
+  setLit(d);
+}
+
+function start(){
+  order = sitting.map((v,i)=>v?i:-1).filter(i=>i>=0);
+  if(!order.length) return;
+  boot(); stopAll();
+  gameMs = +lengthSel.value*1000;
+  grow = [0,0,0,0]; blooms = [0,0,0,0]; hits = [0,0,0,0]; suns = 0; paintScores();
+  garden.innerHTML = ''; results.hidden = true;
+  startBtn.hidden = true; clearBtn.hidden = true; lengthSel.disabled = true;
+  order.forEach(si=>say(si,'get ready'));
+  mode = 'count';
+  const counts = ['3','2','1'];
+  counts.forEach((c,i)=>later(()=>{ promptEl.innerHTML = `<em>${c}</em>`; tick(false); }, i*700));
+  later(go, counts.length*700);
+}
+function go(){
+  mode = 'play'; tick(true);
+  table.classList.add('playing'); dots.hidden = false; clock.hidden = false;
+  setLit(Math.floor(Math.random()*5));
+  startAt = performance.now(); nextHop = startAt + HOP_MS;
+  // the sun comes out at one third and two thirds of the game
+  sunAt = [startAt + gameMs/3, startAt + gameMs*2/3];
+  promptEl.innerHTML = '<em>Mash the glowing key!</em>';
+  sub.textContent = 'Only the glowing key grows your flower. It moves, so keep an eye on the dots.';
+  order.forEach(si=>say(si,'mash!'));
+  raf = requestAnimationFrame(frame);
+}
+function frame(now){
+  const left = Math.max(0, startAt + gameMs - now);
+  clockBar.style.transform = `scaleX(${left/gameMs})`;
+  if(mode==='play'){
+    if(sunAt.length && now >= sunAt[0]){ sunAt.shift(); sunStart(now); }
+    else if(now >= nextHop){ hop(); nextHop = now + HOP_MS; }
+    if(left <= 0) return finish();
+  } else if(mode==='sun'){
+    if(now >= sunEnd) sunStop(false);
+  }
+  raf = requestAnimationFrame(frame);
+}
+function sunStart(now){
+  mode = 'sun'; sunFill = 0; sunNeed = SUN_PER_SEAT * order.length; sunEnd = now + SUN_MS;
+  // the sun pauses the game clock so nobody loses mash time
+  startAt += SUN_MS;
+  document.body.classList.add('sunny'); sunmeter.hidden = false; dots.hidden = true; sunBar.style.width = '0';
+  promptEl.innerHTML = '<em>The sun is out!</em> Everybody mash anything!';
+  sub.textContent = 'Every key counts. Fill the sun together before it sets.';
+  order.forEach(si=>say(si,'any key!'));
+  chord(order[0]);
+}
+function sunStop(won){
+  if(mode!=='sun') return;
+  mode = 'play'; document.body.classList.remove('sunny'); sunmeter.hidden = true; dots.hidden = false;
+  startAt -= Math.max(0, sunEnd - performance.now()); // give back unused sun time
+  nextHop = performance.now() + HOP_MS; hop();
+  if(won){
+    suns++;
+    order.forEach((si,i)=>{ blooms[si]++; later(()=>{ bloom(si); chord(si); }, i*120); });
+    paintScores();
+    promptEl.innerHTML = '<em>Sunburst!</em> A bloom for everyone.';
+  } else {
+    promptEl.innerHTML = '<em>The sun set.</em> Back to your glowing key!';
+  }
+  sub.textContent = 'Only the glowing key grows your flower.';
+  order.forEach(si=>say(si,'mash!'));
+  later(()=>{ if(mode==='play') promptEl.innerHTML = '<em>Mash the glowing key!</em>'; }, 1600);
+}
+function finish(){
+  mode = 'done'; cancelAnimationFrame(raf);
+  table.classList.remove('playing'); document.body.classList.remove('sunny');
+  dots.hidden = true; clock.hidden = true; sunmeter.hidden = true; lengthSel.disabled = false;
+  SEATS.forEach((s,si)=>padEls[si].forEach(p=>p.classList.remove('lit')));
+  const total = blooms.reduce((a,b)=>a+b,0);
+  const best = Math.max(...order.map(si=>blooms[si]));
+  promptEl.innerHTML = `Time! The table grew <em>${total} ${total===1?'bloom':'blooms'}.</em>`;
+  sub.textContent = suns ? `You filled the sun ${suns === 2 ? 'both times' : 'once'}. Enter plays again.` : 'Enter plays again with the same seats.';
+  results.innerHTML = order.map(si=>`<span style="color:${SEATS[si].color}"><b>${blooms[si]}</b>${SEATS[si].name}${order.length>1 && blooms[si]===best?' ✿':''}</span>`).join('');
+  results.hidden = false; startBtn.hidden = false; startBtn.textContent = 'Play again (Enter)'; clearBtn.hidden = false;
+  order.forEach(si=>say(si, `${hits[si]} good mashes`));
+  order.forEach((si,i)=>later(()=>chord(si), i*160));
+}
+function stopAll(){
+  timers.forEach(clearTimeout); timers = []; cancelAnimationFrame(raf);
+  table.classList.remove('playing'); document.body.classList.remove('sunny');
+  dots.hidden = true; clock.hidden = true; sunmeter.hidden = true;
+}
+function toJam(){
+  stopAll(); mode = 'jam'; lengthSel.disabled = false;
+  SEATS.forEach((s,si)=>padEls[si].forEach(p=>p.classList.remove('lit')));
+  startBtn.hidden = false; startBtn.textContent = 'Start (Enter)'; clearBtn.hidden = false; results.hidden = true;
+  sub.innerHTML = 'Coral Q W E R T · Gold Y U I O P · Sea Z X C V B · Violet N M , . /<br>One key glows. Mash it. Your flower grows. That\'s the whole game.';
+  updateLobby();
+}
+
+/* ---------- the garden ---------- */
+function bloom(seat){
+  const c = SEATS[seat].color, h = 20 + Math.random()*10;
+  const petals = [0,72,144,216,288].map(a=>{ const r=a*Math.PI/180; return `<circle cx="${(12+Math.cos(r)*4.4).toFixed(1)}" cy="${(34-h+Math.sin(r)*4.4).toFixed(1)}" r="3.4" fill="${c}"/>`; }).join('');
+  garden.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 24 34" aria-hidden="true"><path d="M12 34 Q ${12+(Math.random()*8-4).toFixed(1)} ${34-h/2} 12 ${34-h}" stroke="#3f6b58" stroke-width="1.6" fill="none"/>${petals}<circle cx="12" cy="${34-h}" r="2.2" fill="#fff4d6"/></svg>`);
+  while(garden.children.length > 90) garden.firstElementChild.remove();
+  const el = seatEls[seat]; el.classList.add('bloomed'); setTimeout(()=>el.classList.remove('bloomed'), 380);
+}
+
+/* ---------- a key press ---------- */
+function flash(seat,deg){ const p=padEls[seat][deg]; p.classList.add('on'); clearTimeout(p._t); p._t=setTimeout(()=>p.classList.remove('on'),90); }
+let hit = function(seat, deg){
+  boot(); flash(seat,deg);
+  if(mode==='jam' || mode==='done' || mode==='count'){
+    if(mode==='jam' && !sitting[seat]){ sitting[seat] = true; updateLobby(); }
+    tone(seat, runMidi(seat, deg+5), 0.6);
+    return;
+  }
+  if(!sitting[seat]) return;                 // mid-game, empty seats stay quiet
+  if(mode==='sun'){
+    sunFill++; sunBar.style.width = Math.min(100, sunFill/sunNeed*100)+'%';
+    tone(seat, runMidi(seat, 5 + Math.floor(Math.random()*8)), 0.45);
+    if(sunFill >= sunNeed) sunStop(true);
+    return;
+  }
+  if(deg !== lit){ thud(seat); return; }
+  hits[seat]++;
+  tone(seat, runMidi(seat, grow[seat]), 0.75);
+  grow[seat]++;
+  if(grow[seat] >= TO_BLOOM){ grow[seat] = 0; blooms[seat]++; bloom(seat); chord(seat); }
+  paintScores();
+};
+
+/* ---------- input ---------- */
+const inviteDlg = $('invite');
+addEventListener('keydown', e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  if(inviteDlg.open) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if(tag==='INPUT' || tag==='TEXTAREA') return;
+  if(tag==='SELECT' && !codeMap.has(e.code)) return;
+  if(e.code==='Enter' || e.code==='NumpadEnter'){ e.preventDefault(); if((mode==='jam'||mode==='done') && !e.repeat) start(); return; }
+  if(e.code==='Escape'){ e.preventDefault(); if(mode!=='jam') toJam(); return; }
+  if(!codeMap.has(e.code)) return;
+  e.preventDefault(); if(e.repeat) return;   // holding a key down is not mashing
+  if(document.activeElement && document.activeElement!==document.body) document.activeElement.blur();
+  const [seat,deg] = codeMap.get(e.code); hit(seat,deg);
+});
+table.addEventListener('pointerdown', e=>{
+  const p = e.target.closest('.pad'); if(!p) return;
+  e.preventDefault(); hit(+p.dataset.seat, +p.dataset.deg);
+});
+startBtn.onclick = ()=>{ start(); startBtn.blur(); };
+clearBtn.onclick = ()=>{ sitting.fill(false); updateLobby(); clearBtn.blur(); };
+const setFlat = on => { document.body.classList.toggle('flat',on); flatBtn.setAttribute('aria-pressed',on); try{ localStorage.setItem('kq:flat', on?'1':'0'); }catch(_){} };
+flatBtn.onclick = ()=>{ setFlat(!document.body.classList.contains('flat')); flatBtn.blur(); };
+try{ if(localStorage.getItem('kq:flat')==='1') setFlat(true); }catch(_){}
+document.addEventListener('pointerdown', ()=>boot(), {once:true});
+
+/* ---------- invites ---------- */
+const invSeats = $('invSeats'), invFrom = $('invFrom'), invCard = $('invCard'), invStatus = $('invStatus'), invShare = $('invShare');
+const cleanName = v => String(v||'').replace(/[<>]/g,'').replace(/\s+/g,' ').trim().slice(0,24);
+let invSeat = 1;
+const invSeatBtns = SEATS.map((s,si)=>{
+  const b = document.createElement('button'); b.type='button'; b.style.setProperty('--c',s.color);
+  b.innerHTML = `${s.name}<small>${s.caps}</small>`;
+  b.onclick = ()=>{ invSeat = si; refreshInvite(); };
+  invSeats.appendChild(b); return b;
+});
+function inviteUrl(){
+  const u = new URL('/keyboard-rush', location.origin);
+  u.searchParams.set('seat', invSeat);
+  const from = cleanName(invFrom.value); if(from) u.searchParams.set('from', from);
+  return u.href;
+}
+let cardT;
+function refreshInvite(){
+  invSeatBtns.forEach((b,i)=>b.setAttribute('aria-pressed', i===invSeat));
+  invStatus.textContent = '';
+  clearTimeout(cardT);
+  cardT = setTimeout(()=>{ invCard.hidden = false; invCard.src = `/og/quartet.png?game=rush&seat=${invSeat}`; }, 60);
+}
+invCard.onerror = ()=>{ invCard.hidden = true; };
+$('inviteBtn').onclick = ()=>{
+  const open = SEATS.findIndex((s,i)=>!sitting[i] && i!==0);
+  invSeat = open >= 0 ? open : 1;
+  try{ invFrom.value = localStorage.getItem('kq:from') || ''; }catch(_){}
+  invShare.hidden = !navigator.share;
+  refreshInvite(); inviteDlg.showModal(); $('inviteBtn').blur();
+};
+invFrom.addEventListener('input', ()=>{ try{ localStorage.setItem('kq:from', cleanName(invFrom.value)); }catch(_){} });
+$('invCopy').onclick = async ()=>{
+  const url = inviteUrl();
+  try{ await navigator.clipboard.writeText(url); invStatus.textContent = 'Copied. Paste it anywhere.'; }
+  catch(_){ invStatus.textContent = url; }
+};
+invShare.onclick = async ()=>{
+  const s = SEATS[invSeat];
+  try{ await navigator.share({ title:'Bloom Rush', text:`I saved you the ${s.name} seat. Your keys are ${s.caps.split('').join(' ')}. Bring your mashing fingers.`, url: inviteUrl() }); invStatus.textContent = 'Sent.'; }
+  catch(e){ if(e && e.name!=='AbortError') invStatus.textContent = 'Share didn\'t open. Copy the link instead.'; }
+};
+$('invClose').onclick = ()=>inviteDlg.close();
+
+const q = new URLSearchParams(location.search);
+const savedSeat = /^[0-3]$/.test(q.get('seat')||'') ? +q.get('seat') : -1;
+updateLobby();
+if(savedSeat >= 0){
+  const s = SEATS[savedSeat], from = cleanName(q.get('from')) || 'Someone';
+  seatEls[savedSeat].classList.add('saved');
+  const origHit = hit;
+  hit = (seat,deg)=>{ if(seat===savedSeat) seatEls[savedSeat].classList.remove('saved'); origHit(seat,deg); };
+  say(savedSeat, 'saved for you');
+  promptEl.textContent = `${from} saved you the `;
+  const em = document.createElement('em'); em.style.color = s.color; em.textContent = `${s.name} seat.`; promptEl.appendChild(em);
+  sub.textContent = `Your keys are ${s.caps.split('').join(' ')}. ${TOUCH ? 'Tap' : 'Press'} one to sit. It's one keyboard for everyone, so pull up a chair next to whoever sent this.`;
+}
+})();
+</script>
+</body>
+</html>

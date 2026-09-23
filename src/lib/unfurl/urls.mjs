@@ -33,8 +33,14 @@ export function quartetSeat(search = '') {
   return v !== null && /^[0-3]$/.test(v) ? Number(v) : null;
 }
 
-export function quartetCardUrl(seat = null, bucket = '', origin = SITE) {
+/** Which four-seat game a card query asks for: 'rush', or the quartet by default. */
+export function quartetGame(search = '') {
+  return new URLSearchParams(String(search)).get('game') === 'rush' ? 'rush' : 'quartet';
+}
+
+export function quartetCardUrl(seat = null, bucket = '', origin = SITE, game = 'quartet') {
   const url = new URL('/og/quartet.png', origin);
+  if (game === 'rush') url.searchParams.set('game', 'rush');
   if (seat !== null && /^[0-3]$/.test(String(seat))) url.searchParams.set('seat', String(seat));
   if (validBucket(bucket)) url.searchParams.set('b', bucket);
   return url.href;

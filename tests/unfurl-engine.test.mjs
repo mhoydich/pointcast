@@ -218,3 +218,19 @@ test('keyboard quartet invites pick a seat, never words', async () => {
   assert.doesNotMatch(JSON.stringify(words), /Evil/);
   for (const seat of [null, 0, 3]) renders(quartetCard({ seat, light: lightAt(now), client: 'slack', serial: 3 }));
 });
+
+test('bloom rush shares the quartet card and invite words', async () => {
+  const { quartetGame, quartetCardUrl } = await import('../src/lib/unfurl/urls.mjs');
+  const { unfurlWords } = await import('../src/lib/unfurl/plan.mjs');
+  const { quartetCard } = await import('../src/lib/unfurl/cards.mjs');
+  const { lightAt } = await import('../src/lib/unfurl/light.mjs');
+  const now = new Date('2026-09-23T17:41:00Z');
+  assert.equal(quartetGame('?game=rush&seat=1'), 'rush');
+  assert.equal(quartetGame('?game=<x>'), 'quartet');
+  assert.equal(quartetCardUrl(2, '', undefined, 'rush'), 'https://pointcast.xyz/og/quartet.png?game=rush&seat=2');
+  const plan = planUnfurl({ pathname: '/keyboard-rush', search: '?seat=3', currentImage: 'https://pointcast.xyz/og/quartet.png?game=rush', now });
+  assert.match(plan.image, /^https:\/\/pointcast\.xyz\/og\/quartet\.png\?game=rush&seat=3&b=/);
+  assert.match(unfurlWords({ pathname: '/keyboard-rush', search: '?seat=0' }).title, /Bloom Rush$/);
+  assert.equal(unfurlWords({ pathname: '/keyboard-rush', search: '' }), null);
+  for (const seat of [null, 1]) renders(quartetCard({ seat, game: 'rush', light: lightAt(now), client: 'x', serial: 5 }));
+});

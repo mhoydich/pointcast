@@ -411,13 +411,20 @@ export const QUARTET_SEATS = [
 ];
 const QUARTET_DEGREES = ['#F2C14E', '#EF7D6B', '#6FC9E6', '#8FDC7A', '#C8A2FF'];
 
-/** Invite copy for /keyboard-quartet: seat-only, never free text from the URL. */
-export function quartetWords(seat) {
+/** The four-seat keyboard games that share the quartet card. */
+export const QUARTET_GAMES = {
+  quartet: { name: 'Keyboard Quartet', pitch: 'Four people, one keyboard: one calls a phrase, everyone echoes it, and the garden grows.' },
+  rush: { name: 'Bloom Rush', pitch: 'Four people, one keyboard: mash your glowing key to grow your flower, and fill the sun together.' },
+};
+
+/** Invite copy for the four-seat games: seat-only, never free text from the URL. */
+export function quartetWords(seat, game = 'quartet') {
   const s = QUARTET_SEATS[seat];
+  const g = QUARTET_GAMES[game] ?? QUARTET_GAMES.quartet;
   if (!s) return null;
   return {
-    title: `A seat is saved for you · Keyboard Quartet`,
-    description: `The ${s.name} seat (${s.caps.split('').join(' ')}) is yours. Four people, one keyboard: one calls a phrase, everyone echoes it, and the garden grows.`,
+    title: `A seat is saved for you · ${g.name}`,
+    description: `The ${s.name} seat (${s.caps.split('').join(' ')}) is yours. ${g.pitch}`,
   };
 }
 
@@ -433,7 +440,8 @@ function quartetFlower(x, y, h, color) {
  * The /keyboard-quartet card: a drawn keyboard split into four seats, with
  * the invited seat lit and labelled. `seat` is 0–3 or null for the plain card.
  */
-export function quartetCard({ seat = null, light, client = '', serial = 0 }) {
+export function quartetCard({ seat = null, light, client = '', serial = 0, game = 'quartet' }) {
+  const rush = game === 'rush';
   const saved = QUARTET_SEATS[seat] ? seat : null;
   const s = saved === null ? null : QUARTET_SEATS[saved];
   // The drawn board, right side of the panel.
@@ -451,9 +459,13 @@ export function quartetCard({ seat = null, light, client = '', serial = 0 }) {
     const pads = q.caps.split('').map((cap, d) => {
       const px = sx + 14 + d * 45;
       const py = sy + 46;
-      return `<rect x="${px}" y="${py}" width="39" height="62" rx="8" fill="${on ? q.light : '#16241F'}" stroke="${on ? q.light : '#2C4139'}" stroke-width="1.5" />
-        <rect x="${px + 8}" y="${py + 7}" width="23" height="4" rx="2" fill="${QUARTET_DEGREES[d]}" />
-        <text x="${px + 19.5}" y="${py + 44}" text-anchor="middle" font-family="${MONO}" font-size="21" font-weight="700" fill="${on ? '#0B1412' : '#DFE9E3'}">${esc(cap)}</text>`;
+      // Bloom Rush: the same key glows in every seat (the middle one on the card).
+      const glow = rush && d === 2;
+      const fill = glow ? QUARTET_DEGREES[d] : on ? q.light : '#16241F';
+      const halo = glow ? `<rect x="${px - 5}" y="${py - 5}" width="49" height="72" rx="11" fill="${QUARTET_DEGREES[d]}" opacity="0.28" />` : '';
+      return `${halo}<rect x="${px}" y="${py}" width="39" height="62" rx="8" fill="${fill}" stroke="${glow ? QUARTET_DEGREES[d] : on ? q.light : '#2C4139'}" stroke-width="1.5" />
+        <rect x="${px + 8}" y="${py + 7}" width="23" height="4" rx="2" fill="${glow ? '#0B1412' : QUARTET_DEGREES[d]}" opacity="${glow ? 0.35 : 1}" />
+        <text x="${px + 19.5}" y="${py + 44}" text-anchor="middle" font-family="${MONO}" font-size="21" font-weight="700" fill="${on || glow ? '#0B1412' : '#DFE9E3'}">${esc(cap)}</text>`;
     }).join('');
     return `<g opacity="${dim ? 0.5 : 1}">
       <rect x="${sx}" y="${sy}" width="${seatW}" height="${seatH}" rx="12" fill="#101C19" stroke="${on ? q.light : '#243630'}" stroke-width="${on ? 4 : 1.5}" />
@@ -475,19 +487,24 @@ export function quartetCard({ seat = null, light, client = '', serial = 0 }) {
     ? `${textLines(['A seat is', 'saved for you.'], { x: CX + 28, y: CY + 128, size: 60, lead: 1.04, weight: 800, spacing: -2 })}
       <text x="${CX + 32}" y="${CY + 246}" font-family="${SANS}" font-size="34" font-weight="800" fill="${s.dark}"${heavy(34, s.dark)}>${esc(`The ${s.name} seat.`)}</text>
       <text x="${CX + 32}" y="${CY + 290}" font-family="${MONO}" font-size="24" font-weight="700" letter-spacing="6" fill="${s.dark}">${esc(s.caps.split('').join(' '))}</text>
-      ${textLines(['Four people, one keyboard.', 'Call, echo, grow the garden.'], { x: CX + 32, y: CY + 344, size: 22, lead: 1.35, fill: BODY })}`
-    : `${textLines(['Keyboard', 'Quartet.'], { x: CX + 28, y: CY + 134, size: 72, lead: 1.02, weight: 800, spacing: -2 })}
+      ${textLines(rush ? ['Bloom Rush: four people, one', 'keyboard. Mash the glowing key.'] : ['Four people, one keyboard.', 'Call, echo, grow the garden.'], { x: CX + 32, y: CY + 344, size: 22, lead: 1.35, fill: BODY })}`
+    : rush
+      ? `${textLines(['Bloom', 'Rush.'], { x: CX + 28, y: CY + 134, size: 72, lead: 1.02, weight: 800, spacing: -2 })}
+      ${textLines(['Four people, one keyboard.', 'Mash the glowing key. Grow', 'the biggest flower.'], { x: CX + 32, y: CY + 262, size: 25, lead: 1.35, fill: BODY })}`
+      : `${textLines(['Keyboard', 'Quartet.'], { x: CX + 28, y: CY + 134, size: 72, lead: 1.02, weight: 800, spacing: -2 })}
       ${textLines(['Four people, one keyboard.', 'One calls a phrase. Everyone', 'echoes it. The garden grows.'], { x: CX + 32, y: CY + 262, size: 25, lead: 1.35, fill: BODY })}`;
 
   return framedCard({
     light,
     code: 'SPN',
-    label: s ? `A ${s.name} seat is saved for you at Keyboard Quartet` : 'Keyboard Quartet on PointCast',
-    kicker: s ? 'CH.SPN · YOU ARE INVITED' : 'CH.SPN · KEYBOARD QUARTET · 2-4 PLAYERS',
+    label: s ? `A ${s.name} seat is saved for you at ${rush ? 'Bloom Rush' : 'Keyboard Quartet'}` : `${rush ? 'Bloom Rush' : 'Keyboard Quartet'} on PointCast`,
+    kicker: s ? 'CH.SPN · YOU ARE INVITED' : rush ? 'CH.SPN · BLOOM RUSH · 1-4 PLAYERS' : 'CH.SPN · KEYBOARD QUARTET · 2-4 PLAYERS',
     body: `${left}${board}`,
-    quip: s ? `Pull up a chair. The ${s.name} keys are yours.` : 'Twenty keys. Four seats. No wrong notes.',
+    quip: rush
+      ? (s ? `Pull up a chair and mash the ${s.name} keys.` : 'One glowing key. Four people. Go.')
+      : (s ? `Pull up a chair. The ${s.name} keys are yours.` : 'Twenty keys. Four seats. No wrong notes.'),
     client,
     serial,
-    extra: 'NO LOGIN · NO TIMER',
+    extra: rush ? 'NO LOGIN · 45 SECONDS A GAME' : 'NO LOGIN · NO TIMER',
   });
 }

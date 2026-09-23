@@ -7,7 +7,7 @@
  */
 import { lightAt, lightBucket, lightForPeriod } from '../../src/lib/unfurl/light.mjs';
 import { unfurlClient } from '../../src/lib/unfurl/client.mjs';
-import { validBucket, quartetSeat } from '../../src/lib/unfurl/urls.mjs';
+import { validBucket, quartetGame, quartetSeat } from '../../src/lib/unfurl/urls.mjs';
 import { quartetCard } from '../../src/lib/unfurl/cards.mjs';
 import { bumpUnfurlCounter, cached, fallback, pngResponse, renderPng } from '../_lib/og-render';
 
@@ -16,16 +16,17 @@ type Env = { AUTH_DB?: D1Database };
 async function handle({ request, env, waitUntil }: { request: Request; env: Env; waitUntil: (p: Promise<unknown>) => void }): Promise<Response> {
   const url = new URL(request.url);
   const seat = quartetSeat(url.search);
+  const game = quartetGame(url.search);
   const bucket = validBucket(url.searchParams.get('b') ?? '') || lightBucket();
   const client = unfurlClient(request.headers.get('user-agent') ?? '');
   // ?light=<period> pins the palette (the Unfurl Wall's dial); otherwise it's El Segundo now.
   const forced = lightForPeriod(url.searchParams.get('light') ?? '') ? url.searchParams.get('light')! : '';
-  const key = `https://pointcast.xyz/og/quartet.png?seat=${seat ?? 'none'}&b=${bucket}&c=${client || 'none'}&l=${forced || 'now'}`;
+  const key = `https://pointcast.xyz/og/quartet.png?game=${game}&seat=${seat ?? 'none'}&b=${bucket}&c=${client || 'none'}&l=${forced || 'now'}`;
   try {
     return await cached(request, key, waitUntil, async () => {
       // Only real unfurlers are counted; browsers and the wall don't bump the stamp.
       const serial = client ? await bumpUnfurlCounter(env) : 0;
-      const svg = quartetCard({ seat, light: lightForPeriod(forced) ?? lightAt(new Date(), ''), client, serial });
+      const svg = quartetCard({ seat, game, light: lightForPeriod(forced) ?? lightAt(new Date(), ''), client, serial });
       return pngResponse(await renderPng(svg), 3600, { 'X-PointCast-Card': 'quartet' });
     });
   } catch {
