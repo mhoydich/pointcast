@@ -1,0 +1,282 @@
+---
+/**
+ * Homepage banner for Sound Garden 001 (the Codex satellite at /sound-garden),
+ * plus Today's Sprout: one seed organism and one set of dial positions chosen
+ * from the Los Angeles date, so every visitor hears the same small organism
+ * that day. The engine is a compact port of the satellite's own recipe (same
+ * four seeds, ratios, and the warmth/roughness/motion/surprise mapping):
+ * synthesized live, no samples, no mic, and silent until someone presses Plant.
+ */
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('sound-garden')!;
+
+// Seeds copied from the satellite bundle (sound-garden-001.mhoydich.chatgpt.site).
+const SEEDS = [
+  { name: 'Tender current', note: 'soft harmonic water', base: 110, ratios: [1, 1.5, 2, 3], accent: '#ff7d4d' },
+  { name: 'Glass orchard', note: 'bright mineral bells', base: 196, ratios: [1, 2.01, 2.98, 4.07], accent: '#d8ff63' },
+  { name: 'Radio moss', note: 'low vegetal broadcast', base: 73.42, ratios: [1, 1.25, 1.51, 2.02], accent: '#73d4a3' },
+  { name: 'Soft machine', note: 'patient electric pulse', base: 146.83, ratios: [1, 1.498, 2.001, 2.51], accent: '#f4b8ff' },
+];
+
+// Must match sproutFor() in the client script below.
+const laDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+function sproutFor(day: string) {
+  let h = 2166136261;
+  for (const ch of day) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  const pick = (shift: number, lo: number, hi: number) => lo + ((h >>> shift) % (hi - lo + 1));
+  return {
+    seed: h % SEEDS.length,
+    dims: { warmth: pick(3, 40, 92), roughness: pick(9, 6, 48), motion: pick(15, 18, 80), surprise: pick(21, 8, 62) },
+  };
+}
+const today = laDay(new Date());
+const sprout = sproutFor(today);
+const seed = SEEDS[sprout.seed];
+const DIMS = ['warmth', 'roughness', 'motion', 'surprise'] as const;
+---
+
+<section class="sg-banner" id="sound-garden" aria-labelledby="sg-banner-title" data-sg-banner style={`--sg-accent:${seed.accent}`}>
+  <div class="sg-banner__copy">
+    <p class="sg-banner__eyebrow">New in the garden · CH.SPN · generative sound study 001</p>
+    <h2 id="sg-banner-title">Grow a sound.</h2>
+    <p class="sg-banner__dek">Sound Garden is a small browser instrument. Pick a seed organism, then turn four dials (warmth, roughness, motion, surprise) and let it drift somewhere strange.</p>
+    <div class="sg-banner__actions">
+      <a class="sg-banner__launch" href={app.url} target="_blank" rel="noopener">Open Sound Garden <span aria-hidden="true">↗</span></a>
+      <a href="/sound-garden">Field notes <span aria-hidden="true">→</span></a>
+    </div>
+  </div>
+
+  <div class="sg-sprout" aria-labelledby="sg-sprout-title">
+    <div class="sg-sprout__head">
+      <p id="sg-sprout-title" class="sg-sprout__label">Today’s sprout · <time data-sg-day datetime={today}>{today}</time></p>
+      <p class="sg-sprout__meta">same organism for everyone today</p>
+    </div>
+    <div class="sg-sprout__organism">
+      <svg class="sg-orbit" viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" stroke-opacity=".25" />
+        <circle cx="60" cy="60" r="33" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-dasharray="3 5" />
+        <g class="sg-orbit__ring"><circle cx="60" cy="10" r="5" fill="var(--sg-accent)" stroke="currentColor" /></g>
+        <g class="sg-orbit__ring sg-orbit__ring--inner"><circle cx="60" cy="27" r="3.5" fill="currentColor" /></g>
+        <circle class="sg-orbit__core" cx="60" cy="60" r="13" fill="var(--sg-accent)" stroke="currentColor" />
+      </svg>
+      <div>
+        <p class="sg-sprout__name" data-sg-name>{seed.name}</p>
+        <p class="sg-sprout__note" data-sg-note>{seed.note}</p>
+      </div>
+    </div>
+    <ul class="sg-sprout__dims">
+      {DIMS.map((k) => (
+        <li><span>{k}</span><i><b data-sg-dim={k} style={`width:${sprout.dims[k]}%`}></b></i><em data-sg-val={k}>{sprout.dims[k]}</em></li>
+      ))}
+    </ul>
+    <div class="sg-sprout__controls">
+      <button type="button" class="sg-sprout__plant" data-sg-plant aria-pressed="false">▶ Plant it</button>
+      <button type="button" data-sg-mutate disabled>Mutate</button>
+      <p class="sg-sprout__status" data-sg-status role="status">Audio starts only when you press Plant. Plays for up to a minute.</p>
+    </div>
+  </div>
+</section>
+
+<script define:vars={{ SEEDS }}>
+  (() => {
+    const root = document.querySelector('[data-sg-banner]');
+    if (!root || root.dataset.sgReady) return;
+    root.dataset.sgReady = '1';
+
+    const laDay = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    function sproutFor(day) {
+      let h = 2166136261;
+      for (const ch of day) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+      const pick = (shift, lo, hi) => lo + ((h >>> shift) % (hi - lo + 1));
+      return {
+        seed: h % SEEDS.length,
+        dims: { warmth: pick(3, 40, 92), roughness: pick(9, 6, 48), motion: pick(15, 18, 80), surprise: pick(21, 8, 62) },
+      };
+    }
+
+    // The page is built once and served for days; re-derive the sprout from the visitor's clock.
+    const day = laDay(new Date());
+    const sprout = sproutFor(day);
+    const seed = SEEDS[sprout.seed];
+    const dims = sprout.dims;
+    root.style.setProperty('--sg-accent', seed.accent);
+    const dayEl = root.querySelector('[data-sg-day]');
+    if (dayEl) { dayEl.textContent = day; dayEl.setAttribute('datetime', day); }
+    root.querySelector('[data-sg-name]').textContent = seed.name;
+    root.querySelector('[data-sg-note]').textContent = seed.note;
+    for (const [k, v] of Object.entries(dims)) {
+      const bar = root.querySelector(`[data-sg-dim="${k}"]`); if (bar) bar.style.width = `${v}%`;
+      const val = root.querySelector(`[data-sg-val="${k}"]`); if (val) val.textContent = String(v);
+    }
+
+    const plantBtn = root.querySelector('[data-sg-plant]');
+    const mutateBtn = root.querySelector('[data-sg-mutate]');
+    const status = root.querySelector('[data-sg-status]');
+    const INTERVALS = [1, 9 / 8, 5 / 4, 4 / 3, 3 / 2, 5 / 3, 15 / 8, 2];
+    const LEVELS = [0.46, 0.25, 0.13, 0.075];
+    let engine = null;
+    let timer = 0;
+    let mutations = 0;
+
+    function build() {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      const ctx = new Ctx();
+      const out = ctx.createGain();
+      const comp = ctx.createDynamicsCompressor();
+      const filter = ctx.createBiquadFilter();
+      const pan = ctx.createStereoPanner();
+      const delay = ctx.createDelay(2);
+      const feedback = ctx.createGain();
+      const wet = ctx.createGain();
+      const verb = ctx.createConvolver();
+      const verbGain = ctx.createGain();
+
+      out.gain.value = 0;
+      comp.threshold.value = -18; comp.knee.value = 18; comp.ratio.value = 5;
+      filter.type = 'lowpass';
+      const len = Math.floor(ctx.sampleRate * 2.8);
+      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let c = 0; c < 2; c += 1) {
+        const data = ir.getChannelData(c);
+        for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.7;
+      }
+      verb.buffer = ir; verbGain.gain.value = 0.25; wet.gain.value = 0.23;
+      filter.connect(pan); pan.connect(out);
+      filter.connect(delay); delay.connect(wet); wet.connect(out); delay.connect(feedback); feedback.connect(delay);
+      filter.connect(verb); verb.connect(verbGain); verbGain.connect(out);
+      out.connect(comp); comp.connect(ctx.destination);
+
+      const voices = seed.ratios.map((ratio, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = i === 1 ? 'triangle' : 'sine';
+        osc.frequency.value = seed.base * ratio;
+        g.gain.value = LEVELS[i];
+        osc.connect(g); g.connect(filter); osc.start();
+        return { osc, g };
+      });
+
+      const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const nd = noiseBuf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < nd.length; i += 1) { last = last * 0.985 + (Math.random() * 2 - 1) * 0.015; nd[i] = last * 3.2; }
+      const noise = ctx.createBufferSource();
+      const noiseGain = ctx.createGain();
+      noise.buffer = noiseBuf; noise.loop = true; noise.connect(noiseGain); noiseGain.connect(filter); noise.start();
+
+      const lfo = ctx.createOscillator();
+      const lfoDepth = ctx.createGain();
+      lfo.connect(lfoDepth); lfoDepth.connect(pan.pan); lfo.start();
+
+      // Same mapping as the satellite's shaping function.
+      const t = ctx.currentTime;
+      const w = dims.warmth / 100, r = dims.roughness / 100, m = dims.motion / 100;
+      filter.frequency.setValueAtTime(800 + w * 6200 - r * 650, t);
+      filter.Q.setValueAtTime(0.5 + r * 7, t);
+      noiseGain.gain.setValueAtTime(0.004 + r * 0.04, t);
+      delay.delayTime.setValueAtTime(0.16 + m * 0.58, t);
+      feedback.gain.setValueAtTime(0.12 + m * 0.31, t);
+      lfo.frequency.setValueAtTime(0.025 + m * 0.31, t);
+      lfoDepth.gain.setValueAtTime(0.05 + m * 0.82, t);
+      voices.forEach((v, i) => {
+        v.osc.detune.setValueAtTime((i - 1.5) * r * 18, t);
+        v.g.gain.setValueAtTime(LEVELS[i] * (i === 0 ? 1 : 0.65 + w * 0.35), t);
+      });
+      out.gain.setTargetAtTime(0.16, t, 0.6);
+      return { ctx, out, voices };
+    }
+
+    function mutate() {
+      if (!engine) return;
+      const t = engine.ctx.currentTime;
+      const reach = dims.surprise / 100;
+      const shift = INTERVALS[Math.floor(Math.random() * INTERVALS.length)];
+      engine.voices.forEach((v, i) => {
+        const wobble = 1 + (Math.random() * 2 - 1) * reach * 0.012 * (i + 1);
+        v.osc.frequency.setTargetAtTime(seed.base * seed.ratios[i] * shift * wobble, t, 0.35 + (1 - reach) * 0.6);
+      });
+      mutations += 1;
+      status.textContent = `${seed.name}, mutation ${mutations}. Keep what you like in the full garden.`;
+    }
+
+    function stop(message) {
+      if (!engine) return;
+      const { ctx, out } = engine;
+      engine = null;
+      clearTimeout(timer);
+      out.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
+      setTimeout(() => ctx.close().catch(() => {}), 2500);
+      root.classList.remove('is-growing');
+      plantBtn.textContent = '▶ Plant it';
+      plantBtn.setAttribute('aria-pressed', 'false');
+      mutateBtn.disabled = true;
+      status.textContent = message || 'Resting. Plant it again, or open the full garden to keep growing it.';
+    }
+
+    plantBtn.addEventListener('click', () => {
+      if (engine) { stop(); return; }
+      engine = build();
+      if (!engine) { status.textContent = 'This browser has no Web Audio, so the sprout can’t play here.'; return; }
+      mutations = 0;
+      root.classList.add('is-growing');
+      plantBtn.textContent = '■ Rest';
+      plantBtn.setAttribute('aria-pressed', 'true');
+      mutateBtn.disabled = false;
+      status.textContent = `Growing ${seed.name}. Press Mutate for a new interval.`;
+      timer = setTimeout(() => stop('A minute is up. The sprout is resting. Open the full garden to keep going.'), 60000);
+    });
+    mutateBtn.addEventListener('click', mutate);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
+    document.addEventListener('astro:before-swap', () => stop(), { once: true });
+  })();
+</script>
+
+<style>
+  .sg-banner { --sg-paper: #eeeade; --sg-ink: #181914; --sg-coral: #ff6f45; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); margin: 22px 7px 26px 0; border: 2px solid var(--sg-ink); background: var(--sg-paper); box-shadow: 7px 7px 0 var(--sg-coral); color: var(--sg-ink); }
+  .sg-banner__copy { padding: clamp(22px, 3.5vw, 42px); border-right: 2px solid var(--sg-ink); align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+  .sg-banner__eyebrow, .sg-sprout__label, .sg-sprout__meta, .sg-sprout__dims, .sg-sprout__controls button { font-family: var(--pc-font-mono); text-transform: uppercase; letter-spacing: .08em; }
+  .sg-banner__eyebrow { margin: 0 0 14px; color: #7b3424; font-size: 10px; font-weight: 650; }
+  .sg-banner h2 { margin: 0; font: 650 clamp(40px, 5.4vw, 76px)/.9 var(--pc-font-sans); letter-spacing: -.06em; }
+  .sg-banner__dek { margin: 16px 0 22px; max-width: 44ch; font-size: 15px; line-height: 1.6; }
+  .sg-banner__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
+  .sg-banner__actions a { display: inline-flex; min-height: 44px; align-items: center; gap: 12px; color: var(--sg-ink); font-size: 13px; font-weight: 700; text-underline-offset: 4px; }
+  .sg-banner__actions .sg-banner__launch { padding: 11px 17px; border: 2px solid var(--sg-ink); background: var(--sg-coral); text-decoration: none; }
+  .sg-banner__actions .sg-banner__launch:hover { background: #d4ed2b; }
+
+  .sg-sprout { display: flex; flex-direction: column; gap: 14px; padding: clamp(18px, 2.6vw, 30px); background: #e5dfd1; }
+  .sg-sprout__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+  .sg-sprout__label { margin: 0; font-size: 10px; font-weight: 700; }
+  .sg-sprout__meta { margin: 0; color: rgba(24, 25, 20, .58); font-size: 9px; }
+  .sg-sprout__organism { display: flex; align-items: center; gap: 16px; }
+  .sg-orbit { flex: 0 0 auto; width: 92px; height: 92px; color: var(--sg-ink); }
+  .sg-orbit__ring { transform-origin: 60px 60px; }
+  .sg-orbit__core { transform-origin: 60px 60px; transition: r .4s; }
+  .sg-banner.is-growing .sg-orbit__ring { animation: sg-spin 9s linear infinite; }
+  .sg-banner.is-growing .sg-orbit__ring--inner { animation-duration: 5s; animation-direction: reverse; }
+  .sg-banner.is-growing .sg-orbit__core { animation: sg-breathe 3.2s ease-in-out infinite; }
+  @keyframes sg-spin { to { transform: rotate(360deg); } }
+  @keyframes sg-breathe { 50% { transform: scale(1.18); } }
+  .sg-sprout__name { margin: 0; font: 650 26px/1.05 var(--pc-font-sans); letter-spacing: -.035em; }
+  .sg-sprout__note { margin: 4px 0 0; color: #5d5446; font-size: 13px; }
+  .sg-sprout__dims { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; font-size: 9px; }
+  .sg-sprout__dims li { display: grid; grid-template-columns: 78px 1fr 26px; align-items: center; gap: 10px; }
+  .sg-sprout__dims i { height: 8px; border: 1px solid var(--sg-ink); background: var(--sg-paper); }
+  .sg-sprout__dims b { display: block; height: 100%; background: var(--sg-accent, var(--sg-coral)); border-right: 1px solid var(--sg-ink); }
+  .sg-sprout__dims em { font-style: normal; text-align: right; }
+  .sg-sprout__controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .sg-sprout__controls button { min-height: 44px; padding: 10px 16px; border: 2px solid var(--sg-ink); background: var(--sg-paper); color: var(--sg-ink); font-size: 11px; font-weight: 700; cursor: pointer; }
+  .sg-sprout__controls .sg-sprout__plant { background: var(--sg-ink); color: var(--sg-paper); }
+  .sg-sprout__controls .sg-sprout__plant[aria-pressed='true'] { background: var(--sg-accent, var(--sg-coral)); color: var(--sg-ink); }
+  .sg-sprout__controls button:disabled { opacity: .4; cursor: default; }
+  .sg-sprout__status { flex-basis: 100%; margin: 0; color: #5d5446; font-size: 11px; line-height: 1.5; }
+  .sg-banner a:focus-visible, .sg-banner button:focus-visible { outline: 3px solid #185fa5; outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) {
+    .sg-banner.is-growing .sg-orbit__ring, .sg-banner.is-growing .sg-orbit__core { animation: none; }
+  }
+  @media (max-width: 760px) {
+    .sg-banner { grid-template-columns: 1fr; margin-right: 5px; box-shadow: 5px 5px 0 var(--sg-coral); }
+    .sg-banner__copy { border-right: 0; border-bottom: 2px solid var(--sg-ink); }
+  }
+</style>
