@@ -58,10 +58,10 @@ test('lookup accepts catalog id or slug without confusing catalog ids with token
 });
 
 test('preview metadata exposes artwork and playable score while clearly separating mint state', () => {
-  assert.equal(NOUNS_DRUM_CLUB_BANDMATES_STATUS, 'not-minted');
+  assert.equal(NOUNS_DRUM_CLUB_BANDMATES_STATUS, 'prepared');
   for (const bandmate of NOUNS_DRUM_CLUB_BANDMATES) {
     const metadata = nounsDrumClubBandmateMetadata(bandmate);
-    assert.equal(metadata.status, 'not-minted');
+    assert.equal(metadata.status, 'prepared');
     assert.equal(metadata.minted, false);
     assert.equal(metadata.contract, null);
     assert.equal(metadata.token, null);
@@ -75,20 +75,20 @@ test('preview metadata exposes artwork and playable score while clearly separati
     assert.equal('royalties' in metadata, false);
     assert.equal('price' in metadata, false);
     assert.equal('editionCap' in metadata, false);
-    assert.ok(metadata.boundaries.some((line) => /No contract, token, mint, price, edition cap, wallet action, or financial claim/.test(line)));
+    assert.ok(metadata.boundaries.some((line) => /No verified contract or wallet action/.test(line)));
   }
 });
 
-test('static preview metadata route emits all 12 ids with explicit not-minted headers', async () => {
+test('static preview metadata route emits all 12 ids with explicit prepared headers', async () => {
   const paths = await getStaticPaths();
   assert.deepEqual(paths.map(({ params }) => params.id), Array.from({ length: 12 }, (_, index) => String(index)));
   for (const path of paths) {
     const response = await GET({ props: path.props });
     assert.equal(response.status, 200);
-    assert.equal(response.headers.get('X-PointCast-Collectible-Status'), 'not-minted');
+    assert.equal(response.headers.get('X-PointCast-Collectible-Status'), 'prepared');
     assert.match(response.headers.get('Content-Type') ?? '', /^application\/json/);
     const body = await response.json();
-    assert.equal(body.status, 'not-minted');
+    assert.equal(body.status, 'prepared');
     assert.equal(body.minted, false);
     assert.equal(body.contract, null);
   }

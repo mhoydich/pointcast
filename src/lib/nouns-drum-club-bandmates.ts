@@ -1,8 +1,9 @@
 import rawBandmates from '../data/nouns-drum-club-bandmates.json' with { type: 'json' };
 import { PAD_BY_ID } from './nouns-drum-club-audio.ts';
 import { encodeScore, normalizeScore, type DrumScore } from './nouns-drum-club-score.ts';
+import { NOUNS_BANDMATES_RELEASE, NOUNS_BANDMATES_RELEASE_DECLARED_LIVE } from './nouns-bandmates-mint.ts';
 
-export const NOUNS_DRUM_CLUB_BANDMATES_STATUS = 'not-minted' as const;
+export const NOUNS_DRUM_CLUB_BANDMATES_STATUS = NOUNS_BANDMATES_RELEASE_DECLARED_LIVE ? 'live' as const : 'prepared' as const;
 export const NOUNS_DRUM_CLUB_BANDMATES_BASE = 'https://pointcast.xyz' as const;
 export const NOUNS_DRUM_CLUB_BANDMATES_PATH = '/nouns/drum-club/bandmates/' as const;
 
@@ -96,12 +97,14 @@ export function nounsDrumClubBandmateMetadataUrl(bandmate: NounsDrumClubBandmate
 export function nounsDrumClubBandmateMetadata(bandmate: NounsDrumClubBandmate) {
   const absolute = (path: string) => new URL(path, NOUNS_DRUM_CLUB_BANDMATES_BASE).href;
   const playUrl = nounsDrumClubBandmatePlayUrl(bandmate);
+  const releaseToken = NOUNS_BANDMATES_RELEASE.tokens.find((token) => token.bandmateId === bandmate.id);
+  const live = NOUNS_BANDMATES_RELEASE_DECLARED_LIVE && Boolean(releaseToken);
   return {
     schema: 'pointcast.collectible-preview/v1',
-    status: NOUNS_DRUM_CLUB_BANDMATES_STATUS,
-    minted: false,
-    contract: null,
-    token: null,
+    status: live ? 'live' : 'prepared',
+    minted: live,
+    contract: live ? NOUNS_BANDMATES_RELEASE.contract : null,
+    token: live ? releaseToken!.tokenId : null,
     name: `Nouns Drum Club ${bandmate.number} · ${bandmate.name}`,
     description: bandmate.description,
     decimals: 0,
@@ -126,7 +129,7 @@ export function nounsDrumClubBandmateMetadata(bandmate: NounsDrumClubBandmate) {
     remixNote: 'Open project design: play, share, and remix the score. This statement is not an on-chain license grant.',
     tags: ['pointcast', 'nouns', 'nouns-drum-club', 'bandmate', bandmate.role, 'music', 'remix'],
     attributes: [
-      { name: 'collection_status', value: NOUNS_DRUM_CLUB_BANDMATES_STATUS },
+      { name: 'collection_status', value: live ? 'live' : 'prepared' },
       { name: 'bandmate_number', value: bandmate.number },
       { name: 'catalog_id', value: String(bandmate.id) },
       { name: 'noun_id', value: String(bandmate.nounId) },
@@ -141,9 +144,12 @@ export function nounsDrumClubBandmateMetadata(bandmate: NounsDrumClubBandmate) {
     homepage: `${NOUNS_DRUM_CLUB_BANDMATES_BASE}${NOUNS_DRUM_CLUB_BANDMATES_PATH}`,
     metadataUri: nounsDrumClubBandmateMetadataUrl(bandmate),
     score: bandmate.score,
-    boundaries: [
-      'This is preview metadata for a playable collectible concept.',
-      'No contract, token, mint, price, edition cap, wallet action, or financial claim exists for this preview.',
+    boundaries: live ? [
+      'This metadata describes a playable Tezos collectible.',
+      'Opening the play link does not autoplay audio.',
+    ] : [
+      'This is preview metadata for a playable collectible preparing to launch.',
+      'No verified contract or wallet action is available for this preview.',
       'Opening the play link does not autoplay audio.',
     ],
   } as const;
