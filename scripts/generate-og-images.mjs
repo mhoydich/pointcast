@@ -16,6 +16,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import sharp from 'sharp';
 import { homeCard } from './og-home-card.mjs';
 import { calendarCard, loadPaddles, paddleCard, registerCard } from './og-paddle-cards.mjs';
@@ -1053,15 +1054,27 @@ async function main() {
   const blockFiles = (await fs.readdir(BLOCKS_DIR)).filter((f) => f.endsWith('.json'));
   console.log('[og] generating', blockFiles.length, 'block cards...');
 
+  // A block card that is committed is the author's art (Pool Together's
+  // 0585 is a 1.6 MB painting); regenerating it replaced that art with the
+  // template on every full build and shipped it. Only untracked cards —
+  // new blocks — are drawn here. Without git, fall back to drawing all.
+  let tracked = new Set();
+  try {
+    tracked = new Set(execFileSync('git', ['ls-files', '--', path.join(OUT_DIR, 'b')], { encoding: 'utf8' })
+      .split('\n').filter(Boolean).map((f) => path.resolve(f)));
+  } catch { /* no git: draw every card */ }
+
   let done = 0;
+  let kept = 0;
   for (const file of blockFiles) {
     const raw = await fs.readFile(path.join(BLOCKS_DIR, file), 'utf8');
     const block = JSON.parse(raw);
-    const svg = blockCard(block);
-    await svgToPng(svg, path.join(OUT_DIR, 'b', `${block.id}.png`));
+    const out = path.join(OUT_DIR, 'b', `${block.id}.png`);
+    if (tracked.has(out)) { kept++; continue; }
+    await svgToPng(blockCard(block), out);
     done++;
   }
-  console.log(`  ✓ ${done} per-block cards at /images/og/b/*.png`);
+  console.log(`  ✓ ${done} per-block cards drawn, ${kept} committed cards kept, at /images/og/b/*.png`);
 }
 
 main().catch((err) => {

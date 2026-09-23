@@ -106,6 +106,10 @@ test('every card body renders at 1200×630, and escapes what it is given', () =>
   assert.ok(!page.includes('<b>'));
   assert.match(page, /UNFURL #42/);
   assert.match(page, /HELLO, SLACK\./);
+  // Every site-name separator the pages use is trimmed from the card title.
+  for (const sep of ['—', '|', '·', '-']) {
+    assert.match(pageCard({ path: '/k', title: `Koan ${sep} PointCast`, light }), />Koan<\/text>/);
+  }
   renders(page);
   const data = {
     shortwave: { posts: [{ text: 'hello town', who: 'visitor', at: new Date().toISOString(), noun: 3 }] },
@@ -148,4 +152,10 @@ test('the routes, middleware and layouts are wired to the engine', async () => {
   assert.match(middleware, /x-pointcast-card-probe/);
   assert.match(layout, /pageCardUrl\(Astro\.url\.pathname/);
   assert.match(render, /CREATE TABLE IF NOT EXISTS unfurl_counts/);
+});
+
+test('a full build keeps committed block cards instead of redrawing them', async () => {
+  const generator = await read('scripts/generate-og-images.mjs');
+  assert.match(generator, /git', \['ls-files'/);
+  assert.match(generator, /if \(tracked\.has\(out\)\) \{ kept\+\+; continue; \}/);
 });
