@@ -4,12 +4,14 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 
 const songs = JSON.parse(readFileSync(new URL('../src/data/bell-choir-songs.json', import.meta.url), 'utf8'));
+const catalogue = JSON.parse(readFileSync(new URL('../src/data/karaoke-catalogue.json', import.meta.url), 'utf8'));
 const core = readFileSync(new URL('../src/lib/karaoke.mjs', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../src/scripts/karaoke.mjs', import.meta.url), 'utf8');
 const page = readFileSync(new URL('../src/pages/karaoke.astro', import.meta.url), 'utf8');
 const textIds = ['toast', 'shwa-line', 'bpm', 'rating-title', 'rating-note', 'rating-result',
   'lyrics', 'next', 'line-announcement', 'song-label', 'status', 'player-note', 'songbook',
-  'presence', 'mode-note', 'singer-label', 'pitch-note', 'pitch-detail', 'pitch-announcement', 'mic-status'];
+  'presence', 'mode-note', 'singer-label', 'pitch-note', 'pitch-detail', 'pitch-announcement', 'mic-status',
+  'video-artist', 'video-title', 'video-status', 'video-credit', 'video-note', 'search-empty'];
 
 // A small fixture keeps these tests independent of Astro's build. Each ID is
 // checked against the real page, and the actual client and audio core execute
@@ -19,7 +21,11 @@ const markup = `<!doctype html><html><body>
   <button data-mode="solo" aria-pressed="true">Solo</button>
   <button data-mode="group" aria-pressed="false">Together</button>
   ${songs.map((song, i) => `<button data-song="${i}">${song.title}</button>`).join('')}
-  <span id="group-size-wrap" hidden><select id="group-size"><option value="2">2</option></select></span>
+  ${catalogue.map((song, i) => `<button data-catalogue="${i}">${song.title} ${song.artist}</button>`).join('')}
+  <input id="song-search" type="search"><section id="noun-companions"></section>
+  <span id="group-size-wrap" hidden><select id="group-size"><option value="2">2</option><option value="4">4</option></select></span>
+  <section id="video-stage" hidden><div id="video-container"></div><button id="video-load">Load video</button><button id="video-close" hidden>Close video</button><a id="video-source"></a></section>
+  <section id="bell-stage"></section><details id="bell-songbook"></details>
   <button id="start">Sing</button><button id="stop" disabled>Stop</button><button id="restart">Restart</button>
   <select id="pace"><option value="0.8">Gentle</option><option value="1" selected>Original</option><option value="1.15">Lively</option></select>
   <input id="volume" value="0.45" type="range" min="0" max="1" step="0.05">
@@ -45,10 +51,12 @@ function mediaStream() {
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function setup(t, { getUserMedia, unavailable = false, resumeGate, sampleFrequency = 0 } = {}) {
-  const dom = new JSDOM(markup, { url: 'https://pointcast.test/karaoke/', pretendToBeVisual: true, runScripts: 'outside-only' });
+function setup(t, { getUserMedia, unavailable = false, resumeGate, sampleFrequency = 0,
+  hash = '#little-light', videoLoad } = {}) {
+  const dom = new JSDOM(markup, { url: `https://pointcast.test/karaoke/${hash}`, pretendToBeVisual: true, runScripts: 'outside-only' });
   const win = dom.window;
-  const contexts = [], frames = new Map(), intervals = new Map(), timeouts = new Map(), requests = [];
+  const contexts = [], frames = new Map(), intervals = new Map(), timeouts = new Map(), requests = [], videoPlayers = [], copied = [];
+  const companionCalls = { singers: [], cheers: [], resets: 0 };
   let nextId = 0, hidden = false;
   Object.defineProperty(win.document, 'hidden', { configurable: true, get: () => hidden });
   win.requestAnimationFrame = callback => { const id = ++nextId; frames.set(id, callback); return id; };
@@ -76,13 +84,36 @@ function setup(t, { getUserMedia, unavailable = false, resumeGate, sampleFrequen
   if (!unavailable) Object.defineProperty(win.navigator, 'mediaDevices', { value: { getUserMedia: options => {
     requests.push(options); return getUserMedia ? getUserMedia(options) : Promise.resolve(mediaStream());
   } } });
-  win.eval(`const SONGS = ${JSON.stringify(songs)};\n${core.replace(/^export /gm, '')}\n${client.replace(/^import .+;\r?\n/gm, '')}\n//# sourceURL=karaoke-client-under-test.js`);
+  Object.defineProperty(win.navigator, 'clipboard', { value: { async writeText(value) { copied.push(value); } } });
+  win.__videoPlayers = videoPlayers;
+  win.__videoLoad = videoLoad;
+  win.__companionCalls = companionCalls;
+  win.eval(`
+    const SONGS = ${JSON.stringify(songs)};
+    const CATALOGUE = ${JSON.stringify(catalogue)};
+    function initNounCompanions() { return {
+      setSingers(count) { globalThis.__companionCalls.singers.push(count); },
+      cheer(label) { globalThis.__companionCalls.cheers.push(label); },
+      reset() { globalThis.__companionCalls.resets++; },
+    }; }
+    function createVideoPlayer(config) {
+      const player = {
+        config, destroyed: 0, loads: [],
+        async load(videoId) { this.loads.push(videoId); return globalThis.__videoLoad ? globalThis.__videoLoad(this, videoId) : undefined; },
+        destroy() { this.destroyed++; },
+      };
+      globalThis.__videoPlayers.push(player);
+      return player;
+    }
+    ${core.replace(/^export /gm, '')}
+    ${client.replace(/^import .+;\r?\n/gm, '')}
+    //# sourceURL=karaoke-client-under-test.js`);
   t.after(() => { win.dispatchEvent(new win.Event('pagehide')); dom.window.close(); });
   const element = selector => win.document.querySelector(selector);
   const press = selector => element(selector).onclick.call(element(selector), new win.MouseEvent('click'));
   const step = (now = 0) => { const pending = [...frames]; frames.clear(); pending.forEach(([, callback]) => callback(now)); };
   return {
-    win, contexts, frames, intervals, requests, element, press, step,
+    win, contexts, frames, intervals, requests, videoPlayers, companionCalls, copied, element, press, step,
     hide() { hidden = true; win.document.dispatchEvent(new win.Event('visibilitychange')); },
     pagehide() { win.dispatchEvent(new win.Event('pagehide')); },
     async finishSong() {
@@ -339,3 +370,102 @@ for (const [name, selector, expectedFeeling] of [
     else { assert.equal(app.element('#presence').textContent, 'TOGETHER · ONE SCREEN'); assert.equal(app.element('#group-size-wrap').hidden, false); }
   });
 }
+
+test('external deep links select publisher video without autoplay or microphone access', t => {
+  const song = catalogue[1];
+  const app = setup(t, { hash: `#${song.id}` });
+  assert.equal(app.element('#video-stage').hidden, false);
+  assert.equal(app.element('#bell-stage').hidden, true);
+  assert.equal(app.element('[data-catalogue="1"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(app.element('#video-title').textContent, song.title);
+  assert.equal(app.element('#video-source').href, `https://www.youtube.com/watch?v=${song.videoId}`);
+  assert.equal(app.videoPlayers.length, 0, 'selection alone does not connect to YouTube');
+  assert.equal(app.requests.length, 0, 'selection alone does not request microphone access');
+});
+
+test('loading an external video cancels pending microphone permission and prior bells', async t => {
+  const permission = deferred(), stream = mediaStream();
+  const app = setup(t, { getUserMedia: () => permission.promise });
+  await app.press('#start');
+  assert.equal(app.intervals.size, 1);
+  app.press('[data-catalogue="0"]');
+  assert.equal(app.intervals.size, 0, 'selecting the video stops bell scheduling');
+  const micStart = app.press('#mic');
+  const videoStart = app.press('#video-load');
+  permission.resolve(stream); await Promise.all([micStart, videoStart]);
+  assert.equal(stream.track.stopped, 1);
+  assertMicOff(app);
+  assert.equal(app.videoPlayers.length, 1);
+  assert.equal(app.videoPlayers[0].loads.join(','), catalogue[0].videoId);
+});
+
+test('stale video callbacks cannot mutate a newer bell selection', async t => {
+  const app = setup(t);
+  app.press('[data-catalogue="0"]'); await app.press('#video-load');
+  const player = app.videoPlayers[0];
+  app.press('[data-song="1"]');
+  assert.equal(player.destroyed, 1);
+  player.config.onReady(); player.config.onState(1); player.config.onState(0); player.config.onError(101);
+  assert.equal(app.element('#status').textContent, 'READY WHEN YOU ARE');
+  assert.equal(app.element('#after-song').hidden, true);
+  assert.equal(app.element('#video-stage').hidden, true);
+});
+
+test('video errors never award flowers and ended counts only after playback begins', async t => {
+  const app = setup(t);
+  app.press('[data-catalogue="0"]'); await app.press('#video-load');
+  let player = app.videoPlayers[0];
+  player.config.onState(0);
+  assert.equal(app.element('#after-song').hidden, true, 'an ended callback before play is ignored');
+  player.config.onError(150);
+  assert.equal(app.element('#after-song').hidden, true);
+  assert.equal(app.element('#status').textContent, 'PLAYER UNAVAILABLE');
+
+  await app.press('#video-load'); player = app.videoPlayers[1];
+  player.config.onState(1); player.config.onState(0);
+  assert.equal(app.element('#after-song').hidden, false);
+  assert.equal(app.element('#status').textContent, 'SONG COMPLETE');
+});
+
+test('close, background, mode, and song changes each destroy an active video', async t => {
+  for (const action of ['close', 'background', 'mode', 'song']) {
+    await t.test(action, async () => {
+      const app = setup(t);
+      app.press('[data-catalogue="0"]'); await app.press('#video-load');
+      const player = app.videoPlayers[0];
+      if (action === 'close') app.press('#video-close');
+      if (action === 'background') app.hide();
+      if (action === 'mode') app.press('[data-mode="group"]');
+      if (action === 'song') app.press('[data-song="2"]');
+      assert.equal(player.destroyed, 1, `${action} destroys publisher player`);
+    });
+  }
+});
+
+test('sharing uses the selected external id and original songs retain their own ids', async t => {
+  const app = setup(t);
+  app.press('[data-catalogue="2"]'); await app.press('#share');
+  assert.equal(app.copied.at(-1), `https://pointcast.test/karaoke/#${catalogue[2].id}`);
+  app.press('[data-song="2"]'); await app.press('#share');
+  assert.equal(app.copied.at(-1), `https://pointcast.test/karaoke/#${songs[2].id}`);
+});
+
+test('catalogue search filters title and artist while group size drives local companions', t => {
+  const app = setup(t);
+  app.element('#song-search').value = 'weezer';
+  app.element('#song-search').oninput();
+  assert.equal(app.win.document.querySelectorAll('[data-catalogue]:not([hidden])').length, 1);
+  assert.equal(app.element('[data-catalogue="2"]').hidden, false);
+  assert.equal(app.element('#search-empty').hidden, true);
+  app.element('#song-search').value = 'not in this set'; app.element('#song-search').oninput();
+  assert.equal(app.element('#search-empty').hidden, false);
+
+  app.press('[data-mode="group"]');
+  assert.equal(app.companionCalls.singers.at(-1), 2);
+  app.element('#group-size').value = '4'; app.element('#group-size').onchange();
+  assert.equal(app.companionCalls.singers.at(-1), 4);
+  app.press('.reaction');
+  assert.equal(app.companionCalls.cheers.at(-1), 'Applause');
+  app.press('[data-mode="solo"]');
+  assert.equal(app.companionCalls.singers.at(-1), 1);
+});
