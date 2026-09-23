@@ -358,7 +358,8 @@ export async function mintCampusCard(params: {
 export async function mintNounsBandmate(tokenId: number, expectedAddress?: string): Promise<{ address: string; opHash: string; confirmation: Promise<unknown> }> {
   const { assertNounsBandmateMintReady } = await import('./nouns-bandmates-mint');
   const readiness = await assertNounsBandmateMintReady(tokenId);
-  const { tezos, wallet } = getToolkit();
+  const wallet = await walletReady();
+  const tezos = await tezosClient();
   const address = await ensurePointCastPermissions(wallet);
   if (expectedAddress && address !== expectedAddress) throw new Error('Wallet account changed before collection. Please try again.');
   const contract = await tezos.wallet.at(readiness.contract);
