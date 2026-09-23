@@ -22,6 +22,7 @@ import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-b
 import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
 import { losAngelesDate } from '../src/lib/kennel-club';
 import { datedImageUrl } from '../src/lib/og-version.mjs';
+import { planUnfurl } from '../src/lib/unfurl/plan.mjs';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
@@ -101,6 +102,46 @@ function injectTodayDogMetadata(response: Response, pathname: string): Response 
     statusText: transformed.statusText,
     headers,
   });
+}
+
+/**
+ * Every page's unfurl, decided per request (src/lib/unfurl/plan.mjs): live
+ * rooms point at /og/live/<room>.png, pages still on a generic default get
+ * their own /og/page.png card, generated cards get the current bucket so
+ * caches roll with the light, and motion rooms carry an og:video loop.
+ */
+function injectUnfurlCards(response: Response, pathname: string): Response {
+  // The plan is made from the first image tag seen (og:image leads in every
+  // layout; twitter:image stands in on the odd standalone page) and applied
+  // to the rest as they stream past.
+  let plan: ReturnType<typeof planUnfurl> | null = null;
+  const decide = (seen = '', missing = false) => (plan ??= planUnfurl({ pathname, currentImage: seen, missing }));
+  const sizeTag = (value: string) => ({
+    element(element: Element) { if (plan?.image) element.setAttribute('content', value); },
+  });
+  const transformed = new HTMLRewriter()
+    .on('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="fc:frame:image"]', {
+      element(element) {
+        const p = decide(element.getAttribute('content') ?? '');
+        if (p.image) element.setAttribute('content', p.image);
+      },
+    })
+    .on('meta[property="og:image:type"]', sizeTag('image/png'))
+    .on('meta[property="og:image:width"]', sizeTag('1200'))
+    .on('meta[property="og:image:height"]', sizeTag('630'))
+    .on('head', {
+      element(element) {
+        element.onEndTag((end) => {
+          // Still no plan here means the page shipped no image tags at all.
+          const p = decide('', true);
+          if (p.headHtml) end.before(p.headHtml, { html: true });
+        });
+      },
+    })
+    .transform(response);
+  const headers = new Headers(transformed.headers);
+  headers.set('X-PointCast-Unfurl', 'request-time');
+  return new Response(transformed.body, { status: transformed.status, statusText: transformed.statusText, headers });
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
@@ -254,7 +295,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     ? classifyUA(ua)
     : 'unknown';
 
-  if (isGet && !looksLikeAsset && !isApiRoute && wantsHtml && env.VISITS) {
+  // The unfurl card route fetches pages to read their titles; that is not a visit.
+  const isCardProbe = request.headers.get('x-pointcast-card-probe') === '1';
+  if (isGet && !looksLikeAsset && !isApiRoute && wantsHtml && env.VISITS && !isCardProbe) {
     // Humans: skip — let the JS widget on the page handle their log entry.
     // Non-humans: auto-log with a random noun so they show up in the feed —
     // except the anonymous crawler flood. On 2026-09-01 the last 100 log
@@ -283,7 +326,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const staticResponse = await withStaticAudioRange(request, await next());
   const staticResponseContentType = staticResponse.headers.get('content-type') ?? '';
   const response = staticResponse.status === 200 && staticResponseContentType.startsWith('text/html')
-    ? injectTodayDogMetadata(staticResponse, url.pathname)
+    ? injectUnfurlCards(injectTodayDogMetadata(staticResponse, url.pathname), url.pathname)
     : staticResponse;
   const responseContentType = response.headers.get('content-type') ?? '';
   const isHtmlResponse = response.status === 200 && responseContentType.startsWith('text/html');
