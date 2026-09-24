@@ -1,0 +1,13 @@
+# Keyboard Studio room service
+
+Private `/keyboard` notes and Studio drafts stay in browser storage. This service stores only passages that a visitor explicitly posts to a shared V3 room. An invite URL includes a 32-character room ID and a 64-character HMAC token. Anyone with both values can read and add writing. Rooms cannot be listed, closed, or deleted yet, so share only writing meant to remain available to invite holders.
+
+Before deploying Pages, bind `PC_RATES_KV` and set the encrypted Pages secret `KEYBOARD_STUDIO_SIGNING_KEY` to 32 random bytes encoded as 64 hexadecimal characters. Keep the same secret across deployments: rotating it invalidates existing invite links. Never put it in `wrangler.toml` or commit a local `.dev.vars` file. Without the secret, room APIs return 503. Without working rate-limit KV reads **and writes**, room creation and posting return 503.
+
+`POST /api/keyboard-studio?action=create` issues `{ "room": "…", "token": "…" }` without creating a Durable Object. Creation is limited to six requests per hour per client IP. The browser includes both values in its invite URL. `GET /api/keyboard-studio?room=<id>&token=<token>` returns the room's passages in creation order. Its first valid GET may return an empty array. `POST` to that same URL with JSON `{ "name": "…", "text": "…", "clientId": "UUID or 32 hex" }` adds a passage and is limited to 12 requests per minute per client IP. Invalid or missing tokens are rejected before the Durable Object is accessed; unrelated room IDs cannot be invented by calling GET.
+
+An identical POST retry with the same `clientId` returns the original passage, while a different payload under the same ID returns 409. Names are limited to 32 characters, passages to 3,000 characters, request bodies to 12,000 bytes, and rooms to 200 passages. GET includes an ETag so clients can poll conditionally. Responses disable caching and omit cross-origin access headers.
+
+The Pages Function is `functions/api/keyboard-studio.ts`; it forwards validated room requests to the SQLite Durable Object through the binding in root `wrangler.toml`. Deploy the standalone Worker before Pages so the `script_name` binding resolves. Direct public Worker requests return 404. Run focused tests with `node --test tests/keyboard-studio-api.test.mjs tests/keyboard-studio.test.mjs tests/keyboard-studio-contract.test.mjs` from the repository root.
+
+For local testing, set an uncommitted `.dev.vars` secret or provide the binding to `wrangler pages dev`. Run `npx wrangler dev` in this Worker directory, then `npx wrangler pages dev dist --do KEYBOARD_STUDIO=KeyboardStudioRoom@pointcast-keyboard-studio` from the repository root. Open the Pages URL; the Worker alone intentionally serves no public room API.
