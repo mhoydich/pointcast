@@ -115,33 +115,46 @@ test('surrogates: every pair is checked; mixed valid + unpaired is rejected', ()
   assert.equal(textBudget('😀').bytes, 4);
 });
 
-test('two instances on one shared store never allocate the same (alias, id) and follow resets', () => {
+test('two tabs never share a wire alias, even on a shared store with interleaved reads and writes', () => {
+  // A deliberately non-atomic shared store: every get() and set() is interleaved between the
+  // two instances at the storage layer, the way two tabs on localStorage can interleave.
   let saved = null;
-  const store = { get: () => saved, set: v => { saved = v; } }; // stands in for localStorage shared by two tabs
-  const a = createSequence(store), b = createSequence(store);
-  assert.equal(a.aliasHex, b.aliasHex, 'same browser, same alias');
+  const trace = [];
+  const shared = who => ({ get: () => { trace.push(`${who}:get`); return saved; }, set: v => { trace.push(`${who}:set`); saved = v; } });
+  const a = createSequence(shared('a'), { owner: 'aaaaaaaa' });
+  const b = createSequence(shared('b'), { owner: 'bbbbbbbb' });   // constructed after a wrote: sees a's live owner
+  assert.notEqual(a.aliasHex, b.aliasHex, 'second instance on an owned store takes its own alias');
   const seen = new Set();
-  for (let i = 0; i < 50; i++) {
-    const inst = i % 3 ? a : b;                       // interleaved takes from both tabs
+  for (let i = 0; i < 200; i++) {                      // interleave at take() granularity: a, b, b, a, a, b ...
+    const inst = [a, b, b, a, a, b][i % 6];
     const key = `${inst.aliasHex}:${inst.take()}`;
     assert.equal(seen.has(key), false, `duplicate ${key}`);
     seen.add(key);
   }
-  assert.equal(seen.size, 50);
-  const d = createDedup(256);
+  assert.equal(seen.size, 200);
+  const d = createDedup(512);
   for (const k of seen) { const [al, id] = k.split(':'); assert.equal(d.accept(al, +id), true); }
-  // a reset in one tab is adopted by the other before its next id
-  const before = b.aliasHex;
-  a.reset();
-  assert.notEqual(b.aliasHex, before);
-  assert.equal(b.take(), 0);
-  assert.equal(a.take(), 1);
-  // wrap in one tab rotates the alias for both
-  saved = JSON.stringify({ alias: a.aliasHex, next: 0xffff });
-  const rotating = a.aliasHex;
-  assert.equal(b.take(), 0xffff);
-  assert.notEqual(a.aliasHex, rotating);
-  assert.equal(a.take(), 0);
+  // both instances handed out the full 0..99 run under their own alias: allocation never depended on a read
+  assert.deepEqual([...seen].filter(k => k.startsWith(a.aliasHex)).map(k => +k.split(':')[1]).sort((x, y) => x - y), [...Array(100).keys()]);
+  assert.ok(trace.filter(t => t.endsWith(':get')).length <= 2, 'the store is only read at construction, never during take()');
+});
+
+test('per-tab store: reload keeps the alias, a duplicated tab (copied store) gets a fresh one', () => {
+  let saved = null;
+  const store = { get: () => saved, set: v => { saved = v; } };
+  const first = createSequence(store, { owner: 'aaaaaaaa' });
+  first.take(); first.take();
+  const reloaded = createSequence(store, { owner: 'aaaaaaaa' });  // same tab after reload: same owner token
+  assert.equal(reloaded.aliasHex, first.aliasHex);
+  assert.equal(reloaded.take(), 2, 'sequence continues after reload');
+  const copy = { get: () => saved, set: () => {} };                 // duplicated tab starts with a copy of the store
+  const dup = createSequence(copy, { owner: 'cccccccc' });
+  assert.notEqual(dup.aliasHex, first.aliasHex, 'copied store with another owner → fresh alias');
+  assert.equal(dup.take(), 0);
+  // legacy store without an owner token is adopted (one-time migration)
+  saved = JSON.stringify({ alias: 'deadbeef', next: 5 });
+  const legacy = createSequence(store, { owner: 'dddddddd' });
+  assert.equal(legacy.aliasHex, 'deadbeef'); assert.equal(legacy.take(), 5);
 });
 
 test('dedup: repeated intentional sends are distinct; the same frame twice is suppressed', () => {
@@ -157,13 +170,13 @@ test('dedup: repeated intentional sends are distinct; the same frame twice is su
 test('sequence persists, wraps at 65535 and rotates alias', () => {
   let saved = null;
   const store = { get: () => saved, set: v => { saved = v; } };
-  const s = createSequence(store);
+  const s = createSequence(store, { owner: 'ab12ab12' });
   const a = s.aliasHex;
   assert.equal(s.take(), 0); assert.equal(s.take(), 1);
-  const s2 = createSequence(store); // reload from store
+  const s2 = createSequence(store, { owner: 'ab12ab12' }); // same tab after reload
   assert.equal(s2.aliasHex, a); assert.equal(s2.take(), 2);
-  saved = JSON.stringify({ alias: a, next: 0xffff });
-  const s3 = createSequence(store);
+  saved = JSON.stringify({ alias: a, next: 0xffff, owner: 'ab12ab12' });
+  const s3 = createSequence(store, { owner: 'ab12ab12' });
   assert.equal(s3.take(), 0xffff);
   assert.notEqual(s3.aliasHex, a, 'alias rotates on wrap');
   assert.equal(s3.take(), 0);

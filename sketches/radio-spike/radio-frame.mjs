@@ -158,29 +158,43 @@ export function randomAlias() {
 }
 
 /**
- * Sender-side sequence keeper. Persists {alias, next} through `store` (get/set of a string).
- * Allocation is coordinated through the store: every take() re-reads it, so two
- * instances sharing one store (two tabs on localStorage) never hand out the same
- * (alias, id) pair in sequence, and an alias reset or rotation in one tab is adopted
- * by the other on its next take(). When the counter wraps, the alias rotates so
- * (alias, id) pairs never repeat within a receiver's memory.
- * The residual race is two tabs executing take() in the same instant; localStorage
- * writes are synchronous per tab, so that window is the storage layer's, not ours.
+ * Sender-side sequence keeper: one wire alias per sequence instance.
+ *
+ * The (alias, id) pair is the receiver's dedup key, so it must never repeat
+ * across concurrent senders. A shared browser-wide alias would need atomic
+ * cross-tab allocation, which localStorage cannot give (two tabs can both read
+ * next=0 before either writes 1). So the wire alias is per tab: `store` is meant
+ * to be tab-scoped (sessionStorage) and the instance is the sole owner of its
+ * alias and counter. It keeps state in memory and only writes the store, never
+ * re-reads it, so nothing another instance writes can be adopted mid-run.
+ *
+ * Guard against a shared or copied store (localStorage by mistake, or a
+ * duplicated tab, which copies sessionStorage): every instance stamps the store
+ * with its own owner token on creation. If the store already carries a live
+ * owner token from a different instance, this instance takes a fresh alias
+ * instead of continuing that one, so two tabs can never share a wire alias.
+ * Tab reload keeps the alias (same store, token re-stamped).
+ *
+ * The alias is unverified and cosmetic; a receiver can only say "the same alias
+ * as before", never who. When the counter wraps, the alias rotates.
  */
-export function createSequence(store) {
-  const fresh = () => ({ alias: hex(randomAlias()), next: 0 });
+export function createSequence(store, { owner = hex(randomAlias()) } = {}) {
+  const fresh = () => ({ alias: hex(randomAlias()), next: 0, owner });
   const valid = s => s && typeof s.alias === 'string' && /^[0-9a-f]{8}$/.test(s.alias) && Number.isInteger(s.next) && s.next >= 0 && s.next <= 0xffff;
   const load = () => { let s = null; try { s = JSON.parse(store.get() || 'null'); } catch {} return valid(s) ? s : null; };
   const persist = s => { try { store.set(JSON.stringify(s)); } catch {} return s; };
-  let state = load() || persist(fresh());
+  const found = load();
+  // Continue only a store nobody else is driving in this session (no owner yet, e.g. an older format,
+  // or our own token after a reload). A store with another live owner is someone else's: start fresh.
+  let state = found && (!found.owner || found.owner === owner) ? persist({ ...found, owner }) : persist(fresh());
   return {
-    get alias() { state = load() || state; return fromHex(state.alias); },
-    get aliasHex() { state = load() || state; return state.alias; },
-    /** Take the next message id (read-modify-write on the shared store); rotates the alias on wrap. */
+    get alias() { return fromHex(state.alias); },
+    get aliasHex() { return state.alias; },
+    get owner() { return owner; },
+    /** Take the next message id; rotates the alias on wrap. Never re-reads the store. */
     take() {
-      state = load() || state;
       const id = state.next;
-      state = id >= 0xffff ? fresh() : { alias: state.alias, next: id + 1 };
+      state = id >= 0xffff ? fresh() : { alias: state.alias, next: id + 1, owner };
       persist(state);
       return id;
     },

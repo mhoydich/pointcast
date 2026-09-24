@@ -141,6 +141,115 @@ test('sends and previews are mutually exclusive while one is playing', async () 
   assert.equal((await h.ctrl.preview({ mood: 2 })).ok, true);
 });
 
+// ---- second-round findings ----
+
+const controllable = () => { const calls = { plays: 0, stops: 0 }; const handles = []; const play = () => { calls.plays++; const d = deferred(); const h = { done: d.promise, stop() { calls.stops++; d.resolve(); } }; handles.push(h); return h; }; return { calls, handles, play }; };
+
+test('P1 send A → Stop → send B → A resumes: A cannot emit Broadcast played or clear B; second Stop reaches B', async () => {
+  const waves = controllable();
+  const h = harness({ playWave: waves.play, setTimeout: fn => { fn(); return 1; } });
+  const pA = h.ctrl.send({ mood: 1, protocol: 'x' });
+  assert.equal(h.ctrl.state.sending, true);
+  h.ctrl.stopRadio('stop');                                    // resolves A.done via stop()
+  assert.equal(waves.calls.stops, 1);
+  const pB = h.ctrl.send({ mood: 2, protocol: 'x' });
+  assert.equal(h.ctrl.state.sending, true, 'B is the current operation');
+  const rA = await pA;                                         // A resumes after its await
+  assert.equal(rA.reason, 'cancelled');
+  assert.equal(h.states.filter(s => s.includes('Broadcast played')).length, 0, 'A emitted no played state');
+  assert.equal(h.ctrl.state.sending, true, 'A did not clear B\'s flag');
+  assert.equal(h.ctrl.state.activeToken, 2, 'active still references B');
+  h.ctrl.stopRadio('stop');
+  assert.equal(waves.calls.stops, 2, 'second Stop stopped B');
+  assert.equal((await pB).reason, 'cancelled');
+  assert.equal(h.ctrl.state.sending, false);
+  assert.equal(h.states.filter(s => s.includes('Broadcast played')).length, 0);
+  const pC = h.ctrl.send({ mood: 3, protocol: 'x' });          // a fresh op is accepted after Stop
+  assert.equal(h.ctrl.state.activeToken, 3);
+  waves.handles[2].stop();                                     // the stub's stop() just ends playback; C is still live
+  assert.equal((await pC).ok, true, 'C completes normally and is the only op to report played');
+  assert.equal(h.states.filter(s => s.includes('Broadcast played')).length, 1);
+});
+
+test('P1 Stop during cooldown settles the send promise instead of leaving it pending', async () => {
+  const h = harness({ setTimeout: () => 99, clearTimeout: () => {} }); // a cooldown timer that never fires
+  const p = h.ctrl.send({ mood: 1, protocol: 'x' });
+  await settle(); await settle();
+  assert.ok(h.states.some(s => s.includes('Broadcast played')), 'in cooldown');
+  let settled = false; p.then(() => { settled = true; });
+  await settle();
+  assert.equal(settled, false, 'still in cooldown');
+  h.ctrl.stopRadio('stop');
+  const r = await p;
+  assert.equal(r.reason, 'cancelled');
+  assert.equal(h.ctrl.state.sending, false);
+  assert.equal((await h.ctrl.preview({ mood: 1 })).ok, true, 'controller is usable right after');
+});
+
+test('P1 preview A → Stop → preview B → A resumes: A cannot finish B', async () => {
+  const motifs = controllable();
+  const h = harness({ playMotif: motifs.play });
+  const pA = h.ctrl.preview({ mood: 1 });
+  h.ctrl.stopRadio('stop');
+  const pB = h.ctrl.preview({ mood: 2 });
+  assert.equal((await pA).reason, 'cancelled');
+  assert.equal(h.ctrl.state.previewing, true);
+  assert.equal(h.states.filter(s => s.includes('Preview done')).length, 0);
+  motifs.handles[1].stop();                                    // B finishes normally
+  assert.equal((await pB).ok, true);
+  assert.equal(h.states.filter(s => s.includes('Preview done')).length, 1);
+});
+
+test('P2 pending: stale A resolving while B is pending does not clear B (both grant orders)', async () => {
+  // order 1: A resolves late while B still pending
+  let h = harness();
+  const pA = h.ctrl.startListen();
+  h.ctrl.stopListen('stop');
+  const pB = h.ctrl.startListen();
+  const sA = fakeStream('A'); h.mics[0].resolve(sA);
+  assert.equal((await pA).reason, 'stale');
+  assert.equal(sA.tracks[0].stopped, 1);
+  assert.equal(h.ctrl.state.pending, true, 'B is still pending');
+  assert.equal((await h.ctrl.startListen()).reason, 'pending', 'Listen C is refused');
+  assert.equal(h.calls.requests, 2);
+  const sB = fakeStream('B'); h.mics[1].resolve(sB);
+  assert.equal((await pB).ok, true);
+  assert.equal(h.ctrl.state.listening, true); assert.equal(sB.tracks[0].stopped, 0);
+  // order 2: B resolves first, then A
+  h = harness();
+  const qA = h.ctrl.startListen();
+  h.ctrl.stopListen('stop');
+  const qB = h.ctrl.startListen();
+  const tB = fakeStream('B2'); h.mics[1].resolve(tB);
+  assert.equal((await qB).ok, true);
+  const tA = fakeStream('A2'); h.mics[0].resolve(tA);
+  assert.equal((await qA).reason, 'stale');
+  assert.equal(tA.tracks[0].stopped, 1);
+  assert.equal(h.ctrl.state.pending, false);
+  assert.equal(h.ctrl.state.listening, true, 'B stays attached');
+  assert.equal(h.calls.attach, 1);
+});
+
+test('P2 partial attach failure is torn down and Listen can restart', async () => {
+  let fail = true;
+  const h = harness({ attachMic: () => { if (fail) throw new Error('worklet load failed'); } });
+  const p = h.ctrl.startListen();
+  const s = fakeStream('x'); h.mics[0].resolve(s);
+  const r = await p;
+  assert.equal(r.reason, 'attach');
+  assert.equal(h.calls.detach, 1, 'detachMic ran to release partial allocations');
+  assert.equal(s.tracks[0].stopped, 1);
+  assert.equal(h.ctrl.state.listening, false);
+  assert.ok(h.states.at(-1).startsWith('listen:Audio setup failed'));
+  assert.equal(h.ctrl.stopListen('stop'), false, 'nothing left to stop');
+  fail = false;
+  const p2 = h.ctrl.startListen();
+  assert.equal(h.calls.requests, 2);
+  h.mics[1].resolve(fakeStream('y'));
+  assert.equal((await p2).ok, true);
+  assert.equal(h.ctrl.state.listening, true);
+});
+
 test('an idle state is emitted only after the busy flag has cleared', async () => {
   const seen = [];
   let ctrl;

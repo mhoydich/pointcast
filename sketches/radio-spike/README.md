@@ -58,7 +58,7 @@ Findings:
 - The mic is never routed to the speakers (processor output is zeroed) and never recorded or uploaded. Decoded text is inserted with `textContent` only.
 - Self-echo suppression covers the whole burst plus 250 ms after playback completes. Sends serialize through complete playback then an 800 ms cooldown.
 - Receive path: validate → dedup on (alias, id), 256 entries → global limiter (1/s, burst 4) → per-alias limiter (0.5/s, burst 3) → inbox of 10, tagged RECEIVED · UNVERIFIED.
-- Alias is 4 random bytes in `localStorage`, with a visible reset. The message id wraps at 65535 and the alias rotates. Allocation is read-modify-write on the shared store on every `take()`, so two tabs of the same browser never hand out the same (alias, id) in sequence and both follow a reset or rotation; a `storage` listener refreshes the shown alias. The residual race is two tabs calling `take()` in the same instant, which is the storage layer's window, not the codec's.
+- **Wire alias is per tab**, 4 random bytes in `sessionStorage`, with a visible reset. The message id wraps at 65535 and the alias rotates. A sequence instance is the sole owner of its alias and counter: it never re-reads the store during `take()`, and it stamps the store with an owner token so a shared or copied store (localStorage by mistake, or a duplicated tab) yields a fresh alias rather than a shared one. Two tabs therefore cannot collide on (alias, id) no matter how their storage reads and writes interleave. This deviates from the PRD's "per browser" wording; a browser-wide alias would need atomic cross-tab allocation that localStorage cannot provide. The alias is unverified either way, so the identity semantics hold: a receiver can say "same call sign as before", never who.
 - Text validation scans every surrogate code unit: a high must be followed by a low, a low must follow a high. "😀 + lone high surrogate" is rejected, not silently turned into U+FFFD.
 - Preview plays only the mood's local motif from `radio-motifs.mjs` plus a colour wash. It never encodes a frame or touches the modem path (controller test 6 pins this).
 - Listen serializes permission requests and tags each with a generation. Stop, Escape, page hidden and pagehide bump the generation; a grant that resolves afterwards has every track stopped and is never attached (controller tests 1, 3, 5).
@@ -69,6 +69,13 @@ Findings:
 2. Preview played the modem waveform at lower gain → Preview is motif-only via `playMotif`, test 6.
 3. Two tabs shared alias + sequence 0 → coordinated allocation through the store, frame test 21.
 4. Surrogate check accepted mixed valid + unpaired → per-pair scan `isWellFormed`, frame test 20.
+
+Second round:
+
+5. Send/preview lacked an operation token: an old send resuming after Stop could emit "Broadcast played" and clear the flags of the send that replaced it, and a Stop during cooldown left the promise pending → every operation carries a token, Stop bumps it and settles the cooldown; controller tests "P1 …".
+6. A stale mic request could clear the slot of the request that replaced it → the slot clears only if it still holds that request; test "P2 pending" covers both grant orders.
+7. A throw inside `attachMic` left partial allocations → `detachMic` runs on the failure path (it is idempotent) before tracks are stopped; test "P2 partial attach".
+8. Cross-tab id allocation was non-atomic → per-tab wire aliases with an owner-token guard (above); frame tests 21–22 interleave a shared store at the storage layer.
 - `NOUN_MAX` is 1199 for the spike (Visit Nouns seed range). The PRD leaves it to be frozen with the schema.
 
 ## Not done here, on purpose
