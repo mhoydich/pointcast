@@ -204,3 +204,86 @@ export function toMorse(text: string): string {
     .map((w) => [...w].map((ch) => MORSE[ch] || '').filter(Boolean).join(' '))
     .join(' / ');
 }
+
+// ---------- v2: seasons, the Nightly Net, keepsakes ----------
+
+/** Season One starts the day The Band went on the air. Fox No. 001 was that day's fox. */
+export const SEASON = { name: 'Season One', start: '2026-09-24' } as const;
+
+/** Whole days between two YYYY-MM-DD dates (b - a). */
+export function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000);
+}
+
+/** Fox No. for a date: 1 on launch day. */
+export function foxNumber(date: string): number {
+  return Math.max(1, daysBetween(SEASON.start, date) + 1);
+}
+
+export const pad3 = (n: number) => String(n).padStart(3, '0');
+
+/**
+ * The Nightly Net: every night at 9:00 PM in El Segundo, twenty minutes on
+ * 7.200 MHz. Net control calls out the fox's frequency, so the whole band
+ * converges and copies it together.
+ */
+export const NET = { step: 168, startMinute: 21 * 60, minutes: 20 } as const;
+
+function townMinute(now: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
+  const h = Number(parts.find((p) => p.type === 'hour')?.value || 0) % 24;
+  const m = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+  return h * 60 + m;
+}
+
+export function netState(now: Date = new Date()): { live: boolean; minutesUntil: number; minutesLeft: number } {
+  const m = townMinute(now);
+  const since = m - NET.startMinute;
+  if (since >= 0 && since < NET.minutes) return { live: true, minutesUntil: 0, minutesLeft: NET.minutes - since };
+  return { live: false, minutesUntil: (NET.startMinute - m + 1440) % 1440, minutesLeft: 0 };
+}
+
+export function formatWait(minutes: number): string {
+  if (minutes < 1) return 'now';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m} min`;
+}
+
+/** A calendar invite for the Net, every night. */
+export function netIcs(): string {
+  return [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//PointCast//The Band//EN', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT', 'UID:nightly-net@pointcast.xyz', 'DTSTAMP:20260924T220000Z',
+    'DTSTART;TZID=America/Los_Angeles:20260924T210000', 'DURATION:PT20M', 'RRULE:FREQ=DAILY',
+    'SUMMARY:The Nightly Net · The Band', 'LOCATION:https://pointcast.xyz/band?f=7.200',
+    'DESCRIPTION:Tune to 7.200 MHz. Net control calls the fox and everyone copies it together.',
+    'END:VEVENT', 'END:VCALENDAR', '',
+  ].join('\r\n');
+}
+
+/**
+ * Stamps 1–9 rotate by date; stamp 10 is the gold edition, for a card copied
+ * during the Net or with four or more other listeners on it.
+ */
+export const GOLD_STAMP = 10;
+export function stampFor(date: string, gold = false): number {
+  return gold ? GOLD_STAMP : 1 + (hash32(`stamp:${date}`) % 9);
+}
+export function isGold(withCount: number, duringNet: boolean): boolean {
+  return duringNet || withCount >= 4;
+}
+
+/** Listener signals are quieter than the fox but copyable alone: within two steps. */
+export function signalClarity(distanceSteps: number): number {
+  const d = Math.abs(distanceSteps);
+  return d > 3 ? 0 : 1 - d / 4;
+}
+
+/** The permanent record cast on the Shortwave tower. Plain, short, human. */
+export function towerLine(card: { kind: string; date: string; mhz: string; message: string; call: string; with: { call: string }[]; note?: string }): string {
+  const who = card.with.length ? ` with ${card.with.slice(0, 6).map((w) => w.call).join(' ')}` : '';
+  const label = card.kind === 'net' ? 'NET CHECK-IN' : card.kind === 'signal' ? 'SIGNAL QSL' : `FOX NO. ${pad3(foxNumber(card.date))}`;
+  const note = card.note ? ` · "${card.note.slice(0, 60)}"` : '';
+  return `QSL · The Band · ${label} · ${card.date} · ${card.mhz} MHz · ${card.message} · ${card.call}${who}${note} · pointcast.xyz/band`.slice(0, 280);
+}
