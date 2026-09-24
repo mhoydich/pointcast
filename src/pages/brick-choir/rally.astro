@@ -729,7 +729,7 @@ const PARTY=(()=>{
     if(X.fansDirty){ X.fansDirty=false; setFans([...X.fans.values()].map(f=>({seat:f.seat,c:f.c}))); }
     // the broadcast: a compact snapshot at 10 Hz over the drum relay (the presence fallback's 120-char frames can't carry it)
     if(X.fans.size&&X.status==='on'&&X.transport==='drum'){
-      if(T-X.wT>=100){ X.wT=T; X.send(watchFrame()); }
+      if(T-X.wT>=100||(T-X.wT>=45&&X.wq.some(e=>e[1]==='h'))){ X.wT=T; X.send(watchFrame()); } // a hit goes out early: it's the keyframe
       if(T-X.wrT>=3000){ X.wrT=T; X.send(rosterFrame()); } } };
   // a watcher-facing event: stamped with wall-clock time so every viewer can place it on its own timeline
   X.wev=e=>{ if(WATCH||!X.fans.size) return; X.wq.push([Date.now(),...e]); if(X.wq.length>8) X.wq.shift(); }; X.wq=[];
@@ -995,10 +995,10 @@ addEventListener('gamepaddisconnected',e=>{ const st=pads[e.gamepad.index]; if(s
 /* ================= watch mode: a spectator's copy of the match =================
    The TV sends `w` snapshots at 10 Hz (state, score, ball position+velocity, avatars, and the events since the last
    frame, each stamped with the TV's wall clock) and a `wr` roster every 3 s (names, fans, scores). A watcher renders
-   160 ms behind the TV: scalars and avatars interpolate between snapshots, the ball is re-simulated forward from the
+   200 ms behind the TV: scalars and avatars interpolate between snapshots, the ball is re-simulated forward from the
    newest keyframe with the TV's own physics, and events (hits, bounces, points) fire their sound and light on time.
    Watchers send only `wh` (take a seat), `wp` (still here), `rx` (cheer / gasp / wave) and `wl` (leaving). */
-const WX_DELAY=160;
+const WX_DELAY=200;
 const WX={pid:'',net:null,netStatus:'off',transport:null,samples:[],evq:[],offs:[],off:null,key:null,cur:null,ph:'',lastW:0,stAt:0,hubAt:0,connT:0,
   sc:[0,0,0,0],n:0,fans:[],mask:'',me:-1,myName:'',myCol:0,seated:false,helloT:0,rxT:0,full:false,hub:0,msg:'',url:''};
 const $w=id=>document.getElementById(id); if(WATCH) window.__wx=WX;
