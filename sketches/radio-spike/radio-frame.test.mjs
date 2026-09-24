@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   encodeFrame, decodeFrame, FrameError, HEADER_BYTES, FRAME_MAX_BYTES, TEXT_MAX_BYTES, NOUN_MAX,
-  MOODS, createSequence, createDedup, createLimiter, textBudget, hex, fromHex,
+  MOODS, createSequence, createDedup, createLimiter, textBudget, hex, fromHex, isWellFormed,
 } from './radio-frame.mjs';
 
 const alias = fromHex('a1b2c3d4');
@@ -94,6 +94,54 @@ test('rejections: magic, version, type, mood, reserved bits, lengths, utf-8', ()
     rejects(f, 'utf8');
   }
   assert.throws(() => encodeFrame({ ...base, text: '\ud83d' }), e => e.code === 'text'); // lone surrogate
+});
+
+test('surrogates: every pair is checked; mixed valid + unpaired is rejected', () => {
+  const ok = ['😀', '😀😀', 'a😀b', '💛🌊💛🌊💛🌊💛🌊'];
+  for (const t of ok) { assert.equal(isWellFormed(t), true, t); assert.equal(decodeFrame(encodeFrame({ ...base, text: t })).text, t); }
+  const bad = {
+    'emoji then lone high':  '\u{1F600}\ud83d',
+    'lone high then emoji':  '\ud83d\u{1F600}',
+    'lone low':              '\udc00',
+    'emoji then lone low':   '\u{1F600}\udc00',
+    'high high':             '\ud83d\ud83d',
+    'low then high':         '\udc00\ud83d',
+    'high at end of text':   'abc\ud83d',
+  };
+  for (const [name, t] of Object.entries(bad)) {
+    assert.equal(isWellFormed(t), false, name);
+    assert.throws(() => encodeFrame({ ...base, text: t }), e => e.code === 'text', name);
+  }
+  assert.equal(textBudget('😀').bytes, 4);
+});
+
+test('two instances on one shared store never allocate the same (alias, id) and follow resets', () => {
+  let saved = null;
+  const store = { get: () => saved, set: v => { saved = v; } }; // stands in for localStorage shared by two tabs
+  const a = createSequence(store), b = createSequence(store);
+  assert.equal(a.aliasHex, b.aliasHex, 'same browser, same alias');
+  const seen = new Set();
+  for (let i = 0; i < 50; i++) {
+    const inst = i % 3 ? a : b;                       // interleaved takes from both tabs
+    const key = `${inst.aliasHex}:${inst.take()}`;
+    assert.equal(seen.has(key), false, `duplicate ${key}`);
+    seen.add(key);
+  }
+  assert.equal(seen.size, 50);
+  const d = createDedup(256);
+  for (const k of seen) { const [al, id] = k.split(':'); assert.equal(d.accept(al, +id), true); }
+  // a reset in one tab is adopted by the other before its next id
+  const before = b.aliasHex;
+  a.reset();
+  assert.notEqual(b.aliasHex, before);
+  assert.equal(b.take(), 0);
+  assert.equal(a.take(), 1);
+  // wrap in one tab rotates the alias for both
+  saved = JSON.stringify({ alias: a.aliasHex, next: 0xffff });
+  const rotating = a.aliasHex;
+  assert.equal(b.take(), 0xffff);
+  assert.notEqual(a.aliasHex, rotating);
+  assert.equal(a.take(), 0);
 });
 
 test('dedup: repeated intentional sends are distinct; the same frame twice is suppressed', () => {

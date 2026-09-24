@@ -57,6 +57,21 @@ export function textBudget(text) {
   return { bytes, remaining: Math.max(0, TEXT_MAX_BYTES - bytes), over: Math.max(0, bytes - TEXT_MAX_BYTES) };
 }
 
+/** True when every surrogate code unit is part of a valid high+low pair (checks each pair, not just one). */
+export function isWellFormed(text) {
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {                 // high surrogate: needs a low right after it
+      const n = i + 1 < text.length ? text.charCodeAt(i + 1) : 0;
+      if (n < 0xdc00 || n > 0xdfff) return false;
+      i++;
+    } else if (c >= 0xdc00 && c <= 0xdfff) {          // low surrogate without a high before it
+      return false;
+    }
+  }
+  return true;
+}
+
 function checkAlias(alias) {
   if (!(alias instanceof Uint8Array) || alias.length !== 4) fail('alias', 'alias must be 4 bytes');
 }
@@ -72,8 +87,8 @@ export function encodeFrame({ alias, messageId, mood, text = '', noun } = {}) {
   if (typeof text !== 'string') fail('text', 'text must be a string');
   const textBytes = encoder.encode(text);
   if (textBytes.length > TEXT_MAX_BYTES) fail('text_too_long', `text is ${textBytes.length} bytes; the limit is ${TEXT_MAX_BYTES}`);
-  // Strings with lone surrogates encode to U+FFFD; treat that as a caller bug rather than shipping garbage.
-  if (/[\ud800-\udfff]/.test(text) && !/[\ud800-\udbff][\udc00-\udfff]/.test(text)) fail('text', 'text contains a lone surrogate');
+  // Strings with unpaired surrogates encode to U+FFFD; reject them instead of shipping garbage.
+  if (!isWellFormed(text)) fail('text', 'text contains an unpaired surrogate');
   const hasNoun = noun !== undefined && noun !== null;
   if (hasNoun && (!Number.isInteger(noun) || noun < 0 || noun > NOUN_MAX)) fail('noun', `noun must be 0..${NOUN_MAX}`);
   const type = textBytes.length ? TYPES.TEXT : TYPES.MOOD;
@@ -144,28 +159,32 @@ export function randomAlias() {
 
 /**
  * Sender-side sequence keeper. Persists {alias, next} through `store` (get/set of a string).
- * When the counter wraps, the alias rotates so (alias, id) pairs never repeat within a receiver's memory.
+ * Allocation is coordinated through the store: every take() re-reads it, so two
+ * instances sharing one store (two tabs on localStorage) never hand out the same
+ * (alias, id) pair in sequence, and an alias reset or rotation in one tab is adopted
+ * by the other on its next take(). When the counter wraps, the alias rotates so
+ * (alias, id) pairs never repeat within a receiver's memory.
+ * The residual race is two tabs executing take() in the same instant; localStorage
+ * writes are synchronous per tab, so that window is the storage layer's, not ours.
  */
 export function createSequence(store) {
-  let state = null;
-  try { state = JSON.parse(store.get() || 'null'); } catch { state = null; }
-  if (!state || typeof state.alias !== 'string' || state.alias.length !== 8 || !Number.isInteger(state.next)) {
-    state = { alias: hex(randomAlias()), next: 0 };
-  }
-  const persist = () => { try { store.set(JSON.stringify(state)); } catch {} };
-  persist();
+  const fresh = () => ({ alias: hex(randomAlias()), next: 0 });
+  const valid = s => s && typeof s.alias === 'string' && /^[0-9a-f]{8}$/.test(s.alias) && Number.isInteger(s.next) && s.next >= 0 && s.next <= 0xffff;
+  const load = () => { let s = null; try { s = JSON.parse(store.get() || 'null'); } catch {} return valid(s) ? s : null; };
+  const persist = s => { try { store.set(JSON.stringify(s)); } catch {} return s; };
+  let state = load() || persist(fresh());
   return {
-    get alias() { return fromHex(state.alias); },
-    get aliasHex() { return state.alias; },
-    /** Take the next message id; rotates the alias on wrap. */
+    get alias() { state = load() || state; return fromHex(state.alias); },
+    get aliasHex() { state = load() || state; return state.alias; },
+    /** Take the next message id (read-modify-write on the shared store); rotates the alias on wrap. */
     take() {
+      state = load() || state;
       const id = state.next;
-      if (id >= 0xffff) { state.alias = hex(randomAlias()); state.next = 0; }
-      else state.next = id + 1;
-      persist();
+      state = id >= 0xffff ? fresh() : { alias: state.alias, next: id + 1 };
+      persist(state);
       return id;
     },
-    reset() { state = { alias: hex(randomAlias()), next: 0 }; persist(); },
+    reset() { state = persist(fresh()); },
   };
 }
 
