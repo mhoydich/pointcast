@@ -67,3 +67,33 @@ test('call signs are stable and shaped like PC4-QRX', () => {
   assert.equal(callSign('abc123-ffff'), callSign('abc123-ffff'));
   assert.match(callSign('abc123-ffff'), /^PC\d-[A-Z]{3}$/);
 });
+
+test('seasons number the foxes from launch day', async () => {
+  const { foxNumber, pad3 } = await import('../src/lib/band.ts');
+  assert.equal(foxNumber('2026-09-24'), 1);
+  assert.equal(foxNumber('2026-10-24'), 31);
+  assert.equal(pad3(foxNumber('2026-09-25')), '002');
+});
+
+test('the Nightly Net runs 9:00–9:20 PM in El Segundo', async () => {
+  const { netState, formatWait, netIcs } = await import('../src/lib/band.ts');
+  assert.deepEqual(netState(new Date('2026-09-25T04:05:00Z')), { live: true, minutesUntil: 0, minutesLeft: 15 });
+  const before = netState(new Date('2026-09-25T01:30:00Z')); // 6:30 PM PT
+  assert.equal(before.live, false);
+  assert.equal(before.minutesUntil, 150);
+  assert.equal(netState(new Date('2026-09-25T04:20:00Z')).minutesUntil, 1420);
+  assert.equal(formatWait(150), '2h 30m');
+  assert.match(netIcs(), /RRULE:FREQ=DAILY/);
+});
+
+test('stamps rotate by day and gold marks a gathering', async () => {
+  const { stampFor, isGold, GOLD_STAMP, towerLine } = await import('../src/lib/band.ts');
+  for (let d = 1; d <= 28; d++) { const s = stampFor(`2026-10-${String(d).padStart(2, '0')}`); assert.ok(s >= 1 && s <= 9); }
+  assert.equal(stampFor('2026-09-24', true), GOLD_STAMP);
+  assert.equal(isGold(4, false), true);
+  assert.equal(isGold(1, true), true);
+  assert.equal(isGold(3, false), false);
+  const line = towerLine({ kind: 'fox', date: '2026-09-24', mhz: '4.050', message: 'YOU ARE NOT ALONE OUT HERE', call: 'PC4-CMR', with: [{ call: 'PC1-ABC' }], note: 'with dad' });
+  assert.match(line, /FOX NO\. 001 · 2026-09-24 · 4\.050 MHz/);
+  assert.ok(line.length <= 280);
+});

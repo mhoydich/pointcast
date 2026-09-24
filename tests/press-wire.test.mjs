@@ -5,8 +5,8 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const releases = JSON.parse(await readFile(new URL('src/data/press-releases.json', root), 'utf8'));
 
-test('press wire seeds twenty product filings across every public kind', () => {
-  assert.equal(releases.length, 20);
+test('press wire seeds twenty-one product filings across every public kind', () => {
+  assert.equal(releases.length, 21);
   assert.equal(new Set(releases.map((release) => release.id)).size, releases.length);
   assert.equal(new Set(releases.map((release) => release.slug)).size, releases.length);
   assert.deepEqual(
@@ -221,4 +221,14 @@ test('press CTAs can enter a measured action path without changing the canonical
   assert.match(page, /release\.actionUrl \|\| release\.productUrl/);
   assert.match(page, /release\.actionLabel \|\| release\.productLabel/);
   assert.match(page, /about: \{ '@type': 'SoftwareApplication', name: release\.product, url: release\.productUrl \}/);
+});
+
+test('The Band filing is an owned announcement that claims no radio transmission or custody', () => {
+  const release = releases.find((candidate) => candidate.id === 'PCPW-2026-0021');
+  assert.ok(release);
+  assert.equal(release.slug, 'the-band-opens-a-shared-shortwave-dial-with-a-nightly-net');
+  assert.equal(release.productUrl, 'https://pointcast.xyz/band');
+  assert.match(release.disclosure, /transmits nothing over the air/);
+  assert.match(release.body.join(' '), /No new contract was deployed and PointCast holds no keys/);
+  assert.ok(release.proofs.some((proof) => proof.url === 'https://pointcast.xyz/b/0619'));
 });
