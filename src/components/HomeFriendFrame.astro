@@ -1,0 +1,105 @@
+---
+/**
+ * HomeFriendFrame — today's frame from /friend-frame/, hung inside the signal
+ * deck under "A little more is happening". The seven starter frames live in
+ * src/data/friend-frame.json; public/friend-frame/index.html carries its own
+ * copy because that page is a standalone file. Keep the two in step.
+ */
+import frames from '../data/friend-frame.json';
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const buildDay = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'America/Los_Angeles' }).format(new Date());
+const buildIndex = Math.max(0, DAYS.indexOf(buildDay));
+
+const tint = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * 0.86);
+  return `rgb(${mix(n >> 16)},${mix((n >> 8) & 255)},${mix(n & 255)})`;
+};
+const shapes = [
+  (c: string) => `<circle cx="200" cy="150" r="78" fill="${c}"/><rect x="60" y="230" width="280" height="14" fill="${c}"/>`,
+  (c: string) => `<path d="M60 240 L200 70 L340 240 Z" fill="${c}"/><circle cx="300" cy="80" r="22" fill="${c}"/>`,
+  (c: string) => `<rect x="90" y="70" width="220" height="160" fill="none" stroke="${c}" stroke-width="14"/><rect x="150" y="120" width="100" height="60" fill="${c}"/>`,
+  (c: string) => `<circle cx="140" cy="150" r="60" fill="${c}"/><circle cx="260" cy="150" r="60" fill="none" stroke="${c}" stroke-width="12"/>`,
+  (c: string) => `<path d="M40 200 Q200 40 360 200" fill="none" stroke="${c}" stroke-width="16" stroke-linecap="round"/><circle cx="200" cy="230" r="18" fill="${c}"/>`,
+  (c: string) => `<rect x="70" y="60" width="60" height="180" fill="${c}"/><rect x="170" y="110" width="60" height="130" fill="${c}"/><rect x="270" y="150" width="60" height="90" fill="${c}"/>`,
+  (c: string) => `<circle cx="200" cy="120" r="70" fill="${c}"/><path d="M40 260 Q200 200 360 260" fill="none" stroke="${c}" stroke-width="12"/>`,
+];
+---
+
+<section class="friend-frame" data-friend-frame aria-labelledby="friend-frame-title">
+  <header class="friend-frame__head">
+    <div>
+      <p class="friend-frame__kicker">Friend Frame · CH.GDN</p>
+      <h2 id="friend-frame-title">A frame your friends <em>program.</em></h2>
+    </div>
+    <p>Seven frames, one friend a day. A picture, a poem, a note. Today's is hung here; the whole week is at /friend-frame/.</p>
+  </header>
+  <div class="friend-frame__week">
+    {frames.map((frame, index) => (
+      <article
+        class="friend-frame__card"
+        data-frame-day={index}
+        hidden={index !== buildIndex}
+        style={`--ff:${frame.color};--ff-tint:${tint(frame.color)}`}
+      >
+        <a class="friend-frame__pic" href="/friend-frame/" tabindex="-1" aria-hidden="true">
+          <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" set:html={`<rect width="400" height="300" fill="${tint(frame.color)}"/>${shapes[index % shapes.length](frame.color)}`} />
+          <span>{frame.day} · today</span>
+        </a>
+        <div class="friend-frame__copy">
+          <p class="friend-frame__who"><b>{frame.friend}</b> <span>{frame.day}'s frame</span></p>
+          <p class="friend-frame__poem">{frame.poem}</p>
+          <p class="friend-frame__note">{frame.note}</p>
+          <a class="friend-frame__action" href="/friend-frame/">Open Friend Frame · program a day <b aria-hidden="true">↗</b></a>
+        </div>
+      </article>
+    ))}
+  </div>
+</section>
+
+<script>
+  function mountFriendFrame() {
+    const root = document.querySelector<HTMLElement>('[data-friend-frame]');
+    if (!root || root.dataset.mounted === 'true') return;
+    root.dataset.mounted = 'true';
+    const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    let today = 0;
+    try {
+      today = Math.max(0, DAYS.indexOf(new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'America/Los_Angeles' }).format(new Date())));
+    } catch { today = (new Date().getDay() + 6) % 7; }
+    root.querySelectorAll<HTMLElement>('[data-frame-day]').forEach((card) => {
+      card.hidden = Number(card.dataset.frameDay) !== today;
+    });
+  }
+  mountFriendFrame();
+  document.addEventListener('astro:page-load', mountFriendFrame);
+</script>
+
+<style>
+  .friend-frame { grid-column: 1 / -1; min-width: 0; border-top: 2px solid #111; background: #fffdf7; padding: clamp(18px, 2.5vw, 28px); }
+  .friend-frame__head { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: end; margin-bottom: 18px; }
+  .friend-frame__kicker { margin: 0 0 8px; color: #0F6E56; font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .friend-frame h2 { margin: 0; font-size: clamp(24px, 2.8vw, 36px); line-height: 1; letter-spacing: -.05em; }
+  .friend-frame h2 em { font-style: normal; color: #0F6E56; }
+  .friend-frame__head > p { margin: 0; max-width: 44ch; font-size: 13px; line-height: 1.5; color: #3d3a34; }
+  .friend-frame__card { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); border: 2px solid #111; background: #fff; box-shadow: 6px 6px 0 var(--ff); }
+  .friend-frame__card[hidden] { display: none; }
+  .friend-frame__pic { position: relative; display: block; border-right: 2px solid #111; background: var(--ff-tint); }
+  .friend-frame__pic svg { display: block; width: 100%; height: 100%; aspect-ratio: 4 / 3; }
+  .friend-frame__pic span { position: absolute; left: 10px; top: 10px; padding: 5px 7px; background: #111; color: #fff; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .friend-frame__copy { display: flex; flex-direction: column; min-width: 0; padding: 18px 20px; }
+  .friend-frame__who { margin: 0; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .friend-frame__who b { font-size: clamp(22px, 2.4vw, 30px); letter-spacing: -.045em; line-height: 1; }
+  .friend-frame__who span { color: var(--ff); font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .friend-frame__poem { margin: 14px 0 0; white-space: pre-wrap; font-size: 15px; line-height: 1.45; letter-spacing: -.01em; }
+  .friend-frame__note { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid #d7d0c4; font-size: 12.5px; color: #3d3a34; }
+  .friend-frame__note::before { content: "Note · "; color: #5f5e5a; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .friend-frame__action { margin-top: auto; padding: 8px 10px; align-self: flex-start; margin-top: 16px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #111; }
+  .friend-frame__action:hover { background: var(--ff); border-color: var(--ff); color: #fff; }
+  @media (max-width: 720px) {
+    .friend-frame__head { grid-template-columns: 1fr; gap: 10px; }
+    .friend-frame__card { grid-template-columns: 1fr; box-shadow: 4px 4px 0 var(--ff); }
+    .friend-frame__pic { border-right: 0; border-bottom: 2px solid #111; }
+  }
+</style>
