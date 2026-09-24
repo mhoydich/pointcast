@@ -119,6 +119,17 @@
   .stats{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--ink-dim);letter-spacing:.06em;text-transform:uppercase;}
   .stats b{display:block;font-family:var(--serif);font-size:26px;font-weight:400;color:var(--ink);text-transform:none;letter-spacing:0;}
   #shareStatus{font-size:11px;color:var(--ink-dim);min-height:1.2em;}
+  .board{width:100%;max-width:360px;text-align:left;}
+  .board h3{font-family:var(--serif);font-weight:400;font-size:20px;margin:4px 0 6px;text-align:center;}
+  .board ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-variant-numeric:tabular-nums;}
+  .board li{display:grid;grid-template-columns:2ch 1fr auto;gap:10px;font-size:12px;color:var(--ink-dim);padding:3px 6px;border-radius:4px;}
+  .board li b{color:var(--ink);font-weight:500;}
+  .board li.me{background:color-mix(in oklab, var(--accent) 18%, transparent);color:var(--ink);}
+  .board .empty{font-size:12px;color:var(--ink-faint);text-align:center;}
+  .post{display:flex;gap:6px;width:100%;max-width:360px;}
+  .post input{flex:1;min-width:0;font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--ground);border:1px solid var(--key-edge);border-radius:4px;padding:6px 8px;-webkit-user-select:text;user-select:text;}
+  .post input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  #teaser{font-size:12px;color:var(--accent);min-height:1.2em;}
 
   footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--key-edge);color:var(--ink-dim);font-size:11px;letter-spacing:.03em;}
   footer b{color:var(--ink);font-weight:500;}
@@ -161,6 +172,7 @@
   <div class="card" id="intro">
     <h2 id="introTitle">Flowers sprout on your keys. <em>Pick them while they bloom.</em></h2>
     <p id="introSub">Buds open, bloom, then wilt. Tap the key while it's in full bloom for 3 points, early or late for 1. Your streak climbs a scale, and every 10 picks raises the bonus. Golden sunflowers want a quick mash and give a heart back. Three wilts and the garden closes.</p>
+    <div id="teaser"></div>
     <div class="row2"><button id="startBtn" class="primary">Start (Space)</button></div>
   </div>
 
@@ -173,6 +185,11 @@
       <button id="shareBtn">Challenge a friend</button>
     </div>
     <div id="shareStatus" aria-live="polite"></div>
+    <div class="post" id="post" hidden>
+      <input id="postName" type="text" maxlength="16" placeholder="Your name" autocomplete="off" aria-label="Name for today's board">
+      <button id="postBtn" class="primary">Post to today's board</button>
+    </div>
+    <div class="board" id="board" hidden><h3>Today's board</h3><ol id="boardList"></ol></div>
   </div>
 </main>
 
@@ -254,7 +271,7 @@ const intro=$('intro'), over=$('over'), dailyBtn=$('dailyBtn'), freeBtn=$('freeB
 let daily = true, mode = 'idle';          // idle | play | over
 let score=0, streak=0, bestStreak=0, hearts=3, picks=0, perfects=0, golds=0;
 let sprouts = new Map();                  // code -> sprout
-let t0=0, nextSpawn=0, nextGold=0, raf=0, pausedAt=0;
+let t0=0, nextSpawn=0, nextGold=0, raf=0, pausedAt=0, pausedTotal=0, runMs=0;
 const MAX_HEARTS = 3;
 
 const mult = () => Math.min(4, 1 + Math.floor(streak/10));
@@ -350,6 +367,7 @@ function start(){
   rand = daily ? mulberry(hashStr('keyboard-garden:'+laDate())) : Math.random;
   score=0; streak=0; bestStreak=0; hearts=MAX_HEARTS; picks=0; perfects=0; golds=0; paintHud();
   intro.hidden = true; over.hidden = true; mode = 'play';
+  pausedTotal = 0; runMs = 0;
   const now = performance.now(); t0 = now; nextSpawn = now + 500; nextGold = now + 14000 + rand()*6000;
   say(daily ? `Today's garden · ${laDate()}` : 'Free play');
   raf = requestAnimationFrame(frame);
@@ -357,7 +375,7 @@ function start(){
 function bestKey(){ return daily ? 'kg:best:'+laDate() : 'kg:best:free'; }
 function getBest(k){ try{ return +localStorage.getItem(k)||0; }catch(_){ return 0; } }
 function finish(){
-  mode = 'over'; cancelAnimationFrame(raf);
+  mode = 'over'; cancelAnimationFrame(raf); runMs = Math.round(performance.now() - t0 - pausedTotal);
   sprouts.forEach(s=>clearKey(s.code)); sprouts.clear();
   const prev = getBest(bestKey()), allPrev = getBest('kg:best:all');
   const isBest = score > prev;
@@ -369,6 +387,10 @@ function finish(){
   $('overSub').textContent = (daily ? `Today's best: ${Math.max(score,prev)}.` : `Free-play best: ${Math.max(score,prev)}.`) + (beat && score <= beat ? ` The challenge was ${beat}. So close.` : '');
   $('shareStatus').textContent = '';
   over.hidden = false; say(''); paintBest();
+  $('post').hidden = !(daily && score > 0); $('postBtn').disabled = false; $('postBtn').textContent = "Post to today's board";
+  try{ $('postName').value = localStorage.getItem('kg:name') || ''; }catch(_){}
+  if(daily) loadBoard(); else $('board').hidden = true;
+  requestAnimationFrame(()=>over.scrollIntoView({block:'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}));
 }
 function giveUp(){ if(mode==='play'){ hearts = 0; paintHud(); finish(); } }
 function paintBest(){ const d=getBest('kg:best:'+laDate()), a=getBest('kg:best:all'); $('bestLine').textContent = a ? `today's best ${d} · all-time ${a}` : 'three wilts and the garden closes'; }
@@ -392,6 +414,8 @@ $('againBtn').onclick = ()=>{ start(); $('againBtn').blur(); };
 
 addEventListener('keydown', e=>{
   if(e.metaKey||e.ctrlKey||e.altKey) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if(tag==='INPUT'){ if(e.code==='Enter'){ e.preventDefault(); $('postBtn').click(); } return; }
   if(e.code==='Space'){ e.preventDefault(); if(mode!=='play' && !e.repeat) start(); return; }
   if(e.code==='Escape'){ giveUp(); return; }
   if(!keys.has(e.code)) return;
@@ -404,8 +428,42 @@ kb.addEventListener('pointerdown', e=>{ const el=e.target.closest('.key'); if(!e
 document.addEventListener('visibilitychange', ()=>{
   if(mode!=='play') return;
   if(document.hidden){ pausedAt = performance.now(); cancelAnimationFrame(raf); }
-  else if(pausedAt){ const d = performance.now()-pausedAt; sprouts.forEach(s=>s.born+=d); nextSpawn+=d; nextGold+=d; pausedAt=0; raf=requestAnimationFrame(frame); }
+  else if(pausedAt){ const d = performance.now()-pausedAt; pausedTotal += d; sprouts.forEach(s=>s.born+=d); nextSpawn+=d; nextGold+=d; pausedAt=0; raf=requestAnimationFrame(frame); }
 });
+
+/* ---------- today's board (/api/keyboard-garden) ---------- */
+const API = '/api/keyboard-garden';
+let myRank = 0;
+function paintBoard(top){
+  const list = $('boardList'); list.innerHTML = '';
+  if(!top.length){ list.innerHTML = '<li class="empty">Nobody on the board yet today.</li>'; }
+  top.forEach((e,i)=>{
+    const li = document.createElement('li'); if(i+1===myRank) li.className = 'me';
+    li.innerHTML = '<span></span><b></b><span></span>';
+    li.children[0].textContent = i+1; li.children[1].textContent = e.name; li.children[2].textContent = `${e.score} · ${e.picks} picked`;
+    list.appendChild(li);
+  });
+  $('board').hidden = false;
+}
+async function loadBoard(){
+  try{ const r = await fetch(`${API}?day=${laDate()}`); const j = await r.json(); paintBoard(j.top||[]); return j.top||[]; }
+  catch(_){ $('board').hidden = true; return []; }
+}
+$('postBtn').onclick = async ()=>{
+  const btn = $('postBtn'); if(btn.disabled) return;
+  const name = $('postName').value.replace(/[^A-Za-z0-9 ._'-]/g,'').trim().slice(0,16);
+  try{ localStorage.setItem('kg:name', name); }catch(_){}
+  btn.disabled = true; btn.textContent = 'Posting…';
+  try{
+    const r = await fetch(API, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({day: laDate(), name, score, picks, perfects, streak: bestStreak, golds, dur: runMs})});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error || 'failed');
+    myRank = j.rank || 0; paintBoard(j.top || []);
+    btn.textContent = myRank ? `You're #${myRank} today` : (j.note ? 'Your best is already posted' : 'Not in the top 10 this time');
+    $('post').querySelector('input').blur();
+  }catch(e){ btn.disabled = false; btn.textContent = 'Try again'; $('shareStatus').textContent = 'Couldn\'t post: ' + (e.message || 'try again') + '.'; }
+};
+(async ()=>{ try{ const r = await fetch(`${API}?day=${laDate()}`); const j = await r.json(); const t = (j.top||[])[0]; if(t) $('teaser').textContent = `Today's top: ${t.score} by ${t.name}`; }catch(_){} })();
 
 /* arriving on a challenge */
 const beat = challenge();
