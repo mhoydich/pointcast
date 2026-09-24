@@ -11,6 +11,14 @@
  *   PCLayers.register({id, kind:'sound'|'sight', name, start(ctx,out), stop(), draw(g,t,w,h,level)})
  *   PCLayers.set("static", {on:true, level:.4})
  *   <body data-pc-layers-feed=".my-list">  -> watch a different stream for new items
+ *
+ * Radio trial hooks (inert unless the page was opened with ?radio=1):
+ *   PCLayers.mood({hue, sky, ms}) -> token   transient colour wash, never saved, max 30 s
+ *   PCLayers.clearMood(token?)               ends it; manual edits, Off and Escape also end it
+ *   PCLayers.addPanel({id, title, el})       a section inside the deck
+ *   PCLayers.duck(seconds)                   briefly lowers ambient sound while Radio transmits
+ *   PCLayers.badge(text, live)               a small tag on the chip
+ *   window 'pcl:stop' event                  fired by Escape and the Off preset; Radio stops on it
  */
 (() => {
   if (window.PCLayers) return;
@@ -37,6 +45,16 @@
   S = { ...defaults, ...S, layers: { ...defaults.layers, ...(S.layers || {}) } };
   S.onAir = false; // audio always needs a fresh gesture
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+  // ---------- radio trial flag: off unless the page was opened with ?radio=1 (per tab) ----------
+  const RADIO_KEY = 'pc-layers-radio';
+  let radioFlag = false;
+  try {
+    const q = new URLSearchParams(location.search).get('radio');
+    if (q === '1') sessionStorage.setItem(RADIO_KEY, '1');
+    if (q === '0') sessionStorage.removeItem(RADIO_KEY);
+    radioFlag = sessionStorage.getItem(RADIO_KEY) === '1';
+  } catch (e) {}
 
   // ---------- styles ----------
   const css = `
@@ -90,6 +108,11 @@
   .pcl-foot kbd{font:10px ui-monospace,Menlo,monospace;border:1px solid #3a342b;border-radius:3px;padding:1px 4px}
   .pcl-canvas{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:38}
   .pcl-scan{position:fixed;inset:0;pointer-events:none;z-index:38;background:repeating-linear-gradient(0deg,rgba(0,0,0,.35) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
+  .pcl-panel{padding:10px 14px 14px;border-top:1px solid #3a342b}
+  .pcl-panel>h4{margin:0 0 10px;font:700 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;color:#a79d8c}
+  .pcl-badge{font:700 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;color:#d8ccb4;border:1px solid #6b645a;border-radius:3px;padding:2px 4px}
+  .pcl-badge[data-live]{color:#1a1713;background:#e5484d;border-color:#e5484d}
+  .pcl-badge[hidden]{display:none}
   `;
   const style = document.createElement('style');
   style.textContent = css;
@@ -185,6 +208,15 @@
     });
   }
 
+  // Radio transmit: lower ambient sound for the length of a burst, then restore. Never saved.
+  function duck(seconds) {
+    if (!ctx || !master || !S.onAir) return;
+    const t = ctx.currentTime, s = Math.max(0, Math.min(10, +seconds || 0));
+    master.gain.cancelScheduledValues(t);
+    master.gain.setTargetAtTime(S.master * 0.15, t, 0.05);
+    master.gain.setTargetAtTime(S.master, t + s, 0.2);
+  }
+
   // morse
   const MORSE = { a:'.-',b:'-...',c:'-.-.',d:'-..',e:'.',f:'..-.',g:'--.',h:'....',i:'..',j:'.---',k:'-.-',l:'.-..',m:'--',n:'-.',o:'---',p:'.--.',q:'--.-',r:'.-.',s:'...',t:'-',u:'..-',v:'...-',w:'.--',x:'-..-',y:'-.--',z:'--..',0:'-----',1:'.----',2:'..---',3:'...--',4:'....-',5:'.....',6:'-....',7:'--...',8:'---..',9:'----.' };
   function keyMorse(text) {
@@ -227,7 +259,7 @@
     scan:  { name: 'Scanlines', note: 'old-set CRT lines' },
     meter: { name: 'Meter', note: 'live spectrum on the bar' },
   };
-  const sightOn = () => ['waves', 'sky', 'grain'].some(k => S.layers[k].on) || extra.some(x => x.kind === 'sight' && S.layers[x.id]?.on);
+  const sightOn = () => !!overlay || ['waves', 'sky', 'grain'].some(k => S.layers[k].on) || extra.some(x => x.kind === 'sight' && S.layers[x.id]?.on);
 
   let raf = 0, levelSmooth = 0;
   function level() {
@@ -240,9 +272,9 @@
     updateMini();
     if (!sightOn() && !ripples.length) { g.clearRect(0, 0, W, H); return; }
     g.clearRect(0, 0, W, H);
-    const hue = ((S.band - 3) / 9) * 300 + 180;
-    if (S.layers.sky.on) {
-      const a = S.layers.sky.level * .22 * (1 + levelSmooth * 2);
+    const hue = overlay ? overlay.hue : ((S.band - 3) / 9) * 300 + 180;
+    if (S.layers.sky.on || overlay) {
+      const a = (overlay ? overlay.sky : S.layers.sky.level) * .22 * (1 + levelSmooth * 2);
       const gr = g.createLinearGradient(0, 0, 0, H);
       gr.addColorStop(0, `hsla(${hue},70%,60%,${a})`); gr.addColorStop(.6, `hsla(${hue + 40},70%,55%,${a * .3})`); gr.addColorStop(1, `hsla(${hue + 80},70%,50%,${a})`);
       g.fillStyle = gr; g.fillRect(0, 0, W, H);
@@ -275,11 +307,30 @@
     if (!raf) raf = requestAnimationFrame(frame);
   }
 
+  // ---------- transient mood overlay (Radio). One slot, token-guarded, never saved. ----------
+  let overlay = null, overlaySeq = 0, overlayTimer = 0;
+  function setMood(o = {}) {
+    clearTimeout(overlayTimer);
+    const token = ++overlaySeq;
+    const hue = Number(o.hue), sky = Number(o.sky ?? 0.5);
+    overlay = { token, hue: Number.isFinite(hue) ? ((hue % 360) + 360) % 360 : 200, sky: Math.max(0, Math.min(0.8, Number.isFinite(sky) ? sky : 0.5)) };
+    const ms = Math.max(500, Math.min(30000, Number(o.ms) || 30000));
+    overlayTimer = setTimeout(() => clearMood(token), ms);
+    if (!raf) raf = requestAnimationFrame(frame);
+    return token;
+  }
+  function clearMood(token) {
+    if (!overlay || (token !== undefined && token !== overlay.token)) return false;
+    overlay = null; clearTimeout(overlayTimer); overlayTimer = 0;
+    return true;
+  }
+  const stopAll = reason => { try { dispatchEvent(new CustomEvent('pcl:stop', { detail: { reason } })); } catch (e) {} };
+
   // ---------- UI ----------
   const chip = document.createElement('button');
   chip.className = 'pcl-chip'; chip.type = 'button';
   chip.setAttribute('aria-haspopup', 'dialog'); chip.setAttribute('aria-expanded', 'false');
-  chip.innerHTML = `<span class="pcl-dot"></span>LAYERS<span class="pcl-mini" aria-hidden="true">${'<i></i>'.repeat(6)}</span>`;
+  chip.innerHTML = `<span class="pcl-dot"></span>LAYERS<span class="pcl-badge" hidden></span><span class="pcl-mini" aria-hidden="true">${'<i></i>'.repeat(6)}</span>`;
   const minis = chip.querySelectorAll('.pcl-mini i');
   let tick = 0;
   function updateMini() {
@@ -337,12 +388,19 @@
         <div class="pcl-col"><h4>SOUND</h4>${Object.entries(soundList).map(([k, v]) => layerRow(k, v)).join('')}</div>
         <div class="pcl-col"><h4>SIGHT</h4>${Object.entries(sightList).map(([k, v]) => layerRow(k, v)).join('')}</div>
       </div>
+      <div class="pcl-panels"></div>
       <div class="pcl-foot">Yours only — saved in this browser. Sound starts with ON AIR. <kbd>L</kbd> opens, <kbd>Esc</kbd> closes. Tap anywhere with Waves on.</div>`;
+    const slot = deck.querySelector('.pcl-panels');
+    for (const p of panels) {
+      const box = document.createElement('section'); box.className = 'pcl-panel'; box.dataset.pclPanel = p.id;
+      const h = document.createElement('h4'); h.textContent = p.title;
+      box.append(h, p.el); slot.append(box);
+    }
   }
 
   function setOpen(v) {
     S.open = v; deck.hidden = !v; chip.setAttribute('aria-expanded', String(v)); save();
-    if (v) { render(); deck.querySelector('[data-air]').focus(); }
+    if (v) { render(); deck.querySelector('[data-air]').focus(); loadRadio(); }
   }
   function setAir(v) {
     if (v) { ensureAudio(); ctx.resume(); }
@@ -355,7 +413,9 @@
   chip.addEventListener('click', () => setOpen(deck.hidden));
   deck.addEventListener('click', e => {
     const t = e.target.closest('button,label[data-lb]'); if (!t) return;
+    if (t.closest('[data-pcl-panel]')) return;          // panels handle their own controls
     if (t.dataset.close !== undefined) return setOpen(false), chip.focus();
+    clearMood();                                         // any manual edit ends a Radio mood overlay
     if (t.dataset.air !== undefined) return setAir(!S.onAir);
     const id = t.dataset.sw || t.dataset.lb;
     if (id) { S.layers[id].on = !S.layers[id].on; deck.querySelector(`[data-sw="${id}"]`).setAttribute('aria-checked', S.layers[id].on); commit(); return; }
@@ -364,11 +424,14 @@
       for (const k in p) { S.layers[k].on = !!p[k][0]; if (p[k][1] != null) S.layers[k].level = p[k][1]; }
       if (t.dataset.pre !== 'Off' && t.dataset.pre !== 'Quiet' && !S.onAir) setAir(true);
       if (t.dataset.pre === 'Off' && S.onAir) setAir(false);
+      if (t.dataset.pre === 'Off') stopAll('off');
       render(); commit();
     }
   });
   deck.addEventListener('input', e => {
     const t = e.target;
+    if (t.closest && t.closest('[data-pcl-panel]')) return;
+    clearMood();
     if (t.dataset.f) { S.layers[t.dataset.f].level = +t.value; if (!S.layers[t.dataset.f].on) { S.layers[t.dataset.f].on = true; deck.querySelector(`[data-sw="${t.dataset.f}"]`).setAttribute('aria-checked', 'true'); } }
     if (t.dataset.master !== undefined) S.master = +t.value;
     if (t.dataset.band !== undefined) {
@@ -381,9 +444,14 @@
   function commit() { applyAudio(); applySight(); save(); }
 
   addEventListener('keydown', e => {
-    if (e.target.closest && e.target.closest('input,textarea,[contenteditable=true],select')) return;
+    const inField = e.target.closest && e.target.closest('input,textarea,[contenteditable=true],select');
+    if (e.key === 'Escape') {
+      clearMood(); stopAll('escape');                    // stops Radio from anywhere, including text fields
+      if (!deck.hidden && (!inField || deck.contains(e.target))) { setOpen(false); chip.focus(); }
+      return;
+    }
+    if (inField) return;
     if ((e.key === 'l' || e.key === 'L') && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setOpen(deck.hidden); }
-    if (e.key === 'Escape' && !deck.hidden) { setOpen(false); chip.focus(); }
   });
   addEventListener('pointerdown', e => {
     if (!S.layers.waves.on || e.target.closest('.pcl-deck,.pcl-chip')) return;
@@ -413,21 +481,55 @@
 
   // ---------- extension API ----------
   const extra = [];
+  const panels = [];
+  function badge(text, live) {
+    const b = chip.querySelector('.pcl-badge');
+    b.textContent = text || ''; b.hidden = !text;
+    if (live) b.setAttribute('data-live', ''); else b.removeAttribute('data-live');
+  }
   window.PCLayers = {
     ping,
     open: () => setOpen(true), close: () => setOpen(false),
     set(id, v) { if (S.layers[id]) Object.assign(S.layers[id], v); if (!deck.hidden) render(); commit(); },
     register(layer) { extra.push(layer); if (!S.layers[layer.id]) S.layers[layer.id] = { on: !!layer.on, level: layer.level ?? .5 }; if (!deck.hidden) render(); commit(); },
     get state() { return JSON.parse(JSON.stringify(S)); },
+    mood: setMood, clearMood, duck, badge, stopAll,
+    addPanel(p) {
+      if (!p || !p.id || !p.el) return;
+      const i = panels.findIndex(x => x.id === p.id); if (i >= 0) panels.splice(i, 1);
+      panels.push({ id: String(p.id), title: String(p.title || p.id).toUpperCase(), el: p.el });
+      if (!deck.hidden) render();
+    },
+    get radio() { return radioFlag; },
   };
 
+  // ---------- Radio trial: lazy, flag-gated, failure-isolated ----------
+  let radioLoad = null;
+  function loadRadio() {
+    if (!radioFlag || radioLoad) return;
+    radioLoad = import('/layers-radio/radio-deck.js')
+      .then(m => m.install(window.PCLayers))
+      .catch(err => {
+        try { console.warn('[layers] radio unavailable', err); } catch (e) {}
+        const p = document.createElement('p');
+        p.style.cssText = 'margin:0;font-size:12px;color:#a79d8c';
+        p.textContent = 'Radio could not load. Everything else in Layers still works.';
+        window.PCLayers.addPanel({ id: 'radio', title: 'Radio · trial', el: p });
+      });
+  }
+
   // ---------- mount ----------
+  // Safe to call again: ClientRouter soft navigation swaps <body> (and prunes <head>), so re-attach.
   function mount() {
+    if (!style.isConnected) document.head.appendChild(style);
     const home = document.querySelector('.fb__right');
-    if (home) home.prepend(chip); else { chip.classList.add('pcl-float'); document.body.appendChild(chip); }
-    document.body.append(cv, scan, deck);
+    if (home) { chip.classList.remove('pcl-float'); if (chip.parentNode !== home) home.prepend(chip); }
+    else { chip.classList.add('pcl-float'); if (chip.parentNode !== document.body) document.body.appendChild(chip); }
+    for (const n of [cv, scan, deck]) if (n.parentNode !== document.body) document.body.append(n);
     resize(); applySight(); watchFeed();
+    if (radioFlag && !chip.querySelector('.pcl-badge').textContent) badge('RADIO', false);
     if (S.open) setOpen(true);
   }
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', mount) : mount();
+  document.addEventListener('astro:after-swap', mount);
 })();
