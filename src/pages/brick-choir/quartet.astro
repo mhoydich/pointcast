@@ -7,7 +7,9 @@
 // Balls that get inside play runs, the hollow core is a bell, a face clear is a fanfare, four seats in one beat is
 // a QUARTET. Empty seats are friendly bots, so it is a solo instrument and a couch co-op game at once.
 // Rounds by the Architects (Terra, Sonnet, Astra) rebuilt as ziggurats. three.js 0.170 (pinned, jsDelivr).
-// Built 2026-09-23 by Claude (Fable) for Mike.
+// ?attract → silent, input-free attract mode for the lobby cabinet at /brick-choir (throttled when unfocused).
+// Scores post with game:"quartet"; the board opens on THIS WEEK with an ALL TIME toggle; SHARE at game over
+// publishes the run to /api/keyboard and draws a share card. Built 2026-09-23 by Claude (Fable) for Mike.
 ---
 <html lang="en">
 <head>
@@ -106,6 +108,23 @@
   .initials b.cur::after{content:"";position:absolute;bottom:8px;width:36px;height:4px;background:var(--gold);animation:blink .6s steps(2,end) infinite;}
   #fail{position:fixed;inset:0;display:none;place-items:center;text-align:center;z-index:30;padding:20px;}
   #fail p{font:500 16px var(--display);} #fail a{color:var(--gold);}
+  body.attract .chrome,body.attract #hud{display:none!important;} body.attract #ui{zoom:.5;} body.attract #words{zoom:.6;}
+  .boards{display:flex;width:max-content;gap:4px;margin:0 auto 10px;padding:3px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);pointer-events:auto;}
+  .boards button{font:700 11px var(--mono);letter-spacing:.14em;color:rgba(244,240,255,.6);background:transparent;border:0;border-radius:999px;padding:6px 12px;cursor:pointer;}
+  .boards button[aria-pressed="true"]{background:var(--gold);color:#140f28;}
+  .panel .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px;pointer-events:auto;}
+  .panel .acts button{font:700 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#140f28;background:var(--gold);border:0;border-radius:999px;padding:10px 18px;cursor:pointer;}
+  .panel .acts button.ghost{background:rgba(255,255,255,.1);color:var(--ink);border:1px solid rgba(255,255,255,.18);}
+  #share{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(6,5,16,.72);backdrop-filter:blur(10px);padding:16px;box-sizing:border-box;}
+  #share .card2{width:min(640px,100%);background:rgba(16,13,38,.94);border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:18px;box-sizing:border-box;box-shadow:0 30px 80px rgba(0,0,0,.5);animation:pop .3s cubic-bezier(.2,.9,.3,1.2);}
+  #share h2{margin:0 0 10px;font:800 20px var(--display);color:var(--gold);display:flex;justify-content:space-between;align-items:center;}
+  #share h2 small{font:600 11px var(--mono);letter-spacing:.1em;color:rgba(244,240,255,.55);}
+  #share img{display:block;width:100%;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:#0b0a1a;aspect-ratio:1200/630;}
+  #share .row2{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center;}
+  #share button,#share a.btn{font:700 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#140f28;background:var(--gold);border:0;border-radius:999px;padding:10px 18px;cursor:pointer;text-decoration:none;display:inline-block;}
+  #share button.ghost{background:rgba(255,255,255,.1);color:var(--ink);border:1px solid rgba(255,255,255,.18);}
+  #share .st{font:600 12px var(--mono);color:var(--mint);margin-left:auto;min-height:1em;} #share .st a{color:var(--mint);}
+  @media (max-width:520px){ #share .card2{padding:12px;} #share button,#share a.btn{padding:9px 12px;font-size:11px;} #share .st{margin-left:0;width:100%;} }
   @media (max-width:700px){ .chrome{left:12px;justify-content:flex-end;gap:6px;} .chrome button,.chrome a{padding:5px 8px;font-size:10px;} .chrome a[href="/keyboard"]{display:none;}
     #top{top:46px;} #top .hs{font-size:18px;} #prog{top:104px;} #combo{top:114px;font-size:11px;} .card.s2,.card.s3{top:136px;}
     .card{min-width:0;padding:6px 9px;} .card .sc{font-size:17px;} .card .keys{display:none;} .panel{padding:20px 18px;} .panel h2{font-size:30px;} .howto span{font-size:14px;} .howto{gap:8px 10px;} .seats{grid-template-columns:1fr;} .arch{grid-template-columns:1fr 1fr 1fr;gap:6px;} }
@@ -123,12 +142,18 @@
 <div id="words"></div>
 <div id="ui"></div>
 <div class="chrome">
-  <a href="/brick-choir" title="Brick Choir 3">brick choir</a>
+  <a href="/brick-choir" title="The arcade lobby">arcade</a>
+  <a href="/brick-choir/choir" title="Brick Choir 3">choir</a>
   <a href="/keyboard" title="The instrument">keyboard</a>
   <button id="snd" aria-pressed="true">sound on</button>
   <button id="fs">fullscreen</button>
 </div>
-<div id="fail"><p>Quartet needs WebGL and a working connection to load three.js.<br><a href="/brick-choir">Play Brick Choir 3 instead →</a></p></div>
+<div id="fail"><p>Quartet needs WebGL and a working connection to load three.js.<br><a href="/brick-choir/choir">Play Brick Choir 3 instead →</a></p></div>
+<div id="share" hidden><div class="card2" role="dialog" aria-label="Share your run">
+  <h2><span>SHARE YOUR RUN</span><small id="shareSub"></small></h2>
+  <img id="shareImg" alt="Your Brick Choir: Quartet share card">
+  <div class="row2"><button id="shCopy">copy link</button><a class="btn" id="shDl" download="brick-choir-quartet.png">download image</a><button id="shNative" hidden>share…</button><button class="ghost" id="shClose">close</button><span class="st" id="shSt"></span></div>
+</div></div>
 
 <script type="importmap" is:inline>
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
@@ -279,13 +304,16 @@ function jingle(notes,step=0.12,kind='lead',pan=0){ if(!ctx) return; const t=ctx
 const beatPhase=()=>{ if(!ctx||!lvl||!seqT) return 0; const spb=60/(lvl.bpm||104); return ((ctx.currentTime%spb)/spb); };
 
 /* ================= state ================= */
-const now=()=>performance.now(); const TESTMODE=/[?&]bot\b/.test(location.search);
+const now=()=>performance.now(); const TESTMODE=/[?&]bot\b/.test(location.search); const ATTRACT=/[?&]attract\b/.test(location.search);
+if(ATTRACT) document.body.classList.add('attract');
+let throttled=false, frameN=0; addEventListener('message',e=>{ if(e.data&&e.data.bc==='throttle') throttled=!!e.data.on; });
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const store={get(k,d){try{const v=localStorage.getItem('bc4:'+k);return v?JSON.parse(v):d;}catch(e){return d;}},set(k,v){try{localStorage.setItem('bc4:'+k,JSON.stringify(v));}catch(e){}}};
 let state='boot', stateT=now(), lvl=null, lvlI=0, cells=[], grid=[], N=7, balls=[], parts=[];
 let players=SEATS.map(s=>({seat:s.id,human:false,score:0,combo:0,hits:0,lastHit:0,balls:0,botT:0,name:'BOT'}));
 let combo=0, lastHit=0, fever=0, targets=[], tIdx=0, songEnd=0, songLen=60000, verse=0, hearts=3, notesPlayed=0, bells=0, quartets=0, lastQuartet=0, runIdx=0, tunnels=0, faceDone=[false,false,false,false], camKick=0, camKickAz=0, cueT=0;
-let hiLocal=store.get('scores',[]), hiGlobal=null, entryQueue=[], entry='', entryFor=null, myRecs=[], heldKeys=new Set(), pressedAt={}, shake=0, flare=0, attractPanel=0, attractT=now(), lobbyEnd=0, interAct=0, overWon=false, clearBonus=0, pausedLeft=0;
+let hiLocal=store.get('scores',[]), hiGlobal=null, hiWeek=null, boardMode='week', entryQueue=[], entry='', entryFor=null, myRecs=[], heldKeys=new Set(), pressedAt={}, shake=0, flare=0, attractPanel=0, attractT=now(), lobbyEnd=0, interAct=0, overWon=false, clearBonus=0, pausedLeft=0;
+let rally=[], rallyT0=0, published=null; // every note of the run: [ms, midi, seat, code|null] — for the share card and the take on the wall
 const HI_DEFAULT=[['TER',42000],['SON',36000],['AST',30000],['KEY',24000],['BLM',18000],['CHO',12000],['RUN',9000],['ARC',6000],['BIT',3000],['YOU',1000]];
 const best=()=>Math.max(...players.map(p=>p.score),...(hiGlobal||hiLocal).map(r=>r.score||0),HI_DEFAULT[0][1]);
 const humans=()=>players.filter(p=>p.human);
@@ -356,6 +384,7 @@ function fire(code,{bot=false}={}){
   let dx=ax-b.x, dz=az-b.z; const L=Math.hypot(dx,dz)||1; dx/=L; dz/=L; const jit=((Math.random()*2-1)*P.spread)*DEG; const c=Math.cos(jit), sn=Math.sin(jit);
   b.vx=dx*c-dz*sn; b.vz=dx*sn+dz*c; b.sp=P.sp*lvl.speed*(caught?1.08:1);
   const m=slotMidi(sl); tone(m,{t:snapT(),kind:(s.id===0&&!sl.inner)?'bass':s.kind,len:sl.inner?0.1:0.2,vel:sl.inner?0.8:0.9,pan:s.pan}); notesPlayed++;
+  if(state==='play') rally.push([Math.round(T-rallyT0),m,sl.seat,code]);
   ring(sl.x,sl.z,s.col,0.5); litSlot(sl,1);
   if(!bot) p.humanCool=T+120;
 }
@@ -369,7 +398,7 @@ function hitCell(c,b,{via='ball',chain=false}={}){
     if(lvl.phrase&&lvl.phrase.length){ m=scaleNote(lvl.phrase[runIdx%lvl.phrase.length],60); } else { m=scaleNote(7+runIdx,48); } runIdx++;
     tone(m,{t,kind:'lead',len:0.12,vel:0.9,pan:s?s.pan:0}); }
   else tone(m,{t:t+(chain?0.03:0),kind:s?s.kind:'bell',len:0.1,vel:c.hp>0?0.5:0.85,pan:s?s.pan:0});
-  notesPlayed++;
+  notesPlayed++; if(state==='play') rally.push([Math.round(T-rallyT0),m,b?b.owner:c.face,null]);
   if(p) award(p,5*(b&&b.inside?2:1));
   spawnShards(wx,c.hp*BH+BH,wz,c.midi,c.hp>0?4:12);
   if(c.chord&&!chain){ c.chord=false; ring(wx,wz,pitchColor(c.midi),1.2); word('chord!',[wx,wz],{color:cssCol(c.midi,88,.12)});
@@ -464,7 +493,7 @@ const faceOf=(u,v)=>{ const d=[-v,u,v,-u]; let f=0; for(let k=1;k<4;k++) if(d[k]
 function bump(b){ const a=angOf(b.x,b.z); const bp=BUMPERS.reduce((m,x)=>angDiff(a,x.ang)<angDiff(a,m.ang)?x:m); drum(bp.drum,{t:snapT(),vel:0.8,pan:Math.cos(bp.ang*DEG)*0.6}); bp.flash=1; award(players[b.owner],5); notesPlayed++; }
 
 /* ================= flow ================= */
-function startGame(){ players.forEach(p=>{ p.score=0; p.combo=0; p.hits=0; p.lastHit=0; }); hearts=3; notesPlayed=0; bells=0; quartets=0; tunnels=0; myRecs=[]; beginRound(0); }
+function startGame(){ players.forEach(p=>{ p.score=0; p.combo=0; p.hits=0; p.lastHit=0; }); hearts=3; notesPlayed=0; bells=0; quartets=0; tunnels=0; myRecs=[]; rally=[]; rallyT0=now(); published=null; beginRound(0); }
 function beginRound(i){
   loadLevel(i); setState('ready'); seqT=0;
   const t0=ctx?ctx.currentTime:0; let k=0; [...cells].filter(c=>c.hp>0&&c.hp!==Infinity).sort((a,b)=>a.born-b.born).forEach(c=>{ if(ctx&&k<44) tone(c.midi+12,{t:t0+k*0.05,kind:'bell',len:0.04,vel:0.35,pan:SEATS[c.face].pan}); k++; });
@@ -496,22 +525,79 @@ function gameOver(won){
   setState('over'); overWon=!!won; balls=[]; jingle(won?[0,4,7,12,16,19,24,28].map(x=>60+(lvl?lvl.root:0)+x):[12,11,7,4,3,0].map(x=>60+(lvl?lvl.root:0)+x),won?0.1:0.2,'lead');
   entryQueue=[...players].filter(p=>p.human).sort((a,b)=>b.score-a.score).filter(p=>qualifies(p.score));
 }
-function qualifies(score){ const list=(hiGlobal||[]).length?hiGlobal:hiLocal; if(score<=0) return false; if(list.length<10) return true; return score>Math.min(...list.map(r=>r.score)); }
+// you make the choir if you'd land on this week's table or the all-time one (the week's is the friendly one)
+function qualifies(score){ if(score<=0) return false; return [hiWeek,(hiGlobal||[]).length?hiGlobal:hiLocal].some(l=>!l||l.length<10||score>Math.min(...l.map(r=>r.score))); }
 async function submitScore(initials,p){
-  const rec={initials,score:p.score,round:lvlI+1,at:Date.now()}; myRecs.push(rec);
+  const rec={initials,score:p.score,round:lvlI+1,at:Date.now(),game:'quartet'}; myRecs.push(rec);
   hiLocal=[...hiLocal,rec].sort((a,b)=>b.score-a.score).slice(0,10); store.set('scores',hiLocal);
-  postScore({initials,score:p.score,round:lvlI+1},0);
+  postScore({initials,score:p.score,round:lvlI+1,game:'quartet'},0);
   nextEntry();
 }
 // four people at one laptop share one IP, and the choir takes one entry a minute: retry the rest in the background
 async function postScore(body,attempt){
   try{ const r=await fetch('/api/brick-scores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(r.ok){ const j=await r.json(); if(Array.isArray(j.scores)) hiGlobal=j.scores; return; }
+    if(r.ok){ const j=await r.json(); if(Array.isArray(j.scores)) hiGlobal=j.scores; if(Array.isArray(j.weekScores)) hiWeek=j.weekScores; renderUI(true); return; }
     if(r.status===429&&attempt<4) setTimeout(()=>postScore(body,attempt+1),62000*(attempt+1)); }catch(e){}
 }
-function nextEntry(){ const p=entryQueue.shift(); if(p){ entryFor=p; entry=''; setState('initials'); } else setState('scores'); }
-async function loadScores(){ try{ const r=await fetch('/api/brick-scores'); if(r.ok){ const j=await r.json(); if(Array.isArray(j.scores)) hiGlobal=j.scores; } }catch(e){} }
-function toAttract(){ players.forEach(p=>{ p.human=false; p.name='BOT'; p.score=0; p.combo=0; }); setState('attract'); attractPanel=0; attractT=now(); loadLevel(0,{build:true}); myRecs=[]; seqT=0; setBackdrop(true); }
+function nextEntry(){ const p=entryQueue.shift(); if(p){ entryFor=p; entry=''; setState('initials'); } else { boardMode='week'; setState('scores'); } }
+async function loadScores(){ const get=async q=>{ try{ const r=await fetch('/api/brick-scores'+q); if(r.ok){ const j=await r.json(); if(Array.isArray(j.scores)) return j.scores; } }catch(e){} return null; };
+  const [a,w]=await Promise.all([get(''),get('?period=week')]); if(a) hiGlobal=a; if(w) hiWeek=w; renderUI(true); }
+function toAttract(){ players.forEach(p=>{ p.human=false; p.name='BOT'; p.score=0; p.combo=0; }); setState('attract'); attractPanel=0; attractT=now(); loadLevel(0,{build:true}); myRecs=[]; seqT=0; setBackdrop(true); boardMode='week'; }
+
+/* ================= the take on the wall + the share card ================= */
+function takeBody(){ // /api/keyboard wants key codes: fired notes have theirs, brick hits borrow the nearest key of the seat that played them
+  const t0=rally[0][0]; const ev=[]; const near=(m,seat)=>{ const s=SEATS[seat]; return s.slots.reduce((a,x)=>Math.abs(slotMidi(x)-m)<Math.abs(slotMidi(a)-m)?x:a).code; };
+  rally.slice(0,5000).forEach(([t,m,seat,code])=>{ const k=t-t0, c=code||near(m,seat); ev.push([k,c,1],[k+120,c,0]); }); ev.sort((a,b)=>a[0]-b[0]);
+  const dur=Math.min(180000,ev[ev.length-1][0]+300); const team=players.reduce((a,p)=>a+p.score,0);
+  return {title:`Brick Choir: Quartet · ${team.toLocaleString()} points`,song:'',note:`round ${lvlI+1} · ${humans().length||1} player${humans().length>1?'s':''} · ${notesPlayed} notes · ${bells} bells · ${quartets} quartets`,link:null,name:'',dur,settings:{scale:lvl.scale,root:lvl.root,voice:'glass',bpm:Math.min(150,Math.max(70,lvl.bpm||104)),sync:false},events:ev.filter(e=>e[0]<=dur),visibility:'public'};
+}
+async function publish(){
+  if(rally.length<4||published) return published; published='…';
+  try{ const r=await fetch('/api/keyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(takeBody())}); const j=await r.json(); published=r.ok?('/keyboard?t='+j.id):'x';
+    if(r.ok) try{ const m=JSON.parse(localStorage.getItem('kb:mine')||'[]'); m.unshift({...j.summary,secret:j.secret}); localStorage.setItem('kb:mine',JSON.stringify(m.slice(0,100))); }catch(e){} }catch(e){ published='x'; }
+  return published;
+}
+const shareEl=document.getElementById('share'); let shareOpen=false, shareBlob=null;
+const OKLCH_OK=(()=>{ try{ const c=document.createElement('canvas').getContext('2d'); c.fillStyle='oklch(80% 0.1 100)'; return c.fillStyle!=='#000000'; }catch(e){ return false; } })();
+const shareCol=(m,l=80,c=0.14)=>OKLCH_OK?`oklch(${l}% ${c} ${hue(m)})`:`hsl(${hue(m)} 80% ${l}%)`;
+function rr2(x,X,Y,w,h,r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); }
+function shareCard(){
+  const c=document.createElement('canvas'); c.width=1200; c.height=630; const x=c.getContext('2d'); const team=players.reduce((a,p)=>a+p.score,0);
+  x.fillStyle='#0b0a1a'; x.fillRect(0,0,1200,630);
+  x.globalCompositeOperation='lighter'; SEATS.forEach((s,i)=>{ const [bx,by]=[[200,560],[1000,560],[1000,100],[200,100]][i]; const gr=x.createRadialGradient(bx,by,0,bx,by,420); gr.addColorStop(0,s.hex+'2a'); gr.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=gr; x.fillRect(0,0,1200,630); }); x.globalCompositeOperation='source-over';
+  const F=(w,s,mono)=>`${w} ${s}px ${mono?'"Geist Mono",ui-monospace,monospace':'"Bricolage Grotesque","Avenir Next",system-ui,sans-serif'}`; x.textBaseline='alphabetic';
+  x.font=F(800,64); let lx=64; 'BRICK CHOIR'.split('').forEach((ch,i)=>{ const w=x.measureText(ch).width; const gr=x.createLinearGradient(0,70,0,130); gr.addColorStop(0,`oklch(90% 0.1 ${i*28})`); gr.addColorStop(1,`oklch(72% 0.17 ${(i*28+60)%360})`); x.fillStyle=OKLCH_OK?gr:'#f4f0ff'; x.fillText(ch,lx,122); lx+=w; });
+  x.font=F(800,22); x.fillStyle='#ffd27a'; x.fillText('Q U A R T E T',lx+22,120);
+  x.font=F(700,20,true); x.fillStyle='#ffd27a'; x.fillText(`ROUND ${lvlI+1} · ${lvl.title.toUpperCase()}`,66,162);
+  x.font=F(500,18,true); x.fillStyle='rgba(244,240,255,.6)'; x.fillText(`by ${lvl.architect} · ${scaleName(lvl)} · ${notesPlayed} notes · ${bells} bells · ${quartets} quartets${tunnels?` · ${tunnels} through the wall`:''}`,66,190);
+  x.textAlign='right'; x.font=F(700,16,true); x.fillStyle='#9fe3c9'; x.fillText('TEAM SCORE',1136,84); x.font=F(800,84); x.fillStyle='#fff'; x.fillText(team.toLocaleString(),1136,166); x.textAlign='left';
+  const px=64, py=228, pw=1072, ph=284; x.fillStyle='rgba(255,255,255,.04)'; rr2(x,px,py,pw,ph,18); x.fill(); x.strokeStyle='rgba(255,255,255,.1)'; x.stroke();
+  if(rally.length){ const t0=rally[0][0], t1=Math.max(t0+1000,rally[rally.length-1][0]); const ms=rally.map(n=>n[1]); const lo=Math.min(...ms)-1, hi=Math.max(...ms)+1; const rowH=Math.min(12,(ph-24)/(hi-lo+1)); const nw=Math.max(4,Math.min(22,pw/Math.max(60,rally.length)*2));
+    rally.forEach(([t,m,seat])=>{ const xx=px+12+(t-t0)/(t1-t0)*(pw-24-nw), yy=py+ph-12-(m-lo)/(hi-lo+1)*(ph-24)-rowH; x.fillStyle=SEATS[seat]?SEATS[seat].hex:shareCol(m); x.globalAlpha=0.9; x.shadowColor=x.fillStyle; x.shadowBlur=10; rr2(x,xx,yy,nw,Math.max(3,rowH-3),3); x.fill(); x.shadowBlur=0; x.globalAlpha=1; }); }
+  else { x.font=F(500,18,true); x.fillStyle='rgba(244,240,255,.4)'; x.textAlign='center'; x.fillText('a quiet one',600,py+ph/2); x.textAlign='left'; }
+  // the four seats, in their colours
+  const rank=[...players].sort((a,b)=>b.score-a.score); rank.forEach((p,i)=>{ const s=SEATS[p.seat]; const bx=66+i*268; x.fillStyle=s.hex; x.fillRect(bx,538,6,30); x.font=F(700,13,true); x.fillStyle=s.hex; x.fillText(`${s.name} · ${p.human?'YOU':'BOT'} · ${s.part}`,bx+16,548); x.font=F(800,20); x.fillStyle='#fff'; x.fillText(p.score.toLocaleString(),bx+16,570); });
+  x.textAlign='right'; x.font=F(600,14,true); x.fillStyle='rgba(244,240,255,.5)'; x.fillText('pointcast.xyz/brick-choir/quartet',1136,612); x.textAlign='left';
+  return c;
+}
+const shSt=document.getElementById('shSt'); const setSt=h=>{ shSt.innerHTML=h; };
+async function openShare(){
+  if(shareOpen||!lvl) return; shareOpen=true; shareEl.hidden=false; if(document.fullscreenElement) try{ document.exitFullscreen(); }catch(e){}
+  const team=players.reduce((a,p)=>a+p.score,0); document.getElementById('shareSub').textContent=`${team.toLocaleString()} PTS · ROUND ${lvlI+1}`;
+  document.getElementById('shNative').hidden=!(navigator.share);
+  setSt(rally.length<4?'play a few notes and your run goes on the wall too':'putting your song on the wall…');
+  const pub=rally.length>=4?publish().then(p=>setSt(p&&p!=='x'&&p!=='…'?`on the wall · <a href="${p}" target="_blank" rel="noopener">hear it</a>`:'the wall is busy — the image still works')):null;
+  const c=shareCard(); const img=document.getElementById('shareImg'); img.src=c.toDataURL('image/png');
+  const dl=document.getElementById('shDl'); dl.download=`brick-choir-quartet-round-${lvlI+1}-${team}.png`; dl.href=img.src;
+  shareBlob=await new Promise(r=>c.toBlob(r,'image/png')); await pub;
+}
+function closeShare(){ shareOpen=false; shareEl.hidden=true; }
+const shareUrl=()=>published&&published!=='x'&&published!=='…'?location.origin+published:location.origin+'/brick-choir/quartet';
+document.getElementById('shCopy').onclick=async()=>{ try{ await navigator.clipboard.writeText(shareUrl()); setSt('link copied ✓'); }catch(e){ setSt(`<a href="${shareUrl()}" target="_blank" rel="noopener">${shareUrl()}</a>`); } };
+document.getElementById('shNative').onclick=async()=>{ const team=players.reduce((a,p)=>a+p.score,0); const data={title:'Brick Choir: Quartet',text:`Brick Choir: Quartet — ${team.toLocaleString()} points, round ${lvlI+1}`,url:shareUrl()};
+  try{ if(shareBlob&&navigator.canShare&&navigator.canShare({files:[new File([shareBlob],'quartet.png',{type:'image/png'})]})) data.files=[new File([shareBlob],'quartet.png',{type:'image/png'})]; await navigator.share(data); setSt('shared ✓'); }catch(e){ if(e&&e.name!=='AbortError') setSt('sharing didn’t work — copy the link instead'); } };
+document.getElementById('shClose').onclick=closeShare;
+shareEl.addEventListener('pointerdown',e=>{ if(e.target===shareEl) closeShare(); e.stopPropagation(); });
 function claimSeat(id){ const p=players[id]; if(p.human) return false; p.human=true; p.name='YOU'; const s=SEATS[id]; jingle([0,4,7,12].map(x=>60+x+(lvl?lvl.root:0)),0.08,s.kind,s.pan); word(`${s.name} joins!`,[s.dir[0]*9,s.dir[1]*9],{big:true,color:s.hex}); return true; }
 function startLobby(){ players.forEach(p=>{ p.score=0; p.combo=0; }); combo=0; setState('lobby'); lobbyEnd=now()+12000; setBackdrop(false); }
 
@@ -702,9 +788,15 @@ function draw(T,dt){
 const ui=document.getElementById('ui'), hud=document.getElementById('hud');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function flashCard(i){ const el=document.getElementById('c'+i); el.classList.add('hit'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('hit'),160); }
-function scoreRows(highlight){ const list=(hiGlobal&&hiGlobal.length?hiGlobal:hiLocal).map(r=>[r.initials,r.score,r.round]); const rows=[...list,...HI_DEFAULT.slice(0,Math.max(0,10-list.length)).map(r=>[r[0],r[1],0])].sort((a,b)=>b[1]-a[1]).slice(0,10);
+function scoreRows(highlight){ const week=boardMode==='week'; const src=week?(hiWeek||[]):((hiGlobal&&hiGlobal.length)?hiGlobal:hiLocal); const list=src.map(r=>[r.initials,r.score,r.round]);
+  const rows=[...list,...(week?[]:HI_DEFAULT.slice(0,Math.max(0,10-list.length)).map(r=>[r[0],r[1],0]))].sort((a,b)=>b[1]-a[1]).slice(0,10);
   const ord=['1ST','2ND','3RD','4TH','5TH','6TH','7TH','8TH','9TH','10TH'], cols=['#ff8fb1','#ffb38a','#ffd27a','#c8f08f','#9fe3c9','#8fd0ff','#b9a8ff','#e3a8ff','#ffa8d8','#f4f0ff'];
-  return `<div class="tag">${hiGlobal&&hiGlobal.length?'THE CHOIR · ALL TIME':'THE CHOIR · THIS BROWSER'}</div><table class="scores">${rows.map((r,i)=>{ const me=highlight&&highlight.some(h=>h.initials===r[0]&&h.score===r[1]); return `<tr class="${me?'me':''}" style="color:${cols[i]}"><td>${ord[i]}</td><td style="text-align:right">${String(r[1]).padStart(7,' ')}</td><td>${esc(r[0]||'???')}</td></tr>`; }).join('')}</table>`; }
+  const toggle=`<div class="boards" role="tablist" aria-label="Which board"><button data-b="week" aria-pressed="${week}">THIS WEEK</button><button data-b="all" aria-pressed="${!week}">ALL TIME</button></div>`;
+  const title=`THE CHOIR · ${week?'THIS WEEK':(hiGlobal&&hiGlobal.length?'ALL TIME':'THIS BROWSER')}`;
+  const body=rows.length?`<table class="scores">${rows.map((r,i)=>{ const me=highlight&&highlight.some(h=>h.initials===r[0]&&h.score===r[1]); return `<tr class="${me?'me':''}" style="color:${cols[i]}"><td>${ord[i]}</td><td style="text-align:right">${String(r[1]).padStart(7,' ')}</td><td>${esc(r[0]||'???')}</td></tr>`; }).join('')}</table>`:`<p style="margin-top:18px">the week is young — be the first voice</p>`;
+  return `${toggle}<div class="tag">${title}</div>${body}`; }
+ui.addEventListener('click',e=>{ const b=e.target.closest('button[data-b]'); if(b){ boardMode=b.dataset.b; stateT=now(); attractT=now(); renderUI(true); tone(76,{kind:'lead',len:0.05,vel:0.4}); return; }
+  if(e.target.id==='shareBtn'){ openShare(); } else if(e.target.id==='contBtn'&&state==='over'){ nextEntry(); } });
 const scaleName=l=>`${NAMES[l.root]} ${l.scale.replace('pent',' pentatonic').replace('maj','major').replace('min','minor')}`;
 function seatsHtml(){ return `<div class="seats">${SEATS.map(s=>{ const p=players[s.id]; return `<div class="seat ${p.human?'human':''}" style="--c:${s.hex}"><b>${s.up} · ${s.part} <small>${s.corner==='SW'?'bottom left':s.corner==='SE'?'bottom right':s.corner==='NE'?'top right':'top left'}</small></b><div class="k">${esc(s.caps[0])} &nbsp;/&nbsp; ${esc(s.caps[1])} <small>· ${esc(s.drums)}</small></div><div class="st">${p.human?'YOU — READY':'press any key here · bot for now'}</div></div>`; }).join('')}</div>`; }
 const LOGO=()=>`<div class="logo">${'BRICK CHOIR'.split('').map((ch,i)=>ch===' '?'<span class="sp"></span>':`<span style="--h:${i*28};--i:${i}">${ch}</span>`).join('')}</div><div class="sub">QUARTET</div>`;
@@ -734,7 +826,7 @@ function renderUI(force){
   else if(state==='over'){ const rank=[...players].sort((a,b)=>b.score-a.score); const w=SEATS[rank[0].seat];
     html=`<div class="panel" style="--c:${w.hex}"><h2 style="color:${overWon?'var(--gold)':'var(--pink)'};font-size:${overWon?28:44}px">${overWon?'YOU PLAYED THE WHOLE SONGBOOK':'GAME OVER'}</h2><p class="mono">${notesPlayed} notes · ${tunnels} through the wall · ${bells} bells · ${quartets} quartets · round ${lvlI+1}</p>
       <div class="podium">${rank.map((p,i)=>{ const s=SEATS[p.seat]; return `<div style="--c:${s.hex}"><em>${['1ST','2ND','3RD','4TH'][i]}</em><b>${s.name} · ${p.human?'YOU':'BOT'}</b><span>${p.score.toLocaleString()}</span></div>`; }).join('')}</div>
-      <p class="mono" style="margin-top:14px;min-height:1.2em" id="overCont"></p></div>`; }
+      <div class="acts"><button id="shareBtn">share this run</button><button class="ghost" id="contBtn">continue</button></div><p class="mono" style="margin-top:10px;min-height:1.2em" id="overCont"></p></div>`; }
   else if(state==='initials'){ const s=SEATS[entryFor.seat]; key+=entry;
     html=`<div class="panel" style="--c:${s.hex}">${LOGO()}<h1 style="margin-top:14px;color:${s.hex}">${s.name} MADE THE CHOIR</h1><p class="mono">${entryFor.score.toLocaleString()} points — type your initials</p><div class="initials">${[0,1,2].map(i=>`<b class="${i===entry.length?'cur':''}" style="color:oklch(88% .12 ${i*80+300})">${esc(entry[i]||'')}</b>`).join('')}</div><p class="mono">enter to confirm · backspace to fix</p></div>`; }
   else if(state==='scores'){ html=`<div class="panel">${scoreRows(myRecs)}<p class="mono" style="margin-top:14px">any key</p></div>`; }
@@ -745,7 +837,7 @@ function renderUI(force){
   if(state==='lobby') setTxt('lobbyLeft',String(Math.max(0,Math.ceil((lobbyEnd-T)/1000))));
   else if(state==='ready'){ const p=(T-stateT)/2600; setTxt('readyWord',p>0.62?(p<0.9?'READY!':'PLAY!'):'',p<0.9?'#ffd27a':'#ff8fb1'); }
   else if(state==='clear'&&clearBonus){ const q=Math.min(1,(T-stateT)/1600); setTxt('clearLine',`song bonus +${Math.round(clearBonus*q).toLocaleString()} each`); }
-  else if(state==='over') setTxt('overCont',T-stateT>900?'any key to continue':'');
+  else if(state==='over') setTxt('overCont',T-stateT>900?(published&&published!=='x'&&published!=='…'?'your song is on the wall ✓ · S to share · any other key to continue':'S to share · any other key to continue'):'');
   hud.hidden=!(state==='play'||state==='ready'||state==='clear'||state==='short'||state==='over'||state==='paused'||state==='attract'||state==='lobby');
 }
 function renderHud(T){
@@ -792,11 +884,12 @@ function interUpdate(T,dt){
 /* ================= main loop ================= */
 let last=0;
 function frame(){
+  if(throttled&&(++frameN%4)){ requestAnimationFrame(frame); return; } // an unfocused lobby cabinet idles at ~15 fps
   const T=now(); const dt=Math.min(TESTMODE?0.4:0.1,(T-(last||T))/1000); if(!last){ attractT=T; stateT=T; } last=T;
   if(state==='play'||state==='attract'||state==='lobby'){ update(dt); scheduler(); bots(); }
   else if(state==='inter') interUpdate(T,dt);
   else { flare=Math.max(0,flare-dt*1.2); shake=Math.max(0,shake-dt*18); coreFlash=Math.max(0,coreFlash-dt*1.1); }
-  if(state==='attract'&&T-attractT>(attractPanel===0?10000:7000)){ attractPanel=(attractPanel+1)%4; attractT=T; if(attractPanel===3) loadScores(); }
+  if(state==='attract'&&T-attractT>(attractPanel===0?10000:7000)){ attractPanel=ATTRACT?(attractPanel?0:3):(attractPanel+1)%4; attractT=T; if(attractPanel===3) loadScores(); } // a cabinet screen only cycles logo ↔ choir
   if(state==='lobby'&&T>=lobbyEnd) startGame();
   if(state==='ready'&&T-stateT>=2600){ setState('play'); songEnd=now()+songLen; seqT=0; }
   if((state==='clear'||state==='short')&&T-stateT>=3200) afterRound();
@@ -809,11 +902,13 @@ function frame(){
 const SP2=()=>now()-stateT;
 function codeOf(e){ return ALIAS[e.code]||e.code; }
 addEventListener('keydown',e=>{
-  if(e.metaKey||e.ctrlKey||e.altKey) return; const code=codeOf(e); const sl=slots[code]; const dk=DRUMKEYS[code];
+  if(e.metaKey||e.ctrlKey||e.altKey||ATTRACT) return; const code=codeOf(e); const sl=slots[code]; const dk=DRUMKEYS[code];
+  if(shareOpen){ if(code==='Escape') closeShare(); return; }
+  if((state==='scores'||(state==='attract'&&attractPanel===3))&&(code==='ArrowLeft'||code==='ArrowRight')){ e.preventDefault(); boardMode=boardMode==='week'?'all':'week'; stateT=now(); attractT=now(); renderUI(true); tone(76,{kind:'lead',len:0.05,vel:0.4}); return; }
   if(state==='attract'){ e.preventDefault(); boot(); claimSeat(sl?sl.seat:dk?dk[0]:0); startLobby(); if(sl){ heldKeys.add(code); fire(code); } else if(dk) drumPad(dk[0],dk[1]); return; }
   if(state==='lobby'){ e.preventDefault(); if(code==='Enter'){ startGame(); return; } if(sl||dk){ boot(); if(claimSeat(sl?sl.seat:dk[0])) lobbyEnd=Math.max(lobbyEnd,now()+6000); if(!e.repeat){ if(sl){ heldKeys.add(code); fire(code); } else drumPad(dk[0],dk[1]); } } return; }
   if(state==='initials'){ e.preventDefault(); if(code==='Backspace'){ entry=entry.slice(0,-1); return; } if(code==='Enter'){ submitScore((entry+'???').slice(0,3).replace(/\?/g,'-'),entryFor); return; } if(/^[A-Za-z0-9]$/.test(e.key)&&entry.length<3){ entry+=e.key.toUpperCase(); tone(64+entry.length*4,{kind:'lead',len:0.08}); } return; }
-  if(state==='over'){ e.preventDefault(); if(SP2()<900) return; nextEntry(); return; }
+  if(state==='over'){ e.preventDefault(); if(SP2()<900) return; if(code==='KeyS'||code==='KeyP'){ openShare(); return; } nextEntry(); return; }
   if(state==='scores'){ e.preventDefault(); toAttract(); return; }
   if(state==='inter'){ e.preventDefault(); if(SP2()>1000){ interUpdate.chord=false; interUpdate.burst=false; interUpdate.ring=-1; balls=[]; beginRound(lvlI+1); } return; }
   if(code==='Escape'){ e.preventDefault(); if(state==='play'){ setState('paused'); pausedLeft=songEnd-now(); } else if(state==='paused'){ setState('play'); songEnd=now()+pausedLeft; seqT=0; } return; }
@@ -826,6 +921,7 @@ addEventListener('blur',()=>{ heldKeys.clear(); if(state==='play'){ setState('pa
 // touch / mouse: each quarter of the screen is a seat — tap to fire the nearest key on that seat's deck
 const seatOfPoint=(x,y)=>{ const l=x<innerWidth/2, t=y<innerHeight/2; return t?(l?3:2):(l?0:1); };
 cv.addEventListener('pointerdown',e=>{
+  if(ATTRACT||shareOpen) return;
   boot(); const seat=seatOfPoint(e.clientX,e.clientY);
   if(state==='attract'){ claimSeat(seat); startLobby(); return; }
   if(state==='lobby'){ if(claimSeat(seat)) lobbyEnd=Math.max(lobbyEnd,now()+6000); else if(now()-stateT>800) startGame(); return; }
@@ -840,8 +936,10 @@ document.getElementById('fs').onclick=e=>{ e.currentTarget.blur(); if(document.f
 
 if(TESTMODE) window.__bq={get state(){return state;},get players(){return players;},get balls(){return balls;},get cells(){return cells;},get targets(){return targets;},get tIdx(){return tIdx;},slots,SEATS,get lvl(){return lvl;},get lvlI(){return lvlI;},get hearts(){return hearts;},
   start:()=>{boot();startGame();},claim:i=>claimSeat(i),lobby:()=>startLobby(),fire:c=>fire(c),setState,go:(s)=>{ if(s==='inter'){ interAct=0; setState('inter'); interStart(); } else if(s==='over'){ gameOver(false); } else if(s==='initials'){ entryFor=players[0]; entry='AB'; setState('initials'); } else setState(s); },
-  endSong:()=>{ songEnd=0; }, act3:()=>{ lvlI=6; interAct=2; setState('inter'); interStart(); }, breakable, set attractPanel(v){ attractPanel=v; attractT=now(); }, get attractPanel(){ return attractPanel; }, get quartets(){ return quartets; }, get bells(){ return bells; }, word, get uiKey(){ return uiKey; }, get stateT(){ return stateT; }, get entryFor(){ return entryFor; }, get verse(){ return verse; }, get tunnels(){ return tunnels; }};
+  endSong:()=>{ songEnd=0; }, act3:()=>{ lvlI=6; interAct=2; setState('inter'); interStart(); }, breakable, set attractPanel(v){ attractPanel=v; attractT=now(); }, get attractPanel(){ return attractPanel; }, get quartets(){ return quartets; }, get bells(){ return bells; }, word, get uiKey(){ return uiKey; }, get stateT(){ return stateT; }, get entryFor(){ return entryFor; }, get verse(){ return verse; }, get tunnels(){ return tunnels; },
+  get rally(){ return rally; }, get published(){ return published; }, get boardMode(){ return boardMode; }, get boards(){ return {all:hiGlobal,week:hiWeek}; }, openShare, get shareOpen(){ return shareOpen; }};
 loadScores(); toAttract(); requestAnimationFrame(frame);
+if(ATTRACT) try{ parent.postMessage({bc:'ready',game:'quartet'},'*'); }catch(e){}
 </script>
 </body>
 </html>

@@ -106,6 +106,16 @@
   footer{margin-top:10px;font-size:11px;letter-spacing:.06em;color:#b5a88f;text-align:center;}
   footer a{color:#e0cfa9;}
   @media (pointer:coarse){ .touch{display:flex;} footer .kbd-only{display:none;} }
+  /* attract mode: just the TV tube, edge to edge, for a cabinet screen in /brick-choir */
+  body.attract{padding:0;overflow:hidden;background:#0d1211;}
+  body.attract .console{width:100vw;height:100vh;max-width:none;border-radius:0;box-shadow:none;}
+  body.attract .ribs,body.attract .switches,body.attract .touch,body.attract footer,body.attract .ov{display:none!important;}
+  body.attract .body{padding:0;flex:1;display:flex;background:#0d1211;} body.attract .tv{padding:0;border-radius:0;flex:1;display:flex;background:#0d1211;box-shadow:none;}
+  body.attract .screen{aspect-ratio:auto;flex:1;border-radius:0;}
+  .choir{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap;}
+  .choir input{font-family:var(--mono);font-size:18px;letter-spacing:.3em;text-transform:uppercase;width:5.2ch;text-align:center;padding:6px 4px 6px 8px;border:2px solid var(--char);border-radius:4px;background:#fff8ea;color:var(--char);}
+  .choir input:focus{outline:3px solid var(--mustard);outline-offset:1px;}
+  .choir small{width:100%;text-align:center;font-size:12px;color:#5b5346;}
   @media (max-width:700px){ .body{padding:12px;} .tv{padding:8px;border-radius:14px;} .card{padding:16px;} .card h2{font-size:26px;} .card .art{display:none;} .rounds{grid-template-columns:repeat(2,1fr);} .sw{min-width:60px;} .cart{order:-1;flex-basis:100%;} body{overflow:auto;justify-content:flex-start;} }
 </style>
 </head>
@@ -131,7 +141,7 @@
     </div>
   </div>
 </div>
-<footer><span class="kbd-only">Every key is a paddle: press the key under the falling ball. Bottom row sends it low, middle row higher, top row straight up. Space sweeps. Esc pauses. · </span><a href="/keyboard">play the keyboard</a> · rounds by Terra, Sonnet &amp; Astra</footer>
+<footer><span class="kbd-only">Every key is a paddle: press the key under the falling ball. Bottom row sends it low, middle row higher, top row straight up. Space sweeps. Esc pauses. · </span><a href="/brick-choir">the arcade</a> · <a href="/brick-choir/choir">Brick Choir 3</a> · <a href="/keyboard">play the keyboard</a> · rounds by Terra, Sonnet &amp; Astra</footer>
 
 <script is:inline>
 (() => {
@@ -258,6 +268,8 @@ const cv=document.getElementById('game'), g=cv.getContext('2d');
 const lr=document.createElement('canvas'); lr.width=W; lr.height=H; const L=lr.getContext('2d'); L.imageSmoothingEnabled=false;
 const $=id=>document.getElementById(id);
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ATTRACT=/[?&]attract\b/.test(location.search); if(ATTRACT) document.body.classList.add('attract');
+let throttled=false, frameN=0; addEventListener('message',e=>{ if(e.data&&e.data.bc==='throttle') throttled=!!e.data.on; });
 const store={get(k,d){try{const v=localStorage.getItem('bc2:'+k);return v?JSON.parse(v):d;}catch(e){return d;}},set(k,v){try{localStorage.setItem('bc2:'+k,JSON.stringify(v));}catch(e){}}};
 let cleared=new Set(store.get('cleared',[])), lineIdx=store.get('line',0);
 let lvl=null, lvlI=0, rule=RULES[0], bricks=new Map(), balls=[], pads=new Map(), caps=[], fx=[], flashes=[], score=0, lives=3, state='title';
@@ -343,9 +355,20 @@ function flash(x,y,col,s){ flashes.push({x,y,col,s,t:now()}); }
 
 /* ============ simulation ============ */
 function step(){
+  if(throttled&&(++frameN%4)){ requestAnimationFrame(step); return; } // an unfocused lobby cabinet idles at ~15 fps
   const t=now(), dt=Math.min(0.033,(t-lastT)/1000); lastT=t;
-  if(state==='play'){ update(dt); scheduler(); }
+  if(state==='play'){ if(ATTRACT) attractBot(); update(dt); scheduler(); }
   render(); requestAnimationFrame(step);
+}
+/* the attract-mode player: serves, reads where the ball will land, and presses the key under it (a little late, like a person) */
+let botHeld=null, botT=0;
+function attractBot(){
+  const T=now(); if(botHeld&&T>botHeld.t+380){ release(botHeld.code); botHeld=null; }
+  if(T<botT) return;
+  if(balls.some(b=>b.held)){ botT=T+900; const code=ROWS[3].codes[Math.floor(Math.random()*ROWS[3].codes.length)]; press(code); botHeld={code,t:T}; return; }
+  for(const b of balls){ if(b.held||b.vy<=0||b.y<CATCH_Y-14||b.botPressed) continue; const x=predict(b); if(x===null) continue; const ri=1+Math.floor(Math.random()*3);
+    const code=ROWS[ri].codes.find(c=>x>=cell[c].lane[0]&&x<cell[c].lane[1])||ROWS[ri].codes[ROWS[ri].codes.length-1]; if(Math.random()<0.93){ press(code); botHeld={code,t:T}; } b.botPressed=true; botT=T+120; return; }
+  balls.forEach(b=>{ if(b.vy<0) b.botPressed=false; });
 }
 function update(dt){
   const sp=speed();
@@ -489,7 +512,7 @@ function intro(i){
   $('menu').onclick=titleScreen;
 }
 function roundClear(){
-  if(state!=='play') return; state='clear';
+  if(state!=='play') return; if(ATTRACT){ state='clear'; setTimeout(()=>{ score=0; loadLevel((lvlI+1)%LEVELS.length); state='play'; lastT=now(); },1200); return; } state='clear';
   cleared.add(lvl.id); store.set('cleared',[...cleared]);
   const bonus=lives*200*mult(); score+=bonus;
   // the flourish: your catches, played back as the melody they were
@@ -506,10 +529,14 @@ function roundClear(){
   $('menu').onclick=titleScreen; $('pub').onclick=publish;
 }
 function gameOver(){
-  state='over';
+  state='over'; if(ATTRACT){ setTimeout(()=>{ score=0; loadLevel((lvlI+1)%LEVELS.length); state='play'; lastT=now(); },1500); return; }
   show(`<div class="eyebrow">Game over · ${esc(lvl.title)}</div><h2>${score.toLocaleString()}</h2>${bands}<p>${breakable()} bricks left · ${catchNotes.length} notes caught · ${tunnelN?tunnelN+' time'+(tunnelN>1?'s':'')+' through the wall':'no tunnel yet'}.</p>
-    <div class="btns"><button class="primary" id="again">Play again</button><button id="pub">Publish this rally</button><button id="menu">Rounds</button></div><div id="status"></div>`);
+    <div class="btns"><button class="primary" id="again">Play again</button><button id="pub">Publish this rally</button><button id="menu">Rounds</button></div>
+    ${score>0?`<div class="choir"><input id="ini" maxlength="3" placeholder="AAA" aria-label="Your initials" autocomplete="off"><button id="post">Join the choir</button><small>your score goes on this week's board at <a href="/brick-choir">the arcade</a></small></div>`:''}<div id="status"></div>`);
   $('again').onclick=()=>{ score=0; intro(lvlI); }; $('menu').onclick=titleScreen; $('pub').onclick=publish;
+  const post=$('post'); if(post) post.onclick=async()=>{ const ini=($('ini').value||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3); if(!ini){ $('ini').focus(); return; } post.disabled=true; $('status').textContent='Posting…';
+    try{ const r=await fetch('/api/brick-scores',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initials:ini,score,round:lvlI+1,game:'2600'})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||'failed');
+      $('status').innerHTML=`In the choir — ${j.weekRank?`#${j.weekRank} this week`:'on the board'} · <a href="/brick-choir">see the arcade</a>`; }catch(e){ post.disabled=false; $('status').textContent='Couldn’t post — '+(e.message||'try again'); } };
 }
 function pause(){ if(state==='play'){ state='paused'; show(`<div class="eyebrow">Paused</div><h2>${esc(lvl.title)}</h2><div class="btns"><button class="primary" id="res">Resume</button><button id="menu">Rounds</button></div>`); $('res').onclick=()=>{hide();state='play';seqNext=0;lastT=now();}; $('menu').onclick=titleScreen; } else if(state==='paused'){ hide(); state='play'; seqNext=0; lastT=now(); } }
 async function publish(){
@@ -538,7 +565,8 @@ setSw('swDiff',!wide); $('lblDiff').textContent=wide?'B · wide pads':'A · narr
 /* ============ input ============ */
 const held=new Set();
 addEventListener('keydown',e=>{
-  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  if(e.metaKey||e.ctrlKey||e.altKey||ATTRACT) return;
+  if(e.target&&e.target.tagName==='INPUT'){ if(e.code==='Enter'){ const p=$('post'); if(p) p.click(); } return; }
   if(e.code==='Escape'){ pause(); e.preventDefault(); return; }
   if(e.code==='Enter'&&!ov.hidden){ const p=card.querySelector('.primary'); if(p){ p.click(); e.preventDefault(); } return; }
   if(state!=='play') return;
@@ -546,7 +574,7 @@ addEventListener('keydown',e=>{
   if(cell[e.code]||e.code==='Space'){ e.preventDefault(); boot(); held.add(e.code); press(e.code); touchLight(e.code,true); }
 });
 addEventListener('keyup',e=>{ if(held.has(e.code)){ held.delete(e.code); release(e.code); touchLight(e.code,false); } });
-addEventListener('blur',()=>{ held.forEach(c=>release(c)); held.clear(); if(state==='play') pause(); });
+addEventListener('blur',()=>{ if(ATTRACT) return; held.forEach(c=>release(c)); held.clear(); if(state==='play') pause(); });
 // touch keyboard: the same three rows, big
 const touch=$('touch');
 [['q',1],['a',2],['z',3]].forEach(([cls,ri])=>{ const r=document.createElement('div'); r.className='r '+cls; r.style.paddingLeft=(ri-1)*3+'%';
@@ -558,14 +586,14 @@ const sweepBtn=document.createElement('div'); sweepBtn.className='r'; sweepBtn.i
 sweepBtn.querySelector('button').addEventListener('pointerdown',ev=>{ ev.preventDefault(); boot(); press('Space'); });
 function touchLight(code,on){ const b=touch.querySelector(`[data-code="${code}"]`); if(b) b.classList.toggle('on',on); }
 // tapping the key-map strip on the screen works too
-cv.addEventListener('pointerdown',e=>{ boot(); if(state!=='play') return; const r=cv.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*W, y=(e.clientY-r.top)/r.height*H; if(y<MAP_Y-4) return; const ri=Math.max(1,Math.min(3,1+Math.floor((y-MAP_Y)/8))); let best=null,bd=1e9; ROWS[ri].codes.forEach(code=>{ const c=cell[code]; const d=Math.abs(c.x+c.w/2-x); if(d<bd){bd=d;best=code;} }); if(best){ press(best); setTimeout(()=>release(best),160); } });
+cv.addEventListener('pointerdown',e=>{ if(ATTRACT) return; boot(); if(state!=='play') return; const r=cv.getBoundingClientRect(); const x=(e.clientX-r.left)/r.width*W, y=(e.clientY-r.top)/r.height*H; if(y<MAP_Y-4) return; const ri=Math.max(1,Math.min(3,1+Math.floor((y-MAP_Y)/8))); let best=null,bd=1e9; ROWS[ri].codes.forEach(code=>{ const c=cell[code]; const d=Math.abs(c.x+c.w/2-x); if(d<bd){bd=d;best=code;} }); if(best){ press(best); setTimeout(()=>release(best),160); } });
 
 /* ============ sizing ============ */
 function fit(){ const s=$('screen').getBoundingClientRect(); const dpr=Math.min(2,devicePixelRatio||1); cv.width=Math.round(s.width*dpr); cv.height=Math.round(s.height*dpr); }
 addEventListener('resize',fit); new ResizeObserver(fit).observe($('screen')); fit();
 
 if(/[?&]bot\b/.test(location.search)) window.__bc={get balls(){return balls;},cell,ROWS,CATCH_Y,get state(){return state;},get score(){return score;},get streak(){return streak;},get bricks(){return bricks.size;}};
-if(!LEVELS.length) show('<h2>No rounds yet</h2>'); else titleScreen();
+if(!LEVELS.length) show('<h2>No rounds yet</h2>'); else if(ATTRACT){ muted=true; loadLevel(0); state='play'; hide(); lastT=now(); try{ parent.postMessage({bc:'ready',game:'2600'},'*'); }catch(e){} } else titleScreen();
 requestAnimationFrame(step);
 })();
 </script>
