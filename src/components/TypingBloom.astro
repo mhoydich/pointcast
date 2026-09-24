@@ -1,0 +1,179 @@
+---
+import { lessons } from '../lib/typing-bloom.mjs';
+const rows = ['1234567890', 'qwertyuiop', "asdfghjkl;'", 'zxcvbnm,./'];
+---
+<section class="tb" data-typing-bloom aria-label="Typing Bloom musical typing tutor">
+  <header class="tb-head">
+    <div><p class="tb-kicker">Keyboard Bloom / a little practice, a little music</p><h2>Find your <em>flow.</em></h2><p class="tb-intro">Type a little. Grow a garden. Make it sing.</p></div>
+    <div class="tb-settings"><button type="button" data-sound aria-pressed="true">Sound on</button><button type="button" data-motion aria-pressed="true">Motion on</button><a href="/keyboard">Free play ↗</a></div>
+  </header>
+  <div class="tb-layout">
+    <div class="tb-garden" aria-hidden="true">
+      <div class="tb-sun">✳</div><span class="tb-orbit">·</span>
+      <svg viewBox="0 0 480 260" focusable="false">
+        <path d="M0 236 Q110 206 240 234 T480 232 V260 H0Z" fill="#233f36" />
+        {Array.from({length: 9}, (_, i) => <g class="tb-flower" data-flower style={`--i:${i};--petal:${['#f9a789','#f3d886','#a9bddf'][i%3]}`} transform={`translate(${35+i*51} 235)`}>
+          <path class="tb-stem" d={`M0 0 Q-13 -35 0 -${65+(i%3)*24}`} fill="none" stroke="#9dbf81" stroke-width="3" />
+          <path d="M-4 -26 Q-33 -52 -29 -27 Q-16 -14 -4 -26 M-5 -40 Q23 -69 24 -43 Q9 -32 -5 -40" fill="#759d70" />
+          <g transform={`translate(0 -${65+(i%3)*24})`}><g class="tb-petals">{Array.from({length: 6}, (_, p) => <ellipse cx="0" cy="-14" rx="8" ry="14" transform={`rotate(${p*60})`} fill="var(--petal)" />)}<circle r="9" fill="#203e34" /><circle r="4" fill="#f4d884" /></g></g>
+        </g>)}
+      </svg>
+      <p data-garden-caption>Your first note is a seed.</p><div class="tb-sparks" data-sparks></div>
+    </div>
+    <div class="tb-practice">
+      <div class="tb-lesson"><label>Practice <select data-lesson>{lessons.map((l,i) => <option value={i}>{l.name}</option>)}</select></label><span data-saved>One letter at a time</span></div>
+      <p class="tb-tip" data-tip>{lessons[0].hint}</p>
+      <div class="tb-prompt" data-prompt aria-label={`Type this: ${lessons[0].text}`}></div>
+      <div class="tb-track"><div data-progress></div></div>
+      <div class="tb-coach"><span data-finger>Left index · f</span><span data-count>0 / {lessons[0].text.length}</span></div>
+      <label class="tb-input-label">Your practice space<textarea rows="1" data-input aria-label="Type the highlighted text here" placeholder="Press Start, or click here and type…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"></textarea></label>
+      <div class="tb-actions"><button class="tb-primary" type="button" data-start>Start growing ↗</button><button type="button" data-restart>Start over</button><button class="tb-primary" type="button" data-next hidden>Next garden ↗</button></div>
+      <p class="tb-message" role="status" data-message>Follow the glowing letter. No rush, no lives to lose.</p>
+      <div class="tb-stats" aria-label="Practice results"><span><strong data-accuracy>—</strong> accuracy</span><span><strong data-wpm>—</strong> <span data-speed-label>WPM</span></span><span><strong data-streak>0</strong> in a row</span><span><strong data-blooms>0</strong> / 9 blooms</span></div>
+    </div>
+  </div>
+  <div class="tb-keyboard" role="group" aria-label="Practice keys: QWERTY layout">
+    {rows.map((row,i) => <div class="tb-row" style={`--offset:${i===2?2:i===3?5:0}%`}>{row.split('').map(k => <button type="button" data-key={k} tabindex="-1" aria-label={`Type ${k}`} class:list={['tb-key', { 'tb-home': k==='f'||k==='j' }]}>{k.toUpperCase()}</button>)}</div>)}
+    <div class="tb-row tb-last"><span data-shift>⇧ Shift</span><button type="button" data-key=" " tabindex="-1" class="tb-key tb-space" aria-label="Type space">space</button><span>⇧ Shift</span></div>
+  </div>
+  <footer class="tb-footer"><span>F + J are home · highlighted key = next note · Esc to pause</span><span>Progress stays in this browser. <a href="/typing">Open the practice room ↗</a></span></footer>
+  <noscript>Enable JavaScript to play the typing tutor.</noscript>
+</section>
+
+<script>
+import { lessons, createRound, enter, metrics, pause, resume, fingerFor, baseKey } from '../lib/typing-bloom.mjs';
+function mount() {
+  document.querySelectorAll<HTMLElement>('[data-typing-bloom]').forEach(root => {
+    if (root.dataset.mounted) return;
+    root.dataset.mounted = 'true';
+    const controller = new AbortController(), {signal} = controller;
+    const el = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!;
+    const input = el<HTMLTextAreaElement>('[data-input]'), select = el<HTMLSelectElement>('[data-lesson]');
+    const start = el<HTMLButtonElement>('[data-start]'), next = el<HTMLButtonElement>('[data-next]');
+    const message = el('[data-message]'), prompt = el('[data-prompt]');
+    const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+    let motion = !motionQuery.matches, sound = true, round = createRound(lessons[0].text), active = false;
+    let audio: AudioContext | null = null, master: GainNode | null = null;
+    let saved: number[] = [];
+    try { const data = JSON.parse(localStorage.getItem('pc-typing-bloom-v1') || '[]'); if (Array.isArray(data)) saved = data.filter(n => Number.isInteger(n) && n >= 0 && n < lessons.length); } catch {}
+    const save = () => { if (!saved.includes(select.selectedIndex)) saved.push(select.selectedIndex); try { localStorage.setItem('pc-typing-bloom-v1', JSON.stringify(saved)); } catch {} };
+    const preferences = () => {
+      root.classList.toggle('tb-still', !motion);
+      el('[data-motion]').textContent = `Motion ${motion ? 'on' : 'off'}`;
+      el('[data-motion]').setAttribute('aria-pressed', String(motion));
+      el('[data-sound]').textContent = `Sound ${sound ? 'on' : 'off'}`;
+      el('[data-sound]').setAttribute('aria-pressed', String(sound));
+      if (master && audio) master.gain.setTargetAtTime(sound ? .18 : 0, audio.currentTime, .02);
+    };
+    const boot = () => {
+      if (!sound) return;
+      try {
+        if (!audio) { audio = new AudioContext(); master = audio.createGain(); master.gain.value = .18; const compressor = audio.createDynamicsCompressor(); master.connect(compressor); compressor.connect(audio.destination); }
+        if (audio.state === 'suspended') void audio.resume().catch(() => {});
+      } catch { sound = false; preferences(); message.textContent = 'Sound is unavailable here. Your garden still grows.'; }
+    };
+    const tone = (step: number, success: boolean, chord = false) => {
+      if (!sound || !audio || !master || audio.state !== 'running') return;
+      const context = audio, bus = master;
+      (chord ? [0,2,4] : [0]).forEach((offset, i) => {
+        const scale = [0,2,4,7,9], degree = (step + offset) % 15;
+        const frequency = success ? 220 * 2 ** ((scale[degree % 5] + 12 * Math.floor(degree / 5)) / 12) : 146.83;
+        const oscillator = context.createOscillator(), gain = context.createGain(), at = context.currentTime + i*.085;
+        oscillator.type = success ? 'sine' : 'triangle'; oscillator.frequency.value = frequency;
+        gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(success ? .35 : .07, at+.012); gain.gain.exponentialRampToValueAtTime(.001, at+.6);
+        oscillator.connect(gain); gain.connect(bus); oscillator.start(at); oscillator.stop(at+.65);
+        oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+      });
+    };
+    const draw = () => {
+      const completed = round.position === round.text.length, expected = round.text[round.position];
+      [...prompt.children].forEach((span, i) => { span.className = i < round.position ? 'tb-done' : i === round.position ? 'tb-current' : ''; if (i === round.position) span.setAttribute('aria-current', 'true'); else span.removeAttribute('aria-current'); });
+      el('[data-progress]').style.width = `${round.position / round.text.length * 100}%`;
+      el('[data-count]').textContent = `${round.position} / ${round.text.length}`;
+      el('[data-finger]').textContent = completed ? 'A whole garden. You grew that.' : `${fingerFor(expected)}${expected !== ' ' ? ` · ${expected}` : ''}`;
+      root.querySelectorAll<HTMLElement>('[data-key]').forEach(key => key.classList.toggle('tb-target', !completed && key.dataset.key === baseKey(expected)));
+      root.classList.toggle('tb-needs-shift', !!expected && /[A-Z:!?]/.test(expected));
+      const blooms = Math.floor(round.position / round.text.length * 9);
+      root.querySelectorAll<HTMLElement>('[data-flower]').forEach((flower,i) => flower.classList.toggle('tb-grown', i < blooms));
+      el('[data-blooms]').textContent = String(blooms);
+      const stats = metrics(round, performance.now());
+      el('[data-accuracy]').textContent = stats.accuracy === null ? '—' : `${stats.accuracy}%`;
+      el('[data-wpm]').textContent = round.touch ? 'Tap mode' : stats.wpm === null ? '—' : String(stats.wpm);
+      el('[data-speed-label]').textContent = round.touch ? 'practice' : 'WPM';
+      el('[data-streak]').textContent = String(round.streak);
+      el('[data-saved]').textContent = saved.length ? `${saved.length} / 6 gardens grown here` : 'One letter at a time';
+      el('[data-garden-caption]').textContent = completed ? 'Look what a little practice can grow.' : blooms > 5 ? 'Your garden has found its rhythm.' : blooms > 1 ? 'Letter by letter. Petal by petal.' : 'Your first note is a seed.';
+      next.hidden = !completed; start.hidden = completed;
+      start.textContent = active ? 'Pause' : round.started ? 'Keep growing ↗' : 'Start growing ↗';
+    };
+    const halt = () => { pause(round, performance.now()); active = false; draw(); };
+    const focus = () => { if (round.position === round.text.length) return; active = true; resume(round, performance.now()); boot(); draw(); };
+    const reset = () => {
+      halt(); round = createRound(lessons[select.selectedIndex].text); input.value = ''; input.disabled = false;
+      prompt.replaceChildren(...[...round.text].map(c => { const span = document.createElement('span'); span.textContent = c; return span; }));
+      prompt.setAttribute('aria-label', `Type this: ${round.text}`);
+      el('[data-tip]').textContent = lessons[select.selectedIndex].hint;
+      message.textContent = 'Follow the glowing letter. No rush, no lives to lose.';
+      root.classList.remove('tb-finished'); draw();
+    };
+    const hit = (character: string, touch = false) => {
+      if (round.position === round.text.length) return;
+      if (!active) focus();
+      const correct = enter(round, character, performance.now(), touch);
+      tone(round.position, correct);
+      if (correct) {
+        message.textContent = round.streak === 10 ? 'Ten in a row. You found a little rhythm.' : round.streak === 20 ? 'Twenty notes, one lovely flow.' : 'That’s it. Keep it comfortable.';
+        if (motion) { const spark = document.createElement('span'); spark.className = 'tb-spark'; spark.textContent = character === ' ' ? '♪' : character; spark.style.left = `${10 + Math.random()*75}%`; el('[data-sparks]').append(spark); spark.addEventListener('animationend', () => spark.remove(), {once:true}); if (el('[data-sparks]').children.length > 20) el('[data-sparks]').firstElementChild?.remove(); }
+      } else message.textContent = `Try ${round.text[round.position] === ' ' ? 'Space' : `“${round.text[round.position]}”`} again. Your garden is still here.`;
+      if (round.position === round.text.length) {
+        active = false; save(); root.classList.add('tb-finished');
+        const stats = metrics(round, performance.now());
+        message.textContent = `Garden complete! ${stats.accuracy}% accuracy. Best run: ${round.bestStreak} letters. Take a breath, then try another.`;
+        tone(0, true, true); input.disabled = true; next.hidden = false; next.focus();
+      }
+      draw();
+    };
+    input.addEventListener('focus', focus, {signal});
+    input.addEventListener('blur', halt, {signal});
+    input.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { input.blur(); message.textContent = 'Paused. Your garden will wait.'; }
+      if (e.repeat || e.key === 'Enter') e.preventDefault();
+    }, {signal});
+    input.addEventListener('paste', e => { e.preventDefault(); message.textContent = 'Try typing the letters one at a time.'; }, {signal});
+    input.addEventListener('drop', e => e.preventDefault(), {signal});
+    input.addEventListener('input', e => {
+      if ((e as InputEvent).isComposing) return;
+      const chars = [...input.value]; input.value = '';
+      if (chars.length === 1) hit(chars[0]);
+      else if (chars.length) message.textContent = 'One letter at a time. Turn off predictive text if needed.';
+    }, {signal});
+    start.addEventListener('pointerdown', e => e.preventDefault(), {signal});
+    start.addEventListener('click', () => { if (active) { input.blur(); halt(); message.textContent = 'Paused. Your garden will wait.'; } else input.focus(); }, {signal});
+    el('[data-restart]').addEventListener('click', () => { reset(); input.focus(); }, {signal});
+    next.addEventListener('click', () => { select.selectedIndex = (select.selectedIndex + 1) % lessons.length; reset(); input.focus(); }, {signal});
+    select.addEventListener('change', reset, {signal});
+    el('[data-sound]').addEventListener('click', () => { sound = !sound; preferences(); if (sound) boot(); }, {signal});
+    el('[data-motion]').addEventListener('click', () => { motion = !motion; preferences(); el('[data-sparks]').replaceChildren(); }, {signal});
+    motionQuery.addEventListener('change', () => { motion = !motionQuery.matches; preferences(); }, {signal});
+    root.querySelectorAll<HTMLButtonElement>('[data-key]').forEach(key => {
+      key.addEventListener('pointerdown', e => e.preventDefault(), {signal});
+      key.addEventListener('click', () => { boot(); const expected = round.text[round.position]; const character = baseKey(expected) === key.dataset.key ? expected : key.dataset.key!; hit(character, true); }, {signal});
+    });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { input.blur(); halt(); if (audio) void audio.suspend().catch(() => {}); } }, {signal});
+    window.addEventListener('blur', () => { input.blur(); halt(); }, {signal});
+    const observer = new IntersectionObserver(([entry]) => { if (!entry.isIntersecting) { input.blur(); halt(); } }); observer.observe(root);
+    const tick = window.setInterval(() => { if (active) draw(); }, 1000);
+    document.addEventListener('astro:before-swap', () => { controller.abort(); observer.disconnect(); clearInterval(tick); if (audio) void audio.close().catch(() => {}); }, {once: true, signal});
+    preferences(); reset();
+  });
+}
+mount();
+document.addEventListener('astro:page-load', mount);
+</script>
+<style>
+.tb{grid-column:1 / -1;min-width:0;--ink:#e9eddb;--dim:#b0c2b2;--gold:#f4d884;--pink:#f9a789;color:var(--ink);background:#142c25;border-top:2px solid #111;padding:clamp(18px,3vw,38px);font-family:var(--pc-font-sans,system-ui,sans-serif);text-align:left;color-scheme:dark;overflow:hidden}
+.tb *{box-sizing:border-box}.tb [hidden]{display:none!important}.tb-head{display:flex;align-items:center;justify-content:space-between;gap:20px}.tb-kicker{font:600 10px/1.5 var(--pc-font-mono,monospace);letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin:0 0 8px}.tb h2{font-size:clamp(35px,4vw,60px);font-weight:450;letter-spacing:-.06em;line-height:1;margin:0}.tb h2 em{font-family:Georgia,serif;font-weight:400;color:var(--pink)}.tb-intro{color:var(--dim);margin:10px 0 0;font-size:14px}.tb-settings{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tb button,.tb select{font-family:inherit;font-size:12px;line-height:1.3;border:1px solid #648273;border-radius:5px;background:#203d32;color:var(--ink);padding:9px 12px;cursor:pointer}.tb button:hover{background:#335544}.tb a{color:var(--ink);font-size:12px;text-underline-offset:4px}.tb :is(button,select,textarea,a):focus-visible{outline:3px solid var(--gold);outline-offset:4px}.tb-layout{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.2fr);gap:35px;margin-top:26px}.tb-garden{position:relative;min-height:260px;background:radial-gradient(ellipse at 55% 40%,#29493a,transparent 65%);border:1px solid #48634f;border-radius:100px 100px 10px 10px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}.tb-garden svg{width:100%;height:auto;overflow:visible}.tb-garden p{font-size:12px;text-align:center;color:var(--dim);margin:0;padding:12px;background:#233f36}.tb-sun{position:absolute;top:14px;left:calc(50% - 25px);font-size:60px;color:var(--gold);animation:tb-turn 60s linear infinite}.tb-orbit{position:absolute;top:20%;left:20%;font-size:55px;color:var(--pink)}.tb-flower{opacity:.2}.tb-petals{transform:scale(.22);transition:transform .7s cubic-bezier(.2,.9,.3,1.3)}.tb-flower.tb-grown{opacity:1}.tb-grown .tb-petals{transform:scale(1)}.tb-grown .tb-stem{stroke:#b0cb89}.tb-finished .tb-sun{color:var(--pink)}.tb-lesson{display:flex;gap:12px;justify-content:space-between;align-items:center;font-size:11px;color:var(--dim)}.tb-lesson label{display:flex;align-items:center;gap:8px}.tb select{max-width:190px}.tb-tip{font-size:12px;color:var(--dim);line-height:1.5;margin:14px 0}.tb-prompt{font:400 clamp(20px,2.5vw,29px)/1.8 var(--pc-font-mono,monospace);letter-spacing:.025em;white-space:pre-wrap;overflow-wrap:anywhere;min-height:105px}.tb-prompt :global(.tb-done){color:#a9cf9c}.tb-prompt :global(.tb-current){background:var(--gold);color:#142c25;outline:2px solid var(--gold);border-radius:2px;box-shadow:0 3px var(--pink)}.tb-track{height:3px;background:#48634f;margin:13px 0 8px}.tb-track div{height:100%;background:var(--gold);transition:width .2s}.tb-coach{display:flex;justify-content:space-between;gap:10px;font:11px/1.5 var(--pc-font-mono,monospace);color:var(--gold);min-height:20px}.tb-input-label{display:block;font-size:10px;color:var(--dim);margin-top:12px}.tb textarea{resize:none;display:block;width:100%;height:40px;margin-top:4px;border:1px solid #648273;border-radius:5px;background:#0e211b;color:var(--ink);padding:10px;font:16px/1.3 system-ui}.tb textarea::placeholder{color:#a0b4a5}.tb-actions{display:flex;gap:8px;margin-top:12px}.tb button.tb-primary{background:var(--gold);color:#172e24;border-color:var(--gold);font-weight:700}.tb-message{font-size:12px;color:var(--ink);min-height:34px;line-height:1.5;margin:12px 0}.tb-stats{display:flex;gap:16px;flex-wrap:wrap;color:var(--dim);font-size:10px}.tb-stats strong{font-size:18px;font-weight:500;color:var(--ink)}.tb-keyboard{max-width:880px;margin:26px auto 18px;display:grid;gap:5px}.tb-row{display:flex;gap:5px;padding-left:var(--offset)}.tb button.tb-key{height:37px;flex:1;min-width:0;padding:4px;border-color:#577463;box-shadow:0 2px #091b13;font:12px var(--pc-font-mono,monospace);position:relative}.tb button.tb-target{background:var(--gold);color:#142c25;border-color:var(--gold);box-shadow:0 0 18px #f4d88430}.tb-home:after{content:'';position:absolute;width:10px;height:2px;background:currentColor;bottom:5px;left:calc(50% - 5px)}.tb-last{justify-content:center;align-items:center;color:var(--dim);font-size:11px}.tb button.tb-space{flex:0 1 45%}.tb-last span{flex:0 0 22%;text-align:center}.tb-needs-shift .tb-last span{color:var(--gold);text-decoration:underline}.tb-footer{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;border-top:1px solid #48634f;padding-top:14px;font-size:10px;color:var(--dim)}.tb-footer a{font-size:10px}.tb-sparks{position:absolute;inset:0;pointer-events:none}.tb-sparks :global(.tb-spark){position:absolute;bottom:25%;font:24px Georgia,serif;color:var(--gold);animation:tb-float 1.3s ease-out forwards}.tb-still *,.tb-still :global(.tb-spark){animation:none!important;transition:none!important}@keyframes tb-turn{to{transform:rotate(360deg)}}@keyframes tb-float{from{opacity:1;transform:translateY(0) rotate(-10deg)}to{opacity:0;transform:translateY(-120px) rotate(15deg)}}
+@media(max-width:760px){.tb-layout{grid-template-columns:1fr;gap:18px}.tb-garden{min-height:130px;height:160px;border-radius:70px 70px 8px 8px}.tb-garden svg{height:145px;width:100%}.tb-garden p{position:absolute;bottom:0;width:100%;padding:6px;font-size:10px}.tb-sun{font-size:40px;left:calc(50% - 18px);top:0}.tb-head{align-items:flex-start;flex-direction:column;gap:14px}.tb-prompt{min-height:80px;font-size:22px}.tb-lesson{flex-wrap:wrap}.tb-stats{gap:12px}.tb button.tb-key{height:36px;font-size:10px}.tb-row{gap:3px}.tb-keyboard{gap:5px;margin-top:18px}.tb-settings button{font-size:12px}.tb-footer{line-height:1.6}}
+@media(prefers-reduced-motion:reduce){.tb *,.tb :global(.tb-spark){animation:none!important;transition:none!important}}
+</style>
