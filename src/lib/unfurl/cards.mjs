@@ -508,3 +508,76 @@ export function quartetCard({ seat = null, light, client = '', serial = 0, game 
     extra: rush ? 'NO LOGIN · 45 SECONDS A GAME' : 'NO LOGIN · NO TIMER',
   });
 }
+
+/* ------------------------------------------------------ keyboard garden */
+
+/** A challenge score from a ?beat= query: digits only, or 0. */
+export function gardenBeat(v) {
+  return /^\d{1,6}$/.test(String(v ?? '')) ? Number(v) : 0;
+}
+
+/** Challenge copy for /keyboard-garden: a number, never free text from the URL. */
+export function gardenWords(beat) {
+  const n = gardenBeat(beat);
+  if (!n) return null;
+  return {
+    title: `Can you beat ${n}? · Keyboard Garden`,
+    description: `Someone picked ${n} points in Keyboard Garden. Flowers sprout on your keys: pick them in full bloom before they wilt. Three wilts and the garden closes.`,
+  };
+}
+
+/**
+ * The /keyboard-garden card: a drawn keyboard with flowers sprouting on a few
+ * keys (bud, bloom, a golden sunflower). With `beat` it's a challenge card.
+ */
+export function gardenCard({ beat = 0, light, client = '', serial = 0 }) {
+  const n = gardenBeat(beat);
+  const rows = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL;', 'ZXCVBNM,./'];
+  const bx = 588;
+  const by = CY + 40;
+  const bw = 540;
+  const bh = 300;
+  const u = 40;
+  const gap = 6;
+  const offs = [0, 0.5, 0.75, 1.25];
+  // A fixed little garden: [row, col, kind, colour]
+  const growing = { '0,6': ['bud', '#6FD3C1'], '1,2': ['bloom', '#FF8F70'], '1,7': ['bloom', '#B69CFF'], '2,4': ['gold', '#FFD166'], '2,8': ['bloom', '#6FC9E6'], '3,1': ['bud', '#E6C98A'], '3,6': ['bloom', '#F2A7C3'], '0,2': ['fade', '#8FDC7A'] };
+  const flower = (cx, cy, kind, color) => {
+    const s = kind === 'bud' ? 0.6 : kind === 'fade' ? 1.05 : 1.3;
+    const petalColor = kind === 'fade' ? '#7B7F6A' : color;
+    const petals = [0, 60, 120, 180, 240, 300].map((a) => {
+      const r = (a * Math.PI) / 180;
+      return `<circle cx="${(Math.cos(r) * 7.5).toFixed(1)}" cy="${(-18 + Math.sin(r) * 7.5).toFixed(1)}" r="5.6" fill="${petalColor}" />`;
+    }).join('');
+    return `<g transform="translate(${cx} ${cy}) scale(${s})${kind === 'fade' ? ' rotate(12)' : ''}"><path d="M0 0 Q 2 -9 0 -18" stroke="#4D8A6C" stroke-width="2.6" fill="none" />${petals}<circle cx="0" cy="-18" r="${kind === 'gold' ? 5.5 : 4}" fill="${kind === 'gold' ? '#8A5A12' : '#FFF4D6'}" /></g>`;
+  };
+  const keyRects = rows.map((caps, r) => caps.split('').map((cap, c) => {
+    const x = bx + 16 + (offs[r] + c) * (u + gap);
+    const y = by + 34 + r * (u + gap + 12);
+    const g = growing[`${r},${c}`];
+    const bg = g?.[0] === 'gold' ? '#4A4020' : g?.[0] === 'bloom' ? '#243A33' : '#16241F';
+    const edge = g?.[0] === 'gold' ? '#FFD166' : g?.[0] === 'bloom' ? g[1] : '#2C4139';
+    return `<rect x="${x}" y="${y}" width="${u}" height="${u + 6}" rx="8" fill="${bg}" stroke="${edge}" stroke-width="${g ? 2 : 1.2}" />
+      ${g ? flower(x + u / 2, y + u + 2, g[0], g[1]) : ''}
+      <text x="${x + 5}" y="${y + u + 2}" font-family="${MONO}" font-size="11" font-weight="700" fill="${g ? '#DFE9E3' : '#5F7A70'}">${esc(cap)}</text>`;
+  }).join('')).join('');
+  const board = `<rect x="${bx + 8}" y="${by + 8}" width="${bw}" height="${bh}" rx="16" fill="${CHANNEL_COLORS.SPN.c600}" />
+    <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="16" fill="#0B1412" stroke="${INK}" stroke-width="3" />
+    ${keyRects}`;
+  const left = n
+    ? `${textLines(['Can you', `beat ${formatInt(n)}?`], { x: CX + 28, y: CY + 134, size: 72, lead: 1.02, weight: 800, spacing: -2 })}
+      ${textLines(['Flowers sprout on your keys.', 'Pick them in full bloom,', 'before they wilt.'], { x: CX + 32, y: CY + 262, size: 25, lead: 1.35, fill: BODY })}`
+    : `${textLines(['Keyboard', 'Garden.'], { x: CX + 28, y: CY + 134, size: 72, lead: 1.02, weight: 800, spacing: -2 })}
+      ${textLines(['Flowers sprout on your keys.', 'Pick them in full bloom,', 'before they wilt.'], { x: CX + 32, y: CY + 262, size: 25, lead: 1.35, fill: BODY })}`;
+  return framedCard({
+    light,
+    code: 'SPN',
+    label: n ? `Can you beat ${n} in Keyboard Garden?` : 'Keyboard Garden on PointCast',
+    kicker: n ? 'CH.SPN · A CHALLENGE' : 'CH.SPN · KEYBOARD GARDEN · SOLO',
+    body: `${left}${board}`,
+    quip: n ? 'Three hearts. One run. Your move.' : 'A good streak sounds like a melody.',
+    client,
+    serial,
+    extra: 'NO LOGIN · SAME SPROUTS FOR EVERYONE TODAY',
+  });
+}
