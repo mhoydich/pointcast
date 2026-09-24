@@ -1,0 +1,435 @@
+---
+/**
+ * The Still Hour — a short sitting for Thursday, September 24, 2026.
+ *
+ * One component, two sizes. `variant="panel"` is the front-door version
+ * (two columns, paper card, sits under the signal deck). `variant="room"`
+ * is the full page at /still-hour: same sit, more air, time-of-day wash.
+ *
+ * What a sit is: pick 2, 5 or 10 minutes. One bell to begin. A ring that
+ * breathes 4 in, 2 hold, 6 out, 2 rest. A quiet line every half minute,
+ * the same lines for everyone today. One bell to finish. Only a finished
+ * sit is counted; leaving early leaves no trace.
+ *
+ * Audio is inline WebAudio (a struck-bell synth + a low ocean bed), no
+ * samples, and nothing plays until Begin is pressed. Presence and the
+ * day's totals come from /api/still-hour and degrade to counting only you.
+ */
+interface Props {
+  variant?: 'panel' | 'room';
+}
+const { variant = 'panel' } = Astro.props;
+const isRoom = variant === 'room';
+
+// Thursday, September 24, 2026 · El Segundo. Equinox was Tue Sep 22, 05:05 PDT.
+// Sun times are the NOAA numbers for 33.92N 118.42W; the weather line updates live.
+const DAY = { iso: '2026-09-24', label: 'Thursday, September 24', sunrise: '6:43 AM', sunset: '6:47 PM' };
+
+// The same lines for everyone today, in this order, one every half minute.
+const CUES = [
+  'Let the shoulders drop. They have been holding the week.',
+  'Breathe out a little longer than you breathe in.',
+  'Feel the weight of your hands, wherever they are.',
+  'Autumn came in on Tuesday morning. Nobody on Main Street noticed.',
+  'Nothing to fix for the next little while.',
+  'Notice the sounds in the room. Let them stay.',
+  'The sun set at 6:47 tonight, two minutes earlier than Monday.',
+  'If a thought shows up, let it walk past like someone on the sidewalk.',
+  'Jaw soft. Tongue off the roof of the mouth.',
+  'Somewhere west of here the marine layer is deciding whether to come in.',
+  'Other people are sitting on this page right now. You do not have to see them.',
+  'Twelve hours of light today, twelve of dark. About even.',
+  'The coffee pot is still on. It can wait.',
+  'You are most of the way there. Nothing to do with that.',
+  'Let the breath go back to whatever it wants to be.',
+  'One more minute. Then the bell.',
+  'Stay for the bell. Let it ring all the way out.',
+  'The sit is nearly done. The quiet can come with you.',
+  'Nothing to hold. Nothing to carry back.',
+  'Whatever comes next can start a little slower.',
+];
+const LENGTHS = [2, 5, 10];
+---
+
+<section
+  class:list={['still', isRoom ? 'still--room' : 'still--panel']}
+  id="still-hour"
+  aria-labelledby="still-title"
+  data-still
+  data-variant={variant}
+  data-tod="midday"
+>
+  <div class="still__copy">
+    <p class="still__eyebrow">
+      <span>Thursday sitting · CH.GDN</span>
+      <time datetime={DAY.iso}>{DAY.label}</time>
+    </p>
+    <h2 id="still-title">{isRoom ? 'The Still Hour.' : 'Sit for a few minutes.'}</h2>
+    <p class="still__dek">
+      The first Thursday of autumn. Sun up {DAY.sunrise}, down {DAY.sunset}, just over twelve hours of light.
+      Everyone on this page today gets the same sit: one bell to begin, a slow breath, a few quiet lines,
+      one bell to finish. No login, no streak, no score.
+    </p>
+    <p class="still__weather" data-still-weather>El Segundo right now: checking the window.</p>
+
+    <dl class="still__ledger" aria-label="Today at the sitting">
+      <div><dt>sitting now</dt><dd data-still-now>—</dd></div>
+      <div><dt>sits today</dt><dd data-still-sits>—</dd></div>
+      <div><dt>minutes today</dt><dd data-still-minutes>—</dd></div>
+    </dl>
+
+    <div class="still__links">
+      {isRoom ? (
+        <>
+          <a href="/">home <span aria-hidden="true">→</span></a>
+          <a href="/sit">the ambient room <span aria-hidden="true">→</span></a>
+          <a href="/meditate">ocean meditation <span aria-hidden="true">→</span></a>
+        </>
+      ) : (
+        <>
+          <a class="still__open" href="/still-hour">Open the full room <span aria-hidden="true">→</span></a>
+          <a href="/b/0614">Field notes <span aria-hidden="true">→</span></a>
+        </>
+      )}
+    </div>
+  </div>
+
+  <div class="still__sit">
+    <div class="still__ring" aria-hidden="true">
+      <svg viewBox="0 0 200 200">
+        <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" stroke-opacity=".18" />
+        <circle cx="100" cy="100" r="66" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-dasharray="2 6" />
+        <circle class="still__ring-core" data-still-core cx="100" cy="100" r="46" fill="var(--still-accent)" stroke="currentColor" stroke-width="1.5" />
+        <circle class="still__ring-dot" data-still-dot cx="100" cy="8" r="4" fill="currentColor" />
+      </svg>
+      <p class="still__phase" data-still-phase>ready</p>
+      <p class="still__clock" data-still-clock>—:——</p>
+    </div>
+
+    <p class="still__cue" data-still-cue role="status" aria-live="polite">Pick a length. Press Begin when you are ready.</p>
+
+    <div class="still__controls">
+      <div class="still__lengths" role="group" aria-label="Length">
+        {LENGTHS.map((m) => (
+          <button type="button" data-still-len={m} aria-pressed={m === 5 ? 'true' : 'false'}>{m} min</button>
+        ))}
+      </div>
+      <button type="button" class="still__begin" data-still-begin>Begin</button>
+      <button type="button" class="still__sound" data-still-sound aria-pressed="true">sound on</button>
+    </div>
+    <p class="still__status" data-still-status>Only a finished sit is counted. Leaving early leaves no trace.</p>
+  </div>
+</section>
+
+<script define:vars={{ CUES }}>
+  (() => {
+    const root = document.querySelector('[data-still]');
+    if (!root || root.dataset.stillReady) return;
+    root.dataset.stillReady = '1';
+
+    const $ = (sel) => root.querySelector(sel);
+    const core = $('[data-still-core]');
+    const dot = $('[data-still-dot]');
+    const phaseEl = $('[data-still-phase]');
+    const clockEl = $('[data-still-clock]');
+    const cueEl = $('[data-still-cue]');
+    const statusEl = $('[data-still-status]');
+    const beginBtn = $('[data-still-begin]');
+    const soundBtn = $('[data-still-sound]');
+    const lenBtns = Array.from(root.querySelectorAll('[data-still-len]'));
+    const nowEl = $('[data-still-now]');
+    const sitsEl = $('[data-still-sits]');
+    const minEl = $('[data-still-minutes]');
+    const weatherEl = $('[data-still-weather]');
+
+    // ── time of day wash (same buckets as /sit and the presence bar) ──
+    function tod() {
+      const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(new Date()));
+      if (h < 6) return 'small-hours';
+      if (h < 10) return 'morning';
+      if (h < 15) return 'midday';
+      if (h < 18) return 'golden';
+      if (h < 21) return 'blue-hour';
+      return 'evening';
+    }
+    root.dataset.tod = tod();
+    setInterval(() => { root.dataset.tod = tod(); }, 5 * 60000);
+
+    // ── window: live weather line, degrades to the day's sunset ──
+    fetch('/api/weather?lat=33.92&lng=-118.42&label=el-segundo', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => {
+        if (!w || !w.ok) return;
+        const sunset = typeof w.sunset === 'string' && w.sunset.includes('T')
+          ? new Date(w.sunset).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          : '6:47 PM';
+        const cond = w.condition ? String(w.condition).replace(/[-_]/g, ' ') : 'quiet';
+        weatherEl.textContent = `El Segundo right now: ${w.tempF}° and ${cond}. Sunset ${sunset}.`;
+      })
+      .catch(() => { weatherEl.textContent = 'El Segundo right now: the window is fogged. Sunset 6:47 PM.'; });
+
+    // ── ledger: /api/still-hour, degrades to counting only you ──
+    let sessionId = '';
+    try {
+      sessionId = localStorage.getItem('pc:still:sid') || '';
+      if (!sessionId) { sessionId = Math.random().toString(36).slice(2, 12) + Date.now().toString(36); localStorage.setItem('pc:still:sid', sessionId); }
+    } catch { sessionId = Math.random().toString(36).slice(2, 12); }
+    let remote = null;
+    let localSits = 0, localMinutes = 0;
+    function paint(snap) {
+      const sitting = snap ? snap.sitting_now + (running && !snap.ok ? 1 : 0) : running ? 1 : 0;
+      nowEl.textContent = String(Math.max(sitting, running ? 1 : 0));
+      sitsEl.textContent = String(snap && snap.ok ? snap.sits : localSits);
+      minEl.textContent = String(snap && snap.ok ? snap.minutes : localMinutes);
+    }
+    async function api(payload) {
+      try {
+        const r = await fetch('/api/still-hour', payload ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, ...payload }) } : { cache: 'no-store' });
+        const snap = await r.json();
+        if (snap && typeof snap.sits === 'number') { remote = snap; paint(remote); }
+        return snap;
+      } catch { paint(remote); return null; }
+    }
+    api();
+
+    // ── sound: struck bell + low ocean bed, inline, nothing until Begin ──
+    let ctx = null, bed = null, soundOn = true;
+    function audio() {
+      if (ctx) return ctx;
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      ctx = new Ctx();
+      return ctx;
+    }
+    function bell(when, base) {
+      if (!ctx || !soundOn) return;
+      const partials = [1, 2.0, 2.74, 3.76, 5.4];
+      const levels = [1, 0.5, 0.32, 0.18, 0.09];
+      const master = ctx.createGain();
+      master.gain.value = 0.22;
+      master.connect(ctx.destination);
+      partials.forEach((p, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = base * p;
+        osc.detune.value = (i - 2) * 3;
+        g.gain.setValueAtTime(0.0001, when);
+        g.gain.linearRampToValueAtTime(levels[i], when + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, when + 7 - i * 0.9);
+        osc.connect(g); g.connect(master);
+        osc.start(when); osc.stop(when + 7.2);
+      });
+    }
+    function startBed() {
+      if (!ctx || !soundOn || bed) return;
+      const len = ctx.sampleRate * 4;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i += 1) { last = last * 0.992 + (Math.random() * 2 - 1) * 0.02; d[i] = last * 3; }
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.4;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = 0.07; lfoG.gain.value = 0.035;
+      lfo.connect(lfoG); lfoG.connect(g.gain);
+      src.connect(lp); lp.connect(g); g.connect(ctx.destination);
+      src.start(); lfo.start();
+      g.gain.setTargetAtTime(0.065, ctx.currentTime, 4);
+      bed = { src, g, lfo };
+    }
+    function stopBed() {
+      if (!bed || !ctx) return;
+      const b = bed; bed = null;
+      b.g.gain.setTargetAtTime(0, ctx.currentTime, 1.5);
+      setTimeout(() => { try { b.src.stop(); b.lfo.stop(); } catch {} }, 6000);
+    }
+
+    // ── the breath: 4 in · 2 hold · 6 out · 2 rest ──
+    const PHASES = [
+      { name: 'breathe in', secs: 4, scale: 1.42 },
+      { name: 'hold', secs: 2, scale: 1.42 },
+      { name: 'breathe out', secs: 6, scale: 1 },
+      { name: 'rest', secs: 2, scale: 1 },
+    ];
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let running = false, minutes = 5, startAt = 0, endAt = 0, tick = 0, phaseTimer = 0, phaseIdx = 0, cueIdx = -1, heartbeat = 0;
+
+    function setPhase(i) {
+      const p = PHASES[i % PHASES.length];
+      phaseEl.textContent = p.name;
+      core.style.transition = reduce ? 'none' : `transform ${p.secs}s cubic-bezier(.45,0,.35,1)`;
+      core.style.transform = `scale(${p.scale})`;
+      phaseTimer = setTimeout(() => { if (running) setPhase(i + 1); }, p.secs * 1000);
+    }
+    function fmt(ms) {
+      const s = Math.max(0, Math.ceil(ms / 1000));
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+    function frame() {
+      if (!running) return;
+      const now = Date.now();
+      const left = endAt - now;
+      clockEl.textContent = fmt(left);
+      const total = endAt - startAt;
+      const angle = ((now - startAt) / total) * 360;
+      dot.setAttribute('transform', `rotate(${angle} 100 100)`);
+      const elapsed = now - startAt;
+      // One line every 30s, starting 10s in. The last lines are saved for the last minute.
+      let idx = Math.floor((elapsed - 10000) / 30000);
+      if (elapsed < 10000) idx = -1;
+      if (left <= 60000) idx = Math.max(idx, CUES.length - 5 + Math.floor((60000 - left) / 12000));
+      idx = Math.min(idx, CUES.length - 1);
+      if (idx !== cueIdx && idx >= 0) { cueIdx = idx; cueEl.textContent = CUES[idx]; }
+      if (left <= 0) { finish(); return; }
+      tick = requestAnimationFrame(frame);
+    }
+    function begin() {
+      const a = audio();
+      if (a && a.state === 'suspended') a.resume().catch(() => {});
+      running = true;
+      startAt = Date.now();
+      endAt = startAt + minutes * 60000;
+      cueIdx = -1;
+      root.classList.add('is-sitting');
+      beginBtn.textContent = 'End early';
+      lenBtns.forEach((b) => { b.disabled = true; });
+      cueEl.textContent = 'Settle in. The bell means start.';
+      statusEl.textContent = `${minutes} minutes. The bell will ring again when it is done.`;
+      if (a) { bell(a.currentTime + 0.05, 432); startBed(); }
+      setPhase(0);
+      frame();
+      paint(remote);
+      api({ action: 'join' });
+      heartbeat = setInterval(() => api({ action: 'join' }), 120000);
+    }
+    function teardown() {
+      running = false;
+      cancelAnimationFrame(tick);
+      clearTimeout(phaseTimer);
+      clearInterval(heartbeat);
+      root.classList.remove('is-sitting');
+      beginBtn.textContent = 'Begin';
+      lenBtns.forEach((b) => { b.disabled = false; });
+      core.style.transition = reduce ? 'none' : 'transform 3s ease';
+      core.style.transform = 'scale(1)';
+      dot.setAttribute('transform', 'rotate(0 100 100)');
+      phaseEl.textContent = 'ready';
+      stopBed();
+    }
+    async function finish() {
+      teardown();
+      clockEl.textContent = '0:00';
+      if (ctx) bell(ctx.currentTime + 0.05, 432);
+      cueEl.textContent = 'That is the sit. Let the bell ring all the way out.';
+      localSits += 1; localMinutes += minutes;
+      const snap = await api({ action: 'done', minutes });
+      if (snap && snap.ok) statusEl.textContent = `Counted. ${snap.sits} ${snap.sits === 1 ? 'sit' : 'sits'} and ${snap.minutes} ${snap.minutes === 1 ? 'minute' : 'minutes'} on this page today.`;
+      else statusEl.textContent = 'Counted here, on your side of the glass.';
+      paint(snap && snap.ok ? snap : null);
+    }
+    function endEarly() {
+      teardown();
+      clockEl.textContent = '—:——';
+      cueEl.textContent = 'Stood up early. That is fine. Nothing was counted, nothing was lost.';
+      statusEl.textContent = 'Only a finished sit is counted. Leaving early leaves no trace.';
+      api({ action: 'leave' });
+    }
+
+    lenBtns.forEach((b) => b.addEventListener('click', () => {
+      minutes = Number(b.dataset.stillLen) || 5;
+      lenBtns.forEach((o) => o.setAttribute('aria-pressed', o === b ? 'true' : 'false'));
+      clockEl.textContent = `${minutes}:00`;
+    }));
+    clockEl.textContent = '5:00';
+    beginBtn.addEventListener('click', () => (running ? endEarly() : begin()));
+    soundBtn.addEventListener('click', () => {
+      soundOn = !soundOn;
+      soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+      soundBtn.textContent = soundOn ? 'sound on' : 'sound off';
+      if (!soundOn) stopBed(); else if (running) startBed();
+    });
+    // A hidden tab keeps sitting (the timer is wall-clock), but the bed pauses politely.
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stopBed(); else if (running) startBed(); });
+    window.addEventListener('pagehide', () => { if (running) { try { navigator.sendBeacon && navigator.sendBeacon('/api/still-hour', new Blob([JSON.stringify({ sessionId, action: 'leave' })], { type: 'application/json' })); } catch {} } });
+    document.addEventListener('astro:before-swap', () => { if (running) endEarly(); if (ctx) ctx.close().catch(() => {}); }, { once: true });
+  })();
+</script>
+
+<style>
+  .still {
+    --still-paper: #eef0e8;
+    --still-paper-2: #e2e6da;
+    --still-ink: #14201b;
+    --still-accent: #0f6e56;
+    --still-mute: #4f5f57;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    border: 2px solid var(--still-ink);
+    background: var(--still-paper);
+    color: var(--still-ink);
+    box-shadow: 7px 7px 0 var(--still-accent);
+    transition: background 2s, box-shadow 2s;
+  }
+  .still--panel { margin: 22px 7px 26px 0; }
+  .still--room { margin: 0 auto; max-width: 1180px; }
+
+  .still[data-tod='small-hours'] { --still-paper: #dfe4e6; --still-paper-2: #d1d8db; --still-accent: #2f4f5d; }
+  .still[data-tod='morning'] { --still-paper: #f1efe4; --still-paper-2: #e6e2d3; --still-accent: #d98b4b; }
+  .still[data-tod='golden'] { --still-paper: #f3ecdc; --still-paper-2: #eadfcb; --still-accent: #c46a2f; }
+  .still[data-tod='blue-hour'] { --still-paper: #e4e7ec; --still-paper-2: #d6dae3; --still-accent: #3b5b8f; }
+  .still[data-tod='evening'] { --still-paper: #e1e2e6; --still-paper-2: #d3d4da; --still-accent: #2a3a5c; }
+
+  .still__copy { padding: clamp(22px, 3.5vw, 42px); border-right: 2px solid var(--still-ink); display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+  .still__eyebrow, .still__ledger, .still__phase, .still__clock, .still__lengths button, .still__sound, .still__status, .still__weather { font-family: var(--pc-font-mono); }
+  .still__eyebrow { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin: 0; font-size: 10px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--still-accent); }
+  .still h2 { margin: 0; font: 650 clamp(38px, 5vw, 72px)/.92 var(--pc-font-sans); letter-spacing: -.06em; }
+  .still--room h2 { font-size: clamp(44px, 7vw, 96px); }
+  .still__dek { margin: 0; max-width: 46ch; font-size: 15px; line-height: 1.6; }
+  .still__weather { margin: 0; font-size: 11px; color: var(--still-mute); }
+  .still__ledger { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 6px 0 0; padding: 0; }
+  .still__ledger div { border: 1px solid var(--still-ink); background: var(--still-paper-2); padding: 10px 12px; }
+  .still__ledger dt { margin: 0; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--still-mute); }
+  .still__ledger dd { margin: 4px 0 0; font: 650 26px/1 var(--pc-font-sans); letter-spacing: -.04em; }
+  .still__links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin-top: 4px; }
+  .still__links a { display: inline-flex; min-height: 44px; align-items: center; gap: 10px; color: var(--still-ink); font-size: 13px; font-weight: 700; text-underline-offset: 4px; }
+  .still__links .still__open { padding: 10px 16px; border: 2px solid var(--still-ink); background: var(--still-accent); color: #fff; text-decoration: none; }
+  .still__links .still__open:hover { background: var(--still-ink); }
+
+  .still__sit { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: clamp(18px, 2.6vw, 34px); background: var(--still-paper-2); text-align: center; transition: background 2s; }
+  .still__ring { position: relative; width: min(100%, 260px); aspect-ratio: 1; color: var(--still-ink); }
+  .still--room .still__ring { width: min(100%, 360px); }
+  .still__ring svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .still__ring-core { transform-origin: 100px 100px; transform: scale(1); }
+  .still__ring-dot { transform-origin: 100px 100px; opacity: 0; transition: opacity 1s; }
+  .still.is-sitting .still__ring-dot { opacity: 1; }
+  .still__phase, .still__clock { position: absolute; left: 0; right: 0; margin: 0; pointer-events: none; }
+  .still__phase { top: 50%; transform: translateY(-120%); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--still-paper); mix-blend-mode: difference; }
+  .still__clock { top: 50%; transform: translateY(10%); font-size: 22px; font-weight: 700; letter-spacing: .02em; color: var(--still-paper); mix-blend-mode: difference; }
+  .still__cue { margin: 0; min-height: 3.2em; max-width: 36ch; font: 400 clamp(16px, 1.6vw, 20px)/1.5 var(--pc-font-sans); letter-spacing: -.01em; }
+  .still--room .still__cue { max-width: 40ch; font-size: clamp(18px, 2vw, 24px); }
+  .still__controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; }
+  .still__lengths { display: inline-flex; border: 2px solid var(--still-ink); }
+  .still__lengths button { min-height: 44px; padding: 8px 12px; border: 0; border-right: 2px solid var(--still-ink); background: var(--still-paper); color: var(--still-ink); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+  .still__lengths button:last-child { border-right: 0; }
+  .still__lengths button[aria-pressed='true'] { background: var(--still-ink); color: var(--still-paper); }
+  .still__lengths button:disabled { opacity: .45; cursor: default; }
+  .still__begin { min-height: 44px; padding: 10px 22px; border: 2px solid var(--still-ink); background: var(--still-ink); color: var(--still-paper); font: 700 14px/1 var(--pc-font-sans); cursor: pointer; }
+  .still.is-sitting .still__begin { background: var(--still-paper); color: var(--still-ink); }
+  .still__sound { min-height: 44px; padding: 8px 12px; border: 2px solid var(--still-ink); background: var(--still-paper); color: var(--still-ink); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+  .still__sound[aria-pressed='false'] { opacity: .6; }
+  .still__status { margin: 0; font-size: 11px; line-height: 1.5; color: var(--still-mute); max-width: 40ch; }
+  .still a:focus-visible, .still button:focus-visible { outline: 3px solid #185fa5; outline-offset: 3px; }
+
+  @media (max-width: 760px) {
+    .still { grid-template-columns: 1fr; box-shadow: 5px 5px 0 var(--still-accent); }
+    .still--panel { margin-right: 5px; }
+    .still__copy { border-right: 0; border-bottom: 2px solid var(--still-ink); }
+    .still__ledger dd { font-size: 22px; }
+  }
+</style>
