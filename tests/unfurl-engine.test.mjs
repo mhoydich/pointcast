@@ -234,3 +234,20 @@ test('bloom rush shares the quartet card and invite words', async () => {
   assert.equal(unfurlWords({ pathname: '/keyboard-rush', search: '' }), null);
   for (const seat of [null, 1]) renders(quartetCard({ seat, game: 'rush', light: lightAt(now), client: 'x', serial: 5 }));
 });
+
+test('keyboard garden challenge links carry a number, never words', async () => {
+  const { gardenCardUrl } = await import('../src/lib/unfurl/urls.mjs');
+  const { unfurlWords } = await import('../src/lib/unfurl/plan.mjs');
+  const { gardenBeat, gardenCard } = await import('../src/lib/unfurl/cards.mjs');
+  const { lightAt } = await import('../src/lib/unfurl/light.mjs');
+  const now = new Date('2026-09-23T17:41:00Z');
+  assert.equal(gardenBeat('84'), 84);
+  assert.equal(gardenBeat('84<b>'), 0);
+  assert.equal(gardenBeat('1234567'), 0);
+  assert.equal(gardenCardUrl(0), 'https://pointcast.xyz/og/garden.png');
+  const plan = planUnfurl({ pathname: '/keyboard-garden', search: '?beat=84', currentImage: 'https://pointcast.xyz/og/garden.png', now });
+  assert.match(plan.image, /^https:\/\/pointcast\.xyz\/og\/garden\.png\?beat=84&b=/);
+  assert.equal(unfurlWords({ pathname: '/keyboard-garden', search: '?beat=hello' }), null);
+  assert.match(unfurlWords({ pathname: '/keyboard-garden', search: '?beat=84' }).title, /^Can you beat 84\?/);
+  for (const beat of [0, 1234]) renders(gardenCard({ beat, light: lightAt(now), client: 'x', serial: 2 }));
+});
