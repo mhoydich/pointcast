@@ -12,6 +12,14 @@ const MAX_MESSAGES_PER_SECOND = 8;
 const MAX_NDC_MESSAGES_PER_SECOND = 24;
 const MAX_ROOM_MESSAGES_PER_SECOND = 300;
 const RECENT_HIT_LIMIT = 24;
+// Brick Choir party rooms (`bc-<code>`): the living-room TV is the only speaker
+// and the only authority; phones are controllers. The DO is a plain relay for
+// small opaque frames — nothing is persisted, and a frame goes to every peer
+// but its sender. A tap on a phone is one frame, so the per-socket rate is
+// higher than a drum room's; the room-wide burst guard still applies.
+const PARTY_PREFIX = "bc-";
+const PARTY_FEATURE = "bc-party";
+const MAX_PARTY_MESSAGES_PER_SECOND = 60;
 const LEGACY_PADS = new Set(["kick", "snare", "hat", "tom", "clap", "bell"]);
 const NDC_PADS = new Set([
   "kick", "snare", "clap", "hat-closed", "hat-open", "tom-low", "tom-high", "rim", "shaker", "tambourine",
@@ -57,7 +65,13 @@ interface ReactionInput {
   emoji: Reaction;
 }
 
-type ClientMessage = HitInput | ReactionInput | { v: 1; type: "ping" } | { v: 1; type: "sync" };
+interface PartyInput {
+  v: 1;
+  type: "party";
+  d: Record<string, unknown>;
+}
+
+type ClientMessage = HitInput | ReactionInput | PartyInput | { v: 1; type: "ping" } | { v: 1; type: "sync" };
 
 interface PublicPerson {
   id: string;
@@ -95,8 +109,19 @@ function isNdcRoom(room: string): boolean {
   return room.startsWith("ndc-");
 }
 
+export function isPartyRoom(room: string): boolean {
+  return room.startsWith(PARTY_PREFIX);
+}
+
 function peerMessageLimit(room: string): number {
+  if (isPartyRoom(room)) return MAX_PARTY_MESSAGES_PER_SECOND;
   return isNdcRoom(room) ? MAX_NDC_MESSAGES_PER_SECOND : MAX_MESSAGES_PER_SECOND;
+}
+
+function roomFeatures(room: string): string[] {
+  if (isNdcRoom(room)) return [NDC_FEATURE];
+  if (isPartyRoom(room)) return [PARTY_FEATURE];
+  return [];
 }
 
 function isReaction(value: unknown): value is Reaction {
@@ -134,6 +159,11 @@ export function decodeClientMessage(message: string | ArrayBuffer): ClientMessag
 
   if (raw.type === "reaction" && isReaction(raw.emoji)) {
     return { v: 1, type: "reaction", emoji: raw.emoji };
+  }
+
+  // An opaque party frame: the 512-byte ceiling above is the only size rule.
+  if (raw.type === "party") {
+    return isRecord(raw.d) ? { v: 1, type: "party", d: raw.d } : null;
   }
 
   if (raw.type !== "hit" || !isPad(raw.pad)) return null;
@@ -263,7 +293,7 @@ export class DrumRoomV2 extends DurableObject<Env> {
       // A client must see this before it claims an NDC room is playable.
       // This lets a Pages deploy and a Worker deploy roll independently
       // without turning a rejected hit into a misleading local success.
-      features: isNdcRoom(room) ? [NDC_FEATURE] : [],
+      features: roomFeatures(room),
       you: identity,
       connected: active.length + 1,
       target: TARGET_CONNECTIONS,
@@ -291,6 +321,10 @@ export class DrumRoomV2 extends DurableObject<Env> {
       return;
     }
     const room = this.roomFromSocket(socket);
+    if (message.type === "party" && !isPartyRoom(room)) {
+      this.send(socket, { v: 1, type: "error", code: "invalid-message" });
+      return;
+    }
     if (message.type === "hit" && !isNdcRoom(room) && !isLegacyPad(message.pad)) {
       this.send(socket, { v: 1, type: "error", code: "invalid-pad" });
       return;
@@ -328,6 +362,11 @@ export class DrumRoomV2 extends DurableObject<Env> {
     }
     if (message.type === "sync") {
       this.send(socket, this.presencePayload(this.roomFromSocket(socket)));
+      return;
+    }
+    if (message.type === "party") {
+      // Relay only: the sender already knows what it sent, and nothing is stored.
+      this.broadcast({ v: 1, type: "party", from: attachment.clientId, serverAt: now, d: message.d }, socket);
       return;
     }
     if (message.type === "reaction") {

@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { decodeClientMessage, normalizeRoom } from "../src/index";
+import { decodeClientMessage, isPartyRoom, normalizeRoom } from "../src/index";
 
 interface ServerMessage {
   type?: string;
@@ -11,6 +11,9 @@ interface ServerMessage {
   totalHits?: number;
   hibernation?: boolean;
   features?: string[];
+  from?: string;
+  d?: Record<string, unknown>;
+  code?: string;
 }
 
 class SocketInbox {
@@ -120,6 +123,42 @@ describe("drum room protocol", () => {
 
     first.socket.close(1000, "done");
     second.socket.close(1000, "done");
+  });
+
+  it("relays opaque party frames inside a bc- room, to peers only, without persisting", async () => {
+    expect(isPartyRoom("bc-kxtq")).toBe(true);
+    expect(isPartyRoom("lobby")).toBe(false);
+    expect(decodeClientMessage(JSON.stringify({ v: 1, type: "party", d: { f: "i", k: 3 } }))).toEqual({ v: 1, type: "party", d: { f: "i", k: 3 } });
+    expect(decodeClientMessage(JSON.stringify({ v: 1, type: "party", d: "nope" }))).toBeNull();
+
+    const tv = await connect("bc-kxtq", "tv");
+    const phone = await connect("bc-kxtq", "phone");
+    const tvWelcome = await tv.waitFor((message) => message.type === "welcome");
+    expect(tvWelcome.features).toContain("bc-party");
+    const phoneWelcome = await phone.waitFor((message) => message.type === "welcome");
+    await tv.waitFor((message) => message.type === "presence" && message.connected === 2);
+
+    phone.socket.send(JSON.stringify({ v: 1, type: "party", d: { f: "i", p: "ab12", k: 7 } }));
+    const relayed = await tv.waitFor((message) => message.type === "party");
+    expect(relayed.from).toBe(phoneWelcome.you?.clientId);
+    expect(relayed.d).toEqual({ f: "i", p: "ab12", k: 7 });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(phone.has((message) => message.type === "party")).toBe(false);
+
+    const statsResponse = await env.DRUM_ROOM.getByName("bc-kxtq").fetch("https://pointcast.test/stats?room=bc-kxtq&stats=1");
+    const stats = await statsResponse.json<ServerMessage>();
+    expect(stats.totalHits).toBe(0);
+
+    tv.socket.close(1000, "done");
+    phone.socket.close(1000, "done");
+  });
+
+  it("refuses a party frame outside a bc- room", async () => {
+    const first = await connect("party-elsewhere", "first");
+    await first.waitFor((message) => message.type === "welcome");
+    first.socket.send(JSON.stringify({ v: 1, type: "party", d: { f: "i" } }));
+    await expect(first.waitFor((message) => message.type === "error")).resolves.toMatchObject({ code: "invalid-message" });
+    first.socket.close(1000, "done");
   });
 
   it("rejects a Drum Club-only pad from a legacy room", async () => {
