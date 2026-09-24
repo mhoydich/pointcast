@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { STARTERS, DAYS } from '../src/lib/friend-frame.ts';
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('friend frame hangs in the signal deck after the keyboard strip and before the footer', async () => {
@@ -10,25 +11,35 @@ test('friend frame hangs in the signal deck after the keyboard strip and before 
   assert.ok(strip > -1 && frame > strip && frame < deck.indexOf('signal-deck__foot">'));
   const component = await read('src/components/HomeFriendFrame.astro');
   assert.match(component, /href="\/friend-frame\/"/);
-  assert.match(component, /timeZone: 'America\/Los_Angeles'/);
+  assert.match(component, /\/api\/friend-frame\/frame\?id=town/, 'the module reads the live town frame');
+  assert.match(component, /from '\.\.\/lib\/friend-frame'/, 'stand-ins come from the shared rules');
 });
 
-test('friend frame page and homepage share the same seven starters', async () => {
-  const data = JSON.parse(await read('src/data/friend-frame.json'));
+test('the wall carries the same seven house stand-ins as the shared rules', async () => {
   const page = await read('public/friend-frame/index.html');
-  assert.equal(data.length, 7);
-  for (const frame of data) {
-    assert.match(page, new RegExp(`friend:'${frame.friend}'`));
-    assert.ok(page.includes(JSON.stringify(frame.poem).slice(1, -1)), `${frame.friend}'s poem drifted`);
+  assert.equal(STARTERS.length, 7);
+  for (const s of STARTERS) {
+    assert.ok(page.includes(`friend: "${s.friend}"`), `${s.friend} missing from the page`);
+    assert.ok(page.includes(JSON.stringify(s.poem)), `${s.friend}'s poem drifted`);
   }
-  assert.match(page, /Changes live only while this page is open/);
+  for (const d of DAYS) assert.ok(page.includes(`'${d}'`));
 });
 
-test('block 0617 announces friend frame in the garden', async () => {
-  const block = JSON.parse(await read('src/content/blocks/0617.json'));
-  assert.equal(block.channel, 'GDN');
-  assert.equal(block.title, 'Friend Frame · a frame your friends program');
-  assert.ok(block.companions.some((c) => c.id === 'https://pointcast.xyz/friend-frame/'));
-  assert.ok(block.dek.length <= 200);
-  for (const c of block.companions) assert.ok(c.id.length <= 80 && c.label.length <= 80);
+test('seat and owner keys travel in the URL fragment, never the query string', async () => {
+  const page = await read('public/friend-frame/index.html');
+  assert.match(page, /#k=\$\{key\}/);
+  assert.match(page, /#o=\$\{OWNER_KEY\}/);
+  assert.doesNotMatch(page, /[?&](k|o|key|ownerKey)=\$\{/);
+  assert.match(page, /noindex/);
 });
+
+for (const id of ['0617', '0620']) {
+  test(`block ${id} announces friend frame in the garden`, async () => {
+    const block = JSON.parse(await read(`src/content/blocks/${id}.json`));
+    assert.equal(block.channel, 'GDN');
+    assert.ok(block.companions.some((c) => c.id === 'https://pointcast.xyz/friend-frame/'));
+    assert.ok(block.dek.length <= 200);
+    assert.ok(block.companions.length <= 12);
+    for (const c of block.companions) assert.ok(c.id.length <= 80 && c.label.length <= 80);
+  });
+}
