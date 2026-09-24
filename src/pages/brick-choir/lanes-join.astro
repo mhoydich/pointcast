@@ -1,0 +1,404 @@
+---
+// /brick-choir/lanes-join — the phone ball for Lanes (the TV is /brick-choir/lanes). Scan the card on the TV or type its
+// room code, pick a three-letter name, grab a lane, then ARM the ball: iOS needs DeviceMotionEvent.requestPermission()
+// from a tap, so the arming screen is one big button. After that the phone is the ball: hold it like one, swing back and
+// through. The release is the peak of the forward swing (the detector watches |linear acceleration| climb past A_ON and
+// fires the moment it turns over), the peak's height is the speed, the lean of the phone read TILT_LAG before the swing
+// began is the aim (during the swing the accelerometer is all swing, no gravity), and the wrist's twist integrated over
+// the swing (rotationRate about the phone's long axis) is the hook. While you line up, the lean streams to the TV as
+// an aim preview (the dots on the lane). No motion sensors, or permission denied, or a laptop: TAP MODE — drag the ball
+// left or right to aim, hold it to charge (the meter swings), slide sideways while holding for the hook, let go to bowl.
+// No audio here — the TV is the speaker; haptics on the release and the strike (navigator.vibrate), an edge flash where
+// there is none (iOS). Transport: the shared party client. Built 2026-09-24 by Claude (Fable).
+---
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Lanes: your phone is the ball · PointCast</title>
+<meta name="description" content="The phone ball for Lanes on the TV. Scan the TV, arm your ball, swing.">
+<meta property="og:title" content="Lanes: your phone is the ball">
+<meta property="og:description" content="Scan the TV, arm your ball, swing. Every pin is a note.">
+<meta property="og:url" content="https://pointcast.xyz/brick-choir/lanes-join">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://pointcast.xyz/brick-choir/og4.jpg">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b0a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="canonical" href="https://pointcast.xyz/brick-choir/lanes-join">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Geist+Mono:wght@500;600;700&display=swap">
+<style is:inline>
+  :root{ --ink:#f4f0ff; --bg:#0b0a1a; --gold:#ffd27a; --pink:#ff8fb1; --mint:#9fe3c9; --sky:#8fd0ff; --violet:#b9a8ff; --c:#ffd27a;
+    --display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif; --mono:"Geist Mono",ui-monospace,monospace; color-scheme:dark; }
+  [hidden]{display:none!important;}
+  html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;overscroll-behavior:none;}
+  body{font-family:var(--display);color:var(--ink);-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;touch-action:manipulation;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(14px + env(safe-area-inset-bottom,0px));box-sizing:border-box;}
+  .screen{flex:1;display:flex;flex-direction:column;gap:12px;min-height:0;animation:pop .3s cubic-bezier(.2,.9,.3,1.2);}
+  @keyframes pop{from{opacity:0;transform:scale(.97) translateY(6px);}}
+  .logo{display:flex;justify-content:center;font:800 clamp(30px,10vw,44px)/1 var(--display);letter-spacing:-.02em;margin-top:8px;}
+  .logo span{background:linear-gradient(180deg,oklch(90% .1 var(--h)),oklch(72% .17 calc(var(--h) + 60)));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .sub{text-align:center;font:800 12px var(--mono);letter-spacing:.3em;color:var(--gold);text-indent:.3em;}
+  .lead{margin:6px 0 0;text-align:center;font:500 15px/1.4 var(--display);color:rgba(244,240,255,.75);} .lead b{color:var(--ink);font-weight:700;}
+  .lbl{font:700 12px var(--mono);letter-spacing:.2em;color:var(--mint);margin-top:8px;} .lbl small{display:block;font:500 11px var(--mono);letter-spacing:.06em;color:rgba(244,240,255,.5);margin-top:3px;text-transform:none;}
+  .fine{margin:0;text-align:center;font:500 12px/1.4 var(--display);color:rgba(244,240,255,.5);}
+  .top{display:flex;justify-content:space-between;align-items:center;} .top a{font:600 12px var(--mono);letter-spacing:.1em;color:var(--sky);text-decoration:none;}
+  .chip{font:700 13px var(--mono);letter-spacing:.16em;color:#140f28;background:var(--gold);border-radius:999px;padding:7px 12px;} .chip.ghost{background:rgba(255,255,255,.1);color:var(--ink);}
+  .boxes{display:flex;justify-content:center;gap:10px;}
+  .boxes b{width:64px;height:78px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font:800 44px var(--mono);color:var(--gold);position:relative;}
+  .boxes b.cur{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 18px rgba(255,210,122,.35);} .boxes b.cur:empty::after{content:"";width:26px;height:4px;background:var(--gold);position:absolute;bottom:12px;animation:blink .7s steps(2,end) infinite;}
+  @keyframes blink{50%{opacity:.2;}}
+  .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;flex:1;min-height:0;align-content:start;}
+  .grid button{aspect-ratio:1.15;min-height:44px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);font:700 22px var(--mono);color:var(--ink);transition:transform .08s,background .08s;}
+  .grid button:active,.grid button.on{background:var(--gold);color:#140f28;transform:scale(.94);}
+  .grid button.bk{font-size:18px;color:var(--pink);}
+  .big{display:block;width:100%;padding:16px 18px;border-radius:999px;background:var(--gold);color:#140f28;font:800 15px var(--mono);letter-spacing:.14em;box-shadow:0 8px 30px rgba(255,210,122,.3);transition:transform .1s,opacity .2s;}
+  .big:active{transform:scale(.98);} .big[disabled]{opacity:.35;box-shadow:none;} .big.ghost{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid rgba(255,255,255,.16);box-shadow:none;}
+  /* the roster: who is bowling tonight */
+  .roster{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start;overflow:auto;}
+  .roster div{--c:#fff;padding:10px 12px;border-radius:14px;background:color-mix(in oklab,var(--c) 12%,transparent);border:1px solid color-mix(in oklab,var(--c) 45%,transparent);display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .roster div b{font:800 18px var(--display);color:var(--c);} .roster div small{font:600 10px var(--mono);letter-spacing:.1em;opacity:.6;} .roster div.open{border-style:dashed;opacity:.5;}
+  /* the ball screen */
+  .pad{gap:10px;}
+  .padhead{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;}
+  .seatbadge{display:flex;flex-direction:column;align-items:center;justify-content:center;width:58px;height:58px;border-radius:16px;background:color-mix(in oklab,var(--c) 22%,transparent);border:1px solid color-mix(in oklab,var(--c) 60%,transparent);}
+  .seatbadge b{font:800 18px/1 var(--display);color:var(--c);} .seatbadge span{font:700 9px var(--mono);letter-spacing:.14em;opacity:.8;margin-top:3px;}
+  .me b{display:block;font:800 24px/1 var(--display);letter-spacing:.02em;} .me small{display:block;font:600 11px var(--mono);letter-spacing:.08em;color:rgba(244,240,255,.55);margin-top:4px;min-height:1.2em;}
+  .net{display:flex;align-items:center;gap:5px;font:600 10px var(--mono);color:rgba(244,240,255,.55);justify-content:flex-end;} .net i{width:8px;height:8px;border-radius:50%;background:#666;box-shadow:0 0 6px #666;}
+  .net.good i{background:var(--mint);box-shadow:0 0 8px var(--mint);} .net.ok i{background:var(--gold);box-shadow:0 0 8px var(--gold);} .net.bad i{background:var(--pink);box-shadow:0 0 8px var(--pink);} .net.off i{animation:blink 1s steps(2,end) infinite;}
+  .scoreline{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);}
+  .scoreline .t{font:800 26px/1 var(--mono);font-variant-numeric:tabular-nums;} .scoreline .t small{display:block;font:700 9px var(--mono);letter-spacing:.18em;margin-top:4px;opacity:.7;} .scoreline .t.b{text-align:right;} .scoreline .t.a span{color:var(--c);}
+  .scoreline .r{text-align:center;font:800 20px/1 var(--mono);color:var(--gold);} .scoreline .r small{display:block;font:700 9px var(--mono);letter-spacing:.2em;color:rgba(244,240,255,.5);margin-top:4px;}
+  .phase{font:700 11px var(--mono);letter-spacing:.2em;color:rgba(244,240,255,.6);text-align:center;}
+  .cue{display:grid;place-items:center;text-align:center;border-radius:16px;padding:10px;background:color-mix(in oklab,var(--c) 14%,transparent);border:1px solid color-mix(in oklab,var(--c) 40%,transparent);opacity:.35;transition:opacity .15s,transform .15s;}
+  .cue span{font:800 22px/1 var(--display);color:var(--c);} .cue small{font:600 11px var(--mono);letter-spacing:.1em;color:rgba(244,240,255,.65);margin-top:4px;}
+  .cue.on{opacity:1;animation:cue .5s ease-in-out infinite alternate;} @keyframes cue{to{transform:scale(1.03);box-shadow:0 0 0 2px var(--c),0 0 30px color-mix(in oklab,var(--c) 60%,transparent);}}
+  /* the ball: a big glossy sphere in your colour that swings with you; under it a strip of lane with the aim dot */
+  .face{flex:1;min-height:0;display:grid;place-items:center;position:relative;}
+  .ballwrap{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;}
+  .ball{width:min(58vw,40vh);aspect-ratio:1;border-radius:50%;position:relative;background:radial-gradient(circle at 32% 28%,color-mix(in oklab,var(--c) 45%,#fff),color-mix(in oklab,var(--c) 75%,#14122a) 55%,color-mix(in oklab,var(--c) 35%,#000));box-shadow:0 24px 50px rgba(0,0,0,.55),inset 0 -14px 34px rgba(0,0,0,.4),0 0 0 6px rgba(255,255,255,.05);transition:transform .1s;}
+  .ball i{position:absolute;width:11%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 40% 35%,#2a2547,#07060f 70%);box-shadow:inset 0 2px 4px rgba(0,0,0,.8);} .ball i:nth-child(1){left:36%;top:26%;} .ball i:nth-child(2){left:53%;top:26%;} .ball i:nth-child(3){left:44.5%;top:42%;}
+  .ball .ring{position:absolute;inset:-9px;border-radius:50%;border:3px solid var(--c);opacity:0;} .ball.swing{animation:swingB .5s cubic-bezier(.2,.9,.3,1.3);} @keyframes swingB{25%{transform:translateY(-22%) scale(1.08);}100%{transform:none;}}
+  .ball.hit .ring{animation:ringOut .5s ease-out;} @keyframes ringOut{from{opacity:1;transform:scale(1);}to{opacity:0;transform:scale(1.5);}}
+  .ball.charge{animation:charge .25s ease-in-out infinite alternate;} @keyframes charge{to{transform:scale(1.04);}}
+  .lanebar{display:grid;grid-template-columns:14px 1fr 14px;height:46px;width:min(78vw,340px);border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.12);}
+  .lanebar .gutter{background:rgba(0,0,0,.4);} .lanebar .boards{position:relative;background:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 6px,rgba(255,255,255,.02) 6px 12px),#1e1a38;}
+  .lanebar .boards::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.2);}
+  .lanebar .dot{position:absolute;top:50%;left:50%;width:22px;height:22px;margin:-11px;border-radius:50%;background:var(--c);box-shadow:0 0 16px var(--c);transition:left .08s;}
+  .lanebar .hookarc{position:absolute;left:50%;top:50%;width:60px;height:2px;margin-top:-1px;transform-origin:left center;background:linear-gradient(90deg,var(--c),transparent);opacity:.7;transition:transform .1s;}
+  .readout{display:flex;justify-content:space-around;font:700 10px var(--mono);letter-spacing:.14em;color:rgba(244,240,255,.5);} .readout b{color:var(--c);font-size:13px;margin-left:4px;}
+  .motionmeter{position:absolute;left:0;right:0;bottom:0;height:4px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;} .motionmeter i{display:block;height:100%;width:0;background:var(--c);transition:width .05s;}
+  /* tap mode: the lane you aim on, the ball you hold */
+  .tap{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;align-items:center;}
+  .lanebar.tall{height:min(24vh,190px);width:min(78vw,320px);} .lanebar.tall .boards{background:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 8px,rgba(255,255,255,.02) 8px 16px),#1e1a38;}
+  .pinsrow{position:absolute;top:8px;left:0;right:0;display:flex;justify-content:center;gap:5px;} .pinsrow i{width:9px;height:9px;border-radius:50%;background:rgba(244,240,255,.75);box-shadow:0 0 6px rgba(244,240,255,.6);}
+  .lanebar .dot.ball{top:auto;bottom:10px;width:30px;height:30px;margin:-15px;left:50%;transition:none;}
+  .lanebar .path{position:absolute;left:50%;bottom:26px;width:2px;height:calc(100% - 54px);background:repeating-linear-gradient(180deg,var(--c) 0 6px,transparent 6px 12px);opacity:.75;transform-origin:bottom center;}
+  .power{width:min(78vw,320px);height:26px;border-radius:13px;background:rgba(255,255,255,.08);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.1);} .power i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--mint),var(--gold) 60%,var(--pink));} .power span{position:absolute;inset:0;display:grid;place-items:center;font:700 9px var(--mono);letter-spacing:.16em;color:rgba(244,240,255,.75);}
+  .tapball{width:min(44vw,180px);aspect-ratio:1;border-radius:50%;position:relative;background:radial-gradient(circle at 32% 28%,color-mix(in oklab,var(--c) 45%,#fff),color-mix(in oklab,var(--c) 75%,#14122a) 55%,color-mix(in oklab,var(--c) 35%,#000));box-shadow:0 18px 40px rgba(0,0,0,.5),inset 0 -12px 30px rgba(0,0,0,.4);display:grid;place-items:center;font:800 16px var(--mono);letter-spacing:.2em;color:rgba(20,15,40,.7);transition:transform .08s;touch-action:none;}
+  .tapball i{position:absolute;width:11%;aspect-ratio:1;border-radius:50%;background:#0b0a1a;} .tapball i:nth-child(1){left:36%;top:22%;} .tapball i:nth-child(2){left:53%;top:22%;} .tapball i:nth-child(3){left:44.5%;top:38%;}
+  .tapball b{margin-top:30%;} .tapball.on{transform:scale(.94);box-shadow:0 0 0 6px var(--c),0 0 40px var(--c),inset 0 -12px 30px rgba(0,0,0,.4);}
+  .padfoot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .act{flex:1;padding:14px;border-radius:999px;background:var(--gold);color:#140f28;font:800 13px var(--mono);letter-spacing:.14em;box-shadow:0 6px 24px rgba(255,210,122,.3);animation:blink 2.4s ease-in-out infinite;}
+  .leave,.mode{font:600 12px var(--mono);letter-spacing:.1em;color:rgba(244,240,255,.45);padding:12px;} .leave{margin-left:auto;}
+  /* arming */
+  .arm{justify-content:center;text-align:center;gap:14px;}
+  .ballart{width:min(56vw,220px);aspect-ratio:1;margin:0 auto;border-radius:50%;position:relative;background:radial-gradient(circle at 32% 28%,color-mix(in oklab,var(--c) 45%,#fff),color-mix(in oklab,var(--c) 75%,#14122a) 55%,color-mix(in oklab,var(--c) 35%,#000));box-shadow:0 20px 50px rgba(0,0,0,.5);animation:swingArt 2.6s ease-in-out infinite;}
+  .ballart i{position:absolute;width:11%;aspect-ratio:1;border-radius:50%;background:#0b0a1a;} .ballart i:nth-child(1){left:36%;top:26%;} .ballart i:nth-child(2){left:53%;top:26%;} .ballart i:nth-child(3){left:44.5%;top:42%;}
+  @keyframes swingArt{0%,100%{transform:translateX(-14%) rotate(-16deg);}50%{transform:translateX(14%) rotate(18deg);}}
+  .arm h2{margin:0;font:800 26px/1.1 var(--display);} .arm p{margin:0;font:500 14px/1.45 var(--display);color:rgba(244,240,255,.75);}
+  .arm .why{font:600 11px/1.5 var(--mono);color:rgba(244,240,255,.45);letter-spacing:.04em;}
+  /* results */
+  .res{justify-content:center;text-align:center;gap:10px;}
+  .rank{font:800 clamp(72px,26vw,120px)/1 var(--display);color:var(--c);text-shadow:0 0 40px color-mix(in oklab,var(--c) 60%,transparent);}
+  .resline{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.05);font:600 13px var(--mono);letter-spacing:.1em;color:rgba(244,240,255,.6);} .resline b{font:700 20px var(--mono);color:var(--ink);letter-spacing:0;}
+  /* feedback: a full-screen flash for the big moments, an edge pulse instead of a buzz where there is no vibrator */
+  #flash{position:fixed;inset:0;pointer-events:none;z-index:20;display:grid;place-items:center;opacity:0;background:radial-gradient(60% 50% at 50% 45%,color-mix(in oklab,var(--f,#fff) 40%,transparent),transparent 70%);}
+  #flash b{font:800 clamp(34px,11vw,52px) var(--display);color:var(--f,#fff);text-shadow:0 4px 30px rgba(0,0,0,.6);letter-spacing:-.01em;transform:rotate(-4deg);}
+  #flash.go{animation:flash .55s ease-out;} @keyframes flash{0%{opacity:1;}100%{opacity:0;}}
+  #flash.big.go{animation:flashBig 1.1s ease-out;} @keyframes flashBig{0%{opacity:1;}60%{opacity:.9;}100%{opacity:0;}}
+  #edge{position:fixed;inset:0;pointer-events:none;z-index:19;box-shadow:inset 0 0 0 0 var(--c);opacity:0;} #edge.go{animation:edge .35s ease-out;} @keyframes edge{0%{opacity:1;box-shadow:inset 0 0 0 14px var(--c),inset 0 0 60px var(--c);}100%{opacity:0;box-shadow:inset 0 0 0 0 var(--c);}}
+  #edge.hold{opacity:1;animation:edgeHold .5s ease-in-out infinite alternate;} @keyframes edgeHold{from{box-shadow:inset 0 0 0 4px var(--c),inset 0 0 30px color-mix(in oklab,var(--c) 40%,transparent);}to{box-shadow:inset 0 0 0 10px var(--c),inset 0 0 60px color-mix(in oklab,var(--c) 60%,transparent);}}
+  @media (max-height:640px){ .boxes b{width:52px;height:62px;font-size:34px;} .grid button{min-height:38px;font-size:18px;} .ball{width:min(48vw,30vh);} }
+  @media (prefers-reduced-motion:reduce){ .cue.on,.act,#edge.hold,.boxes b.cur:empty::after,.net.off i,.ballart,.ball.charge{animation:none;} }
+</style>
+</head>
+<body>
+<div id="edge" aria-hidden="true"></div>
+<div id="flash" aria-hidden="true"><b id="flashTxt"></b></div>
+<main id="app">
+  <section id="sCode" class="screen">
+    <div class="logo"><span style="--h:280">L</span><span style="--h:324">A</span><span style="--h:8">N</span><span style="--h:52">E</span><span style="--h:96">S</span></div>
+    <div class="sub">PHONE BALL</div>
+    <p class="lead">Put <b>pointcast.xyz/brick-choir/lanes</b> on the TV, then type the four letters it shows.</p>
+    <div class="lbl">ROOM CODE</div>
+    <div class="boxes" id="codeBoxes"><b></b><b></b><b></b><b></b></div>
+    <div class="grid" id="codeGrid"></div>
+    <button class="big" id="codeGo" disabled>FIND THE TV ▸</button>
+    <p class="fine">or scan the card on the TV — the QR code brings you here with the code filled in</p>
+  </section>
+
+  <section id="sName" class="screen" hidden>
+    <div class="top"><span class="chip" id="nameRoom">ROOM ····</span><a href="#" id="nameBack">change</a></div>
+    <div class="lbl">YOUR NAME <small>three letters, scoresheet style</small></div>
+    <div class="boxes" id="nameBoxes"><b></b><b></b><b></b></div>
+    <div class="grid six" id="nameGrid"></div>
+    <button class="big" id="nameGo" disabled>GRAB A LANE ▸</button>
+  </section>
+
+  <section id="sLane" class="screen" hidden>
+    <div class="top"><span class="chip" id="laneRoom">ROOM ····</span><span class="chip ghost" id="laneName">···</span></div>
+    <div class="lbl">TONIGHT'S BOWLERS <small id="laneSub">looking for the TV…</small></div>
+    <div class="roster" id="roster"></div>
+    <button class="big" id="laneGo">GRAB A LANE ▸</button>
+    <p class="fine" id="laneNote">up to eight bowlers take turns · bots fill a lane if it's just you</p>
+  </section>
+
+  <section id="sArm" class="screen arm" hidden>
+    <div class="ballart" id="armArt"><i></i><i></i><i></i></div>
+    <h2 id="armTitle">HOLD YOUR PHONE LIKE A BALL</h2>
+    <p>Screen up in your palm, arm by your side. Tap the button — that's your zero. Then swing back and through, like you're bowling: the ball leaves at the top of the swing.</p>
+    <button class="big" id="armGo">TAP TO ARM YOUR BALL</button>
+    <button class="big ghost" id="armTap">USE TAP CONTROLS INSTEAD</button>
+    <p class="why" id="armWhy">iPhones ask permission for motion — that's why this is a button. Keep a good grip!</p>
+  </section>
+
+  <section id="sBall" class="screen pad" hidden>
+    <header class="padhead">
+      <div class="seatbadge"><b id="padSeat">1UP</b><span>LANE</span></div>
+      <div class="me"><b id="padName">ABC</b><small id="padMode">motion ball</small></div>
+      <div class="net" id="padNet"><i></i><span id="padPing">—</span></div>
+    </header>
+    <div class="scoreline"><div class="t a"><span id="slT">0</span><small>YOUR SCORE</small></div><div class="r"><span id="slF">1</span><small>FRAME</small></div><div class="t b"><span id="slL">—</span><small id="slLn">LEADER</small></div></div>
+    <div class="phase" id="padPhase">PARTY MODE</div>
+    <div class="cue" id="cue"><span>you're up</span><small>swing when you're ready</small></div>
+    <div class="face" id="face">
+      <div class="ballwrap">
+        <div class="ball" id="ball"><i></i><i></i><i></i><div class="ring" id="ring"></div></div>
+        <div class="lanebar" id="lanebar"><div class="gutter l"></div><div class="boards"><div class="dot" id="aimdot"></div><div class="hookarc" id="hookarc"></div></div><div class="gutter r"></div></div>
+      </div>
+      <div class="motionmeter"><i id="meter"></i></div>
+    </div>
+    <div class="readout" id="readout"><span>AIM <b id="rAim">·</b></span><span>SPEED <b id="rPow">·</b></span><span>HOOK <b id="rSpin">·</b></span></div>
+    <div class="tap" id="tap" hidden>
+      <div class="lanebar tall" id="tapLane"><div class="gutter l"></div><div class="boards"><div class="pinsrow"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="path" id="tapPath"></div><div class="dot ball" id="tapDot"></div></div><div class="gutter r"></div></div>
+      <div class="power"><i id="tapPow"></i><span>HOLD THE BALL · LET GO TO BOWL</span></div>
+      <button class="tapball" id="tapBall"><i></i><i></i><i></i><b>HOLD</b></button>
+      <p class="fine">drag the ball left or right to aim · hold it to charge · slide sideways while holding to hook</p>
+    </div>
+    <footer class="padfoot">
+      <button class="act" id="padAct" hidden>START LEAGUE NIGHT</button>
+      <button class="mode" id="padRelease" hidden>bowl without swinging</button>
+      <button class="mode" id="padSwitch">re-arm</button>
+      <button class="leave" id="padLeave">leave</button>
+    </footer>
+  </section>
+
+  <section id="sRes" class="screen res" hidden>
+    <div class="lbl" id="resTitle">LEAGUE NIGHT IS OVER</div>
+    <div class="rank" id="resRank">1ST</div>
+    <div class="resline"><span>YOUR SCORE</span><b id="resScore">0</b></div>
+    <div class="resline"><span>STRIKES</span><b id="resStrikes">0</b></div>
+    <div class="resline"><span>THE WINNER</span><b id="resWinner">—</b></div>
+    <button class="big" id="resShare" hidden>SHARE THE NIGHT</button>
+    <button class="big" id="resAgain">PLAY AGAIN ▸</button>
+    <button class="big ghost" id="resParty">BACK TO THE PARTY</button>
+  </section>
+</main>
+<script is:inline>
+/* ================= party transport (shared by /brick-choir/tv and /brick-choir/join) =================
+   A tiny relay client. Frames are small JSON objects (≤120 chars) and carry `o` (origin pid).
+   1. /api/drum/room?room=bc-<code> — the pointcast-drum Durable Object; its welcome lists "bc-party" when the
+      deployed Worker relays opaque party frames (workers/pointcast-drum, migration-free). Immediate fan-out.
+   2. /api/room?url=/brick-choir/party/<code> — the presence Durable Object, sharded per URL; a `chat` message is
+      broadcast at once to the whole room, so it works as a relay today with no Worker deploy (120-char frames).
+   Reconnects with backoff, on visibility and on `online`; the pid stays the same so the TV keeps your seat. */
+function makeParty({code,pid,onFrame,onStatus}){
+  const P={transport:null,ws:null,status:'off',tries:0,closed:false,seen:new Set(),sent:0,recv:0};
+  const room='bc-'+code.toLowerCase(); const proto=location.protocol==='https:'?'wss':'ws';
+  const drumUrl=`${proto}://${location.host}/api/drum/room?room=${room}&sid=${pid}`;
+  const roomUrl=`${proto}://${location.host}/api/room?url=${encodeURIComponent('/brick-choir/party/'+code.toLowerCase())}&sid=bc-${pid}`;
+  const FORCE=(new URLSearchParams(location.search).get('transport')||'').toLowerCase(); // ?transport=room forces the fallback (tests)
+  const setStatus=s=>{ if(P.status!==s){ P.status=s; if(onStatus) onStatus(s,P.transport); } };
+  let timer=null;
+  function open(which){
+    if(P.closed) return; if(which==='drum'&&FORCE==='room') which='room'; setStatus('connecting'); let ws; try{ ws=new WebSocket(which==='drum'?drumUrl:roomUrl); }catch(e){ return fail(which); }
+    // the guard only gives up on a socket that never opened; an open socket whose welcome is late (a TV's main thread is
+    // busy compiling shaders at boot, and queued message events can land after a timer) gets a second, longer wait
+    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState===1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },8000); return; } try{ ws.close(); }catch(e){} },4000);
+    ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; } if(!m||typeof m!=='object') return;
+      if(which==='drum'){
+        if(m.type==='welcome'){ if((m.features||[]).includes('bc-party')){ ok=true; clearTimeout(guard); ready('drum'); } else { clearTimeout(guard); ws.onclose=null; try{ ws.close(); }catch(err){} open('room'); } return; }
+        if(m.type==='party'&&m.d&&typeof m.d==='object'){ P.recv++; onFrame(m.d); } return; }
+      // presence room: every broadcast carries the chat ring; what was there when we arrived is history
+      if(!ok){ ok=true; clearTimeout(guard); (m.chat||[]).forEach(c=>P.seen.add(c.id)); ready('room'); return; }
+      (m.chat||[]).forEach(c=>{ if(P.seen.has(c.id)) return; P.seen.add(c.id); if(P.seen.size>600) P.seen=new Set([...P.seen].slice(-300)); let d; try{ d=JSON.parse(c.msg); }catch(err){ return; } if(d&&typeof d==='object'&&d.o!==pid){ P.recv++; onFrame(d); } });
+    };
+    ws.onclose=()=>{ clearTimeout(guard); if(P.ws!==ws) return; P.ws=null; if(!ok) fail(which); else { setStatus('reconnecting'); retry(); } };
+    ws.onerror=()=>{};
+  }
+  function ready(t){ P.transport=t; P.tries=0; P.seen.clear(); setStatus('on'); }
+  function fail(which){ if(which==='drum'){ open('room'); return; } setStatus('offline'); retry(); }
+  function retry(){ clearTimeout(timer); const wait=Math.min(6000,400*Math.pow(2,P.tries++)); timer=setTimeout(()=>open('drum'),wait); }
+  P.send=d=>{ const ws=P.ws; if(!ws||ws.readyState!==1||P.status!=='on') return false; d.o=pid; try{ if(P.transport==='drum') ws.send(JSON.stringify({v:1,type:'party',d})); else ws.send(JSON.stringify({type:'chat',msg:JSON.stringify(d).slice(0,120)})); }catch(e){ return false; } P.sent++; return true; };
+  P.kick=()=>{ if(P.closed) return; if(!P.ws||P.ws.readyState>1){ clearTimeout(timer); P.tries=0; open('drum'); } };
+  P.close=()=>{ P.closed=true; clearTimeout(timer); try{ if(P.ws) P.ws.close(); }catch(e){} };
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') P.kick(); });
+  addEventListener('online',()=>P.kick()); addEventListener('pageshow',()=>P.kick());
+  open('drum'); return P;
+}
+/* ================= the phone ball ================= */
+const PAL=['#ff8fb1','#ffd27a','#9fe3c9','#8fd0ff','#e9ff7a','#b9a8ff','#ffb38a','#e3a8ff'];
+const ALPHA='ABCDEFGHJKMNPQRSTUVWXYZ', NAMECH='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const $=id=>document.getElementById(id); const TESTMODE=/[?&]bot\b/.test(location.search); const Q=new URLSearchParams(location.search);
+const FLIP_AIM=Q.get('flip')==='1'||Q.get('flip')==='aim'?-1:1, FLIP_SPIN=Q.get('flip')==='1'||Q.get('flip')==='spin'?-1:1; // real-phone tuning: ?flip=aim|spin|1
+const store={get(k,d){try{const v=localStorage.getItem('bcl:'+k);return v===null?d:v;}catch(e){return d;}},set(k,v){try{localStorage.setItem('bcl:'+k,v);}catch(e){}}};
+const sess={get(k,d){try{const v=sessionStorage.getItem('bcl:'+k);return v===null?d:v;}catch(e){return d;}},set(k,v){try{sessionStorage.setItem('bcl:'+k,v);}catch(e){}}};
+const pid=sess.get('pid','')||(()=>{ const a=new Uint8Array(4); crypto.getRandomValues(a); const v=Array.from(a,b=>'abcdefghijklmnopqrstuvwxyz0123456789'[b%36]).join(''); sess.set('pid',v); return v; })();
+let code=(Q.get('room')||sess.get('room','')).toUpperCase().replace(/[^A-Z]/g,'').slice(0,4), name=(store.get('name','')).toUpperCase().slice(0,3), wanted=sess.get('joined','0')==='1';
+let seat=-1, col='#ffd27a', net=null, roster=null, rosterAt=0, phase='', turn=false, rtt=null, st={fr:0,rl:0,tn:-1,n:0,t:[],nf:10}, wake=null, armed=false, tapMode=false;
+const show=id=>{ document.querySelectorAll('.screen').forEach(s=>s.hidden=s.id!==id); };
+const buzz=p=>{ let did=false; try{ if(navigator.vibrate) did=navigator.vibrate(p); }catch(e){} if(!did) edge(); };
+function edge(){ const e=$('edge'); e.classList.remove('go'); void e.offsetWidth; e.classList.add('go'); }
+function flash(txt,c,big){ const f=$('flash'); f.style.setProperty('--f',c||'#fff'); $('flashTxt').textContent=txt; f.classList.remove('go','big'); void f.offsetWidth; if(big) f.classList.add('big'); f.classList.add('go'); }
+function theme(){ document.documentElement.style.setProperty('--c',col); }
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---- code + name entry ---- */
+function drawBoxes(el,val,n){ const cur=Math.min(val.length,n-1); [...el.children].forEach((b,i)=>{ b.textContent=val[i]||''; b.classList.toggle('cur',i===cur); }); }
+function grid(el,chars,on){ el.innerHTML=''; chars.split('').forEach(ch=>{ const b=document.createElement('button'); b.textContent=ch; b.type='button'; b.onpointerdown=e=>{ e.preventDefault(); on(ch); b.classList.add('on'); setTimeout(()=>b.classList.remove('on'),120); }; el.appendChild(b); }); const bk=document.createElement('button'); bk.textContent='⌫'; bk.className='bk'; bk.type='button'; bk.onpointerdown=e=>{ e.preventDefault(); on(null); }; el.appendChild(bk); }
+function codeUI(){ drawBoxes($('codeBoxes'),code,4); $('codeGo').disabled=code.length!==4; }
+grid($('codeGrid'),ALPHA,ch=>{ code=ch===null?code.slice(0,-1):(code+ch).slice(0,4); codeUI(); buzz(8); });
+$('codeGo').onclick=()=>{ if(code.length!==4) return; sess.set('room',code); $('nameRoom').textContent='ROOM '+code; nameUI(); show('sName'); };
+function nameUI(){ drawBoxes($('nameBoxes'),name,3); $('nameGo').disabled=name.length<1; }
+grid($('nameGrid'),NAMECH,ch=>{ name=ch===null?name.slice(0,-1):(name+ch).slice(0,3); nameUI(); buzz(8); });
+$('nameBack').onclick=e=>{ e.preventDefault(); show('sCode'); };
+$('nameGo').onclick=()=>{ if(!name) return; store.set('name',name); $('laneRoom').textContent='ROOM '+code; $('laneName').textContent=name; show('sLane'); connect(); laneUI(); };
+
+/* ---- the roster: who's bowling tonight ---- */
+function laneUI(){ const g=$('roster'); const have=!!roster; $('laneSub').textContent=!net||net.status!=='on'?'connecting…':(have?`the TV sees you · ${roster.s.length} of 8 lanes taken`:'looking for the TV…');
+  const rows=have?roster.s.map((n,i)=>`<div style="--c:${PAL[i%8]}"><b>${n}</b><small>${roster.k[i]===1?'PHONE':roster.k[i]===2?'KEYS':'BOT'}</small></div>`):[]; if(!have||roster.s.length<8) rows.push(`<div class="open"><b>${have?roster.s.length+1:1}UP</b><small>OPEN</small></div>`); g.innerHTML=rows.join('');
+  $('laneGo').disabled=have&&roster.s.length>=8&&!roster.k.some(k=>k===0); }
+function join(){ wanted=true; sess.set('joined','1'); buzz(12); if(net&&net.status==='on'){ net.send({f:'j',p:pid,n:name}); $('laneSub').textContent='asking the TV…'; } else $('laneSub').textContent='still connecting…'; }
+$('laneGo').onclick=join;
+
+/* ---- motion: the release detector ----
+   Samples arrive at ~60 Hz. Gravity is a low-pass of accelerationIncludingGravity; the linear part is `acceleration`
+   when the browser gives it, else the raw minus gravity. The swing: |linear| climbs past A_ON → we are in the forward
+   swing; we ride the peak; the moment |linear| has fallen to 62% of that peak (or SWING_MAX ms have passed) is the
+   release. Speed comes from the peak, aim from the lean read TILT_LAG before the swing began, the hook from the wrist's
+   twist (rotationRate about the long axis) integrated over the swing. A bigger peak inside BETTER_MS after a release
+   re-sends the swing: the TV takes the better one while the ball is still at the foul line. */
+const A_ON=9, A_MAX=30, RELEASE_FRAC=0.62, SWING_MAX=700, REFRACT=650, TILT_LAG=180, BETTER_MS=280, TWIST_DEAD=12, TWIST_FULL=120;
+const M={ok:false,g:[0,0,0],ref:null,sgn:1,tilt:[],phase:'idle',peak:0,peakT:0,onsetT:0,twist:0,lastRelease:0,lastPeak:0,n:0,lastAt:0,hz:0,src:'',aim:0,spin:0,pow:0};
+function onMotion(e){
+  const ag=e.accelerationIncludingGravity; if(!ag||ag.x===null) return; const t=performance.now(); const dt=M.lastAt?Math.min(0.05,(t-M.lastAt)/1000):0.016; M.n++; if(M.lastAt) M.hz=M.hz*0.9+0.1*(1000/Math.max(1,t-M.lastAt)); M.lastAt=t; M.ok=true;
+  let lx,ly,lz; if(e.acceleration&&e.acceleration.x!==null){ lx=e.acceleration.x; ly=e.acceleration.y; lz=e.acceleration.z; M.src='lin'; } else { lx=ag.x-M.g[0]; ly=ag.y-M.g[1]; lz=ag.z-M.g[2]; M.src='raw'; }
+  // gravity: a low-pass that holds still while the phone is being swung (otherwise the swing itself leans the estimate)
+  const still=Math.hypot(lx,ly,lz)<3; const k=still?0.14:0.01; M.g[0]+=(ag.x-M.g[0])*k; M.g[1]+=(ag.y-M.g[1])*k; M.g[2]+=(ag.z-M.g[2])*k;
+  const a=Math.hypot(lx,ly,lz); const rr=e.rotationRate; const twistRate=rr&&rr.gamma!==null?rr.gamma:0; // gamma: about the phone's long axis
+  const gl=Math.hypot(M.g[0],M.g[1],M.g[2])||1; const gx=M.g[0]/gl, gy=M.g[1]/gl, gz=M.g[2]/gl; if(!M.ref) M.ref=[gx,gy,gz];
+  const aim=clamp(-(gx-M.ref[0])*M.sgn*2.4*FLIP_AIM,-1,1); // lean right → the right edge drops → the spec's x goes negative
+  M.tilt.push([t,aim]); while(M.tilt.length>40) M.tilt.shift(); M.aim=aim;
+  meter(Math.max(a/A_MAX,M.phase==='swing'?M.peak/A_MAX:0));
+  if(M.phase==='idle'){ if(a>=A_ON&&t-M.lastRelease>REFRACT){ M.phase='swing'; M.onsetT=t; M.peak=a; M.peakT=t; M.twist=0; } else if(t-M.lastRelease>REFRACT) previewAim(aim); return; }
+  // in the swing
+  M.twist+=twistRate*dt; if(a>M.peak){ M.peak=a; M.peakT=t; }
+  const over=(a<=M.peak*RELEASE_FRAC&&t-M.peakT>=25)||(t-M.onsetT>SWING_MAX);
+  if(over){ M.phase='idle'; M.lastRelease=t; let past=null; for(const s of M.tilt){ if(s[0]<=M.onsetT-TILT_LAG) past=s; else break; } past=past||M.tilt[0];
+    const p=clamp((M.peak-A_ON)/(A_MAX-A_ON),0,1); const power=0.28+0.72*p; const tw=M.twist*FLIP_SPIN; const spin=Math.abs(tw)<TWIST_DEAD?0:clamp((tw-Math.sign(tw)*TWIST_DEAD)/TWIST_FULL,-1,1);
+    M.pow=power; M.spin=spin; M.lastPeak=M.peak; sendBowl(power,past?past[1]:aim,spin,{peak:Math.round(M.peak),twist:Math.round(M.twist),ms:Math.round(t-M.onsetT)}); }
+}
+function onOrient(e){ if(M.ok||e.gamma===null) return; const aim=clamp(e.gamma/35,-1,1); M.tilt.push([performance.now(),aim]); while(M.tilt.length>40) M.tilt.shift(); M.aim=aim; previewAim(aim); }
+function meter(v){ $('meter').style.width=Math.min(100,v*100)+'%'; }
+let prevT=0, prevSendT=0, prevAim=99;
+function previewAim(aim){ const t=performance.now(); if(t-prevT<45) return; prevT=t; dot(aim,M.spin); if(!turn||!net) return; if(t-prevSendT<160||Math.abs(aim-prevAim)<0.04) return; prevSendT=t; prevAim=aim; net.send({f:'ai',p:pid,a:Math.round(aim*100)/100,s:Math.round(M.spin*100)/100}); }
+function dot(aim,spin){ $('aimdot').style.left=(50+aim*44)+'%'; $('hookarc').style.transform=`rotate(${-90+spin*-40}deg)`; $('hookarc').style.left=(50+aim*44)+'%'; $('rAim').textContent=aim>0.15?'RIGHT':aim<-0.15?'LEFT':'STRAIGHT'; $('rSpin').textContent=Math.abs(spin)<0.1?'NONE':(spin>0?'◜ ':'◝ ')+Math.round(Math.abs(spin)*100)+'%'; }
+function calibrate(){ const gl=Math.hypot(M.g[0],M.g[1],M.g[2])||1; M.ref=[M.g[0]/gl,M.g[1]/gl,M.g[2]/gl]; /* the spec says +g on the axis pointing up; a platform that inverts the axes inverts them all, so the sign of the dominant axis tells us which */ const dom=[Math.abs(M.ref[0]),Math.abs(M.ref[1]),Math.abs(M.ref[2])]; const i=dom.indexOf(Math.max(...dom)); M.sgn=i===0?1:(M.ref[i]>=0?1:-1); }
+async function arm(){ let ok=false;
+  try{ if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){ const r=await DeviceMotionEvent.requestPermission(); ok=r==='granted'; if(ok&&typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){ try{ await DeviceOrientationEvent.requestPermission(); }catch(e){} } }
+    else ok=typeof DeviceMotionEvent!=='undefined'; }catch(e){ ok=false; }
+  if(!ok){ $('armWhy').textContent='no motion permission — tap controls it is'; useTap(); return; }
+  M.ok=false; M.n=0; addEventListener('devicemotion',onMotion); addEventListener('deviceorientation',onOrient);
+  $('armGo').textContent='LISTENING…'; $('armGo').disabled=true;
+  await new Promise(r=>setTimeout(r,TESTMODE?150:700));
+  if(!M.ok){ $('armWhy').textContent='no motion sensors here — tap controls it is'; $('armGo').textContent='TAP TO ARM YOUR BALL'; $('armGo').disabled=false; useTap(); return; }
+  calibrate(); armed=true; tapMode=false; if(net) net.send({f:'arm',p:pid,m:1}); $('armGo').textContent='TAP TO ARM YOUR BALL'; $('armGo').disabled=false;
+  show('sBall'); padUI(); flash('ARMED',col,true); buzz([40,30,80]); wakeLock();
+}
+function useTap(){ tapMode=true; armed=false; if(net) net.send({f:'arm',p:pid,m:0}); show('sBall'); padUI(); flash('TAP MODE',col); buzz(20); wakeLock(); }
+$('armGo').onclick=arm; $('armTap').onclick=useTap;
+
+/* ---- the ball screen ---- */
+let lastSend=0, lastBowl=null;
+function sendBowl(power,aim,spin,dbg){ const t=Date.now(); const better=lastBowl&&t-lastBowl.t<BETTER_MS&&power>lastBowl.w*1.25; if(t-lastSend<REFRACT&&!better) return; lastSend=t; power=Math.round(power*100)/100; aim=Math.round(aim*100)/100; spin=Math.round(spin*100)/100;
+  const b=$('ball'); b.classList.remove('swing'); void b.offsetWidth; b.classList.add('swing'); buzz(better?10:[18,20,30]); $('rPow').textContent=Math.round(power*100)+'%'; dot(aim,spin);
+  lastBowl={t,w:power}; if(net) net.send({f:'bw',p:pid,w:power,a:aim,s:spin,t:t%100000}); if(TESTMODE) window.__lj.bowls.push({power,aim,spin,better:!!better,...dbg}); }
+function padUI(){ theme(); $('padSeat').textContent=seat>=0?`${seat+1}UP`:'—'; $('padName').textContent=name; $('padMode').textContent=tapMode?'tap ball · drag · hold · let go':(M.src==='lin'?'motion ball · swing to bowl':'motion ball · raw');
+  $('face').hidden=tapMode; $('readout').hidden=tapMode; $('tap').hidden=!tapMode; $('padSwitch').textContent=tapMode?'try motion':'re-arm'; $('padRelease').hidden=tapMode; phaseUI(); }
+// tap mode: drag on the lane (or the ball) to aim, hold the ball to charge (the meter swings), slide sideways for the hook, let go to bowl
+const TAP={aim:0,spin:0,hold:0,x0:0,pw:0,raf:0};
+function tapDot(){ $('tapDot').style.left=(50+TAP.aim*44)+'%'; $('tapPath').style.left=(50+TAP.aim*44)+'%'; $('tapPath').style.transform=`skewX(${TAP.spin*-22}deg)`; }
+function tapPower(){ const e=(performance.now()-TAP.hold)/1000; return 0.5-0.5*Math.cos(e*2.9); }
+function tapLoop(){ if(!TAP.hold) return; const p=tapPower(); TAP.pw=p; $('tapPow').style.width=(p*100)+'%'; TAP.raf=requestAnimationFrame(tapLoop); }
+const laneEl=$('tapLane'); function aimFrom(e){ const r=laneEl.getBoundingClientRect(); TAP.aim=clamp(((e.clientX-r.left)/r.width-0.5)*2.3,-1,1); tapDot(); sendAi(); }
+laneEl.onpointerdown=e=>{ e.preventDefault(); try{ laneEl.setPointerCapture(e.pointerId); }catch(err){} aimFrom(e); }; laneEl.onpointermove=e=>{ if(e.buttons||e.pressure>0) aimFrom(e); };
+let aiT=0; function sendAi(){ const t=performance.now(); if(t-aiT<140||!net||!turn) return; aiT=t; net.send({f:'ai',p:pid,a:Math.round(TAP.aim*100)/100,s:Math.round(TAP.spin*100)/100,w:TAP.hold?Math.round(TAP.pw*100)/100:undefined}); }
+const tb=$('tapBall');
+tb.onpointerdown=e=>{ e.preventDefault(); try{ tb.setPointerCapture(e.pointerId); }catch(err){} tb.classList.add('on'); TAP.hold=performance.now(); TAP.x0=e.clientX; TAP.spin=0; tapDot(); buzz(8); tapLoop(); };
+tb.onpointermove=e=>{ if(!TAP.hold) return; TAP.spin=clamp((e.clientX-TAP.x0)/110,-1,1); tapDot(); sendAi(); };
+const tapUp=()=>{ if(!TAP.hold) return; cancelAnimationFrame(TAP.raf); const pw=Math.max(0.2,tapPower()); TAP.hold=0; tb.classList.remove('on'); $('tapPow').style.width='0%'; sendBowl(pw,TAP.aim,TAP.spin); };
+tb.onpointerup=tapUp; tb.onpointercancel=tapUp; tb.oncontextmenu=e=>e.preventDefault();
+$('padRelease').onclick=()=>{ sendBowl(0.7,M.aim,0); };
+$('padSwitch').onclick=()=>{ show('sArm'); };
+const ACT={attract:['START LEAGUE NIGHT','start'],lobby:['START NOW','start'],over:['CONTINUE','again'],scores:['PLAY AGAIN','again'],inter:['SKIP ▸','skip']};
+function phaseUI(){ const a=ACT[phase]; const btn=$('padAct'); btn.hidden=!a; if(a){ btn.textContent=a[0]; btn.dataset.c=a[1]; }
+  const txt={attract:'PARTY MODE · the bots are bowling',lobby:'LOBBY · grabbing lanes',ready:'GET READY',aim:turn?'YOUR FRAME':`WAITING · ${st.tn>=0&&roster?roster.s[st.tn]+' is up':'…'}`,roll:'ROLLING',result:'THE PINS',inter:'INTERMISSION',over:'LEAGUE NIGHT IS OVER',initials:'SIGNING THE BOARD',scores:'THE HIGH ROLLERS',paused:'PAUSED',share:'SHARING'}[phase]||phase.toUpperCase();
+  $('padPhase').textContent=txt; const mine=seat>=0&&st.t?st.t[seat]|0:0; $('slT').textContent=mine; $('slF').textContent=`${Math.min(st.nf,(st.fr|0)+1)}/${st.nf}`;
+  let lead=-1, lv=-1; (st.t||[]).forEach((v,i)=>{ if(v>lv){ lv=v; lead=i; } }); $('slL').textContent=lead>=0?lv:'—'; $('slLn').textContent=lead>=0&&roster&&roster.s[lead]?(lead===seat?'YOU LEAD':roster.s[lead]+' LEADS'):'LEADER';
+  const cue=$('cue'); cue.classList.toggle('on',turn); cue.querySelector('span').textContent=turn?(st.rl?'SECOND BALL':"YOU'RE UP"):(phase==='aim'||phase==='roll'||phase==='result'?'watch the lane':'warm up your arm'); cue.querySelector('small').textContent=turn?(tapMode?'drag to aim · hold the ball · let go':'swing back and through · the ball leaves at the top'):(phase==='aim'?'your turn comes round the lanes':'the TV plays a note for every pin');
+  $('edge').classList.toggle('hold',turn&&!navigator.vibrate); const b=$('ball'); b.classList.toggle('charge',turn&&!tapMode); }
+$('padAct').onclick=()=>{ const c=$('padAct').dataset.c; if(net) net.send({f:'cmd',p:pid,c}); buzz(15); };
+$('padLeave').onclick=()=>{ if(net) net.send({f:'l',p:pid}); seat=-1; wanted=false; sess.set('joined','0'); show('sLane'); laneUI(); };
+let resTxt=''; $('resShare').onclick=async()=>{ try{ await navigator.share({title:'Lanes · Brick Choir',text:resTxt,url:'https://pointcast.xyz/brick-choir/lanes'}); }catch(e){} };
+$('resAgain').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'again'}); show('sBall'); };
+$('resParty').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'party'}); show('sBall'); };
+function ballHit(){ const b=$('ball'); b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit'); }
+const EV={ur:()=>{ turn=true; phaseUI(); buzz([30,30,30]); flash("YOU'RE UP",col,true); },rl:()=>{ turn=false; phaseUI(); buzz(20); },x:()=>{ ballHit(); buzz([60,40,60,40,160]); flash('STRIKE!',col,true); },tk:()=>{ ballHit(); buzz([80,40,80,40,80,40,240]); flash('TURKEY!','#ffd27a',true); },sp:()=>{ ballHit(); buzz([40,30,90]); flash('SPARE!','#9fe3c9',true); },g:()=>{ buzz(120); flash('gutter…','rgba(244,240,255,.7)'); }};
+function onEv(e){ if(EV[e]) EV[e](); else if(/^k\d+$/.test(e)){ const n=+e.slice(1); buzz(n?[20+n*4]:60); flash(n===0?'nothing':n===1?'1 pin':`${n} pins`,col); } }
+
+/* ---- frames from the TV ---- */
+function onFrame(d){ if(d.p&&d.p!==pid&&d.f!=='ev') return;
+  switch(d.f){
+    case 'ro': roster=d; rosterAt=Date.now(); if(seat<0) laneUI(); else phaseUI(); break;
+    case 'ok': { const was=seat; seat=d.s; col=d.c||PAL[seat%8]; theme(); if(was!==seat||!$('sLane').hidden){ if(armed||tapMode){ padUI(); show('sBall'); } else show('sArm'); flash(`${seat+1}UP · ${name}`,col,true); buzz([40,30,80]); } if(armed) net.send({f:'arm',p:pid,m:1}); break; }
+    case 'full': $('laneSub').textContent='every lane is taken — wait for one to open'; buzz([30,30,30]); break;
+    case 'who': if(wanted) net.send({f:'j',p:pid,n:name}); break;
+    case 'st': { const ph=String(d.ph||''); st={fr:d.fr|0,rl:d.rl|0,tn:d.tn,n:d.n|0,t:d.t||[],nf:d.nf||10}; const wasTurn=turn; turn=ph==='aim'&&d.tn===seat; if(ph!==phase||wasTurn!==turn){ if(!$('sRes').hidden&&!/^(over|initials|scores|share)$/.test(ph)) show('sBall'); } phase=ph; if(seat>=0) phaseUI(); break; }
+    case 'ev': (d.l||[]).forEach(([s,e])=>{ if(s===seat) onEv(e); }); break;
+    case 'res': { if(seat<0) break; const sc=d.sc||[]; const mine=sc[seat]|0; const rank=sc.filter(v=>v>mine).length+1; const won=d.w===seat; $('resRank').textContent=['1ST','2ND','3RD','4TH','5TH','6TH','7TH','8TH'][rank-1]||rank+'TH'; $('resRank').style.color=won?col:'rgba(244,240,255,.6)'; $('resScore').textContent=mine; $('resStrikes').textContent=(d.x||[])[seat]|0; $('resWinner').textContent=roster&&roster.s[d.w]?roster.s[d.w]+' · '+(sc[d.w]|0):'—';
+      resTxt=`Lanes: I bowled ${mine} (${(d.x||[])[seat]|0} strikes) and came ${$('resRank').textContent.toLowerCase()} of ${sc.length}. My phone was the ball.`; $('resShare').hidden=!navigator.share; show('sRes'); buzz(won?[80,40,80,40,160]:60); break; }
+    case 'pq': if(typeof d.t==='number'){ rtt=Date.now()-d.t; netUI(); } break;
+  }
+}
+function netUI(){ const el=$('padNet'); const s=net?net.status:'off'; el.className='net '+(s!=='on'?'off':rtt===null?'':rtt<90?'good':rtt<180?'ok':'bad'); $('padPing').textContent=s!=='on'?(s==='connecting'?'…':s):(rtt===null?'live':rtt+' ms'); }
+function connect(){ if(net) return; net=makeParty({code,pid,onFrame,onStatus:s=>{ netUI(); if(s==='on'){ net.send({f:'hi',p:pid}); if(wanted) net.send({f:'j',p:pid,n:name}); } if(seat<0) laneUI(); }});
+  setInterval(()=>{ if(!net||net.status!=='on') return; net.send({f:'pp',p:pid,t:Date.now(),r:rtt===null?undefined:rtt}); if(seat<0&&(Date.now()-rosterAt>5000)){ net.send({f:'hi',p:pid}); if(rosterAt===0&&$('laneSub')) $('laneSub').textContent=`no TV is showing room ${code} yet — open pointcast.xyz/brick-choir/lanes on the TV`; } },3000); }
+async function wakeLock(){ try{ if('wakeLock' in navigator&&!wake){ wake=await navigator.wakeLock.request('screen'); wake.addEventListener('release',()=>{ wake=null; }); } }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ if(seat>=0) wakeLock(); if(net){ net.kick(); if(net.status==='on') net.send({f:'hi',p:pid}); } } });
+
+/* ---- boot: a scanned QR lands with the code filled in ---- */
+codeUI(); nameUI(); theme(); tapDot();
+if(code.length===4){ $('nameRoom').textContent='ROOM '+code; if(name){ $('nameGo').onclick(); } else show('sName'); } else show('sCode');
+if(TESTMODE) window.__lj={get seat(){return seat;},get phase(){return phase;},get turn(){return turn;},get st(){return st;},get roster(){return roster;},get net(){return net;},get rtt(){return rtt;},get armed(){return armed;},get tapMode(){return tapMode;},get M(){return M;},get screen(){return [...document.querySelectorAll('.screen')].find(s=>!s.hidden).id;},get flash(){return $('flashTxt').textContent;},pid,bowls:[],
+  setName:n=>{ name=n; nameUI(); },go:()=>$('nameGo').onclick(),join,arm,useTap,bowl:(w,a,s)=>sendBowl(w,a,s||0),
+  // synthetic motion: feed the detector like a browser would (≈60 Hz). g = gravity in the phone frame, lin = linear accel (m/s²), rot = deg/s [alpha,beta,gamma]
+  motion:(lin,rot,g)=>{ const ag=g||[0,0,9.81]; const e={accelerationIncludingGravity:{x:ag[0]+lin[0],y:ag[1]+lin[1],z:ag[2]+lin[2]},acceleration:{x:lin[0],y:lin[1],z:lin[2]},rotationRate:{alpha:rot[0],beta:rot[1],gamma:rot[2]}}; onMotion(e); },
+  tap:(aim,spin,holdMs)=>{ TAP.aim=aim; tapDot(); tb.onpointerdown({preventDefault(){},pointerId:1,clientX:100}); tb.onpointermove({clientX:100+spin*110}); setTimeout(tapUp,holdMs||300); }};
+</script>
+</body>
+</html>
