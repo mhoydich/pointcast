@@ -6,6 +6,16 @@ export const MAX_BODY_BYTES = 12_000;
 export const ROOM_ID_PATTERN = /^[0-9a-f]{32}$/;
 const CLIENT_ID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
+// Cloudflare may expose an origin ETag as weak (W/"1") even when the room
+// returns it as strong ("1"). If-None-Match uses weak comparison for GET.
+export function matchesIfNoneMatch(header: string | null, etag: string): boolean {
+  if (!header) return false;
+  return header.split(',').some(value => {
+    const candidate = value.trim();
+    return candidate === etag || candidate === `W/${etag}`;
+  });
+}
+
 export interface PassageInput {
   name: string;
   text: string;

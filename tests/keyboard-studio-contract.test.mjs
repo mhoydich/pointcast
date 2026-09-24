@@ -4,6 +4,7 @@ import {
   MAX_BODY_BYTES,
   MAX_PASSAGES,
   ROOM_ID_PATTERN,
+  matchesIfNoneMatch,
   parsePassageInput,
 } from '../workers/keyboard-studio/src/contract.ts';
 
@@ -11,6 +12,14 @@ test('studio room IDs require 128 bits of lowercase hex', () => {
   assert.match('0123456789abcdef0123456789abcdef', ROOM_ID_PATTERN);
   assert.doesNotMatch('0123456789ABCDEF0123456789ABCDEF', ROOM_ID_PATTERN);
   assert.doesNotMatch('short', ROOM_ID_PATTERN);
+});
+
+test('conditional room reads accept strong and Cloudflare weak ETags', () => {
+  assert.equal(matchesIfNoneMatch('"1"', '"1"'), true);
+  assert.equal(matchesIfNoneMatch('W/"1"', '"1"'), true);
+  assert.equal(matchesIfNoneMatch('"0", W/"1"', '"1"'), true);
+  assert.equal(matchesIfNoneMatch('W/"10"', '"1"'), false);
+  assert.equal(matchesIfNoneMatch(null, '"1"'), false);
 });
 
 test('studio passage validation preserves writing and normalizes a blank name', () => {

@@ -4,6 +4,7 @@ import {
   MAX_BODY_BYTES,
   MAX_PASSAGES,
   ROOM_ID_PATTERN,
+  matchesIfNoneMatch,
   parsePassageInput,
 } from './contract';
 
@@ -88,7 +89,7 @@ export class KeyboardStudioRoom extends DurableObject<Env> {
         'SELECT COALESCE(MAX(seq), 0) AS latest FROM passages',
       ).one().latest;
       const etag = `"${latest}"`;
-      if (request.headers.get('if-none-match') === etag) {
+      if (matchesIfNoneMatch(request.headers.get('if-none-match'), etag)) {
         return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'no-store' } });
       }
       const passages = this.ctx.storage.sql.exec<PassageRow>(
