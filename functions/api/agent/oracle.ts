@@ -33,6 +33,7 @@ import {
   answerOracle,
   ORACLE_ACTION,
   ORACLE_ROOM,
+  oracleBodyFromParams,
   parseOracleQuery,
   previewOracle,
   type OracleQuery,
@@ -149,12 +150,7 @@ export function handleOracleGet(request: Request, env: OracleEnv, options: Oracl
     if (!env.AUTH_DB) return paidJson({ ok: false, error: 'The split ledger is unavailable; no payment was submitted.' }, 503);
     return quote(request, env, options);
   }
-  const p = url.searchParams;
-  const body: Record<string, unknown> = {};
-  for (const key of ['q', 'build']) if (p.has(key)) body[key] = p.get(key);
-  for (const key of ['maxPrice', 'thicknessMm', 'year']) if (p.has(key)) body[key] = Number(p.get(key));
-  if (p.has('usap')) body.usap = p.get('usap') === 'true';
-  const parsed = parseOracleQuery(body);
+  const parsed = parseOracleQuery(oracleBodyFromParams(url.searchParams));
   if (typeof parsed === 'string') return paidJson({ ok: false, error: parsed }, 400);
   return paidJson({
     ok: true,

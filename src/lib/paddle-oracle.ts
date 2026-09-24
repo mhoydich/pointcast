@@ -120,3 +120,12 @@ export function previewOracle(query: OracleQuery) {
   const { matched } = answerOracle({ ...query, limit: 1 });
   return { matched, register: { paddles: REGISTER_STATS.paddles, asOf: REGISTER_STATS.asOf } };
 }
+
+/** The same question, read from URL query parameters (GET routes and the free preview). */
+export function oracleBodyFromParams(p: URLSearchParams): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  for (const key of ['q', 'build']) if (p.has(key)) body[key] = p.get(key);
+  for (const key of ['maxPrice', 'thicknessMm', 'year', 'limit']) if (p.has(key)) body[key] = Number(p.get(key));
+  if (p.has('usap')) body.usap = p.get('usap') === 'true';
+  return body;
+}

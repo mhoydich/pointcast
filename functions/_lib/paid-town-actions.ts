@@ -47,6 +47,13 @@ export const PAID_TOWN_ACTIONS = {
     room: 'https://pointcast.xyz/paddles/oracle',
     body: { q: 'control paddle for a 4.0 player', maxPrice: 200, usap: true },
     curl: `curl -X POST https://pointcast.xyz/api/agent/oracle -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"q":"control paddle for a 4.0 player","maxPrice":200,"usap":true}'`,
+    base: {
+      endpoint: 'https://pointcast.xyz/api/oracle/paddles',
+      method: 'GET',
+      network: 'eip155:8453',
+      facilitator: 'Coinbase CDP (x402 Bazaar)',
+      example: 'https://pointcast.xyz/api/oracle/paddles?q=control%20paddle%20for%20a%204.0%20player&maxPrice=200&usap=true',
+    },
   },
 } as const;
 
