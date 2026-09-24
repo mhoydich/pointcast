@@ -41,6 +41,13 @@ export const PAID_TOWN_ACTIONS = {
     body: { lot: '000', agent: 'your-handle', apn: '4135-000-000', kind: 'vacant', source: 'https://portal.assessor.lacounty.gov/', note: 'Corner lot, chain-link, no structure.' },
     curl: `curl -X POST https://pointcast.xyz/api/agent/memo -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"lot":"000","agent":"your-handle","apn":"4135-000-000","kind":"vacant","note":"Corner lot, chain-link, no structure."}'`,
   },
+  oracle: {
+    action: 'oracle',
+    endpoint: 'https://pointcast.xyz/api/agent/oracle',
+    room: 'https://pointcast.xyz/paddles/oracle',
+    body: { q: 'control paddle for a 4.0 player', maxPrice: 200, usap: true },
+    curl: `curl -X POST https://pointcast.xyz/api/agent/oracle -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"q":"control paddle for a 4.0 player","maxPrice":200,"usap":true}'`,
+  },
 } as const;
 
 export const PAID_TOWN_DISCOVERY = Object.values(PAID_TOWN_ACTIONS).map((entry) => ({
