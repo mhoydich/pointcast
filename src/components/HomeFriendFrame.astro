@@ -1,105 +1,131 @@
 ---
 /**
- * HomeFriendFrame — today's frame from /friend-frame/, hung inside the signal
- * deck under "A little more is happening". The seven starter frames live in
- * src/data/friend-frame.json; public/friend-frame/index.html carries its own
- * copy because that page is a standalone file. Keep the two in step.
+ * HomeFriendFrame — a small piece of the Friend Frame wall inside the signal
+ * deck ("A little more is happening"). Server-renders the house stand-in for
+ * the build day, then the client reads the town frame from
+ * /api/friend-frame/frame?id=town and hangs whoever has today.
+ * Rules and stand-ins live in src/lib/friend-frame.ts.
  */
-import frames from '../data/friend-frame.json';
+import { DAYS, STARTERS, laToday, nounSeed } from '../lib/friend-frame';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const buildDay = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'America/Los_Angeles' }).format(new Date());
-const buildIndex = Math.max(0, DAYS.indexOf(buildDay));
-
-const tint = (hex: string) => {
-  const n = parseInt(hex.slice(1), 16);
-  const mix = (c: number) => Math.round(c + (255 - c) * 0.86);
-  return `rgb(${mix(n >> 16)},${mix((n >> 8) & 255)},${mix(n & 255)})`;
-};
-const shapes = [
-  (c: string) => `<circle cx="200" cy="150" r="78" fill="${c}"/><rect x="60" y="230" width="280" height="14" fill="${c}"/>`,
-  (c: string) => `<path d="M60 240 L200 70 L340 240 Z" fill="${c}"/><circle cx="300" cy="80" r="22" fill="${c}"/>`,
-  (c: string) => `<rect x="90" y="70" width="220" height="160" fill="none" stroke="${c}" stroke-width="14"/><rect x="150" y="120" width="100" height="60" fill="${c}"/>`,
-  (c: string) => `<circle cx="140" cy="150" r="60" fill="${c}"/><circle cx="260" cy="150" r="60" fill="none" stroke="${c}" stroke-width="12"/>`,
-  (c: string) => `<path d="M40 200 Q200 40 360 200" fill="none" stroke="${c}" stroke-width="16" stroke-linecap="round"/><circle cx="200" cy="230" r="18" fill="${c}"/>`,
-  (c: string) => `<rect x="70" y="60" width="60" height="180" fill="${c}"/><rect x="170" y="110" width="60" height="130" fill="${c}"/><rect x="270" y="150" width="60" height="90" fill="${c}"/>`,
-  (c: string) => `<circle cx="200" cy="120" r="70" fill="${c}"/><path d="M40 260 Q200 200 360 260" fill="none" stroke="${c}" stroke-width="12"/>`,
-];
+const FINISHES = ['#5a3a24', '#a4743f', '#221c18', '#7b3a24', '#cdb48f', '#b8913f', '#8a5a33'];
+const { date, day } = laToday();
+const starter = STARTERS[day];
+const nice = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); };
 ---
 
-<section class="friend-frame" data-friend-frame aria-labelledby="friend-frame-title">
-  <header class="friend-frame__head">
-    <div>
-      <p class="friend-frame__kicker">Friend Frame · CH.GDN</p>
-      <h2 id="friend-frame-title">A frame your friends <em>program.</em></h2>
+<section class="ffh" data-friend-frame aria-labelledby="ffh-title" style={`--ink:${starter.color};--wood:${FINISHES[day]}`}>
+  <div class="ffh__wall">
+    <a class="ffh__hang" href="/friend-frame/" aria-label="Open Friend Frame">
+      <span class="ffh__nail" aria-hidden="true"></span>
+      <span class="ffh__frame">
+        <span class="ffh__mat">
+          <span class="ffh__photo"><img data-ff-img src={`https://noun.pics/${nounSeed(starter.friend, day)}.svg`} alt="" class="is-noun" width="200" height="250" loading="lazy" decoding="async" /></span>
+          <span class="ffh__plate" data-ff-plate>{DAYS[day].slice(0, 3)} · {nice(date)} · {starter.friend}</span>
+        </span>
+      </span>
+      <span class="ffh__ticket" data-ff-ticket><small data-ff-from>from {starter.friend}</small><span data-ff-note>{starter.note}</span></span>
+    </a>
+    <div class="ffh__copy">
+      <p class="ffh__kicker">Friend Frame · CH.GDN · <b data-ff-day>today · {DAYS[day]}</b></p>
+      <h2 id="ffh-title">A frame your friends <em>program.</em></h2>
+      <div class="ffh__card">
+        <p class="ffh__poem" data-ff-poem>{starter.poem}</p>
+        <p class="ffh__sign" data-ff-sign>— {starter.friend}</p>
+      </div>
+      <p class="ffh__line" data-ff-line>Seven friends, one a day. A house stand-in hangs until a friend takes the day.</p>
+      <p class="ffh__actions">
+        <a class="ffh__go" href="/friend-frame/">See the wall ↗</a>
+        <a class="ffh__start" href="/friend-frame/#start">Start one for your friends</a>
+      </p>
     </div>
-    <p>Seven frames, one friend a day. A picture, a poem, a note. Today's is hung here; the whole week is at /friend-frame/.</p>
-  </header>
-  <div class="friend-frame__week">
-    {frames.map((frame, index) => (
-      <article
-        class="friend-frame__card"
-        data-frame-day={index}
-        hidden={index !== buildIndex}
-        style={`--ff:${frame.color};--ff-tint:${tint(frame.color)}`}
-      >
-        <a class="friend-frame__pic" href="/friend-frame/" tabindex="-1" aria-hidden="true">
-          <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" set:html={`<rect width="400" height="300" fill="${tint(frame.color)}"/>${shapes[index % shapes.length](frame.color)}`} />
-          <span>{frame.day} · today</span>
-        </a>
-        <div class="friend-frame__copy">
-          <p class="friend-frame__who"><b>{frame.friend}</b> <span>{frame.day}'s frame</span></p>
-          <p class="friend-frame__poem">{frame.poem}</p>
-          <p class="friend-frame__note">{frame.note}</p>
-          <a class="friend-frame__action" href="/friend-frame/">Open Friend Frame · program a day <b aria-hidden="true">↗</b></a>
-        </div>
-      </article>
-    ))}
   </div>
 </section>
 
 <script>
-  function mountFriendFrame() {
+  type Post = { friend: string; color: string; poem: string; note: string; picture: string | null; date: string; day: number };
+  const SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const nice = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); };
+
+  async function mountFriendFrame() {
     const root = document.querySelector<HTMLElement>('[data-friend-frame]');
     if (!root || root.dataset.mounted === 'true') return;
     root.dataset.mounted = 'true';
-    const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    let today = 0;
+    let data: any;
     try {
-      today = Math.max(0, DAYS.indexOf(new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'America/Los_Angeles' }).format(new Date())));
-    } catch { today = (new Date().getDay() + 6) % 7; }
-    root.querySelectorAll<HTMLElement>('[data-frame-day]').forEach((card) => {
-      card.hidden = Number(card.dataset.frameDay) !== today;
-    });
+      const res = await fetch('/api/friend-frame/frame?id=town', { headers: { Accept: 'application/json' } });
+      if (!res.ok) return;
+      data = await res.json();
+    } catch { return; }
+    const post: Post | null = data?.todayPost || data?.fallback || null;
+    const seat = data?.seats?.[data?.today?.day];
+    if (!post || !data?.today) return; // keep the house stand-in
+    const q = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel);
+    root.style.setProperty('--ink', /^#[0-9a-f]{6}$/i.test(post.color) ? post.color : '#0F6E56');
+    const img = q<HTMLImageElement>('[data-ff-img]');
+    if (img && post.picture && (post.picture.startsWith('/api/friend-frame/image?id=') || post.picture.startsWith('https://'))) {
+      img.classList.remove('is-noun'); img.src = post.picture; img.alt = `${post.friend}'s picture for ${DAYS[post.day]}`;
+    }
+    const set = (sel: string, text: string) => { const n = q(sel); if (n) n.textContent = text; };
+    const isToday = post.date === data.today.date;
+    set('[data-ff-plate]', `${SHORT[data.today.day]} · ${nice(data.today.date)} · ${post.friend}`);
+    set('[data-ff-poem]', post.poem || post.note || '');
+    set('[data-ff-sign]', `— ${post.friend}`);
+    set('[data-ff-from]', `from ${post.friend}`);
+    set('[data-ff-note]', post.note || '');
+    const ticket = q('[data-ff-ticket]'); if (ticket) ticket.hidden = !post.note;
+    set('[data-ff-line]', isToday
+      ? `${post.friend} has today on the town frame. Every day is kept in the album.`
+      : `${seat?.friend || post.friend} hasn't hung today's yet, so last ${DAYS[post.day]}'s frame stays up.`);
   }
   mountFriendFrame();
   document.addEventListener('astro:page-load', mountFriendFrame);
 </script>
 
 <style>
-  .friend-frame { grid-column: 1 / -1; min-width: 0; border-top: 2px solid #111; background: #fffdf7; padding: clamp(18px, 2.5vw, 28px); }
-  .friend-frame__head { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: end; margin-bottom: 18px; }
-  .friend-frame__kicker { margin: 0 0 8px; color: #0F6E56; font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  .friend-frame h2 { margin: 0; font-size: clamp(24px, 2.8vw, 36px); line-height: 1; letter-spacing: -.05em; }
-  .friend-frame h2 em { font-style: normal; color: #0F6E56; }
-  .friend-frame__head > p { margin: 0; max-width: 44ch; font-size: 13px; line-height: 1.5; color: #3d3a34; }
-  .friend-frame__card { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); border: 2px solid #111; background: #fff; box-shadow: 6px 6px 0 var(--ff); }
-  .friend-frame__card[hidden] { display: none; }
-  .friend-frame__pic { position: relative; display: block; border-right: 2px solid #111; background: var(--ff-tint); }
-  .friend-frame__pic svg { display: block; width: 100%; height: 100%; aspect-ratio: 4 / 3; }
-  .friend-frame__pic span { position: absolute; left: 10px; top: 10px; padding: 5px 7px; background: #111; color: #fff; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  .friend-frame__copy { display: flex; flex-direction: column; min-width: 0; padding: 18px 20px; }
-  .friend-frame__who { margin: 0; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
-  .friend-frame__who b { font-size: clamp(22px, 2.4vw, 30px); letter-spacing: -.045em; line-height: 1; }
-  .friend-frame__who span { color: var(--ff); font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  .friend-frame__poem { margin: 14px 0 0; white-space: pre-wrap; font-size: 15px; line-height: 1.45; letter-spacing: -.01em; }
-  .friend-frame__note { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid #d7d0c4; font-size: 12.5px; color: #3d3a34; }
-  .friend-frame__note::before { content: "Note · "; color: #5f5e5a; font: 700 9px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
-  .friend-frame__action { margin-top: auto; padding: 8px 10px; align-self: flex-start; margin-top: 16px; border: 1px solid #111; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #111; }
-  .friend-frame__action:hover { background: var(--ff); border-color: var(--ff); color: #fff; }
+  .ffh { grid-column: 1 / -1; min-width: 0; border-top: 2px solid #111; background: #efe8dc; position: relative; overflow: hidden; }
+  .ffh::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .45; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .4 0 0 0 0 .33 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .ffh::after { content: ""; position: absolute; top: -20%; left: 52%; width: 34%; height: 140%; transform: skewX(-18deg); background: linear-gradient(90deg, transparent, rgba(255,246,220,.55) 30%, rgba(255,246,220,.55) 70%, transparent); filter: blur(14px); mix-blend-mode: soft-light; pointer-events: none; }
+  .ffh__wall { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(180px, 250px) minmax(0, 1fr); gap: clamp(22px, 4vw, 54px); align-items: center; padding: clamp(34px, 4vw, 48px) clamp(18px, 3vw, 40px) clamp(24px, 3vw, 34px); }
+  .ffh__hang { position: relative; display: block; color: inherit; text-decoration: none; transform-origin: 50% -26px; transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
+  .ffh__hang:hover { transform: rotate(-1.4deg); }
+  .ffh__nail { position: absolute; left: 50%; top: -26px; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ddd4c4, #7f776a); }
+  .ffh__nail::before, .ffh__nail::after { content: ""; position: absolute; top: 5px; width: 1px; height: 44px; background: #6b6155; transform-origin: top; }
+  .ffh__nail::before { left: 4px; transform: rotate(56deg); }
+  .ffh__nail::after { left: 4px; transform: rotate(-56deg); }
+  .ffh__frame { position: relative; display: block; padding: 12px; background-color: var(--wood); border-radius: 2px;
+    background-image: linear-gradient(90deg, rgba(0,0,0,.22), transparent 8%, transparent 92%, rgba(0,0,0,.22)), linear-gradient(180deg, rgba(255,235,200,.16), transparent 10%, transparent 90%, rgba(0,0,0,.28));
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.5), inset 2px 2px 0 rgba(255,230,190,.28), inset -2px -2px 0 rgba(0,0,0,.4), 12px 22px 30px -10px rgba(35,20,8,.5); }
+  .ffh__mat { display: block; padding: 11% 10% 7%; background: color-mix(in oklab, var(--ink) 11%, #f7f2e7); box-shadow: 0 0 0 2px rgba(0,0,0,.35), inset 0 2px 4px rgba(0,0,0,.16); }
+  .ffh__photo { position: relative; display: block; aspect-ratio: 4 / 5; overflow: hidden; border: 4px solid #fbf7ee; background: color-mix(in oklab, var(--ink) 20%, #efe6d4); }
+  .ffh__photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .ffh__photo img.is-noun { object-fit: contain; image-rendering: pixelated; padding: 10%; }
+  .ffh__plate { display: block; width: max-content; max-width: 100%; margin: 8% auto 0; padding: 4px 10px; background: linear-gradient(180deg, #f0dc9c, #c29a45 62%, #8d6a26); color: #3f2d0b; font: 700 8px/1.3 var(--pc-font-mono); letter-spacing: .14em; text-transform: uppercase; box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 2px rgba(0,0,0,.35); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ffh__ticket { position: absolute; right: -26px; top: 10%; width: 128px; padding: 18px 10px 12px; background: #fff6c9; transform: rotate(6deg); box-shadow: 3px 6px 12px rgba(40,25,5,.25); font: italic 600 13px/1.25 Georgia, serif; color: var(--ink); }
+  .ffh__ticket[hidden] { display: none; }
+  .ffh__ticket::before { content: ""; position: absolute; top: -8px; left: 50%; width: 32px; height: 16px; margin-left: -16px; border-radius: 2px 2px 5px 5px; background: linear-gradient(#3a3a3a, #111); }
+  .ffh__ticket small { display: block; margin-bottom: 3px; font: 700 7.5px var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; font-style: normal; color: rgba(60,45,10,.55); }
+  .ffh__copy { min-width: 0; }
+  .ffh__kicker { margin: 0 0 8px; font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .12em; text-transform: uppercase; color: #6d6254; }
+  .ffh__kicker b { color: var(--ink); }
+  .ffh h2 { margin: 0; font-size: clamp(26px, 3vw, 40px); line-height: 1; letter-spacing: -.05em; color: #221c16; }
+  .ffh h2 em { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; letter-spacing: -.03em; color: var(--ink); }
+  .ffh__card { position: relative; margin: 18px 0 0; max-width: 440px; padding: 18px 22px 14px; background: #fbf7ee; transform: rotate(-.8deg); box-shadow: 5px 10px 20px rgba(40,25,5,.18); }
+  .ffh__card::before { content: ""; position: absolute; left: 22px; right: 22px; top: 9px; height: 3px; background: var(--ink); }
+  .ffh__poem { margin: 0; white-space: pre-wrap; font: italic 400 16px/1.5 Georgia, 'Times New Roman', serif; color: #221c16; }
+  .ffh__sign { margin: 8px 0 0; text-align: right; font: italic 600 14px Georgia, serif; color: var(--ink); }
+  .ffh__line { margin: 16px 0 0; font-size: 12.5px; line-height: 1.5; color: #4b4237; max-width: 52ch; }
+  .ffh__actions { margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .ffh__actions a { padding: 9px 12px; border: 1px solid #221c16; font: 700 9px var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #221c16; background: #fffdf8; }
+  .ffh__actions a.ffh__go { border: 0; background: linear-gradient(180deg, #f0dc9c, #c29a45 70%, #8d6a26); color: #3b2a0c; box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 2px 6px rgba(80,50,10,.25); }
+  .ffh__actions a:hover { filter: brightness(1.06); }
   @media (max-width: 720px) {
-    .friend-frame__head { grid-template-columns: 1fr; gap: 10px; }
-    .friend-frame__card { grid-template-columns: 1fr; box-shadow: 4px 4px 0 var(--ff); }
-    .friend-frame__pic { border-right: 0; border-bottom: 2px solid #111; }
+    .ffh__wall { grid-template-columns: 1fr; justify-items: center; }
+    .ffh__hang { width: min(230px, 70vw); margin-top: 8px; }
+    .ffh__ticket { right: -30px; width: 116px; }
+    .ffh__copy { width: 100%; }
   }
+  @media (prefers-reduced-motion: reduce) { .ffh__hang { transition: none; } }
 </style>
