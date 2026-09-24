@@ -46,11 +46,18 @@ export function quartetCardUrl(seat = null, bucket = '', origin = SITE, game = '
   return url.href;
 }
 
+export function gardenCardUrl(beat = 0, bucket = '', origin = SITE) {
+  const url = new URL('/og/garden.png', origin);
+  if (/^\d{1,6}$/.test(String(beat)) && Number(beat) > 0) url.searchParams.set('beat', String(Number(beat)));
+  if (validBucket(bucket)) url.searchParams.set('b', bucket);
+  return url.href;
+}
+
 /** Is this og:image one of ours that takes a bucket? */
 export function isGeneratedCard(href) {
   try {
     const { pathname } = new URL(href, SITE);
-    return pathname === '/og/page.png' || pathname === '/og/quartet.png' || pathname.startsWith('/og/live/');
+    return pathname === '/og/page.png' || pathname === '/og/quartet.png' || pathname === '/og/garden.png' || pathname.startsWith('/og/live/');
   } catch {
     return false;
   }

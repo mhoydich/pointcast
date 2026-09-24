@@ -6,8 +6,8 @@
  */
 import { lightBucket, liveBucket } from './light.mjs';
 import { cardPath, liveRoomFor, motionFor, wantsOwnCard } from './rooms.mjs';
-import { SITE, isGeneratedCard, liveCardUrl, pageCardUrl, quartetCardUrl, quartetSeat, withBucket } from './urls.mjs';
-import { quartetWords } from './cards.mjs';
+import { SITE, gardenCardUrl, isGeneratedCard, liveCardUrl, pageCardUrl, quartetCardUrl, quartetSeat, withBucket } from './urls.mjs';
+import { gardenBeat, gardenWords, quartetWords } from './cards.mjs';
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -21,6 +21,7 @@ const QUARTET_PAGES = { '/keyboard-quartet': 'quartet', '/keyboard-rush': 'rush'
  * own. Only /keyboard-quartet invites today, and only from a seat number.
  */
 export function unfurlWords({ pathname, search = '' }) {
+  if (cardPath(pathname) === '/keyboard-garden') return gardenWords(new URLSearchParams(String(search)).get('beat'));
   const game = QUARTET_PAGES[cardPath(pathname)];
   return game ? quartetWords(quartetSeat(search), game) : null;
 }
@@ -33,6 +34,7 @@ export function planUnfurl({ pathname, search = '', currentImage = '', missing =
   let image = '';
   const room = liveRoomFor(path);
   if (room) image = liveCardUrl(room, liveBucket(now));
+  else if (path === '/keyboard-garden') image = gardenCardUrl(gardenBeat(new URLSearchParams(String(search)).get('beat')), lightBucket(now));
   else if (QUARTET_PAGES[path]) image = quartetCardUrl(quartetSeat(search), lightBucket(now), SITE, QUARTET_PAGES[path]);
   else if (currentImage && isGeneratedCard(currentImage)) image = withBucket(currentImage, lightBucket(now));
   else if (missing || wantsOwnCard(path, currentImage)) image = pageCardUrl(path, lightBucket(now));
