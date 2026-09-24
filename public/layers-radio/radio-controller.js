@@ -5,7 +5,7 @@
  * deps:
  *   seq            createSequence(...) instance (alias + message ids)
  *   encodeWave(bytes, protocol) -> Float32Array        (modem; Send only)
- *   playWave(wave) -> { done: Promise, stop() }         (speakers)
+ *   playWave(wave, {alias, bytes}) -> { done, stop(), seconds? } (speakers; seconds = total incl. call sign)
  *   playMotif(moodId) -> { done: Promise, stop() }      (local motif; Preview only, no bytes)
  *   requestMic() -> Promise<stream>                     (getUserMedia)
  *   attachMic(stream, onFrame) / detachMic()            (audio graph; detachMic must be idempotent)
@@ -58,12 +58,13 @@ export function createRadioController(deps) {
       onState('send', SENDER_STATES.PREPARING);
       const bytes = encodeFrame({ alias: seq.alias, messageId: seq.take(), mood, text });
       const wave = encodeWave(bytes, protocol);
-      const seconds = wave.length / sampleRate;
-      transmitUntil = now() + seconds * 1000 + echoGuardMs; // self-echo guard relative to playback completion
+      // The adapter may play more than the burst (a call-sign melody first); it reports the total.
+      const handle = playWave(wave, { alias: seq.alias, bytes });
+      active = { token, handle };
+      const seconds = Number.isFinite(handle.seconds) ? handle.seconds : wave.length / sampleRate;
+      transmitUntil = now() + seconds * 1000 + echoGuardMs; // self-echo guard covers everything we play
       onState('send', `${SENDER_STATES.PLAYING} ${seconds.toFixed(2)} s`);
       log('send', protocol, `${bytes.length} B`, `${seconds.toFixed(3)} s`, `id ${(bytes[8] << 8) | bytes[9]}`);
-      const handle = playWave(wave);
-      active = { token, handle };
       await handle.done;
       if (!live(token)) return { ok: false, reason: 'cancelled' };          // Stop happened while playing
       active = null;

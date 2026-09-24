@@ -1,4 +1,28 @@
-# Layers Radio — acoustic spike (stage B)
+# Layers Radio
+
+Live trial: **https://pointcast.xyz/layers-radio/** (noindex). Inside Layers on any
+PointCast page with `?radio=1`. Source of truth is this folder; `node sketches/radio-spike/package.mjs`
+regenerates `public/layers-radio/`. Reception between real devices is still unproven.
+
+## v2 (2026-09-24)
+
+**What changed for people**
+- **Call signs.** Each sender's alias becomes a four-note pentatonic melody and a mirrored 5×5 mark (`radio-callsign.mjs`). Send plays the call sign, a breath, then the data burst, so friends learn each other by ear. Inbox entries replay it. It is a random per-page-load alias: cosmetic and unverified.
+- **The receive moment.** On the trial page a received mood fills the screen in its colour with the sender's mark, rings and an optional chime. Preview shows the same bloom labelled "only on this device, nothing sent".
+- **Radio inside Layers**, behind `?radio=1` (per tab; `?radio=0` turns it off). The deck gains a Radio section, loaded lazily on first open; if it fails to load, Layers keeps working. An incoming mood can wash the page you are reading in its colour for up to 30 s only if you ticked the box; its tune plays only when your Layers sound is already ON AIR, at no more than your volume. Manual Layers edits, Off, Stop, Escape and leaving the page end it. Nothing is saved.
+- Mute any call sign; everything is keyboard reachable with real accessible names.
+
+**What changed under the hood**
+- AudioWorklet capture (`radio-capture.worklet.js`) with ScriptProcessor fallback, at the device's native sample rate. Firefox gets a capture context at the mic's rate when the rates differ.
+- ggwave now runs at a **fixed 48 kHz operating rate** on every device with per-device input/output resampling (`radio-codec.mjs`). Two devices running ggwave at different operating rates cannot hear each other (test: "why the operating rate must be shared").
+- **Input block rule**: ggwave 0.4.0 decodes one frame per call only when the call's input resamples to exactly one 1024-sample operating frame, so the capture block is `ceil(1024 × rate / 48000)`: 1024 at 48 kHz, 941 at 44.1 kHz, 342 at 16 kHz. Rounding down loses every message. Verified in node across 16–96 kHz and in a real browser at 44.1 kHz (captured worklet audio decodes at 941, not at 1024).
+- **v1 could never report a reception.** ggwave's first instance id is 0 and freed ids are reused, so the Listen decoder was almost always id 0, and v1 (and the first v2 draft) tested the id for truthiness. Every decode silently returned nothing. The node suite missed it because an earlier leaked decoder pushed later ids above 0. Fixed with explicit null checks and a regression test that decodes on a fresh module's instance 0. Any v1 room-trial misses were this bug, not acoustics.
+- The echo guard now covers the whole transmission (call sign + burst) as reported by the adapter.
+- `public/js/pc-layers.js` gains inert-by-default hooks (`mood`, `clearMood`, `addPanel`, `duck`, `badge`, `pcl:stop`), re-mounts after ClientRouter soft navigation (the chip used to vanish on legacy pages after a soft nav), and lets Escape work inside the deck's own controls. Covered by `tests/pc-layers-radio-hooks.test.mjs` (jsdom).
+
+Tests: `node --test --test-timeout=120000 sketches/radio-spike/*.test.mjs tests/pc-layers-radio-hooks.test.mjs`.
+
+## Stage B history (acoustic spike)
 
 Local browser send/listen harness for the Layers Radio PRD. Not wired into
 `pc-layers.js`, not built by Astro (`sketches/` is outside `public/` and
@@ -81,7 +105,7 @@ Documentation correction (third round): an earlier version of this file and of t
 
 ## Supervised two-device trial (stage B exit)
 
-**Reviewed runtime revision:** `86baf4642a457feddc092aa32b2444ce261159ab` (later commits on the PR are documentation only). Use that exact revision, not the moving branch, and record `git rev-parse HEAD` in the log's setup table.
+**Use the live HTTPS page** https://pointcast.xyz/layers-radio/ on both devices (it works on phones), and record the page's `manifest.json` SHA-256 of `radio-panel.js` in the log. The localhost recipe below remains for offline trials; pin the commit you test and record `git rev-parse HEAD`.
 
 Both devices need a **secure context** for the microphone: `http://localhost` counts, an `http://<LAN-IP>` URL does not, so a phone cannot Listen over plain LAN HTTP. **Two-laptop localhost testing is available only if Mike has two suitable laptops; a laptop + phone trial still lacks an authorized HTTPS preview and is blocked until one exists.** No tunnel, exposed service or production deploy is part of this handoff.
 

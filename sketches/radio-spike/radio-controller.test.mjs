@@ -278,6 +278,32 @@ test('self-echo guard ignores frames until playback completes plus the guard win
   release(); await p;
 });
 
+test('echo guard covers the whole transmission the adapter reports (call sign + burst)', async () => {
+  const received = [];
+  let onFrame, clock = 0, meta = null;
+  let release; const done = new Promise(r => { release = r; });
+  const ctrl = createRadioController({
+    seq: createSequence({ get: () => null, set: () => {} }),
+    encodeWave: () => new Float32Array(48000),                           // 1.0 s burst
+    playWave: (w, m) => { meta = m; return { done, stop() {}, seconds: 2.0 }; }, // + 1.0 s call sign lead
+    playMotif: () => ({ done: Promise.resolve(), stop() {} }),
+    requestMic: () => Promise.resolve(fakeStream('m')),
+    attachMic: (s, f) => { onFrame = f; }, detachMic() {},
+    decodeSamples: () => encodeFrame({ alias: fromHex('0badcafe'), messageId: 1, mood: 1 }),
+    now: () => clock, setTimeout: fn => { fn(); return 1; }, clearTimeout() {},
+    onReceive: d => received.push(d),
+  });
+  await ctrl.startListen();
+  const p = ctrl.send({ mood: 3, protocol: 'x' });
+  assert.equal(meta.alias.length, 4, 'adapter gets the sender alias for the call sign');
+  assert.equal(meta.bytes[10], 3);
+  clock = 1500; onFrame(new Float32Array(1024));
+  assert.equal(received.length, 0, 'still inside call sign + burst');
+  clock = 2300; onFrame(new Float32Array(1024));
+  assert.equal(received.length, 1, 'accepted after total + 250 ms guard');
+  release(); await p;
+});
+
 test('receive pipeline: validate, dedup, then rate limits', () => {
   const received = [];
   const h = harness({ onReceive: d => received.push(d) });

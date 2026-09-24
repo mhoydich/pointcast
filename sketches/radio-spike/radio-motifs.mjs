@@ -20,6 +20,17 @@ export const MOTIFS = Object.freeze({
   7: Object.freeze({ name: 'Goodnight', notes: seq([523.25, 466.16, 392, 329.63], 0.4, 0.55, 'sine', 0.45) }),   // descending 4-note lullaby
 });
 
+/** Mood colours: `hex` for UI, `hue` for the transient Layers overlay, `ink` for readable text on the hex. */
+export const MOOD_COLORS = Object.freeze({
+  1: Object.freeze({ hex: '#7ec8ff', hue: 205, ink: '#0b2233' }),   // Calm: sky blue
+  2: Object.freeze({ hex: '#ffb347', hue: 32,  ink: '#2b1700' }),   // Hype: warm
+  3: Object.freeze({ hex: '#ff9ad5', hue: 325, ink: '#33061f' }),   // Love: pink
+  4: Object.freeze({ hex: '#c8ff7e', hue: 90,  ink: '#1c2b00' }),   // Silly: lime
+  5: Object.freeze({ hex: '#9aa7b8', hue: 215, ink: '#10161f' }),   // Focus: dim slate
+  6: Object.freeze({ hex: '#6b6b8a', hue: 245, ink: '#f1f0ff' }),   // Storm: dark
+  7: Object.freeze({ hex: '#5a4bd6', hue: 250, ink: '#f3f0ff' }),   // Goodnight: indigo
+});
+
 export function motifPlan(moodId) {
   const m = MOTIFS[moodId];
   if (!m) throw new RangeError(`no motif for mood ${moodId}`);
