@@ -58,7 +58,7 @@ Findings:
 - The mic is never routed to the speakers (processor output is zeroed) and never recorded or uploaded. Decoded text is inserted with `textContent` only.
 - Self-echo suppression covers the whole burst plus 250 ms after playback completes. Sends serialize through complete playback then an 800 ms cooldown.
 - Receive path: validate → dedup on (alias, id), 256 entries → global limiter (1/s, burst 4) → per-alias limiter (0.5/s, burst 3) → inbox of 10, tagged RECEIVED · UNVERIFIED.
-- **Wire alias is per tab**, 4 random bytes in `sessionStorage`, with a visible reset. The message id wraps at 65535 and the alias rotates. A sequence instance is the sole owner of its alias and counter: it never re-reads the store during `take()`, and it stamps the store with an owner token so a shared or copied store (localStorage by mistake, or a duplicated tab) yields a fresh alias rather than a shared one. Two tabs therefore cannot collide on (alias, id) no matter how their storage reads and writes interleave. This deviates from the PRD's "per browser" wording; a browser-wide alias would need atomic cross-tab allocation that localStorage cannot provide. The alias is unverified either way, so the identity semantics hold: a receiver can say "same call sign as before", never who.
+- **Wire alias is per page load** in this harness: 4 random bytes, with a visible reset. The message id wraps at 65535 and the alias rotates. A sequence instance is the sole owner of its alias and counter: it never re-reads the store during `take()`, and it stamps the store with an owner token so a store already stamped by another loader (a second tab on localStorage, a duplicated tab, or the previous load of this tab) yields a fresh alias rather than a shared one. Two live instances therefore cannot collide on (alias, id) no matter how their storage reads and writes interleave. The harness passes no owner back in, so **reloading the page gives a new call sign at id 0**; continuity across reloads would need the page to keep its own owner token, which this spike does not do. This deviates from the PRD's "per browser" wording; a browser-wide alias would need atomic cross-tab allocation that localStorage cannot provide. The alias is unverified either way, so the identity semantics hold: a receiver can say "same call sign as before", never who.
 - Text validation scans every surrogate code unit: a high must be followed by a low, a low must follow a high. "😀 + lone high surrogate" is rejected, not silently turned into U+FFFD.
 - Preview plays only the mood's local motif from `radio-motifs.mjs` plus a colour wash. It never encodes a frame or touches the modem path (controller test 6 pins this).
 - Listen serializes permission requests and tags each with a generation. Stop, Escape, page hidden and pagehide bump the generation; a grant that resolves afterwards has every track stopped and is never attached (controller tests 1, 3, 5).
@@ -75,7 +75,21 @@ Second round:
 5. Send/preview lacked an operation token: an old send resuming after Stop could emit "Broadcast played" and clear the flags of the send that replaced it, and a Stop during cooldown left the promise pending → every operation carries a token, Stop bumps it and settles the cooldown; controller tests "P1 …".
 6. A stale mic request could clear the slot of the request that replaced it → the slot clears only if it still holds that request; test "P2 pending" covers both grant orders.
 7. A throw inside `attachMic` left partial allocations → `detachMic` runs on the failure path (it is idempotent) before tracks are stopped; test "P2 partial attach".
-8. Cross-tab id allocation was non-atomic → per-tab wire aliases with an owner-token guard (above); frame tests 21–22 interleave a shared store at the storage layer.
+8. Cross-tab id allocation was non-atomic → per-load wire aliases with an owner-token guard (above); frame tests 21–22 interleave a shared store at the storage layer.
+
+Documentation correction (third round): an earlier version of this file and of test 22 said "reload keeps the alias". With the harness's default options a reload rotates the alias and restarts ids at 0. Test 22 now states that, and the same-owner continuation is tested as an explicit option the harness does not use.
+
+## Supervised two-device trial (stage B exit)
+
+Exact commit: see the PR head (`git log -1 --format=%H -- sketches/radio-spike`). Both devices need a **secure context** for the microphone: `http://localhost` counts, an `http://<LAN-IP>` URL does not, so a phone cannot Listen over plain LAN HTTP. Cleanest zero-exposure setup is two laptops, each serving its own checkout on localhost:
+
+```bash
+git fetch origin && git checkout cc/radio-spike
+python3 -m http.server 4531 -d sketches/radio-spike      # on each laptop
+open http://localhost:4531/
+```
+
+On each device: pick a mood, press **Listen** on the receiver first (allow the mic when the browser asks; the page never asks on its own), then **Send** on the sender. Log every attempt in `TRIAL-LOG.md`. Twenty first-attempt mood sends in each direction at 1 m in a quiet room; the proposed gate is 19/20 per direction per device pairing. Text, 2 m and 5 m rows are secondary and reported separately.
 - `NOUN_MAX` is 1199 for the spike (Visit Nouns seed range). The PRD leaves it to be frozen with the schema.
 
 ## Not done here, on purpose

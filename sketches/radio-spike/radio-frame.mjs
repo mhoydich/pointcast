@@ -170,10 +170,14 @@ export function randomAlias() {
  *
  * Guard against a shared or copied store (localStorage by mistake, or a
  * duplicated tab, which copies sessionStorage): every instance stamps the store
- * with its own owner token on creation. If the store already carries a live
- * owner token from a different instance, this instance takes a fresh alias
- * instead of continuing that one, so two tabs can never share a wire alias.
- * Tab reload keeps the alias (same store, token re-stamped).
+ * with its own owner token on creation. If the store already carries an owner
+ * token that is not this instance's, the instance takes a fresh alias instead
+ * of continuing that one, so two live instances can never share a wire alias.
+ *
+ * With the default (random) owner, that means the call sign is PER PAGE LOAD:
+ * reloading the harness produces a new owner, sees the previous load's token,
+ * and starts a fresh alias at id 0. Only a caller that passes the same `owner`
+ * back in continues a saved alias; the spike harness does not do that.
  *
  * The alias is unverified and cosmetic; a receiver can only say "the same alias
  * as before", never who. When the counter wraps, the alias rotates.

@@ -139,17 +139,22 @@ test('two tabs never share a wire alias, even on a shared store with interleaved
   assert.ok(trace.filter(t => t.endsWith(':get')).length <= 2, 'the store is only read at construction, never during take()');
 });
 
-test('per-tab store: reload keeps the alias, a duplicated tab (copied store) gets a fresh one', () => {
+test('owner token: default options give a fresh call sign per load; only the same owner continues a saved alias', () => {
   let saved = null;
   const store = { get: () => saved, set: v => { saved = v; } };
-  const first = createSequence(store, { owner: 'aaaaaaaa' });
+  const first = createSequence(store);                              // as index.html wires it: random owner
   first.take(); first.take();
-  const reloaded = createSequence(store, { owner: 'aaaaaaaa' });  // same tab after reload: same owner token
-  assert.equal(reloaded.aliasHex, first.aliasHex);
-  assert.equal(reloaded.take(), 2, 'sequence continues after reload');
+  const reload = createSequence(store);                             // page reload with default options
+  assert.notEqual(reload.aliasHex, first.aliasHex, 'reload → new call sign');
+  assert.equal(reload.take(), 0, 'and ids restart at 0 under the new alias');
+  const owned = createSequence(store, { owner: 'aaaaaaaa' });
+  owned.take(); owned.take(); owned.take();
+  const continued = createSequence(store, { owner: 'aaaaaaaa' });   // explicit same owner (not used by the harness)
+  assert.equal(continued.aliasHex, owned.aliasHex);
+  assert.equal(continued.take(), 3, 'same owner continues the sequence');
   const copy = { get: () => saved, set: () => {} };                 // duplicated tab starts with a copy of the store
   const dup = createSequence(copy, { owner: 'cccccccc' });
-  assert.notEqual(dup.aliasHex, first.aliasHex, 'copied store with another owner → fresh alias');
+  assert.notEqual(dup.aliasHex, owned.aliasHex, 'copied store with another owner → fresh alias');
   assert.equal(dup.take(), 0);
   // legacy store without an owner token is adopted (one-time migration)
   saved = JSON.stringify({ alias: 'deadbeef', next: 5 });
