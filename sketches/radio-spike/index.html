@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Layers Radio spike</title>
+<style>
+  :root { color-scheme: dark; --bg:#1a1713; --fg:#fdf2d6; --mute:#a79d8c; --rule:#3a342b; --gold:#e8b04a; --red:#e5484d; --green:#6fbf8e; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 Inter, system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  h1 { font: 700 12px/1 ui-monospace, Menlo, monospace; letter-spacing:.2em; color: var(--gold); margin: 0 0 4px; }
+  h2 { font: 700 10px/1 ui-monospace, Menlo, monospace; letter-spacing:.2em; color: var(--mute); margin: 18px 0 8px; }
+  .note { color: var(--mute); font-size: 12px; margin: 0 0 12px; }
+  .warn { border:1px solid var(--red); border-radius:6px; padding:8px 10px; color:#f2c4c6; font-size:12px; }
+  section { border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  .moods { display:flex; flex-wrap:wrap; gap:8px; }
+  .mood { all: unset; cursor: pointer; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--rule); font-weight: 600; }
+  .mood:hover, .mood:focus-visible { border-color: var(--gold); outline: none; }
+  .mood[aria-pressed=true] { background: var(--m, #333); color: #111; border-color: transparent; }
+  button.act { all: unset; cursor: pointer; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--rule); font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .14em; }
+  button.act:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button.act[disabled] { opacity: .45; cursor: default; }
+  button.primary { border-color: #5a2a2a; }
+  button.primary[aria-pressed=true], .listen[aria-pressed=true] { background: #5a1f1f; border-color: var(--red); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  input[type=text] { background:#221e19; color:var(--fg); border:1px solid var(--rule); border-radius:4px; padding:7px 9px; min-width: 240px; font: inherit; }
+  select { background:#221e19; color:var(--fg); border:1px solid var(--rule); border-radius:4px; padding:6px; }
+  .status { font: 600 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; color: var(--mute); }
+  .status b { color: var(--fg); }
+  .budget { font-size: 12px; color: var(--mute); }
+  .budget.over { color: var(--red); }
+  .inbox { list-style: none; margin: 8px 0 0; padding: 0; }
+  .inbox li { border-top: 1px solid var(--rule); padding: 8px 0; display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: start; }
+  .inbox .mark { width: 14px; height: 14px; border-radius: 50%; margin-top: 3px; }
+  .inbox small { color: var(--mute); display:block; }
+  .tag { font: 600 9px/1 ui-monospace, Menlo, monospace; letter-spacing:.14em; color: var(--mute); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 4px; }
+  pre { background:#221e19; border:1px solid var(--rule); border-radius:4px; padding:8px; font: 11px/1.4 ui-monospace, Menlo, monospace; overflow:auto; white-space: pre-wrap; word-break: break-all; }
+  kbd { font: 10px ui-monospace, Menlo, monospace; border: 1px solid var(--rule); border-radius: 3px; padding: 1px 4px; }
+  .meter { height: 6px; background: #221e19; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+  .meter i { display:block; height:100%; width:0; background: var(--green); transition: width .08s; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LAYERS RADIO · ACOUSTIC SPIKE</h1>
+  <p class="note">Local harness, not a product surface. ggwave 0.4.0 is loaded from <code>vendor/</code> (MIT). Everything heard through the air is public and unverified. Nothing here writes to saved Layers settings.</p>
+  <p class="warn">Start with your volume low. Send plays a data burst through your speakers. Listen opens your microphone only when you press it, and Stop / <kbd>Esc</kbd> closes it.</p>
+
+  <section aria-labelledby="send-h">
+    <h2 id="send-h">SEND</h2>
+    <div class="moods" role="group" aria-label="Mood" data-moods></div>
+    <div class="row">
+      <input type="text" data-text placeholder="optional note, up to 32 bytes" aria-label="Optional note" autocomplete="off">
+      <span class="budget" data-budget>0 / 32 bytes</span>
+      <label>speed <select data-proto>
+        <option value="GGWAVE_PROTOCOL_AUDIBLE_FAST" selected>audible fast</option>
+        <option value="GGWAVE_PROTOCOL_AUDIBLE_NORMAL">audible normal</option>
+        <option value="GGWAVE_PROTOCOL_AUDIBLE_FASTEST">audible fastest (fails loopback on 13-byte frames)</option>
+      </select></label>
+    </div>
+    <div class="row">
+      <button class="act primary" data-send disabled>SEND</button>
+      <button class="act" data-preview disabled>PREVIEW (local only)</button>
+      <button class="act" data-loopback disabled>SOFTWARE LOOPBACK</button>
+      <span class="status" data-ready>Pick a mood.</span>
+      <span class="status" data-send-status aria-live="polite"></span>
+    </div>
+    <p class="note" style="margin:10px 0 0">Sender states: Preparing → Playing → <b>Broadcast played</b>. There is no acknowledgement; a receiver may or may not exist. Loopback decodes the generated waveform in software and is codec evidence only, not a room test.</p>
+    <pre data-frame hidden></pre>
+  </section>
+
+  <section aria-labelledby="listen-h">
+    <h2 id="listen-h">LISTEN</h2>
+    <div class="row">
+      <button class="act listen" data-listen aria-pressed="false">LISTEN</button>
+      <button class="act" data-stop>STOP RADIO</button>
+      <span class="status" data-listen-status>Mic closed.</span>
+    </div>
+    <div class="meter" aria-hidden="true"><i data-meter></i></div>
+    <p class="note" style="margin:10px 0 0">Mic permission is requested only on Listen. The raw mic signal never reaches the speakers and is never recorded or uploaded. Your own sends are ignored while they play (self-echo suppression), then listening resumes.</p>
+    <ol class="inbox" data-inbox aria-live="polite"></ol>
+  </section>
+
+  <section aria-labelledby="log-h">
+    <h2 id="log-h">LOG</h2>
+    <pre data-log>ready</pre>
+    <p class="note">Alias: <code data-alias></code> <button class="act" data-reset-alias style="padding:4px 8px">reset alias</button> · <kbd>L</kbd> listen · <kbd>Esc</kbd> stop</p>
+  </section>
+</main>
+
+<script src="vendor/ggwave-0.4.0/ggwave.js"></script>
+<script type="module">
+import { encodeFrame, decodeFrame, MOODS, TEXT_MAX_BYTES, textBudget, createSequence, createDedup, createLimiter, hex } from './radio-frame.mjs';
+
+const $ = s => document.querySelector(s);
+const logEl = $('[data-log]');
+const log = (...a) => { const line = `${new Date().toISOString().slice(11, 23)} ${a.join(' ')}`; logEl.textContent = (logEl.textContent + '\n' + line).split('\n').slice(-40).join('\n'); console.log('[radio]', ...a); };
+
+const PALETTE = { 1: '#7ec8ff', 2: '#ffb347', 3: '#ff9ad5', 4: '#c8ff7e', 5: '#9aa7b8', 6: '#6b6b8a', 7: '#5a4bd6' };
+const seq = createSequence({ get: () => localStorage.getItem('pc-radio-spike-seq'), set: v => localStorage.setItem('pc-radio-spike-seq', v) });
+$('[data-alias]').textContent = seq.aliasHex;
+$('[data-reset-alias]').onclick = () => { seq.reset(); $('[data-alias]').textContent = seq.aliasHex; log('alias reset', seq.aliasHex); };
+
+// ---------- mood buttons ----------
+let mood = null;
+const moodsEl = $('[data-moods]');
+for (const m of MOODS) {
+  const b = document.createElement('button');
+  b.className = 'mood'; b.type = 'button'; b.textContent = m.name; b.dataset.id = m.id; b.style.setProperty('--m', PALETTE[m.id]);
+  b.setAttribute('aria-pressed', 'false'); b.title = `${m.key.toUpperCase()} · ${m.motif}`;
+  b.onclick = () => selectMood(m.id);
+  moodsEl.append(b);
+}
+function selectMood(id) {
+  mood = id;
+  moodsEl.querySelectorAll('.mood').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.id === id)));
+  refreshSend();
+}
+
+// ---------- text budget ----------
+const textEl = $('[data-text]'), budgetEl = $('[data-budget]');
+function refreshSend() {
+  const b = textBudget(textEl.value);
+  budgetEl.textContent = b.over ? `${b.bytes} / ${TEXT_MAX_BYTES} bytes — ${b.over} over, shorten it` : `${b.bytes} / ${TEXT_MAX_BYTES} bytes`;
+  budgetEl.classList.toggle('over', b.over > 0);
+  const ok = !!mood && !b.over && !!codec && !sending;
+  $('[data-send]').disabled = !ok; $('[data-preview]').disabled = !ok; $('[data-loopback]').disabled = !ok;
+  $('[data-ready]').innerHTML = !codec ? 'Loading codec…' : !mood ? 'Pick a mood.' : b.over ? 'Note is over 32 bytes.' : `Ready: <b>${MOODS.find(m => m.id === mood).name}</b>`;
+}
+textEl.addEventListener('input', refreshSend);
+
+// ---------- codec ----------
+let codec = null, params = null;
+const SAMPLE_RATE = 48000, FRAME_SAMPLES = 1024;
+try {
+  codec = await ggwave_factory();
+  codec.disableLog();
+  params = codec.getDefaultParameters();
+  params.sampleRateInp = params.sampleRateOut = params.sampleRate = SAMPLE_RATE;
+  params.samplesPerFrame = FRAME_SAMPLES;
+  params.sampleFormatInp = params.sampleFormatOut = codec.SampleFormat.GGWAVE_SAMPLE_FORMAT_F32;
+  params.operatingMode = codec.GGWAVE_OPERATING_MODE_RX_AND_TX;
+  log('ggwave 0.4.0 ready');
+} catch (e) { log('codec failed to load:', e.message); }
+refreshSend();
+
+function encodeWave(bytes, protoName) {
+  const inst = codec.init(params);
+  try {
+    const raw = new Uint8Array(codec.encode(inst, bytes, codec.ProtocolId[protoName], 25));
+    return new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)); // copy out of WASM memory
+  } finally { codec.free(inst); }
+}
+function softwareDecode(samples) {
+  const inst = codec.init(params); const found = [];
+  const padded = new Float32Array(FRAME_SAMPLES * 4 + samples.length + FRAME_SAMPLES * 8); padded.set(samples, FRAME_SAMPLES * 4);
+  try {
+    for (let s = 0; s + FRAME_SAMPLES <= padded.length; s += FRAME_SAMPLES) {
+      const r = new Uint8Array(codec.decode(inst, new Uint8Array(padded.buffer, s * 4, FRAME_SAMPLES * 4)));
+      if (r.length) found.push(new Uint8Array(r));
+    }
+  } finally { codec.free(inst); }
+  return found;
+}
+
+// ---------- audio context (one, created on first gesture) ----------
+let ctx = null;
+function ensureCtx() {
+  if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE }); log('AudioContext', ctx.sampleRate, 'Hz'); }
+  if (ctx.state !== 'running') ctx.resume();
+  return ctx;
+}
+
+// ---------- send ----------
+let sending = false, transmitUntil = 0, activeSource = null, cooldownTimer = 0;
+function buildFrame() {
+  const bytes = encodeFrame({ alias: seq.alias, messageId: seq.take(), mood, text: textEl.value });
+  $('[data-frame]').hidden = false;
+  $('[data-frame]').textContent = `frame ${bytes.length} B: ${hex(bytes)}`;
+  return bytes;
+}
+async function send(local) {
+  if (sending || !mood) return;
+  sending = true; refreshSend();
+  const st = $('[data-send-status]');
+  const proto = $('[data-proto]').value;
+  try {
+    st.innerHTML = '<b>Preparing</b>';
+    const bytes = buildFrame();
+    const wave = encodeWave(bytes, proto);
+    const c = ensureCtx();
+    const buf = c.createBuffer(1, wave.length, SAMPLE_RATE); buf.copyToChannel(wave, 0);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const gain = c.createGain(); gain.gain.value = local ? 0.35 : 0.9;
+    src.connect(gain); gain.connect(c.destination);
+    activeSource = src;
+    const seconds = wave.length / SAMPLE_RATE;
+    transmitUntil = performance.now() + seconds * 1000 + 250; // self-echo suppression window, relative to playback completion
+    st.innerHTML = `<b>${local ? 'Preview playing' : 'Playing'}</b> ${seconds.toFixed(2)} s`;
+    log(local ? 'preview' : 'send', proto.replace('GGWAVE_PROTOCOL_', '').toLowerCase(), `${bytes.length} B`, `${seconds.toFixed(3)} s`, `id ${bytes[8] << 8 | bytes[9]}`);
+    await new Promise(res => { src.onended = res; src.start(); });
+    activeSource = null;
+    st.innerHTML = local ? 'Preview done (local only, nothing was broadcast)' : '<b>Broadcast played</b> — no acknowledgement exists';
+    // serialize: cooldown after complete playback
+    await new Promise(res => { cooldownTimer = setTimeout(res, 800); });
+  } catch (e) { st.textContent = 'Send failed: ' + e.message; log('send error', e.message); }
+  finally { sending = false; cooldownTimer = 0; refreshSend(); }
+}
+$('[data-send]').onclick = () => send(false);
+$('[data-preview]').onclick = () => send(true);
+$('[data-loopback]').onclick = () => {
+  const bytes = buildFrame();
+  const proto = $('[data-proto]').value;
+  const wave = encodeWave(bytes, proto);
+  const heard = softwareDecode(wave);
+  const ok = heard.length === 1 && hex(heard[0]) === hex(bytes);
+  let msg = `loopback ${proto.replace('GGWAVE_PROTOCOL_', '').toLowerCase()} ${bytes.length} B ${(wave.length / SAMPLE_RATE).toFixed(3)} s → ${ok ? 'exact match' : 'MISMATCH'}`;
+  if (ok) { const d = decodeFrame(heard[0]); msg += ` (${d.moodName}${d.text ? ' "' + d.text + '"' : ''})`; }
+  else if (heard.length) msg += ` heard ${heard.map(hex).join(',')}`;
+  $('[data-send-status]').textContent = 'Software loopback: ' + (ok ? 'exact' : 'mismatch') + ' (codec evidence only)';
+  log(msg);
+};
+
+// ---------- listen ----------
+let mic = null, micSource = null, proc = null, decoder = null, listening = false, frameBuf = null, filled = 0, rafMeter = 0, level = 0;
+const dedup = createDedup(256), perAlias = new Map(), global = createLimiter({ rate: 1, burst: 4 });
+const listenBtn = $('[data-listen]'), lst = $('[data-listen-status]'), inbox = $('[data-inbox]');
+
+async function startListen() {
+  if (listening) return;
+  if (!codec) { lst.textContent = 'Codec not loaded.'; return; }
+  lst.textContent = 'Asking for the microphone…';
+  try {
+    mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }, video: false });
+  } catch (e) {
+    lst.textContent = e.name === 'NotAllowedError' ? 'Microphone permission denied. Allow it in the browser and press Listen again.' : e.name === 'NotFoundError' ? 'No microphone found.' : 'Microphone failed: ' + e.message;
+    log('mic error', e.name, e.message); return;
+  }
+  const track = mic.getAudioTracks()[0];
+  const settings = track.getSettings();
+  log('mic track', JSON.stringify({ sampleRate: settings.sampleRate, echoCancellation: settings.echoCancellation, noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl }));
+  const c = ensureCtx();
+  if (c.sampleRate !== SAMPLE_RATE) log('WARNING context sample rate', c.sampleRate, '≠ codec', SAMPLE_RATE);
+  micSource = c.createMediaStreamSource(mic);
+  decoder = codec.init(params);
+  frameBuf = new Float32Array(FRAME_SAMPLES); filled = 0;
+  // ScriptProcessor for the spike: simplest cross-browser tap; the product version should use an AudioWorklet.
+  proc = c.createScriptProcessor(FRAME_SAMPLES, 1, 1);
+  proc.onaudioprocess = e => {
+    const input = e.inputBuffer.getChannelData(0);
+    let peak = 0; for (let i = 0; i < input.length; i += 8) peak = Math.max(peak, Math.abs(input[i]));
+    level = peak;
+    if (performance.now() < transmitUntil) return; // ignore our own burst
+    let pos = 0;
+    while (pos < input.length) {
+      const take = Math.min(frameBuf.length - filled, input.length - pos);
+      frameBuf.set(input.subarray(pos, pos + take), filled); pos += take; filled += take;
+      if (filled === frameBuf.length) { consume(); filled = 0; }
+    }
+    // Output stays silent: do not route the mic to the speakers.
+    e.outputBuffer.getChannelData(0).fill(0);
+  };
+  micSource.connect(proc); proc.connect(c.destination); // required for onaudioprocess to run; output is zeroed above
+  track.addEventListener('ended', () => { log('mic track ended'); stopListen('track ended'); });
+  listening = true; listenBtn.setAttribute('aria-pressed', 'true');
+  lst.innerHTML = '<b>Listening</b> (mic open)';
+  meterLoop();
+}
+function consume() {
+  let r;
+  try { r = new Uint8Array(decoder ? codec.decode(decoder, new Uint8Array(frameBuf.buffer)) : []); } catch (e) { log('decode error', e.message); return; }
+  if (!r.length) return;
+  const bytes = new Uint8Array(r);
+  let d;
+  try { d = decodeFrame(bytes); } catch (e) { log('rejected frame', e.code, hex(bytes)); return; }
+  if (!dedup.accept(d.alias, d.messageId)) { log('duplicate suppressed', d.alias, d.messageId); return; }
+  if (!global.allow()) { log('global rate limit dropped', d.alias, d.messageId); return; }
+  if (!perAlias.has(d.alias)) perAlias.set(d.alias, createLimiter({ rate: 0.5, burst: 3 }));
+  if (!perAlias.get(d.alias).allow()) { log('alias rate limit dropped', d.alias, d.messageId); return; }
+  receive(d, bytes);
+}
+function receive(d, bytes) {
+  log('RECEIVED', d.alias, `#${d.messageId}`, d.moodName, d.text ? JSON.stringify(d.text) : '', `${bytes.length} B`);
+  const li = document.createElement('li');
+  const mark = document.createElement('i'); mark.className = 'mark'; mark.style.background = PALETTE[d.mood];
+  const body = document.createElement('div');
+  const strong = document.createElement('b'); strong.textContent = d.moodName;
+  body.append(strong);
+  if (d.text) { body.append(' '); const t = document.createElement('span'); t.textContent = d.text; body.append(t); } // textContent only: decoded text is never executed or rendered as HTML
+  const small = document.createElement('small'); small.textContent = `from ${d.alias} · #${d.messageId}${d.noun !== null ? ' · noun ' + d.noun : ''} · ${new Date().toLocaleTimeString()}`;
+  body.append(small);
+  const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = 'RECEIVED · UNVERIFIED';
+  li.append(mark, body, tag);
+  inbox.prepend(li);
+  while (inbox.children.length > 10) inbox.lastChild.remove();
+}
+function stopListen(reason) {
+  if (!listening && !mic) return;
+  try { proc && (proc.onaudioprocess = null, proc.disconnect()); } catch {}
+  try { micSource && micSource.disconnect(); } catch {}
+  try { mic && mic.getTracks().forEach(t => t.stop()); } catch {}
+  try { decoder && codec.free(decoder); } catch {}
+  proc = micSource = mic = decoder = null; listening = false; level = 0;
+  cancelAnimationFrame(rafMeter); rafMeter = 0; $('[data-meter]').style.width = '0';
+  listenBtn.setAttribute('aria-pressed', 'false');
+  lst.textContent = `Mic closed${reason ? ' (' + reason + ')' : ''}.`;
+  log('listen stopped', reason || '');
+}
+function stopRadio(reason) {
+  // Tear down everything this page owns: playback, cooldown, mic, decoder, meters.
+  try { activeSource && activeSource.stop(); } catch {}
+  activeSource = null; transmitUntil = 0;
+  if (cooldownTimer) { clearTimeout(cooldownTimer); cooldownTimer = 0; }
+  stopListen(reason);
+  sending = false; refreshSend();
+  $('[data-send-status]').textContent = 'Stopped.';
+}
+function meterLoop() { rafMeter = requestAnimationFrame(meterLoop); $('[data-meter]').style.width = Math.min(100, level * 300) + '%'; }
+
+listenBtn.onclick = () => listening ? stopListen('stopped') : startListen();
+$('[data-stop]').onclick = () => stopRadio('stop');
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.preventDefault(); stopRadio('escape'); return; } // works from the text field too
+  if (e.target.closest('input,textarea,select')) return;
+  if (e.key === 'l' || e.key === 'L') { e.preventDefault(); listenBtn.click(); }
+  const m = MOODS.find(m => m.key === e.key.toLowerCase()); if (m && !e.metaKey && !e.ctrlKey && !e.altKey) selectMood(m.id);
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopRadio('page hidden'); });
+addEventListener('pagehide', () => stopRadio('pagehide'));
+</script>
+</body>
+</html>
