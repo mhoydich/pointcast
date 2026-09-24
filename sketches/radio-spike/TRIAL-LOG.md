@@ -1,12 +1,13 @@
 # Layers Radio — two-device trial log (blank)
 
-Fill one copy per device pairing. Every row is one **first attempt**: no re-sends count toward the gate. Loopback and preview never count.
+Fill one copy per device pairing. Every row is one **first attempt**: no re-sends count toward the gate. Loopback and preview never count. Two-laptop localhost testing applies only if two suitable laptops are available; a laptop + phone pairing needs an authorized HTTPS preview that does not exist yet.
 
 ## Setup
 
 | Field | Device A | Device B |
 |---|---|---|
-| Commit (PR #1214 head) | | |
+| Commit (`git rev-parse HEAD`; reviewed runtime revision is 86baf4642a457feddc092aa32b2444ce261159ab) | | |
+| Server command used (must include `--bind 127.0.0.1` for a localhost laptop) | | |
 | Device model | | |
 | OS version | | |
 | Browser + version | | |

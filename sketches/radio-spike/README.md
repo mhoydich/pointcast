@@ -25,7 +25,7 @@ Run:
 ```bash
 node --test --test-timeout=8000 sketches/radio-spike/radio-frame.test.mjs sketches/radio-spike/radio-controller.test.mjs
 node sketches/radio-spike/measure.mjs
-python3 -m http.server 4531 -d sketches/radio-spike   # then open http://localhost:4531/
+python3 -m http.server 4531 --bind 127.0.0.1 -d sketches/radio-spike   # loopback only; then open http://localhost:4531/
 ```
 
 ## Measured (ggwave 0.4.0, 48 kHz, 1024 samples/frame, volume 25)
@@ -81,11 +81,17 @@ Documentation correction (third round): an earlier version of this file and of t
 
 ## Supervised two-device trial (stage B exit)
 
-Exact commit: see the PR head (`git log -1 --format=%H -- sketches/radio-spike`). Both devices need a **secure context** for the microphone: `http://localhost` counts, an `http://<LAN-IP>` URL does not, so a phone cannot Listen over plain LAN HTTP. Cleanest zero-exposure setup is two laptops, each serving its own checkout on localhost:
+**Reviewed runtime revision:** `86baf4642a457feddc092aa32b2444ce261159ab` (later commits on the PR are documentation only). Use that exact revision, not the moving branch, and record `git rev-parse HEAD` in the log's setup table.
+
+Both devices need a **secure context** for the microphone: `http://localhost` counts, an `http://<LAN-IP>` URL does not, so a phone cannot Listen over plain LAN HTTP. **Two-laptop localhost testing is available only if Mike has two suitable laptops; a laptop + phone trial still lacks an authorized HTTPS preview and is blocked until one exists.** No tunnel, exposed service or production deploy is part of this handoff.
+
+Zero-exposure setup on each laptop, in an existing clean checkout of the repo (the server binds to loopback only; `http.server` defaults to all interfaces without `--bind`):
 
 ```bash
-git fetch origin && git checkout cc/radio-spike
-python3 -m http.server 4531 -d sketches/radio-spike      # on each laptop
+git fetch origin
+git switch --detach 86baf4642a457feddc092aa32b2444ce261159ab
+git rev-parse HEAD                                   # copy into TRIAL-LOG.md
+python3 -m http.server 4531 --bind 127.0.0.1 -d sketches/radio-spike
 open http://localhost:4531/
 ```
 
