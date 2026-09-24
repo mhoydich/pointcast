@@ -1,0 +1,291 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+const title = 'Sign in with PointCast';
+const description = 'A login for the small web that does not track you. Any site can add it with one script tag and nothing to register. People see exactly what a site gets, each site gets a different id, and no site keeps access.';
+const snippet = `<script src="https://pointcast.xyz/connect.js" defer></script>
+
+<button data-pointcast-connect data-scope="card">
+  Continue with PointCast
+</button>
+
+<script>
+  document.addEventListener('pointcast:connected', (e) => {
+    const { sub, card } = e.detail;   // sub: stable for your site only
+    console.log('Hello', card ? '@' + card.handle : sub);
+  });
+</script>`;
+const server = `// Need your server to trust it? Ask for the code instead:
+const { code } = await PointCast.connect({ exchange: false });
+// …send code to your server, then from the server:
+const res = await fetch('https://pointcast.xyz/api/connect/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ code, client: 'https://your.site' }),
+});
+const who = await res.json(); // { ok, sub, card, wallet?, aud, iss }`;
+---
+<BlockLayout title={title} description={description} immersive alternates={[{ type: 'application/json', href: '/connect.json', title: 'Sign in with PointCast, for agents' }]}>
+  <main class="cx" data-connect>
+    <!-- Consent: shown when a site sends someone here. -->
+    <section class="cx-consent" data-consent hidden aria-live="polite">
+      <p class="cx-kicker">SIGN IN WITH POINTCAST</p>
+      <div class="cx-state" data-state><p class="cx-muted">Checking who is asking…</p></div>
+    </section>
+
+    <!-- Landing: shown when you come here yourself. -->
+    <div class="cx-landing" data-landing hidden>
+      <header class="cx-hero">
+        <p class="cx-kicker"><a href="/">POINTCAST</a> · CONNECT · v1</p>
+        <h1>Sign in with PointCast.</h1>
+        <p class="cx-lede">A login for the small web that does not track you. Your town card goes with you to any site that asks, and nothing follows you home.</p>
+        <div class="cx-cta"><button type="button" class="cx-btn" data-try>Try it here</button><a class="cx-btn ghost" href="#build">Add it to your site</a></div>
+      </header>
+
+      <section class="cx-promises" aria-label="The four promises">
+        <article><b>01</b><h2>Nothing to register</h2><p>Your site's address is its name. No keys, no dashboard, no approval queue. One script tag.</p></article>
+        <article><b>02</b><h2>You see what they get</h2><p>Your card, and your Tezos wallet only if the site asks. Line by line, before you say yes.</p></article>
+        <article><b>03</b><h2>No one keeps access</h2><p>The site gets a code that works once and dies in two minutes. No token, no refresh, no way back in without you.</p></article>
+        <article><b>04</b><h2>A different you everywhere</h2><p>Each site gets its own id for you, so two sites cannot line up their lists and find you in both.</p></article>
+      </section>
+
+      <section class="cx-demo" data-demo hidden aria-live="polite">
+        <h2>What a site just received</h2>
+        <pre data-demo-out></pre>
+        <p class="cx-muted">That is the whole payload. PointCast.xyz asked as an ordinary site would. Run it again and <code>sub</code> stays the same here; on any other site it would be different.</p>
+      </section>
+
+      <section class="cx-build" id="build">
+        <h2>Add it to your site</h2>
+        <ol class="cx-steps"><li>Paste the snippet. The button wires itself.</li><li>Someone taps it, sees your site's address and exactly what you will get, and says yes.</li><li>You receive <code>{'{ sub, card }'}</code>. Store <code>sub</code> as their id on your site.</li></ol>
+        <pre><code>{snippet}</code></pre>
+        <pre><code>{server}</code></pre>
+        <dl class="cx-facts">
+          <div><dt>card</dt><dd>@handle, name, Noun, bio, now, place, song, up to three links, color. Always included when the person has one.</dd></div>
+          <div><dt>wallet</dt><dd>Ask with <code>data-scope="card wallet"</code>. The person sees the exact address first.</dd></div>
+          <div><dt>sub</dt><dd>Stable for your origin, different on every other origin.</dd></div>
+          <div><dt>codes</dt><dd>One use, two minutes, only redeemable by your origin or your server.</dd></div>
+          <div><dt>modes</dt><dd>Popup by default; falls back to a full-page redirect when popups are blocked. Redirects only ever land on your own origin.</dd></div>
+          <div><dt>agents</dt><dd><a href="/connect.json">/connect.json</a> describes all of this as data.</dd></div>
+        </dl>
+      </section>
+
+      <section class="cx-mine" data-mine hidden>
+        <h2>Sites you have signed into</h2>
+        <p class="cx-muted">None of them can reach you again without asking. This list is your receipt.</p>
+        <ul data-grants></ul>
+      </section>
+
+      <footer class="cx-foot"><a href="/shortwave">Shortwave</a><a href="/shortwave#card">Your town card</a><a href="/auth">Account</a><a href="/connect.json">For agents</a></footer>
+    </div>
+  </main>
+</BlockLayout>
+
+<script>
+  type Card = { handle: string; name: string; noun: number; bio: string; now: string; place: string; color: string; avatar: string; url: string } | null;
+  type Preview = { ok: true; app: { name: string; host: string; known: boolean; note: string }; client: string; scope: string[]; card: Card; wallet: string | null; walletMissing: boolean };
+
+  const root = document.querySelector<HTMLElement>('[data-connect]')!;
+  const params = new URLSearchParams(location.search);
+  const el = (tag: string, cls?: string, text?: string) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+
+  function originOf(value: string | null): string | null {
+    if (!value) return null;
+    try { const u = new URL(value); return u.origin === value.replace(/\/$/, '') ? u.origin : null; } catch { return null; }
+  }
+
+  // ── consent ─────────────────────────────────────────────────────────
+  async function consent() {
+    const state = root.querySelector<HTMLElement>('[data-state]')!;
+    const client = originOf(params.get('client'));
+    const scope = params.get('scope') || 'card';
+    const appState = (params.get('state') || '').slice(0, 200);
+    let redirect: URL | null = null;
+    try { redirect = params.get('redirect_uri') ? new URL(params.get('redirect_uri')!) : null; } catch { redirect = null; }
+    // A popup that lost its opener (in-app browsers open popups in the same tab) returns by redirect.
+    const mode = params.get('mode') === 'redirect' || !window.opener ? 'redirect' : 'popup';
+
+    const fail = (msg: string) => { state.replaceChildren(el('h1', 'cx-title', 'This sign-in cannot continue.'), el('p', 'cx-muted', msg)); };
+    if (!client) return fail('The site did not say who it is. Go back and use its PointCast button.');
+    if (mode === 'redirect' && (!redirect || redirect.origin !== client)) return fail('The return address is not on the site that asked. Nothing was shared.');
+    if (mode === 'redirect' && !params.get('redirect_uri')) return fail('Open this from the site’s “Continue with PointCast” button. Nothing was shared.');
+
+    const deliver = (payload: { code?: string; error?: string }) => {
+      if (mode === 'redirect' && redirect) {
+        if (payload.code) redirect.searchParams.set('pc_code', payload.code); else redirect.searchParams.set('pc_error', payload.error || 'denied');
+        redirect.searchParams.set('pc_state', appState);
+        location.assign(redirect.toString());
+        return;
+      }
+      // targetOrigin = the site that asked. If the opener is anyone else, the browser drops it.
+      window.opener?.postMessage({ type: 'pointcast:connect', state: appState, ...payload }, client);
+      setTimeout(() => window.close(), 300);
+    };
+
+    const res = await fetch(`/api/connect/authorize?client=${encodeURIComponent(client)}&scope=${encodeURIComponent(scope)}`, { headers: { accept: 'application/json' }, credentials: 'same-origin' }).catch(() => null);
+    const data = res ? await res.json().catch(() => null) : null;
+    if (res?.status === 401) {
+      const back = `${location.pathname}${location.search}`;
+      const box = el('div', 'cx-card');
+      box.append(el('h1', 'cx-title', `${new URL(client).host} wants you to sign in with PointCast.`), el('p', 'cx-muted', 'Sign in to PointCast first. You will come straight back here and nothing is shared until you say yes.'));
+      const go = el('a', 'cx-btn', 'Sign in to PointCast') as HTMLAnchorElement; go.href = `/auth?returnTo=${encodeURIComponent(back)}`;
+      const no = el('button', 'cx-btn ghost', 'No thanks') as HTMLButtonElement; no.type = 'button'; no.addEventListener('click', () => deliver({ error: 'denied' }));
+      const row = el('div', 'cx-cta'); row.append(go, no); box.append(row);
+      state.replaceChildren(box); return;
+    }
+    if (!res?.ok || !data?.ok) return fail(data?.error || 'PointCast could not load this request. Nothing was shared.');
+    const p = data as Preview;
+
+    const wrap = el('div', 'cx-card');
+    const who = el('div', 'cx-app');
+    const appName = el('h1', 'cx-title'); appName.append(document.createTextNode(`${p.app.name} `), el('span', 'cx-muted', 'wants to know who you are.'));
+    const host = el('p', 'cx-host'); host.append(el('code', '', p.client)); if (p.app.known) host.append(el('span', 'cx-badge', 'known to PointCast'));
+    who.append(appName, host, el('p', 'cx-muted cx-note', p.app.note));
+    wrap.append(who);
+
+    const gets = el('div', 'cx-gets'); gets.append(el('p', 'cx-label', 'THEY WILL GET'));
+    if (p.card) {
+      const c = el('div', 'cx-towncard'); c.style.setProperty('--card', p.card.color);
+      const img = el('img') as HTMLImageElement; img.src = p.card.avatar; img.alt = ''; img.width = 56; img.height = 56;
+      const txt = el('div'); txt.append(el('strong', '', p.card.name), el('span', 'cx-handle', `@${p.card.handle}`));
+      if (p.card.bio) txt.append(el('p', '', p.card.bio));
+      c.append(img, txt); gets.append(c);
+      gets.append(el('p', 'cx-muted', 'Your town card: name, Noun, @handle, bio, now, place, song, links and color.'));
+    } else {
+      gets.append(el('p', '', 'A private id for you on this site. You have no town card yet, so nothing else.'));
+      const make = el('a', '', 'Make a town card first ↗') as HTMLAnchorElement; make.href = '/shortwave#card'; make.target = '_blank'; make.rel = 'noopener'; gets.append(make);
+    }
+    if (p.scope.includes('wallet')) {
+      const w = el('p', 'cx-wallet'); w.append(el('span', 'cx-label', 'AND YOUR TEZOS WALLET'), el('code', '', p.wallet || 'none linked, so none will be shared'));
+      gets.append(w);
+    }
+    wrap.append(gets);
+
+    const never = el('ul', 'cx-never');
+    for (const line of ['They get it once. No ongoing access, nothing to revoke later.', `They see a different id for you than any other site does.`, 'Never your email, your other sign-ins, or your posts.']) never.append(el('li', '', line));
+    wrap.append(never);
+
+    const row = el('div', 'cx-cta');
+    const yes = el('button', 'cx-btn', p.card ? `Continue as @${p.card.handle}` : 'Continue') as HTMLButtonElement; yes.type = 'button';
+    const no = el('button', 'cx-btn ghost', 'No thanks') as HTMLButtonElement; no.type = 'button';
+    const status = el('p', 'cx-muted'); status.setAttribute('role', 'status');
+    row.append(yes, no); wrap.append(row, status);
+    no.addEventListener('click', () => { status.textContent = 'Nothing was shared.'; deliver({ error: 'denied' }); });
+    yes.addEventListener('click', async () => {
+      yes.disabled = true; no.disabled = true; status.textContent = 'Handing over…';
+      try {
+        const r = await fetch('/api/connect/authorize', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client, scope }) });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.error || 'Could not finish.');
+        status.textContent = `Done. ${p.app.name} has it. You can close this window.`;
+        deliver({ code: j.code });
+      } catch (e) { status.textContent = e instanceof Error ? e.message : 'Could not finish.'; yes.disabled = false; no.disabled = false; }
+    });
+    state.replaceChildren(wrap);
+    yes.focus();
+  }
+
+  // ── landing ─────────────────────────────────────────────────────────
+  function loadSdk(): Promise<any> {
+    const w = window as any;
+    if (w.PointCast?.connect) return Promise.resolve(w.PointCast);
+    return new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = '/connect.js'; s.onload = () => resolve(w.PointCast); s.onerror = reject; document.head.append(s); });
+  }
+  async function grants() {
+    const res = await fetch('/api/connect/grants', { credentials: 'same-origin' }).catch(() => null);
+    if (!res?.ok) return;
+    const j = await res.json(); const list = root.querySelector<HTMLElement>('[data-grants]')!;
+    root.querySelector<HTMLElement>('[data-mine]')!.hidden = false;
+    if (!j.grants?.length) { list.replaceChildren(el('li', 'cx-muted', 'None yet.')); return; }
+    list.replaceChildren(...j.grants.map((g: any) => {
+      const li = el('li'); const name = el('div'); name.append(el('strong', '', g.name), el('code', '', g.client));
+      const meta = el('small', '', `${g.scope.join(' + ')} · ${g.count} time${g.count === 1 ? '' : 's'} · last ${new Date(g.lastAt).toLocaleDateString()}`);
+      const forget = el('button', 'cx-link', 'forget') as HTMLButtonElement; forget.type = 'button';
+      forget.addEventListener('click', async () => { forget.disabled = true; await fetch('/api/connect/grants', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client: g.client }) }); li.remove(); });
+      li.append(name, meta, forget); return li;
+    }));
+  }
+  function landing() {
+    root.querySelector<HTMLElement>('[data-landing]')!.hidden = false;
+    const demo = root.querySelector<HTMLElement>('[data-demo]')!, out = root.querySelector<HTMLElement>('[data-demo-out]')!;
+    root.querySelector<HTMLButtonElement>('[data-try]')!.addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget as HTMLButtonElement; btn.disabled = true;
+      try {
+        const sdk = await loadSdk();
+        const id = await sdk.connect({ scope: ['card', 'wallet'] });
+        demo.hidden = false; out.textContent = JSON.stringify(id, null, 2); demo.scrollIntoView({ behavior: 'smooth', block: 'start' }); void grants();
+      } catch (e) { demo.hidden = false; out.textContent = e instanceof Error ? e.message : 'Stopped.'; }
+      finally { btn.disabled = false; }
+    });
+    // Coming back from a same-tab sign-in: let the SDK trade the code and show what arrived.
+    if (params.has('pc_code') || params.has('pc_error')) {
+      const show = (text: string) => { demo.hidden = false; out.textContent = text; demo.scrollIntoView({ block: 'start' }); };
+      document.addEventListener('pointcast:connected', (e) => { show(JSON.stringify((e as CustomEvent).detail, null, 2)); void grants(); }, { once: true });
+      document.addEventListener('pointcast:error', (e) => show((e as CustomEvent).detail?.message || 'Stopped.'), { once: true });
+      void loadSdk();
+    }
+    void grants();
+  }
+
+  if (params.has('client')) { root.querySelector<HTMLElement>('[data-consent]')!.hidden = false; void consent(); }
+  else landing();
+</script>
+
+<style is:global>
+  .cx { --ink: #14181c; --soft: #5b6670; --rule: #d5dde4; --page: #fbfaf7; --panel: #ffffff; --blue: #185fa5; --gold: #e0a100;
+    min-height: 100vh; padding: 28px 16px 80px; background: var(--page); color: var(--ink); font: 16px/1.5 Inter, 'Helvetica Neue', Arial, sans-serif; }
+  @media (prefers-color-scheme: dark) { .cx { --ink: #eef2f5; --soft: #9aa7b2; --rule: #2c3640; --page: #0f1419; --panel: #151c23; --blue: #6fb0ec; } }
+  .cx *, .cx *::before { box-sizing: border-box; }
+  .cx a { color: var(--blue); }
+  .cx [hidden] { display: none !important; }
+  .cx code, .cx pre, .cx-kicker, .cx-label, .cx-badge, .cx-promises b { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }
+  .cx-kicker, .cx-label { margin: 0 0 10px; font-size: 11px; letter-spacing: .12em; color: var(--blue); }
+  .cx-kicker a { text-decoration: none; }
+  .cx-muted { color: var(--soft); }
+  .cx-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 18px; border: 2px solid var(--blue); background: var(--blue); color: #fff !important; font-family: inherit; font-size: 15px; font-weight: 600; line-height: 1.2; text-decoration: none; cursor: pointer; }
+  .cx-btn.ghost { background: transparent; color: var(--blue) !important; }
+  .cx-btn:disabled { opacity: .55; cursor: default; }
+  .cx-btn:focus-visible, .cx-link:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  .cx-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .cx-link { border: 0; background: none; color: var(--blue); font: inherit; cursor: pointer; padding: 4px; }
+
+  .cx-consent { max-width: 460px; margin: 0 auto; }
+  .cx-card { padding: 22px; border: 1.5px solid var(--rule); background: var(--panel); }
+  .cx-title { margin: 0 0 8px; font-size: 24px; line-height: 1.2; font-weight: 700; letter-spacing: -.01em; }
+  .cx-title .cx-muted { font-weight: 400; }
+  .cx-host { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+  .cx-host code { padding: 3px 7px; border: 1px solid var(--rule); font-size: 13px; overflow-wrap: anywhere; }
+  .cx-badge { padding: 2px 6px; background: var(--blue); color: #fff; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+  .cx-note { margin: 8px 0 0; font-size: 13px; }
+  .cx-gets { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rule); }
+  .cx-towncard { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 12px; border-left: 6px solid var(--card, var(--blue)); background: color-mix(in srgb, var(--card, var(--blue)) 8%, var(--panel)); }
+  .cx-towncard img { width: 56px; height: 56px; image-rendering: pixelated; background: #e8eef2; }
+  .cx-towncard strong { display: block; font-size: 17px; } .cx-handle { font: 13px 'JetBrains Mono', ui-monospace, monospace; color: var(--soft); }
+  .cx-towncard p { margin: 6px 0 0; font-size: 14px; }
+  .cx-gets > p { font-size: 13px; }
+  .cx-wallet { display: grid; gap: 4px; margin: 14px 0 0; } .cx-wallet .cx-label { margin: 0; } .cx-wallet code { font-size: 13px; overflow-wrap: anywhere; }
+  .cx-never { margin: 18px 0 0; padding: 12px 0 0 18px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--soft); } .cx-never li + li { margin-top: 4px; }
+
+  .cx-landing { max-width: 980px; margin: 0 auto; }
+  .cx-hero { padding: 24px 0 34px; border-bottom: 2px solid var(--ink); }
+  .cx-hero h1 { margin: 0; font-size: clamp(44px, 9vw, 104px); line-height: .92; letter-spacing: -.05em; font-weight: 800; }
+  .cx-lede { max-width: 640px; margin: 18px 0 0; font-size: clamp(18px, 2.4vw, 23px); line-height: 1.4; }
+  .cx-promises { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--rule); }
+  .cx-promises article { padding: 20px 18px 22px 0; } .cx-promises article + article { padding-left: 18px; border-left: 1px solid var(--rule); }
+  .cx-promises b { color: var(--blue); font-size: 12px; } .cx-promises h2 { margin: 6px 0; font-size: 18px; } .cx-promises p { margin: 0; color: var(--soft); font-size: 14.5px; }
+  .cx-demo, .cx-build, .cx-mine { padding: 30px 0; border-bottom: 1px solid var(--rule); }
+  .cx-demo h2, .cx-build h2, .cx-mine h2 { margin: 0 0 12px; font-size: 26px; letter-spacing: -.02em; }
+  .cx pre { margin: 14px 0; padding: 16px; overflow-x: auto; background: #111820; color: #e9f1f7; font-size: 13px; line-height: 1.55; white-space: pre; }
+  .cx-steps { padding-left: 20px; } .cx-steps li + li { margin-top: 4px; }
+  .cx-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 18px 0 0; border-top: 1px solid var(--rule); }
+  .cx-facts div { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--rule); } .cx-facts dt { font: 12px 'JetBrains Mono', ui-monospace, monospace; color: var(--blue); } .cx-facts dd { margin: 4px 0 0; font-size: 14.5px; }
+  .cx-mine ul { margin: 12px 0 0; padding: 0; list-style: none; }
+  .cx-mine li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  .cx-mine li div { display: grid; } .cx-mine li code, .cx-mine li small { font-size: 12.5px; color: var(--soft); }
+  .cx-foot { display: flex; flex-wrap: wrap; gap: 18px; padding: 24px 0; font: 12px 'JetBrains Mono', ui-monospace, monospace; }
+  @media (max-width: 760px) {
+    .cx-promises { grid-template-columns: 1fr 1fr; } .cx-promises article:nth-child(3) { padding-left: 0; border-left: 0; }
+    .cx-promises article:nth-child(n+3) { border-top: 1px solid var(--rule); }
+    .cx-facts { grid-template-columns: 1fr; } .cx-mine li { grid-template-columns: 1fr auto; } .cx-mine li small { grid-column: 1 / -1; }
+  }
+  @media (max-width: 420px) { .cx-promises { grid-template-columns: 1fr; } .cx-promises article + article { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); } }
+</style>

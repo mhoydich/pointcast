@@ -379,7 +379,7 @@ export function mountFooterBar(root, scope) {
       swSeen[m.id] = 1;
       var own = (m.clientId && m.clientId === swSid()) || swOwnIds().indexOf(m.id) !== -1;
       if (own) return;
-      var post = { id: String(m.id), at: String(m.postedAt || new Date(b.at || Date.now()).toISOString()), who: String((b.by && b.by.handle) || 'visitor'), noun: Number(b.by && b.by.noun) || 0, text: String(m.t1 || '') + String(m.t2 || ''), via: String(m.via || 'bar') };
+      var post = { id: String(m.id), at: String(m.postedAt || new Date(b.at || Date.now()).toISOString()), who: String((b.by && b.by.handle) || 'visitor'), noun: Number(b.by && b.by.noun) || 0, text: String(m.t1 || '') + String(m.t2 || ''), via: String(m.via || 'bar'), handle: typeof m.handle === 'string' && /^[a-z0-9-]{3,24}$/.test(m.handle) ? m.handle : undefined, live: true };
       window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: post, own: false, live: true } }));
       swFlashFeed();
     });
