@@ -133,6 +133,7 @@
   #fail{position:fixed;inset:0;display:none;place-items:center;text-align:center;z-index:30;padding:2vw;} #fail p{font:500 1.3vw var(--display);} #fail a{color:var(--gold);}
   body.embed #room,body.embed .card,body.embed #snd,body.embed #ui,body.embed #pinrow{display:none!important;} body.embed #sheet{transform:translateX(-50%) scale(1.3);transform-origin:top center;}
   @media (prefers-reduced-motion:reduce){ .logo span,.blink,table.scores tr.me td,.initials b.cur::after,#snd,#room .st i,.splash.turkey{animation:none;} }
+  body.hub #joincard{display:none!important;} body.hub #room .lbl{color:var(--gold);}
 </style>
 </head>
 <body>
@@ -250,7 +251,7 @@ function makeParty({code,pid,onFrame,onStatus}){
     if(P.closed) return; if(which==='drum'&&FORCE==='room') which='room'; setStatus('connecting'); let ws; try{ ws=new WebSocket(which==='drum'?drumUrl:roomUrl); }catch(e){ return fail(which); }
     // the guard only gives up on a socket that never opened; an open socket whose welcome is late (a TV's main thread is
     // busy compiling shaders at boot, and queued message events can land after a timer) gets a second, longer wait
-    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState===1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },8000); return; } try{ ws.close(); }catch(e){} },4000);
+    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState<=1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },30000); return; } try{ ws.close(); }catch(e){} },4000);
     ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; } if(!m||typeof m!=='object') return;
       if(which==='drum'){
         if(m.type==='welcome'){ if((m.features||[]).includes('bc-party')){ ok=true; clearTimeout(guard); ready('drum'); } else { clearTimeout(guard); ws.onclose=null; try{ ws.close(); }catch(err){} open('room'); } return; }
@@ -337,6 +338,8 @@ function oklch(L,C,h){ const a=C*Math.cos(h*Math.PI/180), b=C*Math.sin(h*Math.PI
 const pitchColor=(m,L=0.82,C=0.13)=>{ const [r,g,b]=oklch(L,C,hue(m)); return new THREE.Color().setRGB(r,g,b); };
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const now=()=>performance.now(); const TESTMODE=/[?&]bot\b/.test(location.search); const ATTRACT_ONLY=/[?&]attract=1/.test(location.search);
+const HUB=/[?&]hub=1/.test(location.search); if(HUB) document.body.classList.add('hub');
+const HUB_PASS=(()=>{ const q=new URLSearchParams(location.search); return ['bot','lite','transport'].filter(k=>q.has(k)).map(k=>'&'+k+(q.get(k)?'='+encodeURIComponent(q.get(k)):'')).join(''); })();
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)); const lerp=(a,b,t)=>a+(b-a)*t; const rnd=(a=1,b)=>b===undefined?Math.random()*a:a+Math.random()*(b-a);
 const store={get(k,d){try{const v=localStorage.getItem('bcl:'+k);return v?JSON.parse(v):d;}catch(e){return d;}},set(k,v){try{localStorage.setItem('bcl:'+k,JSON.stringify(v));}catch(e){}}};
 
@@ -348,7 +351,7 @@ const BOTNAMES=['ACE','BEA','CAL','DOT','EDD','FAY','GUS','HAL'];
 let players=[]; // {i,name,human,src,pid,seen,motion,frames:[[...]],col,hex,kind,rtt,streak,best,strikes,spares,gutters,skill,auto}
 function mkPlayer(name,src,{pid=null,human=true,skill=0.6}={}){ const i=players.length; const pal=PAL[i%PAL.length];
   return {i,name,human,src,pid,seen:now(),motion:false,frames:[],col:pal.col,hex:pal.hex,kind:pal.kind,pan:pal.pan,rtt:0,streak:0,best:0,strikes:0,spares:0,gutters:0,skill,auto:0}; }
-function reindex(){ players.forEach((p,i)=>{ p.i=i; const pal=PAL[i%PAL.length]; p.col=pal.col; p.hex=pal.hex; p.kind=pal.kind; p.pan=pal.pan; }); }
+function reindex(){ players.forEach((p,i)=>{ p.i=i; const pal=PAL[(HUB&&Number.isInteger(p.pal))?p.pal:i%PAL.length]; p.col=pal.col; p.hex=pal.hex; p.kind=pal.kind; p.pan=pal.pan; }); }
 const humans=()=>players.filter(p=>p.human);
 const phones=()=>players.filter(p=>p.src==='phone');
 
@@ -529,7 +532,7 @@ function tick(T){
   acc+=Math.min(0.6,(T-lastT)/1000); lastT=T; let n=0;
   while(acc>=STEP&&n<80){ acc-=STEP; n++; const Ts=T-acc*1000; substep(STEP,Ts); }
   flare*=Math.pow(0.08,n*STEP); shake*=Math.pow(0.02,n*STEP); camKick*=Math.pow(0.05,n*STEP); if(crowdOn>0&&state!=='result'&&state!=='over') crowdOn=0;
-  scheduler(); PARTY.tick(T);
+  scheduler(); PARTY.tick(T); if(HUB&&state==='scores'&&T-stateT>25000) goHome();
 }
 function substep(dt,T){
   if(stateNext&&T>=stateNext.at){ const s=stateNext.s; stateNext=null; ({firstTurn,nextRoll,afterInter,restartDemo})[s](); }
@@ -544,27 +547,28 @@ const ALPHA='ABCDEFGHJKMNPQRSTUVWXYZ';
 const ROOM=(()=>{ const q=new URLSearchParams(location.search).get('room'); if(q&&/^[A-Za-z]{4}$/.test(q)) return q.toUpperCase(); const a=new Uint32Array(4); crypto.getRandomValues(a); return Array.from(a,v=>ALPHA[v%ALPHA.length]).join(''); })();
 const JOIN_URL=`${location.origin}/brick-choir/lanes-join?room=${ROOM}`;
 document.getElementById('roomCode').textContent=ROOM; document.getElementById('roomUrl').textContent=location.host.replace(/^www\./,'')+'/brick-choir/lanes-join'; document.getElementById('joinSub').textContent='room '+ROOM;
+if(HUB){ document.querySelector('#room .lbl').firstChild.textContent='HOME ROOM · PHONES FOLLOW THE TV'; document.getElementById('roomUrl').textContent=location.host.replace(/^www\./,'')+'/brick-choir/home-join'; }
 function drawQr(cv,text){ const m=qr(text,1), Q=2, S=m.size+Q*2; cv.width=cv.height=S; const g=cv.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,S,S); g.fillStyle='#0b0a1a'; for(let y=0;y<m.size;y++) for(let x=0;x<m.size;x++) if(m.get(x,y)) g.fillRect(x+Q,y+Q,1,1); }
 drawQr(document.querySelector('#joincard canvas'),JOIN_URL);
 const PARTY=(()=>{
   const X={net:null,status:'off',transport:null,lastSt:'',lastStT:0,evq:[],evT:0,pruneT:0};
   const setStatus=(s,t)=>{ X.status=s; X.transport=t; const el=document.getElementById('roomSt'); el.className='st '+s; document.getElementById('roomStTxt').textContent=s==='on'?(t==='drum'?'live':'live · relay'):s; };
   const seatOf=id=>players.find(p=>p.pid===id)||null;
-  function assign(id,name){
+  function assign(id,name,want){
     const cur_=seatOf(id); if(cur_){ if(name&&cur_.name!==name) cur_.name=name; return cur_; }
     if(players.length>=MAXP){ const bot=players.find(p=>!p.human&&(state==='lobby'||demo)); if(!bot) return null; players.splice(bot.i,1); reindex(); }
-    const p=mkPlayer(name,'phone',{pid:id}); players.push(p);
+    const p=mkPlayer(name,'phone',{pid:id}); players.push(p); if(HUB&&Number.isInteger(want)&&want>=0&&want<PAL.length){ p.pal=want; const pal=PAL[want]; Object.assign(p,{col:pal.col,hex:pal.hex,kind:pal.kind,pan:pal.pan}); }
     if(demo){ /* a phone joining a party-mode game: bench a bot, keep the frames flowing */ }
     jingle([0,4,7,12].map(x=>ROOT+x),0.08,p.kind,p.pan); word(`${name} grabs a lane!`,[50,62],{big:true,color:p.hex});
     if(demo){ startLobby(); } else if(state==='lobby'){ lobbyEnd=Math.max(lobbyEnd,now()+10000); } else if(state!=='over'&&state!=='scores'&&state!=='initials'){ p.frames=[]; for(let f=0;f<frame;f++) p.frames.push(isLast(f)?[0,0]:[0,0]); /* a late joiner starts with open frames */ }
     return p;
   }
   function drop(id){ const p=seatOf(id); if(!p) return; word(`${p.name} leaves the lane`,[50,62],{color:p.hex}); if(state==='lobby'||demo||state==='over'||state==='scores'){ players.splice(p.i,1); reindex(); if(demo) while(players.length<3) addBot(); if(cur>=players.length) cur=0; } else { p.human=false; p.src='bot'; p.pid=null; p.name=p.name+'·'; p.skill=0.5; if(state==='aim'&&cur===p.i) autoT=now()+1500; } X.roster(); }
-  function cmd(c){ if(c==='start'){ if(demo) startLobby(); else if(state==='lobby') startGame(); } else if(c==='again'){ if(state==='over') nextEntry(); else if(state==='scores') startLobby(); } else if(c==='party'){ if(state==='scores'||state==='over') toAttract(); } else if(c==='skip'){ if(state==='inter'){ stateNext=null; afterInter(); } } else if(c==='bot'){ if(state==='lobby') addBot(); } }
+  function cmd(c){ if(c==='start'){ if(demo) startLobby(); else if(state==='lobby') startGame(); } else if(c==='again'){ if(state==='over') nextEntry(); else if(state==='scores') startLobby(); } else if(c==='party'){ if(state==='scores'||state==='over') toAttract(); } else if(c==='skip'){ if(state==='inter'){ stateNext=null; afterInter(); } } else if(c==='bot'){ if(state==='lobby') addBot(); } else if(c==='home'){ if(HUB&&(demo||state==='over'||state==='scores'||state==='lobby'||state==='initials'||state==='inter'||state==='share')) goHome(); } }
   X.onFrame=d=>{ if(!d||typeof d!=='object'||d.o==='tv') return; const id=d.p; if(typeof id!=='string'||!id||id.length>12) return; const p=seatOf(id); if(p) p.seen=now();
     switch(d.f){
       case 'hi': X.roster(); X.state(true); if(p) X.ok(p); break;
-      case 'j': { const name=String(d.n||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3)||'???'; const q=assign(id,name); if(!q){ X.send({f:'full',p:id}); break; } X.ok(q); X.roster(); X.state(true); break; }
+      case 'j': { const name=String(d.n||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3)||'???'; const q=assign(id,name,Number.isInteger(d.c)?d.c:-1); if(!q){ X.send({f:'full',p:id}); break; } X.ok(q); X.roster(); X.state(true); break; }
       case 'bw': { if(!p){ X.send({f:'who',p:id}); break; } bowl(p.i,{power:+d.w||0.6,aim:+d.a||0,spin:+d.s||0,src:'phone'}); break; }
       case 'ai': if(p) setAim(p.i,+d.a||0,+d.s||0,d.w===undefined?undefined:+d.w); break;
       case 'arm': if(p){ p.motion=!!d.m; } break;
@@ -584,6 +588,9 @@ const PARTY=(()=>{
   X.start=()=>{ if(ATTRACT_ONLY){ document.body.classList.add('embed'); return; } X.net=makeParty({code:ROOM,pid:'tv',onFrame:X.onFrame,onStatus:setStatus}); };
   X.drop=drop; X.seatOf=seatOf; return X;
 })();
+/* hub mode: BACK TO HOME — results ride in sessionStorage for the hub's medal table, phones get home{g,r} and follow */
+function goHome(){ if(!HUB||window.__homeSent) return; window.__homeSent=true; const r=players.map(p=>({n:p.name,s:totalOf(p),k:p.human?(p.src==='phone'?1:2):0})); try{ sessionStorage.setItem('bch:result',JSON.stringify({g:'lanes',at:Date.now(),r})); }catch(e){}
+  const top=r.filter(x=>x.k).sort((a,b)=>b.s-a.s).slice(0,3).map(x=>[x.n,x.s]); PARTY.send({f:'home',g:'lanes',r:top}); setTimeout(()=>PARTY.send({f:'home',g:'lanes',r:top}),350); setTimeout(()=>{ location.href='/brick-choir/home?room='+ROOM+'&hub=1'+HUB_PASS; },800); }
 const sndEl=document.getElementById('snd'); setInterval(()=>{ sndEl.hidden=!!(ctx&&ctx.state==='running')||state==='boot'; },400);
 /* ================= three.js: the alley from behind the bowler ================= */
 const cv=document.getElementById('gl');
@@ -717,6 +724,7 @@ function scoreRows(highlight){ const week=boardMode==='week'; const src=week?(hi
 const LOGO=()=>`<div class="logo">${'LANES'.split('').map((ch,i)=>`<span style="--h:${i*44+280};--i:${i}">${ch}</span>`).join('')}</div><div class="sub">BRICK CHOIR SPORTS<small>TV</small></div>`;
 function lanesHtml(){ return `<div class="lanes">${players.map(p=>`<div class="lane ${p.human?'human':'bot'}" style="--c:${p.hex}"><b>${p.i+1}UP</b><div class="k">${esc(p.name)}<small>${srcTxt(p)}${p.src==='phone'?'':''}</small></div><div class="st">${p.human?'READY':'league bot'}</div></div>`).join('')}${players.length<MAXP?`<div class="lane open"><b>${players.length+1}UP</b><div class="k">open lane<small>scan · K · gamepad A</small></div><div class="st">${MAXP-players.length} more fit</div></div>`:''}</div>`; }
 const MENUS={lobby:[['start','START NOW'],['frames','FRAMES'],['bumpers','BUMPERS'],['bot','+ BOT'],['party','BACK TO PARTY']],over:[['continue','CONTINUE'],['share','SHARE']],scores:[['again','PLAY AGAIN'],['share','SHARE'],['party','PARTY MODE']],paused:[['resume','RESUME'],['bumpers','BUMPERS'],['end','END GAME']],share:[['back','BACK']]};
+if(HUB){ MENUS.over.push(['home','BACK TO HOME']); MENUS.scores.splice(2,1,['home','BACK TO HOME']); MENUS.lobby.splice(4,1,['home','BACK TO HOME']); }
 const menuHtml=s=>MENUS[s]?`<div class="menu">${MENUS[s].map(([a,t])=>`<button data-act="${a}">${a==='frames'?`${FRAMES} FRAMES`:a==='bumpers'?`BUMPERS ${BUMPERS?'ON':'OFF'}`:t}</button>`).join('')}</div><div class="okhint"><kbd>◀</kbd><kbd>▶</kbd> choose · <kbd>OK</kbd> select</div>`:'';
 let menuFocus=0, uiKey='', pausedFrom='';
 function applyFocus(){ const bs=document.querySelectorAll('#ui .menu button'); if(!bs.length) return; menuFocus=Math.max(0,Math.min(bs.length-1,menuFocus)); bs.forEach((b,i)=>b.classList.toggle('focus',i===menuFocus)); }
@@ -730,6 +738,7 @@ function menuAct(a){ tone(79,{kind:'lead',len:0.06,vel:0.5});
   else if(a==='bot'){ addBot(); renderUI(true); applyFocus(); }
   else if(a==='party') toAttract(); else if(a==='again') startLobby();
   else if(a==='continue'){ if(state==='over') nextEntry(); }
+  else if(a==='home'){ goHome(); }
   else if(a==='share'){ openShare(); }
   else if(a==='back'){ if(state==='share'){ state=shareFrom; stateT=now(); renderUI(true); focusMenu(); } }
   else if(a==='resume'){ if(state==='paused'){ state=pausedFrom; stateT=now(); if(state==='aim') autoT=now()+26000; renderUI(true); } }

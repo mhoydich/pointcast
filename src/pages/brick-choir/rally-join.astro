@@ -219,7 +219,7 @@ function makeParty({code,pid,onFrame,onStatus}){
     if(P.closed) return; if(which==='drum'&&FORCE==='room') which='room'; setStatus('connecting'); let ws; try{ ws=new WebSocket(which==='drum'?drumUrl:roomUrl); }catch(e){ return fail(which); }
     // the guard only gives up on a socket that never opened; an open socket whose welcome is late (a TV's main thread is
     // busy compiling shaders at boot, and queued message events can land after a timer) gets a second, longer wait
-    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState===1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },8000); return; } try{ ws.close(); }catch(e){} },4000);
+    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState<=1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },30000); return; } try{ ws.close(); }catch(e){} },4000);
     ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; } if(!m||typeof m!=='object') return;
       if(which==='drum'){
         if(m.type==='welcome'){ if((m.features||[]).includes('bc-party')){ ok=true; clearTimeout(guard); ready('drum'); } else { clearTimeout(guard); ws.onclose=null; try{ ws.close(); }catch(err){} open('room'); } return; }
@@ -250,7 +250,10 @@ const store={get(k,d){try{const v=localStorage.getItem('bcr:'+k);return v===null
 const sess={get(k,d){try{const v=sessionStorage.getItem('bcr:'+k);return v===null?d:v;}catch(e){return d;}},set(k,v){try{sessionStorage.setItem('bcr:'+k,v);}catch(e){}}};
 const pid=sess.get('pid','')||(()=>{ const a=new Uint8Array(4); crypto.getRandomValues(a); const v=Array.from(a,b=>'abcdefghijklmnopqrstuvwxyz0123456789'[b%36]).join(''); sess.set('pid',v); return v; })();
 const q=new URLSearchParams(location.search);
-let code=(q.get('room')||sess.get('room','')).toUpperCase().replace(/[^A-Z]/g,'').slice(0,4), name=(store.get('name','')).toUpperCase().slice(0,3), wantSeat=Number(sess.get('seat','-1'));
+const HUB=q.get('hub')==='1', HUB_C=/^[0-7]$/.test(q.get('c')||'')?+q.get('c'):-1, HUB_PASS=['bot','transport'].filter(k=>q.has(k)).map(k=>'&'+k+(q.get(k)?'='+encodeURIComponent(q.get(k)):'')).join('');
+const HUB_JOIN={home:'/brick-choir/home-join',quartet:'/brick-choir/join',rally:'/brick-choir/rally-join',lanes:'/brick-choir/lanes-join'};
+function hubFollow(g){ if(!HUB||window.__went) return; const path=HUB_JOIN[g]||HUB_JOIN.home; window.__went=true; location.href=path+'?room='+code+(path===HUB_JOIN.home?'':'&hub=1&name='+encodeURIComponent(name)+'&c='+(HUB_C>=0?HUB_C:''))+HUB_PASS; }
+let code=(q.get('room')||sess.get('room','')).toUpperCase().replace(/[^A-Z]/g,'').slice(0,4), name=((HUB&&q.get('name'))||store.get('name','')).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3), wantSeat=Number(sess.get('seat','-1'));
 let seat=-1, net=null, roster=null, rosterAt=0, phase='', turn=false, rtt=null, st={s:[0,0],g:[0,0],r:0,sv:-1,tn:-1,md:2}, wake=null, armed=false, tapMode=false;
 const show=id=>{ document.querySelectorAll('.screen').forEach(s=>s.hidden=s.id!==id); };
 const buzz=p=>{ let did=false; try{ if(navigator.vibrate) did=navigator.vibrate(p); }catch(e){} if(!did) edge(); };
@@ -344,7 +347,8 @@ $('padAct').onclick=()=>{ const c=$('padAct').dataset.c; if(net) net.send({f:'cm
 $('padLeave').onclick=()=>{ if(net) net.send({f:'l',p:pid}); seat=-1; sess.set('seat','-1'); show('sSeat'); seatUI(); };
 let resTxt=''; $('resShare').onclick=async()=>{ try{ await navigator.share({title:'Rally · Brick Choir',text:resTxt,url:'https://pointcast.xyz/brick-choir/rally'}); }catch(e){} };
 $('resAgain').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'again'}); show('sPad'); };
-$('resParty').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'party'}); show('sPad'); };
+$('resParty').onclick=()=>{ if(HUB){ if(net) net.send({f:'cmd',p:pid,c:'home'}); buzz(20); setTimeout(()=>hubFollow('home'),2500); return; } if(net) net.send({f:'cmd',p:pid,c:'party'}); show('sPad'); };
+if(HUB) $('resParty').textContent='BACK TO HOME';
 function discHit(){ const d=$('disc'); d.classList.add('hit'); setTimeout(()=>d.classList.remove('hit'),160); }
 const EV={ur:()=>{ turn=true; phaseUI(); buzz([30,30,30]); flash('YOURS!',seatCol()); },sv:()=>{ buzz([40,30,40]); flash('SERVE!',seatCol(),true); },h:()=>{ turn=false; phaseUI(); buzz(35); discHit(); },sw:()=>{ turn=false; phaseUI(); buzz([30,20,70]); discHit(); flash('SWEET!','#fff3c4'); },dk:()=>{ flash('dink',seatCol()); },m:()=>{ buzz(80); flash('whiff','rgba(244,240,255,.7)'); },no:()=>{ buzz(15); },w:()=>{ turn=false; phaseUI(); buzz([60,40,60,40,120]); flash('POINT!',seatCol(),true); },l:()=>{ turn=false; phaseUI(); buzz(50); flash('their point','rgba(244,240,255,.6)'); }};
 
@@ -354,7 +358,9 @@ function onFrame(d){ if(d.p&&d.p!==pid&&d.f!=='ev') return;
     case 'ro': roster=d; rosterAt=Date.now(); if(seat<0) seatUI(); break;
     case 'ok': { const was=seat; seat=d.s; sess.set('seat',String(seat)); if(was!==seat||(!$('sSeat').hidden)){ theme(); $('armArt').textContent=SEATS[seat].name; if(armed||tapMode){ padUI(); show('sPad'); } else show('sArm'); flash(`${SEATS[seat].name} · ${TEAMS[SEATS[seat].team].name}`,SEATS[seat].hex,true); buzz([40,30,80]); } if(armed) net.send({f:'arm',p:pid,m:1}); break; }
     case 'full': $('seatSub').textContent='every paddle is taken — wait for one to open'; buzz([30,30,30]); break;
-    case 'who': if(seat>=0||wantSeat>=0) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); break;
+    case 'who': if(seat>=0||wantSeat>=0||HUB) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); break;
+    case 'home': if(HUB){ flash('HOME',seatCol(),true); setTimeout(()=>hubFollow('home'),400); } break;
+    case 'go': if(HUB&&d.g&&d.g!=='rally') hubFollow(d.g); break;
     case 'st': { const ph=String(d.ph||''); st={s:d.s||[0,0],g:d.g||[0,0],r:d.r|0,sv:d.sv,tn:d.tn,md:d.md||2}; const wasTurn=turn; turn=ph==='play'&&d.tn===seat; if(ph!==phase||wasTurn!==turn){ phase=ph; if(!$('sRes').hidden&&!/^(over|initials|scores|share)$/.test(ph)) show('sPad'); } phase=ph; if(seat>=0) phaseUI(); break; }
     case 'ev': (d.l||[]).forEach(([s,e])=>{ if(s===seat&&EV[e]) EV[e](); }); break;
     case 'res': { if(seat<0) break; const tm=SEATS[seat].team; const won=d.w===tm; $('resTitle').textContent='MATCH OVER'; $('resRank').textContent=won?'WIN':'LOSS'; $('resRank').style.color=won?seatCol():'rgba(244,240,255,.5)'; $('resGames').textContent=`${(d.g||[0,0])[0]} – ${(d.g||[0,0])[1]}`; $('resRally').textContent=d.lr|0; $('resScore').textContent=((d.sc||[])[seat]|0).toLocaleString(); resTxt=`Rally: ${won?'won':'lost'} ${(d.g||[0,0]).join('–')} in games, longest rally ${d.lr|0}, ${((d.sc||[])[seat]|0).toLocaleString()} points. My phone was the paddle.`; $('resShare').hidden=!navigator.share; show('sRes'); buzz(won?[80,40,80,40,160]:60); break; }
@@ -362,8 +368,8 @@ function onFrame(d){ if(d.p&&d.p!==pid&&d.f!=='ev') return;
   }
 }
 function netUI(){ const el=$('padNet'); const s=net?net.status:'off'; el.className='net '+(s!=='on'?'off':rtt===null?'':rtt<90?'good':rtt<180?'ok':'bad'); $('padPing').textContent=s!=='on'?(s==='connecting'?'…':s):(rtt===null?'live':rtt+' ms'); }
-function connect(){ if(net) return; net=makeParty({code,pid,onFrame,onStatus:s=>{ netUI(); if(s==='on'){ net.send({f:'hi',p:pid}); if(seat>=0||wantSeat>=0) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); } if(seat<0) seatUI(); }});
-  setInterval(()=>{ if(!net||net.status!=='on') return; net.send({f:'pp',p:pid,t:Date.now(),r:rtt===null?undefined:rtt}); if(seat<0&&(Date.now()-rosterAt>5000)){ net.send({f:'hi',p:pid}); if(rosterAt===0&&$('seatSub')) $('seatSub').textContent=`no TV is showing room ${code} yet — open pointcast.xyz/brick-choir/rally on the TV`; } },3000); }
+function connect(){ if(net) return; net=makeParty({code,pid,onFrame,onStatus:s=>{ netUI(); if(s==='on'){ net.send({f:'hi',p:pid}); if(seat>=0||wantSeat>=0||HUB) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); } if(seat<0) seatUI(); }});
+  setInterval(()=>{ if(!net||net.status!=='on') return; net.send({f:'pp',p:pid,t:Date.now(),r:rtt===null?undefined:rtt}); if(HUB&&seat<0) net.send({f:'j',p:pid,n:name,s:-1}); if(seat<0&&(Date.now()-rosterAt>5000)){ net.send({f:'hi',p:pid}); if(rosterAt===0&&$('seatSub')) $('seatSub').textContent=`no TV is showing room ${code} yet — open pointcast.xyz/brick-choir/rally on the TV`; } },3000); }
 async function wakeLock(){ try{ if('wakeLock' in navigator&&!wake){ wake=await navigator.wakeLock.request('screen'); wake.addEventListener('release',()=>{ wake=null; }); } }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ if(seat>=0) wakeLock(); if(net){ net.kick(); if(net.status==='on') net.send({f:'hi',p:pid}); } } });
 

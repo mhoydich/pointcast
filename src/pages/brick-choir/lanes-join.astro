@@ -229,7 +229,7 @@ function makeParty({code,pid,onFrame,onStatus}){
     if(P.closed) return; if(which==='drum'&&FORCE==='room') which='room'; setStatus('connecting'); let ws; try{ ws=new WebSocket(which==='drum'?drumUrl:roomUrl); }catch(e){ return fail(which); }
     // the guard only gives up on a socket that never opened; an open socket whose welcome is late (a TV's main thread is
     // busy compiling shaders at boot, and queued message events can land after a timer) gets a second, longer wait
-    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState===1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },8000); return; } try{ ws.close(); }catch(e){} },4000);
+    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState<=1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },30000); return; } try{ ws.close(); }catch(e){} },4000);
     ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; } if(!m||typeof m!=='object') return;
       if(which==='drum'){
         if(m.type==='welcome'){ if((m.features||[]).includes('bc-party')){ ok=true; clearTimeout(guard); ready('drum'); } else { clearTimeout(guard); ws.onclose=null; try{ ws.close(); }catch(err){} open('room'); } return; }
@@ -255,11 +255,14 @@ function makeParty({code,pid,onFrame,onStatus}){
 const PAL=['#ff8fb1','#ffd27a','#9fe3c9','#8fd0ff','#e9ff7a','#b9a8ff','#ffb38a','#e3a8ff'];
 const ALPHA='ABCDEFGHJKMNPQRSTUVWXYZ', NAMECH='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const $=id=>document.getElementById(id); const TESTMODE=/[?&]bot\b/.test(location.search); const Q=new URLSearchParams(location.search);
+const HUB=Q.get('hub')==='1', HUB_C=/^[0-7]$/.test(Q.get('c')||'')?+Q.get('c'):-1, HUB_PASS=['bot','transport'].filter(k=>Q.has(k)).map(k=>'&'+k+(Q.get(k)?'='+encodeURIComponent(Q.get(k)):'')).join('');
+const HUB_JOIN={home:'/brick-choir/home-join',quartet:'/brick-choir/join',rally:'/brick-choir/rally-join',lanes:'/brick-choir/lanes-join'};
+function hubFollow(g){ if(!HUB||window.__went) return; const path=HUB_JOIN[g]||HUB_JOIN.home; window.__went=true; location.href=path+'?room='+code+(path===HUB_JOIN.home?'':'&hub=1&name='+encodeURIComponent(name)+'&c='+(HUB_C>=0?HUB_C:''))+HUB_PASS; }
 const FLIP_AIM=Q.get('flip')==='1'||Q.get('flip')==='aim'?-1:1, FLIP_SPIN=Q.get('flip')==='1'||Q.get('flip')==='spin'?-1:1; // real-phone tuning: ?flip=aim|spin|1
 const store={get(k,d){try{const v=localStorage.getItem('bcl:'+k);return v===null?d:v;}catch(e){return d;}},set(k,v){try{localStorage.setItem('bcl:'+k,v);}catch(e){}}};
 const sess={get(k,d){try{const v=sessionStorage.getItem('bcl:'+k);return v===null?d:v;}catch(e){return d;}},set(k,v){try{sessionStorage.setItem('bcl:'+k,v);}catch(e){}}};
 const pid=sess.get('pid','')||(()=>{ const a=new Uint8Array(4); crypto.getRandomValues(a); const v=Array.from(a,b=>'abcdefghijklmnopqrstuvwxyz0123456789'[b%36]).join(''); sess.set('pid',v); return v; })();
-let code=(Q.get('room')||sess.get('room','')).toUpperCase().replace(/[^A-Z]/g,'').slice(0,4), name=(store.get('name','')).toUpperCase().slice(0,3), wanted=sess.get('joined','0')==='1';
+let code=(Q.get('room')||sess.get('room','')).toUpperCase().replace(/[^A-Z]/g,'').slice(0,4), name=((HUB&&Q.get('name'))||store.get('name','')).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3), wanted=HUB||sess.get('joined','0')==='1';
 let seat=-1, col='#ffd27a', net=null, roster=null, rosterAt=0, phase='', turn=false, rtt=null, st={fr:0,rl:0,tn:-1,n:0,t:[],nf:10}, wake=null, armed=false, tapMode=false;
 const show=id=>{ document.querySelectorAll('.screen').forEach(s=>s.hidden=s.id!==id); };
 const buzz=p=>{ let did=false; try{ if(navigator.vibrate) did=navigator.vibrate(p); }catch(e){} if(!did) edge(); };
@@ -283,7 +286,7 @@ $('nameGo').onclick=()=>{ if(!name) return; store.set('name',name); $('laneRoom'
 function laneUI(){ const g=$('roster'); const have=!!roster; $('laneSub').textContent=!net||net.status!=='on'?'connecting…':(have?`the TV sees you · ${roster.s.length} of 8 lanes taken`:'looking for the TV…');
   const rows=have?roster.s.map((n,i)=>`<div style="--c:${PAL[i%8]}"><b>${n}</b><small>${roster.k[i]===1?'PHONE':roster.k[i]===2?'KEYS':'BOT'}</small></div>`):[]; if(!have||roster.s.length<8) rows.push(`<div class="open"><b>${have?roster.s.length+1:1}UP</b><small>OPEN</small></div>`); g.innerHTML=rows.join('');
   $('laneGo').disabled=have&&roster.s.length>=8&&!roster.k.some(k=>k===0); }
-function join(){ wanted=true; sess.set('joined','1'); buzz(12); if(net&&net.status==='on'){ net.send({f:'j',p:pid,n:name}); $('laneSub').textContent='asking the TV…'; } else $('laneSub').textContent='still connecting…'; }
+function join(){ wanted=true; sess.set('joined','1'); buzz(12); if(net&&net.status==='on'){ net.send({f:'j',p:pid,n:name,c:HUB_C>=0?HUB_C:undefined}); $('laneSub').textContent='asking the TV…'; } else $('laneSub').textContent='still connecting…'; }
 $('laneGo').onclick=join;
 
 /* ---- motion: the release detector ----
@@ -366,7 +369,8 @@ $('padAct').onclick=()=>{ const c=$('padAct').dataset.c; if(net) net.send({f:'cm
 $('padLeave').onclick=()=>{ if(net) net.send({f:'l',p:pid}); seat=-1; wanted=false; sess.set('joined','0'); show('sLane'); laneUI(); };
 let resTxt=''; $('resShare').onclick=async()=>{ try{ await navigator.share({title:'Lanes · Brick Choir',text:resTxt,url:'https://pointcast.xyz/brick-choir/lanes'}); }catch(e){} };
 $('resAgain').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'again'}); show('sBall'); };
-$('resParty').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'party'}); show('sBall'); };
+$('resParty').onclick=()=>{ if(HUB){ if(net) net.send({f:'cmd',p:pid,c:'home'}); buzz(20); setTimeout(()=>hubFollow('home'),2500); return; } if(net) net.send({f:'cmd',p:pid,c:'party'}); show('sBall'); };
+if(HUB) $('resParty').textContent='BACK TO HOME';
 function ballHit(){ const b=$('ball'); b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit'); }
 const EV={ur:()=>{ turn=true; phaseUI(); buzz([30,30,30]); flash("YOU'RE UP",col,true); },rl:()=>{ turn=false; phaseUI(); buzz(20); },x:()=>{ ballHit(); buzz([60,40,60,40,160]); flash('STRIKE!',col,true); },tk:()=>{ ballHit(); buzz([80,40,80,40,80,40,240]); flash('TURKEY!','#ffd27a',true); },sp:()=>{ ballHit(); buzz([40,30,90]); flash('SPARE!','#9fe3c9',true); },g:()=>{ buzz(120); flash('gutter…','rgba(244,240,255,.7)'); }};
 function onEv(e){ if(EV[e]) EV[e](); else if(/^k\d+$/.test(e)){ const n=+e.slice(1); buzz(n?[20+n*4]:60); flash(n===0?'nothing':n===1?'1 pin':`${n} pins`,col); } }
@@ -377,17 +381,19 @@ function onFrame(d){ if(d.p&&d.p!==pid&&d.f!=='ev') return;
     case 'ro': roster=d; rosterAt=Date.now(); if(seat<0) laneUI(); else phaseUI(); break;
     case 'ok': { const was=seat; seat=d.s; col=d.c||PAL[seat%8]; theme(); if(was!==seat||!$('sLane').hidden){ if(armed||tapMode){ padUI(); show('sBall'); } else show('sArm'); flash(`${seat+1}UP · ${name}`,col,true); buzz([40,30,80]); } if(armed) net.send({f:'arm',p:pid,m:1}); break; }
     case 'full': $('laneSub').textContent='every lane is taken — wait for one to open'; buzz([30,30,30]); break;
-    case 'who': if(wanted) net.send({f:'j',p:pid,n:name}); break;
+    case 'who': if(wanted) net.send({f:'j',p:pid,n:name,c:HUB_C>=0?HUB_C:undefined}); break;
     case 'st': { const ph=String(d.ph||''); st={fr:d.fr|0,rl:d.rl|0,tn:d.tn,n:d.n|0,t:d.t||[],nf:d.nf||10}; const wasTurn=turn; turn=ph==='aim'&&d.tn===seat; if(ph!==phase||wasTurn!==turn){ if(!$('sRes').hidden&&!/^(over|initials|scores|share)$/.test(ph)) show('sBall'); } phase=ph; if(seat>=0) phaseUI(); break; }
     case 'ev': (d.l||[]).forEach(([s,e])=>{ if(s===seat) onEv(e); }); break;
     case 'res': { if(seat<0) break; const sc=d.sc||[]; const mine=sc[seat]|0; const rank=sc.filter(v=>v>mine).length+1; const won=d.w===seat; $('resRank').textContent=['1ST','2ND','3RD','4TH','5TH','6TH','7TH','8TH'][rank-1]||rank+'TH'; $('resRank').style.color=won?col:'rgba(244,240,255,.6)'; $('resScore').textContent=mine; $('resStrikes').textContent=(d.x||[])[seat]|0; $('resWinner').textContent=roster&&roster.s[d.w]?roster.s[d.w]+' · '+(sc[d.w]|0):'—';
       resTxt=`Lanes: I bowled ${mine} (${(d.x||[])[seat]|0} strikes) and came ${$('resRank').textContent.toLowerCase()} of ${sc.length}. My phone was the ball.`; $('resShare').hidden=!navigator.share; show('sRes'); buzz(won?[80,40,80,40,160]:60); break; }
     case 'pq': if(typeof d.t==='number'){ rtt=Date.now()-d.t; netUI(); } break;
+    case 'home': if(HUB){ flash('HOME',col,true); setTimeout(()=>hubFollow('home'),400); } break;
+    case 'go': if(HUB&&d.g&&d.g!=='lanes') hubFollow(d.g); break;
   }
 }
 function netUI(){ const el=$('padNet'); const s=net?net.status:'off'; el.className='net '+(s!=='on'?'off':rtt===null?'':rtt<90?'good':rtt<180?'ok':'bad'); $('padPing').textContent=s!=='on'?(s==='connecting'?'…':s):(rtt===null?'live':rtt+' ms'); }
-function connect(){ if(net) return; net=makeParty({code,pid,onFrame,onStatus:s=>{ netUI(); if(s==='on'){ net.send({f:'hi',p:pid}); if(wanted) net.send({f:'j',p:pid,n:name}); } if(seat<0) laneUI(); }});
-  setInterval(()=>{ if(!net||net.status!=='on') return; net.send({f:'pp',p:pid,t:Date.now(),r:rtt===null?undefined:rtt}); if(seat<0&&(Date.now()-rosterAt>5000)){ net.send({f:'hi',p:pid}); if(rosterAt===0&&$('laneSub')) $('laneSub').textContent=`no TV is showing room ${code} yet — open pointcast.xyz/brick-choir/lanes on the TV`; } },3000); }
+function connect(){ if(net) return; net=makeParty({code,pid,onFrame,onStatus:s=>{ netUI(); if(s==='on'){ net.send({f:'hi',p:pid}); if(wanted) net.send({f:'j',p:pid,n:name,c:HUB_C>=0?HUB_C:undefined}); } if(seat<0) laneUI(); }});
+  setInterval(()=>{ if(!net||net.status!=='on') return; net.send({f:'pp',p:pid,t:Date.now(),r:rtt===null?undefined:rtt}); if(HUB&&wanted&&seat<0) net.send({f:'j',p:pid,n:name,c:HUB_C>=0?HUB_C:undefined}); if(seat<0&&(Date.now()-rosterAt>5000)){ net.send({f:'hi',p:pid}); if(rosterAt===0&&$('laneSub')) $('laneSub').textContent=`no TV is showing room ${code} yet — open pointcast.xyz/brick-choir/lanes on the TV`; } },3000); }
 async function wakeLock(){ try{ if('wakeLock' in navigator&&!wake){ wake=await navigator.wakeLock.request('screen'); wake.addEventListener('release',()=>{ wake=null; }); } }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ if(seat>=0) wakeLock(); if(net){ net.kick(); if(net.status==='on') net.send({f:'hi',p:pid}); } } });
 

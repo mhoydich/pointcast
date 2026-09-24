@@ -181,7 +181,7 @@ function makeParty({code,pid,onFrame,onStatus}){
     if(P.closed) return; if(which==='drum'&&FORCE==='room') which='room'; setStatus('connecting'); let ws; try{ ws=new WebSocket(which==='drum'?drumUrl:roomUrl); }catch(e){ return fail(which); }
     // the guard only gives up on a socket that never opened; an open socket whose welcome is late (a TV's main thread is
     // busy compiling shaders at boot, and queued message events can land after a timer) gets a second, longer wait
-    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState===1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },8000); return; } try{ ws.close(); }catch(e){} },4000);
+    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState<=1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },30000); return; } try{ ws.close(); }catch(e){} },4000);
     ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; } if(!m||typeof m!=='object') return;
       if(which==='drum'){
         if(m.type==='welcome'){ if((m.features||[]).includes('bc-party')){ ok=true; clearTimeout(guard); ready('drum'); } else { clearTimeout(guard); ws.onclose=null; try{ ws.close(); }catch(err){} open('room'); } return; }
@@ -213,7 +213,10 @@ const sess={get(k,d){try{const v=sessionStorage.getItem('bcj:'+k);return v===nul
 // the pid survives a reload or a sleep inside this tab, so the TV gives the same seat back
 const pid=sess.get('pid','')||(()=>{ const a=new Uint8Array(4); crypto.getRandomValues(a); const v=Array.from(a,b=>'abcdefghijklmnopqrstuvwxyz0123456789'[b%36]).join(''); sess.set('pid',v); return v; })();
 const q=new URLSearchParams(location.search);
-let code=(q.get('room')||sess.get('room','')).toUpperCase().replace(/[^A-Z]/g,'').slice(0,4), name=(store.get('name','')).toUpperCase().slice(0,3), wantSeat=Number(sess.get('seat','-1'));
+const HUB=q.get('hub')==='1', HUB_C=/^[0-7]$/.test(q.get('c')||'')?+q.get('c'):-1, HUB_PASS=['bot','transport'].filter(k=>q.has(k)).map(k=>'&'+k+(q.get(k)?'='+encodeURIComponent(q.get(k)):'')).join('');
+const HUB_JOIN={home:'/brick-choir/home-join',quartet:'/brick-choir/join',rally:'/brick-choir/rally-join',lanes:'/brick-choir/lanes-join'};
+function hubFollow(g){ if(!HUB||window.__went) return; const path=HUB_JOIN[g]||HUB_JOIN.home; window.__went=true; location.href=path+'?room='+code+(path===HUB_JOIN.home?'':'&hub=1&name='+encodeURIComponent(name)+'&c='+(HUB_C>=0?HUB_C:''))+HUB_PASS; }
+let code=(q.get('room')||sess.get('room','')).toUpperCase().replace(/[^A-Z]/g,'').slice(0,4), name=((HUB&&q.get('name'))||store.get('name','')).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3), wantSeat=Number(sess.get('seat','-1'));
 let seat=-1, net=null, roster=null, rosterAt=0, phase='', cueOn=false, rtt=null, myScore=0, team=0, round=1, joined=false, lastAct='', wake=null;
 const show=id=>{ document.querySelectorAll('.screen').forEach(s=>s.hidden=s.id!==id); };
 const buzz=p=>{ let did=false; try{ if(navigator.vibrate) did=navigator.vibrate(p); }catch(e){} if(!did) edge(); };
@@ -258,7 +261,8 @@ function phaseUI(){ const a=ACT[phase]; const btn=$('padAct'); btn.hidden=!a; if
 $('padAct').onclick=()=>{ const c=$('padAct').dataset.c; if(net) net.send({f:'cmd',p:pid,c}); buzz(15); };
 $('padLeave').onclick=()=>{ if(net) net.send({f:'l',p:pid}); seat=-1; joined=false; sess.set('seat','-1'); show('sSeat'); seatUI(); };
 $('resAgain').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'again'}); show('sPad'); };
-$('resParty').onclick=()=>{ if(net) net.send({f:'cmd',p:pid,c:'party'}); show('sPad'); };
+$('resParty').onclick=()=>{ if(HUB){ if(net) net.send({f:'cmd',p:pid,c:'home'}); buzz(20); setTimeout(()=>hubFollow('home'),2500); return; } if(net) net.send({f:'cmd',p:pid,c:'party'}); show('sPad'); };
+if(HUB) $('resParty').textContent='BACK TO HOME';
 function bump(){ const s=$('padScore').parentElement; s.classList.remove('bump'); void s.offsetWidth; s.classList.add('bump'); }
 const EV={n:()=>{ cueOn=true; phaseUI(); buzz([70,40,70]); flash('YOUR NOTE!',seatCol()); },a:()=>{ cueOn=false; phaseUI(); buzz(40); flash('ON CUE!','#ffd27a'); },h:()=>{ buzz(8); },c:()=>{ buzz(25); flash('CATCH!',seatCol()); },b:()=>{ buzz([90,30,140]); flash('THE BELL!','#fff3c4',true); },t:()=>{ buzz(30); flash('THROUGH!','#b9a8ff'); },q:()=>{ buzz([50,30,50,30,120]); flash('QUARTET!','#fff3c4',true); },f:()=>{ buzz([60,40,60,40,60]); flash('FACE CLEAR!',seatCol(),true); }};
 
@@ -269,7 +273,9 @@ function onFrame(d){
     case 'ro': roster=d; rosterAt=Date.now(); if(seat<0) seatUI(); else { const mine=(d.s[seat]||[]).filter(n=>n!==name); $('padDuet').textContent=mine.length?'duet with '+mine.join(' & '):''; } break;
     case 'ok': { const was=seat; seat=d.s; joined=true; sess.set('seat',String(seat)); if(was!==seat||$('sPad').hidden){ padUI(); show('sPad'); flash(`${SEATS[seat].name} · ${SEATS[seat].part}`,SEATS[seat].hex,true); buzz([40,30,80]); } $('padDuet').textContent=d.m>1?'duet':''; phaseUI(); wakeLock(); break; }
     case 'full': $('seatSub').textContent='that corner is full — pick another'; buzz([30,30,30]); break;
-    case 'who': if(seat>=0||wantSeat>=0) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); break;
+    case 'who': if(seat>=0||wantSeat>=0||HUB) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); break;
+    case 'home': if(HUB){ flash('HOME',seat>=0?SEATS[seat].hex:'#ffd27a',true); setTimeout(()=>hubFollow('home'),400); } break;
+    case 'go': if(HUB&&d.g&&d.g!=='quartet') hubFollow(d.g); break;
     case 'st': { const s=d.sc||[0,0,0,0]; team=s.reduce((a,b)=>a+b,0); if(seat>=0){ const ns=s[seat]|0; if(ns>myScore) bump(); myScore=ns; } round=d.r||1; const ph=String(d.ph||''); const cue=d.cue===seat&&ph==='play'; if(ph!==phase||cue!==cueOn){ phase=ph; cueOn=cue; phaseUI(); if(!$('sRes').hidden&&!/^(over|initials|scores)$/.test(ph)) show('sPad'); } else { phase=ph; $('padScore').textContent=myScore.toLocaleString(); } break; }
     case 'ev': (d.l||[]).forEach(([s,e])=>{ if(s===seat&&EV[e]) EV[e](); }); break;
     case 'res': { if(seat<0) break; const rk=(d.rk||[])[seat]|0; $('resTitle').textContent=d.w?'THE WHOLE SONGBOOK!':'GAME OVER'; $('resRank').textContent=['1ST','2ND','3RD','4TH'][rk]||'—'; $('resScore').textContent=((d.sc||[])[seat]|0).toLocaleString(); $('resTeam').textContent=(d.sc||[]).reduce((a,b)=>a+b,0).toLocaleString(); $('resRound').textContent=d.rd||1; show('sRes'); buzz(rk===0?[80,40,80,40,160]:60); break; }
@@ -277,8 +283,8 @@ function onFrame(d){
   }
 }
 function netUI(){ const el=$('padNet'); const st=net?net.status:'off'; el.className='net '+(st!=='on'?'off':rtt===null?'':rtt<90?'good':rtt<180?'ok':'bad'); $('padPing').textContent=st!=='on'?(st==='connecting'?'…':st):(rtt===null?'live':rtt+' ms'); }
-function connect(){ if(net) return; net=makeParty({code,pid,onFrame,onStatus:s=>{ netUI(); if(s==='on'){ net.send({f:'hi',p:pid}); if(seat>=0||wantSeat>=0) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); } if(seat<0) seatUI(); }});
-  setInterval(()=>{ if(!net||net.status!=='on') return; net.send({f:'pp',p:pid,t:Date.now()}); if(seat<0&&(Date.now()-rosterAt>5000)){ net.send({f:'hi',p:pid}); if(rosterAt===0&&$('seatSub')) $('seatSub').textContent=`no TV is showing room ${code} yet — open pointcast.xyz/brick-choir/tv on the TV`; } },3000); }
+function connect(){ if(net) return; net=makeParty({code,pid,onFrame,onStatus:s=>{ netUI(); if(s==='on'){ net.send({f:'hi',p:pid}); if(seat>=0||wantSeat>=0||HUB) net.send({f:'j',p:pid,n:name,s:seat>=0?seat:wantSeat}); } if(seat<0) seatUI(); }});
+  setInterval(()=>{ if(!net||net.status!=='on') return; net.send({f:'pp',p:pid,t:Date.now()}); if(HUB&&seat<0) net.send({f:'j',p:pid,n:name,s:-1}); if(seat<0&&(Date.now()-rosterAt>5000)){ net.send({f:'hi',p:pid}); if(rosterAt===0&&$('seatSub')) $('seatSub').textContent=`no TV is showing room ${code} yet — open pointcast.xyz/brick-choir/tv on the TV`; } },3000); }
 async function wakeLock(){ try{ if('wakeLock' in navigator&&!wake){ wake=await navigator.wakeLock.request('screen'); wake.addEventListener('release',()=>{ wake=null; }); } }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ if(seat>=0) wakeLock(); if(net){ net.kick(); if(net.status==='on') net.send({f:'hi',p:pid}); } } });
 addEventListener('pagehide',()=>{ /* keep the seat: the TV holds it while the phone sleeps, and the same pid reclaims it */ });

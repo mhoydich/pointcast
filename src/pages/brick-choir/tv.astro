@@ -129,6 +129,7 @@
   .okhint{font:600 .85vw var(--mono);letter-spacing:.14em;color:rgba(244,240,255,.45);margin-top:.9vw;text-transform:uppercase;}
   .okhint kbd{display:inline-block;font:700 .8vw var(--mono);padding:.15vw .5vw;border-radius:.4vw;border:.1vw solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);color:var(--ink);margin:0 .15vw;}
   @media (prefers-reduced-motion:reduce){ .logo span,.blink,table.scores tr.me td,.initials b.cur::after,#snd,#room .st i{animation:none;} }
+  body.hub .card .qr{display:none!important;} body.hub #room .lbl{color:var(--gold);}
 </style>
 </head>
 <body>
@@ -245,7 +246,7 @@ function makeParty({code,pid,onFrame,onStatus}){
     if(P.closed) return; if(which==='drum'&&FORCE==='room') which='room'; setStatus('connecting'); let ws; try{ ws=new WebSocket(which==='drum'?drumUrl:roomUrl); }catch(e){ return fail(which); }
     // the guard only gives up on a socket that never opened; an open socket whose welcome is late (a TV's main thread is
     // busy compiling shaders at boot, and queued message events can land after a timer) gets a second, longer wait
-    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState===1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },8000); return; } try{ ws.close(); }catch(e){} },4000);
+    P.ws=ws; let ok=false, guard=setTimeout(()=>{ if(ok) return; if(ws.readyState<=1&&which==='drum'){ guard=setTimeout(()=>{ if(!ok){ ws.onclose=null; try{ ws.close(); }catch(e){} open('room'); } },30000); return; } try{ ws.close(); }catch(e){} },4000);
     ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; } if(!m||typeof m!=='object') return;
       if(which==='drum'){
         if(m.type==='welcome'){ if((m.features||[]).includes('bc-party')){ ok=true; clearTimeout(guard); ready('drum'); } else { clearTimeout(guard); ws.onclose=null; try{ ws.close(); }catch(err){} open('room'); } return; }
@@ -403,6 +404,8 @@ const beatPhase=()=>{ if(!ctx||!lvl||!seqT) return 0; const spb=60/(lvl.bpm||104
 
 /* ================= state ================= */
 const now=()=>performance.now(); const TESTMODE=/[?&]bot\b/.test(location.search); const ATTRACT=false;
+const HUB=/[?&]hub=1/.test(location.search); if(HUB) document.body.classList.add('hub');
+const HUB_PASS=(()=>{ const q=new URLSearchParams(location.search); return ['bot','lite','transport'].filter(k=>q.has(k)).map(k=>'&'+k+(q.get(k)?'='+encodeURIComponent(q.get(k)):'')).join(''); })();
 let throttled=false, frameN=0; addEventListener('message',e=>{ if(e.data&&e.data.bc==='throttle') throttled=!!e.data.on; });
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const store={get(k,d){try{const v=localStorage.getItem('bc4:'+k);return v?JSON.parse(v):d;}catch(e){return d;}},set(k,v){try{localStorage.setItem('bc4:'+k,JSON.stringify(v));}catch(e){}}};
@@ -849,6 +852,7 @@ function seatName(p){ return p.human?(p.names.length?p.names.join(' & '):p.name)
 function seatsHtml(){ return `<div class="seats">${SEATS.map(s=>{ const p=players[s.id]; return `<div class="seat ${p.human?'human':''}" style="--c:${s.hex}"><b>${s.up} · ${s.part} <small>${s.corner==='SW'?'bottom left':s.corner==='SE'?'bottom right':s.corner==='NE'?'top right':'top left'}</small></b><div class="k">${p.human?esc(seatName(p)):'open seat'} <small>· ${p.src==='phone'?(p.members.length>1?'duet':'phone'):p.src==='pad'?'gamepad':p.src==='keys'?esc(s.caps[0]+' / '+s.caps[1]):'scan the corner'}</small></div><div class="st">${p.human?'READY':'bot for now'}</div></div>`; }).join('')}</div>`; }
 const LOGO=()=>`<div class="logo">${'BRICK CHOIR'.split('').map((ch,i)=>ch===' '?'<span class="sp"></span>':`<span style="--h:${i*28};--i:${i}">${ch}</span>`).join('')}</div><div class="sub">QUARTET<small>TV</small></div>`;
 const MENUS={lobby:[['start','START NOW'],['party','BACK TO PARTY']],over:[['continue','CONTINUE']],scores:[['again','PLAY AGAIN'],['party','PARTY MODE']],paused:[['resume','RESUME'],['end','END GAME']]};
+if(HUB){ MENUS.over.push(['home','BACK TO HOME']); MENUS.scores.splice(1,1,['home','BACK TO HOME']); MENUS.lobby.splice(1,1,['home','BACK TO HOME']); }
 const menuHtml=s=>MENUS[s]?`<div class="menu">${MENUS[s].map(([a,t])=>`<button data-act="${a}">${t}</button>`).join('')}</div><div class="okhint"><kbd>◀</kbd><kbd>▶</kbd> choose · <kbd>OK</kbd> select</div>`:'';
 let menuFocus=0, uiKey='';
 function applyFocus(){ const bs=document.querySelectorAll('#ui .menu button'); if(!bs.length) return; menuFocus=Math.max(0,Math.min(bs.length-1,menuFocus)); bs.forEach((b,i)=>b.classList.toggle('focus',i===menuFocus)); }
@@ -861,6 +865,7 @@ function menuAct(a){
   else if(a==='party') toAttract();
   else if(a==='again') startLobby();
   else if(a==='continue'){ if(state==='over') nextEntry(); }
+  else if(a==='home'){ goHome(); }
   else if(a==='resume'){ if(state==='paused'){ setState('play'); songEnd=now()+pausedLeft; seqT=0; } }
   else if(a==='end'){ if(state==='paused'){ gameOver(false); } }
 }
@@ -955,7 +960,7 @@ function frame(){
   if(state==='lobby'&&T>=lobbyEnd) startGame();
   if(state==='ready'&&T-stateT>=2600){ setState('play'); songEnd=now()+songLen; seqT=0; }
   if((state==='clear'||state==='short')&&T-stateT>=3200) afterRound();
-  if(state==='scores'&&T-stateT>=20000) toAttract();
+  if(state==='scores'&&T-stateT>=20000){ if(HUB) goHome(); else toAttract(); }
   try{ renderUI(); renderHud(T); draw(T,dt); }catch(err){ if(!frame.err){ frame.err=true; console.error('quartet frame error',err); } }
   requestAnimationFrame(frame);
 }
@@ -965,6 +970,7 @@ const ALPHA='ABCDEFGHJKMNPQRSTUVWXYZ'; // no I, L or O: they read like 1 and 0 a
 const ROOM=(()=>{ const q=new URLSearchParams(location.search).get('room'); if(q&&/^[A-Za-z]{4}$/.test(q)) return q.toUpperCase(); const a=new Uint32Array(4); crypto.getRandomValues(a); return Array.from(a,v=>ALPHA[v%ALPHA.length]).join(''); })();
 const JOIN_URL=`${location.origin}/brick-choir/join?room=${ROOM}`;
 document.getElementById('roomCode').textContent=ROOM; document.getElementById('roomUrl').textContent=location.host.replace(/^www\./,'')+'/brick-choir/join';
+if(HUB){ document.querySelector('#room .lbl').firstChild.textContent='HOME ROOM · PHONES FOLLOW THE TV'; document.getElementById('roomUrl').textContent=location.host.replace(/^www\./,'')+'/brick-choir/home-join'; }
 { const m=qr(JOIN_URL,1), Q=2, S=m.size+Q*2; // two modules of quiet zone in the bitmap, the rest is the card's white padding
   document.querySelectorAll('.card').forEach((card,i)=>{ const cv=card.querySelector('.qr canvas'); cv.width=cv.height=S; const g=cv.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,S,S); g.fillStyle='#0b0a1a'; for(let y=0;y<m.size;y++) for(let x=0;x<m.size;x++) if(m.get(x,y)) g.fillRect(x+Q,y+Q,1,1);
     const s=SEATS[i]; card.querySelector('.qr .scan').innerHTML=`SCAN TO SIT <em>HERE</em><small>${s.name} · ${s.part} · room ${ROOM}</small>`; }); }
@@ -992,6 +998,7 @@ const PARTY=(()=>{
     if(c==='start'){ if(state==='attract') startLobby(); else if(state==='lobby') startGame(); }
     else if(c==='again'){ if(state==='over') nextEntry(); else if(state==='scores'||state==='attract') startLobby(); }
     else if(c==='party'){ if(state==='scores'||state==='over') toAttract(); }
+    else if(c==='home'){ if(HUB&&(state==='attract'||state==='over'||state==='scores'||state==='lobby'||state==='initials'||state==='inter')) goHome(); }
     else if(c==='skip'){ if(state==='inter'&&now()-stateT>1000){ interUpdate.chord=false; interUpdate.burst=false; interUpdate.ring=-1; balls=[]; beginRound(lvlI+1); } }
   }
   X.onFrame=d=>{ if(!d||typeof d!=='object'||d.o==='tv') return; const id=d.p; if(typeof id!=='string'||!id||id.length>12) return;
@@ -1024,6 +1031,9 @@ const PARTY=(()=>{
   return X;
 })();
 // the speakers: a browser needs one real key press before it will make sound — the remote's OK does it
+/* hub mode: BACK TO HOME — results ride in sessionStorage for the hub's medal table, phones get home{g,r} and follow */
+function goHome(){ if(!HUB||window.__homeSent) return; window.__homeSent=true; const r=players.flatMap(p=>p.src==='phone'?p.names.map(n=>({n,s:p.score,k:1})):p.human?[{n:p.name,s:p.score,k:2}]:[]); try{ sessionStorage.setItem('bch:result',JSON.stringify({g:'quartet',at:Date.now(),r})); }catch(e){}
+  const top=r.filter(x=>x.k).sort((a,b)=>b.s-a.s).slice(0,3).map(x=>[x.n,x.s]); PARTY.send({f:'home',g:'quartet',r:top}); setTimeout(()=>PARTY.send({f:'home',g:'quartet',r:top}),350); setTimeout(()=>{ location.href='/brick-choir/home?room='+ROOM+'&hub=1'+HUB_PASS; },800); }
 const sndEl=document.getElementById('snd'); setInterval(()=>{ sndEl.hidden=!!(ctx&&ctx.state==='running'); },400);
 
 /* ================= input: the remote, the keyboard, gamepads ================= */
