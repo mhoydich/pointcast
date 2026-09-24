@@ -7,13 +7,14 @@ const DRAFT = 'pointcast.keyboard.studio.draft.v1';
 const PREFS = 'pointcast.keyboard.studio.prefs.v1';
 const NOTES = 'pointcast.keyboard.notes.v1';
 const ROOM = '0123456789abcdef0123456789abcdef';
+const TOKEN = 'a'.repeat(64);
 const html = readFileSync('src/pages/keyboard/studio.astro', 'utf8')
   .replace(/^---[\s\S]*?---\n/, '').replaceAll(' is:inline', '');
 
 function open({ storage = {}, room = '', handleRequest } = {}) {
   const requests = [];
   const dom = new JSDOM(html, {
-    url: 'https://pointcast.xyz/keyboard/studio' + (room ? '?room=' + room : ''),
+    url: 'https://pointcast.xyz/keyboard/studio' + (room ? '?room=' + room + '&token=' + TOKEN : ''),
     runScripts: 'dangerously',
     beforeParse(window) {
       Object.defineProperty(window.document, 'hidden', { value: false, configurable: true });
@@ -27,7 +28,9 @@ function open({ storage = {}, room = '', handleRequest } = {}) {
       for (const [key, value] of Object.entries(storage)) window.localStorage.setItem(key, value);
       window.fetch = async (url, init = {}) => {
         requests.push({ url, init });
-        const result = handleRequest ? await handleRequest(url, init) : { room: ROOM, passages: [] };
+        const result = handleRequest ? await handleRequest(url, init) : (url.includes('action=create')
+          ? { room: ROOM, token: TOKEN, status: 201 }
+          : { room: ROOM, passages: [] });
         return {
           ok: result.status === undefined || result.status < 400,
           status: result.status || 200,
@@ -112,18 +115,24 @@ test('creating a room generates a private invite and does not send the draft', a
   const calls = [];
   const app = open({ handleRequest: (url, init) => {
     calls.push({ url, init });
-    return { room: new URL(url, 'https://pointcast.xyz').searchParams.get('room'), passages: [] };
+    return url.includes('action=create')
+      ? { room: ROOM, token: TOKEN, status: 201 }
+      : { room: ROOM, passages: [] };
   } });
   try {
     app.input('body', 'My private draft');
     app.$('room-tab').click();
     app.$('create-room').click();
     await new Promise(resolve => setTimeout(resolve, 20));
-    assert.match(app.window.location.href, /[?]room=[0-9a-f]{32}$/);
-    assert.equal(calls.filter(c => c.init.method === 'POST').length, 0);
+    const invite = new URL(app.window.location.href);
+    assert.equal(invite.searchParams.get('room'), ROOM);
+    assert.equal(invite.searchParams.get('token'), TOKEN);
+    assert.equal(calls.filter(c => c.init.method === 'POST').length, 1);
+    assert.match(calls[0].url, /action=create/);
+    assert.ok(calls.filter(c => c.init.method === 'GET').every(c => c.url.includes('token=' + TOKEN)));
     assert.match(app.$('room-panel').textContent, /cannot be closed yet/i);
     app.$('leave-room').click();
-    assert.doesNotMatch(app.window.location.href, /[?]room=/);
+    assert.doesNotMatch(app.window.location.href, /[?](room|token)=/);
     assert.equal(app.$('body').value, 'My private draft');
   } finally { app.close(); }
 });
