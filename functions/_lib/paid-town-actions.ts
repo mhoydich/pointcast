@@ -55,6 +55,20 @@ export const PAID_TOWN_ACTIONS = {
       example: 'https://pointcast.xyz/api/oracle/paddles?q=control%20paddle%20for%20a%204.0%20player&maxPrice=200&usap=true',
     },
   },
+  'marine-layer': {
+    action: 'oracle-marine',
+    endpoint: 'https://pointcast.xyz/api/agent/marine-layer',
+    room: 'https://pointcast.xyz/oracles/marine-layer',
+    body: { date: '2026-09-23' },
+    curl: `curl -X POST https://pointcast.xyz/api/agent/marine-layer -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"date":"2026-09-23"}'`,
+    base: {
+      endpoint: 'https://pointcast.xyz/api/oracle/marine-layer',
+      method: 'GET',
+      network: 'eip155:8453',
+      facilitator: 'Coinbase CDP (x402 Bazaar)',
+      example: 'https://pointcast.xyz/api/oracle/marine-layer?date=2026-09-23',
+    },
+  },
 } as const;
 
 export const PAID_TOWN_DISCOVERY = Object.values(PAID_TOWN_ACTIONS).map((entry) => ({

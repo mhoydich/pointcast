@@ -148,14 +148,14 @@ test('bare probes get a 402 quote; a paid question settles once and returns sour
     const paid = await m.handleAgentOracle(post(body, { 'Payment-Signature': pay, 'Idempotency-Key': 'oracle-test-0001' }), env, opts);
     assert.equal(paid.status, 200);
     const json = await paid.json();
-    assert.equal(json.oracle.paddles[0].id, 'franklin-c45-aurelius');
+    assert.equal(json.result.answer.paddles[0].id, 'franklin-c45-aurelius');
     assert.ok(json.receipt);
     assert.equal(json.split.action, 'oracle');
     assert.equal(json.split.maker, 'paddle-register');
 
     const again = await m.handleAgentOracle(post(body, { 'Payment-Signature': pay, 'Idempotency-Key': 'oracle-test-0001' }), env, opts);
     assert.equal(again.status, 200);
-    assert.equal((await again.json()).oracle.paddles[0].id, 'franklin-c45-aurelius');
+    assert.equal((await again.json()).result.answer.paddles[0].id, 'franklin-c45-aurelius');
     assert.equal(settles, 1, 'idempotent retry never settles twice');
     assert.equal(db.splits.size, 1);
 

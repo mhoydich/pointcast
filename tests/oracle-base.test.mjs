@@ -42,7 +42,7 @@ class DB {
           return { meta: { changes: row ? 1 : 0 } };
         }
         if (q.startsWith('INSERT INTO splits')) {
-          if (!db.splits.has(a[0])) db.splits.set(a[0], { amount: a[1], house: a[2], network: a[3] });
+          if (!db.splits.has(a[0])) db.splits.set(a[0], { action: a[1], amount: a[2], house: a[3], network: a[4], maker: a[5], makerAddress: a[6] });
           return { meta: { changes: 1 } };
         }
         throw new Error(`run(): ${q}`);
@@ -116,17 +116,18 @@ test('Base rail: 402 with bazaar discovery, pay once, answer, split row, free re
   assert.equal(paid.status, 200, JSON.stringify(await paid.clone().json()));
   assert.ok(paid.headers.get('Payment-Response') || paid.headers.get('PAYMENT-RESPONSE'), 'settlement header returned');
   const body = await paid.json();
-  assert.equal(body.oracle.paddles[0].id, 'franklin-c45-aurelius');
+  assert.equal(body.result.answer.paddles[0].id, 'franklin-c45-aurelius');
   assert.equal(body.payment.transaction, TX);
   assert.equal(state.settles, 1);
   assert.ok(state.lastSettlePayload.extensions?.bazaar, 'the settled payload carries extensions.bazaar, which is what lists us');
-  assert.equal(db.splits.get(`base:${TX}`).house, 5000);
+  const split = db.splits.get(`base:${TX}`);
+  assert.deepEqual([split.action, split.amount, split.house, split.network, split.maker], ['oracle', 10000, 5000, 5000, 'paddle-register'], 'data-dividend ledger row names the contributor');
 
   const replay = await m.handleOracleBase(get(qs, pay), env, opts);
   assert.equal(replay.status, 200);
   const rb = await replay.json();
   assert.equal(rb.replay, true);
-  assert.equal(rb.oracle.paddles[0].id, 'franklin-c45-aurelius');
+  assert.equal(rb.result.answer.paddles[0].id, 'franklin-c45-aurelius');
   assert.equal(state.settles, 1, 'a resent payment never settles twice');
 
   // Same payer + nonce (public on-chain) but a different header: no free answer.
@@ -169,6 +170,6 @@ test('a settlement timeout holds the payment; a resend after chain confirmation 
   used = true;
   const later = await m.handleOracleBase(get(qs, pay), env, opts);
   assert.equal(later.status, 200);
-  assert.equal((await later.json()).oracle.paddles[0].id, 'franklin-c45-aurelius');
+  assert.equal((await later.json()).result.answer.paddles[0].id, 'franklin-c45-aurelius');
   assert.equal(state.settles, 1);
 });
