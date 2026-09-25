@@ -1,0 +1,367 @@
+---
+/**
+ * HomeShortwaveHero — the front door, above the fold, is the town on the air.
+ *
+ * A receiver: a dial across the top (the same 3–12 MHz band /band uses), every
+ * recent Shortwave post parked on it as a blip at a frequency hashed from its
+ * id, the Nightly Net marked at 7.200. Left: the page's only h1 and a big say
+ * box. Right: the latest lines, live. Clicking a line or a blip tunes the
+ * needle to it. Foot: the Net countdown, today's fox, and the ways further in.
+ *
+ * Data: first paint loads /api/shortwave; after that it is push — the dock bar
+ * re-emits every post the presence bus announces as `pc:shortwave:post`, and
+ * the say box goes through the bar's own say path (`pc:shortwave:say`).
+ * Visitor text goes in with textContent only.
+ */
+import '../styles/shortwave-shared.css';
+import { BAND, NET, formatMhz } from '../lib/band';
+
+const ticks = Array.from({ length: BAND.maxMhz - BAND.minMhz + 1 }, (_, i) => BAND.minMhz + i);
+const pct = (mhz: number) => ((mhz - BAND.minMhz) / (BAND.maxMhz - BAND.minMhz)) * 100;
+const netMhz = formatMhz(NET.step);
+---
+<section class="swh" id="shortwave-live" data-home-shortwave-hero aria-labelledby="swh-title">
+  <div class="swh__dial" data-swh-dial>
+    <div class="swh__readout" aria-live="polite">
+      <span class="swh__lcd"><b data-swh-mhz>{netMhz}</b><small>MHz</small></span>
+      <span class="swh__tuned" data-swh-tuned>Shortwave · the town, live</span>
+    </div>
+    <div class="swh__scale" data-swh-scale role="group" aria-label="The band, 3 to 12 MHz. Each blip is a recent post.">
+      {ticks.map((mhz) => (
+        <span class="swh__tick" style={`left:${pct(mhz)}%`}><i>{mhz}</i></span>
+      ))}
+      <span class="swh__net" style={`left:${pct(Number(netMhz))}%`} title={`The Nightly Net · ${netMhz} MHz`}>NET</span>
+      <span class="swh__blips" data-swh-blips></span>
+      <span class="swh__needle" data-swh-needle style={`left:${pct(Number(netMhz))}%`} aria-hidden="true"></span>
+    </div>
+    <span class="swh__meter" data-swh-meter aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+  </div>
+
+  <div class="swh__say">
+    <p class="swh__eyebrow"><span class="swh__dot" aria-hidden="true"></span>On the air from El Segundo · <span data-swh-here>live</span></p>
+    <h1 id="swh-title">Say it once.<br /><em>The whole town hears it.</em></h1>
+    <p class="swh__lede">Shortwave is the town's status feed. Anything you say lands on every open page within a second, then stays on the air for a year. No account needed.</p>
+    <form class="swh__form" data-swh-form autocomplete="off">
+      <label class="swh__sr" for="swh-input">Say something on Shortwave</label>
+      <input id="swh-input" data-swh-input type="text" maxlength="280" placeholder="What's happening where you are?" enterkeyhint="send" />
+      <button type="submit">Say <span aria-hidden="true">↑</span></button>
+    </form>
+    <p class="swh__note"><span data-swh-count>280</span> · <span data-swh-note role="status">Paste a Spotify link and it plays inline. Add 📍 from the bar below to pin a place.</span></p>
+    <ul class="swh__faces" data-swh-faces aria-label="Who is here now"></ul>
+  </div>
+
+  <div class="swh__feed">
+    <div class="swh__feed-head">
+      <p><b>Latest on the air</b></p>
+      <a href="/shortwave">The town square <span aria-hidden="true">↗</span></a>
+    </div>
+    <ol class="swh__list" data-swh-list aria-live="polite">
+      <li class="swh__empty">Tuning in…</li>
+    </ol>
+  </div>
+
+  <footer class="swh__foot">
+    <a href="/band?f=7.200" data-swh-net><span class="swh__net-dot" aria-hidden="true"></span><span data-swh-net-label>The Nightly Net · 9:00 PM on {netMhz}</span></a>
+    <a href="/band" data-swh-fox>Today's fox is somewhere on the band · hunt it</a>
+    <a href="/connect">Claim your @handle · Sign in with PointCast</a>
+    <a href="#new">What's new in town <span aria-hidden="true">↓</span></a>
+  </footer>
+</section>
+
+<script>
+  import { ago, fetchPreview, firstUrl, previewCard, tidyText, type LinkPreview } from '../lib/shortwave-client';
+  import { BAND, NET, formatMhz, formatWait, foxNumber, hash32, netState, pad3, townDate } from '../lib/band';
+
+  type Post = { id: string; at: string; who: string; noun: number; text: string; via?: string; verified?: boolean; color?: string };
+
+  const SHOWN = 4;
+  const pct = (step: number) => (step / BAND.steps) * 100;
+  // Keep posts off the Net marker so the Net always reads as its own place.
+  const stepOf = (id: string) => { const s = hash32(id) % BAND.steps; return Math.abs(s - NET.step) < 4 ? (s + 9) % BAND.steps : s; };
+
+  function mount() {
+    const root = document.querySelector<HTMLElement>('[data-home-shortwave-hero]');
+    if (!root || root.dataset.mounted) return;
+    root.dataset.mounted = 'true';
+    const controller = new AbortController();
+    const { signal } = controller;
+    const q = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
+    const list = q('[data-swh-list]'), blips = q('[data-swh-blips]'), needle = q('[data-swh-needle]'), mhz = q('[data-swh-mhz]');
+    const tuned = q('[data-swh-tuned]'), meter = q('[data-swh-meter]'), here = q('[data-swh-here]'), faces = q('[data-swh-faces]');
+    const form = q<HTMLFormElement>('[data-swh-form]'), input = q<HTMLInputElement>('[data-swh-input]'), note = q('[data-swh-note]'), count = q('[data-swh-count]');
+    const netLabel = q('[data-swh-net-label]'), netLink = q<HTMLAnchorElement>('[data-swh-net]'), fox = q('[data-swh-fox]');
+
+    let posts: Post[] = [];
+    let tunedId = '';
+    const previews = new Map<string, LinkPreview | null>();
+
+    // A short burst of filtered static when a person turns the dial. Only ever on a click.
+    let audio: AudioContext | null = null;
+    function crackle() {
+      try {
+        audio ??= new AudioContext();
+        const len = Math.floor(audio.sampleRate * 0.14), buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const src = audio.createBufferSource(), bp = audio.createBiquadFilter(), g = audio.createGain();
+        bp.type = 'bandpass'; bp.frequency.value = 1400 + Math.random() * 1600; bp.Q.value = 1.4; g.gain.value = 0.07;
+        src.buffer = buf; src.connect(bp).connect(g).connect(audio.destination); src.start();
+      } catch {}
+    }
+
+    function tune(id: string, sound = false) {
+      const p = posts.find((x) => x.id === id);
+      if (!p) return;
+      tunedId = id;
+      const step = stepOf(id);
+      needle.style.left = `${pct(step)}%`;
+      mhz.textContent = formatMhz(step);
+      tuned.textContent = `${p.who || 'visitor'} · ${ago(p.at)}`;
+      root.querySelectorAll<HTMLElement>('[data-swh-post], [data-swh-blip]').forEach((el) => el.toggleAttribute('data-tuned', el.dataset.id === id));
+      if (sound) crackle();
+    }
+
+    function row(p: Post, fresh: boolean): HTMLElement {
+      const li = document.createElement('li'); li.className = 'swh__post'; li.dataset.swhPost = ''; li.dataset.id = p.id; if (fresh) li.dataset.fresh = 'true';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'swh__tune'; btn.setAttribute('aria-label', `Tune to ${p.who || 'visitor'}'s post`);
+      const freq = document.createElement('span'); freq.className = 'swh__freq'; freq.textContent = formatMhz(stepOf(p.id));
+      btn.append(freq);
+      btn.addEventListener('click', () => tune(p.id, true));
+      const img = document.createElement('img'); img.className = 'swh__noun'; img.src = `https://noun.pics/${Number(p.noun) || 0}.svg`; img.alt = ''; img.width = 34; img.height = 34; img.loading = 'lazy';
+      const body = document.createElement('div'); body.className = 'swh__body';
+      const meta = document.createElement('p'); meta.className = 'swh__meta';
+      const who = document.createElement('b'); who.textContent = `${p.who || 'visitor'}${p.verified ? ' ✓' : ''}`;
+      const time = document.createElement('time'); time.dateTime = p.at; time.textContent = ago(p.at);
+      const via = document.createElement('span'); via.textContent = p.via === 'agent' ? 'an agent' : p.via === 'bar' ? 'the bar' : 'the square';
+      meta.append(who, time, via);
+      body.append(meta);
+      const url = firstUrl(p.text), preview = url ? previews.get(url) : null;
+      const line = tidyText(p.text, preview, true);
+      if (line && line !== '♫') { const text = document.createElement('p'); text.className = 'swh__text'; text.textContent = line; body.append(text); }
+      if (preview) body.append(previewCard(preview, true));
+      li.append(btn, img, body);
+      return li;
+    }
+
+    function render(freshId?: string) {
+      if (!posts.length) {
+        const li = document.createElement('li'); li.className = 'swh__empty'; li.textContent = 'Quiet on the air. Say the first thing.';
+        list.replaceChildren(li); blips.replaceChildren(); return;
+      }
+      const shown = posts.slice(0, SHOWN);
+      list.replaceChildren(...shown.map((p) => row(p, p.id === freshId)));
+      blips.replaceChildren(...posts.slice(0, 12).map((p, i) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'swh__blip'; b.dataset.swhBlip = ''; b.dataset.id = p.id;
+        b.style.left = `${pct(stepOf(p.id))}%`; b.style.setProperty('--age', String(Math.min(i, 11) / 11));
+        if (p.id === freshId) b.dataset.fresh = 'true';
+        b.setAttribute('aria-label', `${formatMhz(stepOf(p.id))} MHz · ${p.who || 'visitor'}`);
+        b.title = `${formatMhz(stepOf(p.id))} · ${p.who || 'visitor'}`;
+        b.addEventListener('click', () => tune(p.id, true));
+        return b;
+      }));
+      for (const p of shown) {
+        const url = firstUrl(p.text);
+        if (url && !previews.has(url)) { previews.set(url, null); void fetchPreview(url).then((v) => { if (v) { previews.set(url, v); render(); } }); }
+      }
+      tune(freshId || (posts.some((p) => p.id === tunedId) ? tunedId : posts[0].id));
+    }
+
+    function ping() { meter.dataset.ping = 'true'; setTimeout(() => { delete meter.dataset.ping; }, 1400); }
+    function add(p: Post, fresh: boolean) {
+      if (!p?.id || posts.some((x) => x.id === p.id)) return;
+      posts = [p, ...posts].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 16);
+      render(fresh ? p.id : undefined);
+      if (fresh) ping();
+    }
+
+    async function load() {
+      try {
+        const data = await (await fetch('/api/shortwave?limit=12', { headers: { accept: 'application/json' }, signal })).json();
+        if (!data?.ok || !Array.isArray(data.posts)) throw new Error('unavailable');
+        const known = new Set(posts.map((p) => p.id));
+        posts = [...data.posts.filter((p: Post) => p?.id && !known.has(p.id)), ...posts].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 16);
+        render();
+      } catch {
+        if (!posts.length) { const li = document.createElement('li'); li.className = 'swh__empty'; li.textContent = 'Shortwave is out of range right now. The bar at the bottom still works.'; list.replaceChildren(li); }
+      }
+    }
+
+    function paintPresence(d: any) {
+      const h = Number(d?.humans ?? 0), a = Number(d?.agents ?? 0);
+      here.textContent = h + a > 0 ? `${h + a} here now${a ? ` · ${a} AI` : ''}` : 'live';
+      const nouns: number[] = (Array.isArray(d?.sessions) ? d.sessions : [])
+        .map((v: any) => Number(v?.nounId ?? v?.noun)).filter((n: number) => Number.isFinite(n)).slice(0, 8);
+      faces.replaceChildren(...nouns.map((n) => { const li = document.createElement('li'); const img = document.createElement('img'); img.src = `https://noun.pics/${n}.svg`; img.alt = ''; img.width = 26; img.height = 26; img.loading = 'lazy'; li.append(img); return li; }));
+      faces.hidden = nouns.length === 0;
+    }
+    let livePresence = false;
+    async function presence() {
+      if (livePresence) return;
+      try { paintPresence(await (await fetch('/api/presence/snapshot', { cache: 'no-store', signal })).json()); } catch { here.textContent = 'live'; }
+    }
+
+    function paintClock() {
+      const net = netState();
+      netLink.dataset.live = String(net.live);
+      netLabel.textContent = net.live
+        ? `The Nightly Net is on now · ${formatMhz(NET.step)} · ${net.minutesLeft} min left`
+        : `The Nightly Net · 9:00 PM on ${formatMhz(NET.step)} · in ${formatWait(net.minutesUntil)}`;
+      const n = foxNumber(townDate());
+      fox.textContent = n >= 1 ? `Fox No. ${pad3(n)} is somewhere on the band · hunt it` : `Today's fox is somewhere on the band · hunt it`;
+    }
+
+    window.addEventListener('pc:shortwave:post', (ev: Event) => {
+      const d = (ev as CustomEvent).detail || {};
+      if (d.post) add(d.post as Post, true);
+      if (d.own) note.textContent = d.live === false ? 'Said. It is on Shortwave.' : 'Said. Live across town, and kept on Shortwave.';
+    }, { signal });
+    window.addEventListener('pc:presence', (ev: Event) => { livePresence = true; paintPresence((ev as CustomEvent).detail || {}); }, { signal });
+
+    input.addEventListener('input', () => { count.textContent = String(280 - [...input.value].length); }, { signal });
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const text = input.value.replace(/\s+/g, ' ').trim();
+      if (!text) { input.focus(); return; }
+      input.value = ''; count.textContent = '280';
+      // The dock bar owns the say path (room bubble, ticker, Shortwave). Without it, post directly.
+      if (document.querySelector('[data-pc-ref="fb-omni-form"]')) { window.dispatchEvent(new CustomEvent('pc:shortwave:say', { detail: { text, via: 'page' } })); note.textContent = 'Sending…'; return; }
+      try {
+        const data = await (await fetch('/api/shortwave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, via: 'page' }) })).json();
+        if (data?.ok && data.post) { add(data.post, true); note.textContent = 'Said. It is on Shortwave.'; } else note.textContent = data?.error || 'Could not send that. Try the bar at the bottom.';
+      } catch { note.textContent = 'Could not send that. Try the bar at the bottom.'; }
+    }, { signal });
+
+    // Arrow keys walk the dial from post to post while the dial has focus.
+    q('[data-swh-scale]').addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+      const order = posts.slice(0, 12).sort((a, b) => stepOf(a.id) - stepOf(b.id));
+      if (!order.length) return;
+      ev.preventDefault();
+      const i = Math.max(0, order.findIndex((p) => p.id === tunedId));
+      const next = order[(i + (ev.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length];
+      tune(next.id, true);
+      root.querySelector<HTMLElement>(`[data-swh-blip][data-id="${CSS.escape(next.id)}"]`)?.focus();
+    }, { signal });
+
+    paintClock(); void load(); void presence();
+    const timers = [
+      setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 60000),
+      setInterval(() => { if (document.visibilityState === 'visible') void presence(); }, 30000),
+      setInterval(() => { paintClock(); list.querySelectorAll<HTMLTimeElement>('time').forEach((t) => { t.textContent = ago(t.dateTime); }); }, 30000),
+    ];
+    document.addEventListener('astro:before-swap', () => { timers.forEach(clearInterval); controller.abort(); void audio?.close(); }, { once: true });
+  }
+  mount();
+  document.addEventListener('astro:page-load', mount);
+</script>
+
+<style is:global>
+  .swh { --swh-ink: #111; --swh-night: #14201c; --swh-night-2: #1c2b26; --swh-glow: #ffb547; --swh-green: #9fd36a; --swh-paper: #fffdf7; --swh-soft: #5f5e5a;
+    --sw-accent: #ffb547; --sw-rule: rgba(244,238,217,.14); --sw-soft: #b9c2a8; --sw-card-bg: #14201c; --sw-shadow: transparent; --sw-ink: #f4eed9;
+    display: grid; grid-template-columns: minmax(300px, 1fr) minmax(340px, 1.08fr); margin-top: 14px; border: 2px solid var(--swh-ink); background: var(--swh-paper); box-shadow: 7px 7px 0 var(--swh-glow); color: var(--swh-ink); }
+  .swh__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* The dial */
+  .swh__dial { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 14px 18px 16px; background: var(--swh-night); color: #f4eed9; border-bottom: 2px solid var(--swh-ink); }
+  .swh__readout { display: grid; gap: 4px; min-width: 150px; }
+  .swh__lcd { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 10px; background: #0a110e; border: 1px solid #33443d; box-shadow: inset 0 0 14px rgba(255,181,71,.12); }
+  .swh__lcd b { font: 700 24px/1 var(--pc-font-mono); letter-spacing: .02em; color: var(--swh-glow); text-shadow: 0 0 8px rgba(255,181,71,.55); font-variant-numeric: tabular-nums; }
+  .swh__lcd small { font: 700 9px var(--pc-font-mono); letter-spacing: .12em; color: #c9a35f; }
+  .swh__tuned { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 9px/1.4 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: #b9c2a8; }
+  .swh__scale { position: relative; height: 54px; margin: 0 6px; border-bottom: 1px solid #5b6b58; background: repeating-linear-gradient(90deg, transparent 0 calc(100% / 36 - 1px), rgba(244,238,217,.18) calc(100% / 36 - 1px) calc(100% / 36)); background-size: 100% 12px; background-repeat: no-repeat; background-position: bottom; }
+  .swh__tick { position: absolute; bottom: 0; width: 1px; height: 20px; background: rgba(244,238,217,.55); }
+  .swh__tick i { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); font: 600 9px var(--pc-font-mono); font-style: normal; color: #93a08c; }
+  .swh__net { position: absolute; top: 0; transform: translateX(-50%); padding: 1px 4px; background: #2a3b34; border: 1px solid #5b6b58; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; color: var(--swh-green); }
+  .swh__blips { position: absolute; inset: 14px 0 0; }
+  .swh__blip { position: absolute; bottom: 0; width: 14px; height: calc(34px - var(--age, 0) * 18px); margin-left: -7px; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
+  .swh__blip::before { content: ''; position: absolute; left: 6px; bottom: 0; width: 2px; height: 100%; background: var(--swh-glow); opacity: calc(1 - var(--age, 0) * .6); }
+  .swh__blip::after { content: ''; position: absolute; left: 3px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--swh-glow); box-shadow: 0 0 8px var(--swh-glow); opacity: calc(1 - var(--age, 0) * .6); }
+  .swh__blip[data-tuned]::after { background: #fff; box-shadow: 0 0 0 3px rgba(255,181,71,.45), 0 0 14px var(--swh-glow); opacity: 1; }
+  .swh__blip[data-fresh='true']::after { animation: swh-ring 1.6s ease-out 2; }
+  .swh__blip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  @keyframes swh-ring { 0% { box-shadow: 0 0 0 0 rgba(255,181,71,.8); } 100% { box-shadow: 0 0 0 16px rgba(255,181,71,0); } }
+  .swh__needle { position: absolute; top: -6px; bottom: -4px; width: 2px; margin-left: -1px; background: #ff5a3c; box-shadow: 0 0 10px rgba(255,90,60,.75); pointer-events: none; transition: left .55s cubic-bezier(.3,1.4,.5,1); }
+  .swh__meter { display: inline-flex; align-items: end; gap: 2px; height: 30px; }
+  .swh__meter i { width: 4px; background: var(--swh-green); opacity: .8; transform-origin: bottom; animation: swh-bar 1.8s ease-in-out infinite; }
+  .swh__meter i:nth-child(odd) { animation-delay: -.7s; } .swh__meter i:nth-child(3n) { animation-delay: -1.3s; }
+  .swh__meter i:nth-child(1) { height: 25%; } .swh__meter i:nth-child(2) { height: 45%; } .swh__meter i:nth-child(3) { height: 65%; } .swh__meter i:nth-child(4) { height: 85%; } .swh__meter i:nth-child(5) { height: 100%; } .swh__meter i:nth-child(6) { height: 80%; } .swh__meter i:nth-child(7) { height: 60%; } .swh__meter i:nth-child(8) { height: 40%; } .swh__meter i:nth-child(9) { height: 22%; }
+  @keyframes swh-bar { 0%, 100% { transform: scaleY(.4); } 50% { transform: scaleY(1); } }
+  .swh__meter[data-ping='true'] i { background: var(--swh-glow); opacity: 1; animation-duration: .35s; }
+
+  /* Say */
+  .swh__say { display: flex; flex-direction: column; min-width: 0; padding: clamp(20px, 2.6vw, 34px); border-right: 2px solid var(--swh-ink); background: #fff4dc; }
+  .swh__eyebrow { display: flex; align-items: center; gap: 8px; margin: 0 0 18px; font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; color: #9a5a12; }
+  .swh__dot { width: 8px; height: 8px; border-radius: 50%; background: #e0452b; box-shadow: 0 0 0 0 rgba(224,69,43,.6); animation: swh-pulse 2.2s ease-out infinite; }
+  @keyframes swh-pulse { 70%, 100% { box-shadow: 0 0 0 9px rgba(224,69,43,0); } }
+  .swh h1 { margin: 0; font-size: clamp(34px, 4.1vw, 60px); line-height: .94; letter-spacing: -.055em; }
+  .swh h1 em { font-style: normal; color: #c2410c; }
+  .swh__lede { margin: 16px 0 20px; max-width: 42ch; font-size: 14.5px; line-height: 1.5; color: #3a3833; }
+  .swh__form { display: flex; margin: 0; border: 2px solid var(--swh-ink); background: #fff; box-shadow: 4px 4px 0 var(--swh-ink); }
+  .swh__form input { flex: 1; min-width: 0; padding: 15px 14px; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; font-size: 17px; }
+  .swh__form input:focus-visible { outline: 3px solid var(--swh-glow); outline-offset: -3px; }
+  .swh__form button { padding: 0 22px; border: 0; border-left: 2px solid var(--swh-ink); border-radius: 0; background: var(--swh-ink); color: #fff; font: 700 11px var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+  .swh__form button:hover { background: #c2410c; }
+  .swh__note { margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--swh-soft); }
+  .swh__note [data-swh-count] { font: 700 10px var(--pc-font-mono); color: #9a5a12; }
+  .swh__faces { display: flex; flex-wrap: wrap; gap: 5px; margin: auto 0 0; padding: 18px 0 0; list-style: none; }
+  .swh__faces li img { display: block; width: 26px; height: 26px; border: 1px solid var(--swh-ink); background: #efe7d8; image-rendering: pixelated; }
+
+  /* Feed */
+  .swh__feed { display: flex; flex-direction: column; min-width: 0; background: var(--swh-night-2); color: #f4eed9; }
+  .swh__feed-head { display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid rgba(244,238,217,.18); font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .1em; text-transform: uppercase; }
+  .swh__feed-head p { margin: 0; } .swh__feed-head b { color: var(--swh-glow); }
+  .swh .swh__feed-head a, .swh .swh__feed-head a:visited { color: #ffe2b0; text-decoration: underline; text-underline-offset: 3px; }
+  .swh__list { flex: 1; display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-height: 250px; }
+  .swh__post { position: relative; display: grid; grid-template-columns: 52px 34px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 16px; border-bottom: 1px solid rgba(244,238,217,.1); transition: background .2s ease; }
+  .swh__post:last-child { border-bottom: 0; }
+  .swh__post[data-tuned] { background: rgba(255,181,71,.08); box-shadow: inset 4px 0 0 var(--swh-glow); }
+  .swh__post[data-fresh='true'] { animation: swh-in 1.8s ease-out; }
+  @keyframes swh-in { 0% { background: rgba(255,181,71,.35); transform: translateY(-6px); opacity: 0; } 15% { opacity: 1; transform: none; } }
+  .swh__tune { align-self: stretch; padding: 4px 0 0; border: 0; border-radius: 0; background: none; text-align: left; cursor: pointer; }
+  .swh__freq { font: 700 11px var(--pc-font-mono); color: #93a08c; font-variant-numeric: tabular-nums; }
+  .swh__post[data-tuned] .swh__freq, .swh__tune:hover .swh__freq { color: var(--swh-glow); }
+  .swh__tune:focus-visible { outline: 2px solid var(--swh-glow); outline-offset: 2px; }
+  .swh__noun { width: 34px; height: 34px; border: 1px solid #5b6b58; background: #efe7d8; image-rendering: pixelated; }
+  .swh__meta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin: 0; font: 500 9.5px var(--pc-font-mono); letter-spacing: .04em; color: #93a08c; }
+  .swh__meta b { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: #f4eed9; }
+  .swh__meta span::before { content: 'from '; }
+  .swh__text { margin: 4px 0 0; font-size: 15px; line-height: 1.42; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .swh .sw-card { margin-top: 8px; }
+  .swh__empty { padding: 24px 16px; font-size: 13px; color: #b9c2a8; }
+
+  /* Foot */
+  .swh__foot { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--swh-ink); }
+  .swh__foot a { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 11px 14px; border-right: 1px solid rgba(0,0,0,.18); font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--swh-ink); }
+  .swh__foot a:last-child { border-right: 0; justify-content: flex-end; }
+  .swh__foot a:hover { background: #fff4dc; color: #c2410c; }
+  .swh__net-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #93a08c; }
+  .swh__foot a[data-live='true'] { background: var(--swh-night); color: var(--swh-green); }
+  .swh__foot a[data-live='true'] .swh__net-dot { background: var(--swh-green); animation: swh-pulse 1.6s ease-out infinite; }
+
+  @media (max-width: 980px) {
+    .swh__dial { grid-template-columns: auto minmax(0, 1fr); }
+    .swh__meter { display: none; }
+    .swh__foot { grid-template-columns: 1fr 1fr; }
+    .swh__foot a:nth-child(2) { border-right: 0; }
+    .swh__foot a:nth-child(-n+2) { border-bottom: 1px solid rgba(0,0,0,.18); }
+    .swh__foot a:last-child { justify-content: flex-start; }
+  }
+  @media (max-width: 760px) {
+    .swh { grid-template-columns: 1fr; box-shadow: 5px 5px 0 var(--swh-glow); }
+    .swh__dial { grid-template-columns: 1fr; gap: 10px; padding: 12px 14px 14px; }
+    .swh__readout { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
+    .swh__tuned { max-width: none; }
+    .swh__tick:nth-child(even) i { display: none; }
+    .swh__say { border-right: 0; border-bottom: 2px solid var(--swh-ink); }
+    .swh__form input { font-size: 16px; }
+    .swh__list { min-height: 0; }
+    .swh__post { grid-template-columns: 44px 30px minmax(0, 1fr); gap: 10px; padding: 11px 14px; }
+    .swh__noun { width: 30px; height: 30px; }
+    .swh__foot { grid-template-columns: 1fr; }
+    .swh__foot a { border-right: 0; border-bottom: 1px solid rgba(0,0,0,.18); }
+    .swh__foot a:last-child { border-bottom: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .swh__dot, .swh__meter i, .swh__post[data-fresh='true'], .swh__blip[data-fresh='true']::after, .swh__foot a[data-live='true'] .swh__net-dot { animation: none; }
+    .swh__needle { transition: none; }
+  }
+</style>

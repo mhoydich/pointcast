@@ -6,13 +6,14 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 test('the rebuilt PointCast front door keeps the home-signals catalog and carries Nouns and Bell & Signal as live doors', async () => {
-  const [home, desk, playFirst, signals, welcome, deck] = await Promise.all([
+  const [home, desk, playFirst, signals, welcome, deck, hero] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeFrontDoorDesk.astro'),
     read('src/components/HomePlayFirst.astro'),
     read('src/lib/home-signals.ts'),
     read('src/components/HomeWelcome.astro'),
     read('src/components/HomeV2SignalDeck.astro'),
+    read('src/components/HomeShortwaveHero.astro'),
   ]);
 
   assert.match(signals, /pointcast-drum-noun-universe\/115-rooms-one-shared-pulse\.webp/);
@@ -26,7 +27,9 @@ test('the rebuilt PointCast front door keeps the home-signals catalog and carrie
   assert.equal((home.match(/<h1\b/g) ?? []).length, 0);
   assert.equal((desk.match(/<h1\b/g) ?? []).length, 0);
   assert.equal((welcome.match(/<h1\b/g) ?? []).length, 0);
-  assert.equal((deck.match(/<h1\b/g) ?? []).length, 1);
+  // Shortwave hero 2026-09-24: the page h1 moved up into the Shortwave hero; the deck is an h2 now.
+  assert.equal((deck.match(/<h1\b/g) ?? []).length, 0);
+  assert.equal((hero.match(/<h1\b/g) ?? []).length, 1);
   assert.match(home, /<HomeWelcome \/>/);
   assert.equal((playFirst.match(/<h1\b/g) ?? []).length, 0);
   assert.match(home, /fetch\('\/now-playing\.json'/);

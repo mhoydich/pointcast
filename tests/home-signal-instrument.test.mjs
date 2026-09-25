@@ -8,6 +8,8 @@ const playFirstSource = await readFile(new URL('../src/components/HomePlayFirst.
 const deskSource = await readFile(new URL('../src/components/HomeFrontDoorDesk.astro', import.meta.url), 'utf8');
 const welcomeSource = await readFile(new URL('../src/components/HomeWelcome.astro', import.meta.url), 'utf8');
 const deckSource = await readFile(new URL('../src/components/HomeV2SignalDeck.astro', import.meta.url), 'utf8');
+// Shortwave hero 2026-09-24: the page h1 moved from the drop deck to the Shortwave hero above it.
+const heroSource = await readFile(new URL('../src/components/HomeShortwaveHero.astro', import.meta.url), 'utf8');
 const signalSource = await readFile(new URL('../src/lib/home-signals.ts', import.meta.url), 'utf8');
 const endpointSource = await readFile(new URL('../src/pages/signals.json.ts', import.meta.url), 'utf8');
 const styleSource = await readFile(new URL('../src/styles/front-door-fresh.css', import.meta.url), 'utf8');
@@ -18,7 +20,7 @@ test('front door exposes the four-pad Rosebud instrument', () => {
   assert.ok(indexSource.indexOf('<HomeFrontDoorDesk') < indexSource.indexOf('<HomePlayFirst'));
   assert.ok(indexSource.indexOf('<HomeStartHere') < indexSource.indexOf('<HomePlayFirst'));
   assert.equal((indexSource.match(/<h1\b/g) ?? []).length, 0);
-  assert.equal((`${indexSource}${deskSource}${playFirstSource}${welcomeSource}${deckSource}`.match(/<h1\b/g) ?? []).length, 1);
+  assert.equal((`${indexSource}${deskSource}${playFirstSource}${welcomeSource}${deckSource}${heroSource}`.match(/<h1\b/g) ?? []).length, 1);
   assert.equal((playFirstSource.match(/\{ id: '[a-z]+', key: '[A-Z]', name: '[A-Za-z]+'/g) ?? []).length, 4);
   assert.match(playFirstSource, /role="group" aria-label="Rosebud drum pads"/);
   assert.match(playFirstSource, /data-hit-count/);
