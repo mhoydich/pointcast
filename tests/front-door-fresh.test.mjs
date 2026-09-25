@@ -149,7 +149,7 @@ test('the freshness slot still feeds /now.json, and the front door links the twi
 });
 
 test('the fresh front door is responsive, accessible, and motion-safe by construction', async () => {
-  const [home, edition, desk, play, shelf, css, welcome, deck] = await Promise.all([
+  const [home, edition, desk, play, shelf, css, welcome, deck, hero] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeNewEdition.astro'),
     read('src/components/HomeFrontDoorDesk.astro'),
@@ -158,11 +158,12 @@ test('the fresh front door is responsive, accessible, and motion-safe by constru
     read('src/styles/front-door-fresh.css'),
     read('src/components/HomeWelcome.astro'),
     read('src/components/HomeV2SignalDeck.astro'),
+    read('src/components/HomeShortwaveHero.astro'),
   ]);
 
-  // The live V2 signal deck carries the page's only h1; the welcome and Rosebud are labelled h2 shelves below it.
+  // Shortwave hero 2026-09-24: the Shortwave hero carries the page's only h1 (the V2 deck is now an h2); the welcome and Rosebud are labelled h2 shelves below it.
   assert.equal((home.match(/<h1\b/g) ?? []).length, 0);
-  assert.equal(((home + desk + play + welcome + deck).match(/<h1\b/g) ?? []).length, 1);
+  assert.equal(((home + desk + play + welcome + deck + hero).match(/<h1\b/g) ?? []).length, 1);
   assert.match(edition, /id="home-edition-title"/);
   assert.match(play, /aria-labelledby="play-title"/);
   assert.match(play, /<h2 class="play__title" id="play-title"/);
