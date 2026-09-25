@@ -2,7 +2,7 @@
  * /api/brick-scores — the Brick Choir high-score tables ("the choir").
  *
  * Storage in env.VISITS KV (every list is a JSON array of the top 20 { initials, score, round, game, at }):
- *   - `bc:scores`                       → all-time, all arcade games (choir · quartet · 2600 · rally · lanes)   [unchanged]
+ *   - `bc:scores`                       → all-time, all arcade games (choir · quartet · 2600 · rally · lanes · park · third)   [unchanged]
  *   - `bc:scores:w:<YYYY-Www>`          → this ISO week, all arcade games
  *   - `bc:scores:<game>`                → all-time, one game
  *   - `bc:scores:<game>:w:<YYYY-Www>`   → this ISO week, one game
@@ -12,7 +12,7 @@
  * The daily song is its own ladder: a "daily" post goes to bc:scores:daily, bc:scores:daily:w:<week> and
  * bc:scores:daily:<date>, never to the arcade boards (a 60-second run shouldn't sit next to a full campaign).
  *
- * GET  [?period=all|week|day] [&game=choir|quartet|2600|rally|lanes|daily] [&day=YYYY-MM-DD]
+ * GET  [?period=all|week|day] [&game=choir|quartet|2600|rally|lanes|park|third|daily] [&day=YYYY-MM-DD]
  *      → { scores: top 10, period, week, game?, day? }        (no params: exactly what it always returned)
  * POST { initials, score, round, game? } → { scores: top 10 (all-time, same board as before), rank, week: top 10 of this week, weekRank, day?, dayRank? }
  * Arcade rules: three characters, A–Z / 0–9 / '-', scores are self-reported (it's a toy).
@@ -26,7 +26,7 @@ const HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 const KEY = 'bc:scores';
-const GAMES = new Set(['choir', 'quartet', '2600', 'daily', 'rally', 'lanes', 'park']);
+const GAMES = new Set(['choir', 'quartet', '2600', 'daily', 'rally', 'lanes', 'park', 'third']);
 const KEEP = 20;
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: HEADERS });
 type Row = { initials: string; score: number; round: number; at: number; game?: string };
