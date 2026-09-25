@@ -26,7 +26,7 @@ const HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 const KEY = 'bc:scores';
-const GAMES = new Set(['choir', 'quartet', '2600', 'daily', 'rally', 'lanes']);
+const GAMES = new Set(['choir', 'quartet', '2600', 'daily', 'rally', 'lanes', 'park']);
 const KEEP = 20;
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: HEADERS });
 type Row = { initials: string; score: number; round: number; at: number; game?: string };
