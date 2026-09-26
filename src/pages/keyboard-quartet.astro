@@ -239,6 +239,7 @@
         <option value="5">Long</option>
       </select></div>
     <button id="inviteBtn" class="primary" title="Save a seat and send someone the link">Invite</button>
+    <button id="onlineBtn" title="Friends join from their own phone or laptop with a link">Play online</button>
     <button id="flatBtn" aria-pressed="false" title="Tablet flat on a table: the top two seats face the far side">Table mode</button>
   </div>
 </header>
@@ -281,6 +282,7 @@
   <span id="meter">call and echo · clean echo = 2 petals · second try = 1 · the caller gets 1 for every echo</span>
 </footer>
 
+<script is:inline src="/js/keyboard-table.js"></script>
 <script is:inline>
 (() => {
 'use strict';
@@ -360,6 +362,7 @@ const mtof = m => 440*Math.pow(2,(m-69)/12);
 const PANS = [-0.45, 0.45, -0.3, 0.3];
 function tone(seat, midi, vel=0.9, t){
   boot(); t = t ?? ctx.currentTime;
+  if(netTable) netTable.note(seat, midi, vel, t - ctx.currentTime, 1);
   const f = mtof(midi), kind = SEATS[seat].voice;
   const out = ctx.createGain(); const pan = ctx.createStereoPanner(); pan.pan.value = PANS[seat];
   out.connect(pan); pan.connect(master); pan.connect(wet);
@@ -687,6 +690,35 @@ if(savedSeat >= 0){
   sub.textContent = `Your keys are ${s.caps.split('').join(' ')}${TOUCH ? ' — tap one' : ' — press one'} to sit. It's one keyboard for everyone, so pull up a chair next to whoever sent this.`;
 } else {
   updateLobby();
+}
+/* ---------- online seats (/js/keyboard-table.js) ---------- */
+let netTable = null;
+const onlineBtn = $('onlineBtn');
+const TABLE_OPTS = {
+  game: 'quartet', title: 'Keyboard Quartet', path: location.pathname,
+  seats: SEATS.map(s=>({name:s.name, color:s.color, caps:s.caps})),
+};
+function hostTable(){
+  if(netTable || !window.KeyboardTable) return;
+  netTable = KeyboardTable.host(Object.assign({}, TABLE_OPTS, {
+    snapshot: ()=>({ m: mode, sit: sitting.map(Number), sc: petals.slice(), turn: mode==='lead' ? leader : mode==='echo' ? echoer : -1, lit: -1,
+      bar: mode==='lead' ? Math.round(phrase.length/Math.max(1,phraseLen)*100) : mode==='echo' ? Math.round(pos/Math.max(1,phraseLen)*100) : 0,
+      p: promptEl.textContent }),
+    onKey: (seat,deg)=>hit(seat,deg),
+    onSit: seat=>{ if(mode==='jam' && !sitting[seat]){ sitting[seat] = true; updateLobby(); } },
+    onStart: ()=>{ if(mode==='jam' || mode==='done') start(); },
+    onAgain: (seat)=>{ if(mode==='echo' && seat===echoer){ mode='wait'; seatClasses(); replayPhrase(false, ()=>{ if(mode==='wait'){ mode='echo'; seatClasses(); } }); } },
+    onEnd: ()=>{ netTable = null; onlineBtn.hidden = false; },
+  }));
+  onlineBtn.hidden = true;
+}
+onlineBtn.onclick = ()=>{ boot(); hostTable(); onlineBtn.blur(); };
+const tableCode = window.KeyboardTable ? KeyboardTable.cleanCode(new URLSearchParams(location.search).get('table')) : '';
+if(tableCode){
+  onlineBtn.hidden = true;
+  KeyboardTable.join(Object.assign({}, TABLE_OPTS, { code: tableCode, seatCodes: SEATS.map(s=>s.codes), tone: (seat,midi,vel,t,len)=>tone(seat,midi,vel,t,len), boot }));
+} else {
+  try{ if(sessionStorage.getItem('kt:host:quartet')) hostTable(); }catch(_){}
 }
 })();
 </script>
