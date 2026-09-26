@@ -1,0 +1,64 @@
+name: Deploy PointCast to Cloudflare Pages
+
+# The Cloudflare Pages project "pointcast" is a Direct Upload project (it has no
+# Git connection, and Cloudflare can't add one to an existing Direct Upload
+# project). This workflow is the auto-deploy: every push to main builds the site
+# and uploads it with wrangler, so what's on main is what's live.
+#
+# One-time setup (repo owner): add a repository secret CLOUDFLARE_API_TOKEN with
+# the "Cloudflare Pages: Edit" permission on the account. Until that secret
+# exists the build still runs (a useful check) and the deploy step is skipped.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 699061394cac705067bad6a7a4bd2db5
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: Check out PointCast
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Check for the Cloudflare token
+        id: token
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -n "$CF_TOKEN" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "::notice::CLOUDFLARE_API_TOKEN is not set yet, so the build ran but nothing was deployed."; fi
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.token.outputs.present == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy dist
+            --project-name=pointcast
+            --branch=main
+            --commit-hash=${{ github.sha }}
