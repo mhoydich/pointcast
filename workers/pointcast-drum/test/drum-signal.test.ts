@@ -70,7 +70,7 @@ describe("DrumCounter signal", () => {
     const room = `signal-${crypto.randomUUID()}`;
     await post(room, { delta: 1, source: { kind: "wizard", app: "<script>Hi There</script>" } });
     const s = await summary(room);
-    expect(s.sources[0].kind).toBe("other");
-    expect(s.sources[0].app).not.toMatch(/[<> ]/);
+    expect(s.sources[0]?.kind).toBe("other");
+    expect(s.sources[0]?.app).not.toMatch(/[<> ]/);
   });
 });
