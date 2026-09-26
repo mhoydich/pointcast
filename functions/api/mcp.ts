@@ -1444,7 +1444,11 @@ async function dispatchTool(
       const counter = await fetch(`${base}/api/drum`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ delta: combo, sessionId: `mcp-${sessionId}` }),
+        body: JSON.stringify({
+          delta: combo,
+          sessionId: `mcp-${sessionId}`,
+          source: { kind: 'agent', app: 'mcp' },
+        }),
       });
       if (!counter.ok) return { content: [{ type: 'text', text: 'drum counter unavailable; tap was not broadcast' }], isError: true };
       // Dual broadcast: type=drum so /drum-tv, /drum-marquee, /drum-radio
