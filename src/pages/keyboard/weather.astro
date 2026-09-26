@@ -1,0 +1,732 @@
+---
+/**
+ * /keyboard/weather — Weather Keys, El Segundo's weather turned into sound.
+ *
+ * Fetches Open-Meteo directly (CORS-enabled, no key, sends nothing about
+ * the visitor) for the real current + 12-hour fields: temperature, wind
+ * speed & gusts, cloud cover, precipitation, relative humidity, is_day and
+ * a WMO weather code. If that fails, it falls back to the town's own
+ * /api/weather?lat=33.9192&lng=-118.4165&label=El%20Segundo proxy, which
+ * only has { tempF, condition, sunset, updatedAt } — derived the rest from
+ * `condition` and the clock in that case. If both fail, three demo presets
+ * are offered as a last resort. Readings the current source can't supply
+ * are marked "not reported" rather than faked.
+ *
+ * Six knobs, one generative piece:
+ *   wind → tempo · temperature → register & brightness · clouds → mode
+ *   rain → texture & a slower tempo · humidity → reverb · day/night → voice
+ *
+ * A lookahead scheduler runs a random-walk melody + pad + pulse forever
+ * once you press play, re-fetching every 10 minutes and easing toward the
+ * new numbers instead of jumping. Every 8 bars (never faster than ~20s)
+ * the last bar's melody goes to the town signal as pure, wordless notes.
+ *
+ * Storage: only a volume preference, in pc-weather-v1.
+ */
+const title = 'Weather Keys · PointCast';
+const description =
+  "Hear El Segundo's weather right now. Wind sets the tempo, temperature sets the register, clouds set the mode, rain adds texture — a generative piece tuned to the sky outside.";
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/weather">
+<meta property="og:title" content="Weather Keys">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 16px;cursor:pointer;font-size:12px;min-height:44px}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+button.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+button.primary[aria-pressed=true]{background:transparent;color:var(--ink);border-color:var(--line)}
+button:disabled{opacity:.4;cursor:default}
+input[type=range]{width:120px;accent-color:var(--gold);min-height:44px}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+main{max-width:760px;margin:0 auto;padding:26px 20px 60px;display:flex;flex-direction:column;gap:22px}
+.intro{margin:0;font-size:13px;line-height:1.6;color:var(--dim);max-width:60ch}
+.sky{position:relative;width:100%;height:min(48vw,240px);min-height:150px;border-radius:20px;border:1px solid var(--line);overflow:hidden;background:linear-gradient(180deg,var(--sky-top,#1c2a3a),var(--sky-bot,#0c1420));transition:background 2.5s ease}
+.sky .sun{position:absolute;border-radius:50%;filter:blur(1px);transition:opacity 2s,background 2s;opacity:var(--sun-op,0)}
+.sky .blob{position:absolute;border-radius:50%;background:var(--cloud-c,#cfd8db88);filter:blur(6px);opacity:var(--cloud-op,0);animation:drift linear infinite;transition:opacity 2s}
+.sky .drop{position:absolute;width:1.5px;border-radius:2px;background:linear-gradient(#cfe3ff00,#cfe3ffaa);animation:fall linear infinite}
+.sky .pulse{position:absolute;border-radius:50%;border:1px solid #ffffff55;opacity:0;animation:pulseOut 1.6s ease-out forwards}
+@keyframes drift{from{transform:translateX(-10%)}to{transform:translateX(110%)}}
+@keyframes fall{from{transform:translateY(-10%)}to{transform:translateY(120%)}}
+@keyframes pulseOut{0%{opacity:.7;transform:scale(.2)}100%{opacity:0;transform:scale(2.4)}}
+@media(prefers-reduced-motion:reduce){.sky .blob,.sky .drop,.sky .pulse{animation:none!important;opacity:var(--cloud-op,0)}}
+.transport{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.transport .vol{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dim)}
+.notice{font-size:11px;color:var(--gold);min-height:14px}
+.presets{display:flex;flex-wrap:wrap;gap:8px}
+.readings{width:100%;border-collapse:collapse;font-size:12px}
+.readings caption{text-align:left;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+.readings th,.readings td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.readings th{color:var(--dim);font-weight:normal;width:26%}
+.readings td.doing{color:var(--gold)}
+.readings td.na{color:#5f7264;font-style:italic}
+.legend{background:linear-gradient(155deg,#1d2c20,#111d16);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.legend h2{margin:0 0 10px;font-family:Georgia,serif;font-weight:normal;font-size:16px}
+.legend ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.legend li{font-size:12px;line-height:1.55;color:#c7d3bc}
+.legend b{color:var(--gold);font-weight:normal}
+.hint{font-size:11px;line-height:1.7;color:var(--dim);margin:0}
+.privacy{font-size:10px;line-height:1.6;color:#a0ad95;margin:0}
+[hidden]{display:none!important}
+@media(max-width:520px){header{padding:16px}main{padding:20px 14px 44px}.readings th{width:34%}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Weather Keys<small>Hear the sky over El Segundo</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="sound" aria-pressed="true">♪ Sound on</button>
+  </div>
+</header>
+
+<main>
+  <p class="intro">Hear El Segundo's weather right now. Wind sets the tempo, temperature sets the register and brightness, clouds set the mode, and rain brings its own texture — press play and let it run.</p>
+
+  <div class="sky" id="sky" aria-hidden="true"></div>
+
+  <div class="transport">
+    <button type="button" class="primary" id="play" aria-pressed="false">▶ Play the weather</button>
+    <button type="button" id="hourly" hidden>⏩ Next 12 hours</button>
+    <span class="notice" id="hourlyStatus" role="status" aria-live="polite"></span>
+    <div class="vol">
+      <label for="vol">Volume</label>
+      <input type="range" id="vol" min="0" max="100" value="70" aria-label="Volume">
+    </div>
+  </div>
+  <p class="notice" id="notice" role="status" aria-live="polite"></p>
+  <div class="presets" id="presets" hidden>
+    <span class="hint" style="align-self:center">Live weather didn't load — try the demo instead:</span>
+    <button type="button" data-preset="marine">Marine layer morning</button>
+    <button type="button" data-preset="santaana">Santa Ana afternoon</button>
+    <button type="button" data-preset="winterrain">Winter rain</button>
+  </div>
+
+  <table class="readings" id="readings">
+    <caption>Right now &middot; <span id="place">El Segundo</span></caption>
+    <tbody id="readingsBody">
+      <tr><td colspan="3">Loading the weather&hellip;</td></tr>
+    </tbody>
+  </table>
+  <p class="hint">Data: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>
+
+  <div class="legend">
+    <h2>How the sky plays</h2>
+    <ul>
+      <li><b>Wind → tempo.</b> Calm air keeps a slow, even pulse; gustier air speeds up and adds syncopation.</li>
+      <li><b>Temperature → register &amp; brightness.</b> Cold sits low and dark, hot climbs high and bright.</li>
+      <li><b>Cloud cover → mode.</b> Clear is major/lydian, partly cloudy is mixolydian/dorian, overcast is minor/aeolian, and a marine layer switches to KeyVoice's own "marine" mood.</li>
+      <li><b>Precipitation → texture.</b> Rain adds filtered noise and random high droplet plinks, and slows the tempo down.</li>
+      <li><b>Humidity → reverb.</b> Damper air gets a longer, wetter tail.</li>
+      <li><b>Day / night → voice.</b> Daylight rings a small sun bell on the beat; night trades it for soft, cricket-like pulses.</li>
+    </ul>
+  </div>
+
+  <p class="hint" id="firstRun">First time here? Press "Play the weather" to start the sound (browsers need a tap first) — it keeps playing, checks the sky again every 10 minutes, and eases into any change.</p>
+  <p class="privacy">Every 8 bars, at most once every 20 seconds, this page sends the last bar's melody to the town signal as plain notes — never words, never a recording. Only your volume is saved, in this browser.</p>
+</main>
+
+<script is:inline src="/js/keyboard-voice.js"></script>
+<script is:inline src="/keyboard.js" data-app="keyboard-weather" data-place="el-segundo" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var STORE_KEY = 'pc-weather-v1';
+  var OPEN_METEO = 'https://api.open-meteo.com/v1/forecast?latitude=33.9192&longitude=-118.4165'
+    + '&current=temperature_2m,relative_humidity_2m,is_day,precipitation,cloud_cover,wind_speed_10m,wind_gusts_10m,weather_code'
+    + '&hourly=temperature_2m,cloud_cover,precipitation,wind_speed_10m,weather_code'
+    + '&forecast_hours=12&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FLos_Angeles';
+  var PC_API = '/api/weather?lat=33.9192&lng=-118.4165&label=' + encodeURIComponent('El Segundo');
+  var REFRESH_MS = 10 * 60 * 1000;
+  var $ = function (id) { return document.getElementById(id); };
+  var V = window.KeyVoice;
+  var reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- prefs: volume only ---------------------------------------------------
+  var prefs = { volume: 0.7, sound: true };
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (raw) { var p = JSON.parse(raw); if (p && typeof p.volume === 'number') prefs.volume = Math.max(0, Math.min(1, p.volume)); }
+  } catch (e) { /* private mode: volume just won't stick */ }
+  function savePrefs() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ volume: prefs.volume })); } catch (e) { /* storage full or blocked */ }
+  }
+
+  // ---- scales & moods --------------------------------------------------------
+  var SCALES = {
+    clear: { name: 'major / lydian', arr: [0, 2, 4, 6, 7, 9, 11], mood: 'bright' },
+    partly: { name: 'mixolydian / dorian', arr: [0, 2, 3, 5, 7, 9, 10], mood: 'tender' },
+    overcast: { name: 'minor / aeolian', arr: [0, 2, 3, 5, 7, 8, 10], mood: 'blue' },
+    marine: { name: "KeyVoice 'marine'", arr: (V && V.mood('marine').scale) || [0, 2, 3, 5, 7, 9, 10], mood: 'marine' },
+  };
+
+  // WMO weather codes (used by Open-Meteo's `weather_code`). 45/48 are fog —
+  // the one case where cloud cover alone doesn't tell you it's a marine layer.
+  var WMO_FOG = { 45: 1, 48: 1 };
+  var WMO_PRECIP = { 51: 1, 53: 1, 55: 1, 56: 1, 57: 1, 61: 1, 63: 1, 65: 1, 66: 1, 67: 1, 71: 1, 73: 1, 75: 1, 77: 1, 80: 1, 81: 1, 82: 1, 85: 1, 86: 1, 95: 1, 96: 1, 99: 1 };
+  var WMO_STORM = { 95: 1, 96: 1, 99: 1 };
+
+  function cloudGroup(condition) {
+    switch (condition) {
+      case 'clear': case 'mostly clear': return 'clear';
+      case 'partly cloudy': return 'partly';
+      case 'fog': return 'marine';
+      case 'overcast': case 'drizzle': case 'rain': case 'showers': case 'storm': case 'snow': return 'overcast';
+      default: return 'partly';
+    }
+  }
+  function isPrecip(condition) {
+    return condition === 'drizzle' || condition === 'rain' || condition === 'showers' || condition === 'storm' || condition === 'snow';
+  }
+  function isStorm(condition) { return condition === 'storm'; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  /** Cloud group from real Open-Meteo fields: WMO fog codes win, then cloud %. */
+  function cloudGroupRich(cloudPct, weatherCode) {
+    if (WMO_FOG[weatherCode]) return 'marine';
+    if (cloudPct <= 15) return 'clear';
+    if (cloudPct <= 55) return 'partly';
+    return 'overcast';
+  }
+
+  /**
+   * Turn a weather reading into every knob the instrument needs. Accepts
+   * either the rich Open-Meteo shape (cloudPct + weatherCode present) or the
+   * sparse /api/weather shape (a `condition` string only) and derives
+   * whatever the source didn't supply.
+   */
+  function derive(wx) {
+    var tempF = typeof wx.tempF === 'number' ? wx.tempF : 62;
+    var rich = typeof wx.cloudPct === 'number' || typeof wx.weatherCode === 'number';
+    var condition = wx.condition || 'unknown';
+    var group = rich ? cloudGroupRich(wx.cloudPct || 0, wx.weatherCode) : cloudGroup(condition);
+    var scale = SCALES[group];
+    var storm = rich ? !!WMO_STORM[wx.weatherCode] : isStorm(condition);
+    var precip = rich ? ((wx.precipitationMm || 0) > 0 || !!WMO_PRECIP[wx.weatherCode]) : isPrecip(condition);
+
+    var rootMidi = Math.round(42 + (clamp(tempF, 32, 100) - 32) / 68 * 30); // 42 cold/dark … 72 hot/bright
+    var brightness = clamp((tempF - 32) / 68, 0, 1);
+
+    var haveWind = typeof wx.windMph === 'number';
+    var windMph = haveWind ? wx.windMph : null;
+    var gustMph = typeof wx.windGustMph === 'number' ? wx.windGustMph : null;
+    var bpm;
+    if (haveWind) bpm = clamp(58 + windMph * 1.7, 56, 148);
+    else bpm = storm ? 104 : (precip ? 66 : 80);
+    if (precip) bpm = Math.max(56, bpm - 10);
+    var syncopation = (gustMph != null ? gustMph > 20 : (haveWind && windMph > 16)) || storm;
+
+    var haveHumidity = typeof wx.humidity === 'number';
+    var reverbWet = haveHumidity
+      ? clamp(wx.humidity / 100 * 0.6, 0.06, 0.6)
+      : (group === 'marine' ? 0.5 : precip ? 0.4 : group === 'overcast' ? 0.28 : group === 'partly' ? 0.18 : 0.1);
+
+    var isDay = typeof wx.isDay === 'boolean' ? wx.isDay : dayFromSunset(wx.sunset);
+
+    return {
+      tempF: tempF, condition: condition, group: group, scale: scale, precip: precip, storm: storm,
+      rootMidi: rootMidi, brightness: brightness, bpm: bpm, syncopation: syncopation,
+      reverbWet: reverbWet, isDay: isDay, windMph: windMph, gustMph: gustMph, humidity: haveHumidity ? wx.humidity : null,
+      cloudPct: typeof wx.cloudPct === 'number' ? wx.cloudPct : null,
+    };
+  }
+
+  function dayFromSunset(sunsetIso) {
+    var now = new Date();
+    var hour = now.getHours() + now.getMinutes() / 60;
+    var sunsetHour = 18.5;
+    if (sunsetIso) {
+      var d = new Date(sunsetIso);
+      if (!isNaN(d.getTime())) sunsetHour = d.getHours() + d.getMinutes() / 60;
+    }
+    return hour >= 6 && hour < sunsetHour;
+  }
+
+  // ---- demo presets (used only if the live fetch fails) ----------------------
+  var PRESETS = {
+    marine: { label: 'Marine layer morning (demo)', tempF: 58, condition: 'fog', windMph: 4, humidity: 88, isDay: true },
+    santaana: { label: 'Santa Ana afternoon (demo)', tempF: 91, condition: 'clear', windMph: 28, humidity: 14, isDay: true },
+    winterrain: { label: 'Winter rain (demo)', tempF: 53, condition: 'rain', windMph: 12, humidity: 82, isDay: false },
+  };
+
+  // ---- fetching ---------------------------------------------------------------
+  var current = null; // derived state actually playing
+  var target = null;  // derived state we're easing toward
+  var source = 'none';
+  var placeLabel = 'El Segundo';
+
+  /** A readable sky word whether the reading came from the API's `condition`
+   * string (sparse fallback) or was derived from cloud%/weather code (rich). */
+  function skyLabel(d) {
+    if (d.condition && d.condition !== 'unknown') return d.condition;
+    if (d.storm) return 'storm';
+    if (d.group === 'marine') return d.precip ? 'fog, rain' : 'fog';
+    if (d.precip) return 'rain';
+    return d.group === 'clear' ? 'clear' : d.group === 'partly' ? 'partly cloudy' : 'overcast';
+  }
+
+  function paintReadings(d) {
+    var rows = [];
+    function row(label, value, doing) {
+      rows.push('<tr><th>' + label + '</th><td>' + value + '</td><td class="doing">' + doing + '</td></tr>');
+    }
+    row('Temperature', Math.round(d.tempF) + '°F', d.rootMidi + ' MIDI root · brightness ' + Math.round(d.brightness * 100) + '%');
+    var windText = d.windMph == null ? '<span class="na">not reported</span>' : Math.round(d.windMph) + ' mph' + (d.gustMph != null ? ' (gusts ' + Math.round(d.gustMph) + ')' : '');
+    row('Wind', windText, Math.round(d.bpm) + ' bpm' + (d.syncopation ? ' · syncopated' : ''));
+    row('Cloud cover', d.cloudPct != null ? d.cloudPct + '% · ' + skyLabel(d) : skyLabel(d), d.scale.name);
+    row('Precipitation', d.precip ? skyLabel(d) : 'none', d.precip ? 'rain texture · slower tempo' : 'dry, no texture');
+    row('Humidity', d.humidity == null ? '<span class="na">not reported</span>' : d.humidity + '%', 'reverb ' + Math.round(d.reverbWet * 100) + '%');
+    row('Sky', d.isDay ? 'day' : 'night', d.isDay ? 'sun bell on the beat' : 'soft cricket pulses');
+    $('readingsBody').innerHTML = rows.join('');
+  }
+
+  function paintSky(d) {
+    var sky = $('sky');
+    var s = sky.style;
+    if (d.isDay) {
+      s.setProperty('--sky-top', d.group === 'clear' ? '#3e79c9' : d.group === 'marine' ? '#8fa2ab' : '#5c7a92');
+      s.setProperty('--sky-bot', d.group === 'clear' ? '#a9d3ec' : '#7f939c');
+      s.setProperty('--sun-op', d.group === 'clear' ? '0.9' : d.group === 'partly' ? '0.55' : '0.15');
+    } else {
+      s.setProperty('--sky-top', '#0a1220');
+      s.setProperty('--sky-bot', d.group === 'clear' ? '#1c2a44' : '#242e33');
+      s.setProperty('--sun-op', '0');
+    }
+    var cloudOp = d.group === 'clear' ? 0 : d.group === 'partly' ? 0.35 : d.group === 'marine' ? 0.75 : 0.6;
+    s.setProperty('--cloud-op', String(cloudOp));
+    s.setProperty('--cloud-c', d.group === 'marine' ? '#dfe8ea99' : d.isDay ? '#eef1ee99' : '#3d4a4f99');
+    sky.classList.toggle('raining', !!d.precip);
+    buildSkyShapes(d);
+  }
+
+  var sunEl = null, blobEls = [], dropEls = [];
+  function buildSkyShapes(d) {
+    var sky = $('sky');
+    if (!sunEl) {
+      sunEl = document.createElement('div');
+      sunEl.className = 'sun';
+      sky.appendChild(sunEl);
+    }
+    var w = sky.clientWidth || 300, h = sky.clientHeight || 160;
+    var size = Math.max(30, Math.min(w, h) * 0.24);
+    sunEl.style.width = sunEl.style.height = size + 'px';
+    sunEl.style.left = w * 0.74 + 'px';
+    sunEl.style.top = h * 0.16 + 'px';
+    sunEl.style.background = d.isDay ? 'radial-gradient(circle, #fff6d8, #ffd873)' : 'radial-gradient(circle, #dfe6ff, #b9c6ef)';
+
+    var wantBlobs = d.group === 'clear' ? 0 : d.group === 'partly' ? 3 : d.group === 'marine' ? 6 : 5;
+    while (blobEls.length < wantBlobs) {
+      var b = document.createElement('div');
+      b.className = 'blob';
+      sky.appendChild(b);
+      blobEls.push(b);
+    }
+    blobEls.forEach(function (b, i) {
+      var show = i < wantBlobs;
+      b.style.display = show ? '' : 'none';
+      if (!show) return;
+      var bw = w * (0.28 + (i % 3) * 0.09);
+      b.style.width = bw + 'px';
+      b.style.height = (bw * 0.4) + 'px';
+      b.style.left = '-15%';
+      b.style.top = (h * (0.1 + (i * 0.14) % 0.7)) + 'px';
+      b.style.animationDuration = reduceMotion ? '0s' : (38 + i * 11) + 's';
+      b.style.animationDelay = reduceMotion ? '0s' : (-i * 9) + 's';
+    });
+
+    var wantDrops = d.precip && !reduceMotion ? (d.storm ? 46 : 26) : 0;
+    while (dropEls.length < wantDrops) {
+      var r = document.createElement('div');
+      r.className = 'drop';
+      sky.appendChild(r);
+      dropEls.push(r);
+    }
+    dropEls.forEach(function (r, i) {
+      var show = i < wantDrops;
+      r.style.display = show ? '' : 'none';
+      if (!show) return;
+      r.style.height = (10 + Math.random() * 16) + 'px';
+      r.style.left = Math.random() * 100 + '%';
+      r.style.top = (Math.random() * -h) + 'px';
+      r.style.animationDuration = (0.5 + Math.random() * 0.5) + 's';
+      r.style.animationDelay = (Math.random() * -1) + 's';
+    });
+  }
+
+  function setNotice(text, ms) {
+    $('notice').textContent = text;
+    if (ms) setTimeout(function () { if ($('notice').textContent === text) $('notice').textContent = ''; }, ms);
+  }
+
+  var hourlyDerived = []; // derive()d state per upcoming hour, for "Next 12 hours"
+
+  function applyWeather(wx, src, label) {
+    source = src;
+    if (label) placeLabel = label;
+    $('place').textContent = placeLabel + (src === 'demo' ? ' · demo' : '');
+    var d = derive(wx);
+    target = d;
+    if (!current) current = d; // first load: snap
+    paintReadings(d);
+    paintSky(d);
+    hourlyDerived = Array.isArray(wx.hourly) ? wx.hourly.map(derive) : [];
+    $('hourly').hidden = !hourlyDerived.length;
+    $('presets').hidden = src !== 'fallback-needed';
+  }
+
+  /** Open-Meteo's `current` + `hourly` blocks → this page's weather shape. */
+  function fromOpenMeteo(data) {
+    var c = data.current || {};
+    var h = data.hourly || {};
+    var hourly = [];
+    if (Array.isArray(h.time)) {
+      for (var i = 0; i < h.time.length && i < 12; i++) {
+        hourly.push({
+          time: h.time[i],
+          tempF: h.temperature_2m ? h.temperature_2m[i] : c.temperature_2m,
+          cloudPct: h.cloud_cover ? h.cloud_cover[i] : 0,
+          precipitationMm: h.precipitation ? h.precipitation[i] : 0,
+          windMph: h.wind_speed_10m ? h.wind_speed_10m[i] : null,
+          weatherCode: h.weather_code ? h.weather_code[i] : 0,
+          isDay: c.is_day === 1,
+        });
+      }
+    }
+    return {
+      tempF: c.temperature_2m, humidity: c.relative_humidity_2m, isDay: c.is_day === 1,
+      precipitationMm: c.precipitation, cloudPct: c.cloud_cover, windMph: c.wind_speed_10m,
+      windGustMph: c.wind_gusts_10m, weatherCode: c.weather_code, updatedAt: c.time,
+      hourly: hourly,
+    };
+  }
+
+  function fetchOpenMeteo() {
+    return fetch(OPEN_METEO, { headers: { accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(function (raw) {
+        if (!raw || !raw.current) throw new Error('bad payload');
+        var wx = fromOpenMeteo(raw);
+        applyWeather(wx, 'live', 'El Segundo');
+        setNotice('Live from Open-Meteo, updated ' + new Date(wx.updatedAt || Date.now()).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '.', 6000);
+      });
+  }
+
+  /** Thinner fallback: the town's own /api/weather proxy (no wind/humidity/hourly). */
+  function fetchPointcastApi() {
+    return fetch(PC_API, { headers: { accept: 'application/json' } })
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(function (data) {
+        if (!data || data.ok === false) throw new Error(data && data.error || 'bad payload');
+        applyWeather(data, 'live', data.name || 'El Segundo');
+        setNotice('Live from the town weather proxy, updated ' + new Date(data.updatedAt || Date.now()).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '.', 6000);
+      });
+  }
+
+  function fetchLive() {
+    return fetchOpenMeteo().catch(function () {
+      return fetchPointcastApi().catch(function () {
+        if (!current) {
+          applyWeather({ tempF: 62, condition: 'unknown' }, 'fallback-needed', 'El Segundo');
+          setNotice("Couldn't reach the weather. Try a demo below, or wait — it retries every 10 minutes.");
+        } else {
+          setNotice('Weather refresh failed; keeping the last reading.', 6000);
+        }
+      });
+    });
+  }
+
+  $('presets').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-preset]');
+    if (!b) return;
+    var p = PRESETS[b.dataset.preset];
+    if (!p) return;
+    applyWeather(p, 'demo', p.label.replace(' (demo)', ''));
+    setNotice('Playing the ' + p.label.toLowerCase() + '.', 5000);
+    ensureRunning();
+  });
+
+  // ---- audio engine -------------------------------------------------------
+  var ctx = null, masterGain = null, comp = null, running = false;
+  var noiseBuf = null, rainSource = null, rainFilter = null, rainGain = null;
+  var padOsc = [], padGain = null, padFilter = null;
+  var schedTimer = null, nextNoteTime = 0, sixteenth = 0, barCount = 0;
+  var barNotes = [];
+  var lastSignalAt = 0;
+  var walkIdx = 0;
+  var EASE = 0.03; // per scheduler tick, toward target
+
+  function ensureCtx() {
+    if (ctx) return ctx;
+    ctx = V.ctx();
+    masterGain = ctx.createGain();
+    masterGain.gain.value = prefs.volume;
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -20;
+    masterGain.connect(comp).connect(ctx.destination);
+
+    var len = ctx.sampleRate * 2;
+    noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+    var d = noiseBuf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+    rainSource = ctx.createBufferSource();
+    rainSource.buffer = noiseBuf;
+    rainSource.loop = true;
+    rainFilter = ctx.createBiquadFilter();
+    rainFilter.type = 'bandpass';
+    rainFilter.frequency.value = 2200;
+    rainFilter.Q.value = 0.6;
+    rainGain = ctx.createGain();
+    rainGain.gain.value = 0;
+    rainSource.connect(rainFilter).connect(rainGain).connect(masterGain);
+    rainSource.start();
+
+    padFilter = ctx.createBiquadFilter();
+    padFilter.type = 'lowpass';
+    padFilter.frequency.value = 1200;
+    padGain = ctx.createGain();
+    padGain.gain.value = 0;
+    padFilter.connect(padGain).connect(masterGain);
+    return ctx;
+  }
+
+  function setPad(rootMidi, scaleArr) {
+    padOsc.forEach(function (o) { try { o.stop(); } catch (e) {} });
+    padOsc = [];
+    [0, 2, 4].forEach(function (deg, i) {
+      var midi = rootMidi - 12 + scaleArr[deg % scaleArr.length];
+      var o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+      o.connect(padFilter);
+      o.start();
+      padOsc.push(o);
+    });
+  }
+
+  function droplet() {
+    var t = ctx.currentTime;
+    var f = 1200 + Math.random() * 2200;
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o.connect(g).connect(masterGain);
+    o.start(t);
+    o.stop(t + 0.25);
+  }
+
+  function nightPulse(when) {
+    var t = when;
+    var o = ctx.createOscillator();
+    var f = ctx.createBiquadFilter();
+    var g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.value = 3200 + Math.random() * 600;
+    f.type = 'bandpass';
+    f.frequency.value = 3400;
+    f.Q.value = 6;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.02, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    o.connect(f).connect(g).connect(masterGain);
+    o.start(t);
+    o.stop(t + 0.08);
+  }
+
+  function sunBell(when, rootMidi) {
+    V.play(rootMidi + 12, 'bright', when, 0.35 * prefs.volume);
+  }
+
+  function midiAt(idx, rootMidi, scaleArr) {
+    var span = scaleArr.length;
+    var oct = Math.floor(idx / span);
+    var deg = ((idx % span) + span) % span;
+    return rootMidi + oct * 12 + scaleArr[deg];
+  }
+
+  function ease() {
+    if (!current || !target) return;
+    current.tempF += (target.tempF - current.tempF) * EASE;
+    current.rootMidi += (target.rootMidi - current.rootMidi) * EASE;
+    current.bpm += (target.bpm - current.bpm) * EASE;
+    current.reverbWet += (target.reverbWet - current.reverbWet) * EASE;
+    current.brightness += (target.brightness - current.brightness) * EASE;
+    current.group = target.group;
+    current.scale = target.scale;
+    current.precip = target.precip;
+    current.storm = target.storm;
+    current.isDay = target.isDay;
+    current.syncopation = target.syncopation;
+    if (rainGain) rainGain.gain.setTargetAtTime(current.precip ? (current.storm ? 0.09 : 0.045) * prefs.volume : 0, ctx.currentTime, 1.2);
+    if (padGain) padGain.gain.setTargetAtTime(0.05 * prefs.volume, ctx.currentTime, 1.5);
+    if (rainFilter) rainFilter.frequency.setTargetAtTime(1600 + current.brightness * 1800, ctx.currentTime, 2);
+  }
+
+  function scheduleTick() {
+    var d = current;
+    if (!d) return;
+    ease();
+    var secondsPer16th = 60 / d.bpm / 4;
+    var lookahead = 0.12;
+    while (nextNoteTime < ctx.currentTime + lookahead) {
+      var beatInBar = sixteenth % 16;
+      // bar boundary: flush + maybe send signal
+      if (beatInBar === 0) {
+        if (barCount > 0 && barCount % 8 === 0) maybeSendSignal();
+        if (beatInBar === 0 && barCount % 8 === 0) barNotes = [];
+        barCount++;
+        setPadIfNeeded(d);
+        if (d.isDay) sunBell(nextNoteTime, d.rootMidi);
+      }
+      if (!d.isDay && beatInBar % 4 === 0) nightPulse(nextNoteTime);
+      var melodyStep = d.syncopation ? (beatInBar % 3 === 0) : (beatInBar % 2 === 0);
+      if (melodyStep && Math.random() < 0.72) {
+        var delta = Math.floor(Math.random() * 5) - 2;
+        walkIdx = clampIdx(walkIdx + delta, d.scale.arr.length);
+        var midi = midiAt(walkIdx, Math.round(d.rootMidi), d.scale.arr);
+        V.play(midi, d.scale.mood, nextNoteTime, (0.5 + d.brightness * 0.3) * prefs.volume);
+        barNotes.push(midi);
+      }
+      if (d.precip && Math.random() < (d.storm ? 0.22 : 0.1)) droplet();
+      sixteenth++;
+      nextNoteTime += secondsPer16th;
+    }
+  }
+
+  var lastPadKey = '';
+  function setPadIfNeeded(d) {
+    var key = Math.round(d.rootMidi) + '|' + d.scale.name;
+    if (key === lastPadKey) return;
+    lastPadKey = key;
+    setPad(Math.round(d.rootMidi), d.scale.arr);
+  }
+  function clampIdx(idx, span) { return Math.max(-span, Math.min(span * 2, idx)); }
+
+  function maybeSendSignal() {
+    var now = performance.now();
+    if (now - lastSignalAt < 20000) return;
+    if (!barNotes.length || !window.PointCastKeyboard) return;
+    lastSignalAt = now;
+    window.PointCastKeyboard.note(barNotes.slice(0, 64), { place: 'el-segundo' }, { sound: false });
+  }
+
+  function startEngine() {
+    ensureCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    if (!current) return;
+    nextNoteTime = ctx.currentTime + 0.05;
+    sixteenth = 0;
+    barCount = 0;
+    walkIdx = 0;
+    barNotes = [];
+    setPadIfNeeded(current);
+    running = true;
+    schedTimer = setInterval(scheduleTick, 25);
+  }
+  function stopEngine() {
+    running = false;
+    clearInterval(schedTimer);
+    if (rainGain) rainGain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+    if (padGain) padGain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+  }
+  function ensureRunning() {
+    if (running || $('play').getAttribute('aria-pressed') !== 'true') return;
+    startEngine();
+  }
+
+  $('play').addEventListener('click', function () {
+    var on = $('play').getAttribute('aria-pressed') !== 'true';
+    $('play').setAttribute('aria-pressed', String(on));
+    $('play').textContent = on ? '⏸ Playing — tap to pause' : '▶ Play the weather';
+    $('firstRun').hidden = on;
+    if (on) startEngine(); else stopEngine();
+  });
+
+  $('sound').addEventListener('click', function () {
+    prefs.sound = !prefs.sound;
+    $('sound').setAttribute('aria-pressed', String(prefs.sound));
+    $('sound').textContent = prefs.sound ? '♪ Sound on' : '♪ Sound off';
+    if (masterGain) masterGain.gain.setTargetAtTime(prefs.sound ? prefs.volume : 0, ctx.currentTime, 0.15);
+  });
+
+  $('vol').value = String(Math.round(prefs.volume * 100));
+  $('vol').addEventListener('input', function () {
+    prefs.volume = clamp(Number($('vol').value) / 100, 0, 1);
+    if (masterGain && (!ctx || prefs.sound !== false)) masterGain.gain.setTargetAtTime(prefs.sound === false ? 0 : prefs.volume, (ctx || {}).currentTime || 0, 0.05);
+    savePrefs();
+  });
+
+  // ---- next 12 hours: a real, compressed 60-second forecast -----------------
+  var hourlyTimers = [];
+  $('hourly').addEventListener('click', function () {
+    if (!hourlyDerived.length) return;
+    ensureCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    hourlyTimers.forEach(clearTimeout);
+    hourlyTimers = [];
+    setNotice('Playing the next 12 hours in 60 seconds…', 62000);
+    var idx = 0;
+    hourlyDerived.forEach(function (hd, h) {
+      var t = ctx.currentTime + 0.1 + h * 5;
+      idx = clampIdx(idx + Math.floor(Math.random() * 3) - 1, hd.scale.arr.length);
+      var midi = midiAt(idx, Math.round(hd.rootMidi), hd.scale.arr);
+      V.play(midi, hd.scale.mood, t, 0.6 * prefs.volume);
+      if (hd.precip && Math.random() < 0.6) V.play(midi + 12, hd.scale.mood, t + 0.18, 0.25 * prefs.volume);
+      hourlyTimers.push(setTimeout(function () {
+        paintSky(hd);
+        var when = hd.time ? new Date(hd.time).toLocaleTimeString('en-US', { hour: 'numeric' }) : '+' + (h + 1) + 'h';
+        $('hourlyStatus').textContent = when + ': ' + Math.round(hd.tempF) + '°F, ' + skyLabel(hd);
+      }, h * 5000));
+    });
+    hourlyTimers.push(setTimeout(function () {
+      $('hourlyStatus').textContent = '';
+      if (current) paintSky(current); // restore the live sky when the forecast ends
+    }, hourlyDerived.length * 5000 + 400));
+  });
+
+  // ---- keyboard shortcut: space toggles play, ignoring inputs/modifiers ----
+  window.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+    if (e.key === ' ') { e.preventDefault(); $('play').click(); }
+  });
+
+  addEventListener('resize', function () { if (current) buildSkyShapes(current); });
+  addEventListener('pagehide', function () { if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); });
+
+  fetchLive();
+  setInterval(fetchLive, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
