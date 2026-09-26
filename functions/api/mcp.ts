@@ -297,6 +297,16 @@ const TOOL_DEFINITIONS = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'drum_league_standings',
+    description:
+      'Drum League standings for a week (Monday–Sunday UTC): every app that tags its drum beats is a team, ranked by beats with a daily cap. Optional week = any YYYY-MM-DD inside the week; default this week. Returns JSON.',
+    inputSchema: {
+      type: 'object',
+      properties: { week: { type: 'string', description: 'Any date inside the week, YYYY-MM-DD. Default: this week.' } },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'drum_play_instrument',
     description:
       'Fire one of the 12 orchestra instruments on /drum-v4 (or any of the 30 cells on /drum-v7). Broadcasts to every connected visitor.',
@@ -1453,6 +1463,11 @@ async function dispatchTool(
       return textContent(
         `global drum count: ${(data?.globalTotal ?? 0).toLocaleString()} taps across every /drum* surface, every visitor, since the room opened`,
       );
+    }
+    case 'drum_league_standings': {
+      const week = typeof args.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.week) ? `?week=${args.week}` : '';
+      const league = await callJson(`${base}/api/drum/league${week}`);
+      return { content: [{ type: 'text', text: JSON.stringify(league) }], structuredContent: league };
     }
     case 'drum_hall_state': {
       const [live, top, signal] = await Promise.all([
