@@ -1,0 +1,801 @@
+---
+/**
+ * /keyboard/morse — Morse Melody: Morse code that sounds like music.
+ *
+ * Three rooms in one page: Send (type a message, hear it as tuneful
+ * International Morse, share a link), Learn (Koch-method trainer that grows
+ * from two letters), and Decode (a straight key you tap or hold Space on,
+ * with an adaptive dit/dah/gap classifier and a practice-word target mode).
+ *
+ * Pitch comes from KeyVoice.noteFor per letter, in a chosen mood, so a
+ * message walks a little pentatonic-flavored melody instead of one beep. A
+ * "classic beep" toggle swaps that for a plain 600Hz sine, the way a real
+ * straight key sounds.
+ *
+ * Privacy: Learn/Decode progress lives in localStorage (pc-morse-v1). A sent
+ * message travels in the URL fragment (#m=…), never on a server. The town
+ * signal only ever gets a sorted bag of pitches or a keystroke count — never
+ * the message.
+ */
+const title = 'Morse Melody · PointCast';
+const description =
+  'Type a message and it goes out as tuneful International Morse — each letter on its own pentatonic pitch. Learn the alphabet the Koch way, or decode your own straight-key taps live.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/morse">
+<meta property="og:title" content="Morse Melody">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;--mood:#dfc48d;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 84% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 14px;cursor:pointer;font-size:11px;touch-action:manipulation}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--mood);border-color:var(--mood);color:#101813}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+main{max-width:920px;margin:0 auto;padding:20px 20px 60px}
+.intro{font-size:12px;color:var(--dim);line-height:1.7;margin:0 0 16px;max-width:64ch}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:16px}
+.field{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--dim)}
+.field input[type=range]{width:110px;accent-color:var(--gold)}
+.moods{display:flex;gap:4px;flex-wrap:wrap}
+.moods button{padding:6px 10px;font-size:10px}
+.moods button[aria-pressed=true]{background:var(--mood);border-color:var(--mood);color:#101813}
+.tabs{display:flex;gap:6px;margin:0 0 16px;overflow-x:auto}
+.tabs button{font-size:11px;padding:9px 16px;white-space:nowrap}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}
+.panel[hidden]{display:none!important}
+h2{font-family:Georgia,serif;font-weight:normal;font-size:22px;margin:0 0 6px}
+.sub{font-size:11px;color:var(--dim);margin:0 0 16px;line-height:1.7}
+textarea#msg{width:100%;min-height:80px;background:#0d1711;border:1px solid var(--line);border-radius:12px;color:var(--ink);font:inherit;font-size:16px;font-family:Georgia,serif;padding:12px 14px;resize:vertical;outline:none}
+textarea#msg:focus{border-color:var(--gold)}
+.msgmeta{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:6px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.tape{margin-top:18px;border:1px solid var(--line);border-radius:12px;background:#0d1711;padding:14px;min-height:64px;display:flex;align-items:center;gap:16px;overflow-x:auto;scroll-behavior:smooth}
+.tape .empty{color:var(--dim);font-size:11px}
+.tape .letter{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;padding:4px 6px;border-radius:8px;opacity:.55}
+.tape .letter.active{opacity:1;background:#1e2b20}
+.tape .letter b{font-family:Georgia,serif;font-weight:normal;font-size:16px;color:var(--ink)}
+.tape .syms{display:flex;gap:3px;height:14px;align-items:flex-end}
+.tape .dot,.tape .dash{background:var(--dim);border-radius:2px;height:6px}
+.tape .dot{width:6px}
+.tape .dash{width:16px}
+.tape i.lit{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.sealed{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:14px;background:#0d1711}
+.sealed input{width:100%;background:#0b120d;border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;font-size:11px;padding:10px;margin-top:8px}
+.incoming{display:grid;place-items:center;min-height:56vh;text-align:center;gap:14px}
+.incoming .stamp{width:96px;height:96px;border-radius:50%;background:var(--mood);color:#101813;display:grid;place-items:center;font-size:34px;cursor:pointer;border:0;box-shadow:0 10px 30px #0006}
+.incoming p{color:var(--dim);font-size:12px;max-width:40ch}
+.reading{font-family:Georgia,serif;font-size:22px;letter-spacing:.03em;min-height:40px;margin:6px 0}
+.reading .ahead{color:#3d4d3f}
+.reading .now{background:var(--mood);color:#101813;border-radius:3px}
+/* learn */
+.pool{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 18px}
+.pool span{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#1e2b20;border:1px solid var(--line);font-size:12px}
+.pool span.new{border-color:var(--gold);color:var(--gold)}
+.learnstage{display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px 0}
+.playbtn{width:84px;height:84px;border-radius:50%;font-size:26px;display:grid;place-items:center;background:var(--mood);color:#101813;border:0}
+#learnAnswer{width:100%;max-width:220px;text-align:center;text-transform:uppercase;font-size:22px;font-family:Georgia,serif;background:#0d1711;border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:10px;letter-spacing:.15em}
+#learnAnswer:focus{border-color:var(--gold);outline:none}
+.feedback{min-height:24px;font-size:13px}
+.feedback.ok{color:#a9c98a}
+.feedback.bad{color:#e79a7e}
+.pattern{font-size:20px;letter-spacing:.3em;color:var(--gold);min-height:26px}
+.meterwrap{width:100%;max-width:260px}
+.meter{height:8px;border-radius:6px;background:#0d1711;border:1px solid var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--gold)}
+.meterlabel{font-size:9px;color:var(--dim);margin-top:4px;text-align:center;letter-spacing:.08em;text-transform:uppercase}
+/* decode */
+.keywrap{display:flex;flex-direction:column;align-items:center;gap:16px}
+#key{width:100%;max-width:320px;height:150px;border-radius:20px;background:#1a281d;border:2px solid var(--line);font-family:Georgia,serif;font-size:18px;color:var(--dim);display:grid;place-items:center;cursor:pointer;user-select:none;-webkit-user-select:none}
+#key.down{background:var(--gold);color:#101813;border-color:var(--gold);transform:scale(.98)}
+.decodeout{width:100%;background:#0d1711;border:1px solid var(--line);border-radius:12px;padding:16px;min-height:64px;font-family:Georgia,serif;font-size:22px;letter-spacing:.04em;word-break:break-word}
+.decodebuf{font-size:12px;color:var(--gold);letter-spacing:.3em;min-height:18px}
+.target{font-family:Georgia,serif;font-size:28px;letter-spacing:.2em;text-align:center}
+.target span{color:#3d4d3f}
+.target span.done{color:var(--gold)}
+.dwpm{font-size:10px;color:var(--dim);text-align:center}
+.hint{font-size:10px;color:var(--dim);line-height:1.7;margin-top:10px}
+.privacy{font-size:10px;color:var(--dim);line-height:1.7;margin-top:20px;max-width:64ch}
+[hidden]{display:none!important}
+@media(max-width:640px){header{padding:14px}main{padding:14px 12px 46px}.panel{padding:16px}.brand small{margin-left:0}#key{height:130px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Morse Melody<small>Morse code that sounds like music</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+</header>
+
+<main>
+  <!-- Incoming transmission -->
+  <section id="incoming" class="incoming" hidden>
+    <p class="sub" id="inLabel">An incoming transmission</p>
+    <button type="button" class="stamp" id="inOpen" aria-label="Tap to receive the transmission">♪</button>
+    <p>Tap the stamp. It plays as it arrives, letter by letter — turn your sound on.</p>
+    <div id="inBody" hidden style="width:100%;max-width:520px">
+      <div class="reading" id="inReading" aria-live="polite"></div>
+      <div class="tape" id="inTape"><span class="empty">the tape will fill in as it plays</span></div>
+      <div class="actions">
+        <button type="button" class="primary" id="inAgain">▶ Play again</button>
+        <a href="/keyboard/morse" id="inOwn" style="font-size:11px;margin-left:6px">Send your own →</a>
+      </div>
+    </div>
+  </section>
+
+  <div id="app">
+    <p class="intro">Type a line and it goes out as International Morse — each letter rings its own pentatonic pitch instead of one flat beep. Learn the alphabet the Koch way, two letters at a time, or key your own Morse on a straight key and watch it decode live.</p>
+
+    <div class="toolbar" role="group" aria-label="Morse settings">
+      <button type="button" id="sound" aria-pressed="true">♪ Sound on</button>
+      <button type="button" id="classic" aria-pressed="false" title="Swap the tuneful pitch for a plain 600Hz practice-oscillator beep">◆ Classic beep</button>
+      <label class="field">WPM <input type="range" id="wpm" min="5" max="25" step="1" value="15" aria-label="Words per minute"><b id="wpmVal">15</b></label>
+      <button type="button" id="farnsworth" aria-pressed="false" title="Keep letters and words snappy but stretch the pauses between them, like slow-code practice">⏚ Farnsworth spacing</button>
+      <div class="moods" id="moods" role="group" aria-label="Melody mood"></div>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Morse Melody sections">
+      <button type="button" role="tab" id="tab-send" aria-selected="true" aria-controls="panel-send">Send</button>
+      <button type="button" role="tab" id="tab-learn" aria-selected="false" aria-controls="panel-learn">Learn</button>
+      <button type="button" role="tab" id="tab-decode" aria-selected="false" aria-controls="panel-decode">Decode</button>
+    </div>
+
+    <!-- SEND -->
+    <section class="panel" id="panel-send" role="tabpanel" aria-labelledby="tab-send">
+      <h2>Send a transmission</h2>
+      <p class="sub">Write up to 120 characters. It plays as tuneful Morse at the WPM above, and the tape below shows the dots and dashes as they land.</p>
+      <textarea id="msg" maxlength="120" placeholder="hello from el segundo" aria-label="Message to transmit"></textarea>
+      <div class="msgmeta"><span id="msgCount">0 / 120</span><span id="sendNotice"></span></div>
+      <div class="actions">
+        <button type="button" class="primary" id="send">▶ Send</button>
+        <button type="button" id="stopSend" hidden>◼ Stop</button>
+        <button type="button" id="copyLink">✳ Copy link</button>
+      </div>
+      <div class="tape" id="tape"><span class="empty">the tape draws itself here while sending</span></div>
+      <div class="sealed" id="sealed" hidden>
+        <p class="sub" style="margin:0">Link copied — anyone who opens it hears your transmission decode.</p>
+        <input id="link" readonly aria-label="Transmission link">
+      </div>
+      <p class="privacy">Only a sorted handful of the pitches used — never the words, never the order — joins the town chord on <a href="/keyboard-signal">/keyboard-signal</a>. The message itself travels in the link, after the <code>#</code>, which browsers never send to a server.</p>
+    </section>
+
+    <!-- LEARN -->
+    <section class="panel" id="panel-learn" role="tabpanel" aria-labelledby="tab-learn" hidden>
+      <h2>Learn the alphabet, two letters at a time</h2>
+      <p class="sub">The Koch method: you only ever practice at full speed, but with a tiny alphabet that grows. Get 18 of the last 20 right and a new letter joins the pool.</p>
+      <p class="sub" style="margin:0 0 4px">Now learning</p>
+      <div class="pool" id="pool"></div>
+      <div class="learnstage">
+        <button type="button" class="playbtn" id="learnPlay" aria-label="Play the letter again">▶</button>
+        <input type="text" id="learnAnswer" maxlength="1" autocomplete="off" autocapitalize="characters" aria-label="Which letter did you hear?" placeholder="?">
+        <p class="feedback" id="learnFeedback"></p>
+        <p class="pattern" id="learnPattern"></p>
+        <div class="meterwrap">
+          <div class="meter"><i id="learnMeter" style="width:0%"></i></div>
+          <p class="meterlabel" id="learnMeterLabel">0 / 20 this round</p>
+        </div>
+      </div>
+      <p class="hint">First run: press ▶ to hear a letter from the pool, then type it. Get it right or wrong, the pattern always shows after.</p>
+    </section>
+
+    <!-- DECODE -->
+    <section class="panel" id="panel-decode" role="tabpanel" aria-labelledby="tab-decode" hidden>
+      <h2>Key your own Morse</h2>
+      <p class="sub">Hold Space, or press and hold the key below. Timing is read relative to the WPM above and adapts to your rhythm as you go.</p>
+      <div class="actions" style="margin-bottom:12px">
+        <button type="button" id="practiceToggle" aria-pressed="false">🎯 Practice a word</button>
+        <button type="button" id="decodeClear">Clear</button>
+      </div>
+      <div id="targetWrap" hidden>
+        <p class="sub" style="margin:0 0 4px">Key this word</p>
+        <p class="target" id="target"></p>
+      </div>
+      <div class="keywrap">
+        <button type="button" id="key" aria-label="Straight key — hold to send a dit or dah">HOLD<br>(or Space)</button>
+        <p class="decodebuf" id="decodeBuf">&nbsp;</p>
+        <p class="dwpm" id="decodeWpm">reading at ~15 wpm</p>
+      </div>
+      <p class="sub" style="margin-top:14px">Decoded</p>
+      <div class="decodeout" id="decodeOut">—</div>
+      <p class="hint">A short press is a dit, a long one a dah. Pause a little and the letter locks in; pause longer and a space opens up.</p>
+    </section>
+
+    <p class="privacy">Keying here counts toward the town signal as a keystroke total — never which symbols, never the decoded words.</p>
+  </div>
+</main>
+
+<script is:inline src="/js/keyboard-voice.js"></script>
+<script is:inline src="/keyboard.js" data-app="keyboard-morse" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE_KEY = 'pc-morse-v1';
+
+  // ---- Morse table ----------------------------------------------------------
+  var MORSE = {
+    a: '.-', b: '-...', c: '-.-.', d: '-..', e: '.', f: '..-.', g: '--.', h: '....', i: '..', j: '.---',
+    k: '-.-', l: '.-..', m: '--', n: '-.', o: '---', p: '.--.', q: '--.-', r: '.-.', s: '...', t: '-',
+    u: '..-', v: '...-', w: '.--', x: '-..-', y: '-.--', z: '--..',
+    '0': '-----', '1': '.----', '2': '..---', '3': '...--', '4': '....-',
+    '5': '.....', '6': '-....', '7': '--...', '8': '---..', '9': '----.',
+    '.': '.-.-.-', ',': '--..--', '?': '..--..', "'": '.----.', '!': '-.-.--', '/': '-..-.',
+    '(': '-.--.', ')': '-.--.-', '&': '.-...', ':': '---...', ';': '-.-.-.', '=': '-...-',
+    '+': '.-.-.', '-': '-....-', '_': '..--.-', '"': '.-..-.', '$': '...-..-', '@': '.--.-.',
+  };
+  var REVERSE = {};
+  Object.keys(MORSE).forEach(function (k) { REVERSE[MORSE[k]] = k; });
+  var KOCH_ORDER = ['k', 'm', 'u', 'r', 'w', 'd', 'n', 'f', 'o', 'y', 'p', 'l', 'g', 'c', 'x', 'h', 'v', 'q', 'z',
+    'j', 'b', '5', '9', '3', '2', '7', '1', '8', '0', '4', '6', 'a', 's', 'i', 't', 'e', '.', ',', '?'];
+
+  // ---- persisted store --------------------------------------------------------
+  var store = null;
+  try { store = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) { /* private mode */ }
+  if (!store || typeof store !== 'object') store = {};
+  if (!store.prefs) store.prefs = { wpm: 15, farnsworth: false, mood: 'bright', classic: false, sound: true };
+  if (!store.learn || !Array.isArray(store.learn.pool) || store.learn.pool.length < 2) {
+    store.learn = { pool: ['k', 'm'], window: [] };
+  }
+  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* storage full or blocked */ } }
+
+  var prefs = store.prefs;
+
+  // ---- audio ------------------------------------------------------------------
+  var V = window.KeyVoice;
+  var master = null, comp = null;
+  function ctx() { return V.ctx(); }
+  function bus() {
+    var c = ctx();
+    if (!master) {
+      master = c.createGain();
+      master.gain.value = 0.5;
+      comp = c.createDynamicsCompressor();
+      master.connect(comp).connect(c.destination);
+    }
+    return master;
+  }
+  function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  function beep(freq, when, durSec) {
+    if (!prefs.sound) return;
+    try {
+      var c = ctx();
+      var b = bus();
+      var t = when;
+      var o = c.createOscillator();
+      var g = c.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3, t + 0.006);
+      g.gain.setValueAtTime(0.3, t + Math.max(0.006, durSec - 0.02));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + durSec);
+      o.connect(g).connect(b);
+      o.start(t);
+      o.stop(t + durSec + 0.03);
+    } catch (e) { /* audio is a nicety */ }
+  }
+  function flourish() {
+    if (!prefs.sound) return;
+    var m = V.mood(prefs.mood);
+    [0, 1, 2].forEach(function (i) {
+      V.play(m.root + m.chord[i % m.chord.length] + (i === 2 ? 12 : 0), prefs.mood, ctx().currentTime + i * 0.09);
+    });
+  }
+  function pitchFor(ch, prev) {
+    var n = V.noteFor(ch, prefs.mood, prev);
+    if (n != null) return n;
+    var m = V.mood(prefs.mood);
+    var code = ch.charCodeAt(0) || 0;
+    return m.root + m.scale[code % m.scale.length];
+  }
+
+  // ---- moods --------------------------------------------------------------------
+  V.moods.forEach(function (m) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.mood = m.id;
+    b.textContent = m.emoji + ' ' + m.label;
+    b.setAttribute('aria-pressed', String(m.id === prefs.mood));
+    b.addEventListener('click', function () {
+      prefs.mood = m.id;
+      document.documentElement.style.setProperty('--mood', m.color);
+      Array.prototype.forEach.call($('moods').children, function (x) { x.setAttribute('aria-pressed', String(x.dataset.mood === m.id)); });
+      save();
+      if (prefs.sound) m.chord.forEach(function (s, i) { V.play(m.root + s, m.id, ctx().currentTime + i * 0.08); });
+    });
+    $('moods').appendChild(b);
+  });
+  document.documentElement.style.setProperty('--mood', V.mood(prefs.mood).color);
+
+  // ---- toolbar ------------------------------------------------------------------
+  function paintToolbar() {
+    $('sound').setAttribute('aria-pressed', String(prefs.sound));
+    $('sound').textContent = prefs.sound ? '♪ Sound on' : '♪ Sound off';
+    $('classic').setAttribute('aria-pressed', String(prefs.classic));
+    $('farnsworth').setAttribute('aria-pressed', String(prefs.farnsworth));
+    $('wpm').value = String(prefs.wpm);
+    $('wpmVal').textContent = String(prefs.wpm);
+    $('decodeWpm').textContent = 'reading at ~' + prefs.wpm + ' wpm, adapting as you key';
+  }
+  $('sound').addEventListener('click', function () { prefs.sound = !prefs.sound; paintToolbar(); save(); });
+  $('classic').addEventListener('click', function () { prefs.classic = !prefs.classic; paintToolbar(); save(); });
+  $('farnsworth').addEventListener('click', function () { prefs.farnsworth = !prefs.farnsworth; paintToolbar(); save(); });
+  $('wpm').addEventListener('input', function () { prefs.wpm = Math.max(5, Math.min(25, Number($('wpm').value) || 15)); paintToolbar(); save(); });
+  paintToolbar();
+
+  // ---- tabs -----------------------------------------------------------------------
+  var TABS = ['send', 'learn', 'decode'];
+  function selectTab(name) {
+    TABS.forEach(function (t) {
+      $('panel-' + t).hidden = t !== name;
+      $('tab-' + t).setAttribute('aria-selected', String(t === name));
+    });
+    if (name !== 'send') stopSend();
+  }
+  TABS.forEach(function (t) { $('tab-' + t).addEventListener('click', function () { selectTab(t); }); });
+
+  // ---- shared: build a Morse timeline for a piece of text ------------------------
+  function buildTimeline(text) {
+    var ditMs = 1200 / prefs.wpm;
+    var dahMs = ditMs * 3;
+    var effWpm = prefs.farnsworth ? Math.max(5, prefs.wpm / 2) : prefs.wpm;
+    var letterGapMs = (1200 / effWpm) * 3;
+    var wordGapMs = (1200 / effWpm) * 7;
+    var words = String(text || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+    var t = 0;
+    var events = [];
+    var letters = [];
+    var prevPitch = null;
+    var li = 0;
+    words.forEach(function (word, wi) {
+      if (wi > 0) t += wordGapMs;
+      var placed = 0;
+      for (var ci = 0; ci < word.length; ci++) {
+        var ch = word[ci];
+        var code = MORSE[ch];
+        if (!code) continue;
+        if (placed > 0) t += letterGapMs;
+        placed++;
+        var pitch = pitchFor(ch, prevPitch);
+        prevPitch = pitch;
+        var startT = t;
+        for (var si = 0; si < code.length; si++) {
+          var sym = code[si];
+          var dur = sym === '.' ? ditMs : dahMs;
+          events.push({ t: t, dur: dur, li: li, si: si, pitch: pitch });
+          t += dur;
+          if (si < code.length - 1) t += ditMs;
+        }
+        letters.push({ li: li, ch: ch, code: code, startT: startT, endT: t, pitch: pitch });
+        li++;
+      }
+    });
+    return { events: events, letters: letters, totalMs: t };
+  }
+
+  function buildTapeDom(container, timeline) {
+    container.innerHTML = '';
+    if (!timeline.letters.length) { container.innerHTML = '<span class="empty">nothing to send yet</span>'; return; }
+    timeline.letters.forEach(function (lm) {
+      var wrap = document.createElement('span');
+      wrap.className = 'letter';
+      wrap.dataset.li = String(lm.li);
+      var label = document.createElement('b');
+      label.textContent = lm.ch.toUpperCase();
+      wrap.appendChild(label);
+      var syms = document.createElement('span');
+      syms.className = 'syms';
+      lm.code.split('').forEach(function (s, si) {
+        var m = document.createElement('i');
+        m.className = s === '.' ? 'dot' : 'dash';
+        m.dataset.li = String(lm.li);
+        m.dataset.si = String(si);
+        syms.appendChild(m);
+      });
+      wrap.appendChild(syms);
+      container.appendChild(wrap);
+    });
+  }
+
+  function playTimeline(timeline, container, opts) {
+    opts = opts || {};
+    var timers = [];
+    var c = ctx();
+    timeline.events.forEach(function (ev) {
+      timers.push(setTimeout(function () {
+        var freq = prefs.classic ? 600 : midiToFreq(ev.pitch);
+        beep(freq, c.currentTime, ev.dur / 1000);
+        if (container) {
+          var letterEl = container.querySelector('.letter[data-li="' + ev.li + '"]');
+          if (letterEl) {
+            container.querySelectorAll('.letter.active').forEach(function (el) { if (el !== letterEl) el.classList.remove('active'); });
+            letterEl.classList.add('active');
+            letterEl.scrollIntoView({ inline: 'center', block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+          }
+          var sym = container.querySelector('i[data-li="' + ev.li + '"][data-si="' + ev.si + '"]');
+          if (sym) sym.classList.add('lit');
+        }
+        if (opts.onSymbol) opts.onSymbol(ev);
+      }, ev.t));
+    });
+    timers.push(setTimeout(function () {
+      if (container) container.querySelectorAll('.letter.active').forEach(function (el) { el.classList.remove('active'); });
+      if (opts.onDone) opts.onDone();
+    }, timeline.totalMs + 350));
+    return timers;
+  }
+
+  // ---- SEND -------------------------------------------------------------------------
+  var sendTimers = [];
+  function stopSend() {
+    sendTimers.forEach(clearTimeout);
+    sendTimers = [];
+    $('stopSend').hidden = true;
+    $('send').hidden = false;
+  }
+  function paintMsgMeta() { $('msgCount').textContent = $('msg').value.length + ' / 120'; }
+  $('msg').addEventListener('input', function () { paintMsgMeta(); $('sealed').hidden = true; });
+  paintMsgMeta();
+
+  function bagFor(timeline) {
+    return timeline.letters.map(function (l) { return l.pitch; }).sort(function (a, b) { return a - b; });
+  }
+  function toTown(bag) {
+    if (bag.length && window.PointCastKeyboard) {
+      window.PointCastKeyboard.note(bag, null, { sound: false });
+      window.PointCastKeyboard.flush();
+    }
+  }
+
+  $('send').addEventListener('click', function () {
+    var text = $('msg').value.trim();
+    if (!text) { $('msg').focus(); return; }
+    stopSend();
+    var timeline = buildTimeline(text);
+    buildTapeDom($('tape'), timeline);
+    if (!timeline.letters.length) { $('sendNotice').textContent = 'Nothing keyable in that line yet.'; return; }
+    $('sendNotice').textContent = '';
+    $('send').hidden = true;
+    $('stopSend').hidden = false;
+    sendTimers = playTimeline(timeline, $('tape'), {
+      onDone: function () { stopSend(); flourish(); toTown(bagFor(timeline)); },
+    });
+  });
+  $('stopSend').addEventListener('click', stopSend);
+
+  function b64url(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64url(s) {
+    var bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function copy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(function () {});
+    $('link').select();
+    try { document.execCommand('copy'); } catch (e) { /* the link is still shown */ }
+    return Promise.resolve();
+  }
+  $('copyLink').addEventListener('click', function () {
+    var text = $('msg').value.trim().slice(0, 120);
+    if (!text) { $('msg').focus(); return; }
+    var payload = { v: 1, t: text, w: prefs.wpm, mood: prefs.mood };
+    var url = location.origin + '/keyboard/morse#m=' + b64url(JSON.stringify(payload));
+    $('link').value = url;
+    $('sealed').hidden = false;
+    copy(url);
+  });
+
+  function decodeHash(hash) {
+    var m = /^#m=([A-Za-z0-9_-]{4,4000})$/.exec(hash || '');
+    if (!m) return null;
+    try {
+      var d = JSON.parse(unb64url(m[1]));
+      if (!d || typeof d.t !== 'string' || !d.t.trim()) return null;
+      return {
+        t: d.t.slice(0, 120),
+        w: Math.max(5, Math.min(25, Number(d.w) || 15)),
+        mood: V.mood(d.mood).id,
+      };
+    } catch (e) { return null; }
+  }
+
+  // ---- incoming transmission --------------------------------------------------------
+  var incoming = decodeHash(location.hash);
+  if (incoming) {
+    $('app').hidden = true;
+    $('incoming').hidden = false;
+    document.documentElement.style.setProperty('--mood', V.mood(incoming.mood).color);
+    document.title = 'An incoming transmission · Morse Melody';
+    var opened = false;
+    function receiveTimeline() {
+      var w = prefs.wpm; prefs.wpm = incoming.w; prefs.mood = incoming.mood;
+      var tl = buildTimeline(incoming.t);
+      prefs.wpm = w;
+      return tl;
+    }
+    function playIncoming() {
+      $('inBody').hidden = false;
+      var savedMood = prefs.mood, savedWpm = prefs.wpm, savedFarns = prefs.farnsworth;
+      prefs.mood = incoming.mood; prefs.wpm = incoming.w; prefs.farnsworth = false;
+      var timeline = buildTimeline(incoming.t);
+      buildTapeDom($('inTape'), timeline);
+      var revealed = '';
+      var chars = incoming.t.toUpperCase().split('');
+      var letterCursor = 0;
+      playTimeline(timeline, $('inTape'), {
+        onSymbol: function (ev) {
+          // reveal text roughly in sync with letters as they complete
+        },
+        onDone: function () {
+          $('inReading').textContent = incoming.t;
+          prefs.mood = savedMood; prefs.wpm = savedWpm; prefs.farnsworth = savedFarns;
+          flourish();
+          if (!opened) {
+            opened = true;
+            var bag = timeline.letters.map(function (l) { return l.pitch; }).sort(function (a, b) { return a - b; });
+            toTown(bag);
+          }
+        },
+      });
+      // Reveal letters progressively, timed to each letter's start.
+      timeline.letters.forEach(function (lm) {
+        setTimeout(function () {
+          revealed = incoming.t.slice(0, incoming.t.toLowerCase().indexOf(lm.ch, revealed.length) + 1);
+          paintReading(revealed, incoming.t);
+        }, lm.startT);
+      });
+    }
+    function paintReading(upto, full) {
+      var box = $('inReading');
+      box.innerHTML = '';
+      box.appendChild(document.createTextNode(upto));
+      var rest = document.createElement('span');
+      rest.className = 'ahead';
+      rest.textContent = full.slice(upto.length);
+      box.appendChild(rest);
+    }
+    paintReading('', incoming.t);
+    $('inOpen').addEventListener('click', function () { playIncoming(); });
+    $('inAgain').addEventListener('click', function () { playIncoming(); });
+  }
+
+  // ---- LEARN ------------------------------------------------------------------------
+  var learn = store.learn;
+  var learnCurrent = null;
+  var learnPrevPitch = null;
+  function randomLetter() { return learn.pool[Math.floor(Math.random() * learn.pool.length)]; }
+  function paintPool(justAdded) {
+    var el = $('pool');
+    el.innerHTML = '';
+    learn.pool.forEach(function (ch) {
+      var s = document.createElement('span');
+      s.textContent = ch.toUpperCase();
+      if (ch === justAdded) s.className = 'new';
+      el.appendChild(s);
+    });
+  }
+  function paintMeter() {
+    var n = learn.window.length;
+    var correct = learn.window.filter(Boolean).length;
+    $('learnMeter').style.width = Math.round((n / 20) * 100) + '%';
+    $('learnMeterLabel').textContent = correct + ' / ' + n + ' correct, this round of 20';
+  }
+  function playLearnLetter() {
+    learnCurrent = randomLetter();
+    var code = MORSE[learnCurrent];
+    var pitch = pitchFor(learnCurrent, learnPrevPitch);
+    learnPrevPitch = pitch;
+    $('learnPattern').textContent = '';
+    $('learnFeedback').textContent = '';
+    $('learnFeedback').className = 'feedback';
+    var ditMs = 1200 / Math.max(prefs.wpm, 13);
+    var t = 0;
+    var c = ctx();
+    code.split('').forEach(function (sym, i) {
+      var dur = sym === '.' ? ditMs : ditMs * 3;
+      setTimeout(function () {
+        beep(prefs.classic ? 600 : midiToFreq(pitch), c.currentTime, dur / 1000);
+      }, t);
+      t += dur + ditMs;
+    });
+    $('learnAnswer').value = '';
+    $('learnAnswer').focus();
+  }
+  $('learnPlay').addEventListener('click', playLearnLetter);
+  $('learnAnswer').addEventListener('input', function () {
+    var guess = $('learnAnswer').value.trim().toLowerCase();
+    if (!guess || !learnCurrent) return;
+    var right = guess === learnCurrent;
+    learn.window.push(right);
+    if (learn.window.length > 20) learn.window.shift();
+    $('learnPattern').textContent = MORSE[learnCurrent];
+    if (right) {
+      $('learnFeedback').textContent = '✓ ' + learnCurrent.toUpperCase() + ' — ' + MORSE[learnCurrent];
+      $('learnFeedback').className = 'feedback ok';
+    } else {
+      $('learnFeedback').textContent = '✕ that was ' + learnCurrent.toUpperCase() + ' — ' + MORSE[learnCurrent];
+      $('learnFeedback').className = 'feedback bad';
+    }
+    paintMeter();
+    save();
+    var correct = learn.window.filter(Boolean).length;
+    if (learn.window.length >= 20 && correct / learn.window.length >= 0.9) {
+      var next = KOCH_ORDER.filter(function (c) { return learn.pool.indexOf(c) < 0; })[0];
+      if (next) {
+        learn.pool.push(next);
+        learn.window = [];
+        paintPool(next);
+        paintMeter();
+        save();
+        flourish();
+        $('learnFeedback').textContent = '✓ ' + learnCurrent.toUpperCase() + ' — new letter unlocked: ' + next.toUpperCase();
+        $('learnFeedback').className = 'feedback ok';
+      }
+    }
+    setTimeout(playLearnLetter, 1100);
+  });
+  paintPool();
+  paintMeter();
+
+  // ---- DECODE -----------------------------------------------------------------------
+  var WORDS = ['SOS', 'CQ', 'HI', 'TU', 'FB', 'OM', 'KEY', 'DOT', 'DASH', 'WIRE', 'TOWN', 'GOOD', 'MORSE', 'RADIO', 'SIGNAL', 'ECHO', 'GOLD', 'TIDE', 'PIER', 'KITE'];
+  var practiceOn = false;
+  var target = '';
+  var pressStart = null;
+  var lastRelease = null;
+  var symbolBuf = '';
+  var decodedText = '';
+  var ditEstimate = 1200 / prefs.wpm;
+  var elementsKeyed = 0;
+  var wordSpaced = true;
+  var keyDown = false;
+
+  function paintDecodeOut() {
+    $('decodeOut').textContent = decodedText || '—';
+  }
+  function paintTarget() {
+    if (!practiceOn) { $('targetWrap').hidden = true; return; }
+    $('targetWrap').hidden = false;
+    var tail = decodedText.replace(/\s+$/, '');
+    var matched = 0;
+    while (matched < tail.length && matched < target.length && tail[matched] === target[matched]) matched++;
+    $('target').innerHTML = target.split('').map(function (ch, i) {
+      return '<span class="' + (i < matched ? 'done' : '') + '">' + ch + '</span>';
+    }).join('');
+  }
+  function nextWord() {
+    target = WORDS[Math.floor(Math.random() * WORDS.length)];
+    decodedText = '';
+    symbolBuf = '';
+    paintDecodeOut();
+    paintTarget();
+  }
+  $('practiceToggle').addEventListener('click', function () {
+    practiceOn = !practiceOn;
+    $('practiceToggle').setAttribute('aria-pressed', String(practiceOn));
+    if (practiceOn) nextWord(); else paintTarget();
+  });
+  $('decodeClear').addEventListener('click', function () {
+    decodedText = ''; symbolBuf = '';
+    paintDecodeOut(); paintTarget();
+    $('decodeBuf').innerHTML = '&nbsp;';
+  });
+
+  function flushKeys() {
+    if (elementsKeyed > 0 && window.PointCastKeyboard) {
+      window.PointCastKeyboard.keys(elementsKeyed);
+      elementsKeyed = 0;
+    }
+  }
+
+  function keyPress() {
+    if (keyDown) return;
+    keyDown = true;
+    pressStart = performance.now();
+    $('key').classList.add('down');
+    var pitch = pitchFor('e', null);
+    try {
+      var c = ctx();
+      beep(prefs.classic ? 600 : midiToFreq(pitch), c.currentTime, 0.4);
+    } catch (e) { /* held tone omitted for simplicity */ }
+  }
+  function keyRelease() {
+    if (!keyDown || pressStart == null) return;
+    keyDown = false;
+    $('key').classList.remove('down');
+    var now = performance.now();
+    var dur = now - pressStart;
+    pressStart = null;
+    var dahThreshold = ditEstimate * 2;
+    var isDah = dur >= dahThreshold;
+    if (!isDah) ditEstimate = Math.max(35, Math.min(400, ditEstimate * 0.72 + dur * 0.28));
+    symbolBuf += isDah ? '-' : '.';
+    lastRelease = now;
+    elementsKeyed++;
+    if (elementsKeyed >= 20) flushKeys();
+    $('decodeBuf').textContent = symbolBuf;
+  }
+
+  function commitLetter() {
+    if (!symbolBuf) return;
+    var ch = REVERSE[symbolBuf];
+    decodedText += ch ? ch.toUpperCase() : '·';
+    symbolBuf = '';
+    $('decodeBuf').innerHTML = '&nbsp;';
+    paintDecodeOut();
+    wordSpaced = false;
+    if (practiceOn) {
+      paintTarget();
+      var tail = decodedText.replace(/\s+$/, '');
+      if (tail === target) {
+        flourish();
+        setTimeout(nextWord, 900);
+      }
+    }
+  }
+  setInterval(function () {
+    if (!lastRelease || keyDown) return;
+    var idle = performance.now() - lastRelease;
+    var letterGap = ditEstimate * 2.2;
+    var wordGap = ditEstimate * 5.5;
+    if (symbolBuf && idle >= letterGap) commitLetter();
+    if (!symbolBuf && !wordSpaced && idle >= wordGap) {
+      decodedText += decodedText.endsWith(' ') ? '' : ' ';
+      wordSpaced = true;
+      paintDecodeOut();
+      paintTarget();
+    }
+    if (idle > wordGap * 3) { lastRelease = null; flushKeys(); }
+  }, 60);
+
+  $('key').addEventListener('pointerdown', function (e) { e.preventDefault(); keyPress(); });
+  $('key').addEventListener('pointerup', keyRelease);
+  $('key').addEventListener('pointerleave', function () { if (keyDown) keyRelease(); });
+  $('key').addEventListener('pointercancel', function () { if (keyDown) keyRelease(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if ($('panel-decode').hidden) return;
+    if (e.key === ' ') { e.preventDefault(); keyPress(); }
+  });
+  document.addEventListener('keyup', function (e) {
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if (e.key === ' ') { e.preventDefault(); keyRelease(); }
+  });
+  paintDecodeOut();
+  paintTarget();
+
+  addEventListener('pagehide', function () { flushKeys(); if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { flushKeys(); if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); } });
+})();
+</script>
+</body>
+</html>
