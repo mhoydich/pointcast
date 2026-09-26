@@ -106,3 +106,33 @@ describe("DrumCounter live + reconcile", () => {
     await env.VISITS.delete("drum:top");
   });
 });
+
+describe("DrumCounter league", () => {
+  it("ranks apps by capped daily points for the current week", async () => {
+    const room = `league-${crypto.randomUUID()}`;
+    await post(room, { delta: 30, source: { kind: "embed", app: "tempo-trial" } });
+    await post(room, { delta: 12, source: { kind: "embed", app: "knock-knock" } });
+    await post(room, { delta: 5, source: { kind: "embed", app: "tempo-trial" } });
+    const res = await counter(room).fetch("https://drum-counter.internal/?league=1");
+    const league = (await res.json()) as {
+      season: { id: string; dailyCap: number };
+      week: { start: string; end: string; current: boolean };
+      standings: Array<{ rank: number; app: string; points: number; beats: number; hits: number }>;
+    };
+    expect(league.season.id).toBe("S0");
+    expect(league.week.current).toBe(true);
+    expect(league.standings[0]).toMatchObject({ rank: 1, app: "tempo-trial", points: 35, beats: 35, hits: 2 });
+    expect(league.standings[1]).toMatchObject({ rank: 2, app: "knock-knock", points: 12 });
+  });
+
+  it("returns an empty table for a week before the season", async () => {
+    const room = `league-${crypto.randomUUID()}`;
+    await post(room, { delta: 3, source: { kind: "embed", app: "x" } });
+    const league = (await (await counter(room).fetch("https://drum-counter.internal/?league=1&week=2026-01-05")).json()) as {
+      week: { number: number; start: string }; standings: unknown[];
+    };
+    expect(league.week.start).toBe("2026-01-05");
+    expect(league.week.number).toBe(0);
+    expect(league.standings).toEqual([]);
+  });
+});

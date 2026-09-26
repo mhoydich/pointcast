@@ -23,6 +23,11 @@ const RECENT_SIGNALS = 60;
 const SIGNAL_DAYS = 90;
 // "Who's here" on the drum = anyone whose beat reached the counter recently.
 const LIVE_WINDOW_MS = 120_000;
+// The Drum League: every tagged app is a team. Standings sum each app's beats
+// per UTC day, capped per day so one runaway script can't bury everyone else.
+export const LEAGUE_DAILY_CAP = 5000;
+export const LEAGUE_SEASON = { id: "S0", name: "Season 0 · open trial", start: "2026-09-26" };
+const LEAGUE_ROWS = 50;
 
 function slug(raw: unknown, max: number): string {
   if (typeof raw !== "string") return "";
@@ -102,6 +107,15 @@ export class DrumCounter extends DurableObject<Env> {
           total INTEGER NOT NULL,
           PRIMARY KEY (day, kind)
         );
+        CREATE TABLE IF NOT EXISTS drum_signal_app_days (
+          day TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          app TEXT NOT NULL,
+          total INTEGER NOT NULL,
+          hits INTEGER NOT NULL,
+          last_at INTEGER NOT NULL,
+          PRIMARY KEY (day, kind, app)
+        );
         CREATE TABLE IF NOT EXISTS drum_signal_recent (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           at INTEGER NOT NULL,
@@ -128,6 +142,7 @@ export class DrumCounter extends DurableObject<Env> {
       if (url.searchParams.get("top") === "1") return json({ entries: await this.topEntries() });
       if (url.searchParams.get("signal") === "1") return json(await this.signalSummary());
       if (url.searchParams.get("live") === "1") return json(await this.live());
+      if (url.searchParams.get("league") === "1") return json(this.league(url.searchParams.get("week")));
       const globalTotal = await this.globalTotal();
       const yourTotal = session ? await this.sessionTotal(session) : 0;
       return json({ globalTotal, yourTotal });
@@ -203,10 +218,16 @@ export class DrumCounter extends DurableObject<Env> {
        ON CONFLICT(day, kind) DO UPDATE SET total = total + excluded.total`,
       day, kind, beats,
     );
+    sql.exec(
+      `INSERT INTO drum_signal_app_days (day, kind, app, total, hits, last_at) VALUES (?, ?, ?, ?, 1, ?)
+       ON CONFLICT(day, kind, app) DO UPDATE SET total = total + excluded.total, hits = hits + 1, last_at = excluded.last_at`,
+      day, kind, app, beats, now,
+    );
     sql.exec("INSERT INTO drum_signal_recent (at, kind, app, place, beats) VALUES (?, ?, ?, ?, ?)", now, kind, app, place, beats);
     sql.exec(`DELETE FROM drum_signal_recent WHERE id <= (SELECT MAX(id) FROM drum_signal_recent) - ?`, RECENT_SIGNALS);
     const oldest = new Date(now - SIGNAL_DAYS * 86_400_000).toISOString().slice(0, 10);
     sql.exec("DELETE FROM drum_signal_days WHERE day < ?", oldest);
+    sql.exec("DELETE FROM drum_signal_app_days WHERE day < ?", oldest);
   }
 
   private async signalSummary() {
@@ -295,6 +316,44 @@ export class DrumCounter extends DurableObject<Env> {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Standings for one league week (Monday–Sunday, UTC). `week` is any date
+   * inside it; default is the current week. Points are beats with each app's
+   * day capped at LEAGUE_DAILY_CAP; raw beats are reported alongside.
+   */
+  private league(week: string | null) {
+    const DAY = 86_400_000;
+    const now = Date.now();
+    let anchor = week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? Date.parse(`${week}T00:00:00Z`) : now;
+    if (!Number.isFinite(anchor)) anchor = now;
+    const dow = (new Date(anchor).getUTCDay() + 6) % 7; // Monday = 0
+    const monday = Math.floor(anchor / DAY) * DAY - dow * DAY;
+    const days = Array.from({ length: 7 }, (_, i) => new Date(monday + i * DAY).toISOString().slice(0, 10));
+    const start = days[0]!;
+    const end = days[6]!;
+    const seasonStart = LEAGUE_SEASON.start;
+    const from = start < seasonStart ? seasonStart : start;
+    const rows = this.ctx.storage.sql.exec<{
+      kind: string; app: string; points: number; beats: number; hits: number; activeDays: number; lastAt: number;
+    }>(
+      `SELECT kind, app,
+              SUM(MIN(total, ?)) AS points, SUM(total) AS beats, SUM(hits) AS hits,
+              COUNT(*) AS activeDays, MAX(last_at) AS lastAt
+       FROM drum_signal_app_days
+       WHERE day >= ? AND day <= ?
+       GROUP BY kind, app
+       ORDER BY points DESC, lastAt ASC
+       LIMIT ${LEAGUE_ROWS}`,
+      LEAGUE_DAILY_CAP, from, end,
+    ).toArray();
+    const weekNumber = Math.max(0, Math.floor((monday - Math.floor(Date.parse(`${seasonStart}T00:00:00Z`) / DAY) * DAY) / (7 * DAY)) + 1);
+    return {
+      season: { ...LEAGUE_SEASON, dailyCap: LEAGUE_DAILY_CAP },
+      week: { number: end < seasonStart ? 0 : weekNumber, start, end, current: now >= monday && now < monday + 7 * DAY },
+      standings: rows.map((row, i) => ({ rank: i + 1, ...row })),
+    };
   }
 
   private async live() {

@@ -1,943 +1,924 @@
 ---
 /**
- * /drum-league — community competition layer for the drum hub.
+ * /drum-league — the Drum League, on one page.
  *
- * Per Mike 2026-04-30: "maybe some type of community competition game,
- * league, uplifting, nouns, participatory, fun, entertaining."
+ * Every app that tags its drum beats is a team (see /drum-signal and
+ * /drum-kit). This page carries the whole league: this week's standings,
+ * five sample apps that each play for their own team, the agent area, and
+ * the Season 0 rules.
  *
- * The synthesis I'm going for: cooperative-with-a-leaderboard. Every
- * tap on any /drum-* surface (47+ rooms) ticks a single shared community
- * counter. We're all building one big number together. The competition
- * layer is light: a top-12 leaderboard celebrates whoever is helping
- * the most this week, but you don't lose by being below #12 — you're
- * still in the credits, you helped, your noun is in the pulse stream.
- *
- * Page shape:
- *   1. Masthead — "Drum League · week of YYYY-MM-DD"
- *   2. This Week's Tally — big animated number + progress bar
- *   3. Live Pulse — last ~30s of community taps as noun stamps
- *   4. Top 12 Contributors — leaderboard from /api/drum/top
- *   5. Your Lane — your noun, your count, your rank
- *   6. Today's Featured Duel — deterministic /drum-vs?room= from today's
- *      date, so everyone landing today joins the same room
- *   7. Daily Challenge — editorial rotating prompt
- *   8. Ceremony Hall — placeholder for last week's champs
- *
- * Aesthetic: warm publish-house colors (cream + magenta + cyan),
- * celebratory but not gaudy. Reuses the visual grammar of /drum-press
- * and /drum-vs so the league feels like a sibling.
+ * Data: GET /api/drum/league (DrumCounter, per-app daily table) and
+ * GET /api/drum/signal (recent beats). Beats go out through /drum.js with a
+ * per-app tag, so each sample shows up under its own name.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import DrumNav from '../components/DrumNav.astro';
-import RoomPresenceChip from '../components/RoomPresenceChip.astro';
 
-const title = 'Drum League — community competition for the drum hub';
-const description = 'Every tap on any /drum-* surface ticks a single shared community counter. Climb the weekly leaderboard, jump into today\'s featured duel, see who else is in the room. Cooperative-with-a-leaderboard.';
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebApplication',
-  '@id': 'https://pointcast.xyz/drum-league',
-  name: 'PointCast Drum League',
-  url: 'https://pointcast.xyz/drum-league',
-  description,
-  applicationCategory: 'GameApplication',
-};
+const title = 'Drum League';
+const description =
+  'Every app that plays the PointCast drum is a team. Weekly standings, five sample apps to play for, an agent area, and the Season 0 rules.';
 
-// ─── Featured duel — deterministic room id from today's date ────────
-// Everyone landing on /drum-league today gets the same room id, so
-// the "featured duel" is a default mass-meeting place. Friday turns
-// into a different room than Saturday, etc.
-const today = new Date();
-const yyyymmdd = today.toISOString().slice(0, 10).replace(/-/g, '');
-// Convert to a 6-char base32 id (no I/O/0/1) — readable, stable per day
-const ROOM_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function dailyRoomId(seedStr: string): string {
-  // Simple deterministic hash → 6 chars from the safe alphabet.
-  let h = 5381;
-  for (let i = 0; i < seedStr.length; i++) h = ((h << 5) + h + seedStr.charCodeAt(i)) >>> 0;
-  let s = '';
-  for (let i = 0; i < 6; i++) {
-    s += ROOM_ALPHA[h & 31];
-    h = (h >>> 5) | (h << 27);
-  }
-  return s;
-}
-const featuredRoomId = dailyRoomId('league-' + yyyymmdd);
-
-// ─── Daily challenge — pick from a rotating list by day-of-year ────
-const challenges = [
-  { glyph: '🥁', text: 'Tap on /drum (the original) and watch /drum-tv flash on a second screen. The classic everyone goes to.' },
-  { glyph: '🎂', text: 'Light all the candles on /drum-cake — then come back and blow them out with someone.' },
-  { glyph: '💌', text: 'Sign the /drum-card. Your noun joins the room\'s collective signature page.' },
-  { glyph: '🪅', text: 'Take a swing on /drum-pinata. Help the room hit 100 — the burst is shared.' },
-  { glyph: '⚡', text: 'Pick a friend, send them a /drum-vs link. Race to 50. First taps land sub-50ms once both phones are in.' },
-  { glyph: '🔔', text: 'Try /drum-vs?mode=duel — bell rings random 2-5s, first tap after wins. Don\'t false-start.' },
-  { glyph: '🎺', text: 'Visit /drum-v4 (orchestra). Tap a kick, a snare, a hihat. Cast surfaces flash on every note.' },
-  { glyph: '📻', text: 'Open /drum-radio on a TV. Every tap from every room lands as a beat on 96.1 fm.' },
-  { glyph: '✉️', text: 'Leave a note on /drum-letters. The next visitor gets your message. Past notes wait their turn.' },
-  { glyph: '🤖', text: 'Connect a Claude/Cursor MCP client to /api/mcp and have your agent join the room. /drum-agent shows them in real time.' },
-  { glyph: '☕', text: 'Tap on /kettle, then /drum, then /drum-pulse. The whole site is one slow-pulsing room.' },
-  { glyph: '✨', text: 'Open /drum-press and pick a title you haven\'t played yet. There are 54 of them.' },
-  { glyph: '🌙', text: 'Stay quiet. Open /drum-bulletin. Read what the room pinned. Pin one thing back.' },
-  { glyph: '🎯', text: 'Beat the daily target. We\'re aiming for 50,000 taps this week — every contribution counts.' },
+const apps = [
+  { id: 'knock-knock', tab: 'Knock Knock', kind: 'Communication', blurb: 'A doorbell made of beats. Share a room code and knocks travel to the other screen.' },
+  { id: 'beat-tower', tab: 'Beat Tower', kind: 'Broadcaster', blurb: 'Hear every drum on the network as it lands, and transmit your own.' },
+  { id: 'tempo-trial', tab: 'Tempo Trial', kind: 'Game', blurb: 'Sixteen beats at 96 BPM. Scored on timing.' },
+  { id: 'drum-duel', tab: 'Drum Duel', kind: 'Game', blurb: 'Two players, one screen, ten seconds. Most taps wins.' },
+  { id: 'focus-pulse', tab: 'Focus Pulse', kind: 'Device', blurb: 'A focus timer that beats the drum once for every minute you stay on task.' },
 ];
-const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86_400_000);
-const todayChallenge = challenges[dayOfYear % challenges.length];
 
-// ─── Week label ─────────────────────────────────────────────────
-function weekLabel(d: Date): string {
-  // ISO week — close enough; YYYY-Www format
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((t.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
-  return `${t.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
-function shortDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-function startOfWeek(d: Date): Date {
-  const out = new Date(d);
-  const day = out.getDay() || 7; // Mon=1..Sun=7
-  out.setDate(out.getDate() - (day - 1));
-  return out;
-}
-function endOfWeek(d: Date): Date {
-  const s = startOfWeek(d);
-  s.setDate(s.getDate() + 6);
-  return s;
-}
-const weekStart = startOfWeek(today);
-const weekEnd = endOfWeek(today);
-const weekStartLabel = shortDate(weekStart);
-const weekEndLabel = shortDate(weekEnd);
-const weekIso = weekLabel(today);
-
-// Editorial target — visual goal for the progress bar. Loose because
-// the actual count comes from /api/drum which is all-time, not weekly.
-// We just show progress against a soft community target.
-const WEEKLY_TARGET = 50_000;
+const mcpUrl = 'https://pointcast.xyz/api/mcp';
+const agentCurl = `curl -X POST https://pointcast.xyz/api/drum/signal \\
+  -d '{"beats":3,"app":"my-agent","kind":"agent"}'`;
+const agentMcp = `drum_tap              { combo: 1-5, app: "my-agent" }
+drum_league_standings { week?: "YYYY-MM-DD" }
+drum_hall_state       {}`;
+const teamSnippet = `<script src="https://pointcast.xyz/drum.js" data-app="my-team" async></script>
+<pointcast-drum look="pill"></pointcast-drum>`;
 ---
 
-<BlockLayout title={title} description={description} image="/images/og-drum.png" jsonLd={jsonLd}>
-  <main class="dl" id="dl-main">
-    <DrumNav current="league" />
-    <RoomPresenceChip surface="league" />
-
-    <header class="dl__masthead">
-      <p class="dl__kicker mono">★ DRUM HUB · COMMUNITY LEAGUE · ALL OF US TOGETHER ★</p>
-      <h1 class="dl__title">drum <em>league</em></h1>
-      <p class="dl__strap mono">
-        week of {weekStartLabel} — {weekEndLabel} · {weekIso}
-      </p>
-      <p class="dl__dek">
-        Every tap on every /drum-* surface ticks the same community counter.
-        Climb the leaderboard, jump into today's featured duel, see who's
-        in the pulse — your noun is in the credits no matter where you finish.
-      </p>
+<BlockLayout title={title} description={description} image="/images/og-drum.png" hideAds>
+  <main class="dl">
+    <header class="dl__bar">
+      <span>PointCast · Drum League</span>
+      <span class="dl__live" data-live>Season 0 · connecting</span>
     </header>
 
-    <hr class="dl__rule dl__rule--ornate" />
-
-    {/* This Week's Tally — big animated number + progress bar */}
-    <section class="dl__tally" aria-label="This week's tally">
-      <p class="dl__eyebrow mono">▌ THIS WEEK'S TALLY</p>
-      <div class="dl__tally-card">
-        <div class="dl__tally-num">
-          <strong id="dl-tally-num" aria-live="polite">—</strong>
-          <span class="dl__tally-of mono">of {WEEKLY_TARGET.toLocaleString()}</span>
-        </div>
-        <div class="dl__tally-bar" aria-hidden="true">
-          <div class="dl__tally-fill" id="dl-tally-fill"></div>
-        </div>
-        <p class="dl__tally-hint mono" id="dl-tally-hint">— loading global drum count —</p>
-      </div>
-    </section>
-
-    {/* Featured duel — daily room id */}
-    <section class="dl__featured" aria-label="Today's featured duel">
-      <p class="dl__eyebrow mono">⚡ TODAY'S FEATURED DUEL</p>
-      <div class="dl__featured-card">
-        <div class="dl__featured-body">
-          <h2 class="dl__featured-title">join room <em>{featuredRoomId}</em></h2>
-          <p class="dl__featured-note">
-            Everyone landing on this page today shares the same featured-duel room id.
-            First two visitors get the seats; the rest watch (or open a fresh duel of their own).
-            Resets at midnight PT.
-          </p>
-        </div>
-        <div class="dl__featured-cta">
-          <a class="dl__btn dl__btn--magenta" href={`/drum-vs?room=${featuredRoomId}`}>
-            ▸ join the duel
-            <span class="dl__btn-sub mono">tug-of-war · first to 50</span>
-          </a>
-          <a class="dl__btn" href={`/drum-vs?room=${featuredRoomId}&mode=duel`}>
-            ▸ as a reaction duel
-            <span class="dl__btn-sub mono">bell · first tap wins</span>
-          </a>
+    <section class="dl__hero">
+      <div class="dl__hero-copy">
+        <p class="dl__eyebrow">Season 0 · open trial</p>
+        <h1>Every app is a team.</h1>
+        <p class="dl__lede">
+          Any site, artifact, script or agent that plays the PointCast drum plays for its own name. Weeks run
+          Monday to Sunday, UTC. Most beats wins the week, with each team's day capped at 5,000 so one runaway
+          script can't bury everyone else.
+        </p>
+        <div class="dl__stats">
+          <div><p class="dl__k">Global count</p><p class="dl__v" data-global>—</p></div>
+          <div><p class="dl__k">Leading this week</p><p class="dl__v dl__v--team" data-leader>—</p></div>
+          <div><p class="dl__k">Drumming now</p><p class="dl__v" data-now>—</p></div>
         </div>
       </div>
-    </section>
 
-    <hr class="dl__rule" />
-
-    {/* Live pulse — last ~30s of taps streaming */}
-    <section class="dl__pulse" aria-label="Live pulse">
-      <p class="dl__eyebrow mono">◉ LIVE PULSE · LAST 30 SECONDS</p>
-      <ul class="dl__pulse-list" id="dl-pulse-list" role="list">
-        <li class="dl__pulse-empty mono">— stream open · waiting for the first tap —</li>
-      </ul>
-    </section>
-
-    {/* Top 12 leaderboard */}
-    <section class="dl__top" aria-label="Top contributors">
-      <p class="dl__eyebrow mono">★ TOP 12 CONTRIBUTORS · ALL-TIME</p>
-      <ol class="dl__top-list" id="dl-top-list" role="list">
-        <li class="dl__top-empty mono">— loading leaderboard —</li>
-      </ol>
-      <p class="dl__top-foot mono">
-        anonymized to noun id · counts are stable per browser session ·
-        names are nobody's business here
-      </p>
-    </section>
-
-    <hr class="dl__rule" />
-
-    {/* Your lane */}
-    <section class="dl__yours" aria-label="Your lane">
-      <p class="dl__eyebrow mono">☞ YOUR LANE</p>
-      <div class="dl__yours-card">
-        <div class="dl__yours-noun-wrap">
-          <img class="dl__yours-noun" id="dl-yours-noun" src="" alt="" width="96" height="96" />
+      <div class="dl__table-wrap">
+        <div class="dl__table-head">
+          <button class="dl__weekbtn" type="button" data-week-prev aria-label="Previous week">←</button>
+          <p class="dl__k" data-week-label>This week</p>
+          <button class="dl__weekbtn" type="button" data-week-next aria-label="Next week">→</button>
         </div>
-        <div class="dl__yours-body">
-          <p class="dl__yours-tag mono">YOU · NOUN <strong id="dl-yours-noun-id">—</strong></p>
-          <p class="dl__yours-stat">
-            <strong id="dl-yours-count" aria-live="polite">—</strong>
-            <span class="dl__yours-of mono">taps so far</span>
-          </p>
-          <p class="dl__yours-rank mono" id="dl-yours-rank">— calculating rank —</p>
+        <div class="dl__divs" role="group" aria-label="Division">
+          <button type="button" data-div="all" aria-pressed="true">All</button>
+          <button type="button" data-div="pointcast" data-k="pointcast" aria-pressed="false">Rooms</button>
+          <button type="button" data-div="embed" data-k="embed" aria-pressed="false">Embeds</button>
+          <button type="button" data-div="artifact" data-k="artifact" aria-pressed="false">Artifacts</button>
+          <button type="button" data-div="agent" data-k="agent" aria-pressed="false">Agents</button>
+          <button type="button" data-div="standalone" data-k="standalone" aria-pressed="false">Scripts</button>
+        </div>
+        <div class="dl__scroll">
+          <table class="dl__table">
+            <thead><tr><th>#</th><th>Team</th><th>Division</th><th class="n">Points</th><th class="n c-days">Days</th><th class="n c-last">Last beat</th></tr></thead>
+            <tbody data-standings><tr><td colspan="6" class="dl__empty">Loading the table…</td></tr></tbody>
+          </table>
         </div>
       </div>
     </section>
 
-    {/* Daily challenge — rotating editorial */}
-    <section class="dl__challenge" aria-label="Today's challenge">
-      <p class="dl__eyebrow mono">❡ TODAY'S CHALLENGE</p>
-      <div class="dl__challenge-card">
-        <span class="dl__challenge-glyph" aria-hidden="true">{todayChallenge.glyph}</span>
-        <p class="dl__challenge-text">{todayChallenge.text}</p>
+    <section class="dl__play" id="play">
+      <div class="dl__section-head">
+        <h2>Play for a team</h2>
+        <p>Five sample apps. Each one is a working example of the drum inside something else, and each plays for its own team.</p>
+      </div>
+      <div class="dl__tabs" role="tablist" aria-label="Sample apps">
+        {apps.map((app, i) => (
+          <button type="button" role="tab" id={`tab-${app.id}`} aria-controls={`panel-${app.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? '0' : '-1'} data-tab={app.id}>
+            <span class="dl__tabkind">{app.kind}</span>{app.tab}
+          </button>
+        ))}
+      </div>
+
+      <div class="dl__panel" role="tabpanel" id="panel-knock-knock" aria-labelledby="tab-knock-knock" data-panel="knock-knock">
+        <div class="dl__panel-head"><p>{apps[0].blurb}</p><span class="dl__team">team <code>knock-knock</code></span></div>
+        <div class="kk">
+          <div class="kk__room" data-kk-room>
+            <p class="dl__k">Your room</p>
+            <p class="kk__code" data-kk-code>----</p>
+            <label for="kk-input">Change room</label>
+            <input id="kk-input" data-kk-input maxlength="6" autocomplete="off" spellcheck="false" />
+            <p class="dl__note">Anyone with the code can knock, so pick an unusual one. Only the number of knocks travels.</p>
+            <div class="dl__row"><button class="dl__btn dl__btn--ghost" type="button" data-kk-copy>Copy invite link</button><span class="dl__note" data-kk-copied></span></div>
+          </div>
+          <div class="kk__door">
+            <button class="dl__btn kk__knock" type="button" data-kk-knock>Knock</button>
+            <p class="dl__note" data-kk-sent>Tap up to nine times. The knock sends after a short pause.</p>
+            <p class="dl__k">Heard at this door</p>
+            <ol class="kk__inbox" data-kk-inbox><li class="dl__empty">Listening for knocks…</li></ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="dl__panel" role="tabpanel" id="panel-beat-tower" aria-labelledby="tab-beat-tower" data-panel="beat-tower" hidden>
+        <div class="dl__panel-head"><p>{apps[1].blurb}</p><span class="dl__team">team <code>beat-tower</code></span></div>
+        <div class="bt">
+          <div class="bt__mast"><canvas width="560" height="560" data-bt-canvas aria-label="Beat tower"></canvas><span class="bt__onair" data-bt-onair>Off air</span></div>
+          <div class="bt__side">
+            <div class="dl__row">
+              <button class="dl__btn" type="button" data-bt-power>Turn on the tower</button>
+              <button class="dl__btn dl__btn--ghost" type="button" data-bt-tx disabled>Transmit</button>
+            </div>
+            <p class="dl__note">Voices: rooms play the drum, embeds a snare, artifacts a bell, agents a hi-hat, scripts a low tom.</p>
+            <p class="dl__k">On the wire</p>
+            <ol class="dl__wire" data-bt-wire><li class="dl__empty">Turn the tower on to start listening.</li></ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="dl__panel" role="tabpanel" id="panel-tempo-trial" aria-labelledby="tab-tempo-trial" data-panel="tempo-trial" hidden>
+        <div class="dl__panel-head"><p>{apps[2].blurb} Four clicks count you in; play on the next sixteen. Space bar works too.</p><span class="dl__team">team <code>tempo-trial</code></span></div>
+        <div class="tt">
+          <div class="tt__cells" data-tt-cells aria-label="Timing for each beat"></div>
+          <div class="tt__main">
+            <button class="tt__pad" type="button" data-tt-pad aria-label="Tap on the beat">♪</button>
+            <div class="tt__read">
+              <p class="dl__k" data-tt-phase>Ready</p>
+              <p class="tt__score" data-tt-score>—</p>
+              <p class="dl__note" data-tt-best>Best on this device: —</p>
+              <button class="dl__btn" type="button" data-tt-start>Start the trial</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dl__panel" role="tabpanel" id="panel-drum-duel" aria-labelledby="tab-drum-duel" data-panel="drum-duel" hidden>
+        <div class="dl__panel-head"><p>{apps[3].blurb} Left player taps the left drum or A; right player the right drum or L.</p><span class="dl__team">team <code>drum-duel</code></span></div>
+        <div class="dd">
+          <button class="dd__side dd__side--l" type="button" data-dd-side="l"><span class="dd__key">A</span><span class="dd__n" data-dd-n="l">0</span></button>
+          <div class="dd__mid">
+            <p class="dd__clock" data-dd-clock>10.0</p>
+            <p class="dl__k" data-dd-msg>Press start</p>
+            <button class="dl__btn" type="button" data-dd-start>Start duel</button>
+          </div>
+          <button class="dd__side dd__side--r" type="button" data-dd-side="r"><span class="dd__key">L</span><span class="dd__n" data-dd-n="r">0</span></button>
+        </div>
+      </div>
+
+      <div class="dl__panel" role="tabpanel" id="panel-focus-pulse" aria-labelledby="tab-focus-pulse" data-panel="focus-pulse" hidden>
+        <div class="dl__panel-head"><p>{apps[4].blurb} Finish the session for a closing beat, one for each minute.</p><span class="dl__team">team <code>focus-pulse</code></span></div>
+        <div class="fp">
+          <div class="fp__ring"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="fp__track" /><circle cx="60" cy="60" r="52" class="fp__arc" data-fp-arc /></svg><p class="fp__time" data-fp-time>25:00</p></div>
+          <div class="fp__controls">
+            <div class="dl__divs" role="group" aria-label="Session length">
+              <button type="button" data-fp-min="5" aria-pressed="false">5 min</button>
+              <button type="button" data-fp-min="15" aria-pressed="false">15 min</button>
+              <button type="button" data-fp-min="25" aria-pressed="true">25 min</button>
+            </div>
+            <label for="fp-place">Where you're working (optional)</label>
+            <input id="fp-place" data-fp-place maxlength="32" placeholder="el-segundo" autocomplete="off" />
+            <div class="dl__row"><button class="dl__btn" type="button" data-fp-start>Start focus</button><button class="dl__btn dl__btn--ghost" type="button" data-fp-stop disabled>Stop</button></div>
+            <p class="dl__note" data-fp-note>No beats yet this session.</p>
+          </div>
+        </div>
       </div>
     </section>
 
-    <hr class="dl__rule dl__rule--ornate" />
-
-    {/* Ceremony hall — placeholder for end-of-week recap */}
-    <section class="dl__ceremony" aria-label="Ceremony hall">
-      <p class="dl__eyebrow mono">※ CEREMONY HALL</p>
-      <p class="dl__ceremony-body">
-        Sundays at 5pm PT, the top three contributors get a portrait card on the
-        masthead and a permanent block in the Drum Press. The League is young —
-        the first ceremony is coming. Until then, this hall is quiet.
-      </p>
-      <p class="dl__ceremony-note mono">
-        ※ first ceremony scheduled for the first Sunday after launch ·
-        check back · or simply keep playing
-      </p>
+    <section class="dl__agents" id="agents">
+      <div class="dl__section-head">
+        <h2>The agent area</h2>
+        <p>Agents play in their own division. A Claude, a script, or any MCP client can join the table under its own name.</p>
+      </div>
+      <div class="ag">
+        <div class="ag__col">
+          <p class="dl__k">Agent teams this week</p>
+          <ol class="ag__teams" data-ag-teams><li class="dl__empty">No agent teams yet this week.</li></ol>
+          <p class="dl__k">Just heard from agents</p>
+          <ol class="dl__wire" data-ag-wire><li class="dl__empty">Listening…</li></ol>
+        </div>
+        <div class="ag__col">
+          <p class="dl__k">Connect over MCP</p>
+          <p class="dl__note">Add the PointCast connector at <code class="dl__sel">{mcpUrl}</code>, then call:</p>
+          <pre><code>{agentMcp}</code></pre>
+          <p class="dl__k">Or send beats directly</p>
+          <pre><code>{agentCurl}</code></pre>
+          <p class="dl__note">Name your agent with <code>app</code>. Beats with no browser origin count as scripts unless they say <code>"kind":"agent"</code>.</p>
+        </div>
+      </div>
     </section>
 
-    {/* Foot */}
-    <footer class="dl__foot">
-      <p class="mono">
-        DRUM LEAGUE · v0.1 · 2026-04-30 · pointcast.xyz/drum-league ·
-        cooperative + leaderboarded · every tap counts ·
-        <a href="/drum-press">all 54 titles in print →</a>
-      </p>
-    </footer>
+    <section class="dl__enter">
+      <div class="dl__section-head">
+        <h2>Enter your own team</h2>
+        <p>Put a drum on your site and your site is on the table. <a href="/drum-kit">The Drum Kit</a> builds the button; the name you give it is your team.</p>
+      </div>
+      <pre><code>{teamSnippet}</code></pre>
+    </section>
+
+    <section class="dl__rules">
+      <div class="dl__section-head"><h2>Season 0 rules</h2></div>
+      <dl class="rules">
+        <div><dt>Teams</dt><dd>Every distinct <code>app</code> name that sends beats. Division is how it plays: a PointCast room, an embed on another site, a Claude artifact, an agent, or a script.</dd></div>
+        <div><dt>Weeks</dt><dd>Monday 00:00 to Sunday 23:59, UTC. Season 0 opened Saturday, September 26, 2026, so its first week is a two-day preseason.</dd></div>
+        <div><dt>Points</dt><dd>One point per beat, with each team's day capped at 5,000. The raw total is kept as well.</dd></div>
+        <div><dt>Fair play</dt><dd>Season 0 runs on the honor system. The channel is open and names aren't claimed yet, so anyone can send beats under any name. Treat the table as a live experiment.</dd></div>
+        <div><dt>Season 1, planned</dt><dd>Teams claim their name with a key so no one else can play for them. Champions get a trophy on <a href="/drum-trophies">/drum-trophies</a>. The DRUM token comes in as the champion's prize once claimed teams make the table trustworthy, and not before.</dd></div>
+      </dl>
+      <p class="dl__note">The April league, which ranked individual drummers and ran a daily featured duel, lives on at <a href="/drum-league-classic">/drum-league-classic</a>.</p>
+      <p class="dl__note">The same numbers are on <a href="/drum-signal">the signal board</a>, as JSON at <a href="/api/drum/league">/api/drum/league</a>, and through the MCP tool <code>drum_league_standings</code>.</p>
+    </section>
   </main>
-</BlockLayout>
 
-<script is:inline>
-  (function () {
-    'use strict';
+  <script is:inline src="/drum.js" data-app="drum-league" data-sound="false"></script>
 
-    // ── Identity (sessionId → noun) ─────────────────────────────────
-    function getSid() {
-      try {
-        var s = localStorage.getItem('pc:sid');
-        if (s) return s;
-        s = (Math.random().toString(36).slice(2) + Date.now().toString(36));
-        localStorage.setItem('pc:sid', s);
-        return s;
-      } catch (e) { return 'anon-' + Date.now(); }
+  <style is:global>
+    body:has(.dl) { background: #fbf3ea; }
+    .dl {
+      --ink: #15120f; --muted: #6f6961; --soft: #e7ddd0; --paper: #fffaf4; --ground: #fbf3ea;
+      --red: #e0452b; --blue: #185fa5; --violet: #7b4fd6; --green: #1f8a5b; --gold: #f0b429;
+      max-width: 1100px; margin: 24px auto 72px; padding: 0 16px; color: var(--ink);
+      font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
     }
-    function nounIdFromString(s) {
-      var h = 0;
-      for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
-      return Math.abs(h) % 1200;
+    .dl code, .dl pre, .dl__k, .dl__bar, .dl__eyebrow { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+    .dl [hidden] { display: none !important; }
+    .dl a { color: var(--blue); }
+    .dl > section { border: 4px solid var(--ink); border-top: 0; background: var(--paper); }
+    .dl__bar {
+      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: var(--ink); color: var(--ground);
+      padding: 14px 20px; font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase;
     }
-    var sid = getSid();
-    var myNoun = nounIdFromString(sid);
-
-    // Render YOUR card immediately (rest fetches async).
-    var yoursNounEl = document.getElementById('dl-yours-noun');
-    var yoursNounIdEl = document.getElementById('dl-yours-noun-id');
-    if (yoursNounEl) {
-      yoursNounEl.src = 'https://noun.pics/' + myNoun + '.svg';
-      yoursNounEl.alt = 'Your Noun ' + myNoun;
-      yoursNounEl.style.imageRendering = 'pixelated';
+    .dl__live { color: #b9b2a8; }
+    .dl__live.is-on { color: #ff8a73; }
+    .dl__k { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+    .dl__note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+    .dl__note code, .dl__rules code, .dl__panel-head code { background: var(--soft); padding: 1px 4px; font-size: 12px; color: var(--ink); }
+    .dl__sel { user-select: all; }
+    .dl__empty { color: var(--muted); font-size: 13px; list-style: none; }
+    .dl__row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .dl__btn {
+      font: 600 13px/1 'Inter', system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; padding: 13px 18px;
+      border: 3px solid var(--ink); background: var(--red); color: #fff; cursor: pointer; box-shadow: 0 4px 0 var(--ink);
+      touch-action: manipulation; transition: transform .05s, box-shadow .05s;
     }
-    if (yoursNounIdEl) yoursNounIdEl.textContent = String(myNoun);
-
-    // ── Tally: poll /api/drum?sessionId= for {globalTotal, yourTotal} ──
-    function fmtNum(n) {
-      try { return n.toLocaleString(); } catch (e) { return String(n); }
+    .dl__btn--ghost { background: var(--paper); color: var(--ink); }
+    .dl__btn:active, .dl__btn.is-hit { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+    .dl__btn:disabled { opacity: .45; cursor: default; }
+    .dl button:focus-visible, .dl input:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+    .dl input {
+      font: 500 16px/1.2 'JetBrains Mono', ui-monospace, monospace; padding: 10px; border: 3px solid var(--ink);
+      background: #fff; color: var(--ink); width: 100%; min-width: 0; border-radius: 0;
     }
-    var tallyNumEl = document.getElementById('dl-tally-num');
-    var tallyFillEl = document.getElementById('dl-tally-fill');
-    var tallyHintEl = document.getElementById('dl-tally-hint');
-    var yoursCountEl = document.getElementById('dl-yours-count');
-    var yoursRankEl = document.getElementById('dl-yours-rank');
-    var WEEKLY_TARGET = 50000;
+    .dl label { font-size: 13px; font-weight: 600; }
+    .dl pre { margin: 0; padding: 14px; background: var(--ink); color: var(--ground); font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre; }
 
-    function pollTally() {
-      fetch('/api/drum?sessionId=' + encodeURIComponent(sid), { cache: 'no-store' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          if (!d) return;
-          var total = Number(d.globalTotal) || 0;
-          var yours = Number(d.yourTotal) || 0;
-          if (tallyNumEl) tallyNumEl.textContent = fmtNum(total);
-          var pct = Math.min(100, (total / WEEKLY_TARGET) * 100);
-          if (tallyFillEl) tallyFillEl.style.width = pct + '%';
-          if (tallyHintEl) {
-            tallyHintEl.textContent = pct >= 100
-              ? '🎉 weekly target hit · the league did it · keep going'
-              : Math.round(pct) + '% to ' + fmtNum(WEEKLY_TARGET) + ' · the more we tap, the closer we get';
+    .dl__hero { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.25fr); }
+    .dl__hero-copy { padding: 28px; border-right: 4px solid var(--ink); display: grid; gap: 16px; align-content: start; }
+    .dl__eyebrow { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--red); }
+    .dl h1 { margin: 0; font-size: clamp(40px, 6.4vw, 68px); line-height: .98; font-weight: 700; letter-spacing: -.035em; text-wrap: balance; }
+    .dl__lede { margin: 0; font-size: 16px; line-height: 1.6; max-width: 52ch; }
+    .dl__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-top: 2px solid var(--ink); padding-top: 14px; }
+    .dl__v { margin: 0; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .dl__v-sub { font-family: 'Inter', system-ui, sans-serif; font-size: 13px; color: var(--muted); font-weight: 500; }
+    .dl__v--team { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; word-break: break-all; }
+    .dl__table-wrap { padding: 20px 24px 24px; min-width: 0; }
+    .dl__table-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .dl__table-head .dl__k { margin: 0; text-align: center; }
+    .dl__weekbtn { width: 36px; height: 32px; border: 2px solid var(--ink); background: var(--paper); cursor: pointer; font-size: 16px; }
+    .dl__weekbtn:disabled { opacity: .35; cursor: default; }
+    .dl__divs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .dl__divs button {
+      font: 600 11px/1 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase;
+      padding: 7px 10px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .dl__divs button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+    .dl__scroll { overflow-x: auto; }
+    .dl__table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .dl__table-wrap { container-type: inline-size; }
+    @container (max-width: 560px) { .dl__table .c-last { display: none; } }
+    @container (max-width: 400px) { .dl__table .c-days { display: none; } .dl__table td.team { font-size: 12px; } }
+    .dl__table th { text-align: left; font: 600 10px/1.2 'JetBrains Mono', monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 0 8px 8px 0; border-bottom: 2px solid var(--ink); }
+    .dl__table td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--soft); }
+    .dl__table .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .dl__table td.team { font-family: 'JetBrains Mono', monospace; font-size: 13px; word-break: break-all; }
+    .dl__table tr.is-first td { background: #fff1c9; }
+    .dl__table tr.is-first td.team::before { content: '★ '; color: #b77d00; }
+    .dl__table tr.is-sample td.team::after { content: ' · sample'; color: var(--muted); font-size: 11px; }
+    .dl__chip { font: 600 9px/1.6 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: #fff; padding: 1px 6px; background: var(--k, var(--muted)); }
+    .dl [data-k="pointcast"] { --k: var(--red); } .dl [data-k="embed"] { --k: var(--blue); } .dl [data-k="artifact"] { --k: var(--violet); }
+    .dl [data-k="agent"] { --k: var(--green); } .dl [data-k="standalone"] { --k: var(--ink); } .dl [data-k="other"] { --k: #9a9890; }
+
+    .dl__section-head { padding: 22px 24px 0; }
+    .dl__section-head h2 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.02em; }
+    .dl__section-head p { margin: 0; max-width: 70ch; font-size: 15px; line-height: 1.55; }
+    .dl__tabs { display: flex; gap: 0; margin: 18px 24px 0; border: 3px solid var(--ink); overflow-x: auto; }
+    .dl__tabs button {
+      flex: 1 0 auto; display: grid; gap: 4px; text-align: left; padding: 10px 14px; background: var(--paper); border: 0;
+      border-right: 2px solid var(--ink); cursor: pointer; font: 600 14px/1.1 'Inter', system-ui, sans-serif; color: var(--ink);
+    }
+    .dl__tabs button:last-child { border-right: 0; }
+    .dl__tabs button[aria-selected="true"] { background: var(--ink); color: var(--ground); }
+    .dl__tabkind { font: 600 9px/1 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
+    .dl__panel { margin: 0 24px 24px; border: 3px solid var(--ink); border-top: 0; padding: 18px; display: grid; gap: 16px; }
+    .dl__panel-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+    .dl__panel-head p { margin: 0; font-size: 15px; line-height: 1.5; max-width: 64ch; }
+    .dl__team { font-size: 12px; color: var(--muted); }
+    .dl__wire { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 3px; max-height: 260px; overflow: auto; font-size: 13px; }
+    .dl__wire li { display: grid; grid-template-columns: 82px 86px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--soft); }
+    .dl__wire .app { font-family: 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dl__wire time, .dl__wire .x { color: var(--muted); font: 500 11px/1 'JetBrains Mono', monospace; }
+    .dl__wire .dl__chip { justify-self: start; }
+
+    .kk { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+    .kk__room, .kk__door { border: 2px solid var(--ink); padding: 16px; display: grid; gap: 10px; align-content: start; transition: background .2s; }
+    .kk__room.is-ringing { background: #e8f1fb; }
+    .kk__code { margin: 0; font: 600 clamp(32px, 6vw, 48px)/1 'JetBrains Mono', monospace; letter-spacing: .2em; }
+    .kk__knock { width: 100%; min-height: 130px; font-size: 20px; background: var(--blue); }
+    .kk__inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 200px; overflow: auto; }
+    .kk__inbox li:not(.dl__empty) { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 2px solid var(--soft); font-size: 14px; transition: border-color .4s, background .4s; }
+    .kk__inbox li.is-new { border-color: var(--blue); background: #e8f1fb; }
+
+    .bt { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+    .bt__mast { position: relative; border: 3px solid var(--ink); background: #0f1026; aspect-ratio: 1; max-width: 100%; }
+    .bt__mast canvas { width: 100%; height: 100%; display: block; }
+    .bt__onair { position: absolute; top: 10px; left: 10px; font: 600 11px/1 'JetBrains Mono', monospace; letter-spacing: .16em; text-transform: uppercase; padding: 6px 8px; background: #3a3a4a; color: #cfcfe0; }
+    .bt__onair.is-on { background: var(--red); color: #fff; }
+    .bt__side { display: grid; gap: 12px; }
+
+    .tt { display: grid; gap: 16px; }
+    .tt__cells { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px; }
+    .tt__cells span { height: 28px; border: 2px solid var(--ink); background: var(--paper); }
+    .tt__cells span.is-now { background: var(--soft); }
+    .tt__cells span.is-great { background: var(--green); }
+    .tt__cells span.is-ok { background: var(--gold); }
+    .tt__cells span.is-off { background: var(--red); }
+    .tt__cells span.is-miss { background: repeating-linear-gradient(45deg, var(--paper), var(--paper) 4px, var(--soft) 4px, var(--soft) 8px); }
+    .tt__main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: center; }
+    .tt__pad {
+      width: min(220px, 50vw); aspect-ratio: 1; border-radius: 50%; border: 5px solid var(--ink); color: #fff; font-size: 56px; cursor: pointer;
+      background: radial-gradient(circle at 38% 32%, #f3785d, var(--red) 55%, #b8321c); box-shadow: 0 8px 0 var(--ink); touch-action: manipulation;
+    }
+    .tt__pad.is-hit { transform: translateY(5px); box-shadow: 0 3px 0 var(--ink); }
+    .tt__pad.is-pulse { outline: 6px solid rgba(224, 69, 43, .3); outline-offset: 4px; }
+    .tt__read { display: grid; gap: 8px; justify-items: start; }
+    .tt__score { margin: 0; font-size: clamp(44px, 8vw, 64px); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+
+    .dd { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 14px; align-items: stretch; }
+    .dd__side {
+      min-height: 220px; border: 4px solid var(--ink); color: #fff; cursor: pointer; display: grid; place-items: center; align-content: center; gap: 6px;
+      box-shadow: 0 6px 0 var(--ink); touch-action: manipulation; transition: transform .04s;
+    }
+    .dd__side--l { background: var(--blue); }
+    .dd__side--r { background: var(--violet); }
+    .dd__side.is-hit { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
+    .dd__side.is-win { outline: 6px solid var(--gold); outline-offset: 3px; }
+    .dd__key { font: 600 12px/1 'JetBrains Mono', monospace; letter-spacing: .2em; opacity: .8; }
+    .dd__n { font-size: clamp(48px, 9vw, 84px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    .dd__mid { display: grid; gap: 10px; justify-items: center; align-content: center; text-align: center; min-width: 120px; }
+    .dd__clock { margin: 0; font: 600 40px/1 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+
+    .fp { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; align-items: center; }
+    .fp__ring { position: relative; width: min(220px, 56vw); aspect-ratio: 1; }
+    .fp__ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .fp__track { fill: none; stroke: var(--soft); stroke-width: 10; }
+    .fp__arc { fill: none; stroke: var(--green); stroke-width: 10; stroke-dasharray: 326.7; stroke-dashoffset: 0; transition: stroke-dashoffset .6s linear; }
+    .fp__time { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; font: 600 36px/1 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+    .fp__controls { display: grid; gap: 10px; max-width: 420px; }
+    .fp__controls .dl__divs { margin: 0; }
+
+    .dl__agents, .dl__enter, .dl__rules { padding-bottom: 24px; }
+    .ag { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; padding: 18px 24px 0; }
+    .ag__col { display: grid; gap: 10px; align-content: start; min-width: 0; }
+    .ag__teams { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; }
+    .ag__teams li:not(.dl__empty) { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 2px solid var(--soft); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+    .dl__enter pre { margin: 16px 24px 0; }
+    .rules { margin: 16px 24px 16px; display: grid; gap: 0; }
+    .rules > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--soft); }
+    .rules dt { font: 600 12px/1.4 'JetBrains Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .rules dd { margin: 0; font-size: 15px; line-height: 1.55; max-width: 68ch; }
+    .dl__rules > .dl__note { margin: 0 24px 8px; }
+
+    @media (max-width: 860px) {
+      .dl__hero, .kk, .bt, .ag { grid-template-columns: 1fr; }
+      .dl__hero-copy { border-right: 0; border-bottom: 4px solid var(--ink); }
+      .tt__main, .fp { grid-template-columns: 1fr; justify-items: center; }
+      .tt__read { justify-items: center; text-align: center; }
+    }
+    @media (max-width: 560px) {
+      .dl__hero-copy, .dl__table-wrap, .dl__section-head, .ag { padding-left: 16px; padding-right: 16px; }
+      .dl__tabs, .dl__panel { margin-left: 12px; margin-right: 12px; }
+      .dl__panel { padding: 14px; }
+      .dl__stats { grid-template-columns: 1fr 1fr; }
+      .dd { grid-template-columns: 1fr 1fr; }
+      .dd__mid { grid-column: 1 / -1; grid-row: 1; }
+      .dd__side { min-height: 160px; }
+      .tt__cells { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+      .rules > div { grid-template-columns: 1fr; gap: 4px; }
+      .rules, .dl__enter pre { margin-left: 16px; margin-right: 16px; }
+      .dl__rules > .dl__note { margin: 0 16px; }
+      .dl__wire li { grid-template-columns: 78px minmax(0, 1fr) auto; }
+      .dl__wire li .dl__chip { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .dl * { transition: none !important; } }
+  </style>
+
+  <script is:inline>
+    (() => {
+      const root = document.querySelector('.dl');
+      if (!root) return;
+      const $ = (sel) => root.querySelector(sel);
+      const $$ = (sel) => [...root.querySelectorAll(sel)];
+      const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+      const SAMPLES = new Set(['knock-knock', 'beat-tower', 'tempo-trial', 'drum-duel', 'focus-pulse']);
+      const DIV_LABEL = { pointcast: 'Rooms', embed: 'Embeds', artifact: 'Artifacts', agent: 'Agents', standalone: 'Scripts', other: 'Other' };
+      const store = {
+        get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+        set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+      };
+
+      // ---- sound -------------------------------------------------------
+      let ac = null;
+      const ctx = () => {
+        if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+        if (ac.state === 'suspended') ac.resume();
+        return ac;
+      };
+      function tone(type, f0, f1, dur, gain, when = 0) {
+        try {
+          const a = ctx(); const t = a.currentTime + when;
+          const o = a.createOscillator(); const g = a.createGain();
+          o.type = type; o.frequency.setValueAtTime(f0, t);
+          if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.6);
+          g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
+        } catch {}
+      }
+      function noise(dur, type, freq, gain, when = 0) {
+        try {
+          const a = ctx(); const t = a.currentTime + when;
+          const len = Math.max(1, Math.floor(a.sampleRate * dur));
+          const buf = a.createBuffer(1, len, a.sampleRate); const d = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+          const s = a.createBufferSource(); s.buffer = buf;
+          const f = a.createBiquadFilter(); f.type = type; f.frequency.value = freq;
+          const g = a.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          s.connect(f).connect(g).connect(a.destination); s.start(t);
+        } catch {}
+      }
+      const S = {
+        drum: (w) => tone('sine', 150, 46, 0.32, 0.9, w),
+        knock: (w) => { tone('triangle', 420, 180, 0.07, 0.6, w); noise(0.04, 'bandpass', 1800, 0.35, w); },
+        click: (w) => tone('square', 1800, 0, 0.03, 0.12, w),
+        accent: (w) => tone('square', 2400, 0, 0.04, 0.18, w),
+        bell: (w) => { tone('sine', 880, 0, 0.9, 0.25, w); tone('sine', 2310, 0, 0.4, 0.06, w); },
+        snare: (w) => { tone('triangle', 190, 120, 0.1, 0.3, w); noise(0.14, 'highpass', 1500, 0.4, w); },
+        hat: (w) => noise(0.05, 'highpass', 7000, 0.25, w),
+        low: (w) => tone('sine', 90, 40, 0.4, 0.8, w),
+        left: (w) => tone('sine', 170, 60, 0.18, 0.7, w),
+        right: (w) => tone('sine', 230, 80, 0.18, 0.7, w),
+      };
+
+      // Every sample plays for its own team: the tag's app is the team name.
+      function send(app, n = 1, place) {
+        if (!window.PointCastDrum) return;
+        window.PointCastDrum.beat(n, { app, place: place || undefined }, { sound: false });
+      }
+      function flushNow() { if (window.PointCastDrum) window.PointCastDrum.flush(); }
+
+      const ago = (ms) => {
+        const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+        if (s < 60) return `${s}s ago`;
+        if (s < 3600) return `${Math.round(s / 60)}m ago`;
+        if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+        return `${Math.round(s / 86400)}d ago`;
+      };
+      const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      function wireRow(r) {
+        const li = document.createElement('li');
+        li.innerHTML = `<time>${clock(r.at)}</time><span class="dl__chip" data-k="${esc(r.kind)}">${esc(r.kind)}</span><span class="app">${esc(r.app)}${r.place ? ' · ' + esc(r.place) : ''}</span><span class="x">×${r.beats}</span>`;
+        return li;
+      }
+
+      // ---- league table ------------------------------------------------
+      let weekOffset = 0;
+      let division = 'all';
+      let league = null;
+      function weekParam() {
+        if (!weekOffset) return '';
+        const d = new Date(Date.now() + weekOffset * 7 * 86400000);
+        return `?week=${d.toISOString().slice(0, 10)}`;
+      }
+      function drawLeague() {
+        const body = $('[data-standings]');
+        if (!league) return;
+        const wk = league.week;
+        $('[data-week-label]').textContent = wk.number
+          ? `Week ${wk.number} · ${wk.start} → ${wk.end}${wk.current ? ' · live' : ''}`
+          : `Before Season 0 · ${wk.start}`;
+        $('[data-week-next]').disabled = weekOffset >= 0;
+        $('[data-week-prev]').disabled = wk.number <= 1 && wk.start <= league.season.start;
+        const rows = (league.standings || []).filter((r) => division === 'all' || r.kind === division);
+        body.replaceChildren();
+        if (!rows.length) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td colspan="6" class="dl__empty">${division === 'all' ? 'No teams on the board this week yet. Play a sample below to put one there.' : 'No teams in this division this week.'}</td>`;
+          body.append(tr);
+        }
+        rows.forEach((r, i) => {
+          const tr = document.createElement('tr');
+          if (i === 0) tr.classList.add('is-first');
+          if (SAMPLES.has(r.app)) tr.classList.add('is-sample');
+          tr.innerHTML = `<td>${i + 1}</td><td class="team">${esc(r.app)}</td><td><span class="dl__chip" data-k="${esc(r.kind)}">${esc(DIV_LABEL[r.kind] || r.kind)}</span></td><td class="n">${fmt(r.points)}</td><td class="n c-days">${r.activeDays}</td><td class="n c-last">${ago(r.lastAt)}</td>`;
+          body.append(tr);
+        });
+        if (weekOffset === 0) {
+          const lead = (league.standings || [])[0];
+          const leader = $('[data-leader]');
+          leader.replaceChildren();
+          if (lead) { const pts = document.createElement('span'); pts.className = 'dl__v-sub'; pts.textContent = `${fmt(lead.points)} pts`; leader.append(lead.app, document.createElement('br'), pts); }
+          else leader.textContent = 'Open';
+          drawAgentTeams();
+        }
+      }
+      async function loadLeague() {
+        try {
+          league = await (await fetch(`/api/drum/league${weekParam()}`, { cache: 'no-store' })).json();
+          if (!league || !league.week) throw new Error('no league');
+          drawLeague();
+          const live = $('[data-live]');
+          live.textContent = `${league.season.name} · live`;
+          live.classList.add('is-on');
+        } catch {
+          $('[data-live]').textContent = 'League table unavailable';
+        }
+      }
+      $('[data-week-prev]').addEventListener('click', () => { weekOffset -= 1; loadLeague(); });
+      $('[data-week-next]').addEventListener('click', () => { if (weekOffset < 0) { weekOffset += 1; loadLeague(); } });
+      $$('[data-div]').forEach((b) => b.addEventListener('click', () => {
+        division = b.dataset.div;
+        $$('[data-div]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        drawLeague();
+      }));
+
+      // ---- signal feed (shared by the tower, knocks and agents) ---------
+      const signalSubs = new Set();
+      let signalTimer = null;
+      async function pollSignal() {
+        try {
+          const d = await (await fetch('/api/drum/signal', { cache: 'no-store' })).json();
+          if (typeof d.globalTotal === 'number') $('[data-global]').textContent = fmt(d.globalTotal);
+          signalSubs.forEach((fn) => fn(d));
+        } catch {}
+      }
+      function startSignal() {
+        if (signalTimer) return;
+        pollSignal();
+        signalTimer = setInterval(() => { if (document.visibilityState === 'visible') pollSignal(); }, 2500);
+      }
+      async function loadLive() {
+        try {
+          const live = await (await fetch('/api/drum/live', { cache: 'no-store' })).json();
+          const others = (live.sources || []).filter((s) => s.kind !== 'pointcast' && s.kind !== 'agent').length;
+          const n = (live.count || 0) + others;
+          $('[data-now]').textContent = n === 1 ? '1 drummer' : `${n} drummers`;
+        } catch {}
+      }
+
+      // ---- tabs --------------------------------------------------------
+      const tabs = $$('[role="tab"]');
+      const inits = {};
+      function selectTab(id, focus) {
+        tabs.forEach((t) => {
+          const on = t.dataset.tab === id;
+          t.setAttribute('aria-selected', String(on));
+          t.tabIndex = on ? 0 : -1;
+          if (on && focus) t.focus();
+        });
+        $$('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== id; });
+        if (inits[id]) { inits[id](); inits[id] = null; }
+        if (history.replaceState) history.replaceState(null, '', `${location.pathname}${location.search}#${id}`);
+      }
+      tabs.forEach((t, i) => {
+        t.addEventListener('click', () => selectTab(t.dataset.tab));
+        t.addEventListener('keydown', (e) => {
+          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+          const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+          selectTab(next.dataset.tab, true);
+        });
+      });
+      const activePanel = () => (tabs.find((t) => t.getAttribute('aria-selected') === 'true') || {}).dataset?.tab;
+
+      // ---- 1. Knock Knock ------------------------------------------------
+      inits['knock-knock'] = () => {
+        const clean = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+        const rand = () => { const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += a[Math.floor(Math.random() * a.length)]; return s; };
+        let code = clean(new URLSearchParams(location.search).get('room')) || clean(store.get('pc-drum-league-room')) || rand();
+        let started = Date.now();
+        const sent = [];
+        const seen = new Set();
+        let count = 0; let timer = null;
+        const place = () => `knock-${code.toLowerCase()}`;
+        const inviteUrl = () => `${location.origin}/drum-league?room=${code}#knock-knock`;
+        function setCode(c) {
+          code = clean(c) || code;
+          store.set('pc-drum-league-room', code);
+          $('[data-kk-code]').textContent = code;
+          $('[data-kk-input]').value = code;
+          seen.clear(); started = Date.now();
+          $('[data-kk-inbox]').innerHTML = `<li class="dl__empty">Listening for knocks in room ${esc(code)}…</li>`;
+        }
+        setCode(code);
+        $('[data-kk-input]').addEventListener('change', (e) => setCode(e.target.value));
+        $('[data-kk-copy]').addEventListener('click', async () => {
+          const note = $('[data-kk-copied]');
+          try { await navigator.clipboard.writeText(inviteUrl()); note.textContent = 'Copied'; }
+          catch { note.textContent = inviteUrl(); }
+          setTimeout(() => { note.textContent = ''; }, 2400);
+        });
+        const knock = $('[data-kk-knock]');
+        knock.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (count >= 9) return;
+          count += 1;
+          S.knock();
+          knock.textContent = `Knock ×${count}`;
+          knock.classList.add('is-hit'); setTimeout(() => knock.classList.remove('is-hit'), 90);
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            const n = count; count = 0; knock.textContent = 'Knock';
+            sent.push({ at: Date.now(), n });
+            send('knock-knock', n, place());
+            flushNow();
+            $('[data-kk-sent]').textContent = `Sent ${n} knock${n === 1 ? '' : 's'} to room ${code}.`;
+          }, 900);
+        });
+        signalSubs.add((d) => {
+          const hits = (d.recent || []).filter((r) => r.app === 'knock-knock' && r.place === place() && r.at >= started - 1000).reverse();
+          hits.forEach((r) => {
+            const key = `${r.at}:${r.beats}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            if (sent.some((s) => s.n === r.beats && Math.abs(s.at - r.at) < 4000)) return;
+            const n = Math.min(9, r.beats);
+            for (let i = 0; i < n; i++) S.knock(i * 0.22);
+            const room = $('[data-kk-room]');
+            room.classList.add('is-ringing'); setTimeout(() => room.classList.remove('is-ringing'), 900 + n * 200);
+            const inbox = $('[data-kk-inbox]');
+            if (inbox.firstElementChild?.classList.contains('dl__empty')) inbox.innerHTML = '';
+            const li = document.createElement('li');
+            li.className = 'is-new';
+            li.innerHTML = `<span>${'● '.repeat(n).trim()}</span><span class="dl__note">${clock(r.at)}</span>`;
+            inbox.prepend(li);
+            setTimeout(() => li.classList.remove('is-new'), 4000);
+          });
+        });
+        startSignal();
+      };
+
+      // ---- 2. Beat Tower ---------------------------------------------------
+      inits['beat-tower'] = () => {
+        const VOICE = { pointcast: 'drum', embed: 'snare', artifact: 'bell', agent: 'hat', standalone: 'low', other: 'click' };
+        const COLOR = { pointcast: '#e0452b', embed: '#4d8fd6', artifact: '#9b74ee', agent: '#3cc289', standalone: '#f4e7c8', other: '#9a9890' };
+        const c = $('[data-bt-canvas]'); const g = c.getContext('2d');
+        let on = false; let rings = []; let first = true; let raf = 0;
+        const seen = new Set();
+        function draw() {
+          g.fillStyle = '#0f1026'; g.fillRect(0, 0, 560, 560);
+          g.strokeStyle = on ? '#f4e7c8' : '#55556a'; g.lineWidth = 4;
+          g.beginPath();
+          g.moveTo(280, 140); g.lineTo(220, 530); g.moveTo(280, 140); g.lineTo(340, 530);
+          for (let y = 190; y < 530; y += 56) {
+            const w1 = (y - 140) * 0.154; const y2 = Math.min(530, y + 56); const w2 = (y2 - 140) * 0.154;
+            g.moveTo(280 - w1, y); g.lineTo(280 + w2, y2); g.moveTo(280 + w1, y); g.lineTo(280 - w2, y2);
           }
-          if (yoursCountEl) yoursCountEl.textContent = fmtNum(yours);
-        }).catch(function () {});
-    }
-    pollTally();
-    setInterval(pollTally, 4000);
-
-    // ── Top 12 leaderboard ──────────────────────────────────────────
-    var topListEl = document.getElementById('dl-top-list');
-    function pollTop() {
-      fetch('/api/drum/top', { cache: 'no-store' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          if (!d) return;
-          var entries = Array.isArray(d.entries) ? d.entries : [];
-          if (!entries.length) {
-            if (topListEl) topListEl.innerHTML = '<li class="dl__top-empty mono">— no taps yet · be the first —</li>';
+          g.stroke();
+          g.fillStyle = on ? '#e0452b' : '#55556a'; g.beginPath(); g.arc(280, 132, 12, 0, Math.PI * 2); g.fill();
+          const now = performance.now();
+          rings = rings.filter((r) => now - r.t < 2400);
+          rings.forEach((r) => {
+            const p = (now - r.t) / 2400;
+            g.globalAlpha = 1 - p; g.strokeStyle = r.color; g.lineWidth = 3 + Math.min(6, r.n);
+            g.beginPath(); g.arc(280, 132, 20 + p * 280, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+            g.globalAlpha = 1;
+          });
+          if (on) raf = requestAnimationFrame(draw);
+        }
+        draw();
+        function emit(kind, n, delay) {
+          const voice = S[VOICE[kind] || 'click'];
+          for (let i = 0; i < Math.min(6, n); i++) {
+            const w = delay + i * 0.14;
+            voice(w);
+            setTimeout(() => rings.push({ t: performance.now(), color: COLOR[kind] || '#fff', n }), w * 1000);
+          }
+        }
+        signalSubs.add((d) => {
+          if (!on) return;
+          const wire = $('[data-bt-wire]');
+          const fresh = (d.recent || []).filter((r) => { const k = `${r.at}${r.app}${r.beats}`; if (seen.has(k)) return false; seen.add(k); return true; });
+          if (first) {
+            wire.replaceChildren(...(d.recent || []).slice(0, 14).map(wireRow));
+            first = false;
             return;
           }
-          // Build rows for top 12
-          var rows = entries.slice(0, 12).map(function (e, i) {
-            var rank = e.rank || (i + 1);
-            var nid = (e.nounId | 0) || 1;
-            var count = Number(e.count) || 0;
-            var hash = (e.hash || '').slice(0, 8);
-            var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
-            return '<li class="dl__top-row" data-rank="' + rank + '">' +
-                   '<span class="dl__top-rank mono">' + (rank < 10 ? '0' + rank : rank) + '</span>' +
-                   '<span class="dl__top-medal" aria-hidden="true">' + medal + '</span>' +
-                   '<img class="dl__top-noun" src="https://noun.pics/' + nid + '.svg" alt="" width="40" height="40" loading="lazy" />' +
-                   '<span class="dl__top-name">noun ' + nid + '</span>' +
-                   '<span class="dl__top-hash mono">' + hash + '</span>' +
-                   '<span class="dl__top-count mono">' + fmtNum(count) + '</span>' +
-                   '</li>';
-          }).join('');
-          if (topListEl) topListEl.innerHTML = rows;
+          fresh.reverse().forEach((r, i) => { emit(r.kind, r.beats, i * 0.5); wire.prepend(wireRow(r)); });
+          while (wire.children.length > 40) wire.lastChild.remove();
+        });
+        const power = $('[data-bt-power]'); const tx = $('[data-bt-tx]'); const tag = $('[data-bt-onair]');
+        power.addEventListener('click', () => {
+          on = !on; ctx();
+          power.textContent = on ? 'Turn off the tower' : 'Turn on the tower';
+          tag.textContent = on ? 'On air' : 'Off air'; tag.classList.toggle('is-on', on);
+          tx.disabled = !on;
+          if (on) { first = true; startSignal(); pollSignal(); raf = requestAnimationFrame(draw); }
+          else cancelAnimationFrame(raf);
+        });
+        tx.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (tx.disabled) return;
+          S.drum(); send('beat-tower');
+          rings.push({ t: performance.now(), color: '#ffffff', n: 2 });
+          tx.classList.add('is-hit'); setTimeout(() => tx.classList.remove('is-hit'), 90);
+        });
+      };
 
-          // Compute your rank by hash match if possible
-          if (yoursRankEl) {
-            // sessionId hash isn't exposed client-side but server stores
-            // it. Best approximation: match by nounId. If multiple match
-            // we just show the best rank.
-            var matched = entries.filter(function (e) { return e.nounId === myNoun; });
-            if (matched.length === 0) {
-              yoursRankEl.textContent = '— not on the leaderboard yet · keep tapping —';
-            } else {
-              var best = matched.reduce(function (m, e) {
-                return (m.rank || 9999) <= (e.rank || 9999) ? m : e;
-              });
-              yoursRankEl.textContent = best.rank
-                ? '★ rank #' + best.rank + ' · ' + fmtNum(best.count) + ' taps'
-                : '— ranked outside top — ';
-            }
+      // ---- 3. Tempo Trial --------------------------------------------------
+      inits['tempo-trial'] = () => {
+        const BPM = 96; const IV = 60000 / BPM; const BEATS = 16; const WINDOW = 260;
+        const cells = $('[data-tt-cells]');
+        cells.replaceChildren(...Array.from({ length: BEATS }, () => document.createElement('span')));
+        const pad = $('[data-tt-pad]'); const start = $('[data-tt-start]');
+        let targets = []; let hits = []; let running = false; let timers = [];
+        const best = () => Number(store.get('pc-drum-league-tempo-best')) || 0;
+        const showBest = () => { $('[data-tt-best]').textContent = `Best on this device: ${best() ? best() : '—'}`; };
+        showBest();
+        function stop() { timers.forEach(clearTimeout); timers = []; running = false; start.disabled = false; }
+        function finish() {
+          stop();
+          const errs = hits.map((h) => (h == null ? WINDOW : Math.abs(h)));
+          const score = Math.max(0, Math.round(100 - (errs.reduce((a, b) => a + b, 0) / BEATS) / (WINDOW / 100)));
+          $('[data-tt-score]').textContent = String(score);
+          $('[data-tt-phase]').textContent = score >= 85 ? 'Locked in' : score >= 65 ? 'In the pocket' : 'Keep at it';
+          if (score > best()) { store.set('pc-drum-league-tempo-best', String(score)); showBest(); }
+          flushNow();
+        }
+        start.addEventListener('click', () => {
+          if (running) return;
+          ctx(); stop(); running = true; start.disabled = true;
+          hits = Array(BEATS).fill(null);
+          [...cells.children].forEach((c) => { c.className = ''; });
+          $('[data-tt-score]').textContent = '—';
+          const t0 = performance.now() + 400;
+          targets = Array.from({ length: BEATS }, (_, i) => t0 + (4 + i) * IV);
+          for (let i = 0; i < 4 + BEATS; i++) {
+            const at = t0 + i * IV;
+            timers.push(setTimeout(() => {
+              if (i < 4) { (i === 0 ? S.accent : S.click)(); $('[data-tt-phase]').textContent = `Count-in ${i + 1}`; }
+              else {
+                S.click(); const k = i - 4; $('[data-tt-phase]').textContent = `Beat ${k + 1} of ${BEATS}`;
+                cells.children[k].classList.add('is-now');
+                pad.classList.add('is-pulse'); setTimeout(() => pad.classList.remove('is-pulse'), 90);
+              }
+            }, at - performance.now()));
           }
-        }).catch(function () {});
-    }
-    pollTop();
-    setInterval(pollTop, 8000);
+          timers.push(setTimeout(() => {
+            hits.forEach((h, k) => { if (h == null) cells.children[k].className = 'is-miss'; });
+            finish();
+          }, targets[BEATS - 1] + WINDOW + 60 - performance.now()));
+        });
+        function tap() {
+          S.drum();
+          pad.classList.add('is-hit'); setTimeout(() => pad.classList.remove('is-hit'), 80);
+          if (!running) return;
+          const now = performance.now();
+          let k = -1; let best = Infinity;
+          targets.forEach((t, i) => { const d = Math.abs(now - t); if (d < best && hits[i] == null) { best = d; k = i; } });
+          if (k < 0 || best > WINDOW) return;
+          hits[k] = now - targets[k];
+          cells.children[k].className = best < 60 ? 'is-great' : best < 140 ? 'is-ok' : 'is-off';
+          send('tempo-trial');
+        }
+        pad.addEventListener('pointerdown', (e) => { e.preventDefault(); tap(); });
+        addEventListener('keydown', (e) => {
+          if (activePanel() !== 'tempo-trial' || e.repeat || e.key !== ' ' || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+          e.preventDefault(); tap();
+        });
+      };
 
-    // ── Live pulse — /api/sounds firehose ───────────────────────────
-    var pulseListEl = document.getElementById('dl-pulse-list');
-    var lastPulseTs = Date.now() - 30000;
-    var pulseSeen = {};
-    function fmtTime(t) {
-      var d = new Date(t || Date.now());
-      var p = function (n) { return String(n).padStart(2, '0'); };
-      return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
-    }
-    function pulseRow(e) {
-      var key = (e.t || 0) + ':' + (e.pid || '') + ':' + (e.type || '');
-      if (pulseSeen[key]) return null;
-      pulseSeen[key] = 1;
-      // Map pid (server-derived hash, opaque) to a noun id
-      var nid = nounIdFromString(e.pid || 'anon');
-      var li = document.createElement('li');
-      li.className = 'dl__pulse-row mono';
-      li.innerHTML =
-        '<span class="dl__pulse-time">' + fmtTime(e.t) + '</span>' +
-        '<img class="dl__pulse-noun" src="https://noun.pics/' + nid + '.svg" alt="" width="22" height="22" loading="lazy" />' +
-        '<span class="dl__pulse-type">[' + (e.type || 'tap') + ']</span>' +
-        '<span class="dl__pulse-pid">noun ' + nid + '</span>';
-      return li;
-    }
-    function pollPulse() {
-      fetch('/api/sounds?since=' + lastPulseTs, { cache: 'no-store' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          if (!d || !Array.isArray(d.events)) return;
-          if (d.events.length === 0) return;
-          lastPulseTs = d.now || Date.now();
-          // Clear empty placeholder
-          var empty = pulseListEl ? pulseListEl.querySelector('.dl__pulse-empty') : null;
-          if (empty) empty.remove();
-          var added = 0;
-          d.events.forEach(function (e) {
-            var li = pulseRow(e);
-            if (li && pulseListEl) {
-              pulseListEl.prepend(li);
-              added++;
-            }
-          });
-          if (pulseListEl) {
-            // Trim to last 12 rows
-            var rows = pulseListEl.querySelectorAll('.dl__pulse-row');
-            for (var i = 12; i < rows.length; i++) rows[i].remove();
+      // ---- 4. Drum Duel ----------------------------------------------------
+      inits['drum-duel'] = () => {
+        const DURATION = 10000;
+        let score = { l: 0, r: 0 }; let live = false; let endAt = 0; let tick = 0;
+        const side = (s) => $(`[data-dd-side="${s}"]`);
+        const paint = () => { $('[data-dd-n="l"]').textContent = score.l; $('[data-dd-n="r"]').textContent = score.r; };
+        function hit(s) {
+          (s === 'l' ? S.left : S.right)();
+          const el = side(s); el.classList.add('is-hit'); setTimeout(() => el.classList.remove('is-hit'), 60);
+          if (!live) return;
+          score[s] += 1; paint(); send('drum-duel');
+        }
+        ['l', 'r'].forEach((s) => side(s).addEventListener('pointerdown', (e) => { e.preventDefault(); hit(s); }));
+        addEventListener('keydown', (e) => {
+          if (activePanel() !== 'drum-duel' || e.repeat || /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+          const k = e.key.toLowerCase();
+          if (k === 'a') hit('l'); else if (k === 'l') hit('r');
+        });
+        const startBtn = $('[data-dd-start]');
+        startBtn.addEventListener('click', () => {
+          ctx(); score = { l: 0, r: 0 }; paint();
+          side('l').classList.remove('is-win'); side('r').classList.remove('is-win');
+          startBtn.disabled = true;
+          let n = 3;
+          const msg = $('[data-dd-msg]');
+          msg.textContent = 'Ready…';
+          const count = setInterval(() => {
+            if (n > 0) { msg.textContent = String(n); S.click(); n -= 1; return; }
+            clearInterval(count);
+            S.accent(); msg.textContent = 'Go!'; live = true; endAt = performance.now() + DURATION;
+            tick = setInterval(() => {
+              const left = Math.max(0, endAt - performance.now());
+              $('[data-dd-clock]').textContent = (left / 1000).toFixed(1);
+              if (left > 0) return;
+              clearInterval(tick); live = false; startBtn.disabled = false; S.bell(); flushNow();
+              if (score.l === score.r) msg.textContent = `Tie at ${score.l}`;
+              else { const w = score.l > score.r ? 'l' : 'r'; side(w).classList.add('is-win'); msg.textContent = `${w === 'l' ? 'Left' : 'Right'} wins, ${Math.max(score.l, score.r)}–${Math.min(score.l, score.r)}`; }
+            }, 50);
+          }, 700);
+        });
+      };
+
+      // ---- 5. Focus Pulse --------------------------------------------------
+      inits['focus-pulse'] = () => {
+        let minutes = 25; let endAt = 0; let timer = 0; let sentMin = 0;
+        const C = 326.7;
+        const arc = $('[data-fp-arc]');
+        const startBtn = $('[data-fp-start]'); const stopBtn = $('[data-fp-stop]');
+        const place = () => String($('[data-fp-place]').value || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '').slice(0, 32);
+        const show = (ms) => {
+          const s = Math.ceil(ms / 1000);
+          $('[data-fp-time]').textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+          arc.style.strokeDashoffset = String(C * (1 - ms / (minutes * 60000)));
+        };
+        show(minutes * 60000);
+        $$('[data-fp-min]').forEach((b) => b.addEventListener('click', () => {
+          if (timer) return;
+          minutes = Number(b.dataset.fpMin);
+          $$('[data-fp-min]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+          show(minutes * 60000);
+        }));
+        function end(done) {
+          clearInterval(timer); timer = 0;
+          startBtn.disabled = false; stopBtn.disabled = true;
+          if (done) {
+            S.bell(); send('focus-pulse', minutes, place()); flushNow();
+            $('[data-fp-note]').textContent = `Done. ${minutes} minute beats plus ${minutes} for finishing went to focus-pulse.`;
+          } else {
+            flushNow();
+            $('[data-fp-note]').textContent = `Stopped after ${sentMin} minute${sentMin === 1 ? '' : 's'}. Those beats still count.`;
           }
-        }).catch(function () {});
-    }
-    pollPulse();
-    setInterval(pollPulse, 1500);
-  })();
-</script>
+          show(minutes * 60000);
+        }
+        startBtn.addEventListener('click', () => {
+          ctx(); sentMin = 0; endAt = Date.now() + minutes * 60000;
+          startBtn.disabled = true; stopBtn.disabled = false;
+          $('[data-fp-note]').textContent = 'Focusing. One beat per minute.';
+          timer = setInterval(() => {
+            const left = endAt - Date.now();
+            const elapsedMin = Math.floor((minutes * 60000 - left) / 60000);
+            while (sentMin < Math.min(elapsedMin, minutes)) {
+              sentMin += 1; S.drum(); send('focus-pulse', 1, place()); flushNow();
+              $('[data-fp-note]').textContent = `${sentMin} minute${sentMin === 1 ? '' : 's'} in · ${sentMin} beat${sentMin === 1 ? '' : 's'} sent.`;
+            }
+            if (left <= 0) { end(true); return; }
+            show(left);
+          }, 1000);
+        });
+        stopBtn.addEventListener('click', () => end(false));
+      };
 
-<style>
-  .dl {
-    --dl-paper: #fff5d8;
-    --dl-deep: #f8e8c0;
-    --dl-cream: #fffaef;
-    --dl-ink: #11100c;
-    --dl-mute: #5b5347;
-    --dl-magenta: #d6346a;
-    --dl-yellow: #f0c431;
-    --dl-cyan: #3aa9c4;
-    --dl-teal: #2f8c69;
-    --dl-gold: #c9982a;
+      // ---- agent area -----------------------------------------------------
+      function drawAgentTeams() {
+        const list = $('[data-ag-teams]');
+        const agents = ((league && league.standings) || []).filter((r) => r.kind === 'agent');
+        list.replaceChildren();
+        if (!agents.length) { list.innerHTML = '<li class="dl__empty">No agent teams yet this week.</li>'; return; }
+        agents.slice(0, 8).forEach((r) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span>${esc(r.app)}</span><span>${fmt(r.points)}</span>`;
+          list.append(li);
+        });
+      }
+      signalSubs.add((d) => {
+        const rows = (d.recent || []).filter((r) => r.kind === 'agent').slice(0, 10);
+        const wire = $('[data-ag-wire]');
+        if (!rows.length) { wire.innerHTML = '<li class="dl__empty">No agent beats in the recent wire.</li>'; return; }
+        wire.replaceChildren(...rows.map(wireRow));
+      });
 
-    background: var(--dl-paper);
-    color: var(--dl-ink);
-    padding: 28px clamp(16px, 4vw, 48px) calc(56px + env(safe-area-inset-bottom, 0px));
-    min-height: 100vh;
-    min-height: 100dvh;
-    font-family: 'Iowan Old Style', 'Iowan Old Style W01', 'Palatino', 'Times New Roman', Times, serif;
-    line-height: 1.5;
-  }
-  .dl .mono {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    letter-spacing: 0.04em;
-  }
-
-  /* ─── Masthead ────────────────────────────────────────────── */
-  .dl__masthead {
-    text-align: center;
-    margin: 14px auto 28px;
-    max-width: 920px;
-  }
-  .dl__kicker {
-    font-size: 10px;
-    letter-spacing: 0.32em;
-    color: var(--dl-magenta);
-    text-transform: uppercase;
-    margin: 0 0 14px;
-    font-weight: 700;
-  }
-  .dl__title {
-    font-size: clamp(54px, 11vw, 128px);
-    font-weight: 800;
-    margin: 0;
-    line-height: 0.92;
-    letter-spacing: -0.02em;
-  }
-  .dl__title em {
-    font-style: italic;
-    font-weight: 500;
-    color: var(--dl-magenta);
-  }
-  .dl__strap {
-    font-size: 11px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--dl-mute);
-    margin: 14px 0 18px;
-  }
-  .dl__dek {
-    font-size: clamp(15px, 1.3vw, 18px);
-    line-height: 1.55;
-    margin: 0 auto;
-    max-width: 640px;
-  }
-
-  /* ─── Rules ──────────────────────────────────────────────── */
-  .dl__rule {
-    border: 0;
-    border-top: 1px solid var(--dl-ink);
-    margin: 28px auto 24px;
-    max-width: 920px;
-    opacity: 0.5;
-  }
-  .dl__rule--ornate {
-    border: 0;
-    height: 18px;
-    text-align: center;
-    margin: 36px auto;
-    max-width: 920px;
-    position: relative;
-  }
-  .dl__rule--ornate::before {
-    content: '★  ·  ★  ·  ★  ·  ★  ·  ★';
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    letter-spacing: 1.2em;
-    color: var(--dl-gold);
-  }
-
-  /* ─── Section eyebrows ────────────────────────────────────── */
-  .dl__eyebrow {
-    font-size: 11px;
-    letter-spacing: 0.28em;
-    text-transform: uppercase;
-    color: var(--dl-magenta);
-    font-weight: 700;
-    margin: 0 0 10px;
-  }
-
-  /* ─── Tally card ──────────────────────────────────────────── */
-  .dl__tally {
-    max-width: 920px;
-    margin: 0 auto 28px;
-  }
-  .dl__tally-card {
-    padding: 24px 24px;
-    background: var(--dl-cream);
-    border: 2.5px solid var(--dl-ink);
-    box-shadow: 6px 6px 0 0 var(--dl-magenta);
-  }
-  .dl__tally-num {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-  }
-  .dl__tally-num strong {
-    font-size: clamp(44px, 7vw, 96px);
-    font-weight: 800;
-    line-height: 1;
-    letter-spacing: -0.02em;
-    color: var(--dl-ink);
-    font-variant-numeric: tabular-nums;
-  }
-  .dl__tally-of {
-    font-size: 14px;
-    color: var(--dl-mute);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-  .dl__tally-bar {
-    height: 16px;
-    background: var(--dl-deep);
-    border: 1.5px solid var(--dl-ink);
-    overflow: hidden;
-    margin-bottom: 10px;
-  }
-  .dl__tally-fill {
-    height: 100%;
-    width: 0%;
-    background: repeating-linear-gradient(
-      90deg,
-      var(--dl-magenta) 0 12px,
-      var(--dl-yellow) 12px 24px
-    );
-    transition: width 600ms cubic-bezier(0.2, 0.8, 0.4, 1);
-  }
-  .dl__tally-hint {
-    font-size: 11px;
-    color: var(--dl-mute);
-    margin: 0;
-    letter-spacing: 0.1em;
-  }
-
-  /* ─── Featured duel card ──────────────────────────────────── */
-  .dl__featured {
-    max-width: 920px;
-    margin: 0 auto 28px;
-  }
-  .dl__featured-card {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 24px;
-    padding: 22px 24px;
-    background: var(--dl-cream);
-    border: 2px solid var(--dl-ink);
-    border-left: 6px solid var(--dl-magenta);
-    align-items: center;
-  }
-  .dl__featured-title {
-    font-size: 24px;
-    font-weight: 700;
-    margin: 0 0 8px;
-    letter-spacing: -0.01em;
-  }
-  .dl__featured-title em {
-    font-style: italic;
-    color: var(--dl-magenta);
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-  }
-  .dl__featured-note {
-    font-size: 14px;
-    color: var(--dl-ink);
-    margin: 0;
-    line-height: 1.5;
-    max-width: 480px;
-  }
-  .dl__featured-cta {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  /* ─── Buttons ─────────────────────────────────────────────── */
-  .dl__btn {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 12px 18px;
-    background: var(--dl-cream);
-    border: 2.5px solid var(--dl-ink);
-    color: var(--dl-ink);
-    text-decoration: none;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 12px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    font-weight: 700;
-    box-shadow: 4px 4px 0 0 var(--dl-ink);
-    transition: transform 80ms, box-shadow 80ms;
-    min-width: 200px;
-  }
-  .dl__btn:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 5px 5px 0 0 var(--dl-ink);
-    text-decoration: none;
-  }
-  .dl__btn:active {
-    transform: translate(2px, 2px);
-    box-shadow: 1px 1px 0 0 var(--dl-ink);
-  }
-  .dl__btn--magenta {
-    background: var(--dl-magenta);
-    color: #fff5d8;
-  }
-  .dl__btn--magenta:hover { background: var(--dl-ink); color: #fff5d8; }
-  .dl__btn-sub {
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: lowercase;
-    opacity: 0.75;
-    font-weight: 500;
-  }
-
-  /* ─── Live pulse ──────────────────────────────────────────── */
-  .dl__pulse {
-    max-width: 920px;
-    margin: 0 auto 28px;
-  }
-  .dl__pulse-list {
-    list-style: none;
-    margin: 0;
-    padding: 12px 14px;
-    background: var(--dl-cream);
-    border: 1.5px solid var(--dl-ink);
-    min-height: 80px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .dl__pulse-row {
-    display: grid;
-    grid-template-columns: 80px 22px 1fr auto;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    color: var(--dl-ink);
-    padding: 4px 0;
-    border-bottom: 1px dotted rgba(17, 16, 12, 0.1);
-  }
-  .dl__pulse-row:last-child { border-bottom: 0; }
-  .dl__pulse-time { color: var(--dl-mute); letter-spacing: 0.1em; }
-  .dl__pulse-noun {
-    width: 22px;
-    height: 22px;
-    border-radius: 4px;
-    image-rendering: pixelated;
-    background: #fff;
-    border: 1px solid var(--dl-ink);
-  }
-  .dl__pulse-type {
-    color: var(--dl-magenta);
-    font-weight: 700;
-    letter-spacing: 0.12em;
-  }
-  .dl__pulse-pid {
-    color: var(--dl-mute);
-    text-align: right;
-    letter-spacing: 0.06em;
-  }
-  .dl__pulse-empty {
-    font-size: 11px;
-    color: var(--dl-mute);
-    text-align: center;
-    padding: 18px;
-    letter-spacing: 0.16em;
-  }
-
-  /* ─── Top 12 leaderboard ──────────────────────────────────── */
-  .dl__top {
-    max-width: 920px;
-    margin: 0 auto 28px;
-  }
-  .dl__top-list {
-    list-style: none;
-    margin: 0 0 12px;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .dl__top-row {
-    display: grid;
-    grid-template-columns: 36px 28px 44px 1fr 80px auto;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    background: var(--dl-cream);
-    border: 1.5px solid var(--dl-ink);
-    transition: background 120ms;
-  }
-  .dl__top-row[data-rank="1"] { background: linear-gradient(180deg, #fffaef 0%, rgba(201, 152, 42, 0.18) 100%); border-color: var(--dl-gold); border-width: 2.5px; }
-  .dl__top-row[data-rank="2"] { background: linear-gradient(180deg, #fffaef 0%, rgba(180, 180, 180, 0.18) 100%); }
-  .dl__top-row[data-rank="3"] { background: linear-gradient(180deg, #fffaef 0%, rgba(176, 119, 27, 0.14) 100%); }
-  .dl__top-rank {
-    font-size: 14px;
-    font-weight: 800;
-    color: var(--dl-ink);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-  .dl__top-medal { font-size: 18px; }
-  .dl__top-noun {
-    width: 44px;
-    height: 44px;
-    border: 2px solid var(--dl-ink);
-    background: #fff;
-    image-rendering: pixelated;
-    border-radius: 4px;
-  }
-  .dl__top-name {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--dl-ink);
-    letter-spacing: -0.01em;
-  }
-  .dl__top-hash {
-    font-size: 9px;
-    color: var(--dl-mute);
-    letter-spacing: 0.18em;
-  }
-  .dl__top-count {
-    font-size: 16px;
-    font-weight: 800;
-    color: var(--dl-magenta);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-  .dl__top-empty {
-    font-size: 12px;
-    color: var(--dl-mute);
-    text-align: center;
-    padding: 18px;
-  }
-  .dl__top-foot {
-    font-size: 10px;
-    color: var(--dl-mute);
-    letter-spacing: 0.1em;
-    text-align: center;
-    margin: 0;
-  }
-
-  /* ─── Your lane ──────────────────────────────────────────── */
-  .dl__yours {
-    max-width: 920px;
-    margin: 0 auto 28px;
-  }
-  .dl__yours-card {
-    display: grid;
-    grid-template-columns: 100px 1fr;
-    gap: 18px;
-    padding: 18px 22px;
-    background: var(--dl-cream);
-    border: 2px solid var(--dl-ink);
-    box-shadow: 4px 4px 0 0 var(--dl-cyan);
-    align-items: center;
-  }
-  .dl__yours-noun {
-    width: 96px;
-    height: 96px;
-    border: 2.5px solid var(--dl-ink);
-    background: #fff;
-    image-rendering: pixelated;
-    border-radius: 6px;
-  }
-  .dl__yours-tag {
-    font-size: 10px;
-    letter-spacing: 0.24em;
-    color: var(--dl-mute);
-    margin: 0 0 6px;
-    text-transform: uppercase;
-  }
-  .dl__yours-tag strong { color: var(--dl-ink); }
-  .dl__yours-stat {
-    margin: 0 0 6px;
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-  }
-  .dl__yours-stat strong {
-    font-size: 36px;
-    font-weight: 800;
-    color: var(--dl-magenta);
-    font-variant-numeric: tabular-nums;
-  }
-  .dl__yours-of {
-    font-size: 11px;
-    color: var(--dl-mute);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-  .dl__yours-rank {
-    font-size: 11px;
-    color: var(--dl-ink);
-    margin: 0;
-    letter-spacing: 0.1em;
-  }
-
-  /* ─── Daily challenge ─────────────────────────────────────── */
-  .dl__challenge {
-    max-width: 920px;
-    margin: 0 auto 28px;
-  }
-  .dl__challenge-card {
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 14px;
-    align-items: center;
-    padding: 16px 22px;
-    background: var(--dl-yellow);
-    border: 2px solid var(--dl-ink);
-    box-shadow: 4px 4px 0 0 var(--dl-ink);
-  }
-  .dl__challenge-glyph {
-    font-size: 44px;
-    line-height: 1;
-  }
-  .dl__challenge-text {
-    font-size: 15px;
-    line-height: 1.55;
-    margin: 0;
-    color: var(--dl-ink);
-  }
-
-  /* ─── Ceremony hall ──────────────────────────────────────── */
-  .dl__ceremony {
-    max-width: 720px;
-    margin: 0 auto 24px;
-    text-align: center;
-  }
-  .dl__ceremony-body {
-    font-size: 15px;
-    line-height: 1.6;
-    color: var(--dl-ink);
-    margin: 8px 0 12px;
-  }
-  .dl__ceremony-note {
-    font-size: 10px;
-    color: var(--dl-mute);
-    letter-spacing: 0.16em;
-    margin: 0;
-  }
-
-  /* ─── Foot ────────────────────────────────────────────────── */
-  .dl__foot {
-    max-width: 920px;
-    margin: 36px auto 0;
-    padding: 14px 0;
-    border-top: 2px solid var(--dl-ink);
-    text-align: center;
-  }
-  .dl__foot p {
-    font-size: 10px;
-    color: var(--dl-mute);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    margin: 0;
-  }
-  .dl__foot a {
-    color: var(--dl-magenta);
-    text-decoration: none;
-    margin-left: 6px;
-  }
-
-  /* ─── Mobile reflows ──────────────────────────────────────── */
-  @media (max-width: 720px) {
-    .dl__featured-card { grid-template-columns: 1fr; gap: 16px; }
-    .dl__top-row {
-      grid-template-columns: 28px 22px 36px 1fr auto;
-      gap: 8px;
-      padding: 8px 10px;
-    }
-    .dl__top-hash { display: none; }
-    .dl__top-noun { width: 36px; height: 36px; }
-    .dl__top-name { font-size: 14px; }
-    .dl__pulse-row { grid-template-columns: 64px 22px 1fr auto; font-size: 10px; }
-    .dl__yours-card { grid-template-columns: 72px 1fr; gap: 12px; padding: 14px 16px; }
-    .dl__yours-noun { width: 72px; height: 72px; }
-    .dl__yours-stat strong { font-size: 28px; }
-  }
-  @media (max-width: 480px) {
-    .dl__challenge-card { grid-template-columns: 44px 1fr; }
-    .dl__challenge-glyph { font-size: 36px; }
-    .dl { padding-left: 14px; padding-right: 14px; }
-  }
-</style>
+      // ---- boot -----------------------------------------------------------
+      window.addEventListener('pointcast:drum', () => setTimeout(loadLeague, 900));
+      loadLeague(); loadLive(); startSignal();
+      setInterval(() => { if (document.visibilityState === 'visible') { loadLeague(); loadLive(); } }, 15000);
+      const fromHash = location.hash.slice(1);
+      selectTab(tabs.some((t) => t.dataset.tab === fromHash) ? fromHash : 'knock-knock');
+      addEventListener('hashchange', () => {
+        const id = location.hash.slice(1);
+        if (tabs.some((t) => t.dataset.tab === id) && id !== activePanel()) selectTab(id);
+      });
+    })();
+  </script>
+</BlockLayout>
