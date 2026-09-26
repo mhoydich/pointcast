@@ -1,0 +1,553 @@
+---
+/**
+ * /keyboard/typist — Melody Typist, typing practice that sounds good when
+ * you type well.
+ *
+ * A short public-domain passage (proverbs, Aesop morals, Thoreau, Emerson,
+ * Whitman, Dickinson, the Preamble) is shown in Georgia with the caret ahead
+ * of you. Every correct letter rings a note from /js/keyboard-voice.js;
+ * finishing a word lands a small resolving figure, finishing a sentence
+ * plays a cadence. A wrong letter plays a soft muted thock and turns coral.
+ *
+ * WPM, accuracy and a clean-word streak are tracked live. Personal bests are
+ * kept per passage length in this browser only. At the end of a run, only a
+ * sorted bag of the notes you rang (never the order, never the words) goes
+ * to the town's keyboard signal.
+ */
+const title = 'Melody Typist · PointCast';
+const description =
+  'Typing practice that sounds good when you type well. A daily public-domain passage, a note for every correct letter, a chord when you finish a word. WPM, accuracy and a clean streak, kept in this browser.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/typist">
+<meta property="og:title" content="Melody Typist">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;--coral:#e2795f;--mood:#dfc48d;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:11px 16px;cursor:pointer;font-size:11px;min-height:44px}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+main{display:flex;justify-content:center;padding:26px 20px 60px}
+.page{width:min(820px,100%);display:flex;flex-direction:column;gap:18px}
+.source-bar{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.src-buttons,.moods{display:flex;gap:6px;flex-wrap:wrap}
+.src-buttons button[aria-pressed=true]{background:#2c3e2b;color:var(--ink);border-color:#688777}
+.own-panel{display:flex;gap:8px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.own-panel textarea{flex:1;min-width:200px;min-height:70px;background:#0d1711;border:1px solid var(--line);border-radius:10px;color:var(--ink);font:15px Georgia,serif;padding:10px;resize:vertical}
+.attribution{margin:0;font-family:Georgia,serif;font-style:italic;font-size:13px;color:var(--dim)}
+.attribution b{font-style:normal;color:var(--gold);font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-right:8px}
+.passage-wrap{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px 26px;min-height:150px}
+.passage-wrap.focused{border-color:var(--gold)}
+.passage{font-family:Georgia,serif;font-size:clamp(19px,3.4vw,26px);line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.passage .dim{color:#4f6452}
+.passage .ink{color:var(--ink)}
+.passage .err{color:var(--coral);text-decoration:underline wavy var(--coral)}
+.passage .caret{position:relative}
+.passage .caret:after{content:'';position:absolute;left:-1px;top:1px;bottom:1px;width:2px;background:var(--gold);animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.instrument{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;resize:none;caret-color:transparent}
+.hint{position:absolute;left:26px;bottom:10px;right:26px;margin:0;font-size:11px;color:var(--dim);pointer-events:none}
+.passage-wrap.focused .hint,.passage-wrap.started .hint{display:none}
+.stats{display:grid;grid-template-columns:repeat(3,auto) 1fr;gap:18px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 18px}
+.stats>div{display:flex;flex-direction:column;gap:3px}
+.stats .label{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.stats .val{font-family:Georgia,serif;font-size:24px;font-variant-numeric:tabular-nums}
+.spark{width:100%;height:36px}
+.bests{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--dim)}
+.bests span b{color:var(--gold);font-weight:normal}
+.privacy{font-size:10px;line-height:1.7;color:#a0ad95;margin:0}
+.end{position:fixed;inset:0;background:#0a100cd8;display:flex;align-items:center;justify-content:center;padding:20px;z-index:5}
+.end-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:28px;max-width:420px;width:100%;text-align:center}
+.end-card h2{font-family:Georgia,serif;font-weight:normal;font-size:26px;margin:0 0 10px}
+.end-card p{font-size:13px;color:var(--dim);line-height:1.7;margin:0 0 6px}
+.end-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:16px}
+[hidden]{display:none!important}
+@media(max-width:600px){header{padding:14px}main{padding:18px 12px 40px}.passage-wrap{padding:20px 16px}.stats{grid-template-columns:repeat(3,1fr);padding:12px}.spark{grid-column:1/-1}.brand small{margin-left:0}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}.passage .caret:after{animation:none;opacity:1}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Melody Typist<small>Typing that sounds good when you're right</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="sound" aria-pressed="true">♪ Sound on</button>
+    <button type="button" id="stopErr" aria-pressed="true" title="When on, a mistake blocks you until you backspace it out">⛔ Stop on error</button>
+    <button type="button" id="share" aria-pressed="true" title="At the end of a run, sends a sorted bag of your notes (never the words, never the order) to the town chord on /keyboard-signal">✳ Town chord on</button>
+  </div>
+</header>
+
+<main>
+  <div class="page">
+    <div class="source-bar">
+      <div class="src-buttons" role="group" aria-label="Passage source">
+        <button type="button" data-src="today" aria-pressed="true">Today's passage</button>
+        <button type="button" data-src="random" aria-pressed="false">Random</button>
+        <button type="button" data-src="own" aria-pressed="false">Paste your own</button>
+      </div>
+      <div class="moods" id="moods" role="group" aria-label="Mood"></div>
+    </div>
+
+    <div class="own-panel" id="ownPanel" hidden>
+      <textarea id="ownText" maxlength="400" placeholder="Paste a short passage of your own, up to 400 characters…"></textarea>
+      <button type="button" id="useOwn">Use this passage</button>
+    </div>
+
+    <p class="attribution" id="attribution">—</p>
+
+    <div class="passage-wrap" id="passageWrap" tabindex="-1">
+      <div class="passage" id="passage" aria-live="off"></div>
+      <textarea id="instrument" class="instrument" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Type the passage shown above"></textarea>
+      <p class="hint" id="hint">Tap here (or click, then type). Correct letters ring a note; a miss plays a soft thock and turns coral.</p>
+    </div>
+
+    <div class="stats">
+      <div><span class="label">WPM</span><span class="val" id="wpm">0</span></div>
+      <div><span class="label">Accuracy</span><span class="val" id="acc">100%</span></div>
+      <div><span class="label">Clean streak</span><span class="val" id="streak">0</span></div>
+      <canvas class="spark" id="spark" aria-label="Words per minute over the run"></canvas>
+    </div>
+
+    <div class="bests" id="bests"></div>
+    <p class="privacy">Your typing never leaves this browser. Only a sorted bag of the notes you rang — never their order, never the words — reaches the town chord, and that can be switched off above.</p>
+  </div>
+</main>
+
+<div class="end" id="end" hidden role="dialog" aria-modal="true" aria-label="Run complete">
+  <div class="end-card">
+    <h2>Nice typing.</h2>
+    <p id="endStats">—</p>
+    <p id="endBest"></p>
+    <div class="end-actions">
+      <button type="button" id="replay">▶ Melody of your run</button>
+      <button type="button" id="again">↻ Again</button>
+      <button type="button" id="closeEnd">Close</button>
+    </div>
+  </div>
+</div>
+
+<script is:inline src="/js/keyboard-voice.js"></script>
+<script is:inline src="/keyboard.js" data-app="keyboard-typist" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var KEY = 'pc-typist-v1';
+  var V = window.KeyVoice;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---- passages: public domain, 1-3 sentences each ------------------------
+  var PASSAGES = [
+    { text: 'A stitch in time saves nine.', source: 'Proverb' },
+    { text: 'Actions speak louder than words.', source: 'Proverb' },
+    { text: 'The early bird catches the worm.', source: 'Proverb' },
+    { text: 'Practice makes perfect.', source: 'Proverb' },
+    { text: 'Honesty is the best policy.', source: 'Proverb' },
+    { text: 'Where there is a will, there is a way.', source: 'Proverb' },
+    { text: 'A penny saved is a penny earned.', source: 'Proverb' },
+    { text: 'Better late than never.', source: 'Proverb' },
+    { text: 'Birds of a feather flock together.', source: 'Proverb' },
+    { text: 'Every cloud has a silver lining.', source: 'Proverb' },
+    { text: 'Slow and steady wins the race.', source: 'Aesop, The Tortoise and the Hare' },
+    { text: 'It is best to prepare for the days of necessity.', source: 'Aesop, The Ant and the Grasshopper' },
+    { text: 'There is no believing a liar, even when he speaks the truth.', source: 'Aesop, The Boy Who Cried Wolf' },
+    { text: 'It is easy to despise what you cannot get.', source: 'Aesop, The Fox and the Grapes' },
+    { text: 'No act of kindness, however small, is ever wasted.', source: 'Aesop, The Lion and the Mouse' },
+    { text: 'Kindness affects more than severity.', source: 'Aesop, The North Wind and the Sun' },
+    { text: 'Necessity is the mother of invention.', source: 'Aesop, The Crow and the Pitcher' },
+    { text: 'Persuasion is better than force.', source: 'Aesop' },
+    { text: 'I went to the woods because I wished to live deliberately.', source: 'Thoreau, Walden' },
+    { text: 'Simplicity, simplicity, simplicity!', source: 'Thoreau, Walden' },
+    { text: 'The mass of men lead lives of quiet desperation.', source: 'Thoreau, Walden' },
+    { text: 'To be great is to be misunderstood.', source: 'Emerson, Self-Reliance' },
+    { text: 'Trust thyself: every heart vibrates to that iron string.', source: 'Emerson, Self-Reliance' },
+    { text: 'The eye is the first circle; the horizon which it forms is the second.', source: 'Emerson, Nature' },
+    { text: 'I contain multitudes.', source: 'Whitman, Song of Myself' },
+    { text: 'I loafe and invite my soul.', source: 'Whitman, Song of Myself' },
+    { text: "The ship has weather'd every rack, the prize we sought is won.", source: 'Whitman, O Captain! My Captain!' },
+    { text: 'Hope is the thing with feathers that perches in the soul.', source: 'Dickinson' },
+    { text: 'I dwell in Possibility, a fairer house than Prose.', source: 'Dickinson' },
+    { text: 'Because I could not stop for Death, he kindly stopped for me.', source: 'Dickinson' },
+    { text: 'We the People of the United States, in Order to form a more perfect Union.', source: 'US Constitution, Preamble' },
+    { text: 'Establish Justice, insure domestic Tranquility, provide for the common defence.', source: 'US Constitution, Preamble' },
+    { text: 'Promote the general Welfare, and secure the Blessings of Liberty to ourselves and our Posterity.', source: 'US Constitution, Preamble' },
+  ];
+
+  // ---- storage --------------------------------------------------------------
+  var store = { bests: {}, prefs: { sound: true, stop: true, share: true, mood: 'bright' } };
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) { var parsed = JSON.parse(raw); if (parsed) store = { bests: parsed.bests || {}, prefs: Object.assign({ sound: true, stop: true, share: true, mood: 'bright' }, parsed.prefs || {}) }; }
+  } catch (e) { /* private mode */ }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* storage full or blocked */ } }
+  function bucket(len) { return len < 80 ? 'short' : len < 160 ? 'medium' : 'long'; }
+  function bucketLabel(b) { return b === 'short' ? 'short passages' : b === 'medium' ? 'medium passages' : 'long passages'; }
+
+  // ---- mood picker ------------------------------------------------------------
+  var mood = V.moods.some(function (m) { return m.id === store.prefs.mood; }) ? store.prefs.mood : V.moods[0].id;
+  V.moods.forEach(function (m) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.mood = m.id;
+    b.textContent = m.emoji + ' ' + m.label;
+    b.setAttribute('aria-pressed', String(m.id === mood));
+    b.addEventListener('click', function () {
+      mood = m.id;
+      store.prefs.mood = mood;
+      save();
+      Array.prototype.forEach.call($('moods').children, function (x) { x.setAttribute('aria-pressed', String(x.dataset.mood === mood)); });
+      document.documentElement.style.setProperty('--mood', m.color);
+      if (store.prefs.sound) [0, 1, 2].forEach(function (i) { V.play(m.root + m.chord[i % m.chord.length], mood, V.ctx().currentTime + i * 0.09); });
+    });
+    $('moods').appendChild(b);
+  });
+  document.documentElement.style.setProperty('--mood', V.mood(mood).color);
+
+  // ---- run state --------------------------------------------------------------
+  var passage = '';
+  var finalState = [];
+  var pos = 0;
+  var errorAt = false;
+  var wordHasError = false;
+  var cleanStreak = 0;
+  var totalKeystrokes = 0;
+  var correctKeystrokes = 0;
+  var correctChars = 0;
+  var startTime = null;
+  var lastNoteAt = 0;
+  var prevNote = null;
+  var lastWordNote = null;
+  var noteLog = [];
+  var wpmSamples = [];
+  var doneFlag = false;
+  var currentBucket = 'short';
+
+  function pick(list, avoidText) {
+    if (list.length < 2) return list[0];
+    var p;
+    do { p = list[Math.floor(Math.random() * list.length)]; } while (p.text === avoidText);
+    return p;
+  }
+  function dayIndex() {
+    var d = new Date();
+    return (d.getFullYear() * 372 + d.getMonth() * 31 + d.getDate()) % PASSAGES.length;
+  }
+
+  function loadPassage(p, srcKey) {
+    passage = p.text;
+    currentBucket = bucket(passage.length);
+    finalState = new Array(passage.length).fill(null);
+    pos = 0; errorAt = false; wordHasError = false; cleanStreak = 0;
+    totalKeystrokes = 0; correctKeystrokes = 0; correctChars = 0;
+    startTime = null; lastNoteAt = 0; prevNote = null; lastWordNote = null;
+    noteLog = []; wpmSamples = [];
+    doneFlag = false;
+    $('attribution').innerHTML = '';
+    var b = document.createElement('b'); b.textContent = p.source;
+    $('attribution').appendChild(b);
+    $('attribution').appendChild(document.createTextNode(bucketLabel(currentBucket) + ' · ' + passage.length + ' characters'));
+    $('end').hidden = true;
+    $('passageWrap').classList.remove('started', 'focused');
+    if (srcKey) {
+      document.querySelectorAll('.src-buttons button').forEach(function (btn) { btn.setAttribute('aria-pressed', String(btn.dataset.src === srcKey)); });
+    }
+    renderPassage();
+    renderBests();
+    updateStats();
+    drawSpark();
+  }
+
+  function renderPassage() {
+    var el = $('passage');
+    el.innerHTML = '';
+    for (var i = 0; i < passage.length; i++) {
+      var span = document.createElement('span');
+      span.textContent = passage[i];
+      var cls;
+      if (i < pos) cls = finalState[i] === 'wrong' ? 'err' : 'ink';
+      else if (i === pos) cls = (errorAt ? 'err caret' : 'dim caret');
+      else cls = 'dim';
+      span.className = cls;
+      el.appendChild(span);
+    }
+    if (pos >= passage.length) {
+      var done = document.createElement('span');
+      done.className = 'ink caret';
+      el.appendChild(done);
+    }
+  }
+
+  // ---- sound ------------------------------------------------------------------
+  function nearestChordTone(m, midi) {
+    var oct = Math.floor((midi - m.root) / 12);
+    return m.root + oct * 12 + m.chord[1 % m.chord.length];
+  }
+  function playThock() {
+    if (!store.prefs.sound) return;
+    try {
+      var c = V.ctx();
+      var t = c.currentTime;
+      var buf = c.createBuffer(1, Math.floor(c.sampleRate * 0.08), c.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4);
+      var src = c.createBufferSource();
+      src.buffer = buf;
+      var lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 420;
+      var g = c.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.16, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+      src.connect(lp).connect(g).connect(c.destination);
+      src.start(t);
+      src.stop(t + 0.13);
+    } catch (e) { /* audio is a nicety */ }
+  }
+  function scheduleCadence() {
+    if (!store.prefs.sound) return;
+    var m = V.mood(mood);
+    var tones = [m.root, m.root + (m.chord[1] || 0), m.root + (m.chord[2] != null ? m.chord[2] : m.chord[0] + 12)];
+    tones.forEach(function (n, i) { setTimeout(function () { V.play(n, mood); }, 60 + i * 80); });
+  }
+  function onWordEnd() {
+    if (!wordHasError) cleanStreak++; else cleanStreak = 0;
+    wordHasError = false;
+    if (lastWordNote != null && store.prefs.sound) {
+      var m = V.mood(mood);
+      var tone = nearestChordTone(m, lastWordNote);
+      setTimeout(function () { V.play(tone, mood); }, 90);
+    }
+    lastWordNote = null;
+    pushWpmSample();
+  }
+
+  // ---- typing ------------------------------------------------------------------
+  function handleCorrectChar(i, ch) {
+    var midi = V.noteFor(ch, mood, prevNote);
+    if (midi != null) {
+      var now = performance.now();
+      var dt = lastNoteAt ? Math.min(600, now - lastNoteAt) : 0;
+      lastNoteAt = now;
+      noteLog.push({ idx: i, midi: midi, dt: dt });
+      prevNote = midi;
+      lastWordNote = midi;
+      if (store.prefs.sound) V.play(midi, mood);
+    }
+    if (startTime == null) startTime = performance.now();
+    if (ch === '.' || ch === '!' || ch === '?') scheduleCadence();
+    if (ch === ' ' || i === passage.length - 1) onWordEnd();
+  }
+
+  function processKey(ch) {
+    if (doneFlag || pos >= passage.length) return;
+    if (errorAt && store.prefs.stop) return; // blocked until backspace
+    var expected = passage[pos];
+    totalKeystrokes++;
+    if (ch === expected) {
+      correctKeystrokes++;
+      correctChars++;
+      finalState[pos] = 'correct';
+      handleCorrectChar(pos, ch);
+      pos++;
+      errorAt = false;
+    } else {
+      wordHasError = true;
+      playThock();
+      if (store.prefs.stop) {
+        errorAt = true;
+      } else {
+        finalState[pos] = 'wrong';
+        if (startTime == null) startTime = performance.now();
+        if (expected === ' ' || pos === passage.length - 1) onWordEnd();
+        pos++;
+        errorAt = false;
+      }
+    }
+    renderPassage();
+    updateStats();
+    if (pos >= passage.length) finishRun();
+  }
+
+  function handleBackspace() {
+    if (doneFlag) return;
+    if (errorAt) { errorAt = false; renderPassage(); return; }
+    if (pos <= 0) return;
+    pos--;
+    if (finalState[pos] === 'correct') {
+      correctChars = Math.max(0, correctChars - 1);
+      if (noteLog.length && noteLog[noteLog.length - 1].idx === pos) noteLog.pop();
+    }
+    finalState[pos] = null;
+    // best-effort: a word currently mid-typing is no longer flagged just by this undo
+    wordHasError = false;
+    for (var i = pos; i >= 0 && passage[i] !== ' '; i--) if (finalState[i] === 'wrong') wordHasError = true;
+    renderPassage();
+    updateStats();
+  }
+
+  // ---- stats --------------------------------------------------------------------
+  function currentWpm() {
+    if (startTime == null) return 0;
+    var minutes = (performance.now() - startTime) / 60000;
+    if (minutes <= 0) return 0;
+    return Math.round((correctChars / 5) / minutes);
+  }
+  function pushWpmSample() {
+    wpmSamples.push(currentWpm());
+    if (wpmSamples.length > 200) wpmSamples.shift();
+    drawSpark();
+  }
+  function updateStats() {
+    $('wpm').textContent = String(currentWpm());
+    $('acc').textContent = (totalKeystrokes ? Math.round((correctKeystrokes / totalKeystrokes) * 100) : 100) + '%';
+    $('streak').textContent = String(cleanStreak);
+  }
+  function drawSpark() {
+    var canvas = $('spark');
+    var dpr = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth || 200, h = canvas.clientHeight || 36;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    var g = canvas.getContext('2d');
+    g.scale(dpr, dpr);
+    g.clearRect(0, 0, w, h);
+    if (wpmSamples.length < 2) return;
+    var max = Math.max.apply(null, wpmSamples.concat([1]));
+    g.strokeStyle = V.mood(mood).color;
+    g.lineWidth = 1.5;
+    g.beginPath();
+    wpmSamples.forEach(function (v, i) {
+      var x = i / (wpmSamples.length - 1) * (w - 4) + 2;
+      var y = h - 3 - (v / max) * (h - 6);
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    });
+    g.stroke();
+  }
+
+  // ---- bests --------------------------------------------------------------------
+  function renderBests() {
+    var b = store.bests[currentBucket];
+    var el = $('bests');
+    if (!b) { el.innerHTML = '<span>No best yet for ' + bucketLabel(currentBucket) + '. This run sets one.</span>'; return; }
+    el.innerHTML = '<span>Best for ' + bucketLabel(currentBucket) + ': <b>' + b.wpm + ' WPM</b> · ' + b.acc + '% accuracy</span>';
+  }
+
+  // ---- finish + replay ------------------------------------------------------------
+  function finishRun() {
+    doneFlag = true;
+    $('passageWrap').classList.remove('focused');
+    var finalWpm = currentWpm();
+    var finalAcc = totalKeystrokes ? Math.round((correctKeystrokes / totalKeystrokes) * 100) : 100;
+    var prevBest = store.bests[currentBucket];
+    var isBest = !prevBest || finalWpm > prevBest.wpm;
+    if (isBest) store.bests[currentBucket] = { wpm: finalWpm, acc: finalAcc, at: Date.now() };
+    save();
+    renderBests();
+    $('endStats').textContent = finalWpm + ' WPM · ' + finalAcc + '% accuracy · best clean streak ' + cleanStreak + ' words.';
+    $('endBest').textContent = isBest ? 'That is a new best for ' + bucketLabel(currentBucket) + '.' : 'Your best for ' + bucketLabel(currentBucket) + ' is ' + prevBest.wpm + ' WPM.';
+    $('end').hidden = false;
+    if (store.prefs.share && noteLog.length && window.PointCastKeyboard) {
+      var bag = noteLog.map(function (n) { return n.midi; }).slice(0, 64).sort(function (a, c) { return a - c; });
+      window.PointCastKeyboard.note(bag, null, { sound: false });
+    }
+  }
+  var replayTimers = [];
+  function stopReplay() { replayTimers.forEach(clearTimeout); replayTimers = []; }
+  $('replay').addEventListener('click', function () {
+    stopReplay();
+    var t = 0;
+    noteLog.forEach(function (n, i) {
+      t += i === 0 ? 0 : n.dt;
+      replayTimers.push(setTimeout(function () { V.play(n.midi, mood); }, t));
+    });
+  });
+  $('again').addEventListener('click', function () { stopReplay(); loadPassage({ text: passage, source: $('attribution').firstChild ? $('attribution').firstChild.textContent : 'Passage' }); focusInstrument(); });
+  $('closeEnd').addEventListener('click', function () { $('end').hidden = true; });
+
+  // ---- source picker --------------------------------------------------------------
+  document.querySelectorAll('.src-buttons button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      stopReplay();
+      var src = btn.dataset.src;
+      $('ownPanel').hidden = src !== 'own';
+      if (src === 'today') loadPassage(PASSAGES[dayIndex()], 'today');
+      else if (src === 'random') loadPassage(pick(PASSAGES, passage), 'random');
+      else { $('ownText').focus(); document.querySelectorAll('.src-buttons button').forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); }); }
+    });
+  });
+  $('useOwn').addEventListener('click', function () {
+    var text = $('ownText').value.replace(/[\r\t]/g, ' ').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400);
+    if (text.length < 8) { $('ownText').focus(); return; }
+    loadPassage({ text: text, source: 'Your own passage' }, 'own');
+    focusInstrument();
+  });
+
+  // ---- the instrument (keyboard + touch) -------------------------------------------
+  var ta = $('instrument');
+  var FILLER = '​';
+  function resetTA() {
+    ta.value = FILLER;
+    try { ta.setSelectionRange(FILLER.length, FILLER.length); } catch (e) { /* ignore */ }
+  }
+  function focusInstrument() { ta.focus(); resetTA(); }
+  $('passageWrap').addEventListener('pointerdown', function () { focusInstrument(); });
+  ta.addEventListener('focus', function () { $('passageWrap').classList.add('focused'); });
+  ta.addEventListener('blur', function () { $('passageWrap').classList.remove('focused'); });
+  ta.addEventListener('input', function (ev) {
+    var it = ev.inputType;
+    if (it === 'insertText' || it === 'insertCompositionText' || it === 'insertFromPaste') {
+      var data = ev.data || '';
+      $('passageWrap').classList.add('started');
+      for (var i = 0; i < data.length; i++) if (data[i] !== FILLER) processKey(data[i]);
+    } else if (it === 'deleteContentBackward') {
+      handleBackspace();
+    }
+    resetTA();
+  });
+
+  // ---- toggles ----------------------------------------------------------------------
+  function paintToggles() {
+    $('sound').setAttribute('aria-pressed', String(store.prefs.sound));
+    $('sound').textContent = store.prefs.sound ? '♪ Sound on' : '♪ Sound off';
+    $('stopErr').setAttribute('aria-pressed', String(store.prefs.stop));
+    $('stopErr').textContent = store.prefs.stop ? '⛔ Stop on error' : '➡ Skip on error';
+    $('share').setAttribute('aria-pressed', String(store.prefs.share));
+    $('share').textContent = store.prefs.share ? '✳ Town chord on' : '✳ Town chord off';
+  }
+  $('sound').addEventListener('click', function () { store.prefs.sound = !store.prefs.sound; paintToggles(); save(); });
+  $('stopErr').addEventListener('click', function () { store.prefs.stop = !store.prefs.stop; errorAt = false; renderPassage(); paintToggles(); save(); });
+  $('share').addEventListener('click', function () { store.prefs.share = !store.prefs.share; paintToggles(); save(); });
+
+  addEventListener('resize', drawSpark);
+  addEventListener('pagehide', function () { if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); });
+
+  paintToggles();
+  loadPassage(PASSAGES[dayIndex()], 'today');
+})();
+</script>
+</body>
+</html>
