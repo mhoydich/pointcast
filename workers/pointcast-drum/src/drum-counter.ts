@@ -28,6 +28,7 @@ const LIVE_WINDOW_MS = 120_000;
 export const LEAGUE_DAILY_CAP = 5000;
 export const LEAGUE_SEASON = { id: "S0", name: "Season 0 · open trial", start: "2026-09-26" };
 const LEAGUE_ROWS = 50;
+const USER_KEY_RE = /^[a-f0-9]{24}$/;
 
 function slug(raw: unknown, max: number): string {
   if (typeof raw !== "string") return "";
@@ -116,6 +117,12 @@ export class DrumCounter extends DurableObject<Env> {
           last_at INTEGER NOT NULL,
           PRIMARY KEY (day, kind, app)
         );
+        CREATE TABLE IF NOT EXISTS drum_user_totals (
+          user_key TEXT PRIMARY KEY,
+          total INTEGER NOT NULL,
+          first_at INTEGER NOT NULL,
+          last_at INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS drum_signal_recent (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           at INTEGER NOT NULL,
@@ -143,13 +150,18 @@ export class DrumCounter extends DurableObject<Env> {
       if (url.searchParams.get("signal") === "1") return json(await this.signalSummary());
       if (url.searchParams.get("live") === "1") return json(await this.live());
       if (url.searchParams.get("league") === "1") return json(this.league(url.searchParams.get("week")));
+      const userKey = url.searchParams.get("user");
+      if (userKey !== null) {
+        if (!USER_KEY_RE.test(userKey)) return json({ ok: false, reason: "bad-user" }, { status: 400 });
+        return json(this.userTotal(userKey));
+      }
       const globalTotal = await this.globalTotal();
       const yourTotal = session ? await this.sessionTotal(session) : 0;
       return json({ globalTotal, yourTotal });
     }
     if (request.method !== "POST") return json({ ok: false, reason: "method-not-allowed" }, { status: 405 });
 
-    let body: { delta?: unknown; leaderboardHash?: unknown; nounId?: unknown; source?: unknown };
+    let body: { delta?: unknown; leaderboardHash?: unknown; nounId?: unknown; source?: unknown; userKey?: unknown };
     try {
       body = await request.json();
     } catch {
@@ -179,6 +191,19 @@ export class DrumCounter extends DurableObject<Env> {
     // the lagging mirror, remains authoritative from its very first tap.
     this.setMeta("global", nextGlobal);
     if (source) this.recordSignal(source, delta, Date.now());
+    // A signed-in PointCast member: credit their account across devices. The
+    // key is an opaque hash of the user id, derived by the Pages function.
+    const userKey = typeof body.userKey === "string" && USER_KEY_RE.test(body.userKey) ? body.userKey : null;
+    let memberTotal: number | undefined;
+    if (userKey) {
+      const now = Date.now();
+      this.ctx.storage.sql.exec(
+        `INSERT INTO drum_user_totals (user_key, total, first_at, last_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_key) DO UPDATE SET total = total + excluded.total, last_at = excluded.last_at`,
+        userKey, delta, now, now,
+      );
+      memberTotal = this.userTotal(userKey).total;
+    }
     if (session) this.ctx.storage.sql.exec(
       `UPDATE drum_counter_sessions
        SET total = ?, dirty = 1, leaderboard_hash = COALESCE(?, leaderboard_hash), noun_id = COALESCE(?, noun_id), last_at = ?
@@ -189,7 +214,11 @@ export class DrumCounter extends DurableObject<Env> {
     this.setMeta("pending", pending);
     if (pending >= FLUSH_AFTER_TAPS) await this.flush();
     else await this.ctx.storage.setAlarm(Date.now() + FLUSH_AFTER_MS);
-    return json({ ok: true, globalTotal: nextGlobal, yourTotal: nextSession, ...(source ? { source } : {}) });
+    return json({
+      ok: true, globalTotal: nextGlobal, yourTotal: nextSession,
+      ...(source ? { source } : {}),
+      ...(memberTotal !== undefined ? { memberTotal } : {}),
+    });
   }
 
   private recordSignal(source: SignalSource, beats: number, now: number): void {
@@ -354,6 +383,17 @@ export class DrumCounter extends DurableObject<Env> {
       week: { number: end < seasonStart ? 0 : weekNumber, start, end, current: now >= monday && now < monday + 7 * DAY },
       standings: rows.map((row, i) => ({ rank: i + 1, ...row })),
     };
+  }
+
+  private userTotal(userKey: string) {
+    const sql = this.ctx.storage.sql;
+    const row = sql.exec<{ total: number; firstAt: number; lastAt: number }>(
+      "SELECT total, first_at AS firstAt, last_at AS lastAt FROM drum_user_totals WHERE user_key = ?", userKey,
+    ).toArray()[0];
+    const members = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM drum_user_totals").one().n;
+    if (!row) return { total: 0, rank: null, members, firstAt: null, lastAt: null };
+    const ahead = sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM drum_user_totals WHERE total > ?", row.total).one().n;
+    return { total: row.total, rank: ahead + 1, members, firstAt: row.firstAt, lastAt: row.lastAt };
   }
 
   private async live() {

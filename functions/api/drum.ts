@@ -26,7 +26,8 @@
  */
 
 import { sha256, type Env as VisitsEnv } from './visit.ts';
-import { requestCountry, resolveSource } from '../_lib/drum-signal.ts';
+import { drumMemberKey, requestCountry, resolveSource } from '../_lib/drum-signal.ts';
+import { readSessionFromRequest, type AuthEnv } from './auth/session.ts';
 
 interface Env extends VisitsEnv {
   DRUM_COUNTER?: DurableObjectNamespace;
@@ -86,6 +87,16 @@ async function counterRequest(
   }
 }
 
+/** Signed-in members get their beats credited across devices. */
+async function memberKey(request: Request, env: Env): Promise<string | undefined> {
+  try {
+    const current = await readSessionFromRequest(request, env as unknown as AuthEnv);
+    return current ? await drumMemberKey(current.user.userId) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' });
 
@@ -113,6 +124,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       leaderboardHash,
       nounId,
       source: resolveSource(request, body.source, requestCountry(request)),
+      userKey: await memberKey(request, env),
     }),
   });
   if (counter) {

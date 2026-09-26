@@ -1,0 +1,104 @@
+---
+/**
+ * <DrumProfileCard /> — your drum, on your profile.
+ *
+ * A playable drum plus the signed-in member's drum total (GET /api/drum/me).
+ * Beats played anywhere on pointcast.xyz while signed in are credited to the
+ * account, so this number follows the member across devices. Signed out, the
+ * drum still plays and counts globally; the card says how to keep the beats.
+ *
+ * Every instance is a drum for the `app` it is given (default "profile"), so
+ * profile beats show up as their own team in the Drum League.
+ */
+interface Props {
+  app?: string;
+}
+const { app = 'profile' } = Astro.props;
+---
+
+<section class="dpc" data-dpc aria-label="Your drum">
+  <div class="dpc__drum">
+    <pointcast-drum look="round" size="104" app={app} count="false"></pointcast-drum>
+  </div>
+  <div class="dpc__body">
+    <p class="dpc__kicker">YOUR DRUM</p>
+    <p class="dpc__total"><span data-dpc-total>—</span> <span class="dpc__unit">beats</span></p>
+    <p class="dpc__line" data-dpc-line>Checking your account…</p>
+    <p class="dpc__links">
+      <a href="/drum">Play /drum</a>
+      <a href="/drum-league">Drum League</a>
+      <a href="/drum-kit">Put a drum on your site</a>
+    </p>
+  </div>
+</section>
+
+<script is:inline src="/drum.js" data-app="profile" data-sound="true"></script>
+<script is:inline>
+  (() => {
+    const cards = document.querySelectorAll('[data-dpc]:not([data-dpc-ready])');
+    if (!cards.length) return;
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+    function paint(me) {
+      cards.forEach((card) => {
+        const total = card.querySelector('[data-dpc-total]');
+        const line = card.querySelector('[data-dpc-line]');
+        if (!me || me.ok === false && !me.signedIn) {
+          total.textContent = '—';
+          line.textContent = 'Your drum total is unavailable right now. Beats still count.';
+        } else if (!me.signedIn) {
+          total.textContent = '0';
+          line.innerHTML = 'Beats you play now count on the global drum. <a href="/auth?returnTo=' + encodeURIComponent(location.pathname) + '">Sign in</a> to keep them on your account, across every device.';
+        } else if (me.ok === false) {
+          total.textContent = '—';
+          line.textContent = 'Signed in, but the drum counter is not answering. Beats still count.';
+        } else {
+          total.textContent = fmt(me.total);
+          line.textContent = me.total
+            ? `#${fmt(me.rank)} of ${fmt(me.members)} signed-in drummers · counted on every PointCast drum while you're signed in.`
+            : `No beats on your account yet. Every PointCast drum you play while signed in counts here.`;
+        }
+      });
+    }
+    async function load() {
+      try {
+        const res = await fetch('/api/drum/me', { credentials: 'same-origin', cache: 'no-store' });
+        paint(await res.json());
+      } catch {
+        paint(null);
+      }
+    }
+    cards.forEach((c) => c.setAttribute('data-dpc-ready', ''));
+    let pending = null;
+    window.addEventListener('pointcast:drum', (e) => {
+      const d = e.detail || {};
+      // The signal reply carries the member's new total; paint it directly.
+      if (typeof d.memberTotal === 'number') {
+        cards.forEach((c) => { c.querySelector('[data-dpc-total]').textContent = fmt(d.memberTotal); });
+      }
+      clearTimeout(pending);
+      pending = setTimeout(load, 1200);
+    });
+    load();
+  })();
+</script>
+
+<style>
+  .dpc {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center;
+    border: 3px solid #15120f; background: #fffaf4; color: #15120f; padding: 18px 20px; margin-block: 16px;
+    font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
+  }
+  .dpc__drum { line-height: 0; }
+  .dpc__kicker {
+    margin: 0 0 6px; font: 700 10px/1.2 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+    letter-spacing: .16em; color: #e0452b;
+  }
+  .dpc__total { margin: 0; font-size: clamp(34px, 6vw, 48px); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+  .dpc__unit { font-size: 15px; font-weight: 500; color: #6f6961; }
+  .dpc__line { margin: 8px 0 0; font-size: 14px; line-height: 1.5; max-width: 60ch; color: #3d3a36; }
+  .dpc__line a, .dpc__links a { color: #185fa5; }
+  .dpc__links { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; }
+  @media (max-width: 480px) {
+    .dpc { grid-template-columns: 1fr; justify-items: start; }
+  }
+</style>

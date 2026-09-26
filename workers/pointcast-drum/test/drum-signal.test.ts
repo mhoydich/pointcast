@@ -136,3 +136,21 @@ describe("DrumCounter league", () => {
     expect(league.standings).toEqual([]);
   });
 });
+
+describe("DrumCounter members", () => {
+  it("credits a signed-in member across sessions and ranks them", async () => {
+    const room = `member-${crypto.randomUUID()}`;
+    const a = "a1".repeat(12);
+    const b = "b2".repeat(12);
+    await post(room, { delta: 4, userKey: a, source: { kind: "pointcast", app: "/drum" } }, "1".repeat(16));
+    const second = await post(room, { delta: 3, userKey: a, source: { kind: "pointcast", app: "/auth" } }, "2".repeat(16));
+    expect(second.body.memberTotal).toBe(7);
+    await post(room, { delta: 10, userKey: b, source: { kind: "embed", app: "x" } });
+    const me = (await (await counter(room).fetch(`https://drum-counter.internal/?user=${a}`)).json()) as { total: number; rank: number; members: number };
+    expect(me).toMatchObject({ total: 7, rank: 2, members: 2 });
+    const nobody = (await (await counter(room).fetch(`https://drum-counter.internal/?user=${"c3".repeat(12)}`)).json()) as { total: number; rank: null };
+    expect(nobody).toMatchObject({ total: 0, rank: null });
+    const bad = await counter(room).fetch("https://drum-counter.internal/?user=nope");
+    expect(bad.status).toBe(400);
+  });
+});
