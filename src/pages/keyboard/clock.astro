@@ -1,0 +1,427 @@
+---
+/**
+ * /keyboard/clock — Key Clock, an ambient chiming clock.
+ *
+ * Leave it open on a spare screen. Every quarter hour (configurable) it
+ * chimes the time as a short melody, tuned to the town's key of the day
+ * (from /api/keyboard/signal) or, failing that, the local mood of the
+ * weekday from KeyVoice.moods.
+ *
+ * Chime scheme:
+ *  - Hours ring as low bells in groups of three (max three bongs), with a
+ *    soft chord of 1-3 notes for the remainder — so 12 rings as three low
+ *    bongs plus a three-note chord, never twelve separate strikes.
+ *  - Minutes climb as a quick rising run: the tens digit sets the run's
+ *    length (0-5 notes), the ones digit sets which scale step it lands on.
+ *
+ * Nothing is stored anywhere but this browser (pc-clock-v1: schedule +
+ * sound preference). Each chime sends its own ordered notes to the keyboard
+ * signal as pure music — never text, never the schedule, at most once per
+ * chime.
+ */
+const title = 'Key Clock · PointCast';
+const description =
+  "An ambient clock for a spare screen. It chimes the time as a short melody — low bells for the hour, a rising run for the minutes — tuned to the town's key of the day.";
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/clock">
+<meta property="og:title" content="Key Clock">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh;transition:background-color .8s,filter .8s}
+body.night{filter:brightness(.72)}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 16px;cursor:pointer;font-size:12px;min-height:44px}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+button:disabled{opacity:.45;cursor:default}
+select{font:inherit;color:var(--ink);background:#0d1711;border:1px solid var(--line);border-radius:20px;padding:9px 12px;font-size:12px;min-height:44px}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+main{max-width:640px;margin:0 auto;padding:30px 20px 60px;display:flex;flex-direction:column;align-items:center}
+.card{background:linear-gradient(155deg,#1d2c20,#111d16);border:1px solid var(--line);border-radius:20px;padding:28px 26px 24px;width:100%;display:flex;flex-direction:column;align-items:center;gap:16px}
+.label{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin:0;text-align:center}
+#keyline{color:var(--gold)}
+.dialWrap{position:relative;width:min(78vw,300px);aspect-ratio:1;display:flex;align-items:center;justify-content:center}
+.dial{position:absolute;inset:0;width:100%;height:100%}
+.ring{animation:spin 90s linear infinite;transform-origin:120px 120px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dot{transition:r .12s,fill-opacity .12s}
+.digital{font-family:Georgia,serif;font-size:clamp(30px,7vw,44px);letter-spacing:-1px;font-variant-numeric:tabular-nums;color:var(--ink);text-align:center;line-height:1}
+.digital small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.14em;color:var(--dim);margin-top:6px;text-transform:uppercase}
+.dateline{margin:0;font-size:11px;color:var(--dim);text-align:center}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.scheduleRow{display:flex;gap:10px;align-items:center;font-size:11px;color:var(--dim)}
+.hint{font-size:11px;line-height:1.7;color:var(--dim);text-align:center;margin:0;max-width:440px}
+.privacy{font-size:10px;line-height:1.6;color:#a0ad95;text-align:center;margin:4px 0 0;max-width:440px}
+#notice{font-size:10px;color:var(--gold);min-height:14px;text-align:center}
+[hidden]{display:none!important}
+@media(max-width:520px){header{padding:16px}main{padding:20px 14px 44px}.card{padding:22px 16px 18px}}
+@media(prefers-reduced-motion:reduce){.ring{animation:none}*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Key Clock<small>Chimes the time in today's key</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/clock" aria-current="page">Key Clock</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+</header>
+
+<main>
+  <section class="card">
+    <p class="label" id="keyline">Tuned to —</p>
+    <div class="dialWrap">
+      <svg class="dial" viewBox="0 0 240 240" role="img" aria-label="A ring of twelve pitch dots, lighting as the clock chimes">
+        <circle cx="120" cy="120" r="112" fill="none" stroke="#2b3c2e" stroke-width="1"></circle>
+        <g class="ring">
+          <circle cx="120" cy="8" r="2.4" fill="var(--gold)" fill-opacity=".55"></circle>
+        </g>
+        <g id="dots"></g>
+      </svg>
+      <div class="digital">
+        <div id="time">--:--</div>
+        <small id="ampm">—</small>
+      </div>
+    </div>
+    <p class="dateline" id="dateline">finding the day…</p>
+    <div class="controls">
+      <button type="button" id="startBtn">▶ Start the clock</button>
+      <button type="button" id="soundBtn" aria-pressed="true" hidden>♪ Sound on</button>
+      <button type="button" id="chimeNow">🔔 Chime now</button>
+      <button type="button" id="wakeBtn" aria-pressed="false" hidden>👁 Keep screen awake</button>
+    </div>
+    <div class="scheduleRow">
+      <label for="schedule">Chime</label>
+      <select id="schedule">
+        <option value="minute">every minute</option>
+        <option value="five">every 5 minutes</option>
+        <option value="quarter" selected>quarter hours</option>
+        <option value="hour">hours only</option>
+      </select>
+    </div>
+    <p class="hint">Low bells count the hour in groups of three, with a soft chord for what's left over — twelve is just three bongs and a three-note chord, never twelve. Minutes climb as a quick rising run: how many notes is the tens digit, where it lands is the ones digit. On the quarter hours, a short flourish leads in.</p>
+    <p id="notice" aria-live="polite"></p>
+    <p class="privacy">Click Start for sound — browsers need a tap first. Each chime's notes join the town chord at <a href="/keyboard-signal">Keyboard Signal</a>, nothing else.</p>
+  </section>
+</main>
+
+<script is:inline src="/js/keyboard-voice.js"></script>
+<script is:inline src="/keyboard.js" data-app="keyboard-clock" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var STORE_KEY = 'pc-clock-v1';
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---- prefs ----------------------------------------------------------------
+  var prefs = { schedule: 'quarter', sound: true };
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (raw) { var p = JSON.parse(raw); if (p && typeof p === 'object') prefs = { schedule: p.schedule || 'quarter', sound: p.sound !== false }; }
+  } catch (e) { /* private mode */ }
+  function savePrefs() { try { localStorage.setItem(STORE_KEY, JSON.stringify(prefs)); } catch (e) { /* storage full or blocked */ } }
+
+  // ---- the scale of the day ---------------------------------------------------
+  var MODES = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10] };
+  var PC = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, F: 5, 'E#': 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11 };
+  var scaleState = { root: 57, scale: MODES.minor };
+
+  function degree(deg) {
+    var s = scaleState.scale;
+    var oct = Math.floor(deg / s.length);
+    var idx = ((deg % s.length) + s.length) % s.length;
+    return scaleState.root + oct * 12 + s[idx];
+  }
+
+  function applySignalKey(tonic, mode) {
+    var pc = PC[tonic] !== undefined ? PC[tonic] : 9;
+    var m = MODES[String(mode || '').toLowerCase()] || MODES.minor;
+    scaleState = { root: 48 + pc, scale: m };
+    $('keyline').textContent = 'Tuned to ' + tonic + ' ' + (mode || 'minor') + " · today's town key";
+  }
+  function applyLocalMood() {
+    var moods = (window.KeyVoice && window.KeyVoice.moods) || [];
+    if (!moods.length) { scaleState = { root: 57, scale: MODES.minor }; $('keyline').textContent = 'Tuned to a quiet minor (no signal yet)'; return; }
+    var m = moods[new Date().getDay() % moods.length];
+    scaleState = { root: m.root - 12, scale: m.scale };
+    $('keyline').textContent = 'Tuned to ' + m.label + ' · local mood of the day';
+  }
+
+  applyLocalMood();
+  fetch('/api/keyboard/signal', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      var t = res && res.key && res.key.today;
+      if (t && t.tonic) applySignalKey(t.tonic, t.mode);
+    })
+    .catch(function () { /* stays on the local mood */ });
+
+  // ---- a small bass + bell voice ---------------------------------------------
+  var ac = null, bus = null;
+  function audio() {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      bus = ac.createGain();
+      bus.gain.value = 0.5;
+      var comp = ac.createDynamicsCompressor();
+      bus.connect(comp).connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function isNight() {
+    var h = new Date().getHours();
+    return h >= 22 || h < 6;
+  }
+  function ring(midi, when, len, gain, low) {
+    try {
+      var c = audio();
+      var t = when == null ? c.currentTime : when;
+      var f = 440 * Math.pow(2, (midi - 69) / 12);
+      var g0 = (gain == null ? 1 : gain) * (isNight() ? 0.45 : 1);
+      var parts = low ? [[1, 'sine', 0.3], [2, 'triangle', 0.09], [0.5, 'sine', 0.12]] : [[1, 'triangle', 0.22], [2, 'sine', 0.08], [3, 'sine', 0.03]];
+      parts.forEach(function (p) {
+        var o = c.createOscillator(), g = c.createGain();
+        o.type = p[1];
+        o.frequency.value = f * p[0];
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0006, p[2] * g0), t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        o.connect(g).connect(bus);
+        o.start(t);
+        o.stop(t + len + 0.05);
+      });
+    } catch (e) { /* audio is a nicety */ }
+  }
+
+  // ---- the ring of 12 pitch dots -----------------------------------------------
+  var dotsEl = $('dots');
+  var dots = [];
+  (function buildDots() {
+    for (var i = 0; i < 12; i++) {
+      var a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      var x = 120 + Math.cos(a) * 88, y = 120 + Math.sin(a) * 88;
+      var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('class', 'dot');
+      c.setAttribute('cx', x.toFixed(1));
+      c.setAttribute('cy', y.toFixed(1));
+      c.setAttribute('r', '3.2');
+      c.setAttribute('fill', 'var(--dim)');
+      c.setAttribute('fill-opacity', '.5');
+      dotsEl.appendChild(c);
+      dots.push(c);
+    }
+  })();
+  function light(midi, color, delayMs, holdMs) {
+    var i = ((Math.round(midi) % 12) + 12) % 12;
+    var el = dots[i];
+    if (!el) return;
+    setTimeout(function () {
+      el.setAttribute('fill', color);
+      el.setAttribute('fill-opacity', '1');
+      el.setAttribute('r', '5.5');
+      setTimeout(function () {
+        el.setAttribute('fill', 'var(--dim)');
+        el.setAttribute('fill-opacity', '.5');
+        el.setAttribute('r', '3.2');
+      }, holdMs || 420);
+    }, delayMs || 0);
+  }
+
+  // ---- the chime scheme ---------------------------------------------------------
+  // Hours: groups of three low bongs (0-3), plus a 1-3 note chord for the
+  // remainder — every hour 1-12 fits in at most three bongs + a three-note chord.
+  function hourNotes(h24) {
+    var h12 = h24 % 12 || 12;
+    var groups = Math.floor((h12 - 1) / 3);
+    var remainder = ((h12 - 1) % 3) + 1;
+    var notes = [];
+    for (var i = 0; i < groups; i++) notes.push(degree(-14 + (i % 2 === 0 ? 0 : -3)));
+    var chord = [0, 2, 4].slice(0, remainder).map(function (d) { return degree(-7 + d); });
+    return { bongs: notes, chord: chord };
+  }
+  // Minutes: a quick rising run whose length is the tens digit (0-5), landing
+  // on the scale step named by the ones digit.
+  function minuteNotes(min) {
+    var tens = Math.floor(min / 10);
+    var ones = min % 10;
+    var run = [];
+    for (var i = 0; i < tens; i++) run.push(degree(i));
+    run.push(degree(ones % scaleState.scale.length) + 12);
+    return run;
+  }
+  function quarterFlourish() {
+    return [degree(2) + 12, degree(4) + 12];
+  }
+
+  function playSequence(seq, opts) {
+    // seq: [{note, low, gain}] each with a relative step index for spacing
+    var step = (opts && opts.step) || 260;
+    var c = audio();
+    var t0 = c.currentTime + 0.05;
+    seq.forEach(function (n, i) {
+      ring(n.note, t0 + i * step / 1000, n.len || 1.1, n.gain, n.low);
+      light(n.note, n.color, i * step, n.hold);
+    });
+  }
+
+  var lastPostAt = 0;
+  function sendChime(notes) {
+    if (!notes.length || !window.PointCastKeyboard) return;
+    window.PointCastKeyboard.note(notes.slice(0, 32), null, { sound: false });
+  }
+
+  /** Plays the full chime for a given hour/minute and sends one signal post. */
+  function chime(h24, min, opts) {
+    opts = opts || {};
+    var seq = [];
+    var allNotes = [];
+    if (opts.flourish) {
+      quarterFlourish().forEach(function (n) { seq.push({ note: n, low: false, gain: 0.7, len: 0.5, color: 'var(--ink)', hold: 220 }); allNotes.push(n); });
+    }
+    var h = hourNotes(h24);
+    h.bongs.forEach(function (n) { seq.push({ note: n, low: true, gain: 1, len: 1.6, color: 'var(--gold)', hold: 600 }); allNotes.push(n); });
+    if (h.chord.length) {
+      var base = seq.length;
+      h.chord.forEach(function (n, i) { seq.push({ note: n, low: false, gain: 0.85, len: 1.3, color: 'var(--gold)', hold: 500, chordAt: base }); allNotes.push(n); });
+    }
+    if (opts.minutes !== false) {
+      minuteNotes(min).forEach(function (n) { seq.push({ note: n, low: false, gain: 0.8, len: 0.8, color: '#9dbbbb', hold: 300 }); allNotes.push(n); });
+    }
+    // Space everything out except the remainder chord, which should land together.
+    var c = audio();
+    var t0 = c.currentTime + 0.05;
+    var t = 0;
+    var chordStartedAt = null;
+    seq.forEach(function (n) {
+      var isChord = n.chordAt !== undefined;
+      var at = isChord ? (chordStartedAt == null ? (chordStartedAt = t) : chordStartedAt) : t;
+      ring(n.note, t0 + at / 1000, n.len, n.gain, n.low);
+      light(n.note, n.color, at, n.hold);
+      if (!isChord) t += n.low ? 340 : 190;
+      else t += 30;
+    });
+    sendChime(allNotes);
+  }
+
+  // ---- the clock face ---------------------------------------------------------
+  function paintFace() {
+    var d = new Date();
+    var h = d.getHours();
+    var m = d.getMinutes();
+    var h12 = h % 12 || 12;
+    $('time').textContent = h12 + ':' + String(m).padStart(2, '0');
+    $('ampm').textContent = (h < 12 ? 'AM' : 'PM') + ' · ' + d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    document.body.classList.toggle('night', isNight());
+    return { h: h, m: m, s: d.getSeconds() };
+  }
+  var faceTimer = setInterval(paintFace, 1000);
+  paintFace();
+  $('dateline').textContent = 'Leave this open — it chimes on its own once started.';
+
+  // ---- schedule loop ------------------------------------------------------------
+  var running = false;
+  var lastFired = null; // "H:M" of the last chime, to avoid double-firing
+  function dueNow(h, m, sched) {
+    if (sched === 'minute') return true;
+    if (sched === 'five') return m % 5 === 0;
+    if (sched === 'hour') return m === 0;
+    return m === 0 || m === 15 || m === 30 || m === 45; // quarter
+  }
+  function tickSchedule() {
+    if (!running) return;
+    var d = new Date();
+    var key = d.getHours() + ':' + d.getMinutes();
+    if (d.getSeconds() !== 0 || key === lastFired) return;
+    if (!dueNow(d.getHours(), d.getMinutes(), prefs.schedule)) return;
+    lastFired = key;
+    var isQuarterMark = prefs.schedule === 'quarter' && d.getMinutes() !== 0;
+    chime(d.getHours(), d.getMinutes(), { flourish: isQuarterMark, minutes: prefs.schedule !== 'hour' });
+  }
+  var scheduleTimer = setInterval(tickSchedule, 1000);
+
+  // ---- controls -------------------------------------------------------------
+  $('schedule').value = prefs.schedule;
+  $('schedule').addEventListener('change', function (e) {
+    prefs.schedule = e.target.value;
+    savePrefs();
+    $('notice').textContent = 'Chiming ' + e.target.options[e.target.selectedIndex].text + '.';
+    setTimeout(function () { $('notice').textContent = ''; }, 2500);
+  });
+
+  $('startBtn').addEventListener('click', function () {
+    audio();
+    running = true;
+    $('startBtn').hidden = true;
+    $('soundBtn').hidden = false;
+    if ('wakeLock' in navigator) $('wakeBtn').hidden = false;
+    // a small welcoming bloom, the first satisfying moment
+    var bloom = [0, 2, 4, 7].map(function (d) { return degree(d) + 12; });
+    playSequence(bloom.map(function (n) { return { note: n, low: false, gain: 0.7, len: 1.4, color: 'var(--gold)', hold: 500 }; }), { step: 130 });
+    $('notice').textContent = 'Running. It will chime on its own from here.';
+    setTimeout(function () { $('notice').textContent = ''; }, 3000);
+  });
+
+  function paintSound() {
+    $('soundBtn').setAttribute('aria-pressed', String(prefs.sound));
+    $('soundBtn').textContent = prefs.sound ? '♪ Sound on' : '♪ Sound off';
+    if (bus) bus.gain.value = prefs.sound ? 0.5 : 0;
+  }
+  $('soundBtn').addEventListener('click', function () { prefs.sound = !prefs.sound; savePrefs(); paintSound(); });
+  paintSound();
+
+  $('chimeNow').addEventListener('click', function () {
+    audio();
+    var d = new Date();
+    chime(d.getHours(), d.getMinutes(), { flourish: prefs.schedule === 'quarter', minutes: true });
+  });
+
+  // ---- wake lock ------------------------------------------------------------
+  var wakeLock = null;
+  function paintWake() {
+    $('wakeBtn').setAttribute('aria-pressed', String(!!wakeLock));
+    $('wakeBtn').textContent = wakeLock ? '👁 Screen awake' : '👁 Keep screen awake';
+  }
+  $('wakeBtn').addEventListener('click', function () {
+    if (wakeLock) { wakeLock.release().catch(function () {}); wakeLock = null; paintWake(); return; }
+    if (!('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(function (lock) {
+      wakeLock = lock;
+      wakeLock.addEventListener('release', function () { wakeLock = null; paintWake(); });
+      paintWake();
+    }).catch(function () { /* denied or unsupported */ });
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && running && $('wakeBtn').getAttribute('aria-pressed') === 'true' && !wakeLock && 'wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLock = lock;
+        wakeLock.addEventListener('release', function () { wakeLock = null; paintWake(); });
+      }).catch(function () {});
+    }
+  });
+
+  addEventListener('pagehide', function () { if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); });
+})();
+</script>
+</body>
+</html>
