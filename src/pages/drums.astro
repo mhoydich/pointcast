@@ -10,8 +10,6 @@
  *
  * /drum stays the room people play; this is the house around it.
  */
-import fs from 'node:fs';
-import path from 'node:path';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import DrumProfileCard from '../components/DrumProfileCard.astro';
 import { DRUM_DIRECTORY_ENTRIES, DRUM_DIRECTORY_CHAPTERS } from '../lib/drum-directory';
@@ -38,27 +36,47 @@ const WINGS: Wing[] = [
 
 const START = new Set(['drum', 'drum-party', 'drum-v4', 'drum-league', 'drum-hero', 'drum-says']);
 const RULES: Array<[string, RegExp]> = [
-  ['signal', /^drum-(signal|kit|league|league-classic|directory|games|trophies|scorebook|card|name-card)$/],
+  ['signal', /^drum-(signal|kit|league|league-classic|directory|games|trophies|scorebook)$/],
+  ['games', /^drum-(noun-.*|solo|quickdraw|steps|fill|catch|steady|split|lockstep|hero|says|taiko)$/],
   ['agents', /^drum-agent/],
   ['runners', /^drum-runner/],
   ['versions', /^drum(-v\d+|-apr26|-room(-v2)?)$/],
   ['screens', /(^drum-tv)|(-tv$)|^drum-(marquee|viz|warhol-live|pulse|now)$/],
   ['radio', /^drum-(radio.*|station|walkie|tape|press|bulletin|shout)$/],
   ['quiet', /^drum-(altar.*|shrine|prayer-flag|rosary|vespers|meditate|zen.*|koan|mantra.*|bath|confessional|saint|offering|lantern|threshold|holding-back|bell-.*|aurora.*|procession|tide|lullaby)$/],
-  ['together', /^drum-(jam|meet|table|duel|vs|relay.*|conductor|quintet|fives|applause|emoji-mesh|graffiti|stickers|postcard|portrait|buttons|birthday|cake|pinata|potato|daily|echo|letters)$/],
+  ['together', /^drum-(card|name-card|jam|meet|table|duel|vs|relay.*|conductor|quintet|fives|applause|emoji-mesh|graffiti|stickers|postcard|portrait|buttons|birthday|cake|pinata|potato|daily|echo|letters)$/],
 ];
 
+const WORDS: Record<string, string> = { tv: 'TV', vs: 'VS', apr26: 'Apr 26', v2: 'v2' };
 function humanize(slug: string): string {
   if (slug === 'drum') return 'The Drum';
-  return slug.replace(/^drum-/, '').split('-').map((w) => (/^v\d+$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))).join(' ');
+  const words = slug.replace(/^drum-/, '').split('-')
+    .map((w) => WORDS[w] || (/^v\d+$/.test(w) ? w : w[0].toUpperCase() + w.slice(1)));
+  const name = words.join(' ');
+  return /^v\d+$/.test(name) || /^(TV|Room)/.test(name) ? `Drum ${name}` : name;
 }
-function cleanTitle(raw: string, slug: string): string {
+const titleCase = (t: string) => t.toLowerCase().replace(/(^|[\s(/-])([a-z])/g, (_, a, b) => a + b.toUpperCase()).replace(/\b(Tv|Vs|Ai)\b/g, (m) => m.toUpperCase());
+const capFirst = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+/** Titles in the wing come in every style; normalize to "Name" or "Name · Kind". */
+function cleanTitle(raw: string, slug: string): { name: string; tagline: string } {
   let t = raw.replace(/\s+/g, ' ').trim();
   t = t.replace(/^\/drum[\w-]*\s*[—–-]\s*/i, '');
-  t = t.replace(/\s*[·|—–-]\s*(PointCast|drum hub game|drum hub|PointCast Drum)\s*$/i, '');
-  t = t.replace(/\s*[·|—–-]\s*PointCast\s*$/i, '');
-  if (!t || t.length > 64) return humanize(slug);
-  return t;
+  t = t.replace(/\s*[·|—–-]\s*(PointCast Drum|drum hub game|drum hub|PointCast)\s*$/i, '');
+  if (!t) return { name: humanize(slug), tagline: '' };
+  // "DRUM MEET — welcome to PointCast…" → name "Drum Meet", tagline the rest.
+  const dash = t.match(/^([A-Z0-9 ·&'-]{3,40})\s+[—–]\s+(.+)$/);
+  if (dash) return { name: titleCase(dash[1]), tagline: capFirst(dash[2]) };
+  const soft = t.match(/^(.{3,40}?)\s+[—–]\s+([a-z].+)$/);
+  if (soft) return { name: soft[1], tagline: capFirst(soft[2]) };
+  // Lowercase taglines ("clap meter") describe the room; the slug names it.
+  if (/^[a-z]/.test(t)) {
+    const base = humanize(slug);
+    return t.length <= 28 && !base.toLowerCase().includes(t.toLowerCase())
+      ? { name: `${base} · ${capFirst(t)}`, tagline: '' }
+      : { name: base, tagline: capFirst(t) };
+  }
+  if (/^(V\d+|Tv( V\d+)?)$/i.test(t) || t.length > 64) return { name: humanize(slug), tagline: t.length > 64 ? t : '' };
+  return { name: t, tagline: '' };
 }
 function pick(source: string, patterns: RegExp[]): string {
   for (const re of patterns) {
@@ -70,17 +88,19 @@ function pick(source: string, patterns: RegExp[]): string {
 
 const directory = new Map(DRUM_DIRECTORY_ENTRIES.map((e) => [e.path.replace(/^\//, ''), e]));
 const chapterName = Object.fromEntries(DRUM_DIRECTORY_CHAPTERS.map((c) => [c.id, c.kicker]));
-const pagesDir = path.resolve(process.cwd(), 'src/pages');
-const files = fs.readdirSync(pagesDir).filter((f) => /^drum(-[a-z0-9-]+)?\.astro$/.test(f)).sort();
+// Raw sources of every drum page, bundled by Vite at build time.
+const sources = import.meta.glob('./drum*.astro', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const files = Object.keys(sources).map((k) => k.replace(/^\.\//, '')).filter((f) => /^drum(-[a-z0-9-]+)?\.astro$/.test(f)).sort();
 
 type Room = { slug: string; path: string; name: string; blurb: string; wing: string; tag: string; noun: number | null; accent: string };
 const rooms: Room[] = files.map((file) => {
   const slug = file.replace(/\.astro$/, '');
-  const src = fs.readFileSync(path.join(pagesDir, file), 'utf8');
+  const src = sources[`./${file}`] || '';
   const entry = directory.get(slug);
   const rawTitle = pick(src, [
     /const title\s*=\s*(['"`])((?:(?!\1).){2,140})\1/,
     /<BlockLayout[^>]*?\btitle=(["'])((?:(?!\1).){2,140})\1/s,
+    /<[A-Z]\w*Layout[^>]*?\btitle=(["'])((?:(?!\1).){2,140})\1/s,
     /<title>()([^<{]{2,140})<\/title>/,
   ]);
   const rawDesc = pick(src, [
@@ -92,11 +112,12 @@ const rooms: Room[] = files.map((file) => {
   if (!wing && entry) wing = entry.chapter === 'together' ? 'together' : 'games';
   if (!wing) wing = (RULES.find(([, re]) => re.test(slug)) || ['more'])[0];
   if (wing === 'more' && /\b(game|score|combo|beat the|high score|rounds?)\b/i.test(rawDesc)) wing = 'games';
+  const clean = cleanTitle(rawTitle, slug);
   return {
     slug,
     path: slug === 'drum' ? '/drum' : `/${slug}`,
-    name: entry?.name || cleanTitle(rawTitle, slug),
-    blurb: (entry?.description || rawDesc || '').replace(/\s+/g, ' ').trim().slice(0, 150),
+    name: entry?.name || clean.name,
+    blurb: (entry?.description || rawDesc || clean.tagline || '').replace(/\s+/g, ' ').trim().slice(0, 150),
     wing,
     tag: entry ? chapterName[entry.chapter] || '' : '',
     noun: entry?.nounId ?? null,
