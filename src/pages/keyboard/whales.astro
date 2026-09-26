@@ -1,0 +1,773 @@
+---
+/**
+ * /keyboard/whales — Whale Song.
+ *
+ * Hold the home row to shape long, gliding calls. After two quiet seconds a
+ * distant whale answers the phrase a fourth lower and at a slower pace. Every
+ * third phrase becomes a soft repeating theme: the ocean remembers verse two.
+ * Phrases stay in this browser and are sent to the town signal once, as ordered
+ * MIDI notes only, when the distant whale answers.
+ */
+const title = 'Whale Song · PointCast';
+const description =
+  'Hold the home row to sing long, gliding whale calls. Pause, and a far whale answers your phrase from across the deep.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/whales">
+<meta property="og:title" content="Whale Song">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;
+  --moss:#7fa36b;--fern:#a9c98a;--sea:#6fb3b8;--deep:#1d4a55;--bark:#8a6a4a;--petal:#e7a3b3;--sun:#f2c14e;--dusk:#b5a8ee;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html{background:var(--bg);overflow-x:hidden}
+body{margin:0;min-height:100vh;overflow-x:hidden;background:radial-gradient(ellipse at 50% -10%,#1d4a5548,transparent 50%),var(--bg);color:var(--ink)}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:#132119;border:1px solid var(--line);border-radius:30px;padding:9px 15px;cursor:pointer;font-size:11px;min-height:44px;touch-action:manipulation}
+button:hover{background:#1e2b20;border-color:var(--sea)}
+button[aria-pressed=true]{background:var(--sea);color:var(--bg);border-color:var(--sea)}
+button:disabled{opacity:.42;cursor:default}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--sea);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px;min-height:44px;display:flex;align-items:center}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+main{width:min(100%,980px);margin:0 auto;padding:22px 20px 64px;display:flex;flex-direction:column;gap:16px}
+.intro{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.intro p{font-family:Georgia,serif;font-size:18px;line-height:1.55;margin:0;max-width:640px;color:#d9dfd1}
+.hint{font-size:11px;line-height:1.7;margin:0;color:var(--dim);background:#122018;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.hint b{font-weight:normal;color:var(--sea)}
+.hint code{color:var(--ink);white-space:normal}
+.ocean{position:relative;isolation:isolate;overflow:hidden;aspect-ratio:16/9;min-height:300px;border:1px solid #345241;border-radius:22px;background:#0a1210;box-shadow:0 28px 80px #0008,inset 0 0 70px #06100b;touch-action:pan-y}
+.ocean:after{content:'';position:absolute;inset:0;z-index:7;pointer-events:none;background:linear-gradient(180deg,transparent 55%,#07100bbd),radial-gradient(circle at 50% 50%,transparent 40%,#050a07a8 100%);box-shadow:inset 0 0 70px #041009aa}
+.backdrop,.near-whale,.pod{position:absolute;display:block;pointer-events:none;user-select:none;-webkit-user-drag:none}
+.backdrop{z-index:0;inset:-4%;width:108%;height:108%;object-fit:cover;opacity:.86;animation:deep-breathe 20s ease-in-out infinite alternate;transform:translate(calc(var(--px,0)*-5px),calc(var(--py,0)*-3px)) scale(1.04)}
+.near-whale{z-index:3;width:69%;height:auto;left:-8%;top:33%;opacity:.82;mix-blend-mode:screen;filter:saturate(.72) contrast(1.08) brightness(.78);animation:near-drift 25s ease-in-out infinite alternate;transform:translate(calc(var(--px,0)*13px),calc(var(--py,0)*8px))}
+.pod{z-index:2;width:38%;height:auto;right:3%;top:18%;opacity:.2;mix-blend-mode:screen;filter:saturate(.55) brightness(.65);transition:opacity 1.2s ease,filter 1.2s ease;animation:far-drift 34s ease-in-out infinite alternate;transform:translate(calc(var(--px,0)*7px),calc(var(--py,0)*5px))}
+.ocean.answering .pod{opacity:.82;filter:saturate(.8) brightness(1.25) drop-shadow(0 0 18px #6fb3b888)}
+.ocean.singing .near-whale{filter:saturate(.95) contrast(1.04) brightness(1.04) drop-shadow(0 0 13px #6fb3b866)}
+.depth-label{position:absolute;z-index:10;left:18px;top:16px;margin:0;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#d7eee0;text-shadow:0 1px 6px #000}
+.listen-status{position:absolute;z-index:10;left:18px;right:18px;bottom:16px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;color:#e4eee5;text-shadow:0 1px 8px #000}
+.listen-status strong{display:block;font-family:Georgia,serif;font-weight:normal;font-size:22px;line-height:1.1}
+.listen-status small{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#b7cbb9}
+.verse-badge{display:none;align-items:center;gap:7px;background:#101813bb;border:1px solid #6fb3b877;border-radius:999px;padding:8px 11px;font-size:9px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
+.verse-badge.on{display:flex}
+.verse-badge:before{content:'✳';color:var(--sun)}
+.ripple{position:absolute;z-index:6;width:18px;height:18px;border:1px solid var(--sea);border-radius:50%;left:56%;top:52%;pointer-events:none;opacity:0;animation:call-ring 2.4s ease-out forwards}
+.ripple.far{left:77%;top:31%;border-color:var(--dusk);animation-duration:3.2s}
+.ripple.theme{left:48%;top:70%;border-color:var(--moss);animation-duration:4.2s}
+.panel{background:linear-gradient(155deg,#18271c,#101a14);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.panel-head{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.eyebrow{display:block;color:var(--sea);font-size:9px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:5px}
+h2{font-family:Georgia,serif;font-weight:normal;font-size:21px;margin:0}
+.phrase-count{font-size:10px;color:var(--dim)}
+.pads{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:7px}
+.pad{position:relative;min-width:0;height:76px;padding:8px 3px;border-radius:15px;background:linear-gradient(180deg,#1c3125,#102018);border-color:#355643;overflow:hidden;user-select:none;-webkit-user-select:none}
+.pad:before{content:'';position:absolute;left:50%;bottom:-30px;width:55px;height:55px;border-radius:50%;transform:translateX(-50%);background:radial-gradient(circle,#6fb3b85c,transparent 68%);opacity:0;transition:opacity .16s}
+.pad strong{position:relative;display:block;font-family:Georgia,serif;font-size:22px;font-weight:normal;color:var(--ink)}
+.pad span{position:relative;display:block;font-size:8px;letter-spacing:.1em;color:var(--dim);margin-top:4px}
+.pad.on{background:linear-gradient(180deg,#6fb3b8,#315d63);border-color:#bde2df;color:var(--bg);box-shadow:0 0 22px #6fb3b855;transform:translateY(2px)}
+.pad.on:before{opacity:1}
+.pad.on strong,.pad.on span{color:#071511}
+.memory-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(230px,.55fr);gap:16px}
+.phrase-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.phrase-row{min-height:48px;border:1px solid #294332;border-radius:12px;background:#0e1912;display:flex;align-items:center;gap:9px;padding:8px 11px}
+.phrase-row b{font-size:9px;color:var(--dim);font-weight:normal;min-width:58px;text-transform:uppercase;letter-spacing:.11em}
+.phrase-notes{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;height:27px}
+.phrase-note{display:block;width:7px;min-width:4px;border-radius:6px;background:var(--sea);opacity:.82}
+.empty{font-family:Georgia,serif;font-style:italic;color:#708675;font-size:14px;margin:0;padding:11px 2px}
+.memory-actions{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.memory-actions button{width:100%}
+.microcopy{font-size:9px;line-height:1.6;color:var(--dim);margin:2px 0 0}
+.field-note{border-left:2px solid var(--moss);padding:4px 0 4px 14px;margin:0;color:#bdcbb9;font:15px/1.55 Georgia,serif}
+.field-note strong{display:block;font:9px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--fern);margin-bottom:7px}
+.privacy{font-size:9px;line-height:1.6;color:#6f8474;margin:0;text-align:center}
+[hidden]{display:none!important}
+@keyframes deep-breathe{from{opacity:.79;filter:saturate(.76) brightness(.78)}to{opacity:.93;filter:saturate(.95) brightness(.98)}}
+@keyframes near-drift{from{margin-left:-2%;margin-top:1%}to{margin-left:15%;margin-top:-3%}}
+@keyframes far-drift{from{margin-right:-2%;margin-top:0}to{margin-right:8%;margin-top:4%}}
+@keyframes call-ring{0%{opacity:.85;transform:scale(.2)}70%{opacity:.34}100%{opacity:0;transform:scale(10)}}
+.tab-hidden .backdrop,.tab-hidden .near-whale,.tab-hidden .pod,.tab-hidden .ripple{animation-play-state:paused!important}
+@media(max-width:740px){.pads{grid-template-columns:repeat(5,1fr)}.pad:last-child{grid-column:3}.memory-grid{grid-template-columns:1fr}.ocean{min-height:260px}.near-whale{width:80%;top:39%}.pod{width:48%}}
+@media(max-width:480px){header{padding:14px}main{padding:16px 14px 48px}.brand small{margin-left:0}.toolbar{width:100%}.toolbar button{flex:1}.intro p{font-size:16px}.ocean{min-height:230px;border-radius:17px}.listen-status{left:13px;right:13px;bottom:12px}.listen-status strong{font-size:18px}.depth-label{left:13px;top:12px}.pads{grid-template-columns:repeat(3,1fr)}.pad:last-child{grid-column:auto}.pad{height:68px}.panel{padding:14px}.verse-badge{max-width:130px;white-space:normal}.near-whale{width:93%;left:-20%;top:40%}.pod{width:55%;right:-3%;top:19%}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.backdrop,.near-whale,.pod,.ripple{animation:none!important;transition:none!important}.ripple{display:none}.near-whale{margin-left:7%}.pod{margin-right:4%}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Whale Song<small>The deep sings back</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf" aria-current="page">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="sound" aria-pressed="true">♪ Sound on</button>
+  </div>
+</header>
+
+<main>
+  <div class="intro">
+    <p>Hold a note to sing into the deep. Leave a little silence, and someone far away may answer.</p>
+  </div>
+
+  <p class="hint" id="hint"><b>First dive:</b> hold <code>A S D F G H J K L</code> instead of tapping. Make a short phrase, let go, then listen for two seconds.</p>
+
+  <section class="ocean" id="ocean" aria-label="An underwater scene where your whale song appears" aria-describedby="stageStatus">
+    <img class="backdrop" src="/images/keyboard/whales/deep-ocean.jpg" width="1200" height="675" alt="Gouache deep ocean with sunbeams fading into dark green water">
+    <img class="pod" id="pod" src="/images/keyboard/whales/distant-pod.jpg" width="640" height="360" alt="A distant pod of three humpback whales in dim water">
+    <img class="near-whale" src="/images/keyboard/whales/humpback.jpg" width="640" height="320" alt="A humpback whale in profile, swimming to the right">
+    <p class="depth-label">El Segundo · below the kelp line</p>
+    <div class="listen-status">
+      <div>
+        <strong id="stageStatus" role="status" aria-live="polite">The ocean is listening.</strong>
+        <small id="subStatus">Hold a key to begin</small>
+      </div>
+      <span class="verse-badge" id="verseBadge">Your song · verse 2</span>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="singTitle">
+    <div class="panel-head">
+      <div><span class="eyebrow">Nine low notes</span><h2 id="singTitle">Hold to sing</h2></div>
+      <span class="phrase-count" id="phraseCount">0 phrases heard</span>
+    </div>
+    <div class="pads" id="pads" role="group" aria-label="Nine whale call pads"></div>
+  </section>
+
+  <section class="memory-grid" aria-label="The ocean's memory">
+    <div class="panel">
+      <div class="panel-head">
+        <div><span class="eyebrow">The ocean's memory</span><h2>Recent phrases</h2></div>
+      </div>
+      <p class="empty" id="empty">No phrase yet. The water is quiet and listening.</p>
+      <ol class="phrase-list" id="phrases" aria-live="polite"></ol>
+    </div>
+    <div class="panel memory-actions">
+      <span class="eyebrow">Verse two</span>
+      <button type="button" id="themeToggle" aria-pressed="true" disabled>Ocean theme: waiting</button>
+      <button type="button" id="clear">Begin again</button>
+      <p class="microcopy">On every third phrase, the ocean braids the last three calls into a quiet repeating theme.</p>
+    </div>
+  </section>
+
+  <p class="field-note"><strong>Field note</strong>Humpback whale songs are made of repeated themes. In many populations, songs can change gradually through a season and are shared among whales in the same region.</p>
+  <p class="privacy">Your phrase lengths and ocean theme stay in this browser. When the far whale answers, the ordered notes—never text—join the PointCast keyboard signal once.</p>
+</main>
+
+<script is:inline src="/keyboard.js" data-app="keyboard-whales" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE_KEY = 'pc-whales-v1';
+  var KEYS = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
+  var NAMES = ['D2', 'F2', 'G2', 'A2', 'C3', 'D3', 'F3', 'G3', 'A3'];
+  var MIDIS = [38, 41, 43, 45, 48, 50, 53, 55, 57];
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var state = { phraseCount: 0, recent: [], theme: [], muted: false, hintSeen: false, themeOn: true };
+  var currentPhrase = [];
+  var held = {};
+  var pendingAnswer = null;
+  var lastSignalAt = 0;
+  var lastMidi = 43;
+  var answerVisualTimer = null;
+  var delayedThemeTimer = null;
+  var themeTimer = null;
+  var themeIndex = 0;
+  var liveVoices = [];
+  var audioContext = null;
+  var master = null;
+  var reverb = null;
+  var themeGain = null;
+
+  function cleanPhrase(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(0, 64).map(function (n) {
+      if (!n || MIDIS.indexOf(Math.round(Number(n.midi))) < 0) return null;
+      var dur = Math.max(.12, Math.min(8, Number(n.dur) || .3));
+      return { midi: Math.round(Number(n.midi)), dur: dur };
+    }).filter(Boolean);
+  }
+
+  function cleanTheme(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(-3).map(cleanPhrase).filter(function (p) { return p.length; });
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      if (!saved || typeof saved !== 'object') return;
+      state.phraseCount = Math.max(0, Math.min(9999, Math.round(Number(saved.phraseCount)) || 0));
+      state.recent = cleanTheme(saved.recent);
+      state.theme = cleanTheme(saved.theme);
+      state.muted = !!saved.muted;
+      state.hintSeen = !!saved.hintSeen;
+      state.themeOn = saved.themeOn !== false;
+    } catch (e) { /* local storage is optional; the whale still sings */ }
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        phraseCount: state.phraseCount,
+        recent: state.recent,
+        theme: state.theme,
+        muted: state.muted,
+        hintSeen: state.hintSeen,
+        themeOn: state.themeOn,
+      }));
+    } catch (e) { /* private mode or a full store does not stop the instrument */ }
+  }
+
+  function frequency(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+  function audio() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      master = audioContext.createGain();
+      master.gain.value = state.muted ? .0001 : .34;
+      var compressor = audioContext.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.knee.value = 12;
+      compressor.ratio.value = 5;
+      compressor.attack.value = .008;
+      compressor.release.value = .75;
+      master.connect(compressor).connect(audioContext.destination);
+
+      reverb = audioContext.createConvolver();
+      var seconds = 6;
+      var length = Math.floor(audioContext.sampleRate * seconds);
+      var impulse = audioContext.createBuffer(2, length, audioContext.sampleRate);
+      for (var channel = 0; channel < 2; channel++) {
+        var data = impulse.getChannelData(channel);
+        for (var i = 0; i < length; i++) {
+          var fade = Math.pow(1 - i / length, 2.7);
+          data[i] = (Math.random() * 2 - 1) * fade * (i < 100 ? i / 100 : 1);
+        }
+      }
+      reverb.buffer = impulse;
+      var wet = audioContext.createGain();
+      wet.gain.value = .32;
+      reverb.connect(wet).connect(master);
+
+      themeGain = audioContext.createGain();
+      themeGain.gain.value = state.themeOn ? 1 : .0001;
+      themeGain.connect(master);
+    }
+    if (audioContext.state === 'suspended' && !document.hidden) audioContext.resume();
+    return audioContext;
+  }
+
+  function forgetVoice(record) {
+    var index = liveVoices.indexOf(record);
+    if (index >= 0) liveVoices.splice(index, 1);
+  }
+
+  function heldVoice(midi, index) {
+    var context = audio();
+    var now = context.currentTime;
+    var oscillator = context.createOscillator();
+    var vibrato = context.createOscillator();
+    var vibratoDepth = context.createGain();
+    var formant = context.createBiquadFilter();
+    var formantLfo = context.createOscillator();
+    var formantDepth = context.createGain();
+    var envelope = context.createGain();
+    var dry = context.createGain();
+    var send = context.createGain();
+    var panner = context.createStereoPanner ? context.createStereoPanner() : context.createGain();
+    var from = frequency(lastMidi);
+    var target = frequency(midi);
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(from, now);
+    oscillator.frequency.exponentialRampToValueAtTime(target, now + .52);
+    vibrato.type = 'sine';
+    vibrato.frequency.value = .24;
+    vibratoDepth.gain.value = 13;
+    vibrato.connect(vibratoDepth).connect(oscillator.detune);
+
+    formant.type = 'bandpass';
+    formant.Q.value = 5.5;
+    formant.frequency.value = 520 + index * 22;
+    formantLfo.type = 'sine';
+    formantLfo.frequency.value = .085;
+    formantDepth.gain.value = 260;
+    formantLfo.connect(formantDepth).connect(formant.frequency);
+
+    envelope.gain.setValueAtTime(.0001, now);
+    envelope.gain.exponentialRampToValueAtTime(.24, now + .34);
+    dry.gain.value = .72;
+    send.gain.value = .9;
+    if (panner.pan) panner.pan.value = (index - 4) * .045;
+    oscillator.connect(formant).connect(envelope).connect(panner);
+    panner.connect(dry).connect(master);
+    panner.connect(send).connect(reverb);
+    oscillator.start(now);
+    vibrato.start(now);
+    formantLfo.start(now);
+    lastMidi = midi;
+
+    var record = {
+      stop: function (release) {
+        var t = context.currentTime;
+        var end = t + (release || .72);
+        try {
+          envelope.gain.cancelScheduledValues(t);
+          envelope.gain.setValueAtTime(Math.max(.0001, envelope.gain.value), t);
+          envelope.gain.exponentialRampToValueAtTime(.0001, end);
+          oscillator.stop(end + .05);
+          vibrato.stop(end + .05);
+          formantLfo.stop(end + .05);
+        } catch (e) { /* an already-ended voice needs no cleanup */ }
+        setTimeout(function () { forgetVoice(record); }, Math.ceil((end - t + .1) * 1000));
+      },
+    };
+    liveVoices.push(record);
+    return record;
+  }
+
+  function scheduledVoice(midi, when, duration, options) {
+    if (state.muted || document.hidden) return;
+    var context = audio();
+    var oscillator = context.createOscillator();
+    var vibrato = context.createOscillator();
+    var vibratoDepth = context.createGain();
+    var formant = context.createBiquadFilter();
+    var envelope = context.createGain();
+    var dry = context.createGain();
+    var send = context.createGain();
+    var panner = context.createStereoPanner ? context.createStereoPanner() : context.createGain();
+    var target = frequency(midi);
+    var from = frequency(options.fromMidi == null ? midi - 2 : options.fromMidi);
+    var end = when + duration;
+    var releaseEnd = end + (options.release || 1.2);
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(from, when);
+    oscillator.frequency.exponentialRampToValueAtTime(target, when + Math.min(.68, duration * .4));
+    vibrato.type = 'sine';
+    vibrato.frequency.value = options.vibrato || .2;
+    vibratoDepth.gain.value = options.vibratoDepth || 16;
+    vibrato.connect(vibratoDepth).connect(oscillator.detune);
+
+    formant.type = 'bandpass';
+    formant.Q.value = 5.2;
+    formant.frequency.setValueAtTime(340, when);
+    formant.frequency.linearRampToValueAtTime(880, when + duration * .55);
+    formant.frequency.linearRampToValueAtTime(410, end);
+    envelope.gain.setValueAtTime(.0001, when);
+    envelope.gain.exponentialRampToValueAtTime(options.gain, when + Math.min(.42, duration * .34));
+    envelope.gain.setValueAtTime(options.gain * .82, end);
+    envelope.gain.exponentialRampToValueAtTime(.0001, releaseEnd);
+    dry.gain.value = options.dry;
+    send.gain.value = options.wet;
+    if (panner.pan) panner.pan.value = options.pan;
+
+    oscillator.connect(formant).connect(envelope).connect(panner);
+    if (options.theme) {
+      panner.connect(dry).connect(themeGain);
+      panner.connect(send).connect(reverb);
+    } else {
+      panner.connect(dry).connect(master);
+      panner.connect(send).connect(reverb);
+    }
+    oscillator.start(when);
+    vibrato.start(when);
+    oscillator.stop(releaseEnd + .05);
+    vibrato.stop(releaseEnd + .05);
+  }
+
+  function addRipple(kind, delay) {
+    if (reduced) return;
+    var ripple = document.createElement('span');
+    ripple.className = 'ripple' + (kind ? ' ' + kind : '');
+    ripple.setAttribute('aria-hidden', 'true');
+    if (delay) ripple.style.animationDelay = delay + 's';
+    $('ocean').appendChild(ripple);
+    setTimeout(function () { ripple.remove(); }, 4800 + (delay || 0) * 1000);
+  }
+
+  function setStage(main, sub) {
+    $('stageStatus').textContent = main;
+    $('subStatus').textContent = sub;
+  }
+
+  function buildPads() {
+    var box = $('pads');
+    KEYS.forEach(function (key, index) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'pad';
+      button.dataset.index = String(index);
+      button.setAttribute('aria-label', 'Hold ' + key.toUpperCase() + ' to sing ' + NAMES[index]);
+      button.innerHTML = '<strong>' + key.toUpperCase() + '</strong><span>' + NAMES[index] + '</span>';
+      box.appendChild(button);
+    });
+
+    box.addEventListener('pointerdown', function (event) {
+      var button = event.target.closest('.pad');
+      if (!button || (event.button && event.button !== 0)) return;
+      event.preventDefault();
+      var token = 'pointer:' + event.pointerId;
+      try { button.setPointerCapture(event.pointerId); } catch (e) { /* capture is a touch nicety */ }
+      beginCall(token, Number(button.dataset.index), button);
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (name) {
+      box.addEventListener(name, function (event) { endCall('pointer:' + event.pointerId); });
+    });
+    box.addEventListener('keydown', function (event) {
+      if (event.repeat || (event.key !== ' ' && event.key !== 'Enter')) return;
+      var button = event.target.closest('.pad');
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      beginCall('button:' + button.dataset.index, Number(button.dataset.index), button);
+    });
+    box.addEventListener('keyup', function (event) {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      var button = event.target.closest('.pad');
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      endCall('button:' + button.dataset.index);
+    });
+  }
+
+  function beginCall(token, index, button) {
+    if (held[token] || document.hidden) return;
+    clearTimeout(pendingAnswer);
+    pendingAnswer = null;
+    if (!currentPhrase.length) setStage('A call enters the water.', 'Hold it as long as you like');
+    var entry = { midi: MIDIS[index], dur: .12, started: performance.now() };
+    currentPhrase.push(entry);
+    var voice = null;
+    if (!state.muted) {
+      try { voice = heldVoice(entry.midi, index); } catch (e) { /* visuals still answer without Web Audio */ }
+    }
+    held[token] = { entry: entry, voice: voice, button: button };
+    button.classList.add('on');
+    button.setAttribute('aria-pressed', 'true');
+    $('ocean').classList.add('singing');
+    addRipple('', 0);
+    if (state.theme.length && state.themeOn) startTheme();
+  }
+
+  function endCall(token) {
+    var call = held[token];
+    if (!call) return;
+    delete held[token];
+    call.entry.dur = Math.max(.12, Math.min(8, (performance.now() - call.entry.started) / 1000));
+    delete call.entry.started;
+    if (call.voice) call.voice.stop(.78);
+    call.button.classList.remove('on');
+    call.button.setAttribute('aria-pressed', 'false');
+    if (!Object.keys(held).length) {
+      $('ocean').classList.remove('singing');
+      scheduleAnswer();
+    }
+  }
+
+  function endEveryCall() {
+    Object.keys(held).forEach(endCall);
+  }
+
+  function scheduleAnswer() {
+    clearTimeout(pendingAnswer);
+    if (!currentPhrase.length || document.hidden) return;
+    setStage('The water holds your phrase…', 'Listen for an answer');
+    var signalWait = Math.max(0, lastSignalAt + 3200 - Date.now());
+    pendingAnswer = setTimeout(answerPhrase, Math.max(2000, signalWait));
+  }
+
+  function sendPhrase(notes) {
+    var attempts = 0;
+    function send() {
+      attempts++;
+      if (window.PointCastKeyboard) {
+        window.PointCastKeyboard.note(notes.slice(), null, { sound: false });
+        return;
+      }
+      if (attempts < 10) setTimeout(send, 350);
+    }
+    send();
+  }
+
+  function answerPhrase() {
+    pendingAnswer = null;
+    if (!currentPhrase.length || Object.keys(held).length || document.hidden) return;
+    var phrase = cleanPhrase(currentPhrase);
+    currentPhrase = [];
+    if (!phrase.length) return;
+    state.phraseCount++;
+    state.recent.push(phrase);
+    state.recent = state.recent.slice(-3);
+    state.hintSeen = true;
+    $('hint').hidden = true;
+    lastSignalAt = Date.now();
+    sendPhrase(phrase.map(function (note) { return note.midi; }));
+
+    var total = playAnswer(phrase);
+    if (state.phraseCount % 3 === 0 && state.recent.length === 3) {
+      state.theme = state.recent.map(function (part) { return part.map(function (note) { return { midi: note.midi, dur: note.dur }; }); });
+      themeIndex = 0;
+      clearTimeout(delayedThemeTimer);
+      delayedThemeTimer = setTimeout(function () {
+        if (state.themeOn) startTheme();
+        setStage('Your song returns as verse two.', 'The ocean will keep humming it');
+      }, Math.ceil((total + .7) * 1000));
+    }
+    saveState();
+    renderMemory();
+  }
+
+  function playAnswer(phrase) {
+    var context = null;
+    if (!state.muted) {
+      try { context = audio(); } catch (e) { context = null; }
+    }
+    var offset = .18;
+    var previous = phrase[0].midi - 7;
+    phrase.forEach(function (note, index) {
+      var duration = Math.max(.32, Math.min(6, note.dur * 1.5));
+      if (context) {
+        scheduledVoice(note.midi - 5, context.currentTime + offset, duration, {
+          fromMidi: previous,
+          gain: .105,
+          dry: .42,
+          wet: 1.05,
+          pan: .72,
+          release: 1.6,
+          vibrato: .17,
+          vibratoDepth: 18,
+          theme: false,
+        });
+      }
+      addRipple('far', offset);
+      previous = note.midi - 5;
+      offset += duration + .28;
+    });
+    $('ocean').classList.add('answering');
+    setStage('A far whale answers.', 'A fourth lower · time moving slowly');
+    clearTimeout(answerVisualTimer);
+    answerVisualTimer = setTimeout(function () {
+      $('ocean').classList.remove('answering');
+      if (!currentPhrase.length) setStage(state.theme.length ? 'Your theme moves under the surface.' : 'The ocean is listening.', state.theme.length ? 'Sing over it, or wait awhile' : 'Make another phrase');
+    }, Math.ceil((offset + 1.2) * 1000));
+    return offset;
+  }
+
+  function themeSequence() {
+    var sequence = [];
+    state.theme.forEach(function (phrase) {
+      phrase.forEach(function (note) { sequence.push({ midi: note.midi - 12, dur: Math.max(.3, note.dur * .86) }); });
+      sequence.push({ rest: true, dur: 1.15 });
+    });
+    return sequence;
+  }
+
+  function startTheme() {
+    if (!state.theme.length || !state.themeOn || document.hidden || themeTimer) return;
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    runThemeStep();
+  }
+
+  function runThemeStep() {
+    themeTimer = null;
+    if (!state.theme.length || !state.themeOn || document.hidden) return;
+    var sequence = themeSequence();
+    if (!sequence.length) return;
+    var item = sequence[themeIndex % sequence.length];
+    themeIndex = (themeIndex + 1) % sequence.length;
+    if (!item.rest && !state.muted) {
+      try {
+        var context = audio();
+        scheduledVoice(item.midi, context.currentTime + .03, item.dur, {
+          fromMidi: item.midi - 2,
+          gain: .032,
+          dry: .22,
+          wet: 1.15,
+          pan: -.48,
+          release: 2.1,
+          vibrato: .13,
+          vibratoDepth: 12,
+          theme: true,
+        });
+        addRipple('theme', 0);
+      } catch (e) { /* the visual theme can continue without audio */ }
+    }
+    themeTimer = setTimeout(runThemeStep, Math.ceil(item.dur * 1000 + (item.rest ? 0 : 360)));
+  }
+
+  function stopTheme() {
+    clearTimeout(themeTimer);
+    themeTimer = null;
+  }
+
+  function renderMemory() {
+    $('phraseCount').textContent = state.phraseCount + (state.phraseCount === 1 ? ' phrase heard' : ' phrases heard');
+    $('empty').hidden = state.recent.length > 0;
+    var list = $('phrases');
+    list.innerHTML = '';
+    state.recent.forEach(function (phrase, phraseIndex) {
+      var row = document.createElement('li');
+      row.className = 'phrase-row';
+      var label = document.createElement('b');
+      label.textContent = 'Phrase ' + (state.phraseCount - state.recent.length + phraseIndex + 1);
+      var notes = document.createElement('span');
+      notes.className = 'phrase-notes';
+      phrase.forEach(function (note) {
+        var mark = document.createElement('span');
+        mark.className = 'phrase-note';
+        mark.style.height = (8 + (note.midi - 38) * .7) + 'px';
+        mark.style.width = Math.max(5, Math.min(34, note.dur * 13)) + 'px';
+        mark.title = NAMES[MIDIS.indexOf(note.midi)] + ', ' + note.dur.toFixed(1) + ' seconds';
+        notes.appendChild(mark);
+      });
+      row.appendChild(label);
+      row.appendChild(notes);
+      list.appendChild(row);
+    });
+    $('verseBadge').classList.toggle('on', state.theme.length > 0);
+    $('themeToggle').disabled = !state.theme.length;
+    $('themeToggle').setAttribute('aria-pressed', String(state.themeOn));
+    $('themeToggle').textContent = state.theme.length ? (state.themeOn ? 'Pause verse 2' : 'Play verse 2') : 'Ocean theme: waiting';
+    $('sound').setAttribute('aria-pressed', String(!state.muted));
+    $('sound').textContent = state.muted ? '♪ Sound off' : '♪ Sound on';
+    $('hint').hidden = state.hintSeen;
+  }
+
+  function clearSong() {
+    if ((state.phraseCount || state.theme.length) && !confirm('Let this song drift away and begin again?')) return;
+    clearTimeout(pendingAnswer);
+    clearTimeout(delayedThemeTimer);
+    clearTimeout(answerVisualTimer);
+    pendingAnswer = null;
+    currentPhrase = [];
+    stopTheme();
+    state.phraseCount = 0;
+    state.recent = [];
+    state.theme = [];
+    state.hintSeen = false;
+    state.themeOn = true;
+    themeIndex = 0;
+    $('ocean').classList.remove('answering', 'singing');
+    setStage('The ocean is listening.', 'Hold a key to begin');
+    saveState();
+    renderMemory();
+  }
+
+  $('sound').addEventListener('click', function () {
+    state.muted = !state.muted;
+    if (!state.muted) {
+      try {
+        var context = audio();
+        master.gain.cancelScheduledValues(context.currentTime);
+        master.gain.setTargetAtTime(.34, context.currentTime, .08);
+        if (state.theme.length && state.themeOn) startTheme();
+      } catch (e) { /* the page remains visual if audio is unavailable */ }
+    } else if (master && audioContext) {
+      master.gain.cancelScheduledValues(audioContext.currentTime);
+      master.gain.setTargetAtTime(.0001, audioContext.currentTime, .04);
+    }
+    saveState();
+    renderMemory();
+  });
+
+  $('themeToggle').addEventListener('click', function () {
+    if (!state.theme.length) return;
+    state.themeOn = !state.themeOn;
+    if (themeGain && audioContext) themeGain.gain.setTargetAtTime(state.themeOn ? 1 : .0001, audioContext.currentTime, .12);
+    if (state.themeOn) {
+      try { audio(); } catch (e) { /* visual state still updates */ }
+      startTheme();
+      setStage('Verse two rises again.', 'Your last three phrases, braided together');
+    } else {
+      stopTheme();
+      setStage('Verse two rests below.', 'Your next calls can still cross the water');
+    }
+    saveState();
+    renderMemory();
+  });
+
+  $('clear').addEventListener('click', clearSong);
+
+  document.addEventListener('keydown', function (event) {
+    if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    var tag = event.target && event.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (event.target.closest && event.target.closest('.pad'))) return;
+    var index = KEYS.indexOf(event.key.toLowerCase());
+    if (index < 0) return;
+    event.preventDefault();
+    beginCall('key:' + KEYS[index], index, $('pads').children[index]);
+  });
+
+  document.addEventListener('keyup', function (event) {
+    var index = KEYS.indexOf(event.key.toLowerCase());
+    if (index < 0) return;
+    event.preventDefault();
+    endCall('key:' + KEYS[index]);
+  });
+
+  window.addEventListener('blur', endEveryCall);
+  window.addEventListener('pagehide', function () {
+    endEveryCall();
+    saveState();
+    if (window.PointCastKeyboard) window.PointCastKeyboard.flush();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    document.body.classList.toggle('tab-hidden', document.hidden);
+    if (document.hidden) {
+      endEveryCall();
+      clearTimeout(pendingAnswer);
+      pendingAnswer = null;
+      stopTheme();
+      if (audioContext && audioContext.state === 'running') audioContext.suspend();
+      saveState();
+    } else {
+      if (currentPhrase.length) scheduleAnswer();
+      setStage(currentPhrase.length ? 'The water holds your phrase…' : (state.theme.length ? 'Your theme waits under the surface.' : 'The ocean is listening.'), currentPhrase.length ? 'Listen for an answer' : 'Touch or hold a key to wake the sound');
+    }
+  });
+
+  if (!reduced) {
+    $('ocean').addEventListener('pointermove', function (event) {
+      if (event.pointerType === 'touch') return;
+      var rect = $('ocean').getBoundingClientRect();
+      $('ocean').style.setProperty('--px', ((event.clientX - rect.left) / rect.width - .5).toFixed(3));
+      $('ocean').style.setProperty('--py', ((event.clientY - rect.top) / rect.height - .5).toFixed(3));
+    });
+    $('ocean').addEventListener('pointerleave', function () {
+      $('ocean').style.setProperty('--px', '0');
+      $('ocean').style.setProperty('--py', '0');
+    });
+  }
+
+  loadState();
+  buildPads();
+  renderMemory();
+  document.body.classList.toggle('tab-hidden', document.hidden);
+  if (state.theme.length) setStage('Your theme waits under the surface.', 'Hold a key to wake the sound');
+})();
+</script>
+</body>
+</html>
