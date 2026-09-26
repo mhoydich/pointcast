@@ -1,0 +1,537 @@
+---
+/**
+ * /drums — The Drum House. Every drum on PointCast, in one place.
+ *
+ * One hub for the whole wing: the live heartbeat (count, who's drumming,
+ * this week's leader, the last beat heard), one big drum, a status board
+ * that pings every drum service, the complete catalog of /drum* routes
+ * (read from src/pages at build time, so new rooms appear on their own),
+ * the league, your own drum, and the tools for builders and agents.
+ *
+ * /drum stays the room people play; this is the house around it.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import BlockLayout from '../layouts/BlockLayout.astro';
+import DrumProfileCard from '../components/DrumProfileCard.astro';
+import { DRUM_DIRECTORY_ENTRIES, DRUM_DIRECTORY_CHAPTERS } from '../lib/drum-directory';
+
+const title = 'The Drum House';
+const description =
+  'Every drum on PointCast in one place: the live count, who is drumming, the status of every drum service, all the drum rooms and games, the league, and your own drum.';
+
+// ---- the catalog: every /drum* route, read at build time -----------------
+type Wing = { id: string; name: string; note: string };
+const WINGS: Wing[] = [
+  { id: 'start', name: 'Start here', note: 'The rooms most people play.' },
+  { id: 'games', name: 'Games', note: 'A start, a rule, a score, a replay.' },
+  { id: 'together', name: 'Together', note: 'Rooms that only work because somebody else arrived.' },
+  { id: 'versions', name: 'The drum, every version', note: 'Each edition of the main room, kept playable.' },
+  { id: 'runners', name: 'The Long Loop', note: 'Seven runner editions, one drummer crossing the map.' },
+  { id: 'screens', name: 'Screens & TV', note: 'Cast views, walls, and displays for a room with a TV.' },
+  { id: 'radio', name: 'Radio & broadcast', note: 'Stations, tape, press, and the bulletin board.' },
+  { id: 'quiet', name: 'Quiet rooms', note: 'Altars, bells, meditation, and slow rituals.' },
+  { id: 'agents', name: 'Agents', note: 'Where machines drum and are watched drumming.' },
+  { id: 'signal', name: 'The signal', note: 'Counters, league, kits, and the directory.' },
+  { id: 'more', name: 'More rooms', note: 'Everything else in the wing.' },
+];
+
+const START = new Set(['drum', 'drum-party', 'drum-v4', 'drum-league', 'drum-hero', 'drum-says']);
+const RULES: Array<[string, RegExp]> = [
+  ['signal', /^drum-(signal|kit|league|league-classic|directory|games|trophies|scorebook|card|name-card)$/],
+  ['agents', /^drum-agent/],
+  ['runners', /^drum-runner/],
+  ['versions', /^drum(-v\d+|-apr26|-room(-v2)?)$/],
+  ['screens', /(^drum-tv)|(-tv$)|^drum-(marquee|viz|warhol-live|pulse|now)$/],
+  ['radio', /^drum-(radio.*|station|walkie|tape|press|bulletin|shout)$/],
+  ['quiet', /^drum-(altar.*|shrine|prayer-flag|rosary|vespers|meditate|zen.*|koan|mantra.*|bath|confessional|saint|offering|lantern|threshold|holding-back|bell-.*|aurora.*|procession|tide|lullaby)$/],
+  ['together', /^drum-(jam|meet|table|duel|vs|relay.*|conductor|quintet|fives|applause|emoji-mesh|graffiti|stickers|postcard|portrait|buttons|birthday|cake|pinata|potato|daily|echo|letters)$/],
+];
+
+function humanize(slug: string): string {
+  if (slug === 'drum') return 'The Drum';
+  return slug.replace(/^drum-/, '').split('-').map((w) => (/^v\d+$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))).join(' ');
+}
+function cleanTitle(raw: string, slug: string): string {
+  let t = raw.replace(/\s+/g, ' ').trim();
+  t = t.replace(/^\/drum[\w-]*\s*[—–-]\s*/i, '');
+  t = t.replace(/\s*[·|—–-]\s*(PointCast|drum hub game|drum hub|PointCast Drum)\s*$/i, '');
+  t = t.replace(/\s*[·|—–-]\s*PointCast\s*$/i, '');
+  if (!t || t.length > 64) return humanize(slug);
+  return t;
+}
+function pick(source: string, patterns: RegExp[]): string {
+  for (const re of patterns) {
+    const m = source.match(re);
+    if (m && m[2] && !m[2].includes('${')) return m[2];
+  }
+  return '';
+}
+
+const directory = new Map(DRUM_DIRECTORY_ENTRIES.map((e) => [e.path.replace(/^\//, ''), e]));
+const chapterName = Object.fromEntries(DRUM_DIRECTORY_CHAPTERS.map((c) => [c.id, c.kicker]));
+const pagesDir = path.resolve(process.cwd(), 'src/pages');
+const files = fs.readdirSync(pagesDir).filter((f) => /^drum(-[a-z0-9-]+)?\.astro$/.test(f)).sort();
+
+type Room = { slug: string; path: string; name: string; blurb: string; wing: string; tag: string; noun: number | null; accent: string };
+const rooms: Room[] = files.map((file) => {
+  const slug = file.replace(/\.astro$/, '');
+  const src = fs.readFileSync(path.join(pagesDir, file), 'utf8');
+  const entry = directory.get(slug);
+  const rawTitle = pick(src, [
+    /const title\s*=\s*(['"`])((?:(?!\1).){2,140})\1/,
+    /<BlockLayout[^>]*?\btitle=(["'])((?:(?!\1).){2,140})\1/s,
+    /<title>()([^<{]{2,140})<\/title>/,
+  ]);
+  const rawDesc = pick(src, [
+    /const description\s*=\s*(['"`])((?:(?!\1).){10,400})\1/,
+    /<BlockLayout[^>]*?\bdescription=(["'])((?:(?!\1).){10,400})\1/s,
+    /<meta name="description" content=(")([^"]{10,400})"/,
+  ]);
+  let wing = START.has(slug) ? 'start' : '';
+  if (!wing && entry) wing = entry.chapter === 'together' ? 'together' : 'games';
+  if (!wing) wing = (RULES.find(([, re]) => re.test(slug)) || ['more'])[0];
+  if (wing === 'more' && /\b(game|score|combo|beat the|high score|rounds?)\b/i.test(rawDesc)) wing = 'games';
+  return {
+    slug,
+    path: slug === 'drum' ? '/drum' : `/${slug}`,
+    name: entry?.name || cleanTitle(rawTitle, slug),
+    blurb: (entry?.description || rawDesc || '').replace(/\s+/g, ' ').trim().slice(0, 150),
+    wing,
+    tag: entry ? chapterName[entry.chapter] || '' : '',
+    noun: entry?.nounId ?? null,
+    accent: entry?.accent || '',
+  };
+});
+const byWing = WINGS.map((w) => ({ ...w, rooms: rooms.filter((r) => r.wing === w.id) })).filter((w) => w.rooms.length);
+
+const services = [
+  { id: 'counter', name: 'Global counter', path: '/api/drum', note: 'DrumCounter · one number for every drum' },
+  { id: 'live', name: 'Who is drumming', path: '/api/drum/live', note: 'Anyone heard in the last two minutes' },
+  { id: 'signal', name: 'Drum signal', path: '/api/drum/signal', note: 'Every beat, tagged by where it came from' },
+  { id: 'league', name: 'Drum League', path: '/api/drum/league', note: 'Weekly standings by team' },
+  { id: 'top', name: 'Top drummers', path: '/api/drum/top', note: 'The all-time leaderboard' },
+  { id: 'rooms', name: 'Live rooms', path: '/api/drum/room?room=main&stats=1', note: 'DrumRoomV2 · multiplayer sockets' },
+  { id: 'sounds', name: 'Sound bus', path: '/api/sounds', note: 'Flashes every TV wall and marquee' },
+  { id: 'embed', name: 'Embed script', path: '/drum.js', note: '<pointcast-drum> for any website' },
+  { id: 'mcp', name: 'Agent connector', path: '/api/mcp', note: 'MCP drum tools for Claude and agents' },
+];
+
+const embedSnippet = `<script src="https://pointcast.xyz/drum.js" data-app="my-site" async></script>
+<pointcast-drum look="pill"></pointcast-drum>`;
+const apiLines = `GET  /api/drum            global count
+GET  /api/drum/live       drumming in the last two minutes
+GET  /api/drum/signal     sources, places, recent beats
+GET  /api/drum/league     this week's standings
+GET  /api/drum/me         your total (signed in)
+POST /api/drum/signal     { beats, app, kind?, place? }`;
+const mcpLines = `drum_tap · drum_hall_state · drum_league_standings
+drum_global_count · drum_who_is_here · drum_top_drummers
+connector: https://pointcast.xyz/api/mcp`;
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" hideAds>
+  <main class="dh">
+    <header class="dh__bar">
+      <span>PointCast · The Drum House</span>
+      <span class="dh__pulse" data-pulse>● listening</span>
+    </header>
+
+    <section class="dh__hero">
+      <div class="dh__drumcol">
+        <pointcast-drum look="round" size="260" app="drums" count="false"></pointcast-drum>
+        <p class="dh__hint">Tap the drum · every beat counts on the one PointCast drum</p>
+      </div>
+      <div class="dh__heart">
+        <p class="dh__eyebrow">One drum · {rooms.length} rooms · every source</p>
+        <h1>Every drum on PointCast, in one house.</h1>
+        <div class="dh__stats">
+          <div class="dh__stat dh__stat--big"><p class="dh__k">Global count</p><p class="dh__v" data-global>—</p></div>
+          <div class="dh__stat"><p class="dh__k">Drumming now</p><p class="dh__v" data-now>—</p></div>
+          <div class="dh__stat"><p class="dh__k">In live rooms</p><p class="dh__v" data-inrooms>—</p></div>
+          <div class="dh__stat"><p class="dh__k">Leading this week</p><p class="dh__v dh__v--team" data-leader>—</p></div>
+          <div class="dh__stat dh__stat--wide"><p class="dh__k">Last beat heard</p><p class="dh__v dh__v--team" data-last>—</p></div>
+        </div>
+      </div>
+    </section>
+
+    <nav class="dh__doors" aria-label="Main drum doors">
+      <a href="/drum"><strong>Play</strong><span>The room everyone drums in</span></a>
+      <a href="/drum-party"><strong>Party</strong><span>Five phones, one living room</span></a>
+      <a href="/drum-league"><strong>League</strong><span>Every app is a team</span></a>
+      <a href="/drum-kit"><strong>Kit</strong><span>Put a drum on your site</span></a>
+      <a href="/drum-signal"><strong>Signal</strong><span>Where the beat comes from</span></a>
+      <a href="#rooms"><strong>All rooms</strong><span>{rooms.length} and counting</span></a>
+    </nav>
+
+    <section class="dh__row">
+      <div class="dh__panel">
+        <div class="dh__panel-head"><h2>Status</h2><span class="dh__k" data-status-summary>Checking…</span></div>
+        <ul class="dh__status" data-status>
+          {services.map((s) => (
+            <li data-svc={s.id} data-path={s.path}>
+              <span class="dh__dot" aria-hidden="true"></span>
+              <span class="dh__svc"><strong>{s.name}</strong><small>{s.note}</small></span>
+              <span class="dh__detail" data-detail>…</span>
+              <span class="dh__ms" data-ms></span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="dh__panel">
+        <div class="dh__panel-head"><h2>This week</h2><a class="dh__k" href="/drum-league">League →</a></div>
+        <ol class="dh__league" data-league><li class="dh__empty">Loading the table…</li></ol>
+        <div class="dh__panel-head dh__panel-head--gap"><h2>Just heard</h2><a class="dh__k" href="/drum-signal">Signal →</a></div>
+        <ol class="dh__wire" data-wire><li class="dh__empty">Listening…</li></ol>
+      </div>
+    </section>
+
+    <section class="dh__panel dh__panel--flush">
+      <DrumProfileCard app="drums" />
+    </section>
+
+    <section class="dh__panel" id="rooms">
+      <div class="dh__panel-head">
+        <h2>All the drums</h2>
+        <span class="dh__k"><span data-shown>{rooms.length}</span> of {rooms.length} rooms</span>
+      </div>
+      <div class="dh__filter">
+        <label class="dh__sr" for="dh-q">Find a room</label>
+        <input id="dh-q" data-q type="search" placeholder="Find a room: bells, tv, runner, party…" autocomplete="off" />
+        <div class="dh__chips" role="group" aria-label="Wings">
+          <button type="button" data-wing="all" aria-pressed="true">All</button>
+          {byWing.map((w) => <button type="button" data-wing={w.id} aria-pressed="false">{w.name} <small>{w.rooms.length}</small></button>)}
+        </div>
+      </div>
+      {byWing.map((w) => (
+        <div class="dh__wing" data-wing-block={w.id}>
+          <div class="dh__wing-head"><h3>{w.name}</h3><p>{w.note}</p></div>
+          <ul class="dh__rooms">
+            {w.rooms.map((r) => (
+              <li data-room data-search={`${r.slug} ${r.name} ${r.blurb} ${r.tag}`.toLowerCase()}>
+                <a href={r.path} style={r.accent ? `--room:${r.accent}` : undefined}>
+                  {r.noun !== null
+                    ? <img src={`https://noun.pics/${r.noun}.svg`} alt="" width="40" height="40" loading="lazy" />
+                    : <span class="dh__glyph" aria-hidden="true">♪</span>}
+                  <span class="dh__room-text">
+                    <strong>{r.name}</strong>
+                    <code>{r.path}</code>
+                    {r.blurb && <span>{r.blurb}</span>}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      <p class="dh__empty" data-none hidden>No room matches that. Try “bell”, “tv” or “party”.</p>
+    </section>
+
+    <section class="dh__row">
+      <div class="dh__panel">
+        <div class="dh__panel-head"><h2>Put the drum anywhere</h2><a class="dh__k" href="/drum-kit">Kit →</a></div>
+        <p class="dh__copy">Two lines on any website, and every tap lands on this house's count under your site's name.</p>
+        <pre><code>{embedSnippet}</code></pre>
+        <p class="dh__copy">Or call the counter directly:</p>
+        <pre><code>{apiLines}</code></pre>
+      </div>
+      <div class="dh__panel">
+        <div class="dh__panel-head"><h2>Agents</h2><a class="dh__k" href="/drum-league#agents">Agent area →</a></div>
+        <p class="dh__copy">Agents drum in their own division. Add the PointCast connector and call:</p>
+        <pre><code>{mcpLines}</code></pre>
+        <p class="dh__copy">Agent beats heard recently: <strong data-agents>—</strong></p>
+      </div>
+    </section>
+  </main>
+
+  <style is:global>
+    body:has(.dh) { background: #fbf3ea; }
+    .dh {
+      --ink: #15120f; --muted: #6f6961; --soft: #e7ddd0; --paper: #fffaf4; --ground: #fbf3ea;
+      --red: #e0452b; --blue: #185fa5; --violet: #7b4fd6; --green: #1f8a5b; --gold: #f0b429;
+      max-width: 1160px; margin: 24px auto 72px; padding: 0 16px; color: var(--ink);
+      font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
+    }
+    .dh code, .dh pre, .dh__k, .dh__bar, .dh__eyebrow { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+    .dh a { color: var(--blue); }
+    .dh [hidden] { display: none !important; }
+    .dh__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .dh > section, .dh > nav { border: 4px solid var(--ink); border-top: 0; background: var(--paper); }
+    .dh__bar {
+      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: var(--ink); color: var(--ground);
+      padding: 14px 20px; font-size: 12px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase;
+    }
+    .dh__pulse { color: #b9b2a8; transition: color .2s; }
+    .dh__pulse.is-beat { color: #ff8a73; }
+    .dh__k { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-decoration: none; }
+    a.dh__k { color: var(--blue); }
+
+    .dh__hero { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.3fr); }
+    .dh__drumcol { display: grid; place-items: center; align-content: center; gap: 14px; padding: 32px 16px; border-right: 4px solid var(--ink); }
+    .dh__hint { margin: 0; font-size: 12px; color: var(--muted); text-align: center; }
+    .dh__heart { padding: 28px; display: grid; gap: 18px; align-content: center; }
+    .dh__eyebrow { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--red); }
+    .dh h1 { margin: 0; font-size: clamp(34px, 5.2vw, 58px); line-height: 1; font-weight: 700; letter-spacing: -.035em; text-wrap: balance; }
+    .dh__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 2px solid var(--ink); }
+    .dh__stat { padding: 12px 14px; border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); display: grid; gap: 6px; align-content: start; }
+    .dh__stat:nth-child(3n + 1) { }
+    .dh__stat--big { grid-column: 1 / -1; }
+    .dh__stat--big .dh__v { font-size: clamp(44px, 7vw, 72px); }
+    .dh__stat--wide { grid-column: 1 / -1; border-bottom: 0; }
+    .dh__stat:nth-child(4) { border-right: 0; }
+    .dh__stat--big, .dh__stat--wide { border-right: 0; }
+    .dh__v { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; }
+    .dh__v--team { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600; word-break: break-word; }
+    .dh__v small { display: block; margin-top: 4px; font: 500 12px/1.3 'Inter', system-ui, sans-serif; color: var(--muted); }
+
+    .dh__doors { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .dh__doors a { display: grid; gap: 4px; padding: 16px 18px; color: var(--ink); text-decoration: none; border-right: 2px solid var(--ink); }
+    .dh__doors a:last-child { border-right: 0; }
+    .dh__doors a:hover { background: #fff1e8; }
+    .dh__doors strong { font-size: 18px; letter-spacing: -.01em; }
+    .dh__doors span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+    .dh__doors a:focus-visible, .dh button:focus-visible, .dh input:focus-visible, .dh__rooms a:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+
+    .dh__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .dh__row > .dh__panel + .dh__panel { border-left: 4px solid var(--ink); }
+    .dh__panel { padding: 20px 24px 24px; min-width: 0; }
+    .dh > .dh__panel--flush { padding: 4px 24px; }
+    .dh__panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .dh__panel-head--gap { margin-top: 20px; }
+    .dh h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+    .dh__copy { margin: 0 0 10px; font-size: 14px; line-height: 1.55; color: #3d3a36; }
+    .dh pre { margin: 0 0 14px; padding: 12px 14px; background: var(--ink); color: var(--ground); font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre; }
+    .dh__empty { color: var(--muted); font-size: 13px; list-style: none; }
+
+    .dh__status { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+    .dh__status li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 56px; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--soft); }
+    .dh__dot { width: 12px; height: 12px; border-radius: 50%; background: var(--soft); border: 2px solid var(--ink); }
+    .dh__status li.is-up .dh__dot { background: var(--green); }
+    .dh__status li.is-slow .dh__dot { background: var(--gold); }
+    .dh__status li.is-down .dh__dot { background: var(--red); }
+    .dh__svc { display: grid; gap: 2px; min-width: 0; }
+    .dh__svc strong { font-size: 14px; }
+    .dh__svc small { font-size: 12px; color: var(--muted); }
+    .dh__detail { font: 500 12px/1.3 'JetBrains Mono', monospace; text-align: right; color: #3d3a36; }
+    .dh__ms { font: 500 11px/1 'JetBrains Mono', monospace; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+    .dh__league, .dh__wire { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+    .dh__league li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--soft); font-size: 14px; }
+    .dh__league .rk { font: 600 12px/1 'JetBrains Mono', monospace; color: var(--muted); }
+    .dh__league .team { font-family: 'JetBrains Mono', monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dh__league .pts { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .dh__league li:first-child .team::before { content: '★ '; color: #b77d00; }
+    .dh__wire li { display: grid; grid-template-columns: 58px 84px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--soft); font-size: 13px; }
+    .dh__wire time, .dh__wire .x { color: var(--muted); font: 500 11px/1 'JetBrains Mono', monospace; }
+    .dh__wire .app { font-family: 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dh__chip { font: 600 9px/1.6 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: #fff; padding: 1px 6px; background: var(--k, var(--muted)); justify-self: start; }
+    .dh [data-k="pointcast"] { --k: var(--red); } .dh [data-k="embed"] { --k: var(--blue); } .dh [data-k="artifact"] { --k: var(--violet); }
+    .dh [data-k="agent"] { --k: var(--green); } .dh [data-k="standalone"] { --k: var(--ink); } .dh [data-k="other"] { --k: #9a9890; }
+
+    .dh__filter { display: grid; gap: 10px; margin-bottom: 8px; }
+    .dh__filter input { font: 500 16px/1.2 'Inter', system-ui, sans-serif; padding: 11px 12px; border: 3px solid var(--ink); background: #fff; color: var(--ink); border-radius: 0; width: 100%; }
+    .dh__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dh__chips button {
+      font: 600 11px/1 'JetBrains Mono', monospace; letter-spacing: .04em; padding: 7px 10px; border: 2px solid var(--ink);
+      background: var(--paper); color: var(--ink); cursor: pointer;
+    }
+    .dh__chips button small { opacity: .6; margin-left: 2px; }
+    .dh__chips button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+    .dh__wing { margin-top: 22px; }
+    .dh__wing-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--ink); padding-bottom: 6px; margin-bottom: 10px; }
+    .dh__wing-head h3 { margin: 0; font-size: 16px; }
+    .dh__wing-head p { margin: 0; font-size: 13px; color: var(--muted); }
+    .dh__rooms { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+    .dh__rooms a {
+      display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px; height: 100%;
+      border: 2px solid var(--soft); border-left: 5px solid var(--room, var(--soft)); color: var(--ink); text-decoration: none; background: #fff;
+    }
+    .dh__rooms a:hover { border-color: var(--ink); border-left-color: var(--room, var(--red)); }
+    .dh__rooms img { width: 40px; height: 40px; image-rendering: pixelated; background: #d5d7e1; }
+    .dh__glyph { width: 40px; height: 40px; display: grid; place-items: center; background: var(--ground); color: var(--red); font-size: 20px; }
+    .dh__room-text { display: grid; gap: 2px; min-width: 0; }
+    .dh__room-text strong { font-size: 14px; line-height: 1.25; }
+    .dh__room-text code { font-size: 11px; color: var(--muted); }
+    .dh__room-text span { font-size: 12px; line-height: 1.4; color: #4a4640; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    @media (max-width: 900px) {
+      .dh__hero, .dh__row { grid-template-columns: 1fr; }
+      .dh__drumcol { border-right: 0; border-bottom: 4px solid var(--ink); }
+      .dh__row > .dh__panel + .dh__panel { border-left: 0; border-top: 4px solid var(--ink); }
+      .dh__doors { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .dh__doors a:nth-child(3n) { border-right: 0; }
+      .dh__doors a:nth-child(-n + 3) { border-bottom: 2px solid var(--ink); }
+    }
+    @media (max-width: 560px) {
+      .dh__heart, .dh__panel { padding-left: 16px; padding-right: 16px; }
+      .dh > .dh__panel--flush { padding: 4px 12px; }
+      .dh__stats { grid-template-columns: 1fr 1fr; }
+      .dh__stat:nth-child(4) { border-right: 2px solid var(--ink); }
+      .dh__stat:nth-child(3), .dh__stat:nth-child(5) { border-right: 0; }
+      .dh__stat--wide { grid-column: 1 / -1; }
+      .dh__doors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dh__doors a { border-bottom: 2px solid var(--ink); }
+      .dh__doors a:nth-child(3n) { border-right: 2px solid var(--ink); }
+      .dh__doors a:nth-child(2n) { border-right: 0; }
+      .dh__doors a:nth-last-child(-n + 2) { border-bottom: 0; }
+      .dh__status li { grid-template-columns: 12px minmax(0, 1fr) auto; }
+      .dh__ms { display: none; }
+      .dh__wire li { grid-template-columns: 58px minmax(0, 1fr) auto; }
+      .dh__wire .dh__chip { display: none; }
+    }
+  </style>
+
+  <script is:inline>
+    (() => {
+      const root = document.querySelector('.dh');
+      if (!root) return;
+      const $ = (s) => root.querySelector(s);
+      const $$ = (s) => [...root.querySelectorAll(s)];
+      const fmt = (n) => Number(n || 0).toLocaleString('en-US');
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+      const ago = (ms) => {
+        const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+        if (s < 60) return `${s}s ago`;
+        if (s < 3600) return `${Math.round(s / 60)}m ago`;
+        if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+        return `${Math.round(s / 86400)}d ago`;
+      };
+      const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      async function getJson(url, init) {
+        const t0 = performance.now();
+        const res = await fetch(url, { cache: 'no-store', ...(init || {}) });
+        const ms = Math.round(performance.now() - t0);
+        const body = res.headers.get('content-type')?.includes('json') ? await res.json() : await res.text();
+        return { ok: res.ok, status: res.status, ms, body };
+      }
+
+      // ---- heartbeat ----------------------------------------------------
+      let lastSeen = 0;
+      function paintSignal(d) {
+        if (typeof d.globalTotal === 'number') $('[data-global]').textContent = fmt(d.globalTotal);
+        const recent = d.recent || [];
+        const r = recent[0];
+        if (r) {
+          $('[data-last]').innerHTML = `${esc(r.app)}${r.place ? ' · ' + esc(r.place) : ''}<small>${esc(r.kind)} · ×${r.beats} · ${ago(r.at)}</small>`;
+          if (r.at > lastSeen && lastSeen) {
+            const p = $('[data-pulse]');
+            p.classList.add('is-beat'); p.textContent = `● beat from ${r.app}`;
+            setTimeout(() => { p.classList.remove('is-beat'); p.textContent = '● listening'; }, 1600);
+          }
+          lastSeen = Math.max(lastSeen, r.at);
+        }
+        const wire = $('[data-wire]');
+        wire.replaceChildren();
+        if (!recent.length) wire.innerHTML = '<li class="dh__empty">No tagged beats yet.</li>';
+        recent.slice(0, 7).forEach((x) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<time>${clock(x.at)}</time><span class="dh__chip" data-k="${esc(x.kind)}">${esc(x.kind)}</span><span class="app">${esc(x.app)}${x.place ? ' · ' + esc(x.place) : ''}</span><span class="x">×${x.beats}</span>`;
+          wire.append(li);
+        });
+        const agents = recent.filter((x) => x.kind === 'agent');
+        $('[data-agents]').textContent = agents.length ? `${agents.length} in the recent wire, latest from ${agents[0].app} ${ago(agents[0].at)}` : 'none in the recent wire';
+      }
+      function paintLive(l) {
+        const others = (l.sources || []).filter((s) => s.kind !== 'pointcast' && s.kind !== 'agent').length;
+        const n = (l.count || 0) + others;
+        $('[data-now]').textContent = n === 1 ? '1 drummer' : `${n} drummers`;
+      }
+      function paintLeague(lg) {
+        const rows = lg.standings || [];
+        const lead = rows[0];
+        $('[data-leader]').innerHTML = lead ? `${esc(lead.app)}<small>${fmt(lead.points)} points</small>` : 'Open<small>no teams yet</small>';
+        const list = $('[data-league]');
+        list.replaceChildren();
+        if (!rows.length) list.innerHTML = '<li class="dh__empty">No teams on the board this week yet.</li>';
+        rows.slice(0, 6).forEach((r, i) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span class="rk">${i + 1}</span><span class="team">${esc(r.app)}</span><span class="dh__chip" data-k="${esc(r.kind)}">${esc(r.kind)}</span><span class="pts">${fmt(r.points)}</span>`;
+          list.append(li);
+        });
+      }
+
+      // ---- status board ---------------------------------------------------
+      const detailFor = {
+        counter: (b) => `${fmt(b.globalTotal)} beats`,
+        live: (b) => `${fmt(b.count)} drumming`,
+        signal: (b) => `${fmt(b.attributed)} tagged`,
+        league: (b) => `${(b.standings || []).length} teams`,
+        top: (b) => `${(b.entries || []).length} drummers`,
+        rooms: (b) => `${fmt(b.connected)} in main room`,
+        sounds: (b) => `${(b.events || []).length} recent events`,
+        embed: (b) => `${Math.round(String(b).length / 1024)} KB`,
+        mcp: (b) => {
+          const tools = (b && b.result && b.result.tools) || [];
+          return `${tools.filter((t) => /^drum_/.test(t.name)).length} drum tools`;
+        },
+      };
+      async function probe(li) {
+        const id = li.dataset.svc;
+        const init = id === 'mcp'
+          ? { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) }
+          : undefined;
+        try {
+          const r = await getJson(li.dataset.path, init);
+          li.classList.remove('is-up', 'is-slow', 'is-down');
+          li.classList.add(!r.ok ? 'is-down' : r.ms > 1500 ? 'is-slow' : 'is-up');
+          li.querySelector('[data-ms]').textContent = `${r.ms} ms`;
+          li.querySelector('[data-detail]').textContent = r.ok ? (detailFor[id] ? detailFor[id](r.body) : 'ok') : `HTTP ${r.status}`;
+          if (r.ok && id === 'signal') paintSignal(r.body);
+          if (r.ok && id === 'live') paintLive(r.body);
+          if (r.ok && id === 'league') paintLeague(r.body);
+          if (r.ok && id === 'rooms') $('[data-inrooms]').textContent = `${fmt(r.body.connected)} in main`;
+          return r.ok;
+        } catch {
+          li.classList.remove('is-up', 'is-slow');
+          li.classList.add('is-down');
+          li.querySelector('[data-detail]').textContent = 'unreachable';
+          li.querySelector('[data-ms]').textContent = '';
+          return false;
+        }
+      }
+      async function checkAll() {
+        const items = $$('[data-svc]');
+        const results = await Promise.all(items.map(probe));
+        const up = results.filter(Boolean).length;
+        $('[data-status-summary]').textContent = up === items.length ? `All ${up} services up · ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : `${up} of ${items.length} up`;
+      }
+      async function refreshFast() {
+        for (const id of ['signal', 'live']) {
+          const li = root.querySelector(`[data-svc="${id}"]`);
+          if (li) probe(li);
+        }
+      }
+
+      // ---- catalog filter ---------------------------------------------------
+      let wing = 'all';
+      function filter() {
+        const q = ($('[data-q]').value || '').trim().toLowerCase();
+        let shown = 0;
+        $$('[data-wing-block]').forEach((block) => {
+          let n = 0;
+          const inWing = wing === 'all' || block.dataset.wingBlock === wing;
+          block.querySelectorAll('[data-room]').forEach((li) => {
+            const hit = inWing && (!q || li.dataset.search.includes(q));
+            li.hidden = !hit;
+            if (hit) n += 1;
+          });
+          block.hidden = n === 0;
+          shown += n;
+        });
+        $('[data-shown]').textContent = String(shown);
+        $('[data-none]').hidden = shown !== 0;
+      }
+      $('[data-q]').addEventListener('input', filter);
+      $$('[data-wing]').forEach((b) => b.addEventListener('click', () => {
+        wing = b.dataset.wing;
+        $$('[data-wing]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        filter();
+      }));
+
+      window.addEventListener('pointcast:drum', () => setTimeout(refreshFast, 900));
+      checkAll();
+      setInterval(() => { if (document.visibilityState === 'visible') refreshFast(); }, 5000);
+      setInterval(() => { if (document.visibilityState === 'visible') checkAll(); }, 60000);
+    })();
+  </script>
+</BlockLayout>
