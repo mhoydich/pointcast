@@ -343,12 +343,39 @@ main{width:min(980px,100%);margin:0 auto;padding:22px 20px 64px;display:grid;gap
     ctx.translate(creature.x * w + crabShift, creature.y * h);
     if (creature.name === 'sea star') ctx.rotate(creature.glow * .08 * Math.sin(frame * .08));
     ctx.scale(pulse, pulse);
-    ctx.globalCompositeOperation = 'screen';
-    ctx.globalAlpha = .79 + creature.glow * .21;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = .86 + creature.glow * .14;
     ctx.shadowColor = creature.name === 'sea star' ? '#f2c14e' : creature.name === 'anemone' ? '#a9c98a' : '#b5a8ee';
     ctx.shadowBlur = 7 + creature.glow * 28;
-    ctx.drawImage(image, -dw / 2, -dh / 2, dw, dh);
+    ctx.drawImage(keyedSprite(image), -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
+  }
+
+  /* Architect pass: the field-guide sprites are JPEGs on a painted dark field.
+     Key that field to transparency (sampled from the image's own corners) so
+     shadows and glows follow the animal, not the rectangle. */
+  function keyOutField(img) {
+    var c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    var x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    var d = x.getImageData(0, 0, c.width, c.height), p = d.data, W = c.width, H = c.height;
+    var bg = [0, 0, 0], n = 0;
+    [[2, 2], [W - 3, 2], [2, H - 3], [W - 3, H - 3]].forEach(function (pt) { var i = (pt[1] * W + pt[0]) * 4; bg[0] += p[i]; bg[1] += p[i + 1]; bg[2] += p[i + 2]; n++; });
+    bg = bg.map(function (v) { return v / n; });
+    for (var i = 0; i < p.length; i += 4) {
+      var dist = Math.abs(p[i] - bg[0]) + Math.abs(p[i + 1] - bg[1]) + Math.abs(p[i + 2] - bg[2]);
+      p[i + 3] = Math.round(255 * Math.max(0, Math.min(1, (dist - 16) / 44)));
+    }
+    x.putImageData(d, 0, 0);
+    return c;
+  }
+  var keyedCache = new Map();
+  function keyedSprite(image) {
+    if (keyedCache.has(image)) return keyedCache.get(image);
+    var out = image;
+    try { if (image.complete && image.naturalWidth) { out = keyOutField(image); keyedCache.set(image, out); } } catch (e) { keyedCache.set(image, image); }
+    return out;
   }
   function paintRipples(w, h) {
     var pixels = ripplePixels.data;
