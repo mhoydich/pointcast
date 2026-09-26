@@ -324,7 +324,7 @@ const mtof = m => 440*Math.pow(2,(m-69)/12);
 const PANS = [-0.45, 0.45, -0.3, 0.3];
 function tone(seat, midi, vel=0.8, t, len=1){
   boot(); t = t ?? ctx.currentTime;
-  if(table) table.note(seat, midi, vel, t - ctx.currentTime, len);
+  if(netTable) netTable.note(seat, midi, vel, t - ctx.currentTime, len);
   const f = mtof(midi), kind = SEATS[seat].voice;
   const out = ctx.createGain(); const pan = ctx.createStereoPanner(); pan.pan.value = PANS[seat];
   out.connect(pan); pan.connect(master); pan.connect(wet);
@@ -603,15 +603,15 @@ if(savedSeat >= 0){
   sub.textContent = `Your keys are ${s.caps.split('').join(' ')}. ${TOUCH ? 'Tap' : 'Press'} one to sit. It's one keyboard for everyone, so pull up a chair next to whoever sent this.`;
 }
 /* ---------- online seats (/js/keyboard-table.js) ---------- */
-let table = null;
+let netTable = null;
 const onlineBtn = $('onlineBtn');
 const TABLE_OPTS = {
   game: 'rush', title: 'Bloom Rush', path: location.pathname,
   seats: SEATS.map(s=>({name:s.name, color:s.color, caps:s.caps})),
 };
 function hostTable(){
-  if(table || !window.KeyboardTable) return;
-  table = KeyboardTable.host(Object.assign({}, TABLE_OPTS, {
+  if(netTable || !window.KeyboardTable) return;
+  netTable = KeyboardTable.host(Object.assign({}, TABLE_OPTS, {
     snapshot: ()=>({ m: mode, sit: sitting.map(Number), sc: blooms.slice(), turn: -1, lit: (mode==='play' ? lit : -1),
       bar: mode==='sun' ? Math.round(Math.min(1, sunFill/Math.max(1,sunNeed))*100) : (mode==='play' ? Math.round(Math.max(0, startAt + gameMs - performance.now())/gameMs*100) : 0),
       p: promptEl.textContent }),
@@ -619,7 +619,7 @@ function hostTable(){
     onSit: seat=>{ if(mode==='jam' && !sitting[seat]){ sitting[seat] = true; updateLobby(); } },
     onStart: ()=>{ if(mode==='jam' || mode==='done') start(); },
     onAgain: null,
-    onEnd: ()=>{ table = null; onlineBtn.hidden = false; },
+    onEnd: ()=>{ netTable = null; onlineBtn.hidden = false; },
   }));
   onlineBtn.hidden = true;
 }

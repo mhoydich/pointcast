@@ -362,7 +362,7 @@ const mtof = m => 440*Math.pow(2,(m-69)/12);
 const PANS = [-0.45, 0.45, -0.3, 0.3];
 function tone(seat, midi, vel=0.9, t){
   boot(); t = t ?? ctx.currentTime;
-  if(table) table.note(seat, midi, vel, t - ctx.currentTime, 1);
+  if(netTable) netTable.note(seat, midi, vel, t - ctx.currentTime, 1);
   const f = mtof(midi), kind = SEATS[seat].voice;
   const out = ctx.createGain(); const pan = ctx.createStereoPanner(); pan.pan.value = PANS[seat];
   out.connect(pan); pan.connect(master); pan.connect(wet);
@@ -692,15 +692,15 @@ if(savedSeat >= 0){
   updateLobby();
 }
 /* ---------- online seats (/js/keyboard-table.js) ---------- */
-let table = null;
+let netTable = null;
 const onlineBtn = $('onlineBtn');
 const TABLE_OPTS = {
   game: 'quartet', title: 'Keyboard Quartet', path: location.pathname,
   seats: SEATS.map(s=>({name:s.name, color:s.color, caps:s.caps})),
 };
 function hostTable(){
-  if(table || !window.KeyboardTable) return;
-  table = KeyboardTable.host(Object.assign({}, TABLE_OPTS, {
+  if(netTable || !window.KeyboardTable) return;
+  netTable = KeyboardTable.host(Object.assign({}, TABLE_OPTS, {
     snapshot: ()=>({ m: mode, sit: sitting.map(Number), sc: petals.slice(), turn: mode==='lead' ? leader : mode==='echo' ? echoer : -1, lit: -1,
       bar: mode==='lead' ? Math.round(phrase.length/Math.max(1,phraseLen)*100) : mode==='echo' ? Math.round(pos/Math.max(1,phraseLen)*100) : 0,
       p: promptEl.textContent }),
@@ -708,7 +708,7 @@ function hostTable(){
     onSit: seat=>{ if(mode==='jam' && !sitting[seat]){ sitting[seat] = true; updateLobby(); } },
     onStart: ()=>{ if(mode==='jam' || mode==='done') start(); },
     onAgain: (seat)=>{ if(mode==='echo' && seat===echoer){ mode='wait'; seatClasses(); replayPhrase(false, ()=>{ if(mode==='wait'){ mode='echo'; seatClasses(); } }); } },
-    onEnd: ()=>{ table = null; onlineBtn.hidden = false; },
+    onEnd: ()=>{ netTable = null; onlineBtn.hidden = false; },
   }));
   onlineBtn.hidden = true;
 }
