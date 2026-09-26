@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bloomline · Keyboard</title>
+<meta name="description" content="Bloomline: a chat that hears how you type. Your typing plays music, a mood compass follows your rhythm, and every message can be replayed the way it was typed.">
+<link rel="canonical" href="https://pointcast.xyz/keyboard/bloomline/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<!--
+  Bloomline. Standalone page: runs as a solo instrument with no backend.
+  To make it a live, shared room, a host script sets window.BloomlineHost
+  (or calls window.Bloomline.connect(host)). The three hooks are documented
+  in docs/briefs/2026-09-25-bloomline-keyboard-handoff.md.
+-->
+<style>
+:root{
+  color-scheme:dark;
+  --ink:#101119; --ink-2:#171926; --line:#2a2d40;
+  --text:#ECE9F4; --muted:#9A98B0; --faint:#5f5e78;
+  --mood:#6FBFAE;
+  --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body:"Figtree", "Helvetica Neue", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font-family:var(--body);font-size:15px;line-height:1.5;overflow:hidden;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+#sky{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+.app{position:relative;z-index:1;height:100%;display:grid;grid-template-rows:auto 1fr auto;max-width:1180px;margin:0 auto;padding-inline:20px}
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:16px 10px}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.02em;margin:0}
+.brand h1 i{font-style:normal;color:var(--mood);transition:color 1.2s}
+.brand span{font-size:12px;color:var(--muted)}
+.versions{display:flex;gap:4px;font-size:12px}
+.versions a{color:var(--muted);text-decoration:none;padding:4px 10px;border-radius:999px;border:1px solid transparent}
+.versions a:hover{border-color:var(--line);color:var(--text)}
+.versions a[aria-current=page]{border-color:var(--line);color:var(--text)}
+.weather{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.weather b{color:var(--text);font-weight:600}
+.orb{width:14px;height:14px;border-radius:50%;background:var(--mood);box-shadow:0 0 18px var(--mood);transition:background 1.2s,box-shadow 1.2s}
+.peers{display:flex;gap:6px}
+.peer{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--body);color:#101119;position:relative}
+.peer.typing::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid currentColor;animation:ring 1s ease-out infinite}
+@keyframes ring{from{opacity:.9;transform:scale(.9)}to{opacity:0;transform:scale(1.35)}}
+.btn{font:500 13px var(--body);color:var(--text);background:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
+.btn:hover{border-color:var(--mood)}
+.btn:focus-visible,.play:focus-visible,.versions a:focus-visible{outline:2px solid var(--mood);outline-offset:2px}
+.btn[aria-pressed="true"]{background:var(--mood);color:#101119;border-color:var(--mood)}
+
+main{min-height:0;display:grid;grid-template-columns:1fr 280px;gap:24px}
+.thread{min-height:0;overflow-y:auto;padding-block:8px 16px;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin}
+.note-banner{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:10px;padding:8px 12px;align-self:flex-start}
+.msg{max-width:620px;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start}
+.msg.mine{margin-left:auto;grid-template-columns:1fr 34px}
+.msg.mine .av{order:2}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:600 13px var(--body);color:#101119}
+.bubble{background:rgba(23,25,38,.82);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:10px 14px;position:relative}
+.msg.mine .bubble{border-color:color-mix(in srgb,var(--c) 55%,var(--line))}
+.meta{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:4px}
+.meta .who{color:var(--text);font-weight:600}
+.chip{font:500 11px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 45%,transparent);border-radius:999px;padding:1px 8px}
+.txt{font-size:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.txt span{transition:color .25s,text-shadow .25s}
+.txt span.lit{color:var(--c);text-shadow:0 0 12px var(--c)}
+.score{display:flex;align-items:center;gap:10px;margin-top:8px}
+.play{flex:none;width:28px;height:28px;border-radius:50%;border:1px solid var(--c);background:transparent;color:var(--c);cursor:pointer;display:grid;place-items:center}
+.play svg{width:10px;height:10px;fill:currentColor}
+.roll{flex:1;height:22px;min-width:0}
+.tempo{font:400 11px var(--mono);color:var(--faint);white-space:nowrap}
+
+aside{min-height:0;overflow-y:auto;padding-block:8px 16px;display:flex;flex-direction:column;gap:18px}
+.panel h2{font:600 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.compass{position:relative;aspect-ratio:1;max-width:100%;border:1px solid var(--line);border-radius:18px;background:rgba(16,17,25,.6);overflow:hidden}
+.compass canvas{width:100%;height:100%;display:block}
+.axis{position:absolute;font:400 10px var(--mono);color:var(--faint);letter-spacing:.08em;text-transform:uppercase}
+.readout{margin-top:10px;display:flex;justify-content:space-between;align-items:baseline}
+.readout .mood-name{font-family:var(--display);font-size:28px;font-weight:600;color:var(--mood);transition:color .6s;letter-spacing:-.01em}
+.readout .nums{font:400 12px var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.legend{display:grid;grid-template-columns:1fr;gap:6px 12px;font-size:12px;color:var(--muted)}
+.legend div{display:flex;gap:6px;align-items:center}
+.legend i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.principle{font-size:12px;color:var(--muted);line-height:1.55;border-top:1px solid var(--line);padding-top:12px}
+.principle b{color:var(--text);font-weight:600}
+
+.composer{padding-block:10px 18px}
+.box{display:flex;gap:10px;align-items:flex-end;background:rgba(23,25,38,.9);border:1px solid color-mix(in srgb,var(--mood) 50%,var(--line));border-radius:20px;padding:10px 10px 10px 16px;transition:border-color .8s;box-shadow:0 0 40px -18px var(--mood)}
+.box:focus-within{border-color:var(--mood)}
+textarea{outline:none;flex:1;resize:none;border:0;background:transparent;color:var(--text);font:400 17px/1.45 var(--body);min-height:26px;max-height:140px;padding:4px 0}
+textarea::placeholder{color:var(--faint)}
+.send{background:var(--mood);color:#101119;border:0;border-radius:14px;padding:10px 18px;font:600 14px var(--body);cursor:pointer;transition:background .8s}
+.send:disabled{opacity:.4;cursor:default}
+.hint{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--faint);margin-top:6px;padding-inline:6px}
+.hint b{color:var(--muted);font-weight:500}
+.hint a{color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:var(--ink-2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13px;z-index:5;max-width:calc(100vw - 32px)}
+
+@media (max-width:820px){
+  .app{padding-inline:16px}
+  main{grid-template-columns:1fr}
+  aside{display:none}
+  .weather .label{display:none}
+  .brand span{display:none}
+  .versions{order:3;width:100%;overflow-x:auto}
+}
+@media (prefers-reduced-motion:reduce){
+  .peer.typing::after{animation:none}
+}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div class="app">
+  <header>
+    <div class="brand"><h1>Bloom<i>line</i></h1><span>a chat that hears how you type</span></div>
+    <nav class="versions" aria-label="Keyboard versions">
+      <a href="/keyboard">Notes</a>
+      <a href="/keyboard/garden">Garden V2</a>
+      <a href="/keyboard/bloomline/" aria-current="page">Bloomline</a>
+    </nav>
+    <div class="weather" aria-live="polite">
+      <div class="orb" id="orb"></div>
+      <span class="label">Room weather</span> <b id="weatherName">Calm</b>
+      <div class="peers" id="peers"></div>
+      <button class="btn" id="soundBtn" aria-pressed="false">Sound off</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="thread" id="thread" aria-label="Messages"></section>
+    <aside>
+      <div class="panel">
+        <h2>Your mood, as you type</h2>
+        <div class="compass">
+          <canvas id="compass"></canvas>
+          <span class="axis" style="top:8px;left:50%;transform:translateX(-50%)">Energetic</span>
+          <span class="axis" style="bottom:8px;left:50%;transform:translateX(-50%)">Slow</span>
+        </div>
+        <div class="readout">
+          <div class="mood-name" id="moodName">Calm</div>
+          <div class="nums" id="moodNums">— keys/s<br>— pause</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Six moods, six scales</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+      <p class="principle"><b>Your rhythm is yours.</b> Bloomline only listens to the message box. It keeps the timing of what you send so others can hear it the way you typed it. Nothing else on your keyboard is recorded.</p>
+    </aside>
+  </main>
+
+  <div class="composer">
+    <div class="box">
+      <textarea id="input" rows="1" placeholder="Type something. Listen to how it sounds." aria-label="Message"></textarea>
+      <button class="send" id="sendBtn" disabled>Send</button>
+    </div>
+    <div class="hint"><span><b>Enter</b> sends · <b>Shift+Enter</b> new line · tap a ▶ to hear a message as it was typed</span><span id="status">Solo instrument</span></div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+// ---------- Mood model ----------
+const MOODS = {
+  Electric:{color:"#B48BF2", scale:[0,2,4,6,7,9,11], wave:"square",  cutoff:2600, decay:.45, desc:"fast + light"},
+  Bright:  {color:"#F2C14E", scale:[0,2,4,7,9],      wave:"triangle",cutoff:4200, decay:.8,  desc:"quick + warm"},
+  Tender:  {color:"#E99AB6", scale:[0,4,7,9,11],     wave:"triangle",cutoff:1800, decay:1.7, desc:"slow + warm"},
+  Calm:    {color:"#6FBFAE", scale:[0,2,3,5,7,9,10], wave:"sine",    cutoff:3000, decay:1.2, desc:"even, unhurried"},
+  Blue:    {color:"#6E8BE0", scale:[0,3,5,7,10],     wave:"sine",    cutoff:1400, decay:1.9, desc:"slow + heavy"},
+  Restless:{color:"#EE7F5B", scale:[0,1,3,5,7,8,10], wave:"sawtooth",cutoff:1300, decay:.35, desc:"fast + heavy"}
+};
+const POS = "love,great,good,yes,yay,happy,thanks,thank,nice,beautiful,glad,fun,awesome,amazing,wonderful,sweet,lol,haha,excited,cool,best,enjoy,miss,hug,warm,sunny,win,proud,hope,easy,calm,peace,friend".split(",");
+const NEG = "no,not,sad,tired,ugh,hate,bad,worse,worst,sorry,angry,mad,stress,stressed,late,hard,lost,cant,can't,won't,never,sick,alone,hurt,miss,worried,anxious,annoyed,broke,fail,rough,heavy".split(",");
+
+function moodOf(e, v){
+  // e: energy 0..1, v: valence -1..1
+  const dist = Math.hypot(e-.5, v*.5);
+  if (dist < .14) return "Calm";
+  if (e >= .5) return v >= 0 ? (e > .78 && v > .15 ? "Electric" : "Bright") : "Restless";
+  return v >= 0 ? "Tender" : "Blue";
+}
+function valenceOf(text, backspaces, typed){
+  const words = text.toLowerCase().match(/[a-z']+/g) || [];
+  let s = 0;
+  for (const w of words){ if (POS.includes(w)) s += 1; if (NEG.includes(w)) s -= 1; }
+  s += (text.match(/!/g)||[]).length * .35;
+  s += (text.match(/(:\)|:D|<3|♥)/g)||[]).length * .8;
+  s -= (text.match(/(:\(|\.\.\.)/g)||[]).length * .6;
+  const hes = typed ? Math.min(1, backspaces / Math.max(6, typed)) : 0;
+  s -= hes * 2.2;
+  return Math.max(-1, Math.min(1, s / Math.max(2.2, Math.sqrt(words.length+1))));
+}
+function energyOf(notes){
+  // notes: [[code, dt], ...]; active tempo ignoring pauses > 1.4s
+  let active = 0, n = 0, longest = 0;
+  for (let i = 1; i < notes.length; i++){
+    const dt = notes[i][1];
+    longest = Math.max(longest, dt);
+    if (dt < 1400){ active += dt; n++; }
+  }
+  const cps = n && active ? n / (active/1000) : 0;
+  const e = Math.max(0, Math.min(1, (cps - 2) / 7));
+  return {e, cps, longest};
+}
+
+// ---------- Audio ----------
+let ctx = null, master = null, delay = null, soundOn = false;
+function ensureAudio(){
+  if (ctx) { if (ctx.state === "suspended") ctx.resume(); return; }
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain(); master.gain.value = .32;
+    const comp = ctx.createDynamicsCompressor();
+    delay = ctx.createDelay(1.5); delay.delayTime.value = .31;
+    const fb = ctx.createGain(); fb.gain.value = .34;
+    const wet = ctx.createGain(); wet.gain.value = .28;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2400;
+    master.connect(comp); comp.connect(ctx.destination);
+    master.connect(delay); delay.connect(lp); lp.connect(fb); fb.connect(delay); lp.connect(wet); wet.connect(comp);
+  } catch(e){ ctx = null; }
+}
+const ROWS = ["zxcvbnm","asdfghjkl","qwertyuiop","1234567890"];
+function keyPos(ch){
+  const c = ch.toLowerCase();
+  for (let r = 0; r < ROWS.length; r++){ const i = ROWS[r].indexOf(c); if (i >= 0) return {r, i, len: ROWS[r].length}; }
+  return null;
+}
+function midiFor(code, mood){
+  const ch = String.fromCharCode(code), sc = MOODS[mood].scale, root = 50;
+  const p = keyPos(ch);
+  let deg;
+  if (code === 32) return root - 12 + sc[0];
+  if (code === 8) return null;
+  if (p) deg = p.i + p.r * 4;
+  else deg = 10 + (code % 7);
+  return root + sc[deg % sc.length] + 12 * Math.floor(deg / sc.length);
+}
+function playNote(code, mood, when = 0, vel = 1){
+  if (!soundOn || !ctx) return;
+  const m = midiFor(code, mood); if (m == null) return;
+  const M = MOODS[mood], t = ctx.currentTime + when;
+  const f = 440 * Math.pow(2, (m - 69) / 12);
+  const o = ctx.createOscillator(), g = ctx.createGain(), fl = ctx.createBiquadFilter();
+  o.type = M.wave; o.frequency.value = f;
+  if (mood === "Blue") o.detune.value = -8;
+  fl.type = "lowpass"; fl.frequency.value = M.cutoff;
+  const peak = (code === 32 ? .16 : M.wave === "sine" ? .5 : M.wave === "triangle" ? .38 : .14) * vel;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(peak, t + .008);
+  g.gain.exponentialRampToValueAtTime(.0008, t + M.decay);
+  o.connect(fl); fl.connect(g); g.connect(master);
+  o.start(t); o.stop(t + M.decay + .05);
+}
+function playChord(mood){
+  if (!soundOn || !ctx) return;
+  [65, 73, 81].forEach((c, i) => playNote(c, mood, i * .06, .8));
+}
+
+// ---------- Sky (background bloom) ----------
+const sky = document.getElementById("sky"), sk = sky.getContext("2d");
+let petals = [], skyColor = [111,191,174], skyTarget = [111,191,174];
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function hex2rgb(h){ const n = parseInt(h.slice(1),16); return [n>>16&255, n>>8&255, n&255]; }
+function resizeSky(){ const d = devicePixelRatio||1; sky.width = innerWidth*d; sky.height = innerHeight*d; sk.setTransform(d,0,0,d,0,0); if (reduce){ sk.fillStyle="#101119"; sk.fillRect(0,0,innerWidth,innerHeight); } }
+addEventListener("resize", resizeSky); resizeSky();
+function bloom(code, mood, strength = 1){
+  const p = keyPos(String.fromCharCode(code));
+  const W = innerWidth, H = innerHeight;
+  const x = p ? (0.12 + 0.76 * (p.i + .5) / p.len) * W : Math.random() * W;
+  const y = p ? (0.72 - p.r * 0.18) * H : H * (.2 + Math.random() * .5);
+  petals.push({x: x + (Math.random()-.5)*30, y: y + (Math.random()-.5)*30, r: 4, max: (code===32? 120: 40 + Math.random()*50) * strength, life: 1, c: hex2rgb(MOODS[mood].color)});
+  if (petals.length > 160) petals.shift();
+}
+function drawSky(){
+  for (let i = 0; i < 3; i++) skyColor[i] += (skyTarget[i] - skyColor[i]) * .01;
+  const W = innerWidth, H = innerHeight;
+  sk.fillStyle = "#101119"; sk.fillRect(0,0,W,H);
+  const g = sk.createRadialGradient(W*.5, H*1.05, 0, W*.5, H*1.05, Math.max(W,H)*.9);
+  const [r,gg,b] = skyColor.map(Math.round);
+  g.addColorStop(0, `rgba(${r},${gg},${b},.30)`); g.addColorStop(.55, `rgba(${r},${gg},${b},.07)`); g.addColorStop(1, "rgba(16,17,25,0)");
+  sk.fillStyle = g; sk.fillRect(0,0,W,H);
+  sk.globalCompositeOperation = "lighter";
+  for (const p of petals){
+    p.r += (p.max - p.r) * .06; p.life -= .009;
+    if (p.life <= 0) continue;
+    const gr = sk.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+    gr.addColorStop(0, `rgba(${p.c[0]},${p.c[1]},${p.c[2]},${.34*p.life})`);
+    gr.addColorStop(1, `rgba(${p.c[0]},${p.c[1]},${p.c[2]},0)`);
+    sk.fillStyle = gr; sk.beginPath(); sk.arc(p.x, p.y, p.r, 0, 6.283); sk.fill();
+  }
+  sk.globalCompositeOperation = "source-over";
+  petals = petals.filter(p => p.life > 0);
+  requestAnimationFrame(drawSky);
+}
+if (!reduce) requestAnimationFrame(drawSky);
+
+// ---------- Compass ----------
+const cc = document.getElementById("compass"), cx = cc.getContext("2d");
+let dot = {e:.5, v:0}, dotT = {e:.5, v:0}, trail = [];
+function sizeCompass(){ const r = cc.getBoundingClientRect(), d = devicePixelRatio||1; cc.width = r.width*d; cc.height = r.height*d; cx.setTransform(d,0,0,d,0,0); }
+new ResizeObserver(sizeCompass).observe(cc);
+function drawCompass(){
+  const W = cc.clientWidth, H = cc.clientHeight;
+  if (W){
+    dot.e += (dotT.e - dot.e) * .08; dot.v += (dotT.v - dot.v) * .08;
+    cx.clearRect(0,0,W,H);
+    const q = [["Blue",0,H/2],["Tender",W/2,H/2],["Restless",0,0],["Bright",W/2,0]];
+    for (const [m,x,y] of q){ cx.fillStyle = MOODS[m].color + "14"; cx.fillRect(x,y,W/2,H/2); }
+    cx.strokeStyle = "#2a2d40"; cx.lineWidth = 1;
+    cx.beginPath(); cx.moveTo(W/2,10); cx.lineTo(W/2,H-10); cx.moveTo(10,H/2); cx.lineTo(W-10,H/2); cx.stroke();
+    cx.beginPath(); cx.arc(W/2,H/2,Math.min(W,H)*.14*1.4,0,6.283); cx.setLineDash([3,4]); cx.stroke(); cx.setLineDash([]);
+    cx.font = "500 10px JetBrains Mono, monospace"; cx.fillStyle = "#5f5e78";
+    cx.fillText("HEAVY", 12, H/2 - 6); cx.fillText("LIGHT", W-44, H/2 - 6); cx.fillText("RESTLESS", 14, 44); cx.fillText("BRIGHT", W-60, 44); cx.fillText("BLUE", 14, H-22); cx.fillText("TENDER", W-58, H-22);
+    const px = W/2 + dot.v * W*.42, py = H - (dot.e * (H*.84) + H*.08);
+    trail.push([px,py]); if (trail.length > 40) trail.shift();
+    cx.strokeStyle = MOODS[moodOf(dot.e,dot.v)].color + "66"; cx.lineWidth = 2; cx.beginPath();
+    trail.forEach(([x,y],i) => i ? cx.lineTo(x,y) : cx.moveTo(x,y)); cx.stroke();
+    const col = MOODS[moodOf(dot.e,dot.v)].color;
+    const g = cx.createRadialGradient(px,py,0,px,py,26); g.addColorStop(0,col+"cc"); g.addColorStop(1,col+"00");
+    cx.fillStyle = g; cx.beginPath(); cx.arc(px,py,26,0,6.283); cx.fill();
+    cx.fillStyle = col; cx.beginPath(); cx.arc(px,py,6,0,6.283); cx.fill();
+  }
+  requestAnimationFrame(drawCompass);
+}
+requestAnimationFrame(drawCompass);
+
+document.getElementById("legend").innerHTML = Object.entries(MOODS).map(([k,m]) => `<div style="--c:${m.color}"><i></i>${k} <span style="color:var(--faint)">· ${m.desc}</span></div>`).join("");
+
+// ---------- Composer / live sensing ----------
+const input = document.getElementById("input"), sendBtn = document.getElementById("sendBtn");
+let notes = [], lastKey = 0, backspaces = 0, liveMood = "Calm";
+function setMoodUI(m){
+  liveMood = m;
+  document.documentElement.style.setProperty("--mood", MOODS[m].color);
+  document.getElementById("moodName").textContent = m;
+}
+function resetComposer(){ notes = []; lastKey = 0; backspaces = 0; dotT = {e:.5, v:0}; }
+function sense(){
+  const {e, cps, longest} = energyOf(notes);
+  const v = valenceOf(input.value, backspaces, notes.length);
+  const eBoost = Math.min(.25, (input.value.match(/!/g)||[]).length*.06) + (input.value.length > 6 && input.value === input.value.toUpperCase() && /[A-Z]/.test(input.value) ? .25 : 0);
+  const E = Math.min(1, e + eBoost);
+  dotT = {e: notes.length > 3 ? E : .5, v};
+  const m = notes.length > 3 ? moodOf(E, v) : moodOf(.5, v);
+  setMoodUI(m);
+  document.getElementById("moodNums").innerHTML = `${cps ? cps.toFixed(1) : "—"} keys/s<br>${longest > 1400 ? (longest/1000).toFixed(1)+"s longest pause" : "no long pauses"}`;
+  return {e: E, v, m};
+}
+input.addEventListener("keydown", ev => {
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing){ ev.preventDefault(); send(); return; }
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  const now = performance.now();
+  let code = null;
+  if (ev.key.length === 1) code = ev.key.charCodeAt(0);
+  else if (ev.key === "Backspace"){ code = 8; backspaces++; }
+  else if (ev.key === "Enter") code = 10;
+  if (code == null) return;
+  if (soundOn) ensureAudio();
+  const dt = lastKey ? Math.min(9999, Math.round(now - lastKey)) : 0;
+  lastKey = now;
+  if (notes.length < 600) notes.push([code, dt]);
+  playNote(code, liveMood, 0, 1);
+  if (!reduce) bloom(code, liveMood);
+  presenceTyping(true);
+});
+input.addEventListener("input", () => {
+  input.style.height = "auto"; input.style.height = Math.min(140, input.scrollHeight) + "px";
+  sendBtn.disabled = !input.value.trim();
+  if (!input.value) resetComposer();
+  sense();
+  presenceTyping(!!input.value);
+});
+sendBtn.addEventListener("click", send);
+
+// ---------- Messages ----------
+const thread = document.getElementById("thread");
+const status = document.getElementById("status");
+let messages = [], signedIn = false, me = {id: null, name: null}, host = null, profiles = {}, sampleMode = true, liveLoaded = false;
+const playSvg = '<svg viewBox="0 0 10 10"><path d="M1 0 L10 5 L1 10Z"/></svg>';
+
+function synthNotes(text, cps, jitter){
+  const out = []; let first = true;
+  for (const ch of text){ const base = 1000 / cps; out.push([ch.charCodeAt(0), first ? 0 : Math.round(base * (1 + (Math.random()-.5)*jitter) + (ch === " " && Math.random() < .15 ? 700 : 0))]); first = false; }
+  return out;
+}
+function makeSample(){
+  const now = Date.now();
+  const s = [
+    {by:"sample:ada", name:"Ada (example)", text:"morning!! the light on the water is unreal today, coming down to the beach?", cps:8.5, j:.5, t: now - 1000*60*42},
+    {by:"sample:ren", name:"Ren (example)", text:"yes. slow start here but I'll be there by ten", cps:3.6, j:.6, t: now - 1000*60*39},
+    {by:"sample:ada", name:"Ada (example)", text:"bring the good speaker :)", cps:6.2, j:.4, t: now - 1000*60*38},
+    {by:"sample:ren", name:"Ren (example)", text:"ugh, lost my keys again... hang on", cps:7.8, j:.9, t: now - 1000*60*20},
+  ];
+  return s.map((m,i) => { const n = synthNotes(m.text, m.cps, m.j); const {e} = energyOf(n); const v = valenceOf(m.text, 0, n.length); return {id:"s"+i, by:m.by, sampleName:m.name, text:m.text, t:m.t, n, e, v, mood: moodOf(e, v)}; });
+}
+function colorFor(id){
+  if (profiles[id] && profiles[id].color) return profiles[id].color;
+  let h = 0; for (const c of String(id)) h = (h*31 + c.charCodeAt(0)) >>> 0;
+  return ["#F2C14E","#B48BF2","#E99AB6","#6FBFAE","#6E8BE0","#EE7F5B"][h % 6];
+}
+function nameFor(m){
+  if (m.sampleName) return m.sampleName;
+  if (m.by && m.by === me.id) return "You";
+  return (profiles[m.by] && profiles[m.by].name) || m.name || "Someone";
+}
+function ago(t){ const s = (Date.now() - t)/1000; if (s < 60) return "just now"; if (s < 3600) return Math.floor(s/60)+"m ago"; if (s < 86400) return Math.floor(s/3600)+"h ago"; return new Date(t).toLocaleDateString(); }
+
+function drawRoll(canvas, n, color){
+  const d = devicePixelRatio||1, W = canvas.clientWidth || 300, H = 22;
+  canvas.width = W*d; canvas.height = H*d; const c = canvas.getContext("2d"); c.setTransform(d,0,0,d,0,0);
+  let total = 0; const ts = n.map(([_,dt]) => (total += Math.min(dt, 2500)));
+  total = Math.max(total, 1);
+  c.strokeStyle = "#2a2d40"; c.beginPath(); c.moveTo(0,H/2); c.lineTo(W,H/2); c.stroke();
+  n.forEach(([code], i) => {
+    if (code === 8){ c.fillStyle = "#5f5e78"; c.fillRect(4 + (ts[i]/total)*(W-8) - 1, 4, 2, H-8); return; }
+    const p = keyPos(String.fromCharCode(code));
+    const y = code === 32 ? H-4 : p ? H - 5 - (p.r/3)*(H-10) : 5;
+    c.fillStyle = color; c.globalAlpha = code === 32 ? .35 : .9;
+    c.beginPath(); c.arc(4 + (ts[i]/total)*(W-8), y, code === 32 ? 1.4 : 2, 0, 6.283); c.fill();
+  });
+  c.globalAlpha = 1;
+}
+function render(){
+  const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
+  thread.innerHTML = "";
+  if (sampleMode){
+    const b = document.createElement("div"); b.className = "note-banner";
+    b.textContent = host ? "Example thread. It disappears when the first real message is sent." : "Example thread. This room isn't shared yet, so what you send stays on this screen.";
+    thread.appendChild(b);
+  }
+  for (const m of messages){
+    const mood = MOODS[m.mood] ? m.mood : "Calm", col = MOODS[mood].color;
+    const mine = m.by && m.by === me.id;
+    const el = document.createElement("article");
+    el.className = "msg" + (mine ? " mine" : ""); el.style.setProperty("--c", col);
+    const {cps} = energyOf(m.n || []);
+    const nm = nameFor(m);
+    el.innerHTML = `<div class="av"></div>
+      <div class="bubble"><div class="meta"><span class="who"></span><span class="chip">${mood}</span><span>${ago(m.t)}</span></div>
+      <div class="txt"></div>
+      <div class="score"><button class="play" aria-label="Play this message as it was typed">${playSvg}</button><canvas class="roll"></canvas><span class="tempo">${cps ? cps.toFixed(1)+" k/s" : ""}</span></div></div>`;
+    const av = el.querySelector(".av");
+    av.style.background = colorFor(m.by);
+    av.textContent = (nm[0] || "?").toUpperCase();
+    el.querySelector(".who").textContent = nm;
+    const txt = el.querySelector(".txt");
+    for (const ch of String(m.text || "")){ const s = document.createElement("span"); s.textContent = ch; txt.appendChild(s); }
+    el.querySelector(".play").addEventListener("click", () => replay(m, el));
+    thread.appendChild(el);
+    requestAnimationFrame(() => drawRoll(el.querySelector(".roll"), m.n || [], col));
+  }
+  if (atBottom || !render.done) thread.scrollTop = thread.scrollHeight;
+  render.done = true;
+  updateWeather();
+}
+let replayTimers = [];
+function replay(m, el){
+  replayTimers.forEach(clearTimeout); replayTimers = [];
+  if (!soundOn){ setSound(true); }
+  ensureAudio();
+  const spans = [...el.querySelectorAll(".txt span")];
+  spans.forEach(s => s.classList.remove("lit"));
+  let t = 0, idx = 0;
+  const n = (Array.isArray(m.n) && m.n.length) ? m.n : synthNotes(String(m.text || ""), 5, .3);
+  const mood = MOODS[m.mood] ? m.mood : "Calm";
+  for (const [code, dt] of n){
+    t += Math.min(dt, 2200);
+    const isChar = code !== 8 && code !== 10;
+    const myIdx = isChar ? idx : -1;
+    replayTimers.push(setTimeout(() => {
+      playNote(code, mood);
+      if (!reduce) bloom(code, mood, .8);
+      if (myIdx >= 0 && spans[myIdx]){ spans[myIdx].classList.add("lit"); setTimeout(() => spans[myIdx] && spans[myIdx].classList.remove("lit"), 380); }
+    }, t));
+    if (isChar) idx = Math.min(idx + 1, spans.length);
+    if (code === 8) idx = Math.max(0, idx - 1);
+  }
+  replayTimers.push(setTimeout(() => playChord(mood), t + 250));
+}
+function updateWeather(){
+  const recent = messages.slice(-10);
+  if (!recent.length) return;
+  let e = 0, v = 0, w = 0;
+  recent.forEach((m, i) => { const k = i + 1; e += (m.e ?? .5) * k; v += (m.v ?? 0) * k; w += k; });
+  const mood = moodOf(e/w, v/w);
+  document.getElementById("weatherName").textContent = mood;
+  document.getElementById("orb").style.cssText = `background:${MOODS[mood].color};box-shadow:0 0 18px ${MOODS[mood].color}`;
+  skyTarget = hex2rgb(MOODS[mood].color);
+}
+
+async function send(){
+  const text = input.value.trim();
+  if (!text) return;
+  const s = sense();
+  const msg = {text: text.slice(0, 2000), by: me.id || "local", t: Date.now(), n: notes.slice(0, 600), e: +s.e.toFixed(3), v: +s.v.toFixed(3), mood: s.m};
+  playChord(s.m);
+  input.value = ""; input.style.height = "auto"; sendBtn.disabled = true;
+  resetComposer(); sense(); presenceTyping(false);
+  if (host && host.messages && signedIn){
+    try { await host.messages.add(msg); }
+    catch(err){
+      const code = err && err.code;
+      toast(code === "unauthorized" ? "Sign in with PointCast to post in this room." :
+            code === "rate_limited" ? "Easy there. Give it a second and try again." :
+            code === "quota_exceeded" ? "This room is full right now." : "That message didn't send. Check your connection and try again.");
+      input.value = msg.text; sendBtn.disabled = false;
+    }
+  } else {
+    if (host && !signedIn) toast("You're listening in. Sign in with PointCast to post to the room.");
+    messages.push({...msg, id: "l"+msg.t, by: me.id || "local"}); if (!me.id) me.id = "local";
+    render();
+  }
+}
+function toast(t){ const d = document.createElement("div"); d.className = "toast"; d.setAttribute("role","status"); d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 4200); }
+
+// ---------- Sound toggle ----------
+const soundBtn = document.getElementById("soundBtn");
+function setSound(on){ soundOn = on; if (on) ensureAudio(); soundBtn.setAttribute("aria-pressed", String(on)); soundBtn.textContent = on ? "Sound on" : "Sound off"; try{ localStorage.setItem("bl_sound", on ? "1" : "0"); }catch(e){} }
+soundBtn.addEventListener("click", () => setSound(!soundOn));
+try { if (localStorage.getItem("bl_sound") === "1") { soundBtn.textContent = "Sound on (tap to wake)"; input.addEventListener("keydown", function wake(){ setSound(true); }, {once:true}); } } catch(e){}
+
+// ---------- Presence ----------
+let lastPresence = 0, presenceTimer = null, typingState = false;
+function presenceTyping(on){
+  if (!host || !host.presence) return;
+  const now = Date.now();
+  const push = () => { lastPresence = Date.now(); try { Promise.resolve(host.presence.set({typing: typingState, mood: liveMood})).catch(()=>{}); } catch(e){} };
+  typingState = on;
+  clearTimeout(presenceTimer);
+  if (now - lastPresence > 400) push(); else presenceTimer = setTimeout(push, 400);
+  if (on){ clearTimeout(presenceTyping.idle); presenceTyping.idle = setTimeout(() => { typingState = false; push(); }, 4000); }
+}
+async function loadProfiles(ids){
+  const missing = ids.filter(id => id && !profiles[id] && !String(id).startsWith("sample:"));
+  if (!missing.length || !host || typeof host.profiles !== "function") return;
+  try { Object.assign(profiles, await host.profiles(missing) || {}); } catch(e){}
+}
+async function renderPeers(list){
+  const box = document.getElementById("peers");
+  const others = (list || []).filter(p => p && !p.isMe && p.id !== me.id);
+  await loadProfiles(others.map(p => p.id));
+  box.innerHTML = "";
+  for (const p of others.slice(0, 6)){
+    const d = document.createElement("div");
+    const col = MOODS[p.mood] ? MOODS[p.mood].color : "#9A98B0";
+    const nm = p.name || (p.id && profiles[p.id] && profiles[p.id].name) || "Guest";
+    d.className = "peer" + (p.typing ? " typing" : "");
+    d.style.background = col; d.style.color = col;
+    d.title = p.typing ? `${nm} is typing · sounds ${p.mood || "Calm"}` : `${nm} is here`;
+    const sp = document.createElement("span"); sp.style.color = "#101119"; sp.textContent = (nm[0] || "?").toUpperCase(); d.appendChild(sp);
+    box.appendChild(d);
+  }
+}
+
+// ---------- Host hooks (optional) ----------
+// A host makes this a live room. Shape (see the handoff brief):
+//   me():          Promise<{id, name?, color?} | null>
+//   profiles(ids): Promise<{[id]: {name, color?}}>              (optional)
+//   messages.add(msg): Promise<void>
+//   messages.subscribe(onDocs, onError): unsubscribe fn         onDocs(Array<msg & {id}>), oldest first
+//   presence.set({typing, mood}): Promise<void>
+//   presence.subscribe(onPeers): unsubscribe fn                  onPeers(Array<{id, name?, isMe?, typing?, mood?}>)
+async function connect(h){
+  if (!h || host) return;
+  host = h;
+  status.textContent = "Connecting…";
+  try {
+    const who = typeof h.me === "function" ? await h.me() : null;
+    if (who && who.id){ me = {id: String(who.id), name: who.name || null}; signedIn = true; profiles[me.id] = {name: who.name, color: who.color}; }
+  } catch(e){}
+  if (h.messages && typeof h.messages.subscribe === "function"){
+    status.textContent = signedIn ? "Live room" : "Live room · listening";
+    h.messages.subscribe(async docs => {
+      docs = Array.isArray(docs) ? docs.slice(-150) : [];
+      const fresh = docs.filter(m => !messages.some(x => x.id === m.id));
+      if (docs.length){
+        sampleMode = false;
+        await loadProfiles([...new Set(docs.map(m => m.by))]);
+        const wasLoaded = liveLoaded;
+        messages = docs; render(); liveLoaded = true;
+        if (wasLoaded && soundOn){
+          const incoming = fresh.filter(m => m.by !== me.id);
+          if (incoming.length){ const m = incoming[incoming.length-1]; const els = thread.querySelectorAll(".msg"); const el = els[els.length-1]; if (el) replay(m, el); }
+        }
+      } else { sampleMode = true; messages = makeSample(); render(); liveLoaded = true; }
+    }, () => { status.textContent = "Room offline · solo"; });
+  } else {
+    status.textContent = "Solo instrument";
+    render();
+  }
+  if (h.presence && typeof h.presence.subscribe === "function"){
+    try { h.presence.subscribe(list => { renderPeers(list); }); } catch(e){}
+  }
+}
+window.Bloomline = { connect };
+
+// ---------- Boot ----------
+messages = makeSample(); render(); setMoodUI("Calm");
+if (window.BloomlineHost) connect(window.BloomlineHost);
+else addEventListener("load", () => { if (window.BloomlineHost) connect(window.BloomlineHost); });
+})();
+</script>
+</body>
+</html>
