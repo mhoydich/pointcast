@@ -74,3 +74,35 @@ describe("DrumCounter signal", () => {
     expect(s.sources[0]?.app).not.toMatch(/[<> ]/);
   });
 });
+
+describe("DrumCounter live + reconcile", () => {
+  it("lists drummers and anonymous sources heard in the last two minutes", async () => {
+    const room = `live-${crypto.randomUUID()}`;
+    await post(room, { delta: 2, leaderboardHash: "cccccccc", nounId: 42 }, "c".repeat(16));
+    await post(room, { delta: 1, source: { kind: "artifact", app: "drum-hall" } });
+    const res = await counter(room).fetch("https://drum-counter.internal/?live=1");
+    const live = (await res.json()) as { count: number; drummers: Array<{ nounId: number }>; sources: Array<{ app: string }> };
+    expect(live.count).toBe(1);
+    expect(live.drummers[0]?.nounId).toBe(42);
+    expect(live.sources.map((s) => s.app)).toContain("drum-hall");
+  });
+
+  it("raises a global that the per-drummer totals prove was undercounted, once", async () => {
+    const room = `reconcile-${crypto.randomUUID()}`;
+    // Simulate the legacy KV state: global lost increments, sessions did not.
+    await env.VISITS.put("drum:total", "10");
+    await env.VISITS.put("drum:top", JSON.stringify([
+      { hash: "dddddddd", nounId: 1, count: 8 },
+      { hash: "eeeeeeee", nounId: 2, count: 7 },
+    ]));
+    const res = await counter(room).fetch("https://drum-counter.internal/?signal=1");
+    const s = (await res.json()) as { globalTotal: number; recovered: number };
+    expect(s.globalTotal).toBe(15);
+    expect(s.recovered).toBe(5);
+    await env.VISITS.put("drum:top", JSON.stringify([{ hash: "dddddddd", nounId: 1, count: 999 }]));
+    const again = (await (await counter(room).fetch("https://drum-counter.internal/?signal=1")).json()) as { globalTotal: number };
+    expect(again.globalTotal).toBe(15);
+    await env.VISITS.delete("drum:total");
+    await env.VISITS.delete("drum:top");
+  });
+});

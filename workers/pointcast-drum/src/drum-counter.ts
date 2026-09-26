@@ -21,6 +21,8 @@ const MAX_SOURCE_ROWS = 2000;
 const MAX_PLACE_ROWS = 500;
 const RECENT_SIGNALS = 60;
 const SIGNAL_DAYS = 90;
+// "Who's here" on the drum = anyone whose beat reached the counter recently.
+const LIVE_WINDOW_MS = 120_000;
 
 function slug(raw: unknown, max: number): string {
   if (typeof raw !== "string") return "";
@@ -109,6 +111,11 @@ export class DrumCounter extends DurableObject<Env> {
           beats INTEGER NOT NULL
         );
       `);
+      // Sessions predating the live view have no last_at column yet.
+      const columns = this.ctx.storage.sql.exec<{ name: string }>("PRAGMA table_info(drum_counter_sessions)").toArray();
+      if (!columns.some((c) => c.name === "last_at")) {
+        this.ctx.storage.sql.exec("ALTER TABLE drum_counter_sessions ADD COLUMN last_at INTEGER");
+      }
     });
   }
 
@@ -120,6 +127,7 @@ export class DrumCounter extends DurableObject<Env> {
     if (request.method === "GET") {
       if (url.searchParams.get("top") === "1") return json({ entries: await this.topEntries() });
       if (url.searchParams.get("signal") === "1") return json(await this.signalSummary());
+      if (url.searchParams.get("live") === "1") return json(await this.live());
       const globalTotal = await this.globalTotal();
       const yourTotal = session ? await this.sessionTotal(session) : 0;
       return json({ globalTotal, yourTotal });
@@ -158,9 +166,9 @@ export class DrumCounter extends DurableObject<Env> {
     if (source) this.recordSignal(source, delta, Date.now());
     if (session) this.ctx.storage.sql.exec(
       `UPDATE drum_counter_sessions
-       SET total = ?, dirty = 1, leaderboard_hash = COALESCE(?, leaderboard_hash), noun_id = COALESCE(?, noun_id)
+       SET total = ?, dirty = 1, leaderboard_hash = COALESCE(?, leaderboard_hash), noun_id = COALESCE(?, noun_id), last_at = ?
        WHERE session_hash = ?`,
-      nextSession, leaderboardHash, nounId, session,
+      nextSession, leaderboardHash, nounId, Date.now(), session,
     );
     const pending = this.meta("pending") + delta;
     this.setMeta("pending", pending);
@@ -214,6 +222,9 @@ export class DrumCounter extends DurableObject<Env> {
       attributed,
       // Every beat counted before the signal shipped carried no source.
       unattributed: Math.max(0, globalTotal - attributed),
+      // Taps the old KV counter lost to write races, restored once from the
+      // per-drummer totals (already part of globalTotal and unattributed).
+      recovered: this.meta("reconciled_v1"),
       kinds,
       sources: sql.exec(
         `SELECT kind, app, total, hits, first_at AS firstAt, last_at AS lastAt
@@ -234,11 +245,79 @@ export class DrumCounter extends DurableObject<Env> {
   }
 
   private async globalTotal(): Promise<number> {
-    const existing = this.rowValue("global");
-    if (existing !== undefined) return existing;
-    const legacy = countOf(await this.env.VISITS.get(KEY_GLOBAL));
-    this.setMeta("global", legacy);
-    return legacy;
+    let total = this.rowValue("global");
+    if (total === undefined) {
+      total = countOf(await this.env.VISITS.get(KEY_GLOBAL));
+      this.setMeta("global", total);
+    }
+    if (this.rowValue("reconciled_v1") === undefined) total = await this.reconcile(total);
+    return total;
+  }
+
+  /**
+   * One-time repair. The old KV-only counter did read-modify-write on one
+   * global key, so concurrent taps clobbered each other and the global lost
+   * increments while per-session keys kept theirs — which is how the top ten
+   * came to sum past the global. Every known drummer's taps really happened,
+   * so their sum is a floor for the global. Raise it once and keep the amount
+   * recovered in meta so the repair is auditable.
+   */
+  private async reconcile(total: number): Promise<number> {
+    const best = new Map<string, number>();
+    for (const entry of await this.kvTop()) best.set(entry.hash, Math.max(best.get(entry.hash) ?? 0, entry.count));
+    const rows = this.ctx.storage.sql.exec<{ session_hash: string; total: number }>(
+      "SELECT session_hash, total FROM drum_counter_sessions",
+    ).toArray();
+    for (const row of rows) {
+      // leaderboard hash = first 8 hex of the same sha256 the session hash uses
+      const key = row.session_hash.slice(0, 8);
+      best.set(key, Math.max(best.get(key) ?? 0, row.total));
+    }
+    let floor = 0;
+    for (const count of best.values()) floor += count;
+    const recovered = Math.max(0, floor - total);
+    this.setMeta("reconciled_v1", recovered);
+    if (!recovered) return total;
+    this.setMeta("global", total + recovered);
+    this.setMeta("pending", this.meta("pending") + 1);
+    await this.ctx.storage.setAlarm(Date.now() + FLUSH_AFTER_MS);
+    return total + recovered;
+  }
+
+  private async kvTop(): Promise<TopEntry[]> {
+    try {
+      const raw = await this.env.VISITS.get(KEY_TOP);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((entry): entry is TopEntry =>
+        typeof entry?.hash === "string" && typeof entry?.nounId === "number" && typeof entry?.count === "number",
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  private async live() {
+    const since = Date.now() - LIVE_WINDOW_MS;
+    const sql = this.ctx.storage.sql;
+    const drummers = sql.exec<{ hash: string | null; nounId: number | null; lastAt: number }>(
+      `SELECT leaderboard_hash AS hash, noun_id AS nounId, last_at AS lastAt
+       FROM drum_counter_sessions WHERE last_at >= ? ORDER BY last_at DESC LIMIT 50`,
+      since,
+    ).toArray();
+    const sources = sql.exec<{ kind: string; app: string; beats: number; lastAt: number }>(
+      `SELECT kind, app, SUM(beats) AS beats, MAX(at) AS lastAt
+       FROM drum_signal_recent WHERE at >= ? GROUP BY kind, app ORDER BY lastAt DESC`,
+      since,
+    ).toArray();
+    return {
+      windowSeconds: LIVE_WINDOW_MS / 1000,
+      count: drummers.length,
+      drummers,
+      sources,
+      globalTotal: await this.globalTotal(),
+      recovered: this.meta("reconciled_v1"),
+    };
   }
 
   private async sessionTotal(session: string): Promise<number> {
@@ -306,14 +385,7 @@ export class DrumCounter extends DurableObject<Env> {
        ORDER BY total DESC, session_hash ASC
        LIMIT 10`,
     ).toArray();
-    let current: TopEntry[] = [];
-    try {
-      const raw = await this.env.VISITS.get(KEY_TOP);
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(parsed)) current = parsed.filter((entry): entry is TopEntry =>
-        typeof entry?.hash === "string" && typeof entry?.nounId === "number" && typeof entry?.count === "number",
-      );
-    } catch { /* an unavailable or malformed compatibility mirror is non-fatal */ }
+    const current = await this.kvTop();
     for (const row of rows) {
       const existing = current.find((entry) => entry.hash === row.hash);
       if (existing) existing.count = Math.max(existing.count, row.count);

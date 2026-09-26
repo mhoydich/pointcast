@@ -242,7 +242,7 @@ const TOOL_DEFINITIONS = [
   {
     name: 'drum_who_is_here',
     description:
-      'Return the list of visitors currently present in the drum hub. Each entry has a pid (8-char anonymous identifier), nounId (pixel-art Nouns avatar id 0-1199), and type (human or bot).',
+      'Return who is drumming right now: every drummer whose beat reached the PointCast drum counter in the last two minutes (hash + Nouns avatar id 0-1199), plus the tagged sources (kind/app) those beats came from.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -1379,23 +1379,25 @@ async function dispatchTool(
       return textContent(md);
     }
     case 'drum_who_is_here': {
-      const data = await callJson(`${base}/api/visit`);
-      const present = Array.isArray(data?.present) ? data.present : [];
-      const humans = present.filter((p: any) => p?.type === 'human' && p?.pid);
+      // Drum presence comes from the counter itself: anyone whose beat landed
+      // in the last two minutes, from any room, embed, artifact, or agent.
+      const data = await callJson(`${base}/api/drum/live`);
+      const drummers = Array.isArray(data?.drummers) ? data.drummers : [];
+      const sources = Array.isArray(data?.sources) ? data.sources : [];
       const summary =
-        humans.length === 0
-          ? 'no humans present right now (the room is quiet)'
-          : `${humans.length} human${humans.length === 1 ? '' : 's'} in the drum hub:\n` +
-            humans
-              .map(
-                (p: any) =>
-                  `  · pid ${p.pid?.slice(0, 8)} · noun #${p.nounId} · ${p.country || '—'}${p.city ? '/' + p.city : ''}`,
-              )
-              .join('\n');
+        drummers.length === 0 && sources.length === 0
+          ? 'nobody has drummed in the last two minutes (the room is quiet)'
+          : `${drummers.length} drummer${drummers.length === 1 ? '' : 's'} in the last two minutes` +
+            (drummers.length
+              ? ':\n' + drummers.map((d: any) => `  · noun #${d.nounId ?? '—'} · ${d.hash ?? 'anon'}`).join('\n')
+              : '') +
+            (sources.length
+              ? '\nsources: ' + sources.map((x: any) => `${x.kind}/${x.app} ×${x.beats}`).join(', ')
+              : '');
       return {
         content: [
           { type: 'text', text: summary },
-          { type: 'text', text: JSON.stringify({ count: humans.length, humans }, null, 2) },
+          { type: 'text', text: JSON.stringify({ count: drummers.length, drummers, sources }, null, 2) },
         ],
       };
     }
