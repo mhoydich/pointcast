@@ -213,6 +213,7 @@
         <option value="60">60 s</option>
       </select></div>
     <button id="inviteBtn" class="primary" title="Save a seat and send someone the link">Invite</button>
+    <button id="onlineBtn" title="Friends join from their own phone or laptop with a link">Play online</button>
     <button id="flatBtn" aria-pressed="false" title="Tablet flat on a table: the top two seats face the far side">Table mode</button>
   </div>
 </header>
@@ -254,6 +255,7 @@
   <span>a full flower = one bloom · when the sun comes out, every key counts</span>
 </footer>
 
+<script is:inline src="/js/keyboard-table.js"></script>
 <script is:inline>
 (() => {
 'use strict';
@@ -322,6 +324,7 @@ const mtof = m => 440*Math.pow(2,(m-69)/12);
 const PANS = [-0.45, 0.45, -0.3, 0.3];
 function tone(seat, midi, vel=0.8, t, len=1){
   boot(); t = t ?? ctx.currentTime;
+  if(table) table.note(seat, midi, vel, t - ctx.currentTime, len);
   const f = mtof(midi), kind = SEATS[seat].voice;
   const out = ctx.createGain(); const pan = ctx.createStereoPanner(); pan.pan.value = PANS[seat];
   out.connect(pan); pan.connect(master); pan.connect(wet);
@@ -598,6 +601,35 @@ if(savedSeat >= 0){
   promptEl.textContent = `${from} saved you the `;
   const em = document.createElement('em'); em.style.color = s.color; em.textContent = `${s.name} seat.`; promptEl.appendChild(em);
   sub.textContent = `Your keys are ${s.caps.split('').join(' ')}. ${TOUCH ? 'Tap' : 'Press'} one to sit. It's one keyboard for everyone, so pull up a chair next to whoever sent this.`;
+}
+/* ---------- online seats (/js/keyboard-table.js) ---------- */
+let table = null;
+const onlineBtn = $('onlineBtn');
+const TABLE_OPTS = {
+  game: 'rush', title: 'Bloom Rush', path: location.pathname,
+  seats: SEATS.map(s=>({name:s.name, color:s.color, caps:s.caps})),
+};
+function hostTable(){
+  if(table || !window.KeyboardTable) return;
+  table = KeyboardTable.host(Object.assign({}, TABLE_OPTS, {
+    snapshot: ()=>({ m: mode, sit: sitting.map(Number), sc: blooms.slice(), turn: -1, lit: (mode==='play' ? lit : -1),
+      bar: mode==='sun' ? Math.round(Math.min(1, sunFill/Math.max(1,sunNeed))*100) : (mode==='play' ? Math.round(Math.max(0, startAt + gameMs - performance.now())/gameMs*100) : 0),
+      p: promptEl.textContent }),
+    onKey: (seat,deg)=>hit(seat,deg),
+    onSit: seat=>{ if(mode==='jam' && !sitting[seat]){ sitting[seat] = true; updateLobby(); } },
+    onStart: ()=>{ if(mode==='jam' || mode==='done') start(); },
+    onAgain: null,
+    onEnd: ()=>{ table = null; onlineBtn.hidden = false; },
+  }));
+  onlineBtn.hidden = true;
+}
+onlineBtn.onclick = ()=>{ boot(); hostTable(); onlineBtn.blur(); };
+const tableCode = window.KeyboardTable ? KeyboardTable.cleanCode(new URLSearchParams(location.search).get('table')) : '';
+if(tableCode){
+  onlineBtn.hidden = true;
+  KeyboardTable.join(Object.assign({}, TABLE_OPTS, { code: tableCode, seatCodes: SEATS.map(s=>s.codes), tone: (seat,midi,vel,t,len)=>tone(seat,midi,vel,t,len), boot }));
+} else {
+  try{ if(sessionStorage.getItem('kt:host:rush')) hostTable(); }catch(_){}
 }
 })();
 </script>
