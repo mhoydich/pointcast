@@ -1,0 +1,271 @@
+---
+const title = 'Rain Garden · PointCast';
+const description = 'Play five rain voices into a garden, build a storm, and wait for the rainbow chord.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/rain">
+<meta property="og:title" content="Rain Garden">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;--moss:#7fa36b;--fern:#a9c98a;--sea:#6fb3b8;--deep:#1d4a55;--bark:#8a6a4a;--petal:#e7a3b3;--sun:#f2c14e;--dusk:#b5a8ee;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 84% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 15px;cursor:pointer;font-size:11px;min-height:44px;touch-action:manipulation}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+:focus-visible{outline:2px solid var(--sun);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+main{max-width:980px;margin:0 auto;padding:22px 20px 64px;display:flex;flex-direction:column;gap:16px}
+.hint{font-size:11px;color:var(--dim);line-height:1.7;margin:0;background:#122018;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.hint b{color:var(--gold);font-weight:normal}.hint kbd{color:var(--ink);border:1px solid #46614b;border-radius:4px;padding:1px 4px}
+.card{background:linear-gradient(155deg,#1d2c20,#111d16);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.scene-card{padding:10px;overflow:hidden}.scene{position:relative;isolation:isolate;overflow:hidden;border-radius:12px;background:#18271e;aspect-ratio:16/9;min-height:280px;width:100%;max-width:100%;box-sizing:border-box}
+.scene img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}.scene .storm{z-index:-2}.scene .after{z-index:-1;opacity:0;transition:opacity 1.8s ease}.scene.finale .after{opacity:1}
+#rainCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:1;display:block;cursor:crosshair}
+.scene-copy{position:absolute;z-index:2;left:16px;top:14px;max-width:330px;text-shadow:0 1px 10px #101813cc;pointer-events:none}.scene-copy h2{font-family:Georgia,serif;font-weight:normal;font-size:clamp(23px,4vw,38px);margin:0 0 5px}.scene-copy p{font-size:10px;color:#e6ead7;margin:0;line-height:1.6}
+.scene.finale .scene-copy p:after{content:'  The garden is listening.';color:#fff0ba}
+.regions{position:absolute;inset:0;z-index:3;pointer-events:none}.region{position:absolute;pointer-events:auto;border-color:#d8e1bd88;background:#122018aa;backdrop-filter:blur(2px);padding:7px 10px;text-align:left;line-height:1.25;min-width:82px}.region strong{display:block;font-family:Georgia,serif;font-size:14px;font-weight:normal}.region span{display:block;color:#d1dbc5aa;font-size:9px;margin-top:3px}.region.leaf{left:3%;top:42%;--rc:var(--moss)}.region.fern{left:25%;bottom:6%;--rc:var(--fern)}.region.roof{right:3%;top:13%;--rc:var(--sun)}.region.pond{left:49%;bottom:7%;--rc:var(--sea)}.region.stone{right:14%;bottom:10%;--rc:var(--bark)}.region:hover,.region:focus-visible{background:#223628dd;border-color:var(--rc);transform:translateY(-2px)}
+.storm-panel{display:grid;grid-template-columns:1fr auto;gap:8px 18px;align-items:center}.storm-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.eyebrow{font-size:9px;text-transform:uppercase;letter-spacing:.18em;color:var(--dim)}.storm-name{font-family:Georgia,serif;font-size:20px;color:var(--gold)}.storm-readout{font-size:10px;color:var(--dim)}
+.meter{height:12px;background:#0d1711;border:1px solid var(--line);border-radius:10px;overflow:hidden}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sea),var(--moss),var(--sun),var(--petal));border-radius:inherit;transition:width .18s ease}.storm-action{min-height:54px;padding:9px 14px;color:var(--gold);border-color:#796b3f}.storm-action:hover{background:#3a3520}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.controls .spacer{flex:1}.ambient-note{font-size:10px;color:var(--dim);line-height:1.5}
+.surface-list{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.surface-key{border-radius:11px;padding:10px 8px;text-align:left;background:#122018;min-height:66px;border-color:color-mix(in srgb,var(--surface) 48%,var(--line));}.surface-key strong{display:block;font-family:Georgia,serif;font-weight:normal;color:var(--surface);font-size:14px}.surface-key small{display:block;color:var(--dim);font-size:9px;margin-top:5px}.surface-key.active{background:color-mix(in srgb,var(--surface) 18%,#122018);border-color:var(--surface);box-shadow:0 0 0 1px var(--surface)}
+.field{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start}.field-mark{font-size:25px;color:var(--sun);line-height:1}.field h3{font-family:Georgia,serif;font-weight:normal;font-size:18px;margin:0 0 6px}.field p{margin:0;color:var(--dim);font-size:11px;line-height:1.7}.field em{color:var(--ink);font-style:normal}
+.status{font-size:10px;color:var(--gold);min-height:15px}.fineprint{font-size:10px;color:#718873;line-height:1.6;margin:0}
+[hidden]{display:none!important}
+@media(max-width:720px){header{padding:15px 18px}.scene{min-height:240px}.scene-copy{left:12px;top:10px}.scene-copy p{max-width:240px}.region{min-width:0;padding:7px 8px}.region span{display:none}.surface-list{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.surface-key{padding:9px 6px}.surface-key small{font-size:8px}}
+@media(max-width:480px){main{padding:16px 14px 50px}header{padding:14px}.brand{font-size:26px}.brand small{margin-left:0}.scene{min-height:220px}.scene-copy h2{font-size:25px}.region strong{font-size:11px}.region{padding:6px}.region.leaf{left:2%;top:48%}.region.fern{left:20%;bottom:4%}.region.roof{right:2%;top:14%}.region.pond{left:43%;bottom:4%}.region.stone{right:4%;bottom:19%}.storm-panel{grid-template-columns:1fr}.storm-action{justify-self:end}.surface-list{grid-template-columns:repeat(3,1fr)}.surface-key:nth-child(4){grid-column:1 / span 2}.field{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}.scene .after{transition:none}.region:hover,.region:focus-visible{transform:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Rain Garden<small>play a storm into being</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf" aria-current="page">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="sound" aria-pressed="true" aria-label="Toggle garden sound">♪ Sound on</button>
+  </div>
+</header>
+
+<main>
+  <p class="hint" id="hint">The garden is empty. Tap a place, or play <kbd>Q</kbd>–<kbd>T</kbd>, <kbd>A</kbd>–<kbd>G</kbd>, or <kbd>Z</kbd>–<kbd>B</kbd> across the keyboard. Keep going: the storm grows with you. <b>Space</b> calls thunder.</p>
+
+  <section class="card scene-card" aria-labelledby="garden-title">
+    <div class="scene" id="scene">
+      <img class="storm" src="/images/keyboard/rain/rain-garden-storm.jpg" width="1200" height="675" alt="A lush garden with banana leaves, ferns, a small pond, a wet stone, and a tin roof beneath a grey-green rainy sky">
+      <img class="after" src="/images/keyboard/rain/rain-garden-after.jpg" width="1200" height="675" alt="The same lush garden after rain, glowing in golden light with a faint rainbow">
+      <canvas id="rainCanvas" aria-hidden="true"></canvas>
+      <div class="scene-copy"><h2 id="garden-title">Make it rain.</h2><p id="sceneStatus">Five places are waiting for their first drop.</p></div>
+      <div class="regions" role="group" aria-label="Garden rain surfaces">
+        <button type="button" class="region leaf" data-surface="leaf"><strong>Leaf</strong><span>soft thump · tick</span></button>
+        <button type="button" class="region fern" data-surface="fern"><strong>Fern</strong><span>fine hiss</span></button>
+        <button type="button" class="region roof" data-surface="roof"><strong>Tin roof</strong><span>pitched ping</span></button>
+        <button type="button" class="region pond" data-surface="pond"><strong>Pond</strong><span>bloop</span></button>
+        <button type="button" class="region stone" data-surface="stone"><strong>Stone</strong><span>click</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card storm-panel" id="storm-panel" aria-labelledby="storm-title">
+    <div>
+      <div class="storm-head"><span class="eyebrow" id="storm-title">Storm meter</span><span class="storm-readout" id="stormReadout">0% · still air</span></div>
+      <div class="meter" role="progressbar" aria-label="Storm intensity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="meterFill"></i></div>
+    </div>
+    <button type="button" class="storm-action" id="thunder" aria-label="Call thunder with the spacebar">↯ Call thunder <small>(Space)</small></button>
+  </section>
+
+  <section class="card controls" aria-label="Rain controls">
+    <button type="button" id="ambient" aria-pressed="false">☁ Gentle drizzle off</button>
+    <span class="ambient-note">Let the garden rain softly by itself.<br>Sound begins with your first gesture.</span>
+    <span class="spacer"></span><span class="status" id="status" role="status" aria-live="polite">Waiting for a drop.</span>
+  </section>
+
+  <section aria-label="Garden surfaces">
+    <div class="surface-list" id="surfaceList">
+      <button type="button" class="surface-key" style="--surface:var(--moss)" data-surface="leaf"><strong>Leaf</strong><small>Q · A · Z</small></button>
+      <button type="button" class="surface-key" style="--surface:var(--fern)" data-surface="fern"><strong>Fern</strong><small>W · S · X</small></button>
+      <button type="button" class="surface-key" style="--surface:var(--sun)" data-surface="roof"><strong>Tin roof</strong><small>E · D · C</small></button>
+      <button type="button" class="surface-key" style="--surface:var(--sea)" data-surface="pond"><strong>Pond</strong><small>R · F · V</small></button>
+      <button type="button" class="surface-key" style="--surface:var(--bark)" data-surface="stone"><strong>Stone</strong><small>T · G · B</small></button>
+    </div>
+  </section>
+
+  <section class="card field" aria-labelledby="field-title">
+    <div class="field-mark" aria-hidden="true">✳</div><div><h3 id="field-title">Field note</h3><p>The smell after rain has a name: <em>petrichor</em>. It can come partly from oils released by plants and from <em>geosmin</em>, a compound made by soil bacteria.</p></div>
+  </section>
+  <p class="fineprint">The garden keeps its little weather diary in this browser. It sends only musical notes and key counts to PointCast’s shared signal.</p>
+</main>
+
+<script is:inline src="/keyboard.js" data-app="keyboard-rain" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE_KEY = 'pc-rain-v1';
+  var COLORS = { leaf: '#7fa36b', fern: '#a9c98a', roof: '#f2c14e', pond: '#6fb3b8', stone: '#8a6a4a' };
+  var SURFACES = {
+    leaf: { label: 'Leaf', mids: [48, 50, 53, 55, 57], kind: 'keys' },
+    fern: { label: 'Fern', mids: [60, 62, 64, 67, 69], kind: 'keys' },
+    roof: { label: 'Tin roof', mids: [67, 69, 71, 74, 76], kind: 'notes' },
+    pond: { label: 'Pond', mids: [60, 62, 64, 67, 69], kind: 'notes' },
+    stone: { label: 'Stone', mids: [36, 38, 41, 43, 45], kind: 'keys' },
+  };
+  var state = { sound: true, ambient: false, cursor: { leaf: 0, fern: 0, roof: 0, pond: 0, stone: 0 } };
+  var storm = 0, lastHitAt = 0, thundered = false, finale = false, rainbow = 0, hits = 0;
+  var pitchedBatch = [], unpitchedCount = 0, signalTimer = null, audioCtx = null, master = null, bedGain = null, bedSource = null;
+  var canvas = $('rainCanvas'), canvasCtx = canvas.getContext('2d'), scene = $('scene'), drops = [], rings = [], frameId = null, visible = true;
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var regionBoxes = { leaf: [0.00, 0.27, 0.20, 0.78], fern: [0.19, 0.60, 0.58, 1.00], roof: [0.71, 0.00, 1.00, 0.50], pond: [0.30, 0.68, 0.76, 1.00], stone: [0.62, 0.64, 0.96, 1.00] };
+  var rainbowColors = ['#e7a3b3', '#f2c14e', '#a9c98a', '#6fb3b8', '#b5a8ee', '#dfc48d', '#fff2b0'];
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ v: 1, sound: state.sound, ambient: state.ambient })); } catch (e) { /* browser storage is optional */ }
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) { var saved = JSON.parse(raw); if (saved && typeof saved === 'object') { state.sound = saved.sound !== false; state.ambient = saved.ambient === true; } }
+    } catch (e) { /* private mode is fine */ }
+    updateSound(); updateAmbient();
+  }
+  function freq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+  function audio() {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        master = audioCtx.createGain(); master.gain.value = state.sound ? 0.30 : 0.0001;
+        var comp = audioCtx.createDynamicsCompressor(); comp.threshold.value = -22; comp.knee.value = 18; comp.ratio.value = 5; comp.attack.value = 0.006; comp.release.value = 0.18;
+        master.connect(comp).connect(audioCtx.destination);
+        bedGain = audioCtx.createGain(); bedGain.gain.value = 0.0001; bedGain.connect(master);
+        var bed = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate), data = bed.getChannelData(0);
+        for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (0.5 + Math.random() * 0.5);
+        bedSource = audioCtx.createBufferSource(); bedSource.buffer = bed; bedSource.loop = true;
+        var hp = audioCtx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 420;
+        var lp = audioCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200;
+        bedSource.connect(hp).connect(lp).connect(bedGain); bedSource.start();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    } catch (e) { return null; }
+  }
+  function setBed() {
+    if (!audioCtx || !bedGain) return;
+    var amount = state.ambient ? 0.035 + storm / 850 : storm / 560;
+    bedGain.gain.setTargetAtTime(Math.max(0.0001, amount), audioCtx.currentTime, 0.18);
+  }
+  function noise(c, seconds) {
+    var b = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * seconds)), c.sampleRate), d = b.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  }
+  function leaf(midi, t) {
+    var c = audio(), f = freq(midi); if (!c) return;
+    var o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(f * 1.7, t); o.frequency.exponentialRampToValueAtTime(f * .55, t + .16); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.20, t + .006); g.gain.exponentialRampToValueAtTime(.0001, t + .20); o.connect(g).connect(master); o.start(t); o.stop(t + .23);
+    var n = c.createBufferSource(), hp = c.createBiquadFilter(), ng = c.createGain(); n.buffer = noise(c, .035); hp.type = 'highpass'; hp.frequency.value = 2600; ng.gain.setValueAtTime(.13, t + .035); ng.gain.exponentialRampToValueAtTime(.0001, t + .075); n.connect(hp).connect(ng).connect(master); n.start(t + .035); n.stop(t + .09);
+  }
+  function fern(midi, t) {
+    var c = audio(); if (!c) return; var n = c.createBufferSource(), hp = c.createBiquadFilter(), g = c.createGain(); n.buffer = noise(c, .24); hp.type = 'bandpass'; hp.frequency.value = 3300 + (midi - 60) * 70; hp.Q.value = .7; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.10, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + .22); n.connect(hp).connect(g).connect(master); n.start(t); n.stop(t + .25);
+  }
+  function roof(midi, t) {
+    var c = audio(), f = freq(midi); if (!c) return; var out = c.createGain(); out.gain.value = 1; out.connect(master);
+    [[1, .16], [2.71, .055], [4.08, .028]].forEach(function (p) { var o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.value = f * p[0]; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(p[1], t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + 1.1 / Math.sqrt(p[0])); o.connect(g).connect(out); o.start(t); o.stop(t + 1.25); });
+  }
+  function pond(midi, t) {
+    var c = audio(), f = freq(midi); if (!c) return; var o = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter(); o.type = 'sine'; o.frequency.setValueAtTime(f * 1.55, t); o.frequency.exponentialRampToValueAtTime(f * .72, t + .38); lp.type = 'lowpass'; lp.frequency.value = 1500; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.18, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + .62); o.connect(g).connect(lp).connect(master); o.start(t); o.stop(t + .68);
+  }
+  function stone(midi, t) {
+    var c = audio(), f = freq(midi); if (!c) return; var o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = f * 2.1; g.gain.setValueAtTime(.13, t); g.gain.exponentialRampToValueAtTime(.0001, t + .12); o.connect(g).connect(master); o.start(t); o.stop(t + .15);
+    var n = c.createBufferSource(), hp = c.createBiquadFilter(), ng = c.createGain(); n.buffer = noise(c, .025); hp.type = 'highpass'; hp.frequency.value = 1800; ng.gain.setValueAtTime(.12, t); ng.gain.exponentialRampToValueAtTime(.0001, t + .07); n.connect(hp).connect(ng).connect(master); n.start(t); n.stop(t + .08);
+  }
+  function playSurface(surface, midi) { if (!state.sound) return; var c = audio(); if (!c) return; var t = c.currentTime + .001; if (surface === 'leaf') leaf(midi, t); else if (surface === 'fern') fern(midi, t); else if (surface === 'roof') roof(midi, t); else if (surface === 'pond') pond(midi, t); else stone(midi, t); }
+  function thunder() {
+    var c = audio(); if (!c) return; var t = c.currentTime + .03;
+    var n = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(); n.buffer = noise(c, 2.2); lp.type = 'lowpass'; lp.frequency.value = 180; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.38, t + .2); g.gain.exponentialRampToValueAtTime(.0001, t + 2.05); n.connect(lp).connect(g).connect(master); n.start(t); n.stop(t + 2.2);
+    var o = c.createOscillator(), og = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(58, t); o.frequency.exponentialRampToValueAtTime(31, t + 1.7); og.gain.setValueAtTime(.0001, t); og.gain.exponentialRampToValueAtTime(.28, t + .12); og.gain.exponentialRampToValueAtTime(.0001, t + 2); o.connect(og).connect(master); o.start(t); o.stop(t + 2.1);
+  }
+  function queueSignal(surface, midi) { if (SURFACES[surface].kind === 'notes') pitchedBatch.push(midi); else unpitchedCount++; if (!signalTimer) signalTimer = setTimeout(flushSignal, 5000); }
+  function flushSignal() {
+    signalTimer = null;
+    if (window.PointCastKeyboard) {
+      if (pitchedBatch.length) { window.PointCastKeyboard.note(pitchedBatch.splice(0), null, { sound: false }); }
+      if (unpitchedCount) { window.PointCastKeyboard.keys(unpitchedCount); unpitchedCount = 0; }
+    } else { signalTimer = setTimeout(flushSignal, 5000); }
+  }
+  function surfaceAt(x, y) { var keys = Object.keys(regionBoxes); for (var i = 0; i < keys.length; i++) { var b = regionBoxes[keys[i]]; if (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) return keys[i]; } return keys[Math.min(4, Math.floor(x * 5))]; }
+  function spot(surface) { var b = regionBoxes[surface]; return { x: b[0] + Math.random() * (b[2] - b[0]), y: b[1] + Math.random() * (b[3] - b[1]) }; }
+  function addDrop(surface, gentle) { var p = spot(surface || 'pond'); var h = canvas.clientHeight || 400; drops.push({ x: p.x, y: -0.04 + Math.random() * .16, speed: (gentle ? .18 : .48 + storm / 125) + Math.random() * .26, len: gentle ? .025 : .035 + storm / 1900, color: COLORS[surface || 'pond'], alpha: gentle ? .25 : .48 + storm / 230 }); if (drops.length > 140) drops.splice(0, drops.length - 140); if (surface && !gentle) rings.push({ x: p.x, y: p.y, r: .008, alpha: .85, color: COLORS[surface] }); }
+  function trigger(surface) {
+    if (!SURFACES[surface]) return;
+    if (finale) { finale = false; rainbow = 0; scene.classList.remove('finale'); $('sceneStatus').textContent = 'The clouds are gathering again.'; }
+    var def = SURFACES[surface], midi = def.mids[state.cursor[surface] % def.mids.length]; state.cursor[surface]++;
+    playSurface(surface, midi); queueSignal(surface, midi); storm = Math.min(100, storm + 6); lastHitAt = performance.now(); thundered = thundered && storm >= 100; hits++;
+    addDrop(surface, false); updateSurface(surface); updateMeter(); ensureFrame();
+    $('status').textContent = def.label + ' caught a drop · ' + hits + ' ' + (hits === 1 ? 'drop' : 'drops');
+    $('sceneStatus').textContent = storm >= 90 ? 'The whole garden is ringing.' : 'The storm is gathering in the leaves.';
+    if (storm >= 100 && !thundered) callThunder();
+    save();
+  }
+  function callThunder() { storm = 100; thundered = true; lastHitAt = performance.now(); thunder(); updateMeter(); ensureFrame(); $('status').textContent = 'Thunder rolls through the garden.'; $('sceneStatus').textContent = 'A storm has found its voice.'; }
+  function passStorm() {
+    if (finale || storm < 8) return; finale = true; storm = 0; thundered = false; rainbow = 1; scene.classList.add('finale'); updateMeter(); $('sceneStatus').textContent = 'The storm passes. Listen for the rainbow.'; $('status').textContent = 'Rainbow chord · the garden is shining.'; playRainbow(); ensureFrame(); }
+  function playRainbow() {
+    var notes = [60, 62, 64, 67, 69, 71, 72], c = audioCtx; if (!c || !state.sound) return;
+    notes.forEach(function (m, i) { var t = c.currentTime + .12 + i * .19; pond(m, t); });
+    pitchedBatch = pitchedBatch.concat(notes); if (!signalTimer) signalTimer = setTimeout(flushSignal, 5000);
+  }
+  function updateMeter() { var n = Math.round(storm), fill = $('meterFill'), read = $('stormReadout'); fill.style.width = n + '%'; read.textContent = n + '% · ' + (n >= 90 ? 'storm peak' : n >= 45 ? 'rain is building' : n ? 'rain is waking' : 'still air'); $('storm-title').textContent = n >= 90 ? 'Storm meter · peak' : 'Storm meter'; $('storm-panel').querySelector('[role=progressbar]').setAttribute('aria-valuenow', n); setBed(); }
+  function updateSurface(surface) { document.querySelectorAll('[data-surface="' + surface + '"]').forEach(function (el) { el.classList.add('active'); clearTimeout(el._activeTimer); el._activeTimer = setTimeout(function () { el.classList.remove('active'); }, 180); }); }
+  function updateSound() { $('sound').setAttribute('aria-pressed', String(state.sound)); $('sound').textContent = state.sound ? '♪ Sound on' : '♪ Sound off'; if (master && audioCtx) master.gain.setTargetAtTime(state.sound ? .30 : .0001, audioCtx.currentTime, .025); }
+  function updateAmbient() { $('ambient').setAttribute('aria-pressed', String(state.ambient)); $('ambient').textContent = state.ambient ? '☁ Gentle drizzle on' : '☁ Gentle drizzle off'; setBed(); ensureFrame(); }
+  function resize() { var r = canvas.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); canvas.width = Math.max(1, Math.floor(r.width * d)); canvas.height = Math.max(1, Math.floor(r.height * d)); canvasCtx.setTransform(d, 0, 0, d, 0, 0); }
+  function draw(now) {
+    var w = canvas.clientWidth, h = canvas.clientHeight; canvasCtx.clearRect(0, 0, w, h);
+    if (!reduced) {
+      if (storm > 0) for (var i = 0; i < Math.ceil(storm / 12); i++) addDrop(null, false);
+      if (state.ambient && drops.length < 18) addDrop(null, true);
+      for (var j = drops.length - 1; j >= 0; j--) { var d = drops[j]; d.y += d.speed * .012; if (d.y > 1.06) { drops.splice(j, 1); continue; } var x = d.x * w, y = d.y * h; canvasCtx.strokeStyle = d.color + Math.round(Math.max(.12, d.alpha) * 255).toString(16).padStart(2, '0'); canvasCtx.lineWidth = 1.2; canvasCtx.beginPath(); canvasCtx.moveTo(x, y); canvasCtx.lineTo(x - 2, y - d.len * h); canvasCtx.stroke(); }
+    }
+    for (var k = rings.length - 1; k >= 0; k--) { var ring = rings[k]; ring.r += reduced ? .001 : .009; ring.alpha -= reduced ? .025 : .035; if (ring.alpha <= 0) { rings.splice(k, 1); continue; } canvasCtx.strokeStyle = ring.color + Math.round(ring.alpha * 255).toString(16).padStart(2, '0'); canvasCtx.lineWidth = 1.5; canvasCtx.beginPath(); canvasCtx.ellipse(ring.x * w, ring.y * h, ring.r * w, ring.r * h * .32, 0, 0, Math.PI * 2); canvasCtx.stroke(); }
+    if (rainbow) { var cx = w * .51, cy = h * .78, radius = Math.min(w * .43, h * .64); rainbowColors.forEach(function (color, i) { var offset = (i - 3) * 3; canvasCtx.strokeStyle = color + 'c8'; canvasCtx.lineWidth = 2.5; canvasCtx.beginPath(); canvasCtx.arc(cx, cy, radius - offset, Math.PI * 1.08, Math.PI * 1.92); canvasCtx.stroke(); }); }
+  }
+  function frame(now) { frameId = null; if (!visible) return; draw(now); if (!reduced && (storm > 0 || state.ambient || rings.length)) frameId = requestAnimationFrame(frame); }
+  function ensureFrame() { if (visible && !frameId) frameId = requestAnimationFrame(frame); }
+  function onKey(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return; var target = e.target && e.target.tagName; if (target && /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target)) return;
+    if (e.key === ' ') { e.preventDefault(); callThunder(); return; }
+    var key = String(e.key || '').toLowerCase(), rows = ['qwertyuiop', 'asdfghjkl;', 'zxcvbnm,./'];
+    for (var row = 0; row < rows.length; row++) { var idx = rows[row].indexOf(key); if (idx >= 0) { trigger(['leaf', 'fern', 'roof', 'pond', 'stone'][Math.floor(idx / 2)]); return; } }
+  }
+  document.querySelectorAll('.region,.surface-key').forEach(function (el) { el.addEventListener('click', function () { trigger(el.getAttribute('data-surface')); }); });
+  canvas.addEventListener('pointerdown', function (e) { var r = canvas.getBoundingClientRect(); trigger(surfaceAt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height)); });
+  $('sound').addEventListener('click', function () { state.sound = !state.sound; audio(); updateSound(); save(); });
+  $('ambient').addEventListener('click', function () { state.ambient = !state.ambient; audio(); updateAmbient(); save(); });
+  $('thunder').addEventListener('click', callThunder);
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('resize', function () { resize(); ensureFrame(); });
+  document.addEventListener('visibilitychange', function () { visible = document.visibilityState !== 'hidden'; if (visible) ensureFrame(); else if (frameId) { cancelAnimationFrame(frameId); frameId = null; } });
+  setInterval(function () { var now = performance.now(); if (!finale && lastHitAt && now - lastHitAt > 1800 && storm >= 8) passStorm(); if (!finale && storm > 0 && now - lastHitAt > 520) { storm = Math.max(0, storm - 0.8); updateMeter(); ensureFrame(); } }, 100);
+  resize(); load(); ensureFrame();
+})();
+</script>
+</body>
+</html>
