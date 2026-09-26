@@ -12,5 +12,5 @@ python3 designs/annual-report/flux_cover.py --seed 7   # different glitch/grain
 python3 designs/annual-report/flux_cover.py --scale 0.4 --out /tmp/preview.png
 ```
 
-Caption text, chip colors and the vertical wordmark live in `compose()`.
+Caption text ("Hoydich Entertainment" / "Annual Report"), chip colors and the vertical wordmark live in `compose()`.
 Type is Space Grotesk (SIL OFL, see `SpaceGrotesk-OFL.txt`).

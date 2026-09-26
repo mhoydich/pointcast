@@ -157,11 +157,8 @@ def compose(scale, seed, out):
     side = font(fp, int(56 * scale), 600)
 
     y1, y2 = int(3280 * scale), int(3370 * scale)
-    d.text((L, y1), "2026", font=big, fill=INK)
-    d.text((L + int(210 * scale), y1), "HE-26 – Annual Report", font=big, fill=INK)
-    d.text((L, y2), "Vol.07", font=mid, fill=INK)
-    d.text((L + int(210 * scale), y2), "Hoydich Entertainment – El Segundo, CA",
-           font=mid, fill=INK)
+    d.text((L, y1), "Hoydich Entertainment", font=big, fill=INK)
+    d.text((L, y2), "Annual Report", font=mid, fill=INK)
 
     # colour chips (bottom right)
     cw = int(118 * scale)
