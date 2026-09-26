@@ -20,7 +20,8 @@
  */
 
 import { sha256, type Env as VisitsEnv } from '../visit.ts';
-import { requestCountry, resolveSource } from '../../_lib/drum-signal.ts';
+import { drumMemberKey, requestCountry, resolveSource } from '../../_lib/drum-signal.ts';
+import { readSessionFromRequest, type AuthEnv } from '../auth/session.ts';
 
 interface Env extends VisitsEnv {
   DRUM_COUNTER?: DurableObjectNamespace;
@@ -46,6 +47,16 @@ function counter(env: Env, query: string, init: RequestInit): Promise<Response> 
   if (!env.DRUM_COUNTER) return null;
   const id = env.DRUM_COUNTER.idFromName('global');
   return env.DRUM_COUNTER.get(id).fetch(`https://drum-counter.internal/?${query}`, init);
+}
+
+/** Same-origin beats from a signed-in member also count on their account. */
+async function memberKey(request: Request, env: Env): Promise<string | undefined> {
+  try {
+    const current = await readSessionFromRequest(request, env as unknown as AuthEnv);
+    return current ? await drumMemberKey(current.user.userId) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -82,7 +93,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const pending = counter(env, query, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delta: beats, source, ...identity }),
+      body: JSON.stringify({ delta: beats, source, ...identity, userKey: await memberKey(request, env) }),
     });
     if (!pending) return json({ ok: false, reason: 'counter-unavailable' }, { status: 503 });
     const response = await pending;

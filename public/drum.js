@@ -26,7 +26,8 @@
  * any element with data-pointcast-drum-count shows the live total.
  *
  * JS:  PointCastDrum.beat(n?, tag?) · PointCastDrum.total() · the
- *      "pointcast:drum" window event: detail = { globalTotal, beats, source }
+ *      "pointcast:drum" window event: detail = { globalTotal, beats, source,
+ *      memberTotal } (memberTotal only on pointcast.xyz while signed in)
  *
  * No cookies, no fingerprinting: beats are batched and sent as plain counts.
  */
@@ -83,7 +84,7 @@
       .then(function (res) {
         if (!res || !res.ok) return;
         lastTotal = Math.max(lastTotal || 0, res.globalTotal);
-        window.dispatchEvent(new CustomEvent('pointcast:drum', { detail: { globalTotal: res.globalTotal, beats: beats, source: res.source } }));
+        window.dispatchEvent(new CustomEvent('pointcast:drum', { detail: { globalTotal: res.globalTotal, beats: beats, source: res.source, memberTotal: res.memberTotal } }));
         paint();
       })
       .catch(function () { /* offline: the beat is lost, the page is fine */ });

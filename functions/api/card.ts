@@ -1,7 +1,8 @@
 /**
  * /api/card — town cards.
  *
- *   GET  ?handle=mike   public card (CORS open, cached briefly)
+ *   GET  ?handle=mike   public card (CORS open, cached briefly), with the
+ *                       member's drum beats when the counter is reachable
  *   GET                 your card, your linked Tezos wallets, and whether
  *                       you have a card yet (session cookie)
  *   GET  ?prefill=1     on-chain profile objects held by your linked wallets,
@@ -12,12 +13,28 @@
 import { readSessionFromRequest, type AuthEnv } from './auth/session.ts';
 import { listProfilePages, readProfileHandle } from '../../src/lib/profile-object.mjs';
 import {
-  CARD_COLORS, CardError, PROFILE_CONTRACT, deleteCard, normalizeHandle, publicCard, readCardByHandle, readCardByUser, saveCard, tezosWallets,
+  CARD_COLORS, CardError, PROFILE_CONTRACT, deleteCard, normalizeHandle, publicCard, readCardByHandle, readCardByUser, saveCard, tezosWallets, userIdForHandle,
   type CardEnv, type ProfileReader,
 } from '../_lib/town-card.ts';
 import type { PointCastUser } from '../../src/lib/auth/types';
 
-type Env = AuthEnv & CardEnv;
+import { drumMemberKey } from '../_lib/drum-signal.ts';
+
+type Env = AuthEnv & CardEnv & { DRUM_COUNTER?: DurableObjectNamespace };
+
+/** A member's drum beats for their public card; null when unavailable. */
+async function cardDrum(env: Env, handle: string): Promise<{ beats: number; rank: number | null } | null> {
+  if (!env.DRUM_COUNTER) return null;
+  try {
+    const userId = await userIdForHandle(env, handle);
+    if (!userId) return null;
+    const stub = env.DRUM_COUNTER.get(env.DRUM_COUNTER.idFromName('global'));
+    const stats = (await (await stub.fetch(`https://drum-counter.internal/?user=${await drumMemberKey(userId)}`)).json()) as { total?: number; rank?: number | null };
+    return { beats: Number(stats.total) || 0, rank: stats.rank ?? null };
+  } catch {
+    return null;
+  }
+}
 type SessionReader = (request: Request, env: Env) => Promise<{ user: PointCastUser } | null>;
 export type CardDeps = { readSession?: SessionReader; readProfile?: ProfileReader; listProfiles?: (contract: string) => Promise<Array<{ handle: string; owner: string; tokenId: number; page: { name: string; bio: string; nounSeed: number }; links: Array<{ label: string; url: string }> }>> };
 
@@ -50,7 +67,7 @@ export async function handleCard(request: Request, env: Env, deps: CardDeps = {}
       const card = await readCardByHandle(env, handle);
       const cors = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=15, s-maxage=30' };
       if (!card) return json({ ok: false, reason: 'not-found', handle }, 404, cors);
-      return json({ ok: true, card: publicCard(card) }, 200, cors);
+      return json({ ok: true, card: { ...publicCard(card), drum: await cardDrum(env, handle) } }, 200, cors);
     }
 
     if (request.method !== 'GET' && !sameSite(request)) return json({ ok: false, reason: 'cross-site' }, 403);

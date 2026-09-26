@@ -108,3 +108,15 @@ export function requestCountry(request: Request): string | null {
   const cf = (request as Request & { cf?: { country?: unknown } }).cf;
   return typeof cf?.country === 'string' ? cf.country : null;
 }
+
+/**
+ * Opaque per-member key for the drum counter. A signed-in PointCast member's
+ * beats are credited to this hash of their user id, never the id itself, so
+ * the counter can rank members without knowing who they are.
+ * Never change the prefix: it would orphan every member's total.
+ */
+export async function drumMemberKey(userId: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`pointcast-drum-member/v1|${userId}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+}
