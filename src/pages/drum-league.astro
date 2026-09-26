@@ -74,7 +74,7 @@ const teamSnippet = `<script src="https://pointcast.xyz/drum.js" data-app="my-te
         </div>
         <div class="dl__scroll">
           <table class="dl__table">
-            <thead><tr><th>#</th><th>Team</th><th>Division</th><th class="n">Points</th><th class="n">Days</th><th class="n">Last beat</th></tr></thead>
+            <thead><tr><th>#</th><th>Team</th><th>Division</th><th class="n">Points</th><th class="n c-days">Days</th><th class="n c-last">Last beat</th></tr></thead>
             <tbody data-standings><tr><td colspan="6" class="dl__empty">Loading the table…</td></tr></tbody>
           </table>
         </div>
@@ -272,6 +272,7 @@ const teamSnippet = `<script src="https://pointcast.xyz/drum.js" data-app="my-te
     .dl__lede { margin: 0; font-size: 16px; line-height: 1.6; max-width: 52ch; }
     .dl__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-top: 2px solid var(--ink); padding-top: 14px; }
     .dl__v { margin: 0; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .dl__v-sub { font-family: 'Inter', system-ui, sans-serif; font-size: 13px; color: var(--muted); font-weight: 500; }
     .dl__v--team { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 15px; word-break: break-all; }
     .dl__table-wrap { padding: 20px 24px 24px; min-width: 0; }
     .dl__table-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -285,7 +286,10 @@ const teamSnippet = `<script src="https://pointcast.xyz/drum.js" data-app="my-te
     }
     .dl__divs button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
     .dl__scroll { overflow-x: auto; }
-    .dl__table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 460px; }
+    .dl__table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .dl__table-wrap { container-type: inline-size; }
+    @container (max-width: 560px) { .dl__table .c-last { display: none; } }
+    @container (max-width: 400px) { .dl__table .c-days { display: none; } .dl__table td.team { font-size: 12px; } }
     .dl__table th { text-align: left; font: 600 10px/1.2 'JetBrains Mono', monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 0 8px 8px 0; border-bottom: 2px solid var(--ink); }
     .dl__table td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--soft); }
     .dl__table .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -518,12 +522,15 @@ const teamSnippet = `<script src="https://pointcast.xyz/drum.js" data-app="my-te
           const tr = document.createElement('tr');
           if (i === 0) tr.classList.add('is-first');
           if (SAMPLES.has(r.app)) tr.classList.add('is-sample');
-          tr.innerHTML = `<td>${i + 1}</td><td class="team">${esc(r.app)}</td><td><span class="dl__chip" data-k="${esc(r.kind)}">${esc(DIV_LABEL[r.kind] || r.kind)}</span></td><td class="n">${fmt(r.points)}</td><td class="n">${r.activeDays}</td><td class="n">${ago(r.lastAt)}</td>`;
+          tr.innerHTML = `<td>${i + 1}</td><td class="team">${esc(r.app)}</td><td><span class="dl__chip" data-k="${esc(r.kind)}">${esc(DIV_LABEL[r.kind] || r.kind)}</span></td><td class="n">${fmt(r.points)}</td><td class="n c-days">${r.activeDays}</td><td class="n c-last">${ago(r.lastAt)}</td>`;
           body.append(tr);
         });
         if (weekOffset === 0) {
           const lead = (league.standings || [])[0];
-          $('[data-leader]').textContent = lead ? `${lead.app} · ${fmt(lead.points)}` : 'Open';
+          const leader = $('[data-leader]');
+          leader.replaceChildren();
+          if (lead) { const pts = document.createElement('span'); pts.className = 'dl__v-sub'; pts.textContent = `${fmt(lead.points)} pts`; leader.append(lead.app, document.createElement('br'), pts); }
+          else leader.textContent = 'Open';
           drawAgentTeams();
         }
       }
