@@ -210,6 +210,9 @@ describe("drum counter KV mirror", () => {
 
   it("keeps fresh DO totals authoritative and never lowers a newer KV mirror", async () => {
     await env.VISITS.put("drum:total", "0");
+    // A fresh counter reconciles once against drum:top; start it clean so the
+    // previous test's leaderboard doesn't count as undercounted history.
+    await env.VISITS.delete("drum:top");
     const stub = env.DRUM_COUNTER.getByName("fresh-counter-test");
     const post = (delta: number) => stub.fetch("https://pointcast.test/?session=fedcba9876543210", {
       method: "POST",
