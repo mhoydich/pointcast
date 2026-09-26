@@ -30,8 +30,12 @@ def paint(img, mask, col):
     img[:] = img * (1 - m) + rgba(col) * m
 
 
-def patch_art(size):
-    """Circular patch, 6 thread colours + navy twill."""
+def patch_art(size, phase=None):
+    """Circular patch, 6 thread colours + navy twill.
+
+    phase in [0, 1) animates it: rings travel out from the sun and the swell
+    rolls toward the viewer; both wrap seamlessly at phase 1.
+    """
     n = size * SS
     ys, xs = np.mgrid[0:n, 0:n].astype(np.float32)
     x, y = xs / n, ys / n
@@ -53,8 +57,17 @@ def patch_art(size):
              (0.255, 0.290, MINT), (0.305, 0.335, COBALT), (0.350, 0.380, GOLD),
              (0.395, 0.425, SKY)]
     wob = 0.006 * np.sin(np.arctan2(y - sy, x - sx) * 5)
-    for a, b, col in rings:
-        paint(img, sky & (rs + wob > a) & (rs + wob < b), col)
+    if phase is None:
+        for a, b, col in rings:
+            paint(img, sky & (rs + wob > a) & (rs + wob < b), col)
+    else:
+        # one ring spacing per sixth of the loop; colours roll with the rings
+        sp, r0 = 0.048, 0.155
+        u = (rs + wob - r0) / sp - 6 * phase
+        k = np.floor(u).astype(int)
+        ring = sky & (u - k < 0.62) & (rs + wob > sr + 0.02) & (rs + wob < 0.43)
+        for i, (_, _, col) in enumerate(rings):
+            paint(img, ring & (np.mod(k, 6) == i), col)
     # sun with scanline slots
     sun = sky & (rs < sr)
     paint(img, sun & (y < sy + 0.005), GOLD)
@@ -64,13 +77,15 @@ def patch_art(size):
     # sea: wavy swell lines + glitching gold reflection
     sea = inside & (y >= hz + 0.012)
     d = np.maximum(y - hz, 1e-3)
-    sw = 7.0 * np.log(d / 0.004) + 0.35 * np.sin(x * 22 + np.log(d) * 3)
+    p = 0.0 if phase is None else phase
+    sw = 7.0 * np.log(d / 0.004) + 0.35 * np.sin(x * 22 + np.log(d) * 3 + 2 * np.pi * p) \
+        - 6 * p  # six bands per loop keeps the %2 / %3 colour cycles seamless
     band = np.floor(sw).astype(int)
     t = sw - np.floor(sw)
     line = sea & (t < 0.5)
     reflw = 0.03 + 0.20 * (d / 0.4)
-    offs = 0.02 * np.sin(band * 2.3)
-    refl = np.abs(x - sx + offs) < reflw * (0.5 + 0.5 * np.cos(band * 1.1) ** 2)
+    offs = 0.02 * np.sin(band * np.pi * 2 / 3)
+    refl = np.abs(x - sx + offs) < reflw * (0.5 + 0.5 * np.cos(band * np.pi / 3) ** 2)
     paint(img, line & ~refl & (band % 2 == 0), SKY)
     paint(img, line & ~refl & (band % 2 == 1), COBALT)
     paint(img, line & refl & (band % 3 == 0), GOLD)
@@ -86,7 +101,11 @@ def superellipse_top(x, a, b, p=2.6):
     return b * np.clip(1 - np.abs(x / a) ** p, 0, 1) ** (1 / p)
 
 
-def mockup(scale, patch):
+def cap_base(scale):
+    return mockup(scale, None, bare=True)
+
+
+def mockup(scale, patch, bare=False):
     W, H = int(2400 * scale), int(2000 * scale)
     n_w, n_h = W * SS, H * SS
     ys, xs = np.mgrid[0:n_h, 0:n_w].astype(np.float32)
@@ -145,7 +164,13 @@ def mockup(scale, patch):
 
     out = Image.fromarray(img.clip(0, 255).astype(np.uint8), "RGBA")
     out = out.resize((W, H), Image.LANCZOS)
+    return out if bare else decorate(out, scale, patch, base)
 
+
+def decorate(out, scale, patch, base=0.50):
+    """Place the patch and side embroidery on a rendered cap."""
+    out = out.copy()
+    W = out.width
     # patch on the front crown, slightly squashed for curvature
     pw = int(0.215 * W)
     ph = int(pw * 0.92)
@@ -170,11 +195,36 @@ def mockup(scale, patch):
     return out.convert("RGB")
 
 
+def gif(scale, frames, fps, out):
+    """Looping GIF: rings pulse out of the sun, swell rolls in."""
+    base = cap_base(scale)
+    psize = int(0.215 * base.width * 1.5)
+    imgs = [decorate(base, scale, patch_art(psize, i / frames)) for i in range(frames)]
+    # cap shading tones + the exact thread colours, so no thread goes muddy
+    tones = base.convert("RGB").quantize(colors=96, method=Image.MEDIANCUT)
+    cols = tones.getpalette()[:96 * 3]
+    for c in (NAVY, CREAM, GOLD, ORANGE, CORAL, SKY, COBALT, MINT):
+        cols += list(c)
+    pal = Image.new("P", (1, 1))
+    pal.putpalette(cols + [0] * (768 - len(cols)))
+    q = [im.quantize(palette=pal, dither=Image.NONE) for im in imgs]
+    q[0].save(out, save_all=True, append_images=q[1:], loop=0,
+              duration=int(1000 / fps), optimize=True, disposal=1)
+    print("wrote", out, f"{os.path.getsize(out) / 1e6:.1f} MB")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--scale", type=float, default=1.0)
     ap.add_argument("--outdir", default=HERE)
+    ap.add_argument("--gif", action="store_true", help="render hat-loop.gif instead")
+    ap.add_argument("--frames", type=int, default=48)
+    ap.add_argument("--fps", type=int, default=16)
     a = ap.parse_args()
+    if a.gif:
+        gif(a.scale if a.scale != 1.0 else 0.4, a.frames, a.fps,
+            os.path.join(a.outdir, "hat-loop.gif"))
+        sys.exit()
     patch = patch_art(int(1200 * max(a.scale, 0.5)))
     patch.save(os.path.join(a.outdir, "hat-patch.png"))
     mockup(a.scale, patch).save(os.path.join(a.outdir, "hat-mockup.png"))

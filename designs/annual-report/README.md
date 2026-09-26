@@ -27,8 +27,13 @@ Type is Space Grotesk (SIL OFL, see `SpaceGrotesk-OFL.txt`).
 - `hat/hat-mockup.png`: a front view of a cream crown with a navy visor, gold visor stitching, the patch on the front panel and a small cobalt HOYDICH on the right panel.
 
 ```
-python3 designs/annual-report/hat/hat.py
+python3 designs/annual-report/hat/hat.py         # patch + mockup PNGs
+python3 designs/annual-report/hat/hat.py --gif   # hat-loop.gif
 ```
+
+`hat/hat-loop.gif` (960×800, 48 frames at 16 fps, seamless loop) animates the patch
+on the cap: signal rings pulse out of the sun and the swell and gold reflection roll
+toward the viewer.
 
 ## Animated flux GIF
 
