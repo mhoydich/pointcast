@@ -1,0 +1,713 @@
+---
+const title = 'Firefly Choir · PointCast';
+const description =
+  'Release a meadow of musical fireflies. Each keeps its own rhythm until nearby lights slowly find one shared pulse.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/fireflies">
+<meta property="og:title" content="Firefly Choir">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;
+  --moss:#7fa36b;--fern:#a9c98a;--sea:#6fb3b8;--deep:#1d4a55;--bark:#8a6a4a;--petal:#e7a3b3;--sun:#f2c14e;--dusk:#b5a8ee;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 72% -8%,#403b6855,transparent 42%),var(--bg);color:var(--ink)}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 15px;cursor:pointer;font-size:11px;min-height:44px;touch-action:manipulation}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true],button.primary{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--sun);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px;min-height:44px;display:flex;align-items:center}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+main{width:min(980px,100%);margin:0 auto;padding:22px 20px 64px;display:flex;flex-direction:column;gap:15px}
+.intro{display:flex;align-items:flex-start;justify-content:space-between;gap:22px;flex-wrap:wrap}
+.intro p{font-family:Georgia,serif;font-size:18px;line-height:1.48;max-width:620px;margin:0;color:#d9dfcf}
+.hint{font:10px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);margin:0}
+.hint b{font-weight:normal;color:var(--gold)}
+.scene{position:relative;isolation:isolate;overflow:hidden;border:1px solid #334839;border-radius:20px;background:#0a1515;box-shadow:0 22px 65px #0007;transition:box-shadow 1.2s,border-color 1.2s}
+.scene.found{border-color:#a4c273;box-shadow:0 0 38px #b9d76833,0 22px 65px #0007}
+canvas{display:block;width:100%;height:clamp(430px,62vh,590px);touch-action:none;cursor:crosshair}
+.empty{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:min(330px,78%);padding:18px 20px;text-align:center;border:1px solid #8f9d8050;border-radius:16px;background:#0b1716c9;backdrop-filter:blur(5px);pointer-events:none}
+.empty strong{display:block;font:normal 22px/1.25 Georgia,serif;color:var(--ink);margin-bottom:7px}
+.empty span{font-size:10px;line-height:1.6;color:var(--dim)}
+.caption{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 28px);margin:0;padding:9px 15px;border-radius:30px;background:#0d1815d9;border:1px solid #52634f;color:#dfe7d0;text-align:center;font:italic 16px/1.35 Georgia,serif;pointer-events:none;transition:color .5s,background .5s,border-color .5s}
+.scene.found .caption{background:#6c762ad9;border-color:#d8d67a;color:#fffbdc}
+.controls{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:14px;align-items:center;background:linear-gradient(155deg,#1c2b20,#111d16);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.sync-control{display:grid;grid-template-columns:auto minmax(110px,1fr) auto;align-items:center;gap:10px;min-height:44px}
+.control-label{font-size:9px;letter-spacing:.17em;text-transform:uppercase;color:var(--dim)}
+input[type=range]{width:100%;height:44px;margin:0;accent-color:var(--fern);cursor:pointer}
+.strength{font:18px Georgia,serif;color:var(--fern);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.meter-row{display:flex;align-items:center;gap:10px;min-width:180px}
+.meter-row span{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+meter{width:116px;height:12px;accent-color:var(--sun)}
+meter::-webkit-meter-bar{background:#0b1510;border:1px solid var(--line);border-radius:10px}
+meter::-webkit-meter-optimum-value{background:linear-gradient(90deg,var(--sea),var(--sun));border-radius:10px}
+#syncValue{font-variant-numeric:tabular-nums;color:var(--gold);min-width:28px}
+.below{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap}
+.field-note{flex:1 1 540px;margin:0;padding:13px 15px;border-left:2px solid var(--moss);background:#122018;border-radius:0 12px 12px 0;font:14px/1.55 Georgia,serif;color:#c9d2c1}
+.field-note b{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--fern);margin-right:7px}
+.privacy{font-size:9px;line-height:1.55;color:#718371;max-width:270px}
+[hidden]{display:none!important}
+@media(max-width:680px){
+  header{padding:14px}main{padding:16px 14px 48px}.brand small{margin-left:0}
+  .controls{grid-template-columns:1fr}.actions{justify-content:flex-start}.meter-row{width:100%}meter{flex:1}
+  canvas{height:clamp(430px,67vh,540px)}
+}
+@media(max-width:390px){.intro p{font-size:16px}.sync-control{grid-template-columns:auto 1fr auto}.actions button{flex:1 1 120px}.caption{font-size:14px}.toolbar{width:100%}.toolbar button{width:100%}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}.scene{box-shadow:none}.scene.found{box-shadow:0 0 0 2px #a4c27355}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Firefly Choir<small>A meadow that learns one pulse</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf" aria-current="page">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="sound" aria-pressed="true">♪ Sound on</button>
+  </div>
+</header>
+
+<main>
+  <div class="intro">
+    <p>Release a few lights into the summer grass. Each begins with its own rhythm, then listens for nearby neighbors.</p>
+    <p class="hint"><b>Tap the meadow</b> or press <b>A–Z</b> and <b>0–9</b>. Press <b>Space</b> for wind.</p>
+  </div>
+
+  <section class="scene" id="scene" aria-label="Firefly meadow instrument">
+    <canvas id="meadow" role="img" aria-label="A moonlit meadow where musical fireflies drift and synchronize"></canvas>
+    <div class="empty" id="empty">
+      <strong>The meadow is waiting.</strong>
+      <span>Tap anywhere in the dusk, or press a letter or number, to release the first light.</span>
+    </div>
+    <p class="caption" id="caption" role="status" aria-live="polite">The grass is listening.</p>
+  </section>
+
+  <section class="controls" aria-label="Meadow controls">
+    <label class="sync-control" for="coupling">
+      <span class="control-label">Sync</span>
+      <input type="range" id="coupling" min="0" max="8" step="0.1" value="5.2" aria-label="Firefly synchronization strength">
+      <output class="strength" id="strength" for="coupling">5.2</output>
+    </label>
+    <div class="actions">
+      <button type="button" class="primary" id="wind">Wind gust · Space</button>
+      <button type="button" id="hush">Hush the meadow</button>
+    </div>
+    <div class="meter-row">
+      <span>Sync</span>
+      <meter id="syncMeter" min="0" max="1" low="0.35" high="0.9" optimum="1" value="0">0</meter>
+      <output id="syncValue" for="syncMeter">0.00</output>
+    </div>
+    <p class="hint" id="count">No fireflies yet · up to 60 can gather here</p>
+  </section>
+
+  <div class="below">
+    <p class="field-note"><b>Field note</b>In a few places, including the Great Smoky Mountains, fireflies of the species <i>Photinus carolinus</i> are known to flash in synchrony.</p>
+    <p class="privacy">The choir stays in this browser. About every five seconds, only the ordered pitches that blinked join the PointCast signal—never text.</p>
+  </div>
+</main>
+
+<script is:inline src="/keyboard.js" data-app="keyboard-fireflies" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE_KEY = 'pc-fireflies-v1';
+  var TAU = Math.PI * 2;
+  var MAX_FIREFLIES = 60;
+  var LIFE_SECONDS = 90;
+  var PITCHES = [60, 62, 64, 67, 69, 72, 74, 76, 79];
+  var canvas = $('meadow');
+  var scene = $('scene');
+  var ctx = canvas.getContext('2d');
+  var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fireflies = [];
+  var stars = [];
+  var grass = [];
+  var width = 1;
+  var height = 1;
+  var dpr = 1;
+  var coupling = 5.2;
+  var soundOn = true;
+  var found = false;
+  var syncHold = 0;
+  var settleTime = 0;
+  var foundGlow = 0;
+  var lastTime = 0;
+  var raf = 0;
+  var lastUiPaint = 0;
+  var captionHoldUntil = 0;
+  var signalWindow = [];
+  var audioContext = null;
+  var master = null;
+  var audioUnlocked = false;
+
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+  function random(min, max) { return min + Math.random() * (max - min); }
+  function frequency(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+  function setCaption(message, hold) {
+    $('caption').textContent = message;
+    captionHoldUntil = hold === Infinity ? Infinity : performance.now() + (hold || 0);
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        v: 1,
+        savedAt: Date.now(),
+        coupling: coupling,
+        soundOn: soundOn,
+        fireflies: fireflies.map(function (f) {
+          return { x: f.x / width, y: f.y / height, phase: f.phase, hz: f.hz, pitch: f.pitch, age: f.age, dx: f.dx, dy: f.dy };
+        }),
+      }));
+    } catch (e) { /* The meadow still works when browser storage is unavailable. */ }
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      var saved = JSON.parse(raw);
+      if (!saved || saved.v !== 1) return;
+      coupling = clamp(Number(saved.coupling) || 5.2, 0, 8);
+      soundOn = saved.soundOn !== false;
+      var elapsed = clamp((Date.now() - Number(saved.savedAt || Date.now())) / 1000, 0, LIFE_SECONDS);
+      if (!Array.isArray(saved.fireflies)) return;
+      saved.fireflies.slice(-MAX_FIREFLIES).forEach(function (f) {
+        var age = clamp(Number(f.age) || 0, 0, LIFE_SECONDS) + elapsed;
+        if (age >= LIFE_SECONDS) return;
+        var pitch = Math.round(Number(f.pitch));
+        if (PITCHES.indexOf(pitch) < 0) pitch = PITCHES[fireflies.length % PITCHES.length];
+        fireflies.push({
+          x: clamp(Number(f.x) || 0.5, 0.04, 0.96),
+          y: clamp(Number(f.y) || 0.55, 0.16, 0.91),
+          normalized: true,
+          phase: ((Number(f.phase) || 0) % TAU + TAU) % TAU,
+          hz: clamp(Number(f.hz) || 0.8, 0.5, 1.2),
+          pitch: pitch,
+          age: age,
+          dx: clamp(Number(f.dx) || random(-3, 3), -7, 7),
+          dy: clamp(Number(f.dy) || random(-2, 2), -5, 5),
+          flash: 0,
+          seed: Math.random() * TAU,
+        });
+      });
+    } catch (e) { /* Ignore malformed or blocked local state. */ }
+  }
+
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    var oldWidth = width;
+    var oldHeight = height;
+    width = Math.max(1, rect.width);
+    height = Math.max(1, rect.height);
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fireflies.forEach(function (f) {
+      if (f.normalized) {
+        f.x *= width;
+        f.y *= height;
+        f.normalized = false;
+      } else if (oldWidth > 1 && oldHeight > 1) {
+        f.x = f.x / oldWidth * width;
+        f.y = f.y / oldHeight * height;
+      }
+    });
+    stars = [];
+    for (var i = 0; i < 34; i++) {
+      stars.push({ x: ((i * 83) % 997) / 997 * width, y: (0.07 + ((i * 47) % 271) / 271 * 0.5) * height, r: 0.45 + (i % 4) * 0.2 });
+    }
+    grass = [];
+    for (var g = 0; g < Math.ceil(width / 5); g++) {
+      grass.push({ x: (g + 0.3) * 5, h: 24 + ((g * 37) % 72), lean: ((g * 17) % 13 - 6) * 0.7, layer: g % 3 });
+    }
+    draw();
+  }
+
+  function ensureAudio() {
+    if (!soundOn || !audioUnlocked) return null;
+    try {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        master = audioContext.createGain();
+        master.gain.value = 0.22;
+        var compressor = audioContext.createDynamicsCompressor();
+        compressor.threshold.value = -22;
+        compressor.knee.value = 20;
+        compressor.ratio.value = 5;
+        compressor.attack.value = 0.008;
+        compressor.release.value = 0.3;
+        master.connect(compressor).connect(audioContext.destination);
+      }
+      if (audioContext.state === 'suspended') audioContext.resume();
+      return audioContext;
+    } catch (e) { return null; }
+  }
+
+  function unlockAudio() {
+    audioUnlocked = true;
+    return ensureAudio();
+  }
+
+  function playPlink(f) {
+    var ac = ensureAudio();
+    if (!ac || !master) return;
+    var t = ac.currentTime;
+    var out = ac.createGain();
+    var panner = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    var target = panner || master;
+    if (panner) {
+      panner.pan.value = clamp(f.x / width * 2 - 1, -0.9, 0.9);
+      panner.connect(master);
+    }
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(0.07, t + 0.006);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + 1.15);
+    out.connect(target);
+    [[1, 0.82], [2.01, 0.24], [3.98, 0.09]].forEach(function (part) {
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = frequency(f.pitch) * part[0];
+      gain.gain.value = part[1];
+      osc.connect(gain).connect(out);
+      osc.start(t);
+      osc.stop(t + 1.22 / Math.sqrt(part[0]));
+    });
+  }
+
+  function playSwell() {
+    var ac = ensureAudio();
+    if (!ac || !master) return;
+    var t = ac.currentTime;
+    var out = ac.createGain();
+    var lowpass = ac.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.setValueAtTime(420, t);
+    lowpass.frequency.exponentialRampToValueAtTime(1100, t + 2.3);
+    out.gain.setValueAtTime(0.0001, t);
+    out.gain.exponentialRampToValueAtTime(0.22, t + 1.35);
+    out.gain.exponentialRampToValueAtTime(0.0001, t + 4.8);
+    out.connect(lowpass).connect(master);
+    [36, 43, 48].forEach(function (midi, i) {
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+      osc.type = i === 0 ? 'sine' : 'triangle';
+      osc.frequency.value = frequency(midi);
+      gain.gain.value = i === 0 ? 0.72 : 0.24;
+      osc.connect(gain).connect(out);
+      osc.start(t);
+      osc.stop(t + 5);
+    });
+  }
+
+  function noteBlink(f) {
+    f.flash = 1;
+    playPlink(f);
+    if (signalWindow.length < 64) signalWindow.push(f.pitch);
+  }
+
+  function addFirefly(x, y, keyIndex) {
+    if (fireflies.length >= MAX_FIREFLIES) fireflies.shift();
+    var index = keyIndex == null ? fireflies.length : keyIndex;
+    var fresh = {
+      x: clamp(x, 18, width - 18),
+      y: clamp(y, height * 0.18, height * 0.9),
+      phase: random(0, TAU),
+      hz: random(0.5, 1.2),
+      pitch: PITCHES[((index % PITCHES.length) + PITCHES.length) % PITCHES.length],
+      age: 0,
+      dx: random(-4.2, 4.2),
+      dy: random(-2.5, 2.5),
+      flash: 1,
+      seed: Math.random() * TAU,
+      normalized: false,
+    };
+    fireflies.push(fresh);
+    noteBlink(fresh);
+    found = false;
+    syncHold = 0;
+    settleTime = 0;
+    foundGlow = 0;
+    scene.classList.remove('found');
+    $('empty').hidden = true;
+    if (fireflies.length === 1) setCaption('One small lantern. Invite a few neighbors.', 3200);
+    else if (fireflies.length < 5) setCaption('Every light has its own time.', 2600);
+    else setCaption('Out of step. Listen closely.', 2600);
+    updateUi(0);
+    saveState();
+  }
+
+  function keyboardIndex(key) {
+    var k = key.toLowerCase();
+    if (/^[a-z]$/.test(k)) return k.charCodeAt(0) - 97;
+    if (/^[0-9]$/.test(k)) return 26 + Number(k);
+    return -1;
+  }
+
+  function addFromKey(index) {
+    var column = index % 12;
+    var row = Math.floor(index / 12);
+    var x = width * (0.09 + column / 11 * 0.82) + random(-12, 12);
+    var y = height * (0.34 + row * 0.16) + random(-30, 30);
+    addFirefly(x, y, index);
+  }
+
+  function wind() {
+    unlockAudio();
+    fireflies.forEach(function (f) {
+      f.phase = random(0, TAU);
+      f.dx += random(-8, 8);
+      f.dy += random(-4, 4);
+      f.flash = 0;
+    });
+    found = false;
+    syncHold = 0;
+    settleTime = 0;
+    foundGlow = 0;
+    scene.classList.remove('found');
+    if (fireflies.length) setCaption('The wind broke the rhythm. They begin again.', 3600);
+    else setCaption('The wind crossed an empty meadow.', 2600);
+    updateUi(orderParameter());
+    saveState();
+  }
+
+  function hush() {
+    fireflies = [];
+    signalWindow = [];
+    found = false;
+    syncHold = 0;
+    settleTime = 0;
+    foundGlow = 0;
+    scene.classList.remove('found');
+    $('empty').hidden = false;
+    setCaption('The grass is listening.', 0);
+    updateUi(0);
+    saveState();
+  }
+
+  function orderParameter() {
+    if (!fireflies.length) return 0;
+    var sx = 0;
+    var sy = 0;
+    fireflies.forEach(function (f) { sx += Math.cos(f.phase); sy += Math.sin(f.phase); });
+    return Math.sqrt(sx * sx + sy * sy) / fireflies.length;
+  }
+
+  function step(dt) {
+    settleTime += dt;
+    var radius = Math.max(190, Math.max(width, height) * 0.48);
+    var radius2 = radius * radius;
+    var effectiveCoupling = coupling * Math.min(1, settleTime / 12);
+    var velocities = new Array(fireflies.length);
+    for (var i = 0; i < fireflies.length; i++) {
+      var a = fireflies[i];
+      var pull = 0;
+      var neighbors = 0;
+      for (var j = 0; j < fireflies.length; j++) {
+        if (i === j) continue;
+        var b = fireflies[j];
+        var dx = b.x - a.x;
+        var dy = b.y - a.y;
+        if (dx * dx + dy * dy <= radius2) {
+          pull += Math.sin(b.phase - a.phase);
+          neighbors++;
+        }
+      }
+      velocities[i] = TAU * a.hz + (neighbors ? effectiveCoupling * pull / neighbors : 0);
+    }
+
+    for (var n = fireflies.length - 1; n >= 0; n--) {
+      var f = fireflies[n];
+      var nextPhase = f.phase + velocities[n] * dt;
+      if (nextPhase >= TAU) {
+        nextPhase %= TAU;
+        noteBlink(f);
+      } else if (nextPhase < 0) {
+        nextPhase = (nextPhase % TAU + TAU) % TAU;
+      }
+      f.phase = nextPhase;
+      f.flash = Math.max(0, f.flash - dt * 1.75);
+      f.age += dt;
+      if (!reducedMotion) {
+        f.x += (f.dx + Math.sin(f.age * 0.65 + f.seed) * 3.2) * dt;
+        f.y += (f.dy + Math.cos(f.age * 0.52 + f.seed) * 1.7) * dt;
+        f.dx *= Math.pow(0.996, dt * 60);
+        f.dy *= Math.pow(0.996, dt * 60);
+        if (f.x < 12 || f.x > width - 12) { f.dx *= -1; f.x = clamp(f.x, 12, width - 12); }
+        if (f.y < height * 0.16 || f.y > height * 0.91) { f.dy *= -1; f.y = clamp(f.y, height * 0.16, height * 0.91); }
+      }
+      if (f.age >= LIFE_SECONDS) fireflies.splice(n, 1);
+    }
+
+    var r = orderParameter();
+    if (!found && fireflies.length >= 5 && r > 0.9) syncHold += dt;
+    else if (!found) syncHold = 0;
+    if (!found && syncHold >= 3) {
+      found = true;
+      foundGlow = 1;
+      scene.classList.add('found');
+      setCaption('They found each other.', Infinity);
+      playSwell();
+    }
+    foundGlow = Math.max(0, foundGlow - dt / 9);
+    return r;
+  }
+
+  function fireflyAlpha(f) {
+    if (f.age <= 75) return 1;
+    return clamp((LIFE_SECONDS - f.age) / 15, 0, 1);
+  }
+
+  function drawSky() {
+    var sky = ctx.createLinearGradient(0, 0, 0, height);
+    sky.addColorStop(0, '#121a2b');
+    sky.addColorStop(0.48, '#1b2d35');
+    sky.addColorStop(1, '#16251c');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, height);
+
+    stars.forEach(function (s, i) {
+      var shimmer = reducedMotion ? 0.55 : 0.48 + Math.sin(performance.now() / 1100 + i) * 0.18;
+      ctx.globalAlpha = shimmer;
+      ctx.fillStyle = i % 5 ? '#dfe4cf' : '#b5a8ee';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, TAU);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    var moonX = width * 0.79;
+    var moonY = height * 0.17;
+    var moonR = Math.min(37, width * 0.07);
+    var halo = ctx.createRadialGradient(moonX, moonY, moonR * 0.4, moonX, moonY, moonR * 3.2);
+    halo.addColorStop(0, '#eee8c848');
+    halo.addColorStop(1, '#eee8c800');
+    ctx.fillStyle = halo;
+    ctx.fillRect(moonX - moonR * 3.2, moonY - moonR * 3.2, moonR * 6.4, moonR * 6.4);
+    ctx.fillStyle = '#e6e2c4';
+    ctx.beginPath();
+    ctx.arc(moonX, moonY, moonR, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#202c37';
+    ctx.beginPath();
+    ctx.arc(moonX - moonR * 0.36, moonY - moonR * 0.2, moonR * 0.98, 0, TAU);
+    ctx.fill();
+
+    var glowStrength = found ? 0.1 + foundGlow * 0.32 : 0;
+    if (glowStrength > 0) {
+      var groundGlow = ctx.createLinearGradient(0, height * 0.52, 0, height);
+      groundGlow.addColorStop(0, '#bddc6200');
+      groundGlow.addColorStop(1, 'rgba(189,220,98,' + glowStrength.toFixed(3) + ')');
+      ctx.fillStyle = groundGlow;
+      ctx.fillRect(0, height * 0.5, width, height * 0.5);
+    }
+  }
+
+  function drawGrass() {
+    ctx.fillStyle = '#0a130d';
+    ctx.beginPath();
+    ctx.moveTo(0, height);
+    ctx.lineTo(0, height * 0.82);
+    for (var x = 0; x <= width; x += 22) {
+      ctx.lineTo(x, height * (0.79 + ((x * 13) % 29) / 290));
+    }
+    ctx.lineTo(width, height);
+    ctx.closePath();
+    ctx.fill();
+
+    grass.forEach(function (blade) {
+      var base = height + 2;
+      var bladeHeight = blade.h + blade.layer * 14;
+      ctx.strokeStyle = blade.layer === 0 ? '#1d3421' : blade.layer === 1 ? '#27462a' : '#345537';
+      ctx.lineWidth = blade.layer === 2 ? 1.4 : 1;
+      ctx.beginPath();
+      ctx.moveTo(blade.x, base);
+      ctx.quadraticCurveTo(blade.x + blade.lean * 0.25, base - bladeHeight * 0.48, blade.x + blade.lean, base - bladeHeight);
+      ctx.stroke();
+    });
+  }
+
+  function drawFirefly(f) {
+    var alpha = fireflyAlpha(f);
+    var pulse = reducedMotion ? f.flash * 0.45 : f.flash;
+    var glowRadius = 8 + pulse * 30;
+    if (pulse > 0.02) {
+      var glow = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, glowRadius);
+      glow.addColorStop(0, 'rgba(255,248,151,' + (0.9 * alpha).toFixed(3) + ')');
+      glow.addColorStop(0.2, 'rgba(242,193,78,' + (0.62 * pulse * alpha).toFixed(3) + ')');
+      glow.addColorStop(1, 'rgba(169,201,138,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(f.x - glowRadius, f.y - glowRadius, glowRadius * 2, glowRadius * 2);
+    }
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#9ba99977';
+    ctx.beginPath();
+    ctx.ellipse(-3.1, -0.8, 3.4, 1.25, -0.45, 0, TAU);
+    ctx.ellipse(3.1, -0.8, 3.4, 1.25, 0.45, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#172019';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 1.7, 3.3, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = f.flash > 0.08 ? '#fff9a0' : '#7fa36b';
+    ctx.beginPath();
+    ctx.arc(0, 2.5, 1.45 + pulse * 0.8, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function draw() {
+    if (!ctx) return;
+    ctx.clearRect(0, 0, width, height);
+    drawSky();
+    fireflies.slice().sort(function (a, b) { return a.y - b.y; }).forEach(drawFirefly);
+    drawGrass();
+  }
+
+  function updateUi(r) {
+    $('syncMeter').value = r;
+    $('syncMeter').textContent = r.toFixed(2);
+    $('syncValue').textContent = r.toFixed(2);
+    $('count').textContent = fireflies.length ? fireflies.length + (fireflies.length === 1 ? ' firefly' : ' fireflies') + ' · each light fades after about 90 seconds' : 'No fireflies yet · up to 60 can gather here';
+    $('empty').hidden = fireflies.length > 0;
+  }
+
+  function updateQuietCaption(r, now) {
+    if (found || now < captionHoldUntil || !fireflies.length) return;
+    if (fireflies.length < 5) setCaption('Add a few more lights to make a choir.', 1200);
+    else if (r > 0.78) setCaption('Almost together…', 800);
+    else if (r > 0.5) setCaption('They are hearing one another.', 800);
+    else setCaption('Many clocks in the same warm dark.', 1000);
+  }
+
+  function frame(now) {
+    if (document.hidden) { raf = 0; return; }
+    if (!lastTime) lastTime = now;
+    var dt = clamp((now - lastTime) / 1000, 0, 0.05);
+    if (reducedMotion && now - lastTime < 115) {
+      raf = requestAnimationFrame(frame);
+      return;
+    }
+    lastTime = now;
+    var r = step(dt);
+    draw();
+    if (now - lastUiPaint > 140) {
+      updateUi(r);
+      updateQuietCaption(r, now);
+      lastUiPaint = now;
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  function startAnimation() {
+    if (raf || document.hidden) return;
+    lastTime = 0;
+    raf = requestAnimationFrame(frame);
+  }
+
+  canvas.addEventListener('pointerdown', function (event) {
+    if (event.button && event.button !== 0) return;
+    event.preventDefault();
+    unlockAudio();
+    var rect = canvas.getBoundingClientRect();
+    addFirefly(event.clientX - rect.left, event.clientY - rect.top, fireflies.length);
+  });
+
+  $('coupling').addEventListener('input', function () {
+    coupling = Number($('coupling').value);
+    $('strength').textContent = coupling.toFixed(1);
+    found = false;
+    syncHold = 0;
+    settleTime = 0;
+    foundGlow = 0;
+    scene.classList.remove('found');
+    setCaption(coupling < 0.2 ? 'No pull at all. Every light keeps its own time.' : 'The neighbors lean toward one another.', 2200);
+    saveState();
+  });
+  $('coupling').addEventListener('pointerdown', unlockAudio);
+
+  $('sound').addEventListener('click', function () {
+    soundOn = !soundOn;
+    if (soundOn) unlockAudio();
+    if (master) master.gain.value = soundOn ? 0.22 : 0;
+    $('sound').setAttribute('aria-pressed', String(soundOn));
+    $('sound').textContent = soundOn ? '♪ Sound on' : '♪ Sound off';
+    saveState();
+  });
+
+  $('wind').addEventListener('click', wind);
+  $('hush').addEventListener('click', hush);
+
+  document.addEventListener('keydown', function (event) {
+    if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    var tag = event.target && event.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+    if (event.key === ' ') {
+      event.preventDefault();
+      wind();
+      return;
+    }
+    var index = keyboardIndex(event.key);
+    if (index < 0) return;
+    event.preventDefault();
+    unlockAudio();
+    addFromKey(index);
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      saveState();
+    } else startAnimation();
+  });
+  window.addEventListener('resize', resize);
+  window.addEventListener('pagehide', saveState);
+
+  setInterval(function () {
+    var notes = signalWindow.slice(0, 64);
+    signalWindow = [];
+    if (notes.length && window.PointCastKeyboard) window.PointCastKeyboard.note(notes, null, { sound: false });
+  }, 5000);
+  setInterval(saveState, 10000);
+
+  loadState();
+  $('coupling').value = String(coupling);
+  $('strength').textContent = coupling.toFixed(1);
+  $('sound').setAttribute('aria-pressed', String(soundOn));
+  $('sound').textContent = soundOn ? '♪ Sound on' : '♪ Sound off';
+  resize();
+  updateUi(orderParameter());
+  if (fireflies.length) setCaption('The meadow remembers these lights.', 2800);
+  startAnimation();
+})();
+</script>
+</body>
+</html>
