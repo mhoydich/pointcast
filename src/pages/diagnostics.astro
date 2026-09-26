@@ -1,0 +1,399 @@
+---
+/**
+ * /diagnostics — service health dashboard.
+ *
+ * Polls /api/status.json every 10s and paints each subsystem (Edge,
+ * Durable Objects, KV, External services) with a status dot, latency,
+ * and one-line detail. Sibling to /status (which shows agent activity);
+ * this page focuses on whether the machinery is up.
+ *
+ * Server-side check fan-out lives in functions/api/status.json.ts; this
+ * page is just the viewer + a tiny client poller. No build-time data —
+ * the page renders empty placeholders and fills in on first poll, so a
+ * stale CDN copy never lies about current health.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+---
+
+<BlockLayout title="Diagnostics" description="Live service health for PointCast — edge, durable objects, KV namespaces, and external dependencies.">
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">← Home</a>
+      <span aria-hidden="true">/</span>
+      <span>DIAGNOSTICS</span>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">/DIAGNOSTICS · LIVE SERVICE HEALTH</p>
+      <h1>Are the machines on?</h1>
+      <p class="dek">Every subsystem PointCast leans on, probed in parallel, refreshed every 10 seconds. Green is good. Yellow is "answering but funny". Red is a real outage. Grey means the binding isn't configured — usually a deploy gap rather than downtime.</p>
+    </header>
+
+    <section class="block">
+      <header class="block__head">
+        <h2>OVERALL</h2>
+        <span id="dx-summary" class="dx-summary mono">CHECKING…</span>
+      </header>
+      <p class="dx-meta mono">
+        endpoint · <a href="/api/status.json">/api/status.json</a> · refreshes every 10s · last checked <time id="dx-checked-at" class="rel" data-ts="">—</time> · server-side fan-out in <span id="dx-elapsed">—</span>ms
+      </p>
+    </section>
+
+    <section class="block">
+      <h2>SERVICES</h2>
+      <div id="dx-groups" class="dx-groups">
+        <p class="dx-loading mono">probing edge, durable objects, KV, externals…</p>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>WHAT EACH PROBE MEANS</h2>
+      <ul class="legend">
+        <li><span class="dx-dot dx-dot--ok"></span><strong class="mono">OK</strong> · probe returned 2xx and the response shape matched expectations.</li>
+        <li><span class="dx-dot dx-dot--degraded"></span><strong class="mono">DEGRADED</strong> · 2xx but a soft assertion failed (e.g. snapshot returned a binding-missing fallback). Page still works; data may be empty.</li>
+        <li><span class="dx-dot dx-dot--down"></span><strong class="mono">DOWN</strong> · non-2xx, timeout (5s), threw, or hard assertion failed. User-visible outage on this surface.</li>
+        <li><span class="dx-dot dx-dot--unknown"></span><strong class="mono">UNKNOWN</strong> · the binding isn't present in the runtime. Usually a config gap (e.g. KV namespace not yet bound), not an outage.</li>
+      </ul>
+    </section>
+
+    <section class="block">
+      <h2>SUBSYSTEMS</h2>
+      <dl class="subs">
+        <dt class="mono">Edge · Pages</dt>
+        <dd>Cloudflare Pages routes that serve the public surface — the homepage, presence info, snapshot, wire-events, blocks.json, agents.json. Failures here usually mean a bad deploy.</dd>
+        <dt class="mono">Realtime · Durable Objects</dt>
+        <dd>Per-room state for presence + cursors. Lives in the standalone <code>pointcast-presence</code> Worker; Pages Functions reach it via the <code>PRESENCE</code> binding. Each probe opens a stub fetch to a DO instance and reads the snapshot — actual DO health, not just route reachability.</dd>
+        <dt class="mono">KV namespaces</dt>
+        <dd>Edge-replicated key/value stores backing visit logs, /ping, /sprint queue, /drop inbox, polls, rate limits, race results, studio inputs, and check-ins. Probe reads a sentinel key from each namespace; null is fine, throw is bad, missing binding = unknown.</dd>
+        <dt class="mono">External services</dt>
+        <dd>Hard third-party deps. <a href="https://noun.pics">noun.pics</a> serves the CC0 Noun avatars used everywhere on the site. <a href="https://tzkt.io">tzkt.io</a> is the indexer for Tezos contract data (Visit Nouns FA2, Coffee Mugs FA2, etc.).</dd>
+      </dl>
+    </section>
+
+    <footer class="built mono">
+      DIAGNOSTICS · CLIENT-RENDERED · NO BUILD-TIME DATA
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline>
+  // ─── relative-time helper ──────────────────────────────────────────
+  function rel(ts) {
+    const d = new Date(ts).getTime();
+    if (!d) return '—';
+    const diff = Date.now() - d;
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return s + 's ago';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 48) return h + 'h ago';
+    const days = Math.floor(h / 24);
+    return days + 'd ago';
+  }
+  function tickRel() {
+    document.querySelectorAll('.rel').forEach(function (el) {
+      const ts = el.getAttribute('data-ts');
+      if (ts) el.textContent = rel(ts);
+    });
+  }
+  setInterval(tickRel, 15000);
+
+  // ─── /api/status.json poller ───────────────────────────────────────
+  function makeDot(s) {
+    const span = document.createElement('span');
+    span.className = 'dx-dot dx-dot--' + s;
+    return span;
+  }
+  function fmtLatency(n) {
+    if (n === null || n === undefined) return '—';
+    if (n < 1000) return n + 'ms';
+    return (n / 1000).toFixed(1) + 's';
+  }
+  function render(payload) {
+    const groupsEl = document.getElementById('dx-groups');
+    const summaryEl = document.getElementById('dx-summary');
+    const checkedAtEl = document.getElementById('dx-checked-at');
+    const elapsedEl = document.getElementById('dx-elapsed');
+    if (!groupsEl || !summaryEl) return;
+
+    const counts = payload.counts || { ok: 0, degraded: 0, down: 0, unknown: 0 };
+    summaryEl.className = 'dx-summary dx-summary--' + (payload.overall || 'unknown') + ' mono';
+    const bits = [];
+    if (counts.ok)       bits.push(counts.ok + ' OK');
+    if (counts.degraded) bits.push(counts.degraded + ' DEGRADED');
+    if (counts.down)     bits.push(counts.down + ' DOWN');
+    if (counts.unknown)  bits.push(counts.unknown + ' UNKNOWN');
+    summaryEl.textContent = bits.join(' · ') || 'CHECKING…';
+
+    if (checkedAtEl && payload.checkedAt) {
+      checkedAtEl.setAttribute('data-ts', payload.checkedAt);
+      checkedAtEl.textContent = rel(payload.checkedAt);
+    }
+    if (elapsedEl && typeof payload.elapsedMs === 'number') {
+      elapsedEl.textContent = String(payload.elapsedMs);
+    }
+
+    groupsEl.innerHTML = '';
+    (payload.groups || []).forEach(function (g) {
+      const wrap = document.createElement('div');
+      wrap.className = 'dx-group';
+      const head = document.createElement('h3');
+      head.className = 'dx-group__head mono';
+      head.textContent = g.label;
+      wrap.appendChild(head);
+      const ul = document.createElement('ul');
+      ul.className = 'dx-list';
+      (g.services || []).forEach(function (s) {
+        const li = document.createElement('li');
+        li.className = 'dx-row dx-row--' + s.status;
+        li.appendChild(makeDot(s.status));
+        const name = document.createElement('span');
+        name.className = 'dx-name mono';
+        if (s.href) {
+          const a = document.createElement('a');
+          a.href = s.href;
+          a.textContent = s.name;
+          a.target = (s.href.indexOf('http') === 0 && s.href.indexOf(location.origin) !== 0) ? '_blank' : '_self';
+          a.rel = 'noopener';
+          name.appendChild(a);
+        } else {
+          name.textContent = s.name;
+        }
+        li.appendChild(name);
+        const detail = document.createElement('span');
+        detail.className = 'dx-detail';
+        detail.textContent = s.detail || '';
+        li.appendChild(detail);
+        const lat = document.createElement('span');
+        lat.className = 'dx-lat mono';
+        lat.textContent = fmtLatency(s.latencyMs);
+        li.appendChild(lat);
+        ul.appendChild(li);
+      });
+      wrap.appendChild(ul);
+      groupsEl.appendChild(wrap);
+    });
+  }
+  function poll() {
+    fetch('/api/status.json', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(render)
+      .catch(function (e) {
+        const groupsEl = document.getElementById('dx-groups');
+        const summaryEl = document.getElementById('dx-summary');
+        if (summaryEl) {
+          summaryEl.textContent = 'STATUS UNREACHABLE';
+          summaryEl.className = 'dx-summary dx-summary--down mono';
+        }
+        if (groupsEl) {
+          groupsEl.innerHTML = '<p class="dx-loading mono">/api/status.json failed: ' + (e.message || 'unknown error') + '</p>';
+        }
+      });
+  }
+  poll();
+  setInterval(poll, 10000);
+</script>
+
+<style>
+  .page { max-width: 880px; margin: 0 auto; padding: 20px 20px 80px; }
+
+  .crumb {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin-bottom: 20px;
+    display: flex;
+    gap: 8px;
+  }
+  .crumb a { color: inherit; text-decoration: none; }
+  .crumb a:hover { color: var(--pc-accent); }
+
+  .hero { margin-bottom: 28px; }
+  .kicker {
+    font-family: var(--pc-font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 8px;
+  }
+  .hero h1 {
+    font-family: var(--pc-font-sans);
+    font-size: 30px;
+    font-weight: 500;
+    margin: 0 0 10px;
+    line-height: 1.1;
+  }
+  .dek { font-size: 15px; color: var(--pc-ink); margin: 0; line-height: 1.55; max-width: 640px; }
+
+  .mono {
+    font-family: var(--pc-font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .block { margin: 28px 0; }
+  .block h2 {
+    font-family: var(--pc-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+    border-bottom: 1.5px solid var(--pc-ink);
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
+  .block__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1.5px solid var(--pc-ink);
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
+  .block__head h2 { border: 0; padding: 0; margin: 0; }
+
+  .dx-summary {
+    padding: 4px 10px;
+    border: 1.5px solid currentColor;
+    border-radius: 2px;
+    line-height: 1;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .dx-summary--ok       { color: #1f7a3a; background: #ecf7ee; }
+  .dx-summary--degraded { color: #8a6300; background: #fcf6df; }
+  .dx-summary--down     { color: #a3193c; background: #fcebee; animation: dx-pulse 1.8s ease-in-out infinite; }
+  .dx-summary--unknown  { color: var(--pc-ink-muted); background: #f1efea; }
+
+  @keyframes dx-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+
+  .dx-meta { color: var(--pc-ink-muted); margin: 0; }
+  .dx-meta a { color: inherit; }
+
+  .dx-groups { display: flex; flex-direction: column; gap: 22px; }
+  .dx-group__head {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--pc-ink-muted);
+    margin: 0 0 6px;
+    font-weight: 500;
+  }
+  .dx-list {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    border-top: 1px solid var(--pc-rule);
+  }
+  .dx-row {
+    display: grid;
+    grid-template-columns: 14px 220px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 6px;
+    border-bottom: 1px dashed var(--pc-rule);
+    font-size: 12.5px;
+  }
+  .dx-row--down     { background: #fcebee44; }
+  .dx-row--degraded { background: #fcf6df44; }
+  .dx-row--unknown  { opacity: 0.7; }
+
+  .dx-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px currentColor;
+  }
+  .dx-dot--ok       { color: #1f7a3a; background: #29a352; }
+  .dx-dot--degraded { color: #8a6300; background: #e0a200; }
+  .dx-dot--down     { color: #a3193c; background: #d63b5b; animation: dx-pulse 1.4s ease-in-out infinite; }
+  .dx-dot--unknown  { color: var(--pc-ink-muted); background: var(--pc-ink-muted); }
+
+  .dx-name { color: var(--pc-ink); font-size: 11px; }
+  .dx-name a { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+  .dx-name a:hover { color: var(--pc-accent); }
+  .dx-detail {
+    color: var(--pc-ink-soft);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--pc-font-mono);
+  }
+  .dx-lat {
+    color: var(--pc-ink-muted);
+    font-size: 10.5px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .dx-loading { color: var(--pc-ink-muted); padding: 12px 4px; margin: 0; }
+
+  .legend {
+    list-style: none;
+    margin: 0; padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--pc-ink);
+  }
+  .legend li { display: flex; align-items: baseline; gap: 10px; }
+  .legend strong { font-weight: 500; }
+
+  .subs { margin: 0; }
+  .subs dt {
+    color: var(--pc-ink);
+    margin-top: 12px;
+    font-size: 11px;
+  }
+  .subs dt:first-child { margin-top: 0; }
+  .subs dd {
+    margin: 4px 0 0;
+    padding-left: 0;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .subs code {
+    font-family: var(--pc-font-mono);
+    font-size: 11.5px;
+    padding: 1px 4px;
+    background: #f1efea;
+    border-radius: 2px;
+  }
+  .subs a { color: inherit; }
+
+  .built {
+    margin-top: 48px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--pc-rule);
+    color: var(--pc-ink-muted);
+  }
+
+  @media (max-width: 639px) {
+    .dx-row {
+      grid-template-columns: 14px 1fr auto;
+      grid-template-rows: auto auto;
+      row-gap: 2px;
+    }
+    .dx-detail {
+      grid-column: 2 / -1;
+      grid-row: 2;
+      white-space: normal;
+    }
+    .dx-lat { grid-column: 3; grid-row: 1; }
+  }
+</style>
