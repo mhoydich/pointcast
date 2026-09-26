@@ -18,3 +18,14 @@ The palette constants, `HORIZON`, `SUN` and `SUN_R` sit at the top of the
 script. The caption ("Hoydich Entertainment" / "Annual Report"), the three
 signal dots and the vertical wordmark are in `compose()`.
 Type is Space Grotesk (SIL OFL, see `SpaceGrotesk-OFL.txt`).
+
+## Hat
+
+`hat/hat.py` renders the matching cap:
+
+- `hat/hat-patch.png`: a flat circular patch in six thread colours on navy twill, with a gold merrowed border, sun, signal rings, swell and reflection. It's on transparency so it can go straight to an embroidery vendor.
+- `hat/hat-mockup.png`: a front view of a cream crown with a navy visor, gold visor stitching, the patch on the front panel and a small cobalt HOYDICH on the right panel.
+
+```
+python3 designs/annual-report/hat/hat.py
+```
