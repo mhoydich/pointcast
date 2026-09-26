@@ -65,7 +65,9 @@ const curlSnippet = `curl -X POST https://pointcast.xyz/api/drum/signal \\
         </div>
         <p class="ds__note">
           Beats counted before September 26, 2026 carried no source. Everything since says where it came from.
+          <span data-ds-recovered></span>
         </p>
+        <p class="ds__note"><b data-ds-live-count>—</b> drumming in the last two minutes.</p>
       </div>
     </section>
 
@@ -108,7 +110,7 @@ const curlSnippet = `curl -X POST https://pointcast.xyz/api/drum/signal \\
     <section class="ds__panel ds__wire">
       <h2 class="ds__h">Wire the drum into anything</h2>
       <p class="ds__copy">
-        One channel, open to everyone. Send beats and they count on the same drum as <a href="/drum">/drum</a>.
+        Want a ready-made button? <a href="/drum-kit">Build one in the Drum Kit</a>. One channel, open to everyone. Send beats and they count on the same drum as <a href="/drum">/drum</a>.
         Tag them with an <code>app</code> name, and optionally a <code>place</code> and a <code>kind</code>
         (<code>embed</code>, <code>standalone</code>, <code>artifact</code>, <code>agent</code>, <code>other</code>).
         Only totals are stored: no cookies and no IPs. A place you don't name falls back to a country code.
@@ -286,6 +288,9 @@ Taps arrive as kind "agent", app "mcp".</code></pre>
         $('[data-ds-global]').textContent = fmt(data.globalTotal);
         $('[data-ds-attributed]').textContent = fmt(data.attributed);
         $('[data-ds-unattributed]').textContent = fmt(data.unattributed);
+        $('[data-ds-recovered]').textContent = data.recovered
+          ? `That includes ${fmt(data.recovered)} taps the old counter dropped when requests raced, restored on September 26 from each drummer's own total.`
+          : '';
 
         const byKind = Object.fromEntries((data.kinds || []).map((k) => [k.kind, k.total]));
         const maxKind = Math.max(1, ...Object.values(byKind));
@@ -354,7 +359,19 @@ Taps arrive as kind "agent", app "mcp".</code></pre>
         }
       }
 
+      async function loadLive() {
+        try {
+          const live = await (await fetch('/api/drum/live', { cache: 'no-store' })).json();
+          if (typeof live.count === 'number') {
+            const anon = (live.sources || []).filter((s) => s.kind !== 'pointcast').length;
+            const n = live.count + anon;
+            $('[data-ds-live-count]').textContent = n === 1 ? '1 drummer' : `${n} drummers`;
+          }
+        } catch {}
+      }
+
       async function load() {
+        loadLive();
         const live = $('[data-ds-live]');
         try {
           const res = await fetch(API, { cache: 'no-store' });
