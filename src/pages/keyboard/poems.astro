@@ -1,0 +1,896 @@
+---
+/**
+ * /keyboard/poems — Poem Organ: public-domain poems, played line by line.
+ *
+ * A small anthology of poems (all published before 1929) is read aloud as
+ * melody: each character becomes a note in the poem's mood (see
+ * /js/keyboard-voice.js), vowels held a little longer, spaces breathing,
+ * every line closing on a small drawbar-organ chord. The current word glows
+ * as it plays. "At the console" lets you perform a poem yourself, one
+ * keypress at a time. A haiku writer counts syllables live and rings a bell
+ * on 5-7-5.
+ *
+ * Nothing is sent anywhere except a sorted bag of notes (max 64) after a full
+ * playback — never the words, never the order. Haiku drafts are kept only in
+ * this browser (localStorage) and can be shared as a link (#h=…), which
+ * browsers never send to a server.
+ */
+const title = 'Poem Organ · PointCast';
+const description =
+  'A small anthology of public-domain poems, played line by line on a drawbar organ. Watch the words glow as they sound, perform a poem yourself at the console, or write a haiku that rings true at 5-7-5.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/poems">
+<meta property="og:title" content="Poem Organ · poems played line by line">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;--mood:#dfc48d;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 80% 0%,#34413255,transparent 45%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:11px 16px;cursor:pointer;font-size:11px;min-height:40px}
+button:hover{background:#1e2b20;border-color:#688777}
+button.primary{background:var(--mood);border-color:var(--mood);color:var(--bg)}
+button[aria-pressed=true]{background:var(--mood);color:var(--bg);border-color:var(--mood)}
+button:disabled{opacity:.4;cursor:default}
+button.icon{width:44px;height:44px;min-height:44px;padding:0;display:inline-grid;place-items:center;font-size:15px;border-radius:50%}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+main{max-width:900px;margin:0 auto;padding:26px 20px 70px}
+.hint{font-size:12px;line-height:1.7;color:#b7c4ac;margin:0 0 20px;max-width:64ch}
+.tabs{display:flex;gap:6px;margin-bottom:20px}
+.tabs button{padding:9px 16px}
+.tabs button[aria-selected=true]{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+.panel[hidden]{display:none!important}
+.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:22px}
+.poem-card{text-align:left;border-radius:14px;padding:13px 15px;display:flex;flex-direction:column;gap:4px;min-height:44px;align-items:flex-start}
+.poem-card.sel{background:color-mix(in srgb,var(--c) 20%,transparent);border-color:color-mix(in srgb,var(--c) 55%,transparent)}
+.poem-card b{font-family:Georgia,serif;font-weight:normal;font-size:16px}
+.poem-card span{color:var(--dim);font-size:10px}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 30px;position:relative;overflow:hidden}
+.stage:before{content:'';position:absolute;inset:0 0 auto 0;height:5px;background:var(--mood)}
+.stage h2{font-family:Georgia,serif;font-weight:normal;font-size:24px;margin:6px 0 2px}
+.byline{color:var(--dim);font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 18px}
+.reading{font-family:Georgia,serif;font-size:clamp(20px,3.4vw,28px);line-height:1.9;min-height:6.5em;margin:0 0 6px}
+.reading .word{color:#5f7863;transition:color .12s}
+.reading .word.done{color:#9fb497}
+.reading .word.now{color:var(--bg);background:var(--mood);border-radius:5px;padding:0 3px}
+.lineno{font-size:10px;color:var(--dim);letter-spacing:.1em;margin:0 0 16px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.controls .spacer{flex:1 1 auto}
+.tempo{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--dim)}
+.tempo input{accent-color:var(--gold)}
+.console-hint{margin-top:16px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;font-size:11px;color:var(--dim);line-height:1.7}
+.console-hint.on{border-color:var(--mood);color:var(--ink)}
+.progress{display:flex;gap:4px;margin-top:18px;flex-wrap:wrap}
+.progress i{display:block;width:10px;height:4px;border-radius:2px;background:var(--line);font-style:normal}
+.progress i.past{background:var(--mood);opacity:.5}
+.progress i.at{background:var(--mood)}
+.haiku-sheet{background:#efe8d2;color:#2c3326;border-radius:6px 6px 14px 14px;padding:30px 32px 26px;box-shadow:0 22px 50px #0006}
+.haiku-sheet:before{content:'';display:block;height:5px;margin:-30px -32px 20px;background:var(--mood);border-radius:6px 6px 0 0}
+.hrow{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+.hrow input{flex:1;border:0;border-bottom:1px dashed #2c332644;background:transparent;font:Georgia,serif;font-size:19px;color:inherit;outline:none;padding:6px 2px}
+.hrow .count{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#6b7a5e;min-width:64px;text-align:right;transition:color .15s}
+.hrow .count.hit{color:#8a6d2b;font-weight:bold}
+.hrow.bloom .count{animation:ring .5s ease}
+@keyframes ring{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+.bloom-mark{text-align:center;font-size:11px;color:var(--dim);margin-top:6px;min-height:1.6em}
+.bloom-mark.show{color:var(--gold);animation:bloomIn .6s ease}
+@keyframes bloomIn{0%{opacity:0;transform:translateY(6px) scale(.9)}60%{opacity:1;transform:translateY(-2px) scale(1.06)}100%{opacity:1;transform:translateY(0) scale(1)}}
+.moods{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0}
+.moods button{padding:7px 12px;font-size:10px;min-height:34px}
+.moods button[aria-pressed=true]{background:var(--mood);border-color:var(--mood);color:var(--bg)}
+.hactions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.sealed{margin-top:16px;border:1px solid var(--line);border-radius:14px;padding:14px;background:#0d1711}
+.sealed input{width:100%;background:#0b120d;border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;font-size:11px;padding:11px;margin:8px 0 4px}
+.recent{margin-top:26px}
+.recent h3{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:normal;margin:0 0 10px}
+.recent-list{display:flex;flex-direction:column;gap:6px}
+.recent-item{display:flex;align-items:center;gap:10px;text-align:left;padding:9px 12px;border-radius:10px}
+.recent-item .lines{flex:1;font-family:Georgia,serif;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recent-item small{color:var(--dim);font-size:9px}
+.empty{color:var(--dim);font-size:11px;font-style:italic}
+.privacy{font-size:10px;line-height:1.7;color:#a0ad95;margin:16px 0 0;max-width:70ch}
+[hidden]{display:none!important}
+@media(max-width:640px){header{padding:16px}main{padding:20px 14px 50px}.stage{padding:20px 18px}.haiku-sheet{padding:24px 18px 20px}.haiku-sheet:before{margin:-24px -18px 18px}.brand small{margin-left:0}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Poem Organ<small>Poems played line by line</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="sound" aria-pressed="true">♪ Sound on</button>
+    <button type="button" id="share" aria-pressed="true" title="Adds a sorted bag of notes (never words) to the town chord on /keyboard-signal after a full playback">✳ Town chord on</button>
+  </div>
+</header>
+
+<main>
+  <p class="hint">A dozen poems, all old enough to be everyone's. Pick one, press play, and follow the word that glows. Or step into the console and perform a line yourself, one key at a time — or write a haiku below and see if it rings true.</p>
+
+  <div class="tabs" role="tablist" aria-label="Poem Organ sections">
+    <button type="button" role="tab" id="tabPoems" aria-selected="true" aria-controls="panelPoems">Play a poem</button>
+    <button type="button" role="tab" id="tabHaiku" aria-selected="false" aria-controls="panelHaiku">Write a haiku</button>
+  </div>
+
+  <section id="panelPoems" class="panel" role="tabpanel" aria-labelledby="tabPoems">
+    <div class="shelf" id="shelf" role="list" aria-label="The anthology"></div>
+
+    <div class="stage" id="stage">
+      <h2 id="poemTitle">—</h2>
+      <p class="byline" id="poemByline">—</p>
+      <p class="lineno" id="lineno">—</p>
+      <div class="reading" id="reading" aria-live="polite"></div>
+      <div class="progress" id="progress" aria-hidden="true"></div>
+
+      <div class="controls">
+        <button type="button" class="icon" id="prevLine" aria-label="Previous line">‹</button>
+        <button type="button" class="primary" id="play">▶ Play</button>
+        <button type="button" id="pause" hidden>❚❚ Pause</button>
+        <button type="button" class="icon" id="nextLine" aria-label="Next line">›</button>
+        <span class="spacer"></span>
+        <button type="button" id="voiceMode" aria-pressed="false">☰ Organ + bells</button>
+        <button type="button" id="console" aria-pressed="false">⌨ At the console</button>
+      </div>
+      <div class="tempo">
+        <span>Slow</span>
+        <input type="range" id="tempo" min="55" max="200" step="1" value="100" aria-label="Tempo">
+        <span>Fast</span>
+      </div>
+      <p class="console-hint" id="consoleHint">Turn on "At the console" and press any key to sound the next letter yourself. Press Enter to close the line with a chord.</p>
+    </div>
+  </section>
+
+  <section id="panelHaiku" class="panel" role="tabpanel" aria-labelledby="tabHaiku" hidden>
+    <div class="haiku-sheet">
+      <div class="hrow" id="hrow0"><input id="h0" maxlength="60" placeholder="five syllables…" autocomplete="off"><span class="count" id="c0">0 / 5</span></div>
+      <div class="hrow" id="hrow1"><input id="h1" maxlength="70" placeholder="seven syllables…" autocomplete="off"><span class="count" id="c1">0 / 7</span></div>
+      <div class="hrow" id="hrow2"><input id="h2" maxlength="60" placeholder="five syllables…" autocomplete="off"><span class="count" id="c2">0 / 5</span></div>
+      <p class="bloom-mark" id="bloomMark"></p>
+    </div>
+    <div class="moods" id="hmoods" role="group" aria-label="Mood of the haiku"></div>
+    <div class="hactions">
+      <button type="button" id="hplay">▶ Hear it</button>
+      <button type="button" class="primary" id="hshare">✉ Share &amp; copy link</button>
+    </div>
+    <div class="sealed" id="hsealed" hidden>
+      <p class="byline" style="margin:0">Link copied</p>
+      <input id="hlink" readonly aria-label="Haiku link">
+    </div>
+    <div class="recent">
+      <h3>Recent haiku, kept in this browser</h3>
+      <div class="recent-list" id="recentList"></div>
+    </div>
+    <p class="privacy">Syllable counting is a heuristic — it will occasionally miscount an odd word. Nothing here reaches a server unless you press Share, and even then only the poem rides in the link, never on PointCast.</p>
+  </section>
+</main>
+
+<script is:inline src="/js/keyboard-voice.js"></script>
+<script is:inline src="/keyboard.js" data-app="keyboard-poems" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var V = window.KeyVoice;
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE_KEY = 'pc-poems-v1';
+
+  // ---- the anthology --------------------------------------------------------
+  var POEMS = [
+    { id: 'hope', mood: 'grateful', title: '"Hope" is the thing with feathers', author: 'Emily Dickinson', year: 1891, lines: [
+      '"Hope" is the thing with feathers',
+      'That perches in the soul,',
+      'And sings the tune without the words,',
+      'And never stops at all,',
+      'And sweetest in the gale is heard;',
+      'And sore must be the storm',
+      'That could abash the little bird',
+      'That kept so many warm.',
+      'I\'ve heard it in the chillest land,',
+      'And on the strangest sea;',
+      'Yet, never, in extremity,',
+      'It asked a crumb of me.',
+    ]},
+    { id: 'nobody', mood: 'bright', title: 'I\'m Nobody! Who are you?', author: 'Emily Dickinson', year: 1891, lines: [
+      'I\'m Nobody! Who are you?',
+      'Are you Nobody too?',
+      'Then there\'s a pair of us — don\'t tell!',
+      'They\'d banish us, you know.',
+      'How dreary to be Somebody!',
+      'How public, like a frog',
+      'To tell your name the livelong day',
+      'To an admiring bog!',
+    ]},
+    { id: 'wind', mood: 'marine', title: 'Who Has Seen the Wind?', author: 'Christina Rossetti', year: 1872, lines: [
+      'Who has seen the wind?',
+      'Neither I nor you:',
+      'But when the leaves hang trembling,',
+      'The wind is passing through.',
+      'Who has seen the wind?',
+      'Neither you nor I:',
+      'But when the trees bow down their heads,',
+      'The wind is passing by.',
+    ]},
+    { id: 'shadow', mood: 'bright', title: 'My Shadow', author: 'Robert Louis Stevenson', year: 1885, lines: [
+      'I have a little shadow that goes in and out with me,',
+      'And what can be the use of him is more than I can see.',
+      'He is very, very like me from the heels up to the head;',
+      'And I see him jump before me, when I jump into my bed.',
+      'The funniest thing about him is the way he likes to grow,',
+      'Not at all like proper children, which is always very slow;',
+      'For he sometimes shoots up taller like an india-rubber ball,',
+      'And he sometimes gets so little that there\'s none of him at all.',
+      'He hasn\'t got a notion of how children ought to play,',
+      'And can only make a fool of me in every sort of way.',
+      'He stays so close beside me, he\'s a coward you can see;',
+      'I\'d think shame to stick to nursie as that shadow sticks to me!',
+      'One morning, very early, before the sun was up,',
+      'I rose and found the shining dew on every buttercup;',
+      'But my lazy little shadow, like an arrant sleepy-head,',
+      'Had stayed at home behind me and was fast asleep in bed.',
+    ]},
+    { id: 'tyger', mood: 'restless', title: 'The Tyger', author: 'William Blake', year: 1794, lines: [
+      'Tyger Tyger, burning bright,',
+      'In the forests of the night,',
+      'What immortal hand or eye',
+      'Could frame thy fearful symmetry?',
+      'In what distant deeps or skies',
+      'Burnt the fire of thine eyes?',
+      'On what wings dare he aspire?',
+      'What the hand dare seize the fire?',
+      'And what shoulder, and what art,',
+      'Could twist the sinews of thy heart?',
+      'And when thy heart began to beat,',
+      'What dread hand and what dread feet?',
+      'What the hammer? What the chain?',
+      'In what furnace was thy brain?',
+      'What the anvil? What dread grasp',
+      'Dare its deadly terrors clasp?',
+      'When the stars threw down their spears,',
+      'And watered heaven with their tears,',
+      'Did he smile his work to see?',
+      'Did he who made the lamb make thee?',
+      'Tyger Tyger, burning bright,',
+      'In the forests of the night,',
+      'What immortal hand or eye',
+      'Dare frame thy fearful symmetry?',
+    ]},
+    { id: 'lamb', mood: 'tender', title: 'The Lamb', author: 'William Blake', year: 1789, lines: [
+      'Little lamb, who made thee?',
+      'Dost thou know who made thee?',
+      'Gave thee life, and bid thee feed',
+      'By the stream and o\'er the mead;',
+      'Gave thee clothing of delight,',
+      'Softest clothing, wooly, bright;',
+      'Gave thee such a tender voice,',
+      'Making all the vales rejoice.',
+      'Little lamb, who made thee?',
+      'Dost thou know who made thee?',
+      'Little lamb, I\'ll tell thee,',
+      'Little lamb, I\'ll tell thee:',
+      'He is called by thy name,',
+      'For he calls himself a Lamb.',
+      'He is meek, and he is mild,',
+      'He became a little child.',
+      'I a child, and thou a lamb,',
+      'We are called by his name.',
+      'Little lamb, God bless thee.',
+      'Little lamb, God bless thee.',
+    ]},
+    { id: 'gold', mood: 'blue', title: 'Nothing Gold Can Stay', author: 'Robert Frost', year: 1923, lines: [
+      'Nature\'s first green is gold,',
+      'Her hardest hue to hold.',
+      'Her early leaf\'s a flower;',
+      'But only so an hour.',
+      'Then leaf subsides to leaf.',
+      'So Eden sank to grief,',
+      'So dawn goes down to day.',
+      'Nothing gold can stay.',
+    ]},
+    { id: 'spider', mood: 'marine', title: 'A Noiseless Patient Spider', author: 'Walt Whitman', year: 1868, lines: [
+      'A noiseless patient spider,',
+      'I mark\'d where on a little promontory it stood isolated,',
+      'Mark\'d how to explore the vacant vast surrounding,',
+      'It launch\'d forth filament, filament, filament, out of itself,',
+      'Ever unreeling them, ever tirelessly speeding them.',
+      'And you, O my soul, where you stand,',
+      'Surrounded, detached, in measureless oceans of space,',
+      'Ceaselessly musing, venturing, throwing, seeking the spheres to connect them,',
+      'Till the bridge you will need be form\'d, till the ductile anchor hold,',
+      'Till the gossamer thread you fling catch somewhere, O my soul.',
+    ]},
+    { id: 'rains', mood: 'blue', title: 'There Will Come Soft Rains', author: 'Sara Teasdale', year: 1918, lines: [
+      'There will come soft rains and the smell of the ground,',
+      'And swallows circling with their shimmering sound;',
+      'And frogs in the pools singing at night,',
+      'And wild plum trees in tremulous white;',
+      'Robins will wear their feathery fire,',
+      'Whistling their whims on a low fence-wire;',
+      'And not one will know of the war, not one',
+      'Will care at last when it is done.',
+      'Not one would mind, neither bird nor tree,',
+      'If mankind perished utterly;',
+      'And Spring herself, when she woke at dawn,',
+      'Would scarcely know that we were gone.',
+    ]},
+    { id: 'beard', mood: 'bright', title: 'There Was an Old Man with a Beard', author: 'Edward Lear', year: 1846, lines: [
+      'There was an Old Man with a beard,',
+      'Who said, "It is just as I feared!',
+      'Two Owls and a Hen,',
+      'Four Larks and a Wren,',
+      'Have all built their nests in my beard!"',
+    ]},
+    { id: 'rivers', mood: 'grateful', title: 'The Negro Speaks of Rivers', author: 'Langston Hughes', year: 1921, lines: [
+      'I\'ve known rivers:',
+      'I\'ve known rivers ancient as the world and older than the flow of human blood in human veins.',
+      'My soul has grown deep like the rivers.',
+      'I bathed in the Euphrates when dawns were young.',
+      'I built my hut near the Congo and it lulled me to sleep.',
+      'I looked upon the Nile and raised the pyramids above it.',
+      'I heard the singing of the Mississippi when Abe Lincoln went down to New Orleans,',
+      'And I\'ve seen its muddy bosom turn all golden in the sunset.',
+      'I\'ve known rivers:',
+      'Ancient, dusky rivers.',
+      'My soul has grown deep like the rivers.',
+    ]},
+    { id: 'daffodils', mood: 'bright', title: 'I Wandered Lonely as a Cloud', author: 'William Wordsworth', year: 1815, lines: [
+      'I wandered lonely as a cloud',
+      'That floats on high o\'er vales and hills,',
+      'When all at once I saw a crowd,',
+      'A host, of golden daffodils;',
+      'Beside the lake, beneath the trees,',
+      'Fluttering and dancing in the breeze.',
+      'Continuous as the stars that shine',
+      'And twinkle on the milky way,',
+      'They stretched in never-ending line',
+      'Along the margin of a bay:',
+      'Ten thousand saw I at a glance,',
+      'Tossing their heads in sprightly dance.',
+      'The waves beside them danced, but they',
+      'Out-did the sparkling waves in glee:',
+      'A poet could not but be gay,',
+      'In such a jocund company.',
+      'I gazed, and gazed, but little thought',
+      'What wealth the show to me had brought:',
+      'For oft, when on my couch I lie',
+      'In vacant or in pensive mood,',
+      'They flash upon that inward eye',
+      'Which is the bliss of solitude;',
+      'And then my heart with pleasure fills,',
+      'And dances with the daffodils.',
+    ]},
+  ];
+  var byId = {}; POEMS.forEach(function (p) { byId[p.id] = p; });
+
+  // ---- storage ---------------------------------------------------------------
+  var store = { haikus: [], prefs: { sound: true, share: true } };
+  try { var raw = localStorage.getItem(STORE_KEY); if (raw) { var d = JSON.parse(raw); if (d && typeof d === 'object') store = { haikus: Array.isArray(d.haikus) ? d.haikus : [], prefs: Object.assign({ sound: true, share: true }, d.prefs || {}) }; } } catch (e) { /* private mode */ }
+  var prefs = store.prefs;
+  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify({ haikus: store.haikus.slice(0, 24), prefs: prefs })); } catch (e) { /* storage full or blocked: the page still works */ } }
+
+  function paintToggles() {
+    $('sound').setAttribute('aria-pressed', String(prefs.sound));
+    $('sound').textContent = prefs.sound ? '♪ Sound on' : '♪ Sound off';
+    $('share').setAttribute('aria-pressed', String(prefs.share));
+    $('share').textContent = prefs.share ? '✳ Town chord on' : '✳ Town chord off';
+  }
+  $('sound').addEventListener('click', function () { prefs.sound = !prefs.sound; paintToggles(); save(); });
+  $('share').addEventListener('click', function () { prefs.share = !prefs.share; paintToggles(); save(); });
+
+  // ---- tabs -------------------------------------------------------------------
+  function selectTab(name) {
+    var poems = name === 'poems';
+    $('tabPoems').setAttribute('aria-selected', String(poems));
+    $('tabHaiku').setAttribute('aria-selected', String(!poems));
+    $('panelPoems').hidden = !poems;
+    $('panelHaiku').hidden = poems;
+    if (!poems) stopPlayback();
+  }
+  $('tabPoems').addEventListener('click', function () { selectTab('poems'); });
+  $('tabHaiku').addEventListener('click', function () { selectTab('haiku'); });
+
+  // ---- the organ (drawbar voice for line-end chords) ---------------------------
+  var organBus = null, organComp = null;
+  function organCtx() {
+    var ctx = V.ctx();
+    if (!organBus) {
+      organBus = ctx.createGain();
+      organBus.gain.value = 0.5;
+      organComp = ctx.createDynamicsCompressor();
+      organBus.connect(organComp).connect(ctx.destination);
+    }
+    return ctx;
+  }
+  function organChord(midis, when, dur, gain) {
+    if (!prefs.sound) return;
+    var ctx = organCtx();
+    var g0 = gain == null ? 0.13 : gain;
+    var levels = [1, 0.52, 0.3, 0.16];
+    midis.forEach(function (m) {
+      var f = 440 * Math.pow(2, (m - 69) / 12);
+      for (var h = 0; h < 4; h++) {
+        var o = ctx.createOscillator();
+        var g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = f * (h + 1);
+        var peak = g0 * levels[h];
+        g.gain.setValueAtTime(0.0001, when);
+        g.gain.exponentialRampToValueAtTime(peak, when + 0.04);
+        g.gain.setValueAtTime(peak, Math.max(when + 0.04, when + dur - 0.15));
+        g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+        o.connect(g).connect(organBus);
+        o.start(when);
+        o.stop(when + dur + 0.08);
+      }
+    });
+  }
+  function chordFor(mood, root) {
+    var m = V.mood(mood);
+    var base = root != null ? root : m.root;
+    return [base - 12].concat(m.chord.map(function (d) { return base + d; }));
+  }
+
+  // ---- reading a poem: char steps ----------------------------------------------
+  function buildLine(line) {
+    var words = [];
+    var wordOf = new Array(line.length).fill(-1);
+    var re = /\S+/g, mm;
+    var idx = 0;
+    while ((mm = re.exec(line))) {
+      words.push(mm[0]);
+      for (var i = mm.index; i < mm.index + mm[0].length; i++) wordOf[i] = idx;
+      idx++;
+    }
+    var steps = [];
+    var prev = null;
+    for (var c = 0; c < line.length; c++) {
+      var ch = line[c];
+      var isSpace = /\s/.test(ch);
+      var isPunct = /[.,!?;:—-]/.test(ch);
+      var isVowel = /[aeiouAEIOU]/.test(ch);
+      var dt = isSpace ? 190 : isPunct ? 160 : isVowel ? 210 : 120;
+      var note = isSpace ? null : V.noteFor(ch, undefined, prev);
+      steps.push({ ch: ch, dt: dt, wordIdx: wordOf[c] });
+      steps[steps.length - 1]._note = note; // computed per-mood at play time
+    }
+    return { words: words, wordOf: wordOf, length: line.length };
+  }
+  var lineCache = {}; // poemId -> [buildLine per line]
+  function linesOf(poem) {
+    if (!lineCache[poem.id]) lineCache[poem.id] = poem.lines.map(buildLine);
+    return lineCache[poem.id];
+  }
+
+  function renderReading(poem, lineIdx, wordIdx, doneWords) {
+    var meta = linesOf(poem)[lineIdx];
+    var reading = $('reading');
+    reading.innerHTML = '';
+    meta.words.forEach(function (w, i) {
+      var span = document.createElement('span');
+      span.className = 'word' + (i === wordIdx ? ' now' : i < (doneWords == null ? -1 : doneWords) || (wordIdx != null && i < wordIdx) ? ' done' : '');
+      span.textContent = w;
+      reading.appendChild(span);
+      reading.appendChild(document.createTextNode(' '));
+    });
+    $('lineno').textContent = 'Line ' + (lineIdx + 1) + ' of ' + poem.lines.length;
+    paintProgress(poem, lineIdx);
+  }
+  function paintProgress(poem, lineIdx) {
+    var el = $('progress');
+    el.innerHTML = '';
+    poem.lines.forEach(function (_, i) {
+      var i2 = document.createElement('i');
+      i2.className = i < lineIdx ? 'past' : i === lineIdx ? 'at' : '';
+      el.appendChild(i2);
+    });
+  }
+
+  // ---- playback state -----------------------------------------------------------
+  var current = POEMS[0];
+  var lineIdx = 0;
+  var timers = [];
+  var playing = false;
+  var bag = [];
+  var voiceMode = 'full'; // 'full' | 'organ'
+  var consoleOn = false;
+
+  function tempoScale() { return 100 / Number($('tempo').value || 100); }
+  function stopPlayback() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    playing = false;
+    $('play').hidden = false;
+    $('pause').hidden = true;
+  }
+  function flushBag() {
+    if (!bag.length) return;
+    if (prefs.share && window.PointCastKeyboard) {
+      var sorted = bag.slice(0, 64).sort(function (a, b) { return a - b; });
+      window.PointCastKeyboard.note(sorted, null, { sound: false });
+    }
+    bag = [];
+  }
+
+  function playLine(poem, idx, onDone) {
+    stopPlayback();
+    playing = true;
+    $('play').hidden = true;
+    $('pause').hidden = false;
+    var line = poem.lines[idx];
+    var meta = linesOf(poem)[idx];
+    var scale = tempoScale();
+    var ctx = organCtx();
+    var t = 0;
+    var prev = null;
+    var organOnly = voiceMode === 'organ';
+    if (organOnly) organChord(chordFor(poem.mood), ctx.currentTime + 0.02, Math.max(0.6, (meta.length * 150 * scale) / 1000), 0.06);
+    renderReading(poem, idx, null);
+    for (var c = 0; c < line.length; c++) {
+      (function (c) {
+        var ch = line[c];
+        var isSpace = /\s/.test(ch);
+        var isPunct = /[.,!?;:—-]/.test(ch);
+        var isVowel = /[aeiouAEIOU]/.test(ch);
+        var dt = (isSpace ? 190 : isPunct ? 160 : isVowel ? 210 : 120) * scale;
+        t += dt;
+        timers.push(setTimeout(function () {
+          var note = isSpace ? null : V.noteFor(ch, poem.mood, prev);
+          if (note != null) {
+            prev = note;
+            if (!organOnly && prefs.sound) V.play(note, poem.mood);
+            bag.push(note);
+          }
+          renderReading(poem, idx, meta.wordOf[c] >= 0 ? meta.wordOf[c] : meta.wordOf[Math.max(0, c - 1)]);
+        }, t));
+      })(c);
+    }
+    var chordAt = t + 220 * scale;
+    timers.push(setTimeout(function () {
+      var chord = chordFor(poem.mood);
+      organChord(chord, organCtx().currentTime, 0.9, organOnly ? 0.16 : 0.13);
+      chord.forEach(function (m) { bag.push(m); });
+      renderReading(poem, idx, meta.words.length - 1, meta.words.length);
+    }, chordAt));
+    var end = chordAt + 900;
+    timers.push(setTimeout(function () { playing = false; $('play').hidden = false; $('pause').hidden = true; if (onDone) onDone(); }, end));
+    return end;
+  }
+
+  function playFromCurrentLine() {
+    if (lineIdx >= current.lines.length) lineIdx = 0;
+    playLine(current, lineIdx, function () {
+      lineIdx++;
+      if (lineIdx < current.lines.length) playFromCurrentLine();
+      else { flushBag(); lineIdx = 0; renderReading(current, 0, null); }
+    });
+  }
+  $('play').addEventListener('click', function () { if (!consoleOn) playFromCurrentLine(); });
+  $('pause').addEventListener('click', function () { stopPlayback(); flushBag(); });
+  $('prevLine').addEventListener('click', function () {
+    stopPlayback();
+    lineIdx = Math.max(0, lineIdx - 1);
+    renderReading(current, lineIdx, null);
+  });
+  $('nextLine').addEventListener('click', function () {
+    stopPlayback();
+    lineIdx = Math.min(current.lines.length - 1, lineIdx + 1);
+    renderReading(current, lineIdx, null);
+  });
+
+  $('voiceMode').addEventListener('click', function () {
+    voiceMode = voiceMode === 'full' ? 'organ' : 'full';
+    $('voiceMode').setAttribute('aria-pressed', String(voiceMode === 'organ'));
+    $('voiceMode').textContent = voiceMode === 'organ' ? '☰ Organ only' : '☰ Organ + bells';
+  });
+
+  // ---- at the console: perform it yourself --------------------------------------
+  var consolePos = { line: 0, ch: 0 };
+  function paintConsole() {
+    var meta = linesOf(current)[consolePos.line];
+    var line = current.lines[consolePos.line];
+    var reading = $('reading');
+    reading.innerHTML = '';
+    var done = document.createElement('span'); done.className = 'word done'; done.textContent = line.slice(0, consolePos.ch);
+    var now = document.createElement('span'); now.className = 'word now'; now.textContent = line.slice(consolePos.ch, consolePos.ch + 1) || ' ';
+    var ahead = document.createElement('span'); ahead.className = 'word'; ahead.textContent = line.slice(consolePos.ch + 1);
+    reading.appendChild(done); reading.appendChild(now); reading.appendChild(ahead);
+    $('lineno').textContent = 'Line ' + (consolePos.line + 1) + ' of ' + current.lines.length + ' · at the console';
+    paintProgress(current, consolePos.line);
+  }
+  var consolePrevNote = null;
+  function consoleStep(isEnter) {
+    var line = current.lines[consolePos.line];
+    if (isEnter || consolePos.ch >= line.length) {
+      var chord = chordFor(current.mood);
+      organChord(chord, organCtx().currentTime, 0.9, 0.14);
+      chord.forEach(function (m) { bag.push(m); });
+      consolePos.line++;
+      consolePos.ch = 0;
+      consolePrevNote = null;
+      if (consolePos.line >= current.lines.length) { consolePos.line = 0; flushBag(); }
+      paintConsole();
+      return;
+    }
+    var ch = line[consolePos.ch];
+    var note = V.noteFor(ch, current.mood, consolePrevNote);
+    if (note != null) { consolePrevNote = note; if (prefs.sound) V.play(note, current.mood); bag.push(note); }
+    consolePos.ch++;
+    paintConsole();
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!consoleOn || $('panelPoems').hidden) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    if (e.key === 'Enter') { e.preventDefault(); consoleStep(true); return; }
+    if (e.key.length === 1) { e.preventDefault(); consoleStep(false); }
+  });
+  $('console').addEventListener('click', function () {
+    consoleOn = !consoleOn;
+    $('console').setAttribute('aria-pressed', String(consoleOn));
+    $('consoleHint').classList.toggle('on', consoleOn);
+    $('play').disabled = consoleOn;
+    $('prevLine').disabled = consoleOn;
+    $('nextLine').disabled = consoleOn;
+    stopPlayback();
+    if (consoleOn) {
+      consolePos = { line: lineIdx, ch: 0 };
+      consolePrevNote = null;
+      paintConsole();
+      $('consoleHint').textContent = 'Console on: press any key to sound the next letter. Press Enter to close the line with a chord.';
+    } else {
+      $('consoleHint').textContent = 'Turn on "At the console" and press any key to sound the next letter yourself. Press Enter to close the line with a chord.';
+      lineIdx = consolePos.line;
+      renderReading(current, lineIdx, null);
+    }
+  });
+
+  // ---- choosing a poem ------------------------------------------------------------
+  function paintShelf() {
+    var shelf = $('shelf');
+    shelf.innerHTML = '';
+    POEMS.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'poem-card' + (p.id === current.id ? ' sel' : '');
+      b.style.setProperty('--c', V.mood(p.mood).color);
+      b.setAttribute('role', 'listitem');
+      var strong = document.createElement('b'); strong.textContent = p.title;
+      var span = document.createElement('span'); span.textContent = p.author + ' · ' + p.year + ' · ' + V.mood(p.mood).emoji + ' ' + V.mood(p.mood).label;
+      b.appendChild(strong); b.appendChild(span);
+      b.addEventListener('click', function () { openPoem(p); });
+      shelf.appendChild(b);
+    });
+  }
+  function openPoem(p) {
+    stopPlayback();
+    flushBag();
+    current = p;
+    lineIdx = 0;
+    consolePos = { line: 0, ch: 0 };
+    document.documentElement.style.setProperty('--mood', V.mood(p.mood).color);
+    $('poemTitle').textContent = p.title;
+    $('poemByline').textContent = p.author + ', ' + p.year;
+    renderReading(p, 0, null);
+    paintShelf();
+  }
+
+  // ---- haiku: live syllables ---------------------------------------------------
+  function countSyllables(word) {
+    var w = word.toLowerCase().replace(/[^a-z]/g, '');
+    if (!w) return 0;
+    var groups = w.match(/[aeiouy]+/g) || [];
+    var n = groups.length;
+    if (w.length > 2 && w.slice(-1) === 'e' && !/[aeiouy]e$/.test(w.slice(-2)) && w.slice(-2) !== 'le') n--;
+    if (w.slice(-2) === 'le' && w.length > 2 && !/[aeiouy]/.test(w.slice(-3, -2))) n++;
+    return Math.max(1, n);
+  }
+  function lineSyllables(text) {
+    var words = text.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return 0;
+    var total = 0;
+    words.forEach(function (w) { total += countSyllables(w); });
+    return total;
+  }
+  var TARGETS = [5, 7, 5];
+  var hmood = 'grateful';
+  var hMatched = [false, false, false];
+  var hRang = [false, false, false];
+  function paintHaiku() {
+    var allHit = true;
+    for (var i = 0; i < 3; i++) {
+      var text = $('h' + i).value;
+      var n = lineSyllables(text);
+      var hit = n === TARGETS[i] && text.trim().length > 0;
+      $('c' + i).textContent = n + ' / ' + TARGETS[i];
+      $('c' + i).classList.toggle('hit', hit);
+      if (hit && !hRang[i]) {
+        hRang[i] = true;
+        $('hrow' + i).classList.remove('bloom'); void $('hrow' + i).offsetWidth; $('hrow' + i).classList.add('bloom');
+        if (prefs.sound) V.play(V.mood(hmood).root + 12 + V.mood(hmood).chord[i % V.mood(hmood).chord.length], hmood);
+      } else if (!hit) {
+        hRang[i] = false;
+      }
+      hMatched[i] = hit;
+      if (!hit) allHit = false;
+    }
+    if (allHit) haikuBloom();
+  }
+  var lastBloomKey = '';
+  function haikuBloom() {
+    var key = [$('h0').value, $('h1').value, $('h2').value].join('|');
+    if (key === lastBloomKey) return;
+    lastBloomKey = key;
+    var mark = $('bloomMark');
+    mark.textContent = '✳ Five, seven, five — it rings true.';
+    mark.classList.remove('show'); void mark.offsetWidth; mark.classList.add('show');
+    playHaiku(true);
+    var lines = [$('h0').value.trim(), $('h1').value.trim(), $('h2').value.trim()];
+    store.haikus.unshift({ l: lines, m: hmood, at: Date.now() });
+    store.haikus = store.haikus.slice(0, 24);
+    save();
+    paintRecent();
+  }
+  ['h0', 'h1', 'h2'].forEach(function (id) { $(id).addEventListener('input', paintHaiku); });
+
+  function haikuChars(lines, mood) {
+    var out = [];
+    var prev = null;
+    lines.forEach(function (line) {
+      for (var i = 0; i < line.length; i++) {
+        var n = V.noteFor(line[i], mood, prev);
+        if (n != null) { prev = n; out.push(n); }
+      }
+    });
+    return out;
+  }
+  function playHaiku(fromBloom) {
+    var lines = [$('h0').value.trim(), $('h1').value.trim(), $('h2').value.trim()];
+    if (!lines.some(Boolean)) return;
+    var ctx = organCtx();
+    var t = 0;
+    var prev = null;
+    var scale = 1;
+    var hbag = [];
+    lines.forEach(function (line, li) {
+      for (var c = 0; c < line.length; c++) {
+        (function (ch) {
+          var isSpace = /\s/.test(ch);
+          var isVowel = /[aeiouAEIOU]/.test(ch);
+          t += (isSpace ? 180 : isVowel ? 200 : 120) * scale;
+          setTimeout(function () {
+            var n = isSpace ? null : V.noteFor(ch, hmood, prev);
+            if (n != null) { prev = n; if (prefs.sound) V.play(n, hmood); hbag.push(n); }
+          }, t);
+        })(line[c]);
+      }
+      t += 260;
+      (function (at) { setTimeout(function () { organChord(chordFor(hmood), organCtx().currentTime, 0.8, 0.13); }, at); })(t);
+      t += 500;
+    });
+    setTimeout(function () {
+      if (prefs.share && hbag.length && window.PointCastKeyboard) {
+        window.PointCastKeyboard.note(hbag.slice(0, 64).sort(function (a, b) { return a - b; }), null, { sound: false });
+      }
+    }, t + 200);
+  }
+  $('hplay').addEventListener('click', function () { playHaiku(false); });
+
+  // ---- haiku moods ---------------------------------------------------------------
+  V.moods.forEach(function (m) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.dataset.mood = m.id; b.textContent = m.emoji + ' ' + m.label;
+    b.setAttribute('aria-pressed', String(m.id === hmood));
+    b.addEventListener('click', function () {
+      hmood = m.id;
+      document.documentElement.style.setProperty('--mood', m.color);
+      Array.prototype.forEach.call($('hmoods').children, function (x) { x.setAttribute('aria-pressed', String(x.dataset.mood === hmood)); });
+      if (prefs.sound) m.chord.forEach(function (s, i) { V.play(m.root + s, m.id, V.ctx().currentTime + i * 0.08); });
+    });
+    $('hmoods').appendChild(b);
+  });
+
+  // ---- haiku share (#h=) ----------------------------------------------------------
+  function b64url(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64url(s) {
+    var bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function encodeHaiku() {
+    return b64url(JSON.stringify({ v: 1, l: [$('h0').value.slice(0, 60), $('h1').value.slice(0, 70), $('h2').value.slice(0, 60)], m: hmood }));
+  }
+  function decodeHaiku(hash) {
+    var m = /^#h=([A-Za-z0-9_-]{4,2000})$/.exec(hash || '');
+    if (!m) return null;
+    try {
+      var d = JSON.parse(unb64url(m[1]));
+      if (!d || !Array.isArray(d.l) || d.l.length !== 3) return null;
+      return { l: d.l.map(function (s) { return String(s || '').slice(0, 70); }), m: V.mood(d.m).id };
+    } catch (e) { return null; }
+  }
+  $('hshare').addEventListener('click', function () {
+    var url = location.origin + '/keyboard/poems#h=' + encodeHaiku();
+    $('hlink').value = url;
+    $('hsealed').hidden = false;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).catch(function () {});
+  });
+
+  // ---- recent haiku list ------------------------------------------------------------
+  function paintRecent() {
+    var list = $('recentList');
+    list.innerHTML = '';
+    if (!store.haikus.length) {
+      var p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = 'No haiku saved yet — write one above and land 5-7-5 on all three lines.';
+      list.appendChild(p);
+      return;
+    }
+    store.haikus.slice(0, 12).forEach(function (h) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'recent-item';
+      var lines = document.createElement('span'); lines.className = 'lines'; lines.textContent = h.l.join(' / ');
+      var small = document.createElement('small'); small.textContent = V.mood(h.m).emoji;
+      b.appendChild(lines); b.appendChild(small);
+      b.addEventListener('click', function () {
+        $('h0').value = h.l[0] || ''; $('h1').value = h.l[1] || ''; $('h2').value = h.l[2] || '';
+        hmood = V.mood(h.m).id;
+        document.documentElement.style.setProperty('--mood', V.mood(hmood).color);
+        Array.prototype.forEach.call($('hmoods').children, function (x) { x.setAttribute('aria-pressed', String(x.dataset.mood === hmood)); });
+        hRang = [false, false, false];
+        lastBloomKey = '';
+        paintHaiku();
+      });
+      list.appendChild(b);
+    });
+  }
+
+  // ---- boot -------------------------------------------------------------------------
+  paintToggles();
+  paintShelf();
+  openPoem(POEMS[0]);
+  selectTab('poems');
+  var shared = decodeHaiku(location.hash);
+  if (shared) {
+    selectTab('haiku');
+    $('h0').value = shared.l[0] || ''; $('h1').value = shared.l[1] || ''; $('h2').value = shared.l[2] || '';
+    hmood = shared.m;
+    document.documentElement.style.setProperty('--mood', V.mood(hmood).color);
+    Array.prototype.forEach.call($('hmoods').children, function (x) { x.setAttribute('aria-pressed', String(x.dataset.mood === hmood)); });
+  }
+  paintHaiku();
+  paintRecent();
+
+  function leave() { flushBag(); if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); }
+  addEventListener('pagehide', leave);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) leave(); });
+})();
+</script>
+</body>
+</html>
