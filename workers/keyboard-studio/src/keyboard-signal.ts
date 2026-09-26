@@ -104,8 +104,8 @@ function phrase(row: PhraseRow) {
   return { id: row.id, at: row.at, kind: row.kind, app: row.app, place: row.place, notes, keys: row.keys };
 }
 
-export class KeyboardSignal extends DurableObject {
-  constructor(ctx: DurableObjectState, env: unknown) {
+export class KeyboardSignal extends DurableObject<Record<string, unknown>> {
+  constructor(ctx: DurableObjectState, env: Record<string, unknown>) {
     super(ctx, env);
     this.ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS kb_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
