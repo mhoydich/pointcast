@@ -108,3 +108,18 @@ test('without the binding the API says so instead of pretending', async () => {
   const res = await onRequestGet(context(new Request('https://pointcast.xyz/api/keyboard/signal'), {}));
   assert.equal(res.status, 503);
 });
+
+test('/keyboard.js plays text with the same notes as the API', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const vm = await import('node:vm');
+  const noop = () => {};
+  const sandbox = {
+    window: {}, location: { hostname: 'test.local' }, navigator: {},
+    document: { currentScript: null, readyState: 'complete', addEventListener: noop, querySelector: () => null, querySelectorAll: () => [] },
+    addEventListener: noop, setTimeout, clearTimeout, URL, Blob, CustomEvent: class {},
+  };
+  sandbox.window = sandbox;
+  vm.runInNewContext(await readFile(new URL('../public/keyboard.js', import.meta.url), 'utf8'), sandbox);
+  const sample = 'PointCast keyboard 2026, El Segundo!';
+  assert.deepEqual([...sandbox.PointCastKeyboard.textToNotes(sample)], textToNotes(sample));
+});
