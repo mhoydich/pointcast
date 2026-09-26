@@ -9,7 +9,7 @@
  * notes also build the town's chord of the day.
  *
  * <script> options
- *   data-app     name for your surface (defaults to your hostname)
+ *   data-app     name for your surface (default: your hostname; the page path on PointCast)
  *   data-kind    embed | standalone | artifact | agent | other  (default: inferred)
  *   data-place   optional coarse place slug, e.g. "el-segundo"
  *   data-listen  "true" to count this page's keystrokes as unpitched notes.
@@ -41,7 +41,8 @@
   var ORIGIN = script && script.src ? new URL(script.src).origin : 'https://pointcast.xyz';
   var ENDPOINT = ORIGIN + '/api/keyboard/signal';
   var data = (script && script.dataset) || {};
-  var baseTag = { app: data.app || location.hostname || 'unknown', kind: data.kind || undefined, place: data.place || undefined };
+  // No data-app: the server names the source (hostname for other sites, the page path on PointCast).
+  var baseTag = { app: data.app || undefined, kind: data.kind || undefined, place: data.place || undefined };
   var soundOn = data.sound !== 'false';
 
   var queues = {};
@@ -145,7 +146,7 @@
 
   function enqueue(notes, keys, tag) {
     var t = mergeTag(tag);
-    var key = [t.kind || '', t.app, t.place || ''].join('|');
+    var key = [t.kind || '', t.app || '', t.place || ''].join('|');
     var q = queues[key] = queues[key] || { tag: t, notes: [], keys: 0 };
     for (var i = 0; i < notes.length; i++) q.notes.push(notes[i]);
     q.keys += keys;
