@@ -45,6 +45,33 @@
   var baseTag = { app: data.app || undefined, kind: data.kind || undefined, place: data.place || undefined };
   var soundOn = data.sound !== 'false';
 
+  // A per-browser tally of which PointCast keyboard pages you've opened and how
+  // many notes you played on each, for "your shelf" on /keyboard/shelf. It
+  // never leaves this browser and only runs on PointCast's own hosts.
+  var MINE_KEY = 'pc-keyboard-mine-v1';
+  var ownHost = /(^|\.)pointcast\.(xyz|pages\.dev)$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
+  function mine(update) {
+    if (!ownHost) return null;
+    try {
+      var all = JSON.parse(localStorage.getItem(MINE_KEY) || '{}') || {};
+      if (update) {
+        var path = location.pathname.replace(/\/+$/, '') || '/';
+        var row = all[path] || { first: Date.now(), visits: 0, notes: 0 };
+        update(row);
+        row.last = Date.now();
+        all[path] = row;
+        localStorage.setItem(MINE_KEY, JSON.stringify(all));
+      }
+      return all;
+    } catch (e) { return null; }
+  }
+  mine(function (row) { row.visits++; });
+  var mineNotes = 0, mineTimer = null;
+  function countMine(n) {
+    mineNotes += n;
+    if (!mineTimer) mineTimer = setTimeout(function () { var k = mineNotes; mineNotes = 0; mineTimer = null; mine(function (row) { row.notes += k; }); }, 2000);
+  }
+
   var queues = {};
   var timer = null;
   var lastTotal = null;
@@ -151,6 +178,7 @@
     for (var i = 0; i < notes.length; i++) q.notes.push(notes[i]);
     q.keys += keys;
     var count = notes.length + keys;
+    countMine(count);
     if (lastTotal !== null) { lastTotal += count; paint(); }
     if (q.notes.length >= 48 || q.keys >= 150) flush(false);
     else if (!timer) timer = setTimeout(function () { flush(false); }, 1500);
@@ -364,7 +392,7 @@
     }, true);
   }
 
-  addEventListener('pagehide', function () { flush(true); });
+  addEventListener('pagehide', function () { flush(true); if (mineNotes) { var k = mineNotes; mineNotes = 0; clearTimeout(mineTimer); mineTimer = null; mine(function (row) { row.notes += k; }); } });
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') flush(true);
     else if (widgets.size || document.querySelector('[data-pointcast-keyboard-count]')) total();
@@ -379,5 +407,6 @@
   window.PointCastKeyboard = {
     note: note, play: play, keys: keys, total: total, tone: tone, textToNotes: textToNotes,
     flush: function () { flush(false); }, source: baseTag, endpoint: ENDPOINT,
+    mine: function () { return mine(); },
   };
 })();
