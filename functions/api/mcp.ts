@@ -68,6 +68,10 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   drum_set_track        ({trackId})  set the v3 room Spotify track
  *   drum_altar_ring       ({instrument}) ring an altar on /drum-altars
  *
+ * Keyboard-signal tools
+ *   keyboard_play         ({notes|text}) play notes on the PointCast keyboard
+ *   keyboard_signal_state (no input)   totals, sources, today's key, recent phrases
+ *
  * Whole-site tools
  *   town_map              (no input)   12-building iso town map
  *   surfaces_list         (no input)   every URL grouped by category
@@ -201,6 +205,7 @@ const WRITE_TOOL_NAMES = new Set([
   'drum_sing_voice',
   'drum_set_track',
   'drum_altar_ring',
+  'keyboard_play',
   'yard_permit',
   'yard_beam',
   'night_shift_claim',
@@ -305,6 +310,36 @@ const TOOL_DEFINITIONS = [
       properties: { week: { type: 'string', description: 'Any date inside the week, YYYY-MM-DD. Default: this week.' } },
       additionalProperties: false,
     },
+  },
+  {
+    name: 'keyboard_play',
+    description:
+      'Play notes on the PointCast keyboard (the keyboard signal, /keyboard-signal). Send MIDI numbers (60 = middle C), or text, which is played letter by letter on a C pentatonic; the text itself is not stored. Every note counts on the global keyboard counter and today\'s town chord, and listeners on /keyboard-signal hear the phrase. Use sparingly.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        notes: {
+          type: 'array',
+          items: { type: 'integer', minimum: 0, maximum: 127 },
+          maxItems: 64,
+          description: 'MIDI note numbers, up to 64. 60 = C4.',
+        },
+        text: { type: 'string', maxLength: 64, description: 'Alternative to notes: a word or line to play as a melody.' },
+        app: { type: 'string', maxLength: 48, description: 'Optional: name of the app or artifact playing. Default "mcp".' },
+        kind: {
+          type: 'string',
+          enum: ['agent', 'artifact'],
+          description: 'Optional: "artifact" when a Claude artifact is playing for a person; default "agent".',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'keyboard_signal_state',
+    description:
+      'One read for a keyboard dashboard: global note count, where notes come from (kind/app/place), the town\'s pitch-class histogram with today\'s estimated key, who played in the last two minutes, and the most recent phrases. Returns JSON.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'drum_play_instrument',
@@ -1488,6 +1523,30 @@ async function dispatchTool(
         at: Date.now(),
       };
       return { content: [{ type: 'text', text: JSON.stringify(state) }], structuredContent: state };
+    }
+    case 'keyboard_signal_state': {
+      const state = await callJson(`${base}/api/keyboard/signal`);
+      if (!state || typeof state.globalTotal !== 'number') return { content: [{ type: 'text', text: 'keyboard signal unavailable' }], isError: true };
+      const compact = { ...state, recent: Array.isArray(state.recent) ? state.recent.slice(0, 12) : [], days: undefined };
+      return { content: [{ type: 'text', text: JSON.stringify(compact) }], structuredContent: compact };
+    }
+    case 'keyboard_play': {
+      const notes = Array.isArray(args.notes) ? args.notes.slice(0, 64) : undefined;
+      const text = typeof args.text === 'string' ? args.text.slice(0, 64) : undefined;
+      if (!notes?.length && !text) return { content: [{ type: 'text', text: 'send notes (MIDI numbers) or text' }], isError: true };
+      const res = await fetch(`${base}/api/keyboard/signal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notes,
+          text: notes?.length ? undefined : text,
+          kind: args.kind === 'artifact' ? 'artifact' : 'agent',
+          app: typeof args.app === 'string' && args.app.trim() ? args.app.slice(0, 48) : 'mcp',
+        }),
+      });
+      const out = await res.json().catch(() => null) as any;
+      if (!res.ok || !out?.ok) return { content: [{ type: 'text', text: `keyboard signal refused the notes (${out?.reason ?? res.status})` }], isError: true };
+      return textContent(`✓ played ${out.notes} note${out.notes === 1 ? '' : 's'} on the PointCast keyboard · ${Number(out.globalTotal).toLocaleString()} notes town-wide`);
     }
     case 'drum_tap': {
       const combo = Math.max(1, Math.min(5, Number(args.combo) || 1));

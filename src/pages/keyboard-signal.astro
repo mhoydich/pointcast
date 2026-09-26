@@ -1,0 +1,527 @@
+---
+/**
+ * /keyboard-signal — one keyboard, every source.
+ *
+ * The keyboard sibling of /drum-signal. Every note on the PointCast keyboard
+ * (the /keyboard* pages, sites running /keyboard.js, Claude artifacts,
+ * scripts, agents over MCP) lands on one counter, tallied by where it came
+ * from. Pitched notes build the town's chord of the day; "Listen" plays the
+ * phrases other people send, live.
+ *
+ * Data: GET /api/keyboard/signal (+ ?since= for the live feed, ?league=1).
+ * Send: POST /api/keyboard/signal · <script src="/keyboard.js"> · MCP keyboard_play.
+ */
+const title = 'The Keyboard Signal · PointCast';
+const description =
+  'One keyboard, every source. Notes from PointCast rooms, other sites, Claude artifacts, scripts and agents land on one counter and build the town chord of the day. Play along or listen live.';
+
+const scriptSnippet = `<script src="https://pointcast.xyz/keyboard.js" data-app="my-site" async></script>
+<pointcast-keyboard></pointcast-keyboard>
+<button data-pointcast-keyboard-note="60 64 67">C chord</button>
+<span data-pointcast-keyboard-count></span>`;
+const jsSnippet = `PointCastKeyboard.note([60, 64, 67]);      // play + count a chord
+PointCastKeyboard.play('good morning');     // text → melody (text never sent)
+PointCastKeyboard.keys(12);                 // 12 unpitched keystrokes`;
+const fetchSnippet = `fetch('https://pointcast.xyz/api/keyboard/signal', {
+  method: 'POST',
+  body: JSON.stringify({ notes: [62, 65, 69], app: 'my-app', place: 'el-segundo' }),
+});`;
+const curlSnippet = `curl -X POST https://pointcast.xyz/api/keyboard/signal \\
+  -d '{"text":"hello town","app":"my-script","kind":"standalone"}'
+
+curl https://pointcast.xyz/api/keyboard/signal            # summary + key of the day
+curl "https://pointcast.xyz/api/keyboard/signal?since=0"  # the live phrase feed`;
+const mcpSnippet = `keyboard_play          { "notes": [60, 64, 67] }  or  { "text": "hello" }
+keyboard_signal_state  totals, sources, today's key, recent phrases
+
+Connector: https://pointcast.xyz/api/mcp`;
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard-signal">
+<meta property="og:title" content="The Keyboard Signal">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--panel2:#1a281d;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;
+  --k-pointcast:#dfc48d;--k-embed:#8fc4c4;--k-artifact:#b5a8ee;--k-agent:#e79a7e;--k-standalone:#a9c98a;--k-other:#8d9a8f;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 14px;cursor:pointer}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:20px 32px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+nav a small{color:var(--gold);font-size:8px}
+main{max-width:1180px;margin:0 auto;padding:28px 24px 60px}
+.hero{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;align-items:start}
+.card{background:linear-gradient(155deg,#1d2c20,#111d16);border:1px solid var(--line);border-radius:16px;padding:20px}
+.label{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
+.big{font-family:Georgia,serif;font-size:clamp(46px,7vw,78px);letter-spacing:-2px;margin:0;line-height:1;font-variant-numeric:tabular-nums}
+.mid{font-family:Georgia,serif;font-size:26px;margin:0;font-variant-numeric:tabular-nums}
+.split{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.split p.label{margin-bottom:4px}
+.live{font-size:10px;color:var(--dim)}
+.live.on{color:#b8e0b0}
+.piano{position:relative;display:flex;height:150px;margin:6px 0 10px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.piano .w{flex:1;height:150px;margin-right:3px;border-radius:0 0 9px 9px;background:#ede9d7;border:0;padding:0;box-shadow:inset 0 -7px 0 #cfc8ac;color:#6f6a55;font-size:10px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;transition:transform .05s,background .1s}
+.piano .b{position:absolute;top:0;height:92px;border-radius:0 0 7px 7px;background:#1d2a20;border:1px solid #0b120d;padding:0;z-index:1;box-shadow:inset 0 -5px 0 #34463a;color:#7f9480;font-size:9px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
+.piano .on{background:var(--gold)!important;transform:translateY(2px)}
+.piano .w:hover{background:#f7f3e2}
+.hint{font-size:10px;color:var(--dim);line-height:1.7;margin:0}
+.hint code{color:var(--gold)}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center;font-size:11px}
+.controls input{background:#0d1711;border:1px solid var(--line);border-radius:20px;padding:9px 13px;color:var(--ink);font:inherit;flex:1;min-width:140px}
+h2{font-family:Georgia,serif;font-weight:normal;font-size:24px;margin:0 0 4px}
+.sub{font-size:11px;color:var(--dim);margin:0 0 16px;line-height:1.7}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:28px}
+.grid3{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,.9fr);gap:24px;margin-top:28px}
+.wheelwrap{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:center}
+.wheel{width:220px;height:220px}
+.wheel text{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:var(--dim)}
+.keyname{font-family:Georgia,serif;font-size:34px;margin:0;color:var(--gold)}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{font-size:10px;padding:6px 11px}
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar{display:grid;grid-template-columns:110px 1fr 70px;gap:10px;align-items:center;font-size:11px}
+.bar .track{height:10px;background:#0d1711;border-radius:6px;overflow:hidden}
+.bar .fill{height:100%;border-radius:6px}
+.bar .v{text-align:right;color:var(--dim);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-align:left;font-weight:normal;padding:0 6px 8px}
+td{padding:7px 6px;border-top:1px solid #22322588;vertical-align:middle}
+td.n{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
+.chip{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+.app{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
+.days{display:flex;align-items:flex-end;gap:3px;height:140px;padding-top:6px}
+.days .col{flex:1;display:flex;flex-direction:column-reverse;min-width:0;height:100%}
+.days .col i{display:block;width:100%}
+.days .col:hover{outline:1px solid var(--line)}
+.axis{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin-top:6px}
+.ticker{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto}
+.phrase{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:11px;padding:8px 10px;border:1px solid transparent;border-radius:10px;background:#0d171188;text-align:left;width:100%}
+.phrase:hover{border-color:var(--line)}
+.phrase.fresh{border-color:var(--gold)}
+.phrase .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.phrase .when{color:var(--dim);font-size:10px}
+.strip{grid-column:1/-1;display:flex;align-items:flex-end;gap:2px;height:22px}
+.strip i{display:block;width:5px;border-radius:2px;background:var(--gold);opacity:.85}
+.strip em{font-style:normal;font-size:10px;color:var(--dim)}
+.places{display:flex;flex-wrap:wrap;gap:6px}
+.places span{font-size:10px;border:1px solid var(--line);border-radius:20px;padding:5px 10px;color:var(--dim)}
+.places b{color:var(--ink);font-weight:normal}
+pre{margin:0;background:#0b120d;border:1px solid var(--line);border-radius:10px;padding:14px;font-size:11px;line-height:1.6;overflow:auto;color:#d5dbc5;white-space:pre}
+.snips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.snips h3{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:normal;margin:0 0 8px}
+.demo{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:0 0 18px}
+.empty{font-size:11px;color:var(--dim);padding:10px 0}
+footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;font-size:10px;color:var(--dim);line-height:1.8}
+[hidden]{display:none!important}
+@media(max-width:900px){.hero,.grid2,.grid3,.snips{grid-template-columns:minmax(0,1fr)}.wheelwrap{grid-template-columns:1fr;justify-items:center;text-align:center}}
+@media(max-width:560px){header{padding:16px}main{padding:20px 16px 48px}.piano{height:120px}.piano .w{height:120px;font-size:0}.piano .b{height:74px;font-size:0}.split{grid-template-columns:repeat(2,minmax(0,1fr))}.bar{grid-template-columns:84px 1fr 56px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Keyboard Signal<small>One keyboard · every source · PointCast</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/diary">Key Diary <small>NEW</small></a>
+    <a href="/keyboard/letter">Key Letter <small>NEW</small></a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal" aria-current="page">Signal</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="card">
+      <p class="label">Play the town keyboard · <span class="live" data-ks-live>● connecting</span></p>
+      <div class="piano" data-ks-piano aria-label="Keyboard: click, tap, or type A–K and W E T Y U"></div>
+      <p class="hint">Tap, or type <code>A S D F G H J K</code> (black keys <code>W E T Y U</code>). Every note counts as <code>pointcast / /keyboard-signal</code>.</p>
+      <form class="controls" data-ks-say>
+        <input name="text" maxlength="64" placeholder="or type a line and hear it as a melody" aria-label="Line to play" autocomplete="off">
+        <button type="submit">Play line</button>
+        <button type="button" data-ks-listen aria-pressed="false">♪ Listen to the town</button>
+      </form>
+    </div>
+    <div class="card">
+      <p class="label">Global count · every note, every source</p>
+      <p class="big" data-ks-global>—</p>
+      <div class="split">
+        <div><p class="label">Pitched</p><p class="mid" data-ks-pitched>—</p></div>
+        <div><p class="label">Keystrokes</p><p class="mid" data-ks-unpitched>—</p></div>
+        <div><p class="label">Today (UTC)</p><p class="mid" data-ks-today>—</p></div>
+      </div>
+      <div class="split">
+        <div><p class="label">Key of the day</p><p class="mid" data-ks-key>—</p></div>
+        <div><p class="label">Playing now</p><p class="mid" data-ks-now>—</p></div>
+        <div><p class="label">Sources</p><p class="mid" data-ks-sources>—</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>The town chord</h2>
+      <p class="sub">Every pitched note, folded into one octave. The wheel is today's (UTC) shape; the key is the Krumhansl–Schmuckler best fit, once there are a dozen notes to go on.</p>
+      <div class="tabs"><button type="button" data-ks-span="today" aria-pressed="true">Today</button><button type="button" data-ks-span="all" aria-pressed="false">All time</button><button type="button" data-ks-strum>Strum it</button></div>
+      <div class="wheelwrap">
+        <svg class="wheel" viewBox="0 0 220 220" data-ks-wheel role="img" aria-label="Pitch-class wheel"></svg>
+        <div>
+          <p class="label">Sounds like</p>
+          <p class="keyname" data-ks-keyname>—</p>
+          <p class="sub" data-ks-keynote></p>
+          <p class="label">Register</p>
+          <div class="bars" data-ks-octaves></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Just heard</h2>
+      <p class="sub">The latest phrases on the signal. Tap one to hear it. With <b>Listen</b> on, new ones play as they arrive.</p>
+      <div class="ticker" data-ks-recent><p class="empty">Waiting for the first phrase…</p></div>
+    </div>
+  </section>
+
+  <section class="grid3">
+    <div class="card">
+      <h2>Where the notes come from</h2>
+      <p class="sub">Kinds are inferred from the page that sent the note; only PointCast's own origin can call itself <code>pointcast</code>.</p>
+      <div class="bars" data-ks-kinds></div>
+      <p class="label" style="margin-top:20px">Last 30 days</p>
+      <div class="days" data-ks-days></div>
+      <div class="axis" data-ks-axis></div>
+    </div>
+    <div class="card">
+      <h2>Sources</h2>
+      <table><thead><tr><th>App</th><th style="text-align:right">Notes</th></tr></thead><tbody data-ks-table><tr><td colspan="2" class="empty">—</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <h2>This week's league</h2>
+      <p class="sub">Every tagged app is a team. Mon–Sun UTC, capped at 5,000 notes per app per day.</p>
+      <table><tbody data-ks-league><tr><td class="empty">—</td></tr></tbody></table>
+      <p class="label" style="margin-top:20px">Places</p>
+      <div class="places" data-ks-places></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:28px">
+    <h2>Add the keyboard to anything</h2>
+    <p class="sub">Open to everyone, CORS <code>*</code>, no key, no cookies. Notes are plain MIDI numbers; text you send is turned into notes and dropped. Typing surfaces can send a keystroke <em>count</em> — never which keys.</p>
+    <div class="demo">
+      <pointcast-keyboard app="keyboard-signal-demo"></pointcast-keyboard>
+      <pointcast-keyboard look="pill" app="keyboard-signal-demo"></pointcast-keyboard>
+      <pointcast-keyboard look="badge" app="keyboard-signal-demo"></pointcast-keyboard>
+    </div>
+    <div class="snips">
+      <div><h3>Script + element</h3><pre>{scriptSnippet}</pre></div>
+      <div><h3>JavaScript</h3><pre>{jsSnippet}</pre></div>
+      <div><h3>fetch</h3><pre>{fetchSnippet}</pre></div>
+      <div><h3>curl</h3><pre>{curlSnippet}</pre></div>
+      <div><h3>MCP (agents + artifacts)</h3><pre>{mcpSnippet}</pre></div>
+      <div><h3>The contract</h3><pre>{`POST /api/keyboard/signal
+  notes   MIDI 0–127, up to 64 per post
+  count   0–200 unpitched keystrokes
+  text    ≤64 chars, played as notes, not stored
+  app, kind, place   optional source tag
+
+GET  /api/keyboard/signal[?since=id | ?league=1]`}</pre></div>
+    </div>
+  </section>
+</main>
+<footer>
+  Sibling of the <a href="/drum-signal">Drum Signal</a>. Only aggregates and short note lists are kept (the last 120 phrases, 90 days of daily totals). No text, no IPs, no accounts. <a href="/">PointCast</a> · El Segundo.
+</footer>
+
+<script is:inline src="/keyboard.js" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var API = '/api/keyboard/signal';
+  var NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+  var KINDS = ['pointcast', 'embed', 'artifact', 'agent', 'standalone', 'other'];
+  var KIND_LABEL = { pointcast: 'PointCast', embed: 'Embeds', artifact: 'Artifacts', agent: 'Agents', standalone: 'Standalone', other: 'Other' };
+  var $ = function (sel) { return document.querySelector(sel); };
+  var fmt = function (n) { return (Number(n) || 0).toLocaleString('en-US'); };
+  var color = function (kind) { return 'var(--k-' + (KINDS.indexOf(kind) >= 0 ? kind : 'other') + ')'; };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var ago = function (at) {
+    var s = Math.max(0, Math.round((Date.now() - at) / 1000));
+    return s < 60 ? s + 's ago' : s < 3600 ? Math.round(s / 60) + 'm ago' : s < 86400 ? Math.round(s / 3600) + 'h ago' : Math.round(s / 86400) + 'd ago';
+  };
+  var state = null;
+  var span = 'today';
+  var listening = false;
+  var latestId = 0;
+  var mine = new Set();
+
+  function kb() { return window.PointCastKeyboard; }
+  function tone(midi, when, len) { if (kb()) kb().tone(midi, when, len); }
+  function playNotes(notes) {
+    if (!kb() || !notes.length) return;
+    notes.forEach(function (n, i) { setTimeout(function () { tone(n, 0, 0.9); flash(n); }, i * 150); });
+  }
+
+  // ---- the piano ----------------------------------------------------------
+  var piano = $('[data-ks-piano]');
+  var WHITE_KEYS = 'asdfghjk';
+  var BLACK_KEYS = { 1: 'w', 3: 'e', 6: 't', 8: 'y', 10: 'u' };
+  var WHITE_STEPS = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24];
+  var buttons = {};
+  var keymap = {};
+  (function build() {
+    var whites = WHITE_STEPS.length;
+    WHITE_STEPS.forEach(function (step, i) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'w'; b.dataset.midi = String(60 + step);
+      b.setAttribute('aria-label', NAMES[step % 12] + (4 + Math.floor(step / 12)));
+      if (i < WHITE_KEYS.length) { b.textContent = WHITE_KEYS[i].toUpperCase(); keymap[WHITE_KEYS[i]] = 60 + step; }
+      piano.appendChild(b); buttons[60 + step] = b;
+    });
+    for (var s = 0; s < 24; s++) {
+      if (!(s % 12 in BLACK_KEYS)) continue;
+      var whiteBefore = WHITE_STEPS.filter(function (w) { return w < s; }).length;
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'b'; b.dataset.midi = String(60 + s);
+      b.setAttribute('aria-label', NAMES[s % 12] + (4 + Math.floor(s / 12)));
+      b.style.left = 'calc(' + (whiteBefore / whites * 100) + '% - ' + (100 / whites * 0.3) + '%)';
+      b.style.width = (100 / whites * 0.6) + '%';
+      if (s < 12) { b.textContent = BLACK_KEYS[s].toUpperCase(); keymap[BLACK_KEYS[s]] = 60 + s; }
+      piano.appendChild(b); buttons[60 + s] = b;
+    }
+  })();
+  function flash(midi) {
+    var b = buttons[midi];
+    if (!b) return;
+    b.classList.add('on');
+    setTimeout(function () { b.classList.remove('on'); }, 160);
+  }
+  function hit(midi) {
+    if (kb()) kb().note(midi);
+    flash(midi);
+  }
+  piano.addEventListener('pointerdown', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    e.preventDefault();
+    hit(Number(b.dataset.midi));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    var midi = keymap[e.key.toLowerCase()];
+    if (midi) { e.preventDefault(); hit(midi); }
+  });
+  $('[data-ks-say]').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = e.target.elements.text;
+    if (!kb() || !input.value.trim()) return;
+    var notes = kb().play(input.value);
+    notes.forEach(function (n, i) { setTimeout(function () { flash(n); }, i * 160); });
+    input.value = '';
+  });
+  window.addEventListener('pointcast:keyboard', function (e) {
+    if (e.detail && e.detail.id) { mine.add(e.detail.id); latestId = Math.max(latestId, e.detail.id); }
+    if (e.detail && typeof e.detail.globalTotal === 'number') $('[data-ks-global]').textContent = fmt(e.detail.globalTotal);
+  });
+
+  // ---- rendering ------------------------------------------------------------
+  function wheel(pcs) {
+    var svg = $('[data-ks-wheel]');
+    var max = Math.max.apply(null, pcs.concat([1]));
+    var total = pcs.reduce(function (a, b) { return a + b; }, 0);
+    var html = '<circle cx="110" cy="110" r="96" fill="none" stroke="#2b3c2e"/><circle cx="110" cy="110" r="30" fill="#0d1711" stroke="#2b3c2e"/>';
+    // Circle of fifths, C at the top: neighbours share the most notes.
+    for (var i = 0; i < 12; i++) {
+      var pc = (i * 7) % 12;
+      var a0 = (i - 0.45) / 12 * Math.PI * 2 - Math.PI / 2;
+      var a1 = (i + 0.45) / 12 * Math.PI * 2 - Math.PI / 2;
+      var r = 32 + (pcs[pc] / max) * 62;
+      var p = function (a, rr) { return (110 + Math.cos(a) * rr).toFixed(1) + ' ' + (110 + Math.sin(a) * rr).toFixed(1); };
+      html += '<path d="M' + p(a0, 32) + ' L' + p(a0, r) + ' A' + r + ' ' + r + ' 0 0 1 ' + p(a1, r) + ' L' + p(a1, 32) + ' Z" fill="#dfc48d" fill-opacity="' + (pcs[pc] ? 0.25 + 0.75 * pcs[pc] / max : 0.06) + '"><title>' + NAMES[pc] + ': ' + fmt(pcs[pc]) + '</title></path>';
+      var la = i / 12 * Math.PI * 2 - Math.PI / 2;
+      html += '<text x="' + (110 + Math.cos(la) * 106).toFixed(1) + '" y="' + (110 + Math.sin(la) * 106 + 3).toFixed(1) + '" text-anchor="middle">' + NAMES[pc] + '</text>';
+    }
+    html += '<text x="110" y="113" text-anchor="middle" style="fill:#ede9d7">' + fmt(total) + '</text>';
+    svg.innerHTML = html;
+  }
+
+  function renderChord() {
+    if (!state) return;
+    var pcs = span === 'today' ? (state.today && state.today.pitchClasses) || [] : state.pitchClasses || [];
+    if (pcs.length !== 12) pcs = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    wheel(pcs);
+    var key = state.key && (span === 'today' ? state.key.today : state.key.allTime);
+    $('[data-ks-keyname]').textContent = key ? key.name : 'not yet';
+    $('[data-ks-keynote]').textContent = key
+      ? 'Fit ' + key.confidence.toFixed(2) + ' from ' + fmt(key.notes) + ' pitched notes.'
+      : 'Needs a dozen pitched notes ' + (span === 'today' ? 'today' : 'overall') + '. Play some.';
+    var octs = state.octaves || [];
+    var omax = Math.max.apply(null, octs.map(function (o) { return o.total; }).concat([1]));
+    $('[data-ks-octaves]').innerHTML = octs.length ? octs.map(function (o) {
+      return '<div class="bar"><span>octave ' + o.oct + '</span><span class="track"><span class="fill" style="display:block;width:' + (o.total / omax * 100) + '%;background:var(--gold)"></span></span><span class="v">' + fmt(o.total) + '</span></div>';
+    }).join('') : '<p class="empty">No pitched notes yet.</p>';
+  }
+
+  function strip(p) {
+    if (!p.notes.length) return '<span class="strip"><em>' + fmt(p.keys) + ' keystroke' + (p.keys === 1 ? '' : 's') + '</em></span>';
+    var lo = Math.min.apply(null, p.notes), hi = Math.max.apply(null, p.notes);
+    return '<span class="strip">' + p.notes.slice(0, 48).map(function (n) {
+      return '<i style="height:' + (5 + (hi === lo ? 8 : (n - lo) / (hi - lo) * 17)) + 'px"></i>';
+    }).join('') + (p.keys ? '<em>+' + fmt(p.keys) + ' keys</em>' : '') + '</span>';
+  }
+
+  var phrases = [];
+  function renderRecent(freshIds) {
+    var box = $('[data-ks-recent]');
+    if (!phrases.length) { box.innerHTML = '<p class="empty">Waiting for the first phrase…</p>'; return; }
+    box.innerHTML = phrases.slice(0, 40).map(function (p) {
+      return '<button type="button" class="phrase' + (freshIds && freshIds.has(p.id) ? ' fresh' : '') + '" data-id="' + p.id + '">' +
+        '<span class="who"><span class="chip" style="background:' + color(p.kind) + '"></span>' + esc(p.kind) + ' / ' + esc(p.app) + (p.place ? ' · ' + esc(p.place) : '') + '</span>' +
+        '<span class="when">' + ago(p.at) + '</span>' + strip(p) + '</button>';
+    }).join('');
+  }
+  $('[data-ks-recent]').addEventListener('click', function (e) {
+    var b = e.target.closest('.phrase');
+    if (!b) return;
+    var p = phrases.find(function (x) { return String(x.id) === b.dataset.id; });
+    if (p) playNotes(p.notes);
+  });
+
+  function render(s) {
+    state = s;
+    $('[data-ks-global]').textContent = fmt(s.globalTotal);
+    $('[data-ks-pitched]').textContent = fmt(s.pitched);
+    $('[data-ks-unpitched]').textContent = fmt(s.unpitched);
+    $('[data-ks-today]').textContent = fmt(s.today && s.today.total);
+    $('[data-ks-key]').textContent = s.key && s.key.today ? s.key.today.name : '—';
+    var now = s.live || [];
+    $('[data-ks-now]').textContent = now.length ? now.length + ' app' + (now.length === 1 ? '' : 's') : 'quiet';
+    $('[data-ks-sources]').textContent = fmt((s.sources || []).length);
+    renderChord();
+
+    var kinds = s.kinds || [];
+    var kmax = Math.max.apply(null, kinds.map(function (k) { return k.total; }).concat([1]));
+    $('[data-ks-kinds]').innerHTML = KINDS.map(function (id) {
+      var k = kinds.find(function (x) { return x.kind === id; }) || { total: 0 };
+      return '<div class="bar"><span><span class="chip" style="background:' + color(id) + '"></span>' + KIND_LABEL[id] + '</span><span class="track"><span class="fill" style="display:block;width:' + (k.total / kmax * 100) + '%;background:' + color(id) + '"></span></span><span class="v">' + fmt(k.total) + '</span></div>';
+    }).join('');
+
+    var days = s.days || [];
+    var byDay = {};
+    days.forEach(function (d) { (byDay[d.day] = byDay[d.day] || {})[d.kind] = d.total; });
+    var cols = [];
+    for (var i = 29; i >= 0; i--) cols.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+    var dmax = Math.max.apply(null, cols.map(function (d) { var r = byDay[d] || {}; return Object.keys(r).reduce(function (a, k) { return a + r[k]; }, 0); }).concat([1]));
+    $('[data-ks-days]').innerHTML = cols.map(function (d) {
+      var r = byDay[d] || {};
+      var sum = Object.keys(r).reduce(function (a, k) { return a + r[k]; }, 0);
+      return '<span class="col" title="' + d + ': ' + fmt(sum) + '">' + KINDS.filter(function (k) { return r[k]; }).map(function (k) {
+        return '<i style="height:' + (r[k] / dmax * 100) + '%;background:' + color(k) + '"></i>';
+      }).join('') + '</span>';
+    }).join('');
+    $('[data-ks-axis]').innerHTML = '<span>' + cols[0].slice(5) + '</span><span>today</span>';
+
+    var sources = s.sources || [];
+    $('[data-ks-table]').innerHTML = sources.length ? sources.slice(0, 25).map(function (x) {
+      return '<tr><td><span class="chip" style="background:' + color(x.kind) + '"></span><span class="app" title="' + esc(x.kind + ' / ' + x.app) + '">' + esc(x.app) + '</span></td><td class="n">' + fmt(x.total) + '</td></tr>';
+    }).join('') : '<tr><td colspan="2" class="empty">No notes yet. Be the first.</td></tr>';
+
+    var places = s.places || [];
+    $('[data-ks-places]').innerHTML = places.length ? places.map(function (p) {
+      return '<span><b>' + esc(p.place) + '</b> ' + fmt(p.total) + '</span>';
+    }).join('') : '<span>nowhere yet</span>';
+
+    if (!phrases.length || !listening) {
+      phrases = (s.recent || []).slice();
+      renderRecent();
+    }
+    latestId = Math.max(latestId, s.latestId || 0);
+  }
+
+  function renderLeague(l) {
+    var rows = (l && l.standings) || [];
+    $('[data-ks-league]').innerHTML = rows.length ? rows.slice(0, 10).map(function (r, i) {
+      return '<tr><td style="width:24px;color:var(--dim)">' + (i + 1) + '</td><td><span class="chip" style="background:' + color(r.kind) + '"></span><span class="app">' + esc(r.app) + '</span></td><td class="n">' + fmt(r.points) + '</td></tr>';
+    }).join('') : '<tr><td class="empty">No teams yet this week.</td></tr>';
+  }
+
+  // ---- polling ----------------------------------------------------------------
+  var liveEl = $('[data-ks-live]');
+  function setLive(ok) {
+    liveEl.textContent = ok ? (listening ? '● listening live' : '● live') : '○ offline';
+    liveEl.classList.toggle('on', ok);
+  }
+  function load() {
+    return fetch(API, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.json();
+    }).then(function (s) { render(s); setLive(true); }).catch(function () { setLive(false); });
+  }
+  function loadLeague() {
+    fetch(API + '?league=1', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(renderLeague).catch(function () {});
+  }
+  var queueAt = 0;
+  function listen() {
+    if (!listening || document.hidden) return;
+    fetch(API + '?since=' + latestId, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (res) {
+      if (!res) return;
+      var fresh = (res.phrases || []).filter(function (p) { return !mine.has(p.id); });
+      latestId = Math.max(latestId, res.latestId || 0);
+      if (!fresh.length) return;
+      phrases = fresh.slice().reverse().concat(phrases).slice(0, 60);
+      renderRecent(new Set(fresh.map(function (p) { return p.id; })));
+      // Play arrivals back to back, never overlapping into a wall of sound.
+      fresh.forEach(function (p) {
+        var start = Math.max(Date.now(), queueAt);
+        var notes = p.notes.slice(0, 24);
+        queueAt = start + notes.length * 150 + 400;
+        setTimeout(function () { playNotes(notes); }, start - Date.now());
+      });
+    }).catch(function () {});
+  }
+  $('[data-ks-listen]').addEventListener('click', function (e) {
+    listening = !listening;
+    e.currentTarget.setAttribute('aria-pressed', String(listening));
+    e.currentTarget.textContent = listening ? '♪ Listening…' : '♪ Listen to the town';
+    if (listening && kb()) kb().tone(72, 0, 0.4);
+    setLive(true);
+  });
+  document.querySelectorAll('[data-ks-span]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      span = b.dataset.ksSpan;
+      document.querySelectorAll('[data-ks-span]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      renderChord();
+    });
+  });
+  $('[data-ks-strum]').addEventListener('click', function () {
+    if (!state) return;
+    var pcs = span === 'today' ? state.today.pitchClasses : state.pitchClasses;
+    var order = pcs.map(function (v, pc) { return [v, pc]; }).filter(function (x) { return x[0] > 0; }).sort(function (a, b) { return b[0] - a[0]; }).slice(0, 5);
+    playNotes(order.map(function (x) { return 60 + x[1]; }).sort(function (a, b) { return a - b; }));
+  });
+
+  load();
+  loadLeague();
+  setInterval(function () { if (!document.hidden) load(); }, 15000);
+  setInterval(function () { if (!document.hidden) loadLeague(); }, 60000);
+  setInterval(listen, 2500);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
+})();
+</script>
+</body>
+</html>

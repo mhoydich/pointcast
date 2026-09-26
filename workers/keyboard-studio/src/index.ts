@@ -137,6 +137,8 @@ export class KeyboardStudioRoom extends DurableObject<Env> {
   }
 }
 
+export { KeyboardSignal } from './keyboard-signal';
+
 // Direct access to the host Worker is disabled; Pages binds to the class by script_name.
 export default {
   fetch(): Response {
