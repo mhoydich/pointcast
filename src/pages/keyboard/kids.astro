@@ -1,0 +1,518 @@
+---
+/**
+ * /keyboard/kids — Baby Keys, a toddler-safe smash pad.
+ *
+ * Any key, anywhere on the keyboard, and any tap or click on the screen,
+ * makes a gentle pentatonic note and a big friendly shape pop up. There is
+ * no way to "lose" or break anything. A grown-up gets the device back by
+ * holding Escape for two seconds, or by pressing and holding a small corner
+ * button — both show a filling ring so it's never an accident.
+ *
+ * Pure music, no words: only the notes actually played are sent to the
+ * keyboard signal, batched every few seconds, oldest first.
+ */
+const title = 'Baby Keys · PointCast';
+const description =
+  'A smash pad for toddlers. Every key and every tap makes a sweet note and a big friendly shape — nothing can go wrong. Hold Escape for two seconds to hand the device back.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/kids">
+<meta property="og:title" content="Baby Keys">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh;font-family:Georgia,serif}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 14px;cursor:pointer;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+
+main{max-width:760px;margin:0 auto;padding:34px 22px 60px}
+.card{background:linear-gradient(155deg,#1d2c20,#111d16);border:1px solid var(--line);border-radius:18px;padding:28px}
+h1.title{font-size:clamp(30px,5vw,44px);margin:0 0 10px;font-weight:normal;letter-spacing:-1px}
+.lead{font-size:15px;line-height:1.7;color:#d7dcc9;margin:0 0 8px}
+.fine{font-size:11px;line-height:1.7;color:var(--dim);margin:0 0 22px;font-family:ui-monospace,Menlo,monospace}
+.start{display:block;width:100%;text-align:center;padding:20px;border-radius:16px;background:var(--gold);color:#101813;border-color:var(--gold);font-size:17px;font-family:Georgia,serif;margin:6px 0 26px}
+.start:hover{background:#eed9a8}
+.settings{display:grid;gap:16px}
+.setting h2{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);font-weight:normal;margin:0 0 8px;font-family:ui-monospace,Menlo,monospace}
+.opts{display:flex;gap:8px;flex-wrap:wrap}
+.opts button{padding:9px 14px}
+.hint{font-size:10px;color:var(--dim);margin-top:22px;line-height:1.7;font-family:ui-monospace,Menlo,monospace}
+.hint b{color:var(--gold);font-weight:normal}
+[hidden]{display:none!important}
+
+/* ---- play mode: bright, saturated, joyful ---- */
+.play{position:fixed;inset:0;z-index:50;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;
+  background:linear-gradient(135deg,#ff5c8a,#ffb703,#3ddc97,#4cc9f0);background-size:400% 400%;animation:hue 22s ease-in-out infinite}
+@keyframes hue{0%{background-position:0% 30%}50%{background-position:100% 70%}100%{background-position:0% 30%}}
+.shape{position:absolute;width:110px;height:110px;margin:-55px 0 0 -55px;pointer-events:none;filter:drop-shadow(0 6px 10px rgba(0,0,0,.18))}
+.shape svg{width:100%;height:100%;display:block}
+.shape.anim{animation:pop-float 1.7s cubic-bezier(.22,1.4,.4,1) forwards}
+.shape.calm{animation:pop-fade 1s ease forwards}
+@keyframes pop-float{0%{transform:scale(0) translateY(0);opacity:0}14%{transform:scale(1.22) translateY(0);opacity:1}28%{transform:scale(1) translateY(0)}100%{transform:scale(.92) translateY(-160px);opacity:0}}
+@keyframes pop-fade{0%{opacity:0}18%{opacity:1}75%{opacity:1}100%{opacity:0}}
+.bigchar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
+  font-family:Georgia,serif;font-weight:bold;font-size:min(56vw,60vh);color:rgba(255,255,255,.85);
+  text-shadow:0 10px 26px rgba(0,0,0,.22);opacity:0;transition:opacity .18s ease}
+.bigchar.show{opacity:1}
+.starthint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
+  font-family:ui-monospace,Menlo,monospace;font-size:14px;letter-spacing:.06em;color:rgba(255,255,255,.9);
+  text-shadow:0 2px 8px rgba(0,0,0,.3);text-align:center;padding:0 20px;transition:opacity .5s ease}
+.fs{position:absolute;top:18px;left:14px;z-index:5;border:0;border-radius:24px;padding:10px 14px;background:rgba(0,0,0,.28);color:#fff;font:12px ui-monospace,Menlo,monospace;cursor:pointer}
+.exit{position:absolute;top:14px;right:14px;width:56px;height:56px;border-radius:50%;border:0;padding:0;
+  background:rgba(0,0,0,.28);display:grid;place-items:center;z-index:60;touch-action:none}
+.exit svg{width:56px;height:56px;position:absolute;inset:0;transform:rotate(-90deg)}
+.exit circle{fill:none;stroke-width:4}
+.exit .bg{stroke:rgba(255,255,255,.28)}
+.exit .fill{stroke:#fff;stroke-dasharray:119.4;stroke-dashoffset:119.4}
+.exit .dot{width:16px;height:16px;border-radius:50%;background:#fff;position:relative}
+.rainbow{position:absolute;pointer-events:none;opacity:0}
+.rainbow.go{animation:rainbow-fade 1.6s ease forwards}
+@keyframes rainbow-fade{0%{opacity:0;transform:scale(.7)}20%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.08)}}
+@media(max-width:520px){header{padding:14px}main{padding:24px 14px 46px}.card{padding:20px}}
+@media(prefers-reduced-motion:reduce){.play{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Baby Keys<small>A smash pad for tiny hands</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf" aria-current="page">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+</header>
+
+<main id="landing">
+  <div class="card">
+    <h1 class="title">Every key is a happy sound.</h1>
+    <p class="lead">Hand your kid the keyboard or a tablet and let them smash away — any key or any tap plays a sweet note and pops up a big friendly shape, and nothing they press can break anything or make an ugly sound.</p>
+    <p class="fine" id="statusline">Turns full screen when you start. Browsers still reserve a few keys we can't fully block — a single tap of Escape, for example, may exit full screen on its own; that's normal and safe, just start again.</p>
+    <button type="button" class="start" id="startBtn">▶ Start Baby Keys</button>
+    <div class="settings">
+      <div class="setting">
+        <h2>Sound</h2>
+        <div class="opts" id="soundOpts" role="group" aria-label="Sound volume">
+          <button type="button" data-v="off">Off</button>
+          <button type="button" data-v="soft">Soft</button>
+          <button type="button" data-v="medium">Medium</button>
+        </div>
+      </div>
+      <div class="setting">
+        <h2>Shapes</h2>
+        <div class="opts" id="shapeOpts" role="group" aria-label="Shapes to show">
+          <button type="button" data-v="shapes">Shapes</button>
+          <button type="button" data-v="faces">Faces</button>
+          <button type="button" data-v="both">Both</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint">Nothing your child types is saved or sent anywhere. Only the count of gentle notes actually played joins <b>the town chord</b> on the Keyboard Signal — never which keys, never any words.</p>
+  </div>
+</main>
+
+<div class="play" id="play" hidden>
+  <div class="starthint" id="startHint">Tap anywhere, or press any key ♪</div>
+  <div class="bigchar" id="bigchar" aria-hidden="true"></div>
+  <button type="button" class="fs" id="fsBtn" hidden aria-label="Go full screen again">⤢ full screen</button>
+  <button type="button" class="exit" id="exitBtn" aria-label="Hold for 2 seconds to give the device back to a grown-up">
+    <svg viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="19"></circle><circle class="fill" id="exitRing" cx="22" cy="22" r="19"></circle></svg>
+    <span class="dot"></span>
+  </button>
+</div>
+
+<script is:inline src="/keyboard.js" data-app="keyboard-kids" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var KEY = 'pc-kids-v1';
+  var $ = function (id) { return document.getElementById(id); };
+  var prefs = { sound: 'soft', shapes: 'both' };
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) { var saved = JSON.parse(raw); if (saved && typeof saved === 'object') prefs = { sound: saved.sound || 'soft', shapes: saved.shapes || 'both' }; }
+  } catch (e) { /* private mode: defaults are fine */ }
+  function savePrefs() { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (e) { /* ok to not persist */ } }
+
+  function paintOpts(group, value) {
+    Array.prototype.forEach.call(group.children, function (b) { b.setAttribute('aria-pressed', String(b.dataset.v === value)); });
+  }
+  var soundOpts = $('soundOpts'), shapeOpts = $('shapeOpts');
+  paintOpts(soundOpts, prefs.sound);
+  paintOpts(shapeOpts, prefs.shapes);
+  soundOpts.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-v]'); if (!b) return;
+    prefs.sound = b.dataset.v; paintOpts(soundOpts, prefs.sound); savePrefs();
+  });
+  shapeOpts.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-v]'); if (!b) return;
+    prefs.shapes = b.dataset.v; paintOpts(shapeOpts, prefs.shapes); savePrefs();
+  });
+
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---- sound: a small, soft, round WebAudio voice --------------------------
+  var PENT = [48, 50, 52, 55, 57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84];
+  var ac = null, bus = null;
+  function audio() {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      bus = ac.createGain();
+      bus.gain.value = 1;
+      var comp = ac.createDynamicsCompressor();
+      comp.threshold.setValueAtTime(-20, ac.currentTime);
+      comp.ratio.setValueAtTime(6, ac.currentTime);
+      bus.connect(comp).connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function levelFor(sound) { return sound === 'medium' ? 0.5 : sound === 'off' ? 0 : 0.28; }
+
+  var activeVoices = 0;
+  var MAX_VOICES = 8;
+  function softVoice(midi, when, peakScale) {
+    if (prefs.sound === 'off') return;
+    var level = levelFor(prefs.sound) * (peakScale || 1);
+    if (level <= 0) return;
+    if (activeVoices >= MAX_VOICES) return;
+    try {
+      var c = audio();
+      var t = when || c.currentTime;
+      var f = 440 * Math.pow(2, (midi - 69) / 12);
+      var lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 2200;
+      lp.Q.value = 0.3;
+      var out = c.createGain();
+      out.gain.value = 1;
+      lp.connect(out).connect(bus);
+      var dur = 1.0;
+      activeVoices++;
+      [[1, 'sine', 0.85], [2, 'triangle', 0.22], [0.5, 'sine', 0.12]].forEach(function (p) {
+        var o = c.createOscillator();
+        var g = c.createGain();
+        o.type = p[1];
+        o.frequency.value = f * p[0];
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0005, level * p[2]), t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g).connect(lp);
+        o.start(t);
+        o.stop(t + dur + 0.05);
+      });
+      setTimeout(function () { activeVoices = Math.max(0, activeVoices - 1); }, (dur + 0.1) * 1000);
+    } catch (e) { /* audio is a nicety, not a requirement */ }
+  }
+
+  // ---- ~12 notes/sec overall rate limit, ignoring the voice cap -----------
+  var noteTimes = [];
+  function underRateLimit() {
+    var now = performance.now();
+    while (noteTimes.length && now - noteTimes[0] > 1000) noteTimes.shift();
+    if (noteTimes.length >= 12) return false;
+    noteTimes.push(now);
+    return true;
+  }
+
+  // ---- signal: pure notes, batched every 5s, oldest first, max 64 ---------
+  var sessionNotes = [];
+  var signalTimer = null;
+  function queueForSignal(midi) { sessionNotes.push(midi); }
+  function flushSignal() {
+    if (!sessionNotes.length || !window.PointCastKeyboard) { sessionNotes = []; return; }
+    var batch = sessionNotes.slice(0, 64);
+    sessionNotes = [];
+    window.PointCastKeyboard.note(batch, null, { sound: false });
+  }
+
+  var notesPlayed = 0;
+  function playedNote(midi, gain) {
+    softVoice(midi, null, gain);
+    queueForSignal(midi);
+    notesPlayed++;
+    if (notesPlayed % 20 === 0) celebrate();
+  }
+
+  function celebrate() {
+    var root = PENT[Math.floor(Math.random() * PENT.length)];
+    [0, 2, 4, 7].forEach(function (semi, i) {
+      setTimeout(function () {
+        var c = audio();
+        softVoice(root + semi, c.currentTime, 1.1);
+        queueForSignal(root + semi);
+      }, i * 110);
+    });
+    spawnRainbow();
+  }
+
+  // ---- shapes, drawn as SVG ------------------------------------------------
+  var COLORS = ['#ff5c8a', '#ffd23f', '#3ddc97', '#4cc9f0', '#a06cd5', '#ff8c42', '#06d6a0', '#ef476f'];
+  var onScreen = [];
+  var MAX_SHAPES = 30;
+
+  function starPath(cx, cy, rOuter, rInner, points) {
+    var d = '', step = Math.PI / points;
+    for (var i = 0; i < points * 2; i++) {
+      var r = i % 2 === 0 ? rOuter : rInner;
+      var a = i * step - Math.PI / 2;
+      var x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+      d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+    }
+    return d + 'Z';
+  }
+
+  function shapeMarkup(type, color) {
+    if (type === 'circle') {
+      return '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="' + color + '"/></svg>';
+    }
+    if (type === 'star') {
+      return '<svg viewBox="0 0 100 100"><path d="' + starPath(50, 50, 42, 18, 5) + '" fill="' + color + '"/></svg>';
+    }
+    if (type === 'heart') {
+      return '<svg viewBox="0 0 100 100"><path d="M50 88 C10 62 6 36 24 24 C36 16 48 22 50 34 C52 22 64 16 76 24 C94 36 90 62 50 88 Z" fill="' + color + '"/></svg>';
+    }
+    // face: noggles — two squares joined by a bridge, on a smiling head
+    return '<svg viewBox="0 0 100 100">' +
+      '<circle cx="50" cy="52" r="42" fill="' + color + '"/>' +
+      '<path d="M30 70 Q50 84 70 70" stroke="#101813" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+      '<rect x="26" y="34" width="18" height="18" fill="#fff" stroke="#101813" stroke-width="3"/>' +
+      '<rect x="56" y="34" width="18" height="18" fill="#fff" stroke="#101813" stroke-width="3"/>' +
+      '<rect x="44" y="41" width="12" height="4" fill="#101813"/>' +
+      '<rect x="31" y="39" width="8" height="8" fill="#101813"/>' +
+      '<rect x="61" y="39" width="8" height="8" fill="#101813"/>' +
+      '</svg>';
+  }
+
+  function wantedTypes() {
+    if (prefs.shapes === 'faces') return ['face'];
+    if (prefs.shapes === 'shapes') return ['circle', 'star', 'heart'];
+    return ['circle', 'star', 'heart', 'face'];
+  }
+
+  function spawnShape(x, y) {
+    var stage = $('play');
+    var types = wantedTypes();
+    var type = types[Math.floor(Math.random() * types.length)];
+    var color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    var el = document.createElement('div');
+    el.className = 'shape ' + (reducedMotion ? 'calm' : 'anim');
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    var size = 90 + Math.floor(Math.random() * 46);
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    el.style.marginLeft = (-size / 2) + 'px';
+    el.style.marginTop = (-size / 2) + 'px';
+    el.innerHTML = shapeMarkup(type, color);
+    stage.appendChild(el);
+    onScreen.push(el);
+    if (onScreen.length > MAX_SHAPES) { var old = onScreen.shift(); if (old.parentNode) old.parentNode.removeChild(old); }
+    var life = reducedMotion ? 1000 : 1700;
+    setTimeout(function () {
+      if (el.parentNode) el.parentNode.removeChild(el);
+      var idx = onScreen.indexOf(el);
+      if (idx >= 0) onScreen.splice(idx, 1);
+    }, life + 60);
+  }
+
+  function spawnRainbow() {
+    var stage = $('play');
+    var w = stage.clientWidth, h = stage.clientHeight;
+    var el = document.createElement('div');
+    el.className = 'rainbow';
+    var size = Math.min(w, h) * 0.9;
+    el.style.left = (w / 2 - size / 2) + 'px';
+    el.style.top = (h * 0.62 - size / 2) + 'px';
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    var bands = ['#ef476f', '#ff8c42', '#ffd23f', '#3ddc97', '#4cc9f0', '#a06cd5'];
+    var svg = '<svg viewBox="0 0 200 200">';
+    bands.forEach(function (c, i) {
+      var r = 90 - i * 9;
+      svg += '<path d="M ' + (100 - r) + ' 100 A ' + r + ' ' + r + ' 0 0 1 ' + (100 + r) + ' 100" stroke="' + c + '" stroke-width="8" fill="none" stroke-linecap="round"/>';
+    });
+    svg += '</svg>';
+    el.innerHTML = svg;
+    stage.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('go'); });
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 1700);
+  }
+
+  // ---- key/tap → note + shape -----------------------------------------------
+  function hashCode(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+  function noteForKey(code) { return PENT[hashCode(code) % PENT.length]; }
+  function noteForTap() { return PENT[Math.floor(Math.random() * PENT.length)]; }
+
+  function randomPoint() {
+    var stage = $('play');
+    var w = stage.clientWidth, h = stage.clientHeight;
+    var pad = 70;
+    return { x: pad + Math.random() * Math.max(1, w - pad * 2), y: pad + Math.random() * Math.max(1, h - pad * 2) };
+  }
+
+  var startHintShown = true;
+  function hideStartHint() {
+    if (!startHintShown) return;
+    startHintShown = false;
+    var h = $('startHint');
+    h.style.opacity = '0';
+  }
+
+  var bigTimer = null;
+  function showBigChar(ch) {
+    var el = $('bigchar');
+    el.textContent = ch;
+    el.classList.add('show');
+    clearTimeout(bigTimer);
+    bigTimer = setTimeout(function () { el.classList.remove('show'); }, 1000);
+  }
+
+  function handleHit(midi, x, y, ch) {
+    hideStartHint();
+    if (underRateLimit()) playedNote(midi);
+    spawnShape(x, y);
+    if (ch) showBigChar(ch);
+  }
+
+  var active = false;
+
+  function onKeyDown(e) {
+    if (!active) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'Escape') { startEscapeHold(); return; } // the grown-up exit: never blocked
+    if (e.repeat) { e.preventDefault(); return; }
+    e.preventDefault();
+    var p = randomPoint();
+    var midi = noteForKey(e.code || e.key || 'x');
+    var ch = e.key && e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key) ? e.key.toUpperCase() : null;
+    handleHit(midi, p.x, p.y, ch);
+  }
+  function onKeyUp(e) {
+    if (e.key === 'Escape') cancelEscapeHold();
+  }
+
+  function onPointerDown(e) {
+    if (!active) return;
+    if (e.target.closest && e.target.closest('#exitBtn')) return; // the exit button has its own hold logic
+    if (e.target.closest && e.target.closest('#fsBtn')) return;
+    handleHit(noteForTap(), e.clientX, e.clientY, null);
+  }
+  function onContextMenu(e) { if (active) e.preventDefault(); }
+
+  // ---- the grown-up exit: hold Escape or the corner button for 2s ----------
+  var HOLD_MS = 2000;
+  var holdRaf = null, holdStart = 0, holding = false;
+  var ring = $('exitRing');
+  var CIRC = 2 * Math.PI * 19;
+
+  function ringTick() {
+    var elapsed = performance.now() - holdStart;
+    var frac = Math.min(1, elapsed / HOLD_MS);
+    ring.style.strokeDashoffset = String(CIRC * (1 - frac));
+    if (frac >= 1) { holding = false; exitPlay(); return; }
+    if (holding) holdRaf = requestAnimationFrame(ringTick);
+  }
+  function startHold() {
+    if (holding) return;
+    holding = true;
+    holdStart = performance.now();
+    holdRaf = requestAnimationFrame(ringTick);
+  }
+  function cancelHold() {
+    holding = false;
+    if (holdRaf) cancelAnimationFrame(holdRaf);
+    ring.style.strokeDashoffset = String(CIRC);
+  }
+  function startEscapeHold() { startHold(); }
+  function cancelEscapeHold() { cancelHold(); }
+
+  var exitBtn = $('exitBtn');
+  exitBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); startHold(); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { exitBtn.addEventListener(ev, cancelHold); });
+
+  // ---- entering / leaving play mode -----------------------------------------
+  function requestFs() {
+    var el = document.documentElement;
+    var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (fn) { try { fn.call(el).catch(function () {}); } catch (e) { /* fullscreen is a nicety */ } }
+  }
+  function exitFs() {
+    var fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) { try { fn.call(document); } catch (e) {} }
+  }
+
+  function enterPlay() {
+    active = true;
+    startHintShown = true;
+    $('startHint').style.opacity = '1';
+    $('landing').hidden = true;
+    $('play').hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    audio();
+    requestFs();
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('keyup', onKeyUp, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('contextmenu', onContextMenu, true);
+    signalTimer = setInterval(flushSignal, 5000);
+  }
+  function exitPlay() {
+    if (!active) return;
+    active = false;
+    cancelHold();
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('keyup', onKeyUp, true);
+    document.removeEventListener('pointerdown', onPointerDown, true);
+    document.removeEventListener('contextmenu', onContextMenu, true);
+    clearInterval(signalTimer);
+    flushSignal();
+    exitFs();
+    $('play').hidden = true;
+    $('landing').hidden = false;
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    onScreen.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+    onScreen = [];
+  }
+
+  // Browsers always let Escape leave fullscreen. That must not count as the
+  // grown-up exit, so play mode carries on and offers a way back in.
+  document.addEventListener('fullscreenchange', function () {
+    $('fsBtn').hidden = !active || !!document.fullscreenElement;
+  });
+  $('fsBtn').addEventListener('click', function (e) { e.stopPropagation(); requestFs(); });
+
+  $('startBtn').addEventListener('click', enterPlay);
+
+  function leave() { if (active) flushSignal(); else if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); }
+  addEventListener('pagehide', leave);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) leave(); });
+})();
+</script>
+</body>
+</html>

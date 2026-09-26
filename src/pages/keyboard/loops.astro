@@ -1,0 +1,740 @@
+---
+/**
+ * /keyboard/loops — Loop Porch, a 4-track keyboard looper.
+ *
+ * Sit on the porch and make something. Pick a track (Keys, Bass, Bells,
+ * Drums), press R, and play the home row (A S D F G H J K L ;) — a ten-note
+ * major-pentatonic run across two octaves. Recording starts on the next bar
+ * line and stops after one loop, quantized to a 1/8 or 1/16 grid. Layer all
+ * four tracks, mute what you don't need, and the loop keeps going.
+ *
+ * A lookahead scheduler drives the clock (setInterval ~25ms, scheduling
+ * ~100ms of AudioContext time ahead) so tempo stays steady no matter what
+ * the main thread is doing. All four voices — a soft electric piano, a
+ * round bass, a glassy bell, and a synthesized kick/snare/hat kit — are
+ * built from plain oscillators and noise, no samples.
+ *
+ * The whole song rides in the URL after "#s=" (never a query string, never
+ * a server) so "Copy link" hands someone the loop, not an account. The
+ * working song also autosaves to this browser (pc-loops-v1). When a take
+ * finishes recording, its notes join the town keyboard signal once — pitched
+ * tracks as an ordered run of notes, drum takes as a keystroke count.
+ */
+const title = 'Loop Porch · PointCast';
+const description =
+  'A 4-track keyboard looper. Pick a track, hit record, play the home row, and layer up a loop — keys, bass, bells and drums, quantized and shareable by link.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/loops">
+<meta property="og:title" content="Loop Porch">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;
+  --c-keys:#dfc48d;--c-bass:#8fc4c4;--c-bells:#b5a8ee;--c-drums:#e79a7e;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 15px;cursor:pointer;font-size:11px;min-height:44px}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+button.primary{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+button.danger:hover{background:#3a2320;border-color:#8a5148}
+button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+main{max-width:920px;margin:0 auto;padding:22px 20px 60px;display:flex;flex-direction:column;gap:16px}
+.hint{font-size:11px;color:var(--dim);line-height:1.7;margin:0;background:#122018;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.hint b{color:var(--gold);font-weight:normal}
+.hint code{color:var(--ink)}
+.card{background:linear-gradient(155deg,#1d2c20,#111d16);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.transport{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.tgroup{display:flex;flex-direction:column;gap:6px;min-width:0}
+.tgroup .row{display:flex;align-items:center;gap:8px}
+.tlabel{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg button{padding:7px 11px;font-size:10px;min-height:34px}
+input[type=range]{width:130px;accent-color:var(--gold)}
+.bpmval{font-family:Georgia,serif;font-size:19px;color:var(--gold);min-width:28px;display:inline-block;text-align:right}
+.transport .spacer{flex:1}
+.playbtn{font-size:13px;padding:11px 20px}
+.tracks{display:flex;flex-direction:column;gap:10px}
+.track{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center;border-radius:12px;padding:8px 10px;border:1px solid transparent}
+.track.sel{border-color:var(--tc);background:color-mix(in srgb, var(--tc) 10%, transparent)}
+.track .head{display:flex;flex-direction:column;gap:6px;min-width:0}
+.tname{display:flex;align-items:center;gap:8px;background:transparent;border:0;padding:2px 0;text-align:left;font-size:13px;color:var(--ink);cursor:pointer;min-height:0}
+.tname .chip{width:11px;height:11px;border-radius:50%;background:var(--tc);flex:none}
+.tbtns{display:flex;gap:5px}
+.tbtns button{padding:5px 9px;font-size:9px;min-height:30px}
+.tbtns button.rec[aria-pressed=true]{background:#c65a4a;border-color:#c65a4a;color:#fff}
+.tbtns button.arm{background:#c65a4a55;border-color:#c65a4a}
+.lanewrap{position:relative;min-width:0}
+canvas.lane{display:block;width:100%;height:56px;border-radius:10px;background:#0d1711;border:1px solid var(--line)}
+.emptylane{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#5a7060;pointer-events:none;padding:0 10px;text-align:center}
+.pad-row{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+.pad{aspect-ratio:1;padding:0;font-size:12px;min-height:44px;display:flex;align-items:center;justify-content:center}
+.pad.on{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.actions .spacer{flex:1}
+#notice{font-size:10px;color:var(--gold);min-height:14px}
+.status{font-size:10px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap}
+[hidden]{display:none!important}
+@media(max-width:720px){.track{grid-template-columns:1fr}.tgroup{flex:1 1 45%}}
+@media(max-width:480px){header{padding:14px}main{padding:16px 14px 48px}.pad-row{grid-template-columns:repeat(5,1fr)}.brand small{margin-left:0}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Loop Porch<small>A 4-track keyboard looper</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf" aria-current="page">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="sound" aria-pressed="true">♪ Sound on</button>
+  </div>
+</header>
+
+<main>
+  <p class="hint">Pick a track below, press <b>R</b> (or the row's <b>REC</b>), then play the home row
+    <code>A S D F G H J K L ;</code> — it records from the next bar line and stops after one loop.
+    <b>Space</b> plays/stops, <b>M</b> mutes, <b>Backspace</b> clears, <b>1–4</b> switches tracks.</p>
+
+  <div class="card transport">
+    <div class="tgroup">
+      <span class="tlabel">Tempo</span>
+      <div class="row">
+        <input type="range" id="bpm" min="70" max="140" value="92" step="1" aria-label="Beats per minute">
+        <span class="bpmval" id="bpmVal">92</span>
+      </div>
+    </div>
+    <div class="tgroup">
+      <span class="tlabel">Loop length</span>
+      <div class="seg" id="bars" role="group" aria-label="Loop length in bars">
+        <button type="button" data-bars="1">1 bar</button>
+        <button type="button" data-bars="2" aria-pressed="true">2 bars</button>
+        <button type="button" data-bars="4">4 bars</button>
+      </div>
+    </div>
+    <div class="tgroup">
+      <span class="tlabel">Key</span>
+      <div class="seg" id="tonic" role="group" aria-label="Tonic"></div>
+    </div>
+    <div class="tgroup">
+      <span class="tlabel">Feel</span>
+      <div class="seg">
+        <button type="button" id="metro" aria-pressed="false">♩ Click</button>
+        <button type="button" id="countin" aria-pressed="true">Count-in</button>
+        <button type="button" id="quantize" data-q="16">Quantize 1/16</button>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="tgroup">
+      <span class="tlabel">Transport</span>
+      <div class="row">
+        <button type="button" class="primary playbtn" id="play">▶ Play</button>
+        <button type="button" class="playbtn" id="stop" hidden>◼ Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tracks" id="tracks"></div>
+
+  <div class="card">
+    <span class="tlabel">Play the selected track</span>
+    <div class="pad-row" id="pads" role="group" aria-label="Ten-note pentatonic pads" style="margin-top:8px"></div>
+  </div>
+
+  <div class="actions">
+    <button type="button" id="copyLink">✳ Copy link</button>
+    <button type="button" id="demo">Load "Porch at dusk"</button>
+    <button type="button" class="danger" id="clearAll">Clear song</button>
+    <span class="spacer"></span>
+    <span id="notice" role="status"></span>
+  </div>
+  <div class="status">
+    <span id="countinStatus"></span>
+    <span>Your song autosaves in this browser. Copy link puts the whole loop in the URL — nothing is sent anywhere.</span>
+  </div>
+</main>
+
+<script is:inline src="/keyboard.js" data-app="keyboard-loops" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var STORE_KEY = 'pc-loops-v1';
+  var STEPS_PER_BAR = 16;
+  var HOME_KEYS = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';'];
+  var TONICS = ['C', 'D', 'E', 'F', 'G', 'A'];
+  var TONIC_OFFSET = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9 };
+  var PENT = [0, 2, 4, 7, 9];
+  var TRACK_DEFS = [
+    { name: 'Keys', color: 'var(--c-keys)', base: 60 },
+    { name: 'Bass', color: 'var(--c-bass)', base: 48 },
+    { name: 'Bells', color: 'var(--c-bells)', base: 72 },
+    { name: 'Drums', color: 'var(--c-drums)', base: 60 },
+  ];
+  // Drums: which of the ten home-row degrees plays which drum voice.
+  var DRUM_MAP = ['kick', 'snare', 'hat', 'kick', 'snare', 'hat', 'kick', 'snare', 'hat', 'kick'];
+
+  function demoSong() {
+    return {
+      v: 1, bpm: 92, bars: 2, tonic: 'C',
+      tracks: [
+        [[0, 0], [4, 2], [8, 4], [12, 2], [16, 0], [20, 2], [24, 4], [28, 7]],
+        [[0, 0], [8, 0], [16, 4], [24, 4]],
+        [[2, 7], [6, 9], [10, 7], [14, 4], [18, 7], [22, 9], [26, 7], [30, 4]],
+        [[0, 0], [8, 1], [16, 0], [24, 1], [2, 2], [6, 2], [10, 2], [14, 2], [18, 2], [22, 2], [26, 2], [30, 2]],
+      ],
+    };
+  }
+
+  function freshState() {
+    return {
+      bpm: 92, bars: 2, tonic: 'C', quantize: 16, metronome: false, countIn: true,
+      selected: 0, armed: false, recording: false,
+      tracks: TRACK_DEFS.map(function (d) { return { name: d.name, muted: false, notes: [] }; }),
+    };
+  }
+
+  var state = freshState();
+
+  function totalSteps() { return state.bars * STEPS_PER_BAR; }
+  function degToMidi(trackIdx, deg) {
+    var t = TONIC_OFFSET[state.tonic] || 0;
+    var oct = Math.floor(deg / 5), step = PENT[deg % 5];
+    return TRACK_DEFS[trackIdx].base + t + oct * 12 + step;
+  }
+
+  // ---- load: link > saved song > demo ---------------------------------------
+  function b64url(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64url(s) {
+    var bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function cleanTracks(raw, bars) {
+    var max = bars * STEPS_PER_BAR;
+    var out = TRACK_DEFS.map(function () { return []; });
+    if (!Array.isArray(raw)) return out;
+    for (var t = 0; t < 4 && t < raw.length; t++) {
+      if (!Array.isArray(raw[t])) continue;
+      var seen = {};
+      raw[t].forEach(function (pair) {
+        if (!Array.isArray(pair) || pair.length < 2) return;
+        var step = Math.round(Number(pair[0])), deg = Math.round(Number(pair[1]));
+        if (!isFinite(step) || !isFinite(deg) || step < 0 || step >= max || deg < 0 || deg > 9) return;
+        seen[step] = deg;
+      });
+      out[t] = Object.keys(seen).map(function (k) { return [Number(k), seen[k]]; }).sort(function (a, b) { return a[0] - b[0]; });
+    }
+    return out;
+  }
+  function applySong(song) {
+    var bpm = Math.max(70, Math.min(140, Math.round(Number(song.bpm)) || 92));
+    var bars = [1, 2, 4].indexOf(Number(song.bars)) >= 0 ? Number(song.bars) : 2;
+    var tonic = TONICS.indexOf(song.tonic) >= 0 ? song.tonic : 'C';
+    var tracks = cleanTracks(song.tracks, bars);
+    state = freshState();
+    state.bpm = bpm; state.bars = bars; state.tonic = tonic;
+    tracks.forEach(function (notes, i) { state.tracks[i].notes = notes; });
+  }
+  function decodeHash(hash) {
+    var m = /^#s=([A-Za-z0-9_-]{4,20000})$/.exec(hash || '');
+    if (!m) return null;
+    try {
+      var d = JSON.parse(unb64url(m[1]));
+      if (!d || typeof d !== 'object') return null;
+      return d;
+    } catch (e) { return null; }
+  }
+  function encodeSong() {
+    var song = { v: 1, bpm: state.bpm, bars: state.bars, tonic: state.tonic, tracks: state.tracks.map(function (t) { return t.notes; }) };
+    return b64url(JSON.stringify(song));
+  }
+  function autosave() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        bpm: state.bpm, bars: state.bars, tonic: state.tonic, quantize: state.quantize,
+        metronome: state.metronome, countIn: state.countIn,
+        tracks: state.tracks.map(function (t) { return { muted: t.muted, notes: t.notes }; }),
+      }));
+    } catch (e) { /* private mode or full: the loop still plays */ }
+  }
+  function loadInitial() {
+    var fromLink = decodeHash(location.hash);
+    if (fromLink) { applySong(fromLink); notice('Loop loaded from a link. Press play to hear it.'); return; }
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        var saved = JSON.parse(raw);
+        if (saved && Array.isArray(saved.tracks)) {
+          applySong({ bpm: saved.bpm, bars: saved.bars, tonic: saved.tonic, tracks: saved.tracks.map(function (t) { return (t && t.notes) || []; }) });
+          state.quantize = saved.quantize === 8 ? 8 : 16;
+          state.metronome = !!saved.metronome;
+          state.countIn = saved.countIn !== false;
+          saved.tracks.forEach(function (t, i) { if (state.tracks[i] && t) state.tracks[i].muted = !!t.muted; });
+          return;
+        }
+      }
+    } catch (e) { /* private mode: fall through to the demo */ }
+    applySong(demoSong());
+    notice('A starter loop is loaded — "Porch at dusk". Press play.');
+  }
+
+  // ---- audio ------------------------------------------------------------------
+  var ac = null, bus = null, muted = false;
+  function audio() {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      bus = ac.createGain();
+      bus.gain.value = muted ? 0 : 0.8;
+      var comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -16;
+      bus.connect(comp).connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function freq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+  function playKeys(midi, t) {
+    var c = audio(), f = freq(midi);
+    var o1 = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+    o1.type = 'triangle'; o1.frequency.value = f;
+    o2.type = 'sine'; o2.frequency.value = f * 2.005;
+    lp.type = 'lowpass'; lp.frequency.value = 2600;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.26, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.85);
+    o1.connect(g); o2.connect(g); g.connect(lp); lp.connect(bus);
+    o1.start(t); o2.start(t); o1.stop(t + 0.95); o2.stop(t + 0.95);
+  }
+  function playBass(midi, t) {
+    var c = audio(), f = freq(midi);
+    var o1 = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+    o1.type = 'sine'; o1.frequency.value = f;
+    o2.type = 'triangle'; o2.frequency.value = f;
+    lp.type = 'lowpass'; lp.frequency.value = 950;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.34, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.05);
+    o1.connect(g); o2.connect(g); g.connect(lp); lp.connect(bus);
+    o1.start(t); o2.start(t); o1.stop(t + 1.15); o2.stop(t + 1.15);
+  }
+  function playBells(midi, t) {
+    var c = audio(), f = freq(midi);
+    var out = c.createGain(); out.gain.value = 1; out.connect(bus);
+    [[1, 0.18], [2.01, 0.09], [3.98, 0.045], [5.4, 0.02]].forEach(function (p) {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = f * p[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(p[1], t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.9 / Math.sqrt(p[0]));
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + 2.1);
+    });
+  }
+  function noiseBuffer(c, seconds, shape) {
+    var n = Math.max(1, Math.floor(c.sampleRate * seconds));
+    var buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, shape);
+    return buf;
+  }
+  function playDrum(kind, t) {
+    var c = audio();
+    if (kind === 'kick') {
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(46, t + 0.14);
+      g.gain.setValueAtTime(0.95, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+      o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.3);
+    } else if (kind === 'snare') {
+      var noise = c.createBufferSource(); noise.buffer = noiseBuffer(c, 0.2, 2);
+      var hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1200;
+      var ng = c.createGain();
+      ng.gain.setValueAtTime(0.55, t);
+      ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      noise.connect(hp); hp.connect(ng); ng.connect(bus); noise.start(t); noise.stop(t + 0.2);
+      var o = c.createOscillator(), og = c.createGain();
+      o.type = 'triangle'; o.frequency.value = 190;
+      og.gain.setValueAtTime(0.22, t);
+      og.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      o.connect(og); og.connect(bus); o.start(t); o.stop(t + 0.15);
+    } else {
+      var n2 = c.createBufferSource(); n2.buffer = noiseBuffer(c, 0.06, 1);
+      var hp2 = c.createBiquadFilter(); hp2.type = 'highpass'; hp2.frequency.value = 7000;
+      var g2 = c.createGain();
+      g2.gain.setValueAtTime(0.3, t);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      n2.connect(hp2); hp2.connect(g2); g2.connect(bus); n2.start(t); n2.stop(t + 0.06);
+    }
+  }
+  function playClick(accent, t) {
+    var c = audio(), o = c.createOscillator(), g = c.createGain();
+    o.type = 'square'; o.frequency.value = accent ? 1500 : 1000;
+    g.gain.setValueAtTime(accent ? 0.16 : 0.09, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.06);
+  }
+  function playVoice(trackIdx, deg, t) {
+    if (trackIdx === 3) { playDrum(DRUM_MAP[deg], t); return; }
+    var midi = degToMidi(trackIdx, deg);
+    if (trackIdx === 0) playKeys(midi, t);
+    else if (trackIdx === 1) playBass(midi, t);
+    else playBells(midi, t);
+  }
+
+  // ---- scheduler ----------------------------------------------------------------
+  var isPlaying = false, timerID = null, stepCount = 0, nextStepTime = 0, uiTimers = [];
+  var recordStopAtCount = 0, recordStartAudioTime = 0, hitsThisTake = [];
+  var SCHEDULE_AHEAD = 0.1, LOOKAHEAD_MS = 25;
+
+  function scheduleStep(count, time) {
+    if (count < 0) {
+      if (count % 4 === 0) playClick(count === -STEPS_PER_BAR, time);
+      var delayC = Math.max(0, (time - audio().currentTime) * 1000);
+      uiTimers.push(setTimeout(function () { paintCountIn(count); }, delayC));
+      return;
+    }
+    var loopStep = count % totalSteps();
+    if (loopStep === 0) {
+      if (state.armed) {
+        state.armed = false; state.recording = true;
+        recordStopAtCount = count + totalSteps();
+        recordStartAudioTime = time;
+        hitsThisTake = [];
+      } else if (state.recording && count >= recordStopAtCount) {
+        state.recording = false;
+        finalizeTake();
+      }
+    }
+    if (state.metronome && loopStep % 4 === 0) playClick(loopStep % STEPS_PER_BAR === 0, time);
+    state.tracks.forEach(function (tr, i) {
+      if (tr.muted) return;
+      tr.notes.forEach(function (n) { if (n[0] === loopStep) playVoice(i, n[1], time); });
+    });
+    var delay = Math.max(0, (time - audio().currentTime) * 1000);
+    uiTimers.push(setTimeout(function () { paintStep(loopStep); }, delay));
+  }
+  function scheduler() {
+    var c = audio();
+    while (nextStepTime < c.currentTime + SCHEDULE_AHEAD) {
+      scheduleStep(stepCount, nextStepTime);
+      stepCount++;
+      nextStepTime += 60 / state.bpm / 4;
+    }
+  }
+  function startTransport() {
+    if (isPlaying) return;
+    var c = audio();
+    if (c.state === 'suspended') c.resume();
+    isPlaying = true;
+    stepCount = state.countIn ? -STEPS_PER_BAR : 0;
+    nextStepTime = c.currentTime + 0.05;
+    timerID = setInterval(scheduler, LOOKAHEAD_MS);
+    paintTransport();
+  }
+  function stopTransport() {
+    if (!isPlaying) return;
+    isPlaying = false;
+    clearInterval(timerID); timerID = null;
+    uiTimers.forEach(clearTimeout); uiTimers = [];
+    if (state.armed) state.armed = false;
+    if (state.recording) { state.recording = false; finalizeTake(); }
+    clearPlayheads();
+    paintTransport();
+  }
+  function togglePlay() { if (isPlaying) stopTransport(); else startTransport(); }
+
+  function toggleRecord() {
+    if (state.recording) { state.recording = false; finalizeTake(); }
+    else if (state.armed) { state.armed = false; }
+    else { state.armed = true; if (!isPlaying) startTransport(); }
+    paintTracks();
+  }
+  function finalizeTake() {
+    var idx = state.selected;
+    autosave();
+    if (!hitsThisTake.length) { notice('No notes landed in that take.'); paintTracks(); return; }
+    if (idx === 3) {
+      if (window.PointCastKeyboard) window.PointCastKeyboard.keys(hitsThisTake.length);
+    } else if (window.PointCastKeyboard) {
+      window.PointCastKeyboard.note(hitsThisTake.slice(), null, { sound: false });
+    }
+    notice('Take recorded on ' + state.tracks[idx].name + '.');
+    paintTracks();
+  }
+
+  // ---- playing / capturing notes -------------------------------------------------
+  function pressPad(deg) {
+    var c = audio();
+    playVoice(state.selected, deg, c.currentTime + 0.001);
+    flashPad(deg);
+    if (state.recording) {
+      var stepDur = 60 / state.bpm / 4;
+      var elapsedSteps = (c.currentTime - recordStartAudioTime) / stepDur;
+      var q = state.quantize === 8 ? 2 : 1;
+      var qs = Math.round(elapsedSteps / q) * q;
+      qs = Math.max(0, Math.min(totalSteps() - 1, qs));
+      var tr = state.tracks[state.selected];
+      tr.notes = tr.notes.filter(function (n) { return n[0] !== qs; });
+      tr.notes.push([qs, deg]);
+      tr.notes.sort(function (a, b) { return a[0] - b[0]; });
+      hitsThisTake.push(state.selected === 3 ? 1 : degToMidi(state.selected, deg));
+      paintLane(state.selected);
+      autosave();
+    }
+  }
+
+  function selectTrack(i) {
+    if (state.armed || state.recording) return;
+    state.selected = i;
+    paintTracks();
+  }
+  function toggleMute(i) {
+    state.tracks[i].muted = !state.tracks[i].muted;
+    autosave();
+    paintTracks();
+  }
+  function clearTrack(i) {
+    if (!state.tracks[i].notes.length) return;
+    if (!confirm('Clear the ' + state.tracks[i].name + ' track?')) return;
+    state.tracks[i].notes = [];
+    autosave();
+    paintTracks();
+  }
+
+  // ---- UI: building -----------------------------------------------------------
+  var laneEls = [], emptyEls = [];
+  function buildTracks() {
+    var wrap = $('tracks');
+    wrap.innerHTML = '';
+    laneEls = []; emptyEls = [];
+    TRACK_DEFS.forEach(function (d, i) {
+      var row = document.createElement('div');
+      row.className = 'track'; row.dataset.i = String(i);
+      row.style.setProperty('--tc', d.color);
+      var head = document.createElement('div'); head.className = 'head';
+      var nameBtn = document.createElement('button'); nameBtn.type = 'button'; nameBtn.className = 'tname'; nameBtn.dataset.sel = String(i);
+      nameBtn.innerHTML = '<span class="chip"></span><span>' + d.name + '</span>';
+      var tbtns = document.createElement('div'); tbtns.className = 'tbtns';
+      tbtns.innerHTML =
+        '<button type="button" class="rec" data-rec="' + i + '" aria-pressed="false" aria-label="Record ' + d.name + '">REC</button>' +
+        '<button type="button" data-mute="' + i + '" aria-pressed="false" aria-label="Mute ' + d.name + '">MUTE</button>' +
+        '<button type="button" data-clear="' + i + '" aria-label="Clear ' + d.name + '">CLR</button>';
+      head.appendChild(nameBtn); head.appendChild(tbtns);
+      var laneWrap = document.createElement('div'); laneWrap.className = 'lanewrap';
+      var canvas = document.createElement('canvas'); canvas.className = 'lane';
+      canvas.setAttribute('aria-label', d.name + ' loop lane');
+      var empty = document.createElement('p'); empty.className = 'emptylane'; empty.textContent = 'empty — press R, then play the home row';
+      laneWrap.appendChild(canvas); laneWrap.appendChild(empty);
+      row.appendChild(head); row.appendChild(laneWrap);
+      wrap.appendChild(row);
+      laneEls.push(canvas); emptyEls.push(empty);
+    });
+    wrap.addEventListener('click', function (e) {
+      var sel = e.target.closest('[data-sel]'); if (sel) { selectTrack(Number(sel.dataset.sel)); return; }
+      var rec = e.target.closest('[data-rec]'); if (rec) { selectTrack(Number(rec.dataset.rec)); toggleRecord(); return; }
+      var mut = e.target.closest('[data-mute]'); if (mut) { toggleMute(Number(mut.dataset.mute)); return; }
+      var clr = e.target.closest('[data-clear]'); if (clr) { clearTrack(Number(clr.dataset.clear)); return; }
+    });
+  }
+  function buildTonic() {
+    var box = $('tonic');
+    box.innerHTML = TONICS.map(function (t) { return '<button type="button" data-tonic="' + t + '" aria-pressed="' + (t === state.tonic) + '">' + t + '</button>'; }).join('');
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-tonic]'); if (!b) return;
+      state.tonic = b.dataset.tonic;
+      autosave(); paintTonic();
+    });
+  }
+  function buildPads() {
+    var box = $('pads');
+    box.innerHTML = HOME_KEYS.map(function (k, i) { return '<button type="button" class="pad" data-pad="' + i + '" aria-label="Pad ' + k.toUpperCase() + '">' + k.toUpperCase() + '</button>'; }).join('');
+    box.addEventListener('pointerdown', function (e) {
+      var b = e.target.closest('[data-pad]'); if (!b) return;
+      pressPad(Number(b.dataset.pad));
+    });
+  }
+
+  // ---- UI: painting -------------------------------------------------------------
+  function notice(msg) { $('notice').textContent = msg || ''; if (msg) setTimeout(function () { if ($('notice').textContent === msg) $('notice').textContent = ''; }, 5000); }
+  function paintTonic() { Array.prototype.forEach.call($('tonic').children, function (b) { b.setAttribute('aria-pressed', String(b.dataset.tonic === state.tonic)); }); }
+  function paintTransport() {
+    $('play').hidden = isPlaying;
+    $('stop').hidden = !isPlaying;
+    $('countinStatus').textContent = isPlaying ? (state.armed ? 'counting in…' : state.recording ? 'recording ' + state.tracks[state.selected].name + '…' : 'playing') : 'stopped';
+  }
+  function paintTracks() {
+    Array.prototype.forEach.call($('tracks').children, function (row, i) {
+      row.classList.toggle('sel', i === state.selected);
+      var recBtn = row.querySelector('[data-rec]');
+      recBtn.setAttribute('aria-pressed', String(state.recording && state.selected === i));
+      recBtn.classList.toggle('arm', state.armed && state.selected === i);
+      recBtn.textContent = (state.recording && state.selected === i) ? '● REC' : (state.armed && state.selected === i) ? '… ARM' : 'REC';
+      row.querySelector('[data-mute]').setAttribute('aria-pressed', String(state.tracks[i].muted));
+      emptyEls[i].hidden = state.tracks[i].notes.length > 0;
+      paintLane(i);
+    });
+    paintTransport();
+  }
+  function paintLane(i, highlightStep) {
+    var canvas = laneEls[i]; if (!canvas) return;
+    var dpr = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth || 300, h = canvas.clientHeight || 56;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    var g = canvas.getContext('2d'); g.scale(dpr, dpr);
+    g.clearRect(0, 0, w, h);
+    var steps = totalSteps();
+    for (var s = 0; s <= steps; s += STEPS_PER_BAR) {
+      g.fillStyle = '#2b3c2e';
+      g.fillRect(s / steps * w, 0, s === steps ? 0 : 1, h);
+    }
+    var color = getComputedStyle(canvas.closest('.track')).getPropertyValue('--tc').trim() || '#dfc48d';
+    state.tracks[i].notes.forEach(function (n) {
+      var x = n[0] / steps * w;
+      var cw = Math.max(3, w / steps - 2);
+      var y, ch;
+      if (i === 3) { var row = DRUM_MAP[n[1]] === 'kick' ? 0 : DRUM_MAP[n[1]] === 'snare' ? 1 : 2; y = 6 + row * ((h - 12) / 3); ch = (h - 12) / 3 - 3; }
+      else { y = h - 8 - (n[1] / 9) * (h - 14); ch = 6; }
+      g.fillStyle = color;
+      g.globalAlpha = state.tracks[i].muted ? 0.35 : 0.9;
+      g.fillRect(x + 1, y, cw, ch);
+    });
+    g.globalAlpha = 1;
+    if (highlightStep != null && isPlaying) {
+      g.fillStyle = '#ede9d7';
+      g.fillRect(highlightStep / steps * w, 0, Math.max(1.5, w / steps * 0.12), h);
+    }
+  }
+  function paintStep(loopStep) {
+    for (var i = 0; i < 4; i++) paintLane(i, loopStep);
+    paintTracks_lite();
+  }
+  function paintTracks_lite() {
+    // Cheap per-step refresh of just the transport/record labels while playing.
+    var recRow = $('tracks').children[state.selected];
+    if (recRow) {
+      var recBtn = recRow.querySelector('[data-rec]');
+      recBtn.textContent = state.recording ? '● REC' : state.armed ? '… ARM' : 'REC';
+    }
+    paintTransport();
+  }
+  function paintCountIn(count) {
+    var beatsLeft = Math.ceil(-count / 4);
+    $('countinStatus').textContent = 'count-in… ' + beatsLeft;
+  }
+  function clearPlayheads() { for (var i = 0; i < 4; i++) paintLane(i); }
+  function flashPad(deg) {
+    var b = $('pads').children[deg]; if (!b) return;
+    b.classList.add('on'); setTimeout(function () { b.classList.remove('on'); }, 130);
+  }
+
+  // ---- controls -------------------------------------------------------------------
+  $('bpm').addEventListener('input', function () { state.bpm = Number($('bpm').value); $('bpmVal').textContent = String(state.bpm); autosave(); });
+  $('bars').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-bars]'); if (!b) return;
+    state.bars = Number(b.dataset.bars);
+    Array.prototype.forEach.call($('bars').children, function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    state.tracks.forEach(function (t) { t.notes = t.notes.filter(function (n) { return n[0] < totalSteps(); }); });
+    autosave(); paintTracks();
+  });
+  $('metro').addEventListener('click', function () { state.metronome = !state.metronome; $('metro').setAttribute('aria-pressed', String(state.metronome)); autosave(); });
+  $('countin').addEventListener('click', function () { state.countIn = !state.countIn; $('countin').setAttribute('aria-pressed', String(state.countIn)); autosave(); });
+  $('quantize').addEventListener('click', function () {
+    state.quantize = state.quantize === 16 ? 8 : 16;
+    $('quantize').dataset.q = String(state.quantize);
+    $('quantize').textContent = 'Quantize 1/' + state.quantize;
+    autosave();
+  });
+  $('play').addEventListener('click', startTransport);
+  $('stop').addEventListener('click', stopTransport);
+  $('copyLink').addEventListener('click', function () {
+    var url = location.origin + '/keyboard/loops#s=' + encodeSong();
+    var done = function () { notice('Link copied. Anyone who opens it can press play.'); if (!muted) { var c = audio(); [0, 4, 7].forEach(function (s, i) { playBells(60 + TONIC_OFFSET[state.tonic] + s, c.currentTime + i * 0.09); }); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done).catch(function () { prompt('Copy this link:', url); });
+    else prompt('Copy this link:', url);
+  });
+  $('demo').addEventListener('click', function () {
+    stopTransport();
+    applySong(demoSong());
+    autosave();
+    buildTonic(); $('bpm').value = state.bpm; $('bpmVal').textContent = String(state.bpm);
+    Array.prototype.forEach.call($('bars').children, function (x) { x.setAttribute('aria-pressed', String(Number(x.dataset.bars) === state.bars)); });
+    paintTracks();
+    notice('Loaded "Porch at dusk". Press play.');
+  });
+  $('clearAll').addEventListener('click', function () {
+    if (!confirm('Clear the whole song? This cannot be undone.')) return;
+    stopTransport();
+    state.tracks.forEach(function (t) { t.notes = []; t.muted = false; });
+    autosave(); paintTracks();
+    notice('Song cleared.');
+  });
+  $('sound').addEventListener('click', function () {
+    muted = !muted;
+    if (bus) bus.gain.value = muted ? 0 : 0.8;
+    $('sound').setAttribute('aria-pressed', String(!muted));
+    $('sound').textContent = muted ? '♪ Sound off' : '♪ Sound on';
+  });
+
+  // ---- keyboard -------------------------------------------------------------------
+  document.addEventListener('keydown', function (e) {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' && e.target.type !== 'range') return;
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return;
+    var k = e.key.toLowerCase();
+    if (k === ' ') { e.preventDefault(); togglePlay(); return; }
+    if (k === 'r') { e.preventDefault(); toggleRecord(); return; }
+    if (k === 'm') { e.preventDefault(); toggleMute(state.selected); return; }
+    if (k === 'backspace') { e.preventDefault(); clearTrack(state.selected); return; }
+    if (k >= '1' && k <= '4') { selectTrack(Number(k) - 1); return; }
+    var idx = HOME_KEYS.indexOf(k);
+    if (idx >= 0) { e.preventDefault(); pressPad(idx); }
+  });
+  addEventListener('resize', function () { for (var i = 0; i < 4; i++) paintLane(i); });
+  addEventListener('pagehide', function () { autosave(); if (window.PointCastKeyboard) window.PointCastKeyboard.flush(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) autosave(); });
+
+  // ---- boot ---------------------------------------------------------------------
+  loadInitial();
+  buildTracks();
+  buildTonic();
+  buildPads();
+  $('bpm').value = state.bpm; $('bpmVal').textContent = String(state.bpm);
+  Array.prototype.forEach.call($('bars').children, function (x) { x.setAttribute('aria-pressed', String(Number(x.dataset.bars) === state.bars)); });
+  $('metro').setAttribute('aria-pressed', String(state.metronome));
+  $('countin').setAttribute('aria-pressed', String(state.countIn));
+  $('quantize').dataset.q = String(state.quantize);
+  $('quantize').textContent = 'Quantize 1/' + state.quantize;
+  paintTracks();
+})();
+</script>
+</body>
+</html>

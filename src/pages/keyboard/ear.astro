@@ -1,0 +1,707 @@
+---
+/**
+ * /keyboard/ear — Ear Trail, a walk of ten ear-training stations.
+ *
+ * Hear a prompt, then play it back on a real little piano (mouse, touch, or
+ * the computer keys A W S E D F T G Y H U J K). Ten stations grow from
+ * "same or different" up to a six-note melody, eight rounds each, six
+ * correct to unlock the next. A daily streak and a Daily 5 quick mode keep
+ * the visit short. All progress lives in this browser; only the notes you
+ * play back are sent to the town keyboard, never which station you're on.
+ */
+const title = 'Ear Trail · PointCast';
+const description =
+  'Ear training as a walk along a trail. Ten stations grow from same-or-different to a six-note melody — hear it, then play it back on a real little piano.';
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<link rel="canonical" href="https://pointcast.xyz/keyboard/ear">
+<meta property="og:title" content="Ear Trail">
+<meta property="og:description" content={description}>
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d;--soft:#8fc4c4;--warm:#e79a7e;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg);color:var(--ink);min-height:100vh}
+a{color:var(--gold)}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:30px;padding:10px 16px;cursor:pointer;touch-action:manipulation;min-height:44px}
+button:hover{background:#1e2b20;border-color:#688777}
+button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px 30px;border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:30px;letter-spacing:-1px}
+.brand:before{content:'✳';color:var(--gold);margin-right:12px}
+.brand small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:9px;letter-spacing:.2em;color:var(--dim);margin:6px 0 0 44px;text-transform:uppercase}
+nav{display:flex;gap:4px;flex-wrap:wrap;font-size:10px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a[aria-current=page]{background:#2c3e2b;color:var(--ink)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+main{max-width:960px;margin:0 auto;padding:26px 22px 60px}
+.lede{font-size:13px;color:#cdd8c3;line-height:1.6;margin:0 0 4px;max-width:64ch}
+.hint{font-size:10.5px;color:var(--dim);line-height:1.7;margin:0 0 18px}
+.card{background:linear-gradient(155deg,#1d2c20,#111d16);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.trailcard{margin-bottom:18px}
+.trail{width:100%;height:auto;display:block}
+.station{cursor:pointer}
+.station:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.station circle.ring{fill:#0d1711;stroke:#2b3c2e;stroke-width:2}
+.station.locked circle.ring{opacity:.5}
+.station.locked text{opacity:.45}
+.station.unlocked circle.ring{stroke:var(--soft)}
+.station.cleared circle.ring{fill:var(--gold);stroke:var(--gold)}
+.station.cleared text.num{fill:#101813}
+.station.active circle.ring{stroke:#fff;stroke-width:3}
+.station text{fill:var(--ink);text-anchor:middle;font-family:ui-monospace,Menlo,monospace;pointer-events:none}
+.station text.num{font-size:15px}
+.station text.name{font-size:8.5px;fill:var(--dim)}
+.trailpath{fill:none;stroke:var(--line);stroke-width:3;stroke-dasharray:2 7;stroke-linecap:round}
+.statusbar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-top:14px;font-size:11px;color:var(--dim)}
+.statusbar b{color:var(--ink);font-weight:normal}
+.statusbar .empty{color:#cdd8c3}
+.panel{display:none;flex-direction:column;gap:16px}
+.panel.open{display:flex}
+.panelHead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.panelHead h2{font-family:Georgia,serif;font-weight:normal;font-size:22px;margin:0}
+.panelHead span{font-size:10px;color:var(--dim);letter-spacing:.08em}
+.levelDesc{font-size:12px;color:#cdd8c3;line-height:1.6;margin:0}
+.stage{display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;min-height:72px;justify-content:center}
+.hearRow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+kbd{font-family:ui-monospace,Menlo,monospace;font-size:9px;border:1px solid var(--line);border-radius:5px;padding:2px 5px;color:var(--dim)}
+.answers{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.answers button{min-width:88px}
+.answers button.correct{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+.answers button.wrong{background:#3a2620;border-color:var(--warm);color:var(--warm)}
+.feedback{min-height:20px;font-size:12.5px;color:var(--gold);margin:0}
+.feedback.warm{color:var(--warm)}
+.summary{display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center}
+.summary .big{font-family:Georgia,serif;font-size:32px;margin:0}
+.summaryBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.pianoWrap{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:4px}
+.piano{position:relative;display:flex;width:100%;max-width:560px;height:130px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.piano .w{flex:1;height:130px;margin-right:2px;border-radius:0 0 9px 9px;background:#ede9d7;border:0;padding:0;box-shadow:inset 0 -7px 0 #cfc8ac;color:#6f6a55;font-size:10px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;transition:transform .05s,background .1s;min-height:0}
+.piano .b{position:absolute;top:0;height:80px;border-radius:0 0 7px 7px;background:#1d2a20;border:1px solid #0b120d;padding:0;z-index:1;box-shadow:inset 0 -5px 0 #34463a;color:#7f9480;font-size:9px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:7px;min-height:0}
+.piano .on{background:var(--gold)!important;transform:translateY(2px)}
+.piano .b.on{background:#b39a5f!important}
+.piano .correctKey{outline:3px solid var(--soft);outline-offset:-3px}
+.pianoHint{font-size:10px;color:var(--dim);margin:0;text-align:center}
+footer{max-width:960px;margin:0 auto;padding:0 22px 40px;font-size:10px;color:var(--dim);line-height:1.8}
+[hidden]{display:none!important}
+@media(max-width:640px){header{padding:14px}main{padding:18px 14px 48px}.card{padding:14px}.piano{height:110px}.piano .w{height:110px}.piano .b{height:66px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Ear Trail<small>Hear it, then play it back</small></h1>
+  <nav aria-label="Keyboard family">
+    <a href="/keyboard">Notes</a>
+    <a href="/keyboard/shelf" aria-current="page">Shelf</a>
+    <a href="/keyboard/diary">Key Diary</a>
+    <a href="/keyboard/play">Instrument</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+  <div class="toolbar">
+    <button type="button" id="soundToggle" aria-pressed="true">♪ Sound on</button>
+    <button type="button" id="shareToggle" aria-pressed="true" title="Sends the notes you play back — never which station — to the town keyboard">✳ Town chord on</button>
+  </div>
+</header>
+
+<main>
+  <p class="lede">Ten stations along a trail, from telling two notes apart to playing back a six-note melody. Six correct out of eight rounds opens the next one.</p>
+  <p class="hint">Tap a lit station to start. Locked stations need the one before them cleared first. Play back with the keyboard below, the mouse, or your fingers.</p>
+
+  <section class="card trailcard">
+    <svg class="trail" id="trailSvg" viewBox="0 0 920 190" role="group" aria-label="The ear trail: ten stations"></svg>
+    <div class="statusbar">
+      <span id="statusText" class="empty">You haven't walked the trail yet — Station 1 is lit and ready.</span>
+      <button type="button" id="daily5Btn">✳ Daily 5</button>
+    </div>
+  </section>
+
+  <section class="card panel" id="panel" aria-live="off">
+    <div class="panelHead">
+      <button type="button" id="backTrail">‹ Trail</button>
+      <h2 id="levelName">—</h2>
+      <span id="roundCounter">Round 0 / 8</span>
+    </div>
+    <p class="levelDesc" id="levelDesc">—</p>
+    <div class="stage" id="stage">
+      <div class="hearRow">
+        <button type="button" id="hearBtn" class="primary">▶ Hear it <kbd>Space</kbd></button>
+      </div>
+      <div class="answers" id="answers"></div>
+      <p class="feedback" id="feedback" aria-live="polite"></p>
+    </div>
+    <div class="pianoWrap">
+      <div class="piano" id="piano" role="group" aria-label="Ear Trail keyboard"></div>
+      <p class="pianoHint">Type <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>T</kbd> <kbd>G</kbd> <kbd>Y</kbd> <kbd>H</kbd> <kbd>U</kbd> <kbd>J</kbd> <kbd>K</kbd>, or click/tap the keys.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Progress, streak and bests stay in this browser (<code>pc-ear-v1</code>). When you play a phrase back, only its notes — in order — join the town's <a href="/keyboard-signal">Keyboard Signal</a>; never which station you're on. <a href="/">PointCast</a> · El Segundo.
+</footer>
+
+<script is:inline src="/keyboard.js" data-app="keyboard-ear" async></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var KEY = 'pc-ear-v1';
+  var BASE = 60; // C4
+  var TOP = 72;  // C5
+  var PENT = [0, 2, 4, 7, 9, 12];
+  var ROUNDS_PER_LEVEL = 8;
+  var PASS = 6;
+
+  var LEVELS = [
+    { id: 1, name: 'Same or Different', type: 'compare', desc: 'Two notes. Are they the same note, or a different one?' },
+    { id: 2, name: 'Higher or Lower', type: 'direction', desc: 'Two notes, one after the other. Did it go up, or down?' },
+    { id: 3, name: 'Play It Back · 2 notes', type: 'playback', len: 2, scale: 'near', desc: 'Two notes, close together. Play them back in the same order.' },
+    { id: 4, name: 'Play It Back · 3 notes', type: 'playback', len: 3, scale: 'pent', desc: 'Three notes from a simple scale. Play them back in order.' },
+    { id: 5, name: 'Name the Interval', type: 'interval', desc: 'Two notes at once. Is the gap a 3rd, a 5th, or an octave?' },
+    { id: 6, name: 'Play It Back · 4 notes', type: 'playback', len: 4, scale: 'pent', desc: 'Four notes. Play the whole line back.' },
+    { id: 7, name: 'Major or Minor', type: 'chord', desc: 'A little chord. Does it sound bright (major) or moody (minor)?' },
+    { id: 8, name: 'Play It Back · 5 notes, one leap', type: 'playback', len: 5, scale: 'leap', desc: 'Five notes with one big jump in the middle. Play it back.' },
+    { id: 9, name: 'Echo the Rhythm', type: 'rhythm', desc: 'A tapped rhythm, no pitch to worry about. Tap it back on any key.' },
+    { id: 10, name: 'The Melody', type: 'playback', len: 6, scale: 'pent', desc: 'A six-note melody. Play the whole thing back.' },
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---- storage --------------------------------------------------------------
+  function defaultStore() {
+    var levels = {};
+    LEVELS.forEach(function (l) { levels[l.id] = { cleared: false, best: 0 }; });
+    return { levels: levels, streakDays: 0, lastDate: null, today: { date: null, rounds: 0, correct: 0 }, everPlayed: false, sound: true, share: true };
+  }
+  var store = defaultStore();
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var loaded = JSON.parse(raw);
+      if (loaded && typeof loaded === 'object') {
+        store = defaultStore();
+        Object.keys(store).forEach(function (k) { if (loaded[k] !== undefined) store[k] = loaded[k]; });
+        LEVELS.forEach(function (l) { if (!store.levels[l.id]) store.levels[l.id] = { cleared: false, best: 0 }; });
+      }
+    }
+  } catch (e) { /* private mode: play without saving */ }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* storage full or blocked: still playable */ }
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function todayStr() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function yesterdayStr() { var d = new Date(); d.setDate(d.getDate() - 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+
+  function ensureToday() {
+    var t = todayStr();
+    if (store.today.date === t) return;
+    if (store.today.date === yesterdayStr() && store.lastDate) {
+      store.streakDays = (store.streakDays || 0) + 1;
+    } else {
+      store.streakDays = 1;
+    }
+    store.lastDate = t;
+    store.today = { date: t, rounds: 0, correct: 0 };
+  }
+
+  function isUnlocked(id) { return id === 1 || (store.levels[id - 1] && store.levels[id - 1].cleared); }
+
+  // ---- audio ------------------------------------------------------------------
+  var AC = null, BUS = null;
+  function ctx() {
+    if (!AC) {
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      BUS = AC.createGain();
+      BUS.gain.value = 0.5;
+      var comp = AC.createDynamicsCompressor();
+      comp.threshold.value = -16;
+      BUS.connect(comp).connect(AC.destination);
+    }
+    if (AC.state === 'suspended') AC.resume();
+    return AC;
+  }
+  function freqOf(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+  function tone(midi, when, dur) {
+    if (!store.sound) return;
+    try {
+      var c = ctx();
+      var t = when == null ? c.currentTime : when;
+      dur = dur || 0.85;
+      var f = freqOf(midi);
+      [[1, 'triangle', 0.24], [2, 'sine', 0.08], [4, 'sine', 0.028]].forEach(function (p) {
+        var o = c.createOscillator(), g = c.createGain();
+        o.type = p[1];
+        o.frequency.value = f * p[0];
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(p[2], t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur / Math.sqrt(p[0]));
+        o.connect(g).connect(BUS);
+        o.start(t);
+        o.stop(t + dur + 0.05);
+      });
+    } catch (e) { /* audio is a nicety */ }
+  }
+  function chime(midis, gap) {
+    var c = store.sound ? ctx() : null;
+    midis.forEach(function (m, i) {
+      setTimeout(function () { tone(m, c ? c.currentTime : 0, 0.9); }, i * (gap || 130));
+    });
+  }
+
+  // ---- keyboard widget --------------------------------------------------------
+  var KEYS_ORDER = ['a', 'w', 's', 'e', 'd', 'f', 't', 'g', 'y', 'h', 'u', 'j', 'k'];
+  var BLACK_STEPS = { 1: 1, 3: 1, 6: 1, 8: 1, 10: 1 };
+  var buttons = {};
+  var keymap = {};
+  function buildPiano() {
+    var piano = $('piano');
+    piano.innerHTML = '';
+    var whiteSteps = [];
+    for (var s = 0; s <= 12; s++) if (!BLACK_STEPS[s]) whiteSteps.push(s);
+    var whiteCount = whiteSteps.length;
+    var wi = 0;
+    whiteSteps.forEach(function (step) {
+      var midi = BASE + step;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'w';
+      b.dataset.midi = String(midi);
+      var letter = KEYS_ORDER[step] || '';
+      b.textContent = letter.toUpperCase();
+      if (letter) keymap[letter] = midi;
+      b.setAttribute('aria-label', 'note ' + midi);
+      piano.appendChild(b);
+      buttons[midi] = b;
+      wi++;
+    });
+    for (var s2 = 0; s2 <= 12; s2++) {
+      if (!BLACK_STEPS[s2]) continue;
+      var midi2 = BASE + s2;
+      var whiteBefore = whiteSteps.filter(function (w) { return w < s2; }).length;
+      var b2 = document.createElement('button');
+      b2.type = 'button';
+      b2.className = 'b';
+      b2.dataset.midi = String(midi2);
+      b2.style.left = 'calc(' + (whiteBefore / whiteCount * 100) + '% - ' + (100 / whiteCount * 0.32) + '%)';
+      b2.style.width = (100 / whiteCount * 0.62) + '%';
+      var letter2 = KEYS_ORDER[s2] || '';
+      b2.textContent = letter2.toUpperCase();
+      if (letter2) keymap[letter2] = midi2;
+      b2.setAttribute('aria-label', 'note ' + midi2);
+      piano.appendChild(b2);
+      buttons[midi2] = b2;
+    }
+    piano.addEventListener('pointerdown', function (e) {
+      var b = e.target.closest && e.target.closest('button');
+      if (!b) return;
+      e.preventDefault();
+      onKeyHit(Number(b.dataset.midi));
+    });
+  }
+  function flashKey(midi, cls) {
+    var b = buttons[midi];
+    if (!b) return;
+    b.classList.add(cls || 'on');
+    setTimeout(function () { b.classList.remove(cls || 'on'); }, cls === 'correctKey' ? 700 : 160);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === ' ' && panelOpen) { e.preventDefault(); playPrompt(); return; }
+    var t = e.target;
+    if (t && /INPUT|TEXTAREA|SELECT/.test(t.tagName)) return;
+    var midi = keymap[e.key.toLowerCase()];
+    if (midi != null) { e.preventDefault(); onKeyHit(midi); }
+  });
+
+  // ---- round engine -------------------------------------------------------------
+  function randInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function pick(arr) { return arr[randInt(0, arr.length - 1)]; }
+
+  function genSequence(scale, len) {
+    var seq = [];
+    if (scale === 'pent') {
+      for (var i = 0; i < len; i++) seq.push(BASE + pick(PENT));
+    } else if (scale === 'near') {
+      var start = randInt(BASE, BASE + 5);
+      seq.push(start);
+      for (var j = 1; j < len; j++) seq.push(Math.max(BASE, Math.min(TOP, seq[j - 1] + pick([-2, -1, 1, 2]))));
+    } else if (scale === 'leap') {
+      seq.push(BASE + pick(PENT));
+      var hasLeap = false;
+      for (var k = 1; k < len; k++) {
+        var leap = k === len - 2 || (!hasLeap && k === len - 1);
+        var next;
+        if (leap) {
+          next = seq[k - 1] + (Math.random() < 0.5 ? -1 : 1) * randInt(5, 9);
+          next = Math.max(BASE, Math.min(TOP, next));
+          if (Math.abs(next - seq[k - 1]) >= 5) hasLeap = true;
+        } else {
+          next = Math.max(BASE, Math.min(TOP, seq[k - 1] + pick([-4, -2, -1, 1, 2, 4])));
+        }
+        seq.push(next);
+      }
+      if (!hasLeap) seq[len - 1] = Math.max(BASE, Math.min(TOP, seq[0] + 7));
+    } else {
+      for (var m = 0; m < len; m++) seq.push(randInt(BASE, TOP));
+    }
+    return seq;
+  }
+
+  function genRound(level) {
+    var r = { level: level };
+    if (level.type === 'compare') {
+      var a = randInt(BASE, TOP);
+      var same = Math.random() < 0.5;
+      var b = same ? a : (function () { var x; do { x = randInt(BASE, TOP); } while (x === a); return x; })();
+      r.promptSeq = [a, b];
+      r.answer = same ? 'same' : 'different';
+      r.choices = [['Same', 'same'], ['Different', 'different']];
+    } else if (level.type === 'direction') {
+      var a2 = randInt(BASE, TOP - 1);
+      var b2; do { b2 = randInt(BASE, TOP); } while (b2 === a2);
+      r.promptSeq = [a2, b2];
+      r.answer = b2 > a2 ? 'higher' : 'lower';
+      r.choices = [['Higher', 'higher'], ['Lower', 'lower']];
+    } else if (level.type === 'interval') {
+      var opts = [['3rd', 4], ['5th', 7], ['Octave', 12]];
+      var choice = pick(opts);
+      r.promptSeq = [BASE, BASE + choice[1]];
+      r.simultaneous = true;
+      r.answer = choice[0];
+      r.choices = opts.map(function (o) { return [o[0], o[0]]; });
+    } else if (level.type === 'chord') {
+      var major = Math.random() < 0.5;
+      r.promptSeq = major ? [BASE, BASE + 4, BASE + 7] : [BASE, BASE + 3, BASE + 7];
+      r.simultaneous = true;
+      r.answer = major ? 'major' : 'minor';
+      r.choices = [['Major', 'major'], ['Minor', 'minor']];
+    } else if (level.type === 'rhythm') {
+      var n = randInt(3, 5);
+      var gaps = [0];
+      for (var i2 = 1; i2 < n; i2++) gaps.push(pick([280, 420, 560, 850]));
+      r.pitch = 67;
+      r.expectedGaps = gaps;
+      r.expected = new Array(n).fill(r.pitch);
+    } else { // playback
+      r.expected = genSequence(level.scale, level.len);
+      r.promptSeq = r.expected;
+    }
+    return r;
+  }
+
+  // ---- session state ------------------------------------------------------------
+  var session = null; // { level, roundIndex, correctCount, round, mode:'level'|'daily5', dailyLevels }
+  var panelOpen = false;
+  var awaitingInput = false;
+  var inputBuffer = [];
+  var inputTimes = [];
+  var busy = false;
+
+  function startLevel(id) {
+    var level = LEVELS[id - 1];
+    if (!isUnlocked(id)) return;
+    ctx();
+    session = { level: level, roundIndex: 0, correctCount: 0, mode: 'level' };
+    openPanel();
+    nextRound();
+  }
+  function startDaily5() {
+    var unlocked = LEVELS.filter(function (l) { return isUnlocked(l.id); });
+    if (!unlocked.length) return;
+    ctx();
+    session = { level: null, roundIndex: 0, correctCount: 0, mode: 'daily5', total: 5, pool: unlocked };
+    openPanel();
+    nextRound();
+  }
+  function openPanel() {
+    panelOpen = true;
+    $('panel').classList.add('open');
+    $('panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function closePanel() {
+    panelOpen = false;
+    session = null;
+    awaitingInput = false;
+    $('panel').classList.remove('open');
+    renderTrail();
+  }
+  $('backTrail').addEventListener('click', closePanel);
+
+  function currentLevelForRound() {
+    if (session.mode === 'daily5') return pick(session.pool);
+    return session.level;
+  }
+
+  function nextRound() {
+    busy = false;
+    awaitingInput = false;
+    inputBuffer = []; inputTimes = [];
+    var total = session.mode === 'daily5' ? session.total : ROUNDS_PER_LEVEL;
+    if (session.roundIndex >= total) { finishSession(); return; }
+    var level = currentLevelForRound();
+    session.round = genRound(level);
+    session.round.levelUsed = level;
+    $('levelName').textContent = session.mode === 'daily5' ? 'Daily 5 · ' + level.name : level.name;
+    $('roundCounter').textContent = 'Round ' + (session.roundIndex + 1) + ' / ' + total;
+    $('levelDesc').textContent = level.desc;
+    $('feedback').textContent = '';
+    $('feedback').className = 'feedback';
+    renderAnswers(level);
+    setTimeout(playPrompt, 350);
+  }
+
+  function renderAnswers(level) {
+    var box = $('answers');
+    box.innerHTML = '';
+    if (level.type === 'compare' || level.type === 'direction' || level.type === 'interval' || level.type === 'chord') {
+      session.round.choices.forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = c[0];
+        b.dataset.value = c[1];
+        b.addEventListener('click', function () { if (!busy) answerChoice(c[1], b); });
+        box.appendChild(b);
+      });
+    } else if (level.type === 'rhythm') {
+      var p = document.createElement('p');
+      p.className = 'levelDesc';
+      p.textContent = 'Tap any key in time — pitch doesn’t matter here.';
+      box.appendChild(p);
+      awaitingInput = true;
+    } else {
+      var p2 = document.createElement('p');
+      p2.className = 'levelDesc';
+      p2.textContent = 'Play the ' + session.round.expected.length + ' notes back, in order.';
+      box.appendChild(p2);
+      awaitingInput = true;
+    }
+  }
+
+  function playPrompt() {
+    var r = session.round;
+    if (r.simultaneous) chime(r.promptSeq, 0), r.promptSeq.forEach(function (m) { flashKey(m); });
+    else if (r.level.type === 'rhythm') {
+      var t = 0;
+      r.expectedGaps.forEach(function (g, i) {
+        t += g;
+        setTimeout(function () { tone(r.pitch, ctx().currentTime, 0.25); flashKey(r.pitch); }, t);
+      });
+    } else {
+      var t2 = 0;
+      r.promptSeq.forEach(function (m, i) {
+        t2 += i === 0 ? 0 : 260;
+        setTimeout(function () { tone(m, ctx().currentTime, 0.7); flashKey(m); }, t2);
+      });
+    }
+  }
+  $('hearBtn').addEventListener('click', function () { if (session) playPrompt(); });
+
+  function onKeyHit(midi) {
+    tone(midi, ctx().currentTime, 0.75);
+    flashKey(midi);
+    if (!panelOpen || !awaitingInput || busy || !session) return;
+    var r = session.round;
+    inputBuffer.push(midi);
+    inputTimes.push(performance.now());
+    if (r.level.type === 'rhythm') {
+      if (inputBuffer.length >= r.expected.length) evaluateRhythm();
+    } else {
+      if (inputBuffer.length >= r.expected.length) evaluatePlayback();
+    }
+  }
+
+  function sendPhrase(notes) {
+    if (!store.share || !window.PointCastKeyboard || !notes.length) return;
+    window.PointCastKeyboard.note(notes.slice(0, 64), null, { sound: false });
+  }
+
+  function arraysEqual(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  function evaluatePlayback() {
+    busy = true;
+    awaitingInput = false;
+    var r = session.round;
+    var correct = arraysEqual(inputBuffer, r.expected);
+    sendPhrase(inputBuffer.slice());
+    resolveRound(correct, function () {
+      r.expected.forEach(function (m, i) { setTimeout(function () { tone(m, ctx().currentTime, 0.6); flashKey(m, 'correctKey'); }, i * 220); });
+    });
+  }
+
+  function evaluateRhythm() {
+    busy = true;
+    awaitingInput = false;
+    var r = session.round;
+    var gapsUser = [];
+    for (var i = 1; i < inputTimes.length; i++) gapsUser.push(inputTimes[i] - inputTimes[i - 1]);
+    var gapsExpected = r.expectedGaps.slice(1);
+    var score = rhythmScore(gapsUser, gapsExpected);
+    var correct = score >= 0.6;
+    sendPhrase(r.expected.slice());
+    resolveRound(correct, function () {
+      var t = 0;
+      r.expectedGaps.forEach(function (g) { t += g; setTimeout(function () { tone(r.pitch, ctx().currentTime, 0.25); flashKey(r.pitch, 'correctKey'); }, t); });
+    });
+  }
+  function rhythmScore(user, expected) {
+    if (!user.length || !expected.length || user.length !== expected.length) return user.length === expected.length ? 1 : 0;
+    var su = user.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var se = expected.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var err = 0;
+    for (var i = 0; i < user.length; i++) err += Math.abs(user[i] / su - expected[i] / se);
+    return Math.max(0, 1 - err);
+  }
+
+  function answerChoice(value, btnEl) {
+    busy = true;
+    var r = session.round;
+    var correct = value === r.answer;
+    document.querySelectorAll('#answers button').forEach(function (b) {
+      b.disabled = true;
+      if (b.dataset.value === r.answer) b.classList.add('correct');
+      else if (b === btnEl) b.classList.add('wrong');
+    });
+    resolveRound(correct, function () { chime(r.promptSeq, r.simultaneous ? 0 : 260); });
+  }
+
+  function resolveRound(correct, replay) {
+    ensureToday();
+    store.everPlayed = true;
+    store.today.rounds++;
+    if (correct) store.today.correct++;
+    session.roundIndex++;
+    if (correct) session.correctCount++;
+    save();
+    var f = $('feedback');
+    if (correct) {
+      f.textContent = pick(['Nice — that’s it.', 'Got it.', 'Right on.', 'Just so.']);
+      f.className = 'feedback';
+      chime([BASE + 4, BASE + 7, BASE + 12], 80);
+    } else {
+      f.textContent = pick(['Close — here’s what it was.', 'Not quite — listen again.', 'Almost — here it is.']);
+      f.className = 'feedback warm';
+      if (replay) replay();
+    }
+    renderStatus();
+    setTimeout(nextRound, correct ? 1100 : 1900);
+  }
+
+  function finishSession() {
+    var box = $('answers');
+    $('hearBtn').style.display = 'none';
+    $('feedback').textContent = '';
+    if (session.mode === 'daily5') {
+      box.innerHTML = '';
+      var wrap = document.createElement('div');
+      wrap.className = 'summary';
+      var big = document.createElement('p'); big.className = 'big'; big.textContent = session.correctCount + ' / ' + session.total;
+      var msg = document.createElement('p'); msg.className = 'levelDesc'; msg.textContent = 'Daily 5 done. Come back tomorrow for another set.';
+      wrap.appendChild(big); wrap.appendChild(msg);
+      var btns = document.createElement('div'); btns.className = 'summaryBtns';
+      var back = document.createElement('button'); back.type = 'button'; back.className = 'primary'; back.textContent = 'Back to trail';
+      back.addEventListener('click', closePanel);
+      btns.appendChild(back);
+      wrap.appendChild(btns);
+      box.appendChild(wrap);
+    } else {
+      var id = session.level.id;
+      var passed = session.correctCount >= PASS;
+      var lv = store.levels[id];
+      lv.best = Math.max(lv.best || 0, session.correctCount);
+      if (passed) lv.cleared = true;
+      save();
+      box.innerHTML = '';
+      var wrap2 = document.createElement('div');
+      wrap2.className = 'summary';
+      var big2 = document.createElement('p'); big2.className = 'big'; big2.textContent = session.correctCount + ' / ' + ROUNDS_PER_LEVEL;
+      var msg2 = document.createElement('p'); msg2.className = 'levelDesc';
+      msg2.textContent = passed
+        ? (id < LEVELS.length ? 'Station cleared — the next one just lit up.' : 'Station cleared — you’ve walked the whole trail.')
+        : 'Good effort. Six correct opens the next station — try this one again anytime.';
+      wrap2.appendChild(big2); wrap2.appendChild(msg2);
+      if (passed) chime([BASE, BASE + 4, BASE + 7, BASE + 12], 110);
+      var btns2 = document.createElement('div'); btns2.className = 'summaryBtns';
+      var again = document.createElement('button'); again.type = 'button'; again.textContent = 'Try again';
+      again.addEventListener('click', function () { $('hearBtn').style.display = ''; startLevel(id); });
+      var next = document.createElement('button'); next.type = 'button'; next.className = 'primary';
+      next.textContent = passed && id < LEVELS.length ? 'Next station' : 'Back to trail';
+      next.addEventListener('click', function () {
+        $('hearBtn').style.display = '';
+        if (passed && id < LEVELS.length) startLevel(id + 1); else closePanel();
+      });
+      btns2.appendChild(again); btns2.appendChild(next);
+      wrap2.appendChild(btns2);
+      box.appendChild(wrap2);
+    }
+    $('roundCounter').textContent = 'Complete';
+    renderStatus();
+    renderTrail();
+  }
+
+  // ---- trail render -------------------------------------------------------------
+  function renderTrail() {
+    var svg = $('trailSvg');
+    var W = 920, H = 190, PAD = 55;
+    var pts = LEVELS.map(function (l, i) { return { x: PAD + i * ((W - 2 * PAD) / (LEVELS.length - 1)), y: H / 2 + Math.sin(i * 1.15) * 55 }; });
+    var d = 'M ' + pts.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' L ');
+    var html = '<path class="trailpath" d="' + d + '"></path>';
+    LEVELS.forEach(function (l, i) {
+      var p = pts[i];
+      var unlocked = isUnlocked(l.id);
+      var cleared = store.levels[l.id] && store.levels[l.id].cleared;
+      var cls = cleared ? 'cleared' : (unlocked ? 'unlocked' : 'locked');
+      var label = cleared ? '✓' : String(l.id);
+      html += '<g class="station ' + cls + '" data-id="' + l.id + '" tabindex="' + (unlocked ? '0' : '-1') + '" role="button" aria-label="Station ' + l.id + ': ' + l.name + (cleared ? ', cleared' : unlocked ? ', unlocked' : ', locked') + '">' +
+        '<circle class="ring" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="21"></circle>' +
+        '<text class="num" x="' + p.x.toFixed(1) + '" y="' + (p.y + 5).toFixed(1) + '">' + label + '</text>' +
+        '<text class="name" x="' + p.x.toFixed(1) + '" y="' + (p.y + 36).toFixed(1) + '">' + l.name.split(' · ')[0] + '</text>' +
+        '</g>';
+    });
+    svg.innerHTML = html;
+    svg.querySelectorAll('.station').forEach(function (g) {
+      g.addEventListener('click', function () { startLevel(Number(g.dataset.id)); });
+      g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startLevel(Number(g.dataset.id)); } });
+    });
+  }
+
+  function renderStatus() {
+    var el = $('statusText');
+    if (!store.everPlayed) { el.textContent = 'You haven’t walked the trail yet — Station 1 is lit and ready.'; el.className = 'empty'; return; }
+    el.className = '';
+    el.innerHTML = '🔥 <b>' + (store.streakDays || 0) + '</b>-day streak · today: <b>' + store.today.rounds + '</b> rounds, <b>' + store.today.correct + '</b> correct';
+  }
+
+  $('daily5Btn').addEventListener('click', startDaily5);
+
+  // ---- toggles --------------------------------------------------------------------
+  function paintToggles() {
+    $('soundToggle').setAttribute('aria-pressed', String(store.sound));
+    $('soundToggle').textContent = store.sound ? '♪ Sound on' : '♪ Sound off';
+    $('shareToggle').setAttribute('aria-pressed', String(store.share));
+    $('shareToggle').textContent = store.share ? '✳ Town chord on' : '✳ Town chord off';
+  }
+  $('soundToggle').addEventListener('click', function () { store.sound = !store.sound; paintToggles(); save(); });
+  $('shareToggle').addEventListener('click', function () { store.share = !store.share; paintToggles(); save(); });
+
+  buildPiano();
+  paintToggles();
+  renderTrail();
+  renderStatus();
+})();
+</script>
+</body>
+</html>
