@@ -29,3 +29,13 @@ Type is Space Grotesk (SIL OFL, see `SpaceGrotesk-OFL.txt`).
 ```
 python3 designs/annual-report/hat/hat.py
 ```
+
+## Animated flux GIF
+
+`flux_anim.py` renders `hoydich-flux.gif` (600×900, 36 frames at 12 fps, seamless
+loop). It animates the original contour-flux field: the contours breathe, the warp
+drifts, the glitch slices jump every 3 frames and the grain re-rolls on every frame.
+
+```
+python3 designs/annual-report/flux_anim.py --width 800 --frames 48
+```
