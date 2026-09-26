@@ -276,9 +276,25 @@ const TOOL_DEFINITIONS = [
           minimum: 1,
           maximum: 5,
         },
+        app: {
+          type: 'string',
+          description: 'Optional: name of the app or artifact sending this tap, for the drum signal board (/drum-signal). Default "mcp".',
+          maxLength: 48,
+        },
+        kind: {
+          type: 'string',
+          enum: ['agent', 'artifact'],
+          description: 'Optional: "artifact" when a Claude artifact is tapping for a person; default "agent".',
+        },
       },
       additionalProperties: false,
     },
+  },
+  {
+    name: 'drum_hall_state',
+    description:
+      'One read for a drum dashboard: global count, who drummed in the last two minutes, the top ten drummers, and where recent beats came from (the drum signal). Returns JSON.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'drum_play_instrument',
@@ -1438,6 +1454,26 @@ async function dispatchTool(
         `global drum count: ${(data?.globalTotal ?? 0).toLocaleString()} taps across every /drum* surface, every visitor, since the room opened`,
       );
     }
+    case 'drum_hall_state': {
+      const [live, top, signal] = await Promise.all([
+        callJson(`${base}/api/drum/live`).catch(() => null),
+        callJson(`${base}/api/drum/top`).catch(() => null),
+        callJson(`${base}/api/drum/signal`).catch(() => null),
+      ]);
+      const state = {
+        globalTotal: signal?.globalTotal ?? live?.globalTotal ?? null,
+        live: {
+          count: live?.count ?? 0,
+          drummers: Array.isArray(live?.drummers) ? live.drummers : [],
+          sources: Array.isArray(live?.sources) ? live.sources : [],
+        },
+        top: Array.isArray(top?.entries) ? top.entries : [],
+        kinds: Array.isArray(signal?.kinds) ? signal.kinds : [],
+        recent: Array.isArray(signal?.recent) ? signal.recent.slice(0, 12) : [],
+        at: Date.now(),
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(state) }], structuredContent: state };
+    }
     case 'drum_tap': {
       const combo = Math.max(1, Math.min(5, Number(args.combo) || 1));
       // Keep the tool's declared "tap" semantics in the authoritative drum
@@ -1449,7 +1485,10 @@ async function dispatchTool(
         body: JSON.stringify({
           delta: combo,
           sessionId: `mcp-${sessionId}`,
-          source: { kind: 'agent', app: 'mcp' },
+          source: {
+            kind: args.kind === 'artifact' ? 'artifact' : 'agent',
+            app: typeof args.app === 'string' && args.app.trim() ? args.app.slice(0, 48) : 'mcp',
+          },
         }),
       });
       if (!counter.ok) return { content: [{ type: 'text', text: 'drum counter unavailable; tap was not broadcast' }], isError: true };
