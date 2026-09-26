@@ -16,7 +16,9 @@
  * is a placeholder.
  *
  * POST /api/drum
- *   body: { delta: number, sessionId: string }
+ *   body: { delta: number, sessionId: string, source?: { kind?, app?, place? } }
+ *   Every beat is tagged with a source for the drum signal (/drum-signal);
+ *   when `source` is omitted it is inferred from Origin/Referer.
  *   response: { ok, globalTotal, yourTotal }
  *
  * GET  /api/drum?sessionId=...
@@ -24,6 +26,7 @@
  */
 
 import { sha256, type Env as VisitsEnv } from './visit.ts';
+import { requestCountry, resolveSource } from '../_lib/drum-signal.ts';
 
 interface Env extends VisitsEnv {
   DRUM_COUNTER?: DurableObjectNamespace;
@@ -86,7 +89,7 @@ async function counterRequest(
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.VISITS) return json({ ok: false, reason: 'kv-not-bound' });
 
-  let body: { delta?: unknown; sessionId?: unknown };
+  let body: { delta?: unknown; sessionId?: unknown; source?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -105,7 +108,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const counter = await counterRequest(env, sessionHash, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ delta, leaderboardHash, nounId }),
+    body: JSON.stringify({
+      delta,
+      leaderboardHash,
+      nounId,
+      source: resolveSource(request, body.source, requestCountry(request)),
+    }),
   });
   if (counter) {
     return new Response(counter.body, { status: counter.status, headers: JSON_HEADERS });

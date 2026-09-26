@@ -7,6 +7,33 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const FLUSH_AFTER_TAPS = 50;
 const FLUSH_AFTER_MS = 15_000;
 
+// The drum signal: every beat can say where it came from. Kinds are a closed
+// set; app and place are free slugs from the sender, so both tables are capped
+// and overflow folds into a shared row instead of growing without bound.
+export const SIGNAL_KINDS = ["pointcast", "embed", "standalone", "artifact", "agent", "other"] as const;
+export type SignalKind = (typeof SIGNAL_KINDS)[number];
+export interface SignalSource {
+  kind: SignalKind;
+  app: string;
+  place: string | null;
+}
+const MAX_SOURCE_ROWS = 2000;
+const MAX_PLACE_ROWS = 500;
+const RECENT_SIGNALS = 60;
+const SIGNAL_DAYS = 90;
+
+function slug(raw: unknown, max: number): string {
+  if (typeof raw !== "string") return "";
+  return raw.toLowerCase().trim().replace(/[^a-z0-9._/:-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, max);
+}
+
+export function normalizeSource(raw: unknown): SignalSource | null {
+  if (!raw || typeof raw !== "object") return null;
+  const input = raw as { kind?: unknown; app?: unknown; place?: unknown };
+  const kind = SIGNAL_KINDS.includes(input.kind as SignalKind) ? (input.kind as SignalKind) : "other";
+  return { kind, app: slug(input.app, 48) || "unknown", place: slug(input.place, 32) || null };
+}
+
 interface Env {
   VISITS: KVNamespace;
 }
@@ -53,6 +80,34 @@ export class DrumCounter extends DurableObject<Env> {
           leaderboard_hash TEXT,
           noun_id INTEGER
         );
+        CREATE TABLE IF NOT EXISTS drum_signal_sources (
+          kind TEXT NOT NULL,
+          app TEXT NOT NULL,
+          total INTEGER NOT NULL,
+          hits INTEGER NOT NULL,
+          first_at INTEGER NOT NULL,
+          last_at INTEGER NOT NULL,
+          PRIMARY KEY (kind, app)
+        );
+        CREATE TABLE IF NOT EXISTS drum_signal_places (
+          place TEXT PRIMARY KEY,
+          total INTEGER NOT NULL,
+          last_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS drum_signal_days (
+          day TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          total INTEGER NOT NULL,
+          PRIMARY KEY (day, kind)
+        );
+        CREATE TABLE IF NOT EXISTS drum_signal_recent (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          at INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          app TEXT NOT NULL,
+          place TEXT,
+          beats INTEGER NOT NULL
+        );
       `);
     });
   }
@@ -64,28 +119,32 @@ export class DrumCounter extends DurableObject<Env> {
 
     if (request.method === "GET") {
       if (url.searchParams.get("top") === "1") return json({ entries: await this.topEntries() });
+      if (url.searchParams.get("signal") === "1") return json(await this.signalSummary());
       const globalTotal = await this.globalTotal();
       const yourTotal = session ? await this.sessionTotal(session) : 0;
       return json({ globalTotal, yourTotal });
     }
     if (request.method !== "POST") return json({ ok: false, reason: "method-not-allowed" }, { status: 405 });
 
-    let body: { delta?: unknown; leaderboardHash?: unknown; nounId?: unknown };
+    let body: { delta?: unknown; leaderboardHash?: unknown; nounId?: unknown; source?: unknown };
     try {
       body = await request.json();
     } catch {
       return json({ ok: false, reason: "bad-body" }, { status: 400 });
     }
-    if (!session) return json({ ok: false, reason: "missing-session" }, { status: 400 });
+    const source = normalizeSource(body.source);
+    // A tagged signal may be anonymous (an embed or a server with no visitor
+    // session); it counts globally and by source but not on the leaderboard.
+    if (!session && !source) return json({ ok: false, reason: "missing-session" }, { status: 400 });
     const delta = typeof body.delta === "number" && Number.isFinite(body.delta)
       ? Math.max(0, Math.min(1000, Math.floor(body.delta)))
       : 0;
     const globalTotal = await this.globalTotal();
-    const yourTotal = await this.sessionTotal(session);
+    const yourTotal = session ? await this.sessionTotal(session) : 0;
     if (delta === 0) return json({ ok: true, globalTotal, yourTotal });
 
     const nextGlobal = globalTotal + delta;
-    const nextSession = yourTotal + delta;
+    const nextSession = session ? yourTotal + delta : 0;
     const leaderboardHash = typeof body.leaderboardHash === "string" && /^[a-f0-9]{8}$/i.test(body.leaderboardHash)
       ? body.leaderboardHash
       : null;
@@ -96,7 +155,8 @@ export class DrumCounter extends DurableObject<Env> {
     // namespace has no `global` row to UPDATE. Upsert so the DO, rather than
     // the lagging mirror, remains authoritative from its very first tap.
     this.setMeta("global", nextGlobal);
-    this.ctx.storage.sql.exec(
+    if (source) this.recordSignal(source, delta, Date.now());
+    if (session) this.ctx.storage.sql.exec(
       `UPDATE drum_counter_sessions
        SET total = ?, dirty = 1, leaderboard_hash = COALESCE(?, leaderboard_hash), noun_id = COALESCE(?, noun_id)
        WHERE session_hash = ?`,
@@ -106,7 +166,67 @@ export class DrumCounter extends DurableObject<Env> {
     this.setMeta("pending", pending);
     if (pending >= FLUSH_AFTER_TAPS) await this.flush();
     else await this.ctx.storage.setAlarm(Date.now() + FLUSH_AFTER_MS);
-    return json({ ok: true, globalTotal: nextGlobal, yourTotal: nextSession });
+    return json({ ok: true, globalTotal: nextGlobal, yourTotal: nextSession, ...(source ? { source } : {}) });
+  }
+
+  private recordSignal(source: SignalSource, beats: number, now: number): void {
+    const sql = this.ctx.storage.sql;
+    let { kind, app } = source;
+    const known = sql.exec("SELECT 1 FROM drum_signal_sources WHERE kind = ? AND app = ?", kind, app).toArray().length > 0;
+    if (!known && sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM drum_signal_sources").one().n >= MAX_SOURCE_ROWS) app = "overflow";
+    sql.exec(
+      `INSERT INTO drum_signal_sources (kind, app, total, hits, first_at, last_at) VALUES (?, ?, ?, 1, ?, ?)
+       ON CONFLICT(kind, app) DO UPDATE SET total = total + excluded.total, hits = hits + 1, last_at = excluded.last_at`,
+      kind, app, beats, now, now,
+    );
+    let place = source.place;
+    if (place) {
+      const knownPlace = sql.exec("SELECT 1 FROM drum_signal_places WHERE place = ?", place).toArray().length > 0;
+      if (!knownPlace && sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM drum_signal_places").one().n >= MAX_PLACE_ROWS) place = "elsewhere";
+      sql.exec(
+        `INSERT INTO drum_signal_places (place, total, last_at) VALUES (?, ?, ?)
+         ON CONFLICT(place) DO UPDATE SET total = total + excluded.total, last_at = excluded.last_at`,
+        place, beats, now,
+      );
+    }
+    const day = new Date(now).toISOString().slice(0, 10);
+    sql.exec(
+      `INSERT INTO drum_signal_days (day, kind, total) VALUES (?, ?, ?)
+       ON CONFLICT(day, kind) DO UPDATE SET total = total + excluded.total`,
+      day, kind, beats,
+    );
+    sql.exec("INSERT INTO drum_signal_recent (at, kind, app, place, beats) VALUES (?, ?, ?, ?, ?)", now, kind, app, place, beats);
+    sql.exec(`DELETE FROM drum_signal_recent WHERE id <= (SELECT MAX(id) FROM drum_signal_recent) - ?`, RECENT_SIGNALS);
+    const oldest = new Date(now - SIGNAL_DAYS * 86_400_000).toISOString().slice(0, 10);
+    sql.exec("DELETE FROM drum_signal_days WHERE day < ?", oldest);
+  }
+
+  private async signalSummary() {
+    const sql = this.ctx.storage.sql;
+    const globalTotal = await this.globalTotal();
+    const kinds = sql.exec<{ kind: string; total: number; hits: number; apps: number; lastAt: number }>(
+      `SELECT kind, SUM(total) AS total, SUM(hits) AS hits, COUNT(*) AS apps, MAX(last_at) AS lastAt
+       FROM drum_signal_sources GROUP BY kind ORDER BY total DESC`,
+    ).toArray();
+    const attributed = kinds.reduce((sum, row) => sum + row.total, 0);
+    return {
+      globalTotal,
+      attributed,
+      // Every beat counted before the signal shipped carried no source.
+      unattributed: Math.max(0, globalTotal - attributed),
+      kinds,
+      sources: sql.exec(
+        `SELECT kind, app, total, hits, first_at AS firstAt, last_at AS lastAt
+         FROM drum_signal_sources ORDER BY total DESC, app ASC LIMIT 60`,
+      ).toArray(),
+      places: sql.exec(
+        "SELECT place, total, last_at AS lastAt FROM drum_signal_places ORDER BY total DESC, place ASC LIMIT 30",
+      ).toArray(),
+      days: sql.exec("SELECT day, kind, total FROM drum_signal_days ORDER BY day ASC, kind ASC").toArray(),
+      recent: sql.exec(
+        `SELECT at, kind, app, place, beats FROM drum_signal_recent ORDER BY id DESC LIMIT ${RECENT_SIGNALS}`,
+      ).toArray(),
+    };
   }
 
   async alarm(): Promise<void> {
