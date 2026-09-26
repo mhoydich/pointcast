@@ -123,3 +123,34 @@ test('/keyboard.js plays text with the same notes as the API', async () => {
   const sample = 'PointCast keyboard 2026, El Segundo!';
   assert.deepEqual([...sandbox.PointCastKeyboard.textToNotes(sample)], textToNotes(sample));
 });
+
+test('MCP lists keyboard_play and keyboard_signal_state, and keyboard_play posts notes', async (t) => {
+  const { createServer } = await import('vite');
+  const server = await createServer({ configFile: false, appType: 'custom', logLevel: 'error', resolve: { preserveSymlinks: true }, cacheDir: '.astro/api-test-cache' });
+  t.after(() => server.close());
+  const { onRequestPost: mcpPost } = await server.ssrLoadModule('/functions/api/mcp.ts');
+  const rpc = (method, params) => mcpPost(context(new Request('https://pointcast.xyz/api/mcp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  }), {}));
+  const list = await (await rpc('tools/list', {})).json();
+  const names = list.result.tools.map((t) => t.name);
+  assert.ok(names.includes('keyboard_play'));
+  assert.ok(names.includes('keyboard_signal_state'));
+  assert.equal(list.result.tools.find((t) => t.name === 'keyboard_play').annotations.readOnlyHint, false);
+
+  const realFetch = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = async (url, init) => {
+    sent.push({ url: String(url), body: init?.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify({ ok: true, notes: 5, globalTotal: 1234 }));
+  };
+  try {
+    const played = await (await rpc('tools/call', { name: 'keyboard_play', arguments: { text: 'hello', app: 'claude-diary', kind: 'artifact' } })).json();
+    assert.match(played.result.content[0].text, /played 5 notes/);
+    assert.ok(sent[0].url.endsWith('/api/keyboard/signal'));
+    assert.deepEqual(sent[0].body, { text: 'hello', kind: 'artifact', app: 'claude-diary' });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
