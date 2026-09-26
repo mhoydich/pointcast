@@ -1,100 +1,312 @@
 ---
-// Keyboard Bloom. Notes stay in browser storage.
+// /keyboard — Keyboard Bloom front door. The page itself is playable: type
+// anything and it answers in C-major pentatonic with blooming letters. Four
+// doors (Play, Rooms, Write, Games) plus the shelf of small instruments.
+// Old take links (/keyboard?t=…) still forward to /keyboard/play.
+// The notebook that used to live here moved to /keyboard/notes.
+// Built 2026-09-26 by Claude (Cowork) on a brief from Mike.
 ---
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Keyboard Bloom · Notes</title><meta name="description" content="A quiet notebook with musical typing, local autosave, and a growing garden of ideas."><link rel="canonical" href="https://pointcast.xyz/keyboard">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keyboard Bloom · PointCast</title>
+<meta name="description" content="The whole computer keyboard is an instrument. Play it, play it with friends in Bloom Rooms, write with it, or play games on it.">
+<link rel="canonical" href="https://pointcast.xyz/keyboard">
+<meta property="og:title" content="Keyboard Bloom">
+<meta property="og:description" content="The whole keyboard is an instrument. Type anything and it sings.">
+<meta property="og:url" content="https://pointcast.xyz/keyboard">
+<meta property="og:image" content="https://pointcast.xyz/keyboard/rooms-og.webp">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script is:inline>if(new URLSearchParams(location.search).has('t')){location.replace('/keyboard/play'+location.search+location.hash);}</script>
 <style is:inline>
-:root{color-scheme:dark;--bg:#0b1412;--panel:#101c19;--line:#263a32;--ink:#e1ebe3;--dim:#93aa9f;--gold:#e6c98a;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink)}button,input,textarea,select{font:inherit;color:inherit}button,select{background:transparent;border:1px solid var(--line);border-radius:7px;padding:9px 12px;cursor:pointer}button:hover{background:#1b2d25;border-color:#688777}button:disabled{opacity:.4;cursor:default}button[aria-pressed=true],.primary{background:var(--gold);color:var(--bg);border-color:var(--gold)}:focus-visible{outline:2px solid var(--gold);outline-offset:3px}header{height:87px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:0 30px;gap:20px}.brand{margin:0;font-weight:normal;font-family:Georgia,serif;font-size:28px;white-space:nowrap}.brand em{color:var(--gold)}.tag{font-size:10px;text-transform:uppercase;letter-spacing:.18em;color:var(--dim);margin-top:7px}.toolbar{display:flex;gap:9px;align-items:center;font-size:11px}.app{display:grid;grid-template-columns:280px 1fr;height:calc(100dvh - 87px)}.sidebar{border-right:1px solid var(--line);background:var(--panel);padding:24px 16px;display:flex;flex-direction:column;min-height:0;gap:16px}.side-top{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--dim)}#search{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:12px;font-size:12px}.notes{overflow:auto;flex:1}.note{display:block;text-align:left;width:100%;border-color:transparent;padding:17px 12px;margin-bottom:6px}.note.selected{background:#1e3028;border-color:#415b4c}.note strong{font-family:Georgia,serif;font-size:17px;font-weight:normal;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.note small{display:block;font-size:10px;color:var(--dim);margin-top:9px;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.privacy{font-size:10px;color:var(--dim);line-height:1.7}.side-bottom{display:flex;gap:6px;flex-wrap:wrap}.side-bottom button{font-size:10px}.workspace{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}.editor-tools{display:flex;align-items:center;justify-content:space-between;padding:23px 36px;font-size:10px;color:var(--dim);gap:12px}.editor-tools button{font-size:10px}.paper{width:min(850px,100%);padding:24px 58px 0;margin:0 auto;flex:1;display:flex;flex-direction:column;min-height:160px}#title{border:0;background:transparent;width:100%;font-family:Georgia,serif;font-size:44px;line-height:1.2;padding:0 0 20px;outline:none}#body{border:0;background:transparent;resize:none;width:100%;flex:1;line-height:1.9;font-family:Georgia,serif;font-size:20px;outline:none;padding:0 0 20px}#title::placeholder{color:#718d7d}#body::placeholder{color:#688172}.statusbar{padding:14px 36px;display:flex;justify-content:space-between;gap:12px;color:var(--dim);font-size:10px}.garden{border-top:1px solid var(--line);padding:17px 36px 23px;background:linear-gradient(0deg,#13211a,transparent)}.garden-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px;font-size:10px;color:var(--dim)}.keys{display:flex;gap:5px;justify-content:center}.key{width:40px;height:35px;padding:0;background:#1a2b22;border-color:#334c3d;color:#b5cab9;font-size:10px;box-shadow:0 3px 0 #070e0a;transition:background .15s,transform .15s}.key.lit{background:var(--gold);color:#0b1412;transform:translateY(2px)}#notice{color:var(--gold)}.empty{font-size:12px;line-height:1.8;color:var(--dim);padding:16px}.focus .sidebar,.focus .garden{display:none}.focus .app{grid-template-columns:1fr}[hidden]{display:none!important}#restore{color:var(--gold)}@media(max-width:760px){header{height:auto;min-height:100px;padding:20px;flex-wrap:wrap}.brand{font-size:24px}.toolbar{flex-wrap:wrap}.app{height:auto;min-height:calc(100dvh - 100px);grid-template-columns:1fr}.sidebar{border-right:0;border-bottom:1px solid var(--line);padding:16px}.notes{display:flex;max-height:110px;flex:none}.note{min-width:180px;max-width:220px}.privacy{display:none}.workspace{min-height:70dvh}.paper{padding:20px 24px 0}#title{font-size:34px}#body{min-height:260px}.editor-tools,.statusbar{padding:16px 24px}.garden{padding:16px 24px}.key{width:8%;height:33px}.garden-top{flex-wrap:wrap}.focus .workspace{min-height:80dvh}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+:root{color-scheme:dark;--bg:#0b1412;--panel:#111d19;--panel2:#15241f;--line:#263a32;--ink:#e6ede4;--dim:#93aa9f;--faint:#4d6559;--gold:#e6c98a;--rose:#f0a3b5;--sky:#8fc8f0;--mint:#9fe0c0;--lilac:#c6b2f2;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{min-height:100vh;background:radial-gradient(ellipse at 80% -10%,#2b3d3355,transparent 50%),radial-gradient(ellipse at 0% 40%,#3a2e4a33,transparent 45%),var(--bg)}
+a{color:inherit}
+header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:18px clamp(16px,4vw,40px);border-bottom:1px solid var(--line)}
+.brand{margin:0;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:28px;letter-spacing:-.5px}
+.brand:before{content:'✳';color:var(--gold);margin-right:10px}
+.brand em{color:var(--gold)}
+nav{display:flex;gap:2px;flex-wrap:wrap;font-size:11px}
+nav a{color:var(--dim);text-decoration:none;padding:8px 11px;border-radius:20px}
+nav a:hover,nav a:focus-visible{color:var(--ink);background:var(--panel2)}
+nav a.new:after{content:'new';font-size:8px;letter-spacing:.12em;color:var(--bg);background:var(--gold);border-radius:8px;padding:1px 5px;margin-left:6px;vertical-align:2px}
+main{max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,40px) 60px}
+.hero{position:relative;margin:28px 0 30px;border:1px solid var(--line);border-radius:22px;overflow:hidden;background:linear-gradient(180deg,#0e1a16,#0b1412);min-height:340px;cursor:text;outline:none}
+.hero:focus-visible{border-color:var(--gold)}
+#field{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hero-copy{position:relative;z-index:1;padding:clamp(22px,5vw,48px);pointer-events:none;max-width:720px}
+.hero h2{margin:0 0 12px;font-family:Georgia,serif;font-weight:normal;font-size:clamp(34px,6vw,62px);line-height:1.02;letter-spacing:-1.5px}
+.hero h2 em{color:var(--gold)}
+.hero p{margin:0;color:var(--dim);font-size:13px;line-height:1.7;max-width:520px}
+.hint{position:absolute;z-index:1;left:clamp(22px,5vw,48px);bottom:22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--dim);pointer-events:none}
+.hint kbd{display:inline-block;min-width:26px;text-align:center;padding:5px 7px;border:1px solid var(--line);border-bottom-width:3px;border-radius:7px;background:var(--panel);color:var(--ink);font:inherit}
+.live{position:absolute;z-index:1;right:22px;top:20px;text-align:right;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);pointer-events:none}
+.live b{display:block;font-size:26px;letter-spacing:-.5px;color:var(--gold);font-weight:500;text-transform:none;font-family:Georgia,serif}
+.live i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mint);margin-right:6px;box-shadow:0 0 10px var(--mint);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.typed{position:absolute;z-index:1;right:22px;bottom:22px;max-width:46%;text-align:right;font-family:Georgia,serif;font-size:18px;color:var(--ink);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:clip;pointer-events:none;direction:rtl}
+.typed span{direction:ltr;unicode-bidi:embed}
+.doors{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.door{position:relative;display:flex;flex-direction:column;gap:10px;padding:22px 20px 18px;border:1px solid var(--line);border-radius:18px;background:var(--panel);text-decoration:none;min-height:230px;transition:transform .18s,border-color .18s,background .18s}
+.door:hover,.door:focus-visible{transform:translateY(-3px);border-color:var(--c);background:var(--panel2);outline:none}
+.door .mark{font-size:26px;color:var(--c)}
+.door h3{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:28px;letter-spacing:-.5px}
+.door p{margin:0;color:var(--dim);font-size:12px;line-height:1.65;flex:1}
+.door .go{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--c)}
+.door .badge{position:absolute;top:16px;right:16px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--bg);background:var(--c);border-radius:10px;padding:3px 8px}
+.subs{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.subs a{font-size:10px;color:var(--dim);text-decoration:none;border:1px solid var(--line);border-radius:14px;padding:4px 9px}
+.subs a:hover{color:var(--ink);border-color:var(--c)}
+section.shelf{margin-top:34px;border-top:1px solid var(--line);padding-top:24px}
+.shelf-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.shelf-head h4{margin:0;font-family:Georgia,serif;font-weight:normal;font-size:22px}
+.shelf-head span{color:var(--dim);font-size:11px}
+.shelf-head a{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);text-decoration:none}
+.chips{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.chip{display:flex;gap:10px;align-items:flex-start;padding:12px 13px;border:1px solid var(--line);border-radius:14px;text-decoration:none;background:#0f1a17}
+.chip:hover,.chip:focus-visible{border-color:var(--gold);outline:none}
+.chip b{display:block;font-weight:500;font-size:12px;margin-bottom:3px}
+.chip small{color:var(--dim);font-size:10px;line-height:1.5}
+.chip .m{color:var(--gold);font-size:16px;width:20px;flex:none;text-align:center}
+footer{margin-top:40px;color:var(--faint);font-size:11px;display:flex;gap:14px;flex-wrap:wrap}
+footer a{color:var(--dim)}
+@media (max-width:980px){.doors{grid-template-columns:repeat(2,1fr)}.chips{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.doors{grid-template-columns:1fr}.door{min-height:0}.hero{min-height:380px}.typed{display:none}.live{top:auto;bottom:62px;left:22px;right:auto;text-align:left}}
+@media (prefers-reduced-motion:reduce){.door{transition:none}.live i{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">Keyboard <em>Bloom</em></h1>
+  <nav aria-label="Keyboard Bloom">
+    <a href="/keyboard/play">Play</a>
+    <a href="/keyboard/rooms" class="new">Rooms</a>
+    <a href="/keyboard/notes">Write</a>
+    <a href="/brick-choir">Arcade</a>
+    <a href="/keyboard/shelf">Shelf</a>
+    <a href="/keyboard-signal">Signal</a>
+  </nav>
+</header>
+<main>
+  <div class="hero" id="hero" tabindex="0" aria-label="A playable field: type any key to hear it">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <div class="hero-copy">
+      <h2>The whole keyboard<br>is an <em>instrument.</em></h2>
+      <p>Go ahead and type something. This page is listening. Every key is a note, every row is an octave, and nothing sounds wrong.</p>
+    </div>
+    <div class="live" id="live" hidden><i></i>notes across PointCast<b id="liveN">—</b></div>
+    <div class="typed" aria-hidden="true"><span id="typed"></span></div>
+    <div class="hint" id="hint"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd><span id="hintText">type anywhere · tap on a phone</span></div>
+  </div>
 
-/* Bloom notebook: warm paper, colored keys, a quiet living margin. */
-:root{--bg:#101813;--panel:#142019;--line:#2b3c2e;--ink:#ede9d7;--dim:#97ab91;--gold:#dfc48d}
-body{background:radial-gradient(ellipse at 86% 0%,#34413255,transparent 43%),var(--bg)}
-header{height:94px;padding:0 32px;background:#101813b8;backdrop-filter:blur(20px)}
-.brand{letter-spacing:-1.3px;font-size:31px}.brand:before{content:'✳';display:inline-block;font-family:Georgia,serif;color:var(--gold);font-size:35px;margin-right:13px;vertical-align:middle}.tag{margin-left:48px;font-size:9px;letter-spacing:.2em}
-.toolbar button,.toolbar select{border-radius:30px;padding:11px 15px;background:#1e2b20}.toolbar button[aria-pressed=true]{background:var(--gold)}
-.app{height:calc(100dvh - 94px);grid-template-columns:282px 1fr}
-.sidebar{padding:26px 17px 18px;background:linear-gradient(155deg,#1d2c20,#111d16)}
-.side-top{font-size:10px;letter-spacing:.1em}.primary{border-radius:25px;padding:10px 13px;letter-spacing:0;box-shadow:0 3px 12px #0003}
-#search{background:#0d171180;border-radius:9px;border-color:#354833;padding:13px 14px}
-.note{position:relative;padding:18px 14px 17px 24px;border-bottom:1px solid #2b3c2e;border-radius:9px;transition:background .2s,border-color .2s}
-.note:before{content:'';position:absolute;left:10px;top:25px;width:4px;height:4px;background:#7f9876;border-radius:50%}.note.selected{background:linear-gradient(110deg,#354732aa,#253623aa);border-color:#72846777;box-shadow:0 5px 20px #0002}.note.selected:before{background:var(--gold);box-shadow:0 0 9px #dfc48d66}.note strong{font-size:18px}.note small{font-size:10px;color:#a1b296}
-.side-bottom button{border-radius:20px}.privacy{margin-bottom:0;color:#a0ad95}.workspace{background:radial-gradient(ellipse at 75% 90%,#26372550,transparent 55%)}
-.editor-tools{padding:24px 38px}.editor-tools button{border-color:transparent;color:#acb59e}.editor-tools button:hover{border-color:var(--line)}
-.paper{padding:12px 58px 0;position:relative;max-width:900px}.paper:before{content:'FIELD NOTES / ' attr(data-number);font-size:9px;letter-spacing:.23em;color:#afbd99;display:block;padding-bottom:32px;flex:none}
-#title{font-size:clamp(34px,4vw,55px);letter-spacing:-1.5px;color:#ece7d0;padding-bottom:22px}#body{color:#d5dbc5;font-size:21px;line-height:1.85;caret-color:var(--gold)}
-.statusbar{padding:16px 38px;color:#9bab90}#saved:before{content:'●';font-size:7px;color:#c4d5a5;vertical-align:2px;margin-right:8px}
-.garden{position:relative;margin:10px 30px 22px;border:1px solid #40533a88;border-radius:16px;background:linear-gradient(135deg,#253b27,#18281d 50%,#233126);padding:20px 24px 23px;box-shadow:0 16px 45px #0002,inset 0 1px 0 #d3dfac0c;overflow:hidden}
-.garden:after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 110%,#c6d87a14,transparent 65%)}
-.garden-top{font-size:9px;letter-spacing:.04em;position:relative;z-index:1}.garden-top>span:first-child{color:#c7d4b0;letter-spacing:.14em}.keys{gap:9px;position:relative;z-index:1}.key{--tone:#b7cb9b;width:56px;height:49px;border-radius:9px;background:color-mix(in srgb,var(--tone) 13%,#1a281c);border:1px solid color-mix(in srgb,var(--tone) 40%,#233321);color:var(--tone);box-shadow:0 5px 0 #09100b,0 6px 10px #0004,inset 0 1px 0 #fff1;font-size:12px}
-.key:nth-child(3n+1){--tone:#dfbe8e}.key:nth-child(3n+2){--tone:#b3c8a4}.key:nth-child(3n){--tone:#9dbbbb}.key.lit{background:var(--tone);color:#132218;box-shadow:0 0 28px color-mix(in srgb,var(--tone) 35%,transparent),0 2px 0 #09100b;transform:translateY(3px)}
-.bloom-orbit{position:absolute;right:41px;top:94px;width:55px;height:55px;pointer-events:none;opacity:.55;transition:transform 1s ease,opacity 1s ease}.bloom-orbit i{position:absolute;width:19px;height:29px;left:18px;top:2px;border:1px solid #acbc8e;border-radius:60% 60% 50% 50%;transform-origin:50% 26px}.bloom-orbit i:nth-child(2){transform:rotate(60deg)}.bloom-orbit i:nth-child(3){transform:rotate(120deg)}.bloom-orbit i:nth-child(4){transform:rotate(180deg)}.bloom-orbit i:nth-child(5){transform:rotate(240deg)}.bloom-orbit i:nth-child(6){transform:rotate(300deg)}.bloom-orbit.alive{transform:rotate(30deg) scale(1.15);opacity:1}
-.focus .paper{max-width:850px;padding-top:45px}.focus .bloom-orbit{display:none}
-@media(max-width:760px){header{height:auto;padding:19px 20px;gap:19px}.brand{font-size:27px}.tag{font-size:8px;margin-left:45px}.toolbar{width:100%;gap:6px}.toolbar button,.toolbar select{padding:9px 11px;font-size:10px}.app{height:auto;grid-template-columns:1fr}.sidebar{padding:18px 20px;gap:13px}.note{min-width:180px}.notes{gap:8px;max-height:105px}.side-bottom{gap:7px}.side-bottom button{padding:7px 10px}.paper{padding:16px 24px 0}.paper:before{padding-bottom:23px}.editor-tools{padding:17px 24px}.bloom-orbit{display:none}#title{font-size:36px}#body{font-size:19px}.garden{margin:8px 16px 16px;padding:17px 15px 20px}.garden-top{line-height:1.7;gap:6px}.keys{gap:5px}.key{width:10%;height:41px;font-size:11px}.statusbar{padding:16px 24px}.workspace{min-height:75dvh}}
-@media(prefers-reduced-motion:reduce){.bloom-orbit,.key,.note{transition:none!important}}
+  <div class="doors">
+    <a class="door" href="/keyboard/play" style="--c:var(--gold)">
+      <span class="mark">♫</span>
+      <h3>Play</h3>
+      <p>The instrument. Play over whatever song is on, record a take, pin it to the wall with a Spotify or YouTube link.</p>
+      <span class="go">Open the instrument →</span>
+    </a>
+    <a class="door" href="/keyboard/rooms" style="--c:var(--rose)">
+      <span class="badge">new</span>
+      <span class="mark">✺</span>
+      <h3>Rooms</h3>
+      <p>Play together from anywhere, locked to one key and tempo. Talk in music, sing the Chorus, bloom one shared sculpture.</p>
+      <span class="go">Start a room →</span>
+    </a>
+    <div class="door" style="--c:var(--sky)">
+      <span class="mark">✎</span>
+      <h3><a href="/keyboard/notes" style="text-decoration:none">Write</a></h3>
+      <p>Writing that makes music. Your words stay in your browser or in the link.</p>
+      <div class="subs"><a href="/keyboard/notes">Notes</a><a href="/keyboard/diary">Key Diary</a><a href="/keyboard/letter">Key Letter</a><a href="/keyboard/studio">Sol Studio</a><a href="/keyboard/garden">Garden</a></div>
+    </div>
+    <div class="door" style="--c:var(--mint)">
+      <span class="mark">◇</span>
+      <h3><a href="/brick-choir" style="text-decoration:none">Games</a></h3>
+      <p>The Brick Choir arcade, games for four on one keyboard, and practice that sounds good when you play well.</p>
+      <div class="subs"><a href="/brick-choir">Brick Choir</a><a href="/keyboard-garden">Garden</a><a href="/keyboard-quartet">Quartet</a><a href="/keyboard-rush">Rush</a><a href="/keyboard/typist">Typist</a></div>
+    </div>
+  </div>
 
-.versions{display:flex;gap:4px;align-items:center;font-size:10px}.versions a{color:var(--dim);text-decoration:none;padding:9px 11px;border-radius:20px;white-space:nowrap}.versions a[aria-current=page]{background:#2c3e2b;color:var(--ink)}.versions small{font-size:8px;color:var(--gold)}@media(max-width:1150px){header{height:auto;min-height:110px;flex-wrap:wrap;padding-block:15px;gap:15px}.app{height:calc(100dvh - 110px)}}@media(max-width:760px){.versions{order:3;flex-wrap:wrap}.versions a{padding:7px 10px}.app{height:auto}}
-.sound-options{position:relative;z-index:1;display:flex;justify-content:center;align-items:center;gap:18px;font-size:9px;color:var(--dim);margin:0 0 18px;flex-wrap:wrap}.sound-options label{display:flex;align-items:center;gap:7px}.sound-options select{font-size:10px;padding:5px 8px;border-radius:20px}.sound-options input{width:80px;accent-color:var(--gold)}.sound-options>span{font-size:9px}.focus .sound-options{display:none}
+  <section class="shelf" aria-label="Small instruments">
+    <div class="shelf-head">
+      <div><h4>Small instruments</h4> <span>one idea each, all tuned to the town's key</span></div>
+      <a href="/keyboard/shelf">The whole shelf →</a>
+    </div>
+    <div class="chips">
+      <a class="chip" href="/keyboard/clock"><span class="m">◷</span><span><b>Key Clock</b><small>the time, as a melody</small></span></a>
+      <a class="chip" href="/keyboard/radio"><span class="m">◉</span><span><b>Town Radio</b><small>everyone's notes, live</small></span></a>
+      <a class="chip" href="/keyboard/loops"><span class="m">∞</span><span><b>Loop Porch</b><small>four-track home-row looper</small></span></a>
+      <a class="chip" href="/keyboard/name"><span class="m">✎</span><span><b>Name Song</b><small>a name, as a song</small></span></a>
+      <a class="chip" href="/keyboard/ear"><span class="m">♪</span><span><b>Ear Trail</b><small>hear it, play it back</small></span></a>
+      <a class="chip" href="/keyboard/weather"><span class="m">☁</span><span><b>Weather Keys</b><small>El Segundo, as music</small></span></a>
+      <a class="chip" href="/keyboard/morse"><span class="m">·–</span><span><b>Morse Melody</b><small>Morse that sounds like a tune</small></span></a>
+      <a class="chip" href="/keyboard/poems"><span class="m">❦</span><span><b>Poem Organ</b><small>poems, line by line</small></span></a>
+      <a class="chip" href="/keyboard/kids"><span class="m">☺</span><span><b>Baby Keys</b><small>a smash pad for toddlers</small></span></a>
+      <a class="chip" href="/keyboard-signal"><span class="m">✳</span><span><b>Signal</b><small>every note, one counter</small></span></a>
+    </div>
+  </section>
 
-body[data-skin=midnight]{--bg:#10111f;--panel:#191b2d;--line:#373a56;--ink:#e2e3f6;--dim:#a3a5c4;--gold:#b5a8ee;--wash:#252744;--sheet:#18192c}
-body[data-skin=paper]{color-scheme:light;--bg:#f3eedf;--panel:#e5dfcd;--line:#c7bfa7;--ink:#37392b;--dim:#6b6d58;--gold:#797448;--wash:#ddd5be;--sheet:#f3eedf}
-body[data-skin=rose]{--bg:#261b23;--panel:#33232d;--line:#62434f;--ink:#f1dfdb;--dim:#c6a3af;--gold:#e7b7a9;--wash:#49303c;--sheet:#2c2029}
-body[data-skin=cobalt]{--bg:#101c3a;--panel:#172a50;--line:#354e7c;--ink:#e1eafd;--dim:#a1b8dd;--gold:#e3c876;--wash:#253d65;--sheet:#152242}
-body[data-skin]:not([data-skin=moss]){background:var(--bg)}body[data-skin]:not([data-skin=moss]) header{background:var(--bg)}body[data-skin]:not([data-skin=moss]) .sidebar,body[data-skin]:not([data-skin=moss]) .illustrator{background:var(--panel)}body[data-skin]:not([data-skin=moss]) .workspace{background:var(--sheet)}body[data-skin]:not([data-skin=moss]) .garden{background:var(--wash);border-color:var(--line)}body[data-skin]:not([data-skin=moss]) #title,body[data-skin]:not([data-skin=moss]) #body{color:var(--ink)}body[data-skin]:not([data-skin=moss]) .note.selected,body[data-skin]:not([data-skin=moss]) .toolbar button,body[data-skin]:not([data-skin=moss]) .toolbar select,body[data-skin]:not([data-skin=moss]) .versions a[aria-current=page]{background:var(--wash);color:var(--ink);border-color:var(--line)}body[data-skin]:not([data-skin=moss]) #search{background:var(--bg);border-color:var(--line)}body[data-skin]:not([data-skin=moss]) .note small,body[data-skin]:not([data-skin=moss]) .privacy,body[data-skin]:not([data-skin=moss]) .garden-top>span:first-child,body[data-skin]:not([data-skin=moss]) .paper:before,body[data-skin]:not([data-skin=moss]) .illustrator p{color:var(--dim)}body[data-skin]:not([data-skin=moss]) .key{background:var(--panel);border-color:var(--line);color:var(--ink)}body[data-skin]:not([data-skin=moss]) .key.lit{background:var(--gold);color:var(--bg)}body[data-skin]:not([data-skin=moss]) .toolbar button[aria-pressed=true]{background:var(--gold);color:var(--bg)}body[data-skin=paper] #notice{color:#656037}body[data-skin=paper] .statusbar,body[data-skin=paper] .editor-tools,body[data-skin=paper] .editor-tools button{color:#666b55}.sound-options{gap:12px}.toolbar{flex-wrap:wrap}.toolbar select{max-width:140px}.app{min-height:650px}
-@media(max-width:760px){.app{min-height:0}.toolbar select{max-width:115px}.sound-options{justify-content:flex-start}.sound-options>span{display:none}}
-.sidebar,.illustrator{min-width:0}.paper{min-width:0}.notes{min-width:0}@media(max-width:760px){.app{grid-template-columns:minmax(0,1fr)}.editor-tools{flex-wrap:wrap}.attached-art{margin-inline:0}.attached-art button{padding:7px}.statusbar{flex-wrap:wrap}}
-#title:focus-visible,#body:focus-visible{outline:1px solid var(--line);outline-offset:5px;border-radius:3px}
-</style></head><body>
-<header><div><h1 class="brand">Keyboard <em>Bloom</em></h1><div class="tag">A little room for your thoughts</div></div><nav class="versions" aria-label="Keyboard versions"><a href="/keyboard" aria-current="page">Notes</a><a href="/keyboard/garden">Garden <small>V2</small></a><a href="/keyboard/studio">Sol Studio <small>V3</small></a><a href="/keyboard/play">Original instrument ↗</a></nav><div class="toolbar"><button id="sound" aria-pressed="false">♪ Sound off</button><select id="voice" aria-label="Typing voice"><option value="bloom">Bloom</option><option value="piano">Soft piano</option><option value="glass">Glass bells</option><option value="harp">Harp</option><option value="marimba">Marimba</option><option value="reed">Reed</option><option value="pad">Cloud pad</option><option value="pluck">Moon pluck</option></select><select id="skin" aria-label="Visual skin"><option value="moss">Moss</option><option value="midnight">Midnight</option><option value="paper">Paper</option><option value="rose">Rose</option><option value="cobalt">Cobalt</option></select><button id="focus" aria-pressed="false">Focus</button><button id="export">Export note ↓</button></div></header>
-<div class="app"><aside class="sidebar" aria-label="Notebook"><div class="side-top"><span>YOUR NOTES <span id="total"></span></span><button class="primary" id="new">+ New note</button></div><input id="search" type="search" aria-label="Search notes" placeholder="Search your thoughts…"><nav class="notes" id="notes" aria-label="Saved notes"></nav><div class="side-bottom"><button id="backup">Back up all</button><button id="import">Import backup</button><button id="trash" aria-pressed="false">Trash</button></div><p class="privacy">Saved in this browser, on this device.<br>Back up your notes to keep a copy.</p></aside>
-<main class="workspace"><div class="editor-tools"><span id="date"></span><div><button id="restore" hidden>Restore note</button> <button id="delete">Move to trash</button></div></div><div class="bloom-orbit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div><section class="paper" data-number="01" aria-label="Note editor"><input id="title" aria-label="Note title" placeholder="Untitled thought" maxlength="300"><textarea id="body" aria-label="Note body" placeholder="Start anywhere. A thought, a list, a little possibility…" spellcheck="true"></textarea></section><div class="statusbar"><span id="saved" role="status">Saved on this device</span><span id="count">0 words</span></div><div class="garden"><div class="garden-top"><span>LET YOUR WORDS MAKE A LITTLE MUSIC</span><span id="notice" role="status">Turn sound on for gentle notes as you type.</span></div><div class="sound-options"><label>Mood <select id="mood"><option value="clean">Clear morning</option><option value="slow">Slow + reverb</option><option value="tape">Tape echoes</option><option value="dream">Dream room</option></select></label><label>Scale <select id="music-scale"><option value="pent">Sunny pentatonic</option><option value="minor">Night garden</option><option value="dorian">Dorian drift</option><option value="whole">Dream tones</option></select></label><label>Volume <input id="volume" type="range" min="0" max="100" value="45" aria-label="Music volume"></label><span>Try a sound. Find your rhythm.</span></div><div class="keys" id="keys" aria-label="Musical keys"></div></div></main></div><input type="file" id="file" accept="application/json,.json" hidden>
+  <footer><span>Keyboard Bloom</span><a href="/keyboard/shelf">Shelf</a><a href="/brick-choir">Brick Choir</a><a href="/">PointCast</a></footer>
+</main>
+
 <script is:inline>
-(()=>{'use strict';
-if(new URLSearchParams(location.search).has('t')){location.replace('/keyboard/play'+location.search+location.hash);return;}
-const $=id=>document.getElementById(id),KEY='pointcast.keyboard.notes.v1';
-let audioBus,reverbSend,delaySend;
-let data={version:1,notes:[],selected:null},trash=false,sound=false,ctx,saveFailed=false,loadedOK=true,initialNote=false;
-const fresh=()=>({id:crypto.randomUUID(),title:'',body:'',created:Date.now(),updated:Date.now(),deleted:false});
-function valid(n){return n&&typeof n.id==='string'&&typeof n.title==='string'&&typeof n.body==='string'&&Number.isFinite(n.created)&&Number.isFinite(n.updated)&&typeof n.deleted==='boolean'}
-try{const raw=localStorage.getItem(KEY);if(raw){const parsed=JSON.parse(raw);if(parsed.version!==1||!Array.isArray(parsed.notes)||!parsed.notes.every(valid))throw Error('Invalid backup');data=parsed}}catch(e){loadedOK=false;$('saved').textContent='Existing notes could not be loaded. Export new work before closing.'}
-if(!data.notes.length){initialNote=true;const n=fresh();data.notes.push(n);data.selected=n.id}
-const current=()=>data.notes.find(n=>n.id===data.selected);
-function persist(){if(!loadedOK)return;try{localStorage.setItem(KEY,JSON.stringify(data));saveFailed=false;$('saved').textContent='Saved on this device'}catch(e){saveFailed=true;$('saved').textContent='Could not save — export your note before closing.'}}
-function title(n){return n.title.trim()||'Untitled thought'}
-function render(){const q=$('search').value.trim().toLowerCase();$('notes').replaceChildren();$('total').textContent=data.notes.filter(n=>!n.deleted).length;const list=data.notes.filter(n=>n.deleted===trash&&(!q||(n.title+' '+n.body).toLowerCase().includes(q))).sort((a,b)=>b.updated-a.updated);for(const n of list){const b=document.createElement('button');b.className='note'+(n.id===data.selected?' selected':'');b.setAttribute('aria-current',n.id===data.selected?'true':'false');const t=document.createElement('strong');t.textContent=title(n);const s=document.createElement('small');s.textContent=n.body.replace(/\s+/g,' ').slice(0,65)||'A blank page, all yours.';b.append(t,s);b.onclick=()=>{data.selected=n.id;persist();render();editor()};$('notes').append(b)}if(!list.length){const e=document.createElement('div');e.className='empty';e.textContent=q?'No matching notes.':trash?'The trash is empty.':'Your next thought starts here.';$('notes').append(e)}$('trash').setAttribute('aria-pressed',trash)}
-function counts(){const text=$('body').value.trim();const words=text?text.split(/\s+/u).length:0;$('count').textContent=words+' '+(words===1?'word':'words')+' · '+$('body').value.length+' characters'}
-function editor(){const n=current();document.querySelector('.paper').dataset.number=String(Math.max(1,data.notes.filter(n=>!n.deleted).findIndex(x=>x.id===n?.id)+1)).padStart(2,'0');$('title').value=n?.title||'';$('body').value=n?.body||'';$('title').disabled=$('body').disabled=!n||n.deleted;$('delete').disabled=!n||n.deleted;$('export').disabled=!n;$('restore').hidden=!n?.deleted;$('date').textContent=n?'CREATED '+new Date(n.created).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'}):'YOUR NOTEBOOK';counts()}
-for(const id of ['title','body'])$(id).addEventListener('input',()=>{const n=current();if(!n||n.deleted)return;n.title=$('title').value;n.body=$('body').value;n.updated=Date.now();bloom();persist();render();counts()});
-$('new').onclick=()=>{const n=fresh();data.notes.push(n);data.selected=n.id;trash=false;$('search').value='';persist();render();editor();$('title').focus()};
-$('search').oninput=render;
-$('trash').onclick=()=>{trash=!trash;data.selected=data.notes.find(n=>n.deleted===trash)?.id||null;persist();render();editor()};
-$('delete').onclick=()=>{const n=current();if(!n)return;n.deleted=true;n.updated=Date.now();data.selected=data.notes.find(n=>!n.deleted)?.id||null;persist();render();editor();$('notice').textContent='Note moved to Trash. You can restore it anytime.'};
-$('restore').onclick=()=>{const n=current();if(!n)return;n.deleted=false;trash=false;persist();render();editor();$('notice').textContent='Note restored.'};
-function download(text,name,type){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-$('export').onclick=()=>{const n=current();if(n)download('# '+title(n)+'\n\n'+n.body+'\n',title(n).replace(/[^a-z0-9_-]/gi,'-').slice(0,80)+'.md','text/markdown')};
-$('backup').onclick=()=>download(JSON.stringify(data,null,2),'keyboard-bloom-notes-'+new Date().toISOString().slice(0,10)+'.json','application/json');
-$('import').onclick=()=>$('file').click();$('file').onchange=async()=>{const file=$('file').files[0];if(!file)return;try{if(file.size>10000000)throw Error();const incoming=JSON.parse(await file.text());if(incoming.version!==1||!Array.isArray(incoming.notes)||!incoming.notes.every(valid))throw Error();const imported=incoming.notes.map(n=>({...n,id:crypto.randomUUID()}));data.notes.push(...imported);if(imported.length){data.selected=imported[0].id;trash=imported[0].deleted}$('search').value='';persist();render();editor();$('notice').textContent=imported.length+' notes imported. Existing notes kept.'}catch(e){$('notice').textContent='That file is not a valid Notes backup (maximum 10 MB).'}finally{$('file').value=''}};
-$('focus').onclick=()=>{const active=document.body.classList.toggle('focus');$('focus').setAttribute('aria-pressed',active);$('focus').textContent=active?'Exit focus':'Focus'};
-let bloomTimer;function bloom(){const b=document.querySelector('.bloom-orbit');b.classList.add('alive');clearTimeout(bloomTimer);bloomTimer=setTimeout(()=>b.classList.remove('alive'),850)}
-const letters='ASDFGHJKL',steps=[0,2,4,7,9,12,14,16,19];for(const letter of letters){const b=document.createElement('button');b.className='key';b.textContent=letter;b.setAttribute('aria-label','Play '+letter);b.onclick=()=>{sound=true;syncSound();play(letter)};$('keys').append(b)}
-function syncSound(){if(audioBus)audioBus.gain.setTargetAtTime(sound?Number($('volume').value)/100:0,ctx.currentTime,.04);$('sound').setAttribute('aria-pressed',sound);$('sound').textContent=sound?'♪ Sound on':'♪ Sound off';$('notice').textContent=sound?'Your words, a little music. Choose a mood below.':'Turn sound on for gentle notes as you type.'}
-$('sound').onclick=()=>{sound=!sound;syncSound();if(sound)play('A')};
-const PREF='pointcast.keyboard.notes.preferences';
-function preferences(){try{localStorage.setItem(PREF,JSON.stringify(Object.fromEntries(['skin','voice','mood','music-scale','volume'].map(id=>[id,$(id).value]))))}catch(e){}}
-try{const prefs=JSON.parse(localStorage.getItem(PREF)||'{}');for(const id of ['skin','voice','mood','music-scale','volume']){const el=$(id),value=prefs[id];if(id==='volume'){if(Number.isFinite(Number(value))&&value!==undefined)el.value=String(Math.max(0,Math.min(100,Number(value))))}else if([...el.options].some(o=>o.value===value))el.value=value}}catch(e){}
-document.body.dataset.skin=$('skin').value;for(const id of ['skin','voice','mood','music-scale','volume'])$(id).addEventListener('change',()=>{document.body.dataset.skin=$('skin').value;preferences()});
-function setupAudio(){if(ctx)return;ctx=new AudioContext();audioBus=ctx.createGain();audioBus.gain.value=Number($('volume').value)/100;const compressor=ctx.createDynamicsCompressor();compressor.threshold.value=-20;compressor.ratio.value=6;audioBus.connect(compressor);compressor.connect(ctx.destination);const verb=ctx.createConvolver(),length=Math.floor(ctx.sampleRate*3.6),impulse=ctx.createBuffer(2,length,ctx.sampleRate);for(let c=0;c<2;c++){const samples=impulse.getChannelData(c);for(let i=0;i<length;i++)samples[i]=(Math.random()*2-1)*Math.pow(1-i/length,2.8)}verb.buffer=impulse;reverbSend=ctx.createGain();reverbSend.gain.value=.5;reverbSend.connect(verb);verb.connect(audioBus);const delay=ctx.createDelay(2),feedback=ctx.createGain(),filter=ctx.createBiquadFilter();delay.delayTime.value=.34;feedback.gain.value=.32;filter.type='lowpass';filter.frequency.value=1700;delaySend=ctx.createGain();delaySend.gain.value=.35;delaySend.connect(delay);delay.connect(filter);filter.connect(feedback);feedback.connect(delay);filter.connect(audioBus)}
-const moods={clean:{pitch:1,length:1,wet:0,echo:0},slow:{pitch:.749,length:2.1,wet:.65,echo:.1},tape:{pitch:.944,length:1.2,wet:.12,echo:.45},dream:{pitch:.5,length:2.8,wet:.8,echo:.2}};
-const scales={pent:[0,2,4,7,9,12,14,16,19],minor:[0,3,5,7,10,12,15,17,19],dorian:[0,2,3,5,7,9,10,12,14],whole:[0,2,4,6,8,10,12,14,16]};
-const voices={bloom:{type:'sine',attack:.015,tail:.65,harmonics:[1,.16]},piano:{type:'sine',attack:.007,tail:1,harmonics:[1,.24,.08]},glass:{type:'sine',attack:.005,tail:1.5,harmonics:[1,.18,.08],ratios:[1,2.76,5.4]},harp:{type:'triangle',attack:.008,tail:.85,harmonics:[1,.08]},marimba:{type:'sine',attack:.006,tail:.26,harmonics:[1,.3],ratios:[1,4]},reed:{type:'triangle',attack:.035,tail:.4,harmonics:[1,.12]},pad:{type:'sine',attack:.14,tail:1.45,harmonics:[1,.3]},pluck:{type:'triangle',attack:.004,tail:.36,harmonics:[1,.2],ratios:[1,2]}};
-function play(key){if(!sound||Number($('volume').value)===0)return;try{setupAudio();audioBus.gain.setTargetAtTime(Number($('volume').value)/100,ctx.currentTime,.04);if(ctx.state==='suspended')ctx.resume();const index=letters.includes(key)?letters.indexOf(key):key.charCodeAt(0)%steps.length,notes=scales[$('music-scale').value],v=voices[$('voice').value],mood=moods[$('mood').value],now=ctx.currentTime,frequency=220*mood.pitch*Math.pow(2,notes[index]/12),volume=Number($('volume').value)/100;v.harmonics.forEach((weight,i)=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type=v.type;o.frequency.value=frequency*(v.ratios?.[i]||i+1);g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(Math.max(.0001,.08*weight),now+v.attack);g.gain.exponentialRampToValueAtTime(.0001,now+v.attack+v.tail*mood.length);o.connect(g);g.connect(audioBus);const wet=ctx.createGain(),echo=ctx.createGain();wet.gain.value=mood.wet;echo.gain.value=mood.echo;g.connect(wet);wet.connect(reverbSend);g.connect(echo);echo.connect(delaySend);o.start(now);o.stop(now+v.attack+v.tail*mood.length+.02);o.onended=()=>{o.disconnect();g.disconnect();wet.disconnect();echo.disconnect()}});const b=$('keys').children[index];b.classList.add('lit');setTimeout(()=>b.classList.remove('lit'),180)}catch(e){sound=false;syncSound();$('notice').textContent='Sound is unavailable in this browser.'}}
-$('volume').oninput=()=>{if(audioBus)audioBus.gain.setTargetAtTime(sound?Number($('volume').value)/100:0,ctx.currentTime,.04)};
-$('mood').onchange=()=>{if(sound)play('A')};$('voice').onchange=()=>{if(sound)play('A')};$('music-scale').onchange=()=>{if(sound)play('D')};
+(() => {
+  const hero = document.getElementById('hero');
+  const cv = document.getElementById('field');
+  const ctx2 = cv.getContext('2d');
+  const typedEl = document.getElementById('typed');
+  const hintText = document.getElementById('hintText');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const COLORS = ['#e6c98a', '#f0a3b5', '#8fc8f0', '#9fe0c0', '#c6b2f2'];
+  const ROWS = ['1234567890-=', 'qwertyuiop[]', 'asdfghjkl;\'', 'zxcvbnm,./'];
+  const PENTA = [0, 2, 4, 7, 9];
+  let W = 0, H = 0, DPR = 1;
+  const blooms = [];
+  let typed = '';
 
-for(const id of ['title','body'])$(id).addEventListener('input',e=>{if(e.inputType==='insertText'&&!e.isComposing&&/^[a-z]$/i.test(e.data||''))play(e.data.toUpperCase())});
-window.addEventListener('beforeunload',e=>{if(saveFailed||!loadedOK){e.preventDefault();e.returnValue=''}});
-window.addEventListener('storage',e=>{if(e.key!==KEY||!e.newValue||!loadedOK)return;try{const incoming=JSON.parse(e.newValue);if(incoming.version!==1||!Array.isArray(incoming.notes)||!incoming.notes.every(valid))return;const n=current(),next=incoming.notes.find(x=>x.id===data.selected);const same=!!n&&!!next&&n.title===next.title&&n.body===next.body&&n.deleted===next.deleted&&JSON.stringify(n.illustration)===JSON.stringify(next.illustration);if(saveFailed||(!same&&['title','body'].includes(document.activeElement?.id))){loadedOK=false;$('saved').textContent='This note changed in another tab. Export your work before reloading.';return}const selected=data.selected;data=incoming;data.selected=data.notes.some(x=>x.id===selected)?selected:data.notes.find(x=>!x.deleted)?.id||null;render();if(!same)editor()}catch(e){}});
-if(!current()||current().deleted){data.selected=data.notes.find(n=>!n.deleted)?.id||null}render();editor();if(initialNote)persist();
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    const r = hero.getBoundingClientRect();
+    W = r.width; H = r.height;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx2.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---------- audio ----------
+  let ac = null, master = null, verb = null;
+  function audio() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return ac; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    ac = new AC();
+    master = ac.createDynamicsCompressor();
+    master.threshold.value = -16; master.ratio.value = 6;
+    const out = ac.createGain(); out.gain.value = 0.8;
+    master.connect(out); out.connect(ac.destination);
+    // small feedback-delay "room"
+    const d = ac.createDelay(1); d.delayTime.value = 0.23;
+    const fb = ac.createGain(); fb.gain.value = 0.32;
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+    verb = ac.createGain(); verb.gain.value = 0.28;
+    verb.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(master);
+    hintText.textContent = 'sound on · keep typing';
+    return ac;
+  }
+  function note(row, col) {
+    const a = audio(); if (!a) return;
+    const deg = PENTA[col % 5] + 12 * Math.floor(col / 5);
+    const midi = 48 + (3 - row) * 12 + deg;
+    const f = 440 * Math.pow(2, (midi - 69) / 12);
+    const t = a.currentTime;
+    const g = a.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.22, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + 1.6);
+    // FM bell: carrier + modulator
+    const car = a.createOscillator(); car.type = 'sine'; car.frequency.value = f;
+    const mod = a.createOscillator(); mod.type = 'sine'; mod.frequency.value = f * 2.001;
+    const mg = a.createGain();
+    mg.gain.setValueAtTime(f * 1.4, t); mg.gain.exponentialRampToValueAtTime(f * 0.05, t + 0.9);
+    mod.connect(mg); mg.connect(car.frequency);
+    const tri = a.createOscillator(); tri.type = 'triangle'; tri.frequency.value = f / 2;
+    const tg = a.createGain(); tg.gain.value = 0.25;
+    tri.connect(tg); tg.connect(g);
+    car.connect(g); g.connect(master); g.connect(verb);
+    [car, mod, tri].forEach(o => { o.start(t); o.stop(t + 1.7); });
+  }
+
+  // ---------- blooms ----------
+  function bloom(ch, row, col) {
+    const x = W * (0.08 + 0.84 * ((col + row * 0.5) / 12.5));
+    const y = H * (0.28 + 0.16 * row) + (Math.random() - 0.5) * 30;
+    blooms.push({ ch, x, y, c: COLORS[(col + row) % COLORS.length], born: performance.now(), petals: 5 + (col % 3), rot: Math.random() * 6.28 });
+    if (blooms.length > 90) blooms.shift();
+    if (reduce) draw();
+  }
+  function draw() {
+    const now = performance.now();
+    ctx2.clearRect(0, 0, W, H);
+    for (let i = blooms.length - 1; i >= 0; i--) {
+      const b = blooms[i];
+      const age = (now - b.born) / 1000;
+      const life = 3.2;
+      if (age > life) { blooms.splice(i, 1); continue; }
+      const k = age / life;
+      const open = Math.min(1, age * 3.2);
+      const r = 10 + 34 * open;
+      const alpha = (1 - k) * (1 - k);
+      ctx2.save();
+      ctx2.translate(b.x, b.y - age * 14);
+      ctx2.rotate(b.rot + age * 0.4);
+      ctx2.globalAlpha = alpha * 0.55;
+      ctx2.fillStyle = b.c;
+      for (let p = 0; p < b.petals; p++) {
+        ctx2.rotate(6.283 / b.petals);
+        ctx2.beginPath();
+        ctx2.ellipse(r * 0.55, 0, r * 0.5, r * 0.2, 0, 0, 6.283);
+        ctx2.fill();
+      }
+      ctx2.globalAlpha = alpha;
+      ctx2.rotate(-(b.rot + age * 0.4));
+      ctx2.fillStyle = '#0b1412';
+      ctx2.beginPath(); ctx2.arc(0, 0, 11 * open + 2, 0, 6.283); ctx2.fill();
+      ctx2.fillStyle = b.c;
+      ctx2.font = '600 ' + Math.round(13 + 5 * open) + 'px ui-monospace,Menlo,monospace';
+      ctx2.textAlign = 'center'; ctx2.textBaseline = 'middle';
+      ctx2.fillText(b.ch.toUpperCase(), 0, 1);
+      ctx2.restore();
+    }
+  }
+  function loop() { draw(); requestAnimationFrame(loop); }
+  if (!reduce) requestAnimationFrame(loop);
+
+  function play(ch) {
+    const c = ch.toLowerCase();
+    for (let r = 0; r < ROWS.length; r++) {
+      const col = ROWS[r].indexOf(c);
+      if (col >= 0) { note(r, col); bloom(ch, r, col); return true; }
+    }
+    if (ch === ' ') { note(2, 0); return true; }
+    return false;
+  }
+
+  addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.key === 'Backspace') { typed = typed.slice(0, -1); typedEl.textContent = typed; return; }
+    if (e.key.length !== 1 || e.repeat) return;
+    if (play(e.key)) {
+      if (e.key === ' ') e.preventDefault();
+      typed = (typed + e.key).slice(-48);
+      typedEl.textContent = typed;
+    }
+  });
+
+  // touch / click: position → row + column
+  hero.addEventListener('pointerdown', e => {
+    const r = hero.getBoundingClientRect();
+    const row = Math.max(0, Math.min(3, Math.floor(((e.clientY - r.top) / r.height) * 4)));
+    const col = Math.max(0, Math.min(ROWS[row].length - 1, Math.floor(((e.clientX - r.left) / r.width) * ROWS[row].length)));
+    note(row, col); bloom(ROWS[row][col], row, col);
+  });
+
+  // ---------- live counter from the town signal ----------
+  const live = document.getElementById('live'), liveN = document.getElementById('liveN');
+  async function signal() {
+    try {
+      const r = await fetch('/api/keyboard/signal', { headers: { accept: 'application/json' } });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (typeof j.globalTotal === 'number') { liveN.textContent = j.globalTotal.toLocaleString(); live.hidden = false; }
+    } catch (e) {}
+  }
+  signal(); setInterval(() => { if (!document.hidden) signal(); }, 30000);
 })();
-</script><!-- Keyboard signal: counts keystrokes (never which keys) toward /keyboard-signal. -->
-<script is:inline src="/keyboard.js" data-listen="true" data-sound="false" async></script>
-</body></html>
+</script>
+</body>
+</html>
