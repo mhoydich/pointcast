@@ -1,0 +1,317 @@
+---
+/**
+ * Homepage 3D art module: Contour Field.
+ *
+ * A live WebGL (three.js) terrain of flowing contour bands and ink voids,
+ * built from the "Hoydich Enterprises Network · El Segundo" poster loop.
+ * The engine lives in src/lib/contour-field.ts and is only fetched when the
+ * section nears the viewport, so the front door's first paint stays light.
+ *
+ * Each Los Angeles day gets its own field number (seed); Shuffle rolls a new
+ * one. Hover bends the bands, tap drops a ripple, drag tilts the camera,
+ * Save still composes a 4:5 poster PNG in the browser. No network, no audio.
+ * Without WebGL (or before the engine arrives) a CSS stripe plate stands in.
+ */
+import { PALETTES } from '../lib/contour-field';
+
+// Must match fieldNumberFor() in the client script below.
+const laDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+function fieldNumberFor(day: string) {
+  let h = 2166136261;
+  for (const ch of day) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return (h % 9000) + 1000;
+}
+const today = laDay(new Date());
+const fieldNo = fieldNumberFor(today);
+const WORDS = [
+  ['Hoydich', 'Enterprises'],
+  ['Network', ''],
+  ['Network', 'El Segundo'],
+];
+---
+
+<section class="cf" id="contour-field" aria-labelledby="cf-title" data-cf data-field={fieldNo} data-day={today}>
+  <div class="cf__top">
+    <p class="cf__place"><span data-cf-place>El Segundo, CA</span></p>
+    <p class="cf__meta">3D · live WebGL · field no. <b data-cf-no>{fieldNo}</b></p>
+    <span class="cf__flag" aria-hidden="true"><i></i><i></i></span>
+  </div>
+
+  <div class="cf__stage" data-cf-stage>
+    <div class="cf__plate" aria-hidden="true"></div>
+    <canvas class="cf__canvas" data-cf-canvas role="img" aria-label="A slowly moving three-dimensional landscape of red, blue, pink and white contour stripes with black ink pools. Move the pointer to bend the stripes, tap to drop a ripple, drag to tilt."></canvas>
+    <p class="cf__hint" data-cf-hint>Hover to bend · tap to ripple · drag to tilt</p>
+    <p class="cf__fps" data-cf-fps aria-hidden="true"></p>
+  </div>
+
+  <div class="cf__foot">
+    <h2 id="cf-title" class="cf__words" aria-label="Hoydich Enterprises Network, El Segundo">
+      {WORDS.map(([a, b], i) => (
+        <span class="cf__word" style={`--i:${i}`} aria-hidden="true"><b>{a}</b>{b && <b>{b}</b>}</span>
+      ))}
+    </h2>
+    <div class="cf__controls" role="group" aria-label="Contour Field controls">
+      <div class="cf__palettes" role="radiogroup" aria-label="Palette">
+        {PALETTES.map((p, i) => (
+          <button type="button" role="radio" aria-checked={i === 0 ? 'true' : 'false'} data-cf-palette={p.id} style={`--sw-a:${p.bands[0]};--sw-b:${p.bands[2]};--sw-c:${p.bands[3]};--sw-bg:${p.bg}`}>
+            <i aria-hidden="true"></i>{p.label}
+          </button>
+        ))}
+      </div>
+      <button type="button" data-cf-ripple>Ripple</button>
+      <button type="button" data-cf-shuffle>Shuffle field</button>
+      <button type="button" data-cf-pause aria-pressed="false">Pause</button>
+      <button type="button" class="cf__save" data-cf-save>Save still ↓</button>
+    </div>
+    <p class="cf__status" data-cf-status role="status" aria-live="polite">Today's field is no. {fieldNo}. Every Los Angeles day gets a new one.</p>
+  </div>
+</section>
+
+<style>
+  .cf {
+    --cf-bg: #f1ede4;
+    --cf-ink: #121114;
+    --cf-red: #e4402f;
+    --cf-blue: #2c50d8;
+    position: relative;
+    margin: 22px 7px 26px 0;
+    padding: clamp(14px, 2.2vw, 26px);
+    border: 2px solid var(--cf-ink);
+    background: var(--cf-bg);
+    box-shadow: 7px 7px 0 var(--cf-blue), 14px 14px 0 var(--cf-red);
+    color: var(--cf-ink);
+    transition: background-color .6s ease, color .6s ease;
+  }
+  .cf[data-palette='night'] { --cf-ink: #f1ede4; --cf-bg: #0b0d1c; --cf-red: #ff4f3a; --cf-blue: #3f7bff; border-color: #0b0d1c; }
+  .cf[data-palette='refinery'] { --cf-bg: #f7e9d7; --cf-ink: #1c0c24; --cf-red: #ff6a3d; --cf-blue: #5a3cf0; }
+
+  .cf__top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .cf__place, .cf__meta, .cf__hint, .cf__status, .cf__controls button, .cf__fps { font-family: var(--pc-font-mono, ui-monospace, monospace); text-transform: uppercase; letter-spacing: .08em; }
+  .cf__place { margin: 0; color: var(--cf-red); font-size: 11px; font-weight: 800; }
+  .cf__meta { margin: 0 0 0 auto; font-size: 10px; opacity: .7; }
+  .cf__meta b { font-weight: 800; }
+  .cf__flag { display: inline-flex; gap: 4px; }
+  .cf__flag i { width: 22px; height: 14px; background: var(--cf-blue); }
+  .cf__flag i + i { background: var(--cf-red); }
+
+  .cf__stage { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--cf-bg); isolation: isolate; }
+  .cf__canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; cursor: grab; touch-action: pan-y; opacity: 0; transition: opacity 1.2s ease; }
+  .cf__canvas:active { cursor: grabbing; }
+  .cf.is-live .cf__canvas { opacity: 1; }
+  /* static stand-in: flat stripes, visible until (or unless) WebGL arrives */
+  .cf__plate {
+    position: absolute; inset: -20%;
+    background: repeating-linear-gradient(100deg, #e4402f 0 18px, #f6f2e9 18px 34px, #2c50d8 34px 52px, #f2a0a6 52px 68px, #9bb1f4 68px 84px, #f6f2e9 84px 100px);
+    filter: url(#cf-wobble);
+    transform: rotate(-4deg);
+    transition: opacity 1.2s ease;
+  }
+  .cf.is-live .cf__plate { opacity: 0; }
+  .cf__hint { position: absolute; left: 12px; bottom: 10px; margin: 0; padding: 6px 9px; background: color-mix(in srgb, var(--cf-bg) 88%, transparent); font-size: 10px; font-weight: 700; pointer-events: none; transition: opacity .8s ease; }
+  .cf.is-touched .cf__hint { opacity: 0; }
+  .cf__fps { position: absolute; right: 10px; top: 8px; margin: 0; font-size: 9px; opacity: .45; pointer-events: none; }
+
+  .cf__foot { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px 24px; align-items: end; margin-top: 16px; }
+  .cf__words { position: relative; margin: 0; min-height: 2.05em; font: 900 clamp(34px, 6.4vw, 82px)/.9 'Archivo Black', 'Arial Black', 'Helvetica Neue', Helvetica, sans-serif; letter-spacing: -.01em; text-transform: uppercase; }
+  .cf__word { position: absolute; inset: 0 auto auto 0; display: flex; flex-direction: column; opacity: 0; animation: cf-word 9s steps(1, end) infinite; animation-delay: calc(var(--i) * 3s); }
+  .cf__word b { display: block; font-weight: inherit; white-space: nowrap; }
+  .cf__word b + b { font-size: .62em; line-height: 1.05; }
+  @keyframes cf-word { 0% { opacity: 1; } 33.33% { opacity: 0; } 100% { opacity: 0; } }
+
+  .cf__controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .cf__palettes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cf__controls button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 9px 13px; border: 2px solid var(--cf-ink); background: transparent; color: var(--cf-ink); font-size: 10px; font-weight: 800; cursor: pointer; transition: transform .15s ease, background-color .2s ease, color .2s ease; }
+  .cf__controls button:hover { transform: translate(-2px, -2px); box-shadow: 2px 2px 0 var(--cf-ink); }
+  .cf__controls button:active { transform: none; box-shadow: none; }
+  .cf__controls button[aria-checked='true'], .cf__controls button[aria-pressed='true'] { background: var(--cf-ink); color: var(--cf-bg); }
+  .cf__controls .cf__save { background: var(--cf-red); border-color: var(--cf-red); color: #fff; }
+  .cf__controls button i { width: 18px; height: 12px; border: 1px solid currentColor; background: linear-gradient(90deg, var(--sw-a) 0 33%, var(--sw-b) 33% 66%, var(--sw-c) 66%); }
+  .cf__controls button:disabled { opacity: .4; cursor: default; transform: none; box-shadow: none; }
+  .cf__status { grid-column: 1 / -1; margin: 0; font-size: 10px; line-height: 1.6; opacity: .72; }
+  .cf a:focus-visible, .cf button:focus-visible, .cf canvas:focus-visible { outline: 3px solid var(--cf-blue); outline-offset: 3px; }
+
+  @media (max-width: 760px) {
+    .cf { margin-right: 14px; box-shadow: 5px 5px 0 var(--cf-blue), 10px 10px 0 var(--cf-red); }
+    .cf__stage { aspect-ratio: 4 / 5; }
+    .cf__meta { display: none; }
+    .cf__foot { grid-template-columns: 1fr; }
+    .cf__controls { justify-content: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cf__word { animation: none; }
+    .cf__word:last-child { opacity: 1; }
+    .cf__canvas, .cf__plate, .cf__hint { transition: none; }
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <filter id="cf-wobble"><feTurbulence type="fractalNoise" baseFrequency="0.006 0.012" numOctaves="2" seed="7" /><feDisplacementMap in="SourceGraphic" scale="60" /></filter>
+</svg>
+
+<script>
+  import type { ContourField } from '../lib/contour-field';
+
+  // Must match fieldNumberFor() in the frontmatter above.
+  function fieldNumberFor(day: string) {
+    let h = 2166136261;
+    for (const ch of day) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+    return (h % 9000) + 1000;
+  }
+  const laDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+  function mount() {
+    const root = document.querySelector<HTMLElement>('[data-cf]');
+    if (!root || root.dataset.cfMounted) return;
+    root.dataset.cfMounted = '1';
+
+    const canvas = root.querySelector<HTMLCanvasElement>('[data-cf-canvas]')!;
+    const status = root.querySelector<HTMLElement>('[data-cf-status]')!;
+    const noEl = root.querySelector<HTMLElement>('[data-cf-no]')!;
+    const fpsEl = root.querySelector<HTMLElement>('[data-cf-fps]')!;
+    const pauseBtn = root.querySelector<HTMLButtonElement>('[data-cf-pause]')!;
+    const buttons = root.querySelectorAll<HTMLButtonElement>('.cf__controls button');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // the build-time day can be stale on a cached page; the client date wins
+    let fieldNo = fieldNumberFor(laDay());
+    noEl.textContent = String(fieldNo);
+    let field: ContourField | null = null;
+    let loading = false;
+    const say = (msg: string) => { status.textContent = msg; };
+
+    buttons.forEach((b) => { b.disabled = true; });
+
+    async function boot() {
+      if (loading || field) return;
+      loading = true;
+      try {
+        const mod = await import('../lib/contour-field');
+        if (!mod.supportsWebGL()) {
+          say('This browser has WebGL switched off, so the field is showing its printed plate.');
+          return;
+        }
+        field = mod.createContourField({
+          canvas,
+          seed: fieldNo,
+          reducedMotion: reduced,
+          onFrame: (fps) => { fpsEl.textContent = `${fps} fps`; },
+        });
+        root!.classList.add('is-live');
+        buttons.forEach((b) => { b.disabled = false; });
+        if (reduced) say(`Field no. ${fieldNo} is holding still (reduced motion). Taps and drags still move it.`);
+      } catch (err) {
+        console.warn('[contour-field]', err);
+        say('The 3D field could not start here, so the printed plate stands in.');
+      } finally {
+        loading = false;
+      }
+    }
+
+    // fetch three.js only when the module is about to be seen
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) void boot();
+        field?.setVisible(entry.isIntersecting && document.visibilityState === 'visible');
+      }
+    }, { rootMargin: '300px 0px' });
+    io.observe(root);
+
+    const onVisibility = () => field?.setVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', onVisibility);
+
+    let scrollQueued = false;
+    const onScroll = () => {
+      if (scrollQueued) return;
+      scrollQueued = true;
+      requestAnimationFrame(() => {
+        scrollQueued = false;
+        const r = root.getBoundingClientRect();
+        const vh = window.innerHeight || 1;
+        field?.setScroll((vh - r.top) / (vh + r.height));
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    canvas.addEventListener('pointerdown', () => root.classList.add('is-touched'), { once: true });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-cf-palette]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!field) return;
+        const pal = field.setPalette(btn.dataset.cfPalette!);
+        root.dataset.palette = pal.id;
+        root.querySelectorAll('[data-cf-palette]').forEach((b) => b.setAttribute('aria-checked', String(b === btn)));
+        say(`Palette: ${pal.label}.`);
+      });
+    });
+    root.querySelector('[data-cf-ripple]')?.addEventListener('click', () => { field?.ripple(); });
+    root.querySelector('[data-cf-shuffle]')?.addEventListener('click', () => {
+      if (!field) return;
+      fieldNo = 1000 + Math.floor(Math.random() * 9000);
+      field.setSeed(fieldNo);
+      noEl.textContent = String(fieldNo);
+      say(`Shuffled to field no. ${fieldNo}. Reload to come back to today's.`);
+    });
+    pauseBtn.addEventListener('click', () => {
+      if (!field) return;
+      const next = pauseBtn.getAttribute('aria-pressed') !== 'true';
+      pauseBtn.setAttribute('aria-pressed', String(next));
+      pauseBtn.textContent = next ? 'Play' : 'Pause';
+      field.setPaused(next);
+      say(next ? 'Paused. The field still answers the pointer.' : 'Playing.');
+    });
+
+    root.querySelector('[data-cf-save]')?.addEventListener('click', () => {
+      if (!field) return;
+      const src = field.snapshot();
+      const style = getComputedStyle(root);
+      const bg = style.getPropertyValue('--cf-bg').trim() || '#f1ede4';
+      const ink = style.getPropertyValue('--cf-ink').trim() || '#121114';
+      const red = style.getPropertyValue('--cf-red').trim() || '#e4402f';
+      const blue = style.getPropertyValue('--cf-blue').trim() || '#2c50d8';
+      const W = 1080, H = 1350, pad = 54, artH = 960;
+      const out = document.createElement('canvas');
+      out.width = W; out.height = H;
+      const ctx = out.getContext('2d')!;
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      // cover-crop the live frame into the art window
+      const aw = W - pad * 2, ar = aw / artH, sr = src.width / src.height;
+      const sw = sr > ar ? src.height * ar : src.width;
+      const sh = sr > ar ? src.height : src.width / ar;
+      ctx.drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, pad, 96, aw, artH);
+      ctx.font = '800 22px ui-monospace, Menlo, monospace';
+      ctx.fillStyle = red; ctx.textBaseline = 'middle';
+      ctx.fillText('EL SEGUNDO, CA', pad, 52);
+      ctx.fillStyle = blue; ctx.fillRect(W - pad - 70, 42, 32, 20);
+      ctx.fillStyle = red; ctx.fillRect(W - pad - 32, 42, 32, 20);
+      ctx.fillStyle = ink; ctx.textBaseline = 'alphabetic';
+      ctx.font = '900 118px "Archivo Black", "Arial Black", Helvetica, sans-serif';
+      ctx.fillText('NETWORK', pad - 4, 1180);
+      ctx.font = '900 74px "Archivo Black", "Arial Black", Helvetica, sans-serif';
+      ctx.fillText('EL SEGUNDO', pad - 2, 1262);
+      ctx.font = '700 18px ui-monospace, Menlo, monospace';
+      ctx.globalAlpha = .7;
+      ctx.fillText(`POINTCAST.XYZ · CONTOUR FIELD NO. ${fieldNo}`, pad, 1310);
+      ctx.globalAlpha = 1;
+      out.toBlob((blob) => {
+        if (!blob) { say('Could not save that frame. Try again.'); return; }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `pointcast-contour-field-${fieldNo}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        say(`Saved field no. ${fieldNo} as a 4:5 poster.`);
+      }, 'image/png');
+    });
+
+    document.addEventListener('astro:before-swap', () => {
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('scroll', onScroll);
+      field?.dispose();
+      field = null;
+    }, { once: true });
+  }
+
+  mount();
+  document.addEventListener('astro:page-load', mount);
+</script>
