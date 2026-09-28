@@ -30,7 +30,7 @@ const moment = (over = {}) => ({ value: '1-4', at: FRI_741, support: 5, bylines:
 const byId = (edition, id) => edition.slots.find((s) => s.id === id);
 const full = (date = SAT) => ({
   sky: { marine: klaxOn(date), beach: { value: 'none', at: SAT_631, support: 1, bylines: ['@jen'], reportIds: [rid(9)] } },
-  courts: { yesterday: moment(), lastWeek: moment({ value: '5+', at: Date.parse('2026-09-25T14:38:00Z'), support: 3, reportIds: [rid(7)] }) },
+  courts: { yesterday: moment(), lastWeek: moment({ value: '5-8', at: Date.parse('2026-09-25T14:38:00Z'), support: 3, reportIds: [rid(7)] }) },
   price: pickPrice({ releases: calendar.releases, changes: register.changes, paddles: register.backfill, date: SAT }),
   town: { kind: 'news', label: 'Field Reports', line: 'Two stations are on the air.', link: '/r', date: '2026-10-02' },
   pick: { blockId: '0612', title: 'Drum Party' },
@@ -141,7 +141,7 @@ test('composeEdition: a single report is labeled "1 reporter"', () => {
   const one = moment({ value: '0', support: 1, bylines: ['Guest 4471'], reportIds: [rid(1)] });
   const e = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX, beach: null }, courts: { yesterday: one, lastWeek: null } } });
   const courts = byId(e, 'courts');
-  assert.equal(courts.line, 'Yesterday 7:41 AM: 0 waiting · walk on, 1 reporter — Guest 4471. Next Court Call Fri 7:30 AM on 7.500.');
+  assert.equal(courts.line, 'Yesterday 7:41 AM: open · rack empty, walk on, 1 reporter — Guest 4471. Next Court Call Fri 7:30 AM on 7.500.');
   assert.equal(courts.fallback, false);
   assert.deepEqual(courts.reportIds, [rid(1)]);
   assert.deepEqual(courts.bylines, ['Guest 4471']);
@@ -159,7 +159,7 @@ test('composeEdition: the full Saturday edition, with bylines and reporters', ()
   assert.equal(e.cutoff, '2026-10-03T13:45:00Z');
   assert.equal(e.provisional, false);
   assert.equal(byId(e, 'courts').line,
-    'Yesterday 7:41 AM: 1–4 waiting, 5 agree — @mike, Guest 4471, @sam +2. A week before, Fri 25 Sep 7:38 AM: 5+ waiting, 3 agree. Next Court Call Fri 7:30 AM on 7.500.');
+    'Yesterday 7:41 AM: 1–4 in the rack, 5 agree — @mike, Guest 4471, @sam +2. A week before, Fri 25 Sep 7:38 AM: 5–8 in the rack, 3 agree. Next Court Call Fri 7:30 AM on 7.500.');
   assert.deepEqual(byId(e, 'courts').reportIds, [rid(1), rid(2), rid(3)], 'last week is summarized, not named, so not cited');
   assert.equal(byId(e, 'price').line, 'Gearbox Pressure X shipped Oct 1 at $279.99 MSRP. From the register, no link.');
   assert.equal(byId(e, 'town').line, 'Field Reports: Two stations are on the air.');
@@ -179,7 +179,7 @@ test('composeEdition: report numbers fill templates, and free text never becomes
   const sneaky = composeEdition({
     date: SAT, config, sources: {
       sky: { marine: KLAX, beach: { value: 'OPEN BAR AT THE PIER', at: SAT_631, support: 4, bylines: ['@jen'], reportIds: [rid(9)] } },
-      courts: { yesterday: moment({ value: '5+', label: 'COURTS CLOSED FOREVER', bylines: ['@mike', '<img src=x>', 'Mayor of El Segundo'] }) },
+      courts: { yesterday: moment({ value: '5-8', label: 'COURTS CLOSED FOREVER', bylines: ['@mike', '<img src=x>', 'Mayor of El Segundo'] }) },
       town: { kind: 'shortwave', text: 'BREAKING: courts closed forever!! see https://spam.example/x now', handle: 'jen', at: '2026-10-03T03:12:00Z' },
       pick: { blockId: '0612', title: 'Drum Party' },
     },
@@ -191,7 +191,7 @@ test('composeEdition: report numbers fill templates, and free text never becomes
   assert.equal(sky.source, 'klax-asos');
   assert.deepEqual(sky.reportIds, [], 'and cites nobody');
   const courts = byId(sneaky, 'courts');
-  assert.match(courts.line, /^Yesterday 7:41 AM: 5\+ waiting, 5 agree — @mike\. /, 'the config label for the bucket, the count as a number');
+  assert.match(courts.line, /^Yesterday 7:41 AM: 5–8 in the rack, 5 agree — @mike\. /, 'the config label for the bucket, the count as a number');
   assert.ok(!courts.line.includes('CLOSED') && !courts.line.includes('<img') && !courts.line.includes('Mayor'), 'labels and names that are not bylines are dropped');
   assert.deepEqual(courts.bylines, ['@mike']);
   const town = byId(sneaky, 'town');
@@ -203,8 +203,8 @@ test('composeEdition: report numbers fill templates, and free text never becomes
     assert.ok(!/BREAKING|CLOSED|OPEN BAR/.test(e.title + e.masthead + first), 'free text is never the title, masthead or lead');
   }
   // A label is read back only when it is exactly one the config prints.
-  const byLabel = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { yesterday: { at: '07:41', label: '1–4 waiting', support: 2, bylines: ['@mike', '@sam'], more: 1 } } } });
-  assert.equal(byId(byLabel, 'courts').line.split('. ')[0], 'Yesterday 7:41 AM: 1–4 waiting, 2 agree — @mike, @sam +1', 'the spot page\'s yesterday view works too');
+  const byLabel = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { yesterday: { at: '07:41', label: '1–4 in the rack', support: 2, bylines: ['@mike', '@sam'], more: 1 } } } });
+  assert.equal(byId(byLabel, 'courts').line.split('. ')[0], 'Yesterday 7:41 AM: 1–4 in the rack, 2 agree — @mike, @sam +1', 'the spot page\'s yesterday view works too');
 });
 
 test('provisional: a hole in KLAX or the report store is served, never frozen', () => {
@@ -426,7 +426,7 @@ test('momentOf: yesterday\'s last reading, its bylines and the reports behind it
   const c = { report_id: a.id, pid_hash: 'cccc'.padEnd(16, '0'), ip_hash: 'ccccff'.padEnd(16, '0'), user_id: null, verdict: 'still', value: '1-4', onsite: 1, at: t0 + 5 * MIN };
   const m = momentOf({ spot: 'courts', cfg: COURTS, rows: [a, b, remote, agent], confirms: [c], day: '2026-10-02' });
   assert.equal(m.value, '1-4');
-  assert.equal(m.label, '1–4 waiting');
+  assert.equal(m.label, '1–4 in the rack');
   assert.equal(m.support, 3);
   assert.equal(m.at, t0 + 5 * MIN, 'the last on-site moment of the day');
   assert.deepEqual(m.bylines, ['@mike', '@sam', guestByline(c.pid_hash)]);
@@ -439,7 +439,7 @@ test('momentOf: yesterday\'s last reading, its bylines and the reports behind it
   assert.equal(early.support, 1, '`until` cuts the day at the cutoff');
   assert.deepEqual(early.reportIds, [a.id]);
   const e = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { yesterday: m } } });
-  assert.equal(byId(e, 'courts').line, `Yesterday 7:41 AM: 1–4 waiting, 3 agree — @mike, @sam, ${m.bylines[2]}. Next Court Call Fri 7:30 AM on 7.500.`);
+  assert.equal(byId(e, 'courts').line, `Yesterday 7:41 AM: 1–4 in the rack, 3 agree — @mike, @sam, ${m.bylines[2]}. Next Court Call Fri 7:30 AM on 7.500.`);
   assert.deepEqual(byId(e, 'courts').reportIds, [a.id, b.id]);
   const fog = momentOf({ spot: 'beach', cfg: BEACH, rows: [report('ffff', '@jen', 'none', SAT_631, { spot: 'beach', kind: 'fog', day: SAT })], day: SAT, until: cutoffMs(SAT) });
   assert.equal(fog.label, "Can't see the pier");

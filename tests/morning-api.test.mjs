@@ -152,9 +152,9 @@ function saturday() {
     mike: t.report({ spot: 'courts', value: '1-4', at: AT('2026-10-02T14:36:00Z'), day: FRI, dev: 'a', user: 'u-mike', byline: '@mike' }),
     guest: t.report({ spot: 'courts', value: '1-4', at: AT('2026-10-02T14:38:00Z'), day: FRI, dev: 'b' }),
     sam: t.report({ spot: 'courts', value: '1-4', at: AT('2026-10-02T14:39:00Z'), day: FRI, dev: 'c', user: 'u-sam', byline: '@sam' }),
-    remote: t.report({ spot: 'courts', value: '5+', at: AT('2026-10-02T14:40:00Z'), day: FRI, dev: 'd', onsite: 0 }),
+    remote: t.report({ spot: 'courts', value: '5-8', at: AT('2026-10-02T14:40:00Z'), day: FRI, dev: 'd', onsite: 0 }),
     agent: t.report({ spot: 'courts', value: '0', at: AT('2026-10-02T14:40:30Z'), day: FRI, dev: 'e', onsite: 0, source: 'agent:cc', byline: 'cc' }),
-    lastFri: t.report({ spot: 'courts', value: '5+', at: AT('2026-09-25T14:38:00Z'), day: '2026-09-25', dev: 'g' }),
+    lastFri: t.report({ spot: 'courts', value: '5-8', at: AT('2026-09-25T14:38:00Z'), day: '2026-09-25', dev: 'g' }),
     beach: t.report({ spot: 'beach', value: 'none', at: AT('2026-10-03T13:31:00Z'), day: SAT, dev: 'h' }),
     late: t.report({ spot: 'beach', value: 'clear', at: AT('2026-10-03T13:50:00Z'), day: SAT, dev: 'i' }),
   };
@@ -194,7 +194,7 @@ test('No. 1: the first read after 6:45 freezes the edition and pays one byline p
   assert.equal(slot(e, 'sky').source, 'klax-asos+air');
   assert.deepEqual(slot(e, 'sky').reportIds, [t.ids.beach]);
   assert.equal(slot(e, 'courts').line,
-    `Yesterday 7:41 AM: 1–4 waiting, 4 agree — @mike, ${guestByline(PID.b)}, @sam +1. A week before, Fri 25 Sep 7:38 AM: 5+ waiting, 1 reporter. Next Court Call Fri 7:30 AM on 7.500.`);
+    `Yesterday 7:41 AM: 1–4 in the rack, 4 agree — @mike, ${guestByline(PID.b)}, @sam +1. A week before, Fri 25 Sep 7:38 AM: 5–8 in the rack, 1 reporter. Next Court Call Fri 7:30 AM on 7.500.`);
   assert.deepEqual(slot(e, 'courts').reportIds, [t.ids.mike, t.ids.guest, t.ids.sam], 'reports only: no remote, agent or last-week rows; the confirmer is named, not cited');
   assert.deepEqual(slot(e, 'courts').bylines, ['@mike', guestByline(PID.b), '@sam', '@jen'], 'a signed-in confirmer reads as their card');
   assert.equal(slot(e, 'town').line, 'On Shortwave at 8:12 PM: "Lights out on court 4." — @jen', 'the newest card post not by the house; its link is dropped');

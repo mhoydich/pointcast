@@ -73,10 +73,10 @@ function frozenEdition(date) {
 
 const COURTS_PAYLOAD = {
   spot: { id: 'courts', name: 'The courts', short: 'COURTS', channel: 'CRT', color: '#3B6D11', mhz: 7.5, kind: 'wait', question: 'How many waiting?', options: [], extras: [], decayMin: 45, courtCall: { weekday: 5, time: '07:30' } },
-  reading: { value: '1-4', label: '1–4 waiting', status: 'agree', support: 3, reportId: 'ar_00000000000000000003', observedAt: '2026-10-05T15:48:00Z', ageMin: 12, bars: 4, liveUntil: '2026-10-05T16:33:00Z', bylines: ['@mike', 'Guest 4471', '@sam'], crew: null, last: null },
-  today: [{ id: 'ar_00000000000000000003', at: '08:48', byline: '@mike', value: '1-4', label: '1–4 waiting', onsite: true, agent: false, confirms: 2, live: true }],
-  yesterday: { at: '07:41', label: '1–4 waiting', support: 5, bylines: ['@mike', 'Guest 4471', '@sam'], more: 2 },
-  lastWeek: { date: '2026-09-28', at: '07:38', label: '5+ waiting', support: 3 },
+  reading: { value: '1-4', label: '1–4 in the rack', status: 'agree', support: 3, reportId: 'ar_00000000000000000003', observedAt: '2026-10-05T15:48:00Z', ageMin: 12, bars: 4, liveUntil: '2026-10-05T16:33:00Z', bylines: ['@mike', 'Guest 4471', '@sam'], crew: null, last: null },
+  today: [{ id: 'ar_00000000000000000003', at: '08:48', byline: '@mike', value: '1-4', label: '1–4 in the rack', onsite: true, agent: false, confirms: 2, live: true }],
+  yesterday: { at: '07:41', label: '1–4 in the rack', support: 5, bylines: ['@mike', 'Guest 4471', '@sam'], more: 2 },
+  lastWeek: { date: '2026-09-28', at: '07:38', label: '5–8 in the rack', support: 3 },
   typical: null,
   editorGuess: null,
   serverTime: '2026-10-05T16:00:00Z',
@@ -120,9 +120,9 @@ test('air_latest reads the public spot endpoint and returns the reading, yesterd
     assert.equal(calls[0].headers.get('X-PC-Device'), null, 'no device id: an agent reads what any visitor reads');
     const [line, body] = res.result.content.map((c) => c.text);
     assert.match(line, /^The courts · 7\.500 · How many waiting\?/);
-    assert.match(line, /Now: 1–4 waiting · 3 agree · 12 min ago · @mike, Guest 4471, @sam/);
-    assert.match(line, /Yesterday 07:41: 1–4 waiting, 5 agree · @mike, Guest 4471, @sam \+2/);
-    assert.match(line, /Same day last week \(2026-09-28\) 07:38: 5\+ waiting/);
+    assert.match(line, /Now: 1–4 in the rack · 3 agree · 12 min ago · @mike, Guest 4471, @sam/);
+    assert.match(line, /Yesterday 07:41: 1–4 in the rack, 5 agree · @mike, Guest 4471, @sam \+2/);
+    assert.match(line, /Same day last week \(2026-09-28\) 07:38: 5–8 in the rack/);
     const latest = JSON.parse(body);
     assert.deepEqual(Object.keys(latest).sort(), ['lastWeek', 'reading', 'serverTime', 'spot', 'url', 'yesterday']);
     assert.equal(latest.url, `${BASE}/r/courts`);
@@ -132,10 +132,10 @@ test('air_latest reads the public spot endpoint and returns the reading, yesterd
     assert.doesNotMatch(body, /"you"|crewMember|pid_hash|ip_hash/);
   });
   // One report yesterday reads "1 reporter", never "1 agree".
-  const single = { ...COURTS_PAYLOAD, yesterday: { at: '07:41', label: '1–4 waiting', support: 1, bylines: ['@jen'] } };
+  const single = { ...COURTS_PAYLOAD, yesterday: { at: '07:41', label: '1–4 in the rack', support: 1, bylines: ['@jen'] } };
   await withStubs({ respond: () => jsonResponse(single) }, async () => {
     const line = (await call(rpc, 'air_latest', { spot: 'courts' })).result.content[0].text;
-    assert.match(line, /Yesterday 07:41: 1–4 waiting, 1 reporter · @jen$/m);
+    assert.match(line, /Yesterday 07:41: 1–4 in the rack, 1 reporter · @jen$/m);
     assert.doesNotMatch(line, /1 agree/);
   });
 });
