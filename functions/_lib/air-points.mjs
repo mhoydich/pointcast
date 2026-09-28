@@ -90,8 +90,13 @@ export const placeStamp = (spot, day) => ({ kind: 'place', ref: spot, day });
 export const crewStamp = (spot, day) => ({ kind: 'crew', ref: spot, day });
 export const badgeStamp = (badge) => ({ kind: 'badge', ref: badge, day: '-' });
 
-/** What outranks what on a receipt, highest first. A crew stamp ranks as morning-crew. */
-export const RECEIPT_ORDER = Object.freeze(['morning-crew', 'first-light', 'still-true', 'place']);
+/**
+ * What outranks what on a receipt, highest first. A crew stamp ranks as
+ * morning-crew. 'assignment' is the display-only ASSIGNMENT stamp a filled
+ * seat slams beside the place stamp (assignReceiptStamp in air-assign.mjs):
+ * never an air_stamps row, it carries its own text.
+ */
+export const RECEIPT_ORDER = Object.freeze(['assignment', 'morning-crew', 'first-light', 'still-true', 'place']);
 
 /**
  * Pure: the stamps a receipt slams, from what one report or confirm wrote or
@@ -123,8 +128,9 @@ export function dayStamp(day) {
   return `${DOW[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]} ${String(d).padStart(2, '0')} ${MON[m - 1]} ${y}`;
 }
 
-/** What a stamp prints: "COURTS · FRI 02 OCT 2026", "MORNING CREW · COURTS · …", or the badge label. */
+/** What a stamp prints: "COURTS · FRI 02 OCT 2026", "MORNING CREW · COURTS · …", the badge label, or an ASSIGNMENT stamp's own text. */
 export function stampText(stamp, short) {
+  if (stamp.kind === 'assignment') return stamp.text;
   if (stamp.kind === 'badge') return BADGES[stamp.ref]?.label ?? stamp.ref.toUpperCase();
   const place = `${short} · ${dayStamp(stamp.day)}`;
   return stamp.kind === 'crew' ? `${BADGES['morning-crew'].label} · ${place}` : place;

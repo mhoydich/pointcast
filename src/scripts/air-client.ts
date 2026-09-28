@@ -148,6 +148,33 @@ export function laStamp(when: number | Date = new Date()): string {
   return `${wd} ${laClock(d)}`;
 }
 
+/**
+ * An assignment's LA day: "Today", "Tomorrow", else "Mon 5 Oct". Calls go up
+ * to a week out, so a bare weekday would read a call seven days away as today.
+ */
+function laDayWord(when: number | string | Date, now: number = Date.now()): string {
+  const d = when instanceof Date ? when : new Date(when);
+  const [y, m, day] = laDay(d).split('-').map(Number);
+  const [ny, nm, nd] = laDay(now).split('-').map(Number);
+  const ahead = Math.round((Date.UTC(y, m - 1, day) - Date.UTC(ny, nm - 1, nd)) / 86_400_000);
+  if (ahead === 0) return 'Today';
+  if (ahead === 1) return 'Tomorrow';
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: LA, weekday: 'short' }).format(d);
+  return `${wd} ${day} ${MON[m - 1].charAt(0)}${MON[m - 1].slice(1).toLowerCase()}`;
+}
+
+/** "Tomorrow 6:00 AM", "Mon 5 Oct 5:00 PM": when an assignment ahead opens, LA time. The strip and the spot badge both print this. */
+function laWhen(when: number | string | Date, now: number = Date.now()): string {
+  const d = when instanceof Date ? when : new Date(when);
+  return `${laDayWord(d, now)} ${new Intl.DateTimeFormat('en-US', { timeZone: LA, hour: 'numeric', minute: '2-digit', hour12: true }).format(d)}`;
+}
+
+/** "2 seats open", "1 of 2 seats open": the seats left, never the seats taken, so a fresh call never reads as full. */
+function seatsOpenText(seatsLeft: number, seats: number): string {
+  if (seatsLeft >= seats) return `${seats} ${seats === 1 ? 'seat' : 'seats'} open`;
+  return `${Math.max(0, seatsLeft)} of ${seats} seats open`;
+}
+
 /** The LA day "YYYY-MM-DD" of a moment. */
 export function laDay(when: number | Date = new Date()): string {
   const d = when instanceof Date ? when : new Date(when);
@@ -305,7 +332,7 @@ function typeIn(el: HTMLElement, text: string, ms = 300): Promise<void> {
 }
 
 /** A stamp node. `slam` runs the 120 ms slam + 80 ms ink bleed (a 150 ms fade under reduced motion). */
-function makeStamp(text: string, kind: 'place' | 'crew' | 'badge' | 'queued' | 'mini' = 'place', slam = false): HTMLElement {
+function makeStamp(text: string, kind: 'place' | 'crew' | 'badge' | 'assignment' | 'queued' | 'mini' = 'place', slam = false): HTMLElement {
   const s = document.createElement('span');
   s.className = `air-stamp air-stamp--${kind}`;
   s.setAttribute('role', 'img');
@@ -330,6 +357,8 @@ type Reading = {
 type TodayRow = { id: string; at: string; byline: string; value: string; onsite: boolean; confirms: number; live: boolean };
 /** What this phone did today, from GET with the X-PC-Device header. */
 type You = { reportId: string | null; confirmed: string[]; crewMember: boolean };
+/** The spot's next unvoided assignment (build spec §3.4 spotPayload.assignment), or none at all. */
+type AssignBadge = { id: string; spot: string; label: string; question: string | null; startsAt: string; endsAt: string; seats: number; seatsLeft: number; reward: number; live: boolean };
 type SpotPayload = {
   spot: { id: string; name: string; short: string; kind: string; question: string; options: { v: string; label: string }[]; decayMin: number; courtCall?: { weekday: number; time: string } | null };
   reading: Reading;
@@ -338,13 +367,18 @@ type SpotPayload = {
   lastWeek: { date: string; at: string; label: string; support: number } | null;
   serverTime: string;
   you?: You | null;
+  assignment?: AssignBadge | null;
 };
 /**
  * `stamps` is the receipt, two at most with the server's text: the place stamp and
  * the highest new badge (receiptStamps() in functions/_lib/air-points.mjs). `more`
  * counts the other new stamps, already in the book; `badges` is every new badge id.
  */
-type Award = { points: number; pointsToday: number; cap: number; streakWeeks: number; firstLight: boolean; stamps: StampLike[]; more?: number; badges: string[]; crew: { id: string; n: number; at: string } | null };
+type Award = {
+  points: number; pointsToday: number; cap: number; streakWeeks: number; firstLight: boolean; stamps: StampLike[]; more?: number; badges: string[]; crew: { id: string; n: number; at: string } | null;
+  /** The assignment seat this report filled (build spec §3.4 viewAward.assignment); its ASSIGNMENT stamp is in `stamps`. */
+  assignment?: { id: string; label: string; reward: number; text: string } | null;
+};
 type ReportBody = { kind: string; value: string; device: string; code: string | null; extras: string[]; asGuest: boolean; observedAt: number };
 type Claim = { until: string } | null;
 type ReportResult = { ok: true; replaced: boolean; report: { id: string; value: string; label: string; observedAt: string; byline: string; onsite: boolean; code?: 'none' | 'ok' | 'unknown' }; reading: Reading; today?: TodayRow[]; award: Award; claim?: Claim };
@@ -401,6 +435,19 @@ const ERROR_COPY: Record<string, string> = {
   'store-unavailable': 'The desk is offline. Saved on this phone.',
 };
 
+/** Reasons POST /api/air/assign can answer with (ASSIGN_REASONS in functions/_lib/air-assign.mjs). */
+const ASSIGN_ERROR_COPY: Record<string, string> = {
+  'bad-json': 'That did not go through. Try again.',
+  'bad-action': 'That did not go through. Try again.',
+  'bad-template': 'Pick a template.',
+  'bad-day': 'Pick a day within the next week.',
+  'bad-start': 'That start time is outside the spot’s hours, or the window has already ended.',
+  'bad-seats': 'Seats must be 1 to 3.',
+  'too-many-open': 'Too many open assignments already: 3 at this spot, or 20 today.',
+  forbidden: 'House only.',
+  'not-found': 'That assignment is gone.',
+};
+
 // ---------------------------------------------------------------------------
 // The spot page.
 // ---------------------------------------------------------------------------
@@ -420,6 +467,7 @@ export function mountAirSpot(root: HTMLElement): void {
   const els = {
     clock: q('[data-air-clock]'), live: q('[data-air-dot]'), needle: q('[data-air-needle]'),
     last: q('[data-air-last]'), lastText: q('[data-air-last-text]'),
+    assign: q('[data-air-assign]'),
     confirm: q('[data-air-confirm]'), confirmQ: q('[data-air-confirm-q]'), confirmMeta: q('[data-air-confirm-meta]'),
     ask: q('[data-air-ask]'), receipt: q('[data-air-receipt]'), receiptLine: q('[data-air-receipt-line]'), stampSlot: q('[data-air-stamp-slot]'),
     more: q('[data-air-more]'), moreLink: q('[data-air-more-link]'),
@@ -448,6 +496,8 @@ export function mountAirSpot(root: HTMLElement): void {
   let myExtras: string[] = [];
   // New stamps on this receipt that were counted, not slammed.
   let moreCount = 0;
+  // An ASSIGNMENT stamp outranked this receipt's crew stamp, so the server already counted the crew in `more`.
+  let crewInMore = false;
   let pollTimer: number | undefined;
   let extrasTimer: number | undefined;
   let refreshing: Promise<void> | null = null;
@@ -465,10 +515,31 @@ export function mountAirSpot(root: HTMLElement): void {
 
   // --- the reading on the page ---
   function showAsk(on: boolean) { show(els.ask, on); }
+  /**
+   * The assignment badge above the question (build spec §3.8): "ASSIGNMENT ·
+   * Rack at open · until 7:00 · 1 of 2 seats open · +10" while live and open
+   * (the seats left, so a fresh call reads "2 seats open", never "0 of 2"),
+   * "Assignment filled" while live with no seats left, else "Next assignment
+   * Tomorrow 6:00 AM · +10" for the next one ahead (dated past tomorrow).
+   */
+  function assignBadgeText(a: AssignBadge): string {
+    if (a.live) {
+      if (a.seatsLeft <= 0) return 'Assignment filled';
+      return `ASSIGNMENT · ${a.label} · until ${laClock(a.endsAt)} · ${seatsOpenText(a.seatsLeft, a.seats)} · +${a.reward}`;
+    }
+    return `Next assignment ${laWhen(a.startsAt)} · +${a.reward}`;
+  }
+  function paintAssign(a: AssignBadge | null | undefined) {
+    if (!els.assign) return;
+    if (!a) { show(els.assign, false); return; }
+    text(els.assign, assignBadgeText(a));
+    show(els.assign, true);
+  }
   function paintReading(data: SpotPayload, opts: { fromOwnAction?: boolean } = {}) {
     current = data;
     const r = data.reading;
     setClock();
+    paintAssign(data.assignment);
     show(els.live, r.status !== 'none');
     root.setAttribute('data-air-live', r.status !== 'none' ? 'yes' : 'no');
 
@@ -634,7 +705,7 @@ export function mountAirSpot(root: HTMLElement): void {
     showAsk(false);
     show(els.receipt, true);
     show(els.remoteNote, false); show(els.queuedNote, false);
-    els.stampSlot?.replaceChildren(); paintMore(0);
+    els.stampSlot?.replaceChildren(); paintMore(0); crewInMore = false;
     els.crewRing?.replaceChildren(); show(els.crewRing, false);
     note('');
     lastOwnAction = Date.now();
@@ -664,6 +735,7 @@ export function mountAirSpot(root: HTMLElement): void {
     const slams = (award.stamps || []).filter((s) => s && s.kind).slice(0, 2);
     const place = slams.find((s) => s.kind === 'place');
     const top = slams.find((s) => s.kind !== 'place');
+    crewInMore = !!award.crew && top?.kind === 'assignment';
     emit('air:stamp', { spot, stamps: slams.map(stampLine), badges: award.badges || [], more: award.more ?? 0 });
     if (place && slot) { slot.append(makeStamp(stampLine(place), 'place', true)); thump(); }
     else if (onsite && slot) { slot.append(makeStamp(`${cfg!.short} · ${dayStamp(laDay())}`, 'place', true)); thump(); }
@@ -679,7 +751,7 @@ export function mountAirSpot(root: HTMLElement): void {
           text(els.first, 'First light — you opened the day here.');
           show(els.first, true);
         }
-        if (second && slot) slot.append(makeStamp(stampLine(second), second.kind === 'crew' ? 'crew' : 'badge', true));
+        if (second && slot) slot.append(makeStamp(stampLine(second), second.kind === 'crew' ? 'crew' : second.kind === 'assignment' ? 'assignment' : 'badge', true));
       }, 300);
     }
     if (!first) show(els.first, false);
@@ -711,8 +783,12 @@ export function mountAirSpot(root: HTMLElement): void {
   function settleReport(j: ReportResult, at: number) {
     const label = labelFor(spot, kind, j.report.value) ?? j.report.value;
     rememberOwn(j.report.id, j.report.onsite);
-    if (j.report.onsite) landStamps(j.award, true);
-    else {
+    if (j.report.onsite) {
+      landStamps(j.award, true);
+      // "ON THE AIR · ASSIGNMENT +10" (build spec §3.8): this report filled a seat.
+      const a = j.award.assignment;
+      if (a && els.receiptLine) els.receiptLine.textContent = `${receiptText(label, 'air', undefined, at)} · ASSIGNMENT +${a.reward}`;
+    } else {
       // The optimistic line said ON THE AIR when the phone had a code; the server says otherwise.
       if (els.receiptLine) els.receiptLine.textContent = receiptText(label, 'remote', undefined, at);
       if (els.remoteNote) els.remoteNote.textContent = j.report.code === 'unknown' ? 'That code is not this spot’s. Filed from away; open the link the group shared to go on the air.' : 'Filed from away. Open this spot’s link with its code to go on the air.';
@@ -880,9 +956,17 @@ export function mountAirSpot(root: HTMLElement): void {
     show(els.receipt, true);
     if (reopened) els.receipt?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
     // Still two stamps at most: a crew that forms after this receipt outranks the badge on it, which moves to the count.
-    const bumped = els.stampSlot?.querySelector('.air-stamp--badge');
-    if (bumped) { bumped.remove(); paintMore(moreCount + 1); }
-    els.stampSlot?.append(makeStamp(crewText, 'crew', true));
+    // An ASSIGNMENT stamp outranks the crew (RECEIPT_ORDER): it stays, and the crew stamp is counted instead.
+    // crewInMore is set synchronously by landStamps, whose ASSIGNMENT stamp only lands 300 ms later: under
+    // reduced motion this runs at ~150 ms, before that stamp is in the slot, so the flag decides, not the DOM.
+    if (crewInMore || els.stampSlot?.querySelector('.air-stamp--assignment')) {
+      if (!crewInMore) paintMore(moreCount + 1);
+      crewInMore = true;
+    } else {
+      const bumped = els.stampSlot?.querySelector('.air-stamp--badge');
+      if (bumped) { bumped.remove(); paintMore(moreCount + 1); }
+      els.stampSlot?.append(makeStamp(crewText, 'crew', true));
+    }
     thump();
     chord();
     confetti();
@@ -942,10 +1026,35 @@ export function mountAirSpot(root: HTMLElement): void {
 // The band plan on /r.
 // ---------------------------------------------------------------------------
 type AirIndex = { spots: { id: string; name: string; short: string; mhz: number; channel: string; reading: { label: string; status: string; ageMin: number; bars: number } | null; lastAt: string | null }[]; courtCall: { live: boolean; minutesUntil: number } | null };
+/** One open assignment as GET /api/air/assign lists it. */
+type AssignItem = { id: string; spot: string; label: string; question: string | null; startsAt: string; endsAt: string; seats: number; seatsLeft: number; reward: number; live: boolean };
+/** The directors-only `recent` row: the last 14 days, voided ones too, with fillers and a WITNESSED count. */
+type RecentAssign = AssignItem & { filled: number; witnessed: number; fillers: string[]; voidedAt: string | null; voidReason: string | null; createdAt: string };
+type AssignIndex = { open: AssignItem[]; canCreate: boolean; serverTime: string; recent?: RecentAssign[] };
 
 export function mountAirHome(root: HTMLElement): void {
   const callText = root.querySelector<HTMLElement>('[data-air-call-text]');
   const callDot = root.querySelector<HTMLElement>('[data-air-call-live]');
+  const assignStrip = root.querySelector<HTMLElement>('[data-air-assign-strip]');
+  const assignList = root.querySelector<HTMLElement>('[data-air-assign-strip-list]');
+  const paintAssignStrip = (data: AssignIndex | null) => {
+    if (!assignStrip || !assignList) return;
+    // Calls with a seat left: live ones ("until 7:00"), then the next ones ahead ("Tomorrow 6:00 AM"), soonest first as GET lists them.
+    const open = (data?.open ?? []).filter((a) => a.seatsLeft > 0);
+    assignStrip.hidden = open.length === 0;
+    if (open.length === 0) return;
+    assignList.replaceChildren(...open.slice(0, 5).map((a) => {
+      const li = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = `/r/${a.spot}`;
+      link.textContent = a.label;
+      const meta = document.createElement('span');
+      meta.className = 'air-mono';
+      meta.textContent = a.live ? `until ${laClock(a.endsAt)} · +${a.reward}` : `${laWhen(a.startsAt)} · +${a.reward}`;
+      li.append(link, meta);
+      return li;
+    }));
+  };
   const paint = (data: AirIndex) => {
     for (const s of data.spots || []) {
       const row = root.querySelector<HTMLElement>(`[data-air-row="${CSS.escape(s.id)}"]`);
@@ -981,8 +1090,12 @@ export function mountAirHome(root: HTMLElement): void {
   };
   let timer: number | undefined;
   const tick = async () => {
-    const data = await getJson<AirIndex>('/api/air');
+    const [data, assignData] = await Promise.all([
+      getJson<AirIndex>('/api/air'),
+      assignStrip ? getJson<AssignIndex>('/api/air/assign') : Promise.resolve(null),
+    ]);
     if (data) paint(data);
+    if (assignStrip) paintAssignStrip(assignData);
     clearTimeout(timer);
     if (!document.hidden) timer = window.setTimeout(tick, SLOW_POLL_MS);
   };
@@ -1001,11 +1114,15 @@ export function mountAirHome(root: HTMLElement): void {
 // ---------------------------------------------------------------------------
 // Your card on /r/me.
 // ---------------------------------------------------------------------------
+/** One filled seat in /api/air/me's `assignments` (fillView in functions/_lib/air-assign.mjs). */
+type MeAssign = { id: string; label: string; spot: string; day: string; reward: number; witnessed: boolean; text: string };
 type Me = {
   /** 'user' with a session, else 'device'. */
-  owner: string; byline: string | null; points: { today: number; total: number }; streakWeeks: number;
+  owner: string; byline: string | null; points: { today: number; total: number; assigned?: number }; streakWeeks: number;
   stamps: StampLike[]; badges: string[];
   reports: { id: string; spot: string; kind?: string; value: string; label?: string; at?: string; observedAt?: string; onsite: boolean; day?: string }[];
+  /** Filled assignment seats, 50 at most, newest first. */
+  assignments?: MeAssign[];
   /** Rows still on this phone that a signed-in claim would move, or null. */
   claimable?: { reports: number; points: number; stamps: number } | null;
 };
@@ -1016,7 +1133,9 @@ export function mountAirCard(root: HTMLElement): void {
   const q = <T extends HTMLElement = HTMLElement>(sel: string): T | null => root.querySelector<T>(sel);
   const byline = q('[data-air-me-byline]'), owner = q('[data-air-me-owner]');
   const pointsToday = q('[data-air-me-today]'), pointsTotal = q('[data-air-me-total]'), streak = q('[data-air-me-streak]');
+  const pointsAssigned = q('[data-air-me-assigned]');
   const stamps = q('[data-air-me-stamps]'), badges = q('[data-air-me-badges]'), reports = q('[data-air-me-reports]');
+  const assignSection = q('[data-air-me-assign-section]'), assigns = q('[data-air-me-assigns]');
   const empty = q('[data-air-me-empty]'), signin = q('[data-air-me-signin]'), note = q('[data-air-me-note]'), claimBtn = q<HTMLButtonElement>('[data-air-me-claim]');
   const device = deviceId();
   const headers = { 'X-PC-Device': device };
@@ -1028,6 +1147,8 @@ export function mountAirCard(root: HTMLElement): void {
     if (owner) owner.textContent = signedIn(me) ? 'on your town card' : 'on this phone';
     if (pointsToday) pointsToday.textContent = String(me.points?.today ?? 0);
     if (pointsTotal) pointsTotal.textContent = String(me.points?.total ?? 0);
+    const assignedPts = me.points?.assigned ?? 0;
+    if (pointsAssigned) { pointsAssigned.textContent = assignedPts > 0 ? `+${assignedPts} from assignments` : ''; pointsAssigned.hidden = assignedPts <= 0; }
     if (streak) streak.textContent = me.streakWeeks > 0 ? (me.streakWeeks === 1 ? '1 week running' : `${me.streakWeeks} weeks running`) : 'No week yet';
     const list = (me.stamps || []).filter((s) => s && s.kind);
     const places = list.filter((s) => s.kind !== 'badge');
@@ -1068,6 +1189,21 @@ export function mountAirCard(root: HTMLElement): void {
         return li;
       }));
     }
+    const assignRows = me.assignments || [];
+    if (assigns) {
+      assigns.replaceChildren(...assignRows.slice(0, 50).map((a) => {
+        const li = document.createElement('li');
+        // "MON 28 SEP", as the stamps print a day (dayStamp without the year).
+        const day = document.createElement('span'); day.className = 'air-mono'; day.textContent = dayStamp(a.day).replace(/ \d{4}$/, '');
+        const where = document.createElement('b'); where.textContent = a.label;
+        const what = document.createElement('span'); what.textContent = `${spotById(a.spot)?.name ?? a.spot} · +${a.reward}`;
+        li.append(day, where, what);
+        // The WITNESSED mark only when there is one: no empty cell, no blank row.
+        if (a.witnessed) { const status = document.createElement('small'); status.textContent = 'WITNESSED'; li.append(status); }
+        return li;
+      }));
+    }
+    if (assignSection) assignSection.hidden = assignRows.length === 0;
     const nothing = places.length === 0 && earned.size === 0 && (me.reports || []).length === 0;
     if (empty) empty.hidden = !nothing;
     if (signin) signin.hidden = signedIn(me) || nothing;
@@ -1101,9 +1237,157 @@ export function mountAirCard(root: HTMLElement): void {
   void load().then((me) => { if (me && signedIn(me) && claimableRows(me) > 0) void claim(); });
 }
 
+// ---------------------------------------------------------------------------
+// The Desk on /r/assign — the house-only create form and void, GET-gated.
+// canCreate (from the director session, hasDirectorDeskAccess) is the only
+// thing that decides which half of the page shows; nothing is read from the
+// page source.
+// ---------------------------------------------------------------------------
+export function mountAirAssign(root: HTMLElement): void {
+  const q = <T extends HTMLElement = HTMLElement>(sel: string): T | null => root.querySelector<T>(sel);
+  const note = q('[data-air-assign-note]');
+  const house = q('[data-air-assign-house]');
+  const director = q('[data-air-assign-director]');
+  const form = q<HTMLFormElement>('[data-air-assign-form]');
+  const templateSel = q<HTMLSelectElement>('[data-air-assign-template]');
+  const dayInput = q<HTMLInputElement>('[data-air-assign-day]');
+  const startInput = q<HTMLInputElement>('[data-air-assign-start]');
+  const seatsInput = q<HTMLInputElement>('[data-air-assign-seats]');
+  const list = q('[data-air-assign-list]');
+  const listTitle = q('[data-air-assign-list-title]');
+  const empty = q('[data-air-assign-empty]');
+  const submitBtn = q<HTMLButtonElement>('[data-air-assign-submit]');
+  const formNote = q('[data-air-assign-form-note]');
+  const say = (s: string) => { if (note) { note.textContent = s; note.hidden = !s; } };
+  /** The create result, printed beside the button that was tapped (the page note is off-screen by then). */
+  const sayForm = (s: string) => { if (formNote) { formNote.textContent = s; formNote.hidden = !s; } };
+
+  // The day field defaults to today (LA) so a director need only pick a template.
+  if (dayInput && !dayInput.value) dayInput.value = laDay();
+
+  function applyTemplateDefaults() {
+    const opt = templateSel?.selectedOptions?.[0];
+    if (!opt) return;
+    if (startInput) startInput.value = opt.dataset.start || '';
+    if (seatsInput) seatsInput.value = opt.dataset.seats || '';
+  }
+  templateSel?.addEventListener('change', applyTemplateDefaults);
+  applyTemplateDefaults();
+
+  /** One call. Everyone gets the open ones (`open`); a director's rows (`recent`) add fillers, the void note and a Void button. */
+  function rowNode(item: AssignItem | RecentAssign): HTMLElement {
+    const li = document.createElement('li');
+    const head = document.createElement('div'); head.className = 'ra__row-head';
+    const label = document.createElement('a'); label.className = 'ra__row-label'; label.href = `/r/${item.spot}`; label.textContent = item.label;
+    const spotName = spotById(item.spot)?.name ?? item.spot;
+    const a = 'createdAt' in item ? item : null;
+    const filled = a ? a.filled : Math.max(0, item.seats - item.seatsLeft);
+    const state = a?.voidedAt ? 'VOIDED' : item.live ? 'LIVE' : new Date(item.startsAt).getTime() > Date.now() ? 'UPCOMING' : 'ENDED';
+    // A call still taking fills says what is left ("2 seats open"); a closed one says what it got ("1 of 2 filled").
+    const seatText = (state === 'LIVE' || state === 'UPCOMING') && item.seatsLeft > 0 ? seatsOpenText(item.seatsLeft, item.seats) : `${filled} of ${item.seats} filled`;
+    const meta = document.createElement('span'); meta.className = 'ra__row-meta air-mono';
+    meta.textContent = `${spotName} · ${laDayWord(item.startsAt)} ${laClock(item.startsAt)}–${laClock(item.endsAt)} · ${seatText} · +${item.reward} · ${state}`;
+    head.append(label, meta);
+    li.append(head);
+    if (!a) return li;
+    if (a.voidedAt) li.setAttribute('data-voided', '');
+    if (a.fillers.length) {
+      const fillers = document.createElement('p'); fillers.className = 'ra__row-fillers';
+      fillers.textContent = `Filled by ${a.fillers.join(', ')}${a.witnessed > 0 ? ` · ${a.witnessed} witnessed` : ''}`;
+      li.append(fillers);
+    }
+    if (a.voidedAt) {
+      const why = document.createElement('p'); why.className = 'ra__row-fillers';
+      why.textContent = a.voidReason ? `Voided: ${a.voidReason}` : 'Voided.';
+      li.append(why);
+    } else {
+      const row = document.createElement('div'); row.className = 'ra__row-void';
+      const reason = document.createElement('input'); reason.type = 'text'; reason.maxLength = 80; reason.placeholder = 'Void note (optional)';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Void';
+      // Two taps: a void cannot be undone, so a stray thumb on a live call only arms it for four seconds.
+      let armed: number | undefined;
+      btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        if (armed === undefined) {
+          btn.textContent = 'Void? Tap again';
+          armed = window.setTimeout(() => { armed = undefined; btn.textContent = 'Void'; }, 4000);
+          return;
+        }
+        clearTimeout(armed); armed = undefined;
+        void voidOne(a.id, reason.value, btn);
+      });
+      row.append(reason, btn);
+      li.append(row);
+    }
+    return li;
+  }
+
+  function paintList(data: AssignIndex) {
+    // Everyone sees the open calls (build spec §3.8); directors get `recent` instead (§3.5: the last
+    // 14 days, voided too); an empty list is safe if it is ever missing.
+    const rows: (AssignItem | RecentAssign)[] = data.canCreate ? data.recent ?? [] : data.open ?? [];
+    if (listTitle) listTitle.textContent = data.canCreate ? 'Last 14 days' : 'Open calls';
+    if (list) list.replaceChildren(...rows.map(rowNode));
+    if (empty) empty.hidden = rows.length > 0;
+  }
+
+  /** `keepNote`: a refresh after a create or void leaves its result on screen. */
+  async function load(keepNote = false): Promise<void> {
+    const data = await getJson<AssignIndex>('/api/air/assign');
+    if (!data) { say('Could not reach the desk.'); return; }
+    if (!keepNote) say('');
+    if (house) house.hidden = data.canCreate;
+    if (director) director.hidden = !data.canCreate;
+    paintList(data);
+  }
+
+  let posting = false;
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    // One call per tap: the button stays down until the desk answers, so a second tap on a slow line never posts a duplicate.
+    if (posting) return;
+    const template = templateSel?.value;
+    const day = dayInput?.value;
+    const start = startInput?.value || undefined;
+    const seatsRaw = seatsInput?.value;
+    const seats = seatsRaw ? Number(seatsRaw) : undefined;
+    posting = true;
+    const label = submitBtn?.textContent || '';
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Posting…'; }
+    sayForm('');
+    void (async () => {
+      try {
+        const res = await postJson<{ ok: true; assignment: AssignItem }>('/api/air/assign', { action: 'create', template, day, start, seats });
+        const j = res.json;
+        if (j && j.ok === true) {
+          sayForm(`Call posted: ${j.assignment.label}, ${laWhen(j.assignment.startsAt)}. It is at the top of the list below.`);
+          await load(true);
+        } else if (res.network || res.status === 0) sayForm('No answer from the desk. Check the list below before posting again.');
+        else sayForm(ASSIGN_ERROR_COPY[(j as ApiError | null)?.reason || ''] || 'That did not go through.');
+      } finally {
+        posting = false;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = label; }
+      }
+    })();
+  });
+
+  async function voidOne(id: string, reason: string, btn: HTMLButtonElement): Promise<void> {
+    btn.disabled = true;
+    btn.textContent = 'Voiding…';
+    const res = await postJson<{ ok: true }>('/api/air/assign', { action: 'void', id, reason: reason || undefined });
+    const j = res.json;
+    // The refreshed row reads VOIDED in place, where the tap was; the page note keeps the result too.
+    if (j && j.ok === true) { say('Voided.'); void load(true); }
+    else { btn.disabled = false; btn.textContent = 'Void'; say(ASSIGN_ERROR_COPY[(j as ApiError | null)?.reason || ''] || 'That did not go through.'); }
+  }
+
+  void load();
+}
+
 // Auto-mount whatever this page rendered.
 export function mountAir(): void {
   document.querySelectorAll<HTMLElement>('[data-air-spot]').forEach(mountAirSpot);
   document.querySelectorAll<HTMLElement>('[data-air-home]').forEach(mountAirHome);
   document.querySelectorAll<HTMLElement>('[data-air-card]').forEach(mountAirCard);
+  document.querySelectorAll<HTMLElement>('[data-air-assign-page]').forEach(mountAirAssign);
 }

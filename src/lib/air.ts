@@ -34,11 +34,20 @@ export type AirSpot = {
   hours: { open: string; close: string };
   kinds: Record<string, AirKind>;
 };
-export type AirConfig = { version: number; reserved: string[]; spots: AirSpot[] };
+/**
+ * An assignment template (/r/assign): a spot, one of its existing question
+ * kinds, a default LA start "HH:MM" inside the spot's hours, a window length
+ * in minutes and a default seat count (1-3). The house picks a template, a
+ * date and seats; nothing else is typed in. Rules live in
+ * functions/_lib/air-assign.mjs.
+ */
+export type AirAssignTemplate = { id: string; spot: string; kind: string; label: string; start: string; min: number; seats: number };
+export type AirConfig = { version: number; reserved: string[]; spots: AirSpot[]; assignTemplates: AirAssignTemplate[] };
 
 export const AIR_CONFIG = data as unknown as AirConfig;
 export const AIR_SPOTS: AirSpot[] = AIR_CONFIG.spots;
 export const AIR_RESERVED: readonly string[] = AIR_CONFIG.reserved;
+export const AIR_ASSIGN_TEMPLATES: AirAssignTemplate[] = AIR_CONFIG.assignTemplates;
 export const AIR_HOME = '/r';
 
 /** A spot by id, or null for unknown and reserved ids. */
