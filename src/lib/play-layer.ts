@@ -258,6 +258,34 @@ export const PASSPORT_STAMPS = [
     points: 1,
     description: 'Feed, water, rest, or spark the pet.',
   },
+  // Field Reports (/r): earned on site, when a report or confirm carries the spot code.
+  {
+    id: 'field-courts',
+    label: 'Court Report',
+    category: 'field',
+    route: '/r/courts',
+    action: 'Report',
+    points: 3,
+    description: 'Say how many are waiting at the courts, from the courts.',
+  },
+  {
+    id: 'field-beach',
+    label: 'Pier Watch',
+    category: 'field',
+    route: '/r/beach',
+    action: 'Report',
+    points: 3,
+    description: 'Say whether you can see the pier from Grand Ave.',
+  },
+  {
+    id: 'field-crew',
+    label: 'Morning Crew',
+    category: 'field',
+    route: '/r',
+    action: 'Crew',
+    points: 5,
+    description: 'Be one of three phones on the air at one spot within 30 minutes.',
+  },
 ] as const;
 
 export type PassportStampId = (typeof PASSPORT_STAMPS)[number]['id'];

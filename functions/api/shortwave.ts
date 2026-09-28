@@ -12,6 +12,10 @@
  * verified: true. Everyone else stays self-reported, exactly as before.
  * Member posts are also indexed under the account so /shortwave#@handle can
  * list them (GET ?handle=).
+ *
+ * Station posts (via 'air', attribution 'station') come only from Field
+ * Reports (/api/air) through writeStationPost(): what a spot is reporting,
+ * parked at the spot's frequency. The public POST still refuses via 'air'.
  */
 import { readSessionFromRequest, type AuthEnv } from './auth/session.ts';
 import { normalizeHandle, readCardByUser, userIdForHandle } from '../_lib/town-card.ts';
@@ -26,7 +30,8 @@ const VIAS = ['bar', 'page', 'agent'] as const;
 const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'X-Content-Type-Options': 'nosniff' };
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { 'Cache-Control': 'no-store', ...headers, ...extra } });
 type ShortwaveEnv = Pick<Cloudflare.Env, 'VISITS' | 'PC_RATES_KV'> & AuthEnv & { PRESENCE?: DurableObjectNamespace };
-export type ShortwavePost = { id: string; at: string; who: string; noun: number; text: string; via: (typeof VIAS)[number]; attribution: 'self-reported' | 'card'; handle?: string; color?: string; verified?: true };
+// Stored posts also carry the station kind; VIAS stays the public list.
+export type ShortwavePost = { id: string; at: string; who: string; noun: number; text: string; via: (typeof VIAS)[number] | 'air'; attribution: 'self-reported' | 'card' | 'station'; handle?: string; color?: string; verified?: true; mhz?: number; spot?: string };
 type SessionReader = (request: Request, env: ShortwaveEnv) => Promise<{ user: Pick<PointCastUser, 'userId'> } | null>;
 export type ShortwaveDeps = { readSession?: SessionReader };
 
@@ -48,7 +53,7 @@ export function normalizePost(input: unknown) {
   if (!Number.isInteger(nounRaw) || nounRaw < 0 || nounRaw > 1199) throw new Error('noun must be a whole number from 0 to 1199.');
   const via = b.via === undefined ? 'bar' : b.via;
   if (typeof via !== 'string' || !(VIAS as readonly string[]).includes(via)) throw new Error('via must be bar, page or agent.');
-  return { text, who, noun: nounRaw, via: via as ShortwavePost['via'] };
+  return { text, who, noun: nounRaw, via: via as (typeof VIAS)[number] };
 }
 
 /** The room session id the bar sends along, so a visitor's own post is not replayed to them as news. */
@@ -68,18 +73,53 @@ export async function announce(env: ShortwaveEnv, post: ShortwavePost, clientId:
   try {
     const chars = Array.from(post.text);
     const stub = env.PRESENCE.get(env.PRESENCE.idFromName('global'));
+    const color = post.color || '#185FA5';
+    // The bus keeps the first ten meta keys; handle rides ninth, clientId tenth.
+    // A station has neither, so its spot and frequency ride in the label's place.
+    const tail = post.via === 'air'
+      ? { air: true, spot: post.spot ?? '', mhz: post.mhz ?? 0, color }
+      : { label: 'on shortwave', color, ...(post.handle ? { handle: post.handle } : {}), ...(clientId ? { clientId } : {}) };
     const res = await stub.fetch(new Request(new URL('/burst', origin).toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         kind: 'cast',
         by: { handle: post.who, noun: post.noun },
-        // The bus keeps the first ten meta keys; handle rides ninth, clientId tenth.
-        meta: { shortwave: true, id: post.id, postedAt: post.at, via: post.via, t1: chars.slice(0, 140).join(''), t2: chars.slice(140).join(''), label: 'on shortwave', color: post.color || '#185FA5', ...(post.handle ? { handle: post.handle } : {}), ...(clientId ? { clientId } : {}) },
+        meta: { shortwave: true, id: post.id, postedAt: post.at, via: post.via, t1: chars.slice(0, 140).join(''), t2: chars.slice(140).join(''), ...tail },
       }),
     }));
     return res.ok;
   } catch { return false; }
+}
+
+/** A post id: a reversed timestamp, so a prefix list reads newest first. */
+export function stationPostId(now = Date.now()): string {
+  return `${String(9999999999999 - now).padStart(13, '0')}-${crypto.randomUUID()}`;
+}
+const POST_ID = /^\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export type StationInput = { spot: string; mhz: number; color: string; noun: number; text: string; who?: string; id?: string };
+
+/**
+ * A Field Reports station post: what a spot is reporting, parked at its
+ * frequency on the dial. The only writer of via 'air' (normalizePost refuses
+ * it). Pass `id` to update a window's post in place: the key and `at` stay the
+ * first post's, so a spot never fills the feed with copies. Kept a year like
+ * any post, then announced on the bus (best effort). Throws when KV is unbound
+ * or the write fails; the report behind it is already saved.
+ */
+export async function writeStationPost(env: Pick<ShortwaveEnv, 'VISITS' | 'PRESENCE'>, input: StationInput, origin = 'https://pointcast.xyz'): Promise<{ post: ShortwavePost; live: boolean }> {
+  if (!env.VISITS) throw new Error('Shortwave is unavailable.');
+  const id = input.id && POST_ID.test(input.id) ? input.id : stationPostId();
+  const text = Array.from(input.text.replace(/\s+/g, ' ').trim()).slice(0, MAX_CHARS).join('');
+  const noun = Number.isInteger(input.noun) && input.noun >= 0 && input.noun <= 1199 ? input.noun : 0;
+  const post: ShortwavePost = {
+    id, at: new Date(9999999999999 - Number(id.slice(0, 13))).toISOString(), who: input.who || input.spot, noun, text,
+    via: 'air', attribution: 'station', color: input.color, mhz: input.mhz, spot: input.spot,
+  };
+  await env.VISITS.put(PREFIX + id, JSON.stringify(post), { expirationTtl: TTL });
+  const live = await announce(env as ShortwaveEnv, post, '', origin);
+  return { post, live };
 }
 
 async function readBody(request: Request) {

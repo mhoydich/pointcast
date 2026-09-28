@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS air_codes (spot TEXT NOT NULL, code_hash TEXT NOT NUL
 
 CREATE TABLE IF NOT EXISTS morning_editions (date TEXT PRIMARY KEY, number INTEGER NOT NULL, json TEXT NOT NULL CHECK (json_valid(json)), frozen_at INTEGER NOT NULL);
 ```
-- **Codes.** Seed `air_codes` with `sha256('air-code:'+spot+':'+CODE)[:16]` for `courts/FRI` and `beach/SAND`, valid 2026-09-28 to 2026-10-31. To rotate a code, run `wrangler d1 execute`; no deploy is needed.
+- **Codes.** `code_hash = HMAC-SHA-256(AIR_CODE_PEPPER, 'air-code:'+spot+':'+CODE)`, first 32 hex. `AIR_CODE_PEPPER` is a required Pages secret with no default; unset, no code verifies and every report is remote. Codes are 8–16 random letters and digits, chosen by Mike and **never committed** (this repo is public): print the INSERT with `AIR_CODE_PEPPER=… node scripts/air-codes.mjs courts=<CODE> beach=<CODE>` into an untracked file and apply it with `wrangler d1 execute`. Rotating needs no deploy. (Review 2026-09-28: the short codes first written here are dead and must never be seeded.)
 - **Hashing.** `pid_hash = sha256('air:v1:'+device)[:16]`. `ip_hash = sha256(ip+'|'+day+'|'+(env.AIR_IP_SALT ?? 'pointcast-air-v1'))[:16]`. `AIR_IP_SALT` is an optional new secret.
 - **Time fields.** `slot = floor(observed_at / 1_800_000)`. `windowIdx = floor(minuteOfDayLA / decayMin)`. `day` comes from `townDate()` in `src/lib/band.ts`.
 
@@ -152,7 +152,7 @@ All responses are JSON with `Cache-Control: no-store`. POSTs require `Content-Ty
 ### `POST /api/air/[spot]`: file a report
 Request:
 ```json
-{ "kind":"wait", "value":"1-4", "device":"<uuid v4>", "code":"FRI", "extras":[], "asGuest":false, "observedAt":1790951880000 }
+{ "kind":"wait", "value":"1-4", "device":"<uuid v4>", "code":"<spot code>", "extras":[], "asGuest":false, "observedAt":1790951880000 }
 ```
 Response: 201 for a new report, or 200 with `replaced:true` when it replaces your own report in the same slot.
 ```json
@@ -170,7 +170,7 @@ Errors:
 - 503 `{ok:false, reason:'store-unavailable'}`.
 
 ### `POST /api/air/confirm`
-Request: `{ "reportId":"ar_…", "verdict":"still"|"changed"|"cant", "device":"…", "code":"FRI" }`
+Request: `{ "reportId":"ar_…", "verdict":"still"|"changed"|"cant", "device":"…", "code":"<spot code>" }`
 
 Response 200: `{ ok, reading, award:{points:3,…}, next: "report"|null }`. `next` is `"report"` after `changed`, which tells the UI to show the four buttons.
 
@@ -380,7 +380,7 @@ Request: `{device}`. Requires the `pc_session` cookie.
 ## 12. Deploy
 1. Run `git fetch origin`, then create a worktree from `origin/main` on branch `cc/field-reports-2026-09-28`. Confirm the migration number.
 2. Run `npm test`, then a full `npm run build`, then `node --check` on the inline scripts extracted from the built `/r/*` and `/morning` pages.
-3. Run `npx wrangler d1 execute pointcast-auth --remote --file migrations/auth/0023_air.sql`. Record it in the repo's migration ledger, as Pool Together did. Seed `air_codes`.
+3. Run `npx wrangler d1 execute pointcast-auth --remote --file migrations/auth/0023_air.sql`. Record it in the repo's migration ledger, as Pool Together did. Set the `AIR_CODE_PEPPER` secret, then seed `air_codes` from an untracked file printed by `scripts/air-codes.mjs`.
 4. Merge with a single `gh pr merge` call. This is a Pages-only deploy: there are no Worker changes and PRESENCE is untouched. Verify the remote SHA.
 5. Smoke test in prod:
    - `GET /api/air` and `GET /api/air/courts`.

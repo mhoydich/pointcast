@@ -1,0 +1,121 @@
+---
+/**
+ * AirInk — the global styles for everything src/scripts/air-client.ts creates
+ * at runtime: stamps, tally bars, receipt typing, confetti. Astro scoped CSS
+ * never reaches JS-created nodes, so this sheet is is:global on purpose and
+ * every rule is prefixed `.air-` (or keyed off a data-air-* attribute).
+ *
+ * Tokens (PRD "Design direction"): the only added signal color is on-air red;
+ * it means live and nothing else. Receipt paper and static grey are the other
+ * two. Everything else is ink on paper from BlockLayout.
+ *
+ * Confetti is the BirthdayCelebrate engine (.confetti-overlay / .confetti-particle),
+ * copied here because that component is not on Field Reports pages.
+ */
+---
+
+<style is:global>
+  :root {
+    --air-live: #D42A1E;
+    --air-receipt: #F7F5EF;
+    --air-static: #9A9890;
+  }
+
+  .air-mono { font-family: var(--pc-font-mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ---- the stamp: a double-ruled rectangle, never a circle ---- */
+  .air-stamp {
+    display: inline-block;
+    position: relative;
+    padding: 8px 12px;
+    border: 2px solid var(--air-live);
+    box-shadow: inset 0 0 0 3px var(--pc-bg, #fff), inset 0 0 0 4px var(--air-live);
+    color: var(--air-live);
+    background: transparent;
+    font: 600 15px/1.2 var(--pc-font-mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transform: rotate(-6deg);
+    opacity: .85;
+    mix-blend-mode: multiply;
+    max-width: 100%;
+  }
+  .air-stamp__text { display: block; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; }
+  .air-stamp--crew { font-size: 15px; padding: 10px 14px; z-index: 2; white-space: normal; text-align: center; max-width: min(100%, 320px); }
+  .air-stamp--badge { font-size: 13px; padding: 6px 10px; transform: rotate(4deg); }
+  .air-stamp--mini { font-size: 11px; padding: 4px 8px; border-width: 1.5px; box-shadow: inset 0 0 0 2px var(--pc-bg, #fff), inset 0 0 0 3px var(--air-live); transform: rotate(-3deg); }
+  .air-stamp--mini:nth-child(2n) { transform: rotate(5deg); }
+  .air-stamp--queued {
+    border: 2px dashed var(--air-static);
+    box-shadow: none;
+    color: var(--pc-ink-muted, #5F5E5A);
+    font: 400 13px/1.35 var(--pc-font-mono);
+    letter-spacing: .04em;
+    text-transform: none;
+    white-space: normal;
+    transform: rotate(-2deg);
+    opacity: 1;
+    mix-blend-mode: normal;
+  }
+
+  /* Slam: scale 1.4 → 1 at −6° in 120 ms, then an 80 ms ink bleed from 1 px blur to sharp. */
+  .air-stamp[data-slam] {
+    animation: air-slam 120ms cubic-bezier(.2, 1.6, .4, 1) both, air-bleed 80ms 120ms linear both;
+  }
+  .air-stamp--badge[data-slam] { animation-name: air-slam-badge, air-bleed; }
+  .air-stamp--mini[data-slam] { animation-name: air-slam-mini, air-bleed; }
+  .air-stamp--queued[data-slam] { animation: air-fade 150ms both; }
+  @keyframes air-slam {
+    from { transform: rotate(-6deg) scale(1.4); opacity: 0; }
+    to { transform: rotate(-6deg) scale(1); opacity: .85; }
+  }
+  @keyframes air-slam-badge {
+    from { transform: rotate(4deg) scale(1.4); opacity: 0; }
+    to { transform: rotate(4deg) scale(1); opacity: .85; }
+  }
+  @keyframes air-slam-mini {
+    from { transform: rotate(-3deg) scale(1.3); opacity: 0; }
+    to { transform: rotate(-3deg) scale(1); opacity: .85; }
+  }
+  @keyframes air-bleed { from { filter: blur(1px); } to { filter: blur(0); } }
+  @keyframes air-fade { from { opacity: 0; } to { opacity: .85; } }
+
+  /* ---- tally bars: one ink tick per phone ---- */
+  [data-air-bars] { display: flex; gap: 4px; align-items: flex-end; min-height: 18px; }
+  [data-air-bars] i { display: block; width: 7px; height: 18px; background: var(--pc-ink, #12110E); transform-origin: 50% 100%; }
+  [data-air-bars][data-count] i { animation: air-bar-up 600ms cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: calc(var(--i, 0) * 50ms); }
+  @keyframes air-bar-up { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+  /* ---- the receipt line types in; a block cursor while it does ---- */
+  [data-air-receipt-line][data-typing]::after { content: '▌'; color: var(--air-live); margin-left: 1px; }
+
+  /* ---- the agree count rolls to the new number ---- */
+  [data-air-count][data-roll] { animation: air-roll 200ms steps(4) both; }
+  @keyframes air-roll { from { transform: translateY(-.35em); opacity: .3; } to { transform: none; opacity: 1; } }
+
+  /* ---- the trait line under a stamp on your card ---- */
+  .air-trait { display: block; margin-top: 16px; font-size: 10px; letter-spacing: .1em; line-height: 1.5; color: var(--pc-ink-muted, #5F5E5A); }
+
+  /* ---- confetti (BirthdayCelebrate engine) ---- */
+  .confetti-overlay { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+  .confetti-particle { position: absolute; top: -20px; width: 9px; height: 14px; border-radius: 1px; animation: confetti-fall linear forwards; transform-origin: 50% 50%; }
+  @keyframes confetti-fall {
+    0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
+    100% { transform: translate3d(var(--dx, 0), 110vh, 0) rotate(var(--rot, 720deg)); opacity: .85; }
+  }
+
+  /* ---- reduced motion: every motion is a 150 ms fade, no confetti, no needle ---- */
+  @media (prefers-reduced-motion: reduce) {
+    .air-stamp[data-slam], .air-stamp--badge[data-slam], .air-stamp--mini[data-slam] { animation: air-fade 150ms both; }
+    [data-air-bars][data-count] i { animation: air-fade 150ms both; }
+    [data-air-count][data-roll] { animation: none; }
+    [data-air-receipt-line][data-typing]::after { content: none; }
+    .confetti-particle { animation-duration: 200ms !important; opacity: 0; }
+  }
+  [data-air-motion='reduced'] .air-stamp[data-slam],
+  [data-air-motion='reduced'] .air-stamp--badge[data-slam],
+  [data-air-motion='reduced'] .air-stamp--mini[data-slam] { animation: air-fade 150ms both; }
+  [data-air-motion='reduced'] [data-air-bars][data-count] i { animation: air-fade 150ms both; }
+  [data-air-motion='reduced'] [data-air-count][data-roll] { animation: none; }
+</style>

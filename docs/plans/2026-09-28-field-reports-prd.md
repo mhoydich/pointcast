@@ -43,7 +43,7 @@ On Friday, October 2, five friends at the courts each tap one answer. When the t
 
 **Thursday night.** Mike posts on Shortwave: "Court Call, Friday 7:30 at Rec Park. Bring your phone." The front-door dial shows a COURT CALL marker at 7.500 MHz.
 
-1. **7:36:00. Mike opens the day.** At the fence he opens `pointcast.xyz/r/courts?c=FRI` and taps **1–4**. His stamp slams down with a "First light" line. The dial shows one blip at 7.500.
+1. **7:36:00. Mike opens the day.** At the fence he opens `pointcast.xyz/r/courts?c=<code>` and taps **1–4**. His stamp slams down with a "First light" line. The dial shows one blip at 7.500.
 2. **7:37:30. The ask.** Mike texts the link to the group chat. It unfurls as a card: "Rec Park courts · 1–4 waiting · 1 reporter · 7:36." He says, "Open it. Tap how many are waiting."
 3. **0.0–1.0 s. Load.** Jen's page loads in under a second on LTE. The header reads "Rec Park courts · Fri 7:38." A strip on top asks "Still 1–4 waiting?" with **Yes** and **Changed**.
 4. **1.0–2.5 s. One tap.** Jen taps **Yes**. The button snaps to solid ink in 120 ms. Her Android phone buzzes 30-40-30 ms. iPhones get sound only.
@@ -136,7 +136,7 @@ The daily cap is 30 points per person. Points never depend on the answer, so "0 
 **Anonymous or signed in.** Anyone can report without an account. Anonymous reports show as "Guest 4471", and their stamps stay on that phone. Signing in with PointCast within 24 hours moves the stamps and points to your town card and @handle.
 
 **Anti-spam**
-- **Presence code.** The link carries a spot code (`?c=FRI`). A report or confirmation without it is "remote": shown grey, worth 0, and never counted for agreement, the crew or the edition.
+- **Presence code.** The link carries a spot code (`?c=<code>`, never written in the repo). A report or confirmation without it is "remote": shown grey, worth 0, and never counted for agreement, the crew or the edition.
 - **One per phone.** A phone gets one report per spot per 30-minute slot, enforced by a D1 unique index. A second tap replaces your own answer and earns nothing.
 - **IP is only a ceiling.** Friends at the courts share an IP, so the IP limit is a burst cap: 40 writes per 10 minutes per hashed IP.
 - **No self-confirming.** You cannot confirm your own report.

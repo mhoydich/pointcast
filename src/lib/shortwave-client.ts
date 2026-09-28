@@ -58,6 +58,24 @@ export function fetchPreview(url: string): Promise<LinkPreview | null> {
   return job;
 }
 
+/**
+ * The dial's static blip: 140 ms of noise through a bandpass, a station coming
+ * in. The front-door hero plays it when a person turns the dial; /r plays it
+ * on a report. Pass the page's AudioContext (null makes one) and keep the one
+ * it returns. Call it only from a click or tap. Never throws.
+ */
+export function playBlip(audio: AudioContext | null = null): AudioContext | null {
+  try {
+    audio ??= new AudioContext();
+    const len = Math.floor(audio.sampleRate * 0.14), buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audio.createBufferSource(), bp = audio.createBiquadFilter(), g = audio.createGain();
+    bp.type = 'bandpass'; bp.frequency.value = 1400 + Math.random() * 1600; bp.Q.value = 1.4; g.gain.value = 0.07;
+    src.buffer = buf; src.connect(bp).connect(g).connect(audio.destination); src.start();
+  } catch {}
+  return audio;
+}
+
 /** A preview card built from DOM nodes only. `compact` is the one-line form. */
 export function previewCard(p: LinkPreview, compact = false): HTMLAnchorElement {
   const a = document.createElement('a');

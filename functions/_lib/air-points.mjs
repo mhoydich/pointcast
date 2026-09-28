@@ -1,0 +1,110 @@
+// Pure parts of the Field Reports game layer — the price list, the daily cap,
+// badges, stamps and stamp traits — kept in a plain module so tests run them
+// under node without the Pages runtime. Points are a score, never cash, and
+// never depend on what a report says: "0 waiting" and "5+" pay the same.
+
+import { laDate, laParts, windowIdx } from './air-reading.mjs';
+
+export const POINTS = Object.freeze({ report: 6, 'first-light': 4, confirm: 3, cant: 1, byline: 10 });
+export const DAILY_CAP = 30;
+export const STILL_TRUE_AT = 10;
+
+/** Badges written in the MVP, plus byline (PR 2). Labels are what the stamp prints. */
+export const BADGES = Object.freeze({
+  'first-light': { label: 'FIRST LIGHT', rule: 'First on-site report of the day at a spot' },
+  'morning-crew': { label: 'MORNING CREW', rule: '3+ phones report or confirm on site at one spot within 30 minutes' },
+  'still-true': { label: 'STILL TRUE', rule: `Give ${STILL_TRUE_AT} on-site confirmations` },
+  byline: { label: 'BYLINE', rule: 'A report of yours runs in a frozen Morning Edition' },
+});
+
+// air_points.ref values. UNIQUE (owner, action, ref) is what makes each pay once.
+export const reportRef = (spot, kind, day, idx) => `${spot}:${kind}:${day}:${idx}`;
+export const firstLightRef = (spot, day) => `${spot}:${day}`;
+export const bylineRef = (date) => `morning:${date}`;
+
+/**
+ * Pure: the air_points rows a report earns, before the cap: [{action, ref, units, day}].
+ * Remote reports earn nothing. "cant" pays 1 in place of the report's 6.
+ * `firstLight` means the caller's INSERT OR IGNORE INTO air_firsts changed a row.
+ */
+export function reportAwards({ spot, kind, value, onsite, observedAt, decayMin, firstLight = false }) {
+  if (!onsite) return [];
+  const day = laDate(observedAt);
+  const ref = reportRef(spot, kind, day, windowIdx(observedAt, decayMin));
+  const out = [value === 'cant' ? { action: 'cant', ref, units: POINTS.cant, day } : { action: 'report', ref, units: POINTS.report, day }];
+  if (firstLight) out.push({ action: 'first-light', ref: firstLightRef(spot, day), units: POINTS['first-light'], day });
+  return out;
+}
+
+/** Pure: a confirm's rows before the cap. On site only; a "cant" verdict pays 1, the others 3. */
+export function confirmAwards({ reportId, verdict, onsite, at }) {
+  if (!onsite) return [];
+  const action = verdict === 'cant' ? 'cant' : 'confirm';
+  return [{ action, ref: reportId, units: POINTS[action], day: laDate(at) }];
+}
+
+/** Pure: the byline row for a frozen edition, dated the edition date. */
+export function bylineAwards(date) {
+  return [{ action: 'byline', ref: bylineRef(date), units: POINTS.byline, day: date }];
+}
+
+/** min(units, cap − spent), never below zero. `spent` is the owner's sum for the day. */
+export function capUnits(units, spent, cap = DAILY_CAP) {
+  return Math.max(0, Math.min(units, cap - spent));
+}
+
+/** Pure: cap a list of awards in order against what the owner already earned today. */
+export function applyCap(awards, spent) {
+  let used = spent;
+  const out = awards.map((a) => {
+    const units = capUnits(a.units, used);
+    used += units;
+    return { ...a, units };
+  });
+  return { awards: out, total: used - spent };
+}
+
+/** Pure: badge ids earned by this event. `onsiteConfirmsGiven` counts the owner's on-site confirms. */
+export function badgesFor({ firstLight = false, crewMember = false, onsiteConfirmsGiven = 0, byline = false }) {
+  const out = [];
+  if (firstLight) out.push('first-light');
+  if (crewMember) out.push('morning-crew');
+  if (onsiteConfirmsGiven >= STILL_TRUE_AT) out.push('still-true');
+  if (byline) out.push('byline');
+  return out;
+}
+
+// air_stamps rows: UNIQUE (owner, kind, ref, day). Badges are earned once (day '-').
+export const placeStamp = (spot, day) => ({ kind: 'place', ref: spot, day });
+export const crewStamp = (spot, day) => ({ kind: 'crew', ref: spot, day });
+export const badgeStamp = (badge) => ({ kind: 'badge', ref: badge, day: '-' });
+
+const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+/** "FRI 02 OCT 2026" for '2026-10-02'. */
+export function dayStamp(day) {
+  const [y, m, d] = day.split('-').map(Number);
+  return `${DOW[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]} ${String(d).padStart(2, '0')} ${MON[m - 1]} ${y}`;
+}
+
+/** What a stamp prints: "COURTS · FRI 02 OCT 2026", "MORNING CREW · COURTS · …", or the badge label. */
+export function stampText(stamp, short) {
+  if (stamp.kind === 'badge') return BADGES[stamp.ref]?.label ?? stamp.ref.toUpperCase();
+  const place = `${short} · ${dayStamp(stamp.day)}`;
+  return stamp.kind === 'crew' ? `${BADGES['morning-crew'].label} · ${place}` : place;
+}
+
+/**
+ * Pure: the traits every air_stamps.meta_json carries, for a future public
+ * rarity rating. `observedAt` is the report's time (a confirm's `at` for a
+ * confirm stamp; `value` is then the confirmed value). `crewSize` is the crew's
+ * n for crew stamps, else null. `prevOnsiteAt` is the newest earlier on-site
+ * human report at the spot (any kind), or null when there is none.
+ * → {spot, kind, weekday (0-6 LA, Sun 0), hour (LA), crewSize, firstLight, deadAirHours, value}
+ */
+export function stampTraits({ spot, kind, value, observedAt, crewSize = null, firstLight = false, prevOnsiteAt = null }) {
+  const { weekday, hour } = laParts(observedAt);
+  const deadAirHours = prevOnsiteAt == null ? null : Math.max(0, Math.floor((observedAt - prevOnsiteAt) / 3_600_000));
+  return { spot, kind, weekday, hour, crewSize: crewSize ?? null, firstLight: firstLight === true, deadAirHours, value };
+}
