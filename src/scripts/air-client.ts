@@ -164,6 +164,8 @@ export function dayStamp(day: string): string {
 }
 
 /** The labels a stamp prints. Same words as BADGES in functions/_lib/air-points.mjs. */
+/** Badges with block-print art in public/images/air/badges/ (the v2 collectible set). */
+const BADGE_ART = new Set(['first-light', 'morning-crew', 'still-true', 'byline', 'called-it', 'three-fridays', 'weeks-running', 'fog-eye', 'sunset-shift', 'dead-air', 'first-rain', 'eyeball', 'regular', 'night-editor', 'clockwork']);
 const BADGE_LABEL: Record<string, string> = {
   'first-light': 'FIRST LIGHT',
   'morning-crew': 'MORNING CREW',
@@ -1041,7 +1043,17 @@ export function mountAirCard(root: HTMLElement): void {
       }));
     }
     if (badges) {
-      badges.replaceChildren(...Array.from(earned).map((b) => { const li = document.createElement('li'); li.append(makeStamp(BADGE_LABEL[b] ?? String(b).toUpperCase(), 'badge')); return li; }));
+      badges.replaceChildren(...Array.from(earned).map((b) => {
+        const li = document.createElement('li');
+        // Badge art lives at /images/air/badges/<id>.webp (block-print collectibles); the stamp label stays as the caption.
+        if (BADGE_ART.has(b)) {
+          const img = document.createElement('img');
+          img.className = 'air-badge-art'; img.src = `/images/air/badges/${b}.webp`; img.alt = ''; img.width = 96; img.height = 96; img.loading = 'lazy';
+          li.append(img);
+        }
+        li.append(makeStamp(BADGE_LABEL[b] ?? String(b).toUpperCase(), 'badge'));
+        return li;
+      }));
     }
     if (reports) {
       reports.replaceChildren(...(me.reports || []).slice(0, 20).map((r) => {

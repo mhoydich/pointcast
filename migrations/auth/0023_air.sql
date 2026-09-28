@@ -82,7 +82,7 @@ CREATE INDEX IF NOT EXISTS air_points_owner ON air_points(owner, day);
 CREATE TABLE IF NOT EXISTS air_stamps (
   id TEXT PRIMARY KEY,
   owner TEXT NOT NULL,
-  kind TEXT NOT NULL CHECK (kind IN ('place','crew','badge')),
+  kind TEXT NOT NULL CHECK (kind IN ('place','crew','badge','duel')),
   ref TEXT NOT NULL,
   day TEXT NOT NULL,
   report_id TEXT,
