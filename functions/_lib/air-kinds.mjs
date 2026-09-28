@@ -35,6 +35,22 @@ export function kindOf(config, spotId, kind) {
   return spot && own(spot.kinds, kind) ? spot.kinds[kind] : null;
 }
 
+export const ROLES = Object.freeze(['live', 'side', 'rating']);
+
+/**
+ * A kind's role, from its config's `role`:
+ * - 'live' (absent, today's behavior): First Light, the station post, the crew.
+ * - 'side' (parking): a reading and confirms, but nothing goes on the air.
+ * - 'rating' (vibe): a 30-day aggregate; no reading, no confirms.
+ * An unknown role fails closed to 'side': it can be read and confirmed but
+ * never posts, takes First Light or forms a crew.
+ */
+export function kindRole(kindCfg) {
+  const role = kindCfg?.role;
+  if (role == null) return 'live';
+  return ROLES.includes(role) ? role : 'side';
+}
+
 /** The reading label for a bucket: "1–4 waiting". Falls back to the button label. */
 export function labelOf(kindCfg, value) {
   if (value == null) return null;

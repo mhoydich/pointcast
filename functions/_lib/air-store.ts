@@ -13,6 +13,10 @@
  *            write still pays and a replacement never pays twice.
  *   confirm  one row per phone per report → points → stamps → crew
  *
+ * First light, the dial and the crew are for live kinds only (kindRole(), the
+ * default). A 'side' kind (parking) files, pays and takes confirms but never
+ * goes on the air; a 'rating' (vibe) files and pays, and refuses confirms.
+ *
  * Rate limits count D1 rows by created_at (server time; observed_at is the
  * client's and can be backdated); nothing here writes PC_RATES_KV. The only KV
  * write is the station post, through writeStationPost(), normally twice per
@@ -30,7 +34,7 @@ import { readCardByUser } from './town-card.ts';
 import type { AirConfig, AirKind, AirSpot } from '../../src/lib/air.ts';
 import { courtCallState } from '../../src/lib/band.ts';
 // @ts-ignore — plain modules shared with the tests
-import { AIR_LIMITS, codeHash, guestByline, ipHash, kindOf, labelOf, newAirId, ownerOf, pidHash, slotOf, spotOf } from './air-kinds.mjs';
+import { AIR_LIMITS, codeHash, guestByline, ipHash, kindOf, kindRole, labelOf, newAirId, ownerOf, pidHash, slotOf, spotOf } from './air-kinds.mjs';
 // @ts-ignore — plain modules shared with the tests
 import { CREW_WINDOW_MIN, crewFrom, evidence, isoSec, laClock, laDate, reading, stationLine, streakWeeks, winKey } from './air-reading.mjs';
 // @ts-ignore — plain modules shared with the tests
@@ -55,11 +59,11 @@ type Defer = (p: Promise<unknown>) => void;
 // still build the assignment view; fileReport and confirmReport already have
 // their own `config` parameter and never need to read it off Target.
 type Target = { spot: AirSpot; kind: string; cfg: AirKind; config: AirConfig };
-type ReportRow = {
+export type ReportRow = {
   id: string; spot: string; kind: string; value: string; observed_at: number; day: string;
   pid_hash: string; ip_hash: string; user_id: string | null; byline: string; onsite: number; status: string; source: string;
 };
-type ConfirmRow = { report_id: string; pid_hash: string; ip_hash: string; user_id: string | null; verdict: string; value: string; onsite: number; at: number; byline?: string | null };
+export type ConfirmRow = { report_id: string; pid_hash: string; ip_hash: string; user_id: string | null; verdict: string; value: string; onsite: number; at: number; byline?: string | null };
 /** The day's crew as air_crews keeps it: anchored at its first formation. */
 type CrewRow = { id: string; at: number; n: number };
 type Stamp = { kind: 'place' | 'crew' | 'badge'; ref: string; day: string };
@@ -167,7 +171,12 @@ async function cardByline(env: AirEnv, userId: string): Promise<string | null> {
   cardBylines.set(userId, { byline, at: Date.now() });
   return byline;
 }
-async function withBylines(env: AirEnv, confirms: ConfirmRow[]): Promise<ConfirmRow[]> {
+/**
+ * Confirm rows with a signed-in confirmer's card byline filled in (`byline`),
+ * card lookups cached per isolate for 5 minutes. Rows keep every column they
+ * came with, hashes included: shape them in a view before they leave.
+ */
+export async function withBylines(env: AirEnv, confirms: ConfirmRow[]): Promise<ConfirmRow[]> {
   const ids = [...new Set(confirms.map((c) => c.user_id).filter((id): id is string => Boolean(id)))];
   const names = new Map(await Promise.all(ids.map(async (id) => [id, await cardByline(env, id)] as const)));
   return confirms.map((c) => (c.user_id && names.get(c.user_id) ? { ...c, byline: names.get(c.user_id) } : c));
@@ -630,6 +639,8 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
   const cfg = t ? kindOf(config, p.spot, p.kind) as AirKind | null : null;
   if (!t || !cfg) return fail('bad-spot');
   const target: Target = { ...t, kind: p.kind, cfg };
+  // Only a live kind (the default) takes First Light, goes on the air or forms a crew.
+  const live = kindRole(cfg) === 'live';
   const pid: string = await pidHash(p.device);
   const ip: string = await ipHash(clientIp(request), laDate(now), env.AIR_IP_SALT);
   const gate = await writeGate(db, { pid, ip, spot: p.spot, code: p.code, pepper: env.AIR_CODE_PEPPER, now, kind: 'report' });
@@ -671,7 +682,7 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
     // Checked on every on-site write, so an answer that moves off "Can't say", a
     // remote row that turns on-site and a retried request all find their own claim.
     let holdsFirst = false;
-    if (firstLightOpen({ spot: t.spot, value: saved.value, observedAt: saved.observed_at })) {
+    if (live && firstLightOpen({ spot: t.spot, value: saved.value, observedAt: saved.observed_at })) {
       const [, holder] = await db.batch([
         db.prepare('INSERT OR IGNORE INTO air_firsts (spot, day, report_id) VALUES (?, ?, ?)').bind(p.spot, day, saved.id),
         db.prepare('SELECT report_id FROM air_firsts WHERE spot = ? AND day = ?').bind(p.spot, day),
@@ -682,7 +693,10 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
     // failed before awarded_at was set (every award below is idempotent). A
     // paid row only adds a first light it has just taken.
     const unpaid = saved.awarded_at == null;
-    const all = reportAwards({ spot: p.spot, kind: p.kind, value: saved.value, onsite: true, observedAt: saved.observed_at, decayMin: cfg.decayMin, firstLight: holdsFirst });
+    const all = reportAwards({
+      spot: p.spot, kind: p.kind, value: saved.value, onsite: true, observedAt: saved.observed_at, decayMin: cfg.decayMin, firstLight: holdsFirst,
+      units: cfg.points ?? 6, payEvery: cfg.payEvery ?? null,
+    });
     const pay = await payPoints(db, owner, unpaid ? all : all.filter((a: { action: string }) => a.action === 'first-light'), saved.id, now);
     points = pay.units;
     firstLight = holdsFirst && (unpaid || pay.paid.includes('first-light'));
@@ -705,7 +719,7 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
 
   const data = await loadSpot(db, target, now);
   data.confirms = await withBylines(env, data.confirms);
-  const air = isOnsite && upsert ? await onAir(env, db, target, data, now, saved.observed_at, new URL(request.url).origin, defer) : null;
+  const air = live && isOnsite && upsert ? await onAir(env, db, target, data, now, saved.observed_at, new URL(request.url).origin, defer) : null;
   const mine = air?.crewStamps.filter((s) => s.owner === owner) ?? [];
   const member = Boolean(air?.crew?.members.some((m) => m.pid_hash === pid));
   const { pointsToday, streakWeeks: weeks } = await standing(db, owner, who, pid, now);
@@ -731,6 +745,9 @@ export async function confirmReport(request: Request, env: AirEnv, db: D1Databas
   const t = report ? targetOf(config, report.spot) : null;
   const cfg = report && t ? kindOf(config, report.spot, report.kind) as AirKind | null : null;
   if (!report || report.status !== 'ok' || !t || !cfg) return fail('not-found', 404);
+  // A rating is an aggregate, not a claim about now: nothing to confirm.
+  const role = kindRole(cfg);
+  if (role === 'rating') return fail('not-confirmable');
   const target: Target = { ...t, kind: report.kind, cfg };
   const pid: string = await pidHash(c.device);
   const who = await whoIs(request, env);
@@ -778,7 +795,7 @@ export async function confirmReport(request: Request, env: AirEnv, db: D1Databas
 
   const data = await loadSpot(db, target, now);
   data.confirms = await withBylines(env, data.confirms);
-  const air = onsite && c.verdict === 'still' ? await onAir(env, db, target, data, now, null, origin, defer) : null;
+  const air = role === 'live' && onsite && c.verdict === 'still' ? await onAir(env, db, target, data, now, null, origin, defer) : null;
   const mine = air?.crewStamps.filter((s) => s.owner === owner) ?? [];
   const member = Boolean(air?.crew?.members.some((m) => m.pid_hash === pid));
   const { pointsToday, streakWeeks: weeks } = await standing(db, owner, who, pid, now);

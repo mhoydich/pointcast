@@ -1,0 +1,60 @@
+---
+/**
+ * TapRow — the one-tap input for a `side` or `rating` kind (parking, vibe)
+ * on a court card (build spec §10). Ask buttons only: no receipt, no crew,
+ * no First Light — those stay on /r/[spot]. src/scripts/pickleball-board.ts
+ * POSTs { kind, value, extras, device, code, observedAt } to
+ * POST /api/air/<spotId> and paints the result back into this row:
+ * "+N" on a 2xx, "Didn't send. Tap again." on anything else.
+ *
+ * `cfg.extras` (vibe's chips) are optional details, up to two, sent on the
+ * same tap-time report a moment later — never a second row.
+ */
+import type { AirKind } from '../../lib/air';
+
+interface Props {
+  spotId: string;
+  kind: string;
+  cfg: AirKind;
+}
+const { spotId, kind, cfg } = Astro.props as Props;
+const extraLabel = (x: string) => x.replace(/-/g, ' ');
+---
+
+<div class="pb-tap" data-pb-tap={`${spotId}:${kind}`} data-pb-tap-state="idle">
+  <p class="pb-tap__q">{cfg.question}</p>
+  <div class="pb-tap__buttons" data-pb-tap-buttons role="group" aria-label={cfg.question}>
+    {cfg.options.map((o) => (
+      <button type="button" class="pb-tap__btn" data-pb-tap-value={o.v}>{o.label}</button>
+    ))}
+  </div>
+  {cfg.extras.length > 0 && (
+    <div class="pb-tap__chips" data-pb-tap-chips role="group" aria-label="Details" hidden>
+      {cfg.extras.map((x) => (
+        <button type="button" class="pb-tap__chip" data-pb-tap-extra={x} aria-pressed="false">{extraLabel(x)}</button>
+      ))}
+    </div>
+  )}
+  <p class="pb-tap__note air-mono" data-pb-tap-note role="status" hidden></p>
+  <p class="pb-tap__hint air-mono" data-pb-tap-hint hidden>No on-site code yet · open your group link at the court to count</p>
+</div>
+
+<style>
+  /* Scoped `display` rules below beat the browser's own [hidden]; the card's and page's [hidden] guards are scoped to their own elements and never reach these. */
+  [hidden] { display: none !important; }
+  .pb-tap { margin: 10px 0 0; }
+  .pb-tap__q { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--pc-ink-soft); }
+  .pb-tap__buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+  [data-pb-tap-state='sent'] .pb-tap__buttons, [data-pb-tap-state='sending'] .pb-tap__buttons { opacity: .5; }
+  .pb-tap__btn {
+    padding: 9px 12px; border: 1.5px solid var(--pc-ink); border-radius: 0; background: var(--pc-bg); color: var(--pc-ink);
+    font: 400 14px/1.1 var(--pc-font-sans); cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .pb-tap__btn:active, .pb-tap__btn[data-pressed] { background: var(--pc-ink); color: var(--pc-bg); }
+  .pb-tap__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+  .pb-tap__chip { padding: 7px 10px; border: 1px solid var(--pc-rule); border-radius: 0; background: var(--pc-bg); color: var(--pc-ink-soft); font: 400 13px/1 var(--pc-font-sans); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .pb-tap__chip[aria-pressed='true'] { background: var(--pc-ink); border-color: var(--pc-ink); color: var(--pc-bg); }
+  .pb-tap__note { margin: 8px 0 0; color: var(--pc-ink-muted); }
+  .pb-tap__note[data-tone='grey'], .pb-tap__hint { color: var(--air-static, #9A9890); }
+  .pb-tap__hint { margin: 6px 0 0; text-transform: none; letter-spacing: .02em; }
+</style>

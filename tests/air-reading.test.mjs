@@ -202,8 +202,10 @@ test('crew needs two networks; a confirm counts the value it saw; the strip lead
   assert.equal(old.reportId, null, 'no report still says "0", so there is nothing to confirm');
 });
 
-test('open hours: LA wall time, open inclusive, close exclusive, every spot has them', () => {
-  for (const s of config.spots) assert.match(`${s.hours?.open}-${s.hours?.close}`, /^\d{2}:\d{2}-\d{2}:\d{2}$/, `${s.id} has open hours`);
+test('open hours: LA wall time, open inclusive, close exclusive, set only where verified', () => {
+  // Pickleball Board spec §4: a spot gets hours only where they are verified; without them it never counts First Light.
+  for (const s of config.spots) if (s.hours) assert.match(`${s.hours.open}-${s.hours.close}`, /^\d{2}:\d{2}-\d{2}:\d{2}$/, `${s.id} has readable open hours`);
+  for (const id of ['courts', 'beach', 'el-segundo']) assert.ok(config.spots.find((s) => s.id === id).hours, `${id} has open hours`);
   const courts = config.spots.find((s) => s.id === 'courts').hours;
   assert.deepEqual(courts, { open: '06:00', close: '22:00' });
   assert.deepEqual(config.spots.find((s) => s.id === 'beach').hours, { open: '05:30', close: '20:30' });

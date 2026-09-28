@@ -79,6 +79,16 @@ export function codeFor(spot: string): string | null {
   return null;
 }
 
+/**
+ * The code this phone already holds for a spot (remembered 12 h), or null.
+ * Never reads ?c=: a page that isn't the spot's own (the board) must not
+ * store a URL code under the wrong spot, the way codeFor() would.
+ */
+export function storedCode(spot: string): string | null {
+  const kept = readJson<{ code?: string; at?: number }>(lsGet(KEYS.code + spot), {});
+  return kept.code && typeof kept.at === 'number' && Date.now() - kept.at < CODE_TTL_MS && /^[A-Za-z0-9]{2,16}$/.test(kept.code) ? kept.code : null;
+}
+
 export const isMuted = (): boolean => lsGet(KEYS.mute) === '1';
 export function setMuted(on: boolean): void { if (on) lsSet(KEYS.mute, '1'); else lsDel(KEYS.mute); }
 
