@@ -1,0 +1,146 @@
+---
+/**
+ * /r/assign — the Desk: house-only Field Report Assignments.
+ *
+ * A template, a date and a seat count; nothing else is typed in but a
+ * director's void note (build spec §3.8). The page renders one shell for
+ * everyone and lets src/scripts/air-client.ts (mountAirAssign) decide what
+ * to show once GET /api/air/assign answers. Everyone sees the open calls
+ * (build spec §3.8). A director session (hasDirectorDeskAccess, the existing
+ * broadcaster/Kukai gate) also gets the create form, and the list becomes
+ * the last 14 days (voided too) with fillers and a void button on each.
+ * Everyone else sees a plain "House only" line where the form would be.
+ * Nothing about who may create is read from the page source. noindex.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AirInk from '../../components/air/AirInk.astro';
+import { AIR_ASSIGN_TEMPLATES, airSpot } from '../../lib/air';
+import { ASSIGN_COPY, MAX_SEATS } from '../../../functions/_lib/air-assign.mjs';
+
+const title = 'The Desk · Field Report Assignments';
+const description = 'House-only: put out a call for a window at a spot. Points and a stamp for being there, never cash, never for what you answer.';
+---
+
+<BlockLayout title={title} description={description} noindex hideAds jsonLd={null}>
+  <AirInk />
+  <div class="ra" data-air-assign-page>
+    <header class="ra__head">
+      <p class="ra__kicker air-mono"><a href="/r">Field Reports</a> <span aria-hidden="true">·</span> the Desk</p>
+      <h1 class="ra__title">Assignments</h1>
+      <p class="ra__lede">{ASSIGN_COPY}</p>
+    </header>
+
+    <noscript><p class="ra__note">This page needs JavaScript: assignments are read from your sign-in, never from the page.</p></noscript>
+
+    <p class="ra__note" data-air-assign-note role="status" hidden></p>
+
+    <section class="ra__house" data-air-assign-house hidden>
+      <p>House only. Assignments are put out by the house from a signed-in broadcaster session.</p>
+      <a class="ra__go" href="/r">Back to Field Reports</a>
+    </section>
+
+    <section class="ra__director" data-air-assign-director hidden>
+      <form class="ra__form" data-air-assign-form>
+        <h2 class="ra__h2 air-mono">Put out a call</h2>
+        <label class="ra__field">
+          <span>Template</span>
+          <select data-air-assign-template required>
+            {AIR_ASSIGN_TEMPLATES.map((t) => {
+              const spot = airSpot(t.spot);
+              return (
+                <option value={t.id} data-spot={t.spot} data-start={t.start} data-seats={t.seats}>
+                  {t.label} · {spot?.short ?? t.spot} · {t.start}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <div class="ra__row">
+          <label class="ra__field">
+            <span>Day</span>
+            <input type="date" data-air-assign-day required />
+          </label>
+          <label class="ra__field">
+            <span>Start (LA time)</span>
+            <input type="time" data-air-assign-start />
+          </label>
+          <label class="ra__field ra__field--seats">
+            <span>Seats</span>
+            <input type="number" min="1" max={MAX_SEATS} step="1" data-air-assign-seats />
+          </label>
+        </div>
+        <button type="submit" class="ra__btn" data-air-assign-submit>Put out the call</button>
+        <p class="ra__status" data-air-assign-form-note role="status" hidden></p>
+        <p class="ra__fine">One template, one date, one window. No free text but a void note.</p>
+      </form>
+    </section>
+
+    <section class="ra__list-wrap">
+      <h2 class="ra__h2 air-mono" data-air-assign-list-title>Open calls</h2>
+      <p class="ra__empty" data-air-assign-empty hidden>No open calls right now.</p>
+      <ul class="ra__list" data-air-assign-list></ul>
+    </section>
+
+    <footer class="ra__foot">
+      <p>Points never cash, and never for what a report says.</p>
+      <p class="air-mono"><a href="/r">All spots</a> <span aria-hidden="true">·</span> <a href="/r/me">Your card</a> <span aria-hidden="true">·</span> <a href="/api/air/assign">/api/air/assign</a></p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script>
+  import { mountAir } from '../../scripts/air-client';
+  mountAir();
+</script>
+
+<style>
+  .ra { max-width: 640px; margin: 0 auto; padding: 14px 16px 40px; }
+  .ra [hidden] { display: none !important; }
+  .ra__head { margin-bottom: 18px; }
+  .ra__kicker { margin: 0 0 8px; color: var(--pc-ink-muted); }
+  .ra__title { margin: 0 0 8px; font: 600 40px/44px var(--pc-font-sans); letter-spacing: -.02em; }
+  .ra__lede { margin: 0; font-size: 15px; line-height: 22px; color: var(--pc-ink-soft); }
+
+  .ra__note { margin: 0 0 14px; padding: 10px 12px; border-left: 4px solid var(--pc-ink); font-size: 15px; line-height: 1.4; }
+
+  .ra__house { margin: 0 0 16px; padding: 16px; border: 1.5px solid var(--pc-ink); }
+  .ra__house p { margin: 0 0 10px; font-size: 16px; line-height: 24px; }
+  .ra__go { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; background: var(--pc-ink); color: var(--pc-bg); font-size: 15px; }
+  .ra__go:hover { text-decoration: none; background: var(--pc-ink-soft); }
+
+  .ra__h2 { margin: 0 0 10px; font-weight: 600; color: var(--pc-ink-muted); }
+
+  .ra__form { margin: 0 0 24px; padding: 14px; border: 1.5px solid var(--pc-ink); }
+  /* minmax(0, 1fr) and min-width: 0: a select sizes itself to its longest option, and must not push past a 375px phone. */
+  .ra__field { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 4px; margin: 0 0 12px; font-size: 14px; }
+  .ra__field span { color: var(--pc-ink-muted); font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .ra__field select, .ra__field input { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; padding: 8px 10px; border: 1.5px solid var(--pc-ink); border-radius: 0; background: var(--pc-bg); color: var(--pc-ink); font: 400 16px/1.2 var(--pc-font-sans); }
+  .ra__row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .ra__field--seats { grid-column: 1 / -1; max-width: 120px; }
+  .ra__btn { display: block; width: 100%; min-height: 52px; margin-top: 4px; padding: 0 16px; border: 0; background: var(--pc-ink); color: var(--pc-bg); font: 600 16px/1 var(--pc-font-sans); cursor: pointer; }
+  .ra__btn:hover { background: var(--pc-ink-soft); }
+  .ra__btn:disabled { background: var(--pc-ink-soft); cursor: progress; }
+  .ra__status { margin: 10px 0 0; padding: 8px 10px; border-left: 4px solid var(--air-live); font-size: 15px; line-height: 1.4; }
+  .ra__fine { margin: 10px 0 0; font-size: 12px; line-height: 1.4; color: var(--pc-ink-muted); }
+
+  .ra__list-wrap { margin: 0 0 20px; }
+  .ra__empty { margin: 0; color: var(--pc-ink-muted); font-size: 15px; }
+  .ra__list { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--pc-ink); }
+  .ra__list :global(li) { padding: 12px 0; border-bottom: 1px solid var(--pc-rule-soft); }
+  .ra__list :global(li[data-voided]) { opacity: .55; }
+  .ra__list :global(.ra__row-head) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 4px; }
+  .ra__list :global(.ra__row-label) { font-weight: 600; font-size: 16px; color: var(--pc-ink); }
+  .ra__list :global(.ra__row-meta) { font-size: 13px; color: var(--pc-ink-soft); }
+  .ra__list :global(.ra__row-fillers) { margin: 4px 0 0; font-size: 13px; color: var(--pc-ink-muted); }
+  .ra__list :global(.ra__row-void) { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  /* 16px so iOS Safari does not zoom on focus; 44px targets like the rest of the page. */
+  .ra__list :global(.ra__row-void input) { flex: 1 1 160px; min-width: 0; min-height: 44px; padding: 4px 8px; border: 1px solid var(--pc-rule); background: var(--pc-bg); color: var(--pc-ink); font-size: 16px; }
+  .ra__list :global(.ra__row-void button) { min-height: 44px; padding: 0 12px; border: 1.5px solid var(--air-live); background: var(--pc-bg); color: var(--air-live); font: 600 13px/1 var(--pc-font-mono); letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+  .ra__list :global(.ra__row-void button:hover) { background: var(--air-live); color: var(--pc-bg); }
+  .ra__list :global(.ra__row-void button:disabled) { opacity: .6; cursor: progress; }
+
+  .ra__foot { padding-top: 12px; border-top: 1px solid var(--pc-rule); color: var(--pc-ink-muted); }
+  .ra__foot p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+
+  @media (max-width: 380px) { .ra__title { font-size: 32px; line-height: 36px; } .ra__row { grid-template-columns: 1fr; } }
+</style>

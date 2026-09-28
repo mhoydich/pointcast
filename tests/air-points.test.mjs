@@ -135,7 +135,7 @@ test('receipt: two stamps at most, the place and the highest new badge; the rest
   const crew = (fresh = true) => ({ ...crewStamp('courts', '2026-10-02'), fresh });
   const badge = (id, fresh = true) => ({ ...badgeStamp(id), fresh });
   const pick = (held) => { const r = receiptStamps(held); return { slam: r.slam.map((s) => `${s.kind}:${s.ref}`), more: r.more }; };
-  assert.deepEqual([...RECEIPT_ORDER], ['morning-crew', 'first-light', 'still-true', 'place']);
+  assert.deepEqual([...RECEIPT_ORDER], ['assignment', 'morning-crew', 'first-light', 'still-true', 'place']);
 
   assert.deepEqual(pick([place(), badge('first-light')]), { slam: ['place:courts', 'badge:first-light'], more: 0 });
   // A Friday report that opens the day and completes the first crew ever writes four stamps and slams two.

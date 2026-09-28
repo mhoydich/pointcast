@@ -10,7 +10,7 @@ import { claimDevice, confirmReport, fileReport, mePayload, spotPayload, station
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const ROUTES = ['functions/api/air/index.ts', 'functions/api/air/[spot].ts', 'functions/api/air/confirm.ts', 'functions/api/air/me.ts', 'functions/api/air/claim.ts'];
+const ROUTES = ['functions/api/air/index.ts', 'functions/api/air/[spot].ts', 'functions/api/air/confirm.ts', 'functions/api/air/me.ts', 'functions/api/air/claim.ts', 'functions/api/air/assign.ts'];
 const STORE = 'functions/_lib/air-store.ts';
 // [spot].ts, like og/live/[room].ts: the build's SEO pass only keeps an og:image
 // a function serves, and it reads `[param].ts` files. The route strips the .png.
@@ -48,7 +48,7 @@ test('air API source: the only KV write is the station post, through writeStatio
 test('air API source: every POST checks Origin, JSON and size before anything else', () => {
   assert.match(src[STORE], /request\.headers\.get\('Origin'\) !== new URL\(request\.url\)\.origin\) return \{ refused: fail\('bad-origin', 403\) \}/);
   assert.match(src[STORE], /AIR_LIMITS\.bodyBytes/);
-  for (const file of ['functions/api/air/[spot].ts', 'functions/api/air/confirm.ts', 'functions/api/air/claim.ts']) {
+  for (const file of ['functions/api/air/[spot].ts', 'functions/api/air/confirm.ts', 'functions/api/air/claim.ts', 'functions/api/air/assign.ts']) {
     const post = src[file].slice(src[file].indexOf('export const onRequestPost'));
     assert.match(post, /^export const onRequestPost[^\n]*\n\s+const read = await readPost\(request\);\n\s+if \('refused' in read\) return read\.refused;/, `${file} reads through readPost first`);
   }
@@ -82,7 +82,7 @@ test('air API source: rateLimit (KV) only guards claim; everything else counts D
 test('air routes: reserved ids are their own files or refused, never a spot', async () => {
   for (const id of config.reserved) assert.equal(spotOf(config, id), null, id);
   for (const id of config.reserved) assert.equal(targetOf(config, id), null, id);
-  for (const name of ['confirm', 'me', 'claim', 'index']) assert.ok(src[`functions/api/air/${name}.ts`], `${name}.ts routes before [spot].ts`);
+  for (const name of ['confirm', 'me', 'claim', 'index', 'assign']) assert.ok(src[`functions/api/air/${name}.ts`], `${name}.ts routes before [spot].ts`);
   assert.equal(parseAirReport(config, 'board', { kind: 'wait', value: '0', device: DEV.a }).reason, 'bad-spot');
   assert.match(src[OG], /pngResponse\(await renderPng\(svg\), 60,/, 'the unfurl card caches for a minute');
   assert.match(src[OG], /onRequestHead/);
@@ -96,7 +96,7 @@ test('the per-spot unfurl card survives the build: the SEO pass sees a function 
 
 /* ---------- the Friday court moment, end to end on node:sqlite ---------- */
 
-const MIGRATIONS = (await Promise.all(['0001_init.sql', '0023_air.sql'].map((f) => read(`migrations/auth/${f}`)))).join('\n');
+const MIGRATIONS = (await Promise.all(['0001_init.sql', '0023_air.sql', '0024_air_assignments.sql'].map((f) => read(`migrations/auth/${f}`)))).join('\n');
 // Fixture codes, seeded only in this test DB under a test pepper. Real codes live in an untracked seed.
 const PEPPER = 'test-pepper';
 const CRT = 'CRTFIXTURE9';
@@ -360,7 +360,7 @@ test('claim moves a phone\'s day to the account and its card handle; /me only sh
   await confirm(t, { reportId: filed.body.report.id, verdict: 'still', device: DEV.b, code: CRT }, T0 + MIN);
   const guest = await (await mePayload(req('me'), t.env, db, config, DEV.a, T0 + 2 * MIN)).json();
   assert.equal(guest.owner, 'device');
-  assert.deepEqual(guest.points, { today: 10, total: 10 });
+  assert.deepEqual(guest.points, { today: 10, total: 10, assigned: 0 });
   assert.deepEqual(guest.badges, ['first-light']);
   assert.equal(guest.stamps[0].text, 'MANHATTAN MIDDLE · FRI 02 OCT 2026');
   assert.equal(guest.stamps[0].traits.answer, '0');
@@ -381,7 +381,7 @@ test('claim moves a phone\'s day to the account and its card handle; /me only sh
   assert.equal(db.rows('SELECT byline FROM air_reports')[0].byline, '@mike');
   const card = await (await mePayload(req('me', cookie), t.env, db, config, null, T0 + 4 * MIN)).json();
   assert.equal(card.byline, '@mike');
-  assert.deepEqual(card.points, { today: 10, total: 10 });
+  assert.deepEqual(card.points, { today: 10, total: 10, assigned: 0 });
   assert.equal(card.reports[0].byline, '@mike');
   const jen = await (await mePayload(req('me'), t.env, db, config, DEV.b, T0 + 4 * MIN)).json();
   assert.equal(jen.points.total, 3, 'another phone sees only its own');

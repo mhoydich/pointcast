@@ -35,6 +35,11 @@ import { AIR_LIMITS, codeHash, guestByline, ipHash, kindOf, labelOf, newAirId, o
 import { CREW_WINDOW_MIN, crewFrom, evidence, isoSec, laClock, laDate, reading, stationLine, streakWeeks, winKey } from './air-reading.mjs';
 // @ts-ignore — plain modules shared with the tests
 import { DAILY_CAP, badgeStamp, badgesFor, confirmAwards, crewStamp, firstLightOpen, placeStamp, receiptStamps, reportAwards, stampText, stampTraits } from './air-points.mjs';
+// Field Report Assignments (docs/plans/2026-09-28-field-assignments.md §3): the
+// pure rules and view shapes; the SQL below is this file's, matched against
+// them by tests/air-assign.test.mjs's pickAssignment() cross-check.
+// @ts-ignore — plain module shared with the tests
+import { assignAward, assignReceiptStamp, assignmentView, canFill, canWitness, fillNet, fillView, laDayStart, recentView } from './air-assign.mjs';
 
 export type AirEnv = AuthEnv & {
   VISITS?: KVNamespace;
@@ -46,7 +51,10 @@ export type AirEnv = AuthEnv & {
   AIR_CODE_PEPPER?: string;
 };
 type Defer = (p: Promise<unknown>) => void;
-type Target = { spot: AirSpot; kind: string; cfg: AirKind };
+// `config` rides along so spotPayload (which takes no config of its own) can
+// still build the assignment view; fileReport and confirmReport already have
+// their own `config` parameter and never need to read it off Target.
+type Target = { spot: AirSpot; kind: string; cfg: AirKind; config: AirConfig };
 type ReportRow = {
   id: string; spot: string; kind: string; value: string; observed_at: number; day: string;
   pid_hash: string; ip_hash: string; user_id: string | null; byline: string; onsite: number; status: string; source: string;
@@ -55,6 +63,10 @@ type ConfirmRow = { report_id: string; pid_hash: string; ip_hash: string; user_i
 /** The day's crew as air_crews keeps it: anchored at its first formation. */
 type CrewRow = { id: string; at: number; n: number };
 type Stamp = { kind: 'place' | 'crew' | 'badge'; ref: string; day: string };
+/** The display-only ASSIGNMENT stamp (assignReceiptStamp): ranks first on the receipt, never an air_stamps row. */
+type AssignStamp = { kind: 'assignment'; ref: string; day: string; text: string; fresh: true };
+/** viewAward.assignment: the seat this report just filled. */
+type AssignAward = { id: string; label: string; reward: number; text: string };
 type HeldStamp = Stamp & { fresh: boolean };
 type Who = { userId: string | null; handle: string | null };
 /** reading() from air-reading.mjs: the GET /api/air/[spot] reading shape. */
@@ -64,7 +76,7 @@ type Reading = {
   crew: { id: string; n: number; at: string } | null; last: { value: string; label: string; observedAt: string; byline: string } | null;
 };
 type Crew = { id: string; n: number; at: number; members: { pid_hash: string; owner: string; byline: string }[] };
-type Saved = { id: string; value: string; observed_at: number; byline: string; onsite: number; awarded_at: number | null };
+type Saved = { id: string; value: string; observed_at: number; byline: string; onsite: number; awarded_at: number | null; status: string };
 export type ParsedReport = { spot: string; kind: string; value: string; extras: string[]; device: string; code: string | null; asGuest: boolean; observedAt: number };
 export type ParsedConfirm = { reportId: string; verdict: 'still' | 'changed' | 'cant'; device: string; code: string | null };
 
@@ -125,7 +137,7 @@ function firstKind(spot: AirSpot): { kind: string; cfg: AirKind } {
 /** The spot and its (v1: only) question, or null for unknown and reserved ids. */
 export function targetOf(config: AirConfig, id: string): Target | null {
   const spot = spotOf(config, id) as AirSpot | null;
-  return spot ? { spot, ...firstKind(spot) } : null;
+  return spot ? { spot, config, ...firstKind(spot) } : null;
 }
 
 /* ---------- who is asking ---------- */
@@ -170,7 +182,11 @@ function addDays(day: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d + n, 12)).toISOString().slice(0, 10);
 }
 
-type SpotData = { rows: ReportRow[]; confirms: ConfirmRow[]; weekRows: ReportRow[]; weekConfirms: ConfirmRow[]; crew: CrewRow | null };
+type SpotData = {
+  rows: ReportRow[]; confirms: ConfirmRow[]; weekRows: ReportRow[]; weekConfirms: ConfirmRow[]; crew: CrewRow | null;
+  /** Set by spotPayload, outside loadSpot's batch (its own try/catch: an assignment failure never blocks the spot page). */
+  assignment?: ReturnType<typeof assignmentView> | null;
+};
 
 /**
  * A spot's evidence since `since`: reports observed since then, plus any older
@@ -239,7 +255,20 @@ export async function spotPayload(env: AirEnv, db: D1Database, t: Target, now: n
   const data = await loadSpot(db, t, now);
   data.confirms = await withBylines(env, data.confirms);
   const you = device ? await yours(db, t, data, now, device) : null;
+  data.assignment = await loadAssignment(db, t.config, t.spot.id, now);
   return viewPayload(t, data, now, you);
+}
+
+/** The spot's next open assignment (spec §3.4), or null. Its own query and its own try/catch: never in loadSpot's batch, never blocks the spot page. */
+async function loadAssignment(db: D1Database, config: AirConfig, spotId: string, now: number) {
+  try {
+    const row = await db.prepare(`SELECT a.id, a.spot, a.kind, a.template, a.starts_at, a.ends_at, a.seats, a.reward, a.voided_at,
+        (SELECT COUNT(*) FROM air_assignment_fills f WHERE f.assignment_id = a.id) AS filled
+      FROM air_assignments a WHERE a.voided_at IS NULL AND a.ends_at > ? AND a.spot = ? ORDER BY a.starts_at, a.id LIMIT 1`).bind(now, spotId).first<AssignRow>();
+    return row ? assignmentView(config, row, now) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -292,6 +321,125 @@ export async function stationsPayload(db: D1Database, config: AirConfig, now: nu
 export async function liveReading(db: D1Database, t: Target, now: number): Promise<Reading> {
   const [rows, confirms] = await db.batch(evidenceStmts(db, t.spot.id, t.kind, now - (t.cfg.decayMin + CREW_WINDOW_MIN) * MIN, now - t.cfg.decayMin * MIN, 400));
   return reading({ spot: t.spot.id, cfg: t.cfg, rows: rows.results ?? [], confirms: confirms.results ?? [], now }) as Reading;
+}
+
+/* ---------- assignments: Field Report Assignments (spec §3.3-3.5) ---------- */
+
+type AssignRow = {
+  id: string; spot: string; kind: string; template: string; starts_at: number; ends_at: number;
+  seats: number; reward: number; voided_at: number | null; filled: number;
+};
+type RecentRow = AssignRow & { void_reason: string | null; created_at: number; witnessed: number; fillers?: string[] };
+type AssignFillRow = { assignment_id: string; template: string; spot: string; day: string; reward: number; witnessed_at: number | null };
+
+// Every statement below is the one tests/air-assign.test.mjs cross-checks
+// against pickAssignment() (the fill) and asserts literally (create, void,
+// open, me, assigned): copied here verbatim, inline at each call site (every
+// prepared statement in this file is), so the store and the pure rule never drift.
+
+/**
+ * Match a saved on-site report to an open assignment and pay its flat reward
+ * (spec §3.4): the same rule as pickAssignment() in air-assign.mjs, run as one
+ * INSERT so two phones racing for the last seat never both fill. Called from
+ * fileReport's on-site branch (a row with status 'ok'), after points, only when canFill; wrapped in
+ * its own try/catch there so a missing table or a write failure never blocks
+ * the report. `net` is the fill's own network (spec §3.4: a signed-in phone is
+ * its own network, else the report's IP); the 2-a-day cap counts fills by this
+ * owner or on this network, as the seat rule does, so a guest cannot rotate
+ * device ids past it. witnessed_at starts from an on-site "still" already on
+ * file for this report and value (the report turned on-site, or a retry filled,
+ * after its witness confirmed); later witnesses go through witnessAssignment.
+ */
+async function fillAssignment(
+  db: D1Database, config: AirConfig, target: Target, saved: Saved, owner: string, who: Who, pid: string, ip: string, now: number,
+): Promise<{ award: AssignAward; stamp: AssignStamp } | null> {
+  if (!canFill({ onsite: 1, value: saved.value })) return null;
+  const net: string = fillNet({ user_id: who.userId, ip_hash: ip, pid_hash: pid });
+  const day: string = laDate(saved.observed_at);
+  const row = await db.prepare(`INSERT OR IGNORE INTO air_assignment_fills (assignment_id, report_id, owner, net, day, reward, witnessed_at, created_at)
+    SELECT a.id, ?1, ?2, ?3, ?4, a.reward,
+      (SELECT MIN(c.at) FROM air_confirms c JOIN air_reports r ON r.id = c.report_id
+        WHERE c.report_id = ?1 AND c.verdict = 'still' AND c.onsite = 1 AND c.value = r.value), ?5
+    FROM air_assignments a
+    WHERE a.spot = ?6 AND a.kind = ?7 AND a.voided_at IS NULL
+      AND a.starts_at <= ?8 AND a.ends_at > ?8 AND a.created_by != ?2
+      AND (SELECT COUNT(*) FROM air_assignment_fills f WHERE f.assignment_id = a.id) < a.seats
+      AND NOT EXISTS (SELECT 1 FROM air_assignment_fills f WHERE f.assignment_id = a.id AND (f.owner = ?2 OR f.net = ?3))
+      AND NOT EXISTS (SELECT 1 FROM air_assignment_fills f WHERE f.report_id = ?1)
+      AND (SELECT COUNT(*) FROM air_assignment_fills f WHERE (f.owner = ?2 OR f.net = ?3) AND f.day = ?4) < 2
+    ORDER BY a.ends_at, a.id LIMIT 1
+    RETURNING assignment_id, reward`)
+    .bind(saved.id, owner, net, day, now, target.spot.id, target.kind, saved.observed_at)
+    .first<{ assignment_id: string; reward: number }>();
+  if (!row) return null;
+  const tpl = await db.prepare('SELECT template FROM air_assignments WHERE id = ?').bind(row.assignment_id).first<{ template: string }>();
+  if (!tpl) return null;
+  const filled = { assignment_id: row.assignment_id, template: tpl.template, spot: target.spot.id, day, reward: row.reward };
+  return { award: assignAward(config, filled) as AssignAward, stamp: assignReceiptStamp(config, filled) as AssignStamp };
+}
+
+/**
+ * Mark a fill WITNESSED (spec §3.4): an on-site "still" only, never a reward
+ * change. Called from confirmReport after the confirm insert, only when
+ * canWitness; wrapped in its own try/catch there.
+ */
+async function witnessAssignment(db: D1Database, reportId: string, now: number): Promise<void> {
+  await db.prepare('UPDATE air_assignment_fills SET witnessed_at = ? WHERE report_id = ? AND witnessed_at IS NULL').bind(now, reportId).run();
+}
+
+/** The last 14 days of assignments, voided too, with each one's filler bylines. Director-only (GET /api/air/assign `recent`). */
+async function loadRecentAssignments(db: D1Database, now: number): Promise<RecentRow[]> {
+  const res = await db.prepare(`SELECT a.id, a.spot, a.kind, a.template, a.starts_at, a.ends_at, a.seats, a.reward, a.voided_at, a.void_reason, a.created_at,
+      (SELECT COUNT(*) FROM air_assignment_fills f WHERE f.assignment_id = a.id) AS filled,
+      (SELECT COUNT(*) FROM air_assignment_fills f WHERE f.assignment_id = a.id AND f.witnessed_at IS NOT NULL) AS witnessed
+    FROM air_assignments a WHERE a.created_at >= ? ORDER BY a.created_at DESC LIMIT 50`).bind(now - 14 * DAY).all<RecentRow>();
+  const rows = (res.results ?? []) as RecentRow[];
+  if (!rows.length) return rows;
+  const fillerRes = await db.batch(rows.map((r) => db.prepare(`SELECT f.assignment_id, r.byline FROM air_assignment_fills f JOIN air_reports r ON r.id = f.report_id
+    WHERE f.assignment_id = ? ORDER BY f.created_at`).bind(r.id)));
+  return rows.map((r, i) => ({ ...r, fillers: ((fillerRes[i].results ?? []) as { byline: string }[]).map((f) => f.byline) }));
+}
+
+/** GET /api/air/assign[?spot=]. Public; a director session additionally gets `recent`. */
+export async function assignListPayload(db: D1Database, config: AirConfig, spot: string | null, director: boolean, now: number): Promise<Response> {
+  const ahead = now + 8 * DAY;
+  const openRes = spot
+    ? await db.prepare(`SELECT a.id, a.spot, a.kind, a.template, a.starts_at, a.ends_at, a.seats, a.reward, a.voided_at,
+        (SELECT COUNT(*) FROM air_assignment_fills f WHERE f.assignment_id = a.id) AS filled
+      FROM air_assignments a WHERE a.voided_at IS NULL AND a.ends_at > ? AND a.starts_at < ? AND a.spot = ? ORDER BY a.starts_at, a.id LIMIT 20`).bind(now, ahead, spot).all<AssignRow>()
+    : await db.prepare(`SELECT a.id, a.spot, a.kind, a.template, a.starts_at, a.ends_at, a.seats, a.reward, a.voided_at,
+        (SELECT COUNT(*) FROM air_assignment_fills f WHERE f.assignment_id = a.id) AS filled
+      FROM air_assignments a WHERE a.voided_at IS NULL AND a.ends_at > ? AND a.starts_at < ? ORDER BY a.starts_at, a.id LIMIT 20`).bind(now, ahead).all<AssignRow>();
+  const recent = director ? await loadRecentAssignments(db, now) : null;
+  return json(viewAssignList(config, (openRes.results ?? []) as AssignRow[], director, recent, now));
+}
+
+/** POST /api/air/assign {action:'create', ...parseAssign output}. House-only (checked by the route). */
+export async function createAssignment(
+  db: D1Database, config: AirConfig,
+  p: { template: string; spot: string; kind: string; startsAt: number; endsAt: number; seats: number; reward: number },
+  createdBy: string, now: number,
+): Promise<Response> {
+  const row = await db.prepare(`INSERT INTO air_assignments (id, spot, kind, template, starts_at, ends_at, seats, reward, created_by, created_at)
+    SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
+    WHERE (SELECT COUNT(*) FROM air_assignments WHERE spot = ?2 AND voided_at IS NULL AND ends_at > ?10) < 3
+      AND (SELECT COUNT(*) FROM air_assignments WHERE created_at >= ?11) < 20
+    RETURNING id`)
+    .bind(newAirId('aa'), p.spot, p.kind, p.template, p.startsAt, p.endsAt, p.seats, p.reward, createdBy, now, laDayStart(now))
+    .first<{ id: string }>();
+  if (!row) return fail('too-many-open', 409);
+  const view = assignmentView(config, {
+    id: row.id, spot: p.spot, kind: p.kind, template: p.template, starts_at: p.startsAt, ends_at: p.endsAt,
+    seats: p.seats, reward: p.reward, voided_at: null, filled: 0,
+  }, now);
+  return json(viewAssignCreated(view), 201);
+}
+
+/** POST /api/air/assign {action:'void', id, voidReason}. House-only (checked by the route). Filled seats keep their points. */
+export async function voidAssignment(db: D1Database, id: string, voidReason: string | null, now: number): Promise<Response> {
+  const res = await db.prepare('UPDATE air_assignments SET voided_at = ?, void_reason = ? WHERE id = ? AND voided_at IS NULL').bind(now, voidReason, id).run();
+  if ((res.meta?.changes ?? 0) === 0) return fail('not-found', 404);
+  return json(viewAssignVoided());
 }
 
 /* ---------- writes ---------- */
@@ -499,10 +647,10 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
     ON CONFLICT (spot, kind, pid_hash, slot) DO UPDATE SET value = excluded.value, extras_json = excluded.extras_json,
       observed_at = excluded.observed_at, onsite = MAX(air_reports.onsite, excluded.onsite)
     WHERE excluded.observed_at >= air_reports.observed_at AND air_reports.status = 'ok'
-    RETURNING id, value, observed_at, byline, onsite, awarded_at`)
+    RETURNING id, value, observed_at, byline, onsite, awarded_at, status`)
     .bind(id, p.spot, p.kind, p.value, JSON.stringify(p.extras), p.observedAt, laDate(p.observedAt), slotOf(p.observedAt), pid, ip, who.userId, byline, onsite ? 1 : 0, now)
     .first<Saved>();
-  const saved = upsert ?? await db.prepare('SELECT id, value, observed_at, byline, onsite, awarded_at FROM air_reports WHERE spot = ? AND kind = ? AND pid_hash = ? AND slot = ?')
+  const saved = upsert ?? await db.prepare('SELECT id, value, observed_at, byline, onsite, awarded_at, status FROM air_reports WHERE spot = ? AND kind = ? AND pid_hash = ? AND slot = ?')
     .bind(p.spot, p.kind, pid, slotOf(p.observedAt)).first<Saved>();
   if (!saved) return unavailable();
   const replaced = saved.id !== id;
@@ -512,7 +660,11 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
   let points = 0;
   let firstLight = false;
   let held: HeldStamp[] = [];
-  if (isOnsite) {
+  let assignment: { award: AssignAward; stamp: AssignStamp } | null = null;
+  // A row the house flagged or removed earns nothing more: a same-slot re-tap
+  // skips the upsert and reads the old row back, which must not take first
+  // light, a late award or an assignment seat.
+  if (isOnsite && saved.status === 'ok') {
     const day: string = laDate(saved.observed_at);
     // First light: the first real on-site answer of the day at this spot, inside
     // its open hours (a report from bed at 00:01 files but never claims it).
@@ -543,6 +695,12 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
       held = await putStamps(db, stamps.map((stamp) => ({ owner, stamp })), traits, saved.id, now);
     }
     if (unpaid) await db.prepare('UPDATE air_reports SET awarded_at = ? WHERE id = ?').bind(now, saved.id).run();
+    // Field Report Assignments (spec §3.4): a seat, and its flat reward, on
+    // the same proof the report just paid on. Never blocks the report: a
+    // missing air_assignments table or a write failure just means no fill.
+    try {
+      assignment = await fillAssignment(db, config, target, saved, owner, who, pid, ip, now);
+    } catch { /* no fill */ }
   }
 
   const data = await loadSpot(db, target, now);
@@ -554,7 +712,11 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
   const codeStatus = !p.code ? 'none' : onsite ? 'ok' : 'unknown';
   return json(viewFiled({
     t: target, data, now, replaced, saved, codeStatus, signedIn: Boolean(who.userId),
-    award: { points, pointsToday, streakWeeks: weeks, firstLight, held: [...held, ...mine], crew: member ? air?.anchor ?? null : null },
+    award: {
+      points, pointsToday, streakWeeks: weeks, firstLight, crew: member ? air?.anchor ?? null : null,
+      // The ASSIGNMENT stamp rides with the held stamps for the receipt only (RECEIPT_ORDER ranks it first); it was never written to air_stamps.
+      held: [...held, ...mine, ...(assignment ? [assignment.stamp] : [])], assignment: assignment?.award ?? null,
+    },
   }), replaced ? 200 : 201);
 }
 
@@ -593,6 +755,12 @@ export async function confirmReport(request: Request, env: AirEnv, db: D1Databas
     const data = await loadSpot(db, target, now);
     data.confirms = await withBylines(env, data.confirms);
     return fail('already-confirmed', 409, { reading: viewReading(target, data, now) });
+  }
+  // Field Report Assignments (spec §3.4): an on-site "still" marks the fill
+  // WITNESSED. The mark never pays — agreement is never paid for — and never
+  // blocks the confirm.
+  if (canWitness({ onsite, verdict: c.verdict })) {
+    try { await witnessAssignment(db, report.id, now); } catch { /* no mark */ }
   }
 
   const owner: string = ownerOf({ user_id: who.userId, pid_hash: pid });
@@ -635,6 +803,20 @@ export async function mePayload(request: Request, env: AirEnv, db: D1Database, c
       : db.prepare('SELECT id, spot, kind, value, observed_at, byline, onsite, status FROM air_reports WHERE pid_hash = ? AND user_id IS NULL ORDER BY observed_at DESC LIMIT 20').bind(pid),
   ]);
   const { streakWeeks: weeks } = await standing(db, owner, who, pid, now);
+  // Field Report Assignments (spec §3.4): points.assigned and the caller's own
+  // fills. Its own query, never part of the batch above: no air_assignments
+  // table yet just means nothing assigned, not a broken /me.
+  let assignedPoints = 0;
+  let assignFills: AssignFillRow[] = [];
+  try {
+    const [assigned, fills] = await db.batch([
+      db.prepare('SELECT COALESCE(SUM(reward), 0) AS n FROM air_assignment_fills WHERE owner = ?').bind(owner),
+      db.prepare(`SELECT f.assignment_id, a.template, a.spot, f.day, f.reward, f.witnessed_at FROM air_assignment_fills f
+        JOIN air_assignments a ON a.id = f.assignment_id WHERE f.owner = ? ORDER BY f.created_at DESC LIMIT 50`).bind(owner),
+    ]);
+    assignedPoints = Number((assigned.results?.[0] as { n?: number } | undefined)?.n ?? 0);
+    assignFills = (fills.results ?? []) as AssignFillRow[];
+  } catch { /* no assignments */ }
   // Signed in with this phone's unclaimed rows still on it: say what a claim would move.
   let claimable = null;
   if (who.userId && device) {
@@ -651,6 +833,7 @@ export async function mePayload(request: Request, env: AirEnv, db: D1Database, c
   return json(viewMe(config, {
     signedIn: Boolean(who.userId), byline, now, claimable, streakWeeks: weeks,
     points: { today: Number((today.results?.[0] as { n?: number } | undefined)?.n ?? 0), total: Number((total.results?.[0] as { n?: number } | undefined)?.n ?? 0) },
+    assigned: assignedPoints, assignFills,
     stamps: (stamps.results ?? []) as { kind: Stamp['kind']; ref: string; day: string; meta_json: string; created_at: number }[],
     reports: (reports.results ?? []) as { id: string; spot: string; kind: string; value: string; observed_at: number; byline: string; onsite: number; status: string }[],
   }));
@@ -687,6 +870,10 @@ export async function claimDevice(db: D1Database, who: Who & { userId: string },
       AND EXISTS (SELECT 1 FROM air_points x WHERE x.owner = ? AND x.action = air_points.action AND x.ref = air_points.ref)`).bind(dev, since, user),
     db.prepare('UPDATE OR IGNORE air_stamps SET owner = ? WHERE owner = ? AND created_at >= ?').bind(user, dev, since),
   ]);
+  // Field Report Assignments: move this phone's fills too. Kept out of the
+  // batch above (and its own try/catch) so a missing air_assignments table
+  // never breaks the claim the other four rows already made.
+  try { await db.prepare('UPDATE OR IGNORE air_assignment_fills SET owner = ? WHERE owner = ? AND created_at >= ?').bind(user, dev, since).run(); } catch { /* no fills to move */ }
   const moved = (r: D1Result) => Number(r.meta?.changes ?? 0);
   return json({ ok: true, moved: { reports: moved(reports), confirms: moved(confirms), points: moved(points), stamps: moved(stamps) }, byline });
 }
@@ -734,6 +921,7 @@ function viewPayload(t: Target, data: SpotData, now: number, you: { reportId: st
     typical: null,
     editorGuess: t.cfg.editorGuess ?? null,
     serverTime: isoSec(now),
+    assignment: data.assignment ?? null,
     ...(you ? { you } : {}),
   };
 }
@@ -747,21 +935,28 @@ function viewStation(spot: AirSpot, kind: string, r: Reading, lastAt: number | n
 }
 
 const shortOf = (config: AirConfig, spotId: string) => (spotOf(config, spotId) as AirSpot | null)?.short ?? spotId.toUpperCase();
-function viewStamps(held: HeldStamp[], short: string) {
+function viewStamps(held: (HeldStamp | AssignStamp)[], short: string) {
   return held.map((s) => ({ kind: s.kind, ref: s.ref, day: s.day, text: stampText(s, short) as string, new: s.fresh }));
 }
 
-type AwardIn = { points: number; pointsToday: number; streakWeeks: number; firstLight: boolean; held: HeldStamp[]; crew: CrewRow | null };
+type AwardIn = {
+  points: number; pointsToday: number; streakWeeks: number; firstLight: boolean; held: (HeldStamp | AssignStamp)[]; crew: CrewRow | null;
+  /** Field Report Assignments (spec §3.4): the seat this report just filled, or null. Never a confirm's award. */
+  assignment?: AssignAward | null;
+};
 function viewAward(a: AwardIn, short: string) {
-  const { slam, more } = receiptStamps(a.held) as { slam: HeldStamp[]; more: number };
+  const { slam, more } = receiptStamps(a.held) as { slam: (HeldStamp | AssignStamp)[]; more: number };
   return {
     points: a.points, pointsToday: a.pointsToday, cap: DAILY_CAP, streakWeeks: a.streakWeeks, firstLight: a.firstLight,
-    // The receipt: two stamps at most (the place and the highest new badge); `more` counts the rest, all in the book.
+    // The receipt: two stamps at most (the place and the highest new one: an ASSIGNMENT stamp, else the highest new badge); `more` counts the rest, all in the book.
     stamps: viewStamps(slam, short),
     more,
     // Every badge this action earned, slammed or counted.
     badges: a.held.filter((s) => s.kind === 'badge' && s.fresh).map((s) => s.ref),
     crew: a.crew ? { id: a.crew.id, n: a.crew.n, at: isoSec(a.crew.at) } : null,
+    // "ON THE AIR · ASSIGNMENT +10" (spec §3.8): {id, label, reward, text} of
+    // the seat this report filled; its stamp is in `stamps` above, not a badge.
+    assignment: a.assignment ?? null,
   };
 }
 
@@ -799,6 +994,7 @@ function viewConfirmed(o: { t: Target; data: SpotData; now: number; verdict: str
 
 function viewMe(config: AirConfig, o: {
   signedIn: boolean; byline: string | null; now: number; streakWeeks: number; points: { today: number; total: number };
+  assigned: number; assignFills: AssignFillRow[];
   claimable: { reports: number; points: number; stamps: number } | null;
   stamps: { kind: Stamp['kind']; ref: string; day: string; meta_json: string; created_at: number }[];
   reports: { id: string; spot: string; kind: string; value: string; observed_at: number; byline: string; onsite: number; status: string }[];
@@ -808,7 +1004,9 @@ function viewMe(config: AirConfig, o: {
     ok: true,
     owner: o.signedIn ? 'user' : 'device',
     byline: o.byline,
-    points: o.points,
+    // "+40 from assignments" (spec §3.8): points.assigned sits beside today/total; it never changes the report cap.
+    points: { ...o.points, assigned: o.assigned },
+    assignments: o.assignFills.map((r) => fillView(config, r)),
     streakWeeks: o.streakWeeks,
     stamps: o.stamps.filter((s) => s.kind !== 'badge').map((s) => ({
       kind: s.kind, ref: s.ref, day: s.day, text: stampText(s, shortOf(config, s.ref)) as string, at: isoSec(s.created_at), traits: traits(s.meta_json),
@@ -823,4 +1021,22 @@ function viewMe(config: AirConfig, o: {
     }),
     claimable: o.claimable,
   };
+}
+
+/** GET /api/air/assign. `recent` (directors only) implies canCreate. */
+function viewAssignList(config: AirConfig, open: AssignRow[], director: boolean, recent: RecentRow[] | null, now: number) {
+  return {
+    open: open.map((r) => assignmentView(config, r, now)),
+    canCreate: director,
+    ...(recent ? { recent: recent.map((r) => recentView(config, r, now)) } : {}),
+    serverTime: isoSec(now),
+  };
+}
+
+function viewAssignCreated(assignment: ReturnType<typeof assignmentView>) {
+  return { ok: true, assignment };
+}
+
+function viewAssignVoided() {
+  return { ok: true };
 }
