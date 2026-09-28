@@ -194,7 +194,7 @@ export function reading({ spot, cfg, rows, confirms = [], now }) {
 
 /**
  * The station post line, 280 chars or fewer:
- * "On the air from The courts: 1–4 waiting · 1 reporter · 7:36".
+ * "On the air from Manhattan Middle School courts: 1–4 in the rack · 1 reporter · 7:36".
  */
 export function stationLine({ name, label, support, at }) {
   return `On the air from ${name}: ${label} · ${supportLabel(Math.max(1, support))} · ${laClock(at)}`.slice(0, 280);

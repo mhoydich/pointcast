@@ -31,7 +31,7 @@ test('reading: none, single and agree', () => {
   const single = read([a], [], T0 + MIN);
   assert.equal(single.status, 'single');
   assert.equal(single.value, '1-4');
-  assert.equal(single.label, '1–4 waiting');
+  assert.equal(single.label, '1–4 in the rack');
   assert.equal(single.support, 1);
   assert.equal(single.reportId, a.id);
   assert.equal(single.observedAt, '2026-10-02T14:36:00Z');
@@ -53,12 +53,12 @@ test('reading: none, single and agree', () => {
 });
 
 test('reading: only the latest row per phone counts', () => {
-  const rows = [report('aaaa', '0', T0), report('aaaa', '5+', T0 + 31 * MIN), report('bbbb', '0', T0 + 32 * MIN)];
+  const rows = [report('aaaa', '0', T0), report('aaaa', '5-8', T0 + 31 * MIN), report('bbbb', '0', T0 + 32 * MIN)];
   const r = read(rows, [], T0 + 33 * MIN);
   assert.equal(r.support, 1);
   assert.equal(r.value, '0', 'a tie goes to the newest');
-  const r2 = read([...rows, report('cccc', '5+', T0 + 20 * MIN)], [], T0 + 33 * MIN);
-  assert.equal(r2.value, '5+');
+  const r2 = read([...rows, report('cccc', '5-8', T0 + 20 * MIN)], [], T0 + 33 * MIN);
+  assert.equal(r2.value, '5-8');
   assert.equal(r2.support, 2);
 });
 
@@ -73,10 +73,10 @@ test('reading: "can\'t say" never wins against a real answer', () => {
 });
 
 test('reading: remote, agent, removed and self-confirm rows carry zero support', () => {
-  const remote = report('aaaa', '5+', T0, { onsite: 0 });
+  const remote = report('aaaa', '5-8', T0, { onsite: 0 });
   const agent = report('agnt', '0', T0, { onsite: 0, source: 'agent:cc', source_url: 'https://example.com' });
-  const removed = report('bbbb', '5+', T0, { status: 'removed' });
-  const flagged = report('eeee', '5+', T0, { status: 'flagged' });
+  const removed = report('bbbb', '5-8', T0, { status: 'removed' });
+  const flagged = report('eeee', '5-8', T0, { status: 'flagged' });
   assert.equal(read([remote, agent, removed, flagged], [], T0 + MIN).status, 'none');
   const own = report('cccc', '1-4', T0);
   const r = read([own], [confirm('cccc', own, T0 + MIN), confirm('dddd', own, T0 + MIN, { onsite: 0 }), confirm('ffff', own, T0 + MIN, { verdict: 'changed' })], T0 + 2 * MIN);
@@ -91,7 +91,7 @@ test('reading: rows expire at 45 minutes (courts) and 120 minutes (beach)', () =
   assert.equal(read([a], [], T0 + 45 * MIN - 1).status, 'single');
   const gone = read([a], [], T0 + 45 * MIN);
   assert.equal(gone.status, 'none');
-  assert.deepEqual(gone.last, { value: '1-4', label: '1–4 waiting', observedAt: '2026-10-02T14:36:00Z', byline: '@aaaa' }, 'the grey "last report" line');
+  assert.deepEqual(gone.last, { value: '1-4', label: '1–4 in the rack', observedAt: '2026-10-02T14:36:00Z', byline: '@aaaa' }, 'the grey "last report" line');
   const fog = report('bbbb', 'hazy', T0, { spot: 'beach', kind: 'fog' });
   assert.equal(read([fog], [], T0 + 119 * MIN, BEACH, 'beach').label, 'Pier hazy');
   assert.equal(read([fog], [], T0 + 120 * MIN, BEACH, 'beach').status, 'none');
@@ -121,7 +121,7 @@ test('crew: fires at 3 distinct on-site phones within 30 minutes', () => {
   const r = read([a, c], [b], T0 + 4 * MIN);
   assert.deepEqual(r.crew, { id: crew.id, n: 3, at: '2026-10-02T14:39:10Z' });
   assert.ok(!('members' in r.crew), 'members never ride in a reading');
-  const five = crewFrom({ spot: 'courts', cfg: COURTS, rows: [a, c, report('dddd', '1-4', T0 + 5 * MIN), report('eeee', '5+', T0 + 5 * MIN)], confirms: [b], now: T0 + 6 * MIN });
+  const five = crewFrom({ spot: 'courts', cfg: COURTS, rows: [a, c, report('dddd', '1-4', T0 + 5 * MIN), report('eeee', '5-8', T0 + 5 * MIN)], confirms: [b], now: T0 + 6 * MIN });
   assert.equal(five.n, 5);
   assert.equal(five.at, T0 + 3 * MIN + 10_000, 'the crew time is when the third phone landed');
 });
@@ -133,7 +133,7 @@ test('crew: does not fire at 2, with a remote or agent third, the same phone twi
   assert.equal(crew([a, b]), null, 'two phones');
   assert.equal(crew([a, b, report('cccc', '1-4', T0 + 2 * MIN, { onsite: 0 })]), null, 'a remote third');
   assert.equal(crew([a, b, report('agnt', '1-4', T0 + 2 * MIN, { onsite: 0, source: 'agent:cc', source_url: 'https://example.com' })]), null, 'an agent third');
-  assert.equal(crew([a, b, report('aaaa', '5+', T0 + 3 * MIN)]), null, 'the same phone twice');
+  assert.equal(crew([a, b, report('aaaa', '5-8', T0 + 3 * MIN)]), null, 'the same phone twice');
   assert.equal(crew([a, b], [confirm('aaaa', a, T0 + 2 * MIN), confirm('bbbb', a, T0 + 2 * MIN)]), null, 'confirms by phones already counted');
   assert.equal(crew([a, b, report('cccc', '1-4', T0 + 2 * MIN)], [], T0 + 33 * MIN), null, 'the first phone fell out of the 30 minutes');
   assert.ok(crew([a, b, report('cccc', '1-4', T0 + 2 * MIN)], [], T0 + 30 * MIN), 'still inside at exactly 30');
@@ -154,8 +154,8 @@ test('time: LA days, windows and clocks', () => {
   assert.equal(laClock(T0, { pad: true }), '07:36');
   assert.equal(laClock(T0 + 12 * 3600_000, { ampm: true }), '7:36 PM');
   assert.equal(laParts(Date.parse('2026-11-01T15:00:00Z')).hour, 7, 'after DST ends LA is UTC-8');
-  assert.equal(stationLine({ name: 'The courts', label: '1–4 waiting', support: 1, at: T0 }), 'On the air from The courts: 1–4 waiting · 1 reporter · 7:36');
-  assert.equal(stationLine({ name: 'The courts', label: '1–4 waiting', support: 3, at: T0 + 3 * MIN }), 'On the air from The courts: 1–4 waiting · 3 agree · 7:39');
+  assert.equal(stationLine({ name: 'Manhattan Middle School courts', label: '1–4 in the rack', support: 1, at: T0 }), 'On the air from Manhattan Middle School courts: 1–4 in the rack · 1 reporter · 7:36');
+  assert.equal(stationLine({ name: 'Manhattan Middle School courts', label: '1–4 in the rack', support: 3, at: T0 + 3 * MIN }), 'On the air from Manhattan Middle School courts: 1–4 in the rack · 3 agree · 7:39');
 });
 
 test('streaks: weekly, Monday to Sunday in El Segundo, across the week boundary', () => {
@@ -186,10 +186,10 @@ test('crew needs two networks; a confirm counts the value it saw; the strip lead
   assert.equal(crew.at, T0 + 3 * MIN, 'the crew lands with the second network');
   assert.equal(crew.n, 4);
 
-  const p1 = report('eeee', '5+', T0 + 5 * MIN); // changed from '0' after p2 confirmed it
+  const p1 = report('eeee', '5-8', T0 + 5 * MIN); // changed from '0' after p2 confirmed it
   const p2 = confirm('ffff', p1, T0 + 3 * MIN, { value: '0' });
   const r = read([p1], [p2], T0 + 6 * MIN);
-  assert.equal(r.value, '5+');
+  assert.equal(r.value, '5-8');
   assert.equal(r.support, 1, 'the confirm backed "0", not "5+"');
   const old = read([p1], [p2], T0 + 3.5 * MIN);
   assert.equal(old.value, '0');

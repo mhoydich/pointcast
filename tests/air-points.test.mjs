@@ -62,7 +62,7 @@ test('points: remote pays 0 and "can\'t say" pays 1', () => {
 test('points: "0" and "5+" award identical units', () => {
   for (const firstLight of [false, true]) {
     const zero = reportAwards(courts({ value: '0', firstLight }));
-    const many = reportAwards(courts({ value: '5+', firstLight }));
+    const many = reportAwards(courts({ value: '5-8', firstLight }));
     assert.deepEqual(zero, many);
   }
   const beach = (value) => reportAwards({ spot: 'beach', kind: 'fog', value, onsite: true, observedAt: T0, decayMin: 120 });
@@ -157,14 +157,14 @@ test('receipt: two stamps at most, the place and the highest new badge; the rest
 test('rarity guard: the reporter\'s answer is namespaced and never a rated trait', () => {
   assert.deepEqual([...UNRATED_TRAITS], ['answer']);
   assert.ok(Object.isFrozen(UNRATED_TRAITS));
-  const t = stampTraits({ spot: 'courts', kind: 'wait', answer: '5+', observedAt: T0, crewSize: 3 });
-  assert.equal(t.answer, '5+');
+  const t = stampTraits({ spot: 'courts', kind: 'wait', answer: '5-8', observedAt: T0, crewSize: 3 });
+  assert.equal(t.answer, '5-8');
   assert.equal('value' in t, false, 'no bare value key a rating could pick up');
   assert.equal(t.geo, false, 'no geo tick until PR 3');
   const rated = Object.keys(t).filter((k) => !UNRATED_TRAITS.includes(k));
   assert.deepEqual(rated, ['spot', 'kind', 'weekday', 'hour', 'crewSize', 'firstLight', 'deadAirHours', 'geo']);
   // Two stamps that differ only in what was said carry identical rated traits.
   const zero = stampTraits({ spot: 'courts', kind: 'wait', answer: '0', observedAt: T0 });
-  const many = stampTraits({ spot: 'courts', kind: 'wait', answer: '5+', observedAt: T0 });
+  const many = stampTraits({ spot: 'courts', kind: 'wait', answer: '5-8', observedAt: T0 });
   assert.deepEqual(rated.map((k) => zero[k]), rated.map((k) => many[k]));
 });
