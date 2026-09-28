@@ -79,6 +79,7 @@ export const GET: APIRoute = async () => {
       { slug: 'gummies', label: commerceLaneLabel('gummies'), url: shopLaneUrl('gummies', true), count: countMatching(/gumm/i), sourceKind: 'good-feels', status: 'live', description: 'Gummies and 2-pack samples.' },
       { slug: 'enhancers', label: commerceLaneLabel('enhancers'), url: shopLaneUrl('enhancers', true), count: countMatching(/enhancer/i), sourceKind: 'good-feels', status: 'live', description: 'Beverage enhancers and drops.' },
       { slug: 'pointcast-merch', label: commerceLaneLabel('pointcast-merch'), url: shopLaneUrl('pointcast-merch', true), count: countSource('pointcast-merch'), sourceKind: 'pointcast-merch', status: 'coming-soon', description: 'Draft or unavailable PointCast merch stays hidden until active.' },
+      { slug: 'shelf', label: commerceLaneLabel('shelf'), url: shopLaneUrl('shelf', true), count: countSource('external'), sourceKind: 'external', status: 'live', description: 'Non-Good-Feels goods reviewed around the house; checkout at the maker or retailer.' },
       { slug: 'pairings', label: commerceLaneLabel('pairings'), url: 'https://pointcast.xyz/pairings', count: moodSlugs.length, sourceKind: 'pointcast', status: 'live', description: 'Mood routes that cross-index products.' },
       { slug: 'json-api', label: commerceLaneLabel('json-api'), url: shopLaneUrl('json-api', true), count: 4, sourceKind: 'pointcast', status: 'live', description: 'Shop JSON, products JSON, products JSONL, and blocks JSONL.' },
     ],

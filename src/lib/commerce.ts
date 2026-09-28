@@ -13,6 +13,7 @@ export type CommerceLaneSlug =
   | 'gummies'
   | 'enhancers'
   | 'pointcast-merch'
+  | 'shelf'
   | 'pairings'
   | 'json-api';
 
@@ -22,6 +23,7 @@ export const COMMERCE_LANE_LABELS: Record<CommerceLaneSlug, string> = {
   gummies: 'Gummies',
   enhancers: 'Enhancers',
   'pointcast-merch': 'PointCast Merch',
+  shelf: 'The Shelf',
   pairings: 'Pairings',
   'json-api': 'JSON / API',
 };
@@ -104,6 +106,8 @@ export function sourceLabel(kind: ReturnType<typeof sourceKind>): string {
 export function commerceLane(product: { brand?: string; url: string; category?: string; name?: string }): CommerceLaneSlug {
   const kind = sourceKind(product);
   if (kind === 'pointcast-merch') return 'pointcast-merch';
+  // Non-Good-Feels goods reviewed around the house live on The Shelf.
+  if (kind === 'external') return 'shelf';
 
   const searchable = `${product.category || ''} ${product.name || ''}`.toLowerCase();
   if (/enhancer/.test(searchable)) return 'enhancers';
