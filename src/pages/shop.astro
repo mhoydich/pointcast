@@ -19,7 +19,9 @@ import {
 } from '../lib/commerce';
 
 const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
-  .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
+  // Good Feels leads the grid; The Shelf (external goods) follows, newest first within each.
+  .sort((a, b) => Number(sourceKind(a.data) === 'external') - Number(sourceKind(b.data) === 'external')
+    || b.data.addedAt.getTime() - a.data.addedAt.getTime());
 
 type ProductEntry = (typeof products)[number];
 
@@ -27,6 +29,7 @@ const categories = Array.from(new Set(products.map((p) => p.data.category || 'ca
 const moodSlugs = Array.from(new Set(products.flatMap((p) => p.data.pairsWithMood ?? []))).sort();
 const goodFeelsProducts = products.filter((p) => sourceKind(p.data) === 'good-feels');
 const pointcastMerchProducts = products.filter((p) => sourceKind(p.data) === 'pointcast-merch');
+const shelfProducts = products.filter((p) => sourceKind(p.data) === 'external');
 const seltzerCount = products.filter((p) => /seltzer|drink|mix seltzer/i.test(p.data.category || p.data.name)).length;
 const gummyCount = products.filter((p) => /gumm/i.test(p.data.category || p.data.name)).length;
 const enhancerCount = products.filter((p) => /enhancer/i.test(p.data.category || p.data.name)).length;
@@ -150,6 +153,11 @@ function price(product: ProductEntry): string {
         <span class="lane__title">Enhancers</span>
         <span class="lane__meta mono">{enhancerCount} entries</span>
       </a>
+      <a class="lane lane--shelf" href={shopLaneUrl('shelf')}>
+        <span class="lane__kicker mono">REVIEWED</span>
+        <span class="lane__title">The Shelf</span>
+        <span class="lane__meta mono">{shelfProducts.length} entries</span>
+      </a>
       <a class="lane lane--merch" href={shopLaneUrl('pointcast-merch')}>
         <span class="lane__kicker mono">COMING SOON</span>
         <span class="lane__title">PointCast Merch</span>
@@ -191,7 +199,7 @@ function price(product: ProductEntry): string {
             const kind = sourceKind(product.data);
             const host = checkoutHost(product.data.url);
             const lane = commerceLane(product.data);
-            const cardId = firstSlugByLane.get(lane) === product.data.slug && ['seltzers', 'gummies', 'enhancers'].includes(lane)
+            const cardId = firstSlugByLane.get(lane) === product.data.slug && ['seltzers', 'gummies', 'enhancers', 'shelf'].includes(lane)
               ? lane
               : undefined;
             const moods = product.data.pairsWithMood ?? [];
@@ -457,6 +465,7 @@ function price(product: ProductEntry): string {
     .lane--gummies { border-left-color: #B45309; }
     .lane--enhancers { border-left-color: #6D28D9; }
     .lane--merch { border-left-color: #12110E; background: #fbfaf5; }
+    .lane--shelf { border-left-color: #4D7C0F; background: #f7fbef; }
     .lane--pairings { border-left-color: #5F3DC4; }
     .lane--json { border-left-color: #185FA5; }
 
