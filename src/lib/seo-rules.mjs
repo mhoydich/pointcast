@@ -12,6 +12,8 @@ export const NOINDEX_PATHS = new Set([
   '/court/',
   '/r/me/',
   '/r/assign/',
+  // The reserved /r/board id only redirects to /pickleball (the page to index).
+  '/r/board/',
 ]);
 
 // Sources with permanent redirects in public/_redirects or Pages middleware.

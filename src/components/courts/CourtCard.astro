@@ -1,0 +1,274 @@
+---
+/**
+ * CourtCard — one listed court on THE PICKLEBALL BOARD (build spec §9 item 4,
+ * §10; Fable design §2 item 4, §3 shapes, §6 validators).
+ *
+ * Facts, hours, blocks and the reserve link are sourced (courts-schedule.json,
+ * src/lib/courts.ts) and render here at build time, filtered by showable():
+ * verified renders, partial renders tagged "unconfirmed", unverified never
+ * renders, and anything checked 45+ days ago reads "may have changed"
+ * (build spec §3). Everything that changes between builds — the wait and
+ * parking readings, now/next, validators, vibe — is a skeleton here and is
+ * filled by src/scripts/pickleball-board.ts from GET /api/air/board, keyed
+ * off `data-pb-card`.
+ *
+ * Only an `air: true` court (src/data/air-spots.json) can be reported on: it
+ * gets the wait/parking readings, the Still true? strips and the parking and
+ * vibe TapRows. A listing-only court (no `spot`) shows its schedule and facts
+ * with no way to report — never invents a reading it can't back.
+ */
+import TapRow from './TapRow.astro';
+import { provenanceLine, type Block, type Court, type Provenance } from '../../lib/courts';
+import { daysText, hoursLine, seasonText, timeText } from '../../lib/court-format';
+import { airKind, mhzLabel, spotUrl, type AirSpot } from '../../lib/air';
+
+interface Props {
+  court: Court;
+  spot: AirSpot | null;
+}
+const { court, spot } = Astro.props as Props;
+
+const DAY_MS = 86_400_000;
+/** Whole LA days between a 'YYYY-MM-DD' checked date and now (build time). */
+function daysSince(checked: string, now: Date): number {
+  const [y, m, d] = checked.split('-').map(Number);
+  const then = Date.UTC(y || 1970, (m || 1) - 1, d || 1, 12);
+  return Math.floor((now.getTime() - then) / DAY_MS);
+}
+/** build spec §3: verified renders, partial renders tagged, unverified never renders, 45+ days reads "may have changed". */
+function showable(p: Provenance, now: Date): { show: boolean; tag: 'unconfirmed' | 'stale' | null } {
+  if (p.confidence === 'unverified') return { show: false, tag: null };
+  const stale = daysSince(p.checked, now) >= 45;
+  return { show: true, tag: p.confidence === 'partial' ? 'unconfirmed' : stale ? 'stale' : null };
+}
+const now = new Date();
+
+const facts = court.facts
+  .map((f) => ({ fact: f, ...showable(f, now) }))
+  .filter((f) => f.show)
+  .filter((f) => f.fact.key !== 'walk-on'); // walkOn renders on its own line, not with the other facts
+const hoursInfo = court.hours ? showable(court.hours, now) : null;
+const walkOnInfo = court.walkOn ? showable(court.walkOn, now) : null;
+const blocks = court.blocks
+  .map((b) => ({ block: b, ...showable(b, now) }))
+  .filter((b) => b.show);
+const reserveInfo = court.reserve ? showable(court.reserve, now) : null;
+
+const SHAPE_LABEL: Record<string, string> = {
+  'paddle-rack': 'Paddle rack',
+  'reservation+drop-in': 'Reservation + drop-in',
+  'first-come': 'First come',
+};
+/** "Advanced drop-in · Mon 5 PM–7 PM · Sep 7–Oct 26 · $5" (src/lib/court-format.ts: the client prints the same words). */
+function blockLine(b: Block): string {
+  const time = `${timeText(b.start)}–${timeText(b.end)}`;
+  const season = seasonText(b.from, b.until);
+  const fee = b.fee ? ` · ${b.fee}` : '';
+  return `${b.label} · ${daysText(b.days)} ${time}${season ? ` · ${season}` : ''}${fee}`;
+}
+
+const parkingCfg = spot ? airKind(spot.id, 'parking') : null;
+const vibeCfg = spot ? airKind(spot.id, 'vibe') : null;
+const waitCfg = spot ? airKind(spot.id, 'wait') : null;
+const reportHref = spot ? spotUrl(spot.id) : null;
+---
+
+<section class="pb-card" data-pb-card={court.id} data-pb-status={court.status} style={`--pb-channel:${spot?.color ?? '#3B6D11'}`}>
+  <header class="pb-card__head">
+    <h2 class="pb-card__name">{court.name}</h2>
+    <p class="pb-card__meta air-mono">
+      <span>{court.short}</span>
+      <span aria-hidden="true">·</span>
+      <span>{court.city}</span>
+      {court.shape && <><span aria-hidden="true">·</span><span>{SHAPE_LABEL[court.shape] ?? court.shape}</span></>}
+      {spot && <><span aria-hidden="true">·</span><span>{mhzLabel(spot)} MHz</span></>}
+    </p>
+    {court.status === 'closed' && <p class="pb-card__closed">CLOSED</p>}
+  </header>
+
+  {spot && waitCfg && (
+    <div class="pb-reading" data-pb-reading={`${spot.id}:wait`} hidden>
+      <div class="pb-reading__row">
+        <p class="pb-reading__label" data-pb-reading-label></p>
+        <div class="pb-reading__bars" data-pb-reading-bars aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <p class="pb-reading__meta air-mono">
+        <img class="pb-badge" src="/images/air/badges/still-true.webp" alt="" width="16" height="16" loading="lazy" />
+        <span data-pb-reading-validated></span>
+        <span data-pb-reading-age></span>
+      </p>
+    </div>
+  )}
+  <p class="pb-quiet" data-pb-quiet={spot ? `${spot.id}:wait` : undefined} hidden>Quiet. No live report yet.</p>
+
+  {spot && (
+    <>
+    <div class="pb-confirm" data-pb-confirm={`${spot.id}:wait`} hidden>
+      <p class="pb-confirm__q" data-pb-confirm-q>Still true?</p>
+      <p class="pb-confirm__meta air-mono" data-pb-confirm-meta></p>
+      <div class="pb-confirm__pair">
+        <button type="button" class="pb-confirm__btn" data-pb-confirm-verdict="still">Yes</button>
+        <button type="button" class="pb-confirm__btn" data-pb-confirm-verdict="changed">Changed</button>
+      </div>
+      <p class="pb-confirm__note air-mono" data-pb-confirm-note role="status" hidden></p>
+      <p class="pb-confirm__remote air-mono" data-pb-confirm-remote hidden>Counted from away · open your group link at the court.</p>
+    </div>
+    <p class="pb-reask air-mono" data-pb-reask={`${spot.id}:wait`} hidden>That reading just expired. <a href={reportHref}>Report what you see</a></p>
+    </>
+  )}
+
+  <div class="pb-sched" data-pb-sched={court.id}>
+    <p class="pb-sched__now" data-pb-sched-now hidden>
+      <span data-pb-sched-text></span>
+      <b class="pb-tag pb-tag--unconfirmed" data-pb-sched-tag hidden>unconfirmed</b>
+      <span class="pb-prov air-mono" data-pb-sched-prov></span>
+    </p>
+    <p class="pb-sched__next" data-pb-sched-next hidden>
+      <span data-pb-sched-text></span>
+      <b class="pb-tag pb-tag--unconfirmed" data-pb-sched-tag hidden>unconfirmed</b>
+      <span class="pb-prov air-mono" data-pb-sched-prov></span>
+    </p>
+    {blocks.length > 0 && (
+      <ul class="pb-sched__list">
+        {blocks.map(({ block, tag }) => (
+          <li>
+            {blockLine(block)}
+            {tag === 'unconfirmed' && <b class="pb-tag pb-tag--unconfirmed">unconfirmed</b>}
+            <span class="pb-prov air-mono">{provenanceLine(block)}{tag === 'stale' && ' · may have changed'}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  {hoursInfo?.show && court.hours && (
+    <p class="pb-hours">
+      Hours: {hoursLine(court.hours.rules)}{court.hours.else === 'closed' ? '; closed otherwise' : ''}
+      {hoursInfo.tag === 'unconfirmed' && <b class="pb-tag pb-tag--unconfirmed">unconfirmed</b>}
+      {court.hours.conflict && <span class="pb-conflict"> — {court.hours.conflict.text}</span>}
+      <span class="pb-prov air-mono">{provenanceLine(court.hours)}{hoursInfo.tag === 'stale' && ' · may have changed'}</span>
+    </p>
+  )}
+
+  {walkOnInfo?.show && court.walkOn && (
+    <p class="pb-walkon">
+      {court.walkOn.text}
+      {walkOnInfo.tag === 'unconfirmed' && <b class="pb-tag pb-tag--unconfirmed">unconfirmed</b>}
+      <span class="pb-prov air-mono">{provenanceLine(court.walkOn)}{walkOnInfo.tag === 'stale' && ' · may have changed'}</span>
+    </p>
+  )}
+
+  {facts.length > 0 && (
+    <ul class="pb-facts">
+      {facts.map(({ fact, tag }) => (
+        <li>
+          {fact.text}
+          {tag === 'unconfirmed' && <b class="pb-tag pb-tag--unconfirmed">unconfirmed</b>}
+          <span class="pb-prov air-mono">{provenanceLine(fact)}{tag === 'stale' && ' · may have changed'}</span>
+        </li>
+      ))}
+    </ul>
+  )}
+
+  {spot && (
+    <div class="pb-side">
+      <p class="pb-side__label air-mono">Parking</p>
+      <div class="pb-reading pb-reading--side" data-pb-reading={`${spot.id}:parking`} hidden>
+        <div class="pb-reading__row">
+          <p class="pb-reading__label" data-pb-reading-label></p>
+        </div>
+        <p class="pb-reading__meta air-mono"><span data-pb-reading-validated></span><span data-pb-reading-age></span></p>
+      </div>
+      <p class="pb-quiet pb-quiet--side" data-pb-quiet={`${spot.id}:parking`} hidden></p>
+      <div class="pb-confirm pb-confirm--side" data-pb-confirm={`${spot.id}:parking`} hidden>
+        <p class="pb-confirm__q" data-pb-confirm-q>Still true?</p>
+        <p class="pb-confirm__meta air-mono" data-pb-confirm-meta></p>
+        <div class="pb-confirm__pair">
+          <button type="button" class="pb-confirm__btn" data-pb-confirm-verdict="still">Yes</button>
+          <button type="button" class="pb-confirm__btn" data-pb-confirm-verdict="changed">Changed</button>
+        </div>
+        <p class="pb-confirm__note air-mono" data-pb-confirm-note role="status" hidden></p>
+        <p class="pb-confirm__remote air-mono" data-pb-confirm-remote hidden>Counted from away · open your group link at the court.</p>
+      </div>
+      {parkingCfg && <TapRow spotId={spot.id} kind="parking" cfg={parkingCfg} />}
+    </div>
+  )}
+
+  {spot && vibeCfg && (
+    <div class="pb-side">
+      <p class="pb-side__label air-mono">Vibe</p>
+      <p class="pb-vibe" data-pb-vibe={`${spot.id}:vibe`}>Be the first to rate.</p>
+      <TapRow spotId={spot.id} kind="vibe" cfg={vibeCfg} />
+    </div>
+  )}
+
+  <div class="pb-links">
+    {court.reserve && reserveInfo?.show && (
+      <a class="pb-links__book" href={court.reserve.url}>{court.reserve.label}</a>
+    )}
+    {reportHref && <a class="pb-links__report" href={reportHref} data-pb-report-link>Report</a>}
+  </div>
+</section>
+
+<style>
+  .pb-card { margin: 0 0 20px; padding: 16px; border: 1.5px solid var(--pc-ink); }
+  .pb-card[data-pb-status='closed'] { opacity: .72; }
+  .pb-card[data-pb-best] { border-color: var(--pb-channel); border-width: 2px; }
+  .pb-card__head { margin-bottom: 10px; }
+  .pb-card__name { margin: 0 0 4px; font: 600 22px/1.25 var(--pc-font-sans); letter-spacing: -.01em; }
+  .pb-card__meta { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0; color: var(--pb-channel); }
+  .pb-card__closed { display: inline-block; margin: 8px 0 0; padding: 3px 8px; background: var(--pc-ink); color: var(--pc-bg); font: 600 11px/1 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+
+  .pb-reading { margin: 12px 0 0; padding: 10px 0; border-top: 1px solid var(--pc-rule-soft); }
+  .pb-reading__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .pb-reading__label { margin: 0; font: 600 18px/1.3 var(--pc-font-sans); }
+  .pb-reading__bars { display: flex; gap: 3px; align-items: flex-end; }
+  .pb-reading__bars i { display: block; width: 5px; background: var(--pc-rule); }
+  .pb-reading__bars i:nth-child(1) { height: 6px; } .pb-reading__bars i:nth-child(2) { height: 9px; } .pb-reading__bars i:nth-child(3) { height: 12px; } .pb-reading__bars i:nth-child(4) { height: 15px; } .pb-reading__bars i:nth-child(5) { height: 18px; }
+  .pb-reading__bars[data-bars='1'] i:nth-child(-n+1), .pb-reading__bars[data-bars='2'] i:nth-child(-n+2), .pb-reading__bars[data-bars='3'] i:nth-child(-n+3),
+  .pb-reading__bars[data-bars='4'] i:nth-child(-n+4), .pb-reading__bars[data-bars='5'] i:nth-child(-n+5) { background: var(--pc-ink); }
+  .pb-reading__meta { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; color: var(--pc-ink-muted); }
+  .pb-badge { display: block; }
+  .pb-quiet { margin: 12px 0 0; padding: 10px 0; border-top: 1px solid var(--pc-rule-soft); color: var(--air-static, #9A9890); font-size: 15px; }
+  .pb-quiet--side { padding-top: 0; border-top: 0; margin-top: 4px; }
+
+  .pb-confirm { margin: 10px 0 0; padding: 10px; border: 1.5px solid var(--pc-ink); }
+  .pb-confirm__q { margin: 0 0 2px; font: 600 18px/1.2 var(--pc-font-sans); }
+  .pb-confirm__meta { margin: 0 0 8px; color: var(--pc-ink-muted); }
+  .pb-confirm__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pb-confirm__btn { padding: 10px; border: 1.5px solid var(--pc-ink); border-radius: 0; background: var(--pc-bg); color: var(--pc-ink); font: 400 16px/1 var(--pc-font-sans); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .pb-confirm__btn:active, .pb-confirm__btn[data-pressed] { background: var(--pc-ink); color: var(--pc-bg); }
+  .pb-confirm__btn:disabled { cursor: default; }
+  .pb-confirm__btn:disabled:not([data-pressed]) { opacity: .5; }
+  .pb-confirm__note { margin: 8px 0 0; color: var(--pc-ink); text-transform: none; letter-spacing: .02em; }
+  .pb-confirm__note[data-tone='grey'] { color: var(--air-static, #9A9890); }
+  .pb-confirm__remote { margin: 8px 0 0; color: var(--air-static, #9A9890); text-transform: none; letter-spacing: .02em; }
+  .pb-reask { margin: 10px 0 0; color: var(--pc-ink-muted); text-transform: none; letter-spacing: .02em; }
+  .pb-reask a { color: var(--pc-accent); font-weight: 600; }
+
+  .pb-sched { margin: 10px 0 0; }
+  .pb-sched__now { margin: 0 0 4px; font-weight: 600; color: var(--pb-channel); }
+  .pb-sched__now .pb-prov, .pb-sched__next .pb-prov { font-weight: 400; }
+  .pb-sched__next { margin: 0 0 4px; color: var(--pc-ink-soft); }
+  .pb-sched__list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
+  .pb-sched__list li { font-size: 14px; line-height: 1.4; color: var(--pc-ink-soft); }
+
+  .pb-hours, .pb-walkon { margin: 10px 0 0; font-size: 14px; line-height: 1.45; color: var(--pc-ink-soft); }
+  .pb-conflict { color: var(--pc-ink-muted); }
+  .pb-facts { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+  .pb-facts li { font-size: 14px; line-height: 1.4; color: var(--pc-ink-soft); }
+  .pb-tag { margin-left: 6px; padding: 1px 5px; border: 1px solid var(--pc-ink-muted); font: 600 10px/1.4 var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--pc-ink-muted); }
+  .pb-prov { display: block; margin-top: 2px; color: var(--pc-ink-muted); }
+
+  .pb-side { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--pc-rule-soft); }
+  .pb-side__label { margin: 0 0 6px; color: var(--pc-ink-muted); }
+  .pb-vibe { margin: 0; font-size: 15px; color: var(--pc-ink-soft); }
+
+  .pb-links { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--pc-rule-soft); font-size: 14px; }
+  .pb-links a { color: var(--pc-accent); font-weight: 600; text-decoration: none; }
+  .pb-links a:hover { text-decoration: underline; }
+
+  .pb-card [hidden] { display: none !important; }
+
+  @media (max-width: 380px) { .pb-card__name { font-size: 20px; } }
+</style>

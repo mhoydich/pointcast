@@ -3,7 +3,7 @@
 // under node without the Pages runtime. Points are a score, never cash, and
 // never depend on what a report says: "0 waiting" and "5+" pay the same.
 
-import { inHours, laDate, laParts, windowIdx } from './air-reading.mjs';
+import { inHours, laDate, laParts, weekOf, windowIdx } from './air-reading.mjs';
 
 export const POINTS = Object.freeze({ report: 6, 'first-light': 4, confirm: 3, cant: 1, byline: 10 });
 export const DAILY_CAP = 30;
@@ -19,6 +19,8 @@ export const BADGES = Object.freeze({
 
 // air_points.ref values. UNIQUE (owner, action, ref) is what makes each pay once.
 export const reportRef = (spot, kind, day, idx) => `${spot}:${kind}:${day}:${idx}`;
+/** A `payEvery: 'week'` kind's ref: one award per spot, kind and LA Monday-week (weekOf in air-reading.mjs). */
+export const weeklyRef = (spot, kind, day) => `${spot}:${kind}:w${weekOf(day)}`;
 export const firstLightRef = (spot, day) => `${spot}:${day}`;
 export const bylineRef = (date) => `morning:${date}`;
 
@@ -35,14 +37,19 @@ export function firstLightOpen({ spot, value, observedAt }) {
 
 /**
  * Pure: the air_points rows a report earns, before the cap: [{action, ref, units, day}].
- * Remote reports earn nothing. "cant" pays 1 in place of the report's 6.
+ * Remote reports earn nothing. "cant" pays 1 in place of the report's `units`.
+ * `units` is the kind's `points` (absent or not a whole number ≥ 0: 6).
+ * `payEvery: 'week'` pays once per spot, kind and LA Monday-week (weeklyRef);
+ * otherwise once per decay window (reportRef). UNIQUE (owner, action, ref) in
+ * air_points is what makes either pay once.
  * `firstLight` means the caller's INSERT OR IGNORE INTO air_firsts changed a row.
  */
-export function reportAwards({ spot, kind, value, onsite, observedAt, decayMin, firstLight = false }) {
+export function reportAwards({ spot, kind, value, onsite, observedAt, decayMin, firstLight = false, units = POINTS.report, payEvery = null }) {
   if (!onsite) return [];
   const day = laDate(observedAt);
-  const ref = reportRef(spot, kind, day, windowIdx(observedAt, decayMin));
-  const out = [value === 'cant' ? { action: 'cant', ref, units: POINTS.cant, day } : { action: 'report', ref, units: POINTS.report, day }];
+  const ref = payEvery === 'week' ? weeklyRef(spot, kind, day) : reportRef(spot, kind, day, windowIdx(observedAt, decayMin));
+  const pay = Number.isInteger(units) && units >= 0 ? units : POINTS.report;
+  const out = [value === 'cant' ? { action: 'cant', ref, units: POINTS.cant, day } : { action: 'report', ref, units: pay, day }];
   if (firstLight) out.push({ action: 'first-light', ref: firstLightRef(spot, day), units: POINTS['first-light'], day });
   return out;
 }

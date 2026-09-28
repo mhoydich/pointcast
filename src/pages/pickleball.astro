@@ -1,0 +1,236 @@
+---
+/**
+ * /pickleball — THE PICKLEBALL BOARD. "Where can I play right now?"
+ * (build spec §1, §9; Fable design §1, §2, §9 honesty rules.)
+ *
+ * The static shell: masthead, NowHero, ConditionsStrip, one CourtCard per
+ * src/lib/courts.ts COURTS entry (board order; the best bet moves to the
+ * front once src/scripts/pickleball-board.ts has an answer), Help us confirm,
+ * Private and paid, footer. Every live number — readings, now/next,
+ * validators, conditions, vibe — is a skeleton here, filled from
+ * GET /api/air/board. `/r/courts`, `court.astro`, `AirSpot.astro` and
+ * air-client.ts are untouched: this page only links into them.
+ *
+ * JSON-LD: one SportsActivityLocation per listed court, with
+ * OpeningHoursSpecification and drop-in Events only for `verified` hours and
+ * blocks (build spec's CC addendum) — an `unverified` or `partial` schedule
+ * never renders as a machine-readable fact any more than it renders as text.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import AirInk from '../components/air/AirInk.astro';
+import NowHero from '../components/courts/NowHero.astro';
+import ConditionsStrip from '../components/courts/ConditionsStrip.astro';
+import CourtCard from '../components/courts/CourtCard.astro';
+import { COURTS, PRIVATE_COURTS, CONFIRM_ITEMS, COURT_SOURCES, provenanceLine } from '../lib/courts';
+import { hoursLine, sourcedTag } from '../lib/court-format';
+import { airSpot } from '../lib/air';
+
+const title = 'The Pickleball Board';
+const description =
+  'Where can I play right now? Live paddle-rack and drop-in reports from every South Bay public court PointCast tracks, plus sourced hours, drop-in schedules and parking — every fact carries where it came from and when it was checked.';
+const ogImage = '/og/pickleball.png';
+
+/** The LA day this page is built on — what "checked 45+ days ago" counts from. */
+const buildDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+/** Source labels for the client's live now/next lines (src/scripts/pickleball-board.ts); urls stay out, only whether one exists. */
+const sourceLabels = JSON.stringify(Object.fromEntries(Object.entries(COURT_SOURCES).map(([id, s]) => [id, { label: s.label, url: Boolean(s.url) }])));
+
+const SCHEMA_DAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => `https://schema.org/${d}`);
+const dayOfWeek = (days: number[]) => days.map((d) => SCHEMA_DAY[d]).filter(Boolean);
+
+/** schema.org wants a number and a currency: a single "$5" fee gets both; a tiered one ("$3 resident / $4 non-resident a day") is published as text only. */
+function feeOffer(fee: string) {
+  const single = /^\$(\d+(?:\.\d{2})?)$/.exec(fee.trim());
+  return single
+    ? { '@type': 'Offer', price: single[1], priceCurrency: 'USD' }
+    : { '@type': 'Offer', priceCurrency: 'USD', description: fee };
+}
+
+function courtEntity(court: (typeof COURTS)[number]) {
+  const id = `https://pointcast.xyz/pickleball#${court.id}`;
+  const spot = court.air ? airSpot(court.id) : null;
+  // Machine-readable facts carry no "unconfirmed" tag, so only a verified address is published.
+  const address = court.facts.find((f) => f.key === 'address' && f.confidence === 'verified');
+  const entity: Record<string, unknown> = {
+    '@type': 'SportsActivityLocation',
+    '@id': id,
+    name: court.name,
+    url: spot ? `https://pointcast.xyz/r/${court.id}` : 'https://pointcast.xyz/pickleball',
+    additionalType: 'https://en.wikipedia.org/wiki/Pickleball',
+  };
+  if (address) {
+    const street = address.text.endsWith(`, ${court.city}`) ? address.text.slice(0, -(court.city.length + 2)) : address.text;
+    entity.address = { '@type': 'PostalAddress', streetAddress: street, addressLocality: court.city, addressRegion: 'CA', addressCountry: 'US' };
+  }
+  // A standing closure (Kelly Courts' renovation) is said in words: nobody should read it as a place to play today.
+  if (court.status === 'closed') {
+    const closure = court.facts.find((f) => f.key === 'status' && f.confidence === 'verified');
+    entity.description = closure ? closure.text : 'Closed';
+  }
+  // OpeningHoursSpecification only where verified (build spec §3: unverified never renders as a fact).
+  if (court.hours && court.hours.confidence === 'verified') {
+    // schema.org `closes` wants a fixed time; a sunset-relative 'dusk' close isn't one, so that rule is left out
+    // rather than published with a wrong or missing time.
+    const spec = court.hours.rules
+      .filter((r) => r.close !== 'dusk')
+      .map((r) => ({ '@type': 'OpeningHoursSpecification', dayOfWeek: dayOfWeek(r.days), opens: r.open, closes: r.close }));
+    if (spec.length > 0) entity.openingHoursSpecification = spec;
+  }
+  // Drop-in sessions as Event/Schedule, verified only.
+  const dropins = court.blocks.filter((b) => b.kind === 'dropin' && b.confidence === 'verified');
+  if (dropins.length > 0) {
+    entity.event = dropins.map((b) => ({
+      '@type': 'Event',
+      name: `${b.label} · ${court.name}`,
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      eventSchedule: {
+        '@type': 'Schedule',
+        byDay: dayOfWeek(b.days),
+        startTime: b.start,
+        endTime: b.end,
+        scheduleTimezone: 'America/Los_Angeles',
+        ...(b.from ? { startDate: b.from } : {}),
+        ...(b.until ? { endDate: b.until } : {}),
+      },
+      location: { '@id': id },
+      ...(b.fee ? { isAccessibleForFree: false, offers: feeOffer(b.fee) } : {}),
+    }));
+  }
+  return entity;
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/pickleball',
+  name: 'PointCast · The Pickleball Board',
+  description,
+  url: 'https://pointcast.xyz/pickleball',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  mainEntity: COURTS.map(courtEntity),
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={ogImage}
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[
+    { type: 'application/json', href: '/api/air/board', title: 'The Pickleball Board · live readings' },
+    { type: 'application/json', href: '/courts.json', title: 'The Pickleball Board · courts feed' },
+  ]}
+>
+  <AirInk />
+  <div class="pb" data-pb-board data-pb-sources={sourceLabels}>
+    <header class="pb__head">
+      <p class="pb__kicker air-mono">
+        THE PICKLEBALL BOARD <span aria-hidden="true">·</span> <span data-pb-clock>—</span>
+        <i class="pb__livedot" data-pb-live hidden aria-label="Live"></i>
+      </p>
+      <img class="pb__stamp" src="/images/air/badges/courts-stamp.webp" alt="" width="40" height="40" loading="lazy" />
+      <p class="pb__validators air-mono" data-pb-validators hidden></p>
+    </header>
+
+    <NowHero />
+    <ConditionsStrip />
+
+    <section class="pb__cards" data-pb-cards aria-label="Courts">
+      {COURTS.map((court) => (
+        <CourtCard court={court} spot={court.air ? airSpot(court.id) : null} />
+      ))}
+    </section>
+
+    {CONFIRM_ITEMS.length > 0 && (
+      <section class="pb__confirm-list">
+        <h2 class="pb__h2">Help us confirm</h2>
+        <ul>
+          {CONFIRM_ITEMS.map((item) => (
+            <li>
+              <b>{item.label}</b>: {item.asks.join(', ')}
+              {item.note && <span class="pb__confirm-note"> — {item.note}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {PRIVATE_COURTS.length > 0 && (
+      <section class="pb__private">
+        <h2 class="pb__h2">Private and paid</h2>
+        <ul>
+          {PRIVATE_COURTS.map((p) => {
+            // Same rule as a court card (build spec §3): partial is tagged, unverified never shows, 45+ days reads "may have changed".
+            const facts = p.facts.map((f) => ({ f, ...sourcedTag(f, buildDay) })).filter((x) => x.show);
+            const hours = p.hours ? sourcedTag(p.hours, buildDay) : null;
+            const reserve = p.reserve ? sourcedTag(p.reserve, buildDay) : null;
+            return (
+              <li>
+                <b>{p.name}</b> · {p.city}
+                <ul class="pb__private-facts">
+                  {facts.map(({ f, tag }) => (
+                    <li>
+                      {f.text}
+                      {tag === 'unconfirmed' && <b class="pb-tag">unconfirmed</b>}
+                      <span class="pb-prov air-mono"> · {provenanceLine(f)}{tag === 'stale' && ' · may have changed'}</span>
+                    </li>
+                  ))}
+                  {p.hours && hours?.show && (
+                    <li>
+                      Hours: {hoursLine(p.hours.rules)}
+                      {hours.tag === 'unconfirmed' && <b class="pb-tag">unconfirmed</b>}
+                      <span class="pb-prov air-mono"> · {provenanceLine(p.hours)}{hours.tag === 'stale' && ' · may have changed'}</span>
+                    </li>
+                  )}
+                </ul>
+                {p.reserve && reserve?.show && (
+                  <>
+                    <a href={p.reserve.url}>{p.reserve.label}</a>
+                    {reserve.tag === 'unconfirmed' && <b class="pb-tag">unconfirmed</b>}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    )}
+
+    <footer class="pb__foot">
+      <p>Reporters earn points, never cash, and never for what a report says.</p>
+      <p class="air-mono"><a href="/r">Field Reports</a> <span aria-hidden="true">·</span> <a href="/courts.json">/courts.json</a></p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script>
+  import { mountPickleballBoard } from '../scripts/pickleball-board';
+  mountPickleballBoard();
+</script>
+
+<style>
+  .pb { max-width: 640px; margin: 0 auto; padding: 14px 16px 40px; }
+  .pb [hidden] { display: none !important; }
+
+  .pb__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 18px; flex-wrap: wrap; }
+  .pb__kicker { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--pc-ink-muted); }
+  .pb__livedot { width: 10px; height: 10px; background: var(--air-live, #D42A1E); }
+  .pb__stamp { display: block; }
+  .pb__validators { margin: 0; color: var(--pc-ink-muted); width: 100%; }
+
+  .pb__cards { margin: 0; }
+
+  .pb__h2 { margin: 24px 0 10px; font: 600 20px/1.3 var(--pc-font-sans); border-top: 2px solid var(--pc-ink); padding-top: 14px; }
+  .pb__confirm-list ul, .pb__private ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .pb__confirm-list li, .pb__private > ul > li { font-size: 14px; line-height: 1.5; color: var(--pc-ink-soft); }
+  .pb__confirm-note { color: var(--pc-ink-muted); }
+  .pb__private-facts { list-style: none; margin: 4px 0 4px; padding: 0; display: grid; gap: 2px; }
+  .pb-prov { color: var(--pc-ink-muted); }
+  .pb-tag { margin-left: 6px; padding: 1px 5px; border: 1px solid var(--pc-ink-muted); font: 600 10px/1.4 var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--pc-ink-muted); }
+
+  .pb__foot { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--pc-rule); color: var(--pc-ink-muted); }
+  .pb__foot p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+
+  @media (max-width: 380px) { .pb { padding-left: 16px; padding-right: 16px; } }
+</style>

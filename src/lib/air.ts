@@ -7,6 +7,16 @@
 import data from '../data/air-spots.json';
 
 export type AirOption = { v: string; label: string };
+/**
+ * What a kind does beyond filing (kindRole() in functions/_lib/air-kinds.mjs):
+ * - live (the default when absent, today's behavior): a reading and confirms,
+ *   First Light, the station post and the crew.
+ * - side (parking): a reading and confirms; no First Light, post or crew.
+ * - rating (vibe): a 30-day aggregate; no reading on the board, no confirms.
+ */
+export type AirRole = 'live' | 'side' | 'rating';
+/** The question set a spot asks and its card's schedule block (src/data/courts-schedule.json). */
+export type AirShape = 'paddle-rack' | 'reservation+drop-in' | 'first-come';
 export type AirKind = {
   question: string;
   decayMin: number;
@@ -15,6 +25,12 @@ export type AirKind = {
   readingLabels: Record<string, string>;
   extras: string[];
   editorGuess: string | null;
+  /** Absent is 'live'. */
+  role?: AirRole;
+  /** Units an on-site report pays (a "cant" still pays 1). Absent is 6. */
+  points?: number;
+  /** 'week': a report pays once per spot per LA Monday-week (ref `spot:kind:w<weekOf(day)>`). Absent: once per decay window. */
+  payEvery?: 'week';
 };
 export type AirSpot = {
   id: string;
@@ -24,14 +40,17 @@ export type AirSpot = {
   color: string;
   mhz: number;
   noun: number;
+  /** Pickleball spots only: its shape in src/data/courts-schedule.json. */
+  shape?: AirShape;
   /** Weekday 0-6 (Sun 0) and LA "HH:MM". Only spots with a standing call. */
   courtCall?: { weekday: number; time: string };
   /**
    * Open hours, LA "HH:MM", open inclusive and close exclusive. First Light
    * counts only inside them (inHours() in functions/_lib/air-reading.mjs); a
-   * report outside still files, pays and stamps as usual.
+   * report outside still files, pays and stamps as usual. Set only where the
+   * hours are verified: a spot without them never counts First Light.
    */
-  hours: { open: string; close: string };
+  hours?: { open: string; close: string };
   kinds: Record<string, AirKind>;
 };
 /**
@@ -62,7 +81,7 @@ export function airKind(spotId: string, kind: string): AirKind | null {
   return spot && Object.prototype.hasOwnProperty.call(spot.kinds, kind) ? spot.kinds[kind] : null;
 }
 
-/** The spot's first (in v1, only) question: { kind: 'wait', cfg }. */
+/** The spot's first question, the one /r/[spot] asks: { kind: 'wait', cfg }. Key order in the JSON is the contract. */
 export function primaryKind(spot: AirSpot): { kind: string; cfg: AirKind } {
   const kind = Object.keys(spot.kinds)[0];
   return { kind, cfg: spot.kinds[kind] };
