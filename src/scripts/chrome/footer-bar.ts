@@ -380,6 +380,8 @@ export function mountFooterBar(root, scope) {
       var own = (m.clientId && m.clientId === swSid()) || swOwnIds().indexOf(m.id) !== -1;
       if (own) return;
       var post = { id: String(m.id), at: String(m.postedAt || new Date(b.at || Date.now()).toISOString()), who: String((b.by && b.by.handle) || 'visitor'), noun: Number(b.by && b.by.noun) || 0, text: String(m.t1 || '') + String(m.t2 || ''), via: String(m.via || 'bar'), handle: typeof m.handle === 'string' && /^[a-z0-9-]{3,24}$/.test(m.handle) ? m.handle : undefined, live: true };
+      // Field Reports station posts (via 'air') carry their spot and frequency, so the dial parks them at their spot's frequency on arrival.
+      if (post.via === 'air') { post.spot = typeof m.spot === 'string' ? m.spot.slice(0, 32) : undefined; post.mhz = typeof m.mhz === 'number' && isFinite(m.mhz) ? m.mhz : undefined; }
       window.dispatchEvent(new CustomEvent('pc:shortwave:post', { detail: { post: post, own: false, live: true } }));
       swFlashFeed();
     });

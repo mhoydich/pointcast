@@ -6,6 +6,10 @@ export const NOINDEX_PATHS = new Set([
   '/desk/',
   '/cartography/pilot/',
   '/cartography/sprint/',
+  // Field Reports: /court is the courts spot under a short name (/r/courts is
+  // the page to index), and /r/me is one phone's own card.
+  '/court/',
+  '/r/me/',
 ]);
 
 // Sources with permanent redirects in public/_redirects or Pages middleware.

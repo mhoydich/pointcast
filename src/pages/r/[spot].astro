@@ -1,0 +1,55 @@
+---
+/**
+ * /r/[spot] — one Field Reports spot: ask, confirm, receipt, stamp, crew.
+ *
+ * Static shell from src/data/air-spots.json (one page per spot); the live
+ * reading, the POST and every animation come from src/scripts/air-client.ts
+ * through GET/POST /api/air/[spot]. The unfurl card is the request-time
+ * /og/r/<spot>.png, so a link texted to the group carries the live reading.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AirSpot from '../../components/air/AirSpot.astro';
+import { airSpotPaths, courtCallLabel, mhzLabel, primaryKind, spotOgUrl, spotUrl, type AirSpot as Spot } from '../../lib/air';
+
+export function getStaticPaths() {
+  return airSpotPaths();
+}
+
+const { spot } = Astro.props as { spot: Spot };
+const { cfg } = primaryKind(spot);
+const call = courtCallLabel(spot);
+const title = `${spot.name} · Field Reports`;
+const description = `${cfg.question} One tap from ${spot.name} goes on the air at ${mhzLabel(spot)} MHz for everyone checking before they go.${call ? ` Court Call ${call}.` : ''} No account, no location, points never cash.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': `https://pointcast.xyz${spotUrl(spot.id)}`,
+  name: `PointCast · Field Reports · ${spot.name}`,
+  description,
+  url: `https://pointcast.xyz${spotUrl(spot.id)}`,
+  applicationCategory: 'LifestyleApplication',
+  operatingSystem: 'Web',
+  isAccessibleForFree: true,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  featureList: [
+    `One question: ${cfg.question}`,
+    `Answers: ${cfg.options.map((o) => o.label).join(', ')}`,
+    `Readings expire after ${cfg.decayMin} minutes`,
+    'Confirm someone else’s report with one tap',
+    'Stamps and points for on-site reports; no cash, no leaderboard',
+    `Live reading at GET /api/air/${spot.id}`,
+  ],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={spotOgUrl(spot.id)}
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/json', href: `/api/air/${spot.id}`, title: `${spot.name} · live reading` }]}
+>
+  <AirSpot spot={spot} />
+</BlockLayout>

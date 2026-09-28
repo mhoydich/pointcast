@@ -1,0 +1,146 @@
+---
+/**
+ * /r — Field Reports, the band plan.
+ *
+ * Every spot as a station: its frequency, its one question and, once the
+ * client has GET /api/air, the live reading with fading signal bars. Silence
+ * stays quiet: a spot with nothing live shows its last report or the next
+ * Court Call, never a zero count. Mobile first; everything is one column.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AirDial from '../../components/air/AirDial.astro';
+import AirInk from '../../components/air/AirInk.astro';
+import { AIR_SPOTS, courtCallLabel, mhzLabel, primaryKind, spotUrl } from '../../lib/air';
+
+const title = 'Field Reports';
+const description =
+  'One question per spot, answered from the spot. Tap what you see and it goes on the air for everyone checking before they go. The courts on 7.500, Grand Ave beach on 6.100. No account, no location, points never cash.';
+
+const called = AIR_SPOTS.filter((s) => s.courtCall);
+const stations = AIR_SPOTS.map((s) => ({ mhz: s.mhz, label: s.short, color: s.color }));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/r',
+  name: 'PointCast · Field Reports',
+  description,
+  url: 'https://pointcast.xyz/r',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  hasPart: AIR_SPOTS.map((s) => ({ '@type': 'WebPage', name: `${s.name} · ${primaryKind(s).cfg.question}`, url: `https://pointcast.xyz${spotUrl(s.id)}` })),
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/json', href: '/api/air', title: 'Field Reports · live readings' }]}
+>
+  <AirInk />
+  <div class="rh" data-air-home>
+    <header class="rh__head">
+      <p class="rh__kicker air-mono">Field Reports <span aria-hidden="true">·</span> pointcast.xyz/r</p>
+      <h1 class="rh__title">What’s it like out there?</h1>
+      <p class="rh__lede">One question per spot, answered from the spot. Tap what you see and it goes on the air for everyone checking before they go.</p>
+      <AirDial mhz={called[0]?.mhz ?? AIR_SPOTS[0].mhz} stations={stations} />
+    </header>
+
+    {called.map((s) => (
+      <section class="rh__call" style={`--air-channel:${s.color}`}>
+        <p class="rh__call-line air-mono">
+          <i class="rh__calldot" data-air-call-live hidden aria-hidden="true"></i>
+          <b>Court Call</b>
+          <span>{courtCallLabel(s)} · {s.name} · {mhzLabel(s)}</span>
+        </p>
+        <p class="rh__call-next" data-air-call-text>Bring your phone. Tap once at the fence.</p>
+      </section>
+    ))}
+
+    <ol class="rh__band" aria-label="Band plan">
+      {AIR_SPOTS.map((s) => {
+        const { cfg } = primaryKind(s);
+        return (
+          <li class="rh__row" data-air-row={s.id} data-live="no" style={`--air-channel:${s.color}`}>
+            <a class="rh__link" href={spotUrl(s.id)}>
+              <span class="rh__mhz air-mono">{mhzLabel(s)}</span>
+              <span class="rh__body">
+                <span class="rh__name"><i class="rh__dot" data-air-row-live hidden aria-label="Live"></i>{s.name}</span>
+                <span class="rh__q">{cfg.question}</span>
+                <span class="rh__reading">
+                  <span data-air-row-reading>{s.courtCall ? `Court Call · ${courtCallLabel(s)}` : 'Quiet'}</span>
+                  <span class="air-mono" data-air-row-meta></span>
+                </span>
+              </span>
+              <span class="rh__bars" data-air-row-bars data-bars="0" hidden aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+
+    <section class="rh__card">
+      <a class="rh__card-link" href="/r/me">
+        <span class="rh__card-label air-mono">Your card</span>
+        <span class="rh__card-text">Stamps, your week, points. Kept on this phone until you sign in.</span>
+      </a>
+    </section>
+
+    <footer class="rh__foot">
+      <p>Reports are public. Your location is not stored. Reporters earn points, never cash, and never for what a report says.</p>
+      <p class="air-mono"><a href="/api/air">/api/air</a> <span aria-hidden="true">·</span> <a href="/band">the band</a> <span aria-hidden="true">·</span> <a href="/shortwave">shortwave</a></p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script>
+  import { mountAir } from '../../scripts/air-client';
+  mountAir();
+</script>
+
+<style>
+  .rh { max-width: 560px; margin: 0 auto; padding: 14px 16px 40px; }
+  .rh [hidden] { display: none !important; }
+  .rh__head { margin-bottom: 18px; }
+  .rh__kicker { margin: 0 0 8px; color: var(--pc-ink-muted); }
+  .rh__title { margin: 0 0 8px; font: 600 40px/44px var(--pc-font-sans); letter-spacing: -.02em; }
+  .rh__lede { margin: 0 0 14px; font-size: 16px; line-height: 24px; color: var(--pc-ink-soft); }
+
+  .rh__call { margin: 0 0 16px; padding: 12px; border: 1.5px solid var(--air-channel); }
+  .rh__call-line { margin: 0 0 4px; color: var(--air-channel); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .rh__call-line b { font-weight: 600; }
+  .rh__call-line span { color: var(--pc-ink-soft); }
+  .rh__calldot { width: 10px; height: 10px; background: var(--air-live); }
+  .rh__call-next { margin: 0; font-size: 15px; line-height: 1.4; }
+
+  .rh__band { list-style: none; margin: 0 0 18px; padding: 0; border-top: 2px solid var(--pc-ink); }
+  .rh__row { border-bottom: 1px solid var(--pc-rule-soft); }
+  .rh__link { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 14px 0; color: var(--pc-ink); text-decoration: none; }
+  .rh__link:hover { text-decoration: none; }
+  .rh__link:hover .rh__name { text-decoration: underline; text-underline-offset: 3px; }
+  .rh__mhz { align-self: start; padding: 4px 6px; color: var(--pc-bg); background: var(--air-channel); font-weight: 600; }
+  .rh__body { display: grid; gap: 2px; min-width: 0; }
+  .rh__name { font: 600 20px/1.2 var(--pc-font-sans); display: flex; align-items: center; gap: 8px; }
+  .rh__dot { width: 10px; height: 10px; background: var(--air-live); box-shadow: 0 0 0 2px var(--pc-bg), 0 0 0 3px var(--air-live); }
+  .rh__q { font-size: 15px; color: var(--pc-ink-soft); }
+  .rh__reading { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-top: 4px; font-size: 16px; color: var(--air-static); }
+  .rh__row[data-live='yes'] .rh__reading { color: var(--pc-ink); font-weight: 600; }
+  .rh__reading .air-mono { font-size: 11px; color: var(--pc-ink-muted); font-weight: 400; }
+  .rh__bars { display: flex; gap: 3px; align-items: flex-end; }
+  .rh__bars i { display: block; width: 5px; background: var(--air-static); }
+  .rh__bars i:nth-child(1) { height: 6px; } .rh__bars i:nth-child(2) { height: 9px; } .rh__bars i:nth-child(3) { height: 12px; } .rh__bars i:nth-child(4) { height: 15px; } .rh__bars i:nth-child(5) { height: 18px; }
+  .rh__bars[data-bars='1'] i:nth-child(-n+1), .rh__bars[data-bars='2'] i:nth-child(-n+2), .rh__bars[data-bars='3'] i:nth-child(-n+3),
+  .rh__bars[data-bars='4'] i:nth-child(-n+4), .rh__bars[data-bars='5'] i:nth-child(-n+5) { background: var(--pc-ink); }
+
+  .rh__card { margin: 0 0 18px; }
+  .rh__card-link { display: grid; gap: 4px; padding: 14px; border: 1.5px solid var(--pc-ink); color: var(--pc-ink); }
+  .rh__card-link:hover { text-decoration: none; background: var(--air-receipt); }
+  .rh__card-label { font-weight: 600; }
+  .rh__card-text { font-size: 15px; line-height: 1.4; color: var(--pc-ink-soft); }
+
+  .rh__foot { padding-top: 12px; border-top: 1px solid var(--pc-rule); color: var(--pc-ink-muted); }
+  .rh__foot p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+
+  @media (max-width: 380px) { .rh__title { font-size: 34px; line-height: 38px; } .rh__link { grid-template-columns: auto 1fr; } .rh__bars { grid-column: 2; justify-self: start; } }
+</style>

@@ -4,9 +4,11 @@
  *
  * A receiver: a dial across the top (the same 3–12 MHz band /band uses), every
  * recent Shortwave post parked on it as a blip at a frequency hashed from its
- * id, the Nightly Net marked at 7.200. Left: the page's only h1 and a big say
- * box. Right: the latest lines, live. Clicking a line or a blip tunes the
- * needle to it. Foot: the Net countdown, today's fox, and the ways further in.
+ * id, the Nightly Net marked at 7.200. Field Reports station posts (via 'air')
+ * park at their spot's own frequency instead, and Court Call hangs under the
+ * dial at 7.500. Left: the page's only h1 and a big say box. Right: the latest
+ * lines, live. Clicking a line or a blip tunes the needle to it. Foot: the Net
+ * and Court Call countdowns, today's fox, and the ways further in.
  *
  * Data: first paint loads /api/shortwave; after that it is push — the dock bar
  * re-emits every post the presence bus announces as `pc:shortwave:post`, and
@@ -14,11 +16,13 @@
  * Visitor text goes in with textContent only.
  */
 import '../styles/shortwave-shared.css';
-import { BAND, NET, formatMhz } from '../lib/band';
+import { BAND, COURT_CALL, NET, courtCallTime, formatMhz } from '../lib/band';
 
 const ticks = Array.from({ length: BAND.maxMhz - BAND.minMhz + 1 }, (_, i) => BAND.minMhz + i);
 const pct = (mhz: number) => ((mhz - BAND.minMhz) / (BAND.maxMhz - BAND.minMhz)) * 100;
 const netMhz = formatMhz(NET.step);
+const courtMhz = formatMhz(COURT_CALL.step);
+const courtWhen = courtCallTime();
 ---
 <section class="swh" id="shortwave-live" data-home-shortwave-hero aria-labelledby="swh-title">
   <div class="swh__dial" data-swh-dial>
@@ -31,6 +35,7 @@ const netMhz = formatMhz(NET.step);
         <span class="swh__tick" style={`left:${pct(mhz)}%`}><i>{mhz}</i></span>
       ))}
       <span class="swh__net" style={`left:${pct(Number(netMhz))}%`} title={`The Nightly Net · ${netMhz} MHz`}>NET</span>
+      <span class="swh__court" data-swh-court-mark style={`left:${pct(Number(courtMhz))}%`} title={`Court Call · ${courtWhen} · ${courtMhz} MHz`}>COURT</span>
       <span class="swh__blips" data-swh-blips></span>
       <span class="swh__needle" data-swh-needle style={`left:${pct(Number(netMhz))}%`} aria-hidden="true"></span>
     </div>
@@ -61,7 +66,10 @@ const netMhz = formatMhz(NET.step);
   </div>
 
   <footer class="swh__foot">
-    <a href="/band?f=7.200" data-swh-net><span class="swh__net-dot" aria-hidden="true"></span><span data-swh-net-label>The Nightly Net · 9:00 PM on {netMhz}</span></a>
+    <div class="swh__calls">
+      <a href="/band?f=7.200" data-swh-net><span class="swh__net-dot" aria-hidden="true"></span><span data-swh-net-label>The Nightly Net · 9:00 PM on {netMhz}</span></a>
+      <a href="/r/courts" data-swh-court><span class="swh__net-dot" aria-hidden="true"></span><span data-swh-court-label>Court Call · {courtWhen} on {courtMhz}</span></a>
+    </div>
     <a href="/band" data-swh-fox>Today's fox is somewhere on the band · hunt it</a>
     <a href="/connect">Claim your @handle · Sign in with PointCast</a>
     <a href="#new">What's new in town <span aria-hidden="true">↓</span></a>
@@ -69,15 +77,15 @@ const netMhz = formatMhz(NET.step);
 </section>
 
 <script>
-  import { ago, fetchPreview, firstUrl, previewCard, tidyText, type LinkPreview } from '../lib/shortwave-client';
-  import { BAND, NET, formatMhz, formatWait, foxNumber, hash32, netState, pad3, townDate } from '../lib/band';
+  import { ago, fetchPreview, firstUrl, playBlip, previewCard, tidyText, type LinkPreview } from '../lib/shortwave-client';
+  import { BAND, COURT_CALL, NET, courtCallState, courtCallTime, formatMhz, formatWait, foxNumber, netState, pad3, postStep, townDate } from '../lib/band';
 
-  type Post = { id: string; at: string; who: string; noun: number; text: string; via?: string; verified?: boolean; color?: string };
+  type Post = { id: string; at: string; who: string; noun: number; text: string; via?: string; verified?: boolean; color?: string; mhz?: number; spot?: string };
 
   const SHOWN = 4;
   const pct = (step: number) => (step / BAND.steps) * 100;
-  // Keep posts off the Net marker so the Net always reads as its own place.
-  const stepOf = (id: string) => { const s = hash32(id) % BAND.steps; return Math.abs(s - NET.step) < 4 ? (s + 9) % BAND.steps : s; };
+  // Station posts (via 'air') park at their spot's frequency; the rest hash from the id, off the Net marker.
+  const stepOf = (p: Post) => postStep(p);
 
   function mount() {
     const root = document.querySelector<HTMLElement>('[data-home-shortwave-hero]');
@@ -90,6 +98,7 @@ const netMhz = formatMhz(NET.step);
     const tuned = q('[data-swh-tuned]'), meter = q('[data-swh-meter]'), here = q('[data-swh-here]'), faces = q('[data-swh-faces]');
     const form = q<HTMLFormElement>('[data-swh-form]'), input = q<HTMLInputElement>('[data-swh-input]'), note = q('[data-swh-note]'), count = q('[data-swh-count]');
     const netLabel = q('[data-swh-net-label]'), netLink = q<HTMLAnchorElement>('[data-swh-net]'), fox = q('[data-swh-fox]');
+    const courtLabel = q('[data-swh-court-label]'), courtLink = q<HTMLAnchorElement>('[data-swh-court]'), courtMark = q('[data-swh-court-mark]');
 
     let posts: Post[] = [];
     let tunedId = '';
@@ -97,22 +106,13 @@ const netMhz = formatMhz(NET.step);
 
     // A short burst of filtered static when a person turns the dial. Only ever on a click.
     let audio: AudioContext | null = null;
-    function crackle() {
-      try {
-        audio ??= new AudioContext();
-        const len = Math.floor(audio.sampleRate * 0.14), buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-        const src = audio.createBufferSource(), bp = audio.createBiquadFilter(), g = audio.createGain();
-        bp.type = 'bandpass'; bp.frequency.value = 1400 + Math.random() * 1600; bp.Q.value = 1.4; g.gain.value = 0.07;
-        src.buffer = buf; src.connect(bp).connect(g).connect(audio.destination); src.start();
-      } catch {}
-    }
+    const crackle = () => { audio = playBlip(audio); };
 
     function tune(id: string, sound = false) {
       const p = posts.find((x) => x.id === id);
       if (!p) return;
       tunedId = id;
-      const step = stepOf(id);
+      const step = stepOf(p);
       needle.style.left = `${pct(step)}%`;
       mhz.textContent = formatMhz(step);
       tuned.textContent = `${p.who || 'visitor'} · ${ago(p.at)}`;
@@ -123,7 +123,7 @@ const netMhz = formatMhz(NET.step);
     function row(p: Post, fresh: boolean): HTMLElement {
       const li = document.createElement('li'); li.className = 'swh__post'; li.dataset.swhPost = ''; li.dataset.id = p.id; if (fresh) li.dataset.fresh = 'true';
       const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'swh__tune'; btn.setAttribute('aria-label', `Tune to ${p.who || 'visitor'}'s post`);
-      const freq = document.createElement('span'); freq.className = 'swh__freq'; freq.textContent = formatMhz(stepOf(p.id));
+      const freq = document.createElement('span'); freq.className = 'swh__freq'; freq.textContent = formatMhz(stepOf(p));
       btn.append(freq);
       btn.addEventListener('click', () => tune(p.id, true));
       const img = document.createElement('img'); img.className = 'swh__noun'; img.src = `https://noun.pics/${Number(p.noun) || 0}.svg`; img.alt = ''; img.width = 34; img.height = 34; img.loading = 'lazy';
@@ -131,7 +131,7 @@ const netMhz = formatMhz(NET.step);
       const meta = document.createElement('p'); meta.className = 'swh__meta';
       const who = document.createElement('b'); who.textContent = `${p.who || 'visitor'}${p.verified ? ' ✓' : ''}`;
       const time = document.createElement('time'); time.dateTime = p.at; time.textContent = ago(p.at);
-      const via = document.createElement('span'); via.textContent = p.via === 'agent' ? 'an agent' : p.via === 'bar' ? 'the bar' : 'the square';
+      const via = document.createElement('span'); via.textContent = p.via === 'air' ? 'the field' : p.via === 'agent' ? 'an agent' : p.via === 'bar' ? 'the bar' : 'the square';
       meta.append(who, time, via);
       body.append(meta);
       const url = firstUrl(p.text), preview = url ? previews.get(url) : null;
@@ -151,10 +151,10 @@ const netMhz = formatMhz(NET.step);
       list.replaceChildren(...shown.map((p) => row(p, p.id === freshId)));
       blips.replaceChildren(...posts.slice(0, 12).map((p, i) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'swh__blip'; b.dataset.swhBlip = ''; b.dataset.id = p.id;
-        b.style.left = `${pct(stepOf(p.id))}%`; b.style.setProperty('--age', String(Math.min(i, 11) / 11));
+        b.style.left = `${pct(stepOf(p))}%`; b.style.setProperty('--age', String(Math.min(i, 11) / 11));
         if (p.id === freshId) b.dataset.fresh = 'true';
-        b.setAttribute('aria-label', `${formatMhz(stepOf(p.id))} MHz · ${p.who || 'visitor'}`);
-        b.title = `${formatMhz(stepOf(p.id))} · ${p.who || 'visitor'}`;
+        b.setAttribute('aria-label', `${formatMhz(stepOf(p))} MHz · ${p.who || 'visitor'}`);
+        b.title = `${formatMhz(stepOf(p))} · ${p.who || 'visitor'}`;
         b.addEventListener('click', () => tune(p.id, true));
         return b;
       }));
@@ -167,18 +167,39 @@ const netMhz = formatMhz(NET.step);
 
     function ping() { meter.dataset.ping = 'true'; setTimeout(() => { delete meter.dataset.ping; }, 1400); }
     function add(p: Post, fresh: boolean) {
-      if (!p?.id || posts.some((x) => x.id === p.id)) return;
+      if (!p?.id) return;
+      // Anyone can burst on the bus, so a station post (via 'air') there is only a
+      // signal: its words, byline and frequency come from the server's copy.
+      if (p.via === 'air') { stationSignal(p.id); return; }
+      if (posts.some((x) => x.id === p.id)) return;
       posts = [p, ...posts].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 16);
       render(fresh ? p.id : undefined);
       if (fresh) ping();
+    }
+
+    // A station post is new, or rewritten in place when its crew fills (same id, new
+    // line): refetch /api/shortwave, at most once every 5 s however often the bus says so.
+    let stationTimer = 0, stationAt = 0;
+    signal.addEventListener('abort', () => clearTimeout(stationTimer));
+    function stationSignal(id: string) {
+      if (stationTimer) return;
+      stationTimer = window.setTimeout(async () => {
+        stationTimer = 0; stationAt = Date.now();
+        const had = posts.find((x) => x.id === id)?.text;
+        await load();
+        const now = posts.find((x) => x.id === id);
+        if (now && now.text !== had) { render(id); ping(); }
+      }, Math.max(400, stationAt + 5000 - Date.now()));
     }
 
     async function load() {
       try {
         const data = await (await fetch('/api/shortwave?limit=12', { headers: { accept: 'application/json' }, signal })).json();
         if (!data?.ok || !Array.isArray(data.posts)) throw new Error('unavailable');
-        const known = new Set(posts.map((p) => p.id));
-        posts = [...data.posts.filter((p: Post) => p?.id && !known.has(p.id)), ...posts].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 16);
+        // The server's copy wins: station posts are updated in place, and a pushed one arrives without its mhz.
+        const incoming: Post[] = data.posts.filter((p: Post) => p?.id);
+        const ids = new Set(incoming.map((p) => p.id));
+        posts = [...incoming, ...posts.filter((p) => !ids.has(p.id))].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 16);
         render();
       } catch {
         if (!posts.length) { const li = document.createElement('li'); li.className = 'swh__empty'; li.textContent = 'Shortwave is out of range right now. The bar at the bottom still works.'; list.replaceChildren(li); }
@@ -205,6 +226,12 @@ const netMhz = formatMhz(NET.step);
       netLabel.textContent = net.live
         ? `The Nightly Net is on now · ${formatMhz(NET.step)} · ${net.minutesLeft} min left`
         : `The Nightly Net · 9:00 PM on ${formatMhz(NET.step)} · in ${formatWait(net.minutesUntil)}`;
+      const court = courtCallState();
+      courtLink.dataset.live = courtMark.dataset.live = String(court.live);
+      // The countdown only shows inside the last day; a week out it just reads the standing time.
+      courtLabel.textContent = court.live
+        ? `Court Call is on now · ${formatMhz(COURT_CALL.step)} · ${court.minutesLeft} min left`
+        : `Court Call · ${courtCallTime()} on ${formatMhz(COURT_CALL.step)}${court.minutesUntil < 1440 ? ` · in ${formatWait(court.minutesUntil)}` : ''}`;
       const n = foxNumber(townDate());
       fox.textContent = n >= 1 ? `Fox No. ${pad3(n)} is somewhere on the band · hunt it` : `Today's fox is somewhere on the band · hunt it`;
     }
@@ -233,7 +260,7 @@ const netMhz = formatMhz(NET.step);
     // Arrow keys walk the dial from post to post while the dial has focus.
     q('[data-swh-scale]').addEventListener('keydown', (ev) => {
       if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
-      const order = posts.slice(0, 12).sort((a, b) => stepOf(a.id) - stepOf(b.id));
+      const order = posts.slice(0, 12).sort((a, b) => stepOf(a) - stepOf(b));
       if (!order.length) return;
       ev.preventDefault();
       const i = Math.max(0, order.findIndex((p) => p.id === tunedId));
@@ -255,7 +282,7 @@ const netMhz = formatMhz(NET.step);
 </script>
 
 <style is:global>
-  .swh { --swh-ink: #111; --swh-night: #14201c; --swh-night-2: #1c2b26; --swh-glow: #ffb547; --swh-green: #9fd36a; --swh-paper: #fffdf7; --swh-soft: #5f5e5a;
+  .swh { --swh-ink: #111; --swh-night: #14201c; --swh-night-2: #1c2b26; --swh-glow: #ffb547; --swh-green: #9fd36a; --swh-court: #3b6d11; --swh-paper: #fffdf7; --swh-soft: #5f5e5a;
     --sw-accent: #ffb547; --sw-rule: rgba(244,238,217,.14); --sw-soft: #b9c2a8; --sw-card-bg: #14201c; --sw-shadow: transparent; --sw-ink: #f4eed9;
     display: grid; grid-template-columns: minmax(300px, 1fr) minmax(340px, 1.08fr); margin-top: 14px; border: 2px solid var(--swh-ink); background: var(--swh-paper); box-shadow: 7px 7px 0 var(--swh-glow); color: var(--swh-ink); }
   .swh__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -271,6 +298,10 @@ const netMhz = formatMhz(NET.step);
   .swh__tick { position: absolute; bottom: 0; width: 1px; height: 20px; background: rgba(244,238,217,.55); }
   .swh__tick i { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); font: 600 9px var(--pc-font-mono); font-style: normal; color: #93a08c; }
   .swh__net { position: absolute; top: 0; transform: translateX(-50%); padding: 1px 4px; background: #2a3b34; border: 1px solid #5b6b58; font: 700 8px var(--pc-font-mono); letter-spacing: .1em; color: var(--swh-green); }
+  /* Court Call hangs under the baseline: 7.500 sits too close to NET's 7.200 to share the top edge on a phone. */
+  .swh__court { position: absolute; bottom: -14px; transform: translateX(-50%); padding: 1px 4px; background: var(--swh-court); border: 1px solid var(--swh-green); font: 700 8px/1 var(--pc-font-mono); letter-spacing: .1em; color: #f4eed9; }
+  .swh__court::before { content: ''; position: absolute; left: 50%; bottom: 100%; width: 1px; height: 3px; background: var(--swh-green); }
+  .swh__court[data-live='true'] { background: var(--swh-green); color: var(--swh-night); }
   .swh__blips { position: absolute; inset: 14px 0 0; }
   .swh__blip { position: absolute; bottom: 0; width: 14px; height: calc(34px - var(--age, 0) * 18px); margin-left: -7px; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
   .swh__blip::before { content: ''; position: absolute; left: 6px; bottom: 0; width: 2px; height: 100%; background: var(--swh-glow); opacity: calc(1 - var(--age, 0) * .6); }
@@ -330,9 +361,14 @@ const netMhz = formatMhz(NET.step);
 
   /* Foot */
   .swh__foot { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--swh-ink); }
-  .swh__foot a { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 11px 14px; border-right: 1px solid rgba(0,0,0,.18); font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--swh-ink); }
-  .swh__foot a:last-child { border-right: 0; justify-content: flex-end; }
+  .swh__foot a { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 11px 14px; font: 700 9px/1.4 var(--pc-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--swh-ink); }
+  .swh__foot > * { border-right: 1px solid rgba(0,0,0,.18); }
+  .swh__foot > a:last-child { border-right: 0; justify-content: flex-end; }
   .swh__foot a:hover { background: #fff4dc; color: #c2410c; }
+  /* The Net and Court Call share the first cell, one line each. */
+  .swh__calls { display: grid; min-width: 0; }
+  .swh__calls a { padding: 7px 14px; }
+  .swh__calls a + a { border-top: 1px dashed rgba(0,0,0,.18); }
   .swh__net-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: #93a08c; }
   .swh__foot a[data-live='true'] { background: var(--swh-night); color: var(--swh-green); }
   .swh__foot a[data-live='true'] .swh__net-dot { background: var(--swh-green); animation: swh-pulse 1.6s ease-out infinite; }
@@ -341,13 +377,13 @@ const netMhz = formatMhz(NET.step);
     .swh__dial { grid-template-columns: auto minmax(0, 1fr); }
     .swh__meter { display: none; }
     .swh__foot { grid-template-columns: 1fr 1fr; }
-    .swh__foot a:nth-child(2) { border-right: 0; }
-    .swh__foot a:nth-child(-n+2) { border-bottom: 1px solid rgba(0,0,0,.18); }
-    .swh__foot a:last-child { justify-content: flex-start; }
+    .swh__foot > :nth-child(2) { border-right: 0; }
+    .swh__foot > :nth-child(-n+2) { border-bottom: 1px solid rgba(0,0,0,.18); }
+    .swh__foot > a:last-child { justify-content: flex-start; }
   }
   @media (max-width: 760px) {
     .swh { grid-template-columns: 1fr; box-shadow: 5px 5px 0 var(--swh-glow); }
-    .swh__dial { grid-template-columns: 1fr; gap: 10px; padding: 12px 14px 14px; }
+    .swh__dial { grid-template-columns: 1fr; gap: 10px; padding: 12px 14px 18px; }
     .swh__readout { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
     .swh__tuned { max-width: none; }
     .swh__tick:nth-child(even) i { display: none; }
@@ -364,8 +400,8 @@ const netMhz = formatMhz(NET.step);
     .swh__post { grid-template-columns: 44px 30px minmax(0, 1fr); gap: 10px; padding: 11px 14px; }
     .swh__noun { width: 30px; height: 30px; }
     .swh__foot { grid-template-columns: 1fr; }
-    .swh__foot a { border-right: 0; border-bottom: 1px solid rgba(0,0,0,.18); }
-    .swh__foot a:last-child { border-bottom: 0; }
+    .swh__foot > * { border-right: 0; border-bottom: 1px solid rgba(0,0,0,.18); }
+    .swh__foot > :last-child { border-bottom: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .swh__dot, .swh__meter i, .swh__post[data-fresh='true'], .swh__blip[data-fresh='true']::after, .swh__foot a[data-live='true'] .swh__net-dot { animation: none; }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleShortwave, normalizePost } from '../functions/api/shortwave.ts';
+import { handleShortwave, normalizePost, writeStationPost } from '../functions/api/shortwave.ts';
 class Store {
   data = new Map(); writes = []; failWrite = false;
   async get(key, type) { const v = this.data.get(key); return v === undefined ? null : type === 'json' ? JSON.parse(v) : v; }
@@ -61,4 +61,28 @@ test('a saved post is announced on the presence bus in two halves, and a quiet b
   const quiet = await handleShortwave(post({ text: 'still saved', clientId: '<bad id>' }), broken);
   assert.equal(quiet.status, 201); assert.equal((await quiet.json()).live, false);
   assert.equal((await (await handleShortwave(post({ text: 'no bus bound' }), env())).json()).live, false);
+});
+test('station posts: only writeStationPost says via air, parked at the spot\'s frequency and updated in place', async () => {
+  assert.throws(() => normalizePost({ text: 'x', via: 'air' }), 'the public POST cannot fake a station');
+  const refused = await handleShortwave(post({ text: 'On the air from The courts: 5+ waiting', via: 'air' }), env());
+  assert.equal(refused.status, 400);
+  const sent = [];
+  const PRESENCE = { idFromName: (n) => n, get: () => ({ fetch: async (req) => { sent.push(await req.json()); return new Response('{}'); } }) };
+  const e = { VISITS: new Store(), PRESENCE };
+  const station = { spot: 'courts', mhz: 7.5, color: '#3B6D11', noun: 0, who: 'The courts' };
+  const { post: first, live } = await writeStationPost(e, { ...station, text: 'On the air from The courts: 1–4 waiting · 1 reporter · 7:36' });
+  assert.equal(live, true);
+  assert.equal(first.via, 'air'); assert.equal(first.attribution, 'station'); assert.equal(first.mhz, 7.5); assert.equal(first.spot, 'courts');
+  assert.equal(e.VISITS.writes.at(-1).key, `shortwave:post:v1:${first.id}`);
+  assert.equal(e.VISITS.writes.at(-1).options.expirationTtl, 31536000);
+  const m = sent[0].meta;
+  assert.deepEqual([m.shortwave, m.via, m.air, m.spot, m.mhz], [true, 'air', true, 'courts', 7.5]);
+  assert.ok(Object.keys(m).length <= 10, 'the bus keeps ten meta keys');
+  const crew = await writeStationPost(e, { ...station, id: first.id, text: 'On the air from The courts: 1–4 waiting · 3 agree · 7:39' });
+  assert.equal(crew.post.id, first.id); assert.equal(crew.post.at, first.at);
+  assert.equal(e.VISITS.data.size, 1, 'one key per window');
+  const feed = await (await handleShortwave(new Request(URL_), e)).json();
+  assert.equal(feed.posts[0].text, 'On the air from The courts: 1–4 waiting · 3 agree · 7:39');
+  assert.equal(feed.posts[0].via, 'air');
+  await assert.rejects(writeStationPost({}, { ...station, text: 'x' }), 'no KV, no post');
 });

@@ -1,0 +1,56 @@
+---
+/**
+ * AirDial — the 24 px dial strip on Field Reports pages: a hairline scale
+ * from 3 to 12 MHz (the same band as /band and the front-door hero), the
+ * NET tick at 7.200, one marker per station and a needle parked on `mhz`.
+ * The needle carries data-air-needle so the client can spring it on a tap
+ * (one overshoot, 600 ms; a plain jump under reduced motion).
+ */
+import { BAND, NET, stepToMhz } from '../../lib/band';
+
+interface Station { mhz: number; label: string; color: string }
+interface Props {
+  /** Where the needle parks. */
+  mhz: number;
+  /** Extra station markers (the band plan shows every spot). Defaults to the needle's station. */
+  stations?: Station[];
+  color?: string;
+  label?: string;
+}
+const { mhz, color = '#12110E', label, stations } = Astro.props;
+const pct = (m: number) => ((m - BAND.minMhz) / (BAND.maxMhz - BAND.minMhz)) * 100;
+const ticks = Array.from({ length: BAND.maxMhz - BAND.minMhz + 1 }, (_, i) => BAND.minMhz + i);
+const netMhz = stepToMhz(NET.step);
+const marks: Station[] = stations ?? [{ mhz, label: label ?? mhz.toFixed(3), color }];
+---
+
+<div class="air-dial" role="img" aria-label={`Dial parked at ${mhz.toFixed(3)} MHz`} style={`--air-dial-ink:${color}`}>
+  <span class="air-dial__rule" aria-hidden="true"></span>
+  {ticks.map((t) => <span class="air-dial__tick" style={`left:${pct(t)}%`} data-major={t % 3 === 0 ? '' : undefined} aria-hidden="true"><i>{t}</i></span>)}
+  <span class="air-dial__net" style={`left:${pct(netMhz)}%`} title={`The Nightly Net · ${netMhz.toFixed(3)} MHz`} aria-hidden="true">NET</span>
+  {marks.map((m) => <span class="air-dial__station" style={`left:${pct(m.mhz)}%;--air-dial-station:${m.color}`} aria-hidden="true"><i>{m.label}</i></span>)}
+  <span class="air-dial__needle" data-air-needle style={`left:${pct(mhz)}%`} aria-hidden="true"></span>
+</div>
+
+<style>
+  .air-dial { position: relative; height: 24px; margin: 6px 0 0; user-select: none; }
+  .air-dial__rule { position: absolute; left: 0; right: 0; top: 12px; height: 1px; background: var(--pc-rule, #C4C2BC); }
+  .air-dial__tick { position: absolute; top: 9px; width: 1px; height: 7px; margin-left: -.5px; background: var(--pc-rule, #C4C2BC); }
+  .air-dial__tick[data-major] { top: 7px; height: 11px; background: var(--pc-ink-muted, #5F5E5A); }
+  .air-dial__tick i { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font: 400 9px/1 var(--pc-font-mono); font-style: normal; letter-spacing: .04em; color: var(--pc-ink-muted, #5F5E5A); }
+  .air-dial__tick:not([data-major]) i { display: none; }
+  .air-dial__net { position: absolute; top: -2px; transform: translateX(-50%); font: 600 8px/1 var(--pc-font-mono); letter-spacing: .1em; color: var(--pc-accent, #185FA5); }
+  .air-dial__net::after { content: ''; position: absolute; left: 50%; top: 9px; width: 1px; height: 8px; background: var(--pc-accent, #185FA5); }
+  .air-dial__station { position: absolute; top: 4px; width: 5px; height: 17px; margin-left: -2.5px; background: var(--air-dial-station, var(--air-dial-ink)); }
+  .air-dial__station i { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font: 600 8px/1 var(--pc-font-mono); font-style: normal; letter-spacing: .1em; color: var(--air-dial-station, var(--air-dial-ink)); white-space: nowrap; }
+  .air-dial__needle { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--air-live, #D42A1E); box-shadow: 0 0 6px rgba(212, 42, 30, .55); transform-origin: 50% 100%; }
+  .air-dial__needle[data-swing] { animation: air-needle-spring 600ms cubic-bezier(.3, 1.4, .5, 1) both; }
+  @keyframes air-needle-spring {
+    0% { transform: translateX(-14px) rotate(-4deg); }
+    60% { transform: translateX(3px) rotate(1deg); }
+    100% { transform: translateX(0) rotate(0); }
+  }
+  @media (max-width: 420px) { .air-dial__tick[data-major] i { font-size: 8px; } .air-dial__station i { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .air-dial__needle[data-swing] { animation: none; } }
+  :global([data-air-motion='reduced']) .air-dial__needle[data-swing] { animation: none; }
+</style>

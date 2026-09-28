@@ -250,6 +250,50 @@ export function formatWait(minutes: number): string {
   return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m} min`;
 }
 
+// ---------- Field Reports: Court Call and station posts ----------
+
+/**
+ * Court Call: every Friday at 7:30 AM in El Segundo, an hour on 7.500 MHz,
+ * when the courts spot on Field Reports (/r/courts) fills up. Same shape as
+ * the Net, weekly. Mirrors the courts entry in src/data/air-spots.json
+ * (mhz 7.5, courtCall Fri 07:30); tests/home-shortwave-hero keeps them equal.
+ */
+export const COURT_CALL = { step: 180, weekday: 5, minute: 450, minutes: 60 } as const;
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const WEEK_MINUTES = 7 * 1440;
+
+function townWeekday(now: Date): number {
+  const day = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short' }).format(now);
+  return Math.max(0, WEEKDAYS.indexOf(day as (typeof WEEKDAYS)[number]));
+}
+
+/** Wall-clock minutes; a DST change inside the coming week can make minutesUntil an hour off. */
+export function courtCallState(now: Date = new Date()): { live: boolean; minutesUntil: number; minutesLeft: number } {
+  const m = townWeekday(now) * 1440 + townMinute(now);
+  const start = COURT_CALL.weekday * 1440 + COURT_CALL.minute;
+  const since = (m - start + WEEK_MINUTES) % WEEK_MINUTES;
+  if (since < COURT_CALL.minutes) return { live: true, minutesUntil: 0, minutesLeft: COURT_CALL.minutes - since };
+  return { live: false, minutesUntil: (start - m + WEEK_MINUTES) % WEEK_MINUTES, minutesLeft: 0 };
+}
+
+/** "Fri 7:30 AM" */
+export function courtCallTime(): string {
+  const h = Math.floor(COURT_CALL.minute / 60), m = COURT_CALL.minute % 60;
+  return `${WEEKDAYS[COURT_CALL.weekday]} ${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/**
+ * Where a Shortwave post parks on the dial. A station post (Field Reports,
+ * via 'air') carries its spot's `mhz` and sits exactly there; everything else
+ * hashes from its id, kept off the Net marker so the Net reads as its own place.
+ */
+export function postStep(post: { id: string; mhz?: number | null }): number {
+  if (typeof post.mhz === 'number' && Number.isFinite(post.mhz)) return mhzToStep(post.mhz);
+  const s = hash32(post.id) % BAND.steps;
+  return Math.abs(s - NET.step) < 4 ? (s + 9) % BAND.steps : s;
+}
+
 /** A calendar invite for the Net, every night. */
 export function netIcs(): string {
   return [
