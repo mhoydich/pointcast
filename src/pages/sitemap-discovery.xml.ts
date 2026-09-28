@@ -44,6 +44,9 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/second-shift.json', 'weekly', '0.98'],
   ['https://pointcast.xyz/tonight', 'daily', '0.99'],
   ['https://pointcast.xyz/tonight.json', 'daily', '0.96'],
+  // The Morning Edition: one screen at 6:45 AM, frozen daily; the feed is a Pages Function (functions/morning.json.ts).
+  ['https://pointcast.xyz/morning', 'daily', '0.96'],
+  ['https://pointcast.xyz/morning.json', 'daily', '0.92'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-value', 'weekly', '0.9'],
   ['https://pointcast.xyz/agent-value.json', 'weekly', '0.9'],

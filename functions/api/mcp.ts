@@ -86,6 +86,8 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   weather_get           ({station})  station weather
  *   paddle_lookup         ({query})    The Paddle Register: dates, price, approvals, timeline, lab links
  *   paddle_calendar       ()           2026 paddle releases, the road ahead, labeled forecasts
+ *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
+ *   morning_edition       ({date?})    the Morning Edition: masthead, seven slots, bylines (read-only)
  *   editions_summary      (no input)   mintables overview
  *   contracts_status      (no input)   live Tezos contract addresses
  *   channels_list         (no input)   9 channels with codes/slugs
@@ -182,6 +184,9 @@ import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
 import type { AuthEnv } from './auth/session.ts';
+import { AIR_SPOTS } from '../../src/lib/air.ts';
+// @ts-ignore — plain module shared with the tests
+import { FIRST_EDITION, editionDate, parseEditionParam } from '../_lib/morning.mjs';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
@@ -519,6 +524,29 @@ const TOOL_DEFINITIONS = [
     name: 'paddle_calendar',
     description: 'The 2026 pickleball paddle release calendar: every tracked release in date order (id, brand, model, date, price, build), the dated drops and rule changes still ahead, and the labeled forecasts. Mirror of /paddle-calendar.json, trimmed.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'air_latest',
+    description: 'Field Reports (pointcast.xyz/r): what people standing at one El Segundo spot reported, as the buckets they tapped. courts = how many are waiting at the courts (7.500 MHz); beach = can you see the pier from Grand Ave beach (6.100 MHz). Returns the live reading (value, label, status none|single|agree, how many phones agree, age in minutes, signal bars, bylines, the day\'s crew), yesterday\'s last reading with bylines, and the same weekday last week. Read-only: reports are filed from the spot page, never through MCP.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spot: { type: 'string', enum: AIR_SPOTS.map((s) => s.id), description: 'Spot id: "courts" or "beach".' },
+      },
+      required: ['spot'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'morning_edition',
+    description: 'The PointCast Morning Edition (pointcast.xyz/morning): one screen at 6:45 AM Pacific with seven fixed slots (Sky 6.100, Courts 7.500, A price, Today in town, Daily ritual, One pick, Shop) and bylines from Field Reports. Returns the edition object: number, title, masthead, frozen/provisional, missing sources, reporters, the seven slots (id, label, line, source, reportIds, bylines, fallback), footer and shop disclosure. With no date it is the current edition (before 6:45 AM Pacific that is yesterday\'s). Read-only; mirror of /morning.json.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: `Edition date, YYYY-MM-DD: from ${FIRST_EDITION} (No. 1) through the current edition. Omit for the current edition.` },
+      },
+      additionalProperties: false,
+    },
   },
   {
     name: 'editions_summary',
@@ -1395,6 +1423,71 @@ function buildBattlerResultTracker(args: Record<string, unknown>): any {
   };
 }
 
+// ── Field Reports + Morning Edition helpers ───────────────────────────
+// Both tools read the public endpoints, so an agent sees exactly what a
+// page sees: /api/air/<spot> without X-PC-Device (no `you` block), and
+// /morning.json, whose first read after 6:45 AM Pacific freezes the day.
+
+/** The public fields of GET /api/air/<spot>, named so nothing else rides along. */
+function airLatestOf(data: any, base: string) {
+  const spot = data?.spot ?? {};
+  return {
+    spot: { id: spot.id, name: spot.name, short: spot.short, mhz: spot.mhz, kind: spot.kind, question: spot.question, courtCall: spot.courtCall ?? null },
+    url: `${base}/r/${spot.id}`,
+    reading: data?.reading ?? null,
+    yesterday: data?.yesterday ?? null,
+    lastWeek: data?.lastWeek ?? null,
+    serverTime: data?.serverTime ?? null,
+  };
+}
+
+function airLatestLine(latest: ReturnType<typeof airLatestOf>): string {
+  const { spot, reading, yesterday, lastWeek } = latest;
+  const head = `${spot.name} · ${Number(spot.mhz).toFixed(3)} · ${spot.question}`;
+  const lines = [head];
+  if (reading && reading.status !== 'none') {
+    const who = Array.isArray(reading.bylines) && reading.bylines.length ? ` · ${reading.bylines.slice(0, 3).join(', ')}` : '';
+    lines.push(`Now: ${reading.label} · ${reading.support} ${reading.status === 'agree' ? 'agree' : 'reporter'} · ${reading.ageMin} min ago${who}`);
+  } else {
+    lines.push(`Now: quiet, nothing live${reading?.last?.label ? ` (last report: ${reading.last.label})` : ''}`);
+  }
+  // A single report is "1 reporter", never "1 agree" (the tally rule in functions/_lib/morning.mjs).
+  if (yesterday) lines.push(`Yesterday ${yesterday.at}: ${yesterday.label}, ${Number(yesterday.support) >= 2 ? `${yesterday.support} agree` : '1 reporter'}${yesterday.bylines?.length ? ` · ${yesterday.bylines.join(', ')}${yesterday.more ? ` +${yesterday.more}` : ''}` : ''}`);
+  if (lastWeek) lines.push(`Same day last week (${lastWeek.date}) ${lastWeek.at}: ${lastWeek.label}`);
+  return lines.join('\n');
+}
+
+/** One /morning.json feed item back into the edition object composeEdition() builds. */
+function morningEditionOf(item: any) {
+  const pc = item?._pointcast ?? {};
+  const date = String(item?.id ?? '').replace(/^morning:/, '');
+  return {
+    date,
+    number: Number(pc.number) || 0,
+    preview: !(Number(pc.number) > 0),
+    title: item?.title ?? '',
+    masthead: pc.masthead ?? '',
+    url: item?.url ?? '',
+    cutoff: item?.date_published ?? null,
+    frozen: pc.frozen === true,
+    frozenAt: pc.frozen === true ? item?.date_modified ?? null : null,
+    provisional: pc.provisional === true,
+    missing: Array.isArray(pc.missing) ? pc.missing : [],
+    reporters: Array.isArray(pc.reporters) ? pc.reporters : [],
+    more: Number(pc.more) || 0,
+    reporterLine: pc.reporterLine ?? '',
+    slots: Array.isArray(pc.slots) ? pc.slots : [],
+    footer: pc.footer ?? '',
+    disclosure: pc.disclosure ?? '',
+    text: item?.content_text ?? '',
+  };
+}
+
+function morningEditionLine(e: ReturnType<typeof morningEditionOf>): string {
+  const state = e.frozen ? 'frozen' : e.provisional ? `provisional, waiting on ${e.missing.join(' + ') || 'a source'}` : 'not frozen yet';
+  return [`${e.masthead} · ${state}`, e.reporterLine, e.text, e.footer].filter(Boolean).join('\n');
+}
+
 // ── Tool dispatchers ──────────────────────────────────────────────────
 // ── Home Cartography demo index helpers ───────────────────────────────
 // Everything below reads /cartography/home/demo.json, a FICTIONAL demo
@@ -1879,6 +1972,55 @@ async function dispatchTool(
         content: [
           { type: 'text', text: 'The 2026 Paddle Calendar' },
           { type: 'text', text: JSON.stringify(trimmed, null, 2) },
+        ],
+      };
+    }
+    case 'air_latest': {
+      const id = String(args.spot || '').trim().toLowerCase();
+      const spot = AIR_SPOTS.find((s) => s.id === id);
+      if (!spot) {
+        return { content: [{ type: 'text', text: `spot must be one of: ${AIR_SPOTS.map((s) => s.id).join(', ')}` }], isError: true };
+      }
+      let data: any;
+      try {
+        data = await callJson(`${base}/api/air/${spot.id}`);
+      } catch {
+        return { content: [{ type: 'text', text: `Field Reports is off the air for ${spot.name} right now. Try again in a minute, or open ${base}/r/${spot.id}.` }], isError: true };
+      }
+      const latest = airLatestOf(data, base);
+      return {
+        content: [
+          { type: 'text', text: airLatestLine(latest) },
+          { type: 'text', text: JSON.stringify(latest, null, 2) },
+        ],
+      };
+    }
+    case 'morning_edition': {
+      const asked = args.date == null || args.date === '' ? null : String(args.date).trim();
+      const parsed = parseEditionParam(asked, Date.now()) as { date: string } | { reason: string };
+      if ('reason' in parsed) {
+        const current = editionDate(Date.now()) as string;
+        const range = current < FIRST_EDITION
+          ? `No. 1 is ${FIRST_EDITION}; until then only the current preview exists, so omit date`
+          : `use YYYY-MM-DD from ${FIRST_EDITION} through ${current}, or omit date for the current edition`;
+        return { content: [{ type: 'text', text: `No edition for "${asked}": ${range}.` }], isError: true };
+      }
+      let feed: any;
+      try {
+        feed = await callJson(`${base}/morning.json${asked ? `?d=${parsed.date}` : ''}`);
+      } catch {
+        return { content: [{ type: 'text', text: `The Morning Edition is not on the press right now. Try again in a minute, or open ${base}/morning.` }], isError: true };
+      }
+      const items: any[] = Array.isArray(feed?.items) ? feed.items : [];
+      const item = asked ? items.find((it) => it?.id === `morning:${parsed.date}`) : items[0];
+      if (!item) {
+        return { content: [{ type: 'text', text: `No edition for ${asked ?? 'today'} in /morning.json.` }], isError: true };
+      }
+      const edition = morningEditionOf(item);
+      return {
+        content: [
+          { type: 'text', text: morningEditionLine(edition) },
+          { type: 'text', text: JSON.stringify(edition, null, 2) },
         ],
       };
     }
@@ -3067,6 +3209,8 @@ function discoveryHtml(request: Request) {
   <li><code>weather_get</code> — weather for a station</li>
   <li><code>paddle_lookup</code> — a pickleball paddle's launch date, price, approval status, timeline and lab links</li>
   <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
+  <li><code>air_latest</code> — Field Reports: the live reading at the courts or the beach, yesterday's and last week's</li>
+  <li><code>morning_edition</code> — the Morning Edition: masthead, seven slots and bylines, today or any past date</li>
   <li><code>editions_summary</code> — every mintable</li>
   <li><code>contracts_status</code> — live Tezos contracts</li>
   <li><code>channels_list</code> — 9 channels</li>
@@ -3154,7 +3298,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. Read tools for blocks, channels, presence, weather, contracts, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {

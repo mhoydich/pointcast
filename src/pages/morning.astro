@@ -1,0 +1,284 @@
+---
+/**
+ * /morning — the Morning Edition: one screen at 6:45 AM, seven fixed slots,
+ * bylines from Field Reports. Never ships empty.
+ *
+ * Static BlockLayout shell. The edition itself is the server's: the client
+ * (src/scripts/morning-client.ts) reads ?d=, fetches /morning.json (JSON
+ * Feed 1.1 from functions/morning.json.ts, frozen once a day on the first
+ * read after 6:45 AM) and fills the masthead, the seven rows, the reporters
+ * line and the prev/next links. The live strip under the masthead is GET
+ * /api/air and is never frozen. Before JavaScript lands the rows show a
+ * calm skeleton, never a blank page; <noscript> points at the feed.
+ *
+ * Rows, labels and colors come from the same files the edition is built
+ * from: functions/_lib/morning.mjs (SLOTS, the footer line, the shop
+ * disclosure) and src/data/air-spots.json (frequencies, channel colors).
+ * The masthead art is the pastel "good morning signal" tile, no text baked
+ * in, so the type is set here in JetBrains Mono over a 2px ink rule.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { AIR_SPOTS, mhzLabel, spotUrl } from '../lib/air';
+import { CHANNELS } from '../lib/channels';
+import { FEED_TITLE, FIRST_EDITION, FOOTER_LINE, SHOP_DISCLOSURE, SLOTS, editionDayLabel } from '../../functions/_lib/morning.mjs';
+
+const MASTHEAD = '/images/air/morning-masthead.webp';
+const MASTHEAD_800 = '/images/air/morning-masthead-800.webp';
+
+const title = 'Morning Edition';
+const description =
+  'Seven fixed slots at 6:45 AM in El Segundo: the sky at KLAX, the courts, a price, town, the Nightly Net, one pick and the shop. Bylines from Field Reports.';
+
+/** A channel color for each slot: the spot's own for Sky and Courts, the desk's channel for the rest. */
+const SLOT_CHANNEL: Record<string, string> = {
+  price: CHANNELS.CRT.color600,
+  town: CHANNELS.ESC.color600,
+  ritual: CHANNELS.SPN.color600,
+  pick: CHANNELS.FD.color600,
+  shop: CHANNELS.CRT.color600,
+};
+const rows = SLOTS.map((slot) => {
+  const spot = slot.spot ? AIR_SPOTS.find((s) => s.id === slot.spot) ?? null : null;
+  return {
+    id: slot.id,
+    long: slot.label,
+    label: spot ? `${slot.id} · ${mhzLabel(spot)}` : slot.id,
+    color: spot?.color ?? SLOT_CHANNEL[slot.id] ?? 'var(--pc-ink)',
+    href: spot ? spotUrl(spot.id) : null,
+  };
+});
+const firstDay = editionDayLabel(FIRST_EDITION);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Periodical',
+  '@id': 'https://pointcast.xyz/morning',
+  name: FEED_TITLE,
+  alternateName: 'Morning Edition',
+  description,
+  url: 'https://pointcast.xyz/morning',
+  inLanguage: 'en-US',
+  startDate: FIRST_EDITION,
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  image: `https://pointcast.xyz${MASTHEAD}`,
+  keywords: SLOTS.map((s) => s.label).join(', '),
+  encoding: [{ '@type': 'MediaObject', encodingFormat: 'application/feed+json', contentUrl: 'https://pointcast.xyz/morning.json' }],
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={MASTHEAD}
+  imageWidth={1600}
+  imageHeight={600}
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/feed+json', href: '/morning.json', title: `${FEED_TITLE} · JSON Feed` }]}
+>
+  <article class="me" data-me data-me-state="loading">
+    <header class="me__head">
+      <img
+        class="me__art"
+        src={MASTHEAD}
+        srcset={`${MASTHEAD_800} 800w, ${MASTHEAD} 1600w`}
+        sizes="(max-width: 680px) 100vw, 640px"
+        width="1600"
+        height="600"
+        alt="Good morning signal: a tiled pool with lotus flowers, a rainbow over the sun, palms, torches and a radio tower."
+        fetchpriority="high"
+        decoding="async"
+      />
+      <h1 class="me__mast me-mono" data-me-mast>
+        <span class="me__mast-a"><span>Morning Edition</span><span class="me__mast-no" data-me-mast-no hidden></span></span>
+        <span class="me__mast-b"><span data-me-mast-day hidden></span><span>6:45 AM</span></span>
+      </h1>
+      <p class="me__preview" data-me-preview hidden>
+        Preview. No. 1 is {firstDay} at 6:45 AM. Until then the slots fill from the same sources and nothing freezes.
+      </p>
+      <p class="me__status me-mono" data-me-status>Loading…</p>
+      <p class="me__reporters" data-me-reporters hidden></p>
+    </header>
+
+    <p class="me__live" data-me-live hidden>
+      <i class="me__dot" aria-hidden="true"></i>
+      <span class="me__live-now me-mono">Now</span>
+      <span class="me__live-text" data-me-live-text></span>
+    </p>
+
+    <noscript>
+      <style is:inline>.me__sk { animation: none !important; opacity: .35; } [data-me-status] { display: none !important; }</style>
+      <p class="me__noscript">The edition needs JavaScript to fill in here. The same seven lines are at <a href="/morning.json">/morning.json</a>, a JSON Feed.</p>
+    </noscript>
+
+    <div class="me__error" data-me-error hidden role="status">
+      <p data-me-error-text></p>
+      <p class="me-mono"><button type="button" class="me__retry" data-me-error-retry>Try again</button> <a href="/morning.json">/morning.json</a> <a href="/morning">Today’s edition</a></p>
+    </div>
+
+    <ol class="me__slots" aria-label="The seven slots">
+      {rows.map((r) => (
+        <li class="me__slot" data-me-slot={r.id} data-me-fallback="no" style={`--me-ch:${r.color}`}>
+          <p class="me__label me-mono" title={r.long}>
+            {r.href ? <a href={r.href}>{r.label}</a> : r.label}
+          </p>
+          <p class="me__line" data-me-line><span class="me__sk" aria-hidden="true"></span><span class="me__sk me__sk--short" aria-hidden="true"></span></p>
+          <p class="me__meta" data-me-meta hidden><span class="me__by" data-me-by hidden></span><a class="me__src" data-me-src></a></p>
+        </li>
+      ))}
+    </ol>
+
+    <nav class="me__nav me-mono" data-me-nav aria-label="Other editions" hidden>
+      <a data-me-prev hidden></a>
+      <a data-me-next hidden></a>
+    </nav>
+
+    <footer class="me__foot">
+      <p>{FOOTER_LINE} {SHOP_DISCLOSURE}</p>
+      <p class="me-mono">
+        <a href="/morning.json">/morning.json</a>
+        <span aria-hidden="true">·</span>
+        <a href="/api/mcp">morning_edition on /api/mcp</a>
+        <span aria-hidden="true">·</span>
+        <a href="/r">field reports</a>
+        <span aria-hidden="true">·</span>
+        <a href="/band">the band</a>
+      </p>
+    </footer>
+  </article>
+</BlockLayout>
+
+<script>
+  import { mountMorningPage } from '../scripts/morning-client';
+  mountMorningPage();
+</script>
+
+<style>
+  .me {
+    /* AirInk's on-air red and receipt paper (src/components/air/AirInk.astro): red means live and nothing else. */
+    --me-live: #D42A1E;
+    --me-receipt: #F7F5EF;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 16px 48px;
+  }
+  .me [hidden] { display: none !important; }
+  .me-mono { font-family: var(--pc-font-mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+
+  /* ---- masthead: the art, then the title set in mono over a 2px ink rule ---- */
+  .me__head { margin: 0 0 14px; }
+  .me__art { width: 100%; height: auto; aspect-ratio: 8 / 3; object-fit: cover; background: var(--me-receipt); }
+  .me__mast {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 .6em;
+    margin: 14px 0 0;
+    padding: 0 0 10px;
+    border-bottom: 2px solid var(--pc-ink);
+    font-family: var(--pc-font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 22px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--pc-ink);
+  }
+  /* Two groups: "MORNING EDITION · No. 3" and "MON 5 OCT 2026 · 6:45 AM". One line on a desk; a phone takes them as two, so no line ever starts with a dot.
+     A dot only follows a visible sibling: while the number and day are still hidden (loading, error, no script) the shell reads "MORNING EDITION · 6:45 AM", never "· 6:45 AM". */
+  .me__mast-a, .me__mast-b { display: inline-flex; flex-wrap: wrap; gap: 0 .6em; }
+  .me__mast span:not([hidden]) + span::before { content: '·'; margin-right: .6em; color: var(--pc-ink-muted); }
+  /* The group dot is a flex item of its own group, so the group's gap already spaces it. */
+  .me__mast .me__mast-a + .me__mast-b::before { margin-right: 0; }
+  .me__mast-no { text-transform: none; }
+  .me__preview { margin: 10px 0 0; padding: 8px 10px; border: 1.5px solid var(--pc-ink); font: 400 13px/1.45 var(--pc-font-mono); color: var(--pc-ink-soft); }
+  .me__status { margin: 8px 0 0; font-size: 11px; color: var(--pc-ink-muted); }
+  .me__reporters { margin: 8px 0 0; font-size: 15px; line-height: 1.45; color: var(--pc-ink-soft); }
+
+  /* ---- the live strip: on-air red dot, never frozen ---- */
+  .me__live {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    background: var(--me-receipt);
+    font-size: 15px;
+    line-height: 1.4;
+    color: var(--pc-ink);
+  }
+  .me__dot { align-self: flex-start; margin-top: 5px; width: 10px; height: 10px; background: var(--me-live); animation: me-pulse 2s ease-in-out infinite; }
+  .me__live-now { color: var(--me-live); font-weight: 500; }
+  /* One reading per line, so two readings never run together as one sentence. */
+  .me__live-text { display: grid; gap: 2px; flex: 1 1 12rem; min-width: 0; }
+  /* The items are created by the client, so scoped CSS never reaches them without :global.
+     They wrap: "grand ave can't see the pier · 1 min ago · 1 reporter" is wider than a 375 px strip, and must never widen the page. */
+  .me__live-text :global(.me__live-item) { min-width: 0; overflow-wrap: anywhere; }
+  @keyframes me-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+  .me__noscript { margin: 0 0 14px; font-size: 15px; line-height: 1.45; color: var(--pc-ink-soft); }
+  .me__error { margin: 0 0 14px; padding: 12px; border: 1.5px solid var(--pc-ink); }
+  .me__error p { margin: 0 0 8px; font-size: 15px; line-height: 1.45; }
+  .me__error p:last-child { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; text-transform: none; letter-spacing: .04em; }
+  .me__retry { margin: 0; padding: 6px 10px; border: 1.5px solid var(--pc-ink); background: var(--pc-bg); color: var(--pc-ink); font: inherit; cursor: pointer; }
+  .me__retry:hover { background: var(--pc-ink); color: var(--pc-bg); }
+
+  /* ---- the seven rows ---- */
+  .me__slots { list-style: none; margin: 0 0 18px; padding: 0; border-top: 1px solid var(--pc-rule); }
+  .me__slot { display: grid; gap: 4px; padding: 16px 0; border-bottom: 1px solid var(--pc-rule-soft); }
+  .me__label { margin: 0; font-size: 12px; font-weight: 500; color: var(--me-ch); }
+  .me__label a { color: var(--me-ch); }
+  .me__label a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .me__line { margin: 0; font-size: 17px; line-height: 26px; color: var(--pc-ink); overflow-wrap: anywhere; }
+  .me__meta { display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 2px 0 0; font-family: var(--pc-font-mono); font-size: 13px; line-height: 20px; letter-spacing: .02em; color: var(--pc-ink-muted); }
+  .me__by { color: var(--pc-ink-soft); }
+  /* The dot trails the bylines, so a wrapped meta row never starts with one. */
+  .me__by::after { content: '·'; margin-left: 10px; }
+  .me__src { color: var(--pc-ink-muted); }
+  .me__src[href]:hover { color: var(--pc-accent); text-decoration: underline; }
+
+  /* skeleton: two quiet bars until the line lands */
+  .me__sk { display: block; width: 100%; height: 14px; margin: 6px 0; background: var(--pc-rule-soft); animation: me-breathe 2.4s ease-in-out infinite; }
+  .me__sk--short { width: 62%; }
+  .me[data-me-state='error'] .me__sk { animation: none; opacity: .55; }
+  @keyframes me-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+
+  /* ---- editions before and after ---- */
+  .me__nav { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 18px; }
+  .me__nav a { color: var(--pc-ink); }
+  .me__nav a:last-child { margin-left: auto; }
+
+  /* ---- footer: the points line, the shop disclosure, the machine doors ---- */
+  .me__foot { padding-top: 12px; border-top: 1px solid var(--pc-rule); color: var(--pc-ink-muted); }
+  .me__foot p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+  .me__foot .me-mono { display: flex; flex-wrap: wrap; gap: 4px 8px; text-transform: none; letter-spacing: .04em; }
+
+  @media (min-width: 600px) {
+    .me { padding-top: 8px; }
+    .me__slot { grid-template-columns: 136px 1fr; column-gap: 16px; align-items: baseline; }
+    .me__label { padding-top: 5px; }
+    .me__meta { grid-column: 2; }
+    .me__mast { font-size: 15px; }
+  }
+  @media (max-width: 680px) {
+    /* The art runs edge to edge on a phone, like a front page. */
+    .me__art { width: calc(100% + 32px); max-width: none; margin: 0 -16px; }
+  }
+  @media (max-width: 599px) {
+    /* Outranks the scoped `span + span` rule above (Astro's cid attributes add specificity). */
+    .me__mast .me__mast-a + .me__mast-b { flex-basis: 100%; }
+    .me__mast .me__mast-a + .me__mast-b::before { content: none; margin: 0; }
+  }
+  @media (max-width: 380px) {
+    .me__mast { font-size: 12px; letter-spacing: .08em; gap: 0 .5em; }
+    .me__line { font-size: 16px; line-height: 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .me__dot, .me__sk { animation: none; }
+  }
+  @media print {
+    .me__live, .me__nav, .me__error, .me__retry { display: none !important; }
+    .me__art { margin: 0; width: 100%; }
+  }
+</style>
