@@ -81,7 +81,7 @@ test('field reports: every reason the parsers return is a documented reason', ()
 
 test('field reports: v1 buckets are frozen and every bucket has a reading label', () => {
   assert.equal(config.version, 1);
-  assert.deepEqual(kindOf(config, 'courts', 'wait').options.map((o) => o.v), ['0', '1-4', '5+', 'cant']);
+  assert.deepEqual(kindOf(config, 'courts', 'wait').options.map((o) => o.v), ['locked', '0', '1-4', '5-8', '9+', 'cant']);
   assert.deepEqual(kindOf(config, 'beach', 'fog').options.map((o) => o.v), ['clear', 'hazy', 'none', 'cant']);
   assert.equal(kindOf(config, 'courts', 'wait').decayMin, 45);
   assert.equal(kindOf(config, 'beach', 'fog').decayMin, 120);
@@ -91,7 +91,7 @@ test('field reports: v1 buckets are frozen and every bucket has a reading label'
       assert.deepEqual(Object.keys(cfg.readingLabels).sort(), cfg.options.map((o) => o.v).sort(), 'no label for a bucket that does not exist');
     }
   }
-  assert.equal(labelOf(kindOf(config, 'courts', 'wait'), '1-4'), '1–4 waiting');
+  assert.equal(labelOf(kindOf(config, 'courts', 'wait'), '1-4'), '1–4 in the rack');
   assert.equal(labelOf(kindOf(config, 'courts', 'wait'), null), null);
 });
 
@@ -105,8 +105,8 @@ test('field reports: no spot id collides with a reserved id, and names stay neut
     assert.equal(spotOf(config, id).id, id);
   }
   const courts = spotOf(config, 'courts');
-  assert.equal(courts.name, 'The courts');
-  assert.equal(courts.short, 'COURTS');
+  assert.equal(courts.name, 'Manhattan Middle School courts');
+  assert.equal(courts.short, 'MANHATTAN MIDDLE');
   assert.equal(courts.mhz, 7.5);
   assert.equal(spotOf(config, 'beach').mhz, 6.1);
 });

@@ -200,13 +200,13 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.deepEqual(mike.body.report.onsite, true);
   assert.equal(mike.body.report.code, 'ok');
   assert.equal(mike.body.report.byline, guestByline(await pidHash(DEV.a)));
-  assert.equal(mike.body.report.label, '1–4 waiting');
+  assert.equal(mike.body.report.label, '1–4 in the rack');
   assert.equal(mike.body.award.points, 10, 'report 6 + first light 4');
   assert.equal(mike.body.award.pointsToday, 10);
   assert.equal(mike.body.award.firstLight, true);
   assert.deepEqual(mike.body.award.badges, ['first-light']);
   assert.deepEqual(mike.body.award.stamps, [
-    { kind: 'place', ref: 'courts', day: '2026-10-02', text: 'COURTS · FRI 02 OCT 2026', new: true },
+    { kind: 'place', ref: 'courts', day: '2026-10-02', text: 'MANHATTAN MIDDLE · FRI 02 OCT 2026', new: true },
     { kind: 'badge', ref: 'first-light', day: '-', text: 'FIRST LIGHT', new: true },
   ]);
   assert.equal(mike.body.award.more, 0);
@@ -220,7 +220,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.equal(keys().length, 1);
   const first = JSON.parse(t.env.VISITS.data.get(keys()[0]));
   assert.equal(first.via, 'air'); assert.equal(first.attribution, 'station'); assert.equal(first.mhz, 7.5); assert.equal(first.spot, 'courts');
-  assert.equal(first.text, 'On the air from The courts: 1–4 waiting · 1 reporter · 7:36');
+  assert.equal(first.text, 'On the air from Manhattan Middle School courts: 1–4 in the rack · 1 reporter · 7:36');
   assert.equal(t.bursts.length, 1);
   assert.deepEqual([t.bursts[0].meta.air, t.bursts[0].meta.spot, t.bursts[0].meta.mhz], [true, 'courts', 7.5]);
 
@@ -235,7 +235,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.equal(again.body.award.points, 0);
   assert.equal(again.body.report.id, mike.body.report.id);
   // An older queued tap for that slot changes nothing.
-  const stale = await report(t, 'courts', { kind: 'wait', value: '5+', device: DEV.a, code: CRT, observedAt: T0 + 10_000 }, T0 + 40_000);
+  const stale = await report(t, 'courts', { kind: 'wait', value: '5-8', device: DEV.a, code: CRT, observedAt: T0 + 10_000 }, T0 + 40_000);
   assert.equal(stale.body.replaced, true);
   assert.equal(stale.body.report.value, '1-4');
   await t.settle();
@@ -248,7 +248,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.equal(jen.body.reading.status, 'agree');
   assert.equal(jen.body.reading.support, 2);
   assert.equal(jen.body.next, null);
-  assert.deepEqual(jen.body.award.stamps.map((s) => s.text), ['COURTS · FRI 02 OCT 2026']);
+  assert.deepEqual(jen.body.award.stamps.map((s) => s.text), ['MANHATTAN MIDDLE · FRI 02 OCT 2026']);
   assert.equal((await confirm(t, { reportId: mike.body.report.id, verdict: 'still', device: DEV.b, code: CRT }, T0 + 3 * MIN)).status, 409);
   const own = await confirm(t, { reportId: mike.body.report.id, verdict: 'still', device: DEV.a, code: CRT }, T0 + 3 * MIN);
   assert.equal(own.status, 400); assert.equal(own.body.reason, 'own-report');
@@ -262,7 +262,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.equal(sam.body.award.points, 6);
   assert.deepEqual(sam.body.award.crew, { id: 'courts:2026-10-02:10', n: 3, at: '2026-10-02T14:39:00Z' });
   assert.deepEqual(sam.body.award.badges, ['morning-crew']);
-  assert.deepEqual(sam.body.award.stamps.map((s) => s.text), ['COURTS · FRI 02 OCT 2026', 'MORNING CREW · COURTS · FRI 02 OCT 2026']);
+  assert.deepEqual(sam.body.award.stamps.map((s) => s.text), ['MANHATTAN MIDDLE · FRI 02 OCT 2026', 'MORNING CREW · MANHATTAN MIDDLE · FRI 02 OCT 2026']);
   assert.equal(sam.body.award.more, 1, 'the MORNING CREW badge goes in the book, counted, not slammed');
   assert.equal(sam.body.claim, null, 'a signed-in reporter has nothing to claim');
   assert.equal(sam.body.reading.support, 3);
@@ -271,7 +271,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   await t.settle();
   assert.equal(keys().length, 1, 'the crew updates the window\'s post in place');
   const crewPost = JSON.parse(t.env.VISITS.data.get(keys()[0]));
-  assert.equal(crewPost.text, 'On the air from The courts: 1–4 waiting · 3 agree · 7:39');
+  assert.equal(crewPost.text, 'On the air from Manhattan Middle School courts: 1–4 in the rack · 3 agree · 7:39');
   assert.equal(crewPost.at, first.at);
   assert.equal(t.bursts.length, 2);
   assert.equal(db.rows("SELECT COUNT(*) AS n FROM air_stamps WHERE kind = 'crew'")[0].n, 3, 'every member gets the crew stamp');
@@ -285,11 +285,11 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.equal(postWrites(), 2, 'at most two KV writes per window');
 
   // Remote: no code, or a code that isn't valid, is shown but never counts.
-  const remote = await report(t, 'courts', { kind: 'wait', value: '5+', device: DEV.e }, T0 + 6 * MIN);
+  const remote = await report(t, 'courts', { kind: 'wait', value: '5-8', device: DEV.e }, T0 + 6 * MIN);
   assert.equal(remote.body.report.onsite, false); assert.equal(remote.body.report.code, 'none');
   assert.equal(remote.body.award.points, 0); assert.deepEqual(remote.body.award.stamps, []);
   assert.equal(remote.body.reading.value, '1-4');
-  const wrong = await report(t, 'courts', { kind: 'wait', value: '5+', device: DEV.f, code: BCH }, T0 + 6 * MIN);
+  const wrong = await report(t, 'courts', { kind: 'wait', value: '5-8', device: DEV.f, code: BCH }, T0 + 6 * MIN);
   assert.equal(wrong.body.report.code, 'unknown');
 
   // The poll: a phone that confirmed sees it is in the crew.
@@ -300,11 +300,11 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.equal(page.today.find((r) => r.id === mike.body.report.id).confirms, 1);
   assert.equal(page.today.find((r) => r.id === remote.body.report.id).onsite, false);
   assert.equal(page.reading.crew.id, 'courts:2026-10-02:10');
-  assert.equal(page.spot.question, 'How many waiting?');
+  assert.equal(page.spot.question, 'Paddles in the rack?');
   await noHashes(page);
 
   const all = await stationsPayload(db, config, T0 + 7 * MIN);
-  assert.deepEqual(all.spots[0].reading, { label: '1–4 waiting', status: 'agree', ageMin: 2, bars: 5 });
+  assert.deepEqual(all.spots[0].reading, { label: '1–4 in the rack', status: 'agree', ageMin: 2, bars: 5 });
   assert.equal(all.spots[1].reading, null);
   assert.equal(all.courtCall.live, true);
 
@@ -317,7 +317,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   // Saturday: yesterday's last reading, with bylines.
   const sat = await spotPayload(t.env, db, courts, Date.parse('2026-10-03T15:00:00Z'));
   assert.equal(sat.reading.status, 'none');
-  assert.equal(sat.yesterday.label, '1–4 waiting');
+  assert.equal(sat.yesterday.label, '1–4 in the rack');
   assert.equal(sat.yesterday.support, 4);
   assert.equal(sat.yesterday.more, 1);
   assert.deepEqual(sat.today, []);
@@ -362,7 +362,7 @@ test('claim moves a phone\'s day to the account and its card handle; /me only sh
   assert.equal(guest.owner, 'device');
   assert.deepEqual(guest.points, { today: 10, total: 10 });
   assert.deepEqual(guest.badges, ['first-light']);
-  assert.equal(guest.stamps[0].text, 'COURTS · FRI 02 OCT 2026');
+  assert.equal(guest.stamps[0].text, 'MANHATTAN MIDDLE · FRI 02 OCT 2026');
   assert.equal(guest.stamps[0].traits.answer, '0');
   assert.equal(guest.stamps[0].traits.value, undefined, 'the answer is namespaced, never a bare value');
   assert.equal(guest.stamps[0].traits.geo, false);
@@ -395,7 +395,7 @@ test('limits count server time: a backdated flood from one IP still stops at 40 
   const t = town();
   let limitedN = 0;
   for (let i = 0; i < 60; i++) {
-    const r = await report(t, 'courts', { kind: 'wait', value: '5+', device: uuid(), code: CRT, observedAt: T0 - 11 * MIN }, T0, '', '198.51.100.7');
+    const r = await report(t, 'courts', { kind: 'wait', value: '5-8', device: uuid(), code: CRT, observedAt: T0 - 11 * MIN }, T0, '', '198.51.100.7');
     if (r.status === 429) limitedN++;
   }
   assert.equal(limitedN, 20);
@@ -414,7 +414,7 @@ test('station post: a crew a moment after the first post still ends on the crew 
   await t.settle();
   const keys = [...t.env.VISITS.data.keys()].filter((k) => k.startsWith('shortwave:post:v1:'));
   assert.equal(keys.length, 1);
-  assert.equal(JSON.parse(t.env.VISITS.data.get(keys[0])).text, 'On the air from The courts: 1–4 waiting · 3 agree · 7:36');
+  assert.equal(JSON.parse(t.env.VISITS.data.get(keys[0])).text, 'On the air from Manhattan Middle School courts: 1–4 in the rack · 3 agree · 7:36');
 });
 
 test('a "still" keeps its report confirmable and on the air past the report\'s own decay', async () => {
@@ -433,7 +433,7 @@ test('a "still" keeps its report confirmable and on the air past the report\'s o
   assert.equal(sam.body.reading.support, 2);
   // 8:20: the report is 80 minutes old, the confirms keep it live on /r and the unfurl card.
   const all = await stationsPayload(db, config, R0 + 80 * MIN);
-  assert.equal(all.spots[0].reading?.label, '1–4 waiting');
+  assert.equal(all.spots[0].reading?.label, '1–4 in the rack');
   const page = await spotPayload(t.env, db, courts, R0 + 80 * MIN);
   assert.equal(page.reading.support, 2);
   // Once the last "still" ages out, the report expires.
@@ -459,7 +459,7 @@ test('awards: a retry after a failed write pays; a row that turns on-site or mov
   assert.equal(retry.body.replaced, true);
   assert.equal(retry.body.award.points, 10, 'report 6 + first light 4, paid on the retry');
   assert.equal(retry.body.award.firstLight, true);
-  assert.deepEqual(retry.body.award.stamps.map((s) => s.text), ['COURTS · FRI 02 OCT 2026', 'FIRST LIGHT']);
+  assert.deepEqual(retry.body.award.stamps.map((s) => s.text), ['MANHATTAN MIDDLE · FRI 02 OCT 2026', 'FIRST LIGHT']);
   const again = await report(t, 'courts', { ...body, observedAt: T0 + 2000 }, T0 + 2000);
   assert.equal(again.body.award.points, 0, 'paid once');
   assert.equal(again.body.award.firstLight, false);
@@ -488,9 +488,9 @@ test('a confirm stands for the value it saw; a changed answer does not take its 
   const t = town();
   const p1 = await report(t, 'courts', { kind: 'wait', value: '0', device: DEV.a, code: CRT }, T0 + MIN);
   await confirm(t, { reportId: p1.body.report.id, verdict: 'still', device: DEV.b, code: CRT }, T0 + 3 * MIN);
-  const changed = await report(t, 'courts', { kind: 'wait', value: '5+', device: DEV.a, code: CRT }, T0 + 5 * MIN);
+  const changed = await report(t, 'courts', { kind: 'wait', value: '5-8', device: DEV.a, code: CRT }, T0 + 5 * MIN);
   assert.equal(changed.body.report.id, p1.body.report.id);
-  assert.equal(changed.body.reading.value, '5+');
+  assert.equal(changed.body.reading.value, '5-8');
   assert.equal(changed.body.reading.support, 1);
   assert.deepEqual(changed.body.reading.bylines, [guestByline(await pidHash(DEV.a))]);
 });
@@ -510,7 +510,7 @@ test('the crew is the day\'s first one: a sliding window of the same people neve
   assert.ok(d.body.award.stamps.some((s) => s.kind === 'crew'));
   await t.settle();
   const crewPosts = [...t.env.VISITS.data.values()].map((v) => JSON.parse(v).text).filter((x) => x.includes(' agree '));
-  assert.deepEqual(crewPosts.filter((x) => x.endsWith('8:10')), ['On the air from The courts: 1–4 waiting · 3 agree · 8:10']);
+  assert.deepEqual(crewPosts.filter((x) => x.endsWith('8:10')), ['On the air from Manhattan Middle School courts: 1–4 in the rack · 3 agree · 8:10']);
   assert.equal(db.rows('SELECT COUNT(*) AS n FROM air_broadcasts WHERE crew_at IS NOT NULL')[0].n, 1, 'one crew update all day');
   // 8:52: the sliding window is empty, the crew is still the day's, and B slept through it.
   const b = await spotPayload(t.env, db, courts, at('8:52'), DEV.b);
@@ -524,7 +524,7 @@ test('the crew is the day\'s first one: a sliding window of the same people neve
 test('one network cannot agree with itself: a same-IP confirm counts nothing unless it is another account', async () => {
   const t = town();
   const home = '203.0.113.50';
-  const mike = await report(t, 'courts', { kind: 'wait', value: '5+', device: DEV.a, code: CRT }, T0, '', home);
+  const mike = await report(t, 'courts', { kind: 'wait', value: '5-8', device: DEV.a, code: CRT }, T0, '', home);
   const sock = await confirm(t, { reportId: mike.body.report.id, verdict: 'still', device: uuid(), code: CRT }, T0 + MIN, '', home);
   assert.equal(sock.status, 200);
   assert.equal(sock.body.onsite, false);
@@ -535,10 +535,10 @@ test('one network cannot agree with itself: a same-IP confirm counts nothing unl
   assert.equal(jen.body.onsite, true, 'a different signed-in account on the same wifi counts');
   assert.equal(jen.body.reading.support, 2);
   // Three phones, one network: no crew. A second network completes it.
-  const third = await report(t, 'courts', { kind: 'wait', value: '5+', device: uuid(), code: CRT }, T0 + 3 * MIN, '', home);
+  const third = await report(t, 'courts', { kind: 'wait', value: '5-8', device: uuid(), code: CRT }, T0 + 3 * MIN, '', home);
   assert.equal(third.body.award.crew, null);
   assert.equal(third.body.reading.crew, null);
-  const away = await report(t, 'courts', { kind: 'wait', value: '5+', device: DEV.d, code: CRT }, T0 + 4 * MIN);
+  const away = await report(t, 'courts', { kind: 'wait', value: '5-8', device: DEV.d, code: CRT }, T0 + 4 * MIN);
   assert.ok(away.body.award.crew);
 });
 
@@ -596,7 +596,7 @@ test('receipt: a Friday report that opens the day and completes a crew writes fo
   assert.equal(c.body.award.firstLight, true);
   assert.equal(c.body.award.points, 10);
   assert.ok(c.body.award.crew);
-  assert.deepEqual(c.body.award.stamps.map((s) => s.text), ['COURTS · FRI 02 OCT 2026', 'MORNING CREW · COURTS · FRI 02 OCT 2026'], 'the place and morning crew, which outranks first light');
+  assert.deepEqual(c.body.award.stamps.map((s) => s.text), ['MANHATTAN MIDDLE · FRI 02 OCT 2026', 'MORNING CREW · MANHATTAN MIDDLE · FRI 02 OCT 2026'], 'the place and morning crew, which outranks first light');
   assert.equal(c.body.award.more, 2, '+2 more in your book: FIRST LIGHT and the MORNING CREW badge');
   assert.deepEqual([...c.body.award.badges].sort(), ['first-light', 'morning-crew']);
   const owner = `dev:${await pidHash(DEV.c)}`;
