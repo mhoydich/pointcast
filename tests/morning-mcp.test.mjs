@@ -94,7 +94,7 @@ test('MCP lists air_latest and morning_edition as read-only tools, next to paddl
   assert.equal(air.annotations.readOnlyHint, true);
   assert.equal(morning.annotations.readOnlyHint, true);
   assert.deepEqual(air.inputSchema.properties.spot.enum, config.spots.map((s) => s.id), 'the spot enum is the spots file');
-  assert.deepEqual(air.inputSchema.properties.spot.enum, ['courts', 'beach']);
+  assert.deepEqual(air.inputSchema.properties.spot.enum, config.spots.map((s) => s.id), 'every air spot is readable');
   assert.deepEqual(air.inputSchema.required, ['spot']);
   assert.equal(morning.inputSchema.required, undefined, 'date is optional');
   assert.match(morning.inputSchema.properties.date.description, new RegExp(FIRST_EDITION));
