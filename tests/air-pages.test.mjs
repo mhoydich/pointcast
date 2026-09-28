@@ -154,5 +154,15 @@ test('band plan and card: live readings from GET /api/air, the card claims throu
   assert.match(me, /href="\/auth\?returnTo=\/r\/me"/);
   assert.match(me, /noindex/);
   assert.match(client, /traitLine\(s\)/, 'every stamp on the card shows its trait line');
-  for (const t of ['weekday', 'hour', 'crewSize', 'firstLight', 'deadAirHours', 'value']) assert.match(client, new RegExp(`t\\.${t}`), `trait ${t}`);
+  for (const t of ['weekday', 'hour', 'crewSize', 'firstLight', 'deadAirHours', 'answer']) assert.match(client, new RegExp(`t\\.${t}`), `trait ${t}`);
+});
+
+test('client: the receipt slams two stamps at most and counts the rest into the book', () => {
+  const land = client.slice(client.indexOf('function landStamps('), client.indexOf('function paintPoints('));
+  assert.match(land, /\(award\.stamps \|\| \[\]\)\.filter\(\(s\) => s && s\.kind\)\.slice\(0, 2\)/, 'the server\'s two, never more');
+  assert.doesNotMatch(land, /for \(const b of/, 'no loop slams every badge');
+  assert.match(land, /paintMore\(award\.more \?\? 0\)/);
+  assert.match(client, /`\+\$\{moreCount\} more in your book`/);
+  assert.match(client, /const bumped = els\.stampSlot\?\.querySelector\('\.air-stamp--badge'\);/, 'a later crew takes the badge\'s place, not a third slot');
+  assert.match(airSpot, /<p class="air__more air-mono" data-air-more hidden><a href="\/r\/me" data-air-more-link><\/a><\/p>/);
 });

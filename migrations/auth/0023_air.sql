@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS air_reports (
   user_id TEXT,
   byline TEXT NOT NULL,
   onsite INTEGER NOT NULL DEFAULT 0 CHECK (onsite IN (0,1)),
+  -- The opt-in location tick, checked within the spot's radius and then
+  -- dropped. Always 0 until PR 3 fills it.
+  geo INTEGER NOT NULL DEFAULT 0 CHECK (geo IN (0,1)),
   status TEXT NOT NULL DEFAULT 'ok' CHECK (status IN ('ok','flagged','removed')),
   source TEXT NOT NULL DEFAULT 'page' CHECK (source = 'page' OR source LIKE 'agent:_%'),
   source_url TEXT,
@@ -48,6 +51,8 @@ CREATE TABLE IF NOT EXISTS air_confirms (
   -- reporter later changes their answer in the same slot.
   value TEXT NOT NULL,
   onsite INTEGER NOT NULL DEFAULT 0 CHECK (onsite IN (0,1)),
+  -- As on air_reports: always 0 until PR 3.
+  geo INTEGER NOT NULL DEFAULT 0 CHECK (geo IN (0,1)),
   at INTEGER NOT NULL,
   PRIMARY KEY (report_id, pid_hash)
 );
@@ -70,8 +75,10 @@ CREATE TABLE IF NOT EXISTS air_points (
 CREATE INDEX IF NOT EXISTS air_points_owner ON air_points(owner, day);
 
 -- Badges use day '-' (earned once). meta_json carries the stamp's traits
--- ({spot, kind, weekday, hour, crewSize, firstLight, deadAirHours, value})
--- for a future public rarity rating.
+-- ({spot, kind, weekday, hour, crewSize, firstLight, deadAirHours, geo, answer})
+-- for a future public rarity rating. `answer` is the reporter's own bucket,
+-- kept for the card's trait line; rarity never rates it (UNRATED_TRAITS in
+-- functions/_lib/air-points.mjs).
 CREATE TABLE IF NOT EXISTS air_stamps (
   id TEXT PRIMARY KEY,
   owner TEXT NOT NULL,

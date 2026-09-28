@@ -26,6 +26,12 @@ export type AirSpot = {
   noun: number;
   /** Weekday 0-6 (Sun 0) and LA "HH:MM". Only spots with a standing call. */
   courtCall?: { weekday: number; time: string };
+  /**
+   * Open hours, LA "HH:MM", open inclusive and close exclusive. First Light
+   * counts only inside them (inHours() in functions/_lib/air-reading.mjs); a
+   * report outside still files, pays and stamps as usual.
+   */
+  hours: { open: string; close: string };
   kinds: Record<string, AirKind>;
 };
 export type AirConfig = { version: number; reserved: string[]; spots: AirSpot[] };

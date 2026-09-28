@@ -34,6 +34,22 @@ export function laParts(ms) {
 /** The LA day, same answer as townDate() in src/lib/band.ts. */
 export const laDate = (ms) => laParts(ms).day;
 
+const minuteOfDay = (hhmm) => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; };
+
+/**
+ * Whether an epoch ms is inside a spot's open hours ({open, close}, LA "HH:MM"):
+ * open inclusive, close exclusive; a close at or before the open runs past
+ * midnight. No hours (or unreadable ones) is never open.
+ */
+export function inHours(hours, ms) {
+  if (!hours?.open || !hours?.close) return false;
+  const t = laParts(ms).minuteOfDay;
+  const open = minuteOfDay(hours.open);
+  const close = minuteOfDay(hours.close);
+  if (!Number.isFinite(open) || !Number.isFinite(close)) return false;
+  return open < close ? t >= open && t < close : t >= open || t < close;
+}
+
 /** "07:36" (pad) or "7:36"; with ampm "7:36 AM". LA time. */
 export function laClock(ms, { pad = false, ampm = false } = {}) {
   const { hour, minute } = laParts(ms);

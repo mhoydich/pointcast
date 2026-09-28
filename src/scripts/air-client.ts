@@ -186,11 +186,12 @@ export function stampLine(s: StampLike): string {
   return s.kind === 'crew' ? `${BADGE_LABEL['morning-crew']} · ${place}` : place;
 }
 
-type Traits = { spot?: string; kind?: string; weekday?: number; hour?: number; crewSize?: number | null; firstLight?: boolean; deadAirHours?: number | null; value?: string };
+type Traits = { spot?: string; kind?: string; weekday?: number; hour?: number; crewSize?: number | null; firstLight?: boolean; deadAirHours?: number | null; geo?: boolean; answer?: string };
 
 /**
  * The trait line under a stamp on your card: "FRI · 7 AM · 1–4 WAITING · FIRST LIGHT · DEAD AIR 14H".
  * Traits are what air_stamps.meta_json records for the future rarity rating.
+ * `answer` (the reporter's own bucket) prints here and is never rated.
  */
 export function traitLine(s: StampLike): string {
   const raw = s.traits ?? s.meta ?? s.meta_json;
@@ -198,7 +199,7 @@ export function traitLine(s: StampLike): string {
   const out: string[] = [];
   if (typeof t.weekday === 'number' && DOW[t.weekday]) out.push(DOW[t.weekday]);
   if (typeof t.hour === 'number') out.push(`${t.hour % 12 || 12} ${t.hour < 12 ? 'AM' : 'PM'}`);
-  if (t.spot && t.kind && t.value) { const l = labelFor(t.spot, t.kind, t.value); if (l) out.push(l.toUpperCase()); }
+  if (t.spot && t.kind && t.answer) { const l = labelFor(t.spot, t.kind, t.answer); if (l) out.push(l.toUpperCase()); }
   if (typeof t.crewSize === 'number' && t.crewSize > 0) out.push(`CREW ${t.crewSize}`);
   if (t.firstLight) out.push('FIRST LIGHT');
   if (t.deadAirHours == null && t.spot) out.push('FIRST AT SPOT');
@@ -336,8 +337,12 @@ type SpotPayload = {
   serverTime: string;
   you?: You | null;
 };
-/** Stamps here are place and crew only (with the server's text); badges come as ids. */
-type Award = { points: number; pointsToday: number; cap: number; streakWeeks: number; firstLight: boolean; stamps: StampLike[]; badges: string[]; crew: { id: string; n: number; at: string } | null };
+/**
+ * `stamps` is the receipt, two at most with the server's text: the place stamp and
+ * the highest new badge (receiptStamps() in functions/_lib/air-points.mjs). `more`
+ * counts the other new stamps, already in the book; `badges` is every new badge id.
+ */
+type Award = { points: number; pointsToday: number; cap: number; streakWeeks: number; firstLight: boolean; stamps: StampLike[]; more?: number; badges: string[]; crew: { id: string; n: number; at: string } | null };
 type ReportBody = { kind: string; value: string; device: string; code: string | null; extras: string[]; asGuest: boolean; observedAt: number };
 type Claim = { until: string } | null;
 type ReportResult = { ok: true; replaced: boolean; report: { id: string; value: string; label: string; observedAt: string; byline: string; onsite: boolean; code?: 'none' | 'ok' | 'unknown' }; reading: Reading; today?: TodayRow[]; award: Award; claim?: Claim };
@@ -415,6 +420,7 @@ export function mountAirSpot(root: HTMLElement): void {
     last: q('[data-air-last]'), lastText: q('[data-air-last-text]'),
     confirm: q('[data-air-confirm]'), confirmQ: q('[data-air-confirm-q]'), confirmMeta: q('[data-air-confirm-meta]'),
     ask: q('[data-air-ask]'), receipt: q('[data-air-receipt]'), receiptLine: q('[data-air-receipt-line]'), stampSlot: q('[data-air-stamp-slot]'),
+    more: q('[data-air-more]'), moreLink: q('[data-air-more-link]'),
     remoteNote: q('[data-air-remote]'), queuedNote: q('[data-air-queued]'),
     tally: q('[data-air-tally]'), count: q('[data-air-count]'), bars: q('[data-air-bars]'), rows: q('[data-air-rows]'), points: q('[data-air-points]'), first: q('[data-air-first]'),
     crewLine: q('[data-air-crew-line]'), crewRing: q('[data-air-crew-ring]'),
@@ -438,6 +444,8 @@ export function mountAirSpot(root: HTMLElement): void {
   // The tap time sent with this visit's report: detail chips re-send it so they land in the same slot.
   let myObservedAt = 0;
   let myExtras: string[] = [];
+  // New stamps on this receipt that were counted, not slammed.
+  let moreCount = 0;
   let pollTimer: number | undefined;
   let extrasTimer: number | undefined;
   let refreshing: Promise<void> | null = null;
@@ -624,7 +632,7 @@ export function mountAirSpot(root: HTMLElement): void {
     showAsk(false);
     show(els.receipt, true);
     show(els.remoteNote, false); show(els.queuedNote, false);
-    els.stampSlot?.replaceChildren();
+    els.stampSlot?.replaceChildren(); paintMore(0);
     els.crewRing?.replaceChildren(); show(els.crewRing, false);
     note('');
     lastOwnAction = Date.now();
@@ -637,24 +645,42 @@ export function mountAirSpot(root: HTMLElement): void {
     });
     return Promise.all([printed, wait(420)]).then(() => undefined);
   }
-  /** The place stamp slams at max(420 ms, 2xx); badges follow. A replaced answer re-stamps today's place. */
+  /** "+2 more in your book": new stamps the receipt counts instead of slamming. */
+  function paintMore(n: number) {
+    moreCount = Math.max(0, n || 0);
+    text(els.moreLink, moreCount > 0 ? `+${moreCount} more in your book` : '');
+    show(els.more, moreCount > 0);
+  }
+  /**
+   * Two stamps at most: the place stamp slams at max(420 ms, 2xx), then the server's
+   * highest new badge 300 ms later; the rest print as "+2 more in your book". A
+   * replaced answer re-stamps today's place. A new crew stamp is the crew reveal's
+   * to slam (ring, chord, confetti) unless this phone has already seen that crew.
+   */
   function landStamps(award: Award, onsite: boolean) {
     const slot = els.stampSlot;
-    const place = (award.stamps || []).find((s) => s && s.kind === 'place');
-    const badges = (award.badges || []).filter((b) => b !== 'morning-crew');
-    emit('air:stamp', { spot, stamps: (award.stamps || []).map(stampLine), badges });
+    const slams = (award.stamps || []).filter((s) => s && s.kind).slice(0, 2);
+    const place = slams.find((s) => s.kind === 'place');
+    const top = slams.find((s) => s.kind !== 'place');
+    emit('air:stamp', { spot, stamps: slams.map(stampLine), badges: award.badges || [], more: award.more ?? 0 });
     if (place && slot) { slot.append(makeStamp(stampLine(place), 'place', true)); thump(); }
     else if (onsite && slot) { slot.append(makeStamp(`${cfg!.short} · ${dayStamp(laDay())}`, 'place', true)); thump(); }
     if (onsite) stampPassport(PASSPORT_FOR[spot]);
-    if (award.firstLight || badges.includes('first-light')) {
+    paintMore(award.more ?? 0);
+    const first = award.firstLight || (award.badges || []).includes('first-light');
+    const revealing = top?.kind === 'crew' && !!award.crew && !seenCrews().includes(award.crew.id);
+    const second = top && !revealing ? top : null;
+    if (first || second) {
       setTimeout(() => {
-        emit('air:first-light', { spot });
-        text(els.first, 'First light — you opened the day here.');
-        show(els.first, true);
-        if (slot) slot.append(makeStamp(BADGE_LABEL['first-light'], 'badge', true));
+        if (first) {
+          emit('air:first-light', { spot });
+          text(els.first, 'First light — you opened the day here.');
+          show(els.first, true);
+        }
+        if (second && slot) slot.append(makeStamp(stampLine(second), second.kind === 'crew' ? 'crew' : 'badge', true));
       }, 300);
-    } else show(els.first, false);
-    for (const b of badges) if (b !== 'first-light' && slot) setTimeout(() => slot.append(makeStamp(BADGE_LABEL[b] ?? b.toUpperCase(), 'badge', true)), 420);
+    }
+    if (!first) show(els.first, false);
   }
   function paintPoints(award: Award) {
     const bits: string[] = [];
@@ -732,7 +758,7 @@ export function mountAirSpot(root: HTMLElement): void {
     const label = labelFor(spot, kind, j.report.value) ?? j.report.value;
     show(els.confirm, false); showAsk(false);
     show(els.receipt, true); show(els.queuedNote, false); show(els.remoteNote, false);
-    els.stampSlot?.replaceChildren();
+    els.stampSlot?.replaceChildren(); paintMore(0);
     if (els.receiptLine) els.receiptLine.textContent = receiptText(label, j.report.onsite ? 'air' : 'remote', undefined, item.at);
     settleReport(j, item.at);
     note('Your saved report went out.');
@@ -754,7 +780,7 @@ export function mountAirSpot(root: HTMLElement): void {
     if (res.network || res.status >= 500 || res.status === 0) {
       // No answer: the dashed stamp, the buttons back, and the queue retries (1 s, 3 s, 9 s, then every poll).
       if (els.receiptLine) els.receiptLine.textContent = receiptText(label, 'queued');
-      els.stampSlot?.replaceChildren(makeStamp('Saved on this phone. Sending when you have signal.', 'queued', true));
+      els.stampSlot?.replaceChildren(makeStamp('Saved on this phone. Sending when you have signal.', 'queued', true)); paintMore(0);
       show(els.queuedNote, true);
       setState('queued');
       showAsk(true);
@@ -851,6 +877,9 @@ export function mountAirSpot(root: HTMLElement): void {
     if (els.receiptLine && !els.receiptLine.textContent) els.receiptLine.textContent = `${laClock(Date.now(), true)} · ${cfg!.short} · ${crew.n} ON THE AIR · MORNING CREW`;
     show(els.receipt, true);
     if (reopened) els.receipt?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+    // Still two stamps at most: a crew that forms after this receipt outranks the badge on it, which moves to the count.
+    const bumped = els.stampSlot?.querySelector('.air-stamp--badge');
+    if (bumped) { bumped.remove(); paintMore(moreCount + 1); }
     els.stampSlot?.append(makeStamp(crewText, 'crew', true));
     thump();
     chord();

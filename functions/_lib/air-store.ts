@@ -6,7 +6,8 @@
  * things happen in:
  *
  *   report   one row per phone per spot per 30-minute slot (a second tap
- *            replaces your own and earns nothing) → first light → points
+ *            replaces your own and earns nothing) → first light (open
+ *            hours only) → points
  *            (daily cap applied inside the INSERT) → stamps → dial and crew.
  *            A row pays once, marked by awarded_at, so a retry after a failed
  *            write still pays and a replacement never pays twice.
@@ -33,7 +34,7 @@ import { AIR_LIMITS, codeHash, guestByline, ipHash, kindOf, labelOf, newAirId, o
 // @ts-ignore — plain modules shared with the tests
 import { CREW_WINDOW_MIN, crewFrom, evidence, isoSec, laClock, laDate, reading, stationLine, streakWeeks, winKey } from './air-reading.mjs';
 // @ts-ignore — plain modules shared with the tests
-import { DAILY_CAP, badgeStamp, badgesFor, confirmAwards, crewStamp, placeStamp, reportAwards, stampText, stampTraits } from './air-points.mjs';
+import { DAILY_CAP, badgeStamp, badgesFor, confirmAwards, crewStamp, firstLightOpen, placeStamp, receiptStamps, reportAwards, stampText, stampTraits } from './air-points.mjs';
 
 export type AirEnv = AuthEnv & {
   VISITS?: KVNamespace;
@@ -442,7 +443,7 @@ async function onAir(env: AirEnv, db: D1Database, t: Target, data: SpotData, now
   if (crew) {
     const window = (evidence(data.rows, data.confirms) as { t: number }[]).filter((e) => e.t >= now - CREW_WINDOW_MIN * MIN && e.t <= now);
     const since = Math.min(crew.at, ...window.map((e) => e.t));
-    const traits = stampTraits({ spot: t.spot.id, kind: t.kind, value: r.value, observedAt: crew.at, crewSize: crew.n, prevOnsiteAt: await prevOnsiteAt(db, t.spot.id, since, '') });
+    const traits = stampTraits({ spot: t.spot.id, kind: t.kind, answer: r.value, observedAt: crew.at, crewSize: crew.n, prevOnsiteAt: await prevOnsiteAt(db, t.spot.id, since, '') });
     const day = laDate(crew.at);
     crewStamps = await putStamps(db, crew.members.flatMap((m) => [
       { owner: m.owner, stamp: crewStamp(t.spot.id, day) as Stamp },
@@ -513,11 +514,12 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
   let held: HeldStamp[] = [];
   if (isOnsite) {
     const day: string = laDate(saved.observed_at);
-    // First light: the first real on-site answer of the day at this spot. Checked
-    // on every on-site write, so an answer that moves off "Can't say", a remote
-    // row that turns on-site and a retried request all find their own claim.
+    // First light: the first real on-site answer of the day at this spot, inside
+    // its open hours (a report from bed at 00:01 files but never claims it).
+    // Checked on every on-site write, so an answer that moves off "Can't say", a
+    // remote row that turns on-site and a retried request all find their own claim.
     let holdsFirst = false;
-    if (saved.value !== 'cant') {
+    if (firstLightOpen({ spot: t.spot, value: saved.value, observedAt: saved.observed_at })) {
       const [, holder] = await db.batch([
         db.prepare('INSERT OR IGNORE INTO air_firsts (spot, day, report_id) VALUES (?, ?, ?)').bind(p.spot, day, saved.id),
         db.prepare('SELECT report_id FROM air_firsts WHERE spot = ? AND day = ?').bind(p.spot, day),
@@ -537,7 +539,7 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
       ...(unpaid || firstLight ? badgesFor({ firstLight: holdsFirst }).map((b: string) => badgeStamp(b) as Stamp) : []),
     ];
     if (stamps.length) {
-      const traits = stampTraits({ spot: p.spot, kind: p.kind, value: saved.value, observedAt: saved.observed_at, firstLight: holdsFirst, prevOnsiteAt: await prevOnsiteAt(db, p.spot, saved.observed_at, saved.id) });
+      const traits = stampTraits({ spot: p.spot, kind: p.kind, answer: saved.value, observedAt: saved.observed_at, firstLight: holdsFirst, prevOnsiteAt: await prevOnsiteAt(db, p.spot, saved.observed_at, saved.id) });
       held = await putStamps(db, stamps.map((stamp) => ({ owner, stamp })), traits, saved.id, now);
     }
     if (unpaid) await db.prepare('UPDATE air_reports SET awarded_at = ? WHERE id = ?').bind(now, saved.id).run();
@@ -601,7 +603,7 @@ export async function confirmReport(request: Request, env: AirEnv, db: D1Databas
     const given = who.userId
       ? await db.prepare('SELECT COUNT(*) AS n FROM air_confirms WHERE user_id = ? AND onsite = 1').bind(who.userId).first<{ n: number }>()
       : await db.prepare('SELECT COUNT(*) AS n FROM air_confirms WHERE pid_hash = ? AND user_id IS NULL AND onsite = 1').bind(pid).first<{ n: number }>();
-    const traits = stampTraits({ spot: report.spot, kind: report.kind, value: report.value, observedAt: now, prevOnsiteAt: await prevOnsiteAt(db, report.spot, now, '') });
+    const traits = stampTraits({ spot: report.spot, kind: report.kind, answer: report.value, observedAt: now, prevOnsiteAt: await prevOnsiteAt(db, report.spot, now, '') });
     const stamps: Stamp[] = [placeStamp(report.spot, laDate(now)), ...badgesFor({ onsiteConfirmsGiven: Number(given?.n ?? 0) }).map((b: string) => badgeStamp(b))];
     held = await putStamps(db, stamps.map((stamp) => ({ owner, stamp })), traits, report.id, now);
   }
@@ -746,14 +748,18 @@ function viewStation(spot: AirSpot, kind: string, r: Reading, lastAt: number | n
 
 const shortOf = (config: AirConfig, spotId: string) => (spotOf(config, spotId) as AirSpot | null)?.short ?? spotId.toUpperCase();
 function viewStamps(held: HeldStamp[], short: string) {
-  return held.filter((s) => s.kind !== 'badge').map((s) => ({ kind: s.kind, ref: s.ref, day: s.day, text: stampText(s, short) as string, new: s.fresh }));
+  return held.map((s) => ({ kind: s.kind, ref: s.ref, day: s.day, text: stampText(s, short) as string, new: s.fresh }));
 }
 
 type AwardIn = { points: number; pointsToday: number; streakWeeks: number; firstLight: boolean; held: HeldStamp[]; crew: CrewRow | null };
 function viewAward(a: AwardIn, short: string) {
+  const { slam, more } = receiptStamps(a.held) as { slam: HeldStamp[]; more: number };
   return {
     points: a.points, pointsToday: a.pointsToday, cap: DAILY_CAP, streakWeeks: a.streakWeeks, firstLight: a.firstLight,
-    stamps: viewStamps(a.held, short),
+    // The receipt: two stamps at most (the place and the highest new badge); `more` counts the rest, all in the book.
+    stamps: viewStamps(slam, short),
+    more,
+    // Every badge this action earned, slammed or counted.
     badges: a.held.filter((s) => s.kind === 'badge' && s.fresh).map((s) => s.ref),
     crew: a.crew ? { id: a.crew.id, n: a.crew.n, at: isoSec(a.crew.at) } : null,
   };

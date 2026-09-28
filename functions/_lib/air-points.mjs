@@ -3,7 +3,7 @@
 // under node without the Pages runtime. Points are a score, never cash, and
 // never depend on what a report says: "0 waiting" and "5+" pay the same.
 
-import { laDate, laParts, windowIdx } from './air-reading.mjs';
+import { inHours, laDate, laParts, windowIdx } from './air-reading.mjs';
 
 export const POINTS = Object.freeze({ report: 6, 'first-light': 4, confirm: 3, cant: 1, byline: 10 });
 export const DAILY_CAP = 30;
@@ -11,7 +11,7 @@ export const STILL_TRUE_AT = 10;
 
 /** Badges written in the MVP, plus byline (PR 2). Labels are what the stamp prints. */
 export const BADGES = Object.freeze({
-  'first-light': { label: 'FIRST LIGHT', rule: 'First on-site report of the day at a spot' },
+  'first-light': { label: 'FIRST LIGHT', rule: 'First on-site report of the day at a spot, in its open hours' },
   'morning-crew': { label: 'MORNING CREW', rule: '3+ phones report or confirm on site at one spot within 30 minutes' },
   'still-true': { label: 'STILL TRUE', rule: `Give ${STILL_TRUE_AT} on-site confirmations` },
   byline: { label: 'BYLINE', rule: 'A report of yours runs in a frozen Morning Edition' },
@@ -21,6 +21,17 @@ export const BADGES = Object.freeze({
 export const reportRef = (spot, kind, day, idx) => `${spot}:${kind}:${day}:${idx}`;
 export const firstLightRef = (spot, day) => `${spot}:${day}`;
 export const bylineRef = (date) => `morning:${date}`;
+
+/**
+ * Pure: whether a report may take First Light. A real answer ("Can't say" never
+ * opens the day) inside the spot's open hours (`spot.hours`, LA time). A report
+ * outside hours files, pays and stamps as usual; it just never opens the day,
+ * so a 00:01 report from bed leaves First Light to the first one after 6:00.
+ * The caller checks this before it claims air_firsts.
+ */
+export function firstLightOpen({ spot, value, observedAt }) {
+  return value !== 'cant' && inHours(spot?.hours, observedAt);
+}
 
 /**
  * Pure: the air_points rows a report earns, before the cap: [{action, ref, units, day}].
@@ -79,6 +90,30 @@ export const placeStamp = (spot, day) => ({ kind: 'place', ref: spot, day });
 export const crewStamp = (spot, day) => ({ kind: 'crew', ref: spot, day });
 export const badgeStamp = (badge) => ({ kind: 'badge', ref: badge, day: '-' });
 
+/** What outranks what on a receipt, highest first. A crew stamp ranks as morning-crew. */
+export const RECEIPT_ORDER = Object.freeze(['morning-crew', 'first-light', 'still-true', 'place']);
+
+/**
+ * Pure: the stamps a receipt slams, from what one report or confirm wrote or
+ * already held ([{kind, ref, day, fresh}]). Two at most: the place stamp (new
+ * or already held today; it is the receipt's stamp) and the highest NEW badge
+ * by RECEIPT_ORDER, where the dated crew stamp beats the MORNING CREW badge.
+ * Every other new stamp is only counted: `more`, "+2 more in your book". All
+ * of them are in air_stamps already; only the display is capped.
+ * → { slam: [place?, top?], more }
+ */
+export function receiptStamps(held) {
+  const rank = (s) => {
+    const i = RECEIPT_ORDER.indexOf(s.kind === 'badge' ? s.ref : s.kind === 'crew' ? 'morning-crew' : s.kind);
+    return i < 0 ? RECEIPT_ORDER.length : i;
+  };
+  const place = held.find((s) => s.kind === 'place') ?? null;
+  const top = held.filter((s) => s.fresh && s !== place)
+    .sort((a, b) => rank(a) - rank(b) || Number(b.kind === 'crew') - Number(a.kind === 'crew'))[0] ?? null;
+  const slam = [place, top].filter(Boolean);
+  return { slam, more: held.filter((s) => s.fresh && !slam.includes(s)).length };
+}
+
 const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -96,15 +131,27 @@ export function stampText(stamp, short) {
 }
 
 /**
+ * Trait keys a rarity rating must never score. `answer` is what the reporter
+ * said: a score that rewarded rare answers would pay for content, and "0
+ * waiting" must stay worth what "5+" is (badges doc §5: the reporter's own
+ * value is never rated). Condition traits, when they come, are read off the
+ * nearest agent row, never off `answer`.
+ */
+export const UNRATED_TRAITS = Object.freeze(['answer']);
+
+/**
  * Pure: the traits every air_stamps.meta_json carries, for a future public
  * rarity rating. `observedAt` is the report's time (a confirm's `at` for a
- * confirm stamp; `value` is then the confirmed value). `crewSize` is the crew's
- * n for crew stamps, else null. `prevOnsiteAt` is the newest earlier on-site
- * human report at the spot (any kind), or null when there is none.
- * → {spot, kind, weekday (0-6 LA, Sun 0), hour (LA), crewSize, firstLight, deadAirHours, value}
+ * confirm stamp; `answer` is then the confirmed value). `crewSize` is the
+ * crew's n for crew stamps, else null. `prevOnsiteAt` is the newest earlier
+ * on-site human report at the spot (any kind), or null when there is none.
+ * `geo` is the location tick (PR 3); false until then.
+ * `answer` is the reporter's bucket, kept only for the trait line on the card
+ * ("1–4 WAITING"). It is in UNRATED_TRAITS: rarity must never rate it.
+ * → {spot, kind, weekday (0-6 LA, Sun 0), hour (LA), crewSize, firstLight, deadAirHours, geo, answer}
  */
-export function stampTraits({ spot, kind, value, observedAt, crewSize = null, firstLight = false, prevOnsiteAt = null }) {
+export function stampTraits({ spot, kind, answer, observedAt, crewSize = null, firstLight = false, prevOnsiteAt = null, geo = false }) {
   const { weekday, hour } = laParts(observedAt);
   const deadAirHours = prevOnsiteAt == null ? null : Math.max(0, Math.floor((observedAt - prevOnsiteAt) / 3_600_000));
-  return { spot, kind, weekday, hour, crewSize: crewSize ?? null, firstLight: firstLight === true, deadAirHours, value };
+  return { spot, kind, weekday, hour, crewSize: crewSize ?? null, firstLight: firstLight === true, deadAirHours, geo: geo === true, answer };
 }

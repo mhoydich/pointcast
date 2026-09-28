@@ -4,7 +4,7 @@ import test from 'node:test';
 import config from '../src/data/air-spots.json' with { type: 'json' };
 import { guestByline, kindOf } from '../functions/_lib/air-kinds.mjs';
 import {
-  bars, crewFrom, evidence, laClock, laDate, laParts, reading, stationLine, streakWeeks, supportLabel, weekOf, windowIdx, winKey,
+  bars, crewFrom, evidence, inHours, laClock, laDate, laParts, reading, stationLine, streakWeeks, supportLabel, weekOf, windowIdx, winKey,
 } from '../functions/_lib/air-reading.mjs';
 
 const MIN = 60_000;
@@ -194,4 +194,22 @@ test('crew needs two networks; a confirm counts the value it saw; the strip lead
   const old = read([p1], [p2], T0 + 3.5 * MIN);
   assert.equal(old.value, '0');
   assert.equal(old.reportId, null, 'no report still says "0", so there is nothing to confirm');
+});
+
+test('open hours: LA wall time, open inclusive, close exclusive, every spot has them', () => {
+  for (const s of config.spots) assert.match(`${s.hours?.open}-${s.hours?.close}`, /^\d{2}:\d{2}-\d{2}:\d{2}$/, `${s.id} has open hours`);
+  const courts = config.spots.find((s) => s.id === 'courts').hours;
+  assert.deepEqual(courts, { open: '06:00', close: '22:00' });
+  assert.deepEqual(config.spots.find((s) => s.id === 'beach').hours, { open: '05:30', close: '20:30' });
+  assert.equal(inHours(courts, Date.parse('2026-10-02T07:01:00Z')), false, '00:01 PDT');
+  assert.equal(inHours(courts, Date.parse('2026-10-02T13:00:00Z')), true, '06:00 PDT opens');
+  assert.equal(inHours(courts, Date.parse('2026-10-02T13:05:00Z')), true, '06:05 PDT');
+  assert.equal(inHours(courts, Date.parse('2026-10-03T05:00:00Z')), false, '22:00 PDT closes');
+  assert.equal(inHours(courts, Date.parse('2026-11-06T13:05:00Z')), false, '05:05 PST: after DST ends it is still LA time');
+  assert.equal(inHours(courts, Date.parse('2026-11-06T14:05:00Z')), true, '06:05 PST');
+  const late = { open: '18:00', close: '02:00' };
+  assert.equal(inHours(late, Date.parse('2026-10-03T08:00:00Z')), true, '01:00, past midnight');
+  assert.equal(inHours(late, Date.parse('2026-10-03T10:00:00Z')), false, '03:00');
+  assert.equal(inHours(undefined, T0), false, 'no hours is never open');
+  assert.equal(inHours({ open: 'dawn', close: '22:00' }, T0), false, 'unreadable hours are never open');
 });

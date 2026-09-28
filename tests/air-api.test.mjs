@@ -205,7 +205,11 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.equal(mike.body.award.pointsToday, 10);
   assert.equal(mike.body.award.firstLight, true);
   assert.deepEqual(mike.body.award.badges, ['first-light']);
-  assert.deepEqual(mike.body.award.stamps, [{ kind: 'place', ref: 'courts', day: '2026-10-02', text: 'COURTS · FRI 02 OCT 2026', new: true }]);
+  assert.deepEqual(mike.body.award.stamps, [
+    { kind: 'place', ref: 'courts', day: '2026-10-02', text: 'COURTS · FRI 02 OCT 2026', new: true },
+    { kind: 'badge', ref: 'first-light', day: '-', text: 'FIRST LIGHT', new: true },
+  ]);
+  assert.equal(mike.body.award.more, 0);
   assert.equal(mike.body.award.streakWeeks, 1);
   assert.equal(mike.body.reading.status, 'single');
   assert.ok(mike.body.claim.until);
@@ -222,7 +226,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
 
   // Every stamp row carries its rarity traits.
   const traits = db.rows("SELECT meta_json FROM air_stamps WHERE kind = 'place'").map((r) => JSON.parse(r.meta_json));
-  assert.deepEqual(traits, [{ spot: 'courts', kind: 'wait', weekday: 5, hour: 7, crewSize: null, firstLight: true, deadAirHours: null, value: '1-4' }]);
+  assert.deepEqual(traits, [{ spot: 'courts', kind: 'wait', weekday: 5, hour: 7, crewSize: null, firstLight: true, deadAirHours: null, geo: false, answer: '1-4' }]);
 
   // A second tap in the same slot replaces the answer and earns nothing.
   const again = await report(t, 'courts', { kind: 'wait', value: '1-4', device: DEV.a, code: CRT, extras: ['wind'] }, T0 + 30_000);
@@ -259,6 +263,7 @@ test('Friday: first light, a confirm, the third phone makes a crew, one station 
   assert.deepEqual(sam.body.award.crew, { id: 'courts:2026-10-02:10', n: 3, at: '2026-10-02T14:39:00Z' });
   assert.deepEqual(sam.body.award.badges, ['morning-crew']);
   assert.deepEqual(sam.body.award.stamps.map((s) => s.text), ['COURTS · FRI 02 OCT 2026', 'MORNING CREW · COURTS · FRI 02 OCT 2026']);
+  assert.equal(sam.body.award.more, 1, 'the MORNING CREW badge goes in the book, counted, not slammed');
   assert.equal(sam.body.claim, null, 'a signed-in reporter has nothing to claim');
   assert.equal(sam.body.reading.support, 3);
   assert.deepEqual(sam.body.reading.bylines, [guestByline(await pidHash(DEV.a)), guestByline(await pidHash(DEV.b)), '@sam']);
@@ -358,7 +363,9 @@ test('claim moves a phone\'s day to the account and its card handle; /me only sh
   assert.deepEqual(guest.points, { today: 10, total: 10 });
   assert.deepEqual(guest.badges, ['first-light']);
   assert.equal(guest.stamps[0].text, 'COURTS · FRI 02 OCT 2026');
-  assert.equal(guest.stamps[0].traits.value, '0');
+  assert.equal(guest.stamps[0].traits.answer, '0');
+  assert.equal(guest.stamps[0].traits.value, undefined, 'the answer is namespaced, never a bare value');
+  assert.equal(guest.stamps[0].traits.geo, false);
   assert.equal(guest.reports.length, 1);
   assert.equal(guest.streakWeeks, 1);
   await noHashes(guest);
@@ -452,7 +459,7 @@ test('awards: a retry after a failed write pays; a row that turns on-site or mov
   assert.equal(retry.body.replaced, true);
   assert.equal(retry.body.award.points, 10, 'report 6 + first light 4, paid on the retry');
   assert.equal(retry.body.award.firstLight, true);
-  assert.equal(retry.body.award.stamps.length, 1);
+  assert.deepEqual(retry.body.award.stamps.map((s) => s.text), ['COURTS · FRI 02 OCT 2026', 'FIRST LIGHT']);
   const again = await report(t, 'courts', { ...body, observedAt: T0 + 2000 }, T0 + 2000);
   assert.equal(again.body.award.points, 0, 'paid once');
   assert.equal(again.body.award.firstLight, false);
@@ -544,4 +551,68 @@ test('claim re-pays a phone\'s points under the account\'s daily cap', async () 
   assert.equal(moved.moved.points, 2);
   assert.equal(db.rows("SELECT SUM(units) AS n FROM air_points WHERE owner = 'user:u1' AND day = '2026-10-02'")[0].n, 30, 'capped at 30');
   assert.equal(db.rows("SELECT COUNT(*) AS n FROM air_points WHERE owner LIKE 'dev:%'")[0].n, 0, 'nothing left on the phone to claim twice');
+});
+
+/* ---------- critic revision, PR 1: open hours, the two-stamp receipt, the geo column ---------- */
+
+test('first light keeps open hours: a 00:01 report files and pays but never opens the day; 06:05 does', async () => {
+  const t = town();
+  const db = t.env.AUTH_DB;
+  const at = (iso) => Date.parse(iso); // PDT: 00:01 is 07:01Z, 06:05 is 13:05Z
+  const bed = await report(t, 'courts', { kind: 'wait', value: '0', device: DEV.a, code: CRT }, at('2026-10-02T07:01:00Z'));
+  assert.equal(bed.status, 201, 'it files');
+  assert.equal(bed.body.report.onsite, true);
+  assert.equal(bed.body.award.points, 6, 'the report pays; no +4');
+  assert.equal(bed.body.award.firstLight, false);
+  assert.deepEqual(bed.body.award.badges, []);
+  assert.deepEqual(bed.body.award.stamps.map((s) => s.kind), ['place']);
+  // Changing the answer in the same slot still does not take it.
+  const again = await report(t, 'courts', { kind: 'wait', value: '1-4', device: DEV.a, code: CRT }, at('2026-10-02T07:03:00Z'));
+  assert.equal(again.body.award.firstLight, false);
+  assert.equal(db.rows('SELECT COUNT(*) AS n FROM air_firsts')[0].n, 0, 'nothing claimed outside hours');
+  assert.equal(db.rows("SELECT COUNT(*) AS n FROM air_points WHERE action = 'first-light'")[0].n, 0);
+  assert.equal(JSON.parse(db.rows("SELECT meta_json FROM air_stamps WHERE kind = 'place'")[0].meta_json).firstLight, false);
+
+  const open = await report(t, 'courts', { kind: 'wait', value: '1-4', device: DEV.b, code: CRT }, at('2026-10-02T13:05:00Z'));
+  assert.equal(open.body.award.firstLight, true, '06:05 opens the day');
+  assert.equal(open.body.award.points, 10);
+  assert.deepEqual(open.body.award.badges, ['first-light']);
+  assert.equal(db.rows('SELECT report_id FROM air_firsts')[0].report_id, open.body.report.id);
+  // The 00:01 phone reporting again in hours finds first light taken.
+  const later = await report(t, 'courts', { kind: 'wait', value: '1-4', device: DEV.a, code: CRT }, at('2026-10-02T13:10:00Z'));
+  assert.equal(later.body.award.firstLight, false);
+});
+
+test('receipt: a Friday report that opens the day and completes a crew writes four stamps and slams two', async () => {
+  const t = town();
+  const db = t.env.AUTH_DB;
+  const at = (iso) => Date.parse(iso);
+  // 05:50, before the courts open: files, no first light.
+  const early = await report(t, 'courts', { kind: 'wait', value: '1-4', device: DEV.a, code: CRT }, at('2026-10-02T12:50:00Z'));
+  assert.equal(early.body.award.firstLight, false);
+  await confirm(t, { reportId: early.body.report.id, verdict: 'still', device: DEV.b, code: CRT }, at('2026-10-02T12:55:00Z'));
+  // 06:02: the third phone takes first light and completes the crew.
+  const c = await report(t, 'courts', { kind: 'wait', value: '1-4', device: DEV.c, code: CRT }, at('2026-10-02T13:02:00Z'));
+  assert.equal(c.body.award.firstLight, true);
+  assert.equal(c.body.award.points, 10);
+  assert.ok(c.body.award.crew);
+  assert.deepEqual(c.body.award.stamps.map((s) => s.text), ['COURTS · FRI 02 OCT 2026', 'MORNING CREW · COURTS · FRI 02 OCT 2026'], 'the place and morning crew, which outranks first light');
+  assert.equal(c.body.award.more, 2, '+2 more in your book: FIRST LIGHT and the MORNING CREW badge');
+  assert.deepEqual([...c.body.award.badges].sort(), ['first-light', 'morning-crew']);
+  const owner = `dev:${await pidHash(DEV.c)}`;
+  const book = db.rows('SELECT kind, ref FROM air_stamps WHERE owner = ? ORDER BY kind, ref', owner).map((s) => `${s.kind}:${s.ref}`);
+  assert.deepEqual(book, ['badge:first-light', 'badge:morning-crew', 'crew:courts', 'place:courts'], 'every stamp is written; only the receipt is capped');
+  await noHashes(c.body);
+});
+
+test('0023: geo is on reports and confirms, 0 or 1, and 0 on every PR 1 write', async () => {
+  const t = town();
+  const db = t.env.AUTH_DB;
+  const filed = await report(t, 'courts', { kind: 'wait', value: '0', device: DEV.a, code: CRT }, T0);
+  await confirm(t, { reportId: filed.body.report.id, verdict: 'still', device: DEV.b, code: CRT }, T0 + MIN);
+  assert.deepEqual(db.rows('SELECT geo FROM air_reports'), [{ geo: 0 }]);
+  assert.deepEqual(db.rows('SELECT geo FROM air_confirms'), [{ geo: 0 }]);
+  assert.throws(() => db.db.prepare('UPDATE air_reports SET geo = 2').run(), /CHECK/);
+  assert.throws(() => db.db.prepare('UPDATE air_confirms SET geo = -1').run(), /CHECK/);
+  for (const s of db.rows('SELECT meta_json FROM air_stamps')) assert.equal(JSON.parse(s.meta_json).geo, false);
 });
