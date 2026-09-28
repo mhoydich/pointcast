@@ -15,6 +15,14 @@ import { guestByline, labelOf, ownerOf } from './air-kinds.mjs';
 export const CREW_AT = 3;
 export const CREW_NETS = 2;
 export const CREW_WINDOW_MIN = 30;
+
+/**
+ * The network a row counts as for the crew rule. A signed-in phone is its own
+ * network: friends on one carrier often share a CGNAT address, and an account
+ * is harder to mint than a device id. Guests fall back to the hashed IP, then
+ * the phone. The full IP stays hashed; prefixes would only widen collisions.
+ */
+const netOf = (row) => (row.user_id ? `user:${row.user_id}` : (row.ip_hash || row.pid_hash));
 const MIN = 60_000;
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -100,20 +108,20 @@ export function evidence(rows, confirms = []) {
   const out = [];
   for (const r of rows) {
     if (!ok(r) || !on(r.onsite) || !human(r)) continue;
-    out.push({ pid: r.pid_hash, net: r.ip_hash || r.pid_hash, owner: ownerOf(r), value: r.value, t: r.observed_at, reportId: r.id, byline: r.byline || guestByline(r.pid_hash), via: 'report' });
+    out.push({ pid: r.pid_hash, net: netOf(r), owner: ownerOf(r), value: r.value, t: r.observed_at, reportId: r.id, byline: r.byline || guestByline(r.pid_hash), via: 'report' });
   }
   for (const c of confirms) {
     if (c.verdict !== 'still' || !on(c.onsite)) continue;
     const r = byId.get(c.report_id);
     if (!r || !ok(r) || r.pid_hash === c.pid_hash) continue;
-    out.push({ pid: c.pid_hash, net: c.ip_hash || c.pid_hash, owner: ownerOf(c), value: c.value ?? r.value, t: c.at, reportId: r.id, byline: c.byline || guestByline(c.pid_hash), via: 'confirm' });
+    out.push({ pid: c.pid_hash, net: netOf(c), owner: ownerOf(c), value: c.value ?? r.value, t: c.at, reportId: r.id, byline: c.byline || guestByline(c.pid_hash), via: 'confirm' });
   }
   return out.sort((a, b) => a.t - b.t);
 }
 
 /**
  * Pure: 3+ distinct on-site phones (reports or "still" confirms) inside the
- * last 30 minutes, from at least two networks, so one person minting device
+ * last 30 minutes, from at least two networks (a signed-in phone is its own network), so one person minting device
  * ids on one connection is never a crew. Returns null, or {id, n, at, members};
  * `at` is epoch ms of the phone that completed it and `id` is
  * '<spot>:<day>:<windowIdx>' of that moment. `members` ([{pid_hash, owner,

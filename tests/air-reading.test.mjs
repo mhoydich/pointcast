@@ -185,6 +185,12 @@ test('crew needs two networks; a confirm counts the value it saw; the strip lead
   const crew = crewFrom({ spot: 'courts', cfg: COURTS, rows: [a, b, c, d], now: T0 + 4 * MIN });
   assert.equal(crew.at, T0 + 3 * MIN, 'the crew lands with the second network');
   assert.equal(crew.n, 4);
+  // Friends on one carrier share a CGNAT address; a signed-in phone counts as its own network.
+  const signedIn = { ...c, user_id: 'u-jen' };
+  const cgnat = crewFrom({ spot: 'courts', cfg: COURTS, rows: [a, b, signedIn], now: T0 + 3 * MIN });
+  assert.equal(cgnat?.n, 3, 'two guests and one signed-in phone on one IP make a crew');
+  const allSignedIn = [a, b, c].map((r, i) => ({ ...r, user_id: `u${i}` }));
+  assert.equal(crewFrom({ spot: 'courts', cfg: COURTS, rows: allSignedIn, now: T0 + 3 * MIN })?.n, 3);
 
   const p1 = report('eeee', '5-8', T0 + 5 * MIN); // changed from '0' after p2 confirmed it
   const p2 = confirm('ffff', p1, T0 + 3 * MIN, { value: '0' });

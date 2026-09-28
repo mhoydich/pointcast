@@ -534,12 +534,10 @@ test('one network cannot agree with itself: a same-IP confirm counts nothing unl
   const jen = await confirm(t, { reportId: mike.body.report.id, verdict: 'still', device: DEV.b, code: CRT }, T0 + 2 * MIN, cookie, home);
   assert.equal(jen.body.onsite, true, 'a different signed-in account on the same wifi counts');
   assert.equal(jen.body.reading.support, 2);
-  // Three phones, one network: no crew. A second network completes it.
+  // Three phones on one address: Jen is signed in, so her phone is its own network
+  // (friends on one carrier share a CGNAT address) and the third phone completes the crew.
   const third = await report(t, 'courts', { kind: 'wait', value: '5-8', device: uuid(), code: CRT }, T0 + 3 * MIN, '', home);
-  assert.equal(third.body.award.crew, null);
-  assert.equal(third.body.reading.crew, null);
-  const away = await report(t, 'courts', { kind: 'wait', value: '5-8', device: DEV.d, code: CRT }, T0 + 4 * MIN);
-  assert.ok(away.body.award.crew);
+  assert.ok(third.body.award.crew, 'two guests and one signed-in phone on one address make a crew');
 });
 
 test('claim re-pays a phone\'s points under the account\'s daily cap', async () => {
