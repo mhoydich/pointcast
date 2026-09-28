@@ -6,7 +6,8 @@
  * signed-in account, which of the account-keyed ones are already done.
  *
  * Rounds whose state lives only in a browser (bench, today's block, the
- * race) come back with `done: null`: they are listed, not tracked.
+ * race, the Morning Edition) come back with `done: null`: they are listed,
+ * not tracked.
  * See docs/plans/2026-09-04-daily-refresh-notes.md.
  */
 import { losAngelesDate, sittingOfTheDay } from '../../src/lib/kennel-club';
@@ -16,7 +17,7 @@ import { getUserKennelClaims } from './kennel-club/_claims';
 import { hasClaimedFaucetToday } from './faucet/_claims';
 
 export interface TodayRound {
-  id: 'dog' | 'hello' | 'bench' | 'block' | 'race';
+  id: 'dog' | 'hello' | 'bench' | 'block' | 'race' | 'morning';
   label: string;
   href: string;
   /** true/false for account-keyed rooms; null when the room keeps its state in the browser. */
@@ -44,6 +45,7 @@ export function buildRounds(date: string, state: { dog: boolean | null; hello: b
     { id: 'bench', label: 'Sit on the bench', href: '/bench', done: null },
     { id: 'block', label: 'Collect today’s block', href: '/today', done: null },
     { id: 'race', label: 'Run the daily race', href: '/race', done: null },
+    { id: 'morning', label: 'Read the Morning Edition', href: '/morning', done: null },
   ];
 }
 

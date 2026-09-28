@@ -57,13 +57,14 @@ async function freshDb() {
   return { db, user };
 }
 
-test('anonymous today lists five rounds with nothing tracked', async () => {
+test('anonymous today lists six rounds with nothing tracked', async () => {
   await withModules(async ({ today }) => {
     const { db } = await freshDb();
     const payload = await today.readToday(new Request('https://pointcast.xyz/api/today'), { AUTH_DB: db, USERS: new FakeKV() });
     assert.equal(payload.ok, true);
     assert.equal(payload.signedIn, false);
-    assert.deepEqual(payload.rounds.map((r) => r.id), ['dog', 'hello', 'bench', 'block', 'race']);
+    assert.deepEqual(payload.rounds.map((r) => r.id), ['dog', 'hello', 'bench', 'block', 'race', 'morning']);
+    assert.deepEqual(payload.rounds.at(-1), { id: 'morning', label: 'Read the Morning Edition', href: '/morning', done: null });
     assert.ok(payload.rounds.every((r) => r.done === null));
     assert.equal(payload.tracked, 0);
     assert.match(payload.date, /^\d{4}-\d{2}-\d{2}$/);
@@ -78,7 +79,7 @@ test('a signed-in account sees its dog and HELLO rounds flip as it does them', a
 
     const before = await today.readToday(request, env);
     assert.equal(before.signedIn, true);
-    assert.equal(before.tracked, 2);
+    assert.equal(before.tracked, 2, 'the Morning Edition round is listed, not tracked');
     assert.equal(before.done, 0);
     assert.deepEqual(before.rounds.filter((r) => r.done !== null).map((r) => r.done), [false, false]);
 
