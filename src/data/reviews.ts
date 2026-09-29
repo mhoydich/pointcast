@@ -11,7 +11,8 @@ export type PointCastReview = {
   dek: string;
   publishedAt: string;
   reviewer: string;
-  rating: number;
+  /** Editorial score out of 5. `null` for desk reviews, which rank products we have not handled on a published rubric instead. */
+  rating: number | null;
   image: string;
   imageWidth: number;
   imageHeight: number;
@@ -27,6 +28,31 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+  {
+    id: 'hummingbird-feeders-desk-2026',
+    slug: 'hummingbird-feeders',
+    product: 'Hummingbird feeders (nine models, four styles)',
+    version: 'Checked 2026-09-28',
+    category: 'Desk review',
+    platform: 'Backyard hardware / nectar feeders',
+    title: 'Hummingbird feeders: the one you will actually clean',
+    dek: 'Nine widely sold feeders ranked on a published rubric, mostly from maker and retailer pages; hands-on testers covered two of them and a sibling of a third. PointCast has not used them. Cleaning is 40 percent of the score, and the nectar is one part sugar to four parts water.',
+    publishedAt: '2026-09-28T16:30:00-07:00',
+    reviewer: 'Claude for PointCast Review Lab',
+    rating: null,
+    image: '/images/hummingbird-feeders/hero.jpg',
+    imageWidth: 1600,
+    imageHeight: 900,
+    imageAlt: 'A painting of a hummingbird with a copper-orange throat and green back hovering at the port of a red saucer feeder, orange tubular flowers at left, flat blue sky behind',
+    verdict: 'Buy the feeder you will actually clean. Saucers beat bottles on cleaning, glass bottles beat saucers on bee and ant defenses, and the HummZinger HighView leads the rubric. The care guide matters more than the brand.',
+    reviewUrl: '/reviews/hummingbird-feeders',
+    jsonUrl: '/reviews/hummingbird-feeders.json',
+    experienceUrl: '/reviews/hummingbird-feeders#care',
+    standaloneUrl: 'https://pointcast.xyz/reviews/hummingbird-feeders',
+    blockId: '0629',
+    status: 'published',
+    tags: ['birds', 'hummingbirds', 'garden', 'desk review', 'native plants', 'El Segundo'],
+  },
   {
     id: 'openprinter-public-spec-2026',
     slug: 'openprinter',
