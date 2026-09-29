@@ -21,6 +21,7 @@ import { getCollection } from 'astro:content';
 import { existsSync } from 'node:fs';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import HomeShortwaveHero from '../components/HomeShortwaveHero.astro';
+import HomeNewToday from '../components/HomeNewToday.astro';
 import HomeV2SignalDeck from '../components/HomeV2SignalDeck.astro';
 import HomeWelcome from '../components/HomeWelcome.astro';
 import HomeMorningListening from '../components/HomeMorningListening.astro';
@@ -54,7 +55,9 @@ import { hallwayCount } from '../lib/drum-rooms';
 import { POINTCAST_APPS } from '../lib/pointcast-apps';
 import { RESIDENTS } from '../data/residents';
 import constellation from '../data/constellation.json';
-import frontDoorNews from '../data/front-door-news.json';
+import frontDoorNewsAll from '../data/front-door-news.json';
+import newToday from '../data/new-today.json';
+import { isFresh, type NewTodayItem } from '../lib/new-today.ts';
 import { kennelTodayPayload } from '../lib/kennel-today';
 import '../styles/home-shelf.css';
 
@@ -464,6 +467,11 @@ const glance = [
 
 const builtOn = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const frontDoorToday = kennelTodayPayload();
+// "New today" under the hero names the last seven town days of launches; the dated
+// register lower down keeps everything else, so a launch never shows twice.
+const newTodayItems: NewTodayItem[] = newToday;
+const newTodayLinks = new Set(newTodayItems.filter((item) => isFresh(item)).flatMap((item) => [item.link, ...(item.block ? [`/b/${item.block}`] : [])]));
+const frontDoorNews = frontDoorNewsAll.filter((item) => !newTodayLinks.has(item.link));
 const homeDescription = `A small internet from El Segundo. Explore original games, music, art and useful experiments. Make yourself at home, or bring your AI along. ${blockCount} numbered blocks and a growing world to discover.`;
 const socialImage = 'https://pointcast.xyz/images/og/og-home-v5.png'; // front-door card, scripts/og-home-card.mjs; bump the suffix to bust unfurl caches
 
@@ -558,6 +566,8 @@ const alternates = [
 
     {/* Above the fold: the town on the air. Shortwave is the page's h1; the drop deck follows as "What's new". */}
     <HomeShortwaveHero />
+
+    <HomeNewToday items={newTodayItems} />
 
     <HomeV2SignalDeck drops={latestWire} total={blockCount} />
 
