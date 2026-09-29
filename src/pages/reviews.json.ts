@@ -11,6 +11,7 @@ const catalog = {
   method: [
     'Use the released product on real desktop and mobile viewports.',
     'When a product is pre-release, label the review public-spec and separate documented capability from hands-on evidence.',
+    'A desk review ranks products PointCast has not handled, from published specs and cited testers, on a published weighted rubric. It carries rating: null, never a star rating.',
     'Preserve screenshots from the tested build.',
     'Separate design promise from working behavior.',
     'Do not call a wallet handoff a completed transaction without an operation hash and independent confirmation.',

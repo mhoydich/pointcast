@@ -330,6 +330,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/reviews/paddles', 'weekly', '0.9'],
   ['https://pointcast.xyz/reviews/paddles.json', 'weekly', '0.8'],
   ['https://pointcast.xyz/reviews/paddles/method', 'weekly', '0.85'],
+  ['https://pointcast.xyz/reviews/hummingbird-feeders', 'monthly', '0.90'],
+  ['https://pointcast.xyz/reviews/hummingbird-feeders.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/listening-grove', 'weekly', '0.92'],
   ['https://pointcast.xyz/marine-layer', 'weekly', '0.90'],
   ['https://pointcast.xyz/marine-layer.json', 'weekly', '0.86'],
