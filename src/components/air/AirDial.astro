@@ -5,52 +5,99 @@
  * NET tick at 7.200, one marker per station and a needle parked on `mhz`.
  * The needle carries data-air-needle so the client can spring it on a tap
  * (one overshoot, 600 ms; a plain jump under reduced motion).
+ *
+ * Label collision (2026-09-28 fix): a station label with no `label` prop
+ * draws its tick with no text at all — the spot page passes none, since the
+ * station's name already prints two lines below the dial. Where a caller
+ * does pass station labels (the /r band plan), any label that would land on
+ * top of NET or its neighbor moves to a second row under the numerals
+ * instead of overlapping; this is computed once here at render, for the
+ * narrowest width the layout supports (320 px), not measured live.
  */
 import { BAND, NET, stepToMhz } from '../../lib/band';
 
-interface Station { mhz: number; label: string; color: string }
+interface Station { mhz: number; label?: string; color: string }
 interface Props {
   /** Where the needle parks. */
   mhz: number;
-  /** Extra station markers (the band plan shows every spot). Defaults to the needle's station. */
+  /** Extra station markers (the band plan shows every spot). Defaults to one marker at `mhz`. */
   stations?: Station[];
   color?: string;
+  /** Omit this (or pass undefined) to draw a bare tick with no text — the spot page's name prints below instead. */
   label?: string;
 }
 const { mhz, color = '#12110E', label, stations } = Astro.props;
 const pct = (m: number) => ((m - BAND.minMhz) / (BAND.maxMhz - BAND.minMhz)) * 100;
 const ticks = Array.from({ length: BAND.maxMhz - BAND.minMhz + 1 }, (_, i) => BAND.minMhz + i);
 const netMhz = stepToMhz(NET.step);
-const marks: Station[] = stations ?? [{ mhz, label: label ?? mhz.toFixed(3), color }];
+const marks: Station[] = stations ?? [{ mhz, label, color }];
+
+// Collision rule, computed for the narrowest supported width (320 px viewport →
+// ~288 px inner dial → 32 px/MHz over the 9 MHz band). A label's half-width is
+// ~5.6 px/char (8 px mono, .1em tracking); NET's own label is ~10 px half-width;
+// 8 px is the minimum gap. Labels are placed in the caller's order (the band
+// plan passes AIR_SPOTS order, so the flagship court is placed first). A label
+// closer than that to NET goes to the lower row (under the numerals); one that
+// would overlap a label already on its row tries the other row; one with room on
+// neither row is dropped to a bare tick: the band plan lists every spot by name
+// right under the dial, so a dropped label loses nothing, and a smear of
+// overlapping names (ten stations inside 1 MHz) says less than none.
+const PX_PER_MHZ = 288 / (BAND.maxMhz - BAND.minMhz);
+const NET_HALF_PX = 10;
+const GAP_PX = 8;
+const CHAR_PX = 5.6;
+const halfLabelPx = (s?: string) => (s ? (Array.from(s).length * CHAR_PX) / 2 : 0);
+const lowerRow = new Set<Station>();
+const unlabeled = new Set<Station>();
+{
+  const placed: [Station[], Station[]] = [[], []];
+  for (const m of marks) {
+    if (!m.label) continue;
+    const hl = halfLabelPx(m.label);
+    const netCollide = Math.abs(m.mhz - netMhz) * PX_PER_MHZ < hl + NET_HALF_PX + GAP_PX;
+    const fits = (row: 0 | 1) => placed[row].every((o) => Math.abs(m.mhz - o.mhz) * PX_PER_MHZ >= hl + halfLabelPx(o.label) + GAP_PX);
+    const row = ((netCollide ? [1] : [0, 1]) as (0 | 1)[]).find(fits);
+    if (row === undefined) { unlabeled.add(m); continue; }
+    placed[row].push(m);
+    if (row === 1) lowerRow.add(m);
+  }
+}
+const hasLowerRow = lowerRow.size > 0;
 ---
 
-<div class="air-dial" role="img" aria-label={`Dial parked at ${mhz.toFixed(3)} MHz`} style={`--air-dial-ink:${color}`}>
+<div class:list={['air-dial', hasLowerRow && 'air-dial--tall']} role="img" aria-label={`Dial parked at ${mhz.toFixed(3)} MHz`} style={`--air-dial-ink:${color}`}>
   <span class="air-dial__rule" aria-hidden="true"></span>
   {ticks.map((t) => <span class="air-dial__tick" style={`left:${pct(t)}%`} data-major={t % 3 === 0 ? '' : undefined} aria-hidden="true"><i>{t}</i></span>)}
   <span class="air-dial__net" style={`left:${pct(netMhz)}%`} title={`The Nightly Net · ${netMhz.toFixed(3)} MHz`} aria-hidden="true">NET</span>
-  {marks.map((m) => <span class="air-dial__station" style={`left:${pct(m.mhz)}%;--air-dial-station:${m.color}`} aria-hidden="true"><i>{m.label}</i></span>)}
+  {marks.map((m) => (
+    <span class:list={['air-dial__station', lowerRow.has(m) && 'air-dial__station--low']} style={`left:${pct(m.mhz)}%;--air-dial-station:${m.color}`} aria-hidden="true">
+      {m.label && !unlabeled.has(m) && <i>{m.label}</i>}
+    </span>
+  ))}
   <span class="air-dial__needle" data-air-needle style={`left:${pct(mhz)}%`} aria-hidden="true"></span>
 </div>
 
 <style>
   .air-dial { position: relative; height: 24px; margin: 6px 0 0; user-select: none; }
+  .air-dial--tall { height: 40px; margin-bottom: 10px; }
   .air-dial__rule { position: absolute; left: 0; right: 0; top: 12px; height: 1px; background: var(--pc-rule, #C4C2BC); }
   .air-dial__tick { position: absolute; top: 9px; width: 1px; height: 7px; margin-left: -.5px; background: var(--pc-rule, #C4C2BC); }
   .air-dial__tick[data-major] { top: 7px; height: 11px; background: var(--pc-ink-muted, #5F5E5A); }
-  .air-dial__tick i { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font: 400 9px/1 var(--pc-font-mono); font-style: normal; letter-spacing: .04em; color: var(--pc-ink-muted, #5F5E5A); }
+  .air-dial__tick i { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font: 400 8px/1 var(--pc-font-mono); font-style: normal; letter-spacing: .04em; color: var(--pc-ink-muted, #5F5E5A); }
   .air-dial__tick:not([data-major]) i { display: none; }
   .air-dial__net { position: absolute; top: -2px; transform: translateX(-50%); font: 600 8px/1 var(--pc-font-mono); letter-spacing: .1em; color: var(--pc-accent, #185FA5); }
   .air-dial__net::after { content: ''; position: absolute; left: 50%; top: 9px; width: 1px; height: 8px; background: var(--pc-accent, #185FA5); }
   .air-dial__station { position: absolute; top: 4px; width: 5px; height: 17px; margin-left: -2.5px; background: var(--air-dial-station, var(--air-dial-ink)); }
   .air-dial__station i { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font: 600 8px/1 var(--pc-font-mono); font-style: normal; letter-spacing: .1em; color: var(--air-dial-station, var(--air-dial-ink)); white-space: nowrap; }
-  .air-dial__needle { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--air-live, #D42A1E); box-shadow: 0 0 6px rgba(212, 42, 30, .55); transform-origin: 50% 100%; }
+  .air-dial__station--low i { top: 26px; }
+  /* A fixed 24 px (the plain dial's height), not bottom: 0 — on the tall band-plan dial it stops above the numerals and never cuts through a lower-row label. */
+  .air-dial__needle { position: absolute; top: 0; height: 24px; width: 2px; margin-left: -1px; background: var(--air-live, #D42A1E); box-shadow: 0 0 6px rgba(212, 42, 30, .55); transform-origin: 50% 100%; }
   .air-dial__needle[data-swing] { animation: air-needle-spring 600ms cubic-bezier(.3, 1.4, .5, 1) both; }
   @keyframes air-needle-spring {
     0% { transform: translateX(-14px) rotate(-4deg); }
     60% { transform: translateX(3px) rotate(1deg); }
     100% { transform: translateX(0) rotate(0); }
   }
-  @media (max-width: 420px) { .air-dial__tick[data-major] i { font-size: 8px; } .air-dial__station i { display: none; } }
   @media (prefers-reduced-motion: reduce) { .air-dial__needle[data-swing] { animation: none; } }
   :global([data-air-motion='reduced']) .air-dial__needle[data-swing] { animation: none; }
 </style>

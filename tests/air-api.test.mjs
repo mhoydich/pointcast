@@ -614,3 +614,111 @@ test('0023: geo is on reports and confirms, 0 or 1, and 0 on every PR 1 write', 
   assert.throws(() => db.db.prepare('UPDATE air_confirms SET geo = -1').run(), /CHECK/);
   for (const s of db.rows('SELECT meta_json FROM air_stamps')) assert.equal(JSON.parse(s.meta_json).geo, false);
 });
+
+/* ---------- the spot page header, 2026-09-28: today, prior, the week's leaderboard ---------- */
+
+test('header: today, prior and the access override come off the rows; the week counts days on air by @handle only', async () => {
+  const t = town();
+  const db = t.env.AUTH_DB;
+  const courts = targetOf(config, 'courts');
+  const at = (day, h, m) => Date.parse(`${day}T00:00:00Z`) + (h + 7) * HOUR_MS + m * MIN; // PDT wall time
+  const phone = { claire: uuid(), sam: uuid(), nocard: uuid() };
+  const mike = await t.signIn('u_hdr_mike', 'mike');
+  db.db.prepare("UPDATE users SET payload = json_set(payload, '$.roles', json_array('broadcaster')) WHERE id = 'u_hdr_mike'").run();
+  const claire = await t.signIn('u_hdr_claire', 'claire');
+  const sam = await t.signIn('u_hdr_sam', 'sam');
+  const nocard = await t.signIn('u_hdr_nocard', 'nocard');
+  t.env.VISITS.data.delete('card:v1:user:u_hdr_nocard');
+  const wait = (value, device, extra = {}) => ({ kind: 'wait', value, device, code: CRT, ...extra });
+
+  // Last week: not this week's, but Friday's same-weekday line.
+  const pidOf = async (d) => pidHash(d);
+  const insert = db.db.prepare(`INSERT INTO air_reports (id, spot, kind, value, observed_at, day, slot, pid_hash, ip_hash, user_id, byline, onsite, source, source_url, created_at)
+    VALUES (?, 'courts', ?, ?, ?, ?, ?, ?, 'x', ?, ?, ?, ?, ?, ?)`);
+  const lastFri = at('2026-09-25', 17, 30);
+  insert.run('ar_00000000000000000a01', 'wait', '5-8', lastFri, '2026-09-25', -1, await pidOf(DEV.e), null, 'Guest 1234', 1, 'page', null, lastFri);
+  const lastSun = at('2026-09-27', 9, 0);
+  insert.run('ar_00000000000000000a02', 'wait', '1-4', lastSun, '2026-09-27', -2, await pidOf(phone.claire), 'u_hdr_claire', '@claire', 1, 'page', null, lastSun);
+
+  // Mon–Wed: Mike three days; Claire Tuesday, and Wednesday with a parking report (any question at the spot is a day there).
+  for (const day of ['2026-09-28', '2026-09-29', '2026-09-30']) assert.equal((await report(t, 'courts', wait('1-4', DEV.c), at(day, 8, 0), mike)).body.report.byline, '@mike');
+  await report(t, 'courts', wait('0', DEV.a), at('2026-09-28', 8, 5));
+  await report(t, 'courts', wait('0', phone.claire), at('2026-09-29', 8, 10), claire);
+  await report(t, 'courts', { kind: 'parking', value: 'easy', device: phone.claire, code: CRT }, at('2026-09-30', 9, 10), claire);
+  const removed = await report(t, 'courts', wait('9+', phone.claire), at('2026-09-28', 12, 0), claire); // the house flags it: no day on air
+  db.db.prepare("UPDATE air_reports SET status = 'flagged' WHERE id = ?").run(removed.body.report.id);
+  // Thursday evening: a guest, Mike filing as a guest, a signed-in account with no card, and Sam, who later loses @sam.
+  await report(t, 'courts', wait('1-4', DEV.b), at('2026-10-01', 18, 0));
+  assert.match((await report(t, 'courts', wait('1-4', DEV.c, { asGuest: true }), at('2026-10-01', 18, 5), mike)).body.report.byline, /^Guest /);
+  assert.match((await report(t, 'courts', wait('1-4', phone.nocard), at('2026-10-01', 18, 10), nocard)).body.report.byline, /^Guest /);
+  assert.equal((await report(t, 'courts', wait('1-4', phone.sam), at('2026-10-01', 18, 12), sam)).body.report.byline, '@sam');
+  await report(t, 'courts', { kind: 'wait', value: '9+', device: phone.claire }, at('2026-10-01', 19, 0), claire); // from home: never a day on air
+  await t.env.VISITS.put('card:v1:user:u_hdr_sam', JSON.stringify({ handle: 'sam', name: 'sam', noun: 7, released: true }));
+
+  // Friday: the gate is locked at 7:41 and a second phone says still; an agent, a remote tap and a flagged row.
+  const locked = await report(t, 'courts', wait('locked', DEV.d), at('2026-10-02', 7, 41));
+  await confirm(t, { reportId: locked.body.report.id, verdict: 'still', device: DEV.e, code: CRT }, at('2026-10-02', 7, 43));
+  const agentAt = at('2026-10-02', 7, 44);
+  insert.run('ar_00000000000000000a03', 'wait', '0', agentAt, '2026-10-02', -3, 'agent-pid', 'u_hdr_claire', '@claire', 0, 'agent:codex', 'https://example.com/cam', agentAt);
+  await report(t, 'courts', { kind: 'wait', value: '0', device: DEV.f }, at('2026-10-02', 7, 45));
+  const flagged = await report(t, 'courts', { kind: 'wait', value: '9+', device: uuid() }, at('2026-10-02', 7, 46));
+  db.db.prepare("UPDATE air_reports SET status = 'flagged' WHERE id = ?").run(flagged.body.report.id);
+  for (const [d, v] of [[DEV.a, 'solid'], [DEV.b, 'solid'], [DEV.d, 'character']]) {
+    await report(t, 'courts', { kind: 'vibe', value: v, device: d, code: CRT, extras: ['no-shade'] }, at('2026-10-02', 7, 47));
+  }
+
+  const page = await spotPayload(t.env, db, courts, at('2026-10-02', 7, 50), DEV.d);
+  const h = page.header;
+  assert.deepEqual(h.today, { reports: 3, validators: 2, crew: false, lastAt: '2026-10-02T14:41:00Z', lastAgeMin: 9 },
+    'Friday\'s ok wait rows (the locked gate, the agent, the remote tap; not the flagged one); two phones on site');
+  assert.deepEqual(h.override, { value: 'locked', label: 'Gate locked', at: '7:43 AM', support: 2, live: true });
+  assert.deepEqual(h.prior, {
+    last: { day: '2026-10-01', daysAgo: 1, at: '6:12 PM', value: '1-4', label: '1–4 in the rack', support: 4 },
+    sameWeekday: { day: '2026-09-25', daysAgo: 7, at: '5:30 PM', value: '5-8', label: '5–8 in the rack', support: 1 },
+    typical: null,
+  });
+  assert.deepEqual(h.week, {
+    from: '2026-09-28', to: '2026-10-04',
+    leaders: [{ handle: 'mike', days: 3, house: true }, { handle: 'claire', days: 2, house: false }],
+    guests: 6,
+  }, 'Mike: Mon–Wed (not Thursday as a guest); Claire: Tue + Wed parking (not last Sunday, the flagged Monday, from home or the agent row); guests: five on-site guest phones (Mike\'s Thursday one among them, unlinked) + @sam, released');
+  assert.deepEqual(h.parking, { value: 'easy', label: 'Parking easy', day: '2026-09-30', at: 'Wed 9:10 AM' });
+  assert.deepEqual(h.vibe, { label: 'Solid', n: 3, runnerUp: 'Character', chips: ['no-shade'] });
+
+  // Privacy: no hash, no account id, no time of day on the leaderboard.
+  await noHashes(page);
+  const text = JSON.stringify(page);
+  for (const d of Object.values(phone)) assert.ok(!text.includes(await pidHash(d)), 'a phone hash leaked');
+  assert.doesNotMatch(text, /u_hdr_|agent-pid|"user_id"|"roles"|"first"/);
+  assert.doesNotMatch(JSON.stringify(h.week), /\d{1,2}:\d{2}|T\d{2}:|AM|PM/, 'the leaderboard never carries a time');
+  for (const l of h.week.leaders) assert.deepEqual(Object.keys(l), ['handle', 'days', 'house']);
+
+  // 9:00: the locked reading decayed; the header still says so, time-stamped, as the last word, not live.
+  const later = await spotPayload(t.env, db, courts, at('2026-10-02', 9, 0));
+  assert.equal(later.reading.status, 'none');
+  assert.deepEqual(later.header.override, { value: 'locked', label: 'Gate locked', at: '7:43 AM', support: 2, live: false });
+  assert.equal(later.header.today.lastAgeMin, 79);
+  // 9:05: a phone at the fence says 1–4: no override.
+  await report(t, 'courts', wait('1-4', DEV.a), at('2026-10-02', 9, 5));
+  assert.equal((await spotPayload(t.env, db, courts, at('2026-10-02', 9, 6))).header.override, null);
+  // The next Monday is a new week, and Friday is the newest prior day.
+  const monday = await spotPayload(t.env, db, courts, at('2026-10-05', 8, 0));
+  assert.deepEqual(monday.header.week, { from: '2026-10-05', to: '2026-10-11', leaders: [], guests: 0 });
+  assert.equal(monday.header.prior.last.day, '2026-10-02');
+  assert.equal(monday.header.prior.last.daysAgo, 3);
+  assert.deepEqual([monday.header.prior.sameWeekday.day, monday.header.prior.sameWeekday.daysAgo, monday.header.prior.sameWeekday.at], ['2026-09-28', 7, '8:05 AM']);
+});
+
+test('header source: the leaderboard SQL counts days on site by page rows under an @handle, and guests leave only as a count', () => {
+  const store = src[STORE];
+  const members = store.slice(store.indexOf('SELECT r.user_id, COUNT(DISTINCT r.day) AS days'));
+  const memberSql = members.slice(0, members.indexOf('.bind('));
+  for (const clause of ["r.status = 'ok'", "r.source = 'page'", 'r.onsite = 1', 'r.user_id IS NOT NULL', "r.byline LIKE '@%'", 'r.day BETWEEN ? AND ?', 'ORDER BY days DESC, first ASC']) {
+    assert.ok(memberSql.includes(clause), `members SQL keeps ${clause}`);
+  }
+  assert.match(store, /SELECT COUNT\(DISTINCT pid_hash\) AS n FROM air_reports\s+WHERE spot = \? AND status = 'ok' AND source = 'page' AND onsite = 1 AND \(user_id IS NULL OR byline NOT LIKE '@%'\)/, 'guests are one number');
+  // The user id stops at weekMembers; the view reads handles, days and the house mark only.
+  const marker = store.indexOf('/* ---------- views:');
+  assert.doesNotMatch(store.slice(marker), /user_id|memberRows|\.roles\b/, 'no account id or roles in the views');
+  assert.match(store, /data\.header\.memberRows = \[\];/);
+});

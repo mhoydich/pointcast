@@ -18,6 +18,8 @@
 import AirDial from './AirDial.astro';
 import AirInk from './AirInk.astro';
 import { courtCallLabel, mhzLabel, primaryKind, spotUrl, type AirSpot as AirSpotConfig } from '../../lib/air';
+import { courtById, provenanceLine, sourceOf, type Block, type Court } from '../../lib/courts';
+import { daysText, hoursLine, seasonText, timeText } from '../../lib/court-format';
 
 interface Props {
   spot: AirSpotConfig;
@@ -28,6 +30,79 @@ const { spot, aliasOf } = Astro.props;
 const { kind, cfg } = primaryKind(spot);
 const call = courtCallLabel(spot);
 const extraLabel = (x: string) => x.replace(/-/g, ' ');
+
+/**
+ * The compact header (build spec 2026-09-28): identity + sourced facts render
+ * here at build time, same rule as CourtCard.astro (verified renders, partial
+ * renders tagged "unconfirmed", unverified never renders, 45+ days reads "may
+ * have changed"). Everything that moves — today's count, prior days, the
+ * weekly leaderboard — is filled by air-client.ts from GET /api/air/[spot]'s
+ * `header` field and stays hidden until that data lands, so a build never
+ * prints an invented stat.
+ */
+const court: Court | null = courtById(spot.id);
+const DAY_MS = 86_400_000;
+const buildNow = new Date();
+function daysSince(checked: string): number {
+  const [y, m, d] = checked.split('-').map(Number);
+  const then = Date.UTC(y || 1970, (m || 1) - 1, d || 1, 12);
+  return Math.floor((buildNow.getTime() - then) / DAY_MS);
+}
+/** Same rule as CourtCard.astro / src/lib/court-format.ts sourcedTag(). */
+function showable(p: { confidence: string; checked: string }): { show: boolean; tag: 'unconfirmed' | 'stale' | null } {
+  if (p.confidence === 'unverified') return { show: false, tag: null };
+  const stale = daysSince(p.checked) >= 45;
+  return { show: true, tag: p.confidence === 'partial' ? 'unconfirmed' : stale ? 'stale' : null };
+}
+const SHAPE_LABEL: Record<string, string> = {
+  'paddle-rack': 'Paddle rack',
+  'reservation+drop-in': 'Reservation + drop-in',
+  'first-come': 'First come',
+};
+const shapeLabel = court?.shape ? (SHAPE_LABEL[court.shape] ?? court.shape) : null;
+/** "check-in" -> "Check-in", "address" -> "Address". */
+const factLabel = (key: string) => key.charAt(0).toUpperCase() + key.slice(1);
+/** "Advanced drop-in · Mon 5 PM–7 PM · Sep 7–Oct 26 · $5" — same words as CourtCard.astro's blockLine(). */
+function blockLine(b: Block): string {
+  const time = `${timeText(b.start)}–${timeText(b.end)}`;
+  const season = seasonText(b.from, b.until);
+  const fee = b.fee ? ` · ${b.fee}` : '';
+  return `${b.label} · ${daysText(b.days)} ${time}${season ? ` · ${season}` : ''}${fee}`;
+}
+
+const facts = (court?.facts ?? [])
+  .map((f) => ({ fact: f, ...showable(f) }))
+  .filter((f) => f.show)
+  .filter((f) => f.fact.key !== 'walk-on'); // walkOn gets its own row
+const hoursInfo = court?.hours ? showable(court.hours) : null;
+const walkOnInfo = court?.walkOn ? showable(court.walkOn) : null;
+const blocks = (court?.blocks ?? []).map((b) => ({ block: b, ...showable(b) })).filter((b) => b.show);
+const reserveInfo = court?.reserve ? showable(court.reserve) : null;
+// "only while reserve.confidence === 'verified'" (build spec): a partial reserve link is
+// sourced enough to name in About, never confident enough to hand someone a book-now button.
+const reserveBookable = court?.reserve?.confidence === 'verified' && reserveInfo?.show;
+// The About section's closing source link: the hours' source when hours are shown, else the first shown fact's.
+const primarySrcId = hoursInfo?.show && court?.hours ? court.hours.src : facts[0]?.fact.src;
+const primarySource = primarySrcId ? sourceOf(primarySrcId) : null;
+/** " · may have changed" for a verified fact checked 45+ days before the build. */
+const staleText = (tag: string | null) => (tag === 'stale' ? ' · may have changed' : '');
+
+/**
+ * What the client needs to say "Open" / "Closed" / "Hours not listed for Mon",
+ * the drop-in running now and the next session, against the clock (air-client.ts
+ * paintOpen, through court-board.mjs's openState/sessionsNow/nextSession — the
+ * board's own rules). Only this court's shown hours and blocks, each block with
+ * its provenance words already rendered: courts.ts and its JSON never reach
+ * the client bundle. Unverified hours or blocks never get here.
+ */
+const courtData = court ? {
+  status: court.status,
+  hours: hoursInfo?.show && court.hours
+    ? { rules: court.hours.rules, else: court.hours.else, conflict: court.hours.conflict ?? null, confidence: court.hours.confidence, checked: court.hours.checked, src: court.hours.src }
+    : null,
+  blocks: blocks.map(({ block, tag }) => ({ ...block, prov: `${provenanceLine(block)}${staleText(tag)}`, tag })),
+} : null;
+const courtJson = courtData ? JSON.stringify(courtData).replace(/</g, '\\u003c') : '';
 ---
 
 <AirInk />
@@ -44,13 +119,103 @@ const extraLabel = (x: string) => x.replace(/-/g, ' ');
     <p class="air__topline air-mono">
       <span class="air__mhz">{mhzLabel(spot)} MHz</span>
       <span class="air__sep" aria-hidden="true">·</span>
-      <span class="air__short">{spot.short}</span>
+      <span class="air__short">{court ? spot.channel : spot.short}</span>
       <span class="air__sep" aria-hidden="true">·</span>
       <span data-air-clock>—</span>
       <i class="air__livedot" data-air-dot hidden role="img" aria-label="Live"></i>
     </p>
-    <AirDial mhz={spot.mhz} color={spot.color} label={spot.short} />
+    <AirDial mhz={spot.mhz} color={spot.color} />
   </header>
+
+  <div class="air__id">
+    <h2 class="air__name">{court?.name ?? spot.name}</h2>
+    {court && (
+      <p class="air__loc air-mono">
+        <span>{court.city.toUpperCase()}</span>
+        {shapeLabel && <><span aria-hidden="true">·</span><b class="air__tag">{shapeLabel.toUpperCase()}</b></>}
+      </p>
+    )}
+    {court && (
+      <p class="air__hours" data-air-open>
+        <b data-air-open-state>{hoursInfo?.show ? 'Hours' : 'Hours not listed'}</b>{hoursInfo?.show && court.hours && <> · {hoursLine(court.hours.rules)}</>}
+        {hoursInfo?.tag === 'unconfirmed' && <b class="air__tag air__tag--unconfirmed">unconfirmed</b>}
+        {hoursInfo?.show && court.hours && <span class="air__prov air__prov--inline"> · {provenanceLine(court.hours)}{staleText(hoursInfo.tag)}</span>}
+      </p>
+    )}
+    {court && (
+      <p class="air__hours air__now" data-air-now hidden>
+        <b data-air-now-text></b>
+        <b class="air__tag air__tag--unconfirmed" data-air-now-tag hidden>unconfirmed</b>
+        <span class="air__prov air__prov--inline" data-air-now-prov></span>
+      </p>
+    )}
+    <p class="air__override" data-air-override hidden></p>
+    {courtJson && <script type="application/json" data-air-court set:html={courtJson}></script>}
+  </div>
+
+  <div class="air__stats">
+    <p class="air__strip" data-air-today-strip hidden></p>
+    <p class="air__strip" data-air-prior-strip hidden></p>
+    <p class="air__strip" data-air-week hidden><span data-air-week-text></span><span class="air__crown" data-air-crown hidden></span></p>
+  </div>
+
+  {court && (
+    <details class="air__about">
+      <summary>About this court</summary>
+      <div class="air__about-body">
+        {facts.map(({ fact, tag }) => (
+          <p class="air__fact">
+            <b>{factLabel(fact.key)}</b> · {fact.text}
+            {tag === 'unconfirmed' && <b class="air__tag air__tag--unconfirmed">unconfirmed</b>}
+            <span class="air__prov air-mono">{provenanceLine(fact)}{tag === 'stale' && ' · may have changed'}</span>
+          </p>
+        ))}
+        {walkOnInfo?.show && court.walkOn && (
+          <p class="air__fact">
+            <b>Walk-on</b> · {court.walkOn.text}
+            {walkOnInfo.tag === 'unconfirmed' && <b class="air__tag air__tag--unconfirmed">unconfirmed</b>}
+            <span class="air__prov air-mono">{provenanceLine(court.walkOn)}{walkOnInfo.tag === 'stale' && ' · may have changed'}</span>
+          </p>
+        )}
+        {hoursInfo?.show && court.hours && (
+          <p class="air__fact">
+            <b>Hours</b> · {hoursLine(court.hours.rules)}{court.hours.else === 'closed' ? '; closed otherwise' : ''}
+            {hoursInfo.tag === 'unconfirmed' && <b class="air__tag air__tag--unconfirmed">unconfirmed</b>}
+            {court.hours.conflict && <span class="air__conflict"> — {court.hours.conflict.text}</span>}
+            <span class="air__prov air-mono">{provenanceLine(court.hours)}{hoursInfo.tag === 'stale' && ' · may have changed'}</span>
+          </p>
+        )}
+        <p class="air__fact" data-air-next hidden>
+          <b>Next session</b> · <span data-air-next-text></span>
+          <b class="air__tag air__tag--unconfirmed" data-air-next-tag hidden>unconfirmed</b>
+          <span class="air__prov air-mono" data-air-next-prov></span>
+        </p>
+        {blocks.length > 0 && (
+          <div class="air__blocks">
+            {blocks.map(({ block, tag }) => (
+              <p class="air__fact">
+                {blockLine(block)}
+                {tag === 'unconfirmed' && <b class="air__tag air__tag--unconfirmed">unconfirmed</b>}
+                <span class="air__prov air-mono">{provenanceLine(block)}{tag === 'stale' && ' · may have changed'}</span>
+              </p>
+            ))}
+          </div>
+        )}
+        {/* Filled from the API's header only (air-client.ts): a build or a failed fetch never claims what no one checked. */}
+        <p class="air__fact air__fact--dyn" data-air-lastweek hidden><b data-air-lastweek-when></b> · <span data-air-lastweek-text></span></p>
+        <p class="air__fact air__fact--dyn" data-air-parking hidden><b>Parking</b> · <span data-air-parking-text></span></p>
+        <p class="air__fact air__fact--dyn" data-air-vibe hidden><b>Vibe</b> · <span data-air-vibe-text></span></p>
+        {call && <p class="air__fact"><b>Court Call</b> · {call} · {mhzLabel(spot)}</p>}
+        {court.reserve && reserveBookable && (
+          <p class="air__fact"><a href={court.reserve.url}>{court.reserve.label} →</a></p>
+        )}
+        {primarySource?.url && (
+          <p class="air__fact"><a href={primarySource.url}>{primarySource.label}</a></p>
+        )}
+      </div>
+    </details>
+  )}
+  <hr class="air__hr" />
 
   <noscript><p class="air__note">Reporting needs JavaScript. The live reading is at <a href={`/api/air/${spot.id}`}>/api/air/{spot.id}</a>.</p></noscript>
 
@@ -146,12 +311,53 @@ const extraLabel = (x: string) => x.replace(/-/g, ' ');
   .air [hidden] { display: none !important; }
 
   /* ---- top line + dial ---- */
-  .air__top { margin-bottom: 14px; }
-  .air__topline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; color: var(--pc-ink-muted); }
+  .air__top { margin-bottom: 6px; }
+  /* "7.500 MHz · CRT · Mon 3:46 PM": mixed case, the clock reads 12-hour (2026-09-28). */
+  .air__topline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 12px; text-transform: none; color: var(--pc-ink-muted); }
   .air__mhz { color: var(--pc-ink); font-weight: 600; }
   .air__short { color: var(--air-channel); font-weight: 600; }
   .air__livedot { width: 10px; height: 10px; margin-left: 2px; background: var(--air-live); box-shadow: 0 0 0 2px var(--pc-bg), 0 0 0 3px var(--air-live); animation: air-pulse 1.6s ease-in-out infinite; }
   @keyframes air-pulse { 50% { box-shadow: 0 0 0 2px var(--pc-bg), 0 0 0 3px transparent; } }
+
+  /* ---- header: identity + sourced facts (compact; the rest lives in <details>) ---- */
+  .air__id { margin: 0; }
+  .air__name { margin: 0 0 2px; font: 600 20px/24px var(--pc-font-sans); letter-spacing: -.01em; }
+  .air__loc { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--air-channel); }
+  .air__hours { margin: 5px 0 0; font: 400 12px/1.4 var(--pc-font-mono); color: var(--pc-ink-soft); }
+  .air__hours > b:first-child { font-weight: 600; color: var(--pc-ink); }
+  .air__now > b:first-child { color: var(--air-channel); }
+  .air__override { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font: 600 12px/1.4 var(--pc-font-mono); color: var(--air-live); }
+  .air__override::before { content: ''; flex: none; width: 7px; height: 7px; background: currentColor; }
+  .air__override[data-live='no'] { font-weight: 400; color: var(--pc-ink-muted); }
+  .air__override :global(.air__bit) { white-space: nowrap; }
+  .air__tag { display: inline-block; margin-left: 2px; padding: 1px 5px; border: 1px solid var(--air-channel); font: 600 10px/1.4 var(--pc-font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--air-channel); background: transparent; }
+  .air__tag--unconfirmed { border-color: var(--pc-ink-muted); color: var(--pc-ink-muted); }
+  .air__prov { display: block; margin-top: 1px; font-size: 11px; color: var(--pc-ink-muted); }
+  .air__prov--inline { display: inline; margin: 0; font: 400 11px/1.4 var(--pc-font-mono); }
+  .air__conflict { color: var(--pc-ink-muted); }
+
+  /* ---- the compact stat strips: today, prior, the weekly leaderboard — hidden until the API fills them ---- */
+  .air__stats { margin: 5px 0 0; }
+  .air__strip { margin: 2px 0 0; font: 400 12px/1.35 var(--pc-font-mono); color: var(--pc-ink-soft); }
+  .air__strip :global(b) { font-weight: 600; letter-spacing: .04em; color: var(--pc-ink); }
+  /* JS-built HOUSE tag: scoped .air__tag never reaches it, so it carries its own look. */
+  .air__strip :global(.air__tag) { display: inline-block; margin-left: 4px; padding: 0 4px; border: 1px solid var(--air-channel); font: 600 9px/1.4 var(--pc-font-mono); letter-spacing: .06em; color: var(--air-channel); vertical-align: 1px; }
+  /* Each bit ("@claire 3", "2 on site") is one unbreakable span: a narrow phone wraps between bits, never inside one. */
+  .air__strip :global(.air__bit) { white-space: nowrap; }
+  /* The week line: every name from 421 px up; three names and "+N more" below that. */
+  .air__strip :global(.air__bit--narrow), .air__strip :global(.air__sep-narrow) { display: none; }
+
+  /* ---- About this court: collapsed by default, every line sourced and dated ---- */
+  .air__about { margin: 6px 0 0; }
+  .air__about > summary { cursor: pointer; list-style: none; padding: 2px 0; font: 600 12px/1.3 var(--pc-font-mono); letter-spacing: .04em; text-transform: uppercase; color: var(--pc-ink-muted); -webkit-tap-highlight-color: transparent; }
+  .air__about > summary::-webkit-details-marker { display: none; }
+  .air__about > summary::before { content: '▸ '; }
+  .air__about[open] > summary::before { content: '▾ '; }
+  .air__about-body { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--pc-rule-soft); display: grid; gap: 8px; }
+  .air__fact { margin: 0; font-size: 14px; line-height: 1.45; color: var(--pc-ink-soft); }
+  .air__fact a { color: var(--pc-accent); font-weight: 600; }
+  .air__blocks { display: grid; gap: 8px; }
+  .air__hr { margin: 6px 0 12px; border: 0; border-top: 2px solid var(--pc-ink); }
 
   /* ---- silence stays quiet ---- */
   .air__last { margin: 0 0 12px; padding: 8px 0; border-top: 1px solid var(--pc-rule-soft); border-bottom: 1px solid var(--pc-rule-soft); color: var(--air-static); }
@@ -240,6 +446,13 @@ const extraLabel = (x: string) => x.replace(/-/g, ' ');
   .air__calldot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; background: var(--air-channel); vertical-align: 1px; }
   .air__alias { text-transform: none; letter-spacing: .02em; }
   .air__links { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* A phone narrower than Mike's 440 px: the strips and the override drop to 11 px so each holds one line at 375 px. */
+  @media (max-width: 420px) {
+    .air__strip, .air__override { font-size: 11px; }
+    .air__strip :global(.air__bit--wide), .air__strip :global(.air__sep-wide) { display: none; }
+    .air__strip :global(.air__bit--narrow), .air__strip :global(.air__sep-narrow) { display: inline; }
+  }
 
   @media (max-width: 380px) {
     .air { padding-left: 16px; padding-right: 16px; }
