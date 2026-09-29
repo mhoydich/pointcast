@@ -1,9 +1,12 @@
 /**
  * /api/air/<spot> — one Field Reports station.
  *
- * GET  → { spot, reading, today, yesterday, lastWeek, typical, editorGuess, serverTime, you? }
+ * GET  → { spot, reading, today, yesterday, lastWeek, typical, editorGuess, serverTime, assignment, header, you? }
  *        The spot page polls this. Send `X-PC-Device: <uuid>` (never a query
  *        string) to also get `you: { reportId, confirmed, crewMember }`.
+ *        `header` is the spot page header's moving parts (air-store.ts
+ *        viewHeader): { today, override, prior, week, parking, vibe }. The
+ *        week's leaderboard is days on air by @handle, never a time.
  * POST { kind, value, device, code?, extras?, asGuest?, observedAt? }
  *      → 201 new, 200 { replaced: true } for your own report in the same slot:
  *        { ok, replaced, report, reading, today, award, claim }

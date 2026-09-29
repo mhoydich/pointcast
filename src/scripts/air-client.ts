@@ -13,6 +13,16 @@
  */
 import { AIR_SPOTS, labelFor, type AirSpot } from '../lib/air';
 import * as shortwave from '../lib/shortwave-client';
+// The spot header's open-now line runs the Pickleball Board's own schedule rules
+// (openState/sessionsNow/nextSession) against this court's facts, which the page
+// embeds at build time; sunset for a 'dusk' close is today's, from the same math
+// the board's conditions use (court-conditions.ts sunsetAt). No courts JSON here.
+import { nextSession, openState, sessionsNow } from '../../functions/_lib/court-board.mjs';
+import { laParts } from '../../functions/_lib/air-reading.mjs';
+import { priorDayWord } from '../../functions/_lib/air-spot-stats.mjs';
+import { timeText } from '../lib/court-format';
+import { sunTimes } from '../lib/sky';
+import { EL_SEGUNDO } from '../lib/burnoff';
 
 // ---------------------------------------------------------------------------
 // Storage. Every access is wrapped: private windows, blocked storage and
@@ -151,11 +161,19 @@ export function laClock(when: number | string | Date, pad = false): string {
   return `${pad ? String(h).padStart(2, '0') : h}:${m}`;
 }
 
-/** "FRI 7:38" for the top line. */
+/** "Mon 3:46 PM" for the top line (2026-09-28: 12-hour, mixed-case weekday — h23 read like a European rail board on a US phone). */
 export function laStamp(when: number | Date = new Date()): string {
   const d = when instanceof Date ? when : new Date(when);
-  const wd = new Intl.DateTimeFormat('en-US', { timeZone: LA, weekday: 'short' }).format(d).toUpperCase();
-  return `${wd} ${laClock(d)}`;
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: LA, weekday: 'short' }).format(d);
+  const time = new Intl.DateTimeFormat('en-US', { timeZone: LA, hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
+  return `${wd} ${time}`;
+}
+
+/** "3:46 PM" in LA time: the spot header's clock (laClock stays 24-hour for the Today list until it is restyled). */
+export function laClock12(when: number | string | Date): string {
+  const d = when instanceof Date ? when : new Date(when);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', { timeZone: LA, hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
 }
 
 /**
@@ -211,6 +229,8 @@ const BADGE_LABEL: Record<string, string> = {
 };
 
 export const supportLabel = (n: number): string => (n >= 2 ? `${n} agree` : n === 1 ? '1 reporter' : '');
+/** "no-shade" -> "no shade": the vibe chips' words, same rule as the detail chip labels in AirSpot.astro. */
+const extraLabel = (x: string): string => x.replace(/-/g, ' ');
 export const agoLabel = (min: number | null | undefined): string => (min == null ? '' : min < 1 ? 'just now' : min === 1 ? '1 min ago' : `${min} min ago`);
 const spotById = (id: string): AirSpot | undefined => AIR_SPOTS.find((s) => s.id === id);
 const shortOf = (id: string): string => spotById(id)?.short ?? id.toUpperCase();
@@ -369,6 +389,35 @@ type TodayRow = { id: string; at: string; byline: string; value: string; onsite:
 type You = { reportId: string | null; confirmed: string[]; crewMember: boolean };
 /** The spot's next unvoided assignment (build spec §3.4 spotPayload.assignment), or none at all. */
 type AssignBadge = { id: string; spot: string; label: string; question: string | null; startsAt: string; endsAt: string; seats: number; seatsLeft: number; reward: number; live: boolean };
+/**
+ * The spot page header (functions/_lib/air-spot-stats.mjs, docs: spot header
+ * design 2026-09-28): everything that moves, filled in beside the sourced
+ * facts that render at build time from src/lib/courts.ts. `null` (the whole
+ * header, or any one field) means "nothing to say yet", never a zero.
+ */
+type HeaderToday = { reports: number; validators: number; crew: boolean; lastAt: string | null; lastAgeMin: number | null };
+/** One PRIOR line: the day's last on-site reading. No byline — a name next to a past time is a log this header never keeps. */
+type HeaderPrior = { day: string; daysAgo: number; at: string; value: string; label: string; support: number } | null;
+type HeaderOverride = { value: string; label: string; at: string; support: number; live: boolean } | null;
+type HeaderLeader = { handle: string; days: number; house: boolean };
+type HeaderWeek = { from: string; to: string; leaders: HeaderLeader[]; guests: number };
+type HeaderParking = { value: string; label: string; day: string; at: string } | null;
+type HeaderVibe = { label: string; n: number; runnerUp: string | null; chips: string[] } | null;
+/** This court's shown hours and blocks, embedded by AirSpot.astro (`script[data-air-court]`); each block carries its provenance words. */
+type CourtBlock = { kind: string; label: string; days: number[]; start: string; end: string; from: string | null; until: string | null; fee: string | null; confidence: string; prov: string; tag: 'unconfirmed' | 'stale' | null };
+type CourtData = {
+  status: 'open' | 'closed';
+  hours: { rules: { days: number[]; open: string; close: string }[]; else: 'closed' | 'unknown'; conflict: { text: string; rules: { days: number[]; open: string; close: string }[] } | null; confidence: string; checked: string; src: string } | null;
+  blocks: CourtBlock[];
+};
+type SpotHeader = {
+  today: HeaderToday;
+  override: HeaderOverride;
+  prior: { last: HeaderPrior; sameWeekday: HeaderPrior; typical: { label: string } | null };
+  week: HeaderWeek;
+  parking: HeaderParking;
+  vibe: HeaderVibe;
+} | null;
 type SpotPayload = {
   spot: { id: string; name: string; short: string; kind: string; question: string; options: { v: string; label: string }[]; decayMin: number; courtCall?: { weekday: number; time: string } | null };
   reading: Reading;
@@ -378,6 +427,7 @@ type SpotPayload = {
   serverTime: string;
   you?: You | null;
   assignment?: AssignBadge | null;
+  header?: SpotHeader;
 };
 /**
  * `stamps` is the receipt, two at most with the server's text: the place stamp and
@@ -487,7 +537,20 @@ export function mountAirSpot(root: HTMLElement): void {
     actions: q('[data-air-actions]'), share: q<HTMLButtonElement>('[data-air-share]'), chips: q('[data-air-chips]'), extras: all<HTMLButtonElement>('[data-air-extra]'), signin: q('[data-air-signin]'),
     again: q('[data-air-again]'), today: q('[data-air-today]'), todayList: q('[data-air-today-list]'),
     history: q('[data-air-history]'), note: q('[data-air-note]'), mute: q<HTMLButtonElement>('[data-air-mute]'),
+    override: q('[data-air-override]'),
+    todayStrip: q('[data-air-today-strip]'), priorStrip: q('[data-air-prior-strip]'), week: q('[data-air-week]'), weekText: q('[data-air-week-text]'),
+    parking: q('[data-air-parking]'), parkingText: q('[data-air-parking-text]'), vibe: q('[data-air-vibe]'), vibeText: q('[data-air-vibe-text]'),
+    lastWeek: q('[data-air-lastweek]'), lastWeekWhen: q('[data-air-lastweek-when]'), lastWeekText: q('[data-air-lastweek-text]'),
+    openState: q('[data-air-open-state]'),
+    now: q('[data-air-now]'), nowText: q('[data-air-now-text]'), nowTag: q('[data-air-now-tag]'), nowProv: q('[data-air-now-prov]'),
+    next: q('[data-air-next]'), nextText: q('[data-air-next-text]'), nextTag: q('[data-air-next-tag]'), nextProv: q('[data-air-next-prov]'),
   };
+  // This court's facts for the open-now line (AirSpot.astro embeds them at build time).
+  const courtData = ((): CourtData | null => {
+    const el = root.querySelector('script[data-air-court]');
+    if (!el?.textContent) return null;
+    try { return JSON.parse(el.textContent) as CourtData; } catch { return null; }
+  })();
 
   const device = deviceId();
   const code = codeFor(spot);
@@ -516,7 +579,8 @@ export function mountAirSpot(root: HTMLElement): void {
 
   const setState = (s: State) => { state = s; root.setAttribute('data-air-state', s); };
   const note = (msg: string) => { text(els.note, msg); show(els.note, !!msg); };
-  const setClock = () => text(els.clock, laStamp());
+  // The open-now line turns over with the clock (paintOpen is hoisted; it reads only build-time facts).
+  const setClock = () => { text(els.clock, laStamp()); paintOpen(); };
 
   // --- mute toggle (remembered) ---
   const paintMute = () => { if (els.mute) { const m = isMuted(); els.mute.setAttribute('aria-pressed', m ? 'true' : 'false'); els.mute.textContent = m ? 'Sound off' : 'Sound on'; } };
@@ -556,7 +620,7 @@ export function mountAirSpot(root: HTMLElement): void {
     // Silence stays quiet: the last expired report, never a zero count. Not today's? Say which day.
     if (r.status === 'none' && r.last?.label) {
       const wd = laDay(new Date(r.last.observedAt)) !== laDay() ? `${weekdayOf(laDay(new Date(r.last.observedAt))).slice(0, 3)} ` : '';
-      text(els.lastText, `Last report ${wd}${laClock(r.last.observedAt)}: ${r.last.label}`);
+      text(els.lastText, `Last report ${wd}${laClock12(r.last.observedAt)}: ${r.last.label}`);
       show(els.last, true);
     } else show(els.last, false);
 
@@ -633,7 +697,9 @@ export function mountAirSpot(root: HTMLElement): void {
       if (data.yesterday?.label) lines.push(`Yesterday ${data.yesterday.at}: ${data.yesterday.label}${data.yesterday.support >= 2 ? `, ${data.yesterday.support} agree` : ''}${data.yesterday.bylines?.length ? ` — ${data.yesterday.bylines.join(', ')}${data.yesterday.more > 0 ? ` +${data.yesterday.more}` : ''}` : ''}`);
       if (data.lastWeek?.label) lines.push(`Last ${weekdayOf(data.lastWeek.date)} ${data.lastWeek.at}: ${data.lastWeek.label}${data.lastWeek.support >= 2 ? `, ${data.lastWeek.support} agree` : ''}`);
       els.history.replaceChildren(...lines.map((l) => { const p = document.createElement('p'); p.textContent = l; return p; }));
-      show(els.history, lines.length > 0);
+      // The header's PRIOR strip carries these two readings now (12-hour, no names); this
+      // older block only shows for a payload without `header`, so nothing prints twice.
+      show(els.history, lines.length > 0 && !data.header);
     }
 
     // The crew: members get the reveal once, everyone else the line. Membership is
@@ -644,14 +710,188 @@ export function mountAirSpot(root: HTMLElement): void {
       const mine = Math.max(myOnsiteAt, lastOwnOnsiteAt());
       const member = opts.fromOwnAction || (you ? you.crewMember : mine > 0 && Math.abs(new Date(r.crew.at).getTime() - mine) <= CREW_WINDOW_MS);
       if (member && !seenCrews().includes(r.crew.id)) void crewReveal(r.crew, r.bylines);
-      else if (!member) { text(els.crewLine, `Morning crew: ${r.crew.n} on the air at ${laClock(r.crew.at)}.`); show(els.crewLine, true); }
+      else if (!member) { text(els.crewLine, `Morning crew: ${r.crew.n} on the air at ${laClock12(r.crew.at)}.`); show(els.crewLine, true); }
     } else show(els.crewLine, false);
+
+    paintHeader(data);
   }
 
   function weekdayOf(day: string): string {
     const [y, m, d] = day.split('-').map(Number);
     if (!y || !m || !d) return 'week';
     return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()];
+  }
+
+  // --- the header (spot header design 2026-09-28) ---
+  // The moving parts read GET /api/air/[spot]'s `header` (air-store.ts viewHeader,
+  // functions/_lib/air-spot-stats.mjs). Every element starts `hidden` in AirSpot.astro
+  // and a null field keeps it hidden: nothing here prints a made-up stat. A payload
+  // without `header` (a response from before it shipped) leaves the strips as they are.
+  // The open-now line needs no API at all: build-time facts plus the clock.
+  /** Today's El Segundo sunset as an LA minute-of-day, for a 'dusk' close; null if the math can't say. */
+  function sunsetMinute(now: number): number | null {
+    try {
+      const [y, m, d] = laDay(now).split('-').map(Number);
+      const { sunset } = sunTimes(new Date(Date.UTC(y, m - 1, d)), EL_SEGUNDO.lat, EL_SEGUNDO.lon, new Date(now));
+      return sunset ? laParts(sunset.getTime()).minuteOfDay : null;
+    } catch { return null; }
+  }
+  /** One schedule line: its words, the "unconfirmed" tag for a partial block, and where each block came from. */
+  function paintSched(el: HTMLElement | null, words: HTMLElement | null, tag: HTMLElement | null, prov: HTMLElement | null, blocks: CourtBlock[], line: string | null, provSep = '') {
+    if (!el) return;
+    if (!line || !blocks.length) { show(el, false); return; }
+    text(words, line);
+    show(tag, blocks.some((b) => b.tag === 'unconfirmed'));
+    text(prov, `${provSep}${[...new Set(blocks.map((b) => b.prov))].join(' · ')}`);
+    show(el, true);
+  }
+  /**
+   * "Open ·" / "Closed ·" / "Hours not listed for Mon ·" ahead of the sourced hours
+   * line, a drop-in running now ("Advanced drop-in now until 7 PM · $5"), and the
+   * next session under About. Repainted with the clock, so it turns over on time.
+   */
+  function paintOpen() {
+    if (!courtData) return;
+    const now = Date.now();
+    const sunset = sunsetMinute(now);
+    const state = openState(courtData, now, sunset);
+    let word: string;
+    if (state === 'open') word = 'Open';
+    else if (state === 'closed') word = 'Closed';
+    else if (!courtData.hours) word = 'Hours not listed';
+    else if (!courtData.hours.rules.some((r) => r.days.includes(laParts(now).weekday))) word = `Hours not listed for ${weekdayOf(laDay(now)).slice(0, 3)}`;
+    else word = 'Hours unclear right now';
+    text(els.openState, word);
+
+    const running = sessionsNow(courtData, now, sunset) as { block: CourtBlock; until: string }[];
+    paintSched(els.now, els.nowText, els.nowTag, els.nowProv, running.map((r) => r.block),
+      running.length ? running.map((r) => `${r.block.label} now until ${r.until}${r.block.fee ? ` · ${r.block.fee}` : ''}`).join(' · ') : null, ' · ');
+    const next = running.length ? null : (nextSession(courtData, now, sunset) as { block: CourtBlock; when: string } | null);
+    paintSched(els.next, els.nextText, els.nextTag, els.nextProv, next ? [next.block] : [],
+      next ? `${next.block.label} ${next.when}–${timeText(next.block.end)}${next.block.fee ? ` · ${next.block.fee}` : ''}` : null);
+  }
+
+  const agoLong = (min: number | null): string => (min == null ? '' : min < 1 ? 'just now' : min < 60 ? `${min} min ago` : `${Math.round(min / 60)} h ago`);
+  /**
+   * "Yesterday 6:12 PM: 1–4 in the rack, 3 agree". The day words come from priorDayWord
+   * (air-spot-stats.mjs): "Yesterday", "Sat", "Last Mon" for exactly a week, "Wed Sep 3"
+   * past that — the server looks back 90 days, so an old reading never reads as last week's.
+   * Never a byline beside a past time.
+   */
+  const priorWhen = (p: NonNullable<HeaderPrior>): string => priorDayWord(p.day, p.daysAgo) as string;
+  const priorRest = (p: NonNullable<HeaderPrior>): string => `${p.at}: ${p.label}${p.support >= 2 ? `, ${p.support} agree` : ''}`;
+  /** A strip's lead word ("TODAY", "PRIOR", "ON THE AIR THIS WEEK") in bold, then the text. */
+  const lead = (el: HTMLElement, word: string) => { const b = document.createElement('b'); b.textContent = word; el.append(b, document.createTextNode(' · ')); };
+
+  /** One strip bit that never breaks inside itself, so a narrow phone wraps between bits, not mid-entry. */
+  const bit = (words: string, cls = 'air__bit'): HTMLSpanElement => { const span = document.createElement('span'); span.className = cls; span.textContent = words; return span; };
+  /** Append bits with " · " between them (the separator can break; a bit cannot). */
+  const bits = (el: HTMLElement, parts: HTMLElement[]) => parts.forEach((b, i) => { if (i > 0) el.append(document.createTextNode(' · ')); el.append(b); });
+  function paintOverride(h: NonNullable<SpotHeader>, data: SpotPayload) {
+    if (!els.override) return;
+    const o = h.override;
+    // Once it has decayed, the silence strip under the header already says "Last report …" for the same report.
+    const silence = data.reading.status === 'none' && !!data.reading.last?.label;
+    if (!o || (!o.live && silence)) { show(els.override, false); return; }
+    els.override.setAttribute('data-live', o.live ? 'yes' : 'no');
+    // "Gate locked · reported 7:41 AM · 2 agree": one flex item (the square is ::before), wrapping between bits.
+    const line = document.createElement('span');
+    bits(line, [`${o.live ? '' : 'Last: '}${o.label}`, `reported ${o.at}`, ...(o.support >= 2 ? [`${o.support} agree`] : [])].map((w) => bit(w)));
+    els.override.replaceChildren(line);
+    show(els.override, true);
+  }
+  function paintTodayStrip(t: HeaderToday) {
+    const el = els.todayStrip;
+    if (!el) return;
+    // Silence stays quiet: a day with no reports yet shows no strip, never a row of zeros.
+    if (t.reports <= 0) { show(el, false); return; }
+    el.replaceChildren();
+    lead(el, 'TODAY');
+    // Short enough for one line on a 375 px phone: "3 reports · 2 on site · no crew · 8 h ago".
+    // "on site" = distinct phones at the court today (reports + "still" confirms).
+    const parts = [`${t.reports} ${t.reports === 1 ? 'report' : 'reports'}`, `${t.validators} on site`, t.crew ? 'crew' : 'no crew'];
+    if (t.lastAgeMin != null) parts.push(agoLong(t.lastAgeMin));
+    bits(el, parts.map((w) => bit(w)));
+    show(el, true);
+  }
+  /** The header's PRIOR strip is the newest earlier day only; the same weekday last week lives under About. */
+  function paintPriorStrip(p: NonNullable<SpotHeader>['prior']) {
+    const el = els.priorStrip;
+    if (el) {
+      if (!p.last) show(el, false);
+      else {
+        el.replaceChildren();
+        lead(el, 'PRIOR');
+        el.append(bit(`${priorWhen(p.last)} ${p.last.at}:`), document.createTextNode(' '), bit(`${p.last.label}${p.last.support >= 2 ? `, ${p.last.support} agree` : ''}`));
+        show(el, true);
+      }
+    }
+    const w = p.sameWeekday;
+    if (!els.lastWeek) return;
+    // Same day as the PRIOR line (the newest earlier day was a week ago): say it once.
+    if (!w || (p.last && p.last.day === w.day)) { show(els.lastWeek, false); return; }
+    text(els.lastWeekWhen, priorWhen(w));
+    text(els.lastWeekText, priorRest(w));
+    show(els.lastWeek, true);
+  }
+  /** Named on the strip on a narrow phone; the rest fold into "+N more" (CSS shows every one from 421 px up). */
+  const WEEK_NARROW_NAMES = 3;
+  /** "@mike 4 days · @claire 3 · @pointcast 2 HOUSE · +6 guests": days on air, never a time. */
+  function paintWeek(w: HeaderWeek) {
+    const el = els.weekText;
+    if (!el || !els.week) return;
+    const leaders = (w.leaders ?? []).slice(0, 5);
+    const guests = Math.max(0, w.guests ?? 0);
+    if (!leaders.length && guests <= 0) { show(els.week, false); return; }
+    el.replaceChildren();
+    lead(el, 'ON THE AIR THIS WEEK');
+    const parts: HTMLElement[] = leaders.map((l, i) => {
+      const span = bit(`@${l.handle} ${i === 0 ? `${l.days} ${l.days === 1 ? 'day' : 'days'}` : l.days}`, i < WEEK_NARROW_NAMES ? 'air__bit' : 'air__bit air__bit--wide');
+      if (l.house) { const tag = document.createElement('b'); tag.className = 'air__tag'; tag.textContent = 'HOUSE'; span.append(tag); }
+      return span;
+    });
+    const extra = leaders.length - WEEK_NARROW_NAMES;
+    if (extra > 0) parts.push(bit(`+${extra} more`, 'air__bit air__bit--narrow'));
+    if (guests > 0) parts.push(bit(`+${guests} ${guests === 1 ? 'guest' : 'guests'}`));
+    // The separator before a wide-only name hides with it, so a narrow line never shows " ·  · ".
+    parts.forEach((b, i) => {
+      if (i > 0) {
+        const sep = document.createElement('span');
+        sep.className = b.classList.contains('air__bit--wide') ? 'air__sep-wide' : b.classList.contains('air__bit--narrow') ? 'air__sep-narrow' : '';
+        sep.textContent = ' · ';
+        el.append(sep);
+      }
+      el.append(b);
+    });
+    show(els.week, true);
+  }
+  /**
+   * Parking lives under About, hidden until a header lands: an offline phone or a failed
+   * fetch never claims "no report". The server keeps the newest report of the last
+   * PARKING_DAYS (7) days, so an empty answer says exactly that.
+   */
+  function paintParking(p: HeaderParking) {
+    if (!els.parkingText || !els.parking) return;
+    text(els.parkingText, p?.label ? `${p.label} · ${p.at}` : 'No parking report in the last 7 days');
+    show(els.parking, true);
+  }
+  function paintVibe(v: HeaderVibe) {
+    if (!els.vibe) return;
+    if (!v?.label || v.n < 3) { show(els.vibe, false); return; }
+    const chips = v.chips?.length ? ` (${v.chips.map(extraLabel).join(', ')})` : '';
+    text(els.vibeText, `${v.label}${v.runnerUp ? ` · also ${v.runnerUp}` : ''}${chips} · ${v.n} rated`);
+    show(els.vibe, true);
+  }
+  function paintHeader(data: SpotPayload) {
+    paintOpen();
+    const h = data.header;
+    if (!h) return;
+    paintOverride(h, data);
+    paintTodayStrip(h.today);
+    paintPriorStrip(h.prior);
+    paintWeek(h.week);
+    paintParking(h.parking);
+    paintVibe(h.vibe);
   }
 
   async function refresh(): Promise<void> {

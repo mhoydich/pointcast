@@ -44,6 +44,12 @@ import { DAILY_CAP, badgeStamp, badgesFor, confirmAwards, crewStamp, firstLightO
 // them by tests/air-assign.test.mjs's pickAssignment() cross-check.
 // @ts-ignore — plain module shared with the tests
 import { assignAward, assignReceiptStamp, assignmentView, canFill, canWitness, fillNet, fillView, laDayStart, recentView } from './air-assign.mjs';
+// The spot page header (GET /api/air/[spot] `header`): today, prior, the
+// week's leaderboard, the access override, parking and vibe.
+// @ts-ignore — plain module shared with the tests
+import { MEMBERS_READ, PARKING_DAYS, PRIOR_LOOKBACK_DAYS, VIBE_WINDOW_MS, accessOverride, parkingLine, priorLine, todayStats, vibeLine, weekLeaders, weekRange } from './air-spot-stats.mjs';
+import { isDirector } from '../../src/lib/director-access.ts';
+import type { PointCastUser } from '../../src/lib/auth/types';
 
 export type AirEnv = AuthEnv & {
   VISITS?: KVNamespace;
@@ -191,10 +197,23 @@ function addDays(day: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d + n, 12)).toISOString().slice(0, 10);
 }
 
+/** The week's leaderboard as SQL groups it: one row per signed-in on-site reporter, `roles` the account's roles JSON. */
+type MemberRow = { user_id: string; days: number; first: number; roles: string | null };
+/** A MemberRow once its card is read: the handle (null when released or no card) and whether it is a house account. No user id. */
+type Member = { handle: string | null; days: number; first: number; house: boolean };
+type ParkingRow = { value: string; observed_at: number; day: string };
+/** What the spot page header needs beyond the reading (loadSpot with `header`); `members` is filled in by spotPayload. */
+type HeaderRows = {
+  prior: { rows: ReportRow[]; confirms: ConfirmRow[] };
+  memberRows: MemberRow[]; members: Member[]; guestPhones: number;
+  parking: ParkingRow | null; vibeRows: ReportRow[];
+};
 type SpotData = {
   rows: ReportRow[]; confirms: ConfirmRow[]; weekRows: ReportRow[]; weekConfirms: ConfirmRow[]; crew: CrewRow | null;
   /** Set by spotPayload, outside loadSpot's batch (its own try/catch: an assignment failure never blocks the spot page). */
   assignment?: ReturnType<typeof assignmentView> | null;
+  /** Set by loadSpot with `header` (GET /api/air/[spot] only; a report or confirm response has no header). */
+  header?: HeaderRows;
 };
 
 /**
@@ -216,29 +235,114 @@ function evidenceStmts(db: D1Database, spot: string, kind: string, since: number
 }
 
 /**
+ * The spot page header's statements, in this order (headerRows reads them
+ * back by position):
+ *   0-1  the newest day before today with an on-site human report of this
+ *        question (90 days back at most), its rows and their confirms:
+ *        PRIOR's "last" line, through lastOfDay
+ *   2    the week's members (Mon–Sun LA): signed-in accounts with an on-site
+ *        page report at this spot filed under their @handle (a report filed
+ *        "as guest" is a guest's), days on air and first report for the
+ *        tie-break, with the account's roles for the HOUSE mark
+ *   3    the week's guest phones, counted in SQL: only the number leaves
+ *   4    the newest on-site parking report of the last seven LA days
+ *   5    30 days of on-site vibe ratings (qualityVibe)
+ * Days on air count any question at the spot (a parking report from the
+ * courts is a day at the courts), reports only in v1: on-site confirms join
+ * once air_confirms carries a day. Agent rows never count (source = 'page').
+ */
+function headerStmts(db: D1Database, t: Target, now: number): D1PreparedStatement[] {
+  const { kind } = t;
+  const spot = t.spot.id;
+  const today = laDate(now);
+  const { from, to } = weekRange(now) as { from: string; to: string };
+  const priorSince = now - PRIOR_LOOKBACK_DAYS * DAY;
+  // Index bounds only (air_reports_spot is spot, kind, observed_at): the week
+  // and the parking window both began less than eight days ago; `day` decides.
+  const since = now - 8 * DAY;
+  const kinds = JSON.stringify(Object.keys(t.spot.kinds));
+  return [
+    db.prepare(`SELECT id, spot, kind, value, observed_at, day, pid_hash, ip_hash, user_id, byline, onsite, status, source FROM air_reports
+      WHERE spot = ? AND kind = ? AND status = 'ok' AND observed_at >= ? AND day = (SELECT MAX(day) FROM air_reports
+        WHERE spot = ? AND kind = ? AND status = 'ok' AND onsite = 1 AND source = 'page' AND day < ? AND observed_at >= ?)
+      ORDER BY observed_at DESC LIMIT 300`).bind(spot, kind, priorSince - DAY, spot, kind, today, priorSince),
+    db.prepare(`SELECT c.report_id, c.pid_hash, c.ip_hash, c.user_id, c.verdict, c.value, c.onsite, c.at FROM air_confirms c JOIN air_reports r ON r.id = c.report_id
+      WHERE r.spot = ? AND r.kind = ? AND r.status = 'ok' AND r.observed_at >= ? AND r.day = (SELECT MAX(day) FROM air_reports
+        WHERE spot = ? AND kind = ? AND status = 'ok' AND onsite = 1 AND source = 'page' AND day < ? AND observed_at >= ?)
+      LIMIT 600`).bind(spot, kind, priorSince - DAY, spot, kind, today, priorSince),
+    db.prepare(`SELECT r.user_id, COUNT(DISTINCT r.day) AS days, MIN(r.observed_at) AS first,
+        (SELECT json_extract(u.payload, '$.roles') FROM users u WHERE u.id = r.user_id) AS roles
+      FROM air_reports r
+      WHERE r.spot = ? AND r.status = 'ok' AND r.source = 'page' AND r.onsite = 1 AND r.user_id IS NOT NULL AND r.byline LIKE '@%'
+        AND r.day BETWEEN ? AND ? AND r.kind IN (SELECT value FROM json_each(?)) AND r.observed_at >= ?
+      GROUP BY r.user_id ORDER BY days DESC, first ASC LIMIT ?`).bind(spot, from, to, kinds, since, MEMBERS_READ),
+    db.prepare(`SELECT COUNT(DISTINCT pid_hash) AS n FROM air_reports
+      WHERE spot = ? AND status = 'ok' AND source = 'page' AND onsite = 1 AND (user_id IS NULL OR byline NOT LIKE '@%')
+        AND day BETWEEN ? AND ? AND kind IN (SELECT value FROM json_each(?)) AND observed_at >= ?`).bind(spot, from, to, kinds, since),
+    db.prepare(`SELECT value, observed_at, day FROM air_reports
+      WHERE spot = ? AND kind = ? AND onsite = 1 AND status = 'ok' AND source = 'page' AND value != 'cant' AND day >= ? AND observed_at >= ?
+      ORDER BY observed_at DESC LIMIT 1`).bind(spot, 'parking', addDays(today, 1 - PARKING_DAYS), since),
+    db.prepare(`SELECT id, spot, kind, value, extras_json, observed_at, day, pid_hash, ip_hash, user_id, byline, onsite, status, source FROM air_reports
+      WHERE spot = ? AND kind = ? AND observed_at >= ? AND onsite = 1 AND status = 'ok' AND source = 'page'
+      ORDER BY observed_at DESC LIMIT 500`).bind(spot, 'vibe', now - VIBE_WINDOW_MS),
+  ];
+}
+
+function headerRows(res: D1Result[]): HeaderRows {
+  const all = <T>(i: number) => (res[i]?.results ?? []) as T[];
+  return {
+    prior: { rows: all<ReportRow>(0), confirms: all<ConfirmRow>(1) },
+    memberRows: all<MemberRow>(2),
+    members: [],
+    guestPhones: Number(all<{ n?: number }>(3)[0]?.n ?? 0),
+    parking: all<ParkingRow>(4)[0] ?? null,
+    vibeRows: all<ReportRow>(5),
+  };
+}
+
+/**
  * Everything one spot page needs: the last 49 hours (today and all of
  * yesterday in LA, and any window still decaying across midnight) and the
  * same weekday last week, with the confirms on those reports, and today's crew.
+ * With `header` (GET only), the header's statements ride in the same batch.
  */
-async function loadSpot(db: D1Database, t: Target, now: number): Promise<SpotData> {
+async function loadSpot(db: D1Database, t: Target, now: number, header = false): Promise<SpotData> {
   const { kind } = t;
   const spot = t.spot.id;
   const week = addDays(laDate(now), -7);
-  const [rows, confirms, weekRows, weekConfirms, crew] = await db.batch([
+  const base = [
     ...evidenceStmts(db, spot, kind, now - 49 * HOUR, now - t.cfg.decayMin * MIN, 600),
     db.prepare(`SELECT id, spot, kind, value, observed_at, day, pid_hash, ip_hash, user_id, byline, onsite, status, source FROM air_reports
       WHERE spot = ? AND kind = ? AND day = ? AND status = 'ok' ORDER BY observed_at DESC LIMIT 300`).bind(spot, kind, week),
     db.prepare(`SELECT c.report_id, c.pid_hash, c.ip_hash, c.user_id, c.verdict, c.value, c.onsite, c.at FROM air_confirms c JOIN air_reports r ON r.id = c.report_id
       WHERE r.spot = ? AND r.kind = ? AND r.day = ? AND r.status = 'ok' LIMIT 600`).bind(spot, kind, week),
     db.prepare('SELECT id, at, n FROM air_crews WHERE spot = ? AND kind = ? AND day = ?').bind(spot, kind, laDate(now)),
-  ]);
+  ];
+  const res = await db.batch([...base, ...(header ? headerStmts(db, t, now) : [])]);
+  const [rows, confirms, weekRows, weekConfirms, crew] = res;
   return {
     rows: (rows.results ?? []) as ReportRow[],
     confirms: (confirms.results ?? []) as ConfirmRow[],
     weekRows: (weekRows.results ?? []) as ReportRow[],
     weekConfirms: (weekConfirms.results ?? []) as ConfirmRow[],
     crew: ((crew.results ?? [])[0] as CrewRow | undefined) ?? null,
+    ...(header ? { header: headerRows(res.slice(base.length)) } : {}),
   };
+}
+
+/**
+ * The week's members with their card handles read now (a released handle or
+ * no card is null: that member is one more guest) and the HOUSE mark
+ * (isDirector: role 'broadcaster'). The user id stops here.
+ */
+async function weekMembers(env: AirEnv, rows: MemberRow[]): Promise<Member[]> {
+  return Promise.all(rows.map(async (m) => {
+    const byline = await cardByline(env, m.user_id);
+    let roles: unknown = [];
+    try { roles = m.roles ? JSON.parse(m.roles) : []; } catch { roles = []; }
+    const house = isDirector({ user: { roles: Array.isArray(roles) ? roles : [] } as unknown as PointCastUser });
+    return { handle: byline ? byline.slice(1) : null, days: Number(m.days), first: Number(m.first), house };
+  }));
 }
 
 /** The reading at the last on-site moment of a day ("Yesterday 7:41: 1–4 waiting, 5 agree"), or null. */
@@ -261,8 +365,12 @@ async function prevOnsiteAt(db: D1Database, spot: string, before: number, exclud
 
 /** GET /api/air/[spot]. With the phone's own device header, also what this phone did. */
 export async function spotPayload(env: AirEnv, db: D1Database, t: Target, now: number, device: string | null = null) {
-  const data = await loadSpot(db, t, now);
+  const data = await loadSpot(db, t, now, true);
   data.confirms = await withBylines(env, data.confirms);
+  if (data.header) {
+    data.header.members = await weekMembers(env, data.header.memberRows);
+    data.header.memberRows = [];
+  }
   const you = device ? await yours(db, t, data, now, device) : null;
   data.assignment = await loadAssignment(db, t.config, t.spot.id, now);
   return viewPayload(t, data, now, you);
@@ -923,14 +1031,48 @@ function viewToday(t: Target, data: SpotData, now: number) {
   }));
 }
 
+/**
+ * The spot page header (docs: spot header design, 2026-09-28): only what
+ * moves. The court's sourced facts (hours, shape, address, drop-ins) render
+ * at build time from src/lib/courts.ts; this is today's strip, the prior
+ * readings, the access override, the week's leaderboard, parking and vibe.
+ * - override: a live SHUT reading, else today's last on-site reading when it
+ *   was one; always with its time and support, `live` false once decayed.
+ * - prior.last: the newest earlier day's last on-site reading; sameWeekday is
+ *   the one a week back, null when that is the same day as `last`.
+ * - week: days on air, Mon–Sun LA, never a time; handles only, the rest one
+ *   number (weekLeaders).
+ */
+function viewHeader(t: Target, data: SpotData, h: HeaderRows, now: number, live: Reading, week: { r: Reading; t: number } | null) {
+  const today = laDate(now);
+  const priorDay = h.prior.rows[0]?.day ?? null;
+  const last = priorDay ? lastOfDay(t, h.prior.rows, h.prior.confirms, priorDay) : null;
+  const weekDay = addDays(today, -7);
+  const { from, to } = weekRange(now) as { from: string; to: string };
+  return {
+    today: todayStats({ rows: data.rows, confirms: data.confirms, crew: data.crew, now }),
+    override: accessOverride(live, lastOfDay(t, data.rows, data.confirms, today)),
+    prior: {
+      last: priorLine(last, priorDay, now),
+      sameWeekday: weekDay === priorDay ? null : priorLine(week, weekDay, now),
+      // Needs 4+ same-weekday days with 3+ reports each (MIN_SHOWN); none exist before November.
+      typical: null,
+    },
+    week: { from, to, ...weekLeaders(h.members, h.guestPhones) },
+    parking: parkingLine(h.parking, t.spot.kinds.parking ?? null, now),
+    vibe: vibeLine(h.vibeRows, now),
+  };
+}
+
 function viewPayload(t: Target, data: SpotData, now: number, you: { reportId: string | null; confirmed: string[]; crewMember: boolean } | null) {
   const day = laDate(now);
   const y = lastOfDay(t, data.rows, data.confirms, addDays(day, -1));
   const weekDay = addDays(day, -7);
   const w = lastOfDay(t, data.weekRows, data.weekConfirms, weekDay);
+  const live = viewReading(t, data, now);
   return {
     spot: viewSpot(t),
-    reading: viewReading(t, data, now),
+    reading: live,
     today: viewToday(t, data, now),
     yesterday: y ? { at: laClock(y.t, { pad: true }), label: y.r.label, support: y.r.support, bylines: y.r.bylines.slice(0, 3), more: Math.max(0, y.r.bylines.length - 3) } : null,
     lastWeek: w ? { date: weekDay, at: laClock(w.t, { pad: true }), label: w.r.label, support: w.r.support } : null,
@@ -939,6 +1081,7 @@ function viewPayload(t: Target, data: SpotData, now: number, you: { reportId: st
     editorGuess: t.cfg.editorGuess ?? null,
     serverTime: isoSec(now),
     assignment: data.assignment ?? null,
+    header: data.header ? viewHeader(t, data, data.header, now, live, w) : null,
     ...(you ? { you } : {}),
   };
 }

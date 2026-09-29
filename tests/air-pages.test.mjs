@@ -166,3 +166,43 @@ test('client: the receipt slams two stamps at most and counts the rest into the 
   assert.match(client, /const bumped = els\.stampSlot\?\.querySelector\('\.air-stamp--badge'\);/, 'a later crew takes the badge\'s place, not a third slot');
   assert.match(airSpot, /<p class="air__more air-mono" data-air-more hidden><a href="\/r\/me" data-air-more-link><\/a><\/p>/);
 });
+
+test('spot header (2026-09-28): compact, sourced, 12-hour, and the dial never labels its one station', () => {
+  // The dial: the spot page passes no label (the name prints two lines below), and the
+  // old 420 px media-query hide (it never fired on a 440 px phone) is gone.
+  assert.match(airSpot, /<AirDial mhz=\{spot\.mhz\} color=\{spot\.color\} \/>/);
+  assert.doesNotMatch(dial, /max-width: 420px/);
+  assert.ok(dial.includes('{m.label && !unlabeled.has(m) && <i>{m.label}</i>}'), 'a station with no label, or no room, draws a bare tick');
+  // The top line's clock is 12-hour, mixed case: "Mon 3:46 PM".
+  assert.match(client, /hour: 'numeric', minute: '2-digit', hour12: true/);
+  assert.doesNotMatch(client.slice(client.indexOf('export function laStamp'), client.indexOf('export function laStamp') + 400), /toUpperCase|h23/);
+  // Facts render at build time through the same tag rule as a board card; courts.ts and
+  // its JSON never reach the client, which gets only this court's shown hours and blocks.
+  assert.match(airSpot, /if \(p\.confidence === 'unverified'\) return \{ show: false, tag: null \}/);
+  assert.match(airSpot, /<script type="application\/json" data-air-court set:html=\{courtJson\}>/);
+  assert.doesNotMatch(client, /from '\.\.\/lib\/courts'/);
+  assert.match(client, /import \{ nextSession, openState, sessionsNow \} from '\.\.\/\.\.\/functions\/_lib\/court-board\.mjs'/);
+  // "Book on Rec" only while the reserve link is verified.
+  assert.match(airSpot, /const reserveBookable = court\?\.reserve\?\.confidence === 'verified'/);
+  // The leaderboard: days on air, handles only, guests as one number, never a time.
+  const week = client.slice(client.indexOf('function paintWeek'), client.indexOf('function paintParking'));
+  assert.match(week, /\$\{l\.days\} \$\{l\.days === 1 \? 'day' : 'days'\}/);
+  assert.match(week, /\+\$\{guests\} \$\{guests === 1 \? 'guest' : 'guests'\}/);
+  assert.doesNotMatch(week, /\.at\b|laClock|laStamp|observed/);
+  // Leaderboard entries never break mid-entry; a narrow phone names three and says "+N more".
+  assert.match(airSpot, /\.air__strip :global\(\.air__bit\) \{ white-space: nowrap; \}/);
+  assert.match(week, /`\+\$\{extra\} more`/);
+  // PRIOR's day words: a month-old reading is dated, never "Last Wed" (priorDayWord, tested in air-spot-stats).
+  assert.match(client, /import \{ priorDayWord \} from '\.\.\/\.\.\/functions\/_lib\/air-spot-stats\.mjs'/);
+  const prior = client.slice(client.indexOf('const priorWhen'), client.indexOf('function paintWeek'));
+  assert.match(prior, /priorDayWord\(p\.day, p\.daysAgo\)/);
+  assert.doesNotMatch(prior, /`Last \$\{/, 'the header never builds "Last <weekday>" itself');
+  // Parking under About renders hidden and empty: only a header from the API fills it.
+  assert.match(airSpot, /<p class="air__fact air__fact--dyn" data-air-parking hidden><b>Parking<\/b> · <span data-air-parking-text><\/span><\/p>/);
+  assert.doesNotMatch(airSpot + client, /No parking report yet/);
+  // The needle stops at the plain dial's 24 px, above the band plan's lower-row labels.
+  assert.match(dial, /\.air-dial__needle \{ position: absolute; top: 0; height: 24px;/);
+  // The header sits above the one-tap question.
+  assert.ok(airSpot.indexOf('data-air-week') < airSpot.indexOf('<h1 class="air__q">'));
+  assert.ok(airSpot.indexOf('<details class="air__about">') < airSpot.indexOf('<h1 class="air__q">'));
+});
