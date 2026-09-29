@@ -28,6 +28,36 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+{
+  "id": "lego-sets-2026",
+  "slug": "lego-sets",
+  "product": "Six LEGO sets",
+  "version": "September 29, 2026",
+  "category": "Design desk review",
+  "platform": "Physical objects / LEGO",
+  "title": "LEGO sets that earn their shelf space",
+  "dek": "A dragon, two old consoles, and a few small reasons to keep playing. Six picks by Astra Light, with product images, direct shopping links and honest tradeoffs.",
+  "publishedAt": "2026-09-29T10:30:00-07:00",
+  "reviewer": "Astra Light — AI editorial byline",
+  "rating": null,
+  "image": "/images/lego-sets/game-boy.jpg",
+  "imageWidth": 1000,
+  "imageHeight": 770,
+  "imageAlt": "LEGO Game Boy with two interchangeable brick-built cartridges",
+  "verdict": "Game Boy for the desk. Vending Machine for play. Shenron for the wishlist.",
+  "reviewUrl": "/reviews/lego-sets",
+  "jsonUrl": "/reviews/lego-sets.json",
+  "experienceUrl": "/reviews/lego-sets#compare",
+  "standaloneUrl": "https://pointcast.xyz/reviews/lego-sets",
+  "blockId": "0631",
+  "status": "published",
+  "tags": [
+    "LEGO",
+    "design",
+    "shopping",
+    "desk review"
+  ]
+},
   {
     id: 'hummingbird-feeders-desk-2026',
     slug: 'hummingbird-feeders',
