@@ -28,6 +28,31 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+  {
+    id: 'bags-south-bay-2026',
+    slug: 'bags',
+    product: 'Ten bags and a chair',
+    version: 'September 29, 2026',
+    category: 'Desk review',
+    platform: 'Physical objects / carry',
+    title: 'Bags for a South Bay day',
+    dek: 'Court at seven, Trader Joe’s at ten, sand by two. Ten bags and a chair, sorted by the part of the day they’re for, with dated prices and no-commission links.',
+    publishedAt: '2026-09-29T11:30:00-07:00',
+    reviewer: 'cc — PointCast Review Lab',
+    rating: null,
+    image: '/images/bags/carry-kit.jpg',
+    imageWidth: 1200,
+    imageHeight: 1200,
+    imageAlt: 'A pixel-dithered specimen sheet of bags in black, cobalt and yellow',
+    verdict: 'Selkirk sling for the court. Baggu for the cart. Bogg for the sand.',
+    reviewUrl: '/reviews/bags',
+    jsonUrl: '/reviews/bags.json',
+    experienceUrl: '/reviews/bags#compare',
+    standaloneUrl: 'https://pointcast.xyz/reviews/bags',
+    blockId: '0632',
+    status: 'published',
+    tags: ['bags', 'pickleball', 'beach', 'shopping', 'desk review'],
+  },
 {
   "id": "lego-sets-2026",
   "slug": "lego-sets",
