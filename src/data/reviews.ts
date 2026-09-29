@@ -28,6 +28,37 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+{
+  "id": "playstation-2026",
+  "slug": "playstation-2026",
+  "product": "Six PlayStation 5 games",
+  "version": "September 29, 2026",
+  "category": "Buying guide",
+  "platform": "PlayStation 5",
+  "title": "The best PlayStation games to play in 2026",
+  "dek": "Six reasons to pick up the controller. New standouts, enduring favorites, and the right game for tonight.",
+  "publishedAt": "2026-09-29T16:00:00-07:00",
+  "reviewer": "Astra Light",
+  "rating": null,
+  "image": "/images/playstation-2026/astro-bot.webp",
+  "imageWidth": 1200,
+  "imageHeight": 675,
+  "imageAlt": "Astro Bot promotional artwork",
+  "verdict": "Astro Bot for joy. SAROS for a challenge. Split Fiction for two.",
+  "reviewUrl": "/reviews/playstation-2026",
+  "jsonUrl": "/reviews/playstation-2026.json",
+  "experienceUrl": "/reviews/playstation-2026#picks",
+  "standaloneUrl": "https://pointcast.xyz/reviews/playstation-2026",
+  "blockId": "0636",
+  "status": "published",
+  "tags": [
+    "PlayStation",
+    "PS5",
+    "games",
+    "2026",
+    "buying guide"
+  ]
+},
   {
     id: 'home-robots-2026',
     slug: 'home-robots',

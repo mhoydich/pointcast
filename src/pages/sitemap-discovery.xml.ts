@@ -320,6 +320,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/reviews/home-robots.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/modular-carry', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/modular-carry.json', 'monthly', '0.86'],
+  ['https://pointcast.xyz/reviews/playstation-2026', 'monthly', '0.90'],
+  ['https://pointcast.xyz/reviews/playstation-2026.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/lego-sets', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/lego-sets.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews', 'weekly', '0.92'],

@@ -6,6 +6,7 @@
  * Guides stay the source of truth; this module only flattens them.
  */
 import bags from '../data/bags-south-bay.json';
+import playstation from '../data/playstation-2026.json';
 import lego from '../data/lego-sets.json';
 import robots from '../data/home-robots.json';
 import { FEEDERS, PICKS as FEEDER_PICKS, DESK_DATE as FEEDER_DATE } from './hummingbird-feeders.mjs';
@@ -137,9 +138,12 @@ const modularPicks: ShopPick[] = modular
     })
   : [];
 
-export const SHOP_PICKS: ShopPick[] = [...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+const gamePicks: ShopPick[] = playstation.games.map(g => ({id: `playstation-2026/${g.id}`, guide: 'playstation-2026', name:g.name, brand:g.brand, price:null, priceText:g.priceText, currency:'USD', url:g.url, image:g.image, verdict:g.verdict, reviewUrl:`/reviews/playstation-2026#${g.id}`}));
+
+export const SHOP_PICKS: ShopPick[] = [...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {id:'playstation-2026',title:playstation.title,dek:playstation.dek,href:'/reviews/playstation-2026',json:'/reviews/playstation-2026.json',kind:'Buying guide',image:playstation.games[0].image,imageAlt:playstation.games[0].alt,asOf:playstation.asOf,count:6,countLabel:'games'},
   {
     id: 'home-robots', title: robots.title, dek: robots.dek, href: '/reviews/home-robots', json: '/reviews/home-robots.json',
     kind: 'Desk review', image: '/images/home-robots/hero.jpg', imageAlt: 'Illustrated specimen sheet of house robots',
