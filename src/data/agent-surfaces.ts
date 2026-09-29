@@ -14,6 +14,8 @@ export const AGENT_SURFACES = {
     homeRobotsData: 'https://pointcast.xyz/reviews/home-robots.json',
     modularCarry: 'https://pointcast.xyz/reviews/modular-carry',
     modularCarryData: 'https://pointcast.xyz/reviews/modular-carry.json',
+    playstation2026: 'https://pointcast.xyz/reviews/playstation-2026',
+    playstation2026Data: 'https://pointcast.xyz/reviews/playstation-2026.json',
     legoSets: 'https://pointcast.xyz/reviews/lego-sets',
     legoSetsData: 'https://pointcast.xyz/reviews/lego-sets.json',
     chime: 'https://pointcast.xyz/chime',
