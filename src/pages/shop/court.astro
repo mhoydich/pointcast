@@ -1,0 +1,103 @@
+---
+/**
+ * /shop/court — the Paddle Register's release calendar, read as a shelf.
+ *
+ * A calendar view, not a store: paddles releasing soon and paddles that
+ * shipped recently, each row linking to its permanent register page.
+ * Every claim below about approvals and paid links is computed from
+ * src/data/affiliate-programs.ts, so flipping a program's switch there is
+ * the only edit an approval needs. Stage 1: nothing is approved, and every
+ * PaidLink on this page renders "No link, no commission."
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ShopCourtLane from '../../components/ShopCourtLane.astro';
+import { CHANNELS } from '../../lib/channels';
+import { PADDLES, PADDLE_REGISTER_URL, REGISTER_STATS } from '../../lib/paddle-register';
+import { courtLane } from '../../lib/shop-court';
+import { anyProgramApproved, courtPaidRowCount } from '../../lib/commerce';
+
+const court = CHANNELS.CRT;
+const lane = courtLane(PADDLES, REGISTER_STATS.asOf);
+const rows = [...lane.upcoming, ...lane.recent];
+const total = rows.length;
+// Same window, no cap: how many releases the last four months actually hold,
+// so the dek never implies the shelf shows all of them when it doesn't.
+const inWindow = courtLane(PADDLES, REGISTER_STATS.asOf, { recentCap: Number.MAX_SAFE_INTEGER }).recent.length;
+const recentPhrase = inWindow > lane.recent.length
+  ? `the ${lane.recent.length} most recent of the ${inWindow} paddles that shipped in the last four months`
+  : 'what shipped in the last four months';
+
+const approved = anyProgramApproved();
+const paidRows = courtPaidRowCount(rows);
+const paidNote = paidRows > 0
+  ? 'A link that earns PointCast a commission says so beside the link.'
+  : approved
+    ? 'No link here earns a commission.'
+    : 'No program has approved PointCast, so no link here earns a commission.';
+const kickerNote = paidRows > 0 ? 'PAID LINKS LABELED' : 'NO PAID LINKS YET';
+
+const title = 'The Court — Shop';
+// Kept under the 160-character meta cut so the approval sentence is never truncated.
+const description = `${lane.upcoming.length} paddles releasing soon and ${lane.recent.length} that shipped recently, read off the Paddle Register. ${paidNote}`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/shop/court',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/shop/court',
+  isPartOf: { '@type': 'Dataset', name: 'The Paddle Register', url: PADDLE_REGISTER_URL },
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: total,
+    // Summary-page pattern: url-only list items. Each row's own register
+    // page carries the full Product (with an Offer whenever there is a list
+    // price), so this list never ships a Product with no offers.
+    itemListElement: rows.map((row, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: `https://pointcast.xyz${row.url}`,
+    })),
+  },
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/paddles.png" jsonLd={jsonLd}>
+  <main class="court" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/shop">shop</a><span>/</span><span>court</span>
+      <a href="/shop.json">shop.json</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">CH.CRT · COURT · SHOP LANE · {kickerNote}</p>
+      <h1>The paddle shelf, read off the register.</h1>
+      <p class="dek">
+        Not a store — a calendar. What's coming to market, and {recentPhrase}, pulled straight
+        from <a href="/paddles">the Paddle Register</a>. Each row links to its page there.
+      </p>
+    </header>
+
+    <ShopCourtLane upcoming={lane.upcoming} recent={lane.recent} />
+
+    <p class="foot">
+      <a href="/paddles">the whole register</a> · <a href="/reviews/paddles">paddle takes</a> ·
+      <a href="/reviews/paddles/method">how this page works</a> · <a href="/paddles.json">paddles.json</a> · CC0
+    </p>
+  </main>
+</BlockLayout>
+
+<style>
+  .court{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .crumb{display:flex;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:44px 0 28px;max-width:820px}
+  .hero h1{margin:0;font:500 clamp(38px,6vw,68px)/.97 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
+  .dek{margin:18px 0 0;font:400 17px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .dek a{color:var(--c800)}
+  .foot{margin:32px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:820px){.hero{padding-top:28px}}
+</style>

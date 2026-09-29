@@ -249,7 +249,8 @@ const asPaddle = (p) => ({ id: p.id ?? null, name: nameOf(p), msrp: p.msrp, date
  * Pure: slot 3. The release (paddle calendar) nearest the edition date within
  * ±14 days that has an MSRP and a day or month date; ties go to the more
  * precise date, then the earlier one. Otherwise the newest register change
- * dated on or before the edition. Otherwise null (the slot's template).
+ * dated on or before the edition (never a `policy` entry: a statement about
+ * the register is not price news). Otherwise null (the slot's template).
  * → {kind: 'release', id, name, msrp, date, precision, status} | {kind: 'change', date, paddle, name, text} | null
  */
 export function pickPrice({ releases = [], changes = [], paddles = [], date }) {
@@ -259,7 +260,7 @@ export function pickPrice({ releases = [], changes = [], paddles = [], date }) {
       || PRECISION_RANK[a.precision ?? 'day'] - PRECISION_RANK[b.precision ?? 'day']
       || a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)))[0];
   if (near) return { kind: 'release', ...asPaddle(near) };
-  const change = changes.filter((c) => isObj(c) && isEditionDate(c.date) && c.date <= date && plain(c.text, 200))
+  const change = changes.filter((c) => isObj(c) && c.kind !== 'policy' && isEditionDate(c.date) && c.date <= date && plain(c.text, 200))
     .sort((a, b) => b.date.localeCompare(a.date))[0];
   if (!change) return null;
   const named = [...releases, ...paddles].find((p) => isObj(p) && p.id === change.paddle);

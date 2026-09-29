@@ -17,7 +17,7 @@
 ## Action items for Mike
 
 1. **Apply** at https://11six24.com/pages/ambassador-program — mention PointCast as your platform, Vapor Power 2 as your daily driver, and the monthly page-view count.
-2. **On approval** — paste both the referral link and the discount code into `src/components/PaddleBlock.astro` (replace the current bare `href=https://11six24.com/products/vapor-power-2` with the tracked referral URL, and surface the code as a small secondary chip on the block: e.g. `POINTCAST · 5% off`).
+2. **On approval** — set the config fields in `src/data/affiliate-programs.ts` for the `11six24` row: `accepting: true` (already set), `approved: true`, an ISO `approvedOn`, and the real `linkHosts` the ambassador link resolves through. Do not paste the tracked link into `PaddleBlock.astro` or into the register: the link appears only through `<PaidLink>`, on paddle review pages and in the Shop's court lane. 11SIX24 issues ambassadors a discount code (see the table above); PointCast never publishes it — not on the block, not in the register, not in the Shop. The register promises no affiliate links and no discount codes.
 3. **Commission math** — if the block drives even 1 paddle/month, that's $15/mo in store credit (equivalent to a free paddle every 13-14 months). Meaningful if the block actually converts.
 
 ## Open questions (defer to when Mike applies)

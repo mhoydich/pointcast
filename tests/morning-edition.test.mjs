@@ -385,6 +385,9 @@ test('pickers: price within ±14 days, town news within 7 days, shop turns daily
   assert.equal(far.kind, 'change', 'no release within two weeks: the newest register change');
   assert.equal(far.date, '2026-09-21');
   assert.ok(far.name);
+  const policy = register.changes.filter((c) => c.kind === 'policy');
+  assert.ok(policy.length > 0, 'the register carries a policy entry');
+  assert.equal(pickPrice({ releases: [], changes: policy, date: '2027-06-01' }), null, 'a policy entry is never price news');
   assert.equal(pickPrice({ releases: [], changes: [], date: SAT }), null);
   const e = composeEdition({ date: '2027-06-01', config, sources: { price: far } });
   assert.match(byId(e, 'price').line, /^From the register, Sep 21: /);
