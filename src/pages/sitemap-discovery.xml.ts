@@ -311,6 +311,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/beach-commons/v18/shrines.json', 'weekly', '0.96'],
   ['https://pointcast.xyz/beach-commons/v19', 'weekly', '0.99'],
   ['https://pointcast.xyz/beach-commons/v19.json', 'weekly', '0.96'],
+  ['https://pointcast.xyz/reviews/bags', 'monthly', '0.90'],
+  ['https://pointcast.xyz/reviews/bags.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/lego-sets', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/lego-sets.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews', 'weekly', '0.92'],

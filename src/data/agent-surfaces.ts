@@ -5,6 +5,8 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    bags: 'https://pointcast.xyz/reviews/bags',
+    bagsData: 'https://pointcast.xyz/reviews/bags.json',
     legoSets: 'https://pointcast.xyz/reviews/lego-sets',
     legoSetsData: 'https://pointcast.xyz/reviews/lego-sets.json',
     chime: 'https://pointcast.xyz/chime',
