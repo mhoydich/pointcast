@@ -21,7 +21,7 @@ export const SHOP_FRONT_PATH = '/shop/front';
 // Optional guides that ship in their own PRs; the glob is empty until the file exists.
 const modularFiles = import.meta.glob('../data/modular-carry.json', { eager: true, import: 'default' });
 const modular = Object.values(modularFiles)[0] as
-  | { title: string; dek: string; asOf: string; entries: { id: string; name: string; url: string; image?: string; heroProducts?: { name: string; price: number }[]; lesson?: string }[] }
+  | { title: string; dek: string; asOf: string; entries: { id: string; name: string; url: string; image?: string; heroProducts?: { name: string; price: string | number }[]; lesson?: string }[] }
   | undefined;
 
 export type ShopGuide = {
@@ -103,13 +103,16 @@ const modularPicks: ShopPick[] = modular
   ? modular.entries.flatMap((e) => {
       const hero = e.heroProducts?.[0];
       if (!hero) return [];
+      const n = typeof hero.price === 'number' ? hero.price : Number(String(hero.price).replace(/[^0-9.]/g, ''));
+      // A historical price (e.g. Jibbitz in 2006) is shown as text, never as today's offer.
+      const historical = /\b(19|20)\d\d\b|not checked/i.test(hero.name);
       return [{
         id: `modular-carry/${e.id}`,
         guide: 'modular-carry',
         name: hero.name,
         brand: e.name,
-        price: hero.price,
-        priceText: money(hero.price),
+        price: historical || !Number.isFinite(n) ? null : n,
+        priceText: historical ? `${hero.price} (historical)` : String(hero.price),
         currency: 'USD' as const,
         url: e.url,
         image: e.image ?? null,
