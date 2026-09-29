@@ -5,6 +5,9 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    shopFront: 'https://pointcast.xyz/shop/front',
+    shopFrontData: 'https://pointcast.xyz/shop/front.json',
+    shopLlms: 'https://pointcast.xyz/shop/llms.txt',
     bags: 'https://pointcast.xyz/reviews/bags',
     bagsData: 'https://pointcast.xyz/reviews/bags.json',
     modularCarry: 'https://pointcast.xyz/reviews/modular-carry',
