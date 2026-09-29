@@ -22,9 +22,14 @@
 //   - Slot 7 never carries a THC item and never a link: "No link, no commission."
 //
 // Inputs to composeEdition (every key optional; see the slot builders below):
-//   sources.sky     { marine, beach }   marine: answerMarine() (or previewMarine()) output, null when KLAX failed;
+//   sources.sky     { marine, beach, desk }   marine: answerMarine() (or previewMarine()) output, null when KLAX failed;
 //                                        only its last report at or before 6:45 AM is printed (marineLine)
-//                                        (+ optional `call`, a "10:40 AM" burn-off call); beach: a Moment
+//                                        (+ optional `call`, a "10:40 AM" burn-off call); beach: a Moment;
+//                                        desk: { sky, tides } — DeskFact|null for the Sky and Tides feeds
+//                                        (deskFactsByFeed(), functions/_lib/air-desk.mjs), filed by 6:45 AM.
+//                                        Without KLAX, a Sky desk fact takes its place (editionSkyLine) and
+//                                        klax drops out of `missing`; a Tides fact always adds its own
+//                                        sentence (editionTideLine), whether or not KLAX answered.
 //   sources.courts  { yesterday, lastWeek }   Moments or null; a missing `courts` means the store failed
 //   sources.price   pickPrice() output
 //   sources.town    pickTown() output
@@ -35,6 +40,7 @@
 
 import { labelOf } from './air-kinds.mjs';
 import { evidence, isoSec, laClock, laDate, laParts, reading } from './air-reading.mjs';
+import { editionSkyLine, editionTideLine } from './air-desk.mjs';
 
 export const FIRST_EDITION = '2026-10-03';
 /** 6:45 AM, El Segundo wall time. */
@@ -440,13 +446,25 @@ function skySlot(base, sources, config, date) {
   const sky = isObj(sources.sky) ? sources.sky : {};
   const klax = marineLine(sky.marine, date);
   const beach = cleanMoment(t, sky.beach, date);
+  // The Desk (docs/plans/2026-09-28-early-shift-desk-spec.md §4 "Edition"):
+  // without KLAX a Sky agent fact stands in for it (and is not a fallback —
+  // an agent read the field); a Tides fact always adds its own sentence.
+  const desk = isObj(sky.desk) ? sky.desk : {};
+  const deskSky = config && desk.sky ? editionSkyLine(config, desk.sky) : null;
+  const deskTide = config && desk.tides ? editionTideLine(config, desk.tides) : null;
   const parts = [];
   if (klax) parts.push(klax.line);
+  else if (deskSky) parts.push(deskSky);
   if (beach) parts.push(`At ${t.spot.name} ${clock(beach.at)}: ${tally(beach)}${signed(beach)}.`);
+  if (deskTide) parts.push(deskTide);
   const line = parts.length ? parts.join(' ') : 'KLAX has not reported yet; the sky fills in with its next hourly report.';
+  const src = [klax ? 'klax-asos' : deskSky ? 'desk' : null, beach ? 'air' : null, deskTide ? 'desk-tides' : null].filter(Boolean);
   return {
-    slot: { ...base, line, source: klax && beach ? 'klax-asos+air' : klax ? 'klax-asos' : beach ? 'air' : 'template', reportIds: beach?.reportIds ?? [], bylines: beach?.bylines ?? [], fallback: !klax || klax.fallback },
-    missing: klax ? [] : ['klax'],
+    slot: {
+      ...base, line, source: src.length ? src.join('+') : 'template', reportIds: beach?.reportIds ?? [], bylines: beach?.bylines ?? [],
+      fallback: klax ? klax.fallback : !deskSky,
+    },
+    missing: klax || deskSky ? [] : ['klax'],
     moments: beach ? [beach] : [],
   };
 }

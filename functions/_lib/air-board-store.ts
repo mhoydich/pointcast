@@ -28,9 +28,21 @@ import { withBylines, type AirEnv, type ConfirmRow, type ReportRow } from './air
 // @ts-ignore — plain modules shared with the tests
 import { laDate, laParts } from './air-reading.mjs';
 // @ts-ignore — plain module shared with the tests
-import { boardSummary } from './court-board.mjs';
+import { boardSummary, deskKindOf } from './court-board.mjs';
 // @ts-ignore — plain module shared with the tests
 import { spotOf } from './air-kinds.mjs';
+
+/** One of the beach's agent-only fact rows (deskFactsByFeed(), functions/_lib/air-desk.mjs). */
+type DeskAgentRow = {
+  id: string; spot: string; kind: string; value: string; extras_json: string; schema_v: number;
+  observed_at: number; created_at: number; status: string; source: string; source_url: string;
+};
+/** An air_calls row plus its belief's value/source_url, joined in one query. */
+type CallJoinRow = {
+  id: string; spot: string; kind: string; asker: string; holder: string; report_id: string; day: string; status: string;
+  asked_at: number; expires_at: number; answered_report_id: string | null; answered_at: number | null; relay_json: string;
+  belief_value: string; belief_source_url: string;
+};
 
 /** court-conditions.ts's readConditions(now: Date) — see its own doc comment. */
 export type ReadConditions = (now: Date) => Promise<Conditions>;
@@ -100,6 +112,34 @@ function validatorsStmt(db: D1Database, day: string, dayStart: number, dayEnd: n
     )`).bind(day, spots, dayStart, dayEnd, spots);
 }
 
+/**
+ * The beach's agent-only fact rows (tide, swell, sun, aqi — sky/fog is left
+ * out; Conditions stays the live-KLAX line), newest first. deskFactsByFeed()
+ * (air-desk.mjs) keeps only the newest ok row per feed, so the LIMIT only
+ * needs to outrun a morning's worth of re-filed gaps-turned-rows.
+ */
+function deskStmt(db: D1Database): D1PreparedStatement {
+  return db.prepare(`SELECT id, spot, kind, value, extras_json, schema_v, observed_at, created_at, status, source, source_url FROM air_reports
+    WHERE spot = 'beach' AND kind IN ('tide', 'swell', 'sun', 'aqi') AND source LIKE 'agent:%' AND status = 'ok'
+    ORDER BY observed_at DESC LIMIT 40`).bind();
+}
+
+/**
+ * Live desk calls on the board's courts, joined to their belief row (the
+ * asker's own agent report: `value`, `source_url`) in one statement — a call
+ * without its belief row (it should never happen; the belief is inserted
+ * before the call) simply drops out of the join. `spots` is a JSON array of
+ * court ids that carry a desk kind, bound as one value (the json_each
+ * pattern this file already uses in validatorsStmt). At most one open call
+ * per spot (air_calls' own partial unique index), so the LIMIT is generous.
+ */
+function callStmt(db: D1Database, spots: string): D1PreparedStatement {
+  return db.prepare(`SELECT c.id, c.spot, c.kind, c.asker, c.holder, c.report_id, c.day, c.status, c.asked_at, c.expires_at,
+      c.answered_report_id, c.answered_at, c.relay_json, r.value AS belief_value, r.source_url AS belief_source_url
+    FROM air_calls c JOIN air_reports r ON r.id = c.report_id
+    WHERE c.status = 'open' AND c.spot IN (SELECT value FROM json_each(?)) LIMIT 20`).bind(spots);
+}
+
 /** LA-midnight-to-midnight bounds for `now`, in epoch ms (approximate across a DST day; only used to bound a coarse "today" scan). */
 function laDayBounds(now: number): [number, number] {
   const { minuteOfDay } = laParts(now) as { minuteOfDay: number };
@@ -118,6 +158,7 @@ function laDayBounds(now: number): [number, number] {
  */
 export async function boardData(env: AirEnv, db: D1Database, now: number, courts: Court[], config: AirConfig, readConditions?: ReadConditions): Promise<BoardPayload> {
   const airCourts = courts.filter((c) => c.air);
+  const deskSpots = courts.filter((c) => deskKindOf(config, c.id)).map((c) => c.id);
   const since = now - EVIDENCE_SINCE_MIN * MIN;
   const liveSince = now - EVIDENCE_LIVE_MIN * MIN;
   const today = laDate(now) as string;
@@ -132,6 +173,8 @@ export async function boardData(env: AirEnv, db: D1Database, now: number, courts
   for (const c of airCourts) for (const kind of KINDS) stmts.push(lastStmt(db, c.id, kind, today));
   for (const c of airCourts) stmts.push(vibeStmt(db, c.id, vibeSince));
   stmts.push(validatorsStmt(db, today, dayStart, dayEnd, JSON.stringify(airCourts.map((c) => c.id))));
+  stmts.push(deskStmt(db));
+  stmts.push(callStmt(db, JSON.stringify(deskSpots)));
 
   const res = await db.batch(stmts);
   let cursor = 0;
@@ -150,6 +193,8 @@ export async function boardData(env: AirEnv, db: D1Database, now: number, courts
   for (const c of airCourts) { void c; vibeRows.push(...((next().results ?? []) as ReportRow[])); }
   const validatorsRow = (next().results ?? [])[0] as { phones?: number; courts?: number } | undefined;
   const validatorsToday = { phones: Number(validatorsRow?.phones ?? 0), courts: Number(validatorsRow?.courts ?? 0) };
+  const deskRows = (next().results ?? []) as DeskAgentRow[];
+  const callRows = (next().results ?? []) as CallJoinRow[];
 
   const bylined = await withBylines(env, confirms);
   const conditions: Conditions = readConditions ? await readConditions(new Date(now)) : EMPTY_CONDITIONS;
@@ -159,6 +204,11 @@ export async function boardData(env: AirEnv, db: D1Database, now: number, courts
     const spot = spotOf(config, c.id) as { kinds: Record<string, AirKind> } | null;
     if (spot) kindCfg[c.id] = { wait: spot.kinds.wait, parking: spot.kinds.parking };
   }
+  const calls = callRows.map((r) => ({
+    id: r.id, spot: r.spot, kind: r.kind, asker: r.asker, holder: r.holder, report_id: r.report_id, day: r.day, status: r.status,
+    asked_at: r.asked_at, expires_at: r.expires_at, answered_report_id: r.answered_report_id, answered_at: r.answered_at, relay_json: r.relay_json,
+  }));
+  const beliefs = new Map(callRows.map((r) => [r.report_id, { value: r.belief_value, source_url: r.belief_source_url }]));
 
-  return boardSummary({ now, courts, kindCfg, rows, confirms: bylined, lastRows, vibeRows, validatorsToday, conditions }) as BoardPayload;
+  return boardSummary({ now, courts, kindCfg, rows, confirms: bylined, lastRows, vibeRows, validatorsToday, conditions, config, deskRows, calls, beliefs }) as BoardPayload;
 }

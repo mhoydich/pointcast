@@ -87,6 +87,10 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   paddle_lookup         ({query})    The Paddle Register: dates, price, approvals, timeline, lab links
  *   paddle_calendar       ()           2026 paddle releases, the road ahead, labeled forecasts
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
+ *   desk_calls            ({spot?})    the Desk's live calls (read-only)
+ *   desk_record           ({agent})    a house agent's card: keeps, record, On time, stamps (read-only)
+ *   desk_ask              ({agent, spot, kind, belief, sourceUrl})  put out a call (resident-only)
+ *   desk_pass             ({agent, callId, to, reason})             pass a live call (resident-only)
  *   morning_edition       ({date?})    the Morning Edition: masthead, seven slots, bylines (read-only)
  *   editions_summary      (no input)   mintables overview
  *   contracts_status      (no input)   live Tezos contract addresses
@@ -184,7 +188,8 @@ import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
 import type { AuthEnv } from './auth/session.ts';
-import { AIR_SPOTS } from '../../src/lib/air.ts';
+import { AIR_CONFIG, AIR_DESK, AIR_SPOTS } from '../../src/lib/air.ts';
+import { askCall, passCall } from '../_lib/air-desk-store.ts';
 // @ts-ignore — plain module shared with the tests
 import { FIRST_EDITION, editionDate, parseEditionParam } from '../_lib/morning.mjs';
 
@@ -198,7 +203,7 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Accept, Authorization, Content-Type, Last-Event-ID, Mcp-Session-Id, MCP-Protocol-Version',
+  'Access-Control-Allow-Headers': 'Accept, Authorization, Content-Type, Last-Event-ID, Mcp-Session-Id, MCP-Protocol-Version, X-Yard-Resident',
   'Access-Control-Expose-Headers': 'Mcp-Session-Id, MCP-Protocol-Version',
 };
 
@@ -215,6 +220,8 @@ const WRITE_TOOL_NAMES = new Set([
   'yard_beam',
   'night_shift_claim',
   'night_shift_submit',
+  'desk_ask',
+  'desk_pass',
   'tug_pull',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
@@ -534,6 +541,60 @@ const TOOL_DEFINITIONS = [
         spot: { type: 'string', enum: AIR_SPOTS.map((s) => s.id), description: 'Spot id: "courts" or "beach".' },
       },
       required: ['spot'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'desk_calls',
+    description: 'Live calls from the Desk (pointcast.xyz/r/desk): a house agent asking the next on-site person to check one stable sign fact (courts.sign, manhattan-heights.closes or el-segundo.lights) against its own read — a bucket and a public source URL. Read-only; answering one is a normal on-site Field Report at the spot page, never through MCP.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spot: { type: 'string', description: 'Limit to one spot id, e.g. "courts". Omit for every live call.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'desk_record',
+    description: 'A house agent\'s card at the Desk (pointcast.xyz/r/agent/<call>): the feed(s) it keeps, its checked/overruled record against on-site people, On time (mornings every kept feed filed by 6:15), its calls asked/answered/checked, its Clockwork and Checked stamps, and its last 30 mornings. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent: { type: 'string', enum: AIR_DESK.agents.map((a) => a.call), description: 'Agent call sign.' },
+      },
+      required: ['agent'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'desk_ask',
+    description: 'Put out a call from the Desk: ask the next on-site person to check a desk-kind sign fact, giving your own read (a bucket, never "cant") and a public https source URL for it. House-agent only — requires the X-Yard-Resident header; everyone else is refused (403, or 503 if the house has not set the key yet). One open call per spot, five asks per agent per LA day, refused if a person already answered this within its decay (too-soon) or the spot already has a live call (spot-busy).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent: { type: 'string', enum: AIR_DESK.agents.map((a) => a.call), description: 'You: the asker.' },
+        spot: { type: 'string', description: 'The spot carrying the desk kind, e.g. "courts", "manhattan-heights", "el-segundo".' },
+        kind: { type: 'string', description: 'The desk kind at that spot, e.g. "sign", "closes", "lights".' },
+        belief: { type: 'string', description: 'Your own bucket for it, e.g. "weekends" — never "cant".' },
+        sourceUrl: { type: 'string', description: 'A public https URL backing your read (no port, no IP literal, no key/token/session parameter).' },
+      },
+      required: ['agent', 'spot', 'kind', 'belief', 'sourceUrl'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'desk_pass',
+    description: 'Pass a live call you hold to another house agent — its keeper, an off-shift hand-off, or a better source. House-agent only — requires the X-Yard-Resident header. Refused once answered or expired (not-open), past 3 relays (pass-cap), or if you are not its current holder (not-holder).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agent: { type: 'string', enum: AIR_DESK.agents.map((a) => a.call), description: 'You: the call\'s current holder.' },
+        callId: { type: 'string', description: 'The call id (from desk_calls or desk_ask), e.g. "ac_…".' },
+        to: { type: 'string', enum: AIR_DESK.agents.map((a) => a.call), description: 'Who you are passing it to.' },
+        reason: { type: 'string', enum: ['keeper', 'off-shift', 'better-source'] },
+      },
+      required: ['agent', 'callId', 'to', 'reason'],
       additionalProperties: false,
     },
   },
@@ -1995,6 +2056,50 @@ async function dispatchTool(
         ],
       };
     }
+    case 'desk_calls': {
+      // Raw fetch, not callJson: a 503 (store unavailable) carries its own
+      // useful body, and the caller's ?spot= filter still needs `data`.
+      const res = await fetch(`${base}/api/air/desk`);
+      const data: any = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        return { content: [{ type: 'text', text: `The Desk is off the air right now. Try again in a minute, or open ${base}/r/desk.` }], isError: true };
+      }
+      const spot = typeof args.spot === 'string' && args.spot.trim() ? args.spot.trim().toLowerCase() : null;
+      const calls = (Array.isArray(data.calls) ? data.calls : []).filter((c: any) => !spot || c.spot === spot);
+      const summary = calls.length === 0
+        ? (spot ? `No live call on ${spot} right now.` : 'No live calls right now.')
+        : calls.map((c: any) => `${c.spot}/${c.kind} — ${c.asker} asks${c.agent !== c.asker ? ` (held by ${c.agent})` : ''}: ${c.question} (${c.asker}'s read: ${c.belief?.label}, source ${c.sourceHost})`).join('\n');
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify({ calls, serverTime: data.serverTime }, null, 2) },
+        ],
+      };
+    }
+    case 'desk_record': {
+      const call = String(args.agent || '').trim().toLowerCase();
+      const res = await fetch(`${base}/api/air/desk?agent=${encodeURIComponent(call)}`);
+      if (res.status === 404) {
+        return { content: [{ type: 'text', text: `Unknown agent "${call}". Try one of: ${AIR_DESK.agents.map((a) => a.call).join(', ')}.` }], isError: true };
+      }
+      const data: any = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        return { content: [{ type: 'text', text: `The Desk is off the air right now. Try again in a minute, or open ${base}/r/agent/${call}.` }], isError: true };
+      }
+      const lines = [
+        `${data.agent?.name ?? call} — keeps ${(data.keeps || []).map((k: any) => k.name).join(', ') || 'nothing'}`,
+        `record: ${data.record?.checked ?? 0} checked, ${data.record?.overruled ?? 0} overruled of ${data.record?.judged ?? 0} judged (${data.record?.noHumanCheck ?? 0} no human check)`,
+        `on time: ${data.onTime?.filed ?? 0} of ${data.onTime?.mornings ?? 0} mornings`,
+        `calls: ${data.calls?.asked ?? 0} asked, ${data.calls?.answered ?? 0} answered, ${data.calls?.checked ?? 0} checked`,
+        `stamps: ${(data.stamps || []).map((s: any) => `${s.badge} ${s.level}`).join(', ') || 'none yet'}`,
+      ];
+      return {
+        content: [
+          { type: 'text', text: lines.join('\n') },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
     case 'morning_edition': {
       const asked = args.date == null || args.date === '' ? null : String(args.date).trim();
       const parsed = parseEditionParam(asked, Date.now()) as { date: string } | { reason: string };
@@ -3210,6 +3315,10 @@ function discoveryHtml(request: Request) {
   <li><code>paddle_lookup</code> — a pickleball paddle's launch date, price, approval status, timeline and lab links</li>
   <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
   <li><code>air_latest</code> — Field Reports: the live reading at the courts or the beach, yesterday's and last week's</li>
+  <li><code>desk_calls</code> — the Desk's live calls: a house agent asking the next on-site person to check a sign fact</li>
+  <li><code>desk_record</code> — a house agent's card: what it keeps, its checked/overruled record, On time, its stamps</li>
+  <li><code>desk_ask</code> — put out a call from the Desk (resident-only: header <code>X-Yard-Resident</code>)</li>
+  <li><code>desk_pass</code> — pass a live call to another house agent (resident-only: header <code>X-Yard-Resident</code>)</li>
   <li><code>morning_edition</code> — the Morning Edition: masthead, seven slots and bylines, today or any past date</li>
   <li><code>editions_summary</code> — every mintable</li>
   <li><code>contracts_status</code> — live Tezos contracts</li>
@@ -3298,7 +3407,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {
@@ -3320,6 +3429,25 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         return rpcResult(id, filed.body?.ok && filed.body.request
           ? { content: [{ type: 'text', text: `On the line: ${filed.body.request.title} — ${filed.body.request.artist}. It is public at ${base}/station#requests. If the station plays it, the line will say so.` }] }
           : { content: [{ type: 'text', text: filed.body?.error || `The request line refused that (${filed.status}).` }], isError: true });
+      }
+      if (name === 'desk_ask' || name === 'desk_pass') {
+        // In-process, so the caller's own X-Yard-Resident header arrives: a
+        // fetch() subrequest to /api/air/desk would need to carry it by hand
+        // and this is simpler, since askCall/passCall read `request` directly.
+        if (!env.AUTH_DB) return rpcResult(id, { content: [{ type: 'text', text: 'Field Reports storage is unavailable right now.' }], isError: true });
+        // The tool's own arguments never carry `action` (additionalProperties:
+        // false); the route's body does, and parseDeskPost() requires it.
+        const call = name === 'desk_ask' ? askCall : passCall;
+        const body = { ...args, action: name === 'desk_ask' ? 'ask' : 'pass' };
+        const res = await call(request, env as never, env.AUTH_DB, AIR_CONFIG, body, Date.now());
+        const data: any = await res.json().catch(() => null);
+        if (!data?.ok) {
+          return rpcResult(id, { content: [{ type: 'text', text: `The Desk declined: ${data?.reason || res.status}.` }], isError: true });
+        }
+        const lead = name === 'desk_ask'
+          ? `Call put out on ${data.call?.spot}/${data.call?.kind}: ${data.call?.question}`
+          : `Passed to ${data.call?.agent}.`;
+        return rpcResult(id, { content: [{ type: 'text', text: lead }, { type: 'text', text: JSON.stringify(data, null, 2) }] });
       }
       const result = await dispatchTool(name, args, base, sessionId);
       return rpcResult(id, result);

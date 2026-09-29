@@ -19,10 +19,11 @@
  *     (spec §4: up to two) re-file the same tap-time report with extras
  *     added, same pattern as the Friday spot's detail chips.
  */
-import { spotUrl } from '../lib/air';
+import { agentUrl, spotUrl } from '../lib/air';
+import type { CallView, DeskFact } from '../lib/air';
 import type { Block, BoardBest, BoardCourt, BoardLast, BoardPayload, BoardReading, BoardVibe, Conditions } from '../lib/courts';
 import { STALE_DAYS, daysBetween, provenanceText } from '../lib/court-format';
-import { agoLabel, deviceId, laClock, storedCode, supportLabel } from './air-client';
+import { agoLabel, deviceId, laClock, paintCallLines, storedCode, supportLabel } from './air-client';
 
 const POLL_MS = 30_000;
 const LA = 'America/Los_Angeles';
@@ -215,6 +216,56 @@ export function mountPickleballBoard(): void {
     }
   }
 
+  // --- the Desk's second strip row: tides, swell, sun, air (BoardPayload.desk) ---
+  /** "HIGH 7:12 AM" / "LOW 1:40 PM" for the next tide event a Tides fact's detail carries. */
+  function tideLabel(fact: DeskFact): string {
+    const next = (fact.detail as { next?: { type: string; at: string; ft: number }[] }).next ?? [];
+    const arrow = fact.value === 'rising' ? '↑' : '↓';
+    const e = next[0];
+    if (!e) return `TIDE ${arrow}`;
+    return `TIDE ${arrow} ${e.type === 'H' ? 'HIGH' : 'LOW'} ${clock12(e.at)} ${e.ft.toFixed(1)} FT`;
+  }
+  function swellLabel(fact: DeskFact): string {
+    const d = fact.detail as { periodS?: number | null };
+    return `SWELL ${fact.label.toUpperCase()}${d.periodS != null ? ` ${Math.round(d.periodS)} S` : ''}`;
+  }
+  function airLabel(fact: DeskFact): string {
+    const d = fact.detail as { aqi?: number };
+    return `AIR ${d.aqi ?? fact.label.toUpperCase()}`;
+  }
+  function sunLabel(fact: DeskFact): string {
+    const d = fact.detail as { sunrise?: string };
+    return d.sunrise ? `SUNRISE ${shortClock(d.sunrise)}` : 'SUNRISE —';
+  }
+  const DESK_LABEL: Record<string, (f: DeskFact) => string> = { tides: tideLabel, swell: swellLabel, sun: sunLabel, air: airLabel };
+
+  function paintDesk(desk: BoardPayload['desk']): void {
+    const row = q('[data-pb-desk]');
+    const facts: DeskFact[] = [desk.tides, desk.swell, desk.sun, desk.air].filter((f): f is DeskFact => f != null);
+    if (row) {
+      for (const feed of ['tides', 'swell', 'sun', 'air'] as const) {
+        const el = q(`[data-pb-desk-fact="${feed}"]`, row);
+        if (!el) continue;
+        const fact = desk[feed];
+        if (fact) { el.textContent = DESK_LABEL[feed](fact); el.hidden = false; } else el.hidden = true;
+      }
+      row.hidden = facts.length === 0;
+    }
+    const bylines = q('[data-pb-desk-bylines]');
+    if (bylines) {
+      bylines.replaceChildren();
+      // One byline per feed that filed (never per agent — Sol keeps two feeds and reads two bylines).
+      facts.forEach((f, i) => {
+        if (i > 0) bylines.append(' · ');
+        const a = document.createElement('a');
+        a.href = agentUrl(f.agent);
+        a.textContent = f.byline;
+        bylines.append(a);
+      });
+      bylines.hidden = facts.length === 0;
+    }
+  }
+
   // --- one court card ---
   /** The strip's buttons and note for one report: answered (note, buttons off) or open (buttons on). */
   function paintStripState(strip: HTMLElement, reportId: string): void {
@@ -318,6 +369,15 @@ export function mountPickleballBoard(): void {
     for (const hint of card.querySelectorAll<HTMLElement>('[data-pb-tap-hint]')) hint.hidden = hasCode;
   }
 
+  /** A court's call from the desk (DeskCall.astro), or hidden without one. The answer buttons are TapRow, unchanged. */
+  function paintCall(card: HTMLElement, call: CallView | null): void {
+    const shell = q('[data-pb-call]', card);
+    if (!shell) return;
+    if (!call) { shell.hidden = true; return; }
+    paintCallLines(q('[data-pb-call-head]', shell), q('[data-pb-call-belief]', shell), call);
+    shell.hidden = false;
+  }
+
   function paintCourt(boardCourt: BoardCourt): void {
     const card = cardFor(boardCourt.id);
     if (!card) return;
@@ -327,6 +387,7 @@ export function mountPickleballBoard(): void {
     paintReading(card, boardCourt.id, 'parking', boardCourt.readings.parking, boardCourt.last.parking);
     paintVibe(card, boardCourt.id, boardCourt.vibe);
     paintTapHints(card, boardCourt.id);
+    paintCall(card, boardCourt.call);
   }
 
   /** Best bet first: the one card GET /api/air/board names moves to the top. */
@@ -362,6 +423,7 @@ export function mountPickleballBoard(): void {
     paintMasthead(data);
     paintHero(data.best);
     paintConditions(data.conditions);
+    paintDesk(data.desk);
     for (const c of data.courts) paintCourt(c);
     reorder(data.best?.court ?? null);
   }
@@ -453,6 +515,12 @@ export function mountPickleballBoard(): void {
       }
       if (chips) chips.hidden = false;
       if (kind === 'parking') repaint(spotId, 'parking', toBoardReading(res.json.reading, 'parking') ?? readings.get(`${spotId}:parking`) ?? null);
+    } else if (res.json && res.json.ok === false && res.json.reason === 'no-open-call') {
+      // A call from the desk someone already answered (the board is up to 30 s behind):
+      // done, not "tap again" — the buttons stay off and the next poll drops the call.
+      row.dataset.pbTapState = 'sent';
+      if (note) { note.textContent = 'Already answered.'; note.dataset.tone = 'grey'; note.hidden = false; }
+      void refresh();
     } else {
       row.dataset.pbTapState = 'idle';
       if (note) { note.textContent = 'Didn’t send. Tap again.'; note.dataset.tone = 'grey'; note.hidden = false; }

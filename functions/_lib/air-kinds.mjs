@@ -35,13 +35,16 @@ export function kindOf(config, spotId, kind) {
   return spot && own(spot.kinds, kind) ? spot.kinds[kind] : null;
 }
 
-export const ROLES = Object.freeze(['live', 'side', 'rating']);
+export const ROLES = Object.freeze(['live', 'side', 'rating', 'fact']);
 
 /**
  * A kind's role, from its config's `role`:
  * - 'live' (absent, today's behavior): First Light, the station post, the crew.
  * - 'side' (parking): a reading and confirms, but nothing goes on the air.
  * - 'rating' (vibe): a 30-day aggregate; no reading, no confirms.
+ * - 'fact' (the beach's tide, swell, sun and aqi): filed by the early shift
+ *   only. A person can neither report one (parseAirReport: bad-kind) nor
+ *   confirm one (confirmable(): false); the judge marks it "no human check".
  * An unknown role fails closed to 'side': it can be read and confirmed but
  * never posts, takes First Light or forms a crew.
  */
@@ -50,6 +53,22 @@ export function kindRole(kindCfg) {
   if (role == null) return 'live';
   return ROLES.includes(role) ? role : 'side';
 }
+
+/** Whether a person may confirm a row of this kind: not a rating (an aggregate) and not a fact (agents only). */
+export function confirmable(kindCfg) {
+  const role = kindRole(kindCfg);
+  return role !== 'rating' && role !== 'fact';
+}
+
+/** An agent-only fact kind (role 'fact'). */
+export const isFactKind = (kindCfg) => kindRole(kindCfg) === 'fact';
+
+/**
+ * A desk kind (`desk: true`, role 'side'): a stable sign fact the desk may put
+ * out a call about. Without a live call a report of one is refused
+ * (no-open-call, in the store); with one it is a normal on-site report.
+ */
+export const isDeskKind = (kindCfg) => kindCfg?.desk === true && kindRole(kindCfg) === 'side';
 
 /** The reading label for a bucket: "1–4 waiting". Falls back to the button label. */
 export function labelOf(kindCfg, value) {
@@ -86,6 +105,8 @@ export function parseAirReport(config, spotId, body, now = Date.now()) {
   const kind = typeof body.kind === 'string' && own(spot.kinds, body.kind) ? body.kind : null;
   if (!kind) return { reason: 'bad-kind' };
   const cfg = spot.kinds[kind];
+  // Facts (tide, swell, sun, aqi) are the early shift's; nobody reports one from a phone.
+  if (kindRole(cfg) === 'fact') return { reason: 'bad-kind' };
   const value = typeof body.value === 'string' && cfg.options.some((o) => o.v === body.value) ? body.value : null;
   if (value == null) return { reason: 'bad-value' };
   const extras = body.extras == null ? [] : body.extras;

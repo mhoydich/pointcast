@@ -63,7 +63,9 @@ test('client: a report is saved before it is sent, POSTs time out, and the queue
 });
 
 test('client: the strip or the buttons, chips only on your report, sign-in only for an anonymous stamp', () => {
-  assert.match(client, /if \(askable\) showAsk\(!offer\)/);
+  // usingDesk (build spec §4, §9): the strip also stands in for the beach's Sky agent row
+  // while nobody has reported fog today, so the buttons stay off for that too.
+  assert.match(client, /if \(askable\) showAsk\(!offer && !usingDesk\)/);
   assert.match(airSpot, /data-air-wait\n/, 'the buttons hold their place until the first reading');
   assert.match(airSpot, /\.air\[data-air-wait\] \.air__buttons \{ visibility: hidden; \}/);
   assert.match(client, /root\.removeAttribute\('data-air-wait'\)/);
@@ -71,7 +73,7 @@ test('client: the strip or the buttons, chips only on your report, sign-in only 
   assert.match(client, /show\(els\.chips, what === 'report' && !!myValue\)/);
   assert.match(client, /show\(els\.signin, !!claim && onsite\)/);
   assert.match(airSpot, /data-air-signin hidden/);
-  assert.match(client, /deadReports\.add\(r\.reportId\)/, 'an expired report is never offered again');
+  assert.match(client, /deadReports\.add\(reportId\)/, 'an expired report is never offered again');
   assert.match(client, /memSeenCrew/, 'the crew reveal plays once even with storage blocked');
   assert.match(client, /schedule\(\); \/\/ fast polling starts at the tap/);
   assert.match(airSpot, /<noscript>/);

@@ -16,7 +16,7 @@
 // take AIR_CONFIG) and imports only types from here.
 
 import data from '../data/courts-schedule.json';
-import type { AirShape } from './air';
+import type { AirShape, CallView, DeskFacts } from './air';
 import { monthDay, provenanceText } from './court-format';
 
 export type Confidence = 'verified' | 'partial' | 'unverified';
@@ -184,6 +184,8 @@ export type BoardCourt = {
   readings: { wait: BoardReading | null; parking: BoardReading | null };
   last: { wait: BoardLast | null; parking: BoardLast | null };
   vibe: BoardVibe | null;
+  /** A live call from the desk on this court's one desk kind (sign, closes, lights), or null. */
+  call: CallView | null;
 };
 /**
  * bestBet(): the first rule that matches, ties to `order`. `line` is the hero
@@ -198,6 +200,8 @@ export type BoardPayload = {
   /** Distinct on-site phones and courts today (reports plus on-site "still" confirms). */
   validatorsToday: { phones: number; courts: number };
   conditions: Conditions;
+  /** The early shift's beach facts (tides, swell, sun, air); a gap or expired row is null. Sky/fog is not here — Conditions stays the live-KLAX line. */
+  desk: DeskFacts;
   best: BoardBest | null;
   /** One per COURTS entry, in board order (air: false courts carry null readings). */
   courts: BoardCourt[];

@@ -36,6 +36,11 @@ test('field reports: every rejection reason, and nothing is repaired', () => {
   for (const r of config.reserved) assert.equal(reason(r, good()), 'bad-spot', `${r} is reserved`);
   assert.equal(reason('courts', good({ kind: 'fog' })), 'bad-kind');
   assert.equal(reason('courts', good({ kind: 'constructor' })), 'bad-kind', 'prototype keys are not kinds');
+  for (const kind of ['tide', 'swell', 'sun', 'aqi']) {
+    const value = kindOf(config, 'beach', kind).options[0].v;
+    assert.equal(reason('beach', { kind, value, device: DEVICE }), 'bad-kind', `${kind} is the early shift's fact: no phone files one`);
+  }
+  assert.equal(parseAirReport(config, 'courts', good({ kind: 'sign', value: 'weekends' }), NOW).kind, 'sign', 'a desk kind parses; the store gates it on a live call');
   assert.equal(reason('courts', good({ value: '1–4' })), 'bad-value', 'an en dash is not the bucket');
   assert.equal(reason('courts', good({ value: ' 1-4' })), 'bad-value');
   assert.equal(reason('courts', good({ value: 'CANT' })), 'bad-value', 'case is exact');
@@ -83,6 +88,7 @@ test('field reports: v1 buckets are frozen and every bucket has a reading label'
   assert.equal(config.version, 1);
   assert.deepEqual(kindOf(config, 'courts', 'wait').options.map((o) => o.v), ['locked', '0', '1-4', '5-8', '9+', 'cant']);
   assert.deepEqual(kindOf(config, 'beach', 'fog').options.map((o) => o.v), ['clear', 'hazy', 'none', 'cant']);
+  assert.deepEqual(Object.keys(spotOf(config, 'beach').kinds), ['fog', 'tide', 'swell', 'sun', 'aqi'], 'fog stays first: primaryKind() reads key order');
   assert.equal(kindOf(config, 'courts', 'wait').decayMin, 45);
   assert.equal(kindOf(config, 'beach', 'fog').decayMin, 120);
   for (const spot of config.spots) {
@@ -96,7 +102,7 @@ test('field reports: v1 buckets are frozen and every bucket has a reading label'
 });
 
 test('field reports: no spot id collides with a reserved id, and names stay neutral', () => {
-  assert.deepEqual([...config.reserved].sort(), ['assign', 'board', 'claim', 'confirm', 'index', 'me']);
+  assert.deepEqual([...config.reserved].sort(), ['agent', 'assign', 'board', 'claim', 'confirm', 'desk', 'index', 'me'], '/r/agent/[call] and /r/desk are never spots');
   const ids = config.spots.map((s) => s.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of ids) {

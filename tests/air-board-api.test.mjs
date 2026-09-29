@@ -23,11 +23,12 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 const MIN = 60_000;
+const HOUR = 60 * MIN;
 const PEPPER = 'test-pepper';
 const CRT = 'CRTFIXTURE9';
 const ES = 'ESFIXTURE9';
 const SEED = await Promise.all([['courts', CRT], ['el-segundo', ES]].map(async ([spot, code]) => [spot, await codeHash(spot, code, PEPPER)]));
-const MIGRATIONS = (await Promise.all(['0001_init.sql', '0023_air.sql'].map((f) => read(`migrations/auth/${f}`)))).join('\n');
+const MIGRATIONS = (await Promise.all(['0001_init.sql', '0023_air.sql', '0024_air_assignments.sql', '0025_air_desk.sql'].map((f) => read(`migrations/auth/${f}`)))).join('\n');
 
 /** D1 over node:sqlite, same shape as tests/air-api.test.mjs's harness. */
 class SqliteD1 {
@@ -128,6 +129,58 @@ test('boardData: readings, validatorsToday and vibe come off real Field Reports 
   const text = JSON.stringify(payload);
   assert.doesNotMatch(text, /pid_hash|ip_hash/);
   for (const d of Object.values(DEV)) assert.ok(!text.includes(await pidHash(d)), 'a phone hash leaked');
+});
+
+/** A beach agent fact row, written straight to D1 (what agentRowOf()'s row would INSERT as). */
+function agentFactRow(t, { id, kind, value, extras, at, day }) {
+  t.env.AUTH_DB.db.prepare(`INSERT INTO air_reports
+      (id, spot, kind, value, extras_json, schema_v, observed_at, day, slot, pid_hash, ip_hash, byline, onsite, status, source, source_url, created_at)
+    VALUES (?, 'beach', ?, ?, ?, 2, ?, ?, ?, 'agentpid00000000', 'agentip00000000', 'Sol', 0, 'ok', 'agent:sol', 'https://www.ndbc.noaa.gov/data/realtime2/46221.txt', ?)`)
+    .run(id, kind, value, JSON.stringify(extras), at, day, Math.floor(at / 1_800_000), at);
+}
+
+/** An agent's desk-kind belief row plus its open air_calls row, as an ask would leave them. */
+function callFixture(t, { id, spot, kind, value, at, day, expiresAt }) {
+  t.env.AUTH_DB.db.prepare(`INSERT INTO air_reports
+      (id, spot, kind, value, extras_json, schema_v, observed_at, day, slot, pid_hash, ip_hash, byline, onsite, status, source, source_url, created_at)
+    VALUES (?, ?, ?, ?, '[]', 1, ?, ?, ?, 'agentpid00000001', 'agentip00000001', 'Sol', 0, 'ok', 'agent:sol', 'https://citymb.info', ?)`)
+    .run(`${id}_r`, spot, kind, value, at, day, Math.floor(at / 1_800_000), at);
+  t.env.AUTH_DB.db.prepare(`INSERT INTO air_calls (id, spot, kind, asker, holder, report_id, day, status, asked_at, expires_at)
+    VALUES (?, ?, ?, 'sol', 'sol', ?, ?, 'open', ?, ?)`).run(id, spot, kind, `${id}_r`, day, at, expiresAt);
+}
+
+test('boardData: the Desk — a beach agent fact fills BoardPayload.desk (sky stays out) and a court\'s live call fills its card', async () => {
+  const t = town();
+  const now = Date.parse('2026-10-02T14:40:00Z'); // Fri 7:40 AM LA
+  const today = '2026-10-02';
+  agentFactRow(t, { id: 'ar_swell00000000000001', kind: 'swell', value: '2-3', extras: { ft: 2.4, periodS: 13, dirDeg: 210, waterF: 64, obsAt: '2026-10-02T14:00:00Z' }, at: now - 10 * MIN, day: today });
+  callFixture(t, { id: 'ac_lights0000000000001', spot: 'el-segundo', kind: 'lights', value: 'lights', at: now - MIN, day: today, expiresAt: now + 47 * 60 * MIN });
+
+  const payload = await boardData(t.env, t.env.AUTH_DB, now, COURTS, config);
+  assert.equal(payload.desk.swell.value, '2-3');
+  assert.equal(payload.desk.swell.agent, 'sol');
+  assert.equal(payload.desk.tides, null, 'no tides row filed');
+  assert.ok(!('sky' in payload.desk), 'sky/fog is not on the board — Conditions is the live-KLAX line');
+
+  const es = payload.courts.find((c) => c.id === 'el-segundo');
+  assert.ok(es.call);
+  assert.equal(es.call.agent, 'sol');
+  assert.equal(es.call.belief.value, 'lights');
+  assert.equal(es.call.sourceHost, 'citymb.info');
+  const courts = payload.courts.find((c) => c.id === 'courts');
+  assert.equal(courts.call, null, 'no call on a spot with none open');
+
+  const text = JSON.stringify(payload);
+  assert.doesNotMatch(text, /pid_hash|ip_hash|agentpid|agentip/, 'no hash leaves the Desk view either');
+});
+
+test('boardData: an expired call never fills a court\'s card', async () => {
+  const t = town();
+  const now = Date.parse('2026-10-02T14:40:00Z');
+  const today = '2026-10-02';
+  callFixture(t, { id: 'ac_signs0000000000001', spot: 'courts', kind: 'sign', value: 'weekends', at: now - 50 * HOUR, day: today, expiresAt: now - 2 * HOUR });
+  const payload = await boardData(t.env, t.env.AUTH_DB, now, COURTS, config);
+  assert.equal(payload.courts.find((c) => c.id === 'courts').call, null);
 });
 
 test('boardData: the injected readConditions is called with a Date and folds straight into the payload', async () => {

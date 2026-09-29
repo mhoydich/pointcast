@@ -10,7 +10,7 @@ import { claimDevice, confirmReport, fileReport, mePayload, spotPayload, station
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
-const ROUTES = ['functions/api/air/index.ts', 'functions/api/air/[spot].ts', 'functions/api/air/confirm.ts', 'functions/api/air/me.ts', 'functions/api/air/claim.ts', 'functions/api/air/assign.ts'];
+const ROUTES = ['functions/api/air/index.ts', 'functions/api/air/desk.ts', 'functions/api/air/[spot].ts', 'functions/api/air/confirm.ts', 'functions/api/air/me.ts', 'functions/api/air/claim.ts', 'functions/api/air/assign.ts'];
 const STORE = 'functions/_lib/air-store.ts';
 // [spot].ts, like og/live/[room].ts: the build's SEO pass only keeps an og:image
 // a function serves, and it reads `[param].ts` files. The route strips the .png.
@@ -82,7 +82,7 @@ test('air API source: rateLimit (KV) only guards claim; everything else counts D
 test('air routes: reserved ids are their own files or refused, never a spot', async () => {
   for (const id of config.reserved) assert.equal(spotOf(config, id), null, id);
   for (const id of config.reserved) assert.equal(targetOf(config, id), null, id);
-  for (const name of ['confirm', 'me', 'claim', 'index', 'assign']) assert.ok(src[`functions/api/air/${name}.ts`], `${name}.ts routes before [spot].ts`);
+  for (const name of ['confirm', 'me', 'claim', 'index', 'assign', 'desk']) assert.ok(src[`functions/api/air/${name}.ts`], `${name}.ts routes before [spot].ts`);
   assert.equal(parseAirReport(config, 'board', { kind: 'wait', value: '0', device: DEV.a }).reason, 'bad-spot');
   assert.match(src[OG], /pngResponse\(await renderPng\(svg\), 60,/, 'the unfurl card caches for a minute');
   assert.match(src[OG], /onRequestHead/);
@@ -96,7 +96,7 @@ test('the per-spot unfurl card survives the build: the SEO pass sees a function 
 
 /* ---------- the Friday court moment, end to end on node:sqlite ---------- */
 
-const MIGRATIONS = (await Promise.all(['0001_init.sql', '0023_air.sql', '0024_air_assignments.sql'].map((f) => read(`migrations/auth/${f}`)))).join('\n');
+const MIGRATIONS = (await Promise.all(['0001_init.sql', '0023_air.sql', '0024_air_assignments.sql', '0025_air_desk.sql'].map((f) => read(`migrations/auth/${f}`)))).join('\n');
 // Fixture codes, seeded only in this test DB under a test pepper. Real codes live in an untracked seed.
 const PEPPER = 'test-pepper';
 const CRT = 'CRTFIXTURE9';

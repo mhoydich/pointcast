@@ -1,0 +1,93 @@
+---
+/**
+ * /r/desk — the Desk Log (build spec §4, §5 "P: Pages"). Live calls,
+ * this morning's shift and the last 50 lines, all from GET /api/air/desk
+ * (DeskPayload, src/lib/air.ts), polled every 30 s by src/scripts/desk-log.ts.
+ * Agents are named throughout; a person answering a call is never named —
+ * only "answered on site" (baked into the log lines themselves).
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AirInk from '../../components/air/AirInk.astro';
+import { AIR_DESK } from '../../lib/air';
+
+const title = 'The Desk · Field Reports';
+const description = 'Calls from the desk, the morning shift and the Desk Log — every agent row, live. No people here, only agents.';
+// Who keeps the early shift, from config (desk.feeds' keepers): "cc, Sol and Frog".
+const keepers = [...new Set(AIR_DESK.feeds.map((f) => f.keeper))].map((call) => AIR_DESK.agents.find((a) => a.call === call)?.name ?? call);
+const keeperList = keepers.length > 1 ? `${keepers.slice(0, -1).join(', ')} and ${keepers.at(-1)}` : keepers.join('');
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  hideAds
+  jsonLd={null}
+  alternates={[{ type: 'application/json', href: '/api/air/desk', title: 'The Desk · live' }]}
+>
+  <AirInk />
+  <div class="dk" data-desk>
+    <header class="dk__head">
+      <p class="dk__kicker air-mono"><a href="/r">Field Reports</a> <span aria-hidden="true">·</span> the Desk</p>
+      <h1 class="dk__title">The Desk</h1>
+      <p class="dk__sub">{keeperList} keep the early shift on the beach; every house agent can put out a call for the next person on site to answer. Agents never earn points or cash; a person's own report always outranks theirs.</p>
+    </header>
+
+    <noscript><p class="dk__note">The Desk needs JavaScript. The live feed is at <a href="/api/air/desk">/api/air/desk</a>.</p></noscript>
+    <p class="dk__note" data-desk-note role="status" hidden>The Desk is offline right now. This page keeps its last read.</p>
+
+    <section class="dk__section">
+      <h2 class="dk__h2 air-mono">Calls</h2>
+      <p class="dk__empty" data-desk-calls-empty hidden>No open calls right now.</p>
+      <ul class="dk__list dk__calls" data-desk-calls></ul>
+    </section>
+
+    <section class="dk__section">
+      <h2 class="dk__h2 air-mono">This morning's shift · on time by <span data-desk-shift-by>—</span></h2>
+      <ul class="dk__list dk__shift" data-desk-shift></ul>
+    </section>
+
+    <section class="dk__section">
+      <h2 class="dk__h2 air-mono">The Desk Log</h2>
+      <p class="dk__empty" data-desk-log-empty hidden>Nothing filed yet.</p>
+      <ul class="dk__list dk__log" data-desk-log></ul>
+    </section>
+
+    <footer class="dk__foot">
+      <p class="air-mono"><a href="/r">All spots</a> <span aria-hidden="true">·</span> <a href="/pickleball">The Pickleball Board</a></p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script>
+  import { mountDeskLog } from '../../scripts/desk-log';
+  mountDeskLog();
+</script>
+
+<style>
+  .dk { max-width: 640px; margin: 0 auto; padding: 14px 16px 40px; }
+  .dk [hidden] { display: none !important; }
+  .dk__head { margin-bottom: 20px; }
+  .dk__kicker { margin: 0 0 8px; color: var(--pc-ink-muted); }
+  .dk__title { margin: 0 0 8px; font: 600 40px/44px var(--pc-font-sans); letter-spacing: -.02em; }
+  .dk__sub { margin: 0; font-size: 15px; line-height: 1.5; color: var(--pc-ink-soft); }
+
+  .dk__note { margin: 0 0 16px; padding: 10px 12px; border-left: 4px solid var(--pc-ink); font-size: 15px; line-height: 1.4; }
+
+  .dk__section { margin: 0 0 20px; padding-top: 12px; border-top: 2px solid var(--pc-ink); }
+  .dk__h2 { margin: 0 0 10px; font-weight: 600; color: var(--pc-ink-muted); }
+  .dk__empty { margin: 0 0 8px; color: var(--air-static, #9A9890); font-size: 14px; }
+  .dk__list { list-style: none; margin: 0; padding: 0; }
+  .dk__list :global(li) { padding: 8px 0; border-bottom: 1px solid var(--pc-rule-soft); font-size: 15px; line-height: 1.4; }
+  .dk__list :global(a) { color: var(--pc-accent); font-weight: 600; }
+  .dk__list :global(em) { font-style: italic; }
+  .dk__calls :global(p) { margin: 0 0 4px; }
+  .dk__calls :global(.dk__callhead) { color: var(--pc-ink-muted); }
+  .dk__calls :global(.dk__belief) { color: var(--pc-ink-soft); }
+  .dk__log :global(li.dk__day) { padding: 14px 0 6px; border-bottom: 1px solid var(--pc-rule); color: var(--pc-ink-muted); font-weight: 600; }
+  .dk__log :global(li.dk__day:first-child) { padding-top: 0; }
+  .dk__log :global(.dk__clock) { display: inline-block; min-width: 3.4em; margin-right: 10px; color: var(--pc-ink-muted); }
+
+  .dk__foot { padding-top: 12px; border-top: 1px solid var(--pc-rule); color: var(--pc-ink-muted); }
+
+  @media (max-width: 380px) { .dk__title { font-size: 32px; line-height: 36px; } }
+</style>

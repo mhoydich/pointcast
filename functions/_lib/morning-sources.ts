@@ -46,6 +46,8 @@ import NEWS from '../../src/data/front-door-news.json';
 import { DAILY_CAP, badgeStamp, bylineAwards } from './air-points.mjs';
 // @ts-ignore — plain modules shared with the tests
 import { addDays, composeEdition, cutoffMs, freezeEdition, isEditionDate, momentOf, NEWS_MAX_AGE_DAYS, pickPrice, pickShop, pickTown } from './morning.mjs';
+// @ts-ignore — plain module shared with the tests
+import { deskFactsByFeed } from './air-desk.mjs';
 
 export type MorningEnv = AuthEnv & {
   VISITS?: KVNamespace;
@@ -179,6 +181,41 @@ export async function reportMoments(env: MorningEnv, config: AirConfig, date: st
   }
 }
 
+type DeskSkySources = { sky: unknown; tides: unknown };
+
+/**
+ * The beach's agent-only sky/tide rows filed (`created_at`) at or before the
+ * edition's 6:45 AM cutoff, newest observed first — deskFactsByFeed() keeps
+ * only the newest ok row per feed.
+ */
+function deskSkyStmt(db: D1Database, cutoff: number): D1PreparedStatement {
+  return db.prepare(`SELECT id, spot, kind, value, extras_json, schema_v, observed_at, created_at, status, source, source_url FROM air_reports
+    WHERE spot = 'beach' AND kind IN ('fog', 'tide') AND source LIKE 'agent:%' AND status = 'ok' AND created_at <= ?
+    ORDER BY observed_at DESC LIMIT 20`).bind(cutoff);
+}
+
+/**
+ * `sources.sky.desk` for `date`'s edition: the Sky and Tides feeds' facts
+ * (deskFactsByFeed(), functions/_lib/air-desk.mjs), read as of the edition's
+ * own 6:45 AM cutoff (not "now") and built only from rows filed by then — the
+ * same rule marineLine follows, so the line is identical whenever it is first
+ * read. A missing store, or any failure, fails soft to {sky: null, tides: null}
+ * (the sky slot then falls back exactly as it would with no desk fact at all).
+ */
+export async function deskSkySource(env: MorningEnv, config: AirConfig, date: string): Promise<DeskSkySources> {
+  const db = env.AUTH_DB;
+  if (!db) return { sky: null, tides: null };
+  try {
+    const cutoff = cutoffMs(date);
+    const res = await db.batch([deskSkyStmt(db, cutoff)]);
+    const rows = (res[0]?.results ?? []) as Row[];
+    const facts = deskFactsByFeed(config, rows, cutoff) as Record<string, unknown>;
+    return { sky: facts.sky ?? null, tides: facts.tides ?? null };
+  } catch {
+    return { sky: null, tides: null };
+  }
+}
+
 /* ---------- town ---------- */
 
 /** "In El Segundo today: sunrise 6:59 AM, sunset 6:36 PM, a waxing gibbous moon." Computed, so it cannot fail for a real date. */
@@ -276,15 +313,16 @@ export function priceAndShop(date: string) {
  */
 export async function gatherSources(env: MorningEnv, o: { config: AirConfig; date: string; now: number; origin: string; klax?: Klax }) {
   const { config, date, now, origin } = o;
-  const [marine, moments, town, pick] = await Promise.all([
+  const [marine, moments, town, pick, desk] = await Promise.all([
     (o.klax ?? klaxFor)(date, now, env).catch(() => null),
     reportMoments(env, config, date),
     townSource(env, date).catch(() => null),
     dailyPick(env, date, origin),
+    deskSkySource(env, config, date).catch(() => ({ sky: null, tides: null })),
   ]);
   const { price, shop } = priceAndShop(date);
   return {
-    sky: { marine, beach: moments?.beach ?? null },
+    sky: { marine, beach: moments?.beach ?? null, desk },
     ...(moments ? { courts: moments.courts } : {}),
     price, town, pick, shop,
   };

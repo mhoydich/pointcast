@@ -31,12 +31,17 @@
 import { readSessionFromRequest, type AuthEnv } from '../api/auth/session.ts';
 import { stationPostId, writeStationPost } from '../api/shortwave.ts';
 import { readCardByUser } from './town-card.ts';
-import type { AirConfig, AirKind, AirSpot } from '../../src/lib/air.ts';
+import type { AirConfig, AirKind, AirSpot, CallView, DeskReading } from '../../src/lib/air.ts';
 import { courtCallState } from '../../src/lib/band.ts';
 // @ts-ignore — plain modules shared with the tests
-import { AIR_LIMITS, codeHash, guestByline, ipHash, kindOf, kindRole, labelOf, newAirId, ownerOf, pidHash, slotOf, spotOf } from './air-kinds.mjs';
+import { AIR_LIMITS, codeHash, guestByline, ipHash, isDeskKind, isFactKind, kindOf, kindRole, labelOf, newAirId, ownerOf, pidHash, slotOf, spotOf } from './air-kinds.mjs';
 // @ts-ignore — plain modules shared with the tests
 import { CREW_WINDOW_MIN, crewFrom, evidence, isoSec, laClock, laDate, reading, stationLine, streakWeeks, winKey } from './air-reading.mjs';
+// The Desk (docs/plans/2026-09-28-early-shift-desk-spec.md §4, M's gate/answerCall/views):
+// pure rules for a desk-kind report's live-call gate, an answered call's judge,
+// and the agent reading a spot page shows while the human reading is 'none'.
+// @ts-ignore — plain module shared with the tests
+import { DESK_SPOT, agentCallOf, agentReading, callView, deskByline, feedOfKind, judgeRow } from './air-desk.mjs';
 // @ts-ignore — plain modules shared with the tests
 import { DAILY_CAP, badgeStamp, badgesFor, confirmAwards, crewStamp, firstLightOpen, placeStamp, receiptStamps, reportAwards, stampText, stampTraits } from './air-points.mjs';
 // Field Report Assignments (docs/plans/2026-09-28-field-assignments.md §3): the
@@ -68,6 +73,16 @@ type Target = { spot: AirSpot; kind: string; cfg: AirKind; config: AirConfig };
 export type ReportRow = {
   id: string; spot: string; kind: string; value: string; observed_at: number; day: string;
   pid_hash: string; ip_hash: string; user_id: string | null; byline: string; onsite: number; status: string; source: string;
+  // The Desk (agent rows only): the reading and the judge both need these; a
+  // human row carries them too (extras_json '[]', schema_v 1) but never reads them.
+  extras_json?: string; schema_v?: number; source_url?: string | null; created_at?: number;
+};
+/** The Desk: the report response's call: {id, agent (the holder), verdict}, or null when the report answered none. */
+export type AnsweredCall = { id: string; agent: string; verdict: string };
+/** An air_calls row as selected here (migrations/auth/0025_air_desk.sql); callView() and judgeRow() take it as-is. */
+type CallRow = {
+  id: string; spot: string; kind: string; asker: string; holder: string; report_id: string; day: string;
+  status: string; asked_at: number; expires_at: number; answered_report_id: string | null; answered_at: number | null; relay_json: string;
 };
 export type ConfirmRow = { report_id: string; pid_hash: string; ip_hash: string; user_id: string | null; verdict: string; value: string; onsite: number; at: number; byline?: string | null };
 /** The day's crew as air_crews keeps it: anchored at its first formation. */
@@ -214,6 +229,8 @@ type SpotData = {
   assignment?: ReturnType<typeof assignmentView> | null;
   /** Set by loadSpot with `header` (GET /api/air/[spot] only; a report or confirm response has no header). */
   header?: HeaderRows;
+  /** The Desk (spec §4): the spot's live call (any of its desk kinds), shown only after a receipt. Its own query, its own try/catch. */
+  call?: CallView | null;
 };
 
 /**
@@ -225,7 +242,11 @@ type SpotData = {
  */
 function evidenceStmts(db: D1Database, spot: string, kind: string, since: number, liveSince: number, limit: number): D1PreparedStatement[] {
   return [
-    db.prepare(`SELECT id, spot, kind, value, observed_at, day, pid_hash, ip_hash, user_id, byline, onsite, status, source FROM air_reports
+    // extras_json, schema_v, source_url and created_at ride along unused by
+    // reading()/crewFrom() (human rows only, per air-reading.mjs's human()):
+    // the Desk's agentReading() reads them off this same query for the one
+    // feed (sky) that shares a kind (fog) with a human question.
+    db.prepare(`SELECT id, spot, kind, value, extras_json, schema_v, observed_at, day, pid_hash, ip_hash, user_id, byline, onsite, status, source, source_url, created_at FROM air_reports
       WHERE spot = ? AND kind = ? AND status = 'ok'
         AND (observed_at >= ? OR id IN (SELECT report_id FROM air_confirms WHERE at >= ? AND verdict = 'still' AND onsite = 1))
       ORDER BY observed_at DESC LIMIT ?`).bind(spot, kind, since, liveSince, limit),
@@ -373,7 +394,27 @@ export async function spotPayload(env: AirEnv, db: D1Database, t: Target, now: n
   }
   const you = device ? await yours(db, t, data, now, device) : null;
   data.assignment = await loadAssignment(db, t.config, t.spot.id, now);
+  data.call = await loadCall(db, t.config, t.spot.id, now);
   return viewPayload(t, data, now, you);
+}
+
+/**
+ * The Desk (spec §4): the spot's one live call, or null. A spot carries at
+ * most one desk kind, and `calls` open at most one per spot
+ * (air_calls_open_spot), so this is never more than a single row. Its own
+ * query and its own try/catch: never in loadSpot's batch, never blocks the
+ * spot page.
+ */
+async function loadCall(db: D1Database, config: AirConfig, spotId: string, now: number): Promise<CallView | null> {
+  try {
+    const call = await db.prepare(`SELECT id, spot, kind, asker, holder, report_id, day, status, asked_at, expires_at, answered_report_id, answered_at, relay_json
+      FROM air_calls WHERE spot = ? AND status = 'open' AND expires_at > ? LIMIT 1`).bind(spotId, now).first<CallRow>();
+    if (!call) return null;
+    const belief = await db.prepare('SELECT value, source_url FROM air_reports WHERE id = ?').bind(call.report_id).first<{ value: string; source_url: string | null }>();
+    return belief ? (callView(config, call, belief, now) as CallView | null) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The spot's next open assignment (spec §3.4), or null. Its own query and its own try/catch: never in loadSpot's batch, never blocks the spot page. */
@@ -741,12 +782,48 @@ async function onAir(env: AirEnv, db: D1Database, t: Target, data: SpotData, now
   return { crew, anchor, crewStamps };
 }
 
+/**
+ * The Desk (spec §4): answer the spot's live call with this on-site save, and
+ * judge the asker's belief against it. Called from fileReport after an
+ * on-site ok save that isn't "cant", in its own try/catch, like
+ * fillAssignment: a missing air_calls table or a write failure never blocks
+ * the report. Not a desk kind: null, no query.
+ */
+async function answerCall(db: D1Database, config: AirConfig, target: Target, saved: Saved, now: number): Promise<AnsweredCall | null> {
+  if (!isDeskKind(target.cfg)) return null;
+  // Only an answer observed at or after the ask closes the call: judgeRow()
+  // reads no human row from before the belief, so an earlier one (a phone
+  // clock behind, or a queued tap) would close the call and leave it unjudged.
+  const call = await db.prepare(`UPDATE air_calls SET status = 'answered', answered_report_id = ?, answered_at = ?
+      WHERE spot = ? AND kind = ? AND status = 'open' AND expires_at > ? AND asked_at <= ?
+      RETURNING id, holder, report_id`)
+    .bind(saved.id, now, target.spot.id, target.kind, now, saved.observed_at).first<{ id: string; holder: string; report_id: string }>();
+  if (!call) return null;
+  const belief = await db.prepare('SELECT spot, kind, value, observed_at, source FROM air_reports WHERE id = ?')
+    .bind(call.report_id).first<{ spot: string; kind: string; value: string; observed_at: number; source: string }>();
+  if (!belief) return { id: call.id, agent: call.holder, verdict: 'unjudged' };
+  // The judge (spec §1.8): the answer itself is the on-site human report that
+  // decides it, so the belief is judged the moment it is answered — never
+  // 'pending' here.
+  const human = { spot: target.spot.id, kind: target.kind, value: saved.value, observed_at: saved.observed_at, onsite: 1, status: saved.status, source: 'page' };
+  const judged = judgeRow(config, belief, { humans: [human], confirms: [], now }) as { verdict: string } | null;
+  return { id: call.id, agent: call.holder, verdict: judged?.verdict ?? 'unjudged' };
+}
+
 /** POST /api/air/[spot]: file a report. `p` is parseAirReport() output. */
 export async function fileReport(request: Request, env: AirEnv, db: D1Database, config: AirConfig, p: ParsedReport, now: number, defer: Defer): Promise<Response> {
   const t = targetOf(config, p.spot);
   const cfg = t ? kindOf(config, p.spot, p.kind) as AirKind | null : null;
   if (!t || !cfg) return fail('bad-spot');
   const target: Target = { ...t, kind: p.kind, cfg };
+  // The Desk (spec §4): a desk-kind report without a live call answers
+  // nothing and never files (checked before writeGate, so it never spends a
+  // phone's hourly cap on a refusal).
+  if (isDeskKind(cfg)) {
+    const live = await db.prepare(`SELECT 1 AS ok FROM air_calls WHERE spot = ? AND kind = ? AND status = 'open' AND expires_at > ? LIMIT 1`)
+      .bind(p.spot, p.kind, now).first<{ ok: number }>();
+    if (!live) return fail('no-open-call', 409);
+  }
   // Only a live kind (the default) takes First Light, goes on the air or forms a crew.
   const live = kindRole(cfg) === 'live';
   const pid: string = await pidHash(p.device);
@@ -780,6 +857,7 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
   let firstLight = false;
   let held: HeldStamp[] = [];
   let assignment: { award: AssignAward; stamp: AssignStamp } | null = null;
+  let call: AnsweredCall | null = null;
   // A row the house flagged or removed earns nothing more: a same-slot re-tap
   // skips the upsert and reads the old row back, which must not take first
   // light, a late award or an assignment seat.
@@ -823,6 +901,13 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
     try {
       assignment = await fillAssignment(db, config, target, saved, owner, who, pid, ip, now);
     } catch { /* no fill */ }
+    // The Desk (spec §4): an answer, not "Can't say", may close the spot's
+    // live call. Its own try/catch: never blocks the report.
+    if (saved.value !== 'cant') {
+      try {
+        call = await answerCall(db, config, target, saved, now);
+      } catch { /* no call answered */ }
+    }
   }
 
   const data = await loadSpot(db, target, now);
@@ -833,7 +918,7 @@ export async function fileReport(request: Request, env: AirEnv, db: D1Database, 
   const { pointsToday, streakWeeks: weeks } = await standing(db, owner, who, pid, now);
   const codeStatus = !p.code ? 'none' : onsite ? 'ok' : 'unknown';
   return json(viewFiled({
-    t: target, data, now, replaced, saved, codeStatus, signedIn: Boolean(who.userId),
+    t: target, data, now, replaced, saved, codeStatus, signedIn: Boolean(who.userId), call,
     award: {
       points, pointsToday, streakWeeks: weeks, firstLight, crew: member ? air?.anchor ?? null : null,
       // The ASSIGNMENT stamp rides with the held stamps for the receipt only (RECEIPT_ORDER ranks it first); it was never written to air_stamps.
@@ -856,6 +941,9 @@ export async function confirmReport(request: Request, env: AirEnv, db: D1Databas
   // A rating is an aggregate, not a claim about now: nothing to confirm.
   const role = kindRole(cfg);
   if (role === 'rating') return fail('not-confirmable');
+  // The Desk (spec §1.8): a fact kind is the early shift's alone; a person
+  // confirms none of it (isFactKind === confirmable() === false, restated).
+  if (isFactKind(cfg)) return fail('not-confirmable');
   const target: Target = { ...t, kind: report.kind, cfg };
   const pid: string = await pidHash(c.device);
   const who = await whoIs(request, env);
@@ -1019,13 +1107,27 @@ function viewReading(t: Target, data: SpotData, now: number): Reading {
   return { ...r, crew: data.crew ? { id: data.crew.id, n: data.crew.n, at: isoSec(data.crew.at) } : null };
 }
 
+/**
+ * The Desk: an agent row's byline in the TODAY list, never a bare name that
+ * reads like a person: {call, byline} with the desk byline ("cc read KLAX at
+ * 6:02", the filed time) for an early-shift feed row, the agent's name
+ * otherwise. Null for a person's row.
+ */
+function todayDesk(config: AirConfig, r: ReportRow): { call: string; byline: string } | null {
+  const call = agentCallOf(r) as string | null;
+  if (!call) return null;
+  const feed = feedOfKind(config, r.kind) as { id: string } | null;
+  const filed = typeof r.created_at === 'number' ? r.created_at : r.observed_at;
+  return { call, byline: feed && r.spot === DESK_SPOT ? deskByline(config, call, feed.id, filed) as string : r.byline };
+}
+
 /** Today's rows, LA day, newest first, 20 at most. Remote and agent rows show; they just never count. */
 function viewToday(t: Target, data: SpotData, now: number) {
   const today = laDate(now);
   const decay = t.cfg.decayMin * MIN;
   return data.rows.filter((r) => r.day === today).sort((a, b) => b.observed_at - a.observed_at).slice(0, 20).map((r) => ({
     id: r.id, at: laClock(r.observed_at, { pad: true }), byline: r.byline, value: r.value, label: labelOf(t.cfg, r.value) as string,
-    onsite: r.onsite === 1, agent: r.source !== 'page',
+    onsite: r.onsite === 1, agent: r.source !== 'page', desk: todayDesk(t.config, r),
     confirms: data.confirms.filter((c) => c.report_id === r.id && c.verdict === 'still' && c.onsite === 1).length,
     live: now - r.observed_at < decay,
   }));
@@ -1069,10 +1171,15 @@ function viewPayload(t: Target, data: SpotData, now: number, you: { reportId: st
   const y = lastOfDay(t, data.rows, data.confirms, addDays(day, -1));
   const weekDay = addDays(day, -7);
   const w = lastOfDay(t, data.weekRows, data.weekConfirms, weekDay);
-  const live = viewReading(t, data, now);
+  const human = viewReading(t, data, now);
+  // The Desk (spec §4): the agent reading for this spot+kind, sent only while
+  // the human reading is 'none' (agentReading() checks that itself) and never
+  // once a person overruled the newest agent row. Only sky (fog) ever has one:
+  // it is the one feed that shares a kind with a human question.
+  const desk = agentReading(t.config, { spot: t.spot.id, kind: t.kind, rows: data.rows, confirms: data.confirms, now, human }) as DeskReading | null;
   return {
     spot: viewSpot(t),
-    reading: live,
+    reading: human,
     today: viewToday(t, data, now),
     yesterday: y ? { at: laClock(y.t, { pad: true }), label: y.r.label, support: y.r.support, bylines: y.r.bylines.slice(0, 3), more: Math.max(0, y.r.bylines.length - 3) } : null,
     lastWeek: w ? { date: weekDay, at: laClock(w.t, { pad: true }), label: w.r.label, support: w.r.support } : null,
@@ -1081,7 +1188,10 @@ function viewPayload(t: Target, data: SpotData, now: number, you: { reportId: st
     editorGuess: t.cfg.editorGuess ?? null,
     serverTime: isoSec(now),
     assignment: data.assignment ?? null,
-    header: data.header ? viewHeader(t, data, data.header, now, live, w) : null,
+    header: data.header ? viewHeader(t, data, data.header, now, human, w) : null,
+    // The Desk (spec §4): the spot's live call, shown only after a receipt (the client's own choice; the field is always here).
+    call: data.call ?? null,
+    desk: desk ?? null,
     ...(you ? { you } : {}),
   };
 }
@@ -1122,6 +1232,8 @@ function viewAward(a: AwardIn, short: string) {
 
 function viewFiled(o: {
   t: Target; data: SpotData; now: number; replaced: boolean; codeStatus: 'none' | 'ok' | 'unknown'; signedIn: boolean; award: AwardIn; saved: Saved;
+  /** The Desk (spec §4): the live call this report just answered, or null. */
+  call: AnsweredCall | null;
 }) {
   return {
     ok: true,
@@ -1135,6 +1247,7 @@ function viewFiled(o: {
     award: viewAward(o.award, o.t.spot.short),
     // Anonymous stamps stay on the phone; signing in within a day moves them to the card.
     claim: o.signedIn ? null : { until: isoSec(o.now + DAY) },
+    call: o.call,
   };
 }
 

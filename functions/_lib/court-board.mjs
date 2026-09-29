@@ -8,7 +8,8 @@
 // qualityVibe needs internally to dedupe by phone (which never leaves it).
 
 import { CREW_NETS, evidence, isoSec, laDate, laParts, reading, supportLabel } from './air-reading.mjs';
-import { guestByline, labelOf } from './air-kinds.mjs';
+import { guestByline, isDeskKind, labelOf, spotOf } from './air-kinds.mjs';
+import { callView, deskFactsByFeed, liveCall } from './air-desk.mjs';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -322,6 +323,36 @@ export function publicReading(r) {
   return { value: r.value, label: r.label, status: r.status, support: r.support, ageMin: r.ageMin, bars: r.bars, liveUntil: r.liveUntil };
 }
 
+/* ---------- the Desk on the board ---------- */
+
+/**
+ * Pure: a court's one desk kind ({kind, cfg}), or null. Each court in
+ * courts-schedule.json that carries a desk kind (`courts.sign`,
+ * `manhattan-heights.closes`, `el-segundo.lights`) carries exactly one; the
+ * spot id is the same as the court id.
+ */
+export function deskKindOf(config, courtId) {
+  const spot = config ? spotOf(config, courtId) : null;
+  if (!spot) return null;
+  const entry = Object.entries(spot.kinds).find(([, cfg]) => isDeskKind(cfg));
+  return entry ? { kind: entry[0], cfg: entry[1] } : null;
+}
+
+/**
+ * Pure: a court's live call (callView()), or null. `calls` are air_calls rows
+ * on any spot; `beliefs` maps a call's report_id to its belief row ({value,
+ * source_url}, air_reports). No live call, no belief row, or an unsafe belief
+ * URL all read as null — the card simply shows no call.
+ */
+export function courtCall(config, courtId, calls, beliefs, now) {
+  const desk = deskKindOf(config, courtId);
+  if (!desk) return null;
+  const call = liveCall(calls, courtId, desk.kind, now);
+  if (!call) return null;
+  const belief = beliefs.get(call.report_id);
+  return belief ? callView(config, call, belief, now) : null;
+}
+
 /* ---------- the board payload ---------- */
 
 /**
@@ -335,9 +366,20 @@ export function publicReading(r) {
  * line); lastOnSite() re-checks the same filters.
  * `o.vibeRows` is the flat 30-day on-site vibe batch, newest first. `o.conditions` travels through
  * unchanged; its `sunset` (ISO) resolves any `hours.close: 'dusk'`.
+ *
+ * `o.config` (AIR_CONFIG) is needed for the Desk: `o.deskRows` are the
+ * beach's agent rows (any fact kind — deskFactsByFeed keeps the newest per
+ * feed itself), turned into `BoardPayload.desk` ({tides, swell, sun, air};
+ * sky/fog is left out — Conditions stays the live-KLAX line). `o.calls` are
+ * live air_calls rows on any spot and `o.beliefs` maps a call's report_id to
+ * its belief row; together they fill each court's `call` (courtCall()),
+ * null without config or with none of these passed.
  */
 export function boardSummary(o) {
-  const { now, courts, kindCfg = {}, rows = [], confirms = [], lastRows = [], vibeRows = [], validatorsToday = { phones: 0, courts: 0 }, conditions = null } = o;
+  const {
+    now, courts, kindCfg = {}, rows = [], confirms = [], lastRows = [], vibeRows = [], validatorsToday = { phones: 0, courts: 0 }, conditions = null,
+    config = null, deskRows = [], calls = [], beliefs = new Map(),
+  } = o;
   const evGroups = groupEvidence(rows, confirms);
   const sunsetMin = conditions?.sunset ? laParts(Date.parse(conditions.sunset)).minuteOfDay : null;
 
@@ -366,19 +408,22 @@ export function boardSummary(o) {
       last[kind] = lastOnSite(lastRows.filter((row) => row.spot === court.id && row.kind === kind), kcfg, now);
     }
     const vibe = qualityVibe(vibeRows.filter((row) => row.spot === court.id), now);
-    return { id: court.id, order: court.order, short: court.short, status, walkOn: court.walkOn ?? null, now: sessions, next, nextDropin, readings, last, vibe };
+    const call = courtCall(config, court.id, calls, beliefs, now);
+    return { id: court.id, order: court.order, short: court.short, status, walkOn: court.walkOn ?? null, now: sessions, next, nextDropin, readings, last, vibe, call };
   });
 
   const best = bestBet(cards.map((c) => ({ ...c, next: c.nextDropin })), now);
+  const facts = config ? deskFactsByFeed(config, deskRows, now) : { tides: null, swell: null, sun: null, air: null };
   return {
     serverTime: isoSec(now),
     validatorsToday,
     conditions,
+    desk: { tides: facts.tides, swell: facts.swell, sun: facts.sun, air: facts.air },
     best,
     courts: cards.map((c) => ({
       id: c.id, status: c.status, now: c.now,
       next: c.next ? { block: c.next.block, when: c.next.when } : null,
-      readings: c.readings, last: c.last, vibe: c.vibe,
+      readings: c.readings, last: c.last, vibe: c.vibe, call: c.call,
     })),
   };
 }
