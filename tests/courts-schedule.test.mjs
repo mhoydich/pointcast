@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import config from '../src/data/air-spots.json' with { type: 'json' };
 import schedule from '../src/data/courts-schedule.json' with { type: 'json' };
-import { kindOf, kindRole, ROLES, spotOf } from '../functions/_lib/air-kinds.mjs';
+import { isDeskKind, kindOf, kindRole, ROLES, spotOf } from '../functions/_lib/air-kinds.mjs';
 
 // The Pickleball Board, group F (build spec §3, §4, §11): the sourced schedule
 // and the spots it reports on. Nothing here renders a fact; it keeps the data
@@ -31,9 +31,9 @@ function sourced() {
   return out;
 }
 
-test('courts.wait is unchanged and still the first kind; parking and vibe sit behind it', () => {
+test('courts.wait is unchanged and still the first kind; parking, vibe and the desk kind sit behind it', () => {
   const courts = spotOf(config, 'courts');
-  assert.deepEqual(Object.keys(courts.kinds), ['wait', 'parking', 'vibe'], 'primaryKind() reads key order');
+  assert.deepEqual(Object.keys(courts.kinds), ['wait', 'parking', 'vibe', 'sign'], 'primaryKind() reads key order');
   const wait = kindOf(config, 'courts', 'wait');
   assert.equal(wait.question, 'Paddles in the rack?');
   assert.equal(wait.decayMin, 45);
@@ -80,6 +80,10 @@ test('new spots: CRT, one question set per shape, parking is side, vibe is a wee
       assert.deepEqual(s.kinds.wait.extras, ['wind', 'damp', 'no-net']);
     }
     if (s.id !== 'courts') assert.equal(s.kinds.wait.question, 'Paddles in the rack?');
+    // Desk kinds (early-shift spec §3) may trail the three; nothing else may.
+    const keys = Object.keys(s.kinds);
+    assert.deepEqual(keys.slice(0, 3), ['wait', 'parking', 'vibe'], `${s.id} kind order`);
+    for (const k of keys.slice(3)) assert.ok(isDeskKind(s.kinds[k]), `${s.id}.${k} trails the three, so it must be a desk kind`);
     const parking = s.kinds.parking;
     assert.equal(kindRole(parking), 'side');
     assert.deepEqual([parking.decayMin, parking.points, parking.payEvery], [60, 3, undefined]);

@@ -230,6 +230,24 @@ test('No. 1: the first read after 6:45 freezes the edition and pays one byline p
   assert.equal(t.VISITS.puts, 0, 'no KV writes');
 });
 
+test('the Desk: a Sky agent fact stands in for a missing KLAX and the edition still freezes', async () => {
+  const t = saturday();
+  const skyAt = AT('2026-10-03T13:02:00Z'); // Sat 6:02 AM LA, well inside the 6:45 cutoff
+  t.db.db.prepare(`INSERT INTO air_reports
+      (id, spot, kind, value, extras_json, schema_v, observed_at, day, slot, pid_hash, ip_hash, byline, onsite, status, source, source_url, created_at)
+    VALUES (?, 'beach', 'fog', 'hazy', ?, 2, ?, ?, ?, 'agentpid0000000a', 'agentip00000000', 'cc', 0, 'ok', 'agent:cc', 'https://aviationweather.gov/api/data/metar', ?)`)
+    .run('ar_deskcc00000000000001', JSON.stringify({ obsAt: new Date(skyAt).toISOString().replace(/\.\d{3}Z$/, 'Z'), visMi: 3, ceilFt: null, wx: 'HZ' }), skyAt, SAT, Math.floor(skyAt / 1_800_000), skyAt);
+
+  const e = await lib.editionFor(t.env, { config, date: SAT, now: SAT_0700, origin: 'https://pointcast.xyz', klax: klaxDown });
+  assert.equal(e.provisional, false, 'the Desk\'s own read of the field fills in for KLAX');
+  assert.deepEqual(e.missing, []);
+  assert.equal(slot(e, 'sky').line, `cc read KLAX at 6:02: hazy. At Grand Ave beach 6:31 AM: can't see the pier, 1 reporter — ${guestByline(PID.h)}.`);
+  assert.equal(slot(e, 'sky').source, 'desk+air');
+  assert.equal(slot(e, 'sky').fallback, false, 'an agent read the field — not a template');
+  assert.equal(e.frozen, true);
+  noHashes(e);
+});
+
 test('provisional: KLAX down or the report store down is served, never frozen, never paid', async () => {
   const t = saturday();
   const sky = await lib.editionFor(t.env, { config, date: SAT, now: SAT_0700, origin: 'https://pointcast.xyz', klax: klaxDown });

@@ -11,7 +11,8 @@
  * goes in a query string. The animation starts on the tap and never blocks
  * the POST (build spec §7). Sound only ever follows a user gesture.
  */
-import { AIR_SPOTS, labelFor, type AirSpot } from '../lib/air';
+import { AIR_CONFIG, AIR_SPOTS, agentUrl, deskAgent, labelFor, type AirSpot } from '../lib/air';
+import { beliefParts, callHead } from '../../functions/_lib/air-desk.mjs';
 import * as shortwave from '../lib/shortwave-client';
 // The spot header's open-now line runs the Pickleball Board's own schedule rules
 // (openState/sessionsNow/nextSession) against this court's facts, which the page
@@ -384,7 +385,12 @@ type Reading = {
   crew: { id: string; n: number; at: string } | null;
   last?: { value: string; label: string; observedAt: string; byline: string } | null;
 };
-type TodayRow = { id: string; at: string; byline: string; value: string; onsite: boolean; confirms: number; live: boolean };
+/**
+ * `desk` is set on an agent's row (the beach's Sky row from the early shift):
+ * its call sign and the desk byline ("cc read KLAX at 6:02"), so the list never
+ * prints an agent's bare name as if a person filed it "from away".
+ */
+type TodayRow = { id: string; at: string; byline: string; value: string; onsite: boolean; confirms: number; live: boolean; agent?: boolean; desk?: { call: string; byline: string } | null };
 /** What this phone did today, from GET with the X-PC-Device header. */
 type You = { reportId: string | null; confirmed: string[]; crewMember: boolean };
 /** The spot's next unvoided assignment (build spec §3.4 spotPayload.assignment), or none at all. */
@@ -418,6 +424,43 @@ type SpotHeader = {
   parking: HeaderParking;
   vibe: HeaderVibe;
 } | null;
+/**
+ * GET /api/air/[spot]'s `desk` (functions/_lib/air-store.ts, group M): an
+ * early-shift agent's reading, sent only while `reading.status` is 'none'.
+ * Only the beach's Sky feed (kind 'fog') is ever confirmable this way — its
+ * tide/swell/sun/aqi kinds are agent-only "fact" kinds nobody can report or
+ * confirm (functions/_lib/air-kinds.mjs's confirmable()). `reportId` is a
+ * normal air_reports id: POST /api/air/confirm takes it exactly like any
+ * other report's.
+ */
+type DeskReadingView = { feed: string; agent: string; value: string; label: string; byline: string; reportId: string };
+/**
+ * GET /api/air/[spot]'s `call` (functions/_lib/air-store.ts, group M): the
+ * spot's one live call from the desk, on its one desk kind (a court's sign,
+ * closes or lights question) — sent for every visitor, but this client only
+ * shows it inside the receipt, once this visit has its own (build spec §9
+ * item 4: "the call after the receipt").
+ */
+type CallResultView = {
+  id: string; agent: string; asker: string; belief: { value: string; label: string }; sourceHost: string;
+  options: { v: string; label: string }[]; status: string;
+};
+/**
+ * A call's head and belief line, from config.desk.templates (callHead() and
+ * beliefParts() in functions/_lib/air-desk.mjs): "CALL FROM THE DESK · SOL"
+ * and "Sol read *Weekends and school breaks* on citymb.info." with the
+ * belief label in italics. Shared by the spot page and the board's cards.
+ */
+export function paintCallLines(head: HTMLElement | null, belief: HTMLElement | null, call: { agent: string; asker: string; belief: { value: string; label: string }; sourceHost: string }): void {
+  if (head) head.textContent = callHead(AIR_CONFIG, call);
+  if (!belief) return;
+  belief.replaceChildren(...(beliefParts(AIR_CONFIG, call) as { text: string; key?: string }[]).map((part) => {
+    if (part.key !== 'label') return document.createTextNode(part.text);
+    const em = document.createElement('em');
+    em.textContent = part.text;
+    return em;
+  }));
+}
 type SpotPayload = {
   spot: { id: string; name: string; short: string; kind: string; question: string; options: { v: string; label: string }[]; decayMin: number; courtCall?: { weekday: number; time: string } | null };
   reading: Reading;
@@ -428,6 +471,8 @@ type SpotPayload = {
   you?: You | null;
   assignment?: AssignBadge | null;
   header?: SpotHeader;
+  desk?: DeskReadingView | null;
+  call?: CallResultView | null;
 };
 /**
  * `stamps` is the receipt, two at most with the server's text: the place stamp and
@@ -441,7 +486,9 @@ type Award = {
 };
 type ReportBody = { kind: string; value: string; device: string; code: string | null; extras: string[]; asGuest: boolean; observedAt: number };
 type Claim = { until: string } | null;
-type ReportResult = { ok: true; replaced: boolean; report: { id: string; value: string; label: string; observedAt: string; byline: string; onsite: boolean; code?: 'none' | 'ok' | 'unknown' }; reading: Reading; today?: TodayRow[]; award: Award; claim?: Claim };
+/** A report that answered a live call from the desk (functions/_lib/air-store.ts's answerCall(), group M): the holder and how the judge read it. */
+type CallResult = { id: string; agent: string; verdict: 'checked' | 'overruled' | 'pending' | 'unjudged' | 'no-check' };
+type ReportResult = { ok: true; replaced: boolean; report: { id: string; value: string; label: string; observedAt: string; byline: string; onsite: boolean; code?: 'none' | 'ok' | 'unknown' }; reading: Reading; today?: TodayRow[]; award: Award; claim?: Claim; call?: CallResult | null };
 type ConfirmResult = { ok: true; onsite?: boolean; reading: Reading; today?: TodayRow[]; award: Award; claim?: Claim; next: 'report' | null };
 type ApiError = { ok: false; reason: string; retryAfter?: number; reading?: Reading };
 type Sent<T> = { status: number; json: T | ApiError | null; network: boolean };
@@ -544,6 +591,10 @@ export function mountAirSpot(root: HTMLElement): void {
     openState: q('[data-air-open-state]'),
     now: q('[data-air-now]'), nowText: q('[data-air-now-text]'), nowTag: q('[data-air-now-tag]'), nowProv: q('[data-air-now-prov]'),
     next: q('[data-air-next]'), nextText: q('[data-air-next-text]'), nextTag: q('[data-air-next-tag]'), nextProv: q('[data-air-next-prov]'),
+    deskNote: q('[data-air-desk-note]'),
+    // DeskCall.astro's own markup (shared with pickleball-board.ts's CourtCard wiring):
+    // this spot's one desk kind, if it has one, shown inside the receipt only.
+    callShell: q('[data-pb-call]'), callHead: q('[data-pb-call-head]'), callBelief: q('[data-pb-call-belief]'),
   };
   // This court's facts for the open-now line (AirSpot.astro embeds them at build time).
   const courtData = ((): CourtData | null => {
@@ -571,6 +622,15 @@ export function mountAirSpot(root: HTMLElement): void {
   let moreCount = 0;
   // An ASSIGNMENT stamp outranked this receipt's crew stamp, so the server already counted the crew in `more`.
   let crewInMore = false;
+  // The confirm strip is standing in for the beach's Sky agent row (`current.desk`), not a
+  // human `reading` — set by paintReading(), read by confirmReport() so it knows which
+  // report id and label it is confirming. Only ever true on the beach's fog page.
+  let usingDesk = false;
+  // A "Changed" tap on the desk reading captured before the new report lands (settleReport
+  // judges it): the agent and the value it read, so the receipt can say CHECKED/OVERRULED.
+  // `changedOnsite` turns true once the server took the "Changed" itself on site: judgeRow()
+  // takes the earliest judgment, so that confirm (not the report after it) decides: OVERRULED.
+  let deskConfirmContext: { agent: string; value: string; changedOnsite: boolean } | null = null;
   let pollTimer: number | undefined;
   let extrasTimer: number | undefined;
   let refreshing: Promise<void> | null = null;
@@ -609,11 +669,28 @@ export function mountAirSpot(root: HTMLElement): void {
     text(els.assign, assignBadgeText(a));
     show(els.assign, true);
   }
+  /**
+   * "CALL FROM THE DESK · SOL" and its belief line, inside the receipt only
+   * (build spec §9 item 4) — the shell itself (DeskCall.astro) is physically
+   * inside `.air__receipt`, so it can never show before a receipt does. Its
+   * buttons are TapRow, unchanged: answering is a normal on-site report.
+   */
+  function paintCall(call: SpotPayload['call']): void {
+    if (!els.callShell) return;
+    if (!call) { show(els.callShell, false); return; }
+    paintCallLines(els.callHead, els.callBelief, call);
+    // TapRow's own "no on-site code yet" hint (build spec §10), same rule as the board's.
+    const hint = els.callShell.querySelector<HTMLElement>('[data-pb-tap-hint]');
+    if (hint) hint.hidden = !!code;
+    show(els.callShell, true);
+  }
+
   function paintReading(data: SpotPayload, opts: { fromOwnAction?: boolean } = {}) {
     current = data;
     const r = data.reading;
     setClock();
     paintAssign(data.assignment);
+    paintCall(data.call ?? null);
     show(els.live, r.status !== 'none');
     root.setAttribute('data-air-live', r.status !== 'none' ? 'yes' : 'no');
 
@@ -634,14 +711,20 @@ export function mountAirSpot(root: HTMLElement): void {
     const said = !!ownRow && ownRow.live && ownRow.value === r.value;
     const askable = state === 'idle' || state === 'queued';
     const offer = askable && r.status !== 'none' && !!r.label && r.value !== 'cant' && !own && !done && !said;
-    if (offer) {
-      const l = r.label!;
+    // The beach's Sky agent row (build spec §4, §9): while nobody has reported fog today,
+    // `data.desk` is cc's own KLAX-based reading — a normal confirmable report (only the
+    // beach's tide/swell/sun/aqi kinds are agent-only "fact" kinds nobody can confirm).
+    // Offered exactly like a single-reporter live reading, never alongside one of a person's own.
+    usingDesk = !offer && askable && r.status === 'none' && !!data.desk
+      && !ownIds().includes(data.desk.reportId) && !deadReports.has(data.desk.reportId);
+    if (offer || usingDesk) {
+      const l = (offer ? r.label : data.desk!.label)!;
       text(els.confirmQ, `Still ${/^[A-Z][a-z]/.test(l) ? l.charAt(0).toLowerCase() + l.slice(1) : l}?`);
-      text(els.confirmMeta, [supportLabel(r.support), agoLabel(r.ageMin)].filter(Boolean).join(' · '));
+      text(els.confirmMeta, offer ? [supportLabel(r.support), agoLabel(r.ageMin)].filter(Boolean).join(' · ') : data.desk!.byline);
       show(els.confirm, true);
     } else show(els.confirm, false);
     // The strip or the four buttons, never both (spec §7 step 2): "Changed" brings the buttons back.
-    if (askable) showAsk(!offer);
+    if (askable) showAsk(!offer && !usingDesk);
 
     // Tally, only once there is something to count.
     const live = r.status !== 'none';
@@ -680,12 +763,22 @@ export function mountAirSpot(root: HTMLElement): void {
       els.todayList.replaceChildren(...rows.map((t) => {
         const li = document.createElement('li');
         if (!t.live) li.setAttribute('data-expired', '');
-        if (!t.onsite) li.setAttribute('data-remote', '');
+        // An agent's row reads as the desk's ("cc read KLAX at 6:02", linked to its card), never as a person from away.
+        const desk = t.desk ?? null;
+        if (desk) li.setAttribute('data-agent', '');
+        else if (!t.onsite) li.setAttribute('data-remote', '');
         const at = document.createElement('span'); at.className = 'air-mono'; at.textContent = t.at;
-        const who = document.createElement('b'); who.textContent = t.byline;
+        const who = document.createElement('b');
+        if (desk) {
+          const a = document.createElement('a');
+          a.className = 'air-mono';
+          a.href = agentUrl(desk.call);
+          a.textContent = desk.byline;
+          who.append(a);
+        } else who.textContent = t.byline;
         const what = document.createElement('span'); what.textContent = labelFor(spot, kind, t.value) ?? t.value;
         const meta = document.createElement('small'); meta.className = 'air-mono';
-        meta.textContent = [t.onsite ? '' : 'from away', t.confirms > 0 ? `${t.confirms} still true` : ''].filter(Boolean).join(' · ');
+        meta.textContent = [t.onsite || desk ? '' : 'from away', t.confirms > 0 ? `${t.confirms} still true` : ''].filter(Boolean).join(' · ');
         li.append(at, who, what, meta);
         return li;
       }));
@@ -1029,6 +1122,28 @@ export function mountAirSpot(root: HTMLElement): void {
     void refresh();
   }
 
+  const CALL_VERDICT_WORD: Record<string, string> = { checked: 'CHECKED', overruled: 'OVERRULED', pending: 'pending', unjudged: 'unjudged', 'no-check': 'no check' };
+  /** "Sol's call: CHECKED" / "cc's read: OVERRULED" (build spec §9 item 4): a report that either
+   * answered a live call from the desk (`j.call`) or judged the beach's Sky agent row after a
+   * "Changed" tap on it (deskConfirmContext). Mutually exclusive: a call only lives on a court's
+   * desk kind, and the Sky desk reading only lives on the beach's fog kind. */
+  function paintDeskOutcome(j: ReportResult): void {
+    if (!els.deskNote) return;
+    if (j.call) {
+      const name = deskAgent(j.call.agent)?.name ?? j.call.agent;
+      text(els.deskNote, `${name}'s call: ${CALL_VERDICT_WORD[j.call.verdict] ?? j.call.verdict}`);
+      show(els.deskNote, true);
+    } else if (deskConfirmContext) {
+      const { agent, value, changedOnsite } = deskConfirmContext;
+      // Same rule as judgeRow(): an on-site "Changed" came first and overrules; only
+      // when it did not land on site does the report decide (same value checks).
+      const verdict = changedOnsite || j.report.value !== value ? 'OVERRULED' : 'CHECKED';
+      text(els.deskNote, `${deskAgent(agent)?.name ?? agent}'s read: ${verdict}`);
+      show(els.deskNote, true);
+    }
+    deskConfirmContext = null;
+  }
+
   /** A report the server took: stamp, receipt, tally. Shared by the tap and the queue. */
   function settleReport(j: ReportResult, at: number) {
     const label = labelFor(spot, kind, j.report.value) ?? j.report.value;
@@ -1038,11 +1153,14 @@ export function mountAirSpot(root: HTMLElement): void {
       // "ON THE AIR · ASSIGNMENT +10" (build spec §3.8): this report filled a seat.
       const a = j.award.assignment;
       if (a && els.receiptLine) els.receiptLine.textContent = `${receiptText(label, 'air', undefined, at)} · ASSIGNMENT +${a.reward}`;
+      paintDeskOutcome(j);
     } else {
       // The optimistic line said ON THE AIR when the phone had a code; the server says otherwise.
       if (els.receiptLine) els.receiptLine.textContent = receiptText(label, 'remote', undefined, at);
       if (els.remoteNote) els.remoteNote.textContent = j.report.code === 'unknown' ? 'That code is not this spot’s. Filed from away; open the link the group shared to go on the air.' : 'Filed from away. Open this spot’s link with its code to go on the air.';
       show(els.remoteNote, true);
+      // Neither a call nor the Sky judge reads a report from away (both need an on-site row).
+      deskConfirmContext = null;
     }
     afterOwnAction(j.reading, j.today, j.award, j.report.onsite, j.claim ?? null, 'report');
   }
@@ -1132,31 +1250,46 @@ export function mountAirSpot(root: HTMLElement): void {
   }
 
   async function confirmReport(btn: HTMLElement, verdict: 'still' | 'changed' | 'cant'): Promise<void> {
-    const r = current?.reading;
-    if (!r?.reportId || !r.label) { showAsk(true); return; }
+    // usingDesk (set by paintReading()): this strip stands for the beach's Sky agent row,
+    // not a human `reading` — the report id and label come from `current.desk` instead.
+    const desk = usingDesk ? current?.desk : null;
+    const reportId = desk ? desk.reportId : current?.reading?.reportId;
+    const label = desk ? desk.label : current?.reading?.label;
+    if (!reportId || !label) { showAsk(true); return; }
     if (verdict === 'changed') {
       // "Changed" is a report, so it goes straight to the four buttons. The verdict
       // still goes on the record (the server answers next: 'report'), without waiting.
       inkFill(btn); buzz([30]);
       show(els.confirm, false); showAsk(true);
       els.ask?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-      rememberOwn(`confirm:${r.reportId}`, false);
-      void postJson<ConfirmResult>('/api/air/confirm', { reportId: r.reportId, verdict, device, code });
+      rememberOwn(`confirm:${reportId}`, false);
+      // The desk fact's own judge (functions/_lib/air-desk.mjs's judgeRow()) takes the earliest
+      // on-site judgment: this "Changed" if the server takes it on site, else the report that
+      // follows. The note that names the verdict waits for that report to land.
+      const ctx = desk ? { agent: desk.agent, value: desk.value, changedOnsite: false } : null;
+      deskConfirmContext = ctx;
+      void postJson<ConfirmResult>('/api/air/confirm', { reportId, verdict, device, code }).then((res) => {
+        const cj = res.json;
+        if (ctx && cj && cj.ok === true && cj.onsite === true) ctx.changedOnsite = true;
+      });
       return;
     }
-    const floor = begin(btn, receiptText(r.label, code ? 'air' : 'remote', verdict));
-    const sent = postWithRetry<ConfirmResult>('/api/air/confirm', { reportId: r.reportId, verdict, device, code });
+    const floor = begin(btn, receiptText(label, code ? 'air' : 'remote', verdict));
+    const sent = postWithRetry<ConfirmResult>('/api/air/confirm', { reportId, verdict, device, code });
     const [, res] = await Promise.all([floor, sent]);
     const j = res.json;
     if (j && j.ok === true && 'next' in j) {
       const onsite = typeof j.onsite === 'boolean' ? j.onsite : !!code && (j.award.points > 0 || (j.award.stamps || []).length > 0);
-      rememberOwn(`confirm:${r.reportId}`, onsite);
+      rememberOwn(`confirm:${reportId}`, onsite);
       // A confirm is not a report of yours: nothing for the detail chips to go on.
       myValue = null; myObservedAt = 0; myExtras = [];
       els.extras.forEach((chip) => chip.setAttribute('aria-pressed', 'false'));
-      if (onsite) landStamps(j.award, true);
-      else {
-        if (els.receiptLine) els.receiptLine.textContent = receiptText(r.label, 'remote', verdict);
+      if (onsite) {
+        landStamps(j.award, true);
+        // "Still true" on-site is a definitive same-value judge (judgeRow()): checked, at once.
+        if (desk && els.deskNote) { text(els.deskNote, `${deskAgent(desk.agent)?.name ?? desk.agent}'s read: CHECKED`); show(els.deskNote, true); }
+      } else {
+        if (els.receiptLine) els.receiptLine.textContent = receiptText(label, 'remote', verdict);
         if (els.remoteNote) els.remoteNote.textContent = code ? 'Noted from away: this confirm does not add to the count.' : 'Filed from away. Open this spot’s link with its code to go on the air.';
         show(els.remoteNote, true);
       }
@@ -1168,7 +1301,7 @@ export function mountAirSpot(root: HTMLElement): void {
     else note(ERROR_COPY[reason] || 'That did not go through. Tap again.');
     setState('idle');
     show(els.receipt, false);
-    if (reason === 'expired' || reason === 'not-found') deadReports.add(r.reportId);
+    if (reason === 'expired' || reason === 'not-found') deadReports.add(reportId);
     if ((j as ApiError | null)?.reading && current) current = { ...current, reading: (j as ApiError).reading! };
     if (reason === 'own-report' || reason === 'expired' || reason === 'not-found') { show(els.confirm, false); showAsk(true); }
     else if (current) paintReading(current);
@@ -1224,6 +1357,50 @@ export function mountAirSpot(root: HTMLElement): void {
   }
 
   // --- wiring ---
+  /**
+   * The call from the desk's own TapRow (DeskCall.astro, embedded in the
+   * receipt): answering it is a normal on-site report on this spot's desk
+   * kind. Wired here rather than through pickleball-board.ts's delegated
+   * listener (this page has no `[data-pb-board]` root of its own).
+   */
+  els.callShell?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-pb-tap-value]');
+    if (!btn) return;
+    const row = btn.closest<HTMLElement>('[data-pb-tap]');
+    const [callSpot, callKind] = (row?.dataset.pbTap || '').split(':');
+    if (!row || row.dataset.pbTapState === 'sending' || !callSpot || !callKind) return;
+    row.dataset.pbTapState = 'sending';
+    const tapNote = row.querySelector<HTMLElement>('[data-pb-tap-note]');
+    void postJson<ReportResult>(`/api/air/${encodeURIComponent(callSpot)}`, {
+      kind: callKind, value: btn.dataset.pbTapValue || '', device, code, extras: [], asGuest: false, observedAt: Date.now(),
+    }).then((res) => {
+      const j = res.json;
+      if (j && j.ok === true && 'report' in j) {
+        // "Answered." only when the server says this report closed the call (`j.call`):
+        // "Can't say" on site leaves it open for the next person, and says so.
+        const cant = j.report.value === 'cant';
+        row.dataset.pbTapState = j.report.onsite && !j.call && cant ? 'idle' : 'sent';
+        if (tapNote) {
+          tapNote.textContent = !j.report.onsite ? 'Filed from away · open your group link at the court to answer.'
+            : j.call ? 'Answered.'
+            : cant ? 'Noted. The call stays open for someone who can say.'
+            : 'Noted.';
+          tapNote.hidden = false;
+        }
+        paintDeskOutcome(j);
+        void refresh();
+      } else if (j && j.ok === false && j.reason === 'no-open-call') {
+        // Someone answered it (or it expired) since this page last looked: done, not "tap again".
+        row.dataset.pbTapState = 'sent';
+        if (tapNote) { tapNote.textContent = 'Already answered.'; tapNote.hidden = false; }
+        void refresh();
+      } else {
+        row.dataset.pbTapState = 'idle';
+        if (tapNote) { tapNote.textContent = 'Didn’t send. Tap again.'; tapNote.hidden = false; }
+      }
+    });
+  });
+
   all('[data-air-value]').forEach((btn) => btn.addEventListener('click', () => {
     if (state === 'sending') return;
     void fileReport(btn, btn.dataset.airValue || '', myExtras);

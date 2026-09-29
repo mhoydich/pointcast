@@ -7,6 +7,7 @@ import register from '../src/data/paddle-register.json' with { type: 'json' };
 import news from '../src/data/front-door-news.json' with { type: 'json' };
 import { NET, formatMhz } from '../src/lib/band.ts';
 import { guestByline, kindOf } from '../functions/_lib/air-kinds.mjs';
+import { editionSkyLine, editionTideLine } from '../functions/_lib/air-desk.mjs';
 import {
   CUTOFF_MINUTE, EDITION_TTL, FIRST_EDITION, FOOTER_LINE, NIGHTLY_NET, SHOP_DISCLOSURE, SLOTS,
   addDays, canFreeze, composeEdition, cutoffMs, editionDate, editionMasthead, editionNumber, editionText, editionTitle,
@@ -297,6 +298,35 @@ test('sky: a final KLAX day with no report by 6:45 (no-record) prints a standing
   assert.ok(frozen.reportIds.length > 0, 'its courts reporters still get their bylines');
   const other = composeEdition({ date: MON, config, sources: { ...full(MON), sky: { marine: { ...noRecord, date: '2026-10-04' }, beach: null } } });
   assert.deepEqual(other.missing, ['klax'], 'another day\'s record is not this edition\'s');
+});
+
+test('sky: the Desk\'s sky fact stands in for a missing KLAX, and a tides fact always adds its own sentence', () => {
+  const skyFact = {
+    feed: 'sky', agent: 'cc', value: 'hazy', label: 'Hazy', detail: { obsAt: SAT_553, visMi: 3, ceilFt: null, wx: 'HZ' },
+    filedAt: SAT_553, observedAt: SAT_553, byline: 'cc read KLAX at 6:02', sourceUrl: 'https://aviationweather.gov/api/data/metar', bars: 3,
+  };
+  const tidesFact = {
+    feed: 'tides', agent: 'sol', value: 'rising', label: 'Rising',
+    detail: { next: [{ type: 'H', at: '2026-10-03T14:12:00Z', ft: 5.1 }, { type: 'L', at: '2026-10-03T20:40:00Z', ft: 0.9 }] },
+    filedAt: SAT_553, observedAt: SAT_553, byline: 'Sol read NOAA at 6:02', sourceUrl: 'https://api.tidesandcurrents.noaa.gov/', bars: 4,
+  };
+
+  // No KLAX at all: the sky fact takes its place, and klax drops out of missing.
+  const noKlax = composeEdition({ date: SAT, config, sources: { sky: { marine: null, beach: null, desk: { sky: skyFact, tides: null } }, courts: {} } });
+  assert.equal(byId(noKlax, 'sky').line, editionSkyLine(config, skyFact));
+  assert.equal(byId(noKlax, 'sky').fallback, false, 'an agent read the field — this is not a template fallback');
+  assert.deepEqual(noKlax.missing, [], 'klax is no longer missing');
+  assert.equal(byId(noKlax, 'sky').source, 'desk');
+
+  // KLAX answers and a tides fact is filed too: both sentences print, in order.
+  const both = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX, beach: null, desk: { sky: null, tides: tidesFact } }, courts: {} } });
+  assert.equal(byId(both, 'sky').line, `Under the marine layer at KLAX, 5:53 AM. ${editionTideLine(config, tidesFact)}`);
+  assert.equal(byId(both, 'sky').source, 'klax-asos+desk-tides');
+
+  // Neither KLAX nor a sky fact, and no beach moment: the template line, still missing klax.
+  const nothing = composeEdition({ date: SAT, config, sources: { sky: { marine: null, beach: null, desk: {} }, courts: {} } });
+  assert.deepEqual(nothing.missing, ['klax']);
+  assert.equal(byId(nothing, 'sky').line, 'KLAX has not reported yet; the sky fills in with its next hourly report.');
 });
 
 test('toJsonFeed: JSON Feed 1.1 with stable ids, newest first, seven at most', () => {

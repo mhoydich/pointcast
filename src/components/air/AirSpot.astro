@@ -17,7 +17,8 @@
  */
 import AirDial from './AirDial.astro';
 import AirInk from './AirInk.astro';
-import { courtCallLabel, mhzLabel, primaryKind, spotUrl, type AirSpot as AirSpotConfig } from '../../lib/air';
+import DeskCall from './DeskCall.astro';
+import { courtCallLabel, deskKinds, mhzLabel, primaryKind, spotUrl, type AirSpot as AirSpotConfig } from '../../lib/air';
 import { courtById, provenanceLine, sourceOf, type Block, type Court } from '../../lib/courts';
 import { daysText, hoursLine, seasonText, timeText } from '../../lib/court-format';
 
@@ -103,6 +104,10 @@ const courtData = court ? {
   blocks: blocks.map(({ block, tag }) => ({ ...block, prov: `${provenanceLine(block)}${staleText(tag)}`, tag })),
 } : null;
 const courtJson = courtData ? JSON.stringify(courtData).replace(/</g, '\\u003c') : '';
+
+// This spot's one desk kind (a court's sign, closes or lights question), if it has one —
+// the call from the desk shown inside the receipt (build spec §9 item 4).
+const deskKind = deskKinds(spot)[0] ?? null;
 ---
 
 <AirInk />
@@ -230,6 +235,10 @@ const courtJson = courtData ? JSON.stringify(courtData).replace(/</g, '\\u003c')
     </div>
   </div>
 
+  <!-- The beach's Sky agent row (only ever offered there) or an answered call from the desk: -->
+  <!-- "cc's read: CHECKED" / "Sol's call: CHECKED" (build spec §4, §9 item 4). -->
+  <p class="air__desk-note air-mono" data-air-desk-note role="status" hidden></p>
+
   <p class="air__assign air-mono" data-air-assign hidden></p>
 
   <div class="air__ask" data-air-ask>
@@ -249,6 +258,7 @@ const courtJson = courtData ? JSON.stringify(courtData).replace(/</g, '\\u003c')
     <div class="air__ring" data-air-crew-ring hidden></div>
     <p class="air__remote air-mono" data-air-remote hidden>Filed from away. Open this spot’s link with its code to go on the air.</p>
     <p class="air__queued" data-air-queued hidden>No signal right now. This report resends on its own for 15 minutes.</p>
+    {deskKind && <DeskCall spotId={spot.id} kind={deskKind.kind} cfg={deskKind.cfg} />}
   </div>
 
   <div class="air__tally" data-air-tally hidden>
@@ -370,6 +380,7 @@ const courtJson = courtData ? JSON.stringify(courtData).replace(/</g, '\\u003c')
   .air__confirm-q { margin: 0 0 2px; font: 600 24px/1.15 var(--pc-font-sans); letter-spacing: -.01em; }
   .air__confirm-meta { margin: 0 0 10px; color: var(--pc-ink-muted); }
   .air__pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .air__desk-note { margin: 0 0 18px; padding: 8px 12px; border-left: 4px solid var(--air-live); color: var(--pc-ink); font-weight: 600; }
 
   /* ---- the question and the four buttons ---- */
   .air__q { margin: 0 0 12px; font: 600 40px/44px var(--pc-font-sans); letter-spacing: -.02em; }
@@ -436,6 +447,8 @@ const courtJson = courtData ? JSON.stringify(courtData).replace(/</g, '\\u003c')
   .air__list :global(b) { font-weight: 600; }
   .air__list :global(small) { font-size: 11px; color: var(--pc-ink-muted); text-align: right; }
   .air__list :global(li[data-expired]), .air__list :global(li[data-expired] b), .air__list :global(li[data-remote]) { color: var(--air-static); }
+  /* An agent's row: the desk byline, linked to the agent's card (never a person's name). */
+  .air__list :global(li[data-agent] a) { color: var(--pc-ink-soft); font-weight: 400; overflow-wrap: anywhere; }
   .air__history { margin: 0 0 16px; }
   .air__history :global(p) { margin: 0 0 6px; font-size: 14px; line-height: 1.45; color: var(--pc-ink-soft); }
 

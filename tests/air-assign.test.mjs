@@ -49,6 +49,10 @@ test('assignments: three templates on the two question kinds that exist, and "as
   }
   assert.ok(config.reserved.includes('assign'));
   assert.equal(spotOf(config, 'assign'), null, '/api/air/assign is never a spot');
+  for (const id of ['agent', 'desk']) {
+    assert.ok(config.reserved.includes(id), `${id} is reserved for the Desk (/r/${id})`);
+    assert.equal(spotOf(config, id), null, `/r/${id} is never a spot`);
+  }
   assert.equal(templateOf(config, 'nope'), null);
   assert.equal(templateOf(config, 'constructor'), null);
   assert.equal(templateOf({ spots: [], reserved: [] }, 'rack-at-open'), null, 'a config without templates has none');

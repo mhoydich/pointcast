@@ -1,0 +1,131 @@
+---
+/**
+ * /r/agent/[call] — one house agent's card (build spec §4, §5 "P: Pages").
+ * Static: the agent's name, portrait (a Nouns seed for Frog; a mono
+ * lettermark for the rest) and the feeds it keeps, straight from
+ * src/data/air-spots.json (desk.agents, desk.feeds) — those never change
+ * between builds. Live: the record, On time, calls and the shift log, read
+ * once from GET /api/air/desk?agent=<call> (an AgentCard) by
+ * src/scripts/agent-card.ts.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import AirInk from '../../../components/air/AirInk.astro';
+import { AIR_CONFIG, AIR_DESK, DESK_URL, agentMark, agentPaths, agentPortrait, agentUrl, type AirDeskAgent } from '../../../lib/air';
+import { deskTemplate } from '../../../../functions/_lib/air-desk.mjs';
+
+export function getStaticPaths() {
+  return agentPaths();
+}
+
+const { agent } = Astro.props as { agent: AirDeskAgent };
+const portrait = agentPortrait(agent);
+const keeps = AIR_DESK.feeds.filter((f) => f.keeper === agent.call);
+
+const title = `${agent.name} · The Desk · Field Reports`;
+const description = keeps.length
+  ? `${agent.name} keeps ${keeps.map((f) => f.name).join(' and ')} on the early shift, and can put out a call from the desk. Agents never earn points or cash; a person's own report always outranks theirs.`
+  : `${agent.name} can put out a call from the desk. Agents never earn points or cash; a person's own report always outranks theirs.`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ProfilePage',
+  '@id': `https://pointcast.xyz${agentUrl(agent.call)}`,
+  name: `${agent.name} · The Desk`,
+  description,
+  url: `https://pointcast.xyz${agentUrl(agent.call)}`,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout title={title} description={description} hideAds jsonLd={jsonLd}>
+  <AirInk />
+  <div class="ac" data-agent-card data-agent-call={agent.call}>
+    <header class="ac__head">
+      <p class="ac__kicker air-mono"><a href={DESK_URL}>The Desk</a> <span aria-hidden="true">·</span> agent</p>
+      <div class="ac__id">
+        {portrait
+          ? <>
+              {/* An external portrait (noun.pics): if it fails, the lettermark takes its place (spec §8). */}
+              <img class="ac__portrait" src={portrait} alt={`${agent.name}, Noun ${agent.noun}`} width="72" height="72" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false" />
+              <span class="ac__mark" aria-hidden="true" hidden>{agentMark(agent)}</span>
+            </>
+          : <span class="ac__mark" aria-hidden="true">{agentMark(agent)}</span>}
+        <h1 class="ac__name">{agent.name}</h1>
+      </div>
+      {keeps.length > 0
+        ? (
+          <p class="ac__keeps air-mono">
+            Keeps {keeps.map((f, i) => <>{i > 0 && ' and '}{f.name}{' '}<span class="ac__says">({f.says})</span></>)}
+          </p>
+        )
+        : <p class="ac__keeps air-mono">{deskTemplate(AIR_CONFIG, 'keepsNone')}</p>}
+    </header>
+
+    <noscript><p class="ac__note">The live card needs JavaScript. The data is at <a href={`/api/air/desk?agent=${agent.call}`}>/api/air/desk?agent={agent.call}</a>.</p></noscript>
+    <p class="ac__note" data-agent-note role="status" hidden>The Desk is offline right now. This card fills in on the next successful read.</p>
+
+    <section class="ac__section">
+      <h2 class="ac__h2 air-mono">Record</h2>
+      <p data-agent-record>—</p>
+      <p data-agent-nocheck hidden></p>
+      {keeps.length > 0 && <p data-agent-ontime>—</p>}
+    </section>
+
+    <section class="ac__section">
+      <h2 class="ac__h2 air-mono">Calls</h2>
+      <p data-agent-calls>—</p>
+    </section>
+
+    <section class="ac__section">
+      <h2 class="ac__h2 air-mono">Stamps</h2>
+      <p class="ac__empty" data-agent-stamps-empty hidden>None yet.</p>
+      <ul class="ac__list" data-agent-stamps></ul>
+    </section>
+
+    {keeps.length > 0 && (
+      <section class="ac__section">
+        <h2 class="ac__h2 air-mono">Shift log</h2>
+        <p class="ac__empty" data-agent-log-empty hidden>No mornings on the books yet.</p>
+        <ul class="ac__list" data-agent-log></ul>
+      </section>
+    )}
+
+    <footer class="ac__foot">
+      <p>Agents never hold points, stamps or cash — this is a record of what was filed and checked, nothing more.</p>
+      <p class="air-mono"><a href={DESK_URL}>The Desk</a> <span aria-hidden="true">·</span> <a href="/r">All spots</a></p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script>
+  import { mountAgentCard } from '../../../scripts/agent-card';
+  const call = document.querySelector<HTMLElement>('[data-agent-card]')?.dataset.agentCall;
+  if (call) mountAgentCard(call);
+</script>
+
+<style>
+  .ac { max-width: 560px; margin: 0 auto; padding: 14px 16px 40px; }
+  .ac [hidden] { display: none !important; }
+  .ac__head { margin-bottom: 20px; }
+  .ac__kicker { margin: 0 0 10px; color: var(--pc-ink-muted); }
+  .ac__id { display: flex; align-items: center; gap: 14px; }
+  .ac__portrait { display: block; border-radius: 0; background: var(--pc-ink-soft); }
+  .ac__mark { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; background: var(--pc-ink); color: var(--pc-bg); font: 600 32px/1 var(--pc-font-mono); }
+  .ac__name { margin: 0; font: 600 36px/1.15 var(--pc-font-sans); letter-spacing: -.02em; }
+  .ac__keeps { margin: 10px 0 0; color: var(--pc-ink-soft); }
+  .ac__says { color: var(--pc-ink-muted); }
+
+  .ac__note { margin: 0 0 16px; padding: 10px 12px; border-left: 4px solid var(--pc-ink); font-size: 15px; line-height: 1.4; }
+
+  .ac__section { margin: 0 0 20px; padding-top: 12px; border-top: 2px solid var(--pc-ink); }
+  .ac__h2 { margin: 0 0 8px; font-weight: 600; color: var(--pc-ink-muted); }
+  .ac__section p { margin: 0 0 4px; font-size: 15px; line-height: 1.4; }
+  .ac__empty { color: var(--air-static, #9A9890); font-size: 14px; }
+  .ac__list { list-style: none; margin: 0; padding: 0; }
+  .ac__list :global(li) { padding: 6px 0; border-bottom: 1px solid var(--pc-rule-soft); font-size: 14px; line-height: 1.4; }
+
+  .ac__foot { padding-top: 12px; border-top: 1px solid var(--pc-rule); color: var(--pc-ink-muted); }
+  .ac__foot p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+
+  @media (max-width: 380px) { .ac__name { font-size: 28px; } }
+</style>
