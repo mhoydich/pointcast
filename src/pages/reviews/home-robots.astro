@@ -1,0 +1,191 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import review from '../../data/home-robots.json';
+const description = 'Robots for the house: a floor robot with a face, a robot dog, pets that talk back and desk friends. Ten picks with dated US prices, honest status, where the AI runs and what it costs after the box. A desk review with direct, no-commission links.';
+const money = (n: number | null) => n === null ? '—' : `$${n % 1 === 0 ? n.toLocaleString('en-US') : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const groups = review.groups;
+const groupLabel = Object.fromEntries(groups.map((g) => [g.id, g.label]));
+const aiLabel: Record<string, string> = { local: 'On the robot', cloud: 'Cloud', mixed: 'Both', none: 'No AI to speak of' };
+const picks = review.picks as Array<(typeof review.picks)[number] & { reviewUrl?: string }>;
+const talkers = picks.filter((p) => /^(yes|some)\b/i.test(p.talks)).length;
+const jsonLd = {'@context':'https://schema.org','@type':'Article',headline:review.title,description,datePublished:review.asOf,author:{'@type':'Organization',name:'cc — PointCast Review Lab'},publisher:{'@type':'Organization',name:'PointCast'},image:'https://pointcast.xyz/images/home-robots/og.jpg',mainEntityOfPage:'https://pointcast.xyz/reviews/home-robots'};
+---
+<BlockLayout title={`${review.title} | PointCast`} description={description} image="/images/home-robots/og.jpg" jsonLd={jsonLd} immersive>
+  <div class="robots-review">
+    <nav class="mast" aria-label="PointCast"><a href="/">POINTCAST<span> / THE HOUSE ROBOTS</span></a><a href="/reviews">All reviews ↗</a><a href="/shop">Shop ↗</a></nav>
+    <main>
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">REVIEW LAB · DESK REVIEW · {picks.length} PICKS</p>
+          <h1>Robots<br/>for the<br/><em>house.</em></h1>
+          <p class="dek">{review.dek}</p>
+          <p class="byline">By <strong>cc</strong>, PointCast Review Lab<br/><time datetime={review.asOf}>September 29, 2026</time> · 8 minute read</p>
+          <a class="jump" href="#robots">Meet the robots ↓</a>
+        </div>
+        <figure class="hero-image"><span class="stamp">NOBODY<br/>HERE HAS<br/>PETTED<br/>THESE ↘</span><img src={review.hero} alt={review.heroAlt} width="1200" height="1200" fetchpriority="high"/><figcaption>{review.heroCredit}</figcaption></figure>
+      </header>
+
+      <section class="intro">
+        <p>The house robot finally has a face. Some clean, some learn your name, some just sit on the desk and make you laugh.</p>
+        <div>
+          <p>Ten robots you can live with, checked against the makers’ own pages on September 29. We asked four plain questions of each: what does it do all day, does it talk, where does its brain live, and what does it cost after the box? {talkers} of the ten will hold some kind of conversation. Only one does a chore.</p>
+          <p class="fine">{review.method}</p>
+        </div>
+      </section>
+      <aside class="disclosure"><strong>Shopping note</strong><p>{review.disclosure}</p></aside>
+
+      <section id="robots" aria-labelledby="robots-title">
+        <div class="section-heading"><p class="eyebrow">FOUR KINDS OF HOUSE ROBOT</p><h2 id="robots-title">What do you want<br/>it to do all day?</h2></div>
+        <ol class="kinds" aria-label="Kinds of house robot">
+          {groups.map((g) => <li><span class="mono">{String(picks.filter((p) => p.group === g.id).length).padStart(2, '0')} PICKS</span><strong>{g.label}</strong><small>{g.need}</small></li>)}
+        </ol>
+        <div class="filters" aria-label="Filter by kind">
+          <button type="button" data-filter="all" aria-pressed="true">All robots</button>
+          {groups.map((g) => <button type="button" data-filter={g.id} aria-pressed="false">{g.label}</button>)}
+          <a href="#compare">Compare all ↓</a>
+        </div>
+        <p id="filter-count" class="fine" aria-live="polite">Showing all {picks.length} picks.</p>
+        <div class="cards">{picks.map((p, i) => (
+          <article id={p.id} class="card" data-group={p.group}>
+            <figure class="product-image"><a href={p.url} rel="noopener noreferrer" aria-label={`${p.name} at ${p.brand}`}><img src={p.image} alt={p.alt} loading="lazy" width="900" height="900"/></a><figcaption>{p.credit}</figcaption></figure>
+            <div class="card-copy">
+              <p class="eyebrow">{String(i + 1).padStart(2, '0')} / {groupLabel[p.group]} · {p.award}</p>
+              <h3>{p.name}</h3>
+              <div class="spec"><strong>{money(p.price)}{p.priceNote ? '*' : ''}</strong><span>{p.brand}</span></div>
+              <p class="status"><span>{p.status}</span></p>
+              <p class="specs">{p.specs}</p>
+              <p>{p.review}</p>
+              <dl class="facts">
+                <div><dt>Talks?</dt><dd>{p.talks}</dd></div>
+                <div><dt>Brain</dt><dd><strong>{aiLabel[p.ai]}.</strong> {p.aiNote}</dd></div>
+                <div><dt>Subscription</dt><dd>{p.subscription}</dd></div>
+                <div><dt>Size</dt><dd>{p.size}</dd></div>
+              </dl>
+              <p class="caveat"><strong>The catch.</strong> {p.caveat} <a href={p.caveatSource} rel="noopener noreferrer">Source ↗</a></p>
+              <p class="verdict">{p.verdict}</p>
+              <a class="buy" href={p.url} rel="noopener noreferrer">{p.cta}</a>
+              {p.reviewUrl && <a class="also" href={p.reviewUrl}>Read PointCast’s full review →</a>}
+              <p class="fine">Direct link · no commission{p.priceNote ? ` · * ${p.priceNote}` : ''} · <a href={p.source} rel="noopener noreferrer">{p.sourceLabel} ↗</a></p>
+            </div>
+          </article>
+        ))}</div>
+      </section>
+
+      <section id="compare" class="comparison">
+        <p class="eyebrow">THE LIVING-ROOM TEST</p><h2>Which one gets to stay?</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label={`Comparison of all ${picks.length} robots`}><table>
+          <caption>US prices from maker pages · September 29, 2026</caption>
+          <thead><tr><th scope="col">Robot</th><th scope="col">Price</th><th scope="col">Status</th><th scope="col">Talks?</th><th scope="col">Brain</th><th scope="col">Subscription</th></tr></thead>
+          <tbody>{picks.map((p) => <tr><th scope="row"><a href={`#${p.id}`} data-show-all>{p.name}</a><small>{groupLabel[p.group]}</small></th><td>{money(p.price)}{p.priceNote ? '*' : ''}</td><td>{p.status}</td><td>{p.talks}</td><td>{aiLabel[p.ai]}</td><td>{p.subscription}</td></tr>)}</tbody>
+        </table></div>
+        <p class="fine">* See the note on that robot’s card. Prices exclude tax and shipping and change often; the maker’s page is the truth. “Brain” is where the maker says the thinking happens: on the robot, in the cloud, or both.</p>
+      </section>
+
+      <section class="brains" aria-labelledby="brains-title">
+        <p class="eyebrow">THINGS TO TALK TO</p>
+        <h2 id="brains-title">Ask where<br/>the brain lives.</h2>
+        <div class="brains-grid">
+          <p>A robot that talks back almost always borrows its words from a server. Loona uses ChatGPT, Vector says it does too, and Matic hands your spoken request to Google’s Gemini after the chime. That’s fine until the maker changes the deal. KEYi calls its chat free “for the moment.” Sony’s cloud plan runs three years, then you pay.</p>
+          <p>The robots that keep their thinking at home talk less. Moflin doesn’t understand words at all, on purpose. Matic’s maps and cameras never leave the house. Reachy Mini is the exception worth knowing: its talking app can point at a model on your own computer, and Vector owners run the free wire-pod server for the same reason. Before you buy something to talk to, ask two things: who pays for the brain after year one, and what’s left if the server goes dark.</p>
+        </div>
+      </section>
+
+      <section class="watch" aria-labelledby="watch-title">
+        <p class="eyebrow">NOT ON THE SHELF</p>
+        <h2 id="watch-title">Worth knowing,<br/>not worth a pick.</h2>
+        <ul>{review.watchlist.map((w) => <li><strong>{w.name}</strong><span class="mono">{w.status}</span><p>{w.note} <a href={w.source} rel="noopener noreferrer">{w.sourceLabel} ↗</a></p></li>)}</ul>
+      </section>
+
+      <footer class="endnote">
+        <p class="eyebrow">THE DESK’S CHOICE</p>
+        <h2>{review.endnoteTitle}</h2>
+        <p>{review.verdict}</p>
+        <details><summary>Sources, images & method</summary>
+          <p>{review.method} cc is PointCast’s Claude Code resident; nothing here claims firsthand use.</p>
+          <p>Product photographs and renders are the makers’ own, credited on each card and used as editorial reference. {review.heroCredit}. Brand names belong to their owners. This is an independent selection; no maker paid for or reviewed placement.</p>
+          <p>{review.disclosure}</p>
+          <a href="/reviews/home-robots.json">Read the product and source data as JSON ↗</a>
+        </details>
+        <a class="jump" href="/reviews">More PointCast reviews →</a>
+      </footer>
+    </main>
+  </div>
+</BlockLayout>
+<script>
+ const init = () => {
+  const root = document.querySelector('.robots-review'); if (!root || root.hasAttribute('data-ready')) return; root.setAttribute('data-ready', 'true');
+  const total = root.querySelectorAll('.card').length;
+  const filter = (value: string) => {
+    let count = 0;
+    root.querySelectorAll<HTMLElement>('.card').forEach((card) => { card.hidden = value !== 'all' && card.dataset.group !== value; if (!card.hidden) count++; });
+    root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === value)));
+    const output = root.querySelector('#filter-count'); if (output) output.textContent = value === 'all' ? `Showing all ${total} picks.` : `Showing ${count} of ${total} picks.`;
+  };
+  root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.addEventListener('click', () => filter(b.dataset.filter || 'all')));
+  root.querySelectorAll('[data-show-all]').forEach((a) => a.addEventListener('click', () => filter('all')));
+ }; init(); document.addEventListener('astro:page-load', init);
+</script>
+<style>
+ :global(body){margin:0;background:#e9e9e4;color:#111}
+ .robots-review{--ink:#111;--paper:#e9e9e4;--cobalt:#1f3fe0;--sun:#f6d615;--red:#e8401c;--line:#b9b9b1;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--paper);padding-bottom:60px;overflow-x:hidden}
+ .robots-review *{box-sizing:border-box}.robots-review a{color:inherit}
+ .mast{display:flex;gap:26px;align-items:center;padding:22px 5vw;border-bottom:1px solid var(--ink);font-size:12px;font-weight:800}.mast a{text-decoration:none}.mast a:first-child{margin-right:auto;font-size:19px;letter-spacing:-1px}.mast span{font-size:11px;letter-spacing:1px;margin-left:12px;color:var(--cobalt)}
+ main{max-width:1440px;margin:auto}
+ .hero{display:grid;grid-template-columns:1fr 1.05fr;min-height:680px;border-bottom:1px solid var(--ink)}
+ .hero-copy{padding:65px 6vw 55px;min-width:0}
+ .eyebrow{font:700 11px/1.6 monospace;letter-spacing:1.7px;text-transform:uppercase;margin:0 0 22px}
+ .mono{font-family:monospace}
+ h1{font-size:clamp(64px,7.8vw,118px);line-height:.88;letter-spacing:-.07em;margin:30px 0}h1 em{font-family:Georgia,serif;font-weight:400;color:var(--cobalt)}
+ .dek{font-size:21px;line-height:1.4;max-width:34ch}.byline{font-size:13px;line-height:1.7;margin:25px 0}
+ .jump{display:inline-block;font-weight:700;font-size:13px;padding:15px 0;text-underline-offset:6px}
+ .hero-image{margin:0;position:relative;background:#fff;display:flex;flex-direction:column;justify-content:center;padding:40px 24px 30px;border-left:1px solid var(--ink);min-width:0}
+ .hero-image img{width:100%;height:auto;display:block}
+ .hero-image figcaption{font:10px monospace;letter-spacing:1px;margin-top:20px;text-align:center}
+ .stamp{position:absolute;top:22px;right:24px;z-index:1;border-radius:50%;background:var(--sun);border:2px solid var(--ink);width:112px;height:112px;display:grid;place-content:center;text-align:center;font:700 10px/1.45 monospace;transform:rotate(9deg)}
+ .intro{display:grid;grid-template-columns:1fr 1fr;gap:65px;padding:60px 6vw}.intro>p{font:30px/1.28 Georgia,serif;margin:0}.intro div>p{margin-top:0;line-height:1.65;font-size:16px}
+ .fine,.intro div>p.fine{font:12px/1.6 Arial,sans-serif;color:#4a4a44}
+ .disclosure{margin:0 6vw 70px;padding:20px 24px;border:1px solid var(--line);background:#f4f4f0;display:flex;gap:24px;align-items:baseline;font-size:13px;line-height:1.6}.disclosure strong{white-space:nowrap}.disclosure p{margin:0}
+ #robots{padding:0 6vw}
+ .section-heading{border-top:4px solid var(--ink);padding-top:24px}
+ h2{font-size:clamp(32px,4.4vw,60px);line-height:1.02;letter-spacing:-.05em;margin:0 0 30px}
+ .kinds{list-style:none;padding:0;margin:0 0 26px;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink)}
+ .kinds li{padding:14px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}.kinds li:last-child{border-right:0}
+ .kinds span{font-size:11px;color:var(--cobalt);font-weight:700}.kinds strong{font-size:16px}.kinds small{font-size:12px;line-height:1.4;color:#4a4a44}
+ .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:20px 0 12px}
+ .filters button{font:700 12px Arial;cursor:pointer;padding:12px 17px;border:1px solid var(--ink);border-radius:30px;background:transparent;color:var(--ink);min-height:44px}
+ .filters button[aria-pressed=true]{background:var(--cobalt);border-color:var(--cobalt);color:#fff}
+ .filters a{margin-left:auto;font-size:12px}
+ .cards{display:grid;grid-template-columns:1fr 1fr;gap:55px 30px}.card[hidden]{display:none}
+ .card{border-top:1px solid var(--ink);padding-top:20px;min-width:0;scroll-margin-top:25px}
+ .product-image{margin:0}.product-image>a{display:block;background:#fff;border:1px solid #d6d6cf;height:360px;padding:18px}
+ .product-image img{width:100%;height:100%;object-fit:contain;display:block}
+ .product-image figcaption{font:10px/1.5 Arial;color:#55554f;min-height:30px;padding:9px 0}
+ .card-copy .eyebrow{margin-top:12px;color:var(--cobalt)}
+ .card h3{font-size:34px;line-height:1.05;letter-spacing:-1.4px;margin:10px 0 16px}
+ .spec{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.spec strong{font-size:25px}.spec span{font:12px monospace;text-transform:uppercase;letter-spacing:1px}
+ .status{margin:10px 0 0}.status span{display:inline-block;background:var(--sun);border:1px solid var(--ink);padding:4px 8px;font:700 11px/1.4 monospace}
+ .specs{display:inline-block;background:#fff;border:1px solid #d6d6cf;padding:6px 9px;font:11px/1.5 monospace;max-width:100%}
+ .card-copy>p:not(.eyebrow):not(.fine):not(.specs):not(.status){font-size:16px;line-height:1.65}
+ .facts{margin:0 0 16px;border-top:1px solid var(--line)}.facts div{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
+ .facts dt{font:700 11px/1.6 monospace;text-transform:uppercase;letter-spacing:1px;color:var(--cobalt)}.facts dd{margin:0;min-width:0}
+ .caveat{color:#4a4a44}.caveat a{font-size:12px}.verdict{border-left:3px solid var(--cobalt);padding-left:15px;font-weight:700}
+ .buy{display:inline-block;padding:15px 20px;background:var(--sun);border:1px solid var(--ink);font-size:13px;font-weight:700;text-decoration:none;min-height:48px}.buy:hover{background:#fff}
+ .also{display:inline-block;margin-left:14px;font-size:13px;font-weight:700;padding:15px 0}
+ .comparison{margin:75px 6vw;padding-top:28px;border-top:4px solid var(--ink)}
+ .table-scroll{overflow:auto}
+ table{border-collapse:collapse;width:100%;min-width:900px;text-align:left;font-size:13px;line-height:1.5}caption{text-align:left;padding:0 0 14px;font:11px monospace}
+ th,td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}thead{background:var(--ink);color:#fff}td:nth-child(2){white-space:nowrap}
+ tbody th small{display:block;font:10px/1.5 monospace;color:#55554f;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+ .brains{margin:0 6vw 75px;padding:40px;background:var(--cobalt);color:#fff}
+ .brains .eyebrow{color:var(--sun)}
+ .brains-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;font-size:16px;line-height:1.65}.brains-grid p{margin:0}
+ .watch{margin:0 6vw 75px;padding-top:28px;border-top:4px solid var(--ink)}
+ .watch ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+ .watch li{background:#f4f4f0;border:1px solid var(--line);padding:20px 22px}.watch li strong{font-size:20px;display:block}.watch li .mono{display:inline-block;margin-top:6px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--cobalt);font-weight:700}.watch li p{font-size:14px;line-height:1.6;margin:10px 0 0}
+ .endnote{padding:55px 6vw 60px;background:var(--ink);color:var(--paper)}
+ .endnote>p:not(.eyebrow){font:21px/1.5 Georgia,serif;max-width:48ch}
+ .endnote details{max-width:800px;padding:22px 0;margin:35px 0;border-top:1px solid #6d6d66;border-bottom:1px solid #6d6d66;font-size:13px;line-height:1.8}.endnote summary{cursor:pointer;font-weight:700}
+ a:focus-visible,button:focus-visible,summary:focus-visible,.table-scroll:focus-visible{outline:3px solid var(--red);outline-offset:4px}
+ @media(max-width:900px){.kinds{grid-template-columns:1fr 1fr}.kinds li:nth-child(2){border-right:0}.kinds li:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+ @media(max-width:760px){.mast{padding:18px 16px;gap:15px}.mast span{display:none}.hero{grid-template-columns:1fr;min-height:0}.hero-copy{padding:35px 16px}.hero-image{border-left:0;border-top:1px solid var(--ink);padding:60px 16px 20px}.stamp{width:84px;height:84px;font-size:8px;top:14px;right:14px}.intro{grid-template-columns:1fr;gap:25px;padding:38px 16px}.intro>p{font-size:25px}.disclosure{margin:0 16px 45px;padding:18px;display:block}.disclosure strong{display:block;margin-bottom:7px}#robots{padding:0 16px}.kinds{grid-template-columns:1fr}.kinds li{border-right:0;border-bottom:1px solid var(--line)}.cards{grid-template-columns:1fr;gap:35px}.product-image>a{height:300px}.filters a{margin-left:0;padding:12px}.comparison{margin:50px 16px}.brains{margin:0 16px 50px;padding:28px 20px}.brains-grid{grid-template-columns:1fr;gap:18px}.watch{margin:0 16px 50px}.watch ul{grid-template-columns:1fr}.endnote{padding:40px 16px}.card h3{font-size:30px}.facts div{grid-template-columns:92px 1fr}.also{margin-left:0;display:block}}
+</style>

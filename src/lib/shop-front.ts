@@ -7,6 +7,7 @@
  */
 import bags from '../data/bags-south-bay.json';
 import lego from '../data/lego-sets.json';
+import robots from '../data/home-robots.json';
 import { FEEDERS, PICKS as FEEDER_PICKS, DESK_DATE as FEEDER_DATE } from './hummingbird-feeders.mjs';
 import { REGISTER_STATS } from './paddle-register';
 
@@ -68,6 +69,20 @@ const bagPicks: ShopPick[] = bags.picks.map((p) => ({
   reviewUrl: `/reviews/bags#${p.id}`,
 }));
 
+const robotPicks: ShopPick[] = robots.picks.map((r) => ({
+  id: `home-robots/${r.id}`,
+  guide: 'home-robots',
+  name: r.name,
+  brand: r.brand,
+  price: typeof r.price === 'number' ? r.price : null,
+  priceText: typeof r.price === 'number' ? money(r.price) + (r.priceNote ? '*' : '') : 'Price TBD',
+  currency: 'USD',
+  url: r.url,
+  image: r.image,
+  verdict: r.verdict,
+  reviewUrl: `/reviews/home-robots#${r.id}`,
+}));
+
 const legoPicks: ShopPick[] = lego.sets.map((s) => ({
   id: `lego-sets/${s.id}`,
   guide: 'lego-sets',
@@ -122,9 +137,14 @@ const modularPicks: ShopPick[] = modular
     })
   : [];
 
-export const SHOP_PICKS: ShopPick[] = [...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+export const SHOP_PICKS: ShopPick[] = [...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {
+    id: 'home-robots', title: robots.title, dek: robots.dek, href: '/reviews/home-robots', json: '/reviews/home-robots.json',
+    kind: 'Desk review', image: '/images/home-robots/hero.jpg', imageAlt: 'Illustrated specimen sheet of house robots',
+    asOf: robots.asOf, count: robots.picks.length, countLabel: 'robots',
+  },
   {
     id: 'bags', title: bags.title, dek: bags.dek, href: '/reviews/bags', json: '/reviews/bags.json',
     kind: 'Desk review', image: '/images/bags/carry-kit-thumb.jpg', imageAlt: 'Illustrated specimen sheet of bags',

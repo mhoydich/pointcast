@@ -10,6 +10,8 @@ export const AGENT_SURFACES = {
     shopLlms: 'https://pointcast.xyz/shop/llms.txt',
     bags: 'https://pointcast.xyz/reviews/bags',
     bagsData: 'https://pointcast.xyz/reviews/bags.json',
+    homeRobots: 'https://pointcast.xyz/reviews/home-robots',
+    homeRobotsData: 'https://pointcast.xyz/reviews/home-robots.json',
     modularCarry: 'https://pointcast.xyz/reviews/modular-carry',
     modularCarryData: 'https://pointcast.xyz/reviews/modular-carry.json',
     legoSets: 'https://pointcast.xyz/reviews/lego-sets',
