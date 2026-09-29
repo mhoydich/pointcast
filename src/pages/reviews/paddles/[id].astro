@@ -1,0 +1,136 @@
+---
+/**
+ * /reviews/paddles/[id] — one published take.
+ *
+ * Paths come from publishableTakes(PADDLE_REVIEWS, knownIds, programIds), which throws
+ * on an invalid entry instead of silently dropping it. Stage 1 ships this
+ * with zero entries, so getStaticPaths returns [] and no page — and no
+ * template — is generated at build time.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import PaidLink from '../../../components/PaidLink.astro';
+import { AFFILIATE_PROGRAM_IDS } from '../../../lib/commerce';
+import { CHANNELS } from '../../../lib/channels';
+import { PADDLES, paddleById, paddleUrl, type Paddle } from '../../../lib/paddle-register';
+import { PADDLE_REVIEWS } from '../../../data/paddle-reviews';
+import { publishableTakes, RELATIONSHIP_WORDS, VERDICT_WORDS, type PaddleTake } from '../../../lib/paddle-takes';
+
+export function getStaticPaths() {
+  const knownIds = PADDLES.map((p) => p.id);
+  const takes = publishableTakes(PADDLE_REVIEWS, knownIds, AFFILIATE_PROGRAM_IDS);
+  return takes.map((take) => ({
+    params: { id: take.id },
+    props: { take, paddle: paddleById(take.paddleId)! },
+  }));
+}
+
+const { take, paddle } = Astro.props as { take: PaddleTake; paddle: Paddle };
+const court = CHANNELS.CRT;
+
+const fullDate = (iso: string) => {
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
+};
+
+const title = `${paddle.brand} ${paddle.model}: ${take.reviewer.handle}'s take`;
+const description = `${take.reviewer.handle} (${RELATIONSHIP_WORDS[take.reviewer.relationship]}) on the ${paddle.brand} ${paddle.model}, ${take.hoursPlayed} hours in. Verdict: ${VERDICT_WORDS[take.verdict]}.`.slice(0, 160);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Review',
+  '@id': `https://pointcast.xyz/reviews/paddles/${take.id}#review`,
+  url: `https://pointcast.xyz/reviews/paddles/${take.id}`,
+  name: title,
+  headline: title,
+  reviewBody: take.thesis,
+  datePublished: take.publishedAt,
+  author: { '@type': 'Person', name: take.reviewer.handle },
+  itemReviewed: {
+    '@type': 'Product',
+    name: `${paddle.brand} ${paddle.model}`,
+    brand: { '@type': 'Brand', name: paddle.brand },
+    url: `https://pointcast.xyz${paddleUrl(paddle)}`,
+  },
+  isPartOf: { '@type': 'CollectionPage', name: 'Paddle Takes', url: 'https://pointcast.xyz/reviews/paddles' },
+};
+---
+
+<BlockLayout title={title} description={description} image={`/images/og/paddles/${paddle.id}.png`} jsonLd={jsonLd}>
+  <main class="take" style={`--c50:${court.color50};--c600:${court.color600};--c800:${court.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/reviews/paddles">paddle takes</a><span>/</span><span>{take.reviewer.handle}</span>
+      <a href={`/reviews/paddles/${take.id}.json`}>JSON</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">TAKE · {take.reviewer.handle} · {RELATIONSHIP_WORDS[take.reviewer.relationship]}</p>
+      <h1><a href={paddleUrl(paddle)}>{paddle.brand} {paddle.model}</a></h1>
+      <p class="dek">{take.thesis}</p>
+      <div class="stamp" data-v={take.verdict}>{VERDICT_WORDS[take.verdict]}</div>
+    </header>
+
+    <dl class="facts">
+      <div><dt>Hours played</dt><dd>{take.hoursPlayed}</dd></div>
+      <div><dt>Tested</dt><dd>{fullDate(take.testedFrom)} – {fullDate(take.testedTo)}</dd></div>
+      <div><dt>Published</dt><dd>{fullDate(take.publishedAt.slice(0, 10))}</dd></div>
+      <div><dt>Relationship</dt><dd>{RELATIONSHIP_WORDS[take.reviewer.relationship]}</dd></div>
+    </dl>
+
+    <section class="sec">
+      <p class="kicker">WHAT WOULD CHANGE MY MIND</p>
+      <p class="body">{take.wouldChange}</p>
+    </section>
+
+    <section class="sec" aria-label="Record">
+      <p class="kicker">THE RECORD</p>
+      <ol class="record">
+        {take.record.map((entry) => (
+          <li>
+            <span class="record__date">{fullDate(entry.date)}</span>
+            <span>{entry.note}{entry.source !== 'reviewer' && <> <a href={entry.source} rel="noopener">source ↗</a></>}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="disclosure" aria-label="Disclosure">
+      <p class="kicker">DISCLOSURE</p>
+      <p class="body">{take.disclosure}</p>
+      <PaidLink href={take.affiliate?.url} program={take.affiliate?.program} label={`Get it${paddle.brand ? ` from ${paddle.brand}` : ''}`} />
+    </section>
+
+    <p class="foot">
+      <a href={paddleUrl(paddle)}>the register entry for {paddle.brand} {paddle.model}</a> ·
+      <a href="/reviews/paddles/method">how takes get made</a> · <a href="/reviews/paddles">every take</a> ·
+      <a href={`/reviews/paddles/${take.id}.json`}>this take as JSON</a> · CC0
+    </p>
+  </main>
+</BlockLayout>
+
+<style>
+  .take{max-width:820px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .crumb{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:36px 0 20px}
+  .hero h1{margin:0;font:500 clamp(30px,5.4vw,52px)/1.05 var(--pc-font-sans);letter-spacing:-.03em}
+  .hero h1 a{color:var(--pc-ink)}
+  .dek{margin:16px 0 0;font:400 17px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .stamp{display:inline-block;margin-top:16px;padding:6px 10px;border:1.5px solid var(--c600);font:500 11px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .stamp[data-v="pass"]{color:#8a2432;border-color:#8a2432}
+  .facts{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:24px 0 0;border-top:1.5px solid var(--c600)}
+  .facts div{padding:10px 12px 10px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .facts dt{font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .facts dd{margin:4px 0 0;font:500 15px/1.3 var(--pc-font-sans)}
+  .sec{padding-top:32px}
+  .body{margin:0;max-width:640px;font:400 16px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .record{margin:0;padding:0;list-style:none;border-top:1.5px solid var(--c600)}
+  .record li{display:grid;grid-template-columns:120px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .record__date{font:400 11px var(--pc-font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .record a{color:var(--c800)}
+  .disclosure{margin-top:32px;padding:16px;border:1.5px solid var(--c600);background:var(--c50)}
+  .disclosure .body{margin:0 0 14px}
+  .foot{margin:32px 0 0;font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .foot a{color:var(--c800)}
+  @media(max-width:600px){.facts{grid-template-columns:1fr 1fr}.record li{grid-template-columns:1fr;gap:2px}}
+</style>

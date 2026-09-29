@@ -7,16 +7,20 @@
  */
 import { getCollection } from 'astro:content';
 import BlockLayout from '../layouts/BlockLayout.astro';
+import ShopCourtLane from '../components/ShopCourtLane.astro';
 import {
   CHECKOUT_POLICY,
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
+  courtPaidRowCount,
   isPublicProduct,
   shopLaneUrl,
   sourceKind,
   sourceLabel,
 } from '../lib/commerce';
+import { PADDLES, REGISTER_STATS } from '../lib/paddle-register';
+import { courtLane } from '../lib/shop-court';
 
 const products = (await getCollection('products', ({ data }) => isPublicProduct(data)))
   // Good Feels leads the grid; The Shelf (external goods) follows, newest first within each.
@@ -34,6 +38,11 @@ const seltzerCount = products.filter((p) => /seltzer|drink|mix seltzer/i.test(p.
 const gummyCount = products.filter((p) => /gumm/i.test(p.data.category || p.data.name)).length;
 const enhancerCount = products.filter((p) => /enhancer/i.test(p.data.category || p.data.name)).length;
 const hosts = Array.from(new Set(products.map((p) => checkoutHost(p.data.url)))).sort();
+const court = courtLane(PADDLES, REGISTER_STATS.asOf);
+const courtTotal = court.upcoming.length + court.recent.length;
+// Read from src/data/affiliate-programs.ts through resolvePaidLink, so the
+// tile and kicker follow the approval switch instead of a hard-coded claim.
+const courtPaidLabel = courtPaidRowCount([...court.upcoming, ...court.recent]) > 0 ? 'PAID LINKS LABELED' : 'NO PAID LINKS YET';
 const firstSlugByLane = new Map<string, string>();
 for (const product of products) {
   const lane = commerceLane(product.data);
@@ -132,6 +141,13 @@ function price(product: ProductEntry): string {
       </div>
     </dl>
 
+    {goodFeelsProducts.length > 0 && (
+      <p class="age-notice" role="note">
+        <strong class="mono">21+</strong>
+        <span>Good Feels products contain THC. Adults 21+ only; do not drive impaired, and be extra conservative when pairing cannabis with alcohol.</span>
+      </p>
+    )}
+
     <section class="lanes" aria-label="Shop lanes">
       <a class="lane lane--good-feels" href={shopLaneUrl('good-feels')}>
         <span class="lane__kicker mono">LIVE MIRROR</span>
@@ -162,6 +178,11 @@ function price(product: ProductEntry): string {
         <span class="lane__kicker mono">COMING SOON</span>
         <span class="lane__title">PointCast Merch</span>
         <span class="lane__meta mono">{pointcastMerchProducts.length} public entries</span>
+      </a>
+      <a class="lane lane--court" href={shopLaneUrl('court')}>
+        <span class="lane__kicker mono">PADDLES · {courtPaidLabel}</span>
+        <span class="lane__title">The Court</span>
+        <span class="lane__meta mono">{courtTotal} entries</span>
       </a>
       <a class="lane lane--pairings" href="/pairings">
         <span class="lane__kicker mono">CROSS-INDEX</span>
@@ -252,6 +273,17 @@ function price(product: ProductEntry): string {
         </p>
       </div>
       <a class="btn mono" href="/postcards">Preview postcards</a>
+    </section>
+
+    <section id="court" class="courtsec" aria-labelledby="court-title">
+      <div class="section-head">
+        <div>
+          <p class="kicker mono">COURT · PADDLES · {courtPaidLabel}</p>
+          <h2 id="court-title">Paddles releasing soon</h2>
+        </div>
+        <a class="section-link mono" href="/shop/court">Open /shop/court</a>
+      </div>
+      <ShopCourtLane upcoming={court.upcoming} recent={court.recent} compact />
     </section>
 
     {moodSlugs.length > 0 && (
@@ -408,6 +440,24 @@ function price(product: ProductEntry): string {
       margin-bottom: 8px;
     }
 
+    .age-notice {
+      display: flex;
+      gap: 10px;
+      margin: 0 0 18px;
+      padding: 12px 14px;
+      border-left: 4px solid #B45309;
+      background: #fff3df;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .age-notice strong {
+      flex: 0 0 auto;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      line-height: 1.7;
+    }
+
     .stats {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -466,6 +516,7 @@ function price(product: ProductEntry): string {
     .lane--enhancers { border-left-color: #6D28D9; }
     .lane--merch { border-left-color: #12110E; background: #fbfaf5; }
     .lane--shelf { border-left-color: #4D7C0F; background: #f7fbef; }
+    .lane--court { border-left-color: #3B6D11; }
     .lane--pairings { border-left-color: #5F3DC4; }
     .lane--json { border-left-color: #185FA5; }
 
@@ -724,6 +775,12 @@ function price(product: ProductEntry): string {
     .coming p {
       max-width: 720px;
       margin-top: 8px;
+    }
+
+    .courtsec {
+      margin-top: 26px;
+      padding-top: 18px;
+      border-top: 1px dashed #d6d4cd;
     }
 
     .pairing-strip {

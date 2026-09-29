@@ -1,3 +1,5 @@
+import { AFFILIATE_PROGRAMS, type AffiliateProgram } from '../data/affiliate-programs.ts';
+
 export const COMMERCE_VERSION = 'commerce-hub-v3-2026-07-12';
 
 export const CHECKOUT_POLICY = {
@@ -15,6 +17,7 @@ export type CommerceLaneSlug =
   | 'pointcast-merch'
   | 'shelf'
   | 'pairings'
+  | 'court'
   | 'json-api';
 
 export const COMMERCE_LANE_LABELS: Record<CommerceLaneSlug, string> = {
@@ -25,6 +28,7 @@ export const COMMERCE_LANE_LABELS: Record<CommerceLaneSlug, string> = {
   'pointcast-merch': 'PointCast Merch',
   shelf: 'The Shelf',
   pairings: 'Pairings',
+  court: 'Court',
   'json-api': 'JSON / API',
 };
 
@@ -48,14 +52,22 @@ export function checkoutHost(url: string): string {
 }
 
 /** Machine-readable routing contract shared by every product feed. */
-export function outboundCheckout(url: string) {
-  return {
+export function outboundCheckout(url: string, affiliate?: { program: string }) {
+  const base = {
     mode: 'outbound-only' as const,
     url,
     host: checkoutHost(url),
     opensOn: 'merchant-site' as const,
     paymentHandledBy: 'merchant' as const,
     pointCastCaptures: [] as const,
+  };
+  if (!affiliate) return base;
+  const resolved = resolvePaidLink(url, affiliate.program);
+  return {
+    ...base,
+    paid: resolved.paid,
+    affiliate: resolved.paid ? { program: resolved.program, network: resolved.network, rate: resolved.rate } : null,
+    disclosure: resolved.paid ? resolved.disclosure : NO_COMMISSION_NOTE,
   };
 }
 
@@ -121,6 +133,125 @@ export function commerceLaneLabel(slug: CommerceLaneSlug): string {
 }
 
 export function shopLaneUrl(slug: CommerceLaneSlug, absolute = false): string {
-  const path = slug === 'json-api' ? '/shop.json' : `/shop#${slug}`;
+  const path = slug === 'json-api' ? '/shop.json' : slug === 'court' ? '/shop/court' : `/shop#${slug}`;
   return absolute ? `https://pointcast.xyz${path}` : path;
+}
+
+// ── PaidLink ─────────────────────────────────────────────────────────────
+//
+// Stage 1: every program in src/data/affiliate-programs.ts is approved:false,
+// so every resolution below comes back unpaid. Ranking, ordering and what
+// gets shown never read this — commission cannot move where a paddle sits.
+
+export const PAID_LINK_DISCLOSURE = 'Paid link. PointCast earns a commission if you buy.';
+export const NO_COMMISSION_NOTE = 'No link, no commission.';
+
+export type PaidLinkResolution =
+  | {
+      paid: true;
+      href: string;
+      host: string;
+      program: string;
+      network: string;
+      rate: string;
+      rel: 'sponsored noopener';
+      disclosure: string;
+    }
+  | { paid: false; note: string };
+
+/** Testable core: pass an explicit program list instead of the live registry. */
+export function resolvePaidLinkWith(programs: AffiliateProgram[], href: string, program: string): PaidLinkResolution {
+  const row = programs.find((p) => p.id === program);
+  const unpaid: PaidLinkResolution = { paid: false, note: NO_COMMISSION_NOTE };
+
+  if (!row || !row.accepting || !row.approved) return unpaid;
+  if (typeof row.approvedOn !== 'string' || !row.approvedOn) return unpaid;
+  if (!isOutboundCheckoutUrl(href)) return unpaid;
+
+  const host = checkoutHost(href);
+  if (!row.linkHosts.includes(host)) return unpaid;
+
+  return {
+    paid: true,
+    href,
+    host,
+    program: row.id,
+    network: row.network,
+    rate: row.rate,
+    rel: 'sponsored noopener',
+    disclosure: PAID_LINK_DISCLOSURE,
+  };
+}
+
+/** Binds resolvePaidLinkWith to the live AFFILIATE_PROGRAMS registry. */
+export function resolvePaidLink(href: string, program: string): PaidLinkResolution {
+  return resolvePaidLinkWith(AFFILIATE_PROGRAMS, href, program);
+}
+
+/** True once any program in the registry is approved. Stage 1: always false. */
+export function anyProgramApproved(): boolean {
+  return AFFILIATE_PROGRAMS.some((p) => p.approved);
+}
+
+/** Every program id on file, approved or not. validateTake rejects any other. */
+export const AFFILIATE_PROGRAM_IDS: string[] = AFFILIATE_PROGRAMS.map((p) => p.id);
+
+export interface PublicAffiliate {
+  program: string;
+  url: string;
+  rel: 'sponsored noopener';
+  disclosure: string;
+}
+
+/**
+ * The machine-readable form of a take's affiliate field, behind the same
+ * lock as <PaidLink>: only a link that resolves paid is published, and it
+ * always carries the disclosure. An unapproved, unknown or off-host link is
+ * published as null — never as the raw tracked URL.
+ */
+export function publicAffiliateWith(
+  programs: AffiliateProgram[],
+  affiliate: { program: string; url: string } | null,
+): PublicAffiliate | null {
+  if (!affiliate) return null;
+  const resolved = resolvePaidLinkWith(programs, affiliate.url, affiliate.program);
+  return resolved.paid
+    ? { program: resolved.program, url: resolved.href, rel: resolved.rel, disclosure: resolved.disclosure }
+    : null;
+}
+
+/** Binds publicAffiliateWith to the live AFFILIATE_PROGRAMS registry. */
+export function publicAffiliate(affiliate: { program: string; url: string } | null): PublicAffiliate | null {
+  return publicAffiliateWith(AFFILIATE_PROGRAMS, affiliate);
+}
+
+/**
+ * Paddle Register brand string (exactly as the register spells it) → the
+ * program id in src/data/affiliate-programs.ts. A brand with no entry
+ * resolves unpaid. tests/shop-paid-link.test.mjs checks both sides exist.
+ */
+export const PROGRAM_BY_REGISTER_BRAND: Record<string, string> = {
+  Selkirk: 'selkirk',
+  Engage: 'engage',
+  CRBN: 'crbn',
+  'Six Zero': 'six-zero',
+  '11SIX24': '11six24',
+  JOOLA: 'joola',
+};
+
+/**
+ * Whether a court-lane row's maker link pays. The link is the register's
+ * plain product page; it pays only through resolvePaidLink, so only when
+ * the brand's program is approved and that page's host is one of the
+ * program's linkHosts. Never read for ordering.
+ */
+export function courtRowPaidLink(row: { brand: string; makerUrl: string | null }): PaidLinkResolution {
+  const program = PROGRAM_BY_REGISTER_BRAND[row.brand];
+  if (!row.makerUrl || !program) return { paid: false, note: NO_COMMISSION_NOTE };
+  return resolvePaidLink(row.makerUrl, program);
+}
+
+/** How many court rows carry a link that actually pays. Stage 1: always 0. */
+export function courtPaidRowCount(rows: { brand: string; makerUrl: string | null }[]): number {
+  return rows.filter((row) => courtRowPaidLink(row).paid).length;
 }

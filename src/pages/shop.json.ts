@@ -9,6 +9,7 @@ import {
   commerceLane,
   commerceLaneLabel,
   checkoutHost,
+  courtPaidRowCount,
   isPublicProduct,
   outboundCheckout,
   pairingsUrls,
@@ -16,6 +17,8 @@ import {
   sourceKind,
   sourceLabel,
 } from '../lib/commerce';
+import { PADDLES, REGISTER_STATS } from '../lib/paddle-register';
+import { courtLane } from '../lib/shop-court';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -39,6 +42,12 @@ export const GET: APIRoute = async () => {
   const countSource = (kind: ReturnType<typeof sourceKind>) =>
     products.filter((product) => sourceKind(product.data) === kind).length;
   const moodSlugs = Array.from(new Set(products.flatMap((product) => product.data.pairsWithMood ?? []))).sort();
+  const court = courtLane(PADDLES, REGISTER_STATS.asOf);
+  const courtRows = [...court.upcoming, ...court.recent];
+  const courtCount = courtRows.length;
+  // True only when a court row actually carries a link that resolves paid,
+  // not merely when some program somewhere is approved.
+  const courtPaidLinks = courtPaidRowCount(courtRows) > 0;
 
   const payload = {
     $schema: 'https://pointcast.xyz/shop.json',
@@ -80,6 +89,9 @@ export const GET: APIRoute = async () => {
       { slug: 'enhancers', label: commerceLaneLabel('enhancers'), url: shopLaneUrl('enhancers', true), count: countMatching(/enhancer/i), sourceKind: 'good-feels', status: 'live', description: 'Beverage enhancers and drops.' },
       { slug: 'pointcast-merch', label: commerceLaneLabel('pointcast-merch'), url: shopLaneUrl('pointcast-merch', true), count: countSource('pointcast-merch'), sourceKind: 'pointcast-merch', status: 'coming-soon', description: 'Draft or unavailable PointCast merch stays hidden until active.' },
       { slug: 'shelf', label: commerceLaneLabel('shelf'), url: shopLaneUrl('shelf', true), count: countSource('external'), sourceKind: 'external', status: 'live', description: 'Non-Good-Feels goods reviewed around the house; checkout at the maker or retailer.' },
+      { slug: 'court', label: commerceLaneLabel('court'), url: shopLaneUrl('court', true), count: courtCount, sourceKind: 'pointcast', status: 'live', description: courtPaidLinks
+        ? 'The Paddle Register read as a shop shelf: paddles releasing soon and paddles that shipped recently. A paid link is labeled beside the link; commission never changes the order.'
+        : 'The Paddle Register read as a shop shelf: paddles releasing soon and paddles that shipped recently. No link in this lane earns a commission.', paidLinks: courtPaidLinks },
       { slug: 'pairings', label: commerceLaneLabel('pairings'), url: 'https://pointcast.xyz/pairings', count: moodSlugs.length, sourceKind: 'pointcast', status: 'live', description: 'Mood routes that cross-index products.' },
       { slug: 'json-api', label: commerceLaneLabel('json-api'), url: shopLaneUrl('json-api', true), count: 4, sourceKind: 'pointcast', status: 'live', description: 'Shop JSON, products JSON, products JSONL, and blocks JSONL.' },
     ],

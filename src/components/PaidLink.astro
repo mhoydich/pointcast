@@ -1,0 +1,54 @@
+---
+/**
+ * PaidLink — the one place an outbound paddle link can ever be paid.
+ *
+ * Stage 1: every program in src/data/affiliate-programs.ts is approved:false,
+ * so resolvePaidLink always comes back unpaid here, and this component
+ * renders no anchor at all — only "No link, no commission." The day a
+ * program is approved, the same call starts returning `paid: true` and this
+ * file (unedited) starts rendering the real link with its disclosure beside it.
+ *
+ * The disclosure sits in the same wrapper as the anchor, always visible,
+ * never a footnote: PAID_LINK_DISCLOSURE reads "Paid link. PointCast earns
+ * a commission if you buy." — the exact string, every time, beside the link.
+ */
+import { PAID_LINK_DISCLOSURE, resolvePaidLink } from '../lib/commerce';
+
+interface Props {
+  href?: string;
+  program?: string;
+  label?: string;
+}
+
+const { href, program, label = 'See it at the maker' } = Astro.props;
+const resolution = href && program ? resolvePaidLink(href, program) : { paid: false as const, note: 'No link, no commission.' };
+---
+
+<span class="paidlink">
+  {resolution.paid ? (
+    <>
+      <a href={resolution.href} rel="sponsored noopener" target="_blank">{label} ↗</a>
+      <small>{PAID_LINK_DISCLOSURE}</small>
+    </>
+  ) : (
+    <small>{resolution.note}</small>
+  )}
+</span>
+
+<style>
+  .paidlink {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+    max-width: 100%;
+  }
+  .paidlink a {
+    font: 500 14px var(--pc-font-sans, 'Inter Variable', Inter, sans-serif);
+    color: var(--c800, #24460a);
+  }
+  .paidlink small {
+    font: 400 13px var(--pc-font-sans, 'Inter Variable', Inter, sans-serif);
+    color: var(--pc-ink-muted, #6b6a64);
+    letter-spacing: 0;
+  }
+</style>

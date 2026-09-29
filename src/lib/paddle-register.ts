@@ -175,7 +175,7 @@ export const CHANGES: Change[] = (((register as Raw).changes as Change[]) ?? [])
   .filter((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.date) && c.text)
   .sort((a, b) => b.date.localeCompare(a.date));
 export const CHANGE_WORDS: Record<string, string> = {
-  added: 'ADDED', shipped: 'SHIPPED', approved: 'APPROVED', delisted: 'DELISTED', price: 'PRICE', corrected: 'CORRECTED', signed: 'SIGNED',
+  added: 'ADDED', shipped: 'SHIPPED', approved: 'APPROVED', delisted: 'DELISTED', price: 'PRICE', corrected: 'CORRECTED', signed: 'SIGNED', policy: 'POLICY',
 };
 export const changesFor = (id: string) => CHANGES.filter((c) => c.paddle === id);
 

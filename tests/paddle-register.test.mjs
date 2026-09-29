@@ -110,7 +110,7 @@ test('register data: every paddle is sourced, every enrichment points at a real 
   assert.ok(Array.isArray(register.changes) && register.changes.length > 0, 'changes feed is seeded');
   for (const c of register.changes) {
     assert.match(c.date, /^\d{4}-\d{2}-\d{2}$/, 'change date');
-    assert.ok(['added', 'shipped', 'approved', 'delisted', 'price', 'corrected', 'signed'].includes(c.kind), `change kind ${c.kind}`);
+    assert.ok(['added', 'shipped', 'approved', 'delisted', 'price', 'corrected', 'signed', 'policy'].includes(c.kind), `change kind ${c.kind}`);
     assert.ok(c.paddle === null || known.has(c.paddle), `change points at unknown paddle ${c.paddle}`);
     assert.ok(c.text && (!c.source || isUrl(c.source)), 'change text/source');
   }
