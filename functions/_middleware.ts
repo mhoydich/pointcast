@@ -171,6 +171,31 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
+  // shop.pointcast.xyz — the PointCast Shop front (src/pages/shop/front.astro).
+  // Root and the bot doors are served in place; static assets and APIs pass
+  // through; every other page 301s to the same path on the apex.
+  if (url.hostname === 'shop.pointcast.xyz' && (isGet || request.method === 'HEAD')) {
+    const shopDoors: Record<string, string> = {
+      '/': '/shop/front/',
+      '/index.json': '/shop/front.json',
+      '/llms.txt': '/shop/llms.txt',
+    };
+    const door = shopDoors[url.pathname];
+    if (door) {
+      const assets = (env as unknown as { ASSETS: { fetch: (r: Request) => Promise<Response> } }).ASSETS;
+      return assets.fetch(new Request(new URL(door, url.origin).toString(), request));
+    }
+    if (url.pathname === '/robots.txt') {
+      return new Response('User-agent: *\nAllow: /\n\nSitemap: https://pointcast.xyz/sitemap-index.xml\n', {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+    const passThrough = looksLikeAsset || isApiRoute || url.pathname.startsWith('/_astro/') || url.pathname.startsWith('/images/') || url.pathname.startsWith('/shop/');
+    if (!passThrough) {
+      return Response.redirect(new URL(url.pathname + url.search, 'https://pointcast.xyz').toString(), 301);
+    }
+  }
+
   // Both legacy sign-in URLs must redirect before directory rewriting.
   // Preserve returnTo and other query parameters for the current auth desk.
   if ((isGet || request.method === 'HEAD') && (url.pathname === '/login' || url.pathname === '/login/')) {

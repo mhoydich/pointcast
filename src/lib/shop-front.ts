@@ -1,0 +1,200 @@
+/**
+ * shop.pointcast.xyz — the PointCast Shop front.
+ *
+ * One place that gathers every buying guide and every priced pick across the
+ * Review Lab, so a person can browse and an agent can read one JSON file.
+ * Guides stay the source of truth; this module only flattens them.
+ */
+import bags from '../data/bags-south-bay.json';
+import lego from '../data/lego-sets.json';
+import { FEEDERS, PICKS as FEEDER_PICKS, DESK_DATE as FEEDER_DATE } from './hummingbird-feeders.mjs';
+import { REGISTER_STATS } from './paddle-register';
+
+export const SHOP_FRONT_VERSION = 'shop-front-v1-2026-09-29';
+export const SHOP_HOST = 'shop.pointcast.xyz';
+export const SHOP_ORIGIN = `https://${SHOP_HOST}`;
+export const SITE = 'https://pointcast.xyz';
+export const LAUNCHED_ON = '2026-09-29';
+/** Where on-site links send people. Flip to SHOP_ORIGIN once the custom domain is attached to the Pages project. */
+export const SHOP_FRONT_PATH = '/shop/front';
+
+// Optional guides that ship in their own PRs; the glob is empty until the file exists.
+const modularFiles = import.meta.glob('../data/modular-carry.json', { eager: true, import: 'default' });
+const modular = Object.values(modularFiles)[0] as
+  | { title: string; dek: string; asOf: string; entries: { id: string; name: string; url: string; image?: string; heroProducts?: { name: string; price: string | number }[]; lesson?: string }[] }
+  | undefined;
+
+export type ShopGuide = {
+  id: string;
+  title: string;
+  dek: string;
+  href: string;
+  json: string | null;
+  kind: 'Buying guide' | 'Desk review' | 'Field guide' | 'Register' | 'Shelf';
+  image: string;
+  imageAlt: string;
+  asOf: string;
+  count: number;
+  countLabel: string;
+};
+
+export type ShopPick = {
+  id: string;
+  guide: string;
+  name: string;
+  brand: string;
+  price: number | null;
+  priceText: string;
+  currency: 'USD';
+  url: string;
+  image: string | null;
+  verdict: string;
+  reviewUrl: string;
+};
+
+const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
+
+const bagPicks: ShopPick[] = bags.picks.map((p) => ({
+  id: `bags/${p.id}`,
+  guide: 'bags',
+  name: p.name,
+  brand: p.brand,
+  price: p.price,
+  priceText: money(p.price) + (p.priceNote ? '*' : ''),
+  currency: 'USD',
+  url: p.url,
+  image: p.image,
+  verdict: p.verdict,
+  reviewUrl: `/reviews/bags#${p.id}`,
+}));
+
+const legoPicks: ShopPick[] = lego.sets.map((s) => ({
+  id: `lego-sets/${s.id}`,
+  guide: 'lego-sets',
+  name: s.name,
+  brand: 'LEGO',
+  price: s.price,
+  priceText: money(s.price) + (s.id === 'shenron' ? '*' : ''),
+  currency: 'USD',
+  url: s.url,
+  image: s.image,
+  verdict: s.verdict,
+  reviewUrl: `/reviews/lego-sets#${s.id}`,
+}));
+
+const feederPicks: ShopPick[] = FEEDER_PICKS.map((pick) => {
+  const f = FEEDERS.find((x) => x.id === pick.id)!;
+  return {
+    id: `hummingbird-feeders/${f.id}`,
+    guide: 'hummingbird-feeders',
+    name: f.model,
+    brand: f.maker,
+    price: f.priceVerified ? f.priceHigh : null,
+    priceText: f.priceText,
+    currency: 'USD',
+    url: f.makerPage,
+    image: null,
+    verdict: `${pick.label}. ${pick.why.split('. ')[0]}.`,
+    reviewUrl: '/reviews/hummingbird-feeders',
+  };
+});
+
+const modularPicks: ShopPick[] = modular
+  ? modular.entries.flatMap((e) => {
+      const hero = e.heroProducts?.[0];
+      if (!hero) return [];
+      const n = typeof hero.price === 'number' ? hero.price : Number(String(hero.price).replace(/[^0-9.]/g, ''));
+      // A historical price (e.g. Jibbitz in 2006) is shown as text, never as today's offer.
+      const historical = /\b(19|20)\d\d\b|not checked/i.test(hero.name);
+      return [{
+        id: `modular-carry/${e.id}`,
+        guide: 'modular-carry',
+        name: hero.name,
+        brand: e.name,
+        price: historical || !Number.isFinite(n) ? null : n,
+        priceText: historical ? `${hero.price} (historical)` : String(hero.price),
+        currency: 'USD' as const,
+        url: e.url,
+        image: e.image ?? null,
+        verdict: e.lesson ?? '',
+        reviewUrl: `/reviews/modular-carry#${e.id}`,
+      }];
+    })
+  : [];
+
+export const SHOP_PICKS: ShopPick[] = [...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+
+export const SHOP_GUIDES: ShopGuide[] = [
+  {
+    id: 'bags', title: bags.title, dek: bags.dek, href: '/reviews/bags', json: '/reviews/bags.json',
+    kind: 'Desk review', image: '/images/bags/carry-kit-thumb.jpg', imageAlt: 'Illustrated specimen sheet of bags',
+    asOf: bags.asOf, count: bags.picks.length, countLabel: 'picks',
+  },
+  ...(modular ? [{
+    id: 'modular-carry', title: modular.title, dek: modular.dek, href: '/reviews/modular-carry', json: '/reviews/modular-carry.json',
+    kind: 'Field guide' as const, image: '/images/modular-carry/og.jpg', imageAlt: 'The modular carry companies',
+    asOf: modular.asOf, count: modular.entries.length, countLabel: 'companies',
+  }] : []),
+  {
+    id: 'lego-sets', title: lego.title, dek: 'A dragon, two old consoles, and a few small reasons to keep playing. Six picks by Astra Light.', href: '/reviews/lego-sets', json: '/reviews/lego-sets.json',
+    kind: 'Buying guide', image: '/images/lego-sets/game-boy.jpg', imageAlt: 'LEGO Game Boy with brick cartridges',
+    asOf: lego.asOf, count: lego.sets.length, countLabel: 'sets',
+  },
+  {
+    id: 'hummingbird-feeders', title: 'Hummingbird feeders: the one you will actually clean', dek: 'Nine feeders ranked on a published rubric, plus the care guide that matters more than the brand.', href: '/reviews/hummingbird-feeders', json: '/reviews/hummingbird-feeders.json',
+    kind: 'Desk review', image: '/images/hummingbird-feeders/hero.jpg', imageAlt: 'Painting of a hummingbird at a red saucer feeder',
+    asOf: FEEDER_DATE, count: FEEDERS.length, countLabel: 'feeders',
+  },
+  {
+    id: 'paddles', title: 'The Paddle Register', dek: 'Every pickleball paddle release we can source, with dates, lab links and a change log. Affiliate-free by rule.', href: '/paddles', json: '/paddles.json',
+    kind: 'Register', image: '/images/paddle-study.jpg', imageAlt: 'Study of a pickleball paddle',
+    asOf: String(REGISTER_STATS.asOf), count: REGISTER_STATS.paddles, countLabel: 'paddles',
+  },
+  {
+    id: 'shelf', title: 'The Shelf: Mainichikoh incense', dek: 'Nippon Kodo’s everyday incense, box by box: which one changes a room, which one stays quiet.', href: '/shop#shelf', json: '/shop.json',
+    kind: 'Shelf', image: '/images/shelf/mainichikoh-natural-bodhi-sandalwood.jpg', imageAlt: 'A box of Mainichikoh Natural Bodhi sandalwood incense',
+    asOf: '2026-09-28', count: 5, countLabel: 'boxes',
+  },
+];
+
+export const SHOP_LANES = [
+  { id: 'catalog', label: 'The catalog', href: '/shop', note: 'Every product PointCast lists, with outbound checkout at the maker.' },
+  { id: 'court', label: 'Court lane', href: '/shop/court', note: 'Paddles out now and coming soon, from the register.' },
+  { id: 'good-feels', label: 'Good Feels', href: '/shop#good-feels', note: 'The house brand’s live mirror: seltzers, gummies, enhancers.' },
+  { id: 'takes', label: 'Paddle takes', href: '/reviews/paddles', note: 'Reviews as takes: hours played, who paid, what we’d change.' },
+  { id: 'method', label: 'How we review', href: '/reviews/paddles/method', note: 'Desk vs hands-on, dated prices, and the paid-link rule.' },
+];
+
+export const SHOP_POLICY = [
+  'Desk reviews say so at the top. If nobody handled the product, there is no star rating.',
+  'Every price has a date. The maker’s page is the truth; ours is a snapshot.',
+  'No paid links anywhere today. If a program ever approves PointCast, each paid link will say so beside the link.',
+  'Commission never changes what we rank or recommend. The paddle register stays affiliate-free by rule.',
+];
+
+export const SHOP_ENDPOINTS = [
+  { href: '/shop/front.json', label: 'This page as JSON: guides, every pick, policy' },
+  { href: '/shop/llms.txt', label: 'Plain-text guide for language models' },
+  { href: '/shop.json', label: 'The full product catalog' },
+  { href: '/reviews.json', label: 'Every Review Lab review' },
+  { href: '/paddles.json', label: 'The Paddle Register' },
+];
+
+export function shopFrontJson() {
+  const priced = SHOP_PICKS.filter((p) => p.price !== null);
+  return {
+    schema: 'pointcast.shop-front/v1',
+    version: SHOP_FRONT_VERSION,
+    url: `${SHOP_ORIGIN}/`,
+    mirror: `${SITE}/shop/front`,
+    launchedOn: LAUNCHED_ON,
+    publisher: 'PointCast, El Segundo, California',
+    affiliateLinks: false,
+    policy: SHOP_POLICY,
+    counts: { guides: SHOP_GUIDES.length, picks: SHOP_PICKS.length, priced: priced.length, paidLinks: 0 },
+    guides: SHOP_GUIDES.map((g) => ({ ...g, href: SITE + g.href, json: g.json ? SITE + g.json : null, image: SITE + g.image })),
+    picks: SHOP_PICKS.map((p) => ({ ...p, image: p.image ? SITE + p.image : null, reviewUrl: SITE + p.reviewUrl })),
+    lanes: SHOP_LANES.map((l) => ({ ...l, href: SITE + l.href })),
+    endpoints: SHOP_ENDPOINTS.map((e) => ({ ...e, href: SITE + e.href })),
+  };
+}
