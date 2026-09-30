@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: "arcade-remembrance",
+    name: "The other half of the game",
+    kicker: "ARCADE REMEMBRANCE · READ & PLAY",
+    description: "An ode to Super Sprint, Gauntlet, Super Off Road, and shared cabinets, signed Michael Hoydich. Original wheel, trackball, button, and shared-screen interactions.",
+    url: "https://pointcast.xyz/arcade-remembrance",
+    path: "/arcade-remembrance",
+    repo: "https://github.com/mhoydich/pointcast",
+    channel: "CH.FD",
+    kind: "pointcast",
+  },
+  {
     slug: 'ai-grand-prix',
     name: 'AI Grand Prix',
     kicker: 'PREDICTION ARCADE · PLAY POINTS · TEZOS PREVIEW',
