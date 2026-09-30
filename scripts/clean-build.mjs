@@ -11,7 +11,10 @@ if (existsSync(dist)) {
   const stale = join(root, '..', `dist.stale-${Date.now()}`);
   try {
     renameSync(dist, stale);
-    console.log(`[clean-build] moved dist -> ${stale}`);
+    // Delete the parked copy too. Leaving it cost ~1.8G per build: 28 of these
+    // filled ~48G next to the ~/pc-* worktrees by 2026-09-29.
+    rmSync(stale, { recursive: true, force: true });
+    console.log(`[clean-build] cleared old dist (${stale})`);
   } catch {
     rmSync(dist, { recursive: true, force: true });
   }
