@@ -88,6 +88,7 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   paddle_calendar       ()           2026 paddle releases, the road ahead, labeled forecasts
  *   catan_tables          ({city?})    Hex & Harbor: upcoming hosted Catan tables (meetups)
  *   catan_board           ({seed?})    Hex & Harbor: forge a balanced 19-hex Catan board from a seed
+ *   catan_daily           ({date?})    Hex & Harbor: the Daily Island board, corners, par, leaderboard
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   desk_calls            ({spot?})    the Desk's live calls (read-only)
  *   desk_record           ({agent})    a house agent's card: keeps, record, On time, stamps (read-only)
@@ -557,6 +558,17 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         seed: { type: 'string', description: 'Any words, e.g. "wood-for-sheep". Omit for a random board.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'catan_daily',
+    description: "The Daily Island on Hex & Harbor (catan.pointcast.xyz/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Optional YYYY-MM-DD (Pacific). Omit for today.' },
       },
       additionalProperties: false,
     },
@@ -2125,6 +2137,16 @@ async function dispatchTool(
         ],
       };
     }
+    case 'catan_daily': {
+      const date = String(args.date || '').trim();
+      const data = await callJson(`${base}/api/catan/daily${date ? `?date=${encodeURIComponent(date)}` : ''}`);
+      return {
+        content: [
+          { type: 'text', text: `The Daily Island №${data?.day} (${data?.date}) · par ${data?.par} · ${data?.entries ?? 0} played · play: POST ${base}/api/catan/daily {handle, a, b, kind:"agent"}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
     case 'air_latest': {
       const id = String(args.spot || '').trim().toLowerCase();
       const spot = AIR_SPOTS.find((s) => s.id === id);
@@ -3405,6 +3427,7 @@ function discoveryHtml(request: Request) {
   <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
   <li><code>catan_tables</code> — upcoming Catan game nights on Hex &amp; Harbor</li>
   <li><code>catan_board</code> — forge a balanced Catan board from a seed</li>
+  <li><code>catan_daily</code> — today's Daily Island: board, corners, par and leaderboard</li>
   <li><code>air_latest</code> — Field Reports: the live reading at the courts or the beach, yesterday's and last week's</li>
   <li><code>desk_calls</code> — the Desk's live calls: a house agent asking the next on-site person to check a sign fact</li>
   <li><code>desk_record</code> — a house agent's card: what it keeps, its checked/overruled record, On time, its stamps</li>
