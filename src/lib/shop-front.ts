@@ -5,10 +5,12 @@
  * Review Lab, so a person can browse and an agent can read one JSON file.
  * Guides stay the source of truth; this module only flattens them.
  */
+import aiWorkLife from '../data/ai-work-life.json';
 import bags from '../data/bags-south-bay.json';
 import playstation from '../data/playstation-2026.json';
 import lego from '../data/lego-sets.json';
 import robots from '../data/home-robots.json';
+import video from '../data/ai-video.json';
 import machines from '../data/machine-room.json';
 import aiPlans from '../data/ai-plans.json';
 import { FEEDERS, PICKS as FEEDER_PICKS, DESK_DATE as FEEDER_DATE } from './hummingbird-feeders.mjs';
@@ -175,9 +177,32 @@ const planPicks: ShopPick[] = aiPlans.picks.map((k) => {
   };
 });
 
-export const SHOP_PICKS: ShopPick[] = [...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+// Recurring subscriptions are text prices, not one-time product Offers.
+const aiPicks: ShopPick[] = aiWorkLife.plans.map(p=>({id:`ai-work-life/${p.id}`,guide:'ai-work-life',name:p.name,brand:p.name,price:null,priceText:p.priceText,currency:'USD',url:p.url,image:null,verdict:p.why,reviewUrl:`/reviews/ai-work-life#${p.id}`}));
+
+const videoPicks: ShopPick[] = video.picks.map((v) => ({
+  id: `ai-video/${v.id}`,
+  guide: 'ai-video',
+  name: v.name,
+  brand: v.brand,
+  price: typeof v.price === 'number' ? v.price : null,
+  priceText: v.priceText + (v.priceNote ? '*' : ''),
+  currency: 'USD',
+  url: v.url,
+  image: '/images/ai-video/thumb.jpg',
+  verdict: v.verdict,
+  reviewUrl: `/reviews/ai-video#${v.id}`,
+}));
+
+export const SHOP_PICKS: ShopPick[] = [...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {id:'ai-work-life',title:aiWorkLife.title,dek:aiWorkLife.dek,href:'/reviews/ai-work-life',json:'/reviews/ai-work-life.json',kind:'Buying guide',image:'/images/ai-work-life/hero.png',imageAlt:'An idea becomes a draft and a reviewed result',asOf:aiWorkLife.asOf,count:aiWorkLife.plans.length,countLabel:'AI services'},
+  {
+    id: 'ai-video', title: video.title, dek: video.dek, href: '/reviews/ai-video', json: '/reviews/ai-video.json',
+    kind: 'Desk review', image: '/images/ai-video/thumb.jpg', imageAlt: 'Illustrated specimen sheet of video-making objects',
+    asOf: video.asOf, count: video.picks.length, countLabel: 'services',
+  },
   {
     id: 'machine-room', title: 'The machine room', dek: machines.dek, href: '/reviews/machine-room', json: '/reviews/machine-room.json',
     kind: 'Buying guide', image: '/images/machine-room/hero.jpg', imageAlt: 'Specimen sheet of desk hardware: computers, a drive, a macro pad, a pedal, a light and a mic',
