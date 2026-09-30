@@ -197,6 +197,7 @@ const videoPicks: ShopPick[] = video.picks.map((v) => ({
 export const SHOP_PICKS: ShopPick[] = [...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {id:'100-dollar-ai',title:'The $100 AI challenge',dek:'Five actual outputs and an open ledger. A $3.77 API-equivalent checkpoint; actual billed cost unknown.',href:'/reviews/100-dollar-ai',json:'/reviews/100-dollar-ai.json',kind:'Field guide',image:'/experiments/ai-100/hero.png',imageAlt:'Make it real: five outputs and an open ledger',asOf:'2026-09-29',count:5,countLabel:'outputs'},
   {id:'ai-work-life',title:aiWorkLife.title,dek:aiWorkLife.dek,href:'/reviews/ai-work-life',json:'/reviews/ai-work-life.json',kind:'Buying guide',image:'/images/ai-work-life/hero.png',imageAlt:'An idea becomes a draft and a reviewed result',asOf:aiWorkLife.asOf,count:aiWorkLife.plans.length,countLabel:'AI services'},
   {
     id: 'ai-video', title: video.title, dek: video.dek, href: '/reviews/ai-video', json: '/reviews/ai-video.json',

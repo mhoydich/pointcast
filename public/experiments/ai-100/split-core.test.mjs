@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {splitBill} from './split-core.mjs';
+test('displayed example reconciles cents',()=>{const s=splitBill(83.47,9.5,18,3);assert.deepEqual(s,{base:8347,taxCents:793,tipCents:1502,total:10642,shares:[3548,3547,3547]});});
+test('remainder and zero bills conserve every cent',()=>{assert.deepEqual(splitBill(.01,0,0,8).shares,[1,0,0,0,0,0,0,0]);assert.equal(splitBill(0,100,100,2).total,0);for(let cents=0;cents<10000;cents+=37)for(let n=2;n<=8;n++){const s=splitBill(cents/100,9.5,18,n);assert.equal(s.shares.reduce((a,b)=>a+b,0),s.total);assert.ok(Math.max(...s.shares)-Math.min(...s.shares)<=1);}});
+test('invalid input cannot create a misleading split',()=>{for(const args of [[NaN,0,0,2],[-1,0,0,2],[1,101,0,2],[1,0,-1,2],[1,0,0,2.5],[1,0,0,9],[10001,0,0,2],[1.001,0,0,2]])assert.throws(()=>splitBill(...args));});
