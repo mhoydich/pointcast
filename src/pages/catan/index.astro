@@ -1,0 +1,724 @@
+---
+/**
+ * /catan — Hex & Harbor, served at the root of catan.pointcast.xyz.
+ * An unofficial fan club for Catan tables: host and find meetups, forge a
+ * balanced board, roll fair dice, and (for agents) open a sealed-dice table
+ * over x402. Core logic: src/lib/catan.ts. APIs: functions/api/catan/*.
+ * Art: Astra (Codex) woodblock set, objects only — no people, no places.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  forgeBoard, hexCenter, RESOURCES, TWO_D6_WAYS, EDITIONS, PACES, CATAN_ENDPOINTS, HOUSE_NOTES,
+  CATAN_ORIGIN, CATAN_SITE, CATAN_LAUNCHED_ON, SEAL_ROLLS,
+} from '../../lib/catan';
+
+const title = 'Hex & Harbor — Catan tables, a board forge and fair dice';
+const description = 'An unofficial fan club for Catan players: find or host a local game night, forge a balanced board, roll fair dice, and give your agents a sealed-dice table over x402. From PointCast, El Segundo.';
+const board = forgeBoard('harbor');
+const S = 56;
+const hexPts = (cx: number, cy: number, s: number) =>
+  Array.from({ length: 6 }, (_, k) => {
+    const a = (Math.PI / 180) * (60 * k - 30);
+    return `${(cx + s * Math.cos(a)).toFixed(1)},${(cy + s * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+const resourceList = (['lumber', 'brick', 'wool', 'grain', 'ore'] as const).map((k) => ({ key: k, ...RESOURCES[k] }));
+const numberLine = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12].map((n) => ({ n, ways: TWO_D6_WAYS[n] }));
+
+const lore = [
+  { term: 'Wood for sheep', def: 'The trade offer everyone makes and nobody takes. Say it anyway; it is tradition.' },
+  { term: 'The robber brood', def: 'When the robber sits on your best hex for four turns running. Bring snacks; it helps.' },
+  { term: 'Five pips', def: 'A 6 or an 8. Five of the 36 ways two dice can land. The red numbers are red for a reason.' },
+  { term: 'The ore sulk', def: 'Holding three ore, needing grain, and pretending you are fine.' },
+  { term: 'Friendly robber', def: 'A popular house rule: the robber cannot land on a player with two points or fewer. Say it before the game, not during.' },
+  { term: 'The long road home', def: 'Building the Longest Road with nothing to connect it to. Beautiful. Pointless. Two points.' },
+  { term: 'Seven, again', def: 'One roll in six. It will feel like one in two. Count your hand before you pass the dice.' },
+  { term: 'Harbour brain', def: 'Settling on a 2:1 harbour on turn one and then ignoring it for the whole game.' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': `${CATAN_ORIGIN}/#page`,
+      name: 'Hex & Harbor',
+      description,
+      url: `${CATAN_ORIGIN}/`,
+      datePublished: CATAN_LAUNCHED_ON,
+      isPartOf: { '@type': 'WebSite', name: 'PointCast', url: CATAN_SITE },
+      about: { '@type': 'Game', name: 'Catan (board game)' },
+    },
+    {
+      '@type': 'WebAPI',
+      name: 'Hex & Harbor API',
+      documentation: `${CATAN_SITE}/catan/llms.txt`,
+      url: `${CATAN_SITE}/catan/index.json`,
+    },
+  ],
+};
+---
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/catan/og.jpg"
+  jsonLd={jsonLd}
+  alternates={[
+    { type: 'application/json', href: '/catan/index.json', title: 'Hex & Harbor (JSON)' },
+    { type: 'text/plain', href: '/catan/llms.txt', title: 'Hex & Harbor for language models' },
+  ]}
+  immersive
+>
+  <div class="hh">
+    <header class="hh-top">
+      <a class="hh-mark" href="#top" aria-label="Hex & Harbor home">
+        <svg viewBox="0 0 40 40" width="30" height="30" aria-hidden="true"><polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="#b5532f"/><polygon points="20,10 29,15 29,25 20,30 11,25 11,15" fill="#f3e8d2"/><circle cx="20" cy="20" r="4" fill="#1f5f6b"/></svg>
+        <span>Hex &amp; Harbor</span>
+      </a>
+      <nav aria-label="Sections">
+        <a href="#tables">Tables</a>
+        <a href="#forge">Forge</a>
+        <a href="#dice">Dice</a>
+        <a href="#almanac">Almanac</a>
+        <a href="#agents">Agents</a>
+      </nav>
+    </header>
+
+    <section class="hh-hero" id="top">
+      <picture>
+        <source media="(max-width: 700px)" srcset="/images/catan/hero-sm.jpg" />
+        <img src="/images/catan/hero.jpg" width="1672" height="941" alt="Woodblock print: an island of nineteen carved wooden hex tiles (forest, brick, wool, wheat, ore and a desert) floating on curling teal waves, two dice in the foreground." fetchpriority="high" />
+      </picture>
+      <div class="hh-hero__copy">
+        <p class="hh-kicker">catan.pointcast.xyz · an unofficial fan club</p>
+        <h1>Pull up a chair.<br />The island's already out.</h1>
+        <p class="hh-dek">Find a Catan night near you or host your own. You can also forge a fair board, roll dice you can trust, and hand your agents a table where nobody controls the dice.</p>
+        <div class="hh-cta">
+          <a class="hh-btn hh-btn--brick" href="#tables">Find a table</a>
+          <a class="hh-btn" href="#host">Host a table</a>
+          <a class="hh-btn hh-btn--ghost" href="#forge">Forge a board</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Tables ───────────────────────────────────────────── -->
+    <section class="hh-sec" id="tables" aria-labelledby="tables-h">
+      <div class="hh-sec__head">
+        <p class="hh-num">I</p>
+        <div>
+          <h2 id="tables-h">Tables tonight &amp; soon</h2>
+          <p>Local game nights hosted by people who want another player or three. Take a seat with just a handle. Tables meet in public places.</p>
+        </div>
+      </div>
+      <div class="hh-tablebar">
+        <label class="hh-field hh-field--inline"><span>Near</span><input id="city-filter" type="search" placeholder="city, e.g. El Segundo" autocomplete="address-level2" /></label>
+        <span id="tables-count" class="hh-meta" aria-live="polite">Setting out the chairs…</span>
+      </div>
+      <ol id="tables-list" class="hh-tables" aria-live="polite"></ol>
+      <div id="tables-empty" class="hh-empty" hidden>
+        <img src="/images/catan/table.jpg" width="1200" height="675" alt="Overhead woodblock print of a round wooden game table: a hex island board, fanned cards at four seats, tea, snacks and dice." loading="lazy" />
+        <p><strong>No tables posted here yet.</strong> The first host sets the tone. Put one up below and send the link to two friends; they'll bring a third.</p>
+      </div>
+
+      <form id="host" class="hh-host" autocomplete="off">
+        <h3>Host a table</h3>
+        <p class="hh-meta">Public places only: a game café, library, taproom or community room. Handles only, no phone numbers. You'll get a one-time host key to cancel.</p>
+        <div class="hh-grid">
+          <label class="hh-field hh-field--wide"><span>Table name</span><input name="title" required maxlength="60" placeholder="Tuesday hex night" /></label>
+          <label class="hh-field"><span>City</span><input name="city" required maxlength="60" placeholder="El Segundo, CA" /></label>
+          <label class="hh-field"><span>Venue</span><input name="venue" required maxlength="80" placeholder="the library community room" /></label>
+          <label class="hh-field"><span>When</span><input name="when" type="datetime-local" required /></label>
+          <label class="hh-field"><span>Seats</span><select name="seats">{[2, 3, 4, 5, 6].map((n) => <option value={n} selected={n === 4}>{n}</option>)}</select></label>
+          <label class="hh-field"><span>Edition</span><select name="edition">{EDITIONS.map((e) => <option value={e}>{e}</option>)}</select></label>
+          <label class="hh-field"><span>Pace</span><select name="pace">{PACES.map((p) => <option value={p} selected={p === 'casual'}>{p}</option>)}</select></label>
+          <label class="hh-field"><span>Your handle</span><input name="host" required maxlength="32" placeholder="sheepforwheat" /></label>
+          <label class="hh-field hh-field--wide"><span>Note <em>(optional)</em></span><input name="note" maxlength="280" placeholder="Back corner table, blue game bag. Teaching game at 6, real game at 7." /></label>
+          <label class="hh-field hh-field--wide"><span>Club link <em>(optional, https)</em></span><input name="link" type="url" maxlength="300" placeholder="https://…" /></label>
+        </div>
+        <button class="hh-btn hh-btn--brick" type="submit">Put the table up</button>
+        <p id="host-out" class="hh-out" role="status"></p>
+      </form>
+    </section>
+
+    <!-- ── Forge ────────────────────────────────────────────── -->
+    <section class="hh-sec hh-sec--sea" id="forge" aria-labelledby="forge-h">
+      <div class="hh-sec__head">
+        <p class="hh-num">II</p>
+        <div>
+          <h2 id="forge-h">The Board Forge</h2>
+          <p>A balanced 19-hex base board from any words you like. No 6 touches an 8 and no two matching numbers touch. The harbours get shuffled too. The same seed always forges the same island, so you can text it to the table.</p>
+        </div>
+      </div>
+      <div class="hh-forge">
+        <figure class="hh-board">
+          <svg id="forge-svg" viewBox="-300 -270 600 540" role="img" aria-labelledby="forge-cap">
+            <title id="forge-cap">A forged board for the seed shown below.</title>
+            <defs>
+              {board.hexes.map((h) => { const c = hexCenter(h.q, h.r); return <clipPath id={`hc${h.i}`}><polygon points={hexPts(c.x * S, c.y * S, S - 1)} /></clipPath>; })}
+            </defs>
+            <g id="forge-g">
+              {board.hexes.map((h) => {
+                const c = hexCenter(h.q, h.r); const x = c.x * S; const y = c.y * S; const R = RESOURCES[h.resource];
+                return (
+                  <g>
+                    <polygon points={hexPts(x, y, S - 1)} fill={R.color} />
+                    <image href={R.art.replace('.jpg', '-tile.jpg')} x={x - S * 1.25} y={y - S * 1.25} width={S * 2.5} height={S * 2.5} clip-path={`url(#hc${h.i})`} preserveAspectRatio="xMidYMid slice" />
+                    {h.number !== null && (
+                      <g>
+                        <circle cx={x} cy={y} r="17" fill="#f6eedb" stroke="#1f1a14" stroke-width="1.5" />
+                        <text x={x} y={y + 5} text-anchor="middle" class={h.number === 6 || h.number === 8 ? 'tok tok--red' : 'tok'}>{h.number}</text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+          <figcaption>
+            <label class="hh-field hh-field--inline"><span>Seed</span><input id="seed-in" value={board.seed} maxlength="32" spellcheck="false" /></label>
+            <button class="hh-btn hh-btn--brick" id="forge-new" type="button">Forge another</button>
+            <button class="hh-btn hh-btn--ghost" id="forge-copy" type="button">Copy link</button>
+          </figcaption>
+        </figure>
+        <aside class="hh-forge__side">
+          <h3>Pips on this island</h3>
+          <p class="hh-meta">A pip is one of the 36 ways two dice can land. More pips means more cards. On a fair island no resource runs away with it.</p>
+          <ul id="pips" class="hh-pips">
+            {resourceList.map((r) => (
+              <li><span class="sw" style={`background:${r.color}`}></span><span class="nm">{r.label}</span><span class="bar"><i data-pip={r.key} style={`width:${(board.pipsByResource[r.key] / 20) * 100}%`}></i></span><b data-pipn={r.key}>{board.pipsByResource[r.key]}</b></li>
+            ))}
+          </ul>
+          <p class="hh-meta">Harbours: <span id="harbor-list">{board.harbors.map((h) => `${h.ratio} ${h.kind}`).join(' · ')}</span></p>
+          <p class="hh-meta">JSON for bots: <a id="forge-json" href={`/api/catan/board?seed=${board.seed}`}>/api/catan/board?seed={board.seed}</a></p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ── Dice ─────────────────────────────────────────────── -->
+    <section class="hh-sec" id="dice" aria-labelledby="dice-h">
+      <div class="hh-sec__head">
+        <p class="hh-num">III</p>
+        <div>
+          <h2 id="dice-h">The Dice Tower</h2>
+          <p>Two fair dice from your browser's cryptographic randomness. Leave it on the table and it keeps the curve for you. When the 8s go missing for half an hour, the chart shows everyone it was really just luck.</p>
+        </div>
+      </div>
+      <div class="hh-dice">
+        <div class="hh-dice__roll">
+          <div class="hh-diepair" aria-hidden="true"><div class="die" id="die-a"></div><div class="die" id="die-b"></div></div>
+          <p class="hh-total"><span id="dice-total">–</span><small id="dice-note">Press roll or the space bar.</small></p>
+          <div class="hh-cta">
+            <button class="hh-btn hh-btn--brick" id="dice-roll" type="button">Roll</button>
+            <button class="hh-btn hh-btn--ghost" id="dice-reset" type="button">Clear the curve</button>
+          </div>
+          <p class="hh-meta" id="dice-stats" aria-live="polite">0 rolls · 0 sevens</p>
+        </div>
+        <div class="hh-curve" aria-label="Rolls by total, against the expected curve">
+          {numberLine.concat([{ n: 7, ways: 6 }]).sort((a, b) => a.n - b.n).map(({ n, ways }) => (
+            <div class="col" data-n={n}><span class="bar" style="height:0%"></span><span class="exp" style={`bottom:${(ways / 6) * 100}%`}></span><b class={n === 6 || n === 8 ? 'red' : n === 7 ? 'seven' : ''}>{n}</b></div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Almanac ──────────────────────────────────────────── -->
+    <section class="hh-sec" id="almanac" aria-labelledby="almanac-h">
+      <div class="hh-sec__head">
+        <p class="hh-num">IV</p>
+        <div>
+          <h2 id="almanac-h">The Almanac</h2>
+          <p>Five things the island gives, and a desert that gives nothing. Specimen plates from the Hex &amp; Harbor print shop.</p>
+        </div>
+      </div>
+      <ul class="hh-plates">
+        {resourceList.map((r) => (
+          <li class="plate">
+            <img src={r.art} width="720" height="720" alt={`Woodblock still life for ${r.label.toLowerCase()} on a carved hex tile.`} loading="lazy" />
+            <h3>{r.label} <small>{r.terrain}</small></h3>
+            <p>{r.line}</p>
+          </li>
+        ))}
+        <li class="plate">
+          <img src="/images/catan/robber.jpg" width="720" height="720" alt="A single dark wooden pawn standing on a pale desert hex, long shadow." loading="lazy" />
+          <h3>The robber <small>Desert</small></h3>
+          <p>{RESOURCES.desert.line}</p>
+        </li>
+      </ul>
+
+      <div class="hh-two">
+        <div class="hh-card">
+          <h3>The number line</h3>
+          <p class="hh-meta">Pips per number token. It's the whole game in one row.</p>
+          <ol class="hh-numline">
+            {numberLine.map(({ n, ways }) => (
+              <li class={n === 6 || n === 8 ? 'red' : ''}><b>{n}</b><span>{'•'.repeat(ways)}</span></li>
+            ))}
+          </ol>
+        </div>
+        <div class="hh-card">
+          <h3>Table talk</h3>
+          <dl class="hh-lore">
+            {lore.map((l) => (<><dt>{l.term}</dt><dd>{l.def}</dd></>))}
+          </dl>
+        </div>
+      </div>
+
+      <figure class="hh-wide">
+        <img src="/images/catan/longest.jpg" width="720" height="720" alt="A winding chain of wooden road pieces crossing six hex tiles to a ribbon rosette." loading="lazy" />
+        <figcaption>
+          <h3>Why a fan club</h3>
+          <p>The best Catan game is the one at a real table. Someone offers wood for sheep, someone else guards the ore, and the whole table groans at the fourth seven in a row. Hex &amp; Harbor exists to get more of those tables started. It's a free bulletin board, a few honest tools, and a small print shop of art made for the people who love this game.</p>
+          <p class="hh-meta">Unofficial and not affiliated with CATAN GmbH. Go buy the game from your local game store.</p>
+        </figcaption>
+      </figure>
+    </section>
+
+    <!-- ── Agents ───────────────────────────────────────────── -->
+    <section class="hh-sec hh-sec--ink" id="agents" aria-labelledby="agents-h">
+      <div class="hh-sec__head">
+        <p class="hh-num">V</p>
+        <div>
+          <h2 id="agents-h">A table for agents</h2>
+          <p>Every part of Hex &amp; Harbor has an open JSON door. Agents can list and host tables, take seats and forge boards for free. For games where nobody at the table should control the dice, there is one paid action.</p>
+        </div>
+      </div>
+      <div class="hh-two">
+        <div class="hh-card hh-card--dark">
+          <img class="hh-seal-art" src="/images/catan/dice.jpg" width="720" height="720" alt="Two carved wooden dice tumbling above a hex tile." loading="lazy" />
+          <h3>The Sealed Table · x402 · 0.01 USDC</h3>
+          <p>Pay one cent on Etherlink and you get a forged board plus {SEAL_ROLLS} dice rolls. The rolls are fixed and committed with a sha256 hash before the first one is shown. Only you, holding the roll key, can turn the rolls over, one at a time. When the table ends, the secret is published and anyone can recompute every roll. It suits bot leagues, remote games, and agent referees.</p>
+          <pre><code>POST https://pointcast.xyz/api/agent/catan-seal
+Content-Type: application/json
+Idempotency-Key: &lt;stable-id&gt;
+Payment-Signature: &lt;base64 x402 v2&gt;
+
+{"{"}"title":"Friday bot league","players":4,"seed":"sheep-for-wheat"{"}"}</code></pre>
+          <p class="hh-meta">Without a Payment-Signature you get a 402 quote. The fee splits 50/50 between the house and the network, like every PointCast town action. The receipt is countersigned. Watch any sealed table at <a href="/catan/seal/">/seal</a>.</p>
+        </div>
+        <div class="hh-card hh-card--dark">
+          <h3>Free doors</h3>
+          <ul class="hh-endpoints">
+            {CATAN_ENDPOINTS.map((e) => (<li><code>{e.method}</code> <a href={e.href.startsWith('/api/agent') ? '/x402' : e.href}>{e.href}</a><span>{e.label}</span></li>))}
+          </ul>
+          <p class="hh-meta">Everything at once: <a href="/catan/index.json">/catan/index.json</a> · <a href="/catan/llms.txt">/catan/llms.txt</a>. MCP: <code>catan_tables</code> and <code>catan_board</code> on the PointCast MCP server at <a href="/api/mcp">/api/mcp</a>.</p>
+          <pre><code>curl 'https://pointcast.xyz/api/catan/tables?city=segundo'
+curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <footer class="hh-foot">
+      <img src="/images/catan/harbor.jpg" width="720" height="720" alt="A tiny carved wooden sailing ship on a teal hex of carved waves." loading="lazy" />
+      <div>
+        <p><strong>Hex &amp; Harbor</strong> is a PointCast room, built in El Segundo and opened {CATAN_LAUNCHED_ON}.</p>
+        <ul>{HOUSE_NOTES.map((n) => <li>{n}</li>)}</ul>
+        <p><a href="https://pointcast.xyz/">← back to PointCast</a></p>
+      </div>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script>
+  import { forgeBoard, hexCenter, RESOURCES, TWO_D6_WAYS, cleanSeed } from '../../lib/catan';
+
+  const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector(s) as T | null;
+  const S = 56;
+  const API = '/api/catan';
+  const store = {
+    get(k: string) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+  };
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+  // ── Forge ──────────────────────────────────────────────
+  const NS = 'http://www.w3.org/2000/svg';
+  const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+  const pts = (cx: number, cy: number, s: number) => Array.from({ length: 6 }, (_, k) => {
+    const a = (Math.PI / 180) * (60 * k - 30);
+    return `${(cx + s * Math.cos(a)).toFixed(1)},${(cy + s * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+  const el = (tag: string, attrs: Record<string, string | number>, text?: string) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+    if (text) n.textContent = text;
+    return n;
+  };
+
+  function drawBoard(seed: string) {
+    const b = forgeBoard(seed);
+    const g = $('#forge-g');
+    const defs = $('#forge-svg defs');
+    if (!g || !defs) return;
+    g.replaceChildren();
+    defs.replaceChildren();
+    // sea ring
+    for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) {
+      if (Math.abs(q + r) > 3 || Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) !== 3) continue;
+      const c = hexCenter(q, r);
+      g.append(el('polygon', { points: pts(c.x * S, c.y * S, S - 1), fill: '#1f5f6b', stroke: '#174a54', 'stroke-width': 2 }));
+    }
+    for (const h of b.hexes) {
+      const c = hexCenter(h.q, h.r); const x = c.x * S; const y = c.y * S; const R = RESOURCES[h.resource];
+      const cp = el('clipPath', { id: `hc${h.i}` }); cp.append(el('polygon', { points: pts(x, y, S - 1) })); defs.append(cp);
+      g.append(el('polygon', { points: pts(x, y, S - 1), fill: R.color }));
+      g.append(el('image', { href: R.art.replace('.jpg', '-tile.jpg'), x: x - S * 1.25, y: y - S * 1.25, width: S * 2.5, height: S * 2.5, 'clip-path': `url(#hc${h.i})`, preserveAspectRatio: 'xMidYMid slice' }));
+      g.append(el('polygon', { points: pts(x, y, S - 1), fill: 'none', stroke: '#f3e8d2', 'stroke-width': 2.5 }));
+      if (h.number !== null) {
+        const red = h.number === 6 || h.number === 8;
+        g.append(el('circle', { cx: x, cy: y, r: 18, fill: '#f6eedb', stroke: '#1f1a14', 'stroke-width': 1.5 }));
+        g.append(el('text', { x, y: y + 4, 'text-anchor': 'middle', class: red ? 'tok tok--red' : 'tok' }, String(h.number)));
+        const n = h.pips;
+        for (let k = 0; k < n; k++) g.append(el('circle', { cx: x + (k - (n - 1) / 2) * 4.2, cy: y + 11, r: 1.4, fill: red ? '#b5532f' : '#1f1a14' }));
+      } else {
+        // the robber, home on the desert
+        g.append(el('path', { d: `M${x - 9} ${y + 16} Q${x} ${y + 10} ${x + 9} ${y + 16} L${x + 6} ${y + 2} Q${x + 10} ${y - 8} ${x} ${y - 16} Q${x - 10} ${y - 8} ${x - 6} ${y + 2} Z`, fill: '#1f1a14' }));
+      }
+    }
+    for (const hb of b.harbors) {
+      const h = b.hexes[hb.hex]; const [dq, dr] = DIRS[hb.dir];
+      const a = hexCenter(h.q, h.r); const n = hexCenter(h.q + dq, h.r + dr);
+      const mx = ((a.x + n.x) / 2) * S; const my = ((a.y + n.y) / 2) * S;
+      const px = (a.x + (n.x - a.x) * 0.9) * S; const py = (a.y + (n.y - a.y) * 0.9) * S;
+      g.append(el('line', { x1: mx, y1: my, x2: px, y2: py, stroke: '#f3e8d2', 'stroke-width': 3, 'stroke-dasharray': '3 3' }));
+      const fill = hb.kind === 'any' ? '#f6eedb' : RESOURCES[hb.kind].color;
+      g.append(el('circle', { cx: px, cy: py, r: 17, fill, stroke: '#f3e8d2', 'stroke-width': 2 }));
+      g.append(el('text', { x: px, y: py + 4, 'text-anchor': 'middle', class: hb.kind === 'any' || hb.kind === 'wool' || hb.kind === 'grain' ? 'hb' : 'hb hb--lt' }, hb.ratio));
+    }
+    for (const [k, v] of Object.entries(b.pipsByResource)) {
+      const bar = document.querySelector<HTMLElement>(`[data-pip="${k}"]`); if (bar) bar.style.width = `${(v / 20) * 100}%`;
+      const num = document.querySelector(`[data-pipn="${k}"]`); if (num) num.textContent = String(v);
+    }
+    const hl = $('#harbor-list'); if (hl) hl.textContent = b.harbors.map((h) => `${h.ratio} ${h.kind}`).join(' · ');
+    const j = $<HTMLAnchorElement>('#forge-json'); if (j) { j.href = `/api/catan/board?seed=${encodeURIComponent(b.seed)}`; j.textContent = `/api/catan/board?seed=${b.seed}`; }
+    const si = $<HTMLInputElement>('#seed-in'); if (si && si.value !== b.seed) si.value = b.seed;
+    return b;
+  }
+
+  const WORDS = ['wood', 'sheep', 'wheat', 'ore', 'brick', 'harbor', 'road', 'robber', 'knight', 'desert', 'island', 'tide', 'pip', 'dice', 'lamp', 'tea'];
+  const randomSeed = () => { const r = crypto.getRandomValues(new Uint32Array(3)); return `${WORDS[r[0] % 16]}-${WORDS[r[1] % 16]}-${(r[2] % 900) + 100}`; };
+  const params = new URLSearchParams(location.search);
+  let seed = cleanSeed(params.get('seed') || 'harbor');
+  drawBoard(seed);
+  $('#forge-new')?.addEventListener('click', () => { seed = randomSeed(); drawBoard(seed); history.replaceState(null, '', `?seed=${seed}#forge`); });
+  $('#seed-in')?.addEventListener('change', (e) => { seed = cleanSeed((e.target as HTMLInputElement).value); drawBoard(seed); history.replaceState(null, '', `?seed=${seed}#forge`); });
+  $('#forge-copy')?.addEventListener('click', async (e) => {
+    const url = `${location.origin}${location.pathname}?seed=${seed}#forge`;
+    try { await navigator.clipboard.writeText(url); (e.target as HTMLElement).textContent = 'Copied'; } catch { prompt('Copy this link', url); }
+  });
+
+  // ── Dice ───────────────────────────────────────────────
+  const PIPS: Record<number, number[]> = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+  const face = (node: HTMLElement | null, n: number) => { if (node) node.innerHTML = Array.from({ length: 9 }, (_, i) => `<i${PIPS[n].includes(i) ? ' class="on"' : ''}></i>`).join(''); };
+  let counts: Record<number, number> = {};
+  try { counts = JSON.parse(store.get('hh:dice') || '{}'); } catch { counts = {}; }
+  const d6 = () => { const b = new Uint8Array(1); do crypto.getRandomValues(b); while (b[0] >= 252); return (b[0] % 6) + 1; };
+  function drawCurve() {
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    const maxObs = Math.max(1, ...Object.values(counts));
+    const scale = Math.max(maxObs, total * 6 / 36);
+    document.querySelectorAll<HTMLElement>('.hh-curve .col').forEach((col) => {
+      const n = Number(col.dataset.n);
+      (col.querySelector('.bar') as HTMLElement).style.height = `${((counts[n] || 0) / scale) * 100}%`;
+      (col.querySelector('.exp') as HTMLElement).style.bottom = total ? `${((total * TWO_D6_WAYS[n] / 36) / scale) * 100}%` : `${(TWO_D6_WAYS[n] / 6) * 100}%`;
+      col.title = `${n}: ${counts[n] || 0} rolled, ${(total * TWO_D6_WAYS[n] / 36).toFixed(1)} expected`;
+    });
+    const st = $('#dice-stats'); if (st) st.textContent = `${total} roll${total === 1 ? '' : 's'} · ${counts[7] || 0} seven${counts[7] === 1 ? '' : 's'}`;
+  }
+  face($('#die-a'), 3); face($('#die-b'), 4); drawCurve();
+  const notes: Record<number, string> = { 7: 'Seven. Count your hands; the robber moves.', 2: 'Snake eyes. One in thirty-six.', 12: 'Boxcars. One in thirty-six.', 6: 'A red number. Five pips.', 8: 'A red number. Five pips.' };
+  function roll() {
+    const a = d6(); const b = d6(); const t = a + b;
+    const pair = $('.hh-diepair'); pair?.classList.remove('tumble'); void (pair as HTMLElement | null)?.offsetWidth; pair?.classList.add('tumble');
+    face($('#die-a'), a); face($('#die-b'), b);
+    const tt = $('#dice-total'); if (tt) tt.textContent = String(t);
+    const nt = $('#dice-note'); if (nt) nt.textContent = notes[t] || `${TWO_D6_WAYS[t]} of 36 ways.`;
+    counts[t] = (counts[t] || 0) + 1; store.set('hh:dice', JSON.stringify(counts)); drawCurve();
+  }
+  $('#dice-roll')?.addEventListener('click', roll);
+  $('#dice-reset')?.addEventListener('click', () => { counts = {}; store.set('hh:dice', '{}'); drawCurve(); });
+  document.addEventListener('keydown', (e) => {
+    const t = e.target as HTMLElement;
+    if (e.code === 'Space' && !/INPUT|TEXTAREA|SELECT|BUTTON/.test(t.tagName)) {
+      const box = $('#dice')?.getBoundingClientRect();
+      if (box && box.top < innerHeight && box.bottom > 0) { e.preventDefault(); roll(); }
+    }
+  });
+
+  // ── Tables ─────────────────────────────────────────────
+  type Table = { id: string; title: string; city: string; venue: string; when: string; seats: number; edition: string; pace: string; host: string; note: string; link: string | null; seated: string[]; open: number };
+  let tables: Table[] = [];
+  const myKeys: Record<string, string> = (() => { try { return JSON.parse(store.get('hh:hostKeys') || '{}'); } catch { return {}; } })();
+  const fmtWhen = (iso: string) => {
+    const d = new Date(iso);
+    return {
+      day: d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
+      date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      time: d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+    };
+  };
+  const house = (on: boolean) => `<svg viewBox="0 0 20 20" width="22" height="22" aria-hidden="true"><path d="M3 18V9l7-6 7 6v9z" fill="${on ? '#b5532f' : 'none'}" stroke="#1f1a14" stroke-width="1.6"/></svg>`;
+
+  function renderTables() {
+    const list = $('#tables-list'); const empty = $('#tables-empty'); const count = $('#tables-count');
+    if (!list || !empty || !count) return;
+    const f = ($<HTMLInputElement>('#city-filter')?.value || '').trim().toLowerCase();
+    const shown = tables.filter((t) => !f || t.city.toLowerCase().includes(f));
+    count.textContent = `${shown.length} table${shown.length === 1 ? '' : 's'}${f ? ` near “${f}”` : ' posted'}`;
+    empty.hidden = shown.length > 0;
+    const focus = params.get('table');
+    list.innerHTML = shown.map((t) => {
+      const w = fmtWhen(t.when);
+      const seats = Array.from({ length: t.seats }, (_, i) => house(i < t.seated.length)).join('');
+      return `<li class="tcard${focus === t.id ? ' tcard--focus' : ''}" id="t-${esc(t.id)}">
+        <div class="tcard__when"><b>${esc(w.day)}</b><span>${esc(w.date)}</span><small>${esc(w.time)}</small></div>
+        <div class="tcard__body">
+          <h3>${esc(t.title)}</h3>
+          <p class="tcard__where">${esc(t.city)} · ${esc(t.venue)}</p>
+          <p class="tcard__chips"><span>${esc(t.edition)}</span><span>${esc(t.pace)}</span><span>host ${esc(t.host)}</span></p>
+          ${t.note ? `<p class="tcard__note">${esc(t.note)}</p>` : ''}
+          ${t.link ? `<p><a href="${esc(t.link)}" rel="nofollow noopener" target="_blank">Club link ↗</a></p>` : ''}
+          <p class="tcard__seated">${t.seated.map(esc).join(' · ')}</p>
+        </div>
+        <div class="tcard__seats">
+          <div class="houses" aria-label="${t.seated.length} of ${t.seats} seats taken">${seats}</div>
+          ${t.open > 0 ? `<form class="seatform" data-id="${esc(t.id)}"><input name="handle" maxlength="32" required placeholder="your handle" aria-label="Your handle" /><button class="hh-btn hh-btn--brick" type="submit">Take a seat</button></form>` : '<p class="full">Table full</p>'}
+          ${myKeys[t.id] ? `<button class="hh-btn hh-btn--ghost cancel" data-id="${esc(t.id)}" type="button">Cancel my table</button>` : ''}
+        </div>
+      </li>`;
+    }).join('');
+    if (focus) document.getElementById(`t-${focus}`)?.scrollIntoView({ block: 'center' });
+  }
+
+  async function loadTables() {
+    try {
+      const r = await fetch(`${API}/tables`, { headers: { accept: 'application/json' } });
+      const j = await r.json();
+      tables = Array.isArray(j.tables) ? j.tables : [];
+    } catch { tables = []; }
+    renderTables();
+  }
+  $('#city-filter')?.addEventListener('input', renderTables);
+
+  $('#tables-list')?.addEventListener('submit', async (e) => {
+    const form = e.target as HTMLFormElement; if (!form.classList.contains('seatform')) return;
+    e.preventDefault();
+    const handle = (new FormData(form).get('handle') as string || '').trim();
+    const btn = form.querySelector('button'); if (btn) btn.disabled = true;
+    const r = await fetch(`${API}/seat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: form.dataset.id, handle }) }).then((x) => x.json()).catch(() => ({ ok: false, error: 'network trouble' }));
+    if (r.ok) { store.set('hh:handle', handle); const i = tables.findIndex((t) => t.id === r.table.id); if (i >= 0) tables[i] = r.table; renderTables(); }
+    else { alert(r.error || 'Could not take the seat.'); if (btn) btn.disabled = false; }
+  });
+  $('#tables-list')?.addEventListener('click', async (e) => {
+    const b = (e.target as HTMLElement).closest('.cancel') as HTMLElement | null; if (!b) return;
+    const id = b.dataset.id!; if (!confirm('Take this table down?')) return;
+    const r = await fetch(`${API}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, hostKey: myKeys[id] }) }).then((x) => x.json()).catch(() => ({ ok: false }));
+    if (r.ok) { delete myKeys[id]; store.set('hh:hostKeys', JSON.stringify(myKeys)); tables = tables.filter((t) => t.id !== id); renderTables(); }
+    else alert(r.error || 'Could not cancel.');
+  });
+
+  const hostForm = $<HTMLFormElement>('#host');
+  const savedHandle = store.get('hh:handle');
+  if (hostForm && savedHandle) (hostForm.elements.namedItem('host') as HTMLInputElement).value = savedHandle;
+  hostForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(hostForm);
+    const out = $('#host-out');
+    const whenLocal = String(fd.get('when') || '');
+    const body: Record<string, unknown> = Object.fromEntries(fd.entries());
+    body.when = whenLocal ? new Date(whenLocal).toISOString() : '';
+    body.seats = Number(body.seats);
+    if (!body.link) delete body.link;
+    const btn = hostForm.querySelector('button[type="submit"]') as HTMLButtonElement; btn.disabled = true;
+    const r = await fetch(`${API}/tables`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((x) => x.json()).catch(() => ({ ok: false, error: 'network trouble' }));
+    btn.disabled = false;
+    if (!out) return;
+    if (r.ok) {
+      myKeys[r.table.id] = r.hostKey; store.set('hh:hostKeys', JSON.stringify(myKeys)); store.set('hh:handle', String(body.host));
+      const share = `${location.origin}${location.pathname}?table=${r.table.id}#tables`;
+      out.innerHTML = `The table is up. Share it: <a href="${esc(share)}">${esc(share)}</a><br><small>Host key (this browser remembers it; save a copy to cancel from elsewhere): <code>${esc(r.hostKey)}</code></small>`;
+      out.className = 'hh-out ok';
+      hostForm.reset(); if (savedHandle) (hostForm.elements.namedItem('host') as HTMLInputElement).value = String(body.host);
+      await loadTables();
+    } else { out.textContent = r.error || 'Could not post the table.'; out.className = 'hh-out err'; }
+  });
+  loadTables();
+</script>
+
+<style>
+  .hh {
+    --paper: #f3e8d2; --paper-2: #ebdcc0; --ink: #1f1a14; --ink-2: #4a3f33;
+    --brick: #b5532f; --wheat: #d7a336; --forest: #3f6b3a; --sea: #1f5f6b; --sea-2: #174a54; --ore: #5f6f80; --wool: #d9cfae;
+    --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.55;
+    min-height: 100vh;
+    background-image: radial-gradient(rgba(31, 26, 20, 0.05) 1px, transparent 1px);
+    background-size: 5px 5px;
+  }
+  .hh a { color: var(--sea); text-underline-offset: 3px; }
+  .hh-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px clamp(16px, 4vw, 40px); border-bottom: 2px solid var(--ink); position: sticky; top: 0; z-index: 5; background: var(--paper); flex-wrap: wrap; }
+  .hh-mark { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; color: var(--ink) !important; text-decoration: none; letter-spacing: 0.01em; }
+  .hh-top nav { display: flex; gap: clamp(10px, 2.4vw, 22px); flex-wrap: wrap; }
+  .hh-top nav a { color: var(--ink); text-decoration: none; font-family: var(--mono); font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .hh-top nav a:hover { color: var(--brick); }
+
+  .hh-hero { position: relative; border-bottom: 2px solid var(--ink); }
+  .hh-hero img { display: block; width: 100%; height: auto; max-height: 78vh; object-fit: cover; }
+  .hh-hero__copy { position: absolute; left: clamp(16px, 4vw, 48px); bottom: clamp(16px, 4vw, 48px); max-width: 560px; background: var(--paper); border: 2px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); padding: clamp(16px, 3vw, 28px); }
+  .hh-kicker, .hh-num, .hh-meta { font-family: var(--mono); }
+  .hh-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--brick); margin: 0 0 8px; }
+  .hh h1 { font-size: clamp(30px, 4.4vw, 52px); line-height: 1.02; margin: 0 0 12px; letter-spacing: -0.01em; }
+  .hh-dek { margin: 0 0 16px; color: var(--ink-2); }
+  .hh-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .hh-btn { display: inline-block; font: 600 15px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 16px; border: 2px solid var(--ink); background: var(--wheat); color: var(--ink) !important; text-decoration: none; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); transition: transform 0.08s, box-shadow 0.08s; }
+  .hh-btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+  .hh-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+  .hh-btn--brick { background: var(--brick); color: #fff7ea !important; }
+  .hh-btn--ghost { background: transparent; }
+  .hh-btn:disabled { opacity: 0.5; cursor: progress; }
+  @media (max-width: 760px) {
+    .hh-hero__copy { position: static; box-shadow: none; border: 0; border-top: 2px solid var(--ink); max-width: none; }
+    .hh-hero img { max-height: 46vh; }
+  }
+
+  .hh-sec { padding: clamp(40px, 7vw, 88px) clamp(16px, 4vw, 48px); border-bottom: 2px solid var(--ink); max-width: 1240px; margin: 0 auto; }
+  .hh-sec--sea, .hh-sec--ink { max-width: none; }
+  .hh-sec--sea { background: var(--paper-2); }
+  .hh-sec--ink { background: #1c2b2e; color: #f3e8d2; }
+  .hh-sec--ink a { color: var(--wheat); }
+  .hh-sec--sea > *, .hh-sec--ink > * { max-width: 1144px; margin-left: auto; margin-right: auto; }
+  .hh-sec__head { display: grid; grid-template-columns: auto 1fr; gap: clamp(12px, 3vw, 28px); align-items: start; margin-bottom: 28px; }
+  .hh-num { font-size: clamp(34px, 6vw, 64px); line-height: 1; margin: 0; color: var(--brick); font-weight: 700; }
+  .hh h2 { font-size: clamp(28px, 3.6vw, 42px); line-height: 1.05; margin: 0 0 8px; }
+  .hh-sec__head p { margin: 0; max-width: 62ch; }
+  .hh-meta { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+  .hh-sec--ink .hh-meta { color: #cdbf9f; }
+
+  .hh-field { display: grid; gap: 4px; font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .hh-field em { text-transform: none; font-style: normal; opacity: 0.7; }
+  .hh-field input, .hh-field select { font: 16px/1.2 var(--serif); padding: 10px 12px; border: 2px solid var(--ink); background: #fbf5e8; color: var(--ink); border-radius: 0; min-width: 0; text-transform: none; letter-spacing: 0; }
+  .hh-field input:focus, .hh-field select:focus { outline: 3px solid var(--wheat); outline-offset: 1px; }
+  .hh-field--inline { grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
+
+  .hh-tablebar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .hh-tablebar .hh-field { min-width: min(100%, 340px); }
+  .hh-tables { list-style: none; padding: 0; margin: 0 0 32px; display: grid; gap: 14px; }
+  .hh-tables :global(.tcard) { display: grid; grid-template-columns: 92px 1fr auto; gap: 18px; border: 2px solid var(--ink); background: #fbf5e8; padding: 16px; box-shadow: 4px 4px 0 var(--ink); }
+  .hh-tables :global(.tcard--focus) { outline: 4px solid var(--wheat); }
+  .hh-tables :global(.tcard__when) { display: grid; align-content: start; text-align: center; border-right: 2px dashed var(--ink-2); padding-right: 14px; font-family: var(--mono); }
+  .hh-tables :global(.tcard__when b) { color: var(--brick); font-size: 14px; letter-spacing: 0.1em; }
+  .hh-tables :global(.tcard__when span) { font: 700 22px/1.1 var(--serif); }
+  .hh-tables :global(.tcard__when small) { font-size: 13px; }
+  .hh-tables :global(.tcard h3) { margin: 0 0 2px; font-size: 22px; }
+  .hh-tables :global(.tcard p) { margin: 0 0 6px; }
+  .hh-tables :global(.tcard__where) { color: var(--ink-2); }
+  .hh-tables :global(.tcard__chips span) { display: inline-block; font: 12px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.05em; border: 1.5px solid var(--ink); padding: 4px 7px; margin: 0 6px 4px 0; background: var(--paper); }
+  .hh-tables :global(.tcard__note) { font-style: italic; }
+  .hh-tables :global(.tcard__seated) { font: 13px/1.4 var(--mono); color: var(--forest); }
+  .hh-tables :global(.tcard__seats) { display: grid; gap: 10px; align-content: start; justify-items: end; }
+  .hh-tables :global(.houses) { display: flex; gap: 2px; }
+  .hh-tables :global(.seatform) { display: flex; gap: 6px; }
+  .hh-tables :global(.seatform input) { font: 15px var(--serif); padding: 8px 10px; border: 2px solid var(--ink); width: 150px; background: #fff; }
+  .hh-tables :global(.full) { font: 700 13px var(--mono); text-transform: uppercase; color: var(--brick); }
+  @media (max-width: 760px) {
+    .hh-tables :global(.tcard) { grid-template-columns: 70px 1fr; }
+    .hh-tables :global(.tcard__seats) { grid-column: 1 / -1; justify-items: start; }
+    .hh-tables :global(.seatform) { width: 100%; }
+    .hh-tables :global(.seatform input) { flex: 1; width: auto; }
+  }
+  .hh-empty { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; align-items: center; margin-bottom: 32px; }
+  .hh-empty img { width: 100%; height: auto; border: 2px solid var(--ink); }
+  @media (max-width: 760px) { .hh-empty { grid-template-columns: 1fr; } }
+
+  .hh-host { border: 2px solid var(--ink); padding: clamp(16px, 3vw, 28px); background: var(--paper-2); }
+  .hh-host h3 { margin: 0 0 4px; font-size: 26px; }
+  .hh-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 16px 0 18px; }
+  .hh-field--wide { grid-column: span 2; }
+  @media (max-width: 900px) { .hh-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .hh-grid { grid-template-columns: 1fr; } .hh-field--wide { grid-column: auto; } }
+  .hh-out { margin: 14px 0 0; font-size: 16px; word-break: break-word; }
+  .hh-out.ok { color: var(--forest); }
+  .hh-out.err { color: var(--brick); }
+
+  .hh-forge { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 40px); align-items: start; }
+  @media (max-width: 860px) { .hh-forge { grid-template-columns: 1fr; } }
+  .hh-board { margin: 0; }
+  .hh-board svg { width: 100%; height: auto; display: block; filter: drop-shadow(6px 8px 0 rgba(31, 26, 20, 0.25)); }
+  .hh-board :global(.tok) { font: 700 17px var(--serif); fill: var(--ink); }
+  .hh-board :global(.tok--red) { fill: var(--brick); }
+  .hh-board :global(.hb) { font: 700 11px var(--mono); fill: var(--ink); }
+  .hh-board :global(.hb--lt) { fill: #fff7ea; }
+  .hh-board figcaption { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+  .hh-board figcaption .hh-field { flex: 1 1 220px; }
+  .hh-forge__side h3 { margin: 0 0 6px; font-size: 24px; }
+  .hh-pips { list-style: none; padding: 0; margin: 14px 0 18px; display: grid; gap: 10px; }
+  .hh-pips li { display: grid; grid-template-columns: 18px 70px 1fr 28px; align-items: center; gap: 10px; font-family: var(--mono); font-size: 14px; }
+  .hh-pips .sw { width: 18px; height: 18px; border: 1.5px solid var(--ink); }
+  .hh-pips .bar { height: 12px; border: 1.5px solid var(--ink); background: var(--paper); }
+  .hh-pips .bar i { display: block; height: 100%; background: var(--ink); transition: width 0.35s; }
+
+  .hh-dice { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: clamp(20px, 4vw, 48px); align-items: end; }
+  @media (max-width: 860px) { .hh-dice { grid-template-columns: 1fr; } }
+  .hh-diepair { display: flex; gap: 18px; }
+  .hh-diepair :global(.die) { width: 84px; height: 84px; background: #f6eedb; border: 2.5px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--ink); display: grid; grid-template-columns: repeat(3, 1fr); padding: 10px; gap: 4px; }
+  .hh-diepair :global(.die i) { border-radius: 50%; }
+  .hh-diepair :global(.die i.on) { background: var(--ink); }
+  .hh-diepair.tumble :global(.die) { animation: tumble 0.42s ease-out; }
+  .hh-diepair.tumble :global(.die:nth-child(2)) { animation-delay: 0.05s; }
+  @keyframes tumble { 0% { transform: rotate(-24deg) translateY(-18px); } 60% { transform: rotate(8deg) translateY(2px); } 100% { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .hh-diepair.tumble :global(.die) { animation: none; } }
+  .hh-total { margin: 18px 0 12px; display: grid; }
+  .hh-total span { font: 700 64px/1 var(--serif); }
+  .hh-total small { font: 14px var(--mono); color: var(--ink-2); }
+  .hh-curve { display: grid; grid-template-columns: repeat(11, 1fr); gap: 6px; height: 260px; border-bottom: 2px solid var(--ink); padding-top: 10px; }
+  .hh-curve .col { position: relative; display: flex; align-items: flex-end; justify-content: center; }
+  .hh-curve .bar { width: 100%; background: var(--sea); border: 1.5px solid var(--ink); border-bottom: 0; transition: height 0.3s; min-height: 0; }
+  .hh-curve .exp { position: absolute; left: -2px; right: -2px; height: 0; border-top: 2.5px dashed var(--brick); transition: bottom 0.3s; }
+  .hh-curve b { position: absolute; bottom: -26px; font: 700 14px var(--mono); }
+  .hh-curve b.red { color: var(--brick); }
+  .hh-curve b.seven { background: var(--ink); color: var(--paper); padding: 0 4px; }
+
+  .hh-plates { list-style: none; padding: 0; margin: 0 0 40px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 2.4vw, 26px); }
+  @media (max-width: 860px) { .hh-plates { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .hh-plates { grid-template-columns: 1fr; } }
+  .plate { border: 2px solid var(--ink); background: #fbf5e8; padding: 12px 12px 16px; }
+  .plate img { width: 100%; height: auto; display: block; border-bottom: 2px solid var(--ink); margin-bottom: 10px; }
+  .plate h3 { margin: 0 0 4px; font-size: 22px; }
+  .plate h3 small { font: 12px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--brick); margin-left: 6px; }
+  .plate p { margin: 0; font-size: 16px; }
+
+  .hh-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 3vw, 32px); }
+  @media (max-width: 860px) { .hh-two { grid-template-columns: 1fr; } }
+  .hh-card { border: 2px solid var(--ink); padding: clamp(16px, 3vw, 26px); background: #fbf5e8; min-width: 0; }
+  .hh-card h3 { margin: 0 0 8px; font-size: 24px; }
+  .hh-card--dark { background: #243538; border-color: #f3e8d2; }
+  .hh-numline { list-style: none; padding: 0; margin: 16px 0 0; display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; text-align: center; }
+  .hh-numline li { display: grid; gap: 4px; border: 1.5px solid var(--ink); padding: 8px 0; background: var(--paper); }
+  .hh-numline b { font-size: 20px; }
+  .hh-numline span { font-size: 12px; letter-spacing: -1px; writing-mode: vertical-rl; margin: 0 auto; line-height: 1; }
+  .hh-numline li.red b, .hh-numline li.red span { color: var(--brick); }
+  .hh-lore { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; font-size: 16px; }
+  .hh-lore dt { font-weight: 700; }
+  .hh-lore dd { margin: 0; }
+  @media (max-width: 520px) { .hh-lore { grid-template-columns: 1fr; } .hh-lore dd { margin-bottom: 8px; } }
+  .hh-wide { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(16px, 4vw, 40px); align-items: center; margin: 40px 0 0; }
+  .hh-wide img { width: 100%; height: auto; }
+  .hh-wide h3 { margin: 0 0 8px; font-size: 28px; }
+  @media (max-width: 760px) { .hh-wide { grid-template-columns: 1fr; } }
+
+  .hh-seal-art { width: 120px; height: 120px; float: right; margin: 0 0 10px 14px; border: 2px solid #f3e8d2; object-fit: cover; }
+  .hh pre { background: #111b1d; color: #e9dcc0; padding: 14px; overflow-x: auto; font: 13px/1.5 var(--mono); border: 1.5px solid #4c5e61; margin: 14px 0; white-space: pre; }
+  .hh-endpoints { list-style: none; padding: 0; margin: 10px 0 14px; display: grid; gap: 10px; font-size: 15px; }
+  .hh-endpoints li { display: grid; grid-template-columns: 50px 1fr; gap: 2px 8px; }
+  .hh-endpoints code { font: 700 12px var(--mono); color: var(--wheat); padding-top: 3px; }
+  .hh-endpoints a { font-family: var(--mono); font-size: 14px; word-break: break-all; }
+  .hh-endpoints span { grid-column: 2; color: #cdbf9f; font-size: 14px; }
+
+  .hh-foot { display: grid; grid-template-columns: 180px 1fr; gap: 24px; align-items: center; padding: 40px clamp(16px, 4vw, 48px) 64px; max-width: 1240px; margin: 0 auto; font-size: 15px; }
+  .hh-foot img { width: 100%; height: auto; }
+  .hh-foot ul { padding-left: 18px; color: var(--ink-2); }
+  @media (max-width: 600px) { .hh-foot { grid-template-columns: 1fr; } .hh-foot img { width: 140px; } }
+</style>

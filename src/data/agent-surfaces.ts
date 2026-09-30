@@ -5,6 +5,9 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    catan: 'https://catan.pointcast.xyz/',
+    catanData: 'https://pointcast.xyz/catan/index.json',
+    catanLlms: 'https://pointcast.xyz/catan/llms.txt',
     shopFront: 'https://pointcast.xyz/shop/front',
     shopFrontData: 'https://pointcast.xyz/shop/front.json',
     shopLlms: 'https://pointcast.xyz/shop/llms.txt',

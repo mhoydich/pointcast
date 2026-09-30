@@ -86,6 +86,8 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   weather_get           ({station})  station weather
  *   paddle_lookup         ({query})    The Paddle Register: dates, price, approvals, timeline, lab links
  *   paddle_calendar       ()           2026 paddle releases, the road ahead, labeled forecasts
+ *   catan_tables          ({city?})    Hex & Harbor: upcoming hosted Catan tables (meetups)
+ *   catan_board           ({seed?})    Hex & Harbor: forge a balanced 19-hex Catan board from a seed
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   desk_calls            ({spot?})    the Desk's live calls (read-only)
  *   desk_record           ({agent})    a house agent's card: keeps, record, On time, stamps (read-only)
@@ -511,6 +513,28 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         station: { type: 'string', description: 'Station slug. Default "el-segundo".' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'catan_tables',
+    description: 'Hex & Harbor (catan.pointcast.xyz), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        city: { type: 'string', description: 'Optional city substring, e.g. "segundo" or "portland".' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'catan_board',
+    description: 'Forge a balanced 19-hex Catan base board from any seed words (deterministic: the same seed always gives the same island). Guarantees no touching 6/8 and no touching identical numbers; shuffles the nine harbours. Returns hexes (axial q,r, resource, number, pips), harbours, the robber hex, pips per resource and a share link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        seed: { type: 'string', description: 'Any words, e.g. "wood-for-sheep". Omit for a random board.' },
       },
       additionalProperties: false,
     },
@@ -2036,6 +2060,26 @@ async function dispatchTool(
         ],
       };
     }
+    case 'catan_tables': {
+      const city = String(args.city || '').trim();
+      const data = await callJson(`${base}/api/catan/tables${city ? `?city=${encodeURIComponent(city)}` : ''}`);
+      return {
+        content: [
+          { type: 'text', text: `Hex & Harbor · ${data?.count ?? 0} upcoming table${data?.count === 1 ? '' : 's'}${city ? ` near "${city}"` : ''} · host one at https://catan.pointcast.xyz/#host` },
+          { type: 'text', text: JSON.stringify(data?.tables ?? [], null, 2) },
+        ],
+      };
+    }
+    case 'catan_board': {
+      const seed = String(args.seed || '').trim();
+      const data = await callJson(`${base}/api/catan/board${seed ? `?seed=${encodeURIComponent(seed)}` : ''}`);
+      return {
+        content: [
+          { type: 'text', text: `Hex & Harbor board forge · seed "${data?.seed}" · ${data?.share}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
     case 'air_latest': {
       const id = String(args.spot || '').trim().toLowerCase();
       const spot = AIR_SPOTS.find((s) => s.id === id);
@@ -3314,6 +3358,8 @@ function discoveryHtml(request: Request) {
   <li><code>weather_get</code> — weather for a station</li>
   <li><code>paddle_lookup</code> — a pickleball paddle's launch date, price, approval status, timeline and lab links</li>
   <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
+  <li><code>catan_tables</code> — upcoming Catan game nights on Hex &amp; Harbor</li>
+  <li><code>catan_board</code> — forge a balanced Catan board from a seed</li>
   <li><code>air_latest</code> — Field Reports: the live reading at the courts or the beach, yesterday's and last week's</li>
   <li><code>desk_calls</code> — the Desk's live calls: a house agent asking the next on-site person to check a sign fact</li>
   <li><code>desk_record</code> — a house agent's card: what it keeps, its checked/overruled record, On time, its stamps</li>
