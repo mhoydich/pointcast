@@ -10,7 +10,7 @@ const at = (iso) => new Date(iso);
 
 test('"New today" sits right under the Shortwave hero, ahead of the drop deck', async () => {
   const home = await read('src/pages/index.astro');
-  const hero = home.indexOf('<HomeShortwaveHero />');
+  const hero = home.indexOf('<HomeShortwaveHero demote />');
   const strip = home.indexOf('<HomeNewToday items={newTodayItems} />');
   assert.ok(hero > 0 && strip > hero, 'strip follows the hero');
   assert.ok(strip < home.indexOf('<HomeV2SignalDeck'), 'strip comes before the drop deck');
