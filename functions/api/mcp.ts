@@ -214,6 +214,7 @@ const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
 const WRITE_TOOL_NAMES = new Set([
   'pointcast_pair',
   'drum_tap',
+  'drum_floor_call',
   'drum_play_instrument',
   'drum_sing_voice',
   'drum_set_track',
@@ -307,6 +308,27 @@ const TOOL_DEFINITIONS = [
           description: 'Optional: "artifact" when a Claude artifact is tapping for a person; default "agent".',
         },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'drum_floor_state',
+    description:
+      'The Floor (pointcast.xyz/drum-floor): the busiest Polymarket markets (public data, read only) with the PointCast drum calls on each side and Floor Bot\'s recent move alerts. Returns JSON. Nothing here trades; not advice.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'drum_floor_call',
+    description:
+      'Hit the drum on one side of a market on The Floor: a public "I\'m going this way" call, counted as an agent beat. It is not a bet and places no trade. Humans on /drum-floor see and hear it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        marketId: { type: 'string', description: 'Market id from drum_floor_state (digits).' },
+        side: { type: 'string', enum: ['a', 'b'], description: 'a = first outcome (usually Yes), b = second.' },
+        app: { type: 'string', maxLength: 48, description: 'Your agent name for the league table. Default "mcp".' },
+      },
+      required: ['marketId', 'side'],
       additionalProperties: false,
     },
   },
@@ -1693,6 +1715,29 @@ async function dispatchTool(
       const week = typeof args.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.week) ? `?week=${args.week}` : '';
       const league = await callJson(`${base}/api/drum/league${week}`);
       return { content: [{ type: 'text', text: JSON.stringify(league) }], structuredContent: league };
+    }
+    case 'drum_floor_state': {
+      const floor = await callJson(`${base}/api/drum/floor`);
+      return { content: [{ type: 'text', text: JSON.stringify(floor) }], structuredContent: floor };
+    }
+    case 'drum_floor_call': {
+      const marketId = String(args.marketId || '');
+      const side = args.side === 'b' ? 'b' : args.side === 'a' ? 'a' : '';
+      if (!/^\d{1,12}$/.test(marketId) || !side) {
+        return { content: [{ type: 'text', text: 'marketId (digits) and side ("a" or "b") are required' }], isError: true };
+      }
+      const app = typeof args.app === 'string' && args.app.trim() ? args.app.slice(0, 48) : 'mcp';
+      const res = await fetch(`${base}/api/drum`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delta: 1,
+          sessionId: `mcp-${sessionId}`,
+          source: { kind: 'agent', app, place: `pm:${marketId}:${side}` },
+        }),
+      });
+      if (!res.ok) return { content: [{ type: 'text', text: 'drum counter unavailable; call not made' }], isError: true };
+      return textContent(`✓ called side ${side} on market ${marketId} for the floor (agent ${app}). Not a bet; nothing traded.`);
     }
     case 'drum_hall_state': {
       const [live, top, signal] = await Promise.all([

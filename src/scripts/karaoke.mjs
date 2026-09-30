@@ -3,9 +3,13 @@ import CATALOGUE from '../data/karaoke-catalogue.json';
 import { frequencies, buildTimeline, detectPitch, pitchLabel } from '../lib/karaoke.mjs';
 import { createVideoPlayer } from '../lib/karaoke-video.mjs';
 import { initNounCompanions } from './karaoke-nouns.mjs';
+import { createSetlist } from '../lib/karaoke-setlist.mjs';
 
 const $ = id => document.getElementById(id);
 const companions = initNounCompanions($('noun-companions'));
+const roomSongs = [...CATALOGUE, ...SONGS];
+const setlist = createSetlist({songIds:roomSongs.map(song=>song.id)});
+let currentTurn = null;
 let external = -1, videoPlayer, videoRequest = 0, videoHasPlayed = false;
 const modes = {solo:['Joy','Rhythm','Energy','Courage'],group:['Joy','Rhythm','Energy','Togetherness']};
 let chosen = 0, mode = 'solo', running = false, runId = 0, clock, frame;
@@ -17,6 +21,43 @@ let lastAnalysis = 0, ratings = {}, completed = false, toastTimer;
 const toast = message => { $('toast').textContent=message; $('toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').classList.remove('show'),2500); };
 function host(text) { $('shwa-line').textContent = `“${text}”`; }
 function updateTempo() { $('bpm').textContent = `${Math.round(SONGS[chosen].bpm * Number($('pace').value))} BPM`; }
+const selectedSong = () => external>=0?CATALOGUE[external]:SONGS[chosen];
+const singerName = singer => mode==='group'?`Singer ${singer+1}`:'Your Noun';
+function renderSetlist(message='') {
+  const {entries,limit,singers}=setlist.snapshot();
+  const selectedSinger=Math.min(Number($('turn-singer').value)||0,singers-1);
+  $('turn-singer').replaceChildren(...Array.from({length:singers},(_,i)=>{
+    const option=document.createElement('option');option.value=String(i);option.textContent=singerName(i);return option;
+  }));$('turn-singer').value=String(selectedSinger);
+  $('queue-selected').textContent=`Selected: ${selectedSong().title}`;
+  $('queue-count').textContent=`${entries.length} / ${limit}`;
+  $('queue-empty').hidden=entries.length>0;$('queue-next').disabled=entries.length===0;
+  $('queue-clear').disabled=entries.length===0;$('queue-add').disabled=entries.length>=limit;$('queue-deal').disabled=entries.length>=limit;
+  $('queue-next').textContent=mode==='group'?'Next singer →':'Next song →';
+  $('turn-now').textContent=currentTurn?`On the mic: ${singerName(currentTurn.singer)} · ${roomSongs.find(song=>song.id===currentTurn.songId).title}`:'The mic is open. Your first turn is waiting.';
+  companions.setActiveSinger(currentTurn?.singer??null);
+  $('setlist').replaceChildren(...entries.map((entry,i)=>{
+    const song=roomSongs.find(song=>song.id===entry.songId),li=document.createElement('li'),number=document.createElement('span'),info=document.createElement('span'),title=document.createElement('strong'),detail=document.createElement('small'),remove=document.createElement('button');
+    number.className='turn-number';number.textContent=String(i+1).padStart(2,'0');number.setAttribute('aria-hidden','true');
+    info.className='turn-song';title.textContent=song.title;detail.textContent=`${singerName(entry.singer)} · ${song.artist||'Bell Choir original'}`;info.append(title,detail);
+    remove.className='turn-remove';remove.textContent='×';remove.setAttribute('aria-label',`Remove ${song.title}, ${singerName(entry.singer)}, turn ${i+1}`);
+    remove.onclick=()=>{setlist.remove(entry.id);renderSetlist(`Removed ${song.title} from the waiting turns.`);const buttons=$('setlist').querySelectorAll('button');(buttons[Math.min(i,buttons.length-1)]||$('queue-add')).focus();};
+    li.append(number,info,remove);return li;
+  }));
+  if(message)$('queue-status').textContent=message;
+}
+function chooseSong(songId,turn=null) {
+  stopMic();currentTurn=turn;
+  external=CATALOGUE.findIndex(song=>song.id===songId);
+  if(external<0)chosen=SONGS.findIndex(song=>song.id===songId);
+  resetStage();history.replaceState(null,'',`#${songId}`);renderSetlist();
+}
+function resizeRoom() {
+  const count=mode==='group'?Number($('group-size').value):1;
+  companions.setSingers(count);setlist.setSingers(count);
+  if(currentTurn)currentTurn={...currentTurn,singer:currentTurn.singer%count};
+  renderSetlist();
+}
 function closeVideo() {
   videoRequest++;videoPlayer?.destroy();videoPlayer=null;videoHasPlayed=false;
   $('video-load').disabled=false;$('video-load').hidden=false;$('video-close').hidden=true;
@@ -169,14 +210,35 @@ async function toggleMic() {
     }micFrame=requestAnimationFrame(analyse);};micFrame=requestAnimationFrame(analyse);
   }catch{cleanup();if(token===micRequestId){stopMic();$('mic-status').textContent='Microphone stayed off. Check permission to try again; singing still works.';}}
 }
-document.querySelectorAll('[data-song]').forEach(b=>b.onclick=()=>{stopMic();external=-1;chosen=Number(b.dataset.song);resetStage();history.replaceState(null,'',`#${SONGS[chosen].id}`);});
-document.querySelectorAll('[data-catalogue]').forEach(b=>b.onclick=()=>{stopMic();external=Number(b.dataset.catalogue);resetStage();history.replaceState(null,'',`#${CATALOGUE[external].id}`);});
+document.querySelectorAll('[data-song]').forEach(b=>b.onclick=()=>chooseSong(SONGS[Number(b.dataset.song)].id));
+document.querySelectorAll('[data-catalogue]').forEach(b=>b.onclick=()=>chooseSong(CATALOGUE[Number(b.dataset.catalogue)].id));
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{
   stopMic();mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));$('presence').textContent=mode==='group'?'TOGETHER · ONE SCREEN':'SOLO PRACTICE';$('group-size-wrap').hidden=mode!=='group';
   $('mode-note').textContent=mode==='group'?'Sing with friends around this device. Everyone follows the same screen and gives flowers together.':'A private practice on this screen. Hum first; the words will be waiting.';
-  $('singer-label').textContent=mode==='group'?'SAME ROOM · SAME CHORUS':'YOUR VOICE · YOUR PACE';companions.setSingers(mode==='group'?Number($('group-size').value):1);resetStage();
+  $('singer-label').textContent=mode==='group'?'SAME ROOM · SAME CHORUS':'YOUR VOICE · YOUR PACE';resizeRoom();resetStage();
 });
-$('group-size').onchange=()=>{companions.setSingers(Number($('group-size').value));toast(`${$('group-size').value} singers around this screen`);};
+$('group-size').onchange=()=>{resizeRoom();toast(`${$('group-size').value} singers around this screen · waiting turns adjusted`);};
+$('queue-add').onclick=()=>{
+  const song=selectedSong(),singer=Number($('turn-singer').value);
+  if(!setlist.add(song.id,singer))return;
+  renderSetlist(`${song.title} added for ${singerName(singer)}.`);
+  $('turn-singer').value=String((singer+1)%setlist.snapshot().singers);
+};
+$('queue-deal').onclick=()=>{
+  const {entries,limit,singers}=setlist.snapshot(),choices=[...roomSongs];
+  for(let i=choices.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[choices[i],choices[j]]=[choices[j],choices[i]];}
+  const count=Math.min(3,limit-entries.length),first=Number($('turn-singer').value);
+  choices.slice(0,count).forEach((song,i)=>setlist.add(song.id,(first+i)%singers));
+  renderSetlist(`${count} surprise songs added to the room set.`);
+  $('turn-singer').value=String((first+count)%singers);
+};
+$('queue-next').onclick=()=>{
+  const turn=setlist.next();if(!turn)return;
+  chooseSong(turn.songId,turn);
+  $('queue-status').textContent=`${singerName(turn.singer)} is up. Press play when ready.`;
+  (external>=0?$('video-load'):$('start')).focus();
+};
+$('queue-clear').onclick=()=>{setlist.clear();renderSetlist('Waiting turns cleared.');$('queue-add').focus();};
 $('video-load').onclick=loadVideo;
 $('video-close').onclick=()=>{closeVideo();$('status').textContent='PLAYER CLOSED';$('video-load').focus();};
 $('song-search').oninput=()=>{
@@ -192,4 +254,4 @@ $('share').onclick=async()=>{const song=external>=0?CATALOGUE[external]:SONGS[ch
 document.addEventListener('visibilitychange',()=>{if(document.hidden){const wasRunning=running,hadVideo=Boolean(videoPlayer);closeVideo();stopPlayback();stopMic();if(wasRunning||hadVideo){$('status').textContent='PAUSED WHILE YOU WERE AWAY';$('start').textContent='Sing with the bells';}}});
 window.addEventListener('pagehide',()=>{closeVideo();companions.reset();stopPlayback();stopMic();clearTimeout(toastTimer);if(bellContext)void bellContext.close().catch(()=>{});bellContext=null;master=null;});
 const linkedBell=SONGS.findIndex(song=>song.id===location.hash.slice(1));
-chosen=Math.max(0,linkedBell);external=linkedBell>=0?-1:Math.max(0,CATALOGUE.findIndex(song=>song.id===location.hash.slice(1)));resetStage();
+chosen=Math.max(0,linkedBell);external=linkedBell>=0?-1:Math.max(0,CATALOGUE.findIndex(song=>song.id===location.hash.slice(1)));resetStage();renderSetlist();

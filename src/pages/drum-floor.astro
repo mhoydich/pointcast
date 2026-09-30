@@ -8,6 +8,10 @@
  * markets and hits the drum itself when one moves five points or more, so
  * anyone listening to the drum hears the market move.
  *
+ * Pits: every market has a live room (DrumRoomV2, room pm-<id>). Call a
+ * side or press "Enter pit" and you're in it: you see who else is on that
+ * market as Nouns, and their calls flash and sound on your screen live.
+ *
  * Nothing here trades and nothing here is advice. Beats are not bets.
  * Data: GET /api/drum/floor. Beats: /drum.js, app "drum-floor",
  * place pm:<marketId>:a|b.
@@ -33,7 +37,8 @@ const description =
         <p class="fl__lede">
           The busiest prediction markets right now, each with a drum for either side. A beat is a call to the floor:
           you're going this way. Floor Bot watches the same markets and hits the drum when one moves five points or
-          more, so the whole PointCast drum hears the market move.
+          more, so the whole PointCast drum hears the market move. Call a market and you're in its pit: everyone
+          else on that market shows up as a Noun, and their calls sound on your screen as they happen.
         </p>
         <p class="fl__fine">Beats are not bets. Nothing on this page trades, and nothing here is advice. Prices come from Polymarket's public API and can lag by a minute.</p>
         <label class="fl__sound"><input type="checkbox" data-sound checked /> Play the floor out loud (bot moves ring a bell)</label>
@@ -42,6 +47,18 @@ const description =
         <p class="fl__k">Floor Bot tape</p>
         <ol data-tape><li class="fl__empty">Waiting for the first check…</li></ol>
       </div>
+    </section>
+
+    <section class="fl__pit" data-pit hidden aria-live="polite">
+      <div class="fl__pit-head">
+        <div>
+          <p class="fl__k">In the pit · <span data-pit-count>0</span> here · live</p>
+          <p class="fl__pit-q" data-pit-q>—</p>
+        </div>
+        <button type="button" class="fl__pit-leave" data-pit-leave>Leave pit</button>
+      </div>
+      <div class="fl__pit-people" data-pit-people></div>
+      <p class="fl__pit-log" data-pit-log>Calls in this pit sound on everyone's screen as they happen.</p>
     </section>
 
     <section class="fl__board">
@@ -136,6 +153,27 @@ const description =
     .fl__balance.is-empty { background: var(--line); }
     .fl__balance.is-empty span { background: transparent; }
     .fl__bot { font: 600 11px/1 'JetBrains Mono', monospace; }
+    .fl__pit { padding: 14px 22px 16px; background: #1d2016; border-color: var(--amber); display: grid; gap: 10px; }
+    .fl__pit-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .fl__pit-q { margin: 4px 0 0; font-size: 16px; font-weight: 600; line-height: 1.3; }
+    .fl__pit-leave, .fl__pitbtn {
+      font: 600 11px/1 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; padding: 6px 9px;
+      border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer;
+    }
+    .fl__pitbtn { padding: 3px 7px; font-size: 10px; color: var(--amber); border-color: rgba(242, 179, 61, .4); }
+    .fl__pitbtn.is-in { background: var(--amber); color: #15120f; }
+    .fl__pit-people { display: flex; flex-wrap: wrap; gap: 6px; min-height: 36px; }
+    .fl__pit-people figure { margin: 0; position: relative; }
+    .fl__pit-people img { width: 34px; height: 34px; image-rendering: pixelated; background: #d5d7e1; border: 2px solid var(--line); display: block; }
+    .fl__pit-people figure.is-you img { border-color: var(--amber); }
+    .fl__pit-people figure.is-hit img { animation: fl-bump .35s ease-out; }
+    .fl__pit-people figure.is-hit-a img { border-color: var(--up); }
+    .fl__pit-people figure.is-hit-b img { border-color: var(--down); }
+    @keyframes fl-bump { 0% { transform: translateY(0); } 40% { transform: translateY(-5px); } 100% { transform: translateY(0); } }
+    .fl__pit-log { margin: 0; font: 500 12px/1.4 'JetBrains Mono', monospace; color: var(--muted); }
+    .fl__mkt.is-pit { background: rgba(242, 179, 61, .06); box-shadow: inset 3px 0 0 var(--amber); }
+    .fl__drum.is-remote { animation: fl-remote .6s ease-out; }
+    @keyframes fl-remote { from { box-shadow: 0 0 0 4px rgba(242, 179, 61, .55); } to { box-shadow: 0 0 0 0 rgba(242, 179, 61, 0); } }
     .fl__foot { padding: 16px 22px 20px; font-size: 13px; line-height: 1.6; color: #cfc9bc; }
     .fl__foot p { margin: 0; max-width: 90ch; }
     .fl__foot code { background: var(--panel); padding: 1px 5px; color: var(--text); }
@@ -219,7 +257,7 @@ const description =
         const existing = new Map([...list.querySelectorAll('[data-mkt]')].map((li) => [li.dataset.mkt, li]));
         list.replaceChildren(...markets.map((m) => {
           const li = existing.get(m.id) || document.createElement('li');
-          li.className = 'fl__mkt'; li.dataset.mkt = m.id;
+          li.className = `fl__mkt${pit && pit.id === m.id ? ' is-pit' : ''}`; li.dataset.mkt = m.id;
           const [a = 'Yes', b = 'No'] = m.outcomes;
           const [pa] = m.prices;
           const chg = m.change24h || 0;
@@ -230,7 +268,7 @@ const description =
             ${m.image ? `<img src="${esc(m.image)}" alt="" loading="lazy" width="44" height="44" />` : '<span class="ph" aria-hidden="true">♪</span>'}
             <div class="fl__q">
               <a href="https://polymarket.com/market/${encodeURIComponent(m.slug)}" target="_blank" rel="noopener">${esc(m.question)}</a>
-              <span class="fl__meta"><span>${money(m.volume24h)} 24h</span>${m.endDate ? `<span>ends ${esc(String(m.endDate).slice(0, 10))}</span>` : ''}${bot}</span>
+              <span class="fl__meta"><button type="button" class="fl__pitbtn${pit && pit.id === m.id ? ' is-in' : ''}" data-pit-join>${pit && pit.id === m.id ? 'In the pit' : 'Enter pit'}</button><span>${money(m.volume24h)} 24h</span>${m.endDate ? `<span>ends ${esc(String(m.endDate).slice(0, 10))}</span>` : ''}${bot}</span>
             </div>
             <div class="fl__price"><span class="fl__num">${pct(pa)}</span><span class="fl__chg ${chg >= 0 ? 'fl__up' : 'fl__down'}">${chg >= 0 ? '+' : ''}${Math.round(chg * 100)} pts 24h</span><span class="fl__k">${esc(a)}</span></div>
             <div class="fl__drums">
@@ -255,6 +293,105 @@ const description =
         }
       }
 
+      // ---- pits: one live room per market (DrumRoomV2, room pm-<id>) -------
+      let pit = null; // { id, question, ws, myId, seq, lastSend, retry }
+      const sid = (() => {
+        try {
+          let v = localStorage.getItem('pc-drum-floor-sid');
+          if (!v) { v = crypto.randomUUID(); localStorage.setItem('pc-drum-floor-sid', v); }
+          return v;
+        } catch { return crypto.randomUUID(); }
+      })();
+      const nounImg = (avatar) => `https://noun.pics/${Math.abs(Number(avatar) || 0) % 1200}.svg`;
+      const marketOf = (id) => (data?.markets || []).find((m) => m.id === id);
+
+      function pitLog(text) { $('[data-pit-log]').textContent = text; }
+      function drawPeople(people) {
+        const box = $('[data-pit-people]');
+        box.replaceChildren(...people.map((p) => {
+          const fig = document.createElement('figure');
+          fig.dataset.person = p.id;
+          if (pit && p.id === pit.myId) fig.classList.add('is-you');
+          fig.innerHTML = `<img src="${nounImg(p.avatar)}" alt="" width="34" height="34" title="${pit && p.id === pit.myId ? 'you' : 'noun ' + (Math.abs(p.avatar) % 1200)}" />`;
+          return fig;
+        }));
+        $('[data-pit-count]').textContent = String(people.length);
+      }
+      function remoteHit(hit, quiet) {
+        if (!pit) return;
+        const side = hit.pad === 'snare' ? 'b' : 'a';
+        const m = marketOf(pit.id);
+        const name = m ? (m.outcomes[side === 'a' ? 0 : 1] || (side === 'a' ? 'Yes' : 'No')) : side;
+        const btn = root.querySelector(`[data-mkt="${pit.id}"] [data-call="${side}"]`);
+        if (btn) { btn.classList.remove('is-remote'); void btn.offsetWidth; btn.classList.add('is-remote'); }
+        const fig = root.querySelector(`[data-person="${hit.clientId}"]`);
+        if (fig) { fig.classList.add('is-hit', `is-hit-${side}`); setTimeout(() => fig.classList.remove('is-hit', 'is-hit-a', 'is-hit-b'), 400); }
+        if (!quiet) S[side]();
+        pitLog(`noun ${Math.abs(hit.avatar) % 1200} called ${name}${quiet ? ` · ${ago(hit.serverAt)}` : ' · just now'}`);
+      }
+      function openSocket() {
+        if (!pit) return;
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const ws = new WebSocket(`${proto}://${location.host}/api/drum/room?room=pm-${pit.id}&sid=${encodeURIComponent(sid)}`);
+        pit.ws = ws;
+        ws.addEventListener('message', (ev) => {
+          let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+          if (!pit || pit.ws !== ws) return;
+          if (msg.type === 'welcome') {
+            pit.myId = msg.you?.clientId;
+            pit.retry = 0;
+            $('[data-pit-count]').textContent = String(msg.connected || 1);
+            // Replay the pit's last few calls so an empty pit still tells a story.
+            (msg.recentHits || []).filter((h) => h.pad === 'kick' || h.pad === 'snare').slice(-5)
+              .forEach((h, i) => setTimeout(() => remoteHit(h, true), 250 * i));
+          } else if (msg.type === 'presence') {
+            drawPeople(msg.people || []);
+          } else if (msg.type === 'hit' && msg.clientId !== pit.myId && (msg.pad === 'kick' || msg.pad === 'snare')) {
+            remoteHit(msg, false);
+          }
+        });
+        ws.addEventListener('close', () => {
+          if (!pit || pit.ws !== ws) return;
+          pit.retry = Math.min(5, (pit.retry || 0) + 1);
+          pitLog('Pit connection dropped, reconnecting…');
+          setTimeout(() => { if (pit && pit.ws === ws) openSocket(); }, 800 * pit.retry);
+        });
+      }
+      function joinPit(id) {
+        if (pit && pit.id === id) return;
+        leavePit(true);
+        const m = marketOf(id);
+        pit = { id, ws: null, myId: null, seq: 0, lastSend: 0, retry: 0 };
+        $('[data-pit]').hidden = false;
+        $('[data-pit-q]').textContent = m ? m.question : `Market ${id}`;
+        $('[data-pit-people]').replaceChildren();
+        pitLog('Calls in this pit sound on everyone\'s screen as they happen.');
+        openSocket();
+        if (data) renderMarkets(data.markets || []);
+      }
+      function leavePit(silent) {
+        if (!pit) return;
+        const ws = pit.ws;
+        pit = null;
+        try { ws && ws.close(); } catch {}
+        if (!silent) { $('[data-pit]').hidden = true; if (data) renderMarkets(data.markets || []); }
+      }
+      function pitSend(id, side) {
+        if (!pit || pit.id !== id || !pit.ws || pit.ws.readyState !== 1) return;
+        const now = Date.now();
+        if (now - pit.lastSend < 160) return; // the room allows ~8 messages a second
+        pit.lastSend = now;
+        pit.seq = (pit.seq + 1) % 1_000_000_000;
+        pit.ws.send(JSON.stringify({ v: 1, type: 'hit', pad: side === 'a' ? 'kick' : 'snare', velocity: 0.9, seq: pit.seq, clientAt: now }));
+      }
+      $('[data-pit-leave]').addEventListener('click', () => leavePit(false));
+      $('[data-markets]').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-pit-join]');
+        if (!b) return;
+        const id = b.closest('[data-mkt]').dataset.mkt;
+        if (pit && pit.id === id) leavePit(false); else joinPit(id);
+      });
+
       // ---- calls ----------------------------------------------------------
       $('[data-markets]').addEventListener('pointerdown', (e) => {
         const btn = e.target.closest('[data-call]');
@@ -267,6 +404,9 @@ const description =
         const small = btn.querySelector('small');
         small.textContent = `${(parseInt(small.textContent, 10) || 0) + 1} calls`;
         if (window.PointCastDrum) window.PointCastDrum.beat(1, { app: 'drum-floor', place: `pm:${id}:${side}` }, { sound: false });
+        // Calling a market puts you in its pit, so the others on it hear you.
+        if (!pit || pit.id !== id) { joinPit(id); setTimeout(() => pitSend(id, side), 700); }
+        else pitSend(id, side);
       });
       $('[data-markets]').addEventListener('keydown', (e) => {
         if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-call]')) {
