@@ -223,6 +223,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
+  // Museum shorthand must resolve before the generic directory rewrite.
+  if ((isGet || request.method === 'HEAD') && /^\/(atari|bbs)\/?$/.test(url.pathname)) {
+    const target = new URL('/atari-bbs/', url.origin);
+    target.search = url.search;
+    return Response.redirect(target.toString(), 301);
+  }
+
   // Both legacy sign-in URLs must redirect before directory rewriting.
   // Preserve returnTo and other query parameters for the current auth desk.
   if ((isGet || request.method === 'HEAD') && (url.pathname === '/login' || url.pathname === '/login/')) {

@@ -23,6 +23,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'atari-bbs',
+    name: 'Death Star BBS · Museum + Computer Club',
+    kicker: 'OVERLORD · 130XE · 300 BAUD · 1987',
+    description: 'Mike Hoydich’s original BBS story and photographs, a playable ATASCII board, plus a shared computer club with handles, posts, earned badges, and ten art designs.',
+    url: 'https://pointcast.xyz/atari-bbs',
+    path: '/atari-bbs',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
+  {
     slug: 'ghost-town',
     name: 'Ghost Town · Skyward',
     kicker: 'WATCH + PLAY · THREE SKIES · TAKE YOUR TIME',
