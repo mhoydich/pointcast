@@ -1,0 +1,585 @@
+---
+/**
+ * /apis — "The Bountiful Keyboard": what an API is, why it matters, and what
+ * happens when anyone with an agent can build on one. An interactive essay
+ * whose labs call the real Keyboard Signal API (/api/keyboard/signal).
+ *
+ * Byline: Michael Hoydich (mh+cc). Mike asked for it in chat on 2026-09-29
+ * ("create a blogpost … michael hoydich signed"); Claude drafted the prose
+ * from that direction; Codex (Sol) painted the art. See block 0643.
+ */
+const title = 'The Bountiful Keyboard · What an API is, and why builders with agents should care';
+const description =
+  'Start here: what an API is, why it is the most interesting idea on the internet right now, and what grows when anyone with an AI agent can build on one. With live labs that call the PointCast Keyboard API. By Michael Hoydich.';
+
+const agentPromptBase = `You are helping me build a small web page that uses the PointCast Keyboard API.
+
+The API (open, no key, CORS *):
+- POST https://pointcast.xyz/api/keyboard/signal
+  JSON body: { "notes": [MIDI numbers 0-127, up to 64], "app": "my-app-name" }
+  or { "count": 1-200 } for unpitched keystrokes. Never send text.
+  Reply: { "ok": true, "globalTotal": n, "id": n }
+- GET https://pointcast.xyz/api/keyboard/signal
+  Reply: totals, sources, today's key (key.today), recent phrases
+- GET https://pointcast.xyz/api/keyboard/signal?since=<id>
+  Reply: { latestId, phrases } newer than id, for live listening
+- Or drop in <script src="https://pointcast.xyz/keyboard.js" data-app="my-app-name" async></script>
+  and call PointCastKeyboard.note([60, 64, 67]).
+
+Rules: batch sends (no more than one POST every few seconds), start audio only
+after a click, and keep anything the user types in their browser.`;
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<meta name="description" content={description}>
+<meta name="author" content="Michael Hoydich">
+<link rel="canonical" href="https://pointcast.xyz/apis">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The Bountiful Keyboard">
+<meta property="og:description" content={description}>
+<meta property="og:image" content="https://pointcast.xyz/images/essays/apis/hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://pointcast.xyz/images/essays/apis/hero.jpg">
+<style is:inline>
+:root{color-scheme:dark;--bg:#101813;--panel:#142019;--panel2:#0d1711;--line:#2b3c2e;--ink:#ede9d7;--body:#d8dcc8;--dim:#97ab91;--gold:#dfc48d;--moss:#7fa36b;--fern:#a9c98a;--sea:#6fb3b8;--petal:#e7a3b3;--coral:#ef8f7a;--dusk:#b5a8ee}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,'Iowan Old Style',serif}
+a{color:var(--gold)}
+code,pre,.mono,button,input,select,textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 24px;border-bottom:1px solid var(--line);font:11px ui-monospace,Menlo,monospace;color:var(--dim);letter-spacing:.06em}
+.top a{color:var(--dim);text-decoration:none;margin-left:14px}.top a:hover{color:var(--ink)}
+.top b{color:var(--ink);font-weight:normal}.top b:before{content:'✳ ';color:var(--gold)}
+.hero{position:relative;max-width:1180px;margin:0 auto;padding:0 24px}
+.hero img{display:block;width:100%;height:auto;border-radius:0 0 18px 18px;aspect-ratio:16/9;object-fit:cover;background:#0b120d}
+.hero .fade{position:absolute;left:24px;right:24px;bottom:0;height:45%;background:linear-gradient(transparent,var(--bg));pointer-events:none}
+header.head{max-width:760px;margin:-120px auto 0;position:relative;padding:0 24px}
+.kicker{font:11px ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
+h1{font-weight:normal;font-size:clamp(40px,7vw,76px);line-height:1;letter-spacing:-2px;margin:0 0 18px}
+.dek{font-size:clamp(19px,2.4vw,23px);line-height:1.45;color:var(--body);margin:0 0 22px}
+.byline{font:12px/1.7 ui-monospace,Menlo,monospace;color:var(--dim);border-top:1px solid var(--line);padding-top:14px}
+.byline b{color:var(--ink);font-weight:normal}
+article{max-width:680px;margin:0 auto;padding:10px 24px 40px;font-size:20px;line-height:1.7;color:var(--body)}
+article h2{font-weight:normal;font-size:clamp(28px,4vw,38px);line-height:1.15;letter-spacing:-.5px;color:var(--ink);margin:64px 0 16px}
+article h2 small{display:block;font:11px ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
+article p{margin:0 0 20px}
+article strong{color:var(--ink);font-weight:normal;background:linear-gradient(transparent 62%,#dfc48d33 62%)}
+article ul{padding-left:22px;margin:0 0 22px}article li{margin-bottom:8px}
+.pull{font-size:clamp(24px,3.4vw,30px);line-height:1.35;color:var(--ink);border-left:3px solid var(--gold);padding:4px 0 4px 20px;margin:36px 0}
+figure{margin:36px -60px}
+figure img{display:block;width:100%;height:auto;border-radius:14px;background:#0b120d}
+figcaption{font:12px/1.6 ui-monospace,Menlo,monospace;color:var(--dim);margin-top:10px;padding:0 60px}
+.lab{margin:34px -60px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(160deg,#1a291e,#0f1913);padding:22px;font-size:15px;line-height:1.55;color:var(--ink)}
+.lab-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.lab-head h3{margin:0;font-weight:normal;font-size:22px}
+.lab-head span{font:10px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--gold)}
+.lab p.hint{font:12px/1.6 ui-monospace,Menlo,monospace;color:var(--dim);margin:0 0 14px}
+.btn{font-size:12px;color:var(--bg);background:var(--gold);border:0;border-radius:30px;padding:11px 18px;cursor:pointer;min-height:44px}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.warn{background:transparent;color:var(--coral);border:1px solid #ef8f7a66}
+.btn:hover{filter:brightness(1.08)}.btn:disabled{opacity:.4;cursor:default}
+.btn:focus-visible,.key:focus-visible,.field:focus-visible,.idea:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px;margin-top:16px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.card h4{margin:0 0 10px;font:10px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);font-weight:normal;display:flex;justify-content:space-between;gap:8px}
+.card h4 em{font-style:normal;color:var(--fern)}.card h4 em.bad{color:var(--coral)}
+.req{font:13px/1.7 ui-monospace,Menlo,monospace;word-break:break-all}
+.verb{display:inline-block;border-radius:6px;padding:1px 7px;margin-right:6px;background:#6fb3b833;color:var(--sea)}.verb.post{background:#dfc48d33;color:var(--gold)}
+pre{margin:0;font-size:12.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word;color:#d5dbc5;max-height:340px;overflow:auto}
+.json .field{all:unset;cursor:pointer;color:var(--gold);border-bottom:1px dotted #dfc48d88}
+.json .field.on{background:#dfc48d33}
+.json .s{color:#b8e0b0}.json .n{color:var(--sea)}.json .b{color:var(--petal)}
+.explain{margin-top:12px;font:13px/1.6 ui-monospace,Menlo,monospace;color:var(--body);background:#dfc48d14;border:1px solid #dfc48d33;border-radius:10px;padding:10px 12px;min-height:44px}
+.explain b{color:var(--gold);font-weight:normal}
+.piano{display:flex;gap:4px;margin:6px 0 12px;max-width:520px}
+.key{flex:1;min-width:0;height:96px;border-radius:0 0 10px 10px;border:0;background:#ede9d7;color:#6f6a55;font:11px ui-monospace,Menlo,monospace;display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;cursor:pointer;box-shadow:inset 0 -6px 0 #cfc8ac;transition:transform .05s,background .1s;touch-action:manipulation}
+.key.on{background:var(--gold);transform:translateY(2px)}
+.code-tabs{display:flex;gap:4px;margin-bottom:8px}
+.code-tabs button{font-size:10px;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer}
+.code-tabs button[aria-pressed=true]{background:#2c3e2b;color:var(--ink)}
+.board{position:relative;margin-top:8px}
+.board svg{display:block;width:100%;height:auto;max-height:420px}
+.board text{font:11px ui-monospace,Menlo,monospace;fill:var(--dim)}
+.board .hub-n{font:24px Georgia,serif;fill:var(--ink)}
+.stats{display:flex;gap:18px;flex-wrap:wrap;font:12px ui-monospace,Menlo,monospace;color:var(--dim);margin-top:10px}
+.stats b{color:var(--ink);font-weight:normal;font:20px Georgia,serif}
+.ideas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:6px 0 14px}
+.idea{font:12px/1.4 ui-monospace,Menlo,monospace;text-align:left;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:12px;padding:11px 12px;cursor:pointer;min-height:44px}
+.idea[aria-pressed=true]{border-color:var(--gold);background:#dfc48d1f}
+.idea small{display:block;color:var(--dim);margin-top:4px}
+textarea.prompt{width:100%;min-height:260px;background:#0b120d;color:#d5dbc5;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:12.5px;line-height:1.6;resize:vertical}
+.harvest{list-style:none;padding:0!important;display:grid;gap:10px}
+.harvest li{border-left:2px solid var(--moss);padding:2px 0 2px 16px;margin:0!important}
+.harvest li b{color:var(--ink);font-weight:normal}
+.sign{margin:56px 0 10px;font-size:22px;color:var(--ink)}
+.sign span{display:block;font:12px ui-monospace,Menlo,monospace;color:var(--dim);margin-top:6px}
+.colophon{max-width:680px;margin:0 auto 60px;padding:18px 24px 0;border-top:1px solid var(--line);font:12px/1.8 ui-monospace,Menlo,monospace;color:var(--dim)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--gold);color:var(--bg);font:12px ui-monospace,Menlo,monospace;padding:10px 16px;border-radius:30px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.toast.on{opacity:1}
+[hidden]{display:none!important}
+@media(max-width:860px){figure,.lab{margin-left:-8px;margin-right:-8px}figcaption{padding:0 8px}.cards{grid-template-columns:minmax(0,1fr)}.ideas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.top{padding:12px 16px}.top a{margin-left:10px}.hero{padding:0}.hero img{border-radius:0}.hero .fade{left:0;right:0}header.head{margin-top:-70px;padding:0 16px}article{padding:10px 16px 40px;font-size:18px}.lab{padding:16px;margin-left:-4px;margin-right:-4px}figure{margin-left:-16px;margin-right:-16px}figure img{border-radius:0}.ideas{grid-template-columns:minmax(0,1fr)}.key{height:80px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="top">
+  <b>PointCast · Essays</b>
+  <span><a href="/keyboard/shelf">Keyboard Shelf</a><a href="/keyboard-signal">Signal</a><a href="/">Front door</a></span>
+</div>
+
+<div class="hero">
+  <img src="/images/essays/apis/hero.jpg" width="1400" height="788" alt="A painted vintage keyboard with seedlings and small flowers growing between its round keys, gold signal rings rising from the middle.">
+  <div class="fade"></div>
+</div>
+
+<header class="head">
+  <p class="kicker">Essay · For new builders</p>
+  <h1>The Bountiful Keyboard</h1>
+  <p class="dek">What an API is, why it might be the most interesting idea on the internet right now, and what grows when anyone with an AI agent can build on one.</p>
+  <p class="byline"><b>Michael Hoydich</b> · El Segundo · September 29, 2026 · the labs on this page talk to a real API, so press the buttons.</p>
+</header>
+
+<article>
+  <h2><small>Start here</small>What’s an API?</h2>
+  <p>Picture a mail slot in a door. You don’t know what’s behind the door. You don’t need to. You know one thing: if you push the right kind of envelope through the slot, the right kind of envelope comes back.</p>
+  <p>That’s an API, an <strong>application programming interface</strong>. It’s a promise one program makes to every other program: <strong>send me this, and I’ll send you that.</strong> The weather app on your phone doesn’t own a weather station. It asks a weather API. The map in a ride app asks a maps API. Almost everything on your phone is a bundle of promises like this, stacked up and passed around.</p>
+
+  <figure>
+    <img src="/images/essays/apis/slot.jpg" width="1400" height="1050" loading="lazy" alt="A brass mail slot in a dark wooden panel with small paper cards shaped like musical notes sliding through, one coming back out.">
+    <figcaption>An API is a slot with a promise on it: this shape in, that shape back.</figcaption>
+  </figure>
+
+  <p>Here’s one we built at PointCast this week. It’s a single shared keyboard for the whole town. Every note anyone plays, on any of our thirty or so keyboard apps, on someone else’s website, or from an AI agent, lands on one counter. The counter’s promise is simple. Ask it a question and it answers.</p>
+
+  <section class="lab" id="lab-ask" aria-label="Lab 1: your first API call">
+    <div class="lab-head"><h3>Your first API call</h3><span>Lab 1 · live</span></div>
+    <p class="hint">Press the button. Your browser sends a real request to pointcast.xyz and shows you exactly what comes back. Then tap any gold word in the answer to find out what it means.</p>
+    <div class="row"><button class="btn" type="button" data-ask>Ask the town keyboard</button><span class="mono" data-ask-status style="font-size:12px;color:var(--dim)"></span></div>
+    <div class="cards" data-ask-cards hidden>
+      <div class="card"><h4>The request <em>you sent</em></h4><div class="req"><span class="verb">GET</span>https://pointcast.xyz/api/keyboard/signal</div><p class="mono" style="font-size:12px;color:var(--dim);margin:10px 0 0">GET means “just tell me.” No envelope inside, only the address.</p></div>
+      <div class="card"><h4>The response <em data-ask-code>200 OK</em></h4><pre class="json" data-ask-json></pre></div>
+    </div>
+    <div class="explain" data-ask-explain hidden>Tap a gold word.</div>
+  </section>
+
+  <p>That little block of text is called <strong>JSON</strong>. It’s the envelope most APIs use: labels on the left, values on the right. It isn’t pretty, and it isn’t meant to be read by people. It’s meant to be read by programs. That’s the trick, and it’s why this matters. Anything that can read that envelope can build on it.</p>
+
+  <h2><small>The four parts</small>Every request has an address, a verb, an envelope, and an answer</h2>
+  <p>Once you can see these four things, you can read almost any API on earth:</p>
+  <ul>
+    <li><strong>The address</strong> (the URL). Where the slot is.</li>
+    <li><strong>The verb.</strong> GET means “tell me.” POST means “take this.” There are a few others, but those two carry most of the internet.</li>
+    <li><strong>The envelope</strong> (the body). What you’re handing over, if anything.</li>
+    <li><strong>The answer</strong>, which starts with a status number: 200 means “fine,” 400 means “I didn’t understand your envelope,” 500 means “something broke on my side.”</li>
+  </ul>
+  <p>Let’s send an envelope. Play a few notes below. Watch the body fill in as you play, then post it to the town. You can also send it broken on purpose. Learning what a good error looks like is half of building.</p>
+
+  <section class="lab" id="lab-send" aria-label="Lab 2: send something back">
+    <div class="lab-head"><h3>Send something back</h3><span>Lab 2 · live</span></div>
+    <p class="hint">Tap the keys, or type A S D F G H J K. Each note is a number (60 is middle C). Nothing you type in words ever leaves this page. Only these numbers do.</p>
+    <div class="piano" data-piano role="group" aria-label="Eight-key piano"></div>
+    <div class="row">
+      <button class="btn" type="button" data-send disabled>POST these notes</button>
+      <button class="btn warn" type="button" data-broken>Send it broken</button>
+      <button class="btn ghost" type="button" data-clear>Clear</button>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <h4>The request <em>building…</em></h4>
+        <div class="req"><span class="verb post">POST</span>/api/keyboard/signal</div>
+        <div class="code-tabs" role="group" aria-label="Show the request as" style="margin-top:12px"><button type="button" data-tab="body" aria-pressed="true">body</button><button type="button" data-tab="curl" aria-pressed="false">curl</button><button type="button" data-tab="js" aria-pressed="false">JavaScript</button></div>
+        <pre data-send-code></pre>
+      </div>
+      <div class="card"><h4>The response <em data-send-code-status>—</em></h4><pre class="json" data-send-json>Play a few notes, then POST them.</pre><div class="explain" data-send-explain hidden></div></div>
+    </div>
+  </section>
+
+  <p class="pull">An API is a contract between strangers. That’s the whole magic. People who will never meet can build on the same thing, at the same time, without asking permission.</p>
+
+  <h2><small>Why it’s interesting</small>Strangers, building together</h2>
+  <p>Here’s what I find beautiful about this. We didn’t build one keyboard app. We built one small promise, and then things started plugging into it. A diary that plays as you write. A radio station that plays everyone’s phrases. Fireflies, frogs, a whale that sings your song back. A clock that chimes in the town’s key of the day. Each one is a stranger to the others. They all speak the same envelope.</p>
+
+  <figure>
+    <img src="/images/essays/apis/switchboard.jpg" width="1400" height="1050" loading="lazy" alt="A vintage switchboard with many colored patch cables running from round sockets into one glowing brass socket in the middle.">
+    <figcaption>Many callers, one socket. Every app on the shelf plugs into the same counter.</figcaption>
+  </figure>
+
+  <p>This is the switchboard, running right now. Every dot is a phrase that reached the counter from somewhere: a PointCast page, another website, a Claude artifact, an agent, or a script someone ran from a terminal. Play something in Lab 2 and you’ll see your own dot fly in.</p>
+
+  <section class="lab" id="lab-board" aria-label="Lab 3: the live switchboard">
+    <div class="lab-head"><h3>The switchboard</h3><span>Lab 3 · live · every 3s</span></div>
+    <p class="hint">This page is polling <code>GET /api/keyboard/signal?since=…</code>, which means “anything new since the last thing I saw?” That’s how most live dashboards work under the hood.</p>
+    <div class="board"><svg viewBox="0 0 640 360" data-board role="img" aria-label="Live diagram of notes flowing from five kinds of callers into one counter"></svg></div>
+    <div class="stats"><span><b data-b-total>—</b> notes, all time</span><span><b data-b-apps>—</b> callers</span><span><b data-b-key>—</b> town key</span><span><b data-b-seen>0</b> arrived while you read</span></div>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" type="button" data-b-sound aria-pressed="false">♪ Hear arrivals</button></div>
+  </section>
+
+  <h2><small>If you have an agent</small>You already have a builder</h2>
+  <p>For most of the internet’s history, the hard part of an API was the code around it. You had to learn a language, set up a project, read the docs, and wire it all together. That was a lot of the job.</p>
+  <p>That part is getting easy. If you have an AI agent (Claude, Codex, anything that can write and run code), <strong>you can describe what you want and let it do the wiring</strong>. This week, agents built twenty-two new keyboard apps for PointCast in a few days. Claude designed the API and wrote the first two. Ten more came from Sonnet. Ten came from Codex, which painted its own illustrations. I mostly pointed and asked questions.</p>
+
+  <figure>
+    <img src="/images/essays/apis/toolbox.jpg" width="1400" height="1050" loading="lazy" alt="An open wooden toolbox holding glowing keycaps, a brass tuning fork, coiled patch cables and folded blank paper.">
+    <figcaption>The tools are already in the box. The new skill is knowing what to ask for.</figcaption>
+  </figure>
+
+  <p>So what’s the new skill? It’s knowing <strong>what an API promises</strong> and describing <strong>what you want to exist</strong>. Your agent reads the promise the same way it reads JSON. What it can’t know is what you want. Pick something below and I’ll write the first message to your agent for you. Copy it, paste it in, and see what comes back.</p>
+
+  <section class="lab" id="lab-prompt" aria-label="Lab 4: the prompt builder">
+    <div class="lab-head"><h3>Talk to your agent</h3><span>Lab 4 · copy &amp; paste</span></div>
+    <p class="hint">Pick an idea. The message includes the API’s full promise, so your agent has everything it needs.</p>
+    <div class="ideas" data-ideas role="group" aria-label="Ideas"></div>
+    <textarea class="prompt" data-prompt aria-label="Prompt for your agent" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:10px"><button class="btn" type="button" data-copy>Copy the prompt</button><span class="mono" style="font-size:12px;color:var(--dim)">Agents that speak MCP can skip the web page and call <code>keyboard_play</code> directly from the PointCast connector.</span></div>
+  </section>
+
+  <h2><small>The bountiful part</small>What could grow here</h2>
+  <p>Here’s the part I keep thinking about. When the wiring is cheap, <strong>the interesting question stops being “can we build it?” and becomes “what should be connected to what?”</strong> Small, open, friendly APIs are the seeds. Agents are the rain. Some things I’d love to see grow from one shared keyboard:</p>
+
+  <figure>
+    <img src="/images/essays/apis/harvest.jpg" width="1400" height="788" loading="lazy" alt="A woven harvest basket spilling keycaps, fruit, seed pods, small bells, a tuning fork and sprigs of herbs.">
+    <figcaption>Seeds, rain, harvest.</figcaption>
+  </figure>
+
+  <ul class="harvest">
+    <li><b>A town that has a key.</b> Every day, the notes everyone plays add up to a key signature, a musical mood for the whole place. Today’s lives in the <code>key.today</code> field you saw in Lab 1.</li>
+    <li><b>Instruments that cross websites.</b> A button on your blog, a piano in a friend’s newsletter, a frog in a classroom. All of it plays one song.</li>
+    <li><b>Objects that sing.</b> A watering can, a doorbell, a bike bell, a plant sensor. Anything that can send a POST can play a note.</li>
+    <li><b>Agents as bandmates.</b> An agent that listens to the <code>?since</code> feed and answers every phrase with a harmony. It’s already possible. It would take an afternoon.</li>
+    <li><b>Classrooms and families.</b> Four kids, four phones, one quartet, with no accounts and no app store.</li>
+    <li><b>Gentle data.</b> The counter never stores words, names or IP addresses. Writing apps send only a shuffled handful of pitches. You can build something shared without building something creepy.</li>
+    <li><b>Leagues, seasons, games</b> that anyone can enter by tagging their app with a name.</li>
+  </ul>
+  <p>None of these needs a company, a meeting, or a permission slip. Each one needs an idea, an agent, and one open promise to build on.</p>
+
+  <h2><small>Honest limits</small>What this API is not</h2>
+  <p>It’s a toy, on purpose. Anyone can post to it, so the numbers are a celebration, not a ledger. Posts are small and capped, and each app’s league points are capped per day. It won’t hold your secrets, because it never asks for them. When you build on someone else’s API, ask the same three questions: <strong>what does it promise, what does it keep, and what happens if it goes away?</strong> Good APIs answer all three in plain language. This one tries to.</p>
+
+  <p>The internet was always a place where strangers could build together. APIs are how. What’s new is that almost everyone now has a builder in their pocket. So find a promise you like, describe the thing you wish existed, and play a note.</p>
+
+  <p class="sign">— Michael Hoydich<span>El Segundo, California · September 29, 2026</span></p>
+</article>
+
+<div class="colophon">
+  Written with Claude from my direction, and I signed it. Art painted by Codex (Sol) with its built-in image generator: still lifes, with no people and no places. The labs call the live <a href="/keyboard-signal">Keyboard Signal API</a>. The notes they send are tagged <code>apis-essay</code> and show up on the <a href="/keyboard/shelf">shelf</a> and in the league. More: <a href="/keyboard/shelf">the Keyboard Shelf</a> · <a href="/keyboard-signal">the Signal dashboard</a> · <a href="/drum-signal">the Drum Signal</a>.
+</div>
+<div class="toast" data-toast role="status" aria-live="polite"></div>
+
+<textarea hidden data-prompt-base>{agentPromptBase}</textarea>
+<script is:inline src="/js/keyboard-voice.js"></script>
+<script is:inline>
+(function () {
+  'use strict';
+  var API = '/api/keyboard/signal';
+  var APP = 'apis-essay';
+  var $ = function (s, root) { return (root || document).querySelector(s); };
+  var fmt = function (n) { return (Number(n) || 0).toLocaleString('en-US'); };
+  var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var V = window.KeyVoice;
+  function play(midi, when) { if (V) V.play(midi, 'bright', when); }
+  var toastT;
+  function toast(msg) { var t = $('[data-toast]'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('on'); }, 1800); }
+
+  // ---- a tiny JSON printer whose keys are buttons ---------------------------
+  function jsonHTML(value, explain, path, indent) {
+    indent = indent || '';
+    path = path || '';
+    var pad = indent + '  ';
+    if (Array.isArray(value)) {
+      if (!value.length) return '[]';
+      if (value.every(function (v) { return typeof v !== 'object' || v === null; })) return '[' + value.map(function (v) { return jsonHTML(v); }).join(', ') + ']';
+      return '[\n' + value.map(function (v) { return pad + jsonHTML(v, explain, path + '[]', pad); }).join(',\n') + '\n' + indent + ']';
+    }
+    if (value && typeof value === 'object') {
+      var keys = Object.keys(value);
+      if (!keys.length) return '{}';
+      return '{\n' + keys.map(function (k) {
+        var p = path ? path + '.' + k : k;
+        var label = explain && explain[p] ? '<button type="button" class="field" data-path="' + esc(p) + '">"' + esc(k) + '"</button>' : '"' + esc(k) + '"';
+        return pad + label + ': ' + jsonHTML(value[k], explain, p, pad);
+      }).join(',\n') + '\n' + indent + '}';
+    }
+    if (typeof value === 'string') return '<span class="s">"' + esc(value) + '"</span>';
+    if (typeof value === 'number') return '<span class="n">' + value + '</span>';
+    return '<span class="b">' + String(value) + '</span>';
+  }
+
+  // ---- Lab 1 ------------------------------------------------------------------
+  var EXPLAIN = {
+    globalTotal: 'Every note ever counted, from every app and every website. One number, shared by everyone.',
+    pitched: 'Notes with a pitch: real musical notes, sent as numbers (60 is middle C).',
+    unpitched: 'Keystrokes counted without a pitch. Typing apps send a count, never which keys.',
+    key: 'The API listens to all the pitches and guesses what key the town is playing in.',
+    'key.today': 'Today’s key, from today’s notes only. It’s null until enough notes arrive. Null is JSON for “nothing yet.”',
+    'key.allTime': 'The key of everything ever played. A musical mood for the whole town.',
+    today: 'Just today, in UTC, the clock servers use so everyone agrees on when a day starts.',
+    'today.total': 'How many notes have arrived so far today.',
+    sources: 'Who’s calling. Each app tags its notes with a name, so the API can say where the music came from.',
+    'sources[].app': 'The caller’s name. On PointCast it’s the app; on other sites it’s their name or domain.',
+    'sources[].kind': 'The kind of caller: pointcast, embed (another site), artifact, agent, or standalone (a script).',
+    'sources[].total': 'How many notes this caller has sent, all time.',
+    latestId: 'The number of the newest phrase. Ask “anything newer than this?” and you have a live feed. That’s Lab 3.',
+  };
+  function pick(s) {
+    return {
+      globalTotal: s.globalTotal, pitched: s.pitched, unpitched: s.unpitched,
+      key: { today: s.key && s.key.today ? s.key.today.name : null, allTime: s.key && s.key.allTime ? s.key.allTime.name : null },
+      today: { day: s.today && s.today.day, total: s.today && s.today.total },
+      sources: (s.sources || []).slice(0, 3).map(function (x) { return { app: x.app, kind: x.kind, total: x.total }; }),
+      latestId: s.latestId,
+    };
+  }
+  function wireExplain(root, box, table) {
+    root.addEventListener('click', function (e) {
+      var f = e.target.closest('.field');
+      if (!f) return;
+      root.querySelectorAll('.field.on').forEach(function (x) { x.classList.remove('on'); });
+      f.classList.add('on');
+      box.hidden = false;
+      box.innerHTML = '<b>' + esc(f.dataset.path.replace('[]', '')) + '</b>: ' + esc(table[f.dataset.path] || '');
+    });
+  }
+  wireExplain($('[data-ask-json]'), $('[data-ask-explain]'), EXPLAIN);
+  $('[data-ask]').addEventListener('click', function () {
+    var btn = this, t0 = performance.now();
+    btn.disabled = true;
+    $('[data-ask-status]').textContent = 'asking…';
+    fetch(API, { cache: 'no-store' }).then(function (r) {
+      var ms = Math.round(performance.now() - t0);
+      return r.json().then(function (j) { return { r: r, j: j, ms: ms }; });
+    }).then(function (x) {
+      $('[data-ask-cards]').hidden = false;
+      $('[data-ask-code]').textContent = x.r.status + ' ' + (x.r.ok ? 'OK' : 'error');
+      $('[data-ask-code]').className = x.r.ok ? '' : 'bad';
+      $('[data-ask-json]').innerHTML = jsonHTML(x.r.ok ? pick(x.j) : x.j, EXPLAIN);
+      $('[data-ask-explain]').hidden = false;
+      $('[data-ask-explain]').innerHTML = 'Answered in <b>' + x.ms + ' ms</b>. A round trip to a server and back, faster than a blink. Tap a gold word.';
+      $('[data-ask-status]').textContent = 'shortened to the good parts · ask again any time';
+      btn.textContent = 'Ask again';
+    }).catch(function () {
+      $('[data-ask-status]').textContent = 'no answer: the network or the API is down. That happens. Good apps plan for it.';
+    }).then(function () { btn.disabled = false; });
+  });
+
+  // ---- Lab 2 --------------------------------------------------------------------
+  var NOTES = [60, 62, 64, 65, 67, 69, 71, 72];
+  var NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'C'];
+  var KEYS = 'asdfghjk';
+  var played = [];
+  var tab = 'body';
+  var piano = $('[data-piano]');
+  NOTES.forEach(function (n, i) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'key'; b.dataset.i = i;
+    b.innerHTML = NAMES[i] + '<br>' + KEYS[i].toUpperCase();
+    b.setAttribute('aria-label', 'Note ' + NAMES[i] + ', MIDI ' + n);
+    piano.appendChild(b);
+  });
+  function hit(i) {
+    if (played.length >= 64) return;
+    played.push(NOTES[i]);
+    play(NOTES[i]);
+    var k = piano.children[i];
+    k.classList.add('on'); setTimeout(function () { k.classList.remove('on'); }, 140);
+    paintCode();
+  }
+  piano.addEventListener('pointerdown', function (e) { var k = e.target.closest('.key'); if (!k) return; e.preventDefault(); hit(+k.dataset.i); });
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    var r = $('#lab-send').getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) return; // only while Lab 2 is on screen
+    var i = KEYS.indexOf((e.key || '').toLowerCase());
+    if (i >= 0) { e.preventDefault(); hit(i); }
+  });
+  function bodyObj() { return { notes: played.slice(), app: APP }; }
+  function paintCode() {
+    var body = JSON.stringify(bodyObj());
+    var text = tab === 'body' ? JSON.stringify(bodyObj(), null, 2)
+      : tab === 'curl' ? "curl -X POST https://pointcast.xyz/api/keyboard/signal \\\n  -H 'Content-Type: application/json' \\\n  -d '" + body + "'"
+      : "await fetch('https://pointcast.xyz/api/keyboard/signal', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify(" + JSON.stringify(bodyObj(), null, 2).replace(/\n/g, '\n  ') + ')\n});';
+    $('[data-send-code]').textContent = text;
+    $('[data-send]').disabled = !played.length;
+    $('#lab-send .card h4 em').textContent = played.length ? played.length + ' note' + (played.length === 1 ? '' : 's') : 'empty';
+  }
+  document.querySelectorAll('[data-tab]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      tab = b.dataset.tab;
+      document.querySelectorAll('[data-tab]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      paintCode();
+    });
+  });
+  var SEND_EXPLAIN = {
+    ok: 'The API’s own yes or no, inside the envelope. Many APIs include one so programs don’t have to guess.',
+    globalTotal: 'The town’s total right after your notes landed. Your notes are in there now.',
+    notes: 'How many pitched notes it accepted. Anything it couldn’t read, it drops instead of guessing.',
+    keys: 'Unpitched keystrokes in this post. Zero here, because you sent real notes.',
+    source: 'Who the API thinks you are. You declared the app name; it worked out the kind from where the request came from.',
+    'source.kind': 'pointcast, because this page lives on pointcast.xyz. Another website can’t claim to be PointCast. The API checks the origin.',
+    'source.app': 'The name you put in the envelope: apis-essay.',
+    'source.place': 'A coarse place: a country code from the network, never an address.',
+    id: 'Your phrase’s number. It’s now the newest thing in the live feed. Look at Lab 3.',
+    reason: 'An error that says why. “no-notes” means the envelope arrived empty. A good error tells you what to fix.',
+  };
+  wireExplain($('[data-send-json]'), $('[data-send-explain]'), SEND_EXPLAIN);
+  var myIds = new Set();
+  function post(body, label) {
+    var status = $('[data-send-code-status]');
+    status.textContent = 'sending…'; status.className = '';
+    return fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { r: r, j: j }; }); })
+      .then(function (x) {
+        status.textContent = x.r.status + (x.r.ok ? ' OK' : x.r.status === 400 ? ' Bad Request' : ' error');
+        status.className = x.r.ok ? '' : 'bad';
+        $('[data-send-json]').innerHTML = jsonHTML(x.j, SEND_EXPLAIN);
+        var ex = $('[data-send-explain]');
+        ex.hidden = false;
+        if (x.r.ok) {
+          if (x.j.id) myIds.add(x.j.id);
+          ex.innerHTML = '<b>200</b> means it worked. You just used an API. Tap a gold word to see what each part means.';
+          toast('Your ' + label + ' is in the town now');
+        } else {
+          ex.innerHTML = '<b>' + x.r.status + '</b> means the server understood the request but not the envelope. Here it was empty on purpose. Nothing broke. The API said no, clearly, and told you why.';
+        }
+      })
+      .catch(function () { status.textContent = 'no answer'; status.className = 'bad'; });
+  }
+  $('[data-send]').addEventListener('click', function () {
+    if (!played.length) return;
+    var n = played.length;
+    post(bodyObj(), n + '-note phrase').then(function () { played = []; paintCode(); });
+  });
+  $('[data-broken]').addEventListener('click', function () { post({ app: APP }, 'empty envelope'); });
+  $('[data-clear]').addEventListener('click', function () { played = []; paintCode(); });
+  paintCode();
+
+  // ---- Lab 3 ------------------------------------------------------------------------
+  var KINDS = [
+    { id: 'pointcast', label: 'PointCast apps', color: '#dfc48d' },
+    { id: 'embed', label: 'Other websites', color: '#6fb3b8' },
+    { id: 'artifact', label: 'Claude artifacts', color: '#b5a8ee' },
+    { id: 'agent', label: 'AI agents', color: '#ef8f7a' },
+    { id: 'standalone', label: 'Scripts', color: '#a9c98a' },
+  ];
+  var svg = $('[data-board]');
+  var NS = 'http://www.w3.org/2000/svg';
+  var HUB = { x: 320, y: 180 };
+  var pos = {};
+  function el(tag, attrs, parent) { var n = document.createElementNS(NS, tag); for (var k in attrs) n.setAttribute(k, attrs[k]); (parent || svg).appendChild(n); return n; }
+  KINDS.forEach(function (k, i) {
+    var a = -Math.PI / 2 + i * (Math.PI * 2 / KINDS.length);
+    pos[k.id] = { x: HUB.x + Math.cos(a) * 250, y: HUB.y + Math.sin(a) * 138 };
+  });
+  KINDS.forEach(function (k) { el('line', { x1: pos[k.id].x, y1: pos[k.id].y, x2: HUB.x, y2: HUB.y, stroke: k.color, 'stroke-opacity': '.25', 'stroke-width': '2', 'stroke-dasharray': '3 6' }); });
+  el('circle', { cx: HUB.x, cy: HUB.y, r: 52, fill: '#0d1711', stroke: '#dfc48d', 'stroke-width': '2' });
+  var hubN = el('text', { x: HUB.x, y: HUB.y + 4, 'text-anchor': 'middle', class: 'hub-n' }); hubN.textContent = '—';
+  var hubL = el('text', { x: HUB.x, y: HUB.y + 24, 'text-anchor': 'middle' }); hubL.textContent = 'the counter';
+  var kindN = {};
+  KINDS.forEach(function (k) {
+    var p = pos[k.id];
+    el('circle', { cx: p.x, cy: p.y, r: 22, fill: '#0d1711', stroke: k.color, 'stroke-width': '2' });
+    var t = el('text', { x: p.x, y: p.y + 4, 'text-anchor': 'middle', style: 'fill:' + k.color + ';font-size:12px' }); t.textContent = '0';
+    kindN[k.id] = t;
+    var l = el('text', { x: p.x, y: p.y + (p.y < HUB.y ? -30 : 40), 'text-anchor': 'middle' }); l.textContent = k.label;
+  });
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var soundOn = false;
+  function fly(kind, phrase, mine) {
+    var k = KINDS.find(function (x) { return x.id === kind; }) || KINDS[4];
+    var from = pos[k.id];
+    var dot = el('circle', { cx: from.x, cy: from.y, r: mine ? 9 : 6, fill: mine ? '#ffffff' : k.color });
+    if (mine) { var tag = el('text', { x: from.x, y: from.y - 12, 'text-anchor': 'middle', style: 'fill:#fff' }); tag.textContent = 'you'; }
+    var t0 = performance.now(), dur = reduce ? 1 : 1400;
+    function step(now) {
+      var p = Math.min(1, (now - t0) / dur), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      var x = from.x + (HUB.x - from.x) * e, y = from.y + (HUB.y - from.y) * e;
+      dot.setAttribute('cx', x); dot.setAttribute('cy', y);
+      if (tag) { tag.setAttribute('x', x); tag.setAttribute('y', y - 12); }
+      if (p < 1) requestAnimationFrame(step);
+      else { dot.remove(); if (tag) tag.remove(); }
+    }
+    requestAnimationFrame(step);
+    if (soundOn && phrase.notes && phrase.notes.length) phrase.notes.slice(0, 6).forEach(function (n, i) { play(n, V && V.ctx().currentTime + 1.4 + i * 0.14); });
+  }
+  var latestId = 0, seen = 0, kindTotals = {};
+  function summary() {
+    return fetch(API, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+      if (!s) return;
+      hubN.textContent = fmt(s.globalTotal);
+      $('[data-b-total]').textContent = fmt(s.globalTotal);
+      $('[data-b-apps]').textContent = fmt((s.sources || []).length);
+      $('[data-b-key]').textContent = s.key && s.key.today ? s.key.today.name : s.key && s.key.allTime ? s.key.allTime.name : '—';
+      (s.kinds || []).forEach(function (k) { kindTotals[k.kind] = k.total; });
+      KINDS.forEach(function (k) { kindN[k.id].textContent = fmt(kindTotals[k.id] || 0); });
+      if (!latestId) latestId = s.latestId || 0;
+    }).catch(function () {});
+  }
+  function poll() {
+    if (document.hidden || !latestId) return;
+    fetch(API + '?since=' + latestId, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (res) {
+      if (!res) return;
+      (res.phrases || []).forEach(function (p, i) {
+        var n = (p.notes ? p.notes.length : 0) + (p.keys || 0);
+        kindTotals[p.kind] = (kindTotals[p.kind] || 0) + n;
+        setTimeout(function () { fly(p.kind, p, myIds.has(p.id)); }, i * 250);
+        seen++;
+      });
+      latestId = Math.max(latestId, res.latestId || 0);
+      if (res.phrases && res.phrases.length) {
+        $('[data-b-seen]').textContent = seen;
+        KINDS.forEach(function (k) { kindN[k.id].textContent = fmt(kindTotals[k.id] || 0); });
+        setTimeout(summary, 1500);
+      }
+    }).catch(function () {});
+  }
+  $('[data-b-sound]').addEventListener('click', function () {
+    soundOn = !soundOn;
+    this.setAttribute('aria-pressed', String(soundOn));
+    this.textContent = soundOn ? '♪ Hearing arrivals' : '♪ Hear arrivals';
+    if (soundOn) play(72);
+  });
+  // Start polling only once the switchboard is near the screen.
+  var started = false;
+  new IntersectionObserver(function (entries) {
+    if (started || !entries.some(function (e) { return e.isIntersecting; })) return;
+    started = true;
+    summary().then(function () { setInterval(poll, 3000); setInterval(function () { if (!document.hidden) summary(); }, 30000); });
+  }, { rootMargin: '400px' }).observe($('#lab-board'));
+
+  // ---- Lab 4 -------------------------------------------------------------------------
+  var BASE = $('[data-prompt-base]').value;
+  var IDEAS = [
+    { t: 'A doorbell that plays a chord', d: 'one page, one big button', ask: 'Build me a single web page with one huge friendly button, a doorbell. When someone presses it, play a pleasant three-note chord with the Web Audio API and POST those three notes to the keyboard API with app "my-doorbell". Show the town total it sends back.' },
+    { t: 'A plant that sings when watered', d: 'a button now, a sensor later', ask: 'Build me a page for my houseplant. A "Watered it" button plays a short rising melody, POSTs the notes with app "plant-name", and keeps a local log of watering days in localStorage. Explain how I could later swap the button for a moisture sensor.' },
+    { t: 'An agent that harmonizes', d: 'listens to the town, answers', ask: 'Write a small Node.js script that polls GET /api/keyboard/signal?since=<latestId> every 5 seconds. For each new pitched phrase, compute a simple harmony (a third above each note, in key) and POST it back with app "harmony-bot". Rate-limit to one post every 10 seconds and log what it hears.' },
+    { t: 'A classroom clap counter', d: 'kids tap, the room grows', ask: 'Build a kid-friendly page for a classroom projector. Every tap anywhere adds a colorful shape and plays a pentatonic note. Every 5 seconds, send the batch of notes to the keyboard API with app "room-12". Show a big running total.' },
+    { t: 'The town key on my website', d: 'a tiny widget', ask: 'Build a tiny embeddable widget that shows the PointCast town key of the day (key.today.name from GET /api/keyboard/signal, falling back to key.allTime). Include a small play button that plays that key\'s scale. Keep it under 40 lines and give me the snippet to paste into my site.' },
+    { t: 'Something I haven’t thought of', d: 'describe it yourself', ask: 'Help me brainstorm three small things I could build on this API in an afternoon, then build the one I pick. Ask me one question at a time.' },
+  ];
+  var ideasBox = $('[data-ideas]'), promptBox = $('[data-prompt]');
+  IDEAS.forEach(function (idea, i) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'idea';
+    b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = esc(idea.t) + '<small>' + esc(idea.d) + '</small>';
+    b.addEventListener('click', function () {
+      ideasBox.querySelectorAll('.idea').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      promptBox.value = idea.ask + '\n\n' + BASE;
+    });
+    ideasBox.appendChild(b);
+    if (i === 0) b.click();
+  });
+  $('[data-copy]').addEventListener('click', function () {
+    var text = promptBox.value;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { toast('Copied. Paste it to your agent.'); }, function () { promptBox.select(); toast('Selected. Press copy.'); });
+  });
+})();
+</script>
+</body>
+</html>
