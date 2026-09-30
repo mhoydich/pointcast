@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 export { DrumCounter } from "./drum-counter";
+import { runFloorBot } from "./floor-bot";
 
 const ROOM_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 const MAX_CONNECTIONS = 125;
@@ -595,5 +596,9 @@ export default {
     const room = normalizeRoom(url.searchParams.get("room"));
     const stub = env.DRUM_ROOM.getByName(room);
     return stub.fetch(request);
+  },
+  // Floor Bot: watches the busiest Polymarket markets and drums on big moves.
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runFloorBot(env).then(() => undefined, (err) => console.error("floor-bot", String(err))));
   },
 } satisfies ExportedHandler<Env>;

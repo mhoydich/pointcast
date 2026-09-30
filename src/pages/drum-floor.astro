@@ -1,0 +1,283 @@
+---
+/**
+ * /drum-floor — The Floor. Hit the drum when you go.
+ *
+ * The busiest Polymarket markets (public Gamma API, read only), each with a
+ * drum for either side. A beat on a side is a call to the floor: "I'm going
+ * this way." Floor Bot (a cron on the pointcast-drum worker) watches the same
+ * markets and hits the drum itself when one moves five points or more, so
+ * anyone listening to the drum hears the market move.
+ *
+ * Nothing here trades and nothing here is advice. Beats are not bets.
+ * Data: GET /api/drum/floor. Beats: /drum.js, app "drum-floor",
+ * place pm:<marketId>:a|b.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'The Floor';
+const description =
+  'Hit the drum when you go. The busiest Polymarket markets, a drum for each side, and a bot that drums when a market moves. Beats are not bets.';
+---
+
+<BlockLayout title={title} description={description} image="/images/og-drum.png" hideAds>
+  <main class="fl">
+    <header class="fl__bar">
+      <span>PointCast · The Floor</span>
+      <span data-bot-status>Floor Bot · checking</span>
+    </header>
+
+    <section class="fl__top">
+      <div class="fl__intro">
+        <p class="fl__eyebrow">Drum × Polymarket · a signal for traders</p>
+        <h1>Hit the drum when you go.</h1>
+        <p class="fl__lede">
+          The busiest prediction markets right now, each with a drum for either side. A beat is a call to the floor:
+          you're going this way. Floor Bot watches the same markets and hits the drum when one moves five points or
+          more, so the whole PointCast drum hears the market move.
+        </p>
+        <p class="fl__fine">Beats are not bets. Nothing on this page trades, and nothing here is advice. Prices come from Polymarket's public API and can lag by a minute.</p>
+        <label class="fl__sound"><input type="checkbox" data-sound checked /> Play the floor out loud (bot moves ring a bell)</label>
+      </div>
+      <div class="fl__tape">
+        <p class="fl__k">Floor Bot tape</p>
+        <ol data-tape><li class="fl__empty">Waiting for the first check…</li></ol>
+      </div>
+    </section>
+
+    <section class="fl__board">
+      <div class="fl__board-head">
+        <p class="fl__k">Busiest markets · 24h volume</p>
+        <p class="fl__k" data-updated>—</p>
+      </div>
+      <ol class="fl__markets" data-markets>
+        <li class="fl__empty">Loading the floor…</li>
+      </ol>
+    </section>
+
+    <section class="fl__foot">
+      <p>
+        Floor Bot is an agent on the <a href="/drum-league">Drum League</a> table (team <code>floor-bot</code>), and floor calls
+        play for team <code>drum-floor</code>. Every beat also lands on the <a href="/drums">one PointCast drum</a>.
+        Want the tape somewhere else? <code>GET /api/drum/floor</code> returns markets, calls and bot moves as JSON.
+      </p>
+    </section>
+  </main>
+
+  <script is:inline src="/drum.js" data-app="drum-floor" data-sound="false"></script>
+
+  <style is:global>
+    body:has(.fl) { background: #0e0f0c; }
+    .fl {
+      --board: #12140f; --panel: #181a14; --line: #2c2f26; --text: #efe9dc; --muted: #9a958a;
+      --up: #36c275; --down: #ff5a4a; --amber: #f2b33d; --blue: #6aa8ff;
+      max-width: 1120px; margin: 24px auto 72px; padding: 0 16px; color: var(--text);
+      font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
+    }
+    .fl code, .fl__k, .fl__bar, .fl__eyebrow, .fl__num { font-family: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+    .fl a { color: var(--blue); }
+    .fl > section { border: 2px solid var(--line); border-top: 0; background: var(--board); }
+    .fl__bar {
+      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 18px; background: var(--amber); color: #15120f;
+      font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+    }
+    .fl__k { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+    .fl__empty { color: var(--muted); font-size: 13px; list-style: none; padding: 10px 0; }
+
+    .fl__top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+    .fl__intro { padding: 24px; display: grid; gap: 12px; align-content: start; border-right: 2px solid var(--line); }
+    .fl__eyebrow { margin: 0; color: var(--amber); font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; }
+    .fl h1 { margin: 0; font-size: clamp(36px, 6vw, 60px); line-height: 1; letter-spacing: -.035em; font-weight: 700; text-wrap: balance; }
+    .fl__lede { margin: 0; font-size: 15px; line-height: 1.6; max-width: 58ch; color: #d9d3c6; }
+    .fl__fine { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 60ch; }
+    .fl__sound { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #d9d3c6; }
+    .fl__tape { padding: 20px 22px; min-width: 0; }
+    .fl__tape ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; max-height: 300px; overflow: auto; }
+    .fl__tape li:not(.fl__empty) {
+      display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+      padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+    }
+    .fl__tape li.is-new { animation: fl-flash 1.6s ease-out; }
+    @keyframes fl-flash { from { background: rgba(242, 179, 61, .25); } to { background: transparent; } }
+    .fl__tape time { color: var(--muted); font: 500 11px/1 'JetBrains Mono', monospace; }
+    .fl__tape .q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fl__up { color: var(--up); }
+    .fl__down { color: var(--down); }
+
+    .fl__board { padding: 18px 22px 22px; }
+    .fl__board-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .fl__markets { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+    .fl__mkt {
+      display: grid; grid-template-columns: 44px minmax(0, 1fr) 120px minmax(250px, 300px); gap: 14px; align-items: center;
+      padding: 14px 0; border-bottom: 1px solid var(--line);
+    }
+    .fl__mkt img, .fl__mkt .ph { width: 44px; height: 44px; object-fit: cover; background: var(--panel); border: 1px solid var(--line); }
+    .fl__mkt .ph { display: grid; place-items: center; color: var(--amber); font-size: 18px; }
+    .fl__q { display: grid; gap: 4px; min-width: 0; }
+    .fl__q a { color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px; line-height: 1.3; }
+    .fl__q a:hover { text-decoration: underline; }
+    .fl__meta { font: 500 11px/1.3 'JetBrains Mono', monospace; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+    .fl__price { text-align: right; display: grid; gap: 2px; }
+    .fl__num { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .fl__chg { font: 600 12px/1 'JetBrains Mono', monospace; }
+    .fl__drums { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .fl__drum {
+      display: grid; gap: 4px; justify-items: center; padding: 10px 6px; border: 2px solid var(--line); background: var(--panel);
+      color: var(--text); cursor: pointer; font: 600 13px/1.1 'Inter', system-ui, sans-serif; touch-action: manipulation; min-width: 0;
+      transition: transform .05s, border-color .15s, background .15s;
+    }
+    .fl__drum span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fl__drum small { font: 500 11px/1 'JetBrains Mono', monospace; color: var(--muted); }
+    .fl__drum--a:hover, .fl__drum--a.is-hit { border-color: var(--up); background: rgba(54, 194, 117, .12); }
+    .fl__drum--b:hover, .fl__drum--b.is-hit { border-color: var(--down); background: rgba(255, 90, 74, .12); }
+    .fl__drum.is-hit { transform: translateY(2px); }
+    .fl__drum:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+    .fl__balance { grid-column: 1 / -1; height: 5px; background: var(--down); display: flex; }
+    .fl__balance span { display: block; height: 100%; background: var(--up); transition: width .3s; }
+    .fl__balance.is-empty { background: var(--line); }
+    .fl__balance.is-empty span { background: transparent; }
+    .fl__bot { font: 600 11px/1 'JetBrains Mono', monospace; }
+    .fl__foot { padding: 16px 22px 20px; font-size: 13px; line-height: 1.6; color: #cfc9bc; }
+    .fl__foot p { margin: 0; max-width: 90ch; }
+    .fl__foot code { background: var(--panel); padding: 1px 5px; color: var(--text); }
+
+    @media (max-width: 860px) {
+      .fl__top { grid-template-columns: 1fr; }
+      .fl__intro { border-right: 0; border-bottom: 2px solid var(--line); }
+      .fl__mkt { grid-template-columns: 40px minmax(0, 1fr) auto; }
+      .fl__mkt img, .fl__mkt .ph { width: 40px; height: 40px; }
+      .fl__drums { grid-column: 1 / -1; }
+    }
+    @media (max-width: 480px) {
+      .fl__intro, .fl__tape, .fl__board, .fl__foot { padding-left: 14px; padding-right: 14px; }
+      .fl__num { font-size: 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .fl * { animation: none !important; transition: none !important; } }
+  </style>
+
+  <script is:inline>
+    (() => {
+      const root = document.querySelector('.fl');
+      if (!root) return;
+      const $ = (s) => root.querySelector(s);
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+      const pct = (p) => (Number.isFinite(p) ? `${Math.round(p * 100)}¢` : '—');
+      const money = (v) => v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`;
+      const ago = (ms) => {
+        const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+        if (s < 60) return `${s}s ago`;
+        if (s < 3600) return `${Math.round(s / 60)}m ago`;
+        return `${Math.round(s / 3600)}h ago`;
+      };
+      const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+      // ---- sound ----------------------------------------------------------
+      let ac = null;
+      const soundOn = () => $('[data-sound]').checked;
+      function tone(type, f0, f1, dur, gain, when = 0) {
+        if (!soundOn()) return;
+        try {
+          ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+          if (ac.state === 'suspended') ac.resume();
+          const t = ac.currentTime + when;
+          const o = ac.createOscillator(); const g = ac.createGain();
+          o.type = type; o.frequency.setValueAtTime(f0, t);
+          if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.6);
+          g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+          o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+        } catch {}
+      }
+      const S = {
+        a: () => tone('sine', 180, 60, 0.28, 0.9),
+        b: () => tone('sine', 120, 42, 0.32, 0.9),
+        up: (i) => { tone('sine', 988, 0, 0.9, 0.22, i * 0.25); tone('sine', 1976, 0, 0.4, 0.05, i * 0.25); },
+        down: (i) => tone('triangle', 196, 98, 0.5, 0.35, i * 0.25),
+      };
+
+      // ---- data -----------------------------------------------------------
+      let data = null;
+      const seenMoves = new Set();
+      let firstLoad = true;
+
+      function renderTape(moves) {
+        const tape = $('[data-tape]');
+        const fresh = [];
+        moves.forEach((m) => { const k = `${m.at}:${m.id}`; if (!seenMoves.has(k)) { seenMoves.add(k); fresh.push(m); } });
+        if (!moves.length) { tape.innerHTML = '<li class="fl__empty">No big moves yet. The bot checks every five minutes and drums on moves of five points or more.</li>'; return; }
+        tape.replaceChildren(...moves.slice(0, 20).map((m) => {
+          const li = document.createElement('li');
+          const up = m.direction === 'up';
+          li.innerHTML = `<time>${clock(m.at)}</time><span class="q" title="${esc(m.question)}">${esc(m.question)}</span><span class="${up ? 'fl__up' : 'fl__down'}">${esc(m.outcome)} ${pct(m.from)}→${pct(m.to)} ${up ? '▲' : '▼'}×${m.beats}</span>`;
+          if (!firstLoad && fresh.includes(m)) li.classList.add('is-new');
+          return li;
+        }));
+        if (!firstLoad) fresh.slice(0, 4).forEach((m, i) => (m.direction === 'up' ? S.up : S.down)(i));
+      }
+
+      function renderMarkets(markets) {
+        const list = $('[data-markets]');
+        if (!markets.length) { list.innerHTML = '<li class="fl__empty">Polymarket is not answering right now. Try again in a minute.</li>'; return; }
+        const existing = new Map([...list.querySelectorAll('[data-mkt]')].map((li) => [li.dataset.mkt, li]));
+        list.replaceChildren(...markets.map((m) => {
+          const li = existing.get(m.id) || document.createElement('li');
+          li.className = 'fl__mkt'; li.dataset.mkt = m.id;
+          const [a = 'Yes', b = 'No'] = m.outcomes;
+          const [pa] = m.prices;
+          const chg = m.change24h || 0;
+          const calls = m.calls[0] + m.calls[1];
+          const share = calls ? (m.calls[0] / calls) * 100 : 50;
+          const bot = m.bot.up || m.bot.down ? `<span class="fl__bot"><span class="fl__up">▲${m.bot.up}</span> <span class="fl__down">▼${m.bot.down}</span> bot</span>` : '';
+          li.innerHTML = `
+            ${m.image ? `<img src="${esc(m.image)}" alt="" loading="lazy" width="44" height="44" />` : '<span class="ph" aria-hidden="true">♪</span>'}
+            <div class="fl__q">
+              <a href="https://polymarket.com/market/${encodeURIComponent(m.slug)}" target="_blank" rel="noopener">${esc(m.question)}</a>
+              <span class="fl__meta"><span>${money(m.volume24h)} 24h</span>${m.endDate ? `<span>ends ${esc(String(m.endDate).slice(0, 10))}</span>` : ''}${bot}</span>
+            </div>
+            <div class="fl__price"><span class="fl__num">${pct(pa)}</span><span class="fl__chg ${chg >= 0 ? 'fl__up' : 'fl__down'}">${chg >= 0 ? '+' : ''}${Math.round(chg * 100)} pts 24h</span><span class="fl__k">${esc(a)}</span></div>
+            <div class="fl__drums">
+              <button type="button" class="fl__drum fl__drum--a" data-call="a" aria-label="Hit the drum for ${esc(a)}"><span>♪ ${esc(a)}</span><small>${calls ? m.calls[0] : 0} calls</small></button>
+              <button type="button" class="fl__drum fl__drum--b" data-call="b" aria-label="Hit the drum for ${esc(b)}"><span>♪ ${esc(b)}</span><small>${calls ? m.calls[1] : 0} calls</small></button>
+              <span class="fl__balance${calls ? '' : ' is-empty'}" title="Floor calls: ${m.calls[0]} ${esc(a)} · ${m.calls[1]} ${esc(b)}"><span style="width:${share}%"></span></span>
+            </div>`;
+          return li;
+        }));
+      }
+
+      async function load() {
+        try {
+          data = await (await fetch('/api/drum/floor', { cache: 'no-store' })).json();
+          renderMarkets(data.markets || []);
+          renderTape(data.moves || []);
+          $('[data-updated]').textContent = `updated ${clock(Date.now())}`;
+          $('[data-bot-status]').textContent = data.botCheckedAt ? `Floor Bot · last check ${ago(data.botCheckedAt)}` : 'Floor Bot · first check pending';
+          firstLoad = false;
+        } catch {
+          $('[data-updated]').textContent = 'floor unavailable, retrying';
+        }
+      }
+
+      // ---- calls ----------------------------------------------------------
+      $('[data-markets]').addEventListener('pointerdown', (e) => {
+        const btn = e.target.closest('[data-call]');
+        if (!btn) return;
+        e.preventDefault();
+        const id = btn.closest('[data-mkt]').dataset.mkt;
+        const side = btn.dataset.call;
+        S[side]();
+        btn.classList.add('is-hit'); setTimeout(() => btn.classList.remove('is-hit'), 90);
+        const small = btn.querySelector('small');
+        small.textContent = `${(parseInt(small.textContent, 10) || 0) + 1} calls`;
+        if (window.PointCastDrum) window.PointCastDrum.beat(1, { app: 'drum-floor', place: `pm:${id}:${side}` }, { sound: false });
+      });
+      $('[data-markets]').addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-call]')) {
+          e.preventDefault();
+          e.target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        }
+      });
+      window.addEventListener('pointcast:drum', () => setTimeout(load, 1500));
+
+      load();
+      setInterval(() => { if (document.visibilityState === 'visible') load(); }, 20000);
+    })();
+  </script>
+</BlockLayout>
