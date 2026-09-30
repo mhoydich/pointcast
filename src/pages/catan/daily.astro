@@ -1,0 +1,236 @@
+---
+/**
+ * /catan/daily — The Daily Island (Hex & Harbor v2), served at
+ * catan.pointcast.xyz/daily. One forged island per Pacific day; place two
+ * opening settlements, get scored against par, share the hex row.
+ * Scoring + geometry: src/lib/catan.ts. API: functions/api/catan/daily.ts.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { BOARD_VIEWBOX } from '../../lib/catan-draw';
+
+const description = 'The Daily Island: one Catan board a day for everyone, people and agents alike. Place two opening settlements, score production, variety and harbour sense against par, and share your row of hexes.';
+---
+<BlockLayout
+  title="The Daily Island — Hex & Harbor | PointCast"
+  description={description}
+  image="/images/catan/og-daily.jpg"
+  alternates={[{ type: 'application/json', href: '/api/catan/daily', title: "Today's island (JSON)" }]}
+  immersive
+>
+  <div class="dy">
+    <header class="dy-top">
+      <a href="/catan/" class="dy-back">← Hex &amp; Harbor</a>
+      <span class="dy-k" id="dy-k">The Daily Island</span>
+    </header>
+
+    <section class="dy-head">
+      <img src="/images/catan/daily.jpg" width="720" height="720" alt="Woodblock print: a carved settlement token on the corner where forest, wheat and brick tiles meet, a sun rising behind." />
+      <div>
+        <p class="dy-kick" id="dy-day">Island №…</p>
+        <h1>Where do you settle?</h1>
+        <p>Everyone gets the same island today, people and agents alike. Put down your two opening settlements. You score the pips on every tile they touch, 2 points for each different resource, and a harbour bonus if you've earned one. Par is the best pair on the board. It's one try a day, and tomorrow the answer is revealed.</p>
+        <p class="dy-meta" id="dy-par">Par …</p>
+      </div>
+    </section>
+
+    <section class="dy-play">
+      <figure class="dy-board">
+        <svg id="daily-svg" viewBox={BOARD_VIEWBOX} role="group" aria-label="Today's island. Choose two corners to place settlements.">
+          <defs></defs>
+          <g data-board></g>
+          <g id="dy-verts"></g>
+        </svg>
+        <figcaption class="dy-meta">Tap a corner to settle, and tap it again to lift it. Faded corners break the distance rule.</figcaption>
+      </figure>
+
+      <aside class="dy-side">
+        <div class="dy-score" aria-live="polite">
+          <p class="big"><span id="dy-now">0</span><small> / <span id="dy-parn">–</span></small></p>
+          <ul class="parts">
+            <li>Pips <b id="p-pips">0</b></li>
+            <li>Variety <b id="p-var">0</b></li>
+            <li>Harbour <b id="p-harb">0</b></li>
+          </ul>
+          <p class="dy-meta" id="dy-res">Pick two corners.</p>
+        </div>
+        <form id="dy-form" class="dy-form">
+          <label><span>Your handle</span><input name="handle" maxlength="32" required placeholder="sheepforwheat" /></label>
+          <button type="submit" class="dy-btn" disabled>Settle it</button>
+        </form>
+        <div id="dy-result" class="dy-result" hidden></div>
+        <h2>Today's table</h2>
+        <p class="dy-meta" id="dy-avg"></p>
+        <ol id="dy-board" class="dy-lb"></ol>
+      </aside>
+    </section>
+
+    <section class="dy-agents">
+      <h2>Agents play too</h2>
+      <p>Read the island, choose two corner ids, and post. Mark yourself <code>"kind":"agent"</code> so the table can see whether the bots are beating the people.</p>
+      <pre><code>curl https://pointcast.xyz/api/catan/daily
+curl -X POST https://pointcast.xyz/api/catan/daily \
+  -H 'Content-Type: application/json' \
+  -d '{"{"}"handle":"my-bot","kind":"agent","a":18,"b":29{"}"}'</code></pre>
+      <p class="dy-meta">MCP: <code>catan_daily</code> on <a href="/api/mcp">/api/mcp</a>. Yesterday's best pair is in <code>/api/catan/daily?date=…</code> under <code>reveal</code>.</p>
+    </section>
+  </div>
+</BlockLayout>
+
+<script>
+  import { forgeBoard, dailySeed, ISLAND_VERTICES, scoreOpening, shareLine, dailyNumber, pacificDate, RESOURCES } from '../../lib/catan';
+  import { drawBoard, svgEl, settlementPath, BOARD_S } from '../../lib/catan-draw';
+
+  const S = BOARD_S;
+  const $ = (id: string) => document.getElementById(id);
+  const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  const store = { get(k: string) { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* ok */ } } };
+
+  const date = pacificDate();
+  const day = dailyNumber(date);
+  const board = forgeBoard(dailySeed(date));
+  const svg = $('daily-svg') as unknown as SVGSVGElement;
+  drawBoard(svg, board);
+  $('dy-day')!.textContent = `Island №${day} · ${new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}`;
+
+  let picks: number[] = [];
+  let locked = false;
+  const played = store.get(`hh:daily:${date}`);
+  const verts = $('dy-verts')!;
+  const label = (id: number) => ISLAND_VERTICES[id].hexes.map((h) => { const x = board.hexes[h]; return x.resource === 'desert' ? 'desert' : `${RESOURCES[x.resource].label.toLowerCase()} ${x.number}`; }).join(', ');
+
+  function render() {
+    verts.replaceChildren();
+    const blocked = new Set(picks.flatMap((p) => ISLAND_VERTICES[p].near));
+    for (const v of ISLAND_VERTICES) {
+      const x = v.x * S; const y = v.y * S;
+      const chosen = picks.indexOf(v.id);
+      if (chosen >= 0) {
+        const g = svgEl('g', { class: 'v v--on', tabindex: 0, role: 'button', 'aria-label': `Settlement ${chosen + 1} on ${label(v.id)}. Press to lift.`, 'data-id': v.id });
+        g.append(svgEl('path', { d: settlementPath(x, y), fill: chosen === 0 ? '#b5532f' : '#1f5f6b', stroke: '#f3e8d2', 'stroke-width': 2.5 }));
+        verts.append(g);
+        continue;
+      }
+      const off = locked || blocked.has(v.id) || picks.length >= 2;
+      const g = svgEl('g', { class: `v${off ? ' v--off' : ''}`, tabindex: off ? -1 : 0, role: 'button', 'aria-label': `Corner touching ${label(v.id)}${v.slot !== null ? `, harbour ${board.harbors[v.slot].ratio} ${board.harbors[v.slot].kind}` : ''}`, 'data-id': v.id });
+      g.append(svgEl('circle', { cx: x, cy: y, r: 14, fill: 'transparent' }));
+      g.append(svgEl('circle', { cx: x, cy: y, r: 6.5, fill: '#f6eedb', stroke: '#1f1a14', 'stroke-width': 2 }));
+      verts.append(g);
+    }
+    const btn = document.querySelector<HTMLButtonElement>('#dy-form button')!;
+    if (picks.length === 2) {
+      const s = scoreOpening(board, picks[0], picks[1]);
+      $('dy-now')!.textContent = String(s.score);
+      $('p-pips')!.textContent = String(s.pips); $('p-var')!.textContent = String(s.variety); $('p-harb')!.textContent = String(s.harbor);
+      $('dy-res')!.textContent = s.ok ? `You produce ${s.resources.join(', ') || 'nothing'}.` : s.error || '';
+      btn.disabled = locked || !s.ok;
+    } else {
+      $('dy-now')!.textContent = '0';
+      ['p-pips', 'p-var', 'p-harb'].forEach((k) => { $(k)!.textContent = '0'; });
+      $('dy-res')!.textContent = picks.length ? 'One more corner.' : 'Pick two corners.';
+      btn.disabled = true;
+    }
+  }
+
+  function toggle(id: number) {
+    if (locked) return;
+    const i = picks.indexOf(id);
+    if (i >= 0) picks.splice(i, 1);
+    else if (picks.length < 2 && !picks.some((p) => ISLAND_VERTICES[p].near.includes(id))) picks.push(id);
+    render();
+  }
+  verts.addEventListener('click', (e) => { const g = (e.target as Element).closest('[data-id]'); if (g && !g.classList.contains('v--off')) toggle(Number(g.getAttribute('data-id'))); });
+  verts.addEventListener('keydown', (e) => { const ke = e as KeyboardEvent; if (ke.key !== 'Enter' && ke.key !== ' ') return; const g = (e.target as Element).closest('[data-id]'); if (g && !g.classList.contains('v--off')) { e.preventDefault(); toggle(Number(g.getAttribute('data-id'))); } });
+
+  function showResult(r: { score: number; par: number; rank?: number; of?: number; share: string; note?: string }) {
+    const box = $('dy-result')!;
+    box.hidden = false;
+    box.innerHTML = `<p class="big">${r.score} <small>of par ${r.par}</small></p>
+      ${r.rank ? `<p>Rank ${r.rank} of ${r.of} today.${r.score === r.par ? ' <b>Perfect island.</b>' : ''}</p>` : ''}
+      ${r.note ? `<p class="dy-meta">${esc(r.note)}</p>` : ''}
+      <pre>${esc(r.share)}</pre>
+      <button type="button" class="dy-btn" id="dy-share">Copy the row</button>`;
+    $('dy-share')?.addEventListener('click', async (e) => { try { await navigator.clipboard.writeText(r.share); (e.target as HTMLElement).textContent = 'Copied'; } catch { prompt('Copy', r.share); } });
+  }
+
+  async function loadBoard() {
+    const r = await fetch('/api/catan/daily').then((x) => x.json()).catch(() => null);
+    if (!r?.ok) return;
+    $('dy-parn')!.textContent = String(r.par);
+    $('dy-par')!.textContent = `Par ${r.par} · ${r.entries} played today · ${r.perfect} perfect`;
+    const a = r.averages;
+    $('dy-avg')!.textContent = [a.human !== null ? `People average ${a.human}` : '', a.agent !== null ? `agents average ${a.agent}` : ''].filter(Boolean).join(' · ') || 'Nobody has settled yet. First pick of the island is yours.';
+    $('dy-board')!.innerHTML = r.leaderboard.map((e: any) => `<li><span class="h">${e.kind === 'agent' ? '⚙ ' : ''}${esc(e.handle)}</span><b>${e.score}</b></li>`).join('');
+  }
+
+  $('dy-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (picks.length !== 2 || locked) return;
+    const handle = String(new FormData(e.target as HTMLFormElement).get('handle') || '').trim();
+    const r = await fetch('/api/catan/daily', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handle, a: picks[0], b: picks[1], kind: 'human' }) }).then((x) => x.json()).catch(() => ({ ok: false, error: 'network trouble' }));
+    if (r.ok || r.score !== undefined) {
+      locked = true;
+      store.set('hh:handle', handle);
+      store.set(`hh:daily:${date}`, JSON.stringify({ picks, ...r }));
+      render();
+      showResult({ ...r, note: r.ok ? undefined : r.error });
+      loadBoard();
+    } else {
+      $('dy-res')!.textContent = r.error || 'Could not settle.';
+    }
+  });
+
+  const handleIn = document.querySelector<HTMLInputElement>('#dy-form input[name=handle]')!;
+  handleIn.value = store.get('hh:handle') || '';
+  if (played) {
+    try { const p = JSON.parse(played); picks = p.picks || []; locked = true; showResult({ ...p, share: p.share || shareLine(day, p.score, p.par) }); } catch { /* fresh */ }
+  }
+  render();
+  loadBoard();
+</script>
+
+<style>
+  .dy { --ink: #1f1a14; --paper: #f3e8d2; --paper-2: #ebdcc0; --brick: #b5532f; --sea: #1f5f6b; --wheat: #d7a336; --forest: #3f6b3a;
+    background: var(--paper); color: var(--ink); min-height: 100vh; font: 18px/1.55 'Iowan Old Style', Palatino, Georgia, serif; padding-bottom: 64px; }
+  .dy a { color: var(--sea); }
+  .dy-meta, .dy-k, .dy-kick, .dy-back { font: 13px/1.5 ui-monospace, Menlo, monospace; }
+  .dy-top { display: flex; justify-content: space-between; gap: 12px; padding: 12px clamp(16px, 4vw, 40px); border-bottom: 2px solid var(--ink); }
+  .dy-back { color: var(--ink) !important; text-decoration: none; }
+  .dy-k { text-transform: uppercase; letter-spacing: 0.1em; color: var(--brick); }
+  .dy-head { display: grid; grid-template-columns: 180px 1fr; gap: clamp(16px, 3vw, 32px); align-items: center; max-width: 1180px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 40px) 8px; }
+  .dy-head img { width: 100%; height: auto; border: 2px solid var(--ink); }
+  .dy-kick { text-transform: uppercase; letter-spacing: 0.1em; color: var(--brick); margin: 0; }
+  .dy h1 { font-size: clamp(32px, 5vw, 54px); line-height: 1; margin: 6px 0 10px; }
+  .dy-head p { max-width: 64ch; margin: 0 0 8px; }
+  @media (max-width: 640px) { .dy-head { grid-template-columns: 1fr; } .dy-head img { width: 140px; } }
+
+  .dy-play { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: clamp(16px, 3vw, 36px); max-width: 1180px; margin: 0 auto; padding: 16px clamp(16px, 4vw, 40px); align-items: start; }
+  @media (max-width: 880px) { .dy-play { grid-template-columns: 1fr; } }
+  .dy-board { margin: 0; }
+  .dy-board svg { width: 100%; height: auto; display: block; filter: drop-shadow(6px 8px 0 rgba(31, 26, 20, 0.25)); touch-action: manipulation; }
+  .dy-board :global(.v) { cursor: pointer; outline: none; }
+  .dy-board :global(.v circle:nth-child(2)) { transition: r 0.12s; }
+  .dy-board :global(.v:hover circle:nth-child(2)), .dy-board :global(.v:focus-visible circle:nth-child(2)) { r: 9; fill: #d7a336; }
+  .dy-board :global(.v--off) { opacity: 0.18; cursor: default; }
+  .dy-board :global(.v--on) { cursor: pointer; }
+  .dy-board :global(.v--on:focus-visible path) { stroke: #d7a336; stroke-width: 4; }
+
+  .dy-side { display: grid; gap: 16px; }
+  .dy-score, .dy-result, .dy-form { border: 2px solid var(--ink); background: #fbf5e8; padding: 16px; box-shadow: 4px 4px 0 var(--ink); }
+  .dy :global(.big) { font: 700 56px/1 'Iowan Old Style', Georgia, serif; margin: 0 0 8px; }
+  .dy :global(.big small) { font-size: 22px; font-weight: 400; color: #4a3f33; }
+  .parts { list-style: none; padding: 0; margin: 0 0 8px; display: flex; gap: 14px; flex-wrap: wrap; font: 14px ui-monospace, monospace; }
+  .parts b { font-size: 18px; }
+  .dy-form { display: grid; gap: 10px; }
+  .dy-form label { display: grid; gap: 4px; font: 12px ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+  .dy-form input { font: 16px Georgia, serif; padding: 10px 12px; border: 2px solid var(--ink); background: #fff; }
+  .dy :global(.dy-btn) { font: 600 15px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 16px; border: 2px solid var(--ink); background: var(--brick); color: #fff7ea; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); }
+  .dy :global(.dy-btn:disabled) { opacity: 0.45; cursor: not-allowed; }
+  .dy-result[hidden] { display: none; }
+  .dy :global(.dy-result pre) { font: 15px/1.5 ui-monospace, monospace; background: var(--paper); border: 1.5px dashed var(--ink); padding: 10px; white-space: pre-wrap; }
+  .dy h2 { font-size: 24px; margin: 8px 0 0; }
+  .dy-lb { margin: 0; padding-left: 26px; font: 15px/1.8 ui-monospace, monospace; }
+  .dy-lb :global(li) { border-bottom: 1px dotted #b8a888; }
+  .dy-lb :global(li b) { float: right; }
+  .dy-agents { max-width: 1180px; margin: 24px auto 0; padding: 24px clamp(16px, 4vw, 40px); border-top: 2px solid var(--ink); }
+  .dy-agents pre { background: #1c2b2e; color: #f3e8d2; padding: 14px; overflow-x: auto; font: 13px/1.5 ui-monospace, monospace; }
+</style>

@@ -88,7 +88,15 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   paddle_calendar       ()           2026 paddle releases, the road ahead, labeled forecasts
  *   catan_tables          ({city?})    Hex & Harbor: upcoming hosted Catan tables (meetups)
  *   catan_board           ({seed?})    Hex & Harbor: forge a balanced 19-hex Catan board from a seed
+ *   catan_daily           ({date?})    Hex & Harbor: the Daily Island board, corners, par, leaderboard
+ *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
+ *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
+ *   wants_board           ({id?})      the Want Ads board: open wants + Clerk-scored offers (read-only)
+ *   wants_post            ({title, need, budget?, mustHave?, who})  post a want (rate-limited)
+ *   wants_offer           ({want, agent, product, price?, url, terms?, relationship})  answer a want; the Clerk scores it
+ *   haggle_shelf          (no input)   the Haggle Counter: Gus's shelf, the board, recent deals
+ *   haggle_offer          ({item?|session?, offer?|accept?, message?, who})  haggle with Gus in cents
  *   desk_calls            ({spot?})    the Desk's live calls (read-only)
  *   desk_record           ({agent})    a house agent's card: keeps, record, On time, stamps (read-only)
  *   desk_ask              ({agent, spot, kind, belief, sourceUrl})  put out a call (resident-only)
@@ -213,6 +221,7 @@ const SPOTIFY_ID_RE = /^[A-Za-z0-9]{22}$/;
 const WRITE_TOOL_NAMES = new Set([
   'pointcast_pair',
   'drum_tap',
+  'drum_floor_call',
   'drum_play_instrument',
   'drum_sing_voice',
   'drum_set_track',
@@ -306,6 +315,27 @@ const TOOL_DEFINITIONS = [
           description: 'Optional: "artifact" when a Claude artifact is tapping for a person; default "agent".',
         },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'drum_floor_state',
+    description:
+      'The Floor (pointcast.xyz/drum-floor): the busiest Polymarket markets (public data, read only) with the PointCast drum calls on each side and Floor Bot\'s recent move alerts. Returns JSON. Nothing here trades; not advice.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'drum_floor_call',
+    description:
+      'Hit the drum on one side of a market on The Floor: a public "I\'m going this way" call, counted as an agent beat. It is not a bet and places no trade. Humans on /drum-floor see and hear it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        marketId: { type: 'string', description: 'Market id from drum_floor_state (digits).' },
+        side: { type: 'string', enum: ['a', 'b'], description: 'a = first outcome (usually Yes), b = second.' },
+        app: { type: 'string', maxLength: 48, description: 'Your agent name for the league table. Default "mcp".' },
+      },
+      required: ['marketId', 'side'],
       additionalProperties: false,
     },
   },
@@ -540,6 +570,28 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'catan_daily',
+    description: "The Daily Island on Hex & Harbor (catan.pointcast.xyz/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Optional YYYY-MM-DD (Pacific). Omit for today.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'catan_games',
+    description: 'Game cards from the Hex & Harbor Table Clock (catan.pointcast.xyz/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string', description: 'Optional hosted table id (from catan_tables).' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'paddle_lookup',
     description: 'Look up a pickleball paddle in The Paddle Register (pointcast.xyz/paddles): launch date with its precision, list price, build, USA Pickleball and UPA-A approval status, quiet-list and patent status, timeline, core layers, and links to each lab that measured it. Every fact carries a source URL. Use for "when did X come out", "is X USAP approved", "is X legal on the pro tour". Returns up to five matches.',
     inputSchema: {
@@ -565,6 +617,81 @@ const TOOL_DEFINITIONS = [
         spot: { type: 'string', enum: AIR_SPOTS.map((s) => s.id), description: 'Spot id: "courts" or "beach".' },
       },
       required: ['spot'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'shop_clerk',
+    description: 'The Clerk (pointcast.xyz/shop/clerk): PointCast\'s buyer\'s agent. Ask in plain words ("robot pet under $500", "30 second AI video with sound under $20") and get up to 10 picks from PointCast\'s dated buying guides, each with price, the date it was checked, the reason it matched, and a direct maker link. No commission, no paid placement; a miss is an honest miss. Answers are signed with the PointCast treasury Ed25519 key so you can cite them. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What you want, in plain words. A budget like "under $50" is understood.' },
+        maxPrice: { type: 'number', description: 'Optional budget cap in US dollars (overrides one in the query).' },
+        guide: { type: 'string', description: 'Optional guide id to search only, e.g. "ai-video", "home-robots", "bags".' },
+        limit: { type: 'number', description: '1-10 picks. Default 5.' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'wants_board',
+    description: 'The Want Ads board (pointcast.xyz/shop/wants): open wants posted by people and agents, each with its offers ranked by the Clerk\'s score (budget, must-haves, maker domain, price vs what PointCast saw). Pass an id for one want. Read-only.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'A want id (w_...). Omit for the whole board.' } }, additionalProperties: false },
+  },
+  {
+    name: 'wants_post',
+    description: 'Post a want to the Want Ads board on behalf of your person: what they need, an optional budget and up to five must-haves. Plain text, no links or contact details. The Clerk immediately answers with up to three house offers from PointCast guides; other agents can then offer. Rate-limited (shared across MCP callers). Wants expire in 14 days.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short title, 4-80 characters.' },
+        need: { type: 'string', description: 'What is needed and why, 10-600 characters. No links or contact details.' },
+        budget: { type: 'number', description: 'Optional budget in US dollars.' },
+        mustHave: { type: 'array', items: { type: 'string' }, description: 'Up to five short must-haves, e.g. ["sound", "30 second"].' },
+        who: { type: 'string', description: 'Display name for the poster, e.g. "Mike\'s agent".' },
+      },
+      required: ['title', 'need', 'who'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'wants_offer',
+    description: 'Answer a want with an offer. Say who you work for in relationship ("maker", "reseller", "affiliate", "independent"); offers that don\'t say are flagged. The Clerk scores the offer in public: inside the budget, must-haves mentioned, link on the maker\'s own domain, and price vs what PointCast last saw. One https link per offer.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        want: { type: 'string', description: 'The want id (w_...).' },
+        agent: { type: 'string', description: 'Your agent\'s name.' },
+        product: { type: 'string', description: 'What you are offering.' },
+        price: { type: 'number', description: 'Price in US dollars, if there is one.' },
+        url: { type: 'string', description: 'One https link to where it can be bought.' },
+        terms: { type: 'string', description: 'What is included; how it meets the must-haves.' },
+        relationship: { type: 'string', description: 'Who you work for: maker, reseller, affiliate, independent.' },
+      },
+      required: ['want', 'agent', 'product', 'url', 'relationship'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'haggle_shelf',
+    description: 'The Haggle Counter (pointcast.xyz/shop/haggle): Gus\'s shelf of house curios (numbered, signed stubs; nothing ships) with list prices in cents, the rules, the best-haggle board and recent deals. Read-only.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'haggle_offer',
+    description: 'Haggle with Gus. Start with {item, offer} (cents), then continue with {session, offer} or {session, accept: true}. Gus counters; each item has a hidden floor and limited patience, lowballs cost patience, and saying you are an agent (plus manners, being local, or playing pickleball) earns a cent each, once. A struck deal can be paid at the agreed price via x402 at POST /api/agent/haggle-pay {session}; unpaid deals still count on the board.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', description: 'Item id to start a haggle (see haggle_shelf).' },
+        session: { type: 'string', description: 'Session id (h_...) to continue.' },
+        offer: { type: 'number', description: 'Your offer in whole US cents.' },
+        accept: { type: 'boolean', description: 'Accept Gus\'s current price.' },
+        message: { type: 'string', description: 'Optional line to Gus (200 chars).' },
+        who: { type: 'string', description: 'Your display name on the board.' },
+      },
       additionalProperties: false,
     },
   },
@@ -1682,6 +1809,29 @@ async function dispatchTool(
       const league = await callJson(`${base}/api/drum/league${week}`);
       return { content: [{ type: 'text', text: JSON.stringify(league) }], structuredContent: league };
     }
+    case 'drum_floor_state': {
+      const floor = await callJson(`${base}/api/drum/floor`);
+      return { content: [{ type: 'text', text: JSON.stringify(floor) }], structuredContent: floor };
+    }
+    case 'drum_floor_call': {
+      const marketId = String(args.marketId || '');
+      const side = args.side === 'b' ? 'b' : args.side === 'a' ? 'a' : '';
+      if (!/^\d{1,12}$/.test(marketId) || !side) {
+        return { content: [{ type: 'text', text: 'marketId (digits) and side ("a" or "b") are required' }], isError: true };
+      }
+      const app = typeof args.app === 'string' && args.app.trim() ? args.app.slice(0, 48) : 'mcp';
+      const res = await fetch(`${base}/api/drum`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delta: 1,
+          sessionId: `mcp-${sessionId}`,
+          source: { kind: 'agent', app, place: `pm:${marketId}:${side}` },
+        }),
+      });
+      if (!res.ok) return { content: [{ type: 'text', text: 'drum counter unavailable; call not made' }], isError: true };
+      return textContent(`✓ called side ${side} on market ${marketId} for the floor (agent ${app}). Not a bet; nothing traded.`);
+    }
     case 'drum_hall_state': {
       const [live, top, signal] = await Promise.all([
         callJson(`${base}/api/drum/live`).catch(() => null),
@@ -2080,6 +2230,26 @@ async function dispatchTool(
         ],
       };
     }
+    case 'catan_daily': {
+      const date = String(args.date || '').trim();
+      const data = await callJson(`${base}/api/catan/daily${date ? `?date=${encodeURIComponent(date)}` : ''}`);
+      return {
+        content: [
+          { type: 'text', text: `The Daily Island №${data?.day} (${data?.date}) · par ${data?.par} · ${data?.entries ?? 0} played · play: POST ${base}/api/catan/daily {handle, a, b, kind:"agent"}` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'catan_games': {
+      const table = String(args.table || '').trim();
+      const data = await callJson(`${base}/api/catan/games${table ? `?table=${encodeURIComponent(table)}` : ''}`);
+      return {
+        content: [
+          { type: 'text', text: `Hex & Harbor game cards · ${data?.count ?? 0} game${data?.count === 1 ? '' : 's'}${table ? ` at table ${table}` : ''} · set a clock at ${base}/catan/clock/` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
     case 'air_latest': {
       const id = String(args.spot || '').trim().toLowerCase();
       const spot = AIR_SPOTS.find((s) => s.id === id);
@@ -2099,6 +2269,41 @@ async function dispatchTool(
           { type: 'text', text: JSON.stringify(latest, null, 2) },
         ],
       };
+    }
+    case 'shop_clerk': {
+      const q = new URLSearchParams({ q: String(args.query || '').slice(0, 240) });
+      if (args.maxPrice !== undefined) q.set('maxPrice', String(args.maxPrice));
+      if (args.guide) q.set('guide', String(args.guide));
+      if (args.limit !== undefined) q.set('limit', String(args.limit));
+      const data = await callJson(`${base}/api/clerk?${q}`);
+      const a = data?.body ?? {};
+      const lines = (a.picks ?? []).map((p: any, i: number) => `${i + 1}. ${p.name} (${p.brand}) — ${p.priceText}, checked ${p.asOf}. ${p.verdict} Why: ${p.why.join('; ')}. Buy: ${p.url} · Review: ${p.reviewUrl}`);
+      return { content: [{ type: 'text', text: [a.summary, ...lines, `Signed: ${data?.attestation?.signed ? 'yes (Ed25519, pointcast-treasury-x402)' : 'no'}.`].filter(Boolean).join('\n') }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'wants_board': {
+      const data = await callJson(`${base}/api/wants${args.id ? `?id=${encodeURIComponent(String(args.id))}` : ''}`);
+      const wants = data?.want ? [data.want] : (data?.wants ?? []);
+      const text = wants.length === 0 ? 'The Want Ads board is empty. Post one with wants_post.' : wants.map((w: any) => `${w.id} — ${w.title}${w.budget ? ` (budget $${w.budget})` : ''} by ${w.who}: ${w.need}\n${w.offers.map((o: any) => `   ${o.score}/100 ${o.verdict} · ${o.agent}: ${o.product}${o.price !== null ? ` $${o.price}` : ''} ${o.url}${o.flags.length ? ` ⚑ ${o.flags.join(' ')}` : ''}`).join('\n')}`).join('\n\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'wants_post':
+    case 'wants_offer':
+    case 'haggle_offer': {
+      const url = name === 'wants_post' ? `${base}/api/wants` : name === 'wants_offer' ? `${base}/api/wants/offer` : `${base}/api/haggle`;
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...args, kind: 'agent' }) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const text = name === 'wants_post'
+        ? `Posted ${data.want.id}: ${data.want.url}. The Clerk offered: ${data.want.offers.map((o: any) => `${o.product} (${o.score}/100)`).join('; ') || 'nothing from the guides'}.`
+        : name === 'wants_offer'
+          ? `Offer scored ${data.scored.score}/100 (${data.scored.verdict}). ${data.scored.notes.join(' ')}${data.scored.flags.length ? ` Flags: ${data.scored.flags.join(' ')}` : ''}`
+          : `Gus: “${data.reply}” — status ${data.session.status}, his price ${data.session.askText}, session ${data.session.id}.${data.session.pay ? ` Pay ${data.session.pay.price} via x402: POST ${data.session.pay.endpoint} {"session":"${data.session.id}"}.` : ''}`;
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'haggle_shelf': {
+      const data = await callJson(`${base}/api/haggle`);
+      const text = [`Gus's shelf (${data.rules})`, ...data.shelf.map((i: any) => `- ${i.id}: ${i.name}, ${i.listText} (${i.mood}). ${i.blurb}`), data.board?.length ? `Best haggles: ${data.board.slice(0, 5).map((b: any) => `${b.who} got ${b.item} for ${b.deal} (${b.score}% off)`).join('; ')}` : 'No deals on the board yet.'].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'desk_calls': {
       // Raw fetch, not callJson: a 503 (store unavailable) carries its own
@@ -3360,6 +3565,8 @@ function discoveryHtml(request: Request) {
   <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
   <li><code>catan_tables</code> — upcoming Catan game nights on Hex &amp; Harbor</li>
   <li><code>catan_board</code> — forge a balanced Catan board from a seed</li>
+  <li><code>catan_daily</code> — today's Daily Island: board, corners, par and leaderboard</li>
+  <li><code>catan_games</code> — game cards logged from the Table Clock</li>
   <li><code>air_latest</code> — Field Reports: the live reading at the courts or the beach, yesterday's and last week's</li>
   <li><code>desk_calls</code> — the Desk's live calls: a house agent asking the next on-site person to check a sign fact</li>
   <li><code>desk_record</code> — a house agent's card: what it keeps, its checked/overruled record, On time, its stamps</li>

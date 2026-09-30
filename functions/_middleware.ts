@@ -204,6 +204,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       '/': '/catan/',
       '/seal': '/catan/seal/',
       '/seal/': '/catan/seal/',
+      '/daily': '/catan/daily/',
+      '/daily/': '/catan/daily/',
+      '/flyer': '/catan/flyer/',
+      '/clock': '/catan/clock/',
+      '/clock/': '/catan/clock/',
+      '/game': '/catan/game/',
+      '/game/': '/catan/game/',
+      '/flyer/': '/catan/flyer/',
       '/index.json': '/catan/index.json',
       '/llms.txt': '/catan/llms.txt',
     };
@@ -221,6 +229,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (!passThrough) {
       return Response.redirect(new URL(url.pathname + url.search, 'https://pointcast.xyz').toString(), 301);
     }
+  }
+
+  // Museum shorthand must resolve before the generic directory rewrite.
+  if ((isGet || request.method === 'HEAD') && /^\/(atari|bbs)\/?$/.test(url.pathname)) {
+    const target = new URL('/atari-bbs/', url.origin);
+    target.search = url.search;
+    return Response.redirect(target.toString(), 301);
   }
 
   // Both legacy sign-in URLs must redirect before directory rewriting.

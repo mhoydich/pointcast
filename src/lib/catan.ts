@@ -300,6 +300,12 @@ export const CATAN_ENDPOINTS = [
   { method: 'GET', href: '/api/catan/board', label: 'Forge a balanced board: ?seed=any-words. Deterministic JSON.' },
   { method: 'GET', href: '/api/catan/seal', label: 'Read a sealed table: ?id=. Commitment, rolls so far, secret once revealed.' },
   { method: 'POST', href: '/api/catan/seal', label: 'Roll or reveal a sealed table: {id, rollKey, action:"roll"|"reveal"}.' },
+  { method: 'GET', href: '/api/catan/daily', label: "The Daily Island: today's board, corner vertices, par, leaderboard. ?date= for past days (with the best pair revealed)." },
+  { method: 'POST', href: '/api/catan/daily', label: 'Play the Daily Island: {handle, a, b, kind:"human"|"agent"}. One entry per handle per day.' },
+  { method: 'GET', href: '/api/catan/ics', label: 'Tables as calendar: ?id= one invite, ?city= or nothing for a subscribable feed.' },
+  { method: 'GET', href: '/api/catan/games', label: 'Game cards logged from the Table Clock: ?id= one, ?table= a table\'s history, nothing for recent games and top winners.' },
+  { method: 'POST', href: '/api/catan/games', label: 'Log a finished game: {players:[{name,color,vp}], winner, target, road?, army?, turns, minutes, rolls, table?, seed?}.' },
+  { method: 'POST', href: '/api/agent/catan-lantern', label: 'x402, 0.01 USDC on Etherlink: light a lantern on a hosted table ({table, note?}); pinned and glowing for 7 days, stacks.' },
   { method: 'POST', href: '/api/agent/catan-seal', label: 'x402, 0.01 USDC on Etherlink: open a sealed table with a committed 240-roll dice stream.' },
 ] as const;
 
@@ -309,3 +315,186 @@ export const HOUSE_NOTES = [
   'Hosts get a one-time hostKey to cancel. Keep it.',
   'Unofficial fan site. CATAN is a trademark of CATAN GmbH; this site is not affiliated with or endorsed by CATAN GmbH or its publishers. All art is original.',
 ];
+
+// ── The Daily Island (v2) ──────────────────────────────────────────────────
+//
+// One forged island per Pacific day. Pick two opening settlement corners;
+// the score is production (pips), variety and harbour sense. Everyone —
+// people and agents — plays the same island, and the best possible pair
+// ("par") is computed by brute force so the leaderboard has a ceiling.
+
+export const DAILY_EPOCH = '2026-09-29';
+
+export function pacificDate(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+export function dailyNumber(date: string): number {
+  return Math.round((Date.parse(`${date}T12:00:00Z`) - Date.parse(`${DAILY_EPOCH}T12:00:00Z`)) / 86400_000) + 1;
+}
+
+export function dailySeed(date: string): string {
+  return `daily-${date}`;
+}
+
+export interface IslandVertex {
+  id: number;
+  x: number;
+  y: number;
+  hexes: number[];
+  /** index into HARBOR_SLOTS when this corner touches a harbour edge */
+  slot: number | null;
+  near: number[];
+}
+
+/** Every corner of the 19 land hexes, deduplicated, with adjacency. Unit hex size. */
+export const ISLAND_VERTICES: IslandVertex[] = (() => {
+  const key = (x: number, y: number) => `${Math.round(x * 1000)}:${Math.round(y * 1000)}`;
+  const map = new Map<string, IslandVertex>();
+  HEX_COORDS.forEach(({ q, r }, hex) => {
+    const c = hexCenter(q, r);
+    for (let k = 0; k < 6; k++) {
+      const a = (Math.PI / 180) * (60 * k - 30);
+      const x = c.x + Math.cos(a);
+      const y = c.y + Math.sin(a);
+      const id = key(x, y);
+      const v = map.get(id) ?? { id: 0, x, y, hexes: [], slot: null, near: [] };
+      v.hexes.push(hex);
+      map.set(id, v);
+    }
+  });
+  const list = [...map.values()].sort((a, b) => a.y - b.y || a.x - b.x);
+  list.forEach((v, i) => { v.id = i; });
+  for (const v of list) {
+    v.near = list.filter((w) => w !== v && Math.hypot(w.x - v.x, w.y - v.y) < 1.01).map((w) => w.id);
+  }
+  HARBOR_SLOTS.forEach(({ hex, dir }, slot) => {
+    const { q, r } = HEX_COORDS[hex];
+    const [dq, dr] = NEIGHBOR_DIRS[dir];
+    const a = hexCenter(q, r);
+    const b = hexCenter(q + dq, r + dr);
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    for (const v of list) if (Math.abs(Math.hypot(v.x - mx, v.y - my) - 0.5) < 0.01) v.slot = slot;
+  });
+  return list;
+})();
+
+export interface OpeningScore {
+  ok: boolean;
+  error?: string;
+  score: number;
+  pips: number;
+  variety: number;
+  harbor: number;
+  resources: Array<Exclude<Resource, 'desert'>>;
+}
+
+/** Score two opening settlements on a forged board. */
+export function scoreOpening(board: ForgedBoard, a: number, b: number): OpeningScore {
+  const empty = { score: 0, pips: 0, variety: 0, harbor: 0, resources: [] };
+  const va = ISLAND_VERTICES[a];
+  const vb = ISLAND_VERTICES[b];
+  if (!Number.isInteger(a) || !Number.isInteger(b) || !va || !vb) return { ok: false, error: 'pick two corners by id', ...empty };
+  if (a === b) return { ok: false, error: 'two different corners, please', ...empty };
+  if (va.near.includes(b)) return { ok: false, error: 'the distance rule: settlements cannot sit on neighbouring corners', ...empty };
+  let pipsTotal = 0;
+  const produced = new Set<Exclude<Resource, 'desert'>>();
+  for (const v of [va, vb]) {
+    for (const h of v.hexes) {
+      const hex = board.hexes[h];
+      if (hex.resource === 'desert') continue;
+      pipsTotal += hex.pips;
+      produced.add(hex.resource);
+    }
+  }
+  let harbor = 0;
+  for (const v of [va, vb]) {
+    if (v.slot === null) continue;
+    const kind = board.harbors[v.slot].kind;
+    if (kind === 'any') harbor += 1;
+    else if (produced.has(kind)) harbor += 3;
+  }
+  const variety = produced.size * 2;
+  return { ok: true, score: pipsTotal + variety + harbor, pips: pipsTotal, variety, harbor, resources: [...produced] };
+}
+
+/** The best opening on a board (brute force over ~1,400 legal pairs). */
+export function bestOpening(board: ForgedBoard): { a: number; b: number; score: number } {
+  let best = { a: 0, b: 0, score: -1 };
+  for (let a = 0; a < ISLAND_VERTICES.length; a++) {
+    for (let b = a + 1; b < ISLAND_VERTICES.length; b++) {
+      const s = scoreOpening(board, a, b);
+      if (s.ok && s.score > best.score) best = { a, b, score: s.score };
+    }
+  }
+  return best;
+}
+
+export function shareLine(day: number, score: number, par: number): string {
+  const filled = Math.max(0, Math.min(5, Math.round((score / Math.max(1, par)) * 5)));
+  return `Hex & Harbor Daily Island #${day}\n${score}/${par} ${'⬢'.repeat(filled)}${'⬡'.repeat(5 - filled)}\n${CATAN_ORIGIN}/daily`;
+}
+
+export function icsEscape(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+}
+
+// ── The Table Clock (v3) ───────────────────────────────────────────────────
+//
+// A finished game, logged from the Table Clock: who played, final points,
+// who held the road and the army, how long it ran, and the dice curve.
+
+export const PLAYER_COLORS = ['red', 'blue', 'white', 'orange', 'green', 'brown'] as const;
+export type PlayerColor = (typeof PLAYER_COLORS)[number];
+
+export interface GameInput {
+  table: string | null;
+  target: number;
+  players: Array<{ name: string; color: PlayerColor; vp: number }>;
+  winner: number;
+  road: number | null;
+  army: number | null;
+  turns: number;
+  minutes: number;
+  rolls: Record<string, number>;
+  seed: string | null;
+}
+
+export function validateGame(body: Record<string, unknown>): { ok: true; game: GameInput } | { ok: false; error: string } {
+  const raw = Array.isArray(body.players) ? body.players : [];
+  if (raw.length < 2 || raw.length > 6) return { ok: false, error: 'players must be a list of 2 to 6' };
+  const players = raw.map((p) => {
+    const o = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
+    return { name: cleanHandle(o.name), color: String(o.color) as PlayerColor, vp: Number(o.vp) };
+  });
+  for (const p of players) {
+    if (!p.name || /(https?:\/\/|www\.)/i.test(p.name)) return { ok: false, error: 'every player needs a name (32 characters, no links)' };
+    if (!PLAYER_COLORS.includes(p.color)) return { ok: false, error: `colors must be from: ${PLAYER_COLORS.join(', ')}` };
+    if (!Number.isInteger(p.vp) || p.vp < 0 || p.vp > 30) return { ok: false, error: 'vp must be a whole number 0-30' };
+  }
+  const target = Number(body.target ?? 10);
+  if (!Number.isInteger(target) || target < 5 || target > 30) return { ok: false, error: 'target must be 5-30' };
+  const idx = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v));
+  const winner = Number(body.winner);
+  const road = idx(body.road);
+  const army = idx(body.army);
+  for (const [k, v] of Object.entries({ winner, road, army })) {
+    if (v !== null && (!Number.isInteger(v) || v < 0 || v >= players.length)) return { ok: false, error: `${k} must be a player index` };
+  }
+  if (players[winner].vp < target) return { ok: false, error: 'the winner has not reached the target' };
+  const turns = Number(body.turns ?? 0);
+  const minutes = Number(body.minutes ?? 0);
+  if (!Number.isInteger(turns) || turns < 0 || turns > 2000) return { ok: false, error: 'turns out of range' };
+  if (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440) return { ok: false, error: 'minutes out of range' };
+  const rolls: Record<string, number> = {};
+  const rin = (body.rolls && typeof body.rolls === 'object' ? body.rolls : {}) as Record<string, unknown>;
+  for (let n = 2; n <= 12; n++) {
+    const c = Number(rin[n] ?? 0);
+    if (!Number.isInteger(c) || c < 0 || c > 2000) return { ok: false, error: 'rolls must be counts per total 2-12' };
+    rolls[n] = c;
+  }
+  const table = typeof body.table === 'string' && /^[a-z0-9]{4,16}$/.test(body.table) ? body.table : null;
+  const seed = typeof body.seed === 'string' && body.seed ? cleanSeed(body.seed) : null;
+  return { ok: true, game: { table, target, players, winner, road, army, turns, minutes: Math.round(minutes), rolls, seed } };
+}

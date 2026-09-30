@@ -75,6 +75,8 @@ const jsonLd = {
         <span>Hex &amp; Harbor</span>
       </a>
       <nav aria-label="Sections">
+        <a href="/catan/daily/">Daily</a>
+        <a href="/catan/clock/">Clock</a>
         <a href="#tables">Tables</a>
         <a href="#forge">Forge</a>
         <a href="#dice">Dice</a>
@@ -100,6 +102,21 @@ const jsonLd = {
       </div>
     </section>
 
+    <a class="hh-daily" href="/catan/daily/" aria-label="Play today's Daily Island">
+      <img src="/images/catan/daily.jpg" width="720" height="720" alt="" />
+      <span class="hh-daily__k" id="daily-k">The Daily Island</span>
+      <span class="hh-daily__t">Where do you settle today?</span>
+      <span class="hh-daily__m" id="daily-m">One island for everyone. Two settlements, one try, scored against par. Agents play too.</span>
+      <span class="hh-btn hh-btn--brick">Play today's island</span>
+    </a>
+    <a class="hh-daily hh-daily--clock" href="/catan/clock/" aria-label="Open the Table Clock">
+      <img src="/images/catan/clock.jpg" width="720" height="720" alt="" />
+      <span class="hh-daily__k">Game night · the Table Clock</span>
+      <span class="hh-daily__t">One phone in the middle of the table.</span>
+      <span class="hh-daily__m" id="clock-m">It keeps the points, the road and the army, a turn timer and fair dice, and writes a game card for the winner.</span>
+      <span class="hh-btn">Set the clock</span>
+    </a>
+
     <!-- ── Tables ───────────────────────────────────────────── -->
     <section class="hh-sec" id="tables" aria-labelledby="tables-h">
       <div class="hh-sec__head">
@@ -111,7 +128,7 @@ const jsonLd = {
       </div>
       <div class="hh-tablebar">
         <label class="hh-field hh-field--inline"><span>Near</span><input id="city-filter" type="search" placeholder="city, e.g. El Segundo" autocomplete="address-level2" /></label>
-        <span id="tables-count" class="hh-meta" aria-live="polite">Setting out the chairs…</span>
+        <span class="hh-meta"><span id="tables-count" aria-live="polite">Setting out the chairs…</span> · <a href="/api/catan/ics" id="tables-ics">subscribe (.ics)</a> · <a href="/catan/flyer/">print a club flyer</a></span>
       </div>
       <ol id="tables-list" class="hh-tables" aria-live="polite"></ol>
       <div id="tables-empty" class="hh-empty" hidden>
@@ -155,7 +172,7 @@ const jsonLd = {
             <defs>
               {board.hexes.map((h) => { const c = hexCenter(h.q, h.r); return <clipPath id={`hc${h.i}`}><polygon points={hexPts(c.x * S, c.y * S, S - 1)} /></clipPath>; })}
             </defs>
-            <g id="forge-g">
+            <g id="forge-g" data-board>
               {board.hexes.map((h) => {
                 const c = hexCenter(h.q, h.r); const x = c.x * S; const y = c.y * S; const R = RESOURCES[h.resource];
                 return (
@@ -293,6 +310,10 @@ Payment-Signature: &lt;base64 x402 v2&gt;
 
 {"{"}"title":"Friday bot league","players":4,"seed":"sheep-for-wheat"{"}"}</code></pre>
           <p class="hh-meta">Without a Payment-Signature you get a 402 quote. The fee splits 50/50 between the house and the network, like every PointCast town action. The receipt is countersigned. Watch any sealed table at <a href="/catan/seal/">/seal</a>.</p>
+          <h3>Lanterns · x402 · 0.01 USDC</h3>
+          <p>A game café, a club sponsor, or an agent working for either can pay one cent to light a lantern on a hosted table. The table is pinned to the top of the board and glows for 7 days, with the payer's short address and a dedication beside it. Lanterns stack.</p>
+          <pre><code>POST https://pointcast.xyz/api/agent/catan-lantern
+{"{"}"table":"&lt;id&gt;","note":"First night at the café"{"}"}</code></pre>
         </div>
         <div class="hh-card hh-card--dark">
           <h3>Free doors</h3>
@@ -318,10 +339,10 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
 </BlockLayout>
 
 <script>
-  import { forgeBoard, hexCenter, RESOURCES, TWO_D6_WAYS, cleanSeed } from '../../lib/catan';
+  import { forgeBoard, TWO_D6_WAYS, cleanSeed } from '../../lib/catan';
+  import { drawBoard } from '../../lib/catan-draw';
 
   const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector(s) as T | null;
-  const S = 56;
   const API = '/api/catan';
   const store = {
     get(k: string) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -330,59 +351,11 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
   // ── Forge ──────────────────────────────────────────────
-  const NS = 'http://www.w3.org/2000/svg';
-  const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-  const pts = (cx: number, cy: number, s: number) => Array.from({ length: 6 }, (_, k) => {
-    const a = (Math.PI / 180) * (60 * k - 30);
-    return `${(cx + s * Math.cos(a)).toFixed(1)},${(cy + s * Math.sin(a)).toFixed(1)}`;
-  }).join(' ');
-  const el = (tag: string, attrs: Record<string, string | number>, text?: string) => {
-    const n = document.createElementNS(NS, tag);
-    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
-    if (text) n.textContent = text;
-    return n;
-  };
-
-  function drawBoard(seed: string) {
+  function drawForge(seed: string) {
+    const svg = $<SVGSVGElement>('#forge-svg');
+    if (!svg) return;
     const b = forgeBoard(seed);
-    const g = $('#forge-g');
-    const defs = $('#forge-svg defs');
-    if (!g || !defs) return;
-    g.replaceChildren();
-    defs.replaceChildren();
-    // sea ring
-    for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) {
-      if (Math.abs(q + r) > 3 || Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) !== 3) continue;
-      const c = hexCenter(q, r);
-      g.append(el('polygon', { points: pts(c.x * S, c.y * S, S - 1), fill: '#1f5f6b', stroke: '#174a54', 'stroke-width': 2 }));
-    }
-    for (const h of b.hexes) {
-      const c = hexCenter(h.q, h.r); const x = c.x * S; const y = c.y * S; const R = RESOURCES[h.resource];
-      const cp = el('clipPath', { id: `hc${h.i}` }); cp.append(el('polygon', { points: pts(x, y, S - 1) })); defs.append(cp);
-      g.append(el('polygon', { points: pts(x, y, S - 1), fill: R.color }));
-      g.append(el('image', { href: R.art.replace('.jpg', '-tile.jpg'), x: x - S * 1.25, y: y - S * 1.25, width: S * 2.5, height: S * 2.5, 'clip-path': `url(#hc${h.i})`, preserveAspectRatio: 'xMidYMid slice' }));
-      g.append(el('polygon', { points: pts(x, y, S - 1), fill: 'none', stroke: '#f3e8d2', 'stroke-width': 2.5 }));
-      if (h.number !== null) {
-        const red = h.number === 6 || h.number === 8;
-        g.append(el('circle', { cx: x, cy: y, r: 18, fill: '#f6eedb', stroke: '#1f1a14', 'stroke-width': 1.5 }));
-        g.append(el('text', { x, y: y + 4, 'text-anchor': 'middle', class: red ? 'tok tok--red' : 'tok' }, String(h.number)));
-        const n = h.pips;
-        for (let k = 0; k < n; k++) g.append(el('circle', { cx: x + (k - (n - 1) / 2) * 4.2, cy: y + 11, r: 1.4, fill: red ? '#b5532f' : '#1f1a14' }));
-      } else {
-        // the robber, home on the desert
-        g.append(el('path', { d: `M${x - 9} ${y + 16} Q${x} ${y + 10} ${x + 9} ${y + 16} L${x + 6} ${y + 2} Q${x + 10} ${y - 8} ${x} ${y - 16} Q${x - 10} ${y - 8} ${x - 6} ${y + 2} Z`, fill: '#1f1a14' }));
-      }
-    }
-    for (const hb of b.harbors) {
-      const h = b.hexes[hb.hex]; const [dq, dr] = DIRS[hb.dir];
-      const a = hexCenter(h.q, h.r); const n = hexCenter(h.q + dq, h.r + dr);
-      const mx = ((a.x + n.x) / 2) * S; const my = ((a.y + n.y) / 2) * S;
-      const px = (a.x + (n.x - a.x) * 0.9) * S; const py = (a.y + (n.y - a.y) * 0.9) * S;
-      g.append(el('line', { x1: mx, y1: my, x2: px, y2: py, stroke: '#f3e8d2', 'stroke-width': 3, 'stroke-dasharray': '3 3' }));
-      const fill = hb.kind === 'any' ? '#f6eedb' : RESOURCES[hb.kind].color;
-      g.append(el('circle', { cx: px, cy: py, r: 17, fill, stroke: '#f3e8d2', 'stroke-width': 2 }));
-      g.append(el('text', { x: px, y: py + 4, 'text-anchor': 'middle', class: hb.kind === 'any' || hb.kind === 'wool' || hb.kind === 'grain' ? 'hb' : 'hb hb--lt' }, hb.ratio));
-    }
+    drawBoard(svg, b);
     for (const [k, v] of Object.entries(b.pipsByResource)) {
       const bar = document.querySelector<HTMLElement>(`[data-pip="${k}"]`); if (bar) bar.style.width = `${(v / 20) * 100}%`;
       const num = document.querySelector(`[data-pipn="${k}"]`); if (num) num.textContent = String(v);
@@ -397,9 +370,9 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
   const randomSeed = () => { const r = crypto.getRandomValues(new Uint32Array(3)); return `${WORDS[r[0] % 16]}-${WORDS[r[1] % 16]}-${(r[2] % 900) + 100}`; };
   const params = new URLSearchParams(location.search);
   let seed = cleanSeed(params.get('seed') || 'harbor');
-  drawBoard(seed);
-  $('#forge-new')?.addEventListener('click', () => { seed = randomSeed(); drawBoard(seed); history.replaceState(null, '', `?seed=${seed}#forge`); });
-  $('#seed-in')?.addEventListener('change', (e) => { seed = cleanSeed((e.target as HTMLInputElement).value); drawBoard(seed); history.replaceState(null, '', `?seed=${seed}#forge`); });
+  drawForge(seed);
+  $('#forge-new')?.addEventListener('click', () => { seed = randomSeed(); drawForge(seed); history.replaceState(null, '', `?seed=${seed}#forge`); });
+  $('#seed-in')?.addEventListener('change', (e) => { seed = cleanSeed((e.target as HTMLInputElement).value); drawForge(seed); history.replaceState(null, '', `?seed=${seed}#forge`); });
   $('#forge-copy')?.addEventListener('click', async (e) => {
     const url = `${location.origin}${location.pathname}?seed=${seed}#forge`;
     try { await navigator.clipboard.writeText(url); (e.target as HTMLElement).textContent = 'Copied'; } catch { prompt('Copy this link', url); }
@@ -444,7 +417,7 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
   });
 
   // ── Tables ─────────────────────────────────────────────
-  type Table = { id: string; title: string; city: string; venue: string; when: string; seats: number; edition: string; pace: string; host: string; note: string; link: string | null; seated: string[]; open: number };
+  type Table = { id: string; title: string; city: string; venue: string; when: string; seats: number; edition: string; pace: string; host: string; note: string; link: string | null; seated: string[]; open: number; lantern: { until: string; by: string; note: string; lit: number } | null };
   let tables: Table[] = [];
   const myKeys: Record<string, string> = (() => { try { return JSON.parse(store.get('hh:hostKeys') || '{}'); } catch { return {}; } })();
   const fmtWhen = (iso: string) => {
@@ -462,13 +435,15 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
     if (!list || !empty || !count) return;
     const f = ($<HTMLInputElement>('#city-filter')?.value || '').trim().toLowerCase();
     const shown = tables.filter((t) => !f || t.city.toLowerCase().includes(f));
+    const ics = document.getElementById('tables-ics') as HTMLAnchorElement | null; if (ics) ics.href = f ? `/api/catan/ics?city=${encodeURIComponent(f)}` : '/api/catan/ics';
     count.textContent = `${shown.length} table${shown.length === 1 ? '' : 's'}${f ? ` near “${f}”` : ' posted'}`;
     empty.hidden = shown.length > 0;
     const focus = params.get('table');
     list.innerHTML = shown.map((t) => {
       const w = fmtWhen(t.when);
       const seats = Array.from({ length: t.seats }, (_, i) => house(i < t.seated.length)).join('');
-      return `<li class="tcard${focus === t.id ? ' tcard--focus' : ''}" id="t-${esc(t.id)}">
+      return `<li class="tcard${focus === t.id ? ' tcard--focus' : ''}${t.lantern ? ' tcard--lit' : ''}" id="t-${esc(t.id)}">
+        ${t.lantern ? `<p class="tcard__lantern">🏮 Lantern lit by ${esc(t.lantern.by)}${t.lantern.lit > 1 ? ` · ×${t.lantern.lit}` : ''}${t.lantern.note ? ` · “${esc(t.lantern.note)}”` : ''}</p>` : ''}
         <div class="tcard__when"><b>${esc(w.day)}</b><span>${esc(w.date)}</span><small>${esc(w.time)}</small></div>
         <div class="tcard__body">
           <h3>${esc(t.title)}</h3>
@@ -481,6 +456,7 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
         <div class="tcard__seats">
           <div class="houses" aria-label="${t.seated.length} of ${t.seats} seats taken">${seats}</div>
           ${t.open > 0 ? `<form class="seatform" data-id="${esc(t.id)}"><input name="handle" maxlength="32" required placeholder="your handle" aria-label="Your handle" /><button class="hh-btn hh-btn--brick" type="submit">Take a seat</button></form>` : '<p class="full">Table full</p>'}
+          <p class="tcard__links"><a href="/api/catan/ics?id=${esc(t.id)}">Add to calendar</a> · <a href="/catan/flyer/?id=${esc(t.id)}">Print flyer</a></p>
           ${myKeys[t.id] ? `<button class="hh-btn hh-btn--ghost cancel" data-id="${esc(t.id)}" type="button">Cancel my table</button>` : ''}
         </div>
       </li>`;
@@ -541,6 +517,13 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
     } else { out.textContent = r.error || 'Could not post the table.'; out.className = 'hh-out err'; }
   });
   loadTables();
+
+  // ── Daily teaser ───────────────────────────────────────
+  fetch('/api/catan/daily').then((r) => r.json()).then((d) => {
+    if (!d?.ok) return;
+    const k = document.getElementById('daily-k'); if (k) k.textContent = `The Daily Island · №${d.day}`;
+    const m = document.getElementById('daily-m'); if (m) m.textContent = `Par ${d.par}. ${d.entries} played so far${d.perfect ? `, ${d.perfect} perfect` : ''}. People average ${d.averages.human ?? '–'}, agents ${d.averages.agent ?? '–'}.`;
+  }).catch(() => {});
 </script>
 
 <style>
@@ -584,6 +567,20 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
     .hh-hero img { max-height: 46vh; }
   }
 
+  .hh-daily { display: grid; grid-template-columns: 96px 1fr auto; grid-template-rows: auto auto; gap: 2px 18px; align-items: center; max-width: 1144px; margin: 28px auto 0; padding: 14px 18px; border: 2px solid var(--ink); background: #fbf5e8; box-shadow: 5px 5px 0 var(--ink); color: var(--ink) !important; text-decoration: none; width: calc(100% - 32px); box-sizing: border-box; }
+  .hh-daily img { grid-row: 1 / span 3; width: 96px; height: 96px; object-fit: cover; border: 2px solid var(--ink); }
+  .hh-daily__k { font: 12px var(--mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--brick); }
+  .hh-daily__t { font: 700 26px/1.1 var(--serif); }
+  .hh-daily__m { font-size: 15px; color: var(--ink-2); }
+  .hh-daily .hh-btn { grid-column: 3; grid-row: 1 / span 3; }
+  .hh-daily:hover .hh-daily__t { color: var(--brick); }
+  @media (max-width: 700px) { .hh-daily { grid-template-columns: 72px 1fr; } .hh-daily img { width: 72px; height: 72px; } .hh-daily .hh-btn { grid-column: 1 / -1; grid-row: auto; text-align: center; } }
+  .hh-tables :global(.tcard--lit) { background: #fff4d6; box-shadow: 0 0 0 3px var(--wheat), 0 0 28px rgba(215, 163, 54, 0.55), 4px 4px 0 var(--ink); }
+  .hh-tables :global(.tcard__lantern) { grid-column: 1 / -1; margin: 0; font: 13px var(--mono); color: #7a4a10; }
+  .hh-daily--clock { margin-top: 14px; background: #1c2b2e; color: #f3e8d2 !important; }
+  .hh-daily--clock .hh-daily__m { color: #d8ccb2; }
+  .hh-daily--clock .hh-daily__k { color: var(--wheat); }
+  .hh-tables :global(.tcard__links) { font: 13px var(--mono); }
   .hh-sec { padding: clamp(40px, 7vw, 88px) clamp(16px, 4vw, 48px); border-bottom: 2px solid var(--ink); max-width: 1240px; margin: 0 auto; }
   .hh-sec--sea, .hh-sec--ink { max-width: none; }
   .hh-sec--sea { background: var(--paper-2); }

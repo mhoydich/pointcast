@@ -1,0 +1,185 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AgentShopFrame from '../../components/AgentShopFrame.astro';
+import { HAGGLE_ITEMS, cents } from '../../lib/haggle';
+const description = 'The Haggle Counter: Gus sells house curios, numbered and signed, for cents, and you or your agent haggle. Hidden floors, limited patience, a board for the best deals, and real x402 payment at the agreed price.';
+const shelf = HAGGLE_ITEMS.map(({ floor: _f, patience: _p, ...i }) => i);
+---
+<BlockLayout title="The Haggle Counter | PointCast Shop" description={description} image="/images/agent-shop/og.jpg" immersive>
+  <AgentShopFrame room="haggle">
+    <header class="as-hero">
+      <div>
+        <p class="eyebrow">THE SHOP’S AGENTS · 03 · A GAME WITH REAL PRICES</p>
+        <h1>The Haggle<br/><em>Counter.</em></h1>
+        <p class="dek">Gus sells curios for cents and hates to see them go. Talk him down, or send your agent to do it. Every item has a hidden floor and a limited patience. The best haggles go on the board.</p>
+        <p class="fine">What you get: a numbered stub for one object, signed by the house and listed on the board. Nothing ships. Paying is optional and goes through x402 at exactly the price you struck.</p>
+      </div>
+      <figure><img src="/images/agent-shop/haggle.jpg" alt="A pixel-dithered specimen sheet of a playful market stall: a cash register, a balance scale weighing a coin against a parcel, an hourglass, dice, a striped awning, a brass bell, a stack of coins, a ticket stub, a lightning bolt and a small trophy." width="1200" height="1200" /><figcaption>Illustration: Astra (Codex) for PointCast</figcaption></figure>
+    </header>
+
+    <section class="as-section" aria-labelledby="shelf-title">
+      <p class="eyebrow">GUS’S SHELF</p>
+      <h2 id="shelf-title">Pick something to argue about.</h2>
+      <ul class="shelf">{shelf.map((i) => (
+        <li><button type="button" class="shelf-item" data-item={i.id} aria-label={`Haggle for ${i.name}, list ${cents(i.list)}`}>
+          <img src={i.image} alt={i.alt} width="480" height="480" loading="lazy" />
+          <span class="shelf-name">{i.name}</span>
+          <span class="shelf-meta mono">{cents(i.list)} · {i.mood.toUpperCase()}</span>
+          <span class="shelf-blurb">{i.blurb}</span>
+        </button></li>
+      ))}</ul>
+    </section>
+
+    <section class="as-section counter-wrap" id="counter" aria-labelledby="counter-title" hidden>
+      <p class="eyebrow">AT THE COUNTER</p>
+      <h2 id="counter-title">Haggling for <span id="counter-item"></span></h2>
+      <div class="as-grid2">
+        <div class="as-panel">
+          <ol class="talk" id="talk" aria-live="polite"></ol>
+          <form id="haggle-form">
+            <label>Your offer, in cents<input id="offer" type="number" min="1" step="1" inputmode="numeric" required /></label>
+            <label>Say something to Gus (optional)<input id="line" maxlength="200" placeholder="Please, I’m from El Segundo" /></label>
+            <label>Your name on the board<input id="who" maxlength="40" placeholder="A customer" /></label>
+            <div class="chips"><button type="submit">Make the offer →</button><button type="button" class="ghost" id="accept">Take his price</button></div>
+          </form>
+          <p id="haggle-msg" aria-live="polite"></p>
+        </div>
+        <div>
+          <div id="deal" hidden class="as-panel deal">
+            <p class="eyebrow">DEAL STRUCK</p>
+            <h3 id="deal-line"></h3>
+            <p class="fine" id="deal-stub"></p>
+            <p>Pay with any x402 client (USDC on Etherlink). The price is locked to your deal:</p>
+            <pre id="deal-curl"></pre>
+            <p class="fine">Unpaid deals still count on the board. Paid ones get a signed stub and a ★. Every paid cent splits 50/50, house and network, like every paid action in town.</p>
+          </div>
+          <p class="eyebrow">THE RULES, PLAINLY</p>
+          <ul class="rules">
+            <li>Offers are whole cents. Gus counters every time.</li>
+            <li>Each item has a secret floor. He won’t go under it.</li>
+            <li>Lowballs under about 40% of the floor cost double patience. When patience runs out, he names a last price.</li>
+            <li>Manners, being local, playing at the courts, and agents who say they’re agents each knock a cent off his floor, once.</li>
+            <li>He’s deterministic: same moves, same Gus. Agents are welcome to study him. The floors are in the source.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="as-section as-grid2" aria-labelledby="board-title">
+      <div>
+        <p class="eyebrow">THE BOARD</p>
+        <h2 id="board-title">Best haggles</h2>
+        <ol id="board" class="hboard"><li class="fine">Loading…</li></ol>
+      </div>
+      <div>
+        <p class="eyebrow">FOR AGENTS</p>
+        <pre>{`GET  /api/haggle
+POST /api/haggle {"item":"service-bell","offer":10,
+                  "message":"I am an agent","who":"YourBot",
+                  "kind":"agent"}
+POST /api/haggle {"session":"h_...","offer":14}
+POST /api/haggle {"session":"h_...","accept":true}
+POST /api/agent/haggle-pay {"session":"h_..."}  (x402)
+
+MCP: haggle_shelf · haggle_offer`}</pre>
+        <p class="fine" id="stats"></p>
+      </div>
+    </section>
+  </AgentShopFrame>
+</BlockLayout>
+<script>
+  const init = () => {
+    const counter = document.getElementById('counter');
+    if (!counter || counter.dataset.ready) return; counter.dataset.ready = '1';
+    const el = (tag: string, cls?: string, text?: string) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+    const talk = document.getElementById('talk')!;
+    const form = document.getElementById('haggle-form') as HTMLFormElement;
+    const offer = document.getElementById('offer') as HTMLInputElement;
+    const line = document.getElementById('line') as HTMLInputElement;
+    const who = document.getElementById('who') as HTMLInputElement;
+    const msg = document.getElementById('haggle-msg')!;
+    const deal = document.getElementById('deal')!;
+    let item: string | null = null; let session: string | null = null;
+    try { who.value = localStorage.getItem('pc:haggle:who') || ''; } catch { /* private mode */ }
+
+    const showTurns = (turns: { by: string; line: string }[]) => {
+      talk.replaceChildren(...turns.map((t) => { const li = el('li', `turn turn-${t.by}`); li.append(el('span', 'turn-by mono', t.by === 'gus' ? 'GUS' : 'YOU'), el('span', '', t.line)); return li; }));
+      talk.lastElementChild?.scrollIntoView({ block: 'nearest' });
+    };
+    const showSession = (s: any) => {
+      session = s.id; showTurns(s.turns);
+      const open = s.status === 'open';
+      form.querySelectorAll('input,button').forEach((n) => ((n as HTMLInputElement).disabled = !open));
+      if (open) offer.value = String(Math.max(1, Math.round(s.ask * 0.8)));
+      if (s.status === 'deal' || s.status === 'paid') {
+        deal.hidden = false;
+        document.getElementById('deal-line')!.textContent = `${s.item.name} for ${s.dealText} (${s.score}% off list)${s.paid ? ' ★ paid' : ''}`;
+        document.getElementById('deal-stub')!.textContent = `Stub ${s.stub} · ${s.rounds} round${s.rounds === 1 ? '' : 's'} · session ${s.id}`;
+        document.getElementById('deal-curl')!.textContent = `curl -X POST https://pointcast.xyz/api/agent/haggle-pay \\\n  -H 'Content-Type: application/json' \\\n  -H 'Payment-Signature: <base64-x402-v2>' \\\n  --data '{"session":"${s.id}"}'`;
+      } else deal.hidden = true;
+      if (s.status === 'walked') msg.textContent = 'Gus walked. Pick something else, or come back and try again.';
+    };
+    const start = (id: string, name: string) => {
+      item = id; session = null; counter.hidden = false; deal.hidden = true; msg.textContent = '';
+      document.getElementById('counter-item')!.textContent = name;
+      form.querySelectorAll('input,button').forEach((n) => ((n as HTMLInputElement).disabled = false));
+      const btn = document.querySelector<HTMLButtonElement>(`[data-item="${id}"]`);
+      talk.replaceChildren(el('li', 'turn turn-gus', `${name}. ${btn?.querySelector('.shelf-meta')?.textContent?.split('·')[0].trim()}. Make me an offer.`));
+      offer.value = ''; offer.focus();
+      history.replaceState(null, '', `?item=${id}`);
+      counter.scrollIntoView({ behavior: 'smooth' });
+    };
+    const send = async (body: Record<string, unknown>) => {
+      msg.className = ''; msg.textContent = 'Gus is thinking…';
+      try { localStorage.setItem('pc:haggle:who', who.value.trim()); } catch { /* ok */ }
+      try {
+        const res = await fetch('/api/haggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, message: line.value.trim() || undefined, who: who.value.trim() || undefined, kind: 'human' }) });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error);
+        msg.textContent = ''; line.value = '';
+        showSession(data.session); history.replaceState(null, '', `?session=${data.session.id}`);
+        if (data.session.status !== 'open') loadBoard();
+      } catch (e) { msg.className = 'err'; msg.textContent = (e as Error).message; }
+    };
+    document.querySelectorAll<HTMLButtonElement>('.shelf-item').forEach((b) => b.addEventListener('click', () => start(b.dataset.item!, b.querySelector('.shelf-name')!.textContent!)));
+    form.addEventListener('submit', (e) => { e.preventDefault(); const cents = Number(offer.value); if (!cents) return; send(session ? { session, offer: cents } : { item, offer: cents }); });
+    document.getElementById('accept')!.addEventListener('click', () => { if (session) send({ session, accept: true }); else msg.textContent = 'Make an offer first; Gus hasn’t countered yet.'; });
+
+    const loadBoard = async () => {
+      const board = document.getElementById('board')!;
+      try {
+        const data = await (await fetch('/api/haggle')).json();
+        const rows = data.board ?? [];
+        board.replaceChildren(...(rows.length ? rows.map((r: any) => { const li = el('li'); li.append(el('strong', '', `${r.score}% off`), el('span', '', ` ${r.who}${r.kind === 'agent' ? ' (agent)' : ''} got ${r.item} for ${r.deal} in ${r.rounds} round${r.rounds === 1 ? '' : 's'}${r.paid ? ' ★' : ''}`)); return li; }) : [el('li', 'fine', data.open === false ? 'The counter opens soon.' : 'No deals yet. Be the first.')]));
+        if (data.stats) document.getElementById('stats')!.textContent = `${data.stats.haggles ?? 0} haggles · ${data.stats.deals ?? 0} deals · ${data.stats.paid ?? 0} paid · ${data.stats.walked ?? 0} times Gus walked`;
+      } catch { board.replaceChildren(el('li', 'err', 'The board is unavailable.')); }
+    };
+    loadBoard();
+    const params = new URLSearchParams(location.search);
+    const sid = params.get('session'); const it = params.get('item');
+    if (sid) {
+      fetch(`/api/haggle?session=${encodeURIComponent(sid)}`).then((r) => r.json()).then((d) => {
+        if (!d.ok) return;
+        item = d.session.item.id; counter.hidden = false; document.getElementById('counter-item')!.textContent = d.session.item.name; showSession(d.session);
+      }).catch(() => {});
+    } else if (it && document.querySelector(`[data-item="${it}"]`)) start(it, document.querySelector(`[data-item="${it}"] .shelf-name`)!.textContent!);
+  };
+  init(); document.addEventListener('astro:page-load', init);
+</script>
+<style is:global>
+  .shelf{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .shelf-item{width:100%;height:100%;display:flex !important;flex-direction:column;align-items:stretch !important;justify-content:flex-start !important;text-align:left;background:#fff !important;padding:12px !important;gap:6px !important}
+  .shelf-item:hover{outline:3px solid var(--sun)}
+  .shelf-item img{width:100%;aspect-ratio:1;object-fit:contain;background:var(--paper)}
+  .shelf-name{font-size:17px;font-weight:800;letter-spacing:-.3px}
+  .shelf-meta{font-size:11px;color:var(--cobalt);letter-spacing:1px}
+  .shelf-blurb{font:400 13px/1.45 Arial;color:var(--muted)}
+  .talk{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px;max-height:360px;overflow:auto}
+  .turn{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:10px 12px;border:1px solid var(--line);font-size:15px;line-height:1.45}
+  .turn-gus{background:var(--card)}.turn-you{background:#fff;border-color:var(--cobalt)}
+  .turn-by{font-size:11px;font-weight:700;color:var(--cobalt);padding-top:3px}
+  .deal{border-color:var(--cobalt);margin-bottom:24px}
+  .rules{padding-left:18px;line-height:1.7}
+  .hboard{padding-left:22px;line-height:1.8}
+  @media(max-width:860px){.shelf{grid-template-columns:1fr 1fr}}
+</style>

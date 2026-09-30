@@ -163,6 +163,14 @@ export const COLLECTION_SOURCES: readonly CollectionSource[] = [
     empty: 'No journey prints yet.',
     color: '#6d8a55',
   },
+  {
+    id: 'rocks',
+    label: 'Pocket Rocks',
+    key: 'pc:pocket-rocks:cabinet:v1',
+    href: '/rocks#cabinet',
+    empty: 'No digital rocks collected yet.',
+    color: '#7f8765',
+  },
 ] as const;
 
 export const FEATURED_COLLECTIBLE_IMAGES: readonly CollectionArtwork[] = [

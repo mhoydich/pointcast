@@ -1,0 +1,99 @@
+---
+/**
+ * /catan/flyer — a printable Letter/A4 flyer for a hosted table, for the
+ * game-café corkboard. ?id= prints that table; no id prints a general
+ * "start a Catan night" flyer. The QR code is drawn locally (qrcode).
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+---
+<BlockLayout title="Print a flyer — Hex & Harbor | PointCast" description="A printable flyer for a Catan table, with the woodblock art and a QR code to take a seat." image="/images/catan/og.jpg" immersive noindex>
+  <div class="fl-wrap">
+    <p class="fl-tools">
+      <a href="/catan/#tables">← back to the tables</a>
+      <button type="button" id="fl-print">Print this flyer</button>
+    </p>
+    <article class="fl" id="fl">
+      <header>
+        <p class="fl-k">Catan night · all welcome</p>
+        <h1 id="fl-title">Play Catan with us.</h1>
+      </header>
+      <img class="fl-art" src="/images/catan/table.jpg" width="1200" height="675" alt="" />
+      <div class="fl-when">
+        <p class="fl-date" id="fl-date">Find a table near you</p>
+        <p class="fl-where" id="fl-where">or host your own. It takes a minute and needs no account.</p>
+      </div>
+      <div class="fl-foot">
+        <div>
+          <p class="fl-seats" id="fl-seats">Bring a friend. Learn in one game.</p>
+          <p class="fl-note" id="fl-note"></p>
+          <p class="fl-url" id="fl-url">catan.pointcast.xyz</p>
+        </div>
+        <div class="fl-qr" id="fl-qr" aria-label="QR code"></div>
+      </div>
+      <p class="fl-fine">Hex &amp; Harbor, an unofficial Catan fan club from PointCast. CATAN is a trademark of CATAN GmbH, and this club has no affiliation with it.</p>
+    </article>
+  </div>
+</BlockLayout>
+
+<script>
+  import QRCode from 'qrcode';
+  const $ = (id: string) => document.getElementById(id)!;
+  const id = new URLSearchParams(location.search).get('id');
+  let target = 'https://catan.pointcast.xyz/';
+
+  async function paintQr(url: string) {
+    $('fl-qr').innerHTML = await QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#1f1a14', light: '#00000000' } });
+  }
+
+  async function load() {
+    if (id) {
+      const r = await fetch(`/api/catan/tables?id=${encodeURIComponent(id)}`).then((x) => x.json()).catch(() => null);
+      const t = r?.table;
+      if (t) {
+        const d = new Date(t.when);
+        target = `https://catan.pointcast.xyz/?table=${t.id}#tables`;
+        $('fl-title').textContent = t.title;
+        $('fl-date').textContent = `${d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} · ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+        $('fl-where').textContent = `${t.venue}, ${t.city}`;
+        $('fl-seats').textContent = t.open > 0 ? `${t.open} of ${t.seats} seats open · ${t.edition} · ${t.pace}` : `Table full · ${t.edition}. Scan to find another.`;
+        $('fl-note').textContent = t.note || `Hosted by ${t.host}.`;
+        $('fl-url').textContent = `catan.pointcast.xyz/?table=${t.id}`;
+        document.title = `Flyer: ${t.title} — Hex & Harbor`;
+      }
+    }
+    await paintQr(target);
+  }
+  $('fl-print').addEventListener('click', () => window.print());
+  load();
+</script>
+
+<style>
+  .fl-wrap { background: #ebdcc0; min-height: 100vh; padding: 20px 16px 48px; font-family: 'Iowan Old Style', Palatino, Georgia, serif; color: #1f1a14; }
+  .fl-tools { max-width: 8.5in; margin: 0 auto 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font: 14px ui-monospace, Menlo, monospace; }
+  .fl-tools a { color: #1f5f6b; }
+  .fl-tools button { font: 600 14px ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 14px; border: 2px solid #1f1a14; background: #b5532f; color: #fff7ea; cursor: pointer; box-shadow: 3px 3px 0 #1f1a14; }
+  .fl { max-width: 8.5in; margin: 0 auto; background: #f3e8d2; border: 3px solid #1f1a14; padding: 0.45in; box-shadow: 8px 8px 0 #1f1a14; display: grid; gap: 0.2in; }
+  .fl-k { font: 700 14px ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.14em; color: #b5532f; margin: 0; }
+  .fl h1 { font-size: clamp(34px, 7vw, 60px); line-height: 1; margin: 6px 0 0; overflow-wrap: anywhere; }
+  .fl-art { width: 100%; height: auto; border: 2px solid #1f1a14; display: block; }
+  .fl-date { font: 700 clamp(22px, 4vw, 34px)/1.1 Georgia, serif; margin: 0; }
+  .fl-where { font-size: clamp(18px, 3vw, 24px); margin: 4px 0 0; }
+  .fl-foot { display: grid; grid-template-columns: 1fr 1.6in; gap: 0.25in; align-items: end; border-top: 2px dashed #1f1a14; padding-top: 0.2in; }
+  .fl-seats { font: 700 18px ui-monospace, monospace; margin: 0 0 6px; }
+  .fl-note { font-style: italic; margin: 0 0 8px; }
+  .fl-url { font: 700 16px ui-monospace, monospace; color: #1f5f6b; margin: 0; overflow-wrap: anywhere; }
+  .fl-qr { width: 1.6in; height: 1.6in; }
+  .fl-qr :global(svg) { width: 100%; height: 100%; display: block; }
+  .fl-fine { font: 11px ui-monospace, monospace; color: #4a3f33; margin: 0; }
+  @media (max-width: 560px) { .fl { padding: 20px; } .fl-foot { grid-template-columns: 1fr 110px; } .fl-qr { width: 110px; height: 110px; } }
+  @media print {
+    @page { size: letter; margin: 0.4in; }
+    .fl-wrap { background: none; padding: 0; min-height: 0; }
+    .fl-tools { display: none; }
+    .fl { box-shadow: none; max-width: none; }
+    :global(body) { background: #fff !important; }
+    :global(body *) { visibility: hidden !important; }
+    .fl, .fl :global(*) { visibility: visible !important; }
+    .fl { position: absolute; left: 0; top: 0; width: 100%; border-width: 2px; }
+  }
+</style>

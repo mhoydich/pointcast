@@ -5,18 +5,22 @@ import test from 'node:test';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('Shortwave is the front door above the fold, ahead of the drop deck', async () => {
-  const [home, hero, welcome] = await Promise.all([
+test('recent features lead, with Shortwave ahead of the drop deck and one page headline', async () => {
+  const [home, hero, welcome, latest] = await Promise.all([
     read('src/pages/index.astro'),
     read('src/components/HomeShortwaveHero.astro'),
     read('src/components/HomeWelcome.astro'),
+    read('src/components/HomeLatestShelf.astro'),
   ]);
   assert.match(home, /import HomeShortwaveHero/);
   const masthead = home.indexOf('</header>');
-  const heroAt = home.indexOf('<HomeShortwaveHero />');
-  assert.ok(masthead > 0 && heroAt > masthead, 'hero sits right under the masthead');
+  const latestAt = home.indexOf('<HomeLatestShelf items={homepageHighlights} />');
+  const heroAt = home.indexOf('<HomeShortwaveHero demote />');
+  assert.ok(masthead > 0 && latestAt > masthead && heroAt > latestAt, 'recent features lead, then the live receiver');
   assert.ok(heroAt < home.indexOf('<HomeV2SignalDeck'), 'hero comes before the drop deck');
-  assert.equal((hero.match(/<h1\b/g) ?? []).length, 1);
+  assert.equal((latest.match(/<h1\b/g) ?? []).length, 1);
+  assert.match(hero, /const Heading = demote \? 'h2' : 'h1'/);
+  assert.doesNotMatch(home, /<HomeShopShelf hero/, 'the shop is a shelf beneath the lead');
   assert.doesNotMatch(welcome, /HomeShortwaveLive/, 'one receiver on the page, not two');
 });
 

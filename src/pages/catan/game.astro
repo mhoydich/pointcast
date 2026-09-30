@@ -1,0 +1,79 @@
+---
+/**
+ * /catan/game — a logged game card (from the Table Clock). ?id= shows one
+ * game; without it, the club's recent games and winners.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+---
+<BlockLayout title="Game cards — Hex & Harbor | PointCast" description="Catan games logged from the Hex & Harbor Table Clock: who won, the road and the army, how long it ran, and the dice." image="/images/catan/og-clock.jpg" immersive>
+  <div class="gc">
+    <p class="k"><a href="/catan/">← Hex &amp; Harbor</a> · <a href="/catan/clock/">the Table Clock</a></p>
+    <div id="gc-body" aria-live="polite"><p class="m">Pulling the card from the box…</p></div>
+  </div>
+</BlockLayout>
+
+<script>
+  import { TWO_D6_WAYS } from '../../lib/catan';
+  const SW: Record<string, string> = { red: '#c0392b', blue: '#2e5e9e', white: '#f4efe4', orange: '#e07b24', green: '#3f7a3a', brown: '#7a4a2a' };
+  const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  const body = document.getElementById('gc-body')!;
+  const id = new URLSearchParams(location.search).get('id');
+
+  function card(g: any) {
+    const order = g.players.map((p: any, k: number) => ({ ...p, k })).sort((a: any, b: any) => b.vp - a.vp);
+    const total = Object.values(g.rolls as Record<string, number>).reduce((a, b) => a + b, 0);
+    const scale = Math.max(1, ...Object.values(g.rolls as Record<string, number>), total * 6 / 36);
+    const curve = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `<div class="c"><span class="bar" style="height:${((g.rolls[n] || 0) / scale) * 100}%"></span><span class="exp" style="bottom:${total ? ((total * TWO_D6_WAYS[n] / 36) / scale) * 100 : 0}%"></span><b>${n}</b></div>`).join('');
+    const w = g.players[g.winner];
+    return `<article class="card" style="--pc:${SW[w.color]}">
+      <img src="/images/catan/clock.jpg" width="720" height="720" alt="" />
+      <p class="k">Game card · ${esc(new Date(g.t).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }))}</p>
+      <h1>${esc(w.name)} wins</h1>
+      <p class="line">${w.vp} points, first to ${g.target} · ${g.turns} round${g.turns === 1 ? '' : 's'} · ${g.minutes} minute${g.minutes === 1 ? '' : 's'}${total ? ` · ${total} rolls, ${g.rolls[7] || 0} sevens` : ''}</p>
+      <ol class="final">${order.map((p: any) => `<li style="--pc:${SW[p.color]}"><span class="dot"></span>${esc(p.name)}${g.road === p.k ? ' <small>longest road</small>' : ''}${g.army === p.k ? ' <small>largest army</small>' : ''}<b>${p.vp}</b></li>`).join('')}</ol>
+      ${total ? `<div class="curve" aria-label="Dice this game">${curve}</div>` : ''}
+      <p class="m">${g.table ? `Played at table <a href="/catan/?table=${esc(g.table)}#tables">${esc(g.table)}</a>. ` : ''}${g.seed ? `Board: <a href="/catan/?seed=${esc(g.seed)}#forge">${esc(g.seed)}</a>. ` : ''}<button type="button" id="copy">Copy link</button></p>
+    </article>`;
+  }
+
+  async function run() {
+    if (id) {
+      const r = await fetch(`/api/catan/games?id=${encodeURIComponent(id)}`).then((x) => x.json()).catch(() => null);
+      if (!r?.ok) { body.innerHTML = '<p class="m">No game card by that id.</p>'; return; }
+      body.innerHTML = card(r.game);
+      document.title = `${r.game.players[r.game.winner].name} wins — Hex & Harbor game card`;
+      document.getElementById('copy')?.addEventListener('click', async (e) => { try { await navigator.clipboard.writeText(location.href); (e.target as HTMLElement).textContent = 'Copied'; } catch { prompt('Copy', location.href); } });
+      return;
+    }
+    const r = await fetch('/api/catan/games').then((x) => x.json()).catch(() => null);
+    const games = r?.games ?? [];
+    body.innerHTML = `<h1>Game cards</h1>
+      <p>Games logged from the <a href="/catan/clock/">Table Clock</a> at Hex &amp; Harbor tables.${r?.tallies?.medianMinutes ? ` A typical game runs ${r.tallies.medianMinutes} minutes.` : ''}</p>
+      ${r?.tallies?.winners?.length ? `<h2>Most wins</h2><ol class="final">${r.tallies.winners.map((w: any) => `<li>${esc(w.name)}<b>${w.wins}</b></li>`).join('')}</ol>` : ''}
+      <h2>Recent games</h2>
+      ${games.length ? `<ul class="list">${games.map((g: any) => `<li><a href="?id=${esc(g.id)}">${esc(g.players[g.winner].name)} wins</a> <span class="m">${g.players.length} players · ${g.minutes} min · ${esc(g.t.slice(0, 10))}</span></li>`).join('')}</ul>` : '<p class="m">No games logged yet. Set the clock at your next game night.</p>'}`;
+  }
+  run();
+</script>
+
+<style>
+  .gc { --ink: #1f1a14; --paper: #f3e8d2; --brick: #b5532f; --sea: #1f5f6b; background: var(--paper); color: var(--ink); min-height: 100vh; padding: 24px clamp(16px, 4vw, 48px) 64px; font: 18px/1.55 'Iowan Old Style', Palatino, Georgia, serif; }
+  .gc > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+  .gc a { color: var(--sea); }
+  .k, .m { font: 13px/1.5 ui-monospace, Menlo, monospace; color: #4a3f33; }
+  .gc :global(h1) { font-size: clamp(34px, 6vw, 54px); line-height: 1; margin: 6px 0; }
+  .gc :global(.card) { border: 3px solid var(--ink); border-top: 14px solid var(--pc); background: #fbf5e8; padding: 22px; box-shadow: 8px 8px 0 var(--ink); position: relative; }
+  .gc :global(.card img) { float: right; width: 120px; height: 120px; margin: 0 0 10px 16px; border: 2px solid var(--ink); }
+  .gc :global(.line) { font: 14px ui-monospace, monospace; }
+  .gc :global(.final) { padding-left: 22px; clear: both; }
+  .gc :global(.final li) { display: flex; align-items: center; gap: 8px; border-bottom: 1px dotted #b8a888; padding: 5px 0; }
+  .gc :global(.final li b) { margin-left: auto; font-size: 22px; }
+  .gc :global(.final small) { font: 11px ui-monospace, monospace; text-transform: uppercase; color: var(--brick); }
+  .gc :global(.dot) { width: 14px; height: 14px; border-radius: 50%; background: var(--pc); border: 1.5px solid var(--ink); display: inline-block; }
+  .gc :global(.curve) { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; height: 90px; border-bottom: 2px solid var(--ink); margin: 16px 0 30px; }
+  .gc :global(.c) { position: relative; display: flex; align-items: flex-end; }
+  .gc :global(.c .bar) { width: 100%; background: var(--sea); border: 1.5px solid var(--ink); border-bottom: 0; }
+  .gc :global(.c .exp) { position: absolute; left: -2px; right: -2px; border-top: 2px dashed var(--brick); }
+  .gc :global(.c b) { position: absolute; bottom: -22px; width: 100%; text-align: center; font: 700 12px ui-monospace, monospace; }
+  .gc :global(#copy) { font: 12px ui-monospace, monospace; border: 1.5px solid var(--ink); background: transparent; padding: 4px 8px; cursor: pointer; }
+</style>

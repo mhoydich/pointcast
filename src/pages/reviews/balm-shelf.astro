@@ -1,0 +1,476 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import review from '../../data/balm-shelf.json';
+const description = 'Tiger Balm and the balm shelf: sixteen rubs, patches, liniments and gels, from Tiger Balm, Vicks and Bengay to Voltaren, lidocaine and capsaicin. Drug Facts percentages, dated prices, what the evidence says, safety notes, the history of Tiger Balm and Haw Par Villa, and where the category could go. Not medical advice; no commission links.';
+const money = (n: number | null) => n === null ? 'No verified price' : `$${n.toFixed(2)}`;
+const groups = review.groups;
+const groupLabel = Object.fromEntries(groups.map((g) => [g.id, g.label]));
+const picks = review.picks;
+const webp = (src: string) => src.replace(/\.jpg$/, '.webp');
+const priced = picks.filter((p) => p.price !== null).map((p) => p.price as number);
+const low = Math.min(...priced);
+const high = Math.max(...priced);
+// Active-ingredient bars: percent of product on a 0–40% scale (White Flower's 40% methyl salicylate is the top of this shelf).
+const pctBar = (v: number | null | undefined) => (v === null || v === undefined) ? null : Math.max(0.03, Math.min(1, v / 40));
+const tempLabel: Record<string, string> = { cool: 'Cooling', warm: 'Warming', mixed: 'Cool + warm', none: 'Neither' };
+const activeText = (a: { name: string; pct: number | null; mg?: number }) => a.pct !== null ? `${a.name} ${a.pct}%` : (a.mg ? `${a.name} ${a.mg} mg/patch` : a.name);
+const jsonLd = {'@context':'https://schema.org','@type':'Article',headline:review.title,description,datePublished:review.asOf,author:{'@type':'Organization',name:'cc — PointCast Review Lab'},publisher:{'@type':'Organization',name:'PointCast'},image:'https://pointcast.xyz/images/balm-shelf/og.jpg',mainEntityOfPage:'https://pointcast.xyz/reviews/balm-shelf'};
+const modes = [
+  { id: 'menthol', label: 'Menthol', caption: 'Menthol switches on TRPM8, the cold sensor. The nerve reports “cold” though nothing got colder, and that signal competes with the ache.' },
+  { id: 'capsaicin', label: 'Capsaicin', caption: 'Capsaicin switches on TRPV1, the heat-and-pain sensor. It burns first; with repeated use the nerve ending runs low on the chemical it signals pain with.' },
+  { id: 'lidocaine', label: 'Lidocaine', caption: 'Lidocaine doesn’t trigger a sensor. It blocks the nerve ending from firing at all, so the area goes numb. It does nothing for inflammation.' },
+  { id: 'diclofenac', label: 'Diclofenac', caption: 'Diclofenac passes through the skin into the tissue below and dampens inflammation there, the way ibuprofen does from the inside. No tingle, no chill.' },
+];
+---
+<BlockLayout title={`${review.title} | PointCast`} description={description} image="/images/balm-shelf/og.jpg" jsonLd={jsonLd} immersive>
+  <div class="balm-review" data-feel="all">
+    <nav class="mast" aria-label="PointCast"><a href="/">POINTCAST<span> / THE BALM SHELF</span></a><a href="/reviews">All reviews ↗</a><a href="/shop">Shop ↗</a></nav>
+    <main>
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">REVIEW LAB · CATEGORY GUIDE · {picks.length} ON THE SHELF</p>
+          <h1>The balm<br/><em>shelf.</em></h1>
+          <p class="dek">{review.dek}</p>
+          <p class="byline">By <strong>cc</strong>, PointCast Review Lab<br/><time datetime={review.asOf}>September 29, 2026</time> · 12 minute read</p>
+          <p class="not-advice"><strong>Not medical advice.</strong> A guide to labels and published evidence. Ask a pharmacist or doctor about your own pain.</p>
+          <a class="jump" href="#shelf">See the shelf ↓</a>
+        </div>
+        <figure class="hero-image">
+          <span class="stamp">LABELS<br/>READ.<br/>NOTHING<br/>RUBBED ON ↘</span>
+          <span class="hero-art"><picture><source srcset={review.heroWebp} type="image/webp"/><img src={review.hero} alt={review.heroAlt} width="1200" height="1200" fetchpriority="high"/></picture><span class="shimmer" aria-hidden="true"></span></span>
+          <figcaption>{review.heroCredit}</figcaption>
+        </figure>
+      </header>
+
+      <section class="intro">
+        <p>Most of the balm shelf sells a feeling: cold, heat, or both at once. Only a little of it sells a drug with strong evidence behind it.</p>
+        <div>
+          <p>Sixteen products from {money(low)} to {money(high)}, sorted by kind. We copied every active ingredient from the Drug Facts label filed with the National Library of Medicine, checked prices on September 29, and read the Cochrane reviews, guidelines and FDA warnings so the evidence ratings below mean something. Tiger Balm, Bengay, Icy Hot, Salonpas and White Flower are mostly the same three chemicals in different proportions. Voltaren, lidocaine and capsaicin are different kinds of product altogether.</p>
+          <p class="fine">{review.method}</p>
+        </div>
+      </section>
+      <aside class="disclosure"><strong>Read this first</strong><p>{review.disclosure}</p></aside>
+
+      <section id="tin" class="tin" aria-labelledby="tin-title">
+        <div class="section-heading"><p class="eyebrow">WHAT’S IN THE TIN</p><h2 id="tin-title">Cold, heat,<br/>numb, or a drug.</h2></div>
+        <div class="dial" role="group" aria-labelledby="dial-label">
+          <label id="dial-label" for="feel-dial" class="mono">SLIDE: COOL ↔ HOT</label>
+          <div class="dial-track">
+            <span class="dial-end cool" aria-hidden="true">❄</span>
+            <input id="feel-dial" type="range" min="0" max="100" value="50" step="1" aria-describedby="dial-readout"/>
+            <span class="dial-end warm" aria-hidden="true">✹</span>
+          </div>
+          <p id="dial-readout" class="fine" aria-live="polite">Showing everything. Slide left for cooling agents, right for warming ones.</p>
+        </div>
+        <ol class="ingredients">{review.ingredients.map((ing) => (
+          <li class="ing reveal" data-temp={ing.temp}>
+            <span class="ing-dot" aria-hidden="true"></span>
+            <p class="mono">{ing.class} · {tempLabel[ing.temp]}</p>
+            <h3>{ing.name}</h3>
+            <p>{ing.how}</p>
+            <dl>
+              <div><dt>From</dt><dd>{ing.from}</dd></div>
+              <div><dt>Strength</dt><dd>{ing.range}</dd></div>
+              <div><dt>Found in</dt><dd>{ing.found}</dd></div>
+            </dl>
+            <a class="src" href={ing.source} rel="noopener noreferrer">{ing.sourceLabel} ↗</a>
+          </li>
+        ))}</ol>
+
+        <figure class="how" aria-labelledby="how-caption">
+          <div class="how-toggle" role="group" aria-label="Choose an ingredient">
+            {modes.map((m, i) => <button type="button" data-mode={m.id} data-caption={m.caption} aria-pressed={i === 0 ? 'true' : 'false'}>{m.label}</button>)}
+          </div>
+          <svg viewBox="0 0 440 300" role="img" aria-labelledby="how-svg-title" class="how-svg" data-mode="menthol">
+            <title id="how-svg-title">Simplified cross-section of skin with a nerve ending that carries a cold sensor (TRPM8) and a heat sensor (TRPV1), showing where each ingredient acts</title>
+            <rect x="0" y="0" width="440" height="300" fill="#f4f4f0"/>
+            <text x="16" y="24" font-family="monospace" font-size="10" fill="#4a4a44" letter-spacing="1.2">ON THE SKIN</text>
+            <rect x="0" y="70" width="440" height="42" fill="#e3ddd2"/>
+            <rect x="0" y="112" width="440" height="110" fill="#ece6dc"/>
+            <rect x="0" y="222" width="440" height="78" fill="#e1dccf"/>
+            <line x1="0" y1="70" x2="440" y2="70" stroke="#111" stroke-width="2"/>
+            <text x="16" y="92" font-family="monospace" font-size="9" fill="#4a4a44" letter-spacing="1">OUTER SKIN</text>
+            <text x="16" y="134" font-family="monospace" font-size="9" fill="#4a4a44" letter-spacing="1">DEEPER SKIN · NERVE ENDINGS</text>
+            <text x="16" y="244" font-family="monospace" font-size="9" fill="#4a4a44" letter-spacing="1">MUSCLE · JOINT TISSUE</text>
+            <g class="inflame" aria-hidden="true">{[0,1,2,3,4,5,6].map((n) => <circle cx={250 + (n % 4) * 34} cy={258 + Math.floor(n / 4) * 18} r="5" fill="#c8321e"/>)}</g>
+            <path class="nerve" d="M150 135 C 150 175, 220 175, 230 150 M230 150 C 240 130, 300 128, 310 150 M190 168 C 170 205, 90 210, 60 292" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round"/>
+            <path class="signal" d="M190 168 C 170 205, 90 210, 60 292" fill="none" stroke-width="5" stroke-linecap="round" pathLength="100"/>
+            <text x="70" y="286" font-family="monospace" font-size="9" fill="#111" letter-spacing="1">TO THE BRAIN ↓</text>
+            <g class="rcpt cold"><circle cx="150" cy="135" r="11"/><text x="128" y="160" font-family="monospace" font-size="9" letter-spacing="1">TRPM8</text><text x="126" y="171" font-family="monospace" font-size="8" fill="#1f3fe0">COLD</text></g>
+            <g class="rcpt hot"><circle cx="310" cy="150" r="11"/><text x="290" y="175" font-family="monospace" font-size="9" letter-spacing="1">TRPV1</text><text x="292" y="186" font-family="monospace" font-size="8" fill="#e8751a">HEAT</text></g>
+            <g class="block" aria-hidden="true"><line x1="178" y1="172" x2="202" y2="196" stroke="#111" stroke-width="4"/><line x1="202" y1="172" x2="178" y2="196" stroke="#111" stroke-width="4"/></g>
+            <g class="mols" aria-hidden="true">{[0,1,2,3,4,5,6,7].map((n) => <circle class="mol" cx={120 + n * 28} cy={40 + (n % 2) * 12} r="6" style={`--d:${(n * 0.07).toFixed(2)}s`}/>)}</g>
+          </svg>
+          <figcaption id="how-caption" aria-live="polite">{modes[0].caption}</figcaption>
+          <p class="fine">A simplified diagram, not to scale. Camphor and methyl salicylate act as counterirritants in a similar competing-sensation way; their exact receptor story is less settled, so we don’t draw it.</p>
+        </figure>
+      </section>
+
+      <section id="shelf" aria-labelledby="shelf-title">
+        <div class="section-heading"><p class="eyebrow">SIX SHELVES</p><h2 id="shelf-title">What’s on<br/>the shelf.</h2></div>
+        <ol class="kinds" aria-label="Kinds of product">
+          {groups.map((g) => <li><span class="mono">{String(picks.filter((p) => p.group === g.id).length).padStart(2, '0')} ON SHELF</span><strong>{g.label}</strong><small>{g.need}</small></li>)}
+        </ol>
+        <div class="filters" aria-label="Filter by kind">
+          <button type="button" data-filter="all" aria-pressed="true">Everything</button>
+          {groups.map((g) => <button type="button" data-filter={g.id} aria-pressed="false">{g.label}</button>)}
+          <a href="#compare">The label test ↓</a>
+        </div>
+        <p id="filter-count" class="fine" aria-live="polite">Showing all {picks.length}.</p>
+        <div class="cards">{picks.map((p, i) => (
+          <article id={p.id} class="card reveal" data-group={p.group} data-feel={p.feel}>
+            <figure class="product-image"><a href={p.url} rel="noopener noreferrer" aria-label={`${p.name}: ${p.cta.replace(' →', '')}`}><picture><source srcset={webp(p.image)} type="image/webp"/><img src={p.image} alt={p.alt} loading="lazy" decoding="async" width="1200" height="750"/></picture><span class="lid" aria-hidden="true"></span></a><figcaption>{p.credit}</figcaption></figure>
+            <div class="card-copy">
+              <p class="eyebrow">{String(i + 1).padStart(2, '0')} / {groupLabel[p.group]} · {p.award}</p>
+              <h3>{p.name}</h3>
+              <span class={`feel-line feel-${p.feel}`} aria-hidden="true"></span>
+              <div class="spec"><strong class={p.price === null ? 'noprice' : ''}>{money(p.price)}{p.price !== null && '*'}</strong><span>{p.brand}</span></div>
+              <ul class="actives" aria-label="Active ingredients">{p.actives.map((a) => <li class={`t-${a.temp}`}>{activeText(a)}</li>)}</ul>
+              {p.activeNote && <p class="fine">{p.activeNote}</p>}
+              <p>{p.review}</p>
+              <dl class="facts">
+                <div><dt>Size</dt><dd>{p.size}</dd></div>
+                <div><dt>Form</dt><dd>{p.form}</dd></div>
+                <div><dt>Feel</dt><dd>{tempLabel[p.feel]}</dd></div>
+                <div><dt>Smell</dt><dd>{p.smell}</dd></div>
+                <div><dt>For</dt><dd>{p.for}</dd></div>
+                <div><dt>Evidence</dt><dd><span class="meter" style={`--s:${p.evidenceScore}`} aria-hidden="true"><i></i><i></i><i></i><i></i></span>{p.evidence}</dd></div>
+              </dl>
+              <p class="caveat"><strong>The catch.</strong> {p.caveat}</p>
+              <p class="verdict">{p.verdict}</p>
+              <a class="buy" href={p.url} rel="noopener noreferrer">{p.cta}</a>
+              <p class="fine">No commission · {p.price !== null ? '* ' : ''}{p.priceNote} · <a href={p.source} rel="noopener noreferrer">{p.sourceLabel} ↗</a></p>
+            </div>
+          </article>
+        ))}</div>
+      </section>
+
+      <section id="compare" class="comparison reveal">
+        <p class="eyebrow">THE LABEL TEST</p><h2>Sixteen boxes,<br/>side by side.</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label={`Comparison of all ${picks.length} products`}><table>
+          <caption>Actives from each Drug Facts label · prices September 29, 2026 · bars show percent of product on a 0–40% scale: <span class="key cool">cooling</span> <span class="key warm">warming</span> <span class="key none">neither</span></caption>
+          <thead><tr><th scope="col">Product</th><th scope="col">Price</th><th scope="col">Size</th><th scope="col">Actives</th><th scope="col">Form</th><th scope="col">Smell</th><th scope="col">Evidence</th></tr></thead>
+          <tbody>{picks.map((p) => (
+            <tr data-feel={p.feel}>
+              <th scope="row"><a href={`#${p.id}`} data-show-all>{p.name}</a><small>{groupLabel[p.group]}</small></th>
+              <td>{p.price === null ? '—' : money(p.price)}</td>
+              <td>{p.size}</td>
+              <td class="bar-cell">{p.actives.map((a) => { const w = pctBar(a.pct); return <div class="act"><span>{activeText(a)}</span>{w !== null ? <span class={`bar t-${a.temp}`} style={`--w:${w.toFixed(3)}`} aria-hidden="true"><i></i></span> : <span class="bar empty" aria-hidden="true"></span>}</div>; })}</td>
+              <td>{p.form}</td>
+              <td>{p.smell}</td>
+              <td><span class="meter" style={`--s:${p.evidenceScore}`} aria-hidden="true"><i></i><i></i><i></i><i></i></span>{p.evidence}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+        <p class="fine">Prices are Target.com for ZIP 90245 except White Flower (Weee!); “—” means we couldn’t verify a US price. Patches list actives in milligrams per patch, not percentages, so they get an empty bar. Evidence is our plain-language summary of the sources on each card: “Best supported” means Cochrane found a real if modest effect; “Limited” means little direct trial evidence beyond the label’s approved use; “Very low” and “Weak” mean the reviews we read found poor or no support; “Not established” means no approved use. The label is the truth; boxes change.</p>
+      </section>
+
+      <section id="uses" class="uses" aria-labelledby="uses-title">
+        <p class="eyebrow">WHAT IT’S ACTUALLY FOR</p>
+        <h2 id="uses-title">Six aches,<br/>honestly rated.</h2>
+        <ol class="use-grid">{review.uses.map((u) => (
+          <li class="use reveal">
+            <span class="meter big" style={`--s:${u.score}`} aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <p class="mono">{u.rating}</p>
+            <h3>{u.title}</h3>
+            <p>{u.text} <a href={u.source} rel="noopener noreferrer">{u.sourceLabel} ↗</a></p>
+          </li>
+        ))}</ol>
+      </section>
+
+      <section id="interesting" class="interesting" aria-labelledby="int-title">
+        <p class="eyebrow">WHAT’S INTERESTING</p>
+        <h2 id="int-title">A tiger, a villa,<br/>and a Nobel Prize.</h2>
+        <ol class="timeline">{review.interesting.map((x) => (
+          <li class="reveal"><span class="mono">{x.kicker}</span><h3>{x.title}</h3><p>{x.text} <a href={x.source} rel="noopener noreferrer">{x.sourceLabel} ↗</a></p></li>
+        ))}</ol>
+      </section>
+
+      <section id="next" class="next" aria-labelledby="next-title">
+        <p class="eyebrow">WHERE THE CATEGORY GOES NEXT</p>
+        <h2 id="next-title">Shipping now,<br/>coming, and our ideas.</h2>
+        <p class="fine next-key">Three labels, kept separate on purpose: <span class="kind k-now">On shelves now</span> <span class="kind k-real">Real, not a rub (yet)</span> <span class="kind k-idea">Our idea</span>. Anything marked “Our idea” is speculation; we haven’t seen it for sale.</p>
+        <ul class="future">{review.future.map((f) => (
+          <li class={`reveal ${f.kind === 'Our idea' ? 'idea' : f.kind.startsWith('On shelves') ? 'now' : 'real'}`}>
+            <span class="kind">{f.kind}</span>
+            <h3>{f.title}</h3>
+            <p>{f.text}{f.source && <> <a href={f.source} rel="noopener noreferrer">{f.sourceLabel} ↗</a></>}</p>
+          </li>
+        ))}</ul>
+      </section>
+
+      <section id="safety" class="safety" aria-labelledby="safety-title">
+        <p class="eyebrow">SAFETY</p>
+        <h2 id="safety-title">Read the box.<br/>Then read it again.</h2>
+        <ol class="safety-list">{review.safety.map((s) => <li><strong>{s.title}</strong><p>{s.text} <a href={s.source} rel="noopener noreferrer">{s.sourceLabel} ↗</a></p></li>)}</ol>
+        <p class="poison"><strong>Swallowed some?</strong> Call Poison Help, 1-800-222-1222 (US), or emergency services if someone is having trouble breathing or a seizure.</p>
+      </section>
+
+      <footer class="endnote">
+        <p class="eyebrow">THE DESK’S READ</p>
+        <h2>{review.endnoteTitle}</h2>
+        <p>{review.verdict}</p>
+        <p class="disclaimer">This page is not medical advice. It summarizes product labels and published research as of September 29, 2026. It can’t account for your health, your medicines or your pain. Ask a pharmacist or doctor, and follow the label.</p>
+        <details><summary>Sources, images & method</summary>
+          <p>{review.method} cc is PointCast’s Claude Code resident; nothing here claims firsthand use.</p>
+          <p>Product photographs are retailer packshots from Target’s listings (made by the brands), trimmed and centered on white. For three products whose packaging art shows a body or hand, we used the back or side Drug Facts panel instead, and for three more we used our own illustration. Zheng Gu Shui, White Flower and Arnicare images are the carton art each maker filed with its label on DailyMed. {review.heroCredit}. Brand names belong to their owners. This is an independent selection; no maker paid for or reviewed placement.</p>
+          <p>{review.disclosure}</p>
+          <ol class="source-list">{review.sources.map((s) => <li><a href={s.url} rel="noopener noreferrer">{s.label}</a></li>)}</ol>
+          <a href="/reviews/balm-shelf.json">Read the product, ingredient and source data as JSON ↗</a>
+        </details>
+        <a class="jump" href="/reviews">More PointCast reviews →</a>
+      </footer>
+    </main>
+  </div>
+</BlockLayout>
+<script>
+ const init = () => {
+  const root = document.querySelector<HTMLElement>('.balm-review'); if (!root || root.hasAttribute('data-ready')) return; root.setAttribute('data-ready', 'true');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce) root.classList.add('fx');
+
+  // Filters
+  const total = root.querySelectorAll('.card').length;
+  const filter = (value: string) => {
+    let count = 0;
+    root.querySelectorAll<HTMLElement>('.card').forEach((card) => { card.hidden = value !== 'all' && card.dataset.group !== value; if (!card.hidden) { count++; card.classList.add('is-in'); } });
+    root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === value)));
+    const output = root.querySelector('#filter-count'); if (output) output.textContent = value === 'all' ? `Showing all ${total}.` : `Showing ${count} of ${total}.`;
+  };
+  root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.addEventListener('click', () => filter(b.dataset.filter || 'all')));
+  root.querySelectorAll('[data-show-all]').forEach((a) => a.addEventListener('click', () => filter('all')));
+
+  // Scroll-in reveals (once)
+  const targets = root.querySelectorAll<HTMLElement>('.reveal');
+  if (reduce || !('IntersectionObserver' in window)) targets.forEach((t) => t.classList.add('is-in'));
+  else {
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -10% 0px', threshold: 0.1 });
+    targets.forEach((t) => io.observe(t));
+  }
+
+  // Cool ↔ hot dial: recolors the ingredient map and the label-test rows
+  const dial = root.querySelector<HTMLInputElement>('#feel-dial');
+  const readout = root.querySelector('#dial-readout');
+  const setFeel = () => {
+    if (!dial) return;
+    const v = Number(dial.value);
+    const feel = v <= 35 ? 'cool' : v >= 65 ? 'warm' : 'all';
+    root.dataset.feel = feel;
+    root.style.setProperty('--dial', String(v / 100));
+    if (readout) readout.textContent = feel === 'cool' ? 'Cooling agents: menthol (and eucalyptus in Vicks). Products that lean cool are highlighted in the label test.' : feel === 'warm' ? 'Warming agents: camphor, methyl salicylate and capsaicin. Products that lean warm are highlighted in the label test.' : 'Showing everything. Slide left for cooling agents, right for warming ones.';
+  };
+  dial?.addEventListener('input', setFeel);
+
+  // How-it-works diagram
+  const svg = root.querySelector<SVGSVGElement>('.how-svg');
+  const cap = root.querySelector('#how-caption');
+  root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+    root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    if (svg) { svg.classList.remove('run'); svg.dataset.mode = b.dataset.mode || 'menthol'; void svg.getBoundingClientRect(); svg.classList.add('run'); }
+    if (cap) cap.textContent = b.dataset.caption || '';
+  }));
+  const how = root.querySelector('.how');
+  if (svg && how) {
+    if (reduce || !('IntersectionObserver' in window)) svg.classList.add('run');
+    else { const io2 = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { svg.classList.add('run'); io2.disconnect(); } }), { threshold: 0.3 }); io2.observe(how); }
+  }
+ }; init(); document.addEventListener('astro:page-load', init);
+</script>
+<style>
+ :global(body){margin:0;background:#e9e9e4;color:#111}
+ .balm-review{--ink:#111;--paper:#e9e9e4;--cobalt:#1f3fe0;--sun:#f6d615;--tiger:#e8751a;--balm:#c8321e;--line:#b9b9b1;--muted:#4a4a44;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--paper);padding-bottom:60px;overflow-x:hidden}
+ .balm-review *{box-sizing:border-box}.balm-review a{color:inherit}
+ .mast{display:flex;gap:26px;align-items:center;padding:22px 5vw;border-bottom:1px solid var(--ink);font-size:12px;font-weight:800}.mast a{text-decoration:none}.mast a:first-child{margin-right:auto;font-size:19px;letter-spacing:-1px}.mast span{font-size:11px;letter-spacing:1px;margin-left:12px;color:var(--tiger)}
+ main{max-width:1440px;margin:auto}
+ .hero{display:grid;grid-template-columns:1fr 1.05fr;min-height:680px;border-bottom:1px solid var(--ink)}
+ .hero-copy{padding:65px 6vw 55px;min-width:0}
+ .eyebrow{font:700 11px/1.6 monospace;letter-spacing:1.7px;text-transform:uppercase;margin:0 0 22px}
+ .mono{font-family:monospace}
+ h1{font-size:clamp(68px,8.6vw,132px);line-height:.88;letter-spacing:-.07em;margin:30px 0}h1 em{font-family:Georgia,serif;font-weight:400;color:var(--cobalt)}
+ .dek{font-size:21px;line-height:1.4;max-width:36ch}.byline{font-size:13px;line-height:1.7;margin:25px 0 14px}
+ .not-advice{font-size:13px;line-height:1.55;max-width:44ch;border-left:4px solid var(--tiger);padding:4px 0 4px 12px;margin:0 0 10px}
+ .jump{display:inline-block;font-weight:700;font-size:13px;padding:15px 0;text-underline-offset:6px}
+ .hero-image{margin:0;position:relative;background:#fff;display:flex;flex-direction:column;justify-content:center;padding:40px 24px 30px;border-left:1px solid var(--ink);min-width:0}
+ .hero-art{position:relative;display:block;overflow:hidden}
+ .hero-art img{width:100%;height:auto;display:block}
+ .hero-image figcaption{font:10px monospace;letter-spacing:1px;margin-top:20px;text-align:center}
+ .stamp{position:absolute;top:22px;right:24px;z-index:2;border-radius:50%;background:var(--tiger);color:#111;border:2px solid var(--ink);width:116px;height:116px;display:grid;place-content:center;text-align:center;font:700 10px/1.45 monospace;transform:rotate(9deg)}
+ /* Shimmer: a warm band of light, like heat haze. Moves only when .fx (motion allowed). */
+ .shimmer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+ .shimmer::before{content:"";position:absolute;top:-20%;bottom:-20%;left:0;width:34%;background:linear-gradient(100deg,rgba(246,214,21,0) 0%,rgba(246,214,21,.22) 45%,rgba(255,255,255,.55) 50%,rgba(232,117,26,.18) 55%,rgba(246,214,21,0) 100%);transform:translateX(-160%) skewX(-18deg);opacity:0}
+ .fx .hero-art .shimmer::before{opacity:1;animation:sweep 7s ease-in-out 1.2s infinite}
+ @keyframes sweep{0%{transform:translateX(-160%) skewX(-18deg)}28%,100%{transform:translateX(420%) skewX(-18deg)}}
+ .intro{display:grid;grid-template-columns:1fr 1fr;gap:65px;padding:60px 6vw}.intro>p{font:30px/1.28 Georgia,serif;margin:0}.intro div>p{margin-top:0;line-height:1.65;font-size:16px}
+ .fine,.intro div>p.fine{font:12px/1.6 Arial,sans-serif;color:var(--muted)}
+ .disclosure{margin:0 6vw 70px;padding:20px 24px;border:1px solid var(--line);border-left:6px solid var(--tiger);background:#f4f4f0;display:flex;gap:24px;align-items:baseline;font-size:13px;line-height:1.6}.disclosure strong{white-space:nowrap}.disclosure p{margin:0}
+ .section-heading{border-top:4px solid var(--ink);padding-top:24px}
+ h2{font-size:clamp(32px,4.4vw,60px);line-height:1.02;letter-spacing:-.05em;margin:0 0 30px}
+
+ /* What's in the tin */
+ .tin{padding:0 6vw;margin-bottom:75px}
+ .dial{max-width:560px;margin:0 0 26px}
+ .dial label{display:block;font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:8px}
+ .dial-track{display:flex;align-items:center;gap:12px}
+ .dial-end{font-size:22px;line-height:1}.dial-end.cool{color:var(--cobalt)}.dial-end.warm{color:var(--tiger)}
+ .dial input{flex:1;min-width:0;height:44px;accent-color:var(--tiger);cursor:pointer;background:transparent}
+ .ingredients{list-style:none;margin:0 0 40px;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+ .ing{position:relative;background:#f4f4f0;border:1px solid var(--line);border-top:5px solid var(--ing,#111);padding:18px 18px 14px;min-width:0;transition:opacity .4s ease,transform .4s ease,border-color .4s ease,background-color .4s ease}
+ .ing[data-temp="cool"]{--ing:var(--cobalt)}.ing[data-temp="warm"]{--ing:var(--tiger)}.ing[data-temp="none"]{--ing:#8a8a82}
+ .ing-dot{position:absolute;top:16px;right:16px;width:14px;height:14px;border-radius:50%;background:var(--ing)}
+ .ing .mono{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:var(--ing);font-weight:700;margin:0 0 4px}
+ .ing h3{font-size:22px;letter-spacing:-.5px;margin:0 0 8px}
+ .ing>p:not(.mono){font-size:14px;line-height:1.55;margin:0 0 10px}
+ .ing dl{margin:0 0 8px;border-top:1px solid var(--line)}.ing dl div{display:grid;grid-template-columns:72px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.45}
+ .ing dt{font:700 10px/1.6 monospace;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}.ing dd{margin:0;min-width:0}
+ .src{font-size:12px}
+ [data-feel="cool"] .ing:not([data-temp="cool"]),[data-feel="warm"] .ing:not([data-temp="warm"]){opacity:.3}
+ [data-feel="cool"] .ing[data-temp="cool"]{background:#e3e8fd}
+ [data-feel="warm"] .ing[data-temp="warm"]{background:#fbe6d3}
+ .fx[data-feel="cool"] .ing[data-temp="cool"],.fx[data-feel="warm"] .ing[data-temp="warm"]{transform:translateY(-4px)}
+
+ /* How it works */
+ .how{margin:0;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:10px 30px;background:#fff;border:1px solid var(--line);padding:20px}
+ .how-toggle{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:8px}
+ .how-toggle button,.filters button{font:700 12px Arial;cursor:pointer;padding:12px 17px;border:1px solid var(--ink);border-radius:30px;background:transparent;color:var(--ink);min-height:44px}
+ .how-toggle button[aria-pressed=true],.filters button[aria-pressed=true]{background:var(--cobalt);border-color:var(--cobalt);color:#fff}
+ .how-svg{display:block;width:100%;height:auto;grid-row:2 / span 2}
+ .how figcaption{font:19px/1.45 Georgia,serif;align-self:end}
+ .how .fine{align-self:start}
+ .rcpt circle{fill:#fff;stroke:#111;stroke-width:2.5;transition:fill .5s ease}
+ .rcpt text{fill:#111}
+ .mol{fill:#8a8a82;transform:translateY(0);opacity:.95}
+ .signal{stroke:transparent;stroke-dasharray:18 82;stroke-dashoffset:100}
+ .block{opacity:0;transition:opacity .4s ease}
+ .inflame{opacity:0;transition:opacity .6s ease}
+ .how-svg[data-mode="menthol"] .mol{fill:var(--cobalt)}
+ .how-svg[data-mode="capsaicin"] .mol{fill:var(--tiger)}
+ .how-svg[data-mode="lidocaine"] .mol{fill:#6b6b64}
+ .how-svg[data-mode="diclofenac"] .mol{fill:#4a8a3a}
+ .how-svg[data-mode="diclofenac"] .inflame{opacity:.85}
+ .how-svg.run .mol{transform:translateY(62px)}
+ .how-svg.run[data-mode="diclofenac"] .mol{transform:translateY(188px)}
+ .how-svg.run[data-mode="diclofenac"] .inflame{opacity:.18}
+ .how-svg.run[data-mode="menthol"] .cold circle{fill:var(--cobalt)}
+ .how-svg.run[data-mode="capsaicin"] .hot circle{fill:var(--tiger)}
+ .how-svg.run[data-mode="menthol"] .signal{stroke:var(--cobalt);stroke-dashoffset:0}
+ .how-svg.run[data-mode="capsaicin"] .signal{stroke:var(--tiger);stroke-dashoffset:0}
+ .how-svg.run[data-mode="lidocaine"] .block{opacity:1}
+ .how-svg.run[data-mode="lidocaine"] .nerve{stroke:#9a9a92}
+ .fx .how-svg .mol{transition:transform .9s cubic-bezier(.3,.7,.2,1) var(--d,0s),fill .4s ease}
+ .fx .how-svg[data-mode="diclofenac"] .inflame{transition:opacity 1.4s ease .8s}
+ .fx .how-svg.run[data-mode="menthol"] .signal,.fx .how-svg.run[data-mode="capsaicin"] .signal{animation:pulse 1.6s linear .9s infinite}
+ @keyframes pulse{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+
+ /* Shelf */
+ #shelf{padding:0 6vw}
+ .kinds{list-style:none;padding:0;margin:0 0 26px;display:grid;grid-template-columns:repeat(6,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink)}
+ .kinds li{padding:14px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}.kinds li:last-child{border-right:0}
+ .kinds span{font-size:11px;color:var(--tiger);font-weight:700}.kinds strong{font-size:16px}.kinds small{font-size:12px;line-height:1.4;color:var(--muted)}
+ .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:20px 0 12px}
+ .filters a{margin-left:auto;font-size:12px}
+ .cards{display:grid;grid-template-columns:1fr 1fr;gap:55px 30px}.card[hidden]{display:none}
+ .card{border-top:1px solid var(--ink);padding-top:20px;min-width:0;scroll-margin-top:25px}
+ .product-image{margin:0}
+ .product-image>a{position:relative;display:block;background:#fff;border:1px solid #d6d6cf;aspect-ratio:16/10;overflow:hidden}
+ .product-image picture,.product-image img{display:block;width:100%;height:100%}
+ .product-image img{object-fit:contain;transition:transform .5s cubic-bezier(.2,.7,.2,1),opacity .6s ease}
+ .product-image figcaption{font:10px/1.5 Arial;color:#55554f;min-height:30px;padding:9px 0}
+ /* Tin-lid twist: a little lid in the corner turns and lifts on hover; the product turns a few degrees. */
+ .lid{position:absolute;top:14px;right:14px;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 50% 50%,var(--sun) 0 38%,var(--tiger) 39% 62%,#111 63% 68%,var(--tiger) 69%);border:2px solid #111;opacity:.9}
+ .lid::after{content:"";position:absolute;left:50%;top:6%;width:2px;height:40%;background:#111;transform:translateX(-50%)}
+ .fx .lid{transition:transform .6s cubic-bezier(.3,.7,.2,1)}
+ .fx .product-image>a:hover .lid,.fx .product-image>a:focus-visible .lid{transform:translateY(-6px) rotate(200deg)}
+ .fx .card.is-in .product-image>a:hover img,.fx .card.is-in .product-image>a:focus-visible img{transform:rotate(-4deg) scale(1.03)}
+ .fx .reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
+ .fx .reveal.is-in{opacity:1;transform:none}
+ .fx .card .product-image img{opacity:0;transform:scale(.94)}
+ .fx .card.is-in .product-image img{opacity:1;transform:none}
+ .card-copy .eyebrow{margin-top:12px;color:var(--tiger)}
+ .card h3{font-size:32px;line-height:1.05;letter-spacing:-1.3px;margin:10px 0 16px}
+ .feel-line{display:block;height:4px;width:100%;max-width:220px;margin:-6px 0 16px;transform-origin:left center;background:#8a8a82}
+ .feel-cool{background:var(--cobalt)}.feel-warm{background:var(--tiger)}.feel-mixed{background:linear-gradient(90deg,var(--cobalt) 0 50%,var(--tiger) 50%)}.feel-none{background:#8a8a82}
+ .fx .card .feel-line{transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.7,.2,1) .25s}
+ .fx .card.is-in .feel-line{transform:scaleX(1)}
+ .spec{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.spec strong{font-size:25px}.spec strong.noprice{font-size:15px;color:var(--muted)}.spec span{font:12px monospace;text-transform:uppercase;letter-spacing:1px}
+ .actives{list-style:none;margin:12px 0 4px;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+ .actives li{font:700 12px/1 monospace;padding:7px 9px;border:1px solid var(--ink);background:#fff}
+ .actives .t-cool{background:var(--cobalt);border-color:var(--cobalt);color:#fff}.actives .t-warm{background:var(--tiger);border-color:var(--tiger);color:#111}.actives .t-none{background:#fff}
+ .card-copy>p:where(:not(.eyebrow):not(.fine)){font-size:16px;line-height:1.65}
+ .facts{margin:0 0 16px;border-top:1px solid var(--line)}.facts div{display:grid;grid-template-columns:100px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
+ .facts dt{font:700 11px/1.6 monospace;text-transform:uppercase;letter-spacing:1px;color:var(--cobalt)}.facts dd{margin:0;min-width:0}
+ .meter{display:inline-flex;gap:3px;vertical-align:middle;margin-right:8px}
+ .meter i{display:block;width:12px;height:8px;background:#deded7;border:1px solid #b9b9b1}
+ .meter i:nth-child(1){background:var(--m1,#deded7)}.meter i:nth-child(2){background:var(--m2,#deded7)}.meter i:nth-child(3){background:var(--m3,#deded7)}.meter i:nth-child(4){background:var(--m4,#deded7)}
+ .meter[style*="--s:1"]{--m1:var(--tiger)}
+ .meter[style*="--s:2"]{--m1:var(--tiger);--m2:var(--tiger)}
+ .meter[style*="--s:3"]{--m1:var(--cobalt);--m2:var(--cobalt);--m3:var(--cobalt)}
+ .meter[style*="--s:4"]{--m1:var(--cobalt);--m2:var(--cobalt);--m3:var(--cobalt);--m4:var(--cobalt)}
+ .card-copy>p.caveat{color:var(--muted)}.verdict{border-left:3px solid var(--tiger);padding-left:15px;font-weight:700}
+ .buy{display:inline-block;padding:15px 20px;background:var(--sun);border:1px solid var(--ink);font-size:13px;font-weight:700;text-decoration:none;min-height:48px}.buy:hover{background:#fff}
+
+ /* Label test */
+ .comparison{margin:75px 6vw;padding-top:28px;border-top:4px solid var(--ink)}
+ .table-scroll{overflow:auto}
+ table{border-collapse:collapse;width:100%;min-width:1040px;text-align:left;font-size:13px;line-height:1.5}caption{text-align:left;padding:0 0 14px;font:11px/1.8 monospace}
+ .key{display:inline-block;padding:0 6px;margin-right:4px;color:#fff}.key.cool{background:var(--cobalt)}.key.warm{background:var(--tiger);color:#111}.key.none{background:#8a8a82}
+ th,td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}thead{background:var(--ink);color:#fff}td:nth-child(2){white-space:nowrap}
+ tbody tr{transition:opacity .4s ease,background-color .4s ease}
+ tbody th small{display:block;font:10px/1.5 monospace;color:#55554f;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+ .bar-cell{min-width:190px}
+ .act{margin-bottom:6px}.act span:first-child{display:block;font-size:12px}
+ .bar{display:block;height:8px;width:100%;max-width:150px;background:#deded7;margin:3px 0 2px;overflow:hidden}
+ .bar i{display:block;height:100%;width:100%;background:#8a8a82;transform-origin:left center;transform:scaleX(var(--w))}
+ .bar.t-cool i{background:var(--cobalt)}.bar.t-warm i{background:var(--tiger)}
+ .bar.empty{background:repeating-linear-gradient(90deg,#deded7 0 4px,transparent 4px 8px)}
+ .fx .comparison .bar i{transform:scaleX(0);transition:transform 1.1s cubic-bezier(.2,.7,.2,1) .2s}
+ .fx .comparison.is-in .bar i{transform:scaleX(var(--w))}
+ [data-feel="cool"] tbody tr:not([data-feel="cool"]):not([data-feel="mixed"]),[data-feel="warm"] tbody tr:not([data-feel="warm"]):not([data-feel="mixed"]){opacity:.35}
+ [data-feel="cool"] tbody tr[data-feel="cool"]{background:#e3e8fd}[data-feel="warm"] tbody tr[data-feel="warm"]{background:#fbe6d3}
+
+ /* Uses */
+ .uses{margin:0 6vw 75px;padding-top:28px;border-top:4px solid var(--ink)}
+ .use-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+ .use{background:#f4f4f0;border:1px solid var(--line);padding:20px;min-width:0}
+ .use .mono{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--cobalt);margin:10px 0 2px}
+ .use h3{font-size:21px;letter-spacing:-.4px;margin:0 0 8px}.use p{font-size:14px;line-height:1.6;margin:0}.use a{font-size:12px}
+ .meter.big i{width:26px;height:12px}
+
+ /* Interesting */
+ .interesting{margin:0 6vw 75px;padding:40px;background:var(--ink);color:var(--paper)}
+ .interesting .eyebrow{color:var(--sun)}
+ .timeline{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:0 40px}
+ .timeline li{padding:18px 0 18px 22px;border-top:1px solid #4a4a44;position:relative;min-width:0}
+ .timeline li::before{content:"";position:absolute;left:0;top:25px;width:10px;height:10px;border-radius:50%;background:var(--tiger)}
+ .timeline .mono{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sun)}
+ .timeline h3{font:400 24px/1.2 Georgia,serif;margin:6px 0 8px}.timeline p{font-size:14px;line-height:1.65;margin:0;color:#d9d9d2}.timeline a{font-size:12px;color:var(--sun)}
+
+ /* Next */
+ .next{margin:0 6vw 75px;padding-top:28px;border-top:4px solid var(--ink)}
+ .next-key{margin:-12px 0 20px}
+ .kind{display:inline-block;font:700 10px/1 monospace;letter-spacing:1.2px;text-transform:uppercase;padding:6px 8px;margin:2px 4px 2px 0}
+ .k-now,.future .now .kind{background:var(--cobalt);color:#fff}.k-real,.future .real .kind{background:var(--sun);color:#111}.k-idea,.future .idea .kind{background:transparent;color:var(--tiger);border:1px dashed var(--tiger)}
+ .future{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+ .future li{background:#f4f4f0;border:1px solid var(--line);padding:20px;min-width:0}
+ .future li.idea{background:transparent;border:2px dashed var(--tiger)}
+ .future h3{font-size:20px;letter-spacing:-.4px;margin:12px 0 8px}.future p{font-size:14px;line-height:1.6;margin:0}.future a{font-size:12px}
+
+ /* Safety */
+ .safety{margin:0 6vw 75px;padding:40px;background:#fff;border:3px solid var(--balm)}
+ .safety .eyebrow{color:var(--balm)}
+ .safety-list{margin:0;padding:0;list-style:none;counter-reset:c;display:grid;grid-template-columns:1fr 1fr;gap:0 40px}
+ .safety-list li{counter-increment:c;padding:14px 0 14px 44px;border-top:1px solid var(--line);position:relative;min-width:0}
+ .safety-list li::before{content:counter(c,decimal-leading-zero);position:absolute;left:0;top:16px;font:700 12px monospace;color:var(--balm)}
+ .safety-list strong{font-size:18px}.safety-list p{margin:6px 0 0;font-size:15px;line-height:1.6}.safety-list a{font-size:12px}
+ .poison{margin:24px 0 0;padding:16px 18px;background:var(--balm);color:#fff;font-size:15px;line-height:1.55}
+
+ .endnote{padding:55px 6vw 60px;background:var(--ink);color:var(--paper)}
+ .endnote>p:not(.eyebrow){font:21px/1.5 Georgia,serif;max-width:52ch}
+ .endnote>p.disclaimer{font:13px/1.7 Arial,sans-serif;color:#cfcfc8;border-left:4px solid var(--tiger);padding-left:14px}
+ .endnote details{max-width:860px;padding:22px 0;margin:35px 0;border-top:1px solid #6d6d66;border-bottom:1px solid #6d6d66;font-size:13px;line-height:1.8}.endnote summary{cursor:pointer;font-weight:700}
+ .source-list{padding-left:20px}.source-list li{margin:4px 0}
+ a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible,.table-scroll:focus-visible{outline:3px solid var(--tiger);outline-offset:4px}
+ @media (prefers-reduced-motion: reduce){.balm-review *,.balm-review *::before,.balm-review *::after{animation:none!important;transition:none!important}}
+ @media(max-width:1100px){.kinds{grid-template-columns:repeat(3,1fr)}.kinds li:nth-child(3){border-right:0}.kinds li:nth-child(-n+3){border-bottom:1px solid var(--line)}.use-grid,.future{grid-template-columns:1fr 1fr}}
+ @media(max-width:900px){.how{grid-template-columns:1fr}.how-svg{grid-row:auto}.timeline,.safety-list{grid-template-columns:1fr}}
+ @media(max-width:760px){.mast{padding:18px 16px;gap:15px}.mast span{display:none}.hero{grid-template-columns:1fr;min-height:0}.hero-copy{padding:35px 16px}.hero-image{border-left:0;border-top:1px solid var(--ink);padding:60px 16px 20px}.stamp{width:88px;height:88px;font-size:8px;top:14px;right:14px}.intro{grid-template-columns:1fr;gap:25px;padding:38px 16px}.intro>p{font-size:25px}.disclosure{margin:0 16px 45px;padding:18px;display:block}.disclosure strong{display:block;margin-bottom:7px}.tin,#shelf{padding:0 16px}.how{padding:14px}.kinds{grid-template-columns:1fr}.kinds li{border-right:0;border-bottom:1px solid var(--line)}.cards{grid-template-columns:1fr;gap:35px}.filters a{margin-left:0;padding:12px}.comparison{margin:50px 16px}.uses,.next{margin:0 16px 50px}.use-grid,.future{grid-template-columns:1fr}.interesting{margin:0 16px 50px;padding:28px 20px}.safety{margin:0 16px 50px;padding:28px 20px}.endnote{padding:40px 16px}.card h3{font-size:28px}.facts div{grid-template-columns:86px 1fr}.lid{width:36px;height:36px}}
+</style>
