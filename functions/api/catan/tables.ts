@@ -9,7 +9,7 @@
  */
 import { validateTable } from '../../../src/lib/catan.ts';
 import {
-  catanJson, catanOptions, loadTables, overBudget, publicTable, randomId, randomSecret, readBody, saveTables,
+  boardOrder, catanJson, catanOptions, loadTables, overBudget, publicTable, randomId, randomSecret, readBody, saveTables,
   type CatanEnv, type StoredTable,
 } from '../../_lib/catan-store.ts';
 import { sha256Hex } from '../../../src/lib/catan.ts';
@@ -26,7 +26,7 @@ export const onRequestGet: PagesFunction<CatanEnv> = async ({ request, env }) =>
     return t ? catanJson({ ok: true, table: publicTable(t) }) : catanJson({ ok: false, error: 'no such table (it may have finished)' }, 404);
   }
   const city = (url.searchParams.get('city') || '').trim().toLowerCase();
-  const list = tables.filter((t) => !city || t.city.toLowerCase().includes(city)).map(publicTable);
+  const list = boardOrder(tables).filter((t) => !city || t.city.toLowerCase().includes(city)).map(publicTable);
   return catanJson({ ok: true, count: list.length, tables: list });
 };
 

@@ -38,18 +38,70 @@ const TABLES_KEY = 'catan:tables';
 const TABLE_CAP = 300;
 const STALE_AFTER_MS = 6 * 3600_000;
 
+export interface Lantern {
+  until: string;
+  by: string;
+  note: string;
+  lit: number;
+  receipts: string[];
+}
+
 export interface StoredTable extends TableInput {
   id: string;
   created: string;
   seated: string[];
   hostKeyHash: string;
+  lantern?: Lantern;
 }
 
-export type PublicTable = Omit<StoredTable, 'hostKeyHash'> & { open: number; url: string };
+export type PublicTable = Omit<StoredTable, 'hostKeyHash' | 'lantern'> & {
+  open: number;
+  url: string;
+  lantern: { until: string; by: string; note: string; lit: number } | null;
+};
+
+export function lanternLit(t: StoredTable, now = Date.now()): boolean {
+  return !!t.lantern && Date.parse(t.lantern.until) > now;
+}
 
 export function publicTable(t: StoredTable): PublicTable {
-  const { hostKeyHash: _omit, ...rest } = t;
-  return { ...rest, open: Math.max(0, t.seats - t.seated.length), url: `${CATAN_ORIGIN}/?table=${t.id}#tables` };
+  const { hostKeyHash: _omit, lantern, ...rest } = t;
+  return {
+    ...rest,
+    open: Math.max(0, t.seats - t.seated.length),
+    url: `${CATAN_ORIGIN}/?table=${t.id}#tables`,
+    lantern: lantern && lanternLit(t) ? { until: lantern.until, by: lantern.by, note: lantern.note, lit: lantern.lit } : null,
+  };
+}
+
+/** Lit tables first (soonest first among them), then everyone else by time. */
+export function boardOrder(tables: StoredTable[], now = Date.now()): StoredTable[] {
+  return tables.slice().sort((a, b) => Number(lanternLit(b, now)) - Number(lanternLit(a, now)) || a.when.localeCompare(b.when));
+}
+
+const LANTERN_MS = 7 * 86400_000;
+
+/**
+ * Light (or extend) a lantern: +7 days from now or from the current expiry,
+ * capped at the table's start time. Returns the public table, or null if the
+ * table is gone or already started.
+ */
+export async function lightTable(kv: KVNamespace, id: string, by: string, note: string, receiptHash: string | null): Promise<PublicTable | null> {
+  const tables = await loadTables(kv);
+  const t = tables.find((x) => x.id === id);
+  const now = Date.now();
+  if (!t || Date.parse(t.when) < now) return null;
+  const from = t.lantern && lanternLit(t, now) ? Date.parse(t.lantern.until) : now;
+  const until = new Date(Math.min(from + LANTERN_MS, Date.parse(t.when) + 3 * 3600_000)).toISOString();
+  t.lantern = {
+    until,
+    by,
+    note: note || t.lantern?.note || '',
+    lit: (t.lantern?.lit ?? 0) + 1,
+    receipts: [...(t.lantern?.receipts ?? []), ...(receiptHash ? [receiptHash] : [])].slice(-20),
+  };
+  await saveTables(kv, tables);
+  return publicTable(t);
 }
 
 export async function loadTables(kv: KVNamespace, now = Date.now()): Promise<StoredTable[]> {
