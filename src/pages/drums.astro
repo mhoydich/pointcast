@@ -182,6 +182,7 @@ connector: https://pointcast.xyz/api/mcp`;
       <a href="/drum-league"><strong>League</strong><span>Every app is a team</span></a>
       <a href="/drum-kit"><strong>Kit</strong><span>Put a drum on your site</span></a>
       <a href="/drum-signal"><strong>Signal</strong><span>Where the beat comes from</span></a>
+      <a href="/drum-floor"><strong>Floor</strong><span>Markets, pits, Floor Bot</span></a>
       <a href="#rooms"><strong>All rooms</strong><span>{rooms.length} and counting</span></a>
     </nav>
 
@@ -202,6 +203,8 @@ connector: https://pointcast.xyz/api/mcp`;
       <div class="dh__panel">
         <div class="dh__panel-head"><h2>This week</h2><a class="dh__k" href="/drum-league">League →</a></div>
         <ol class="dh__league" data-league><li class="dh__empty">Loading the table…</li></ol>
+        <div class="dh__panel-head dh__panel-head--gap"><h2>On the floor</h2><a class="dh__k" href="/drum-floor">The Floor →</a></div>
+        <ol class="dh__wire dh__floor" data-floor><li class="dh__empty">Checking the markets…</li></ol>
         <div class="dh__panel-head dh__panel-head--gap"><h2>Just heard</h2><a class="dh__k" href="/drum-signal">Signal →</a></div>
         <ol class="dh__wire" data-wire><li class="dh__empty">Listening…</li></ol>
       </div>
@@ -305,7 +308,7 @@ connector: https://pointcast.xyz/api/mcp`;
     .dh__v--team { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600; word-break: break-word; }
     .dh__v small { display: block; margin-top: 4px; font: 500 12px/1.3 'Inter', system-ui, sans-serif; color: var(--muted); }
 
-    .dh__doors { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .dh__doors { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
     .dh__doors a { display: grid; gap: 4px; padding: 16px 18px; color: var(--ink); text-decoration: none; border-right: 2px solid var(--ink); }
     .dh__doors a:last-child { border-right: 0; }
     .dh__doors a:hover { background: #fff1e8; }
@@ -342,6 +345,9 @@ connector: https://pointcast.xyz/api/mcp`;
     .dh__league .team { font-family: 'JetBrains Mono', monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dh__league .pts { font-variant-numeric: tabular-nums; font-weight: 600; }
     .dh__league li:first-child .team::before { content: '★ '; color: #b77d00; }
+    .dh__floor li { grid-template-columns: 58px minmax(0, 1fr) auto; }
+    .dh__floor .up { color: var(--green); font-weight: 600; }
+    .dh__floor .down { color: var(--red); font-weight: 600; }
     .dh__wire li { display: grid; grid-template-columns: 58px 84px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--soft); font-size: 13px; }
     .dh__wire time, .dh__wire .x { color: var(--muted); font: 500 11px/1 'JetBrains Mono', monospace; }
     .dh__wire .app { font-family: 'JetBrains Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -379,9 +385,9 @@ connector: https://pointcast.xyz/api/mcp`;
       .dh__hero, .dh__row { grid-template-columns: 1fr; }
       .dh__drumcol { border-right: 0; border-bottom: 4px solid var(--ink); }
       .dh__row > .dh__panel + .dh__panel { border-left: 0; border-top: 4px solid var(--ink); }
-      .dh__doors { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-      .dh__doors a:nth-child(3n) { border-right: 0; }
-      .dh__doors a:nth-child(-n + 3) { border-bottom: 2px solid var(--ink); }
+      .dh__doors { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .dh__doors a:nth-child(4n), .dh__doors a:last-child { border-right: 0; }
+      .dh__doors a:nth-child(-n + 4) { border-bottom: 2px solid var(--ink); }
     }
     @media (max-width: 560px) {
       .dh__heart, .dh__panel { padding-left: 16px; padding-right: 16px; }
@@ -392,9 +398,9 @@ connector: https://pointcast.xyz/api/mcp`;
       .dh__stat--wide { grid-column: 1 / -1; }
       .dh__doors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .dh__doors a { border-bottom: 2px solid var(--ink); }
-      .dh__doors a:nth-child(3n) { border-right: 2px solid var(--ink); }
+      .dh__doors a:nth-child(n) { border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
       .dh__doors a:nth-child(2n) { border-right: 0; }
-      .dh__doors a:nth-last-child(-n + 2) { border-bottom: 0; }
+      .dh__doors a:last-child { grid-column: 1 / -1; border-right: 0; border-bottom: 0; }
       .dh__status li { grid-template-columns: 12px minmax(0, 1fr) auto; }
       .dh__ms { display: none; }
       .dh__wire li { grid-template-columns: 58px minmax(0, 1fr) auto; }
@@ -548,6 +554,25 @@ connector: https://pointcast.xyz/api/mcp`;
         $$('[data-wing]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
         filter();
       }));
+
+      async function loadFloor() {
+        const list = $('[data-floor]');
+        try {
+          const d = await (await fetch('/api/drum/floor', { cache: 'no-store' })).json();
+          const moves = (d.moves || []).slice(0, 4);
+          if (!moves.length) { list.innerHTML = '<li class="dh__empty">No big market moves yet. Floor Bot checks every five minutes.</li>'; return; }
+          list.replaceChildren(...moves.map((m) => {
+            const li = document.createElement('li');
+            const up = m.direction === 'up';
+            li.innerHTML = `<time>${clock(m.at)}</time><span class="app" title="${esc(m.question)}">${esc(m.question)}</span><span class="${up ? 'up' : 'down'}">${Math.round(m.from * 100)}→${Math.round(m.to * 100)}¢ ${up ? '▲' : '▼'}${m.beats}</span>`;
+            return li;
+          }));
+        } catch {
+          list.innerHTML = '<li class="dh__empty">The floor is not answering right now.</li>';
+        }
+      }
+      loadFloor();
+      setInterval(() => { if (document.visibilityState === 'visible') loadFloor(); }, 60000);
 
       window.addEventListener('pointcast:drum', () => setTimeout(refreshFast, 900));
       checkAll();
