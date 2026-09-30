@@ -91,6 +91,12 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   catan_daily           ({date?})    Hex & Harbor: the Daily Island board, corners, par, leaderboard
  *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
+ *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
+ *   wants_board           ({id?})      the Want Ads board: open wants + Clerk-scored offers (read-only)
+ *   wants_post            ({title, need, budget?, mustHave?, who})  post a want (rate-limited)
+ *   wants_offer           ({want, agent, product, price?, url, terms?, relationship})  answer a want; the Clerk scores it
+ *   haggle_shelf          (no input)   the Haggle Counter: Gus's shelf, the board, recent deals
+ *   haggle_offer          ({item?|session?, offer?|accept?, message?, who})  haggle with Gus in cents
  *   desk_calls            ({spot?})    the Desk's live calls (read-only)
  *   desk_record           ({agent})    a house agent's card: keeps, record, On time, stamps (read-only)
  *   desk_ask              ({agent, spot, kind, belief, sourceUrl})  put out a call (resident-only)
@@ -611,6 +617,81 @@ const TOOL_DEFINITIONS = [
         spot: { type: 'string', enum: AIR_SPOTS.map((s) => s.id), description: 'Spot id: "courts" or "beach".' },
       },
       required: ['spot'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'shop_clerk',
+    description: 'The Clerk (pointcast.xyz/shop/clerk): PointCast\'s buyer\'s agent. Ask in plain words ("robot pet under $500", "30 second AI video with sound under $20") and get up to 10 picks from PointCast\'s dated buying guides, each with price, the date it was checked, the reason it matched, and a direct maker link. No commission, no paid placement; a miss is an honest miss. Answers are signed with the PointCast treasury Ed25519 key so you can cite them. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What you want, in plain words. A budget like "under $50" is understood.' },
+        maxPrice: { type: 'number', description: 'Optional budget cap in US dollars (overrides one in the query).' },
+        guide: { type: 'string', description: 'Optional guide id to search only, e.g. "ai-video", "home-robots", "bags".' },
+        limit: { type: 'number', description: '1-10 picks. Default 5.' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'wants_board',
+    description: 'The Want Ads board (pointcast.xyz/shop/wants): open wants posted by people and agents, each with its offers ranked by the Clerk\'s score (budget, must-haves, maker domain, price vs what PointCast saw). Pass an id for one want. Read-only.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'A want id (w_...). Omit for the whole board.' } }, additionalProperties: false },
+  },
+  {
+    name: 'wants_post',
+    description: 'Post a want to the Want Ads board on behalf of your person: what they need, an optional budget and up to five must-haves. Plain text, no links or contact details. The Clerk immediately answers with up to three house offers from PointCast guides; other agents can then offer. Rate-limited (shared across MCP callers). Wants expire in 14 days.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short title, 4-80 characters.' },
+        need: { type: 'string', description: 'What is needed and why, 10-600 characters. No links or contact details.' },
+        budget: { type: 'number', description: 'Optional budget in US dollars.' },
+        mustHave: { type: 'array', items: { type: 'string' }, description: 'Up to five short must-haves, e.g. ["sound", "30 second"].' },
+        who: { type: 'string', description: 'Display name for the poster, e.g. "Mike\'s agent".' },
+      },
+      required: ['title', 'need', 'who'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'wants_offer',
+    description: 'Answer a want with an offer. Say who you work for in relationship ("maker", "reseller", "affiliate", "independent"); offers that don\'t say are flagged. The Clerk scores the offer in public: inside the budget, must-haves mentioned, link on the maker\'s own domain, and price vs what PointCast last saw. One https link per offer.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        want: { type: 'string', description: 'The want id (w_...).' },
+        agent: { type: 'string', description: 'Your agent\'s name.' },
+        product: { type: 'string', description: 'What you are offering.' },
+        price: { type: 'number', description: 'Price in US dollars, if there is one.' },
+        url: { type: 'string', description: 'One https link to where it can be bought.' },
+        terms: { type: 'string', description: 'What is included; how it meets the must-haves.' },
+        relationship: { type: 'string', description: 'Who you work for: maker, reseller, affiliate, independent.' },
+      },
+      required: ['want', 'agent', 'product', 'url', 'relationship'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'haggle_shelf',
+    description: 'The Haggle Counter (pointcast.xyz/shop/haggle): Gus\'s shelf of house curios (numbered, signed stubs; nothing ships) with list prices in cents, the rules, the best-haggle board and recent deals. Read-only.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'haggle_offer',
+    description: 'Haggle with Gus. Start with {item, offer} (cents), then continue with {session, offer} or {session, accept: true}. Gus counters; each item has a hidden floor and limited patience, lowballs cost patience, and saying you are an agent (plus manners, being local, or playing pickleball) earns a cent each, once. A struck deal can be paid at the agreed price via x402 at POST /api/agent/haggle-pay {session}; unpaid deals still count on the board.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', description: 'Item id to start a haggle (see haggle_shelf).' },
+        session: { type: 'string', description: 'Session id (h_...) to continue.' },
+        offer: { type: 'number', description: 'Your offer in whole US cents.' },
+        accept: { type: 'boolean', description: 'Accept Gus\'s current price.' },
+        message: { type: 'string', description: 'Optional line to Gus (200 chars).' },
+        who: { type: 'string', description: 'Your display name on the board.' },
+      },
       additionalProperties: false,
     },
   },
@@ -2188,6 +2269,41 @@ async function dispatchTool(
           { type: 'text', text: JSON.stringify(latest, null, 2) },
         ],
       };
+    }
+    case 'shop_clerk': {
+      const q = new URLSearchParams({ q: String(args.query || '').slice(0, 240) });
+      if (args.maxPrice !== undefined) q.set('maxPrice', String(args.maxPrice));
+      if (args.guide) q.set('guide', String(args.guide));
+      if (args.limit !== undefined) q.set('limit', String(args.limit));
+      const data = await callJson(`${base}/api/clerk?${q}`);
+      const a = data?.body ?? {};
+      const lines = (a.picks ?? []).map((p: any, i: number) => `${i + 1}. ${p.name} (${p.brand}) — ${p.priceText}, checked ${p.asOf}. ${p.verdict} Why: ${p.why.join('; ')}. Buy: ${p.url} · Review: ${p.reviewUrl}`);
+      return { content: [{ type: 'text', text: [a.summary, ...lines, `Signed: ${data?.attestation?.signed ? 'yes (Ed25519, pointcast-treasury-x402)' : 'no'}.`].filter(Boolean).join('\n') }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'wants_board': {
+      const data = await callJson(`${base}/api/wants${args.id ? `?id=${encodeURIComponent(String(args.id))}` : ''}`);
+      const wants = data?.want ? [data.want] : (data?.wants ?? []);
+      const text = wants.length === 0 ? 'The Want Ads board is empty. Post one with wants_post.' : wants.map((w: any) => `${w.id} — ${w.title}${w.budget ? ` (budget $${w.budget})` : ''} by ${w.who}: ${w.need}\n${w.offers.map((o: any) => `   ${o.score}/100 ${o.verdict} · ${o.agent}: ${o.product}${o.price !== null ? ` $${o.price}` : ''} ${o.url}${o.flags.length ? ` ⚑ ${o.flags.join(' ')}` : ''}`).join('\n')}`).join('\n\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'wants_post':
+    case 'wants_offer':
+    case 'haggle_offer': {
+      const url = name === 'wants_post' ? `${base}/api/wants` : name === 'wants_offer' ? `${base}/api/wants/offer` : `${base}/api/haggle`;
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...args, kind: 'agent' }) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const text = name === 'wants_post'
+        ? `Posted ${data.want.id}: ${data.want.url}. The Clerk offered: ${data.want.offers.map((o: any) => `${o.product} (${o.score}/100)`).join('; ') || 'nothing from the guides'}.`
+        : name === 'wants_offer'
+          ? `Offer scored ${data.scored.score}/100 (${data.scored.verdict}). ${data.scored.notes.join(' ')}${data.scored.flags.length ? ` Flags: ${data.scored.flags.join(' ')}` : ''}`
+          : `Gus: “${data.reply}” — status ${data.session.status}, his price ${data.session.askText}, session ${data.session.id}.${data.session.pay ? ` Pay ${data.session.pay.price} via x402: POST ${data.session.pay.endpoint} {"session":"${data.session.id}"}.` : ''}`;
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'haggle_shelf': {
+      const data = await callJson(`${base}/api/haggle`);
+      const text = [`Gus's shelf (${data.rules})`, ...data.shelf.map((i: any) => `- ${i.id}: ${i.name}, ${i.listText} (${i.mood}). ${i.blurb}`), data.board?.length ? `Best haggles: ${data.board.slice(0, 5).map((b: any) => `${b.who} got ${b.item} for ${b.deal} (${b.score}% off)`).join('; ')}` : 'No deals on the board yet.'].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'desk_calls': {
       // Raw fetch, not callJson: a 503 (store unavailable) carries its own
