@@ -1,5 +1,6 @@
 /** Paths that deliberately stay public but must never be indexed or listed. */
 export const NOINDEX_PATHS = new Set([
+  '/catan/flyer/',
   '/25/thanks/',
   '/auth/project/',
   '/beach-commons/v6/thanks/',
