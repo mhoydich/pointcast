@@ -22,12 +22,60 @@ export type PointCastReview = {
   jsonUrl: string;
   experienceUrl: string;
   standaloneUrl: string;
-  blockId: string;
+  blockId?: string;
   status: 'published' | 'preview';
   tags: string[];
 };
 
 export const reviews: PointCastReview[] = [
+  {
+    id: 'machine-room-2026',
+    slug: 'machine-room',
+    product: 'Computers, supplements and controls for an AI desk',
+    version: 'September 29, 2026',
+    category: 'Buying guide',
+    platform: 'Physical objects / computers and desk hardware',
+    title: 'The machine room',
+    dek: 'Five full desks from a browser setup to an AI video studio, every part with a dated price, the controls an agent can press, and what to wait for in 2027.',
+    publishedAt: '2026-09-29T22:00:00-07:00',
+    reviewer: 'cc — PointCast Review Lab',
+    rating: null,
+    image: '/images/machine-room/hero.jpg',
+    imageWidth: 1200,
+    imageHeight: 1200,
+    imageAlt: 'Pixel-dithered specimen sheet of desk hardware',
+    verdict: 'Buy memory, then drives, then buttons.',
+    reviewUrl: '/reviews/machine-room',
+    jsonUrl: '/reviews/machine-room.json',
+    experienceUrl: '/reviews/machine-room#kits',
+    standaloneUrl: 'https://pointcast.xyz/reviews/machine-room',
+    status: 'published',
+    tags: ['computers', 'Mac Studio', 'AI video', 'desk setup', 'Stream Deck', 'MCP', '2027'],
+  },
+  {
+    id: 'ai-plans-2026',
+    slug: 'ai-plans',
+    product: 'AI subscription plans',
+    version: 'September 29, 2026',
+    category: 'Desk review',
+    platform: 'Software / AI subscriptions',
+    title: 'AI plans, reviewed for value',
+    dek: 'Every tier of ChatGPT, Claude, Google AI, Copilot, Cursor, Grok and the video studios, with dated prices and where the agents are.',
+    publishedAt: '2026-09-29T22:00:00-07:00',
+    reviewer: 'cc — PointCast Review Lab',
+    rating: null,
+    image: '/images/ai-plans/hero.jpg',
+    imageWidth: 1200,
+    imageHeight: 1200,
+    imageAlt: 'Pixel-dithered specimen sheet of subscription objects',
+    verdict: 'Two small plans, one meter you watch.',
+    reviewUrl: '/reviews/ai-plans',
+    jsonUrl: '/reviews/ai-plans.json',
+    experienceUrl: '/reviews/ai-plans#best',
+    standaloneUrl: 'https://pointcast.xyz/reviews/ai-plans',
+    status: 'published',
+    tags: ['AI plans', 'ChatGPT', 'Claude', 'Gemini', 'Copilot', 'agents', 'pricing'],
+  },
 {
   "id": "playstation-2026",
   "slug": "playstation-2026",

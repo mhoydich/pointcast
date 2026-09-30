@@ -23,7 +23,7 @@ const catalog = {
     jsonUrl: new URL(review.jsonUrl, 'https://pointcast.xyz').href,
     experienceUrl: new URL(review.experienceUrl, 'https://pointcast.xyz').href,
     image: new URL(review.image, 'https://pointcast.xyz').href,
-    blockUrl: `https://pointcast.xyz/b/${review.blockId}`,
+    blockUrl: review.blockId ? `https://pointcast.xyz/b/${review.blockId}` : null,
   })),
 };
 
