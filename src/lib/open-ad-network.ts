@@ -27,6 +27,9 @@ import {
   DIGITAL_PETS_COUNSEL_PROMO_DISPATCHES,
 } from './digital-pets-counsel-promo';
 
+import { MICRO_CLUB_CAMPAIGN, MICRO_CLUB_PROMO_DISPATCHES } from './micro-club-promotion';
+
+export { MICRO_CLUB_CAMPAIGN } from './micro-club-promotion';
 export { NOUN_BATTLER_ANNUAL_CAMPAIGN } from './noun-battler-annual-promotion';
 export { BEACH_BLANKET_PROMOTION_CAMPAIGN } from './beach-commons-v8-promotion';
 export { DIGITAL_PETS_COUNSEL_CAMPAIGN } from './digital-pets-counsel-promo';
@@ -142,7 +145,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'pointcast.xyz',
     surface: 'Native sitewide contextual rail',
     advertiserAliases: ['PointCast', "PointCast Today's Art"],
-    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id, MICRO_CLUB_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -152,7 +155,7 @@ export const OPEN_AD_PUBLISHERS: OpenAdPublisher[] = [
     hostname: 'www.industrynext.xyz',
     surface: 'Labeled contextual house campaigns in the Industry Next footer',
     advertiserAliases: ['Industry Next'],
-    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id],
+    campaigns: [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id, MICRO_CLUB_CAMPAIGN.id],
     status: 'active',
   },
   {
@@ -1128,6 +1131,7 @@ export const POINTCAST_ADS: PointCastAd[] = [
     seriesIndex: 6,
     status: 'house',
   },
+  ...MICRO_CLUB_PROMO_DISPATCHES,
 ];
 
 function pathWords(pathname: string): string[] {
@@ -1141,6 +1145,8 @@ function stablePathSeed(pathname: string): number {
 }
 
 export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
+  // Route boundaries preserve music families such as /playlist and /playlists.
+  const isMicroClubSurface = /^\/(?:keyboard|games|play|studio|connectors|agents)(?:-|\/|$)/.test(pathname);
   const words = new Set(pathWords(pathname));
   const seed = stablePathSeed(pathname || '/');
   const cappedCount = Math.max(1, Math.min(count, POINTCAST_ADS.length));
@@ -1150,6 +1156,7 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       score: ad.contexts.reduce((total, context) => total + (words.has(context) ? 10 : 0), 0)
         + ((seed + index * 17) % 7),
     }))
+    .filter(({ ad }) => isMicroClubSurface || ad.campaign !== MICRO_CLUB_CAMPAIGN.id)
     .sort((a, b) => b.score - a.score || a.ad.id.localeCompare(b.ad.id))
     .map(({ ad }) => ad);
 
@@ -1160,6 +1167,9 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
   const isCounselSurface = /^\/digital-pets\/counsel(?:\/|$)/.test(pathname);
   const isNounsDrumClubSurface = /^\/nouns\/drum-club(?:\/|$)/.test(pathname);
   const isNounsMusicSurface = /^\/(?:nouns(?:\/|$)|drum(?:-|\/|$)|station(?:\/|$)|radio(?:\/|$)|playlist(?:s|\/|$)|now(?:\/|$))/.test(pathname);
+  const microClubCreative = isMicroClubSurface
+    ? ranked.find((ad) => ad.campaign === MICRO_CLUB_CAMPAIGN.id)
+    : undefined;
   const counselCreative = ranked.find((ad) => ad.campaign === DIGITAL_PETS_COUNSEL_CAMPAIGN.id);
   const annualCreative = ranked.find((ad) => ad.campaign === NOUN_BATTLER_ANNUAL_CAMPAIGN.id);
   const beachCommonsCreative = ranked.find((ad) => ad.campaign === BEACH_COMMONS_V5_CAMPAIGN.id);
@@ -1194,9 +1204,11 @@ export function selectAdsForPath(pathname: string, count = 2): PointCastAd[] {
       && ad.campaign !== NETWORK_EL_SEGUNDO_CAMPAIGN.id
       && ad.campaign !== LOCAL_STAR_COMMONS_CAMPAIGN.id
       && ad.campaign !== LITTLE_WONDERS_CAMPAIGN.id
+      && ad.campaign !== MICRO_CLUB_CAMPAIGN.id
     ));
     return [
       upliftCreative,
+      microClubCreative,
       nounsEverybodyCreative,
       littleWondersCreative,
       isCounselSurface ? undefined : counselCreative,
