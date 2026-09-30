@@ -10,6 +10,7 @@ import bags from '../data/bags-south-bay.json';
 import playstation from '../data/playstation-2026.json';
 import lego from '../data/lego-sets.json';
 import robots from '../data/home-robots.json';
+import knives from '../data/chef-knives.json';
 import video from '../data/ai-video.json';
 import machines from '../data/machine-room.json';
 import aiPlans from '../data/ai-plans.json';
@@ -72,6 +73,20 @@ const bagPicks: ShopPick[] = bags.picks.map((p) => ({
   image: p.image,
   verdict: p.verdict,
   reviewUrl: `/reviews/bags#${p.id}`,
+}));
+
+const knifePicks: ShopPick[] = knives.picks.map((k) => ({
+  id: `chef-knives/${k.id}`,
+  guide: 'chef-knives',
+  name: k.name,
+  brand: k.brand,
+  price: typeof k.price === 'number' ? k.price : null,
+  priceText: typeof k.price === 'number' ? money(k.price) + (k.priceNote ? '*' : '') : 'Price TBD',
+  currency: 'USD',
+  url: k.url,
+  image: k.image,
+  verdict: k.verdict,
+  reviewUrl: `/reviews/chef-knives#${k.id}`,
 }));
 
 const robotPicks: ShopPick[] = robots.picks.map((r) => ({
@@ -194,9 +209,14 @@ const videoPicks: ShopPick[] = video.picks.map((v) => ({
   reviewUrl: `/reviews/ai-video#${v.id}`,
 }));
 
-export const SHOP_PICKS: ShopPick[] = [...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+export const SHOP_PICKS: ShopPick[] = [...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {
+    id: 'chef-knives', title: knives.title, dek: knives.dek, href: '/reviews/chef-knives', json: '/reviews/chef-knives.json',
+    kind: 'Desk review', image: '/images/chef-knives/hero.jpg', imageAlt: 'Illustrated knife roll: chef knife, gyuto, honing rod, whetstone, board with lemon',
+    asOf: knives.asOf, count: knives.picks.length, countLabel: 'picks',
+  },
   {id:'100-dollar-ai',title:'The $100 AI challenge',dek:'Five actual outputs and an open ledger. A $3.77 API-equivalent checkpoint; actual billed cost unknown.',href:'/reviews/100-dollar-ai',json:'/reviews/100-dollar-ai.json',kind:'Field guide',image:'/experiments/ai-100/hero.png',imageAlt:'Make it real: five outputs and an open ledger',asOf:'2026-09-29',count:5,countLabel:'outputs'},
   {id:'ai-work-life',title:aiWorkLife.title,dek:aiWorkLife.dek,href:'/reviews/ai-work-life',json:'/reviews/ai-work-life.json',kind:'Buying guide',image:'/images/ai-work-life/hero.png',imageAlt:'An idea becomes a draft and a reviewed result',asOf:aiWorkLife.asOf,count:aiWorkLife.plans.length,countLabel:'AI services'},
   {

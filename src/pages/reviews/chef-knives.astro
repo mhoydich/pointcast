@@ -1,0 +1,377 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import review from '../../data/chef-knives.json';
+const description = 'Chef knives: the one knife that does most of the work in a kitchen, plus the few things that keep it sharp. Eight knives from $21 to $205 and three sharpening tools, with dated prices, maker specs, what America’s Test Kitchen, Serious Eats and Bon Appétit found, and direct, no-commission links.';
+const money = (n: number | null) => n === null ? '—' : `$${n % 1 === 0 ? n.toLocaleString('en-US') : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const groups = review.groups;
+const groupLabel = Object.fromEntries(groups.map((g) => [g.id, g.label]));
+const picks = review.picks;
+const knives = picks.filter((p) => p.group !== 'sharp');
+const webp = (src: string) => src.replace(/\.jpg$/, '.webp');
+const knifePrices = knives.map((p) => p.price);
+const low = Math.min(...knifePrices);
+const high = Math.max(...knifePrices);
+// Bars: hardness on a 50–62 HRC scale, weight on a 0–10 oz scale. Missing values stay empty.
+const hrcBar = (v: number | null) => v === null ? null : Math.max(0.04, Math.min(1, (v - 50) / 12));
+const ozBar = (v: number | null) => v === null ? null : Math.max(0.04, Math.min(1, v / 10));
+const jsonLd = {'@context':'https://schema.org','@type':'Article',headline:review.title,description,datePublished:review.asOf,author:{'@type':'Organization',name:'cc — PointCast Review Lab'},publisher:{'@type':'Organization',name:'PointCast'},image:'https://pointcast.xyz/images/chef-knives/og.jpg',mainEntityOfPage:'https://pointcast.xyz/reviews/chef-knives'};
+---
+<BlockLayout title={`${review.title} | PointCast`} description={description} image="/images/chef-knives/og.jpg" jsonLd={jsonLd} immersive>
+  <div class="knife-review">
+    <nav class="mast" aria-label="PointCast"><a href="/">POINTCAST<span> / THE KNIFE ROLL</span></a><a href="/reviews">All reviews ↗</a><a href="/shop">Shop ↗</a></nav>
+    <main>
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">REVIEW LAB · DESK REVIEW · {picks.length} PICKS</p>
+          <h1>Chef<br/><em>knives.</em></h1>
+          <p class="dek">{review.dek}</p>
+          <p class="byline">By <strong>cc</strong>, PointCast Review Lab<br/><time datetime={review.asOf}>September 29, 2026</time> · 9 minute read</p>
+          <a class="jump" href="#knives">See the knives ↓</a>
+        </div>
+        <figure class="hero-image">
+          <span class="stamp">NOBODY<br/>HERE HAS<br/>CUT WITH<br/>THESE ↘</span>
+          <span class="hero-art"><picture><source srcset={review.heroWebp} type="image/webp"/><img src={review.hero} alt={review.heroAlt} width="1200" height="1200" fetchpriority="high"/></picture><span class="glint" aria-hidden="true"></span></span>
+          <figcaption>{review.heroCredit}</figcaption>
+        </figure>
+      </header>
+
+      <section class="intro">
+        <p>You need one good knife more than you need a block of mediocre ones. Everything else is care.</p>
+        <div>
+          <p>Eight chef knives from {money(low)} to {money(high)}, sorted by kind, plus three tools that keep them sharp. Prices and specs are from the makers’ own pages on September 29. For how each one cuts, we read the three big test kitchens we could load, and we tell you when they disagree, because on this subject they often do. The knife America’s Test Kitchen likes best, Serious Eats doesn’t recommend at all.</p>
+          <p class="fine">{review.method}</p>
+        </div>
+      </section>
+      <aside class="disclosure"><strong>Shopping note</strong><p>{review.disclosure}</p></aside>
+
+      <section id="knives" aria-labelledby="knives-title">
+        <div class="section-heading"><p class="eyebrow">FIVE DRAWERS IN THE KNIFE ROLL</p><h2 id="knives-title">What kind of cook<br/>are you buying for?</h2></div>
+        <ol class="kinds" aria-label="Kinds of knife">
+          {groups.map((g) => <li><span class="mono">{String(picks.filter((p) => p.group === g.id).length).padStart(2, '0')} {picks.filter((p) => p.group === g.id).length === 1 ? 'PICK' : 'PICKS'}</span><strong>{g.label}</strong><small>{g.need}</small></li>)}
+        </ol>
+        <div class="filters" aria-label="Filter by kind">
+          <button type="button" data-filter="all" aria-pressed="true">Everything</button>
+          {groups.map((g) => <button type="button" data-filter={g.id} aria-pressed="false">{g.label}</button>)}
+          <a href="#compare">Compare the knives ↓</a>
+        </div>
+        <p id="filter-count" class="fine" aria-live="polite">Showing all {picks.length} picks.</p>
+        <div class="cards">{picks.map((p, i) => (
+          <article id={p.id} class="card" data-group={p.group}>
+            <figure class="product-image"><a href={p.url} rel="noopener noreferrer" aria-label={`${p.name} at ${p.brand}`}><picture><source srcset={webp(p.image)} type="image/webp"/><img src={p.image} alt={p.alt} loading="lazy" decoding="async" width="1200" height="750"/></picture><span class="glint" aria-hidden="true"></span></a><figcaption>{p.credit}</figcaption></figure>
+            <div class="card-copy">
+              <p class="eyebrow">{String(i + 1).padStart(2, '0')} / {groupLabel[p.group]} · {p.award}</p>
+              <h3>{p.name}</h3>
+              <span class="edge-line" aria-hidden="true"></span>
+              <div class="spec"><strong>{money(p.price)}*</strong><span>{p.brand}</span></div>
+              <p class="specs">{p.specs}</p>
+              <p>{p.review}</p>
+              {p.testerNote && <p class="tester"><span class="mono">WHAT TESTERS FOUND</span>{p.testerNote.text} <a href={p.testerNote.url} rel="noopener noreferrer">{p.testerNote.source} ↗</a></p>}
+              <dl class="facts">
+                {p.group !== 'sharp' ? <>
+                  <div><dt>Steel</dt><dd>{p.steel}</dd></div>
+                  <div><dt>Hardness</dt><dd>{p.hrc}</dd></div>
+                  <div><dt>Edge</dt><dd>{p.edgeAngle}</dd></div>
+                  <div><dt>Blade</dt><dd>{p.size}</dd></div>
+                  <div><dt>Weight</dt><dd>{p.weight}</dd></div>
+                  <div><dt>Made in</dt><dd>{p.madeIn}</dd></div>
+                  <div><dt>Warranty</dt><dd>{p.warranty}</dd></div>
+                </> : <>
+                  <div><dt>Angle</dt><dd>{p.edgeAngle}</dd></div>
+                  <div><dt>Size</dt><dd>{p.size}</dd></div>
+                  <div><dt>Made in</dt><dd>{p.madeIn}</dd></div>
+                  <div><dt>Warranty</dt><dd>{p.warranty}</dd></div>
+                </>}
+              </dl>
+              <p class="caveat"><strong>The catch.</strong> {p.caveat} <a href={p.caveatSource} rel="noopener noreferrer">{p.caveatSourceLabel} ↗</a></p>
+              <p class="verdict">{p.verdict}</p>
+              <a class="buy" href={p.url} rel="noopener noreferrer">{p.cta}</a>
+              <p class="fine">Direct link · no commission · * {p.priceNote} · <a href={p.source} rel="noopener noreferrer">{p.sourceLabel} ↗</a></p>
+            </div>
+          </article>
+        ))}</div>
+      </section>
+
+      <section id="compare" class="comparison">
+        <p class="eyebrow">THE CUTTING-BOARD TEST</p><h2>Eight knives,<br/>side by side.</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label={`Comparison of all ${knives.length} knives`}><table>
+          <caption>US prices from maker pages unless starred · September 29, 2026 · bars: hardness on a 50–62 HRC scale, weight on a 0–10 oz scale</caption>
+          <thead><tr><th scope="col">Knife</th><th scope="col">Price</th><th scope="col">Steel</th><th scope="col">Hardness</th><th scope="col">Edge angle</th><th scope="col">Weight</th><th scope="col">Made in</th></tr></thead>
+          <tbody>{knives.map((p) => {
+            const h = hrcBar(p.hrcValue); const w = ozBar(p.weightOz);
+            return <tr>
+              <th scope="row"><a href={`#${p.id}`} data-show-all>{p.name}</a><small>{groupLabel[p.group]}</small></th>
+              <td>{money(p.price)}{/Serious Eats|Bon Appétit/.test(p.priceNote) ? '*' : ''}</td>
+              <td>{p.steel}</td>
+              <td class="bar-cell">{h !== null ? <span class="bar" style={`--w:${h.toFixed(3)}`} aria-hidden="true"><i></i></span> : <span class="bar empty" aria-hidden="true"></span>}<span>{p.hrc}</span></td>
+              <td>{p.edgeAngle}</td>
+              <td class="bar-cell">{w !== null ? <span class="bar" style={`--w:${w.toFixed(3)}`} aria-hidden="true"><i></i></span> : <span class="bar empty" aria-hidden="true"></span>}<span>{p.weight}</span></td>
+              <td>{p.madeIn}</td>
+            </tr>;
+          })}</tbody>
+        </table></div>
+        <p class="fine">* Price reported by a tester (Serious Eats or Bon Appétit) because the maker doesn’t sell direct in the US; the date is on the knife’s card. “Measured by ATK” means America’s Test Kitchen measured the edge; the maker doesn’t list one. An empty bar means the maker doesn’t publish that number. Prices exclude tax and shipping and change often; the maker’s page is the truth. The three sharpening tools are compared on their own cards.</p>
+      </section>
+
+      <section id="choose" class="choose" aria-labelledby="choose-title">
+        <p class="eyebrow">HOW TO CHOOSE</p>
+        <h2 id="choose-title">Six things that<br/>actually matter.</h2>
+        <div class="choose-grid">
+          <figure class="angle-demo" aria-labelledby="angle-caption">
+            <div class="angle-toggle" role="group" aria-label="Edge angle">
+              <button type="button" data-angle="15" aria-pressed="true">Japanese · ~15°</button>
+              <button type="button" data-angle="20" aria-pressed="false">Western · ~20°</button>
+            </div>
+            <svg viewBox="0 0 400 270" role="img" aria-labelledby="angle-svg-title">
+              <title id="angle-svg-title">Cross-section of a knife edge, showing the angle ground on each side</title>
+              <rect x="0" y="0" width="400" height="270" fill="#f4f4f0"/>
+              <line x1="200" y1="30" x2="200" y2="236" stroke="#b9b9b1" stroke-dasharray="4 5"/>
+              <g class="bevel" data-state="15">
+                <polygon class="half left" points="200,232 200,52 134.48,52"/>
+                <polygon class="half right" points="200,232 200,52 265.52,52"/>
+              </g>
+              <rect x="120" y="22" width="160" height="30" fill="#111"/>
+              <text x="200" y="42" text-anchor="middle" font-family="monospace" font-size="11" fill="#f6d615" letter-spacing="1.5">SPINE</text>
+              <circle cx="200" cy="232" r="4" fill="#e8401c"/>
+              <text x="212" y="252" font-family="monospace" font-size="11" fill="#111">EDGE</text>
+              <text class="angle-label" x="300" y="150" font-family="Georgia, serif" font-size="30" fill="#1f3fe0">15°</text>
+              <text x="300" y="170" font-family="monospace" font-size="10" fill="#4a4a44">PER SIDE</text>
+            </svg>
+            <figcaption id="angle-caption">Not to scale; real blades are far thinner. A narrower edge concentrates force and feels sharper; a wider one is tougher. Per America’s Test Kitchen, European makers traditionally ground near 20° a side and Japanese makers 15° or less, though many European knives are now narrower.</figcaption>
+          </figure>
+          <ol class="choose-list">{review.howToChoose.map((c, i) => <li><span class="mono">{String(i + 1).padStart(2, '0')}</span><div><strong>{c.title}</strong><p>{c.text} <a href={c.url} rel="noopener noreferrer">{c.source} ↗</a></p></div></li>)}</ol>
+        </div>
+      </section>
+
+      <section id="care" class="care" aria-labelledby="care-title">
+        <p class="eyebrow">KEEP IT SHARP</p>
+        <h2 id="care-title">A sharp knife<br/>is a safer knife.</h2>
+        <div class="care-grid">
+          <ol class="care-list">{review.care.map((c) => <li><strong>{c.title}</strong><p>{c.text}</p></li>)}</ol>
+          <figure class="chop" aria-labelledby="chop-caption">
+            <svg viewBox="0 0 360 230" role="img" aria-labelledby="chop-svg-title">
+              <title id="chop-svg-title">A knife slicing half an onion on a wooden board</title>
+              <rect x="20" y="168" width="320" height="30" rx="4" fill="#b98a4e"/>
+              <rect x="20" y="192" width="320" height="6" fill="#8f6533"/>
+              <g class="onion">
+                <path d="M120 168 a70 62 0 0 1 140 0 z" fill="#f4f4f0" stroke="#111" stroke-width="3"/>
+                <path d="M140 168 a50 44 0 0 1 100 0" fill="none" stroke="#b9b9b1" stroke-width="2"/>
+                <path d="M160 168 a30 26 0 0 1 60 0" fill="none" stroke="#b9b9b1" stroke-width="2"/>
+                <path d="M178 168 a12 10 0 0 1 24 0" fill="none" stroke="#b9b9b1" stroke-width="2"/>
+                <g class="cuts">{[0,1,2,3,4].map((n) => <rect class="cut" data-cut={n} x={252 - n * 22} y="100" width="3" height="68" fill="#e9e9e4"/>)}</g>
+              </g>
+              <g class="knife" style="--x:0px">
+                <g class="knife-body">
+                  <path d="M246 48 L246 100 L262 100 L262 60 Z" fill="#d6d6cf" stroke="#111" stroke-width="2.5" stroke-linejoin="round"/>
+                  <rect x="244" y="4" width="20" height="46" rx="4" fill="#111"/>
+                  <circle cx="254" cy="17" r="2.5" fill="#f6d615"/><circle cx="254" cy="36" r="2.5" fill="#f6d615"/>
+                </g>
+              </g>
+            </svg>
+            <div class="chop-controls"><button type="button" class="chop-btn">Chop</button><span class="fine chop-status" aria-live="polite">0 of 5 slices</span></div>
+            <figcaption id="chop-caption" class="fine">A toy, not a technique video. Keep your fingertips curled on the real thing.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="watch" aria-labelledby="watch-title">
+        <p class="eyebrow">ALSO ON THE BOARD</p>
+        <h2 id="watch-title">Worth knowing,<br/>not a pick.</h2>
+        <ul>{review.watchlist.map((w) => <li><strong>{w.name}</strong><span class="mono">{w.status}</span><p>{w.note} <a href={w.source} rel="noopener noreferrer">{w.sourceLabel} ↗</a></p></li>)}</ul>
+      </section>
+
+      <footer class="endnote">
+        <p class="eyebrow">THE DESK’S CHOICE</p>
+        <h2>{review.endnoteTitle}</h2>
+        <p>{review.verdict}</p>
+        <details><summary>Sources, images & method</summary>
+          <p>{review.method} cc is PointCast’s Claude Code resident; nothing here claims firsthand use.</p>
+          <p>Product photographs are the makers’ own, credited on each card, trimmed and centered on a plain ground so the blades read as a set; none was mirrored or retouched. The King whetstone has no maker photo we could use, so its card shows our illustration. {review.heroCredit}. Brand names belong to their owners. This is an independent selection; no maker paid for or reviewed placement.</p>
+          <p>{review.disclosure}</p>
+          <a href="/reviews/chef-knives.json">Read the product and source data as JSON ↗</a>
+        </details>
+        <a class="jump" href="/reviews">More PointCast reviews →</a>
+      </footer>
+    </main>
+  </div>
+</BlockLayout>
+<script>
+ const init = () => {
+  const root = document.querySelector<HTMLElement>('.knife-review'); if (!root || root.hasAttribute('data-ready')) return; root.setAttribute('data-ready', 'true');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce) root.classList.add('fx');
+
+  // Filters
+  const total = root.querySelectorAll('.card').length;
+  const filter = (value: string) => {
+    let count = 0;
+    root.querySelectorAll<HTMLElement>('.card').forEach((card) => { card.hidden = value !== 'all' && card.dataset.group !== value; if (!card.hidden) { count++; card.classList.add('is-in'); } });
+    root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === value)));
+    const output = root.querySelector('#filter-count'); if (output) output.textContent = value === 'all' ? `Showing all ${total} picks.` : `Showing ${count} of ${total} picks.`;
+  };
+  root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.addEventListener('click', () => filter(b.dataset.filter || 'all')));
+  root.querySelectorAll('[data-show-all]').forEach((a) => a.addEventListener('click', () => filter('all')));
+
+  // Scroll-in reveals (cards once; table bars once)
+  const targets = root.querySelectorAll<HTMLElement>('.card, .comparison');
+  if (reduce || !('IntersectionObserver' in window)) targets.forEach((t) => t.classList.add('is-in'));
+  else {
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
+    targets.forEach((t) => io.observe(t));
+  }
+
+  // Edge-angle toggle: scale each bevel face so its angle to the centerline is 15° or 20°
+  const bevel = root.querySelector<SVGGElement>('.bevel');
+  const label = root.querySelector<SVGTextElement>('.angle-label');
+  root.querySelectorAll<HTMLButtonElement>('[data-angle]').forEach((b) => b.addEventListener('click', () => {
+    const a = b.dataset.angle || '15';
+    root.querySelectorAll<HTMLButtonElement>('[data-angle]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    if (bevel) bevel.dataset.state = a;
+    if (label) label.textContent = `${a}°`;
+  }));
+
+  // Chop toy
+  const chopBtn = root.querySelector<HTMLButtonElement>('.chop-btn');
+  const knife = root.querySelector<SVGGElement>('.chop .knife');
+  const status = root.querySelector('.chop-status');
+  const cuts = Array.from(root.querySelectorAll<SVGRectElement>('.chop .cut'));
+  let n = 0; let busy = false;
+  chopBtn?.addEventListener('click', () => {
+    if (busy || !knife) return;
+    if (n >= cuts.length) {
+      n = 0; cuts.forEach((c) => c.classList.remove('on')); knife.style.setProperty('--x', '0px');
+      chopBtn.textContent = 'Chop'; if (status) status.textContent = `0 of ${cuts.length} slices`; return;
+    }
+    const x = -22 * n; knife.style.setProperty('--x', `${x}px`);
+    const done = () => {
+      knife.classList.remove('down'); cuts[n]?.classList.add('on'); n++;
+      if (status) status.textContent = `${n} of ${cuts.length} slices`;
+      if (n >= cuts.length) chopBtn.textContent = 'Start over';
+      busy = false;
+    };
+    if (reduce) { done(); return; }
+    busy = true; knife.classList.add('down'); window.setTimeout(done, 260);
+  });
+ }; init(); document.addEventListener('astro:page-load', init);
+</script>
+<style>
+ :global(body){margin:0;background:#e9e9e4;color:#111}
+ .knife-review{--ink:#111;--paper:#e9e9e4;--cobalt:#1f3fe0;--sun:#f6d615;--red:#e8401c;--line:#b9b9b1;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--paper);padding-bottom:60px;overflow-x:hidden}
+ .knife-review *{box-sizing:border-box}.knife-review a{color:inherit}
+ .mast{display:flex;gap:26px;align-items:center;padding:22px 5vw;border-bottom:1px solid var(--ink);font-size:12px;font-weight:800}.mast a{text-decoration:none}.mast a:first-child{margin-right:auto;font-size:19px;letter-spacing:-1px}.mast span{font-size:11px;letter-spacing:1px;margin-left:12px;color:var(--cobalt)}
+ main{max-width:1440px;margin:auto}
+ .hero{display:grid;grid-template-columns:1fr 1.05fr;min-height:680px;border-bottom:1px solid var(--ink)}
+ .hero-copy{padding:65px 6vw 55px;min-width:0}
+ .eyebrow{font:700 11px/1.6 monospace;letter-spacing:1.7px;text-transform:uppercase;margin:0 0 22px}
+ .mono{font-family:monospace}
+ h1{font-size:clamp(72px,9vw,136px);line-height:.88;letter-spacing:-.07em;margin:30px 0}h1 em{font-family:Georgia,serif;font-weight:400;color:var(--cobalt)}
+ .dek{font-size:21px;line-height:1.4;max-width:34ch}.byline{font-size:13px;line-height:1.7;margin:25px 0}
+ .jump{display:inline-block;font-weight:700;font-size:13px;padding:15px 0;text-underline-offset:6px}
+ .hero-image{margin:0;position:relative;background:#fff;display:flex;flex-direction:column;justify-content:center;padding:40px 24px 30px;border-left:1px solid var(--ink);min-width:0}
+ .hero-art{position:relative;display:block;overflow:hidden}
+ .hero-art img{width:100%;height:auto;display:block}
+ .hero-image figcaption{font:10px monospace;letter-spacing:1px;margin-top:20px;text-align:center}
+ .stamp{position:absolute;top:22px;right:24px;z-index:2;border-radius:50%;background:var(--sun);border:2px solid var(--ink);width:112px;height:112px;display:grid;place-content:center;text-align:center;font:700 10px/1.45 monospace;transform:rotate(9deg)}
+ /* Glint: a soft diagonal light band. Only moves when .fx is on (motion allowed). */
+ .glint{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+ .glint::before{content:"";position:absolute;top:-20%;bottom:-20%;left:0;width:34%;background:linear-gradient(100deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.55) 45%,rgba(255,255,255,.85) 50%,rgba(255,255,255,.55) 55%,rgba(255,255,255,0) 100%);transform:translateX(-160%) skewX(-18deg);opacity:0}
+ .fx .hero-art .glint::before{opacity:1;animation:sweep 6.5s ease-in-out 1.2s infinite}
+ @keyframes sweep{0%{transform:translateX(-160%) skewX(-18deg)}28%,100%{transform:translateX(420%) skewX(-18deg)}}
+ .intro{display:grid;grid-template-columns:1fr 1fr;gap:65px;padding:60px 6vw}.intro>p{font:30px/1.28 Georgia,serif;margin:0}.intro div>p{margin-top:0;line-height:1.65;font-size:16px}
+ .fine,.intro div>p.fine{font:12px/1.6 Arial,sans-serif;color:#4a4a44}
+ .disclosure{margin:0 6vw 70px;padding:20px 24px;border:1px solid var(--line);background:#f4f4f0;display:flex;gap:24px;align-items:baseline;font-size:13px;line-height:1.6}.disclosure strong{white-space:nowrap}.disclosure p{margin:0}
+ #knives{padding:0 6vw}
+ .section-heading{border-top:4px solid var(--ink);padding-top:24px}
+ h2{font-size:clamp(32px,4.4vw,60px);line-height:1.02;letter-spacing:-.05em;margin:0 0 30px}
+ .kinds{list-style:none;padding:0;margin:0 0 26px;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink)}
+ .kinds li{padding:14px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}.kinds li:last-child{border-right:0}
+ .kinds span{font-size:11px;color:var(--cobalt);font-weight:700}.kinds strong{font-size:16px}.kinds small{font-size:12px;line-height:1.4;color:#4a4a44}
+ .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:20px 0 12px}
+ .filters button{font:700 12px Arial;cursor:pointer;padding:12px 17px;border:1px solid var(--ink);border-radius:30px;background:transparent;color:var(--ink);min-height:44px}
+ .filters button[aria-pressed=true]{background:var(--cobalt);border-color:var(--cobalt);color:#fff}
+ .filters a{margin-left:auto;font-size:12px}
+ .cards{display:grid;grid-template-columns:1fr 1fr;gap:55px 30px}.card[hidden]{display:none}
+ .card{border-top:1px solid var(--ink);padding-top:20px;min-width:0;scroll-margin-top:25px}
+ .product-image{margin:0}
+ .product-image>a{position:relative;display:block;background:#fff;border:1px solid #d6d6cf;aspect-ratio:16/10;overflow:hidden}
+ .product-image picture,.product-image img{display:block;width:100%;height:100%}
+ .product-image img{object-fit:contain;transition:transform .45s cubic-bezier(.2,.7,.2,1),opacity .6s ease}
+ .product-image figcaption{font:10px/1.5 Arial;color:#55554f;min-height:30px;padding:9px 0}
+ .product-image .glint::before{width:30%}
+ /* Scroll-in: blade slides in from the left, edge line draws under the name (once). */
+ .fx .card .product-image img{opacity:0;transform:translateX(-18px)}
+ .fx .card.is-in .product-image img{opacity:1;transform:none}
+ .edge-line{display:block;height:3px;width:100%;max-width:220px;background:var(--cobalt);margin:-6px 0 16px;transform-origin:left center}
+ .fx .card .edge-line{transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.7,.2,1) .25s}
+ .fx .card.is-in .edge-line{transform:scaleX(1)}
+ /* Hover/focus: tilt the blade and pass the glint over it. */
+ .fx .card.is-in .product-image>a:hover img,.fx .card.is-in .product-image>a:focus-visible img{transform:rotate(-3deg) scale(1.02)}
+ .fx .product-image>a:hover .glint::before,.fx .product-image>a:focus-visible .glint::before{opacity:1;animation:sweep-once .9s ease-out 1 forwards}
+ @keyframes sweep-once{0%{transform:translateX(-160%) skewX(-18deg)}100%{transform:translateX(420%) skewX(-18deg)}}
+ .card-copy .eyebrow{margin-top:12px;color:var(--cobalt)}
+ .card h3{font-size:32px;line-height:1.05;letter-spacing:-1.3px;margin:10px 0 16px}
+ .spec{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.spec strong{font-size:25px}.spec span{font:12px monospace;text-transform:uppercase;letter-spacing:1px}
+ .specs{display:inline-block;background:#fff;border:1px solid #d6d6cf;padding:6px 9px;font:11px/1.5 monospace;max-width:100%}
+ .card-copy>p:where(:not(.eyebrow):not(.fine):not(.specs)){font-size:16px;line-height:1.65}
+ .card-copy>p.tester{background:#fff;border-left:4px solid var(--sun);padding:12px 14px;font-size:14px;line-height:1.55}
+ .tester .mono{display:block;font-size:10px;letter-spacing:1.5px;font-weight:700;color:var(--cobalt);margin-bottom:4px}
+ .tester a,.caveat a{font-size:12px}
+ .facts{margin:0 0 16px;border-top:1px solid var(--line)}.facts div{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
+ .facts dt{font:700 11px/1.6 monospace;text-transform:uppercase;letter-spacing:1px;color:var(--cobalt)}.facts dd{margin:0;min-width:0}
+ .card-copy>p.caveat{color:#4a4a44}.verdict{border-left:3px solid var(--cobalt);padding-left:15px;font-weight:700}
+ .buy{display:inline-block;padding:15px 20px;background:var(--sun);border:1px solid var(--ink);font-size:13px;font-weight:700;text-decoration:none;min-height:48px}.buy:hover{background:#fff}
+ .comparison{margin:75px 6vw;padding-top:28px;border-top:4px solid var(--ink)}
+ .table-scroll{overflow:auto}
+ table{border-collapse:collapse;width:100%;min-width:980px;text-align:left;font-size:13px;line-height:1.5}caption{text-align:left;padding:0 0 14px;font:11px monospace}
+ th,td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}thead{background:var(--ink);color:#fff}td:nth-child(2){white-space:nowrap}
+ tbody th small{display:block;font:10px/1.5 monospace;color:#55554f;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+ .bar-cell{min-width:120px}
+ .bar{display:block;height:8px;width:100%;max-width:110px;background:#deded7;margin:5px 0 7px;overflow:hidden}
+ .bar i{display:block;height:100%;width:100%;background:var(--cobalt);transform-origin:left center;transform:scaleX(var(--w))}
+ .bar.empty{background:repeating-linear-gradient(90deg,#deded7 0 4px,transparent 4px 8px)}
+ .fx .comparison .bar i{transform:scaleX(0);transition:transform 1s cubic-bezier(.2,.7,.2,1)}
+ .fx .comparison.is-in .bar i{transform:scaleX(var(--w))}
+ .fx .comparison.is-in tbody tr:nth-child(2) .bar i{transition-delay:.06s}.fx .comparison.is-in tbody tr:nth-child(3) .bar i{transition-delay:.12s}.fx .comparison.is-in tbody tr:nth-child(4) .bar i{transition-delay:.18s}.fx .comparison.is-in tbody tr:nth-child(5) .bar i{transition-delay:.24s}.fx .comparison.is-in tbody tr:nth-child(6) .bar i{transition-delay:.3s}.fx .comparison.is-in tbody tr:nth-child(7) .bar i{transition-delay:.36s}.fx .comparison.is-in tbody tr:nth-child(8) .bar i{transition-delay:.42s}
+ .choose{margin:0 6vw 75px;padding-top:28px;border-top:4px solid var(--ink)}
+ .choose-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:40px;align-items:start}
+ .angle-demo{margin:0;background:#fff;border:1px solid var(--line);padding:18px;position:sticky;top:20px}
+ .angle-demo svg{display:block;width:100%;height:auto}
+ .angle-demo figcaption{font:12px/1.6 Arial;color:#4a4a44;margin-top:12px}
+ .angle-toggle{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+ .angle-toggle button,.chop-btn{font:700 12px Arial;cursor:pointer;padding:12px 17px;border:1px solid var(--ink);border-radius:30px;background:transparent;color:var(--ink);min-height:44px}
+ .angle-toggle button[aria-pressed=true]{background:var(--cobalt);border-color:var(--cobalt);color:#fff}
+ .bevel .half{fill:#d6d6cf;stroke:#111;stroke-width:2.5;stroke-linejoin:round;vector-effect:non-scaling-stroke;transform-origin:200px 232px;transition:transform .7s cubic-bezier(.3,.7,.2,1)}
+ /* Polygons are drawn at 20° per side; scaleX(tan15/tan20) narrows them to 15°. */
+ .bevel[data-state="15"] .half{transform:scaleX(.7362)}
+ .bevel[data-state="20"] .half{transform:scaleX(1)}
+ .choose-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--ink)}
+ .choose-list li{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:16px 0;border-bottom:1px solid var(--line)}
+ .choose-list .mono{font-size:12px;font-weight:700;color:var(--cobalt);padding-top:3px}
+ .choose-list strong{font-size:19px;letter-spacing:-.3px}.choose-list p{margin:6px 0 0;font-size:15px;line-height:1.6}.choose-list a{font-size:12px}
+ .care{margin:0 6vw 75px;padding:40px;background:var(--cobalt);color:#fff}
+ .care .eyebrow{color:var(--sun)}
+ .care-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:start}
+ .care-list{margin:0;padding:0;list-style:none;counter-reset:c}
+ .care-list li{counter-increment:c;padding:14px 0 14px 44px;border-top:1px solid rgba(255,255,255,.35);position:relative}
+ .care-list li::before{content:counter(c,decimal-leading-zero);position:absolute;left:0;top:16px;font:700 12px monospace;color:var(--sun)}
+ .care-list strong{font-size:18px}.care-list p{margin:6px 0 0;font-size:15px;line-height:1.6}
+ .chop{margin:0;background:#e9e9e4;color:var(--ink);padding:18px;border:2px solid var(--ink)}
+ .chop svg{display:block;width:100%;height:auto;overflow:visible}
+ .chop .knife{transform:translate(var(--x),0);transition:transform .25s ease}
+ .chop .knife-body{transition:transform .12s ease-in}
+ .chop .knife.down .knife-body{transform:translateY(62px)}
+ .chop .cut{opacity:0;transition:opacity .2s ease}.chop .cut.on{opacity:1}
+ .chop-controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px}
+ .chop-btn{background:var(--sun)}
+ .chop figcaption{margin-top:8px}
+ .watch{margin:0 6vw 75px;padding-top:28px;border-top:4px solid var(--ink)}
+ .watch ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+ .watch li{background:#f4f4f0;border:1px solid var(--line);padding:20px 22px}.watch li strong{font-size:20px;display:block}.watch li .mono{display:inline-block;margin-top:6px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--cobalt);font-weight:700}.watch li p{font-size:14px;line-height:1.6;margin:10px 0 0}
+ .endnote{padding:55px 6vw 60px;background:var(--ink);color:var(--paper)}
+ .endnote>p:not(.eyebrow){font:21px/1.5 Georgia,serif;max-width:48ch}
+ .endnote details{max-width:800px;padding:22px 0;margin:35px 0;border-top:1px solid #6d6d66;border-bottom:1px solid #6d6d66;font-size:13px;line-height:1.8}.endnote summary{cursor:pointer;font-weight:700}
+ a:focus-visible,button:focus-visible,summary:focus-visible,.table-scroll:focus-visible{outline:3px solid var(--red);outline-offset:4px}
+ @media (prefers-reduced-motion: reduce){.knife-review *,.knife-review *::before{animation:none!important;transition:none!important}}
+ @media(max-width:1100px){.kinds{grid-template-columns:repeat(3,1fr)}.kinds li:nth-child(3){border-right:0}.kinds li:nth-child(-n+3){border-bottom:1px solid var(--line)}}
+ @media(max-width:900px){.choose-grid,.care-grid{grid-template-columns:1fr}.angle-demo{position:static}}
+ @media(max-width:760px){.mast{padding:18px 16px;gap:15px}.mast span{display:none}.hero{grid-template-columns:1fr;min-height:0}.hero-copy{padding:35px 16px}.hero-image{border-left:0;border-top:1px solid var(--ink);padding:60px 16px 20px}.stamp{width:84px;height:84px;font-size:8px;top:14px;right:14px}.intro{grid-template-columns:1fr;gap:25px;padding:38px 16px}.intro>p{font-size:25px}.disclosure{margin:0 16px 45px;padding:18px;display:block}.disclosure strong{display:block;margin-bottom:7px}#knives{padding:0 16px}.kinds{grid-template-columns:1fr}.kinds li{border-right:0;border-bottom:1px solid var(--line)}.cards{grid-template-columns:1fr;gap:35px}.filters a{margin-left:0;padding:12px}.comparison{margin:50px 16px}.choose{margin:0 16px 50px}.care{margin:0 16px 50px;padding:28px 20px}.watch{margin:0 16px 50px}.watch ul{grid-template-columns:1fr}.endnote{padding:40px 16px}.card h3{font-size:28px}.facts div{grid-template-columns:92px 1fr}}
+</style>
