@@ -6,12 +6,14 @@ import { JSDOM } from 'jsdom';
 const songs = JSON.parse(readFileSync(new URL('../src/data/bell-choir-songs.json', import.meta.url), 'utf8'));
 const catalogue = JSON.parse(readFileSync(new URL('../src/data/karaoke-catalogue.json', import.meta.url), 'utf8'));
 const core = readFileSync(new URL('../src/lib/karaoke.mjs', import.meta.url), 'utf8');
+const setlistCore = readFileSync(new URL('../src/lib/karaoke-setlist.mjs', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../src/scripts/karaoke.mjs', import.meta.url), 'utf8');
 const page = readFileSync(new URL('../src/pages/karaoke.astro', import.meta.url), 'utf8');
 const textIds = ['toast', 'shwa-line', 'bpm', 'rating-title', 'rating-note', 'rating-result',
   'lyrics', 'next', 'line-announcement', 'song-label', 'status', 'player-note', 'songbook',
   'presence', 'mode-note', 'singer-label', 'pitch-note', 'pitch-detail', 'pitch-announcement', 'mic-status',
-  'video-artist', 'video-title', 'video-status', 'video-credit', 'video-note', 'search-empty'];
+  'video-artist', 'video-title', 'video-status', 'video-credit', 'video-note', 'search-empty',
+  'turn-now', 'queue-selected', 'queue-count', 'queue-empty', 'queue-status'];
 
 // A small fixture keeps these tests independent of Astro's build. Each ID is
 // checked against the real page, and the actual client and audio core execute
@@ -23,6 +25,9 @@ const markup = `<!doctype html><html><body>
   ${songs.map((song, i) => `<button data-song="${i}">${song.title}</button>`).join('')}
   ${catalogue.map((song, i) => `<button data-catalogue="${i}">${song.title} ${song.artist}</button>`).join('')}
   <input id="song-search" type="search"><section id="noun-companions"></section>
+  <select id="turn-singer"><option value="0">Your Noun</option></select><ol id="setlist"></ol>
+  <button id="queue-add">Add this song</button><button id="queue-next" disabled>Next singer</button>
+  <button id="queue-deal">Deal 3 songs</button><button id="queue-clear" disabled>Clear waiting turns</button>
   <span id="group-size-wrap" hidden><select id="group-size"><option value="2">2</option><option value="4">4</option></select></span>
   <section id="video-stage" hidden><div id="video-container"></div><button id="video-load">Load video</button><button id="video-close" hidden>Close video</button><a id="video-source"></a></section>
   <section id="bell-stage"></section><details id="bell-songbook"></details>
@@ -56,7 +61,7 @@ function setup(t, { getUserMedia, unavailable = false, resumeGate, sampleFrequen
   const dom = new JSDOM(markup, { url: `https://pointcast.test/karaoke/${hash}`, pretendToBeVisual: true, runScripts: 'outside-only' });
   const win = dom.window;
   const contexts = [], frames = new Map(), intervals = new Map(), timeouts = new Map(), requests = [], videoPlayers = [], copied = [];
-  const companionCalls = { singers: [], cheers: [], resets: 0 };
+  const companionCalls = { singers: [], active: [], cheers: [], resets: 0 };
   let nextId = 0, hidden = false;
   Object.defineProperty(win.document, 'hidden', { configurable: true, get: () => hidden });
   win.requestAnimationFrame = callback => { const id = ++nextId; frames.set(id, callback); return id; };
@@ -93,6 +98,7 @@ function setup(t, { getUserMedia, unavailable = false, resumeGate, sampleFrequen
     const CATALOGUE = ${JSON.stringify(catalogue)};
     function initNounCompanions() { return {
       setSingers(count) { globalThis.__companionCalls.singers.push(count); },
+      setActiveSinger(index) { globalThis.__companionCalls.active.push(index); },
       cheer(label) { globalThis.__companionCalls.cheers.push(label); },
       reset() { globalThis.__companionCalls.resets++; },
     }; }
@@ -106,6 +112,7 @@ function setup(t, { getUserMedia, unavailable = false, resumeGate, sampleFrequen
       return player;
     }
     ${core.replace(/^export /gm, '')}
+    ${setlistCore.replace(/^export /gm, '')}
     ${client.replace(/^import .+;\r?\n/gm, '')}
     //# sourceURL=karaoke-client-under-test.js`);
   t.after(() => { win.dispatchEvent(new win.Event('pagehide')); dom.window.close(); });
@@ -155,6 +162,67 @@ test('client test fixture uses real page IDs', () => {
   const fixture = new JSDOM(markup);
   for (const element of fixture.window.document.querySelectorAll('[id]')) assert.ok(page.includes(`id="${element.id}"`), `page contains #${element.id}`);
   fixture.window.close();
+});
+
+test('room turns preserve assignment and advance only by an explicit tap without autoplay', async t => {
+  const app=setup(t);
+  await app.press('[data-mode="group"]');
+  app.element('#turn-singer').value='1';await app.press('#queue-add');
+  await app.press('[data-catalogue="0"]');await app.press('#queue-add');
+  assert.equal(app.element('#setlist').children.length,2);
+  assert.match(app.element('#setlist').textContent,/Singer 2/);
+  await app.press('#queue-next');
+  assert.match(app.element('#turn-now').textContent,/Singer 2.*Little Light/i);
+  assert.equal(app.companionCalls.active.at(-1),1);
+  assert.equal(app.contexts.length,0);assert.equal(app.videoPlayers.length,0);
+  assert.equal(app.win.document.activeElement,app.element('#start'));
+  await app.press('#restart');assert.equal(app.companionCalls.active.at(-1),1);
+  await app.press('#queue-next');
+  assert.equal(app.element('#video-title').textContent,catalogue[0].title);
+  assert.equal(app.videoPlayers.length,0);
+  assert.equal(app.win.document.activeElement,app.element('#video-load'));
+  assert.equal(app.element('#queue-next').disabled,true);
+});
+
+test('dealing creates three distinct songs, rotates singers, caps turns, and clear affects only waiting turns', async t => {
+  const app=setup(t);await app.press('[data-mode="group"]');
+  app.element('#group-size').value='4';app.element('#group-size').onchange();
+  await app.press('#queue-deal');
+  const rows=[...app.element('#setlist').children];
+  assert.equal(new Set(rows.map(row=>row.querySelector('strong').textContent)).size,3);
+  rows.forEach((row,i)=>assert.match(row.textContent,new RegExp(`Singer ${i+1}`)));
+  for(let i=0;i<4;i++)await app.press('#queue-deal');
+  assert.equal(app.element('#setlist').children.length,12);
+  assert.equal(app.element('#queue-add').disabled,true);assert.equal(app.element('#queue-deal').disabled,true);
+  await app.press('#queue-next');const active=app.element('#turn-now').textContent;
+  await app.press('#queue-clear');
+  assert.equal(app.element('#setlist').children.length,0);assert.equal(app.element('#turn-now').textContent,active);
+  assert.equal(app.element('#queue-add').disabled,false);
+});
+
+test('reducing the room remaps waiting/current singers and removing a turn preserves focus', async t => {
+  const app=setup(t);await app.press('[data-mode="group"]');
+  app.element('#group-size').value='4';app.element('#group-size').onchange();
+  app.element('#turn-singer').value='3';await app.press('#queue-add');await app.press('#queue-add');
+  await app.press('#queue-next');
+  app.element('#group-size').value='2';app.element('#group-size').onchange();
+  assert.match(app.element('#turn-now').textContent,/Singer 2/);assert.equal(app.companionCalls.active.at(-1),1);
+  assert.doesNotMatch(app.element('#setlist').textContent,/Singer [34]/);
+  app.element('#setlist button').click();
+  assert.equal(app.win.document.activeElement,app.element('#queue-add'));
+  await app.press('[data-mode="solo"]');assert.match(app.element('#turn-now').textContent,/Your Noun/);
+});
+
+test('advancing a turn cancels a late microphone and destroys the previous video', async t => {
+  const permission=deferred(),stream=mediaStream();
+  const app=setup(t,{getUserMedia:()=>permission.promise});
+  await app.press('#queue-add');
+  const pending=app.press('#mic');await app.press('#queue-next');
+  permission.resolve(stream);await pending;assert.ok(stream.track.stopped>0);assertMicOff(app);
+  await app.press('[data-catalogue="0"]');await app.press('#video-load');
+  await app.press('#queue-add');await app.press('#queue-next');
+  assert.equal(app.videoPlayers[0].destroyed,1);assert.equal(app.videoPlayers.length,1);
+  assertFreshReflection(app);
 });
 
 test('cancelling delayed microphone permission stops the late stream without creating audio nodes', async t => {

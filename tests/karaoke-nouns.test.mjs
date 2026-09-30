@@ -63,6 +63,45 @@ test('cheers only on direct calls and reset preserves chosen local avatars', () 
   } finally { env.restore(); }
 });
 
+test('spotlights the active local singer across avatar changes and reset', () => {
+  const env = setup({ reducedMotion: true });
+  try {
+    const api = initNounCompanions(env.container);
+    api.setSingers(3);
+    api.setActiveSinger(1);
+    let active = env.container.querySelector('.noun-companion--active .noun-companion__choice');
+    assert.equal(active.dataset.singer, '2');
+    assert.equal(active.getAttribute('aria-current'), 'true');
+    assert.match(active.getAttribute('aria-label'), /On the mic/);
+    assert.equal(active.querySelector('.noun-companion__mic-label').textContent, 'On the mic');
+    active.click();
+    active = env.container.querySelector('.noun-companion--active .noun-companion__choice');
+    assert.equal(active.dataset.singer, '2');
+    assert.equal(env.container.ownerDocument.activeElement, active, 'active singer cycle preserves focus');
+    api.reset();
+    assert.equal(env.container.querySelector('.noun-companion--active .noun-companion__choice').dataset.singer, '2');
+    assert.match(env.container.querySelector('[role="status"]').textContent, /Singer 2 is on the mic/);
+  } finally { env.restore(); }
+});
+
+test('clears the active spotlight explicitly or when the singer count shrinks past it', () => {
+  const env = setup();
+  try {
+    const api = initNounCompanions(env.container);
+    api.setSingers(4);
+    api.setActiveSinger(3);
+    api.setSingers(2);
+    assert.equal(env.container.querySelector('.noun-companion--active'), null);
+    api.setActiveSinger(0);
+    assert.equal(env.container.querySelector('.noun-companion--active .noun-companion__choice').dataset.singer, '1');
+    api.setActiveSinger(null);
+    assert.equal(env.container.querySelector('.noun-companion--active'), null);
+    assert.match(env.container.querySelector('[role="status"]').textContent, /No singer is on the mic/);
+    api.setActiveSinger(99);
+    assert.equal(env.container.querySelector('.noun-companion--active'), null);
+  } finally { env.restore(); }
+});
+
 test('requires a real container element', () => {
   const env = setup();
   try { assert.throws(() => initNounCompanions(null), TypeError); }
