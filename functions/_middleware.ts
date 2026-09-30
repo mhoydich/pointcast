@@ -251,6 +251,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(new URL(retiredProfileTarget, url.origin).toString(), 301);
   }
 
+  // Published Me pages resolve their current visibility in D1 on every request.
+  // Preserve their no-store/CSP headers and complete HTML/JSON for every UA.
+  // A static-directory fetch or the generic agent cache would retain withdrawn
+  // content; injected scripts/unfurls are also outside their public projection.
+  if (/^\/(?:collections|people)\/[^/]+\/?$/.test(url.pathname)) {
+    return next();
+  }
+
   // Keep older Nouns Nation Battler deep links alive. CF Pages handles the
   // directory route reliably, while hash params stay client-side for TV modes.
   if (isGet && url.pathname === '/games/nouns-nation-battler/index.html') {

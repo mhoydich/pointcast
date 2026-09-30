@@ -84,7 +84,7 @@ test('compiled artifacts are valid JSON with paused origination storage', async 
   }
 });
 
-test('new profile DOM uses delegated data hooks and no element IDs', async () => {
+test('profile DOM uses delegated data hooks with only stable Me navigation anchors', async () => {
   const files = await Promise.all([
     read('src/pages/me.astro'),
     read('src/pages/p/[handle].astro'),
@@ -93,7 +93,10 @@ test('new profile DOM uses delegated data hooks and no element IDs', async () =>
   assert.match(files[0], /document\.addEventListener\('submit'/);
   assert.match(files[0], /pc:auth-change/);
   assert.match(files[0], /getSession/);
-  for (const source of files) assert.doesNotMatch(source, /\sid\s*=/i);
+  const anchors = [...files[0].matchAll(/<[^>]+\sid="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(anchors.sort(), ['account', 'owned-handle']);
+  assert.doesNotMatch(files[0], /document\.getElementById/, 'Me handlers resolve nodes within the current page root');
+  for (const source of files.slice(1)) assert.doesNotMatch(source, /\sid\s*=/i);
   assert.doesNotMatch(files[0], /tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw/);
 });
 

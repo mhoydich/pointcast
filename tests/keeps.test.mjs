@@ -28,8 +28,9 @@ test('no session, cross-site writes and bad shapes are refused; storage failure 
 test('a browser shelf merges in on sign-in, bounded and cleaned', async () => {
   const env = { VISITS: new Store() };
   const items = [postKeep, linkKeep, { kind: 'nope' }, { ...linkKeep, url: 'https://site.com/a', image: 'http://insecure/x.png', title: 'x'.repeat(400), keptAt: '2999-01-01T00:00:00Z' }];
-  const merged = await (await handleKeeps(req('POST', { items }), env, as('pcu_9'))).json();
+  const merged = await (await handleKeeps(req('POST', { importProtocol: 2, items }), env, as('pcu_9'))).json();
   assert.equal(merged.keeps.length, 3);
+  assert.deepEqual(merged.rejected, [{ id: 'item:2', reason: 'invalid-keep' }]);
   const k = merged.keeps.find((x) => x.url === 'https://site.com/a'); assert.equal(k.image, ''); assert.equal(k.title.length, 160); assert.ok(Date.parse(k.keptAt) <= Date.now());
   assert.throws(() => normalizeKeep({ kind: 'post', text: 'no id' })); assert.equal(normalizeKeep({ ...postKeep, noun: 5000 }).noun, 0);
 });
