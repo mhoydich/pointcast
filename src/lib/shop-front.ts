@@ -9,6 +9,8 @@ import bags from '../data/bags-south-bay.json';
 import playstation from '../data/playstation-2026.json';
 import lego from '../data/lego-sets.json';
 import robots from '../data/home-robots.json';
+import machines from '../data/machine-room.json';
+import aiPlans from '../data/ai-plans.json';
 import { FEEDERS, PICKS as FEEDER_PICKS, DESK_DATE as FEEDER_DATE } from './hummingbird-feeders.mjs';
 import { REGISTER_STATS } from './paddle-register';
 
@@ -140,9 +142,52 @@ const modularPicks: ShopPick[] = modular
 
 const gamePicks: ShopPick[] = playstation.games.map(g => ({id: `playstation-2026/${g.id}`, guide: 'playstation-2026', name:g.name, brand:g.brand, price:null, priceText:g.priceText, currency:'USD', url:g.url, image:g.image, verdict:g.verdict, reviewUrl:`/reviews/playstation-2026#${g.id}`}));
 
-export const SHOP_PICKS: ShopPick[] = [...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+const machinePicks: ShopPick[] = machines.items.filter((m) => typeof m.price === 'number').map((m) => ({
+  id: `machine-room/${m.id}`,
+  guide: 'machine-room',
+  name: m.name,
+  brand: m.brand,
+  price: m.price as number,
+  priceText: (m as { priceText?: string }).priceText ?? money(m.price as number) + ((m as { priceNote?: string }).priceNote ? '*' : ''),
+  currency: 'USD',
+  url: m.url,
+  image: null,
+  verdict: m.verdict,
+  reviewUrl: `/reviews/machine-room#${m.id}`,
+}));
+
+// Subscriptions are monthly, so they list as text, never as a one-time price.
+const planPicks: ShopPick[] = aiPlans.picks.map((k) => {
+  const p = aiPlans.plans.find((x) => x.id === k.plan)!;
+  const price = (p as { priceText?: string }).priceText ?? (p.price === 0 ? 'Free' : `${money(p.price as number)}/mo`);
+  return {
+    id: `ai-plans/${p.id}`,
+    guide: 'ai-plans',
+    name: (p as { full: string }).full,
+    brand: aiPlans.providers.find((v) => v.id === p.provider)!.name,
+    price: null,
+    priceText: price,
+    currency: 'USD' as const,
+    url: aiPlans.providers.find((v) => v.id === p.provider)!.pricingUrl,
+    image: null,
+    verdict: `${k.label.charAt(0) + k.label.slice(1).toLowerCase()}. ${p.verdict}`,
+    reviewUrl: `/reviews/ai-plans#${p.id}`,
+  };
+});
+
+export const SHOP_PICKS: ShopPick[] = [...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {
+    id: 'machine-room', title: 'The machine room', dek: machines.dek, href: '/reviews/machine-room', json: '/reviews/machine-room.json',
+    kind: 'Buying guide', image: '/images/machine-room/hero.jpg', imageAlt: 'Specimen sheet of desk hardware: computers, a drive, a macro pad, a pedal, a light and a mic',
+    asOf: machines.asOf, count: machines.kits.length, countLabel: 'full desks',
+  },
+  {
+    id: 'ai-plans', title: aiPlans.title, dek: aiPlans.dek, href: '/reviews/ai-plans', json: '/reviews/ai-plans.json',
+    kind: 'Desk review', image: '/images/ai-plans/hero.jpg', imageAlt: 'Specimen sheet: membership cards, a usage gauge, coins, a robot arm, a clapperboard, a terminal and keys',
+    asOf: aiPlans.asOf, count: aiPlans.plans.length, countLabel: 'plans',
+  },
   {id:'playstation-2026',title:playstation.title,dek:playstation.dek,href:'/reviews/playstation-2026',json:'/reviews/playstation-2026.json',kind:'Buying guide',image:playstation.games[0].image,imageAlt:playstation.games[0].alt,asOf:playstation.asOf,count:6,countLabel:'games'},
   {
     id: 'home-robots', title: robots.title, dek: robots.dek, href: '/reviews/home-robots', json: '/reviews/home-robots.json',
