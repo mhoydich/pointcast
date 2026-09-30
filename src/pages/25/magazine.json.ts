@@ -79,6 +79,7 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
     })),
   repertoire: SONG_YARD_REPERTOIRE,
   features: [
+    { title: 'After the Noise', subtitle: 'Ole Miss made us move the board. Florida made us move it again.', human: 'https://pointcast.xyz/25/magazine/after-the-noise', machine: 'https://pointcast.xyz/25/magazine/after-the-noise.json', publishedAt: '2026-09-29T22:55:00-07:00', board: '002' },
     {
       title: DIVISION_ONE_DIRECTORY.title,
       subtitle: DIVISION_ONE_DIRECTORY.subtitle,

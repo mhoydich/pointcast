@@ -145,3 +145,5 @@ export default {
     return json({ error: 'not-found' }, 404);
   },
 };
+
+export { KeyboardCascadeRoom } from './cascade';

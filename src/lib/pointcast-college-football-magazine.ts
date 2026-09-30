@@ -484,9 +484,9 @@ export const SONG_YARD_REPERTOIRE = SONG_YARD_REPERTOIRE_PROGRAMS.flatMap((progr
 export const COLLEGE_FOOTBALL_MAGAZINE = {
   spec: 'pointcast.college-football-magazine/v1',
   title: 'POINTCAST COLLEGE FOOTBALL',
-  issue: '002',
-  issueName: "THE EVIDENCE ARRIVES",
-  publishedAt: '2026-09-23T10:30:00-07:00',
+  issue: '003',
+  issueName: "THE ROAD ANSWER",
+  publishedAt: '2026-09-29T22:55:00-07:00',
   canonical: 'https://pointcast.xyz/25/magazine',
   machineEdition: 'https://pointcast.xyz/25/magazine.json',
   block: '0530',

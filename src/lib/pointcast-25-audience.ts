@@ -1,39 +1,40 @@
 import openingBoard from './pointcast-25-board-000.frozen.json';
+import previousBoard from './pointcast-25-board-001.frozen.json';
 import { POINTCAST_25 } from './pointcast-25';
 
 export const POINTCAST_25_REFERENCE = {
-  "name": "AP Top 25 \u00b7 September 20, 2026",
+  "name": "AP Top 25 \u00b7 September 27, 2026",
   "shortName": "AP Top 25",
-  "publishedAt": "2026-09-20",
-  "checkedAt": "2026-09-23",
-  "url": "https://www.collegepollarchive.com/football/ap/seasons.cfm?appollid=1271",
-  "note": "The September 20 AP poll, as archived by College Poll Archive and cross-checked against CFB App. An opinion poll, not a predictive model: one legible reference board, not as a universal consensus.",
+  "publishedAt": "2026-09-27",
+  "checkedAt": "2026-09-29",
+  "url": "https://www.collegepollarchive.com/football/ap/seasons.cfm?appollid=1272",
+  "note": "The September 27 AP poll, as archived by College Poll Archive and cross-checked against LSU Athletics. An opinion poll, not a predictive model: one legible reference board, not a universal consensus.",
   "rankings": [
     "Texas",
     "Georgia",
     "Notre Dame",
-    "Ole Miss",
-    "Indiana",
     "Miami",
     "Ohio State",
+    "Indiana",
     "Alabama",
+    "Florida",
+    "Ole Miss",
     "BYU",
     "LSU",
     "Texas Tech",
-    "USC",
-    "Penn State",
-    "Tennessee",
     "Utah",
-    "Louisville",
     "Iowa",
-    "Michigan",
-    "Missouri",
     "Oregon",
-    "Florida",
-    "SMU",
-    "Texas A&M",
     "Mississippi State",
-    "Houston"
+    "Tennessee",
+    "USC",
+    "Oklahoma State",
+    "Houston",
+    "SMU",
+    "Boise State",
+    "UCLA",
+    "Kentucky",
+    "Missouri"
   ]
 } as const;
 
@@ -96,13 +97,28 @@ export function getPointcast25Team(slug: string) {
 
 // Retain old team URLs even when a team drops out of the current 25.
 export const POINTCAST_25_ALL_TEAM_PAGES = [
-  ...POINTCAST_25_TEAMS.map(team => ({...team, isCurrent: true})),
-  ...openingBoard.teams.filter(team => !POINTCAST_25_TEAMS.some(now => now.school === team.school))
+  ...POINTCAST_25_TEAMS.map(team => ({...team, isCurrent: true, archiveBoard: '002'})),
+  ...previousBoard.teams.filter(team => !POINTCAST_25_TEAMS.some(now => now.school === team.school))
+    .map(team => ({...team, slug: pointcast25TeamSlug(team.school), referenceRank: null, rankDelta: null,
+      comparison: 'Outside the current PointCast 25. This is the preserved Board 001 case.',
+      movementReason: 'Dropped from the current board; the Board 001 case remains below.',
+      isCurrent: false, archiveBoard: '001'})),
+  ...openingBoard.teams.filter(team => !POINTCAST_25_TEAMS.some(now => now.school === team.school) && !previousBoard.teams.some(prior => prior.school === team.school))
     .map(team => ({...team, slug: pointcast25TeamSlug(team.school), referenceRank: null, rankDelta: null,
       comparison: 'Outside the current PointCast 25. This is the preserved Board 000 case.',
       record: null, lastResult: null, movementReason: 'Dropped from the current board; the original case remains below.',
-      isCurrent: false})),
+      isCurrent: false, archiveBoard: '000'})),
 ];
+export const POINTCAST_25_PREVIOUS_RECEIPTS = previousBoard.teams.map(team => ({
+  id: `001-${pointcast25TeamSlug(team.school)}`, board: '001', team: team.school,
+  teamUrl: `https://pointcast.xyz/25/teams/${pointcast25TeamSlug(team.school)}`,
+  rank: team.rank, openedAt: previousBoard.publishedAt,
+  status: team.school === 'Ole Miss' ? 'COMPLICATED' : 'OPEN',
+  claim: team.reason, nextProof: team.proof,
+  review: team.school === 'Ole Miss'
+    ? 'The LSU win remains evidence, but the stated road-composure proof failed in the 52–28 loss at Florida on September 26. The claim is narrowed, not deleted.'
+    : 'Board 001 claim retained. A rank movement alone does not grade the stated football proof.',
+}));
 export const POINTCAST_25_OPENING_RECEIPTS = openingBoard.teams.map(team => ({
   id: `000-${pointcast25TeamSlug(team.school)}`, board: '000', team: team.school,
   teamUrl: `https://pointcast.xyz/25/teams/${pointcast25TeamSlug(team.school)}`,

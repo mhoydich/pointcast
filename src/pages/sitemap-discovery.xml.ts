@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isPublicProduct } from '../lib/commerce';
-import { POINTCAST_25_TEAMS } from '../lib/pointcast-25-audience';
+import { POINTCAST_25_ALL_TEAM_PAGES } from '../lib/pointcast-25-audience';
 import { MASCOT_CARDS } from '../lib/mascot-battler';
 import { POINTCAST_2029_IDENTITIES } from '../lib/pointcast-2029';
 import afterimageExamples from '../data/afterimage-examples.json';
@@ -217,9 +217,11 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/25/boards/001', 'never', '0.92'],
   ['https://pointcast.xyz/25/boards/000.json', 'never', '0.88'],
   ['https://pointcast.xyz/25/boards/001.json', 'never', '0.88'],
+  ['https://pointcast.xyz/25/boards/002', 'never', '0.92'],
+  ['https://pointcast.xyz/25/boards/002.json', 'never', '0.88'],
   ['https://pointcast.xyz/25/alabama-after-saban', 'weekly', '0.98'],
   ['https://pointcast.xyz/25/alabama-after-saban.json', 'weekly', '0.94'],
-  ...POINTCAST_25_TEAMS.flatMap((team) => [
+  ...POINTCAST_25_ALL_TEAM_PAGES.flatMap((team) => [
     [`https://pointcast.xyz/25/teams/${team.slug}`, 'weekly', '0.9'] as SitemapEntry,
     [`https://pointcast.xyz/25/teams/${team.slug}.json`, 'weekly', '0.82'] as SitemapEntry,
   ]),
@@ -231,6 +233,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/25/2029/song-yard.json', 'monthly', '0.95'],
   ['https://pointcast.xyz/25/magazine', 'weekly', '1.0'],
   ['https://pointcast.xyz/25/magazine.json', 'weekly', '0.96'],
+  ['https://pointcast.xyz/25/magazine/after-the-noise', 'monthly', '0.99'],
+  ['https://pointcast.xyz/25/magazine/after-the-noise.json', 'monthly', '0.95'],
   ['https://pointcast.xyz/haptic-dreams', 'weekly', '0.99'],
   ['https://pointcast.xyz/haptic-dreams/play', 'weekly', '0.98'],
   ['https://pointcast.xyz/haptic-dreams.json', 'weekly', '0.95'],

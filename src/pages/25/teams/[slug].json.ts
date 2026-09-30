@@ -17,7 +17,7 @@ export const GET: APIRoute = ({ props }) => {
   return new Response(JSON.stringify({
     spec: 'pointcast.25-team-receipt/v1',
     season: POINTCAST_25.season,
-    board: team.isCurrent ? POINTCAST_25.board : "000",
+    board: team.archiveBoard,
     status: team.isCurrent ? POINTCAST_25.status : "archived-outside-current-25",
     canonical: `https://pointcast.xyz/25/teams/${team.slug}`,
     machineEdition: `https://pointcast.xyz/25/teams/${team.slug}.json`,
