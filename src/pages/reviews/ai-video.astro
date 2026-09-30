@@ -1,0 +1,220 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import review from '../../data/ai-video.json';
+const description = 'The new AI video machines, fall 2026: Kling 4.0, Gemini Omni Flash, Wan 3.0, Seedance 2.5, MiniMax H3, Runway, Luma, Veo 3.1 and more. Fifteen services with clip length, resolution, sound, price and what changed this month. Sora is gone. A desk review with direct, no-commission links.';
+const groups = review.groups;
+const groupLabel = Object.fromEntries(groups.map((g) => [g.id, g.label]));
+const picks = review.picks;
+const lb = review.leaderboard;
+const fmtDate = (d: string | null) => { if (!d) return 'Date unconfirmed'; const [y, m, day] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, day || 1)).toLocaleDateString('en-US', { month: 'short', ...(day ? { day: 'numeric' } : {}), year: 'numeric', timeZone: 'UTC' }); };
+const isNew = (d: string | null) => !!d && d >= '2026-07-01';
+const jsonLd = {'@context':'https://schema.org','@type':'Article',headline:review.title,description,datePublished:review.asOf,author:{'@type':'Organization',name:'cc — PointCast Review Lab'},publisher:{'@type':'Organization',name:'PointCast'},image:'https://pointcast.xyz/images/ai-video/og.jpg',mainEntityOfPage:'https://pointcast.xyz/reviews/ai-video'};
+---
+<BlockLayout title={`${review.title} | PointCast`} description={description} image="/images/ai-video/og.jpg" jsonLd={jsonLd} immersive>
+  <div class="video-review">
+    <nav class="mast" aria-label="PointCast"><a href="/">POINTCAST<span> / THE VIDEO MACHINES</span></a><a href="/reviews">All reviews ↗</a><a href="/shop/front">Shop ↗</a></nav>
+    <main>
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">REVIEW LAB · DESK REVIEW · {picks.length} SERVICES</p>
+          <h1>The new<br/>video<br/><em>machines.</em></h1>
+          <p class="dek">{review.dek}</p>
+          <p class="byline">By <strong>cc</strong>, PointCast Review Lab<br/><time datetime={review.asOf}>September 29, 2026</time> · 9 minute read</p>
+          <a class="jump" href="#machines">See all fifteen ↓</a>
+        </div>
+        <figure class="hero-image"><span class="stamp">KLING 4<br/>DROPPED<br/>SEPT 28 ↘</span><img src={review.hero} alt={review.heroAlt} width="1200" height="1200" fetchpriority="high"/><figcaption>{review.heroCredit}</figcaption></figure>
+      </header>
+
+      <section class="intro">
+        <p>A year ago, AI video meant four wobbly seconds. This month it means thirty seconds, with sound, in one pass.</p>
+        <div>
+          <p>{review.summary}</p>
+          <p class="fine">{review.method}</p>
+        </div>
+      </section>
+      <aside class="disclosure"><strong>Shopping note</strong><p>{review.disclosure}</p></aside>
+
+      <section class="chart" aria-labelledby="chart-title">
+        <p class="eyebrow">WHO’S WINNING THE BLIND VOTE · {fmtDate(lb.seen).toUpperCase()}</p>
+        <h2 id="chart-title">The chart, this week.</h2>
+        <ol class="ranks">{lb.ranks.map((r) => <li><span class="rank mono">{String(r.rank).padStart(2, '0')}</span><strong>{r.model}</strong><span class="maker">{r.maker}</span><span class="elo mono">{r.elo}</span><span class="bar" style={`--w:${Math.max(8, (r.elo - 1100) / 1.4)}%`}></span></li>)}</ol>
+        <p class="fine">{lb.source}, Elo from blind head-to-head votes. {lb.note} <a href={lb.url} rel="noopener noreferrer">See the live chart ↗</a></p>
+      </section>
+
+      <section id="machines" aria-labelledby="machines-title">
+        <div class="section-heading"><p class="eyebrow">FOUR KINDS OF VIDEO MACHINE</p><h2 id="machines-title">What do you want<br/>to make?</h2></div>
+        <ol class="kinds" aria-label="Kinds of video service">
+          {groups.map((g) => <li><span class="mono">{String(picks.filter((p) => p.group === g.id).length).padStart(2, '0')} PICKS</span><strong>{g.label}</strong><small>{g.need}</small></li>)}
+        </ol>
+        <div class="filters" aria-label="Filter by kind">
+          <button type="button" data-filter="all" aria-pressed="true">All services</button>
+          {groups.map((g) => <button type="button" data-filter={g.id} aria-pressed="false">{g.label}</button>)}
+          <a href="#compare">Compare all ↓</a>
+        </div>
+        <p id="filter-count" class="fine" aria-live="polite">Showing all {picks.length} services.</p>
+        <div class="cards">{picks.map((p, i) => (
+          <article id={p.id} class="card" data-group={p.group}>
+            <div class="plate" aria-label={`${p.name} at a glance`}>
+              <p class="plate-top mono"><span>{String(i + 1).padStart(2, '0')}</span><span>{isNew(p.released) ? '● NEW' : ''}</span></p>
+              <p class="plate-name">{p.name}</p>
+              <dl>
+                <div><dt>Length</dt><dd>{p.length}</dd></div>
+                <div><dt>Picture</dt><dd>{p.resolution}</dd></div>
+                <div><dt>Sound</dt><dd>{p.audio}</dd></div>
+                <div><dt>Latest</dt><dd>{fmtDate(p.released)}</dd></div>
+              </dl>
+            </div>
+            <div class="card-copy">
+              <p class="eyebrow">{groupLabel[p.group]} · {p.award}</p>
+              <h3>{p.name}</h3>
+              <div class="spec"><strong>{p.priceText}{p.priceNote ? '*' : ''}</strong><span>{p.brand}</span></div>
+              <p class="status"><span>{p.status}</span>{p.confidence === 'unconfirmed' && <span class="unconf">SOME DETAILS UNCONFIRMED</span>}</p>
+              <p>{p.review}</p>
+              <dl class="facts">
+                <div><dt>What’s new</dt><dd>{p.whatsNew}</dd></div>
+                <div><dt>Best for</dt><dd>{p.bestFor}</dd></div>
+                <div><dt>Where</dt><dd>{p.how}</dd></div>
+              </dl>
+              <p class="caveat"><strong>The catch.</strong> {p.caveat} <a href={p.caveatSource} rel="noopener noreferrer">Source ↗</a></p>
+              <p class="verdict">{p.verdict}</p>
+              <a class="buy" href={p.url} rel="noopener noreferrer">{p.cta}</a>
+              <p class="fine">Direct link · no commission{p.priceNote ? ` · * ${p.priceNote}` : ''} · <a href={p.source} rel="noopener noreferrer">{p.sourceLabel} ↗</a></p>
+            </div>
+          </article>
+        ))}</div>
+      </section>
+
+      <section id="compare" class="comparison">
+        <p class="eyebrow">THE SPEC SHEET</p><h2>All fifteen, side by side.</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label={`Comparison of all ${picks.length} video services`}><table>
+          <caption>Seen on maker pages and the Artificial Analysis arena · September 29, 2026</caption>
+          <thead><tr><th scope="col">Service</th><th scope="col">Entry price</th><th scope="col">Length</th><th scope="col">Picture</th><th scope="col">Sound</th><th scope="col">Status</th></tr></thead>
+          <tbody>{picks.map((p) => <tr><th scope="row"><a href={`#${p.id}`} data-show-all>{p.name}</a><small>{groupLabel[p.group]}</small></th><td>{p.priceText}{p.priceNote ? '*' : ''}</td><td>{p.length}</td><td>{p.resolution}</td><td>{p.audio}</td><td>{p.status}</td></tr>)}</tbody>
+        </table></div>
+        <p class="fine">* See the note on that service’s card. Prices are US list prices before tax and change often; per-second prices are API rates. Monthly plans buy credits, and credits buy fewer seconds on the newest models.</p>
+      </section>
+
+      <section class="brains" aria-labelledby="brains-title">
+        <p class="eyebrow">HOW TO READ THE PRICE</p>
+        <h2 id="brains-title">Count the seconds,<br/>not the plan.</h2>
+        <div class="brains-grid">
+          <p>Almost every plan here sells credits, and every model spends them at a different rate. Runway’s $12 plan buys about 52 seconds of its best model. Luma’s $25 plan buys about 100 seconds at 1080p. The honest unit is the finished second, and on the APIs it’s printed plainly: five cents for Veo 3.1 Lite at 720p, about ten cents for Omni Flash or Wan 3.0 at 720p, forty cents for Veo 3.1 Standard.</p>
+          <p>And plan for waste. Most clips you generate won’t be the one you keep, so a 30-second model that nails the scene in one take can cost less than a cheap one you roll ten times. That’s the real promise in Kling 4 and Seedance 2.5: keyframes and references mean fewer retries. If you’d rather never watch a meter, MiniMax H3, LTX-2.5 and MAGI-2 will run on your own GPU for the price of the electricity. Already paying for ChatGPT, Gemini or Claude? <a href="/reviews/ai-plans">Our AI plans guide</a> shows which tiers include video.</p>
+        </div>
+      </section>
+
+      <section class="watch" aria-labelledby="watch-title">
+        <p class="eyebrow">GONE, COMING, OR NOT YET A PICK</p>
+        <h2 id="watch-title">Worth knowing,<br/>not worth a pick.</h2>
+        <ul>{review.watchlist.map((w) => <li><strong>{w.name}</strong><span class="mono">{w.status}</span><p>{w.note} <a href={w.source} rel="noopener noreferrer">{w.sourceLabel} ↗</a></p></li>)}</ul>
+      </section>
+
+      <footer class="endnote">
+        <p class="eyebrow">THE DESK’S CHOICE</p>
+        <h2>{review.endnoteTitle}</h2>
+        <p>{review.verdict}</p>
+        <details><summary>Sources, images & method</summary>
+          <p>{review.method} cc is PointCast’s Claude Code resident; nothing here claims a hands-on test.</p>
+          <p>{review.heroCredit}. Product and model names belong to their owners. This is an independent selection; no maker paid for or reviewed placement.</p>
+          <p>{review.disclosure}</p>
+          <a href="/reviews/ai-video.json">Read the service and source data as JSON ↗</a> · <a href="/reviews/ai-plans">Which AI plan includes video? See AI plans, reviewed for value →</a>
+        </details>
+        <a class="jump" href="/shop/front">Back to the PointCast Shop →</a>
+      </footer>
+    </main>
+  </div>
+</BlockLayout>
+<script>
+ const init = () => {
+  const root = document.querySelector('.video-review'); if (!root || root.hasAttribute('data-ready')) return; root.setAttribute('data-ready', 'true');
+  const total = root.querySelectorAll('.card').length;
+  const filter = (value: string) => {
+    let count = 0;
+    root.querySelectorAll<HTMLElement>('.card').forEach((card) => { card.hidden = value !== 'all' && card.dataset.group !== value; if (!card.hidden) count++; });
+    root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === value)));
+    const output = root.querySelector('#filter-count'); if (output) output.textContent = value === 'all' ? `Showing all ${total} services.` : `Showing ${count} of ${total} services.`;
+  };
+  root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.addEventListener('click', () => filter(b.dataset.filter || 'all')));
+  root.querySelectorAll('[data-show-all]').forEach((a) => a.addEventListener('click', () => filter('all')));
+ }; init(); document.addEventListener('astro:page-load', init);
+</script>
+<style>
+ :global(body){margin:0;background:#e9e9e4;color:#111}
+ .video-review{--ink:#111;--paper:#e9e9e4;--cobalt:#1f3fe0;--sun:#f6d615;--red:#e8401c;--line:#b9b9b1;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--paper);padding-bottom:60px;overflow-x:hidden}
+ .video-review *{box-sizing:border-box}.video-review a{color:inherit}
+ .mast{display:flex;gap:26px;align-items:center;padding:22px 5vw;border-bottom:1px solid var(--ink);font-size:12px;font-weight:800}.mast a{text-decoration:none}.mast a:first-child{margin-right:auto;font-size:19px;letter-spacing:-1px}.mast span{font-size:11px;letter-spacing:1px;margin-left:12px;color:var(--cobalt)}
+ main{max-width:1440px;margin:auto}
+ .hero{display:grid;grid-template-columns:1fr 1.05fr;min-height:680px;border-bottom:1px solid var(--ink)}
+ .hero-copy{padding:65px 6vw 55px;min-width:0}
+ .eyebrow{font:700 11px/1.6 monospace;letter-spacing:1.7px;text-transform:uppercase;margin:0 0 22px}
+ .mono{font-family:monospace}
+ h1{font-size:clamp(64px,7.8vw,118px);line-height:.88;letter-spacing:-.07em;margin:30px 0}h1 em{font-family:Georgia,serif;font-weight:400;color:var(--cobalt)}
+ .dek{font-size:21px;line-height:1.4;max-width:34ch}.byline{font-size:13px;line-height:1.7;margin:25px 0}
+ .jump{display:inline-block;font-weight:700;font-size:13px;padding:15px 0;text-underline-offset:6px}
+ .hero-image{margin:0;position:relative;background:#fff;display:flex;flex-direction:column;justify-content:center;padding:40px 24px 30px;border-left:1px solid var(--ink);min-width:0}
+ .hero-image img{width:100%;height:auto;display:block}
+ .hero-image figcaption{font:10px monospace;letter-spacing:1px;margin-top:20px;text-align:center}
+ .stamp{position:absolute;top:22px;right:24px;z-index:1;border-radius:50%;background:var(--sun);border:2px solid var(--ink);width:112px;height:112px;display:grid;place-content:center;text-align:center;font:700 10px/1.45 monospace;transform:rotate(9deg)}
+ .intro{display:grid;grid-template-columns:1fr 1fr;gap:65px;padding:60px 6vw}.intro>p{font:30px/1.28 Georgia,serif;margin:0}.intro div>p{margin-top:0;line-height:1.65;font-size:16px}
+ .fine,.intro div>p.fine{font:12px/1.6 Arial,sans-serif;color:#4a4a44}
+ .disclosure{margin:0 6vw 70px;padding:20px 24px;border:1px solid var(--line);background:#f4f4f0;display:flex;gap:24px;align-items:baseline;font-size:13px;line-height:1.6}.disclosure strong{white-space:nowrap}.disclosure p{margin:0}
+ #machines{padding:0 6vw}
+ .section-heading{border-top:4px solid var(--ink);padding-top:24px}
+ h2{font-size:clamp(32px,4.4vw,60px);line-height:1.02;letter-spacing:-.05em;margin:0 0 30px}
+ .kinds{list-style:none;padding:0;margin:0 0 26px;display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink)}
+ .kinds li{padding:14px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}.kinds li:last-child{border-right:0}
+ .kinds span{font-size:11px;color:var(--cobalt);font-weight:700}.kinds strong{font-size:16px}.kinds small{font-size:12px;line-height:1.4;color:#4a4a44}
+ .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:20px 0 12px}
+ .filters button{font:700 12px Arial;cursor:pointer;padding:12px 17px;border:1px solid var(--ink);border-radius:30px;background:transparent;color:var(--ink);min-height:44px}
+ .filters button[aria-pressed=true]{background:var(--cobalt);border-color:var(--cobalt);color:#fff}
+ .filters a{margin-left:auto;font-size:12px}
+ .cards{display:grid;grid-template-columns:1fr 1fr;gap:55px 30px}.card[hidden]{display:none}
+ .card{border-top:1px solid var(--ink);padding-top:20px;min-width:0;scroll-margin-top:25px}
+ .product-image{margin:0}.product-image>a{display:block;background:#fff;border:1px solid #d6d6cf;height:360px;padding:18px}
+ .product-image img{width:100%;height:100%;object-fit:contain;display:block}
+ .product-image figcaption{font:10px/1.5 Arial;color:#55554f;min-height:30px;padding:9px 0}
+ .card-copy .eyebrow{margin-top:12px;color:var(--cobalt)}
+ .card h3{font-size:34px;line-height:1.05;letter-spacing:-1.4px;margin:10px 0 16px}
+ .spec{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.spec strong{font-size:25px}.spec span{font:12px monospace;text-transform:uppercase;letter-spacing:1px}
+ .status{margin:10px 0 0}.status span{display:inline-block;background:var(--sun);border:1px solid var(--ink);padding:4px 8px;font:700 11px/1.4 monospace}
+ .specs{display:inline-block;background:#fff;border:1px solid #d6d6cf;padding:6px 9px;font:11px/1.5 monospace;max-width:100%}
+ .card-copy>p:not(.eyebrow):not(.fine):not(.specs):not(.status){font-size:16px;line-height:1.65}
+ .facts{margin:0 0 16px;border-top:1px solid var(--line)}.facts div{display:grid;grid-template-columns:110px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;line-height:1.5}
+ .facts dt{font:700 11px/1.6 monospace;text-transform:uppercase;letter-spacing:1px;color:var(--cobalt)}.facts dd{margin:0;min-width:0}
+ .caveat{color:#4a4a44}.caveat a{font-size:12px}.verdict{border-left:3px solid var(--cobalt);padding-left:15px;font-weight:700}
+ .buy{display:inline-block;padding:15px 20px;background:var(--sun);border:1px solid var(--ink);font-size:13px;font-weight:700;text-decoration:none;min-height:48px}.buy:hover{background:#fff}
+ .also{display:inline-block;margin-left:14px;font-size:13px;font-weight:700;padding:15px 0}
+ .comparison{margin:75px 6vw;padding-top:28px;border-top:4px solid var(--ink)}
+ .table-scroll{overflow:auto}
+ table{border-collapse:collapse;width:100%;min-width:900px;text-align:left;font-size:13px;line-height:1.5}caption{text-align:left;padding:0 0 14px;font:11px monospace}
+ th,td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:top}thead{background:var(--ink);color:#fff}td:nth-child(2){white-space:nowrap}
+ tbody th small{display:block;font:10px/1.5 monospace;color:#55554f;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+ .brains{margin:0 6vw 75px;padding:40px;background:var(--cobalt);color:#fff}
+ .brains .eyebrow{color:var(--sun)}
+ .brains-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;font-size:16px;line-height:1.65}.brains-grid p{margin:0}
+ .watch{margin:0 6vw 75px;padding-top:28px;border-top:4px solid var(--ink)}
+ .watch ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+ .watch li{background:#f4f4f0;border:1px solid var(--line);padding:20px 22px}.watch li strong{font-size:20px;display:block}.watch li .mono{display:inline-block;margin-top:6px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--cobalt);font-weight:700}.watch li p{font-size:14px;line-height:1.6;margin:10px 0 0}
+ .endnote{padding:55px 6vw 60px;background:var(--ink);color:var(--paper)}
+ .endnote>p:not(.eyebrow){font:21px/1.5 Georgia,serif;max-width:48ch}
+ .endnote details{max-width:800px;padding:22px 0;margin:35px 0;border-top:1px solid #6d6d66;border-bottom:1px solid #6d6d66;font-size:13px;line-height:1.8}.endnote summary{cursor:pointer;font-weight:700}
+ a:focus-visible,button:focus-visible,summary:focus-visible,.table-scroll:focus-visible{outline:3px solid var(--red);outline-offset:4px}
+ @media(max-width:900px){.kinds{grid-template-columns:1fr 1fr}.kinds li:nth-child(2){border-right:0}.kinds li:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+ @media(max-width:760px){.mast{padding:18px 16px;gap:15px}.mast span{display:none}.hero{grid-template-columns:1fr;min-height:0}.hero-copy{padding:35px 16px}.hero-image{border-left:0;border-top:1px solid var(--ink);padding:60px 16px 20px}.stamp{width:84px;height:84px;font-size:8px;top:14px;right:14px}.intro{grid-template-columns:1fr;gap:25px;padding:38px 16px}.intro>p{font-size:25px}.disclosure{margin:0 16px 45px;padding:18px;display:block}.disclosure strong{display:block;margin-bottom:7px}#machines{padding:0 16px}.kinds{grid-template-columns:1fr}.kinds li{border-right:0;border-bottom:1px solid var(--line)}.cards{grid-template-columns:1fr;gap:35px}.product-image>a{height:300px}.filters a{margin-left:0;padding:12px}.comparison{margin:50px 16px}.brains{margin:0 16px 50px;padding:28px 20px}.brains-grid{grid-template-columns:1fr;gap:18px}.watch{margin:0 16px 50px}.watch ul{grid-template-columns:1fr}.endnote{padding:40px 16px}.card h3{font-size:30px}.facts div{grid-template-columns:92px 1fr}.also{margin-left:0;display:block}}
+
+ .chart{margin:0 6vw 75px;padding-top:28px;border-top:4px solid var(--ink)}
+ .ranks{list-style:none;margin:0 0 16px;padding:0;border-top:1px solid var(--ink)}
+ .ranks li{display:grid;grid-template-columns:44px minmax(0,1.4fr) minmax(0,1fr) 60px;gap:6px 14px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--line);font-size:15px}
+ .ranks .rank{color:var(--cobalt);font-weight:700}.ranks .maker{font-size:12px;color:#4a4a44}.ranks .elo{text-align:right;font-weight:700}
+ .ranks .bar{grid-column:2/-1;height:8px;background:repeating-linear-gradient(90deg,var(--cobalt) 0 6px,transparent 6px 8px);width:var(--w)}
+ .ranks li:first-child .bar{background:repeating-linear-gradient(90deg,var(--sun) 0 6px,var(--ink) 6px 8px)}
+ .plate{background:var(--ink);color:var(--paper);padding:18px 20px 16px;border:1px solid var(--ink);background-image:radial-gradient(#3a3a36 1px,transparent 1px);background-size:6px 6px}
+ .plate-top{display:flex;justify-content:space-between;font-size:11px;letter-spacing:2px;margin:0 0 6px;color:var(--sun)}
+ .plate-name{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1.05;margin:0 0 14px}
+ .plate dl{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#4a4a44;border:1px solid #4a4a44}
+ .plate dl div{background:var(--ink);padding:9px 10px;min-width:0}
+ .plate dt{font:700 10px/1.4 monospace;letter-spacing:1.5px;text-transform:uppercase;color:#9fb0ff}
+ .plate dd{margin:3px 0 0;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+ .status .unconf{background:#fff;border-style:dashed;margin-left:6px}
+ @media(max-width:760px){.chart{margin:0 16px 50px}.ranks li{grid-template-columns:34px minmax(0,1fr) 50px}.ranks .maker{grid-column:2}.ranks .elo{grid-row:1;grid-column:3}.plate-name{font-size:24px}}
+</style>
