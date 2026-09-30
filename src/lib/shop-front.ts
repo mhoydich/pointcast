@@ -11,6 +11,7 @@ import playstation from '../data/playstation-2026.json';
 import lego from '../data/lego-sets.json';
 import robots from '../data/home-robots.json';
 import knives from '../data/chef-knives.json';
+import balms from '../data/balm-shelf.json';
 import video from '../data/ai-video.json';
 import machines from '../data/machine-room.json';
 import aiPlans from '../data/ai-plans.json';
@@ -73,6 +74,20 @@ const bagPicks: ShopPick[] = bags.picks.map((p) => ({
   image: p.image,
   verdict: p.verdict,
   reviewUrl: `/reviews/bags#${p.id}`,
+}));
+
+const balmPicks: ShopPick[] = balms.picks.map((b) => ({
+  id: `balm-shelf/${b.id}`,
+  guide: 'balm-shelf',
+  name: b.name,
+  brand: b.brand,
+  price: typeof b.price === 'number' ? b.price : null,
+  priceText: typeof b.price === 'number' ? money(b.price) + (b.priceNote ? '*' : '') : 'See the guide',
+  currency: 'USD',
+  url: b.url,
+  image: b.image,
+  verdict: b.verdict,
+  reviewUrl: `/reviews/balm-shelf#${b.id}`,
 }));
 
 const knifePicks: ShopPick[] = knives.picks.map((k) => ({
@@ -209,9 +224,14 @@ const videoPicks: ShopPick[] = video.picks.map((v) => ({
   reviewUrl: `/reviews/ai-video#${v.id}`,
 }));
 
-export const SHOP_PICKS: ShopPick[] = [...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+export const SHOP_PICKS: ShopPick[] = [...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {
+    id: 'balm-shelf', title: balms.title, dek: balms.dek, href: '/reviews/balm-shelf', json: '/reviews/balm-shelf.json',
+    kind: 'Field guide', image: '/images/balm-shelf/hero.jpg', imageAlt: 'Illustrated balm shelf: tin, tube, patch, liniment bottle, mint, chili, wintergreen',
+    asOf: balms.asOf, count: balms.picks.length, countLabel: 'products',
+  },
   {
     id: 'chef-knives', title: knives.title, dek: knives.dek, href: '/reviews/chef-knives', json: '/reviews/chef-knives.json',
     kind: 'Desk review', image: '/images/chef-knives/hero.jpg', imageAlt: 'Illustrated knife roll: chef knife, gyuto, honing rod, whetstone, board with lemon',

@@ -30,6 +30,8 @@ export const AGENT_SURFACES = {
     homeRobotsData: 'https://pointcast.xyz/reviews/home-robots.json',
     chefKnives: 'https://pointcast.xyz/reviews/chef-knives',
     chefKnivesData: 'https://pointcast.xyz/reviews/chef-knives.json',
+    balmShelf: 'https://pointcast.xyz/reviews/balm-shelf',
+    balmShelfData: 'https://pointcast.xyz/reviews/balm-shelf.json',
     modularCarry: 'https://pointcast.xyz/reviews/modular-carry',
     modularCarryData: 'https://pointcast.xyz/reviews/modular-carry.json',
     playstation2026: 'https://pointcast.xyz/reviews/playstation-2026',
