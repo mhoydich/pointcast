@@ -48,6 +48,8 @@ const staticUrls: SitemapEntry[] = [
   // The Morning Edition: one screen at 6:45 AM, frozen daily; the feed is a Pages Function (functions/morning.json.ts).
   ['https://pointcast.xyz/morning', 'daily', '0.96'],
   ['https://pointcast.xyz/morning.json', 'daily', '0.92'],
+  ['https://pointcast.xyz/agent-field-guide', 'weekly', '0.95'],
+  ['https://pointcast.xyz/agent-field-guide.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-value', 'weekly', '0.9'],
   ['https://pointcast.xyz/agent-value.json', 'weekly', '0.9'],
@@ -329,6 +331,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/reviews/ai-plans.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/home-robots', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/home-robots.json', 'monthly', '0.86'],
+  ['https://pointcast.xyz/reviews/chef-knives', 'monthly', '0.90'],
+  ['https://pointcast.xyz/reviews/chef-knives.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/modular-carry', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/modular-carry.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/100-dollar-ai', 'monthly', '0.90'],
