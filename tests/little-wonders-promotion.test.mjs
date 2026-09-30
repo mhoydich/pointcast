@@ -23,7 +23,7 @@ const bundle = await build({
   }],
 });
 const registry = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
-const { POINTCAST_ADS, OPEN_AD_PUBLISHERS, LITTLE_WONDERS_CAMPAIGN, A_LITTLE_MORE_LIGHT_CAMPAIGN, NOUNS_EVERYBODY_CAMPAIGN, selectAdsForPath, adDestination } = registry;
+const { POINTCAST_ADS, OPEN_AD_PUBLISHERS, LITTLE_WONDERS_CAMPAIGN, MICRO_CLUB_CAMPAIGN, A_LITTLE_MORE_LIGHT_CAMPAIGN, NOUNS_EVERYBODY_CAMPAIGN, selectAdsForPath, adDestination } = registry;
 const ads = POINTCAST_ADS.filter((ad) => ad.campaign === LITTLE_WONDERS_CAMPAIGN.id);
 const destination = 'https://wild-little-wonders.mhoydich.workers.dev/';
 const widget = await readFile(new URL('public/open-ad-network.js', root), 'utf8');
@@ -59,10 +59,10 @@ test('native public rails visibly select exactly one Little Wonders creative wit
   }
 });
 
-test('only PointCast and Industry Next add Little Wonders while retaining both existing campaigns', () => {
+test('PointCast and Industry Next retain Little Wonders alongside the other preferred campaigns', () => {
   for (const publisher of OPEN_AD_PUBLISHERS) {
     assert.deepEqual(publisher.campaigns, ['pointcast', 'industrynext'].includes(publisher.id)
-      ? [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id]
+      ? [A_LITTLE_MORE_LIGHT_CAMPAIGN.id, NOUNS_EVERYBODY_CAMPAIGN.id, LITTLE_WONDERS_CAMPAIGN.id, MICRO_CLUB_CAMPAIGN.id]
       : [A_LITTLE_MORE_LIGHT_CAMPAIGN.id], publisher.id);
   }
 });
