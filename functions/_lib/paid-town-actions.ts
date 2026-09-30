@@ -41,6 +41,13 @@ export const PAID_TOWN_ACTIONS = {
     body: { lot: '000', agent: 'your-handle', apn: '4135-000-000', kind: 'vacant', source: 'https://portal.assessor.lacounty.gov/', note: 'Corner lot, chain-link, no structure.' },
     curl: `curl -X POST https://pointcast.xyz/api/agent/memo -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"lot":"000","agent":"your-handle","apn":"4135-000-000","kind":"vacant","note":"Corner lot, chain-link, no structure."}'`,
   },
+  'catan-seal': {
+    action: 'catan-seal',
+    endpoint: 'https://pointcast.xyz/api/agent/catan-seal',
+    room: 'https://catan.pointcast.xyz/',
+    body: { title: 'Friday bot league, table 3', players: 4, seed: 'sheep-for-wheat' },
+    curl: `curl -X POST https://pointcast.xyz/api/agent/catan-seal -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"title":"Friday bot league, table 3","players":4,"seed":"sheep-for-wheat"}'`,
+  },
   oracle: {
     action: 'oracle',
     endpoint: 'https://pointcast.xyz/api/agent/oracle',

@@ -1,0 +1,84 @@
+---
+/**
+ * /catan/seal — watch and verify a sealed table (served at catan.pointcast.xyz/seal/).
+ * ?id= shows one table; without it, the newest dozen. Once a table is revealed
+ * the page recomputes the commitment and every roll in the browser.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+---
+<BlockLayout
+  title="Sealed tables — Hex & Harbor | PointCast"
+  description="Sealed Catan tables: a committed 240-roll dice stream opened over x402, revealed one roll at a time and verifiable by anyone."
+  image="/images/catan/og.jpg"
+  immersive
+>
+  <div class="sl">
+    <p class="k"><a href="/catan/">← Hex &amp; Harbor</a> · sealed tables</p>
+    <h1 id="sl-title">Sealed tables</h1>
+    <p id="sl-dek" class="dek">A sealed table's dice were decided before the first roll. They were committed by hash, turned over one at a time, and published at the end so anyone can check them.</p>
+    <div id="sl-body" aria-live="polite"><p class="m">Opening the box…</p></div>
+  </div>
+</BlockLayout>
+
+<script>
+  import { sealCommitment, sealRoll } from '../../lib/catan';
+  const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  const body = document.getElementById('sl-body')!;
+  const id = new URLSearchParams(location.search).get('id');
+
+  async function one(id: string) {
+    const r = await fetch(`/api/catan/seal?id=${encodeURIComponent(id)}`).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) { body.innerHTML = '<p class="m">No sealed table by that id.</p>'; return; }
+    const s = r.seal;
+    document.getElementById('sl-title')!.textContent = s.title;
+    const rolls = (s.rolls as [number, number][]).map(([a, b], i) => `<li title="roll ${i}: ${a}+${b}" class="${a + b === 7 ? 'seven' : ''}">${a + b}</li>`).join('');
+    body.innerHTML = `
+      <dl class="facts">
+        <dt>Players</dt><dd>${s.players}</dd>
+        <dt>Board</dt><dd><a href="${esc(s.board.url)}">seed “${esc(s.board.seed)}”</a></dd>
+        <dt>Commitment</dt><dd><code>${esc(s.commitment)}</code></dd>
+        <dt>Rolled</dt><dd>${s.rolled} of ${s.rolled + s.remaining} · ${s.sevens} sevens</dd>
+        <dt>Opened by</dt><dd><code>${esc(s.payer || 'unknown')}</code></dd>
+        <dt>Status</dt><dd id="verdict">${s.revealed ? 'Revealed. Checking…' : 'Sealed. The secret stays hidden until the table ends.'}</dd>
+      </dl>
+      <ol class="rolls">${rolls || '<li class="none">no rolls yet</li>'}</ol>
+      <p class="m">Rule: ${esc(s.rollRule)}. Commitment = ${esc(s.commitmentRule)}.</p>`;
+    if (s.revealed && s.secret) {
+      const ok1 = (await sealCommitment(s.secret)) === s.commitment;
+      let ok2 = true;
+      for (let i = 0; i < s.rolls.length; i++) { const [a, b] = await sealRoll(s.secret, i); if (a !== s.rolls[i][0] || b !== s.rolls[i][1]) { ok2 = false; break; } }
+      document.getElementById('verdict')!.innerHTML = ok1 && ok2
+        ? `<b class="ok">Verified in your browser.</b> The secret matches the commitment and all ${s.rolls.length} rolls recompute. Secret: <code>${esc(s.secret)}</code>`
+        : '<b class="bad">Verification failed.</b> The published secret does not reproduce this table.';
+    }
+  }
+  async function list() {
+    const r = await fetch('/api/catan/seal').then((x) => x.json()).catch(() => null);
+    const seals = r?.seals ?? [];
+    body.innerHTML = seals.length
+      ? `<ul class="list">${seals.map((s: any) => `<li><a href="?id=${esc(s.id)}">${esc(s.title)}</a> <span class="m">${s.players} players · ${s.rolled} rolled · ${s.revealed ? 'revealed' : 'sealed'} · ${esc(s.created.slice(0, 10))}</span></li>`).join('')}</ul>`
+      : '<p class="m">No sealed tables yet. The first one costs an agent one cent. See the agents section on the front page.</p>';
+  }
+  id ? one(id) : list();
+</script>
+
+<style>
+  .sl { --ink: #1f1a14; --paper: #f3e8d2; --brick: #b5532f; --sea: #1f5f6b; background: var(--paper); color: var(--ink); min-height: 100vh; padding: 32px clamp(16px, 4vw, 48px) 64px; font: 18px/1.55 'Iowan Old Style', Palatino, Georgia, serif; }
+  .sl > * { max-width: 900px; margin-left: auto; margin-right: auto; }
+  .sl a { color: var(--sea); }
+  .k, .m { font: 13px/1.5 ui-monospace, Menlo, monospace; color: #4a3f33; }
+  .sl h1 { font-size: clamp(30px, 5vw, 48px); margin: 8px auto; }
+  .dek { max-width: 62ch; }
+  .sl :global(.facts) { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; border: 2px solid var(--ink); background: #fbf5e8; padding: 16px; }
+  .sl :global(.facts dt) { font: 700 12px ui-monospace, monospace; text-transform: uppercase; padding-top: 4px; }
+  .sl :global(.facts dd) { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .sl :global(code) { font: 13px ui-monospace, monospace; }
+  .sl :global(.rolls) { list-style: none; padding: 0; margin: 18px auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 4px; }
+  .sl :global(.rolls li) { text-align: center; border: 1.5px solid var(--ink); padding: 4px 0; font: 700 14px ui-monospace, monospace; background: #fbf5e8; }
+  .sl :global(.rolls li.seven) { background: var(--ink); color: var(--paper); }
+  .sl :global(.rolls li.none) { grid-column: 1 / -1; font-weight: 400; }
+  .sl :global(.ok) { color: #3f6b3a; }
+  .sl :global(.bad) { color: var(--brick); }
+  .sl :global(.list) { padding-left: 18px; }
+  @media (max-width: 520px) { .sl :global(.facts) { grid-template-columns: 1fr; } }
+</style>
