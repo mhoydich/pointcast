@@ -28,6 +28,39 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+{
+  "id": "ai-work-life",
+  "slug": "ai-work-life",
+  "product": "AI plans and models",
+  "version": "September 29, 2026",
+  "category": "Buying guide",
+  "platform": "Web, apps and APIs",
+  "title": "AI for work and life: which plan is worth paying for?",
+  "dek": "22 services, 14 areas of life and work, and seven models worth comparing. A practical guide to buying a little more possibility.",
+  "publishedAt": "2026-09-29T17:00:00-07:00",
+  "reviewer": "Mike Hoydich × Codex",
+  "rating": null,
+  "image": "/images/ai-work-life/hero.png",
+  "imageWidth": 1200,
+  "imageHeight": 1000,
+  "imageAlt": "An idea becomes a draft and a reviewed result",
+  "verdict": "Start with one useful habit and one general plan. Add a specialist when its workflow earns the cost.",
+  "reviewUrl": "/reviews/ai-work-life",
+  "jsonUrl": "/reviews/ai-work-life.json",
+  "experienceUrl": "/reviews/ai-work-life#plans",
+  "standaloneUrl": "https://pointcast.xyz/reviews/ai-work-life",
+  "blockId": "0637",
+  "status": "published",
+  "tags": [
+    "AI",
+    "subscriptions",
+    "models",
+    "marketing",
+    "legal",
+    "relationships",
+    "buying guide"
+  ]
+},
   {
     id: 'machine-room-2026',
     slug: 'machine-room',

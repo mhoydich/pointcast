@@ -5,6 +5,8 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    aiWorkLife: 'https://pointcast.xyz/reviews/ai-work-life',
+    aiWorkLifeData: 'https://pointcast.xyz/reviews/ai-work-life.json',
     shopFront: 'https://pointcast.xyz/shop/front',
     shopFrontData: 'https://pointcast.xyz/shop/front.json',
     shopLlms: 'https://pointcast.xyz/shop/llms.txt',

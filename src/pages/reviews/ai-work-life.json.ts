@@ -1,0 +1,2 @@
+import guide from '../../data/ai-work-life.json';
+export const GET = () => new Response(JSON.stringify({schema:'pointcast.ai-buying-guide/v1',url:'https://pointcast.xyz/reviews/ai-work-life',...guide,affiliateLinks:false,handsOn:false,apiPriceUnit:'USD per million tokens',apiExample:{inputTokens:20000,billedOutputTokens:4000,jobs:100,excludes:'Tools, media, storage, retries, taxes and orchestration'}},null,2),{headers:{'Content-Type':'application/json; charset=utf-8','Access-Control-Allow-Origin':'*'}});
