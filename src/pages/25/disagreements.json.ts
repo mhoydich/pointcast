@@ -12,9 +12,9 @@ export const GET: APIRoute = () => new Response(JSON.stringify({
   publishedAt: POINTCAST_25.publishedAt,
   canonical: 'https://pointcast.xyz/25/disagreements',
   machineEdition: 'https://pointcast.xyz/25/disagreements.json',
-  question: 'Which five teams does PointCast believe in more than the September 20 AP poll?',
+  question: 'Which five teams does PointCast believe in more than the September 27 AP poll?',
   methodology:
-    'The index compares PointCast Board 001 with the September 20 AP Top 25, archived by College Poll Archive. It is a comparison between two differently framed rankings, not a claim of universal consensus.',
+    'The index compares PointCast Board 002 with the September 27 AP Top 25, archived by College Poll Archive. It is a comparison between two differently framed rankings, not a claim of universal consensus.',
   reference: POINTCAST_25_REFERENCE,
   disagreements: POINTCAST_25_DISSENTS.map((team) => ({
     team: team.school,

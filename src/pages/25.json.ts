@@ -18,12 +18,14 @@ export const GET: APIRoute = () =>
           soundOfFocusInteractiveLab: 'https://tonebloom.xyz/focus',
           houseDesk: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed',
           houseDeskJson: 'https://pointcast.xyz/25/magazine/the-house-we-borrowed.json',
+          afterTheNoise: 'https://pointcast.xyz/25/magazine/after-the-noise',
+          afterTheNoiseJson: 'https://pointcast.xyz/25/magazine/after-the-noise.json',
           disagreementIndex: 'https://pointcast.xyz/25/disagreements',
           disagreementIndexJson: 'https://pointcast.xyz/25/disagreements.json',
           receiptBook: 'https://pointcast.xyz/25/receipts',
           receiptBookJson: 'https://pointcast.xyz/25/receipts.json',
-          immutableBoard: 'https://pointcast.xyz/25/boards/001',
-          immutableBoardJson: 'https://pointcast.xyz/25/boards/001.json',
+          immutableBoard: 'https://pointcast.xyz/25/boards/002',
+          immutableBoardJson: 'https://pointcast.xyz/25/boards/002.json',
           fieldFiles: [
             {
               title: 'The State of Alabama / The State of Nick Saban',

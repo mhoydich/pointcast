@@ -3,7 +3,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 const outDir = path.resolve('public/images/pointcast-25');
-const boardFile = path.join(outDir, 'board-001.png');
+const boardFile = path.join(outDir, 'board-002.png');
 const disagreementFile = path.join(outDir, 'disagreement-000.png');
 
 const svg = `
@@ -12,7 +12,7 @@ const svg = `
   <rect y="0" width="1200" height="18" fill="#f4ff3f"/>
   <text x="-28" y="520" fill="#f4ff3f" font-family="Arial Black, Helvetica, sans-serif" font-size="510" font-weight="900" letter-spacing="-66">25</text>
   <text x="612" y="102" fill="#ffffff" font-family="Arial Black, Helvetica, sans-serif" font-size="58" font-weight="900" letter-spacing="-4">FOR REASONS</text>
-  <text x="618" y="137" fill="#aaa9a2" font-family="Menlo, monospace" font-size="14" font-weight="700" letter-spacing="3">BOARD 001 · WEEK 4 · SEP 23, 2026</text>
+  <text x="618" y="137" fill="#aaa9a2" font-family="Menlo, monospace" font-size="14" font-weight="700" letter-spacing="3">BOARD 002 · WEEK 5 · SEP 29, 2026</text>
   <line x1="618" y1="168" x2="1140" y2="168" stroke="#696863" stroke-width="1"/>
   <g font-family="Helvetica, Arial, sans-serif">
     <text x="618" y="222" fill="#7d7c76" font-family="Menlo, monospace" font-size="17" font-weight="700">01</text>
@@ -20,11 +20,11 @@ const svg = `
     <text x="618" y="282" fill="#7d7c76" font-family="Menlo, monospace" font-size="17" font-weight="700">02</text>
     <text x="680" y="282" fill="#ffffff" font-size="31" font-weight="800">GEORGIA</text>
     <text x="618" y="342" fill="#7d7c76" font-family="Menlo, monospace" font-size="17" font-weight="700">03</text>
-    <text x="680" y="342" fill="#ffffff" font-size="31" font-weight="800">OLE MISS</text>
+    <text x="680" y="342" fill="#ffffff" font-size="31" font-weight="800">FLORIDA</text>
     <text x="618" y="402" fill="#7d7c76" font-family="Menlo, monospace" font-size="17" font-weight="700">04</text>
     <text x="680" y="402" fill="#ffffff" font-size="31" font-weight="800">NOTRE DAME</text>
     <text x="618" y="462" fill="#7d7c76" font-family="Menlo, monospace" font-size="17" font-weight="700">05</text>
-    <text x="680" y="462" fill="#ffffff" font-size="31" font-weight="800">MIAMI</text>
+    <text x="680" y="462" fill="#ffffff" font-size="31" font-weight="800">ALABAMA</text>
   </g>
   <line x1="618" y1="500" x2="1140" y2="500" stroke="#696863" stroke-width="1"/>
   <text x="618" y="545" fill="#f4ff3f" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="800">A COLLEGE-FOOTBALL POLL WITH RECEIPTS.</text>

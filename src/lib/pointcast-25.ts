@@ -18,7 +18,7 @@ export interface PointCast25Team {
   proof: string;
 }
 
-import currentBoard from './pointcast-25-board-001.frozen.json';
+import currentBoard from './pointcast-25-board-002.frozen.json';
 
 export const POINTCAST_25 = { ...currentBoard, teams: currentBoard.teams as (PointCast25Team & { record: string; lastResult: string; previousRank: number | null; movementReason: string; sourceUrl: string })[] };
 
@@ -32,6 +32,25 @@ export const POINTCAST_25_SIGNAL_LABELS: Record<PointCast25Signal, string> = {
 // Ledger entries are frozen literals, never derived from the live POINTCAST_25
 // object — a published board's row must not move when the next board edits the lib.
 export const POINTCAST_25_EDITIONS = [
+  {
+    board: '002',
+    status: 'week-5',
+    publishedAt: '2026-09-29T22:55:00-07:00',
+    question: 'If everybody played next Saturday, which 25 teams would we believe in most?',
+    leaders: [
+      { rank: 1, school: 'Texas', reason: 'A pressured road finish keeps Texas first.' },
+      { rank: 2, school: 'Georgia', reason: 'Georgia made the second chair look too small.' },
+      { rank: 3, school: 'Florida', reason: 'Florida answered the question our No. 18 asked too quietly.' },
+      { rank: 4, school: 'Notre Dame', reason: 'A road rout keeps Notre Dame in title weather.' },
+      { rank: 5, school: 'Alabama', reason: 'The offense is loud; the defensive bill got smaller.' },
+    ],
+    integrity: 'sha256:bcb6ea15f7ec93262f43ea00c3fc144065087303ba9cfef024b58b1fcfdb3c9e',
+    human: 'https://pointcast.xyz/25/boards/002',
+    snapshot: 'https://pointcast.xyz/25/boards/002',
+    machine: 'https://pointcast.xyz/25/boards/002.json',
+    current: 'https://pointcast.xyz/25',
+    block: null,
+  },
 {
   "board": "001",
   "status": "week-4",
