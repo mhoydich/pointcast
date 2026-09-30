@@ -546,11 +546,17 @@ textarea.prompt{width:100%;min-height:260px;background:#0b120d;color:#d5dbc5;bor
   });
   // Start polling only once the switchboard is near the screen.
   var started = false;
-  new IntersectionObserver(function (entries) {
-    if (started || !entries.some(function (e) { return e.isIntersecting; })) return;
+  function startBoard() {
+    if (started) return;
     started = true;
     summary().then(function () { setInterval(poll, 3000); setInterval(function () { if (!document.hidden) summary(); }, 30000); });
-  }, { rootMargin: '400px' }).observe($('#lab-board'));
+  }
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (entries) {
+      if (entries.some(function (e) { return e.isIntersecting; })) startBoard();
+    }, { rootMargin: '400px' }).observe($('#lab-board'));
+  }
+  setTimeout(startBoard, 5000); // fallback: observers can be throttled
 
   // ---- Lab 4 -------------------------------------------------------------------------
   var BASE = $('[data-prompt-base]').value;
