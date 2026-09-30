@@ -300,6 +300,9 @@ export const CATAN_ENDPOINTS = [
   { method: 'GET', href: '/api/catan/board', label: 'Forge a balanced board: ?seed=any-words. Deterministic JSON.' },
   { method: 'GET', href: '/api/catan/seal', label: 'Read a sealed table: ?id=. Commitment, rolls so far, secret once revealed.' },
   { method: 'POST', href: '/api/catan/seal', label: 'Roll or reveal a sealed table: {id, rollKey, action:"roll"|"reveal"}.' },
+  { method: 'GET', href: '/api/catan/daily', label: "The Daily Island: today's board, corner vertices, par, leaderboard. ?date= for past days (with the best pair revealed)." },
+  { method: 'POST', href: '/api/catan/daily', label: 'Play the Daily Island: {handle, a, b, kind:"human"|"agent"}. One entry per handle per day.' },
+  { method: 'GET', href: '/api/catan/ics', label: 'Tables as calendar: ?id= one invite, ?city= or nothing for a subscribable feed.' },
   { method: 'POST', href: '/api/agent/catan-seal', label: 'x402, 0.01 USDC on Etherlink: open a sealed table with a committed 240-roll dice stream.' },
 ] as const;
 
@@ -309,3 +312,127 @@ export const HOUSE_NOTES = [
   'Hosts get a one-time hostKey to cancel. Keep it.',
   'Unofficial fan site. CATAN is a trademark of CATAN GmbH; this site is not affiliated with or endorsed by CATAN GmbH or its publishers. All art is original.',
 ];
+
+// ── The Daily Island (v2) ──────────────────────────────────────────────────
+//
+// One forged island per Pacific day. Pick two opening settlement corners;
+// the score is production (pips), variety and harbour sense. Everyone —
+// people and agents — plays the same island, and the best possible pair
+// ("par") is computed by brute force so the leaderboard has a ceiling.
+
+export const DAILY_EPOCH = '2026-09-29';
+
+export function pacificDate(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+export function dailyNumber(date: string): number {
+  return Math.round((Date.parse(`${date}T12:00:00Z`) - Date.parse(`${DAILY_EPOCH}T12:00:00Z`)) / 86400_000) + 1;
+}
+
+export function dailySeed(date: string): string {
+  return `daily-${date}`;
+}
+
+export interface IslandVertex {
+  id: number;
+  x: number;
+  y: number;
+  hexes: number[];
+  /** index into HARBOR_SLOTS when this corner touches a harbour edge */
+  slot: number | null;
+  near: number[];
+}
+
+/** Every corner of the 19 land hexes, deduplicated, with adjacency. Unit hex size. */
+export const ISLAND_VERTICES: IslandVertex[] = (() => {
+  const key = (x: number, y: number) => `${Math.round(x * 1000)}:${Math.round(y * 1000)}`;
+  const map = new Map<string, IslandVertex>();
+  HEX_COORDS.forEach(({ q, r }, hex) => {
+    const c = hexCenter(q, r);
+    for (let k = 0; k < 6; k++) {
+      const a = (Math.PI / 180) * (60 * k - 30);
+      const x = c.x + Math.cos(a);
+      const y = c.y + Math.sin(a);
+      const id = key(x, y);
+      const v = map.get(id) ?? { id: 0, x, y, hexes: [], slot: null, near: [] };
+      v.hexes.push(hex);
+      map.set(id, v);
+    }
+  });
+  const list = [...map.values()].sort((a, b) => a.y - b.y || a.x - b.x);
+  list.forEach((v, i) => { v.id = i; });
+  for (const v of list) {
+    v.near = list.filter((w) => w !== v && Math.hypot(w.x - v.x, w.y - v.y) < 1.01).map((w) => w.id);
+  }
+  HARBOR_SLOTS.forEach(({ hex, dir }, slot) => {
+    const { q, r } = HEX_COORDS[hex];
+    const [dq, dr] = NEIGHBOR_DIRS[dir];
+    const a = hexCenter(q, r);
+    const b = hexCenter(q + dq, r + dr);
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    for (const v of list) if (Math.abs(Math.hypot(v.x - mx, v.y - my) - 0.5) < 0.01) v.slot = slot;
+  });
+  return list;
+})();
+
+export interface OpeningScore {
+  ok: boolean;
+  error?: string;
+  score: number;
+  pips: number;
+  variety: number;
+  harbor: number;
+  resources: Array<Exclude<Resource, 'desert'>>;
+}
+
+/** Score two opening settlements on a forged board. */
+export function scoreOpening(board: ForgedBoard, a: number, b: number): OpeningScore {
+  const empty = { score: 0, pips: 0, variety: 0, harbor: 0, resources: [] };
+  const va = ISLAND_VERTICES[a];
+  const vb = ISLAND_VERTICES[b];
+  if (!Number.isInteger(a) || !Number.isInteger(b) || !va || !vb) return { ok: false, error: 'pick two corners by id', ...empty };
+  if (a === b) return { ok: false, error: 'two different corners, please', ...empty };
+  if (va.near.includes(b)) return { ok: false, error: 'the distance rule: settlements cannot sit on neighbouring corners', ...empty };
+  let pipsTotal = 0;
+  const produced = new Set<Exclude<Resource, 'desert'>>();
+  for (const v of [va, vb]) {
+    for (const h of v.hexes) {
+      const hex = board.hexes[h];
+      if (hex.resource === 'desert') continue;
+      pipsTotal += hex.pips;
+      produced.add(hex.resource);
+    }
+  }
+  let harbor = 0;
+  for (const v of [va, vb]) {
+    if (v.slot === null) continue;
+    const kind = board.harbors[v.slot].kind;
+    if (kind === 'any') harbor += 1;
+    else if (produced.has(kind)) harbor += 3;
+  }
+  const variety = produced.size * 2;
+  return { ok: true, score: pipsTotal + variety + harbor, pips: pipsTotal, variety, harbor, resources: [...produced] };
+}
+
+/** The best opening on a board (brute force over ~1,400 legal pairs). */
+export function bestOpening(board: ForgedBoard): { a: number; b: number; score: number } {
+  let best = { a: 0, b: 0, score: -1 };
+  for (let a = 0; a < ISLAND_VERTICES.length; a++) {
+    for (let b = a + 1; b < ISLAND_VERTICES.length; b++) {
+      const s = scoreOpening(board, a, b);
+      if (s.ok && s.score > best.score) best = { a, b, score: s.score };
+    }
+  }
+  return best;
+}
+
+export function shareLine(day: number, score: number, par: number): string {
+  const filled = Math.max(0, Math.min(5, Math.round((score / Math.max(1, par)) * 5)));
+  return `Hex & Harbor Daily Island #${day}\n${score}/${par} ${'⬢'.repeat(filled)}${'⬡'.repeat(5 - filled)}\n${CATAN_ORIGIN}/daily`;
+}
+
+export function icsEscape(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+}

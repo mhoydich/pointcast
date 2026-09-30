@@ -314,6 +314,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/beach-commons/v19.json', 'weekly', '0.96'],
   ['https://pointcast.xyz/shop/front', 'weekly', '0.99'],
   ['https://pointcast.xyz/catan/', 'daily', '0.99'],
+  ['https://pointcast.xyz/catan/daily/', 'daily', '0.99'],
   ['https://pointcast.xyz/catan/index.json', 'daily', '0.95'],
   ['https://pointcast.xyz/catan/seal/', 'daily', '0.8'],
   ['https://pointcast.xyz/shop/front.json', 'weekly', '0.95'],

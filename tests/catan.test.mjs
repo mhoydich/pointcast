@@ -122,3 +122,73 @@ test('catan-seal paid action quotes 402 without payment and refuses bad input fi
   const bad = await handleAgentCatanSeal(post('https://pointcast.xyz/api/agent/catan-seal', { players: 9 }), env);
   assert.equal(bad.status, 400);
 });
+
+import { ISLAND_VERTICES, scoreOpening, bestOpening, dailySeed, pacificDate, dailyNumber, shareLine } from '../src/lib/catan.ts';
+import { onRequestGet as dailyGet, onRequestPost as dailyPost } from '../functions/api/catan/daily.ts';
+import { onRequestGet as icsGet } from '../functions/api/catan/ics.ts';
+
+test('daily geometry: 54 corners, 18 harbour corners, neighbours are symmetric', () => {
+  assert.equal(ISLAND_VERTICES.length, 54);
+  assert.equal(ISLAND_VERTICES.filter((v) => v.slot !== null).length, 18);
+  for (const v of ISLAND_VERTICES) {
+    assert.ok(v.hexes.length >= 1 && v.hexes.length <= 3);
+    for (const n of v.near) assert.ok(ISLAND_VERTICES[n].near.includes(v.id));
+  }
+});
+
+test('daily scoring: distance rule, par is the ceiling, share row', () => {
+  const b = forgeBoard(dailySeed('2026-10-01'));
+  const v = ISLAND_VERTICES[20];
+  assert.equal(scoreOpening(b, 20, v.near[0]).ok, false);
+  assert.equal(scoreOpening(b, 20, 20).ok, false);
+  const best = bestOpening(b);
+  assert.equal(scoreOpening(b, best.a, best.b).score, best.score);
+  for (let a = 0; a < 54; a += 7) for (let c = a + 1; c < 54; c += 5) {
+    const s = scoreOpening(b, a, c); if (s.ok) assert.ok(s.score <= best.score);
+  }
+  assert.equal(dailyNumber('2026-09-29'), 1);
+  assert.match(shareLine(3, 31, 31), /#3\n31\/31 ⬢⬢⬢⬢⬢/);
+});
+
+test('daily API: play once per handle, leaderboard ranks, past days reveal', async () => {
+  const env = { VISITS: new FakeKV() };
+  const today = pacificDate();
+  const b = forgeBoard(dailySeed(today));
+  const best = bestOpening(b);
+  const g = await (await dailyGet({ request: new Request('https://x/api/catan/daily'), env })).json();
+  assert.equal(g.date, today);
+  assert.equal(g.par, best.score);
+  assert.equal(g.reveal, null, 'no spoilers today');
+  assert.equal(g.vertices.length, 54);
+  const r1 = await dailyPost({ request: post('https://x/api/catan/daily', { handle: 'bot-a', kind: 'agent', a: best.a, b: best.b }), env });
+  assert.equal(r1.status, 201);
+  const j1 = await r1.json();
+  assert.equal(j1.score, best.score);
+  assert.equal(j1.rank, 1);
+  const again = await dailyPost({ request: post('https://x/api/catan/daily', { handle: 'BOT-A', a: 0, b: 30 }), env });
+  assert.equal(again.status, 409);
+  const bad = await dailyPost({ request: post('https://x/api/catan/daily', { handle: 'p', a: 20, b: ISLAND_VERTICES[20].near[0] }), env });
+  assert.equal(bad.status, 400);
+  const g2 = await (await dailyGet({ request: new Request('https://x/api/catan/daily'), env })).json();
+  assert.equal(g2.entries, 1);
+  assert.equal(g2.averages.agent, best.score);
+  assert.equal(g2.leaderboard[0].handle, 'bot-a');
+  const past = await (await dailyGet({ request: new Request('https://x/api/catan/daily?date=2026-09-29'), env })).json();
+  if (today > '2026-09-29') assert.ok(past.reveal && Number.isInteger(past.reveal.a));
+  assert.equal((await dailyGet({ request: new Request('https://x/api/catan/daily?date=2099-01-01'), env })).status, 400);
+});
+
+test('ics: one invite and a feed, escaped and CRLF', async () => {
+  const env = { VISITS: new FakeKV() };
+  const when = new Date(Date.now() + 2 * 86400_000).toISOString();
+  const { table } = await (await tablesPost({ request: post('https://x/api/catan/tables', { title: 'Hex night; bring snacks', city: 'El Segundo, CA', venue: 'library', when, host: 'mike' }), env })).json();
+  const one = await icsGet({ request: new Request(`https://x/api/catan/ics?id=${table.id}`), env });
+  const text = await one.text();
+  assert.match(one.headers.get('Content-Type'), /text\/calendar/);
+  assert.match(text, /BEGIN:VEVENT\r\n/);
+  assert.ok(text.includes('SUMMARY:Catan · Hex night\\; bring snacks'));
+  assert.match(text, /LOCATION:library\\, El Segundo\\, CA/);
+  const feed = await (await icsGet({ request: new Request('https://x/api/catan/ics?city=segundo'), env })).text();
+  assert.equal((feed.match(/BEGIN:VEVENT/g) || []).length, 1);
+  assert.equal((await icsGet({ request: new Request('https://x/api/catan/ics?id=nope'), env })).status, 404);
+});

@@ -204,6 +204,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       '/': '/catan/',
       '/seal': '/catan/seal/',
       '/seal/': '/catan/seal/',
+      '/daily': '/catan/daily/',
+      '/daily/': '/catan/daily/',
+      '/flyer': '/catan/flyer/',
+      '/flyer/': '/catan/flyer/',
       '/index.json': '/catan/index.json',
       '/llms.txt': '/catan/llms.txt',
     };
