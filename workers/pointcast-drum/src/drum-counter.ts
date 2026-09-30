@@ -29,6 +29,9 @@ export const LEAGUE_DAILY_CAP = 5000;
 export const LEAGUE_SEASON = { id: "S0", name: "Season 0 · open trial", start: "2026-09-26" };
 const LEAGUE_ROWS = 50;
 const USER_KEY_RE = /^[a-f0-9]{24}$/;
+// Places under this prefix are market calls on The Floor (/drum-floor).
+export const FLOOR_PREFIX = "pm:";
+const FLOOR_TTL_MS = 14 * 86_400_000;
 
 function slug(raw: unknown, max: number): string {
   if (typeof raw !== "string") return "";
@@ -117,6 +120,11 @@ export class DrumCounter extends DurableObject<Env> {
           last_at INTEGER NOT NULL,
           PRIMARY KEY (day, kind, app)
         );
+        CREATE TABLE IF NOT EXISTS drum_floor (
+          place TEXT PRIMARY KEY,
+          total INTEGER NOT NULL,
+          last_at INTEGER NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS drum_user_totals (
           user_key TEXT PRIMARY KEY,
           total INTEGER NOT NULL,
@@ -149,6 +157,14 @@ export class DrumCounter extends DurableObject<Env> {
       if (url.searchParams.get("top") === "1") return json({ entries: await this.topEntries() });
       if (url.searchParams.get("signal") === "1") return json(await this.signalSummary());
       if (url.searchParams.get("live") === "1") return json(await this.live());
+      if (url.searchParams.get("floor") === "1") {
+        return json({
+          places: this.ctx.storage.sql.exec(
+            "SELECT place, total, last_at AS lastAt FROM drum_floor WHERE last_at >= ? ORDER BY total DESC LIMIT 400",
+            Date.now() - FLOOR_TTL_MS,
+          ).toArray(),
+        });
+      }
       if (url.searchParams.get("league") === "1") return json(this.league(url.searchParams.get("week")));
       const userKey = url.searchParams.get("user");
       if (userKey !== null) {
@@ -232,7 +248,16 @@ export class DrumCounter extends DurableObject<Env> {
       kind, app, beats, now, now,
     );
     let place = source.place;
-    if (place) {
+    if (place && place.startsWith(FLOOR_PREFIX)) {
+      // The Floor (/drum-floor): market calls keep their own short-lived
+      // table so they never crowd the capped places table.
+      sql.exec(
+        `INSERT INTO drum_floor (place, total, last_at) VALUES (?, ?, ?)
+         ON CONFLICT(place) DO UPDATE SET total = total + excluded.total, last_at = excluded.last_at`,
+        place, beats, now,
+      );
+      sql.exec("DELETE FROM drum_floor WHERE last_at < ?", now - FLOOR_TTL_MS);
+    } else if (place) {
       const knownPlace = sql.exec("SELECT 1 FROM drum_signal_places WHERE place = ?", place).toArray().length > 0;
       if (!knownPlace && sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM drum_signal_places").one().n >= MAX_PLACE_ROWS) place = "elsewhere";
       sql.exec(
