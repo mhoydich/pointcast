@@ -1,0 +1,106 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AgentShopFrame from '../../components/AgentShopFrame.astro';
+const description = 'The Clerk: PointCast’s buyer’s agent. Ask for anything on the shop’s shelves in plain words and get dated picks, the reason each matched and direct maker links. No commission. Signed answers other agents can cite.';
+const examples = ['robot pet under $500', '30 second AI video with sound under $20', 'a tote for the beach', 'LEGO under $60', 'robot that talks back with no subscription', 'best espresso machine'];
+---
+<BlockLayout title="The Clerk | PointCast Shop" description={description} image="/images/agent-shop/og.jpg" immersive>
+  <AgentShopFrame room="clerk">
+    <header class="as-hero">
+      <div>
+        <p class="eyebrow">THE SHOP’S AGENTS · 01 · FREE · SIGNED</p>
+        <h1>The<br/><em>Clerk.</em></h1>
+        <p class="dek">A buyer’s agent that only answers from guides PointCast wrote. Ask it anything. It tells you what it knows, when it checked, and why it thinks so. If it doesn’t know, it says so.</p>
+      </div>
+      <figure><img src="/images/agent-shop/clerk.jpg" alt="A pixel-dithered specimen sheet of an honest shop counter: a brass service bell, an open ledger, a magnifying glass over a price tag, a receipt with a red wax seal, a rubber stamp, a card catalog drawer and a small shelf of boxes." width="1200" height="1200" /><figcaption>Illustration: Astra (Codex) for PointCast</figcaption></figure>
+    </header>
+
+    <section class="as-section" aria-labelledby="ask-title">
+      <p class="eyebrow">ASK THE COUNTER</p>
+      <h2 id="ask-title">What are you looking for?</h2>
+      <form id="clerk-form" class="as-panel">
+        <label>Your question<input id="clerk-q" name="q" maxlength="240" autocomplete="off" placeholder="robot pet under $500" required /></label>
+        <div class="chips" aria-label="Try one">{examples.map((e) => <button type="button" class="chip" data-example={e}>{e}</button>)}</div>
+        <div><button type="submit">Ring the bell →</button></div>
+      </form>
+      <div id="clerk-out" aria-live="polite"></div>
+    </section>
+
+    <section class="as-section as-grid2" aria-labelledby="how-title">
+      <div>
+        <p class="eyebrow">HOW IT ANSWERS</p>
+        <h2 id="how-title">Dated, sourced,<br/>and <em>signed.</em></h2>
+        <p>The Clerk reads the shop front, every pick from every PointCast guide, with the date each price was checked. It pulls a budget and a subject out of your words, matches names, reviews and the guides’ notes, and ranks what’s left. No language model guesses; the same question gets the same answer.</p>
+        <p>Every answer is signed with the PointCast treasury’s Ed25519 key, the same key that signs x402 receipts. A shopping agent can hand your person the answer and the signature together, and anyone can check that PointCast said it and when.</p>
+        <p class="fine">What it won’t do: rank anyone for money, answer from outside PointCast’s own guides, or pretend a miss is a hit.</p>
+      </div>
+      <div>
+        <p class="eyebrow">FOR AGENTS</p>
+        <pre>GET https://pointcast.xyz/api/clerk?q=robot+pet+under+$500
+
+POST https://pointcast.xyz/api/clerk
+{"q": "30 second AI video with sound",
+ "maxPrice": 20, "limit": 3}
+
+MCP (pointcast.xyz/api/mcp): shop_clerk
+  {"query": "a tote for the beach"}</pre>
+        <p class="fine">Free. 60 questions a minute. Answers carry <code>attestation.signature</code> over the canonical JSON of <code>{kind, issuedAt, body}</code>; the public key is at <a href="/api/x402/keys">/api/x402/keys</a>.</p>
+      </div>
+    </section>
+  </AgentShopFrame>
+</BlockLayout>
+<script>
+  const init = () => {
+    const form = document.getElementById('clerk-form') as HTMLFormElement | null;
+    if (!form || form.dataset.ready) return; form.dataset.ready = '1';
+    const input = document.getElementById('clerk-q') as HTMLInputElement;
+    const out = document.getElementById('clerk-out')!;
+    const el = (tag: string, cls?: string, text?: string) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+    const ask = async (q: string) => {
+      out.replaceChildren(el('p', 'fine', 'The Clerk is looking…'));
+      try {
+        const res = await fetch(`/api/clerk?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'no answer');
+        const a = data.body;
+        const wrap = el('div', 'clerk-answer');
+        wrap.append(el('p', 'clerk-summary', a.summary));
+        const list = el('ol', 'clerk-picks');
+        for (const p of a.picks) {
+          const li = el('li', 'clerk-pick');
+          const head = el('div', 'clerk-head');
+          head.append(el('strong', '', p.name), el('span', 'status', p.priceText));
+          li.append(head, el('p', 'fine', `${p.brand} · ${p.guideTitle} · checked ${p.asOf ?? 'recently'}`), el('p', '', p.verdict), el('p', 'fine', `Why: ${p.why.join('; ')}`));
+          const links = el('p', 'clerk-links');
+          const buy = el('a', 'btn', 'Maker’s page →') as HTMLAnchorElement; buy.href = p.url; buy.rel = 'noopener noreferrer';
+          const rev = el('a', '', 'Read the review') as HTMLAnchorElement; rev.href = p.reviewUrl;
+          links.append(buy, rev); li.append(links); list.append(li);
+        }
+        if (a.picks.length) wrap.append(list);
+        for (const g of a.guides) { const p = el('p', 'fine'); const link = el('a', '', `Open ${g.title} →`) as HTMLAnchorElement; link.href = g.href; p.append(link); wrap.append(p); }
+        const sig = el('p', 'fine', data.attestation?.signed ? `Signed ${data.issuedAt} by ${data.attestation.signer} (Ed25519). ` : `Unsigned on this deployment (${data.attestation?.reason ?? 'no key'}). `);
+        const raw = el('a', '', 'See the raw answer ↗') as HTMLAnchorElement; raw.href = `/api/clerk?q=${encodeURIComponent(q)}`; sig.append(raw);
+        wrap.append(sig);
+        out.replaceChildren(wrap);
+      } catch (e) {
+        out.replaceChildren(el('p', 'err', `The Clerk couldn’t answer: ${(e as Error).message}`));
+      }
+    };
+    form.addEventListener('submit', (e) => { e.preventDefault(); const q = input.value.trim(); if (q) { history.replaceState(null, '', `?q=${encodeURIComponent(q)}`); ask(q); } });
+    form.querySelectorAll<HTMLButtonElement>('[data-example]').forEach((b) => b.addEventListener('click', () => { input.value = b.dataset.example!; form.requestSubmit(); }));
+    const q0 = new URLSearchParams(location.search).get('q');
+    if (q0) { input.value = q0; ask(q0); }
+  };
+  init(); document.addEventListener('astro:page-load', init);
+</script>
+<style is:global>
+  .clerk-answer{margin-top:24px}
+  .clerk-summary{font:22px/1.4 Georgia,serif;max-width:60ch;margin:0 0 18px}
+  .clerk-picks{list-style:none;margin:0;padding:0;display:grid;gap:14px;counter-reset:pick}
+  .clerk-pick{background:#fff;border:1px solid var(--ink);padding:18px 20px;counter-increment:pick}
+  .clerk-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+  .clerk-head strong{font-size:22px;letter-spacing:-.5px}
+  .clerk-head strong::before{content:counter(pick, decimal-leading-zero) "  ";font:700 12px monospace;color:var(--cobalt)}
+  .clerk-pick p{margin:8px 0 0;line-height:1.55}
+  .clerk-links{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:14px !important}
+</style>
