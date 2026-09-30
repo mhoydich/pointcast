@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
-import { ROCK_FAMILIES } from '../src/lib/pocket-rocks.mjs';
+import { ROCK_FAMILIES, makeRock, rockSvg } from '../src/lib/pocket-rocks.mjs';
 
 const KEY = 'pc:pocket-rocks:cabinet:v1';
 const root = new URL('../', import.meta.url);
@@ -12,7 +12,7 @@ const page = await readFile(new URL('src/pages/rocks.astro', root), 'utf8');
 // Use the real page's controls. Only expand its server-rendered family loop.
 const markup = page.match(/<(?:main|div)\b[^>]*data-pocket-rocks>[\s\S]*?(?=\s*<script>)/)[0].replace(
   /\{ROCK_FAMILIES\.map\([\s\S]*?\)\)\}/,
-  ROCK_FAMILIES.map(family => `<button type="button" data-family="${family.id}" disabled>${family.geology}</button>`).join(''),
+  () => ROCK_FAMILIES.map((family, index) => `<button type="button" class="rock-family" data-family="${family.id}" aria-pressed="${family.id === 'agate'}" disabled><span class="rock-family-art" aria-hidden="true">${rockSvg(makeRock(18092026 + index * 419, family.id), { size: 160 })}</span><span>${family.geology}</span><span class="rocks-mono">${String(index + 1).padStart(2, '0')}</span></button>`).join(''),
 );
 const bundled = await build({
   entryPoints: [fileURLToPath(new URL('src/scripts/pocket-rocks.ts', root))],
@@ -136,6 +136,18 @@ test('actual controls keep once, persist across reloads, and give specimens dist
   first.click('[data-specimen="PR-AGATE-00000064"]'); first.click('[data-feature]');
   const favoriteReload = await open(t, { storage });
   assert.equal(favoriteReload.$('[data-rock-number]').textContent, '00000064');
+});
+
+test('actual family controls announce a clean specimen status despite thumbnail SVG metadata', async t => {
+  const app = await open(t);
+  for (const family of ROCK_FAMILIES) {
+    const button = app.$(`[data-family="${family.id}"]`);
+    assert.ok(button.querySelector('.rock-family-art[aria-hidden="true"] svg title'));
+    assert.match(button.querySelector('svg desc').textContent, /Fictional digital specimen PR-/);
+    button.click();
+    assert.equal(app.status(), `${family.geology} specimen found.`);
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+  }
 });
 
 test('actual share handling rejects invalid seeds/families and shares the displayed safe specimen', async t => {

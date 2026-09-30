@@ -122,7 +122,10 @@ function boot() {
     familyIndex = (familyIndex + 1) % ROCK_FAMILIES.length;
     showRock(makeRock(randomSeed(), ROCK_FAMILIES[familyIndex].id), 'A new small wonder.');
   }, {signal});
-  page.querySelectorAll<HTMLButtonElement>('[data-family]').forEach(button => button.addEventListener('click', () => showRock(makeRock(randomSeed(), button.dataset.family), `${button.textContent?.trim().replace(/\s+/g,' ')} specimen found.`), {signal}));
+  page.querySelectorAll<HTMLButtonElement>('[data-family]').forEach(button => button.addEventListener('click', () => {
+    const rock = makeRock(randomSeed(), button.dataset.family);
+    showRock(rock, `${rock.geology} specimen found.`);
+  }, {signal}));
   favorite.addEventListener('click', () => { cabinet.featuredId = current.id; save(); renderSpecimen(); renderCabinet(); say('Your favorite will greet you next time.'); }, {signal});
   get('[data-cabinet-grid]').addEventListener('click', event => {
     const button = (event.target as Element).closest<HTMLElement>('[data-specimen]');
