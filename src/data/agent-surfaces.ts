@@ -5,6 +5,9 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    luckyCat: 'https://pointcast.xyz/lucky-cat/',
+    luckyCatAgents: 'https://pointcast.xyz/lucky-cat/agents/',
+    luckyCatArt: 'https://pointcast.xyz/lucky-cat/art/',
     catan: 'https://catan.pointcast.xyz/',
     catanData: 'https://pointcast.xyz/catan/index.json',
     catanLlms: 'https://pointcast.xyz/catan/llms.txt',
@@ -72,6 +75,7 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
   },
   json: {
+    luckyCat: 'https://pointcast.xyz/lucky-cat.json',
     atariBbsMuseum: 'https://pointcast.xyz/atari-bbs.json',
     deathStarClubArt: 'https://pointcast.xyz/atari-bbs/club.json',
     deathStarClubBoard: 'https://pointcast.xyz/api/atari-club',
@@ -96,6 +100,9 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns-drum-club.json',
   },
   api: {
+    luckyCatManifest: 'https://pointcast.xyz/api/lucky-cat',
+    luckyCatProfile: 'https://pointcast.xyz/api/lucky-cat/profile',
+    luckyCatActions: 'https://pointcast.xyz/api/lucky-cat/actions',
     chimeNotebook: 'https://pointcast.xyz/api/chime/log',
     kennelClubToday: 'https://pointcast.xyz/api/kennel-club/today',
     kennelClubMint: 'https://pointcast.xyz/api/kennel-club/mint',
