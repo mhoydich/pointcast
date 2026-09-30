@@ -29,6 +29,38 @@ export type PointCastReview = {
 
 export const reviews: PointCastReview[] = [
 {
+  "id": "100-dollar-ai",
+  "slug": "100-dollar-ai",
+  "product": "Five AI-built artifacts",
+  "version": "September 29, 2026",
+  "category": "Field test",
+  "platform": "Browser and downloadable files",
+  "title": "The $100 AI challenge: five outputs, an open ledger",
+  "dek": "A brand, an app, a difficult document, a weekend and a short. Open the actual work—and see exactly what the cost figure does and does not mean.",
+  "publishedAt": "2026-09-29T22:30:00-07:00",
+  "reviewer": "Mike Hoydich × Codex",
+  "rating": null,
+  "image": "/experiments/ai-100/hero.png",
+  "imageWidth": 1200,
+  "imageHeight": 800,
+  "imageAlt": "Make it real: five outputs and an open ledger",
+  "verdict": "Five inspectable outputs. A $3.77 API-equivalent checkpoint; actual billed cost unknown.",
+  "reviewUrl": "/reviews/100-dollar-ai",
+  "jsonUrl": "/reviews/100-dollar-ai.json",
+  "experienceUrl": "/reviews/100-dollar-ai#outputs",
+  "standaloneUrl": "https://pointcast.xyz/reviews/100-dollar-ai",
+  "blockId": "0641",
+  "status": "published",
+  "tags": [
+    "AI",
+    "field test",
+    "budget",
+    "software",
+    "creative",
+    "evidence"
+  ]
+},
+{
   "id": "ai-work-life",
   "slug": "ai-work-life",
   "product": "AI plans and models",

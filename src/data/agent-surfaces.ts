@@ -8,6 +8,8 @@ export const AGENT_SURFACES = {
     catan: 'https://catan.pointcast.xyz/',
     catanData: 'https://pointcast.xyz/catan/index.json',
     catanLlms: 'https://pointcast.xyz/catan/llms.txt',
+    aiChallenge: 'https://pointcast.xyz/reviews/100-dollar-ai',
+    aiChallengeData: 'https://pointcast.xyz/reviews/100-dollar-ai.json',
     aiWorkLife: 'https://pointcast.xyz/reviews/ai-work-life',
     aiWorkLifeData: 'https://pointcast.xyz/reviews/ai-work-life.json',
     shopFront: 'https://pointcast.xyz/shop/front',
