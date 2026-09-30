@@ -1,9 +1,16 @@
 export const PLAY_LAYER_VERSION = '0.4.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
+  {
+    id: 'pocket-rocks',
+    code: 'ROCK',
+    title: 'Pocket Rocks',
+    route: '/rocks',
+    summary: 'Ten geology-inspired families, endless seeded specimens, and a free cabinet kept in your browser. Turn a rock, share it, or save its artwork.',
+  },
   {
     id: 'co-games',
     code: 'COOP',

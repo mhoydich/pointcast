@@ -1,0 +1,11 @@
+# Pocket Rocks — September 29, 2026
+
+Mike requested: “create collectible digital rocks on pointcast”. This change adds a complete native collecting room at `/rocks` with a structured field guide at `/rocks.json`.
+
+Ten geology-inspired families produce individual procedural specimens from a stable unsigned 32-bit seed and family identifier. The viewer loads Three.js on demand, supports dragging and keyboard/button rotation, and falls back to deterministic illustrated SVG. Rocks can be kept in a browser-local cabinet, featured, shared by URL, or exported as SVG. Cabinets support JSON export/import, metadata validation, duplicate removal, a 500-specimen bound, and reconciliation across tabs. Storage failures remain recoverable through export.
+
+Discovery is integrated into the homepage project shelf, Apps, Play, Block 0643, agent endpoints, both LLM guides, and the discovery sitemap. The existing Block schema and channels are unchanged. The room is isolated from global auth/session, presence, ads, and analytics.
+
+Validation: 10 library tests and 8 production-client tests pass. The client tests exercise the real source and canonical library with only the GPU viewer boundary mocked. Native browser checks at 390 and 1280 pixels verified no horizontal overflow, all ten families, full-pocket completion, reload persistence, valid shared identity, and a visible genuine 3D specimen. No console errors were observed. Independent review fixed cross-tab collection loss, specimen accessibility names, small-text contrast, context-loss controls, stale clipboard callbacks, and initialization cleanup. A full repository build is part of preview preparation; its first sandboxed attempt failed because an existing TzKT route needs network access.
+
+This is preview and draft-PR work. Production publication remains subject to the existing AGENTS.md requirement: “Merge to `main` — X review + MH approval.” Source is prepared on `codex/pocket-rocks-20260929`; no contract, payment, wallet, or data-service changes are involved.
