@@ -85,7 +85,7 @@ export async function readBody(request: Request, maxBytes = 8_192): Promise<Reco
   return parsed as Record<string, unknown>;
 }
 
-/** The storage tables exist? (0026_shop_agents.sql). Cached per isolate once true. */
+/** The storage tables exist? (0027_shop_agents.sql). Cached per isolate once true. */
 let tablesReady = false;
 export async function tablesExist(db: D1Database): Promise<boolean> {
   if (tablesReady) return true;

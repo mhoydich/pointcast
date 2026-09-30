@@ -1,6 +1,6 @@
 -- The shop's agents (/shop/clerk, /shop/wants, /shop/haggle). Additive only:
 -- three new tables and their indexes. Apply to AUTH_DB with
--- `wrangler d1 execute pointcast-auth --remote --file migrations/auth/0026_shop_agents.sql`
+-- `wrangler d1 execute pointcast-auth --remote --file migrations/auth/0027_shop_agents.sql`
 -- before the Pages deploy; the routes answer 503 until the tables exist.
 --
 -- No personal data: posters and agents give a display name they choose, and
