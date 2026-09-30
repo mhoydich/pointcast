@@ -1,4 +1,5 @@
 /** Reading the Want Ads board (shared by /api/wants, /api/wants/offer and the MCP tools). */
+export const DAY = 86_400_000;
 const parseList = (s: string) => { try { const v = JSON.parse(s); return Array.isArray(v) ? v : []; } catch { return []; } };
 
 type WantRow = { id: string; created_at: number; expires_at: number; title: string; need: string; budget_usd: number | null; guide: string | null; must_have: string; poster_name: string; poster_kind: string; status: string };

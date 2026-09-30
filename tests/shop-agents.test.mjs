@@ -10,7 +10,7 @@ const front = {
     { id: 'bags', title: 'Bags for a South Bay day', href: 'https://pointcast.xyz/reviews/bags', asOf: '2026-09-29' },
   ],
   picks: [
-    { id: 'ai-video/kling-4', guide: 'ai-video', name: 'Kling 4.0', brand: 'Kuaishou · Kling AI', price: 10, priceText: 'From ~$10/mo*', url: 'https://kling.ai/', verdict: 'The one to watch.', reviewUrl: 'https://pointcast.xyz/reviews/ai-video#kling-4', facts: 'The one that just dropped · 30 s (Flash: 20 s) · Yes, stereo' },
+    { id: 'ai-video/kling-4', guide: 'ai-video', name: 'Kling 4.0', brand: 'Kuaishou · Kling AI', price: 10, priceText: 'From ~$10/mo*', url: 'https://kling.ai/', verdict: 'The one to watch.', reviewUrl: 'https://pointcast.xyz/reviews/ai-video#kling-4', facts: 'award: The one that just dropped · length: 30 s (Flash: 20 s) · audio: Yes, stereo' },
     { id: 'ai-video/runway', guide: 'ai-video', name: 'Runway Gen-4.5', brand: 'Runway', price: 12, priceText: 'From $12/mo*', url: 'https://runway.com/', verdict: 'Still the best workbench.', reviewUrl: 'https://pointcast.xyz/reviews/ai-video#runway', facts: 'Up to a minute, multi-shot · 1080p · Yes' },
     { id: 'ai-video/midjourney-video', guide: 'ai-video', name: 'Midjourney Video (V1)', brand: 'Midjourney', price: 10, priceText: 'From $10/mo*', url: 'https://www.midjourney.com/', verdict: 'For your own Midjourney art only.', reviewUrl: 'https://pointcast.xyz/reviews/ai-video#midjourney-video', facts: 'Up to 21 s · 480p · No' },
     { id: 'home-robots/loona', guide: 'home-robots', name: 'Loona Petbot Premium', brand: 'KEYi Tech', price: 499, priceText: '$499*', url: 'https://keyirobot.com/', verdict: 'The robot pet for kids.', reviewUrl: 'https://pointcast.xyz/reviews/home-robots#loona', facts: 'Talks through ChatGPT' },
@@ -114,4 +114,13 @@ test('accepting takes the current price and scores the discount', () => {
   assert.equal(r.state.deal, s.ask);
   assert.equal(haggleScore(item, 10), 50);
   assert.equal(haggleTurn(item, r.state, { offer: 3 }).ok, false);
+});
+
+test('house offers carry guide facts, so must-haves like sound and 30 second count', () => {
+  const want = { title: 'Video for ads', need: 'thirty second video clips with sound', budget: 30, guide: 'ai-video', mustHave: ['sound', '30 second'] };
+  const kling = houseOffers(front, want).find((h) => h.pick.id === 'ai-video/kling-4');
+  assert.ok(kling, 'Kling is a house offer');
+  const s = scoreOffer(front, want, kling.offer);
+  assert.ok(s.notes.some((n) => /covers: sound, 30 second/.test(n)), s.notes.join(' | '));
+  assert.equal(s.verdict, 'strong');
 });

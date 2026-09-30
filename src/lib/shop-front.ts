@@ -231,7 +231,7 @@ const videoPicks: ShopPick[] = video.picks.map((v) => ({
  */
 type FactRow = Record<string, unknown> & { id: string };
 const factLine = (row: FactRow, fields: string[]) =>
-  fields.map((f) => row[f]).filter((v): v is string | number => typeof v === 'string' || typeof v === 'number').map(String).join(' · ').replace(/\s+/g, ' ').slice(0, 700);
+  fields.filter((f) => typeof row[f] === 'string' || typeof row[f] === 'number').map((f) => `${f}: ${row[f]}`).join(' · ').replace(/\s+/g, ' ').slice(0, 700);
 const FACT_SOURCES: [string, FactRow[], string[]][] = [
   ['ai-video', video.picks as FactRow[], ['award', 'length', 'resolution', 'audio', 'bestFor', 'whatsNew', 'how', 'caveat']],
   ['home-robots', robots.picks as FactRow[], ['award', 'status', 'talks', 'subscription', 'size', 'specs', 'caveat']],

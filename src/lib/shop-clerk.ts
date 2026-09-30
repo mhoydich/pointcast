@@ -28,7 +28,7 @@ export type ClerkAsk = { q: string; maxPrice: number | null; guide: string | nul
 
 export type ClerkMatch = {
   id: string; name: string; brand: string; guide: string; guideTitle: string; price: number | null; priceText: string;
-  asOf: string | null; url: string; reviewUrl: string; verdict: string; why: string[]; score: number;
+  asOf: string | null; url: string; reviewUrl: string; verdict: string; why: string[]; score: number; facts?: string | null;
 };
 
 export type ClerkAnswer = {
@@ -163,7 +163,7 @@ export function clerkAnswer(front: ShopFront, ask: ClerkAsk): ClerkAnswer {
     if (score <= 0) continue;
     scored.push({
       id: p.id, name: p.name, brand: p.brand, guide: p.guide, guideTitle: title, price: p.price, priceText: p.priceText,
-      asOf: g?.asOf ?? null, url: p.url, reviewUrl: p.reviewUrl, verdict: p.verdict, why, score: Math.round(score * 100) / 100,
+      asOf: g?.asOf ?? null, url: p.url, reviewUrl: p.reviewUrl, verdict: p.verdict, why, score: Math.round(score * 100) / 100, facts: p.facts ?? null,
     });
   }
   scored.sort((a, b) => b.score - a.score || (a.price ?? Infinity) - (b.price ?? Infinity) || a.name.localeCompare(b.name));
@@ -226,7 +226,8 @@ export function scoreOffer(front: ShopFront, want: WantInput, offer: OfferInput)
     if (offer.price <= want.budget) { score += 15; notes.push(`${money(offer.price)} is inside the ${money(want.budget)} budget.`); }
     else { score -= 25; flags.push(`${money(offer.price)} is over the ${money(want.budget)} budget.`); }
   } else if (offer.price === null) { score -= 10; notes.push('No price given. Ask for one before you decide.'); }
-  const offerHay = `${offer.product} ${offer.terms}`.toLowerCase();
+  // "30 s" in a spec line means "30 second"; "audio" means "sound".
+  const offerHay = `${offer.product} ${offer.terms}`.toLowerCase().replace(/(\d+)\s*s\b/g, '$1 second').replace(/\baudio\b/g, 'audio sound');
   if (want.mustHave.length) {
     const met = want.mustHave.filter((m) => m.toLowerCase().split(/\s+/).every((w) => offerHay.includes(w)));
     const missing = want.mustHave.filter((m) => !met.includes(m));
@@ -266,7 +267,7 @@ export function houseOffers(front: ShopFront, want: WantInput): { offer: OfferIn
       product: `${m.name} · ${m.brand}`,
       price: m.price,
       url: m.url,
-      terms: `${m.verdict} From PointCast’s ${m.guideTitle}, checked ${m.asOf ?? 'recently'}. Full review: ${m.reviewUrl}`,
+      terms: `${m.verdict}${m.facts ? ` Guide notes: ${m.facts}.` : ''} From PointCast’s ${m.guideTitle}, checked ${m.asOf ?? 'recently'}. Full review: ${m.reviewUrl}`.slice(0, 400),
       relationship: 'house',
     },
   }));
