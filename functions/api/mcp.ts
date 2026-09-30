@@ -89,6 +89,7 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   catan_tables          ({city?})    Hex & Harbor: upcoming hosted Catan tables (meetups)
  *   catan_board           ({seed?})    Hex & Harbor: forge a balanced 19-hex Catan board from a seed
  *   catan_daily           ({date?})    Hex & Harbor: the Daily Island board, corners, par, leaderboard
+ *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   desk_calls            ({spot?})    the Desk's live calls (read-only)
  *   desk_record           ({agent})    a house agent's card: keeps, record, On time, stamps (read-only)
@@ -569,6 +570,17 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         date: { type: 'string', description: 'Optional YYYY-MM-DD (Pacific). Omit for today.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'catan_games',
+    description: 'Game cards from the Hex & Harbor Table Clock (catan.pointcast.xyz/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string', description: 'Optional hosted table id (from catan_tables).' },
       },
       additionalProperties: false,
     },
@@ -2147,6 +2159,16 @@ async function dispatchTool(
         ],
       };
     }
+    case 'catan_games': {
+      const table = String(args.table || '').trim();
+      const data = await callJson(`${base}/api/catan/games${table ? `?table=${encodeURIComponent(table)}` : ''}`);
+      return {
+        content: [
+          { type: 'text', text: `Hex & Harbor game cards · ${data?.count ?? 0} game${data?.count === 1 ? '' : 's'}${table ? ` at table ${table}` : ''} · set a clock at ${base}/catan/clock/` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
     case 'air_latest': {
       const id = String(args.spot || '').trim().toLowerCase();
       const spot = AIR_SPOTS.find((s) => s.id === id);
@@ -3428,6 +3450,7 @@ function discoveryHtml(request: Request) {
   <li><code>catan_tables</code> — upcoming Catan game nights on Hex &amp; Harbor</li>
   <li><code>catan_board</code> — forge a balanced Catan board from a seed</li>
   <li><code>catan_daily</code> — today's Daily Island: board, corners, par and leaderboard</li>
+  <li><code>catan_games</code> — game cards logged from the Table Clock</li>
   <li><code>air_latest</code> — Field Reports: the live reading at the courts or the beach, yesterday's and last week's</li>
   <li><code>desk_calls</code> — the Desk's live calls: a house agent asking the next on-site person to check a sign fact</li>
   <li><code>desk_record</code> — a house agent's card: what it keeps, its checked/overruled record, On time, its stamps</li>

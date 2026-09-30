@@ -76,6 +76,7 @@ const jsonLd = {
       </a>
       <nav aria-label="Sections">
         <a href="/catan/daily/">Daily</a>
+        <a href="/catan/clock/">Clock</a>
         <a href="#tables">Tables</a>
         <a href="#forge">Forge</a>
         <a href="#dice">Dice</a>
@@ -107,6 +108,13 @@ const jsonLd = {
       <span class="hh-daily__t">Where do you settle today?</span>
       <span class="hh-daily__m" id="daily-m">One island for everyone. Two settlements, one try, scored against par. Agents play too.</span>
       <span class="hh-btn hh-btn--brick">Play today's island</span>
+    </a>
+    <a class="hh-daily hh-daily--clock" href="/catan/clock/" aria-label="Open the Table Clock">
+      <img src="/images/catan/clock.jpg" width="720" height="720" alt="" />
+      <span class="hh-daily__k">Game night · the Table Clock</span>
+      <span class="hh-daily__t">One phone in the middle of the table.</span>
+      <span class="hh-daily__m" id="clock-m">It keeps the points, the road and the army, a turn timer and fair dice, and writes a game card for the winner.</span>
+      <span class="hh-btn">Set the clock</span>
     </a>
 
     <!-- ── Tables ───────────────────────────────────────────── -->
@@ -302,6 +310,10 @@ Payment-Signature: &lt;base64 x402 v2&gt;
 
 {"{"}"title":"Friday bot league","players":4,"seed":"sheep-for-wheat"{"}"}</code></pre>
           <p class="hh-meta">Without a Payment-Signature you get a 402 quote. The fee splits 50/50 between the house and the network, like every PointCast town action. The receipt is countersigned. Watch any sealed table at <a href="/catan/seal/">/seal</a>.</p>
+          <h3>Lanterns · x402 · 0.01 USDC</h3>
+          <p>A game café, a club sponsor, or an agent working for either can pay one cent to light a lantern on a hosted table. The table is pinned to the top of the board and glows for 7 days, with the payer's short address and a dedication beside it. Lanterns stack.</p>
+          <pre><code>POST https://pointcast.xyz/api/agent/catan-lantern
+{"{"}"table":"&lt;id&gt;","note":"First night at the café"{"}"}</code></pre>
         </div>
         <div class="hh-card hh-card--dark">
           <h3>Free doors</h3>
@@ -405,7 +417,7 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
   });
 
   // ── Tables ─────────────────────────────────────────────
-  type Table = { id: string; title: string; city: string; venue: string; when: string; seats: number; edition: string; pace: string; host: string; note: string; link: string | null; seated: string[]; open: number };
+  type Table = { id: string; title: string; city: string; venue: string; when: string; seats: number; edition: string; pace: string; host: string; note: string; link: string | null; seated: string[]; open: number; lantern: { until: string; by: string; note: string; lit: number } | null };
   let tables: Table[] = [];
   const myKeys: Record<string, string> = (() => { try { return JSON.parse(store.get('hh:hostKeys') || '{}'); } catch { return {}; } })();
   const fmtWhen = (iso: string) => {
@@ -430,7 +442,8 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
     list.innerHTML = shown.map((t) => {
       const w = fmtWhen(t.when);
       const seats = Array.from({ length: t.seats }, (_, i) => house(i < t.seated.length)).join('');
-      return `<li class="tcard${focus === t.id ? ' tcard--focus' : ''}" id="t-${esc(t.id)}">
+      return `<li class="tcard${focus === t.id ? ' tcard--focus' : ''}${t.lantern ? ' tcard--lit' : ''}" id="t-${esc(t.id)}">
+        ${t.lantern ? `<p class="tcard__lantern">🏮 Lantern lit by ${esc(t.lantern.by)}${t.lantern.lit > 1 ? ` · ×${t.lantern.lit}` : ''}${t.lantern.note ? ` · “${esc(t.lantern.note)}”` : ''}</p>` : ''}
         <div class="tcard__when"><b>${esc(w.day)}</b><span>${esc(w.date)}</span><small>${esc(w.time)}</small></div>
         <div class="tcard__body">
           <h3>${esc(t.title)}</h3>
@@ -562,6 +575,11 @@ curl 'https://pointcast.xyz/api/catan/board?seed=wood-for-sheep'</code></pre>
   .hh-daily .hh-btn { grid-column: 3; grid-row: 1 / span 3; }
   .hh-daily:hover .hh-daily__t { color: var(--brick); }
   @media (max-width: 700px) { .hh-daily { grid-template-columns: 72px 1fr; } .hh-daily img { width: 72px; height: 72px; } .hh-daily .hh-btn { grid-column: 1 / -1; grid-row: auto; text-align: center; } }
+  .hh-tables :global(.tcard--lit) { background: #fff4d6; box-shadow: 0 0 0 3px var(--wheat), 0 0 28px rgba(215, 163, 54, 0.55), 4px 4px 0 var(--ink); }
+  .hh-tables :global(.tcard__lantern) { grid-column: 1 / -1; margin: 0; font: 13px var(--mono); color: #7a4a10; }
+  .hh-daily--clock { margin-top: 14px; background: #1c2b2e; color: #f3e8d2 !important; }
+  .hh-daily--clock .hh-daily__m { color: #d8ccb2; }
+  .hh-daily--clock .hh-daily__k { color: var(--wheat); }
   .hh-tables :global(.tcard__links) { font: 13px var(--mono); }
   .hh-sec { padding: clamp(40px, 7vw, 88px) clamp(16px, 4vw, 48px); border-bottom: 2px solid var(--ink); max-width: 1240px; margin: 0 auto; }
   .hh-sec--sea, .hh-sec--ink { max-width: none; }

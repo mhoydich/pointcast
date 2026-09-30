@@ -303,6 +303,9 @@ export const CATAN_ENDPOINTS = [
   { method: 'GET', href: '/api/catan/daily', label: "The Daily Island: today's board, corner vertices, par, leaderboard. ?date= for past days (with the best pair revealed)." },
   { method: 'POST', href: '/api/catan/daily', label: 'Play the Daily Island: {handle, a, b, kind:"human"|"agent"}. One entry per handle per day.' },
   { method: 'GET', href: '/api/catan/ics', label: 'Tables as calendar: ?id= one invite, ?city= or nothing for a subscribable feed.' },
+  { method: 'GET', href: '/api/catan/games', label: 'Game cards logged from the Table Clock: ?id= one, ?table= a table\'s history, nothing for recent games and top winners.' },
+  { method: 'POST', href: '/api/catan/games', label: 'Log a finished game: {players:[{name,color,vp}], winner, target, road?, army?, turns, minutes, rolls, table?, seed?}.' },
+  { method: 'POST', href: '/api/agent/catan-lantern', label: 'x402, 0.01 USDC on Etherlink: light a lantern on a hosted table ({table, note?}); pinned and glowing for 7 days, stacks.' },
   { method: 'POST', href: '/api/agent/catan-seal', label: 'x402, 0.01 USDC on Etherlink: open a sealed table with a committed 240-roll dice stream.' },
 ] as const;
 
@@ -435,4 +438,63 @@ export function shareLine(day: number, score: number, par: number): string {
 
 export function icsEscape(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+}
+
+// ── The Table Clock (v3) ───────────────────────────────────────────────────
+//
+// A finished game, logged from the Table Clock: who played, final points,
+// who held the road and the army, how long it ran, and the dice curve.
+
+export const PLAYER_COLORS = ['red', 'blue', 'white', 'orange', 'green', 'brown'] as const;
+export type PlayerColor = (typeof PLAYER_COLORS)[number];
+
+export interface GameInput {
+  table: string | null;
+  target: number;
+  players: Array<{ name: string; color: PlayerColor; vp: number }>;
+  winner: number;
+  road: number | null;
+  army: number | null;
+  turns: number;
+  minutes: number;
+  rolls: Record<string, number>;
+  seed: string | null;
+}
+
+export function validateGame(body: Record<string, unknown>): { ok: true; game: GameInput } | { ok: false; error: string } {
+  const raw = Array.isArray(body.players) ? body.players : [];
+  if (raw.length < 2 || raw.length > 6) return { ok: false, error: 'players must be a list of 2 to 6' };
+  const players = raw.map((p) => {
+    const o = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
+    return { name: cleanHandle(o.name), color: String(o.color) as PlayerColor, vp: Number(o.vp) };
+  });
+  for (const p of players) {
+    if (!p.name || /(https?:\/\/|www\.)/i.test(p.name)) return { ok: false, error: 'every player needs a name (32 characters, no links)' };
+    if (!PLAYER_COLORS.includes(p.color)) return { ok: false, error: `colors must be from: ${PLAYER_COLORS.join(', ')}` };
+    if (!Number.isInteger(p.vp) || p.vp < 0 || p.vp > 30) return { ok: false, error: 'vp must be a whole number 0-30' };
+  }
+  const target = Number(body.target ?? 10);
+  if (!Number.isInteger(target) || target < 5 || target > 30) return { ok: false, error: 'target must be 5-30' };
+  const idx = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v));
+  const winner = Number(body.winner);
+  const road = idx(body.road);
+  const army = idx(body.army);
+  for (const [k, v] of Object.entries({ winner, road, army })) {
+    if (v !== null && (!Number.isInteger(v) || v < 0 || v >= players.length)) return { ok: false, error: `${k} must be a player index` };
+  }
+  if (players[winner].vp < target) return { ok: false, error: 'the winner has not reached the target' };
+  const turns = Number(body.turns ?? 0);
+  const minutes = Number(body.minutes ?? 0);
+  if (!Number.isInteger(turns) || turns < 0 || turns > 2000) return { ok: false, error: 'turns out of range' };
+  if (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440) return { ok: false, error: 'minutes out of range' };
+  const rolls: Record<string, number> = {};
+  const rin = (body.rolls && typeof body.rolls === 'object' ? body.rolls : {}) as Record<string, unknown>;
+  for (let n = 2; n <= 12; n++) {
+    const c = Number(rin[n] ?? 0);
+    if (!Number.isInteger(c) || c < 0 || c > 2000) return { ok: false, error: 'rolls must be counts per total 2-12' };
+    rolls[n] = c;
+  }
+  const table = typeof body.table === 'string' && /^[a-z0-9]{4,16}$/.test(body.table) ? body.table : null;
+  const seed = typeof body.seed === 'string' && body.seed ? cleanSeed(body.seed) : null;
+  return { ok: true, game: { table, target, players, winner, road, army, turns, minutes: Math.round(minutes), rolls, seed } };
 }

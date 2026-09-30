@@ -1,0 +1,340 @@
+---
+/**
+ * /catan/clock — The Table Clock (Hex & Harbor v3), served at
+ * catan.pointcast.xyz/clock. One phone in the middle of a real table keeps
+ * the points, the Longest Road and Largest Army (+2 each, one holder), the
+ * turn timer, fair dice with the game's own curve, and at the end logs a
+ * game card (POST /api/catan/games). State lives in this browser only.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import { PLAYER_COLORS } from '../../lib/catan';
+
+---
+<BlockLayout
+  title="The Table Clock — Hex & Harbor | PointCast"
+  description="A game-night companion for the phone in the middle of the Catan table: points, Longest Road and Largest Army, a turn timer, fair dice with the game's own curve, and a game card at the end."
+  image="/images/catan/og-clock.jpg"
+  immersive
+>
+  <div class="tc" id="tc">
+    <header class="tc-top">
+      <a href="/catan/">← Hex &amp; Harbor</a>
+      <span>The Table Clock</span>
+    </header>
+
+    <!-- setup -->
+    <section class="tc-setup" id="setup">
+      <div class="tc-intro">
+        <img src="/images/catan/clock.jpg" width="720" height="720" alt="Woodblock print: a carved hourglass, a stack of wooden victory tokens, a road piece and a knight token on a hex tile." />
+        <div>
+          <h1>Set the clock.</h1>
+          <p>Put one phone in the middle of the table. It keeps the points, knows who holds the road and the army, times the turns, rolls fair dice, and writes up a game card when someone wins.</p>
+        </div>
+      </div>
+      <form id="setup-form" class="tc-form" autocomplete="off">
+        <fieldset>
+          <legend>Players, in seat order</legend>
+          <ol id="seats" class="tc-seats">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <li data-seat={i} hidden={i > 3}>
+                <input name={`name${i}`} maxlength="32" placeholder={`Player ${i + 1}`} aria-label={`Player ${i + 1} name`} />
+                <select name={`color${i}`} aria-label={`Player ${i + 1} color`}>
+                  {PLAYER_COLORS.map((c, k) => <option value={c} selected={k === i}>{c}</option>)}
+                </select>
+              </li>
+            ))}
+          </ol>
+          <p class="tc-row">
+            <button type="button" class="tc-btn tc-btn--ghost" id="seat-less">− seat</button>
+            <button type="button" class="tc-btn tc-btn--ghost" id="seat-more">+ seat</button>
+          </p>
+        </fieldset>
+        <div class="tc-grid">
+          <label><span>Play to</span><input name="target" type="number" min="5" max="30" value="10" /></label>
+          <label><span>Turn timer (seconds, 0 = off)</span><input name="limit" type="number" min="0" max="600" step="15" value="90" /></label>
+          <label><span>Table id <em>(optional, from the board)</em></span><input name="table" maxlength="16" placeholder="e.g. 0728243g" /></label>
+          <label><span>Board seed <em>(optional)</em></span><input name="seed" maxlength="32" placeholder="wood-for-sheep" /></label>
+        </div>
+        <button class="tc-btn" type="submit">Start the game</button>
+      </form>
+    </section>
+
+    <!-- game -->
+    <section class="tc-game" id="game" hidden>
+      <div class="tc-status">
+        <span id="st-turn">Turn 1</span>
+        <span id="st-clock">0:00</span>
+        <span id="st-target">to 10</span>
+      </div>
+      <ol id="players" class="tc-players"></ol>
+      <div class="tc-bar">
+        <div class="tc-dice" aria-live="polite">
+          <button type="button" class="tc-roll" id="roll" aria-label="Roll the dice (space)">
+            <span class="die" id="da"></span><span class="die" id="db"></span>
+          </button>
+          <p class="tc-total"><b id="total">–</b><small id="total-note">tap the dice</small></p>
+        </div>
+        <div class="tc-turn">
+          <svg viewBox="0 0 40 40" class="tc-glass" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="#d8c8a6" stroke-width="5"/><circle id="ring" cx="20" cy="20" r="17" fill="none" stroke="#b5532f" stroke-width="5" stroke-dasharray="106.8" stroke-dashoffset="0" transform="rotate(-90 20 20)"/></svg>
+          <p class="tc-timer" id="timer">0:00</p>
+          <button type="button" class="tc-btn" id="next">Next turn</button>
+        </div>
+      </div>
+      <div class="tc-curve" id="curve" aria-label="This game's dice"></div>
+      <p class="tc-row tc-row--end">
+        <button type="button" class="tc-btn tc-btn--ghost" id="end">End game</button>
+        <button type="button" class="tc-btn tc-btn--ghost" id="reset">New game</button>
+      </p>
+    </section>
+
+    <!-- winner -->
+    <dialog id="win" class="tc-win">
+      <p class="tc-k">Game over</p>
+      <h2 id="win-name">—</h2>
+      <p id="win-line"></p>
+      <ol id="win-table" class="tc-final"></ol>
+      <p class="tc-row">
+        <button type="button" class="tc-btn" id="log">Log the game card</button>
+        <button type="button" class="tc-btn tc-btn--ghost" id="keep">Keep playing</button>
+      </p>
+      <p id="log-out" class="tc-out" role="status"></p>
+    </dialog>
+  </div>
+</BlockLayout>
+
+<script>
+  import { TWO_D6_WAYS } from '../../lib/catan';
+  const SW: Record<string, string> = { red: '#c0392b', blue: '#2e5e9e', white: '#f4efe4', orange: '#e07b24', green: '#3f7a3a', brown: '#7a4a2a' };
+  const $ = (id: string) => document.getElementById(id)!;
+  const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+  const store = { get(k: string) { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* ok */ } } };
+
+  type P = { name: string; color: string; vp: number };
+  type G = { players: P[]; target: number; limit: number; table: string | null; seed: string | null; turn: number; current: number; road: number | null; army: number | null; rolls: Record<number, number>; started: number; turnStarted: number; over: boolean; last: [number, number] | null };
+  let g: G | null = null;
+  let seats = 4;
+
+  const params = new URLSearchParams(location.search);
+  const form = $('setup-form') as HTMLFormElement;
+  if (params.get('table')) (form.elements.namedItem('table') as HTMLInputElement).value = params.get('table')!;
+  if (params.get('seed')) (form.elements.namedItem('seed') as HTMLInputElement).value = params.get('seed')!;
+  const setSeats = (n: number) => { seats = Math.max(2, Math.min(6, n)); document.querySelectorAll<HTMLElement>('#seats li').forEach((li, i) => { li.hidden = i >= seats; }); };
+  $('seat-less').addEventListener('click', () => setSeats(seats - 1));
+  $('seat-more').addEventListener('click', () => setSeats(seats + 1));
+
+  const save = () => store.set('hh:clock', JSON.stringify(g));
+  const points = (i: number) => g!.players[i].vp + (g!.road === i ? 2 : 0) + (g!.army === i ? 2 : 0);
+  const mmss = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const PIPS: Record<number, number[]> = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+  const face = (el: HTMLElement, n: number) => { el.innerHTML = Array.from({ length: 9 }, (_, i) => `<i${PIPS[n].includes(i) ? ' class="on"' : ''}></i>`).join(''); };
+  const d6 = () => { const b = new Uint8Array(1); do crypto.getRandomValues(b); while (b[0] >= 252); return (b[0] % 6) + 1; };
+
+  function renderPlayers() {
+    if (!g) return;
+    $('players').innerHTML = g.players.map((p, i) => `
+      <li class="pl${i === g!.current ? ' pl--now' : ''}" style="--pc:${SW[p.color]}">
+        <div class="pl-head"><span class="pl-dot"></span><b>${esc(p.name)}</b>${i === g!.current ? '<em>to play</em>' : ''}</div>
+        <div class="pl-vp"><button type="button" data-act="minus" data-i="${i}" aria-label="${esc(p.name)} minus one point">−</button><output aria-label="${esc(p.name)} points">${points(i)}</output><button type="button" data-act="plus" data-i="${i}" aria-label="${esc(p.name)} plus one point">+</button></div>
+        <div class="pl-badges">
+          <button type="button" data-act="road" data-i="${i}" aria-pressed="${g!.road === i}">Longest Road</button>
+          <button type="button" data-act="army" data-i="${i}" aria-pressed="${g!.army === i}">Largest Army</button>
+        </div>
+      </li>`).join('');
+    $('st-turn').textContent = `Turn ${g.turn}`;
+    $('st-target').textContent = `to ${g.target}`;
+  }
+
+  function renderCurve() {
+    if (!g) return;
+    const total = Object.values(g.rolls).reduce((a, b) => a + b, 0);
+    const scale = Math.max(1, ...Object.values(g.rolls), total * 6 / 36);
+    $('curve').innerHTML = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `
+      <div class="c" title="${n}: ${g!.rolls[n] || 0} rolled, ${(total * TWO_D6_WAYS[n] / 36).toFixed(1)} expected">
+        <span class="bar" style="height:${((g!.rolls[n] || 0) / scale) * 100}%"></span>
+        <span class="exp" style="bottom:${total ? ((total * TWO_D6_WAYS[n] / 36) / scale) * 100 : (TWO_D6_WAYS[n] / 6) * 100}%"></span>
+        <b class="${n === 7 ? 'seven' : n === 6 || n === 8 ? 'red' : ''}">${n}</b>
+      </div>`).join('');
+  }
+
+  function checkWin(i: number) {
+    if (!g || g.over || points(i) < g.target) return;
+    g.over = true; save();
+    const order = g.players.map((p, k) => ({ ...p, k, pts: points(k) })).sort((a, b) => b.pts - a.pts);
+    $('win-name').textContent = `${g.players[i].name} wins`;
+    $('win-line').textContent = `${points(i)} points on turn ${g.turn}, ${mmss(Date.now() - g.started)} at the table.`;
+    $('win-table').innerHTML = order.map((p) => `<li style="--pc:${SW[p.color]}"><span class="pl-dot"></span>${esc(p.name)}<b>${p.pts}</b>${g!.road === p.k ? ' <small>road</small>' : ''}${g!.army === p.k ? ' <small>army</small>' : ''}</li>`).join('');
+    $('log-out').textContent = '';
+    ($('win') as HTMLDialogElement).showModal();
+  }
+
+  $('players').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button'); if (!b || !g) return;
+    const i = Number(b.dataset.i); const act = b.dataset.act;
+    if (act === 'plus') g.players[i].vp = Math.min(30, g.players[i].vp + 1);
+    if (act === 'minus') g.players[i].vp = Math.max(0, g.players[i].vp - 1);
+    if (act === 'road') g.road = g.road === i ? null : i;
+    if (act === 'army') g.army = g.army === i ? null : i;
+    save(); renderPlayers();
+    if (act !== 'minus') checkWin(i);
+  });
+
+  function roll() {
+    if (!g) return;
+    const a = d6(); const b = d6(); const t = a + b;
+    g.rolls[t] = (g.rolls[t] || 0) + 1; g.last = [a, b]; save();
+    const btn = $('roll'); btn.classList.remove('tumble'); void btn.offsetWidth; btn.classList.add('tumble');
+    face($('da'), a); face($('db'), b);
+    $('total').textContent = String(t);
+    $('total-note').textContent = t === 7 ? 'Seven. Discard half over seven cards; move the robber.' : `${TWO_D6_WAYS[t]} of 36 ways`;
+    $('tc').classList.toggle('tc--seven', t === 7);
+    renderCurve();
+  }
+  function next() {
+    if (!g) return;
+    g.current = (g.current + 1) % g.players.length;
+    if (g.current === 0) g.turn += 1;
+    g.turnStarted = Date.now(); save(); renderPlayers();
+    $('tc').classList.remove('tc--seven');
+  }
+  $('roll').addEventListener('click', roll);
+  $('next').addEventListener('click', next);
+  document.addEventListener('keydown', (e) => {
+    if (!g || (e.target as HTMLElement).closest('input, select, dialog')) return;
+    if (e.code === 'Space') { e.preventDefault(); roll(); }
+    if (e.key === 'n' || e.key === 'N') next();
+  });
+
+  setInterval(() => {
+    if (!g || g.over) return;
+    $('st-clock').textContent = mmss(Date.now() - g.started);
+    const used = Date.now() - g.turnStarted;
+    $('timer').textContent = mmss(g.limit ? g.limit * 1000 - used : used);
+    const frac = g.limit ? Math.min(1, used / (g.limit * 1000)) : 0;
+    $('ring').setAttribute('stroke-dashoffset', String(106.8 * frac));
+    $('tc').classList.toggle('tc--late', !!g.limit && used > g.limit * 1000);
+  }, 500);
+
+  let wake: { release(): Promise<void> } | null = null;
+  async function keepAwake() { try { wake = await (navigator as any).wakeLock?.request('screen'); } catch { /* not supported */ } }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && g && !g.over) keepAwake(); });
+
+  function show(game: boolean) { $('setup').hidden = game; $('game').hidden = !game; }
+  function start(fresh: G) {
+    g = fresh; save(); show(true); renderPlayers(); renderCurve(); keepAwake();
+    if (g.last) { face($('da'), g.last[0]); face($('db'), g.last[1]); } else { face($('da'), 3); face($('db'), 4); }
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const players: P[] = [];
+    for (let i = 0; i < seats; i++) players.push({ name: String(fd.get(`name${i}`) || '').trim().slice(0, 32) || `Player ${i + 1}`, color: String(fd.get(`color${i}`)), vp: 2 });
+    if (new Set(players.map((p) => p.color)).size !== players.length) { alert('Give every player a different color.'); return; }
+    const now = Date.now();
+    start({ players, target: Math.min(30, Math.max(5, Number(fd.get('target')) || 10)), limit: Math.max(0, Number(fd.get('limit')) || 0), table: String(fd.get('table') || '').trim() || null, seed: String(fd.get('seed') || '').trim() || null, turn: 1, current: 0, road: null, army: null, rolls: {}, started: now, turnStarted: now, over: false, last: null });
+  });
+
+  $('keep').addEventListener('click', () => { if (g) { g.over = false; save(); } ($('win') as HTMLDialogElement).close(); });
+  $('end').addEventListener('click', () => {
+    if (!g) return;
+    const lead = g.players.map((_, i) => i).sort((a, b) => points(b) - points(a))[0];
+    if (points(lead) < g.target) { alert(`Nobody has ${g.target} points yet. Keep playing, or lower the target.`); return; }
+    g.over = false; checkWin(lead);
+  });
+  $('reset').addEventListener('click', () => { if (confirm('Clear this game and start over?')) { g = null; store.set('hh:clock', ''); show(false); } });
+
+  $('log').addEventListener('click', async () => {
+    if (!g) return;
+    const winner = g.players.map((_, i) => i).sort((a, b) => points(b) - points(a))[0];
+    const body = {
+      table: g.table, target: g.target, seed: g.seed, winner, road: g.road, army: g.army, turns: g.turn,
+      minutes: Math.round((Date.now() - g.started) / 60000), rolls: g.rolls,
+      players: g.players.map((p, i) => ({ name: p.name, color: p.color, vp: points(i) })),
+    };
+    const btn = $('log') as HTMLButtonElement; btn.disabled = true;
+    const r = await fetch('/api/catan/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((x) => x.json()).catch(() => ({ ok: false, error: 'network trouble' }));
+    btn.disabled = false;
+    $('log-out').innerHTML = r.ok ? `Logged. <a href="/catan/game/?id=${esc(r.game.id)}">Open the game card →</a>` : esc(r.error || 'Could not log the game.');
+  });
+
+  try { const saved = JSON.parse(store.get('hh:clock') || 'null'); if (saved?.players) start(saved); } catch { /* fresh */ }
+</script>
+
+<style>
+  .tc { --ink: #1f1a14; --paper: #f3e8d2; --paper-2: #ebdcc0; --brick: #b5532f; --sea: #1f5f6b; --wheat: #d7a336;
+    background: var(--paper); color: var(--ink); min-height: 100vh; font: 18px/1.5 'Iowan Old Style', Palatino, Georgia, serif; padding-bottom: 48px; transition: background 0.3s; }
+  .tc--seven { background: #e9c9b8; }
+  .tc a { color: var(--sea); }
+  .tc-top { display: flex; justify-content: space-between; padding: 12px clamp(16px, 4vw, 40px); border-bottom: 2px solid var(--ink); font: 13px ui-monospace, Menlo, monospace; text-transform: uppercase; letter-spacing: 0.08em; }
+  .tc-top a { color: var(--ink); text-decoration: none; }
+  .tc-top span { color: var(--brick); }
+  .tc [hidden] { display: none !important; }
+  .tc-setup, .tc-game { max-width: 1100px; margin: 0 auto; padding: 24px clamp(16px, 4vw, 40px); }
+  .tc-intro { display: grid; grid-template-columns: 150px 1fr; gap: 24px; align-items: center; margin-bottom: 20px; }
+  .tc-intro img { width: 100%; height: auto; border: 2px solid var(--ink); }
+  .tc h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1; margin: 0 0 8px; }
+  @media (max-width: 560px) { .tc-intro { grid-template-columns: 90px 1fr; gap: 14px; } .tc h1 { font-size: 32px; } .tc-intro p { font-size: 15px; } }
+  .tc-form { border: 2px solid var(--ink); background: #fbf5e8; padding: 18px; box-shadow: 5px 5px 0 var(--ink); display: grid; gap: 16px; }
+  .tc-form fieldset { border: 0; padding: 0; margin: 0; }
+  .tc-form legend, .tc-grid span { font: 12px ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+  .tc-grid em { text-transform: none; font-style: normal; opacity: 0.7; }
+  .tc-seats { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+  .tc-seats li { display: grid; grid-template-columns: 1fr 130px; gap: 8px; }
+  .tc input, .tc select { font: 16px Georgia, serif; padding: 10px 12px; border: 2px solid var(--ink); background: #fff; min-width: 0; border-radius: 0; }
+  .tc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .tc-grid label { display: grid; gap: 4px; }
+  @media (max-width: 560px) { .tc-grid { grid-template-columns: 1fr; } }
+  .tc-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 0; }
+  .tc-row--end { justify-content: flex-end; margin-top: 18px; }
+  .tc :global(.tc-btn), .tc-btn { font: 600 15px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 16px; border: 2px solid var(--ink); background: var(--brick); color: #fff7ea; cursor: pointer; box-shadow: 3px 3px 0 var(--ink); }
+  .tc-btn--ghost { background: transparent; color: var(--ink); }
+  .tc-btn:disabled { opacity: 0.5; }
+
+  .tc-status { display: flex; justify-content: space-between; font: 700 15px ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+  .tc-players { list-style: none; padding: 0; margin: 0 0 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .tc-players :global(.pl) { border: 2px solid var(--ink); background: #fbf5e8; padding: 12px; border-top: 10px solid var(--pc); }
+  .tc-players :global(.pl--now) { box-shadow: 5px 5px 0 var(--ink); outline: 3px solid var(--wheat); }
+  .tc :global(.pl-head) { display: flex; align-items: center; gap: 8px; font-size: 20px; }
+  .tc :global(.pl-head em) { margin-left: auto; font: 12px ui-monospace, monospace; text-transform: uppercase; color: var(--brick); font-style: normal; }
+  .tc :global(.pl-dot) { width: 14px; height: 14px; border-radius: 50%; background: var(--pc); border: 1.5px solid var(--ink); display: inline-block; flex: none; }
+  .tc :global(.pl-vp) { display: grid; grid-template-columns: 56px 1fr 56px; align-items: center; margin: 8px 0; }
+  .tc :global(.pl-vp output) { font: 700 64px/1 Georgia, serif; text-align: center; }
+  .tc :global(.pl-vp button) { height: 56px; font: 700 30px/1 Georgia, serif; border: 2px solid var(--ink); background: var(--paper); cursor: pointer; }
+  .tc :global(.pl-badges) { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .tc :global(.pl-badges button) { font: 12px ui-monospace, monospace; text-transform: uppercase; padding: 8px 4px; border: 1.5px solid var(--ink); background: transparent; cursor: pointer; }
+  .tc :global(.pl-badges button[aria-pressed="true"]) { background: var(--ink); color: var(--paper); }
+
+  .tc-bar { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; border: 2px solid var(--ink); background: #fbf5e8; padding: 14px; }
+  .tc-dice { display: flex; align-items: center; gap: 14px; }
+  .tc-roll { display: flex; gap: 10px; background: none; border: 0; padding: 0; cursor: pointer; }
+  .tc-roll.tumble :global(.die) { animation: tumble 0.4s ease-out; }
+  @keyframes tumble { 0% { transform: rotate(-22deg) translateY(-14px); } 100% { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .tc-roll.tumble :global(.die) { animation: none; } }
+  .tc :global(.die) { width: 64px; height: 64px; background: #f6eedb; border: 2.5px solid var(--ink); border-radius: 12px; box-shadow: 3px 3px 0 var(--ink); display: grid; grid-template-columns: repeat(3, 1fr); padding: 8px; gap: 3px; }
+  .tc :global(.die i) { border-radius: 50%; }
+  .tc :global(.die i.on) { background: var(--ink); }
+  .tc-total { margin: 0; display: grid; }
+  .tc-total b { font: 700 48px/1 Georgia, serif; }
+  .tc-total small { font: 13px ui-monospace, monospace; max-width: 22ch; }
+  .tc-turn { display: grid; justify-items: center; gap: 6px; }
+  .tc-glass { width: 64px; height: 64px; }
+  .tc-timer { margin: 0; font: 700 22px ui-monospace, monospace; }
+  .tc--late .tc-timer { color: var(--brick); }
+  @media (max-width: 560px) { .tc-bar { grid-template-columns: 1fr; } .tc-turn { grid-template-columns: auto auto 1fr; align-items: center; justify-items: start; } }
+  .tc-curve { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; height: 110px; border-bottom: 2px solid var(--ink); margin: 20px 0 30px; }
+  .tc :global(.c) { position: relative; display: flex; align-items: flex-end; }
+  .tc :global(.c .bar) { width: 100%; background: var(--sea); border: 1.5px solid var(--ink); border-bottom: 0; }
+  .tc :global(.c .exp) { position: absolute; left: -2px; right: -2px; border-top: 2px dashed var(--brick); }
+  .tc :global(.c b) { position: absolute; bottom: -22px; width: 100%; text-align: center; font: 700 12px ui-monospace, monospace; }
+  .tc :global(.c b.red) { color: var(--brick); }
+  .tc :global(.c b.seven) { background: var(--ink); color: var(--paper); }
+
+  .tc-win { border: 3px solid var(--ink); background: var(--paper); color: var(--ink); padding: 24px; max-width: min(520px, 92vw); box-shadow: 10px 10px 0 var(--ink); }
+  .tc-win::backdrop { background: rgba(31, 26, 20, 0.55); }
+  .tc-k { font: 12px ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.12em; color: var(--brick); margin: 0; }
+  .tc-win h2 { font-size: 42px; margin: 4px 0; }
+  .tc-final { padding-left: 22px; }
+  .tc-final :global(li) { display: flex; align-items: center; gap: 8px; border-bottom: 1px dotted #b8a888; padding: 4px 0; }
+  .tc-final :global(li b) { margin-left: auto; font-size: 20px; }
+  .tc-out { font-size: 16px; }
+</style>
