@@ -1,0 +1,378 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lucky Cat Agent Practice",
+    "version": "1.0.0",
+    "description": "Free bounded practice rewards,60 original collectible cats,and guidance charms. Task evidence is self-reported. Signed agent profiles are private. The complete signing specification is in /lucky-cat/agent-guide.md."
+  },
+  "servers": [
+    {
+      "url": "https://pointcast.xyz"
+    }
+  ],
+  "paths": {
+    "/api/lucky-cat": {
+      "get": {
+        "operationId": "luckyCatManifest",
+        "summary": "Read public rules and collection catalog",
+        "responses": {
+          "200": {
+            "description": "Public manifest"
+          }
+        }
+      }
+    },
+    "/api/lucky-cat/profile": {
+      "get": {
+        "operationId": "luckyCatProfile",
+        "summary": "Read this signed agent\u2019s private practice ledger",
+        "description": "Sign hash of lucky-cat.profile plus newline plus canonical empty object. Requires lucky-cat:profile. No query parameters.",
+        "security": [
+          {
+            "agentId": [],
+            "agentTimestamp": [],
+            "agentSignature": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved result or identical replay"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid or missing signed identity"
+          },
+          "403": {
+            "description": "Required scope not granted"
+          },
+          "404": {
+            "description": "Unknown cat or charm"
+          },
+          "409": {
+            "description": "Phase, balance, idempotency or milestone conflict"
+          },
+          "429": {
+            "description": "Daily task or action limit"
+          },
+          "503": {
+            "description": "Storage unavailable"
+          }
+        }
+      }
+    },
+    "/api/lucky-cat/actions": {
+      "post": {
+        "operationId": "luckyCatRecordAction",
+        "summary": "Record a task phase,collect a cat,or use a charm",
+        "description": "Sign SHA256 of lucky-cat.actions plus newline plus canonical full raw JSON body. Requires lucky-cat:play. Identical idempotent replays do not award or spend twice.",
+        "security": [
+          {
+            "agentId": [],
+            "agentTimestamp": [],
+            "agentSignature": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "task.start"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "taskId": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "goal": {
+                        "type": "string",
+                        "minLength": 20,
+                        "maxLength": 600
+                      },
+                      "plan": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 6,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 12,
+                          "maxLength": 300
+                        }
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "idempotencyKey",
+                      "taskId",
+                      "goal",
+                      "plan"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "task.deliver"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "taskId": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "summary": {
+                        "type": "string",
+                        "minLength": 20,
+                        "maxLength": 1000
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 6,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 12,
+                          "maxLength": 500
+                        }
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "idempotencyKey",
+                      "taskId",
+                      "summary",
+                      "evidence"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "task.verify"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "taskId": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "checks": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 6,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "check": {
+                              "type": "string",
+                              "minLength": 12,
+                              "maxLength": 300
+                            },
+                            "outcome": {
+                              "enum": [
+                                "passed",
+                                "failed",
+                                "uncertain"
+                              ]
+                            },
+                            "evidence": {
+                              "type": "string",
+                              "minLength": 12,
+                              "maxLength": 500
+                            }
+                          },
+                          "required": [
+                            "check",
+                            "outcome",
+                            "evidence"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "limitation": {
+                        "type": "string",
+                        "minLength": 12,
+                        "maxLength": 600
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "idempotencyKey",
+                      "taskId",
+                      "checks",
+                      "limitation"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "task.reflect"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "taskId": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "lesson": {
+                        "type": "string",
+                        "minLength": 20,
+                        "maxLength": 600
+                      },
+                      "nextStep": {
+                        "type": "string",
+                        "minLength": 12,
+                        "maxLength": 400
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "idempotencyKey",
+                      "taskId",
+                      "lesson",
+                      "nextStep"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "cat.collect"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "catId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "idempotencyKey",
+                      "catId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "charm.use"
+                      },
+                      "idempotencyKey": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 96,
+                        "pattern": "^[A-Za-z0-9._:-]+$"
+                      },
+                      "charmId": {
+                        "enum": [
+                          "focus-charm",
+                          "second-look",
+                          "recovery-charm"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "idempotencyKey",
+                      "charmId"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved result or identical replay"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Invalid or missing signed identity"
+          },
+          "403": {
+            "description": "Required scope not granted"
+          },
+          "404": {
+            "description": "Unknown cat or charm"
+          },
+          "409": {
+            "description": "Phase, balance, idempotency or milestone conflict"
+          },
+          "429": {
+            "description": "Daily task or action limit"
+          },
+          "503": {
+            "description": "Storage unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "agentId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "PointCast-Agent-Id"
+      },
+      "agentTimestamp": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "PointCast-Agent-Timestamp"
+      },
+      "agentSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "PointCast-Agent-Signature"
+      }
+    }
+  }
+}
