@@ -14,6 +14,8 @@ export const AGENT_SURFACES = {
     bagsData: 'https://pointcast.xyz/reviews/bags.json',
     machineRoom: 'https://pointcast.xyz/reviews/machine-room',
     machineRoomData: 'https://pointcast.xyz/reviews/machine-room.json',
+    aiVideo: 'https://pointcast.xyz/reviews/ai-video',
+    aiVideoData: 'https://pointcast.xyz/reviews/ai-video.json',
     aiPlans: 'https://pointcast.xyz/reviews/ai-plans',
     aiPlansData: 'https://pointcast.xyz/reviews/ai-plans.json',
     homeRobots: 'https://pointcast.xyz/reviews/home-robots',
