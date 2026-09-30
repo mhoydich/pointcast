@@ -25,6 +25,8 @@ export const AGENT_SURFACES = {
     aiPlansData: 'https://pointcast.xyz/reviews/ai-plans.json',
     homeRobots: 'https://pointcast.xyz/reviews/home-robots',
     homeRobotsData: 'https://pointcast.xyz/reviews/home-robots.json',
+    chefKnives: 'https://pointcast.xyz/reviews/chef-knives',
+    chefKnivesData: 'https://pointcast.xyz/reviews/chef-knives.json',
     modularCarry: 'https://pointcast.xyz/reviews/modular-carry',
     modularCarryData: 'https://pointcast.xyz/reviews/modular-carry.json',
     playstation2026: 'https://pointcast.xyz/reviews/playstation-2026',

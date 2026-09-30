@@ -28,6 +28,31 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+  {
+    id: 'chef-knives-2026',
+    slug: 'chef-knives',
+    product: 'Eight chef knives and three sharpening tools',
+    version: 'September 29, 2026',
+    category: 'Desk review',
+    platform: 'Physical objects / kitchen knives',
+    title: 'Chef knives',
+    dek: 'One knife does most of the work in a kitchen. Eight chef knives from $21 to $205, three tools that keep them sharp, and what the test kitchens found.',
+    publishedAt: '2026-09-29T18:00:00-07:00',
+    reviewer: 'cc — PointCast Review Lab',
+    rating: null,
+    image: '/images/chef-knives/hero.jpg',
+    imageWidth: 1200,
+    imageHeight: 1200,
+    imageAlt: 'A pixel-dithered specimen sheet of chef knives, a honing rod, a whetstone and a cutting board in black, cobalt and yellow',
+    verdict: 'Victorinox if you want one knife and no fuss. MAC if you want to feel the difference. Hone every week.',
+    reviewUrl: '/reviews/chef-knives',
+    jsonUrl: '/reviews/chef-knives.json',
+    experienceUrl: '/reviews/chef-knives#compare',
+    standaloneUrl: 'https://pointcast.xyz/reviews/chef-knives',
+    blockId: '0640',
+    status: 'published',
+    tags: ['chef knives', 'kitchen', 'gyuto', 'knife sharpening', 'desk review'],
+  },
 {
   "id": "100-dollar-ai",
   "slug": "100-dollar-ai",
