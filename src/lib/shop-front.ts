@@ -224,6 +224,27 @@ const videoPicks: ShopPick[] = video.picks.map((v) => ({
   reviewUrl: `/reviews/ai-video#${v.id}`,
 }));
 
+/**
+ * Searchable facts per pick, for the Clerk (/shop/clerk, /api/clerk). One line of
+ * plain text built from each guide's richer fields, so an agent can match "30
+ * seconds with sound" or "talks back" without reading every guide.
+ */
+type FactRow = Record<string, unknown> & { id: string };
+const factLine = (row: FactRow, fields: string[]) =>
+  fields.filter((f) => typeof row[f] === 'string' || typeof row[f] === 'number').map((f) => `${f}: ${row[f]}`).join(' · ').replace(/\s+/g, ' ').slice(0, 700);
+const FACT_SOURCES: [string, FactRow[], string[]][] = [
+  ['ai-video', video.picks as FactRow[], ['award', 'length', 'resolution', 'audio', 'bestFor', 'whatsNew', 'how', 'caveat']],
+  ['home-robots', robots.picks as FactRow[], ['award', 'status', 'talks', 'subscription', 'size', 'specs', 'caveat']],
+  ['bags', bags.picks as FactRow[], ['moment', 'award', 'size', 'specs', 'caveat']],
+  ['lego-sets', lego.sets as FactRow[], ['award', 'pieces', 'status', 'caveat']],
+  ['playstation-2026', playstation.games as FactRow[], ['award', 'mood', 'players', 'caveat']],
+  ['machine-room', machines.items as FactRow[], ['section', 'group', 'status', 'why', 'forWho']],
+  ['ai-work-life', aiWorkLife.plans as FactRow[], ['area', 'why', 'catch']],
+];
+export const SHOP_FACTS: Record<string, string> = Object.fromEntries(
+  FACT_SOURCES.flatMap(([guide, rows, fields]) => rows.map((r) => [`${guide}/${r.id}`, factLine(r, fields)] as const)),
+);
+
 export const SHOP_PICKS: ShopPick[] = [...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
@@ -293,6 +314,9 @@ export const SHOP_GUIDES: ShopGuide[] = [
 ];
 
 export const SHOP_LANES = [
+  { id: 'clerk', label: 'Ask the Clerk', href: '/shop/clerk', note: 'The shop’s buyer’s agent: dated, signed picks from every guide. Free.' },
+  { id: 'wants', label: 'Want Ads', href: '/shop/wants', note: 'Post what you need; agents offer in the open and the Clerk scores them.' },
+  { id: 'haggle', label: 'Haggle Counter', href: '/shop/haggle', note: 'Talk Gus down on a house curio, or send your agent.' },
   { id: 'catalog', label: 'The catalog', href: '/shop', note: 'Every product PointCast lists, with outbound checkout at the maker.' },
   { id: 'court', label: 'Court lane', href: '/shop/court', note: 'Paddles out now and coming soon, from the register.' },
   { id: 'good-feels', label: 'Good Feels', href: '/shop#good-feels', note: 'The house brand’s live mirror: seltzers, gummies, enhancers.' },
@@ -308,6 +332,9 @@ export const SHOP_POLICY = [
 ];
 
 export const SHOP_ENDPOINTS = [
+  { href: '/api/clerk?q=robot+pet+under+$500', label: 'The Clerk: plain-words shop search, signed (pointcast.clerk/v1)' },
+  { href: '/api/wants', label: 'Want Ads: open wants and Clerk-scored offers (POST to post or offer)' },
+  { href: '/api/haggle', label: 'Haggle Counter: the shelf, the board, and POST to haggle' },
   { href: '/shop/front.json', label: 'This page as JSON: guides, every pick, policy' },
   { href: '/shop/llms.txt', label: 'Plain-text guide for language models' },
   { href: '/shop.json', label: 'The full product catalog' },
@@ -328,7 +355,7 @@ export function shopFrontJson() {
     policy: SHOP_POLICY,
     counts: { guides: SHOP_GUIDES.length, picks: SHOP_PICKS.length, priced: priced.length, paidLinks: 0 },
     guides: SHOP_GUIDES.map((g) => ({ ...g, href: SITE + g.href, json: g.json ? SITE + g.json : null, image: SITE + g.image })),
-    picks: SHOP_PICKS.map((p) => ({ ...p, image: p.image ? SITE + p.image : null, reviewUrl: SITE + p.reviewUrl })),
+    picks: SHOP_PICKS.map((p) => ({ ...p, image: p.image ? SITE + p.image : null, reviewUrl: SITE + p.reviewUrl, facts: SHOP_FACTS[p.id] ?? null })),
     lanes: SHOP_LANES.map((l) => ({ ...l, href: SITE + l.href })),
     endpoints: SHOP_ENDPOINTS.map((e) => ({ ...e, href: SITE + e.href })),
   };
