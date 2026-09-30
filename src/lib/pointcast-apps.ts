@@ -26,7 +26,7 @@ export const POINTCAST_APPS: PointcastApp[] = [
     slug: 'ai-grand-prix',
     name: 'AI Grand Prix',
     kicker: 'PREDICTION ARCADE · PLAY POINTS · TEZOS PREVIEW',
-    description: 'Back an AI in four practice races, collect preseason milestones, share your pick, and inspect the price receipt. Local play points; XTZ wagering is not live.',
+    description: 'Build a local race season: four practice races, a constructors table, lap history, collectibles and downloadable receipts. Play points only; XTZ wagering is not live.',
     url: 'https://pointcast.xyz/ai-grand-prix/',
     path: '/ai-grand-prix/',
     repo: 'https://github.com/mhoydich/pointcast',
