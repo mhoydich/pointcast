@@ -2,6 +2,10 @@
 
 The `/karaoke/` starter shelf is a data-driven, seven-song set, not a licensed native music catalogue. `src/data/karaoke-catalogue.json` holds stable share IDs, titles, artists/arrangements, fixed YouTube video IDs, publishers, editorial notes, and a source-check date. Original Bell Choir songs remain separate and local.
 
+## Pass the Mic
+
+The room set is an in-memory queue of up to 12 waiting turns for 1–8 singers sharing a screen. Select a song and assign its singer, or deal three distinct random songs with rotating singer slots. `Next singer` consumes one turn, closes existing audio/video, cancels pending microphone access, selects the song, and spotlights its Noun. It does not load or autoplay the publisher player. Waiting turns can be removed or cleared without changing the active turn; reducing the singer count wraps removed slots into the remaining group. Reload clears the set. Shared song links do not carry the set or synchronize devices.
+
 ## Adding songs later
 
 1. Select an identifiable karaoke publisher and an on-screen-lyrics version. A search result, catalogue listing, or audio-only Topic release is not proof of usable karaoke.

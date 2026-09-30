@@ -18,6 +18,7 @@ export function initNounCompanions(container) {
 
   let singerCount = 1;
   let choices = [0];
+  let activeSinger = null;
   const activeAnimations = new Set();
 
   const heading = document.createElement('div');
@@ -59,7 +60,10 @@ export function initNounCompanions(container) {
       button.type = 'button';
       button.className = 'noun-companion__choice';
       button.dataset.singer = String(index + 1);
-      button.setAttribute('aria-label', `Singer ${index + 1} companion: ${companion.name}. Choose next companion.`);
+      const isActive = index === activeSinger;
+      button.setAttribute('aria-label', `Singer ${index + 1} companion: ${companion.name}.${isActive ? ' On the mic.' : ''} Choose next companion.`);
+      if (isActive) button.setAttribute('aria-current', 'true');
+      item.classList.toggle('noun-companion--active', isActive);
 
       const image = document.createElement('img');
       image.src = companion.image;
@@ -75,6 +79,12 @@ export function initNounCompanions(container) {
       const name = document.createElement('strong');
       name.textContent = companion.name;
       text.append(singer, name);
+      if (isActive) {
+        const micLabel = document.createElement('em');
+        micLabel.className = 'noun-companion__mic-label';
+        micLabel.textContent = 'On the mic';
+        text.append(micLabel);
+      }
       button.append(image, text);
       button.addEventListener('click', () => {
         choices[index] = (choices[index] + 1) % NOUN_COMPANIONS.length;
@@ -89,9 +99,19 @@ export function initNounCompanions(container) {
 
   function setSingers(count) {
     singerCount = clampSingers(count);
+    if (activeSinger !== null && activeSinger >= singerCount) activeSinger = null;
     choices = Array.from({ length: singerCount }, (_, index) => choices[index] ?? index % NOUN_COMPANIONS.length);
     render();
     status.textContent = `${singerCount} ${singerCount === 1 ? 'companion' : 'companions'} on this screen.`;
+  }
+
+  function setActiveSinger(index) {
+    const next = index === null ? null : Math.trunc(Number(index));
+    activeSinger = next !== null && Number.isFinite(next) && next >= 0 && next < singerCount ? next : null;
+    render();
+    status.textContent = activeSinger === null
+      ? 'No singer is on the mic yet.'
+      : `Singer ${activeSinger + 1} is on the mic.`;
   }
 
   function cheer(label = 'Cheer') {
@@ -120,10 +140,12 @@ export function initNounCompanions(container) {
     activeAnimations.forEach(animation => animation.cancel());
     activeAnimations.clear();
     delete container.dataset.cheer;
-    status.textContent = 'Tap a companion to choose another.';
+    status.textContent = activeSinger === null
+      ? 'Tap a companion to choose another.'
+      : `Singer ${activeSinger + 1} is on the mic.`;
   }
 
   cheerButton.addEventListener('click', () => cheer('A little applause'));
   render();
-  return { setSingers, cheer, reset };
+  return { setSingers, setActiveSinger, cheer, reset };
 }
