@@ -3553,7 +3553,7 @@ function discoveryHtml(request: Request) {
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
   <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
   <li><code>wild_field</code> — The Wild: altars open for a one-cent sealed prayer today, candles on the wall, prices</li>
-  <li><code>wild_buy_kit</code> — the exact x402 contract for one prayer, keeping or candle at The Wild (reads only; your own wallet pays)</li>
+  <li><code>wild_buy_kit</code> — the exact x402 contract for one prayer ($0.01), keeping ($0.01) or votive candle ($1 / $3 / $9) at The Wild (reads only; your own wallet pays)</li>
   <li><code>drum_global_count</code> — global drum count</li>
   <li><code>drum_tap</code> — tap the drum (combo 1-5)</li>
   <li><code>drum_play_instrument</code> — fire an orchestra instrument</li>

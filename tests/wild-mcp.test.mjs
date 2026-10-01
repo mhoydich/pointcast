@@ -14,7 +14,10 @@ const MANIFEST = {
     unsealPrayer: { method: 'POST', endpointTemplate: `${WILD_ORIGIN}/api/prayers/{spirit-id}/unseal` },
     takeIn: { method: 'POST', endpointTemplate: `${WILD_ORIGIN}/api/acquire/{spirit-id}`, price: '$0.01 USDC' },
     readCandles: { method: 'GET', endpoint: `${WILD_ORIGIN}/api/candles` },
-    lightCandle: { method: 'POST', endpointTemplate: `${WILD_ORIGIN}/api/candles/x402/{spirit-id}/7`, price: '$3.00 USDC' },
+    lightCandle: { method: 'POST', endpoint: `${WILD_ORIGIN}/api/candles/orders`, requiredBody: { spirit: '<spirit id>', dedication: '<1-40>', days: '1, 7 or 30', rail: 'base_pay' }, prices: [{ days: 1, price: '$1 USDC plus this order’s tag' }] },
+    lightVotiveCandle: { method: 'POST', protocol: 'x402-v2',
+      endpointTemplates: ['day', 'week', 'month'].map((r) => `${WILD_ORIGIN}/api/candles/${r}/{spirit-id}`),
+      prices: [['day', 1, '$1.00 USDC', '1000000'], ['week', 7, '$3.00 USDC', '3000000'], ['month', 30, '$9.00 USDC', '9000000']].map(([r, days, price, amountAtomic]) => ({ route: `${WILD_ORIGIN}/api/candles/${r}/{spirit-id}`, days, price, amountAtomic })) },
     evil: { method: 'POST', endpointTemplate: 'https://evil.example/{spirit-id}' },
   },
 };
@@ -39,7 +42,7 @@ test('both tools read; neither is a write tool and neither ever sends a non-GET'
   assert.deepEqual(WILD_WRITE_TOOL_NAMES, []);
   const { fetcher, calls } = fakeFetcher({ '/api/field': FIELD, '/api/altars': ALTARS, '/api/candles': CANDLES, '/.well-known/the-wild.json': MANIFEST });
   await dispatchWildTool('wild_field', {}, fetcher);
-  for (const act of ['prayer', 'keep', 'candle']) await dispatchWildTool('wild_buy_kit', { act, spirit: 'moss-hare' }, fetcher);
+  for (const act of ['prayer', 'keep', 'votive_day', 'votive_week', 'votive_month', 'candle_order', 'candle']) await dispatchWildTool('wild_buy_kit', { act, spirit: 'moss-hare' }, fetcher);
   assert.ok(calls.length >= 6);
   assert.ok(calls.every((c) => c.method === 'GET' && c.url.startsWith(`${WILD_ORIGIN}/`)), JSON.stringify(calls));
 });
@@ -74,8 +77,22 @@ test('wild_buy_kit fills the manifest template for the spirit and carries the pr
   const kit = JSON.parse(prayer.content[1].text);
   assert.equal(kit.action, 'offerPrayer', 'the paid prayer, not the free unseal');
   assert.equal(kit.endpoint, `${WILD_ORIGIN}/api/prayers/moss-hare`);
-  const candle = JSON.parse((await dispatchWildTool('wild_buy_kit', { act: 'candle', spirit: 'moss-hare' }, fetcher)).content[1].text);
-  assert.equal(candle.action, 'lightCandle', 'the POST candle action, not the GET read');
+  for (const [act, rung, price, atomic] of [['votive_day', 'day', '$1.00 USDC', '1000000'], ['votive_week', 'week', '$3.00 USDC', '3000000'], ['votive_month', 'month', '$9.00 USDC', '9000000']]) {
+    const r = await dispatchWildTool('wild_buy_kit', { act, spirit: 'moss-hare' }, fetcher);
+    const kit = JSON.parse(r.content[1].text);
+    assert.equal(kit.action, 'lightVotiveCandle');
+    assert.equal(kit.endpoint, `${WILD_ORIGIN}/api/candles/${rung}/moss-hare`, 'each rung gets its own route');
+    assert.equal(kit.price, price);
+    assert.equal(kit.amountAtomic, atomic);
+    assert.equal(kit.endpointTemplates, undefined, 'never hand back the other rungs’ routes');
+    assert.match(r.content[0].text, new RegExp(`refuse any amount above \\${price.split(' ')[0]}`));
+  }
+  const legacy = JSON.parse((await dispatchWildTool('wild_buy_kit', { act: 'candle', spirit: 'moss-hare' }, fetcher)).content[1].text);
+  assert.equal(legacy.endpoint, `${WILD_ORIGIN}/api/candles/week/moss-hare`, 'candle still works and means the week');
+  const order = JSON.parse((await dispatchWildTool('wild_buy_kit', { act: 'candle_order', spirit: 'moss-hare' }, fetcher)).content[1].text);
+  assert.equal(order.action, 'lightCandle');
+  assert.equal(order.endpoint, `${WILD_ORIGIN}/api/candles/orders`);
+  assert.equal(order.requiredBody.spirit, 'moss-hare', 'the spirit goes in the order body');
 });
 
 test('wild_buy_kit refuses bad input and anything outside The Wild', async () => {
@@ -85,8 +102,9 @@ test('wild_buy_kit refuses bad input and anything outside The Wild', async () =>
   assert.equal(calls.length, 0, 'bad input never reaches the network');
   assert.equal(fillEndpoint('https://evil.example/{spirit-id}', 'moss-hare'), null);
   assert.equal(fillEndpoint(`${WILD_ORIGIN}/api/x/{other}`, 'moss-hare'), null);
-  assert.equal(pickAction({ readCandles: MANIFEST.actions.readCandles }, 'candle'), null);
-  const noCandle = await dispatchWildTool('wild_buy_kit', { act: 'candle', spirit: 'moss-hare' }, fakeFetcher({ '/.well-known/the-wild.json': { actions: { offerPrayer: MANIFEST.actions.offerPrayer } } }).fetcher);
+  assert.equal(pickAction({ readCandles: MANIFEST.actions.readCandles }, 'votive_day'), null);
+  assert.equal(pickAction({ readCandles: MANIFEST.actions.readCandles }, 'candle_order'), null);
+  const noCandle = await dispatchWildTool('wild_buy_kit', { act: 'votive_month', spirit: 'moss-hare' }, fakeFetcher({ '/.well-known/the-wild.json': { actions: { offerPrayer: MANIFEST.actions.offerPrayer } } }).fetcher);
   assert.equal(noCandle.isError, true);
   assert.match(noCandle.content[0].text, /\/candles/);
 });

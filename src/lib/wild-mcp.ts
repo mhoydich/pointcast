@@ -24,7 +24,8 @@
 export const WILD_ORIGIN = 'https://the-wild-x402.mhoydich.workers.dev';
 const MANIFEST = `${WILD_ORIGIN}/.well-known/the-wild.json`;
 const SPIRIT_RE = /^[a-z0-9-]{1,64}$/;
-const ACTS = ['prayer', 'candle', 'keep'] as const;
+const ACTS = ['prayer', 'keep', 'votive_day', 'votive_week', 'votive_month', 'candle_order', 'candle'] as const;
+const VOTIVE: Record<string, 'day' | 'week' | 'month'> = { votive_day: 'day', votive_week: 'week', votive_month: 'month' };
 type Act = (typeof ACTS)[number];
 
 export const WILD_TOOL_DEFINITIONS = [
@@ -37,11 +38,11 @@ export const WILD_TOOL_DEFINITIONS = [
   {
     name: 'wild_buy_kit',
     description:
-      'The exact, current contract for one paid act at The Wild, filled in for a spirit: method, endpoint, headers, body, price, payment network and asset, and the retry and reconcile rules, read live from The Wild’s manifest. act is "prayer" (one sealed prayer, $0.01, one per spirit per UTC day; the words never leave your side, only a salted SHA-256 commitment), "keep" (become a spirit’s first keeper, $0.01, one keeper per spirit) or "candle" (a candle for someone on the wall, $1 to $9). This tool does not pay and never sees a key: your own x402 client or wallet pays The Wild directly, under your own spend limit. Never pay twice for one Idempotency-Key; on HTTP 202 reconcile instead.',
+      'The exact, current contract for one paid act at The Wild, filled in for a spirit: method, endpoint, headers, body, price, payment network and asset, and the retry and reconcile rules, read live from The Wild’s manifest. act is "prayer" (one sealed prayer, $0.01 over x402, one per spirit per UTC day; the words never leave your side, only a salted SHA-256 commitment), "keep" (become a spirit’s first keeper, $0.01 over x402), "votive_day" / "votive_week" / "votive_month" (a votive candle for someone on the spirit’s altar over x402 at a fixed $1.00 / $3.00 / $9.00), or "candle_order" (the same candle paid by a plain USDC transfer to an order instead of x402). This tool does not pay and never sees a key: your own x402 client or wallet pays The Wild directly, under your own per-route spend limit, and only because your human asked. Never pay twice for one Idempotency-Key; on HTTP 202 reconcile instead.',
     inputSchema: {
       type: 'object',
       properties: {
-        act: { type: 'string', enum: [...ACTS], description: 'prayer, keep or candle.' },
+        act: { type: 'string', enum: [...ACTS], description: 'prayer, keep, votive_day, votive_week, votive_month or candle_order. (candle is accepted and means votive_week.)' },
         spirit: { type: 'string', description: 'A spirit id from wild_field, e.g. "moss-hare". Lowercase letters, digits and hyphens.', maxLength: 64 },
       },
       required: ['act', 'spirit'],
@@ -69,7 +70,7 @@ async function getJson(fetcher: WildFetcher, url: string): Promise<Record<string
 /** Pick the manifest action for an act. Matching by key keeps this working when The Wild renames or adds routes. */
 export function pickAction(actions: Record<string, any>, act: Act): [string, Record<string, any>] | null {
   const entries = Object.entries(actions || {});
-  const want: Record<Act, RegExp> = { prayer: /^offerPrayer$/, keep: /^takeIn$/, candle: /candle/i };
+  const want: Record<Act, RegExp> = { prayer: /^offerPrayer$/, keep: /^takeIn$/, votive_day: /^lightVotiveCandle$/, votive_week: /^lightVotiveCandle$/, votive_month: /^lightVotiveCandle$/, candle: /^lightVotiveCandle$/, candle_order: /^lightCandle$/ };
   const hit = entries.find(([key, value]) => want[act].test(key) && value && typeof value === 'object' && String(value.method || '').toUpperCase() === 'POST');
   return hit ? [hit[0], hit[1]] : null;
 }
@@ -79,6 +80,16 @@ export function fillEndpoint(template: string, spirit: string): string | null {
   const url = template.replace(/\{(spirit|familiar)-id\}/g, spirit);
   if (!url.startsWith(`${WILD_ORIGIN}/`) || /[{}]/.test(url)) return null;
   return url;
+}
+
+/** One rung of the votive candle action: its own route, its own fixed price. */
+export function narrowVotive(action: Record<string, any>, rung: 'day' | 'week' | 'month'): Record<string, any> | null {
+  const routeRe = new RegExp(`/api/candles/${rung}/`);
+  const template = (action.endpointTemplates || []).find((t: string) => routeRe.test(t));
+  const price = (action.prices || []).find((p: any) => routeRe.test(String(p.route || '')));
+  if (!template || !price) return null;
+  const { endpointTemplates: _all, prices: _prices, ...rest } = action;
+  return { ...rest, endpointTemplate: template, price: price.price, amountAtomic: price.amountAtomic, days: price.days };
 }
 
 /** Put the spirit into a manifest body template wherever it asks for a spirit id. */
@@ -115,22 +126,26 @@ export async function dispatchWildTool(name: string, args: Record<string, unknow
     }
 
     if (name === 'wild_buy_kit') {
-      const act = String(args?.act ?? '') as Act;
+      const rawAct = String(args?.act ?? '');
+      const act = (rawAct === 'candle' ? 'votive_week' : rawAct) as Act;
       const spirit = String(args?.spirit ?? '').trim().toLowerCase();
-      if (!ACTS.includes(act)) return { content: [text('act must be prayer, keep or candle.')], isError: true };
+      if (!ACTS.includes(act)) return { content: [text('act must be prayer, keep, votive_day, votive_week, votive_month or candle_order.')], isError: true };
       if (!SPIRIT_RE.test(spirit)) return { content: [text('spirit must be a spirit id like "moss-hare" (wild_field lists them).')], isError: true };
       const manifest = await getJson(fetcher, MANIFEST);
       if (!manifest?.actions) return { content: [text('The Wild’s manifest is not answering. Nothing was spent.')], isError: true };
       const picked = pickAction(manifest.actions, act);
-      if (!picked) return { content: [text(act === 'candle' ? 'Candles are not in The Wild’s machine contract yet. A person can light one at ' + WILD_ORIGIN + '/candles.' : `The manifest has no ${act} action right now.`)], isError: true };
-      const [key, action] = picked;
+      if (!picked) return { content: [text(VOTIVE[act] || act === 'candle_order' ? 'Candles are not in The Wild’s machine contract right now. A person can light one at ' + WILD_ORIGIN + '/candles.' : `The manifest has no ${act} action right now.`)], isError: true };
+      const [key, picked1] = picked;
+      const action = VOTIVE[act] ? narrowVotive(picked1, VOTIVE[act]) : picked1;
+      if (!action) return { content: [text(`The manifest has no ${VOTIVE[act]} votive candle route right now.`)], isError: true };
       const endpoint = fillEndpoint(String(action.endpointTemplate || action.endpoint || ''), spirit);
       if (!endpoint) return { content: [text('The manifest’s endpoint for that act did not resolve to a Wild URL. Nothing was spent.')], isError: true };
       const lines = [
         `${key} at ${spirit} · ${action.price || (Array.isArray(action.prices) ? action.prices.map((p: any) => String(p.price).split(' ')[0]).join(' / ') : 'see manifest')} · ${action.protocol || ''}`.trim(),
         `${action.method} ${endpoint}`,
         action.paymentAuthorization ? `Pay: ${action.paymentAuthorization.scheme} on ${action.paymentAuthorization.network} (${action.paymentAuthorization.chain}), ${action.paymentAuthorization.asset} ${action.paymentAuthorization.assetContract}. ${action.paymentAuthorization.resourceBinding || ''}` : '',
-        action.requiredBody ? `Body: ${JSON.stringify(fillBody(action.requiredBody, spirit))}` : '',
+        action.requiredBody || action.body ? `Body: ${JSON.stringify(fillBody(action.requiredBody || action.body, spirit))}` : '',
+        action.optionalBody ? `Optional body: ${JSON.stringify(action.optionalBody)}` : '',
         Array.isArray(action.prices) ? `Prices: ${action.prices.map((p: any) => `${p.days} day${p.days === 1 ? '' : 's'} ${p.price}`).join(', ')}` : '',
         action.amountBinding ? `Amount: ${action.amountBinding}` : '',
         action.privacy ? `Seal: ${action.privacy}` : '',
