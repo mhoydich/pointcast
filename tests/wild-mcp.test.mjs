@@ -18,6 +18,8 @@ const MANIFEST = {
     lightVotiveCandle: { method: 'POST', protocol: 'x402-v2',
       endpointTemplates: ['day', 'week', 'month'].map((r) => `${WILD_ORIGIN}/api/candles/${r}/{spirit-id}`),
       prices: [['day', 1, '$1.00 USDC', '1000000'], ['week', 7, '$3.00 USDC', '3000000'], ['month', 30, '$9.00 USDC', '9000000']].map(([r, days, price, amountAtomic]) => ({ route: `${WILD_ORIGIN}/api/candles/${r}/{spirit-id}`, days, price, amountAtomic })) },
+    setWitnessStone: { method: 'POST', endpoint: `${WILD_ORIGIN}/api/witness`, price: '$0.01 USDC', protocol: 'x402-v2', requiredBody: { commitment: '<64 hex>' }, optionalBody: { spirit: '<spirit id>', kind: 'intention' } },
+    revealWitness: { method: 'POST', endpointTemplate: `${WILD_ORIGIN}/api/witness/{witness-id}/reveal` },
     evil: { method: 'POST', endpointTemplate: 'https://evil.example/{spirit-id}' },
   },
 };
@@ -42,7 +44,7 @@ test('both tools read; neither is a write tool and neither ever sends a non-GET'
   assert.deepEqual(WILD_WRITE_TOOL_NAMES, []);
   const { fetcher, calls } = fakeFetcher({ '/api/field': FIELD, '/api/altars': ALTARS, '/api/candles': CANDLES, '/.well-known/the-wild.json': MANIFEST });
   await dispatchWildTool('wild_field', {}, fetcher);
-  for (const act of ['prayer', 'keep', 'votive_day', 'votive_week', 'votive_month', 'candle_order', 'candle']) await dispatchWildTool('wild_buy_kit', { act, spirit: 'moss-hare' }, fetcher);
+  for (const act of ['prayer', 'keep', 'votive_day', 'votive_week', 'votive_month', 'candle_order', 'witness', 'candle']) await dispatchWildTool('wild_buy_kit', { act, spirit: 'moss-hare' }, fetcher);
   assert.ok(calls.length >= 6);
   assert.ok(calls.every((c) => c.method === 'GET' && c.url.startsWith(`${WILD_ORIGIN}/`)), JSON.stringify(calls));
 });
@@ -93,6 +95,19 @@ test('wild_buy_kit fills the manifest template for the spirit and carries the pr
   assert.equal(order.action, 'lightCandle');
   assert.equal(order.endpoint, `${WILD_ORIGIN}/api/candles/orders`);
   assert.equal(order.requiredBody.spirit, 'moss-hare', 'the spirit goes in the order body');
+});
+
+test('wild_buy_kit witness: no spirit needed, the paid stone not the free reveal, one cent', async () => {
+  const { fetcher } = fakeFetcher({ '/.well-known/the-wild.json': MANIFEST });
+  const r = await dispatchWildTool('wild_buy_kit', { act: 'witness' }, fetcher);
+  assert.equal(r.isError, undefined, r.content[0].text);
+  const kit = JSON.parse(r.content[1].text);
+  assert.equal(kit.action, 'setWitnessStone');
+  assert.equal(kit.endpoint, `${WILD_ORIGIN}/api/witness`);
+  assert.match(r.content[0].text, /^setWitnessStone · \$0\.01 USDC/);
+  const withSpirit = JSON.parse((await dispatchWildTool('wild_buy_kit', { act: 'witness', spirit: 'moss-hare' }, fetcher)).content[1].text);
+  assert.equal(withSpirit.endpoint, `${WILD_ORIGIN}/api/witness`, 'the spirit never goes into the witness URL');
+  assert.equal((await dispatchWildTool('wild_buy_kit', { act: 'prayer' }, fetcher)).isError, true, 'every other act still needs a spirit');
 });
 
 test('wild_buy_kit refuses bad input and anything outside The Wild', async () => {
