@@ -46,7 +46,7 @@ const scopedPaths = pathArg
   ? pathArg.slice('--paths='.length).split(',').map((path) => path.trim()).filter(Boolean)
   : (process.env.PUBLISH_PATHS || '').split(',').map((path) => path.trim()).filter(Boolean);
 const message = rawArgs
-  .filter((arg) => arg !== '--all' && !arg.startsWith('--paths='))
+  .filter((arg) => arg !== '--all' && arg !== '--no-deploy' && !arg.startsWith('--paths='))
   .join(' ')
   .trim();
 
@@ -112,4 +112,13 @@ if (changed) {
 run('git', ['push', 'origin', `HEAD:${defaultBranch}`]);
 
 const shortSha = output('git', ['rev-parse', '--short', 'HEAD']);
-console.log(`\nPublished ${shortSha} to origin/${defaultBranch}. Cloudflare Pages should deploy pointcast.xyz from this push.`);
+console.log(`\nPushed ${shortSha} to origin/${defaultBranch}.`);
+
+// Pages has no Git hookup (the webhook died in 2026-04), so a push alone
+// never reaches pointcast.xyz. scripts/deploy.sh builds origin/main in the
+// shared ~/pc-deploy worktree, queued behind any other agent's deploy.
+if (rawArgs.includes('--no-deploy')) {
+  console.log('Skipping deploy (--no-deploy). Run scripts/deploy.sh to go live.');
+} else {
+  run('bash', [join(root, 'scripts/deploy.sh')]);
+}

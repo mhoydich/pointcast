@@ -150,16 +150,20 @@ automatically.
 
 ## Publishing live
 
-`pointcast.xyz` deploys from `origin/main` through Cloudflare Pages.
-Codex and Claude can work from any local branch or worktree, but the site
-only updates after the shippable HEAD reaches GitHub main.
+`pointcast.xyz` is Cloudflare Pages with no Git hookup: a push to main does
+not deploy by itself. Deploy with:
 
 ```sh
-npm run publish:live -- "feat(scope): describe the ship"
+scripts/deploy.sh
 ```
 
-The command fetches `origin/main`, refuses if the current HEAD is behind,
-runs the full build, commits local changes, and pushes `HEAD:main`.
+It builds the tip of `origin/main` in the shared `~/pc-deploy` worktree,
+queues behind any other deploy, gates on a complete build, and skips if that
+sha is already live. Details in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+
+`npm run publish:live -- "feat(scope): describe the ship"` fetches
+`origin/main`, refuses if the current HEAD is behind, builds, commits local
+changes, pushes `HEAD:main`, then runs `scripts/deploy.sh`.
 
 ### After the deploy: walk the town
 

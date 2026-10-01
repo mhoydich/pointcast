@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> **Operations (2026-10-01):** worktrees, builds, and deploys follow [`docs/OPERATIONS.md`](docs/OPERATIONS.md). Deploy only with `scripts/deploy.sh`. Older deploy notes below (Vercel, Netlify, `blocks-rebuild`) are historical.
+
 **Multi-agent workflow for pointcast.xyz v2**
 
 Three builders: Claude Code, Manus, Codex. One director: Mike. This doc defines roles, coordination, handoffs, and the parallel tracks running alongside engineering.
