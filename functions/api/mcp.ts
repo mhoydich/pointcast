@@ -194,6 +194,12 @@ import {
   STATION_WRITE_TOOL_NAMES,
   dispatchStationTool,
 } from '../../src/lib/station-mcp';
+import {
+  WILD_TOOL_DEFINITIONS,
+  WILD_WRITE_TOOL_NAMES,
+  dispatchWildTool,
+  type WildFetcher,
+} from '../../src/lib/wild-mcp';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
@@ -236,6 +242,7 @@ const WRITE_TOOL_NAMES = new Set([
   'tug_pull',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
+  ...WILD_WRITE_TOOL_NAMES,
 ]);
 
 function toolTitle(name: string): string {
@@ -1275,6 +1282,7 @@ const TOOLS = [
   TUG_PULL_TOOL,
   ...BENCH_TOOL_DEFINITIONS,
   ...STATION_TOOL_DEFINITIONS,
+  ...WILD_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -3212,6 +3220,10 @@ async function dispatchTool(
     case 'station_request':
       return dispatchStationTool(name, args, base);
 
+    case 'wild_field':
+    case 'wild_buy_kit':
+      return dispatchWildTool(name, args);
+
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
   }
@@ -3540,6 +3552,8 @@ function discoveryHtml(request: Request) {
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
   <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
+  <li><code>wild_field</code> — The Wild: altars open for a one-cent sealed prayer today, candles on the wall, prices</li>
+  <li><code>wild_buy_kit</code> — the exact x402 contract for one prayer, keeping or candle at The Wild (reads only; your own wallet pays)</li>
   <li><code>drum_global_count</code> — global drum count</li>
   <li><code>drum_tap</code> — tap the drum (combo 1-5)</li>
   <li><code>drum_play_instrument</code> — fire an orchestra instrument</li>
@@ -3701,6 +3715,13 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
           ? `Call put out on ${data.call?.spot}/${data.call?.kind}: ${data.call?.question}`
           : `Passed to ${data.call?.agent}.`;
         return rpcResult(id, { content: [{ type: 'text', text: lead }, { type: 'text', text: JSON.stringify(data, null, 2) }] });
+      }
+      if (name === 'wild_field' || name === 'wild_buy_kit') {
+        // The WILD service binding avoids Cloudflare 1042 (same-account
+        // workers.dev fetch); the public URL rides along unchanged.
+        const wild = (env as { WILD?: { fetch: (req: Request) => Promise<Response> } }).WILD;
+        const fetcher: WildFetcher | undefined = wild ? (url, init) => wild.fetch(new Request(url, init)) : undefined;
+        return rpcResult(id, await dispatchWildTool(name, args, fetcher));
       }
       const result = await dispatchTool(name, args, base, sessionId);
       return rpcResult(id, result);
