@@ -70,7 +70,7 @@ test('wild_buy_kit fills the manifest template for the spirit and carries the pr
   const prayer = await dispatchWildTool('wild_buy_kit', { act: 'prayer', spirit: 'moss-hare' }, fetcher);
   assert.match(prayer.content[0].text, new RegExp(`POST ${WILD_ORIGIN}/api/prayers/moss-hare`));
   assert.match(prayer.content[0].text, /\$0\.01 USDC/);
-  assert.match(prayer.content[0].text, /Never sign twice/);
+  assert.match(prayer.content[0].text, /Never pay twice/);
   const kit = JSON.parse(prayer.content[1].text);
   assert.equal(kit.action, 'offerPrayer', 'the paid prayer, not the free unseal');
   assert.equal(kit.endpoint, `${WILD_ORIGIN}/api/prayers/moss-hare`);

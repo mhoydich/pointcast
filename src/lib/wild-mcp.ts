@@ -81,6 +81,11 @@ export function fillEndpoint(template: string, spirit: string): string | null {
   return url;
 }
 
+/** Put the spirit into a manifest body template wherever it asks for a spirit id. */
+export function fillBody(template: Record<string, unknown>, spirit: string): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(template || {}).map(([key, value]) => [key, key === 'spirit' || key === 'familiarId' ? spirit : value]));
+}
+
 export async function dispatchWildTool(name: string, args: Record<string, unknown>, fetcher: WildFetcher = (url, init) => fetch(url, init)): Promise<ToolResult> {
   try {
     if (name === 'wild_field') {
@@ -122,16 +127,19 @@ export async function dispatchWildTool(name: string, args: Record<string, unknow
       const endpoint = fillEndpoint(String(action.endpointTemplate || action.endpoint || ''), spirit);
       if (!endpoint) return { content: [text('The manifest’s endpoint for that act did not resolve to a Wild URL. Nothing was spent.')], isError: true };
       const lines = [
-        `${key} at ${spirit} · ${action.price || 'see manifest'} · ${action.protocol || ''}`.trim(),
+        `${key} at ${spirit} · ${action.price || (Array.isArray(action.prices) ? action.prices.map((p: any) => String(p.price).split(' ')[0]).join(' / ') : 'see manifest')} · ${action.protocol || ''}`.trim(),
         `${action.method} ${endpoint}`,
         action.paymentAuthorization ? `Pay: ${action.paymentAuthorization.scheme} on ${action.paymentAuthorization.network} (${action.paymentAuthorization.chain}), ${action.paymentAuthorization.asset} ${action.paymentAuthorization.assetContract}. ${action.paymentAuthorization.resourceBinding || ''}` : '',
+        action.requiredBody ? `Body: ${JSON.stringify(fillBody(action.requiredBody, spirit))}` : '',
+        Array.isArray(action.prices) ? `Prices: ${action.prices.map((p: any) => `${p.days} day${p.days === 1 ? '' : 's'} ${p.price}`).join(', ')}` : '',
+        action.amountBinding ? `Amount: ${action.amountBinding}` : '',
         action.privacy ? `Seal: ${action.privacy}` : '',
         Array.isArray(action.flow) ? `Flow: ${action.flow.map((s: string, i: number) => `${i + 1}. ${s}`).join(' ')}` : '',
-        `Your signer must refuse any amount above ${action.price || 'the listed price'} for this act. Never sign twice for one Idempotency-Key; on HTTP 202 POST the reconcile URL instead.`,
+        `Your signer must refuse any amount above ${action.price || 'the listed price'} for this act, and pay only because your human asked for it. Never pay twice for one attempt; on HTTP 202 reconcile or confirm again instead.`,
         `Manifest: ${MANIFEST}`,
         UNTRUSTED,
       ].filter(Boolean);
-      return { content: [text(lines.join('\n')), text(JSON.stringify({ action: key, endpoint, ...action, endpointTemplate: undefined }, null, 2))] };
+      return { content: [text(lines.join('\n')), text(JSON.stringify({ action: key, endpoint, ...action, ...(action.requiredBody ? { requiredBody: fillBody(action.requiredBody, spirit) } : {}), endpointTemplate: undefined }, null, 2))] };
     }
     return { content: [text(`unknown wild tool: ${name}`)], isError: true };
   } catch {
