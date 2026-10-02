@@ -6,6 +6,7 @@ const chapters = [
   ['idempotency', '05', 'Idempotency'], ['errors', '06', 'Errors'],
   ['authentication', '07', 'Storage & auth'], ['provenance', '08', 'Art & rights'],
   ['tezos', '09', 'Tezos proposal'],
+  ['agents', '10', 'Agents & x402 proposal'],
 ];
 const nodeExample = `import {
   NounsMoneySandbox, MemorySandboxStore,
@@ -39,6 +40,30 @@ const result = await sandbox.confirmIntent(
   { idempotencyKey: 'browser:confirm:0001' },
 );
 console.log(result.receipt);`;
+const agentServiceExample = `import {
+  approveLocalAgentServiceJob,
+  createLocalAgentServiceReceipt,
+  createLocalAgentServiceRequest,
+  sha256Hex,
+} from './packages/nouns-money-sdk/src/index.ts';
+
+const request = createLocalAgentServiceRequest({
+  scope: 'text-report',
+  constraints: { maxOutputBytes: 256, mediaType: 'text/plain' },
+  acceptanceTest: 'Compare the returned bytes to local expected text.',
+});
+
+// Separate local job approval. This authorizes no payment.
+const approval = approveLocalAgentServiceJob(request, { approved: true });
+const expected = new TextEncoder().encode('Local result.\\n');
+const bytes = new TextEncoder().encode('Local result.\\n');
+const receipt = await createLocalAgentServiceReceipt({
+  request, approval, providerId: 'local-demo',
+  resultRef: 'local://artifact/result.txt', bytes,
+  expectedSha256: await sha256Hex(expected),
+});
+console.log(JSON.stringify(receipt, null, 2));
+// unsigned/unverified · acceptance pending · payment not requested`;
 const apiExample = `// Run in a signed-in browser on pointcast.xyz.
 const currentResponse = await fetch('/api/me/nouns-money');
 const current = await currentResponse.json();
@@ -200,6 +225,16 @@ const sandboxErrors = [
       <ol class="steps"><li><strong>Establish consent and recipient control.</strong> A future wallet challenge would bind an explicit recipient, application domain, nonce and expiry. Verify it on a server before considering issuance. Arbitrary-data signing exists in wallet tooling; the challenge and verifier still need their own reviewed implementation. <a href="https://octez-connect.tezos.com/guides/sign-payload/">Octez Connect signing reference ↗</a></li><li><strong>Authorize the sponsor’s operation.</strong> A reviewed, contract-specific mint could issue to the recipient from an authorized issuer account. The official SmartPy tutorial shows administrator-controlled minting to recipients; it is a reference, not a Nouns Money contract. <a href="https://docs.tezos.com/tutorials/smartpy-fa2-fungible/minting-and-burning">Minting reference ↗</a></li><li><strong>Pay and reconcile.</strong> The sponsor would pay authorized fees and storage costs, enforce a budget and duplicate-claim rules, and reconcile the operation’s observed result before recording delivery. “No collector gas” means sponsored costs, not a zero-fee chain. <a href="https://octez.tezos.com/docs/active/blocks_ops.html">Octez operation reference ↗</a></li><li><strong>Keep later actions separate.</strong> An issuer-sponsored mint would not automatically sponsor later transfers. Permits or relayed interactions need a compatible contract and their own authorization, replay protection and review. A future adapter must distinguish requested, submitted, confirmed and failed delivery from today’s local demo receipt.</li></ol>
       <p>Before activation, a separate owner authorization must cover the contract, signer, fee budget, abuse controls, recovery and real-chain testing. Issuer, backing asset, merchant network and legal setup are undecided. Nothing here promises issuance, allocation, future value, redemption or an airdrop.</p>
       <p>Webhooks also remain proposed. A future delivery service would need authenticated events, event IDs, retries and reconciliation; no callback URL can be registered and no webhook is sent today.</p>
+    </section>
+    <section id="agents" class="chapter" aria-labelledby="agents-title">
+      <div class="chapter-heading"><p class="eyebrow">10 / AGENTS &amp; X402 · PROPOSED</p><h2 id="agents-title">Specify the job before any future payment.</h2></div>
+      <div class="callout"><p><strong>Proposed service only.</strong> The implemented endpoints expose the art catalog and account preferences. There is no Nouns Money agent-service HTTP route or x402 support in this release.</p></div>
+      <p>A future agent-service request could bind a short scope, output constraints, one acceptance-test description, and an expiry. Approval of service work is a separate decision from any future payment. A provider would return an artifact reference and digest; verification would record its method and outcome. The user acceptance decision would remain a separate field.</p>
+      <div class="split"><article class="example"><h3>Local receipt adapter · no network</h3><p>The TypeScript SDK example uses local memory only. Its explicit approval input represents a local workflow step and grants no financial authority. Run the complete exportable example with <code>node docs/nouns-money/agent-service-quickstart.mjs</code>.</p><pre tabindex="0" aria-label="Local-only agent service receipt example"><code>{agentServiceExample}</code></pre><p>The resulting record contains <code>pointcast.nouns-money.agent-service-receipt/v1</code>, an artifact digest, <code>paymentStatus: not_requested</code>, <code>acceptanceStatus: pending</code> and <code>authenticity: unsigned_unverified</code>.</p></article><article class="example"><h3>What the digest checks</h3><p><code>verification.method</code> is <code>sha-256-content-bytes</code>; the outcome compares the produced bytes with separately supplied expected bytes. A match proves byte consistency only. It does not establish truth, quality, safety, ownership, delivery to another party, or user acceptance.</p><p>Never use an unsigned local JSON receipt as proof of provider identity or payment. The request, approval and artifact references in this sample are local examples, not account, merchant, or payment records.</p></article></div>
+      <h3>Possible x402 V2 adapter boundary</h3>
+      <p>As checked on 2 October 2026, the official HTTP guide describes the x402 V2 exchange through <code>PAYMENT-REQUIRED</code> (server requirements), <code>PAYMENT-SIGNATURE</code> (client payment payload) and <code>PAYMENT-RESPONSE</code> (server settlement-attempt result). These messages can carry payment requirements and settlement information; they do not define this proposed service-receipt schema or a user-acceptance contract. Read the <a href="https://docs.x402.org/core-concepts/http-402">HTTP 402 guide ↗</a>, <a href="https://docs.x402.org/core-concepts/client-server">client/server flow ↗</a>, and <a href="https://docs.x402.org/extensions/payment-identifier">payment-identifier extension ↗</a>.</p>
+      <p>A future adapter would require its own approved asset, network, scheme, facilitator and settlement implementation. It would keep request approval separate from payment approval and keep service result, payment status, reconciliation and user acceptance as distinct records. Any replay-protection extension must be explicitly advertised and implemented server-side; the SDK’s local idempotency keys do not substitute for x402 payment identifiers.</p>
+      <p>No Nouns Money x402 route, automatic payer, payment signer, facilitator connection, payment credential, network setting, HTTP intent endpoint or webhook delivery is present. Do not reuse existing PointCast <code>X402_MODE=test</code> as a dry-run switch: it labels receipts but does not prevent the settlement call. OpenAPI includes a descriptive proposed-integration extension only, with no new HTTP paths.</p>
     </section>
     <footer class="book-footer"><div><p class="eyebrow">NEXT / TRY THE CONTRACT</p><a href="/nouns-money/pay/">Create a demo intent ↗</a><a href="/nouns-money/developers/">Inspect the dashboard ↗</a><a href="/nouns-money/openapi.json">Read OpenAPI ↗</a></div><p>Independent collectible-art workshop.<br/>Local test receipts. Real payment disabled.</p></footer>
   </main>

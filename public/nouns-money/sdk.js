@@ -1,4 +1,98 @@
-class NounsMoneyError extends Error {
+// packages/nouns-money-sdk/src/agent-service.ts
+var AgentServiceExampleError = class extends Error {
+  code;
+  constructor(code, message) {
+    super(message);
+    this.name = "AgentServiceExampleError";
+    this.code = code;
+  }
+};
+var schema = "pointcast.nouns-money.agent-service-request/v1";
+var receiptSchema = "pointcast.nouns-money.agent-service-receipt/v1";
+var object = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+function exact(value, keys) {
+  if (!object(value) || Reflect.ownKeys(value).length !== keys.length || keys.some((key2) => !Object.hasOwn(value, key2))) {
+    throw new AgentServiceExampleError("invalid_request", "Provide exactly: " + keys.join(", ") + ".");
+  }
+}
+function validDate(value) {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+function fail(code, message) {
+  throw new AgentServiceExampleError(code, message);
+}
+function createLocalAgentServiceRequest(input) {
+  if (!object(input)) fail("invalid_request", "A bounded local service request is required.");
+  exact(input, ["scope", "constraints", "acceptanceTest", ...Object.hasOwn(input, "ttlMs") ? ["ttlMs"] : []]);
+  if (typeof input.scope !== "string" || !/^[a-z][a-z0-9-]{0,47}$/.test(input.scope)) fail("invalid_request", "scope must be a short lowercase service name.");
+  exact(input.constraints, ["maxOutputBytes", "mediaType"]);
+  if (!Number.isInteger(input.constraints.maxOutputBytes) || input.constraints.maxOutputBytes < 1 || input.constraints.maxOutputBytes > 262144) fail("invalid_request", "maxOutputBytes must be from 1 through 262144.");
+  if (!["text/plain", "application/json"].includes(input.constraints.mediaType)) fail("invalid_request", "Choose text/plain or application/json.");
+  if (typeof input.acceptanceTest !== "string" || input.acceptanceTest.trim().length < 1 || input.acceptanceTest.length > 240 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(input.acceptanceTest)) fail("invalid_request", "Describe one acceptance test in at most 240 plain-text characters.");
+  const ttlMs = input.ttlMs ?? 5 * 60 * 1e3;
+  if (!Number.isInteger(ttlMs) || ttlMs < 1e3 || ttlMs > 60 * 60 * 1e3) fail("invalid_request", "ttlMs must be from 1000 through 3600000.");
+  const created = Date.now();
+  return {
+    schema,
+    requestId: "nmjob_" + crypto.randomUUID(),
+    scope: input.scope,
+    constraints: { maxOutputBytes: input.constraints.maxOutputBytes, mediaType: input.constraints.mediaType },
+    acceptanceTest: input.acceptanceTest.trim(),
+    createdAt: new Date(created).toISOString(),
+    expiresAt: new Date(created + ttlMs).toISOString()
+  };
+}
+function approveLocalAgentServiceJob(request, input) {
+  exact(input, ["approved"]);
+  if (input.approved !== true) fail("approval_required", "Approve the service job explicitly before making its local receipt.");
+  if (request?.schema !== schema || typeof request.requestId !== "string" || !/^nmjob_[0-9a-f-]{36}$/.test(request.requestId) || typeof request.scope !== "string" || !/^[a-z][a-z0-9-]{0,47}$/.test(request.scope) || !validDate(request.createdAt) || !validDate(request.expiresAt) || !request.constraints || !Number.isInteger(request.constraints.maxOutputBytes) || request.constraints.maxOutputBytes < 1 || request.constraints.maxOutputBytes > 262144 || !["text/plain", "application/json"].includes(request.constraints.mediaType) || typeof request.acceptanceTest !== "string" || request.acceptanceTest.length < 1 || request.acceptanceTest.length > 240 || Date.parse(request.expiresAt) <= Date.parse(request.createdAt)) fail("invalid_request", "Invalid local service request.");
+  const approvedAt = (/* @__PURE__ */ new Date()).toISOString();
+  if (Date.parse(approvedAt) >= Date.parse(request.expiresAt)) fail("request_expired", "The local service request has expired.");
+  return { requestId: request.requestId, decision: "approved", approvedAt, mode: "local-demo-unverified" };
+}
+async function sha256Hex(bytes) {
+  if (!(bytes instanceof Uint8Array)) fail("invalid_request", "Expected artifact bytes as Uint8Array.");
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+async function createLocalAgentServiceReceipt(input) {
+  exact(input, ["request", "approval", "providerId", "resultRef", "bytes", "expectedSha256"]);
+  const { request, approval, bytes } = input;
+  if (request?.schema !== schema || typeof request.requestId !== "string" || !validDate(request.createdAt) || !validDate(request.expiresAt) || typeof request.scope !== "string" || !request.constraints || !Number.isInteger(request.constraints.maxOutputBytes) || request.constraints.maxOutputBytes < 1 || request.constraints.maxOutputBytes > 262144 || !["text/plain", "application/json"].includes(request.constraints.mediaType) || typeof approval?.requestId !== "string" || approval.requestId !== request.requestId || approval.decision !== "approved" || approval.mode !== "local-demo-unverified" || !validDate(approval.approvedAt) || Date.parse(request.expiresAt) <= Date.parse(request.createdAt) || typeof request.acceptanceTest !== "string" || request.acceptanceTest.length < 1 || request.acceptanceTest.length > 240 || Date.parse(approval.approvedAt) < Date.parse(request.createdAt)) fail("approval_required", "Create a separate local approval for this valid request before preparing a receipt.");
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  if (Date.parse(now) >= Date.parse(request.expiresAt)) fail("request_expired", "The local service request has expired.");
+  if (Date.parse(now) < Date.parse(approval.approvedAt)) fail("invalid_request", "The approval timestamp cannot be in the future.");
+  if (typeof input.providerId !== "string" || !/^[A-Za-z0-9._:-]{1,64}$/.test(input.providerId)) fail("invalid_request", "providerId must be a short local identifier.");
+  if (typeof input.resultRef !== "string" || !/^local:\/\/[A-Za-z0-9._/-]{1,180}$/.test(input.resultRef)) fail("invalid_request", "This example accepts local:// artifact references only.");
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1 || bytes.byteLength > request.constraints.maxOutputBytes) fail("invalid_request", "Output must be non-empty and within the requested byte limit.");
+  if (typeof input.expectedSha256 !== "string" || !/^[a-f0-9]{64}$/.test(input.expectedSha256)) fail("invalid_request", "expectedSha256 must be a lowercase SHA-256 digest.");
+  const actualDigest = await sha256Hex(bytes);
+  return {
+    schema: receiptSchema,
+    version: 1,
+    requestId: request.requestId,
+    scope: request.scope,
+    createdAt: now,
+    expiresAt: request.expiresAt,
+    providerId: input.providerId,
+    resultRef: input.resultRef,
+    digest: { algorithm: "sha-256", value: actualDigest },
+    verification: {
+      method: "sha-256-content-bytes",
+      outcome: actualDigest === input.expectedSha256 ? "digest_match" : "digest_mismatch",
+      expectedDigest: input.expectedSha256,
+      actualDigest,
+      semanticTruth: "not_evaluated"
+    },
+    serviceStatus: "result_available",
+    acceptanceStatus: "pending",
+    paymentStatus: "not_requested",
+    authenticity: "unsigned_unverified"
+  };
+}
+
+// packages/nouns-money-sdk/src/index.ts
+var NounsMoneyError = class extends Error {
   code;
   status;
   reason;
@@ -9,69 +103,69 @@ class NounsMoneyError extends Error {
     this.status = details?.status;
     this.reason = details?.reason;
   }
-}
-const SANDBOX_LIMITS = Object.freeze({ intents: 250, operations: 1e3 });
-const INTENT_SCHEMA = "pointcast.nouns-money.intent/v1";
-const STORE_SCHEMA = "pointcast.nouns-money.sandbox-store/v1";
-const NOTE_PATTERN = /^nm100-0[0-9]{2}$/;
-const INTENT_PATTERN = /^nmpi_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const KEY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
-const PUBLIC_KEYS = ["schema", "id", "mode", "label", "noteCount", "status", "noteIds", "receipt", "createdAt", "updatedAt"];
-const copy = (value) => structuredClone(value);
-function fail(code, message) {
+};
+var SANDBOX_LIMITS = Object.freeze({ intents: 250, operations: 1e3 });
+var INTENT_SCHEMA = "pointcast.nouns-money.intent/v1";
+var STORE_SCHEMA = "pointcast.nouns-money.sandbox-store/v1";
+var NOTE_PATTERN = /^nm100-0[0-9]{2}$/;
+var INTENT_PATTERN = /^nmpi_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+var KEY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
+var PUBLIC_KEYS = ["schema", "id", "mode", "label", "noteCount", "status", "noteIds", "receipt", "createdAt", "updatedAt"];
+var copy = (value) => structuredClone(value);
+function fail2(code, message) {
   throw new NounsMoneyError(code, message);
 }
-const object = (value) => !!value && typeof value === "object" && !Array.isArray(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
-function exact(value, keys, code = "invalid_request") {
-  if (!object(value) || Reflect.ownKeys(value).length !== keys.length || keys.some((key2) => !Object.hasOwn(value, key2))) fail(code, "Expected exactly: " + keys.join(", ") + ".");
+var object2 = (value) => !!value && typeof value === "object" && !Array.isArray(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+function exact2(value, keys, code = "invalid_request") {
+  if (!object2(value) || Reflect.ownKeys(value).length !== keys.length || keys.some((key2) => !Object.hasOwn(value, key2))) fail2(code, "Expected exactly: " + keys.join(", ") + ".");
 }
 function isNoteId(value) {
   return typeof value === "string" && NOTE_PATTERN.test(value);
 }
 function note(value) {
-  if (!isNoteId(value)) fail("invalid_request", "Choose a catalog note ID from nm100-000 through nm100-099.");
+  if (!isNoteId(value)) fail2("invalid_request", "Choose a catalog note ID from nm100-000 through nm100-099.");
   return value;
 }
 function key(value) {
-  if (typeof value !== "string" || !KEY_PATTERN.test(value)) fail("invalid_request", "Idempotency keys need 16\u2013128 ASCII letters, digits, periods, underscores, colons, or hyphens.");
+  if (typeof value !== "string" || !KEY_PATTERN.test(value)) fail2("invalid_request", "Idempotency keys need 16\u2013128 ASCII letters, digits, periods, underscores, colons, or hyphens.");
   return value;
 }
 function expectedAccountId(value) {
-  if (typeof value !== "string" || value.length > 128 || !/^pcu_[A-Za-z0-9_-]+$/.test(value)) fail("invalid_request", "Pass the exact userId of the displayed PointCast account.");
+  if (typeof value !== "string" || value.length > 128 || !/^pcu_[A-Za-z0-9_-]+$/.test(value)) fail2("invalid_request", "Pass the exact userId of the displayed PointCast account.");
   return value;
 }
 function intentId(value) {
-  if (typeof value !== "string" || !INTENT_PATTERN.test(value)) fail("invalid_request", "Invalid sandbox intent ID.");
+  if (typeof value !== "string" || !INTENT_PATTERN.test(value)) fail2("invalid_request", "Invalid sandbox intent ID.");
   return value;
 }
 function label(value) {
-  if (typeof value !== "string" || value.trim().length < 1 || value.trim().length > 80 || /[\u0000-\u001f\u007f]/.test(value)) fail("invalid_request", "Label needs 1\u201380 characters without control characters.");
+  if (typeof value !== "string" || value.trim().length < 1 || value.trim().length > 80 || /[\u0000-\u001f\u007f]/.test(value)) fail2("invalid_request", "Label needs 1\u201380 characters without control characters.");
   return value.trim();
 }
 function count(value) {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 5) fail("invalid_request", "noteCount must be an integer from 1 through 5.");
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 5) fail2("invalid_request", "noteCount must be an integer from 1 through 5.");
   return value;
 }
 function mode(value) {
-  if (value !== "test") fail("invalid_mode", "Only mode test is available. Live payments are disabled.");
+  if (value !== "test") fail2("invalid_mode", "Only mode test is available. Live payments are disabled.");
   return "test";
 }
 function notes(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 5) fail("invalid_request", "Choose 1\u20135 unique catalog note IDs.");
+  if (!Array.isArray(value) || value.length < 1 || value.length > 5) fail2("invalid_request", "Choose 1\u20135 unique catalog note IDs.");
   const ids = value.map(note);
-  if (new Set(ids).size !== ids.length) fail("invalid_request", "Each selected note must be unique.");
+  if (new Set(ids).size !== ids.length) fail2("invalid_request", "Each selected note must be unique.");
   return ids.sort();
 }
 function options(value) {
-  exact(value, ["idempotencyKey"]);
+  exact2(value, ["idempotencyKey"]);
   return key(value.idempotencyKey);
 }
 function createInput(value) {
-  exact(value, ["label", "noteCount", "mode"]);
+  exact2(value, ["label", "noteCount", "mode"]);
   return { label: label(value.label), noteCount: count(value.noteCount), mode: mode(value.mode) };
 }
 function confirmInput(value) {
-  exact(value, ["noteIds", "mode"]);
+  exact2(value, ["noteIds", "mode"]);
   return { noteIds: notes(value.noteIds), mode: mode(value.mode) };
 }
 function date(value) {
@@ -85,64 +179,64 @@ function emptyState() {
   return { schema: STORE_SCHEMA, intents: {}, operations: {} };
 }
 function validateIntent(value, stored) {
-  exact(value, stored ? [...PUBLIC_KEYS, "createIdempotencyKey"] : PUBLIC_KEYS, "corrupted_state");
-  if (value.schema !== INTENT_SCHEMA || value.mode !== "test" || typeof value.id !== "string" || !INTENT_PATTERN.test(value.id) || label(value.label) !== value.label || count(value.noteCount) !== value.noteCount || !["requires_notes", "succeeded", "canceled"].includes(value.status) || !date(value.createdAt) || !date(value.updatedAt) || value.updatedAt < value.createdAt || !Array.isArray(value.noteIds)) fail("corrupted_state", "Invalid stored intent.");
+  exact2(value, stored ? [...PUBLIC_KEYS, "createIdempotencyKey"] : PUBLIC_KEYS, "corrupted_state");
+  if (value.schema !== INTENT_SCHEMA || value.mode !== "test" || typeof value.id !== "string" || !INTENT_PATTERN.test(value.id) || label(value.label) !== value.label || count(value.noteCount) !== value.noteCount || !["requires_notes", "succeeded", "canceled"].includes(value.status) || !date(value.createdAt) || !date(value.updatedAt) || value.updatedAt < value.createdAt || !Array.isArray(value.noteIds)) fail2("corrupted_state", "Invalid stored intent.");
   if (stored) key(value.createIdempotencyKey);
   if (value.status !== "succeeded") {
-    if (value.noteIds.length || value.receipt !== null) fail("corrupted_state", "An unfinished or canceled intent cannot have a receipt or selected notes.");
+    if (value.noteIds.length || value.receipt !== null) fail2("corrupted_state", "An unfinished or canceled intent cannot have a receipt or selected notes.");
     return;
   }
   const ids = notes(value.noteIds);
-  if (ids.length !== value.noteCount || JSON.stringify(ids) !== JSON.stringify(value.noteIds)) fail("corrupted_state", "Stored selected notes do not match the intent.");
-  exact(value.receipt, ["id", "intentId", "mode", "label", "noteCount", "noteIds", "issuedAt"], "corrupted_state");
+  if (ids.length !== value.noteCount || JSON.stringify(ids) !== JSON.stringify(value.noteIds)) fail2("corrupted_state", "Stored selected notes do not match the intent.");
+  exact2(value.receipt, ["id", "intentId", "mode", "label", "noteCount", "noteIds", "issuedAt"], "corrupted_state");
   const receipt = value.receipt;
-  if (receipt.id !== "nmr_" + value.id.slice(5) || receipt.intentId !== value.id || receipt.mode !== "test" || receipt.label !== value.label || receipt.noteCount !== value.noteCount || JSON.stringify(receipt.noteIds) !== JSON.stringify(ids) || receipt.issuedAt !== value.updatedAt) fail("corrupted_state", "Invalid stored receipt.");
+  if (receipt.id !== "nmr_" + value.id.slice(5) || receipt.intentId !== value.id || receipt.mode !== "test" || receipt.label !== value.label || receipt.noteCount !== value.noteCount || JSON.stringify(receipt.noteIds) !== JSON.stringify(ids) || receipt.issuedAt !== value.updatedAt) fail2("corrupted_state", "Invalid stored receipt.");
 }
 function validateSandboxState(value) {
   try {
-    exact(value, ["schema", "intents", "operations"], "corrupted_state");
-    if (value.schema !== STORE_SCHEMA || !object(value.intents) || !object(value.operations)) fail("corrupted_state", "Invalid sandbox store.");
-    if (Object.keys(value.intents).length > SANDBOX_LIMITS.intents || Object.keys(value.operations).length > SANDBOX_LIMITS.operations) fail("corrupted_state", "Sandbox store exceeds its capacity.");
+    exact2(value, ["schema", "intents", "operations"], "corrupted_state");
+    if (value.schema !== STORE_SCHEMA || !object2(value.intents) || !object2(value.operations)) fail2("corrupted_state", "Invalid sandbox store.");
+    if (Object.keys(value.intents).length > SANDBOX_LIMITS.intents || Object.keys(value.operations).length > SANDBOX_LIMITS.operations) fail2("corrupted_state", "Sandbox store exceeds its capacity.");
     for (const [id, record] of Object.entries(value.intents)) {
       validateIntent(record, true);
-      if (id !== record.id) fail("corrupted_state", "Intent key does not match the record.");
+      if (id !== record.id) fail2("corrupted_state", "Intent key does not match the record.");
     }
     for (const [opKey, operation] of Object.entries(value.operations)) {
       key(opKey);
-      exact(operation, ["operation", "fingerprint", "result"], "corrupted_state");
-      if (!["create", "confirm", "cancel"].includes(operation.operation) || typeof operation.fingerprint !== "string") fail("corrupted_state", "Invalid stored operation.");
+      exact2(operation, ["operation", "fingerprint", "result"], "corrupted_state");
+      if (!["create", "confirm", "cancel"].includes(operation.operation) || typeof operation.fingerprint !== "string") fail2("corrupted_state", "Invalid stored operation.");
       validateIntent(operation.result, false);
       const current = value.intents[operation.result.id];
-      if (!current || current.label !== operation.result.label || current.noteCount !== operation.result.noteCount || current.createdAt !== operation.result.createdAt || operation.result.updatedAt > current.updatedAt) fail("corrupted_state", "Operation does not match its intent.");
+      if (!current || current.label !== operation.result.label || current.noteCount !== operation.result.noteCount || current.createdAt !== operation.result.createdAt || operation.result.updatedAt > current.updatedAt) fail2("corrupted_state", "Operation does not match its intent.");
       const payload = JSON.parse(operation.fingerprint);
       let expected;
       if (operation.operation === "create") {
-        exact(payload, ["operation", "label", "noteCount", "mode"], "corrupted_state");
+        exact2(payload, ["operation", "label", "noteCount", "mode"], "corrupted_state");
         expected = JSON.stringify({ operation: "create", ...createInput({ label: payload.label, noteCount: payload.noteCount, mode: payload.mode }) });
-        if (current.createIdempotencyKey !== opKey || operation.result.status !== "requires_notes" || operation.result.updatedAt !== current.createdAt || payload.label !== current.label || payload.noteCount !== current.noteCount) fail("corrupted_state", "Invalid original creation record.");
+        if (current.createIdempotencyKey !== opKey || operation.result.status !== "requires_notes" || operation.result.updatedAt !== current.createdAt || payload.label !== current.label || payload.noteCount !== current.noteCount) fail2("corrupted_state", "Invalid original creation record.");
       } else if (operation.operation === "confirm") {
-        exact(payload, ["operation", "id", "noteIds", "mode"], "corrupted_state");
+        exact2(payload, ["operation", "id", "noteIds", "mode"], "corrupted_state");
         expected = JSON.stringify({ operation: "confirm", id: intentId(payload.id), ...confirmInput({ noteIds: payload.noteIds, mode: payload.mode }) });
-        if (payload.id !== current.id || operation.result.status !== "succeeded" || current.status !== "succeeded" || JSON.stringify(payload.noteIds) !== JSON.stringify(current.noteIds) || JSON.stringify(operation.result.receipt) !== JSON.stringify(current.receipt)) fail("corrupted_state", "Invalid confirmation record.");
+        if (payload.id !== current.id || operation.result.status !== "succeeded" || current.status !== "succeeded" || JSON.stringify(payload.noteIds) !== JSON.stringify(current.noteIds) || JSON.stringify(operation.result.receipt) !== JSON.stringify(current.receipt)) fail2("corrupted_state", "Invalid confirmation record.");
       } else {
-        exact(payload, ["operation", "id"], "corrupted_state");
+        exact2(payload, ["operation", "id"], "corrupted_state");
         expected = JSON.stringify({ operation: "cancel", id: intentId(payload.id) });
-        if (payload.id !== current.id || operation.result.status !== "canceled" || current.status !== "canceled") fail("corrupted_state", "Invalid cancellation record.");
+        if (payload.id !== current.id || operation.result.status !== "canceled" || current.status !== "canceled") fail2("corrupted_state", "Invalid cancellation record.");
       }
-      if (payload.operation !== operation.operation || expected !== operation.fingerprint) fail("corrupted_state", "Invalid idempotency fingerprint.");
+      if (payload.operation !== operation.operation || expected !== operation.fingerprint) fail2("corrupted_state", "Invalid idempotency fingerprint.");
     }
     for (const record of Object.values(value.intents)) {
       const creation = value.operations[record.createIdempotencyKey];
-      if (!creation || creation.operation !== "create" || creation.result.id !== record.id) fail("corrupted_state", "Original create key is missing.");
-      if (record.status === "succeeded" && !Object.values(value.operations).some((op) => object(op) && op.operation === "confirm" && object(op.result) && op.result.id === record.id)) fail("corrupted_state", "Confirmation evidence is missing.");
-      if (record.status === "canceled" && !Object.values(value.operations).some((op) => object(op) && op.operation === "cancel" && object(op.result) && op.result.id === record.id)) fail("corrupted_state", "Cancellation evidence is missing.");
+      if (!creation || creation.operation !== "create" || creation.result.id !== record.id) fail2("corrupted_state", "Original create key is missing.");
+      if (record.status === "succeeded" && !Object.values(value.operations).some((op) => object2(op) && op.operation === "confirm" && object2(op.result) && op.result.id === record.id)) fail2("corrupted_state", "Confirmation evidence is missing.");
+      if (record.status === "canceled" && !Object.values(value.operations).some((op) => object2(op) && op.operation === "cancel" && object2(op.result) && op.result.id === record.id)) fail2("corrupted_state", "Cancellation evidence is missing.");
     }
   } catch (error) {
     if (error instanceof NounsMoneyError && error.code === "corrupted_state") throw error;
-    fail("corrupted_state", "The local sandbox data is invalid. Export or clear the browser sandbox before restarting.");
+    fail2("corrupted_state", "The local sandbox data is invalid. Export or clear the browser sandbox before restarting.");
   }
 }
-class MemorySandboxStore {
+var MemorySandboxStore = class {
   state;
   queue = Promise.resolve();
   constructor(initialState = emptyState()) {
@@ -165,8 +259,8 @@ class MemorySandboxStore {
   exportState() {
     return this.transact((state) => copy(state));
   }
-}
-class IndexedDbSandboxStore {
+};
+var IndexedDbSandboxStore = class {
   databaseName;
   database;
   constructor({ databaseName = "pointcast-nouns-money-sandbox-v1" } = {}) {
@@ -246,8 +340,8 @@ class IndexedDbSandboxStore {
     if (this.database) (await this.database).close();
     this.database = void 0;
   }
-}
-class NounsMoneySandbox {
+};
+var NounsMoneySandbox = class {
   store;
   constructor(store = new IndexedDbSandboxStore()) {
     this.store = store;
@@ -256,10 +350,10 @@ class NounsMoneySandbox {
     return this.store.transact((state) => {
       const previous = Object.hasOwn(state.operations, opKey) ? state.operations[opKey] : void 0;
       if (previous) {
-        if (previous.operation !== operation || previous.fingerprint !== fingerprint) fail("idempotency_conflict", "This key was already used for a different operation or payload.");
+        if (previous.operation !== operation || previous.fingerprint !== fingerprint) fail2("idempotency_conflict", "This key was already used for a different operation or payload.");
         return copy(previous.result);
       }
-      if (Object.keys(state.operations).length >= SANDBOX_LIMITS.operations) fail("capacity_exceeded", "The local sandbox has reached 1,000 saved operations. Existing keys remain valid.");
+      if (Object.keys(state.operations).length >= SANDBOX_LIMITS.operations) fail2("capacity_exceeded", "The local sandbox has reached 1,000 saved operations. Existing keys remain valid.");
       const result = change(state);
       state.operations[opKey] = { operation, fingerprint, result: copy(result) };
       return result;
@@ -269,7 +363,7 @@ class NounsMoneySandbox {
     const payload = createInput(input);
     const opKey = options(opts);
     return this.mutate("create", opKey, JSON.stringify({ operation: "create", ...payload }), (state) => {
-      if (Object.keys(state.intents).length >= SANDBOX_LIMITS.intents) fail("capacity_exceeded", "The local sandbox has reached 250 demo intents. Existing intents and keys remain readable.");
+      if (Object.keys(state.intents).length >= SANDBOX_LIMITS.intents) fail2("capacity_exceeded", "The local sandbox has reached 250 demo intents. Existing intents and keys remain readable.");
       const id = "nmpi_" + crypto.randomUUID();
       const now = (/* @__PURE__ */ new Date()).toISOString();
       const record = { schema: INTENT_SCHEMA, id, ...payload, status: "requires_notes", noteIds: [], receipt: null, createdAt: now, updatedAt: now, createIdempotencyKey: opKey };
@@ -283,11 +377,11 @@ class NounsMoneySandbox {
     const opKey = options(opts);
     return this.mutate("confirm", opKey, JSON.stringify({ operation: "confirm", id, ...payload }), (state) => {
       const record = state.intents[id];
-      if (!record) fail("not_found", "Sandbox intent was not found on this device.");
-      if (payload.noteIds.length !== record.noteCount) fail("invalid_request", "Choose exactly " + record.noteCount + " unique demo notes.");
-      if (record.status === "canceled") fail("invalid_state", "A canceled sandbox intent cannot be confirmed.");
+      if (!record) fail2("not_found", "Sandbox intent was not found on this device.");
+      if (payload.noteIds.length !== record.noteCount) fail2("invalid_request", "Choose exactly " + record.noteCount + " unique demo notes.");
+      if (record.status === "canceled") fail2("invalid_state", "A canceled sandbox intent cannot be confirmed.");
       if (record.status === "succeeded") {
-        if (JSON.stringify(record.noteIds) !== JSON.stringify(payload.noteIds)) fail("invalid_state", "This sandbox intent already succeeded with a different selection.");
+        if (JSON.stringify(record.noteIds) !== JSON.stringify(payload.noteIds)) fail2("invalid_state", "This sandbox intent already succeeded with a different selection.");
         return publicIntent(record);
       }
       record.status = "succeeded";
@@ -302,8 +396,8 @@ class NounsMoneySandbox {
     const opKey = options(opts);
     return this.mutate("cancel", opKey, JSON.stringify({ operation: "cancel", id }), (state) => {
       const record = state.intents[id];
-      if (!record) fail("not_found", "Sandbox intent was not found on this device.");
-      if (record.status === "succeeded") fail("invalid_state", "A successful sandbox intent cannot be canceled.");
+      if (!record) fail2("not_found", "Sandbox intent was not found on this device.");
+      if (record.status === "succeeded") fail2("invalid_state", "A successful sandbox intent cannot be canceled.");
       if (record.status === "requires_notes") {
         record.status = "canceled";
         record.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -315,19 +409,19 @@ class NounsMoneySandbox {
     id = intentId(id);
     return this.store.transact((state) => {
       const result = state.intents[id];
-      if (!result) fail("not_found", "Sandbox intent was not found on this device.");
+      if (!result) fail2("not_found", "Sandbox intent was not found on this device.");
       return publicIntent(result);
     });
   }
   async listIntents() {
     return this.store.transact((state) => Object.values(state.intents).map(publicIntent).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id)));
   }
-}
+};
 function collectionResponse(value) {
-  if (!object(value) || value.ok !== true || value.schema !== "pointcast.nouns-money.collection/v1" || value.storage !== "account" || typeof value.userId !== "string" || !value.userId || !Array.isArray(value.noteIds) || value.noteIds.some((id) => !isNoteId(id)) || new Set(value.noteIds).size !== value.noteIds.length || !object(value.collectedAt) || Object.keys(value.collectedAt).length !== value.noteIds.length || value.noteIds.some((id) => !date(value.collectedAt[id])) || value.updatedAt !== null && !date(value.updatedAt) || value.changed !== void 0 && typeof value.changed !== "boolean") fail("invalid_response", "The account collection response did not match the implemented contract.");
+  if (!object2(value) || value.ok !== true || value.schema !== "pointcast.nouns-money.collection/v1" || value.storage !== "account" || typeof value.userId !== "string" || !value.userId || !Array.isArray(value.noteIds) || value.noteIds.some((id) => !isNoteId(id)) || new Set(value.noteIds).size !== value.noteIds.length || !object2(value.collectedAt) || Object.keys(value.collectedAt).length !== value.noteIds.length || value.noteIds.some((id) => !date(value.collectedAt[id])) || value.updatedAt !== null && !date(value.updatedAt) || value.changed !== void 0 && typeof value.changed !== "boolean") fail2("invalid_response", "The account collection response did not match the implemented contract.");
   return copy(value);
 }
-class NounsMoneyClient {
+var NounsMoneyClient = class {
   baseUrl;
   fetcher;
   constructor({ baseUrl = "", fetch: fetcher = globalThis.fetch } = {}) {
@@ -339,16 +433,16 @@ class NounsMoneyClient {
     try {
       response = await this.fetcher(this.baseUrl + path, { method, credentials: "same-origin", headers: { Accept: "application/json", ...body ? { "Content-Type": "application/json" } : {}, ...expectedUserId ? { "X-PointCast-User": expectedUserId } : {} }, ...body ? { body: JSON.stringify(body) } : {} });
     } catch {
-      fail("api_error", "The request did not reach PointCast.");
+      fail2("api_error", "The request did not reach PointCast.");
     }
     let data;
     try {
       data = await response.json();
     } catch {
-      fail("invalid_response", "PointCast did not return JSON.");
+      fail2("invalid_response", "PointCast did not return JSON.");
     }
-    if (!response.ok || object(data) && data.ok === false) {
-      const reason = object(data) && typeof data.reason === "string" ? data.reason : void 0;
+    if (!response.ok || object2(data) && data.ok === false) {
+      const reason = object2(data) && typeof data.reason === "string" ? data.reason : void 0;
       throw new NounsMoneyError("api_error", reason ?? "PointCast rejected the request.", { status: response.status, reason });
     }
     return data;
@@ -359,7 +453,7 @@ class NounsMoneyClient {
   async mutateCollection(noteId, expectedUserId, method) {
     const userId = expectedAccountId(expectedUserId);
     const result = collectionResponse(await this.request("/api/me/nouns-money", method, { noteId: note(noteId) }, userId));
-    if (result.userId !== userId) fail("invalid_response", "The collection response did not match the displayed account.");
+    if (result.userId !== userId) fail2("invalid_response", "The collection response did not match the displayed account.");
     return result;
   }
   /** Pass the userId captured with the displayed shelf; do not silently refresh it before mutation. */
@@ -371,17 +465,22 @@ class NounsMoneyClient {
   }
   async getCatalog() {
     const data = await this.request("/nouns-money/catalog.json");
-    if (!object(data) || typeof data.schema !== "string" || data.mode !== "collectible-art" || data.count !== 100 || !Array.isArray(data.notes) || data.notes.length !== 100 || new Set(data.notes.map((item) => object(item) ? item.id : null)).size !== 100 || data.notes.some((item) => !object(item) || !isNoteId(item.id) || typeof item.name !== "string" || !Number.isInteger(item.nounId) || item.nounId !== Number(item.id.slice(6)) || typeof item.image !== "string" || typeof item.svg !== "string") || !Object.hasOwn(data, "provenance")) fail("invalid_response", "The catalog did not contain the 100 source notes.");
+    if (!object2(data) || typeof data.schema !== "string" || data.mode !== "collectible-art" || data.count !== 100 || !Array.isArray(data.notes) || data.notes.length !== 100 || new Set(data.notes.map((item) => object2(item) ? item.id : null)).size !== 100 || data.notes.some((item) => !object2(item) || !isNoteId(item.id) || typeof item.name !== "string" || !Number.isInteger(item.nounId) || item.nounId !== Number(item.id.slice(6)) || typeof item.image !== "string" || typeof item.svg !== "string") || !Object.hasOwn(data, "provenance")) fail2("invalid_response", "The catalog did not contain the 100 source notes.");
     return copy(data);
   }
-}
+};
 export {
+  AgentServiceExampleError,
   IndexedDbSandboxStore,
   MemorySandboxStore,
   NounsMoneyClient,
   NounsMoneyError,
   NounsMoneySandbox,
   SANDBOX_LIMITS,
+  approveLocalAgentServiceJob,
+  createLocalAgentServiceReceipt,
+  createLocalAgentServiceRequest,
   isNoteId,
+  sha256Hex,
   validateSandboxState
 };
