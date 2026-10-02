@@ -238,6 +238,21 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
+  // Concept rebrand: old exhibit and machine URLs resolve before generic rewrites.
+  if (isGet || request.method === 'HEAD') {
+    const moneyTarget = new Map([
+      ['/noggle-reserve', '/nouns-money/'],
+      ['/noggle-reserve/', '/nouns-money/'],
+      ['/noggle-reserve/index.html', '/nouns-money/'],
+      ['/noggle-reserve.json', '/nouns-money.json'],
+    ]).get(url.pathname);
+    if (moneyTarget) {
+      const target = new URL(moneyTarget, url.origin);
+      target.search = url.search;
+      return Response.redirect(target.toString(), 301);
+    }
+  }
+
   // Both legacy sign-in URLs must redirect before directory rewriting.
   // Preserve returnTo and other query parameters for the current auth desk.
   if ((isGet || request.method === 'HEAD') && (url.pathname === '/login' || url.pathname === '/login/')) {
