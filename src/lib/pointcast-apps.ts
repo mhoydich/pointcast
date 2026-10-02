@@ -12,6 +12,13 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'everyday', name: 'Everyday Works',
+    kicker: 'WEAR · CARRY · HOME · CONCEPT COLLECTION',
+    description: 'Twelve useful everyday product concepts with a $3–$29 target retail ladder. Illustrative design studies, not available inventory or quoted manufacturing costs.',
+    url: 'https://pointcast.xyz/everyday/', path: '/everyday/',
+    repo: 'https://github.com/mhoydich/pointcast', channel: 'CH.ESC', kind: 'pointcast',
+  },
+  {
     slug: 'communications-lab',
     name: 'Industry Next Communications Lab',
     kicker: 'MAKE THE SIGNAL USEFUL · PROPOSED 2026/2027 PROGRAM',
