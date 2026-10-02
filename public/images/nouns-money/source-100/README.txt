@@ -1,0 +1,1 @@
+Catalog adapter and independent source verification for Nouns Money. Artwork files are canonical public/images/nouns-money/nordic-100 assets already landed by the art release; see provenance.json for100exact matched source hashes and artwork verification. No currency issuance or NFT ownership is implied.

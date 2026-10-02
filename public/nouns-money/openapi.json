@@ -1,0 +1,533 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nouns Money collection API",
+    "version": "1.0.0",
+    "description": "Public collectible-art catalog and same-origin PointCast account collection. No HTTP payment intents, settlement, funds, redemption, API keys, webhooks, or blockchain transactions. The payment sandbox uses a separate local TypeScript adapter. Artwork preference records confer no ownership or monetary value."
+  },
+  "servers": [
+    {
+      "url": "https://pointcast.xyz",
+      "description": "PointCast public site; account collection requires a signed-in same-origin browser session."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Catalog"
+    },
+    {
+      "name": "Account collection"
+    }
+  ],
+  "paths": {
+    "/nouns-money/catalog.json": {
+      "get": {
+        "operationId": "getNounsMoneyCatalog",
+        "summary": "Read the authentic source-100 catalog",
+        "tags": [
+          "Catalog"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The 100-design catalog, using authentic Nouns #0\u201399.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalog"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/nouns-money": {
+      "get": {
+        "operationId": "getNounsMoneyCollection",
+        "summary": "Read the signed-in account collection",
+        "description": "Uses the existing signed pc_session cookie. No bearer token or API key authentication is offered.",
+        "tags": [
+          "Account collection"
+        ],
+        "security": [
+          {
+            "PointCastSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current account collection. Mutation responses may include changed; repeated collection or removal is safe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The request failed. The reason is a stable machine-readable code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request failed. The reason is a stable machine-readable code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "collectNounsMoneyNote",
+        "summary": "Collect a design in the account",
+        "description": "Set membership is idempotent. Repeating the same mutation does not duplicate a design. This preference record establishes no paper possession, token ownership, funds or redemption rights. X-PointCast-User must identify the displayed account and match the signed session.",
+        "tags": [
+          "Account collection"
+        ],
+        "security": [
+          {
+            "PointCastSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Must exactly match the request URL origin. Browsers set this header automatically; this is a same-origin account API.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            },
+            "example": "https://pointcast.xyz"
+          },
+          {
+            "name": "X-PointCast-User",
+            "in": "header",
+            "required": true,
+            "description": "userId from the account collection currently displayed. Must match the signed session. This is an account-switch consistency guard, not an authentication credential.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "JSON body containing exactly one known noteId. Request body is capped at 256 bytes, including whitespace.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteMutation"
+              },
+              "example": {
+                "noteId": "nm100-000"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The current account collection. Mutation responses may include changed; repeated collection or removal is safe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad-body for malformed JSON/UTF-8, or invalid-note-id for a wrong JSON shape or unknown note ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized: sign in through PointCast.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "origin-not-allowed: missing or nonmatching Origin.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "body-too-large: request exceeds 256 bytes. payload-too-large: the shared account-state document would exceed 16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "json-required: Content-Type must be application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "nouns-money-collection-unavailable: account storage is unavailable. No successful collection is claimed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "account-changed: expected displayed user ID is missing or does not match the signed session. Refresh the account collection and retry the deliberate action. collection-write-conflict: refresh and retry a concurrent write conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeNounsMoneyNote",
+        "summary": "Remove a design from the account",
+        "description": "Set membership is idempotent. Repeating the same mutation does not duplicate a design. This preference record establishes no paper possession, token ownership, funds or redemption rights. X-PointCast-User must identify the displayed account and match the signed session.",
+        "tags": [
+          "Account collection"
+        ],
+        "security": [
+          {
+            "PointCastSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Must exactly match the request URL origin. Browsers set this header automatically; this is a same-origin account API.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            },
+            "example": "https://pointcast.xyz"
+          },
+          {
+            "name": "X-PointCast-User",
+            "in": "header",
+            "required": true,
+            "description": "userId from the account collection currently displayed. Must match the signed session. This is an account-switch consistency guard, not an authentication credential.",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "JSON body containing exactly one known noteId. Request body is capped at 256 bytes, including whitespace.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteMutation"
+              },
+              "example": {
+                "noteId": "nm100-000"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The current account collection. Mutation responses may include changed; repeated collection or removal is safe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad-body for malformed JSON/UTF-8, or invalid-note-id for a wrong JSON shape or unknown note ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized: sign in through PointCast.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "origin-not-allowed: missing or nonmatching Origin.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "body-too-large: request exceeds 256 bytes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "json-required: Content-Type must be application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "nouns-money-collection-unavailable: account storage is unavailable. No successful collection is claimed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "account-changed: expected displayed user ID is missing or does not match the signed session. Refresh the account collection and retry the deliberate action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "PointCastSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "pc_session",
+        "description": "Existing signed PointCast session cookie. HttpOnly and managed by PointCast sign-in. It is not a developer API key; JavaScript must not read, copy, or create it."
+      }
+    },
+    "schemas": {
+      "NoteId": {
+        "type": "string",
+        "pattern": "^nm100-0[0-9]{2}$",
+        "description": "A source-100 design ID, nm100-000 through nm100-099. These IDs identify designs, not tokens or issued notes.",
+        "example": "nm100-000"
+      },
+      "NoteMutation": {
+        "type": "object",
+        "required": [
+          "noteId"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "noteId": {
+            "$ref": "#/components/schemas/NoteId"
+          }
+        }
+      },
+      "Collection": {
+        "type": "object",
+        "required": [
+          "ok",
+          "schema",
+          "userId",
+          "storage",
+          "noteIds",
+          "collectedAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "schema": {
+            "const": "pointcast.nouns-money.collection/v1"
+          },
+          "userId": {
+            "type": "string",
+            "description": "The authenticated PointCast account ID."
+          },
+          "storage": {
+            "const": "account"
+          },
+          "noteIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteId"
+            },
+            "uniqueItems": true,
+            "maxItems": 100
+          },
+          "collectedAt": {
+            "type": "object",
+            "description": "Current collected note IDs mapped to the time they were collected. Removing and recollecting creates a new timestamp.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "changed": {
+            "type": "boolean",
+            "description": "Present on mutations; false when the requested membership already holds."
+          }
+        }
+      },
+      "Catalog": {
+        "type": "object",
+        "required": [
+          "schema",
+          "mode",
+          "count",
+          "notes",
+          "provenance"
+        ],
+        "properties": {
+          "schema": {
+            "const": "pointcast.nouns-money.catalog/v1"
+          },
+          "mode": {
+            "const": "collectible-art"
+          },
+          "count": {
+            "const": 100
+          },
+          "notes": {
+            "type": "array",
+            "minItems": 100,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/CatalogNote"
+            }
+          },
+          "provenance": {
+            "type": "string",
+            "description": "Public path to the exact source-set provenance file.",
+            "example": "/images/nouns-money/source-100/provenance.json"
+          }
+        }
+      },
+      "CatalogNote": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "nounId",
+          "image",
+          "svg"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/NoteId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nounId": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99
+          },
+          "image": {
+            "type": "string",
+            "description": "Public raster preview path."
+          },
+          "svg": {
+            "type": "string",
+            "description": "Public editable SVG source path."
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "ok",
+          "reason"
+        ],
+        "properties": {
+          "ok": {
+            "const": false
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unauthorized",
+              "origin-not-allowed",
+              "json-required",
+              "body-too-large",
+              "payload-too-large",
+              "bad-body",
+              "invalid-note-id",
+              "collection-write-conflict",
+              "nouns-money-collection-unavailable",
+              "account-changed"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
