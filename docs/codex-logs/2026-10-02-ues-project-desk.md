@@ -30,4 +30,3 @@ Independent Codex source review found nested main landmarks and two statements i
 - Homepage, class source/routes, progress/receipt modules, existing archive and layout verified unchanged against base.
 
 Browser screenshots and machine-readable check receipts are retained with the Codex task. Real participant tests, course completion claims and implementation acceptance are outside this brief publication. Release uses an approved reviewed PR and scripts/deploy.sh only; production verification is recorded in the final handback.
-
