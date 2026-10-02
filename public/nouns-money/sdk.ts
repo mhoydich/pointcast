@@ -1,4 +1,13 @@
 /** Local demonstration only. No funds, chain operations, balances, or redemption. */
+export {
+  AgentServiceExampleError,
+  approveLocalAgentServiceJob,
+  createLocalAgentServiceReceipt,
+  createLocalAgentServiceRequest,
+  sha256Hex,
+} from './agent-service.ts';
+export type { LocalAgentServiceApproval, LocalAgentServiceReceipt, LocalAgentServiceRequest } from './agent-service.ts';
+
 export type NoteId = `nm100-${string}`;
 export type SandboxStatus = 'requires_notes' | 'succeeded' | 'canceled';
 export type NounsMoneyErrorCode = 'invalid_request' | 'invalid_mode' | 'not_found' | 'invalid_state' | 'idempotency_conflict' | 'capacity_exceeded' | 'storage_unavailable' | 'corrupted_state' | 'api_error' | 'invalid_response';

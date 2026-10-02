@@ -32,6 +32,26 @@ const confirmed = await sandbox.confirmIntent(
 console.log(confirmed.receipt);
 ```
 
+## Proposed agent service receipt
+
+The SDK also includes an explicitly local service-receipt example. Run it from the PointCast checkout:
+
+```sh
+node docs/nouns-money/agent-service-quickstart.mjs
+```
+
+It constructs a bounded request with constraints and an acceptance-test description, records a separate local approval of that job, makes a local text artifact, compares its SHA-256 digest with the expected bytes, and prints an exportable JSON receipt. The example makes no network request and does not access any x402 transport or payment code. The approval flag represents only a step in this local demonstration. It cannot authorize spending.
+
+Receipt records keep service result availability, artifact-byte verification, user acceptance, payment status, and receipt authenticity in separate fields. The sample remains unsigned and unverified as an issuer-authenticated record; acceptance is pending and payment is `not_requested`. A matching digest shows that the bytes match the expected bytes. It does not prove that the output is true, useful, safe, or acceptable.
+
+An agent-facing HTTP service and its service-receipt schema are proposed only. A future request would need bounded scope and constraints, an expiry, a separately authorized job, an artifact reference and digest, an explicit verification method and outcome, and a separate acceptance decision. Never include secrets, personal data or payment instructions in a public receipt.
+
+### x402 boundary
+
+As checked on 2 October 2026, the official x402 HTTP guide describes V2’s `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers. These carry payment requirements, a client payment payload, and the server’s settlement-attempt response. They do not implement a Nouns Money service. Verification, settlement, service delivery and acceptance still need distinct records and reconciliation. See the [official HTTP 402 guide](https://docs.x402.org/core-concepts/http-402), [client/server flow](https://docs.x402.org/core-concepts/client-server), and optional [payment-identifier extension](https://docs.x402.org/extensions/payment-identifier).
+
+No Nouns Money x402 route, facilitator connection, payment signature, automatic buyer, payment credential or x402 SDK adapter is implemented. The current OpenAPI paths remain the public art catalog and signed-in account collection; the proposal is descriptive metadata only. Do not use the existing PointCast `X402_MODE=test` as a dry-run switch: that setting labels receipts but does not stop its settlement call. Nouns Money local examples must stay separate from the existing x402 service.
+
 Use one stable idempotency key for each deliberate mutation and reuse it on retries. Keys are 16–128 ASCII letters, digits, periods, underscores, colons or hyphens. The key namespace is global within the store. Reusing a key with another operation or normalized payload raises `idempotency_conflict`. Intents progress from `requires_notes` to `succeeded` or `canceled`; both terminal states are protected. A same-selection confirmation retains the same receipt. Replaying a creation key returns the original creation result; retrieve the intent for its current status.
 
 The default browser store is IndexedDB database `pointcast-nouns-money-sandbox-v1`, shared across tabs and sign-ins at that browser origin. It is independent of the account collection and visible to other people using that browser. It is not a server-verified payment ledger. An explicit memory store lasts for the store instance. Capacity is 250 intents and 1,000 saved mutation keys, with no silent eviction. Storage errors must never be shown as success.
