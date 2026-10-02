@@ -7,7 +7,7 @@ export const MONEY = {
   publishedAt: '2026-10-02',
   status: 'Collectible art concept',
   disclosure: 'Independent collectible art concept directed by Mike Hoydich. Paper artworks for voluntary art trades, never cash. No bank, deposits, cash redemption, financial offer, NFT ownership or Nouns DAO endorsement.',
-  built: ['A ten-design digital exhibition using actual numbered Nouns', 'Ten generated Nordic 2027 visual studies', 'A browser-local saved design set with JSON export', 'Original artwork downloads and provenance', 'A read-only machine edition', 'A fictional serial journey example and phased build scope'],
+  built: ['A 100-distinct-Noun Nordic 2027 read-only art catalog, plus the original ten-design collecting room', 'Fourteen generated Nordic 2027 visual studies', 'Campaign artwork and two downloadable Letter print proofs', 'A browser-local saved design set with JSON export', 'Original artwork downloads and provenance', 'A read-only machine edition', 'A fictional serial journey example and phased build scope'],
   proposed: ['A printer-proofed physical edition', 'A host-approved art-trade table', 'A moderated, opt-in serial journey service', 'Optional Tezos companion artworks, subject to a separate design and approval'],
   collecting: {
     meaning: 'Save designs you like in this browser. A saved design does not establish possession of a paper note, NFT ownership, a mint or a transfer.',
@@ -21,10 +21,33 @@ export const MONEY = {
     officialSource: 'https://nouns.wtf/brand',
     sourceContract: '0x9C8fF314C9Bc7F6e59A9d9225Fb22946427eDC03',
     sourceChain: 'Ethereum mainnet',
-    note: 'Original numbered Nouns retain their pixel shapes and colors in the flat artwork. Physical scenes and Nordic 2027 studies are generated visual interpretations; the exact-source claims apply to Collection 01 flat masters only.',
+    note: 'Original numbered Nouns retain their pixel shapes and colors in the flat artwork. Physical scenes and Nordic 2027 studies are generated visual interpretations; the exact-source claims apply to Collection 01 and the Nordic 100 flat masters.',
   },
   download: '/downloads/nouns-money-collection-01.zip',
+  communityCollectible: {
+    status: 'Proposed founding community collectible · Tezos mint not yet available',
+    catalogCount: 100,
+    sourceNouns: 'Actual Nouns #0–99; 100 distinct source artworks',
+    serialRange: ['NM27-000001', 'NM27-000100'],
+    contract: null, mintEnabled: false, mintUrl: null, walletConnection: false,
+    purpose: 'A proposed collectible for people who want to help shape Nouns Money art, future launches and community projects.',
+    economics: 'Claim price, supply, edition caps and eligibility are undecided. A free claim with network gas only is a recommendation, not an approved release term.',
+    participation: 'Future drops, art afternoons and project invitations are proposed. Holding art does not guarantee allocations, airdrops, access, returns, redemption or issuer backing.',
+    decisionsNeeded: ['Approved edition and claim rules', 'Administrator wallet and contract deployment authorization', 'Verified Tezos contract, network, code hash and entrypoints', 'Public artwork metadata and hosting', 'Explicit future event and participation terms'],
+  },
+  printProofs: {
+    status: 'Digital printer-discussion proofs from generated Nordic studies; no physical printing or ordering configured',
+    threeDesignSheet: '/downloads/nouns-money-2027-three-design-print-sheet-light.pdf',
+    tenDesignSampler: '/downloads/nouns-money-2027-letter-print-proofs-light.pdf',
+    page: 'US Letter · 215.9 × 279.4 mm · single-sided',
+    imageAreaMm: [150, 75],
+    threeDesigns: ['Ice Blue One', 'Glacier Mint Ten', 'Rose Charcoal 100'],
+    copies: [{ sheets: 10, totalNotes: 30, copiesPerDesign: 10 }, { sheets: 25, totalNotes: 75, copiesPerDesign: 25 }],
+    scaling: '100% / Actual Size. Disable Fit and Shrink. Measure the 50 mm reference line before continuing.',
+    limits: 'The image area includes the original borders, so the visible note may be smaller. Flat printed visual effects only; no foil, translucent window or security feature. Confirm paper, color and cutting with the printer. No duplex back, calibrated CMYK separation or physical proof verified.',
+  },
   noteSpec: {
+    series: 'Original ten · Collection 01',
     status: 'Front-face collectible design prototypes. No manufactured edition or physical proof verified.',
     trimMm: [150, 75], rasterPx: [3600, 1800], previewColorSpace: 'RGB; no calibrated CMYK or spot separation', specimenIds: 'NM-A-0001 through NM-A-0010 identify designs, not unique issued notes',
     meaning: 'Numerals and serials are design details, not monetary amounts or redemption promises.',
@@ -232,5 +255,43 @@ export const NORDIC_STUDIES = [
     "name": "Midnight Teal Silver Twenty",
     "referenceNoun": 9,
     "status": "Generated concept art"
+  },
+  {
+    "file": "11-arctic-cobalt-200",
+    "name": "Arctic Cobalt 200",
+    "referenceNoun": null,
+    "status": "Generated concept art"
+  },
+  {
+    "file": "12-moss-ochre-500",
+    "name": "Moss Ochre 500",
+    "referenceNoun": null,
+    "status": "Generated concept art"
+  },
+  {
+    "file": "13-coral-ink-2",
+    "name": "Coral Ink Two",
+    "referenceNoun": null,
+    "status": "Generated concept art"
+  },
+  {
+    "file": "14-violet-fluorogreen-25",
+    "name": "Violet Fluorogreen 25",
+    "referenceNoun": null,
+    "status": "Generated concept art"
+  }
+] as const;
+
+export const CAMPAIGN_POSTERS = [
+  {"file":"03-lets-go-team","title":"Let’s go team","alt":"Generated Nouns Money campaign poster: Let’s go team, with Noun character cards and currency-inspired art notes"},
+  {
+    "file": "01-lets-collect",
+    "title": "Let\u2019s collect",
+    "alt": "Generated Nouns Money campaign poster: Let\u2019s collect, with three currency-inspired art notes"
+  },
+  {
+    "file": "02-small-notes-big-stories",
+    "title": "Small notes. Big stories.",
+    "alt": "Generated Nouns Money campaign poster: Small notes, big stories, with a lavender twenty concept"
   }
 ] as const;
