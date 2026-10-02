@@ -23,6 +23,10 @@ function canonicalSitemapUrl(loc: string) {
 const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/nouns-money/', 'weekly', '0.9'],
   ['https://pointcast.xyz/nouns-money.json', 'weekly', '0.8'],
+  ['https://pointcast.xyz/nouns-money/community/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/nouns-money/community.json', 'monthly', '0.75'],
+  ['https://pointcast.xyz/nouns-money/marketplace/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/nouns-money/marketplace.json', 'monthly', '0.75'],
   ['https://pointcast.xyz/rocks/', 'weekly', '0.9'],
   ['https://pointcast.xyz/rocks.json', 'weekly', '0.85'],
   ["https://pointcast.xyz/arcade-remembrance", "monthly", "0.9"],
