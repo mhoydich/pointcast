@@ -191,6 +191,10 @@ export const GET: APIRoute = async () => {
         constellationJson: 'https://pointcast.xyz/constellation.json',
       },
       human: {
+        bookshop: AGENT_SURFACES.human.bookshop,
+        siddhartha: AGENT_SURFACES.human.siddhartha,
+        denOfThieves: AGENT_SURFACES.human.denOfThieves,
+        playingForPizza: AGENT_SURFACES.human.playingForPizza,
         everyday: AGENT_SURFACES.human.everyday,
         communicationsLab: AGENT_SURFACES.human.communicationsLab,
         mobility2030: AGENT_SURFACES.human.mobility2030,
@@ -449,6 +453,9 @@ export const GET: APIRoute = async () => {
         profileShelf: AGENT_SURFACES.human.profileShelf,
       },
       json: {
+        siddhartha: AGENT_SURFACES.json.siddhartha,
+        denOfThieves: AGENT_SURFACES.json.denOfThieves,
+        playingForPizza: AGENT_SURFACES.json.playingForPizza,
         everyday: AGENT_SURFACES.json.everyday,
         communicationsLab: AGENT_SURFACES.json.communicationsLab,
         mobility2030: AGENT_SURFACES.json.mobility2030,

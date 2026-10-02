@@ -21,6 +21,13 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/books/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/siddhartha/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/siddhartha.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/books/den-of-thieves/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/books/den-of-thieves.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/books/playing-for-pizza/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/books/playing-for-pizza.json', 'monthly', '0.8'],
   ['https://pointcast.xyz/everyday/', 'monthly', '0.9'],
   ['https://pointcast.xyz/everyday.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/communications-lab/', 'monthly', '0.9'],
