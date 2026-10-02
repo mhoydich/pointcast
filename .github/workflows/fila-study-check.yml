@@ -1,0 +1,42 @@
+name: Check FILA editorial study
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/fila-study-check.yml'
+      - 'src/pages/fila*'
+      - 'src/pages/fila/**'
+      - 'src/layouts/FilaLayout.astro'
+      - 'src/components/fila/**'
+      - 'src/data/fila-study.ts'
+      - 'src/scripts/fila-lookbook.mjs'
+      - 'public/images/fila/**'
+      - 'docs/research/fila*'
+      - 'tests/fila-lookbook.test.mjs'
+permissions:
+  contents: read
+concurrency:
+  group: fila-study-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: Check out reviewed head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build PointCast
+        run: npm run build
+      - name: Verify FILA assets and interactions
+        run: node --test tests/fila-lookbook.test.mjs
