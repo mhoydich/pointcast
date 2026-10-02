@@ -191,6 +191,9 @@ export const GET: APIRoute = async () => {
         constellationJson: 'https://pointcast.xyz/constellation.json',
       },
       human: {
+        communicationsLab: AGENT_SURFACES.human.communicationsLab,
+        mobility2030: AGENT_SURFACES.human.mobility2030,
+        manufacturingAtlas: AGENT_SURFACES.human.manufacturingAtlas,
         home: 'https://pointcast.xyz/',
         luckyCat: AGENT_SURFACES.human.luckyCat,
         luckyCatAgents: AGENT_SURFACES.human.luckyCatAgents,
@@ -445,6 +448,9 @@ export const GET: APIRoute = async () => {
         profileShelf: AGENT_SURFACES.human.profileShelf,
       },
       json: {
+        communicationsLab: AGENT_SURFACES.json.communicationsLab,
+        mobility2030: AGENT_SURFACES.json.mobility2030,
+        manufacturingAtlas: AGENT_SURFACES.json.manufacturingAtlas,
         agents: 'https://pointcast.xyz/agents.json',
         agentValue: 'https://pointcast.xyz/agent-value.json',
         protocol: 'https://pointcast.xyz/protocol.json',
