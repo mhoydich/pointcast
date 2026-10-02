@@ -17,7 +17,7 @@ class FakeD1Statement {
     const { db, sql, args } = this;
     if (sql.startsWith('INSERT INTO user_state')) {
       db.userState.set(args[0], { payload: args[1], version: args[2], updated_at: args[3] });
-      return { success: true };
+      return { success: true, meta: { changes: 1 } };
     }
     if (sql === 'DELETE FROM sessions WHERE token = ?') { db.sessions.delete(args[0]); return { success: true }; }
     throw new Error(`Unsupported fake D1 run(): ${sql}`);

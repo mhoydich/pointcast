@@ -1,0 +1,213 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+const chapters = [
+  ['overview', '01', 'What is built'], ['quickstart', '02', 'Quickstart'],
+  ['collection-api', '03', 'Collection API'], ['state-model', '04', 'Intent model'],
+  ['idempotency', '05', 'Idempotency'], ['errors', '06', 'Errors'],
+  ['authentication', '07', 'Storage & auth'], ['provenance', '08', 'Art & rights'],
+  ['tezos', '09', 'Tezos proposal'],
+];
+const nodeExample = `import {
+  NounsMoneySandbox, MemorySandboxStore,
+} from './packages/nouns-money-sdk/src/index.ts';
+
+const sandbox = new NounsMoneySandbox(new MemorySandboxStore());
+const intent = await sandbox.createIntent(
+  { label: 'Two-note art demo', noteCount: 2, mode: 'test' },
+  { idempotencyKey: 'my-demo:create:0001' },
+);
+const confirmed = await sandbox.confirmIntent(
+  intent.id,
+  { noteIds: ['nm100-000', 'nm100-001'], mode: 'test' },
+  { idempotencyKey: 'my-demo:confirm:0001' },
+);
+console.log(confirmed.status, confirmed.receipt);
+// succeeded — a local demo receipt, no settlement`;
+const browserExample = `import { NounsMoneySandbox } from
+  '/nouns-money/sdk.js';
+
+// Same-origin browser ES module; no build step required.
+// The default store is IndexedDB, on your app's origin.
+const sandbox = new NounsMoneySandbox();
+const intent = await sandbox.createIntent(
+  { label: 'One-note art demo', noteCount: 1, mode: 'test' },
+  { idempotencyKey: 'browser:create:0001' },
+);
+const result = await sandbox.confirmIntent(
+  intent.id,
+  { noteIds: ['nm100-000'], mode: 'test' },
+  { idempotencyKey: 'browser:confirm:0001' },
+);
+console.log(result.receipt);`;
+const apiExample = `// Run in a signed-in browser on pointcast.xyz.
+const currentResponse = await fetch('/api/me/nouns-money');
+const current = await currentResponse.json();
+if (!currentResponse.ok) throw new Error(current.reason);
+
+const response = await fetch('/api/me/nouns-money', {
+  method: 'POST',
+  credentials: 'same-origin',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-PointCast-User': current.userId,
+  },
+  body: JSON.stringify({ noteId: 'nm100-000' }),
+});
+const collection = await response.json();
+if (!response.ok) throw new Error(collection.reason);
+console.log(collection.storage, collection.noteIds);
+// account [ ... ]
+// To remove the same note: method: 'DELETE', same JSON body.`;
+const sdkApiExample = `import { NounsMoneyClient } from
+  '/nouns-money/sdk.js';
+
+// Same-origin browser session; never copy the session cookie.
+const client = new NounsMoneyClient();
+const catalog = await client.getCatalog();
+const displayed = await client.getCollection();
+const saved = await client.collectNote(
+  catalog.notes[0].id, displayed.userId,
+);
+const removed = await client.removeNote(
+  catalog.notes[0].id, displayed.userId,
+);`;
+const intentExample = `{
+  "schema": "pointcast.nouns-money.intent/v1",
+  "id": "nmpi_<uuid>",
+  "mode": "test",
+  "label": "Two-note art demo",
+  "noteCount": 2,
+  "status": "requires_notes",
+  "noteIds": [],
+  "receipt": null,
+  "createdAt": "<ISO-8601 timestamp>",
+  "updatedAt": "<ISO-8601 timestamp>"
+}`;
+const stateDiagram = `                    confirm valid notes
+requires_notes ──────────────────────────→ succeeded
+      │                                      │
+      │ cancel                               └ stable demo receipt
+      ↓
+   canceled
+
+succeeded and canceled are terminal.`;
+const errorExample = `import { NounsMoneyError } from
+  './packages/nouns-money-sdk/src/index.ts';
+
+try {
+  await sandbox.retrieveIntent(
+    'nmpi_00000000-0000-4000-8000-000000000000',
+  );
+} catch (error) {
+  if (error instanceof NounsMoneyError) {
+    console.log(error.code, error.message);
+    // not_found ...
+  } else {
+    throw error;
+  }
+}`;
+const apiErrors = [
+  ['401', 'unauthorized', 'Sign in through PointCast, then retry.'],
+  ['403', 'origin-not-allowed', 'Use the same-origin browser. Mutation Origin must exactly match.'],
+  ['415', 'json-required', 'Send Content-Type: application/json.'],
+  ['413', 'body-too-large', 'Keep the request body at most 256 bytes.'],
+  ['413', 'payload-too-large', 'The shared account-state document would exceed 16 KiB. Remove unneeded saved data before retrying.'],
+  ['409', 'collection-write-conflict', 'Refresh the account collection and retry the intended action.'],
+  ['409', 'account-changed', 'Refresh the displayed account; the expected user ID is missing or differs from the session.'],
+  ['400', 'bad-body', 'Send valid JSON.'],
+  ['400', 'invalid-note-id', 'Send exactly one noteId field, using nm100-000 through nm100-099.'],
+  ['503', 'nouns-money-collection-unavailable', 'Account storage is unavailable. Retry later; do not show success.'],
+];
+const sandboxErrors = [
+  ['invalid_request', 'Fix the label, note count, unique note IDs or idempotency key.'],
+  ['invalid_mode', 'Only mode: test is supported.'],
+  ['not_found', 'Retrieve an intent ID created in this store.'],
+  ['invalid_state', 'The terminal intent cannot accept that transition.'],
+  ['idempotency_conflict', 'A key was reused for another operation or payload.'],
+  ['capacity_exceeded', 'The store is full. Preserve needed receipts before an intentional reset.'],
+  ['storage_unavailable', 'IndexedDB is unavailable. Use an explicit memory store for temporary demos.'],
+  ['corrupted_state', 'The stored state failed validation. Do not treat it as a valid receipt.'],
+];
+---
+<BlockLayout title="Nouns Money developer documentation" description="Build with the Nouns Money collection API and local TypeScript payment sandbox. Runnable examples, OpenAPI, intent states, authentication, provenance and a proposed sponsored Tezos path." immersive hideAds showNetworkStrip={false} themeColor="#072c36">
+  <main class="nm-docs" id="main-content">
+    <div class="book-top"><a href="/nouns-money/">NOUNS MONEY ↗</a><span>DEVELOPER WORKSHOP · V1 / TEST RELEASE</span><a href="/nouns-money/developers/">DASHBOARD ↗</a></div>
+    <header class="book-hero">
+      <div><p class="eyebrow">OPEN DOCUMENTATION / 2 OCTOBER 2026</p><h1>Build with<br/>Nouns Money.</h1><p class="lead">Collect art. Program a demo.<br/>Know exactly where the boundary is.</p></div>
+      <div class="hero-contract"><p class="eyebrow">THE RELEASE CONTRACT</p><p><strong>Collection</strong> saves a preference list, with no gas.</p><p><strong>Payment sandbox</strong> creates local test intents and demo receipts.</p><p><strong>Real payment and redemption</strong> remain disabled.</p><div class="book-actions"><a href="/nouns-money/openapi.json" download>OpenAPI 3.1 ↓</a><a href="https://github.com/mhoydich/pointcast/tree/main/packages/nouns-money-sdk">TypeScript SDK ↗</a></div></div>
+    </header>
+    <nav class="book-doors" aria-label="Nouns Money tools"><a href="/nouns-money/collect/">Collect all 100 ↗</a><a href="/me#nouns-money">Profile companion ↗</a><a href="/nouns-money/pay/">Try a demo payment ↗</a><a href="/nouns-money/developers/">Developer dashboard ↗</a></nav>
+    <nav class="chapters" aria-label="Documentation chapters">{chapters.map(([id, number, label]) => <a href={`#${id}`}><span>{number}</span>{label}</a>)}</nav>
+    <section id="overview" class="chapter" aria-labelledby="overview-title">
+      <div class="chapter-heading"><p class="eyebrow">01 / WHAT IS BUILT</p><h2 id="overview-title">A small, useful first release.</h2></div>
+      <div class="split"><div><p>The public catalog contains 100 note designs with authentic Nouns #0–99. IDs <code>nm100-000</code> through <code>nm100-099</code> identify this source set. The earlier ten designs and generated visual studies belong to separate sets.</p><p>The collection and profile companion save which designs you like. Signed-in collection uses your PointCast account; anonymous collection stays in your browser. Neither creates token ownership, a funded wallet or a redeemable balance.</p></div><div class="callout"><p class="eyebrow">ART FIRST / TEST ONLY</p><p>Nouns Money remains collectible art for voluntary art trades, never sold for cash. Demo note counts have no monetary value. There is no live checkout, issuer commitment, backing asset, cash redemption, merchant network, investment return or promised airdrop.</p></div></div>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Implemented interfaces"><table><thead><tr><th>Interface</th><th>Runs where</th><th>What it does</th></tr></thead><tbody><tr><td>Catalog HTTP API</td><td>Public PointCast</td><td>Read the source-100 art metadata.</td></tr><tr><td>Collection HTTP API</td><td>Same-origin, signed-in session</td><td>Read, collect and remove preferences in the account.</td></tr><tr><td>TypeScript sandbox</td><td>Local browser or Node process</td><td>Create, confirm, cancel and retrieve demo intents.</td></tr><tr><td>Developer dashboard</td><td>This browser</td><td>Inspect local sandbox activity and demo receipts.</td></tr></tbody></table></div>
+      <p>There are no HTTP payment-intent endpoints, developer API keys or webhook delivery in this release. The OpenAPI document describes the two HTTP paths that exist; sandbox methods have their own local contract below.</p>
+    </section>
+    <section id="quickstart" class="chapter" aria-labelledby="quickstart-title">
+      <div class="chapter-heading"><p class="eyebrow">02 / QUICKSTART</p><h2 id="quickstart-title">Run a complete demo.</h2></div>
+      <p>The SDK source lives in <a href="https://github.com/mhoydich/pointcast/tree/main/packages/nouns-money-sdk"><code>packages/nouns-money-sdk</code></a> in the PointCast repository. Use the source directly or the <a href="/nouns-money/sdk.js">browser ES module</a>; this release does not publish an npm package. <a href="/nouns-money/sdk.ts" download>Download the TypeScript source ↓</a>.</p>
+      <div class="split"><article class="example"><h3>Node 24 · memory store</h3><p>Run from a PointCast checkout with Node 24. Save this as <code>demo.mjs</code> at the repository root and run <code>node demo.mjs</code>. State lasts for this store instance.</p><pre tabindex="0" aria-label="Runnable Node sandbox example"><code>{nodeExample}</code></pre><p>The checked-in <a href="https://github.com/mhoydich/pointcast/blob/main/docs/nouns-money/quickstart.mjs">quickstart script</a> also asserts replay, stable receipts and cancellation. Run <code>node docs/nouns-money/quickstart.mjs</code>.</p></article><article class="example"><h3>Browser module · IndexedDB</h3><p>Use this inside a <code>&lt;script type="module"&gt;</code> on PointCast. The browser ES module needs no build step. For a TypeScript app in the checkout, import <code>packages/nouns-money-sdk/src/index.ts</code> through your bundler. Demo state belongs to that browser origin.</p><pre tabindex="0" aria-label="Browser TypeScript sandbox example"><code>{browserExample}</code></pre><p>Changing origin or database creates a different sandbox. Browser storage can be cleared or blocked. These receipts are local demo records, not trusted payment evidence.</p></article></div>
+      <div class="callout"><p>Want to try the complete flow without a development checkout? Open <a href="/nouns-money/pay/">Pay with Nouns Money</a>, create a <em>test</em> intent, select demo notes, confirm and inspect the receipt in the <a href="/nouns-money/developers/">dashboard</a>.</p></div>
+    </section>
+    <section id="collection-api" class="chapter" aria-labelledby="collection-title">
+      <div class="chapter-heading"><p class="eyebrow">03 / COLLECTION HTTP API</p><h2 id="collection-title">Real paths. Clear authentication.</h2></div>
+      <p>Read the public catalog from any HTTP client: <code>GET https://pointcast.xyz/nouns-money/catalog.json</code>. For example, run <code>curl --fail https://pointcast.xyz/nouns-money/catalog.json</code>. The response includes <code>schema</code>, <code>mode: collectible-art</code>, <code>count: 100</code>, <code>notes</code> and a provenance path. Each note has <code>id</code>, <code>name</code>, <code>nounId</code>, <code>image</code> and <code>svg</code>.</p>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Collection endpoint methods"><table><thead><tr><th>Method &amp; path</th><th>Body</th><th>Result</th></tr></thead><tbody><tr><td><code>GET /api/me/nouns-money</code></td><td>None</td><td>Current signed-in account collection.</td></tr><tr><td><code>POST /api/me/nouns-money</code></td><td><code>{'{"noteId":"nm100-000"}'}</code></td><td>Add one design to the set.</td></tr><tr><td><code>DELETE /api/me/nouns-money</code></td><td><code>{'{"noteId":"nm100-000"}'}</code></td><td>Remove one design from the set.</td></tr></tbody></table></div>
+      <p>Successful requests return HTTP 200 with <code>ok: true</code>, <code>schema: pointcast.nouns-money.collection/v1</code>, <code>userId</code>, <code>storage: account</code>, <code>noteIds</code>, <code>collectedAt</code> and <code>updatedAt</code>. Mutation responses include <code>changed</code>. An empty account can have <code>updatedAt: null</code>.</p>
+      <p>Mutations accept JSON containing exactly one known <code>noteId</code>, at most 256 bytes. Send <code>Content-Type: application/json</code>. The total shared account-state document is capped at 16 KiB; a collect that exceeds it returns <code>payload-too-large</code>. The existing signed, HttpOnly <code>pc_session</code> cookie identifies the account; mutation requests must have an <code>Origin</code> that exactly matches the request origin. Browsers set Origin. Mutations also require <code>X-PointCast-User</code> matching the <code>userId</code> from the displayed GET response. This consistency guard prevents a changed browser session from writing under a different displayed account; it is not an authentication credential. Missing or mismatched values return <code>account-changed</code> (409). There is no cross-origin developer write access.</p>
+      <div class="split"><article class="example"><h3>Use fetch in the signed-in browser</h3><pre tabindex="0" aria-label="Account collection fetch example"><code>{apiExample}</code></pre></article><article class="example"><h3>Use the SDK’s HTTP client</h3><pre tabindex="0" aria-label="Collection SDK client example"><code>{sdkApiExample}</code></pre><p>The client wraps the catalog and collection paths above. Authentication still comes from the same-origin session. A different base URL does not grant authentication or CORS access.</p></article></div>
+      <p><a href="/nouns-money/openapi.json">Read or download the OpenAPI 3.1 specification ↗</a>. Never put a session cookie in source code, a URL, an example or a third-party service.</p>
+    </section>
+    <section id="state-model" class="chapter" aria-labelledby="sandbox-title">
+      <div class="chapter-heading"><p class="eyebrow">04 / LOCAL INTENT MODEL</p><h2 id="sandbox-title">A programmable payment rehearsal.</h2></div>
+      <p><code>NounsMoneySandbox</code> runs local methods and stores local records. <code>mode: 'test'</code> is required for creation and confirmation. A request for live mode fails. Confirming demo notes does not consume, move, lock or debit any collected art.</p>
+      <div class="split"><pre tabindex="0" aria-label="Payment sandbox state diagram"><code>{stateDiagram}</code></pre><pre tabindex="0" aria-label="Example intent shape"><code>{intentExample}</code></pre></div>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Local sandbox methods"><table><thead><tr><th>Method</th><th>Contract</th></tr></thead><tbody><tr><td><code>createIntent(input, options)</code></td><td>Label: trimmed 1–80 characters, no control characters. Integer noteCount: 1–5. mode: test. Returns requires_notes.</td></tr><tr><td><code>confirmIntent(id, input, options)</code></td><td>Exactly noteCount unique, valid source-100 note IDs. mode: test. Returns succeeded with a stable demo receipt.</td></tr><tr><td><code>cancelIntent(id, options)</code></td><td>Transitions requires_notes to canceled. A succeeded intent cannot be canceled.</td></tr><tr><td><code>retrieveIntent(id)</code></td><td>Read one intent from the current store; unknown IDs fail.</td></tr><tr><td><code>listIntents()</code></td><td>Read the intents in the current store.</td></tr></tbody></table></div>
+      <p>Intent IDs begin <code>nmpi_</code> and use a UUID. Receipt IDs begin <code>nmr_</code> and derive from that intent UUID. A succeeded intent contains a receipt with <code>id</code>, <code>intentId</code>, <code>mode: test</code>, <code>label</code>, <code>noteCount</code>, sorted <code>noteIds</code> and <code>issuedAt</code>. Dates use ISO 8601. A canceled intent has no receipt.</p>
+      <p>The receipt records the selected design references in a demo. It is neither a cryptographic receipt nor server-verified settlement. It grants no right to goods, cash, backing assets, tokens or later allocations.</p>
+    </section>
+    <section id="idempotency" class="chapter" aria-labelledby="idempotency-title">
+      <div class="chapter-heading"><p class="eyebrow">05 / IDEMPOTENCY</p><h2 id="idempotency-title">Retry the action, keep the result.</h2></div>
+      <p>Each sandbox mutation requires <code>{'{ idempotencyKey: "your-key-here-0001" }'}</code>. Keys must contain 16–128 ASCII letters, digits, periods, underscores, colons or hyphens. Generate one key for a deliberate action and reuse it when retrying that action.</p>
+      <ol class="steps"><li><strong>Same key, same normalized operation and payload:</strong> returns the original result. A retried create produces the same intent ID and original creation snapshot. Use <code>retrieveIntent</code> to inspect the intent’s current state after later actions.</li><li><strong>Same key, another operation or payload:</strong> fails with <code>idempotency_conflict</code>. Keys share one namespace within the store.</li><li><strong>Repeated confirmation with the same note selection:</strong> preserves the receipt, even with a new key. Note order is normalized; IDs are unique and sorted.</li><li><strong>A terminal intent:</strong> cannot change to another terminal outcome or accept a different note selection. Inspect its state instead of assuming a retry can undo it.</li></ol>
+      <p>The browser store uses IndexedDB transactions to serialize mutations across tabs using the same origin and database. The memory store protects operations using the same store instance. Neither coordinates a different device or a different browser database.</p>
+      <p>Collection HTTP mutations use set membership instead of an Idempotency-Key header. Collecting an already collected design or removing an absent design succeeds with <code>changed: false</code>. Removing then recollecting records a new collection timestamp. There is no quantity or balance to increase through repeated clicks.</p>
+    </section>
+    <section id="errors" class="chapter" aria-labelledby="errors-title">
+      <div class="chapter-heading"><p class="eyebrow">06 / ERRORS</p><h2 id="errors-title">Handle failure before showing success.</h2></div>
+      <p>Collection API failures return <code>{'{"ok":false,"reason":"code"}'}</code> with the relevant non-200 status. The collection SDK client reports API failures as <code>api_error</code>, with <code>status</code> and <code>reason</code> when a server response exists, and malformed responses as <code>invalid_response</code>.</p>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Collection API error reference"><table><thead><tr><th>Status</th><th>Reason</th><th>Action</th></tr></thead><tbody>{apiErrors.map(([status, reason, action])=><tr><td>{status}</td><td><code>{reason}</code></td><td>{action}</td></tr>)}</tbody></table></div>
+      <div class="split"><div><h3>Sandbox errors</h3><dl class="errors">{sandboxErrors.map(([code, meaning])=><div><dt><code>{code}</code></dt><dd>{meaning}</dd></div>)}</dl></div><div><h3>Use the code, keep the message</h3><pre tabindex="0" aria-label="Sandbox error handling example"><code>{errorExample}</code></pre><p><code>NounsMoneyError</code> exposes <code>code</code> and <code>message</code>. A retryable storage error does not mean an intent succeeded. Retrieve a known intent after recovery; an idempotency replay can establish the result of a known action.</p></div></div>
+    </section>
+    <section id="authentication" class="chapter" aria-labelledby="storage-title">
+      <div class="chapter-heading"><p class="eyebrow">07 / STORAGE &amp; AUTHENTICATION</p><h2 id="storage-title">Three records, three lifetimes.</h2></div>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Storage and account boundaries"><table><thead><tr><th>Record</th><th>Lifetime &amp; boundary</th><th>Reload / switching</th></tr></thead><tbody><tr><td>Signed-in art collection</td><td>Stored against the authenticated PointCast account.</td><td>Reload fetches that account’s set. Switching accounts loads the other account; signing out ends account access.</td></tr><tr><td>Anonymous art collection</td><td>Device/browser-local preferences, with temporary memory if storage is unavailable.</td><td>Reload keeps a persisted set. Clearing browser data removes it. Local preferences are not automatically imported on sign-in.</td></tr><tr><td>Payment sandbox</td><td>IndexedDB database <code>pointcast-nouns-money-sandbox-v1</code>, or an explicit memory store.</td><td>IndexedDB survives reload, subject to browser storage policy. It is shared by the browser origin, independent of signed-in account. Memory ends with the store.</td></tr></tbody></table></div>
+      <p>Failed account reads show an unavailable state; they do not silently substitute device preferences as account-saved. The sandbox has no account authentication. Signing out does not erase local demo receipts, and another person using the same browser can see them. Use public demo labels; do not put secrets, customer data or payment details in a label.</p>
+      <p>A store holds at most 250 intents and 1,000 mutation keys. There is no silent eviction. Preserve any useful demo records before intentionally clearing the browser’s sandbox data. Exported or edited local files remain untrusted demo data.</p>
+      <p>Existing PointCast sign-in remains the account boundary. The generic profile-state PUT route rejects this collection slot with <code>collection-endpoint-required</code>; use the dedicated endpoint. The SDK does not create sessions, link wallets, ask for wallet signatures, change credentials or request spending approval.</p>
+    </section>
+    <section id="provenance" class="chapter" aria-labelledby="provenance-title">
+      <div class="chapter-heading"><p class="eyebrow">08 / PROVENANCE &amp; RIGHTS</p><h2 id="provenance-title">Keep the source attached.</h2></div>
+      <p>The source-100 catalog uses authentic numbered Nouns #0–99. <a href="/images/nouns-money/source-100/provenance.json">Read the source-set provenance</a> for file evidence and exact-source verification. Catalog IDs label collectible designs; they do not imply ownership of the corresponding NFTs. Earlier ten-design art and generated studies retain their own provenance and labels.</p>
+      <p>Nouns artwork is available under CC0; using it does not imply Nouns DAO endorsement or NFT ownership. See the <a href="https://nouns.wtf/brand">official Nouns brand and art resources</a>. The exact artwork claims apply to verified flat masters, not to generated scenes or material effects.</p>
+      <p>This release does not grant a blanket license over the repository or every third-party asset. Check the existing license or provenance of each code component, font, image and source before reuse. Keep author credits and asset-specific terms with copies. Open documentation and a public specification do not change those terms.</p>
+    </section>
+    <section id="tezos" class="chapter" aria-labelledby="tezos-title">
+      <div class="chapter-heading"><p class="eyebrow">09 / TEZOS WORKSHOP · PROPOSED</p><h2 id="tezos-title">No collector gas, with a sponsor.</h2></div>
+      <div class="callout"><p><strong>Design proposal only.</strong> Today’s collection makes no blockchain operation. No Nouns Money contract, token issuance, wallet challenge, sponsor service, chain fee budget or transfer service is enabled in this release.</p></div>
+      <p>A possible first Tezos companion could use an issuer-funded FA2 mint to a verified recipient. FA2 supports multiple token types and defines transfer and operator behavior; a mint entrypoint is contract-specific, not guaranteed by the standard. <a href="https://docs.tezos.com/architecture/tokens/FA2">Tezos FA2 documentation ↗</a></p>
+      <ol class="steps"><li><strong>Establish consent and recipient control.</strong> A future wallet challenge would bind an explicit recipient, application domain, nonce and expiry. Verify it on a server before considering issuance. Arbitrary-data signing exists in wallet tooling; the challenge and verifier still need their own reviewed implementation. <a href="https://octez-connect.tezos.com/guides/sign-payload/">Octez Connect signing reference ↗</a></li><li><strong>Authorize the sponsor’s operation.</strong> A reviewed, contract-specific mint could issue to the recipient from an authorized issuer account. The official SmartPy tutorial shows administrator-controlled minting to recipients; it is a reference, not a Nouns Money contract. <a href="https://docs.tezos.com/tutorials/smartpy-fa2-fungible/minting-and-burning">Minting reference ↗</a></li><li><strong>Pay and reconcile.</strong> The sponsor would pay authorized fees and storage costs, enforce a budget and duplicate-claim rules, and reconcile the operation’s observed result before recording delivery. “No collector gas” means sponsored costs, not a zero-fee chain. <a href="https://octez.tezos.com/docs/active/blocks_ops.html">Octez operation reference ↗</a></li><li><strong>Keep later actions separate.</strong> An issuer-sponsored mint would not automatically sponsor later transfers. Permits or relayed interactions need a compatible contract and their own authorization, replay protection and review. A future adapter must distinguish requested, submitted, confirmed and failed delivery from today’s local demo receipt.</li></ol>
+      <p>Before activation, a separate owner authorization must cover the contract, signer, fee budget, abuse controls, recovery and real-chain testing. Issuer, backing asset, merchant network and legal setup are undecided. Nothing here promises issuance, allocation, future value, redemption or an airdrop.</p>
+      <p>Webhooks also remain proposed. A future delivery service would need authenticated events, event IDs, retries and reconciliation; no callback URL can be registered and no webhook is sent today.</p>
+    </section>
+    <footer class="book-footer"><div><p class="eyebrow">NEXT / TRY THE CONTRACT</p><a href="/nouns-money/pay/">Create a demo intent ↗</a><a href="/nouns-money/developers/">Inspect the dashboard ↗</a><a href="/nouns-money/openapi.json">Read OpenAPI ↗</a></div><p>Independent collectible-art workshop.<br/>Local test receipts. Real payment disabled.</p></footer>
+  </main>
+</BlockLayout>
+<style>
+  .nm-docs{--ink:#072c36;--green:#08795f;--paper:#f5faf6;--line:#85b6a5;color:var(--ink);background:var(--paper);font-family:'Inter Variable',Inter,sans-serif;font-size:16px;line-height:1.65;max-width:1600px;margin:0 auto;padding-bottom:70px}
+  .nm-docs *{box-sizing:border-box}.nm-docs a{color:inherit;text-underline-offset:4px}.nm-docs a:hover{color:var(--green)}.nm-docs a:focus-visible,.nm-docs pre:focus-visible,.nm-docs .table-wrap:focus-visible{outline:3px solid var(--green);outline-offset:3px}.nm-docs h1,.nm-docs h2,.nm-docs h3,.nm-docs p{margin:0}.nm-docs p+p{margin-top:16px}.nm-docs strong{font-weight:500}.nm-docs h1{font-size:clamp(40px,6vw,82px);font-weight:500;line-height:1;letter-spacing:-.06em}.nm-docs h2{font-size:clamp(28px,3vw,40px);font-weight:500;line-height:1.1;letter-spacing:-.035em}.nm-docs h3{font-size:20px;font-weight:500;line-height:1.3;margin-bottom:16px}.eyebrow,.book-top,.book-doors,.chapters,.book-actions,.nm-docs code{font-family:'JetBrains Mono Variable',monospace;font-weight:400}.eyebrow{font-size:11px;letter-spacing:.1em;line-height:1.6;margin-bottom:16px!important}.book-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;padding:16px 4vw;border-bottom:1px solid var(--ink);font-size:11px;letter-spacing:.06em}.book-top a{text-decoration:none}.book-hero{display:grid;grid-template-columns:1.15fr 1fr;gap:38px;padding:40px 4vw;background:var(--ink);color:var(--paper)}.book-hero a:hover{color:#a8e4c2}.lead{font-size:21px;line-height:1.4;margin-top:24px!important;max-width:36ch}.hero-contract{align-self:center;border:1px solid var(--line);padding:22px;min-width:0}.hero-contract p{font-size:16px}.book-actions{display:flex;flex-wrap:wrap;gap:12px 20px;border-top:1px solid var(--line);margin-top:24px;padding-top:16px;font-size:12px}.book-doors{display:flex;flex-wrap:wrap;gap:12px 24px;padding:18px 4vw;background:#b1e7cb;border-bottom:1px solid var(--ink);font-size:12px}.chapters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:24px 4vw;border-bottom:1px solid var(--line);font-size:12px}.chapters a{display:flex;gap:14px;padding:12px;border:1px solid var(--line);text-decoration:none;min-height:44px}.chapters span{color:var(--green)}.chapters a:hover{background:#dcefe4}.chapter{padding:34px 4vw;border-bottom:1px solid var(--line);scroll-margin-top:18px;min-width:0}.chapter-heading{margin-bottom:24px}.chapter>p,.chapter>ol{max-width:95ch}.chapter>p{margin-top:20px}.split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:24px}.split>div,.split>article{min-width:0}.callout{border:1px solid var(--green);border-left:5px solid var(--green);background:#e1f3e8;padding:20px;min-width:0}.chapter>.callout{margin-top:24px}.example{border:1px solid var(--line);padding:20px;min-width:0}.example p{margin-bottom:16px}.example pre+p{margin-top:16px}.nm-docs code{font-size:13px;overflow-wrap:anywhere;background:#e1ebe7;padding:2px 4px}.nm-docs pre{display:block;min-width:0;max-width:100%;overflow-x:auto;background:var(--ink);color:#d9f4e5;border:1px solid var(--ink);padding:18px;margin:20px 0;line-height:1.65;tab-size:2}.nm-docs pre code{font-size:12px;white-space:pre;overflow-wrap:normal;background:none;padding:0}.split>pre{margin:0}.table-wrap{overflow-x:auto;max-width:100%;margin:24px 0;border:1px solid var(--line)}.nm-docs table{width:100%;border-collapse:collapse;text-align:left;font-size:15px;min-width:560px}.nm-docs th{font-family:'JetBrains Mono Variable',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:#e1f3e8;font-weight:500}.nm-docs th,.nm-docs td{padding:13px 16px;vertical-align:top;border-bottom:1px solid var(--line)}.nm-docs tr:last-child td{border-bottom:0}.nm-docs td:first-child{width:31%}.nm-docs td code{font-size:12px}.steps{padding-left:25px;margin:24px 0}.steps li{padding-left:5px}.steps li+li{margin-top:16px}.errors{margin:0}.errors>div{padding:13px 0;border-bottom:1px solid var(--line)}.errors dt{font-weight:400}.errors dd{margin:7px 0 0}.book-footer{padding:30px 4vw;display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:24px;background:#b1e7cb;font-size:14px}.book-footer a{display:inline-block;margin:0 20px 12px 0}.book-footer>.eyebrow{margin:0}.book-footer p{font-size:13px}.nm-docs em{font-style:normal;font-weight:500}
+  @media(max-width:800px){.book-hero,.split{grid-template-columns:1fr;gap:20px}.book-hero{padding:32px 5vw}.book-top,.book-doors,.chapters,.chapter,.book-footer{padding-left:5vw;padding-right:5vw}.book-top>span{display:none}.chapters{grid-template-columns:repeat(2,minmax(0,1fr))}.lead{font-size:20px}.chapter{padding-top:28px;padding-bottom:28px}.nm-docs table{font-size:15px}.example{padding:16px}}
+  @media(max-width:420px){.chapters{grid-template-columns:1fr;font-size:12px;gap:6px;padding-top:18px;padding-bottom:18px}.chapters a{padding:9px 12px}.book-doors{gap:12px 18px}.hero-contract{padding:18px}.nm-docs pre{padding:14px}.book-top{font-size:10px}.callout{padding:16px}.nm-docs h1{font-size:42px}}
+  @media print{.book-top,.book-doors,.chapters{display:none}.book-hero{background:white;color:var(--ink);grid-template-columns:1fr 1fr}.chapter{padding:24px 0}.nm-docs pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;color:var(--ink)}.nm-docs pre code{white-space:pre-wrap}.split{grid-template-columns:1fr}.book-footer{background:white}.table-wrap{overflow:visible}.nm-docs table{min-width:0}}
+</style>
