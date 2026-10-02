@@ -130,6 +130,14 @@ const shelves = [
     action: 'Unlock one journey print',
     empty: 'No journey prints yet.',
   },
+  {
+    id: 'rocks',
+    label: 'Pocket Rocks',
+    key: 'pc:pocket-rocks:cabinet:v1',
+    href: '/rocks#cabinet',
+    action: 'Find and keep a digital rock',
+    empty: 'No digital rocks collected yet.',
+  },
 ];
 
 const featured = [
@@ -272,41 +280,56 @@ const jsonLd = {
   <script id="cabinet-shelves" type="application/json" is:inline set:html={JSON.stringify(shelves)}></script>
 </BlockLayout>
 
-<script is:inline>
-  (() => {
-    const root = document.querySelector('[data-cabinet]');
+<script>
+  import { readCabinet } from '../lib/pocket-rocks.mjs';
+
+  type Shelf = { id: string; label: string; key: string; href: string; action: string; empty: string };
+  let mountedRoot: HTMLElement | null = null;
+  let controller: AbortController | undefined;
+
+  function bootCabinet() {
+    const root = document.querySelector<HTMLElement>('[data-cabinet]');
     const dataEl = document.querySelector('#cabinet-shelves');
+    if (root === mountedRoot) return;
+    controller?.abort();
+    mountedRoot = root;
     if (!root || !dataEl) return;
-    const shelves = JSON.parse(dataEl.textContent || '[]');
-    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+    controller = new AbortController();
+    const { signal } = controller;
+    const shelves = JSON.parse(dataEl.textContent || '[]') as Shelf[];
+    const escapeHtml = (value: unknown) => String(value).replace(/[&<>"']/g, (char) => ({
       '&': '&amp;',
       '<': '&lt;',
       '>': '&gt;',
       '"': '&quot;',
       "'": '&#39;',
-    }[char]));
-    const readItems = (key) => {
+    } as Record<string, string>)[char]);
+    const readItems = (key: string): any[] => {
       try {
-        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        const raw = localStorage.getItem(key);
+        if (key === 'pc:pocket-rocks:cabinet:v1') return readCabinet(raw).rocks.sort((a, b) => a.collectedAt.localeCompare(b.collectedAt));
+        const parsed = JSON.parse(raw || '[]');
         if (Array.isArray(parsed)) return parsed;
         if (parsed && typeof parsed === 'object') return Object.values(parsed);
       } catch {}
       return [];
     };
-    const itemLabel = (item) => {
+    const itemLabel = (item: any) => {
       if (item == null) return 'receipt';
       if (typeof item === 'string' || typeof item === 'number') return String(item);
       return item.title || item.name || item.alias || item.id || item.tokenId || item.code || 'receipt';
     };
-    const itemDetail = (item) => {
+    const itemDetail = (item: any) => {
       if (!item || typeof item !== 'object') return '';
       return [
         item.collection,
+        item.geology,
+        item.familyId && item.id ? item.id : null,
         item.city && item.country ? `${item.city}, ${item.country}` : item.country,
         item.vessel,
         item.gem,
         item.rarity,
-        item.savedAt || item.date || item.stampedAt,
+        item.savedAt || item.date || item.stampedAt || item.collectedAt,
       ].filter(Boolean).slice(0, 3).join(' - ');
     };
     const render = () => {
@@ -330,7 +353,7 @@ const jsonLd = {
       const statusEl = root.querySelector('[data-cabinet-status]');
       const nextTitleEl = root.querySelector('[data-cabinet-next-title]');
       const nextCopyEl = root.querySelector('[data-cabinet-next-copy]');
-      const nextLinkEl = root.querySelector('[data-cabinet-next-link]');
+      const nextLinkEl = root.querySelector<HTMLAnchorElement>('[data-cabinet-next-link]');
       const latestTitleEl = root.querySelector('[data-latest-title]');
       const latestCopyEl = root.querySelector('[data-latest-copy]');
       const ledgerEl = root.querySelector('[data-cabinet-ledger]');
@@ -361,10 +384,13 @@ const jsonLd = {
         }).join('');
       }
     };
-    root.querySelector('[data-refresh-cabinet]')?.addEventListener('click', render);
-    window.addEventListener('storage', render);
+    root.querySelector('[data-refresh-cabinet]')?.addEventListener('click', render, { signal });
+    window.addEventListener('storage', render, { signal });
     render();
-  })();
+  }
+  document.addEventListener('astro:before-swap', () => { controller?.abort(); mountedRoot = null; });
+  document.addEventListener('astro:page-load', bootCabinet);
+  bootCabinet();
 </script>
 
 <style>

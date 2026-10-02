@@ -87,46 +87,56 @@ const jsonLd = {
   <script id="provenance-sources" type="application/json" is:inline set:html={JSON.stringify(COLLECTION_SOURCES)}></script>
 </BlockLayout>
 
-<script is:inline>
-  (() => {
-    const root = document.querySelector('[data-provenance-ledger]');
+<script>
+  import { readCabinet } from '../lib/pocket-rocks.mjs';
+
+  type ProofEntry = { source: string; sourceId: string; index: number; name: string; detail: string };
+  let mountedRoot: HTMLElement | null = null;
+  function bootProvenance() {
+    const root = document.querySelector<HTMLElement>('[data-provenance-ledger]');
     const dataEl = document.querySelector('#provenance-sources');
+    if (root === mountedRoot) return;
+    mountedRoot = root;
     if (!root || !dataEl) return;
 
-    const sources = JSON.parse(dataEl.textContent || '[]');
+    const sources = JSON.parse(dataEl.textContent || '[]') as Array<{ id: string; label: string; key: string }>;
     const storageKey = 'pc:provenance-ledger:exports';
-    let currentProof = { id: 'PC-LOCAL-0000', entries: [], checksum: '0000', generatedAt: '' };
-    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+    let currentProof: { id: string; entries: ProofEntry[]; checksum: string; generatedAt: string } = { id: 'PC-LOCAL-0000', entries: [], checksum: '0000', generatedAt: '' };
+    const escapeHtml = (value: unknown) => String(value).replace(/[&<>"']/g, (char) => ({
       '&': '&amp;',
       '<': '&lt;',
       '>': '&gt;',
       '"': '&quot;',
       "'": '&#39;',
-    }[char]));
-    const readArray = (key) => {
+    } as Record<string, string>)[char]);
+    const readArray = (key: string): any[] => {
       try {
-        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        const raw = localStorage.getItem(key);
+        if (key === 'pc:pocket-rocks:cabinet:v1') return readCabinet(raw).rocks.sort((a, b) => a.collectedAt.localeCompare(b.collectedAt));
+        const parsed = JSON.parse(raw || '[]');
         if (Array.isArray(parsed)) return parsed;
         if (parsed && typeof parsed === 'object') return Object.values(parsed);
       } catch {}
       return [];
     };
-    const itemName = (item) => {
+    const itemName = (item: any): string => {
       if (item == null) return 'local receipt';
       if (typeof item === 'string' || typeof item === 'number') return String(item);
       return item.title || item.name || item.alias || item.subject || item.label || item.id || 'local receipt';
     };
-    const itemDetail = (item) => {
+    const itemDetail = (item: any): string => {
       if (!item || typeof item !== 'object') return '';
       return [
         item.collection,
+        item.geology,
+        item.familyId && item.id ? item.id : null,
         item.city && item.country ? `${item.city}, ${item.country}` : item.country,
         item.vessel,
         item.rarity,
-        item.savedAt || item.date || item.time,
+        item.savedAt || item.date || item.time || item.collectedAt,
       ].filter(Boolean).slice(0, 3).join(' - ');
     };
-    const checksum = (value) => {
+    const checksum = (value: string) => {
       let hash = 2166136261;
       for (let index = 0; index < value.length; index++) {
         hash ^= value.charCodeAt(index);
@@ -135,10 +145,11 @@ const jsonLd = {
       return (hash >>> 0).toString(16).toUpperCase().padStart(8, '0');
     };
     const scan = () => {
-      const entries = [];
+      const entries: ProofEntry[] = [];
       sources.forEach((source) => {
         const items = readArray(source.key);
-        root.querySelector(`[data-source-count="${source.id}"]`).textContent = String(items.length);
+        const countEl = root.querySelector(`[data-source-count="${source.id}"]`);
+        if (countEl) countEl.textContent = String(items.length);
         items.forEach((item, index) => {
           entries.push({
             source: source.label,
@@ -162,15 +173,15 @@ const jsonLd = {
     };
     const renderProof = () => {
       const activeSources = new Set(currentProof.entries.map((entry) => entry.sourceId)).size;
-      root.querySelector('[data-proof-title]').textContent = currentProof.entries.length ? 'Local provenance sheet' : 'Unscanned cabinet';
-      root.querySelector('[data-proof-id]').textContent = currentProof.id;
-      root.querySelector('[data-proof-count]').textContent = String(currentProof.entries.length);
-      root.querySelector('[data-proof-sources]').textContent = String(activeSources);
-      root.querySelector('[data-proof-short]').textContent = currentProof.checksum.slice(0, 4);
-      root.querySelector('[data-proof-reading]').textContent = currentProof.entries.length ? 'Proof sheet ready' : 'Ready to scan';
-      root.querySelector('[data-proof-copy]').textContent = currentProof.entries.length ? `${currentProof.entries.length} local receipts resolved.` : 'Local receipts from PointCast apps will resolve into a compact proof card.';
-      root.querySelector('[data-proof-json]').textContent = JSON.stringify(currentProof, null, 2);
-      root.querySelector('[data-proof-entries]').innerHTML = currentProof.entries.slice(0, 18).map((entry) => `
+      root.querySelector('[data-proof-title]')!.textContent = currentProof.entries.length ? 'Local provenance sheet' : 'Unscanned cabinet';
+      root.querySelector('[data-proof-id]')!.textContent = currentProof.id;
+      root.querySelector('[data-proof-count]')!.textContent = String(currentProof.entries.length);
+      root.querySelector('[data-proof-sources]')!.textContent = String(activeSources);
+      root.querySelector('[data-proof-short]')!.textContent = currentProof.checksum.slice(0, 4);
+      root.querySelector('[data-proof-reading]')!.textContent = currentProof.entries.length ? 'Proof sheet ready' : 'Ready to scan';
+      root.querySelector('[data-proof-copy]')!.textContent = currentProof.entries.length ? `${currentProof.entries.length} local receipts resolved.` : 'Local receipts from PointCast apps will resolve into a compact proof card.';
+      root.querySelector('[data-proof-json]')!.textContent = JSON.stringify(currentProof, null, 2);
+      root.querySelector('[data-proof-entries]')!.innerHTML = currentProof.entries.slice(0, 18).map((entry) => `
         <li>
           <span>${escapeHtml(entry.source)}</span>
           <strong>${escapeHtml(entry.name)}</strong>
@@ -190,7 +201,10 @@ const jsonLd = {
       localStorage.setItem(storageKey, JSON.stringify(exports.slice(-24)));
     });
     scan();
-  })();
+  }
+  document.addEventListener('astro:before-swap', () => { mountedRoot = null; });
+  document.addEventListener('astro:page-load', bootProvenance);
+  bootProvenance();
 </script>
 
 <style>

@@ -7,6 +7,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Pocket Rocks — native collectible specimens (2026-09-29)
+
+- [x] (X) Build `/rocks` and `/rocks.json` with ten procedural geology-inspired families, a rotatable viewer, SVG fallback, browser-local cabinet, specimen sharing, and portable exports — `done`
+- [x] (X) Integrate homepage, Apps, Play, Block 0651, sitemap, agent endpoints, and LLM discovery; validate library/client behavior and mobile/desktop browser layout — `done` — 18 focused tests pass; see `docs/codex-logs/2026-09-29-pocket-rocks.md`
+- [ ] (MH/X) Review the draft PR and preview, approve the main merge, then publish and verify canonical `/rocks` — `waiting-on-mh`
+
+---
+
 ## Agent Cabinet — preview-only resident marketplace (2026-09-21)
 
 - [x] (X) Build `/x402/collect` with three inspectable proposal objects, exact disabled x402 terms, separate Tezos delivery requirements, and a local-only proposal manifest desk — `done`

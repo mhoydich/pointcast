@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'pocket-rocks',
+    name: 'Pocket Rocks',
+    kicker: 'TEN FAMILIES · ENDLESS SPECIMENS · YOUR LITTLE CABINET',
+    description: 'Find a geology-inspired digital rock, turn it in your hand, and keep it in a free browser-local cabinet. Share a specimen or save its artwork.',
+    url: 'https://pointcast.xyz/rocks/',
+    path: '/rocks',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.GDN',
+    kind: 'pointcast',
+  },
+  {
     slug: "arcade-remembrance",
     name: "The other half of the game",
     kicker: "ARCADE REMEMBRANCE · READ & PLAY",
