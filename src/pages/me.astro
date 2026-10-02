@@ -1,5 +1,6 @@
 ---
 import ShoppingPocket from '../components/ShoppingPocket.astro';
+import MeLibrary from '../components/MeLibrary.astro';
 import BlockLayout from '../layouts/BlockLayout.astro';
 import DrumProfileCard from '../components/DrumProfileCard.astro';
 import AuthMenu from '../components/AuthMenu.astro';
@@ -10,13 +11,13 @@ import ProfileConnections from '../components/ProfileConnections.astro';
 import contracts from '../data/contracts.json';
 import { isProfileContractConfigured } from '../lib/profile-object.mjs';
 
-const description = 'Your private PointCast identity and Tezos holdings, keyed only to wallets linked to this signed session.';
+const description = 'Keep what you find, arrange what matters, and show what you choose. Your private PointCast library, collections and profile.';
 const profileContract = contracts.profile_objects.mainnet;
 const profileClaimOpen = isProfileContractConfigured(profileContract);
 import '../styles/shortwave-shared.css';
 ---
 
-<BlockLayout title="Me" description={description}>
+<BlockLayout title="Me" description={description} noindex hideAds>
   <main class="me" data-me-root data-me-noun-default="404" data-me-state="loading">
     <nav class="me__crumb" aria-label="Breadcrumb">
       <a href="/">← PointCast</a>
@@ -25,6 +26,10 @@ import '../styles/shortwave-shared.css';
       <a class="me__json-link" href="/me.json">JSON twin ↗</a>
     </nav>
 
+    <MeLibrary />
+
+    <details class="me-account" id="account" data-me-account>
+      <summary>Account · connections, owned handle &amp; holdings</summary>
     <ShoppingPocket compact />
 
     <section class="me__loading" data-me-loading aria-live="polite">
@@ -39,12 +44,12 @@ import '../styles/shortwave-shared.css';
       </div>
       <div class="me-door__copy">
         <p class="me__kicker">PRIVATE CHANNEL · SIGN-IN REQUIRED</p>
-        <h1>Your shelf starts with your session.</h1>
+        <h2>Carry your things with you.</h2>
         <p>
           Sign in to see the identities and Tezos wallets you linked to PointCast.
           Nothing on this page falls back to another person’s wallet.
         </p>
-        <AuthMenu autoOpen={true} />
+        <AuthMenu />
         <p class="me-door__privacy">The session cookie is HttpOnly. Holdings are public-chain data fetched only after this session is accepted.</p>
       </div>
     </section>
@@ -62,7 +67,7 @@ import '../styles/shortwave-shared.css';
           />
           <div>
             <p class="me__kicker">CH.ME · PRIVATE · D1 SESSION</p>
-            <h1 data-me-name>PointCast member</h1>
+            <h2 data-me-name>PointCast member</h2>
             <p class="me-head__dek">One account. Every identity you deliberately linked. Every PointCast object those Tezos wallets hold.</p>
           </div>
         </div>
@@ -205,6 +210,7 @@ import '../styles/shortwave-shared.css';
 
       <section
         class="me-claim"
+        id="owned-handle"
         data-me-claim
         data-me-claim-contract={profileContract}
         data-me-claim-open={String(profileClaimOpen)}
@@ -213,7 +219,7 @@ import '../styles/shortwave-shared.css';
         <header class="me-section-head">
           <div>
             <p class="me__kicker">PROFILE OBJECT · OWNED HANDLE</p>
-            <h2>Claim your handle</h2>
+            <h2>Owned handle</h2>
           </div>
           <a class="me-claim__browse" href="/p">Browse profile objects →</a>
         </header>
@@ -295,6 +301,7 @@ import '../styles/shortwave-shared.css';
         <div class="me-collections" data-me-collections></div>
       </section>
     </div>
+    </details>
   </main>
 </BlockLayout>
 
@@ -640,12 +647,31 @@ import '../styles/shortwave-shared.css';
   }
 
   async function refreshPasskeys(root: HTMLElement): Promise<void> {
+    const actor = root.dataset.meAccountId;
+    const requestVersion = String(Number(root.dataset.mePasskeyLoadVersion || 0) + 1);
+    root.dataset.mePasskeyLoadVersion = requestVersion;
+    const stale = () => root.dataset.meAccountId !== actor || root.dataset.mePasskeyLoadVersion !== requestVersion;
+    const count = root.querySelector<HTMLElement>('[data-me-passkey-count]');
     const status = root.querySelector<HTMLOutputElement>('[data-me-passkey-status]');
+    const list = root.querySelector<HTMLElement>('[data-me-passkey-list]');
+    if (count) count.textContent = 'Checking…';
+    status?.replaceChildren(); list?.replaceChildren();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      renderPasskeys(root, await getPasskeys());
-    } catch (error) {
-      if (status) status.textContent = error instanceof Error ? error.message : 'Could not read passkeys.';
-    }
+      const passkeys = await Promise.race([getPasskeys(), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('passkey-read-timeout')), 15000);
+      })]);
+      if (stale()) return;
+      renderPasskeys(root, passkeys);
+    } catch {
+      if (stale()) return;
+      if (count) count.textContent = 'Unavailable';
+      if (status) {
+        const retry = create('button', 'me-retry', 'Retry passkeys');
+        retry.type = 'button'; retry.dataset.meAction = 'passkey-retry';
+        status.replaceChildren('Passkeys are unavailable right now. Your current sign-in still works. ', retry);
+      }
+    } finally { clearTimeout(timer); }
   }
 
   function renderWallets(root: HTMLElement, wallets: Wallet[]): void {
@@ -858,6 +884,7 @@ import '../styles/shortwave-shared.css';
   }
 
   async function renderClaimDoor(root: HTMLElement, wallets: Wallet[]): Promise<void> {
+    const actor = root.dataset.meAccountId;
     const door = root.querySelector<HTMLElement>('[data-me-claim]');
     if (!door) return;
     door.dataset.meClaimAddresses = wallets.map((wallet) => wallet.address).join(',');
@@ -865,6 +892,7 @@ import '../styles/shortwave-shared.css';
     if (!contract || !wallets.length) return;
     try {
       const profiles = await readOwnedProfiles(contract, wallets);
+      if (root.dataset.meAccountId !== actor) return;
       ownedProfilesByRoot.set(root, profiles);
       if (profiles[0]) renderEditor(root, profiles[0]);
       const select = root.querySelector<HTMLSelectElement>('[data-me-editor-select]');
@@ -927,10 +955,13 @@ import '../styles/shortwave-shared.css';
   }
 
   let keepsWired = false;
+  const musicReloaders = new WeakMap<HTMLElement, () => Promise<void>>();
   // Your music in town. The connection is the personal Spotify link (current track only);
   // the switch writes pc:music:auto='personal', which cursor-room.ts reads on every page.
   async function renderMusic(root: HTMLElement): Promise<void> {
-    const box = root.querySelector<HTMLElement>('[data-me-music]'); if (!box || box.dataset.ready) return; box.dataset.ready = 'true';
+    const box = root.querySelector<HTMLElement>('[data-me-music]'); if (!box) return;
+    if (box.dataset.ready) { await musicReloaders.get(root)?.(); return; }
+    box.dataset.ready = 'true';
     const q = <T extends HTMLElement>(sel: string) => box.querySelector<T>(sel)!;
     const state = q('[data-me-music-state]'), track = q('[data-me-music-track]'), cover = q<HTMLImageElement>('[data-me-music-cover]'), note = q('[data-me-music-note]');
     const connect = q<HTMLAnchorElement>('[data-me-music-connect]'), auto = q<HTMLButtonElement>('[data-me-music-auto]'), disconnect = q<HTMLButtonElement>('[data-me-music-disconnect]');
@@ -938,8 +969,11 @@ import '../styles/shortwave-shared.css';
     const setOn = (on: boolean) => { try { if (on) localStorage.setItem('pc:music:auto', 'personal'); else if (isOn()) localStorage.removeItem('pc:music:auto'); } catch { /* no storage */ } window.dispatchEvent(new CustomEvent('pc:music:auto')); paintAuto(); };
     const paintAuto = () => { const on = isOn(); auto.setAttribute('aria-pressed', String(on)); auto.textContent = on ? 'Showing what I am playing in town · turn off' : 'Show what I am playing next to my face in town'; };
     async function load(): Promise<void> {
+      const actor = root.dataset.meAccountId;
+      cover.hidden = true; track.textContent = ''; state.textContent = 'Reading your music connection…';
       let j: { connected?: boolean; configured?: boolean; status?: string | 'not_seated'; track?: { title: string; artist: string; imageUrl: string | null; isPlaying: boolean } | null } | null = null;
       try { const r = await fetch('/api/me/spotify', { headers: { accept: 'application/json' }, credentials: 'same-origin' }); j = await r.json(); } catch { /* below */ }
+      if (root.dataset.meAccountId !== actor) return;
       const connected = Boolean(j?.connected);
       connect.hidden = connected; auto.hidden = !connected; disconnect.hidden = !connected; cover.hidden = true; track.textContent = '';
       if (!j || j.status === 'unavailable') { state.textContent = 'Spotify connections are not available right now.'; connect.hidden = true; return; }
@@ -977,6 +1011,7 @@ import '../styles/shortwave-shared.css';
       try { const r = await fetch('/api/me/spotify', { method: 'DELETE', credentials: 'same-origin' }); note.textContent = r.ok ? 'Disconnected. The stored Spotify credentials were deleted.' : 'Could not disconnect just now.'; if (r.ok) setOn(false); } catch { note.textContent = 'Could not disconnect just now.'; }
       disconnect.disabled = false; void load();
     });
+    musicReloaders.set(root, load);
     await load();
   }
 
@@ -1009,6 +1044,12 @@ import '../styles/shortwave-shared.css';
   }
 
   function showSignedOut(root: HTMLElement): void {
+    root.dataset.meAccountId = '';
+    root.dataset.meLoadVersion = String(Number(root.dataset.meLoadVersion || 0) + 1);
+    ownedProfilesByRoot.delete(root);
+    const musicTrack = root.querySelector<HTMLElement>('[data-me-music-track]'); if (musicTrack) musicTrack.textContent = '';
+    const musicCover = root.querySelector<HTMLImageElement>('[data-me-music-cover]'); if (musicCover) { musicCover.hidden = true; musicCover.removeAttribute('src'); }
+    const editor = root.querySelector<HTMLFormElement>('[data-me-editor]'); if (editor) { editor.reset(); editor.hidden = true; }
     root.dataset.meState = 'signed-out';
     const loading = root.querySelector<HTMLElement>('[data-me-loading]');
     const door = root.querySelector<HTMLElement>('[data-me-signed-out]');
@@ -1064,24 +1105,42 @@ import '../styles/shortwave-shared.css';
   }
 
   async function loadRoot(root: HTMLElement, signal: AbortSignal): Promise<void> {
-    const user = await getSession().catch(() => null);
-    if (signal.aborted) return;
-    if (!user) {
-      showSignedOut(root);
-      return;
+    const requestVersion = String(Number(root.dataset.meLoadVersion || 0) + 1);
+    root.dataset.meLoadVersion = requestVersion;
+    const stale = () => signal.aborted || root.dataset.meLoadVersion !== requestVersion;
+    let sessionTimer: ReturnType<typeof setTimeout> | undefined;
+    const user = await Promise.race([getSession(), new Promise<never>((_, reject) => { sessionTimer = setTimeout(() => reject(new Error('The account check took too long. Please try again.')), 15000); })]).finally(() => clearTimeout(sessionTimer));
+    if (stale()) return;
+    if (root.dataset.meAccountId !== user?.userId) {
+      ownedProfilesByRoot.delete(root);
+      const editor = root.querySelector<HTMLFormElement>('[data-me-editor]'); if (editor) { editor.reset(); editor.hidden = true; }
     }
-    const response = await fetch('/api/me/holdings', {
-      credentials: 'include',
-      cache: 'no-store',
-      signal,
-    });
-    if (signal.aborted) return;
-    if (response.status === 401) {
-      showSignedOut(root);
-      return;
+    root.dataset.meAccountId = user?.userId || '';
+    if (!user) { showSignedOut(root); return; }
+    // Account tools settle from the authenticated session; chain reads are a separate concern.
+    const wallets: Wallet[] = user.identities.filter(identity => /^(tz[1-4])[1-9A-HJ-NP-Za-km-z]{33}$/.test(identity.id)).map(identity => ({
+      address: identity.id, tzktUrl: `https://tzkt.io/${identity.id}`, totalTokenBalanceCount: 0,
+      everythingElseCount: 0, collections: [], seals: [], sealShelf: { state: 'unavailable', groups: [] }, cache: 'unavailable', error: 'loading',
+    }));
+    showSignedIn(root, { ok: true, user, wallets, collections: [], dogs: [], streak: 0, nextSealAt: 7, generatedAt: new Date().toISOString(), cacheTtlSeconds: 60 });
+    const status = root.querySelector<HTMLElement>('[data-me-status]');
+    if (status) status.textContent = 'Reading holdings from the linked wallets…';
+    try {
+      const response = await fetch('/api/me/holdings', { credentials: 'include', cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+      if (stale()) return;
+      if (response.status === 401) { showSignedOut(root); return; }
+      if (!response.ok) throw new Error('Holdings are unavailable right now.');
+      const payload = await response.json() as HoldingsPayload;
+      if (stale()) return;
+      if (payload.user.userId !== user.userId) { showSignedOut(root); return; }
+      showSignedIn(root, payload);
+    } catch (error) {
+      if (stale()) return;
+      if (status) {
+        status.replaceChildren(create('span', '', 'Holdings are unavailable. Your saved things and account tools are still available. '));
+        const retry = create('button', 'me-retry', 'Retry holdings'); retry.type = 'button'; retry.dataset.meAction = 'retry'; status.append(retry);
+      }
     }
-    if (!response.ok) throw new Error(`holdings-${response.status}`);
-    showSignedIn(root, await response.json() as HoldingsPayload);
   }
 
   function initializeMePages(): void {
@@ -1092,12 +1151,20 @@ import '../styles/shortwave-shared.css';
     const roots = Array.from(document.querySelectorAll<HTMLElement>('[data-me-root]'));
     if (!roots.length) return;
 
+    const openAccountAnchor = () => {
+      if (!['#account', '#owned-handle', '#my-ai', '#holdings'].includes(window.location.hash)) return;
+      roots.forEach(root => { const account = root.querySelector<HTMLDetailsElement>('[data-me-account]'); if (account) account.open = true; });
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>(window.location.hash)?.scrollIntoView({ block: 'start' }));
+    };
+    openAccountAnchor();
+    window.addEventListener('hashchange', openAccountAnchor, { signal: controller.signal });
     roots.forEach((root) => {
       renderLocalState(root);
       void loadRoot(root, controller.signal).catch((error) => {
         if (controller.signal.aborted) return;
         const loading = root.querySelector<HTMLElement>('[data-me-loading]');
         if (loading) {
+          loading.hidden = false;
           loading.replaceChildren(
             create('p', 'me__kicker', 'PRIVATE CHANNEL · CONNECTION STOPPED'),
             create('p', '', error instanceof Error ? error.message : 'Could not load this profile.'),
@@ -1123,7 +1190,13 @@ import '../styles/shortwave-shared.css';
         void logout().then(() => roots.forEach(showSignedOut));
       } else if (action === 'retry') {
         event.preventDefault();
-        roots.forEach((root) => void loadRoot(root, controller.signal));
+        roots.forEach((root) => void loadRoot(root, controller.signal).catch(() => {
+        const loading = root.querySelector<HTMLElement>('[data-me-loading]');
+        if (loading) { loading.hidden = false; loading.textContent = 'Account tools could not load. Refresh this page to try again.'; }
+      }));
+      } else if (action === 'passkey-retry') {
+        const root = actionElement?.closest<HTMLElement>('[data-me-root]');
+        if (root) void refreshPasskeys(root);
       } else if (action === 'passkey-remove') {
         event.preventDefault();
         const root = actionElement.closest<HTMLElement>('[data-me-root]');
@@ -1311,11 +1384,14 @@ import '../styles/shortwave-shared.css';
 
     window.addEventListener('pc:auth-change', (event) => {
       const user = (event as CustomEvent<{ user?: PointCastUser | null }>).detail?.user;
+      roots.forEach(showSignedOut);
       if (!user) {
-        roots.forEach(showSignedOut);
         return;
       }
-      roots.forEach((root) => void loadRoot(root, controller.signal));
+      roots.forEach((root) => void loadRoot(root, controller.signal).catch(() => {
+        const loading = root.querySelector<HTMLElement>('[data-me-loading]');
+        if (loading) { loading.hidden = false; loading.textContent = 'Account tools could not load. Refresh this page to try again.'; }
+      }));
     }, { signal: controller.signal });
 
     window.addEventListener('storage', (event) => {

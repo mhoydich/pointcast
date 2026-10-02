@@ -6,19 +6,26 @@ import { createServer } from 'vite';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-test('/me is a private session view with a signed-out door and no visitor wallet fallback', async () => {
+test('/me opens a guest library with optional account sign-in and no visitor wallet fallback', async () => {
   const page = await read('src/pages/me.astro');
   assert.match(page, /getSession\(\)/);
   assert.match(page, /fetch\('\/api\/me\/holdings'/);
   assert.match(page, /data-me-signed-out/);
-  assert.match(page, /<AuthMenu autoOpen=\{true\}/);
+  assert.match(page, /<MeLibrary\s*\/>/);
+  assert.match(page, /<AuthMenu\s*\/>/);
+  assert.doesNotMatch(page, /<AuthMenu[^>]*autoOpen=\{true\}/, 'opening the guest library must not open a sign-in modal');
   assert.match(page, /Nothing on this page falls back to another person’s wallet/);
   assert.doesNotMatch(page, /tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw/);
 });
 
 test('/me follows the ClientRouter DOM contract and keeps the utility rows', async () => {
   const page = await read('src/pages/me.astro');
-  assert.doesNotMatch(page, /<[^>]+\sid=/, 'the new profile surface must not use element ids');
+  const anchorIds = [...page.matchAll(/<[^>]+\sid="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(anchorIds.sort(), ['account', 'owned-handle'], 'stable ids are reserved for account destinations');
+  assert.doesNotMatch(page, /document\.getElementById/, 'account components resolve nodes from the current page root');
+  assert.match(page, /document\.querySelectorAll<HTMLElement>\('\[data-me-root\]'\)/);
+  assert.match(page, /__pointCastMeAbort\?\.abort\(\)/, 'navigation aborts listeners from the previous page');
+  assert.match(page, /signal: controller\.signal/, 'page listeners have the current navigation lifetime');
   assert.match(page, /document\.addEventListener\('click'/);
   assert.match(page, /__pointCastMeAbort/);
   assert.match(page, /astro:page-load/);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { onRequestPost, issueSession, readSessionFromRequest } from '../functions/api/auth/session.ts';
+import { onRequestPost, onRequestGet, issueSession, readSessionFromRequest } from '../functions/api/auth/session.ts';
 
 function environment() {
   const user = { userId: 'known-victim', preferredName: 'Fixture member', createdAt: new Date().toISOString(), identities: [], roles: [] };
@@ -46,4 +46,40 @@ test('verified provider handlers can still issue and read a normal session direc
   }), env);
   assert.equal(current.user.userId, user.userId);
   assert.equal(current.session.sessionToken, session.sessionToken);
+});
+
+
+test('session GET exposes a display summary without exposing the bearer token', async () => {
+  const { env, user } = environment();
+  const session = await issueSession(env, user.userId);
+  const response = await onRequestGet({ env, request: new Request('https://pointcast.xyz/api/auth/session', {
+    headers: { cookie: `pc_session=${session.sessionToken}` },
+  }) });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body.session, { userId: user.userId, expiresAt: session.expiresAt });
+  assert.equal(JSON.stringify(body).includes(session.sessionToken), false);
+  assert.equal(response.headers.get('set-cookie'), null);
+  assert.match(response.headers.get('cache-control'), /private, no-store/);
+});
+
+test('session renewal rotates the cookie without exposing either bearer token in JSON', async () => {
+  const { env, user, entries } = environment();
+  const session = await issueSession(env, user.userId, 3600);
+  const response = await onRequestGet({ env, request: new Request('https://pointcast.xyz/api/auth/session', {
+    headers: { cookie: `pc_session=${session.sessionToken}` },
+  }) });
+  const body = await response.json();
+  const cookie = response.headers.get('set-cookie');
+  const renewedToken = decodeURIComponent(cookie.match(/^pc_session=([^;]+)/)[1]);
+  assert.notEqual(renewedToken, session.sessionToken);
+  assert.match(cookie, /HttpOnly; Secure; SameSite=Lax/);
+  assert.deepEqual(Object.keys(body.session).sort(), ['expiresAt', 'userId']);
+  assert.equal(body.renewed, true);
+  assert.equal(body.session.userId, user.userId);
+  assert.ok(Date.parse(body.session.expiresAt) > Date.parse(session.expiresAt));
+  assert.equal(JSON.stringify(body).includes(session.sessionToken), false);
+  assert.equal(JSON.stringify(body).includes(renewedToken), false);
+  assert.equal(entries.has(`session:${session.sessionToken}`), false);
+  assert.equal(entries.has(`session:${renewedToken}`), true);
 });
