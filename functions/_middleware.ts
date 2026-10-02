@@ -245,6 +245,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       ['/noggle-reserve/', '/nouns-money/'],
       ['/noggle-reserve/index.html', '/nouns-money/'],
       ['/noggle-reserve.json', '/nouns-money.json'],
+      ['/reads/pickleball-strategy', '/pickleball/home#learn'],
+      ['/reads/pickleball-strategy/', '/pickleball/home#learn'],
+      ['/reads/pickleball-starter-paddle', '/pickleball/home#gear'],
+      ['/reads/pickleball-starter-paddle/', '/pickleball/home#gear'],
     ]).get(url.pathname);
     if (moneyTarget) {
       const target = new URL(moneyTarget, url.origin);
