@@ -5,6 +5,10 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    bookshop: 'https://pointcast.xyz/books/',
+    siddhartha: 'https://pointcast.xyz/siddhartha/',
+    denOfThieves: 'https://pointcast.xyz/books/den-of-thieves/',
+    playingForPizza: 'https://pointcast.xyz/books/playing-for-pizza/',
     everyday: 'https://pointcast.xyz/everyday/',
     communicationsLab: 'https://pointcast.xyz/communications-lab/',
     mobility2030: 'https://pointcast.xyz/mobility-2030/',
@@ -83,6 +87,9 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
   },
   json: {
+    siddhartha: 'https://pointcast.xyz/siddhartha.json',
+    denOfThieves: 'https://pointcast.xyz/books/den-of-thieves.json',
+    playingForPizza: 'https://pointcast.xyz/books/playing-for-pizza.json',
     everyday: 'https://pointcast.xyz/everyday.json',
     communicationsLab: 'https://pointcast.xyz/communications-lab/briefs.json',
     mobility2030: 'https://pointcast.xyz/mobility-2030.json',

@@ -1,0 +1,315 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+interface Bookshop {
+  slug: string;
+  title: string;
+  author: string;
+  theme: string;
+  number: string;
+  description: string;
+  image: string;
+  imageAlt: string;
+  artworkTitle: string;
+  kicker: string;
+  heroNote: string;
+  genre: string;
+  firstPublication: string;
+  language: string;
+  checked: string;
+  checkedLabel: string;
+  introTitle: string;
+  intro: string[];
+  introSources: string[];
+  facts: { label: string; value: string }[];
+  cards: {
+    id: string;
+    label: string;
+    title: string;
+    kinds: string[];
+    format: string;
+    publisher: string;
+    isbn: string;
+    editionDate: string;
+    length: string;
+    why: string;
+    note: string;
+    source: string;
+    routes: { kind: string; label: string; url: string; note?: string }[];
+  }[];
+  borrowNote: string;
+  borrowRoutes?: { label: string; url: string; text: string }[];
+  pathways: { number: string; label: string; title: string; text: string; link: { label: string; url: string } }[];
+  guideIntro: string;
+  themes: { title: string; text: string }[];
+  questions: string[];
+  sources: { id: string; label: string; url: string; type: string; note: string }[];
+  rightsNote: string;
+  sibling: { title: string; path: string };
+}
+interface Props { book: Bookshop }
+const { book } = Astro.props;
+const path = `/books/${book.slug}/`;
+const canonical = `https://pointcast.xyz${path}`;
+const metadataPath = `/books/${book.slug}.json`;
+const guideCount = book.cards.length + (book.borrowRoutes?.length ? 1 : 0);
+const printCard = book.cards.find((card) => card.isbn !== 'Not tied to a single edition');
+const metadata = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: `${book.title} — a PointCast bookshop`,
+  description: book.description,
+  url: canonical,
+  image: `https://pointcast.xyz${book.image}`,
+  dateModified: book.checked,
+  about: {
+    '@type': 'Book',
+    name: book.title,
+    author: { '@type': 'Person', name: book.author },
+    inLanguage: 'en',
+    datePublished: book.firstPublication,
+    genre: book.genre,
+    ...(printCard && /^\d{13}$/.test(printCard.isbn) ? { workExample: { '@type': 'Book', name: book.title, isbn: printCard.isbn, bookFormat: 'https://schema.org/Paperback' } } : {}),
+  },
+};
+const introSources = book.sources.filter((source) => book.introSources.includes(source.id));
+---
+
+<BlockLayout
+  title={`${book.title} bookshop & reader’s guide`}
+  description={book.description}
+  image={book.image}
+  imageWidth={1536}
+  imageHeight={1024}
+  themeColor={book.theme === 'midnight' ? '#0d1825' : '#f5efdf'}
+  isolated={true}
+  showNetworkStrip={false}
+  jsonLd={metadata}
+  alternates={[{ type: 'application/json', href: metadataPath, title: `${book.title} sources and editions` }]}
+>
+  <div class:list={['bookshop', book.theme]} data-bookshop={book.slug}>
+    <div class="shell">
+      <nav class="topbar" aria-label="Bookshop navigation">
+        <a class="wordmark" href="/">pointcast<span>reading shelf</span></a>
+        <div class="toplinks"><a href="/books/">All books</a><a href="#copies">Find a copy <span aria-hidden="true">↓</span></a></div>
+      </nav>
+
+      <header class="hero">
+        <div class="folio"><span class="label">Bookshop / {book.number}</span><span class="label">{book.genre} · {book.firstPublication}</span></div>
+        <div class="hero-title">
+          <div><p class="kicker">{book.kicker}</p><h1>{book.title}</h1></div>
+          <div class="byline"><p class="author">{book.author}</p><p>{book.heroNote}</p><a class="text-link" href="#reader">A place to begin <span aria-hidden="true">↗</span></a></div>
+        </div>
+        <figure class="hero-art">
+          <img src={book.image} alt={book.imageAlt} width="1536" height="1024" fetchpriority="high" decoding="async" />
+          <figcaption><span>{book.artworkTitle}</span><span>Original AI-generated editorial artwork. An imagined atmosphere.</span></figcaption>
+        </figure>
+      </header>
+
+      <section id="reader" class="introduction section" aria-labelledby="reader-heading">
+        <div class="section-index"><p class="label">01 / Before you open it</p><p class="section-aside">A spoiler-light introduction.</p></div>
+        <div class="intro-copy"><h2 id="reader-heading">{book.introTitle}</h2>{book.intro.map((paragraph) => <p>{paragraph}</p>)}
+          <p class="inline-sources">Grounding: {introSources.map((source, index) => <><a href={source.url}>{source.label}</a>{index < introSources.length - 1 && <span aria-hidden="true"> · </span>}</>)}</p>
+        </div>
+        <dl class="book-facts">{book.facts.map((fact) => <div><dt class="label">{fact.label}</dt><dd>{fact.value}</dd></div>)}</dl>
+      </section>
+
+      <section id="copies" class="section copies" aria-labelledby="copies-heading">
+        <div class="section-heading"><div><p class="label">02 / The copy desk</p><h2 id="copies-heading">Choose how to read.</h2></div><p class="section-aside">New, used, or borrowed.<br />The book is the destination.</p></div>
+        <p class="desk-note">These are edition guides and links to outside sellers and libraries. Providers set prices, stock, condition, and lending terms. Bibliographic details and routes checked <time datetime={book.checked}>{book.checkedLabel}</time>; availability can change.</p>
+        <bookshop-copy-filter>
+          <div class="copy-filters" data-copy-filters hidden role="group" aria-label="Filter copy routes">
+            {['all', 'new', 'used', 'borrow'].map((filter) => <button type="button" data-copy-filter={filter} aria-pressed={filter === 'all' ? 'true' : 'false'} aria-controls={`${book.slug}-copy-list`}>{filter === 'all' ? 'All copies' : filter.charAt(0).toUpperCase() + filter.slice(1)}</button>)}
+          </div>
+          <p class="filter-status" data-copy-status role="status" aria-live="polite" aria-atomic="true">All {guideCount} copy guides shown.</p>
+          <div id={`${book.slug}-copy-list`}>
+          <div class:list={['copy-grid', { two: book.cards.length === 2 }]}>
+            {book.cards.map((card, index) => <article class="copy-card" data-copy-card data-copy-kinds={card.kinds.join(' ')} id={`copy-${card.id}`} aria-labelledby={`copy-title-${card.id}`}>
+              <div class="card-top"><span class="label">{String(index + 1).padStart(2, '0')}</span><p class="label">{card.label}</p></div>
+              <h3 id={`copy-title-${card.id}`}>{card.title}</h3><p class="card-why">{card.why}</p>
+              <dl class="edition-facts"><div><dt>Format</dt><dd>{card.format}</dd></div><div><dt>Publisher / provider</dt><dd>{card.publisher}</dd></div><div><dt>ISBN</dt><dd class="isbn">{card.isbn}</dd></div><div><dt>Edition date</dt><dd>{card.editionDate}</dd></div><div><dt>Length</dt><dd>{card.length}</dd></div></dl>
+              <p class="edition-note">{card.note}</p>
+              <a class="verified-link" href={card.source}>View bibliographic source <span aria-hidden="true">↗</span></a>
+              <div class="copy-routes">{card.routes.map((route) => <div data-route-kind={route.kind}><a class="route-link" href={route.url}><span>{route.label}</span><span aria-hidden="true">↗</span></a>{route.note && <p>{route.note}</p>}</div>)}</div>
+            </article>)}
+          </div>
+          {book.borrowRoutes?.length && <aside class="borrowing-desk" data-copy-card data-copy-kinds="borrow" aria-labelledby="borrowing-heading"><div><p class="label">Borrow / Library routes</p><h3 id="borrowing-heading">The library door.</h3><p>Start with your library’s catalog and lending rules. A catalog record identifies a route; it does not promise a copy is ready to borrow.</p></div><div class="borrow-route-list">{book.borrowRoutes.map((route) => <div><a class="route-link" href={route.url}>{route.label}<span aria-hidden="true">↗</span></a><p>{route.text}</p></div>)}</div></aside>}
+          </div>
+        </bookshop-copy-filter>
+        <p class="borrow-note">{book.borrowNote}</p>
+      </section>
+
+      <section class="section pathways" aria-labelledby="pathways-heading">
+        <div class="section-heading"><div><p class="label">03 / Reading pathways</p><h2 id="pathways-heading">Make it your own reading.</h2></div></div>
+        <div class="pathway-grid">{book.pathways.map((pathway) => <article><p class="label">{pathway.number} / {pathway.label}</p><h3>{pathway.title}</h3><p>{pathway.text}</p><a class="text-link" href={pathway.link.url}>{pathway.link.label} <span aria-hidden="true">↗</span></a></article>)}</div>
+      </section>
+
+      <section id="guide" class="section reading-guide" aria-labelledby="guide-heading">
+        <div class="section-heading"><div><p class="label">04 / Keep going</p><h2 id="guide-heading">After a few chapters.</h2></div><p class="section-aside">Optional deeper reading.<br />Open when you are ready.</p></div>
+        <p class="guide-intro">{book.guideIntro}</p>
+        <details class="guide-details"><summary><span><span class="label">Deeper themes · may reveal developments</span><span class="summary-title">Look beneath the story.</span></span><span class="details-mark" aria-hidden="true">+</span></summary><div class="details-content"><p class="spoiler-note">Discussion below may reveal narrative developments. These are PointCast’s original reading prompts, not the author’s stated interpretation.</p><div class="themes-grid">{book.themes.map((theme) => <article><h3>{theme.title}</h3><p>{theme.text}</p></article>)}</div></div></details>
+        <details class="guide-details"><summary><span><span class="label">Reading group · discussion spoilers</span><span class="summary-title">Bring it to the table.</span></span><span class="details-mark" aria-hidden="true">+</span></summary><div class="details-content"><p class="spoiler-note">Save these questions for a reading group or for after you finish. They ask about the work as a whole.</p><ol class="discussion-questions">{book.questions.map((question) => <li>{question}</li>)}</ol></div></details>
+      </section>
+
+      <section id="sources" class="section sources" aria-labelledby="sources-heading">
+        <div class="section-index"><p class="label">05 / Sources &amp; small print</p><p class="section-aside">Follow the evidence.<br />Keep the artwork in view.</p></div>
+        <div class="source-copy"><h2 id="sources-heading">A shelf with its sources.</h2><ul class="source-list">{book.sources.map((source) => <li id={`source-${source.id}`}><p class="label">{source.type}</p><h3><a href={source.url}>{source.label} <span aria-hidden="true">↗</span></a></h3><p>{source.note}</p></li>)}</ul><div class="rights-note"><p>{book.rightsNote}</p><p>The artwork is an original AI-generated editorial interpretation made for this PointCast page. It is not a publisher’s cover, archival photograph, or image by the author. No book text is reproduced here.</p><p class="metadata-link"><a href={metadataPath}>Edition and source metadata <span aria-hidden="true">↗</span></a></p><p class="metadata-link"><a href="/images/bookshop/provenance.json">Artwork provenance <span aria-hidden="true">↗</span></a></p></div></div>
+      </section>
+
+      <footer class="shelf-footer"><p class="footer-title">One good book<br />opens another door.</p><nav aria-label="More reading"><a href="/books/">Back to the reading shelf <span aria-hidden="true">↗</span></a><a href="/siddhartha/">Siddhartha · Hermann Hesse <span aria-hidden="true">↗</span></a><a href={book.sibling.path}>{book.sibling.title} <span aria-hidden="true">↗</span></a></nav><p class="label">PointCast / Books</p></footer>
+    </div>
+  </div>
+</BlockLayout>
+
+<script>
+  class BookshopCopyFilter extends HTMLElement {
+    connectedCallback() {
+      if (this.dataset.mounted === 'true') return;
+      this.dataset.mounted = 'true';
+      const controls = this.querySelector<HTMLElement>('[data-copy-filters]');
+      const buttons = Array.from(this.querySelectorAll<HTMLButtonElement>('[data-copy-filter]'));
+      const cards = Array.from(this.querySelectorAll<HTMLElement>('[data-copy-card]'));
+      const status = this.querySelector<HTMLElement>('[data-copy-status]');
+      if (!controls || !status || !cards.length) return;
+      controls.hidden = false;
+      buttons.forEach((button) => button.addEventListener('click', () => {
+        const filter = button.dataset.copyFilter || 'all';
+        if (!['all', 'new', 'used', 'borrow'].includes(filter)) return;
+        buttons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        let shown = 0;
+        cards.forEach((card) => {
+          const matches = filter === 'all' || (card.dataset.copyKinds || '').split(' ').includes(filter);
+          card.hidden = !matches;
+          if (matches) shown += 1;
+          card.querySelectorAll<HTMLElement>('[data-route-kind]').forEach((route) => {
+            route.hidden = filter !== 'all' && route.dataset.routeKind !== filter;
+          });
+        });
+        status.textContent = `${shown} ${filter === 'all' ? 'copy' : filter} ${shown === 1 ? 'guide' : 'guides'} shown.`;
+      }));
+    }
+  }
+  if (!customElements.get('bookshop-copy-filter')) customElements.define('bookshop-copy-filter', BookshopCopyFilter);
+</script>
+
+<style>
+  .bookshop { --paper:#0d1825; --ink:#f2eee5; --muted:#b9c2ca; --line:#53606e; --accent:#dfbb78; --panel:#142333; --focus:#f5cb77; background:var(--paper); color:var(--ink); font:400 1rem/1.65 var(--pc-font-sans); }
+  .bookshop.parma { --paper:#f5efdf; --ink:#302a21; --muted:#63584a; --line:#b5a98e; --accent:#9c2c21; --panel:#eee5d2; --focus:#852419; }
+  .shell { width:min(1400px,calc(100% - 96px)); margin-inline:auto; }
+  .bookshop :global(a) { color:inherit; text-decoration:none; }
+  .bookshop :global(a:hover) { text-decoration:underline; text-underline-offset:.22em; }
+  .bookshop :global(a:focus-visible),button:focus-visible,summary:focus-visible { outline:3px solid var(--focus); outline-offset:5px; }
+  .bookshop :global([hidden]) { display:none !important; }
+  .bookshop :global(::selection) { background:var(--accent); color:var(--paper); }
+  p,h1,h2,h3,figure,dl,dd { margin:0; }
+  button { font:inherit; cursor:pointer; touch-action:manipulation; }
+  a,summary { touch-action:manipulation; }
+  .label { font:400 .875rem/1.5 var(--pc-font-mono); letter-spacing:.045em; text-transform:uppercase; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:24px; padding-block:26px; border-bottom:1px solid var(--line); }
+  .wordmark { font-size:1.5rem; line-height:1.1; letter-spacing:-.07em; min-height:44px; display:flex; align-items:center; flex-wrap:wrap; gap:12px 22px; }
+  .wordmark span { font:400 .875rem/1.4 var(--pc-font-mono); text-transform:uppercase; letter-spacing:.045em; border-left:1px solid var(--line); padding-left:22px; }
+  .toplinks { display:flex; align-items:center; gap:28px; font-size:.875rem; }
+  .toplinks a { min-height:44px; display:inline-flex; align-items:center; gap:14px; }
+  .folio { display:flex; justify-content:space-between; gap:20px; padding:28px 0 32px; color:var(--muted); }
+  .hero-title { display:grid; grid-template-columns:minmax(0,1fr) minmax(200px,300px); align-items:end; gap:50px; padding-bottom:40px; }
+  .kicker { font-size:1rem; color:var(--accent); margin-bottom:20px; }
+  h1 { font:400 clamp(4.1rem,9.2vw,8.5rem)/.94 var(--pc-font-sans); letter-spacing:-.065em; max-width:9ch; overflow-wrap:anywhere; }
+  .byline { padding-bottom:5px; }
+  .author { font-size:1.375rem; color:var(--accent); margin-bottom:15px; }
+  .byline > p:not(.author) { color:var(--muted); }
+  .text-link { display:inline-flex; align-items:center; justify-content:space-between; gap:16px; min-height:44px; margin-top:17px; border-bottom:1px solid var(--accent); color:var(--accent) !important; }
+  .hero-art { border-top:3px solid var(--accent); }
+  .hero-art img { width:100%; height:auto; object-fit:cover; }
+  .hero-art figcaption { display:flex; justify-content:space-between; gap:24px; font-size:.875rem; color:var(--muted); padding-block:16px; border-bottom:1px solid var(--line); }
+  .hero-art figcaption span:first-child { color:var(--accent); }
+  .section { padding-block:68px; border-bottom:1px solid var(--line); scroll-margin-top:24px; }
+  .introduction { display:grid; grid-template-columns:minmax(150px,.7fr) minmax(0,1.85fr) minmax(170px,.8fr); gap:50px; }
+  .section-index .label,.section-heading .label { color:var(--accent); }
+  .section-aside { color:var(--muted); font-size:1rem; margin-top:14px; }
+  h2 { font:400 clamp(2rem,3.1vw,3rem)/1.14 var(--pc-font-sans); letter-spacing:-.04em; margin-bottom:25px; }
+  .intro-copy > p { margin-top:18px; }
+  .inline-sources { font-size:.875rem; color:var(--muted); }
+  .inline-sources a { text-decoration:underline; text-underline-offset:3px; }
+  .book-facts > div + div { margin-top:24px; }
+  .book-facts dt { color:var(--muted); }
+  .book-facts dd { margin-top:6px; }
+  .section-heading { display:flex; align-items:end; justify-content:space-between; gap:32px; }
+  .section-heading h2 { margin-top:14px; margin-bottom:24px; }
+  .section-heading .section-aside { margin:0 0 27px; }
+  .desk-note { color:var(--muted); max-width:80ch; }
+  bookshop-copy-filter { display:block; }
+  .copy-filters { display:flex; gap:8px; flex-wrap:wrap; margin-top:30px; }
+  .copy-filters button { min-height:46px; min-width:76px; padding:8px 18px; border:1px solid var(--line); background:transparent; color:var(--ink); font-size:1rem; }
+  .copy-filters button[aria-pressed='true'] { background:var(--accent); color:var(--paper); border-color:var(--accent); }
+  .filter-status { font-size:.875rem; color:var(--muted); margin:17px 0 22px; }
+  .copy-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; align-items:start; }
+  .copy-grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .copy-card { padding:26px; border:1px solid var(--line); min-width:0; background:var(--panel); }
+  .card-top { display:flex; justify-content:space-between; gap:20px; color:var(--accent); margin-bottom:28px; }
+  .card-top .label { font-size:.875rem; }
+  h3 { font:500 1.375rem/1.3 var(--pc-font-sans); letter-spacing:-.025em; margin-bottom:14px; }
+  .card-why { min-height:6.6em; }
+  .edition-facts { border-top:1px solid var(--line); padding-top:17px; margin-top:25px; font-size:.875rem; }
+  .edition-facts > div { display:grid; grid-template-columns:minmax(80px,.75fr) minmax(0,1.25fr); gap:14px; padding-block:7px; }
+  .edition-facts dt { color:var(--muted); }
+  .edition-facts dd { overflow-wrap:anywhere; }
+  .isbn { font-family:var(--pc-font-mono); }
+  .edition-note { font-size:.875rem; color:var(--muted); margin-top:18px; }
+  .verified-link { font-size:.875rem; display:inline-flex; gap:12px; align-items:center; min-height:44px; margin-top:12px; color:var(--accent) !important; }
+  .copy-routes { margin-top:20px; }
+  .copy-routes > div + div { margin-top:12px; }
+  .route-link { display:flex; justify-content:space-between; align-items:center; gap:16px; min-height:48px; border:1px solid var(--accent); padding:10px 14px; color:var(--accent) !important; }
+  .route-link span:last-child { flex-shrink:0; }
+  .copy-routes p { font-size:.875rem; color:var(--muted); margin-top:7px; }
+  .borrow-note { padding-left:18px; border-left:2px solid var(--accent); color:var(--muted); max-width:88ch; margin-top:29px; }
+  .borrowing-desk { display:grid; grid-template-columns:1fr 1.5fr; gap:40px; margin-top:24px; border:1px solid var(--line); padding:26px; }
+  .borrowing-desk .label { color:var(--accent); margin-bottom:16px; }
+  .borrowing-desk p:not(.label) { color:var(--muted); }
+  .borrow-route-list { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  .borrow-route-list p { margin-top:12px; font-size:.875rem; }
+  .pathway-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:40px; }
+  .pathway-grid article { border-top:1px solid var(--line); padding-top:22px; }
+  .pathway-grid .label { color:var(--accent); margin-bottom:17px; }
+  .pathway-grid p:not(.label) { color:var(--muted); }
+  .guide-intro { color:var(--muted); max-width:76ch; margin-bottom:28px; }
+  .guide-details { border-top:1px solid var(--line); }
+  .guide-details:last-child { border-bottom:1px solid var(--line); }
+  summary { cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:116px; padding:24px 0; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  summary .label { display:block; color:var(--accent); }
+  .summary-title { display:block; font-size:1.5rem; letter-spacing:-.03em; margin-top:7px; }
+  .details-mark { display:grid; place-items:center; width:44px; height:44px; border:1px solid var(--line); font-size:1.5rem; flex-shrink:0; }
+  details[open] .details-mark { transform:rotate(45deg); }
+  .details-content { padding:2px 0 35px; }
+  .spoiler-note { color:var(--muted); font-size:.875rem; max-width:75ch; margin-bottom:26px; }
+  .themes-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:40px; }
+  .themes-grid p { color:var(--muted); }
+  .discussion-questions { margin:0; padding-left:1.5em; max-width:80ch; }
+  .discussion-questions li { padding-left:10px; margin-bottom:18px; }
+  .discussion-questions li::marker { color:var(--accent); font-family:var(--pc-font-mono); }
+  .sources { display:grid; grid-template-columns:minmax(150px,.7fr) minmax(0,2.65fr); gap:50px; }
+  .source-list { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:30px 40px; }
+  .source-list li { min-width:0; border-top:1px solid var(--line); padding-top:18px; }
+  .source-list .label { color:var(--muted); margin-bottom:10px; }
+  .source-list h3 { font-size:1.125rem; line-height:1.5; }
+  .source-list p:not(.label) { font-size:.875rem; color:var(--muted); }
+  .rights-note { margin-top:36px; padding-top:24px; border-top:1px solid var(--line); font-size:.875rem; color:var(--muted); max-width:90ch; }
+  .rights-note p + p { margin-top:14px; }
+  .metadata-link a { color:var(--accent) !important; display:inline-flex; gap:12px; align-items:center; min-height:44px; }
+  .shelf-footer { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:30px; align-items:start; padding:45px 0 50px; }
+  .footer-title { font-size:1.75rem; line-height:1.2; letter-spacing:-.035em; }
+  .shelf-footer nav { display:flex; flex-direction:column; align-items:start; }
+  .shelf-footer a { display:flex; align-items:center; gap:16px; min-height:44px; font-size:.875rem; }
+  .shelf-footer > .label { color:var(--muted); padding-top:10px; }
+  .parma .hero-title { grid-template-columns:minmax(0,1fr) minmax(200px,290px); }
+  .parma h1 { font-family:Georgia,'Times New Roman',serif; font-style:italic; letter-spacing:-.065em; max-width:11ch; }
+  .parma .hero-art { border-top:6px double var(--accent); padding-top:12px; }
+  .parma .folio { border-bottom:1px solid var(--line); margin-bottom:30px; padding-bottom:20px; }
+  .parma .card-top { padding-bottom:15px; border-bottom:3px double var(--line); }
+  .parma .copy-card { background:transparent; }
+  .parma .footer-title { font-family:Georgia,'Times New Roman',serif; font-style:italic; }
+  @media (max-width:1100px) { .shell { width:calc(100% - 64px); } .introduction { grid-template-columns:minmax(0,1fr) minmax(0,2fr); gap:30px; } .book-facts { grid-column:2; display:grid; grid-template-columns:1fr 1fr; gap:24px; } .book-facts > div + div { margin-top:0; } .copy-card { padding:20px; } .edition-facts > div { grid-template-columns:1fr; gap:2px; } .card-why { min-height:0; } .pathway-grid,.themes-grid { gap:24px; } }
+  @media (max-width:800px) { .shell { width:calc(100% - 48px); } .hero-title,.parma .hero-title { grid-template-columns:1fr; gap:30px; } h1 { font-size:clamp(4.1rem,12vw,7rem); } .byline { max-width:48ch; } .byline .author { margin-bottom:10px; } .hero-art figcaption { flex-direction:column; gap:4px; } .copy-grid,.copy-grid.two { grid-template-columns:1fr; gap:18px; } .copy-card { padding:25px; } .card-top { margin-bottom:20px; } .edition-facts > div { grid-template-columns:minmax(90px,.65fr) minmax(0,1.5fr); gap:14px; } .borrowing-desk { grid-template-columns:1fr; gap:24px; } .pathway-grid { grid-template-columns:1fr; gap:28px; } .themes-grid { grid-template-columns:1fr; gap:28px; } .section { padding-block:48px; } .sources { grid-template-columns:1fr; gap:27px; } .source-list { gap:28px; } .shelf-footer { grid-template-columns:1fr 1fr; } .shelf-footer > .label { grid-column:1/-1; } }
+  @media (max-width:560px) { .shell { width:calc(100% - 32px); } .topbar { flex-wrap:wrap; gap:10px; padding-block:17px; } .wordmark { gap:16px; } .wordmark span { padding-left:16px; } .toplinks { width:100%; justify-content:space-between; gap:16px; } .folio { flex-direction:column; gap:7px; padding-top:24px; padding-bottom:24px; } .hero-title { padding-bottom:26px; } h1 { font-size:clamp(3.7rem,15vw,5.2rem); line-height:1; } .kicker { margin-bottom:15px; } .hero-art img { min-height:270px; object-fit:cover; } .hero-art figcaption { padding-block:13px; } .introduction { grid-template-columns:1fr; gap:24px; } .book-facts { grid-column:auto; grid-template-columns:1fr 1fr; gap:24px 16px; } .section-heading { display:block; } .section-heading .section-aside { margin-top:-6px; margin-bottom:24px; } .copy-filters { gap:7px; } .copy-filters button { padding:8px 12px; min-width:70px; } .copy-card,.borrowing-desk { padding:21px; } .borrow-route-list { grid-template-columns:1fr; gap:20px; } .card-top { gap:14px; } .edition-facts > div { grid-template-columns:minmax(80px,.8fr) minmax(0,1.5fr); gap:10px; } summary { gap:14px; min-height:112px; } .summary-title { font-size:1.25rem; } summary .label { font-size:.875rem; } .source-list { grid-template-columns:1fr; } .shelf-footer { grid-template-columns:1fr; padding-block:35px; } .shelf-footer > .label { grid-column:auto; } .source-copy { min-width:0; } }
+  @media (prefers-reduced-motion:reduce) { .bookshop :global(*) { scroll-behavior:auto !important; animation:none !important; transition:none !important; } }
+</style>
