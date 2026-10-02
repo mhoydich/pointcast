@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {filterCompanies,validateAtlas} from '../src/lib/manufacturing-atlas.mjs';
+const read=p=>JSON.parse(readFileSync(new URL(p,import.meta.url)));
+const atlas=read('../src/data/manufacturing-atlas.json');
+const concept=read('../src/data/mobility-2030.json');
+const reg=read('../src/data/mobility-2030-regulatory.json');
+test('all public records retain identity, sources, distance method and explicit availability',()=>{assert.equal(atlas.companies.length,23);assert.deepEqual(validateAtlas(atlas),[]);});
+test('capability, city, availability and search compose without treating presence as service',()=>{const found=filterCompanies(atlas.companies,{query:'CNC',capability:'machining',city:'Torrance',availability:'yes'});assert.ok(found.length>1);assert.ok(found.every(c=>c.city==='Torrance'&&c.outsideWork==='yes'));assert.equal(filterCompanies(atlas.companies,{query:'Boeing',availability:'yes'}).length,0);assert.equal(filterCompanies(atlas.companies,{query:'Boeing',availability:'unknown'}).length,1);});
+test('boundary context can be isolated and never upgrades to measured geography',()=>{const boundary=filterCompanies(atlas.companies,{geography:'boundary-check-required'});assert.equal(boundary.length,1);assert.equal(boundary[0].id,'ES21');assert.ok(atlas.companies.every(c=>c.latitude===null&&c.longitude===null));assert.equal(filterCompanies(atlas.companies,{geography:'approximate-within-radius'}).length,22);});
+test('malformed provenance and implicit availability fail validation',()=>{const invalid=structuredClone(atlas);invalid.companies[0].outsideWork='available';invalid.companies[0].sources=[];invalid.companies[0].latitude=0;assert.ok(validateAtlas(invalid).length>=3);});
+test('concepts are illustrative and contain no performance promises',()=>{assert.equal(concept.status,'design-fiction');assert.equal(concept.forms.length,3);assert.match(concept.disclaimer,/not construction instructions/);assert.match(concept.disclaimer,/not an existing facility/);assert.equal(concept.systems.length,8);assert.ok(concept.phases.every(p=>p.gate&&p.deliverable));assert.match(concept.budgetNotes,/fictional planning assumptions/);});
+test('regulatory branches and multicopter qualification remain distinct',()=>{assert.equal(reg.sources.length,20);assert.ok(reg.critical_distinctions.some(c=>c.claim.includes('not multicopters')));assert.ok(reg.paths.some(p=>p.id==='ground_first'));assert.ok(reg.paths.some(p=>p.id==='two_seat_powered_lift'));});
+test('renderable pages retain progressive enhancement and separate concept data twins',()=>{const m=readFileSync(new URL('../src/pages/manufacturing.astro',import.meta.url),'utf8');const c=readFileSync(new URL('../src/pages/mobility-2030.astro',import.meta.url),'utf8');assert.match(m,/<noscript>/);assert.match(m,/aria-live="polite"/);assert.match(m,/boundary-check-required/);assert.match(c,/No investment terms/);assert.match(c,/Part 22/);});
