@@ -112,18 +112,19 @@ No new scientific raster interpolation, parcel-level risk map, forecast, local t
 
 ## Published edition implementation
 
-The map center is El Segundo civic center reference 33.9192°N,118.4165°W. This edition uses a mean-Earth-radius spherical haversine distance (6,371.0088 km) and samples the25mi boundary at5°bearings for display in a local equirectangular projection. Map coastline and polygons are schematic illustrations, no actual gridded data or pixel interpolation.
+The center is an approximate El Segundo civic-center reference at 33.9192°N, 118.4165°W. This edition uses spherical haversine distance with mean Earth radius 6,371.0088 km. The 25-mile boundary is sampled at 5° bearings and displayed with a local equirectangular projection. Coastline and zone shapes are schematic; no numerical weather interpolation or PRISM raster is displayed.
 
-Controls choose4seasons,5qualitative zones and4purposes. Each gives a season planning default plus a location tradeoff, source limit and links to original design concepts. The browser-local Object Library rehearsal creates a demo card only. No borrowing service, inventory, manufacturing, checkout, messages or payment system exists.
+Controls choose four seasons, five qualitative zones and four purposes. Each selection gives a seasonal starting plan, a location tradeoff, an evidence limit and links to original object concepts. The Object Library creates only a browser-local demo card and reflection. No inventory, reservation, manufacturing, submission, pickup or payment exists.
 
-The numeric appendix includes48station-month rows (4stations×12months),70observed-calendar-year rows (LAX+Downtown×1991–2025),source monthly CSVs and an evidence JSON. Direct NOAA file URLs,exact periods,quality flags,available-year counts,coordinates and SHA-256 source fingerprints accompany the data. All35years per station had every expected calendar day of accepted rain data. Heat-day counts disclose accepted temperature-day coverage; Downtown2024includes a station move and is not a homogenized climate trend.
+Downloads contain 48 station-month rows, 70 observed calendar-year rows (LAX and Downtown, 1991–2025), raw monthly source CSVs, evidence JSON and a complete research ZIP. The ZIP includes the exact daily and comparison source inputs required by its extractor. Run python3 extract-weather-data.py inside the extracted folder; no API key or network access is required. Public aliases are evidence.json = weather-data.json, normals.csv = monthly-normals.csv, observed-years.csv = observed-calendar-years.csv. All three outputs have been reproduced byte-for-byte from the included source snapshots.
 
-Record changes: LAX airport metadata reaches1930,dailyelements in the downloaded GHCNdfile start1944-08-01. Downtown officialcompositerecord beganJuly1877,supplieddailydata startApr1906;CivicCenter1964–1999,USC1999–2024,FHMCsinceMay2024. Burbank airportmetadata reaches1931,supplieddailydata start1998-05-22;normaltemperatureRRepresentative has20–21availableyears plusestimates. LongBeach airportmetadata reaches1930,supplieddailydata start1949-01-01. Historical metadata is not proof of a complete daily variable record.
+Daily data filters retain nonmissing observations with blank GHCNd quality flags. Precipitation in tenths of mm is divided by 254 to obtain inches; trace rain retains zero measured depth. Temperatures in tenths of °C are converted to °F. Heat counts use whole-Fahrenheit rounding before the 90°F threshold and are not HeatRisk or an indoor safety measure. Counts are omitted when temperature coverage is incomplete. Annual rain requires all 365 or 366 expected calendar days, with no partial total presented as a complete year. Displayed annual rain is rounded to one decimal; revisions and conversions can differ from official annual climate reports.
 
-Daily-source filters: accept nonmissing observations with blank GHCNd QFLAG. PRCP tenths ofmm ÷254=inches;TMAX tenths°C ÷10 ×9/5+32=°F. TraceflagT contributeszero measuredrain. Annualrain is reportedonly for complete365/366day coverage. Totals convertedfromrawmetricdailydata are rounded toone decimalonthepage;differences fromofficialannualreports canreflect roundingorrevisions. Dataanalysis is aneditorialresearch extraction,not a certifiedclimatereport.
+Station history and data coverage differ. LAX airport metadata reaches 1930, while supplied daily elements begin in August 1944. Downtown's composite record began in July 1877; supplied daily elements begin in April 1906. Civic Center observations ran 1964–1999, USC 1999–2024, and FHMC began in May 2024. The normal uses a labeled USC orientation point, while original CSV metadata and current-site differences are retained in the evidence. Burbank airport metadata reaches 1931 but supplied daily elements begin in May 1998. Long Beach metadata reaches 1930 and supplied daily elements begin in January 1949.
 
-Original SVG art uses square-glasses motifs from Nouns visual culture. No token art,logos or repository code was imported. Artwork is an independent PointCast creation; no NOAA,NWS,EPA,Nouns or municipal affiliation or endorsement is claimed.
+Quality flags are variable-specific. Burbank normal high temperatures are R / Representative with 20–21 available years; lows are R with 18–20 and rain R with 20–23. Long Beach highs are S / Standard with 24–26 years, lows R with 22–23, and rain S with 29–30. Downtown mean-temperature flags vary R/S, while high and low flags are S. Missing months may be estimated; the source tables and JSON retain all separate high, low, mean and rain availability fields. A historic station name or metadata start does not prove a continuous variable record.
 
+Original SVG illustrations use square glasses inspired by Nouns visual culture. No Nouns token artwork or repository code was imported. The object-character SVGs are dedicated to CC0 1.0; the atlas guides are independent original PointCast artwork. No NOAA, NWS, EPA, Nouns or municipal endorsement is claimed.
 
 ## Published source appendix
 
@@ -151,8 +152,8 @@ Original SVG art uses square-glasses motifs from Nouns visual culture. No token 
 
 ```json
 {
-  "weather-data.json": "271cd2f9b4e2272fed7f1cfd2b8b64482892c7fe4987495f7413732ae424b22f",
-  "monthly-normals.csv": "81bb70bce6f596775142825ae71e807cef442ba245e19c992c9619fed230c7ed",
+  "weather-data.json": "ca9afa472e8d9042b1c7813d93e35cfee2b16d1382365adb2634894743a1899b",
+  "monthly-normals.csv": "db0237cbee33264e1f0f657fd88bcf96f291217924cfe0d3615919c2289fbae0",
   "observed-calendar-years.csv": "af16b9396f2d27ddb3697ddb09a0928dacfbaf0bd8c5d4de05f8432c1cee596b",
   "noaa-lax-1991-2020.csv": "a5505d14850b573b76f49e26124fb5ba927d33317d47f2bc5ef2fbda81f544e3",
   "noaa-downtown-la-1991-2020.csv": "b780e7c7c85a2dd5f39b99fc5fc8a3f269f78d617025630e7ee53e6915cea4a8",
@@ -160,7 +161,6 @@ Original SVG art uses square-glasses motifs from Nouns visual culture. No token 
   "noaa-long-beach-1991-2020.csv": "40c98a899d32746020663933e27a6e52010ac2a6e215bd0303ac0589c7869540"
 }
 ```
-
 
 ## Seasonal hazards and living evidence
 
