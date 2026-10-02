@@ -5,6 +5,7 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    noggleReserve: 'https://pointcast.xyz/noggle-reserve',
     luckyCat: 'https://pointcast.xyz/lucky-cat/',
     luckyCatAgents: 'https://pointcast.xyz/lucky-cat/agents/',
     luckyCatArt: 'https://pointcast.xyz/lucky-cat/art/',
@@ -75,6 +76,7 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
   },
   json: {
+    noggleReserve: 'https://pointcast.xyz/noggle-reserve.json',
     luckyCat: 'https://pointcast.xyz/lucky-cat.json',
     atariBbsMuseum: 'https://pointcast.xyz/atari-bbs.json',
     deathStarClubArt: 'https://pointcast.xyz/atari-bbs/club.json',
