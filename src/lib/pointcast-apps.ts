@@ -11,6 +11,8 @@ export interface PointcastApp {
 }
 
 export const POINTCAST_APPS: PointcastApp[] = [
+  {slug:'object-library',name:'El Segundo Object Library',kicker:'BORROW / TRY / IMPROVE · CONCEPT DEMO',description:'Six original object concepts and a browser-local lending rehearsal. No inventory, bookings, payments or operating workshop.',url:'https://pointcast.xyz/object-library/',path:'/object-library/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
+  {slug:'weather-atlas',name:'A year within reach',kicker:'EL SEGUNDO · 25-MILE WEATHER & LIVING ATLAS',description:'Four NOAA1991–2020 station normals,35years of observed rainfall,an illustrative seasonal microclimate map and object utility. Historical research,not a forecast.',url:'https://pointcast.xyz/weather-atlas/',path:'/weather-atlas/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
   {
     slug: 'everyday', name: 'Everyday Works',
     kicker: 'WEAR · CARRY · HOME · CONCEPT COLLECTION',
