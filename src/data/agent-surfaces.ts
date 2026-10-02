@@ -6,6 +6,7 @@
 export const AGENT_SURFACES = {
   human: {
     nounsMoney: 'https://pointcast.xyz/nouns-money/',
+    nounsMoneyEditions: 'https://pointcast.xyz/nouns-money/editions/',
     nounsMoneyCommunity: 'https://pointcast.xyz/nouns-money/community/',
     nounsMoneyMarketplace: 'https://pointcast.xyz/nouns-money/marketplace/',
     luckyCat: 'https://pointcast.xyz/lucky-cat/',
@@ -79,6 +80,7 @@ export const AGENT_SURFACES = {
   },
   json: {
     nounsMoney: 'https://pointcast.xyz/nouns-money.json',
+    nounsMoneyEditions: 'https://pointcast.xyz/nouns-money/editions.json',
     nounsMoneyCommunity: 'https://pointcast.xyz/nouns-money/community.json',
     nounsMoneyMarketplace: 'https://pointcast.xyz/nouns-money/marketplace.json',
     luckyCat: 'https://pointcast.xyz/lucky-cat.json',

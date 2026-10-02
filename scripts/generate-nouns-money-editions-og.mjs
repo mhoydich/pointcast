@@ -1,0 +1,7 @@
+import fs from 'node:fs';
+import {Resvg} from '@resvg/resvg-js';
+import DATA from '../src/data/nouns-money-editions.json' with {type:'json'};
+const png=fs.readFileSync('public'+DATA.catalog[0].png).toString('base64');
+const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="1200" height="630" fill="#f5edd8"/><rect x="30" y="30" width="1140" height="570" fill="none" stroke="#153b32" stroke-width="3"/><text x="60" y="95" fill="#153b32" font-family="Inter" font-size="25">NOUNS MONEY / EVERYDAY COLLECTION / 2028</text><text x="60" y="230" fill="#153b32" font-family="Inter" font-weight="700" font-size="65">FIFTY NOTES.</text><text x="60" y="310" fill="#a42d17" font-family="Inter" font-weight="600" font-size="38">MANY SMALL BEGINNINGS.</text><image href="data:image/png;base64,${png}" x="620" y="145" width="525" height="350"/><text x="60" y="430" fill="#153b32" font-family="Inter" font-size="24">Authentic Nouns #50–99.</text><text x="60" y="470" fill="#153b32" font-family="Inter" font-size="24">Planned 1 tez. Mint unavailable.</text><rect x="30" y="552" width="1140" height="48" fill="#153b32"/><text x="60" y="583" fill="#f5edd8" font-family="Inter" font-size="18">POINTCAST.XYZ / COLLECTIBLE ART / NO FINANCIAL RIGHTS</text></svg>`;
+fs.writeFileSync('public/images/og/nouns-money-editions.png',new Resvg(svg,{font:{loadSystemFonts:true}}).render().asPng());
+console.log('Generated Everyday Collection OG card');
