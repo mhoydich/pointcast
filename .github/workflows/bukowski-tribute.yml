@@ -1,0 +1,38 @@
+name: Check Bukowski tribute
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/bukowski-tribute.yml'
+      - 'src/data/bukowski.ts'
+      - 'src/pages/bukowski*'
+      - 'public/images/bukowski/**'
+      - 'tests/bukowski-tribute.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bukowski-tribute-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/bukowski-tribute.test.mjs
+      - run: npm run build:bare
+      - name: Verify story output
+        run: |
+          test -f dist/bukowski/index.html
+          test -f dist/bukowski.txt
+          test -f dist/bukowski.json
+          test -f dist/images/bukowski/room.webp
+          test -f dist/images/bukowski/street.webp
+          test -f dist/images/bukowski/ticket.webp
