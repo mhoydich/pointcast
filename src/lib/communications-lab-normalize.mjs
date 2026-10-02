@@ -1,0 +1,15 @@
+export function normalizeLab(source) {
+  const lanes = ['Local first','Receive only','Ambient systems','Accessibility','Agent handoffs','Offline notes','Public data','Translation','Archives','Low bandwidth','PointCast bulletin','Reproducibility'];
+  const slugs = ['local-messages','listening-desk','ambient-status','accessible-recovery','agent-handoffs','offline-field-notes','public-data','reviewed-translation','portable-archive','thin-connection','pointcast-bulletin','reproducibility-relay'];
+  return {
+    name:source.brand.name, tagline:source.brand.tagline, updatedAt:'2026-10-02',
+    intro:'An independent communications lab for Mike, agents and future interns. Explore how people, places and intelligent systems can communicate more clearly in 2026 and 2027.',
+    status:'proposed_educational_programme',applicationsOpen:false,opportunities:[],work:[],
+    independence:'Inspired by the interdisciplinary spirit of Bell Labs. This is an original, independent programme with no affiliation with or endorsement by Nokia Bell Labs, AT&T or their affiliates.',
+    boundaries:[source.brand.projectStatusNote,'Use synthetic or licensed public fixtures first. A human supervisor must approve any participant involvement, consent, collection and data lifecycle.','Agents may draft, code, propose tests and document evidence. They cannot supervise interns, approve their own work or infer authority to send messages, buy materials or publish.','PointCast publication is the programme’s intended context. Physical venues, partners and installations need separate confirmation; no external venue partnership is claimed.','Credit every contributor with permission. Publish measured results and limitations only after human review; preserve a record of corrections.'],
+    roles:[{name:'Mike',title:'Scope + release authority',description:source.roles.Mike},{name:'Agents',title:'Research + build assistance',description:source.roles.Agents},{name:'Future interns',title:'Supervised explorations',description:source.roles.Interns}],
+    cadence:[{label:'Before launch',description:source.cadence[0]},{label:'One week',description:source.cadence[2]},{label:'Four weeks',description:source.cadence[3]},{label:'Human review',description:'Review permissions, measurements, unknowns and contributor credit before any external pilot or publication.'}],
+    seasons:[{label:'2026 / First proofs',description:source.cadence[1]},{label:'2027 / Repeat + connect',description:source.cadence[4]}],sources:source.sources,
+    projects:source.projects.map((p,i)=>({...p,id:'CL-'+p.id,slug:slugs[i],lane:lanes[i],week:p.oneWeek,stretch:p.fourWeek,materials:[p.materialsBudget,'Skills to practise: '+p.skills],safety:i===10?'Prototype on PointCast with invented notices. Physical venues, partners and installations remain unconfirmed. No real names, addresses, contact forms or live submissions.':p.safety,privacy:i===10?'Prototype on PointCast with invented notices. Physical venues, partners and installations remain unconfirmed. No real names, addresses, contact forms or live submissions.':p.safety,success:p.successMeasure,review:p.approvalBoundary})),
+  };
+}

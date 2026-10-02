@@ -1,0 +1,2 @@
+import type {APIRoute} from 'astro';
+export const GET: APIRoute = () => new Response(JSON.stringify({title:'PointCast Intern project desk',status:'educational_project_briefs_only',applicationsOpen:false,opportunities:[],work:[],lab:'https://pointcast.xyz/communications-lab/',briefs:'https://pointcast.xyz/communications-lab/briefs.json',pendingTerms:['Pay','Hours','Hiring entity','Supervisor','Eligibility','Agreements','Privacy']},null,2),{headers:{'Content-Type':'application/json; charset=utf-8'}});
