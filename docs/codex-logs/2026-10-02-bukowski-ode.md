@@ -17,8 +17,10 @@ Animation has finite scroll-triggered image settling and line movement. All text
 
 ## Art provenance
 
-See `docs/art/bukowski-generated-art.json` for generation prompts and SHA-256 values. The original PNGs remain in the task's `generated_images` directory, while verified optimized WebP assets are committed with the page. Library preparation is unavailable in the official helper; no Library IDs claimed.
+See `docs/art/bukowski-generated-art.json` for generation prompts and SHA-256 values. The original PNGs remain in the task's `generated_images` directory, while verified optimized WebP assets are committed with the page. The prepared helper failed discovery before any write. Per user direction, native Library batch creation succeeded for all three originals; verified IDs and local metadata are preserved in the provenance manifest.
 
 ## Execution environment
 
 The selected managed execution environment supplies a writable task workspace under Documents and no PointCast project checkout. This isolated clone is based on fresh remote main at `918a7ad011ce5402277311398046dc2aaced12ca`, rather than either dirty/divergent legacy checkout. It uses copied node_modules, not a symlink. The task workspace exception to the home-worktree preference is constrained to implementation and preview. Production still uses the repository's required `scripts/deploy.sh` with its shared home release checkout and serialization lock; no manual Wrangler Pages deploy or unrelated PR merge.
+
+Independent source/browser review of implementation head `7ce9cddbfdde33fc86eca0a7cc92e9dd7b4b4adf` found no blockers. Desktop 1440×900, mobile 390×844, narrow 320×568: no horizontal overflow, artwork loaded after chapter navigation, native keyboard controls and details operated, motion preference persisted on reload. Device reduced-motion and no-JavaScript modes were verified in source and focused jsdom tests; CUA does not expose browser emulation for those modes.
