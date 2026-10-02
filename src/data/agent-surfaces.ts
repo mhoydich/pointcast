@@ -5,6 +5,7 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    everyday: 'https://pointcast.xyz/everyday/',
     communicationsLab: 'https://pointcast.xyz/communications-lab/',
     mobility2030: 'https://pointcast.xyz/mobility-2030/',
     manufacturingAtlas: 'https://pointcast.xyz/manufacturing/',
@@ -82,6 +83,7 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
   },
   json: {
+    everyday: 'https://pointcast.xyz/everyday.json',
     communicationsLab: 'https://pointcast.xyz/communications-lab/briefs.json',
     mobility2030: 'https://pointcast.xyz/mobility-2030.json',
     manufacturingAtlas: 'https://pointcast.xyz/manufacturing.json',

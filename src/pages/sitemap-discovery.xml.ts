@@ -21,6 +21,8 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/everyday/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/everyday.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/communications-lab/', 'monthly', '0.9'],
   ['https://pointcast.xyz/communications-lab/briefs.json', 'monthly', '0.9'],
   ['https://pointcast.xyz/mobility-2030/', 'monthly', '0.9'],
