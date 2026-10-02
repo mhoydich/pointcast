@@ -5,7 +5,7 @@
  */
 export const AGENT_SURFACES = {
   human: {
-    noggleReserve: 'https://pointcast.xyz/noggle-reserve',
+    nounsMoney: 'https://pointcast.xyz/nouns-money/',
     luckyCat: 'https://pointcast.xyz/lucky-cat/',
     luckyCatAgents: 'https://pointcast.xyz/lucky-cat/agents/',
     luckyCatArt: 'https://pointcast.xyz/lucky-cat/art/',
@@ -76,7 +76,7 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
   },
   json: {
-    noggleReserve: 'https://pointcast.xyz/noggle-reserve.json',
+    nounsMoney: 'https://pointcast.xyz/nouns-money.json',
     luckyCat: 'https://pointcast.xyz/lucky-cat.json',
     atariBbsMuseum: 'https://pointcast.xyz/atari-bbs.json',
     deathStarClubArt: 'https://pointcast.xyz/atari-bbs/club.json',
@@ -141,6 +141,8 @@ export const AGENT_SURFACES = {
 } as const;
 
 export const RETIRED_AGENT_PATHS = [
+  { path: '/noggle-reserve', replacement: '/nouns-money/', status: 'retired-301' },
+  { path: '/noggle-reserve.json', replacement: '/nouns-money.json', status: 'retired-301' },
   { path: '/profile', replacement: '/me', status: 'retired-301' },
   { path: '/minted', replacement: '/me#holdings', status: 'retired-301' },
   { path: '/dashboard', replacement: '/me', status: 'retired-301' },

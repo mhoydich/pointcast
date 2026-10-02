@@ -20,6 +20,9 @@ export const NOINDEX_PATHS = new Set([
 // Sources with permanent redirects in public/_redirects or Pages middleware.
 // Keep the slash variants together so sitemap producers cannot re-list them.
 export const REDIRECT_PATHS = new Set([
+  '/noggle-reserve/',
+  '/noggle-reserve/index.html',
+  '/noggle-reserve.json',
   '/dashboard/',
   '/login/',
   '/minted/',
