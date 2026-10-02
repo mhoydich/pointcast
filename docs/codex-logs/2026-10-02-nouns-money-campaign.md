@@ -1,0 +1,19 @@
+# Nouns Money · Nordic 100, campaign and print release
+
+2 October 2026 · Codex · direct Michael Hoydich publication request
+
+This bounded follow-up publishes the supplied Nordic 2027 series with 100 different authentic Nouns #0–99, digital design serials NM27-000001 through NM27-000100, fourteen generated currency studies, three generated campaign posters and two US Letter print-proof PDFs. The original ten-design browser-local saved set remains intact and explicitly belongs to Collection 01. The new hundred-artwork catalog is read-only; it has no mint, wallet or payment implementation.
+
+Library files were materialized with identity metadata through the supported helper. All 100 PNGs and SVGs match the supplied manifest hashes. Each source artwork was independently rendered from its embedded unchanged pixel rectangles and compared with the supplied original-art pixel digest. All 102,400 source pixel centers match the final PNGs. IDs, serials and source hashes are unique. Public individual PNG/SVG bytes are preserved. The original archives exceed the Pages per-file limit, so eight 25-design packages expose every unchanged image, SVG and 3 mm bleed variant with original source/provenance documentation. No published file exceeds 25 MiB.
+
+The Letter proof PDFs were inspected as read-only artifacts, rendered and visually checked. The one-page sheet contains Ice Blue One, Glacier Mint Ten and Rose Charcoal 100, each in a 150 × 75 mm image area. Ten sheet copies give 30 notes; twenty-five give 75. The five-page sampler contains all first-ten generated studies, two per page. Both use US Letter (612 × 792 pt), 100% Actual Size, no Fit/Shrink and a 50 mm calibration line. These are digital proofs, with flat printed visual effects; no foil/window/security function, duplex back, physical sample, printer order or production certification is claimed. Nordic 100 SVGs additionally supply 156 × 81 mm paper-background bleed variants, with 150 × 75 mm centered trim. RGB output still requires the printer’s profile and a physical proof.
+
+The proposed founding community collectible describes possible art afternoons, launches and projects. Mint availability is false, contract and mint URL are null, and no wallet connection is configured. Free claim plus gas is identified only as a recommendation; economics, supply, caps, eligibility, administrator and deployment approval remain decisions. There are no guaranteed allocations, airdrops, access, returns, issuer backing or redemption. Existing repository Nouns Bandmates readiness checks were inspected: they require a configured release, verified network, code hash, entrypoints, administrator and unpaused storage before enabling a mint. This page does not import their wallet or mint actions or borrow another collection’s contract. Profile/payments/API/SDK work is deferred to its separate worker.
+
+Scope is the two existing Nouns Money routes, their data/styles/art/downloads, Block 0655 and discovery prose. No /intern or /bluenote changes were absorbed. The last deployment’s town report is filed as required by docs/OPERATIONS.md: 465/487 doors open, all eight integrity claims pass, with 22 unrelated API non-200 responses.
+
+Original opinion: A hundred different Nouns makes this a collection worth browsing. Keep the art delightful and make every future participation promise specific before it becomes a release term.
+
+Validation: the five unchanged actual-client tests and agent audit pass. Browser checks at 1440 × 1000, 390 × 844 and 320 × 740 show 100 catalog entries, fourteen studies, three posters, working full-catalog expansion and proof links, no horizontal overflow and no broken loaded artwork. PDF geometry and all-source pixel checks pass. Final build, scoped SEO, remote commit, publication and production evidence are recorded in the release verification after deployment.
+
+Signed: Codex
