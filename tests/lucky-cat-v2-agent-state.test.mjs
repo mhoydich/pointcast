@@ -68,12 +68,17 @@ const bundle=(await build({entryPoints:[new URL('../public/lucky-cat/v2/agents.j
 const clone=value=>structuredClone(value);
 function testProfile(tasks=[]){return{agentId:AGENT,balance:40,lifetimePoints:60,completedTasks:2,cats:['classic','ocean'],daily:{day:'2026-10-03',earned:8,remaining:52,taskStarts:1,maxTaskStarts:3,actionCount:3,maxActions:64},tasks,receipts:[],charms:[{id:'second-look',uses:1}],evidenceStatus:'self-reported'};}
 function deliveredTask(){return{id:TASK,phase:'delivered',goal:startBody.goal,plan:startBody.plan,delivery:{summary:'Delivered a useful interface improvement.',evidence:['Inspect the saved preview at a local URL.']},verification:null,reflection:null,createdAt:'2026-10-03T12:00:00Z',updatedAt:'2026-10-03T12:05:00Z'};}
-async function until(predicate){const deadline=Date.now()+15000;while(Date.now()<deadline){if(predicate())return;await new Promise(r=>setTimeout(r,10));}throw new Error('Fixture did not reach its expected state');}
+async function until(predicate,diagnose=()=>null){
+ const deadline=Date.now()+15000;
+ // The page may become ready during a long synchronous render or CPU stall.
+ // Observe its actual state before enforcing the unchanged deadline.
+ while(true){if(predicate())return;if(Date.now()>=deadline)throw new Error(`Fixture did not reach its expected state: ${JSON.stringify(diagnose())}`);await new Promise(r=>setTimeout(r,10));}
+}
 async function fixture({profile=testProfile(),saved=null,request=null}={}){
  const dom=new JSDOM(html,{url:'http://127.0.0.1:8814/lucky-cat/agents/v2/',runScripts:'outside-only'});const w=dom.window;
  Object.defineProperty(w,'crypto',{value:webcrypto});w.TextEncoder=TextEncoder;w.matchMedia=()=>({matches:false,addEventListener(){}});w.HTMLElement.prototype.scrollIntoView=function(){};w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const mock=w.__agentMock={credential:{agentId:AGENT,expiresAt:'2027-01-01T00:00:00Z'},profile:clone(profile),calls:[],request:async(c,path,body)=>{mock.calls.push({path,body:body?clone(body):null});if(request)return request(mock,path,body);if(body)throw new Error('Unexpected write in read-only fixture');return{ok:true,profile:clone(mock.profile)};}};
- if(saved)w.localStorage.setItem(deskStorageKey(AGENT),JSON.stringify(saved));w.eval(bundle);await until(()=>w.document.querySelector('#agent-status').textContent==='Connected');return{dom,w,doc:w.document,mock,close(){w.dispatchEvent(new w.Event('pagehide'));dom.window.close();}};
+ if(saved)w.localStorage.setItem(deskStorageKey(AGENT),JSON.stringify(saved));w.eval(bundle);await until(()=>w.document.querySelector('#agent-status').textContent==='Connected',()=>({status:w.document.querySelector('#agent-status')?.textContent,toast:w.document.querySelector('#agent-toast')?.textContent,profileReads:mock.calls.filter(c=>!c.body).length,writes:mock.calls.filter(c=>c.body).length,connectDisabled:w.document.querySelector('#agent-connect')?.disabled})).catch(error=>{dom.window.close();throw error;});return{dom,w,doc:w.document,mock,close(){w.dispatchEvent(new w.Event('pagehide'));dom.window.close();}};
 }
 function change(f,selector,value){const input=f.doc.querySelector(selector);assert.ok(input,selector);input.value=value;input.dispatchEvent(new f.w.Event('input',{bubbles:true}));return input;}
 function click(f,selector){const button=f.doc.querySelector(selector);assert.ok(button,selector);button.click();}
