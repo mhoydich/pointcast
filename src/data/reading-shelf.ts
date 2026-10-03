@@ -20,7 +20,7 @@ const established = [
 ];
 
 export const readingShelf = [...established, ...companions.map((book) => ({
-  id: book.id, title: book.title, author: book.authors.join(' & '), kind: book.kind,
+  id: book.id, title: book.title, author: book.attributionLine || book.authors.join(' & '), kind: book.kind,
   firstPublished: book.firstPublished, href: `/books/${book.id}/`, metadata: `/books/${book.id}.json`,
   image: book.art.src, tone: book.theme, themes: book.themes, note: book.dek,
 }))];
