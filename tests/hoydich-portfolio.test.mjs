@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { PROJECTS, STUDIO, NATIVE, ROADMAP, LATEST_LINKS, portfolioPayload } from '../src/data/hoydich-portfolio.mjs';
+import { PROJECTS, STUDIO, NATIVE, ROADMAP, LATEST_LINKS, RELEASED_STUDIES, portfolioPayload } from '../src/data/hoydich-portfolio.mjs';
 import { initPortfolio } from '../src/scripts/hoydich-portfolio.mjs';
 import { articles } from '../src/lib/pickleball-v2/articles.js';
 
@@ -21,15 +21,14 @@ function fixture() {
   return { root, dom, visible: selector => [...root.querySelectorAll(selector)].filter(card => !card.hidden), click: status => root.querySelector(`[data-status-filter="${status}"]`).click(), family: value => { const select = root.querySelector('select'); select.value = value; select.dispatchEvent(new dom.window.Event('change')); } };
 }
 
-test('status filters retain the published baseline for a redesign and hide unrelated projects', () => {
+test('published redesign editions leave the unfinished redesign view', () => {
   const f = fixture();
   f.click('redesign');
-  assert.equal(f.visible('[data-project-card]').length, 1);
-  assert.equal(f.visible('[data-studio-card]').length, 1);
-  assert.deepEqual(f.visible('[data-project-card]').map(card => card.querySelector('a').getAttribute('href')), ['/fila/']);
+  assert.equal(f.visible('[data-project-card]').length, 0);
+  assert.equal(f.visible('[data-studio-card]').length, 0);
+  assert.equal(PROJECTS.find(project => project.id === 'fila').next, undefined);
+  assert.ok(PROJECTS.find(project => project.id === 'fila').links.some(link => link.href === '/fila/el-segundo/'));
   assert.equal(f.root.querySelector('[data-status-filter="redesign"]').getAttribute('aria-pressed'), 'true');
-  assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'false');
-  assert.match(f.root.querySelector('[data-filter-result]').textContent, /1 open project and 1 studio thread/);
 });
 
 test('family and stage combine, announce empty states, and reset to the complete snapshot', () => {
@@ -41,7 +40,7 @@ test('family and stage combine, announce empty states, and reset to the complete
   assert.equal(f.root.querySelector('[data-project-empty]').hidden, false);
   assert.equal(f.root.querySelector('[data-studio-empty]').hidden, false);
   f.click('building');
-  assert.equal(f.visible('[data-studio-card]').length, 2);
+  assert.equal(f.visible('[data-studio-card]').length, 0);
   f.root.querySelector('[data-reset-filters]').click();
   assert.equal(f.root.querySelector('select').value, 'all');
   assert.equal(f.visible('[data-project-card]').length, PROJECTS.length);
@@ -50,16 +49,16 @@ test('family and stage combine, announce empty states, and reset to the complete
   assert.equal(f.root.querySelector('[data-studio-empty]').hidden, true);
 });
 
-test('building reading view keeps the open shelf and shows its unfinished expansion', () => {
+test('published reading expansion no longer appears as an unfinished studio thread', () => {
   const f = fixture();
   f.family('reading');
   f.click('building');
-  assert.equal(f.visible('[data-project-card]').length, 1);
-  assert.equal(f.visible('[data-studio-card]').length, 1);
-  assert.match(f.root.querySelector('[data-filter-result]').textContent, /1 open project and 1 studio thread/);
+  assert.equal(f.visible('[data-project-card]').length, 0);
+  assert.equal(f.visible('[data-studio-card]').length, 0);
   f.click('open');
   assert.equal(f.visible('[data-project-card]').length, 2);
   assert.equal(f.visible('[data-studio-card]').length, 0);
+  assert.equal(PROJECTS.find(project => project.id === 'books').links.length, 10);
 });
 
 test('public snapshot has source artwork and only known destinations; unpublished builds have no route', () => {
@@ -71,8 +70,9 @@ test('public snapshot has source artwork and only known destinations; unpublishe
     assert.ok(existsSync(new URL(`public${project.image}`, rootPath)), `artwork exists: ${project.image}`);
     for (const href of [project.href, ...project.links.map(link => link.href)].filter(href => href.startsWith('/'))) {
       const route = href.replace(/^\//, '').replace(/\/$/, '');
+      const bookRoute = href.startsWith('/books/') && existsSync(new URL('src/pages/books/[slug]/index.astro', rootPath)) && JSON.parse(readFileSync(new URL('src/data/bookshelf-expansion.json', rootPath), 'utf8')).some(book => href === '/books/' + book.id + '/');
       const articleRoute = articles.some(article => article.url.replace(/\/$/, '') === `/${route}`) && existsSync(new URL('src/pages/pickleball/articles/[slug].astro', rootPath));
-      assert.ok(existsSync(new URL(`src/pages/${route}.astro`, rootPath)) || existsSync(new URL(`src/pages/${route}/index.astro`, rootPath)) || articleRoute, `route exists: ${href}`);
+      assert.ok(existsSync(new URL(`src/pages/${route}.astro`, rootPath)) || existsSync(new URL(`src/pages/${route}/index.astro`, rootPath)) || articleRoute || bookRoute, `route exists: ${href}`);
     }
     assert.ok(project.boundary.length > 30);
   }
@@ -83,7 +83,7 @@ test('public snapshot has source artwork and only known destinations; unpublishe
     if (project.currentHref) assert.ok(PROJECTS.some(current => current.href === project.currentHref));
   }
   const serialized = JSON.stringify(payload);
-  assert.doesNotMatch(serialized, /linear\.app|completionPercent|percentComplete|liveSync|approval|wallet|security|private finances/i);
+  assert.doesNotMatch(serialized, /linear\.app|completionPercent|percentComplete|liveSync|privateKey|seedPhrase|client confidential|private finances/i);
   const page = readFileSync(new URL('src/pages/hoydich.astro', rootPath), 'utf8');
   assert.doesNotMatch(page, /href=["']\/(fortune|discovery-audit|fila\/el-segundo|pickleball\/home\/v2)/);
 });
@@ -92,21 +92,27 @@ test('setup is idempotent and keeps controls hidden until the working initialize
   const f = fixture();
   initPortfolio(f.root);
   assert.equal(f.root.querySelector('[data-portfolio-filters]').hidden, false);
-  f.click('redesign');
-  assert.equal(f.visible('[data-project-card]').length, 1);
+  f.click('building');
+  assert.equal(f.visible('[data-project-card]').length, 0);
+  assert.equal(f.visible('[data-studio-card]').length, STUDIO.length);
 });
 
 
-test('visiting a next-edition link from Open now reveals its studio destination before fragment navigation', () => {
-  const f = fixture();
-  f.click('open');
-  const target = f.root.querySelector('#studio-fila-next');
-  assert.equal(target.hidden, true);
-  f.root.querySelector('[href="#studio-fila-next"]').click();
-  assert.equal(target.hidden, false);
-  assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'true');
+test('verified concept and disabled status pages stay distinct from pending destinations', () => {
+  const payload = portfolioPayload();
+  assert.equal(payload.sourceRevision, 'a154574feb4fda082df8e126c9639e1f82bca492');
+  assert.equal(payload.capturedAt, '2026-10-03T22:14:54Z');
+  assert.ok(LATEST_LINKS.some(project => project.id === 'buildworks' && project.href === '/buildworks/'));
+  assert.equal(STUDIO.some(project => project.id === 'buildworks'), false);
+  const commerce = LATEST_LINKS.find(project => project.id === 'art-v2-commerce');
+  assert.equal(commerce.href, '/art/v2/commerce/');
+  assert.match(commerce.statusLabel, /DISABLED PREVIEW.*GALLERY PENDING/);
+  assert.match(commerce.summary, /Purchases, minting and listings remain unavailable/);
+  assert.equal(LATEST_LINKS.find(project => project.id === 'home-share-editions').links.length, 6);
+  const destinations = LATEST_LINKS.flatMap(project => [project.href, ...project.links.map(link => link.href)]);
+  for (const pending of ['/puzzles/', '/art/v2/', '/goodreads/', '/death/']) assert.equal(destinations.includes(pending), false);
+  assert.deepEqual(STUDIO.map(project => project.id), ['sunday', 'art-v2', 'puzzles']);
 });
-
 
 test('delivered native work stays distinct from public browser pages and unfinished builds', () => {
   const f = fixture();
@@ -119,18 +125,20 @@ test('delivered native work stays distinct from public browser pages and unfinis
 });
 
 
-test('the empty-view studio fallback reveals matching unfinished work', () => {
+test('the empty-view studio fallback reveals matching pending gallery work', () => {
   const f = fixture();
-  f.family('tools');
-  f.click('open');
+  f.family('art');
+  f.click('delivered-native');
   assert.equal(f.visible('[data-studio-card]').length, 0);
   f.root.querySelector('[data-project-empty] a').click();
-  assert.equal(f.visible('[data-studio-card]').length, 2);
+  assert.deepEqual(f.visible('[data-studio-card]').map(card => card.id), ['studio-art-v2']);
   assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'true');
 });
 
 test('latest links preserve published destinations while upcoming studios stay unlinked', () => {
-  assert.deepEqual(LATEST_LINKS.map(project => project.href), PROJECTS.map(project => project.href));
+  assert.deepEqual(LATEST_LINKS.slice(0, PROJECTS.length).map(project => project.href), PROJECTS.map(project => project.href));
+  assert.equal(LATEST_LINKS.length, PROJECTS.length + RELEASED_STUDIES.length);
+  assert.equal(new Set(LATEST_LINKS.map(project => project.id)).size, LATEST_LINKS.length);
   for (const project of LATEST_LINKS) {
     assert.ok(project.summary.length > 25);
     for (const link of project.links) assert.ok(link.summary.length > 20, `A short summary accompanies ${link.label}`);
@@ -138,7 +146,7 @@ test('latest links preserve published destinations while upcoming studios stay u
   const rally = PROJECTS.find(project => project.id === 'rally');
   assert.equal(rally.next, undefined);
   assert.equal(STUDIO.some(project => project.id === 'canterbury' || project.id === 'rally-next'), false);
-  for (const id of ['puzzles', 'buildworks']) {
+  for (const id of ['puzzles', 'art-v2']) {
     const project = STUDIO.find(project => project.id === id);
     assert.equal(project.status, 'building');
     assert.equal('href' in project, false);

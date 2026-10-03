@@ -2,9 +2,9 @@
 export const SNAPSHOT = {
   title: 'Hoydich / A map of the making',
   route: '/hoydich/',
-  capturedAt: '2026-10-03T18:39:48Z',
+  capturedAt: '2026-10-03T22:14:54Z',
   dateLabel: '03 October 2026',
-  sourceRevision: '3a290ef53c396ff1a03a7e4b1526da49e000409f',
+  sourceRevision: 'a154574feb4fda082df8e126c9639e1f82bca492',
   note: 'An edited snapshot of public creative work and current studio plans. Updated by hand after releases; no live project sync.',
 };
 
@@ -24,12 +24,11 @@ export const PROJECTS = [
     number: '01', color: '#ad392e', image: '/images/fila/court-material-study.webp',
     imageAlt: 'Original interpretive art of ivory knit forms and a red tennis-court material study.',
     imageNote: 'Original AI-generated interpretive artwork. Independent study.',
-    description: 'An illustrated brand exhibition and twelve independently imagined Court, Club and Coast looks for 2027.',
+    description: 'An independent brand exhibition, a twelve-look 2027 concept collection and nine new Ocean, Works and Court concepts in El Segundo edition two.',
     kind: 'Independent design study', href: '/fila/', action: 'Enter the exhibition',
-    links: [{ label: '2027 concept lookbook', href: '/fila/2027/', summary: 'Twelve imagined Court, Club and Coast looks, with front, back and detail studies.' }],
-    milestones: ['Sourced brand exhibition published', '12 concept looks with front, back and detail views'],
+    links: [{ label: 'El Segundo / edition two', href: '/fila/el-segundo/', summary: 'Nine independent Ocean, Works and Court concepts, with an afternoon edit and original image credits.' }, { label: '2027 concept lookbook', href: '/fila/2027/', summary: 'Twelve imagined Court, Club and Coast looks, with front, back and detail studies.' }],
+    milestones: ['Sourced brand exhibition published', '12 concept looks with front, back and detail views', 'El Segundo edition two: nine coastal concepts published'],
     boundary: 'No FILA affiliation. Imagined garments, not physical samples or available products.',
-    next: { title: 'El Segundo / edition two', direction: 'Develop the coastal setting and a more focused way through the collection.', status: 'redesign', stage: 'Redesign in progress', nextStep: 'Review the revised exhibition and its image credits.' },
   },
   {
     id: 'rally', family: 'play', title: 'RALLY', subtitle: 'Leave it all on the court.',
@@ -47,12 +46,11 @@ export const PROJECTS = [
     number: '03', color: '#176674', image: '/images/siddhartha/river-horizon.webp',
     imageAlt: 'Original cyanotype-inspired river horizon artwork for the Siddhartha reading companion.',
     imageNote: 'Original generated reader artwork, not publisher cover art.',
-    description: 'Three art-rich bookshops and reader companions, with a new company of voices in The Canterbury Tales.',
+    description: 'Nine art-rich bookshops and reader companions, with a further company of voices in The Canterbury Tales.',
     kind: 'Literary companions', href: '/books/', action: 'Browse the shelf',
-    links: [{ label: 'Siddhartha', href: '/siddhartha/', summary: 'A river-shaped reading companion and edition-aware bookshop.' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/', summary: 'A companion to the book’s financial history, with reading and edition resources.' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/', summary: 'A bookshop and reading journey through football, food and Parma.' }, { label: 'The Canterbury Tales', href: '/canterbury/', summary: 'A company of voices, a pilgrimage and a new reading room.' }],
-    milestones: ['Three bookshop companions and The Canterbury Tales published', 'New, used and library discovery links with edition context'],
+    links: [{ label: 'Siddhartha', href: '/siddhartha/', summary: 'A river-shaped reading companion and edition-aware bookshop.' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/', summary: 'A companion to the book’s financial history, with reading and edition resources.' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/', summary: 'A bookshop and reading journey through football, food and Parma.' }, { label: 'The Canterbury Tales', href: '/canterbury/', summary: 'A company of voices, a pilgrimage and a new reading room.' }, {"label": "Barbarians at the Gate", "href": "/books/barbarians-at-the-gate/", "summary": "A reported corporate drama about the contest for RJR Nabisco. Follow the people before the numbers."}, {"label": "New Rules for the New Economy", "href": "/books/new-rules-for-the-new-economy/", "summary": "Kevin Kelly’s 1998 argument about connected systems. Read its proposals in their moment, then test the questions they leave."}, {"label": "Ethan Frome", "href": "/books/ethan-frome/", "summary": "Edith Wharton’s compressed story of desire and constraint. Attend to the weather, the rooms and the distance between telling and knowing."}, {"label": "Treasure Island", "href": "/books/treasure-island/", "summary": "A voyage, a dangerous company and a young narrator learning to judge people. Follow the voices as closely as the map."}, {"label": "The Kite Runner", "href": "/books/the-kite-runner/", "summary": "Khaled Hosseini’s novel of friendship, memory and responsibility across a changing Afghanistan and a life abroad."}, {"label": "Mistborn", "href": "/books/mistborn-the-final-empire/", "summary": "Begin Sanderson’s Mistborn sequence with its first novel: a crew, a dangerous plan and a world whose rules matter."}],
+    milestones: ['Nine bookshop companions and The Canterbury Tales published', 'New, used and library discovery links with edition context'],
     boundary: 'Independent companions. Original artwork is not archival evidence. No stock or availability promise.',
-    next: { title: 'Six more worlds', direction: 'Barbarians at the Gate · New Rules for the New Economy · Ethan Frome · Treasure Island · The Kite Runner · Mistborn: The Final Empire.', status: 'building', stage: 'Companions in progress', nextStep: 'Verify editions, sources and the new reading journeys before opening their routes.' },
   },
   {
     id: 'bukowski', family: 'reading', title: 'The ordinary stays', subtitle: 'An empty room. A little light.',
@@ -107,16 +105,122 @@ export const PROJECTS = [
 ];
 
 export const STUDIO_ONLY = [
-  { id: 'discovery', family: 'tools', title: 'Discovery / audit dashboard', direction: 'A clearer public view of PointCast’s project discovery and navigation.', status: 'building', stage: 'Dashboard in progress', nextStep: 'Verify the public page, its evidence and accessible navigation.', kind: 'Tools & systems' },
-  { id: 'saturday', family: 'place', title: 'Saturday / El Segundo', direction: 'An interactive meditation for 3 October, with Bill Evans Trio’s “Some Other Time” and researched local context.', status: 'building', stage: 'Meditation in progress', nextStep: 'Verify the dated research and interactive meditation before publishing.', kind: 'Music & place' },
   { id: 'sunday', family: 'play', title: 'One Sunday at the Vanguard', direction: 'A standalone listening world around a historical recording and a map of New York City.', status: 'building', stage: 'Listening site in progress', nextStep: 'Verify the recording history, place references and listening experience.', kind: 'Music & place' },
-  { id: 'dispensary-atlas', family: 'place', title: 'Dispensary Market Atlas', direction: 'A 25-mile El Segundo research and discovery study, with California and national market context.', status: 'building', stage: 'Market research in progress', nextStep: 'Verify public sources, local coverage and the discovery experience. No store or ordering service is offered here.', kind: 'Place & market research' },
-  { id: 'art-v2', family: 'art', title: 'Original art / edition two', direction: 'A planned gallery of 50 source artworks paired with new reinterpretations. The matched source collection is still being verified.', status: 'building', stage: 'Source verification in progress', nextStep: 'Verify each source and its matching new work before showing a comparison. No editions are offered here.', kind: 'Art & image' },
-  {"id": "coffee-business", "family": "place", "title": "Coffee atlas / UES business studies", "direction": "A coffee atlas and a University of El Segundo hub for local case studies and business research.", "status": "building", "stage": "Atlas & casebook in progress", "nextStep": "Verify the dated sources, local coverage and study tools before publication.", "kind": "Place & business studies"},
-  {"id": "real-estate", "family": "place", "title": "Real estate observatory", "direction": "A new public real estate study being shaped for PointCast.", "status": "building", "stage": "Observatory in progress", "nextStep": "Verify the public sources and study experience before publication.", "kind": "Place & market research"},
-  {"id": "business-signals", "family": "tools", "title": "Rates / FX business signals", "direction": "A public business-study view of rates and foreign-exchange signals.", "status": "building", "stage": "Signals study in progress", "nextStep": "Verify source dates, data definitions and the study context before publication.", "kind": "Tools & business studies"},
-  { id: 'puzzles', family: 'design', title: 'Puzzle studio', direction: 'Ten jigsaw concepts, making and buying resources, and UES business and design studies.', status: 'building', stage: 'Puzzle studies in progress', nextStep: 'Verify the concepts, sources and making guidance before publication.', kind: 'Design & learning' },
-  { id: 'buildworks', family: 'design', title: 'El Segundo Buildworks', direction: 'A studio study for pins, stickers, magnets, ornaments and small crafted objects.', status: 'building', stage: 'Studio study in progress', nextStep: 'Verify the designs and business studies before publication. No manufacturing service is offered here.', kind: 'Objects & business studies' },
+  { id: 'art-v2', family: 'art', title: 'Coast, Reimagined / Art v2', direction: 'A prepared gallery of fifty source artworks paired with new reinterpretations. Gallery publication remains pending.', status: 'building', stage: 'Gallery publication pending', nextStep: 'Complete gallery visual and source-label review. The separate commerce page is a disabled status preview; no gallery destination is linked here.', kind: 'Art & image' },
+  { id: 'puzzles', family: 'design', title: 'Puzzle studio', direction: 'Ten jigsaw concepts, making and buying resources, and UES business and design studies.', status: 'building', stage: 'Prepared edition / publication pending', nextStep: 'Review the concepts, sources and making guidance before publication.', kind: 'Design & learning' },
+];
+
+export const RELEASED_STUDIES = [
+  {
+    "id": "discovery",
+    "family": "tools",
+    "title": "Discovery / audit dashboard",
+    "href": "/discovery/",
+    "summary": "A saved public discovery audit, with route findings, source evidence and a dated method.",
+    "source": {
+      "href": "/discovery/#method",
+      "label": "Audit method & evidence"
+    }
+  },
+  {
+    "id": "saturday",
+    "family": "place",
+    "title": "Saturday / El Segundo",
+    "href": "/meditate/2026-10-03",
+    "summary": "A dated music-and-place meditation for 3 October, with local research, listening context and a quiet timer.",
+    "source": {
+      "href": "/meditate/2026-10-03.json",
+      "label": "Meditation context & sources"
+    }
+  },
+  {
+    "id": "dispensary-atlas",
+    "family": "place",
+    "title": "Dispensary Market Atlas",
+    "href": "/dispensary-atlas/",
+    "summary": "A sourced 25-mile research atlas, with store records and California and national market context.",
+    "source": {
+      "href": "/dispensary-atlas/#method",
+      "label": "Atlas method & source records"
+    }
+  },
+  {
+    "id": "coffee-business",
+    "family": "place",
+    "title": "Coffee / 25 miles",
+    "href": "/ues/coffee/",
+    "summary": "Selected cafés, local source notes and classroom operating scenarios in a University of El Segundo field study.",
+    "source": {
+      "href": "/ues/coffee/#method",
+      "label": "Coffee field-study method"
+    }
+  },
+  {
+    "id": "real-estate",
+    "family": "place",
+    "title": "Groundwork / real estate",
+    "href": "/real-estate/",
+    "summary": "A dated real-estate observatory with a public source ledger and explicitly hypothetical study scenarios.",
+    "source": {
+      "href": "/real-estate/#sources",
+      "label": "Groundwork source ledger"
+    }
+  },
+  {
+    "id": "business-signals",
+    "family": "tools",
+    "title": "Business Feels / rates & FX",
+    "href": "/business-feels/",
+    "summary": "A dated educational view of rates, foreign exchange and public business indicators, with source notes and scenarios.",
+    "source": {
+      "href": "/business-feels/#sources",
+      "label": "Observation dates & sources"
+    }
+  },
+  {
+    "id": "chain",
+    "family": "tools",
+    "title": "PointCast Chain / recorded dev world",
+    "href": "/chain",
+    "summary": "A published replay of 422 recorded Rust-chain blocks, with a browser verifier and documented local-network limits.",
+    "source": {
+      "href": "/chain#status",
+      "label": "Dev-chain status & boundaries"
+    }
+  },
+  {
+    "id": "prediction-markets",
+    "family": "tools",
+    "title": "Prediction markets / UES study",
+    "href": "/ues/prediction-markets/",
+    "summary": "Twelve lessons, synthetic paper labs and dated prediction-market research for classroom exploration.",
+    "source": {
+      "href": "/ues/prediction-markets/#sources",
+      "label": "Curriculum & research sources"
+    },
+    "links": [
+      {
+        "href": "/ues/business/",
+        "label": "UES business study hub",
+        "summary": "The existing hub for the newly published local and business-study casebooks."
+      },
+      {
+        "href": "/ues/",
+        "label": "UES classes",
+        "summary": "The published University of El Segundo class and study collection."
+      }
+    ]
+  },
+  { id: 'buildworks', family: 'design', title: 'El Segundo Buildworks', href: '/buildworks/', summary: 'Six original small-object concepts, sourcing research and a pilot workbook for exploring a possible studio. No ordering or manufactured inventory is offered.', source: { href: '/buildworks/#sources', label: 'Sourcing research & provenance' }, links: [{ href: '/buildworks/pilot-workbook.txt', label: 'Pilot workbook', summary: 'A plain-text workbook for investigating materials, suppliers and a possible first pilot.' }] },
+  { id: 'art-v2-commerce', family: 'art', title: 'Art v2 / collection status', href: '/art/v2/commerce/', statusLabel: 'DISABLED PREVIEW / GALLERY PENDING', summary: 'A published collection-status preview. Purchases, minting and listings remain unavailable while the separate gallery is prepared.', source: { href: '/art/v2/commerce.json', label: 'Disabled purchase & mint status' } },
+  { id: 'home-share-editions', family: 'art', title: 'PointCast / daily share editions', href: '/#home-share-title', summary: 'Six original share cards for art, music, games and making, with a daily home selection and fixed edition links.', links: [
+    { href: '/share/home/2026-10-signal-atlas/', label: 'Signal Atlas', summary: 'An original PointCast share-card edition with its own fixed public link.' },
+    { href: '/share/home/2026-10-listening-garden/', label: 'Listening Garden', summary: 'An original music-inspired share-card edition with its own fixed public link.' },
+    { href: '/share/home/2026-10-paper-constellation/', label: 'Paper Constellation', summary: 'An original paper-world share-card edition with its own fixed public link.' },
+    { href: '/share/home/2026-10-tide-observatory/', label: 'Tide Observatory', summary: 'An original coastal share-card edition with its own fixed public link.' },
+    { href: '/share/home/2026-10-making-room/', label: 'Making Room', summary: 'An original making-inspired share-card edition with its own fixed public link.' },
+    { href: '/share/home/2026-10-night-arcade/', label: 'Night Arcade', summary: 'An original play-inspired share-card edition with its own fixed public link.' }
+  ] }
 ];
 
 export const ROADMAP = [
@@ -140,6 +244,7 @@ export const STUDIO = [
 
 const PUBLIC_SOURCES = {
   fila: { href: '/fila/#sources', label: 'Sources & image credits' },
+  books: { href: '/books.json', label: 'Shelf data & reading resources' },
   rally: { href: '/pickleball/home.json', label: 'Data & sources' },
   bukowski: { href: '/bukowski/#sources', label: 'Sources & reading notes' },
   objects: { href: '/object-library/#product-notebook', label: 'Product notes & provenance' },
@@ -147,12 +252,16 @@ const PUBLIC_SOURCES = {
   'other-worlds': { href: '/collectibles/other-worlds/manifest.json', label: 'Metadata & provenance' },
 };
 
-export const LATEST_LINKS = PROJECTS.map(project => ({
+export const LATEST_LINKS = [...PROJECTS.map(project => ({
   id: project.id, title: project.title, href: project.href,
   summary: project.description, links: project.links, ...(PUBLIC_SOURCES[project.id] ? { source: PUBLIC_SOURCES[project.id] } : {}),
-}));
+})), ...RELEASED_STUDIES.map(project => ({ ...project, links: project.links ?? [] }))];
 
 export const MILESTONES = [
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'Small ideas get a workbook.', description: 'Buildworks opened six object concepts, sourcing research and a pilot workbook. The website offers studies, not ordering or manufactured inventory.', href: '/buildworks/', source: 'a154574f' },
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'A picture to pass along.', description: 'Six original share-card editions joined the PointCast homepage with fixed edition links.', href: '/#home-share-title', source: 'a154574f' },
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'More rooms opened.', description: 'FILA El Segundo edition two, six reading companions and the new public research studies were verified as published pages.', href: '/hoydich/#latest-links', source: '765c912e' },
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'A dev world can be replayed.', description: 'PointCast Chain published its recorded browser replay and explicit local-network status.', href: '/chain', source: 'aa286992' },
   { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'The next practice takes shape.', description: 'Pickleball Home’s second edition added adaptive practice planning and illustrated backhand and mixed-doubles articles.', href: '/pickleball/home/', source: '3a290ef5' },
   { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'A company of voices gathers.', description: 'The Canterbury Tales opened as a new reading room on PointCast.', href: '/canterbury/', source: '2a3e3532' },
   { date: '02 OCT 2026', title: 'Three books, three companions.', description: 'Siddhartha, Den of Thieves and Playing for Pizza joined one art-rich reading shelf.', href: '/books/', source: 'f95e945c' },
