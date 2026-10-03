@@ -1,0 +1,131 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import data from '../../data/thus-camp.json';
+import { THUS_CAMP_CANONICAL } from '../../lib/thus-camp.mjs';
+import '../../styles/thus-camp.css';
+
+export function getStaticPaths() {
+  return data.situations.map((s, i) => ({
+    params: { slug: s.slug },
+    props: { situation: s, prev: data.situations[i - 1] ?? null, next: data.situations[i + 1] ?? null },
+  }));
+}
+
+const { situation: s, prev, next } = Astro.props;
+const url = `${THUS_CAMP_CANONICAL}${s.slug}/`;
+const title = `${s.title} · Thus Camp`;
+const description = `${s.call} A Thus Camp kit: ${s.loadout.length} items, a timeline, the moves and what to watch for.`;
+const roleLabel = (id: string) => s.roles.find((r) => r.id === id)?.label ?? id;
+const core = s.loadout.filter((i) => i.tier !== 'nice');
+const nice = s.loadout.filter((i) => i.tier === 'nice');
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'HowTo',
+  '@id': url,
+  name: s.title,
+  description: s.call,
+  url,
+  supply: s.loadout.map((i) => ({ '@type': 'HowToSupply', name: i.name })),
+  step: s.timeline.map((t, n) => ({ '@type': 'HowToStep', position: n + 1, name: t.when, text: t.do })),
+  isPartOf: { '@type': 'CollectionPage', name: 'Thus Camp', url: THUS_CAMP_CANONICAL },
+};
+---
+
+<BlockLayout title={title} description={description} themeColor={s.accent} isolated={true} hideAds={true} showNetworkStrip={false} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/thus-camp.json', title: 'Thus Camp JSON' }]}>
+  <main class="tc" style={`--tc-accent:${s.accent}`}>
+    <nav class="tc-crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href="/thus-camp/">Thus Camp</a><span>/</span><span>{s.code}</span><a class="tc-crumb__json" href="/thus-camp.json">JSON</a>
+    </nav>
+
+    <header class="tc-hero">
+      <div>
+        <p class="tc-kicker">{s.code} · {s.kicker}</p>
+        <h1>{s.title}</h1>
+      </div>
+      <p class="tc-hero__dek">{s.setting}</p>
+    </header>
+
+    <dl class="tc-stats">
+      <div><dt>Hours</dt><dd>{s.hours}</dd></div>
+      <div><dt>Surface</dt><dd>{s.surface}</dd></div>
+      <div><dt>Kit</dt><dd>{core.length} core · {nice.length} nice</dd></div>
+    </dl>
+    <p class="tc-callout">{s.call}</p>
+
+    <section class="tc-section" aria-labelledby="loadout-title" data-tc-loadout>
+      <div class="tc-section__head">
+        <div><p class="tc-kicker">Loadout</p><h2 id="loadout-title">What to bring.</h2></div>
+        <div class="tc-options" role="group" aria-label="Show the kit for">
+          <label class="tc-chip"><input type="radio" name="role" value="" checked /><span>Everyone</span></label>
+          {s.roles.map((r) => <label class="tc-chip"><input type="radio" name="role" value={r.id} /><span>{r.label}</span></label>)}
+        </div>
+      </div>
+      <div class="tc-twocol">
+        {[{ label: 'Core', items: core, nice: false }, { label: 'Nice to have', items: nice, nice: true }].filter((g) => g.items.length).map((g) => (
+          <div>
+            <p class="tc-label">{g.label}</p>
+            <ul class="tc-list">
+              {g.items.map((i) => (
+                <li data-roles={(i.roles ?? []).join(' ')}>
+                  <span class={g.nice ? 'tc-bullet tc-bullet--nice' : 'tc-bullet'} aria-hidden="true"></span>
+                  <strong>{i.name}{i.roles && <span class="tc-tag">{i.roles.map(roleLabel).join(' · ')}</span>}</strong>
+                  <p class="tc-why">{i.why}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div class="tc-actions"><a class="tc-btn" href={`/thus-camp/?s=${s.slug}#pack`}>Make this a checklist →</a></div>
+    </section>
+
+    <section class="tc-section tc-twocol" aria-label="Timeline and moves">
+      <div>
+        <p class="tc-kicker">Timeline</p>
+        <h2 style="margin-bottom:22px">How it goes.</h2>
+        <ol class="tc-timeline">
+          {s.timeline.map((t) => <li><b>{t.when}</b><p>{t.do}</p></li>)}
+        </ol>
+      </div>
+      <div>
+        <p class="tc-kicker">The moves</p>
+        <h2 style="margin-bottom:22px">What helps.</h2>
+        <ul class="tc-moves">{s.moves.map((m) => <li>{m}</li>)}</ul>
+        <p class="tc-label" style="margin-top:24px">Skip</p>
+        <ul class="tc-skip">{s.skip.map((k) => <li>{k}</li>)}</ul>
+      </div>
+    </section>
+
+    <section class="tc-section" aria-labelledby="watch-title">
+      <div class="tc-alert">
+        <h3 id="watch-title">Watch for</h3>
+        <ul>{s.watchFor.map((w) => <li>{w}</li>)}</ul>
+      </div>
+    </section>
+
+    <nav class="tc-section tc-pager" aria-label="More camps">
+      {prev ? <a class="tc-btn tc-btn--ghost" href={`/thus-camp/${prev.slug}/`}>← {prev.title}</a> : <a class="tc-btn tc-btn--ghost" href="/thus-camp/">← All camps</a>}
+      {next ? <a class="tc-btn tc-btn--ghost" href={`/thus-camp/${next.slug}/`}>{next.title} →</a> : <a class="tc-btn tc-btn--ghost" href="/thus-camp/#trunk">The trunk kit →</a>}
+    </nav>
+
+    <p class="tc-fine">{data.disclaimer} Written by Claude Code for PointCast.</p>
+  </main>
+</BlockLayout>
+
+<script>
+  function initRoles(): void {
+    const box = document.querySelector<HTMLElement>('[data-tc-loadout]');
+    if (!box || box.dataset.ready) return;
+    box.dataset.ready = '1';
+    box.addEventListener('change', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.name !== 'role') return;
+      box.querySelectorAll<HTMLElement>('li[data-roles]').forEach((li) => {
+        const roles = (li.dataset.roles ?? '').split(' ').filter(Boolean);
+        li.hidden = Boolean(t.value) && roles.length > 0 && !roles.includes(t.value);
+      });
+    });
+  }
+  initRoles();
+  document.addEventListener('astro:page-load', initRoles);
+</script>
