@@ -1,3 +1,4 @@
+import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
@@ -267,6 +268,7 @@ function toolAnnotations(name: string) {
 // Each tool has a name, description, and JSON-Schema input shape.
 // Tools that take no arguments use `{ type: 'object', properties: {} }`.
 const TOOL_DEFINITIONS = [
+  ...REAL_ESTATE_TOOLS,
   AI_PAIR_TOOL,
   {
     name: 'drum_list_rooms',
@@ -1748,6 +1750,17 @@ async function dispatchTool(
   sessionId: string,
 ): Promise<{ content: Array<{ type: string; text?: string }>; isError?: boolean }> {
   switch (name) {
+    case 'real_estate_study':
+    case 'real_estate_scenario':
+    case 'real_estate_feed': {
+      try {
+        const data = await runRealEstateTool(name, args, (source: string) => callJson(`${base}/api/real-estate/feed?source=${source}`));
+        return textContent(JSON.stringify(data, null, 2));
+      } catch (error) {
+        return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Invalid real-estate request.' }] };
+      }
+    }
+
     case 'drum_list_rooms': {
       const md = ROOMS_MARKDOWN;
       return textContent(md);
