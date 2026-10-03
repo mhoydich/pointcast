@@ -40,3 +40,12 @@ Review screenshots: [desktop](plugin-field-guide-20261003/desktop.jpg), [mobile]
 ## Release limits
 
 Draft PR only. No merge, deploy, plugin installation, directory submission/publication, event subscription, credential, connected private app, external message, or permission change was performed. Editorial/X review, MH publication approval, and the parent release lane remain outstanding. Any live pilot needs its own reviewed implementation and account checks.
+
+
+## Exact-head CI follow-up
+
+The earlier prose refinements do affect generated output: the source JSON feeds the HTML reader and both exports, so the final wording and output hashes differ from the first full-build snapshot. That snapshot alone is not proof of the final head.
+
+`.github/workflows/plugin-field-guide-check.yml` now provides a path-scoped, nondeploy PR check. It explicitly checks out `pull_request.head.sha` without persisted credentials, installs the locked dependencies (including jsdom and TypeScript), runs the four guide tests, and runs `build:bare`. `scripts/check-plugin-field-guide-build.mjs` then checks the actual prerendered HTML against every final text passage, verifies Markdown and JSON equivalence, all fifteen examples before JavaScript, canonical/noindex metadata, source/fragment links, isolated chrome, and generated assets. The evidence artifact reports and hashes the exact checked-out head and only the three guide outputs. Repository permission is `contents: read`; no deployment secret or deployment step is present.
+
+The follow-up content reviewer found no publication blocker at `9b3c3cf06c8991d00a41b5b7ddb10d10515dba95`, including the final Events and editorial wording. Their Astro transform and diff check passed. Three tests passed in their independent snapshot; their filter rerun was blocked by missing jsdom in that snapshot's older dependency tree. The new CI installs from the lockfile rather than borrowing that tree. CI delta review and results must be assessed at the final commit; the run and artifact are the authoritative final-head evidence. Parent/coordinator own merge and publication.

@@ -17,3 +17,6 @@ Validation: four focused tests passed, full `build:bare` passed, final Astro pag
 A pre-existing PointCast MCP annotation/handler mismatch was recorded for a separate follow-up. The guide recommends a reviewed public-read allowlist rather than inheriting the full catalog. Native Extensions/MCP Events were not verified as implemented. Sites MCP hosting and actual account eligibility remain unverified.
 
 No hub/navigation changes, live integrations, installs, subscriptions, private connections, credentials, publication, merge or deployment. The dirty wallet/auth checkout at `~/pointcast` was preserved; work used a separate HOME worktree. Editorial/X review, MH publication approval, and the parent release lane are still required. Task worktree/build/dependency copies are removed after the branch is preserved remotely.
+
+
+Follow-up: added a path-scoped, read-only nondeploy CI workflow and a post-build generated-output verifier. Final prose changes do alter HTML/Markdown/JSON, so the initial full-build snapshot is explicitly insufficient for final-head publication proof. The CI artifact binds the actual head to the generated guide hashes and source-equivalence checks. No local full build was repeated on the shared Mac. The separate batch coordinator owns merge/deploy; this worker supplies exact-head review/check evidence only.
