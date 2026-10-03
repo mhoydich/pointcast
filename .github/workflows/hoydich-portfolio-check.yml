@@ -1,0 +1,78 @@
+name: Check Hoydich portfolio
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/hoydich-portfolio-check.yml'
+      - 'src/components/HomeLatestProjects.astro'
+      - 'src/data/hoydich-portfolio.mjs'
+      - 'src/pages/hoydich*'
+      - 'src/scripts/hoydich-portfolio.mjs'
+      - 'src/styles/hoydich-portfolio.css'
+      - 'tests/hoydich-portfolio.test.mjs'
+permissions:
+  contents: read
+concurrency:
+  group: hoydich-portfolio-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      ASTRO_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/hoydich-portfolio.test.mjs
+      - name: Build the complete site
+        run: |
+          if ! npm run build:bare; then
+            echo 'Retrying the full build once for transient upstream failures, following docs/OPERATIONS.md.'
+            npm run build:bare
+          fi
+      - name: Verify the generated portfolio and artwork
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { existsSync, readFileSync } from 'node:fs';
+          import { JSDOM } from 'jsdom';
+          import { portfolioPayload } from './src/data/hoydich-portfolio.mjs';
+          const payload = portfolioPayload();
+          const output = JSON.parse(readFileSync('dist/hoydich.json', 'utf8'));
+          assert.deepEqual(output, payload);
+          const document = new JSDOM(readFileSync('dist/hoydich/index.html', 'utf8')).window.document;
+          assert.equal(document.querySelectorAll('h1').length, 1);
+          assert.equal(document.querySelectorAll('main').length, 1);
+          assert.equal(document.querySelectorAll('[data-project-card]').length, payload.projects.length);
+          assert.equal(document.querySelectorAll('[data-studio-card]').length, payload.studio.length);
+          assert.equal(document.querySelectorAll('[data-native-card]').length, payload.native.length);
+          for (const image of document.querySelectorAll('img')) {
+            const src = image.getAttribute('src');
+            if (src?.startsWith('/')) assert.ok(existsSync(`dist${src}`), `Built artwork exists: ${src}`);
+          }
+          for (const link of document.querySelectorAll('script[src]')) {
+            const src = link.getAttribute('src');
+            if (src?.startsWith('/')) assert.ok(existsSync(`dist${src}`), `Built script exists: ${src}`);
+          }
+          for (const link of document.querySelectorAll('#latest-links a[href]')) {
+            const href = link.getAttribute('href');
+            if (!href.startsWith('/')) continue;
+            const url = new URL(href, 'https://pointcast.xyz');
+            const path = url.pathname.endsWith('.json') ? `dist${url.pathname}` : `dist${url.pathname.replace(/\/$/, '')}/index.html`;
+            assert.ok(existsSync(path), `Latest destination is built: ${href}`);
+            if (url.hash) {
+              const target = new JSDOM(readFileSync(path, 'utf8')).window.document;
+              assert.ok(target.getElementById(url.hash.slice(1)), `Source fragment exists: ${href}`);
+            }
+          }
+          console.log(`Verified ${payload.projects.length} public project families, ${payload.studio.length} studio threads and ${payload.native.length} native edition at ${payload.capturedAt}.`);
+          JS
