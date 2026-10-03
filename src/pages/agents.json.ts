@@ -204,6 +204,7 @@ export const GET: APIRoute = async () => {
         treasureIsland: AGENT_SURFACES.human.treasureIsland,
         theKiteRunner: AGENT_SURFACES.human.theKiteRunner,
         mistbornTheFinalEmpire: AGENT_SURFACES.human.mistbornTheFinalEmpire,
+        chain: AGENT_SURFACES.human.chain,
         objectLibrary: AGENT_SURFACES.human.objectLibrary,
         weatherAtlas: AGENT_SURFACES.human.weatherAtlas,
         everyday: AGENT_SURFACES.human.everyday,

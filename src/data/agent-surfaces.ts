@@ -5,6 +5,7 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    chain: 'https://pointcast.xyz/chain/',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',
     pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands/',
     pickleballMixedDoubles: 'https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles/',
