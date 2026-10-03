@@ -150,6 +150,46 @@ test('cache retries respect source intervals and keep last good readings after a
   assert.match(retained.sourceHealth.find(s=>s.id==='treasury').lastError.message,/502/);
 });
 
+test('a new committed evidence generation ignores warm legacy and older-generation caches', async () => {
+  const committed=getSnapshot(now);
+  const previous=structuredClone(committed);
+  previous.verifiedAt='2026-09-01T12:00:00Z';
+  for(const series of previous.series.filter(series=>['bls','fed','ecb-policy','boe'].includes(series.sourceId))) series.value=99;
+  assert.equal(isSignalSet(previous),true); // Valid shape alone previously admitted stale manual evidence.
+  const origin='https://pointcast.xyz';
+  const legacyKey=`${origin}/api/business-feels/_cache/v1`;
+  const previousKey=`${legacyKey}/${encodeURIComponent(previous.verifiedAt)}`;
+  const currentKey=`${legacyKey}/${encodeURIComponent(committed.verifiedAt)}`;
+  const entries=new Map([legacyKey,previousKey].map(key=>[key,new Response(JSON.stringify(previous),{headers:{'Cache-Control':'public, max-age=2592000'}})]));
+  const matched=[];const written=[];
+  const cache={async match(key){matched.push(key.url);return entries.get(key.url)?.clone();},async put(key,response){written.push(key.url);entries.set(key.url,response.clone());}};
+  const request=new Request(`${origin}/api/business-feels?verifiedAt=${encodeURIComponent(previous.verifiedAt)}`);
+  let calls=0;
+  const response=await handleBusinessFeels(request,{cache,now,fetch:async url=>{calls++;return fetchSuccess(url);}});
+  const current=await response.json();
+  assert.deepEqual(matched,[currentKey]);assert.deepEqual(written,[currentKey]);assert.equal(calls,3);
+  assert.equal(current.verifiedAt,committed.verifiedAt);
+  for(const series of committed.series.filter(series=>['bls','fed','ecb-policy','boe'].includes(series.sourceId))) assert.equal(current.series.find(row=>row.id===series.id).value,series.value);
+  assert.equal((await entries.get(previousKey).clone().json()).verifiedAt,previous.verifiedAt);
+  const reused=await handleBusinessFeels(request,{cache,now:'2026-10-06T18:05:00Z',fetch:async()=>{calls++;throw new Error('same generation should reuse runtime evidence');}});
+  assert.equal((await reused.json()).fx.date,'2026-10-05');assert.equal(calls,3);
+});
+
+test('cached evidence with a different or missing committed version falls back to the new bundle', async () => {
+  const committed=getSnapshot(now);
+  for(const version of ['2026-09-01T12:00:00Z',undefined]) {
+    const previous=structuredClone(committed);previous.verifiedAt=version;
+    for(const series of previous.series.filter(series=>['bls','fed','ecb-policy','boe'].includes(series.sourceId))) series.value=99;
+    assert.equal(isSignalSet(previous),true);
+    let retained;
+    const cache={async match(){return new Response(JSON.stringify(previous));},async put(key,response){retained=await response.json();}};
+    const response=await handleBusinessFeels(new Request('https://pointcast.xyz/api/business-feels'),{cache,now,fetch:async()=>new Response('',{status:503})});
+    const data=await response.json();assert.match(data.cache.error,/unavailable/);
+    assert.equal(data.verifiedAt,committed.verifiedAt);assert.equal(retained.verifiedAt,committed.verifiedAt);
+    for(const series of committed.series.filter(series=>['bls','fed','ecb-policy','boe'].includes(series.sourceId))) assert.equal(data.series.find(row=>row.id===series.id).value,series.value);
+  }
+});
+
 test('corrupt/failed local cache remains a bounded snapshot fallback', async () => {
   const cache={async match(){return new Response('invalid JSON');},async put(){throw new Error('no cache');}};
   const response=await handleBusinessFeels(new Request('https://pointcast.xyz/api/business-feels'),{cache,now,fetch:async()=>new Response('',{status:503})});

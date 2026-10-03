@@ -320,15 +320,16 @@ export async function handleBusinessFeels(request, options = {}) {
   const now = options.now ?? new Date();
   const url = new URL(request.url);
   // Query parameters, cookies and client-supplied headers never alter cache keys or upstream URLs.
-  const key = new Request(`${url.origin}/api/business-feels/_cache/v1`);
   let baseline = getSnapshot(now);
+  // A reviewed evidence update starts a new cache generation, even if old entries stay warm.
+  const key = new Request(`${url.origin}/api/business-feels/_cache/v1/${encodeURIComponent(baseline.verifiedAt)}`);
   let cacheError = null;
   if (options.cache) {
     try {
       const stored = await options.cache.match(key);
       if (stored) {
         const state = JSON.parse(await readBoundedResponse(stored, SOURCE_LIMITS.stateMaxBytes));
-        if (!isSignalSet(state)) throw new Error('Invalid public feed cache shape');
+        if (!isSignalSet(state) || state.verifiedAt !== baseline.verifiedAt) throw new Error('Invalid public feed cache shape or evidence version');
         baseline = evaluateSnapshot(state, now);
       }
     } catch { cacheError = 'Stored public feed cache was unavailable; bundled dated observations were used.'; }
