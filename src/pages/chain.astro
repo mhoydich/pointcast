@@ -1,41 +1,82 @@
 ---
 /**
- * /chain — pointcast-chain, PointCast's broadcast chain in Rust, on the site.
+ * /chain — the PointCast Chain home: pointcast-chain, PointCast's broadcast
+ * chain in Rust, organized as a home with wayfinding. Explore (Block Yard,
+ * VERIFY, Town Hall, the explorer feed), Build (dev tools), Wallets + First
+ * Mints, Art, Roadmap, Learn (case study, intern assignments), what works
+ * today, and status with numbers.
  *
- * The page is plain BlockLayout grammar. Every visual flourish lives inside
- * the Block Yard iframe (public/chain/yard/), a static copy of the explorer
- * built in pointcast-chain (crates/explorer/static/town.html) with a recorded
- * --dev chain beside it, so the replay and VERIFY run in the visitor's browser
- * with no node behind them.
+ * Plain BlockLayout grammar. Every visual flourish lives inside the Block
+ * Yard iframe (public/chain/yard/), a static copy of the explorer built in
+ * pointcast-chain with a recorded --dev chain beside it, so the replay and
+ * VERIFY run in the visitor's browser with no node behind them.
  *
- * Facts come only from the pointcast-chain README, DESIGN.md and
- * crates/chain-sim/FINDINGS.md as of 2026-10-03. Filed as block 0660 (cc).
+ * Facts come only from the pointcast-chain repo at main da7bc09 (README,
+ * DESIGN.md, docs/V2.md, docs/WALLETS.md, docs/ART_MINTING.md,
+ * crates/chain-sim/FINDINGS.md, docs/reviews/*). Shared numbers live in
+ * src/data/chain-home.ts. Filed as block 0660 (cc).
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
+import ChainHeader from '../components/chain/ChainHeader.astro';
 import { CHANNELS } from '../lib/channels';
+import { CRATES, SOURCE, TESTS, yardStats } from '../data/chain-home';
+import '../styles/chain.css';
 
 const BLOCK = '0660';
 const URL_SELF = 'https://pointcast.xyz/chain';
-// ?snapshot= skips the yard's node probe: on pointcast.xyz, /status is a page, not a chain node.
-const YARD = '/chain/yard/?snapshot=./snapshot.json';
+const yard = yardStats();
 const title = 'PointCast Chain';
 const description =
-  'pointcast-chain is a broadcast chain where every block is a PointCast Block. Watch a recorded dev chain in the Block Yard and verify it in your browser with the same code the sequencer runs. Anchored on Tezos Shadownet, signed with Kukai, built and tested locally. Not yet a public network.';
+  'The home of pointcast-chain, a broadcast chain where every block is a PointCast Block. Watch a recorded dev chain in the Block Yard and verify it in your browser, then read the dev tools, the docs, a University of El Segundo case study and ten intern assignments. Built and tested locally; not yet a public network.';
 const ch = CHANNELS.FD;
 
 const stats = [
-  { value: '422', label: 'Blocks in the yard', note: 'A recorded dev chain: 67 transactions, 4 anchors, 7 accounts.' },
-  { value: '560 KiB', label: 'Verifier, in your browser', note: 'The consensus code compiled to wasm, pinned by sha256.' },
-  { value: '3', label: 'Shadownet operations', note: 'Reveal, a manual anchor post and a background post, all applied.' },
+  { value: String(yard.blocks), label: 'Blocks in the yard', note: `A recorded dev chain: ${yard.txs} transactions, ${yard.anchors} anchors, ${yard.accounts} accounts.` },
+  { value: `${yard.verifierKiB} KiB`, label: 'Verifier, in your browser', note: 'The consensus code compiled to wasm, pinned by sha256.' },
+  { value: String(TESTS.total), label: 'Tests passing', note: `Rust, rollup kernel and JS suites at ${SOURCE.commit}. None failed.` },
   { value: '66% → 10.1%', label: 'Farming, measured', note: 'Sybil share of issuance with room_only plus one tap an hour.' },
 ];
 
-type Fact = { n: string; tag: string; claim: string; proof: string; refs?: { label: string; href: string }[] };
+const explore = [
+  {
+    k: 'VERIFY · IN YOUR BROWSER',
+    title: 'Your browser replays every block.',
+    body: `Press ✓ VERIFY in the yard. Your browser downloads the consensus code, ${yard.verifierKiB} KiB of wasm checked against a pinned sha256, and replays every block from genesis in a Web Worker. A stack turns green only when your replay matches. A lie gets a red banner that names the height and an evidence.json anyone can check offline.`,
+    links: [{ label: 'Open the yard full screen', href: yard.href }],
+  },
+  {
+    k: 'TOWN HALL · RUNS LOCALLY',
+    title: 'A town square that checks its own numbers.',
+    body: 'pc-town follows a node over its read-only routes, replays every block with the real verifier, and serves account, channel, room and block pages. Every number it shows comes from its own replay, not the node’s word. A fault with evidence turns the page red and stops indexing. It runs on a laptop today; there is no public Town Hall.',
+    links: [{ label: 'Run it', href: '/chain/dev#quickstart' }],
+  },
+  {
+    k: 'THE EXPLORER FEED · RUNS LOCALLY',
+    title: 'The chain as a PointCast feed.',
+    body: 'Every node serves an explorer at its root: newest blocks first, with transaction cards, anchors linked to TzKT, VERIFY, and a Transmit panel that signs taps, posts and sends with Kukai or Temple. It runs wherever a node runs. The yard above is a static recording of one.',
+    links: [{ label: 'HTTP API', href: '/chain/dev#api' }],
+  },
+];
+
+const buildCounts = [
+  { n: '33', l: 'HTTP routes on the node' },
+  { n: '15', l: 'Routes on pc-town' },
+  { n: '10', l: 'MCP tools: 6 node, 4 town' },
+  { n: '13', l: 'CLI subcommands, plus pc-sim' },
+];
+
+const wallets = [
+  { k: 'A PASS · NO EXTENSION', title: 'Face ID is the wallet.', body: 'A passkey becomes your pass. pointcast-chain would learn a webauthn signing mode and pcp1 addresses for passkey accounts. It can verify the WebAuthn envelope; Tezos L1 tz3 cannot.' },
+  { k: 'DEVICE PASSES', title: 'One approval, then quiet.', body: 'A device pass is a session key that can tap, drum and post for up to 30 days, and can never spend, mint or change keys. Anything permanent asks every time and says what it does first.' },
+  { k: 'ONE PROFILE', title: 'One person, one profile.', body: 'The PointCast account is canonical. Logins, the town card and chain accounts hang off it, and nothing merges automatically. The address-to-person link is shown only when the member opts in.' },
+];
+
+type Fact = { n: string; tag: string; claim: string; proof: string; today?: boolean; refs?: { label: string; href: string }[] };
 const facts: Fact[] = [
   {
     n: '01', tag: 'VERIFY IN YOUR BROWSER',
     claim: 'Press VERIFY and your browser replays every block from genesis with the chain’s own consensus code.',
-    proof: 'The code ships as a 560 KiB wasm module that the page checks against a pinned sha256 before it runs. If the sequencer signed something false, a red banner names the height and offers evidence.json, which anyone can check offline. The lying-node demo re-seals a tampered state root at #37, and the yard catches it.',
+    proof: `The code ships as a ${yard.verifierKiB} KiB wasm module that the page checks against a pinned sha256 before it runs. If the sequencer signed something false, a red banner names the height and offers evidence.json, which anyone can check offline. The lying-node demo re-seals a tampered state root at #37, and VERIFY catches it.`,
   },
   {
     n: '02', tag: 'ANCHORED ON TEZOS',
@@ -50,12 +91,12 @@ const facts: Fact[] = [
   {
     n: '03', tag: 'GENESIS-BOUND SIGNATURES',
     claim: 'Every signature binds the chain’s genesis hash, so nothing signed for one chain can be replayed on another.',
-    proof: 'Transactions, block seals, anchors and attestations all commit to the hash of the genesis parameters (tx/v2, seal/v2, anchor/v2). A review caught the first gap, when transactions bound only the chain id. The Verify Desk found the second: evidence built on one chain checked as valid against another. Now it reads NOT EVIDENCE.',
+    proof: 'Transactions, block seals, anchors, attestations and the kernel’s chunk manifests all commit to the hash of the genesis parameters. A review caught the first gap, when transactions bound only the chain id. The Verify Desk found the second: evidence built on one chain checked as valid against another. Now it reads NOT EVIDENCE.',
   },
   {
     n: '04', tag: 'KUKAI AND TEMPLE',
     claim: 'People sign with the Tezos wallets they already have: Kukai or Temple signs one readable line, and the chain rebuilds that line from the transaction itself.',
-    proof: 'tz1 and tz2 keys work, including Kukai’s Google sign-in. Text sent by a client is never trusted. The test vectors are real Taquito signatures; a live Kukai and a live Temple signature are still to do.',
+    proof: 'tz1 and tz2 keys work, including Kukai’s Google sign-in. Text sent by a client is never trusted, and the wallet form signs exact integers or refuses. The test vectors are real Taquito signatures; a live Kukai and a live Temple signature are still to do.',
   },
   {
     n: '05', tag: 'AGENT MANDATES',
@@ -65,7 +106,7 @@ const facts: Fact[] = [
   {
     n: '06', tag: 'ROLLUP KERNEL',
     claim: 'The same state machine runs inside a Tezos smart-rollup kernel and reaches the native state root byte for byte.',
-    proof: 'Checked at every inbox level across 200 blocks on the SDK’s mock host, with all ten transaction kinds. The kernel builds to about 240 KiB of wasm. Lazy storage, the bridge and origination are not done yet.',
+    proof: 'Checked at every inbox level on the SDK’s mock host: 200 blocks with all ten original transaction kinds, plus a 90-block chain with the presence kinds. A review found valid blocks too big for the inbox transport; the ceiling now covers every block chain-core accepts. Lazy storage, the bridge and origination are not done yet.',
   },
   {
     n: '07', tag: 'SIMULATOR = NODE',
@@ -75,8 +116,43 @@ const facts: Fact[] = [
   {
     n: '08', tag: 'FARMING, MEASURED',
     claim: 'With room-attested drum sessions and about one tap an hour, sybil farming falls from 66% of issuance to 10.1%.',
-    proof: 'A 120-day sweep against an attacker that adapts. Neither setting works alone. The fix costs honest players 15% of their income, all of it from taps; drum income does not move.',
+    proof: 'A 120-day sweep against an attacker that adapts. Neither setting works alone. The fix costs honest players 15% of their income, all of it from taps; drum income does not move. The 10.1% left over is why v2 starts with presence tickets.',
   },
+  {
+    n: '09', tag: 'PROOF OF BALANCE · MERGED 3 OCT', today: true,
+    claim: 'Anyone holding the genesis params can check an account’s balance, or that the account doesn’t exist, against a sequencer-signed anchor, offline and without replaying history.',
+    proof: 'Built by Codex. `prove` exports a claim and `verify-claim` prints PROVEN and exits 0; change one balance byte and it reads NOT PROVEN. Every result prints its scope: inclusion in a sequencer-signed root, not proof that every transition was valid, and not Tezos finality. Codex also showed the tree doesn’t commit to its leaf count, so one requirement in its brief was impossible, and it said so with counterexamples.',
+  },
+  {
+    n: '10', tag: 'REVIEWED, THEN FIXED · 3 OCT', today: true,
+    claim: 'An independent review by Codex found seven defects. All seven are fixed, each pinned by a test that failed before the fix.',
+    proof: 'Markup injection from a hostile feed, a 5.5-second stall holding the node lock, u64 values rounded in the browser verifier, an anchor operation hash journaled too late, oversized transactions kept in the mempool, a kernel inbox ceiling, and taps_per_window = 0. Claude then attacked each fix and found six follow-ups, including quadratic base58 decoding, all fixed. OpenAI’s content filter stopped both review sessions, so coverage is partial.',
+  },
+  {
+    n: '11', tag: 'PRESENCE TICKETS · MERGED 3 OCT', today: true,
+    claim: 'On a ticketed chain, a tap earns ATTN only when it carries an issuer-signed ticket, at most once per identity per slot. A bare key’s tap still counts, and mints nothing.',
+    proof: 'Two new transaction kinds and an optional launch record in the genesis params. Legacy chains replay byte for byte: the legacy-root golden and the pinned dev-genesis hash are unchanged, and 22 presence tests include property tests. A stolen issuer key is capped per slot and can be removed. The reference issuer is not deployed, and the reward and slot values stay hypotheses until batch 2 measures them.',
+  },
+];
+
+const merged = [
+  { b: 'Presence tickets', s: 'Tap income only for issuer-vouched identities, one per slot. Consensus change; activates only on a new launch genesis.' },
+  { b: 'Town Hall', s: 'pc-town, the read-side sidecar that replays the chain and serves Town Hall, with a read-only MCP.' },
+  { b: 'Night Shift', s: '/metrics, /healthz and /readyz; `doctor` prints READY or NOT READY with a reason for each failure; backups proven by replay; a runbook.' },
+];
+const later = [
+  { b: 'Batch 2', s: 'Drum circles signed from browser wallets; the economy re-measured with identities and issuers; sequencer keys that can rotate and wallet prompts that show amounts; passkey wallets and First Mints.' },
+  { b: 'Batch 3', s: 'An agent desk for owners; time capsules and claimable stations; a reviewed, simulator-gated launch ceremony.' },
+  { b: 'Batches 4–7', s: 'A sparse-Merkle state root, lazy kernel state, a light client from anchors, forced inclusion through the Tezos inbox, and an ATTN bridge that ships off by default.' },
+];
+const townNetwork = [
+  { b: 'Syncing', s: 'Replica nodes that follow the sequencer and verify every block; checkpoint sync from anchors; offline-first client caches.' },
+  { b: 'Peer to peer', s: 'Transactions gossiped toward the sequencer through peers; blocks propagated among replicas; peer discovery and anti-spam.' },
+  { b: 'Exchange and marketplaces', s: 'Edition transfers, offers in ATTN, and the link to Tezos markets through the art mirror, measured against the farming findings first.' },
+  { b: 'Requests', s: 'Signed asks between accounts: payment, co-sign, mint and song requests, with an inbox, an expiry and fulfillment by an on-chain transaction.' },
+  { b: 'Oracles', s: 'Registered oracle keys and signed reports as a transaction kind, for local feeds such as weather and tides.' },
+  { b: 'Prediction markets', s: 'Play money by default: integer math, resolved by oracles, with a dispute window and the farming findings in mind.' },
+  { b: 'Broadcast to other networks', s: 'Tezos already takes anchors. Adapters for other chains and social networks would prepare exact payloads in dry run and send nothing without keys and approval.' },
 ];
 
 const jsonLd = {
@@ -96,6 +172,10 @@ const jsonLd = {
   },
   hasPart: [
     { '@type': 'WebPage', name: 'Block Yard', url: 'https://pointcast.xyz/chain/yard/' },
+    { '@type': 'WebPage', name: 'Dev tools', url: 'https://pointcast.xyz/chain/dev/' },
+    { '@type': 'WebPage', name: 'Docs', url: 'https://pointcast.xyz/chain/docs/' },
+    { '@type': 'WebPage', name: 'Case study (University of El Segundo)', url: 'https://pointcast.xyz/chain/case-study/' },
+    { '@type': 'WebPage', name: 'Intern exploration assignments', url: 'https://pointcast.xyz/chain/interns/' },
     { '@type': 'WebPage', name: 'First Mints (preview)', url: 'https://pointcast.xyz/chain/first-mints/' },
   ],
   isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
@@ -104,22 +184,24 @@ const jsonLd = {
 
 <BlockLayout title={title} description={description} image={`/images/og/b/${BLOCK}.png`} imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds>
   <div class="chn" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
-    <nav class="crumb" aria-label="Breadcrumb">
-      <a href="/">PointCast</a><span>/</span><a href={`/c/${ch.slug}`}>front door</a><span>/</span><span>chain</span>
-      <a href={`/b/${BLOCK}`}>BLOCK {BLOCK}</a>
-    </nav>
+    <ChainHeader current="home" block={BLOCK} quick={[
+      { label: 'Yard', href: yard.href },
+      { label: 'Verify', href: '#explore' },
+      { label: 'Dev tools', href: '/chain/dev' },
+      { label: 'Docs', href: '/chain/docs/' },
+      { label: 'Learn', href: '#learn' },
+    ]} />
 
     <header class="hero">
-      <p class="kicker">CHAIN · LOCAL BUILD · NOT YET PUBLIC</p>
+      <p class="kicker">CHAIN · HOME · LOCAL BUILD · NOT YET PUBLIC</p>
       <h1>A chain where every block is a broadcast.</h1>
       <p class="dek">
-        pointcast-chain is written in Rust. Every block is a PointCast Block. Humans sign with Tezos keys.
-        Agents are accounts with an owner and a name. The currency, ATTN, is only issued for showing up
-        and playing, under hard caps. Below, 422 recorded blocks, stacked like a town. Press verify and
-        your browser checks every one.
+        pointcast-chain is written in Rust. Every block is a PointCast Block. Humans sign with Tezos keys,
+        agents are accounts with an owner and a name, and the currency, ATTN, is only issued for showing up
+        and playing, under hard caps. This is its home. Watch it, check it, build on it, learn from it.
       </p>
       <p class="jump">
-        <a href="#yard">the yard</a><a href="#works">what works</a><a href="#status">status</a><a href="#next">next</a>
+        <a href="#explore">explore</a><a href="#build">build</a><a href="#wallets">wallets</a><a href="#art">art</a><a href="#roadmap">roadmap</a><a href="#learn">learn</a><a href="#works">what works</a><a href="#status">status</a>
       </p>
     </header>
 
@@ -129,32 +211,151 @@ const jsonLd = {
       ))}
     </section>
 
-    <section id="yard" class="sec" aria-labelledby="yard-title">
-      <p class="kicker">THE YARD · ONE STACK PER BLOCK · ONE CUBE PER TRANSACTION · A BEACON AT EVERY ANCHOR</p>
-      <h2 id="yard-title" class="h2">Watch it. Then make your browser check it.</h2>
+    <section id="explore" class="sec" aria-labelledby="explore-title">
+      <p class="kicker">01 · EXPLORE · ONE STACK PER BLOCK · ONE CUBE PER TRANSACTION · A BEACON AT EVERY ANCHOR</p>
+      <h2 id="explore-title" class="h2">Watch it. Then make your browser check it.</h2>
       <p class="note">A recorded dev chain, replayed and verified in your browser with the same code the sequencer runs.</p>
       <div class="yard">
-        <iframe src={YARD} title="Block Yard: pointcast-chain drawn as isometric cubes, replayable with VERIFY" loading="lazy"></iframe>
+        <iframe src={yard.href} title="Block Yard: pointcast-chain drawn as isometric cubes, replayable with VERIFY" loading="lazy"></iframe>
       </div>
       <p class="yard__bar">
         <span>Press <b>✓ VERIFY</b> in the yard. Stacks turn green when your replay matches.</span>
-        <a href={YARD} target="_blank" rel="noopener">Open full screen ↗</a>
+        <a href={yard.href} target="_blank" rel="noopener">Open full screen ↗</a>
       </p>
       <p class="note">
         Signed with the public dev keys, so nothing on it has value. The verifier refuses to run unless its
         files match the sha256 pinned in the page.
       </p>
+      <ul class="cards">
+        {explore.map((c, i) => (
+          <li class={`card${i === 0 ? ' card--tint' : ''}`}>
+            <p class="card__k">{c.k}</p>
+            <h3>{c.title}</h3>
+            <p>{c.body}</p>
+            <p class="card__links">{c.links.map((l) => <a href={l.href}>{l.label} →</a>)}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section id="build" class="sec" aria-labelledby="build-title">
+      <p class="kicker">02 · BUILD · DEV TOOLS · THE REPO IS LOCAL TODAY</p>
+      <h2 id="build-title" class="h2">Run it on your machine. Read every route.</h2>
+      <p class="note">
+        One command starts a dev chain with synthetic traffic and its explorer. One script adds Town Hall beside it.
+        The source isn’t public yet, so these steps assume you have a copy of the repo.
+      </p>
+      <pre><code>cargo run -p node -- run --dev --demo     # explorer at http://127.0.0.1:8545/
+scripts/town-demo.sh                      # Town Hall at http://127.0.0.1:8550/</code></pre>
+      <section class="stats" aria-label="Dev surface">
+        {buildCounts.map((s) => <div><strong>{s.n}</strong><span>{s.l}</span></div>)}
+      </section>
+      <p class="cta">
+        <a class="btn" href="/chain/dev">Open the dev tools</a>
+        <a class="btn btn--ghost" href="/chain/docs/">Read the docs</a>
+        <span>Quickstart, every HTTP route, the MCP tools, the CLI and a zero-dependency SDK.</span>
+      </p>
+    </section>
+
+    <section id="wallets" class="sec" aria-labelledby="wallets-title">
+      <p class="kicker">03 · WALLETS + FIRST MINTS · PLANNED FOR V2 BATCH 2</p>
+      <h2 id="wallets-title" class="h2">A pass, not a wallet.</h2>
+      <p class="note">
+        Wallets that are easy to use and easy to explain. Scoped on 3 October as a research and design document;
+        none of this is built yet. It is planned for v2 batch 2.
+      </p>
+      <ul class="cards">
+        {wallets.map((w) => (
+          <li class="card">
+            <p class="card__k">{w.k} <span class="tag tag--plan">plan</span></p>
+            <h3>{w.title}</h3>
+            <p>{w.body}</p>
+          </li>
+        ))}
+        <li class="card card--tint">
+          <p class="card__k">FIRST MINTS <span class="tag tag--plan">preview</span></p>
+          <h3>A Noun, a few words, a background.</h3>
+          <p>A founding edition. Only the recipe goes on chain, and the art is drawn from it the same way every time. One per person.</p>
+          <p class="card__links"><a href="/chain/first-mints/">Try the preview →</a></p>
+        </li>
+      </ul>
+      <p class="fine">The First Mints preview is a design preview. Nothing is minted, no key is created, and nothing leaves your browser. <a href="/chain/docs/wallets/">Read the wallet scope</a>.</p>
+    </section>
+
+    <section id="art" class="sec" aria-labelledby="art-title">
+      <p class="kicker">04 · ART · THE DUAL-CHAIN GALLERY · REHEARSAL</p>
+      <h2 id="art-title" class="h2">The sale happens on Tezos. The certificate is a rehearsal.</h2>
+      <p class="note">
+        Codex is building a gallery where a piece costs 1 tez. Only Tezos can take that payment: pointcast-chain has
+        no tez, and ATTN is its only asset. The pointcast-chain side is built and tested locally: read routes for
+        drops and holders, a mirror that checks a finished Tezos sale before anything is signed, and the SDK a
+        gallery reads with.
+      </p>
+      <ul class="rows">
+        <li><b>Tezos · the sale</b><span>1 tez per piece. The Tezos token is the only thing sold.</span></li>
+        <li><b>pointcast-chain · the certificate</b><span>A free first-collector certificate: non-transferable, it does not follow a Tezos resale, tz1 and tz2 wallets only. Status: <strong>rehearsal; no certificates issued or promised.</strong></span></li>
+        <li><b>What would make it real</b><span>A public pointcast-chain node on the final v2 genesis with non-dev keys, hosted by Mike, before any certificate is called issued.</span></li>
+      </ul>
+      <p class="fine"><a href="/chain/docs/art-minting/">Read the art minting plan</a> · <a href="/chain/dev#art-mirror">the mirror command</a></p>
+    </section>
+
+    <section id="roadmap" class="sec" aria-labelledby="roadmap-title">
+      <p class="kicker">05 · ROADMAP · EVERYTHING MARKED PLAN IS A PLAN</p>
+      <h2 id="roadmap-title" class="h2">v2 is Present Company. Next comes the Town Network.</h2>
+      <p class="note">
+        v2 is the version where ATTN could carry value. Its first batch is merged on main and tested locally. The
+        rest of v2, and the Town Network after it, are plans.
+      </p>
+      <h3 class="h3">v2 “Present Company” · batch 1 <span class="tag tag--done">merged · local</span></h3>
+      <ul class="rows">
+        {merged.map((r) => <li><b>{r.b}</b><span set:html={r.s.replace(/`([^`]+)`/g, '<code>$1</code>')} /></li>)}
+      </ul>
+      <h3 class="h3">v2 · later batches <span class="tag tag--plan">plan</span></h3>
+      <ul class="rows">
+        {later.map((r) => <li><b>{r.b} <span class="tag tag--plan">plan</span></b><span>{r.s}</span></li>)}
+      </ul>
+      <h3 class="h3">Next · “Town Network” <span class="tag tag--plan">plan</span></h3>
+      <ul class="rows">
+        {townNetwork.map((r) => <li><b>{r.b} <span class="tag tag--plan">plan</span></b><span>{r.s}</span></li>)}
+      </ul>
+      <p class="fine">Nothing in the Town Network is built. <a href="/chain/docs/v2/">Read the v2 plan of record</a>.</p>
+    </section>
+
+    <section id="learn" class="sec" aria-labelledby="learn-title">
+      <p class="kicker">06 · LEARN</p>
+      <h2 id="learn-title" class="h2">Study how it was built. Then take an assignment.</h2>
+      <ul class="cards">
+        <li class="card card--tint">
+          <p class="card__k">CASE STUDY · UNIVERSITY OF EL SEGUNDO</p>
+          <h3>A broadcast chain built in two days by a team of AI agents.</h3>
+          <p>The situation, the timeline, six decisions, the evidence as exhibits, what went wrong, teaching notes and discussion questions.</p>
+          <p class="card__links"><a href="/chain/case-study">Read the case →</a></p>
+        </li>
+        <li class="card">
+          <p class="card__k">INTERN EXPLORATION ASSIGNMENTS</p>
+          <h3>Ten small, safe ways in.</h3>
+          <p>Run a node, audit the yard on phones, write a simulator scenario, test passkeys, explain the chain to a neighbor. No keys, no money, no posting.</p>
+          <p class="card__links"><a href="/chain/interns">See the assignments →</a></p>
+        </li>
+        <li class="card">
+          <p class="card__k">DOCS · FROM THE REPO</p>
+          <h3>The design notes, in full.</h3>
+          <p>DESIGN, the v2 plan, the wallet scope, art minting, the simulator’s findings and the two review reports, copied from the repo at {SOURCE.commit}.</p>
+          <p class="card__links"><a href="/chain/docs/">Open the docs →</a></p>
+        </li>
+      </ul>
     </section>
 
     <section id="works" class="sec" aria-labelledby="works-title">
-      <p class="kicker">WHAT WORKS · EIGHT CLAIMS · THE PROOF BEHIND EACH</p>
-      <h2 id="works-title" class="h2">Eight things it does today, and how we know.</h2>
+      <p class="kicker">07 · WHAT WORKS · ELEVEN CLAIMS · THE PROOF BEHIND EACH</p>
+      <h2 id="works-title" class="h2">Eleven things it does today, and how we know.</h2>
+      <p class="note">The first eight held on the first version of this page. The last three merged on 3 October.</p>
       <ol class="facts">
         {facts.map((f) => (
-          <li class="fact">
+          <li class={`fact${f.today ? ' fact--today' : ''}`}>
             <p class="fact__n">{f.n} · {f.tag}</p>
             <h3>{f.claim}</h3>
-            <p class="fact__proof">{f.proof}</p>
+            <p class="fact__proof" set:html={f.proof.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/`([^`]+)`/g, '<code>$1</code>')} />
             {f.refs && (
               <p class="fact__refs">
                 {f.refs.map((r) => <a href={r.href} rel="noopener" target="_blank">{r.label} ↗</a>)}
@@ -166,124 +367,70 @@ const jsonLd = {
     </section>
 
     <section id="status" class="sec" aria-labelledby="status-title">
-      <p class="kicker">STATUS · AS OF 2026-10-03</p>
+      <p class="kicker">08 · STATUS AND NUMBERS · AS OF {SOURCE.date} · SOURCE {SOURCE.commit}</p>
       <h2 id="status-title" class="h2">Built and tested locally. Not yet a public network.</h2>
+      <section class="stats" aria-label="Repository numbers">
+        <div><strong>{TESTS.total}</strong><span>Tests passing</span><small>{TESTS.workspace.passed} Rust workspace, {TESTS.kernel.passed} rollup kernel, {TESTS.js.passed} JS. 0 failed; {TESTS.workspace.ignored + TESTS.kernel.ignored} ignored by design.</small></div>
+        <div><strong>{SOURCE.commits}</strong><span>Commits</span><small>From {SOURCE.firstAt} to {SOURCE.lastAt}.</small></div>
+        <div><strong>{CRATES.length}</strong><span>Crates</span><small>Eight in one Cargo workspace; the rollup kernel in its own.</small></div>
+        <div><strong>{SOURCE.rustLines.toLocaleString('en-US')}</strong><span>Lines of Rust</span><small>Everything under crates/, tests included.</small></div>
+      </section>
       <dl class="status">
         <div><dt>Runs</dt><dd>On one machine: a single sequencer, 3-second blocks, sqlite. There is no public node to connect to.</dd></div>
         <div><dt>Value</dt><dd>None. The yard is a dev chain signed with public keys, and ATTN carries no value today.</dd></div>
         <div><dt>Mainnet</dt><dd>Anchoring to Tezos mainnet waits on a funded anchor key, about 10 ꜩ for six days of hourly anchors, and a redeploy of the tez-cast and stampz feeds.</dd></div>
         <div><dt>Trust</dt><dd>One sequencer can censor, reorder and pick timestamps. It cannot forge your transactions, mint past the caps, or sign a state root that does not match its transactions without a replay catching it.</dd></div>
       </dl>
-    </section>
-
-    <section id="next" class="sec" aria-labelledby="next-title">
-      <p class="kicker">NEXT · V2 “PRESENT COMPANY” · BATCH 1 BUILT LOCALLY · THE REST ARE PLANS</p>
-      <h2 id="next-title" class="h2">Next: make ATTN worth holding, and easy to hold.</h2>
-      <ul class="next">
-        <li><b>Launch-ready</b><span>Built locally on 3 October: presence tickets, so on a launch chain tap income goes only to taps carrying an issuer-signed ticket, one per identity per slot, and bare keys mint nothing from taps. Also built: a night-shift doctor that says READY or NOT READY. Planned: the simulator re-measures the economy before any genesis that carries value.</span></li>
-        <li><b>PointCast-native</b><span>Built locally: Town Hall, a sidecar that replays the chain itself and shows every account, room and channel. Planned: drum circles co-signed from Kukai.</span></li>
-        <li><b>Trust-minimized</b><span>Planned: sequencer keys that can rotate, wallet prompts that show amounts, proofs light enough for a phone, and forced inclusion through the Tezos inbox.</span></li>
-        <li><b>Wallets that need no extension, and First Mints</b><span>Scoped for batch 2: a passkey as the wallet, one approval for a day of taps and drums, one profile. First Mints: a Noun, a typed word and a background. Only the recipe goes on chain; the art is drawn from it the same way every time.</span></li>
-      </ul>
-      <p class="cta">
-        <a href="/chain/first-mints/">Try the First Mints preview ↗</a>
-        <span>A design preview. Nothing is minted, no key is created, and nothing leaves your browser.</span>
-      </p>
+      <div class="tbl">
+        <table>
+          <caption>The crates</caption>
+          <thead><tr><th scope="col">Crate</th><th scope="col">What it is</th></tr></thead>
+          <tbody>
+            {CRATES.map((c) => <tr><th scope="row"><code>{c.name}</code>{c.bin && <> · <code>{c.bin}</code></>}</th><td>{c.role}</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+      <p class="fine">Tests run by Claude Code on {TESTS.ranOn} against a clean export of {SOURCE.commit}: <code>cargo test --workspace</code>, the kernel’s own <code>cargo test</code>, and five <code>node --test</code> suites ({TESTS.js.suites}).</p>
     </section>
 
     <footer class="method">
       <p class="kicker">METHOD</p>
       <p>
-        Facts on this page come from the pointcast-chain README, its design notes, the v2 plan and the simulator’s
-        findings, as of 3 October 2026; the yard’s counts come from its recording. The yard and its verifier are
-        static copies of the chain’s own explorer files, and the recording holds raw blocks with every signature. Filed by Claude Code as <a href={`/b/${BLOCK}`}>block {BLOCK}</a>.
+        Facts on this page come from the pointcast-chain repository at {SOURCE.commit}: the README, DESIGN.md, the v2 plan,
+        the wallet scope, the art minting plan, the simulator’s findings and the two review reports. The yard’s counts are
+        read from its recording at build time. The yard and its verifier are static copies of the chain’s own explorer files,
+        and the recording holds raw blocks with every signature. Filed by Claude Code as <a href={`/b/${BLOCK}`}>block {BLOCK}</a>.
       </p>
     </footer>
   </div>
 </BlockLayout>
 
 <style>
-  .chn{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
-  .crumb{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:400 10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
-  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
-  .kicker{margin:0 0 12px;font:500 10px/1.5 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
-  .hero{padding:48px 0 28px;max-width:820px}
-  .hero h1{margin:0;font:500 clamp(38px,6.2vw,72px)/.98 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
-  .dek{margin:20px 0 0;font:400 18px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
-  .jump{display:flex;flex-wrap:wrap;gap:6px 16px;margin:22px 0 0;font:400 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
-  .jump a{color:var(--c800);border-bottom:1px solid var(--c600)}
-
-  .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1.5px solid var(--c600);margin:8px 0}
-  .stats div{padding:16px;border-right:1.5px solid var(--c600);min-width:0}
-  .stats div:last-child{border-right:0;background:var(--c50)}
-  .stats strong{display:block;font:500 clamp(22px,3vw,34px)/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c800);font-variant-numeric:tabular-nums;white-space:nowrap}
-  .stats span{display:block;margin-top:8px;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
-  .stats small{display:block;margin-top:6px;font:400 12px/1.45 var(--pc-font-sans);color:var(--pc-ink-muted)}
-
-  .sec{padding-top:56px;scroll-margin-top:12px}
-  .h2{margin:0 0 14px;max-width:760px;font:500 clamp(24px,3vw,34px)/1.1 var(--pc-font-sans);letter-spacing:-.02em;text-wrap:balance}
-  .note{max-width:760px;margin:0 0 16px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
-
-  .yard{position:relative;aspect-ratio:4/3;max-height:min(900px,92vh);border:1.5px solid var(--c600);background:var(--c50)}
-  .yard iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
-  .yard__bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;margin:0 0 14px;padding:10px 12px;border:1.5px solid var(--c600);border-top:0;font:400 11px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
-  .yard__bar b{font-weight:500;color:var(--c800)}
-  .yard__bar a{color:var(--c800);font-weight:500}
-
   .facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .fact{min-width:0;border:1.5px solid var(--c600);padding:16px;overflow-wrap:anywhere}
   .fact:nth-child(4n+1){background:var(--c50)}
+  .fact--today{border-style:solid;box-shadow:inset 6px 0 0 var(--c600)}
   .fact__n{margin:0 0 8px;font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
   .fact h3{margin:0;font:500 19px/1.3 var(--pc-font-sans);letter-spacing:-.01em;color:var(--pc-ink)}
   .fact__proof{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--pc-rule-soft);font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
   .fact__refs{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0;font:400 11px var(--pc-font-mono);letter-spacing:.04em}
   .fact__refs a{color:var(--c800);border-bottom:1px solid var(--c600)}
 
-  .status{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;border:1.5px solid var(--c600)}
+  .status{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:8px 0;border:1.5px solid var(--c600)}
   .status div{padding:16px;border-bottom:1px solid var(--pc-rule-soft);min-width:0}
   .status div:nth-child(odd){border-right:1px solid var(--pc-rule-soft)}
   .status div:nth-last-child(-n+2){border-bottom:0}
   .status dt{margin:0 0 6px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
   .status dd{margin:0;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
 
-  .next{list-style:none;margin:0;padding:0;border-top:1.5px solid var(--c600)}
-  .next li{display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr);gap:8px 20px;padding:14px 0;border-bottom:1px solid var(--pc-rule-soft)}
-  .next b{font:500 15px/1.4 var(--pc-font-sans);color:var(--pc-ink)}
-  .next span{font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
-  .cta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:16px 0 0}
-  .cta a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;background:var(--c600);color:var(--pc-bg);font:500 12px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase}
-  .cta a:hover{background:var(--c800);text-decoration:none}
-  .cta span{font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
-
-  .method{margin-top:56px;padding-top:16px;border-top:1px solid var(--pc-rule);max-width:760px}
-  .method p:not(.kicker){margin:0;font:400 13px/1.6 var(--pc-font-sans);color:var(--pc-ink-muted)}
-  .method a{color:var(--c800)}
-
-  .chn a:focus-visible{outline:2px solid var(--c600);outline-offset:2px}
-
   @media (max-width:900px){
-    .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .stats div:nth-child(2){border-right:0}
-    .stats div:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}
     .facts{grid-template-columns:minmax(0,1fr)}
     .fact:nth-child(4n+1){background:transparent}
     .fact:nth-child(odd){background:var(--c50)}
   }
   @media (max-width:640px){
-    .chn{padding:16px 16px 96px}
-    .hero{padding:32px 0 22px}
-    .dek{font-size:17px}
-    .yard{aspect-ratio:auto;max-height:none;height:min(86vh,760px)}
     .status{grid-template-columns:minmax(0,1fr)}
     .status div:nth-child(odd){border-right:0}
     .status div:nth-last-child(2){border-bottom:1px solid var(--pc-rule-soft)}
-    .next li{grid-template-columns:minmax(0,1fr)}
-    .crumb a:last-child{margin-left:0}
-  }
-  @media (max-width:420px){
-    .stats{grid-template-columns:minmax(0,1fr)}
-    .stats div{border-right:0;border-bottom:1.5px solid var(--c600)}
-    .stats div:last-child{border-bottom:0}
-    .stats strong{white-space:normal}
   }
 </style>
