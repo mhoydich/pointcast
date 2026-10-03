@@ -14,6 +14,7 @@ const DAY_MS = 86400000;
 const ECB_DAILY = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml';
 const ECB_HISTORY = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml';
 const treasuryUrl = (year) => `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value=${year}`;
+const treasurySourceUrl = (date) => `https://home.treasury.gov/resource-center-data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value=${date.slice(0, 4)}`;
 const isoNow = (now = new Date()) => new Date(now).toISOString();
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -257,6 +258,7 @@ export async function refreshSignals(input = getSnapshot(), options = {}) {
       const latest = rows.at(-1);
       if (result.yieldCurve?.date && latest.date < result.yieldCurve.date) throw new Error('Treasury returned an older observation; last good curve retained');
       rows = rows.slice(-65);
+      treasurySource.sourceUrl = treasurySourceUrl(latest.date);
       result.yieldCurve = { date: latest.date, points: latest.points, sourceId: 'treasury', sourceUrl: treasurySource.sourceUrl, status: 'fresh', fetchedAt: at, lastSuccessAt: at, delivery: 'runtime' };
       for (const tenor of TREASURY_TENORS) {
         const series = result.series.find((series) => series.id === `treasury-${tenor.tenor}`);
@@ -267,7 +269,7 @@ export async function refreshSignals(input = getSnapshot(), options = {}) {
         const byDate = new Map((series?.history ?? []).filter((row) => row.date <= at.slice(0, 10)).map((row) => [row.date, row]));
         for (const row of newHistory) byDate.set(row.date, row);
         const history = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-65);
-        if (series && newHistory.length) Object.assign(series, { history, observationDate: history.at(-1).date, value: history.at(-1).value, fetchedAt: at, lastSuccessAt: at, delivery: 'runtime' });
+        if (series && newHistory.length) Object.assign(series, { history, sourceUrl: treasurySourceUrl(history.at(-1).date), observationDate: history.at(-1).date, value: history.at(-1).value, fetchedAt: at, lastSuccessAt: at, delivery: 'runtime' });
       }
       markSuccess(treasurySource, at, 'Keyless U.S. Treasury daily par yields; the curve uses one observation date.');
     } catch (error) { markFailure(treasurySource, at, error); }

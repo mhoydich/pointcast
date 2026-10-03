@@ -188,3 +188,47 @@ test('nearly zero educational interest stays finite instead of losing its denomi
   }
   assert.ok(Math.abs(rateScenario({principal:12000,annualRatePercent:1e-30,years:1}).monthlyPayment-1000)<1e-8);
 });
+
+
+test('new-year Treasury source attribution follows the observation year while missing tenors retain their old links', async () => {
+  const now2027='2027-01-05T12:00:00.000Z';
+  const baseline=getSnapshot(now2027);
+  const currentYear=treasuryXml('2027-01-04').replace('<d:BC_30YEAR>5.7</d:BC_30YEAR>','');
+  const calls=[];
+  const updated=await refreshSignals(baseline,{now:now2027,fetch:async (url)=>{calls.push(url);return new Response(url.includes('treasury')?currentYear:fxXml('2027-01-04'));}});
+  assert.ok(calls.some(url=>url.endsWith('field_tdr_date_value=2027')));
+  assert.equal(updated.yieldCurve.date,'2027-01-04');
+  assert.ok(updated.yieldCurve.sourceUrl.endsWith('field_tdr_date_value=2027'));
+  assert.ok(updated.sourceHealth.find(source=>source.id==='treasury').sourceUrl.endsWith('field_tdr_date_value=2027'));
+  for(const id of ['treasury-2y','treasury-10y']) {
+    const series=updated.series.find(series=>series.id===id);
+    assert.equal(series.observationDate,'2027-01-04');
+    assert.ok(series.sourceUrl.endsWith('field_tdr_date_value=2027'));
+  }
+  for(const id of ['treasury-3m','treasury-5y','treasury-30y']) {
+    const prior=baseline.series.find(series=>series.id===id);
+    const retained=updated.series.find(series=>series.id===id);
+    assert.equal(retained.observationDate,prior.observationDate);
+    assert.equal(retained.sourceUrl,prior.sourceUrl);
+    assert.equal(retained.lastSuccessAt,prior.lastSuccessAt);
+  }
+});
+
+test('January previous-year Treasury fallback attributes the actual previous-year observation', async () => {
+  const now2027='2027-01-05T12:00:00.000Z';
+  const calls=[];
+  const updated=await refreshSignals(getSnapshot(now2027),{now:now2027,fetch:async (url)=>{
+    calls.push(url);
+    if(!url.includes('treasury')) return new Response(fxXml('2027-01-04'));
+    return new Response(url.endsWith('field_tdr_date_value=2027')?'<feed />':treasuryXml('2026-12-31'));
+  }});
+  assert.deepEqual(calls.filter(url=>url.includes('treasury')).map(url=>url.slice(-4)),['2027','2026']);
+  assert.equal(updated.yieldCurve.date,'2026-12-31');
+  assert.ok(updated.yieldCurve.sourceUrl.endsWith('field_tdr_date_value=2026'));
+  assert.ok(updated.sourceHealth.find(source=>source.id==='treasury').sourceUrl.endsWith('field_tdr_date_value=2026'));
+  for(const id of ['treasury-2y','treasury-10y','treasury-30y']) {
+    const series=updated.series.find(series=>series.id===id);
+    assert.equal(series.observationDate,'2026-12-31');
+    assert.ok(series.sourceUrl.endsWith('field_tdr_date_value=2026'));
+  }
+});
