@@ -21,7 +21,7 @@ export function mountBookCompanion(root) {
       }
     }
     for (const button of filterButtons) button.setAttribute('aria-pressed', String(button.dataset.copyFilter === filter));
-    filterStatus.textContent = `${count} ${filter === 'all' ? 'copy' : filter} ${count === 1 ? 'route' : 'routes'} shown.`;
+    filterStatus.textContent = `${count} ${filter === 'all' ? 'reading' : filter} ${count === 1 ? 'route' : 'routes'} shown.`;
   };
   if (filterControls && filterStatus && cards.length) {
     for (const button of filterButtons) {
@@ -66,7 +66,7 @@ export function mountBookCompanion(root) {
     removers.forEach((remove) => remove());
     cards.forEach((card) => { card.hidden = false; card.querySelectorAll('[data-route-kind]').forEach((route) => { route.hidden = false; }); });
     if (filterControls) filterControls.hidden = true;
-    if (filterStatus) filterStatus.textContent = `All ${cards.length} copy routes shown.`;
+    if (filterStatus) filterStatus.textContent = `All ${cards.length} reading routes shown.`;
     if (lensControls) lensControls.hidden = true;
     if (lensPanel) lensPanel.hidden = true;
     if (lensList) lensList.hidden = false;
@@ -78,6 +78,9 @@ export function mountBookCompanion(root) {
 
 /** Build Book metadata from verified fields; never invent an Offer or emit unknown nulls. */
 export function buildBookStructuredData(book) {
+  if (book.resourceType === 'reading-room') {
+    return { '@context': 'https://schema.org', '@type': 'WebPage', name: `${book.title} — PointCast reading room`, url: `https://pointcast.xyz/books/${book.id}/`, description: book.dek, image: `https://pointcast.xyz${book.art.src}`, dateModified: book.checkedAt };
+  }
   const verifiedDate = (value) => typeof value === 'string' && /^\d{4}(?:-\d{2}-\d{2})?$/.test(value);
   const formats = { paperback: 'Paperback', hardcover: 'Hardcover', ebook: 'EBook', audiobook: 'Audiobook' };
   const editions = book.editions.map((edition) => {
@@ -92,7 +95,8 @@ export function buildBookStructuredData(book) {
     if (source) record.url = source.url;
     return record;
   });
-  const about = { '@type': 'Book', '@id': `https://pointcast.xyz/books/${book.id}/#work`, name: book.title, author: book.authors.map((name) => ({ '@type': 'Person', name })), inLanguage: 'en', genre: book.kind, workExample: editions };
+  const about = { '@type': 'Book', '@id': `https://pointcast.xyz/books/${book.id}/#work`, name: book.title, author: (book.authorCredits ? book.authorCredits.filter(credit => credit.role === 'author').map(credit => credit.name) : book.authors).map((name) => ({ '@type': 'Person', name })), inLanguage: 'en', genre: book.kind, workExample: editions };
+  if (book.authorCredits?.some(credit => credit.role === 'contributor')) about.contributor = book.authorCredits.filter(credit => credit.role === 'contributor').map(credit => ({ '@type': 'Person', name: credit.name }));
   if (verifiedDate(book.firstPublished)) about.datePublished = book.firstPublished;
   return { '@context': 'https://schema.org', '@type': 'WebPage', name: `${book.title} — PointCast book companion`, url: `https://pointcast.xyz/books/${book.id}/`, description: book.dek, image: `https://pointcast.xyz${book.art.src}`, dateModified: book.checkedAt, about };
 }
