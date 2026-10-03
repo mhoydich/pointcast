@@ -1,0 +1,48 @@
+name: Check home share editions
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/home-share-editions-check.yml'
+      - 'src/lib/home-share-editions*'
+      - 'src/components/HomeShareEditions.astro'
+      - 'src/pages/share/home/**'
+      - 'src/pages/index.astro'
+      - 'src/layouts/BlockLayout.astro'
+      - 'src/lib/unfurl/plan.mjs'
+      - 'functions/_middleware.ts'
+      - 'public/_headers'
+      - 'public/images/home-share/**'
+      - 'scripts/verify-home-share.mjs'
+      - 'tests/home-share-editions.test.mjs'
+      - 'tests/unfurl-freshness.test.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: home-share-editions-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify edition identities, original assets, and existing unfurls
+        run: node --test tests/home-share-editions.test.mjs tests/unfurl-engine.test.mjs tests/unfurl-freshness.test.mjs tests/kennel-club-og-today.test.mjs
+      - name: Full build
+        run: npm run build
+      - name: Verify server-rendered edition metadata and built image bytes
+        run: node scripts/verify-home-share.mjs
