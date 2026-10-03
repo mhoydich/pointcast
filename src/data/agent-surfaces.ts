@@ -5,6 +5,9 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    pickleballHome: 'https://pointcast.xyz/pickleball/home/',
+    pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands/',
+    pickleballMixedDoubles: 'https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles/',
     bookshop: 'https://pointcast.xyz/books/',
     siddhartha: 'https://pointcast.xyz/siddhartha/',
     denOfThieves: 'https://pointcast.xyz/books/den-of-thieves/',
@@ -89,6 +92,9 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
   },
   json: {
+    pickleballHome: 'https://pointcast.xyz/pickleball/home.json',
+    pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands.json',
+    pickleballMixedDoubles: 'https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles.json',
     siddhartha: 'https://pointcast.xyz/siddhartha.json',
     denOfThieves: 'https://pointcast.xyz/books/den-of-thieves.json',
     playingForPizza: 'https://pointcast.xyz/books/playing-for-pizza.json',
