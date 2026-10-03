@@ -35,14 +35,52 @@ const reader = document.querySelector('[data-plugin-field-guide]');
 assert.ok(reader, 'generated reading surface must exist');
 const renderedText = normalize(reader.textContent);
 const paragraphs = (value) => Array.isArray(value) ? value : [value];
-const finalText = [guide.title, guide.subtitle, ...guide.intro,
-  ...guide.baselines.map((item) => item.body), ...guide.recommendations.map((item) => item.body),
-  ...guide.topics.flatMap((topic) => [topic.title, topic.definition, ...paragraphs(topic.use), ...paragraphs(topic.avoid),
-    ...topic.architecture, ...topic.practices.map((item) => item.body), topic.availability,
+const finalText = [guide.title, guide.subtitle, ...guide.intro, guide.baselineSha,
+  ...Object.values(GUIDE_BRANDS), ...guide.statusLabels.flatMap((item) => [item.label, item.description]),
+  ...guide.baselines.flatMap((item) => [item.title, item.body, ...item.links.map((link) => link.label)]),
+  ...guide.recommendations.flatMap((item) => [item.title, item.body]),
+  ...guide.topics.flatMap((topic) => [topic.title, topic.question, topic.definition, ...paragraphs(topic.use), ...paragraphs(topic.avoid),
+    ...topic.architecture, ...topic.practices.flatMap((item) => [item.label, item.body]), topic.availability,
     ...topic.examples.flatMap((item) => [item.title, item.body, item.prompt, item.output, item.firstStep]),
-    ...(topic.code ? [topic.code.caption, topic.code.text] : [])]),
-  ...guide.sharedPractices.map((item) => item.body), ...guide.pilotSteps.map((item) => item.body), ...guide.limitations];
+    ...(topic.code ? [topic.code.language, topic.code.caption, topic.code.text] : [])]),
+  ...guide.sharedPractices.flatMap((item) => [item.label, item.body]),
+  ...guide.pilotSteps.flatMap((item) => [item.title, item.body]),
+  ...guide.sources.flatMap((item) => [item.title, item.note]), ...guide.limitations];
 for (const text of finalText) assert.ok(renderedText.includes(normalize(text)), `final prose absent from generated HTML: ${text.slice(0, 100)}`);
+assert.equal(reader.querySelector('time')?.getAttribute('datetime'), guide.checkedAt);
+
+const statusLabel = (id) => guide.statusLabels.find((item) => item.id === id)?.label;
+for (const topic of guide.topics) {
+  const section = document.getElementById(topic.id);
+  assert.ok(section && reader.contains(section), `missing topic: ${topic.id}`);
+  assert.equal(normalize(section.querySelector('h2')?.textContent ?? ''), topic.title);
+  assert.equal(normalize(section.querySelector('.fg-topic-number')?.textContent ?? ''), String(topic.number).padStart(2, '0'));
+  const cards = [...section.querySelectorAll('.fg-example-card')];
+  assert.equal(cards.length, topic.examples.length);
+  for (const [index, example] of topic.examples.entries()) {
+    const card = cards[index];
+    assert.equal(card.dataset.brand, example.brand, `wrong example brand in ${topic.id}`);
+    assert.equal(card.querySelector('.fg-status')?.dataset.status, example.status);
+    assert.equal(normalize(card.querySelector('.fg-status')?.textContent ?? ''), statusLabel(example.status));
+    assert.equal(normalize(card.querySelector('h4')?.textContent ?? ''), example.title);
+    for (const text of [GUIDE_BRANDS[example.brand], example.body, example.prompt, example.output, example.firstStep]) {
+      assert.ok(normalize(card.textContent).includes(normalize(text)), `wrong example content for ${topic.id}/${example.brand}`);
+    }
+  }
+}
+for (const baseline of guide.baselines) {
+  const card = reader.querySelector(`.fg-baseline-card[data-baseline-brand="${baseline.brand}"]`);
+  assert.ok(card);
+  assert.equal(card.querySelector('.fg-status')?.dataset.status, baseline.status);
+  assert.equal(normalize(card.querySelector('.fg-status')?.textContent ?? ''), statusLabel(baseline.status));
+  for (const text of [baseline.title, baseline.body]) assert.ok(normalize(card.textContent).includes(normalize(text)));
+}
+for (const source of guide.sources) {
+  const entry = document.getElementById(`source-${source.id}`);
+  assert.ok(entry && reader.contains(entry));
+  assert.equal(entry.querySelector('a')?.href, source.url);
+  for (const text of [source.title, source.note]) assert.ok(normalize(entry.textContent).includes(normalize(text)));
+}
 
 assert.equal(document.documentElement.dataset.pcIsolated, 'true');
 assert.equal(document.querySelector('meta[name="robots"]')?.content, 'noindex, nofollow');
@@ -78,7 +116,7 @@ const report = {
   exampleCount: 15,
   renderedFinalParagraphs: finalText.length,
   generatedAssetCount: assets.size,
-  checks: ['exact-checkout', 'final-html-prose', 'exact-markdown', 'exact-json', 'draft-no-activation', 'noindex', 'canonical', 'all-15-without-js', 'live-status', 'anchors', 'source-links', 'isolated-chrome', 'generated-assets'],
+  checks: ['exact-checkout', 'final-html-prose', 'brand-status-mapping', 'source-attribution', 'exact-markdown', 'exact-json', 'draft-no-activation', 'noindex', 'canonical', 'all-15-without-js', 'live-status', 'anchors', 'source-links', 'isolated-chrome', 'generated-assets'],
   sha256: { html: hash(html), markdown: hash(markdown), json: hash(json) },
   deploymentPerformed: false,
 };
