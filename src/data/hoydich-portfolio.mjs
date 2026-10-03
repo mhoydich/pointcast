@@ -97,7 +97,7 @@ export const PROJECTS = [
   },
   {
     id: 'keyboard', family: 'play', title: 'Keyboard Arcade', subtitle: 'A key becomes a small world.',
-    number: '08', color: '#916b28', image: '/images/home-highlights/keyboard.jpg',
+    number: '08', color: '#825e22', image: '/images/home-highlights/keyboard.jpg',
     imageAlt: 'The existing PointCast Keyboard Arcade project artwork.',
     imageNote: 'Existing project artwork from the PointCast homepage.',
     description: 'A collection of small keyboard instruments and playful rooms for making sound, marks and moments.',

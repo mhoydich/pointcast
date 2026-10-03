@@ -1,6 +1,8 @@
 export function initPortfolio(root) {
   if (!root || root.dataset.portfolioReady === 'true') return;
   root.dataset.portfolioReady = 'true';
+  const main = root.closest('main');
+  if (main) main.tabIndex = -1;
   const family = root.querySelector('[data-family-filter]');
   const statusButtons = [...root.querySelectorAll('[data-status-filter]')];
   const projectCards = [...root.querySelectorAll('[data-project-card]')];
