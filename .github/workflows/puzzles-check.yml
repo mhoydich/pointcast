@@ -1,0 +1,38 @@
+name: Puzzle feature checks
+on:
+  pull_request:
+    paths:
+      - 'src/pages/puzzles/**'
+      - 'src/pages/puzzles.json.ts'
+      - 'src/pages/shop/puzzles.astro'
+      - 'src/components/PuzzleFrame.astro'
+      - 'src/styles/puzzles.css'
+      - 'src/lib/puzzle-*'
+      - 'src/data/puzzle-*'
+      - 'public/images/puzzles/**'
+      - 'tests/puzzles.test.mjs'
+      - 'scripts/audit-puzzles.mjs'
+      - '.github/workflows/puzzles-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: puzzles-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/puzzles.test.mjs
+      - run: npm run build:bare
+      - run: node scripts/audit-puzzles.mjs
+      - run: npm run audit:agents

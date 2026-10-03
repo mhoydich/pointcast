@@ -248,6 +248,7 @@ export const SHOP_FACTS: Record<string, string> = Object.fromEntries(
 export const SHOP_PICKS: ShopPick[] = [...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {id:'puzzles',title:'The puzzle shelf',dek:'Nine official puzzle publishers, choosing guidance, and ten original PointCast concepts clearly marked not for sale.',href:'/shop/puzzles/',json:'/puzzles.json',kind:'Shelf',image:'/images/puzzles/01-tidepool-atlas.webp',imageAlt:'Original Tidepool atlas puzzle concept with colorful coastal pools',asOf:'2026-10-03',count:9,countLabel:'publisher shops'},
   {
     id: 'balm-shelf', title: balms.title, dek: balms.dek, href: '/reviews/balm-shelf', json: '/reviews/balm-shelf.json',
     kind: 'Field guide', image: '/images/balm-shelf/hero.jpg', imageAlt: 'Illustrated balm shelf: tin, tube, patch, liniment bottle, mint, chili, wintergreen',
