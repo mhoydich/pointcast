@@ -7,6 +7,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Pickleball Practice Desk 02 (2026-10-03)
+
+- [x] (X) Add goal/time/space/partner practice plans, browser-local self-reported scorecard, and two sourced illustrated articles to `/pickleball/home` — `done` — canonical RALLY mirror and original board preserved
+- [x] (X) Validate source behavior and independently review desktop/mobile interactions and article contrast — `done` — exact-head build/CI evidence is recorded in the draft PR
+- [ ] (MH/X) Approve the reviewed PR, grant the serialized publication lane, then merge/deploy and verify production — `waiting-on-mh`
+
+---
+
 ## Pocket Rocks — native collectible specimens (2026-09-29)
 
 - [x] (X) Build `/rocks` and `/rocks.json` with ten procedural geology-inspired families, a rotatable viewer, SVG fallback, browser-local cabinet, specimen sharing, and portable exports — `done`
