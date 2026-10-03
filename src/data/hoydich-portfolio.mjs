@@ -2,7 +2,7 @@
 export const SNAPSHOT = {
   title: 'Hoydich / A map of the making',
   route: '/hoydich/',
-  capturedAt: '2026-10-03T16:49:53Z',
+  capturedAt: '2026-10-03T18:00:06Z',
   dateLabel: '03 October 2026',
   sourceRevision: '551bd6e62b4126a811cbc5eba7e4ea831c5bc5c0',
   note: 'An edited snapshot of public creative work and current studio plans. Updated by hand after releases; no live project sync.',
@@ -114,6 +114,9 @@ export const STUDIO_ONLY = [
   { id: 'sunday', family: 'play', title: 'One Sunday at the Vanguard', direction: 'A standalone listening world around a historical recording and a map of New York City.', status: 'building', stage: 'Listening site in progress', nextStep: 'Verify the recording history, place references and listening experience.', kind: 'Music & place' },
   { id: 'dispensary-atlas', family: 'place', title: 'Dispensary Market Atlas', direction: 'A 25-mile El Segundo research and discovery study, with California and national market context.', status: 'building', stage: 'Market research in progress', nextStep: 'Verify public sources, local coverage and the discovery experience. No store or ordering service is offered here.', kind: 'Place & market research' },
   { id: 'art-v2', family: 'art', title: 'Original art / edition two', direction: 'A planned gallery of 50 source artworks paired with new reinterpretations. The matched source collection is still being verified.', status: 'building', stage: 'Source verification in progress', nextStep: 'Verify each source and its matching new work before showing a comparison. No editions are offered here.', kind: 'Art & image' },
+  {"id": "coffee-business", "family": "place", "title": "Coffee atlas / UES business studies", "direction": "A coffee atlas and a University of El Segundo hub for local case studies and business research.", "status": "building", "stage": "Atlas & casebook in progress", "nextStep": "Verify the dated sources, local coverage and study tools before publication.", "kind": "Place & business studies"},
+  {"id": "real-estate", "family": "place", "title": "Real estate observatory", "direction": "A new public real estate study being shaped for PointCast.", "status": "building", "stage": "Observatory in progress", "nextStep": "Verify the public sources and study experience before publication.", "kind": "Place & market research"},
+  {"id": "business-signals", "family": "tools", "title": "Rates / FX business signals", "direction": "A public business-study view of rates and foreign-exchange signals.", "status": "building", "stage": "Signals study in progress", "nextStep": "Verify source dates, data definitions and the study context before publication.", "kind": "Tools & business studies"},
 ];
 
 export const ROADMAP = [

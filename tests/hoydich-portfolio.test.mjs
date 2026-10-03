@@ -40,7 +40,7 @@ test('family and stage combine, announce empty states, and reset to the complete
   assert.equal(f.root.querySelector('[data-project-empty]').hidden, false);
   assert.equal(f.root.querySelector('[data-studio-empty]').hidden, false);
   f.click('building');
-  assert.equal(f.visible('[data-studio-card]').length, 1);
+  assert.equal(f.visible('[data-studio-card]').length, 2);
   f.root.querySelector('[data-reset-filters]').click();
   assert.equal(f.root.querySelector('select').value, 'all');
   assert.equal(f.visible('[data-project-card]').length, PROJECTS.length);
@@ -121,6 +121,6 @@ test('the empty-view studio fallback reveals matching unfinished work', () => {
   f.click('open');
   assert.equal(f.visible('[data-studio-card]').length, 0);
   f.root.querySelector('[data-project-empty] a').click();
-  assert.equal(f.visible('[data-studio-card]').length, 1);
+  assert.equal(f.visible('[data-studio-card]').length, 2);
   assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'true');
 });
