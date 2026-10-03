@@ -150,7 +150,7 @@ def og_svg(block='0660'):
 <rect x="560" y="60" width="600" height="480" fill="none" stroke="#185FA5" stroke-width="1.5"/>
 <rect x="0" y="0" width="24" height="{H}" fill="#185FA5"/>
 <text x="80" y="100" font-family="JetBrains Mono, ui-monospace, monospace" font-size="22" font-weight="500" letter-spacing="3.2" fill="#0B3E73">CH.FD · № {block} · LINK</text>
-<text x="80" y="138" font-family="JetBrains Mono, ui-monospace, monospace" font-size="16" font-weight="400" letter-spacing="2.5" fill="#5F5E5A">10.03.26 · LOCAL BUILD · 250 TESTS</text>
+<text x="80" y="138" font-family="JetBrains Mono, ui-monospace, monospace" font-size="16" font-weight="400" letter-spacing="2.5" fill="#5F5E5A">10.03.26 · LOCAL BUILD · NOT PUBLIC</text>
 <text x="80" y="250" font-family="Inter, system-ui, sans-serif" font-size="50" font-weight="500" fill="#12110E">A chain where</text>
 <text x="80" y="312" font-family="Inter, system-ui, sans-serif" font-size="50" font-weight="500" fill="#12110E">every block is</text>
 <text x="80" y="374" font-family="Inter, system-ui, sans-serif" font-size="50" font-weight="500" fill="#12110E">a broadcast.</text>
