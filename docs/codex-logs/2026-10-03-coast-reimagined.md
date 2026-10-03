@@ -54,7 +54,11 @@ unverified: browser-control capability was unavailable in this execution task.
 The DOM tests emulate modal methods and layout rectangles and do not substitute
 for that visual check.
 
-No gallery branch was pushed, no PR opened, and no gallery merge, deployment or
-social publication occurred. Public actions are paused under the latest owner
-instruction and require explicit approval. The scoped `Art v2 gallery checks`
-workflow is prepared locally; remote CI has not run.
+At the initial local handoff (20:06 UTC), no gallery branch had been pushed, no PR
+opened, and no gallery merge, deployment or social publication had occurred.
+The owner subsequently authorized finishing the current releases. A scoped branch
+push and draft PR may now be submitted; merge and deployment remain with the
+exclusive publisher and must account for the outstanding native browser check.
+The scoped `Art v2 gallery checks` workflow verifies each submitted PR head.
+Remote CI is separate from the local validation recorded above; see the PR's
+checks for its result. Minting, payments and social posts remain excluded.
