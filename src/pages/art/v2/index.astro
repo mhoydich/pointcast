@@ -1,0 +1,144 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import gallery from '../../../data/art-v2.json';
+import { toPublicManifest } from '../../../lib/art-v2.mjs';
+import '../../../styles/art-v2.css';
+
+const manifest = toPublicManifest(gallery);
+const works = manifest.works;
+const categories = [...new Set(works.map((work) => work.category))].sort((a, b) => a.localeCompare(b));
+const v2Count = works.filter((work) => work.v2?.asset).length;
+const number = (work, index) => String(work.number ?? index + 1).padStart(2, '0');
+const displayTitle = (work) => work.v2?.title || work.title;
+const heroParts = manifest.title.split(/,\s*/, 2);
+const heroFirst = heroParts[0];
+const heroSecond = heroParts[1] ? `${heroParts[1].charAt(0).toLocaleLowerCase()}${heroParts[1].slice(1).replace(/[.!?]$/, '')}.` : '';
+const manifestJson = JSON.stringify(manifest).replace(/</g, '\\u003c');
+const description = manifest.description || 'Selected Midjourney originals and their new interpretations, exhibited together with public provenance.';
+const coverImage = works.find((work) => work.v2?.asset)?.v2 || works[0]?.source;
+const cover = coverImage?.asset;
+const imageGalleryJson = JSON.stringify({
+  '@context': 'https://schema.org', '@type': 'ImageGallery',
+  name: manifest.title, description, url: manifest.url,
+  associatedMedia: works.flatMap((work) => [
+    work.source.asset ? { '@type': 'ImageObject', name: work.title, contentUrl: work.source.asset } : null,
+    work.v2?.asset ? { '@type': 'ImageObject', name: displayTitle(work), contentUrl: work.v2.asset } : null,
+  ].filter(Boolean)),
+}).replace(/</g, '\\u003c');
+---
+
+<BlockLayout
+  title={manifest.title}
+  description={description}
+  image={cover || undefined}
+  imageWidth={coverImage?.width || 1200}
+  imageHeight={coverImage?.height || 630}
+  themeColor="#f1ece2"
+  isolated
+  immersive
+  showNetworkStrip={false}
+  noindex={manifest.status === 'review'}
+  alternates={[{ type: 'application/json', href: '/art/v2/manifest.json', title: 'Artwork provenance manifest' }]}
+  jsonLd={null}
+>
+  <div class="art-v2" data-art-gallery data-view="paired">
+    <a class="art-skip" href="#collection">Skip to the collection</a>
+    <header class="art-nav">
+      <a class="art-brand" href="/"><span class="art-mark" aria-hidden="true"></span>POINTCAST</a>
+      <p>THE ART ROOMS <span aria-hidden="true">/</span> VERSION 02</p>
+      <a href="/art/v2/manifest.json">Public provenance <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <div class="art-exhibition-body">
+      <section class="art-intro" aria-labelledby="exhibition-title">
+        <div>
+          <p class="art-eyebrow">MIDJOURNEY ORIGINALS / NEW INTERPRETATIONS</p>
+          <h1 id="exhibition-title">{heroFirst}{heroSecond && ','}{heroSecond && <><br /><em>{heroSecond}</em></>}</h1>
+        </div>
+        <div class="art-intro-note">
+          <p class="art-exhibition-name">{manifest.title}</p>
+          <p>{description}</p>
+          <div class="art-edition-count"><strong>{String(works.length).padStart(2, '0')}</strong><span>selected originals<br />{v2Count} new interpretations</span></div>
+          <a class="art-text-link" href="#collection">Enter the collection <span aria-hidden="true">↓</span></a>
+        </div>
+      </section>
+
+      <section class="art-collection" id="collection" aria-labelledby="collection-title">
+        <div class="art-collection-head">
+          <h2 id="collection-title">The collection</h2>
+          <p class="art-eyebrow" data-result-count>{works.length} works / paired view</p>
+        </div>
+        <div class="art-controls" data-gallery-controls hidden>
+          <div class="art-control-top">
+            <label class="art-search"><span>Search the collection</span><input type="search" data-search placeholder="Title, subject, or prompt" autocomplete="off" spellcheck="false" /></label>
+            <fieldset class="art-view-controls"><legend>View</legend><div>
+              <button type="button" data-view-control="paired" aria-pressed="true">Paired</button>
+              <button type="button" data-view-control="source" aria-pressed="false">Source</button>
+              <button type="button" data-view-control="v2" aria-pressed="false">V2</button>
+            </div></fieldset>
+          </div>
+          <fieldset class="art-categories"><legend>Filter by category</legend><div>
+            <button type="button" data-category="all" aria-pressed="true">All works <span>{works.length}</span></button>
+            {categories.map((category) => <button type="button" data-category={category} aria-pressed="false">{category} <span>{works.filter((work) => work.category === category).length}</span></button>)}
+          </div></fieldset>
+        </div>
+
+        <p class="art-sr" data-filter-status role="status" aria-live="polite" aria-atomic="true"></p>
+        <div class="art-empty" data-empty hidden><h3>No works in this view.</h3><p>Try another category or search term.</p><button type="button" data-reset>Show all works</button></div>
+        <div class="art-grid" data-gallery-grid>
+          {works.map((work, index) => (
+            <article class="art-work" id={`work-${work.id}`} data-work-id={work.id} data-featured={index === 0 ? 'true' : 'false'}>
+              <a class="art-work-open" href={work.v2?.asset || work.source.asset || '#collection'} data-open-work={work.id} aria-haspopup="dialog" aria-label={`View ${number(work, index)}: ${displayTitle(work)}`}>
+                <div class="art-work-images">
+                  {work.source.asset && <figure class="art-image art-image-source" style={work.source.width ? `--art-native-width: ${work.source.width}px` : undefined}>
+                    <img src={work.source.thumbnail || work.source.asset} srcset={work.source.thumbnail ? `${work.source.thumbnail} ${work.source.thumbnailWidth || 480}w, ${work.source.asset} ${work.source.width || 1280}w` : undefined} sizes={`(min-width: 1100px) ${index === 0 ? '45' : '22'}vw, (min-width: 480px) 45vw, 90vw`} width={work.source.width || undefined} height={work.source.height || undefined} alt={`${work.title} — Midjourney source reference`} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" />
+                    <figcaption><span>01 / SOURCE</span><span>Midjourney</span></figcaption>
+                    <p class="art-image-title">{work.title}</p>
+                  </figure>}
+                  {work.v2?.asset ? <figure class="art-image art-image-v2" style={work.v2.width ? `--art-native-width: ${work.v2.width}px` : undefined}>
+                    <img src={work.v2.thumbnail || work.v2.asset} srcset={work.v2.thumbnail ? `${work.v2.thumbnail} ${work.v2.thumbnailWidth || 480}w, ${work.v2.asset} ${work.v2.width || 1280}w` : undefined} sizes={`(min-width: 1100px) ${index === 0 ? '45' : '22'}vw, (min-width: 480px) 45vw, 90vw`} width={work.v2.width || undefined} height={work.v2.height || undefined} alt={`${displayTitle(work)} — V2 interpretation`} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" />
+                    <figcaption><span>02 / NEW INTERPRETATION</span><span>V2</span></figcaption>
+                    <p class="art-image-title">{displayTitle(work)}</p>
+                  </figure> : <p class="art-v2-pending art-image-v2">The V2 interpretation is not yet exhibited.</p>}
+                </div>
+                <span class="art-open-label">Open viewing room <span aria-hidden="true">↗</span></span>
+              </a>
+              <div class="art-work-caption"><span class="art-work-number" aria-label={`Work ${number(work, index)}`}>{number(work, index)}</span><div><p class="art-eyebrow">{work.category}</p><h3>{displayTitle(work)}</h3>{work.v2?.title && work.v2.title !== work.title && <p class="art-work-source-title">Source: {work.title}</p>}</div><p class="art-work-edition">Edition unavailable<br /><span>Planned 1 tez</span></p></div>
+            </article>
+          ))}
+        </div>
+        {works.length === 0 && <p class="art-empty">The exhibition has no published artwork records yet.</p>}
+        <noscript><p class="art-no-script">The complete paired collection is shown. Each artwork link opens its full image; search and the viewing room require JavaScript.</p></noscript>
+      </section>
+
+      <section class="art-colophon" aria-labelledby="colophon-title">
+        <div><p class="art-eyebrow">THE RECORD BEHIND THE IMAGE</p><h2 id="colophon-title">Every image<br /><em>has a beginning.</em></h2></div>
+        <div><p>Open a work to read its published source record and prompt fragment, plus the prompt and generator behind its V2 interpretation. The original complete Midjourney prompt is unavailable in these source records.</p><p>Edition unavailable. The planned price is 1 tez. Rights review, edition details, and sale configuration must be resolved before an edition can be offered.</p><div class="art-colophon-links"><a class="art-text-link" href="https://www.midjourney.com/@mhoydich?tab=spotlight" target="_blank" rel="noopener noreferrer">Mike’s Midjourney profile <span aria-hidden="true">↗</span></a><a class="art-text-link" href="/art/v2/manifest.json">Read the public manifest <span aria-hidden="true">↗</span></a></div></div>
+      </section>
+    </div>
+
+    <footer class="art-footer"><a class="art-brand" href="/">POINTCAST <span aria-hidden="true">↗</span></a><p>SELECTED SOURCES / NEW POSSIBILITIES</p><a href="#exhibition-title">Back to the beginning <span aria-hidden="true">↑</span></a></footer>
+
+    <dialog class="art-dialog" data-viewer aria-labelledby="art-dialog-title" aria-describedby="art-dialog-instructions" data-view="paired">
+      <div class="art-dialog-top"><p class="art-eyebrow" data-viewer-counter></p><button class="art-close" type="button" data-close autofocus aria-label="Close viewing room">Close <span aria-hidden="true">×</span></button></div>
+      <div class="art-dialog-heading"><div><p class="art-eyebrow" data-viewer-category></p><h2 id="art-dialog-title" data-viewer-title></h2><p class="art-dialog-source-title" data-viewer-source-title></p></div><fieldset class="art-view-controls"><legend>View</legend><div><button type="button" data-view-control="paired" aria-pressed="true">Paired</button><button type="button" data-view-control="source" aria-pressed="false">Source</button><button type="button" data-view-control="v2" aria-pressed="false">V2</button></div></fieldset></div>
+      <div class="art-dialog-images" data-viewer-images></div>
+      <div class="art-dialog-bottom"><button type="button" data-previous aria-label="Previous artwork" aria-keyshortcuts="ArrowLeft"><span aria-hidden="true">←</span> Previous</button><p id="art-dialog-instructions">Arrow keys to explore · Escape to close</p><button type="button" data-next aria-label="Next artwork" aria-keyshortcuts="ArrowRight">Next <span aria-hidden="true">→</span></button></div>
+      <div class="art-provenance"><div data-viewer-source></div><div data-viewer-v2></div><aside class="art-edition"><p class="art-eyebrow">THE EDITION</p><p class="art-planned-price">Planned 1 tez</p><button type="button" disabled aria-describedby="art-edition-note">Edition unavailable</button><p id="art-edition-note">Rights review and edition configuration are pending.</p></aside></div>
+      <p class="art-sr" data-viewer-status role="status" aria-live="polite" aria-atomic="true"></p>
+    </dialog>
+    <script type="application/json" data-gallery-data is:inline set:html={manifestJson}></script>
+    <script type="application/ld+json" is:inline set:html={imageGalleryJson}></script>
+  </div>
+  <script>
+    import { initArtGallery } from '../../../scripts/art-v2.mjs';
+    let cleanup;
+    const setup = () => {
+      cleanup?.();
+      cleanup = initArtGallery(document.querySelector('[data-art-gallery]'));
+    };
+    setup();
+    document.addEventListener('astro:page-load', setup);
+    document.addEventListener('astro:before-swap', () => cleanup?.());
+  </script>
+</BlockLayout>
