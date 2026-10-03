@@ -15,7 +15,10 @@ export function observationCsv(packet) {
   for (const series of packet.series) {
     const history = pointsFor(series);
     if (numeric(series.value) && series.observationDate && !history.some(p=>p.date===series.observationDate)) history.push({date:series.observationDate,value:series.value});
-    for (const point of history) rows.push([series.id,series.title,point.date,point.value,series.unit,series.sourceId,series.sourceUrl,series.status,series.lastSuccessAt,point.preliminary??series.preliminary??false,series.dateMeaning??'Source observation date']);
+    for (const point of history) {
+      const sourceUrl=series.sourceId==='treasury'?`https://home.treasury.gov/resource-center-data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value=${point.date.slice(0,4)}`:series.sourceUrl;
+      rows.push([series.id,series.title,point.date,point.value,series.unit,series.sourceId,sourceUrl,series.status,series.lastSuccessAt,point.preliminary??series.preliminary??false,series.dateMeaning??'Source observation date']);
+    }
   }
   const fxHistory=(packet.fx?.history||[]).filter(table=>table.date&&table.rates);
   if(packet.fx?.rates&&packet.fx.date&&!fxHistory.some(table=>table.date===packet.fx.date))fxHistory.push(packet.fx);

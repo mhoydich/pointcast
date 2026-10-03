@@ -26,3 +26,11 @@ test('CSV escapes commas, quotes and formula-like text without turning signed nu
   assert.match(csv,/,"-12","test units"/);
   assert.doesNotMatch(csv,/'-12/);
 });
+
+
+test('historical Treasury CSV attribution follows each row across a year boundary',()=>{
+  const packet={series:[{id:'treasury-10y',title:'Treasury10y',sourceId:'treasury',unit:'%',sourceUrl:'https://home.treasury.gov/resource-center-data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value=2027',status:'fresh',observationDate:'2027-01-04',value:5.1,history:[{date:'2026-12-31',value:5},{date:'2027-01-04',value:5.1}]}]};
+  const rows=observationCsv(packet).split('\r\n');
+  assert.match(rows.find(row=>row.includes('"2026-12-31"')),/field_tdr_date_value=2026/);
+  assert.match(rows.find(row=>row.includes('"2027-01-04"')),/field_tdr_date_value=2027/);
+});
