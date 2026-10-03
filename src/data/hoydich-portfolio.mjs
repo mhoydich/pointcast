@@ -2,7 +2,7 @@
 export const SNAPSHOT = {
   title: 'Hoydich / A map of the making',
   route: '/hoydich/',
-  capturedAt: '2026-10-03T16:24:49Z',
+  capturedAt: '2026-10-03T16:49:53Z',
   dateLabel: '03 October 2026',
   sourceRevision: '551bd6e62b4126a811cbc5eba7e4ea831c5bc5c0',
   note: 'An edited snapshot of public creative work and current studio plans. Updated by hand after releases; no live project sync.',
@@ -110,9 +110,9 @@ export const PROJECTS = [
 export const STUDIO_ONLY = [
   { id: 'discovery', family: 'tools', title: 'Discovery / audit dashboard', direction: 'A clearer public view of PointCast’s project discovery and navigation.', status: 'building', stage: 'Dashboard in progress', nextStep: 'Verify the public page, its evidence and accessible navigation.', kind: 'Tools & systems' },
   { id: 'canterbury', family: 'reading', title: 'Canterbury', direction: 'A new reading room being shaped for PointCast.', status: 'building', stage: 'Reading room in progress', nextStep: 'Review the reading experience and source notes before release.', kind: 'Reading rooms' },
-  { id: 'fortune', family: 'tools', title: 'Fortune Terminal / 2027–2028', direction: 'A native creative terminal project on the studio worktable.', status: 'building', stage: 'Native build in progress', nextStep: 'Review the native experience. No browser destination is published here.', kind: 'Native project' },
   { id: 'saturday', family: 'place', title: 'Saturday / El Segundo', direction: 'An interactive meditation for 3 October, with Bill Evans Trio’s “Some Other Time” and researched local context.', status: 'building', stage: 'Meditation in progress', nextStep: 'Verify the dated research and interactive meditation before publishing.', kind: 'Music & place' },
   { id: 'sunday', family: 'play', title: 'One Sunday at the Vanguard', direction: 'A standalone listening world around a historical recording and a map of New York City.', status: 'building', stage: 'Listening site in progress', nextStep: 'Verify the recording history, place references and listening experience.', kind: 'Music & place' },
+  { id: 'dispensary-atlas', family: 'place', title: 'Dispensary Market Atlas', direction: 'A 25-mile El Segundo research and discovery study, with California and national market context.', status: 'building', stage: 'Market research in progress', nextStep: 'Verify public sources, local coverage and the discovery experience. No store or ordering service is offered here.', kind: 'Place & market research' },
   { id: 'art-v2', family: 'art', title: 'Original art / edition two', direction: 'A planned gallery of 50 source artworks paired with new reinterpretations. The matched source collection is still being verified.', status: 'building', stage: 'Source verification in progress', nextStep: 'Verify each source and its matching new work before showing a comparison. No editions are offered here.', kind: 'Art & image' },
 ];
 
@@ -122,6 +122,13 @@ export const ROADMAP = [
   { title: 'Objects & the place around us', lanes: ['EVERYDAY WORKS / Local Object Factory', 'Hoydich Mobility & Manufacturing Atlas'], note: 'Proposed objects, design fiction and research about making.' },
   { title: 'Play & personal tools', lanes: ['Micro Club / Dojo / Play Factory', 'Good Fortune / Personal Tools', 'Agent product concepts & demos'], note: 'Small instruments, browser experiments and products still being imagined.' },
 ];
+
+export const NATIVE = [{
+  id: 'good-fortune-horizon', family: 'tools', title: 'Good Fortune Horizon',
+  subtitle: 'Fortune Terminal / 2027–2028', status: 'delivered-native',
+  description: 'A delivered native creative terminal: six original pixel-art families, seeded collectibles, appreciation and enjoyment generators, a searchable cabinet, favorites and text / PNG export.',
+  boundary: 'Delivered as a native app. No public browser edition or download is linked from this map.',
+}];
 
 export const STUDIO = [
   ...PROJECTS.filter(project => project.next).map(project => ({ ...project.next, id: `${project.id}-next`, family: project.family, currentId: project.id, currentHref: project.href, kind: project.kind })),
@@ -136,5 +143,5 @@ export const MILESTONES = [
 ];
 
 export function portfolioPayload() {
-  return { ...SNAPSHOT, families: FAMILIES, projects: PROJECTS, studio: STUDIO, roadmap: ROADMAP, milestones: MILESTONES, statusDefinitions: { open: 'A published public page is available; its project may still be a concept or demo.', building: 'Work in progress; unpublished destinations are not linked.', redesign: 'An existing page is public and a revised edition is in progress.' }, comparisons: [], comparisonNote: 'No verified before/after pair is available in this snapshot. Current artwork is not a screenshot of an unpublished redesign.' };
+  return { ...SNAPSHOT, families: FAMILIES, projects: PROJECTS, native: NATIVE, studio: STUDIO, roadmap: ROADMAP, milestones: MILESTONES, statusDefinitions: { 'delivered-native': 'A native edition has been delivered; this map provides no public download or browser edition.', open: 'A published public page is available; its project may still be a concept or demo.', building: 'Work in progress; unpublished destinations are not linked.', redesign: 'An existing page is public and a revised edition is in progress.' }, comparisons: [], comparisonNote: 'No verified before/after pair is available in this snapshot. Current artwork is not a screenshot of an unpublished redesign.' };
 }
