@@ -642,7 +642,7 @@ code{font-family:var(--f-mono)}
           <div class="id-top">
             <div class="avatar xl" id="pAvatar"></div>
             <div class="id-name"><h3 id="pHandle">@your-handle</h3><p class="hint" id="pSince">No account yet. Make one in Act 01.</p></div>
-            <div class="addr-row"><code id="pAddr">pca1&#x2026;</code><span class="chip chip-demo">demo</span><button class="btn btn-quiet btn-sm" id="copyAddr" type="button" disabled>Copy</button></div>
+            <div class="addr-row"><code id="pAddr">pcp1&#x2026;</code><span class="chip chip-demo">demo</span><button class="btn btn-quiet btn-sm" id="copyAddr" type="button" disabled>Copy</button></div>
           </div>
           <p class="sub-h">Linked identities</p>
           <ul class="ids" id="pIds"></ul>
@@ -654,7 +654,7 @@ code{font-family:var(--f-mono)}
             <div id="pMandates"></div>
             <div class="drum-test">
               <button class="btn btn-ghost btn-sm" id="drumBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><ellipse cx="12" cy="9" rx="8" ry="3.2"/><path d="M4 9v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V9M8 11.8v6M16 11.8v6M15 3l3 4M9 3 6 7"/></svg>Drum</button>
-              <p class="hint" id="drumHint">Try the mandate. Each drum spends 1 ATTN and doesn't ask.</p>
+              <p class="hint" id="drumHint">Try the mandate. Each drum earns ATTN and doesn't ask.</p>
             </div>
           </section>
           <section class="panel" aria-labelledby="h-signed">
@@ -966,7 +966,7 @@ function fnv(str) {
 const B32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 function townAddress(handle) {
   let x = fnv('pointcast-demo:' + handle) || 1;
-  let s = 'pca1';
+  let s = 'pcp1';
   for (let i = 0; i < 38; i++) { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; s += B32[x & 31]; }
   return s;
 }
@@ -1274,7 +1274,7 @@ function renderIdentity() {
   $('#pSince').textContent = a
     ? `Town account since ${fmtTime(new Date(a.at))} today${S.holding ? ' \u00B7 avatar from your First Mint' : ''}`
     : 'No account yet. Make one in Act 01.';
-  $('#pAddr').textContent = a ? shortAddr(a.address) : 'pca1\u2026';
+  $('#pAddr').textContent = a ? shortAddr(a.address) : 'pcp1\u2026';
   $('#pAddr').title = a ? a.address : '';
   $('#copyAddr').disabled = !a;
   const linkedCount = Object.values(S.linked).filter(Boolean).length;
@@ -1315,8 +1315,8 @@ function renderMandates() {
     return `<div class="mrow ${on ? '' : 'ended'}">` +
       `<div class="mrow-h"><b>Today's taps</b><span class="chip ${on ? 'chip-ok' : 'chip-off'}">${on ? 'Active' : 'Ended'}</span></div>` +
       `<p>This tab may tap and drum for 24 hours, up to 500 ATTN.</p>` +
-      `<div class="meter" role="progressbar" aria-label="ATTN used" aria-valuemin="0" aria-valuemax="${m.allowance}" aria-valuenow="${m.used}"><i style="width:${pct.toFixed(2)}%"></i></div>` +
-      `<div class="mrow-f"><span>${m.used} of ${m.allowance} ATTN used</span><span>${when}</span></div>` +
+      `<div class="meter" role="progressbar" aria-label="ATTN earned today" aria-valuemin="0" aria-valuemax="${m.allowance}" aria-valuenow="${m.used}"><i style="width:${pct.toFixed(2)}%"></i></div>` +
+      `<div class="mrow-f"><span>${m.used} of ${m.allowance} ATTN earned today</span><span>${when}</span></div>` +
       `<div class="mrow-a"><span class="kicker">Session key \u00B7 this tab</span>${on ? `<button class="btn btn-ghost btn-sm" type="button" data-end="${m.id}">End</button>` : ''}</div>` +
       `</div>`;
   }).join('');
@@ -1351,9 +1351,14 @@ $('#drumBtn').addEventListener('click', () => {
   b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 110);
   if (!S.account) { toast('Make a town account in Act 01 first.'); return; }
   const m = activeMandate();
-  if (m && m.used < m.allowance) {
-    m.used += 1;
-    $('#drumHint').textContent = `Drummed with no prompt. The mandate covered it. ${m.used} of 500 ATTN used.`;
+  if (m) {
+    // On pointcast-chain drums earn ATTN, never spend it: a 10-second session pays 2, and the
+    // day's 500 cap clamps the rest to 0 (DESIGN.md section 4).
+    const earned = Math.min(2, m.allowance - m.used);
+    m.used += earned;
+    $('#drumHint').textContent = earned
+      ? `Drummed with no prompt. The mandate covered it. A 10-second session earns 2 ATTN: ${m.used} of 500 earned today.`
+      : 'Drummed with no prompt. You have hit today\'s 500 ATTN cap, so this one earns 0.';
     renderMandates();
   } else {
     $('#drumHint').textContent = 'No active mandate, so every drum would ask for Face ID.';
@@ -1596,7 +1601,7 @@ async function press() {
   sign(`Signed a First Mint for Noun ${d.noun}, \u201C${t}\u201D in ${f.name} on ${p.name} with ${pt.phrase}. Preview only, so nothing was minted.`, 'passkey');
   renderProfile(); renderDone();
   $('#pvState').textContent = 'Pressed \u00B7 preview, not minted';
-  $('#endingBytes').textContent = `What you signed: ${encode(d).length} bytes, 0x${encode(d).map(hex2).join('')}.`;
+  $('#endingBytes').textContent = `What you would sign: ${encode(d).length} bytes, 0x${encode(d).map(hex2).join('')}.`;
   $('#pressingNote').hidden = true; $('#ending').hidden = false;
   $('#endingTitle').focus({ preventScroll: true });
 }
