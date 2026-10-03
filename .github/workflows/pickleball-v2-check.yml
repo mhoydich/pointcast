@@ -1,0 +1,52 @@
+name: Pickleball v2 checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/pickleball-v2/**'
+      - 'src/lib/pickleball-home/**'
+      - 'src/pages/pickleball/**'
+      - 'src/layouts/BlockLayout.astro'
+      - 'src/data/agent-surfaces.ts'
+      - 'src/pages/agents.json.ts'
+      - 'src/pages/for-agents.astro'
+      - 'src/pages/sitemap-discovery.xml.ts'
+      - 'public/llms.txt'
+      - 'public/llms-full.txt'
+      - 'public/images/pickleball-v2/**'
+      - 'tests/pickleball-v2*.test.mjs'
+      - 'tests/pickleball-home.test.mjs'
+      - 'scripts/sync-pickleball-home.mjs'
+      - 'scripts/audit-pickleball-v2.mjs'
+      - '.github/workflows/pickleball-v2-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pickleball-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check source behavior and shared mirror
+        run: |
+          node scripts/sync-pickleball-home.mjs --check
+          node --test tests/pickleball-home.test.mjs tests/pickleball-v2*.test.mjs tests/pickleball-board-pages.test.mjs tests/court-board.test.mjs tests/paddle-register.test.mjs
+      - run: npm run build:bare
+      - name: Check compiled routes and discovery
+        run: |
+          node scripts/audit-pickleball-v2.mjs
+          npm run audit:agents
