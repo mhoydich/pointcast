@@ -1,9 +1,16 @@
 export const PLAY_LAYER_VERSION = '0.4.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
+  {
+    id: 'baseball',
+    code: 'BALL',
+    title: 'A game you can sit inside',
+    route: '/baseball',
+    summary: 'A look at baseball: read the essay, follow an illustrated half inning, and keep a small ballpark memory in this browser.',
+  },
   {
     id: 'pocket-rocks',
     code: 'ROCK',
