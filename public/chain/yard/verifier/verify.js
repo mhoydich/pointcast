@@ -9,6 +9,15 @@
 //   v.call("verifier.push", { blocks });         // -> { checkpoints } | { fault, at_height, evidence }
 //
 // `call` returns the op's `ok` value and throws on `{"err": ...}`.
+//
+// Integers stay exact across this boundary. Chain values are u64, and
+// JSON.parse turns any integer above 2^53 into the nearest double
+// (u64::MAX becomes 18446744073709552000, which the wasm then refuses), so
+// `call` and the worker use parseJson/stringifyJson below: an integer that
+// is not an exact double comes back as a BigInt and is written back as the
+// same digits. Read a node's JSON with `parseJson(await response.text())`,
+// never `response.json()`, before handing it to `call`.
+//
 // Ops: version, verifier.new, verifier.push, verifier.status, verifier.state, verifier.account,
 //      anchor.check, evidence.check, tx.wallet, body.hash (see crates/chain-wasm/src/ops.rs).
 
@@ -29,6 +38,123 @@ async function toBytes(src) {
     return new Uint8Array(await r.arrayBuffer());
   }
   throw new TypeError("PointcastVerifier.load: pass a URL, Response, ArrayBuffer or Uint8Array");
+}
+
+/**
+ * JSON.parse, except that an integer literal which is not a safe integer
+ * becomes a BigInt (exact) instead of a rounded double. Everything else
+ * (strings, other numbers, nesting, "__proto__" as a plain own key, the
+ * errors on malformed input) matches JSON.parse.
+ */
+export function parseJson(text) {
+  if (typeof text !== "string") throw new TypeError("parseJson: expected a string");
+  const n = text.length;
+  const NUM = /-?(?:0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?/y;
+  let i = 0;
+  const fail = (what) => { throw new SyntaxError(`JSON: ${what} at position ${i}`); };
+  const ws = () => {
+    for (let c = text.charCodeAt(i); c === 32 || c === 10 || c === 13 || c === 9; c = text.charCodeAt(++i));
+  };
+  const str = () => {
+    const start = i;
+    let plain = true;
+    for (i++; ; i++) {
+      const c = text.charCodeAt(i);
+      if (c === 34) break;
+      if (c === 92) { plain = false; i++; } // the escape is checked by JSON.parse below
+      else if (c < 32 || Number.isNaN(c)) fail("bad or unterminated string");
+    }
+    i++;
+    return plain ? text.slice(start + 1, i - 1) : JSON.parse(text.slice(start, i));
+  };
+  const val = () => {
+    ws();
+    const c = text.charCodeAt(i);
+    if (c === 34) return str();
+    if (c === 123) {
+      const o = {};
+      i++; ws();
+      if (text.charCodeAt(i) === 125) { i++; return o; }
+      for (;;) {
+        ws();
+        if (text.charCodeAt(i) !== 34) fail("expected a key");
+        const k = str();
+        ws();
+        if (text.charCodeAt(i) !== 58) fail("expected ':'");
+        i++;
+        const v = val();
+        if (k === "__proto__") Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true });
+        else o[k] = v;
+        ws();
+        const d = text.charCodeAt(i);
+        if (d === 44) { i++; continue; }
+        if (d === 125) { i++; return o; }
+        fail("expected ',' or '}'");
+      }
+    }
+    if (c === 91) {
+      const a = [];
+      i++; ws();
+      if (text.charCodeAt(i) === 93) { i++; return a; }
+      for (;;) {
+        a.push(val());
+        ws();
+        const d = text.charCodeAt(i);
+        if (d === 44) { i++; continue; }
+        if (d === 93) { i++; return a; }
+        fail("expected ',' or ']'");
+      }
+    }
+    if (text.startsWith("true", i)) { i += 4; return true; }
+    if (text.startsWith("false", i)) { i += 5; return false; }
+    if (text.startsWith("null", i)) { i += 4; return null; }
+    NUM.lastIndex = i;
+    const m = NUM.exec(text);
+    if (!m) fail("unexpected character");
+    i = NUM.lastIndex;
+    const x = Number(m[0]);
+    return m[1] || m[2] || Number.isSafeInteger(x) ? x : BigInt(m[0]);
+  };
+  const v = val();
+  ws();
+  if (i !== n) fail("unexpected trailing characters");
+  return v;
+}
+
+/**
+ * JSON.stringify for plain data, except that a BigInt is written as its
+ * exact digits (JSON.stringify throws on BigInt). `indent` works as
+ * JSON.stringify's `space` argument.
+ */
+export function stringifyJson(value, indent) {
+  const gap = typeof indent === "number" ? " ".repeat(Math.max(0, Math.min(10, Math.floor(indent))))
+    : typeof indent === "string" ? indent.slice(0, 10) : "";
+  const go = (v, key, pad) => {
+    if (v !== null && typeof v === "object" && typeof v.toJSON === "function") v = v.toJSON(key);
+    switch (typeof v) {
+      case "bigint": return v.toString();
+      case "number": return JSON.stringify(v);
+      case "string": return JSON.stringify(v);
+      case "boolean": return v ? "true" : "false";
+      case "object": {
+        if (v === null) return "null";
+        const inner = pad + gap;
+        const [open, sep, close] = gap ? [`\n${inner}`, `,\n${inner}`, `\n${pad}`] : ["", ",", ""];
+        if (Array.isArray(v)) {
+          if (!v.length) return "[]";
+          return `[${open}${v.map((x, k) => go(x, String(k), inner) ?? "null").join(sep)}${close}]`;
+        }
+        const parts = [];
+        for (const k of Object.keys(v)) {
+          const s = go(v[k], k, inner);
+          if (s !== undefined) parts.push(`${JSON.stringify(k)}:${gap ? " " : ""}${s}`);
+        }
+        return parts.length ? `{${open}${parts.join(sep)}${close}}` : "{}";
+      }
+      default: return undefined; // undefined, functions and symbols, as JSON.stringify
+    }
+  };
+  return go(value, "", "");
 }
 
 /** Lowercase hex sha256 of `bytes`, or null when WebCrypto is unavailable. */
@@ -100,12 +226,25 @@ export class PointcastVerifier {
     }
   }
 
-  /** Run `op` with `obj` (JSON-serialisable). Returns `ok`, throws on `err`. */
+  /**
+   * Run `op` with `obj` (JSON data; BigInts allowed). Returns `ok`, throws on
+   * `err`. Integers in the reply that are not exact doubles are BigInts.
+   */
   call(op, obj = {}) {
     if (this.poisoned) throw new Error("verifier wasm trapped earlier; load a fresh instance");
-    const reply = JSON.parse(this.callRaw(op, JSON.stringify(obj)));
+    const reply = parseJson(this.callRaw(op, stringifyJson(obj)));
     if (reply && "err" in reply) throw new Error(`${op}: ${reply.err}`);
     return reply.ok;
+  }
+
+  /** See {@link parseJson}. */
+  static parseJson(text) {
+    return parseJson(text);
+  }
+
+  /** See {@link stringifyJson}. */
+  static stringifyJson(value, indent) {
+    return stringifyJson(value, indent);
   }
 }
 

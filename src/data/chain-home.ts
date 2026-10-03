@@ -13,7 +13,22 @@
  * If the chain moves on, update the numbers and the SOURCE commit together.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+
+/**
+ * Size of the verifier the yard actually serves
+ * (public/chain/yard/verifier/pointcast_chain.wasm), read at build time so a
+ * re-synced verifier can never disagree with the page (the README at da7bc09
+ * still says "~560 KiB"; main's pinned wasm is larger). Falls back to the
+ * 2026-10-03 file (632,135 bytes) if the wasm is unreadable.
+ */
+export const VERIFIER_KIB: number = (() => {
+  try {
+    return Math.round(statSync('public/chain/yard/verifier/pointcast_chain.wasm').size / 1024);
+  } catch {
+    return 617;
+  }
+})();
 
 export const SOURCE = {
   repo: 'pointcast-chain',
@@ -45,7 +60,7 @@ export const CRATES: Crate[] = [
   { name: 'node', bin: 'pointcast-node', role: 'The sequencer: 3-second blocks, sqlite, the HTTP API, the MCP server, the Tezos anchor job and the CLI.' },
   { name: 'explorer', role: 'One static page that renders the chain as a PointCast-style feed, with VERIFY and the Transmit wallet panel.' },
   { name: 'verifier', role: 'Replays blocks with chain-core and turns a sequencer lie into portable evidence anyone can check offline.' },
-  { name: 'chain-wasm', role: 'The verifier compiled to wasm32 for browsers, about 560 KiB, with no wasm-bindgen.' },
+  { name: 'chain-wasm', role: `The verifier compiled to wasm32 for browsers, about ${VERIFIER_KIB} KiB, with no wasm-bindgen.` },
   { name: 'chain-proof', role: 'Proof of Balance: an account balance or absence, checked against a sequencer-signed root without replay.' },
   { name: 'chain-sim', bin: 'pc-sim', role: 'A seeded town-economy simulator that drives the unmodified state machine.' },
   { name: 'town', bin: 'pc-town', role: 'Town Hall: a read-side sidecar that replays the chain itself and serves account, channel and room pages.' },
@@ -68,10 +83,11 @@ export type YardStats = { href: string; blocks: number; txs: number; anchors: nu
 /**
  * Counts from the yard's static recording (public/chain/yard/snapshot.json),
  * read at build time so a re-synced recording can never disagree with the
- * page. Falls back to the 2026-10-03 recording if the file is unreadable.
+ * page. Falls back to the 2026-10-03 recording (re-recorded 19:31 UTC with
+ * ticketed taps) if the file is unreadable.
  */
 export function yardStats(): YardStats {
-  const base = { href: '/chain/yard/?snapshot=./snapshot.json', verifierKiB: 560 };
+  const base = { href: '/chain/yard/?snapshot=./snapshot.json', verifierKiB: VERIFIER_KIB };
   try {
     const snap = JSON.parse(readFileSync('public/chain/yard/snapshot.json', 'utf8'));
     const blocks = Array.isArray(snap.blocks) ? snap.blocks : [];
@@ -84,6 +100,6 @@ export function yardStats(): YardStats {
       recordedAt: String(snap.recorded_at || '').slice(0, 10),
     };
   } catch {
-    return { ...base, blocks: 422, txs: 67, anchors: 4, accounts: 7, recordedAt: '2026-10-03' };
+    return { ...base, blocks: 421, txs: 359, anchors: 4, accounts: 11, recordedAt: '2026-10-03' };
   }
 }
