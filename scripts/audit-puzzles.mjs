@@ -1,0 +1,7 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const routes=['puzzles','puzzles/make','puzzles/business','puzzles/studio','shop/puzzles'];
+for(const route of routes){const html=fs.readFileSync(`dist/${route}/index.html`,'utf8');assert.ok(html.includes('PointCast'));assert.equal((html.match(/<h1(?:\s|>)/g)||[]).length,1,`${route} needs one h1`);assert.ok(html.includes('/puzzles.json'));assert.ok(html.includes('aria-label="Puzzle feature"'));}
+const data=JSON.parse(fs.readFileSync('dist/puzzles.json','utf8'));assert.equal(data.concepts.length,10);assert.equal(data.artProvenance.count,10);assert.equal(data.research.buying.length,9);assert.ok(data.concepts.every(c=>!c.productionReady&&c.commercialStatus==='concept-not-for-sale'));assert.ok(data.artProvenance.records.every(r=>!JSON.stringify(r).includes('/Users/')));
+const world=fs.readFileSync('dist/puzzles/index.html','utf8');assert.ok(world.includes('CONCEPT · NOT FOR SALE'));assert.ok(world.includes('No audio, lyrics or cover art'));assert.ok(world.includes('id="p-board"'));assert.ok(world.includes('id="p-filter"'));
+const shop=fs.readFileSync('dist/shop/puzzles/index.html','utf8');assert.ok(!shop.includes('schema.org/Offer'));assert.ok(shop.includes('not for sale'));assert.ok(fs.readFileSync('dist/shop/front/index.html','utf8').includes('/shop/puzzles/'));assert.ok(fs.readFileSync('dist/sitemap-discovery.xml','utf8').includes('https://pointcast.xyz/puzzles/'));console.log('Puzzle compiled routes, ten concepts, nine publishers, privacy, commerce and discovery passed.');
