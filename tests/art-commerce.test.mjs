@@ -20,7 +20,7 @@ test('preview config prevents all wallet and network reads', async () => {
   assert.equal(saleReadiness(preview, artwork).ready, false);
   let reads = 0;
   await assert.rejects(prepareUnsignedPurchase(preview, artwork, { getWallet: async () => { reads++; }, readProof: async () => { reads++; } }), e => e.code === 'unavailable');
-  assert.equal(reads, 0); assert.equal(preview.networks.pointcast.status, 'unverified_network');
+  assert.equal(reads, 0); assert.equal(preview.networks.pointcast.status, 'public_network_not_configured');
 });
 test('1 tez preparation has exact PointCast nat ABI, no signature, fee or total claim', async () => {
   const plan = await prepareUnsignedPurchase(config, artwork, adapter());
