@@ -1,0 +1,206 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SCALES, VOICES, AMBIENCE, KEY_SOUNDS, ROOTS } from '../scripts/takes-audio.mjs';
+import '../styles/takes.css';
+
+const description = 'TAKES is a PointCast writing desk for alternate takes: keep several versions of a word, sentence or paragraph in place, audition them with synthesized tones, dim lines back and stash cuts in an overflow. Plain Markdown, saved only in your browser.';
+const jsonLd = { '@context': 'https://schema.org', '@type': 'WebApplication', name: 'TAKES', url: 'https://pointcast.xyz/takes/', applicationCategory: 'WritingApplication', operatingSystem: 'Any modern browser', isAccessibleForFree: true, description };
+const themes = [['midnight', 'Midnight'], ['paper', 'Paper'], ['dusk', 'El Segundo dusk'], ['phosphor', 'Phosphor'], ['riso', 'Riso'], ['ink', 'High-contrast ink'], ['fog', 'Marine layer']];
+const fonts = [['plex', 'IBM Plex Mono'], ['jetbrains', 'JetBrains Mono'], ['courier', 'Courier Prime'], ['newsreader', 'Newsreader'], ['literata', 'Literata'], ['inter', 'Inter'], ['atkinson', 'Atkinson Hyperlegible']];
+const underlines = [['pen', 'Editor’s pen (wavy)'], ['double', 'Double pen'], ['marker', 'Highlighter'], ['straight', 'Straight'], ['dotted', 'Dotted'], ['none', 'None']];
+const textures = [['grain', 'Grain'], ['paper', 'Paper fibre'], ['stars', 'Night sky'], ['scan', 'Scan lines'], ['none', 'None']];
+const presets = [['editors-pen', 'Editor’s pen', 'Midnight, mono, glass bells'], ['beach-house', 'Beach house', 'Dusk, serif, kalimba, ocean'], ['night-terminal', 'Night terminal', 'Phosphor, 8-bit, tape hiss'], ['manuscript', 'Manuscript', 'Paper, plucked strings, rain'], ['riso-zine', 'Riso zine', 'Highlighter, marimba, key notes'], ['deep-focus', 'Deep focus', 'Ink, pad, drone, focus mode']];
+---
+<BlockLayout title="TAKES · A writing desk for alternate takes" description={description} themeColor="#0b1030" immersive isolated showNetworkStrip={false} hideAds jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/takes.json', title: 'TAKES — format and capabilities' }]}>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;1,400&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Inter:wght@400;600&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" />
+
+  <div class="tk" data-takes data-theme="midnight" data-texture="grain" data-layout="play">
+    <h1 class="tk-sr">TAKES — a writing desk for alternate takes</h1>
+    <header class="tk-top">
+      <p class="tk-status" data-status aria-live="off">0 words</p>
+      <div class="tk-modes" role="group" aria-label="View">
+        <button type="button" data-mode="play" aria-pressed="true" title="Play: audition takes (W toggles)"><span aria-hidden="true">◉◉◉</span><span class="tk-sr">Play view</span></button>
+        <button type="button" data-mode="split" aria-pressed="false" title="Split: source beside the page"><span aria-hidden="true">◧</span><span class="tk-sr">Split view</span></button>
+        <button type="button" data-mode="write" aria-pressed="false" title="Write: Markdown source"><span aria-hidden="true">M↓</span><span class="tk-sr">Markdown source view</span></button>
+      </div>
+      <div class="tk-top-right">
+        <button type="button" data-act="sound" aria-pressed="true" title="Sound on/off (M)"><span aria-hidden="true">♪</span><span class="tk-sr">Sound</span></button>
+        <button type="button" data-act="toggle-stash" title="Show or hide the overflow stash"><span aria-hidden="true">⇥</span> <span class="tk-hide-sm">Overflow</span> <span class="tk-badge" data-stash-count>0</span></button>
+        <button type="button" data-act="help" title="Keys (?)"><span aria-hidden="true">⌨</span><span class="tk-sr">Keyboard help</span></button>
+      </div>
+    </header>
+
+    <main class="tk-desk">
+      <section class="tk-source-wrap" aria-label="Markdown source">
+        <div class="tk-source-bar">
+          <span>TAKES MARKDOWN</span>
+          <span>
+            <button type="button" data-act="src-take" title="Wrap selection as a take (Alt+1)">{'{{ take }}'}</button>
+            <button type="button" data-act="src-dim" title="Dim selection (Alt+2)">(( dim ))</button>
+            <button type="button" data-act="src-stash" title="Move selection to overflow (Alt+3)">stash ⇥</button>
+          </span>
+        </div>
+        <textarea class="tk-source" data-source spellcheck="true" aria-label="Takes Markdown source"></textarea>
+      </section>
+
+      <article class="tk-page" data-page aria-label="Draft. Takes are underlined; focus one and use the arrow keys to switch." tabindex="-1"></article>
+
+      <aside class="tk-stash" data-stash aria-labelledby="tk-stash-title">
+        <h2 id="tk-stash-title">Overflow <span>stash nearby, lose nothing</span></h2>
+        <ol data-stash-list></ol>
+      </aside>
+    </main>
+
+    <div class="tk-selbar" data-selbar hidden role="toolbar" aria-label="Selection">
+      <button type="button" data-act="sel-take" title="New take of the selection (T)">Take <kbd>T</kbd></button>
+      <button type="button" data-act="sel-sentence" title="New take of the whole sentence (.)">Sentence <kbd>.</kbd></button>
+      <button type="button" data-act="sel-dim" title="Dim it back (D)">Dim <kbd>D</kbd></button>
+      <button type="button" data-act="sel-stash" title="Move to overflow (S)">Stash <kbd>S</kbd></button>
+      <span class="tk-selbar-msg" data-selbar-msg></span>
+    </div>
+
+    <form class="tk-takeform" data-take-form hidden>
+      <p class="tk-k">NEW TAKE OF</p>
+      <p class="tk-takeform-orig" data-take-orig></p>
+      <label class="tk-sr" for="tk-take-input">Alternate take</label>
+      <input id="tk-take-input" name="alt" autocomplete="off" placeholder="Try it another way… (blank keeps a copy to edit later)" />
+      <div><button type="submit">Add take ↵</button><span>Esc to cancel</span></div>
+    </form>
+
+    <div class="tk-pop" data-pop hidden role="dialog" aria-label="Takes"></div>
+
+    <footer class="tk-bottom">
+      <div class="tk-file">
+        <button type="button" data-act="save-md" title="Download Takes Markdown with every alternate"><span aria-hidden="true">⤓</span> .md</button>
+        <button type="button" data-act="open-md" title="Open a Markdown file"><span aria-hidden="true">⤒</span> Open</button>
+        <button type="button" data-act="undo" title="Undo (⌘Z)"><span aria-hidden="true">↶</span><span class="tk-sr">Undo</span></button>
+        <button type="button" data-act="redo" title="Redo (⌘⇧Z)"><span aria-hidden="true">↷</span><span class="tk-sr">Redo</span></button>
+        <input type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" data-file hidden />
+      </div>
+      <button type="button" class="tk-lab-btn" data-act="open-lab" aria-expanded="false" aria-controls="tk-lab">LAB</button>
+      <p class="tk-saved" data-saved>Edits save in this browser</p>
+    </footer>
+
+    <section class="tk-lab" id="tk-lab" data-lab hidden aria-label="Lab: sound and style">
+      <div class="tk-lab-head">
+        <div role="tablist" aria-label="Lab sections">
+          <button type="button" role="tab" data-tab="presets" aria-selected="true">Presets</button>
+          <button type="button" role="tab" data-tab="sound" aria-selected="false">Sound</button>
+          <button type="button" role="tab" data-tab="style" aria-selected="false">Style</button>
+          <button type="button" role="tab" data-tab="file" aria-selected="false">File</button>
+        </div>
+        <button type="button" data-act="close-lab" aria-label="Close lab">×</button>
+      </div>
+
+      <div class="tk-panel" data-panel="presets">
+        <p class="tk-note">Each preset sets a look and a sound together. Tweak anything after in Sound and Style.</p>
+        <div class="tk-presets">
+          {presets.map(([id, name, desc]) => <button type="button" data-act="preset" data-preset={id} class={`tk-preset tk-preset-${id}`}><strong>{name}</strong><span>{desc}</span></button>)}
+        </div>
+      </div>
+
+      <div class="tk-panel" data-panel="sound" hidden>
+        <div class="tk-grid">
+          <label>Instrument<select data-set="audio.voice">{Object.entries(VOICES).map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+          <label>Original tone<select data-set="audio.originalVoice"><option value="same">Same instrument, low</option>{Object.entries(VOICES).map(([k, v]) => <option value={k}>{v}, low</option>)}</select></label>
+          <label>Scale<select data-set="audio.scale">{Object.entries(SCALES).map(([k, v]) => <option value={k}>{v.name}</option>)}</select></label>
+          <label>Key<select data-set="audio.root" data-num="1">{ROOTS.map((r, i) => <option value={String(i)}>{r}</option>)}</select></label>
+          <label>Register <output data-out="audio.octave"></output><input type="range" min="-2" max="2" step="1" data-set="audio.octave" /></label>
+          <label>Volume <output data-out="audio.volume"></output><input type="range" min="0" max="1" step="0.01" data-set="audio.volume" data-unit="%" /></label>
+          <label>Ring length <output data-out="audio.length"></output><input type="range" min="0.05" max="1.5" step="0.05" data-set="audio.length" /></label>
+          <label>Brightness <output data-out="audio.brightness"></output><input type="range" min="0" max="1" step="0.01" data-set="audio.brightness" data-unit="%" /></label>
+          <label>Reverb <output data-out="audio.reverb"></output><input type="range" min="0" max="1" step="0.01" data-set="audio.reverb" data-unit="%" /></label>
+          <label>Room size <output data-out="audio.space"></output><input type="range" min="0.3" max="6" step="0.1" data-set="audio.space" data-unit="s" /></label>
+          <label>Echo <output data-out="audio.echo"></output><input type="range" min="0" max="0.6" step="0.01" data-set="audio.echo" data-unit="%" /></label>
+          <label>Stereo spread <output data-out="audio.spread"></output><input type="range" min="0" max="1" step="0.01" data-set="audio.spread" data-unit="%" /></label>
+          <label>Human touch <output data-out="audio.humanize"></output><input type="range" min="0" max="1" step="0.01" data-set="audio.humanize" data-unit="%" /></label>
+          <label>Typing sounds<select data-set="audio.keys">{Object.entries(KEY_SOUNDS).map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+          <label>Typing volume <output data-out="audio.keyVolume"></output><input type="range" min="0" max="1" step="0.01" data-set="audio.keyVolume" data-unit="%" /></label>
+          <label>Room ambience<select data-set="audio.ambience">{Object.entries(AMBIENCE).map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+          <label>Ambience level <output data-out="audio.ambienceVolume"></output><input type="range" min="0" max="1" step="0.01" data-set="audio.ambienceVolume" data-unit="%" /></label>
+          <label class="tk-check"><input type="checkbox" data-set="audio.actions" /> Sounds for dim, stash and new takes</label>
+        </div>
+        <div class="tk-row"><button type="button" data-act="audition">▶ Audition: three takes, then home</button><button type="button" data-act="reset-sound">Reset sound</button></div>
+        <p class="tk-note">Alternates ring high and climb the scale; the original always lands low, so you can hear when you are back where you started. Paragraph takes play a two-note chord. Everything is synthesized in your browser.</p>
+      </div>
+
+      <div class="tk-panel" data-panel="style" hidden>
+        <div class="tk-grid">
+          <label>Theme<select data-set="style.theme">{themes.map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+          <label>Typeface<select data-set="style.font">{fonts.map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+          <label>Take underline<select data-set="style.underline">{underlines.map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+          <label>Hand wobble <output data-out="style.wobble"></output><input type="range" min="0" max="1" step="0.01" data-set="style.wobble" data-unit="%" /></label>
+          <label>Pen weight <output data-out="style.ink"></output><input type="range" min="0.6" max="3" step="0.1" data-set="style.ink" data-unit="px" /></label>
+          <label>Texture<select data-set="style.texture">{textures.map(([k, v]) => <option value={k}>{v}</option>)}</select></label>
+          <label>Text size <output data-out="style.size"></output><input type="range" min="13" max="26" step="1" data-set="style.size" data-unit="px" /></label>
+          <label>Line height <output data-out="style.leading"></output><input type="range" min="1.3" max="2.4" step="0.05" data-set="style.leading" /></label>
+          <label>Column width <output data-out="style.measure"></output><input type="range" min="36" max="96" step="1" data-set="style.measure" data-unit="ch" /></label>
+          <label class="tk-check"><input type="checkbox" data-set="style.focus" /> Focus: fade every paragraph but this one (F)</label>
+          <label class="tk-check"><input type="checkbox" data-set="style.showStash" /> Show the overflow stash</label>
+        </div>
+        <div class="tk-row"><button type="button" data-act="reset-style">Reset style</button></div>
+      </div>
+
+      <div class="tk-panel" data-panel="file" hidden>
+        <div class="tk-row tk-row-wrap">
+          <button type="button" data-act="save-md">⤓ Takes Markdown (every alternate)</button>
+          <button type="button" data-act="save-clean">⤓ Clean Markdown (chosen takes only)</button>
+          <button type="button" data-act="copy-md">Copy Takes Markdown</button>
+          <button type="button" data-act="copy-clean">Copy clean text</button>
+          <button type="button" data-act="open-md">⤒ Open .md</button>
+          <button type="button" data-act="new-doc">Blank page</button>
+          <button type="button" data-act="sample">Load the sample</button>
+        </div>
+        <div class="tk-format">
+          <p class="tk-k">THE FORMAT IS JUST MARKDOWN</p>
+          <pre><code>{`The sand was {{shining | glassy | >wet}}.   ← inline takes, > marks the chosen one
+((A line pushed back, still there.))         ← dimmed
+
+::: takes
+First version of a paragraph.
++++ >
+Second version, currently chosen.
+:::
+
+--- overflow ---
+
+Anything stashed lives down here.`}</code></pre>
+          <p class="tk-note">Your draft stays in this browser’s storage. Nothing is uploaded, sent or published. Clearing site data erases it, so download a copy you care about.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="tk-help" data-help hidden aria-label="Keyboard">
+      <div class="tk-lab-head"><p class="tk-k">KEYS</p><button type="button" data-act="close-help" aria-label="Close keys">×</button></div>
+      <dl>
+        <dt><kbd>Tab</kbd> / <kbd>J</kbd> <kbd>K</kbd></dt><dd>Step through the takes</dd>
+        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Audition the takes on the focused one</dd>
+        <dt><kbd>O</kbd></dt><dd>Back to the original (the low tone)</dd>
+        <dt><kbd>Enter</kbd></dt><dd>Open every take; add, promote or keep one</dd>
+        <dt><kbd>Delete</kbd></dt><dd>Keep the showing take, drop the rest</dd>
+        <dt>Select + <kbd>T</kbd></dt><dd>New take of the words · <kbd>.</kbd> the whole sentence</dd>
+        <dt>Select + <kbd>D</kbd> / <kbd>U</kbd></dt><dd>Dim back · bring back a dim in this paragraph</dd>
+        <dt>Select + <kbd>S</kbd></dt><dd>Stash in the overflow (drag it back any time)</dd>
+        <dt><kbd>[</kbd> <kbd>]</kbd> · <kbd>P</kbd></dt><dd>Switch paragraph takes · new paragraph take</dd>
+        <dt><kbd>E</kbd> or double-click</dt><dd>Edit the paragraph</dd>
+        <dt><kbd>W</kbd> · <kbd>F</kbd> · <kbd>M</kbd></dt><dd>Markdown source · focus mode · sound</dd>
+        <dt><kbd>Alt</kbd>+<kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd></dt><dd>In the source: take, dim, stash</dd>
+        <dt><kbd>⌘Z</kbd> / <kbd>⌘⇧Z</kbd></dt><dd>Undo / redo</dd>
+      </dl>
+      <p class="tk-note">TAKES is a PointCast experiment in “alternative control”, after an idea Jason Fried showed with his Write_On editor. Not affiliated. <a href="/takes.json">Format notes (JSON)</a> · <a href="/">PointCast</a></p>
+    </section>
+
+    <p class="tk-toast" data-toast role="status"></p>
+    <p class="tk-sr" data-live aria-live="polite"></p>
+    <noscript><p class="tk-noscript">TAKES needs JavaScript to run. The format is plain Markdown; see <a href="/takes.json">/takes.json</a>.</p></noscript>
+  </div>
+
+  <script>
+    import { initTakes } from '../scripts/takes.mjs';
+    const setup = () => initTakes(document.querySelector('[data-takes]'));
+    setup();
+    document.addEventListener('astro:page-load', setup);
+  </script>
+</BlockLayout>
