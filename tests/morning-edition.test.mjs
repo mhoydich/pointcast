@@ -15,6 +15,11 @@ import {
   reportersLine, toJsonFeed,
 } from '../functions/_lib/morning.mjs';
 
+// The pickers below run on No. 1 (Sat 3 Oct 2026), where a front-door note under 7 days old outranks
+// Shortwave. Use only notes filed more than a week before it, so a launch note filed later doesn't
+// change what that date expects.
+const newsBeforeNo1 = news.filter((n) => n.date < '2026-09-26');
+
 const MIN = 60_000;
 const COURTS = kindOf(config, 'courts', 'wait');
 const BEACH = kindOf(config, 'beach', 'fog');
@@ -438,11 +443,11 @@ test('pickers: price within ±14 days, town news within 7 days, shop turns daily
     { id: 'd', at: '2026-10-03T06:00:00Z', text: 'unsigned', via: 'bar', attribution: 'self-reported', who: 'Mayor' },
     { id: 'e', at: '2026-10-03T14:00:00Z', text: 'after the cutoff', via: 'page', attribution: 'card', handle: 'sam' },
   ];
-  const sw = pickTown({ news, posts, date: SAT, ownerHandles: ['@mike'] });
+  const sw = pickTown({ news: newsBeforeNo1, posts, date: SAT, ownerHandles: ['@mike'] });
   assert.deepEqual(sw, { kind: 'shortwave', text: 'Lights out on court 4.', handle: 'jen', at: '2026-10-03T03:12:00Z' });
   assert.equal(byId(composeEdition({ date: SAT, config, sources: { town: sw } }), 'town').line, 'On Shortwave at 8:12 PM: "Lights out on court 4." — @jen');
-  assert.deepEqual(pickTown({ news, posts: [], almanac: 'Sunrise 6:52 AM.', date: SAT }), { kind: 'almanac', line: 'Sunrise 6:52 AM.' });
-  assert.equal(pickTown({ news, posts: [], date: SAT }), null);
+  assert.deepEqual(pickTown({ news: newsBeforeNo1, posts: [], almanac: 'Sunrise 6:52 AM.', date: SAT }), { kind: 'almanac', line: 'Sunrise 6:52 AM.' });
+  assert.equal(pickTown({ news: newsBeforeNo1, posts: [], date: SAT }), null);
 });
 
 test('momentOf: yesterday\'s last reading, its bylines and the reports behind it', () => {

@@ -10,6 +10,7 @@ export const AGENT_SURFACES = {
     puzzleBusiness: 'https://pointcast.xyz/puzzles/business/',
     puzzleStudio: 'https://pointcast.xyz/puzzles/studio/',
     puzzlesData: 'https://pointcast.xyz/puzzles.json',
+    chain: 'https://pointcast.xyz/chain/',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',
     pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands/',
     pickleballMixedDoubles: 'https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles/',
