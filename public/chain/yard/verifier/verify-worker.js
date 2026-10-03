@@ -12,9 +12,10 @@
 //   { type: "progress", height, block_hash, state_root, tip,
 //     verified: [[height, block_hash, state_root, tx_count], ...],
 //     blocks: [{ height, block_hash, txs: [card fields from the replay] }] }
-//   { type: "fault", fault, height, reason, evidence, verdict }
+//   { type: "fault", fault, height, reason, evidence, evidence_json, verdict }
 //                                                        sequencer fault with evidence checked against
-//                                                        this genesis (verdict.genesis); the worker stops
+//                                                        this genesis (verdict.genesis); the worker stops.
+//                                                        evidence_json is the exact JSON to save (u64s intact)
 //   { type: "node_fault", fault, height, reason }         the node served something wrong; retried
 //   { type: "anchors", match, total, ahead, bad_sig, foreign, mismatch: [heights] }
 //   { type: "error", message, transient? }
@@ -25,13 +26,17 @@ const POLL_MS = 3000;
 // full pages (or ignores `from`) cannot keep the worker spinning.
 const MAX_PAGES_PER_SYNC = 40;
 let api = "", v = null, params = null, stopped = false, tipSeen = 0;
+// verify.js's lossless parseJson/stringifyJson, set once it is imported.
+let json = null;
 
 const say = (m) => postMessage(m);
 
+// Everything fetched here goes into the wasm, so it is parsed losslessly:
+// r.json() would round every u64 above 2^53 and break honest blocks.
 async function getJson(path) {
   const r = await fetch(api + path, { cache: "no-store" });
   if (!r.ok) throw new Error(`${r.status} ${path}`);
-  return r.json();
+  return json.parseJson(await r.text());
 }
 
 // Push one batch. Returns "ok", "stop" (sequencer fault: reported, worker
@@ -60,7 +65,7 @@ function push(blocks) {
     try { check = v.call("evidence.check", { evidence: r.evidence, params }); } catch {}
     if (check && check.valid) {
       stopped = true;
-      say({ type: "fault", fault: r.fault, height: r.at_height, reason: r.reason, evidence: r.evidence, verdict: check.verdict });
+      say({ type: "fault", fault: r.fault, height: r.at_height, reason: r.reason, evidence: r.evidence, evidence_json: json.stringifyJson(r.evidence, 2), verdict: check.verdict });
       return "stop";
     }
   }
@@ -157,7 +162,8 @@ onmessage = async (ev) => {
     if (!msg.verifyJsUrl || !(msg.wasm instanceof ArrayBuffer) || !msg.wasmSha256) {
       throw new Error("start the worker with the page's pinned verify.js and wasm");
     }
-    const { PointcastVerifier, sha256Hex } = await import(msg.verifyJsUrl);
+    const { PointcastVerifier, sha256Hex, parseJson, stringifyJson } = await import(msg.verifyJsUrl);
+    json = { parseJson, stringifyJson };
     const bytes = new Uint8Array(msg.wasm);
     // Defence in depth: the page already checked these bytes against its pin.
     const wasm_sha256 = await sha256Hex(bytes);
@@ -165,7 +171,7 @@ onmessage = async (ev) => {
     v = await PointcastVerifier.load(bytes);
     let status;
     [params, status] = await Promise.all([getJson("/params"), getJson("/status")]);
-    tipSeen = status.height;
+    tipSeen = Number(status.height) || 0;
     const init = v.call("verifier.new", { params, genesis: msg.genesis || null });
     say({ type: "ready", genesis_hash: init.genesis_hash, chain_id: init.chain_id, wasm_sha256 });
     loop();

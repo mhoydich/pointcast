@@ -1,5 +1,6 @@
 export interface ExpansionSource { id: string; label: string; url: string; type: string; note: string }
 export interface ExpansionBook {
+  resourceType?: 'book' | 'reading-room'; authorCredits?: { name: string; role: 'author' | 'contributor' }[]; attributionLine?: string; copyHeading?: string; copyIntro?: string;
   id: string; shelfNumber: string; title: string; subtitle: string; authors: string[];
   firstPublished: string; firstPublicationNote: string; kind: string; themes: string[];
   theme: string; layout: string; tagline: string; dek: string;

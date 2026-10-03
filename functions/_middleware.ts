@@ -22,6 +22,7 @@ import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-b
 import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
 import { HOME_SHARE_EDITIONS, HOME_SHARE_CANONICAL, HOME_SHARE_TITLE, HOME_SHARE_DESCRIPTION, HOME_SHARE_WIDTH, HOME_SHARE_HEIGHT, homeShareEditionForDate } from '../src/lib/home-share-editions.mjs';
 import { planUnfurl, unfurlWords } from '../src/lib/unfurl/plan.mjs';
+import { isQuietUesStudyPath } from '../src/lib/ues-living-study-boundaries.mjs';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
@@ -331,7 +332,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         headers,
       });
       const upstreamType = classifyUA(request.headers.get('user-agent') ?? '');
-      return upstreamType.startsWith('ai:')
+      return upstreamType.startsWith('ai:') || isQuietUesStudyPath(url.pathname)
         ? directoryResponse
         : injectTezosSessionBridge(directoryResponse);
     }
@@ -439,8 +440,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Restore the same signed Tezos identity on every PointCast HTML surface,
   // including standalone/legacy pages that intentionally bypass the shared
   // Astro layouts. Layout-backed pages contain the same script; its global
-  // singleton guard makes this middleware copy a no-op there.
-  const browserResponse = isHtmlResponse && !type.startsWith('ai:')
+  // singleton guard makes this middleware copy a no-op there. Quiet UES
+  // educational documents intentionally omit account probing and unrelated wallet state.
+  const browserResponse = isHtmlResponse && !type.startsWith('ai:') && !isQuietUesStudyPath(url.pathname)
     ? injectTezosSessionBridge(response)
     : response;
 

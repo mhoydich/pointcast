@@ -1,0 +1,75 @@
+---
+import QuietLayout from '../layouts/UesQuietLayout.astro';
+import '../styles/ues-living-studies.css';
+interface Citation { text: string; sources?: string[] }
+interface Study {
+  id: string; title: string; kicker: string; lede: string;
+  orientation: {title: string; text: string};
+  sections: {id: string; kicker: string; title: string; intro?: string; paragraphs: Citation[]; cards?: {label: string; title: string; text: string; sources?: string[]}[]; table?: {caption: string; columns: string[]; rows: string[][]; sources?: string[]}}[];
+  practice: {title: string; text: string}[]; reflectionPrompt: string;
+  sources: {id: string; publisher: string; title: string; url: string; date: string; note?: string}[];
+  crosslinks: {href: string; title: string; text: string}[];
+}
+interface Options {
+  study: Study; path?: string; jsonPath?: string; author?: string; credit?: string;
+  artPath?: string; artCaption?: string;
+  navigation?: {href: string; title: string; label: string}[]; navigationLabel?: string;
+}
+const {study, path: configuredPath, jsonPath: configuredJsonPath, author, credit, artPath, artCaption, navigation, navigationLabel} = Astro.props as Options;
+const path = configuredPath || `/ues/${study.id}/`;
+const jsonPath = configuredJsonPath || `/ues/${study.id}.json`;
+const sourceNumbers = Object.fromEntries(study.sources.map((s,i)=>[s.id,i+1]));
+const art = artPath || `/images/ues-living-studies/${study.id}.svg`;
+const artCaptions: Record<string,string> = {
+  'human-energy': 'A field of intersecting rhythms. An abstract study of attention and vitality; not an anatomical map.',
+  'nature-interaction': 'Leaf, root, weather, and neighboring life. A conceptual ecology illustration, not a species identification guide.',
+  grief: 'A vessel beside an open horizon. An image of room for remembrance, without a sequence or destination.',
+};
+const imageDescription = artCaption || artCaptions[study.id];
+const siblings = [{id:'human-energy',title:'Human energy',label:'01 · BODY & ATTENTION'},{id:'nature-interaction',title:'Nature interaction',label:'02 · LIFE & PLACE'},{id:'grief',title:'Grief & explorations',label:'03 · LOSS & REMEMBRANCE'}];
+---
+<QuietLayout author={author} title={`${study.title} · University of El Segundo`} description={study.lede} image={art} alternates={[{type:'application/json',href:jsonPath,title:'Study, sources, and provenance'}]} jsonLd={{'@context':'https://schema.org','@type':'LearningResource',name:study.title,description:study.lede,url:`https://pointcast.xyz${path}`,isAccessibleForFree:true,...(author?{author:{'@type':'Person',name:author}}:{}),inLanguage:'en',dateModified:'2026-10-03',learningResourceType:'Self-guided educational study',isPartOf:{'@type':'EducationalOrganization',name:'University of El Segundo',url:'https://pointcast.xyz/ues'}}}>
+  <article class="living-study" data-study={study.id}>
+    <header class="study-masthead"><a class="wordmark" href="/">POINTCAST</a><a class="university" href="/ues">University of El Segundo <span>↗</span></a><span class="edition">OPEN STUDY · 2026.10</span></header>
+    <nav class="study-siblings" aria-label={navigationLabel || "Three connected studies"}>{(navigation || siblings.map(s=>({...s,href:`/ues/${s.id}/`}))).map(s=><a href={s.href} aria-current={s.href===path?'page':undefined}><span>{s.label}</span><b>{s.title}</b></a>)}</nav>
+    <section class="study-hero" aria-labelledby="study-title"><div class="hero-copy"><p class="eyebrow">{study.kicker}</p><h1 id="study-title">{study.title}</h1><p class="lede">{study.lede}</p><div class="hero-actions"><a class="study-button" href={`#${study.sections[0].id}`}>Begin reading <span>↓</span></a><a href="#practice">Try a small practice</a></div><p class="fine">Free · self-paced · no account · pause anywhere</p>{author&&<p class="byline">By {author}{' '}<span>{credit || "Research and drafting assistance: Codex"}</span></p>}</div><figure class="hero-art"><img src={art} width="960" height="700" alt={imageDescription} fetchpriority="high" /><figcaption>ORIGINAL VECTOR STUDY · CODEX · 03 OCT 2026</figcaption></figure></section>
+    <aside class="orientation"><span class="eyebrow">HOW TO USE THIS STUDY</span><div><h2>{study.orientation.title}</h2><p>{study.orientation.text}</p></div></aside>
+    <div class="study-body"><nav class="study-contents" aria-label="On this page"><p class="eyebrow">IN THIS STUDY</p><ol>{study.sections.map(section=><li><a href={`#${section.id}`}>{section.title}</a></li>)}<li><a href="#practice">Small practices</a></li><li><a href="#reflection">Optional reflection</a></li><li><a href="#sources">Sources & method</a></li></ol><p class="fine">Evidence reviewed<br /><time datetime="2026-10-03">October 3, 2026</time></p></nav><div class="study-reading">
+      {study.sections.map((section,index)=><section class="study-section" id={section.id} aria-labelledby={`${section.id}-title`}><p class="eyebrow">{String(index+1).padStart(2,'0')} · {section.kicker}</p><h2 id={`${section.id}-title`}>{section.title}</h2>{section.intro&&<p class="section-intro">{section.intro}</p>}{section.paragraphs.map(p=><p>{p.text} {p.sources?.map(id=><a class="citation" href={`#source-${id}`} aria-label={`Source ${sourceNumbers[id]}: ${study.sources.find(s=>s.id===id)?.title}`}>[{sourceNumbers[id]}]</a>)}</p>)}{section.cards&&<div class="study-cards">{section.cards.map(card=><article class="study-card"><p class="eyebrow">{card.label}</p><h3>{card.title}</h3><p>{card.text} {card.sources?.map(id=><a class="citation" href={`#source-${id}`} aria-label={`Source ${sourceNumbers[id]}`}>[{sourceNumbers[id]}]</a>)}</p></article>)}</div>}{section.table&&<><div class="study-table" role="region" aria-label={section.table.caption} tabindex="0"><table><caption>{section.table.caption}</caption><thead><tr>{section.table.columns.map(col=><th scope="col">{col}</th>)}</tr></thead><tbody>{section.table.rows.map(row=><tr>{row.map((cell,i)=>i===0?<th scope="row">{cell}</th>:<td>{cell}</td>)}</tr>)}</tbody></table></div>{section.table.sources&&<p class="table-source">Table sources: {section.table.sources.map(id=><a class="citation" href={`#source-${id}`}>[{sourceNumbers[id]}]</a>)}</p>}</>}</section>)}
+      <slot name="exhibition" />
+      <section class="study-section" id="practice" aria-labelledby="practice-title"><p class="eyebrow">A LITTLE ROOM TO EXPLORE</p><h2 id="practice-title">Small practices.</h2><p>Choose one, change it, or skip it. These are educational invitations, without a promised health effect. Seated, indoor, and reading-only participation count.</p><ol class="practice-list">{study.practice.map((p,i)=><li><span aria-hidden="true">{String(i+1).padStart(2,'0')}</span><div><h3>{p.title}</h3><p>{p.text}</p></div></li>)}</ol></section>
+      <section class="study-section reflection" id="reflection" aria-labelledby="reflection-title"><p class="eyebrow">OPTIONAL · FOR YOURSELF</p><h2 id="reflection-title">Keep a thought.</h2><label for="study-note">{study.reflectionPrompt}</label><p class="fine" id="note-privacy">Write a general observation, without names, identifying details, or health information. Your text stays in this browser tab until you choose Save in this browser. Saved text is available to anyone using this browser and to software with access to this site's browser storage. No account, server sync, entry analytics, or AI processing is used. Export creates a text file on your device; Clear removes this study's saved note and the text here.</p><textarea id="study-note" rows="5" maxlength="3000" aria-describedby="note-privacy note-status" autocomplete="off" spellcheck="false"></textarea><div class="note-actions" hidden><button type="button" data-note-save>Save in this browser</button><button type="button" data-note-export>Export note (.txt)</button><button type="button" data-note-clear>Clear note</button></div><p class="fine" id="note-status" role="status" aria-live="polite">Nothing is saved unless you choose Save in this browser.</p><noscript><p class="fine">Without JavaScript, writing works for this visit only. Save, export, and clear controls are unavailable; copy a thought yourself if you wish.</p></noscript></section>
+      <section class="study-section" id="sources" aria-labelledby="sources-title"><p class="eyebrow">DATED EVIDENCE · OPEN QUESTIONS</p><h2 id="sources-title">Sources & method.</h2><p>{author?`By ${author}. ${credit || "Research and drafting assistance: Codex"}.`:'Educational synthesis by Codex for UES.'} Source pages and reviews were checked October 3, 2026; their publication or review dates appear below. Tradition, first-person meaning, proposed mechanisms, and clinical evidence answer different questions. A citation supports its adjacent claim, not every claim made elsewhere on a linked page.</p><p>These studies offer no diagnosis, prescription, or professional qualification. UES is an independent, unaccredited educational project. Published research describes groups and cannot determine an individual's experience.</p><ol class="source-list">{study.sources.map(s=><li id={`source-${s.id}`}><a href={s.url} rel="noreferrer">{s.publisher} · {s.title} <span aria-hidden="true">↗</span></a><p class="fine">Source date: {s.date}. Accessed October 3, 2026.{s.note&&<> {s.note}</>}</p></li>)}</ol><details class="provenance"><summary>Artwork, privacy, and reusable study data</summary><p>{imageDescription} Original SVG artwork authored in code by Codex on October 3, 2026; no stock photography or third-party art is used. Text equivalents are provided. Artwork is illustrative and is not clinical, anatomical, or diagnostic evidence.</p><p>Reading and all core exercises work without JavaScript. Reflection uses only this page's browser storage key; no entries are sent over a network. Browser storage is optional and may be blocked. There is no score, health profile, or completion requirement.</p><a href={jsonPath} download={`${study.id}-study-2026-10-03.json`}>Download public study and source ledger (JSON)</a></details></section>
+      <section class="study-section connected" aria-labelledby="connected-title"><p class="eyebrow">CONTINUE IN YOUR OWN DIRECTION</p><h2 id="connected-title">Related studies.</h2><div class="study-cards">{study.crosslinks.map(link=><a class="study-card link-card" href={link.href}><h3>{link.title} <span aria-hidden="true">↗</span></h3><p>{link.text}</p></a>)}</div></section>
+    </div></div><footer class="study-footer"><a href="/ues">University of El Segundo</a><span>Careful observation. Room for uncertainty.</span><a href="#study-title">Back to the beginning ↑</a></footer>
+  </article>
+</QuietLayout>
+<script>
+  const root = document.querySelector<HTMLElement>('[data-study]');
+  if (root) {
+    const textarea = root.querySelector<HTMLTextAreaElement>('#study-note')!;
+    const status = root.querySelector<HTMLElement>('#note-status')!;
+    const key = `ues:living-study:v1:${root.dataset.study}:note`;
+    root.querySelector<HTMLElement>('.note-actions')!.hidden = false;
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved !== null) { textarea.value = saved.slice(0,3000); status.textContent = 'A saved note was loaded from this browser. Changes are not saved until you choose Save.'; }
+    } catch { status.textContent = 'Browser storage is unavailable. You can write here and export a text file.'; }
+    textarea.addEventListener('input',()=>{status.textContent = 'This text has unsaved changes. Choose Save to keep it in this browser, or Export to download it.';});
+    root.querySelector('[data-note-save]')!.addEventListener('click',()=>{
+      try { localStorage.setItem(key,textarea.value.slice(0,3000)); status.textContent='Saved in this browser only. Nothing was sent to a server.'; }
+      catch { status.textContent='Could not save in this browser. Your text is still here; export it if you wish.'; }
+    });
+    root.querySelector('[data-note-clear]')!.addEventListener('click',()=>{
+      textarea.value='';
+      try { localStorage.removeItem(key); status.textContent='This study’s saved note and text here were cleared. Downloaded files must be deleted separately.'; }
+      catch { status.textContent='Text here was cleared. Browser storage could not be accessed; a previously saved note may remain.'; }
+      textarea.focus();
+    });
+    root.querySelector('[data-note-export]')!.addEventListener('click',()=>{
+      const blob = new Blob([`${root.dataset.study} · optional reflection\n\n${textarea.value.slice(0,3000)}\n`],{type:'text/plain;charset=utf-8'});
+      const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`${root.dataset.study}-reflection.txt`; document.body.append(a); a.click(); a.remove(); window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      status.textContent='A text file was downloaded to your device. This does not save the note in browser storage.';
+    });
+  }
+</script>
