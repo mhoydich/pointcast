@@ -6,6 +6,11 @@
 export const AGENT_SURFACES = {
   human: {
     chain: 'https://pointcast.xyz/chain/',
+    chainDev: 'https://pointcast.xyz/chain/dev/',
+    chainDocs: 'https://pointcast.xyz/chain/docs/',
+    chainCaseStudy: 'https://pointcast.xyz/chain/case-study/',
+    chainInterns: 'https://pointcast.xyz/chain/interns/',
+    chainInternsData: 'https://pointcast.xyz/chain/interns.json',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',
     pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands/',
     pickleballMixedDoubles: 'https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles/',

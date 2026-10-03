@@ -11,7 +11,7 @@ export interface PointcastApp {
 }
 
 export const POINTCAST_APPS: PointcastApp[] = [
-  {slug:'chain',name:'PointCast Chain',kicker:'CHAIN · LOCAL BUILD · BLOCK YARD',description:'A chain where every block is a broadcast: 422 recorded blocks replayed and verified in your browser with the same code the sequencer runs. Local build, not a public network.',url:'https://pointcast.xyz/chain/',path:'/chain/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
+  {slug:'chain',name:'PointCast Chain',kicker:'CHAIN · HOME · LOCAL BUILD',description:'The home of pointcast-chain: the Block Yard, replayed and verified in your browser with the same code the sequencer runs, plus dev tools, docs, a case study and intern assignments. Local build, not a public network.',url:'https://pointcast.xyz/chain/',path:'/chain/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
   {slug:'object-library',name:'El Segundo Object Library',kicker:'BORROW / TRY / IMPROVE · CONCEPT DEMO',description:'Six original object concepts and a browser-local lending rehearsal. No inventory, bookings, payments or operating workshop.',url:'https://pointcast.xyz/object-library/',path:'/object-library/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
   {slug:'weather-atlas',name:'A year within reach',kicker:'EL SEGUNDO · 25-MILE WEATHER & LIVING ATLAS',description:'Four NOAA1991–2020 station normals,35years of observed rainfall,an illustrative seasonal microclimate map and object utility. Historical research,not a forecast.',url:'https://pointcast.xyz/weather-atlas/',path:'/weather-atlas/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
   {

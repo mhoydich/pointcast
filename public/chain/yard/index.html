@@ -31,6 +31,7 @@
   --pc-human: #0b5fa8;
   --pc-human-bg: #e2efff;
   --pc-live: #e0182d;
+  --pc-presence: #0b8a63;
   --yard-bg: #ebe5d3;
   --yard-bg2: #d8cfb6;
   --yard-plate: #ddd5bd;
@@ -53,7 +54,7 @@
     --pc-bg: #0d0f14; --pc-panel: #151821; --pc-ink: #e9ecf3; --pc-dim: #9298a8; --pc-rule: #2a2f3c;
     --pc-chrome: #2b303d; --pc-chrome-hi: #464d5e; --pc-chrome-lo: #0a0b0f;
     --pc-title: #1b3fd1; --pc-attn: #3ddc7a; --pc-agent: #c08bff; --pc-agent-bg: #2a1844;
-    --pc-human: #6cb2ff; --pc-human-bg: #142a44;
+    --pc-human: #6cb2ff; --pc-human-bg: #142a44; --pc-presence: #2ee6a6;
     --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
     --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
     --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
@@ -63,7 +64,7 @@
   --pc-bg: #0d0f14; --pc-panel: #151821; --pc-ink: #e9ecf3; --pc-dim: #9298a8; --pc-rule: #2a2f3c;
   --pc-chrome: #2b303d; --pc-chrome-hi: #464d5e; --pc-chrome-lo: #0a0b0f;
   --pc-title: #1b3fd1; --pc-attn: #3ddc7a; --pc-agent: #c08bff; --pc-agent-bg: #2a1844;
-  --pc-human: #6cb2ff; --pc-human-bg: #142a44;
+  --pc-human: #6cb2ff; --pc-human-bg: #142a44; --pc-presence: #2ee6a6;
   --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
   --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
   --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
@@ -189,6 +190,10 @@ button.link { background: none; border: 0; padding: 0; text-decoration: underlin
 .badge.rep { color: #fff; background: #6b7080; border-color: transparent; }
 .badge.bad { color: #fff; background: var(--pc-live); border-color: transparent; }
 .badge.wallet { color: #0a7f8a; }
+/* presence tickets: a ticketed tap, and a bare tap that counts for +0 on a ticketed chain */
+.badge.ticket { color: var(--pc-presence); }
+.badge.noticket { color: var(--pc-dim); border-style: dashed; }
+.policy { font: bold 10px/16px var(--mono); letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; padding: 1px 6px; color: var(--pc-presence); white-space: nowrap; }
 .addr { font: 12px var(--mono); }
 .empty-note { padding: 10px 12px; color: var(--pc-dim); font: 12px var(--mono); }
 
@@ -237,6 +242,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       <h1>Block<span>·</span>Yard</h1>
       <span class="live off" id="live"><i></i><span id="live-text">TUNING IN</span><span class="tally" id="live-tally"></span></span>
       <span class="tag">Every block is a stack of blocks: one cube per transaction.</span>
+      <span class="policy" id="policy" hidden title="Tap income needs a presence ticket from a registered issuer; bare taps count but mint 0">ticketed taps</span>
       <span class="grow"></span>
       <a class="bevel" href="/" id="feed-link">▤ feed explorer</a>
     </div>
@@ -317,55 +323,84 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   let reduced = RM.matches;
   const onMq = (mq, fn) => (mq.addEventListener ? mq.addEventListener("change", fn) : mq.addListener(fn));
 
+  // ---------- renderers
+  // Pure functions: chain data in, DOM nodes or strings out. Everything they
+  // are handed comes from a node, a snapshot or the verifier, and with ?api=
+  // a hostile endpoint controls all of it, so:
+  //  - strings reach the page only as text nodes or attribute values: h()
+  //    never hands a string to the HTML parser;
+  //  - attribute names are literals in this section, never data;
+  //  - the one link built from data (a Tezos operation) must pass
+  //    tezosExplorerUrl: https on tzkt.io, nothing else;
+  //  - lists are read only from real arrays (a JSON object can fake .length);
+  //  - str()/num() never throw (String() and Number() throw on a JSON object
+  //    like {"toString": 1}), so one bad field cannot blank the panel;
+  //  - u64s above 2^53, which the replay hands over as exact BigInts
+  //    (verify.js parseJson), keep their digits.
+  // crates/explorer/tests/town_escaping.mjs runs this section against hostile
+  // values with a stub `document`: keep it free of other DOM access (copyText
+  // touches the page only when its button is clicked) and of variables
+  // defined outside it.
+
   // DOM builder: children are nodes or text. Never parses HTML.
   function h(tag, props, ...kids) {
     const el = document.createElement(tag);
     if (props) {
       for (const [k, v] of Object.entries(props)) {
         if (v == null || v === false) continue;
-        if (k === "class") el.className = v;
-        else if (k === "text") el.textContent = String(v);
+        if (k === "class") el.className = str(v);
+        else if (k === "text") el.textContent = str(v);
         else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
-        else el.setAttribute(k, v === true ? "" : String(v));
+        else el.setAttribute(k, v === true ? "" : str(v));
       }
     }
     for (const kid of kids.flat(Infinity)) {
       if (kid == null || kid === false) continue;
-      el.append(kid instanceof Node ? kid : String(kid));
+      el.append(kid instanceof Node ? kid : str(kid));
     }
     return el;
   }
-  const str = (v) => (v == null ? "" : typeof v === "string" ? v
-    : typeof v === "number" || typeof v === "boolean" ? String(v) : JSON.stringify(v));
+  const str = (v) => {
+    if (v == null) return "";
+    switch (typeof v) {
+      case "string": return v;
+      case "number": case "boolean": case "bigint": return String(v);
+      default:
+        try { return JSON.stringify(v, (_, x) => (typeof x === "bigint" ? String(x) : x)) ?? ""; } catch { return ""; }
+    }
+  };
+  const num = (x) => { try { return Number(x); } catch { return NaN; } };
+  const arr = (x) => (Array.isArray(x) ? x : []);
+  const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
   const short = (s, n = 6) => { s = str(s); return s.length > n * 2 + 1 ? `${s.slice(0, n)}…${s.slice(-4)}` : s; };
-  const fmt = (n) => { const x = Number(n); return Number.isFinite(x) ? x.toLocaleString("en-US") : "—"; };
+  // Exact for the replay's BigInts; "—" for anything that is not a number.
+  const fmt = (n) => {
+    if (typeof n === "bigint") return n.toLocaleString("en-US");
+    const x = num(n);
+    return Number.isFinite(x) ? x.toLocaleString("en-US") : "—";
+  };
   const isInt = (n) => Number.isSafeInteger(n);
   // A positive safe integer, else the default. Loop bounds (anchor spacing,
   // heights) come from a node the page does not trust, so they are checked.
-  const posInt = (v, d) => { const n = Number(v); return Number.isSafeInteger(n) && n > 0 ? n : d; };
-  const metaContent = (name) => { const m = document.querySelector(`meta[name="${name}"]`); return m ? (m.getAttribute("content") || "").trim() : ""; };
+  const posInt = (v, d) => { const n = num(v); return Number.isSafeInteger(n) && n > 0 ? n : d; };
   const plural = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
   const ago = (ms) => {
-    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    const s = Math.max(0, Math.round((Date.now() - num(ms)) / 1000));
     if (s < 60) return `${s}s ago`;
     if (s < 3600) return `${Math.floor(s / 60)}m ago`;
     if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
     return `${Math.floor(s / 86400)}d ago`;
   };
-  const utc = (ms) => { try { return `${new Date(ms).toISOString().replace("T", " ").slice(0, 19)} UTC`; } catch { return str(ms); } };
-  const show = (id, text) => { const el = $(id); el.textContent = text; el.hidden = !text; };
-
-  // ---------- theme (shares pc-theme with the feed explorer)
-  try { const t = localStorage.getItem("pc-theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}
-  $("theme").onclick = () => {
-    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    const next = cur === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("pc-theme", next); } catch {}
-    themeChanged();
-  };
-  onMq(matchMedia("(prefers-color-scheme: dark)"), () => themeChanged());
-  onMq(RM, (e) => { reduced = e.matches; kick(); });
+  const utc = (ms) => { try { return `${new Date(num(ms)).toISOString().replace("T", " ").slice(0, 19)} UTC`; } catch { return str(ms); } };
+  const dur = (s) => { const n = num(s) || 0; return `${Math.floor(n / 60)}m${String(n % 60).padStart(2, "0")}s`; };
+  // Total of a receipt's issued amounts: exact when the replay hands over BigInts.
+  function issuedTotal(list) {
+    const amounts = arr(list).map((m) => m && m.amount);
+    if (amounts.some((x) => typeof x === "bigint")) {
+      return amounts.reduce((a, x) => a + (typeof x === "bigint" ? x : BigInt(Number.isSafeInteger(x) ? x : 0)), 0n);
+    }
+    return amounts.reduce((a, x) => a + (num(x) || 0), 0);
+  }
 
   // ======================================================================
   // Transaction kinds (chain-core TxKind, serde tag "type"). Colour is never
@@ -379,6 +414,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       motif: [[7, 2], [8, 2], [6, 3], [9, 3], [6, 4], [9, 4], [7, 5], [8, 5]] },
     { id: "tap", label: "Tap", glyph: "✦", color: "#12c8d8",
       motif: [[7, 3], [8, 3], [7, 4], [8, 4]] },
+    // A presence tap is the tap's dot inside a ring (as in the feed explorer).
+    { id: "presence_tap", label: "Presence tap", glyph: "✧", color: "#2ee6a6",
+      motif: [[7, 3], [8, 3], [7, 4], [8, 4], [7, 1], [8, 1], [5, 2], [10, 2], [4, 3], [11, 3], [4, 4], [11, 4], [5, 5], [10, 5], [7, 6], [8, 6]] },
     { id: "drop_mint", label: "Drop", glyph: "◆", color: "#ff2ea6",
       motif: [[7, 2], [8, 2], [6, 3], [7, 3], [8, 3], [9, 3], [7, 4], [8, 4]] },
     { id: "transfer", label: "Transfer", glyph: "⇄", color: "#ffd21a",
@@ -387,6 +425,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       motif: [[6, 2], [9, 2], [7, 3], [8, 3], [7, 4], [8, 4], [6, 5], [9, 5]] },
     { id: "set_drum_attestors", label: "Set drum attestors", glyph: "◎", color: "#9be22d",
       motif: [[7, 1], [8, 1], [5, 3], [10, 3], [7, 3], [8, 3], [5, 4], [10, 4], [7, 6], [8, 6]] },
+    // The issuer set: four keys around the room, in the presence family's teal.
+    { id: "set_presence_issuers", label: "Set presence issuers", glyph: "⊙", color: "#178f84",
+      motif: [[7, 1], [8, 1], [4, 3], [5, 3], [10, 3], [11, 3], [4, 4], [5, 4], [10, 4], [11, 4], [7, 6], [8, 6]] },
     { id: "set_mandate", label: "Set mandate", glyph: "⚖", color: "#c9a2ff",
       motif: [[5, 3], [6, 3], [7, 3], [8, 3], [9, 3], [10, 3], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4]] },
     { id: "clear_mandate", label: "Clear mandate", glyph: "⊘", color: "#8c93a8",
@@ -399,14 +440,208 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   const KIND_IX = new Map(KINDS.map((k, i) => [k.id, i]));
   const UNKNOWN = KINDS.length - 1;
   const kindIx = (t) => (KIND_IX.has(t) ? KIND_IX.get(t) : UNKNOWN);
-  // Mandate scope bits (1 << tag), chain-core mandate.rs.
+  // Mandate scope bits (1 << tag), chain-core TxKind::tag and mandate.rs.
   const KIND_TAGS = { 1: "publish_block", 2: "drum_session", 3: "tap", 4: "drop_mint", 5: "transfer",
-    6: "register_agent", 7: "set_drum_attestors", 10: "spend_allowance" };
+    6: "register_agent", 7: "set_drum_attestors", 10: "spend_allowance", 11: "presence_tap", 12: "set_presence_issuers" };
   const scopeKinds = (bits) => {
-    const n = Number(bits) || 0;
+    const n = num(bits) || 0;
     if (!n) return "paused (no kinds)";
     return Object.entries(KIND_TAGS).filter(([t]) => n & (1 << Number(t))).map(([, k]) => k).join(", ") || `bits ${n}`;
   };
+
+  // One line saying what the tx did, from its own fields.
+  function summary(kind, p) {
+    p = obj(p);
+    switch (kind) {
+      case "publish_block": return `${str(p.channel)} · ${str(p.title)}`;
+      case "drum_session": {
+        const players = arr(p.players).length, cosigs = arr(p.cosigs).length;
+        const att = p.room_sig ? "room-attested" : cosigs ? `${cosigs} co-signed` : "self-reported";
+        return `${str(p.room)} · ${dur(p.duration)} · ${plural(players, "player")} · ${att}`;
+      }
+      case "tap": return `tapped in · ${str(p.room)}`;
+      case "presence_tap": {
+        const t = obj(p.ticket);
+        return `present · ${str(p.room)} · ticketed by ${short(t.issuer, 6)} · slot ${fmt(t.slot)}`;
+      }
+      case "set_presence_issuers": {
+        const n = arr(p.issuers).length;
+        return n ? `presence issuers set: ${n}` : "presence issuers cleared: presence taps paused";
+      }
+      case "drop_mint": return `minted ${str(p.drop_id)} → ${short(p.recipient, 7)}`;
+      case "transfer": return `${fmt(p.amount)} ATTN → ${short(p.to, 7)}`;
+      case "register_agent": return `new agent on the register: ${str(p.name)}`;
+      case "set_drum_attestors": return `room-server attestors set: ${arr(p.attestors).length}`;
+      case "set_mandate": {
+        const t = obj(p.terms);
+        return `mandate for ${short(p.agent, 7)} · may: ${scopeKinds(t.kinds)} · ${fmt(t.spend_per_period || 0)} ATTN / ${fmt(t.period_blocks || 0)} blocks`;
+      }
+      case "clear_mandate": return `mandate cleared · ${short(p.agent, 7)} is unscoped again`;
+      case "spend_allowance": return `${fmt(p.amount)} ATTN → ${short(p.to, 7)} from the owner's allowance`;
+      default: return "unknown transaction kind";
+    }
+  }
+
+  async function copyText(text, btn) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch {
+      try {
+        const ta = h("textarea", { style: "position:fixed;opacity:0" });
+        ta.value = text; document.body.append(ta); ta.select(); ok = document.execCommand("copy"); ta.remove();
+      } catch {}
+    }
+    if (btn) { const was = btn.textContent; btn.textContent = ok ? "copied" : "copy failed"; setTimeout(() => { btn.textContent = was; }, 1200); }
+  }
+  function copyable(value, n = 8) {
+    const v = str(value);
+    if (!v) return h("span", { class: "src" }, "—");
+    const btn = h("button", { class: "bevel mini", type: "button", "aria-label": "Copy full value" }, "copy");
+    btn.addEventListener("click", (e) => { e.stopPropagation(); copyText(v, btn); });
+    return h("span", { class: "cp" }, h("code", { title: v }, short(v, n)), btn);
+  }
+  function whoBadge(addr, info) {
+    const a = str(addr), i = obj(info);
+    return [i.kind === "agent" ? h("span", { class: "badge agent", title: `Agent owned by ${str(i.owner)}` }, `⚙ ${str(i.name)}`)
+      : h("span", { class: "badge human" }, `${a.slice(0, 3)} · ${a.startsWith("pca") ? "agent" : "human"}`), " ", copyable(a, 7)];
+  }
+  // Link out only to the explorer the node itself builds (tzkt.io and its
+  // network subdomains, crates/node/src/tezos/mod.rs), never to a URL a node
+  // made up.
+  function tezosExplorerUrl(u) {
+    if (typeof u !== "string") return false;
+    try {
+      const x = new URL(u);
+      return x.protocol === "https:" && !x.username && !x.password && !x.port && (x.hostname === "tzkt.io" || x.hostname.endsWith(".tzkt.io"));
+    } catch { return false; }
+  }
+
+  // One transaction of the detail panel. `raw` is the page's copy of the
+  // signed tx ({ tx, sig_mode, … } from /raw/blocks or the snapshot), `card`
+  // the node's /block card or your replay's (with the receipt), or null.
+  // ctx: { icon(ix) -> node, snapshot: bool, ticketed: bool }.
+  function txCard(raw, card, i, cardSrc, fromReplay, ctx) {
+    const x = obj(raw && raw.tx);
+    card = card && typeof card === "object" && !Array.isArray(card) ? card : null;
+    // A card from your own replay outranks the page's copy of the tx; a node's
+    // card only fills in what the raw tx lacks.
+    const pick = (mine, served) => (fromReplay ? mine ?? served : served ?? mine);
+    const kind = str(pick(card && card.kind, x.type));
+    const ix = kindIx(kind);
+    const K = KINDS[ix];
+    const cp = card && card.payload && typeof card.payload === "object" ? card.payload : null;
+    const payload = obj(cp || x);
+    const sigMode = pick(card && card.sig_mode, raw && raw.sig_mode) || "raw";
+    const issued = arr(card && card.issued);
+    const art = h("article", { class: "txc" },
+      h("div", { class: "txk" }, ctx.icon(ix), h("b", null, `${K.glyph} ${K.label}`), h("code", null, kind || "?"),
+        h("span", { class: "txmeta" }, `#${fmt(i + 1)}`)),
+      h("div", { class: "txmeta" }, "sender ", whoBadge(pick(card && card.sender, x.sender), card && card.sender_info), ` · nonce ${str(pick(card && card.nonce, x.nonce))}`,
+        sigMode === "tezos_message" ? [" · ", h("span", { class: "badge wallet", title: "Signed in a Tezos wallet (sign_payload)" }, "✍ wallet")] : null),
+      h("div", { class: "txsum" }, summary(kind, payload)));
+    if (kind === "publish_block") {
+      if (cp && typeof cp.body === "string" && cp.body) {
+        art.append(h("div", { class: "txbody" }, cp.body),
+          h("div", { class: "txmeta" }, "post text is off-chain, as the node reports it; the chain holds its body_hash"));
+      }
+      art.append(h("div", { class: "txmeta" }, "body_hash ", copyable(payload.body_hash, 8),
+        payload.media_uri ? [" · media ", h("code", null, str(payload.media_uri))] : null));
+    }
+    if (kind === "drum_session" && Array.isArray(payload.players)) {
+      art.append(h("div", { class: "txmeta" }, "players ", payload.players.map((a) => short(a, 5)).join(" · ")));
+    }
+    if (kind === "register_agent" && cp && cp.agent_address) {
+      art.append(h("div", { class: "txmeta" }, "agent ", copyable(cp.agent_address, 7)));
+    }
+    if (kind === "presence_tap") {
+      const t = obj(payload.ticket);
+      art.append(h("div", { class: "txmeta" },
+        h("span", { class: "badge ticket", title: "Carries a presence ticket from a registered issuer: the only tap that earns on a ticketed chain" }, "✧ ticketed"),
+        " issuer ", copyable(t.issuer, 6), " · pid ", copyable(t.pid, 6), ` · slot ${fmt(t.slot)}`));
+    }
+    if (kind === "set_presence_issuers") {
+      const keys = arr(payload.issuers);
+      art.append(h("div", { class: "txmeta" }, keys.length ? `issuers ${keys.map((k) => short(k, 8)).join(" · ")}` : "no issuers: presence taps are paused until the admin sets some"));
+    }
+    if (kind === "tap" && ctx.ticketed && !issued.length) {
+      art.append(h("div", { class: "txmeta" },
+        h("span", { class: "badge noticket", title: "A bare tap counts on a ticketed chain but mints nothing" }, "tap · no ticket · +0")));
+    }
+    if (card) {
+      const bits = [];
+      if (issued.length) bits.push(`issued +${fmt(issuedTotal(issued))} ATTN (${issued.map((m) => `${short(m && m.to, 5)} +${fmt(m && m.amount)}`).join(", ")})`);
+      const credited = arr(card.credited);
+      if (credited.length) bits.push(`credited ${plural(credited.length, "player")}`);
+      if (card.funded_by) bits.push(`paid by ${short(card.funded_by, 7)}`);
+      art.append(h("div", { class: "txmeta" }, h("span", { class: "rc" }, `receipt: ${bits.length ? bits.join(" · ") : "applied, nothing issued"}`), ` · ${str(cardSrc)}`));
+      if (card.hash) art.append(h("div", { class: "txmeta" }, "tx ", copyable(card.hash, 8)));
+    } else {
+      art.append(h("div", { class: "txmeta" }, ctx.snapshot
+        ? "receipt: not recorded in the snapshot; turn on VERIFY to compute it in your browser"
+        : "receipt: loading…"));
+    }
+    return art;
+  }
+  // A sealed anchor record (/anchors or the snapshot); `state` is "posted" or "sealed".
+  function anchorRecord(a, state) {
+    a = obj(a);
+    const p = obj(a.payload);
+    const out = [h("span", null, `${state === "posted" ? "posted to Tezos" : "sealed"} · status ${str(a.status)}`)];
+    if (p.state_root) out.push(h("br"), "root ", copyable(p.state_root, 8));
+    if (tezosExplorerUrl(a.explorer_url)) {
+      out.push(" · ", h("a", { href: a.explorer_url, target: "_blank", rel: "noopener noreferrer nofollow" }, "Tezos operation ↗"));
+    }
+    return out;
+  }
+  // The detail panel's header facts. `hash` and its source come from the
+  // caller (your replay, the node, or the next block's parent link).
+  function blockFacts(hh, hd, hash, hashSrc, txLine, anchorNode) {
+    hd = obj(hd);
+    const row = (k, v, src) => [h("dt", null, k), h("dd", null, v, src ? [" ", h("span", { class: "src" }, src)] : null)];
+    const ts = num(hd.timestamp);
+    return h("dl", { class: "kv" },
+      row("height", fmt(hh)),
+      row("block hash", copyable(hash, 10), hashSrc),
+      row("parent", copyable(hd.prev_hash, 10)),
+      row("timestamp", Number.isFinite(ts) ? `${utc(ts)} · ${ago(ts)}` : str(hd.timestamp)),
+      row("state root", copyable(hd.state_root, 10)),
+      row("tx root", copyable(hd.tx_root, 10)),
+      row("sequencer sig", copyable(hd.sequencer_sig, 10)),
+      row("transactions", txLine),
+      anchorNode ? row("anchor", anchorNode) : null);
+  }
+  // One row of the balances drawer, from /account/{addr} or the snapshot.
+  // Returns the row and what a click on it spotlights.
+  function accountRow(a, i, max, on) {
+    a = obj(a);
+    const addr = str(a.address), k = obj(a.kind);
+    const isAgent = k.type === "agent";
+    const bal = num(a.balance) || 0;
+    const pct = Math.min(100, Math.max(1, (bal / Math.max(1, num(max) || 1)) * 100 || 0));
+    const el = h("button", { class: "acct", type: "button", "aria-pressed": String(!!on), title: addr },
+      h("span", { class: "rank" }, String(i + 1)),
+      h("span", { class: "who" },
+        isAgent ? h("span", { class: "badge agent", title: `owner ${str(k.owner)}` }, `⚙ ${str(k.name)}`) : h("span", { class: "badge human" }, `${addr.slice(0, 3)} · human`),
+        h("code", null, short(addr, 6))),
+      h("span", { class: "bal" }, `${fmt(typeof a.balance === "bigint" ? a.balance : bal)} ATTN`),
+      h("span", { class: "bar" }, h("i", { style: `width:${pct.toFixed(1)}%` })));
+    return { el, addr, label: isAgent ? `${str(k.name)} (${short(addr, 6)})` : short(addr, 7) };
+  }
+  // ---------- end renderers
+
+  const metaContent = (name) => { const m = document.querySelector(`meta[name="${name}"]`); return m ? (m.getAttribute("content") || "").trim() : ""; };
+  const show = (id, text) => { const el = $(id); el.textContent = text; el.hidden = !text; };
+
+  // ---------- theme (shares pc-theme with the feed explorer)
+  try { const t = localStorage.getItem("pc-theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}
+  $("theme").onclick = () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("pc-theme", next); } catch {}
+    themeChanged();
+  };
+  onMq(matchMedia("(prefers-color-scheme: dark)"), () => themeChanged());
+  onMq(RM, (e) => { reduced = e.matches; kick(); });
 
   // ======================================================================
   // Geometry. One world unit = one sprite pixel. A cube is 16×16 px (2:1
@@ -566,7 +801,17 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // ======================================================================
   let MODE = "boot";               // "node" | "snapshot"
   let API = null, SNAP_URL = null, SNAP = null;
+  // The snapshot exactly as served. The page reads it with JSON.parse, which is
+  // fine for drawing; VERIFY hands these bytes to the worker, which parses them
+  // losslessly (verify.js parseJson), so every u64 reaches the wasm intact.
+  let SNAP_TEXT = "";
   let params = null, status = null, interval = 100;
+  // Tap income needs a presence ticket on this chain (GET /params →
+  // launch.presence.tap_policy, chain-core params.rs): bare taps count, +0.
+  const ticketed = () => {
+    const pp = params && params.launch && params.launch.presence;
+    return !!pp && pp.tap_policy === "ticketed";
+  };
   const blocks = new Map();        // height -> stack
   let order = [];                  // heights, back-to-front (hit testing)
   let heights = [];                // heights, ascending (timeline; never loop over minH..maxH, it may have gaps)
@@ -648,6 +893,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   function httpUrl(u, base) { try { const x = new URL(u, base); return /^https?:$/.test(x.protocol) ? x : null; } catch { return null; } }
   // Same rule as the feed explorer: ?api=, else 127.0.0.1:8545 from file://, else this origin.
   const API_GUESS = (qs.get("api") || (location.protocol === "file:" ? "http://127.0.0.1:8545" : location.origin)).replace(/\/$/, "");
+  // For drawing only: r.json() rounds integers above 2^53, so nothing read
+  // here is handed to the verifier (its worker fetches the node itself, and
+  // parses losslessly).
   async function getJSON(path, timeoutMs = 8000) {
     const ctl = typeof AbortController === "function" ? new AbortController() : null;
     const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : 0;
@@ -712,11 +960,12 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
         : `The snapshot must be a relative or same-origin URL (got ${rel}).`, why);
     }
     SNAP_URL = url.href;
-    let snap;
+    let snap, text;
     try {
       const r = await fetch(SNAP_URL, { cache: "no-cache" });
       if (!r.ok) throw new Error(`${r.status} ${url.pathname}`);
-      snap = await r.json();
+      text = await r.text();
+      snap = JSON.parse(text);
     } catch (e) {
       return fatal(`No node, and no snapshot at ${url.pathname} (${e.message || e}).`, why);
     }
@@ -725,11 +974,12 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     }
     MODE = "snapshot";
     SNAP = snap;
+    SNAP_TEXT = text;
     status = snap.status;
     params = snap.params;
     interval = posInt(params.anchor_interval, posInt(status.anchor_interval, 100));
     (Array.isArray(snap.anchors) ? snap.anchors : []).forEach(addAnchor);
-    accounts = Array.isArray(snap.accounts) ? snap.accounts : null;
+    accounts = Array.isArray(snap.accounts) ? snap.accounts.filter((a) => a && typeof a === "object") : null;
     setSource(why);
     addBlocks(snap.blocks, true);
     initialDone = true;
@@ -822,10 +1072,11 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       $("s-source-l").textContent = rec ? `rec. ${rec.slice(0, 10)}` : "static";
       $("s-source").title = SNAP_URL || "";
       setLive("snap", "SNAPSHOT");
-      show("v-src", `Static snapshot: a recorded --dev --demo chain signed with the public dev keys${rec ? `, recorded ${rec}` : ""}.${why ? ` Showing it because ${why}.` : ""} VERIFY replays it in your browser.`);
+      show("v-src", `Static snapshot: a recorded --dev --demo chain${ticketed() ? " with ticketed taps" : ""}, signed with the public dev keys${rec ? `, recorded ${rec}` : ""}.${why ? ` Showing it because ${why}.` : ""} VERIFY replays it in your browser.`);
       $("feed-link").hidden = true;
     }
     $("anchor-every").textContent = fmt(interval);
+    $("policy").hidden = !ticketed();
   }
   function setLive(kind, text) {
     const el = $("live");
@@ -845,7 +1096,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     $("s-anchors").textContent = fmt(Math.max(sealed, reached));
     $("s-anchors-l").textContent = `Anchors · every ${fmt(interval)}`;
     $("s-anchors").title = `${fmt(sealed)} sealed anchor records · ${fmt(reached)} anchor heights reached`;
-    const sup = Number(status.total_supply), max = Number(status.max_supply);
+    const sup = num(status.total_supply), max = num(status.max_supply);
     $("s-supply").textContent = Number.isFinite(sup) ? fmt(sup) : "—";
     $("s-supply-bar").style.width = Number.isFinite(sup) && max > 0 ? `${Math.max(0.5, Math.min(100, (sup / max) * 100))}%` : "0";
     $("ticker").textContent = `state_root ${str(status.state_root) || "—"} · tip ${str(status.tip_hash) || "—"} · genesis ${str(status.genesis_hash)}`;
@@ -1546,107 +1797,12 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // ======================================================================
   // Detail panel
   // ======================================================================
-  async function copyText(text, btn) {
-    let ok = false;
-    try { await navigator.clipboard.writeText(text); ok = true; } catch {
-      try {
-        const ta = h("textarea", { style: "position:fixed;opacity:0" });
-        ta.value = text; document.body.append(ta); ta.select(); ok = document.execCommand("copy"); ta.remove();
-      } catch {}
-    }
-    if (btn) { const was = btn.textContent; btn.textContent = ok ? "copied" : "copy failed"; setTimeout(() => { btn.textContent = was; }, 1200); }
-  }
-  function copyable(value, n = 8) {
-    const v = str(value);
-    if (!v) return h("span", { class: "src" }, "—");
-    const btn = h("button", { class: "bevel mini", type: "button", "aria-label": "Copy full value" }, "copy");
-    btn.addEventListener("click", (e) => { e.stopPropagation(); copyText(v, btn); });
-    return h("span", { class: "cp" }, h("code", { title: v }, short(v, n)), btn);
-  }
   function kindIcon(ix, cls = "kicon") {
     const c = mkCanvas(W, T + S);
     c.className = cls;
     c.setAttribute("aria-hidden", "true");
     c.getContext("2d").drawImage(SP.cubes[ix], 0, 0);
     return c;
-  }
-  function whoBadge(addr, info) {
-    const a = str(addr);
-    const agent = info && info.kind === "agent";
-    return [agent ? h("span", { class: "badge agent", title: `Agent owned by ${str(info.owner)}` }, `⚙ ${str(info.name)}`)
-      : h("span", { class: "badge human" }, `${a.slice(0, 3)} · ${a.startsWith("pca") ? "agent" : "human"}`), " ", copyable(a, 7)];
-  }
-  const dur = (s) => { const n = Number(s) || 0; return `${Math.floor(n / 60)}m${String(n % 60).padStart(2, "0")}s`; };
-  // One line saying what the tx did, from its own fields.
-  function summary(kind, p) {
-    p = p || {};
-    switch (kind) {
-      case "publish_block": return `${str(p.channel)} · ${str(p.title)}`;
-      case "drum_session": {
-        const players = Array.isArray(p.players) ? p.players.length : 0;
-        const att = p.room_sig ? "room-attested" : Array.isArray(p.cosigs) && p.cosigs.length ? `${p.cosigs.length} co-signed` : "self-reported";
-        return `${str(p.room)} · ${dur(p.duration)} · ${plural(players, "player")} · ${att}`;
-      }
-      case "tap": return `tapped in · ${str(p.room)}`;
-      case "drop_mint": return `minted ${str(p.drop_id)} → ${short(p.recipient, 7)}`;
-      case "transfer": return `${fmt(p.amount)} ATTN → ${short(p.to, 7)}`;
-      case "register_agent": return `new agent on the register: ${str(p.name)}`;
-      case "set_drum_attestors": return `room-server attestors set: ${Array.isArray(p.attestors) ? p.attestors.length : 0}`;
-      case "set_mandate": {
-        const t = p.terms || {};
-        return `mandate for ${short(p.agent, 7)} · may: ${scopeKinds(t.kinds)} · ${fmt(t.spend_per_period || 0)} ATTN / ${fmt(t.period_blocks || 0)} blocks`;
-      }
-      case "clear_mandate": return `mandate cleared · ${short(p.agent, 7)} is unscoped again`;
-      case "spend_allowance": return `${fmt(p.amount)} ATTN → ${short(p.to, 7)} from the owner's allowance`;
-      default: return "unknown transaction kind";
-    }
-  }
-  function txCard(raw, card, i, cardSrc, fromReplay) {
-    const x = (raw && raw.tx) || {};
-    // A card from your own replay outranks the page's copy of the tx; a node's
-    // card only fills in what the raw tx lacks.
-    const pick = (mine, served) => (fromReplay ? mine ?? served : served ?? mine);
-    const kind = str(pick(card && card.kind, x.type));
-    const ix = kindIx(kind);
-    const K = KINDS[ix];
-    const payload = (card && card.payload && typeof card.payload === "object" && card.payload) || x;
-    const info = card && card.sender_info;
-    const sigMode = pick(card && card.sig_mode, raw && raw.sig_mode) || "raw";
-    const art = h("article", { class: "txc" },
-      h("div", { class: "txk" }, kindIcon(ix), h("b", null, `${K.glyph} ${K.label}`), h("code", null, kind || "?"),
-        h("span", { class: "txmeta" }, `#${i + 1}`)),
-      h("div", { class: "txmeta" }, "sender ", whoBadge(pick(card && card.sender, x.sender), info), ` · nonce ${str(pick(card && card.nonce, x.nonce))}`,
-        sigMode === "tezos_message" ? [" · ", h("span", { class: "badge wallet", title: "Signed in a Tezos wallet (sign_payload)" }, "✍ wallet")] : null),
-      h("div", { class: "txsum" }, summary(kind, payload)));
-    if (kind === "publish_block") {
-      if (card && card.payload && typeof card.payload.body === "string" && card.payload.body) {
-        art.append(h("div", { class: "txbody" }, card.payload.body),
-          h("div", { class: "txmeta" }, "post text is off-chain, as the node reports it; the chain holds its body_hash"));
-      }
-      art.append(h("div", { class: "txmeta" }, "body_hash ", copyable(payload.body_hash, 8),
-        payload.media_uri ? [" · media ", h("code", null, str(payload.media_uri))] : null));
-    }
-    if (kind === "drum_session" && Array.isArray(payload.players)) {
-      art.append(h("div", { class: "txmeta" }, "players ", payload.players.map((a) => short(a, 5)).join(" · ")));
-    }
-    if (kind === "register_agent" && card && card.payload && card.payload.agent_address) {
-      art.append(h("div", { class: "txmeta" }, "agent ", copyable(card.payload.agent_address, 7)));
-    }
-    if (card) {
-      const issued = Array.isArray(card.issued) ? card.issued : [];
-      const sum = issued.reduce((a, m) => a + (Number(m && m.amount) || 0), 0);
-      const bits = [];
-      if (issued.length) bits.push(`issued +${fmt(sum)} ATTN (${issued.map((m) => `${short(m && m.to, 5)} +${fmt(m && m.amount)}`).join(", ")})`);
-      if (Array.isArray(card.credited) && card.credited.length) bits.push(`credited ${plural(card.credited.length, "player")}`);
-      if (card.funded_by) bits.push(`paid by ${short(card.funded_by, 7)}`);
-      art.append(h("div", { class: "txmeta" }, h("span", { class: "rc" }, `receipt: ${bits.length ? bits.join(" · ") : "applied, nothing issued"}`), ` · ${cardSrc}`));
-      if (card.hash) art.append(h("div", { class: "txmeta" }, "tx ", copyable(card.hash, 8)));
-    } else {
-      art.append(h("div", { class: "txmeta" }, MODE === "snapshot"
-        ? "receipt: not recorded in the snapshot; turn on VERIFY to compute it in your browser"
-        : "receipt: loading…"));
-    }
-    return art;
   }
   function badgeFor(B) {
     if (!B) return h("span");
@@ -1707,18 +1863,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     if (B.v === 1 && mine) { hash = mine[0]; hashSrc = "replayed in your browser"; }
     else if (view && typeof view.hash === "string") { hash = view.hash; hashSrc = "reported by the node"; }
     else { const r = reportedHash(hh); if (r) { hash = r.hash; hashSrc = r.note; } }
-    const row = (k, v, src) => [h("dt", null, k), h("dd", null, v, src ? [" ", h("span", { class: "src" }, src)] : null)];
-    const ts = Number(hd.timestamp);
-    body.append(h("dl", { class: "kv" },
-      row("height", fmt(hh)),
-      row("block hash", copyable(hash, 10), hashSrc),
-      row("parent", copyable(hd.prev_hash, 10)),
-      row("timestamp", Number.isFinite(ts) ? `${utc(ts)} · ${ago(ts)}` : str(hd.timestamp)),
-      row("state root", copyable(hd.state_root, 10)),
-      row("tx root", copyable(hd.tx_root, 10)),
-      row("sequencer sig", copyable(hd.sequencer_sig, 10)),
-      row("transactions", B.ntx ? `${fmt(B.ntx)} · ${describe(B)}` : "none (empty block)"),
-      hh % interval === 0 ? row("anchor", anchorLine(hh)) : null));
+    body.append(blockFacts(hh, hd, hash, hashSrc, B.ntx ? `${fmt(B.ntx)} · ${describe(B)}` : "none (empty block)",
+      hh % interval === 0 ? anchorLine(hh) : null));
     // verification state, in words
     const vs = h("div", { class: "vstate" });
     if (B.v === 1) {
@@ -1747,14 +1893,16 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       body.append(h("div", { class: "sec" }, `Transactions · ${fmt(B.ntx)}`));
       const cards = useReplay ? rep.txs : view && Array.isArray(view.txs) && view.txs.length === B.ntx ? view.txs : null;
       const src = useReplay ? "from your replay" : "reported by the node";
+      const ctx = { icon: (ix) => kindIcon(ix), snapshot: MODE === "snapshot", ticketed: ticketed() };
       const list = h("div");
       B.txs.forEach((t, i) => {
         let card = cards ? cards[i] : null;
         // Post text is off-chain: keep the node's text alongside the replayed card.
-        if (useReplay && card && view && view.txs && view.txs[i] && typeof view.txs[i].payload?.body === "string") {
-          card = { ...card, payload: { ...card.payload, body: view.txs[i].payload.body } };
+        const served = useReplay && view && Array.isArray(view.txs) ? view.txs[i] : null;
+        if (card && typeof card === "object" && served && served.payload && typeof served.payload.body === "string") {
+          card = { ...card, payload: { ...card.payload, body: served.payload.body } };
         }
-        list.append(txCard(t, card, i, src, !!useReplay));
+        list.append(txCard(t, card, i, src, !!useReplay, ctx));
       });
       body.append(list);
     } else {
@@ -1762,29 +1910,13 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     }
     body.scrollTop = keepScroll;
   }
-  // Link out only to the explorer the node itself builds (tzkt.io and its
-  // network subdomains, crates/node/src/tezos/mod.rs), never to a URL a node
-  // made up.
-  function tezosExplorerUrl(u) {
-    if (typeof u !== "string") return false;
-    try {
-      const x = new URL(u);
-      return x.protocol === "https:" && !x.username && !x.password && !x.port && (x.hostname === "tzkt.io" || x.hostname.endsWith(".tzkt.io"));
-    } catch { return false; }
-  }
   function anchorLine(hh) {
     const a = anchors.get(hh);
     if (!a) {
       if (MODE === "node" && hh < anchorWindowFloor) return `anchor height (every ${fmt(interval)} blocks) · older than the 50 anchors the node lists, so its record is not shown`;
       return `anchor height (every ${fmt(interval)} blocks) · no sealed anchor record ${MODE === "snapshot" ? "in the snapshot" : "from the node yet"}`;
     }
-    const st = anchorState(hh);
-    const out = [h("span", null, `${st === "posted" ? "posted to Tezos" : "sealed"} · status ${str(a.status)}`)];
-    if (a.payload && a.payload.state_root) out.push(h("br"), "root ", copyable(a.payload.state_root, 8));
-    if (tezosExplorerUrl(a.explorer_url)) {
-      out.push(" · ", h("a", { href: a.explorer_url, target: "_blank", rel: "noopener noreferrer nofollow" }, "Tezos operation ↗"));
-    }
-    return out;
+    return anchorRecord(a, anchorState(hh));
   }
 
   // ======================================================================
@@ -1835,10 +1967,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       await Promise.all(Array.from({ length: 6 }, async () => {
         while (i < addrs.length) {
           const a = addrs[i++];
-          try { const v = await getJSON(`/account/${encodeURIComponent(a)}`); if (v && v.exists !== false) out.push(v); } catch {}
+          try { const v = await getJSON(`/account/${encodeURIComponent(a)}`); if (v && typeof v === "object" && v.exists !== false) out.push(v); } catch {}
         }
       }));
-      out.sort((a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0));
+      out.sort((a, b) => (num(b.balance) || 0) - (num(a.balance) || 0));
       accounts = out;
       acctAt = Date.now();
       renderAccounts(out, `Live from the node: ${fmt(out.length)} of ${fmt(status.accounts)} accounts (the ones seen in the yard), read via /account/{address}.`);
@@ -1846,25 +1978,16 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   }
   function renderAccounts(list, note) {
     $("drawer-note").textContent = `${note} Tap one to spotlight its transactions.`;
-    const max = Math.max(1, ...list.map((a) => Number(a.balance) || 0));
+    list = list.filter((a) => a && typeof a === "object");
+    const max = Math.max(1, ...list.map((a) => num(a.balance) || 0));
     const box = $("drawer-list");
     box.replaceChildren();
     if (!list.length) { box.append(h("div", { class: "empty-note" }, "No accounts yet.")); return; }
     list.slice(0, 40).forEach((a, i) => {
-      const addr = str(a.address);
-      const k = a.kind || {};
-      const isAgent = k.type === "agent";
-      const on = spot && spot.type === "addr" && spot.addr === addr;
-      const bal = Number(a.balance) || 0;
-      const row = h("button", { class: "acct", type: "button", "aria-pressed": String(!!on), title: addr },
-        h("span", { class: "rank" }, String(i + 1)),
-        h("span", { class: "who" },
-          isAgent ? h("span", { class: "badge agent", title: `owner ${str(k.owner)}` }, `⚙ ${str(k.name)}`) : h("span", { class: "badge human" }, `${addr.slice(0, 3)} · human`),
-          h("code", null, short(addr, 6))),
-        h("span", { class: "bal" }, `${fmt(bal)} ATTN`),
-        h("span", { class: "bar" }, h("i", { style: `width:${Math.max(1, (bal / max) * 100).toFixed(1)}%` })));
-      row.addEventListener("click", () => setSpot(on ? null : { type: "addr", addr, label: isAgent ? `${str(k.name)} (${short(addr, 6)})` : short(addr, 7) }));
-      box.append(row);
+      const on = !!spot && spot.type === "addr" && spot.addr === str(a.address);
+      const { el, addr, label } = accountRow(a, i, max, on);
+      el.addEventListener("click", () => setSpot(on ? null : { type: "addr", addr, label }));
+      box.append(el);
     });
   }
 
@@ -1902,7 +2025,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       h("div", { class: "lg-row" }, slab, `empty block · 1 cube per tx (first at the bottom; striped cap past ${MAX_CUBES})`),
       h("div", { class: "lg-row" }, `◎ beacon every ${fmt(interval)}: `, h("span", { class: "sw", style: `border:2px solid ${TH.beacon}` }), " sealed ",
         h("span", { class: "sw", style: `border:2px solid ${TH.posted}` }), " on Tezos ", h("span", { class: "sw", style: `border:2px dashed ${TH.beaconOff}` }), " due"),
-      h("div", { class: "lg-row" }, h("span", { class: "sw", style: `background:${TH.ok}` }), " ✓ verified by you  ", h("span", { class: "sw", style: `background:${TH.bad}` }), " ✗ fault"));
+      h("div", { class: "lg-row" }, h("span", { class: "sw", style: `background:${TH.ok}` }), " ✓ verified by you  ", h("span", { class: "sw", style: `background:${TH.bad}` }), " ✗ fault"),
+      ticketed() ? h("div", { class: "lg-row" }, "ticketed chain: only ✧ presence taps earn; a bare ✦ tap counts, +0") : null);
   }
   $("legend-btn").onclick = () => {
     const lg = $("legend");
@@ -1921,9 +2045,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // snapshot, so nothing is trusted that the replay does not check.
   // ======================================================================
   const VERIFIER_PINS = {
-    "pointcast_chain.wasm": "2a976f82af51072163aa02e198a9a470569e0a79e9285b527cc51660e2f36226",
-    "verify.js": "9d566db88af1ce1fe0369701c74fd3de91a02a0833a74f675cd87f41e732c6eb",
-    "verify-worker.js": "6aabbb18e7e3cc2c12ee3f17c201d16d8c307f672d52e6aa889b9b5d39ab137e",
+    "pointcast_chain.wasm": "e08e675b94a07ff5fd76350a06a465836bd09f41aeac3e12b09148f65078d60f",
+    "verify.js": "74255711f5b8988eb18c30d5138ef0dc5ff4612566f0d70ac5b9fea6f81dc3cc",
+    "verify-worker.js": "d2823b12caab9924f6ab256121a3bb5f1ba16223f881568f4bc7542a4ef7f783",
   };
   const SNAP_API = "https://snapshot.invalid";
   const verified = new Map();     // height -> [block hash, state root, tx count] replayed locally
@@ -1969,17 +2093,20 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   }
 
   // Runs inside the snapshot worker, before the pinned worker module loads.
+  // It parses the snapshot's own bytes with the pinned verify.js (parseJson /
+  // stringifyJson, lossless for u64s) and answers with the same digits, so the
+  // worker reads exactly what a node serving this chain would have sent.
   function snapshotShim(SNAP_ORIGIN) {
-    let snap = null;
+    let snap = null, json = null;
     const realFetch = self.fetch.bind(self);
-    const reply = (v, code = 200) => new Response(JSON.stringify(v), { status: code, headers: { "content-type": "application/json" } });
+    const reply = (v, code = 200) => new Response(json.stringifyJson(v), { status: code, headers: { "content-type": "application/json" } });
     self.fetch = async (input, init) => {
       const url = String(input && typeof input === "object" && "url" in input ? input.url : input);
       if (!url.startsWith(`${SNAP_ORIGIN}/`)) return realFetch(input, init);
       const u = new URL(url);
       if (u.pathname === "/params") return reply(snap.params);
       if (u.pathname === "/status") return reply(snap.status);
-      if (u.pathname === "/anchors") return reply({ anchors: snap.anchors });
+      if (u.pathname === "/anchors") return reply({ anchors: Array.isArray(snap.anchors) ? snap.anchors : [] });
       if (u.pathname === "/raw/blocks") {
         const from = Math.max(1, Math.floor(Number(u.searchParams.get("from"))) || 1);
         const limit = Math.min(500, Math.max(1, Math.floor(Number(u.searchParams.get("limit"))) || 100));
@@ -1996,8 +2123,14 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     self.onmessage = async (ev) => {
       const d = ev.data || {};
       self.onmessage = null;
-      snap = d.snapshot;
-      snap.index = new Map(snap.blocks.map((b, i) => [b.header.height, i]));
+      try {
+        const { parseJson, stringifyJson } = await import(d.start.verifyJsUrl);
+        json = { parseJson, stringifyJson };
+        snap = parseJson(d.snapshotText);
+        if (!snap || !Array.isArray(snap.blocks) || !snap.params || !snap.status) throw new Error("not a pointcast-chain-snapshot/v1 file");
+        snap.index = new Map();
+        snap.blocks.forEach((b, i) => { const hh = b && b.header && b.header.height; if (Number.isSafeInteger(hh)) snap.index.set(hh, i); });
+      } catch (e) { postMessage({ type: "error", message: `the snapshot could not be read for the replay: ${e.message || e}` }); return; }
       try { await import(d.workerUrl); }
       catch (e) { postMessage({ type: "error", message: `verifier worker failed to load: ${e.message || e}` }); return; }
       if (typeof self.onmessage !== "function") { postMessage({ type: "error", message: "verifier worker did not start" }); return; }
@@ -2062,8 +2195,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   let evidenceUrl = null;
   function evidenceLink() {
     if (!evidenceUrl) {
-      const blob = new Blob([JSON.stringify(vFault.evidence, null, 2) + "\n"], { type: "application/json" });
-      evidenceUrl = URL.createObjectURL(blob);
+      // evidence_json is the worker's exact (lossless) JSON: JSON.stringify
+      // would throw on, or round, the u64s that evidence.check needs intact.
+      const text = typeof vFault.evidence_json === "string" ? vFault.evidence_json : str(vFault.evidence);
+      evidenceUrl = URL.createObjectURL(new Blob([`${text}\n`], { type: "application/json" }));
     }
     return h("a", { href: evidenceUrl, download: "evidence.json" }, "download evidence.json");
   }
@@ -2166,8 +2301,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       vWorker = new Worker(shimUrl, { type: "module" });
       vWorker.onmessage = onVerify;
       vWorker.onerror = (e) => onVerify({ data: { type: "error", message: e.message || "worker failed to start" } });
-      const snapshot = { params: SNAP.params, status: SNAP.status, anchors: Array.isArray(SNAP.anchors) ? SNAP.anchors : [], blocks: SNAP.blocks };
-      vWorker.postMessage({ workerUrl: a.workerUrl, snapshot, start }, [wasm]);
+      vWorker.postMessage({ workerUrl: a.workerUrl, snapshotText: SNAP_TEXT, start }, [wasm]);
     } else {
       vWorker = new Worker(a.workerUrl, { type: "module" });
       vWorker.onmessage = onVerify;
