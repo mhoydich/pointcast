@@ -1,4 +1,4 @@
-import companions from './bookshelf-expansion.json';
+import { bookCompanions as companions } from './book-companions';
 
 export const shelfThemes = [
   { id: 'all', label: 'Everything' },
@@ -9,6 +9,8 @@ export const shelfThemes = [
   { id: 'memory', label: 'Memory & choices' },
   { id: 'fantasy', label: 'Fantasy' },
   { id: 'attention', label: 'Attention' },
+  { id: 'language', label: 'Words & language' },
+  { id: 'practice', label: 'Habits & aspiration' },
 ];
 
 const established = [
