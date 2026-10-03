@@ -50,7 +50,7 @@ for (const slug of slugs) {
   const document = new JSDOM(await read(`dist${path}/index.html`)).window.document;
   check(document.querySelectorAll('main').length === 1 && document.querySelectorAll('h1').length === 1, `${slug}: one main and title`);
   check(document.querySelector('link[rel="canonical"]').href === `${base}${path}/`, `${slug}: canonical`);
-  check(document.querySelector('link[rel="alternate"][type="application/json"]').getAttribute('href') === `${path}.json`, `${slug}: head JSON alternate`);
+  check([...document.querySelectorAll('link[rel="alternate"][type="application/json"]')].some(link => new URL(link.getAttribute('href'), base).href === `${base}${path}.json`), `${slug}: head JSON alternate`);
   check(document.querySelector('meta[name="author"]').content === 'PointCast Editorial' && document.querySelector('meta[name="creator"]').content === 'PointCast Editorial', `${slug}: editorial metadata`);
   const schemas = [...document.querySelectorAll('script[type="application/ld+json"]')].map(node => JSON.parse(node.textContent));
   const articleSchema = schemas.flatMap(value => value['@graph'] || [value]).find(value => value['@type'] === 'Article');
