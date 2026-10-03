@@ -12,7 +12,7 @@ function fixture() {
     ${['all','open','building','redesign','delivered-native'].map(id => `<button data-status-filter="${id}" aria-pressed="${id === 'all'}">${id}</button>`).join('')}<button data-reset-filters>Reset</button></div>
     <p data-filter-result role="status"></p>
     ${PROJECTS.map(project => `<article data-project-card data-family="${project.family}" data-next-status="${project.next?.status ?? ''}"><a href="${project.href}">${project.title}</a>${project.next ? `<a data-show-studio href="#studio-${project.id}-next">Next</a>` : ''}</article>`).join('')}
-    ${NATIVE.map(project => `<article data-native-card data-family="${project.family}">${project.title}</article>`).join('')}<p data-project-empty hidden></p>
+    ${NATIVE.map(project => `<article data-native-card data-family="${project.family}">${project.title}</article>`).join('')}<p data-project-empty hidden><a data-show-studio href="#worktable">Studio</a></p>
     ${STUDIO.map(project => `<article id="studio-${project.id}" data-studio-card data-family="${project.family}" data-status="${project.status}">${project.title}</article>`).join('')}
     <p data-studio-empty hidden></p></main>`);
   const root = dom.window.document.querySelector('main');
@@ -112,4 +112,15 @@ test('delivered native work stays distinct from public browser pages and unfinis
   assert.equal(f.visible('[data-native-card]').length, 1);
   assert.equal('href' in NATIVE[0], false);
   assert.equal(NATIVE[0].status, 'delivered-native');
+});
+
+
+test('the empty-view studio fallback reveals matching unfinished work', () => {
+  const f = fixture();
+  f.family('tools');
+  f.click('open');
+  assert.equal(f.visible('[data-studio-card]').length, 0);
+  f.root.querySelector('[data-project-empty] a').click();
+  assert.equal(f.visible('[data-studio-card]').length, 1);
+  assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'true');
 });
