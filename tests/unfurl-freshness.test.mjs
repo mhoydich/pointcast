@@ -20,10 +20,10 @@ test('a public card URL carries a content hash that changes with the file', asyn
   assert.equal(versionedImageUrl('https://noun.pics/1.svg', 'https://pointcast.xyz', dir), 'https://noun.pics/1.svg');
 });
 
-test("the home card is dated with the Los Angeles day so caches roll over", async () => {
+test("the Kennel Club route can pin a Los Angeles sitting date independently of home art", async () => {
   assert.equal(datedImageUrl('https://pointcast.xyz/og/kennel-club/today.png', '2026-09-21'), 'https://pointcast.xyz/og/kennel-club/today.png?date=2026-09-21');
   const middleware = await read('functions/_middleware.ts');
-  assert.match(middleware, /datedImageUrl\('https:\/\/pointcast\.xyz\/og\/kennel-club\/today\.png', losAngelesDate\(\)\)/);
+  assert.doesNotMatch(middleware, /injectTodayDogMetadata/);
 });
 
 test('the request-time card answers HEAD, which unfurl crawlers send first', async () => {

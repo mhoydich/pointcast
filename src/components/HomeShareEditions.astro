@@ -1,0 +1,136 @@
+---
+import {
+  HOME_SHARE_EDITIONS,
+  HOME_SHARE_WIDTH,
+  HOME_SHARE_HEIGHT,
+  findHomeShareEdition,
+  type HomeShareEditionId,
+} from '../lib/home-share-editions.mjs';
+
+interface Props {
+  initialEditionId?: HomeShareEditionId;
+  /** The home utility follows the server's UTC schedule; fixed pages keep their art. */
+  followDaily?: boolean;
+}
+const { initialEditionId, followDaily = false } = Astro.props;
+const current = findHomeShareEdition(initialEditionId) ?? HOME_SHARE_EDITIONS[0];
+const number = (value: number) => String(value).padStart(2, '0');
+---
+
+<section class="home-share" aria-labelledby="home-share-title" data-home-share data-edition={current.id} data-follow-daily={String(followDaily)}>
+  <div class="home-share__copy">
+    <p class="home-share__eyebrow">PointCast / Home share editions / October 2026</p>
+    <h2 id="home-share-title">A picture to pass along.</h2>
+    <p>Six original cards from our worlds of art, music, games, and making. The home link rotates daily. Choose an edition link to keep one picture with your share.</p>
+    <div class="home-share__buttons" data-home-share-controls hidden>
+      <button type="button" data-home-share-next>New share card</button>
+      <button type="button" data-home-share-copy>Copy edition link</button>
+      <a href={current.path} data-home-share-open>Open edition ↗</a>
+    </div>
+    <label class="home-share__link-label" for="home-share-link">Selected edition link</label>
+    <input id="home-share-link" class="home-share__link" type="url" value={current.url} readonly data-home-share-link />
+    <p class="home-share__status" role="status" aria-live="polite" data-home-share-status></p>
+    <p class="home-share__note">Social apps can keep older previews. A new picture on every paste is not guaranteed.</p>
+  </div>
+  <figure class="home-share__preview">
+    <a href={current.path} data-home-share-open>
+      <img src={`${current.imagePath}?v=${current.id}`} width={HOME_SHARE_WIDTH} height={HOME_SHARE_HEIGHT} alt={current.alt} loading="lazy" decoding="async" data-home-share-image />
+    </a>
+    <figcaption><span data-home-share-number>{number(current.number)} / {number(HOME_SHARE_EDITIONS.length)}</span><strong data-home-share-name>{current.title}</strong></figcaption>
+  </figure>
+  <details class="home-share__all">
+    <summary>Browse all six edition links</summary>
+    <nav aria-label="Home share card editions">
+      {HOME_SHARE_EDITIONS.map((edition) => (
+        <a href={edition.path} data-home-share-choice={edition.id} aria-current={edition.id === current.id ? 'true' : undefined}>
+          <span>{number(edition.number)}</span>{edition.title}<span aria-hidden="true">↗</span>
+        </a>
+      ))}
+    </nav>
+  </details>
+</section>
+
+<script>
+  import { HOME_SHARE_EDITIONS, homeShareEditionForDate } from '../lib/home-share-editions.mjs';
+
+  function initializeHomeShareEditions() {
+    document.querySelectorAll<HTMLElement>('[data-home-share]').forEach((root) => {
+      if (root.dataset.ready === 'true') return;
+      const image = root.querySelector<HTMLImageElement>('[data-home-share-image]');
+      const link = root.querySelector<HTMLInputElement>('[data-home-share-link]');
+      const name = root.querySelector<HTMLElement>('[data-home-share-name]');
+      const number = root.querySelector<HTMLElement>('[data-home-share-number]');
+      const status = root.querySelector<HTMLElement>('[data-home-share-status]');
+      const next = root.querySelector<HTMLButtonElement>('[data-home-share-next]');
+      const copy = root.querySelector<HTMLButtonElement>('[data-home-share-copy]');
+      if (!image || !link || !name || !number || !status || !next || !copy) return;
+      root.dataset.ready = 'true';
+      const initialId = root.dataset.followDaily === 'true' ? homeShareEditionForDate().id : root.dataset.edition;
+      let index = Math.max(0, HOME_SHARE_EDITIONS.findIndex((edition) => edition.id === initialId));
+      const show = () => {
+        const edition = HOME_SHARE_EDITIONS[index];
+        root.dataset.edition = edition.id;
+        image.src = `${edition.imagePath}?v=${edition.id}`;
+        image.alt = edition.alt;
+        link.value = edition.url;
+        name.textContent = edition.title;
+        number.textContent = `${String(edition.number).padStart(2, '0')} / ${String(HOME_SHARE_EDITIONS.length).padStart(2, '0')}`;
+        root.querySelectorAll<HTMLAnchorElement>('[data-home-share-open]').forEach((anchor) => { anchor.href = edition.path; });
+        root.querySelectorAll<HTMLAnchorElement>('[data-home-share-choice]').forEach((anchor) => {
+          if (anchor.dataset.homeShareChoice === edition.id) anchor.setAttribute('aria-current', 'true');
+          else anchor.removeAttribute('aria-current');
+        });
+      };
+      show();
+      root.querySelector<HTMLElement>('[data-home-share-controls]')?.removeAttribute('hidden');
+      next.addEventListener('click', () => {
+        index = (index + 1) % HOME_SHARE_EDITIONS.length;
+        show();
+        status.textContent = `Showing card ${index + 1} of ${HOME_SHARE_EDITIONS.length}: ${HOME_SHARE_EDITIONS[index].title}.`;
+      });
+      copy.addEventListener('click', async () => {
+        const edition = HOME_SHARE_EDITIONS[index];
+        try {
+          await navigator.clipboard.writeText(edition.url);
+          status.textContent = `Copied the ${edition.title} edition link.`;
+        } catch {
+          link.focus();
+          link.select();
+          status.textContent = 'Copy the selected link from the field.';
+        }
+      });
+    });
+  }
+  initializeHomeShareEditions();
+  document.addEventListener('astro:page-load', initializeHomeShareEditions);
+</script>
+
+<style>
+  .home-share { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px 30px;margin:30px 0;padding:25px;background:#f3eee2;border:1px solid #282a28;color:#202420; }
+  .home-share__eyebrow { margin:0 0 13px;font:700 9px/1.6 var(--pc-font-mono);text-transform:uppercase;letter-spacing:.09em; }
+  .home-share h2 { margin:0 0 13px;font-size:clamp(25px,3vw,37px);font-weight:650;line-height:1.05;letter-spacing:-.04em; }
+  .home-share__copy>p:not(.home-share__eyebrow):not(.home-share__status):not(.home-share__note) { margin:0;font-size:13px;line-height:1.65;max-width:50ch; }
+  .home-share__buttons { display:flex;flex-wrap:wrap;gap:8px;margin:19px 0 15px; }
+  .home-share__buttons[hidden] { display:none; }
+  .home-share__buttons button,.home-share__buttons a { display:inline-block;appearance:none;border:1px solid #202420;padding:9px 11px;background:transparent;color:inherit;font:700 10px/1.4 var(--pc-font-mono);text-decoration:none;cursor:pointer; }
+  .home-share__buttons button:first-child { background:#202420;color:#f8f5eb; }
+  .home-share__buttons button:hover,.home-share__buttons a:hover { background:#24534c;color:#fff; }
+  .home-share__link-label { display:block;margin-top:18px;font:700 9px/1.5 var(--pc-font-mono); }
+  .home-share__link { width:100%;box-sizing:border-box;margin-top:5px;border:1px solid #878e80;border-radius:0;padding:9px;background:#fffdf7;color:#202420;font:10px/1.5 var(--pc-font-mono); }
+  .home-share__status { min-height:1.6em;margin:6px 0;font-size:11px;line-height:1.6; }
+  .home-share__note { max-width:55ch;margin:0;font-size:11px;line-height:1.6;color:#50574f; }
+  .home-share__preview { min-width:0;margin:0;align-self:center; }
+  .home-share__preview>a { display:block; }
+  .home-share__preview img { display:block;width:100%;height:auto;aspect-ratio:1200/630;border:1px solid #282a28;box-sizing:border-box;background:#dfded0; }
+  .home-share__preview figcaption { display:flex;gap:14px;align-items:baseline;padding-top:10px;font:10px/1.5 var(--pc-font-mono); }
+  .home-share__preview strong { font-weight:650; }
+  .home-share__all { grid-column:1/-1;border-top:1px solid #b1b3a5; }
+  .home-share__all summary { padding:12px 0 0;font:700 10px/1.5 var(--pc-font-mono);cursor:pointer; }
+  .home-share__all nav { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:13px;background:#b1b3a5;border:1px solid #b1b3a5; }
+  .home-share__all a { display:flex;gap:10px;align-items:center;padding:12px;background:#fffdf7;color:inherit;font:11px/1.5 var(--pc-font-mono);text-decoration:none; }
+  .home-share__all a>span:last-child { margin-left:auto; }
+  .home-share__all a:hover,.home-share__all a[aria-current='true'] { background:#d8e5d6; }
+  .home-share :is(button,a,input,summary):focus-visible { outline:3px solid #ad492a;outline-offset:3px; }
+  @media(max-width:760px) { .home-share { grid-template-columns:1fr;padding:20px;gap:20px; }.home-share__preview { grid-row:2; }.home-share__all nav { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:420px) { .home-share__all nav { grid-template-columns:1fr; }.home-share__buttons button,.home-share__buttons a { padding:10px; } }
+</style>

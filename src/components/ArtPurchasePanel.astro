@@ -1,0 +1,44 @@
+---
+import config from '../data/art-v2-commerce.json';
+import { saleReadiness } from '../lib/art-commerce.mjs';
+interface Props { artwork: any; compact?: boolean; }
+const { artwork, compact = false } = Astro.props;
+// Do not place private ownerEvidence, prompts, or arbitrary metadata in HTML.
+const safeArtwork = {
+  id: artwork?.id,
+  source: { rightsStatus: artwork?.source?.rightsStatus },
+  v2: { asset: artwork?.v2?.asset },
+  commerce: {
+    priceMutez: artwork?.commerce?.priceMutez,
+    network: artwork?.commerce?.network,
+    tokenId: artwork?.commerce?.tokenId,
+    contract: artwork?.commerce?.contract,
+  },
+};
+const readiness = saleReadiness(config, safeArtwork);
+---
+<section class:list={['art-purchase', { compact }]} data-art-purchase data-artwork={JSON.stringify(safeArtwork)} aria-label="Artwork purchase status">
+  <div class="art-purchase__price"><strong>1 tez</strong><span>{readiness.ready ? 'artwork price' : 'planned artwork price'}</span></div>
+  <p class="art-purchase__state">{readiness.ready ? 'Unsigned review available · manual wallet handoff' : 'Preview · purchase unavailable'}</p>
+  <button type="button" data-prepare-purchase disabled={!readiness.ready}>{readiness.ready ? 'Prepare 1 tez purchase' : 'Purchase unavailable'}</button>
+  <p data-purchase-message role="status" aria-live="polite">{readiness.ready ? 'Connect your wallet through PointCast, then prepare a review file. Sign and submit manually in your wallet.' : 'Artwork rights, token identity, listing and release terms must be verified before purchase.'}</p>
+  <p class="art-purchase__fees">Network fees are additional. The amount is unknown until the signing wallet estimates it.</p>
+  {!compact && <p class="art-purchase__chains">Tezos: not configured. Separate PointCast blockchain: unverified.</p>}
+  <a href="/art/v2/commerce/">Collection and mint status</a>
+</section>
+<script>
+  import config from '../data/art-v2-commerce.json';
+  import { mountArtPurchasePanels } from '../lib/art-commerce-client';
+  mountArtPurchasePanels(config);
+  document.addEventListener('astro:page-load', () => mountArtPurchasePanels(config));
+</script>
+<style>
+  .art-purchase { display: grid; gap: .65rem; padding: 1rem; border: 1px solid currentColor; border-radius: .75rem; font-size: .875rem; }
+  .art-purchase__price { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap; }
+  .art-purchase__price strong { font-size: 1.35rem; }
+  .art-purchase p { margin: 0; line-height: 1.5; }
+  .art-purchase button { padding: .75rem; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: .4rem; font: inherit; font-weight: 700; cursor: pointer; }
+  .art-purchase button:disabled { opacity: .55; cursor: not-allowed; }
+  .art-purchase button:focus-visible, .art-purchase a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+  .art-purchase__fees, .art-purchase__chains { font-size: .78rem; opacity: .8; }
+</style>
