@@ -120,7 +120,8 @@ export const RELEASED_STUDIES = [
     "source": {
       "href": "/discovery/#method",
       "label": "Audit method & evidence"
-    }
+    },
+    "nextAction": "Inspect a finding and its saved route evidence; distinguish the audit date from the current site."
   },
   {
     "id": "saturday",
@@ -131,7 +132,8 @@ export const RELEASED_STUDIES = [
     "source": {
       "href": "/meditate/2026-10-03.json",
       "label": "Meditation context & sources"
-    }
+    },
+    "nextAction": "Start the linked music deliberately, then choose a quiet timer session."
   },
   {
     "id": "dispensary-atlas",
@@ -142,7 +144,8 @@ export const RELEASED_STUDIES = [
     "source": {
       "href": "/dispensary-atlas/#method",
       "label": "Atlas method & source records"
-    }
+    },
+    "nextAction": "Explore the radius and inspect a store’s dated source record; confirm details with the original source."
   },
   {
     "id": "coffee-business",
@@ -153,7 +156,8 @@ export const RELEASED_STUDIES = [
     "source": {
       "href": "/ues/coffee/#method",
       "label": "Coffee field-study method"
-    }
+    },
+    "nextAction": "Filter the selected cafés and test an operating assumption in the classroom model."
   },
   {
     "id": "real-estate",
@@ -164,7 +168,8 @@ export const RELEASED_STUDIES = [
     "source": {
       "href": "/real-estate/#sources",
       "label": "Groundwork source ledger"
-    }
+    },
+    "nextAction": "Inspect the source ledger and scenario assumptions before trying a hypothetical comparison."
   },
   {
     "id": "business-signals",
@@ -175,7 +180,8 @@ export const RELEASED_STUDIES = [
     "source": {
       "href": "/business-feels/#sources",
       "label": "Observation dates & sources"
-    }
+    },
+    "nextAction": "Compare observation dates and try a reference-rate scenario; the saved data is not a live market feed."
   },
   {
     "id": "chain",
@@ -186,7 +192,8 @@ export const RELEASED_STUDIES = [
     "source": {
       "href": "/chain#status",
       "label": "Dev-chain status & boundaries"
-    }
+    },
+    "nextAction": "Read the network status, then try the recorded replay and its browser verification."
   },
   {
     "id": "prediction-markets",
@@ -209,18 +216,81 @@ export const RELEASED_STUDIES = [
         "label": "UES classes",
         "summary": "The published University of El Segundo class and study collection."
       }
-    ]
+    ],
+    "nextAction": "Begin a lesson and test a forecast in the synthetic paper labs."
   },
-  { id: 'buildworks', family: 'design', title: 'El Segundo Buildworks', href: '/buildworks/', summary: 'Six original small-object concepts, sourcing research and a pilot workbook for exploring a possible studio. No ordering or manufactured inventory is offered.', source: { href: '/buildworks/#sources', label: 'Sourcing research & provenance' }, links: [{ href: '/buildworks/pilot-workbook.txt', label: 'Pilot workbook', summary: 'A plain-text workbook for investigating materials, suppliers and a possible first pilot.' }] },
-  { id: 'art-v2-commerce', family: 'art', title: 'Art v2 / collection status', href: '/art/v2/commerce/', statusLabel: 'DISABLED PREVIEW / GALLERY PENDING', summary: 'A published collection-status preview. Purchases, minting and listings remain unavailable while the separate gallery is prepared.', source: { href: '/art/v2/commerce.json', label: 'Disabled purchase & mint status' } },
-  { id: 'home-share-editions', family: 'art', title: 'PointCast / daily share editions', href: '/#home-share-title', summary: 'Six original share cards for art, music, games and making, with a daily home selection and fixed edition links.', links: [
-    { href: '/share/home/2026-10-signal-atlas/', label: 'Signal Atlas', summary: 'An original PointCast share-card edition with its own fixed public link.' },
-    { href: '/share/home/2026-10-listening-garden/', label: 'Listening Garden', summary: 'An original music-inspired share-card edition with its own fixed public link.' },
-    { href: '/share/home/2026-10-paper-constellation/', label: 'Paper Constellation', summary: 'An original paper-world share-card edition with its own fixed public link.' },
-    { href: '/share/home/2026-10-tide-observatory/', label: 'Tide Observatory', summary: 'An original coastal share-card edition with its own fixed public link.' },
-    { href: '/share/home/2026-10-making-room/', label: 'Making Room', summary: 'An original making-inspired share-card edition with its own fixed public link.' },
-    { href: '/share/home/2026-10-night-arcade/', label: 'Night Arcade', summary: 'An original play-inspired share-card edition with its own fixed public link.' }
-  ] }
+  {
+    "id": "buildworks",
+    "family": "design",
+    "title": "El Segundo Buildworks",
+    "href": "/buildworks/",
+    "summary": "Six original small-object concepts, sourcing research and a pilot workbook for exploring a possible studio. No ordering or manufactured inventory is offered.",
+    "source": {
+      "href": "/buildworks/#sources",
+      "label": "Sourcing research & provenance"
+    },
+    "links": [
+      {
+        "href": "/buildworks/pilot-workbook.txt",
+        "label": "Pilot workbook",
+        "summary": "A plain-text workbook for investigating materials, suppliers and a possible first pilot."
+      }
+    ],
+    "nextAction": "Open the pilot workbook and compare dated supplier and material sources before proposing a physical pilot."
+  },
+  {
+    "id": "art-v2-commerce",
+    "family": "art",
+    "title": "Art v2 / collection status",
+    "href": "/art/v2/commerce/",
+    "statusLabel": "DISABLED PREVIEW / GALLERY PENDING",
+    "summary": "A published collection-status preview. Purchases, minting and listings remain unavailable while the separate gallery is prepared.",
+    "source": {
+      "href": "/art/v2/commerce.json",
+      "label": "Disabled purchase & mint status"
+    },
+    "nextAction": "Read the collection status; purchasing, minting and listing remain disabled while the gallery is prepared."
+  },
+  {
+    "id": "home-share-editions",
+    "family": "art",
+    "title": "PointCast / daily share editions",
+    "href": "/#home-share-title",
+    "summary": "Six original share cards for art, music, games and making, with a daily home selection and fixed edition links.",
+    "links": [
+      {
+        "href": "/share/home/2026-10-signal-atlas/",
+        "label": "Signal Atlas",
+        "summary": "An original PointCast share-card edition with its own fixed public link."
+      },
+      {
+        "href": "/share/home/2026-10-listening-garden/",
+        "label": "Listening Garden",
+        "summary": "An original music-inspired share-card edition with its own fixed public link."
+      },
+      {
+        "href": "/share/home/2026-10-paper-constellation/",
+        "label": "Paper Constellation",
+        "summary": "An original paper-world share-card edition with its own fixed public link."
+      },
+      {
+        "href": "/share/home/2026-10-tide-observatory/",
+        "label": "Tide Observatory",
+        "summary": "An original coastal share-card edition with its own fixed public link."
+      },
+      {
+        "href": "/share/home/2026-10-making-room/",
+        "label": "Making Room",
+        "summary": "An original making-inspired share-card edition with its own fixed public link."
+      },
+      {
+        "href": "/share/home/2026-10-night-arcade/",
+        "label": "Night Arcade",
+        "summary": "An original play-inspired share-card edition with its own fixed public link."
+      }
+    ],
+    "nextAction": "Choose an original share-card edition and use its fixed link for that visual edition."
+  }
 ];
 
 export const ROADMAP = [
@@ -253,7 +323,7 @@ const PUBLIC_SOURCES = {
 };
 
 export const LATEST_LINKS = [...PROJECTS.map(project => ({
-  id: project.id, title: project.title, href: project.href,
+  id: project.id, title: project.title, family: project.family, href: project.href,
   summary: project.description, links: project.links, ...(PUBLIC_SOURCES[project.id] ? { source: PUBLIC_SOURCES[project.id] } : {}),
 })), ...RELEASED_STUDIES.map(project => ({ ...project, links: project.links ?? [] }))];
 
@@ -271,5 +341,5 @@ export const MILESTONES = [
 ];
 
 export function portfolioPayload() {
-  return { ...SNAPSHOT, families: FAMILIES, projects: PROJECTS, native: NATIVE, studio: STUDIO, latestLinks: LATEST_LINKS, roadmap: ROADMAP, milestones: MILESTONES, statusDefinitions: { 'delivered-native': 'A native edition has been delivered; this map provides no public download or browser edition.', open: 'A published public page is available; its project may still be a concept or demo.', building: 'Work in progress; unpublished destinations are not linked.', redesign: 'An existing page is public and a revised edition is in progress.' }, comparisons: [], comparisonNote: 'No verified before/after pair is available in this snapshot. Current artwork is not a screenshot of an unpublished redesign.' };
+  return { ...SNAPSHOT, families: FAMILIES, projects: PROJECTS, native: NATIVE, studio: STUDIO, latestLinks: LATEST_LINKS, roadmap: ROADMAP, milestones: MILESTONES, statusDefinitions: { 'delivered-native': 'A native edition has been delivered; this map provides no public download or browser edition.', open: 'A published public page is available; its project may still be a concept or demo.', building: 'Work in progress; unpublished destinations are not linked.', redesign: 'An existing page is public and a revised edition is in progress.', ready: 'A prepared creative edition is ready for review and remains unpublished.' }, comparisons: [], comparisonNote: 'No verified before/after pair is available in this snapshot. Current artwork is not a screenshot of an unpublished redesign.' };
 }
