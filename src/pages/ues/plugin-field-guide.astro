@@ -1,0 +1,237 @@
+---
+/**
+ * /ues/plugin-field-guide — a sourced educational draft.
+ *
+ * Data and downloads are owned by the guide author. This page is a reader,
+ * not a plugin extension, MCP server, install flow, or event subscription.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import guideData from '../../data/plugin-field-guide.json';
+import '../../styles/plugin-field-guide.css';
+
+type Brand = 'pointcast' | 'ues' | 'industrynext';
+type Reading = string | string[];
+interface Source { id: string; title: string; url: string; note: string }
+interface Example {
+  brand: Brand; status: string; title: string; body: string;
+  prompt: string; output: string; firstStep: string;
+}
+interface Topic {
+  id: string; number: string | number; title: string; question: string;
+  definition: string; use: Reading; avoid: Reading; architecture: string[];
+  practices: { label: string; body: string }[]; availability: string;
+  examples: Example[];
+  code?: { language: string; caption: string; text: string; source: string } | null;
+  sources: string[];
+}
+interface Guide {
+  title: string; subtitle: string; checkedAt: string; baselineSha: string;
+  intro: string[];
+  statusLabels: { id: string; label: string; description: string }[];
+  baselines: { brand: Brand; status: string; title: string; body: string; links: { label: string; url: string }[] }[];
+  recommendations: { brand: Brand; title: string; body: string }[];
+  topics: Topic[];
+  sharedPractices: { label: string; body: string }[];
+  pilotSteps: { title: string; body: string }[];
+  sources: Source[];
+  limitations: string[];
+}
+
+const guide = guideData as unknown as Guide;
+const brands: Record<Brand, string> = {
+  pointcast: 'PointCast',
+  ues: 'University of El Segundo',
+  industrynext: 'IndustryNext',
+};
+const statusLabel = (id: string) => guide.statusLabels.find((status) => status.id === id)?.label ?? id;
+const paragraphs = (reading: Reading) => Array.isArray(reading) ? reading : [reading];
+const sourceById = new Map(guide.sources.map((source) => [source.id, source]));
+const exampleCount = guide.topics.reduce((count, topic) => count + topic.examples.length, 0);
+const numberLabel = (number: string | number) => String(number).padStart(2, '0');
+const checkedDate = guide.checkedAt.slice(0, 10);
+---
+
+<BlockLayout
+  title={guide.title}
+  description={guide.subtitle}
+  themeColor="#efe9d9"
+  isolated
+  noindex
+  alternates={[
+    { type: 'application/json', href: '/ues/plugin-field-guide.json', title: 'Plugin field guide data' },
+    { type: 'text/markdown', href: '/ues/plugin-field-guide.md', title: 'Plugin field guide companion' },
+  ]}
+>
+  <article class="plugin-field-guide" data-plugin-field-guide>
+    <a class="fg-skip" href="#field-guide-reading">Skip to the field guide</a>
+
+    <header class="fg-masthead">
+      <a class="fg-mark" href="/ues" aria-label="University of El Segundo home">
+        <span class="fg-mark-symbol" aria-hidden="true">U<span>E</span>S</span>
+        <span>University of<br />El Segundo</span>
+      </a>
+      <p class="fg-mono">Field studies / inhabitable software</p>
+      <a class="fg-town-link" href="/for-agents">PointCast visiting handbook <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <div class="fg-document-strip">
+      <span class="fg-mono">Field manual / 05 capabilities</span>
+      <span class="fg-draft-stamp">Educational draft</span>
+      <span class="fg-mono">Sources checked <time datetime={guide.checkedAt}>{checkedDate}</time></span>
+    </div>
+
+    <header class="fg-hero">
+      <div class="fg-hero-copy">
+        <p class="fg-kicker">PointCast · UES · IndustryNext</p>
+        <h1>{guide.title}</h1>
+        <p class="fg-dek">{guide.subtitle}</p>
+        <a class="fg-jump" href="#first-pilots">Start with the practical recommendations <span aria-hidden="true">↓</span></a>
+      </div>
+      <nav class="fg-capability-map" aria-label="The five capabilities">
+        {guide.topics.map((topic, index) => (
+          <a class={`fg-map-square fg-map-square-${index + 1}`} href={`#${topic.id}`}>
+            <span class="fg-map-number" aria-hidden="true">{numberLabel(topic.number)}</span>
+            <span>{topic.title}</span>
+            <span class="fg-map-arrow" aria-hidden="true">↘</span>
+          </a>
+        ))}
+        <div class="fg-map-key" aria-hidden="true"><span>Read.</span><span>Compare.</span><span>Try one.</span><i></i></div>
+      </nav>
+    </header>
+
+    <div id="field-guide-reading" class="fg-reading" tabindex="-1">
+      <section class="fg-introduction" aria-labelledby="intro-heading">
+        <div class="fg-section-label"><span class="fg-kicker">Before the tools</span><h2 id="intro-heading">Build from evidence.</h2></div>
+        <div class="fg-prose">{guide.intro.map((paragraph) => <p>{paragraph}</p>)}</div>
+      </section>
+
+      <aside class="fg-status-key" aria-labelledby="status-heading">
+        <h2 id="status-heading" class="fg-kicker">How to read the examples</h2>
+        <ul role="list">{guide.statusLabels.map((status) => (
+          <li><span class="fg-status" data-status={status.id}>{status.label}</span><p>{status.description}</p></li>
+        ))}</ul>
+      </aside>
+
+      <section class="fg-baselines fg-section" aria-labelledby="baseline-heading">
+        <div class="fg-section-heading"><p class="fg-kicker">01 / Ground truth</p><h2 id="baseline-heading">What exists today</h2><p>Existing surfaces are the starting point for these ideas.</p></div>
+        <div class="fg-brand-grid">{guide.baselines.map((baseline) => (
+          <article class="fg-baseline-card" data-baseline-brand={baseline.brand}>
+            <p class="fg-kicker">{brands[baseline.brand]}</p>
+            <span class="fg-status" data-status={baseline.status}>{statusLabel(baseline.status)}</span>
+            <h3>{baseline.title}</h3>
+            <p>{baseline.body}</p>
+            <ul class="fg-link-list" role="list">{baseline.links.map((link) => <li><a href={link.url}>{link.label}<span aria-hidden="true"> ↗</span></a></li>)}</ul>
+          </article>
+        ))}</div>
+        <p class="fg-baseline-note"><span class="fg-kicker">Repository baseline</span> <code>{guide.baselineSha}</code> · review the source date before treating a capability as current.</p>
+      </section>
+
+      <section id="first-pilots" class="fg-recommendations fg-section" aria-labelledby="recommendations-heading">
+        <div class="fg-section-heading"><p class="fg-kicker">02 / First moves</p><h2 id="recommendations-heading">A useful place to begin</h2><p>Choose one small, reviewable pilot for each context.</p></div>
+        <ol class="fg-brand-grid" role="list">{guide.recommendations.map((recommendation, index) => (
+          <li class="fg-recommendation" data-recommendation-brand={recommendation.brand}>
+            <span class="fg-recommendation-number" aria-hidden="true">{numberLabel(index + 1)}</span>
+            <p class="fg-kicker">{brands[recommendation.brand]}</p>
+            <h3>{recommendation.title}</h3>
+            <p>{recommendation.body}</p>
+          </li>
+        ))}</ol>
+      </section>
+
+      <section class="fg-guide-tools" aria-labelledby="capabilities-heading">
+        <div class="fg-section-heading"><p class="fg-kicker">03 / The field guide</p><h2 id="capabilities-heading">Five different moves</h2><p>Each capability answers a different question. Start with the job a person needs to do.</p></div>
+        <nav class="fg-outline" aria-label="Capability outline"><ol role="list">{guide.topics.map((topic) => (
+          <li><a href={`#${topic.id}`}><span class="fg-mono">{numberLabel(topic.number)}</span><span>{topic.title}</span><span aria-hidden="true">↓</span></a></li>
+        ))}</ol></nav>
+        <div class="fg-filter-row">
+          <div class="fg-filter-control" data-brand-filter-ui hidden>
+            <label for="fg-brand-filter">Show examples for</label>
+            <select id="fg-brand-filter" aria-describedby="fg-filter-help">
+              <option value="all">All three contexts</option>
+              <option value="pointcast">PointCast</option>
+              <option value="ues">University of El Segundo</option>
+              <option value="industrynext">IndustryNext</option>
+            </select>
+            <p id="fg-filter-help">This filter changes examples only.</p>
+          </div>
+          <p id="fg-example-count" class="fg-mono" aria-live="polite" aria-atomic="true">Showing all {exampleCount} examples.</p>
+          <noscript><p class="fg-no-script">All examples are shown. Use the capability outline to move through the guide.</p></noscript>
+        </div>
+      </section>
+
+      <div class="fg-topic-list">{guide.topics.map((topic) => (
+        <section id={topic.id} class="fg-topic" aria-labelledby={`${topic.id}-heading`}>
+          <header class="fg-topic-heading">
+            <span class="fg-topic-number" aria-hidden="true">{numberLabel(topic.number)}</span>
+            <div><p class="fg-kicker">Capability {numberLabel(topic.number)}</p><h2 id={`${topic.id}-heading`}>{topic.title}</h2><p class="fg-topic-question">{topic.question}</p></div>
+          </header>
+          <p class="fg-definition">{topic.definition}</p>
+          <div class="fg-use-grid">
+            <section aria-labelledby={`${topic.id}-use`}><h3 id={`${topic.id}-use`} class="fg-kicker">Use it when</h3>{paragraphs(topic.use).map((paragraph) => <p>{paragraph}</p>)}</section>
+            <section aria-labelledby={`${topic.id}-avoid`}><h3 id={`${topic.id}-avoid`} class="fg-kicker">Avoid it when</h3>{paragraphs(topic.avoid).map((paragraph) => <p>{paragraph}</p>)}</section>
+          </div>
+          <section class="fg-architecture" aria-labelledby={`${topic.id}-architecture`}>
+            <h3 id={`${topic.id}-architecture`} class="fg-kicker">How the pieces fit</h3>
+            <ol role="list">{topic.architecture.map((step, index) => <li><span class="fg-mono" aria-hidden="true">{numberLabel(index + 1)}</span><p>{step}</p></li>)}</ol>
+          </section>
+          <section class="fg-topic-practices" aria-labelledby={`${topic.id}-practices`}>
+            <h3 id={`${topic.id}-practices`}>Practices that make it work</h3>
+            <dl>{topic.practices.map((practice) => <div><dt>{practice.label}</dt><dd>{practice.body}</dd></div>)}</dl>
+          </section>
+          <aside class="fg-availability"><p><span class="fg-kicker">Availability & freshness</span> {topic.availability}</p></aside>
+          <section class="fg-examples" aria-labelledby={`${topic.id}-examples`}>
+            <div class="fg-examples-heading"><h3 id={`${topic.id}-examples`}>Three applications</h3><p class="fg-mono">Read-only scenarios / no install or execution</p></div>
+            <div class="fg-brand-grid">{topic.examples.map((example) => (
+              <article class="fg-example-card" data-brand={example.brand}>
+                <header><p class="fg-kicker">{brands[example.brand]}</p><span class="fg-status" data-status={example.status}>{statusLabel(example.status)}</span></header>
+                <h4>{example.title}</h4>
+                <p>{example.body}</p>
+                <div class="fg-example-prompt"><p class="fg-kicker">Example request</p><blockquote>{example.prompt}</blockquote></div>
+                <dl class="fg-example-result"><div><dt>Expected output</dt><dd>{example.output}</dd></div><div><dt>First small step</dt><dd>{example.firstStep}</dd></div></dl>
+              </article>
+            ))}</div>
+          </section>
+          {topic.code && <figure class="fg-code-example">
+            <figcaption><span class="fg-kicker">{topic.code.language} / illustration</span><p>{topic.code.caption}</p></figcaption>
+            <pre tabindex="0" aria-label={`${topic.title} code illustration`}><code>{topic.code.text}</code></pre>
+            {sourceById.has(topic.code.source)
+              ? <p class="fg-code-source">Documentation: <a href={`#source-${topic.code.source}`}>{sourceById.get(topic.code.source)?.title}</a></p>
+              : /^https?:\/\//.test(topic.code.source)
+                ? <p class="fg-code-source">Documentation: <a href={topic.code.source}>Source reference</a></p>
+                : <p class="fg-code-source">{topic.code.source}</p>}
+          </figure>}
+          <nav class="fg-topic-sources" aria-label={`Sources for ${topic.title}`}><span class="fg-kicker">Supporting sources</span><ul role="list">{topic.sources.map((id) => {
+            const source = sourceById.get(id);
+            return source && <li><a href={`#source-${id}`}>{source.title}</a></li>;
+          })}</ul></nav>
+          <a class="fg-return" href="#capabilities-heading">Back to the five capabilities <span aria-hidden="true">↑</span></a>
+        </section>
+      ))}</div>
+
+      <section class="fg-shared-practices fg-section" aria-labelledby="shared-heading">
+        <div class="fg-section-heading"><p class="fg-kicker">04 / Carry these everywhere</p><h2 id="shared-heading">One standard of care</h2><p>Useful tools earn trust through bounded behavior and legible results.</p></div>
+        <dl>{guide.sharedPractices.map((practice, index) => <div><dt><span class="fg-mono" aria-hidden="true">{numberLabel(index + 1)}</span>{practice.label}</dt><dd>{practice.body}</dd></div>)}</dl>
+      </section>
+
+      <section class="fg-pilot fg-section" aria-labelledby="pilot-heading">
+        <div class="fg-section-heading"><p class="fg-kicker">05 / From reading to doing</p><h2 id="pilot-heading">Run a small pilot</h2><p>A proposed sequence for a human-reviewed experiment.</p></div>
+        <ol role="list">{guide.pilotSteps.map((step, index) => <li><span class="fg-pilot-step fg-mono" aria-hidden="true">{numberLabel(index + 1)}</span><div><h3>{step.title}</h3><p>{step.body}</p></div></li>)}</ol>
+      </section>
+
+      <section class="fg-sources fg-section" aria-labelledby="sources-heading">
+        <div class="fg-section-heading"><p class="fg-kicker">06 / Reading desk</p><h2 id="sources-heading">Sources & limits</h2><p>Follow the evidence. Product availability and documentation can change.</p></div>
+        <ol class="fg-bibliography">{guide.sources.map((source) => <li id={`source-${source.id}`}><a href={source.url}>{source.title}<span aria-hidden="true"> ↗</span></a><p>{source.note}</p></li>)}</ol>
+        <aside class="fg-limitations" aria-labelledby="limitations-heading"><h3 id="limitations-heading">What this draft can establish</h3><ul>{guide.limitations.map((limitation) => <li>{limitation}</li>)}</ul></aside>
+      </section>
+    </div>
+
+    <footer class="fg-footer">
+      <div><p class="fg-kicker">A field guide, ready for review</p><p>University of El Segundo / PointCast</p></div>
+      <nav aria-label="Guide companion files"><a href="/ues/plugin-field-guide.md" download>Download the readable companion <span class="fg-mono">.md ↓</span></a><a href="/ues/plugin-field-guide.json" download>Download the structured guide <span class="fg-mono">.json ↓</span></a></nav>
+      <a href="/ues">Back to UES <span aria-hidden="true">↗</span></a>
+    </footer>
+  </article>
+  <script>
+    import '../../scripts/plugin-field-guide';
+  </script>
+</BlockLayout>

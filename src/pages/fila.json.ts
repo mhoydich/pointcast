@@ -3,7 +3,7 @@ import { CAPSULES, CONCEPT_LABEL, LOOKS, SOURCES, STUDY_DATE, TIMELINE, lookImag
 import rights from '../../docs/research/fila-image-rights.json';
 export const GET: APIRoute = () => Response.json({
   title:'FILA / From thread to court to culture',url:'https://pointcast.xyz/fila/',lookbook:'https://pointcast.xyz/fila/2027/',researchedAt:STUDY_DATE,
-  independentEditorial:true,affiliation:null,conceptLabel:CONCEPT_LABEL,
+  independentEditorial:true,affiliation:null,conceptLabel:CONCEPT_LABEL,localCollection:'https://pointcast.xyz/fila/el-segundo/',
   timeline:TIMELINE,sources:SOURCES,capsules:CAPSULES,
   looks:LOOKS.map(look => ({...look,images:{front:lookImage(look.id),back:lookImage(look.id,'back'),detail:lookImage(look.id,'detail')},detailNote:'Crop of the front rendering, not a physical material sample.',availableForPurchase:false})),
   imageCredits:rights.images.map(({localPath,...credit}) => ({...credit,asset:`/images/fila/${credit.id}.webp`,adaptation:'Resized and converted to WebP. Responsive display may crop the frame.'})),
