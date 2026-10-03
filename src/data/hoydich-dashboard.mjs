@@ -140,7 +140,7 @@ export const CHAIN_PANELS = [
     "title": "PointCast Chain / dev replay",
     "statusLabel": "Recorded prototype / no public node",
     "tone": "limited",
-    "summary": "Replay 422 recorded dev-chain blocks in the browser. Tezos Shadownet anchor posts are demonstrated; no public node or value-bearing network is available. A released replay page is distinct from a launched network.",
+    "summary": "Replay 422 recorded dev-chain blocks in the browser. Tezos Shadownet posts were applied, but their binding to this recording is unchecked. No public node or value-bearing network is advertised; a replay does not establish production readiness.",
     "nextAction": "Read the dated network boundaries and try verification of the saved recording.",
     "sources": [
       {
