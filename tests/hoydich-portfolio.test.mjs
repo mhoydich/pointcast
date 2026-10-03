@@ -49,13 +49,13 @@ test('family and stage combine, announce empty states, and reset to the complete
   assert.equal(f.root.querySelector('[data-studio-empty]').hidden, true);
 });
 
-test('building reading view keeps the open shelf and shows its expansion plus Canterbury', () => {
+test('building reading view keeps the open shelf and shows its unfinished expansion', () => {
   const f = fixture();
   f.family('reading');
   f.click('building');
   assert.equal(f.visible('[data-project-card]').length, 1);
-  assert.equal(f.visible('[data-studio-card]').length, 2);
-  assert.match(f.root.querySelector('[data-filter-result]').textContent, /1 open project and 2 studio threads/);
+  assert.equal(f.visible('[data-studio-card]').length, 1);
+  assert.match(f.root.querySelector('[data-filter-result]').textContent, /1 open project and 1 studio thread/);
   f.click('open');
   assert.equal(f.visible('[data-project-card]').length, 2);
   assert.equal(f.visible('[data-studio-card]').length, 0);
@@ -68,8 +68,10 @@ test('public snapshot has source artwork and only known destinations; unpublishe
   assert.equal(ROADMAP.reduce((count, group) => count + group.lanes.length, 0), 11);
   for (const project of PROJECTS) {
     assert.ok(existsSync(new URL(`public${project.image}`, rootPath)), `artwork exists: ${project.image}`);
-    const route = project.href.replace(/^\//, '').replace(/\/$/, '');
-    assert.ok(existsSync(new URL(`src/pages/${route}.astro`, rootPath)) || existsSync(new URL(`src/pages/${route}/index.astro`, rootPath)), `route exists: ${project.href}`);
+    for (const href of [project.href, ...project.links.map(link => link.href)].filter(href => href.startsWith('/'))) {
+      const route = href.replace(/^\//, '').replace(/\/$/, '');
+      assert.ok(existsSync(new URL(`src/pages/${route}.astro`, rootPath)) || existsSync(new URL(`src/pages/${route}/index.astro`, rootPath)), `route exists: ${href}`);
+    }
     assert.ok(project.boundary.length > 30);
   }
   for (const project of STUDIO) {
@@ -81,7 +83,7 @@ test('public snapshot has source artwork and only known destinations; unpublishe
   const serialized = JSON.stringify(payload);
   assert.doesNotMatch(serialized, /linear\.app|completionPercent|percentComplete|liveSync|approval|wallet|security|private finances/i);
   const page = readFileSync(new URL('src/pages/hoydich.astro', rootPath), 'utf8');
-  assert.doesNotMatch(page, /href=["']\/(canterbury|fortune|discovery-audit|fila\/el-segundo|pickleball\/home\/v2)/);
+  assert.doesNotMatch(page, /href=["']\/(fortune|discovery-audit|fila\/el-segundo|pickleball\/home\/v2)/);
 });
 
 test('setup is idempotent and keeps controls hidden until the working initializer runs', () => {

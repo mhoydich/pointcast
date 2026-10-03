@@ -2,9 +2,9 @@
 export const SNAPSHOT = {
   title: 'Hoydich / A map of the making',
   route: '/hoydich/',
-  capturedAt: '2026-10-03T18:00:06Z',
+  capturedAt: '2026-10-03T18:26:35Z',
   dateLabel: '03 October 2026',
-  sourceRevision: '551bd6e62b4126a811cbc5eba7e4ea831c5bc5c0',
+  sourceRevision: '2a3e35326beffc23884b8fcca1c045623fe6565b',
   note: 'An edited snapshot of public creative work and current studio plans. Updated by hand after releases; no live project sync.',
 };
 
@@ -48,10 +48,10 @@ export const PROJECTS = [
     number: '03', color: '#176674', image: '/images/siddhartha/river-horizon.webp',
     imageAlt: 'Original cyanotype-inspired river horizon artwork for the Siddhartha reading companion.',
     imageNote: 'Original generated reader artwork, not publisher cover art.',
-    description: 'Three art-rich bookshops and reader companions: Siddhartha, Den of Thieves and Playing for Pizza.',
+    description: 'Three art-rich bookshops and reader companions, with a new company of voices in The Canterbury Tales.',
     kind: 'Literary companions', href: '/books/', action: 'Browse the shelf',
-    links: [{ label: 'Siddhartha', href: '/siddhartha/' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/' }],
-    milestones: ['Three reading companions published', 'New, used and library discovery links with edition context'],
+    links: [{ label: 'Siddhartha', href: '/siddhartha/' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/' }, { label: 'The Canterbury Tales', href: '/canterbury/' }],
+    milestones: ['Three bookshop companions and The Canterbury Tales published', 'New, used and library discovery links with edition context'],
     boundary: 'Independent companions. Original artwork is not archival evidence. No stock or availability promise.',
     next: { title: 'Six more worlds', direction: 'Barbarians at the Gate · New Rules for the New Economy · Ethan Frome · Treasure Island · The Kite Runner · Mistborn: The Final Empire.', status: 'building', stage: 'Companions in progress', nextStep: 'Verify editions, sources and the new reading journeys before opening their routes.' },
   },
@@ -109,7 +109,6 @@ export const PROJECTS = [
 
 export const STUDIO_ONLY = [
   { id: 'discovery', family: 'tools', title: 'Discovery / audit dashboard', direction: 'A clearer public view of PointCast’s project discovery and navigation.', status: 'building', stage: 'Dashboard in progress', nextStep: 'Verify the public page, its evidence and accessible navigation.', kind: 'Tools & systems' },
-  { id: 'canterbury', family: 'reading', title: 'Canterbury', direction: 'A new reading room being shaped for PointCast.', status: 'building', stage: 'Reading room in progress', nextStep: 'Review the reading experience and source notes before release.', kind: 'Reading rooms' },
   { id: 'saturday', family: 'place', title: 'Saturday / El Segundo', direction: 'An interactive meditation for 3 October, with Bill Evans Trio’s “Some Other Time” and researched local context.', status: 'building', stage: 'Meditation in progress', nextStep: 'Verify the dated research and interactive meditation before publishing.', kind: 'Music & place' },
   { id: 'sunday', family: 'play', title: 'One Sunday at the Vanguard', direction: 'A standalone listening world around a historical recording and a map of New York City.', status: 'building', stage: 'Listening site in progress', nextStep: 'Verify the recording history, place references and listening experience.', kind: 'Music & place' },
   { id: 'dispensary-atlas', family: 'place', title: 'Dispensary Market Atlas', direction: 'A 25-mile El Segundo research and discovery study, with California and national market context.', status: 'building', stage: 'Market research in progress', nextStep: 'Verify public sources, local coverage and the discovery experience. No store or ordering service is offered here.', kind: 'Place & market research' },
@@ -139,6 +138,7 @@ export const STUDIO = [
 ];
 
 export const MILESTONES = [
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'A company of voices gathers.', description: 'The Canterbury Tales opened as a new reading room on PointCast.', href: '/canterbury/', source: '2a3e3532' },
   { date: '02 OCT 2026', title: 'Three books, three companions.', description: 'Siddhartha, Den of Thieves and Playing for Pizza joined one art-rich reading shelf.', href: '/books/', source: 'f95e945c' },
   { date: '02 OCT 2026', title: 'A brand study opens onto the coast.', description: 'The FILA exhibition and independent 2027 concept lookbook were published together.', href: '/fila/', source: '929ede2b' },
   { date: '02 OCT 2026', title: 'The court gets a front door.', description: 'RALLY × PointCast brought the learning guide, practice and sourced court directory into one home.', href: '/pickleball/home/', source: '49a28c86' },
