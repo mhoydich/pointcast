@@ -2,9 +2,9 @@
 export const SNAPSHOT = {
   title: 'Hoydich / A map of the making',
   route: '/hoydich/',
-  capturedAt: '2026-10-03T18:26:35Z',
+  capturedAt: '2026-10-03T18:39:48Z',
   dateLabel: '03 October 2026',
-  sourceRevision: '2a3e35326beffc23884b8fcca1c045623fe6565b',
+  sourceRevision: '3a290ef53c396ff1a03a7e4b1526da49e000409f',
   note: 'An edited snapshot of public creative work and current studio plans. Updated by hand after releases; no live project sync.',
 };
 
@@ -26,7 +26,7 @@ export const PROJECTS = [
     imageNote: 'Original AI-generated interpretive artwork. Independent study.',
     description: 'An illustrated brand exhibition and twelve independently imagined Court, Club and Coast looks for 2027.',
     kind: 'Independent design study', href: '/fila/', action: 'Enter the exhibition',
-    links: [{ label: '2027 concept lookbook', href: '/fila/2027/' }],
+    links: [{ label: '2027 concept lookbook', href: '/fila/2027/', summary: 'Twelve imagined Court, Club and Coast looks, with front, back and detail studies.' }],
     milestones: ['Sourced brand exhibition published', '12 concept looks with front, back and detail views'],
     boundary: 'No FILA affiliation. Imagined garments, not physical samples or available products.',
     next: { title: 'El Segundo / edition two', direction: 'Develop the coastal setting and a more focused way through the collection.', status: 'redesign', stage: 'Redesign in progress', nextStep: 'Review the revised exhibition and its image credits.' },
@@ -36,12 +36,11 @@ export const PROJECTS = [
     number: '02', color: '#1554c4', image: '/images/pickleball-home/leave-it-all.webp',
     imageAlt: 'Original RALLY campaign concept with courtside athletic styling in blue and warm sunlight.',
     imageNote: 'Generated campaign concept. Fictional setting and apparel.',
-    description: 'A pickleball front door for learning the game, finding sourced South Bay courts and building a practice.',
+    description: 'A pickleball front door with adaptive practice plans, sourced South Bay courts and illustrated backhand and doubles guides.',
     kind: 'Play, practice & community', href: '/pickleball/home/', action: 'Open Pickleball Home',
-    links: [{ label: 'Visit the RALLY sister site', href: 'https://tez-rally.pages.dev/' }],
-    milestones: ['Shared RALLY × PointCast home published', 'Sourced court guide and practice planner available'],
+    links: [{ label: 'RALLY sister site', href: 'https://tez-rally.pages.dev/', summary: 'The independent companion site for RALLY.' }, { label: 'Cleaner backhands', href: '/pickleball/articles/cleaner-backhands/', summary: 'Contact, soft replies and three practice rounds you can measure.' }, { label: 'Smarter mixed doubles', href: '/pickleball/articles/smarter-mixed-doubles/', summary: 'Shared coverage, the seam and a deliberate next-ball plan.' }],
+    milestones: ['Shared RALLY × PointCast home published', 'Edition two: adaptive practice desk and two illustrated articles published'],
     boundary: 'Court information is dated. Apparel images are concepts; this page is not a shop or booking service.',
-    next: { title: 'Pickleball / edition two', direction: 'Bring learning, practice and courts into a clearer next edition.', status: 'redesign', stage: 'Redesign in progress', nextStep: 'Check the revised learning flows on phone and desktop.' },
   },
   {
     id: 'books', family: 'reading', title: 'The reading shelf', subtitle: 'A book. Another world.',
@@ -50,7 +49,7 @@ export const PROJECTS = [
     imageNote: 'Original generated reader artwork, not publisher cover art.',
     description: 'Three art-rich bookshops and reader companions, with a new company of voices in The Canterbury Tales.',
     kind: 'Literary companions', href: '/books/', action: 'Browse the shelf',
-    links: [{ label: 'Siddhartha', href: '/siddhartha/' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/' }, { label: 'The Canterbury Tales', href: '/canterbury/' }],
+    links: [{ label: 'Siddhartha', href: '/siddhartha/', summary: 'A river-shaped reading companion and edition-aware bookshop.' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/', summary: 'A companion to the book’s financial history, with reading and edition resources.' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/', summary: 'A bookshop and reading journey through football, food and Parma.' }, { label: 'The Canterbury Tales', href: '/canterbury/', summary: 'A company of voices, a pilgrimage and a new reading room.' }],
     milestones: ['Three bookshop companions and The Canterbury Tales published', 'New, used and library discovery links with edition context'],
     boundary: 'Independent companions. Original artwork is not archival evidence. No stock or availability promise.',
     next: { title: 'Six more worlds', direction: 'Barbarians at the Gate · New Rules for the New Economy · Ethan Frome · Treasure Island · The Kite Runner · Mistborn: The Final Empire.', status: 'building', stage: 'Companions in progress', nextStep: 'Verify editions, sources and the new reading journeys before opening their routes.' },
@@ -96,13 +95,13 @@ export const PROJECTS = [
     boundary: 'Invented artistic scenes, not photographs of documented places or events.',
   },
   {
-    id: 'keyboard', family: 'play', title: 'Keyboard Arcade', subtitle: 'A key becomes a small world.',
+    id: 'keyboard', family: 'play', title: 'Keyboard Bloom', subtitle: 'A key becomes a small world.',
     number: '08', color: '#825e22', image: '/images/home-highlights/keyboard.jpg',
     imageAlt: 'The existing PointCast Keyboard Arcade project artwork.',
     imageNote: 'Existing project artwork from the PointCast homepage.',
     description: 'A collection of small keyboard instruments and playful rooms for making sound, marks and moments.',
     kind: 'Browser instruments', href: '/keyboard/', action: 'Play a little', links: [],
-    milestones: ['Keyboard Arcade and its room collection available', 'Dedicated reading and sound experiments linked from the arcade'],
+    milestones: ['Keyboard Bloom and its room collection available', 'Dedicated reading and sound experiments linked from the arcade'],
     boundary: 'Browser play. Audio depends on a deliberate interaction and your device settings.',
   },
 ];
@@ -116,6 +115,8 @@ export const STUDIO_ONLY = [
   {"id": "coffee-business", "family": "place", "title": "Coffee atlas / UES business studies", "direction": "A coffee atlas and a University of El Segundo hub for local case studies and business research.", "status": "building", "stage": "Atlas & casebook in progress", "nextStep": "Verify the dated sources, local coverage and study tools before publication.", "kind": "Place & business studies"},
   {"id": "real-estate", "family": "place", "title": "Real estate observatory", "direction": "A new public real estate study being shaped for PointCast.", "status": "building", "stage": "Observatory in progress", "nextStep": "Verify the public sources and study experience before publication.", "kind": "Place & market research"},
   {"id": "business-signals", "family": "tools", "title": "Rates / FX business signals", "direction": "A public business-study view of rates and foreign-exchange signals.", "status": "building", "stage": "Signals study in progress", "nextStep": "Verify source dates, data definitions and the study context before publication.", "kind": "Tools & business studies"},
+  { id: 'puzzles', family: 'design', title: 'Puzzle studio', direction: 'Ten jigsaw concepts, making and buying resources, and UES business and design studies.', status: 'building', stage: 'Puzzle studies in progress', nextStep: 'Verify the concepts, sources and making guidance before publication.', kind: 'Design & learning' },
+  { id: 'buildworks', family: 'design', title: 'El Segundo Buildworks', direction: 'A studio study for pins, stickers, magnets, ornaments and small crafted objects.', status: 'building', stage: 'Studio study in progress', nextStep: 'Verify the designs and business studies before publication. No manufacturing service is offered here.', kind: 'Objects & business studies' },
 ];
 
 export const ROADMAP = [
@@ -137,7 +138,22 @@ export const STUDIO = [
   ...STUDIO_ONLY,
 ];
 
+const PUBLIC_SOURCES = {
+  fila: { href: '/fila/#sources', label: 'Sources & image credits' },
+  rally: { href: '/pickleball/home.json', label: 'Data & sources' },
+  bukowski: { href: '/bukowski/#sources', label: 'Sources & reading notes' },
+  objects: { href: '/object-library/#product-notebook', label: 'Product notes & provenance' },
+  weather: { href: '/weather-atlas/#sources', label: 'Sources & research' },
+  'other-worlds': { href: '/collectibles/other-worlds/manifest.json', label: 'Metadata & provenance' },
+};
+
+export const LATEST_LINKS = PROJECTS.map(project => ({
+  id: project.id, title: project.title, href: project.href,
+  summary: project.description, links: project.links, ...(PUBLIC_SOURCES[project.id] ? { source: PUBLIC_SOURCES[project.id] } : {}),
+}));
+
 export const MILESTONES = [
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'The next practice takes shape.', description: 'Pickleball Home’s second edition added adaptive practice planning and illustrated backhand and mixed-doubles articles.', href: '/pickleball/home/', source: '3a290ef5' },
   { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'A company of voices gathers.', description: 'The Canterbury Tales opened as a new reading room on PointCast.', href: '/canterbury/', source: '2a3e3532' },
   { date: '02 OCT 2026', title: 'Three books, three companions.', description: 'Siddhartha, Den of Thieves and Playing for Pizza joined one art-rich reading shelf.', href: '/books/', source: 'f95e945c' },
   { date: '02 OCT 2026', title: 'A brand study opens onto the coast.', description: 'The FILA exhibition and independent 2027 concept lookbook were published together.', href: '/fila/', source: '929ede2b' },
@@ -146,5 +162,5 @@ export const MILESTONES = [
 ];
 
 export function portfolioPayload() {
-  return { ...SNAPSHOT, families: FAMILIES, projects: PROJECTS, native: NATIVE, studio: STUDIO, roadmap: ROADMAP, milestones: MILESTONES, statusDefinitions: { 'delivered-native': 'A native edition has been delivered; this map provides no public download or browser edition.', open: 'A published public page is available; its project may still be a concept or demo.', building: 'Work in progress; unpublished destinations are not linked.', redesign: 'An existing page is public and a revised edition is in progress.' }, comparisons: [], comparisonNote: 'No verified before/after pair is available in this snapshot. Current artwork is not a screenshot of an unpublished redesign.' };
+  return { ...SNAPSHOT, families: FAMILIES, projects: PROJECTS, native: NATIVE, studio: STUDIO, latestLinks: LATEST_LINKS, roadmap: ROADMAP, milestones: MILESTONES, statusDefinitions: { 'delivered-native': 'A native edition has been delivered; this map provides no public download or browser edition.', open: 'A published public page is available; its project may still be a concept or demo.', building: 'Work in progress; unpublished destinations are not linked.', redesign: 'An existing page is public and a revised edition is in progress.' }, comparisons: [], comparisonNote: 'No verified before/after pair is available in this snapshot. Current artwork is not a screenshot of an unpublished redesign.' };
 }

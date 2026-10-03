@@ -63,5 +63,16 @@ jobs:
             const src = link.getAttribute('src');
             if (src?.startsWith('/')) assert.ok(existsSync(`dist${src}`), `Built script exists: ${src}`);
           }
+          for (const link of document.querySelectorAll('#latest-links a[href]')) {
+            const href = link.getAttribute('href');
+            if (!href.startsWith('/')) continue;
+            const url = new URL(href, 'https://pointcast.xyz');
+            const path = url.pathname.endsWith('.json') ? `dist${url.pathname}` : `dist${url.pathname.replace(/\/$/, '')}/index.html`;
+            assert.ok(existsSync(path), `Latest destination is built: ${href}`);
+            if (url.hash) {
+              const target = new JSDOM(readFileSync(path, 'utf8')).window.document;
+              assert.ok(target.getElementById(url.hash.slice(1)), `Source fragment exists: ${href}`);
+            }
+          }
           console.log(`Verified ${payload.projects.length} public project families, ${payload.studio.length} studio threads and ${payload.native.length} native edition at ${payload.capturedAt}.`);
           JS

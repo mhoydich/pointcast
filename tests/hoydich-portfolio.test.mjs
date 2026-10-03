@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { PROJECTS, STUDIO, NATIVE, ROADMAP, portfolioPayload } from '../src/data/hoydich-portfolio.mjs';
+import { PROJECTS, STUDIO, NATIVE, ROADMAP, LATEST_LINKS, portfolioPayload } from '../src/data/hoydich-portfolio.mjs';
 import { initPortfolio } from '../src/scripts/hoydich-portfolio.mjs';
+import { articles } from '../src/lib/pickleball-v2/articles.js';
 
 const rootPath = new URL('../', import.meta.url);
 function fixture() {
@@ -23,12 +24,12 @@ function fixture() {
 test('status filters retain the published baseline for a redesign and hide unrelated projects', () => {
   const f = fixture();
   f.click('redesign');
-  assert.equal(f.visible('[data-project-card]').length, 2);
-  assert.equal(f.visible('[data-studio-card]').length, 2);
-  assert.deepEqual(f.visible('[data-project-card]').map(card => card.querySelector('a').getAttribute('href')), ['/fila/', '/pickleball/home/']);
+  assert.equal(f.visible('[data-project-card]').length, 1);
+  assert.equal(f.visible('[data-studio-card]').length, 1);
+  assert.deepEqual(f.visible('[data-project-card]').map(card => card.querySelector('a').getAttribute('href')), ['/fila/']);
   assert.equal(f.root.querySelector('[data-status-filter="redesign"]').getAttribute('aria-pressed'), 'true');
   assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'false');
-  assert.match(f.root.querySelector('[data-filter-result]').textContent, /2 open projects and 2 studio threads/);
+  assert.match(f.root.querySelector('[data-filter-result]').textContent, /1 open project and 1 studio thread/);
 });
 
 test('family and stage combine, announce empty states, and reset to the complete snapshot', () => {
@@ -70,7 +71,8 @@ test('public snapshot has source artwork and only known destinations; unpublishe
     assert.ok(existsSync(new URL(`public${project.image}`, rootPath)), `artwork exists: ${project.image}`);
     for (const href of [project.href, ...project.links.map(link => link.href)].filter(href => href.startsWith('/'))) {
       const route = href.replace(/^\//, '').replace(/\/$/, '');
-      assert.ok(existsSync(new URL(`src/pages/${route}.astro`, rootPath)) || existsSync(new URL(`src/pages/${route}/index.astro`, rootPath)), `route exists: ${href}`);
+      const articleRoute = articles.some(article => article.url.replace(/\/$/, '') === `/${route}`) && existsSync(new URL('src/pages/pickleball/articles/[slug].astro', rootPath));
+      assert.ok(existsSync(new URL(`src/pages/${route}.astro`, rootPath)) || existsSync(new URL(`src/pages/${route}/index.astro`, rootPath)) || articleRoute, `route exists: ${href}`);
     }
     assert.ok(project.boundary.length > 30);
   }
@@ -91,7 +93,7 @@ test('setup is idempotent and keeps controls hidden until the working initialize
   initPortfolio(f.root);
   assert.equal(f.root.querySelector('[data-portfolio-filters]').hidden, false);
   f.click('redesign');
-  assert.equal(f.visible('[data-project-card]').length, 2);
+  assert.equal(f.visible('[data-project-card]').length, 1);
 });
 
 
@@ -125,4 +127,20 @@ test('the empty-view studio fallback reveals matching unfinished work', () => {
   f.root.querySelector('[data-project-empty] a').click();
   assert.equal(f.visible('[data-studio-card]').length, 2);
   assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'true');
+});
+
+test('latest links preserve published destinations while upcoming studios stay unlinked', () => {
+  assert.deepEqual(LATEST_LINKS.map(project => project.href), PROJECTS.map(project => project.href));
+  for (const project of LATEST_LINKS) {
+    assert.ok(project.summary.length > 25);
+    for (const link of project.links) assert.ok(link.summary.length > 20, `A short summary accompanies ${link.label}`);
+  }
+  const rally = PROJECTS.find(project => project.id === 'rally');
+  assert.equal(rally.next, undefined);
+  assert.equal(STUDIO.some(project => project.id === 'canterbury' || project.id === 'rally-next'), false);
+  for (const id of ['puzzles', 'buildworks']) {
+    const project = STUDIO.find(project => project.id === id);
+    assert.equal(project.status, 'building');
+    assert.equal('href' in project, false);
+  }
 });
