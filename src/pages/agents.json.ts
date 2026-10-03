@@ -195,6 +195,7 @@ export const GET: APIRoute = async () => {
         siddhartha: AGENT_SURFACES.human.siddhartha,
         denOfThieves: AGENT_SURFACES.human.denOfThieves,
         playingForPizza: AGENT_SURFACES.human.playingForPizza,
+        chain: AGENT_SURFACES.human.chain,
         objectLibrary: AGENT_SURFACES.human.objectLibrary,
         weatherAtlas: AGENT_SURFACES.human.weatherAtlas,
         everyday: AGENT_SURFACES.human.everyday,

@@ -5,6 +5,7 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    chain: 'https://pointcast.xyz/chain/',
     bookshop: 'https://pointcast.xyz/books/',
     siddhartha: 'https://pointcast.xyz/siddhartha/',
     denOfThieves: 'https://pointcast.xyz/books/den-of-thieves/',

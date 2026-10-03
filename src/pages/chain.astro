@@ -1,0 +1,289 @@
+---
+/**
+ * /chain — pointcast-chain, PointCast's broadcast chain in Rust, on the site.
+ *
+ * The page is plain BlockLayout grammar. Every visual flourish lives inside
+ * the Block Yard iframe (public/chain/yard/), a static copy of the explorer
+ * built in pointcast-chain (crates/explorer/static/town.html) with a recorded
+ * --dev chain beside it, so the replay and VERIFY run in the visitor's browser
+ * with no node behind them.
+ *
+ * Facts come only from the pointcast-chain README, DESIGN.md and
+ * crates/chain-sim/FINDINGS.md as of 2026-10-03. Filed as block 0660 (cc).
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { CHANNELS } from '../lib/channels';
+
+const BLOCK = '0660';
+const URL_SELF = 'https://pointcast.xyz/chain';
+// ?snapshot= skips the yard's node probe: on pointcast.xyz, /status is a page, not a chain node.
+const YARD = '/chain/yard/?snapshot=./snapshot.json';
+const title = 'PointCast Chain';
+const description =
+  'pointcast-chain is a broadcast chain where every block is a PointCast Block. Watch a recorded dev chain in the Block Yard and verify it in your browser with the same code the sequencer runs. Anchored on Tezos Shadownet, signed with Kukai, built and tested locally. Not yet a public network.';
+const ch = CHANNELS.FD;
+
+const stats = [
+  { value: '422', label: 'Blocks in the yard', note: 'A recorded dev chain: 67 transactions, 4 anchors, 7 accounts.' },
+  { value: '560 KiB', label: 'Verifier, in your browser', note: 'The consensus code compiled to wasm, pinned by sha256.' },
+  { value: '3', label: 'Shadownet operations', note: 'Reveal, a manual anchor post and a background post, all applied.' },
+  { value: '66% → 10.1%', label: 'Farming, measured', note: 'Sybil share of issuance with room_only plus one tap an hour.' },
+];
+
+type Fact = { n: string; tag: string; claim: string; proof: string; refs?: { label: string; href: string }[] };
+const facts: Fact[] = [
+  {
+    n: '01', tag: 'VERIFY IN YOUR BROWSER',
+    claim: 'Press VERIFY and your browser replays every block from genesis with the chain’s own consensus code.',
+    proof: 'The code ships as a 560 KiB wasm module that the page checks against a pinned sha256 before it runs. If the sequencer signed something false, a red banner names the height and offers evidence.json, which anyone can check offline. The lying-node demo re-seals a tampered state root at #37, and the yard catches it.',
+  },
+  {
+    n: '02', tag: 'ANCHORED ON TEZOS',
+    claim: 'Every 100 blocks the sequencer signs an anchor, and on 2026-10-02 anchors went to Tezos Shadownet as casts on the tez-cast tower.',
+    proof: 'Run end to end against the live protocol with a throwaway key. Read back from TzKT: sequencer signature valid, block hash and state root match. Each anchor verifies against the genesis params alone, whoever posted it.',
+    refs: [
+      { label: 'reveal ooT6hDN…', href: 'https://shadownet.tzkt.io/ooT6hDNcvmz9VZM3hnusexyEgHzAnHoQugCcsm7oCsNqPLBqZc6' },
+      { label: 'post @200 opP5W2o…', href: 'https://shadownet.tzkt.io/opP5W2o3s8UQZZjhmUt51nRyTWWuJVwyaZrw6iVxWmaAX2DX3cP' },
+      { label: 'node job @100 opVXzWi…', href: 'https://shadownet.tzkt.io/opVXzWiyYEe5E2eumwW8tCarPZwtR6CSyqcG86ETRbaXQzGrSAL' },
+    ],
+  },
+  {
+    n: '03', tag: 'GENESIS-BOUND SIGNATURES',
+    claim: 'Every signature binds the chain’s genesis hash, so nothing signed for one chain can be replayed on another.',
+    proof: 'Transactions, block seals, anchors and attestations all commit to the hash of the genesis parameters (tx/v2, seal/v2, anchor/v2). The Verify Desk found the gap that made this necessary: evidence built on one chain checked as valid against another. Now it reads NOT EVIDENCE.',
+  },
+  {
+    n: '04', tag: 'KUKAI AND TEMPLE',
+    claim: 'People sign with the Tezos wallets they already have: Kukai or Temple signs one readable line, and the chain rebuilds that line from the transaction itself.',
+    proof: 'tz1 and tz2 keys work, including Kukai’s Google sign-in. Text sent by a client is never trusted. The test vectors are real Taquito signatures; a live Kukai and a live Temple signature are still to do.',
+  },
+  {
+    n: '05', tag: 'AGENT MANDATES',
+    claim: 'An agent’s owner grants it a mandate on chain: which kinds of transaction, which channels and rooms, an allowance and an expiry.',
+    proof: 'The allowance spends from the owner’s balance within per-period and total caps. At expiry every transaction from the agent is rejected until the owner re-grants. A rejected transaction changes nothing, not even the nonce, and chains from before mandates replay byte for byte.',
+  },
+  {
+    n: '06', tag: 'ROLLUP KERNEL',
+    claim: 'The same state machine runs inside a Tezos smart-rollup kernel and reaches the native state root byte for byte.',
+    proof: 'Checked at every inbox level across 200 blocks on the SDK’s mock host, with all ten transaction kinds. The kernel builds to about 240 KiB of wasm. Lazy storage, the bridge and origination are not done yet.',
+  },
+  {
+    n: '07', tag: 'SIMULATOR = NODE',
+    claim: 'The economy simulator drives the unmodified state machine, and a test proves it matches the real node block for block.',
+    proof: 'Fed to the real node, a run sealed 17,279 heights, 16,056 of them empty, with every receipt, landing height and the final state root identical. Across 38 runs and sweep cells, 123.1 million applied transactions, no protocol bug fired.',
+  },
+  {
+    n: '08', tag: 'FARMING, MEASURED',
+    claim: 'With room-attested drum sessions and about one tap an hour, sybil farming falls from 66% of issuance to 10.1%.',
+    proof: 'A 120-day sweep against an attacker that adapts. Neither setting works alone. The fix costs honest players 15% of their income, all of it from taps; drum income does not move.',
+  },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': URL_SELF,
+  name: 'PointCast Chain: a chain where every block is a broadcast',
+  description,
+  url: URL_SELF,
+  dateModified: '2026-10-03',
+  about: {
+    '@type': 'SoftwareApplication',
+    name: 'pointcast-chain',
+    applicationCategory: 'Blockchain',
+    operatingSystem: 'Any (browser verifier); macOS and Linux (node)',
+    description: 'A single-sequencer broadcast chain in Rust. Humans sign with Tezos keys, agents are first-class accounts, and the currency ATTN is only issued for showing up and playing, under hard caps.',
+  },
+  hasPart: [
+    { '@type': 'WebPage', name: 'Block Yard', url: 'https://pointcast.xyz/chain/yard/' },
+    { '@type': 'WebPage', name: 'First Mints (preview)', url: 'https://pointcast.xyz/chain/first-mints/' },
+  ],
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout title={title} description={description} image={`/images/og/b/${BLOCK}.png`} imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds>
+  <div class="chn" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/">PointCast</a><span>/</span><a href={`/c/${ch.slug}`}>front door</a><span>/</span><span>chain</span>
+      <a href={`/b/${BLOCK}`}>BLOCK {BLOCK}</a>
+    </nav>
+
+    <header class="hero">
+      <p class="kicker">CHAIN · LOCAL BUILD · 250 TESTS</p>
+      <h1>A chain where every block is a broadcast.</h1>
+      <p class="dek">
+        pointcast-chain is written in Rust. Every block is a PointCast Block. Humans sign with Tezos keys.
+        Agents are accounts with an owner and a name. The currency, ATTN, is only issued for showing up
+        and playing, under hard caps. Below, 422 recorded blocks, stacked like a town. Press verify and
+        your browser checks every one.
+      </p>
+      <p class="jump">
+        <a href="#yard">the yard</a><a href="#works">what works</a><a href="#status">status</a><a href="#next">next</a>
+      </p>
+    </header>
+
+    <section class="stats" aria-label="Four numbers">
+      {stats.map((s) => (
+        <div><strong>{s.value}</strong><span>{s.label}</span><small>{s.note}</small></div>
+      ))}
+    </section>
+
+    <section id="yard" class="sec" aria-labelledby="yard-title">
+      <p class="kicker">THE YARD · ONE STACK PER BLOCK · ONE CUBE PER TRANSACTION · A BEACON AT EVERY ANCHOR</p>
+      <h2 id="yard-title" class="h2">Watch it. Then make your browser check it.</h2>
+      <p class="note">A recorded dev chain, replayed and verified in your browser with the same code the sequencer runs.</p>
+      <div class="yard">
+        <iframe src={YARD} title="Block Yard: pointcast-chain drawn as isometric cubes, replayable with VERIFY" loading="lazy"></iframe>
+      </div>
+      <p class="yard__bar">
+        <span>Press <b>✓ VERIFY</b> in the yard. Stacks turn green when your replay matches.</span>
+        <a href={YARD} target="_blank" rel="noopener">Open full screen ↗</a>
+      </p>
+      <p class="note">
+        Signed with the public dev keys, so nothing on it has value. The verifier refuses to run unless its
+        files match the sha256 pinned in the page.
+      </p>
+    </section>
+
+    <section id="works" class="sec" aria-labelledby="works-title">
+      <p class="kicker">WHAT WORKS · EIGHT CLAIMS · THE PROOF BEHIND EACH</p>
+      <h2 id="works-title" class="h2">Eight things it does today, and how we know.</h2>
+      <ol class="facts">
+        {facts.map((f) => (
+          <li class="fact">
+            <p class="fact__n">{f.n} · {f.tag}</p>
+            <h3>{f.claim}</h3>
+            <p class="fact__proof">{f.proof}</p>
+            {f.refs && (
+              <p class="fact__refs">
+                {f.refs.map((r) => <a href={r.href} rel="noopener" target="_blank">{r.label} ↗</a>)}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section id="status" class="sec" aria-labelledby="status-title">
+      <p class="kicker">STATUS · AS OF 2026-10-03</p>
+      <h2 id="status-title" class="h2">Built and tested locally. Not yet a public network.</h2>
+      <dl class="status">
+        <div><dt>Runs</dt><dd>On one machine: a single sequencer, 3-second blocks, sqlite. There is no public node to connect to.</dd></div>
+        <div><dt>Value</dt><dd>None. The yard is a dev chain signed with public keys, and ATTN carries no value today.</dd></div>
+        <div><dt>Mainnet</dt><dd>Anchoring to Tezos mainnet waits on a funded anchor key, about 10 ꜩ for six days of hourly anchors, and a redeploy of the tez-cast and stampz feeds.</dd></div>
+        <div><dt>Trust</dt><dd>One sequencer can censor, reorder and pick timestamps. It cannot forge your transactions, mint past the caps, or sign a state root that does not match its transactions without a replay catching it.</dd></div>
+      </dl>
+    </section>
+
+    <section id="next" class="sec" aria-labelledby="next-title">
+      <p class="kicker">NEXT · PLANS, NOT BUILT · V2 “PRESENT COMPANY”</p>
+      <h2 id="next-title" class="h2">Next: make ATTN worth holding, and easy to hold.</h2>
+      <ul class="next">
+        <li><b>Launch-ready</b><span>Tap income only for people PointCast can vouch for as present, one identity per hour. A farm of bare keys earns nothing. A night-shift console that says READY or NOT READY.</span></li>
+        <li><b>PointCast-native</b><span>A Town Hall that replays the chain itself and shows every account, room and channel. Drum circles co-signed from Kukai.</span></li>
+        <li><b>Trust-minimized</b><span>Sequencer keys that can rotate, wallet prompts that show amounts, proofs light enough for a phone, and forced inclusion through the Tezos inbox.</span></li>
+        <li><b>Wallets that need no extension, and First Mints</b><span>A passkey as the wallet, one approval for a day of taps and drums, one profile. First Mints: a Noun, a typed word and a background, with only the recipe, under 20 bytes, on chain.</span></li>
+      </ul>
+      <p class="cta">
+        <a href="/chain/first-mints/">Try the First Mints preview ↗</a>
+        <span>A design preview. Nothing is minted, no key is created, and nothing leaves your browser.</span>
+      </p>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        Facts on this page come from the pointcast-chain README, its design notes, the v2 plan and the simulator’s
+        findings, as of 3 October 2026; the yard’s counts come from its recording. The yard and its verifier are
+        static copies of the chain’s own explorer files, and the recording holds raw blocks with every signature. Filed by Claude Code as <a href={`/b/${BLOCK}`}>block {BLOCK}</a>.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<style>
+  .chn{max-width:1120px;margin:0 auto;padding:20px 18px 96px;color:var(--pc-ink)}
+  .crumb{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:6px 0 16px;border-bottom:1px solid var(--pc-rule);font:400 10px var(--pc-font-mono);text-transform:uppercase;letter-spacing:.1em}
+  .crumb a{color:var(--pc-ink)}.crumb a:last-child{margin-left:auto;color:var(--c800)}
+  .kicker{margin:0 0 12px;font:500 10px/1.5 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .hero{padding:48px 0 28px;max-width:820px}
+  .hero h1{margin:0;font:500 clamp(38px,6.2vw,72px)/.98 var(--pc-font-sans);letter-spacing:-.035em;text-wrap:balance}
+  .dek{margin:20px 0 0;font:400 18px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .jump{display:flex;flex-wrap:wrap;gap:6px 16px;margin:22px 0 0;font:400 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase}
+  .jump a{color:var(--c800);border-bottom:1px solid var(--c600)}
+
+  .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1.5px solid var(--c600);margin:8px 0}
+  .stats div{padding:16px;border-right:1.5px solid var(--c600);min-width:0}
+  .stats div:last-child{border-right:0;background:var(--c50)}
+  .stats strong{display:block;font:500 clamp(22px,3vw,34px)/1 var(--pc-font-sans);letter-spacing:-.02em;color:var(--c800);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .stats span{display:block;margin-top:8px;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .stats small{display:block;margin-top:6px;font:400 12px/1.45 var(--pc-font-sans);color:var(--pc-ink-muted)}
+
+  .sec{padding-top:56px;scroll-margin-top:12px}
+  .h2{margin:0 0 14px;max-width:760px;font:500 clamp(24px,3vw,34px)/1.1 var(--pc-font-sans);letter-spacing:-.02em;text-wrap:balance}
+  .note{max-width:760px;margin:0 0 16px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+
+  .yard{position:relative;aspect-ratio:4/3;max-height:min(900px,92vh);border:1.5px solid var(--c600);background:var(--c50)}
+  .yard iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+  .yard__bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;margin:0 0 14px;padding:10px 12px;border:1.5px solid var(--c600);border-top:0;font:400 11px/1.5 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .yard__bar b{font-weight:500;color:var(--c800)}
+  .yard__bar a{color:var(--c800);font-weight:500}
+
+  .facts{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .fact{min-width:0;border:1.5px solid var(--c600);padding:16px;overflow-wrap:anywhere}
+  .fact:nth-child(4n+1){background:var(--c50)}
+  .fact__n{margin:0 0 8px;font:500 10px var(--pc-font-mono);letter-spacing:.12em;color:var(--c800)}
+  .fact h3{margin:0;font:500 19px/1.3 var(--pc-font-sans);letter-spacing:-.01em;color:var(--pc-ink)}
+  .fact__proof{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--pc-rule-soft);font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .fact__refs{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0;font:400 11px var(--pc-font-mono);letter-spacing:.04em}
+  .fact__refs a{color:var(--c800);border-bottom:1px solid var(--c600)}
+
+  .status{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;border:1.5px solid var(--c600)}
+  .status div{padding:16px;border-bottom:1px solid var(--pc-rule-soft);min-width:0}
+  .status div:nth-child(odd){border-right:1px solid var(--pc-rule-soft)}
+  .status div:nth-last-child(-n+2){border-bottom:0}
+  .status dt{margin:0 0 6px;font:500 10px var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .status dd{margin:0;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+
+  .next{list-style:none;margin:0;padding:0;border-top:1.5px solid var(--c600)}
+  .next li{display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr);gap:8px 20px;padding:14px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .next b{font:500 15px/1.4 var(--pc-font-sans);color:var(--pc-ink)}
+  .next span{font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .cta{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:16px 0 0}
+  .cta a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;background:var(--c600);color:#fff;font:500 12px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase}
+  .cta a:hover{background:var(--c800);text-decoration:none}
+  .cta span{font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink-muted)}
+
+  .method{margin-top:56px;padding-top:16px;border-top:1px solid var(--pc-rule);max-width:760px}
+  .method p:not(.kicker){margin:0;font:400 13px/1.6 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .method a{color:var(--c800)}
+
+  .chn a:focus-visible{outline:2px solid var(--c600);outline-offset:2px}
+
+  @media (max-width:900px){
+    .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .stats div:nth-child(2){border-right:0}
+    .stats div:nth-child(-n+2){border-bottom:1.5px solid var(--c600)}
+    .facts{grid-template-columns:minmax(0,1fr)}
+    .fact:nth-child(4n+1){background:transparent}
+    .fact:nth-child(odd){background:var(--c50)}
+  }
+  @media (max-width:640px){
+    .chn{padding:16px 16px 96px}
+    .hero{padding:32px 0 22px}
+    .dek{font-size:17px}
+    .yard{aspect-ratio:auto;max-height:none;height:min(86vh,760px)}
+    .status{grid-template-columns:minmax(0,1fr)}
+    .status div:nth-child(odd){border-right:0}
+    .status div:nth-last-child(2){border-bottom:1px solid var(--pc-rule-soft)}
+    .next li{grid-template-columns:minmax(0,1fr)}
+    .crumb a:last-child{margin-left:0}
+  }
+  @media (max-width:420px){
+    .stats{grid-template-columns:minmax(0,1fr)}
+    .stats div{border-right:0;border-bottom:1.5px solid var(--c600)}
+    .stats div:last-child{border-bottom:0}
+    .stats strong{white-space:normal}
+  }
+</style>
