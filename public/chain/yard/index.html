@@ -8,6 +8,11 @@
 <!-- Where the pinned verifier files live. Empty = the node's /verifier route when a node
      answers, else ./verifier/ next to this page. ?verifier=<url> overrides both. -->
 <meta name="pc-verifier-base" content="">
+<!-- Where the chain comes from. Empty = ?api=, else a node at this origin, else ./snapshot.json.
+     A static host that has no node sets a relative snapshot URL (e.g. ./snapshot.json): the page
+     then reads that snapshot straight away, without probing its own origin for /status. ?api= and
+     ?snapshot= still override it. -->
+<meta name="pc-snapshot" content="./snapshot.json">
 <style>
 :root {
   --pc-bg: #f3efe4;
@@ -136,6 +141,8 @@ button.link { background: none; border: 0; padding: 0; text-decoration: underlin
 .overlay-msg code { background: var(--pc-panel); padding: 1px 4px; }
 .tip { position: absolute; z-index: 6; pointer-events: none; background: var(--pc-panel); color: var(--pc-ink); border: 2px solid; border-color: var(--pc-chrome-hi) var(--pc-chrome-lo) var(--pc-chrome-lo) var(--pc-chrome-hi); font: 11px/1.45 var(--mono); padding: 4px 7px; max-width: 280px; overflow-wrap: anywhere; }
 .tip b { font-size: 12px; }
+.tip.hint { left: 50%; top: 10px; transform: translateX(-50%); max-width: calc(100% - 20px); text-align: center; }
+.sheet-body:focus-visible { outline: 2px solid var(--beacon); outline-offset: -2px; }
 
 .stage.drawer-open .legend { display: none; }
 .legend { position: absolute; left: 10px; bottom: 10px; z-index: 3; max-width: min(300px, calc(100% - 20px)); font: 11px var(--mono); padding: 0; }
@@ -264,24 +271,26 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   <div class="spot" id="spot" hidden></div>
 
   <section class="yard win" aria-label="The block yard">
-    <div class="titlebar"><span id="yard-title">THE YARD</span><span class="grow"></span><span id="yard-hint" class="hide-sm">drag to pan · wheel or pinch to zoom · click a stack</span></div>
+    <div class="titlebar"><span id="yard-title">THE YARD</span><span class="grow"></span><span id="yard-hint" class="hide-sm">drag to pan · click + wheel, or pinch, to zoom · click a stack</span></div>
     <div class="stage" id="stage">
       <canvas id="yard" tabindex="0" role="img" aria-label="Isometric yard of pointcast-chain blocks. Use the arrow keys to move between blocks and Enter to open one." aria-describedby="sr-sel"></canvas>
       <div class="overlay-msg" id="msg"><div>TUNING IN…</div></div>
       <div class="tip" id="tooltip" hidden></div>
-      <aside class="legend win" id="legend" aria-label="Legend">
-        <div class="titlebar"><span>LEGEND · tap a kind to spotlight it</span></div>
-        <div class="lg-grid" id="legend-grid"></div>
+      <div class="tip hint" id="wheel-hint" role="status" hidden>Click the yard (or hold Ctrl / ⌘) to zoom with the wheel</div>
+      <!-- the detail panel and the drawer come first, so Tab from the yard reaches them before the legend -->
+      <aside class="panel win" id="panel" aria-label="Block detail" hidden>
+        <div class="grab"></div>
+        <div class="titlebar"><span id="panel-title">№ —</span><span id="panel-badge"></span><span class="grow"></span><button class="close" id="panel-close" aria-label="Close block detail">×</button></div>
+        <div class="sheet-body" id="panel-body" tabindex="0" aria-label="Block detail contents"></div>
       </aside>
       <aside class="drawer win" id="drawer" aria-label="Top balances" hidden>
         <div class="grab"></div>
         <div class="titlebar"><span>◫ TOP BALANCES</span><span class="grow"></span><button class="close" id="drawer-close" aria-label="Close accounts">×</button></div>
         <div class="sheet-body"><div class="drawer-note" id="drawer-note">…</div><div id="drawer-list"></div></div>
       </aside>
-      <aside class="panel win" id="panel" aria-label="Block detail" hidden>
-        <div class="grab"></div>
-        <div class="titlebar"><span id="panel-title">№ —</span><span id="panel-badge"></span><span class="grow"></span><button class="close" id="panel-close" aria-label="Close block detail">×</button></div>
-        <div class="sheet-body" id="panel-body"></div>
+      <aside class="legend win" id="legend" aria-label="Legend">
+        <div class="titlebar"><span>LEGEND · tap a kind to spotlight it</span></div>
+        <div class="lg-grid" id="legend-grid"></div>
       </aside>
     </div>
     <div class="scrub">
@@ -331,6 +340,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   const short = (s, n = 6) => { s = str(s); return s.length > n * 2 + 1 ? `${s.slice(0, n)}…${s.slice(-4)}` : s; };
   const fmt = (n) => { const x = Number(n); return Number.isFinite(x) ? x.toLocaleString("en-US") : "—"; };
   const isInt = (n) => Number.isSafeInteger(n);
+  // A positive safe integer, else the default. Loop bounds (anchor spacing,
+  // heights) come from a node the page does not trust, so they are checked.
+  const posInt = (v, d) => { const n = Number(v); return Number.isSafeInteger(n) && n > 0 ? n : d; };
+  const metaContent = (name) => { const m = document.querySelector(`meta[name="${name}"]`); return m ? (m.getAttribute("content") || "").trim() : ""; };
   const plural = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
   const ago = (ms) => {
     const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -555,7 +568,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   let API = null, SNAP_URL = null, SNAP = null;
   let params = null, status = null, interval = 100;
   const blocks = new Map();        // height -> stack
-  let order = [];                  // heights, back-to-front
+  let order = [];                  // heights, back-to-front (hit testing)
+  let heights = [];                // heights, ascending (timeline; never loop over minH..maxH, it may have gaps)
   let minH = 0, maxH = 0, totalTx = 0;
   const anchors = new Map();       // height -> anchor record
   let accounts = null;             // snapshot accounts, or the last live fetch
@@ -611,7 +625,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     minH = minH && blocks.has(minH) ? Math.min(minH, fresh[0].h) : Math.min(...blocks.keys());
     maxH = Math.max(maxH, fresh[fresh.length - 1].h);
     if (initialDone) { live.blocks += fresh.length; live.txs += fresh.reduce((a, B) => a + B.ntx, 0); }
-    order = [...blocks.keys()];
+    heights = [...blocks.keys()].sort((a, b) => a - b);
+    order = heights.slice();
     order.sort((a, b) => { const A = blocks.get(a), Bb = blocks.get(b); return (A.gx + A.gy) - (Bb.gx + Bb.gy) || A.gx - Bb.gx; });
     miniDirty = true;
     return fresh;
@@ -649,7 +664,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     buildLegend();
     resize();
     const snapParam = qs.get("snapshot");
-    if (snapParam) return bootSnapshot(snapParam, "requested with ?snapshot=");
+    if (snapParam) return bootSnapshot(snapParam, "");
+    // A static host names its snapshot in <meta name="pc-snapshot">: no probe.
+    const metaSnap = metaContent("pc-snapshot");
+    if (metaSnap && !qs.get("api")) return bootSnapshot(metaSnap, "");
     const apiUrl = httpUrl(API_GUESS, location.href);
     let why = "";
     if (!apiUrl) why = `?api=${API_GUESS} is not an http(s) URL`;
@@ -657,9 +675,13 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       API = API_GUESS;
       try {
         const st = await getJSON("/status", 4000);
-        if (!validStatus(st)) throw new Error("/status is not a pointcast-chain node");
+        if (!validStatus(st)) throw new Error("its /status is not a pointcast-chain node");
         return await bootNode(st);
-      } catch (e) { why = `no node answered at ${API_GUESS} (${e.message || e})`; }
+      } catch (e) {
+        // A static site answers /status with a web page: say so plainly.
+        const reason = e instanceof SyntaxError ? "its /status is a web page, not a chain node" : (e.name === "AbortError" ? "timed out" : (e.message || String(e)));
+        why = qs.get("api") ? `no node answered at ?api=${API_GUESS} (${reason})` : `no chain node answers at ${API_GUESS} (${reason})`;
+      }
     }
     API = null;
     return bootSnapshot("./snapshot.json", why);
@@ -669,7 +691,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     MODE = "node";
     status = st;
     params = await getJSON("/params").catch(() => null);
-    interval = Number((params && params.anchor_interval) || st.anchor_interval) || 100;
+    interval = posInt(params && params.anchor_interval, posInt(st.anchor_interval, 100));
     setSource();
     await loadAnchorsLive();
     const tip = st.height;
@@ -687,7 +709,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     if (!url || url.origin !== location.origin) {
       return fatal(location.protocol === "file:"
         ? "This page needs a node or an http server. Serve its folder (python3 -m http.server) or pass ?api=http://127.0.0.1:8545."
-        : `?snapshot= must be a relative or same-origin URL (got ${rel}).`, why);
+        : `The snapshot must be a relative or same-origin URL (got ${rel}).`, why);
     }
     SNAP_URL = url.href;
     let snap;
@@ -705,7 +727,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     SNAP = snap;
     status = snap.status;
     params = snap.params;
-    interval = Number(params.anchor_interval || status.anchor_interval) || 100;
+    interval = posInt(params.anchor_interval, posInt(status.anchor_interval, 100));
     (Array.isArray(snap.anchors) ? snap.anchors : []).forEach(addAnchor);
     accounts = Array.isArray(snap.accounts) ? snap.accounts : null;
     setSource(why);
@@ -728,8 +750,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     let f = from;
     for (let guard = 0; guard < 200 && f <= to; guard++) {
       const page = await getJSON(`/raw/blocks?from=${f}&limit=${PAGE}`);
+      // Only the page that was asked for: a node cannot plant a block at a far-off height.
       const list = (Array.isArray(page && page.blocks) ? page.blocks : [])
-        .filter((b) => b && b.header && isInt(b.header.height) && b.header.height >= f && b.header.height <= to);
+        .filter((b) => b && b.header && isInt(b.header.height) && b.header.height >= f && b.header.height < f + PAGE && b.header.height <= to);
       if (!list.length) break;
       addBlocks(list, animate);
       const last = Math.max(...list.map((b) => b.header.height));
@@ -799,7 +822,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       $("s-source-l").textContent = rec ? `rec. ${rec.slice(0, 10)}` : "static";
       $("s-source").title = SNAP_URL || "";
       setLive("snap", "SNAPSHOT");
-      show("v-src", `Static snapshot: a recorded --dev --demo chain signed with the public dev keys${rec ? `, recorded ${rec}` : ""}. ${why ? `Showing it because ${why}.` : ""} VERIFY replays it in your browser.`);
+      show("v-src", `Static snapshot: a recorded --dev --demo chain signed with the public dev keys${rec ? `, recorded ${rec}` : ""}.${why ? ` Showing it because ${why}.` : ""} VERIFY replays it in your browser.`);
       $("feed-link").hidden = true;
     }
     $("anchor-every").textContent = fmt(interval);
@@ -844,7 +867,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   const stage = $("stage"), cv = $("yard"), ctx = cv.getContext("2d", { alpha: false });
   const mini = $("mini"), mctx = mini.getContext("2d");
   let dpr = 1, CW = 0, CH = 0;
-  const cam = { x: 0, y: 0, z: 4, tx: null, ty: null, set: false };
+  const cam = { x: 0, y: 0, z: 4, tx: null, ty: null, th: 0, set: false };   // th: height a glide is heading for
   let follow = true, raf = 0, dirty = true, miniDirty = true, lastBeacon = 0, animating = false, userZoomed = false, userMoved = false;
   let visMin = 0, visMax = 0;
   const narrow = () => matchMedia("(max-width: 640px)").matches;
@@ -909,7 +932,12 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const wx = (ax - CW / 2) / cam.z + cam.x, wy = (ay - CH / 2) / cam.z + cam.y;
     cam.z = z;
     cam.x = wx - (ax - CW / 2) / z; cam.y = wy - (ay - CH / 2) / z;
-    if (cam.tx != null && !follow) { cam.tx = null; cam.ty = null; }
+    // A glide toward a selected stack keeps going after a zoom; its target
+    // depends on the zoom when a sheet is open, so it is recomputed.
+    if (cam.tx != null && !follow) {
+      if (cam.th && blocks.has(cam.th)) { const t = camTarget(cam.th); cam.tx = t.x; cam.ty = t.y; }
+      else { cam.tx = null; cam.ty = null; }
+    }
     dirty = miniDirty = true; kick();
   }
   // Where the camera should centre so stack `hh` sits clear of open sheets.
@@ -929,7 +957,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   function moveTo(hh, instant) {
     const t = camTarget(hh);
     if (instant || reduced) { cam.x = t.x; cam.y = t.y; cam.tx = cam.ty = null; }
-    else { cam.tx = t.x; cam.ty = t.y; }
+    else { cam.tx = t.x; cam.ty = t.y; cam.th = hh; }
     dirty = miniDirty = true; kick();
   }
   function focusTip(instant) { if (maxH) moveTo(maxH, instant); }
@@ -959,11 +987,15 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     if (moving && lastMouse) rehover();
     const revealing = stepReveal(now);
     const pulse = beaconsVisible && !reduced && now - lastBeacon > 66;
-    if (dirty || moving || revealing || animating || pulse) {
-      render(now);
+    if (dirty || moving || revealing || animating) {
+      render(now, false);
       if (pulse) lastBeacon = now;
       dirty = false;
       miniDirty = true;
+    } else if (pulse) {
+      // Only the beacon rings move: blit the cached yard and redraw the rings.
+      render(now, true);
+      lastBeacon = now;
     }
     if (miniDirty) { drawMini(); miniDirty = false; }
     if (moving || revealing || animating || (beaconsVisible && !reduced) || cam.tx != null) raf = requestAnimationFrame(frame);
@@ -998,31 +1030,71 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     return "sealed";
   }
 
-  function render(now) {
-    animating = false;
+  // The yard minus the beacon rings, kept so a pulse-only frame is one blit
+  // plus a few rings instead of a full redraw of every visible stack.
+  const baseCv = document.createElement("canvas"), bctx = baseCv.getContext("2d", { alpha: false });
+  let baseOk = false, beaconList = [], lastView = { ox: 0, oy: 0, z: 1, fs: 12 };
+  // Cells whose stack can reach the viewport, in a valid painter's order:
+  // rows back to front, columns left to right. Two stacks only overlap when
+  // their screen columns differ by at most one, and then the one in front is
+  // in a later row, or further right in the same row. O(visible), not O(chain).
+  function visibleStacks(wx0, wx1, wy0, wy1) {
+    const out = [];
+    if (!heights.length) return out;
+    const hx = PW / 2, hy = PT / 2;
+    const g0 = Math.max(Math.floor((heights[0] - 1) / COLS), Math.ceil(wy0 / hy - (COLS - 1)), Math.ceil(-wx1 / hx));
+    const g1 = Math.min(Math.floor((heights[heights.length - 1] - 1) / COLS), Math.floor(wy1 / hy), Math.floor(COLS - 1 - wx0 / hx));
+    for (let gy = g0; gy <= g1; gy++) {
+      const c0 = Math.max(0, Math.ceil(Math.max(gy + wx0 / hx, wy0 / hy - gy) - 1e-9));
+      const c1 = Math.min(COLS - 1, Math.floor(Math.min(gy + wx1 / hx, wy1 / hy - gy) + 1e-9));
+      for (let gx = c0; gx <= c1; gx++) {
+        const B = blocks.get(heightAt(gx, gy));
+        if (B) out.push(B);
+      }
+    }
+    return out;
+  }
+  function label(text, x, y, color) {
+    ctx.strokeStyle = TH.halo; ctx.strokeText(text, x, y);
+    ctx.fillStyle = color || TH.ink; ctx.fillText(text, x, y);
+  }
+  function setLabelFont(fs) {
+    ctx.font = `bold ${fs}px ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.lineJoin = "round"; ctx.lineWidth = Math.max(2, fs / 4);
+  }
+
+  function render(now, pulseOnly) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
+    if (pulseOnly && baseOk && baseCv.width === CW && baseCv.height === CH) {
+      ctx.drawImage(baseCv, 0, 0);
+      drawBeacons(now);
+      return;
+    }
+    animating = false;
+    baseOk = false;
     const grad = ctx.createLinearGradient(0, 0, 0, CH);
     grad.addColorStop(0, TH.bg2); grad.addColorStop(0.55, TH.bg); grad.addColorStop(1, TH.bg);
     ctx.fillStyle = grad; ctx.fillRect(0, 0, CW, CH);
     beaconsVisible = false;
+    beaconList = [];
     if (!blocks.size || !SP) return;
     const z = cam.z;
     const ox = Math.round(CW / 2 - cam.x * z), oy = Math.round(CH / 2 - cam.y * z);
     const X = (wx) => ox + Math.round(wx * z), Y = (wy) => oy + Math.round(wy * z);
     const zw = (n) => Math.max(1, Math.round(n * z));
     const wx0 = -ox / z - PW, wx1 = (CW - ox) / z + PW, wy0 = -oy / z - PT, wy1 = (CH - oy) / z + MAX_CUBES * S + 60;
-    const vis = (B) => B.x >= wx0 && B.x <= wx1 && B.y >= wy0 && B.y <= wy1;
-    const verifyOn = !!vWorker;
+    const vis = visibleStacks(wx0, wx1, wy0, wy1);
+    const fs = Math.round(Math.max(9 * dpr, Math.min(4.2 * z, 13 * dpr)));
+    lastView = { ox, oy, z, fs };
 
     // 1. ground: plates, then ghost cells where the current row will grow
-    for (const hh of order) {
-      const B = blocks.get(hh);
-      if (!vis(B)) continue;
+    for (const B of vis) {
       let p = SP.plate;
       if (B.v === 1 && B.vAt && now >= B.vAt) p = SP.plateOk;
       else if (B.v === 2 || B.v === 3) p = SP.plateBad;
-      if (hh === selected) p = SP.plateSel;
+      if (B.h === selected) p = SP.plateSel;
       ctx.drawImage(p, X(B.x - PW / 2), Y(B.y - PT / 2), zw(PW), zw(PT));
     }
     if (MODE === "node" && maxH) {
@@ -1036,23 +1108,27 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
 
     // 2. the wire: dotted parent links between consecutive heights
     const dot = Math.max(1, Math.round(z));
-    for (const hh of order) {
-      const A = blocks.get(hh), Bn = blocks.get(hh + 1);
-      if (!Bn || (!vis(A) && !vis(Bn))) continue;
+    const link = (A, Bn) => {
       let col = TH.link;
       if (A.v === 1 && Bn.v === 1 && now >= Bn.vAt && Bn.vAt) col = TH.ok;
       else if (A.v >= 2 || Bn.v >= 2) col = TH.bad;
       ctx.fillStyle = col;
       const dx = Math.sign(Bn.x - A.x), dy = Math.sign(Bn.y - A.y);
       for (let s = 2; s <= 10; s += 2) ctx.fillRect(X(A.x + dx * s), Y(A.y + dy * (s / 2)), dot, dot);
+    };
+    const onScreen = new Set(vis.map((B) => B.h));
+    for (const A of vis) {
+      const Bn = blocks.get(A.h + 1);
+      if (Bn) link(A, Bn);
+      const P = blocks.get(A.h - 1);
+      if (P && !onScreen.has(P.h)) link(P, A);
     }
 
     // 3. stacks, back to front
     let vlo = Infinity, vhi = 0;
     const tops = [];
-    for (const hh of order) {
-      const B = blocks.get(hh);
-      if (!vis(B)) continue;
+    for (const B of vis) {
+      const hh = B.h;
       if (hh < vlo) vlo = hh;
       if (hh > vhi) vhi = hh;
       const lit = spotStack(B);
@@ -1097,15 +1173,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     }
     visMin = vlo === Infinity ? 0 : vlo; visMax = vhi;
 
-    // 4. marks above stacks: verification glyphs, beacons, labels
-    const fs = Math.round(Math.max(9 * dpr, Math.min(4.2 * z, 13 * dpr)));
-    ctx.font = `bold ${fs}px ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
-    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-    ctx.lineJoin = "round"; ctx.lineWidth = Math.max(2, fs / 4);
-    const label = (text, x, y, color) => {
-      ctx.strokeStyle = TH.halo; ctx.strokeText(text, x, y);
-      ctx.fillStyle = color || TH.ink; ctx.fillText(text, x, y);
-    };
+    // 4. marks above stacks: verification glyphs and labels. Beacons last.
+    setLabelFont(fs);
     for (const [B, topY, revealed] of tops) {
       const cx = B.x, cy = topY - T / 2;
       if (z >= 1.5) {
@@ -1121,26 +1190,44 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       }
       if (B.ntx > MAX_CUBES && z >= 2) label(`+${B.ntx - (MAX_CUBES - 1)}`, X(cx), Y(cy - 3));
       if (B.h % interval === 0) {
-        beaconsVisible = true;
-        const st = anchorState(B.h);
-        const col = st === "posted" ? TH.posted : st === "sealed" ? TH.beacon : TH.beaconOff;
-        const by = cy - 16;
-        const rings = st === "expected" || reduced ? [0.22, 0.52, 0.82] : [0, 1, 2].map((i) => ((now / 1700) + i / 3) % 1);
-        for (const ph of rings) {
-          const r = Math.round(3 + ph * 22);
-          const spr = ring(r, col), ry = (spr.height - 1) / 2;
-          ctx.globalAlpha = st === "expected" ? 0.55 : Math.max(0, 1 - ph) * 0.95;
-          ctx.drawImage(spr, X(cx - r), Y(by - ry), zw(spr.width), zw(spr.height));
-        }
-        ctx.globalAlpha = 1;
-        const em = st === "posted" ? SP.emitPosted : st === "sealed" ? SP.emit : SP.emitOff;
-        ctx.drawImage(em, X(cx - 2.5), Y(by - 2.5), zw(5), zw(5));
-        if (z >= 2) label(`⚓ №${fmt(B.h)}`, X(cx), Y(by - 14), col);
+        beaconList.push({ h: B.h, cx, cy });
+        if (anchorState(B.h) !== "expected") beaconsVisible = true;     // due beacons stand still
       }
       if (B.h === maxH && z >= 1) label(`TIP №${fmt(B.h)}`, X(cx), Y(cy - (B.h % interval === 0 ? 40 : 12)), TH.ink);
       else if (z >= 3 && (B.h - 1) % COLS === 0 && B.h % interval !== 0) {
         ctx.globalAlpha = 0.7; label(`№${fmt(B.h)}`, X(cx), Y(B.y + 12), TH.link); ctx.globalAlpha = 1;
       }
+    }
+    if (beaconsVisible && !reduced) {
+      if (baseCv.width !== CW || baseCv.height !== CH) { baseCv.width = CW; baseCv.height = CH; }
+      bctx.setTransform(1, 0, 0, 1, 0, 0);
+      bctx.drawImage(cv, 0, 0);
+      baseOk = true;
+    }
+    drawBeacons(now);
+  }
+  // Broadcast beacons over anchor heights: concentric rings and an emitter.
+  function drawBeacons(now) {
+    if (!beaconList.length) return;
+    const { ox, oy, z, fs } = lastView;
+    const X = (wx) => ox + Math.round(wx * z), Y = (wy) => oy + Math.round(wy * z);
+    const zw = (n) => Math.max(1, Math.round(n * z));
+    setLabelFont(fs);
+    for (const { h: bh, cx, cy } of beaconList) {
+      const st = anchorState(bh);
+      const col = st === "posted" ? TH.posted : st === "sealed" ? TH.beacon : TH.beaconOff;
+      const by = cy - 16;
+      const rings = st === "expected" || reduced ? [0.22, 0.52, 0.82] : [0, 1, 2].map((i) => ((now / 1700) + i / 3) % 1);
+      for (const ph of rings) {
+        const r = Math.round(3 + ph * 22);
+        const spr = ring(r, col), ry = (spr.height - 1) / 2;
+        ctx.globalAlpha = st === "expected" ? 0.55 : Math.max(0, 1 - ph) * 0.95;
+        ctx.drawImage(spr, X(cx - r), Y(by - ry), zw(spr.width), zw(spr.height));
+      }
+      ctx.globalAlpha = 1;
+      const em = st === "posted" ? SP.emitPosted : st === "sealed" ? SP.emit : SP.emitOff;
+      ctx.drawImage(em, X(cx - 2.5), Y(by - 2.5), zw(5), zw(5));
+      if (z >= 2) label(`⚓ №${fmt(bh)}`, X(cx), Y(by - 14), col);
     }
   }
 
@@ -1156,9 +1243,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const base = hh - Math.round(7 * dpr), top = Math.round(4 * dpr), barMax = base - top;
     // tx density, coloured by the biggest block's first kind
     const cols = new Array(w).fill(null);
-    for (let h0 = lo; h0 <= hi; h0++) {
+    for (const h0 of heights) {
       const B = blocks.get(h0);
-      if (!B) continue;
       const x = Math.min(w - 1, xOf(h0));
       const c = cols[x];
       if (!c || B.ntx > c.n) cols[x] = { n: B.ntx, k: B.kinds[0], lit: spotStack(B) };
@@ -1176,7 +1262,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     }
     mctx.globalAlpha = 1;
     // anchors
-    for (let a = Math.ceil(lo / interval) * interval; a <= hi; a += interval) {
+    for (let a = Math.ceil(lo / interval) * interval; a <= hi && span / interval <= w; a += interval) {
       const st = anchorState(a);
       mctx.fillStyle = st === "posted" ? TH.posted : st === "sealed" ? TH.beacon : TH.beaconOff;
       const x = xOf(a);
@@ -1186,7 +1272,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     // verification
     if (vWorker || vFault) {
       let okTo = 0;
-      for (let h0 = lo; h0 <= hi; h0++) { const B = blocks.get(h0); if (B && B.v === 1 && B.vAt && performance.now() >= B.vAt) okTo = h0; else if (B && B.v >= 2) break; }
+      const tNow = performance.now();
+      for (const h0 of heights) { const B = blocks.get(h0); if (B.v === 1 && B.vAt && tNow >= B.vAt) okTo = h0; else if (B.v >= 2) break; }
       if (okTo) { mctx.fillStyle = TH.ok; mctx.fillRect(0, base + 2 * dpr, xOf(okTo) + bw, 3 * dpr); }
       if (vFault && vFault.height >= lo && vFault.height <= hi) {
         mctx.fillStyle = TH.bad;
@@ -1384,8 +1471,20 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   cv.addEventListener("pointerleave", (e) => {
     if (e.pointerType === "mouse" && !drag) { lastMouse = null; hovered = 0; tipEl.hidden = true; stage.classList.remove("over"); kick(); }
   });
-  let wheelAcc = 0;
+  // The wheel zooms once the yard is engaged (clicked or focused), or with
+  // Ctrl / ⌘ (trackpad pinch arrives as ctrl+wheel). Otherwise it scrolls the
+  // page, so the yard is not a scroll trap on a page (or iframe) that embeds it.
+  let wheelAcc = 0, hintTimer = 0;
   cv.addEventListener("wheel", (e) => {
+    const engaged = (document.activeElement === cv && document.hasFocus()) || e.ctrlKey || e.metaKey;
+    if (!engaged) {
+      const hint = $("wheel-hint");
+      hint.hidden = false;
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => { hint.hidden = true; }, 1600);
+      return;
+    }
+    $("wheel-hint").hidden = true;
     e.preventDefault();
     wheelAcc += e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
     if (Math.abs(wheelAcc) < (e.ctrlKey ? 18 : 60)) return;
@@ -1502,18 +1601,21 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       default: return "unknown transaction kind";
     }
   }
-  function txCard(raw, card, i, cardSrc) {
+  function txCard(raw, card, i, cardSrc, fromReplay) {
     const x = (raw && raw.tx) || {};
-    const kind = str(x.type || (card && card.kind));
+    // A card from your own replay outranks the page's copy of the tx; a node's
+    // card only fills in what the raw tx lacks.
+    const pick = (mine, served) => (fromReplay ? mine ?? served : served ?? mine);
+    const kind = str(pick(card && card.kind, x.type));
     const ix = kindIx(kind);
     const K = KINDS[ix];
     const payload = (card && card.payload && typeof card.payload === "object" && card.payload) || x;
     const info = card && card.sender_info;
-    const sigMode = (card && card.sig_mode) || (raw && raw.sig_mode) || "raw";
+    const sigMode = pick(card && card.sig_mode, raw && raw.sig_mode) || "raw";
     const art = h("article", { class: "txc" },
       h("div", { class: "txk" }, kindIcon(ix), h("b", null, `${K.glyph} ${K.label}`), h("code", null, kind || "?"),
         h("span", { class: "txmeta" }, `#${i + 1}`)),
-      h("div", { class: "txmeta" }, "sender ", whoBadge(x.sender || (card && card.sender), info), ` · nonce ${str(x.nonce ?? (card && card.nonce))}`,
+      h("div", { class: "txmeta" }, "sender ", whoBadge(pick(card && card.sender, x.sender), info), ` · nonce ${str(pick(card && card.nonce, x.nonce))}`,
         sigMode === "tezos_message" ? [" · ", h("span", { class: "badge wallet", title: "Signed in a Tezos wallet (sign_payload)" }, "✍ wallet")] : null),
       h("div", { class: "txsum" }, summary(kind, payload)));
     if (kind === "publish_block") {
@@ -1562,8 +1664,12 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     renderPanel();
     if (MODE === "node" && !blockViews.has(hh)) fetchBlockView(hh).then(() => { if (panelH === hh && !$("panel").hidden) renderPanel(); });
   }
+  // Hiding a sheet that holds keyboard focus would drop focus on <body>:
+  // hand it back to the yard instead.
+  function keepFocus(el) { if (el.contains(document.activeElement)) cv.focus({ preventScroll: true }); }
   function closePanel() {
     if ($("panel").hidden) return;
+    keepFocus($("panel"));
     $("panel").hidden = true; panelH = 0; selected = 0;
     syncSheet();
     dirty = miniDirty = true; kick();
@@ -1617,7 +1723,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const vs = h("div", { class: "vstate" });
     if (B.v === 1) {
       vs.className = "vstate ok";
-      vs.append(`✓ Verified by you: this browser replayed №${fmt(hh)} with the pinned consensus wasm. Block hash, state root and tx count match what the page shows.`);
+      vs.append(`✓ Verified by you: this browser replayed №${fmt(hh)} with the pinned consensus wasm. The replay's block hash, state root, tx count and parent link match this page's copy, and the transactions below come from your replay.`);
+      if (MODE === "node") vs.append(" Timestamp, tx root and signature are shown as the node served them to this page; your replay checked its own copy of them.");
     } else if (B.v === 2) {
       vs.className = "vstate bad";
       vs.append(`✗ Sequencer fault at №${fmt(hh)}: ${B.reason || "the replay rejected this block"}`);
@@ -1647,13 +1754,23 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
         if (useReplay && card && view && view.txs && view.txs[i] && typeof view.txs[i].payload?.body === "string") {
           card = { ...card, payload: { ...card.payload, body: view.txs[i].payload.body } };
         }
-        list.append(txCard(t, card, i, src));
+        list.append(txCard(t, card, i, src, !!useReplay));
       });
       body.append(list);
     } else {
       body.append(h("div", { class: "empty-note" }, `Empty block: sealed on schedule with no transactions. Root ${short(hd.state_root, 8)}.`));
     }
     body.scrollTop = keepScroll;
+  }
+  // Link out only to the explorer the node itself builds (tzkt.io and its
+  // network subdomains, crates/node/src/tezos/mod.rs), never to a URL a node
+  // made up.
+  function tezosExplorerUrl(u) {
+    if (typeof u !== "string") return false;
+    try {
+      const x = new URL(u);
+      return x.protocol === "https:" && !x.username && !x.password && !x.port && (x.hostname === "tzkt.io" || x.hostname.endsWith(".tzkt.io"));
+    } catch { return false; }
   }
   function anchorLine(hh) {
     const a = anchors.get(hh);
@@ -1664,7 +1781,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const st = anchorState(hh);
     const out = [h("span", null, `${st === "posted" ? "posted to Tezos" : "sealed"} · status ${str(a.status)}`)];
     if (a.payload && a.payload.state_root) out.push(h("br"), "root ", copyable(a.payload.state_root, 8));
-    if (typeof a.explorer_url === "string" && /^https:\/\//.test(a.explorer_url)) {
+    if (tezosExplorerUrl(a.explorer_url)) {
       out.push(" · ", h("a", { href: a.explorer_url, target: "_blank", rel: "noopener noreferrer nofollow" }, "Tezos operation ↗"));
     }
     return out;
@@ -1693,6 +1810,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   }
   function closeAccounts() {
     if (!accountsOpen()) return;
+    if ($("drawer").contains(document.activeElement)) $("accounts-btn").focus({ preventScroll: true });
     $("drawer").hidden = true;
     $("accounts-btn").setAttribute("aria-expanded", "false");
     syncSheet();
@@ -1899,6 +2017,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     if (root !== B.header.state_root) bad.push(`state root ${short(B.header.state_root, 6)} vs replay ${short(root, 6)}`);
     if (ntx !== B.ntx) bad.push(`${B.ntx} tx vs replay ${ntx}`);
     if (rh && rh.hash !== hash) bad.push(`hash ${short(rh.hash, 6)} (${rh.note}) vs replay ${short(hash, 6)}`);
+    // The parent link this page shows must be the block hash your browser replayed below it.
+    const below = verified.get(B.h - 1);
+    if (below && B.header.prev_hash !== below[0]) bad.push(`parent ${short(B.header.prev_hash, 6)} vs replayed №${fmt(B.h - 1)} ${short(below[0], 6)}`);
     if (bad.length) { B.v = 3; B.reason = bad.join("; "); B.vAt = 0; return; }
     const rep = replayed.get(B.h);
     if (rep && rep.block_hash === hash && Array.isArray(rep.txs) && rep.txs.length === B.ntx) {
@@ -1937,10 +2058,14 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       MODE === "snapshot" ? h("span", null, "· replaying the snapshot") : null,
       extra ? h("span", null, `· ${extra}`) : null].filter(Boolean));
   }
+  // One blob URL per fault: the panel re-renders often, and each URL pins its blob.
+  let evidenceUrl = null;
   function evidenceLink() {
-    const blob = new Blob([JSON.stringify(vFault.evidence, null, 2) + "\n"], { type: "application/json" });
-    const a = h("a", { href: URL.createObjectURL(blob), download: "evidence.json" }, "download evidence.json");
-    return a;
+    if (!evidenceUrl) {
+      const blob = new Blob([JSON.stringify(vFault.evidence, null, 2) + "\n"], { type: "application/json" });
+      evidenceUrl = URL.createObjectURL(blob);
+    }
+    return h("a", { href: evidenceUrl, download: "evidence.json" }, "download evidence.json");
   }
   // Only faults that carry checked evidence are blamed on the sequencer.
   function showFault(m) {
@@ -2007,8 +2132,13 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       paintStrip();
     }
   }
-  async function startVerify() {
+  // Each press of VERIFY gets a generation; a start still awaiting its
+  // assets when VERIFY is pressed off (or again) must not spawn a worker.
+  let vGen = 0;
+  async function startVerify(gen) {
+    $("v-loud").hidden = true;
     const st = MODE === "snapshot" ? SNAP.status : await getJSON("/status");
+    if (gen !== vGen) return;
     const where = MODE === "snapshot" ? `the snapshot (${new URL(SNAP_URL).pathname})` : API;
     const urlPin = qs.get("genesis");
     let pin = urlPin;
@@ -2027,6 +2157,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       }
     }
     const a = await loadPinned();
+    if (gen !== vGen) return;
     const wasm = a.wasm.slice(0);
     const start = { api: MODE === "snapshot" ? SNAP_API : API, genesis: pin, verifyJsUrl: a.verifyJsUrl, wasm, wasmSha256: a.wasmSha256 };
     if (MODE === "snapshot") {
@@ -2047,7 +2178,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     revalidate();
   }
   function stopVerify() {
+    vGen++;
     if (vWorker) vWorker.terminate();
+    if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
     vWorker = null; verified.clear(); replayed.clear(); revealQ = [];
     vHeight = 0; vRoot = null; vSha = undefined; vFault = null; vAnchors = null; vStopped = null; vNodeFault = null;
     ["v-loud", "v-fault", "v-node", "v-pin"].forEach((id) => { $(id).hidden = true; });
@@ -2064,8 +2197,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const on = btn.getAttribute("aria-pressed") !== "true";
     btn.setAttribute("aria-pressed", String(on));
     if (!on) return stopVerify();
-    try { await startVerify(); }
+    const gen = ++vGen;
+    try { await startVerify(gen); }
     catch (e) {
+      if (gen !== vGen) return;
       show("v-loud", `Verifier could not start: ${e.message || e}`);
       btn.setAttribute("aria-pressed", "false");
       if (vWorker) { vWorker.terminate(); vWorker = null; }
