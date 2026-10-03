@@ -21,6 +21,7 @@ export function initPortfolio(root) {
   family.addEventListener('change', apply);
   for (const button of statusButtons) button.addEventListener('click', () => { status = button.dataset.statusFilter; apply(); });
   root.querySelector('[data-reset-filters]').addEventListener('click', () => { status = 'all'; family.value = 'all'; apply(); });
+  for (const link of root.querySelectorAll('[data-show-studio]')) link.addEventListener('click', () => { status = 'all'; apply(); });
   root.querySelector('[data-portfolio-filters]').hidden = false;
   apply();
 }

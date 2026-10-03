@@ -11,9 +11,9 @@ function fixture() {
     <div data-portfolio-filters hidden><select data-family-filter><option value="all">All</option>${['design','reading','art','play','place','tools'].map(id => `<option value="${id}">${id}</option>`).join('')}</select>
     ${['all','open','building','redesign'].map(id => `<button data-status-filter="${id}" aria-pressed="${id === 'all'}">${id}</button>`).join('')}<button data-reset-filters>Reset</button></div>
     <p data-filter-result role="status"></p>
-    ${PROJECTS.map(project => `<article data-project-card data-family="${project.family}" data-next-status="${project.next?.status ?? ''}"><a href="${project.href}">${project.title}</a></article>`).join('')}
+    ${PROJECTS.map(project => `<article data-project-card data-family="${project.family}" data-next-status="${project.next?.status ?? ''}"><a href="${project.href}">${project.title}</a>${project.next ? `<a data-show-studio href="#studio-${project.id}-next">Next</a>` : ''}</article>`).join('')}
     <p data-project-empty hidden></p>
-    ${STUDIO.map(project => `<article data-studio-card data-family="${project.family}" data-status="${project.status}">${project.title}</article>`).join('')}
+    ${STUDIO.map(project => `<article id="studio-${project.id}" data-studio-card data-family="${project.family}" data-status="${project.status}">${project.title}</article>`).join('')}
     <p data-studio-empty hidden></p></main>`);
   const root = dom.window.document.querySelector('main');
   initPortfolio(root);
@@ -90,4 +90,15 @@ test('setup is idempotent and keeps controls hidden until the working initialize
   assert.equal(f.root.querySelector('[data-portfolio-filters]').hidden, false);
   f.click('redesign');
   assert.equal(f.visible('[data-project-card]').length, 2);
+});
+
+
+test('visiting a next-edition link from Open now reveals its studio destination before fragment navigation', () => {
+  const f = fixture();
+  f.click('open');
+  const target = f.root.querySelector('#studio-fila-next');
+  assert.equal(target.hidden, true);
+  f.root.querySelector('[href="#studio-fila-next"]').click();
+  assert.equal(target.hidden, false);
+  assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'true');
 });
