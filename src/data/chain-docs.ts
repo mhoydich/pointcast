@@ -38,7 +38,7 @@ export const CHAIN_DOCS: ChainDoc[] = [
     sha256: '334be32d57bb637f18e34415234b0e5f7a680f57899e97c52ac5e31cc5fa1e1e',
     kicker: 'PLAN OF RECORD · V2 · PRESENT COMPANY',
     title: 'v2: Present Company.',
-    summary: 'The v2 plan: four pillars, fourteen packages over seven batches, batch-1 ownership, the demo moment, risks and merge order. Batch 1 is merged; the rest is plan.',
+    summary: 'The v2 plan: four pillars, fourteen packages over seven batches, batch-1 ownership, the demo moment, risks and merge order. Batch 1 is merged; its batch 2–7 list has since been replaced by the Town Network plan.',
   },
   {
     slug: 'wallets', file: 'wallets.md', source: 'docs/WALLETS.md',

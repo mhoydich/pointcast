@@ -108,7 +108,7 @@ export const ASSIGNMENTS: Assignment[] = [
   {
     id: 'PCC-I04',
     title: 'A passkey device test matrix',
-    why: 'v2 batch 2 plans passkeys as the wallet: a webauthn signing mode and pcp1 addresses. The design assumes ES256 keys, signCount 0 on synced passkeys, and a fixed order of fields in clientDataJSON. Real devices have to be checked.',
+    why: 'The wallet scope plans passkeys as the wallet: a webauthn signing mode and pcp1 addresses. The design assumes ES256 keys, signCount 0 on synced passkeys, and a fixed order of fields in clientDataJSON. Real devices have to be checked.',
     steps: [
       'Read “Passkey design” in the wallet scope.',
       'List the devices you can reach: iPhone or iPad Safari, macOS Safari and Chrome, Android Chrome, Windows Hello.',
