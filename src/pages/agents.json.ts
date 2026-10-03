@@ -128,6 +128,14 @@ export const GET: APIRoute = async () => {
     },
 
     luckyCat: {
+      currentEdition: 'v2',
+      v2: {
+        human: AGENT_SURFACES.human.luckyCatV2,
+        art: AGENT_SURFACES.human.luckyCatArtV2,
+        practice: AGENT_SURFACES.human.luckyCatAgentsV2,
+        exhibition: 'Live sculpture, family tours, lighting and A/B comparison, and a browser-local three-work show that can be shared by URL.',
+        api: 'The existing signed Lucky Cat API and persistent agent practice ledger.',
+      },
       human: AGENT_SURFACES.human.luckyCat,
       art: AGENT_SURFACES.human.luckyCatArt,
       practice: AGENT_SURFACES.human.luckyCatAgents,
@@ -220,6 +228,9 @@ export const GET: APIRoute = async () => {
         luckyCat: AGENT_SURFACES.human.luckyCat,
         luckyCatAgents: AGENT_SURFACES.human.luckyCatAgents,
         luckyCatArt: AGENT_SURFACES.human.luckyCatArt,
+        luckyCatV2: AGENT_SURFACES.human.luckyCatV2,
+        luckyCatAgentsV2: AGENT_SURFACES.human.luckyCatAgentsV2,
+        luckyCatArtV2: AGENT_SURFACES.human.luckyCatArtV2,
         beachBlanketReview: 'https://pointcast.xyz/beach-commons/v8',
         beachBlanketPromotionDesk: 'https://pointcast.xyz/beach-commons/v8/share',
         beachCommonsExtraChair: 'https://pointcast.xyz/beach-commons/v19',
