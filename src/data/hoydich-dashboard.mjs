@@ -13,7 +13,7 @@ export const DASHBOARD_ROWS = [
     summary: project.summary, nextAction: project.nextAction ?? 'Use the published edition and its source notes; review the date and project boundaries before relying on it.',
     focus: focused.has(project.id), href: project.href, ...(project.statusLabel ? { statusLabel: project.statusLabel } : {}),
     source: project.source ?? { href: project.href, label: 'Published project context' },
-    sourceNote: project.statusLabel ? 'The status preview is public; service restrictions remain as described in the project summary.' : 'The page is public. Objects, garments and future scenarios may remain concepts.',
+    sourceNote: project.statusLabel ? 'The page is public; the stated display or service restrictions remain in effect.' : 'The page is public. Objects, garments and future scenarios may remain concepts.',
   })),
   ...STUDIO.map(project => ({
     id: project.id, title: project.title, family: project.family,
@@ -140,7 +140,7 @@ export const CHAIN_PANELS = [
     "title": "PointCast Chain / dev replay",
     "statusLabel": "Recorded prototype / no public node",
     "tone": "limited",
-    "summary": "Replay 422 recorded dev-chain blocks in the browser. Tezos Shadownet posts were applied, but their binding to this recording is unchecked. No public node or value-bearing network is advertised; a replay does not establish production readiness.",
+    "summary": "Replay 421 recorded dev-chain blocks, saved on 3 October 2026 at 19:31:59 UTC. Browser verification is available; the updated recording has not been replay-verified here. Historical Shadownet posts remain separate evidence with their binding to this recording unchecked. No public node or value-bearing network is advertised.",
     "nextAction": "Read the dated network boundaries and try verification of the saved recording.",
     "sources": [
       {
@@ -149,10 +149,14 @@ export const CHAIN_PANELS = [
       },
       {
         "href": "/chain/yard/snapshot.json",
-        "label": "Recorded blocks"
+        "label": "Current recorded blocks"
+      },
+      {
+        "href": "https://github.com/mhoydich/pointcast/blob/acb659d89be755e46791e0fa935b788064811dc1/public/chain/yard/snapshot.json",
+        "label": "Dated 421-block source"
       }
     ],
-    "checkedAt": "2026-10-03T20:15:00Z"
+    "checkedAt": "2026-10-04T00:12:52.586053Z"
   }
 ];
 

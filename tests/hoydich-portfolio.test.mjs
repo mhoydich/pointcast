@@ -58,7 +58,7 @@ test('published reading expansion no longer appears as an unfinished studio thre
   f.click('open');
   assert.equal(f.visible('[data-project-card]').length, 2);
   assert.equal(f.visible('[data-studio-card]').length, 0);
-  assert.equal(PROJECTS.find(project => project.id === 'books').links.length, 10);
+  assert.equal(PROJECTS.find(project => project.id === 'books').links.length, 11);
 });
 
 test('public snapshot has source artwork and only known destinations; unpublished builds have no route', () => {
@@ -100,18 +100,24 @@ test('setup is idempotent and keeps controls hidden until the working initialize
 
 test('verified concept and disabled status pages stay distinct from pending destinations', () => {
   const payload = portfolioPayload();
-  assert.equal(payload.sourceRevision, 'a154574feb4fda082df8e126c9639e1f82bca492');
-  assert.equal(payload.capturedAt, '2026-10-03T22:14:54Z');
+  assert.equal(payload.sourceRevision, 'acb659d89be755e46791e0fa935b788064811dc1');
+  assert.ok(Number.isFinite(Date.parse(payload.capturedAt)));
+  assert.match(payload.dateLabel, /UTC/);
   assert.ok(LATEST_LINKS.some(project => project.id === 'buildworks' && project.href === '/buildworks/'));
   assert.equal(STUDIO.some(project => project.id === 'buildworks'), false);
   const commerce = LATEST_LINKS.find(project => project.id === 'art-v2-commerce');
   assert.equal(commerce.href, '/art/v2/commerce/');
-  assert.match(commerce.statusLabel, /DISABLED PREVIEW.*GALLERY PENDING/);
-  assert.match(commerce.summary, /Purchases, minting and listings remain unavailable/);
+  assert.match(commerce.statusLabel, /^DISABLED PREVIEW$/);
+  assert.match(commerce.summary, /purchases, preparation, minting and listings remain disabled/i);
   assert.equal(LATEST_LINKS.find(project => project.id === 'home-share-editions').links.length, 6);
   const destinations = LATEST_LINKS.flatMap(project => [project.href, ...project.links.map(link => link.href)]);
-  for (const pending of ['/puzzles/', '/art/v2/', '/goodreads/', '/death/']) assert.equal(destinations.includes(pending), false);
-  assert.deepEqual(STUDIO.map(project => project.id), ['sunday', 'art-v2', 'puzzles']);
+  for (const pending of ['/puzzles/', '/goodreads/', '/death/', '/ues/death.html']) assert.equal(destinations.includes(pending), false);
+  assert.deepEqual(STUDIO.map(project => project.id), ['sunday', 'puzzles']);
+  assert.equal(LATEST_LINKS.find(project => project.id === 'art-v2').href, '/art/v2/');
+  assert.equal(LATEST_LINKS.find(project => project.id === 'visitor-homepage').href, '/#home-visit-title');
+  assert.equal(LATEST_LINKS.find(project => project.id === 'ues-death').href, '/ues/death/');
+  assert.ok(PROJECTS.find(project => project.id === 'books').links.some(link => link.href === '/books/map/'));
+  assert.equal(STUDIO.some(project => project.id === 'art-v2'), false);
 });
 
 test('delivered native work stays distinct from public browser pages and unfinished builds', () => {
@@ -125,13 +131,13 @@ test('delivered native work stays distinct from public browser pages and unfinis
 });
 
 
-test('the empty-view studio fallback reveals matching pending gallery work', () => {
+test('the empty-view studio fallback reveals the held puzzle thread', () => {
   const f = fixture();
-  f.family('art');
+  f.family('design');
   f.click('delivered-native');
   assert.equal(f.visible('[data-studio-card]').length, 0);
   f.root.querySelector('[data-project-empty] a').click();
-  assert.deepEqual(f.visible('[data-studio-card]').map(card => card.id), ['studio-art-v2']);
+  assert.deepEqual(f.visible('[data-studio-card]').map(card => card.id), ['studio-puzzles']);
   assert.equal(f.root.querySelector('[data-status-filter="all"]').getAttribute('aria-pressed'), 'true');
 });
 
@@ -146,7 +152,7 @@ test('latest links preserve published destinations while upcoming studios stay u
   const rally = PROJECTS.find(project => project.id === 'rally');
   assert.equal(rally.next, undefined);
   assert.equal(STUDIO.some(project => project.id === 'canterbury' || project.id === 'rally-next'), false);
-  for (const id of ['puzzles', 'art-v2']) {
+  for (const id of ['puzzles']) {
     const project = STUDIO.find(project => project.id === id);
     assert.equal(project.status, 'building');
     assert.equal('href' in project, false);

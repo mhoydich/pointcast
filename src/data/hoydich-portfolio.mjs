@@ -2,9 +2,9 @@
 export const SNAPSHOT = {
   title: 'Hoydich / A map of the making',
   route: '/hoydich/',
-  capturedAt: '2026-10-03T22:14:54Z',
-  dateLabel: '03 October 2026',
-  sourceRevision: 'a154574feb4fda082df8e126c9639e1f82bca492',
+  capturedAt: '2026-10-04T00:13:21Z',
+  dateLabel: '04 October 2026 / UTC',
+  sourceRevision: 'acb659d89be755e46791e0fa935b788064811dc1',
   note: 'An edited snapshot of public creative work and current studio plans. Updated by hand after releases; no live project sync.',
 };
 
@@ -46,11 +46,11 @@ export const PROJECTS = [
     number: '03', color: '#176674', image: '/images/siddhartha/river-horizon.webp',
     imageAlt: 'Original cyanotype-inspired river horizon artwork for the Siddhartha reading companion.',
     imageNote: 'Original generated reader artwork, not publisher cover art.',
-    description: 'Nine art-rich bookshops and reader companions, with a further company of voices in The Canterbury Tales.',
+    description: 'Twenty illustrated bookshops and reading companions, eleven new reading doors and a dated editorial map of 87 catalog records, with The Canterbury Tales beside the shelf.',
     kind: 'Literary companions', href: '/books/', action: 'Browse the shelf',
-    links: [{ label: 'Siddhartha', href: '/siddhartha/', summary: 'A river-shaped reading companion and edition-aware bookshop.' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/', summary: 'A companion to the book’s financial history, with reading and edition resources.' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/', summary: 'A bookshop and reading journey through football, food and Parma.' }, { label: 'The Canterbury Tales', href: '/canterbury/', summary: 'A company of voices, a pilgrimage and a new reading room.' }, {"label": "Barbarians at the Gate", "href": "/books/barbarians-at-the-gate/", "summary": "A reported corporate drama about the contest for RJR Nabisco. Follow the people before the numbers."}, {"label": "New Rules for the New Economy", "href": "/books/new-rules-for-the-new-economy/", "summary": "Kevin Kelly’s 1998 argument about connected systems. Read its proposals in their moment, then test the questions they leave."}, {"label": "Ethan Frome", "href": "/books/ethan-frome/", "summary": "Edith Wharton’s compressed story of desire and constraint. Attend to the weather, the rooms and the distance between telling and knowing."}, {"label": "Treasure Island", "href": "/books/treasure-island/", "summary": "A voyage, a dangerous company and a young narrator learning to judge people. Follow the voices as closely as the map."}, {"label": "The Kite Runner", "href": "/books/the-kite-runner/", "summary": "Khaled Hosseini’s novel of friendship, memory and responsibility across a changing Afghanistan and a life abroad."}, {"label": "Mistborn", "href": "/books/mistborn-the-final-empire/", "summary": "Begin Sanderson’s Mistborn sequence with its first novel: a crew, a dangerous plan and a world whose rules matter."}],
-    milestones: ['Nine bookshop companions and The Canterbury Tales published', 'New, used and library discovery links with edition context'],
-    boundary: 'Independent companions. Original artwork is not archival evidence. No stock or availability promise.',
+    links: [{ label: 'Siddhartha', href: '/siddhartha/', summary: 'A river-shaped reading companion and edition-aware bookshop.' }, { label: 'Den of Thieves', href: '/books/den-of-thieves/', summary: 'A companion to the book’s financial history, with reading and edition resources.' }, { label: 'Playing for Pizza', href: '/books/playing-for-pizza/', summary: 'A bookshop and reading journey through football, food and Parma.' }, { label: 'The Canterbury Tales', href: '/canterbury/', summary: 'A company of voices, a pilgrimage and a new reading room.' }, { label: 'The reading map', href: '/books/map/', summary: 'A dated editorial map of 87 catalog records, with conservative links into the illustrated shelf.' }, {"label": "Barbarians at the Gate", "href": "/books/barbarians-at-the-gate/", "summary": "A reported corporate drama about the contest for RJR Nabisco. Follow the people before the numbers."}, {"label": "New Rules for the New Economy", "href": "/books/new-rules-for-the-new-economy/", "summary": "Kevin Kelly’s 1998 argument about connected systems. Read its proposals in their moment, then test the questions they leave."}, {"label": "Ethan Frome", "href": "/books/ethan-frome/", "summary": "Edith Wharton’s compressed story of desire and constraint. Attend to the weather, the rooms and the distance between telling and knowing."}, {"label": "Treasure Island", "href": "/books/treasure-island/", "summary": "A voyage, a dangerous company and a young narrator learning to judge people. Follow the voices as closely as the map."}, {"label": "The Kite Runner", "href": "/books/the-kite-runner/", "summary": "Khaled Hosseini’s novel of friendship, memory and responsibility across a changing Afghanistan and a life abroad."}, {"label": "Mistborn", "href": "/books/mistborn-the-final-empire/", "summary": "Begin Sanderson’s Mistborn sequence with its first novel: a crew, a dangerous plan and a world whose rules matter."}],
+    milestones: ['Twenty illustrated reading doors and The Canterbury Tales published', 'Eleven new companions and an editorial map of 87 catalog records', 'New, used and library discovery links with edition context'],
+    boundary: 'Independent companions. Original artwork is not archival evidence. Publisher and With attribution remain distinct. No live feed, activity, inventory or availability promise.',
   },
   {
     id: 'bukowski', family: 'reading', title: 'The ordinary stays', subtitle: 'An empty room. A little light.',
@@ -106,7 +106,6 @@ export const PROJECTS = [
 
 export const STUDIO_ONLY = [
   { id: 'sunday', family: 'play', title: 'One Sunday at the Vanguard', direction: 'A standalone listening world around a historical recording and a map of New York City.', status: 'building', stage: 'Listening site in progress', nextStep: 'Verify the recording history, place references and listening experience.', kind: 'Music & place' },
-  { id: 'art-v2', family: 'art', title: 'Coast, Reimagined / Art v2', direction: 'A prepared gallery of fifty source artworks paired with new reinterpretations. Gallery publication remains pending.', status: 'building', stage: 'Gallery publication pending', nextStep: 'Complete gallery visual and source-label review. The separate commerce page is a disabled status preview; no gallery destination is linked here.', kind: 'Art & image' },
   { id: 'puzzles', family: 'design', title: 'Puzzle studio', direction: 'Ten jigsaw concepts, making and buying resources, and UES business and design studies.', status: 'building', stage: 'Prepared edition / publication pending', nextStep: 'Review the concepts, sources and making guidance before publication.', kind: 'Design & learning' },
 ];
 
@@ -188,7 +187,7 @@ export const RELEASED_STUDIES = [
     "family": "tools",
     "title": "PointCast Chain / recorded dev world",
     "href": "/chain",
-    "summary": "A published replay of 422 recorded Rust-chain blocks, with a browser verifier and documented local-network limits.",
+    "summary": "A published replay of 421 Rust-chain blocks recorded on 3 October at 19:31:59 UTC, with a browser verifier and documented local-network limits.",
     "source": {
       "href": "/chain#status",
       "label": "Dev-chain status & boundaries"
@@ -243,13 +242,13 @@ export const RELEASED_STUDIES = [
     "family": "art",
     "title": "Art v2 / collection status",
     "href": "/art/v2/commerce/",
-    "statusLabel": "DISABLED PREVIEW / GALLERY PENDING",
-    "summary": "A published collection-status preview. Purchases, minting and listings remain unavailable while the separate gallery is prepared.",
+    "statusLabel": "DISABLED PREVIEW",
+    "summary": "A public disabled preview with a verified local-development recording. The public network and mint adapter remain unconfigured; purchases, preparation, minting and listings remain disabled.",
     "source": {
       "href": "/art/v2/commerce.json",
       "label": "Disabled purchase & mint status"
     },
-    "nextAction": "Read the collection status; purchasing, minting and listing remain disabled while the gallery is prepared."
+    "nextAction": "Read the disabled-service status and local-development evidence; no purchase, preparation, mint or listing is enabled."
   },
   {
     "id": "home-share-editions",
@@ -290,7 +289,31 @@ export const RELEASED_STUDIES = [
       }
     ],
     "nextAction": "Choose an original share-card edition and use its fixed link for that visual edition."
+  },
+  {
+    "id": "art-v2", "family": "art", "title": "Coast, Reimagined / Art v2",
+    "href": "/art/v2/", "statusLabel": "DISPLAY ONLY",
+    "summary": "Fifty historical source artworks paired with fifty original OpenAI reinterpretations, filters, viewing rooms and public provenance. Display only; editions remain unavailable.",
+    "source": { "href": "/art/v2/manifest.json", "label": "Public artwork provenance" },
+    "links": [{ "href": "/art/v2/#colophon-title", "label": "Gallery sources & credits", "summary": "Dated source records, attribution and the boundaries of each new interpretation." }],
+    "nextAction": "Filter the artwork, enter a viewing room and compare its provenance; the published gallery offers display, not artwork editions."
+  },
+  {
+    "id": "visitor-homepage", "family": "art", "title": "PointCast / another window",
+    "href": "/#home-visit-title",
+    "summary": "Six original illustrated views into art, music, play and ideas, with nine source-qualified public destinations and an Another view control. The chosen view stays while you read.",
+    "source": { "href": "https://github.com/mhoydich/pointcast/blob/acb659d89be755e46791e0fa935b788064811dc1/src/data/home-visit-views.json", "label": "View register & project qualifications" },
+    "nextAction": "Choose another window and follow its qualified project doors; the six fixed share editions remain separate from the visitor view."
+  },
+  {
+    "id": "ues-death", "family": "reading", "title": "Death / a living study",
+    "href": "/ues/death/",
+    "summary": "A free exploration of mortality, memory, ecology and traditions by Michael Hoydich with Codex and two actual model texts. Optional browser-local reflection; no transactions.",
+    "source": { "href": "/ues/death/#sources", "label": "Research sources & attribution" },
+    "links": [{ "href": "/ues/death/#model-expressions", "label": "Two model expressions", "summary": "Two attributed model texts presented beside the study, with their source and interpretation boundaries." }],
+    "nextAction": "Explore a theme and its sources, then choose whether to use the reflection saved only in your browser."
   }
+
 ];
 
 export const ROADMAP = [
@@ -328,6 +351,8 @@ export const LATEST_LINKS = [...PROJECTS.map(project => ({
 })), ...RELEASED_STUDIES.map(project => ({ ...project, links: project.links ?? [] }))];
 
 export const MILESTONES = [
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'A gallery and more reading doors.', description: 'The fifty-pair display gallery, eleven new companions, the dated reading map and the free Death study were verified in the published edition. Commerce remains a disabled preview.', href: '/hoydich/#latest-links', source: 'acb659d8' },
+  { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'Another window opens.', description: 'Six original visitor views opened onto nine qualified public projects, with an Another view control. The fixed share-card editions remain separate.', href: '/#home-visit-title', source: 'abf8b41e' },
   { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'Small ideas get a workbook.', description: 'Buildworks opened six object concepts, sourcing research and a pilot workbook. The website offers studies, not ordering or manufactured inventory.', href: '/buildworks/', source: 'a154574f' },
   { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'A picture to pass along.', description: 'Six original share-card editions joined the PointCast homepage with fixed edition links.', href: '/#home-share-title', source: 'a154574f' },
   { date: '03 OCT 2026', isoDate: '2026-10-03', title: 'More rooms opened.', description: 'FILA El Segundo edition two, six reading companions and the new public research studies were verified as published pages.', href: '/hoydich/#latest-links', source: '765c912e' },

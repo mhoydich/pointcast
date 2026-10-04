@@ -16,6 +16,7 @@ on:
       - 'src/scripts/hoydich-portfolio.mjs'
       - 'src/styles/hoydich-portfolio.css'
       - 'tests/hoydich-portfolio.test.mjs'
+      - 'scripts/package-hoydich-qa.mjs'
 permissions:
   contents: read
 concurrency:
@@ -57,6 +58,12 @@ jobs:
           const output = JSON.parse(readFileSync('dist/hoydich.json', 'utf8'));
           assert.deepEqual(output, payload);
           const document = new JSDOM(readFileSync('dist/hoydich/index.html', 'utf8')).window.document;
+          const town = JSON.parse(readFileSync('src/data/town-inspector-report.json', 'utf8'));
+          const health = JSON.parse(readFileSync('dist/health.json', 'utf8'));
+          for (const key of Object.keys(town)) assert.deepEqual(health[key], town[key], `Built health report preserves ${key}`);
+          const home = new JSDOM(readFileSync('dist/index.html', 'utf8')).window.document;
+          assert.ok(home.getElementById('home-visit-title'));
+          assert.ok(home.getElementById('home-share-title'));
           assert.equal(document.querySelectorAll('h1').length, 1);
           assert.equal(document.querySelectorAll('main').length, 1);
           assert.equal(document.querySelectorAll('[data-dashboard-row]').length, payload.dashboard.rows.length);
@@ -87,3 +94,15 @@ jobs:
           }
           console.log(`Verified ${payload.projects.length} public project families, ${payload.studio.length} studio threads and ${payload.native.length} native edition at ${payload.capturedAt}.`);
           JS
+      - name: Package compiled homepage and portfolio for browser QA
+        env:
+          HOYDICH_QA_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/package-hoydich-qa.mjs
+      - name: Upload exact-head compiled QA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoydich-compiled-${{ github.event.pull_request.head.sha }}
+          path: .qa/hoydich-compiled/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3

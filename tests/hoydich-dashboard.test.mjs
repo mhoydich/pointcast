@@ -75,7 +75,7 @@ test('only verified open project groups have a destination; prepared and native 
   const commerce = DASHBOARD_ROWS.find(row => row.id === 'art-v2-commerce');
   assert.equal(commerce.status, 'open');
   assert.match(commerce.statusLabel, /DISABLED PREVIEW/);
-  assert.match(commerce.summary, /Purchases, minting and listings remain unavailable/);
+  assert.match(commerce.summary, /purchases, preparation, minting and listings remain disabled/i);
   assert.ok(DASHBOARD_ROWS.some(row => row.status === 'building'));
   assert.ok(DASHBOARD_ROWS.some(row => row.status === 'native'));
   assert.equal(DASHBOARD_ROWS.find(row => row.id === 'fila').family, 'design');
@@ -114,6 +114,12 @@ test('blockchain panels separate runtime quotes, mint restrictions and the recor
   assert.match(text, /disabled|nothing.*mint/i);
   assert.match(text, /dev|recorded/i);
   assert.match(text, /no public|not.*public network/i);
+  const recording = JSON.parse(readFileSync(new URL('../public/chain/yard/snapshot.json', import.meta.url), 'utf8'));
+  const devPanel = CHAIN_PANELS.find(panel => panel.id === 'pointcast-dev');
+  assert.equal(recording.blocks.length, 421);
+  assert.equal(recording.status.height, 421);
+  assert.match(devPanel.summary, /421 recorded.*19:31:59 UTC/);
+  assert.ok(devPanel.sources.some(source => source.href.includes('acb659d89be755e46791e0fa935b788064811dc1/public/chain/yard/snapshot.json')));
   const client = readFileSync(new URL('../src/scripts/hoydich-dashboard.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(client, /fetch\(|XMLHttpRequest|setInterval|sendTransaction|requestPermissions|signPayload|walletConnect|Payment-Signature/);
 });
