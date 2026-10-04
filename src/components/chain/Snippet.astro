@@ -1,0 +1,48 @@
+---
+/**
+ * A copy-ready code block for /chain pages: an optional label, the code in a
+ * <pre>, and a Copy button. The button stays hidden until the script runs, so
+ * without JS the block is plain selectable text. Astro bundles the script once
+ * per page however many snippets there are.
+ */
+interface Props {
+  label?: string;
+  code: string;
+}
+const { label, code } = Astro.props;
+---
+{label && <p class="cmd__label">{label}</p>}
+<div class="snip">
+  <pre><code>{code}</code></pre>
+  <button type="button" class="snip__copy" hidden>Copy</button>
+</div>
+
+<script>
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.snip__copy')) {
+    btn.hidden = false;
+    btn.addEventListener('click', async () => {
+      const code = btn.parentElement?.querySelector('code');
+      if (!code) return;
+      try {
+        await navigator.clipboard.writeText(code.textContent ?? '');
+        btn.textContent = 'Copied';
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        btn.textContent = 'Press ⌘C';
+      }
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+    });
+  }
+</script>
+
+<style>
+  .snip{position:relative}
+  .snip pre{padding-right:72px}
+  .snip__copy{position:absolute;top:7px;right:7px;min-height:28px;padding:0 9px;border:1px solid #5A86B5;background:#0B1B2E;color:#E8EEF5;font:500 10px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+  .snip__copy:hover{background:#185FA5;border-color:#185FA5}
+  .snip__copy:focus-visible{outline:2px solid #E8EEF5;outline-offset:2px}
+</style>
