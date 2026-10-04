@@ -66,9 +66,9 @@ export const DEVNET = {
    * The Block Yard reading the devnet live, genesis pinned. `verifier=` points
    * VERIFY at the yard's own sha256-pinned copy rather than the devnet's
    * /verifier, so a later devnet verifier build can never make the yard refuse
-   * to run. Both are the 7f9f09f8… build since the yard re-pin (pointcast-chain
-   * 8e98d11); it replays the snapshot to №421 and the devnet with no faults
-   * (checked 2026-10-03).
+   * to run. Re-pin both together (pointcast-chain scripts/pin-verifier.sh, then
+   * re-copy town.html and verifier/ here); each re-pin is checked to replay the
+   * snapshot to №421 and the devnet with no faults.
    */
   yardHref: `/chain/yard/?api=${DEVNET_URL}&genesis=${DEVNET_GENESIS}&verifier=/chain/yard/verifier`,
 } as const;
