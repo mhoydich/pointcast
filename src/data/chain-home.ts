@@ -64,10 +64,11 @@ export const DEVNET = {
   readOn: '2026-10-03',
   /**
    * The Block Yard reading the devnet live, genesis pinned. `verifier=` points
-   * VERIFY at the yard's own pinned copy: the devnet's /verifier serves a newer
-   * build (sha256 7f9f09f8…) than the yard pins (e08e675b…), so without it the
-   * yard refuses to run the verifier. The yard's copy replays the devnet with
-   * no faults (checked 2026-10-03).
+   * VERIFY at the yard's own sha256-pinned copy rather than the devnet's
+   * /verifier, so a later devnet verifier build can never make the yard refuse
+   * to run. Both are the 7f9f09f8… build since the yard re-pin (pointcast-chain
+   * 8e98d11); it replays the snapshot to №421 and the devnet with no faults
+   * (checked 2026-10-03).
    */
   yardHref: `/chain/yard/?api=${DEVNET_URL}&genesis=${DEVNET_GENESIS}&verifier=/chain/yard/verifier`,
 } as const;
