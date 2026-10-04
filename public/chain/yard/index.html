@@ -46,6 +46,7 @@
   --beacon: #00a7c4;
   --beacon-posted: #d114c2;
   --beacon-off: #a39b84;
+  --mint: #d4148f;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Verdana", "Tahoma", system-ui, sans-serif;
 }
@@ -58,6 +59,7 @@
     --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
     --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
     --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
+    --mint: #ff5cc0;
   }
 }
 :root[data-theme="dark"] {
@@ -68,6 +70,7 @@
   --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
   --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
   --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
+  --mint: #ff5cc0;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -87,6 +90,7 @@ code { font: 11px var(--mono); }
 .bevel { background: var(--pc-chrome); border: 2px solid; border-color: var(--pc-chrome-hi) var(--pc-chrome-lo) var(--pc-chrome-lo) var(--pc-chrome-hi); padding: 3px 10px; font: 12px var(--mono); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .bevel:active, .bevel[aria-pressed="true"], .bevel[aria-expanded="true"] { border-color: var(--pc-chrome-lo) var(--pc-chrome-hi) var(--pc-chrome-hi) var(--pc-chrome-lo); }
 .bevel[aria-pressed="true"]#verify { background: var(--pc-attn); color: #fff; }
+.bevel[aria-pressed="true"]#lens-btn { background: var(--mint); color: #fff; }
 .bevel:disabled { opacity: .5; cursor: default; }
 .bevel.mini { padding: 0 5px; font-size: 10px; line-height: 16px; }
 
@@ -129,6 +133,17 @@ button.link { background: none; border: 0; padding: 0; text-decoration: underlin
 .verify-strip .bad { color: var(--pc-live); font-weight: bold; }
 .spot { margin: 0 0 10px; display: flex; align-items: center; gap: 8px; font: 12px var(--mono); flex-wrap: wrap; }
 .spot b { font-weight: bold; }
+/* the Mints lens strip: counts, then one chip per collection */
+.mints { margin: 0 0 10px; }
+.mints .titlebar { background: linear-gradient(90deg, #8a0f5e, var(--mint)); }
+.mints-body { padding: 7px 10px 8px; display: grid; gap: 6px; font: 12px var(--mono); min-width: 0; }
+.mints-counts { display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: baseline; }
+.mints-counts b { font: bold 16px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.mchips { display: flex; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.mchip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; }
+.mchip .bevel { max-width: 100%; overflow: hidden; }
+.mchip .bevel span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mchip a { font: 11px var(--mono); white-space: nowrap; }
 
 /* the yard */
 .yard { position: relative; }
@@ -193,6 +208,9 @@ button.link { background: none; border: 0; padding: 0; text-decoration: underlin
 /* presence tickets: a ticketed tap, and a bare tap that counts for +0 on a ticketed chain */
 .badge.ticket { color: var(--pc-presence); }
 .badge.noticket { color: var(--pc-dim); border-style: dashed; }
+/* mints: any *_mint kind; a collection's first mint is filled */
+.badge.mint { color: var(--mint); }
+.badge.mint.first { color: #fff; background: var(--mint); border-color: transparent; }
 .policy { font: bold 10px/16px var(--mono); letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; padding: 1px 6px; color: var(--pc-presence); white-space: nowrap; }
 .addr { font: 12px var(--mono); }
 .empty-note { padding: 10px 12px; color: var(--pc-dim); font: 12px var(--mono); }
@@ -261,6 +279,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     <button class="bevel" id="verify" aria-pressed="false" title="Re-execute the chain in this browser with the real consensus code (pinned wasm)">✓ VERIFY</button>
     <button class="bevel" id="accounts-btn" aria-expanded="false" aria-controls="drawer">◫ Accounts</button>
     <button class="bevel" id="legend-btn" aria-expanded="true" aria-controls="legend">▧ Legend</button>
+    <button class="bevel" id="lens-btn" aria-pressed="false" aria-controls="mints" title="Mints lens: light every mint cube and ring each collection's first mint (M)">◆ <span class="hide-sm">Mints </span>lens</button>
     <span class="grow"></span>
     <form class="goto" id="goto"><label for="goto-h">go to №</label><input id="goto-h" type="number" min="1" step="1" inputmode="numeric" placeholder="height"><button class="bevel" type="submit" aria-label="Jump to height">↵</button></form>
     <button class="bevel" id="zoom-out" aria-label="Zoom out" title="Zoom out (−)">−</button>
@@ -275,6 +294,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   <div class="vnote info" id="v-src" role="status" hidden></div>
   <div class="win verify-strip" id="v-strip" role="status" hidden></div>
   <div class="spot" id="spot" hidden></div>
+  <section class="win mints" id="mints" aria-label="Mints lens" hidden>
+    <div class="titlebar"><span>◆ MINTS LENS · every *_mint cube lit · ◎ a collection's first mint</span><span class="grow"></span><button class="close" id="mints-close" aria-label="Turn off the Mints lens">×</button></div>
+    <div id="mints-body"></div>
+  </section>
 
   <section class="yard win" aria-label="The block yard">
     <div class="titlebar"><span id="yard-title">THE YARD</span><span class="grow"></span><span id="yard-hint" class="hide-sm">drag to pan · click + wheel, or pinch, to zoom · click a stack</span></div>
@@ -434,12 +457,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       motif: [[10, 2], [9, 2], [8, 3], [7, 4], [6, 5], [5, 5]] },
     { id: "spend_allowance", label: "Spend allowance", glyph: "⇢", color: "#c47a33",
       motif: [[6, 2], [7, 2], [8, 3], [9, 3], [8, 4], [9, 4], [6, 5], [7, 5]] },
-    { id: "unknown", label: "Unknown kind", glyph: "?", color: "#9a9a9a",
-      motif: [[7, 2], [8, 2], [8, 3], [7, 5], [8, 5]] },
   ];
-  const KIND_IX = new Map(KINDS.map((k, i) => [k.id, i]));
-  const UNKNOWN = KINDS.length - 1;
-  const kindIx = (t) => (KIND_IX.has(t) ? KIND_IX.get(t) : UNKNOWN);
   // Mandate scope bits (bit = tag), docs/TAGS.md and chain-core TxKind::tag.
   const KIND_TAGS = { 1: "publish_block", 2: "drum_session", 3: "tap", 4: "drop_mint", 5: "transfer",
     6: "register_agent", 7: "set_drum_attestors", 8: "set_mandate", 9: "clear_mandate", 10: "spend_allowance",
@@ -448,6 +466,47 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     21: "open_edition", 22: "edition_mint", 23: "edition_transfer", 24: "fill_order", 25: "cancel_orders", 26: "pay",
     27: "register_feed", 28: "oracle_report", 29: "strike_reporter", 30: "market_open", 31: "market_stake",
     32: "market_resolve", 33: "market_dispute", 34: "market_claim", 35: "bridge_withdraw" };
+  // Registry kinds (docs/TAGS.md) with no cube of their own yet render by
+  // name on a neutral slate cube. Their top face carries the tag as six
+  // signal bars (tall = 1, short = 0, high bit on the left), so two of them
+  // never look alike even without colour; each slate is a step lighter.
+  {
+    const slate = (i) => {
+      const l = 0.36 + i * 0.019, c = 0.1 * Math.min(l, 1 - l);
+      const ch = (n) => { const k = (n + (222 / 30)) % 12; return Math.round(255 * (l - c * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+      return `#${[ch(0), ch(8), ch(4)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+    };
+    let i = 0;
+    for (const [tag, id] of Object.entries(KIND_TAGS)) {
+      if (KINDS.some((k) => k.id === id)) continue;
+      const motif = [];
+      for (let b = 0; b < 6; b++) {
+        const x = 3 + 2 * b;
+        motif.push([x, 5]);
+        if ((Number(tag) >> (5 - b)) & 1) motif.push([x, 4], [x, 3]);
+      }
+      KINDS.push({ id, label: id, glyph: "▫", color: slate(i++), motif, registry: Number(tag) });
+    }
+  }
+  KINDS.push({ id: "unknown", label: "Unknown kind", glyph: "?", color: "#9a9a9a",
+    motif: [[7, 2], [8, 2], [8, 3], [7, 5], [8, 5]] });
+  const KIND_IX = new Map(KINDS.map((k, i) => [k.id, i]));
+  const UNKNOWN = KINDS.length - 1;
+  const kindIx = (t) => (typeof t === "string" && KIND_IX.has(t) ? KIND_IX.get(t) : UNKNOWN);
+  // A kind's name as the chain data spells it, for display (text nodes and
+  // canvas labels) and for matching *_mint: printable ASCII, at most 40
+  // characters. Anything else becomes "?", so "drop_mint" plus an invisible
+  // or bidi character can neither pass for drop_mint nor count as a mint.
+  const kindName = (t) => {
+    const s = str(t).replace(/[^\x21-\x7e]/g, "?");
+    return s ? (s.length > 40 ? `${s.slice(0, 39)}…` : s) : "?";
+  };
+  // An id (drop, edition) for display: printable ASCII ("?" for anything
+  // else), at most n characters.
+  const clip = (v, n = 64) => {
+    const s = str(v).replace(/[^\x20-\x7e]/g, "?");
+    return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+  };
   const scopeKinds = (bits) => {
     // The mask is u64 (docs/TAGS.md): BigInt, so bits 31-63 are not lost to 32-bit `1 << t`.
     let n = 0n;
@@ -492,8 +551,144 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       }
       case "clear_mandate": return `mandate cleared · ${short(p.agent, 7)} is unscoped again`;
       case "spend_allowance": return `${fmt(p.amount)} ATTN → ${short(p.to, 7)} from the owner's allowance`;
-      default: return "unknown transaction kind";
+      // Editions (docs/TAGS.md 21-23), read by name before this page draws them.
+      case "open_edition": {
+        const t = obj(p.terms);
+        return `edition opened: ${clip(p.id ?? t.id, 64) || "?"}${p.title ?? t.title ? ` · ${clip(p.title ?? t.title, 80)}` : ""}`;
+      }
+      case "edition_mint": return `minted ${clip(p.edition, 64) || "?"} → ${short(p.recipient, 7)}`;
+      case "edition_transfer": return `${clip(p.edition, 64) || "?"}${p.serial != null ? ` #${fmt(p.serial)}` : ""} → ${short(p.to ?? p.recipient, 7)}`;
+      default: {
+        const K = KINDS[kindIx(kind)];
+        if (K.registry) return `${kindName(kind)} · registry tag ${K.registry} (docs/TAGS.md), not drawn by this page yet`;
+        return `unknown transaction kind: ${kindName(kind)}`;
+      }
     }
+  }
+  // ---------- mints (the Mints lens). Matched by name, never by tag: any
+  // kind spelled *_mint is a mint (drop_mint today, edition_mint once editions
+  // land). The collection is the drop or edition the mint belongs to.
+  const isMintName = (n) => typeof n === "string" && /^[a-z][a-z0-9_]*_mint$/.test(n) && n.length <= 40;
+  // A collection id must be well-formed text: a lone surrogate (JSON can carry
+  // one; the chain never could) is not an id, and encodeURIComponent throws on it.
+  const wellFormed = (s) => { try { encodeURIComponent(s); return true; } catch { return false; } };
+  function mintOf(kind, p) {
+    p = obj(p);
+    const pick = kind === "drop_mint" ? [p.drop_id] : kind === "edition_mint" ? [p.edition, p.edition_id] : [p.drop_id, p.edition, p.edition_id, p.collection];
+    const id = pick.find((v) => typeof v === "string" && v.length > 0 && v.length <= 256 && wellFormed(v));
+    return id === undefined ? null : { collection: id };
+  }
+  // Every mint in `list` (stacks in ascending height: { h, ntx, names, txs }):
+  // per kind its mints and collections, per collection its first mint (the
+  // block where it was born, when the yard starts at №1) and each mint's
+  // position in its collection.
+  function indexMints(list) {
+    const kinds = new Map(), coll = new Map(), firstAt = new Map(), nth = new Map();
+    let total = 0;
+    for (const B of arr(list)) {
+      if (!B || !isInt(B.h)) continue;
+      const names = arr(B.names), txs = arr(B.txs);
+      for (let k = 0; k < names.length; k++) {
+        const name = names[k];
+        if (!isMintName(name)) continue;
+        total++;
+        let kk = kinds.get(name);
+        if (!kk) kinds.set(name, (kk = { mints: 0, collections: 0 }));
+        kk.mints++;
+        const m = mintOf(name, txs[k] && txs[k].tx);
+        if (!m) continue;
+        const key = `${name}\n${m.collection}`;
+        let c = coll.get(key);
+        if (!c) {
+          c = { key, kind: name, collection: m.collection, first: B.h, firstIx: k, count: 0, last: B.h };
+          coll.set(key, c);
+          kk.collections++;
+          if (!firstAt.has(B.h)) firstAt.set(B.h, []);
+          firstAt.get(B.h).push(c);
+        }
+        c.count++;
+        c.last = B.h;
+        nth.set(`${B.h}:${k}`, c.count);
+      }
+    }
+    return { total, kinds, coll, firstAt, nth };
+  }
+  // A pc-town base from ?town=: http(s) only, no credentials, no query or
+  // fragment. Anything else is null and nothing links out.
+  function townBase(v, baseHref) {
+    if (typeof v !== "string" || !v || v.length > 512) return null;
+    try {
+      const u = new URL(v, baseHref);
+      if ((u.protocol !== "https:" && u.protocol !== "http:") || u.username || u.password) return null;
+      u.search = ""; u.hash = "";
+      return u.href.replace(/\/+$/, "");
+    } catch { return null; }
+  }
+  // The feed explorer that goes with the node this page reads: the node
+  // serves it at its own root, so the link resolves against the api base,
+  // never against the page's origin (on a static host such as
+  // pointcast.xyz/chain/yard, "/" is that site's homepage). http(s) without
+  // credentials, else null and the link is hidden.
+  function feedHref(api) {
+    if (typeof api !== "string" || !api || api.length > 2048) return null;
+    try {
+      const u = new URL(api);
+      if ((u.protocol !== "https:" && u.protocol !== "http:") || u.username || u.password) return null;
+      u.search = ""; u.hash = "";
+      if (!u.pathname.endsWith("/")) u.pathname += "/";
+      return u.href;
+    } catch { return null; }
+  }
+  // A collection's Town Hall gallery (pc-town mintwall view #/d/{collection}).
+  // encodeURIComponent throws on a lone surrogate, which JSON can carry: no link then.
+  const townLink = (base, collection) => {
+    if (typeof base !== "string" || !base || typeof collection !== "string" || !collection) return null;
+    try { return `${base}/#/d/${encodeURIComponent(collection)}`; } catch { return null; }
+  };
+  // The Mints lens strip: counts per mint kind, then one chip per collection
+  // (oldest first). ix = indexMints(...); opts: { town, whole, from, to,
+  // pick(height), max }. Collection ids are chain data: text and an encoded
+  // link path only.
+  function mintStrip(ix, opts) {
+    ix = obj(ix);
+    const o = obj(opts);
+    const kinds = ix.kinds instanceof Map ? ix.kinds : new Map();
+    const coll = ix.coll instanceof Map ? [...ix.coll.values()] : [];
+    const drops = obj(kinds.get("drop_mint")), eds = obj(kinds.get("edition_mint"));
+    const count = (label, k, unit, none) => h("span", null, h("b", null, fmt(num(k.mints) || 0)), ` ${label}`,
+      num(k.mints) ? ` · ${plural(num(k.collections) || 0, unit)}` : ` · ${none}`);
+    const counts = h("div", { class: "mints-counts" },
+      h("span", null, h("b", null, fmt(num(ix.total) || 0)), " mints"),
+      // Mints counted in the loaded yard: an edition can be open with no mint
+      // yet, and a partial yard misses older ones, so no "none on this chain".
+      count("drop mints", drops, "drop", "none in the yard"),
+      count("edition mints", eds, "edition", "none in the yard"));
+    for (const [name, k] of kinds) {
+      if (name === "drop_mint" || name === "edition_mint") continue;
+      counts.append(h("span", null, h("b", null, fmt(num(obj(k).mints) || 0)), ` ${kindName(name)}`));
+    }
+    const box = h("div", { class: "mints-body" }, counts);
+    if (!o.whole && isInt(o.from)) box.append(h("div", { class: "txmeta" }, `counting the loaded blocks №${fmt(o.from)}–№${fmt(o.to)}: a ring marks a collection's first mint in the yard, not necessarily its birth`));
+    if (coll.length) {
+      coll.sort((a, b) => a.first - b.first || a.firstIx - b.firstIx);
+      const max = isInt(o.max) && o.max > 0 ? o.max : 24;
+      const chips = h("div", { class: "mchips" });
+      for (const c of coll.slice(0, max)) {
+        const id = typeof c.collection === "string" ? c.collection : "";
+        const go = h("button", { class: "bevel mini", type: "button", title: `${kindName(c.kind)} ${clip(id, 256)}: go to its first mint, №${fmt(c.first)}` },
+          h("span", null, `◎ ${clip(id, 28) || "?"}`), ` ×${fmt(c.count)} · №${fmt(c.first)}`);
+        if (typeof o.pick === "function") go.addEventListener("click", () => o.pick(c.first));
+        const href = townLink(o.town, id);
+        chips.append(h("span", { class: "mchip" }, go,
+          href ? h("a", { href, target: "_blank", rel: "noopener noreferrer", title: `Town Hall gallery for ${clip(id, 256)}` }, "gallery ↗") : null));
+      }
+      if (coll.length > max) chips.append(h("span", { class: "txmeta" }, `+${fmt(coll.length - max)} more`));
+      box.append(chips);
+    } else {
+      box.append(h("div", { class: "txmeta" }, "No mints in the yard yet."));
+    }
+    if (!o.town && coll.length) box.append(h("div", { class: "txmeta" }, "Add ?town=<pc-town address> to link each collection to its Town Hall gallery."));
+    return box;
   }
 
   async function copyText(text, btn) {
@@ -529,13 +724,64 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     } catch { return false; }
   }
 
+  // Moderation (the public devnet: crates/devnet-wasm/src/views.rs). The
+  // devnet admin can hide a post: its /block card then says hidden: true and
+  // withholds title and media. The chain bytes are unchanged, so the page's
+  // raw copy and your replay still carry the title: what the panel shows for
+  // a tx is decided here, from the card the server sent for it.
+  //  - served card hidden: the title, text and media are never shown, whichever
+  //    card (served or replayed) is drawn;
+  //  - a devnet with no served card for the tx yet: a post shows only its
+  //    channel until the card arrives (withhold).
+  // Returns { card, mod } for txCard.
+  function panelCard(replayCard, servedCard, useReplay, devnet) {
+    const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+    const served = isObj(servedCard) ? servedCard : null;
+    const hidden = !!served && served.hidden === true;
+    let card = useReplay ? (isObj(replayCard) ? replayCard : null) : served;
+    // Post text is off-chain: keep the server's text alongside the replayed card (never a hidden post's).
+    if (card && useReplay && served && !hidden && isObj(served.payload) && typeof served.payload.body === "string") {
+      card = { ...card, payload: { ...obj(card.payload), body: served.payload.body } };
+    }
+    return { card, mod: { hidden, withhold: devnet === true && !served } };
+  }
+  // The node's /block cards, kept per height. The devnet admin can hide a
+  // post after you first saw its card, so a card older than CARD_TTL_MS is
+  // fetched again when its panel opens or the tab comes back (stale), and
+  // until the new one arrives a devnet panel treats it as not there yet
+  // (fresh returns null: panelCard then withholds the post). `now` is for tests.
+  const CARD_TTL_MS = 5 * 60 * 1000;
+  function cardCache(max = 300, now = () => Date.now()) {
+    const views = new Map();       // height -> { view, at }
+    return {
+      set(hh, view) {
+        views.delete(hh);
+        views.set(hh, { view, at: now() });
+        while (views.size > max) views.delete(views.keys().next().value);
+      },
+      get(hh) { const e = views.get(hh); return e ? e.view : undefined; },
+      has(hh) { return views.has(hh); },
+      delete(hh) { views.delete(hh); },
+      get size() { return views.size; },
+      // No card yet, or one older than CARD_TTL_MS: fetch it (again).
+      stale(hh) { const e = views.get(hh); return !e || now() - e.at >= CARD_TTL_MS; },
+      // The card while it is younger than CARD_TTL_MS, else null.
+      fresh(hh) { const e = views.get(hh); return e && now() - e.at < CARD_TTL_MS ? e.view : null; },
+    };
+  }
+  const HIDDEN_NOTE = "hidden by the devnet admin";
   // One transaction of the detail panel. `raw` is the page's copy of the
   // signed tx ({ tx, sig_mode, … } from /raw/blocks or the snapshot), `card`
   // the node's /block card or your replay's (with the receipt), or null.
-  // ctx: { icon(ix) -> node, snapshot: bool, ticketed: bool }.
-  function txCard(raw, card, i, cardSrc, fromReplay, ctx) {
+  // ctx: { icon(ix) -> node, snapshot: bool, ticketed: bool, town?, mintAt? }.
+  // mod (panelCard): { hidden, withhold }: a post's title, text and media are
+  // not shown when the server hid it, or (devnet) before its card arrives.
+  function txCard(raw, card, i, cardSrc, fromReplay, ctx, mod) {
     const x = obj(raw && raw.tx);
     card = card && typeof card === "object" && !Array.isArray(card) ? card : null;
+    const md = obj(mod);
+    const hidden = md.hidden === true || (!!card && card.hidden === true);
+    const withhold = hidden || md.withhold === true;
     // A card from your own replay outranks the page's copy of the tx; a node's
     // card only fills in what the raw tx lacks.
     const pick = (mine, served) => (fromReplay ? mine ?? served : served ?? mine);
@@ -547,12 +793,19 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const sigMode = pick(card && card.sig_mode, raw && raw.sig_mode) || "raw";
     const issued = arr(card && card.issued);
     const art = h("article", { class: "txc" },
-      h("div", { class: "txk" }, ctx.icon(ix), h("b", null, `${K.glyph} ${K.label}`), h("code", null, kind || "?"),
+      h("div", { class: "txk" }, ctx.icon(ix), h("b", null, `${K.glyph} ${K.label}`), h("code", null, kindName(kind)),
         h("span", { class: "txmeta" }, `#${fmt(i + 1)}`)),
       h("div", { class: "txmeta" }, "sender ", whoBadge(pick(card && card.sender, x.sender), card && card.sender_info), ` · nonce ${str(pick(card && card.nonce, x.nonce))}`,
         sigMode === "tezos_message" ? [" · ", h("span", { class: "badge wallet", title: "Signed in a Tezos wallet (sign_payload)" }, "✍ wallet")] : null),
-      h("div", { class: "txsum" }, summary(kind, payload)));
-    if (kind === "publish_block") {
+      h("div", { class: "txsum" }, kind === "publish_block" && withhold
+        ? `${str(payload.channel)} · ${hidden ? `post ${HIDDEN_NOTE}` : "post"}`
+        : summary(kind, payload)));
+    if (kind === "publish_block" && withhold) {
+      art.append(h("div", { class: "txmeta" }, hidden
+        ? [h("span", { class: "badge noticket" }, "hidden"), ` ${HIDDEN_NOTE}: its title, text and media are not shown here. The chain still holds the post (body_hash below), and VERIFY still replays it.`]
+        : "devnet post: its title, text and media wait for the devnet's card for this block, which says whether the admin hid it"));
+      art.append(h("div", { class: "txmeta" }, "body_hash ", copyable(payload.body_hash, 8)));
+    } else if (kind === "publish_block") {
       if (cp && typeof cp.body === "string" && cp.body) {
         art.append(h("div", { class: "txbody" }, cp.body),
           h("div", { class: "txmeta" }, "post text is off-chain, as the node reports it; the chain holds its body_hash"));
@@ -576,6 +829,21 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       const keys = arr(payload.issuers);
       art.append(h("div", { class: "txmeta" }, keys.length ? `issuers ${keys.map((k) => short(k, 8)).join(" · ")}` : "no issuers: presence taps are paused until the admin sets some"));
     }
+    // A mint: its collection, whether it is the collection's first mint in
+    // the yard, and (with ?town=) a link to its Town Hall gallery.
+    // ctx.mintAt(i) -> { collection, first, nth, whole } | null.
+    if (isMintName(kind)) {
+      const mi = typeof ctx.mintAt === "function" ? obj(ctx.mintAt(i)) : {};
+      const coll = typeof mi.collection === "string" ? mi.collection : (obj(mintOf(kind, payload)).collection || "");
+      const href = townLink(ctx.town, coll);
+      art.append(h("div", { class: "txmeta" },
+        h("span", { class: `badge mint${mi.first === true ? " first" : ""}` }, mi.first === true ? "◎ first mint" : "◆ mint"),
+        // Only a drop is born at its first mint (its first minter becomes its
+        // creator); an edition is born earlier, at its open_edition.
+        coll ? ` ${mi.first === true ? (mi.whole === true ? (kind === "drop_mint" ? "born here: " : "first mint: ") : "first in the yard: ") : "of "}${clip(coll, 64)}` : " · no collection id",
+        isInt(mi.nth) && mi.nth > 0 ? ` · #${fmt(mi.nth)}${mi.whole === true ? "" : " in the yard"}` : "",
+        href ? [" · ", h("a", { href, target: "_blank", rel: "noopener noreferrer" }, "Town Hall gallery ↗")] : null));
+    }
     if (kind === "tap" && ctx.ticketed && !issued.length) {
       art.append(h("div", { class: "txmeta" },
         h("span", { class: "badge noticket", title: "A bare tap counts on a ticketed chain but mints nothing" }, "tap · no ticket · +0")));
@@ -586,6 +854,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       const credited = arr(card.credited);
       if (credited.length) bits.push(`credited ${plural(credited.length, "player")}`);
       if (card.funded_by) bits.push(`paid by ${short(card.funded_by, 7)}`);
+      if (card.token && typeof card.token === "object") bits.push(`token ${clip(card.token.edition, 64) || "?"} #${fmt(card.token.serial)}`);
       art.append(h("div", { class: "txmeta" }, h("span", { class: "rc" }, `receipt: ${bits.length ? bits.join(" · ") : "applied, nothing issued"}`), ` · ${str(cardSrc)}`));
       if (card.hash) art.append(h("div", { class: "txmeta" }, "tx ", copyable(card.hash, 8)));
     } else {
@@ -688,7 +957,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       bg: v("--yard-bg"), bg2: v("--yard-bg2"), plate: v("--yard-plate"), plateEdge: v("--yard-plate-edge"),
       ghost: v("--yard-ghost"), link: v("--yard-link"), ink: v("--yard-ink"), halo: v("--yard-halo"),
       slab: v("--slab"), ok: v("--ok"), bad: v("--bad"), beacon: v("--beacon"), posted: v("--beacon-posted"),
-      beaconOff: v("--beacon-off"), dark: lum(rgbOf(v("--yard-bg"))) < 0.3,
+      beaconOff: v("--beacon-off"), mint: v("--mint"), dark: lum(rgbOf(v("--yard-bg"))) < 0.3,
     };
   }
 
@@ -786,10 +1055,22 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     ringCache.set(key, c);
     return c;
   }
+  // The Mints lens's beacon gem, one per colour.
+  const gemCache = new Map();
+  function gem(color) {
+    let c = gemCache.get(color);
+    if (!c) {
+      c = glyph(["..#..", ".###.", "#####", ".###.", "..#.."], color, TH.halo);
+      if (gemCache.size > 64) gemCache.clear();
+      gemCache.set(color, c);
+    }
+    return c;
+  }
   let SP = null;
   function buildSprites() {
     readTheme();
     ringCache.clear();
+    gemCache.clear();
     const cubes = KINDS.map((k) => prism(k.color, S, k.motif));
     const overflow = prism("#f2f2f2", S, [[7, 2], [8, 2], [7, 3], [8, 3], [7, 4], [8, 4], [5, 3], [6, 3], [9, 3], [10, 3]], { stripes: true });
     const slab = prism(TH.slab, SLAB, null, { flat: true });
@@ -832,9 +1113,20 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   let minH = 0, maxH = 0, totalTx = 0;
   const anchors = new Map();       // height -> anchor record
   let accounts = null;             // snapshot accounts, or the last live fetch
-  const blockViews = new Map();    // height -> node /block view (receipts, hashes)
+  const blockViews = cardCache(300); // height -> node /block view (receipts, hashes), with its age
+  // The public devnet (x-pointcast-network: devnet, or status.network): its
+  // admin can hide posts, so post titles wait for its cards (panelCard).
+  let devnetSeen = false;
+  const devnet = () => devnetSeen || !!(status && status.network === "devnet");
   let selected = 0, hovered = 0, panelH = 0;
   let spot = null;                 // { type: "kind", ix } | { type: "addr", addr }
+  // The Mints lens (?lens=mints): every *_mint cube lit, a ring on each
+  // collection's first mint, the counter strip. ?town= links collections to
+  // their pc-town Town Hall gallery (#/d/{collection}).
+  let lens = qs.get("lens") === "mints";
+  const TOWN = townBase(qs.get("town"), location.href);
+  let MINTS = null;                // indexMints() of the loaded yard; null = stale
+  const seenKinds = new Set();     // kind indexes seen so far (a new neutral or unknown one rebuilds the legend)
   let live = { on: false, blocks: 0, txs: 0, since: Date.now() };
   let initialDone = false;
 
@@ -858,6 +1150,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       const B = {
         h: hd.height, header: hd, txs, ntx: txs.length,
         kinds: txs.map((t) => kindIx(t && t.tx && t.tx.type)),
+        names: txs.map((t) => kindName(t && t.tx && t.tx.type)),
         addrs: txs.map(involved),
         gx: c.gx, gy: c.gy, x: c.x, y: c.y,
         born: 0, v: 0, vAt: 0, reason: "",
@@ -868,6 +1161,11 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       applyVerified(B);
     }
     if (!fresh.length) return fresh;
+    MINTS = null;
+    let newKind = false;
+    for (const B of fresh) for (const ix of B.kinds) if (!seenKinds.has(ix)) { seenKinds.add(ix); if (KINDS[ix].registry || ix === UNKNOWN) newKind = true; }
+    if (newKind && initialDone) buildLegend();
+    if (lens && initialDone) queueMints();
     fresh.sort((a, b) => a.h - b.h);
     if (initialDone && !maxH) { $("msg").hidden = true; cam.set = false; setTimeout(afterLoad, 0); }
     // A page left open on a live node keeps the newest MAX_LOAD + 1000 stacks.
@@ -890,6 +1188,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     miniDirty = true;
     return fresh;
   }
+  // Every mint in the loaded yard, indexed once per change.
+  const mintIndex = () => MINTS || (MINTS = indexMints(heights.map((hh) => blocks.get(hh))));
+
   // Block hash as the page's own data reports it: the next block's parent link,
   // the node's /block view, or the snapshot's status for the tip.
   function reportedHash(hh) {
@@ -915,6 +1216,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : 0;
     try {
       const r = await fetch(API + path, { cache: "no-store", signal: ctl ? ctl.signal : undefined });
+      if (r.headers && r.headers.get("x-pointcast-network") === "devnet") devnetSeen = true;
       if (!r.ok) throw new Error(`${r.status} ${path}`);
       return await r.json();
     } finally { clearTimeout(timer); }
@@ -1078,8 +1380,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       $("s-source-l").textContent = short(API.replace(/^https?:\/\//, ""), 12);
       $("s-source").title = API;
       setLive("on", "LIVE");
-      const feed = $("feed-link");
-      if (qs.get("api")) feed.href = `/?api=${encodeURIComponent(API)}`;
+      // The node's own feed explorer (its root), wherever this page is hosted.
+      const feed = $("feed-link"), href = feedHref(API);
+      if (href) feed.href = href; else feed.hidden = true;
     } else {
       $("s-source").textContent = "SNAPSHOT";
       const rec = str(SNAP && SNAP.recorded_at);
@@ -1118,7 +1421,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   }
 
   function afterLoad() {
-    buildLegend();
+    lensUi();             // builds the legend too
     $("msg").hidden = blocks.size > 0;
     if (!blocks.size) $("msg").replaceChildren(h("div", null, "NO BLOCKS YET", h("span", { class: "sub" }, "Waiting for the first block…")));
     updateStats();
@@ -1277,13 +1580,16 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     if (t < 0.72) { const u = t / 0.72; return -80 * (1 - u * u); }
     return -4 * Math.sin(((t - 0.72) / 0.28) * Math.PI);
   }
+  // The Mints lens and a spotlight combine: with both, a cube is lit when it
+  // is a mint AND matches the spotlight (an account's mints, say).
   function spotCube(B, k) {
+    if (lens && !isMintName(B.names[k])) return false;
     if (!spot) return true;
     if (spot.type === "kind") return B.kinds[k] === spot.ix;
     return B.addrs[k] && B.addrs[k].has(spot.addr);
   }
   function spotStack(B) {
-    if (!spot) return true;
+    if (!spot && !lens) return true;
     if (!B.ntx) return false;
     for (let k = 0; k < B.ntx; k++) if (spotCube(B, k)) return true;
     return false;
@@ -1298,7 +1604,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // The yard minus the beacon rings, kept so a pulse-only frame is one blit
   // plus a few rings instead of a full redraw of every visible stack.
   const baseCv = document.createElement("canvas"), bctx = baseCv.getContext("2d", { alpha: false });
-  let baseOk = false, beaconList = [], lastView = { ox: 0, oy: 0, z: 1, fs: 12 };
+  let baseOk = false, beaconList = [], mintBeacons = [], lastView = { ox: 0, oy: 0, z: 1, fs: 12 };
   // Cells whose stack can reach the viewport, in a valid painter's order:
   // rows back to front, columns left to right. Two stacks only overlap when
   // their screen columns differ by at most one, and then the one in front is
@@ -1344,7 +1650,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     ctx.fillStyle = grad; ctx.fillRect(0, 0, CW, CH);
     beaconsVisible = false;
     beaconList = [];
+    mintBeacons = [];
     if (!blocks.size || !SP) return;
+    const focus = !!(spot || lens);
+    const firstAt = lens ? mintIndex().firstAt : null;
     const z = cam.z;
     const ox = Math.round(CW / 2 - cam.x * z), oy = Math.round(CH / 2 - cam.y * z);
     const X = (wx) => ox + Math.round(wx * z), Y = (wy) => oy + Math.round(wy * z);
@@ -1397,7 +1706,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       if (hh < vlo) vlo = hh;
       if (hh > vhi) vhi = hh;
       const lit = spotStack(B);
-      const dimStack = (spot && !lit) || B.v === 4;
+      const dimStack = (focus && !lit) || B.v === 4;
       const hi = hh === hovered || hh === selected;
       const sx = X(B.x - W / 2);
       const revealed = B.v === 1 && B.vAt && now >= B.vAt;
@@ -1422,7 +1731,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
           const spr = B.ntx > MAX_CUBES && k === MAX_CUBES - 1 ? SP.overflow : SP.cubes[B.kinds[k]];
           const y = B.y - T / 2 - S - k * S + dy;
           const sy = Y(y);
-          const cubeLit = !spot || (k === MAX_CUBES - 1 && B.ntx > MAX_CUBES ? lit : spotCube(B, k));
+          const cubeLit = !focus || (k === MAX_CUBES - 1 && B.ntx > MAX_CUBES ? lit : spotCube(B, k));
           ctx.globalAlpha = B.v === 4 ? 0.3 : cubeLit ? 1 : 0.16;
           ctx.drawImage(spr, sx, sy, zw(W), zw(T + S));
           if (B.v === 2 || B.v === 3) { ctx.globalAlpha = 0.55; ctx.drawImage(SP.cubeSil.bad, sx, sy, zw(W), zw(T + S)); }
@@ -1443,7 +1752,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     for (const [B, topY, revealed] of tops) {
       const cx = B.x, cy = topY - T / 2;
       if (z >= 1.5) {
-        if (revealed && (!spot || spotStack(B))) {
+        if (revealed && (!focus || spotStack(B))) {
           const t = reduced ? 1 : Math.min(1, (now - B.vAt) / 260);
           ctx.globalAlpha = t;
           ctx.drawImage(SP.check, X(cx - 4), Y(cy - 9 - (1 - t) * 4), zw(9), zw(8));
@@ -1454,12 +1763,16 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
         }
       }
       if (B.ntx > MAX_CUBES && z >= 2) label(`+${B.ntx - (MAX_CUBES - 1)}`, X(cx), Y(cy - 3));
-      if (B.h % interval === 0) {
+      const isAnchor = B.h % interval === 0;
+      if (isAnchor) {
         beaconList.push({ h: B.h, cx, cy });
         if (anchorState(B.h) !== "expected") beaconsVisible = true;     // due beacons stand still
       }
-      if (B.h === maxH && z >= 1) label(`TIP №${fmt(B.h)}`, X(cx), Y(cy - (B.h % interval === 0 ? 40 : 12)), TH.ink);
-      else if (z >= 3 && (B.h - 1) % COLS === 0 && B.h % interval !== 0) {
+      // Mints lens: a ring beacon on each collection's first mint in the yard.
+      const born = firstAt && firstAt.get(B.h);
+      if (born) { mintBeacons.push({ h: B.h, cx, cy, list: born, anchor: isAnchor }); beaconsVisible = true; }
+      if (B.h === maxH && z >= 1) label(`TIP №${fmt(B.h)}`, X(cx), Y(cy - 12 - (isAnchor ? 28 : 0) - (born ? 34 : 0)), TH.ink);
+      else if (z >= 3 && (B.h - 1) % COLS === 0 && !isAnchor && !born) {
         ctx.globalAlpha = 0.7; label(`№${fmt(B.h)}`, X(cx), Y(B.y + 12), TH.link); ctx.globalAlpha = 1;
       }
     }
@@ -1473,11 +1786,20 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   }
   // Broadcast beacons over anchor heights: concentric rings and an emitter.
   function drawBeacons(now) {
-    if (!beaconList.length) return;
+    if (!beaconList.length && !mintBeacons.length) return;
     const { ox, oy, z, fs } = lastView;
     const X = (wx) => ox + Math.round(wx * z), Y = (wy) => oy + Math.round(wy * z);
     const zw = (n) => Math.max(1, Math.round(n * z));
     setLabelFont(fs);
+    // Label boxes already drawn this frame: a mint label that would overlap
+    // one (two collections born in neighbouring stacks) moves up a line.
+    const placed = [];
+    const freeY = (text, lx, ly) => {
+      const w = ctx.measureText(text).width + 6, hh = fs + 2;
+      for (let tries = 0; tries < 4 && placed.some((r) => Math.abs(r.x - lx) < (r.w + w) / 2 && Math.abs(r.y - ly) < hh); tries++) ly -= hh;
+      placed.push({ x: lx, y: ly, w });
+      return ly;
+    };
     for (const { h: bh, cx, cy } of beaconList) {
       const st = anchorState(bh);
       const col = st === "posted" ? TH.posted : st === "sealed" ? TH.beacon : TH.beaconOff;
@@ -1492,8 +1814,34 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       ctx.globalAlpha = 1;
       const em = st === "posted" ? SP.emitPosted : st === "sealed" ? SP.emit : SP.emitOff;
       ctx.drawImage(em, X(cx - 2.5), Y(by - 2.5), zw(5), zw(5));
-      if (z >= 2) label(`⚓ №${fmt(bh)}`, X(cx), Y(by - 14), col);
+      if (z >= 2) { const t = `⚓ №${fmt(bh)}`; label(t, X(cx), freeY(t, X(cx), Y(by - 14)), col); }
     }
+    // Mints lens: a halo ring around the top of the stack where a collection
+    // was born, a slow pulse outward, and a gem with the collection's name
+    // above (stacked over an anchor beacon when both fall on one block).
+    for (const { cx, cy, list, anchor } of mintBeacons) {
+      const c0 = list[0], K = KINDS[kindIx(c0.kind)];
+      const col = K.registry || K.id === "unknown" ? TH.mint : K.color;
+      const halo = ring(11, col), hy = (halo.height - 1) / 2;
+      ctx.globalAlpha = 1;
+      ctx.drawImage(halo, X(cx - 11), Y(cy - hy), zw(halo.width), zw(halo.height));
+      const phases = reduced ? [0.5] : [0, 1].map((i) => ((now / 2300) + i / 2) % 1);
+      for (const ph of phases) {
+        const r = Math.round(12 + ph * 12);
+        const spr = ring(r, col), ry = (spr.height - 1) / 2;
+        ctx.globalAlpha = reduced ? 0.6 : Math.max(0, 1 - ph) * 0.9;
+        ctx.drawImage(spr, X(cx - r), Y(cy - ry), zw(spr.width), zw(spr.height));
+      }
+      ctx.globalAlpha = 1;
+      const gy = cy - 14 - (anchor ? 34 : 0);
+      const g = gem(col);
+      ctx.drawImage(g, X(cx - 3.5), Y(gy - 3.5), zw(g.width), zw(g.height));
+      if (z >= 2) {
+        const t = `◎ ${clip(c0.collection, 20)}${list.length > 1 ? ` +${list.length - 1}` : ""}`;
+        label(t, X(cx), freeY(t, X(cx), Y(gy - 7)), col);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ---------- the timeline / minimap
@@ -1506,13 +1854,16 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const lo = minH, hi = maxH, span = hi - lo + 1;
     const xOf = (h0) => Math.floor(((h0 - lo) / span) * w);
     const base = hh - Math.round(7 * dpr), top = Math.round(4 * dpr), barMax = base - top;
-    // tx density, coloured by the biggest block's first kind
+    // tx density, coloured by the biggest block's first kind (its first lit
+    // kind under a spotlight or the Mints lens)
+    const focus = !!(spot || lens);
+    const litKind = (B) => { if (focus) for (let k = 0; k < B.ntx; k++) if (spotCube(B, k)) return B.kinds[k]; return B.kinds[0]; };
     const cols = new Array(w).fill(null);
     for (const h0 of heights) {
       const B = blocks.get(h0);
       const x = Math.min(w - 1, xOf(h0));
       const c = cols[x];
-      if (!c || B.ntx > c.n) cols[x] = { n: B.ntx, k: B.kinds[0], lit: spotStack(B) };
+      if (!c || B.ntx > c.n) cols[x] = { n: B.ntx, k: litKind(B), lit: spotStack(B) };
     }
     const bw = Math.max(1, Math.floor(w / span));
     const peak = Math.max(1, ...cols.map((c) => (c ? Math.min(c.n, MAX_CUBES) : 0)));
@@ -1521,7 +1872,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       const c = cols[x];
       if (!c || !c.n) continue;
       const bh = Math.max(3 * dpr, Math.round(Math.sqrt(Math.min(c.n, MAX_CUBES) / peak) * barMax));
-      mctx.globalAlpha = spot && !c.lit ? 0.2 : 1;
+      mctx.globalAlpha = focus && !c.lit ? 0.2 : 1;
       mctx.fillStyle = KINDS[c.k].color;
       mctx.fillRect(x, base - bh, bw, bh);
     }
@@ -1533,6 +1884,16 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       const x = xOf(a);
       mctx.fillRect(x, top - 2 * dpr, Math.max(1, dpr), base - top + 2 * dpr);
       mctx.fillRect(x - 2 * dpr, top - 3 * dpr, 5 * dpr, 2 * dpr);
+    }
+    // Mints lens: a gem tick at each collection's first mint
+    if (lens) {
+      for (const h0 of mintIndex().firstAt.keys()) {
+        if (h0 < lo || h0 > hi) continue;
+        mctx.fillStyle = TH.halo;
+        mctx.fillRect(xOf(h0) - 2 * dpr, top - dpr, 5 * dpr, 5 * dpr);
+        mctx.fillStyle = TH.mint;
+        mctx.fillRect(xOf(h0) - dpr, top, 3 * dpr, 3 * dpr);
+      }
     }
     // verification
     if (vWorker || vFault) {
@@ -1638,7 +1999,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   }
   function describe(B) {
     if (!B) return "";
-    const kinds = B.kinds.map((k) => KINDS[k].label.toLowerCase());
+    // Neutral (registry) and unknown kinds go by the name the chain data gives.
+    const kinds = B.kinds.map((k, i) => (KINDS[k].registry || k === UNKNOWN ? B.names[i] : KINDS[k].label.toLowerCase()));
     const counts = new Map();
     kinds.forEach((k) => counts.set(k, (counts.get(k) || 0) + 1));
     const what = B.ntx ? [...counts].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(", ") : "empty block";
@@ -1656,6 +2018,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       h("b", null, `№${fmt(hh)}`), ` · ${plural(B.ntx, "tx", "tx")}`,
       hh % interval === 0 ? ` · ⚓ anchor (${anchorState(hh)})` : "", h("br"),
       describe(B), h("br"),
+      lens && mintIndex().firstAt.has(hh) ? [`◎ first mint of ${mintIndex().firstAt.get(hh).map((c) => clip(c.collection, 28)).join(", ")}`, h("br")] : null,
       h("span", { style: "opacity:.75" }, vText(B)));
     tipEl.hidden = false;
     const r = stage.getBoundingClientRect();
@@ -1778,6 +2141,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     else if (e.key === "+" || e.key === "=") zoomStep(1);
     else if (e.key === "-" || e.key === "_") zoomStep(-1);
     else if (e.key === "f" || e.key === "F") setFollow(true);
+    else if (e.key === "m" || e.key === "M") setLens(!lens);
     else if (e.key === "Home") select(minH, { center: true });
     else if (e.key === "End") select(maxH, { center: true });
   });
@@ -1832,7 +2196,15 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       if (narrow()) { closeAccounts(); syncSheet(); stage.scrollIntoView({ block: "start" }); }
     }
     renderPanel();
-    if (MODE === "node" && !blockViews.has(hh)) fetchBlockView(hh).then(() => { if (panelH === hh && !$("panel").hidden) renderPanel(); });
+    if (MODE === "node" && blockViews.stale(hh)) fetchBlockView(hh).then(() => { if (panelH === hh && !$("panel").hidden) renderPanel(); });
+  }
+  // The open panel's card, fetched again once it is older than CARD_TTL_MS
+  // (the tab came back, or the panel stayed open), then the panel redrawn.
+  function refreshPanelCard() {
+    const hh = panelH;
+    if (MODE !== "node" || !hh || $("panel").hidden || !blockViews.stale(hh)) return false;
+    fetchBlockView(hh).then(() => { if (panelH === hh && !$("panel").hidden) renderPanel(); });
+    return true;
   }
   // Hiding a sheet that holds keyboard focus would drop focus on <body>:
   // hand it back to the yard instead.
@@ -1845,20 +2217,23 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     dirty = miniDirty = true; kick();
   }
   $("panel-close").onclick = () => { closePanel(); cv.focus({ preventScroll: true }); };
-  async function fetchBlockView(hh) {
-    let view = null;
-    try { view = await getJSON(`/block/${hh}`); } catch {
-      try {
-        const d = await getJSON(`/feed?all=true&limit=1&before=${hh + 1}`);
-        const b = d && Array.isArray(d.blocks) && d.blocks[0];
-        if (b && b.height === hh) view = b;
-      } catch {}
-    }
-    if (view && Array.isArray(view.txs)) {
-      blockViews.set(hh, view);
-      if (blockViews.size > 300) blockViews.delete(blockViews.keys().next().value);
-    }
-    return view;
+  const cardFetches = new Map();   // height -> the fetch in flight
+  function fetchBlockView(hh) {
+    if (cardFetches.has(hh)) return cardFetches.get(hh);
+    const p = (async () => {
+      let view = null;
+      try { view = await getJSON(`/block/${hh}`); } catch {
+        try {
+          const d = await getJSON(`/feed?all=true&limit=1&before=${hh + 1}`);
+          const b = d && Array.isArray(d.blocks) && d.blocks[0];
+          if (b && b.height === hh) view = b;
+        } catch {}
+      }
+      if (view && Array.isArray(view.txs)) blockViews.set(hh, view);
+      return view;
+    })().finally(() => cardFetches.delete(hh));
+    cardFetches.set(hh, p);
+    return p;
   }
   function renderPanel() {
     const hh = panelH, B = blocks.get(hh);
@@ -1905,18 +2280,26 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     // transactions
     if (B.ntx) {
       body.append(h("div", { class: "sec" }, `Transactions · ${fmt(B.ntx)}`));
-      const cards = useReplay ? rep.txs : view && Array.isArray(view.txs) && view.txs.length === B.ntx ? view.txs : null;
+      // On the devnet a card older than CARD_TTL_MS may predate the admin
+      // hiding a post: until it is fetched again it counts as not there.
+      const served = devnet() ? blockViews.fresh(hh) : view;
+      const servedTxs = served && Array.isArray(served.txs) && served.txs.length === B.ntx ? served.txs : null;
       const src = useReplay ? "from your replay" : "reported by the node";
-      const ctx = { icon: (ix) => kindIcon(ix), snapshot: MODE === "snapshot", ticketed: ticketed() };
+      const mi = mintIndex();
+      const ctx = {
+        icon: (ix) => kindIcon(ix), snapshot: MODE === "snapshot", ticketed: ticketed(), town: TOWN,
+        mintAt: (i) => {
+          const name = B.names[i];
+          const m = isMintName(name) ? mintOf(name, B.txs[i] && B.txs[i].tx) : null;
+          if (!m) return null;
+          const c = mi.coll.get(`${name}\n${m.collection}`);
+          return { collection: m.collection, first: !!c && c.first === hh && c.firstIx === i, nth: mi.nth.get(`${hh}:${i}`), whole: minH <= 1 };
+        },
+      };
       const list = h("div");
       B.txs.forEach((t, i) => {
-        let card = cards ? cards[i] : null;
-        // Post text is off-chain: keep the node's text alongside the replayed card.
-        const served = useReplay && view && Array.isArray(view.txs) ? view.txs[i] : null;
-        if (card && typeof card === "object" && served && served.payload && typeof served.payload.body === "string") {
-          card = { ...card, payload: { ...card.payload, body: served.payload.body } };
-        }
-        list.append(txCard(t, card, i, src, !!useReplay, ctx));
+        const { card, mod } = panelCard(useReplay ? rep.txs[i] : null, servedTxs ? servedTxs[i] : null, !!useReplay, devnet());
+        list.append(txCard(t, card, i, src, !!useReplay, ctx, mod));
       });
       body.append(list);
     } else {
@@ -2007,6 +2390,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
 
   // ---------- spotlight (a kind from the legend, or an account)
   function setSpot(s) {
+    // A kind that is not a mint kind takes over from the Mints lens.
+    const leaveLens = !!(s && s.type === "kind" && lens && !isMintName(KINDS[s.ix].id));
+    if (leaveLens) lens = false;
     spot = s;
     const el = $("spot");
     if (!s) { el.hidden = true; el.replaceChildren(); }
@@ -2015,32 +2401,86 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       const clear = h("button", { class: "bevel mini", type: "button" }, "× clear");
       clear.onclick = () => setSpot(null);
       el.replaceChildren(h("span", null, "Spotlight: "), h("b", null, s.type === "kind" ? `${KINDS[s.ix].glyph} ${KINDS[s.ix].label}` : s.label),
-        h("span", null, ` · ${plural(n, "block")} in the yard`), clear);
+        h("span", null, ` · ${plural(n, "block")} in the yard${lens ? " · mints only (Mints lens)" : ""}`), clear);
       el.hidden = false;
     }
     document.querySelectorAll(".lg[data-kind]").forEach((b) => b.setAttribute("aria-pressed", String(!!s && s.type === "kind" && s.ix === Number(b.dataset.kind))));
     if (accountsOpen() && accounts) renderAccounts(accounts, $("drawer-note").textContent.replace(/ Tap one to spotlight its transactions\.$/, ""));
+    if (leaveLens) lensUi();
     dirty = miniDirty = true; kick();
   }
+
+  // ---------- the Mints lens
+  function setLens(on) {
+    lens = !!on;
+    // The lens replaces a spotlight on a non-mint kind (an account spotlight stays: its mints).
+    if (lens && spot && spot.type === "kind" && !isMintName(KINDS[spot.ix].id)) setSpot(null);
+    else if (spot) setSpot(spot);       // recount the spotlight under the lens
+    lensUi();
+    if (lens) {
+      const ix = mintIndex();
+      $("sr-sel").textContent = `Mints lens on: ${plural(ix.total, "mint")} in ${plural(ix.coll.size, "collection")}.`;
+    } else $("sr-sel").textContent = "Mints lens off.";
+    dirty = miniDirty = true; kick();
+  }
+  // Button, URL (?lens=mints), title, strip and legend follow `lens`.
+  function lensUi() {
+    $("lens-btn").setAttribute("aria-pressed", String(lens));
+    $("yard-title").textContent = lens ? "THE YARD · MINTS LENS" : "THE YARD";
+    try {
+      const u = new URL(location.href);
+      if ((u.searchParams.get("lens") === "mints") !== lens) {
+        if (lens) u.searchParams.set("lens", "mints"); else u.searchParams.delete("lens");
+        history.replaceState(history.state, "", u.href);
+      }
+    } catch {}
+    renderMints();
+    buildLegend();
+  }
+  function renderMints() {
+    const el = $("mints");
+    el.hidden = !lens || !status;
+    if (el.hidden) { $("mints-body").replaceChildren(); return; }
+    $("mints-body").replaceChildren(mintStrip(mintIndex(), {
+      town: TOWN, whole: minH <= 1, from: minH, to: maxH,
+      pick: (hh) => select(hh, { open: true, center: true }),
+    }));
+  }
+  // New blocks while the lens is on: one strip refresh per batch.
+  let mintsQueued = false;
+  function queueMints() {
+    if (mintsQueued) return;
+    mintsQueued = true;
+    setTimeout(() => { mintsQueued = false; if (lens) renderMints(); }, 0);
+  }
+  $("lens-btn").onclick = () => setLens(!lens);
+  $("mints-close").onclick = () => { setLens(false); $("lens-btn").focus({ preventScroll: true }); };
 
   // ---------- legend
   function buildLegend() {
     const grid = $("legend-grid");
     grid.replaceChildren();
-    KINDS.slice(0, UNKNOWN).forEach((k, i) => {
-      const b = h("button", { class: "lg", type: "button", "data-kind": String(i), "aria-pressed": String(!!spot && spot.type === "kind" && spot.ix === i), title: `${k.label} (${k.id}): spotlight these cubes` },
+    // Every live kind; neutral registry kinds and unknown kinds only once the yard holds one.
+    const present = new Set();
+    for (const B of blocks.values()) for (const ix of B.kinds) present.add(ix);
+    KINDS.forEach((k, i) => {
+      if ((k.registry || i === UNKNOWN) && !present.has(i)) return;
+      const what = k.registry ? `${k.id}: registry tag ${k.registry} (docs/TAGS.md), neutral cube` : i === UNKNOWN ? "a kind this page does not know, shown by its name" : `${k.label} (${k.id})`;
+      const b = h("button", { class: "lg", type: "button", "data-kind": String(i), "aria-pressed": String(!!spot && spot.type === "kind" && spot.ix === i), title: `${what}: spotlight these cubes` },
         kindIcon(i, ""), h("span", null, `${k.glyph} ${k.label}`));
       b.onclick = () => setSpot(spot && spot.type === "kind" && spot.ix === i ? null : { type: "kind", ix: i });
       grid.append(b);
     });
     const slab = mkCanvas(W, T + SLAB); slab.getContext("2d").drawImage(SP.slab, 0, 0);
     slab.className = "kicon"; slab.setAttribute("aria-hidden", "true");
-    grid.append(h("div", { class: "lg-sep" }),
+    // append() prints a null child as the text "null": drop the optional rows that are off.
+    grid.append(...[h("div", { class: "lg-sep" }),
       h("div", { class: "lg-row" }, slab, `empty block · 1 cube per tx (first at the bottom; striped cap past ${MAX_CUBES})`),
       h("div", { class: "lg-row" }, `◎ beacon every ${fmt(interval)}: `, h("span", { class: "sw", style: `border:2px solid ${TH.beacon}` }), " sealed ",
         h("span", { class: "sw", style: `border:2px solid ${TH.posted}` }), " on Tezos ", h("span", { class: "sw", style: `border:2px dashed ${TH.beaconOff}` }), " due"),
       h("div", { class: "lg-row" }, h("span", { class: "sw", style: `background:${TH.ok}` }), " ✓ verified by you  ", h("span", { class: "sw", style: `background:${TH.bad}` }), " ✗ fault"),
-      ticketed() ? h("div", { class: "lg-row" }, "ticketed chain: only ✧ presence taps earn; a bare ✦ tap counts, +0") : null);
+      ticketed() ? h("div", { class: "lg-row" }, "ticketed chain: only ✧ presence taps earn; a bare ✦ tap counts, +0") : null,
+      lens ? h("div", { class: "lg-row" }, h("span", { class: "sw", style: `border:2px solid ${TH.mint}` }), " ◎ mints lens: a ring on each collection's first mint") : null].filter(Boolean));
   }
   $("legend-btn").onclick = () => {
     const lg = $("legend");
@@ -2059,7 +2499,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // snapshot, so nothing is trusted that the replay does not check.
   // ======================================================================
   const VERIFIER_PINS = {
-    "pointcast_chain.wasm": "7f9f09f812d2e7b0311cad45b1214124646890dd851b955e30515e8837eae2b5",
+    "pointcast_chain.wasm": "a70b16c0facbf27f3cb551b092f600a7a59185feb4e8144a32ee5f0ccf3af9a9",
     "verify.js": "74255711f5b8988eb18c30d5138ef0dc5ff4612566f0d70ac5b9fea6f81dc3cc",
     "verify-worker.js": "d2823b12caab9924f6ab256121a3bb5f1ba16223f881568f4bc7542a4ef7f783",
   };
@@ -2171,6 +2611,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     const rep = replayed.get(B.h);
     if (rep && rep.block_hash === hash && Array.isArray(rep.txs) && rep.txs.length === B.ntx) {
       B.kinds = rep.txs.map((t) => kindIx(t && t.kind));     // draw the cubes from the replay
+      B.names = rep.txs.map((t) => kindName(t && t.kind));
+      MINTS = null;
     }
     if (B.v !== 1) { B.v = 1; B.vAt = 0; revealQ.push(B.h); }
   }
@@ -2335,7 +2777,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     for (const B of blocks.values()) {
       B.v = 0; B.vAt = 0; B.reason = "";
       B.kinds = B.txs.map((t) => kindIx(t && t.tx && t.tx.type));
+      B.names = B.txs.map((t) => kindName(t && t.tx && t.tx.type));
     }
+    MINTS = null;
     paintStrip();
     revalidate();
   }
@@ -2357,8 +2801,14 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   };
 
   // ---------- tick the "ago" in an open panel, keep the stats fresh
-  setInterval(() => { if (panelH && !$("panel").hidden && MODE === "node") renderPanel(); }, 15000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) kick(); });
+  setInterval(() => {
+    if (!panelH || $("panel").hidden || MODE !== "node") return;
+    // A card that went stale is fetched first; the panel redraws when it lands.
+    if (!document.hidden && refreshPanelCard()) return;
+    renderPanel();
+  }, 15000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { kick(); refreshPanelCard(); } });
+  window.addEventListener("focus", refreshPanelCard);
 
   boot().catch((e) => fatal(`Could not start: ${e.message || e}`));
 })();
