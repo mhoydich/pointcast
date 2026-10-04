@@ -2,9 +2,9 @@
 export const SNAPSHOT = {
   title: 'Hoydich / A map of the making',
   route: '/hoydich/',
-  capturedAt: '2026-10-04T00:13:21Z',
-  dateLabel: '04 October 2026 / UTC',
-  sourceRevision: 'acb659d89be755e46791e0fa935b788064811dc1',
+  capturedAt: '2026-10-04T00:30:05Z',
+  dateLabel: '03 October 2026 / Pacific',
+  sourceRevision: '958fcedcd78f041a989bceb140c4fb587d59ca9a',
   note: 'An edited snapshot of public creative work and current studio plans. Updated by hand after releases; no live project sync.',
 };
 
@@ -187,12 +187,13 @@ export const RELEASED_STUDIES = [
     "family": "tools",
     "title": "PointCast Chain / recorded dev world",
     "href": "/chain",
-    "summary": "A published replay of 421 Rust-chain blocks recorded on 3 October at 19:31:59 UTC, with a browser verifier and documented local-network limits.",
+    "summary": "A dated recording of 421 Rust-chain blocks saved on 3 October at 19:31:59 UTC, with browser verification available and a separate no-value, resettable bot-devnet guide. The launch chain remains nonpublic.",
     "source": {
       "href": "/chain#status",
       "label": "Dev-chain status & boundaries"
     },
-    "nextAction": "Read the network status, then try the recorded replay and its browser verification."
+    "links": [{ "href": "/chain/bots/", "label": "Bot-devnet guide", "summary": "A separate no-value, resettable devnet guide with MCP examples and a GET-only watch; the launch chain remains nonpublic." }],
+    "nextAction": "Read the dated replay limits and the separate bot-devnet guide; the public art-commerce adapter remains unconfigured."
   },
   {
     "id": "prediction-markets",

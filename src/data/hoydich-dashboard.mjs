@@ -138,9 +138,9 @@ export const CHAIN_PANELS = [
   {
     "id": "pointcast-dev",
     "title": "PointCast Chain / dev replay",
-    "statusLabel": "Recorded prototype / no public node",
+    "statusLabel": "Recorded replay / nonpublic launch chain",
     "tone": "limited",
-    "summary": "Replay 421 recorded dev-chain blocks, saved on 3 October 2026 at 19:31:59 UTC. Browser verification is available; the updated recording has not been replay-verified here. Historical Shadownet posts remain separate evidence with their binding to this recording unchecked. No public node or value-bearing network is advertised.",
+    "summary": "Replay 421 recorded dev-chain blocks, saved on 3 October 2026 at 19:31:59 UTC. A separate no-value, resettable bot-devnet guide offers MCP examples and a GET-only watch. The launch chain remains nonpublic and the art-commerce mint adapter remains unconfigured. This recording has not been replay-verified here; its binding to historical Shadownet posts is unchecked.",
     "nextAction": "Read the dated network boundaries and try verification of the saved recording.",
     "sources": [
       {
@@ -152,11 +152,15 @@ export const CHAIN_PANELS = [
         "label": "Current recorded blocks"
       },
       {
-        "href": "https://github.com/mhoydich/pointcast/blob/acb659d89be755e46791e0fa935b788064811dc1/public/chain/yard/snapshot.json",
+        "href": "https://github.com/mhoydich/pointcast/blob/958fcedcd78f041a989bceb140c4fb587d59ca9a/public/chain/yard/snapshot.json",
         "label": "Dated 421-block source"
+      },
+      {
+        "href": "/chain/bots/",
+        "label": "Separate bot-devnet guide"
       }
     ],
-    "checkedAt": "2026-10-04T00:12:52.586053Z"
+    "checkedAt": "2026-10-04T00:30:05Z"
   }
 ];
 

@@ -113,13 +113,16 @@ test('blockchain panels separate runtime quotes, mint restrictions and the recor
   assert.match(text, /settlement.*not|not.*settlement|settlement.*untested/i);
   assert.match(text, /disabled|nothing.*mint/i);
   assert.match(text, /dev|recorded/i);
-  assert.match(text, /no public|not.*public network/i);
+  assert.match(text, /launch chain remains nonpublic/i);
   const recording = JSON.parse(readFileSync(new URL('../public/chain/yard/snapshot.json', import.meta.url), 'utf8'));
   const devPanel = CHAIN_PANELS.find(panel => panel.id === 'pointcast-dev');
   assert.equal(recording.blocks.length, 421);
   assert.equal(recording.status.height, 421);
   assert.match(devPanel.summary, /421 recorded.*19:31:59 UTC/);
-  assert.ok(devPanel.sources.some(source => source.href.includes('acb659d89be755e46791e0fa935b788064811dc1/public/chain/yard/snapshot.json')));
+  assert.match(devPanel.summary, /separate no-value, resettable bot-devnet/);
+  assert.match(devPanel.summary, /art-commerce mint adapter remains unconfigured/);
+  assert.ok(devPanel.sources.some(source => source.href === '/chain/bots/'));
+  assert.ok(devPanel.sources.some(source => source.href.includes('958fcedcd78f041a989bceb140c4fb587d59ca9a/public/chain/yard/snapshot.json')));
   const client = readFileSync(new URL('../src/scripts/hoydich-dashboard.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(client, /fetch\(|XMLHttpRequest|setInterval|sendTransaction|requestPermissions|signPayload|walletConnect|Payment-Signature/);
 });

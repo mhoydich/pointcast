@@ -100,9 +100,9 @@ test('setup is idempotent and keeps controls hidden until the working initialize
 
 test('verified concept and disabled status pages stay distinct from pending destinations', () => {
   const payload = portfolioPayload();
-  assert.equal(payload.sourceRevision, 'acb659d89be755e46791e0fa935b788064811dc1');
+  assert.equal(payload.sourceRevision, '958fcedcd78f041a989bceb140c4fb587d59ca9a');
   assert.ok(Number.isFinite(Date.parse(payload.capturedAt)));
-  assert.match(payload.dateLabel, /UTC/);
+  assert.match(payload.dateLabel, /Pacific/);
   assert.ok(LATEST_LINKS.some(project => project.id === 'buildworks' && project.href === '/buildworks/'));
   assert.equal(STUDIO.some(project => project.id === 'buildworks'), false);
   const commerce = LATEST_LINKS.find(project => project.id === 'art-v2-commerce');
