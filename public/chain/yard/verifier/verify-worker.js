@@ -4,11 +4,21 @@
 //
 // The PAGE fetches this file, verify.js and the wasm, checks each against the
 // sha256 pinned in index.html, and starts the worker from those checked bytes:
-//   postMessage({ api, genesis?, verifyJsUrl, wasm: ArrayBuffer, wasmSha256 })
+//   postMessage({ api, genesis?, verifyJsUrl, wasm: ArrayBuffer, wasmSha256, checkpoint? })
 // The worker never loads code from the node it is checking.
 //
+// checkpoint (optional; needs a verifier wasm with verifier.from_checkpoint):
+// "latest" fetches the node's /snapshot/latest manifest and chunks, or pass
+// a snapshot object (a manifest with `state` filled in). The wasm re-checks
+// the seal, key proof and the state root over every account and module, and
+// the replay starts at its height. `basis` then says
+// "from checkpoint #H (sequencer-sealed)": show it yellow, never "verified".
+//
 // Messages out:
-//   { type: "ready", genesis_hash, chain_id, wasm_sha256 }
+//   { type: "ready", genesis_hash, chain_id, wasm_sha256, basis }
+//                                                        basis: the wasm's verifier.basis report
+//                                                        ({kind, label, verified_from_genesis, …}),
+//                                                        or null with an older wasm
 //   { type: "progress", height, block_hash, state_root, tip,
 //     verified: [[height, block_hash, state_root, tx_count], ...],
 //     blocks: [{ height, block_hash, txs: [card fields from the replay] }] }
@@ -17,7 +27,10 @@
 //                                                        this genesis (verdict.genesis); the worker stops.
 //                                                        evidence_json is the exact JSON to save (u64s intact)
 //   { type: "node_fault", fault, height, reason }         the node served something wrong; retried
-//   { type: "anchors", match, total, ahead, bad_sig, foreign, mismatch: [heights] }
+//   { type: "anchors", match, total, ahead, bad_sig, foreign, unknown, mismatch: [heights] }
+//                                                        unknown: validly signed for a height the
+//                                                        replay holds no checkpoint for (below a
+//                                                        checkpoint start): neither match nor mismatch
 //   { type: "error", message, transient? }
 
 const PAGE = 500;
@@ -25,6 +38,8 @@ const POLL_MS = 3000;
 // At most this many pages per sync pass, so a node that keeps answering with
 // full pages (or ignores `from`) cannot keep the worker spinning.
 const MAX_PAGES_PER_SYNC = 40;
+// Largest checkpoint state the worker fetches (JSON bytes).
+const MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024;
 let api = "", v = null, params = null, stopped = false, tipSeen = 0;
 // verify.js's lossless parseJson/stringifyJson, set once it is imported.
 let json = null;
@@ -116,7 +131,7 @@ async function syncOnce() {
 async function checkAnchors() {
   let list;
   try { list = (await getJson("/anchors")).anchors || []; } catch { return; }
-  const out = { type: "anchors", match: 0, total: 0, ahead: 0, bad_sig: 0, foreign: 0, mismatch: [] };
+  const out = { type: "anchors", match: 0, total: 0, ahead: 0, bad_sig: 0, foreign: 0, unknown: 0, mismatch: [] };
   for (const a of list) {
     if (!a.seq_sig || !a.payload) continue;
     const input = a.cast_body ? { body_hex: a.cast_body } : { payload: a.payload, seq_sig: a.seq_sig };
@@ -125,11 +140,34 @@ async function checkAnchors() {
     if (r.result === "ahead") { out.ahead++; continue; }
     if (r.result === "bad_sig") { out.bad_sig++; continue; }
     if (r.result === "foreign") { out.foreign++; continue; }
+    if (r.result === "before_checkpoint") { out.unknown++; continue; }
     out.total++;
     if (r.result === "match") out.match++;
     else out.mismatch.push(r.height);
   }
   say(out);
+}
+
+// The node's newest snapshot: the manifest, then every chunk (same node,
+// bounded), joined and parsed losslessly. Checked by the wasm, not here.
+async function fetchSnapshot() {
+  const m = await getJson("/snapshot/latest");
+  const total = Number(m.state_bytes), size = Number(m.chunk_bytes), n = Number(m.chunks);
+  if (!(total >= 0 && total <= MAX_SNAPSHOT_BYTES && size > 0 && n === Math.ceil(total / size))) throw new Error("bad snapshot manifest");
+  if (!/^\/snapshot\/[0-9]+\/chunk\/$/.test(String(m.chunk_path))) throw new Error("bad snapshot chunk path");
+  const bytes = new Uint8Array(total);
+  for (let i = 0; i < n; i++) {
+    const r = await fetch(`${api}${m.chunk_path}${i}?chunk_bytes=${size}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(`${r.status} snapshot chunk ${i}`);
+    const part = new Uint8Array(await r.arrayBuffer());
+    if (part.length !== Math.min(size, total - i * size)) throw new Error(`snapshot chunk ${i} has the wrong size`);
+    bytes.set(part, i * size);
+  }
+  return { ...m, state: json.parseJson(new TextDecoder().decode(bytes)) };
+}
+
+function basisNow() {
+  try { return v.call("verifier.basis"); } catch { return null; } // an older wasm has no basis op
 }
 
 async function loop() {
@@ -172,8 +210,14 @@ onmessage = async (ev) => {
     let status;
     [params, status] = await Promise.all([getJson("/params"), getJson("/status")]);
     tipSeen = Number(status.height) || 0;
-    const init = v.call("verifier.new", { params, genesis: msg.genesis || null });
-    say({ type: "ready", genesis_hash: init.genesis_hash, chain_id: init.chain_id, wasm_sha256 });
+    let init;
+    if (msg.checkpoint) {
+      const snapshot = msg.checkpoint === "latest" ? await fetchSnapshot() : msg.checkpoint;
+      init = v.call("verifier.from_checkpoint", { params, genesis: msg.genesis || null, snapshot });
+    } else {
+      init = v.call("verifier.new", { params, genesis: msg.genesis || null });
+    }
+    say({ type: "ready", genesis_hash: init.genesis_hash, chain_id: init.chain_id, wasm_sha256, basis: init.basis || basisNow() });
     loop();
   } catch (e) {
     stopped = true;
