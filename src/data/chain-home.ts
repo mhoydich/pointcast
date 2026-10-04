@@ -42,7 +42,36 @@ export const SOURCE = {
 } as const;
 
 export const STATUS_LINE =
-  'Built and tested locally. Not a public network. No public node. Mainnet anchoring waits on a funded key. First Mints and the art certificates are previews or rehearsals.';
+  'Built and tested locally. The launch chain has no public node; a public devnet for bots is open (no value, may reset). Mainnet anchoring waits on a funded key. First Mints and the art certificates are previews or rehearsals.';
+
+/**
+ * The public devnet: one Cloudflare Worker + Durable Object running
+ * chain-core as wasm (pointcast-chain docs/DEVNET.md and docs/BOTS.md at
+ * main bdc46e8). chain_id and genesis read from its /status on 2026-10-03.
+ * If the devnet resets, the genesis changes: update it here and every link
+ * that pins it follows.
+ */
+const DEVNET_URL = 'https://pointcast-devnet.mhoydich.workers.dev';
+const DEVNET_GENESIS = '132faa1c08769a871c53547db3499b6c031459e6606b3c4999ffd0ead0a56f08';
+export const DEVNET = {
+  url: DEVNET_URL,
+  mcp: `${DEVNET_URL}/mcp`,
+  chainId: 'pointcast-devnet-1',
+  genesis: DEVNET_GENESIS,
+  label: 'devnet · bot · unmoderated',
+  houseBots: ['grok', 'claude', 'chatgpt', 'frog', 'sparrow'],
+  source: 'bdc46e8',
+  readOn: '2026-10-03',
+  /**
+   * The Block Yard reading the devnet live, genesis pinned. `verifier=` points
+   * VERIFY at the yard's own sha256-pinned copy rather than the devnet's
+   * /verifier, so a later devnet verifier build can never make the yard refuse
+   * to run. Both are the 7f9f09f8… build since the yard re-pin (pointcast-chain
+   * 8e98d11); it replays the snapshot to №421 and the devnet with no faults
+   * (checked 2026-10-03).
+   */
+  yardHref: `/chain/yard/?api=${DEVNET_URL}&genesis=${DEVNET_GENESIS}&verifier=/chain/yard/verifier`,
+} as const;
 
 export const TESTS = {
   ranOn: '2026-10-03',
@@ -71,6 +100,7 @@ export type NavItem = { href: string; label: string; key: string };
 export const CHAIN_NAV: NavItem[] = [
   { key: 'home', href: '/chain', label: 'Home' },
   { key: 'yard', href: '/chain/yard/?snapshot=./snapshot.json', label: 'Block Yard' },
+  { key: 'bots', href: '/chain/bots', label: 'Bots · devnet' },
   { key: 'dev', href: '/chain/dev', label: 'Dev tools' },
   { key: 'docs', href: '/chain/docs/', label: 'Docs' },
   { key: 'case-study', href: '/chain/case-study', label: 'Case study' },

@@ -11,6 +11,7 @@ export const AGENT_SURFACES = {
     chainCaseStudy: 'https://pointcast.xyz/chain/case-study/',
     chainInterns: 'https://pointcast.xyz/chain/interns/',
     chainInternsData: 'https://pointcast.xyz/chain/interns.json',
+    chainBots: 'https://pointcast.xyz/chain/bots/',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',
     pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands/',
     pickleballMixedDoubles: 'https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles/',
@@ -199,6 +200,9 @@ export const AGENT_SURFACES = {
     postOfficeAliasStatus: 'https://pointcast.xyz/api/post-office/alias/{name}',
     mcp: 'https://pointcast.xyz/api/mcp',
     mcpV2: 'https://pointcast.xyz/api/mcp-v2',
+    // The public pointcast-chain devnet (its own Worker, not pointcast.xyz): no value, may reset. Guide: /chain/bots/.
+    chainDevnet: 'https://pointcast-devnet.mhoydich.workers.dev',
+    chainDevnetMcp: 'https://pointcast-devnet.mhoydich.workers.dev/mcp',
   },
   patterns: {
     block: 'https://pointcast.xyz/b/{id}',

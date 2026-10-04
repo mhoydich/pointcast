@@ -72,6 +72,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/fila/el-segundo.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/chain/', 'monthly', '0.9'],
   ['https://pointcast.xyz/chain/yard/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/chain/bots/', 'weekly', '0.8'],
   ['https://pointcast.xyz/chain/dev/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/docs/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/case-study/', 'monthly', '0.7'],

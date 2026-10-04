@@ -440,13 +440,27 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   const KIND_IX = new Map(KINDS.map((k, i) => [k.id, i]));
   const UNKNOWN = KINDS.length - 1;
   const kindIx = (t) => (KIND_IX.has(t) ? KIND_IX.get(t) : UNKNOWN);
-  // Mandate scope bits (1 << tag), chain-core TxKind::tag and mandate.rs.
+  // Mandate scope bits (bit = tag), docs/TAGS.md and chain-core TxKind::tag.
   const KIND_TAGS = { 1: "publish_block", 2: "drum_session", 3: "tap", 4: "drop_mint", 5: "transfer",
-    6: "register_agent", 7: "set_drum_attestors", 10: "spend_allowance", 11: "presence_tap", 12: "set_presence_issuers" };
+    6: "register_agent", 7: "set_drum_attestors", 8: "set_mandate", 9: "clear_mandate", 10: "spend_allowance",
+    11: "presence_tap", 12: "set_presence_issuers", 13: "rotate_sequencer", 14: "seal_capsule", 15: "open_capsule",
+    16: "claim_station", 17: "set_station", 18: "set_session_key", 19: "clear_session_key", 20: "set_controllers",
+    21: "open_edition", 22: "edition_mint", 23: "edition_transfer", 24: "fill_order", 25: "cancel_orders", 26: "pay",
+    27: "register_feed", 28: "oracle_report", 29: "strike_reporter", 30: "market_open", 31: "market_stake",
+    32: "market_resolve", 33: "market_dispute", 34: "market_claim", 35: "bridge_withdraw" };
   const scopeKinds = (bits) => {
-    const n = num(bits) || 0;
+    // The mask is u64 (docs/TAGS.md): BigInt, so bits 31-63 are not lost to 32-bit `1 << t`.
+    let n = 0n;
+    try {
+      if (typeof bits === "bigint") n = bits;
+      else if (typeof bits === "string" && /^\d{1,20}$/.test(bits)) n = BigInt(bits);
+      else if (typeof bits === "number" && Number.isFinite(bits) && bits > 0) n = BigInt(Math.trunc(bits));
+    } catch { n = 0n; }
+    n &= (1n << 64n) - 1n;
     if (!n) return "paused (no kinds)";
-    return Object.entries(KIND_TAGS).filter(([t]) => n & (1 << Number(t))).map(([, k]) => k).join(", ") || `bits ${n}`;
+    const out = [];
+    for (let t = 0; t < 64; t++) if ((n >> BigInt(t)) & 1n) out.push(KIND_TAGS[t] || `tag ${t}`);
+    return out.join(", ");
   };
 
   // One line saying what the tx did, from its own fields.
@@ -2045,7 +2059,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // snapshot, so nothing is trusted that the replay does not check.
   // ======================================================================
   const VERIFIER_PINS = {
-    "pointcast_chain.wasm": "e08e675b94a07ff5fd76350a06a465836bd09f41aeac3e12b09148f65078d60f",
+    "pointcast_chain.wasm": "7f9f09f812d2e7b0311cad45b1214124646890dd851b955e30515e8837eae2b5",
     "verify.js": "74255711f5b8988eb18c30d5138ef0dc5ff4612566f0d70ac5b9fea6f81dc3cc",
     "verify-worker.js": "d2823b12caab9924f6ab256121a3bb5f1ba16223f881568f4bc7542a4ef7f783",
   };
