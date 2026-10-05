@@ -1,0 +1,139 @@
+---
+/**
+ * One Daily Almanac card. The number and the date are known at build time.
+ * The five lines fill from /almanac.json so a miss stays a miss.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { addIsoDays, cardDateLabel, cardMeta, cardNumber, CARD_EPOCH, CARD_LAST } from '../../functions/_lib/almanac-card.mjs';
+
+interface Props {
+  date: string;
+}
+
+const { date } = Astro.props;
+const meta = cardMeta(date);
+const number = cardNumber(date);
+const prev = number > 1 ? addIsoDays(date, -1) : null;
+const next = date < CARD_LAST ? addIsoDays(date, 1) : null;
+const title = `${meta.title} — ${cardDateLabel(date)}`;
+const description = `Daily Almanac No. ${number} for El Segundo on ${cardDateLabel(date)}: tide, marine layer, the price-wire basket, the Morning Edition pick, and the weather. Missing sources are marked, not guessed.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWork',
+  name: title,
+  description,
+  url: `https://pointcast.xyz${meta.path}`,
+  datePublished: date,
+  isPartOf: { '@type': 'Collection', name: 'PointCast Daily Almanac', url: 'https://pointcast.xyz/almanac' },
+};
+const lines = [
+  ['tide', 'Tide'],
+  ['marine', 'Sky'],
+  ['basket', 'Basket'],
+  ['pick', 'Pick'],
+  ['weather', 'Weather'],
+];
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={meta.og}
+  imageWidth={1200}
+  imageHeight={630}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: meta.json, title: `${meta.title} JSON` }]}
+>
+  <main class="dac" data-almanac-card data-date={date}>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="/almanac">Almanac</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">No. {number}</span>
+    </nav>
+
+    <article class="card">
+      <header class="card-head">
+        <p class="team">El Segundo</p>
+        <p class="no">No. {number}</p>
+        <h1>{meta.title}</h1>
+        <p class="when">{cardDateLabel(date)}</p>
+      </header>
+      <dl>
+        {lines.map(([key, label]) => (
+          <div>
+            <dt>{label}</dt>
+            <dd>
+              <span class="flag" data-flag={key}>waiting</span>
+              <span class="line" data-line={key}>Reading the town…</span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p class="rule">No. 1 is {CARD_EPOCH}. A missing line was not guessed. Tide is NOAA or nothing. The basket is not an official CPI.</p>
+    </article>
+
+    <noscript>
+      <p class="plain">The lines need JavaScript here. The same card is at <a href={meta.json}>{meta.json}</a>.</p>
+    </noscript>
+
+    <nav class="pager" aria-label="Other cards">
+      {prev ? <a href={`/almanac/${prev}`}>No. {number - 1}</a> : <span>First card</span>}
+      <a href="/almanac">The collection</a>
+      {next ? <a href={`/almanac/${next}`}>No. {number + 1}</a> : <span>Last card this year</span>}
+    </nav>
+    <p class="plain">Places, sun, and moon stay at <a href="/almanac/el-segundo">the El Segundo almanac</a>. Morning Edition: <a href="/morning">/morning</a>.</p>
+  </main>
+</BlockLayout>
+
+<script>
+  import '../scripts/daily-almanac.mjs';
+</script>
+
+<style>
+  .dac { max-width: 40rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  .crumb, .plain, .pager, .rule, .team, .no, .when, .flag {
+    font-family: var(--pc-font-mono);
+  }
+  .crumb {
+    display: flex; gap: 0.5rem; flex-wrap: wrap;
+    margin: 0 0 1.25rem; font-size: 0.75rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--pc-ink-muted);
+  }
+  .crumb a { color: inherit; text-decoration: none; }
+  .card {
+    background: #f4e7c8;
+    color: #1c2430;
+    border: 8px solid #1d3557;
+    box-shadow: inset 0 0 0 3px #9b2335;
+    padding: 1.25rem 1.2rem 1.1rem;
+  }
+  .card-head { display: grid; grid-template-columns: 1fr auto; gap: 0.15rem 1rem; }
+  .team {
+    margin: 0; font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: #1d3557;
+  }
+  .no { margin: 0; color: #9b2335; font-size: 1.15rem; letter-spacing: 0.04em; }
+  .card h1 {
+    grid-column: 1 / -1; margin: 0.2rem 0 0;
+    font-size: clamp(1.8rem, 5vw, 2.5rem); letter-spacing: -0.03em; line-height: 0.95;
+  }
+  .when { grid-column: 1 / -1; margin: 0.35rem 0 0; color: #5c5346; font-size: 0.85rem; }
+  .card dl { margin: 1rem 0 0; }
+  .card dl div { padding: 0.55rem 0; border-top: 1px solid #1d355744; }
+  .card dt {
+    font-family: var(--pc-font-mono); font-size: 0.68rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #9b2335; margin: 0 0 0.15rem;
+  }
+  .card dd { margin: 0; font-size: 1.02rem; line-height: 1.4; }
+  .flag {
+    display: inline-block; margin-right: 0.45rem; font-size: 0.65rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #5c5346;
+  }
+  .flag.is-missing { color: #9b2335; }
+  .rule, .plain { font-size: 0.82rem; line-height: 1.5; color: var(--pc-ink-muted); }
+  .rule { margin: 0.9rem 0 0; color: #5c5346; }
+  .pager {
+    display: flex; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+    margin: 1rem 0; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .pager a { color: var(--pc-accent); }
+</style>
