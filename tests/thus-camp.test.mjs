@@ -84,3 +84,40 @@ test('JSON payload carries attribution and absolute URLs', () => {
   assert.ok(p.source);
   for (const s of p.situations) assert.equal(s.url, `https://pointcast.xyz/thus-camp/${s.slug}/`);
 });
+
+test('weather readings map to condition suggestions', async () => {
+  const { suggestConditions } = await import('../src/lib/thus-camp.mjs');
+  assert.deepEqual(suggestConditions({ tempF: 98, condition: 'clear' }).modifiers, ['hot']);
+  assert.match(suggestConditions({ tempF: 99, condition: 'clear' }).notes[0], /98 degree/);
+  assert.deepEqual(suggestConditions({ tempF: 89, condition: 'clear' }).modifiers, []);
+  assert.deepEqual(suggestConditions({ tempF: 58, condition: 'showers' }).modifiers, ['chill', 'rain']);
+  assert.match(suggestConditions({ tempF: 75, condition: 'storm' }).notes.join(' '), /lightning/);
+  assert.deepEqual(suggestConditions({}).modifiers, []);
+  assert.deepEqual(suggestConditions({ tempF: null, condition: 'clear' }).modifiers, []);
+  const modIds = new Set(data.modifiers.map((m) => m.id));
+  for (const id of ['hot', 'chill', 'rain']) assert.ok(modIds.has(id), id);
+});
+
+test('camp codes run in order with no gaps', () => {
+  data.situations.forEach((s, i) => assert.equal(s.code, `TC-${String(i + 1).padStart(2, '0')}`));
+  assert.ok(data.situations.length >= 14);
+});
+
+test('MCP declares and handles thus_camp_kit and documents it', () => {
+  const src = readFileSync(new URL('../functions/api/mcp.ts', import.meta.url), 'utf8');
+  const defs = src.slice(src.indexOf('const TOOL_DEFINITIONS = ['), src.indexOf('const TOOLS = ['));
+  assert.match(defs, /name: 'thus_camp_kit'/);
+  assert.match(src, /case 'thus_camp_kit':/);
+  assert.match(src, /<code>thus_camp_kit<\/code>/);
+  // The handler reuses the page's kit logic against the published JSON.
+  assert.match(src, /from '\.\.\/\.\.\/src\/lib\/thus-camp\.mjs'/);
+  assert.match(src, /callJson\(`\$\{base\}\/thus-camp\.json`\)/);
+});
+
+test('the kit logic works against the published JSON payload, as the MCP tool uses it', () => {
+  const p = JSON.parse(JSON.stringify(campPayload(data)));
+  const kit = buildKit(p, 'pickleball-watcher', { role: 'family', modifiers: ['rain'], trunk: false });
+  assert.ok(kit.items.some((i) => i.id === 'player-snacks'));
+  assert.ok(kit.items.some((i) => i.group === 'rain'));
+  assert.equal(kitParams(kit).get('m'), 'rain');
+});

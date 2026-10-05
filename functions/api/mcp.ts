@@ -3,6 +3,7 @@ import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-in
 import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
 import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
+import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, kitParams as thusCampParams, suggestConditions as suggestThusCampConditions } from '../../src/lib/thus-camp.mjs';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
  *
@@ -568,6 +569,21 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         station: { type: 'string', description: 'Station slug. Default "el-segundo".' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'thus_camp_kit',
+    description: 'Thus Camp (pointcast.xyz/thus-camp): pack lists for the next three hours of any outing, e.g. high school football as a parent, a 98 degree day, the pickleball courts as a player or a watcher, a beach day, an airport delay. With no situation: lists the camps (slug, title, roles, the one-line call). With a situation: returns the kit (items with why, tier core|nice), plus the timeline, moves and watch-for notes. Optional role, conditions (hot, chill, rain, kids) and trunk kit. Set weather_station (e.g. "el-segundo", see weather_get) to add hot/chill/rain from the live reading. General guidance, not medical or legal advice. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        situation: { type: 'string', description: 'Camp slug, e.g. "friday-night-football", "ninety-eight-degrees", "pickleball-player", "pickleball-watcher". Omit to list camps.' },
+        role: { type: 'string', description: 'Optional role id from the camp\'s roles, e.g. "player-parent" or "tournament".' },
+        conditions: { type: 'array', items: { type: 'string', enum: ['hot', 'chill', 'rain', 'kids'] }, description: 'Optional conditions to add.' },
+        trunk: { type: 'boolean', description: 'Add the always-in-the-car trunk kit.' },
+        weather_station: { type: 'string', description: 'Optional weather station slug; its live reading adds hot/chill/rain.' },
       },
       additionalProperties: false,
     },
@@ -2319,6 +2335,50 @@ async function dispatchTool(
         ],
       };
     }
+    case 'thus_camp_kit': {
+      const data = await callJson(`${base}/thus-camp.json`);
+      const slug = String(args.situation || '');
+      if (!slug) {
+        const camps = (data?.situations ?? []).map((s: any) => ({ slug: s.slug, code: s.code, title: s.title, hours: s.hours, roles: s.roles, call: s.call, url: s.url }));
+        return {
+          content: [
+            { type: 'text', text: `Thus Camp · ${camps.length} camps · conditions: ${(data?.modifiers ?? []).map((m: any) => m.id).join(', ')} · ${data?.disclaimer ?? ''}` },
+            { type: 'text', text: JSON.stringify(camps, null, 2) },
+          ],
+        };
+      }
+      const situation = findThusCampSituation(data, slug);
+      if (!situation) throw new Error(`unknown situation "${slug}". Call thus_camp_kit with no situation to list camps.`);
+      const conditions = Array.isArray(args.conditions) ? args.conditions.map(String) : [];
+      let weather: any = null;
+      let notes: string[] = [];
+      if (args.weather_station) {
+        weather = await callJson(`${base}/api/weather?station=${encodeURIComponent(String(args.weather_station))}`).catch(() => null);
+        if (weather?.ok) {
+          const suggested = suggestThusCampConditions(weather);
+          for (const m of suggested.modifiers) if (!conditions.includes(m)) conditions.push(m);
+          notes = suggested.notes;
+        }
+      }
+      const kit = buildThusCampKit(data, slug, { role: String(args.role || ''), modifiers: conditions, trunk: Boolean(args.trunk) });
+      const result = {
+        ...kit,
+        url: situation.url,
+        builder: `${base}/thus-camp/?${thusCampParams(kit).toString()}#pack`,
+        weather: weather?.ok ? { name: weather.name, tempF: weather.tempF, condition: weather.condition, notes } : null,
+        timeline: situation.timeline,
+        moves: situation.moves,
+        watchFor: situation.watchFor,
+        skip: situation.skip,
+        disclaimer: data.disclaimer,
+      };
+      return {
+        content: [
+          { type: 'text', text: `Thus Camp · ${kit.title} · ${kit.items.length} items${kit.role ? ` · ${kit.role}` : ''}${kit.modifiers.length ? ` · ${kit.modifiers.join(', ')}` : ''}` },
+          { type: 'text', text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
     case 'paddle_lookup': {
       const words = String(args.query || '').toLowerCase().split(/[^a-z0-9.+]+/).filter(Boolean).slice(0, 8);
       if (!words.length) throw new Error('query is required');
@@ -3756,6 +3816,7 @@ function discoveryHtml(request: Request) {
   <li><code>blocks_search</code> — full-text search blocks</li>
   <li><code>local_snapshot</code> — El Segundo 100-mile lens · /local.json</li>
   <li><code>weather_get</code> — weather for a station</li>
+  <li><code>thus_camp_kit</code> — Thus Camp pack lists for an outing (football as a parent, 98 degrees, pickleball, beach), with optional live-weather conditions</li>
   <li><code>paddle_lookup</code> — a pickleball paddle's launch date, price, approval status, timeline and lab links</li>
   <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
   <li><code>catan_tables</code> — upcoming Catan game nights on Hex &amp; Harbor</li>

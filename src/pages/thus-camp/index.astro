@@ -88,6 +88,11 @@ const jsonLd = {
             <div class="tc-options">
               {data.modifiers.map((m) => <label class="tc-chip"><input type="checkbox" name="m" value={m.id} /><span>{m.label}</span></label>)}
             </div>
+            <div class="tc-wx" data-tc-wx hidden>
+              <button type="button" class="tc-btn tc-btn--ghost" data-tc-wx-here>Use El Segundo weather</button>
+              <button type="button" class="tc-btn tc-btn--ghost" data-tc-wx-me>Use my location</button>
+              <p class="tc-status" data-tc-wx-status role="status"></p>
+            </div>
           </fieldset>
           <fieldset class="tc-field">
             <legend class="tc-label">Base layer</legend>
@@ -145,7 +150,7 @@ const jsonLd = {
 
 
 <script>
-  import { buildKit, kitText, readKitParams, kitParams, findSituation } from '../../lib/thus-camp.mjs';
+  import { buildKit, kitText, readKitParams, kitParams, findSituation, suggestConditions, EL_SEGUNDO } from '../../lib/thus-camp.mjs';
 
   function esc(s: string): string {
     return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
@@ -241,6 +246,40 @@ const jsonLd = {
     $('[data-tc-copy]').addEventListener('click', () => copy(kitText(data, kit, new Set(store(checkKey()))), 'Pack list copied.'));
     $('[data-tc-share]').addEventListener('click', () => copy(`${location.origin}/thus-camp/?${kitParams(state).toString()}#pack`, 'Link copied. It carries the camp and conditions, not your checks.'));
     $('[data-tc-reset]').addEventListener('click', () => { store(checkKey(), []); render(); status.textContent = 'Checks cleared for this camp.'; });
+
+    // Weather sets the weather-driven conditions (hot, chill, rain) and leaves the rest alone.
+    const WEATHER_MODS = ['hot', 'chill', 'rain'];
+    const wxBox = $('[data-tc-wx]');
+    const wxStatus = $('[data-tc-wx-status]');
+    async function applyWeather(lat: number, lng: number, label: string): Promise<void> {
+      wxStatus.textContent = `Checking ${label}…`;
+      try {
+        const res = await fetch(`/api/weather?lat=${lat.toFixed(2)}&lng=${lng.toFixed(2)}&label=${encodeURIComponent(label)}`);
+        const wx = res.ok ? await res.json() : null;
+        if (!wx?.ok || typeof wx.tempF !== 'number') throw new Error('no reading');
+        const { modifiers, notes } = suggestConditions(wx);
+        state = { ...state, modifiers: [...state.modifiers.filter((m: string) => !WEATHER_MODS.includes(m)), ...modifiers] };
+        syncControls();
+        render();
+        pushUrl();
+        const set = modifiers.length ? `set ${modifiers.map((m: string) => data.modifiers.find((d: { id: string }) => d.id === m)?.label).join(', ')}` : 'no weather conditions needed';
+        wxStatus.textContent = [`${label}: ${wx.tempF}°F, ${wx.condition} right now. ${set[0].toUpperCase()}${set.slice(1)}.`, ...notes].join(' ');
+      } catch {
+        wxStatus.textContent = 'Weather is not available right now. Pick the conditions by hand.';
+      }
+    }
+    wxBox.hidden = false;
+    $('[data-tc-wx-here]').addEventListener('click', () => applyWeather(EL_SEGUNDO.lat, EL_SEGUNDO.lng, EL_SEGUNDO.label));
+    const meBtn = $('[data-tc-wx-me]');
+    if (!('geolocation' in navigator)) meBtn.hidden = true;
+    meBtn.addEventListener('click', () => {
+      wxStatus.textContent = 'Asking your browser for location. It is rounded to about a kilometer and only used to look up the weather.';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => applyWeather(pos.coords.latitude, pos.coords.longitude, 'Your location'),
+        () => { wxStatus.textContent = 'Location was not shared. Try El Segundo weather or pick by hand.'; },
+        { maximumAge: 600000, timeout: 10000 },
+      );
+    });
 
     syncControls();
     render();

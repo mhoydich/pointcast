@@ -91,3 +91,25 @@ export function campPayload(data) {
     situations: data.situations.map((s) => ({ ...s, url: `${THUS_CAMP_CANONICAL}${s.slug}/` })),
   };
 }
+
+export const EL_SEGUNDO = { lat: 33.92, lng: -118.42, label: 'El Segundo' };
+const WET = new Set(['drizzle', 'rain', 'showers', 'storm']);
+
+/**
+ * Turn a /api/weather reading ({ tempF, condition }) into suggested condition ids
+ * plus short notes. Thresholds: 90°F and up is "hot", 62°F and down is "chill".
+ */
+export function suggestConditions(weather) {
+  const modifiers = [];
+  const notes = [];
+  const t = typeof weather?.tempF === 'number' ? weather.tempF : Number.NaN;
+  const condition = String(weather?.condition ?? '').toLowerCase();
+  if (Number.isFinite(t) && t >= 90) {
+    modifiers.push('hot');
+    if (t >= 98) notes.push(`${t}°F: read the 98 degree camp before you go.`);
+  }
+  if (Number.isFinite(t) && t <= 62) modifiers.push('chill');
+  if (WET.has(condition)) modifiers.push('rain');
+  if (condition === 'storm') notes.push('Thunderstorms: outdoor events usually pause for lightning. Wait it out in a car or building, not under bleachers or trees.');
+  return { modifiers, notes };
+}
