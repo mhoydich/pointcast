@@ -123,3 +123,5 @@ export const STANDARDS: StandardEntry[] = [
 ];
 
 export const UPCOMING: readonly { title: string; summary: string }[] = [];
+
+export { STANDARDS_PUBLISHED, STANDARDS_COPY, standardsJsonLd } from './standards-seo.mjs';

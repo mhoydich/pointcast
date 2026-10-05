@@ -21,6 +21,10 @@
  * { reason: 'key-not-bound' } — this script logs the condition and
  * exits 0 (not a failure) so it can be wired into post-deploy CI today
  * and start working the moment the secret lands.
+ *
+ * Ownership file: public/<key>.txt at the site root. The file body is the
+ * key. Set the Cloudflare Pages secret INDEXNOW_KEY to that same value
+ * before a ping can succeed. This script does not read the secret.
  */
 
 const ENDPOINT = 'https://pointcast.xyz/api/indexnow';

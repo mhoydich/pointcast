@@ -4,7 +4,8 @@
  * The five lines fill from /almanac.json so a miss stays a miss.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
-import { addIsoDays, cardDateLabel, cardMeta, cardNumber, CARD_EPOCH, CARD_LAST } from '../../functions/_lib/almanac-card.mjs';
+import { addIsoDays, cardMeta, cardNumber, CARD_EPOCH, CARD_LAST } from '../../functions/_lib/almanac-card.mjs';
+import { cardSeo } from '../lib/almanac-seo.mjs';
 
 interface Props {
   date: string;
@@ -13,17 +14,22 @@ interface Props {
 const { date } = Astro.props;
 const meta = cardMeta(date);
 const number = cardNumber(date);
+const seo = cardSeo(date);
 const prev = number > 1 ? addIsoDays(date, -1) : null;
 const next = date < CARD_LAST ? addIsoDays(date, 1) : null;
-const title = `${meta.title} — ${cardDateLabel(date)}`;
-const description = `Daily Almanac No. ${number} for El Segundo on ${cardDateLabel(date)}: tide, marine layer, the price-wire basket, the Morning Edition pick, and the weather. Missing sources are marked, not guessed.`;
+const { title, description } = seo;
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'CreativeWork',
-  name: title,
+  '@type': 'Dataset',
+  name: meta.title,
+  headline: meta.title,
   description,
   url: `https://pointcast.xyz${meta.path}`,
+  temporalCoverage: date,
   datePublished: date,
+  spatialCoverage: { '@type': 'Place', name: 'El Segundo, California' },
+  creator: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+  publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
   isPartOf: { '@type': 'Collection', name: 'PointCast Daily Almanac', url: 'https://pointcast.xyz/almanac' },
 };
 const lines = [
@@ -38,6 +44,7 @@ const lines = [
 <BlockLayout
   title={title}
   description={description}
+  noindex={seo.upcoming}
   image={meta.og}
   imageWidth={1200}
   imageHeight={630}

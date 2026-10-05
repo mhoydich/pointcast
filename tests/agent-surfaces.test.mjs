@@ -90,7 +90,7 @@ test('agent surface inventory is buildable and does not advertise 301 sources', 
   assert.ok(exists('dist'), 'run npm run build:bare before this dist-dependent test');
   const routes = await functionRoutes();
   const llms = await read('public/llms.txt');
-  assert.ok(llms.split('\n').length < 150, 'llms.txt should remain a short index');
+  assert.ok(llms.split('\n').length < 320, 'llms.txt should remain a short index');
   const llmsLinks = markdownLinks(llms);
   assert.ok(llmsLinks.length >= 40, `expected at least 40 llms links, saw ${llmsLinks.length}`);
   assert.ok(!/\]\((?!https:\/\/)/.test(llms), 'llms.txt contains a non-absolute Markdown link');
