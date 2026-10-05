@@ -47,6 +47,7 @@
   --beacon-posted: #d114c2;
   --beacon-off: #a39b84;
   --mint: #d4148f;
+  --strike: #b3001b;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Verdana", "Tahoma", system-ui, sans-serif;
 }
@@ -59,7 +60,7 @@
     --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
     --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
     --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
-    --mint: #ff5cc0;
+    --mint: #ff5cc0; --strike: #ff5a5a;
   }
 }
 :root[data-theme="dark"] {
@@ -70,7 +71,7 @@
   --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
   --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
   --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
-  --mint: #ff5cc0;
+  --mint: #ff5cc0; --strike: #ff5a5a;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -91,6 +92,7 @@ code { font: 11px var(--mono); }
 .bevel:active, .bevel[aria-pressed="true"], .bevel[aria-expanded="true"] { border-color: var(--pc-chrome-lo) var(--pc-chrome-hi) var(--pc-chrome-hi) var(--pc-chrome-lo); }
 .bevel[aria-pressed="true"]#verify { background: var(--pc-attn); color: #fff; }
 .bevel[aria-pressed="true"]#lens-btn { background: var(--mint); color: #fff; }
+.bevel[aria-pressed="true"]#wlens-btn { background: var(--pc-title); color: #fff; }
 .bevel:disabled { opacity: .5; cursor: default; }
 .bevel.mini { padding: 0 5px; font-size: 10px; line-height: 16px; }
 
@@ -144,6 +146,17 @@ button.link { background: none; border: 0; padding: 0; text-decoration: underlin
 .mchip .bevel { max-width: 100%; overflow: hidden; }
 .mchip .bevel span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .mchip a { font: 11px var(--mono); white-space: nowrap; }
+/* the Witness lens: attested checkpoints, then the keys at one checkpoint */
+.wit { margin: 0 0 10px; }
+.wit-body { padding: 7px 10px 8px; display: grid; gap: 6px; font: 12px var(--mono); min-width: 0; }
+.wstrike { color: var(--strike); font-weight: bold; }
+.mchip .bevel.wstrike { color: var(--strike); }
+.badge.wkey { color: var(--pc-title); }
+.badge.wstrike { color: #fff; background: var(--strike); border-color: transparent; }
+.badge.est { color: var(--pc-attn); }
+.wrow { padding: 8px 12px; border-top: 1px solid var(--pc-rule); display: grid; gap: 3px; font: 12px var(--mono); }
+.wrow .txk b { font: bold 13px var(--sans); overflow-wrap: anywhere; }
+.netchip { background: none; font: bold 10px/16px var(--mono); color: var(--pc-title); }
 
 /* the yard */
 .yard { position: relative; }
@@ -261,6 +274,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       <span class="live off" id="live"><i></i><span id="live-text">TUNING IN</span><span class="tally" id="live-tally"></span></span>
       <span class="tag">Every block is a stack of blocks: one cube per transaction.</span>
       <span class="policy" id="policy" hidden title="Tap income needs a presence ticket from a registered issuer; bare taps count but mint 0">ticketed taps</span>
+      <button class="policy netchip" id="net-chip" type="button" hidden aria-controls="wit" title="The devnet's Daily Net today: participants and witness keys, read each minute. The day is UTC and resets at 00:00 UTC. Counts are keys, not people. Opens the Witness lens.">NET</button>
       <span class="grow"></span>
       <a class="bevel" href="/" id="feed-link">▤ feed explorer</a>
     </div>
@@ -280,6 +294,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     <button class="bevel" id="accounts-btn" aria-expanded="false" aria-controls="drawer">◫ Accounts</button>
     <button class="bevel" id="legend-btn" aria-expanded="true" aria-controls="legend">▧ Legend</button>
     <button class="bevel" id="lens-btn" aria-pressed="false" aria-controls="mints" title="Mints lens: light every mint cube and ring each collection's first mint (M)">◆ <span class="hide-sm">Mints </span>lens</button>
+    <button class="bevel" id="wlens-btn" aria-pressed="false" aria-controls="wit" title="Witness lens: ring each checkpoint that witness keys signed, from a devnet's witness index (W)">◎ <span class="hide-sm">Witness </span>lens</button>
     <span class="grow"></span>
     <form class="goto" id="goto"><label for="goto-h">go to №</label><input id="goto-h" type="number" min="1" step="1" inputmode="numeric" placeholder="height"><button class="bevel" type="submit" aria-label="Jump to height">↵</button></form>
     <button class="bevel" id="zoom-out" aria-label="Zoom out" title="Zoom out (−)">−</button>
@@ -297,6 +312,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   <section class="win mints" id="mints" aria-label="Mints lens" hidden>
     <div class="titlebar"><span>◆ MINTS LENS · every *_mint cube lit · ◎ a collection's first mint</span><span class="grow"></span><button class="close" id="mints-close" aria-label="Turn off the Mints lens">×</button></div>
     <div id="mints-body"></div>
+  </section>
+  <section class="win wit" id="wit" aria-label="Witness lens" hidden>
+    <div class="titlebar"><span>◎ WITNESS LENS · keys that signed a checkpoint · a claim, not proof of replay</span><span class="grow"></span><button class="close" id="wit-close" aria-label="Turn off the Witness lens">×</button></div>
+    <div id="wit-body"></div>
   </section>
 
   <section class="yard win" aria-label="The block yard">
@@ -909,6 +928,167 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       h("span", { class: "bar" }, h("i", { style: `width:${pct.toFixed(1)}%` })));
     return { el, addr, label: isAgent ? `${str(k.name)} (${short(addr, 6)})` : short(addr, 7) };
   }
+
+  // ---------- witnesses (the Witness lens). The PointCast devnet's Daily Net
+  // indexes witness attestations: GET /checkpoints?from=&to= (attested
+  // checkpoint heights) and GET /checkpoints/{h}/witnesses (the keys at one).
+  // Every field is server data, and with ?api= a hostile endpoint writes all
+  // of it: names, tiers and results match fixed vocabularies or show as
+  // clipped text, counts are non-negative safe integers, nothing links out.
+  // A witness is a claim, not proof of replay; this page never says verified.
+  const CHECKPOINT_EVERY = 10;
+  const isCheckpoint = (hh) => isInt(hh) && hh >= CHECKPOINT_EVERY && hh % CHECKPOINT_EVERY === 0;
+  const cpCount = (v) => (v === true ? 1 : isInt(v) && v >= 0 ? v : 0);
+  const hex64 = (v) => (typeof v === "string" && /^[0-9a-f]{64}$/.test(v) ? v : "");
+  const WITNESS_MEANING = "A witness is a public claim tied to a free key: “I replayed this chain from genesis with the pinned verifier and got this block hash and state root at this height.” It is not proof of replay: strikes only catch disagreement with this server, so a key that copies /status never gets one, and a streak means “agreed with this server”. Everything passes through the server it checks, so a hostile sequencer could censor it: this catches bugs, not a hostile operator. Counts are keys, not people.";
+  const STRIKE_COPY = "signed a checkpoint this chain does not have: a wrong replay, or it was shown a different chain.";
+  const WIT_RESULTS = {
+    correct: "correct",
+    mismatch: `mismatch · strike: ${STRIKE_COPY}`,
+    conflict: "conflict · strike: a second, different claim for this height from the same key or account",
+    duplicate: "duplicate: the same claim again, not counted",
+    premature: "premature: included before this checkpoint was sealed, not counted",
+    not_checkpoint: "not a checkpoint height, not counted",
+    other_epoch: "another epoch: signed for an earlier run of this chain, not counted",
+    unsupported_key: "unsupported key type, not counted",
+    bad_key: "bad public key, not counted",
+    bad_sig: "bad signature, not counted",
+    malformed: "malformed attestation, not counted",
+    over_cap: "over the daily cap, not counted",
+  };
+  const ownKey = (o, k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(o, k);
+  // A witness name as the Daily Net allows it ([a-z0-9-]{2,24}), else null.
+  const witName = (v) => (typeof v === "string" && /^[a-z0-9-]{2,24}$/.test(v) ? v : null);
+  const witTier = (v) => (v === "witness" ? "witness key" : v === "checkin" ? "check-in" : null);
+  // When an attestation was included: a block height, an ISO time, or ms.
+  const witWhen = (v) => {
+    if (isInt(v) && v > 0 && v < 1e11) return `included at №${fmt(v)}`;
+    if (isInt(v) && v >= 1e12 && v < 1e14) return `included ${utc(v)}`;
+    if (typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d{1,9})?)?Z$/.test(v)) return `included ${v.slice(0, 19).replace("T", " ")} UTC`;
+    return "";
+  };
+  // GET /checkpoints → height -> { height, distinct, correct, strikes, established }.
+  // Checkpoint heights only. With `into` and a from–to window, the window's
+  // old entries are dropped first (a refresh of the newest blocks).
+  function indexCheckpoints(reply, into, from, to) {
+    const out = into instanceof Map ? into : new Map();
+    if (into instanceof Map && isInt(from) && isInt(to)) for (const k of [...out.keys()]) if (k >= from && k <= to) out.delete(k);
+    for (const c of arr(obj(reply).checkpoints)) {
+      const o = obj(c);
+      if (!isCheckpoint(o.height)) continue;
+      if (isInt(from) && isInt(to) && (o.height < from || o.height > to)) continue;
+      out.set(o.height, { height: o.height, distinct: cpCount(o.distinct), correct: cpCount(o.correct), strikes: cpCount(o.strikes), established: cpCount(o.established) });
+    }
+    return out;
+  }
+  // The lens's ring on one checkpoint: wider with more keys, 9 + 2·min(keys, 8);
+  // "strike" with any strike, "ok" with a correct key and no strike, else "dim".
+  function witRing(c) {
+    const o = obj(c);
+    return { r: 9 + 2 * Math.min(cpCount(o.distinct), 8), tone: cpCount(o.strikes) > 0 ? "strike" : cpCount(o.correct) > 0 ? "ok" : "dim" };
+  }
+  // The Witness lens strip. ix = indexCheckpoints(...); opts: { state:
+  // "ok" | "loading" | "none" | "error" | "snapshot", why, from, to, pick(height), max }.
+  function witnessStrip(ix, opts) {
+    const o = obj(opts);
+    const list = ix instanceof Map ? [...ix.values()].filter((c) => c && isCheckpoint(c.height)) : [];
+    list.sort((a, b) => b.height - a.height);
+    const box = h("div", { class: "wit-body" });
+    const note = (text) => box.append(h("div", { class: "txmeta" }, text));
+    if (o.state === "snapshot") note("The Witness lens reads a devnet's witness index (GET /checkpoints). A recorded snapshot has none: open the yard with ?api=<devnet URL>.");
+    else if (o.state === "none") note("This node serves no witness index (GET /checkpoints). Witnesses attest on the PointCast devnet's Daily Net.");
+    else if (o.state === "error") note(`Could not read GET /checkpoints${o.why ? ` (${clip(o.why, 80)})` : ""}. Trying again with the next blocks.`);
+    else if (o.state !== "ok" && !list.length) note("Reading GET /checkpoints…");
+    if (o.state === "ok" || list.length) {
+      const strikes = list.reduce((a, c) => a + cpCount(c.strikes), 0);
+      const keys = list.reduce((a, c) => Math.max(a, cpCount(c.distinct)), 0);
+      box.append(h("div", { class: "mints-counts" },
+        h("span", null, h("b", null, fmt(list.length)), ` ${list.length === 1 ? "checkpoint" : "checkpoints"} signed by witness keys`),
+        h("span", null, h("b", null, fmt(keys)), " keys at most on one"),
+        h("span", { class: strikes ? "wstrike" : null }, h("b", null, fmt(strikes)), ` ${strikes === 1 ? "strike" : "strikes"}`)));
+      if (list.length) {
+        const max = isInt(o.max) && o.max > 0 ? o.max : 12;
+        const chips = h("div", { class: "mchips" });
+        for (const c of list.slice(0, max)) {
+          const tone = witRing(c).tone;
+          const go = h("button", { class: `bevel mini${tone === "strike" ? " wstrike" : ""}`, type: "button", title: `Open №${fmt(c.height)}: ${plural(cpCount(c.distinct), "key")}, ${fmt(cpCount(c.correct))} correct, ${plural(cpCount(c.strikes), "strike")}` },
+            h("span", null, `◎ №${fmt(c.height)}`), ` · ${plural(cpCount(c.distinct), "key")}${cpCount(c.strikes) ? ` · ✗ ${fmt(cpCount(c.strikes))}` : ""}`);
+          if (typeof o.pick === "function") go.addEventListener("click", () => o.pick(c.height));
+          chips.append(h("span", { class: "mchip" }, go));
+        }
+        if (list.length > max) chips.append(h("span", { class: "txmeta" }, `+${fmt(list.length - max)} more`));
+        box.append(chips);
+      } else note("No witness key has signed a checkpoint in the loaded blocks yet.");
+      if (isInt(o.from) && isInt(o.to)) note(`Counting the loaded blocks №${fmt(o.from)}–№${fmt(o.to)}; a checkpoint every ${CHECKPOINT_EVERY} blocks. Open one for its keys.`);
+    }
+    note(WITNESS_MEANING);
+    return box;
+  }
+  // The detail panel's witness section for checkpoint `height`, from
+  // GET /checkpoints/{h}/witnesses. opts: { height, state: "ok" | "loading" |
+  // "empty" | "none" | "error" | "snapshot", why, replay: [block hash, state
+  // root] from this browser's VERIFY, or null }. "✓ matches your replay" only
+  // when your replay reached the height and agrees with the server.
+  function witnessPanel(data, opts) {
+    const o = obj(opts);
+    const hh = isInt(o.height) ? o.height : null;
+    const box = h("div", null, h("div", { class: "sec" }, `Witness keys at №${fmt(hh)}`));
+    const d = obj(data);
+    const say = (text) => box.append(h("div", { class: "empty-note" }, text));
+    if (o.state === "ok" && hh !== null && d.height !== hh) say(`The server answered for another height (${fmt(d.height)}); not shown.`);
+    else if (o.state === "ok") {
+      const bh = hex64(d.block_hash), sr = hex64(d.state_root);
+      const rp = Array.isArray(o.replay) ? o.replay : null;
+      const replay = rp ? (bh && sr && rp[0] === bh && rp[1] === sr ? "match" : "differs") : "none";
+      const at = `№${fmt(hh)}`;
+      box.append(h("div", { class: `vstate ${replay === "match" ? "ok" : replay === "differs" ? "bad" : "dim"}` },
+        replay === "match" ? `✓ This server's chain at ${at} matches your replay: block hash ${short(bh, 6)}, state root ${short(sr, 6)}.`
+          : replay === "differs" ? `≠ This server's chain at ${at} (block hash ${short(bh, 6) || "?"}, state root ${short(sr, 6) || "?"}) differs from your replay. A key marked correct agreed with this server, not with you.`
+            : `This server's chain at ${at}: block hash ${short(bh, 6) || "?"}, state root ${short(sr, 6) || "?"}. Press ✓ VERIFY to replay it yourself.`));
+      const strikes = cpCount(d.strikes);
+      box.append(h("div", { class: "txmeta" }, `${plural(cpCount(d.distinct), "key")} · ${fmt(cpCount(d.correct))} correct · `,
+        h("span", { class: strikes ? "wstrike" : null }, plural(strikes, "strike"))));
+      const rows = arr(d.witnesses);
+      const agree = replay === "match" ? "✓ matches your replay" : replay === "differs" ? "matches this server's chain, not your replay" : "matches this server's chain";
+      for (const w of rows.slice(0, 64)) {
+        const x = obj(w);
+        const name = witName(x.name), tier = witTier(x.tier);
+        const addr = typeof x.addr === "string" ? clip(x.addr, 64) : "";
+        const tx = hex64(x.tx);
+        const result = ownKey(WIT_RESULTS, x.result) ? x.result : null;
+        const strike = result === "mismatch" || result === "conflict";
+        const text = result === "correct" ? `correct · ${agree}`
+          : result ? `${WIT_RESULTS[result]}${result === "mismatch" && replay === "differs" ? " (this server's chain also differs from your replay)" : ""}`
+            : `result: ${kindName(x.result)}`;
+        box.append(h("div", { class: "wrow" },
+          h("div", { class: "txk" }, h("b", null, name || "unnamed key"),
+            name && x.name_bound !== true ? h("span", { class: "badge noticket", title: "Names bind first-come: another key claimed this name first, so it is only a claim here" }, "name not bound") : null,
+            addr ? h("code", { title: addr }, short(addr, 6)) : null,
+            tier ? h("span", { class: "badge wkey" }, tier) : null,
+            x.established === true ? h("span", { class: "badge est", title: "Agreed with this server 3 days running, with no strikes" }, "established") : null,
+            strike ? h("span", { class: "badge wstrike" }, "strike") : null),
+          h("div", { class: `txmeta${strike ? " wstrike" : ""}` }, text),
+          h("div", { class: "txmeta" }, "tx ", tx ? copyable(tx, 8) : "—", witWhen(x.included_at) ? ` · ${witWhen(x.included_at)}` : "")));
+      }
+      // The devnet lists at most 64 keys per checkpoint and counts the rest in `more`.
+      const more = Math.max(0, rows.length - 64) + (isInt(d.more) && d.more > 0 ? d.more : 0);
+      if (!rows.length && !more) say("No key has signed this checkpoint yet.");
+      if (more) say(`+${plural(more, "more key", "more keys")}`);
+    } else {
+      say(o.state === "snapshot" ? "Witnesses live in a devnet's witness index: open the yard with ?api=<devnet URL>."
+        : o.state === "none" ? "This node serves no witness index (GET /checkpoints)."
+          : o.state === "empty" ? "No key has signed this checkpoint yet."
+            : o.state === "error" ? `Could not read the witnesses${o.why ? ` (${clip(o.why, 80)})` : ""}.`
+              : "Reading the witnesses…");
+    }
+    box.append(h("div", { class: "wrow" }, h("div", { class: "txmeta" }, WITNESS_MEANING)));
+    return box;
+  }
+  // The Daily Net chip, from GET /net: "NET · 7 in · 2 witness keys · resets 00:00 UTC".
+  function netChip(net) {
+    const c = obj(obj(net).counts);
+    return `NET · ${fmt(cpCount(c.participants))} in · ${plural(cpCount(c.witnesses), "witness key")} · resets 00:00 UTC`;
+  }
   // ---------- end renderers
 
   const metaContent = (name) => { const m = document.querySelector(`meta[name="${name}"]`); return m ? (m.getAttribute("content") || "").trim() : ""; };
@@ -957,7 +1137,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       bg: v("--yard-bg"), bg2: v("--yard-bg2"), plate: v("--yard-plate"), plateEdge: v("--yard-plate-edge"),
       ghost: v("--yard-ghost"), link: v("--yard-link"), ink: v("--yard-ink"), halo: v("--yard-halo"),
       slab: v("--slab"), ok: v("--ok"), bad: v("--bad"), beacon: v("--beacon"), posted: v("--beacon-posted"),
-      beaconOff: v("--beacon-off"), mint: v("--mint"), dark: lum(rgbOf(v("--yard-bg"))) < 0.3,
+      beaconOff: v("--beacon-off"), mint: v("--mint"), strike: v("--strike"), dark: lum(rgbOf(v("--yard-bg"))) < 0.3,
     };
   }
 
@@ -1124,6 +1304,14 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // collection's first mint, the counter strip. ?town= links collections to
   // their pc-town Town Hall gallery (#/d/{collection}).
   let lens = qs.get("lens") === "mints";
+  // The Witness lens (?lens=witness): a ring on each checkpoint that witness
+  // keys signed, from a devnet's GET /checkpoints, and the keys at a
+  // checkpoint (GET /checkpoints/{h}/witnesses) in the detail panel. Its own
+  // flag, exclusive with the Mints lens. A snapshot has no witness index.
+  let wlens = qs.get("lens") === "witness";
+  const CPS = new Map();           // attested checkpoint height -> indexCheckpoints() entry
+  let cpState = "idle", cpWhy = "", cpAt = 0, cpTo = 0, cpBusy = false;
+  const witViews = new Map();      // checkpoint height -> { at, state, data, why }
   const TOWN = townBase(qs.get("town"), location.href);
   let MINTS = null;                // indexMints() of the loaded yard; null = stale
   const seenKinds = new Set();     // kind indexes seen so far (a new neutral or unknown one rebuilds the legend)
@@ -1266,6 +1454,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     afterLoad();
     setTimeout(poll, POLL_MS);
     setInterval(() => { loadAnchorsLive().then(() => { updateStats(); kick(); }).catch(() => {}); }, 15000);
+    refreshNet();
+    setInterval(refreshNet, 60000);
   }
 
   async function bootSnapshot(rel, why) {
@@ -1359,6 +1549,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       } else {
         status = st;
         if (st.height > maxH) await loadRange(maxH + 1, Infinity, true);
+        if (wlens && cpState !== "none" && maxH - cpTo >= CHECKPOINT_EVERY) loadCheckpoints(false);
         setLive("on", "LIVE");
         updateStats();
         if (accountsOpen()) refreshAccounts(false);
@@ -1422,6 +1613,8 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
 
   function afterLoad() {
     lensUi();             // builds the legend too
+    wlensUi();
+    if (wlens && MODE === "node" && cpState === "idle") loadCheckpoints(true);
     $("msg").hidden = blocks.size > 0;
     if (!blocks.size) $("msg").replaceChildren(h("div", null, "NO BLOCKS YET", h("span", { class: "sub" }, "Waiting for the first block…")));
     updateStats();
@@ -1604,7 +1797,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // The yard minus the beacon rings, kept so a pulse-only frame is one blit
   // plus a few rings instead of a full redraw of every visible stack.
   const baseCv = document.createElement("canvas"), bctx = baseCv.getContext("2d", { alpha: false });
-  let baseOk = false, beaconList = [], mintBeacons = [], lastView = { ox: 0, oy: 0, z: 1, fs: 12 };
+  let baseOk = false, beaconList = [], mintBeacons = [], witBeacons = [], lastView = { ox: 0, oy: 0, z: 1, fs: 12 };
   // Cells whose stack can reach the viewport, in a valid painter's order:
   // rows back to front, columns left to right. Two stacks only overlap when
   // their screen columns differ by at most one, and then the one in front is
@@ -1651,6 +1844,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     beaconsVisible = false;
     beaconList = [];
     mintBeacons = [];
+    witBeacons = [];
     if (!blocks.size || !SP) return;
     const focus = !!(spot || lens);
     const firstAt = lens ? mintIndex().firstAt : null;
@@ -1771,8 +1965,11 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       // Mints lens: a ring beacon on each collection's first mint in the yard.
       const born = firstAt && firstAt.get(B.h);
       if (born) { mintBeacons.push({ h: B.h, cx, cy, list: born, anchor: isAnchor }); beaconsVisible = true; }
-      if (B.h === maxH && z >= 1) label(`TIP №${fmt(B.h)}`, X(cx), Y(cy - 12 - (isAnchor ? 28 : 0) - (born ? 34 : 0)), TH.ink);
-      else if (z >= 3 && (B.h - 1) % COLS === 0 && !isAnchor && !born) {
+      // Witness lens: a halo ring on each checkpoint witness keys signed.
+      const wit = wlens ? CPS.get(B.h) : null;
+      if (wit) witBeacons.push({ h: B.h, cx, cy, c: wit });
+      if (B.h === maxH && z >= 1) label(`TIP №${fmt(B.h)}`, X(cx), Y(cy - 12 - (isAnchor ? 28 : 0) - (born ? 34 : 0) - (wit ? 14 : 0)), TH.ink);
+      else if (z >= 3 && (B.h - 1) % COLS === 0 && !isAnchor && !born && !wit) {
         ctx.globalAlpha = 0.7; label(`№${fmt(B.h)}`, X(cx), Y(B.y + 12), TH.link); ctx.globalAlpha = 1;
       }
     }
@@ -1786,7 +1983,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   }
   // Broadcast beacons over anchor heights: concentric rings and an emitter.
   function drawBeacons(now) {
-    if (!beaconList.length && !mintBeacons.length) return;
+    if (!beaconList.length && !mintBeacons.length && !witBeacons.length) return;
     const { ox, oy, z, fs } = lastView;
     const X = (wx) => ox + Math.round(wx * z), Y = (wy) => oy + Math.round(wy * z);
     const zw = (n) => Math.max(1, Math.round(n * z));
@@ -1841,6 +2038,21 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
         label(t, X(cx), freeY(t, X(cx), Y(gy - 7)), col);
       }
     }
+    // Witness lens: a halo per attested checkpoint, 9 + 2·min(keys, 8) wide:
+    // mint when a key agreed and none struck, red with a strike, dim
+    // otherwise; the key count (and strikes) above it from zoom 2.
+    for (const { cx, cy, c } of witBeacons) {
+      const { r, tone } = witRing(c);
+      const col = tone === "strike" ? TH.strike : tone === "ok" ? TH.mint : TH.beaconOff;
+      const halo = ring(r, col), hy = (halo.height - 1) / 2;
+      ctx.globalAlpha = tone === "dim" ? 0.55 : 1;
+      ctx.drawImage(halo, X(cx - r), Y(cy - hy), zw(halo.width), zw(halo.height));
+      ctx.globalAlpha = 1;
+      if (z >= 2) {
+        const t = `◎ ${fmt(cpCount(c.distinct))}${cpCount(c.strikes) ? ` ✗${fmt(cpCount(c.strikes))}` : ""}`;
+        label(t, X(cx), freeY(t, X(cx), Y(cy - hy - 3)), col);
+      }
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -1892,6 +2104,17 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
         mctx.fillStyle = TH.halo;
         mctx.fillRect(xOf(h0) - 2 * dpr, top - dpr, 5 * dpr, 5 * dpr);
         mctx.fillStyle = TH.mint;
+        mctx.fillRect(xOf(h0) - dpr, top, 3 * dpr, 3 * dpr);
+      }
+    }
+    // Witness lens: a tick at each attested checkpoint, in its ring's colour
+    if (wlens) {
+      for (const [h0, c] of CPS) {
+        if (h0 < lo || h0 > hi) continue;
+        const tone = witRing(c).tone;
+        mctx.fillStyle = TH.halo;
+        mctx.fillRect(xOf(h0) - 2 * dpr, top - dpr, 5 * dpr, 5 * dpr);
+        mctx.fillStyle = tone === "strike" ? TH.strike : tone === "ok" ? TH.mint : TH.beaconOff;
         mctx.fillRect(xOf(h0) - dpr, top, 3 * dpr, 3 * dpr);
       }
     }
@@ -2019,6 +2242,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       hh % interval === 0 ? ` · ⚓ anchor (${anchorState(hh)})` : "", h("br"),
       describe(B), h("br"),
       lens && mintIndex().firstAt.has(hh) ? [`◎ first mint of ${mintIndex().firstAt.get(hh).map((c) => clip(c.collection, 28)).join(", ")}`, h("br")] : null,
+      wlens && CPS.has(hh) ? [`◎ ${plural(CPS.get(hh).distinct, "witness key")} · ${fmt(CPS.get(hh).correct)} correct · ${plural(CPS.get(hh).strikes, "strike")}`, h("br")] : null,
       h("span", { style: "opacity:.75" }, vText(B)));
     tipEl.hidden = false;
     const r = stage.getBoundingClientRect();
@@ -2142,6 +2366,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     else if (e.key === "-" || e.key === "_") zoomStep(-1);
     else if (e.key === "f" || e.key === "F") setFollow(true);
     else if (e.key === "m" || e.key === "M") setLens(!lens);
+    else if (e.key === "w" || e.key === "W") setWLens(!wlens);
     else if (e.key === "Home") select(minH, { center: true });
     else if (e.key === "End") select(maxH, { center: true });
   });
@@ -2305,6 +2530,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     } else {
       body.append(h("div", { class: "empty-note" }, `Empty block: sealed on schedule with no transactions. Root ${short(hd.state_root, 8)}.`));
     }
+    if (wlens && isCheckpoint(hh)) body.append(witnessSection(hh));
     body.scrollTop = keepScroll;
   }
   function anchorLine(hh) {
@@ -2413,6 +2639,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // ---------- the Mints lens
   function setLens(on) {
     lens = !!on;
+    if (lens && wlens) { wlens = false; wlensUi(); if (panelH && !$("panel").hidden) renderPanel(); }   // exclusive with the Witness lens
     // The lens replaces a spotlight on a non-mint kind (an account spotlight stays: its mints).
     if (lens && spot && spot.type === "kind" && !isMintName(KINDS[spot.ix].id)) setSpot(null);
     else if (spot) setSpot(spot);       // recount the spotlight under the lens
@@ -2426,7 +2653,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // Button, URL (?lens=mints), title, strip and legend follow `lens`.
   function lensUi() {
     $("lens-btn").setAttribute("aria-pressed", String(lens));
-    $("yard-title").textContent = lens ? "THE YARD · MINTS LENS" : "THE YARD";
+    $("yard-title").textContent = lens ? "THE YARD · MINTS LENS" : wlens ? "THE YARD · WITNESS LENS" : "THE YARD";
     try {
       const u = new URL(location.href);
       if ((u.searchParams.get("lens") === "mints") !== lens) {
@@ -2456,6 +2683,120 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   $("lens-btn").onclick = () => setLens(!lens);
   $("mints-close").onclick = () => { setLens(false); $("lens-btn").focus({ preventScroll: true }); };
 
+  // ---------- the Witness lens
+  function setWLens(on) {
+    wlens = !!on;
+    if (wlens && lens) setLens(false);   // exclusive with the Mints lens
+    wlensUi();
+    if (wlens) {
+      if (MODE === "node" && (cpState !== "ok" || Date.now() - cpAt > 60000)) loadCheckpoints(true);
+      $("sr-sel").textContent = MODE === "node"
+        ? `Witness lens on: ${plural(CPS.size, "signed checkpoint")} in the yard.`
+        : "Witness lens on. It needs a devnet (?api=): a snapshot has no witness index.";
+    } else $("sr-sel").textContent = "Witness lens off.";
+    if (panelH && !$("panel").hidden) renderPanel();
+    dirty = miniDirty = true; kick();
+  }
+  // Button, URL (?lens=witness), title, strip and legend follow `wlens`.
+  function wlensUi() {
+    $("wlens-btn").setAttribute("aria-pressed", String(wlens));
+    $("yard-title").textContent = lens ? "THE YARD · MINTS LENS" : wlens ? "THE YARD · WITNESS LENS" : "THE YARD";
+    try {
+      const u = new URL(location.href);
+      if ((u.searchParams.get("lens") === "witness") !== wlens) {
+        if (wlens) u.searchParams.set("lens", "witness"); else u.searchParams.delete("lens");
+        history.replaceState(history.state, "", u.href);
+      }
+    } catch {}
+    renderWit();
+    buildLegend();
+  }
+  function renderWit() {
+    const el = $("wit");
+    el.hidden = !wlens || !status;
+    if (el.hidden) { $("wit-body").replaceChildren(); return; }
+    $("wit-body").replaceChildren(witnessStrip(CPS, {
+      state: MODE === "snapshot" ? "snapshot" : cpState === "idle" ? "loading" : cpState, why: cpWhy,
+      from: minH, to: maxH, pick: (hh) => select(hh, { open: true, center: true }),
+    }));
+  }
+  // GET /checkpoints in windows of at most 1,000 heights (the server's span
+  // limit): every loaded height when `full`, else the newest window. A node
+  // that answers 404 has no witness index: the lens says so and stops asking.
+  const CP_SPAN = 1000;
+  async function loadCheckpoints(full) {
+    if (MODE !== "node" || cpBusy || !maxH) return;
+    cpBusy = true;
+    if (cpState !== "ok") { cpState = "loading"; renderWit(); }
+    try {
+      const lo = Math.max(1, minH);
+      let from = full ? lo : Math.max(lo, maxH - CP_SPAN + 1);
+      const to0 = maxH;
+      for (let guard = 0; guard < 8 && from <= to0; guard++) {
+        const to = Math.min(to0, from + CP_SPAN - 1);
+        indexCheckpoints(await getJSON(`/checkpoints?from=${from}&to=${to}`), CPS, from, to);
+        from = to + 1;
+      }
+      for (const k of [...CPS.keys()]) if (k < lo) CPS.delete(k);
+      cpState = "ok"; cpWhy = ""; cpAt = Date.now(); cpTo = to0;
+    } catch (e) {
+      const msg = str(e && e.message);
+      cpState = /^404 /.test(msg) ? "none" : "error";
+      cpWhy = e && e.name === "AbortError" ? "timed out" : msg;
+      cpTo = maxH;
+    } finally {
+      cpBusy = false;
+      renderWit();
+      if (wlens && panelH && !$("panel").hidden) renderPanel();
+      dirty = miniDirty = true; kick();
+    }
+  }
+  // The panel's witness section: GET /checkpoints/{h}/witnesses, kept 30 s.
+  // "✓ matches your replay" needs VERIFY to have replayed that height.
+  const WIT_TTL_MS = 30000;
+  const witFetches = new Set();
+  function witnessSection(hh) {
+    if (MODE !== "node") return witnessPanel(null, { height: hh, state: "snapshot" });
+    if (cpState === "none") return witnessPanel(null, { height: hh, state: "none" });
+    const v = witViews.get(hh);
+    if (!v || Date.now() - v.at > WIT_TTL_MS) fetchWitnesses(hh);
+    const mine = verified.get(hh);
+    return witnessPanel(v ? v.data : null, { height: hh, state: v ? v.state : "loading", why: v ? v.why : "", replay: mine ? [mine[0], mine[1]] : null });
+  }
+  function fetchWitnesses(hh) {
+    if (witFetches.has(hh)) return;
+    witFetches.add(hh);
+    getJSON(`/checkpoints/${hh}/witnesses`).then(
+      (data) => { witViews.set(hh, { at: Date.now(), state: "ok", data, why: "" }); },
+      (e) => {
+        const msg = str(e && e.message);
+        // With the index up, a 404 here is a checkpoint nobody signed.
+        const state = /^404 /.test(msg) ? (cpState === "ok" ? "empty" : "none") : "error";
+        witViews.set(hh, { at: Date.now(), state, data: null, why: e && e.name === "AbortError" ? "timed out" : msg });
+      },
+    ).finally(() => {
+      witFetches.delete(hh);
+      while (witViews.size > 200) witViews.delete(witViews.keys().next().value);
+      if (wlens && panelH === hh && !$("panel").hidden) renderPanel();
+    });
+  }
+  $("wlens-btn").onclick = () => setWLens(!wlens);
+  $("wit-close").onclick = () => { setWLens(false); $("wlens-btn").focus({ preventScroll: true }); };
+  // The Daily Net chip, when this node is a devnet with a net index
+  // (/status.net): today's participants and witness keys, read each minute.
+  let netAt = 0;
+  async function refreshNet() {
+    const chip = $("net-chip");
+    if (MODE !== "node" || !status || typeof status.net !== "string" || !status.net) { chip.hidden = true; return; }
+    if (Date.now() - netAt < 50000) return;
+    netAt = Date.now();
+    try {
+      chip.textContent = netChip(await getJSON("/net"));
+      chip.hidden = false;
+    } catch { chip.hidden = true; }
+  }
+  $("net-chip").onclick = () => setWLens(true);
+
   // ---------- legend
   function buildLegend() {
     const grid = $("legend-grid");
@@ -2480,7 +2821,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
         h("span", { class: "sw", style: `border:2px solid ${TH.posted}` }), " on Tezos ", h("span", { class: "sw", style: `border:2px dashed ${TH.beaconOff}` }), " due"),
       h("div", { class: "lg-row" }, h("span", { class: "sw", style: `background:${TH.ok}` }), " ✓ verified by you  ", h("span", { class: "sw", style: `background:${TH.bad}` }), " ✗ fault"),
       ticketed() ? h("div", { class: "lg-row" }, "ticketed chain: only ✧ presence taps earn; a bare ✦ tap counts, +0") : null,
-      lens ? h("div", { class: "lg-row" }, h("span", { class: "sw", style: `border:2px solid ${TH.mint}` }), " ◎ mints lens: a ring on each collection's first mint") : null].filter(Boolean));
+      lens ? h("div", { class: "lg-row" }, h("span", { class: "sw", style: `border:2px solid ${TH.mint}` }), " ◎ mints lens: a ring on each collection's first mint") : null,
+      wlens ? h("div", { class: "lg-row" }, "◎ witness lens: ", h("span", { class: "sw", style: `border:2px solid ${TH.mint}` }), " keys agreed ",
+        h("span", { class: "sw", style: `border:2px solid ${TH.strike}` }), " strike · wider = more keys") : null].filter(Boolean));
   }
   $("legend-btn").onclick = () => {
     const lg = $("legend");

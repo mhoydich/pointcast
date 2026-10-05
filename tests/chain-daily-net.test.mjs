@@ -4,6 +4,7 @@
 // devnet's GET /net. Shapes: pointcast-chain Daily Net spec rev 2 §7.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -481,6 +482,23 @@ test('the Daily Net is in the /chain nav, and the yard link opens the Witness le
   assert.match(chainHome, /\{ key: 'net', href: '\/chain\/net', label: 'Daily Net' \},/);
   assert.match(page, /<ChainHeader current="net"/);
   assert.match(page, /href=\{yardWitness\}/);
+});
+
+const sha256 = (p) => createHash('sha256').update(readFileSync(new URL(p, root))).digest('hex');
+test('the Block Yard this site serves has the Witness lens the page links to, pinned to the verifier it serves', () => {
+  // /chain/net links to /chain/yard/?…&lens=witness: the yard there must be the
+  // pointcast-chain town.html that has the lens, re-copied with this site's
+  // snapshot and the sha256 of the verifier files public/chain/yard/verifier/ serves.
+  const yard = read('public/chain/yard/index.html');
+  assert.match(yard, /let wlens = qs\.get\("lens"\) === "witness";/, 'the yard reads ?lens=witness');
+  assert.match(yard, /<button class="bevel" id="wlens-btn"/);
+  assert.match(yard, /getJSON\(`\/checkpoints\?from=\$\{from\}&to=\$\{to\}`\)/);
+  assert.match(yard, /<meta name="pc-snapshot" content="\.\/snapshot\.json">/);
+  for (const f of ['pointcast_chain.wasm', 'verify.js', 'verify-worker.js']) {
+    const pin = yard.match(new RegExp(`"${f.replace(/\./g, '\\.')}": "([0-9a-f]{64})"`));
+    assert.ok(pin, `the yard pins ${f}`);
+    assert.equal(pin[1], sha256(`public/chain/yard/verifier/${f}`), `the yard's ${f} pin is the file /chain/yard/verifier/ serves`);
+  }
 });
 
 const built = new URL('dist/chain/net/index.html', root);
