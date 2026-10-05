@@ -8,14 +8,7 @@
  *
  * Combinations and names are ours. These are not numbered on-chain Nouns.
  */
-import { readFileSync } from 'node:fs';
-
-const imageData = JSON.parse(
-  readFileSync(
-    new URL('../../public/images/nouns-money/source-100/sources/official-image-data.json', import.meta.url),
-    'utf8',
-  ),
-);
+import imageData from '../../public/images/nouns-money/source-100/sources/official-image-data.json' with { type: 'json' };
 
 export const NOUNS_ART = {
   license: 'CC0',
