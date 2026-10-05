@@ -88,7 +88,7 @@ test('honest copy: who wrote it, who reviewed it, and what it does not check', (
     assert.match(section, phrase);
   assert.match(page, /\['State root', 'Not recomputed\./);
   assert.match(page, /\['Consensus', 'Not full consensus validation\./);
-  assert.match(page, /const PCV_RECORD = \{ blocks: 572, tipHeight: 572, tip: '916a739a[0-9a-f]{56}', sigCases: 375, gaps: 21, tests: 58 \};/);
+  assert.match(page, /const PCV_RECORD = \{ blocks: 572, tipHeight: 572, tip: '916a739a[0-9a-f]{56}', sigCases: 375, gaps: 21, tests: 74 \};/);
   assert.match(block.body, /It does not recompute the state root/);
   // Agreement covers only what both implementations check; never claim it catches every bug.
   assert.match(block.body, /a bug in a rule both of them check shows up as a disagreement\. The state, which pcv does not rebuild, is outside that\./);
