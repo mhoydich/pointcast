@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -552,10 +553,19 @@ def unique_keys(pairs):
     return result
 
 
+# Python 3.11+ refuses longer integer literals by default (int_max_str_digits).
+# Python 3.9 and 3.10 (macOS's python3 is 3.9) convert them in quadratic time,
+# so a single 1M-digit "tip" took ~19 s and a 64 MiB one would take hours.
+# chain-core's integers are at most u64 (20 digits), so this rejects nothing real.
+MAX_INT_DIGITS = 4300
+
+
 def strict_int(text):
     # serde_json reads -0 as a float, which no integer field accepts.
     if text == '-0':
         raise ValueError('invalid JSON integer: -0')
+    if len(text) - text.startswith('-') > MAX_INT_DIGITS:
+        raise ValueError('JSON integer longer than %d digits' % MAX_INT_DIGITS)
     return int(text)
 
 
@@ -630,8 +640,8 @@ def genesis_pin(genesis, devnet=None):
                      'and pcv never takes a genesis pin from the node it checks' % (devnet, DEVNET_URL))
 
 
-def get_json(url, timeout):
-    """GET url with pcv's User-Agent; returns the body and its strict JSON parse."""
+def get_bytes(url, timeout):
+    """One GET with pcv's User-Agent; the body, or FetchError. Each socket operation has the timeout."""
     request = urllib.request.Request(url, headers={'User-Agent': USER_AGENT, 'Accept': 'application/json'})
     try:
         with _OPENER.open(request, timeout=timeout) as response:
@@ -647,6 +657,32 @@ def get_json(url, timeout):
         raise FetchError('GET %s: %s' % (url, str(exc) or type(exc).__name__)) from None
     if len(raw) > MAX_RESPONSE_BYTES:
         raise FetchError('GET %s: response larger than %d bytes' % (url, MAX_RESPONSE_BYTES))
+    return raw
+
+
+def get_json(url, timeout):
+    """GET url; returns the body and its strict JSON parse.
+
+    timeout bounds the whole request, not only each socket operation: a node
+    that answers a byte at a time, or stalls in DNS, cannot hold pcv past it.
+    The GET runs in a daemon thread that pcv abandons at the deadline.
+    """
+    outcome = {}
+
+    def fetch():
+        try:
+            outcome['raw'] = get_bytes(url, timeout)
+        except BaseException as exc:  # handed to the caller's thread below
+            outcome['error'] = exc
+
+    worker = threading.Thread(target=fetch, name='pcv-get', daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        raise FetchError('GET %s: timed out: no complete response within %g s' % (url, timeout))
+    if 'error' in outcome:
+        raise outcome['error']
+    raw = outcome['raw']
     try:
         return raw, parse_json(raw.decode('utf-8'))
     except (ValueError, RecursionError) as exc:
@@ -727,7 +763,7 @@ def main(argv=None):
                         help='instead of files, GET URL/params and every block from URL/raw/blocks')
     parser.add_argument('--save', metavar='DIR',
                         help='with --devnet: write DIR/params.json and DIR/blocks.json for an offline rerun')
-    parser.add_argument('--timeout', type=float, default=30.0, help='with --devnet: seconds per request (default 30)')
+    parser.add_argument('--timeout', type=float, default=30.0, help='with --devnet: seconds allowed for each whole request (default 30)')
     parser.add_argument('--genesis', help='trusted genesis hex (default: the built-in devnet pin, for files and '
                                           'for --devnet %s only)' % DEVNET_URL)
     args = parser.parse_args(argv)
