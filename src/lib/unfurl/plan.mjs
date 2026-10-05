@@ -28,7 +28,7 @@ export function unfurlWords({ pathname, search = '' }) {
 
 export function planUnfurl({ pathname, search = '', currentImage = '', missing = false, now = new Date() }) {
   const path = cardPath(pathname);
-  // The homepage keeps its request-time Kennel Club card (injectTodayDogMetadata).
+  // The homepage keeps its daily art edition (injectHomeShareMetadata).
   if (!path || path === '/') return { image: '', headHtml: '' };
 
   let image = '';

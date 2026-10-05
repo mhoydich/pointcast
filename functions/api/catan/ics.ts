@@ -2,7 +2,7 @@
  * /api/catan/ics — hosted tables as calendar invites.
  * ?id=  → one table (.ics download)   ·   ?city= or nothing → a subscribable feed
  */
-import { icsEscape } from '../../../src/lib/catan.ts';
+import { CATAN_ORIGIN, icsEscape } from '../../../src/lib/catan.ts';
 import { loadTables, type CatanEnv, type StoredTable } from '../../_lib/catan-store.ts';
 
 const stamp = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}/, '');
@@ -12,7 +12,7 @@ const fold = (line: string) => line.length <= 74 ? line : line.match(/.{1,73}/g)
 function vevent(t: StoredTable, now: string): string[] {
   const start = new Date(t.when);
   const end = new Date(start.getTime() + 3 * 3600_000);
-  const url = `https://catan.pointcast.xyz/?table=${t.id}#tables`;
+  const url = `${CATAN_ORIGIN}/?table=${t.id}#tables`;
   const desc = [`${t.seated.length} of ${t.seats} seats taken · ${t.edition} · ${t.pace}`, `Host: ${t.host}`, t.note, `Take a seat: ${url}`].filter(Boolean).join('\n');
   return [
     'BEGIN:VEVENT',

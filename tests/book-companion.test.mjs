@@ -6,7 +6,7 @@ import { mountBookCompanion, buildBookStructuredData } from '../src/lib/book-com
 const fixture = () => new JSDOM(`<article data-book-companion>
   <p id="main-reading">The main introduction remains readable.</p>
   <div data-copy-filters hidden>${['all', 'new', 'used', 'borrow', 'online'].map((kind) => `<button data-copy-filter="${kind}" aria-pressed="${kind === 'all'}">${kind}</button>`).join('')}</div>
-  <p data-copy-status role="status" aria-live="polite">All 3 copy routes shown.</p>
+  <p data-copy-status role="status" aria-live="polite">All 3 reading routes shown.</p>
   <article id="print-copy" data-copy-card data-copy-kinds="new used borrow"><div data-route-kind="new">New print link</div><div data-route-kind="used">Used print link</div><div data-route-kind="borrow">Library print link</div></article>
   <article id="digital-copy" data-copy-card data-copy-kinds="new borrow"><div data-route-kind="new">New digital link</div><div data-route-kind="borrow">Library ebook link</div></article>
   <article id="online-copy" data-copy-card data-copy-kinds="online">A lawful online route with jurisdiction stated.</article>
@@ -109,4 +109,20 @@ test('Book JSON-LD preserves verified bibliographic facts and omits unknown edit
   assert.equal(encoded.includes(':null'), false);
   assert.equal(encoded.includes('offers'), false);
   assert.equal(encoded.includes('price'), false);
+});
+
+
+test('unverified historical reading rooms never assert Book authorship or edition metadata', () => {
+  const metadata = buildBookStructuredData({ resourceType: 'reading-room', id: 'paul-graham-startup-essays', title: 'Paul Graham: The Art of Funding a Startup', authors: ['Andrew Warner'], firstPublished: 'Not verified', checkedAt: '2026-10-03', dek: 'A bibliographic note and primary essay routes.', art: { src: '/images/bookshelf-goodreads/paul-graham-startup-essays.webp' }, editions: [{ isbn: null, publisher: 'Unverified attribution' }] });
+  assert.equal(metadata['@type'], 'WebPage');
+  assert.equal('about' in metadata, false);
+  assert.equal(JSON.stringify(metadata).includes('"Book"'), false);
+  assert.equal(JSON.stringify(metadata).includes('"author"'), false);
+});
+
+
+test('publisher By and With credits remain distinct in Book metadata', () => {
+ const metadata = buildBookStructuredData({ id:'credit-fixture', title:'Memoir', authors:['Narrator','Co-writer','Contributor'], authorCredits:[{name:'Narrator',role:'author'},{name:'Co-writer',role:'author'},{name:'Contributor',role:'contributor'}], firstPublished:'2004', checkedAt:'2026-10-03', kind:'Memoir', dek:'Original description', art:{src:'/image.webp'}, editions:[], sources:[] });
+ assert.deepEqual(metadata.about.author.map(person => person.name), ['Narrator','Co-writer']);
+ assert.deepEqual(metadata.about.contributor.map(person => person.name), ['Contributor']);
 });

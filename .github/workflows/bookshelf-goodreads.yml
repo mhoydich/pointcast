@@ -1,0 +1,47 @@
+name: Check reading map and companions
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/bookshelf-goodreads.yml'
+      - 'src/components/BookCompanion.astro'
+      - 'src/data/book-companions.ts'
+      - 'src/data/bookshelf-goodreads.json'
+      - 'src/data/reading-*'
+      - 'src/lib/book-companion*'
+      - 'src/lib/bookshelf-browser.mjs'
+      - 'src/lib/reading-map-browser.mjs'
+      - 'src/pages/books*'
+      - 'src/pages/books/**'
+      - 'scripts/refresh-reading-feed.mjs'
+      - 'scripts/lib/reading-feed*'
+      - 'scripts/check-reading-map.mjs'
+      - 'tests/*reading*'
+      - 'tests/*book*'
+      - 'public/images/bookshelf-goodreads/**'
+      - 'package*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: reading-map-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/book-companion.test.mjs tests/bookshelf-browser.test.mjs tests/reading-feed.test.mjs tests/reading-map.test.mjs
+      - run: npm run build:bare
+      - run: npm run audit:agents
+      - run: npm run audit:publishing
+      - run: node scripts/check-reading-map.mjs
