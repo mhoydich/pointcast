@@ -15,10 +15,11 @@ import balms from '../data/balm-shelf.json';
 import video from '../data/ai-video.json';
 import machines from '../data/machine-room.json';
 import aiPlans from '../data/ai-plans.json';
+import fans from '../data/fans.json';
 import { FEEDERS, PICKS as FEEDER_PICKS, DESK_DATE as FEEDER_DATE } from './hummingbird-feeders.mjs';
 import { REGISTER_STATS } from './paddle-register';
 
-export const SHOP_FRONT_VERSION = 'shop-front-v1-2026-09-29';
+export const SHOP_FRONT_VERSION = 'shop-front-v1-2026-10-05';
 export const SHOP_HOST = 'shop.pointcast.xyz';
 export const SHOP_ORIGIN = `https://${SHOP_HOST}`;
 export const SITE = 'https://pointcast.xyz';
@@ -61,6 +62,20 @@ export type ShopPick = {
 };
 
 const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
+
+const fanPicks: ShopPick[] = fans.picks.map((p) => ({
+  id: `fans/${p.id}`,
+  guide: 'fans',
+  name: p.name,
+  brand: p.brand,
+  price: p.price,
+  priceText: money(p.price) + (p.priceNote ? '*' : ''),
+  currency: 'USD',
+  url: p.url,
+  image: p.image,
+  verdict: p.verdict,
+  reviewUrl: `/reviews/fans#${p.id}`,
+}));
 
 const bagPicks: ShopPick[] = bags.picks.map((p) => ({
   id: `bags/${p.id}`,
@@ -236,6 +251,7 @@ const FACT_SOURCES: [string, FactRow[], string[]][] = [
   ['ai-video', video.picks as FactRow[], ['award', 'length', 'resolution', 'audio', 'bestFor', 'whatsNew', 'how', 'caveat']],
   ['home-robots', robots.picks as FactRow[], ['award', 'status', 'talks', 'subscription', 'size', 'specs', 'caveat']],
   ['bags', bags.picks as FactRow[], ['moment', 'award', 'size', 'specs', 'caveat']],
+  ['fans', fans.picks as FactRow[], ['award', 'specs', 'caveat', 'whyElSegundo', 'verdict']],
   ['lego-sets', lego.sets as FactRow[], ['award', 'pieces', 'status', 'caveat']],
   ['playstation-2026', playstation.games as FactRow[], ['award', 'mood', 'players', 'caveat']],
   ['machine-room', machines.items as FactRow[], ['section', 'group', 'status', 'why', 'forWho']],
@@ -245,9 +261,15 @@ export const SHOP_FACTS: Record<string, string> = Object.fromEntries(
   FACT_SOURCES.flatMap(([guide, rows, fields]) => rows.map((r) => [`${guide}/${r.id}`, factLine(r, fields)] as const)),
 );
 
-export const SHOP_PICKS: ShopPick[] = [...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+export const SHOP_PICKS: ShopPick[] = [...fanPicks, ...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  {id:'puzzles',title:'The puzzle shelf',dek:'Nine official puzzle publishers, choosing guidance, and ten original PointCast concepts clearly marked not for sale.',href:'/shop/puzzles/',json:'/puzzles.json',kind:'Shelf',image:'/images/puzzles/01-tidepool-atlas.webp',imageAlt:'Original Tidepool atlas puzzle concept with colorful coastal pools',asOf:'2026-10-03',count:9,countLabel:'publisher shops'},
+  {
+    id: 'fans', title: fans.title, dek: fans.dek, href: '/reviews/fans', json: '/reviews/fans.json',
+    kind: 'Desk review', image: fans.hero, imageAlt: fans.heroAlt,
+    asOf: fans.asOf, count: fans.picks.length, countLabel: 'fans',
+  },
   {
     id: 'balm-shelf', title: balms.title, dek: balms.dek, href: '/reviews/balm-shelf', json: '/reviews/balm-shelf.json',
     kind: 'Field guide', image: '/images/balm-shelf/hero.jpg', imageAlt: 'Illustrated balm shelf: tin, tube, patch, liniment bottle, mint, chili, wintergreen',
@@ -321,7 +343,8 @@ export const SHOP_LANES = [
   { id: 'court', label: 'Court lane', href: '/shop/court', note: 'Paddles out now and coming soon, from the register.' },
   { id: 'good-feels', label: 'Good Feels', href: '/shop#good-feels', note: 'The house brand’s live mirror: seltzers, gummies, enhancers.' },
   { id: 'takes', label: 'Paddle takes', href: '/reviews/paddles', note: 'Reviews as takes: hours played, who paid, what we’d change.' },
-  { id: 'method', label: 'How we review', href: '/reviews/paddles/method', note: 'Desk vs hands-on, dated prices, and the paid-link rule.' },
+  { id: 'method', label: 'How we review', href: '/reviews/method', note: 'Desk review means no hands-on testing. Dated prices. Non-affiliate links. Unpublished results are not invented.' },
+  { id: 'paddle-method', label: 'How a paddle take gets made', href: '/reviews/paddles/method', note: 'The hour floor, disclosed relationships, and the paid-link rule for paddle takes.' },
 ];
 
 export const SHOP_POLICY = [

@@ -1,27 +1,51 @@
 ---
 import BlockLayout from '../../layouts/BlockLayout.astro';
-import { reviews } from '../../data/reviews';
+import { reviews, type PointCastReview } from '../../data/reviews';
 
 const title = 'PointCast Reviews';
 const description =
-  'Independent reviews of art software, small web products, speculative experiences, listening tools, and interfaces worth living with.';
+  'Buying guides and desk reviews from El Segundo, plus the Review Lab’s art and software pieces. Dated prices, named sources, and non-affiliate links.';
 const latest = reviews[0];
+
+const experienceLabel: Record<string, string> = {
+  '100-dollar-ai': 'OPEN THE ACTUAL OUTPUTS →',
+  'ai-video': 'SEE THE SPEC SHEET →',
+  'ai-work-life': 'FIND YOUR AI PLAN →',
+  'playstation-2026': 'FIND YOUR NEXT GAME →',
+  bags: 'THE TRUNK TEST →',
+  'lego-sets': 'COMPARE THE SETS →',
+  fans: 'COMPARE THE FANS →',
+};
+
+const openLabel = (review: PointCastReview) =>
+  experienceLabel[review.slug] ?? (review.category === 'Desk review' ? 'OPEN THE CARE GUIDE →' : 'OPEN EXPERIENCE ↗');
+
+const topLine = (review: PointCastReview) => review.topPick ?? review.verdict;
+
+const updated = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Los_Angeles',
+  }).format(new Date(iso));
 ---
 
 <BlockLayout legacy
   title={title}
   description={description}
-  image="/images/og/beach-commons-v3.png"
+  image="/images/fans/hero.jpg"
 >
   <header class="desk-head">
     <div class="desk-head__top">
       <a href="/" class="wordmark">POINTCAST</a>
       <span>REVIEWS</span>
+      <a href="/reviews/method">How we review</a>
       <a href="/reviews.json">JSON ↗</a>
     </div>
     <div class="desk-head__title">
-      <p>INDEPENDENT PRODUCT CRITICISM / EST. 2026</p>
-      <h1>REVIEWS</h1>
+      <p>BUYING GUIDES / DESK REVIEWS / EL SEGUNDO</p>
+      <h1>Reviews</h1>
       <p class="intro">{description}</p>
     </div>
   </header>
@@ -41,28 +65,32 @@ const latest = reviews[0];
           : <span class="lead__score">{latest.rating}<small>/5</small></span>}
       </a>
       <div class="lead__copy">
-        <p class="kicker">LATEST / {latest.category.toUpperCase()}</p>
+        <p class="kicker">LATEST / {latest.category.toUpperCase()} / UPDATED {updated(latest.publishedAt).toUpperCase()}</p>
         <h2><a href={latest.reviewUrl}>{latest.title}</a></h2>
         <p>{latest.dek}</p>
+        <p class="top-pick"><span>Top pick</span> {topLine(latest)}</p>
         <div class="lead__actions">
-          <a class="button button--ink" href={latest.reviewUrl}>READ THE REVIEW →</a>
-          <a class="button" href={latest.experienceUrl}>{latest.slug === '100-dollar-ai' ? 'OPEN THE ACTUAL OUTPUTS →' : latest.slug === 'ai-video' ? 'SEE THE SPEC SHEET →' : latest.slug === 'ai-work-life' ? 'FIND YOUR AI PLAN →' : latest.slug === 'playstation-2026' ? 'FIND YOUR NEXT GAME →' : latest.slug === 'bags' ? 'THE TRUNK TEST →' : latest.slug === 'lego-sets' ? 'COMPARE THE SETS →' : latest.category === 'Desk review' ? 'OPEN THE CARE GUIDE →' : 'OPEN EXPERIENCE ↗'}</a>
+          <a class="button button--ink" href={latest.reviewUrl}>READ THE GUIDE →</a>
+          <a class="button" href={latest.experienceUrl}>{openLabel(latest)}</a>
         </div>
       </div>
     </article>
 
-    <section class="method" aria-labelledby="method-title">
+    <section class="method" id="how-we-review" aria-labelledby="method-title">
       <div>
-        <p class="kicker">THE POINTCAST METHOD</p>
-        <h2 id="method-title">USE IT. LISTEN. LOOK AGAIN.</h2>
+        <p class="kicker">HOW WE REVIEW</p>
+        <h2 id="method-title">THE POINTCAST METHOD</h2>
       </div>
-      <p>
-        We use released products on real desktop and mobile viewports. When hardware is still
-        pre-release, we label the piece public-spec and separate documented capability from hands-on
-        evidence. Desk reviews rank products we have not handled, from published specs and cited
-        testers, on a published rubric and without a star rating. Design promise never becomes
-        working behavior by typography alone. Scores are editorial judgments, not affiliate math.
-      </p>
+      <div>
+        <p>
+          Desk review; no hands-on testing, unless a piece says otherwise. A desk review ranks
+          products we have not handled, from maker pages and cited testers, and it does not carry a
+          star rating. Prices are dated US list snapshots. Links are direct and non-affiliate:
+          PointCast earns no commission, and no maker paid for placement. We do not invent a test
+          result or a price.
+        </p>
+        <p><a href="/reviews/method">Read how we review →</a></p>
+      </div>
     </section>
 
     <section class="paddle-takes" aria-labelledby="paddle-takes-title">
@@ -73,6 +101,7 @@ const latest = reviews[0];
       <p>
         A reviewer's own read on a paddle they've actually played: no stars, a disclosed
         relationship, real hours on court. <a href="/reviews/paddles">Open Paddle Takes →</a>
+        The paddle method is separate: <a href="/reviews/paddles/method">how a take gets made</a>.
       </p>
     </section>
 
@@ -95,12 +124,14 @@ const latest = reviews[0];
             </a>
             <div class="card__meta">
               <span>{review.category.toUpperCase()}</span>
+              <time datetime={review.publishedAt}>Updated {updated(review.publishedAt)}</time>
               {review.rating === null
                 ? <strong class="card__desk">DESK REVIEW</strong>
                 : <strong>{review.rating}<small>/5</small></strong>}
             </div>
             <h3><a href={review.reviewUrl}>{review.title}</a></h3>
             <p>{review.dek}</p>
+            <p class="top-pick"><span>Top pick</span> {topLine(review)}</p>
             <div class="card__links">
               <a href={review.reviewUrl}>REVIEW →</a>
               <a href={review.jsonUrl}>JSON ↗</a>
@@ -112,96 +143,80 @@ const latest = reviews[0];
   </main>
 
   <style>
-    :global(body) { background: #f4efdf; color: #151719; }
-    .desk-head { border-bottom: 4px solid #151719; }
+    :global(body) { background: #f7f5f0; color: #1a1916; }
+    .desk-head { border-bottom: 1px solid #1a1916; }
     .desk-head__top {
-      min-height: 50px; padding: 0 4vw; display: flex; align-items: center; gap: 24px;
-      background: #151719; color: white; font: 700 12px/1 'JetBrains Mono', monospace;
-      letter-spacing: .08em;
+      min-height: 48px; padding: 0 4vw; display: flex; align-items: center; gap: 18px;
+      background: #1a1916; color: #f7f5f0; font: 700 12px/1 Arial, Helvetica, sans-serif;
+      letter-spacing: .06em;
     }
-    .desk-head__top .wordmark { margin-right: auto; color: #f6dc4c; font-size: 15px; }
+    .desk-head__top .wordmark { margin-right: auto; color: #f3d36b; }
     .desk-head__top a { color: inherit; text-decoration: none; }
     .desk-head__title {
-      max-width: 1280px; margin: 0 auto; padding: clamp(42px, 8vw, 110px) 4vw 40px;
-      display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 420px); gap: 20px 48px; align-items: end;
+      max-width: 1080px; margin: 0 auto; padding: 48px 4vw 36px;
       box-sizing: border-box; width: 100%;
     }
-    .desk-head__title > * { min-width: 0; }
     .desk-head__title > p:first-child {
-      grid-column: 1 / -1; margin: 0; font: 700 11px/1 'JetBrains Mono', monospace;
-      letter-spacing: .14em;
+      margin: 0 0 12px; font: 700 11px/1 Arial, Helvetica, sans-serif; letter-spacing: .14em;
     }
     h1 {
-      margin: 0; font: 700 clamp(74px, 15vw, 210px)/.72 'Syne', sans-serif; letter-spacing: -.07em;
+      margin: 0; font: 500 clamp(56px, 8vw, 92px)/.95 Georgia, 'Iowan Old Style', serif;
     }
-    .intro { margin: 0; max-width: 38ch; font: 600 clamp(20px, 2.4vw, 33px)/1.08 'Lora', serif; }
-    .desk { max-width: 1280px; margin: 0 auto; padding: 56px 4vw 120px; box-sizing: border-box; width: 100%; }
-    .lead { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(270px, .65fr); gap: 38px; align-items: center; }
-    .lead__image { position: relative; display: block; background: #111; overflow: hidden; border: 3px solid #151719; }
-    .lead__image img { display: block; width: 100%; height: auto; transition: transform .4s ease; }
-    .lead__image:hover img { transform: scale(1.012); }
+    .intro { margin: 14px 0 0; max-width: 46ch; font: 500 20px/1.4 Georgia, serif; }
+    .desk { max-width: 1080px; margin: 0 auto; padding: 40px 4vw 96px; box-sizing: border-box; width: 100%; }
+    .lead { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(260px, .9fr); gap: 32px; align-items: center; }
+    .lead__image { position: relative; display: block; background: #fff; overflow: hidden; border: 1px solid #1a1916; }
+    .lead__image img { display: block; width: 100%; height: auto; }
     .lead__score {
-      position: absolute; right: 18px; bottom: 18px; width: 98px; aspect-ratio: 1;
-      display: grid; place-items: center; background: #f6dc4c; color: #151719;
-      border: 3px solid #151719; border-radius: 50%; font: 700 36px/1 'Syne', sans-serif;
-      transform: rotate(5deg);
+      position: absolute; right: 14px; bottom: 14px; min-width: 72px; min-height: 72px; padding: 8px;
+      display: grid; place-items: center; background: #f3d36b; color: #1a1916;
+      border: 1px solid #1a1916; font: 700 18px/1 Arial, Helvetica, sans-serif;
     }
-    .lead__score small, .card__meta small { font: 700 12px/1 'JetBrains Mono', monospace; }
-    .lead__score--desk { font: 700 15px/1 'JetBrains Mono', monospace; letter-spacing: .08em; }
-    .card__meta .card__desk { font: 700 11px/1 'JetBrains Mono', monospace; letter-spacing: .08em; }
-    .kicker { margin: 0 0 10px; font: 700 11px/1.2 'JetBrains Mono', monospace; letter-spacing: .12em; }
-    .lead h2 { margin: 0 0 18px; font: 700 clamp(42px, 5vw, 76px)/.92 'Syne', sans-serif; letter-spacing: -.045em; }
+    .lead__score small, .card__meta small { font: 700 11px/1 Arial, Helvetica, sans-serif; }
+    .lead__score--desk, .card__meta .card__desk { font: 700 11px/1 Arial, Helvetica, sans-serif; letter-spacing: .08em; }
+    .kicker { margin: 0 0 8px; font: 700 11px/1.3 Arial, Helvetica, sans-serif; letter-spacing: .1em; }
+    .lead h2 { margin: 0 0 12px; font: 500 clamp(32px, 4vw, 48px)/1.05 Georgia, serif; }
     .lead h2 a, .card h3 a { color: inherit; text-decoration: none; }
-    .lead__copy > p:not(.kicker) { font: 500 19px/1.45 'Lora', serif; }
-    .lead__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+    .lead__copy > p:not(.kicker):not(.top-pick) { font: 18px/1.5 Georgia, serif; }
+    .top-pick { margin: 12px 0 0; font: 15px/1.45 Arial, Helvetica, sans-serif; }
+    .top-pick span { display: block; font: 700 10px/1 Arial, Helvetica, sans-serif; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 4px; color: #6b4423; }
+    .lead__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
     .button {
-      padding: 13px 16px; color: #151719; border: 2px solid #151719; text-decoration: none;
-      font: 700 11px/1 'JetBrains Mono', monospace;
+      padding: 12px 14px; color: #1a1916; border: 1px solid #1a1916; text-decoration: none;
+      font: 700 11px/1 Arial, Helvetica, sans-serif; letter-spacing: .04em;
     }
-    .button--ink { background: #151719; color: white; }
+    .button--ink { background: #1a1916; color: #f7f5f0; }
     .method {
-      margin: 78px 0; padding: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
-      border: 3px solid #151719; background: #60d8e7;
+      margin: 56px 0; padding: 28px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 28px;
+      border-top: 2px solid #1a1916; border-bottom: 1px solid #cfc8ba;
     }
-    .method h2 { margin: 0; font: 700 clamp(34px, 4vw, 62px)/.93 'Syne', sans-serif; letter-spacing: -.04em; }
-    .method > p { margin: 0; font: 600 18px/1.45 'Lora', serif; }
+    .method h2 { margin: 0; font: 500 clamp(28px, 3vw, 40px)/1.05 Georgia, serif; }
+    .method p { margin: 0 0 12px; font: 17px/1.55 Georgia, serif; }
+    .method a, .paddle-takes a { color: #1f3a5f; }
     .paddle-takes {
-      margin: 40px 0 78px; padding: 26px 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center;
-      border: 3px solid #151719; background: #f6dc4c;
+      margin: 0 0 56px; padding: 22px 0; display: grid; grid-template-columns: .8fr 1.2fr; gap: 28px; align-items: start;
     }
-    .paddle-takes h2 { margin: 0; font: 700 clamp(28px, 3.4vw, 46px)/.95 'Syne', sans-serif; letter-spacing: -.03em; }
-    .paddle-takes > p { margin: 0; font: 600 16px/1.5 'Lora', serif; }
-    .paddle-takes a { color: #151719; }
+    .paddle-takes h2 { margin: 0; font: 500 clamp(24px, 3vw, 34px)/1.1 Georgia, serif; }
+    .paddle-takes > p { margin: 0; font: 16px/1.55 Georgia, serif; }
     .catalog__head {
-      display: flex; justify-content: space-between; align-items: end; padding-bottom: 12px;
-      border-bottom: 4px solid #151719;
+      display: flex; justify-content: space-between; align-items: end; padding-bottom: 10px;
+      border-bottom: 2px solid #1a1916;
     }
-    .catalog__head h2 { margin: 0; font: 700 clamp(44px, 7vw, 94px)/.8 'Syne', sans-serif; letter-spacing: -.05em; }
-    .catalog__head span { font: 700 11px/1 'JetBrains Mono', monospace; }
-    .catalog__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 54px 28px; padding-top: 28px; }
-    .card__image { display: block; border: 2px solid #151719; overflow: hidden; background: #ddd; }
-    .card__image img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; transition: transform .35s ease; }
-    .card__image:hover img { transform: scale(1.02); }
-    .card__meta { display: flex; justify-content: space-between; margin-top: 14px; font: 700 11px/1 'JetBrains Mono', monospace; }
-    .card__meta strong { font: 700 30px/1 'Syne', sans-serif; }
-    .card h3 { margin: 4px 0 10px; font: 700 clamp(29px, 3.2vw, 48px)/.96 'Syne', sans-serif; letter-spacing: -.035em; }
-    .card > p { margin: 0; max-width: 54ch; font: 500 16px/1.5 'Lora', serif; }
-    .card__links { display: flex; gap: 20px; margin-top: 18px; }
-    .card__links a { color: inherit; font: 700 11px/1 'JetBrains Mono', monospace; }
+    .catalog__head h2 { margin: 0; font: 500 clamp(36px, 5vw, 56px)/1 Georgia, serif; }
+    .catalog__head span { font: 700 11px/1 Arial, Helvetica, sans-serif; letter-spacing: .08em; }
+    .catalog__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px 24px; padding-top: 24px; }
+    .card__image { display: block; border: 1px solid #1a1916; overflow: hidden; background: #fff; }
+    .card__image img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: contain; background: #fff; }
+    .card__meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 12px; font: 700 11px/1.3 Arial, Helvetica, sans-serif; letter-spacing: .04em; }
+    .card__meta time { font-weight: 500; letter-spacing: 0; }
+    .card h3 { margin: 8px 0 8px; font: 500 28px/1.1 Georgia, serif; }
+    .card > p { margin: 0; max-width: 54ch; font: 16px/1.5 Georgia, serif; }
+    .card__links { display: flex; gap: 16px; margin-top: 14px; }
+    .card__links a { color: inherit; font: 700 11px/1 Arial, Helvetica, sans-serif; }
     @media (max-width: 800px) {
       .desk-head__title, .lead, .method, .paddle-takes { grid-template-columns: 1fr; }
       .intro { max-width: none; }
       .catalog__grid { grid-template-columns: 1fr; }
-      .lead__score { width: 76px; font-size: 28px; }
-    }
-    @media (max-width: 520px) {
-      .desk-head__top { gap: 14px; padding-inline: 18px; }
-      .desk-head__title, .desk { padding-left: 18px; padding-right: 18px; }
-      .desk-head__title { padding-top: 54px; }
-      .desk { padding-top: 28px; }
-      .lead { gap: 24px; }
-      .method { margin-block: 54px; padding: 22px; gap: 20px; }
-      .paddle-takes { margin-block: 32px 54px; padding: 20px; gap: 16px; }
     }
   </style>
 </BlockLayout>

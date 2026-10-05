@@ -5,6 +5,11 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    puzzles: 'https://pointcast.xyz/puzzles/',
+    puzzleShelf: 'https://pointcast.xyz/shop/puzzles/',
+    puzzleBusiness: 'https://pointcast.xyz/puzzles/business/',
+    puzzleStudio: 'https://pointcast.xyz/puzzles/studio/',
+    puzzlesData: 'https://pointcast.xyz/puzzles.json',
     chain: 'https://pointcast.xyz/chain/',
     chainDev: 'https://pointcast.xyz/chain/dev/',
     chainDocs: 'https://pointcast.xyz/chain/docs/',
@@ -23,6 +28,7 @@ export const AGENT_SURFACES = {
     uesPhilosophy: 'https://pointcast.xyz/ues/philosophy/',
     uesPhilosophyReceipts: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts/',
     uesPhilosophyRadius: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/',
+    uesPhilosophyUnmoderated: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label/',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',
     pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands/',
     pickleballMixedDoubles: 'https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles/',
@@ -134,6 +140,11 @@ export const AGENT_SURFACES = {
     prices: 'https://pointcast.xyz/prices',
     frontDesk: 'https://pointcast.xyz/front-desk/agents/',
     dailyAlmanac: 'https://pointcast.xyz/almanac',
+    standards: 'https://pointcast.xyz/standards/',
+    standardsPassport: 'https://pointcast.xyz/standards/agent-identity/',
+    standardsPassportSpec: 'https://pointcast.xyz/standards/agent-identity/spec.md',
+    standardsCheck: 'https://pointcast.xyz/standards/check/',
+    standardsRegistry: 'https://pointcast.xyz/standards/registry/',
   },
   json: {
     pickleballHome: 'https://pointcast.xyz/pickleball/home.json',
@@ -172,6 +183,7 @@ export const AGENT_SURFACES = {
     uesPhilosophy: 'https://pointcast.xyz/ues/philosophy.json',
     uesPhilosophyReceipts: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts.json',
     uesPhilosophyRadius: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy.json',
+    uesPhilosophyUnmoderated: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label.json',
     everyday: 'https://pointcast.xyz/everyday.json',
     communicationsLab: 'https://pointcast.xyz/communications-lab/briefs.json',
     mobility2030: 'https://pointcast.xyz/mobility-2030.json',
@@ -208,6 +220,10 @@ export const AGENT_SURFACES = {
     prices: 'https://pointcast.xyz/prices.json',
     frontDesk: 'https://pointcast.xyz/front-desk/agents.json',
     dailyAlmanac: 'https://pointcast.xyz/almanac.json',
+    standards: 'https://pointcast.xyz/standards.json',
+    standardsPassportSchema: 'https://pointcast.xyz/standards/agent-identity/schema.json',
+    standardsPassportExample: 'https://pointcast.xyz/standards/agent-identity/examples/grok.json',
+    standardsRegistry: 'https://pointcast.xyz/standards/registry.json',
   },
   api: {
     luckyCatManifest: 'https://pointcast.xyz/api/lucky-cat',
