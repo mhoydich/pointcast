@@ -6,7 +6,7 @@ import {
   applyVerdict, editionCalls, layerFromState, openMorning, placeCall, publicSky, resultOf, settleOutstanding, SKY_DEFINITION,
 } from '../functions/_lib/sky-calls.mjs';
 import {
-  BASKET_NOTE, editionReport, fileReport, formatUsd, holdReason, ITEM_IDS, parsePrice, publicPrices, shouldHold,
+  BASKET_NOTE, editionReport, fileReport, formatUsd, holdReason, ITEM_IDS, parsePrice, parseSource, publicPrices, shouldHold,
 } from '../functions/_lib/price-wire.mjs';
 
 async function loadHandler(t, path) {
@@ -245,4 +245,73 @@ test('MCP lists sky and price tools with write tools not marked read-only', asyn
   }
   assert.deepEqual(byName.sky_call.inputSchema.properties.call.enum, ['layer', 'clear']);
   assert.deepEqual(byName.price_report.inputSchema.properties.item.enum, ITEM_IDS);
+});
+
+
+test('receipt URLs reject embedded credentials before adding a public price report', () => {
+  for (const source of ['https://user:secret@example.com/receipt', 'https://user@example.com/receipt', 'https://:secret@example.com/receipt']) {
+    assert.equal(parseSource(source).ok, false);
+    const book = { v: 1, reports: [] };
+    const filed = fileReport(book, { handle: 'ada', item: 'burrito', price: 12, place: 'The stand', date: '2026-10-05', source }, Date.parse('2026-10-05T20:00:00Z'));
+    assert.equal(filed.ok, false);
+    assert.match(filed.error, /credentials/);
+    assert.deepEqual(book.reports, []);
+  }
+  assert.equal(parseSource('https://example.com/receipt').ok, true);
+  assert.equal(parseSource('menu board, no photo').ok, true);
+});
+
+test('Sky GET computes verdicts without writes and a successful POST still saves calls and verdicts', async (t) => {
+  const weatherRequests = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    weatherRequests.push(String(url));
+    assert.match(String(url), /^https:\/\/mesonet\.agron\.iastate\.edu\/cgi-bin\/request\/asos\.py\?/);
+    // A valid empty archive settles this old morning as no-record, offline.
+    return new Response('station,valid,skyc1,skyl1,skyc2,skyl2,skyc3,skyl3,skyc4,skyl4\n', { status: 200 });
+  });
+  const { onRequestGet: skyGet, onRequestPost: skyPost } = await loadHandler(t, '/functions/api/sky-calls.ts');
+  const kv = new FakeKV();
+  const key = 'sky:book:v1';
+  const pastDate = '2020-10-01';
+  kv.m.set(key, JSON.stringify({
+    v: 1,
+    days: {
+      [pastDate]: {
+        calls: [{ handle: 'ada', kind: 'human', call: 'layer', t: '2020-09-30T18:00:00Z' }],
+        verdict: null,
+      },
+    },
+  }));
+  const before = new Map(kv.m);
+  const writes = [];
+  const put = kv.put.bind(kv);
+  kv.put = async (name, value) => {
+    writes.push({ name, value });
+    return put(name, value);
+  };
+  const env = { VISITS: kv };
+
+  const response = await skyGet({ request: new Request('https://pointcast.xyz/api/sky-calls'), env });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const computed = body.days.find((day) => day.date === pastDate);
+  assert.equal(computed.verdict.state, 'no-record');
+  assert.equal(computed.verdict.final, true);
+  assert.equal(computed.calls[0].result, 'void');
+  assert.equal(computed.calls[0].points, 0);
+  assert.deepEqual(writes, []);
+  assert.deepEqual(kv.m, before);
+  assert.equal(weatherRequests.length, 1);
+
+  const filed = await skyPost({ request: post('https://pointcast.xyz/api/sky-calls', { handle: 'bee', call: 'clear' }), env });
+  assert.equal(filed.status, 201);
+  const posted = await filed.json();
+  assert.equal(posted.points, 0);
+  assert.match(posted.pointsNote, /Never cash/);
+  assert.equal(writes.filter(({ name }) => name === key).length, 1);
+  const stored = await kv.get(key, 'json');
+  assert.equal(stored.days[pastDate].verdict.state, 'no-record');
+  assert.equal(stored.days[pastDate].verdict.final, true);
+  assert.deepEqual(stored.days[posted.date].calls, [posted.call]);
+  assert.equal(weatherRequests.length, 2, 'the GET verdict was not persisted and is recomputed for POST');
 });

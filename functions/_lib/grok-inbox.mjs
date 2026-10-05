@@ -123,7 +123,6 @@ export async function listPings(kv, status = 'all') {
     keep.push(id);
     if (status === 'all' || record.status === status) records.push(publicPing(record));
   }
-  if (keep.length !== ids.length) await kv.put(INDEX_KEY, JSON.stringify(keep));
   records.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   return records;
 }

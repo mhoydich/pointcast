@@ -156,7 +156,7 @@ export const WX = (() => {
     r.lat = strictNum(fields.lat, -90, 90); if (r.lat == null) errors.push("lat missing or out of range");
     r.lon = strictNum(fields.lon, -180, 180); if (r.lon == null) errors.push("lon missing or out of range");
     r.tempC = strictNum(fields.temp_c, -90, 60); if (r.tempC == null) errors.push("temp_c missing or out of range");
-    r.sky = str(fields.sky).toLowerCase(); if (!SKY_WORDS[r.sky]) errors.push("sky not in the word list");
+    r.sky = str(fields.sky).toLowerCase(); if (!Object.hasOwn(SKY_WORDS, r.sky)) errors.push("sky not in the word list");
     r.obsMs = parseObs(fields.obs); if (r.obsMs == null) errors.push("obs must be UTC like 2026-10-05T19:00Z");
     r.tz = str(fields.tz); if (!validTz(r.tz)) errors.push("tz must be an IANA zone like Asia/Tokyo");
     r.src = str(fields.src).toLowerCase(); if (!/^[a-z0-9][a-z0-9.\-]{1,31}$/.test(r.src)) errors.push("src missing");

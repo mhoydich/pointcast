@@ -89,6 +89,7 @@ export function parseSource(v) {
     try {
       const url = new URL(s);
       if (url.protocol !== 'https:') return { ok: false, error: 'a source URL has to start with https://' };
+      if (url.username || url.password) return { ok: false, error: 'source URL must not contain credentials' };
       if (url.toString().length > 300) return { ok: false, error: 'source URL is too long' };
       return { ok: true, source: { kind: 'url', text: url.toString() } };
     } catch {
