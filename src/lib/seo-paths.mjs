@@ -12,7 +12,9 @@ function functionServes(segments, functionsDir, directory = functionsDir, index 
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const dynamicDirectory = /^\[\.\.\..+\]$/.test(entry.name) || /^\[[^\]]+\]$/.test(entry.name);
     const dynamicFile = /^\[\.\.\..+\]\.ts$/.test(entry.name) || /^\[[^\]]+\]\.ts$/.test(entry.name);
-    if (entry.isFile() && index === segments.length - 1 && dynamicFile) return true;
+    const dynamicAsset = entry.name.match(/^\[[^\]]+\]\.([a-z0-9]+)\.ts$/);
+    const servesSegment = dynamicFile || (dynamicAsset && segment.endsWith(`.${dynamicAsset[1]}`));
+    if (entry.isFile() && index === segments.length - 1 && servesSegment) return true;
     if (entry.isDirectory() && (entry.name === segment || dynamicDirectory) && functionServes(segments, functionsDir, join(directory, entry.name), index + 1)) return true;
   }
   return false;
