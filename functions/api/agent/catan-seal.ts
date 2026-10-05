@@ -67,7 +67,7 @@ export async function handleAgentCatanSeal(
       maker: 'town',
       expectedPublicKey: options.expectedPublicKey,
       resourceDescription: 'Open a sealed Catan table: a forged balanced board and a committed 240-roll dice stream.',
-      merchantUrl: 'https://catan.pointcast.xyz/',
+      merchantUrl: 'https://pointcast.xyz/catan/',
       context: 'Paid town action: an agent opens a sealed-dice table at Hex & Harbor.',
       requestHash: begun.kind === 'quote' ? null : begun.intent.request_hash,
       resourceId: intentId,

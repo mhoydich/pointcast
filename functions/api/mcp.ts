@@ -1,4 +1,5 @@
 import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
+import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-inbox.mjs';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
@@ -241,6 +242,10 @@ const WRITE_TOOL_NAMES = new Set([
   'desk_ask',
   'desk_pass',
   'tug_pull',
+  'wants_post',
+  'wants_offer',
+  'haggle_offer',
+  'grok_inbox_answer',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
@@ -558,7 +563,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_tables',
-    description: 'Hex & Harbor (catan.pointcast.xyz), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
+    description: 'Hex & Harbor (pointcast.xyz/catan), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -580,7 +585,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_daily',
-    description: "The Daily Island on Hex & Harbor (catan.pointcast.xyz/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
+    description: "The Daily Island on Hex & Harbor (pointcast.xyz/catan/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -591,7 +596,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_games',
-    description: 'Game cards from the Hex & Harbor Table Clock (catan.pointcast.xyz/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
+    description: 'Game cards from the Hex & Harbor Table Clock (pointcast.xyz/catan/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1276,6 +1281,32 @@ const TOOL_DEFINITIONS = [
     description:
       'Informational contents schedule from the Home Cartography demo index — every item at or above the $200 threshold with serial, room, purchase record, estimated value, and matching receipt id, sorted highest value first. Not an appraisal, policy, or claim document. FICTIONAL demo household.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'grok_inbox_read',
+    description: 'Pings waiting for Grok Bot on /grok, or the recent conversation. Read-only. Each row has id, created_at, handle, kind (ping, question, game, sky), text, status, and any stored reply.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'open (default), answered, or all.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'grok_inbox_answer',
+    description: 'Mark one grok inbox ping answered. Write. Requires GROK_INBOX_TOKEN, sent as Authorization: Bearer or as the token argument. Does not post to the devnet. If the token is not set, a grok devnet post containing "re: ping <id>" is the reply instead.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Ping id (g plus 8 letters or digits).' },
+        reply_text: { type: 'string', description: 'The reply, up to 500 characters.' },
+        devnet_tx: { type: 'string', description: 'Optional devnet transaction hash.' },
+        token: { type: 'string', description: 'GROK_INBOX_TOKEN. Prefer the Authorization header when you can set one.' },
+      },
+      required: ['id', 'reply_text'],
+      additionalProperties: false,
+    },
   },
 ] as const;
 
@@ -2236,7 +2267,7 @@ async function dispatchTool(
       const data = await callJson(`${base}/api/catan/tables${city ? `?city=${encodeURIComponent(city)}` : ''}`);
       return {
         content: [
-          { type: 'text', text: `Hex & Harbor · ${data?.count ?? 0} upcoming table${data?.count === 1 ? '' : 's'}${city ? ` near "${city}"` : ''} · host one at https://catan.pointcast.xyz/#host` },
+          { type: 'text', text: `Hex & Harbor · ${data?.count ?? 0} upcoming table${data?.count === 1 ? '' : 's'}${city ? ` near "${city}"` : ''} · host one at https://pointcast.xyz/catan/#host` },
           { type: 'text', text: JSON.stringify(data?.tables ?? [], null, 2) },
         ],
       };
@@ -3656,6 +3687,41 @@ Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
 </html>`;
 }
 
+async function grokInboxCall(
+  name: string,
+  args: Record<string, unknown>,
+  request: Request,
+  env: Env & { GROK_INBOX_TOKEN?: string },
+) {
+  if (!env.VISITS) {
+    return { content: [{ type: 'text', text: 'VISITS KV is not bound, so the grok inbox is closed.' }], isError: true };
+  }
+  if (name === 'grok_inbox_read') {
+    const asked = String(args.status || 'open');
+    const status = asked === 'answered' || asked === 'all' ? asked : 'open';
+    const pings = await listPings(env.VISITS, status);
+    return { content: [{ type: 'text', text: JSON.stringify({ ok: true, status, count: pings.length, pings }, null, 2) }] };
+  }
+  const expected = env.GROK_INBOX_TOKEN || '';
+  if (!expected) {
+    return {
+      content: [{ type: 'text', text: 'GROK_INBOX_TOKEN is not set. Add it in Cloudflare Pages → Settings → Environment variables and encrypt it. Until then, answer with a grok devnet post whose title or body contains "re: ping <id>".' }],
+      isError: true,
+    };
+  }
+  const headerToken = bearerToken(request.headers.get('authorization'));
+  const argToken = typeof args.token === 'string' ? args.token : '';
+  if (!tokensMatch(headerToken, expected) && !tokensMatch(argToken, expected)) {
+    return { content: [{ type: 'text', text: 'unauthorized' }], isError: true };
+  }
+  const result = await answerPing(env.VISITS, String(args.id || ''), {
+    reply_text: args.reply_text,
+    devnet_tx: args.devnet_tx,
+  });
+  if (!result.ok) return { content: [{ type: 'text', text: result.error || 'not answered' }], isError: true };
+  return { content: [{ type: 'text', text: JSON.stringify({ ok: true, ping: result.ping }, null, 2) }] };
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────
 export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
   return new Response(discoveryHtml(request), {
@@ -3709,6 +3775,9 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         return rpcResult(id, filed.body?.ok && filed.body.request
           ? { content: [{ type: 'text', text: `On the line: ${filed.body.request.title} — ${filed.body.request.artist}. It is public at ${base}/station#requests. If the station plays it, the line will say so.` }] }
           : { content: [{ type: 'text', text: filed.body?.error || `The request line refused that (${filed.status}).` }], isError: true });
+      }
+      if (name === 'grok_inbox_read' || name === 'grok_inbox_answer') {
+        return rpcResult(id, await grokInboxCall(name, args, request, env));
       }
       if (name === 'desk_ask' || name === 'desk_pass') {
         // In-process, so the caller's own X-Yard-Resident header arrives: a
