@@ -559,7 +559,7 @@ const NET_FIELDS = Object.freeze({
  *   checkin    {note? ≤140, name?}            (name: own-key authors only)
  *   observe    {height, state_root, tip_hash, seen_at}   hashes 12–64 hex, seen_at ISO UTC
  *   crosscheck {of_tx, height, claimed_root, chain_root, links_checked 0..64, result: match|mismatch}
- *   review     {items: [{tx, rating: good|unclear|flag, reason ≤48}] 1..5}
+ *   review     {items: [{tx, rating: good|unclear|flag, reason? ≤48}] 1..5}
  *   digest     {text ≤1200, cites: [tx] ≤20}
  *
  * `day` is the UTC day (`YYYY-MM-DD`) the post is for. Unknown fields throw.
@@ -600,7 +600,11 @@ export function buildNetBody(kind, fields = {}, dayStr) {
         const tx = hash64(`items[${i}].tx`, it.tx);
         if (seen.has(tx)) fail(`items[${i}].tx: reviewed twice`);
         seen.add(tx);
-        return { tx, rating: oneOf(`items[${i}].rating`, it.rating, ["good", "unclear", "flag"]), reason: plain(`items[${i}].reason`, it.reason, 48) };
+        const item = { tx, rating: oneOf(`items[${i}].rating`, it.rating, ["good", "unclear", "flag"]) };
+        // The reason is optional, as the devnet Worker takes and writes it: an
+        // absent or empty one is left out of the body.
+        if (it.reason !== undefined && it.reason !== null && it.reason !== "") item.reason = plain(`items[${i}].reason`, it.reason, 48);
+        return item;
       });
       break;
     }

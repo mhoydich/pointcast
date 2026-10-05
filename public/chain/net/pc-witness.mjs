@@ -40,14 +40,21 @@ const DEVNET = "https://pointcast-devnet.mhoydich.workers.dev";
 const CHAIN_ID = "pointcast-devnet-1";
 const GENESIS = "132faa1c08769a871c53547db3499b6c031459e6606b3c4999ffd0ead0a56f08";
 const VERIFIER_URL = "https://pointcast.xyz/chain/yard/verifier/";
-/** sha256 of every verifier build this script will run (pointcast-chain commits named). */
+/**
+ * sha256 of every verifier build this script will run (pointcast-chain
+ * commits named). Every re-pin of crates/explorer/static/verifier (and so of
+ * the Block Yard) must add its build here, or every run refuses it;
+ * sdk/test/witness-script.test.mjs fails when the repo's copy is missing.
+ */
 const VERIFIER_PINS = Object.freeze({
   "verify.js": ["74255711f5b8988eb18c30d5138ef0dc5ff4612566f0d70ac5b9fea6f81dc3cc"],
   "pointcast_chain.wasm": [
-    "5491621602ecfa6afa4e8a88a20775243b717774393332e8b3437b690d39746d", // 3774071, batch 5: pointcast.xyz/chain/yard/verifier
-    "16395976817554ca5cfdc82b75feb7db559e6c18d49ad8a7fd9023c619c6a45f", // 1a13850, polish-d: crates/explorer/static/verifier
+    "5491621602ecfa6afa4e8a88a20775243b717774393332e8b3437b690d39746d", // 3774071, batch 5: the Block Yard until 2026-10-05
+    "16395976817554ca5cfdc82b75feb7db559e6c18d49ad8a7fd9023c619c6a45f", // 1a13850, polish-d
+    "7467bfd9afb34a9a37a177d1f9236e529b2b827bb5dfa07f7e6e12263af4acd4", // 77b1be1, stations (record 13): the Block Yard since 2026-10-05
   ],
 });
+const REPIN_HINT = "if the Block Yard's verifier was updated, download pc-witness.mjs again from https://pointcast.xyz/chain/net/";
 const WAIT_BLOCKS = 20; // warn when a post is not in a block 20 blocks after it was sent
 
 const USAGE = `pc-witness.mjs: replay the PointCast devnet, then sign and post one witness attestation.
@@ -76,6 +83,7 @@ A witness is a public claim, not proof of replay. Devnet: no value, may reset.`;
 
 class Refusal extends Error {}
 class Usage extends Error {}
+class Midnight extends Error {}
 
 const say = (s = "") => process.stdout.write(`${s}\n`);
 const warn = (s) => process.stderr.write(`pc-witness: ${s}\n`);
@@ -137,9 +145,9 @@ function parseArgs(argv) {
 async function pinned({ js, wasm, sums, label }) {
   const jsSha = sha256(js);
   const wasmSha = sha256(wasm);
-  if (!VERIFIER_PINS["verify.js"].includes(jsSha)) throw new Refusal(`verifier (${label}): verify.js sha256 ${jsSha} is not one this script pins`);
+  if (!VERIFIER_PINS["verify.js"].includes(jsSha)) throw new Refusal(`verifier (${label}): verify.js sha256 ${jsSha} is not one this script pins (${REPIN_HINT})`);
   if (!VERIFIER_PINS["pointcast_chain.wasm"].includes(wasmSha)) {
-    throw new Refusal(`verifier (${label}): pointcast_chain.wasm sha256 ${wasmSha} is not one this script pins`);
+    throw new Refusal(`verifier (${label}): pointcast_chain.wasm sha256 ${wasmSha} is not one this script pins (${REPIN_HINT})`);
   }
   if (sums !== null && sums !== undefined) {
     const listed = String(sums).trim().split(/\s+/)[0];
@@ -308,9 +316,10 @@ async function saveJournal(path, j) {
 
 // ---------------------------------------------------------------- posting
 
+const STARTED = Date.now();
 function nowMs() {
-  const t = process.env.PC_WITNESS_NOW; // tests only: pretend the wall clock says this
-  const v = t ? Date.parse(t) : Date.now();
+  const t = process.env.PC_WITNESS_NOW; // tests only: pretend the wall clock said this at start (it runs on from there)
+  const v = t ? Date.parse(t) + (Date.now() - STARTED) : Date.now();
   if (!Number.isFinite(v)) throw new Usage("PC_WITNESS_NOW is not a time");
   return v;
 }
@@ -376,10 +385,14 @@ async function main() {
     return 0;
   }
   const epoch = r.cps.get(1).block_hash;
-  const day = w.utcDay(r.ts[r.tip.height]);
+  // The UTC day: the later of the replayed tip's and this machine's clock's. A
+  // post counts on its block's UTC day, and just after midnight an idle
+  // chain's tip is still yesterday's (a check-in dated by it would count for
+  // yesterday, or be wrong_day after 00:10). Never from /status or /duties.
+  const day = w.utcDay(Math.max(r.ts[r.tip.height], nowMs()));
   const headers = [];
   r.ts.forEach((t, h) => headers.push({ height: h, timestamp: t }));
-  const dayCp = w.dayCheckpoint(headers);
+  const dayCp = w.dayCheckpoint(headers, { day }); // null until today's is sealed: then the latest sealed one
   let target = dayCp ?? w.checkpointAt(r.tip.height);
   if (opt.height !== undefined) {
     const h = Number(opt.height);
@@ -430,7 +443,7 @@ async function main() {
     if (onChain) say(`  (no WIT: you attested №${target} already, tx ${onChain.tx} in block №${onChain.height})`);
     if (checkin && checkedIn) say(`  (no check-in: you checked in today already, tx ${checkedIn.tx})`);
     say("");
-    say(w.WITNESS_MEANING);
+    say(`${w.WITNESS_MEANING} ${w.WITNESS_LIMITS}`);
     return 0;
   }
 
@@ -441,9 +454,18 @@ async function main() {
     return 3;
   }
   const signKey = await txSigner(key.seed);
-  const send = async (p) => {
+  /** Checked before every write, not only at start: waiting for a block can carry a run past 23:59. */
+  const notNearMidnight = (label) => {
+    const t = nowMs();
+    if (nearMidnight(t)) {
+      throw new Midnight(`${label} not sent: it is ${utc(t)}, and a post sent between 23:59 and 00:01 UTC could land on either day. Try again after 00:01 UTC.`);
+    }
+  };
+  const send = async (p, label) => {
+    notNearMidnight(label);
     let tx = await chain.buildPublish({ sender: key.address, channel: p.channel, title: p.title, body: p.body });
     for (let attempt = 0; ; attempt++) {
+      notNearMidnight(label);
       const digest = pcc.signingHash(tx, chain.domain);
       const signature = pcc.bytesToHex(new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, signKey, pcc.hexToBytes(digest))));
       const stx = { tx, public_key: { scheme: "ed25519", bytes: key.publicKeyHex }, signature };
@@ -461,9 +483,9 @@ async function main() {
       }
     }
   };
-  const sendOrExplain = async (p) => {
+  const sendOrExplain = async (p, label) => {
     try {
-      return await send(p);
+      return await send(p, label);
     } catch (e) {
       if (/word filter/i.test(String(e && e.message))) {
         throw new Error(`${p.channel} refused: ${e.message}. A devnet whose word filter predates the Daily Net reads hex as words, so a few witness bodies in a hundred trip it; the same claim is refused again until the Daily Net door (which filters only text fields) is live there. Nothing else was sent.`);
@@ -516,7 +538,7 @@ async function main() {
       journal.entries.push(entry);
     }
     await saveJournal(jpath, journal); // before sending: a crash after the send still leaves the claim on record
-    const sent = await sendOrExplain(wit);
+    const sent = await sendOrExplain(wit, "WIT");
     entry.tx = sent.hash;
     await saveJournal(jpath, journal);
     say(`WIT sent: ${s.title} · tx ${sent.hash}`);
@@ -535,7 +557,7 @@ async function main() {
     if (checkedIn) say(`NET: you checked in today already (tx ${checkedIn.tx}, block №${checkedIn.height})`);
     else if (!witnessLanded) warn("skipping the check-in until the WIT post lands (it would queue behind it)");
     else {
-      const sent = await sendOrExplain(checkin);
+      const sent = await sendOrExplain(checkin, "NET check-in");
       say(`NET sent: ${checkin.title} · tx ${sent.hash}`);
       const got = await land(sent.hash, "NET check-in");
       if (got) {
@@ -545,7 +567,7 @@ async function main() {
     }
   }
   say("");
-  say(w.WITNESS_MEANING);
+  say(`${w.WITNESS_MEANING} ${w.WITNESS_LIMITS}`);
   say(`Journal (portable evidence of what you signed): ${jpath}`);
   return code;
 }
@@ -562,6 +584,10 @@ main().then(finish, (e) => {
   if (e instanceof Refusal) {
     warn(`refused: ${e.message}`);
     return finish(2);
+  }
+  if (e instanceof Midnight) {
+    warn(e.message);
+    return finish(3);
   }
   if (e instanceof Usage || (e && e.name === "WitnessFormatError")) {
     warn(e.message);
