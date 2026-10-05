@@ -46,8 +46,8 @@ async function loadVerdict(date: string) {
 async function settled(env: Env, now = Date.now()) {
   const book = await readBook(env.VISITS);
   if (!env.VISITS) return book;
-  const changed = await settleOutstanding(book, now, loadVerdict);
-  if (changed) await writeBook(env.VISITS, book);
+  // Compute verdicts in memory; only a successful POST persists this book.
+  await settleOutstanding(book, now, loadVerdict);
   return book;
 }
 
