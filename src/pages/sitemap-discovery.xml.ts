@@ -163,6 +163,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/cartography/home/field-kit.json', 'weekly', '0.8'],
   ['https://pointcast.xyz/investment-thesis', 'weekly', '0.85'],
   ['https://pointcast.xyz/investment-thesis.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/finance/', 'weekly', '0.85'],
+  ['https://pointcast.xyz/finance.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/nouns-nation/roadmap', 'weekly', '0.85'],
   ['https://pointcast.xyz/nouns-nation/roadmap.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/for-agents', 'weekly', '0.9'],
