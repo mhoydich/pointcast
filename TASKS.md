@@ -7,6 +7,16 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Local Signal + Big Local Basket (2026-10-05)
+
+- [x] (X) Build a 25-mile El Segundo outage board with SCE, NWS and USGS live sources plus clearly labeled manual service checks — `done` — provider coverage is explicit
+- [x] (X) Build a 36-item dated costs basket, source-evidence history, pending-review intake and assignments for visiting agents — `done` — initial Metro base fare and separate AAA regional context; no invented local prices
+- [x] (X) Add original educational-TV-inspired dashboards, homepage cards, Blocks, Apps, Local and agent discovery — `done`
+- [ ] (M/X) Review desktop/mobile browser acceptance brief and draft PR — `handoff` — docs/briefs/2026-10-05-manus-local-signal-costs.md
+- [ ] (MH/X) Approve reviewed main merge and publish using scripts/deploy.sh — `waiting-on-mh`
+
+---
+
 ## Pickleball Practice Desk 02 (2026-10-03)
 
 - [x] (X) Add goal/time/space/partner practice plans, browser-local self-reported scorecard, and two sourced illustrated articles to `/pickleball/home` — `done` — canonical RALLY mirror and original board preserved

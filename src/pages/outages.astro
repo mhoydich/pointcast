@@ -1,0 +1,49 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import '../styles/local-broadcast.css';
+import { SOURCES } from '../lib/local-signals.mjs';
+---
+<BlockLayout title="Local signal · 25-mile outage tracker" description="Power outages and local disruptions within 25 miles of El Segundo. Live SCE, NWS and USGS sources, with clearly labeled coverage gaps." author="Codex" hideAds showNetworkStrip={false} alternates={[{type:'application/json',href:'/outages.json',title:'Local signal sources and live API'}]}>
+<main class="broadcast" id="outage-board">
+<nav aria-label="Local tools"><a href="/">PointCast</a><a href="/local">Local</a><a href="/local-costs">Cost of living</a><a href="/outages.json">For agents</a></nav>
+<header><div><p class="label">CH.ESC / El Segundo / 90245</p><h1>IS THE<br/><span>SIGNAL ON?</span></h1><p>Power first. Then the things that interrupt a day.</p></div><div class="stamp"><strong>25</strong>MILE<br/>RADIUS</div></header>
+<div class="panels">
+<section class="panel blue" aria-labelledby="power-heading"><p class="label">01 / Power / 90245 only</p><h2 id="power-heading">Checking the neighborhood.</h2><div class="big-number" id="local-count">—</div><p id="local-detail" aria-live="polite">Connecting to Southern California Edison…</p><button id="refresh">Refresh signals</button><p id="checked" class="label">No live check yet</p><p>SCE coverage only. No listed incident does not confirm your home has power.</p></section>
+<section class="panel yellow"><p class="label">02 / Nearby / 25 miles</p><svg class="radar" viewBox="0 0 500 500" role="img" aria-labelledby="radar-title radar-desc"><title id="radar-title">Outage location dial</title><desc id="radar-desc">North is up. Each point is a utility outage location or earthquake epicenter, not an outage boundary. All incidents also appear in the list below.</desc><circle cx="250" cy="250" r="200" fill="none" stroke="#101018" stroke-width="3"/><circle cx="250" cy="250" r="100" fill="none" stroke="#101018" stroke-dasharray="4 6"/><path d="M250 50V450M50 250H450" stroke="#101018"/><text x="243" y="30">N</text><text x="470" y="255">E</text><text x="243" y="485">S</text><text x="15" y="255">W</text><text x="280" y="65">25 mi</text><circle cx="250" cy="250" r="8" fill="#1544d3"/><text x="270" y="275">90245</text><g id="radar-points"></g></svg><p>Red: utility outage location. Blue: earthquake epicenter. Distances from El Segundo’s center; coverage stops at provider boundaries.</p></section>
+</div>
+<p class="notice">Utility restoration times are estimates in Pacific time. Weather alerts and earthquakes are context, not proof of a service outage. If you see a downed wire, keep away and call 911.</p>
+<section><h2>Check each channel.</h2><div class="feed-grid">{SOURCES.map(s=><article class="feed"><p class="label">{s.name}</p><h3 data-feed-status={s.id}>{['power','weather','quake'].includes(s.id)?'Connecting…':'Manual check'}</h3><p>{s.coverage}</p><a href={s.url} target="_blank" rel="noopener noreferrer">{s.source}</a></article>)}</div></section>
+<section><h2>The interruption board.</h2><div class="filters" role="group" aria-label="Filter signals"><button data-filter="all" aria-pressed="true">All signals</button><button data-filter="power" aria-pressed="false">Power</button><button data-filter="weather" aria-pressed="false">Weather</button><button data-filter="quake" aria-pressed="false">Earthquakes</button></div><p id="list-status" aria-live="polite">Waiting for live sources.</p><div class="incidents" id="incidents"></div></section>
+<div class="ticker">LOCAL SIGNAL / Auto-checks every 2 minutes while this page is visible / <a href="/api/local-signals">Live JSON</a> / <a href="/local-costs">What does a day cost?</a></div>
+<noscript><p>Live readings need JavaScript. Use the official source links above, or <a href="/api/local-signals">read the live JSON</a>.</p></noscript>
+</main>
+</BlockLayout>
+<script>
+import { CENTER } from '../lib/local-signals.mjs';
+const root=document.querySelector('#outage-board')!;
+let state:any=null, filter='all', busy=false;
+const el=(id:string)=>root.querySelector('#'+id)!;
+const write=(id:string,text:string)=>{el(id).textContent=text;};
+function element(tag:string,text:string,cls=''){const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;return e;}
+function render(){
+ if(!state)return;
+ const old=Date.now()-Date.parse(state.checkedAt)>300000;
+ const power=state.feeds.find((f:any)=>f.id==='power');
+ const local=power.items.filter((i:any)=>i.zip==='90245');
+ write('power-heading',power.status==='available'?(local.length?'Power interruptions reported.':'No SCE incidents listed.'):'Power status unknown.');
+ write('local-count',power.status==='available'?String(local.length):'?');
+ write('local-detail',power.status==='available'?`${local.length} active SCE incident${local.length===1?'':'s'} in 90245 · ${local.reduce((n:number,i:any)=>n+(i.customers??0),0)} reported affected customers. ${old?'Reading is stale.':''}`:'Source unavailable. Check SCE directly.');
+ write('checked',`${old?'STALE / ':''}Checked ${new Date(state.checkedAt).toLocaleString('en-US',{timeZone:'America/Los_Angeles'})} Pacific`);
+ for(const feed of state.feeds){const target=root.querySelector(`[data-feed-status="${feed.id}"]`);if(target)target.textContent=feed.status==='available'?`${feed.items.length} ${feed.id==='quake'?'events in 24h':'active reports'}${old?' · stale':''}`:feed.status==='manual'?'Manual check':'Source unavailable';}
+ const items=state.feeds.flatMap((f:any)=>f.items).filter((i:any)=>filter==='all'||i.kind===filter);
+ write('list-status',items.length?`${items.length} sourced signals${old?' · stale, refresh before relying on these':''}.`:state.feeds.some((f:any)=>f.status==='unavailable')?'No signals displayed; some live sources are unavailable.':'No matching signals reported by connected sources. Other services require manual checks.');
+ el('incidents').replaceChildren();
+ for(const item of items){const card=element('article','','incident');card.append(element('p',`${item.kind.toUpperCase()}${Number.isFinite(item.miles)?' / '+item.miles.toFixed(1)+' MI':''}`,'meta'),element('h3',item.title));const dl=document.createElement('dl');const row=(k:string,v:any)=>{if(v!==undefined&&v!==null){dl.append(element('dt',k),element('dd',String(v)));}};row('Reported',item.startedAt?new Date(item.startedAt).toLocaleString('en-US',{timeZone:'America/Los_Angeles'})+' Pacific':null);row('Affected customers',item.customers);row('Cause / severity',item.cause);row('Status',item.detail);row('Estimated restoration · Pacific',item.restoration);row('Utility feed update · Pacific',item.sourceUpdatedAt);card.append(dl);const link=element('a','Official source') as HTMLAnchorElement;link.href=item.url;link.target='_blank';link.rel='noopener noreferrer';card.append(link);el('incidents').append(card);}
+ const points=el('radar-points');points.replaceChildren();
+ for(const item of items.filter((i:any)=>Number.isFinite(i.lat)&&Number.isFinite(i.lng))){const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');const dx=(item.lng-CENTER.lng)*69.17*Math.cos(CENTER.lat*Math.PI/180),dy=(item.lat-CENTER.lat)*69.0;circle.setAttribute('cx',String(250+dx*8));circle.setAttribute('cy',String(250-dy*8));circle.setAttribute('r','5');circle.setAttribute('fill',item.kind==='power'?'#db342b':'#1544d3');const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=item.title;circle.append(title);points.append(circle);}
+}
+async function refresh(){if(busy)return;busy=true;(el('refresh') as HTMLButtonElement).disabled=true;try{const r=await fetch('/api/local-signals');if(!r.ok)throw Error();const data=await r.json();if(!Array.isArray(data.feeds)||!data.checkedAt)throw Error();state=data;render();}catch{write('checked',state?'Refresh failed. Previous readings retained; they may be stale.':'Live check unavailable. Use official source links.');if(!state){write('power-heading','Power status unknown.');write('local-detail','No live result received.');write('list-status','Live data unavailable.');for(const f of ['power','weather','quake'])root.querySelector(`[data-feed-status="${f}"]`)!.textContent='Source unavailable';}}finally{busy=false;(el('refresh') as HTMLButtonElement).disabled=false;}}
+el('refresh').addEventListener('click',refresh);
+root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(b=>b.addEventListener('click',()=>{filter=b.dataset.filter!;root.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render();}));
+refresh();setInterval(()=>{if(!document.hidden)refresh();},120000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});setInterval(()=>{if(state&&Date.now()-Date.parse(state.checkedAt)>300000)render();},30000);
+</script>
