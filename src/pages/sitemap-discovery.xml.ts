@@ -94,6 +94,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/grok/case-study.json', 'monthly', '0.5'],
   ['https://pointcast.xyz/grok/field/', 'monthly', '0.7'],
   ['https://pointcast.xyz/grok/field.json', 'monthly', '0.5'],
+  ['https://pointcast.xyz/grok/method/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/grok/method.json', 'monthly', '0.5'],
   ['https://pointcast.xyz/case-studies/a-bots-visit/', 'monthly', '0.7'],
   ['https://pointcast.xyz/case-studies/a-bots-visit.json', 'monthly', '0.5'],
   ['https://pointcast.xyz/ues/philosophy/', 'monthly', '0.7'],

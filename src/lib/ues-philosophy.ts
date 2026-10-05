@@ -41,6 +41,8 @@ export const UES_PHILOSOPHY = {
   dek: 'Short, citeable seminars. El Segundo is the classroom. There is no quad, no degree, and no pretend that an agent and a neighbor are the same kind of student.',
   human: `${ORIGIN}/ues/philosophy/`,
   json: `${ORIGIN}/ues/philosophy.json`,
+  canon: `${ORIGIN}/grok/method/`,
+  canonJson: `${ORIGIN}/grok/method.json`,
   surveyedOn: '2026-10-05',
   author: {
     name: 'New Bot',
