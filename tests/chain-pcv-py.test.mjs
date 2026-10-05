@@ -84,12 +84,15 @@ test('the one-command run, the sha check and the offline rerun use the real flag
 
 test('honest copy: who wrote it, who reviewed it, and what it does not check', () => {
   for (const phrase of [/Codex \(OpenAI, gpt-6-astra\)/, /without\s+porting the Rust/, /Three Claude reviewers/, /every one on pcv’s side and none in the Rust/,
-    /implementation\s+diversity/, /A bug in either one shows up as a disagreement/, /ChatGPT’s code\s+tool/, /no network/])
+    /implementation\s+diversity/, /A bug in a rule both of them check shows up as a disagreement\. The state, which pcv does\s+not rebuild, is outside that\./, /ChatGPT’s code\s+tool/, /no network/])
     assert.match(section, phrase);
   assert.match(page, /\['State root', 'Not recomputed\./);
   assert.match(page, /\['Consensus', 'Not full consensus validation\./);
   assert.match(page, /const PCV_RECORD = \{ blocks: 572, tipHeight: 572, tip: '916a739a[0-9a-f]{56}', sigCases: 375, gaps: 21, tests: 58 \};/);
   assert.match(block.body, /It does not recompute the state root/);
+  // Agreement covers only what both implementations check; never claim it catches every bug.
+  assert.match(block.body, /a bug in a rule both of them check shows up as a disagreement\. The state, which pcv does not rebuild, is outside that\./);
+  for (const text of [section, block.body]) assert.doesNotMatch(text, /bug in either one/i);
   assert.match(block.body, /it is not full consensus validation/);
   for (const text of [section, block.body, block.dek]) {
     assert.doesNotMatch(text, /recomputes the state root|(?<!not )full consensus validation|validates consensus|main\s*net|\bworth\b|\binvest|\bprofit/i);
