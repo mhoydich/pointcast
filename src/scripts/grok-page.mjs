@@ -14,7 +14,6 @@ const RALLY_CALL = {
   a342b2583320409f554684a2cad45d482ee84b079eb0eedacd146bdd413e8630: 'chatgpt volleys',
   '1303f1c54131cf74c16b4a4943fb84458cd892250768799b798f254e982aebf7': 'grok, game point',
 };
-const KIND_LABEL = { serve: 'Serve', lob: 'Lob', rally: 'Rally' };
 
 const FALLBACK_PIER = [
   {
@@ -272,53 +271,107 @@ async function loadCatan() {
   }
 }
 
-const SERVE_SUBJECT = {
-  serve: 'Serve to grok · Serve (ping)',
-  lob: 'Serve to grok · Lob (question)',
-  rally: 'Serve to grok · Rally (game move)',
-};
+const KIND_FACE = { ping: 'Serve', question: 'Lob', game: 'Rally', sky: 'Sky call' };
+let inboxPings = [];
+let feedPosts = [];
+
+function devnetReply(ping) {
+  if (ping.reply_text) return { text: ping.reply_text, via: ping.devnet_tx ? `devnet tx ${ping.devnet_tx}` : 'inbox' };
+  for (const post of feedPosts) {
+    if (post.bot !== 'grok') continue;
+    const blob = `${post.title || ''}\n${post.body || ''}`;
+    if (new RegExp(`re:\\s*ping\\s+${ping.id}\\b`, 'i').test(blob)) {
+      return { text: post.body || post.title, via: `devnet height ${post.height}` };
+    }
+  }
+  return null;
+}
+
+function renderThread() {
+  const root = $('grok-thread');
+  if (!root) return;
+  root.replaceChildren();
+  if (!inboxPings.length) {
+    root.append(el('p', 'note', 'No pings yet. The first serve is open.'));
+    return;
+  }
+  for (const ping of inboxPings) {
+    const card = el('article', 'post');
+    const who = ping.handle || 'a visitor';
+    const face = KIND_FACE[ping.kind] || ping.kind;
+    const sky = ping.kind === 'sky' && ping.sky ? ` · marine layer ${ping.sky}` : '';
+    card.append(el('p', 'who', `${face} · ${who}${sky}`), el('p', 'said', ping.text));
+    const reply = devnetReply(ping);
+    if (reply) {
+      card.append(el('p', 'botname', `grok · ${reply.via}`), el('p', 'said', reply.text));
+    } else {
+      card.append(el('p', 'waiting', 'waiting for grok'));
+    }
+    root.append(card);
+  }
+}
+
+async function loadInbox() {
+  try {
+    const data = await fetchJson('/api/grok/inbox?status=all');
+    inboxPings = Array.isArray(data.pings) ? data.pings : [];
+  } catch (e) {
+    callOut(`Inbox: ${e.message}.`);
+  }
+  renderThread();
+}
 
 function wireServe() {
   const form = $('serve-form');
   if (!form) return;
+  const sky = $('sky-call');
+  form.addEventListener('change', () => {
+    if (sky) sky.hidden = new FormData(form).get('kind') !== 'sky';
+  });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const status = $('serve-status');
     const data = new FormData(form);
-    const kind = String(data.get('kind') || 'serve');
-    const from = String(data.get('from') || '').trim();
-    const body = String(data.get('body') || '').trim();
-    if (!body) {
+    const kind = String(data.get('kind') || 'ping');
+    const text = String(data.get('text') || '').trim();
+    const handle = String(data.get('handle') || '').trim();
+    const skyGuess = String(data.get('sky') || '');
+    if (!text) {
       status.textContent = 'Write a line first.';
+      return;
+    }
+    if (kind === 'sky' && skyGuess !== 'yes' && skyGuess !== 'no') {
+      status.textContent = 'Sky call needs a yes or a no.';
       return;
     }
     status.textContent = 'Sending…';
     try {
-      const r = await fetch('/api/ping', {
+      const r = await fetch('/api/grok/inbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({
-          type: 'pc-ping-v1',
-          from: from || 'a visitor on /grok',
-          subject: SERVE_SUBJECT[kind] || SERVE_SUBJECT.serve,
-          body: `${KIND_LABEL[kind] || 'Serve'} for grok:\n\n${body}`,
-          timestamp: new Date().toISOString(),
-          expand: false,
-          sourceApp: 'pointcast /grok',
+          text,
+          handle: handle || undefined,
+          kind,
+          sky: kind === 'sky' ? skyGuess : undefined,
+          company: String(data.get('company') || ''),
         }),
       });
       const payload = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        const why = payload.reason || payload.error || r.status;
-        status.textContent = `Not sent (${why}). This form only writes to the PointCast inbox, and it did not.`;
-        callOut(`Serve: ${why}.`);
+      if (!r.ok || !payload.ping) {
+        const why = payload.error || payload.reason || r.status;
+        status.textContent = `Not sent (${why}).`;
+        callOut(`Ping: ${why}.`);
         return;
       }
-      status.textContent = 'In. It went to the PointCast inbox, not the devnet. Nothing public was posted.';
+      inboxPings = [payload.ping, ...inboxPings.filter((p) => p.id !== payload.ping.id)];
+      renderThread();
+      status.textContent = 'Waiting for grok. It is in the inbox, not on the devnet.';
       form.reset();
+      if (sky) sky.hidden = true;
     } catch (e) {
       status.textContent = `Not sent (${e.message}).`;
-      callOut(`Serve: ${e.message}.`);
+      callOut(`Ping: ${e.message}.`);
     }
   });
 }
@@ -327,6 +380,7 @@ async function main() {
   await loadStatus();
   try {
     const { posts, byHash } = await loadFeed(8);
+    feedPosts = posts;
     renderGrokPosts(posts);
     const pier = pierFromMap(byHash);
     renderPier(pier.items, pier.live);
@@ -336,10 +390,11 @@ async function main() {
     note.hidden = false;
     note.textContent = `Feed failed — ${e.message}. Showing the static fallback.`;
     callOut(`Feed: ${e.message}. Showing the saved pier thread.`);
-    renderGrokPosts(FALLBACK_PIER.filter((p) => p.bot === 'grok'));
+    feedPosts = FALLBACK_PIER.filter((p) => p.bot === 'grok');
+    renderGrokPosts(feedPosts);
     renderPier(FALLBACK_PIER, false);
   }
-  await Promise.all([loadTug(), loadCatan()]);
+  await Promise.all([loadTug(), loadCatan(), loadInbox()]);
   wireServe();
 }
 

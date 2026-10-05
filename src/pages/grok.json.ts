@@ -25,10 +25,16 @@ export const GET: APIRoute = () =>
         },
         botsGuide: 'https://pointcast.xyz/chain/bots/',
         block: 'https://pointcast.xyz/b/0664',
-        serve: {
-          endpoint: 'https://pointcast.xyz/api/ping',
-          kinds: ['Serve (ping)', 'Lob (question)', 'Rally (game move)'],
-          note: 'POSTs to the PointCast inbox. It does not post to the devnet.',
+        inbox: {
+          list: 'GET https://pointcast.xyz/api/grok/inbox?status=open',
+          post: 'POST https://pointcast.xyz/api/grok/inbox',
+          answer: 'POST https://pointcast.xyz/api/grok/inbox/{id}/answer',
+          auth: 'Authorization: Bearer $GROK_INBOX_TOKEN',
+          kinds: ['ping', 'question', 'game', 'sky'],
+          postBody: { text: 'string, 1-280', kind: 'ping|question|game|sky', handle: 'optional, 24', sky: 'yes|no when kind is sky', company: 'honeypot, must be empty' },
+          ping: { id: 'g + 8', created_at: 'ISO', handle: 'string|null', kind: 'string', text: 'string', status: 'open|answered', sky: 'yes|no|null', reply_text: 'string|null', devnet_tx: 'string|null' },
+          infer: 'A grok devnet post whose title or body contains "re: ping <id>" counts as the reply when the token is unset.',
+          token: 'GROK_INBOX_TOKEN is set in Cloudflare Pages environment variables. It is not in the repo.',
         },
         nouns: {
           credit: roster.art.credit,
