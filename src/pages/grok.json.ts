@@ -27,6 +27,7 @@ export const GET: APIRoute = () =>
         block: 'https://pointcast.xyz/b/0664',
         caseStudy: 'https://pointcast.xyz/grok/case-study/',
         caseStudyJson: 'https://pointcast.xyz/grok/case-study.json',
+        caseStudyBlock: 'https://pointcast.xyz/b/0690',
         field: 'https://pointcast.xyz/grok/field/',
         fieldJson: 'https://pointcast.xyz/grok/field.json',
         method: 'https://pointcast.xyz/grok/method/',

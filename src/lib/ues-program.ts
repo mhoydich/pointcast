@@ -339,7 +339,12 @@ export const UES_PROGRAM_PAYLOAD = {
     seminars: [
       'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts/',
       'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/',
+      'https://pointcast.xyz/ues/philosophy/the-unmoderated-label/',
     ],
-    note: 'Seminars for a campus with no campus. Not a degree and not a revenue plan.',
+    blocks: {
+      'ues-phil-001': 'https://pointcast.xyz/b/0691',
+      'ues-phil-002': 'https://pointcast.xyz/b/0692',
+    },
+    note: 'Seminars for a campus with no campus. 001 and 002 are Blocks. 003 is a page and a JSON twin, not its own Block. 004 and 005 are titles. Not a degree and not a revenue plan.',
   },
 } as const;

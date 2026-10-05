@@ -10,13 +10,14 @@
  */
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
+import { STANDARDS_FEED } from '../lib/standards-feed.mjs';
 import type { APIRoute } from 'astro';
 
 export const GET: APIRoute = async () => {
   const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
     .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-  const items = blocks.map((b) => {
+  const blockItems = blocks.map((b) => {
     const ch = CHANNELS[b.data.channel];
     return {
       id: `https://pointcast.xyz/b/${b.data.id}`,
@@ -36,6 +37,23 @@ export const GET: APIRoute = async () => {
       },
     };
   });
+  const standardsItems = STANDARDS_FEED.map((entry) => ({
+    id: entry.id,
+    url: entry.url,
+    title: entry.title,
+    content_text: entry.summary,
+    summary: entry.summary,
+    date_published: entry.date,
+    tags: entry.tags,
+    image: 'https://pointcast.xyz/og/page.png?p=/standards/',
+    _pointcast: {
+      id: null,
+      channel: { code: 'FD', slug: 'front-door', name: 'Front Door', color: CHANNELS.FD.color600 },
+      type: 'standards',
+      edition: null,
+    },
+  }));
+  const items = [...blockItems, ...standardsItems].sort((a, b) => Date.parse(b.date_published) - Date.parse(a.date_published));
 
   const payload = {
     version: 'https://jsonfeed.org/version/1.1',
