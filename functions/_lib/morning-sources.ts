@@ -11,7 +11,8 @@
  *           week before. Court Call comes from the spots file inside
  *           composeEdition, not from courtCallState, so a frozen line never
  *           depends on when it was first read
- *   price   the nearest paddle release within ±14 days, else the newest register change
+ *   price   a price-wire report filed before 6:45 AM and dated within 7 days,
+ *           else the nearest paddle release within ±14 days, else the newest register change
  *   town    front-door news 7 days old or less, else the newest card-signed
  *           Shortwave post not by the house, else the almanac line for El Segundo
  *   ritual  the Nightly Net (fixed in morning.mjs, mirrors NET in src/lib/band.ts;
@@ -48,6 +49,10 @@ import { DAILY_CAP, badgeStamp, bylineAwards } from './air-points.mjs';
 import { addDays, composeEdition, cutoffMs, freezeEdition, isEditionDate, momentOf, NEWS_MAX_AGE_DAYS, pickPrice, pickShop, pickTown } from './morning.mjs';
 // @ts-ignore — plain module shared with the tests
 import { deskFactsByFeed } from './air-desk.mjs';
+// @ts-ignore — plain module shared with the tests
+import { readEditionCalls } from './sky-calls.mjs';
+// @ts-ignore — plain module shared with the tests
+import { readEditionPrice } from './price-wire.mjs';
 
 export type MorningEnv = AuthEnv & {
   VISITS?: KVNamespace;
@@ -313,18 +318,20 @@ export function priceAndShop(date: string) {
  */
 export async function gatherSources(env: MorningEnv, o: { config: AirConfig; date: string; now: number; origin: string; klax?: Klax }) {
   const { config, date, now, origin } = o;
-  const [marine, moments, town, pick, desk] = await Promise.all([
+  const [marine, moments, town, pick, desk, calls, localPrice] = await Promise.all([
     (o.klax ?? klaxFor)(date, now, env).catch(() => null),
     reportMoments(env, config, date),
     townSource(env, date).catch(() => null),
     dailyPick(env, date, origin),
     deskSkySource(env, config, date).catch(() => ({ sky: null, tides: null })),
+    readEditionCalls(env.VISITS, date).catch(() => null),
+    readEditionPrice(env.VISITS, date).catch(() => null),
   ]);
   const { price, shop } = priceAndShop(date);
   return {
-    sky: { marine, beach: moments?.beach ?? null, desk },
+    sky: { marine, beach: moments?.beach ?? null, desk, calls },
     ...(moments ? { courts: moments.courts } : {}),
-    price, town, pick, shop,
+    price, localPrice, town, pick, shop,
   };
 }
 
