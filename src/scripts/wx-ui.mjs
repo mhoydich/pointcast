@@ -14,7 +14,7 @@ import LANDMASK from '../data/wx-landmask.json';
   /* ?demo=1 adds three sample bot posts built from live Open-Meteo readings and run through the real parser.
      They are labelled as demos and never leave the page. */
   const DEMO = new URLSearchParams(location.search).get("demo") === "1";
-  const state = { limits: WX.DEFAULT_LIMITS, home: null, around: [], wire: [], skipped: [], checks: new Map(), feedOk: null, lastFeedMs: 0 };
+  const state = { limits: WX.DEFAULT_LIMITS, home: null, weatherError: null, around: [], wire: [], skipped: [], checks: new Map(), feedOk: null, lastFeedMs: 0 };
 
   /* ---------- map ---------- */
   const map = $("map");
@@ -74,10 +74,16 @@ import LANDMASK from '../data/wx-landmask.json';
   }
 
   /* ---------- home ---------- */
-  function renderHome(errText) {
+  function renderHome(errText = state.weatherError) {
     drawHomeDot();
-    if (errText) { $("homeSky").textContent = errText; return; }
-    const r = state.home; if (!r) return;
+    const error = errText || state.weatherError;
+    const r = state.home;
+    $("home").querySelector(".kind").textContent = error ? (r ? "Home · last reading · refresh unavailable" : "Home · unavailable") : (r ? "Home · live" : "Home · checking");
+    if (error) {
+      $("homeSky").textContent = error + (r ? " Last successful reading: " + (r.phrase || "Sky not reported") + " · as of " + WX.localClock(r.obsMs, r.tz) + " PT on " + WX.localDay(r.obsMs, r.tz) + "." : "");
+      return;
+    }
+    if (!r) return;
     $("homeTemp").textContent = Math.round(WX.cToF(r.tempC)) + "°F";
     $("homeTempAlt").textContent = Math.round(r.tempC) + "°C";
     $("homeSky").textContent = (r.phrase || "Sky not reported") + " · as of " + WX.localClock(r.obsMs, r.tz) + " PT";
@@ -232,11 +238,13 @@ import LANDMASK from '../data/wx-landmask.json';
       const all = await WX.fetchCurrent([WX.HOME].concat(WX.AROUND));
       state.home = all[0];
       state.around = all.slice(1);
+      state.weatherError = null;
       renderHome();
       renderAround();
       if (DEMO) loadFeed();
     } catch (e) {
-      renderHome("Open-Meteo didn't answer. Nothing here is a guess. Trying again soon.");
+      state.weatherError = "Open-Meteo didn't answer. Trying again soon.";
+      renderHome();
       renderAround("Open-Meteo didn't answer, so no fallback readings are shown.");
     }
   }

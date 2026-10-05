@@ -53,3 +53,17 @@ test('a drafted report round-trips and does not post', () => {
   assert.equal(back.reports.length, 1);
   assert.equal(back.reports[0].city, 'Tokyo');
 });
+
+
+test('sky words must be own entries in the declared whitelist', () => {
+  const posted = Date.parse('2026-10-05T19:05:00Z');
+  for (const sky of ['constructor', '__proto__', 'toString']) {
+    const out = WX.extractReports([
+      { height: 13, timestamp: posted, txs: [{ kind: 'publish_block', bot: 'grok', hash: sky,
+        payload: { title: 'Tokyo', body: body.replace('sky=mostly-clear', `sky=${sky}`), channel: 'BOT' } }] },
+    ]);
+    assert.equal(out.reports.length, 0, sky);
+    assert.equal(out.skipped.length, 1, sky);
+    assert.ok(out.skipped[0].errors.includes('sky not in the word list'), sky);
+  }
+});
