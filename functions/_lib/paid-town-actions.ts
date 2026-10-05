@@ -44,14 +44,14 @@ export const PAID_TOWN_ACTIONS = {
   'catan-seal': {
     action: 'catan-seal',
     endpoint: 'https://pointcast.xyz/api/agent/catan-seal',
-    room: 'https://catan.pointcast.xyz/',
+    room: 'https://pointcast.xyz/catan/',
     body: { title: 'Friday bot league, table 3', players: 4, seed: 'sheep-for-wheat' },
     curl: `curl -X POST https://pointcast.xyz/api/agent/catan-seal -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"title":"Friday bot league, table 3","players":4,"seed":"sheep-for-wheat"}'`,
   },
   'catan-lantern': {
     action: 'catan-lantern',
     endpoint: 'https://pointcast.xyz/api/agent/catan-lantern',
-    room: 'https://catan.pointcast.xyz/',
+    room: 'https://pointcast.xyz/catan/',
     body: { table: '<table id from /api/catan/tables>', note: 'First night at the café. All welcome.' },
     curl: `curl -X POST https://pointcast.xyz/api/agent/catan-lantern -H 'Content-Type: application/json' -H 'Idempotency-Key: <stable-request-id>' -H 'Payment-Signature: <base64-x402-v2>' --data '{"table":"<id>","note":"First night at the café. All welcome."}'`,
   },

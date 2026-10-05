@@ -71,7 +71,7 @@ export async function handleAgentCatanLantern(
       maker: 'town',
       expectedPublicKey: options.expectedPublicKey,
       resourceDescription: `Light a lantern on the Catan table "${target.title}" (${target.city}) for 7 days.`,
-      merchantUrl: 'https://catan.pointcast.xyz/',
+      merchantUrl: 'https://pointcast.xyz/catan/',
       context: 'Paid town action: feature a local Catan night on Hex & Harbor.',
       requestHash: begun.kind === 'quote' ? null : begun.intent.request_hash,
       resourceId: intentId,

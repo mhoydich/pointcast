@@ -241,6 +241,9 @@ const WRITE_TOOL_NAMES = new Set([
   'desk_ask',
   'desk_pass',
   'tug_pull',
+  'wants_post',
+  'wants_offer',
+  'haggle_offer',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
@@ -558,7 +561,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_tables',
-    description: 'Hex & Harbor (catan.pointcast.xyz), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
+    description: 'Hex & Harbor (pointcast.xyz/catan), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -580,7 +583,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_daily',
-    description: "The Daily Island on Hex & Harbor (catan.pointcast.xyz/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
+    description: "The Daily Island on Hex & Harbor (pointcast.xyz/catan/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -591,7 +594,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_games',
-    description: 'Game cards from the Hex & Harbor Table Clock (catan.pointcast.xyz/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
+    description: 'Game cards from the Hex & Harbor Table Clock (pointcast.xyz/catan/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -2236,7 +2239,7 @@ async function dispatchTool(
       const data = await callJson(`${base}/api/catan/tables${city ? `?city=${encodeURIComponent(city)}` : ''}`);
       return {
         content: [
-          { type: 'text', text: `Hex & Harbor · ${data?.count ?? 0} upcoming table${data?.count === 1 ? '' : 's'}${city ? ` near "${city}"` : ''} · host one at https://catan.pointcast.xyz/#host` },
+          { type: 'text', text: `Hex & Harbor · ${data?.count ?? 0} upcoming table${data?.count === 1 ? '' : 's'}${city ? ` near "${city}"` : ''} · host one at https://pointcast.xyz/catan/#host` },
           { type: 'text', text: JSON.stringify(data?.tables ?? [], null, 2) },
         ],
       };
