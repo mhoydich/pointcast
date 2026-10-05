@@ -27,7 +27,7 @@ working on PointCast from Mike's iMac. It replaces older advice in
   card. The deploy script runs the full build.
 - Delete `dist/` when you are done with it.
 
-## 3. Deploy: one script, always origin/main
+## 3. Deploy: one script, origin/main by default
 
 ```sh
 scripts/deploy.sh             # build + deploy origin/main, skips if it's already live
@@ -46,6 +46,15 @@ scripts/deploy.sh --force     # redeploy the same sha
 - Log: `~/Library/Logs/pointcast-deploy.log` (build output in `.log.build`).
 - `npm run publish:live` pushes to main and then calls this script
   (`--no-deploy` to skip it).
+- When newer main changes cannot yet pass review, a reviewed corrective commit
+  can ship independently: `scripts/deploy.sh --release-sha=<full 40-character SHA>`.
+  This exception requires the selected source and any deployment-script change
+  to pass independent review and the user's publication authorization. It still
+  fetches main, uses the same shared lock/worktree, and runs the complete build,
+  integrity gates, upload, smoke checks, and live marker update. The pin must be
+  an ancestor of freshly fetched main and a descendant of the previous live
+  commit. Missing history, missing live marker, and rollback pins stop before
+  checkout/build; `--force` does not bypass these ancestry checks.
 - Workers in `workers/*` deploy separately: `npx wrangler deploy` in that
   folder, before the Pages deploy if the pages depend on them.
 - Don't run `wrangler pages deploy` by hand. Every manual deploy from a

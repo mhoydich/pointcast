@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # deploy.sh — the one way pointcast.xyz goes live.
 #
-# Always deploys the tip of origin/main, built in one dedicated worktree
+# Defaults to origin/main, built in one dedicated worktree
 # (~/pc-deploy), never the caller's checkout. Callers can be any agent in any
-# worktree; they all queue on one lock, and a call that finds main already live
+# worktree; reviewed corrective pins use the same lock and prevent rollback.
+# Callers queue on one lock, and a call that finds its release already live
 # exits without rebuilding.
 #
 # Why: through Sept 2026 prod took ~20 deploys a day, each built in whatever
@@ -16,17 +17,23 @@
 #   scripts/deploy.sh             build + deploy origin/main if it isn't live yet
 #   scripts/deploy.sh --force     rebuild + redeploy even if this sha is live
 #   scripts/deploy.sh --dry-run   build and check, don't deploy
+#   scripts/deploy.sh --release-sha=<40 hex>   reviewed corrective ancestor only
 #
 # Workers under workers/ are not deployed here; ship those with
 # `npx wrangler deploy` in their own folder, before this runs.
 
 set -euo pipefail
 
-FORCE=0; DRY=0
+FORCE=0; DRY=0; RELEASE_SHA=""
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --dry-run) DRY=1 ;;
+    --release-sha=*)
+      [ -z "$RELEASE_SHA" ] || { echo "duplicate release sha" >&2; exit 2; }
+      RELEASE_SHA="${arg#--release-sha=}"
+      [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "release sha must be 40 lowercase hex characters" >&2; exit 2; }
+      ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
@@ -58,13 +65,24 @@ done
 echo $$ > "$LOCK/pid"
 trap 'rm -rf "$LOCK"' EXIT
 
-# --- the deploy worktree, pinned to origin/main -----------------------------
+# --- the deploy worktree, pinned to the selected release --------------------
 git -C "$REPO" fetch -q origin main
-SHA="$(git -C "$REPO" rev-parse origin/main)"
+MAIN_SHA="$(git -C "$REPO" rev-parse origin/main)"
+SHA="$MAIN_SHA"
+if [ -n "$RELEASE_SHA" ]; then
+  # Corrective pins may omit unreviewed newer work, never replace newer live work.
+  git -C "$REPO" cat-file -e "$RELEASE_SHA^{commit}" 2>/dev/null || { say "PIN: release commit unavailable — not deploying"; exit 1; }
+  git -C "$REPO" merge-base --is-ancestor "$RELEASE_SHA" "$MAIN_SHA" || { say "PIN: release is not an ancestor of fresh origin/main — not deploying"; exit 1; }
+  PREVIOUS_LIVE="$(cat "$LIVE_FILE" 2>/dev/null || true)"
+  [[ "$PREVIOUS_LIVE" =~ ^[0-9a-f]{40}$ ]] || { say "PIN: previous live commit is missing or invalid — not deploying"; exit 1; }
+  git -C "$REPO" merge-base --is-ancestor "$PREVIOUS_LIVE" "$RELEASE_SHA" || { say "PIN: release would replace newer or unrelated live work — not deploying"; exit 1; }
+  SHA="$RELEASE_SHA"
+  say "reviewed corrective pin ${SHA:0:8} (fresh origin/main ${MAIN_SHA:0:8})"
+fi
 SHORT="${SHA:0:8}"
 
 if [ "$FORCE" = 0 ] && [ "$DRY" = 0 ] && [ "$(cat "$LIVE_FILE" 2>/dev/null)" = "$SHA" ]; then
-  say "origin/main $SHORT is already live, nothing to do (--force to redeploy)"
+  say "release $SHORT is already live, nothing to do (--force to redeploy)"
   exit 0
 fi
 
@@ -105,7 +123,7 @@ if [ "$DRY" = 1 ]; then say "dry run, stopping before deploy"; exit 0; fi
 
 # Main may have moved while we built. That's fine — we deploy what we built
 # and the next caller ships the newer tip. What must never happen is an older
-# sha replacing a newer one, and the lock + fresh fetch above guarantee that.
+# sha replacing a newer one: defaults use fresh main; pins also check live ancestry.
 WRANGLER=node_modules/.bin/wrangler
 [ -x "$WRANGLER" ] || WRANGLER="npx --yes wrangler@4"
 $WRANGLER pages deploy dist --project-name "$PROJECT" --branch main \
