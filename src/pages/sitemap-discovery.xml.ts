@@ -77,6 +77,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/chain/docs/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/case-study/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/interns/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/chain/mints/', 'weekly', '0.7'],
   ['https://pointcast.xyz/chain/first-mints/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/mixtape/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/sanctuary/', 'monthly', '0.6'],
