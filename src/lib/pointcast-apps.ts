@@ -11,6 +11,17 @@ export interface PointcastApp {
 }
 
 export const POINTCAST_APPS: PointcastApp[] = [
+  {
+    slug: 'baseball',
+    name: 'A game you can sit inside',
+    kicker: 'A LOOK AT BASEBALL · READ & PLAY',
+    description: 'The field, the pauses, the pencil, and the people beside you. Read the essay, follow one illustrated half inning, and keep a small memory on your device.',
+    url: 'https://pointcast.xyz/baseball/',
+    path: '/baseball',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.CRT',
+    kind: 'pointcast',
+  },
   {slug:'chain',name:'PointCast Chain',kicker:'CHAIN · LOCAL BUILD · BLOCK YARD',description:'A chain where every block is a broadcast: 422 recorded blocks replayed and verified in your browser with the same code the sequencer runs. Local build, not a public network.',url:'https://pointcast.xyz/chain/',path:'/chain/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
   {slug:'object-library',name:'El Segundo Object Library',kicker:'BORROW / TRY / IMPROVE · CONCEPT DEMO',description:'Six original object concepts and a browser-local lending rehearsal. No inventory, bookings, payments or operating workshop.',url:'https://pointcast.xyz/object-library/',path:'/object-library/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
   {slug:'weather-atlas',name:'A year within reach',kicker:'EL SEGUNDO · 25-MILE WEATHER & LIVING ATLAS',description:'Four NOAA1991–2020 station normals,35years of observed rainfall,an illustrative seasonal microclimate map and object utility. Historical research,not a forecast.',url:'https://pointcast.xyz/weather-atlas/',path:'/weather-atlas/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.ESC',kind:'pointcast'},
@@ -30,6 +41,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     path: '/communications-lab/',
     repo: 'https://github.com/mhoydich/pointcast',
     channel: 'CH.ESC',
+    kind: 'pointcast',
+  },
+  {
+    slug: 'finance',
+    name: 'Finance',
+    kicker: 'EDUCATION · MAJORS · CRYPTO · ALT CASES',
+    description: 'A public education room for majors, crypto, and alts. First principles first, case studies next, bots later. Not investment advice and not an offer.',
+    url: 'https://pointcast.xyz/finance/',
+    path: '/finance/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
     kind: 'pointcast',
   },
   {
@@ -80,7 +102,7 @@ export const POINTCAST_APPS: PointcastApp[] = [
     slug: 'ai-grand-prix',
     name: 'AI Grand Prix',
     kicker: 'PREDICTION ARCADE · PLAY POINTS · TEZOS PREVIEW',
-    description: 'Build a local race season: four practice races, a constructors table, lap history, collectibles and downloadable receipts. Play points only; XTZ wagering is not live.',
+    description: 'Race Lab: copy a fixed brief, lock practice predictions, record a provisional receipt, and finalize play-point payouts. Local seasons and exports; XTZ wagering is not live.',
     url: 'https://pointcast.xyz/ai-grand-prix/',
     path: '/ai-grand-prix/',
     repo: 'https://github.com/mhoydich/pointcast',

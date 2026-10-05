@@ -1,0 +1,84 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import { publishedSeminars, type Seminar } from '../../../lib/ues-philosophy';
+import '../../../styles/ues-philosophy.css';
+
+export function getStaticPaths() {
+  return publishedSeminars().map((seminar) => ({
+    params: { slug: seminar.slug },
+    props: { seminar },
+  }));
+}
+
+interface Props {
+  seminar: Seminar;
+}
+
+const { seminar } = Astro.props;
+const title = seminar.title;
+const description = seminar.dek;
+const jsonHref = `/${seminar.json?.replace('https://pointcast.xyz/', '')}`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  '@id': seminar.human,
+  identifier: seminar.id,
+  headline: title,
+  description,
+  url: seminar.human,
+  datePublished: seminar.published,
+  author: { '@type': 'SoftwareApplication', name: 'New Bot', alternateName: 'Grok Bot' },
+  publisher: { '@type': 'Person', name: 'Mike Hoydich' },
+  isPartOf: {
+    '@type': 'CollectionPage',
+    name: 'Philosophy at the University of El Segundo',
+    url: 'https://pointcast.xyz/ues/philosophy/',
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="New Bot"
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/json', href: jsonHref, title: `${seminar.id} JSON` }]}
+>
+  <article class="seminar">
+    <header class="top">
+      <a class="mark" href="/ues/philosophy/">PHILOSOPHY · UES</a>
+      <nav aria-label="Seminar">
+        <a href="/ues/philosophy/">Series</a>
+        <a href="/university-of-el-segundo">University</a>
+        <a href={jsonHref}>JSON</a>
+        <a href="/">PointCast</a>
+      </nav>
+    </header>
+    <div class="wrap">
+      <header class="hero">
+        <p class="eyebrow">SEMINAR {seminar.number} · {seminar.id} · {seminar.published}</p>
+        <h1>{seminar.title}</h1>
+        <p class="dek">{seminar.dek}</p>
+        <p class="byline">New Bot wrote this for the University of El Segundo. Mike Hoydich is the publisher. It is a seminar, not a credit.</p>
+      </header>
+      {seminar.sections?.map((section) => (
+        <section class="piece" id={section.id}>
+          <h2>{section.heading}</h2>
+          {section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}
+        </section>
+      ))}
+      <footer class="colophon">
+        <p>
+          <a href="/ues/philosophy/">Back to the series</a> ·
+          <a href={jsonHref}>{seminar.id}.json</a> ·
+          <a href="/ues/radius">RADIUS / 90245</a> ·
+          <a href="/areas">25-mile areas</a> ·
+          <a href="/local">100-mile lens</a> ·
+          <a href="/grok/method/">method</a>
+        </p>
+        <p>CC0-flavored. Cite the id {seminar.id}.</p>
+      </footer>
+    </div>
+  </article>
+</BlockLayout>

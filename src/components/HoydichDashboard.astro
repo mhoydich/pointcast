@@ -1,0 +1,76 @@
+---
+import { DASHBOARD_SNAPSHOT, DASHBOARD_ROWS, PROPOSALS, CHAIN_PANELS } from '../data/hoydich-dashboard.mjs';
+import '../styles/hoydich-dashboard.css';
+
+const statusLabels = { open: 'Open / checked', building: 'Building', ready: 'Ready for approval', native: 'Delivered native' };
+const filters = [
+  { value: 'focus', label: 'Focus desk' }, { value: 'all', label: 'All projects' },
+  { value: 'open', label: 'Open' }, { value: 'building', label: 'Building' },
+  { value: 'ready', label: 'Ready for approval' }, { value: 'native', label: 'Native' },
+];
+const metrics = [
+  { status: 'open', label: 'Open / checked' }, { status: 'building', label: 'Building' },
+  { status: 'ready', label: 'Ready for approval' }, { status: 'native', label: 'Delivered native' },
+];
+const selected = PROPOSALS.filter(proposal => proposal.selected);
+const checkedLabel = value => `${value.slice(0, 10)} / ${value.slice(11, 16)} UTC`;
+const sourceRel = href => href.startsWith('https:') ? 'noopener noreferrer' : undefined;
+---
+
+<section class="hd" id="dashboard" aria-labelledby="dashboard-title" data-hoydich-dashboard>
+  <a class="hd-skip" href="#dashboard-projects">Skip to dashboard projects</a>
+  <header class="hd-head">
+    <div><p class="hd-kicker">THE STUDIO DESK / A CHECKED SNAPSHOT</p><h2 id="dashboard-title">What’s here.<br/><em>What comes next.</em></h2></div>
+    <div class="hd-snapshot"><p class="hd-kicker">CHECKED / <time datetime={DASHBOARD_SNAPSHOT.capturedAt}>{DASHBOARD_SNAPSHOT.dateLabel}</time></p><p>{DASHBOARD_SNAPSHOT.note}</p><nav aria-label="Dashboard sections"><a href="#dashboard-projects">Project desk ↓</a><a href="#next-three">Selected next ↓</a><a href="#chain-status">Chain status ↓</a></nav></div>
+  </header>
+
+  <dl class="hd-counts" aria-label="Recorded project statuses">{metrics.map(metric => <div class={`hd-count hd-count--${metric.status}`}><dt>{metric.label}</dt><dd>{DASHBOARD_ROWS.filter(row => row.status === metric.status).length}</dd></div>)}</dl>
+
+  <div class="hd-project-desk" id="dashboard-projects" tabindex="-1">
+    <div class="hd-controls" data-dashboard-controls hidden>
+      <div class="hd-filter-group" role="group" aria-label="Show projects">{filters.map(filter => <button type="button" data-dashboard-filter={filter.value} aria-pressed={filter.value === 'focus' ? 'true' : 'false'}>{filter.label}</button>)}</div>
+      <div class="hd-search-row"><label class="hd-search-label" for="dashboard-search"><span>Find a project or next action</span><input id="dashboard-search" type="search" maxlength="160" placeholder="Try books, fieldwork, source…" autocomplete="off" data-dashboard-search/></label><button class="hd-reset" type="button" data-dashboard-reset>Reset desk</button></div>
+    </div>
+    <p class="hd-result" data-dashboard-result role="status" aria-live="polite" aria-atomic="true">All {DASHBOARD_ROWS.length} recorded projects are shown. Open each note for the next action and source evidence.</p>
+    <div class="hd-rows">{DASHBOARD_ROWS.map(row => <article class={`hd-row hd-row--${row.status}`} data-dashboard-row data-status={row.status} data-focus={String(row.focus)} data-search={[row.title, row.family, row.status, row.statusLabel ?? statusLabels[row.status], row.summary, row.nextAction, row.sourceNote ?? ''].join(' ')}>
+      <div class="hd-row-meta"><span class="hd-kicker">{row.family}</span><span class:list={['hd-status', { 'hd-status--limited': Boolean(row.statusLabel) }]}><span aria-hidden="true">{row.status === 'open' && !row.statusLabel ? '●' : '○'}</span> {row.statusLabel ?? statusLabels[row.status]}</span></div>
+      <h3>{row.status === 'open' && row.href ? <a href={row.href} rel={sourceRel(row.href)}>{row.title}<span aria-hidden="true"> ↗</span></a> : row.title}</h3>
+      <p class="hd-row-summary">{row.summary}</p>
+      <details class="hd-row-notes"><summary>Next action / evidence <span aria-hidden="true">+</span></summary><div><p class="hd-kicker">NEXT ACTION</p><p>{row.nextAction}</p>{row.sourceNote && <p class="hd-source-note">{row.sourceNote}</p>}{row.source && <a class="hd-source-link" href={row.source.href} rel={sourceRel(row.source.href)}>{row.source.label} <span aria-hidden="true">↗</span></a>}</div></details>
+    </article>)}</div>
+    <p class="hd-empty" data-dashboard-empty hidden>No projects match this view. Try another status or reset the desk.</p>
+  </div>
+
+  <section class="hd-next" id="next-three" aria-labelledby="next-three-title">
+    <header class="hd-subhead"><div><p class="hd-kicker">THREE DIRECTIONS / SELECTED BY MIKE</p><h3 id="next-three-title">The next three.</h3></div><p>Selected directions, with a small first edition for each. These proposals have not started; finish the current releases first.</p></header>
+    <div class="hd-selected">{selected.map(proposal => <article class="hd-proposal-selected" data-selected-proposal>
+      <div class="hd-proposal-top"><span class="hd-proposal-number" aria-hidden="true">{proposal.number}</span><p class="hd-kicker">SELECTED NEXT / NOT STARTED</p></div>
+      <h4>{proposal.title}</h4><p>{proposal.summary}</p><div class="hd-first-edition"><p class="hd-kicker">FIRST EDITION</p><p>{proposal.firstEdition}</p></div><p class="hd-proposal-next"><b>Next action</b>{proposal.nextAction}</p>
+      {proposal.reuse.length > 0 && <nav class="hd-reuse" aria-label={`Existing work for ${proposal.title}`}>{proposal.reuse.map(link => <a href={link.href} rel={sourceRel(link.href)}>{link.label} <span aria-hidden="true">↗</span></a>)}</nav>}
+    </article>)}</div>
+  </section>
+
+  <details class="hd-ideas" id="ideas">
+    <summary><span><span class="hd-kicker">THE IDEA DRAWER / TEN POSSIBILITIES</span><span class="hd-ideas-title">Keep the other doors open.</span></span><span class="hd-disclosure" aria-hidden="true">+</span></summary>
+    <p class="hd-ideas-note">Three ideas are selected next. The other seven remain proposals, without a start date or a commitment.</p>
+    <div class="hd-idea-grid">{PROPOSALS.map(proposal => <article class="hd-idea" data-proposal>
+      <p class="hd-kicker">{proposal.number} / {proposal.selected ? 'SELECTED NEXT / NOT STARTED' : 'PROPOSED / NOT STARTED'}</p><h4>{proposal.title}</h4><p>{proposal.summary}</p><p><b>First edition</b>{proposal.firstEdition}</p><p><b>Next action</b>{proposal.nextAction}</p>
+      {proposal.reuse.length > 0 && <nav class="hd-reuse" aria-label={`Reuse for ${proposal.title}`}>{proposal.reuse.map(link => <a href={link.href} rel={sourceRel(link.href)}>{link.label} <span aria-hidden="true">↗</span></a>)}</nav>}
+    </article>)}</div>
+  </details>
+
+  <section class="hd-chain" id="chain-status" aria-labelledby="chain-status-title">
+    <header class="hd-subhead"><div><p class="hd-kicker">CHAIN STATUS / OBSERVATION BEFORE ACTION</p><h3 id="chain-status-title">Separate the rails.</h3></div><p>A dated view of the available evidence. A contract, a payment experiment and a working mint are different claims. No automatic polling runs here.</p></header>
+    <div class="hd-chain-grid">{CHAIN_PANELS.map(panel => <article class={`hd-chain-panel hd-chain-panel--${panel.tone}`} data-chain-panel>
+      <p class="hd-chain-status hd-kicker"><span aria-hidden="true">{panel.tone === 'verified' ? '●' : '○'}</span> {panel.statusLabel}</p><h4>{panel.title}</h4><p>{panel.summary}</p><p class="hd-chain-next"><b>Next check</b>{panel.nextAction}</p><nav class="hd-chain-sources" aria-label={`Evidence for ${panel.title}`}>{panel.sources.map(source => <a href={source.href} rel={sourceRel(source.href)}>{source.label} <span aria-hidden="true">↗</span></a>)}</nav><p class="hd-checked">Checked <time datetime={panel.checkedAt}>{checkedLabel(panel.checkedAt)}</time></p>
+    </article>)}</div>
+  </section>
+  <p class="hd-footnote">Desk snapshot: <time datetime={DASHBOARD_SNAPSHOT.capturedAt}>{checkedLabel(DASHBOARD_SNAPSHOT.capturedAt)}</time>. Source revision <code>{DASHBOARD_SNAPSHOT.sourceRevision.slice(0, 8)}</code>. Status describes the evidence checked for this snapshot.</p>
+</section>
+
+<script>
+  import { initDashboard } from '../scripts/hoydich-dashboard.mjs';
+  const setup = () => document.querySelectorAll('[data-hoydich-dashboard]').forEach(initDashboard);
+  setup();
+  document.addEventListener('astro:page-load', setup);
+</script>

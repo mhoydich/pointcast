@@ -20,9 +20,9 @@ import { readSessionFromRequest, type AuthEnv } from './api/auth/session';
 import { hasDirectorDeskAccess } from '../src/lib/director-access';
 import { POINTCAST_TEZOS_SESSION_BRIDGE_SCRIPT } from '../src/lib/auth/session-bridge-script';
 import { withStaticAudioRange } from '../src/lib/server/static-audio-range';
-import { losAngelesDate } from '../src/lib/kennel-club';
-import { datedImageUrl } from '../src/lib/og-version.mjs';
+import { HOME_SHARE_EDITIONS, HOME_SHARE_CANONICAL, HOME_SHARE_TITLE, HOME_SHARE_DESCRIPTION, HOME_SHARE_WIDTH, HOME_SHARE_HEIGHT, homeShareEditionForDate } from '../src/lib/home-share-editions.mjs';
 import { planUnfurl, unfurlWords } from '../src/lib/unfurl/plan.mjs';
+import { isQuietUesStudyPath } from '../src/lib/ues-living-study-boundaries.mjs';
 
 const STATIC_ASSET_REGEX = /\.(css|js|png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|otf|map|xml|json|txt|html|mp3|mp4|m4a|wav|webm|zip)(\?|$)/i;
 const TEZOS_BRIDGE_HEADER = 'x-pointcast-tezos-session-bridge';
@@ -56,46 +56,50 @@ function injectTezosSessionBridge(response: Response): Response {
   });
 }
 
-function injectTodayDogMetadata(response: Response, pathname: string): Response {
+const HOME_SHARE_IMAGE_PATHS = new Set(HOME_SHARE_EDITIONS.map((edition) => edition.imagePath));
+
+/** Declared artwork is permanent; _headers is already at its rule limit. */
+function withHomeShareAssetCache(response: Response, pathname: string): Response {
+  if (!HOME_SHARE_IMAGE_PATHS.has(pathname) || response.status !== 200 || !(response.headers.get('Content-Type') ?? '').startsWith('image/png')) return response;
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function injectHomeShareMetadata(response: Response, pathname: string): Response {
   if (pathname !== '/') return response;
 
-  // Dated so unfurl caches (X, iMessage, Slack) roll over with the Los Angeles
-  // day instead of pinning the first dog they ever fetched.
-  const image = datedImageUrl('https://pointcast.xyz/og/kennel-club/today.png', losAngelesDate());
-  const title = 'Today’s dog is sitting — PointCast';
-  const description = 'A new Kennel Club portrait is sitting now. Claim today’s dog free, then walk the whole PointCast town.';
-
+  // One UTC-day choice for every request. Fixed edition links preserve an
+  // artwork; changing the root response cannot evict a social app's cache.
+  const edition = homeShareEditionForDate();
+  const content = (value: string) => ({
+    element(element: Element) { element.setAttribute('content', value); },
+  });
   const transformed = new HTMLRewriter()
-    .on('meta[property="og:title"], meta[name="twitter:title"]', {
-      element(element) {
-        element.setAttribute('content', title);
-      },
-    })
-    .on('meta[property="og:description"], meta[name="twitter:description"], meta[name="description"]', {
-      element(element) {
-        element.setAttribute('content', description);
-      },
-    })
-    .on('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="fc:frame:image"]', {
-      element(element) {
-        element.setAttribute('content', image);
-      },
-    })
-    .on('meta[property="og:image:width"]', {
-      element(element) {
-        element.setAttribute('content', '1200');
-      },
-    })
-    .on('meta[property="og:image:height"]', {
-      element(element) {
-        element.setAttribute('content', '630');
-      },
+    .on('meta[property="og:title"], meta[name="twitter:title"]', content(HOME_SHARE_TITLE))
+    .on('meta[property="og:description"], meta[name="twitter:description"], meta[name="description"]', content(HOME_SHARE_DESCRIPTION))
+    .on('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], meta[property="fc:frame:image"]', content(edition.imageUrl))
+    .on('meta[property="og:image:type"]', content('image/png'))
+    .on('meta[property="og:image:width"]', content(String(HOME_SHARE_WIDTH)))
+    .on('meta[property="og:image:height"]', content(String(HOME_SHARE_HEIGHT)))
+    .on('meta[property="og:image:alt"], meta[name="twitter:image:alt"]', content(edition.alt))
+    .on('meta[name="twitter:card"]', content('summary_large_image'))
+    .on('meta[property="og:url"]', content(HOME_SHARE_CANONICAL))
+    .on('link[rel="canonical"]', {
+      element(element) { element.setAttribute('href', HOME_SHARE_CANONICAL); },
     })
     .transform(response);
 
   const headers = new Headers(transformed.headers);
-  headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-  headers.set('X-PointCast-Today-Dog', 'request-time');
+  // Static-asset validators describe the build fallback, not today's head.
+  headers.delete('ETag');
+  headers.delete('Last-Modified');
+  headers.delete('Content-Length');
+  const cacheControl = headers.get('Cache-Control') ?? '';
+  if (!headers.has('Set-Cookie') && !/(?:^|,)\s*(?:private|no-store|no-cache)\b/i.test(cacheControl)) {
+    headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  }
+  headers.set('X-PointCast-Home-Edition', edition.id);
 
   return new Response(transformed.body, {
     status: transformed.status,
@@ -328,7 +332,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         headers,
       });
       const upstreamType = classifyUA(request.headers.get('user-agent') ?? '');
-      return upstreamType.startsWith('ai:')
+      return upstreamType.startsWith('ai:') || isQuietUesStudyPath(url.pathname)
         ? directoryResponse
         : injectTezosSessionBridge(directoryResponse);
     }
@@ -416,10 +420,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
   }
 
-  const staticResponse = await withStaticAudioRange(request, await next());
+  // A home GET/HEAD must reach the HTML transform even when the client has
+  // yesterday's build-asset validator. Leave all other routes' requests alone.
+  let assetRequest = request;
+  if (url.pathname === '/' && (isGet || request.method === 'HEAD')) {
+    const headers = new Headers(request.headers);
+    headers.delete('If-None-Match');
+    headers.delete('If-Modified-Since');
+    assetRequest = new Request(request, { headers });
+  }
+  const staticResponse = withHomeShareAssetCache(await withStaticAudioRange(request, await next(assetRequest)), url.pathname);
   const staticResponseContentType = staticResponse.headers.get('content-type') ?? '';
   const response = staticResponse.status === 200 && staticResponseContentType.startsWith('text/html')
-    ? injectUnfurlCards(injectTodayDogMetadata(staticResponse, url.pathname), url.pathname, url.search)
+    ? injectUnfurlCards(injectHomeShareMetadata(staticResponse, url.pathname), url.pathname, url.search)
     : staticResponse;
   const responseContentType = response.headers.get('content-type') ?? '';
   const isHtmlResponse = response.status === 200 && responseContentType.startsWith('text/html');
@@ -427,8 +440,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // Restore the same signed Tezos identity on every PointCast HTML surface,
   // including standalone/legacy pages that intentionally bypass the shared
   // Astro layouts. Layout-backed pages contain the same script; its global
-  // singleton guard makes this middleware copy a no-op there.
-  const browserResponse = isHtmlResponse && !type.startsWith('ai:')
+  // singleton guard makes this middleware copy a no-op there. Quiet UES
+  // educational documents intentionally omit account probing and unrelated wallet state.
+  const browserResponse = isHtmlResponse && !type.startsWith('ai:') && !isQuietUesStudyPath(url.pathname)
     ? injectTezosSessionBridge(response)
     : response;
 
@@ -485,7 +499,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       headers.set('X-Agent-Mode', `stripped · ${type}`);
       headers.set('X-Robots-Tag', 'index, follow');
       // Cache: same body per UA-class, safe to cache briefly at CDN.
-      headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+      if (url.pathname !== '/') headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
       return new Response(transformed.body, {
         status: transformed.status,
         statusText: transformed.statusText,

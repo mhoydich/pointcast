@@ -1,14 +1,18 @@
 ---
 /**
  * /almanac/{place} — the whole day for one place.
+ * /almanac/{YYYY-MM-DD} — one Daily Almanac card. No. 1 is 2026-10-05.
  *
- * Sun, moon, daylight, and (from NOAA, never computed) water. This is the
- * page someone lands on when they want the day rather than one number; the
- * /{facet} children answer the single questions.
+ * Astro allows one dynamic segment at this level, so the card dates share
+ * the place route. Place slugs are not dates. Sun, moon, daylight, and
+ * (from NOAA, never computed) water stay on the place pages. The /{facet}
+ * children answer the single questions.
  */
 import BlockLayout from '../../layouts/BlockLayout.astro';
 import AlmanacLive from '../../components/AlmanacLive.astro';
 import AlmanacTide from '../../components/AlmanacTide.astro';
+import DailyAlmanacCard from '../../components/DailyAlmanacCard.astro';
+import { cardDates } from '../../../functions/_lib/almanac-card.mjs';
 import {
   ALMANAC_PLACES,
   FACETS,
@@ -27,131 +31,140 @@ import {
 } from '../../lib/almanac';
 
 export async function getStaticPaths() {
-  return ALMANAC_PLACES.map((place) => ({
+  const places = ALMANAC_PLACES.map((place) => ({
     params: { place: place.slug },
     props: { place },
   }));
+  const cards = cardDates().map((date) => ({
+    params: { place: date },
+    props: { cardDate: date },
+  }));
+  return [...places, ...cards];
 }
 
 interface Props {
-  place: AlmanacPlace;
+  place?: AlmanacPlace;
+  cardDate?: string;
 }
 
-const { place } = Astro.props;
+const { place, cardDate } = Astro.props;
 
-const today = pacificDate();
-const day = buildDay(place, today, new Date());
-const week = buildRange(place, today, 7);
-const year = today.getUTCFullYear();
-const extremes = yearExtremes(place, year);
+const view = place && !cardDate ? (() => {
+  const today = pacificDate();
+  const day = buildDay(place, today, new Date());
+  const week = buildRange(place, today, 7);
+  const year = today.getUTCFullYear();
+  const extremes = yearExtremes(place, year);
+  const canonical = `https://pointcast.xyz/almanac/${place.slug}`;
+  const title = `${place.name} almanac — sun, moon, and tide`;
+  const description = `Today in ${place.formalName}: sunrise ${fmtTime(day.sun.sunrise)}, sunset ${fmtTime(
+    day.sun.sunset,
+  )}, ${fmtDuration(day.sun.dayLengthMs)} of daylight, and the moon at ${Math.round(
+    day.moon.illumination * 100,
+  )}%. Tide from NOAA.`;
+  const others = ALMANAC_PLACES.filter((p) => p.slug !== place.slug);
+  return { place, today, day, week, year, extremes, canonical, title, description, others };
+})() : null;
 
-const canonical = `https://pointcast.xyz/almanac/${place.slug}`;
-const title = `${place.name} almanac — sun, moon, and tide`;
-const description = `Today in ${place.formalName}: sunrise ${fmtTime(day.sun.sunrise)}, sunset ${fmtTime(
-  day.sun.sunset,
-)}, ${fmtDuration(day.sun.dayLengthMs)} of daylight, and the moon at ${Math.round(
-  day.moon.illumination * 100,
-)}%. Tide from NOAA.`;
-
-const others = ALMANAC_PLACES.filter((p) => p.slug !== place.slug);
-
-const jsonLd = {
+const jsonLd = view ? {
   '@context': 'https://schema.org',
   '@graph': [
     {
       '@type': 'WebPage',
-      '@id': `${canonical}#page`,
-      url: canonical,
-      name: title,
-      description,
-      about: { '@id': `${canonical}#place` },
+      '@id': `${view.canonical}#page`,
+      url: view.canonical,
+      name: view.title,
+      description: view.description,
+      about: { '@id': `${view.canonical}#place` },
       isPartOf: { '@id': 'https://pointcast.xyz/#website' },
-      dateModified: isoDate(today),
+      dateModified: isoDate(view.today),
     },
     {
       '@type': 'Place',
-      '@id': `${canonical}#place`,
-      name: place.formalName,
-      description: place.blurb,
-      geo: { '@type': 'GeoCoordinates', latitude: place.lat, longitude: place.lng },
+      '@id': `${view.canonical}#place`,
+      name: view.place.formalName,
+      description: view.place.blurb,
+      geo: { '@type': 'GeoCoordinates', latitude: view.place.lat, longitude: view.place.lng },
     },
     {
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Almanac', item: 'https://pointcast.xyz/almanac' },
-        { '@type': 'ListItem', position: 2, name: place.name, item: canonical },
+        { '@type': 'ListItem', position: 2, name: view.place.name, item: view.canonical },
       ],
     },
   ],
-};
+} : undefined;
 ---
 
-<BlockLayout title={title} description={description} jsonLd={jsonLd}
-  alternates={[{ type: 'application/json', href: `/almanac/${place.slug}.json`, title: `${place.name} almanac data` }]}>
-  <AlmanacLive lat={place.lat} lng={place.lng} builtFor={isoDate(today)} place={place.name} facet="all" />
+{cardDate ? <DailyAlmanacCard date={cardDate} /> : null}
+{view && (
+<BlockLayout title={view.title} description={view.description} jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: `/almanac/${view.place.slug}.json`, title: `${view.place.name} almanac data` }]}>
+  <AlmanacLive lat={view.place.lat} lng={view.place.lng} builtFor={isoDate(view.today)} place={view.place.name} facet="all" />
 
   <main class="alm">
     <nav class="crumb" aria-label="Breadcrumb">
       <a href="/almanac">Almanac</a>
       <span aria-hidden="true">/</span>
-      <span aria-current="page">{place.name}</span>
+      <span aria-current="page">{view.place.name}</span>
     </nav>
 
     <header class="head">
       <p class="kicker">
-        {place.formalName} · {place.lat.toFixed(2)}°N {Math.abs(place.lng).toFixed(2)}°W
-        {place.miles > 0 ? <> · {place.miles} mi {place.direction} of El Segundo</> : <> · the anchor</>}
+        {view.place.formalName} · {view.place.lat.toFixed(2)}°N {Math.abs(view.place.lng).toFixed(2)}°W
+        {view.place.miles > 0 ? <> · {view.place.miles} mi {view.place.direction} of El Segundo</> : <> · the anchor</>}
       </p>
-      <h1>The {place.name} almanac</h1>
+      <h1>The {view.place.name} almanac</h1>
       <p class="answer">
-        <span data-live="date">{fmtDateLong(day.date)}</span> — sunrise at
-        <strong data-live="sunrise">{fmtTime(day.sun.sunrise)}</strong>, sunset at
-        <strong data-live="sunset">{fmtTime(day.sun.sunset)}</strong>,
-        <strong data-live="daylight">{fmtDuration(day.sun.dayLengthMs)}</strong> of daylight, and a
-        <strong data-live="moon-label">{day.moon.label}</strong> overhead.
+        <span data-live="date">{fmtDateLong(view.day.date)}</span> — sunrise at
+        <strong data-live="sunrise">{fmtTime(view.day.sun.sunrise)}</strong>, sunset at
+        <strong data-live="sunset">{fmtTime(view.day.sun.sunset)}</strong>,
+        <strong data-live="daylight">{fmtDuration(view.day.sun.dayLengthMs)}</strong> of daylight, and a
+        <strong data-live="moon-label">{view.day.moon.label}</strong> overhead.
       </p>
-      <p class="blurb">{place.blurb}</p>
+      <p class="blurb">{view.place.blurb}</p>
     </header>
 
     <section class="cards">
       <article>
         <h2>Sun</h2>
         <dl>
-          <div><dt>Sunrise</dt><dd data-live="sunrise">{fmtTime(day.sun.sunrise)}</dd></div>
-          <div><dt>Solar noon</dt><dd data-live="solar-noon">{fmtTime(day.sun.solarNoon)}</dd></div>
-          <div><dt>Sunset</dt><dd data-live="sunset">{fmtTime(day.sun.sunset)}</dd></div>
-          <div><dt>Right now</dt><dd data-live="sun-state">{day.sun.isDay ? 'up' : 'down'}</dd></div>
+          <div><dt>Sunrise</dt><dd data-live="sunrise">{fmtTime(view.day.sun.sunrise)}</dd></div>
+          <div><dt>Solar noon</dt><dd data-live="solar-noon">{fmtTime(view.day.sun.solarNoon)}</dd></div>
+          <div><dt>Sunset</dt><dd data-live="sunset">{fmtTime(view.day.sun.sunset)}</dd></div>
+          <div><dt>Right now</dt><dd data-live="sun-state">{view.day.sun.isDay ? 'up' : 'down'}</dd></div>
         </dl>
         <p class="card-links">
-          <a href={`/almanac/${place.slug}/sunrise`}>Sunrise detail</a> ·
-          <a href={`/almanac/${place.slug}/sunset`}>Sunset detail</a>
+          <a href={`/almanac/${view.place.slug}/sunrise`}>Sunrise detail</a> ·
+          <a href={`/almanac/${view.place.slug}/sunset`}>Sunset detail</a>
         </p>
       </article>
 
       <article>
         <h2>Daylight</h2>
         <dl>
-          <div><dt>Length</dt><dd data-live="daylight">{fmtDuration(day.sun.dayLengthMs)}</dd></div>
-          <div><dt>vs yesterday</dt><dd data-live="daylight-delta">{fmtSignedDuration(day.daylightDeltaMs)}</dd></div>
-          <div><dt>Longest {year}</dt><dd>{fmtDateShort(extremes.longest.date)}</dd></div>
-          <div><dt>Shortest {year}</dt><dd>{fmtDateShort(extremes.shortest.date)}</dd></div>
+          <div><dt>Length</dt><dd data-live="daylight">{fmtDuration(view.day.sun.dayLengthMs)}</dd></div>
+          <div><dt>vs yesterday</dt><dd data-live="daylight-delta">{fmtSignedDuration(view.day.daylightDeltaMs)}</dd></div>
+          <div><dt>Longest {view.year}</dt><dd>{fmtDateShort(view.extremes.longest.date)}</dd></div>
+          <div><dt>Shortest {view.year}</dt><dd>{fmtDateShort(view.extremes.shortest.date)}</dd></div>
         </dl>
-        <p class="card-links"><a href={`/almanac/${place.slug}/daylight`}>Daylight detail</a></p>
+        <p class="card-links"><a href={`/almanac/${view.place.slug}/daylight`}>Daylight detail</a></p>
       </article>
 
       <article>
         <h2>Moon</h2>
         <dl>
-          <div><dt>Phase</dt><dd><span data-live="moon-glyph">{day.moon.glyph}</span> <span data-live="moon-label">{day.moon.label}</span></dd></div>
-          <div><dt>Illuminated</dt><dd data-live="moon-illum">{Math.round(day.moon.illumination * 100)}%</dd></div>
-          <div><dt>Next full</dt><dd>{fmtDateShort(day.moon.nextFullAt)}</dd></div>
-          <div><dt>Next new</dt><dd>{fmtDateShort(day.moon.nextNewAt)}</dd></div>
+          <div><dt>Phase</dt><dd><span data-live="moon-glyph">{view.day.moon.glyph}</span> <span data-live="moon-label">{view.day.moon.label}</span></dd></div>
+          <div><dt>Illuminated</dt><dd data-live="moon-illum">{Math.round(view.day.moon.illumination * 100)}%</dd></div>
+          <div><dt>Next full</dt><dd>{fmtDateShort(view.day.moon.nextFullAt)}</dd></div>
+          <div><dt>Next new</dt><dd>{fmtDateShort(view.day.moon.nextNewAt)}</dd></div>
         </dl>
-        <p class="card-links"><a href={`/almanac/${place.slug}/moon`}>Moon detail</a></p>
+        <p class="card-links"><a href={`/almanac/${view.place.slug}/moon`}>Moon detail</a></p>
       </article>
     </section>
 
-    <AlmanacTide place={place} />
+    <AlmanacTide place={view.place} />
 
     <section class="table-wrap" aria-labelledby="week-heading">
       <h2 id="week-heading">The next seven days</h2>
@@ -167,8 +180,8 @@ const jsonLd = {
             </tr>
           </thead>
           <tbody>
-            {week.map((d) => (
-              <tr data-day-row={d.iso} class={d.iso === isoDate(today) ? 'is-today' : undefined}>
+            {view.week.map((d) => (
+              <tr data-day-row={d.iso} class={d.iso === isoDate(view.today) ? 'is-today' : undefined}>
                 <th scope="row">{fmtWeekday(d.date)} {fmtDateShort(d.date)}</th>
                 <td>{fmtTime(d.sun.sunrise)}</td>
                 <td>{fmtTime(d.sun.sunset)}</td>
@@ -183,17 +196,17 @@ const jsonLd = {
 
     <nav class="links" aria-label="Related almanac pages">
       <div>
-        <h2>Single answers for {place.name}</h2>
+        <h2>Single answers for {view.place.name}</h2>
         <ul>
           {FACETS.map((f) => (
-            <li><a href={`/almanac/${place.slug}/${f.slug}`}>{f.title(place)}</a></li>
+            <li><a href={`/almanac/${view.place.slug}/${f.slug}`}>{f.title(view.place)}</a></li>
           ))}
         </ul>
       </div>
       <div>
         <h2>Other places</h2>
         <ul class="places">
-          {others.map((p) => (
+          {view.others.map((p) => (
             <li><a href={`/almanac/${p.slug}`}>{p.name}</a></li>
           ))}
         </ul>
@@ -204,11 +217,12 @@ const jsonLd = {
       Sun and moon are computed here from the NOAA solar formulas and the standard synodic model,
       so this page is as correct months from now as it was the day it built. Tide is never computed —
       it comes live from NOAA or it is absent.
-      <a href={`/almanac/${place.slug}.json`}>Machine-readable version</a> ·
+      <a href={`/almanac/${view.place.slug}.json`}>Machine-readable version</a> ·
       <a href="/almanac">All places</a>
     </p>
   </main>
 </BlockLayout>
+)}
 
 <style>
   .alm { max-width: 62rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }

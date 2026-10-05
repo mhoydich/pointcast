@@ -1,0 +1,329 @@
+---
+/**
+ * /this-is-it — a room for the present moment, after Alan Watts.
+ *
+ * Four small interactions, each a paraphrase of an idea Watts returned to
+ * (no quotations): you can't grab the present; music isn't played to reach
+ * the last note; a wave is something the whole ocean is doing; thoughts
+ * pass like weather. Nothing is saved, counted, or sent anywhere. No
+ * login, no streak, no score. Sound starts only after a tap.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+
+const title = 'This Is It · a room for the present';
+const description =
+  'Four small things to do with your hands, after Alan Watts: try to catch the present, play music that has no end, make a wave the ocean is doing, and let a thought go by. Nothing is saved.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/this-is-it',
+  name: 'PointCast · This Is It',
+  description,
+  url: 'https://pointcast.xyz/this-is-it',
+  applicationCategory: 'LifestyleApplication',
+  isAccessibleForFree: true,
+  about: { '@type': 'Person', name: 'Alan Watts' },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd} immersive hideAds>
+  <div class="here">
+    <header class="intro">
+      <p class="kicker">PointCast · after Alan Watts</p>
+      <h1>Here.</h1>
+      <p>Four small things to do with your hands. There is nothing to finish and nothing to win, so take them in any order, or don't.</p>
+      <nav class="index" aria-label="Rooms">
+        <a href="#catch">i · catch it</a><a href="#music">ii · the music</a><a href="#wave">iii · the wave</a><a href="#weather">iv · weather</a>
+      </nav>
+    </header>
+
+    <section id="catch" class="room" aria-labelledby="catch-h">
+      <p class="num">i</p>
+      <h2 id="catch-h">Catch the present.</h2>
+      <p class="lede">Press the button at the exact moment that is now.</p>
+      <button type="button" class="now" data-now>now</button>
+      <p class="readout" data-now-readout aria-live="polite">&nbsp;</p>
+      <p class="after" data-now-after hidden>Every grab lands on a moment that's already gone. Watts' point was that you can't hold the present, only be in it. And you are in it while you watch that number climb.</p>
+    </section>
+
+    <section id="music" class="room" aria-labelledby="music-h">
+      <p class="num">ii</p>
+      <h2 id="music-h">The music.</h2>
+      <p class="lede">Tap or drag across the field. There's no song to finish and no last note.</p>
+      <div class="field" data-music role="application" aria-label="Music field. Tap or drag to play notes. Arrow keys and space also play."  tabindex="0">
+        <span class="field__hint" data-music-hint>tap anywhere</span>
+      </div>
+      <p class="after">Nobody goes to a concert to hear the final chord, and nobody dances to reach a spot on the floor. Watts said life works more like music than like a journey: the point is the playing.</p>
+    </section>
+
+    <section id="wave" class="room" aria-labelledby="wave-h">
+      <p class="num">iii</p>
+      <h2 id="wave-h">The wave.</h2>
+      <p class="lede">Touch the water.</p>
+      <canvas class="sea" data-sea aria-label="Water surface. Tap to make a wave." role="img"></canvas>
+      <p class="after">Your ripple doesn't stay yours for long. A wave is something the whole ocean is doing, and Watts put a person the same way: something the whole universe is doing, here, for a while.</p>
+    </section>
+
+    <section id="weather" class="room" aria-labelledby="weather-h">
+      <p class="num">iv</p>
+      <h2 id="weather-h">Weather.</h2>
+      <p class="lede">Write down the thought that keeps coming back. Then let it go by.</p>
+      <form class="cloud-form" data-cloud-form>
+        <label class="sr" for="thought">A passing thought</label>
+        <input id="thought" name="thought" maxlength="120" autocomplete="off" placeholder="the thing on your mind" />
+        <button type="submit">let it go by</button>
+      </form>
+      <div class="sky" data-sky aria-live="polite"></div>
+      <p class="after">You don't have to fight a thought or follow it. Watch it the way you'd watch a cloud cross the sky. It isn't saved anywhere, either.</p>
+    </section>
+
+    <footer class="outro">
+      <p class="big">This is it.</p>
+      <p>More from the quiet end of town: <a href="/b/0262">Alan Watts, Awakening the Mind</a> (a guided meditation), <a href="/sit">/sit</a>, <a href="/still-hour">the Still Hour</a>, <a href="/meditate">/meditate</a>.</p>
+      <button type="button" class="hush" data-hush aria-pressed="false">sound on</button>
+    </footer>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var muted = false;
+      var ctx = null;
+      function audio() {
+        if (muted) return null;
+        if (!ctx) {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          ctx = new AC();
+        }
+        if (ctx.state === 'suspended') ctx.resume();
+        return ctx;
+      }
+      function tone(freq, dur, gain) {
+        var a = audio();
+        if (!a) return;
+        var t = a.currentTime;
+        var o = a.createOscillator();
+        var g = a.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(gain || 0.18, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 1.6));
+        o.connect(g).connect(a.destination);
+        o.start(t);
+        o.stop(t + (dur || 1.6) + 0.05);
+      }
+
+      // i · catch it
+      var nowBtn = document.querySelector('[data-now]');
+      var readout = document.querySelector('[data-now-readout]');
+      var after = document.querySelector('[data-now-after]');
+      var caught = 0, raf = 0, grabs = 0;
+      function tick() {
+        var s = (performance.now() - caught) / 1000;
+        readout.textContent = 'that moment is ' + s.toFixed(s < 10 ? 3 : 1) + 's gone';
+        raf = requestAnimationFrame(tick);
+      }
+      nowBtn.addEventListener('click', function () {
+        caught = performance.now();
+        grabs += 1;
+        cancelAnimationFrame(raf);
+        if (reduce) readout.textContent = 'gone already';
+        else tick();
+        if (grabs >= 2) after.hidden = false;
+        tone(528, 1.2, 0.12);
+      });
+
+      // ii · the music (major pentatonic, two octaves, no end)
+      var field = document.querySelector('[data-music]');
+      var hint = document.querySelector('[data-music-hint]');
+      var scale = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25, 783.99, 880.0];
+      var lastNote = 0;
+      function play(x, y) {
+        var r = field.getBoundingClientRect();
+        var i = Math.min(scale.length - 1, Math.max(0, Math.floor(((x - r.left) / r.width) * scale.length)));
+        var vol = 0.06 + 0.16 * (1 - Math.min(1, Math.max(0, (y - r.top) / r.height)));
+        tone(scale[i], 2.2, vol);
+        if (hint) { hint.remove(); hint = null; }
+        if (reduce) return;
+        var dot = document.createElement('span');
+        dot.className = 'note';
+        dot.style.left = (x - r.left) + 'px';
+        dot.style.top = (y - r.top) + 'px';
+        field.appendChild(dot);
+        setTimeout(function () { dot.remove(); }, 2200);
+      }
+      field.addEventListener('pointerdown', function (e) { field.setPointerCapture(e.pointerId); lastNote = 0; play(e.clientX, e.clientY); });
+      field.addEventListener('pointermove', function (e) {
+        if (!field.hasPointerCapture(e.pointerId)) return;
+        var t = performance.now();
+        if (t - lastNote < 140) return;
+        lastNote = t;
+        play(e.clientX, e.clientY);
+      });
+      var keyIdx = 4;
+      field.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft') keyIdx = Math.max(0, keyIdx - 1);
+        else if (e.key === 'ArrowRight') keyIdx = Math.min(scale.length - 1, keyIdx + 1);
+        else if (e.key !== ' ' && e.key !== 'Enter') return;
+        e.preventDefault();
+        var r = field.getBoundingClientRect();
+        play(r.left + (keyIdx + 0.5) * (r.width / scale.length), r.top + r.height / 2);
+      });
+
+      // iii · the wave
+      var sea = document.querySelector('[data-sea]');
+      var c2 = sea.getContext('2d');
+      var ripples = [];
+      var seaVisible = false;
+      function size() {
+        var dpr = Math.min(2, window.devicePixelRatio || 1);
+        sea.width = sea.clientWidth * dpr;
+        sea.height = sea.clientHeight * dpr;
+        c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      size();
+      window.addEventListener('resize', size);
+      function ink() { return getComputedStyle(sea).color; }
+      function draw(t) {
+        var w = sea.clientWidth, h = sea.clientHeight;
+        c2.clearRect(0, 0, w, h);
+        c2.strokeStyle = ink();
+        var rows = 14;
+        for (var row = 0; row < rows; row++) {
+          var y0 = (h / (rows + 1)) * (row + 1);
+          c2.globalAlpha = 0.25 + 0.5 * (row / rows);
+          c2.beginPath();
+          for (var x = 0; x <= w; x += 6) {
+            var y = y0 + Math.sin(x / 70 + t / 1400 + row * 0.6) * 3;
+            for (var k = 0; k < ripples.length; k++) {
+              var rp = ripples[k];
+              var age = (t - rp.t) / 1000;
+              var d = Math.hypot(x - rp.x, y0 - rp.y);
+              var front = age * 120;
+              var amp = 14 * Math.exp(-age * 0.55) * Math.exp(-Math.pow((d - front) / 26, 2));
+              y += amp * Math.sin((d - front) / 9);
+            }
+            if (x === 0) c2.moveTo(x, y); else c2.lineTo(x, y);
+          }
+          c2.stroke();
+        }
+        c2.globalAlpha = 1;
+        ripples = ripples.filter(function (rp) { return t - rp.t < 8000; });
+        if (seaVisible && !reduce) requestAnimationFrame(draw);
+      }
+      new IntersectionObserver(function (es) {
+        var v = es[0].isIntersecting;
+        if (v && !seaVisible) { seaVisible = true; requestAnimationFrame(draw); }
+        seaVisible = v;
+      }).observe(sea);
+      sea.addEventListener('pointerdown', function (e) {
+        var r = sea.getBoundingClientRect();
+        ripples.push({ x: e.clientX - r.left, y: e.clientY - r.top, t: performance.now() });
+        tone(196, 2.8, 0.08);
+        if (reduce) draw(performance.now());
+      });
+
+      // iv · weather
+      var form = document.querySelector('[data-cloud-form]');
+      var sky = document.querySelector('[data-sky]');
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var input = form.elements.thought;
+        var text = (input.value || '').trim();
+        if (!text) return;
+        input.value = '';
+        var cloud = document.createElement('p');
+        cloud.className = 'cloud';
+        cloud.textContent = text;
+        sky.appendChild(cloud);
+        tone(349.23, 3, 0.07);
+        setTimeout(function () { cloud.classList.add('cloud--go'); }, 1200);
+        setTimeout(function () { cloud.remove(); }, reduce ? 4000 : 9500);
+      });
+
+      // sound toggle
+      var hush = document.querySelector('[data-hush]');
+      hush.addEventListener('click', function () {
+        muted = !muted;
+        hush.textContent = muted ? 'sound off' : 'sound on';
+        hush.setAttribute('aria-pressed', String(muted));
+      });
+    })();
+  </script>
+</BlockLayout>
+
+<style>
+  .here {
+    --bg: #f3efe6; --ink: #1f2a2e; --soft: #5f6b6d; --line: #c9c1b1; --accent: #2f6f73; --field: #e8e1d2;
+    background: var(--bg); color: var(--ink); min-height: 100vh;
+    font-family: var(--pc-font-sans, system-ui, sans-serif);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .here { --bg: #11181a; --ink: #e6e1d6; --soft: #9aa5a6; --line: #34403f; --accent: #7cc0bf; --field: #182224; }
+  }
+  :root[data-theme="dark"] .here { --bg: #11181a; --ink: #e6e1d6; --soft: #9aa5a6; --line: #34403f; --accent: #7cc0bf; --field: #182224; }
+
+  .intro, .room, .outro { width: min(720px, calc(100% - 32px)); margin: 0 auto; }
+  .intro { padding: 14vh 0 10vh; }
+  .kicker, .num, .index a, .readout, .hush, .field__hint {
+    font-family: var(--pc-font-mono, ui-monospace, monospace); letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px;
+  }
+  .kicker { color: var(--soft); margin: 0 0 14px; }
+  h1 { font-size: clamp(56px, 14vw, 120px); font-weight: 400; line-height: 0.95; margin: 0 0 18px; letter-spacing: -0.02em; }
+  .intro p { font-size: 18px; line-height: 1.6; max-width: 46ch; }
+  .index { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 26px; }
+  .index a { color: var(--accent); text-decoration: none; }
+
+  .room { padding: 9vh 0; border-top: 1px solid var(--line); }
+  .num { color: var(--soft); margin: 0 0 6px; }
+  h2 { font-size: clamp(28px, 6vw, 40px); font-weight: 400; margin: 0 0 8px; }
+  .lede { font-size: 17px; line-height: 1.55; margin: 0 0 22px; }
+  .after { color: var(--soft); font-size: 15px; line-height: 1.65; max-width: 56ch; margin: 22px 0 0; }
+
+  .now {
+    width: 168px; height: 168px; border-radius: 50%; border: 1.5px solid var(--ink); background: transparent; color: var(--ink);
+    font-size: 22px; letter-spacing: 0.08em; cursor: pointer; transition: transform 0.15s ease;
+  }
+  .now:active { transform: scale(0.96); }
+  .now:focus-visible, .field:focus-visible, .hush:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+  .readout { margin: 18px 0 0; color: var(--accent); min-height: 1.4em; }
+
+  .field { position: relative; height: 240px; background: var(--field); border: 1px solid var(--line); overflow: hidden; touch-action: none; cursor: crosshair; }
+  .field__hint { position: absolute; inset: 0; display: grid; place-items: center; color: var(--soft); pointer-events: none; }
+  .field :global(.note) {
+    position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 1.5px solid var(--accent);
+    animation: bloom 2.2s ease-out forwards; pointer-events: none;
+  }
+  @keyframes bloom { to { transform: scale(7); opacity: 0; } }
+
+  .sea { display: block; width: 100%; height: 260px; color: var(--accent); background: var(--field); border: 1px solid var(--line); touch-action: manipulation; cursor: pointer; }
+
+  .cloud-form { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cloud-form input {
+    flex: 1 1 220px; min-width: 0; padding: 12px 14px; font: inherit; font-size: 16px; color: var(--ink);
+    background: var(--field); border: 1px solid var(--line);
+  }
+  .cloud-form button, .hush { padding: 12px 16px; background: transparent; color: var(--ink); border: 1px solid var(--ink); cursor: pointer; font: inherit; }
+  .sky { position: relative; min-height: 120px; margin-top: 14px; overflow: hidden; }
+  .sky :global(.cloud) {
+    margin: 0 0 8px; font-size: 20px; font-style: italic; opacity: 1; overflow-wrap: anywhere;
+    transition: transform 8s ease-in, opacity 8s ease-in, filter 8s ease-in;
+  }
+  .sky :global(.cloud--go) { transform: translate(40%, -60px); opacity: 0; filter: blur(6px); }
+
+  .outro { padding: 12vh 0 16vh; border-top: 1px solid var(--line); }
+  .big { font-size: clamp(40px, 10vw, 80px); margin: 0 0 18px; }
+  .outro p { line-height: 1.65; }
+  .outro a { color: var(--accent); }
+  .hush { margin-top: 18px; font-size: 11px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .field :global(.note) { animation: none; display: none; }
+    .sky :global(.cloud) { transition: opacity 3s linear; }
+    .sky :global(.cloud--go) { transform: none; filter: none; }
+  }
+</style>

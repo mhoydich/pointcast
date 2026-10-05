@@ -1,0 +1,404 @@
+---
+/**
+ * /chain/dev — pointcast-chain dev tools: quickstart, the HTTP API (built
+ * from the `.route(` declarations in crates/node/src/{api,ops,api_raw,
+ * proofs,api_mandate,api_art}.rs and crates/town/src/api.rs), the MCP tools
+ * (crates/node/src/mcp.rs, crates/town/src/mcp.rs), the CLI
+ * (crates/node/src/main.rs USAGE, chain-sim and town main.rs), the SDK
+ * (published unchanged at /chain/sdk/pointcast-chain.js), the docs, and the
+ * Verify Desk, Proof of Balance and art mirror commands. Source: da7bc09.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, SOURCE } from '../../data/chain-home';
+import { CHAIN_DOCS } from '../../data/chain-docs';
+import '../../styles/chain.css';
+
+const ch = CHANNELS.FD;
+const title = 'PointCast Chain dev tools';
+const description =
+  'Run pointcast-chain on your machine: the quickstart, every HTTP route on the node and on pc-town, the MCP tools, the CLI, a zero-dependency SDK, the docs, and the commands behind VERIFY, Proof of Balance and the art mirror. The repo is local today.';
+
+type Route = { m: string; p: string; d: string };
+type RouteGroup = { file: string; routes: Route[] };
+const nodeRoutes: RouteGroup[] = [
+  { file: 'api.rs', routes: [
+    { m: 'GET', p: '/', d: 'The explorer: the chain as a PointCast-style feed, with VERIFY and the Transmit wallet panel.' },
+    { m: 'GET', p: '/status', d: 'Height, tip, state root, supply, counts, chain_id and genesis_hash.' },
+    { m: 'POST', p: '/tx', d: 'Submit a SignedTx (JSON) → {tx_hash}.' },
+    { m: 'POST', p: '/tx/digest', d: 'Unsigned tx → the raw digest, plus the wallet message and Micheline payload to sign.' },
+    { m: 'POST', p: '/drum/digest', d: 'Drum session claim → attestation digest and per-player co-sign payloads. Sizes are bounded before the node lock.' },
+    { m: 'GET', p: '/tx/{hash}', d: 'pending · included (with receipt) · rejected (with reason).' },
+    { m: 'GET', p: '/block/latest', d: 'The newest block with tx cards.' },
+    { m: 'GET', p: '/block/{height}', d: 'One block with tx cards.' },
+    { m: 'GET', p: '/account/{address}', d: 'Balance, nonce, next_nonce (counts the mempool), agent info, drops.' },
+    { m: 'GET', p: '/feed', d: 'Newest blocks first. ?limit=20&before=H&all=false; all=true includes empty blocks.' },
+    { m: 'GET', p: '/anchors', d: 'Recent anchor payloads and their status.' },
+    { m: 'POST', p: '/body', d: 'Store a block body off chain (at most 64 KiB) → {body_hash}.' },
+    { m: 'GET', p: '/body/{hash}', d: 'Body text.' },
+    { m: 'POST', p: '/mcp', d: 'The MCP server (JSON-RPC 2.0, streamable HTTP). GET answers 405.' },
+  ] },
+  { file: 'ops.rs', routes: [
+    { m: 'GET', p: '/metrics', d: 'Prometheus text: height, block age, mempool depth, txs and ATTN by kind, supply, accounts at the epoch cap, top-10 issuance share, anchors by status, db bytes.' },
+    { m: 'GET', p: '/healthz', d: 'ok, unless the node lock is poisoned.' },
+    { m: 'GET', p: '/readyz', d: '503 when the tip is older than PC_READY_MAX_BLOCK_AGE_MS (default 9,000).' },
+  ] },
+  { file: 'api_raw.rs', routes: [
+    { m: 'GET', p: '/params', d: 'Genesis params; blake2b(params) is /status.genesis_hash.' },
+    { m: 'GET', p: '/raw/block/{height}', d: 'The exact serde Block, every signature included (404 if missing).' },
+    { m: 'GET', p: '/raw/blocks', d: '?from=H&limit=N → {tip, from, blocks}, ascending, N ≤ 500.' },
+    { m: 'GET', p: '/verifier/pointcast_chain.wasm', d: 'The verifier wasm.' },
+    { m: 'GET', p: '/verifier/pointcast_chain.wasm.sha256', d: 'Its committed sha256.' },
+    { m: 'GET', p: '/verifier/verify.js', d: 'The page-side verifier wrapper.' },
+    { m: 'GET', p: '/verifier/verify-worker.js', d: 'The Web Worker that replays blocks.' },
+  ] },
+  { file: 'proofs.rs', routes: [
+    { m: 'GET', p: '/proof/account/{addr}', d: 'An unsigned proof at the tip.' },
+    { m: 'GET', p: '/proof/claim/{addr}', d: '?height=H → a balance claim at a retained anchor; 404 “replay required” once the snapshot is gone.' },
+  ] },
+  { file: 'api_mandate.rs', routes: [
+    { m: 'GET', p: '/agent/{addr}/mandate', d: 'The agent’s mandate as the next block sees it, or 404 {"mandate": null}.' },
+  ] },
+  { file: 'api_art.rs', routes: [
+    { m: 'GET', p: '/drops', d: '?prefix&creator&after&limit → drops sorted by id, with creator, minted and remaining.' },
+    { m: 'POST', p: '/drops/prepare-mint', d: 'An unsigned drop_mint with advisory checks and the wallet payload. Refuses to create a drop unless create:true.' },
+    { m: 'GET', p: '/drop/{id}', d: 'One drop: creator, minted, chain cap, remaining, first height.' },
+    { m: 'GET', p: '/drop/{id}/mints', d: 'Mints in chain order. Editions can’t move, so this is the holder list.' },
+    { m: 'GET', p: '/account/{address}/drops', d: '?at=tip|anchor&height&drop → editions held, with a chain-proof claim.' },
+    { m: 'POST', p: '/tx/simulate', d: 'Run a SignedTx through the real apply_tx on a copy of the tip.' },
+  ] },
+];
+const nodeRouteCount = nodeRoutes.reduce((n, g) => n + g.routes.length, 0);
+
+const townRoutes: Route[] = [
+  { m: 'GET', p: '/', d: 'Town Hall (#/ square, #/a/{addr}, #/c/{code}, #/r/{room}, #/b/{h}).' },
+  { m: 'GET', p: '/hall', d: 'The same page.' },
+  { m: 'GET', p: '/api/town/health', d: 'ok, halted, or a fault with its evidence; 503 when not ok.' },
+  { m: 'GET', p: '/api/town/status', d: 'Verified height, state root, supply, counts, recent state roots.' },
+  { m: 'GET', p: '/api/town/accounts', d: 'The register.' },
+  { m: 'GET', p: '/api/town/account/{addr}', d: 'Balance, the epoch ATTN tank, tap window, agents, mandate, attestations, first page of txs.' },
+  { m: 'GET', p: '/api/town/account/{addr}/txs', d: '?before=H&role=R → older txs, with the account’s roles in each.' },
+  { m: 'GET', p: '/api/town/channels', d: 'Channels.' },
+  { m: 'GET', p: '/api/town/channel/{code}', d: 'One channel’s posts. ?before=H' },
+  { m: 'GET', p: '/api/town/rooms', d: 'Rooms.' },
+  { m: 'GET', p: '/api/town/room/{room}', d: 'Sessions, attestation mix, credited-seconds leaderboard this epoch.' },
+  { m: 'GET', p: '/api/town/blocks', d: 'Recent blocks. ?busy=true' },
+  { m: 'GET', p: '/api/town/block/{h}', d: 'A replayed block with its txs and receipts.' },
+  { m: 'GET', p: '/api/town/body/{hash}', d: 'The node’s body, re-hashed; 502 if it doesn’t match body_hash.' },
+  { m: 'POST', p: '/mcp', d: 'Read-only MCP. GET answers 405.' },
+];
+
+const mcpNode = [
+  { n: 'post_block', d: 'Publish a PointCast Block on chain. The node stores the body off chain; the chain records its hash.' },
+  { n: 'drum_session', d: 'Record a finished drum session. Players earn capped ATTN only if attested: the sender always, others by co-signature or a room attestation.' },
+  { n: 'get_feed', d: 'Newest blocks first, with transaction cards.' },
+  { n: 'my_mandate', d: 'The owner-granted mandate bounding an agent: kinds, channels and rooms, allowance left, payees, blocks until expiry.' },
+  { n: 'spend_allowance', d: 'Pay ATTN from the agent’s owner’s balance, within the mandate’s caps and payee list. The custodial path refuses browser requests.' },
+  { n: 'prove_balance', d: 'A portable balance claim: the sealed tip, or a retained anchor at a given height. Verify offline with the genesis params.' },
+];
+const mcpTown = [
+  { n: 'town_status', d: 'The town square from pc-town’s own replay, with health.' },
+  { n: 'town_account', d: 'One account as pc-town replayed it: balance, epoch tank, tap window, agents, mandate, newest txs.' },
+  { n: 'channel_feed', d: 'A channel’s posts, newest first.' },
+  { n: 'room_sessions', d: 'A room’s drum sessions, attestation mix and this epoch’s leaderboard.' },
+];
+
+const cli = [
+  { c: 'run', u: 'run [--dev] [--demo] [--db PATH] [--addr HOST:PORT] [--block-ms N]', d: 'Start the sequencer. On restart it replays every stored block and re-checks signatures and roots.' },
+  { c: 'keygen', u: 'keygen [--secp256k1]', d: 'A new key, its tz address and its agent address. Store the secret in a secret manager.' },
+  { c: 'sign', u: 'sign --nonce N [--agent | --wallet] --chain ID --genesis HEX \'<tx kind JSON>\'', d: 'Sign a tx with PC_SIGNER_SECRET; --wallet produces what Kukai or Temple return.' },
+  { c: 'attest-drum', u: 'attest-drum --as player|room [--mode raw|wallet] …', d: 'Print a drum co-signature or room attestation.' },
+  { c: 'presence-ticket', u: 'presence-ticket --login ID --holder ADDR --room R …', d: 'Sign a presence ticket locally, as a reference issuer.' },
+  { c: 'anchor', u: 'anchor status|reveal|post|verify|keygen', d: 'Tezos anchoring. Only post --yes signs and spends tez.' },
+  { c: 'evidence', u: 'evidence check <evidence.json> --params <params.json> | evidence params --db PATH', d: 'Check sequencer-fault evidence offline. Exit 0 is a proven fault, 1 is not evidence.' },
+  { c: 'prove', u: 'prove <addr> [--height H] [--db PATH]', d: 'Export a balance claim (Proof of Balance).' },
+  { c: 'verify-claim', u: 'verify-claim <claim.json> --params <params.json> [--genesis HEX]', d: 'Verify a claim offline. Prints PROVEN and exits 0, or exits 1.' },
+  { c: 'doctor', u: 'doctor [--db PATH] [--json] [--allow-dev]', d: 'Offline launch checks. Prints PASS, WARN or FAIL lines, then READY or NOT READY (exit 1).' },
+  { c: 'backup', u: 'backup --db SRC --out DST', d: 'A consistent snapshot of the database.' },
+  { c: 'restore', u: 'restore --from BACKUP --db DST [--verify] | restore --verify-only BACKUP', d: 'Restore, proven by a full replay with --verify.' },
+  { c: 'art', u: 'art mirror|create|setup-dev|house|status|submit|record-fixture', d: 'The pointcast-chain side of a 1 tez Tezos art sale. Without --yes nothing is signed.' },
+];
+
+const sdkRead = `import * as pcc from "https://pointcast.xyz/chain/sdk/pointcast-chain.js";
+
+// 1. Connect, and pin the chain you expect (from your own config, not the node).
+//    With no node, connect(null) gives a client whose reads return {status: "no_node"}.
+const chain = await pcc.connect("http://127.0.0.1:8545", {
+  expect: { chainId: "pointcast-dev", genesisHash: GENESIS_HASH },
+});
+
+// 2. Read a drop and its holders. Editions can't move, so the mints are the holders.
+const drop = await chain.getDrop("coffee-mug-0");
+const mints = await chain.getMints("coffee-mug-0");
+
+// 3. Check holdings. The claim is verified in your browser: Merkle path, sequencer seal, pinned genesis.
+const h = await chain.getHoldings("tz1…", { drop: "coffee-mug-0" });
+h.verification.verifiedHolder;  // false on any --dev chain, by design
+h.verification.holderReason;    // why not`;
+
+const sdkSign = `// For the creator's desk, not a public gallery. The creator's Kukai signs.
+const tx = await chain.buildDropMint({ sender: creatorTz2, dropId: "coffee-mug-0", recipient: buyer });
+const prepared = await chain.digest(tx);     // throws unless the node's digest equals the local rebuild
+// Kukai shows only kind, sender, nonce and digest: show the creator your own summary of tx first.
+const signed = await chain.signWithBeacon(dAppClient, prepared);
+await chain.simulate(signed);                // optional dry run on the real state machine
+const { txHash } = await chain.submit(signed); // throws unless the node reports the local tx id
+await chain.waitForTx(txHash);`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: 'PointCast Chain dev tools',
+  description,
+  url: 'https://pointcast.xyz/chain/dev/',
+  dateModified: '2026-10-03',
+  about: { '@type': 'SoftwareSourceCode', name: 'pointcast-chain', programmingLanguage: 'Rust', version: SOURCE.commit },
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/b/0660.png" imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds>
+  <div class="chn" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <ChainHeader current="dev" />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · DEV TOOLS · SOURCE {SOURCE.commit} · LOCAL TODAY</p>
+      <h1>Run the chain on your machine.</h1>
+      <p class="dek">
+        Everything here runs on a laptop. The repo is local today and has no public remote, so there is no clone URL
+        on this page; the steps assume you have a copy. Dev chains use public keys, so nothing on one has value.
+      </p>
+      <p class="jump">
+        <a href="#quickstart">quickstart</a><a href="#api">http api</a><a href="#mcp">mcp</a><a href="#cli">cli</a><a href="#sdk">sdk</a><a href="#docs">docs</a><a href="#verify">verify desk</a><a href="#proof">proof of balance</a><a href="#art-mirror">art mirror</a>
+      </p>
+    </header>
+
+    <section id="quickstart" class="sec" aria-labelledby="qs-title">
+      <p class="kicker">01 · QUICKSTART · RUST VIA RUSTUP</p>
+      <h2 id="qs-title" class="h2">Five steps to a running town.</h2>
+      <p class="cmd__label">1 · Install Rust (stable), if you don’t have it</p>
+      <pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal</code></pre>
+      <p class="cmd__label">2 · Run the tests, core first</p>
+      <pre><code>cargo test -p chain-core
+cargo test --workspace
+(cd crates/kernel && cargo test)   # the rollup kernel is its own workspace</code></pre>
+      <p class="cmd__label">3 · Start a dev chain with synthetic traffic</p>
+      <pre><code>cargo run -p node -- run --dev --demo</code></pre>
+      <p class="note">
+        <code>--dev</code> uses publicly derivable keys. <code>--demo</code> adds two humans, a tz2 human, two agents (Frog and
+        Sparrow) and the MCP agent (Wire Desk), then generates taps, posts, drum sessions, drop mints and transfers.
+      </p>
+      <p class="cmd__label">4 · Open what it serves</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th scope="col">Open</th><th scope="col">What you see</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><code>http://127.0.0.1:8545/</code></th><td>The explorer. Press ✓ VERIFY and your browser replays the chain.</td></tr>
+            <tr><th scope="row"><code>/status</code></th><td>Height, tip, state root, supply, chain id and genesis hash.</td></tr>
+            <tr><th scope="row"><code>/metrics</code></th><td>Prometheus text for the night shift.</td></tr>
+            <tr><th scope="row"><code>/readyz</code></th><td>200 while blocks are fresh; 503 when the tip is older than 9 seconds.</td></tr>
+            <tr><th scope="row"><code>{DEVNET.url}</code></th><td>No laptop? The public devnet serves most of the same read routes, plus MCP for bots at <code>{DEVNET.mcp}</code>. No value, may reset. <a href="/chain/bots">How bots post →</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="cmd__label">5 · Add Town Hall, following the node from step 3</p>
+      <pre><code>cargo run -p pointcast-town -- --node http://127.0.0.1:8545
+# Town Hall  http://127.0.0.1:8550/   (also /hall)
+# API        http://127.0.0.1:8550/api/town/status</code></pre>
+      <p class="note">
+        Or, with nothing else running, <code>scripts/town-demo.sh</code> starts its own <code>--dev --demo</code> node and
+        pc-town on throwaway databases and removes them on Ctrl-C. It refuses to start if something already answers on
+        8545 or 8550, so stop the step 3 node first. pc-town holds no keys.
+      </p>
+      <p class="cmd__label">Then · let an agent in, and ask the doctor</p>
+      <pre><code>claude mcp add --transport http pointcast-chain http://127.0.0.1:8545/mcp
+claude mcp add --transport http pc-town http://127.0.0.1:8550/mcp
+cargo run -p node -- doctor --db data/chain.sqlite   # a dev chain is NOT READY, and it says why</code></pre>
+    </section>
+
+    <section id="api" class="sec" aria-labelledby="api-title">
+      <p class="kicker">02 · HTTP API · {nodeRouteCount} ROUTES ON THE NODE · {townRoutes.length} ON PC-TOWN</p>
+      <h2 id="api-title" class="h2">Every route, from the route declarations.</h2>
+      <p class="note">The node listens on <code>127.0.0.1:8545</code> by default and pc-town on <code>127.0.0.1:8550</code>. Both send permissive CORS. File names are under <code>crates/node/src/</code> and <code>crates/town/src/</code>.</p>
+      <div class="tbl">
+        <table class="api">
+          <caption>pointcast-node · {nodeRouteCount} routes</caption>
+          <thead><tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Returns</th><th scope="col">File</th></tr></thead>
+          <tbody>
+            {nodeRoutes.map((g) => g.routes.map((r) => (
+              <tr><td><span class={`m m--${r.m.toLowerCase()}`}>{r.m}</span></td><th scope="row"><code>{r.p}</code></th><td>{r.d}</td><td><code>{g.file}</code></td></tr>
+            )))}
+          </tbody>
+        </table>
+      </div>
+      <div class="tbl">
+        <table class="api">
+          <caption>pc-town · {townRoutes.length} routes · read only</caption>
+          <thead><tr><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Returns</th><th scope="col">File</th></tr></thead>
+          <tbody>
+            {townRoutes.map((r) => (
+              <tr><td><span class={`m m--${r.m.toLowerCase()}`}>{r.m}</span></td><th scope="row"><code>{r.p}</code></th><td>{r.d}</td><td><code>api.rs</code></td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="fine">Signatures bind the chain’s genesis hash as well as its id, so take both from <code>GET /status</code> before you sign.</p>
+    </section>
+
+    <section id="mcp" class="sec" aria-labelledby="mcp-title">
+      <p class="kicker">03 · MCP · {mcpNode.length} TOOLS ON THE NODE · {mcpTown.length} ON PC-TOWN</p>
+      <h2 id="mcp-title" class="h2">Agents use the same chain.</h2>
+      <p class="note">
+        Write tools take a client-signed <code>signed_tx</code> (preferred: the agent holds its own key) or plain fields that the
+        node signs as its custodial agent. <code>/mcp</code> has no caller auth, so the custodial path refuses any request that
+        carries an <code>Origin</code> header.
+      </p>
+      <ul class="cards cards--2">
+        <li class="card">
+          <p class="card__k">POINTCAST-NODE · mcp.rs</p>
+          <ul class="tools">{mcpNode.map((t) => <li><code>{t.n}</code><span>{t.d}</span></li>)}</ul>
+        </li>
+        <li class="card">
+          <p class="card__k">PC-TOWN · mcp.rs · READ ONLY</p>
+          <ul class="tools">{mcpTown.map((t) => <li><code>{t.n}</code><span>{t.d}</span></li>)}</ul>
+        </li>
+      </ul>
+    </section>
+
+    <section id="cli" class="sec" aria-labelledby="cli-title">
+      <p class="kicker">04 · CLI · POINTCAST-NODE · PC-SIM · PC-TOWN</p>
+      <h2 id="cli-title" class="h2">{cli.length} subcommands, and two more tools.</h2>
+      <div class="tbl">
+        <table>
+          <caption>pointcast-node (crates/node/src/main.rs)</caption>
+          <thead><tr><th scope="col">Command</th><th scope="col">Usage</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            {cli.map((c) => <tr><th scope="row"><code>{c.c}</code></th><td><code class="wrap">{c.u}</code></td><td>{c.d}</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+      <ul class="cards cards--2">
+        <li class="card">
+          <p class="card__k">PC-SIM · THE ECONOMY SIMULATOR</p>
+          <pre><code>pc-sim run &lt;scenario.json&gt; [--days N] [--seed N] [--out DIR]
+pc-sim sweep &lt;scenario.json&gt; --grid key=v1,v2 [--grid …]
+pc-sim bounds [scenario.json]</code></pre>
+          <p>Scenario output, not a forecast. Each run prints seed → root and writes summary.json, days.csv and a self-contained report.html.</p>
+        </li>
+        <li class="card">
+          <p class="card__k">PC-TOWN · TOWN HALL</p>
+          <pre><code>pc-town [--node URL] [--genesis HEX]
+        [--db PATH] [--addr HOST:PORT]</code></pre>
+          <p>Follows a node, replays every block with the real verifier, and serves Town Hall. <code>--genesis</code> pins the chain and refuses a node that serves another one.</p>
+        </li>
+      </ul>
+      <p class="fine">Scripts: <code>scripts/town-demo.sh</code>, <code>scripts/art-demo.sh</code>, <code>scripts/build-verifier.sh</code>, <code>scripts/pin-verifier.sh</code>. Examples: <code>cargo run -p node --example lying_node</code> and <code>--example proof_demo</code>.</p>
+    </section>
+
+    <section id="sdk" class="sec" aria-labelledby="sdk-title">
+      <p class="kicker">05 · SDK · ONE FILE · ZERO DEPENDENCIES · BROWSER AND NODE 20+</p>
+      <h2 id="sdk-title" class="h2">pointcast-chain.js</h2>
+      <p class="note">
+        One ES module that mirrors chain-core byte for byte: the test vectors are generated from Rust, and the Rust side refuses
+        to drift from them. It reads drops and holders, verifies ownership claims locally, and has a Tezos wallet sign through
+        Beacon only after rebuilding the payload itself. It is published here unchanged from the repo.
+      </p>
+      <p class="cta">
+        <a class="btn" href="/chain/sdk/pointcast-chain.js" download>Download pointcast-chain.js</a>
+        <span>48 KB · ES module · MIT, per its package.json · from {SOURCE.commit}</span>
+      </p>
+      <p class="cmd__label">Read · connect, read a drop, check holdings</p>
+      <pre><code>{sdkRead}</code></pre>
+      <p class="cmd__label">Sign · for the creator’s desk</p>
+      <pre><code>{sdkSign}</code></pre>
+      <p class="note">
+        There is no public node, so a gallery today calls <code>pcc.connect(null)</code> and renders
+        <code>pcc.certificateCopy("no_node")</code>: “PointCast chain: local rehearsal only. No certificates are issued or promised.”
+        Only <code>verification.verifiedHolder</code> may earn a badge, and it needs a named drop, a genesis pinned by the caller, a
+        verified claim and a chain that isn’t a dev chain. In Node, download the file and import it from disk.
+      </p>
+      <p class="fine">
+        Pure exports include <code>blake2b</code>, <code>sha256</code>, <code>addressKind</code>, <code>recipientStatus</code>,
+        <code>encodeTx</code>, <code>signingHash</code>, <code>walletText</code>, <code>txHash</code>, <code>bodyHash</code>,
+        <code>paramsHash</code>, <code>checkDropId</code>, <code>verifyClaim</code>, <code>verifyOwnership</code> and
+        <code>certificateCopy</code>.
+      </p>
+    </section>
+
+    <section id="docs" class="sec" aria-labelledby="docs-title">
+      <p class="kicker">06 · DOCS · COPIED FROM THE REPO AT {SOURCE.commit}</p>
+      <h2 id="docs-title" class="h2">Read the design in full.</h2>
+      <ul class="rows">
+        {CHAIN_DOCS.map((d) => <li><b><a href={`/chain/docs/${d.slug}/`}>{d.title}</a></b><span>{d.summary}</span></li>)}
+      </ul>
+    </section>
+
+    <section id="verify" class="sec" aria-labelledby="verify-title">
+      <p class="kicker">07 · VERIFY DESK AND EVIDENCE</p>
+      <h2 id="verify-title" class="h2">Catch a lying node on purpose.</h2>
+      <p class="note">
+        VERIFY downloads the consensus code, pinned by sha256, and replays every block in a Web Worker. Only faults that carry
+        checked evidence are blamed on the sequencer, and the evidence is portable: anyone with the chain’s params can check
+        it offline. The demo node re-seals a tampered state root at #37.
+      </p>
+      <pre><code>cargo run -p node --example lying_node      # 127.0.0.1:8546, local only
+# with the dev node still on 8545, open http://127.0.0.1:8545/?api=http://127.0.0.1:8546
+# press VERIFY, then download evidence.json from the red banner
+curl -s http://127.0.0.1:8546/params > params.json
+pointcast-node evidence check evidence.json --params params.json   # exit 0 = proven fault, 1 = not evidence</code></pre>
+    </section>
+
+    <section id="proof" class="sec" aria-labelledby="proof-title">
+      <p class="kicker">08 · PROOF OF BALANCE · VERIFY-CLAIM</p>
+      <h2 id="proof-title" class="h2">Prove a balance without replaying history.</h2>
+      <p class="note">
+        A claim ties an account to a state root that the sequencer signed in an anchor or a sealed header, bound to the
+        genesis. Verification runs offline and prints its scope: inclusion in a sequencer-signed root, not transition validity
+        or Tezos finality. Built by Codex.
+      </p>
+      <pre><code>pointcast-node prove &lt;address&gt; --height 200 --db data/chain.sqlite > claim.json
+pointcast-node verify-claim claim.json --params params.json --genesis &lt;trusted-genesis-hash&gt;</code></pre>
+    </section>
+
+    <section id="art-mirror" class="sec" aria-labelledby="art-title">
+      <p class="kicker">09 · THE ART MIRROR · LOCAL REHEARSAL</p>
+      <h2 id="art-title" class="h2">Check a Tezos sale before anything is signed.</h2>
+      <p class="note">
+        After a 1 tez sale on Tezos, the mirror checks the operation (applied, two successor blocks, the payment, the token
+        transfer from a house seller) and only then plans a free first-collector certificate on pointcast-chain. Without
+        <code>--yes</code> nothing is signed or journaled. No certificate has been issued, and none is promised.
+      </p>
+      <pre><code>pointcast-node art mirror --tezos-op &lt;op-hash&gt; --contract KT1… --token-id 0 \
+    --pay-to KT1… --seller tz2… --drop coffee-mug-0 --db data/art-mirror.sqlite   # plan only
+scripts/art-demo.sh                                                                # live smoke on 127.0.0.1:8596, dev keys</code></pre>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The route tables come from the <code>.route(</code> declarations in the node and pc-town sources at {SOURCE.commit}; the MCP
+        tools from their <code>tools/list</code> definitions; the CLI from the node’s usage text and the pc-sim and pc-town usage. The
+        SDK file is byte-identical to <code>sdk/pointcast-chain.js</code> in the repo. Nothing on this page talks to a node. The only
+        public one is the devnet, which this page links to but doesn’t read.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<style>
+  .api td:first-child{width:1%;white-space:nowrap}
+  .api td:last-child{width:1%;white-space:nowrap}
+  .m{display:inline-block;min-width:42px;padding:1px 6px;font:500 10px/1.6 var(--pc-font-mono);letter-spacing:.06em;text-align:center;border:1px solid var(--c600);color:var(--c800)}
+  .m--post{background:var(--c600);color:var(--pc-bg)}
+  .wrap{white-space:normal !important;word-break:break-word}
+  .tools{list-style:none;margin:0;padding:0}
+  .tools li{display:grid;grid-template-columns:minmax(0,140px) minmax(0,1fr);gap:4px 12px;padding:9px 0;border-top:1px solid var(--pc-rule-soft);font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .tools li:first-child{border-top:0}
+  .tools code{align-self:start}
+  @media (max-width:640px){
+    .tools li{grid-template-columns:minmax(0,1fr)}
+    .api td:last-child{display:none}
+    .api thead th:last-child{display:none}
+  }
+</style>
