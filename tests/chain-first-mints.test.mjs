@@ -71,10 +71,17 @@ test('the page is static and escaped: no client script, no raw HTML from data', 
 });
 
 test('honest copy: rehearsal, public dev keys, no value, Daily Mint only coming', () => {
-  for (const phrase of [/rehearsal/, /public dev keys/, /no value/i, /Daily Mint: one First Mint auctioned a day \(coming\)/, /being designed now/])
+  for (const phrase of [/rehearsal/, /public dev keys/, /no value/i, /Daily Mint: a daily play auction for one new card \(coming\)/, /being designed now/, /play ATTN/])
     assert.match(page, phrase);
   for (const phrase of [/main\s*net/i, /\binvest/i, /\bprofit/i, /\byield\b/i, /\bworth\b/i, /\bbuy now\b/i, /\blimited time\b/i])
     assert.doesNotMatch(page, phrase);
+  for (const text of [page, block.body]) {
+    // The Daily Mint is a devnet play auction for a new daily card, never one of these 24.
+    assert.doesNotMatch(text, /First Mint auctioned|(?<!play )auction(?:ed)? (?:a|one|for)/i);
+    // The renderer is pinned but not published, so nothing may call it open or say anyone can redraw a card.
+    assert.doesNotMatch(text, /open renderer|anyone with the recipe can draw/i);
+  }
+  assert.match(page, /it does not redraw the card pictures/);
   assert.match(block.body, /being designed now/);
   assert.doesNotMatch(block.body, /https?:\/\//, 'block body is plain text; links live in companions');
 });
