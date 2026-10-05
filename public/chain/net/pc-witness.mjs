@@ -96,7 +96,14 @@ const here = (p) => new URL(p, import.meta.url);
 async function loadSdk() {
   for (const dir of ["./", "../sdk/"]) {
     if (existsSync(fileURLToPath(here(`${dir}witness.js`))) && existsSync(fileURLToPath(here(`${dir}pointcast-chain.js`)))) {
-      return { w: await import(here(`${dir}witness.js`).href), pcc: await import(here(`${dir}pointcast-chain.js`).href) };
+      try {
+        return { w: await import(here(`${dir}witness.js`).href), pcc: await import(here(`${dir}pointcast-chain.js`).href) };
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          throw new Usage(`witness.js and pointcast-chain.js do not match (${e.message}): download both again from https://pointcast.xyz/chain/net/ (an older pointcast-chain.js lacks what witness.js needs)`);
+        }
+        throw e;
+      }
     }
   }
   throw new Usage("witness.js and pointcast-chain.js are missing: download them from https://pointcast.xyz/chain/net/ into this folder");
