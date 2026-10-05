@@ -23,6 +23,9 @@ test('finance room leads with principles and keeps the MN case dated', () => {
   assert.equal(finance.alts.cases.filter((item) => item.status === 'placeholder').length, 2);
   assert.equal(finance.bots.swarmHook.status, 'expandable');
   assert.equal(JSON.stringify(finance).includes('"livePrice"'), false);
+  assert.match(mn.nicoNote, /figure of record/);
+  assert.match(mn.nicoNote, /around 5%/);
+  assert.doesNotMatch(mn.nicoNote, /could not read/);
 });
 
 test('finance page renders the required order from the shared record', () => {
