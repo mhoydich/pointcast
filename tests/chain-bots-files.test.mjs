@@ -62,6 +62,9 @@ test('the page shows the files themselves: imported with ?raw, with no second co
   assert.match(page, /^import verifyMjs from '\.\.\/\.\.\/\.\.\/public\/chain\/bots\/verify\.mjs\?raw';$/m);
   assert.match(page, /<Snippet label="bot\.mjs[^"]*" code=\{botMjs\} \/>/);
   assert.match(page, /<Snippet label="verify\.mjs[^"]*" code=\{verifyMjs\} \/>/);
+  // Snippet prints `code` as-is inside <pre><code> (the Copy button copies that textContent), so the
+  // ?raw string reaches the page and the clipboard unchanged even when there is no dist/ to compare.
+  assert.match(read('src/components/chain/Snippet.astro'), /<pre><code>\{code\}<\/code><\/pre>/);
   // Lines that exist only in the files: a copy of them in the page source could drift.
   for (const line of ['crypto.subtle.importKey("pkcs8"', 'chain.buildPublish(', 'chain.waitForTx(', 'PointcastVerifier.load(', 'verifier.push']) {
     assert.ok(bot.includes(line) || verify.includes(line), `fixture: ${line}`);
@@ -105,7 +108,8 @@ test('the one-command quickstarts fetch files this site serves, and nothing else
   const quick = rawConst('signedQuickstart');
   assert.deepEqual(sitePaths(quick).sort(), ['/chain/bots/bot.mjs', '/chain/bots/package.json', '/chain/sdk/pointcast-chain.js']);
   // One -O for many URLs (or a shell brace glob) would print every file after the first to stdout.
-  assert.match(quick, /^mkdir pc-bot && cd pc-bot && curl -fsS --remote-name-all \\$/m);
+  // Without --fail-early, curl -f exits 0 when only an earlier URL fails, so && runs node anyway.
+  assert.match(quick, /^mkdir pc-bot && cd pc-bot && curl -fsS --fail-early --remote-name-all \\$/m);
   assert.match(quick, /&& node bot\.mjs "[^"]+"$/);
 
   const fetchVerify = rawConst('verifyFetch');
@@ -116,7 +120,7 @@ test('the one-command quickstarts fetch files this site serves, and nothing else
     '/chain/yard/verifier/pointcast_chain.wasm.sha256',
     '/chain/yard/verifier/verify.js',
   ]);
-  assert.match(fetchVerify, /curl -fsS --remote-name-all \\/);
+  assert.match(fetchVerify, /curl -fsS --fail-early --remote-name-all \\/);
   assert.match(fetchVerify, /&& shasum -a 256 -c pointcast_chain\.wasm\.sha256 \\\n  && node verify\.mjs$/);
 
   for (const p of [...sitePaths(quick), ...sitePaths(fetchVerify)]) assert.ok(existsSync(new URL(`public${p}`, root)), `public${p}`);
@@ -136,8 +140,10 @@ test('METHOD: the stubbed run was the first test; a signed post has since gone l
   const method = page.slice(page.indexOf('<footer class="method">'));
   assert.doesNotMatch(method, /so nothing was posted\./);
   assert.match(method, /The signed bot was first tested with\s+its writes stubbed out, so that first test posted nothing\./);
-  assert.match(method, /Since then an outside agent has posted a signed transaction\s+live: \{FIRST_OUTSIDE_SIGNED\.who\}, with its own key/);
-  assert.match(page, /const FIRST_OUTSIDE_SIGNED = \{ who: 'Manus', height: 564, on: 'October 5', tx: '[0-9a-f]{64}' \};/);
+  // Manus is a PointCast resident agent (src/data/residents.ts), not an outside adopter.
+  assert.match(method, /Since then \{FIRST_LIVE_SIGNED\.who\}, one of\s+PointCast’s <a href="\/residents">resident agents<\/a>, has followed this page fresh and posted a signed transaction\s+live with its own key/);
+  assert.doesNotMatch(page, /outside agent/i);
+  assert.match(page, /const FIRST_LIVE_SIGNED = \{ who: 'Manus', height: 564, on: 'October 5', tx: '[0-9a-f]{64}' \};/);
 });
 
 test('honesty: both files say devnet, no value, may reset, and make no value claims', () => {
