@@ -24,8 +24,9 @@ if name == 'git':
     if args[:1] == ['-C']: args = args[2:]
     if args[:1] == ['rev-parse']:
         print(data['main'] if args[-1] == 'origin/main' else root / 'repository')
-    elif args[:2] == ['cat-file', '-e']:
-        sys.exit(0 if args[-1].split('^')[0] in data['known'] else 1)
+    elif args[:2] == ['cat-file', '-t']:
+        if args[-1] not in data['known']: sys.exit(1)
+        print('tag' if args[-1] in data['tags'] else 'commit')
     elif args[:2] == ['merge-base', '--is-ancestor']:
         sys.exit(0 if args[-2:] in data['ancestors'] or args[-2] == args[-1] else 1)
     elif args[:1] == ['log']:
@@ -33,6 +34,7 @@ if name == 'git':
     sys.exit(0)
 if name == 'cat':
     if args == [str(pathlib.Path.home() / '.pointcast-deploy.live')]:
+        if data['markerMissing']: sys.exit(1)
         print(data['live'])
         sys.exit(0)
     sys.exit(subprocess.call(['/bin/cat', *args]))
@@ -49,22 +51,25 @@ if name == 'npm':
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text('fixture only')
     sys.exit(0)
+if name in ['curl', 'npx', 'wrangler']:
+    sys.exit(93)  # Never permit a fixture to reach network, auth or upload.
 sys.exit(92)
 '''
 
 
 class PinnedReleaseTests(unittest.TestCase):
     def run_case(self, args, *, live=LIVE, known=None, ancestors=None,
-                 missing='', file_count=3001):
+                 missing='', file_count=3001, tags=None, marker_missing=False):
         with tempfile.TemporaryDirectory(prefix='pc-pin-offline-') as directory:
             root = Path(directory)
             data = {'live': live, 'main': MAIN, 'known': known or [LIVE, PIN, MAIN, OTHER],
                     'ancestors': ancestors if ancestors is not None else [[LIVE, PIN], [PIN, MAIN], [LIVE, MAIN]],
-                    'missing': missing, 'fileCount': file_count}
+                    'missing': missing, 'fileCount': file_count,
+                    'tags': tags or [], 'markerMissing': marker_missing}
             (root / 'case.json').write_text(json.dumps(data))
             binary = root / 'bin'
             binary.mkdir()
-            for name in ['git', 'cat', 'find', 'npm']:
+            for name in ['git', 'cat', 'find', 'npm', 'curl', 'npx', 'wrangler']:
                 target = binary / name
                 target.write_text(TRANSPORT)
                 target.chmod(0o755)
@@ -75,8 +80,14 @@ class PinnedReleaseTests(unittest.TestCase):
             (work / 'package-lock.json').write_bytes(lockfile)
             (work / 'node_modules').mkdir()
             (work / 'node_modules/.pc-lock-hash').write_text(hashlib.sha1(lockfile).hexdigest())
-            environment = os.environ.copy()
-            environment.update(PATH=str(binary) + os.pathsep + environment['PATH'],
+            (work / 'node_modules/.bin').mkdir()
+            denied_upload = work / 'node_modules/.bin/wrangler'
+            denied_upload.write_text(TRANSPORT)
+            denied_upload.chmod(0o755)
+            # Preserve the actual HOME value without inheriting any credentials.
+            environment = {'HOME': os.environ['HOME'], 'LANG': 'C', 'LC_ALL': 'C',
+                           'TMPDIR': str(root)}
+            environment.update(PATH=str(binary) + ':/usr/bin:/bin:/usr/sbin:/sbin',
                                PC_TEST_FIXTURE=str(root), PC_DEPLOY_DIR=str(work),
                                PC_DEPLOY_LOCK=str(root / 'lock'), PC_DEPLOY_LOG=str(root / 'deploy.log'))
             # HOME and the real global marker remain untouched. The cat transport
@@ -87,6 +98,8 @@ class PinnedReleaseTests(unittest.TestCase):
             self.assertFalse((root / 'lock').exists(), 'EXIT cleanup releases only fixture lock')
             checkouts = [row['args'] for row in calls if row['name'] == 'git' and 'checkout' in row['args']]
             builds = [row for row in calls if row['name'] == 'npm']
+            self.assertFalse(any(row['name'] in ['curl', 'npx', 'wrangler'] for row in calls),
+                             'dry-run fixture must never invoke a denied network transport')
             return result, checkouts, builds, calls
 
     def test_pin_builds_exact_reviewed_ancestor_with_full_gate(self):
@@ -125,6 +138,18 @@ class PinnedReleaseTests(unittest.TestCase):
         for live, pin in [('', PIN), ('invalid-marker', PIN), (PIN, LIVE)]:
             with self.subTest(live=live, pin=pin):
                 result, checkouts, builds, _ = self.run_case(['--force', '--release-sha=' + pin], live=live)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(checkouts, [])
+                self.assertEqual(builds, [])
+        result, checkouts, builds, _ = self.run_case(['--release-sha=' + PIN], marker_missing=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(checkouts, [])
+        self.assertEqual(builds, [])
+
+    def test_tag_objects_cannot_be_selected_or_recorded_live(self):
+        for configuration in [{'tags': [PIN]}, {'tags': [LIVE]}]:
+            with self.subTest(configuration=configuration):
+                result, checkouts, builds, _ = self.run_case(['--release-sha=' + PIN], **configuration)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(checkouts, [])
                 self.assertEqual(builds, [])

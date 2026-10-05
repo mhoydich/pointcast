@@ -71,10 +71,11 @@ MAIN_SHA="$(git -C "$REPO" rev-parse origin/main)"
 SHA="$MAIN_SHA"
 if [ -n "$RELEASE_SHA" ]; then
   # Corrective pins may omit unreviewed newer work, never replace newer live work.
-  git -C "$REPO" cat-file -e "$RELEASE_SHA^{commit}" 2>/dev/null || { say "PIN: release commit unavailable — not deploying"; exit 1; }
+  [ "$(git -C "$REPO" cat-file -t "$RELEASE_SHA" 2>/dev/null || true)" = commit ] || { say "PIN: release must be an available commit object — not deploying"; exit 1; }
   git -C "$REPO" merge-base --is-ancestor "$RELEASE_SHA" "$MAIN_SHA" || { say "PIN: release is not an ancestor of fresh origin/main — not deploying"; exit 1; }
   PREVIOUS_LIVE="$(cat "$LIVE_FILE" 2>/dev/null || true)"
   [[ "$PREVIOUS_LIVE" =~ ^[0-9a-f]{40}$ ]] || { say "PIN: previous live commit is missing or invalid — not deploying"; exit 1; }
+  [ "$(git -C "$REPO" cat-file -t "$PREVIOUS_LIVE" 2>/dev/null || true)" = commit ] || { say "PIN: previous live must be an available commit object — not deploying"; exit 1; }
   git -C "$REPO" merge-base --is-ancestor "$PREVIOUS_LIVE" "$RELEASE_SHA" || { say "PIN: release would replace newer or unrelated live work — not deploying"; exit 1; }
   SHA="$RELEASE_SHA"
   say "reviewed corrective pin ${SHA:0:8} (fresh origin/main ${MAIN_SHA:0:8})"
