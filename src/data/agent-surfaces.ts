@@ -132,6 +132,7 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns/drum-club/',
     skyCalls: 'https://pointcast.xyz/sky-calls',
     prices: 'https://pointcast.xyz/prices',
+    frontDesk: 'https://pointcast.xyz/front-desk/agents/',
   },
   json: {
     pickleballHome: 'https://pointcast.xyz/pickleball/home.json',
@@ -204,6 +205,7 @@ export const AGENT_SURFACES = {
     nounsDrumClub: 'https://pointcast.xyz/nouns-drum-club.json',
     skyCalls: 'https://pointcast.xyz/sky-calls.json',
     prices: 'https://pointcast.xyz/prices.json',
+    frontDesk: 'https://pointcast.xyz/front-desk/agents.json',
   },
   api: {
     luckyCatManifest: 'https://pointcast.xyz/api/lucky-cat',
@@ -226,6 +228,7 @@ export const AGENT_SURFACES = {
     postOfficeAliasStatus: 'https://pointcast.xyz/api/post-office/alias/{name}',
     skyCalls: 'https://pointcast.xyz/api/sky-calls',
     prices: 'https://pointcast.xyz/api/prices',
+    frontDesk: 'https://pointcast.xyz/api/front-desk',
     mcp: 'https://pointcast.xyz/api/mcp',
     mcpV2: 'https://pointcast.xyz/api/mcp-v2',
     // The public pointcast-chain devnet (its own Worker, not pointcast.xyz): no value, may reset. Guide: /chain/bots/.

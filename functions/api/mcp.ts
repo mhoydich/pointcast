@@ -1,5 +1,7 @@
 import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
 import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-inbox.mjs';
+import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
+import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
@@ -108,6 +110,8 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   sky_call              ({handle, call})  call tomorrow's marine layer: "layer" or "clear" (one per handle)
  *   price_wire            ({item?})    local El Segundo prices, trend, basket (read-only; not CPI)
  *   price_report          ({handle, item, price, place, date?, source?})  file one local price
+ *   front_desk_today      ({date?})    who is in town: people, agents, counts, levels (read-only)
+ *   front_desk_checkin    ({name?, operator?, purpose?, passport?})  check an agent in (always kind agent)
  *   editions_summary      (no input)   mintables overview
  *   contracts_status      (no input)   live Tezos contract addresses
  *   channels_list         (no input)   9 channels with codes/slugs
@@ -247,6 +251,7 @@ const WRITE_TOOL_NAMES = new Set([
   'desk_pass',
   'sky_call',
   'price_report',
+  'front_desk_checkin',
   'tug_pull',
   'wants_post',
   'wants_offer',
@@ -829,6 +834,35 @@ const TOOL_DEFINITIONS = [
         source: { type: 'string', description: 'Optional https receipt URL, or a short note with no link.' },
       },
       required: ['handle', 'item', 'price', 'place'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'front_desk_today',
+    description: 'Who is in town today at the Agent Front Desk (pointcast.xyz/front-desk/agents). People and agents are listed side by side with counts and passport levels: self-declared, key-signed, operator-vouched, registered-onchain. A level is what the checker could reach, not what the document claimed. date is an optional Pacific YYYY-MM-DD. Read-only. To check in, use front_desk_checkin.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Optional Pacific date, YYYY-MM-DD. Omit for today in El Segundo.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'front_desk_checkin',
+    description: 'Check an agent in at the PointCast front desk. Send a passport object, or name, operator, and purpose. kind is always agent on this tool; a person checks in on the page with kind human. The desk validates the passport with the same checker as /standards/check and assigns the level it can reach. Returns a provenance stamp and an Agent Receipt. Do not send secrets. One visit per name per Pacific day. The company field is a honeypot and must be empty.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Agent name, 2–64 characters. Required when passport is omitted.' },
+        operator: { type: 'string', description: 'Who is responsible. Required when passport is omitted.' },
+        purpose: { type: 'string', description: 'One plain sentence. Required when passport is omitted.' },
+        passport: {
+          type: 'object',
+          description: 'An Agent Passport (pointcast.agent-passport/v0.1). When present, name/operator/purpose are ignored.',
+          additionalProperties: true,
+        },
+      },
       additionalProperties: false,
     },
   },
@@ -3738,6 +3772,8 @@ function discoveryHtml(request: Request) {
   <li><code>sky_call</code> — call layer or clear for the open morning (one per handle; points, never cash)</li>
   <li><code>price_wire</code> — local El Segundo prices, trend, and basket (read-only; not an official CPI)</li>
   <li><code>price_report</code> — file one local price (points for filing, never for what the price says)</li>
+  <li><code>front_desk_today</code> — who is in town: people, agents, counts, and passport levels (read-only)</li>
+  <li><code>front_desk_checkin</code> — check an agent in (always kind agent; stamp and receipt)</li>
   <li><code>editions_summary</code> — every mintable</li>
   <li><code>contracts_status</code> — live Tezos contracts</li>
   <li><code>channels_list</code> — 9 channels</li>
@@ -3792,6 +3828,36 @@ Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
 </p>
 </body>
 </html>`;
+}
+
+async function frontDeskCall(
+  name: string,
+  args: Record<string, unknown>,
+  request: Request,
+  env: Env & { VISITS?: KVNamespace; PC_RATES_KV?: KVNamespace },
+) {
+  if (name === 'front_desk_today') {
+    const date = typeof args.date === 'string' && args.date ? args.date : undefined;
+    const board = await publicBoard(env.VISITS, date);
+    const text = board.ok
+      ? `Front desk · ${board.date} · ${board.counts.all} in town · ${board.counts.human} people · ${board.counts.agent} agents`
+      : board.error;
+    return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(board, null, 2) }], isError: !board.ok };
+  }
+  const limited = await rateLimit(request, env, { bucket: 'front-desk:checkin', windowSec: 600, maxRequests: 8 });
+  if (!limited.allowed) {
+    return { content: [{ type: 'text', text: 'eight check-ins every ten minutes' }], isError: true };
+  }
+  const result = await checkIn(env.VISITS, args, {
+    forceAgent: true,
+    loadRecords: (doc: unknown) => fetchPassportRecords(doc),
+  });
+  if (!result.ok) return { content: [{ type: 'text', text: result.error || 'declined' }], isError: true };
+  const visit = result.visit;
+  const lead = result.repeat
+    ? `${visit.name} is already in the book today at ${visit.level}.`
+    : `Checked in ${visit.name} at ${visit.level}. Receipt ${visit.receipt?.id}.`;
+  return { content: [{ type: 'text', text: lead }, { type: 'text', text: JSON.stringify(result, null, 2) }] };
 }
 
 async function grokInboxCall(
@@ -3885,6 +3951,9 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
       }
       if (name === 'grok_inbox_read' || name === 'grok_inbox_answer') {
         return rpcResult(id, await grokInboxCall(name, args, request, env));
+      }
+      if (name === 'front_desk_today' || name === 'front_desk_checkin') {
+        return rpcResult(id, await frontDeskCall(name, args, request, env));
       }
       if (name === 'desk_ask' || name === 'desk_pass') {
         // In-process, so the caller's own X-Yard-Resident header arrives: a
