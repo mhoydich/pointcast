@@ -13,6 +13,7 @@
  * If the chain moves on, update the numbers and the SOURCE commit together.
  */
 
+import { Buffer } from 'node:buffer';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 
 /**
@@ -158,8 +159,10 @@ export type FirstMint = {
 };
 export type FirstMintsRehearsal = {
   mints: FirstMint[];
-  /** Edition mints in the rehearsal that are not First Mints (no card). */
-  others: { collection: string; serial: number; height: number }[];
+  /** Other mints in the recording (no card here), read from the snapshot's blocks:
+   *  every *_mint tx that is not a first-mints edition_mint. The yard's Mints lens
+   *  lights these too, so the page names them. */
+  others: { kind: 'edition' | 'drop' | 'other'; collection: string; height: number }[];
   supply: number;
   rendererSha256: string;
   genesis: string;
@@ -176,6 +179,12 @@ export type FirstMintsRehearsal = {
 
 const FM_DIR = 'public/chain/yard/first-mints';
 const HEX64 = /^[0-9a-f]{64}$/;
+/** sdk/first-mint.js TEXT_CHARSET, 1 to 24 characters: the only text a recipe can carry. */
+const FM_WORDS = /^[A-Z0-9 !?&'.,#-]{1,24}$/;
+/** sdk/first-mint.js humanCode() without its words, e.g. "FM1 1.2.3.4 cobalt scanlines syne ink:white". */
+const FM_CODE = /^FM1 \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?: [A-Za-z0-9:-]{1,24}){1,6}$/;
+const MINT_TX = /^[a-z][a-z0-9_]*_mint$/;
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export function firstMints(): FirstMintsRehearsal {
   const snap = JSON.parse(readFileSync(`${FM_DIR}/snapshot.json`, 'utf8'));
@@ -184,34 +193,50 @@ export function firstMints(): FirstMintsRehearsal {
   const genesis = String(status.genesis_hash ?? '');
   if (!HEX64.test(genesis)) throw new Error('first-mints snapshot has no genesis hash');
   const blocks: { header?: { height?: number }; txs?: { tx?: Record<string, unknown> }[] }[] = Array.isArray(snap.blocks) ? snap.blocks : [];
-  const terms = blocks
-    .flatMap((b) => b.txs ?? [])
-    .map((t) => t.tx ?? {})
+  const txs = blocks.flatMap((b) => (b.txs ?? []).map((t) => ({ height: Number(b.header?.height), tx: t.tx ?? {} })));
+  const terms = txs
+    .map((t) => t.tx)
     .find((tx) => tx.type === 'open_edition' && (tx.terms as { id?: string } | undefined)?.id === 'first-mints')?.terms as
     | { supply?: number; renderer_hash?: string }
     | undefined;
-  const mints: FirstMint[] = [];
+  // First Mint serials are assigned in landing order, so serial n is the n-th
+  // first-mints edition_mint in the recording. Each row must match it exactly.
+  const fmTxs = txs.filter((t) => t.tx.type === 'edition_mint' && t.tx.edition === 'first-mints');
   const others: FirstMintsRehearsal['others'] = [];
+  for (const t of txs) {
+    const type = String(t.tx.type ?? '');
+    if (!MINT_TX.test(type) || (type === 'edition_mint' && t.tx.edition === 'first-mints')) continue;
+    const id = String(t.tx.edition ?? t.tx.drop_id ?? t.tx.collection ?? '');
+    if (!SLUG.test(id) || !Number.isInteger(t.height)) continue;
+    others.push({ kind: type === 'edition_mint' ? 'edition' : type === 'drop_mint' ? 'drop' : 'other', collection: id, height: t.height });
+  }
+  const mints: FirstMint[] = [];
   for (const r of Array.isArray(rows) ? rows : []) {
     const m = r as Record<string, unknown>;
+    if (m.collection !== 'first-mints') continue;
     const serial = Number(m.serial);
     const height = Number(m.height);
     if (!Number.isInteger(serial) || serial < 1 || !Number.isInteger(height) || height < 1) continue;
-    if (m.collection !== 'first-mints') {
-      others.push({ collection: String(m.collection), serial, height });
-      continue;
-    }
     const human = typeof m.words === 'string' ? m.words : '';
     const cut = human.lastIndexOf(' / ');
     const hex = typeof m.recipe_hex === 'string' ? m.recipe_hex : '';
     const card = `/chain/yard/first-mints/cards/first-mints-${serial}.svg`;
     if (cut < 0 || !/^(?:[0-9a-f]{2})+$/.test(hex) || !existsSync(`public${card}`)) continue;
+    const words = human.slice(cut + 3);
+    const code = human.slice(0, cut);
+    const tx = fmTxs[serial - 1];
+    // Words and code reach the page and its JSON-LD, so they must be what a
+    // recipe can hold, the words must be the recipe's own text, and the row must
+    // be the recorded edition_mint at that height with those exact bytes.
+    const recipe = Buffer.from(hex, 'hex');
+    if (!FM_WORDS.test(words) || !FM_CODE.test(code) || recipe.length < 15 || recipe.subarray(14).toString('latin1') !== words) continue;
+    if (!tx || tx.height !== height || tx.tx.recipe !== hex) continue;
     mints.push({
       serial,
-      words: human.slice(cut + 3),
-      code: human.slice(0, cut),
+      words,
+      code,
       height,
-      recipeBytes: hex.length / 2,
+      recipeBytes: recipe.length,
       tx: typeof m.tx === 'string' && HEX64.test(m.tx) ? m.tx : '',
       card,
     });

@@ -50,9 +50,13 @@ test('firstMints() reads the recording, and the Verify link pins its genesis wit
   assert.equal(fm.supply, 1200);
   assert.match(fm.rendererSha256, /^[0-9a-f]{64}$/);
   assert.equal(fm.yardHref, `/chain/yard/?snapshot=./first-mints/snapshot.json&lens=mints&genesis=${snap.status.genesis_hash}`);
-  assert.deepEqual(fm.others.map((o) => o.collection), ['art-demo']);
+  // Every other *_mint the yard's Mints lens lights, read from the snapshot, not mints.json.
+  const otherMints = snap.blocks.flatMap((b) => b.txs.map((t) => ({ h: b.header.height, tx: t.tx })))
+    .filter((t) => /_mint$/.test(t.tx.type) && !(t.tx.type === 'edition_mint' && t.tx.edition === 'first-mints'));
+  assert.deepEqual(fm.others.map((o) => [o.collection, o.height]), otherMints.map((t) => [t.tx.edition ?? t.tx.drop_id, t.h]));
+  assert.deepEqual(fm.others.map((o) => o.kind), ['edition', 'drop']);
   for (const m of fm.mints) {
-    assert.ok(m.words.length > 0 && m.words.length <= 24);
+    assert.match(m.words, /^[A-Z0-9 !?&'.,#-]{1,24}$/, 'words stay in the recipe charset (no < or /), so the JSON-LD cannot break out');
     assert.match(m.code, /^FM1 \d+\.\d+\.\d+\.\d+ /);
     assert.ok(existsSync(new URL(`public${m.card}`, root)));
   }
