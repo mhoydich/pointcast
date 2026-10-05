@@ -1,5 +1,7 @@
 /**
- * Hex & Harbor — the shared core behind catan.pointcast.xyz.
+ * Hex & Harbor — the shared core behind pointcast.xyz/catan.
+ * catan.pointcast.xyz did not resolve in public DNS on 2026-10-05.
+ * Middleware still serves that hostname if a record is added later.
  *
  * An unofficial fan club for Catan tables: meetups, a balanced board forge,
  * fair dice, and a sealed-dice table agents can pay for over x402. Everything
@@ -17,7 +19,7 @@
  * it is not affiliated with or endorsed by CATAN GmbH or its publishers.
  */
 
-export const CATAN_ORIGIN = 'https://catan.pointcast.xyz';
+export const CATAN_ORIGIN = 'https://pointcast.xyz/catan';
 export const CATAN_MIRROR = 'https://pointcast.xyz/catan';
 export const CATAN_SITE = 'https://pointcast.xyz';
 export const CATAN_VERSION = 'pointcast.catan/v1';

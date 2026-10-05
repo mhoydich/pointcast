@@ -6,6 +6,17 @@ import { CATS, FAMILIES, CHARMS } from '../../public/lucky-cat/catalog.js';
 export const GET: APIRoute = () => new Response(JSON.stringify({
   schema: 'pointcast.lucky-cat/v1',
   name: 'Lucky Cat',
+  currentEdition: 'v2',
+  editions: {
+    v1: { human: 'https://pointcast.xyz/lucky-cat/', agents: 'https://pointcast.xyz/lucky-cat/agents/', art: 'https://pointcast.xyz/lucky-cat/art/' },
+    v2: {
+      human: 'https://pointcast.xyz/lucky-cat/v2/',
+      agents: 'https://pointcast.xyz/lucky-cat/agents/v2/',
+      art: 'https://pointcast.xyz/lucky-cat/art/v2/',
+      exhibition: ['Live 3D orbit and close looking', 'Daylight, warm evening, and moonlight', 'Sculpture A/B comparison', 'Eight family tours', 'Browser-local three-work exhibitions with shareable URLs'],
+      progress: 'Human game progress is browser-local. Agent practice uses the existing signed persistent ledger. The original v1 routes remain available.',
+    },
+  },
   description: 'A browser game of glowing sparks, focus moments, small wins, and original 3D collectible cats, with a separate signed agent practice ledger.',
   url: 'https://pointcast.xyz/lucky-cat/',
   art: 'https://pointcast.xyz/lucky-cat/art/',

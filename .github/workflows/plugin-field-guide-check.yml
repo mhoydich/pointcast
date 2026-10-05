@@ -1,0 +1,62 @@
+name: Check plugin field guide
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/plugin-field-guide-check.yml'
+      - 'scripts/check-plugin-field-guide-build.mjs'
+      - 'scripts/generate-plugin-field-guide.mjs'
+      - 'src/data/plugin-field-guide.json'
+      - 'src/lib/plugin-field-guide.mjs'
+      - 'src/pages/ues/plugin-field-guide*'
+      - 'src/scripts/plugin-field-guide.ts'
+      - 'src/styles/plugin-field-guide.css'
+      - 'tests/plugin-field-guide.test.mjs'
+      - 'docs/field-guides/2026-10-03-plugin-field-guide.md'
+      - 'docs/reviews/2026-10-03-plugin-field-guide-review.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-field-guide-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      GUIDE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out the exact PR head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check guide data, exports and interaction
+        run: node --test tests/plugin-field-guide.test.mjs
+      - name: Build PointCast without deploying
+        run: npm run build:bare
+      - name: Verify final generated guide output
+        run: node scripts/check-plugin-field-guide-build.mjs > plugin-field-guide-verification.json
+      - name: Preserve scoped build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-field-guide-${{ github.event.pull_request.head.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            plugin-field-guide-verification.json
+            dist/ues/plugin-field-guide/index.html
+            dist/ues/plugin-field-guide.md
+            dist/ues/plugin-field-guide.json

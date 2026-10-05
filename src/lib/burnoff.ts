@@ -29,6 +29,8 @@
  */
 
 import { sunTimes } from './sky';
+export { BURN_OFF_DEFINITION, DECK_CEILING_FT, DECK_COVERS, HOLD_MINUTES } from './burnoff-definition';
+import { DECK_CEILING_FT, DECK_COVERS, HOLD_MINUTES } from './burnoff-definition';
 
 // ────────────── the constants you are allowed to argue with ──────────────
 
@@ -36,12 +38,6 @@ import { sunTimes } from './sky';
 export const EL_SEGUNDO = { lat: 33.9192, lon: -118.4165 } as const;
 
 export const LOCAL_TIMEZONE = 'America/Los_Angeles';
-
-/** A deck above this is weather, not the marine layer. Feet above ground. */
-export const DECK_CEILING_FT = 3000;
-
-/** How long the sky has to stay open before we believe it. */
-export const HOLD_MINUTES = 120;
 
 /** How far either side of sunrise we look to decide there was a layer at all. */
 export const DAWN_LOOKBACK_MINUTES = 60;
@@ -342,9 +338,6 @@ export function mesonetUrl(startISO: string, endISO: string, station = 'LAX'): s
   return `https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?${data}&${params.toString()}`;
 }
 
-/** Covers that make a ceiling. Mirrors scripts/fetch-burnoff.mjs exactly. */
-export const DECK_COVERS = ['BKN', 'OVC', 'VV'];
-
 /**
  * Parse the archive's CSV into the same day shape the committed record uses,
  * so the live edge and the backfill are read by identical code.
@@ -385,12 +378,3 @@ export function parseMesonetCsv(csv: string): RecordDay[] {
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([date, obs]) => ({ date, obs: obs.sort((a, b) => a[0] - b[0]) }));
 }
-
-/** The definition, in words, printed next to the chart so you can argue with it. */
-export const BURN_OFF_DEFINITION = [
-  `Under the layer means a broken or overcast deck — or an indefinite ceiling, which is fog on the ground — below ${DECK_CEILING_FT.toLocaleString()} feet. Few and scattered do not count. You can see sky through them.`,
-  'The lowest deck is often reported in the second or third layer, not the first, so each cover is paired with its own height by index and the lowest one wins.',
-  `The sky opened at the first hourly report after sunrise with no such deck, where every report in the following ${HOLD_MINUTES / 60} hours is also free of it.`,
-  'A day with no deck anywhere around sunrise has no layer to burn off. It is not a fast morning. It is a different kind of morning.',
-  'If the sky clears in the last hour we watch and nothing follows to confirm it, the day reads as never opened. We do not claim what we could not watch.',
-];

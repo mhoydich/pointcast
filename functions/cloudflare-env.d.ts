@@ -45,5 +45,7 @@ declare namespace Cloudflare {
     POST_OFFICE_PRICE_UNITS?: string;
     POST_OFFICE_ALIAS_DAILY_CAP?: string;
     POST_OFFICE_GLOBAL_DAILY_CAP?: string;
+    /** Bearer for POST /api/grok/inbox/:id/answer. Set in the Pages dashboard. Never commit a value. */
+    GROK_INBOX_TOKEN?: string;
   }
 }

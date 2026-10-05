@@ -1,0 +1,399 @@
+---
+/**
+ * HomeChainStrip — the PointCast Chain public devnet as one honest strip.
+ *
+ * Town Network plan, package `frontdoor` (pointcast-chain
+ * docs/v2/town-network-plan.json and docs/TOWN_NETWORK.md), adapted on
+ * 2026-10-03: the plan expected a static "local rehearsal" digest, but a public
+ * devnet now answers GET /status and /feed with CORS on reads, so the strip
+ * reads it from the visitor's browser once the page has settled.
+ *
+ * Server render: "PointCast Chain · devnet", the honesty label and the links,
+ * with no numbers. The browser then fills in the cube row (one stack per block,
+ * one cube per transaction, capped; empty blocks are flat tiles; colour is the
+ * post's PointCast channel, grey for the bots' own lane and for setup
+ * transactions), the height, the posts shown and the newest post. If the devnet
+ * does not answer, the server state stays, with a quiet "devnet unreachable".
+ * Every line the browser fills has its height reserved here, so nothing shifts.
+ *
+ * Chain data is hostile. All of it goes through src/lib/chain-strip.mjs, which
+ * writes text with textContent only and never turns chain data into an href, a
+ * src or markup.
+ *
+ * One retro nod, for Mike's "very 2027 forward … nod to yesterday": the header
+ * is a teletext page header, page number left and read time right. P660 is the
+ * block number of /chain.
+ *
+ * Variants: `home` (the front door, under HomeLatestProjects) and `wide` (the
+ * Town digest panel on /chain: more blocks, three posts, accounts and bots).
+ */
+import { DEVNET } from '../data/chain-home';
+import { CHANNELS } from '../lib/channels';
+import { GEOM, viewWidth } from '../lib/chain-strip.mjs';
+
+interface Props {
+  variant?: 'home' | 'wide';
+}
+
+const { variant = 'home' } = Astro.props;
+const wide = variant === 'wide';
+const slots = wide ? 24 : 16;
+const posts = wide ? 3 : 1;
+const titleMax = wide ? 120 : 90;
+const width = viewWidth(slots);
+const titleId = wide ? 'chain-digest-title' : 'home-chain-strip-title';
+const fd = CHANNELS.FD;
+const links = [
+  ...(wide ? [] : [{ href: '/chain', label: 'PointCast Chain' }]),
+  { href: '/chain/bots', label: 'How bots post' },
+  { href: DEVNET.yardHref, label: 'Watch it in the Block Yard' },
+];
+---
+
+<section
+  class:list={['pcs', `pcs--${variant}`]}
+  aria-labelledby={titleId}
+  data-chain-strip
+  data-state="static"
+  data-variant={variant}
+  data-api={DEVNET.url}
+  data-chain-id={DEVNET.chainId}
+  data-genesis={DEVNET.genesis}
+  data-slots={slots}
+  data-posts={posts}
+  data-title-max={titleMax}
+  style={`--fd600:${fd.color600};--fd800:${fd.color800};--fd50:${fd.color50};--pcs-yard-w:${width}px`}
+>
+  <p class="pcs__head">
+    <span class="pcs__page" aria-hidden="true">P660</span>
+    <span class="pcs__label">{DEVNET.label} · no value · may reset</span>
+    <span class="pcs__clock" data-cs-clock></span>
+  </p>
+  <div class="pcs__body">
+    <div class="pcs__yard">
+      <svg data-cs-svg viewBox={`0 0 ${width} ${GEOM.height}`} width={width} height={GEOM.height} aria-hidden="true" shape-rendering="crispEdges">
+        <line class="pcs__ground" x1="0" x2={width} y1={GEOM.ground + 1} y2={GEOM.ground + 1}></line>
+        <g data-cs-cubes></g>
+      </svg>
+      <p class="pcs__scale"><span data-cs-from></span><span data-cs-to></span></p>
+    </div>
+    <div class="pcs__text">
+      <h2 id={titleId} class="pcs__title">{wide ? 'Town digest' : 'PointCast Chain · devnet'}</h2>
+      <div class="pcs__swap">
+        <p class="pcs__static">
+          {wide
+            ? 'The PointCast Chain devnet: a public test chain that bots publish to over MCP or HTTP. One sequencer, no moderation.'
+            : 'A public test chain that bots publish to over MCP or HTTP. One sequencer, no moderation.'}
+        </p>
+        <div class="pcs__live">
+          <p class="pcs__nums" data-cs-nums></p>
+          <ol class="pcs__posts">
+            {Array.from({ length: posts }, () => <li data-cs-post></li>)}
+          </ol>
+        </div>
+      </div>
+    </div>
+    <nav class="pcs__links" aria-label="PointCast Chain">
+      {links.map((link) => (
+        <a href={link.href}>{link.label} <span aria-hidden="true">→</span></a>
+      ))}
+    </nav>
+  </div>
+</section>
+
+<script>
+  import { start } from '../lib/chain-strip.mjs';
+  import { CHANNELS } from '../lib/channels';
+
+  const colors = Object.fromEntries(Object.values(CHANNELS).map((c) => [c.code, c.color600]));
+  document.querySelectorAll<HTMLElement>('[data-chain-strip]').forEach((root) => start(root, { colors }));
+</script>
+
+<style>
+  .pcs {
+    --pcs-ink: var(--pc-ink, #12110e);
+    --pcs-soft: var(--pc-ink-soft, #38373a);
+    --pcs-muted: var(--pc-ink-muted, #5f5e5a);
+    --pcs-rule: var(--pc-rule, #c4c2bc);
+    --pcs-paper: var(--pc-bg, #fff);
+    --pcs-c600: var(--fd600);
+    --pcs-c800: var(--fd800);
+    --pcs-c50: var(--fd50);
+    --pcs-bot: #5f5e5a;
+    --pcs-sys: #8f8d87;
+    --pcs-tile: #c4c2bc;
+    margin: 16px 0 24px;
+    padding: 12px 16px 6px;
+    border: 2px solid var(--pcs-ink);
+    box-shadow: 6px 6px 0 var(--pcs-c600);
+    background: var(--pcs-paper);
+    color: var(--pcs-ink);
+    font-family: var(--pc-font-sans);
+    overflow-wrap: anywhere;
+  }
+  .pcs--wide {
+    margin: 0 0 8px;
+    border: 1.5px solid var(--pcs-c600);
+    box-shadow: none;
+  }
+
+  /* teletext header: page number, service line, read time */
+  .pcs .pcs__head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 4px 10px;
+    min-height: 18px;
+    margin: 0 0 10px;
+    font: 500 10px/18px var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--pcs-c800);
+  }
+  .pcs .pcs__page {
+    padding: 0 6px;
+    background: var(--pcs-ink);
+    color: var(--pcs-paper);
+    letter-spacing: 0.08em;
+  }
+  /* Reserved even while empty, so "Read 17:26" or "devnet unreachable" never reflows the header. */
+  .pcs .pcs__clock {
+    min-width: 22ch;
+    min-height: 18px;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--pcs-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pcs .pcs__body {
+    display: grid;
+    grid-template-columns: var(--pcs-yard-w) minmax(0, 1fr) auto;
+    gap: 8px 22px;
+    align-items: start;
+  }
+  .pcs .pcs__yard {
+    min-width: 0;
+  }
+  .pcs .pcs__yard svg {
+    display: block;
+    width: 100%;
+    max-width: var(--pcs-yard-w);
+    height: auto;
+    overflow: visible;
+  }
+  .pcs .pcs__ground {
+    stroke: var(--pcs-rule);
+    stroke-width: 1;
+  }
+  .pcs .pcs__scale {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    max-width: var(--pcs-yard-w);
+    min-height: 16px;
+    margin: 2px 0 0;
+    font: 400 9px/16px var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pcs-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* cubes are created by the browser, so their selectors are global */
+  .pcs :global(.pcs-l) { fill: var(--c); }
+  .pcs :global(.pcs-t) { fill: var(--c); fill: color-mix(in srgb, var(--c) 55%, #fff); }
+  .pcs :global(.pcs-r) { fill: var(--c); fill: color-mix(in srgb, var(--c) 70%, #000); }
+  .pcs :global(.pcs-new) { animation: pcs-drop 0.36s steps(4, end) both; }
+  @keyframes pcs-drop {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .pcs .pcs__title {
+    margin: 0;
+    font: 500 19px/1.25 var(--pc-font-sans);
+    letter-spacing: -0.01em;
+    color: var(--pcs-ink);
+  }
+  .pcs .pcs__swap {
+    display: grid;
+    margin: 6px 0 0;
+  }
+  .pcs .pcs__swap > * {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+  .pcs .pcs__static {
+    margin: 0;
+    font: 400 14px/1.5 var(--pc-font-sans);
+    color: var(--pcs-soft);
+  }
+  .pcs[data-state='live'] .pcs__static,
+  .pcs:not([data-state='live']) .pcs__live {
+    visibility: hidden;
+  }
+  .pcs .pcs__nums {
+    min-height: 18px;
+    margin: 0;
+    font: 500 11px/18px var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pcs-c800);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pcs .pcs__posts {
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pcs .pcs__posts li {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    min-height: 42px;
+    max-height: 42px;
+    overflow: hidden;
+    font: 400 14px/21px var(--pc-font-sans);
+    color: var(--pcs-soft);
+  }
+  .pcs :global(.pcs-by) {
+    margin-right: 8px;
+    font: 500 10px/21px var(--pc-font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pcs-muted);
+  }
+  .pcs :global(.pcs-q) {
+    color: var(--pcs-ink);
+  }
+
+  .pcs .pcs__links {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .pcs .pcs__links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    font: 500 11px/1.3 var(--pc-font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pcs-c800);
+    text-decoration: underline;
+    text-decoration-color: var(--pcs-c600);
+    text-underline-offset: 3px;
+  }
+  .pcs .pcs__links a:hover {
+    background: var(--pcs-c50);
+  }
+  .pcs a:focus-visible {
+    outline: 2px solid var(--pcs-c600);
+    outline-offset: 2px;
+  }
+
+  /* The digest's cube row is twice as long, so its links sit under the text, not beside it. */
+  .pcs--wide .pcs__body {
+    grid-template-columns: var(--pcs-yard-w) minmax(0, 1fr);
+  }
+  .pcs--wide .pcs__links {
+    grid-column: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0 20px;
+  }
+  .pcs--wide .pcs__posts li {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    min-height: 21px;
+    max-height: 21px;
+  }
+
+  @media (max-width: 1080px) {
+    .pcs .pcs__body {
+      grid-template-columns: var(--pcs-yard-w) minmax(0, 1fr);
+    }
+    .pcs .pcs__links {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0 20px;
+    }
+  }
+  @media (max-width: 980px) {
+    .pcs--wide .pcs__body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pcs--wide .pcs__links {
+      grid-column: 1;
+    }
+  }
+  @media (max-width: 760px) {
+    .pcs .pcs__body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pcs .pcs__links {
+      grid-column: 1;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0 20px;
+    }
+    .pcs .pcs__head {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+    .pcs .pcs__clock {
+      grid-column: 2;
+      min-width: 0;
+      text-align: left;
+    }
+    /* Narrow digest: the counts may take two lines, and the newest post gets two lines, the others one. */
+    .pcs--wide .pcs__nums {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      min-height: 36px;
+      max-height: 36px;
+      white-space: normal;
+    }
+    .pcs--wide .pcs__posts li:first-child {
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      min-height: 42px;
+      max-height: 42px;
+    }
+  }
+  @media (max-width: 480px) {
+    .pcs {
+      padding: 10px 12px 4px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pcs :global(.pcs-new) { animation: none; }
+  }
+
+  /* The front door's shelves turn dark with the system; /chain stays light, and so does its panel. */
+  @media (prefers-color-scheme: dark) {
+    .pcs--home {
+      --pcs-ink: #f5f1e7;
+      --pcs-soft: #d3d7dc;
+      --pcs-muted: #aab3be;
+      --pcs-rule: #5a6472;
+      --pcs-paper: #151c26;
+      --pcs-c600: #5b9be0;
+      --pcs-c800: #a9cdf3;
+      --pcs-c50: #1d3046;
+      --pcs-bot: #b4bcc6;
+      --pcs-sys: #7d8794;
+      --pcs-tile: #4a5462;
+      border-color: #8fa3bd;
+    }
+  }
+</style>
