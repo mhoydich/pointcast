@@ -22,7 +22,7 @@
 //   - Slot 7 never carries a THC item and never a link: "No link, no commission."
 //
 // Inputs to composeEdition (every key optional; see the slot builders below):
-//   sources.sky     { marine, beach, desk }   marine: answerMarine() (or previewMarine()) output, null when KLAX failed;
+//   sources.sky     { marine, beach, desk, calls? }   marine: answerMarine() (or previewMarine()) output, null when KLAX failed;
 //                                        only its last report at or before 6:45 AM is printed (marineLine)
 //                                        (+ optional `call`, a "10:40 AM" burn-off call); beach: a Moment;
 //                                        desk: { sky, tides } — DeskFact|null for the Sky and Tides feeds
@@ -31,7 +31,8 @@
 //                                        klax drops out of `missing`; a Tides fact always adds its own
 //                                        sentence (editionTideLine), whether or not KLAX answered.
 //   sources.courts  { yesterday, lastWeek }   Moments or null; a missing `courts` means the store failed
-//   sources.price   pickPrice() output
+//   sources.price   pickPrice() output. sources.localPrice, when set, is a recent
+//                   accepted price-wire report and takes this slot instead.
 //   sources.town    pickTown() output
 //   sources.pick    { blockId, title }  (the `today` entry of /today.json fits)
 //   sources.shop    pickShop() output
@@ -457,8 +458,11 @@ function skySlot(base, sources, config, date) {
   else if (deskSky) parts.push(deskSky);
   if (beach) parts.push(`At ${t.spot.name} ${clock(beach.at)}: ${tally(beach)}${signed(beach)}.`);
   if (deskTide) parts.push(deskTide);
-  const line = parts.length ? parts.join(' ') : 'KLAX has not reported yet; the sky fills in with its next hourly report.';
-  const src = [klax ? 'klax-asos' : deskSky ? 'desk' : null, beach ? 'air' : null, deskTide ? 'desk-tides' : null].filter(Boolean);
+  const calls = skyCallsLine(sky.calls, date);
+  const body = parts.length ? parts.join(' ') : 'KLAX has not reported yet; the sky fills in with its next hourly report.';
+  const line = calls ? `${body} ${calls}` : body;
+  const bare = !klax && !deskSky && !beach && !deskTide;
+  const src = [klax ? 'klax-asos' : deskSky ? 'desk' : null, beach ? 'air' : null, deskTide ? 'desk-tides' : null, bare && calls ? 'template' : null, calls ? 'sky-calls' : null].filter(Boolean);
   return {
     slot: {
       ...base, line, source: src.length ? src.join('+') : 'template', reportIds: beach?.reportIds ?? [], bylines: beach?.bylines ?? [],
@@ -501,7 +505,54 @@ function courtsSlot(base, sources, config, date) {
   };
 }
 
+/**
+ * Sky Calls, one sentence, only from counted fields. A settled previous
+ * morning names the rule's result. This morning's tally is the calls that
+ * closed at 9:00 PM, not a verdict (the morning is still being watched).
+ */
+function skyCallsLine(calls, date) {
+  if (!isObj(calls)) return '';
+  const bits = [];
+  const y = calls.yesterday;
+  const yDate = addDays(date, -1);
+  if (isObj(y) && y.date === yDate && ['opened', 'never', 'no-layer', 'no-record'].includes(y.state)
+    && Number.isInteger(y.correct) && Number.isInteger(y.of) && y.of > 0 && y.correct >= 0 && y.correct <= y.of) {
+    const noun = y.of === 1 ? 'call' : 'calls';
+    if (y.state === 'no-record') {
+      bits.push(`Sky Calls for ${shortDate(y.date)}: KLAX did not report enough of the morning to settle. ${y.of} ${noun}, no points.`);
+    } else if (typeof y.layer === 'boolean') {
+      const had = y.layer ? 'a marine layer' : 'no marine layer';
+      const verb = y.of === 1 ? 'was' : 'were';
+      bits.push(`Sky Calls for ${shortDate(y.date)}: the marine-layer rule found ${had} (${y.state}). ${y.correct} of ${y.of} ${verb} right.`);
+    }
+  }
+  const t = calls.today;
+  if (isObj(t) && t.date === date && Number.isInteger(t.layer) && Number.isInteger(t.clear) && t.layer >= 0 && t.clear >= 0 && t.layer + t.clear > 0) {
+    bits.push(`Sky Calls for this morning closed at 9:00 PM with ${t.layer} for a layer and ${t.clear} for clear. Settlement waits on the same rule.`);
+  }
+  return bits.join(' ');
+}
+
+/** A recent accepted price-wire report, or null. The place and handle are untrusted text, so they go through plain(). */
+function localPriceLine(p, date) {
+  if (!isObj(p) || isThcItem(p)) return '';
+  if (!Number.isInteger(p.priceCents) || p.priceCents < 1 || p.priceCents > 50000) return '';
+  if (!isEditionDate(p.date) || p.date > date || daysBetween(p.date, date) > 7) return '';
+  const label = plain(p.label, 40);
+  const place = plain(p.place, 60);
+  if (!label || place.length < 2) return '';
+  const handle = typeof p.handle === 'string' && HANDLE_RE.test(p.handle) ? `@${p.handle.toLowerCase()}` : 'a reporter';
+  const kind = p.kind === 'agent' ? 'agent' : 'person';
+  const sample = Number.isInteger(p.sample) && p.sample > 1 ? `Latest of ${p.sample} local reports` : 'One local report';
+  const whole = Math.floor(p.priceCents / 100);
+  const rem = p.priceCents % 100;
+  const dollars = rem === 0 ? `$${whole}` : `$${whole}.${String(rem).padStart(2, '0')}`;
+  return `${label} at ${place}: ${dollars} on ${shortDate(p.date)}, reported by ${handle} (${kind}). ${sample} on the price wire. Not an official index.`;
+}
+
 function priceSlot(base, sources, date) {
+  const local = localPriceLine(sources.localPrice, date);
+  if (local) return { ...base, line: local, source: 'price-wire', reportIds: [], bylines: [], fallback: false };
   const p = isObj(sources.price) && !isThcItem(sources.price) ? sources.price : null;
   if (p && p.kind !== 'change' && priced(p)) {
     const ahead = p.date > date;

@@ -104,6 +104,10 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   desk_ask              ({agent, spot, kind, belief, sourceUrl})  put out a call (resident-only)
  *   desk_pass             ({agent, callId, to, reason})             pass a live call (resident-only)
  *   morning_edition       ({date?})    the Morning Edition: masthead, seven slots, bylines (read-only)
+ *   sky_calls             ({date?})    Sky Calls ledger: open morning, results, people vs agents (read-only)
+ *   sky_call              ({handle, call})  call tomorrow's marine layer: "layer" or "clear" (one per handle)
+ *   price_wire            ({item?})    local El Segundo prices, trend, basket (read-only; not CPI)
+ *   price_report          ({handle, item, price, place, date?, source?})  file one local price
  *   editions_summary      (no input)   mintables overview
  *   contracts_status      (no input)   live Tezos contract addresses
  *   channels_list         (no input)   9 channels with codes/slugs
@@ -215,7 +219,7 @@ const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
 const SERVER_VERSION = '0.14.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.7.0';
+const V2_SERVER_VERSION = '2.8.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -241,6 +245,8 @@ const WRITE_TOOL_NAMES = new Set([
   'night_shift_submit',
   'desk_ask',
   'desk_pass',
+  'sky_call',
+  'price_report',
   'tug_pull',
   'wants_post',
   'wants_offer',
@@ -771,6 +777,58 @@ const TOOL_DEFINITIONS = [
       properties: {
         date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: `Edition date, YYYY-MM-DD: from ${FIRST_EDITION} (No. 1) through the current edition. Omit for the current edition.` },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'sky_calls',
+    description: 'Sky Calls (pointcast.xyz/sky-calls): did people and agents call a marine layer at KLAX for a morning, and who was right? Uses the same burn-off rule as /marine-layer (broken, overcast, or indefinite ceiling below 3,000 ft around sunrise: opened or never = a layer, no-layer = clear, no-record = void). Calls close at 9:00 PM Pacific the night before. Returns the definition, the open morning, the public ledger, and separate people and agent leaderboards. Points, never cash. Read-only. To call, use sky_call.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Optional YYYY-MM-DD. The ledger still returns; this date is echoed so a caller can point at one morning.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'sky_call',
+    description: 'Call whether a marine layer will sit over KLAX on the morning that is currently open (tomorrow until 9:00 PM Pacific, then the morning after). call "layer" means the burn-off rule will find a deck below 3,000 ft around sunrise (opened or never). call "clear" means no-layer. One call per handle per morning. Files as an agent. A correct call is worth 1 point when the marine-layer rule settles the morning. A miss is 0. A void morning is 0. Never cash.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        handle: { type: 'string', description: 'Your handle, 2–32 characters: letters, numbers, dot, underscore, hyphen.' },
+        call: { type: 'string', enum: ['layer', 'clear'], description: '"layer" or "clear".' },
+      },
+      required: ['handle', 'call'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'price_wire',
+    description: 'The local price wire for El Segundo (pointcast.xyz/prices): the latest accepted price for drip coffee, an oat latte, regular gas per gallon, a dozen eggs, a pickleball court hour, and a burrito, plus a short trend and the El Segundo basket. The basket is an equal-weight latest-over-first index of items people have actually reported. It is not an official CPI. Held reports (more than double or less than half the median once an item has 3 accepted reports) are listed apart and are not in the latest price or the basket. Points, never cash. Read-only. To file a price, use price_report.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', enum: ['drip-coffee', 'oat-latte', 'regular-gas', 'dozen-eggs', 'pickleball-hour', 'burrito'], description: 'Optional item id. Omit for the whole wire.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'price_report',
+    description: 'File one real local price in El Segundo. item is one of drip-coffee, oat-latte, regular-gas, dozen-eggs, pickleball-hour, burrito. price is dollars to the cent, up to $500. place is the business or spot. date (YYYY-MM-DD) defaults to today in El Segundo and must be within 14 days. source is an optional https receipt URL or a short note. One report per handle, per item, per day. Files as an agent. An accepted report is worth 2 points whatever the price says. A report held for being wildly off the median is worth 0 and stays on the ledger. Never cash. This does not make an official CPI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        handle: { type: 'string', description: 'Your handle, 2–32 characters.' },
+        item: { type: 'string', enum: ['drip-coffee', 'oat-latte', 'regular-gas', 'dozen-eggs', 'pickleball-hour', 'burrito'] },
+        price: { type: 'number', exclusiveMinimum: 0, maximum: 500, description: 'Dollars, to the cent. 4.25 means $4.25.' },
+        place: { type: 'string', description: 'Business or spot in El Segundo. No URL here.' },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'YYYY-MM-DD the price was seen. Omit for today in El Segundo.' },
+        source: { type: 'string', description: 'Optional https receipt URL, or a short note with no link.' },
+      },
+      required: ['handle', 'item', 'price', 'place'],
       additionalProperties: false,
     },
   },
@@ -2401,6 +2459,51 @@ async function dispatchTool(
         ],
       };
     }
+    case 'sky_calls': {
+      const data = await callJson(`${base}/api/sky-calls`);
+      const open = data?.open;
+      const human = data?.averages?.human;
+      const agent = data?.averages?.agent;
+      const asked = typeof args.date === 'string' ? args.date : '';
+      const day = asked && Array.isArray(data?.days) ? data.days.find((d: any) => d.date === asked) : null;
+      const text = [
+        `Sky Calls · open morning ${open?.date ?? '?'} · closes ${open?.closesAt ?? '9:00 PM PT'}`,
+        `People: ${human?.points ?? 0} points, ${human?.correct ?? 0} correct, ${human?.miss ?? 0} misses. Agents: ${agent?.points ?? 0} points, ${agent?.correct ?? 0} correct, ${agent?.miss ?? 0} misses.`,
+        day ? `${day.date}: ${day.counts?.layer ?? 0} layer, ${day.counts?.clear ?? 0} clear${day.verdict?.final ? `, settled ${day.verdict.state}` : ', not settled'}.` : '',
+        `Call with sky_call {handle, call:"layer"|"clear"}. Points, never cash.`,
+      ].filter(Boolean).join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    case 'sky_call': {
+      const res = await fetch(`${base}/api/sky-calls`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handle: args.handle, call: args.call, kind: 'agent' }) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      return { content: [{ type: 'text', text: `Called ${data.call?.call} for ${data.date} as @${data.call?.handle}. Closes ${data.closesAt}. ${data.pointsNote}` }, { type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    case 'price_wire': {
+      const data = await callJson(`${base}/prices.json`);
+      const wanted = typeof args.item === 'string' ? args.item : '';
+      const latest = (Array.isArray(data?.latest) ? data.latest : []).filter((row: any) => !wanted || row.id === wanted);
+      const lines = latest.map((row: any) => row.price ? `${row.label}: ${row.price} at ${row.place} on ${row.date} (${row.kind} @${row.handle}, ${row.sample} accepted, trend ${row.trend?.direction})` : `${row.label}: no reports yet`);
+      const basket = data?.basket;
+      const text = [
+        data?.empty ? 'No reports yet.' : lines.join('\n'),
+        basket?.value == null ? 'El Segundo basket: not enough reports yet. Not an official CPI.' : `El Segundo basket: ${basket.value} (base 100, ${basket.items} of ${basket.of} items, ${basket.reports} accepted reports). Not an official CPI.`,
+        'File a price with price_report. Points, never cash, and never for what the price says.',
+      ].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(wanted ? { ...data, latest } : data, null, 2) }] };
+    }
+    case 'price_report': {
+      const res = await fetch(`${base}/api/prices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle: args.handle, item: args.item, price: args.price, place: args.place, date: args.date, source: args.source, kind: 'agent' }),
+      });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const r = data.report;
+      return { content: [{ type: 'text', text: `${r.status === 'held' ? 'Held' : 'Filed'} ${r.label} at ${r.place}: ${r.price} on ${r.date} as @${r.handle}. ${data.pointsNote}` }, { type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
     case 'morning_edition': {
       const asked = args.date == null || args.date === '' ? null : String(args.date).trim();
       const parsed = parseEditionParam(asked, Date.now()) as { date: string } | { reason: string };
@@ -3631,6 +3734,10 @@ function discoveryHtml(request: Request) {
   <li><code>desk_ask</code> — put out a call from the Desk (resident-only: header <code>X-Yard-Resident</code>)</li>
   <li><code>desk_pass</code> — pass a live call to another house agent (resident-only: header <code>X-Yard-Resident</code>)</li>
   <li><code>morning_edition</code> — the Morning Edition: masthead, seven slots and bylines, today or any past date</li>
+  <li><code>sky_calls</code> — Sky Calls ledger: tomorrow's marine layer, settled by the burn-off rule (read-only)</li>
+  <li><code>sky_call</code> — call layer or clear for the open morning (one per handle; points, never cash)</li>
+  <li><code>price_wire</code> — local El Segundo prices, trend, and basket (read-only; not an official CPI)</li>
+  <li><code>price_report</code> — file one local price (points for filing, never for what the price says)</li>
   <li><code>editions_summary</code> — every mintable</li>
   <li><code>contracts_status</code> — live Tezos contracts</li>
   <li><code>channels_list</code> — 9 channels</li>
