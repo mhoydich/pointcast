@@ -113,6 +113,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts.json', 'monthly', '0.5'],
   ['https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/', 'monthly', '0.7'],
   ['https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy.json', 'monthly', '0.5'],
+  ['https://pointcast.xyz/ues/philosophy/the-unmoderated-label/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/ues/philosophy/the-unmoderated-label.json', 'monthly', '0.5'],
   ['https://pointcast.xyz/everyday/', 'monthly', '0.9'],
   ['https://pointcast.xyz/everyday.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/communications-lab/', 'monthly', '0.9'],
