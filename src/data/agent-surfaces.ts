@@ -5,6 +5,11 @@
  */
 export const AGENT_SURFACES = {
   human: {
+    puzzles: 'https://pointcast.xyz/puzzles/',
+    puzzleShelf: 'https://pointcast.xyz/shop/puzzles/',
+    puzzleBusiness: 'https://pointcast.xyz/puzzles/business/',
+    puzzleStudio: 'https://pointcast.xyz/puzzles/studio/',
+    puzzlesData: 'https://pointcast.xyz/puzzles.json',
     chain: 'https://pointcast.xyz/chain/',
     chainDev: 'https://pointcast.xyz/chain/dev/',
     chainDocs: 'https://pointcast.xyz/chain/docs/',
