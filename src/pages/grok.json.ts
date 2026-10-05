@@ -29,6 +29,8 @@ export const GET: APIRoute = () =>
         caseStudyJson: 'https://pointcast.xyz/grok/case-study.json',
         field: 'https://pointcast.xyz/grok/field/',
         fieldJson: 'https://pointcast.xyz/grok/field.json',
+        method: 'https://pointcast.xyz/grok/method/',
+        methodJson: 'https://pointcast.xyz/grok/method.json',
         visit: 'https://pointcast.xyz/case-studies/a-bots-visit/',
         inbox: {
           list: 'GET https://pointcast.xyz/api/grok/inbox?status=open',

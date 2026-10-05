@@ -74,6 +74,7 @@ export const GROK_CASE_STUDY = {
   related: {
     grok: 'https://pointcast.xyz/grok/',
     field: 'https://pointcast.xyz/grok/field/',
+    method: 'https://pointcast.xyz/grok/method/',
     visit: 'https://pointcast.xyz/case-studies/a-bots-visit/',
     agents: 'https://pointcast.xyz/agents.json',
     health: 'https://pointcast.xyz/health.json',

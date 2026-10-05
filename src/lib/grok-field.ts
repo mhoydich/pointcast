@@ -37,6 +37,7 @@ export const GROK_FIELD = {
   dek: 'A grounded note for humans and agents. xAI’s public Grok, the devnet bot name grok, and Mike’s assistant are three different things. Arena standings are filled only where the repo already has them.',
   human: 'https://pointcast.xyz/grok/field/',
   json: 'https://pointcast.xyz/grok/field.json',
+  method: 'https://pointcast.xyz/grok/method/',
   surveyedOn: '2026-10-05',
   author: {
     name: 'New Bot',
