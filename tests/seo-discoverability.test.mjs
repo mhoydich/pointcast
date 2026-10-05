@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { STANDARDS_COPY } from '../src/lib/standards-seo.mjs';
 import { cardSeo, isFutureAlmanacCard, almanacCardPath } from '../src/lib/almanac-seo.mjs';
 import { isNoindexPath } from '../src/lib/seo-rules.mjs';
+import { ogAssetExists } from '../src/lib/seo-paths.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -21,6 +23,16 @@ const SITEMAP_HTML = [
 function addDays(iso, days) {
   return new Date(Date.parse(`${iso}T12:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
 }
+
+test('dynamic OG functions count as real images', () => {
+  const roots = {
+    distDir: fileURLToPath(new URL('dist/', root)),
+    publicDir: fileURLToPath(new URL('public/', root)),
+    functionsDir: fileURLToPath(new URL('functions/', root)),
+  };
+  assert.equal(ogAssetExists('https://pointcast.xyz/og/almanac/2026-10-05.png', roots), true);
+  assert.equal(ogAssetExists('https://pointcast.xyz/og/page.png', roots), true);
+});
 
 test('future almanac cards are noindex and today is not', () => {
   const today = '2026-10-05';
