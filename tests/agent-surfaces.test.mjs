@@ -32,7 +32,8 @@ function replaceTemplate(pathname) {
     .replaceAll('{team-slug}', 'ohio-state')
     .replaceAll('{station}', 'los-angeles')
     .replaceAll('{tokenId}', '0')
-    .replaceAll('{query}', 'town');
+    .replaceAll('{query}', 'town')
+    .replaceAll('{date}', '2026-10-05');
 }
 
 async function functionRoutes(directory = 'functions', prefix = '') {
@@ -43,7 +44,11 @@ async function functionRoutes(directory = 'functions', prefix = '') {
     if (entry.isDirectory()) routes.push(...await functionRoutes(`${directory}/${entry.name}`, relative));
     else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.bak.ts')) {
       const route = relative.replace(/\.ts$/, '').replace(/\/index$/, '').replace(/\[\.\.\.([^\]]+)\]/g, '**').replace(/\[([^\]]+)\]/g, '*');
-      routes.push(new RegExp(`^${route.split('/').map((part) => part === '*' ? '[^/]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('/')}/?$`));
+      routes.push(new RegExp(`^${route.split('/').map((part) => {
+        if (part === '*') return '[^/]+';
+        if (part.startsWith('*')) return `[^/]+${part.slice(1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`;
+        return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }).join('/')}/?$`));
     }
   }
   return routes;
