@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import {createHash} from 'node:crypto';
+import {renderCurrency} from '../src/lib/currency/render.mjs';
+const scope={};vm.runInNewContext(readFileSync(new URL('../public/currency/engine.js',import.meta.url),'utf8'),scope);
+const {economics,configuration}=scope.CurrencyEngine;
+test('whole-batch economics matches independently calculated reference outcomes',()=>{assert.ok(Math.abs(economics({sold:25}).remaining-68.65)<.001);assert.ok(Math.abs(economics({sold:15}).remaining+160.41)<.001);assert.equal(economics({}).breakEven,23);assert.equal(economics({sold:0}).remaining,-504);});
+test('zero contribution cannot break even and batch limit is visible',()=>{assert.equal(economics({price:0,shippingCharge:0}).breakEven,null);assert.equal(economics({artwork:1000}).reachable,false);});
+test('reject impossible sell-through and unsafe numbers',()=>{for(const v of [{sold:26},{sold:-1},{batch:0},{sold:1.2},{print:NaN},{minutes:Infinity}])assert.throws(()=>economics(v));});
+test('editable labor, reserve and shipping affect contribution',()=>{const a=economics({}),b=economics({minutes:16});assert.ok(Math.abs(a.remaining-b.remaining-100)<.001);assert.ok(economics({vendorTax:10}).remaining<a.remaining);});
+test('configuration bounds and identifiers',()=>{assert.equal(configuration({start:999999,quantity:1}).end,999999);assert.throws(()=>configuration({start:999999,quantity:2}));assert.throws(()=>configuration({quantity:1.5}));assert.throws(()=>configuration({product:'government-note'}));assert.equal(configuration({product:'medallion',mode:'physical'}).total,null);assert.equal(configuration({product:'note',mode:'physical',quantity:2}).total,60);});
+test('registry provenance hash and bounded fields',()=>{const r=JSON.parse(readFileSync(new URL('../src/data/currency/registry.json',import.meta.url)));assert.equal(r.rows.length,18);assert.equal(r.sourcePublished,'2026-09-17');assert.equal(r.sourceSha256,createHash('sha256').update(readFileSync(new URL('../docs/currency/list-one.xml',import.meta.url))).digest('hex'));assert.ok(r.rows.find(x=>x.code==='EUR').entities.includes('BULGARIA'));assert.ok(r.rows.every(x=>/^\d{3}$/.test(x.numeric)));});
+test('render preserves sources, section IDs, bounded scope and no private data fields',()=>{const html=renderCurrency();assert.ok(html.includes('No identifiers are issued or reserved'));assert.ok(html.includes('not valid for postage'));assert.ok(html.includes('not open vacancies'));assert.ok(!/type="(?:email|tel|file)"|<form[^>]+action=/.test(html));const ids=[...html.matchAll(/\sid="([^"]+)"/g)].map(x=>x[1]);assert.equal(ids.length,new Set(ids).size);assert.ok(html.includes('https://www.onondaganation.org/culture/wampum/'));});
