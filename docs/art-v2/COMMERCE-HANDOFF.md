@@ -8,10 +8,14 @@ Inspected fresh `origin/main` at `551bd6e62b4126a811cbc5eba7e4ea831c5bc5c0` and 
 
 Public admin, platform fee receiver and shared royalty receiver: `tz2FjJhB1gb9Xc2qNB7QgFkdBZkGCCRMxdFw`. These establish existing infrastructure, not authorization to use that wallet as this collection's seller or creator. Platform share is currently 250 bps: 25,000 mutez deducted from a 1 tez listing payment. Royalties also come from that payment. Network fees and storage costs are additional and unknown until a wallet estimates them.
 
-A separate PointCast blockchain was not identified. The Chain Messenger prepares Tezos envelopes; Etherlink payments do not establish a PointCast-owned chain. Preserve the second-chain status as `unverified_network` until the user names it and supplies verified configuration. No bridge, duplicate ownership or unified token inventory is implied.
+PointCast has a separate local development prototype, `pointcast-chain`. The October 3, 2026 read-only review accepted all 422 blocks of the recorded `pointcast-dev` snapshot and matched its final tip and state root. The snapshot was recorded at 16:31:35 UTC; replay was checked at 20:07:20 UTC. This verifies consistency of that recording under its verifier, not a public network or production readiness. No public node is advertised. Public network and mint adapter configuration for this collection remain unset; its PointCast status is `public_network_not_configured`. First Mints remains a design preview with nothing minted. The existing PointCast marketplace and Chain Messenger use Tezos; Etherlink USDC quotes are a separate payment rail. No bridge, duplicate ownership or unified token inventory is implied.
 
 Evidence:
 
+- [PointCast prototype status](https://pointcast.xyz/chain)
+- [Recorded development snapshot](https://pointcast.xyz/chain/yard/snapshot.json)
+- [Replay verifier](https://pointcast.xyz/chain/yard/verifier/pointcast_chain.wasm) and [published digest](https://pointcast.xyz/chain/yard/verifier/pointcast_chain.wasm.sha256)
+- [First Mints design preview](https://pointcast.xyz/chain/first-mints/)
 - [Mainnet chain ID](https://rpc.tzkt.io/mainnet/chains/main/chain_id)
 - [Current marketplace storage](https://api.tzkt.io/v1/contracts/KT1X9LUxV5qaPVLr17uzRfxgRWPdGfRMYxQT/storage)
 - [Current active asks](https://api.tzkt.io/v1/bigmaps/806869/keys?active=true&limit=1)
@@ -21,7 +25,7 @@ Evidence:
 
 ## Decisions required from the owner
 
-1. Network: approve Tezos mainnet; identify any additional PointCast network or choose the existing PointCast marketplace on Tezos.
+1. Network: approve Tezos mainnet for this collection. Any future mint on PointCast requires a reviewed public network, owner authorization and a verified mint adapter; none is configured for this collection.
 2. Collection: select an owner-authorized existing FA2 or hand off a separately reviewed dedicated collection. Existing El Segundo `KT1N1U6esJHuhLpUKiebpyW9MJUCoqJyREtb` is a candidate, not selected. IDs 0–9 exist; Agent Cabinet prepared IDs 10–12 are reserved but not approved. Do not allocate the new series IDs without collision and ownership checks. Imported objkt `KT1Qc77qoVQadgwCqrqscWsgQ75aa3Rt1MrP` has 43 tokens and a contract administrator; do not silently reuse it.
 3. Wallets: approve seller and creator addresses. Existing Mike wallet above is only a candidate.
 4. Editions: choose the number issued per work and review continued issuance permissions. Historical releases use different caps; Nouns Money's 50-art 1 tez catalog explicitly leaves editions TBD. Neither is authorization for this series. The preparer checks current issued supply against an approved limit; it does not assert that every FA2 enforces a cap. Review and disclose the selected collection's issuance policy.

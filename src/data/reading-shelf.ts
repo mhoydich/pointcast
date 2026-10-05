@@ -1,4 +1,4 @@
-import companions from './bookshelf-expansion.json';
+import { bookCompanions as companions } from './book-companions';
 
 export const shelfThemes = [
   { id: 'all', label: 'Everything' },
@@ -9,6 +9,8 @@ export const shelfThemes = [
   { id: 'memory', label: 'Memory & choices' },
   { id: 'fantasy', label: 'Fantasy' },
   { id: 'attention', label: 'Attention' },
+  { id: 'language', label: 'Words & language' },
+  { id: 'practice', label: 'Habits & aspiration' },
 ];
 
 const established = [
@@ -18,7 +20,7 @@ const established = [
 ];
 
 export const readingShelf = [...established, ...companions.map((book) => ({
-  id: book.id, title: book.title, author: book.authors.join(' & '), kind: book.kind,
+  id: book.id, title: book.title, author: book.attributionLine || book.authors.join(' & '), kind: book.kind,
   firstPublished: book.firstPublished, href: `/books/${book.id}/`, metadata: `/books/${book.id}.json`,
   image: book.art.src, tone: book.theme, themes: book.themes, note: book.dek,
 }))];

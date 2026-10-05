@@ -1,0 +1,451 @@
+---
+/**
+ * /chain/case-study — a University of El Segundo case study, written in the
+ * UES casebook format: pointcast-chain, a broadcast chain built in two days
+ * by a team of AI agents.
+ *
+ * Sources: the pointcast-chain repo at da7bc09 (git log, README, DESIGN.md,
+ * docs/V2.md, docs/WALLETS.md, docs/ART_MINTING.md, docs/reviews/*,
+ * crates/chain-sim/FINDINGS.md; docs/TOWN_NETWORK.md at 50015e4), test runs on clean exports of 1b6e819 and
+ * da7bc09 (2026-10-03), and Claude's session notes for three things outside
+ * the repo: the Control Room board, the deck and the misread timer. No quote
+ * is attributed to the founder. Listed as case 05 in the UES business
+ * casebook (src/data/ues-business-cases.json, /ues/business).
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import { CHANNELS } from '../../lib/channels';
+import { CRATES, SOURCE, TESTS } from '../../data/chain-home';
+import '../../styles/chain.css';
+
+const ch = CHANNELS.FD;
+const title = 'pointcast-chain: a case study';
+const description =
+  'A University of El Segundo case study: how a team of AI agents, directed by PointCast’s founder, built a broadcast chain in two days. The situation, the timeline, six decisions, the evidence as exhibits, what went wrong, teaching notes, discussion questions and a glossary.';
+
+type Row = { t: string; what: string; ev: string };
+const timeline: { round: string; when: string; rows: Row[] }[] = [
+  { round: 'Round 1', when: 'Thursday 1 October, evening', rows: [
+    { t: '21:02', what: 'v0.1: the pure state machine, a sequencer node and the explorer.', ev: 'c56ff65' },
+    { t: '21:27', what: 'Kukai and Temple wallet signing.', ev: '8142ba7' },
+    { t: '21:35', what: 'Real anchoring to Tezos through the tez-cast tower; hardened after review at 21:52.', ev: '092dab5 · 7d22a47' },
+    { t: '21:38', what: 'The drum farming gap closed with co-signatures and room attestation.', ev: 'ec0cf1c' },
+    { t: '21:58', what: 'Adversarial review, three finders and two refuters each: 8 findings confirmed, 0 refuted, all fixed. Signatures now bind the genesis hash.', ev: 'c9e55a9' },
+    { t: '22:05', what: 'The Shadownet end-to-end proof is recorded. (The README dates the run 2026-10-02, in UTC.)', ev: 'f0f81f0' },
+  ] },
+  { round: 'Round 2', when: 'Friday 2 October, small hours', rows: [
+    { t: '01:52', what: 'A legacy-root golden: a 40-block chain pinned so later changes can prove they replay old chains byte for byte.', ev: 'daed73f' },
+    { t: '02:04', what: 'Agent mandates: owner-granted scope, allowance, expiry and a kill switch. Merged 02:48.', ev: '00b6122 · d53f4d6' },
+    { t: '02:13', what: 'The rollup kernel, then at 02:22 the Verify Desk (in-browser replay plus portable evidence), each followed within half an hour by review fixes.', ev: '557547b · 08a771b' },
+    { t: '02:49', what: 'The nonce wedge fixed (Exhibit 2).', ev: 'f8e994f' },
+    { t: '02:53', what: 'Block seals and anchors bind the genesis hash (seal/v2, anchor/v2).', ev: '6679380' },
+    { t: '03:11', what: 'Merges and post-merge fixes: the kernel’s chunk manifests bind the genesis too.', ev: '119e376' },
+  ] },
+  { round: 'Round 3', when: 'Friday 2 October, afternoon', rows: [
+    { t: '14:49', what: 'pc-sim, the town-economy simulator, driving the unmodified state machine.', ev: 'f8b4272' },
+    { t: '16:22', what: 'Review fixes: an ordering setting that never reached the engine, a test against the real node, an attacker that adapts.', ev: '7329565' },
+    { t: '17:32', what: 'FINDINGS merged. The v1 tip, with 250 tests.', ev: '1b6e819' },
+  ] },
+  { round: 'Day 3', when: 'Saturday 3 October', rows: [
+    { t: '~09:00', what: 'A Control Room board tracking every agent lane, and a 15-slide briefing deck. Both live outside the repo.', ev: 'session notes' },
+    { t: '09:06', what: 'Proof of Balance, built by Codex: balance and absence proofs against a sequencer-signed root. Merged 09:29.', ev: '4d76e21 · e4b2ea3' },
+    { t: '09:11', what: 'The v2 plan, “Present Company”: three independent planners and a judge, fourteen packages over seven batches.', ev: 'dcc8c11' },
+    { t: '09:24', what: 'Codex’s review: regression tests for seven findings, committed unchanged after OpenAI’s content filter stopped the run. Report written by Claude.', ev: 'b17457c · 3e18351' },
+    { t: '09:30', what: 'v2 batch 1 built in three parallel worktrees: night-shift operations, Town Hall, presence tickets. Merged 11:19–11:25.', ev: 'ca4c5ec · 817448e · af141a4' },
+    { t: '09:46', what: 'Fixes begin for all seven, then six follow-ups from an adversarial pass on the fixes. Merged 11:15.', ev: '3f63079 · bc4018d' },
+    { t: '10:29', what: 'Art minting: a drops read API, a mirror for Tezos sales, the SDK and ART_MINTING.md. Merged 11:27.', ev: 'db2ab1c · 7221f19 · abfa19d' },
+    { t: '11:15', what: 'The wallet scope: passkeys, one profile, First Mints, planned for batch 2.', ev: '1fd6bee' },
+    { t: '11:45', what: `The snapshot this case measures: ${SOURCE.commit}, ${SOURCE.commits} commits.`, ev: SOURCE.commit },
+    { t: '13:06', what: 'After the snapshot, docs only: the Town Network, a plan of record for v2 batches 2 to 13. A plan; nothing in it is built.', ev: '50015e4' },
+  ] },
+];
+
+const decisions = [
+  {
+    n: 'D1', name: 'One sequencer',
+    what: 'A single node orders transactions, seals a block every three seconds and signs anchors.',
+    why: 'It is the simplest thing that can be made honest-checkable. The sequencer can censor, reorder and pick timestamps; it cannot forge a transaction, mint past the caps or sign a state root that doesn’t match its transactions without a replay catching it.',
+    cost: 'Liveness and fair ordering rest on one operator. The plan answers with sequencer keys that can rotate and forced inclusion through the Tezos inbox, both still plans.',
+  },
+  {
+    n: 'D2', name: 'Genesis-bound signatures',
+    what: 'Every signature commits to the hash of the genesis parameters: transactions, seals, anchors, attestations, kernel chunk manifests.',
+    why: 'Two gaps were found by review, not by tests: transactions that bound only the chain id, and evidence from one chain that checked as valid against another sharing a key, as every dev chain does.',
+    cost: 'Every change of parameters is a new chain. Old dev databases had to be thrown away, and a re-genesis resets browser pins, agents and mandates.',
+  },
+  {
+    n: 'D3', name: 'Simulator before economics',
+    what: 'Before ATTN carries value, a simulator runs the real state machine through seeded town traffic and six sybil strategies.',
+    why: 'Intuition said either room-attested drums or tap limits would stop farming. Measurement said neither works alone against an attacker that adapts; together they cut farming from 66% to 10.1% of issuance.',
+    cost: '15% of honest income, and a residual that only a scarce identity can close. Scenario output is not a forecast; populations are written into the scenario files.',
+  },
+  {
+    n: 'D4', name: 'Presence tickets',
+    what: 'On a launch chain, tap income goes only to taps that carry an issuer-signed ticket, one per identity per slot. A bare key mints nothing from taps.',
+    why: 'It attacks the 10.1% the simulator left: a farm of 200 keys behind five logins earns what five people earn.',
+    cost: 'Trust moves to the issuer’s login check. If identities are cheap, farming scales with identities instead of keys, and the simulator has to measure that before any genesis with value.',
+  },
+  {
+    n: 'D5', name: 'Local only until the founder’s keys',
+    what: 'No public node. Dev chains use public keys. Shadownet ran with a throwaway key. Mainnet anchoring, hosting and anything that spends money or uses the founder’s keys waits for him.',
+    why: 'Nothing can be lost while nothing has value, and every claim can be stated plainly: built and tested locally.',
+    cost: 'No outside users, no real network conditions, and the art certificate stays a rehearsal: no certificates issued or promised.',
+  },
+  {
+    n: 'D6', name: 'Agents in worktrees, with adversarial review',
+    what: 'Each package gets a written brief and its own git worktree, owns disjoint files, and is reviewed by agents told to break it before it merges.',
+    why: 'Parallel lanes merge cleanly when they can’t touch the same files, and a reviewer who must find faults finds different ones than the author’s tests.',
+    cost: 'Coordination overhead: briefs, merge order, wasm pins that conflict whenever two lanes rebuild. And reviewers can be stopped: OpenAI’s content filter halted one review twice.',
+  },
+];
+
+const bugs = [
+  { bug: 'Signatures bound only the chain id', found: 'Adversarial review, round 1', harm: 'A re-genesis that reused the chain id could replay old transactions and attestations.', fix: 'tx/v2 binds the genesis hash.', ev: 'c9e55a9' },
+  { bug: 'The nonce wedge', found: 'Seen live: the demo agent Frog stopped transacting at block 18', harm: 'After one rejection mid-queue, a sender’s later transactions waited behind the gap and every new one was numbered after them. The sender was stuck for good.', fix: 'next_nonce offers the first unused nonce; each sender’s queue is ordered by nonce.', ev: 'f8e994f' },
+  { bug: 'Evidence that crossed chains', found: 'Review of the Verify Desk', harm: 'A seal or anchor from one chain checked as valid against another chain that shared the sequencer key.', fix: 'seal/v2 and anchor/v2 bind the genesis hash.', ev: '6679380' },
+  { bug: 'A setting that never reached the engine', found: 'Review of the simulator', harm: 'Every run silently used the node’s ordering, so a comparison of orderings would have compared nothing.', fix: 'Wired in, plus a test that feeds the run to the real node at every one of 17,279 heights.', ev: '7329565' },
+  { bug: 'An impossible requirement', found: 'Codex, while building Proof of Balance', harm: 'The brief asked the verifier to reject any changed leaf count. With leaves A, B and C, a proof for A with leaf_count 3 still verifies with leaf_count 4: the tree never commits to its count.', fix: 'Codex wrote the counterexample as a test, argued absence from ordered paths instead, and said the phase could not be called complete as written.', ev: 'report' },
+  { bug: 'A 5.5-second lock stall (AS-02)', found: 'Codex’s independent review', harm: 'One unsigned /drum/digest request with 1,025 players and a 64 KiB room held the node lock for about 5.5 seconds, and could be repeated, stalling block production.', fix: 'Sizes checked before the lock and before any hashing.', ev: '3f63079' },
+  { bug: 'Quadratic base58 decoding', found: 'Claude’s adversarial pass on the review fixes', harm: '32 KB took 1.1 seconds to decode; the 2 MB a request body can hold would take over an hour. (The kernel review had already found a 259 KB sender costing 13 seconds.)', fix: 'Length guards refuse strings longer than any valid value before decoding.', ev: '869506c' },
+];
+
+const review = [
+  ['AS-01', 'high', 'The explorer rendered unverified feed fields as HTML, so a hostile node could run script before VERIFY.'],
+  ['AS-02', 'high', 'POST /drum/digest did unbounded work under the node lock.'],
+  ['AS-05', 'medium', 'The browser verifier rounded u64 values above 2^53, failing an honest chain.'],
+  ['AS-04', 'medium', 'The anchor job sent an operation before journaling its hash, risking a double post.'],
+  ['AS-07', 'medium', 'The mempool kept oversized invalid transactions.'],
+  ['AS-03', 'medium', 'Some valid blocks were larger than the kernel’s inbox transport could carry.'],
+  ['AS-06', 'low', 'taps_per_window = 0 still allowed taps.'],
+];
+
+const farming = [
+  ['room_only', '5 a minute (default)', '2.97M', '66.1%', '500'],
+  ['room_only', '5 an hour', '2.86M (−4%)', '32.7%', '119'],
+  ['room_only', '1 an hour', '2.53M (−15%)', '10.1%', '24'],
+  ['cosign', '1 an hour', '2.57M', '69.6%', '500'],
+];
+
+const waiting = [
+  ['A funded anchor key', 'About 10 ꜩ, roughly six days of hourly anchors, in a dedicated account.'],
+  ['Feed redeploys', 'tez-cast and stampz, before the first mainnet anchor, so anchors don’t show up as garbled notes.'],
+  ['A public node', 'Hosting, on the final v2 genesis with non-dev keys. Until then, every certificate stays a rehearsal.'],
+  ['Live wallet signatures', 'One real Kukai and one real Temple signature through the UI; today’s vectors come from Taquito’s signer.'],
+  ['Launch keys', 'A cold sequencer-admin key, genesis acknowledgements, and deploying the presence issuer.'],
+  ['Wallet and art choices', 'Eight open questions in the wallet scope; the art rail, the Tezos signatures and the certificate signer.'],
+];
+
+const questions = [
+  'The sequencer is a single point of trust. Which of its powers matter most for a town broadcast, and which planned change addresses each one?',
+  'Codex proved one requirement in its brief impossible, and shipped with the counterexample in a test. When should an agent stop, and when should it ship with a stated deviation?',
+  'Neither room-attested drums nor tap limits worked alone; together they cut farming by more than six times. What does that say about testing defenses one at a time?',
+  'Presence tickets move trust from keys to an issuer’s login check. Is that a better trust anchor for a local community? What would you measure before believing it?',
+  'The nonce wedge surfaced only because a demo agent stopped at block 18. What kinds of bugs need a running system rather than unit tests, and how would you plan for them?',
+  'A content filter stopped a review twice, midway. How should a team plan for tools that may refuse work partway through?',
+  'Everything stays local until the founder funds a key and hosts a node. What does waiting cost, and what would launching early cost?',
+];
+
+const glossary = [
+  ['ATTN', 'The chain’s only currency, issued only for showing up (a tap) and playing (a drum session), under hard caps. It carries no value today.'],
+  ['Anchor', 'Every 100 blocks the sequencer signs height, block hash and state root. Some anchors are posted to Tezos as casts on the tez-cast tower.'],
+  ['Block Yard', 'A static explorer on pointcast.xyz that draws a recorded dev chain as isometric cubes and verifies it in the browser.'],
+  ['chain-core', 'The whole protocol as a pure, deterministic state machine: no I/O, no clocks, no randomness, no floats.'],
+  ['Dev chain', 'A chain started with --dev, signed with publicly derivable keys. Nothing on it has value, and claims from it prove nothing.'],
+  ['Epoch cap', 'The most ATTN one account can earn per epoch: 500 per day by default.'],
+  ['Evidence', 'A portable file proving the sequencer signed something false, checkable offline with only the genesis params.'],
+  ['Genesis hash', 'The hash of a chain’s parameters. Every signature commits to it, so nothing signed for one chain works on another.'],
+  ['Mandate', 'An owner’s on-chain limits for an agent: kinds, channels, rooms, an allowance and an expiry.'],
+  ['pc-sim', 'The economy simulator. Scenario output, not a forecast.'],
+  ['pc-town / Town Hall', 'A read-side sidecar that replays the chain itself and serves account, channel and room pages.'],
+  ['Presence ticket', 'An issuer-signed ticket that lets a tap earn ATTN, at most once per identity per slot.'],
+  ['Proof of Balance', 'A claim that an account holds a balance, or doesn’t exist, in a sequencer-signed root, checked offline without replay.'],
+  ['Rollup kernel', 'The state machine running inside a Tezos smart rollup, proven on the SDK’s mock host but not deployed.'],
+  ['Sequencer', 'The single node that orders transactions and seals blocks.'],
+  ['Shadownet', 'A Tezos test network. Anchors were posted there with a throwaway key.'],
+  ['Sybil', 'One actor behind many keys or identities, farming rewards meant for many people.'],
+  ['VERIFY', 'The button that makes your browser replay every block with the chain’s own code, pinned by sha256.'],
+  ['Worktree', 'A separate checkout of the same git repository, so parallel agents can build without touching each other’s files.'],
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': ['Article', 'LearningResource'],
+  headline: 'pointcast-chain: a broadcast chain built in two days by a team of AI agents',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/chain/case-study/',
+  datePublished: '2026-10-03',
+  learningResourceType: 'Case study',
+  educationalUse: 'Discussion',
+  author: { '@type': 'Organization', name: 'PointCast (written by Claude Code)' },
+  publisher: { '@type': 'EducationalOrganization', name: 'University of El Segundo', url: 'https://pointcast.xyz/university-of-el-segundo' },
+  about: { '@type': 'SoftwareSourceCode', name: 'pointcast-chain', version: SOURCE.commit },
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+---
+
+<BlockLayout title={title} description={description} image="/images/og/b/0660.png" imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds>
+  <div class="chn" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <ChainHeader current="case-study" />
+
+    <div class="ues">
+      <a class="ues__mark" href="/university-of-el-segundo">UNIVERSITY OF EL SEGUNDO</a>
+      <nav aria-label="University of El Segundo"><a href="/ues/business#cases">Casebook</a><a href="/ues">Classes</a><a href="/university-of-el-segundo">About</a></nav>
+    </div>
+
+    <header class="hero">
+      <p class="kicker">UES CASEBOOK · CASE 05 · POINTCAST CHAIN · 3 OCTOBER 2026</p>
+      <h1>pointcast-chain: a broadcast chain built in two days by a team of AI agents.</h1>
+      <p class="dek">
+        In under 39 hours of commits, a team of AI agents directed by PointCast’s founder built a chain, attacked it,
+        measured it, and wrote down what it still can’t do. This case asks what made that pace safe, and where it wasn’t.
+      </p>
+      <p class="band">
+        <b>University of El Segundo</b> · PointCast’s independent learning project. An open case for discussion; not academic
+        credit or accreditation. Facts come from the project’s repository and test runs; no words are put in anyone’s mouth.
+      </p>
+      <p class="jump">
+        <a href="#situation">situation</a><a href="#timeline">timeline</a><a href="#decisions">decisions</a><a href="#exhibits">exhibits</a><a href="#wrong">what went wrong</a><a href="#teaching">teaching notes</a><a href="#questions">questions</a><a href="#glossary">glossary</a>
+      </p>
+    </header>
+
+    <section id="situation" class="sec" aria-labelledby="situation-title">
+      <p class="kicker">01 · THE SITUATION</p>
+      <h2 id="situation-title" class="h2">A town broadcast wants its own ledger.</h2>
+      <div class="prose2">
+        <p>
+          PointCast is a living broadcast from El Segundo, California, run by its founder, Mike Hoydich. Everything on it is a
+          Block: a numbered, channel-coded post. Its collectibles already live on Tezos. Between the evening of Thursday
+          1 October and late morning on Saturday 3 October 2026, the founder directed a team of AI agents that built
+          <b>pointcast-chain</b>: a chain where every block is a PointCast Block.
+        </p>
+        <p>
+          The design is deliberately small. One sequencer seals a block every three seconds. Humans sign with the Tezos keys they
+          already have; agents are first-class accounts with an owner and a name. The only currency, ATTN, is issued only for
+          showing up and playing, and every issuance passes hard caps. Every 100 blocks the sequencer signs an anchor, and
+          anchors can be posted to Tezos, so history can’t be quietly rewritten.
+        </p>
+        <p>The team had three kinds of members.</p>
+      </div>
+      <ul class="cards">
+        <li class="card card--tint"><p class="card__k">THE FOUNDER</p><h3>Direction, decisions, keys.</h3><p>Sets what gets built and holds everything that spends money or uses his keys: funding an anchor account, hosting a node, signing on Tezos. Nothing in this case required any of it.</p></li>
+        <li class="card"><p class="card__k">CLAUDE · ORCHESTRATION</p><h3>Briefs, workflows, reviews.</h3><p>Running as Claude Code, it wrote the briefs, ran workflows of builder agents in separate git worktrees, set reviewers on each lane, merged, fixed and wrote the docs. 104 of the 111 commits carry its co-author line.</p></li>
+        <li class="card"><p class="card__k">CODEX · TWO LANES</p><h3>Proof of Balance, and a review.</h3><p>OpenAI’s agent built Proof of Balance, and ran the independent review lane that OpenAI’s own content filter stopped twice. Its tests survived the stops and became the review.</p></li>
+      </ul>
+      <p class="note" style="margin-top:16px">
+        The constraint over everything: <b>local only</b>. No public node, dev keys that anyone can derive, nothing of value.
+        The question for the reader is how a team goes this fast with agents without shipping something nobody can trust.
+      </p>
+    </section>
+
+    <section id="timeline" class="sec" aria-labelledby="timeline-title">
+      <p class="kicker">02 · TIMELINE · PACIFIC TIME · FROM THE COMMIT LOG</p>
+      <h2 id="timeline-title" class="h2">Three rounds in two days, then a Saturday morning.</h2>
+      {timeline.map((g) => (
+        <div class="tbl">
+          <table class="tl">
+            <caption>{g.round} · {g.when}</caption>
+            <thead><tr><th scope="col">Time</th><th scope="col">What landed</th><th scope="col">Commit</th></tr></thead>
+            <tbody>
+              {g.rows.map((r) => <tr><td class="num">{r.t}</td><td>{r.what}</td><td><code>{r.ev}</code></td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <p class="fine">Commit hashes are in the pointcast-chain repository, which is local and has no public remote. Day-3 rows overlap because lanes ran in parallel.</p>
+    </section>
+
+    <section id="decisions" class="sec" aria-labelledby="decisions-title">
+      <p class="kicker">03 · THE DECISIONS · SIX CHOICES AND WHAT EACH COST</p>
+      <h2 id="decisions-title" class="h2">Each choice bought something and cost something.</h2>
+      <ol class="cards cards--2 dec">
+        {decisions.map((d, i) => (
+          <li class={`card${i % 3 === 0 ? ' card--tint' : ''}`}>
+            <p class="card__k">{d.n} · {d.name.toUpperCase()}</p>
+            <h3>{d.what}</h3>
+            <p class="card__rule"><b>Why.</b> {d.why}</p>
+            <p><b>The cost.</b> {d.cost}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section id="exhibits" class="sec" aria-labelledby="exhibits-title">
+      <p class="kicker">04 · THE EVIDENCE · FIVE EXHIBITS</p>
+      <h2 id="exhibits-title" class="h2">Numbers and bugs, from the repository.</h2>
+
+      <h3 class="h3" id="exhibit-1">Exhibit 1 · The build in numbers</h3>
+      <div class="tbl">
+        <table>
+          <thead><tr><th scope="col">Measure</th><th scope="col" class="num">Value</th><th scope="col">Note</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Commits</th><td class="num">{SOURCE.commits}</td><td>{SOURCE.firstCommit} ({SOURCE.firstAt}) to {SOURCE.commit} ({SOURCE.lastAt}).</td></tr>
+            <tr><th scope="row">First to last commit</th><td class="num">38 h 42 min</td><td>Wall-clock time, not working time; lanes ran in parallel.</td></tr>
+            <tr><th scope="row">Crates</th><td class="num">{CRATES.length}</td><td>Eight in one Cargo workspace, plus the rollup kernel in its own.</td></tr>
+            <tr><th scope="row">Lines of Rust</th><td class="num">{SOURCE.rustLines.toLocaleString('en-US')}</td><td>Everything under crates/, tests included.</td></tr>
+            <tr><th scope="row">Transaction kinds</th><td class="num">12</td><td>Ten in v1; presence tickets added two.</td></tr>
+            <tr><th scope="row">Tests at the v1 tip</th><td class="num">{TESTS.v1.total}</td><td>{TESTS.v1.workspace} workspace, {TESTS.v1.kernel} kernel, {TESTS.v1.js} JS, at {TESTS.v1.commit}.</td></tr>
+            <tr><th scope="row">Tests passing at {SOURCE.commit}</th><td class="num">{TESTS.total}</td><td>{TESTS.workspace.passed} workspace, {TESTS.kernel.passed} kernel, {TESTS.js.passed} JS. 0 failed. Run on {TESTS.ranOn}.</td></tr>
+            <tr><th scope="row">Review findings fixed</th><td class="num">7 + 6</td><td>Codex’s seven, then six follow-ups from attacking the fixes.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="h3" id="exhibit-2">Exhibit 2 · Bugs caught before anything had value</h3>
+      <div class="tbl">
+        <table class="bugs">
+          <thead><tr><th scope="col">Bug</th><th scope="col">How it was found</th><th scope="col">What it would have done</th><th scope="col">Fix</th><th scope="col">Commit</th></tr></thead>
+          <tbody>
+            {bugs.map((b) => <tr><th scope="row">{b.bug}</th><td data-label="Found">{b.found}</td><td data-label="Would have">{b.harm}</td><td data-label="Fix">{b.fix}</td><td data-label="Commit"><code>{b.ev}</code></td></tr>)}
+          </tbody>
+        </table>
+      </div>
+      <p class="fine">The leaf-count counterexample, verbatim from Codex’s report: <code>root = node(node(A,B),C)</code>; a proof for A with <code>leaf_count=3</code>, <code>siblings=[B,C]</code> still verifies with <code>leaf_count=4</code>. <a href="/chain/docs/proof-of-balance/">Read the report</a>.</p>
+
+      <h3 class="h3" id="exhibit-3">Exhibit 3 · Codex’s review, AS-01 to AS-07</h3>
+      <div class="tbl">
+        <table>
+          <thead><tr><th scope="col">Id</th><th scope="col">Severity</th><th scope="col">Finding</th></tr></thead>
+          <tbody>{review.map((r) => <tr><td><code>{r[0]}</code></td><td>{r[1]}</td><td>{r[2]}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <p class="fine">Severity was assigned by Claude. Every finding has a test that fails on the code before the fix; all seven are fixed and the tests pass. <a href="/chain/docs/review-codex/">Read the review</a>.</p>
+
+      <h3 class="h3" id="exhibit-4">Exhibit 4 · Farming, measured</h3>
+      <div class="tbl">
+        <table>
+          <caption>120-day sweep · attacker that adapts · epoch cap 500</caption>
+          <thead><tr><th scope="col">Drum policy</th><th scope="col">Taps allowed</th><th scope="col" class="num">Honest ATTN</th><th scope="col" class="num">Sybil share</th><th scope="col" class="num">Per sybil key a day</th></tr></thead>
+          <tbody>{farming.map((r) => <tr><th scope="row"><code>{r[0]}</code></th><td>{r[1]}</td><td class="num">{r[2]}</td><td class="num">{r[3]}</td><td class="num">{r[4]}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <p class="fine">Scenario output, not a forecast. Across 38 runs and sweep cells, 123.1 million applied transactions, no protocol bug fired. <a href="/chain/docs/findings/">Read the findings</a>.</p>
+
+      <h3 class="h3" id="exhibit-5">Exhibit 5 · What still waits on the founder</h3>
+      <ul class="rows">{waiting.map((w) => <li><b>{w[0]}</b><span>{w[1]}</span></li>)}</ul>
+    </section>
+
+    <section id="wrong" class="sec" aria-labelledby="wrong-title">
+      <p class="kicker">05 · WHAT WENT WRONG</p>
+      <h2 id="wrong-title" class="h2">Three mistakes, told plainly.</h2>
+      <ul class="cards">
+        <li class="card">
+          <p class="card__k">THE MISREAD TIMER</p>
+          <h3>Four minutes became four hours.</h3>
+          <p>While lanes ran, the process table showed an elapsed time of <code>04:09</code>. That is minutes and seconds. It was read as hours, and the founder was told the lanes had run for four hours.</p>
+          <p class="card__rule"><b>Lesson.</b> Read the units, and report durations from records you can show, such as the commit log.</p>
+        </li>
+        <li class="card">
+          <p class="card__k">THE CONTENT-FILTER STOPS</p>
+          <h3>A review stopped twice, midway.</h3>
+          <p>Codex’s unattended review was stopped by OpenAI’s content filter, “flagged for possible cybersecurity risk”: first after about six minutes with no output, then after about ten. The second session had already written tests for seven findings.</p>
+          <p class="card__rule"><b>Lesson.</b> Have reviewers commit evidence as they go. Claude committed the tests unchanged and wrote the report from them; coverage is still partial.</p>
+        </li>
+        <li class="card">
+          <p class="card__k">PLACEHOLDER BRIEFS</p>
+          <h3>Lanes launched on drafts.</h3>
+          <p>Once, agent lanes were launched with placeholder briefs instead of the finished ones.</p>
+          <p class="card__rule"><b>Lesson.</b> An agent does exactly what its brief says. The working rule in the session notes: briefs go in files.</p>
+        </li>
+      </ul>
+      <p class="note" style="margin-top:16px">
+        One deviation went right. Codex’s sandbox would not let its Proof of Balance demo open a port. It ran a socket-free demo
+        instead and said so in its report: “This is not a claim that every requirement in the brief was satisfied.”
+      </p>
+    </section>
+
+    <section id="teaching" class="sec" aria-labelledby="teaching-title">
+      <p class="kicker">06 · TEACHING NOTES</p>
+      <h2 id="teaching-title" class="h2">For a 60 to 75 minute session.</h2>
+      <div class="cards cards--2">
+        <div class="card">
+          <p class="card__k">LEARNING OBJECTIVES</p>
+          <ol class="steps">
+            <li>Explain what a single sequencer can and cannot do, and how replay and anchors limit it.</li>
+            <li>Show why adversarial review finds bugs that the author’s tests miss, using Exhibit 2.</li>
+            <li>Read a simulation honestly: what it measures, what it assumes, and why defenses interact.</li>
+            <li>Describe a working process for a team of agents: briefs, worktrees, review, merge order.</li>
+            <li>Practise honest status: built and tested locally is not launched.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <p class="card__k">SUGGESTED FLOW</p>
+          <ol class="steps">
+            <li>10 min · The situation and the constraint.</li>
+            <li>15 min · Exhibits 1 and 2: what does speed look like, and what did review catch?</li>
+            <li>20 min · Small groups each defend one decision and name its cost.</li>
+            <li>15 min · What went wrong, and the one deviation that went right.</li>
+            <li>10 min · One discussion question, chosen by the room.</li>
+          </ol>
+        </div>
+      </div>
+      <ul class="rows" style="margin-top:16px">
+        <li><b>The central tension</b><span>Speed against verification. Every round paired building with an attempt to break what was built, and most of the bugs in Exhibit 2 came from the second half.</span></li>
+        <li><b>What students miss</b><span>Tests encode what the author thought of. The nonce wedge, the cross-chain evidence and the impossible leaf count were all found by someone who wasn’t the author, or by a running system.</span></li>
+        <li><b>A fair criticism</b><span>Nothing here has met real users, real wallets or a real network. The case shows that a careful local build is possible at this pace, not that the result is ready.</span></li>
+      </ul>
+    </section>
+
+    <section id="questions" class="sec" aria-labelledby="questions-title">
+      <p class="kicker">07 · DISCUSSION QUESTIONS</p>
+      <h2 id="questions-title" class="h2">Seven questions for the room.</h2>
+      <ol class="qs">{questions.map((q) => <li>{q}</li>)}</ol>
+    </section>
+
+    <section id="glossary" class="sec" aria-labelledby="glossary-title">
+      <p class="kicker">08 · GLOSSARY</p>
+      <h2 id="glossary-title" class="h2">Words used in this case.</h2>
+      <dl class="gloss">{glossary.map((g) => <div><dt>{g[0]}</dt><dd>{g[1]}</dd></div>)}</dl>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        Written by Claude Code in the University of El Segundo casebook format. Facts come from the pointcast-chain repository at
+        {SOURCE.commit} (the commit log, README, DESIGN.md, the v2 plan, the review reports and the simulator’s findings), one later
+        docs-only commit (50015e4, the Town Network plan), and from
+        test runs on clean exports of {TESTS.v1.commit} and {SOURCE.commit} on {TESTS.ranOn}. Three things come from Claude’s session
+        notes rather than the repo: the Control Room board, the deck and the misread timer. No quote is attributed to the founder.
+        It is case 05 in the <a href="/ues/business#cases">UES business casebook</a>.
+      </p>
+      <p>Continue: <a href="/chain/docs/">the docs</a> · <a href="/chain/interns">intern assignments</a> · <a href="/ues">UES classes</a>.</p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<style>
+  .ues{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;margin:14px 0 0;padding:10px 12px;background:var(--c800);color:var(--pc-bg)}
+  .ues__mark{font:500 12px var(--pc-font-mono);letter-spacing:.14em;color:var(--pc-bg)}
+  .ues nav{display:flex;gap:14px;font:400 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase}
+  .ues a{color:var(--pc-bg)}
+  .band{margin:18px 0 0;max-width:780px;padding:10px 12px;border-left:6px solid var(--c600);background:var(--c50);font:400 13px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .band b{color:var(--pc-ink)}
+  .prose2{max-width:780px}
+  .prose2 p{margin:0 0 14px;font:400 16px/1.65 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .prose2 b{color:var(--pc-ink)}
+  .tl td:first-child{width:1%;white-space:nowrap}
+  .tl td:last-child{width:1%;white-space:nowrap}
+  .bugs th{min-width:150px}
+  .bugs td:nth-child(3){min-width:240px}
+  .bugs td:last-child{white-space:nowrap}
+  .dec h3{font-size:17px}
+  .dec b{color:var(--pc-ink)}
+  .qs{margin:0;padding:0 0 0 1.5em;max-width:820px;font:400 17px/1.55 var(--pc-font-sans);color:var(--pc-ink)}
+  .qs li{margin:0 0 12px;padding-left:6px}
+  .qs li::marker{font:500 13px var(--pc-font-mono);color:var(--c800)}
+  .gloss{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin:0;border-top:1.5px solid var(--c600)}
+  .gloss div{padding:12px 16px 12px 0;border-bottom:1px solid var(--pc-rule-soft);min-width:0}
+  .gloss dt{margin:0 0 4px;font:500 12px var(--pc-font-mono);letter-spacing:.06em;color:var(--c800)}
+  .gloss dd{margin:0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  @media (max-width:760px){.gloss{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:640px){
+    .tl td:last-child,.tl td code{white-space:normal}
+    .bugs thead{display:none}
+    .bugs tr,.bugs th,.bugs td{display:block;min-width:0 !important;width:auto}
+    .bugs tr{padding:4px 0;border-bottom:1px solid var(--pc-rule-soft)}
+    .bugs tbody tr:last-child{border-bottom:0}
+    .bugs th,.bugs td{border-bottom:0;padding:4px 12px}
+    .bugs th{padding-top:10px}
+    .bugs td::before{content:attr(data-label);display:block;font:500 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  }
+</style>

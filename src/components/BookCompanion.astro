@@ -8,19 +8,22 @@ const { book } = Astro.props;
 const palette: Record<string, string> = { oxblood: '#35151c', sage: '#e8eee3', winter: '#e5e9ec', sea: '#e6ece5', indigo: '#172544', ash: '#23272a' };
 const sourceFor = (id: string) => book.sources.find((source) => source.id === id);
 const sourcesFor = (ids: string[]) => book.sources.filter((source) => ids.includes(source.id));
+const readingRoom = book.resourceType === 'reading-room';
+const attribution = book.attributionLine || book.authors.join(' & ');
+const routeLabel = (type: string) => (({ 'public-domain': 'Public-domain route', 'historical-digital-text': 'Historical text · rights below', 'library-directory': 'Library directory', 'dictionary-resource': 'Related word-study resource', 'author-resource': 'Author context', 'authorized-summary': 'Author’s summary', 'authorized-source-interview': 'Original interview', 'official-author-essay': 'Author’s essay' } as Record<string, string>)[type] || 'Authorized reading');
 const copyCount = book.editions.length + book.digitalRoutes.length;
 const metadataPath = `/books/${book.id}.json`;
 ---
 
-<BlockLayout title={`${book.title} — bookshop & companion`} description={book.dek} image={book.art.src} imageWidth={book.art.width} imageHeight={book.art.height} themeColor={palette[book.theme] || '#e5e9ec'} isolated={true} showNetworkStrip={false} jsonLd={buildBookStructuredData(book)} alternates={[{ type: 'application/json', href: metadataPath, title: `${book.title} editions and sources` }]}>
+<BlockLayout title={`${book.title} — ${readingRoom ? 'reading room' : 'bookshop & companion'}`} description={book.dek} image={book.art.src} imageWidth={book.art.width} imageHeight={book.art.height} themeColor={palette[book.theme] || '#e5e9ec'} isolated={true} showNetworkStrip={false} jsonLd={buildBookStructuredData(book)} alternates={[{ type: 'application/json', href: metadataPath, title: `${book.title} editions and sources` }]}>
   <article class:list={['companion', `theme-${book.theme}`, `layout-${book.layout}`]} data-book-companion data-book-id={book.id}>
     <div class="shell">
-      <nav class="masthead" aria-label="Book companion navigation"><a class="wordmark" href="/">pointcast<span>reading shelf</span></a><div class="masthead-links"><a href="/books/">All books</a><a href="#copies">Find a copy <span aria-hidden="true">↓</span></a></div></nav>
+      <nav class="masthead" aria-label="Book companion navigation"><a class="wordmark" href="/">pointcast<span>reading shelf</span></a><div class="masthead-links"><a href="/books/">All books</a><a href="#copies">{readingRoom ? 'Reading routes' : 'Find a copy'} <span aria-hidden="true">↓</span></a></div></nav>
 
       <header class="opening">
-        <div class="opening-meta"><p class="label">Book {book.shelfNumber} / {book.kind}</p><p class="label">{book.firstPublished} · {book.authors.join(' & ')}</p></div>
+        <div class="opening-meta"><p class="label">{readingRoom ? 'Room' : 'Book'} {book.shelfNumber} / {book.kind}</p><p class="label">{book.firstPublished} · {attribution}</p></div>
         <div class="opening-title"><p class="tagline">{book.tagline}</p><h1>{book.title}</h1>{book.subtitle && <p class="subtitle">{book.subtitle}</p>}</div>
-        <div class="opening-dek"><p class="author-line">{book.authors.join(' & ')}</p><p>{book.dek}</p><a class="text-link" href="#begin">Begin reading <span aria-hidden="true">↗</span></a></div>
+        <div class="opening-dek"><p class="author-line">{attribution}</p><p>{book.dek}</p><a class="text-link" href="#begin">Begin reading <span aria-hidden="true">↗</span></a></div>
         <figure class="opening-art"><img src={book.art.src} alt={book.art.alt} width={book.art.width} height={book.art.height} fetchpriority="high" decoding="async" /><figcaption><span>{book.art.caption}</span><span>Original AI-generated atmosphere · an imagined scene, not a book cover</span></figcaption></figure>
       </header>
 
@@ -42,12 +45,12 @@ const metadataPath = `/books/${book.id}.json`;
       </section>
 
       <section id="copies" class="section copy-desk" aria-labelledby="copy-title">
-        <div class="section-heading"><p class="label">03 / The copy desk</p><h2 id="copy-title">Find the edition for you.</h2><p>Outside sellers and libraries handle purchases and loans. They determine stock, prices, condition, eligibility, and waits. Routes and bibliographic details checked <time datetime={book.checkedAt}>{book.checkedAt}</time>.</p></div>
+        <div class="section-heading"><p class="label">03 / The copy desk</p><h2 id="copy-title">{book.copyHeading || 'Find the edition for you.'}</h2><p>{book.copyIntro || 'Outside sellers and libraries handle purchases and loans.'} They determine stock, prices, condition, eligibility, and waits. Routes and bibliographic details checked <time datetime={book.checkedAt}>{book.checkedAt}</time>.</p></div>
         <div class="copy-filters" data-copy-filters hidden role="group" aria-label="Filter edition and reading routes">{['all', 'new', 'used', 'borrow', 'online'].map((filter) => <button type="button" data-copy-filter={filter} aria-pressed={filter === 'all' ? 'true' : 'false'} aria-controls={`${book.id}-copies`}>{filter.charAt(0).toUpperCase() + filter.slice(1)}</button>)}</div>
-        <p class="filter-status" data-copy-status role="status" aria-live="polite" aria-atomic="true">All {copyCount} copy routes shown.</p>
+        <p class="filter-status" data-copy-status role="status" aria-live="polite" aria-atomic="true">All {copyCount} reading routes shown.</p>
         <div class="edition-grid" id={`${book.id}-copies`}>
           {book.editions.map((edition, index) => <article class="edition" data-copy-card data-copy-kinds={[...new Set(edition.links.map((link) => link.kind))].join(' ')} aria-labelledby={`edition-${book.id}-${edition.id}`}><div class="edition-top"><span class="label">{String(index + 1).padStart(2, '0')}</span><p class="label">{edition.label}</p></div><h3 id={`edition-${book.id}-${edition.id}`}>{edition.format}</h3><p class="edition-why">{edition.why}</p><dl class="edition-facts"><div><dt>Publisher</dt><dd>{edition.publisher}</dd></div><div><dt>ISBN</dt><dd class="isbn">{edition.isbn || 'Not verified'}</dd></div><div><dt>Edition date</dt><dd>{edition.publicationDate || 'Not verified'}</dd></div><div><dt>Pages</dt><dd>{edition.pages ?? 'Not verified'}</dd></div><div><dt>Extra material</dt><dd>{edition.extras}</dd></div></dl>{sourceFor(edition.sourceId) && <a class="source-link" href={sourceFor(edition.sourceId)!.url}>Edition source <span aria-hidden="true">↗</span></a>}<div class="route-list">{edition.links.map((link) => <div data-route-kind={link.kind}><a class="route-link" href={link.url}><span>{link.label}</span><span aria-hidden="true">↗</span></a>{link.note && <p>{link.note}</p>}</div>)}</div></article>)}
-          {book.digitalRoutes.map((route) => <article class="edition digital-route" data-copy-card data-copy-kinds="online" aria-labelledby={`online-${book.id}-${route.id}`}><div class="edition-top"><span class="label">Online</span><p class="label">{route.type === 'public-domain' ? 'Public-domain route' : 'Authorized reading'}</p></div><h3 id={`online-${book.id}-${route.id}`}>{route.label}</h3><p>{route.description}</p><p class="route-rights">{route.rights}</p>{sourceFor(route.sourceId) && <a class="source-link" href={sourceFor(route.sourceId)!.url}>Reading source <span aria-hidden="true">↗</span></a>}<div class="route-list"><a class="route-link" href={route.url}><span>{route.label}</span><span aria-hidden="true">↗</span></a></div></article>)}
+          {book.digitalRoutes.map((route) => <article class="edition digital-route" data-copy-card data-copy-kinds="online" aria-labelledby={`online-${book.id}-${route.id}`}><div class="edition-top"><span class="label">Online</span><p class="label">{routeLabel(route.type)}</p></div><h3 id={`online-${book.id}-${route.id}`}>{route.label}</h3><p>{route.description}</p><p class="route-rights">{route.rights}</p>{sourceFor(route.sourceId) && <a class="source-link" href={sourceFor(route.sourceId)!.url}>Reading source <span aria-hidden="true">↗</span></a>}<div class="route-list"><a class="route-link" href={route.url}><span>{route.label}</span><span aria-hidden="true">↗</span></a></div></article>)}
         </div>
         <p class="rights-note">{book.rightsNote}</p>
       </section>

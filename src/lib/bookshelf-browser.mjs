@@ -26,7 +26,7 @@ export function mountBookshelf(root) {
       if (show) count += 1;
     }
     for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.shelfTheme === theme));
-    status.textContent = `${count} of ${cards.length} books shown.`;
+    status.textContent = `${count} of ${cards.length} reading doors shown.`;
     empty.hidden = count !== 0;
     reset.disabled = theme === 'all' && !input.value;
   };
@@ -47,7 +47,7 @@ export function mountBookshelf(root) {
     cards.forEach((card) => { card.hidden = false; });
     empty.hidden = true;
     controls.hidden = true;
-    status.textContent = `All ${cards.length} books shown.`;
+    status.textContent = `All ${cards.length} reading doors shown.`;
     mounted.delete(root);
   };
   mounted.set(root, dispose);

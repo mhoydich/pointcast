@@ -1,0 +1,43 @@
+name: Art v2 gallery checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/data/art-v2.json'
+      - 'src/lib/art-v2.mjs'
+      - 'src/scripts/art-v2.mjs'
+      - 'src/styles/art-v2.css'
+      - 'src/pages/art/v2/**'
+      - 'public/images/art-v2/**'
+      - 'tests/art-v2.test.mjs'
+      - 'scripts/audit-art-v2.mjs'
+      - '.github/workflows/art-v2-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: art-v2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify behavior and all 50 image pairs
+        run: |
+          node --test tests/art-v2.test.mjs
+          node scripts/audit-art-v2.mjs
+      - run: npm run build:bare
+      - name: Verify compiled gallery and public provenance
+        run: node scripts/audit-art-v2.mjs --compiled
