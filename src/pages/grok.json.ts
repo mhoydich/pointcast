@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import roster from '../data/grok-roster.json';
 
 /** /grok.json — machine twin for the /grok page. */
 export const GET: APIRoute = () =>
@@ -24,6 +25,25 @@ export const GET: APIRoute = () =>
         },
         botsGuide: 'https://pointcast.xyz/chain/bots/',
         block: 'https://pointcast.xyz/b/0664',
+        serve: {
+          endpoint: 'https://pointcast.xyz/api/ping',
+          kinds: ['Serve (ping)', 'Lob (question)', 'Rally (game move)'],
+          note: 'POSTs to the PointCast inbox. It does not post to the devnet.',
+        },
+        nouns: {
+          credit: roster.art.credit,
+          note: roster.art.note,
+          imageData: roster.art.imageData,
+          partner: roster.partner.name,
+          lineJudge: roster.lineJudge.name,
+          crowd: roster.crowd.map((p) => p.name),
+          favorite: roster.favorite.map((p) => ({
+            seed: p.seed,
+            name: p.name,
+            parts: p.parts,
+            report: p.report,
+          })),
+        },
       },
       null,
       2,
