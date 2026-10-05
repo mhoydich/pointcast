@@ -1,0 +1,51 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import HomeShareEditions from '../../../components/HomeShareEditions.astro';
+import {
+  HOME_SHARE_EDITIONS,
+  HOME_SHARE_DESCRIPTION,
+  HOME_SHARE_WIDTH,
+  HOME_SHARE_HEIGHT,
+  type HomeShareEdition,
+} from '../../../lib/home-share-editions.mjs';
+
+// Fixed pages stay visible to people and crawlers alike. No redirect, date
+// selection, or query override: this version always represents the same art.
+export function getStaticPaths() {
+  return HOME_SHARE_EDITIONS.map((edition) => ({ params: { edition: edition.id }, props: { edition } }));
+}
+interface Props { edition: HomeShareEdition; }
+const { edition } = Astro.props;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWork',
+  name: edition.title,
+  description: HOME_SHARE_DESCRIPTION,
+  url: edition.url,
+  image: edition.imageUrl,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz/' },
+};
+---
+
+<BlockLayout title={`${edition.title} · Share card`} description={HOME_SHARE_DESCRIPTION} image={edition.imageUrl} imageAlt={edition.alt} imageWidth={HOME_SHARE_WIDTH} imageHeight={HOME_SHARE_HEIGHT} jsonLd={jsonLd} isolated hideAds showNetworkStrip={false} themeColor="#f3eee2">
+  <div class="share-edition">
+    <a class="share-edition__brand" href="/">PointCast ↗</a>
+    <p class="share-edition__eyebrow">Home share card / October 2026 / Edition {String(edition.number).padStart(2, '0')}</p>
+    <h1>{edition.title}</h1>
+    <p class="share-edition__intro">A small window into PointCast. This edition link keeps its original artwork; the home link moves through the series.</p>
+    <HomeShareEditions initialEditionId={edition.id} />
+    <a class="share-edition__explore" href="/">Explore PointCast →</a>
+  </div>
+</BlockLayout>
+
+<style>
+  :global(body:has(.share-edition)) { background:#f3eee2; }
+  .share-edition { max-width:1140px;margin:0 auto;padding:40px 24px 65px;color:#202420; }
+  .share-edition__brand { display:inline-block;margin-bottom:52px;font-size:23px;font-weight:750;letter-spacing:-.04em;color:inherit;text-decoration:none; }
+  .share-edition__eyebrow { margin:0 0 12px;font:700 10px/1.5 var(--pc-font-mono);letter-spacing:.07em;text-transform:uppercase; }
+  h1 { margin:0;font-size:clamp(42px,7vw,85px);line-height:1;letter-spacing:-.055em;font-weight:650; }
+  .share-edition__intro { max-width:62ch;margin:22px 0;font-size:15px;line-height:1.65; }
+  .share-edition__explore { display:inline-block;margin-top:6px;padding:13px 17px;background:#202420;color:#fffdf7;font:700 12px/1.5 var(--pc-font-mono);text-decoration:none; }
+  .share-edition a:focus-visible { outline:3px solid #ad492a;outline-offset:4px; }
+  @media(max-width:600px) { .share-edition { padding:25px 18px 45px; }.share-edition__brand { margin-bottom:35px; } }
+</style>

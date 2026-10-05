@@ -1,3 +1,7 @@
+import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
+import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-inbox.mjs';
+import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
+import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
@@ -102,6 +106,12 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   desk_ask              ({agent, spot, kind, belief, sourceUrl})  put out a call (resident-only)
  *   desk_pass             ({agent, callId, to, reason})             pass a live call (resident-only)
  *   morning_edition       ({date?})    the Morning Edition: masthead, seven slots, bylines (read-only)
+ *   sky_calls             ({date?})    Sky Calls ledger: open morning, results, people vs agents (read-only)
+ *   sky_call              ({handle, call})  call tomorrow's marine layer: "layer" or "clear" (one per handle)
+ *   price_wire            ({item?})    local El Segundo prices, trend, basket (read-only; not CPI)
+ *   price_report          ({handle, item, price, place, date?, source?})  file one local price
+ *   front_desk_today      ({date?})    who is in town: people, agents, counts, levels (read-only)
+ *   front_desk_checkin    ({name?, operator?, purpose?, passport?})  check an agent in (always kind agent)
  *   editions_summary      (no input)   mintables overview
  *   contracts_status      (no input)   live Tezos contract addresses
  *   channels_list         (no input)   9 channels with codes/slugs
@@ -213,7 +223,7 @@ const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
 const SERVER_VERSION = '0.14.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.7.0';
+const V2_SERVER_VERSION = '2.8.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -239,7 +249,14 @@ const WRITE_TOOL_NAMES = new Set([
   'night_shift_submit',
   'desk_ask',
   'desk_pass',
+  'sky_call',
+  'price_report',
+  'front_desk_checkin',
   'tug_pull',
+  'wants_post',
+  'wants_offer',
+  'haggle_offer',
+  'grok_inbox_answer',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
@@ -267,6 +284,7 @@ function toolAnnotations(name: string) {
 // Each tool has a name, description, and JSON-Schema input shape.
 // Tools that take no arguments use `{ type: 'object', properties: {} }`.
 const TOOL_DEFINITIONS = [
+  ...REAL_ESTATE_TOOLS,
   AI_PAIR_TOOL,
   {
     name: 'drum_list_rooms',
@@ -556,7 +574,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_tables',
-    description: 'Hex & Harbor (catan.pointcast.xyz), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
+    description: 'Hex & Harbor (pointcast.xyz/catan), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -578,7 +596,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_daily',
-    description: "The Daily Island on Hex & Harbor (catan.pointcast.xyz/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
+    description: "The Daily Island on Hex & Harbor (pointcast.xyz/catan/daily): one forged Catan board per Pacific day that people and agents both play. Returns the board, every settlement corner (id, touching hexes, harbour, neighbouring corner ids), the scoring rule, par (best possible), the leaderboard, and human vs agent averages. Past dates (date=YYYY-MM-DD) include the revealed best pair. To play, POST {handle, a, b, kind:'agent'} to https://pointcast.xyz/api/catan/daily — one entry per handle per day.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -589,7 +607,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'catan_games',
-    description: 'Game cards from the Hex & Harbor Table Clock (catan.pointcast.xyz/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
+    description: 'Game cards from the Hex & Harbor Table Clock (pointcast.xyz/catan/clock): finished Catan games logged at real tables, each with players and colors, final points, winner, Longest Road and Largest Army holders, rounds, minutes and the dice curve. With no input: the newest games plus the club\'s top winners and median game length. With table: that hosted table\'s history. Read-only; games are logged from the clock or POST /api/catan/games.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -763,6 +781,87 @@ const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: `Edition date, YYYY-MM-DD: from ${FIRST_EDITION} (No. 1) through the current edition. Omit for the current edition.` },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'sky_calls',
+    description: 'Sky Calls (pointcast.xyz/sky-calls): did people and agents call a marine layer at KLAX for a morning, and who was right? Uses the same burn-off rule as /marine-layer (broken, overcast, or indefinite ceiling below 3,000 ft around sunrise: opened or never = a layer, no-layer = clear, no-record = void). Calls close at 9:00 PM Pacific the night before. Returns the definition, the open morning, the public ledger, and separate people and agent leaderboards. Points, never cash. Read-only. To call, use sky_call.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Optional YYYY-MM-DD. The ledger still returns; this date is echoed so a caller can point at one morning.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'sky_call',
+    description: 'Call whether a marine layer will sit over KLAX on the morning that is currently open (tomorrow until 9:00 PM Pacific, then the morning after). call "layer" means the burn-off rule will find a deck below 3,000 ft around sunrise (opened or never). call "clear" means no-layer. One call per handle per morning. Files as an agent. A correct call is worth 1 point when the marine-layer rule settles the morning. A miss is 0. A void morning is 0. Never cash.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        handle: { type: 'string', description: 'Your handle, 2–32 characters: letters, numbers, dot, underscore, hyphen.' },
+        call: { type: 'string', enum: ['layer', 'clear'], description: '"layer" or "clear".' },
+      },
+      required: ['handle', 'call'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'price_wire',
+    description: 'The local price wire for El Segundo (pointcast.xyz/prices): the latest accepted price for drip coffee, an oat latte, regular gas per gallon, a dozen eggs, a pickleball court hour, and a burrito, plus a short trend and the El Segundo basket. The basket is an equal-weight latest-over-first index of items people have actually reported. It is not an official CPI. Held reports (more than double or less than half the median once an item has 3 accepted reports) are listed apart and are not in the latest price or the basket. Points, never cash. Read-only. To file a price, use price_report.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        item: { type: 'string', enum: ['drip-coffee', 'oat-latte', 'regular-gas', 'dozen-eggs', 'pickleball-hour', 'burrito'], description: 'Optional item id. Omit for the whole wire.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'price_report',
+    description: 'File one real local price in El Segundo. item is one of drip-coffee, oat-latte, regular-gas, dozen-eggs, pickleball-hour, burrito. price is dollars to the cent, up to $500. place is the business or spot. date (YYYY-MM-DD) defaults to today in El Segundo and must be within 14 days. source is an optional https receipt URL or a short note. One report per handle, per item, per day. Files as an agent. An accepted report is worth 2 points whatever the price says. A report held for being wildly off the median is worth 0 and stays on the ledger. Never cash. This does not make an official CPI.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        handle: { type: 'string', description: 'Your handle, 2–32 characters.' },
+        item: { type: 'string', enum: ['drip-coffee', 'oat-latte', 'regular-gas', 'dozen-eggs', 'pickleball-hour', 'burrito'] },
+        price: { type: 'number', exclusiveMinimum: 0, maximum: 500, description: 'Dollars, to the cent. 4.25 means $4.25.' },
+        place: { type: 'string', description: 'Business or spot in El Segundo. No URL here.' },
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'YYYY-MM-DD the price was seen. Omit for today in El Segundo.' },
+        source: { type: 'string', description: 'Optional https receipt URL, or a short note with no link.' },
+      },
+      required: ['handle', 'item', 'price', 'place'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'front_desk_today',
+    description: 'Who is in town today at the Agent Front Desk (pointcast.xyz/front-desk/agents). People and agents are listed side by side with counts and passport levels: self-declared, key-signed, operator-vouched, registered-onchain. A level is what the checker could reach, not what the document claimed. date is an optional Pacific YYYY-MM-DD. Read-only. To check in, use front_desk_checkin.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Optional Pacific date, YYYY-MM-DD. Omit for today in El Segundo.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'front_desk_checkin',
+    description: 'Check an agent in at the PointCast front desk. Send a passport object, or name, operator, and purpose. kind is always agent on this tool; a person checks in on the page with kind human. The desk validates the passport with the same checker as /standards/check and assigns the level it can reach. Returns a provenance stamp and an Agent Receipt. Do not send secrets. One visit per name per Pacific day. The company field is a honeypot and must be empty.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Agent name, 2–64 characters. Required when passport is omitted.' },
+        operator: { type: 'string', description: 'Who is responsible. Required when passport is omitted.' },
+        purpose: { type: 'string', description: 'One plain sentence. Required when passport is omitted.' },
+        passport: {
+          type: 'object',
+          description: 'An Agent Passport (pointcast.agent-passport/v0.1). When present, name/operator/purpose are ignored.',
+          additionalProperties: true,
+        },
       },
       additionalProperties: false,
     },
@@ -1275,6 +1374,32 @@ const TOOL_DEFINITIONS = [
       'Informational contents schedule from the Home Cartography demo index — every item at or above the $200 threshold with serial, room, purchase record, estimated value, and matching receipt id, sorted highest value first. Not an appraisal, policy, or claim document. FICTIONAL demo household.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'grok_inbox_read',
+    description: 'Pings waiting for Grok Bot on /grok, or the recent conversation. Read-only. Each row has id, created_at, handle, kind (ping, question, game, sky), text, status, and any stored reply.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'open (default), answered, or all.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'grok_inbox_answer',
+    description: 'Mark one grok inbox ping answered. Write. Requires GROK_INBOX_TOKEN, sent as Authorization: Bearer or as the token argument. Does not post to the devnet. If the token is not set, a grok devnet post containing "re: ping <id>" is the reply instead.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Ping id (g plus 8 letters or digits).' },
+        reply_text: { type: 'string', description: 'The reply, up to 500 characters.' },
+        devnet_tx: { type: 'string', description: 'Optional devnet transaction hash.' },
+        token: { type: 'string', description: 'GROK_INBOX_TOKEN. Prefer the Authorization header when you can set one.' },
+      },
+      required: ['id', 'reply_text'],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 const TOOLS = [
@@ -1748,6 +1873,17 @@ async function dispatchTool(
   sessionId: string,
 ): Promise<{ content: Array<{ type: string; text?: string }>; isError?: boolean }> {
   switch (name) {
+    case 'real_estate_study':
+    case 'real_estate_scenario':
+    case 'real_estate_feed': {
+      try {
+        const data = await runRealEstateTool(name, args, (source: string) => callJson(`${base}/api/real-estate/feed?source=${source}`));
+        return textContent(JSON.stringify(data, null, 2));
+      } catch (error) {
+        return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Invalid real-estate request.' }] };
+      }
+    }
+
     case 'drum_list_rooms': {
       const md = ROOMS_MARKDOWN;
       return textContent(md);
@@ -2223,7 +2359,7 @@ async function dispatchTool(
       const data = await callJson(`${base}/api/catan/tables${city ? `?city=${encodeURIComponent(city)}` : ''}`);
       return {
         content: [
-          { type: 'text', text: `Hex & Harbor · ${data?.count ?? 0} upcoming table${data?.count === 1 ? '' : 's'}${city ? ` near "${city}"` : ''} · host one at https://catan.pointcast.xyz/#host` },
+          { type: 'text', text: `Hex & Harbor · ${data?.count ?? 0} upcoming table${data?.count === 1 ? '' : 's'}${city ? ` near "${city}"` : ''} · host one at https://pointcast.xyz/catan/#host` },
           { type: 'text', text: JSON.stringify(data?.tables ?? [], null, 2) },
         ],
       };
@@ -2356,6 +2492,51 @@ async function dispatchTool(
           { type: 'text', text: JSON.stringify(data, null, 2) },
         ],
       };
+    }
+    case 'sky_calls': {
+      const data = await callJson(`${base}/api/sky-calls`);
+      const open = data?.open;
+      const human = data?.averages?.human;
+      const agent = data?.averages?.agent;
+      const asked = typeof args.date === 'string' ? args.date : '';
+      const day = asked && Array.isArray(data?.days) ? data.days.find((d: any) => d.date === asked) : null;
+      const text = [
+        `Sky Calls · open morning ${open?.date ?? '?'} · closes ${open?.closesAt ?? '9:00 PM PT'}`,
+        `People: ${human?.points ?? 0} points, ${human?.correct ?? 0} correct, ${human?.miss ?? 0} misses. Agents: ${agent?.points ?? 0} points, ${agent?.correct ?? 0} correct, ${agent?.miss ?? 0} misses.`,
+        day ? `${day.date}: ${day.counts?.layer ?? 0} layer, ${day.counts?.clear ?? 0} clear${day.verdict?.final ? `, settled ${day.verdict.state}` : ', not settled'}.` : '',
+        `Call with sky_call {handle, call:"layer"|"clear"}. Points, never cash.`,
+      ].filter(Boolean).join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    case 'sky_call': {
+      const res = await fetch(`${base}/api/sky-calls`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handle: args.handle, call: args.call, kind: 'agent' }) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      return { content: [{ type: 'text', text: `Called ${data.call?.call} for ${data.date} as @${data.call?.handle}. Closes ${data.closesAt}. ${data.pointsNote}` }, { type: 'text', text: JSON.stringify(data, null, 2) }] };
+    }
+    case 'price_wire': {
+      const data = await callJson(`${base}/prices.json`);
+      const wanted = typeof args.item === 'string' ? args.item : '';
+      const latest = (Array.isArray(data?.latest) ? data.latest : []).filter((row: any) => !wanted || row.id === wanted);
+      const lines = latest.map((row: any) => row.price ? `${row.label}: ${row.price} at ${row.place} on ${row.date} (${row.kind} @${row.handle}, ${row.sample} accepted, trend ${row.trend?.direction})` : `${row.label}: no reports yet`);
+      const basket = data?.basket;
+      const text = [
+        data?.empty ? 'No reports yet.' : lines.join('\n'),
+        basket?.value == null ? 'El Segundo basket: not enough reports yet. Not an official CPI.' : `El Segundo basket: ${basket.value} (base 100, ${basket.items} of ${basket.of} items, ${basket.reports} accepted reports). Not an official CPI.`,
+        'File a price with price_report. Points, never cash, and never for what the price says.',
+      ].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(wanted ? { ...data, latest } : data, null, 2) }] };
+    }
+    case 'price_report': {
+      const res = await fetch(`${base}/api/prices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle: args.handle, item: args.item, price: args.price, place: args.place, date: args.date, source: args.source, kind: 'agent' }),
+      });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const r = data.report;
+      return { content: [{ type: 'text', text: `${r.status === 'held' ? 'Held' : 'Filed'} ${r.label} at ${r.place}: ${r.price} on ${r.date} as @${r.handle}. ${data.pointsNote}` }, { type: 'text', text: JSON.stringify(data, null, 2) }] };
     }
     case 'morning_edition': {
       const asked = args.date == null || args.date === '' ? null : String(args.date).trim();
@@ -3587,6 +3768,12 @@ function discoveryHtml(request: Request) {
   <li><code>desk_ask</code> — put out a call from the Desk (resident-only: header <code>X-Yard-Resident</code>)</li>
   <li><code>desk_pass</code> — pass a live call to another house agent (resident-only: header <code>X-Yard-Resident</code>)</li>
   <li><code>morning_edition</code> — the Morning Edition: masthead, seven slots and bylines, today or any past date</li>
+  <li><code>sky_calls</code> — Sky Calls ledger: tomorrow's marine layer, settled by the burn-off rule (read-only)</li>
+  <li><code>sky_call</code> — call layer or clear for the open morning (one per handle; points, never cash)</li>
+  <li><code>price_wire</code> — local El Segundo prices, trend, and basket (read-only; not an official CPI)</li>
+  <li><code>price_report</code> — file one local price (points for filing, never for what the price says)</li>
+  <li><code>front_desk_today</code> — who is in town: people, agents, counts, and passport levels (read-only)</li>
+  <li><code>front_desk_checkin</code> — check an agent in (always kind agent; stamp and receipt)</li>
   <li><code>editions_summary</code> — every mintable</li>
   <li><code>contracts_status</code> — live Tezos contracts</li>
   <li><code>channels_list</code> — 9 channels</li>
@@ -3643,6 +3830,71 @@ Signed: Michael Hoydich · Claude Opus 4.7 (1M Max) · 2026
 </html>`;
 }
 
+async function frontDeskCall(
+  name: string,
+  args: Record<string, unknown>,
+  request: Request,
+  env: Env & { VISITS?: KVNamespace; PC_RATES_KV?: KVNamespace },
+) {
+  if (name === 'front_desk_today') {
+    const date = typeof args.date === 'string' && args.date ? args.date : undefined;
+    const board = await publicBoard(env.VISITS, date);
+    const text = board.ok
+      ? `Front desk · ${board.date} · ${board.counts.all} in town · ${board.counts.human} people · ${board.counts.agent} agents`
+      : board.error;
+    return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(board, null, 2) }], isError: !board.ok };
+  }
+  const limited = await rateLimit(request, env, { bucket: 'front-desk:checkin', windowSec: 600, maxRequests: 8 });
+  if (!limited.allowed) {
+    return { content: [{ type: 'text', text: 'eight check-ins every ten minutes' }], isError: true };
+  }
+  const result = await checkIn(env.VISITS, args, {
+    forceAgent: true,
+    loadRecords: (doc: unknown) => fetchPassportRecords(doc),
+  });
+  if (!result.ok) return { content: [{ type: 'text', text: result.error || 'declined' }], isError: true };
+  const visit = result.visit;
+  const lead = result.repeat
+    ? `${visit.name} is already in the book today at ${visit.level}.`
+    : `Checked in ${visit.name} at ${visit.level}. Receipt ${visit.receipt?.id}.`;
+  return { content: [{ type: 'text', text: lead }, { type: 'text', text: JSON.stringify(result, null, 2) }] };
+}
+
+async function grokInboxCall(
+  name: string,
+  args: Record<string, unknown>,
+  request: Request,
+  env: Env & { GROK_INBOX_TOKEN?: string },
+) {
+  if (!env.VISITS) {
+    return { content: [{ type: 'text', text: 'VISITS KV is not bound, so the grok inbox is closed.' }], isError: true };
+  }
+  if (name === 'grok_inbox_read') {
+    const asked = String(args.status || 'open');
+    const status = asked === 'answered' || asked === 'all' ? asked : 'open';
+    const pings = await listPings(env.VISITS, status);
+    return { content: [{ type: 'text', text: JSON.stringify({ ok: true, status, count: pings.length, pings }, null, 2) }] };
+  }
+  const expected = env.GROK_INBOX_TOKEN || '';
+  if (!expected) {
+    return {
+      content: [{ type: 'text', text: 'GROK_INBOX_TOKEN is not set. Add it in Cloudflare Pages → Settings → Environment variables and encrypt it. Until then, answer with a grok devnet post whose title or body contains "re: ping <id>".' }],
+      isError: true,
+    };
+  }
+  const headerToken = bearerToken(request.headers.get('authorization'));
+  const argToken = typeof args.token === 'string' ? args.token : '';
+  if (!tokensMatch(headerToken, expected) && !tokensMatch(argToken, expected)) {
+    return { content: [{ type: 'text', text: 'unauthorized' }], isError: true };
+  }
+  const result = await answerPing(env.VISITS, String(args.id || ''), {
+    reply_text: args.reply_text,
+    devnet_tx: args.devnet_tx,
+  });
+  if (!result.ok) return { content: [{ type: 'text', text: result.error || 'not answered' }], isError: true };
+  return { content: [{ type: 'text', text: JSON.stringify({ ok: true, ping: result.ping }, null, 2) }] };
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────
 export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
   return new Response(discoveryHtml(request), {
@@ -3696,6 +3948,12 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         return rpcResult(id, filed.body?.ok && filed.body.request
           ? { content: [{ type: 'text', text: `On the line: ${filed.body.request.title} — ${filed.body.request.artist}. It is public at ${base}/station#requests. If the station plays it, the line will say so.` }] }
           : { content: [{ type: 'text', text: filed.body?.error || `The request line refused that (${filed.status}).` }], isError: true });
+      }
+      if (name === 'grok_inbox_read' || name === 'grok_inbox_answer') {
+        return rpcResult(id, await grokInboxCall(name, args, request, env));
+      }
+      if (name === 'front_desk_today' || name === 'front_desk_checkin') {
+        return rpcResult(id, await frontDeskCall(name, args, request, env));
       }
       if (name === 'desk_ask' || name === 'desk_pass') {
         // In-process, so the caller's own X-Yard-Resident header arrives: a

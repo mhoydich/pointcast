@@ -1,0 +1,2817 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Block Yard — PointCast Chain</title>
+<meta name="description" content="pointcast-chain drawn as isometric pixel cubes: one stack per block, one cube per transaction, a broadcast beacon at every anchor height. Replay it in your browser with VERIFY.">
+<!-- Where the pinned verifier files live. Empty = the node's /verifier route when a node
+     answers, else ./verifier/ next to this page. ?verifier=<url> overrides both. -->
+<meta name="pc-verifier-base" content="">
+<!-- Where the chain comes from. Empty = ?api=, else a node at this origin, else ./snapshot.json.
+     A static host that has no node sets a relative snapshot URL (e.g. ./snapshot.json): the page
+     then reads that snapshot straight away, without probing its own origin for /status. ?api= and
+     ?snapshot= still override it. -->
+<meta name="pc-snapshot" content="./snapshot.json">
+<style>
+:root {
+  --pc-bg: #f3efe4;
+  --pc-panel: #fffdf6;
+  --pc-ink: #14161c;
+  --pc-dim: #5d6170;
+  --pc-rule: #d8d1bf;
+  --pc-chrome: #c9c3b3;
+  --pc-chrome-hi: #ffffff;
+  --pc-chrome-lo: #7d7868;
+  --pc-title: #0b2a8a;
+  --pc-title-ink: #ffffff;
+  --pc-attn: #0a8a3a;
+  --pc-agent: #7a1fd1;
+  --pc-agent-bg: #f0e4ff;
+  --pc-human: #0b5fa8;
+  --pc-human-bg: #e2efff;
+  --pc-live: #e0182d;
+  --pc-presence: #0b8a63;
+  --yard-bg: #ebe5d3;
+  --yard-bg2: #d8cfb6;
+  --yard-plate: #ddd5bd;
+  --yard-plate-edge: #c4ba9c;
+  --yard-ghost: #e2dbc6;
+  --yard-link: #9a9177;
+  --yard-ink: #14161c;
+  --yard-halo: #fffdf6;
+  --slab: #b4ab92;
+  --ok: #0aa64c;
+  --bad: #e0102e;
+  --beacon: #00a7c4;
+  --beacon-posted: #d114c2;
+  --beacon-off: #a39b84;
+  --mint: #d4148f;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Verdana", "Tahoma", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pc-bg: #0d0f14; --pc-panel: #151821; --pc-ink: #e9ecf3; --pc-dim: #9298a8; --pc-rule: #2a2f3c;
+    --pc-chrome: #2b303d; --pc-chrome-hi: #464d5e; --pc-chrome-lo: #0a0b0f;
+    --pc-title: #1b3fd1; --pc-attn: #3ddc7a; --pc-agent: #c08bff; --pc-agent-bg: #2a1844;
+    --pc-human: #6cb2ff; --pc-human-bg: #142a44; --pc-presence: #2ee6a6;
+    --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
+    --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
+    --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
+    --mint: #ff5cc0;
+  }
+}
+:root[data-theme="dark"] {
+  --pc-bg: #0d0f14; --pc-panel: #151821; --pc-ink: #e9ecf3; --pc-dim: #9298a8; --pc-rule: #2a2f3c;
+  --pc-chrome: #2b303d; --pc-chrome-hi: #464d5e; --pc-chrome-lo: #0a0b0f;
+  --pc-title: #1b3fd1; --pc-attn: #3ddc7a; --pc-agent: #c08bff; --pc-agent-bg: #2a1844;
+  --pc-human: #6cb2ff; --pc-human-bg: #142a44; --pc-presence: #2ee6a6;
+  --yard-bg: #080a13; --yard-bg2: #141936; --yard-plate: #151a2e; --yard-plate-edge: #252c4a;
+  --yard-ghost: #0f1224; --yard-link: #3b4470; --yard-ink: #e9ecf3; --yard-halo: #080a13;
+  --slab: #353c58; --ok: #2bf07f; --bad: #ff2a4a; --beacon: #3df5ff; --beacon-posted: #ff4df0; --beacon-off: #444b6a;
+  --mint: #ff5cc0;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--pc-bg); color: var(--pc-ink); font: 14px/1.45 var(--sans); }
+a { color: inherit; }
+button { font: inherit; color: inherit; cursor: pointer; }
+code { font: 11px var(--mono); }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* late-90s window chrome, shared with the feed explorer */
+.win { background: var(--pc-panel); border: 2px solid; border-color: var(--pc-chrome-hi) var(--pc-chrome-lo) var(--pc-chrome-lo) var(--pc-chrome-hi); box-shadow: 1px 1px 0 var(--pc-chrome-lo); }
+.titlebar { background: linear-gradient(90deg, var(--pc-title), #1a8fd1); color: var(--pc-title-ink); font: bold 12px/1 var(--mono); letter-spacing: .06em; padding: 6px 8px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.titlebar .grow { flex: 1; }
+.titlebar > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bevel { background: var(--pc-chrome); border: 2px solid; border-color: var(--pc-chrome-hi) var(--pc-chrome-lo) var(--pc-chrome-lo) var(--pc-chrome-hi); padding: 3px 10px; font: 12px var(--mono); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.bevel:active, .bevel[aria-pressed="true"], .bevel[aria-expanded="true"] { border-color: var(--pc-chrome-lo) var(--pc-chrome-hi) var(--pc-chrome-hi) var(--pc-chrome-lo); }
+.bevel[aria-pressed="true"]#verify { background: var(--pc-attn); color: #fff; }
+.bevel[aria-pressed="true"]#lens-btn { background: var(--mint); color: #fff; }
+.bevel:disabled { opacity: .5; cursor: default; }
+.bevel.mini { padding: 0 5px; font-size: 10px; line-height: 16px; }
+
+header.mast { margin-bottom: 12px; }
+.brand { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 12px 14px 8px; }
+.brand h1 { margin: 0; font: 900 28px/1 var(--sans); letter-spacing: -.02em; }
+.brand h1 span { color: #ff5b1a; }
+.brand .tag { color: var(--pc-dim); font-size: 12px; }
+.brand .grow { flex: 1; }
+.live { display: inline-flex; align-items: center; gap: 6px; font: bold 11px var(--mono); color: var(--pc-live); white-space: nowrap; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--pc-live); animation: pulse 1.2s infinite; }
+.live.off, .live.snap { color: var(--pc-dim); } .live.off i, .live.snap i { background: var(--pc-dim); animation: none; }
+.live.snap i { border-radius: 0; background: #00a7c4; }
+.live .tally { color: var(--pc-dim); font-weight: normal; }
+@keyframes pulse { 50% { opacity: .25; } }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); border-top: 1px solid var(--pc-rule); }
+.stat { padding: 7px 12px; border-right: 1px solid var(--pc-rule); border-bottom: 1px solid var(--pc-rule); margin-bottom: -1px; min-width: 0; }
+.stat b { display: block; font: bold 18px/1.2 var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat small { color: var(--pc-dim); font: 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+.supply { height: 6px; background: var(--pc-rule); margin-top: 4px; }
+.supply > div { height: 100%; background: var(--pc-attn); width: 0; transition: width .6s; }
+.ticker { font: 11px var(--mono); color: var(--pc-dim); padding: 6px 14px; border-top: 1px solid var(--pc-rule); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.controls { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; font: 12px var(--mono); }
+.controls .grow { flex: 1; }
+.goto { display: inline-flex; gap: 4px; align-items: center; margin: 0; }
+.goto input { width: 84px; font: 12px var(--mono); color: var(--pc-ink); background: var(--pc-panel); border: 2px solid; border-color: var(--pc-chrome-lo) var(--pc-chrome-hi) var(--pc-chrome-hi) var(--pc-chrome-lo); padding: 2px 6px; }
+
+/* notices (same vocabulary as the feed explorer's Verify Desk) */
+.vnote { margin: 0 0 10px; padding: 8px 10px; font: 12px var(--mono); border: 2px solid; overflow-wrap: anywhere; }
+.vnote.warn, .vnote.node { background: #fff4b8; color: #4a3b00; border-color: #c9a400; }
+.vnote.info { background: var(--pc-panel); color: var(--pc-dim); border-color: var(--pc-rule); }
+.vnote.loud { background: var(--pc-live); color: #fff; border-color: #7a0010; font-weight: bold; }
+.vnote.fault { background: #3a0008; color: #fff; border-color: var(--pc-live); font-size: 13px; }
+.vnote.fault b { color: #ff8a96; }
+.vnote a, .vnote button.link { color: inherit; font-weight: bold; }
+button.link { background: none; border: 0; padding: 0; text-decoration: underline; font: inherit; }
+.verify-strip { margin: 0 0 10px; padding: 6px 10px; font: 12px var(--mono); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; overflow-wrap: anywhere; }
+.verify-strip .ok { color: var(--pc-attn); font-weight: bold; }
+.verify-strip .bad { color: var(--pc-live); font-weight: bold; }
+.spot { margin: 0 0 10px; display: flex; align-items: center; gap: 8px; font: 12px var(--mono); flex-wrap: wrap; }
+.spot b { font-weight: bold; }
+/* the Mints lens strip: counts, then one chip per collection */
+.mints { margin: 0 0 10px; }
+.mints .titlebar { background: linear-gradient(90deg, #8a0f5e, var(--mint)); }
+.mints-body { padding: 7px 10px 8px; display: grid; gap: 6px; font: 12px var(--mono); min-width: 0; }
+.mints-counts { display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: baseline; }
+.mints-counts b { font: bold 16px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.mchips { display: flex; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.mchip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; }
+.mchip .bevel { max-width: 100%; overflow: hidden; }
+.mchip .bevel span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mchip a { font: 11px var(--mono); white-space: nowrap; }
+
+/* the yard */
+.yard { position: relative; }
+.stage { position: relative; height: clamp(420px, 64vh, 880px); overflow: hidden; background: var(--yard-bg); touch-action: none; }
+#yard { display: block; width: 100%; height: 100%; cursor: grab; outline: none; }
+#yard:focus-visible { box-shadow: inset 0 0 0 2px var(--beacon); }
+.stage.dragging #yard { cursor: grabbing; }
+.stage.over #yard { cursor: pointer; }
+.overlay-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; font: bold 13px/1.6 var(--mono); color: var(--yard-ink); letter-spacing: .08em; pointer-events: none; }
+.overlay-msg .sub { display: block; font-weight: normal; letter-spacing: 0; color: var(--pc-dim); max-width: 520px; margin-top: 6px; }
+.overlay-msg code { background: var(--pc-panel); padding: 1px 4px; }
+.tip { position: absolute; z-index: 6; pointer-events: none; background: var(--pc-panel); color: var(--pc-ink); border: 2px solid; border-color: var(--pc-chrome-hi) var(--pc-chrome-lo) var(--pc-chrome-lo) var(--pc-chrome-hi); font: 11px/1.45 var(--mono); padding: 4px 7px; max-width: 280px; overflow-wrap: anywhere; }
+.tip b { font-size: 12px; }
+.tip.hint { left: 50%; top: 10px; transform: translateX(-50%); max-width: calc(100% - 20px); text-align: center; }
+.sheet-body:focus-visible { outline: 2px solid var(--beacon); outline-offset: -2px; }
+
+.stage.drawer-open .legend { display: none; }
+.legend { position: absolute; left: 10px; bottom: 10px; z-index: 3; max-width: min(300px, calc(100% - 20px)); font: 11px var(--mono); padding: 0; }
+.legend .titlebar { font-size: 10px; padding: 4px 6px; }
+.legend .lg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 6px; padding: 5px 6px 6px; }
+.lg { display: flex; align-items: center; gap: 5px; background: none; border: 1px solid transparent; padding: 1px 3px; text-align: left; font: 11px var(--mono); min-width: 0; }
+.lg:hover, .lg[aria-pressed="true"] { border-color: var(--pc-ink); }
+.lg span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg canvas, .kicon { width: 16px; height: 16px; image-rendering: pixelated; flex: none; }
+.lg-row { display: flex; align-items: center; gap: 5px; padding: 1px 4px; color: var(--pc-dim); grid-column: span 2; }
+.lg-sep { grid-column: span 2; border-top: 1px dashed var(--pc-rule); margin: 3px 0; }
+.sw { width: 12px; height: 8px; display: inline-block; flex: none; }
+
+.panel { position: absolute; z-index: 4; top: 10px; right: 10px; bottom: 10px; width: min(390px, calc(100% - 20px)); display: flex; flex-direction: column; }
+.drawer { position: absolute; z-index: 4; top: 10px; left: 10px; width: min(330px, calc(100% - 20px)); max-height: calc(100% - 20px); display: flex; flex-direction: column; }
+.sheet-body { overflow: auto; overscroll-behavior: contain; flex: 1; min-height: 0; }
+.panel .titlebar .badge, .drawer .titlebar .badge { font-size: 9px; }
+.close { background: var(--pc-chrome); color: var(--pc-ink); border: 2px solid; border-color: var(--pc-chrome-hi) var(--pc-chrome-lo) var(--pc-chrome-lo) var(--pc-chrome-hi); font: bold 11px/1 var(--mono); padding: 1px 5px; }
+.grab { display: none; }
+
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; padding: 10px 12px; margin: 0; font: 12px var(--mono); }
+.kv dt { color: var(--pc-dim); } .kv dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.kv .src { color: var(--pc-dim); font-size: 10px; }
+.cp { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vstate { margin: 0 12px 8px; padding: 7px 9px; font: 12px var(--mono); border: 2px solid var(--pc-rule); overflow-wrap: anywhere; }
+.vstate.ok { border-color: var(--ok); color: var(--pc-attn); }
+.vstate.bad { border-color: var(--bad); background: #3a0008; color: #fff; }
+.vstate.bad a { color: #fff; font-weight: bold; }
+.vstate.dim { color: var(--pc-dim); }
+.sec { font: bold 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--pc-dim); padding: 8px 12px 4px; border-top: 1px solid var(--pc-rule); }
+.txc { padding: 8px 12px; border-top: 1px solid var(--pc-rule); display: grid; gap: 3px; font: 12px var(--mono); }
+.txc:first-of-type { border-top: 0; }
+.txk { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.txk b { font: bold 13px var(--sans); }
+.txk .kicon { width: 24px; height: 24px; }
+.txsum { font: bold 13px/1.35 var(--sans); overflow-wrap: anywhere; }
+.txbody { font: 13px/1.4 var(--sans); overflow-wrap: anywhere; }
+.txmeta { color: var(--pc-dim); font-size: 11px; overflow-wrap: anywhere; }
+.rc { color: var(--pc-attn); }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font: bold 10px/16px var(--mono); letter-spacing: .06em; border: 1px solid currentColor; text-transform: uppercase; white-space: nowrap; }
+.badge.agent { color: var(--pc-agent); background: var(--pc-agent-bg); }
+.badge.human { color: var(--pc-human); background: var(--pc-human-bg); }
+.badge.vfy { color: #fff; background: #0a7a35; border-color: transparent; }
+.badge.rep { color: #fff; background: #6b7080; border-color: transparent; }
+.badge.bad { color: #fff; background: var(--pc-live); border-color: transparent; }
+.badge.wallet { color: #0a7f8a; }
+/* presence tickets: a ticketed tap, and a bare tap that counts for +0 on a ticketed chain */
+.badge.ticket { color: var(--pc-presence); }
+.badge.noticket { color: var(--pc-dim); border-style: dashed; }
+/* mints: any *_mint kind; a collection's first mint is filled */
+.badge.mint { color: var(--mint); }
+.badge.mint.first { color: #fff; background: var(--mint); border-color: transparent; }
+.policy { font: bold 10px/16px var(--mono); letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; padding: 1px 6px; color: var(--pc-presence); white-space: nowrap; }
+.addr { font: 12px var(--mono); }
+.empty-note { padding: 10px 12px; color: var(--pc-dim); font: 12px var(--mono); }
+
+.acct { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--pc-rule); font: 12px var(--mono); background: none; border-left: 0; border-right: 0; border-bottom: 0; width: 100%; text-align: left; }
+.acct:hover, .acct[aria-pressed="true"] { background: var(--pc-bg); }
+.acct .rank { color: var(--pc-dim); font-size: 10px; }
+.acct .who { display: flex; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
+.acct .bal { font-weight: bold; font-variant-numeric: tabular-nums; text-align: right; }
+.acct .bar { grid-column: 2 / 4; height: 3px; background: var(--pc-rule); }
+.acct .bar > i { display: block; height: 100%; background: var(--pc-attn); }
+.drawer-note { padding: 8px 10px; font: 11px var(--mono); color: var(--pc-dim); }
+
+.scrub { border-top: 1px solid var(--pc-rule); padding: 6px 10px 7px; }
+#mini { display: block; width: 100%; height: 44px; cursor: pointer; touch-action: none; outline: none; }
+#mini:focus-visible { box-shadow: 0 0 0 2px var(--beacon); }
+.scrub-meta { display: flex; justify-content: space-between; gap: 8px; font: 10px var(--mono); color: var(--pc-dim); margin-top: 3px; }
+.scrub-meta #mini-hover { color: var(--pc-ink); font-weight: bold; }
+footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; padding: 10px 0 30px; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .wrap { padding: 10px; }
+  .brand { padding: 10px 10px 6px; }
+  .brand h1 { font-size: 22px; }
+  .brand .tag { display: none; }
+  .stat { padding: 6px 9px; }
+  .stat b { font-size: 15px; }
+  .stage { height: clamp(340px, 58vh, 640px); }
+  .hide-sm { display: none; }
+  .panel, .drawer { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 56vh; border-bottom: 0; box-shadow: 0 -8px 28px rgba(0,0,0,.4); }
+  body.sheet-open .wrap { padding-bottom: 58vh; }
+  .grab { display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--pc-chrome-lo); margin: 6px auto 2px; opacity: .6; }
+  .legend .lg-grid { grid-template-columns: 1fr; max-height: 30vh; overflow: auto; }
+  .lg-row, .lg-sep { grid-column: span 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live i { animation: none; }
+  .supply > div { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast win">
+    <div class="titlebar"><span>▦ POINTCAST.CHAIN — BLOCK YARD</span><span class="grow"></span><span id="chain-id">…</span></div>
+    <div class="brand">
+      <h1>Block<span>·</span>Yard</h1>
+      <span class="live off" id="live"><i></i><span id="live-text">TUNING IN</span><span class="tally" id="live-tally"></span></span>
+      <span class="tag">Every block is a stack of blocks: one cube per transaction.</span>
+      <span class="policy" id="policy" hidden title="Tap income needs a presence ticket from a registered issuer; bare taps count but mint 0">ticketed taps</span>
+      <span class="grow"></span>
+      <a class="bevel" href="/" id="feed-link">▤ feed explorer</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="s-tip">—</b><small>Tip height</small></div>
+      <div class="stat"><b id="s-txs">—</b><small id="s-txs-l">Transactions</small></div>
+      <div class="stat"><b id="s-accounts">—</b><small>Accounts</small></div>
+      <div class="stat"><b id="s-anchors">—</b><small id="s-anchors-l">Anchors</small></div>
+      <div class="stat"><b id="s-supply">—</b><small>ATTN supply</small><div class="supply"><div id="s-supply-bar"></div></div></div>
+      <div class="stat"><b id="s-source">—</b><small id="s-source-l">Source</small></div>
+    </div>
+    <div class="ticker" id="ticker">state_root —</div>
+  </header>
+
+  <div class="controls">
+    <button class="bevel" id="verify" aria-pressed="false" title="Re-execute the chain in this browser with the real consensus code (pinned wasm)">✓ VERIFY</button>
+    <button class="bevel" id="accounts-btn" aria-expanded="false" aria-controls="drawer">◫ Accounts</button>
+    <button class="bevel" id="legend-btn" aria-expanded="true" aria-controls="legend">▧ Legend</button>
+    <button class="bevel" id="lens-btn" aria-pressed="false" aria-controls="mints" title="Mints lens: light every mint cube and ring each collection's first mint (M)">◆ <span class="hide-sm">Mints </span>lens</button>
+    <span class="grow"></span>
+    <form class="goto" id="goto"><label for="goto-h">go to №</label><input id="goto-h" type="number" min="1" step="1" inputmode="numeric" placeholder="height"><button class="bevel" type="submit" aria-label="Jump to height">↵</button></form>
+    <button class="bevel" id="zoom-out" aria-label="Zoom out" title="Zoom out (−)">−</button>
+    <button class="bevel" id="zoom-in" aria-label="Zoom in" title="Zoom in (+)">+</button>
+    <button class="bevel" id="follow" aria-pressed="true" title="Keep the camera on the newest block (F)">⇥ <span class="hide-sm">follow </span>tip</button>
+    <button class="bevel" id="theme" aria-label="Toggle theme">◐</button>
+  </div>
+  <div class="vnote loud" id="v-loud" role="alert" hidden></div>
+  <div class="vnote fault" id="v-fault" role="alert" hidden></div>
+  <div class="vnote node" id="v-node" role="status" hidden></div>
+  <div class="vnote warn" id="v-pin" hidden></div>
+  <div class="vnote info" id="v-src" role="status" hidden></div>
+  <div class="win verify-strip" id="v-strip" role="status" hidden></div>
+  <div class="spot" id="spot" hidden></div>
+  <section class="win mints" id="mints" aria-label="Mints lens" hidden>
+    <div class="titlebar"><span>◆ MINTS LENS · every *_mint cube lit · ◎ a collection's first mint</span><span class="grow"></span><button class="close" id="mints-close" aria-label="Turn off the Mints lens">×</button></div>
+    <div id="mints-body"></div>
+  </section>
+
+  <section class="yard win" aria-label="The block yard">
+    <div class="titlebar"><span id="yard-title">THE YARD</span><span class="grow"></span><span id="yard-hint" class="hide-sm">drag to pan · click + wheel, or pinch, to zoom · click a stack</span></div>
+    <div class="stage" id="stage">
+      <canvas id="yard" tabindex="0" role="img" aria-label="Isometric yard of pointcast-chain blocks. Use the arrow keys to move between blocks and Enter to open one." aria-describedby="sr-sel"></canvas>
+      <div class="overlay-msg" id="msg"><div>TUNING IN…</div></div>
+      <div class="tip" id="tooltip" hidden></div>
+      <div class="tip hint" id="wheel-hint" role="status" hidden>Click the yard (or hold Ctrl / ⌘) to zoom with the wheel</div>
+      <!-- the detail panel and the drawer come first, so Tab from the yard reaches them before the legend -->
+      <aside class="panel win" id="panel" aria-label="Block detail" hidden>
+        <div class="grab"></div>
+        <div class="titlebar"><span id="panel-title">№ —</span><span id="panel-badge"></span><span class="grow"></span><button class="close" id="panel-close" aria-label="Close block detail">×</button></div>
+        <div class="sheet-body" id="panel-body" tabindex="0" aria-label="Block detail contents"></div>
+      </aside>
+      <aside class="drawer win" id="drawer" aria-label="Top balances" hidden>
+        <div class="grab"></div>
+        <div class="titlebar"><span>◫ TOP BALANCES</span><span class="grow"></span><button class="close" id="drawer-close" aria-label="Close accounts">×</button></div>
+        <div class="sheet-body"><div class="drawer-note" id="drawer-note">…</div><div id="drawer-list"></div></div>
+      </aside>
+      <aside class="legend win" id="legend" aria-label="Legend">
+        <div class="titlebar"><span>LEGEND · tap a kind to spotlight it</span></div>
+        <div class="lg-grid" id="legend-grid"></div>
+      </aside>
+    </div>
+    <div class="scrub">
+      <canvas id="mini" tabindex="0" role="slider" aria-label="Timeline: jump to a block height" aria-valuemin="1" aria-valuemax="1" aria-valuenow="1"></canvas>
+      <div class="scrub-meta"><span id="mini-l">№ —</span><span id="mini-hover"></span><span id="mini-r">№ —</span></div>
+    </div>
+  </section>
+  <div class="sr" id="sr-sel" aria-live="polite"></div>
+  <footer id="footer">pointcast-chain · Block Yard · one stack per block · one cube per transaction · beacons every <span id="anchor-every">100</span> blocks</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  // ======================================================================
+  // Block Yard. Every string that comes from the chain, a node, a snapshot
+  // or the verifier is user content: it only ever reaches the page through
+  // textContent / createTextNode / setAttribute, or canvas fillText. This
+  // file never hands a string to the HTML parser.
+  // ======================================================================
+  const qs = new URLSearchParams(location.search);
+  const $ = (id) => document.getElementById(id);
+  const RM = matchMedia("(prefers-reduced-motion: reduce)");
+  let reduced = RM.matches;
+  const onMq = (mq, fn) => (mq.addEventListener ? mq.addEventListener("change", fn) : mq.addListener(fn));
+
+  // ---------- renderers
+  // Pure functions: chain data in, DOM nodes or strings out. Everything they
+  // are handed comes from a node, a snapshot or the verifier, and with ?api=
+  // a hostile endpoint controls all of it, so:
+  //  - strings reach the page only as text nodes or attribute values: h()
+  //    never hands a string to the HTML parser;
+  //  - attribute names are literals in this section, never data;
+  //  - the one link built from data (a Tezos operation) must pass
+  //    tezosExplorerUrl: https on tzkt.io, nothing else;
+  //  - lists are read only from real arrays (a JSON object can fake .length);
+  //  - str()/num() never throw (String() and Number() throw on a JSON object
+  //    like {"toString": 1}), so one bad field cannot blank the panel;
+  //  - u64s above 2^53, which the replay hands over as exact BigInts
+  //    (verify.js parseJson), keep their digits.
+  // crates/explorer/tests/town_escaping.mjs runs this section against hostile
+  // values with a stub `document`: keep it free of other DOM access (copyText
+  // touches the page only when its button is clicked) and of variables
+  // defined outside it.
+
+  // DOM builder: children are nodes or text. Never parses HTML.
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    if (props) {
+      for (const [k, v] of Object.entries(props)) {
+        if (v == null || v === false) continue;
+        if (k === "class") el.className = str(v);
+        else if (k === "text") el.textContent = str(v);
+        else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
+        else el.setAttribute(k, v === true ? "" : str(v));
+      }
+    }
+    for (const kid of kids.flat(Infinity)) {
+      if (kid == null || kid === false) continue;
+      el.append(kid instanceof Node ? kid : str(kid));
+    }
+    return el;
+  }
+  const str = (v) => {
+    if (v == null) return "";
+    switch (typeof v) {
+      case "string": return v;
+      case "number": case "boolean": case "bigint": return String(v);
+      default:
+        try { return JSON.stringify(v, (_, x) => (typeof x === "bigint" ? String(x) : x)) ?? ""; } catch { return ""; }
+    }
+  };
+  const num = (x) => { try { return Number(x); } catch { return NaN; } };
+  const arr = (x) => (Array.isArray(x) ? x : []);
+  const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
+  const short = (s, n = 6) => { s = str(s); return s.length > n * 2 + 1 ? `${s.slice(0, n)}…${s.slice(-4)}` : s; };
+  // Exact for the replay's BigInts; "—" for anything that is not a number.
+  const fmt = (n) => {
+    if (typeof n === "bigint") return n.toLocaleString("en-US");
+    const x = num(n);
+    return Number.isFinite(x) ? x.toLocaleString("en-US") : "—";
+  };
+  const isInt = (n) => Number.isSafeInteger(n);
+  // A positive safe integer, else the default. Loop bounds (anchor spacing,
+  // heights) come from a node the page does not trust, so they are checked.
+  const posInt = (v, d) => { const n = num(v); return Number.isSafeInteger(n) && n > 0 ? n : d; };
+  const plural = (n, one, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`;
+  const ago = (ms) => {
+    const s = Math.max(0, Math.round((Date.now() - num(ms)) / 1000));
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  };
+  const utc = (ms) => { try { return `${new Date(num(ms)).toISOString().replace("T", " ").slice(0, 19)} UTC`; } catch { return str(ms); } };
+  const dur = (s) => { const n = num(s) || 0; return `${Math.floor(n / 60)}m${String(n % 60).padStart(2, "0")}s`; };
+  // Total of a receipt's issued amounts: exact when the replay hands over BigInts.
+  function issuedTotal(list) {
+    const amounts = arr(list).map((m) => m && m.amount);
+    if (amounts.some((x) => typeof x === "bigint")) {
+      return amounts.reduce((a, x) => a + (typeof x === "bigint" ? x : BigInt(Number.isSafeInteger(x) ? x : 0)), 0n);
+    }
+    return amounts.reduce((a, x) => a + (num(x) || 0), 0);
+  }
+
+  // ======================================================================
+  // Transaction kinds (chain-core TxKind, serde tag "type"). Colour is never
+  // the only signal: every kind also has a glyph, a top-face pixel motif, a
+  // legend entry and its name spelled out in the tooltip and detail panel.
+  // ======================================================================
+  const KINDS = [
+    { id: "publish_block", label: "Publish", glyph: "▤", color: "#3d6bff",
+      motif: [[6, 2], [7, 2], [8, 2], [9, 2], [6, 4], [7, 4], [8, 4], [9, 4]] },
+    { id: "drum_session", label: "Drum", glyph: "◉", color: "#ff5b1a",
+      motif: [[7, 2], [8, 2], [6, 3], [9, 3], [6, 4], [9, 4], [7, 5], [8, 5]] },
+    { id: "tap", label: "Tap", glyph: "✦", color: "#12c8d8",
+      motif: [[7, 3], [8, 3], [7, 4], [8, 4]] },
+    // A presence tap is the tap's dot inside a ring (as in the feed explorer).
+    { id: "presence_tap", label: "Presence tap", glyph: "✧", color: "#2ee6a6",
+      motif: [[7, 3], [8, 3], [7, 4], [8, 4], [7, 1], [8, 1], [5, 2], [10, 2], [4, 3], [11, 3], [4, 4], [11, 4], [5, 5], [10, 5], [7, 6], [8, 6]] },
+    { id: "drop_mint", label: "Drop", glyph: "◆", color: "#ff2ea6",
+      motif: [[7, 2], [8, 2], [6, 3], [7, 3], [8, 3], [9, 3], [7, 4], [8, 4]] },
+    { id: "transfer", label: "Transfer", glyph: "⇄", color: "#ffd21a",
+      motif: [[5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [9, 3], [9, 5]] },
+    { id: "register_agent", label: "Register agent", glyph: "⚙", color: "#8d3dff",
+      motif: [[6, 2], [9, 2], [7, 3], [8, 3], [7, 4], [8, 4], [6, 5], [9, 5]] },
+    { id: "set_drum_attestors", label: "Set drum attestors", glyph: "◎", color: "#9be22d",
+      motif: [[7, 1], [8, 1], [5, 3], [10, 3], [7, 3], [8, 3], [5, 4], [10, 4], [7, 6], [8, 6]] },
+    // The issuer set: four keys around the room, in the presence family's teal.
+    { id: "set_presence_issuers", label: "Set presence issuers", glyph: "⊙", color: "#178f84",
+      motif: [[7, 1], [8, 1], [4, 3], [5, 3], [10, 3], [11, 3], [4, 4], [5, 4], [10, 4], [11, 4], [7, 6], [8, 6]] },
+    { id: "set_mandate", label: "Set mandate", glyph: "⚖", color: "#c9a2ff",
+      motif: [[5, 3], [6, 3], [7, 3], [8, 3], [9, 3], [10, 3], [5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [10, 4]] },
+    { id: "clear_mandate", label: "Clear mandate", glyph: "⊘", color: "#8c93a8",
+      motif: [[10, 2], [9, 2], [8, 3], [7, 4], [6, 5], [5, 5]] },
+    { id: "spend_allowance", label: "Spend allowance", glyph: "⇢", color: "#c47a33",
+      motif: [[6, 2], [7, 2], [8, 3], [9, 3], [8, 4], [9, 4], [6, 5], [7, 5]] },
+  ];
+  // Mandate scope bits (bit = tag), docs/TAGS.md and chain-core TxKind::tag.
+  const KIND_TAGS = { 1: "publish_block", 2: "drum_session", 3: "tap", 4: "drop_mint", 5: "transfer",
+    6: "register_agent", 7: "set_drum_attestors", 8: "set_mandate", 9: "clear_mandate", 10: "spend_allowance",
+    11: "presence_tap", 12: "set_presence_issuers", 13: "rotate_sequencer", 14: "seal_capsule", 15: "open_capsule",
+    16: "claim_station", 17: "set_station", 18: "set_session_key", 19: "clear_session_key", 20: "set_controllers",
+    21: "open_edition", 22: "edition_mint", 23: "edition_transfer", 24: "fill_order", 25: "cancel_orders", 26: "pay",
+    27: "register_feed", 28: "oracle_report", 29: "strike_reporter", 30: "market_open", 31: "market_stake",
+    32: "market_resolve", 33: "market_dispute", 34: "market_claim", 35: "bridge_withdraw" };
+  // Registry kinds (docs/TAGS.md) with no cube of their own yet render by
+  // name on a neutral slate cube. Their top face carries the tag as six
+  // signal bars (tall = 1, short = 0, high bit on the left), so two of them
+  // never look alike even without colour; each slate is a step lighter.
+  {
+    const slate = (i) => {
+      const l = 0.36 + i * 0.019, c = 0.1 * Math.min(l, 1 - l);
+      const ch = (n) => { const k = (n + (222 / 30)) % 12; return Math.round(255 * (l - c * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+      return `#${[ch(0), ch(8), ch(4)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+    };
+    let i = 0;
+    for (const [tag, id] of Object.entries(KIND_TAGS)) {
+      if (KINDS.some((k) => k.id === id)) continue;
+      const motif = [];
+      for (let b = 0; b < 6; b++) {
+        const x = 3 + 2 * b;
+        motif.push([x, 5]);
+        if ((Number(tag) >> (5 - b)) & 1) motif.push([x, 4], [x, 3]);
+      }
+      KINDS.push({ id, label: id, glyph: "▫", color: slate(i++), motif, registry: Number(tag) });
+    }
+  }
+  KINDS.push({ id: "unknown", label: "Unknown kind", glyph: "?", color: "#9a9a9a",
+    motif: [[7, 2], [8, 2], [8, 3], [7, 5], [8, 5]] });
+  const KIND_IX = new Map(KINDS.map((k, i) => [k.id, i]));
+  const UNKNOWN = KINDS.length - 1;
+  const kindIx = (t) => (typeof t === "string" && KIND_IX.has(t) ? KIND_IX.get(t) : UNKNOWN);
+  // A kind's name as the chain data spells it, for display (text nodes and
+  // canvas labels) and for matching *_mint: printable ASCII, at most 40
+  // characters. Anything else becomes "?", so "drop_mint" plus an invisible
+  // or bidi character can neither pass for drop_mint nor count as a mint.
+  const kindName = (t) => {
+    const s = str(t).replace(/[^\x21-\x7e]/g, "?");
+    return s ? (s.length > 40 ? `${s.slice(0, 39)}…` : s) : "?";
+  };
+  // An id (drop, edition) for display: printable ASCII ("?" for anything
+  // else), at most n characters.
+  const clip = (v, n = 64) => {
+    const s = str(v).replace(/[^\x20-\x7e]/g, "?");
+    return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+  };
+  const scopeKinds = (bits) => {
+    // The mask is u64 (docs/TAGS.md): BigInt, so bits 31-63 are not lost to 32-bit `1 << t`.
+    let n = 0n;
+    try {
+      if (typeof bits === "bigint") n = bits;
+      else if (typeof bits === "string" && /^\d{1,20}$/.test(bits)) n = BigInt(bits);
+      else if (typeof bits === "number" && Number.isFinite(bits) && bits > 0) n = BigInt(Math.trunc(bits));
+    } catch { n = 0n; }
+    n &= (1n << 64n) - 1n;
+    if (!n) return "paused (no kinds)";
+    const out = [];
+    for (let t = 0; t < 64; t++) if ((n >> BigInt(t)) & 1n) out.push(KIND_TAGS[t] || `tag ${t}`);
+    return out.join(", ");
+  };
+
+  // One line saying what the tx did, from its own fields.
+  function summary(kind, p) {
+    p = obj(p);
+    switch (kind) {
+      case "publish_block": return `${str(p.channel)} · ${str(p.title)}`;
+      case "drum_session": {
+        const players = arr(p.players).length, cosigs = arr(p.cosigs).length;
+        const att = p.room_sig ? "room-attested" : cosigs ? `${cosigs} co-signed` : "self-reported";
+        return `${str(p.room)} · ${dur(p.duration)} · ${plural(players, "player")} · ${att}`;
+      }
+      case "tap": return `tapped in · ${str(p.room)}`;
+      case "presence_tap": {
+        const t = obj(p.ticket);
+        return `present · ${str(p.room)} · ticketed by ${short(t.issuer, 6)} · slot ${fmt(t.slot)}`;
+      }
+      case "set_presence_issuers": {
+        const n = arr(p.issuers).length;
+        return n ? `presence issuers set: ${n}` : "presence issuers cleared: presence taps paused";
+      }
+      case "drop_mint": return `minted ${str(p.drop_id)} → ${short(p.recipient, 7)}`;
+      case "transfer": return `${fmt(p.amount)} ATTN → ${short(p.to, 7)}`;
+      case "register_agent": return `new agent on the register: ${str(p.name)}`;
+      case "set_drum_attestors": return `room-server attestors set: ${arr(p.attestors).length}`;
+      case "set_mandate": {
+        const t = obj(p.terms);
+        return `mandate for ${short(p.agent, 7)} · may: ${scopeKinds(t.kinds)} · ${fmt(t.spend_per_period || 0)} ATTN / ${fmt(t.period_blocks || 0)} blocks`;
+      }
+      case "clear_mandate": return `mandate cleared · ${short(p.agent, 7)} is unscoped again`;
+      case "spend_allowance": return `${fmt(p.amount)} ATTN → ${short(p.to, 7)} from the owner's allowance`;
+      // Editions (docs/TAGS.md 21-23), read by name before this page draws them.
+      case "open_edition": {
+        const t = obj(p.terms);
+        return `edition opened: ${clip(p.id ?? t.id, 64) || "?"}${p.title ?? t.title ? ` · ${clip(p.title ?? t.title, 80)}` : ""}`;
+      }
+      case "edition_mint": return `minted ${clip(p.edition, 64) || "?"} → ${short(p.recipient, 7)}`;
+      case "edition_transfer": return `${clip(p.edition, 64) || "?"}${p.serial != null ? ` #${fmt(p.serial)}` : ""} → ${short(p.to ?? p.recipient, 7)}`;
+      default: {
+        const K = KINDS[kindIx(kind)];
+        if (K.registry) return `${kindName(kind)} · registry tag ${K.registry} (docs/TAGS.md), not drawn by this page yet`;
+        return `unknown transaction kind: ${kindName(kind)}`;
+      }
+    }
+  }
+  // ---------- mints (the Mints lens). Matched by name, never by tag: any
+  // kind spelled *_mint is a mint (drop_mint today, edition_mint once editions
+  // land). The collection is the drop or edition the mint belongs to.
+  const isMintName = (n) => typeof n === "string" && /^[a-z][a-z0-9_]*_mint$/.test(n) && n.length <= 40;
+  // A collection id must be well-formed text: a lone surrogate (JSON can carry
+  // one; the chain never could) is not an id, and encodeURIComponent throws on it.
+  const wellFormed = (s) => { try { encodeURIComponent(s); return true; } catch { return false; } };
+  function mintOf(kind, p) {
+    p = obj(p);
+    const pick = kind === "drop_mint" ? [p.drop_id] : kind === "edition_mint" ? [p.edition, p.edition_id] : [p.drop_id, p.edition, p.edition_id, p.collection];
+    const id = pick.find((v) => typeof v === "string" && v.length > 0 && v.length <= 256 && wellFormed(v));
+    return id === undefined ? null : { collection: id };
+  }
+  // Every mint in `list` (stacks in ascending height: { h, ntx, names, txs }):
+  // per kind its mints and collections, per collection its first mint (the
+  // block where it was born, when the yard starts at №1) and each mint's
+  // position in its collection.
+  function indexMints(list) {
+    const kinds = new Map(), coll = new Map(), firstAt = new Map(), nth = new Map();
+    let total = 0;
+    for (const B of arr(list)) {
+      if (!B || !isInt(B.h)) continue;
+      const names = arr(B.names), txs = arr(B.txs);
+      for (let k = 0; k < names.length; k++) {
+        const name = names[k];
+        if (!isMintName(name)) continue;
+        total++;
+        let kk = kinds.get(name);
+        if (!kk) kinds.set(name, (kk = { mints: 0, collections: 0 }));
+        kk.mints++;
+        const m = mintOf(name, txs[k] && txs[k].tx);
+        if (!m) continue;
+        const key = `${name}\n${m.collection}`;
+        let c = coll.get(key);
+        if (!c) {
+          c = { key, kind: name, collection: m.collection, first: B.h, firstIx: k, count: 0, last: B.h };
+          coll.set(key, c);
+          kk.collections++;
+          if (!firstAt.has(B.h)) firstAt.set(B.h, []);
+          firstAt.get(B.h).push(c);
+        }
+        c.count++;
+        c.last = B.h;
+        nth.set(`${B.h}:${k}`, c.count);
+      }
+    }
+    return { total, kinds, coll, firstAt, nth };
+  }
+  // A pc-town base from ?town=: http(s) only, no credentials, no query or
+  // fragment. Anything else is null and nothing links out.
+  function townBase(v, baseHref) {
+    if (typeof v !== "string" || !v || v.length > 512) return null;
+    try {
+      const u = new URL(v, baseHref);
+      if ((u.protocol !== "https:" && u.protocol !== "http:") || u.username || u.password) return null;
+      u.search = ""; u.hash = "";
+      return u.href.replace(/\/+$/, "");
+    } catch { return null; }
+  }
+  // The feed explorer that goes with the node this page reads: the node
+  // serves it at its own root, so the link resolves against the api base,
+  // never against the page's origin (on a static host such as
+  // pointcast.xyz/chain/yard, "/" is that site's homepage). http(s) without
+  // credentials, else null and the link is hidden.
+  function feedHref(api) {
+    if (typeof api !== "string" || !api || api.length > 2048) return null;
+    try {
+      const u = new URL(api);
+      if ((u.protocol !== "https:" && u.protocol !== "http:") || u.username || u.password) return null;
+      u.search = ""; u.hash = "";
+      if (!u.pathname.endsWith("/")) u.pathname += "/";
+      return u.href;
+    } catch { return null; }
+  }
+  // A collection's Town Hall gallery (pc-town mintwall view #/d/{collection}).
+  // encodeURIComponent throws on a lone surrogate, which JSON can carry: no link then.
+  const townLink = (base, collection) => {
+    if (typeof base !== "string" || !base || typeof collection !== "string" || !collection) return null;
+    try { return `${base}/#/d/${encodeURIComponent(collection)}`; } catch { return null; }
+  };
+  // The Mints lens strip: counts per mint kind, then one chip per collection
+  // (oldest first). ix = indexMints(...); opts: { town, whole, from, to,
+  // pick(height), max }. Collection ids are chain data: text and an encoded
+  // link path only.
+  function mintStrip(ix, opts) {
+    ix = obj(ix);
+    const o = obj(opts);
+    const kinds = ix.kinds instanceof Map ? ix.kinds : new Map();
+    const coll = ix.coll instanceof Map ? [...ix.coll.values()] : [];
+    const drops = obj(kinds.get("drop_mint")), eds = obj(kinds.get("edition_mint"));
+    const count = (label, k, unit, none) => h("span", null, h("b", null, fmt(num(k.mints) || 0)), ` ${label}`,
+      num(k.mints) ? ` · ${plural(num(k.collections) || 0, unit)}` : ` · ${none}`);
+    const counts = h("div", { class: "mints-counts" },
+      h("span", null, h("b", null, fmt(num(ix.total) || 0)), " mints"),
+      // Mints counted in the loaded yard: an edition can be open with no mint
+      // yet, and a partial yard misses older ones, so no "none on this chain".
+      count("drop mints", drops, "drop", "none in the yard"),
+      count("edition mints", eds, "edition", "none in the yard"));
+    for (const [name, k] of kinds) {
+      if (name === "drop_mint" || name === "edition_mint") continue;
+      counts.append(h("span", null, h("b", null, fmt(num(obj(k).mints) || 0)), ` ${kindName(name)}`));
+    }
+    const box = h("div", { class: "mints-body" }, counts);
+    if (!o.whole && isInt(o.from)) box.append(h("div", { class: "txmeta" }, `counting the loaded blocks №${fmt(o.from)}–№${fmt(o.to)}: a ring marks a collection's first mint in the yard, not necessarily its birth`));
+    if (coll.length) {
+      coll.sort((a, b) => a.first - b.first || a.firstIx - b.firstIx);
+      const max = isInt(o.max) && o.max > 0 ? o.max : 24;
+      const chips = h("div", { class: "mchips" });
+      for (const c of coll.slice(0, max)) {
+        const id = typeof c.collection === "string" ? c.collection : "";
+        const go = h("button", { class: "bevel mini", type: "button", title: `${kindName(c.kind)} ${clip(id, 256)}: go to its first mint, №${fmt(c.first)}` },
+          h("span", null, `◎ ${clip(id, 28) || "?"}`), ` ×${fmt(c.count)} · №${fmt(c.first)}`);
+        if (typeof o.pick === "function") go.addEventListener("click", () => o.pick(c.first));
+        const href = townLink(o.town, id);
+        chips.append(h("span", { class: "mchip" }, go,
+          href ? h("a", { href, target: "_blank", rel: "noopener noreferrer", title: `Town Hall gallery for ${clip(id, 256)}` }, "gallery ↗") : null));
+      }
+      if (coll.length > max) chips.append(h("span", { class: "txmeta" }, `+${fmt(coll.length - max)} more`));
+      box.append(chips);
+    } else {
+      box.append(h("div", { class: "txmeta" }, "No mints in the yard yet."));
+    }
+    if (!o.town && coll.length) box.append(h("div", { class: "txmeta" }, "Add ?town=<pc-town address> to link each collection to its Town Hall gallery."));
+    return box;
+  }
+
+  async function copyText(text, btn) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch {
+      try {
+        const ta = h("textarea", { style: "position:fixed;opacity:0" });
+        ta.value = text; document.body.append(ta); ta.select(); ok = document.execCommand("copy"); ta.remove();
+      } catch {}
+    }
+    if (btn) { const was = btn.textContent; btn.textContent = ok ? "copied" : "copy failed"; setTimeout(() => { btn.textContent = was; }, 1200); }
+  }
+  function copyable(value, n = 8) {
+    const v = str(value);
+    if (!v) return h("span", { class: "src" }, "—");
+    const btn = h("button", { class: "bevel mini", type: "button", "aria-label": "Copy full value" }, "copy");
+    btn.addEventListener("click", (e) => { e.stopPropagation(); copyText(v, btn); });
+    return h("span", { class: "cp" }, h("code", { title: v }, short(v, n)), btn);
+  }
+  function whoBadge(addr, info) {
+    const a = str(addr), i = obj(info);
+    return [i.kind === "agent" ? h("span", { class: "badge agent", title: `Agent owned by ${str(i.owner)}` }, `⚙ ${str(i.name)}`)
+      : h("span", { class: "badge human" }, `${a.slice(0, 3)} · ${a.startsWith("pca") ? "agent" : "human"}`), " ", copyable(a, 7)];
+  }
+  // Link out only to the explorer the node itself builds (tzkt.io and its
+  // network subdomains, crates/node/src/tezos/mod.rs), never to a URL a node
+  // made up.
+  function tezosExplorerUrl(u) {
+    if (typeof u !== "string") return false;
+    try {
+      const x = new URL(u);
+      return x.protocol === "https:" && !x.username && !x.password && !x.port && (x.hostname === "tzkt.io" || x.hostname.endsWith(".tzkt.io"));
+    } catch { return false; }
+  }
+
+  // Moderation (the public devnet: crates/devnet-wasm/src/views.rs). The
+  // devnet admin can hide a post: its /block card then says hidden: true and
+  // withholds title and media. The chain bytes are unchanged, so the page's
+  // raw copy and your replay still carry the title: what the panel shows for
+  // a tx is decided here, from the card the server sent for it.
+  //  - served card hidden: the title, text and media are never shown, whichever
+  //    card (served or replayed) is drawn;
+  //  - a devnet with no served card for the tx yet: a post shows only its
+  //    channel until the card arrives (withhold).
+  // Returns { card, mod } for txCard.
+  function panelCard(replayCard, servedCard, useReplay, devnet) {
+    const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+    const served = isObj(servedCard) ? servedCard : null;
+    const hidden = !!served && served.hidden === true;
+    let card = useReplay ? (isObj(replayCard) ? replayCard : null) : served;
+    // Post text is off-chain: keep the server's text alongside the replayed card (never a hidden post's).
+    if (card && useReplay && served && !hidden && isObj(served.payload) && typeof served.payload.body === "string") {
+      card = { ...card, payload: { ...obj(card.payload), body: served.payload.body } };
+    }
+    return { card, mod: { hidden, withhold: devnet === true && !served } };
+  }
+  // The node's /block cards, kept per height. The devnet admin can hide a
+  // post after you first saw its card, so a card older than CARD_TTL_MS is
+  // fetched again when its panel opens or the tab comes back (stale), and
+  // until the new one arrives a devnet panel treats it as not there yet
+  // (fresh returns null: panelCard then withholds the post). `now` is for tests.
+  const CARD_TTL_MS = 5 * 60 * 1000;
+  function cardCache(max = 300, now = () => Date.now()) {
+    const views = new Map();       // height -> { view, at }
+    return {
+      set(hh, view) {
+        views.delete(hh);
+        views.set(hh, { view, at: now() });
+        while (views.size > max) views.delete(views.keys().next().value);
+      },
+      get(hh) { const e = views.get(hh); return e ? e.view : undefined; },
+      has(hh) { return views.has(hh); },
+      delete(hh) { views.delete(hh); },
+      get size() { return views.size; },
+      // No card yet, or one older than CARD_TTL_MS: fetch it (again).
+      stale(hh) { const e = views.get(hh); return !e || now() - e.at >= CARD_TTL_MS; },
+      // The card while it is younger than CARD_TTL_MS, else null.
+      fresh(hh) { const e = views.get(hh); return e && now() - e.at < CARD_TTL_MS ? e.view : null; },
+    };
+  }
+  const HIDDEN_NOTE = "hidden by the devnet admin";
+  // One transaction of the detail panel. `raw` is the page's copy of the
+  // signed tx ({ tx, sig_mode, … } from /raw/blocks or the snapshot), `card`
+  // the node's /block card or your replay's (with the receipt), or null.
+  // ctx: { icon(ix) -> node, snapshot: bool, ticketed: bool, town?, mintAt? }.
+  // mod (panelCard): { hidden, withhold }: a post's title, text and media are
+  // not shown when the server hid it, or (devnet) before its card arrives.
+  function txCard(raw, card, i, cardSrc, fromReplay, ctx, mod) {
+    const x = obj(raw && raw.tx);
+    card = card && typeof card === "object" && !Array.isArray(card) ? card : null;
+    const md = obj(mod);
+    const hidden = md.hidden === true || (!!card && card.hidden === true);
+    const withhold = hidden || md.withhold === true;
+    // A card from your own replay outranks the page's copy of the tx; a node's
+    // card only fills in what the raw tx lacks.
+    const pick = (mine, served) => (fromReplay ? mine ?? served : served ?? mine);
+    const kind = str(pick(card && card.kind, x.type));
+    const ix = kindIx(kind);
+    const K = KINDS[ix];
+    const cp = card && card.payload && typeof card.payload === "object" ? card.payload : null;
+    const payload = obj(cp || x);
+    const sigMode = pick(card && card.sig_mode, raw && raw.sig_mode) || "raw";
+    const issued = arr(card && card.issued);
+    const art = h("article", { class: "txc" },
+      h("div", { class: "txk" }, ctx.icon(ix), h("b", null, `${K.glyph} ${K.label}`), h("code", null, kindName(kind)),
+        h("span", { class: "txmeta" }, `#${fmt(i + 1)}`)),
+      h("div", { class: "txmeta" }, "sender ", whoBadge(pick(card && card.sender, x.sender), card && card.sender_info), ` · nonce ${str(pick(card && card.nonce, x.nonce))}`,
+        sigMode === "tezos_message" ? [" · ", h("span", { class: "badge wallet", title: "Signed in a Tezos wallet (sign_payload)" }, "✍ wallet")] : null),
+      h("div", { class: "txsum" }, kind === "publish_block" && withhold
+        ? `${str(payload.channel)} · ${hidden ? `post ${HIDDEN_NOTE}` : "post"}`
+        : summary(kind, payload)));
+    if (kind === "publish_block" && withhold) {
+      art.append(h("div", { class: "txmeta" }, hidden
+        ? [h("span", { class: "badge noticket" }, "hidden"), ` ${HIDDEN_NOTE}: its title, text and media are not shown here. The chain still holds the post (body_hash below), and VERIFY still replays it.`]
+        : "devnet post: its title, text and media wait for the devnet's card for this block, which says whether the admin hid it"));
+      art.append(h("div", { class: "txmeta" }, "body_hash ", copyable(payload.body_hash, 8)));
+    } else if (kind === "publish_block") {
+      if (cp && typeof cp.body === "string" && cp.body) {
+        art.append(h("div", { class: "txbody" }, cp.body),
+          h("div", { class: "txmeta" }, "post text is off-chain, as the node reports it; the chain holds its body_hash"));
+      }
+      art.append(h("div", { class: "txmeta" }, "body_hash ", copyable(payload.body_hash, 8),
+        payload.media_uri ? [" · media ", h("code", null, str(payload.media_uri))] : null));
+    }
+    if (kind === "drum_session" && Array.isArray(payload.players)) {
+      art.append(h("div", { class: "txmeta" }, "players ", payload.players.map((a) => short(a, 5)).join(" · ")));
+    }
+    if (kind === "register_agent" && cp && cp.agent_address) {
+      art.append(h("div", { class: "txmeta" }, "agent ", copyable(cp.agent_address, 7)));
+    }
+    if (kind === "presence_tap") {
+      const t = obj(payload.ticket);
+      art.append(h("div", { class: "txmeta" },
+        h("span", { class: "badge ticket", title: "Carries a presence ticket from a registered issuer: the only tap that earns on a ticketed chain" }, "✧ ticketed"),
+        " issuer ", copyable(t.issuer, 6), " · pid ", copyable(t.pid, 6), ` · slot ${fmt(t.slot)}`));
+    }
+    if (kind === "set_presence_issuers") {
+      const keys = arr(payload.issuers);
+      art.append(h("div", { class: "txmeta" }, keys.length ? `issuers ${keys.map((k) => short(k, 8)).join(" · ")}` : "no issuers: presence taps are paused until the admin sets some"));
+    }
+    // A mint: its collection, whether it is the collection's first mint in
+    // the yard, and (with ?town=) a link to its Town Hall gallery.
+    // ctx.mintAt(i) -> { collection, first, nth, whole } | null.
+    if (isMintName(kind)) {
+      const mi = typeof ctx.mintAt === "function" ? obj(ctx.mintAt(i)) : {};
+      const coll = typeof mi.collection === "string" ? mi.collection : (obj(mintOf(kind, payload)).collection || "");
+      const href = townLink(ctx.town, coll);
+      art.append(h("div", { class: "txmeta" },
+        h("span", { class: `badge mint${mi.first === true ? " first" : ""}` }, mi.first === true ? "◎ first mint" : "◆ mint"),
+        // Only a drop is born at its first mint (its first minter becomes its
+        // creator); an edition is born earlier, at its open_edition.
+        coll ? ` ${mi.first === true ? (mi.whole === true ? (kind === "drop_mint" ? "born here: " : "first mint: ") : "first in the yard: ") : "of "}${clip(coll, 64)}` : " · no collection id",
+        isInt(mi.nth) && mi.nth > 0 ? ` · #${fmt(mi.nth)}${mi.whole === true ? "" : " in the yard"}` : "",
+        href ? [" · ", h("a", { href, target: "_blank", rel: "noopener noreferrer" }, "Town Hall gallery ↗")] : null));
+    }
+    if (kind === "tap" && ctx.ticketed && !issued.length) {
+      art.append(h("div", { class: "txmeta" },
+        h("span", { class: "badge noticket", title: "A bare tap counts on a ticketed chain but mints nothing" }, "tap · no ticket · +0")));
+    }
+    if (card) {
+      const bits = [];
+      if (issued.length) bits.push(`issued +${fmt(issuedTotal(issued))} ATTN (${issued.map((m) => `${short(m && m.to, 5)} +${fmt(m && m.amount)}`).join(", ")})`);
+      const credited = arr(card.credited);
+      if (credited.length) bits.push(`credited ${plural(credited.length, "player")}`);
+      if (card.funded_by) bits.push(`paid by ${short(card.funded_by, 7)}`);
+      if (card.token && typeof card.token === "object") bits.push(`token ${clip(card.token.edition, 64) || "?"} #${fmt(card.token.serial)}`);
+      art.append(h("div", { class: "txmeta" }, h("span", { class: "rc" }, `receipt: ${bits.length ? bits.join(" · ") : "applied, nothing issued"}`), ` · ${str(cardSrc)}`));
+      if (card.hash) art.append(h("div", { class: "txmeta" }, "tx ", copyable(card.hash, 8)));
+    } else {
+      art.append(h("div", { class: "txmeta" }, ctx.snapshot
+        ? "receipt: not recorded in the snapshot; turn on VERIFY to compute it in your browser"
+        : "receipt: loading…"));
+    }
+    return art;
+  }
+  // A sealed anchor record (/anchors or the snapshot); `state` is "posted" or "sealed".
+  function anchorRecord(a, state) {
+    a = obj(a);
+    const p = obj(a.payload);
+    const out = [h("span", null, `${state === "posted" ? "posted to Tezos" : "sealed"} · status ${str(a.status)}`)];
+    if (p.state_root) out.push(h("br"), "root ", copyable(p.state_root, 8));
+    if (tezosExplorerUrl(a.explorer_url)) {
+      out.push(" · ", h("a", { href: a.explorer_url, target: "_blank", rel: "noopener noreferrer nofollow" }, "Tezos operation ↗"));
+    }
+    return out;
+  }
+  // The detail panel's header facts. `hash` and its source come from the
+  // caller (your replay, the node, or the next block's parent link).
+  function blockFacts(hh, hd, hash, hashSrc, txLine, anchorNode) {
+    hd = obj(hd);
+    const row = (k, v, src) => [h("dt", null, k), h("dd", null, v, src ? [" ", h("span", { class: "src" }, src)] : null)];
+    const ts = num(hd.timestamp);
+    return h("dl", { class: "kv" },
+      row("height", fmt(hh)),
+      row("block hash", copyable(hash, 10), hashSrc),
+      row("parent", copyable(hd.prev_hash, 10)),
+      row("timestamp", Number.isFinite(ts) ? `${utc(ts)} · ${ago(ts)}` : str(hd.timestamp)),
+      row("state root", copyable(hd.state_root, 10)),
+      row("tx root", copyable(hd.tx_root, 10)),
+      row("sequencer sig", copyable(hd.sequencer_sig, 10)),
+      row("transactions", txLine),
+      anchorNode ? row("anchor", anchorNode) : null);
+  }
+  // One row of the balances drawer, from /account/{addr} or the snapshot.
+  // Returns the row and what a click on it spotlights.
+  function accountRow(a, i, max, on) {
+    a = obj(a);
+    const addr = str(a.address), k = obj(a.kind);
+    const isAgent = k.type === "agent";
+    const bal = num(a.balance) || 0;
+    const pct = Math.min(100, Math.max(1, (bal / Math.max(1, num(max) || 1)) * 100 || 0));
+    const el = h("button", { class: "acct", type: "button", "aria-pressed": String(!!on), title: addr },
+      h("span", { class: "rank" }, String(i + 1)),
+      h("span", { class: "who" },
+        isAgent ? h("span", { class: "badge agent", title: `owner ${str(k.owner)}` }, `⚙ ${str(k.name)}`) : h("span", { class: "badge human" }, `${addr.slice(0, 3)} · human`),
+        h("code", null, short(addr, 6))),
+      h("span", { class: "bal" }, `${fmt(typeof a.balance === "bigint" ? a.balance : bal)} ATTN`),
+      h("span", { class: "bar" }, h("i", { style: `width:${pct.toFixed(1)}%` })));
+    return { el, addr, label: isAgent ? `${str(k.name)} (${short(addr, 6)})` : short(addr, 7) };
+  }
+  // ---------- end renderers
+
+  const metaContent = (name) => { const m = document.querySelector(`meta[name="${name}"]`); return m ? (m.getAttribute("content") || "").trim() : ""; };
+  const show = (id, text) => { const el = $(id); el.textContent = text; el.hidden = !text; };
+
+  // ---------- theme (shares pc-theme with the feed explorer)
+  try { const t = localStorage.getItem("pc-theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}
+  $("theme").onclick = () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("pc-theme", next); } catch {}
+    themeChanged();
+  };
+  onMq(matchMedia("(prefers-color-scheme: dark)"), () => themeChanged());
+  onMq(RM, (e) => { reduced = e.matches; kick(); });
+
+  // ======================================================================
+  // Geometry. One world unit = one sprite pixel. A cube is 16×16 px (2:1
+  // dimetric: 16×8 top face, 8 px sides). Stacks stand on a 24×12 grid cell.
+  // Heights fill rows of COLS, serpentine, so the chain is one unbroken wire.
+  // ======================================================================
+  const W = 16, T = 8, S = 8, SLAB = 3, PW = 24, PT = 12;
+  // 24 per row: with anchors every 100 blocks, the beacons march diagonally
+  // across the yard instead of all landing on one edge.
+  const COLS = 24, MAX_CUBES = 12, MAX_LOAD = 6000, PAGE = 500, POLL_MS = 3000;
+  const LEVELS = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12, 16];   // device px per world px
+  function cellOf(hh) {
+    const i = hh - 1, row = Math.floor(i / COLS);
+    let col = i % COLS;
+    if (row % 2) col = COLS - 1 - col;
+    return { gx: col, gy: row, x: (col - row) * (PW / 2), y: (col + row) * (PT / 2) };
+  }
+
+  // ---------- colours
+  const rgbOf = (hex) => { const n = parseInt(hex.replace("#", "").slice(0, 6), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const css = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const WHITE = [255, 255, 255], BLACK = [0, 0, 0];
+  const lum = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+  let TH = {};
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (n) => cs.getPropertyValue(n).trim() || "#888888";
+    TH = {
+      bg: v("--yard-bg"), bg2: v("--yard-bg2"), plate: v("--yard-plate"), plateEdge: v("--yard-plate-edge"),
+      ghost: v("--yard-ghost"), link: v("--yard-link"), ink: v("--yard-ink"), halo: v("--yard-halo"),
+      slab: v("--slab"), ok: v("--ok"), bad: v("--bad"), beacon: v("--beacon"), posted: v("--beacon-posted"),
+      beaconOff: v("--beacon-off"), mint: v("--mint"), dark: lum(rgbOf(v("--yard-bg"))) < 0.3,
+    };
+  }
+
+  // ======================================================================
+  // Sprites, drawn pixel by pixel into small canvases and blitted with
+  // imageSmoothingEnabled = false, so every zoom level stays crisp.
+  // ======================================================================
+  const mkCanvas = (w, hh) => { const c = document.createElement("canvas"); c.width = w; c.height = hh; return c; };
+  function rhombusRows(wd, td) {
+    const rows = [];
+    for (let y = 0; y < td; y++) {
+      const hw = y < td / 2 ? 2 * (y + 1) : 2 * (td - y);
+      rows.push([wd / 2 - hw, wd / 2 + hw]);
+    }
+    return rows;
+  }
+  function prism(hex, side, motif, opts = {}) {
+    const c = mkCanvas(W, T + side), g = c.getContext("2d");
+    const base = rgbOf(hex);
+    const top = mix(base, WHITE, opts.flat ? 0.12 : 0.3), left = base, right = mix(base, BLACK, opts.flat ? 0.18 : 0.3);
+    const put = (x, y, col) => { g.fillStyle = css(col); g.fillRect(x, y, 1, 1); };
+    const rows = rhombusRows(W, T);
+    rows.forEach(([a, b], y) => { for (let x = a; x < b; x++) put(x, y, top); });
+    for (let x = 0; x < W; x++) {
+      const lft = x < W / 2;
+      const y0 = T / 2 + 1 + ((lft ? x : W - 1 - x) >> 1);
+      for (let y = y0; y < y0 + side; y++) {
+        let col = lft ? left : right;
+        if (y === y0 + side - 1) col = mix(base, BLACK, 0.5);          // seam under each cube
+        else if (x === W / 2 - 1) col = mix(left, WHITE, 0.12);        // front edge
+        put(x, y, col);
+      }
+    }
+    // rim light on the top face (light comes from the upper left)
+    rows.slice(0, T / 2).forEach(([a, b], y) => {
+      put(a, y, mix(base, WHITE, 0.62)); put(a + 1, y, mix(base, WHITE, 0.62));
+      put(b - 1, y, mix(top, WHITE, 0.28)); put(b - 2, y, mix(top, WHITE, 0.28));
+    });
+    if (opts.stripes) {
+      rows.forEach(([a, b], y) => { for (let x = a; x < b; x++) if ((x + 2 * y) % 6 < 2) put(x, y, mix(base, BLACK, 0.25)); });
+    }
+    if (motif) {
+      const mark = lum(top) > 0.58 ? mix(base, BLACK, 0.62) : mix(top, WHITE, 0.82);
+      for (const [x, y] of motif) put(x, y, mark);
+    }
+    return c;
+  }
+  function silhouette(src, color) {
+    const c = mkCanvas(src.width, src.height), g = c.getContext("2d");
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = "source-in";
+    g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+    return c;
+  }
+  function plate(fill, edge, dashed) {
+    const c = mkCanvas(PW, PT), g = c.getContext("2d");
+    const rows = rhombusRows(PW, PT);
+    rows.forEach(([a, b], y) => {
+      for (let x = a; x < b; x++) {
+        const rim = y === 0 || y === PT - 1 || x < a + 2 || x >= b - 2;
+        if (dashed) { if (rim && (x + y) % 4 < 2) { g.fillStyle = edge; g.fillRect(x, y, 1, 1); } continue; }
+        g.fillStyle = rim ? edge : fill; g.fillRect(x, y, 1, 1);
+      }
+    });
+    return c;
+  }
+  function glyph(rows, color, outline) {
+    const hh = rows.length, w = rows[0].length;
+    const c = mkCanvas(w + 2, hh + 2), g = c.getContext("2d");
+    const on = (x, y) => rows[y] && rows[y][x] === "#";
+    g.fillStyle = outline;
+    for (let y = -1; y <= hh; y++) for (let x = -1; x <= w; x++) {
+      if (on(x, y)) continue;
+      if (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1)) g.fillRect(x + 1, y + 1, 1, 1);
+    }
+    g.fillStyle = color;
+    for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) if (on(x, y)) g.fillRect(x + 1, y + 1, 1, 1);
+    return c;
+  }
+  const ringCache = new Map();
+  function ring(r, color) {
+    const key = `${color}|${r}`;
+    let c = ringCache.get(key);
+    if (c) return c;
+    const rx = r, ry = Math.max(1, Math.round(r / 2));
+    c = mkCanvas(2 * rx + 1, 2 * ry + 1);
+    const g = c.getContext("2d");
+    g.fillStyle = color;
+    const steps = Math.max(24, Math.ceil(Math.PI * 2 * rx) * 2);
+    for (let i = 0; i < steps; i++) {
+      const t = (i / steps) * Math.PI * 2;
+      g.fillRect(Math.round(rx + rx * Math.cos(t)), Math.round(ry + ry * Math.sin(t)), 1, 1);
+    }
+    if (ringCache.size > 600) ringCache.clear();
+    ringCache.set(key, c);
+    return c;
+  }
+  // The Mints lens's beacon gem, one per colour.
+  const gemCache = new Map();
+  function gem(color) {
+    let c = gemCache.get(color);
+    if (!c) {
+      c = glyph(["..#..", ".###.", "#####", ".###.", "..#.."], color, TH.halo);
+      if (gemCache.size > 64) gemCache.clear();
+      gemCache.set(color, c);
+    }
+    return c;
+  }
+  let SP = null;
+  function buildSprites() {
+    readTheme();
+    ringCache.clear();
+    gemCache.clear();
+    const cubes = KINDS.map((k) => prism(k.color, S, k.motif));
+    const overflow = prism("#f2f2f2", S, [[7, 2], [8, 2], [7, 3], [8, 3], [7, 4], [8, 4], [5, 3], [6, 3], [9, 3], [10, 3]], { stripes: true });
+    const slab = prism(TH.slab, SLAB, null, { flat: true });
+    SP = {
+      cubes, overflow, slab,
+      cubeSil: { ok: silhouette(cubes[0], TH.ok), bad: silhouette(cubes[0], TH.bad), hi: silhouette(cubes[0], "#ffffff") },
+      slabSil: { ok: silhouette(slab, TH.ok), bad: silhouette(slab, TH.bad), hi: silhouette(slab, "#ffffff") },
+      plate: plate(TH.plate, TH.plateEdge),
+      plateOk: plate(css(mix(rgbOf(TH.plate), rgbOf(TH.ok), TH.dark ? 0.16 : 0.22)), css(mix(rgbOf(TH.plateEdge), rgbOf(TH.ok), 0.55))),
+      plateBad: plate(TH.dark ? "#4a0712" : "#ffd0d6", TH.bad),
+      plateSel: plate(TH.dark ? "#2a3156" : "#fffdf6", TH.ink),
+      ghost: plate(TH.ghost, TH.plateEdge, true),
+      check: glyph(["......#", ".....##", "#...##.", "##.##..", ".###...", "..#...."], TH.ok, TH.dark ? "#00160a" : "#ffffff"),
+      cross: glyph(["#...#", "##.##", ".###.", "##.##", "#...#"], TH.bad, TH.dark ? "#1a0005" : "#ffffff"),
+      emit: glyph([".#.", "###", ".#."], "#ffffff", TH.beacon),
+      emitPosted: glyph([".#.", "###", ".#."], "#ffffff", TH.posted),
+      emitOff: glyph([".#.", "###", ".#."], TH.beaconOff, TH.halo),
+    };
+  }
+
+  // ======================================================================
+  // State
+  // ======================================================================
+  let MODE = "boot";               // "node" | "snapshot"
+  let API = null, SNAP_URL = null, SNAP = null;
+  // The snapshot exactly as served. The page reads it with JSON.parse, which is
+  // fine for drawing; VERIFY hands these bytes to the worker, which parses them
+  // losslessly (verify.js parseJson), so every u64 reaches the wasm intact.
+  let SNAP_TEXT = "";
+  let params = null, status = null, interval = 100;
+  // Tap income needs a presence ticket on this chain (GET /params →
+  // launch.presence.tap_policy, chain-core params.rs): bare taps count, +0.
+  const ticketed = () => {
+    const pp = params && params.launch && params.launch.presence;
+    return !!pp && pp.tap_policy === "ticketed";
+  };
+  const blocks = new Map();        // height -> stack
+  let order = [];                  // heights, back-to-front (hit testing)
+  let heights = [];                // heights, ascending (timeline; never loop over minH..maxH, it may have gaps)
+  let minH = 0, maxH = 0, totalTx = 0;
+  const anchors = new Map();       // height -> anchor record
+  let accounts = null;             // snapshot accounts, or the last live fetch
+  const blockViews = cardCache(300); // height -> node /block view (receipts, hashes), with its age
+  // The public devnet (x-pointcast-network: devnet, or status.network): its
+  // admin can hide posts, so post titles wait for its cards (panelCard).
+  let devnetSeen = false;
+  const devnet = () => devnetSeen || !!(status && status.network === "devnet");
+  let selected = 0, hovered = 0, panelH = 0;
+  let spot = null;                 // { type: "kind", ix } | { type: "addr", addr }
+  // The Mints lens (?lens=mints): every *_mint cube lit, a ring on each
+  // collection's first mint, the counter strip. ?town= links collections to
+  // their pc-town Town Hall gallery (#/d/{collection}).
+  let lens = qs.get("lens") === "mints";
+  const TOWN = townBase(qs.get("town"), location.href);
+  let MINTS = null;                // indexMints() of the loaded yard; null = stale
+  const seenKinds = new Set();     // kind indexes seen so far (a new neutral or unknown one rebuilds the legend)
+  let live = { on: false, blocks: 0, txs: 0, since: Date.now() };
+  let initialDone = false;
+
+  // ---------- stacks
+  function involved(t) {
+    const x = (t && t.tx) || {};
+    const out = new Set();
+    const add = (a) => { if (typeof a === "string" && a) out.add(a); };
+    add(x.sender); add(x.to); add(x.recipient); add(x.agent);
+    (Array.isArray(x.players) ? x.players : []).forEach(add);
+    (x.terms && Array.isArray(x.terms.payees) ? x.terms.payees : []).forEach(add);
+    return out;
+  }
+  function addBlocks(list, animate) {
+    const fresh = [];
+    for (const raw of list) {
+      const hd = raw && raw.header;
+      if (!hd || !isInt(hd.height) || hd.height < 1 || blocks.has(hd.height)) continue;
+      const txs = Array.isArray(raw.txs) ? raw.txs : [];
+      const c = cellOf(hd.height);
+      const B = {
+        h: hd.height, header: hd, txs, ntx: txs.length,
+        kinds: txs.map((t) => kindIx(t && t.tx && t.tx.type)),
+        names: txs.map((t) => kindName(t && t.tx && t.tx.type)),
+        addrs: txs.map(involved),
+        gx: c.gx, gy: c.gy, x: c.x, y: c.y,
+        born: 0, v: 0, vAt: 0, reason: "",
+      };
+      blocks.set(B.h, B);
+      totalTx += B.ntx;
+      fresh.push(B);
+      applyVerified(B);
+    }
+    if (!fresh.length) return fresh;
+    MINTS = null;
+    let newKind = false;
+    for (const B of fresh) for (const ix of B.kinds) if (!seenKinds.has(ix)) { seenKinds.add(ix); if (KINDS[ix].registry || ix === UNKNOWN) newKind = true; }
+    if (newKind && initialDone) buildLegend();
+    if (lens && initialDone) queueMints();
+    fresh.sort((a, b) => a.h - b.h);
+    if (initialDone && !maxH) { $("msg").hidden = true; cam.set = false; setTimeout(afterLoad, 0); }
+    // A page left open on a live node keeps the newest MAX_LOAD + 1000 stacks.
+    if (blocks.size > MAX_LOAD + 1000) {
+      const drop = [...blocks.keys()].sort((a, b) => a - b).slice(0, blocks.size - MAX_LOAD);
+      for (const hh of drop) { const B = blocks.get(hh); totalTx -= B.ntx; blocks.delete(hh); verified.delete(hh); blockViews.delete(hh); }
+      minH = Math.min(...blocks.keys());
+    }
+    const now = performance.now();
+    if (animate && !reduced) {
+      const step = initialDone ? 110 : Math.min(8, 1400 / fresh.length);
+      fresh.forEach((B, i) => { B.born = now + i * step; });
+    }
+    minH = minH && blocks.has(minH) ? Math.min(minH, fresh[0].h) : Math.min(...blocks.keys());
+    maxH = Math.max(maxH, fresh[fresh.length - 1].h);
+    if (initialDone) { live.blocks += fresh.length; live.txs += fresh.reduce((a, B) => a + B.ntx, 0); }
+    heights = [...blocks.keys()].sort((a, b) => a - b);
+    order = heights.slice();
+    order.sort((a, b) => { const A = blocks.get(a), Bb = blocks.get(b); return (A.gx + A.gy) - (Bb.gx + Bb.gy) || A.gx - Bb.gx; });
+    miniDirty = true;
+    return fresh;
+  }
+  // Every mint in the loaded yard, indexed once per change.
+  const mintIndex = () => MINTS || (MINTS = indexMints(heights.map((hh) => blocks.get(hh))));
+
+  // Block hash as the page's own data reports it: the next block's parent link,
+  // the node's /block view, or the snapshot's status for the tip.
+  function reportedHash(hh) {
+    const next = blocks.get(hh + 1);
+    if (next && typeof next.header.prev_hash === "string") return { hash: next.header.prev_hash, note: `parent link of №${fmt(hh + 1)}` };
+    const view = blockViews.get(hh);
+    if (view && typeof view.hash === "string") return { hash: view.hash, note: "reported by the node" };
+    if (status && hh === status.height && typeof status.tip_hash === "string") return { hash: status.tip_hash, note: MODE === "snapshot" ? "snapshot status (tip)" : "node status (tip)" };
+    return null;
+  }
+
+  // ======================================================================
+  // Data: ?api= node, same-origin node, or a static snapshot.
+  // ======================================================================
+  function httpUrl(u, base) { try { const x = new URL(u, base); return /^https?:$/.test(x.protocol) ? x : null; } catch { return null; } }
+  // Same rule as the feed explorer: ?api=, else 127.0.0.1:8545 from file://, else this origin.
+  const API_GUESS = (qs.get("api") || (location.protocol === "file:" ? "http://127.0.0.1:8545" : location.origin)).replace(/\/$/, "");
+  // For drawing only: r.json() rounds integers above 2^53, so nothing read
+  // here is handed to the verifier (its worker fetches the node itself, and
+  // parses losslessly).
+  async function getJSON(path, timeoutMs = 8000) {
+    const ctl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : 0;
+    try {
+      const r = await fetch(API + path, { cache: "no-store", signal: ctl ? ctl.signal : undefined });
+      if (r.headers && r.headers.get("x-pointcast-network") === "devnet") devnetSeen = true;
+      if (!r.ok) throw new Error(`${r.status} ${path}`);
+      return await r.json();
+    } finally { clearTimeout(timer); }
+  }
+  const validStatus = (s) => s && typeof s === "object" && isInt(s.height) && s.height >= 0 && typeof s.genesis_hash === "string";
+
+  async function boot() {
+    buildSprites();
+    buildLegend();
+    resize();
+    const snapParam = qs.get("snapshot");
+    if (snapParam) return bootSnapshot(snapParam, "");
+    // A static host names its snapshot in <meta name="pc-snapshot">: no probe.
+    const metaSnap = metaContent("pc-snapshot");
+    if (metaSnap && !qs.get("api")) return bootSnapshot(metaSnap, "");
+    const apiUrl = httpUrl(API_GUESS, location.href);
+    let why = "";
+    if (!apiUrl) why = `?api=${API_GUESS} is not an http(s) URL`;
+    else {
+      API = API_GUESS;
+      try {
+        const st = await getJSON("/status", 4000);
+        if (!validStatus(st)) throw new Error("its /status is not a pointcast-chain node");
+        return await bootNode(st);
+      } catch (e) {
+        // A static site answers /status with a web page: say so plainly.
+        const reason = e instanceof SyntaxError ? "its /status is a web page, not a chain node" : (e.name === "AbortError" ? "timed out" : (e.message || String(e)));
+        why = qs.get("api") ? `no node answered at ?api=${API_GUESS} (${reason})` : `no chain node answers at ${API_GUESS} (${reason})`;
+      }
+    }
+    API = null;
+    return bootSnapshot("./snapshot.json", why);
+  }
+
+  async function bootNode(st) {
+    MODE = "node";
+    status = st;
+    params = await getJSON("/params").catch(() => null);
+    interval = posInt(params && params.anchor_interval, posInt(st.anchor_interval, 100));
+    setSource();
+    await loadAnchorsLive();
+    const tip = st.height;
+    const from = Math.max(1, tip - MAX_LOAD + 1);
+    if (from > 1) show("v-src", `Showing the latest ${fmt(MAX_LOAD)} blocks (№${fmt(from)}–№${fmt(tip)}); the timeline covers what is loaded.`);
+    if (tip > 0) await loadRange(from, tip, true);
+    initialDone = true;
+    afterLoad();
+    setTimeout(poll, POLL_MS);
+    setInterval(() => { loadAnchorsLive().then(() => { updateStats(); kick(); }).catch(() => {}); }, 15000);
+  }
+
+  async function bootSnapshot(rel, why) {
+    const url = httpUrl(rel, location.href);
+    if (!url || url.origin !== location.origin) {
+      return fatal(location.protocol === "file:"
+        ? "This page needs a node or an http server. Serve its folder (python3 -m http.server) or pass ?api=http://127.0.0.1:8545."
+        : `The snapshot must be a relative or same-origin URL (got ${rel}).`, why);
+    }
+    SNAP_URL = url.href;
+    let snap, text;
+    try {
+      const r = await fetch(SNAP_URL, { cache: "no-cache" });
+      if (!r.ok) throw new Error(`${r.status} ${url.pathname}`);
+      text = await r.text();
+      snap = JSON.parse(text);
+    } catch (e) {
+      return fatal(`No node, and no snapshot at ${url.pathname} (${e.message || e}).`, why);
+    }
+    if (!snap || snap.format !== "pointcast-chain-snapshot/v1" || !Array.isArray(snap.blocks) || !validStatus(snap.status) || !snap.params) {
+      return fatal(`${url.pathname} is not a pointcast-chain-snapshot/v1 file.`, why);
+    }
+    MODE = "snapshot";
+    SNAP = snap;
+    SNAP_TEXT = text;
+    status = snap.status;
+    params = snap.params;
+    interval = posInt(params.anchor_interval, posInt(status.anchor_interval, 100));
+    (Array.isArray(snap.anchors) ? snap.anchors : []).forEach(addAnchor);
+    accounts = Array.isArray(snap.accounts) ? snap.accounts.filter((a) => a && typeof a === "object") : null;
+    setSource(why);
+    addBlocks(snap.blocks, true);
+    initialDone = true;
+    afterLoad();
+  }
+
+  function fatal(text, why) {
+    const msg = $("msg");
+    msg.replaceChildren(h("div", null, "NO SIGNAL",
+      h("span", { class: "sub" }, text),
+      h("span", { class: "sub" }, "Start a node: cargo run -p node -- run --dev --demo, then open /town on it, or add ?api=http://127.0.0.1:8545 or ?snapshot=./snapshot.json"),
+      why ? h("span", { class: "sub" }, `(${why})`) : null));
+    msg.hidden = false;
+    setLive("off", "OFF AIR");
+  }
+
+  async function loadRange(from, to, animate) {
+    let f = from;
+    for (let guard = 0; guard < 200 && f <= to; guard++) {
+      const page = await getJSON(`/raw/blocks?from=${f}&limit=${PAGE}`);
+      // Only the page that was asked for: a node cannot plant a block at a far-off height.
+      const list = (Array.isArray(page && page.blocks) ? page.blocks : [])
+        .filter((b) => b && b.header && isInt(b.header.height) && b.header.height >= f && b.header.height < f + PAGE && b.header.height <= to);
+      if (!list.length) break;
+      addBlocks(list, animate);
+      const last = Math.max(...list.map((b) => b.header.height));
+      if (!initialDone) $("msg").replaceChildren(h("div", null, `TUNING IN… №${fmt(last)} / ${fmt(to === Infinity ? last : to)}`));
+      f = last + 1;
+      if (list.length < PAGE && to === Infinity) break;
+    }
+  }
+
+  function addAnchor(a) {
+    const hh = a && a.payload && a.payload.height;
+    if (isInt(hh)) anchors.set(hh, a);
+  }
+  // /anchors lists the latest 50; older anchor heights may simply be outside it.
+  let anchorWindowFloor = 0;
+  async function loadAnchorsLive() {
+    try {
+      const d = await getJSON("/anchors");
+      const list = Array.isArray(d && d.anchors) ? d.anchors : [];
+      list.forEach(addAnchor);
+      if (list.length >= 50) {
+        const hs = list.map((a) => a && a.payload && a.payload.height).filter(isInt);
+        anchorWindowFloor = Math.max(anchorWindowFloor, hs.length ? Math.min(...hs) : 0);
+      }
+    } catch {}
+  }
+
+  let polling = false;
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    try {
+      const st = await getJSON("/status", 5000);
+      if (!validStatus(st)) throw new Error("bad /status");
+      if (status && st.genesis_hash !== status.genesis_hash) {
+        show("v-node", `This node now reports another genesis (${short(st.genesis_hash, 8)}, was ${short(status.genesis_hash, 8)}). Reload to see the new chain.`);
+        setLive("off", "GENESIS CHANGED");
+      } else {
+        status = st;
+        if (st.height > maxH) await loadRange(maxH + 1, Infinity, true);
+        setLive("on", "LIVE");
+        updateStats();
+        if (accountsOpen()) refreshAccounts(false);
+      }
+    } catch {
+      setLive("off", "OFF AIR");
+    } finally {
+      polling = false;
+      setTimeout(poll, POLL_MS);
+      kick();
+    }
+  }
+
+  function setSource(why) {
+    const id = status && status.chain_id;
+    $("chain-id").textContent = str(id || "…");
+    if (MODE === "node") {
+      $("s-source").textContent = "NODE";
+      $("s-source-l").textContent = short(API.replace(/^https?:\/\//, ""), 12);
+      $("s-source").title = API;
+      setLive("on", "LIVE");
+      // The node's own feed explorer (its root), wherever this page is hosted.
+      const feed = $("feed-link"), href = feedHref(API);
+      if (href) feed.href = href; else feed.hidden = true;
+    } else {
+      $("s-source").textContent = "SNAPSHOT";
+      const rec = str(SNAP && SNAP.recorded_at);
+      $("s-source-l").textContent = rec ? `rec. ${rec.slice(0, 10)}` : "static";
+      $("s-source").title = SNAP_URL || "";
+      setLive("snap", "SNAPSHOT");
+      show("v-src", `Static snapshot: a recorded --dev --demo chain${ticketed() ? " with ticketed taps" : ""}, signed with the public dev keys${rec ? `, recorded ${rec}` : ""}.${why ? ` Showing it because ${why}.` : ""} VERIFY replays it in your browser.`);
+      $("feed-link").hidden = true;
+    }
+    $("anchor-every").textContent = fmt(interval);
+    $("policy").hidden = !ticketed();
+  }
+  function setLive(kind, text) {
+    const el = $("live");
+    el.className = `live${kind === "on" ? "" : kind === "snap" ? " snap" : " off"}`;
+    $("live-text").textContent = text;
+    $("live-tally").textContent = kind === "on" && (live.blocks || live.txs) ? ` +${fmt(live.blocks)} blocks · +${fmt(live.txs)} tx` : "";
+  }
+
+  function updateStats() {
+    if (!status) return;
+    $("s-tip").textContent = `№${fmt(status.height)}`;
+    $("s-txs").textContent = fmt(totalTx);
+    $("s-txs-l").textContent = minH > 1 ? `Txs since №${fmt(minH)}` : "Transactions";
+    $("s-accounts").textContent = fmt(status.accounts);
+    const reached = Math.floor(status.height / interval);
+    const sealed = [...anchors.keys()].filter((k) => k <= status.height).length;
+    $("s-anchors").textContent = fmt(Math.max(sealed, reached));
+    $("s-anchors-l").textContent = `Anchors · every ${fmt(interval)}`;
+    $("s-anchors").title = `${fmt(sealed)} sealed anchor records · ${fmt(reached)} anchor heights reached`;
+    const sup = num(status.total_supply), max = num(status.max_supply);
+    $("s-supply").textContent = Number.isFinite(sup) ? fmt(sup) : "—";
+    $("s-supply-bar").style.width = Number.isFinite(sup) && max > 0 ? `${Math.max(0.5, Math.min(100, (sup / max) * 100))}%` : "0";
+    $("ticker").textContent = `state_root ${str(status.state_root) || "—"} · tip ${str(status.tip_hash) || "—"} · genesis ${str(status.genesis_hash)}`;
+    if (MODE === "node") setLive($("live").classList.contains("off") ? "off" : "on", $("live-text").textContent);
+  }
+
+  function afterLoad() {
+    lensUi();             // builds the legend too
+    $("msg").hidden = blocks.size > 0;
+    if (!blocks.size) $("msg").replaceChildren(h("div", null, "NO BLOCKS YET", h("span", { class: "sub" }, "Waiting for the first block…")));
+    updateStats();
+    if (!cam.set) { frameInitial(); cam.set = true; }
+    kick();
+  }
+
+  // ======================================================================
+  // Canvas + camera
+  // ======================================================================
+  const stage = $("stage"), cv = $("yard"), ctx = cv.getContext("2d", { alpha: false });
+  const mini = $("mini"), mctx = mini.getContext("2d");
+  let dpr = 1, CW = 0, CH = 0;
+  const cam = { x: 0, y: 0, z: 4, tx: null, ty: null, th: 0, set: false };   // th: height a glide is heading for
+  let follow = true, raf = 0, dirty = true, miniDirty = true, lastBeacon = 0, animating = false, userZoomed = false, userMoved = false;
+  let visMin = 0, visMax = 0;
+  const narrow = () => matchMedia("(max-width: 640px)").matches;
+
+  function resize() {
+    dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const r = stage.getBoundingClientRect();
+    CW = Math.max(1, Math.round(r.width * dpr)); CH = Math.max(1, Math.round(r.height * dpr));
+    if (cv.width !== CW || cv.height !== CH) { cv.width = CW; cv.height = CH; }
+    const m = mini.getBoundingClientRect();
+    const mw = Math.max(1, Math.round(m.width * dpr)), mh = Math.max(1, Math.round(m.height * dpr));
+    if (mini.width !== mw || mini.height !== mh) { mini.width = mw; mini.height = mh; }
+    if (cam.set && !userZoomed && !userMoved) frameInitial();
+    cam.z = clampZ(cam.z);
+    if (follow && maxH) focusTip(true);
+    dirty = miniDirty = true;
+    kick();
+  }
+  new ResizeObserver(() => resize()).observe(stage);
+  window.addEventListener("resize", resize);
+
+  const zMin = () => Math.max(0.5, dpr * 0.3), zMax = () => Math.min(16, dpr * 8);
+  const clampZ = (z) => Math.max(zMin(), Math.min(zMax(), z));
+  const levels = () => LEVELS.filter((l) => l >= zMin() - 1e-9 && l <= zMax() + 1e-9);
+  function fitDefault() {
+    const want = CW / ((narrow() ? 11 : 17) * PW);
+    const ls = levels();
+    cam.z = ls.reduce((best, l) => (l <= want ? l : best), ls[0]);
+  }
+  // Snapshot: the whole yard when it fits at ≥ 1 CSS px per sprite pixel.
+  // Live node: the default zoom, following the tip.
+  function frameInitial() {
+    fitDefault();
+    if (MODE !== "snapshot" || !blocks.size) { if (follow) focusTip(true); return; }
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const B of blocks.values()) {
+      const tall = B.ntx ? Math.min(B.ntx, MAX_CUBES) * S : SLAB;
+      x0 = Math.min(x0, B.x - PW / 2); x1 = Math.max(x1, B.x + PW / 2);
+      y0 = Math.min(y0, B.y - tall - (B.h % interval === 0 ? 40 : 14)); y1 = Math.max(y1, B.y + PT);
+    }
+    const zfit = Math.min(CW / ((x1 - x0) * 1.06), CH / ((y1 - y0) * 1.08));
+    const ls = levels();
+    setFollow(false);
+    if (zfit < dpr * 0.5) { moveTo(maxH, true); return; }    // a big yard: start at the tip
+    // the whole yard, or (phones) as close to it as stays legible, centred
+    const want = Math.max(zfit, dpr * 0.75);
+    cam.z = ls.reduce((best, l) => (l <= want ? l : best), ls[0]);
+    cam.x = (x0 + x1) / 2; cam.y = (y0 + y1) / 2; cam.tx = cam.ty = null;
+  }
+  function zoomStep(dir, ax, ay) {
+    const ls = levels();
+    let i = ls.findIndex((l) => l >= cam.z - 1e-6);
+    if (i < 0) i = ls.length - 1;
+    if (dir > 0 && ls[i] <= cam.z + 1e-6) i = Math.min(ls.length - 1, i + 1);
+    else if (dir < 0) i = Math.max(0, (ls[i] >= cam.z - 1e-6 ? i : i + 1) - 1);
+    zoomTo(ls[i], ax, ay);
+  }
+  function zoomTo(z, ax = CW / 2, ay = CH / 2) {
+    z = clampZ(z);
+    userZoomed = true;
+    if (follow) { ax = CW / 2; ay = CH / 2; }
+    const wx = (ax - CW / 2) / cam.z + cam.x, wy = (ay - CH / 2) / cam.z + cam.y;
+    cam.z = z;
+    cam.x = wx - (ax - CW / 2) / z; cam.y = wy - (ay - CH / 2) / z;
+    // A glide toward a selected stack keeps going after a zoom; its target
+    // depends on the zoom when a sheet is open, so it is recomputed.
+    if (cam.tx != null && !follow) {
+      if (cam.th && blocks.has(cam.th)) { const t = camTarget(cam.th); cam.tx = t.x; cam.ty = t.y; }
+      else { cam.tx = null; cam.ty = null; }
+    }
+    dirty = miniDirty = true; kick();
+  }
+  // Where the camera should centre so stack `hh` sits clear of open sheets.
+  function camTarget(hh) {
+    const c = cellOf(hh), B = blocks.get(hh);
+    const tall = B ? (B.ntx ? Math.min(B.ntx, MAX_CUBES) * S : SLAB) : 0;
+    let x = c.x, y = c.y - tall / 2 - 4;
+    const pn = $("panel");
+    if (!pn.hidden) {
+      const r = pn.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+      // phones: the sheet covers the bottom of the stage; centre in what is left
+      if (narrow()) y += Math.max(0, Math.min(sr.height * 0.8, sr.bottom - r.top)) * dpr / 2 / cam.z;
+      else x += (r.width + 10) * dpr / 2 / cam.z;
+    }
+    return { x, y };
+  }
+  function moveTo(hh, instant) {
+    const t = camTarget(hh);
+    if (instant || reduced) { cam.x = t.x; cam.y = t.y; cam.tx = cam.ty = null; }
+    else { cam.tx = t.x; cam.ty = t.y; cam.th = hh; }
+    dirty = miniDirty = true; kick();
+  }
+  function focusTip(instant) { if (maxH) moveTo(maxH, instant); }
+  function setFollow(on) {
+    follow = on;
+    $("follow").setAttribute("aria-pressed", String(on));
+    if (on) focusTip(false);
+  }
+  function stepCamera() {
+    if (follow && maxH && cam.tx == null) {
+      const t = camTarget(maxH);
+      if (Math.abs(t.x - cam.x) > 0.5 || Math.abs(t.y - cam.y) > 0.5) { cam.tx = t.x; cam.ty = t.y; }
+    }
+    if (cam.tx == null) return false;
+    if (reduced) { cam.x = cam.tx; cam.y = cam.ty; cam.tx = cam.ty = null; return true; }
+    cam.x += (cam.tx - cam.x) * 0.16; cam.y += (cam.ty - cam.y) * 0.16;
+    if (Math.abs(cam.tx - cam.x) < 0.3 && Math.abs(cam.ty - cam.y) < 0.3) { cam.x = cam.tx; cam.y = cam.ty; cam.tx = cam.ty = null; }
+    return true;
+  }
+
+  function kick() { dirty = true; if (!raf) raf = requestAnimationFrame(frame); }
+  let beaconsVisible = false;
+  let lastMouse = null;
+  function frame(now) {
+    raf = 0;
+    const moving = stepCamera();
+    if (moving && lastMouse) rehover();
+    const revealing = stepReveal(now);
+    const pulse = beaconsVisible && !reduced && now - lastBeacon > 66;
+    if (dirty || moving || revealing || animating) {
+      render(now, false);
+      if (pulse) lastBeacon = now;
+      dirty = false;
+      miniDirty = true;
+    } else if (pulse) {
+      // Only the beacon rings move: blit the cached yard and redraw the rings.
+      render(now, true);
+      lastBeacon = now;
+    }
+    if (miniDirty) { drawMini(); miniDirty = false; }
+    if (moving || revealing || animating || (beaconsVisible && !reduced) || cam.tx != null) raf = requestAnimationFrame(frame);
+  }
+  function themeChanged() { buildSprites(); buildLegend(); dirty = miniDirty = true; kick(); }
+
+  // ---------- rendering
+  function dropY(B, k, now) {
+    if (!B.born) return 0;
+    const t = (now - B.born - k * 55) / 420;
+    if (t >= 1) { if (k === 0 && now - B.born > 420 + MAX_CUBES * 55) B.born = 0; return 0; }
+    animating = true;
+    if (t < 0) return null;
+    if (t < 0.72) { const u = t / 0.72; return -80 * (1 - u * u); }
+    return -4 * Math.sin(((t - 0.72) / 0.28) * Math.PI);
+  }
+  // The Mints lens and a spotlight combine: with both, a cube is lit when it
+  // is a mint AND matches the spotlight (an account's mints, say).
+  function spotCube(B, k) {
+    if (lens && !isMintName(B.names[k])) return false;
+    if (!spot) return true;
+    if (spot.type === "kind") return B.kinds[k] === spot.ix;
+    return B.addrs[k] && B.addrs[k].has(spot.addr);
+  }
+  function spotStack(B) {
+    if (!spot && !lens) return true;
+    if (!B.ntx) return false;
+    for (let k = 0; k < B.ntx; k++) if (spotCube(B, k)) return true;
+    return false;
+  }
+  function anchorState(hh) {
+    const a = anchors.get(hh);
+    if (!a) return "expected";
+    if (typeof a.op_ref === "string" && a.op_ref.startsWith("o")) return "posted";
+    return "sealed";
+  }
+
+  // The yard minus the beacon rings, kept so a pulse-only frame is one blit
+  // plus a few rings instead of a full redraw of every visible stack.
+  const baseCv = document.createElement("canvas"), bctx = baseCv.getContext("2d", { alpha: false });
+  let baseOk = false, beaconList = [], mintBeacons = [], lastView = { ox: 0, oy: 0, z: 1, fs: 12 };
+  // Cells whose stack can reach the viewport, in a valid painter's order:
+  // rows back to front, columns left to right. Two stacks only overlap when
+  // their screen columns differ by at most one, and then the one in front is
+  // in a later row, or further right in the same row. O(visible), not O(chain).
+  function visibleStacks(wx0, wx1, wy0, wy1) {
+    const out = [];
+    if (!heights.length) return out;
+    const hx = PW / 2, hy = PT / 2;
+    const g0 = Math.max(Math.floor((heights[0] - 1) / COLS), Math.ceil(wy0 / hy - (COLS - 1)), Math.ceil(-wx1 / hx));
+    const g1 = Math.min(Math.floor((heights[heights.length - 1] - 1) / COLS), Math.floor(wy1 / hy), Math.floor(COLS - 1 - wx0 / hx));
+    for (let gy = g0; gy <= g1; gy++) {
+      const c0 = Math.max(0, Math.ceil(Math.max(gy + wx0 / hx, wy0 / hy - gy) - 1e-9));
+      const c1 = Math.min(COLS - 1, Math.floor(Math.min(gy + wx1 / hx, wy1 / hy - gy) + 1e-9));
+      for (let gx = c0; gx <= c1; gx++) {
+        const B = blocks.get(heightAt(gx, gy));
+        if (B) out.push(B);
+      }
+    }
+    return out;
+  }
+  function label(text, x, y, color) {
+    ctx.strokeStyle = TH.halo; ctx.strokeText(text, x, y);
+    ctx.fillStyle = color || TH.ink; ctx.fillText(text, x, y);
+  }
+  function setLabelFont(fs) {
+    ctx.font = `bold ${fs}px ui-monospace, "SF Mono", Menlo, Consolas, monospace`;
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.lineJoin = "round"; ctx.lineWidth = Math.max(2, fs / 4);
+  }
+
+  function render(now, pulseOnly) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    if (pulseOnly && baseOk && baseCv.width === CW && baseCv.height === CH) {
+      ctx.drawImage(baseCv, 0, 0);
+      drawBeacons(now);
+      return;
+    }
+    animating = false;
+    baseOk = false;
+    const grad = ctx.createLinearGradient(0, 0, 0, CH);
+    grad.addColorStop(0, TH.bg2); grad.addColorStop(0.55, TH.bg); grad.addColorStop(1, TH.bg);
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, CW, CH);
+    beaconsVisible = false;
+    beaconList = [];
+    mintBeacons = [];
+    if (!blocks.size || !SP) return;
+    const focus = !!(spot || lens);
+    const firstAt = lens ? mintIndex().firstAt : null;
+    const z = cam.z;
+    const ox = Math.round(CW / 2 - cam.x * z), oy = Math.round(CH / 2 - cam.y * z);
+    const X = (wx) => ox + Math.round(wx * z), Y = (wy) => oy + Math.round(wy * z);
+    const zw = (n) => Math.max(1, Math.round(n * z));
+    const wx0 = -ox / z - PW, wx1 = (CW - ox) / z + PW, wy0 = -oy / z - PT, wy1 = (CH - oy) / z + MAX_CUBES * S + 60;
+    const vis = visibleStacks(wx0, wx1, wy0, wy1);
+    const fs = Math.round(Math.max(9 * dpr, Math.min(4.2 * z, 13 * dpr)));
+    lastView = { ox, oy, z, fs };
+
+    // 1. ground: plates, then ghost cells where the current row will grow
+    for (const B of vis) {
+      let p = SP.plate;
+      if (B.v === 1 && B.vAt && now >= B.vAt) p = SP.plateOk;
+      else if (B.v === 2 || B.v === 3) p = SP.plateBad;
+      if (B.h === selected) p = SP.plateSel;
+      ctx.drawImage(p, X(B.x - PW / 2), Y(B.y - PT / 2), zw(PW), zw(PT));
+    }
+    if (MODE === "node" && maxH) {
+      const rowEnd = Math.ceil(maxH / COLS) * COLS;
+      for (let hh = maxH + 1; hh <= rowEnd + COLS; hh++) {
+        const c = cellOf(hh);
+        if (c.x < wx0 || c.x > wx1 || c.y < wy0 || c.y > wy1) continue;
+        ctx.drawImage(SP.ghost, X(c.x - PW / 2), Y(c.y - PT / 2), zw(PW), zw(PT));
+      }
+    }
+
+    // 2. the wire: dotted parent links between consecutive heights
+    const dot = Math.max(1, Math.round(z));
+    const link = (A, Bn) => {
+      let col = TH.link;
+      if (A.v === 1 && Bn.v === 1 && now >= Bn.vAt && Bn.vAt) col = TH.ok;
+      else if (A.v >= 2 || Bn.v >= 2) col = TH.bad;
+      ctx.fillStyle = col;
+      const dx = Math.sign(Bn.x - A.x), dy = Math.sign(Bn.y - A.y);
+      for (let s = 2; s <= 10; s += 2) ctx.fillRect(X(A.x + dx * s), Y(A.y + dy * (s / 2)), dot, dot);
+    };
+    const onScreen = new Set(vis.map((B) => B.h));
+    for (const A of vis) {
+      const Bn = blocks.get(A.h + 1);
+      if (Bn) link(A, Bn);
+      const P = blocks.get(A.h - 1);
+      if (P && !onScreen.has(P.h)) link(P, A);
+    }
+
+    // 3. stacks, back to front
+    let vlo = Infinity, vhi = 0;
+    const tops = [];
+    for (const B of vis) {
+      const hh = B.h;
+      if (hh < vlo) vlo = hh;
+      if (hh > vhi) vhi = hh;
+      const lit = spotStack(B);
+      const dimStack = (focus && !lit) || B.v === 4;
+      const hi = hh === hovered || hh === selected;
+      const sx = X(B.x - W / 2);
+      const revealed = B.v === 1 && B.vAt && now >= B.vAt;
+      let topY = B.y;
+      if (!B.ntx) {
+        const dy = dropY(B, 0, now);
+        if (dy === null) continue;
+        const y = B.y - T / 2 - SLAB + dy;
+        ctx.globalAlpha = dimStack ? 0.25 : 1;
+        ctx.drawImage(SP.slab, sx, Y(y), zw(W), zw(T + SLAB));
+        const tint = B.v === 2 || B.v === 3 ? [SP.slabSil.bad, 0.55] : revealed ? [SP.slabSil.ok, 0.32 * (reduced ? 1 : Math.min(1, (now - B.vAt) / 240))] : null;
+        if (tint && !dimStack) { ctx.globalAlpha = tint[1]; ctx.drawImage(tint[0], sx, Y(y), zw(W), zw(T + SLAB)); }
+        if (hi) { ctx.globalAlpha = 0.4; ctx.drawImage(SP.slabSil.hi, sx, Y(y), zw(W), zw(T + SLAB)); }
+        ctx.globalAlpha = 1;
+        topY = B.y - SLAB;
+      } else {
+        const n = Math.min(B.ntx, MAX_CUBES);
+        let drawn = 0;
+        for (let k = 0; k < n; k++) {
+          const dy = dropY(B, k, now);
+          if (dy === null) break;
+          const spr = B.ntx > MAX_CUBES && k === MAX_CUBES - 1 ? SP.overflow : SP.cubes[B.kinds[k]];
+          const y = B.y - T / 2 - S - k * S + dy;
+          const sy = Y(y);
+          const cubeLit = !focus || (k === MAX_CUBES - 1 && B.ntx > MAX_CUBES ? lit : spotCube(B, k));
+          ctx.globalAlpha = B.v === 4 ? 0.3 : cubeLit ? 1 : 0.16;
+          ctx.drawImage(spr, sx, sy, zw(W), zw(T + S));
+          if (B.v === 2 || B.v === 3) { ctx.globalAlpha = 0.55; ctx.drawImage(SP.cubeSil.bad, sx, sy, zw(W), zw(T + S)); }
+          else if (revealed && cubeLit) { ctx.globalAlpha = 0.2 * (reduced ? 1 : Math.min(1, (now - B.vAt) / 240)); ctx.drawImage(SP.cubeSil.ok, sx, sy, zw(W), zw(T + S)); }
+          if (hi) { ctx.globalAlpha = hh === hovered ? 0.38 : 0.22; ctx.drawImage(SP.cubeSil.hi, sx, sy, zw(W), zw(T + S)); }
+          ctx.globalAlpha = 1;
+          drawn = k + 1;
+        }
+        if (!drawn) continue;
+        topY = B.y - drawn * S;
+      }
+      tops.push([B, topY, revealed]);
+    }
+    visMin = vlo === Infinity ? 0 : vlo; visMax = vhi;
+
+    // 4. marks above stacks: verification glyphs and labels. Beacons last.
+    setLabelFont(fs);
+    for (const [B, topY, revealed] of tops) {
+      const cx = B.x, cy = topY - T / 2;
+      if (z >= 1.5) {
+        if (revealed && (!focus || spotStack(B))) {
+          const t = reduced ? 1 : Math.min(1, (now - B.vAt) / 260);
+          ctx.globalAlpha = t;
+          ctx.drawImage(SP.check, X(cx - 4), Y(cy - 9 - (1 - t) * 4), zw(9), zw(8));
+          ctx.globalAlpha = 1;
+          if (t < 1) animating = true;
+        } else if (B.v === 2 || B.v === 3) {
+          ctx.drawImage(SP.cross, X(cx - 3.5), Y(cy - 9), zw(7), zw(7));
+        }
+      }
+      if (B.ntx > MAX_CUBES && z >= 2) label(`+${B.ntx - (MAX_CUBES - 1)}`, X(cx), Y(cy - 3));
+      const isAnchor = B.h % interval === 0;
+      if (isAnchor) {
+        beaconList.push({ h: B.h, cx, cy });
+        if (anchorState(B.h) !== "expected") beaconsVisible = true;     // due beacons stand still
+      }
+      // Mints lens: a ring beacon on each collection's first mint in the yard.
+      const born = firstAt && firstAt.get(B.h);
+      if (born) { mintBeacons.push({ h: B.h, cx, cy, list: born, anchor: isAnchor }); beaconsVisible = true; }
+      if (B.h === maxH && z >= 1) label(`TIP №${fmt(B.h)}`, X(cx), Y(cy - 12 - (isAnchor ? 28 : 0) - (born ? 34 : 0)), TH.ink);
+      else if (z >= 3 && (B.h - 1) % COLS === 0 && !isAnchor && !born) {
+        ctx.globalAlpha = 0.7; label(`№${fmt(B.h)}`, X(cx), Y(B.y + 12), TH.link); ctx.globalAlpha = 1;
+      }
+    }
+    if (beaconsVisible && !reduced) {
+      if (baseCv.width !== CW || baseCv.height !== CH) { baseCv.width = CW; baseCv.height = CH; }
+      bctx.setTransform(1, 0, 0, 1, 0, 0);
+      bctx.drawImage(cv, 0, 0);
+      baseOk = true;
+    }
+    drawBeacons(now);
+  }
+  // Broadcast beacons over anchor heights: concentric rings and an emitter.
+  function drawBeacons(now) {
+    if (!beaconList.length && !mintBeacons.length) return;
+    const { ox, oy, z, fs } = lastView;
+    const X = (wx) => ox + Math.round(wx * z), Y = (wy) => oy + Math.round(wy * z);
+    const zw = (n) => Math.max(1, Math.round(n * z));
+    setLabelFont(fs);
+    // Label boxes already drawn this frame: a mint label that would overlap
+    // one (two collections born in neighbouring stacks) moves up a line.
+    const placed = [];
+    const freeY = (text, lx, ly) => {
+      const w = ctx.measureText(text).width + 6, hh = fs + 2;
+      for (let tries = 0; tries < 4 && placed.some((r) => Math.abs(r.x - lx) < (r.w + w) / 2 && Math.abs(r.y - ly) < hh); tries++) ly -= hh;
+      placed.push({ x: lx, y: ly, w });
+      return ly;
+    };
+    for (const { h: bh, cx, cy } of beaconList) {
+      const st = anchorState(bh);
+      const col = st === "posted" ? TH.posted : st === "sealed" ? TH.beacon : TH.beaconOff;
+      const by = cy - 16;
+      const rings = st === "expected" || reduced ? [0.22, 0.52, 0.82] : [0, 1, 2].map((i) => ((now / 1700) + i / 3) % 1);
+      for (const ph of rings) {
+        const r = Math.round(3 + ph * 22);
+        const spr = ring(r, col), ry = (spr.height - 1) / 2;
+        ctx.globalAlpha = st === "expected" ? 0.55 : Math.max(0, 1 - ph) * 0.95;
+        ctx.drawImage(spr, X(cx - r), Y(by - ry), zw(spr.width), zw(spr.height));
+      }
+      ctx.globalAlpha = 1;
+      const em = st === "posted" ? SP.emitPosted : st === "sealed" ? SP.emit : SP.emitOff;
+      ctx.drawImage(em, X(cx - 2.5), Y(by - 2.5), zw(5), zw(5));
+      if (z >= 2) { const t = `⚓ №${fmt(bh)}`; label(t, X(cx), freeY(t, X(cx), Y(by - 14)), col); }
+    }
+    // Mints lens: a halo ring around the top of the stack where a collection
+    // was born, a slow pulse outward, and a gem with the collection's name
+    // above (stacked over an anchor beacon when both fall on one block).
+    for (const { cx, cy, list, anchor } of mintBeacons) {
+      const c0 = list[0], K = KINDS[kindIx(c0.kind)];
+      const col = K.registry || K.id === "unknown" ? TH.mint : K.color;
+      const halo = ring(11, col), hy = (halo.height - 1) / 2;
+      ctx.globalAlpha = 1;
+      ctx.drawImage(halo, X(cx - 11), Y(cy - hy), zw(halo.width), zw(halo.height));
+      const phases = reduced ? [0.5] : [0, 1].map((i) => ((now / 2300) + i / 2) % 1);
+      for (const ph of phases) {
+        const r = Math.round(12 + ph * 12);
+        const spr = ring(r, col), ry = (spr.height - 1) / 2;
+        ctx.globalAlpha = reduced ? 0.6 : Math.max(0, 1 - ph) * 0.9;
+        ctx.drawImage(spr, X(cx - r), Y(cy - ry), zw(spr.width), zw(spr.height));
+      }
+      ctx.globalAlpha = 1;
+      const gy = cy - 14 - (anchor ? 34 : 0);
+      const g = gem(col);
+      ctx.drawImage(g, X(cx - 3.5), Y(gy - 3.5), zw(g.width), zw(g.height));
+      if (z >= 2) {
+        const t = `◎ ${clip(c0.collection, 20)}${list.length > 1 ? ` +${list.length - 1}` : ""}`;
+        label(t, X(cx), freeY(t, X(cx), Y(gy - 7)), col);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- the timeline / minimap
+  function drawMini() {
+    const w = mini.width, hh = mini.height;
+    mctx.setTransform(1, 0, 0, 1, 0, 0);
+    mctx.imageSmoothingEnabled = false;
+    mctx.fillStyle = TH.bg; mctx.fillRect(0, 0, w, hh);
+    if (!maxH) return;
+    const lo = minH, hi = maxH, span = hi - lo + 1;
+    const xOf = (h0) => Math.floor(((h0 - lo) / span) * w);
+    const base = hh - Math.round(7 * dpr), top = Math.round(4 * dpr), barMax = base - top;
+    // tx density, coloured by the biggest block's first kind (its first lit
+    // kind under a spotlight or the Mints lens)
+    const focus = !!(spot || lens);
+    const litKind = (B) => { if (focus) for (let k = 0; k < B.ntx; k++) if (spotCube(B, k)) return B.kinds[k]; return B.kinds[0]; };
+    const cols = new Array(w).fill(null);
+    for (const h0 of heights) {
+      const B = blocks.get(h0);
+      const x = Math.min(w - 1, xOf(h0));
+      const c = cols[x];
+      if (!c || B.ntx > c.n) cols[x] = { n: B.ntx, k: litKind(B), lit: spotStack(B) };
+    }
+    const bw = Math.max(1, Math.floor(w / span));
+    const peak = Math.max(1, ...cols.map((c) => (c ? Math.min(c.n, MAX_CUBES) : 0)));
+    mctx.fillStyle = TH.plateEdge; mctx.fillRect(0, base, w, Math.max(1, dpr));
+    for (let x = 0; x < w; x++) {
+      const c = cols[x];
+      if (!c || !c.n) continue;
+      const bh = Math.max(3 * dpr, Math.round(Math.sqrt(Math.min(c.n, MAX_CUBES) / peak) * barMax));
+      mctx.globalAlpha = focus && !c.lit ? 0.2 : 1;
+      mctx.fillStyle = KINDS[c.k].color;
+      mctx.fillRect(x, base - bh, bw, bh);
+    }
+    mctx.globalAlpha = 1;
+    // anchors
+    for (let a = Math.ceil(lo / interval) * interval; a <= hi && span / interval <= w; a += interval) {
+      const st = anchorState(a);
+      mctx.fillStyle = st === "posted" ? TH.posted : st === "sealed" ? TH.beacon : TH.beaconOff;
+      const x = xOf(a);
+      mctx.fillRect(x, top - 2 * dpr, Math.max(1, dpr), base - top + 2 * dpr);
+      mctx.fillRect(x - 2 * dpr, top - 3 * dpr, 5 * dpr, 2 * dpr);
+    }
+    // Mints lens: a gem tick at each collection's first mint
+    if (lens) {
+      for (const h0 of mintIndex().firstAt.keys()) {
+        if (h0 < lo || h0 > hi) continue;
+        mctx.fillStyle = TH.halo;
+        mctx.fillRect(xOf(h0) - 2 * dpr, top - dpr, 5 * dpr, 5 * dpr);
+        mctx.fillStyle = TH.mint;
+        mctx.fillRect(xOf(h0) - dpr, top, 3 * dpr, 3 * dpr);
+      }
+    }
+    // verification
+    if (vWorker || vFault) {
+      let okTo = 0;
+      const tNow = performance.now();
+      for (const h0 of heights) { const B = blocks.get(h0); if (B.v === 1 && B.vAt && tNow >= B.vAt) okTo = h0; else if (B.v >= 2) break; }
+      if (okTo) { mctx.fillStyle = TH.ok; mctx.fillRect(0, base + 2 * dpr, xOf(okTo) + bw, 3 * dpr); }
+      if (vFault && vFault.height >= lo && vFault.height <= hi) {
+        mctx.fillStyle = TH.bad;
+        const x = xOf(vFault.height);
+        mctx.fillRect(x, base + 2 * dpr, w - x, 3 * dpr);
+        mctx.fillRect(x - dpr, top - 3 * dpr, 3 * dpr, base - top + 3 * dpr);
+      }
+    }
+    // viewport
+    if (visMax) {
+      const x0 = xOf(Math.max(lo, visMin)), x1 = xOf(Math.min(hi, visMax)) + bw;
+      mctx.strokeStyle = TH.ink; mctx.lineWidth = Math.max(1, dpr);
+      mctx.globalAlpha = 0.85;
+      mctx.strokeRect(x0 + 0.5, 1, Math.max(2, x1 - x0) - 1, hh - 2);
+      mctx.globalAlpha = 0.08; mctx.fillStyle = TH.ink; mctx.fillRect(x0, 0, Math.max(2, x1 - x0), hh);
+      mctx.globalAlpha = 1;
+    }
+    if (selected >= lo && selected <= hi) { mctx.fillStyle = TH.ink; mctx.fillRect(xOf(selected), 0, Math.max(1, dpr), hh); }
+    $("mini-l").textContent = `№${fmt(lo)}`;
+    $("mini-r").textContent = `№${fmt(hi)}`;
+    mini.setAttribute("aria-valuemin", String(lo));
+    mini.setAttribute("aria-valuemax", String(hi));
+    const now = selected || Math.round((visMin + visMax) / 2) || hi;
+    mini.setAttribute("aria-valuenow", String(now));
+    mini.setAttribute("aria-valuetext", `block ${now}`);
+  }
+  function miniHeight(clientX) {
+    const r = mini.getBoundingClientRect();
+    const f = Math.max(0, Math.min(0.9999, (clientX - r.left) / Math.max(1, r.width)));
+    return Math.max(minH, Math.min(maxH, minH + Math.floor(f * (maxH - minH + 1))));
+  }
+  let scrubbing = false;
+  mini.addEventListener("pointerdown", (e) => {
+    if (!maxH) return;
+    scrubbing = true;
+    userMoved = true;
+    mini.setPointerCapture(e.pointerId);
+    const hh = miniHeight(e.clientX);
+    setFollow(hh === maxH);
+    moveTo(hh, true);
+  });
+  mini.addEventListener("pointermove", (e) => {
+    if (!maxH) return;
+    const hh = miniHeight(e.clientX);
+    const B = blocks.get(hh);
+    $("mini-hover").textContent = `№${fmt(hh)}${B ? ` · ${plural(B.ntx, "tx", "tx")}` : ""}${hh % interval === 0 ? " · ⚓ anchor" : ""}`;
+    if (scrubbing) { setFollow(hh === maxH); moveTo(hh, true); }
+  });
+  const endScrub = () => { scrubbing = false; };
+  mini.addEventListener("pointerup", endScrub);
+  mini.addEventListener("pointercancel", endScrub);
+  mini.addEventListener("pointerleave", () => { if (!scrubbing) $("mini-hover").textContent = ""; });
+  mini.addEventListener("keydown", (e) => {
+    if (!maxH) return;
+    const cur = selected || Math.round((visMin + visMax) / 2) || maxH;
+    const step = { ArrowLeft: -1, ArrowRight: 1, PageDown: -COLS * 4, PageUp: COLS * 4 }[e.key];
+    let next = null;
+    if (step) next = cur + step;
+    else if (e.key === "Home") next = minH;
+    else if (e.key === "End") next = maxH;
+    if (next == null) return;
+    e.preventDefault();
+    select(Math.max(minH, Math.min(maxH, next)), { center: true });
+  });
+
+  // ======================================================================
+  // Interaction: pan, zoom, pinch, hover, click, keys
+  // ======================================================================
+  function toWorld(clientX, clientY) {
+    const r = cv.getBoundingClientRect();
+    const px = (clientX - r.left) * dpr, py = (clientY - r.top) * dpr;
+    return { px, py, x: (px - CW / 2) / cam.z + cam.x, y: (py - CH / 2) / cam.z + cam.y };
+  }
+  function inPoly(x, y, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  function hitTest(clientX, clientY) {
+    if (!blocks.size) return 0;
+    const p = toWorld(clientX, clientY);
+    for (let i = order.length - 1; i >= 0; i--) {
+      const B = blocks.get(order[i]);
+      if (Math.abs(B.x - p.x) > PW / 2 + 1) continue;
+      if (p.y > B.y + PT / 2 + 1 || p.y < B.y - MAX_CUBES * S - 12) continue;
+      const tall = B.ntx ? Math.min(B.ntx, MAX_CUBES) * S : SLAB;
+      const x0 = B.x, y0 = B.y;
+      const hex = [[x0 - 8, y0], [x0, y0 + 4], [x0 + 8, y0], [x0 + 8, y0 - tall], [x0, y0 - tall - 4], [x0 - 8, y0 - tall]];
+      if (inPoly(p.x, p.y, hex)) return B.h;
+      const cell = [[x0 - 12, y0], [x0, y0 + 6], [x0 + 12, y0], [x0, y0 - 6]];
+      if (inPoly(p.x, p.y, cell)) return B.h;
+    }
+    return 0;
+  }
+  function describe(B) {
+    if (!B) return "";
+    // Neutral (registry) and unknown kinds go by the name the chain data gives.
+    const kinds = B.kinds.map((k, i) => (KINDS[k].registry || k === UNKNOWN ? B.names[i] : KINDS[k].label.toLowerCase()));
+    const counts = new Map();
+    kinds.forEach((k) => counts.set(k, (counts.get(k) || 0) + 1));
+    const what = B.ntx ? [...counts].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(", ") : "empty block";
+    return what;
+  }
+  function vText(B) {
+    if (!B) return "";
+    return { 1: "verified by you", 2: "sequencer fault", 3: "differs from your replay", 4: "unverifiable (after a fault)" }[B.v] || (vWorker ? "replaying…" : "reported, not verified");
+  }
+  const tipEl = $("tooltip");
+  function showTip(hh, clientX, clientY) {
+    const B = blocks.get(hh);
+    if (!B) { tipEl.hidden = true; return; }
+    tipEl.replaceChildren(
+      h("b", null, `№${fmt(hh)}`), ` · ${plural(B.ntx, "tx", "tx")}`,
+      hh % interval === 0 ? ` · ⚓ anchor (${anchorState(hh)})` : "", h("br"),
+      describe(B), h("br"),
+      lens && mintIndex().firstAt.has(hh) ? [`◎ first mint of ${mintIndex().firstAt.get(hh).map((c) => clip(c.collection, 28)).join(", ")}`, h("br")] : null,
+      h("span", { style: "opacity:.75" }, vText(B)));
+    tipEl.hidden = false;
+    const r = stage.getBoundingClientRect();
+    let x = clientX - r.left + 14, y = clientY - r.top + 14;
+    const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+    if (x + tw > r.width - 6) x = clientX - r.left - tw - 12;
+    if (y + th > r.height - 6) y = clientY - r.top - th - 12;
+    tipEl.style.left = `${Math.max(4, x)}px`; tipEl.style.top = `${Math.max(4, y)}px`;
+  }
+
+  // Hover follows the cursor, and the yard when the camera glides under it.
+  function rehover() {
+    const hh = hitTest(lastMouse.x, lastMouse.y);
+    if (hh !== hovered) { hovered = hh; stage.classList.toggle("over", !!hh); kick(); }
+    if (hh) showTip(hh, lastMouse.x, lastMouse.y); else tipEl.hidden = true;
+  }
+  const ptrs = new Map();
+  let drag = null, pinch = null;
+  cv.addEventListener("pointerdown", (e) => {
+    cv.focus({ preventScroll: true });
+    cv.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    tipEl.hidden = true;
+    if (ptrs.size === 1) {
+      drag = { x0: e.clientX, y0: e.clientY, cx: cam.x, cy: cam.y, moved: false };
+    } else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()];
+      const mid = toWorld((a.x + b.x) / 2, (a.y + b.y) / 2);
+      pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: cam.z, wx: mid.x, wy: mid.y };
+      drag = null;
+    }
+  });
+  cv.addEventListener("pointermove", (e) => {
+    const p = ptrs.get(e.pointerId);
+    if (p) { p.x = e.clientX; p.y = e.clientY; }
+    if (pinch && ptrs.size >= 2) {
+      const [a, b] = [...ptrs.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      cam.z = clampZ(pinch.z0 * (d / pinch.d0));
+      userZoomed = true;
+      const r = cv.getBoundingClientRect();
+      const mx = (((a.x + b.x) / 2) - r.left) * dpr, my = (((a.y + b.y) / 2) - r.top) * dpr;
+      cam.x = pinch.wx - (mx - CW / 2) / cam.z; cam.y = pinch.wy - (my - CH / 2) / cam.z;
+      if (follow) setFollow(false);
+      cam.tx = cam.ty = null;
+      dirty = true; kick();
+      return;
+    }
+    if (drag) {
+      const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+      if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; userMoved = true; stage.classList.add("dragging"); if (follow) setFollow(false); cam.tx = cam.ty = null; }
+      if (drag.moved) { cam.x = drag.cx - (dx * dpr) / cam.z; cam.y = drag.cy - (dy * dpr) / cam.z; dirty = true; kick(); }
+      return;
+    }
+    if (e.pointerType === "mouse") { lastMouse = { x: e.clientX, y: e.clientY }; rehover(); }
+  });
+  function endPointer(e, cancelled) {
+    const wasDrag = drag;
+    ptrs.delete(e.pointerId);
+    if (pinch && ptrs.size < 2) {
+      pinch = null;
+      const ls = levels();
+      const snap = ls.reduce((best, l) => (Math.abs(Math.log(l / cam.z)) < Math.abs(Math.log(best / cam.z)) ? l : best), ls[0]);
+      zoomTo(snap, CW / 2, CH / 2);
+      drag = null;
+      return;
+    }
+    stage.classList.remove("dragging");
+    drag = null;
+    if (!cancelled && wasDrag && !wasDrag.moved) {
+      const hh = hitTest(e.clientX, e.clientY);
+      if (hh) select(hh, { open: true });
+      else if (!$("panel").hidden) closePanel();
+    }
+  }
+  cv.addEventListener("pointerup", (e) => endPointer(e, false));
+  cv.addEventListener("pointercancel", (e) => endPointer(e, true));
+  cv.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse" && !drag) { lastMouse = null; hovered = 0; tipEl.hidden = true; stage.classList.remove("over"); kick(); }
+  });
+  // The wheel zooms once the yard is engaged (clicked or focused), or with
+  // Ctrl / ⌘ (trackpad pinch arrives as ctrl+wheel). Otherwise it scrolls the
+  // page, so the yard is not a scroll trap on a page (or iframe) that embeds it.
+  let wheelAcc = 0, hintTimer = 0;
+  cv.addEventListener("wheel", (e) => {
+    const engaged = (document.activeElement === cv && document.hasFocus()) || e.ctrlKey || e.metaKey;
+    if (!engaged) {
+      const hint = $("wheel-hint");
+      hint.hidden = false;
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => { hint.hidden = true; }, 1600);
+      return;
+    }
+    $("wheel-hint").hidden = true;
+    e.preventDefault();
+    wheelAcc += e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
+    if (Math.abs(wheelAcc) < (e.ctrlKey ? 18 : 60)) return;
+    const r = cv.getBoundingClientRect();
+    zoomStep(wheelAcc < 0 ? 1 : -1, (e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
+    wheelAcc = 0;
+  }, { passive: false });
+  // Left/right walk the chain; up/down step to the stack in the row behind or
+  // in front (same column, so the serpentine layout stays spatial).
+  const heightAt = (gx, gy) => gy * COLS + (gy % 2 ? COLS - 1 - gx : gx) + 1;
+  cv.addEventListener("keydown", (e) => {
+    if (!maxH) return;
+    const cur = selected || maxH;
+    let next = null;
+    if (e.key === "ArrowLeft") next = cur - 1;
+    else if (e.key === "ArrowRight") next = cur + 1;
+    else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const c = cellOf(cur);
+      next = heightAt(c.gx, c.gy + (e.key === "ArrowUp" ? -1 : 1));
+    }
+    if (next != null) {
+      e.preventDefault();
+      select(Math.max(minH, Math.min(maxH, next)), { center: true, open: !$("panel").hidden });
+    } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(cur, { open: true, center: true }); }
+    else if (e.key === "Escape") { closePanel(); closeAccounts(); }
+    else if (e.key === "+" || e.key === "=") zoomStep(1);
+    else if (e.key === "-" || e.key === "_") zoomStep(-1);
+    else if (e.key === "f" || e.key === "F") setFollow(true);
+    else if (e.key === "m" || e.key === "M") setLens(!lens);
+    else if (e.key === "Home") select(minH, { center: true });
+    else if (e.key === "End") select(maxH, { center: true });
+  });
+  $("zoom-in").onclick = () => zoomStep(1);
+  $("zoom-out").onclick = () => zoomStep(-1);
+  $("follow").onclick = () => setFollow(!follow);
+  $("goto").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const hh = Math.floor(Number($("goto-h").value));
+    if (!isInt(hh) || hh < 1) return;
+    if (!blocks.has(hh)) { show("v-src", `№${fmt(hh)} is not in the yard (loaded: №${fmt(minH)}–№${fmt(maxH)}).`); return; }
+    select(hh, { open: true, center: true });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.activeElement !== cv) { closePanel(); closeAccounts(); }
+  });
+
+  function select(hh, { open = false, center = false } = {}) {
+    if (!blocks.has(hh)) return;
+    selected = hh;
+    userMoved = true;
+    if (hh !== maxH || !follow) setFollow(false);
+    const B = blocks.get(hh);
+    $("sr-sel").textContent = `Block ${hh}: ${plural(B.ntx, "transaction")}${B.ntx ? `, ${describe(B)}` : ""}. ${vText(B)}.`;
+    if (open) openPanel(hh);
+    else if (!$("panel").hidden) openPanel(hh);
+    if (center || open) moveTo(hh, false);
+    dirty = miniDirty = true; kick();
+  }
+
+  // ======================================================================
+  // Detail panel
+  // ======================================================================
+  function kindIcon(ix, cls = "kicon") {
+    const c = mkCanvas(W, T + S);
+    c.className = cls;
+    c.setAttribute("aria-hidden", "true");
+    c.getContext("2d").drawImage(SP.cubes[ix], 0, 0);
+    return c;
+  }
+  function badgeFor(B) {
+    if (!B) return h("span");
+    const map = { 1: ["vfy", "✓ verified by you"], 2: ["bad", "✗ sequencer fault"], 3: ["bad", "≠ your replay"], 4: ["bad", "unverifiable"] };
+    const [cls, text] = map[B.v] || ["rep", vWorker ? "replaying…" : MODE === "snapshot" ? "recorded" : "reported by node"];
+    return h("span", { class: `badge ${cls}` }, text);
+  }
+  function openPanel(hh) {
+    panelH = hh;
+    const pn = $("panel");
+    if (pn.hidden) {
+      pn.hidden = false;
+      if (narrow()) { closeAccounts(); syncSheet(); stage.scrollIntoView({ block: "start" }); }
+    }
+    renderPanel();
+    if (MODE === "node" && blockViews.stale(hh)) fetchBlockView(hh).then(() => { if (panelH === hh && !$("panel").hidden) renderPanel(); });
+  }
+  // The open panel's card, fetched again once it is older than CARD_TTL_MS
+  // (the tab came back, or the panel stayed open), then the panel redrawn.
+  function refreshPanelCard() {
+    const hh = panelH;
+    if (MODE !== "node" || !hh || $("panel").hidden || !blockViews.stale(hh)) return false;
+    fetchBlockView(hh).then(() => { if (panelH === hh && !$("panel").hidden) renderPanel(); });
+    return true;
+  }
+  // Hiding a sheet that holds keyboard focus would drop focus on <body>:
+  // hand it back to the yard instead.
+  function keepFocus(el) { if (el.contains(document.activeElement)) cv.focus({ preventScroll: true }); }
+  function closePanel() {
+    if ($("panel").hidden) return;
+    keepFocus($("panel"));
+    $("panel").hidden = true; panelH = 0; selected = 0;
+    syncSheet();
+    dirty = miniDirty = true; kick();
+  }
+  $("panel-close").onclick = () => { closePanel(); cv.focus({ preventScroll: true }); };
+  const cardFetches = new Map();   // height -> the fetch in flight
+  function fetchBlockView(hh) {
+    if (cardFetches.has(hh)) return cardFetches.get(hh);
+    const p = (async () => {
+      let view = null;
+      try { view = await getJSON(`/block/${hh}`); } catch {
+        try {
+          const d = await getJSON(`/feed?all=true&limit=1&before=${hh + 1}`);
+          const b = d && Array.isArray(d.blocks) && d.blocks[0];
+          if (b && b.height === hh) view = b;
+        } catch {}
+      }
+      if (view && Array.isArray(view.txs)) blockViews.set(hh, view);
+      return view;
+    })().finally(() => cardFetches.delete(hh));
+    cardFetches.set(hh, p);
+    return p;
+  }
+  function renderPanel() {
+    const hh = panelH, B = blocks.get(hh);
+    $("panel-title").textContent = `№ ${fmt(hh)}`;
+    $("panel-badge").replaceChildren(badgeFor(B));
+    const body = $("panel-body");
+    const keepScroll = body.scrollTop;
+    body.replaceChildren();
+    if (!B) { body.append(h("div", { class: "empty-note" }, "This height is not loaded.")); return; }
+    const hd = B.header;
+    const mine = verified.get(hh);
+    const rep = replayed.get(hh);
+    const view = blockViews.get(hh);
+    const useReplay = B.v === 1 && rep && mine && rep.block_hash === mine[0];
+    let hash = null, hashSrc = "";
+    if (B.v === 1 && mine) { hash = mine[0]; hashSrc = "replayed in your browser"; }
+    else if (view && typeof view.hash === "string") { hash = view.hash; hashSrc = "reported by the node"; }
+    else { const r = reportedHash(hh); if (r) { hash = r.hash; hashSrc = r.note; } }
+    body.append(blockFacts(hh, hd, hash, hashSrc, B.ntx ? `${fmt(B.ntx)} · ${describe(B)}` : "none (empty block)",
+      hh % interval === 0 ? anchorLine(hh) : null));
+    // verification state, in words
+    const vs = h("div", { class: "vstate" });
+    if (B.v === 1) {
+      vs.className = "vstate ok";
+      vs.append(`✓ Verified by you: this browser replayed №${fmt(hh)} with the pinned consensus wasm. The replay's block hash, state root, tx count and parent link match this page's copy, and the transactions below come from your replay.`);
+      if (MODE === "node") vs.append(" Timestamp, tx root and signature are shown as the node served them to this page; your replay checked its own copy of them.");
+    } else if (B.v === 2) {
+      vs.className = "vstate bad";
+      vs.append(`✗ Sequencer fault at №${fmt(hh)}: ${B.reason || "the replay rejected this block"}`);
+      if (vFault && vFault.height === hh && vFault.evidence) vs.append(" · ", evidenceLink());
+    } else if (B.v === 3) {
+      vs.className = "vstate bad";
+      vs.append(`≠ The block this page shows differs from the one your browser replayed (${B.reason}).`);
+    } else if (B.v === 4) {
+      vs.className = "vstate dim";
+      vs.append(`Unverifiable: it comes after the fault at №${fmt(vFault ? vFault.height : 0)}, so there is no honest state to replay it on.`);
+    } else {
+      vs.className = "vstate dim";
+      vs.append(vWorker ? "Replaying… this stack turns green when your browser reaches it."
+        : MODE === "snapshot" ? "Recorded data, not yet checked. Press ✓ VERIFY to replay the snapshot in your browser."
+          : "Shown as the node reports it. Press ✓ VERIFY to replay the chain in your browser.");
+    }
+    body.append(vs);
+    // transactions
+    if (B.ntx) {
+      body.append(h("div", { class: "sec" }, `Transactions · ${fmt(B.ntx)}`));
+      // On the devnet a card older than CARD_TTL_MS may predate the admin
+      // hiding a post: until it is fetched again it counts as not there.
+      const served = devnet() ? blockViews.fresh(hh) : view;
+      const servedTxs = served && Array.isArray(served.txs) && served.txs.length === B.ntx ? served.txs : null;
+      const src = useReplay ? "from your replay" : "reported by the node";
+      const mi = mintIndex();
+      const ctx = {
+        icon: (ix) => kindIcon(ix), snapshot: MODE === "snapshot", ticketed: ticketed(), town: TOWN,
+        mintAt: (i) => {
+          const name = B.names[i];
+          const m = isMintName(name) ? mintOf(name, B.txs[i] && B.txs[i].tx) : null;
+          if (!m) return null;
+          const c = mi.coll.get(`${name}\n${m.collection}`);
+          return { collection: m.collection, first: !!c && c.first === hh && c.firstIx === i, nth: mi.nth.get(`${hh}:${i}`), whole: minH <= 1 };
+        },
+      };
+      const list = h("div");
+      B.txs.forEach((t, i) => {
+        const { card, mod } = panelCard(useReplay ? rep.txs[i] : null, servedTxs ? servedTxs[i] : null, !!useReplay, devnet());
+        list.append(txCard(t, card, i, src, !!useReplay, ctx, mod));
+      });
+      body.append(list);
+    } else {
+      body.append(h("div", { class: "empty-note" }, `Empty block: sealed on schedule with no transactions. Root ${short(hd.state_root, 8)}.`));
+    }
+    body.scrollTop = keepScroll;
+  }
+  function anchorLine(hh) {
+    const a = anchors.get(hh);
+    if (!a) {
+      if (MODE === "node" && hh < anchorWindowFloor) return `anchor height (every ${fmt(interval)} blocks) · older than the 50 anchors the node lists, so its record is not shown`;
+      return `anchor height (every ${fmt(interval)} blocks) · no sealed anchor record ${MODE === "snapshot" ? "in the snapshot" : "from the node yet"}`;
+    }
+    return anchorRecord(a, anchorState(hh));
+  }
+
+  // ======================================================================
+  // Accounts drawer: top balances. Live: /account/{addr} for the addresses
+  // seen in the yard (the node has no account-list route). Snapshot: the
+  // balances recorded with it.
+  // ======================================================================
+  const accountsOpen = () => !$("drawer").hidden;
+  // Phones: room to scroll the yard up above an open bottom sheet.
+  function syncSheet() {
+    document.body.classList.toggle("sheet-open", narrow() && (!$("panel").hidden || !$("drawer").hidden));
+    stage.classList.toggle("drawer-open", !$("drawer").hidden);     // the drawer sits where the legend does
+  }
+  let acctBusy = false, acctAt = 0;
+  $("accounts-btn").onclick = () => (accountsOpen() ? closeAccounts() : openAccounts());
+  $("drawer-close").onclick = () => closeAccounts();
+  function openAccounts() {
+    $("drawer").hidden = false;
+    $("accounts-btn").setAttribute("aria-expanded", "true");
+    syncSheet();
+    if (narrow()) { $("panel").hidden = true; panelH = 0; syncSheet(); stage.scrollIntoView({ block: "start" }); }
+    refreshAccounts(true);
+  }
+  function closeAccounts() {
+    if (!accountsOpen()) return;
+    if ($("drawer").contains(document.activeElement)) $("accounts-btn").focus({ preventScroll: true });
+    $("drawer").hidden = true;
+    $("accounts-btn").setAttribute("aria-expanded", "false");
+    syncSheet();
+  }
+  function seenAddresses() {
+    const counts = new Map();
+    const add = (a, w = 1) => { if (typeof a === "string" && a) counts.set(a, (counts.get(a) || 0) + w); };
+    if (params) { add(params.genesis_treasury, 100); add(params.drum_attestor_admin, 50); }
+    if (status) add(status.mcp_agent, 20);
+    for (const B of blocks.values()) for (const set of B.addrs) for (const a of set) add(a);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([a]) => a);
+  }
+  async function refreshAccounts(force) {
+    if (MODE === "snapshot") { renderAccounts(accounts || [], `Balances recorded with the snapshot at №${fmt(status.height)}.`); return; }
+    if (MODE !== "node" || acctBusy || (!force && Date.now() - acctAt < 10000)) return;
+    acctBusy = true;
+    if (!accounts) $("drawer-note").textContent = "Reading balances…";
+    try {
+      const addrs = seenAddresses().slice(0, 48);
+      const out = [];
+      let i = 0;
+      await Promise.all(Array.from({ length: 6 }, async () => {
+        while (i < addrs.length) {
+          const a = addrs[i++];
+          try { const v = await getJSON(`/account/${encodeURIComponent(a)}`); if (v && typeof v === "object" && v.exists !== false) out.push(v); } catch {}
+        }
+      }));
+      out.sort((a, b) => (num(b.balance) || 0) - (num(a.balance) || 0));
+      accounts = out;
+      acctAt = Date.now();
+      renderAccounts(out, `Live from the node: ${fmt(out.length)} of ${fmt(status.accounts)} accounts (the ones seen in the yard), read via /account/{address}.`);
+    } finally { acctBusy = false; }
+  }
+  function renderAccounts(list, note) {
+    $("drawer-note").textContent = `${note} Tap one to spotlight its transactions.`;
+    list = list.filter((a) => a && typeof a === "object");
+    const max = Math.max(1, ...list.map((a) => num(a.balance) || 0));
+    const box = $("drawer-list");
+    box.replaceChildren();
+    if (!list.length) { box.append(h("div", { class: "empty-note" }, "No accounts yet.")); return; }
+    list.slice(0, 40).forEach((a, i) => {
+      const on = !!spot && spot.type === "addr" && spot.addr === str(a.address);
+      const { el, addr, label } = accountRow(a, i, max, on);
+      el.addEventListener("click", () => setSpot(on ? null : { type: "addr", addr, label }));
+      box.append(el);
+    });
+  }
+
+  // ---------- spotlight (a kind from the legend, or an account)
+  function setSpot(s) {
+    // A kind that is not a mint kind takes over from the Mints lens.
+    const leaveLens = !!(s && s.type === "kind" && lens && !isMintName(KINDS[s.ix].id));
+    if (leaveLens) lens = false;
+    spot = s;
+    const el = $("spot");
+    if (!s) { el.hidden = true; el.replaceChildren(); }
+    else {
+      const n = [...blocks.values()].filter(spotStack).length;
+      const clear = h("button", { class: "bevel mini", type: "button" }, "× clear");
+      clear.onclick = () => setSpot(null);
+      el.replaceChildren(h("span", null, "Spotlight: "), h("b", null, s.type === "kind" ? `${KINDS[s.ix].glyph} ${KINDS[s.ix].label}` : s.label),
+        h("span", null, ` · ${plural(n, "block")} in the yard${lens ? " · mints only (Mints lens)" : ""}`), clear);
+      el.hidden = false;
+    }
+    document.querySelectorAll(".lg[data-kind]").forEach((b) => b.setAttribute("aria-pressed", String(!!s && s.type === "kind" && s.ix === Number(b.dataset.kind))));
+    if (accountsOpen() && accounts) renderAccounts(accounts, $("drawer-note").textContent.replace(/ Tap one to spotlight its transactions\.$/, ""));
+    if (leaveLens) lensUi();
+    dirty = miniDirty = true; kick();
+  }
+
+  // ---------- the Mints lens
+  function setLens(on) {
+    lens = !!on;
+    // The lens replaces a spotlight on a non-mint kind (an account spotlight stays: its mints).
+    if (lens && spot && spot.type === "kind" && !isMintName(KINDS[spot.ix].id)) setSpot(null);
+    else if (spot) setSpot(spot);       // recount the spotlight under the lens
+    lensUi();
+    if (lens) {
+      const ix = mintIndex();
+      $("sr-sel").textContent = `Mints lens on: ${plural(ix.total, "mint")} in ${plural(ix.coll.size, "collection")}.`;
+    } else $("sr-sel").textContent = "Mints lens off.";
+    dirty = miniDirty = true; kick();
+  }
+  // Button, URL (?lens=mints), title, strip and legend follow `lens`.
+  function lensUi() {
+    $("lens-btn").setAttribute("aria-pressed", String(lens));
+    $("yard-title").textContent = lens ? "THE YARD · MINTS LENS" : "THE YARD";
+    try {
+      const u = new URL(location.href);
+      if ((u.searchParams.get("lens") === "mints") !== lens) {
+        if (lens) u.searchParams.set("lens", "mints"); else u.searchParams.delete("lens");
+        history.replaceState(history.state, "", u.href);
+      }
+    } catch {}
+    renderMints();
+    buildLegend();
+  }
+  function renderMints() {
+    const el = $("mints");
+    el.hidden = !lens || !status;
+    if (el.hidden) { $("mints-body").replaceChildren(); return; }
+    $("mints-body").replaceChildren(mintStrip(mintIndex(), {
+      town: TOWN, whole: minH <= 1, from: minH, to: maxH,
+      pick: (hh) => select(hh, { open: true, center: true }),
+    }));
+  }
+  // New blocks while the lens is on: one strip refresh per batch.
+  let mintsQueued = false;
+  function queueMints() {
+    if (mintsQueued) return;
+    mintsQueued = true;
+    setTimeout(() => { mintsQueued = false; if (lens) renderMints(); }, 0);
+  }
+  $("lens-btn").onclick = () => setLens(!lens);
+  $("mints-close").onclick = () => { setLens(false); $("lens-btn").focus({ preventScroll: true }); };
+
+  // ---------- legend
+  function buildLegend() {
+    const grid = $("legend-grid");
+    grid.replaceChildren();
+    // Every live kind; neutral registry kinds and unknown kinds only once the yard holds one.
+    const present = new Set();
+    for (const B of blocks.values()) for (const ix of B.kinds) present.add(ix);
+    KINDS.forEach((k, i) => {
+      if ((k.registry || i === UNKNOWN) && !present.has(i)) return;
+      const what = k.registry ? `${k.id}: registry tag ${k.registry} (docs/TAGS.md), neutral cube` : i === UNKNOWN ? "a kind this page does not know, shown by its name" : `${k.label} (${k.id})`;
+      const b = h("button", { class: "lg", type: "button", "data-kind": String(i), "aria-pressed": String(!!spot && spot.type === "kind" && spot.ix === i), title: `${what}: spotlight these cubes` },
+        kindIcon(i, ""), h("span", null, `${k.glyph} ${k.label}`));
+      b.onclick = () => setSpot(spot && spot.type === "kind" && spot.ix === i ? null : { type: "kind", ix: i });
+      grid.append(b);
+    });
+    const slab = mkCanvas(W, T + SLAB); slab.getContext("2d").drawImage(SP.slab, 0, 0);
+    slab.className = "kicon"; slab.setAttribute("aria-hidden", "true");
+    // append() prints a null child as the text "null": drop the optional rows that are off.
+    grid.append(...[h("div", { class: "lg-sep" }),
+      h("div", { class: "lg-row" }, slab, `empty block · 1 cube per tx (first at the bottom; striped cap past ${MAX_CUBES})`),
+      h("div", { class: "lg-row" }, `◎ beacon every ${fmt(interval)}: `, h("span", { class: "sw", style: `border:2px solid ${TH.beacon}` }), " sealed ",
+        h("span", { class: "sw", style: `border:2px solid ${TH.posted}` }), " on Tezos ", h("span", { class: "sw", style: `border:2px dashed ${TH.beaconOff}` }), " due"),
+      h("div", { class: "lg-row" }, h("span", { class: "sw", style: `background:${TH.ok}` }), " ✓ verified by you  ", h("span", { class: "sw", style: `background:${TH.bad}` }), " ✗ fault"),
+      ticketed() ? h("div", { class: "lg-row" }, "ticketed chain: only ✧ presence taps earn; a bare ✦ tap counts, +0") : null,
+      lens ? h("div", { class: "lg-row" }, h("span", { class: "sw", style: `border:2px solid ${TH.mint}` }), " ◎ mints lens: a ring on each collection's first mint") : null].filter(Boolean));
+  }
+  $("legend-btn").onclick = () => {
+    const lg = $("legend");
+    lg.hidden = !lg.hidden;
+    $("legend-btn").setAttribute("aria-expanded", String(!lg.hidden));
+  };
+  if (narrow()) { $("legend").hidden = true; $("legend-btn").setAttribute("aria-expanded", "false"); }
+
+  // ======================================================================
+  // Verify Desk: the same pinned machinery as the feed explorer. The page
+  // fetches verify.js, verify-worker.js and the wasm, checks each sha256
+  // against VERIFIER_PINS (written by scripts/pin-verifier.sh, checked by
+  // crates/chain-wasm/tests/rebuild.rs) and runs only those bytes.
+  // In snapshot mode the same pinned worker runs behind a small shim that
+  // answers its HTTP reads (/params, /status, /raw/blocks, /anchors) from the
+  // snapshot, so nothing is trusted that the replay does not check.
+  // ======================================================================
+  const VERIFIER_PINS = {
+    "pointcast_chain.wasm": "5491621602ecfa6afa4e8a88a20775243b717774393332e8b3437b690d39746d",
+    "verify.js": "74255711f5b8988eb18c30d5138ef0dc5ff4612566f0d70ac5b9fea6f81dc3cc",
+    "verify-worker.js": "cf9c552a8b8498edfa51811cb9ca0421422fa4bc200b91816416ec6a297c9a00",
+  };
+  const SNAP_API = "https://snapshot.invalid";
+  const verified = new Map();     // height -> [block hash, state root, tx count] replayed locally
+  const replayed = new Map();     // height -> { block_hash, txs } card data from the replay
+  const REPLAY_KEEP = 6000;
+  let vWorker = null, vHeight = 0, vRoot = null, vSha, vFault = null, vAnchors = null, vStopped = null, vNodeFault = null;
+  let revealQ = [];
+  const head = (x) => (x ? `${String(x).slice(0, 4)}…` : "—");
+  const pinKey = () => (MODE === "snapshot" ? `pc-genesis-pin:snapshot:${SNAP_URL}` : `pc-genesis-pin:${API}`);
+  function storedPin() { try { return localStorage.getItem(pinKey()); } catch { return null; } }
+
+  function verifierBase() {
+    const meta = document.querySelector('meta[name="pc-verifier-base"]');
+    const q = qs.get("verifier") || (meta ? (meta.getAttribute("content") || "").trim() : "");
+    if (q) { const u = httpUrl(q, location.href); if (u) return u.href.replace(/\/$/, ""); }
+    if (MODE === "node") return `${API}/verifier`;
+    return new URL("verifier", location.href).href;
+  }
+  let pinnedAssets = null;
+  function loadPinned() {
+    if (pinnedAssets) return pinnedAssets;
+    const base = verifierBase();
+    pinnedAssets = (async () => {
+      const subtle = globalThis.crypto && globalThis.crypto.subtle;
+      if (!subtle) throw new Error("this page has no WebCrypto (not a secure context), so it cannot check the verifier's sha256; refusing to run it");
+      const hex = (buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+      const fetchPinned = async (name) => {
+        const r = await fetch(`${base}/${name}`, { cache: "no-store" });
+        if (!r.ok) throw new Error(`${r.status} ${base}/${name}`);
+        const buf = await r.arrayBuffer();
+        const got = hex(await subtle.digest("SHA-256", buf));
+        if (got !== VERIFIER_PINS[name]) {
+          throw new Error(`${base}/${name} is not the verifier this page pins (sha256 ${got.slice(0, 12)}…, want ${VERIFIER_PINS[name].slice(0, 12)}…); refusing to run it`);
+        }
+        return buf;
+      };
+      const [wasm, js, worker] = await Promise.all(["pointcast_chain.wasm", "verify.js", "verify-worker.js"].map(fetchPinned));
+      const blobUrl = (buf) => URL.createObjectURL(new Blob([buf], { type: "text/javascript" }));
+      return { wasm, verifyJsUrl: blobUrl(js), workerUrl: blobUrl(worker), wasmSha256: VERIFIER_PINS["pointcast_chain.wasm"] };
+    })();
+    pinnedAssets.catch(() => { pinnedAssets = null; });
+    return pinnedAssets;
+  }
+
+  // Runs inside the snapshot worker, before the pinned worker module loads.
+  // It parses the snapshot's own bytes with the pinned verify.js (parseJson /
+  // stringifyJson, lossless for u64s) and answers with the same digits, so the
+  // worker reads exactly what a node serving this chain would have sent.
+  function snapshotShim(SNAP_ORIGIN) {
+    let snap = null, json = null;
+    const realFetch = self.fetch.bind(self);
+    const reply = (v, code = 200) => new Response(json.stringifyJson(v), { status: code, headers: { "content-type": "application/json" } });
+    self.fetch = async (input, init) => {
+      const url = String(input && typeof input === "object" && "url" in input ? input.url : input);
+      if (!url.startsWith(`${SNAP_ORIGIN}/`)) return realFetch(input, init);
+      const u = new URL(url);
+      if (u.pathname === "/params") return reply(snap.params);
+      if (u.pathname === "/status") return reply(snap.status);
+      if (u.pathname === "/anchors") return reply({ anchors: Array.isArray(snap.anchors) ? snap.anchors : [] });
+      if (u.pathname === "/raw/blocks") {
+        const from = Math.max(1, Math.floor(Number(u.searchParams.get("from"))) || 1);
+        const limit = Math.min(500, Math.max(1, Math.floor(Number(u.searchParams.get("limit"))) || 100));
+        const i = snap.index.get(from);
+        return reply({ tip: snap.status.height, from, blocks: i === undefined ? [] : snap.blocks.slice(i, i + limit) });
+      }
+      const m = /^\/raw\/block\/(\d+)$/.exec(u.pathname);
+      if (m) {
+        const i = snap.index.get(Number(m[1]));
+        return i === undefined ? reply({ error: "block not found" }, 404) : reply(snap.blocks[i]);
+      }
+      return reply({ error: "not in the snapshot" }, 404);
+    };
+    self.onmessage = async (ev) => {
+      const d = ev.data || {};
+      self.onmessage = null;
+      try {
+        const { parseJson, stringifyJson } = await import(d.start.verifyJsUrl);
+        json = { parseJson, stringifyJson };
+        snap = parseJson(d.snapshotText);
+        if (!snap || !Array.isArray(snap.blocks) || !snap.params || !snap.status) throw new Error("not a pointcast-chain-snapshot/v1 file");
+        snap.index = new Map();
+        snap.blocks.forEach((b, i) => { const hh = b && b.header && b.header.height; if (Number.isSafeInteger(hh)) snap.index.set(hh, i); });
+      } catch (e) { postMessage({ type: "error", message: `the snapshot could not be read for the replay: ${e.message || e}` }); return; }
+      try { await import(d.workerUrl); }
+      catch (e) { postMessage({ type: "error", message: `verifier worker failed to load: ${e.message || e}` }); return; }
+      if (typeof self.onmessage !== "function") { postMessage({ type: "error", message: "verifier worker did not start" }); return; }
+      self.onmessage({ data: d.start });
+    };
+  }
+
+  function applyVerified(B) {
+    const mine = verified.get(B.h);
+    if (!mine) {
+      if (vFault && B.h > vFault.height) { B.v = 4; B.vAt = 0; }
+      return;
+    }
+    const [hash, root, ntx] = mine;
+    const rh = reportedHash(B.h);
+    const bad = [];
+    if (root !== B.header.state_root) bad.push(`state root ${short(B.header.state_root, 6)} vs replay ${short(root, 6)}`);
+    if (ntx !== B.ntx) bad.push(`${B.ntx} tx vs replay ${ntx}`);
+    if (rh && rh.hash !== hash) bad.push(`hash ${short(rh.hash, 6)} (${rh.note}) vs replay ${short(hash, 6)}`);
+    // The parent link this page shows must be the block hash your browser replayed below it.
+    const below = verified.get(B.h - 1);
+    if (below && B.header.prev_hash !== below[0]) bad.push(`parent ${short(B.header.prev_hash, 6)} vs replayed №${fmt(B.h - 1)} ${short(below[0], 6)}`);
+    if (bad.length) { B.v = 3; B.reason = bad.join("; "); B.vAt = 0; return; }
+    const rep = replayed.get(B.h);
+    if (rep && rep.block_hash === hash && Array.isArray(rep.txs) && rep.txs.length === B.ntx) {
+      B.kinds = rep.txs.map((t) => kindIx(t && t.kind));     // draw the cubes from the replay
+      B.names = rep.txs.map((t) => kindName(t && t.kind));
+      MINTS = null;
+    }
+    if (B.v !== 1) { B.v = 1; B.vAt = 0; revealQ.push(B.h); }
+  }
+  function stepReveal(now) {
+    if (!revealQ.length) return false;
+    const n = reduced ? revealQ.length : Math.max(1, Math.ceil(revealQ.length / 40));
+    revealQ.sort((a, b) => a - b);
+    for (const hh of revealQ.splice(0, n)) {
+      const B = blocks.get(hh);
+      if (B && B.v === 1 && !B.vAt) B.vAt = now;
+    }
+    if (panelH && !revealQ.length) renderPanel();
+    return true;
+  }
+  function revalidate() {
+    for (const B of blocks.values()) applyVerified(B);
+    if (panelH) renderPanel();
+    dirty = miniDirty = true; kick();
+  }
+
+  function paintStrip(extra) {
+    const strip = $("v-strip");
+    strip.hidden = !vWorker;
+    if (!vWorker) return;
+    const a = vAnchors ? `anchors ${vAnchors.match}/${vAnchors.total} match` : "anchors …";
+    const bad = vFault || vStopped;
+    strip.replaceChildren(...[
+      h("span", { class: bad ? "bad" : "ok" }, `${bad ? "✗" : "✓"} Verified locally to №${fmt(vHeight)}${vStopped ? " (verifier stopped)" : ""}`),
+      h("span", { title: vRoot || "" }, `· root ${head(vRoot)}`),
+      h("span", null, `· ${a}`),
+      h("span", { title: vSha || "" }, `· verifier wasm sha256 ${vSha ? `${head(vSha)} pinned` : "…"}`),
+      MODE === "snapshot" ? h("span", null, "· replaying the snapshot") : null,
+      extra ? h("span", null, `· ${extra}`) : null].filter(Boolean));
+  }
+  // One blob URL per fault: the panel re-renders often, and each URL pins its blob.
+  let evidenceUrl = null;
+  function evidenceLink() {
+    if (!evidenceUrl) {
+      // evidence_json is the worker's exact (lossless) JSON: JSON.stringify
+      // would throw on, or round, the u64s that evidence.check needs intact.
+      const text = typeof vFault.evidence_json === "string" ? vFault.evidence_json : str(vFault.evidence);
+      evidenceUrl = URL.createObjectURL(new Blob([`${text}\n`], { type: "application/json" }));
+    }
+    return h("a", { href: evidenceUrl, download: "evidence.json" }, "download evidence.json");
+  }
+  // Only faults that carry checked evidence are blamed on the sequencer.
+  function showFault(m) {
+    vFault = m;
+    const el = $("v-fault");
+    const what = m.evidence && m.evidence.kind === "equivocation" ? "Sequencer equivocation" : "Sequencer fault";
+    const go = h("button", { class: "link", type: "button" }, `show №${fmt(m.height)} in the yard`);
+    go.onclick = () => select(m.height, { open: true, center: true });
+    el.replaceChildren(h("b", null, `${what} at №${fmt(m.height)}`), `: ${str(m.reason)}`, " · ", go);
+    if (m.evidence) {
+      const a = evidenceLink();
+      a.id = "v-evidence";
+      el.append(" · ", a, " · check it offline: pointcast-node evidence check evidence.json --params params.json");
+    }
+    el.hidden = false;
+    const B = blocks.get(m.height);
+    if (B) { B.v = 2; B.reason = str(m.reason); B.vAt = 0; }
+    for (const X of blocks.values()) if (X.h > m.height) { X.v = 4; X.vAt = 0; }
+    if (B) select(m.height, { center: true });
+    paintStrip();
+    revalidateFaultOnly();
+  }
+  function revalidateFaultOnly() { if (panelH) renderPanel(); dirty = miniDirty = true; kick(); }
+  const NODE_FAULT = {
+    garbage: "served a block the sequencer never sealed (bad seal, or a body that doesn't match the sealed tx_root)",
+    out_of_order: "served blocks out of order (a gap or a repeat)",
+    fork: "served a sealed header whose parent is not your replayed tip",
+    no_progress: "keeps answering without advancing the replay",
+  };
+  function showNodeFault(m) {
+    vNodeFault = m;
+    show("v-node", `Node problem at №${fmt(m.height)}: ${MODE === "snapshot" ? "the snapshot" : API} ${NODE_FAULT[m.fault] || str(m.fault)}. ${str(m.reason)}. Not attributable to the sequencer; retrying.`);
+    paintStrip();
+  }
+  function onVerify(ev) {
+    const m = ev.data || {};
+    if (m.type === "ready") { vSha = m.wasm_sha256; paintStrip(); }
+    else if (m.type === "progress") {
+      (Array.isArray(m.blocks) ? m.blocks : []).forEach((b) => replayed.set(b.height, b));
+      while (replayed.size > REPLAY_KEEP) replayed.delete(replayed.keys().next().value);
+      (Array.isArray(m.verified) ? m.verified : []).forEach(([hh, hash, root, ntx]) => {
+        verified.set(hh, [hash, root, ntx]);
+        const B = blocks.get(hh);
+        if (B) applyVerified(B);
+      });
+      // a block re-checked earlier may now have its next block's parent link
+      (Array.isArray(m.verified) ? m.verified : []).forEach(([hh]) => { const P = blocks.get(hh - 1); if (P && P.v === 1) applyVerified(P); });
+      vHeight = m.height; vRoot = m.state_root;
+      if (vNodeFault && m.height >= vNodeFault.height) { vNodeFault = null; $("v-node").hidden = true; }
+      paintStrip();
+      dirty = miniDirty = true; kick();
+    } else if (m.type === "fault") showFault(m);
+    else if (m.type === "node_fault") showNodeFault(m);
+    else if (m.type === "anchors") {
+      vAnchors = m; paintStrip();
+      if (Array.isArray(m.mismatch) && m.mismatch.length) {
+        show("v-node", `Anchor mismatch at №${fmt(m.mismatch[0])}: an anchor signed by this chain's sequencer disagrees with your replay. One conflicting anchor is a warning; two signed anchors for the same height that disagree are portable evidence (anchor equivocation).`);
+      }
+    } else if (m.type === "error") {
+      if (m.transient) { paintStrip(str(m.message)); return; }
+      vStopped = str(m.message);
+      const loud = $("v-loud"), before = loud.hidden ? "" : `${loud.textContent} `;
+      show("v-loud", `${before}Verifier stopped: ${vStopped}`);
+      paintStrip();
+    }
+  }
+  // Each press of VERIFY gets a generation; a start still awaiting its
+  // assets when VERIFY is pressed off (or again) must not spawn a worker.
+  let vGen = 0;
+  async function startVerify(gen) {
+    $("v-loud").hidden = true;
+    const st = MODE === "snapshot" ? SNAP.status : await getJSON("/status");
+    if (gen !== vGen) return;
+    const where = MODE === "snapshot" ? `the snapshot (${new URL(SNAP_URL).pathname})` : API;
+    const urlPin = qs.get("genesis");
+    let pin = urlPin;
+    $("v-pin").hidden = true;
+    if (urlPin) {
+      if (urlPin !== st.genesis_hash) show("v-loud", `⚠ GENESIS MISMATCH: you pinned ${urlPin} in the URL, but ${where} reports ${str(st.genesis_hash)}. Refusing to trust it.`);
+    } else {
+      const stored = storedPin();
+      if (stored && stored !== st.genesis_hash) {
+        pin = stored;
+        show("v-loud", `⚠ GENESIS CHANGED: this browser pinned ${stored} on first use, but ${where} now reports ${str(st.genesis_hash)}. Verification refused. If this is an intended re-genesis, reopen with ?genesis=${str(st.genesis_hash)}.`);
+      } else {
+        pin = stored || st.genesis_hash;
+        if (!stored) { try { localStorage.setItem(pinKey(), pin); } catch {} }
+        show("v-pin", `Genesis ${head(pin)} pinned on first use (trust-on-first-use from ${where}). Pin it yourself with ?genesis=${pin}`);
+      }
+    }
+    const a = await loadPinned();
+    if (gen !== vGen) return;
+    const wasm = a.wasm.slice(0);
+    const start = { api: MODE === "snapshot" ? SNAP_API : API, genesis: pin, verifyJsUrl: a.verifyJsUrl, wasm, wasmSha256: a.wasmSha256 };
+    if (MODE === "snapshot") {
+      const src = `(${snapshotShim.toString()})(${JSON.stringify(SNAP_API)});`;
+      const shimUrl = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+      vWorker = new Worker(shimUrl, { type: "module" });
+      vWorker.onmessage = onVerify;
+      vWorker.onerror = (e) => onVerify({ data: { type: "error", message: e.message || "worker failed to start" } });
+      vWorker.postMessage({ workerUrl: a.workerUrl, snapshotText: SNAP_TEXT, start }, [wasm]);
+    } else {
+      vWorker = new Worker(a.workerUrl, { type: "module" });
+      vWorker.onmessage = onVerify;
+      vWorker.onerror = (e) => onVerify({ data: { type: "error", message: e.message || "worker failed to start" } });
+      vWorker.postMessage(start, [wasm]);
+    }
+    paintStrip();
+    revalidate();
+  }
+  function stopVerify() {
+    vGen++;
+    if (vWorker) vWorker.terminate();
+    if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
+    vWorker = null; verified.clear(); replayed.clear(); revealQ = [];
+    vHeight = 0; vRoot = null; vSha = undefined; vFault = null; vAnchors = null; vStopped = null; vNodeFault = null;
+    ["v-loud", "v-fault", "v-node", "v-pin"].forEach((id) => { $(id).hidden = true; });
+    for (const B of blocks.values()) {
+      B.v = 0; B.vAt = 0; B.reason = "";
+      B.kinds = B.txs.map((t) => kindIx(t && t.tx && t.tx.type));
+      B.names = B.txs.map((t) => kindName(t && t.tx && t.tx.type));
+    }
+    MINTS = null;
+    paintStrip();
+    revalidate();
+  }
+  $("verify").onclick = async () => {
+    const btn = $("verify");
+    if (MODE !== "node" && MODE !== "snapshot") return;
+    const on = btn.getAttribute("aria-pressed") !== "true";
+    btn.setAttribute("aria-pressed", String(on));
+    if (!on) return stopVerify();
+    const gen = ++vGen;
+    try { await startVerify(gen); }
+    catch (e) {
+      if (gen !== vGen) return;
+      show("v-loud", `Verifier could not start: ${e.message || e}`);
+      btn.setAttribute("aria-pressed", "false");
+      if (vWorker) { vWorker.terminate(); vWorker = null; }
+      paintStrip();
+    }
+  };
+
+  // ---------- tick the "ago" in an open panel, keep the stats fresh
+  setInterval(() => {
+    if (!panelH || $("panel").hidden || MODE !== "node") return;
+    // A card that went stale is fetched first; the panel redraws when it lands.
+    if (!document.hidden && refreshPanelCard()) return;
+    renderPanel();
+  }, 15000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { kick(); refreshPanelCard(); } });
+  window.addEventListener("focus", refreshPanelCard);
+
+  boot().catch((e) => fatal(`Could not start: ${e.message || e}`));
+})();
+</script>
+</body>
+</html>

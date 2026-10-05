@@ -10,14 +10,14 @@
  * KV: catan:game:{id} (1 year) · catan:games:recent (ids, 60) · catan:games:table:{id} (ids, 60)
  * Budget: 6 games per IP per 10 minutes — a real table finishes one every hour or two.
  */
-import { validateGame, type GameInput } from '../../../src/lib/catan.ts';
+import { CATAN_ORIGIN, validateGame, type GameInput } from '../../../src/lib/catan.ts';
 import { catanJson, catanOptions, overBudget, randomId, readBody, type CatanEnv } from '../../_lib/catan-store.ts';
 
 export const onRequestOptions = catanOptions;
 
 const TTL = 365 * 86400;
 type Stored = GameInput & { id: string; t: string };
-const url = (id: string) => `https://catan.pointcast.xyz/game?id=${id}`;
+const url = (id: string) => `${CATAN_ORIGIN}/game/?id=${id}`;
 
 async function ids(kv: KVNamespace, key: string): Promise<string[]> {
   return ((await kv.get(key, 'json').catch(() => null)) as string[] | null) ?? [];

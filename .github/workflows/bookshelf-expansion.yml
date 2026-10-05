@@ -1,0 +1,55 @@
+name: Check reading shelf
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/bookshelf-expansion.yml'
+      - 'src/components/BookCompanion.astro'
+      - 'src/data/bookshelf-expansion.json'
+      - 'src/data/reading-shelf.ts'
+      - 'src/lib/book-companion*'
+      - 'src/lib/bookshelf-browser.mjs'
+      - 'src/pages/books*'
+      - 'src/pages/books/**'
+      - 'public/images/bookshelf/**'
+      - 'tests/book-companion.test.mjs'
+      - 'tests/bookshelf-browser.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: reading-shelf-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: Check out reviewed head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --test tests/book-companion.test.mjs tests/bookshelf-browser.test.mjs
+      - run: npm run build:bare
+      - run: npm run audit:agents
+      - run: npm run audit:publishing
+      - name: Verify all six book companions and original artworks
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const books = JSON.parse(fs.readFileSync('src/data/bookshelf-expansion.json', 'utf8'));
+          if (books.length !== 6 || books.reduce((n, book) => n + book.editions.length, 0) !== 12) throw Error('Expected six companions and twelve editions');
+          for (const book of books) {
+            for (const file of [`dist/books/${book.id}/index.html`, `dist/books/${book.id}.json`, `dist${book.art.src}`]) {
+              if (!fs.existsSync(file)) throw Error(`Missing ${file}`);
+            }
+          }
+          if (!fs.existsSync('dist/books.json')) throw Error('Missing shelf metadata');
+          JS

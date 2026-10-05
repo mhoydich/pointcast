@@ -1,0 +1,17 @@
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {resolve,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {renderFrontDoor} from '../src/lib/ues-front-door.mjs';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const destination=resolve(process.argv[2] || '/tmp/ues-homepage-preview');
+const data=JSON.parse(await readFile(resolve(root,'src/data/ues-front-door.json'),'utf8'));
+await mkdir(destination,{recursive:true});
+const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>University of El Segundo · Learning by Making</title><meta name="description" content="Independent learning rooted in El Segundo: open classes, sourced studies and proposed inquiries."><link rel="stylesheet" href="./ues-front-door.css"></head><body class="ues-portable"><a class="ues-portable-skip" href="#main-content">Skip to learning homepage</a><main id="main-content">${renderFrontDoor(data,{standalone:true})}</main><script type="module" src="./ues-front-door.mjs"></script></body></html>`;
+await writeFile(resolve(destination,'index.html'),html);
+await writeFile(resolve(destination,'catalog.json'),JSON.stringify(data,null,2)+'\n');
+await writeFile(resolve(destination,'ues-front-door.css'),await readFile(resolve(root,'src/styles/ues-front-door.css')));
+await writeFile(resolve(destination,'ues-front-door-lib.mjs'),await readFile(resolve(root,'src/lib/ues-front-door.mjs')));
+const client=(await readFile(resolve(root,'src/scripts/ues-front-door.mjs'),'utf8')).replace("'../lib/ues-front-door.mjs'","'./ues-front-door-lib.mjs'").replace("'../data/ues-front-door.json'","'./catalog.json'");
+await writeFile(resolve(destination,'ues-front-door.mjs'),client);
+await writeFile(resolve(destination,'README.txt'),'LOCAL DRAFT — no publication occurred.\nServe this folder over HTTP to test module-based filters. All cards and course links remain usable without JavaScript.\nCourses stay on pointcast.xyz so existing local-browser progress keeps its origin.\nDomain, DNS, hosting and public release require explicit approval. noindex is intentionally retained for the review draft.\n');
+console.log(JSON.stringify({destination,files:6,studies:data.studies.length,classes:data.classes.length,publication:'local draft only'}));

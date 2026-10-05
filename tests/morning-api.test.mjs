@@ -77,7 +77,16 @@ test('morning route: JSON Feed content type, caches.default TTLs, ?d= through pa
 
 /* ---------- Saturday 3 Oct 2026, No. 1, end to end on node:sqlite ---------- */
 
-const server = await createServer({ root: fileURLToPath(root), configFile: false, appType: 'custom', logLevel: 'error' });
+// The town slot reads src/data/front-door-news.json, and a note under 7 days old outranks Shortwave.
+// These editions sit on fixed dates from No. 1 (Sat 3 Oct 2026) on, so serve only notes filed more
+// than a week before No. 1: a launch note filed later must not rewrite what these dates expect.
+const NEWS_BEFORE_NO1 = JSON.parse(await read('src/data/front-door-news.json')).filter((n) => n.date < '2026-09-26');
+const newsFixture = {
+  name: 'front-door-news-before-no1',
+  enforce: 'pre',
+  load(id) { if (id.split('?')[0].endsWith('/src/data/front-door-news.json')) return JSON.stringify(NEWS_BEFORE_NO1); },
+};
+const server = await createServer({ root: fileURLToPath(root), configFile: false, appType: 'custom', logLevel: 'error', plugins: [newsFixture] });
 after(() => server.close());
 const [lib, route] = await Promise.all([server.ssrLoadModule('/functions/_lib/morning-sources.ts'), server.ssrLoadModule('/functions/morning.json.ts')]);
 

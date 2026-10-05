@@ -1,0 +1,116 @@
+---
+import collection from '../data/home-visit-views.json';
+import { HOME_SHARE_EDITIONS } from '../lib/home-share-editions.mjs';
+
+const projects = new Map(collection.projects.map((project) => [project.id, project]));
+const views = collection.views.map((view, index) => {
+  const art = HOME_SHARE_EDITIONS.find((edition) => edition.slug === view.id);
+  if (!art) throw new Error(`Missing original home art: ${view.id}`);
+  return {
+    ...view,
+    number: String(index + 1).padStart(2, '0'),
+    image: `/images/home-visit/2026-10/${String(art.number).padStart(2, '0')}-${art.slug}.webp`,
+    alt: art.alt,
+    projects: view.projects.map((id) => {
+      const project = projects.get(id);
+      if (!project) throw new Error(`Missing public home project: ${id}`);
+      return project;
+    }),
+  };
+});
+---
+
+<section class="home-visit" aria-labelledby="home-visit-title" data-home-visit data-view={views[0].id}>
+  <header class="home-visit__header">
+    <div>
+      <p class="home-visit__eyebrow">PointCast · El Segundo · A little independent internet</p>
+      <h2 id="home-visit-title">Small worlds.<br /><span>Wide open.</span></h2>
+    </div>
+    <div class="home-visit__invitation">
+      <p>Art, play, music and ideas<br />for what comes next.</p>
+      <div class="home-visit__control-slot"><button type="button" data-home-visit-next aria-controls="home-visit-views" hidden>Another view <span aria-hidden="true">↗</span></button></div>
+    </div>
+  </header>
+  <div class="home-visit__stack" id="home-visit-views">
+    {views.map((view, index) => (
+      <article class="home-visit__view" data-home-visit-view data-view-id={view.id} data-view-title={view.title} data-active={String(index === 0)} aria-hidden={index === 0 ? undefined : 'true'} inert={index === 0 ? undefined : true} aria-labelledby={`home-visit-${view.id}`}>
+        <figure class="home-visit__art">
+          <div class="home-visit__frame"><img src={view.image} alt={view.alt} width="1200" height="630" loading="lazy" decoding="async" /></div>
+          <figcaption><span>Window {view.number} / 06</span><span>{view.title}</span><span aria-hidden="true">✳</span></figcaption>
+        </figure>
+        <div class="home-visit__doors">
+          <div class="home-visit__intro"><h3 id={`home-visit-${view.id}`}>{view.heading}</h3><p>{view.note}</p></div>
+          <ol>
+            {view.projects.map((project, projectIndex) => (
+              <li><a href={project.href} tabindex={index === 0 ? undefined : -1}>
+                <span class="home-visit__door-number" aria-hidden="true">0{projectIndex + 1}</span>
+                <div><p class="home-visit__kind">{project.kind}</p><h4>{project.title}</h4><p class="home-visit__description">{project.description}</p></div>
+                <span class="home-visit__arrow" aria-hidden="true">↗</span>
+              </a></li>
+            ))}
+          </ol>
+        </div>
+      </article>
+    ))}
+  </div>
+  <footer class="home-visit__footer">
+    <p>A fresh selection on arrival. It stays put while you read.</p>
+    <a href="/apps/">Every project <span aria-hidden="true">↗</span></a>
+  </footer>
+  <p class="home-visit__status" role="status" aria-live="polite" data-home-visit-status></p>
+  <noscript><p class="home-visit__fallback">This is the first curated view. All its doors work without JavaScript. <a href="/apps/">Browse every project ↗</a></p></noscript>
+</section>
+
+<script>
+  import { initializeHomeVisitWindow } from '../lib/home-visit-controller.mjs';
+  const initialize = () => document.querySelectorAll<HTMLElement>('[data-home-visit]').forEach((root) => initializeHomeVisitWindow(root));
+  initialize();
+  document.addEventListener('astro:page-load', initialize);
+</script>
+
+<style>
+  .home-visit { --ink:#202520;--paper:#f5f1e8;--muted:#51594f;--line:#b5b9ab;background:var(--paper);color:var(--ink);border:1px solid var(--ink);margin:10px 0 30px;padding:28px 30px 0; }
+  .home-visit__header { display:flex;align-items:end;justify-content:space-between;gap:24px;padding-bottom:28px; }
+  .home-visit__eyebrow { margin:0 0 15px;font:600 9px/1.6 var(--pc-font-mono);letter-spacing:.055em;text-transform:uppercase; }
+  .home-visit h2 { font-size:clamp(42px,6.5vw,83px);line-height:.94;letter-spacing:-.06em;font-weight:720;margin:0; }
+  .home-visit h2 span { color:#315945; }
+  .home-visit__invitation { flex:0 0 205px; }
+  .home-visit__invitation>p { font-size:14px;line-height:1.5;margin:0 0 15px; }
+  .home-visit__control-slot { min-height:44px; }
+  .home-visit__control-slot button { appearance:none;display:flex;align-items:center;justify-content:space-between;gap:30px;width:100%;min-height:44px;background:var(--ink);border:1px solid var(--ink);border-radius:0;color:var(--paper);padding:11px 14px;font:600 11px/1.5 var(--pc-font-mono);cursor:pointer; }
+  .home-visit__control-slot button[hidden] { display:none; }
+  .home-visit__control-slot button:hover { background:#315945; }
+  .home-visit__stack { display:grid; }
+  .home-visit__view { grid-area:1/1;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;padding-top:24px;border-top:1px solid var(--ink); }
+  .home-visit__view[data-active='false'] { visibility:hidden;pointer-events:none; }
+  .home-visit__art { margin:0;min-width:0;align-self:start; }
+  .home-visit__frame { aspect-ratio:1200/630;border:1px solid var(--ink);background:#e8e3d8;overflow:hidden; }
+  .home-visit__art img { display:block;width:100%;height:100%;object-fit:contain; }
+  .home-visit__art figcaption { display:flex;align-items:center;gap:12px;padding:12px 0;font:500 9px/1.5 var(--pc-font-mono); }
+  .home-visit__art figcaption>span:last-child { margin-left:auto;font-size:17px;line-height:1; }
+  .home-visit__doors { min-width:0; }
+  .home-visit__intro { margin-bottom:16px; }
+  .home-visit__intro h3 { font-size:clamp(22px,2.6vw,30px);letter-spacing:-.045em;line-height:1.08;margin:0 0 7px; }
+  .home-visit__intro>p { font-size:12px;line-height:1.55;color:var(--muted);margin:0; }
+  .home-visit__doors ol { margin:0;padding:0;list-style:none; }
+  .home-visit__doors li { border-top:1px solid var(--line); }
+  .home-visit__doors li:last-child { border-bottom:1px solid var(--line); }
+  .home-visit__doors a { display:grid;grid-template-columns:18px minmax(0,1fr) 17px;gap:9px;padding:14px 0;color:inherit;text-decoration:none;min-height:44px; }
+  .home-visit__doors a:hover h4 { text-decoration:underline;text-underline-offset:3px; }
+  .home-visit__door-number { font:500 9px/1.5 var(--pc-font-mono);padding-top:1px; }
+  .home-visit__kind { color:#315945;margin:0 0 5px;font:650 10px/1.5 var(--pc-font-mono);text-transform:uppercase;letter-spacing:.035em; }
+  .home-visit h4 { font-size:20px;line-height:1.13;letter-spacing:-.035em;margin:0; }
+  .home-visit__description { font-size:12px;line-height:1.55;color:var(--muted);margin:6px 0 0; }
+  .home-visit__arrow { font-size:20px;line-height:1;padding-top:3px; }
+  .home-visit__footer { display:flex;justify-content:space-between;align-items:center;gap:20px;border-top:1px solid var(--ink);margin-top:24px;padding-top:10px;font:500 9px/1.55 var(--pc-font-mono); }
+  .home-visit__footer>p { max-width:54ch;margin:0; }
+  .home-visit__footer>a { display:flex;align-items:center;gap:16px;color:inherit;min-height:44px;white-space:nowrap; }
+  .home-visit__status { font:500 10px/1.5 var(--pc-font-mono);min-height:3em;margin:0;padding:0 0 8px; }
+  .home-visit__fallback { font-size:12px;line-height:1.6;padding:0 0 18px;margin:0;color:var(--muted); }
+  .home-visit__fallback a { color:inherit; }
+  .home-visit :is(a,button):focus-visible { outline:3px solid #2549dd;outline-offset:4px; }
+  @media(max-width:950px) { .home-visit { padding:24px 22px 0; }.home-visit__view { grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px; }.home-visit h4 { font-size:18px; } }
+  @media(max-width:700px) { .home-visit { padding:22px 18px 0; }.home-visit__header { flex-direction:column;align-items:stretch;gap:20px;padding-bottom:20px; }.home-visit__invitation { display:flex;align-items:center;justify-content:space-between;gap:18px;flex:auto; }.home-visit__invitation>p { font-size:11px;margin:0; }.home-visit__control-slot { flex:0 0 145px; }.home-visit__control-slot button { font-size:10px;gap:12px;padding:10px; }.home-visit__view { grid-template-columns:1fr;gap:12px;padding-top:18px; }.home-visit h2 { font-size:clamp(43px,11vw,70px); }.home-visit h4 { font-size:20px; }.home-visit__intro h3 { font-size:27px; }.home-visit__footer { align-items:start;gap:12px; }.home-visit__footer>p { max-width:31ch; }.home-visit__footer>a { min-height:36px; }.home-visit__eyebrow { font-size:8px; } }
+  @media(max-width:360px) { .home-visit { padding-left:14px;padding-right:14px; }.home-visit__invitation { gap:10px; }.home-visit__control-slot { flex-basis:133px; }.home-visit__eyebrow { letter-spacing:0; }.home-visit__footer { font-size:8px; } }
+  @media(prefers-reduced-motion:reduce) { .home-visit * { animation:none!important;transition:none!important;scroll-behavior:auto!important; } }
+</style>
