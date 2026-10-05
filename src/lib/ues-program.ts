@@ -333,4 +333,13 @@ export const UES_PROGRAM_PAYLOAD = {
   satelliteModel: UES_SATELLITE_MODEL,
   governance: UES_GOVERNANCE,
   sources: UES_SOURCES,
+  philosophy: {
+    series: 'https://pointcast.xyz/ues/philosophy/',
+    json: 'https://pointcast.xyz/ues/philosophy.json',
+    seminars: [
+      'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts/',
+      'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/',
+    ],
+    note: 'Seminars for a campus with no campus. Not a degree and not a revenue plan.',
+  },
 } as const;

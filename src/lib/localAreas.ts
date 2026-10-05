@@ -78,10 +78,10 @@ export const LOCAL_AREAS: LocalArea[] = [
     noun: 'First Tide',
     status: 'seed',
     description:
-      'A neighborhood learning club with course tracks, session notes, and participation roles. No degrees, no campus cosplay: just people teaching what they actually know.',
+      'A neighborhood learning club with course tracks, session notes, participation roles, and a philosophy shelf at /ues/philosophy. No degrees. People teach what they know, and the proof is a receipt.',
     radiusFit:
       'UES can invite beyond city limits, but the first cohort should stay inside the participation radius so sessions turn into repeat relationships.',
-    actions: ['course tracks', 'host roster', 'session notes', 'participation tiers'],
+    actions: ['course tracks', 'host roster', 'session notes', 'participation tiers', 'philosophy seminars'],
     palette: { ink: '#6f4f14', wash: '#fff4dc', rule: '#e3bc69' },
   },
   {

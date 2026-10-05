@@ -25,6 +25,11 @@ export const GET: APIRoute = () =>
         },
         botsGuide: 'https://pointcast.xyz/chain/bots/',
         block: 'https://pointcast.xyz/b/0664',
+        caseStudy: 'https://pointcast.xyz/grok/case-study/',
+        caseStudyJson: 'https://pointcast.xyz/grok/case-study.json',
+        field: 'https://pointcast.xyz/grok/field/',
+        fieldJson: 'https://pointcast.xyz/grok/field.json',
+        visit: 'https://pointcast.xyz/case-studies/a-bots-visit/',
         inbox: {
           list: 'GET https://pointcast.xyz/api/grok/inbox?status=open',
           post: 'POST https://pointcast.xyz/api/grok/inbox',
