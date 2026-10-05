@@ -1,0 +1,239 @@
+---
+import exhibition from '../../data/purple-rain.json';
+import '../../styles/purple-rain.css';
+
+type LensId = 'fashion' | 'energy' | 'results' | 'time';
+type Source = { id: string; title: string; url: string; publisher: string; note: string };
+type Lens = { id: LensId; number: string | number; title: string; kicker: string; summary: string; sections: { title: string; body: string; sourceIds: string[] }[] };
+type ExhibitImage = { id: string; title: string; src?: string; fullSrc?: string; width?: number; height?: number; alt: string; caption: string; creator: string; license: string; licenseUrl: string; sourceUrl: string; date: string; kind: 'reuse' | 'original' | 'reference'; lenses: LensId[] };
+const data = exhibition as {
+  updated: string;
+  hero: { src: string; alt: string; caption: string; width?: number; height?: number };
+  sources: Source[];
+  lenses: Lens[];
+  facts: { value: string; label: string; scope: string; sourceIds: string[] }[];
+  timeline: { date: string; title: string; body: string; lenses: LensId[]; sourceIds: string[] }[];
+  images: ExhibitImage[];
+  listening: { title: string; body: string; url: string }[];
+  related: { title: string; body: string; url: string }[];
+};
+const canonical = 'https://pointcast.xyz/purple-rain/';
+const imageUrl = new URL(data.hero.src, canonical).href;
+const description = 'An interactive PointCast editorial exhibition on Prince’s Purple Rain: fashion, performance, verified outcomes, and the passage of time. Original art, credited photographs, and archival references.';
+const sourceById = new Map(data.sources.map((source) => [source.id, source]));
+const sourceLinks = (ids: string[] = []) => ids.map((id) => sourceById.get(id)).filter((source): source is Source => Boolean(source));
+const paragraphs = (body: string) => body.split(/\n\s*\n/).filter(Boolean);
+const kindNames = { reuse: 'Reusable photograph', original: 'Original art', reference: 'Archive reference' };
+const formatNumber = (value: string | number) => String(value).padStart(2, '0');
+const leadImageIds: Record<LensId, string> = { fashion: 'violet-material-study', energy: 'electric-crescendo', results: 'prince-revolution-stars-2020', time: 'first-avenue-night-2005' };
+const leadImage = (lens: LensId) => data.images.find((entry) => entry.id === leadImageIds[lens]);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#2b0d46" />
+    <meta name="robots" content="index, follow" />
+    <title>Purple Rain — Four ways into a world · PointCast</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Purple Rain — Four ways into a world" />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:alt" content={data.hero.alt} />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body class="purple-exhibition">
+    <a class="skip-link" href="#main">Skip to exhibition</a>
+    <header class="exhibit-header">
+      <a class="pointcast-wordmark" href="/" aria-label="PointCast home"><span class="pointcast-mark" aria-hidden="true">P<span>·</span></span><span>PointCast</span></a>
+      <span class="header-edition">A cultural exhibition <span aria-hidden="true">/</span> Album · film · era</span>
+      <nav class="header-links" aria-label="Exhibition sections">
+        <a href="#image-atlas">Image atlas</a>
+        <a href="#chronology">Time</a>
+        <a href="#sources">Sources</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="exhibit-hero" aria-labelledby="exhibition-title">
+        <div class="hero-art">
+          <img src={data.hero.src} width={data.hero.width || 1600} height={data.hero.height || 900} alt={data.hero.alt} fetchpriority="high" decoding="async" />
+        </div>
+        <div class="hero-wash" aria-hidden="true"></div>
+        <div class="hero-copy">
+          <p class="eyebrow hero-eyebrow">Prince <span aria-hidden="true">&</span> The Revolution <span class="eyebrow-dot" aria-hidden="true">·</span> 1984</p>
+          <h1 id="exhibition-title"><span>Purple</span><em>Rain</em></h1>
+          <p class="hero-deck">Four ways into a world.</p>
+          <p class="hero-introduction">An album, a film, an era. Enter through the clothes, the performance, the outcomes, or the unfolding of time.</p>
+          <a class="hero-enter" href="#lenses"><span>Enter the exhibition</span><span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="hero-bottom">
+          <p class="hero-art-caption"><span>Original visual study</span>{data.hero.caption}</p>
+          <p class="hero-byline">PointCast editorial · Codex<br /><span>Research checked {data.updated}</span></p>
+        </div>
+      </section>
+
+      <div class="exhibition-intro content-width">
+        <p class="eyebrow">The invitation</p>
+        <p class="intro-statement">Look closely.<br />Then look <em>again.</em></p>
+        <div class="intro-description">
+          <p>Purple Rain can be approached as a record, a movie, a wardrobe, and a way of holding a stage. Each lens changes what comes into focus.</p>
+          <p>This is a contemporary editorial exhibition. The photographs have individual credits and licenses; the original visual studies are labeled; archival works remain connected to their sources.</p>
+          <a class="text-link" href="#sources">Follow the evidence <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+
+      <nav id="lenses" class="lens-navigation" aria-label="Filter the exhibition by lens">
+        <div class="lens-navigation-inner content-width">
+          <span class="lens-navigation-label">Choose a lens</span>
+          <div class="lens-filter-controls enhanced-only" role="group" aria-label="Exhibition lens">
+            <button class="lens-button is-active" type="button" data-lens-button="all" aria-pressed="true"><span class="lens-button-number" aria-hidden="true">◎</span> All four</button>
+            {data.lenses.map((lens) => <button class="lens-button" type="button" data-lens-button={lens.id} aria-pressed="false"><span class="lens-button-number" aria-hidden="true">{formatNumber(lens.number)}</span> {lens.title}</button>)}
+          </div>
+          <div class="lens-static-links nojs-only">
+            {data.lenses.map((lens) => <a href={`#lens-${lens.id}`}>{formatNumber(lens.number)} {lens.title}</a>)}
+          </div>
+        </div>
+      </nav>
+      <p id="lens-status" class="sr-only" aria-live="polite"></p>
+
+      <div class="lens-stories content-width">
+        {data.lenses.map((lens) => <article class={`lens-story lens-${lens.id}`} id={`lens-${lens.id}`} data-lens-panel={lens.id} aria-labelledby={`heading-${lens.id}`}>
+          <div class="lens-story-heading">
+            <span class="lens-large-number" aria-hidden="true">{formatNumber(lens.number)}</span>
+            <p class="eyebrow">{lens.kicker}</p>
+            <h2 id={`heading-${lens.id}`}>{lens.title}<span aria-hidden="true">.</span></h2>
+            <p class="lens-summary">{lens.summary}</p>
+            {leadImage(lens.id) && (() => { const entry = leadImage(lens.id)!; return <figure class={`lens-lead-image lens-lead-${entry.kind}`}>
+              <a class="lens-lead-link" href={entry.fullSrc || entry.src} data-lightbox data-image-src={entry.fullSrc || entry.src} data-image-alt={entry.alt} data-image-title={entry.title} data-image-caption={entry.caption} data-image-creator={entry.creator} data-image-license={entry.license} data-image-license-url={entry.licenseUrl} data-image-source-url={entry.sourceUrl} aria-label={`View a larger image: ${entry.title}`}>
+                <img src={entry.src} width={entry.width} height={entry.height} alt={entry.alt} loading="lazy" decoding="async" /><span class="image-kind-label">{kindNames[entry.kind]}</span><span class="image-open" aria-hidden="true">↗</span>
+              </a>
+              <figcaption><p class="lens-lead-title">{entry.title} <span>· {entry.date}</span></p><p>{entry.caption}</p><p class="image-credit">{entry.creator} · <a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer">Source<span class="sr-only"> for {entry.title} (opens in a new tab)</span></a></p><p class="image-license">{entry.licenseUrl ? <a href={entry.licenseUrl} target="_blank" rel="noopener noreferrer">{entry.license}<span class="sr-only"> (opens in a new tab)</span></a> : entry.license}</p></figcaption>
+            </figure>; })()}
+          </div>
+          <div class="lens-story-sections">
+            {lens.sections.map((section) => <section class="editorial-section">
+              <h3>{section.title}</h3>
+              {paragraphs(section.body).map((paragraph) => <p>{paragraph}</p>)}
+              {sourceLinks(section.sourceIds).length > 0 && <p class="inline-sources"><span>Sources</span> {sourceLinks(section.sourceIds).map((source, index) => <><a href={`#source-${source.id}`} title={`${source.publisher}: ${source.title}`}>{source.publisher}</a>{index < sourceLinks(section.sourceIds).length - 1 && <span aria-hidden="true"> · </span>}</>)}</p>}
+            </section>)}
+          </div>
+        </article>)}
+      </div>
+
+      <section class="stage-reading" data-lens-panel="energy" aria-labelledby="stage-title">
+        <div class="content-width stage-reading-inner">
+          <div class="stage-heading">
+            <p class="eyebrow">An interpretive exercise · Original writing</p>
+            <h2 id="stage-title">Read the<br /><em>room.</em></h2>
+            <p>Try three ways of arranging a performance. These are visual and dramatic readings, offered as prompts for your own attention.</p>
+          </div>
+          <div class="stage-console">
+            <div class="stage-scene" data-stage-scene="restraint" aria-hidden="true">
+              <div class="stage-light stage-light-left"></div><div class="stage-light stage-light-right"></div><div class="stage-horizon"></div><div class="stage-center"></div>
+              <span class="stage-scene-label">A stage in three readings</span>
+            </div>
+            <div class="stage-buttons enhanced-only" role="group" aria-label="Stage reading">
+              <button type="button" data-stage-button="restraint" aria-pressed="true" class="is-active">Restraint</button>
+              <button type="button" data-stage-button="build" aria-pressed="false">Build</button>
+              <button type="button" data-stage-button="release" aria-pressed="false">Release</button>
+            </div>
+            <div class="stage-reading-copy" aria-live="polite" aria-atomic="true">
+              <h3 id="stage-reading-title">Restraint</h3>
+              <p id="stage-reading-description">A held pose, a single spotlight, a phrase left open. Attention gathers because the scene gives it room. What do you notice when very little changes?</p>
+            </div>
+            <div class="stage-reading-alternatives nojs-only"><h3>Build</h3><p>Add a second light, a repeated gesture, another musical layer. The scene starts to accumulate possibilities. Which detail tells you something is about to change?</p><h3>Release</h3><p>A broad gesture, a wider field of light, a full arrangement. The composition opens outward. What makes the arrival feel earned by what came before?</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results-ledger content-width" data-lens-panel="results" aria-labelledby="ledger-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">The record of the record</p><h2 id="ledger-title">Results, in context.</h2></div>
+          <p>Every number carries a date, a territory, or a defined measure. Recognition and influence need their own kinds of evidence.</p>
+        </div>
+        <div class="fact-grid">
+          {data.facts.map((fact) => <article class="fact-card"><p class="fact-value">{fact.value}</p><h3>{fact.label}</h3><p class="fact-scope">{fact.scope}</p><p class="inline-sources">{sourceLinks(fact.sourceIds).map((source, index) => <><a href={`#source-${source.id}`} title={source.title}>{source.publisher}</a>{index < sourceLinks(fact.sourceIds).length - 1 && <span aria-hidden="true"> · </span>}</>)}</p></article>)}
+        </div>
+      </section>
+
+      <section id="image-atlas" class="image-atlas" aria-labelledby="atlas-title">
+        <div class="content-width">
+          <div class="section-heading atlas-heading">
+            <div><p class="eyebrow">A visual field guide</p><h2 id="atlas-title">The image atlas<span aria-hidden="true">.</span></h2></div>
+            <p>Photographs, places, objects, and original studies. Open a picture to look closer; open an archive reference to see the work at its source.</p>
+          </div>
+          <div class="atlas-controls enhanced-only">
+            <div class="gallery-kind-buttons" role="group" aria-label="Image type">
+              <button type="button" data-kind-button="all" aria-pressed="true" class="is-active">All entries</button>
+              <button type="button" data-kind-button="reuse" aria-pressed="false">Reusable photographs</button>
+              <button type="button" data-kind-button="original" aria-pressed="false">Original art</button>
+              <button type="button" data-kind-button="reference" aria-pressed="false">Archive references</button>
+            </div>
+            <label class="gallery-search"><span class="sr-only">Search images and references</span><span aria-hidden="true">⌕</span><input id="gallery-search" type="search" placeholder="Search the atlas" autocomplete="off" /></label>
+          </div>
+          <p class="gallery-status" id="gallery-status" aria-live="polite">{data.images.length} entries · All four lenses</p>
+          <div class="image-gallery">
+            {data.images.map((entry, index) => <figure class={`gallery-card gallery-card-${entry.kind}`} data-gallery-card data-image-kind={entry.kind} data-image-lenses={entry.lenses.join(' ')} data-image-search={`${entry.title} ${entry.caption} ${entry.creator} ${entry.date} ${entry.lenses.join(' ')} ${kindNames[entry.kind]}`.toLowerCase()}>
+              {entry.kind === 'reference' ? <a class="archive-reference" href={entry.sourceUrl} target="_blank" rel="noopener noreferrer" aria-label={`View ${entry.title} at its source (opens in a new tab)`}>
+                <div class="reference-top"><span>Archive reference</span><span aria-hidden="true">↗</span></div>
+                <span class="reference-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                <h3>{entry.title}</h3>
+                <p class="reference-date">{entry.date}</p>
+                <span class="reference-action">View at source <span aria-hidden="true">↗</span></span>
+              </a> : <a class="gallery-image-link" href={entry.fullSrc || entry.src} data-lightbox data-image-src={entry.fullSrc || entry.src} data-image-alt={entry.alt} data-image-title={entry.title} data-image-caption={entry.caption} data-image-creator={entry.creator} data-image-license={entry.license} data-image-license-url={entry.licenseUrl} data-image-source-url={entry.sourceUrl} aria-label={`View a larger image: ${entry.title}`}>
+                <img src={entry.src} width={entry.width} height={entry.height} alt={entry.alt} loading="lazy" decoding="async" />
+                <span class="image-kind-label">{kindNames[entry.kind]}</span><span class="image-open" aria-hidden="true">↗</span>
+              </a>}
+              <figcaption>
+                <div class="gallery-caption-title"><h3>{entry.title}</h3><span>{entry.date}</span></div>
+                <p>{entry.caption}</p>
+                <p class="image-credit">{entry.creator}{entry.sourceUrl && <> · <a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer">Source<span class="sr-only"> for {entry.title} (opens in a new tab)</span></a></>}</p>
+                <p class="image-license">{entry.licenseUrl ? <a href={entry.licenseUrl} target="_blank" rel="noopener noreferrer">{entry.license}<span class="sr-only"> (opens in a new tab)</span></a> : entry.license}</p>
+              </figcaption>
+            </figure>)}
+          </div>
+          <div class="gallery-empty" id="gallery-empty" hidden><p>No entries match this view.</p><button class="text-link" type="button" id="gallery-reset">Reset the atlas</button></div>
+          <p class="atlas-rights-note">Credits and reuse terms belong to each entry. Archive references link to rights holders and collections; their images are not reproduced here. <a href="/purple-rain.json" download>Download the source and rights inventory <span aria-hidden="true">↓</span></a></p>
+        </div>
+      </section>
+
+      <section id="chronology" class="chronology content-width" aria-labelledby="timeline-title">
+        <div class="section-heading"><div><p class="eyebrow">Creation → release → legacy</p><h2 id="timeline-title">Time leaves a trace.</h2></div><p>The story keeps changing as the work passes through studios, stages, cinemas, collections, and new audiences.</p></div>
+        <ol class="timeline">
+          {data.timeline.map((event) => <li class="timeline-event" data-timeline-lenses={event.lenses.join(' ')}><p class="timeline-date">{event.date}</p><div class="timeline-copy"><h3>{event.title}</h3><p>{event.body}</p><p class="inline-sources">{sourceLinks(event.sourceIds).map((source, index) => <><a href={`#source-${source.id}`} title={source.title}>{source.publisher}</a>{index < sourceLinks(event.sourceIds).length - 1 && <span aria-hidden="true"> · </span>}</>)}</p></div></li>)}
+        </ol>
+        <p class="timeline-empty" id="timeline-empty" hidden>No timeline entries are assigned to this lens. Choose “All four” to see the full chronology.</p>
+      </section>
+
+      <section class="listening-room" aria-labelledby="listening-title">
+        <div class="content-width listening-inner"><div><p class="eyebrow">Continue with the work</p><h2 id="listening-title">Listen.<br /><em>Watch.</em><br />Return.</h2></div><div class="listening-links">{data.listening.map((entry) => <a href={entry.url} target="_blank" rel="noopener noreferrer"><div><h3>{entry.title}</h3><p>{entry.body}</p></div><span aria-hidden="true">↗</span><span class="sr-only"> Opens in a new tab.</span></a>)}<p class="playback-note">Playback stays with the official provider. Nothing plays automatically.</p></div></div>
+      </section>
+
+      <section id="sources" class="source-room content-width" aria-labelledby="sources-title">
+        <div class="section-heading"><div><p class="eyebrow">The evidence room</p><h2 id="sources-title">Go to the source.</h2></div><p>The links below support the editorial text, dates, and results. Image credits and licenses appear beside each atlas entry.</p></div>
+        <details class="sources-accordion" open><summary><span>Research sources</span><span class="source-count">{data.sources.length} records <span aria-hidden="true">+</span></span></summary><ol class="sources-list">{data.sources.map((source, index) => <li id={`source-${source.id}`}><span class="source-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><div><p class="source-publisher">{source.publisher}</p><h3><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span aria-hidden="true"> ↗</span><span class="sr-only"> (opens in a new tab)</span></a></h3><p>{source.note}</p></div></li>)}</ol></details>
+        <p class="source-update">Research checked {data.updated}. PointCast editorial · Codex. A contemporary exhibition, with original interpretation and individually identified source material.</p>
+      </section>
+
+      {data.related.length > 0 && <section class="related-room content-width" aria-labelledby="related-title"><p class="eyebrow">Elsewhere on PointCast</p><h2 id="related-title">Keep following the thread.</h2><div class="related-grid">{data.related.map((entry) => <a href={entry.url}><h3>{entry.title}<span aria-hidden="true">↗</span></h3><p>{entry.body}</p></a>)}</div></section>}
+    </main>
+
+    <footer class="exhibit-footer"><div class="content-width"><a class="pointcast-wordmark" href="/"><span class="pointcast-mark" aria-hidden="true">P<span>·</span></span><span>PointCast</span></a><p>Purple Rain / Four ways into a world.</p><a href="#exhibition-title">Back to the beginning <span aria-hidden="true">↑</span></a></div></footer>
+
+    <dialog id="image-dialog" class="image-dialog" aria-labelledby="lightbox-title">
+      <div class="lightbox-toolbar"><span>Look closer</span><div><button type="button" id="lightbox-zoom" aria-pressed="false">Zoom in</button><button type="button" id="lightbox-close" aria-label="Close image viewer">Close <span aria-hidden="true">×</span></button></div></div>
+      <p class="sr-only" id="lightbox-pan-instruction">When zoomed, use the arrow keys to move around the image. Use Shift and Tab to return to the viewer controls.</p>
+      <div class="lightbox-image-wrap" id="lightbox-image-wrap" tabindex="0" role="region" aria-label="Image viewing area" aria-describedby="lightbox-pan-instruction"><img id="lightbox-image" alt="" /></div>
+      <div class="lightbox-caption"><h2 id="lightbox-title"></h2><p id="lightbox-description"></p><p class="image-credit"><span id="lightbox-creator"></span> · <a id="lightbox-source" target="_blank" rel="noopener noreferrer">Source <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a> · <a id="lightbox-license" target="_blank" rel="noopener noreferrer"></a><span id="lightbox-license-text" hidden></span></p></div>
+    </dialog>
+    <script>
+      import '../../scripts/purple-rain';
+    </script>
+  </body>
+</html>

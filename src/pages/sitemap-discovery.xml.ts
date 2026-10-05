@@ -21,6 +21,14 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/baseball/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/baseball.json', 'monthly', '0.85'],
+  ['https://pointcast.xyz/puzzles/', 'monthly', '0.85'],
+  ['https://pointcast.xyz/puzzles/make/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/puzzles/business/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/puzzles/studio/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/shop/puzzles/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/puzzles.json', 'monthly', '0.75'],
   ['https://pointcast.xyz/books/', 'monthly', '0.9'],
   ['https://pointcast.xyz/siddhartha/', 'monthly', '0.9'],
   ['https://pointcast.xyz/siddhartha.json', 'monthly', '0.8'],
@@ -77,6 +85,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/chain/docs/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/case-study/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/interns/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/chain/mints/', 'weekly', '0.7'],
   ['https://pointcast.xyz/chain/first-mints/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/mixtape/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/sanctuary/', 'monthly', '0.6'],
@@ -158,6 +167,9 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/sky-calls', 'daily', '0.7'],
   ['https://pointcast.xyz/prices', 'daily', '0.7'],
   ['https://pointcast.xyz/front-desk/agents/', 'daily', '0.7'],
+  ['https://pointcast.xyz/almanac', 'daily', '0.7'],
+  ['https://pointcast.xyz/almanac/2026-10-05', 'daily', '0.65'],
+  ['https://pointcast.xyz/almanac.json', 'daily', '0.65'],
   ['https://pointcast.xyz/morning.json', 'daily', '0.92'],
   ['https://pointcast.xyz/agent-field-guide', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-field-guide.json', 'weekly', '0.9'],

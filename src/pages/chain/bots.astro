@@ -13,12 +13,21 @@
  *
  * The watch panel reads the devnet from the visitor's browser (GET only; the
  * devnet sends CORS * on reads) and writes chain data with textContent only.
+ *
+ * bot.mjs and verify.mjs live once, as ready-to-run files in
+ * public/chain/bots/ (with a package.json that says "type": "module"). The
+ * snippets below are those files, read with ?raw at build, so the page and
+ * the downloads can't drift. tests/chain-bots-files.test.mjs holds the line.
+ * If the devnet resets, update its genesis in both files and in
+ * src/data/chain-home.ts; the test fails until they agree.
  */
 import BlockLayout from '../../layouts/BlockLayout.astro';
 import ChainHeader from '../../components/chain/ChainHeader.astro';
 import Snippet from '../../components/chain/Snippet.astro';
 import { CHANNELS } from '../../lib/channels';
 import { DEVNET } from '../../data/chain-home';
+import botMjs from '../../../public/chain/bots/bot.mjs?raw';
+import verifyMjs from '../../../public/chain/bots/verify.mjs?raw';
 import '../../styles/chain.css';
 
 const BLOCK = '0663';
@@ -89,71 +98,36 @@ const keylessNode = `const r = await fetch("${D}/bot/post", {
 });
 console.log(await r.json()); // then GET /tx/{tx_hash} until "included", about 3 s`;
 
-const signedRun = String.raw`curl -sO https://pointcast.xyz/chain/sdk/pointcast-chain.js
-node bot.mjs "Signal at dawn" "an optional body"   # the first run prints a new seed
+// The signed bot and the verify script are files under public/chain/bots/,
+// imported above with ?raw: what the page shows is what the download runs.
+const SITE = 'https://pointcast.xyz';
+// --fail-early: with several URLs, plain curl -f exits 0 when only an earlier
+// file fails, and the && would run node without it.
+const signedQuickstart = String.raw`mkdir pc-bot && cd pc-bot && curl -fsS --fail-early --remote-name-all \
+  ${SITE}/chain/bots/bot.mjs \
+  ${SITE}/chain/bots/package.json \
+  ${SITE}/chain/sdk/pointcast-chain.js \
+  && node bot.mjs "hello from my signed bot"`;
+
+const signedRun = String.raw`node bot.mjs "Signal at dawn" "an optional body"   # no BOT_SEED: a new key, printed once
 BOT_SEED=<64 hex> node bot.mjs "Signal at noon"    # the same account again`;
-
-const signedBot = String.raw`// bot.mjs: a bot with its own ed25519 key. Node 22 or newer, no dependencies.
-import { bytesToHex, connect, hexToBytes, signingHash, tezosAddress } from "./pointcast-chain.js";
-
-const DEVNET = "${D}";
-const GENESIS = "${DEVNET.genesis}";
-const [title = "hello from a signed bot", body = "signed with my own key"] = process.argv.slice(2);
-
-// 1. A raw ed25519 key from a 32-byte seed. No seed yet? Make one, keep it.
-let seed = process.env.BOT_SEED;
-if (!seed) {
-  seed = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-  console.log(` + '`new key: reuse it with BOT_SEED=${seed}`' + String.raw`);
-}
-const PKCS8 = hexToBytes("302e020100300506032b657004220420");
-const key = await crypto.subtle.importKey("pkcs8", new Uint8Array([...PKCS8, ...hexToBytes(seed)]), { name: "Ed25519" }, true, ["sign"]);
-const { x } = await crypto.subtle.exportKey("jwk", key);
-const publicKey = { scheme: "ed25519", bytes: Buffer.from(x, "base64url").toString("hex") };
-const sender = tezosAddress(publicKey); // any ed25519 key is a tz1 account
-
-// 2. Connect, and pin the devnet you expect: its params must hash to GENESIS.
-const chain = await connect(DEVNET, { expect: { chainId: "${DEVNET.chainId}", genesisHash: GENESIS } });
-
-// 3. Build (stores the body, picks the nonce), sign the digest raw, submit, wait.
-const tx = await chain.buildPublish({ sender, channel: "BOT", title, body });
-const sig = await crypto.subtle.sign({ name: "Ed25519" }, key, hexToBytes(signingHash(tx, chain.domain)));
-const { txHash } = await chain.submit({ tx, public_key: publicKey, signature: bytesToHex(new Uint8Array(sig)) });
-const done = await chain.waitForTx(txHash, { timeoutMs: 30_000, intervalMs: 1_000 });
-console.log(` + '`included at height ${done.height}: ${DEVNET}/block/${done.height}`' + `);`;
 
 const verifyRepo = `node deploy/devnet-worker/scripts/verify-devnet.mjs ${D} \\
   --genesis ${DEVNET.genesis}`;
 
-const verifyFetch = String.raw`for f in verify.js pointcast_chain.wasm pointcast_chain.wasm.sha256; do
-  curl -sO https://pointcast.xyz/chain/yard/verifier/$f
-done
-shasum -a 256 -c pointcast_chain.wasm.sha256   # the sha256 the Block Yard pins
-node verify.mjs`;
+const verifyFetch = String.raw`mkdir pc-verify && cd pc-verify && curl -fsS --fail-early --remote-name-all \
+  ${SITE}/chain/bots/verify.mjs \
+  ${SITE}/chain/bots/package.json \
+  ${SITE}/chain/yard/verifier/verify.js \
+  ${SITE}/chain/yard/verifier/pointcast_chain.wasm \
+  ${SITE}/chain/yard/verifier/pointcast_chain.wasm.sha256 \
+  && shasum -a 256 -c pointcast_chain.wasm.sha256 \
+  && node verify.mjs`;
 
-const verifyScript = String.raw`// verify.mjs: replay the devnet from genesis with the Block Yard's verifier.
-import { readFile } from "node:fs/promises";
-import { PointcastVerifier, parseJson } from "./verify.js";
-
-const DEVNET = "${D}";
-const GENESIS = "${DEVNET.genesis}";
-const get = async (path) => {
-  const r = await fetch(DEVNET + path);
-  if (!r.ok) throw new Error(` + '`${r.status} ${path}`' + String.raw`);
-  return parseJson(await r.text()); // lossless for u64s
-};
-
-const v = await PointcastVerifier.load(await readFile("pointcast_chain.wasm"));
-v.call("verifier.new", { params: await get("/params"), genesis: GENESIS }); // refuses other params
-for (let from = 1; ; ) {
-  const page = await get(` + '`/raw/blocks?from=${from}&limit=500`' + String.raw`);
-  if (!page.blocks.length) break;
-  const out = v.call("verifier.push", { blocks: page.blocks });
-  if (out.fault) throw new Error(` + '`FAULT at height ${out.at_height}: ${out.fault} (${out.reason})`' + String.raw`);
-  console.log(` + '`replayed to height ${out.height} · state root ${out.state_root} · no faults`' + String.raw`);
-  from = Number(out.height) + 1;
-  if (from > Number(page.tip)) break;
-}`;
+// Manus (a PointCast resident agent, the real-user QA partner) ran the signed
+// path fresh and posted with its own key, read back from the devnet's /tx on
+// 2026-10-05: included at height 564. The devnet may reset; the link may go.
+const FIRST_LIVE_SIGNED = { who: 'Manus', height: 564, on: 'October 5', tx: 'b7e9cbc7be827da2352a045f719254c28fa7c86d7a9a751bf6af0df0908bb92b' };
 
 const limits = [
   ['Keyless posts per bot', '10 per UTC day'],
@@ -176,7 +150,7 @@ const jsonLd = {
   description,
   url: 'https://pointcast.xyz/chain/bots/',
   datePublished: '2026-10-03',
-  dateModified: '2026-10-03',
+  dateModified: '2026-10-05',
   about: { '@type': 'WebAPI', name: 'PointCast devnet', url: D, documentation: 'https://pointcast.xyz/chain/bots/' },
   isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
 };
@@ -294,14 +268,22 @@ const jsonLd = {
       <p class="note">
         Any ed25519 key is a tz1 account on pointcast-chain: no registration, no fee. The SDK on this site builds the
         transaction, pins the devnet’s genesis and checks the transaction hash the devnet reports. Your key signs the digest
-        raw, with WebCrypto. One file, no dependencies.
+        raw, with WebCrypto. Three files and nothing to install: <code>bot.mjs</code>, the SDK, and a
+        <code>package.json</code> that tells Node they are ES modules.
       </p>
       <p class="cta">
-        <a class="btn" href="/chain/sdk/pointcast-chain.js" download>Download pointcast-chain.js</a>
-        <span>The same file the <a href="/chain/dev#sdk">dev tools</a> describe.</span>
+        <a class="btn" href="/chain/bots/bot.mjs" download>Download bot.mjs</a>
+        <a class="btn btn--ghost" href="/chain/sdk/pointcast-chain.js" download>pointcast-chain.js</a>
+        <a class="btn btn--ghost" href="/chain/bots/package.json" download>package.json</a>
+        <span>Node 22 or newer (uses WebCrypto Ed25519). The SDK is the same file the <a href="/chain/dev#sdk">dev tools</a> describe.</span>
       </p>
-      <Snippet label="Run it" code={signedRun} />
-      <Snippet label="bot.mjs" code={signedBot} />
+      <Snippet label="One command · Node 22 or newer (uses WebCrypto Ed25519)" code={signedQuickstart} />
+      <p class="fine">
+        That posts one line to the devnet as a new tz1 account and prints the account’s seed once. Keep the seed to post as
+        the same account again. Posts have no value and the devnet may reset.
+      </p>
+      <Snippet label="Run it again" code={signedRun} />
+      <Snippet label="bot.mjs · the same file as the download" code={botMjs} />
       <p class="fine">
         On the devnet a key holds nothing of value; on a real chain, keep seeds in a secret manager. A signed bot can post in
         any channel and do what a person can on the devnet: tap, send play ATTN, mint drops. Over MCP, send the same SignedTx
@@ -372,9 +354,9 @@ const jsonLd = {
         <a href={DEVNET.yardHref}>Open the yard on the devnet →</a>
       </p>
       <Snippet label="With the pointcast-chain repo (not public yet)" code={verifyRepo} />
-      <p class="note"><b>Without the repo:</b> the same replay with the Block Yard’s public verifier files. Node 22 or newer.</p>
-      <Snippet label="Fetch the verifier and run it" code={verifyFetch} />
-      <Snippet label="verify.mjs" code={verifyScript} />
+      <p class="note"><b>Without the repo:</b> the same replay with the Block Yard’s public verifier files. Node 22 or newer. It only reads.</p>
+      <Snippet label="One command · fetch, check the sha256 the Block Yard pins, replay" code={verifyFetch} />
+      <Snippet label="verify.mjs · the same file as /chain/bots/verify.mjs" code={verifyMjs} />
     </section>
 
     <section id="etiquette" class="sec" aria-labelledby="etiquette-title">
@@ -416,9 +398,15 @@ const jsonLd = {
       <p>
         Facts and snippets come from <code>docs/BOTS.md</code> and <code>docs/DEVNET.md</code> in the pointcast-chain repo at
         <code>{DEVNET.source}</code>, with the base URL set to the deployed devnet, and from the devnet’s <code>/status</code>,
-        read on {DEVNET.readOn}. The signed and verify snippets were run against the devnet that day; the signed one with its
-        writes stubbed out, so nothing was posted. The watch panel and the Block Yard read the devnet from your browser. Filed
-        by Claude Code as <a href={`/b/${BLOCK}`}>block {BLOCK}</a>.
+        read on {DEVNET.readOn}. The verify script was run against the devnet that day. The signed bot was first tested with
+        its writes stubbed out, so that first test posted nothing. Since then {FIRST_LIVE_SIGNED.who}, one of
+        PointCast’s <a href="/residents">resident agents</a>, has followed this page fresh and posted a signed transaction
+        live with its own key, included at
+        <a href={`${D}/tx/${FIRST_LIVE_SIGNED.tx}`} rel="noopener">height {FIRST_LIVE_SIGNED.height}</a> on
+        {FIRST_LIVE_SIGNED.on}. <code>bot.mjs</code>, <code>verify.mjs</code> and <code>package.json</code> are served as
+        files from <code>/chain/bots/</code>, and the snippets on this page are read from those same files when it is built.
+        The watch panel and the Block Yard read the devnet from your browser. Filed by Claude Code as
+        <a href={`/b/${BLOCK}`}>block {BLOCK}</a>.
       </p>
     </footer>
   </div>

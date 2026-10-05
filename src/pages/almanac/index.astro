@@ -7,6 +7,7 @@
  * water. Now it covers the whole lens instead of the anchor alone.
  */
 import BlockLayout from '../../layouts/BlockLayout.astro';
+import { cardDateLabel, cardDates, cardNumber, CARD_EPOCH } from '../../../functions/_lib/almanac-card.mjs';
 import {
   ALMANAC_PLACES,
   FACETS,
@@ -21,6 +22,11 @@ import {
 const today = pacificDate();
 const rows = ALMANAC_PLACES.map((place) => ({ place, day: buildDay(place, today) }));
 const anchor = rows[0];
+const cards = cardDates().map((date) => ({
+  date,
+  number: cardNumber(date),
+  label: cardDateLabel(date),
+}));
 
 const canonical = 'https://pointcast.xyz/almanac';
 const title = 'The PointCast Almanac — sun, moon, and tide across the South Bay';
@@ -50,11 +56,28 @@ const jsonLd = {
         url: `${canonical}/${place.slug}`,
       })),
     },
+    {
+      '@type': 'ItemList',
+      '@id': `${canonical}#cards`,
+      name: 'Daily Almanac cards',
+      numberOfItems: cards.length,
+      itemListElement: cards.map((card) => ({
+        '@type': 'ListItem',
+        position: card.number,
+        name: `Daily Almanac No. ${card.number}`,
+        url: `${canonical}/${card.date}`,
+      })),
+    },
   ],
 };
 ---
 
-<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/almanac.json', title: 'Daily Almanac JSON' }]}
+>
   <main class="alm">
     <header class="head">
       <p class="kicker">PointCast daily almanac · {fmtDateLong(today)}</p>
@@ -69,7 +92,27 @@ const jsonLd = {
         Tide is the one thing we never compute. It comes from NOAA with the station named,
         or it is absent. Do not invent the water.
       </p>
+      <p class="lede">
+        The numbered cards start at No. 1 on October 5, 2026. Each card is one day:
+        tide highs and lows, the marine layer, the price-wire basket, the Morning Edition
+        pick, and the weather. A missing line stays missing.
+      </p>
     </header>
+
+    <section class="binder" data-almanac-binder aria-labelledby="cards-heading">
+      <h2 id="cards-heading">The daily cards</h2>
+      <p class="binder-note">No. 1 is {CARD_EPOCH}. The live lines are on the card, and in <a href="/almanac.json">/almanac.json</a>.</p>
+      <ul class="binder-grid">
+        {cards.map((card) => (
+          <li>
+            <a href={`/almanac/${card.date}`} data-card-date={card.date}>
+              <span class="binder-no">No. {card.number}</span>
+              <span class="binder-date">{card.label}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
 
     <section class="today" aria-label="Today at the anchor">
       <p class="today-kicker">Today in El Segundo</p>
@@ -127,11 +170,16 @@ const jsonLd = {
 
     <p class="method">
       Every place also publishes a machine-readable twin at
-      <code>/almanac/{'{place}'}.json</code> — see <a href="/agent-native">agent-native publishing</a>
+      <code>/almanac/{'{place}'}.json</code>. The daily cards share
+      <a href="/almanac.json">/almanac.json</a> — see <a href="/agent-native">agent-native publishing</a>
       for why every surface here has one.
     </p>
   </main>
 </BlockLayout>
+
+<script>
+  import '../../scripts/daily-almanac.mjs';
+</script>
 
 <style>
   .alm { max-width: 62rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
@@ -216,4 +264,30 @@ const jsonLd = {
   }
   .method a { color: var(--pc-accent); }
   .method code { font-family: var(--pc-font-mono); font-size: 0.9em; }
+
+  .binder { margin-top: 2.5rem; }
+  .binder-note {
+    margin: -0.2rem 0 1rem; max-width: 62ch;
+    font-size: 0.92rem; line-height: 1.5; color: var(--pc-ink-soft);
+  }
+  .binder-note a { color: var(--pc-accent); }
+  .binder-grid {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+    gap: 0.75rem;
+  }
+  .binder-grid a {
+    display: flex; flex-direction: column; justify-content: space-between; gap: 0.45rem;
+    min-height: 6.4rem; padding: 0.7rem 0.75rem;
+    text-decoration: none; color: #1c2430;
+    background: #f4e7c8;
+    border: 4px solid #1d3557;
+    box-shadow: inset 0 0 0 1px #9b2335;
+  }
+  .binder-grid a:hover { background: #f8edd4; }
+  .binder-grid a.is-today { outline: 2px solid #9b2335; outline-offset: 3px; }
+  .binder-no {
+    font-family: var(--pc-font-mono); color: #9b2335; font-size: 0.95rem; letter-spacing: 0.04em;
+  }
+  .binder-date { font-size: 0.78rem; line-height: 1.35; color: #1d3557; }
 </style>

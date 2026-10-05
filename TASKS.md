@@ -18,6 +18,14 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## A look at baseball (2026-10-03)
+
+- [x] (X) Build `/baseball` with a sourced editorial, original illustration, interactive half inning, browser-local memory card, JSON twin and discovery — `done`
+- [x] (X) Independently review factual accuracy and scoring, verify desktop/mobile and keyboard controls, and exercise local-memory behavior — `done` — `docs/codex-logs/2026-10-03-baseball.md`
+- [ ] (MH/X) Approve the reviewed PR, then merge, publish through `scripts/deploy.sh` and verify canonical production — `waiting-on-mh`
+
+---
+
 ## Pickleball Practice Desk 02 (2026-10-03)
 
 - [x] (X) Add goal/time/space/partner practice plans, browser-local self-reported scorecard, and two sourced illustrated articles to `/pickleball/home` — `done` — canonical RALLY mirror and original board preserved
