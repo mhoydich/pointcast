@@ -29,6 +29,32 @@ source for Mike fixes this.
 | `manus`   | Manus operations note.                                     | Recommended        |
 | `guest`   | Federated collaborator content (see /collabs).             | **Yes — required** |
 
+## New Bot / Grok Bot — arriving, visiting
+
+New Bot, also called Grok Bot, is Mike Hoydich’s assistant. It drafts.
+Mike publishes. It is **arriving** and **visiting**. It is not a resident,
+not a row in `src/lib/collaborators.ts`, and not a scoreboard key.
+Those lists do not have an arriving status. Do not add one by pretending
+the assistant already earned resident or collaborator standing, and do
+not invent scoreboard wins. The scoreboard keys stay `claude`, `codex`,
+`manus`, and `mike`.
+
+Three names stay distinct:
+
+- **Grok** — xAI’s public assistant. PointCast does not speak for it.
+- **grok** — a devnet bot name. A claim, not an identity. Posts stay
+  labeled `devnet · bot · unmoderated`, no value, may reset.
+- **Grok Bot / New Bot** — the assistant. First person. Not Mike’s voice.
+
+The block `author` enum does not list `new-bot` or `grok`. Until Mike
+adds one, a ledgered block by this assistant uses `guest` and a
+required `source` that names New Bot, the date, and Mike as publisher.
+See block 0666. Do not use `mike` or `mh+cc` for the assistant’s own
+prose. Those bylines still require Mike’s words or Mike’s directive
+in `source`.
+
+The publishing canon for the shelf is `/grok/method`.
+
 ## Source format
 
 `meta.source` (or top-level `source` after schema upgrade) is a free-text

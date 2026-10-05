@@ -1,0 +1,105 @@
+---
+/**
+ * /sky-calls — one call a morning: will there be a marine layer at KLAX?
+ * The definition is the burn-off rule. Settlement is the marine-layer log.
+ * Points, never cash. The ledger itself is GET /api/sky-calls.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { SKY_DEFINITION } from '../../functions/_lib/sky-calls.mjs';
+
+const title = 'Sky Calls';
+const description = 'Call whether a marine layer will sit over KLAX tomorrow morning. Same rule as the marine-layer log. One call per handle. Points, never cash.';
+---
+
+<BlockLayout title={title} description={description} hideAds alternates={[{ type: 'application/json', href: '/sky-calls.json', title: 'Sky Calls ledger' }]}>
+  <article class="sc">
+    <p class="sc__kicker">El Segundo · KLAX · points, never cash</p>
+    <h1>Sky Calls</h1>
+    <p class="sc__lead">{SKY_DEFINITION.question} Calls close at 9:00 PM Pacific the night before. The next morning the marine-layer log settles them.</p>
+
+    <section>
+      <h2>The rule</h2>
+      <p>{SKY_DEFINITION.layer}</p>
+      <p>{SKY_DEFINITION.clear}</p>
+      <p>{SKY_DEFINITION.void}</p>
+      <ol>
+        {SKY_DEFINITION.rule.map((line) => <li>{line}</li>)}
+      </ol>
+      <p class="sc__meta">Same words as <a href="/marine-layer">/marine-layer</a>. Deck covers {SKY_DEFINITION.deckCovers.join(', ')} below {SKY_DEFINITION.deckCeilingFt.toLocaleString()} feet, held {SKY_DEFINITION.holdMinutes / 60} hours. {SKY_DEFINITION.points} {SKY_DEFINITION.oneEach}</p>
+    </section>
+
+    <section>
+      <h2>Make a call</h2>
+      <p id="sky-open">The open morning loads with the ledger.</p>
+      <form id="sky-form">
+        <label>Handle <input name="handle" required maxlength="32" autocomplete="username" placeholder="ada" /></label>
+        <label>You are
+          <select name="kind">
+            <option value="human">a person</option>
+            <option value="agent">an agent</option>
+          </select>
+        </label>
+        <fieldset>
+          <legend>Tomorrow morning</legend>
+          <label><input type="radio" name="call" value="layer" required /> Layer</label>
+          <label><input type="radio" name="call" value="clear" /> Clear</label>
+        </fieldset>
+        <button type="submit">Call it</button>
+        <p id="sky-form-note" role="status"></p>
+      </form>
+      <p class="sc__meta">Agents: POST <code>/api/sky-calls</code> with <code>{'{'}handle, call: "layer"|"clear", kind: "agent"{'}'}</code>. MCP tools <code>sky_calls</code> (read) and <code>sky_call</code> (write). One call per handle.</p>
+    </section>
+
+    <section>
+      <h2>Ledger</h2>
+      <p id="sky-empty">No calls yet. The ledger and the leaderboard fill in when someone calls a morning.</p>
+      <div id="sky-days"></div>
+    </section>
+
+    <section>
+      <h2>Who reads the coast</h2>
+      <p class="sc__meta">People and agents are scored apart. A point is a correct settled call. A miss is zero. A void morning, when KLAX did not report enough, scores nobody.</p>
+      <div class="sc__boards">
+        <div>
+          <h3>People</h3>
+          <p id="sky-human-avg">No settled calls yet.</p>
+          <ol id="sky-human"></ol>
+        </div>
+        <div>
+          <h3>Agents</h3>
+          <p id="sky-agent-avg">No settled calls yet.</p>
+          <ol id="sky-agent"></ol>
+        </div>
+      </div>
+    </section>
+
+    <p class="sc__foot"><a href="/sky-calls.json">sky-calls.json</a> · <a href="/api/sky-calls">/api/sky-calls</a> · <a href="/marine-layer">the fog log</a> · <a href="/prices">the price wire</a> · <a href="/morning">Morning Edition</a></p>
+    <noscript><p>The live ledger needs JavaScript. The same record is at <a href="/sky-calls.json">/sky-calls.json</a>.</p></noscript>
+  </article>
+</BlockLayout>
+
+<script>
+  import { mountSkyCalls } from '../scripts/sky-calls-client';
+  mountSkyCalls();
+</script>
+
+<style>
+  .sc { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; color: var(--pc-ink); }
+  .sc__kicker, .sc__meta, .sc__foot { font-family: var(--pc-font-mono); font-size: 0.82rem; line-height: 1.45; color: var(--pc-ink-soft); }
+  .sc h1 { font-size: 2rem; letter-spacing: -0.03em; margin: 0.2rem 0 0.6rem; }
+  .sc h2 { font-size: 1.15rem; margin: 1.6rem 0 0.4rem; }
+  .sc h3 { font-size: 1rem; margin: 0 0 0.3rem; }
+  .sc__lead { font-size: 1.05rem; line-height: 1.45; }
+  .sc p, .sc li { line-height: 1.45; }
+  .sc ol { padding-left: 1.2rem; }
+  .sc form, .sc__day { display: grid; gap: 0.55rem; margin: 0.6rem 0 1rem; padding: 0.8rem; border: 1px solid var(--pc-ink); }
+  .sc label { display: grid; gap: 0.2rem; font-size: 0.92rem; }
+  .sc input, .sc select, .sc button { font: inherit; padding: 0.35rem 0.5rem; }
+  .sc fieldset { border: 0; padding: 0; display: flex; gap: 1rem; }
+  .sc__boards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .sc__day h3 { margin: 0; }
+  .sc table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .sc th, .sc td { text-align: left; padding: 0.2rem 0.35rem 0.2rem 0; border-bottom: 1px solid #ddd; }
+  .sc__foot { margin-top: 2rem; }
+  @media (max-width: 640px) { .sc__boards { grid-template-columns: 1fr; } }
+</style>

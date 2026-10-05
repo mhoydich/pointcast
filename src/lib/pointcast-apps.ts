@@ -44,6 +44,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'finance',
+    name: 'Finance',
+    kicker: 'EDUCATION · MAJORS · CRYPTO · ALT CASES',
+    description: 'A public education room for majors, crypto, and alts. First principles first, case studies next, bots later. Not investment advice and not an offer.',
+    url: 'https://pointcast.xyz/finance/',
+    path: '/finance/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.FD',
+    kind: 'pointcast',
+  },
+  {
     slug: 'mobility-2030',
     name: 'Hoydich Enterprises · Mobility 2030',
     kicker: 'DESIGN FICTION · CONCEPT ARCHITECTURE · STAGED R&D',

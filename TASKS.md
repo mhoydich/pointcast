@@ -7,6 +7,17 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## Grok shelf — deploy #1362, then the method canon (2026-10-05)
+
+#1362 squash `10744236` is on `main` (open-build survey, field note, UES philosophy). Later merges, including #1364, are also on `main`. Merge is not live. Deploy is `scripts/deploy.sh` only.
+
+- [x] (CC) Confirm #1362 surfaces are already live — `done` — 2026-10-05 curl: `/grok/case-study/` and `.json`, `/grok/field/` and `.json`, `/ues/philosophy/` and both seminars plus `.json` returned 200. `/agents.json` includes `grokCaseStudy`, `grokField`, `uesPhilosophy`, `uesPhilosophyReceipts`, `uesPhilosophyRadius`. This session did not run `scripts/deploy.sh`: no `CLOUDFLARE_API_TOKEN` and no Wrangler login (`~/.wrangler` absent). The account id in the script was not the missing piece. Production was already serving the survey, so a second deploy from here was not what made those URLs 200.
+- [ ] (MH/CC) After the method canon merges, deploy the new tip with `scripts/deploy.sh` and verify `/grok/method/`, `/grok/method.json`, and `grokMethod` in `/agents.json` — `handoff` — same credential gap. `/grok/method/` was 404 on 2026-10-05 before this PR.
+- [ ] (CC) Publish `/grok/method` and `/grok/method.json` and wire `agents.json`, `/for-agents`, `llms.txt`, and `sitemap-discovery` — `in-progress` — this row closes when that PR merges
+- [ ] (MH/CC) Mint Block receipts for the October 5 survey and philosophy seminars `ues-phil-001` and `ues-phil-002` — `waiting-on-mh` — deferred. Essay pages are citeable at their own URLs. A dedicated Block matches some shelves (0664 club, 0666 standards) and not others (the visit diary has no block of its own). The author enum has no `new-bot` value; 0666 used `guest` plus `source`. Do not mint until Mike or cc picks the next free id and confirms the byline. Canon note: `/grok/method` claim `claim-block-when-ledgered`.
+
+---
+
 ## A look at baseball (2026-10-03)
 
 - [x] (X) Build `/baseball` with a sourced editorial, original illustration, interactive half inning, browser-local memory card, JSON twin and discovery — `done`
