@@ -12,6 +12,7 @@ import { JSDOM } from 'jsdom';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
+const sha256 = (p) => createHash('sha256').update(readFileSync(new URL(p, root))).digest('hex');
 const lib = read('src/lib/daily-net.mjs');
 const panel = read('src/components/chain/DailyNetPanel.astro');
 const page = read('src/pages/chain/net.astro');
@@ -195,6 +196,23 @@ test('the witness files are served from /chain/net/ and hang together',
     assert.match(script, /BOT_SEED/);
     assert.match(script, /\.pc-witness/);
     assert.match(script, /NOT proof that you replayed/);
+  });
+
+test('pc-witness.mjs pins the verifier /chain/yard/verifier/ serves, the one it downloads',
+  { todo: !haveNetFiles && 'public/chain/net/ waits for the pointcast-chain SDK package' }, () => {
+    // A code agent runs the script from an empty folder, so it downloads the
+    // verifier from this site and refuses any sha256 it does not pin. A yard
+    // re-pin (a new pointcast_chain.wasm here) must come with a pc-witness.mjs
+    // that pins it, or every witness run stops before it signs.
+    const script = read('public/chain/net/pc-witness.mjs');
+    assert.match(script, /^const VERIFIER_URL = "https:\/\/pointcast\.xyz\/chain\/yard\/verifier\/";$/m);
+    const at = script.indexOf('const VERIFIER_PINS');
+    assert.ok(at > 0, 'pc-witness.mjs has VERIFIER_PINS');
+    const pins = script.slice(at, script.indexOf('});', at));
+    for (const f of ['verify.js', 'pointcast_chain.wasm']) {
+      const sha = sha256(`public/chain/yard/verifier/${f}`);
+      assert.ok(pins.includes(`"${sha}"`), `${f} ${sha.slice(0, 12)}… served at /chain/yard/verifier/ is not pinned by pc-witness.mjs`);
+    }
   });
 
 // ---------------------------------------------------------------- jsdom harness
@@ -484,7 +502,6 @@ test('the Daily Net is in the /chain nav, and the yard link opens the Witness le
   assert.match(page, /href=\{yardWitness\}/);
 });
 
-const sha256 = (p) => createHash('sha256').update(readFileSync(new URL(p, root))).digest('hex');
 test('the Block Yard this site serves has the Witness lens the page links to, pinned to the verifier it serves', () => {
   // /chain/net links to /chain/yard/?…&lens=witness: the yard there must be the
   // pointcast-chain town.html that has the lens, re-copied with this site's
