@@ -336,6 +336,35 @@ test('reads GET /net only after load, idle and intersection, then at most once a
   assert.equal(start(bad.el, bad.env), null);
 });
 
+test('lazy and private: no read until the root nears the viewport, no cookies or referrer, no oversized reply', async () => {
+  const { start, MAX_BODY_CHARS } = await import('../src/lib/daily-net.mjs');
+  // Loaded, idle and visible, but never within 400px of the viewport: nothing is read.
+  const far = harness();
+  start(far.el, far.env);
+  await far.runIdle();
+  far.intersect(false);
+  await far.runIdle();
+  for (const t of far.timers.filter((x) => x.live)) t.fn();
+  await far.runIdle();
+  assert.equal(far.urls.length, 0, 'a root that never nears the viewport never reads /net');
+  // The read carries no credentials and no referrer.
+  let init = null;
+  const h = harness();
+  const fetch = h.env.fetch;
+  h.env.fetch = (url, opts) => { init = opts; return fetch(url, opts); };
+  start(h.el, h.env);
+  h.intersect(true);
+  await h.runIdle();
+  assert.equal(init.credentials, 'omit');
+  assert.equal(init.referrerPolicy, 'no-referrer');
+  // A reply larger than MAX_BODY_CHARS is refused, not parsed.
+  const big = harness({ respond: () => ({ status: 200, body: JSON.stringify(net()).replace('"limits":{}', `"limits":{},"pad":"${'x'.repeat(MAX_BODY_CHARS)}"`) }) });
+  start(big.el, big.env);
+  big.intersect(true);
+  await big.runIdle();
+  assert.equal(big.el.dataset.state, 'down');
+});
+
 test('the panel: day, the UTC reset in local time, six counts, the roll top 12 with tier badges and short addresses, strikes', async () => {
   const { start } = await import('../src/lib/daily-net.mjs');
   const many = Array.from({ length: 15 }, (_, i) => rollEntry({ name: `bot-${i}`, bot: `bot-${i}` }));
@@ -428,6 +457,7 @@ test('hostile names, notes and addresses stay text: no elements, no links, no in
     assert.ok(!t.includes(ADDR1), 'addresses only ever shortened');
     assert.match(t, /unnamed key/);
     assert.match(t, /constructor/, 'a valid name is shown as text');
+    assert.ok(![...h.el.querySelectorAll('.dn-b')].some((b) => b.textContent === 'established'), 'established only when the server sends true');
     assert.equal(globalThis.pwned, undefined);
     if (fixture === pageFixture) {
       assert.match(t, /“<img src=x onerror="globalThis\.pwned=1"><script>globalThis\.pwned=2<\/script> gnp\.exe send to \[address\]”|“.*\[address\]”/, 'a hostile note is literal text, its address masked');
