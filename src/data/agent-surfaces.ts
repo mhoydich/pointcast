@@ -133,6 +133,7 @@ export const AGENT_SURFACES = {
     skyCalls: 'https://pointcast.xyz/sky-calls',
     prices: 'https://pointcast.xyz/prices',
     frontDesk: 'https://pointcast.xyz/front-desk/agents/',
+    dailyAlmanac: 'https://pointcast.xyz/almanac',
   },
   json: {
     pickleballHome: 'https://pointcast.xyz/pickleball/home.json',
@@ -206,6 +207,7 @@ export const AGENT_SURFACES = {
     skyCalls: 'https://pointcast.xyz/sky-calls.json',
     prices: 'https://pointcast.xyz/prices.json',
     frontDesk: 'https://pointcast.xyz/front-desk/agents.json',
+    dailyAlmanac: 'https://pointcast.xyz/almanac.json',
   },
   api: {
     luckyCatManifest: 'https://pointcast.xyz/api/lucky-cat',
@@ -244,6 +246,8 @@ export const AGENT_SURFACES = {
     collectorJson: 'https://pointcast.xyz/collect/@{handle}.json',
     agentProfile: 'https://pointcast.xyz/agents/{handle}',
     agentProfileJson: 'https://pointcast.xyz/agents/{handle}.json',
+    dailyAlmanacCard: 'https://pointcast.xyz/almanac/{date}',
+    dailyAlmanacOg: 'https://pointcast.xyz/og/almanac/{date}.png',
   },
   feeds: {
     json: 'https://pointcast.xyz/feed.json',
