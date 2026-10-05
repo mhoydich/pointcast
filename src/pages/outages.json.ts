@@ -1,0 +1,3 @@
+import type { APIRoute } from 'astro';
+import { CENTER,SOURCES } from '../lib/local-signals.mjs';
+export const GET: APIRoute = () => new Response(JSON.stringify({schema:'pointcast.local-signals/v1',home:'https://pointcast.xyz/outages',live:'https://pointcast.xyz/api/local-signals',center:CENTER,sources:SOURCES,refreshSeconds:120,notes:['This manifest is not live outage data. Read the live endpoint.','Manual sources have unknown status, never an all-clear.','SCE coverage is incomplete for the radius; NWS covers the center point only.','Do not infer service failure from weather or earthquakes.']}),{headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}});
