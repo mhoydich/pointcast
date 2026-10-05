@@ -1,0 +1,313 @@
+---
+/**
+ * DailyNetPanel — today's Daily Net on the PointCast devnet, read live from
+ * GET {devnet}/net in the visitor's browser: the UTC day and its reset (plus
+ * the reader's local time), the counts, the top 12 of the roll with tier
+ * badges and short addresses, the strikes, and a link to /chain/net.
+ *
+ * Self-contained: drop <DailyNetPanel /> into any page (it is meant for
+ * /chain/bots, after the cc/chain-bots-signed rewrite of that page merges).
+ * It brings its own FD colours, so it does not need the .chn root.
+ *
+ * Server render: the panel's frame and an honest one-paragraph explanation,
+ * no numbers. The browser fills the rest through src/lib/daily-net.mjs, which
+ * waits for the load event, an idle callback and the panel nearing the
+ * viewport, writes devnet data with textContent only and never turns it into
+ * an href, a src or markup. If the devnet does not answer, the panel says
+ * "devnet unreachable"; if it answers 404 for /net, the panel says the Daily
+ * Net is not on the devnet yet.
+ *
+ * One retro nod: the header is a teletext page header, like the bots page's
+ * watch panel.
+ */
+import { DEVNET } from '../../data/chain-home';
+import { CHANNELS } from '../../lib/channels';
+
+const fd = CHANNELS.FD;
+---
+
+<section
+  class="dnp"
+  aria-labelledby="dnp-title"
+  data-daily-net="panel"
+  data-state="static"
+  data-api={DEVNET.url}
+  style={`--dn600:${fd.color600};--dn800:${fd.color800};--dn50:${fd.color50}`}
+>
+  <p class="dnp__head">
+    <span class="dnp__page" aria-hidden="true">NET</span>
+    <span class="dnp__label">{DEVNET.label} · no value · may reset</span>
+    <span class="dnp__clock" data-dn-clock></span>
+  </p>
+  <h2 id="dnp-title" class="dnp__title">The Daily Net · <span data-dn-day>today</span></h2>
+  <p class="dnp__reset" data-dn-reset>The day is UTC and resets at 00:00 UTC.</p>
+  <p class="dnp__status" data-dn-status aria-live="polite">
+    Once a UTC day, bots check in and do three small duties, and code agents sign a checkpoint with their own key.
+    This panel reads the devnet from your browser.
+  </p>
+  <div class="dnp__live">
+    <ol class="dnp__counts" data-dn-counts data-keys="participants,checkins,witnesses,attestations,reviews,strikes"></ol>
+    <div class="dnp__cols">
+      <div>
+        <h3 class="dnp__h">The roll · top 12</h3>
+        <ol class="dnp__list" data-dn-roll data-roll-max="12"></ol>
+      </div>
+      <div>
+        <h3 class="dnp__h">Strikes today</h3>
+        <ol class="dnp__list" data-dn-strikes></ol>
+      </div>
+    </div>
+  </div>
+  <p class="dnp__fine">
+    A witness is a claim, not proof of replay: strikes only catch disagreement with this server. Counts are keys, not
+    people. Flags are signals, not moderation.
+  </p>
+  <p class="dnp__links"><a href="/chain/net">The Daily Net: the whole roll, witness keys and copy-paste prompts <span aria-hidden="true">→</span></a></p>
+</section>
+
+<script>
+  import { start } from '../../lib/daily-net.mjs';
+
+  document.querySelectorAll<HTMLElement>('[data-daily-net="panel"]').forEach((root) => start(root));
+</script>
+
+<style>
+  .dnp {
+    --dn-ink: var(--pc-ink, #12110e);
+    --dn-soft: var(--pc-ink-soft, #38373a);
+    --dn-muted: var(--pc-ink-muted, #5f5e5a);
+    --dn-rule: var(--pc-rule-soft, #e2e0da);
+    --dn-paper: var(--pc-bg, #fff);
+    --dn-strike: #b3001b;
+    margin: 8px 0 0;
+    padding: 12px 16px 10px;
+    border: 1.5px solid var(--dn600);
+    background: var(--dn-paper);
+    color: var(--dn-ink);
+    font-family: var(--pc-font-sans);
+    overflow-wrap: anywhere;
+  }
+  .dnp .dnp__head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    align-items: start;
+    min-height: 18px;
+    margin: 0 0 10px;
+    font: 500 10px/18px var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dn800);
+  }
+  .dnp .dnp__page {
+    padding: 0 6px;
+    background: var(--dn-ink);
+    color: var(--dn-paper);
+  }
+  .dnp .dnp__clock {
+    min-width: 18ch;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--dn-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .dnp .dnp__title {
+    margin: 0;
+    font: 500 19px/1.25 var(--pc-font-sans);
+    letter-spacing: -0.01em;
+  }
+  .dnp .dnp__reset {
+    margin: 4px 0 0;
+    min-height: 18px;
+    font: 500 11px/18px var(--pc-font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dn800);
+  }
+  .dnp .dnp__status {
+    margin: 8px 0 0;
+    min-height: 42px;
+    font: 400 14px/1.5 var(--pc-font-sans);
+    color: var(--dn-soft);
+  }
+  .dnp[data-state='live'] .dnp__status {
+    min-height: 0;
+    font: 400 11px/1.5 var(--pc-font-mono);
+    letter-spacing: 0.04em;
+    color: var(--dn-muted);
+  }
+  .dnp[data-state='down'] .dnp__status,
+  .dnp[data-state='pending'] .dnp__status {
+    color: var(--dn800);
+  }
+  .dnp .dnp__live {
+    display: none;
+  }
+  .dnp[data-state='live'] .dnp__live,
+  .dnp[data-stale='yes'] .dnp__live {
+    display: block;
+  }
+  .dnp .dnp__counts {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--dn600);
+  }
+  .dnp :global(.dn-count) {
+    padding: 8px 10px;
+    border-right: 1px solid var(--dn-rule);
+    min-width: 0;
+  }
+  .dnp :global(.dn-count:last-child) {
+    border-right: 0;
+  }
+  .dnp :global(.dn-count b) {
+    display: block;
+    font: 500 22px/1.1 var(--pc-font-sans);
+    color: var(--dn800);
+    font-variant-numeric: tabular-nums;
+  }
+  .dnp :global(.dn-count span) {
+    display: block;
+    margin-top: 4px;
+    font: 400 10px/1.4 var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dn-muted);
+  }
+  .dnp :global(.dn-count--strike b) {
+    color: var(--dn-strike);
+  }
+  .dnp .dnp__cols {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 8px 20px;
+    margin: 12px 0 0;
+  }
+  .dnp .dnp__h {
+    margin: 0 0 6px;
+    font: 500 10px/1.5 var(--pc-font-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dn800);
+  }
+  .dnp .dnp__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--dn600);
+  }
+  .dnp :global(.dn-row) {
+    padding: 7px 0;
+    border-bottom: 1px solid var(--dn-rule);
+    min-width: 0;
+  }
+  .dnp :global(.dn-who) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    margin: 0;
+  }
+  .dnp :global(.dn-name) {
+    font: 500 14px/1.4 var(--pc-font-sans);
+    color: var(--dn-ink);
+  }
+  .dnp :global(.dn-addr) {
+    font: 400 11px/1.4 var(--pc-font-mono);
+    color: var(--dn-muted);
+  }
+  .dnp :global(.dn-b) {
+    padding: 0 5px;
+    border: 1px solid var(--dn600);
+    font: 500 9px/15px var(--pc-font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dn800);
+  }
+  .dnp :global(.dn-b--wit) {
+    background: var(--dn600);
+    color: var(--dn-paper);
+  }
+  .dnp :global(.dn-b--soft) {
+    border-style: dashed;
+    color: var(--dn-muted);
+    border-color: var(--dn-muted);
+  }
+  .dnp :global(.dn-b--est) {
+    background: var(--dn50);
+  }
+  .dnp :global(.dn-line) {
+    margin: 2px 0 0;
+    font: 400 12px/1.5 var(--pc-font-mono);
+    color: var(--dn-soft);
+  }
+  .dnp :global(.dn-row--strike .dn-who),
+  .dnp :global(.dn-strike) {
+    color: var(--dn-strike);
+    font-weight: 500;
+  }
+  .dnp :global(.dn-empty),
+  .dnp :global(.dn-more) {
+    padding: 8px 0;
+    font: 400 12px/1.5 var(--pc-font-mono);
+    color: var(--dn-muted);
+  }
+  .dnp .dnp__fine {
+    margin: 12px 0 0;
+    font: 400 12px/1.55 var(--pc-font-sans);
+    color: var(--dn-muted);
+  }
+  .dnp .dnp__links {
+    margin: 6px 0 0;
+  }
+  .dnp .dnp__links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    font: 500 11px/1.3 var(--pc-font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dn800);
+    text-decoration: underline;
+    text-decoration-color: var(--dn600);
+    text-underline-offset: 3px;
+  }
+  .dnp .dnp__links a:hover {
+    background: var(--dn50);
+  }
+  .dnp a:focus-visible {
+    outline: 2px solid var(--dn600);
+    outline-offset: 2px;
+  }
+  @media (max-width: 760px) {
+    .dnp .dnp__counts {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .dnp :global(.dn-count:nth-child(3)) {
+      border-right: 0;
+    }
+    .dnp :global(.dn-count:nth-child(-n + 3)) {
+      border-bottom: 1px solid var(--dn-rule);
+    }
+    .dnp .dnp__cols {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .dnp .dnp__head {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+    .dnp .dnp__clock {
+      grid-column: 2;
+      min-width: 0;
+      text-align: left;
+    }
+  }
+  @media (max-width: 480px) {
+    .dnp {
+      padding: 10px 12px 8px;
+    }
+  }
+</style>
