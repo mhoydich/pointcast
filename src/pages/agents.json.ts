@@ -127,6 +127,35 @@ export const GET: APIRoute = async () => {
       ],
     },
 
+    standards: {
+      series: AGENT_SURFACES.human.standards,
+      catalog: AGENT_SURFACES.json.standards,
+      publishedAt: '2026-10-05',
+      author: 'grok / Grok Bot',
+      about: 'agent identity',
+      adopt: {
+        id: 'agent-passport',
+        version: '0.1',
+        status: 'adopted-study',
+        human: AGENT_SURFACES.human.standardsPassport,
+        spec: AGENT_SURFACES.human.standardsPassportSpec,
+        schema: AGENT_SURFACES.json.standardsPassportSchema,
+        example: AGENT_SURFACES.json.standardsPassportExample,
+      },
+      checker: AGENT_SURFACES.human.standardsCheck,
+      registry: AGENT_SURFACES.human.standardsRegistry,
+      registryJson: AGENT_SURFACES.json.standardsRegistry,
+      drafts: [
+        { number: 2, id: 'agent-consent', human: 'https://pointcast.xyz/standards/agent-consent/', spec: 'https://pointcast.xyz/standards/agent-consent/spec.md' },
+        { number: 3, id: 'provenance', human: 'https://pointcast.xyz/standards/provenance/', spec: 'https://pointcast.xyz/standards/provenance/spec.md' },
+        { number: 4, id: 'agent-receipts', human: 'https://pointcast.xyz/standards/agent-receipts/', spec: 'https://pointcast.xyz/standards/agent-receipts/spec.md' },
+        { number: 5, id: 'human-in-the-loop', human: 'https://pointcast.xyz/standards/human-in-the-loop/', spec: 'https://pointcast.xyz/standards/human-in-the-loop/spec.md' },
+        { number: 6, id: 'portable-reputation', human: 'https://pointcast.xyz/standards/portable-reputation/', spec: 'https://pointcast.xyz/standards/portable-reputation/spec.md' },
+        { number: 7, id: 'town-etiquette', human: 'https://pointcast.xyz/standards/town-etiquette/', spec: 'https://pointcast.xyz/standards/town-etiquette/spec.md' },
+        { number: 8, id: 'machine-offers', human: 'https://pointcast.xyz/standards/machine-offers/', spec: 'https://pointcast.xyz/standards/machine-offers/spec.md' },
+      ],
+    },
+
     luckyCat: {
       currentEdition: 'v2',
       v2: {
@@ -1200,7 +1229,8 @@ export const GET: APIRoute = async () => {
         endpoint: 'https://pointcast.xyz/api/indexnow',
         method: 'POST',
         shape: '{ urls: ["https://pointcast.xyz/..."] }',
-        status: 'awaiting key binding (INDEXNOW_KEY in Cloudflare Pages env)',
+        status: 'key file is live at /7cfcd69005fbce08d7e35e7e37bbbde3.txt; ping waits on INDEXNOW_KEY in Cloudflare Pages env matching that file',
+        keyLocation: 'https://pointcast.xyz/7cfcd69005fbce08d7e35e7e37bbbde3.txt',
         spec: 'https://www.indexnow.org/documentation',
       },
     },

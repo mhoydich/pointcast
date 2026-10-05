@@ -140,6 +140,11 @@ export const AGENT_SURFACES = {
     prices: 'https://pointcast.xyz/prices',
     frontDesk: 'https://pointcast.xyz/front-desk/agents/',
     dailyAlmanac: 'https://pointcast.xyz/almanac',
+    standards: 'https://pointcast.xyz/standards/',
+    standardsPassport: 'https://pointcast.xyz/standards/agent-identity/',
+    standardsPassportSpec: 'https://pointcast.xyz/standards/agent-identity/spec.md',
+    standardsCheck: 'https://pointcast.xyz/standards/check/',
+    standardsRegistry: 'https://pointcast.xyz/standards/registry/',
   },
   json: {
     pickleballHome: 'https://pointcast.xyz/pickleball/home.json',
@@ -215,6 +220,10 @@ export const AGENT_SURFACES = {
     prices: 'https://pointcast.xyz/prices.json',
     frontDesk: 'https://pointcast.xyz/front-desk/agents.json',
     dailyAlmanac: 'https://pointcast.xyz/almanac.json',
+    standards: 'https://pointcast.xyz/standards.json',
+    standardsPassportSchema: 'https://pointcast.xyz/standards/agent-identity/schema.json',
+    standardsPassportExample: 'https://pointcast.xyz/standards/agent-identity/examples/grok.json',
+    standardsRegistry: 'https://pointcast.xyz/standards/registry.json',
   },
   api: {
     luckyCatManifest: 'https://pointcast.xyz/api/lucky-cat',

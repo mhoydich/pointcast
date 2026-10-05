@@ -93,11 +93,11 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/object-library.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/weather-atlas/', 'monthly', '0.9'],
   ['https://pointcast.xyz/weather-atlas.json', 'monthly', '0.85'],
-  ['https://pointcast.xyz/weather/world/', 'daily', '0.8'],
+  // /weather/world/ HTML is on sitemap-0.xml. The JSON twin stays here.
   ['https://pointcast.xyz/weather/world.json', 'weekly', '0.6'],
   ['https://pointcast.xyz/weather/world/spec.md', 'monthly', '0.6'],
   ['https://pointcast.xyz/weather/world/bot-prompt.md', 'monthly', '0.5'],
-  ['https://pointcast.xyz/grok/', 'daily', '0.7'],
+  // /grok/ HTML is on sitemap-0.xml. The JSON twin stays here.
   ['https://pointcast.xyz/grok.json', 'weekly', '0.5'],
   ['https://pointcast.xyz/grok/case-study/', 'monthly', '0.7'],
   ['https://pointcast.xyz/grok/case-study.json', 'monthly', '0.5'],
@@ -105,7 +105,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/grok/field.json', 'monthly', '0.5'],
   ['https://pointcast.xyz/grok/method/', 'monthly', '0.7'],
   ['https://pointcast.xyz/grok/method.json', 'monthly', '0.5'],
-  ['https://pointcast.xyz/case-studies/a-bots-visit/', 'monthly', '0.7'],
+  // /case-studies/a-bots-visit/ HTML is on sitemap-0.xml. The JSON twin stays here.
   ['https://pointcast.xyz/case-studies/a-bots-visit.json', 'monthly', '0.5'],
   ['https://pointcast.xyz/ues/philosophy/', 'monthly', '0.7'],
   ['https://pointcast.xyz/ues/philosophy.json', 'monthly', '0.5'],
@@ -166,11 +166,13 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/tonight.json', 'daily', '0.96'],
   // The Morning Edition: one screen at 6:45 AM, frozen daily; the feed is a Pages Function (functions/morning.json.ts).
   ['https://pointcast.xyz/morning', 'daily', '0.96'],
-  ['https://pointcast.xyz/sky-calls', 'daily', '0.7'],
-  ['https://pointcast.xyz/prices', 'daily', '0.7'],
-  ['https://pointcast.xyz/front-desk/agents/', 'daily', '0.7'],
+  // /sky-calls, /prices, /front-desk/agents/, and /almanac/YYYY-MM-DD HTML
+  // are on sitemap-0.xml. Dated cards after today are noindex and omitted.
+  // JSON twins and the almanac index stay on this discovery list.
+  ['https://pointcast.xyz/sky-calls.json', 'daily', '0.6'],
+  ['https://pointcast.xyz/prices.json', 'daily', '0.6'],
+  ['https://pointcast.xyz/front-desk/agents.json', 'daily', '0.6'],
   ['https://pointcast.xyz/almanac', 'daily', '0.7'],
-  ['https://pointcast.xyz/almanac/2026-10-05', 'daily', '0.65'],
   ['https://pointcast.xyz/almanac.json', 'daily', '0.65'],
   ['https://pointcast.xyz/morning.json', 'daily', '0.92'],
   ['https://pointcast.xyz/agent-field-guide', 'weekly', '0.95'],
