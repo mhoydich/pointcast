@@ -158,6 +158,7 @@ function boot() {
   const form = $('check-form');
   const file = $('passport-file');
   const load = $('load-example');
+  const submit = $('check-submit');
   if (!form) return;
 
   form.addEventListener('submit', (event) => {
@@ -165,6 +166,9 @@ function boot() {
     const raw = String(new FormData(form).get('passport') || '');
     runCheck(raw);
   });
+
+  // Native submission stays disabled until local handling is attached.
+  if (submit) submit.disabled = false;
 
   file?.addEventListener('change', async () => {
     const picked = file.files?.[0];
