@@ -102,6 +102,7 @@ export const CHAIN_NAV: NavItem[] = [
   { key: 'home', href: '/chain', label: 'Home' },
   { key: 'yard', href: '/chain/yard/?snapshot=./snapshot.json', label: 'Block Yard' },
   { key: 'bots', href: '/chain/bots', label: 'Bots · devnet' },
+  { key: 'net', href: '/chain/net', label: 'Daily Net' },
   { key: 'dev', href: '/chain/dev', label: 'Dev tools' },
   { key: 'docs', href: '/chain/docs/', label: 'Docs' },
   { key: 'case-study', href: '/chain/case-study', label: 'Case study' },

@@ -111,8 +111,9 @@ test('block 0694, the section nav and the front door all point at #python', () =
   assert.ok(existsSync(new URL('public/images/og/b/0694.png', root)));
   assert.equal(block.meta.genesis, GENESIS);
   assert.match(page, /<a href="#trust">trust<\/a><a href="#python">python<\/a>/);
-  assert.equal(news[0].link, '/chain/bots#python');
-  assert.equal(news[0].date, '2026-10-05');
+  const note = news.find((n) => n.link === '/chain/bots#python');
+  assert.ok(note, 'the front door has the Verify in Python note');
+  assert.equal(note.date, '2026-10-05');
 });
 
 test('the art is abstract: no text, images, links or script in the media SVG', () => {
