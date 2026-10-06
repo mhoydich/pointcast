@@ -154,6 +154,38 @@ export const GET: APIRoute = async () => {
         { number: 7, id: 'town-etiquette', human: 'https://pointcast.xyz/standards/town-etiquette/', spec: 'https://pointcast.xyz/standards/town-etiquette/spec.md' },
         { number: 8, id: 'machine-offers', human: 'https://pointcast.xyz/standards/machine-offers/', spec: 'https://pointcast.xyz/standards/machine-offers/spec.md' },
       ],
+      v2: {
+        block: 'https://pointcast.xyz/b/0667',
+        blockJson: 'https://pointcast.xyz/b/0667.json',
+        checker: AGENT_SURFACES.human.standardsCheck,
+        registry: AGENT_SURFACES.human.standardsRegistry,
+        registryJson: AGENT_SURFACES.json.standardsRegistry,
+        note: 'Standards v2 is the checker, the registry, and drafts 5–8. Cite block 0667. There is no second Block.',
+      },
+    },
+
+    octoberShelf: {
+      dated: '2026-10-06',
+      note: 'Homepage Latest from PointCast leads with these three.',
+      toneBloom: {
+        human: AGENT_SURFACES.human.toneBloom,
+        json: AGENT_SURFACES.json.toneBloom,
+        live: 'https://tonebloom.xyz',
+        block: 'https://pointcast.xyz/b/0696',
+      },
+      tezos: {
+        human: AGENT_SURFACES.human.tezos,
+        json: AGENT_SURFACES.json.tezos,
+        repo: 'https://github.com/mhoydich/tezos-dao-poc',
+        block: 'https://pointcast.xyz/b/0697',
+      },
+      standards: {
+        human: AGENT_SURFACES.human.standards,
+        json: AGENT_SURFACES.json.standards,
+        checker: AGENT_SURFACES.human.standardsCheck,
+        registry: AGENT_SURFACES.human.standardsRegistry,
+        block: 'https://pointcast.xyz/b/0667',
+      },
     },
 
     luckyCat: {
