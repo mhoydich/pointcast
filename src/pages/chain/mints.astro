@@ -1,0 +1,242 @@
+---
+/**
+ * /chain/mints — First Mints: the 24 cards minted on a recorded pointcast-chain
+ * rehearsal, as a wall, with a Verify button into the Block Yard (Mints lens,
+ * genesis pinned) and an honest line about the Daily Mint, a devnet play auction
+ * that is still being designed and does not include these 24 cards.
+ *
+ * Everything shown is read at build time from public/chain/yard/first-mints/
+ * (snapshot.json, mints.json, cards/*.svg) by firstMints() in
+ * src/data/chain-home.ts, so the wall, the counts and the yard link can never
+ * disagree with the recording the yard replays. No client-side script: every
+ * string from the data is escaped by Astro, and each card is a static SVG
+ * shown as <img src>, which cannot run script.
+ *
+ * Art rule: the cards are abstract (rings, arcs, tiles, patterns and pixel
+ * type); no people or places are drawn. The one retro nod is the teletext
+ * page header above the wall. Filed as block 0689 (cc).
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import { CHANNELS } from '../../lib/channels';
+import { firstMints } from '../../data/chain-home';
+import '../../styles/chain.css';
+
+const BLOCK = '0689';
+const URL_SELF = 'https://pointcast.xyz/chain/mints/';
+const ch = CHANNELS.FD;
+const fm = firstMints();
+const n = fm.mints.length;
+const pad4 = (v: number) => String(v).padStart(4, '0');
+const short = (h: string, k = 8) => (h ? `${h.slice(0, k)}…` : '—');
+const nf = (v: number) => v.toLocaleString('en-US');
+const bytes = fm.mints.map((m) => m.recipeBytes);
+const minB = Math.min(...bytes);
+const maxB = Math.max(...bytes);
+const heights = fm.mints.map((m) => m.height);
+const firstH = Math.min(...heights);
+const lastH = Math.max(...heights);
+const recorded = fm.recordedAt.slice(0, 10);
+
+const title = 'First Mints';
+const description = `${n} First Mints, minted on a recorded PointCast chain rehearsal and sealed by public dev keys, with no value. Only a ${minB}–${maxB} byte recipe lives on chain; each card is drawn from it. Verify all ${n} mints in your browser in the Block Yard.`;
+
+const stats = [
+  { value: String(n), label: 'First Mints minted', note: `Serials 1–${n} of the rehearsal edition’s ${nf(fm.supply)}, one per account.` },
+  { value: `#${firstH}–#${lastH}`, label: 'Blocks they landed in', note: `On a rehearsal chain of ${fm.blocks} blocks.` },
+  { value: `${minB}–${maxB} B`, label: 'Recipe on chain', note: 'A 14-byte header of traits and style, then the words.' },
+  { value: String(fm.blocks), label: 'Blocks your browser replays', note: 'VERIFY checks every one from genesis.' },
+];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': URL_SELF,
+  name: `First Mints: ${n} cards minted on a PointCast chain rehearsal`,
+  description,
+  url: URL_SELF,
+  dateModified: recorded || '2026-10-05',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: n,
+    itemListElement: fm.mints.map((m, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'VisualArtwork',
+        name: `First Mint № ${pad4(m.serial)}: ${m.words}`,
+        image: `https://pointcast.xyz${m.card}`,
+        artform: 'Generative abstract card (SVG)',
+        description: `Minted at block ${m.height} of a recorded rehearsal chain with public dev keys. No value. Recipe ${m.recipeBytes} bytes: ${m.code} / ${m.words}.`,
+      },
+    })),
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  image={`/images/og/b/${BLOCK}.png`}
+  imageAlt={`First Mints: ${n} small abstract cards of coloured rings in a grid, beside the line ${n} cards, minted on a rehearsal.`}
+  imageWidth={1200}
+  imageHeight={630}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: fm.mintsHref, title: 'First Mints in the rehearsal (JSON)' }]}
+  hideAds
+>
+  <div class="chn" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <ChainHeader current="mints" block={BLOCK} trail={[{ label: 'first mints' }]} quick={[
+      { label: 'Verify', href: fm.yardHref },
+      { label: 'Wall', href: '#wall' },
+      { label: 'Mint preview', href: '/chain/first-mints/' },
+      { label: 'Wallet scope', href: '/chain/docs/wallets/' },
+    ]} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · FIRST MINTS · REHEARSAL · PUBLIC DEV KEYS · NO VALUE</p>
+      <h1>First Mints</h1>
+      <p class="dek">
+        Every card here was minted on a recorded PointCast chain rehearsal, sealed by public dev keys, with no value.
+        Only a recipe of {minB} to {maxB} bytes lives on chain. Each card is drawn from its recipe by a renderer the
+        edition pins by sha256, so the same recipe always makes the same card.
+      </p>
+      <p class="cta">
+        <a class="btn" href={fm.yardHref}>✓ Verify these mints</a>
+        <a class="btn btn--ghost" href="#wall">See all {n}</a>
+        <span>Opens the Block Yard on this recording with the Mints lens on and the genesis pinned.</span>
+      </p>
+    </header>
+
+    <section class="stats" aria-label="Four numbers">
+      {stats.map((s) => (
+        <div><strong>{s.value}</strong><span>{s.label}</span><small>{s.note}</small></div>
+      ))}
+    </section>
+
+    <section id="wall" class="sec" aria-labelledby="wall-title">
+      <p class="kicker">01 · THE WALL · {n} FIRST MINTS · SERIAL ORDER</p>
+      <h2 id="wall-title" class="h2">{n} cards, one per account, in the order they landed.</h2>
+      <p class="tt" aria-hidden="true">
+        <span class="tt__p">P{BLOCK.replace(/^0/, '')}</span><span class="tt__a">POINTCAST</span><span class="tt__b">FIRST MINTS</span><span class="tt__c">{String(n).padStart(2, '0')}/{String(n).padStart(2, '0')}</span><span class="tt__d">TIP #{fm.tip}</span>
+      </p>
+      <ol class="fm-wall">
+        {fm.mints.map((m) => (
+          <li class="fm">
+            <a class="fm__art" href={m.card} aria-label={`Open the SVG of First Mint number ${m.serial}, ${m.words}`}>
+              <img
+                src={m.card}
+                width="360"
+                height="480"
+                loading="lazy"
+                decoding="async"
+                alt={`First Mint № ${pad4(m.serial)}: an abstract card of rings and pixel type reading “${m.words}”`}
+              />
+            </a>
+            <div class="fm__cap">
+              <p class="fm__k"><span>№ {pad4(m.serial)}</span><span>BLOCK #{m.height}</span></p>
+              <h3 class="fm__w">{m.words}</h3>
+              <p class="fm__code"><code>{m.code}</code><span>{m.recipeBytes} B recipe</span></p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {fm.others.length > 0 && (
+        <p class="fine">
+          The rehearsal also sealed {fm.others.map((o) => `one ${o.collection} ${o.kind === 'drop' ? 'drop' : o.kind === 'edition' ? 'edition mint' : 'mint'} at #${o.height}`).join(fm.others.length > 2 ? ', ' : ' and ')}.
+          {fm.others.length === 1 ? ' It is not a First Mint and has no card here' : ' None of them is a First Mint or has a card here'}, but the Mints lens lights {fm.others.length === 1 ? 'it' : 'them'} too.
+        </p>
+      )}
+    </section>
+
+    <section id="verify" class="sec" aria-labelledby="verify-title">
+      <p class="kicker">02 · VERIFY · DON’T TAKE THIS PAGE’S WORD FOR IT</p>
+      <h2 id="verify-title" class="h2">Your browser can check every mint against the chain.</h2>
+      <p class="note">
+        The button opens the Block Yard on this rehearsal’s recording, with the Mints lens lighting every mint. Press
+        ✓ VERIFY there: your browser downloads the chain’s consensus code, checks it against a pinned sha256, and
+        replays all {fm.blocks} blocks from genesis. A stack turns green only when your replay matches. VERIFY proves
+        each mint and its recipe bytes are in the chain; it does not redraw the card pictures.
+      </p>
+      <ul class="rows">
+        <li><b>Genesis</b><span><code>{short(fm.genesis, 16)}</code>, pinned in the Verify link, so a different chain is refused.</span></li>
+        <li><b>Tip</b><span>№{fm.tip} <code>{short(fm.tipHash, 16)}</code>, state root <code>{short(fm.stateRoot, 16)}</code>.</span></li>
+        <li><b>Each card</b><span>Its recipe is the <code>recipe</code> bytes of one <code>edition_mint</code> in the recording. The edition pins its renderer, pointcast-chain’s <code>sdk/first-mint.js</code>, by sha256 <code>{short(fm.rendererSha256, 12)}</code>, so the same recipe always draws the same card. That renderer is not published on this site yet; the pictures here are its saved output.</span></li>
+        <li><b>Raw files</b><span><a href={fm.snapshotHref}>snapshot.json</a> (every block and signature) and <a href={fm.mintsHref}>mints.json</a> (one row per edition mint, taken from those blocks).</span></li>
+      </ul>
+      <p class="cta">
+        <a class="btn" href={fm.yardHref}>✓ Verify these mints</a>
+        <span>Recorded {recorded}. Nothing here talks to a node: the yard replays a static file.</span>
+      </p>
+    </section>
+
+    <section id="daily" class="sec" aria-labelledby="daily-title">
+      <p class="kicker">03 · NEXT <span class="tag tag--plan">coming</span></p>
+      <h2 id="daily-title" class="h2">Daily Mint: a daily play auction for one new card (coming)</h2>
+      <p class="note">
+        It is being designed now, for the devnet: bids would be play ATTN, which has no value, and each day’s card would be
+        a new one, not one of the {n} above. No play auction runs, nothing is for sale, and there is no start date yet.
+      </p>
+    </section>
+
+    <section id="plainly" class="sec" aria-labelledby="plainly-title">
+      <p class="kicker">04 · PLAINLY</p>
+      <h2 id="plainly-title" class="h2">What these are, and what they are not.</h2>
+      <ul class="rows">
+        <li><b>Value</b><span>None. The rehearsal is sealed by public dev keys that anyone can use, and the edition does not allow transfers.</span></li>
+        <li><b>The chain</b><span>A recorded rehearsal, not the launch chain. No public node is behind this page; the yard replays a static recording.</span></li>
+        <li><b>Who holds them</b><span>{n} throwaway dev accounts, one card each. The edition allows one per account, out of a supply of {nf(fm.supply)}.</span></li>
+        <li><b>The art</b><span>Abstract by rule: rings, arcs, tiles, a pattern and the words in pixel type. The renderer never draws faces, figures, buildings or places.</span></li>
+        <li><b>The preview</b><span>The <a href="/chain/first-mints/">mint preview</a> is an earlier design (a Noun, a word and a background) you can try in your browser. It is not the renderer behind these cards, and it mints nothing, creates no key, and sends nothing.</span></li>
+      </ul>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        Recorded on {recorded} with pointcast-chain at <code>14188e2</code> (main <code>1a13850</code> plus a fix so every
+        card the demo mints renders): a dev node with <code>PC_EDITIONS=on</code>, <code>PC_EDITIONS_DEMO_MINTS={n}</code> and
+        ticketed taps, on 127.0.0.1 with a scratch database. Before publishing, the recording was replayed with the verifier this
+        yard pins: no fault, and the tip hash, state root and anchor all match. Each card was rendered from its recipe by
+        <code>sdk/first-mint.js</code> and passed its <code>validate</code> and <code>auditSvg</code> checks. Filed by Claude Code
+        as <a href={`/b/${BLOCK}`}>block {BLOCK}</a>.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<style>
+  /* Retro nod: a teletext page header, the way CEEFAX numbered its pages. */
+  .tt{display:flex;flex-wrap:wrap;gap:0 14px;margin:0 0 8px;padding:6px 10px;background:#000;font:500 13px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase}
+  .tt__p{color:#fff}
+  .tt__a{color:#ffff00}
+  .tt__b{color:#00ffff}
+  .tt__c{color:#00ff00}
+  .tt__d{color:#fff;margin-left:auto}
+
+  .fm-wall{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+  .fm{min-width:0;display:flex;flex-direction:column;border:1.5px solid var(--c600);background:var(--pc-bg);container-type:inline-size}
+  .fm__art{display:block;background:var(--c50);border-bottom:1.5px solid var(--c600)}
+  .fm__art:hover{text-decoration:none}
+  .fm__art img{display:block;width:100%;height:auto;aspect-ratio:3/4}
+  .fm__art:hover img{outline:2px solid var(--c800);outline-offset:-2px}
+  .fm__cap{padding:10px 10px 12px;display:flex;flex-direction:column;gap:4px;flex:1}
+  .fm__k{display:flex;justify-content:space-between;gap:6px;margin:0;font:500 10px/1.4 var(--pc-font-mono);letter-spacing:.1em;color:var(--c800)}
+  .fm__w{margin:0;font:500 15px/1.25 var(--pc-font-sans);letter-spacing:-.005em;color:var(--pc-ink);overflow-wrap:anywhere}
+  .fm__code{display:flex;flex-direction:column;gap:2px;margin:auto 0 0;padding-top:6px;border-top:1px solid var(--pc-rule-soft);font:400 10px/1.45 var(--pc-font-mono);letter-spacing:.02em;color:var(--pc-ink-muted)}
+  .fm__code code{background:none;padding:0;font-size:inherit;overflow-wrap:anywhere}
+  /* Narrow cells keep the serial, block and words; the recipe line steps aside. */
+  @container (max-width: 150px){
+    .fm__code code{display:none}
+    .fm__k{flex-direction:column;gap:0}
+  }
+
+  @media (max-width:1023px){ .fm-wall{grid-template-columns:repeat(4,minmax(0,1fr))} }
+  @media (max-width:720px){ .fm-wall{grid-template-columns:repeat(3,minmax(0,1fr))} }
+  @media (max-width:520px){
+    .fm-wall{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .tt{font-size:11px;gap:0 10px}
+    .tt__d{margin-left:0}
+  }
+</style>

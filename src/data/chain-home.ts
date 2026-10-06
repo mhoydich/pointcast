@@ -13,7 +13,8 @@
  * If the chain moves on, update the numbers and the SOURCE commit together.
  */
 
-import { readFileSync, statSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 
 /**
  * Size of the verifier the yard actually serves
@@ -106,7 +107,8 @@ export const CHAIN_NAV: NavItem[] = [
   { key: 'docs', href: '/chain/docs/', label: 'Docs' },
   { key: 'case-study', href: '/chain/case-study', label: 'Case study' },
   { key: 'interns', href: '/chain/interns', label: 'Interns' },
-  { key: 'first-mints', href: '/chain/first-mints/', label: 'First Mints' },
+  { key: 'mints', href: '/chain/mints', label: 'First Mints' },
+  { key: 'first-mints', href: '/chain/first-mints/', label: 'Mint preview' },
 ];
 
 export type YardStats = { href: string; blocks: number; txs: number; anchors: number; accounts: number; recordedAt: string; verifierKiB: number };
@@ -133,4 +135,128 @@ export function yardStats(): YardStats {
   } catch {
     return { ...base, blocks: 421, txs: 359, anchors: 4, accounts: 11, recordedAt: '2026-10-03' };
   }
+}
+
+/**
+ * First Mints, minted on a recorded rehearsal chain: public/chain/yard/first-mints/
+ * holds the snapshot the Block Yard replays, mints.json (one row per edition_mint,
+ * extracted from that snapshot's blocks) and one SVG per First Mint, rendered from
+ * its recipe by pointcast-chain sdk/first-mint.js and checked with validate() and
+ * auditSvg(). Recorded 2026-10-05 with pointcast-chain 14188e2 (main 1a13850 plus
+ * the demo's mint fix): PC_EDITIONS=on, PC_EDITIONS_DEMO_MINTS=24, ticketed taps,
+ * public dev keys. Everything here is read at build time, so the page, the block
+ * and the yard link can never disagree with the files the yard verifies.
+ */
+export type FirstMint = {
+  serial: number;
+  /** The words on the card (the recipe text). */
+  words: string;
+  /** The human code without its words, e.g. "FM1 14.132.94.18 warm scanlines syne". */
+  code: string;
+  height: number;
+  recipeBytes: number;
+  tx: string;
+  card: string;
+};
+export type FirstMintsRehearsal = {
+  mints: FirstMint[];
+  /** Other mints in the recording (no card here), read from the snapshot's blocks:
+   *  every *_mint tx that is not a first-mints edition_mint. The yard's Mints lens
+   *  lights these too, so the page names them. */
+  others: { kind: 'edition' | 'drop' | 'other'; collection: string; height: number }[];
+  supply: number;
+  rendererSha256: string;
+  genesis: string;
+  tip: number;
+  tipHash: string;
+  stateRoot: string;
+  recordedAt: string;
+  blocks: number;
+  snapshotHref: string;
+  mintsHref: string;
+  /** The Block Yard on this snapshot, Mints lens on, genesis pinned. */
+  yardHref: string;
+};
+
+const FM_DIR = 'public/chain/yard/first-mints';
+const HEX64 = /^[0-9a-f]{64}$/;
+/** sdk/first-mint.js TEXT_CHARSET, 1 to 24 characters: the only text a recipe can carry. */
+const FM_WORDS = /^[A-Z0-9 !?&'.,#-]{1,24}$/;
+/** sdk/first-mint.js humanCode() without its words, e.g. "FM1 1.2.3.4 cobalt scanlines syne ink:white". */
+const FM_CODE = /^FM1 \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?: [A-Za-z0-9:-]{1,24}){1,6}$/;
+const MINT_TX = /^[a-z][a-z0-9_]*_mint$/;
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export function firstMints(): FirstMintsRehearsal {
+  const snap = JSON.parse(readFileSync(`${FM_DIR}/snapshot.json`, 'utf8'));
+  const rows: unknown = JSON.parse(readFileSync(`${FM_DIR}/mints.json`, 'utf8'));
+  const status = snap?.status ?? {};
+  const genesis = String(status.genesis_hash ?? '');
+  if (!HEX64.test(genesis)) throw new Error('first-mints snapshot has no genesis hash');
+  const blocks: { header?: { height?: number }; txs?: { tx?: Record<string, unknown> }[] }[] = Array.isArray(snap.blocks) ? snap.blocks : [];
+  const txs = blocks.flatMap((b) => (b.txs ?? []).map((t) => ({ height: Number(b.header?.height), tx: t.tx ?? {} })));
+  const terms = txs
+    .map((t) => t.tx)
+    .find((tx) => tx.type === 'open_edition' && (tx.terms as { id?: string } | undefined)?.id === 'first-mints')?.terms as
+    | { supply?: number; renderer_hash?: string }
+    | undefined;
+  // First Mint serials are assigned in landing order, so serial n is the n-th
+  // first-mints edition_mint in the recording. Each row must match it exactly.
+  const fmTxs = txs.filter((t) => t.tx.type === 'edition_mint' && t.tx.edition === 'first-mints');
+  const others: FirstMintsRehearsal['others'] = [];
+  for (const t of txs) {
+    const type = String(t.tx.type ?? '');
+    if (!MINT_TX.test(type) || (type === 'edition_mint' && t.tx.edition === 'first-mints')) continue;
+    const id = String(t.tx.edition ?? t.tx.drop_id ?? t.tx.collection ?? '');
+    if (!SLUG.test(id) || !Number.isInteger(t.height)) continue;
+    others.push({ kind: type === 'edition_mint' ? 'edition' : type === 'drop_mint' ? 'drop' : 'other', collection: id, height: t.height });
+  }
+  const mints: FirstMint[] = [];
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const m = r as Record<string, unknown>;
+    if (m.collection !== 'first-mints') continue;
+    const serial = Number(m.serial);
+    const height = Number(m.height);
+    if (!Number.isInteger(serial) || serial < 1 || !Number.isInteger(height) || height < 1) continue;
+    const human = typeof m.words === 'string' ? m.words : '';
+    const cut = human.lastIndexOf(' / ');
+    const hex = typeof m.recipe_hex === 'string' ? m.recipe_hex : '';
+    const card = `/chain/yard/first-mints/cards/first-mints-${serial}.svg`;
+    if (cut < 0 || !/^(?:[0-9a-f]{2})+$/.test(hex) || !existsSync(`public${card}`)) continue;
+    const words = human.slice(cut + 3);
+    const code = human.slice(0, cut);
+    const tx = fmTxs[serial - 1];
+    // Words and code reach the page and its JSON-LD, so they must be what a
+    // recipe can hold, the words must be the recipe's own text, and the row must
+    // be the recorded edition_mint at that height with those exact bytes.
+    const recipe = Buffer.from(hex, 'hex');
+    if (!FM_WORDS.test(words) || !FM_CODE.test(code) || recipe.length < 15 || recipe.subarray(14).toString('latin1') !== words) continue;
+    if (!tx || tx.height !== height || tx.tx.recipe !== hex) continue;
+    mints.push({
+      serial,
+      words,
+      code,
+      height,
+      recipeBytes: recipe.length,
+      tx: typeof m.tx === 'string' && HEX64.test(m.tx) ? m.tx : '',
+      card,
+    });
+  }
+  mints.sort((a, b) => a.serial - b.serial);
+  return {
+    mints,
+    others,
+    supply: Number(terms?.supply) || 0,
+    rendererSha256: HEX64.test(String(terms?.renderer_hash)) ? String(terms?.renderer_hash) : '',
+    genesis,
+    tip: Number(status.height) || 0,
+    tipHash: String(status.tip_hash ?? ''),
+    stateRoot: String(status.state_root ?? ''),
+    recordedAt: String(snap.recorded_at ?? ''),
+    blocks: blocks.length,
+    snapshotHref: '/chain/yard/first-mints/snapshot.json',
+    mintsHref: '/chain/yard/first-mints/mints.json',
+    // Relative on purpose, like CHAIN_NAV's yard link: the yard resolves ?snapshot= against its own URL.
+    yardHref: `/chain/yard/?snapshot=./first-mints/snapshot.json&lens=mints&genesis=${genesis}`,
+  };
 }
