@@ -34,15 +34,15 @@ test('real Pages middleware keeps quiet studies isolated through both HTML deliv
       });
       return {response,bridgeTransforms};
     }
-    for(const slug of ['death']) {
+    for(const study of ['/ues/death','/coastal-signal']) {
       for(const suffix of ['','/','.html','/index.html']) {
-        const {response,bridgeTransforms}=await route(`/ues/${slug}${suffix}`);
+        const {response,bridgeTransforms}=await route(`${study}${suffix}`);
         assert.equal(response.status,200);
         assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'),null);
-        assert.equal(bridgeTransforms,0,`quiet ${slug}${suffix} does not receive the account bridge`);
+        assert.equal(bridgeTransforms,0,`quiet ${study}${suffix} does not receive the account bridge`);
       }
     }
-    for(const pathname of ['/ues/','/ues/plant-portraits/','/me','/ues/grief/notes','/ues/grief/','/ues/human-energy/','/ues/nature-interaction/','/ues/frequency/','/ues/human-energy/adult-substances/']) {
+    for(const pathname of ['/coastal-signalish','/coastal-signal/notes','/coastal-signal//','/ues/','/ues/plant-portraits/','/me','/ues/grief/notes','/ues/grief/','/ues/human-energy/','/ues/nature-interaction/','/ues/frequency/','/ues/human-energy/adult-substances/']) {
       const {response,bridgeTransforms}=await route(pathname);
       assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'),'1',pathname);
       assert.equal(bridgeTransforms,1,`${pathname} keeps existing session restoration`);

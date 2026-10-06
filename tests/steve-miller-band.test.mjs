@@ -16,7 +16,7 @@ const LYRIC_DUMPS = [
 test('the desk is one document for the page and the JSON twin', async () => {
   const desk = JSON.parse(await read('src/data/steve-miller-band.json'));
   assert.equal(desk.schema, 'pointcast.steve-miller-band/v1');
-  assert.equal(desk.block, '0696');
+  assert.equal(desk.block, '0698');
   assert.equal(desk.channel, 'SPN');
   assert.equal(desk.lyrics === undefined || desk.honesty.includes('No lyric'), true);
   assert.equal(desk.eras.length, 4);
@@ -57,7 +57,7 @@ test('the desk is one document for the page and the JSON twin', async () => {
 
 test('discovery, the Spinning block, and the front door agree', async () => {
   const [blockText, sitemap, llms, llmsFull, today, apps, surfaces, agents] = await Promise.all([
-    read('src/content/blocks/0696.json'),
+    read('src/content/blocks/0698.json'),
     read('src/pages/sitemap-discovery.xml.ts'),
     read('public/llms.txt'),
     read('public/llms-full.txt'),
@@ -67,7 +67,7 @@ test('discovery, the Spinning block, and the front door agree', async () => {
     read('src/pages/agents.json.ts'),
   ]);
   const block = JSON.parse(blockText);
-  assert.equal(block.id, '0696');
+  assert.equal(block.id, '0698');
   assert.equal(block.channel, 'SPN');
   assert.equal(block.type, 'LINK');
   assert.equal(block.author, 'guest');
@@ -82,7 +82,7 @@ test('discovery, the Spinning block, and the front door agree', async () => {
   }
   const strip = JSON.parse(today);
   assert.equal(strip[0].link, '/steve-miller-band/');
-  assert.equal(strip[0].block, '0696');
+  assert.equal(strip[0].block, '0698');
   assert.ok(strip[0].title.length <= 28);
   assert.ok(strip[0].kicker.length <= 21);
   assert.match(apps, /slug: 'steve-miller-band'/);
