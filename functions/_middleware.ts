@@ -287,6 +287,24 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(new URL('/games/nouns-nation-battler/posters/', url.origin).toString(), 302);
   }
 
+  // Noticeboard reads stay quiet after existing host/canonical redirects.
+  // Exact aliases resolve before directory rewriting; resident /agents/* routes
+  // retain their existing middleware, identity and FrontDesk behavior.
+  if (isGet || request.method === 'HEAD') {
+    const noticeboardTarget = new Map([
+      ['/agents', '/agents/'],
+      ['/agents/index.html', '/agents/'],
+      ['/agents/spec', '/agents/spec/'],
+      ['/agents/spec/index.html', '/agents/spec/'],
+    ]).get(url.pathname);
+    if (noticeboardTarget) {
+      const target = new URL(noticeboardTarget, url.origin);
+      target.search = url.search;
+      return Response.redirect(target.toString(), 301);
+    }
+  }
+  if (['/agents/', '/agents/spec/'].includes(url.pathname)) return next();
+
   // Generic trailing-slash rewrite — applies to ANY path that
   //   • is a GET asking for HTML
   //   • doesn't already end in `/`
