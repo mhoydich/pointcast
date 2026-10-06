@@ -15,3 +15,8 @@ test('ordinary classes, account/API routes, JSON, and neighboring paths retain e
     assert.equal(isQuietUesStudyPath(pathname),false,pathname);
   }
 });
+
+test('approved wallet-free Coastal Signal and exact static aliases omit session restoration',()=>{
+  for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(`/coastal-signal${suffix}`),true);
+  for (const pathname of ['/coastal-signal.json','/coastal-signalish','/coastal-signal/notes','/coastal-signal//','/coastal-signal/index.html/extra']) assert.equal(isQuietUesStudyPath(pathname),false,pathname);
+});
