@@ -97,7 +97,9 @@ test('block 0689, the hub and the front door all point at /chain/mints', () => {
   assert.equal(block.meta.genesis, snap.status.genesis_hash);
   assert.match(hub, /<a href="\/chain\/mints">See all/);
   const news = JSON.parse(read('src/data/front-door-news.json'));
-  assert.equal(news[0].label, 'First Mints');
-  assert.equal(news[0].link, '/chain/mints');
+  // Newer notes go on top (0694's Verify in Python, 2026-10-05), so find the First Mints note by its link.
+  const note = news.find((n) => n.link === '/chain/mints');
+  assert.ok(note, 'a front-door note links /chain/mints');
+  assert.equal(note.label, 'First Mints');
   assert.match(read('src/data/chain-home.ts'), /\{ key: 'mints', href: '\/chain\/mints', label: 'First Mints' \}/);
 });
