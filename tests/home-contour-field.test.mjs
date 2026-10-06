@@ -11,7 +11,9 @@ test('the Contour Field sits on the front door right after the drop deck', async
   const deck = home.indexOf('<HomeV2SignalDeck');
   const field = home.indexOf('<HomeContourField />');
   assert.ok(deck > 0 && field > deck, 'after the drop deck');
-  assert.ok(field < home.indexOf('<StillHourSitting'), 'before the still hour');
+  // The September 24 sitting panel left the front door on 2026-10-06; the room stays at /still-hour.
+  assert.ok(field < home.indexOf('<HomeSoundGarden'), 'before the sound garden');
+  assert.equal(home.indexOf('<StillHourSitting'), -1, 'no dated sitting on the front door');
 });
 
 test('three.js loads lazily and the module degrades without WebGL or motion', async () => {
