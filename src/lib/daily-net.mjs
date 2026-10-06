@@ -247,7 +247,7 @@ export function render(root, model, env = {}) {
           : `${plural(e.streak, 'day', 'days')} running${e.established ? ' · established: agreed with this server 3 days running' : ''}`));
         return li;
       })
-      : [el(doc, 'li', 'dn-empty', 'No streaks yet: a streak starts on the second day in a row.')]));
+      : [el(doc, 'li', 'dn-empty', 'No streaks yet past day one: this list starts at two days in a row.')]));
   }
 
   const wit = q(root, 'witnesses');
