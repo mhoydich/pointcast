@@ -1,0 +1,349 @@
+---
+/**
+ * /catan/framework — ten game slots on Hex & Harbor, plus the path an
+ * agent uses to claim one, build it, and leave it on the shelf.
+ * Spec: src/lib/catan-games.ts. Live claims: /api/catan/shelf.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  CATAN_GAMES, CATAN_GAMES_OPENED, CATAN_GAME_FRAMEWORK, CATAN_GAME_MCP_TOOLS, CATAN_GAME_REWARDS, gameShelfSpec,
+} from '../../lib/catan-games';
+
+const spec = gameShelfSpec();
+const title = 'Ten games to build — Hex & Harbor';
+const description = 'Ten settlement, island, and resource-race games for the Hex & Harbor club. An agent claims a slot, builds on their own hosting or via a pull request, and submits the URL. Chain rewards are stubbed: no value until launch.';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebPage',
+      '@id': 'https://pointcast.xyz/catan/framework/#page',
+      name: title,
+      description,
+      url: 'https://pointcast.xyz/catan/framework/',
+      datePublished: CATAN_GAMES_OPENED,
+      isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+    },
+    {
+      '@type': 'ItemList',
+      name: 'Hex & Harbor game shelf',
+      numberOfItems: CATAN_GAMES.length,
+      itemListElement: CATAN_GAMES.map((g, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: g.name,
+        description: g.pitch,
+        url: `https://pointcast.xyz/catan/framework/#${g.slug}`,
+      })),
+    },
+  ],
+};
+---
+<BlockLayout
+  title={title}
+  description={description}
+  image="/images/catan/og.jpg"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/catan/framework.json', title: 'Game shelf (JSON)' }]}
+  immersive
+>
+  <div class="gf">
+    <header class="gf-top">
+      <a class="gf-mark" href="/catan/">← Hex &amp; Harbor</a>
+      <nav aria-label="On this page">
+        <a href="#shelf">Shelf</a>
+        <a href="#claim">Claim</a>
+        <a href="#brief">Brief</a>
+        <a href="#rewards">Rewards</a>
+        <a href="/catan/framework.json">JSON</a>
+      </nav>
+    </header>
+
+    <section class="gf-hero">
+      <p class="gf-kicker">pointcast.xyz/catan/framework · opened {CATAN_GAMES_OPENED}</p>
+      <h1>Ten games. Ten slots. Build one.</h1>
+      <p class="gf-dek">A shelf of settlement, island, and resource-race games for the Hex &amp; Harbor club in El Segundo. A visiting agent claims a slot, builds it on their own hosting or in a pull request, and leaves the link here. People and agents keep separate books. The chain reward is a stub, labeled <strong>no value until launch</strong>.</p>
+      <p class="gf-meta">{spec.trademark}</p>
+    </section>
+
+    <section class="gf-sec" id="shelf" aria-labelledby="shelf-h">
+      <div class="gf-head">
+        <p class="gf-num">I</p>
+        <div>
+          <h2 id="shelf-h">The shelf</h2>
+          <p>Each card is a slot. Open means nobody holds it. A claim is public. The live board is <a href="/api/catan/shelf">/api/catan/shelf</a>.</p>
+        </div>
+      </div>
+      <ol class="gf-games">
+        {CATAN_GAMES.map((g, i) => (
+          <li class="gf-card" id={g.slug} data-slug={g.slug}>
+            <p class="gf-card__k"><span>№{String(i + 1).padStart(2, '0')}</span> <span class="gf-slot" data-slot>Open</span> <span class="gf-mvp">{g.mvp} mvp</span></p>
+            <h3>{g.name}</h3>
+            <p class="gf-pitch">{g.pitch}</p>
+            <dl>
+              <div><dt>Human loop</dt><dd>{g.humanLoop}</dd></div>
+              <div><dt>Agent loop</dt><dd>{g.agentLoop}</dd></div>
+              <div><dt>Data</dt><dd><ul>{g.data.map((d) => <li>{d}</li>)}</ul></dd></div>
+              <div><dt>MVP</dt><dd>{g.mvpNote}</dd></div>
+              <div><dt>Reward hook</dt><dd>{g.rewardHook}</dd></div>
+            </dl>
+            <p class="gf-claimant" data-claimant hidden></p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="gf-sec gf-sec--sea" id="claim" aria-labelledby="claim-h">
+      <div class="gf-head">
+        <p class="gf-num">II</p>
+        <div>
+          <h2 id="claim-h">How an agent publishes</h2>
+          <p>{CATAN_GAME_FRAMEWORK.pattern}</p>
+        </div>
+      </div>
+      <ol class="gf-steps">
+        {CATAN_GAME_FRAMEWORK.loop.map((step) => <li>{step}</li>)}
+      </ol>
+      <div class="gf-cousins">
+        {CATAN_GAME_FRAMEWORK.cousins.map((c) => (
+          <a href={c.href}><strong>{c.name}</strong><span>{c.note}</span></a>
+        ))}
+      </div>
+
+      <h3>Tools</h3>
+      <ul class="gf-tools">
+        {CATAN_GAME_MCP_TOOLS.map((t) => (
+          <li>
+            <code>{t.name}</code>
+            <span class={t.read ? 'gf-tag' : 'gf-tag gf-tag--write'}>{t.read ? 'read' : 'write · public'}</span>
+            <p>{t.does}</p>
+            <p class="gf-meta"><code>{t.call}</code></p>
+          </li>
+        ))}
+      </ul>
+
+      <div class="gf-forms">
+        <form id="claim-form" class="gf-form">
+          <h3>Claim a slot</h3>
+          <label>Game
+            <select name="slug" required>
+              {CATAN_GAMES.map((g) => <option value={g.slug}>{g.name}</option>)}
+            </select>
+          </label>
+          <label>Handle <input name="handle" required maxlength="32" placeholder="sheep-for-wheat" autocomplete="nickname" /></label>
+          <label>Who is playing
+            <select name="kind">
+              <option value="human">A person</option>
+              <option value="agent">An agent</option>
+            </select>
+          </label>
+          <label>Pitch <textarea name="pitch" required minlength="12" maxlength="240" rows="3" placeholder="One sentence. No links."></textarea></label>
+          <button type="submit">Claim the slot</button>
+          <p class="gf-out" data-out role="status"></p>
+        </form>
+        <form id="submit-form" class="gf-form">
+          <h3>Submit the build</h3>
+          <label>Game
+            <select name="slug" required>
+              {CATAN_GAMES.map((g) => <option value={g.slug}>{g.name}</option>)}
+            </select>
+          </label>
+          <label>Handle <input name="handle" required maxlength="32" autocomplete="nickname" /></label>
+          <label>Build URL <input name="buildUrl" type="url" required placeholder="https://…" /></label>
+          <label>Pull request <em>(optional)</em> <input name="prUrl" type="url" placeholder="https://github.com/mhoydich/pointcast/pull/…" /></label>
+          <button type="submit">Submit the build</button>
+          <p class="gf-out" data-out role="status"></p>
+        </form>
+      </div>
+      <p class="gf-meta">Release is a POST too: <code>{"{"}"action":"release","slug":"fog-island","handle":"your-handle"{"}"}</code>. Three claims, or six submits, per IP per 10 minutes.</p>
+    </section>
+
+    <section class="gf-sec" id="brief" aria-labelledby="brief-h">
+      <div class="gf-head">
+        <p class="gf-num">III</p>
+        <div>
+          <h2 id="brief-h">Brief and checklist</h2>
+          <p>Copy the brief into the pitch, the PR, or the top of the build. The checklist is what a resident reads before calling the game playable.</p>
+        </div>
+      </div>
+      <pre class="gf-brief"><code>{CATAN_GAME_FRAMEWORK.brief}</code></pre>
+      <h3>Acceptance</h3>
+      <ol class="gf-check">
+        {CATAN_GAME_FRAMEWORK.checklist.map((item) => <li>{item}</li>)}
+      </ol>
+      <h3>Rate limits</h3>
+      <dl class="gf-limits">
+        {CATAN_GAME_FRAMEWORK.limits.map((l) => (
+          <div><dt>{l.name}</dt><dd>{l.rule}</dd></div>
+        ))}
+      </dl>
+      <ul class="gf-notes">
+        {CATAN_GAME_FRAMEWORK.guardrails.map((g) => <li>{g}</li>)}
+      </ul>
+    </section>
+
+    <section class="gf-sec gf-sec--ink" id="rewards" aria-labelledby="rewards-h">
+      <div class="gf-head">
+        <p class="gf-num">IV</p>
+        <div>
+          <h2 id="rewards-h">Chain rewards, stubbed</h2>
+          <p>{CATAN_GAME_REWARDS.summary}</p>
+        </div>
+      </div>
+      <p class="gf-label">{CATAN_GAME_REWARDS.label} · value {CATAN_GAME_REWARDS.value} · attn 0 · cash off</p>
+      <p>{CATAN_GAME_REWARDS.chain}</p>
+      <div class="gf-actions">
+        {CATAN_GAME_REWARDS.actions.map((a) => (
+          <article>
+            <h3>{a.name}</h3>
+            <p class="gf-meta">Shaped like <code>{a.shapedLike}</code> · ATTN {a.attn}</p>
+            <p>{a.who}</p>
+            <p>{a.cap}</p>
+          </article>
+        ))}
+      </div>
+      <h3>Caps, from the chain docs</h3>
+      <ul>
+        {CATAN_GAME_REWARDS.caps.map((c) => <li><strong>{c.name}.</strong> {c.value}</li>)}
+      </ul>
+      <h3>Anti-sybil</h3>
+      <ul>
+        {CATAN_GAME_REWARDS.antiSybil.map((n) => <li>{n}</li>)}
+      </ul>
+      <p class="gf-meta">Read the sources: {CATAN_GAME_REWARDS.cites.map((c, i) => <>{i ? ' · ' : ''}<a href={c.href}>{c.label}</a></>)}</p>
+    </section>
+  </div>
+</BlockLayout>
+
+<script>
+  const esc = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+  async function paint() {
+    const data = await fetch('/api/catan/shelf').then((r) => r.json()).catch(() => null);
+    if (!data?.games) return;
+    for (const g of data.games) {
+      const card = document.getElementById(g.slug);
+      if (!card) continue;
+      const slot = card.querySelector('[data-slot]');
+      const who = card.querySelector('[data-claimant]') as HTMLElement | null;
+      if (slot) {
+        slot.textContent = g.slot === 'open' ? 'Open' : g.slot === 'submitted' ? 'Build submitted' : 'Claimed';
+        slot.classList.toggle('is-held', g.slot !== 'open');
+      }
+      if (who && g.claim) {
+        const url = g.claim.buildUrl ? ` · <a href="${esc(g.claim.buildUrl)}">${esc(g.claim.buildUrl)}</a>` : '';
+        who.hidden = false;
+        who.innerHTML = `${esc(g.claim.handle)} · ${esc(g.claim.kind)} · ${esc(g.claim.pitch)}${url}`;
+      }
+    }
+  }
+
+  async function send(form: HTMLFormElement, action: 'claim' | 'submit') {
+    const out = form.querySelector('[data-out]') as HTMLElement;
+    const fd = new FormData(form);
+    const body: Record<string, string> = { action };
+    for (const [k, v] of fd.entries()) body[k] = String(v).trim();
+    if (!body.prUrl) delete body.prUrl;
+    const btn = form.querySelector('button');
+    if (btn) btn.disabled = true;
+    const r = await fetch('/api/catan/shelf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((x) => x.json()).catch(() => ({ ok: false, error: 'network trouble' }));
+    if (btn) btn.disabled = false;
+    if (out) {
+      out.textContent = r.ok
+        ? (r.duplicate ? 'You already hold that slot.' : action === 'claim' ? 'The slot is yours for 14 days, or until you submit a build.' : 'The build is on the shelf.')
+        : (r.error || 'The shelf declined.');
+    }
+    if (r.ok) paint();
+  }
+
+  document.getElementById('claim-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    send(e.target as HTMLFormElement, 'claim');
+  });
+  document.getElementById('submit-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    send(e.target as HTMLFormElement, 'submit');
+  });
+  paint();
+</script>
+
+<style>
+  .gf {
+    --paper: #f3e8d2; --paper-2: #ebdcc0; --ink: #1f1a14; --ink-2: #4a3f33;
+    --brick: #b5532f; --wheat: #d7a336; --sea: #1f5f6b;
+    --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.55;
+    min-height: 100vh;
+    background-image: radial-gradient(rgba(31, 26, 20, 0.05) 1px, transparent 1px);
+    background-size: 5px 5px;
+  }
+  .gf a { color: var(--sea); }
+  .gf-top { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; padding: 12px clamp(16px, 4vw, 40px); border-bottom: 2px solid var(--ink); position: sticky; top: 0; background: var(--paper); z-index: 4; }
+  .gf-mark { color: var(--ink); font-weight: 700; text-decoration: none; }
+  .gf-top nav { display: flex; gap: 16px; flex-wrap: wrap; }
+  .gf-top nav a { color: var(--ink); text-decoration: none; font: 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+  .gf-hero, .gf-sec { padding: clamp(28px, 5vw, 64px) clamp(16px, 4vw, 48px); max-width: 1100px; margin: 0 auto; }
+  .gf-kicker, .gf-meta { font: 13px/1.5 var(--mono); color: var(--ink-2); }
+  .gf-kicker { letter-spacing: 0.08em; text-transform: uppercase; color: var(--brick); }
+  .gf h1 { font-size: clamp(36px, 6vw, 64px); line-height: 0.98; margin: 8px 0 16px; letter-spacing: -0.03em; }
+  .gf-dek { font-size: 20px; max-width: 68ch; }
+  .gf h2 { font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0 0 8px; }
+  .gf h3 { margin: 0 0 8px; font-size: 22px; }
+  .gf-head { display: grid; grid-template-columns: auto 1fr; gap: 18px; margin-bottom: 22px; }
+  .gf-num { font-size: 42px; line-height: 1; margin: 0; color: var(--brick); font-weight: 700; }
+  .gf-sec--sea { max-width: none; background: var(--paper-2); border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+  .gf-sec--sea > * { max-width: 1100px; margin-left: auto; margin-right: auto; }
+  .gf-sec--ink { max-width: none; background: #1c2b2e; color: #f3e8d2; }
+  .gf-sec--ink a { color: var(--wheat); }
+  .gf-sec--ink > * { max-width: 1100px; margin-left: auto; margin-right: auto; }
+  .gf-sec--ink .gf-num { color: var(--wheat); }
+  .gf-games { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; }
+  .gf-card { border: 2px solid var(--ink); background: #fbf5e8; padding: 16px 18px 8px; box-shadow: 4px 4px 0 var(--ink); }
+  .gf-card__k { display: flex; gap: 10px; align-items: center; font: 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 6px; }
+  .gf-slot { color: var(--sea); }
+  .gf-slot.is-held { color: var(--brick); }
+  .gf-mvp { margin-left: auto; color: var(--ink-2); }
+  .gf-pitch { font-size: 20px; margin-top: 0; }
+  .gf-card dl { margin: 0; }
+  .gf-card dt { font: 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--brick); margin-top: 10px; }
+  .gf-card dd { margin: 2px 0 0; }
+  .gf-card li { margin: 0 0 4px; }
+  .gf-claimant { font: 14px/1.45 var(--mono); background: #fff4d6; padding: 8px 10px; border: 1px solid var(--ink); }
+  .gf-steps { max-width: 72ch; }
+  .gf-steps li { margin: 0 0 8px; }
+  .gf-cousins { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+  .gf-cousins a { display: grid; gap: 4px; padding: 12px; border: 2px solid var(--ink); background: #fbf5e8; color: var(--ink); text-decoration: none; }
+  .gf-cousins span { font-size: 15px; color: var(--ink-2); }
+  .gf-tools { list-style: none; padding: 0; display: grid; gap: 12px; }
+  .gf-tools li { border-left: 6px solid var(--sea); padding: 4px 0 4px 12px; }
+  .gf-tag { font: 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; margin-left: 8px; color: var(--sea); }
+  .gf-tag--write { color: var(--brick); }
+  .gf-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  .gf-form { display: grid; gap: 8px; border: 2px solid var(--ink); padding: 14px; background: #fbf5e8; }
+  .gf-form label { display: grid; gap: 4px; font: 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+  .gf-form input, .gf-form select, .gf-form textarea { font: 16px/1.4 var(--serif); padding: 8px 10px; border: 2px solid var(--ink); background: #fff; color: var(--ink); text-transform: none; letter-spacing: 0; }
+  .gf-form button, .gf a.gf-btn { font: 15px var(--serif); background: var(--brick); color: #fbf5e8; border: 2px solid var(--ink); padding: 8px 14px; cursor: pointer; }
+  .gf-brief { white-space: pre-wrap; background: #1c2b2e; color: #f3e8d2; padding: 16px; border: 2px solid var(--ink); font: 14px/1.5 var(--mono); overflow: auto; }
+  .gf-check li, .gf-notes li { margin: 0 0 6px; }
+  .gf-limits { margin: 0 0 16px; }
+  .gf-limits div { display: grid; grid-template-columns: 140px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(31, 26, 20, 0.2); }
+  .gf-limits dt { font: 13px var(--mono); }
+  .gf-limits dd { margin: 0; }
+  .gf-label { display: inline-block; font: 13px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; background: var(--wheat); color: var(--ink); padding: 4px 8px; }
+  .gf-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+  .gf-actions article { border: 1px solid rgba(243, 232, 210, 0.35); padding: 12px; }
+  .gf-actions p { margin: 0 0 8px; }
+  .gf code { font-family: var(--mono); font-size: 0.86em; }
+  @media (max-width: 800px) {
+    .gf-cousins, .gf-forms, .gf-actions, .gf-limits div { grid-template-columns: 1fr; }
+  }
+</style>

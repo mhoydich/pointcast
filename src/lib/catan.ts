@@ -307,6 +307,8 @@ export const CATAN_ENDPOINTS = [
   { method: 'GET', href: '/api/catan/ics', label: 'Tables as calendar: ?id= one invite, ?city= or nothing for a subscribable feed.' },
   { method: 'GET', href: '/api/catan/games', label: 'Game cards logged from the Table Clock: ?id= one, ?table= a table\'s history, nothing for recent games and top winners.' },
   { method: 'POST', href: '/api/catan/games', label: 'Log a finished game: {players:[{name,color,vp}], winner, target, road?, army?, turns, minutes, rolls, table?, seed?}.' },
+  { method: 'GET', href: '/api/catan/shelf', label: 'The ten-game shelf: specs, who holds each slot, the agent brief, and the chain reward stub (no value until launch).' },
+  { method: 'POST', href: '/api/catan/shelf', label: 'Claim, submit, or release a game slot: {action:"claim"|"submit"|"release", slug, handle, kind?, pitch?, buildUrl?, prUrl?}.' },
   { method: 'POST', href: '/api/agent/catan-lantern', label: 'x402, 0.01 USDC on Etherlink: light a lantern on a hosted table ({table, note?}); pinned and glowing for 7 days, stacks.' },
   { method: 'POST', href: '/api/agent/catan-seal', label: 'x402, 0.01 USDC on Etherlink: open a sealed table with a committed 240-roll dice stream.' },
 ] as const;

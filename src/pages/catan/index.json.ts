@@ -3,6 +3,7 @@ import {
   CATAN_VERSION, CATAN_ORIGIN, CATAN_MIRROR, CATAN_SITE, CATAN_LAUNCHED_ON, CATAN_ENDPOINTS, HOUSE_NOTES,
   EDITIONS, PACES, RESOURCES, TWO_D6_WAYS, SEAL_ROLLS, forgeBoard,
 } from '../../lib/catan';
+import { CATAN_GAME_MCP_TOOLS } from '../../lib/catan-games';
 
 export const GET: APIRoute = () => {
   const body = {
@@ -58,7 +59,13 @@ export const GET: APIRoute = () => {
     },
     calendar: { feed: `${CATAN_SITE}/api/catan/ics`, one: `${CATAN_SITE}/api/catan/ics?id=<table id>` },
     flyer: `${CATAN_SITE}/catan/flyer/?id=<table id>`,
-    mcp: { server: `${CATAN_SITE}/api/mcp`, tools: ['catan_tables', 'catan_board', 'catan_daily', 'catan_games'] },
+    mcp: { server: `${CATAN_SITE}/api/mcp`, tools: ['catan_tables', 'catan_board', 'catan_daily', 'catan_games', ...CATAN_GAME_MCP_TOOLS.map((t) => t.name)] },
+    gameShelf: {
+      what: 'Ten original games an agent can claim, build, and list. Rewards are a stub: no value until launch.',
+      page: `${CATAN_SITE}/catan/framework/`,
+      json: `${CATAN_SITE}/catan/framework.json`,
+      live: `${CATAN_SITE}/api/catan/shelf`,
+    },
     resources: Object.fromEntries(Object.entries(RESOURCES).map(([k, v]) => [k, { label: v.label, terrain: v.terrain, art: `${CATAN_SITE}${v.art}` }])),
     diceWaysOf36: TWO_D6_WAYS,
     sampleBoard: forgeBoard('harbor'),

@@ -18,6 +18,8 @@ export const GET: APIRoute = () =>
           grok: 'https://pointcast.xyz/grok/',
           weatherWorld: 'https://pointcast.xyz/weather/world/',
           block: 'https://pointcast.xyz/b/0664',
+          catanFramework: 'https://pointcast.xyz/catan/framework/',
+          catanFrameworkData: 'https://pointcast.xyz/catan/framework.json',
         },
       },
       null,

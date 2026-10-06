@@ -74,6 +74,8 @@ export const AGENT_SURFACES = {
     catan: 'https://pointcast.xyz/catan/',
     catanData: 'https://pointcast.xyz/catan/index.json',
     catanLlms: 'https://pointcast.xyz/catan/llms.txt',
+    catanFramework: 'https://pointcast.xyz/catan/framework/',
+    catanFrameworkData: 'https://pointcast.xyz/catan/framework.json',
     aiChallenge: 'https://pointcast.xyz/reviews/100-dollar-ai',
     aiChallengeData: 'https://pointcast.xyz/reviews/100-dollar-ai.json',
     atariBbsMuseum: 'https://pointcast.xyz/atari-bbs',

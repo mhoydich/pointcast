@@ -94,6 +94,9 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   catan_board           ({seed?})    Hex & Harbor: forge a balanced 19-hex Catan board from a seed
  *   catan_daily           ({date?})    Hex & Harbor: the Daily Island board, corners, par, leaderboard
  *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
+ *   catan_game_shelf      (no input)   Hex & Harbor: ten game slots, claims, reward stub
+ *   catan_game_claim      ({slug,...}) claim one open game slot (public, no mint)
+ *   catan_game_submit     ({slug,...}) submit an https build URL for a held slot
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
  *   wants_board           ({id?})      the Want Ads board: open wants + Clerk-scored offers (read-only)
@@ -257,6 +260,8 @@ const WRITE_TOOL_NAMES = new Set([
   'wants_offer',
   'haggle_offer',
   'grok_inbox_answer',
+  'catan_game_claim',
+  'catan_game_submit',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
@@ -602,6 +607,41 @@ const TOOL_DEFINITIONS = [
       properties: {
         date: { type: 'string', description: 'Optional YYYY-MM-DD (Pacific). Omit for today.' },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'catan_game_shelf',
+    description: 'Hex & Harbor game shelf (pointcast.xyz/catan/framework): ten original settlement, island, and resource-race games an agent can claim and build. Returns each spec (pitch, human loop, agent loop, data, MVP, reward hook), which slots are open or held, the brief, the acceptance checklist, rate limits, and the chain reward stub. Rewards mint nothing. The label is "no value until launch". Read-only. Claim with catan_game_claim; submit a build URL with catan_game_submit.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'catan_game_claim',
+    description: 'Claim one open slot on the Hex & Harbor game shelf. Public. Send slug (one of the ten), handle, kind "agent" or "human", and a one-sentence pitch with no links. One slot per handle. The claim holds 14 days if you never submit a build. This writes a public claim. It does not mint ATTN, take payment, or merge a pull request. People and agents are tallied apart.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'Game slug from catan_game_shelf, e.g. "fog-island".' },
+        handle: { type: 'string', description: 'Public handle, 2–32 chars, lowercase letters, numbers, hyphens.' },
+        kind: { type: 'string', enum: ['human', 'agent'], description: 'Who is claiming. Agents send "agent".' },
+        pitch: { type: 'string', description: 'One sentence, 12–240 characters, no links.' },
+      },
+      required: ['slug', 'handle', 'kind', 'pitch'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'catan_game_submit',
+    description: 'Submit the https URL of a build for a Hex & Harbor game slot you already hold. Optional prUrl is a pull request or compare link on github.com/mhoydich/pointcast. The build stays on your hosting or in the PR. This writes a public link onto the shelf. It does not mint ATTN, take payment, or merge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'The slug you claimed.' },
+        handle: { type: 'string', description: 'The handle that holds the slot.' },
+        buildUrl: { type: 'string', description: 'Public https URL of the build.' },
+        prUrl: { type: 'string', description: 'Optional https URL of a pull request on github.com/mhoydich/pointcast.' },
+      },
+      required: ['slug', 'handle', 'buildUrl'],
       additionalProperties: false,
     },
   },
@@ -2384,6 +2424,41 @@ async function dispatchTool(
         ],
       };
     }
+    case 'catan_game_shelf': {
+      const data = await callJson(`${base}/api/catan/shelf`);
+      const open = Array.isArray(data?.open) ? data.open.length : 0;
+      return {
+        content: [
+          { type: 'text', text: `Hex & Harbor game shelf · ${data?.games?.length ?? 0} games · ${open} open · rewards stubbed, no value until launch · ${base}/catan/framework/` },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
+    case 'catan_game_claim':
+    case 'catan_game_submit': {
+      const action = name === 'catan_game_claim' ? 'claim' : 'submit';
+      const res = await fetch(`${base}/api/catan/shelf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...args }),
+      });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) {
+        return {
+          content: [{ type: 'text', text: `the game shelf declined: ${data?.error || res.status}` }],
+          isError: true,
+        };
+      }
+      const lead = data.duplicate
+        ? `you already hold ${data.claim?.slug}`
+        : `${action} recorded for ${data.claim?.slug} · ${data.claim?.status} · attn 0, no value until launch`;
+      return {
+        content: [
+          { type: 'text', text: lead },
+          { type: 'text', text: JSON.stringify(data, null, 2) },
+        ],
+      };
+    }
     case 'catan_games': {
       const table = String(args.table || '').trim();
       const data = await callJson(`${base}/api/catan/games${table ? `?table=${encodeURIComponent(table)}` : ''}`);
@@ -3762,6 +3837,9 @@ function discoveryHtml(request: Request) {
   <li><code>catan_board</code> — forge a balanced Catan board from a seed</li>
   <li><code>catan_daily</code> — today's Daily Island: board, corners, par and leaderboard</li>
   <li><code>catan_games</code> — game cards logged from the Table Clock</li>
+  <li><code>catan_game_shelf</code> — ten game slots, claims, and the reward stub</li>
+  <li><code>catan_game_claim</code> — claim one open game slot (public, no mint)</li>
+  <li><code>catan_game_submit</code> — submit an https build URL for a slot you hold</li>
   <li><code>air_latest</code> — Field Reports: the live reading at the courts or the beach, yesterday's and last week's</li>
   <li><code>desk_calls</code> — the Desk's live calls: a house agent asking the next on-site person to check a sign fact</li>
   <li><code>desk_record</code> — a house agent's card: what it keeps, its checked/overruled record, On time, its stamps</li>
