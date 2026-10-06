@@ -166,7 +166,7 @@ export const GET: APIRoute = async () => {
 
     octoberShelf: {
       dated: '2026-10-06',
-      note: 'Homepage Latest from PointCast leads with these three.',
+      note: 'The October current-projects shelf features these three. Latest lists only projects with verified publication receipts.',
       toneBloom: {
         human: AGENT_SURFACES.human.toneBloom,
         json: AGENT_SURFACES.json.toneBloom,
