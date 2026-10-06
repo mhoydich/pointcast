@@ -153,10 +153,41 @@ jobs:
             await fs.writeFile(target, buffer);
             files.push({ path: relative, bytes: buffer.length, sha256: createHash('sha256').update(buffer).digest('hex') });
           }
+          // Retain the complete stable build census separately from the primary
+          // runtime graph. Unrelated gallery media graphs are not traversed.
+          const runtimePaths = [...seen].sort();
+          const primaryCount = queue.length;
+          const stableDependencyPaths = [];
+          let enumeratedEntries = 0;
+          async function retainStable(directory, optional = false) {
+            let entries;
+            try { entries = await fs.readdir(path.join(dist, directory), { withFileTypes: true }); }
+            catch (error) { if (optional && error.code === 'ENOENT') return; throw error; }
+            entries.sort((a, b) => a.name.localeCompare(b.name));
+            for (const entry of entries) {
+              if (++enumeratedEntries > 20000) throw new Error('Stable preview enumeration exceeds budget');
+              if (entry.isSymbolicLink() || entry.name.startsWith('.')) throw new Error('Unsafe stable preview entry');
+              const relative = directory + '/' + entry.name;
+              if (entry.isDirectory()) await retainStable(relative);
+              else if (entry.isFile() && /\.(?:js|css|woff2?)$/i.test(entry.name)) {
+                await include('/' + relative, 'index.html', true);
+                stableDependencyPaths.push(relative);
+              }
+            }
+          }
+          await retainStable('_astro');
+          await retainStable('fonts', true);
+          for (const relative of queue.slice(primaryCount)) {
+            const buffer = await fs.readFile(path.join(dist, relative));
+            const target = path.join(out, relative);
+            await fs.mkdir(path.dirname(target), { recursive: true });
+            await fs.writeFile(target, buffer);
+            files.push({ path: relative, bytes: buffer.length, sha256: createHash('sha256').update(buffer).digest('hex') });
+          }
           files.sort((a, b) => a.path.localeCompare(b.path));
           const actualBytes = files.reduce((sum, file) => sum + file.bytes, 0);
           if (actualBytes > 150 * 1024 * 1024) throw new Error('Preview changed beyond byte budget');
-          const manifest = { head, tree, scope: 'Compiled root homepage, Latest page/catalog and referenced static assets only. Backend/API/OG routes and navigation pages are not included; third-party resources were not fetched.', artwork, files, bytes: actualBytes, omittedLocal: [...missing].sort(), externalReferences: [...external].sort(), excludedRuntime: [...excluded].sort() };
+          const manifest = { head, tree, scope: 'Compiled root homepage, Latest page/catalog and referenced static assets only. Complete emitted JS/CSS/font census is also retained without traversing unrelated media. Backend/API/OG routes and navigation pages are not included; third-party resources were not fetched.', artwork, files, bytes: actualBytes, runtimePaths, stableDependencyPaths: stableDependencyPaths.sort(), stableDependencySuffixes: ['.js', '.css', '.woff', '.woff2'], omittedLocal: [...missing].sort(), externalReferences: [...external].sort(), excludedRuntime: [...excluded].sort() };
           await fs.writeFile(path.join(out, 'home-preview-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
           console.log(JSON.stringify({ head, tree, files: files.length, bytes: actualBytes, artworks: artwork.length, omittedLocal: missing.size, externalReferences: external.size, excludedRuntime: excluded.size }));
           NODE
