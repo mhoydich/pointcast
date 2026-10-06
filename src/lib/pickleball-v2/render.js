@@ -1,6 +1,7 @@
 import { renderPickleballHome } from '../pickleball-home/render.js';
 import { buildPracticePlan } from './model.js';
 import { articles } from './articles.js';
+import { renderPaddleCourtStation } from '../paddle-court/render.mjs';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 const options = (values, selected) => values.map(([value, label]) => `<option value="${escape(value)}"${String(value) === String(selected) ? ' selected' : ''}>${escape(label)}</option>`).join('');
@@ -34,5 +35,9 @@ export function renderPointCastPickleballHome() {
   const anchor = '<span class="pb-anchor" id="learn"></span>';
   const first = shared.indexOf(anchor);
   if (first < 0 || shared.indexOf(anchor, first + 1) >= 0) throw new Error('Shared pickleball learning anchor changed; review the PointCast extension integration.');
-  return shared.slice(0, first) + renderPickleballV2() + shared.slice(first);
+  const extended = shared.slice(0, first) + renderPickleballV2() + shared.slice(first);
+  const gearAnchor = '<span class="pb-anchor" id="gear"></span>';
+  const gear = extended.indexOf(gearAnchor);
+  if (gear < 0 || extended.indexOf(gearAnchor, gear + 1) >= 0) throw new Error('Shared gear anchor changed; review Paddle Lab integration.');
+  return extended.slice(0, gear) + renderPaddleCourtStation() + extended.slice(gear);
 }
