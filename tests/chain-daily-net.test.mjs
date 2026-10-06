@@ -79,7 +79,7 @@ test('the panel is self-contained: DEVNET from chain-home, its own colours, one 
   assert.match(panel, /querySelectorAll<HTMLElement>\('\[data-daily-net="panel"\]'\)/);
   for (const hook of ['data-dn-clock', 'data-dn-day', 'data-dn-reset', 'data-dn-status', 'data-dn-counts', 'data-dn-roll data-roll-max="12"', 'data-dn-strikes'])
     assert.ok(panel.includes(hook), hook);
-  assert.match(panel, /\{DEVNET\.label\} · no value · may reset/);
+  assert.match(panel, /\{DEVNET\.label\} · no value · restarts, dated/);
   assert.match(panel, /resets at 00:00 UTC/);
   assert.match(panel, /var\(--pc-font-mono\)/);
   assert.match(panel, /var\(--pc-ink/);
@@ -123,7 +123,7 @@ test('who does what: the panel\'s roles name the same duty tools as the /chain/n
   for (const name of ['grokPrompt', 'chatgptPrompt', 'codePrompt']) assert.match(rawConst(name), /resets at 00:00 UTC[ ,(]+\$\{RESET_PT\}/, name);
 });
 
-test('copy: devnet, no value, may reset; a witness is a claim; nothing says verified or promises value', () => {
+test('copy: devnet, no value, the restart is dated; a witness is a claim; nothing says verified or promises value', () => {
   // (the code-agent prompt tells agents "don't call it verified": the one allowed use)
   for (const [name, src] of [['lib', lib], ['panel', panel], ['page', copy.replace("don't call it verified", '')]]) {
     for (const phrase of [/main\s*net/i, /\bworth\b/i, /\binvest/i, /\bprofit/i, /\byield\b/i, /\bverified\b/i, /proves?\b/i])
@@ -132,9 +132,9 @@ test('copy: devnet, no value, may reset; a witness is a claim; nothing says veri
   assert.match(lib, /'devnet unreachable/);
   assert.match(panel, /A witness is a claim, not proof of replay/);
   assert.match(panel, /Counts are keys, not\s+people/);
-  for (const phrase of ['NO VALUE · MAY RESET', 'It is not proof of replay.', 'Copiers never get strikes.', 'agreed with this server',
+  for (const phrase of ['NO VALUE · RESTARTS, DATED', 'It is not proof of replay.', 'Copiers never get strikes.', 'agreed with this server',
     'This catches bugs, not a hostile operator.', 'Keys are free.', 'Counts are keys, not people.', 'Flags are not moderation.',
-    'Inconsistent is not a strike.', 'No value. May reset.', 'signed a checkpoint this chain does not have: a wrong replay, or it was shown a different chain.',
+    'Inconsistent is not a strike.', 'No value. It restarts.', 'signed a checkpoint this chain does not have: a wrong replay, or it was shown a different chain.',
     'posts under this name', 'The day is UTC and resets at 00:00 UTC.'])
     assert.ok(page.includes(phrase), phrase);
   assert.match(rawConst('codePrompt'), /A witness is a claim that you replayed the chain, not proof of it; don't call it verified\./);

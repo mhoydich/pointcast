@@ -40,12 +40,12 @@ test('chain data never becomes markup, an href or a src', () => {
   assert.match(lib, /own\(colors, channel\) && HEX_COLOR_RE\.test\(colors\[channel\]\)/);
 });
 
-test('honesty copy: devnet, no value, may reset; no network, mainnet, mint or value claims', () => {
+test('honesty copy: devnet, no value, the restart is dated; no network, mainnet, mint or value claims', () => {
   for (const [name, src] of Object.entries(stripSources)) {
     for (const phrase of [/live network/i, /main\s*net/i, /minted on pointcast chain/i, /\bminted\b/i, /\bworth\b/i, /\binvest/i, /\bprofit/i, /\byield\b/i, /\bpublic network\b/i])
       assert.doesNotMatch(src, phrase, `${name}: ${phrase}`);
   }
-  assert.match(component, /\{DEVNET\.label\} · no value · may reset/);
+  assert.match(component, /\{DEVNET\.label\} · no value · restarts, dated/);
   assert.match(chainHome, /label: 'devnet · bot · unmoderated'/);
   assert.match(component, /'PointCast Chain · devnet'/);
   assert.match(component, /devnet/);
@@ -360,7 +360,7 @@ test('built pages carry the strip with its links and no addresses', { skip: !exi
     assert.equal(strip.dataset.state, 'static');
     assert.equal(strip.dataset.variant, wide ? 'wide' : 'home');
     assert.equal(strip.dataset.api, DEVNET_URL);
-    assert.match(strip.textContent, /devnet · bot · unmoderated · no value · may reset/);
+    assert.match(strip.textContent, /devnet · bot · unmoderated · no value · restarts, dated/);
     assert.match(strip.querySelector('h2').textContent, wide ? /^Town digest$/ : /^PointCast Chain · devnet$/);
     assert.doesNotMatch(strip.outerHTML, ADDRESS, page);
     assert.doesNotMatch(strip.textContent, /\d+ posts? shown|Height \d/, 'no numbers before the browser reads');

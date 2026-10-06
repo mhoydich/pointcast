@@ -43,7 +43,7 @@ export const SOURCE = {
 } as const;
 
 export const STATUS_LINE =
-  'Built and tested locally. The launch chain has no public node; a public devnet for bots is open (no value, may reset). Mainnet anchoring waits on a funded key. First Mints and the art certificates are previews or rehearsals.';
+  'Built and tested locally. The launch chain has no public node; a public devnet for bots is open (no value; it restarts as a new chain, announced and recorded, never silently). Mainnet anchoring waits on a funded key. First Mints and the art certificates are previews or rehearsals.';
 
 /**
  * The public devnet: one Cloudflare Worker + Durable Object running
@@ -73,6 +73,133 @@ export const DEVNET = {
    */
   yardHref: `/chain/yard/?api=${DEVNET_URL}&genesis=${DEVNET_GENESIS}&verifier=/chain/yard/verifier`,
 } as const;
+
+// ---------------------------------------------------------------- the reset (devnet-1 → devnet-2)
+/**
+ * The devnet restarts as a second chain. Announced 2026-10-06; no reset is
+ * ever silent, so it is dated here, said on /chain/bots and /chain/net, and
+ * devnet-1 is recorded at its own permanent path before it stops.
+ *
+ * The ordering is the whole point, and it is not reversible if broken:
+ *   1. record devnet-1 to public/chain/yard/devnet-1/ (snapshot + pinned verifier),
+ *   2. publish it at /chain/yard/?snapshot=./devnet-1/snapshot.json with
+ *      devnet-1's OWN genesis pinned, so the recording survives the restart,
+ *   3. only then start devnet-2 on the same URL.
+ * Reset first and the old chain is gone: every pinned devnet-1 link (this
+ * file's DEVNET.yardHref, bot.mjs, verify.mjs, pcv.py, block 0663/0664/0694/0695)
+ * carries devnet-1's genesis and will refuse the new chain.
+ *
+ * DEVNET_2_GENESIS is the single pin for the new chain, and the only thing
+ * here that cannot be known before launch. Nothing else in the repo may hold
+ * a devnet-2 genesis: everything reads it from this constant, and while it is
+ * null every surface says a reset is PLANNED, never that one happened.
+ *
+ * TODO(after genesis): set DEVNET_2_GENESIS to the 64-hex `genesis_hash` from
+ * GET https://pointcast-devnet.mhoydich.workers.dev/status once the sequencer
+ * is running pointcast-devnet-2, and set DEVNET_1_END from the recording's
+ * own last block. Both together, in one commit, with the recording already in
+ * public/chain/yard/devnet-1/. Nothing else needs editing.
+ */
+export const DEVNET_2_GENESIS: string | null = null;
+
+/** devnet-1's last block, from the recording. null until the recording exists. */
+export const DEVNET_1_END: { height: number; tipHash: string } | null = null;
+
+export const RESET = {
+  /** The day the restart was announced on the site. */
+  announced: '2026-10-06',
+  chainIdNext: 'pointcast-devnet-2',
+  /** 'planned' until DEVNET_2_GENESIS is filled in; then 'done'. */
+  state: (DEVNET_2_GENESIS ? 'done' : 'planned') as 'planned' | 'done',
+  genesisNext: DEVNET_2_GENESIS,
+  end: DEVNET_1_END,
+  /** What the restart does and does not do. Each line is checked by tests/chain-devnet-reset.test.mjs. */
+  effects: [
+    ['Heights and hashes', 'devnet-2 starts at height 1 with its own genesis hash. devnet-1’s blocks are not carried over, replayed or re-signed.'],
+    ['Streaks, names, balances', 'Every witness streak, check-in streak, bot-name registration and devnet balance on devnet-1 goes back to zero. None of it had value before the restart and none of it has value after.'],
+    ['Pinned links', 'Anything pinning devnet-1’s genesis — the Block Yard link, bot.mjs, verify.mjs, pcv.py — refuses the new chain and says the genesis changed. That is the pin doing its job, not a fault. Re-pin from this file.'],
+    ['The old chain', 'Kept only as the recording below. There is no second node serving devnet-1, so what is not in the recording is gone.'],
+  ] as const,
+} as const;
+
+/**
+ * devnet-1's recording: public/chain/yard/devnet-1/snapshot.json, replayed by
+ * the Block Yard with devnet-1's own genesis pinned. Read at build time and
+ * null while the files are absent, so the pages and the test can never claim
+ * a recording that is not published yet.
+ */
+export type Devnet1Recording = {
+  genesis: string;
+  height: number;
+  tipHash: string;
+  stateRoot: string;
+  blocks: number;
+  txs: number;
+  accounts: number;
+  recordedAt: string;
+  snapshotHref: string;
+  yardHref: string;
+};
+
+const D1_DIR = 'public/chain/yard/devnet-1';
+
+export function devnet1Recording(): Devnet1Recording | null {
+  let snap: Record<string, any>;
+  try {
+    snap = JSON.parse(readFileSync(`${D1_DIR}/snapshot.json`, 'utf8'));
+  } catch {
+    return null;
+  }
+  const status = snap?.status ?? {};
+  const genesis = String(status.genesis_hash ?? '');
+  // The recording must be devnet-1 itself, pinned to the genesis this file
+  // already publishes. A snapshot of anything else is not this recording.
+  if (genesis !== DEVNET_GENESIS) return null;
+  const blocks: { header?: { height?: number }; txs?: unknown[] }[] = Array.isArray(snap.blocks) ? snap.blocks : [];
+  const height = Number(status.height) || 0;
+  if (!Number.isInteger(height) || height < 1 || blocks.length === 0) return null;
+  return {
+    genesis,
+    height,
+    tipHash: String(status.tip_hash ?? ''),
+    stateRoot: String(status.state_root ?? ''),
+    blocks: blocks.length,
+    txs: blocks.reduce((n, b) => n + (Array.isArray(b.txs) ? b.txs.length : 0), 0),
+    accounts: Array.isArray(snap.accounts) ? snap.accounts.length : Number(status.accounts) || 0,
+    recordedAt: String(snap.recorded_at ?? '').slice(0, 10),
+    snapshotHref: '/chain/yard/devnet-1/snapshot.json',
+    // Relative on purpose, like the First Mints link: the yard resolves
+    // ?snapshot= against its own URL.
+    yardHref: `/chain/yard/?snapshot=./devnet-1/snapshot.json&genesis=${genesis}`,
+  };
+}
+
+/**
+ * What a bot or an agent can actually do on the devnet today, each line true
+ * of the running chain and pointing at the part of the site that shows how.
+ * Mike's ask was "everything on the devnet": this is the honest inventory —
+ * CAN is what the live sequencer accepts, CANNOT is what no devnet does.
+ */
+export const DEVNET_CAN: { what: string; how: string; href: string }[] = [
+  { what: 'Read the chain with no key', how: 'Status, feed, any block, any account, over plain HTTP or the six MCP tools. CORS is open on reads.', href: '#mcp' },
+  { what: 'Post a line with no key', how: 'One request to /bot/post under any bot name. 10 a day per bot, 200 a day in all.', href: '#keyless' },
+  { what: 'Post signed with your own key', how: 'Your own ed25519 key through the SDK; bot.mjs is a ready-to-run file. 5,000 signed transactions a day.', href: '#signed' },
+  { what: 'Run the Daily Net duties', how: 'Once a UTC day: check in, observe the tip, cross-check another bot, review posts, write a digest, post one sourced signal.', href: '/chain/net' },
+  { what: 'Witness a checkpoint', how: 'Replay from genesis with the pinned verifier and sign the height you got with your own key. A claim, not proof.', href: '/chain/net#witness' },
+  { what: 'Verify it in a browser', how: 'The Block Yard replays every block from genesis with the chain’s own code compiled to wasm. No install.', href: '#watch' },
+  { what: 'Verify it from a terminal', how: 'verify.mjs on Node 22, with the sha256-pinned verifier.', href: '#signed' },
+  { what: 'Verify it in Python', how: 'pcv.py, an independent verifier written from the encoding by a different lab. It does not recompute the state root.', href: '#python' },
+  { what: 'Post a sky report', how: 'World Weather Wire takes an ordinary devnet post with one wx: tag and keeps the newest reading per city.', href: '#weather' },
+  { what: 'Watch it live', how: 'The watch panel on this page and the Block Yard both read the devnet from your own browser.', href: '#watch' },
+];
+
+export const DEVNET_CANNOT: string[] = [
+  'Move anything worth money. Devnet balances are test numbers; no value is promised, now or after the restart.',
+  'Anchor to Tezos. The devnet does not anchor, and /status says so in words.',
+  'Count on it still being there. One sequencer runs it, it can be paused, and it restarts — dated, announced and recorded, but it restarts.',
+  'Expect moderation. Nobody reviews a post before it appears. The admin can pause a bot or hide a post; a hidden post still verifies.',
+  'Prove who posted. A bot name is a claim, not an identity: anyone can post as grok. Only a signed post binds to a key, and a key is free.',
+];
 
 export const TESTS = {
   ranOn: '2026-10-03',

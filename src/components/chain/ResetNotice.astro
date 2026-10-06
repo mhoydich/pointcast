@@ -1,0 +1,101 @@
+---
+/**
+ * The devnet restart notice, shown on /chain/bots and /chain/net.
+ *
+ * One component so the copy lives once and the two pages cannot drift. It has
+ * two states and says only what is true in each:
+ *
+ *   RESET.state === 'planned'  (src/data/chain-home.ts DEVNET_2_GENESIS is null)
+ *     The restart is announced and dated. It has NOT happened. The notice says
+ *     "planned", gives the live chain id and genesis, and never prints a
+ *     devnet-2 genesis it does not have.
+ *
+ *   RESET.state === 'done'     (DEVNET_2_GENESIS filled in after launch)
+ *     Past tense: where devnet-1 ended, where its recording lives, what the
+ *     new chain id and genesis are.
+ *
+ * The recording row appears only when public/chain/yard/devnet-1/snapshot.json
+ * is actually there and is devnet-1's own snapshot (devnet1Recording() returns
+ * null otherwise), so the page can never link a recording that is not
+ * published. tests/chain-devnet-reset.test.mjs holds both halves.
+ */
+import { DEVNET, RESET, devnet1Recording } from '../../data/chain-home';
+
+const rec = devnet1Recording();
+const planned = RESET.state === 'planned';
+---
+
+<section id="reset" class="rst" aria-labelledby="reset-title">
+  <p class="rst__k">
+    <span class={planned ? 'tag tag--plan' : 'tag tag--done'}>{planned ? 'Planned' : 'Done'}</span>
+    <span>Restart · announced {RESET.announced}</span>
+  </p>
+
+  {planned ? (
+    <Fragment>
+    <h2 id="reset-title" class="rst__h">The devnet will restart as a new chain.</h2>
+    <p class="rst__p">
+      <b>This has not happened yet.</b> Today the devnet is still <code>{DEVNET.chainId}</code> at genesis
+      <code class="hash">{DEVNET.genesis}</code>. When it restarts it becomes <code>{RESET.chainIdNext}</code> with a
+      genesis of its own, at the same URL. No restart here is silent: it is dated above, it is said on this page and on
+      the Daily Net page, and <b>{DEVNET.chainId} is recorded first</b> — published at its own permanent address, with
+      its own genesis pinned — so the chain you can read today stays readable after the restart.
+    </p>
+    </Fragment>
+  ) : (
+    <Fragment>
+    <h2 id="reset-title" class="rst__h">The devnet restarted. {DEVNET.chainId} is kept as a recording.</h2>
+    <p class="rst__p">
+      <code>{DEVNET.chainId}</code>{RESET.end ? ` ended at height ${RESET.end.height.toLocaleString('en-US')}` : ' has stopped'}
+      and the chain at this URL is now <code>{RESET.chainIdNext}</code>, starting again at height 1 with genesis
+      <code class="hash">{RESET.genesisNext}</code>. The old chain is readable only as the recording below.
+    </p>
+    </Fragment>
+  )}
+
+  <ul class="rst__rows">
+    {RESET.effects.map(([k, v]) => <li><b>{k}</b><span>{v}</span></li>)}
+  </ul>
+
+  {rec ? (
+    <div class="rst__rec">
+      <p class="rst__k"><span class="tag tag--done">Recorded</span><span>{DEVNET.chainId} · {rec.recordedAt}</span></p>
+      <p class="rst__p">
+        {rec.blocks.toLocaleString('en-US')} blocks to height {rec.height.toLocaleString('en-US')},
+        {' '}{rec.txs.toLocaleString('en-US')} transactions, {rec.accounts.toLocaleString('en-US')} accounts. The Block
+        Yard replays the recording from genesis <code class="hash">{rec.genesis}</code> with the same pinned verifier it
+        uses on the live chain, so the recording verifies the same way the chain did — and keeps verifying after the
+        restart, because its genesis is pinned to the old chain, not to whatever is at the URL now.
+      </p>
+      <p class="cta">
+        <a class="btn" href={rec.yardHref}>Replay {DEVNET.chainId}</a>
+        <a class="btn btn--ghost" href={rec.snapshotHref}>snapshot.json</a>
+        <span>Tip <code class="hash">{rec.tipHash.slice(0, 16)}…</code></span>
+      </p>
+    </div>
+  ) : (
+    <p class="rst__fine">
+      The {DEVNET.chainId} recording is not published yet. It goes to <code>/chain/yard/devnet-1/</code> and is linked
+      from here the moment it is there{planned ? ', before the restart' : ''}. Until then this page links only the live
+      chain.
+    </p>
+  )}
+</section>
+
+<style>
+  .rst{margin:24px 0 0;max-width:840px;padding:16px 18px 18px;border:1.5px solid var(--c600);border-left-width:6px;background:var(--c50)}
+  .rst__k{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 10px;font:500 10px/1.6 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .rst__h{margin:0 0 10px;font:500 clamp(20px,2.4vw,26px)/1.2 var(--pc-font-sans);letter-spacing:-.02em;text-wrap:balance}
+  .rst__p{margin:0;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rst__p b{font-weight:500;color:var(--pc-ink)}
+  .rst__rows{list-style:none;margin:14px 0 0;padding:0;border-top:1px solid var(--pc-rule-soft)}
+  .rst__rows li{display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr);gap:4px 18px;padding:10px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rst__rows b{font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800)}
+  .rst__rec{margin:16px 0 0;padding:14px 0 0;border-top:1.5px solid var(--c600)}
+  .rst__fine{margin:14px 0 0;font:400 13px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .rst .hash{word-break:break-all}
+  @media (max-width:560px){
+    .rst{padding:14px 14px 16px}
+    .rst__rows li{grid-template-columns:minmax(0,1fr);gap:2px}
+  }
+</style>
