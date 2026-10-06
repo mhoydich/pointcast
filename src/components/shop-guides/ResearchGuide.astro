@@ -1,0 +1,41 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/shop-guides.css';
+const { guide } = Astro.props;
+const hero = guide.hero ?? { src: `/images/shop-guides/${guide.slug}.jpg`, alt: 'Original editorial supporting illustration; not product photography or test data.', width: 1200, height: 800 };
+const guidePath = guide.path ?? `/reviews/${guide.slug}`;
+---
+<BlockLayout immersive title={guide.title} description={guide.subtitle} image={hero.src} imageAlt={hero.alt} imageWidth={hero.width} imageHeight={hero.height} alternates={[{type: 'application/json', href: `${guidePath}.json`, title: guide.title}]} jsonLd={{
+  '@context': 'https://schema.org', '@type': 'Article',
+  headline: guide.title, description: guide.subtitle,
+  datePublished: '2026-10-05', dateModified: '2026-10-05',
+  author: { '@type': 'Organization', name: 'PointCast' },
+  url: `https://pointcast.xyz${guidePath}`
+}}>
+  <Fragment set:html={guide.bodyHtml} />
+</BlockLayout>
+<script>
+  function initializeGuides() {
+  for (const root of document.querySelectorAll<HTMLElement>('[data-guide]')) {
+    if (root.dataset.guideReady) continue;
+    root.dataset.guideReady = 'true';
+    const select = root.querySelector<HTMLSelectElement>('[data-guide-filter]');
+    const cards = [...root.querySelectorAll<HTMLElement>('[data-tags]')];
+    const count = root.querySelector<HTMLElement>('[data-guide-count]');
+    const update = () => {
+      let shown = 0;
+      for (const card of cards) {
+        card.hidden = select?.value !== 'all' && !card.dataset.tags?.split(' ').includes(select?.value || 'all');
+        if (!card.hidden) shown++;
+      }
+      if (count) count.textContent = `${shown} of ${cards.length} comparisons shown`;
+    };
+    select?.addEventListener('change', update);
+
+    update();
+  }
+  }
+  document.addEventListener('astro:page-load', initializeGuides);
+  window.addEventListener('pageshow', initializeGuides);
+  initializeGuides();
+</script>
