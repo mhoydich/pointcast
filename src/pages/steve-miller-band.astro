@@ -1,0 +1,644 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import companion from '../data/steve-miller-band.json';
+
+const title = 'Steve Miller Band';
+const description = companion.dek;
+const spotifyLabel = (url: string) =>
+  url.includes('/album/') ? 'Open the album on Spotify' : 'Search on Spotify';
+const youtubeLabel = (kind: string) =>
+  kind === 'official-video' ? 'Watch the official video' : kind === 'label-audio' ? 'Play the label audio' : 'Search on YouTube';
+const playerNote = (kind: string) =>
+  kind === 'official-video'
+    ? 'Official video. Playback stays in the player.'
+    : kind === 'label-audio'
+      ? 'Label audio on YouTube, with an auto-generated picture. Not a band-shot video.'
+      : 'No embedded player for this one. The links open a search.';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': companion.url,
+  name: title,
+  description,
+  url: companion.url,
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+  about: {
+    '@type': 'MusicGroup',
+    name: 'Steve Miller Band',
+    foundingDate: '1966',
+    foundingLocation: 'San Francisco, California',
+    url: companion.listen.site,
+    sameAs: [companion.listen.youtubeChannel, companion.listen.musicBrainz],
+  },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  themeColor="#1c1410"
+  immersive={true}
+  isolated={true}
+  showNetworkStrip={false}
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/steve-miller-band.json', title: 'Steve Miller Band desk (JSON)' }]}
+>
+  <script is:inline>
+    document.documentElement.classList.add('smb-js');
+  </script>
+  <div class="smb" data-smb>
+    <nav class="smb-nav" aria-label="Room">
+      <a href="/">← PointCast</a>
+      <span>
+        <a href="/c/spinning">Spinning</a>
+        <a href="/listening-room">Listening room</a>
+        <a href="/ghost-town/">Ghost Town</a>
+        <a href="/steve-miller-band.json">JSON</a>
+      </span>
+    </nav>
+
+    <header class="smb-head">
+      <div>
+        <p class="smb-kicker">CH.SPN · listening desk · smb</p>
+        <h1>Steve Miller Band</h1>
+        <p class="smb-dek">{description}</p>
+      </div>
+      <div class="smb-mark" aria-hidden="true">
+        <span class="smb-disc"></span>
+        <span class="smb-mark-caption">Space cowboy, still</span>
+      </div>
+    </header>
+
+    <section class="smb-block" aria-labelledby="smb-eras-title">
+      <div class="smb-block-head">
+        <h2 id="smb-eras-title">Era map</h2>
+        <p>Open a stretch of the catalog. The note stays short. The songs are underneath.</p>
+      </div>
+      <div class="smb-controls smb-eras" role="group" aria-label="Eras">
+        {companion.eras.map((era) => (
+          <button
+            type="button"
+            class="smb-era"
+            data-era={era.id}
+            aria-pressed={era.id === companion.defaults.era ? 'true' : 'false'}
+          >
+            <span class="smb-era-kicker">{era.kicker}</span>
+            <span class="smb-era-title">{era.title}</span>
+            <span class="smb-era-years">{era.years}</span>
+          </button>
+        ))}
+      </div>
+      <div class="smb-panels">
+        {companion.eras.map((era) => (
+          <article class="smb-panel" data-era-panel={era.id} data-open={era.id === companion.defaults.era || undefined} id={`era-${era.id}`}>
+            <p class="smb-panel-kicker">{era.years}</p>
+            <h3>{era.title}</h3>
+            <p>{era.note}</p>
+            <div class="smb-chips" aria-label="Key tracks">
+              {era.keyTracks.map((id) => {
+                const song = companion.songs.find((item) => item.id === id);
+                return song ? (
+                  <button type="button" class="smb-chip" data-song={song.id}>{song.title}</button>
+                ) : null;
+              })}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="smb-block" aria-labelledby="smb-songs-title">
+      <div class="smb-block-head">
+        <h2 id="smb-songs-title">Song desk</h2>
+        <p>Nine songs. Six radio locks, three that explain them. Pick one.</p>
+      </div>
+      <div class="smb-desk">
+        <div class="smb-controls smb-songs" role="group" aria-label="Songs">
+          {companion.songs.map((song) => (
+            <button
+              type="button"
+              class="smb-song"
+              data-song={song.id}
+              data-era-of={song.era}
+              aria-pressed={song.id === companion.defaults.song ? 'true' : 'false'}
+            >
+              <span class="smb-song-title">{song.title}</span>
+              <span class="smb-song-meta">{song.year} · {song.kind === 'deep' ? 'Deep cut' : 'Hit'}</span>
+            </button>
+          ))}
+        </div>
+        <div class="smb-panels">
+          {companion.songs.map((song) => (
+            <article class="smb-panel smb-song-panel" data-song-panel={song.id} data-open={song.id === companion.defaults.song || undefined} id={`song-${song.id}`}>
+              <p class="smb-panel-kicker">{song.released} · {song.album}</p>
+              <h3>{song.title}</h3>
+              <p class="smb-writers">Written by {song.writers.join(', ')}</p>
+              <p>{song.note}</p>
+              <p class="smb-why"><span>Why it matters.</span> {song.why}</p>
+              {song.listen.youtubeEmbed && (
+                <div class="smb-frame">
+                  <iframe
+                    data-smb-frame
+                    data-src={song.listen.youtubeEmbed}
+                    src={song.id === companion.defaults.song ? song.listen.youtubeEmbed : undefined}
+                    title={`${song.title} — ${youtubeLabel(song.listen.youtubeKind)}`}
+                    allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    allowfullscreen
+                    loading="lazy"
+                  ></iframe>
+                </div>
+              )}
+              <p class="smb-player-note">{playerNote(song.listen.youtubeKind)} {song.listen.youtubeCredit}</p>
+              <p class="smb-links">
+                <a href={song.listen.youtube} target="_blank" rel="noopener noreferrer">{youtubeLabel(song.listen.youtubeKind)} ↗</a>
+                <a href={song.listen.spotify} target="_blank" rel="noopener noreferrer">{spotifyLabel(song.listen.spotify)} ↗</a>
+                <a href={companion.listen.site} target="_blank" rel="noopener noreferrer">Band site ↗</a>
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="smb-block" aria-labelledby="smb-lore-title">
+      <div class="smb-block-head">
+        <h2 id="smb-lore-title">Space Cowboy board</h2>
+        <p>Three masks. The 1973 song keeps all of them in circulation.</p>
+      </div>
+      <div class="smb-controls smb-lores" role="group" aria-label="Personas">
+        {companion.personas.map((persona) => (
+          <button
+            type="button"
+            class="smb-lore"
+            data-persona={persona.id}
+            aria-pressed={persona.id === companion.defaults.persona ? 'true' : 'false'}
+          >
+            {persona.title}
+          </button>
+        ))}
+      </div>
+      <div class="smb-panels">
+        {companion.personas.map((persona) => (
+          <article class="smb-panel" data-persona-panel={persona.id} data-open={persona.id === companion.defaults.persona || undefined} id={`persona-${persona.id}`}>
+            <h3>{persona.title}</h3>
+            <p>{persona.blurb}</p>
+            <p class="smb-links">
+              <button type="button" class="smb-textlink" data-song={persona.song}>Open the related song</button>
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="smb-receipt" aria-labelledby="smb-receipt-title">
+      <div>
+        <h2 id="smb-receipt-title">Room receipt</h2>
+        <p>
+          Browser-local. The era, song, and persona you last opened stay in this browser under <code>pc:smb-companion:v1</code>.
+          Nothing is sent to PointCast. A shared link only carries the three ids in the address.
+        </p>
+      </div>
+      <div class="smb-controls smb-receipt-actions">
+        <button type="button" data-smb-action="download">Download JSON</button>
+        <button type="button" data-smb-action="copy">Copy JSON</button>
+        <button type="button" data-smb-action="all">Read the whole desk</button>
+        <button type="button" data-smb-action="clear">Clear this browser</button>
+        <p class="smb-status" data-smb-status role="status" aria-live="polite"></p>
+        <pre class="smb-preview" data-smb-preview></pre>
+      </div>
+      <noscript>
+        <p>The receipt export needs JavaScript. The era, song, and persona notes are already on this page.</p>
+      </noscript>
+    </section>
+
+    <footer class="smb-foot">
+      <p>Years, albums, and credits follow public discographies. This desk does not transcribe lyrics or keep a chart.</p>
+      <ul>
+        {companion.sources.map((source) => (
+          <li><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title} ↗</a></li>
+        ))}
+        <li><a href="/b/0698">Block 0698</a></li>
+        <li><a href="/steve-miller-band.json">JSON twin</a></li>
+      </ul>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script define:vars={{ companion }}>
+  const root = document.querySelector('[data-smb]');
+  if (root) {
+    const eras = companion.eras;
+    const songs = companion.songs;
+    const personas = companion.personas;
+    const known = {
+      era: new Set(eras.map((item) => item.id)),
+      song: new Set(songs.map((item) => item.id)),
+      persona: new Set(personas.map((item) => item.id)),
+    };
+    const state = {
+      era: companion.defaults.era,
+      song: companion.defaults.song,
+      persona: companion.defaults.persona,
+      openedAt: new Date().toISOString(),
+    };
+
+    function valid(kind, id) {
+      return typeof id === 'string' && known[kind].has(id);
+    }
+
+    function readStore() {
+      try {
+        const raw = localStorage.getItem(companion.receipt.storageKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return parsed;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function applyRecord(record) {
+      if (!record) return false;
+      let changed = false;
+      if (valid('era', record.era)) { state.era = record.era; changed = true; }
+      if (valid('song', record.song)) { state.song = record.song; changed = true; }
+      if (valid('persona', record.persona)) { state.persona = record.persona; changed = true; }
+      if (typeof record.openedAt === 'string') state.openedAt = record.openedAt;
+      return changed;
+    }
+
+    function songById(id) {
+      return songs.find((item) => item.id === id);
+    }
+
+    function eraById(id) {
+      return eras.find((item) => item.id === id);
+    }
+
+    function personaById(id) {
+      return personas.find((item) => item.id === id);
+    }
+
+    function receipt() {
+      const era = eraById(state.era);
+      const song = songById(state.song);
+      const persona = personaById(state.persona);
+      return {
+        schema: companion.receipt.schema,
+        label: 'browser-local',
+        page: companion.url,
+        era: { id: era.id, title: era.title, years: era.years },
+        song: { id: song.id, title: song.title, year: song.year, album: song.album },
+        persona: { id: persona.id, title: persona.title },
+        openedAt: state.openedAt,
+        privateDataNotice: 'This receipt was written in the browser and was not sent to PointCast or any other server.',
+      };
+    }
+
+    function persist() {
+      try {
+        localStorage.setItem(companion.receipt.storageKey, JSON.stringify({
+          era: state.era,
+          song: state.song,
+          persona: state.persona,
+          openedAt: state.openedAt,
+        }));
+      } catch (err) {}
+    }
+
+    function writeUrl() {
+      const url = new URL(location.href);
+      url.searchParams.set('era', state.era);
+      url.searchParams.set('song', state.song);
+      url.searchParams.set('persona', state.persona);
+      history.replaceState(null, '', url);
+    }
+
+    function say(text) {
+      const status = root.querySelector('[data-smb-status]');
+      if (status) status.textContent = text;
+    }
+
+    function syncFrames() {
+      root.querySelectorAll('[data-smb-frame]').forEach((frame) => {
+        const panel = frame.closest('[data-song-panel]');
+        const open = panel && panel.hasAttribute('data-open');
+        const dataSrc = frame.getAttribute('data-src');
+        if (open && dataSrc) {
+          if (frame.getAttribute('src') !== dataSrc) frame.setAttribute('src', dataSrc);
+        } else {
+          frame.removeAttribute('src');
+        }
+      });
+    }
+
+    function paint() {
+      root.querySelectorAll('[data-era]').forEach((button) => {
+        button.setAttribute('aria-pressed', button.getAttribute('data-era') === state.era ? 'true' : 'false');
+      });
+      root.querySelectorAll('[data-era-panel]').forEach((panel) => {
+        panel.toggleAttribute('data-open', panel.getAttribute('data-era-panel') === state.era);
+      });
+      root.querySelectorAll('[data-song]').forEach((button) => {
+        const on = button.getAttribute('data-song') === state.song;
+        button.setAttribute('aria-pressed', on ? 'true' : 'false');
+        if (button.hasAttribute('data-era-of')) {
+          button.toggleAttribute('data-in-era', button.getAttribute('data-era-of') === state.era);
+        }
+      });
+      root.querySelectorAll('[data-song-panel]').forEach((panel) => {
+        panel.toggleAttribute('data-open', panel.getAttribute('data-song-panel') === state.song);
+      });
+      root.querySelectorAll('[data-persona]').forEach((button) => {
+        button.setAttribute('aria-pressed', button.getAttribute('data-persona') === state.persona ? 'true' : 'false');
+      });
+      root.querySelectorAll('[data-persona-panel]').forEach((panel) => {
+        panel.toggleAttribute('data-open', panel.getAttribute('data-persona-panel') === state.persona);
+      });
+      syncFrames();
+      const preview = root.querySelector('[data-smb-preview]');
+      if (preview) preview.textContent = JSON.stringify(receipt(), null, 2);
+    }
+
+    function chooseSong(id, fromClick) {
+      const song = songById(id);
+      if (!song) return;
+      state.song = song.id;
+      state.era = song.era;
+      state.openedAt = new Date().toISOString();
+      paint();
+      writeUrl();
+      persist();
+      if (fromClick) {
+        const panel = root.querySelector('[data-song-panel="' + song.id + '"]');
+        if (panel) panel.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    function chooseEra(id) {
+      const era = eraById(id);
+      if (!era) return;
+      state.era = era.id;
+      const current = songById(state.song);
+      if (!current || current.era !== era.id) {
+        const next = era.keyTracks.find((track) => songById(track)) || songs.find((item) => item.era === era.id);
+        if (next) state.song = typeof next === 'string' ? next : next.id;
+      }
+      state.openedAt = new Date().toISOString();
+      paint();
+      writeUrl();
+      persist();
+    }
+
+    function choosePersona(id) {
+      if (!personaById(id)) return;
+      state.persona = id;
+      state.openedAt = new Date().toISOString();
+      paint();
+      writeUrl();
+      persist();
+    }
+
+    const params = new URLSearchParams(location.search);
+    const fromUrl = applyRecord({
+      era: params.get('era'),
+      song: params.get('song'),
+      persona: params.get('persona'),
+    });
+    const fromStore = !fromUrl && applyRecord(readStore());
+    if (fromUrl || fromStore) {
+      const song = songById(state.song);
+      if (song) state.era = song.era;
+    }
+    paint();
+    if (fromUrl || fromStore) writeUrl();
+    else persist();
+    if (fromUrl) persist();
+
+    root.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-smb-action]');
+      if (action) {
+        const name = action.getAttribute('data-smb-action');
+        if (name === 'download') {
+          const body = JSON.stringify(receipt(), null, 2);
+          const blob = new Blob([body], { type: 'application/json' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'pointcast-smb-receipt.json';
+          document.body.appendChild(link);
+          link.click();
+          setTimeout(() => {
+            URL.revokeObjectURL(link.href);
+            link.remove();
+          }, 100);
+          say('Receipt downloaded. It never left this browser.');
+          return;
+        }
+        if (name === 'copy') {
+          const body = JSON.stringify(receipt(), null, 2);
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(body).then(() => say('Receipt copied. Browser-local.'));
+          }
+          return;
+        }
+        if (name === 'all') {
+          const on = root.classList.toggle('smb-all');
+          action.textContent = on ? 'Back to the desk' : 'Read the whole desk';
+          say(on ? 'Every note is open.' : 'Back to one era, one song, one mask.');
+          return;
+        }
+        if (name === 'clear') {
+          try { localStorage.removeItem(companion.receipt.storageKey); } catch (err) {}
+          state.era = companion.defaults.era;
+          state.song = companion.defaults.song;
+          state.persona = companion.defaults.persona;
+          state.openedAt = new Date().toISOString();
+          paint();
+          const url = new URL(location.href);
+          url.searchParams.delete('era');
+          url.searchParams.delete('song');
+          url.searchParams.delete('persona');
+          history.replaceState(null, '', url);
+          say('Cleared on this browser.');
+          return;
+        }
+      }
+      const song = event.target.closest('[data-song]');
+      if (song && root.contains(song)) {
+        chooseSong(song.getAttribute('data-song'), true);
+        return;
+      }
+      const era = event.target.closest('[data-era]');
+      if (era && root.contains(era)) {
+        chooseEra(era.getAttribute('data-era'));
+        return;
+      }
+      const persona = event.target.closest('[data-persona]');
+      if (persona && root.contains(persona)) choosePersona(persona.getAttribute('data-persona'));
+    });
+  }
+</script>
+
+<style>
+  :global(html[data-pc-layout='block'] body.pc-block-shell) {
+    --pc-bg: #1c1410;
+    --pc-ink: #f6efe6;
+    --pc-accent: #e7a15a;
+    margin: 0;
+    background: #1c1410;
+    color: #f6efe6;
+  }
+  .smb {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 22px clamp(16px, 3vw, 42px) 56px;
+    color: #f6efe6;
+    font-family: var(--pc-font-sans);
+  }
+  .smb a { color: inherit; text-underline-offset: 3px; }
+  .smb a:focus-visible, .smb button:focus-visible { outline: 3px solid #f0c48a; outline-offset: 3px; }
+  .smb-nav, .smb-kicker, .smb-era-years, .smb-song-meta, .smb-panel-kicker, .smb-foot, .smb-status, .smb-preview {
+    font-family: var(--pc-font-mono);
+  }
+  .smb-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: #d9c7b6;
+  }
+  .smb-nav span { display: flex; gap: 14px; flex-wrap: wrap; }
+  .smb-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 28px;
+    align-items: end;
+    padding: 36px 0 28px;
+  }
+  .smb-kicker {
+    margin: 0 0 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 10px;
+    color: #e7a15a;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(42px, 7vw, 78px);
+    line-height: 0.92;
+    letter-spacing: -0.045em;
+    font-weight: 500;
+  }
+  .smb-dek { max-width: 46rem; margin: 14px 0 0; color: #d9c7b6; font-size: 16px; line-height: 1.55; }
+  .smb-mark { display: grid; justify-items: center; gap: 8px; }
+  .smb-disc {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 50%, #1c1410 0 7px, transparent 8px),
+      repeating-radial-gradient(circle at 50% 50%, #2a1d17 0 2px, #993c1d 3px 4px, #e7a15a 5px 6px);
+    animation: smb-spin 14s linear infinite;
+  }
+  .smb-mark-caption { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #cbb9a6; }
+  .smb-block { margin-top: 28px; }
+  .smb-block-head h2, .smb-receipt h2 {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .smb-block-head p, .smb-receipt p { margin: 8px 0 0; color: #d9c7b6; font-size: 14px; line-height: 1.55; max-width: 46rem; }
+  .smb-controls { margin-top: 14px; }
+  .smb-eras, .smb-lores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .smb-lores { grid-template-columns: repeat(3, 1fr); }
+  .smb-era, .smb-lore, .smb-song, .smb-receipt-actions button, .smb-chip, .smb-textlink {
+    font: inherit;
+    color: inherit;
+    background: #2a1d17;
+    border: 1px solid #6a4b38;
+    text-align: left;
+    cursor: pointer;
+  }
+  .smb-era, .smb-lore { padding: 12px 12px 14px; }
+  .smb-era-kicker, .smb-era-years { display: block; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #cbb9a6; }
+  .smb-era-title { display: block; margin: 6px 0; font-size: 16px; line-height: 1.25; }
+  .smb-era[aria-pressed='true'], .smb-lore[aria-pressed='true'], .smb-song[aria-pressed='true'] {
+    background: #993c1d;
+    border-color: #e7a15a;
+  }
+  .smb-song[data-in-era] { box-shadow: inset 3px 0 0 #e7a15a; }
+  .smb-desk { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 14px; align-items: start; margin-top: 14px; }
+  .smb-songs { display: grid; gap: 6px; margin-top: 0; }
+  .smb-song { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 10px 12px; }
+  .smb-song-title { font-size: 14px; }
+  .smb-song-meta { color: #cbb9a6; font-size: 10px; letter-spacing: 0.04em; white-space: nowrap; }
+  .smb-panel {
+    margin-top: 12px;
+    padding: 18px 18px 16px;
+    background: #241911;
+    border: 1px solid #6a4b38;
+  }
+  .smb-desk .smb-panel { margin-top: 0; }
+  .smb-panel h3 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 42px); line-height: 1; font-weight: 500; letter-spacing: -0.03em; }
+  .smb-panel p { margin: 0 0 12px; font-size: 16px; line-height: 1.6; }
+  .smb-panel-kicker { color: #e7a15a; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .smb-writers { color: #d9c7b6; font-size: 14px; }
+  .smb-why span { font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #e7a15a; }
+  .smb-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .smb-chip, .smb-textlink { padding: 7px 10px; font-size: 13px; border-radius: 999px; }
+  .smb-frame { margin: 4px 0 10px; background: #120e0b; aspect-ratio: 16 / 9; }
+  .smb-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+  .smb-player-note { color: #cbb9a6; font-size: 13px; }
+  .smb-links { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .smb-links a, .smb-textlink { color: #f0c48a; }
+  .smb-textlink { border-radius: 999px; }
+  .smb-lore { font-size: 16px; }
+  .smb-receipt {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 18px;
+    margin-top: 34px;
+    padding-top: 22px;
+    border-top: 1px solid #6a4b38;
+  }
+  .smb-receipt code { font-family: var(--pc-font-mono); font-size: 12px; }
+  .smb-receipt-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .smb-receipt-actions button { padding: 8px 12px; font-size: 13px; }
+  .smb-status { flex-basis: 100%; margin: 0; min-height: 1.2em; color: #e7a15a; font-size: 12px; }
+  .smb-preview {
+    flex-basis: 100%;
+    margin: 0;
+    padding: 12px;
+    max-height: 220px;
+    overflow: auto;
+    background: #120e0b;
+    border: 1px solid #6a4b38;
+    color: #f6efe6;
+    font-size: 11px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+  .smb-foot { margin-top: 28px; color: #cbb9a6; font-size: 12px; line-height: 1.6; }
+  .smb-foot ul { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 0; margin: 10px 0 0; list-style: none; }
+  :global(html.smb-js) .smb-panel:not([data-open]) { display: none; }
+  :global(html.smb-js) .smb.smb-all .smb-panel { display: block; }
+  :global(html:not(.smb-js)) .smb-controls { display: none; }
+  :global(html:not(.smb-js)) .smb-desk { grid-template-columns: 1fr; }
+  @keyframes smb-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .smb-disc { animation: none; }
+  }
+  @media (max-width: 800px) {
+    .smb-head { display: block; }
+    .smb-mark { justify-items: start; margin-top: 18px; }
+    .smb-eras, .smb-lores, .smb-desk, .smb-receipt { grid-template-columns: 1fr; }
+    .smb-song { align-items: start; }
+  }
+</style>

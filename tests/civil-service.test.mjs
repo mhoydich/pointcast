@@ -120,7 +120,7 @@ test('surfaces are wired: page, footer disclaimer, deep links, agents.json, llms
     read('functions/api/mcp.ts'),
     read('src/lib/play-layer.ts'),
     read('src/pages/c/[channel].astro'),
-    read('src/content/blocks/0696.json'),
+    read('src/content/blocks/0699.json'),
   ]);
   assert.match(page, /ESCS_DISCLAIMER/);
   assert.match(page, /location\.hash/);

@@ -21,6 +21,15 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/tone-bloom/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/tone-bloom.json', 'monthly', '0.7'],
+  ['https://pointcast.xyz/tezos/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/tezos.json', 'monthly', '0.7'],
+  ['https://pointcast.xyz/standards/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/standards.json', 'monthly', '0.7'],
+  ['https://pointcast.xyz/standards/check/', 'monthly', '0.75'],
+  ['https://pointcast.xyz/standards/registry/', 'monthly', '0.75'],
+  ['https://pointcast.xyz/standards/registry.json', 'monthly', '0.65'],
   ['https://pointcast.xyz/baseball/', 'monthly', '0.9'],
   ['https://pointcast.xyz/baseball.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/puzzles/', 'monthly', '0.85'],
@@ -143,6 +152,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/atari-bbs/club.json', 'monthly', '0.8'],
   ['https://pointcast.xyz/ghost-town/', 'weekly', '0.9'],
   ['https://pointcast.xyz/ghost-town.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/steve-miller-band/', 'weekly', '0.9'],
+  ['https://pointcast.xyz/steve-miller-band.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/railroads/', 'weekly', '0.9'],
   ['https://pointcast.xyz/railroads.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/nouns-nation-battler-rivalry-night/001', 'monthly', '0.9'],
