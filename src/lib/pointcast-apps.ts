@@ -132,6 +132,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'steve-miller-band',
+    name: 'Steve Miller Band',
+    kicker: 'CH.SPN · ERA MAP · SONG DESK · LOCAL RECEIPT',
+    description: 'A listening desk for four eras, nine songs, and the Space Cowboy, Maurice, and Gangster of Love. Outbound listen links. The receipt stays in the browser.',
+    url: 'https://pointcast.xyz/steve-miller-band/',
+    path: '/steve-miller-band/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.SPN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'railroad-time',
     name: 'Railroad Time',
     kicker: '4 SOURCED ERAS · SPEAK OR TYPE · LOCAL ROUTING',
