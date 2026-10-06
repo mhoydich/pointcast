@@ -8,6 +8,15 @@ on:
       - 'src/lib/home-share-editions*'
       - 'src/components/HomeShareEditions.astro'
       - 'src/components/HomeVisitWindow.astro'
+      - 'src/components/HomeLatestProjects.astro'
+      - 'src/data/home-latest-projects.json'
+      - 'src/lib/home-published-projects*'
+      - 'src/lib/home-project-discovery-controller*'
+      - 'src/pages/latest/**'
+      - 'scripts/admit-home-published-projects.mjs'
+      - 'scripts/verify-home-published.mjs'
+      - 'tests/home-published-*'
+      - 'tests/home-project-discovery-*'
       - 'src/data/home-visit-views.json'
       - 'src/lib/home-visit-*'
       - 'public/images/home-visit/**'
@@ -48,12 +57,15 @@ jobs:
       - run: npm ci
       - name: Verify editions, visitor choices, and existing unfurls
         run: node --test tests/home-visit-deck.test.mjs tests/home-visit-controller.test.mjs tests/home-visit-content.test.mjs tests/home-share-editions.test.mjs tests/unfurl-engine.test.mjs tests/unfurl-freshness.test.mjs tests/kennel-club-og-today.test.mjs
+      - name: Verify published discovery and live admission
+        run: node --test tests/home-published-*.test.mjs tests/home-project-discovery-controller.test.mjs
       - name: Full build
         run: npm run build
       - name: Verify server-rendered edition metadata and built image bytes
         run: |
           node scripts/verify-home-share.mjs
           node scripts/verify-home-visit.mjs
+          node scripts/verify-home-published.mjs
       - name: Retain focused compiled homepage preview
         env:
           HOME_PREVIEW_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
@@ -72,6 +84,7 @@ jobs:
           if ((await fs.readdir(out).catch(error => error.code === 'ENOENT' ? [] : Promise.reject(error))).length) throw new Error('Preview output must be empty');
           await fs.mkdir(out, { recursive: true });
           const origin = 'https://pointcast.xyz';
+          const previewEntries = new Set(['index.html', 'latest/index.html', 'latest/catalog.json']);
           const extensions = /\.(?:css|m?js|woff2?|ttf|otf|png|jpe?g|gif|webp|avif|svg|ico)$/i;
           const queue = [], seen = new Set(), files = [], missing = new Set(), external = new Set(), excluded = new Set();
           let bytes = 0;
@@ -86,7 +99,7 @@ jobs:
               if (required) throw new Error('Required preview reference points to runtime output: ' + relative);
               excluded.add(relative); return;
             }
-            if (relative !== 'index.html' && !extensions.test(relative)) return;
+            if (!previewEntries.has(relative) && !extensions.test(relative)) return;
             if (relative.split('/').some(part => part.startsWith('.'))) throw new Error('Hidden preview reference: ' + relative);
             if (seen.has(relative)) return;
             const candidate = path.resolve(dist, relative);
@@ -103,6 +116,8 @@ jobs:
             seen.add(relative); bytes += stat.size; queue.push(relative);
           }
           await include('/index.html', 'index.html', true);
+          await include('/latest/index.html', 'index.html', true);
+          await include('/latest/catalog.json', 'index.html', true);
           const html = await fs.readFile(path.join(dist, 'index.html'), 'utf8');
           const dom = new JSDOM(html); // Parsing only: no script execution or resource fetching.
           for (const node of dom.window.document.querySelectorAll('link[href], script[src], img[src], source[src], video[poster]')) {
@@ -115,6 +130,14 @@ jobs:
           if (artwork.length !== 6 || new Set(artwork).size !== 6 || artwork.some(src => !src.startsWith('/images/home-visit/') || !src.endsWith('.webp'))) throw new Error('Expected all six visitor artworks');
           for (const src of artwork) await include(src, 'index.html', true);
           dom.window.close();
+          const latestDom = new JSDOM(await fs.readFile(path.join(dist, 'latest/index.html'), 'utf8'));
+          for (const node of latestDom.window.document.querySelectorAll('link[href], script[src], img[src], source[src], video[poster]')) {
+            const tag = node.tagName.toLowerCase();
+            if (tag === 'link' && !/\b(stylesheet|preload|modulepreload|icon)\b/.test(node.getAttribute('rel') || '')) continue;
+            await include(node.getAttribute(tag === 'link' ? 'href' : tag === 'video' ? 'poster' : 'src'), 'latest/index.html', tag === 'script' || tag === 'link');
+          }
+          for (const node of latestDom.window.document.querySelectorAll('[srcset]')) for (const item of node.getAttribute('srcset').split(',')) await include(item.trim().split(/\s+/)[0], 'latest/index.html');
+          latestDom.window.close();
           for (let index = 0; index < queue.length; index++) {
             const relative = queue[index];
             const buffer = await fs.readFile(path.join(dist, relative));
@@ -131,7 +154,7 @@ jobs:
           files.sort((a, b) => a.path.localeCompare(b.path));
           const actualBytes = files.reduce((sum, file) => sum + file.bytes, 0);
           if (actualBytes > 150 * 1024 * 1024) throw new Error('Preview changed beyond byte budget');
-          const manifest = { head, tree, scope: 'Compiled root homepage and referenced static assets only. Backend/API/OG routes and navigation pages are not included; third-party resources were not fetched.', artwork, files, bytes: actualBytes, omittedLocal: [...missing].sort(), externalReferences: [...external].sort(), excludedRuntime: [...excluded].sort() };
+          const manifest = { head, tree, scope: 'Compiled root homepage, Latest page/catalog and referenced static assets only. Backend/API/OG routes and navigation pages are not included; third-party resources were not fetched.', artwork, files, bytes: actualBytes, omittedLocal: [...missing].sort(), externalReferences: [...external].sort(), excludedRuntime: [...excluded].sort() };
           await fs.writeFile(path.join(out, 'home-preview-manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
           console.log(JSON.stringify({ head, tree, files: files.length, bytes: actualBytes, artworks: artwork.length, omittedLocal: missing.size, externalReferences: external.size, excludedRuntime: excluded.size }));
           NODE
