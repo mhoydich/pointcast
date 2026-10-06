@@ -21,6 +21,17 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  // Approved public studies include static documents outside Astro route discovery.
+  ['https://pointcast.xyz/coastal-signal/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/coastal-signal-wallet/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/moon/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/sun/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/pacific/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/air/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/moon.json', 'monthly', '0.6'],
+  ['https://pointcast.xyz/sun.json', 'monthly', '0.6'],
+  ['https://pointcast.xyz/pacific.json', 'monthly', '0.6'],
+  ['https://pointcast.xyz/air.json', 'monthly', '0.6'],
   ['https://pointcast.xyz/tone-bloom/', 'monthly', '0.8'],
   ['https://pointcast.xyz/tone-bloom.json', 'monthly', '0.7'],
   ['https://pointcast.xyz/tezos/', 'monthly', '0.8'],

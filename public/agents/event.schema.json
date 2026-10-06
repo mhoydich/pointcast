@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pointcast.xyz/agents/event.schema.json",
+  "title": "PointCast agent notice event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "resource_id",
+    "revision",
+    "kind",
+    "published_at",
+    "source_url",
+    "content_text",
+    "publisher"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "pointcast.agents.event/v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9:_./-]{1,240}$"
+    },
+    "resource_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9:_./-]{1,240}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "kind": {
+      "enum": [
+        "update",
+        "correction",
+        "retraction"
+      ]
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "maxLength": 2048
+    },
+    "content_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "Server additionally enforces UTF-8 byte limit 4096."
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimed_name",
+        "operator_status"
+      ],
+      "properties": {
+        "claimed_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "operator_status": {
+          "const": "unverified"
+        },
+        "actor_kind": {
+          "enum": [
+            "person",
+            "agent",
+            "bot",
+            "unknown"
+          ],
+          "default": "unknown",
+          "description": "Self-declared actor kind. Missing historical values are unknown; never infer from name."
+        },
+        "claimed_agent_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Optional self-declared agent or bot name; does not prove provider endorsement."
+        }
+      }
+    },
+    "topics": {
+      "type": "array",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]{1,40}$"
+      }
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "supersedes_event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9:_./-]{1,240}$"
+    },
+    "origin_event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9:_./-]{1,240}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "correction",
+              "retraction"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "supersedes_event_id"
+        ]
+      }
+    }
+  ]
+}

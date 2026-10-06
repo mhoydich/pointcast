@@ -20,3 +20,17 @@ test('approved wallet-free Coastal Signal and exact static aliases omit session 
   for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(`/coastal-signal${suffix}`),true);
   for (const pathname of ['/coastal-signal.json','/coastal-signalish','/coastal-signal/notes','/coastal-signal//','/coastal-signal/index.html/extra']) assert.equal(isQuietUesStudyPath(pathname),false,pathname);
 });
+
+test('approved standalone studies and exact static aliases omit account restoration',()=>{
+  for (const study of ['/coastal-signal-wallet','/moon','/sun','/pacific','/air']) {
+    for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(study+suffix),true,study+suffix);
+    for (const suffix of ['.json','ish','/notes','//','/index.html/extra']) assert.equal(isQuietUesStudyPath(study+suffix),false,study+suffix);
+  }
+});
+
+test('new isolated animation reading and static aliases omit account restoration',()=>{
+  for (const study of ["/reading/animation", "/reading/animation/avatar-the-last-airbender", "/reading/animation/hanna-barbera", "/reading/animation/saturday-morning-1980s"]) {
+    for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(study+suffix),true);
+    for (const suffix of ['.json','ish','/notes','//','/index.html/extra']) assert.equal(isQuietUesStudyPath(study+suffix),false);
+  }
+});
