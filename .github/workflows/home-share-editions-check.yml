@@ -1,6 +1,8 @@
 name: Check home share editions
 
 on:
+  push:
+    branches: [codex/home-discovery-selected-20261006]
   pull_request:
     branches: [main]
     paths:
@@ -37,7 +39,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: home-share-editions-${{ github.event.pull_request.number }}
+  group: home-share-editions-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -68,7 +70,7 @@ jobs:
           node scripts/verify-home-published.mjs
       - name: Retain focused compiled homepage preview
         env:
-          HOME_PREVIEW_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          HOME_PREVIEW_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           node --input-type=module <<'NODE'
           import * as fs from 'node:fs/promises';
@@ -161,7 +163,7 @@ jobs:
       - name: Upload compiled homepage for browser QA
         uses: actions/upload-artifact@v4
         with:
-          name: pointcast-home-visit-${{ github.event.pull_request.head.sha }}
+          name: pointcast-home-visit-${{ github.event.pull_request.head.sha || github.sha }}
           path: home-preview/
           if-no-files-found: error
           retention-days: 3
