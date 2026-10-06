@@ -27,7 +27,9 @@
 // (parseJsonExact / stringifyJsonExact: u64 never goes through a double).
 // Town Network `keys` adds rotate_sequencer (tag 13), launch record 2 in
 // paramsHash, and wallet text v2 (walletText(tx, domain, 2): the amounts and
-// targets a person must see, rebuilt from the tx).
+// targets a person must see, rebuilt from the tx). Town Network `stations`
+// (batch 6) adds time capsules and stations (tags 14-17), launch record 13
+// in paramsHash, and capsuleCommitment / capsuleId (what a seal commits to).
 //
 // Trust model: the SDK never signs or shows a payload it did not rebuild
 // itself from the tx and the pinned chain domain (chain id + genesis hash).
@@ -515,6 +517,8 @@ export const KIND_TAGS = Object.freeze({
   presence_tap: 11, set_presence_issuers: 12,
   // Sequencer rotation (Town Network `keys`; a chain needs launch record 2).
   rotate_sequencer: 13,
+  // Time capsules and stations (Town Network `stations`, batch 6; a chain needs launch record 13).
+  seal_capsule: 14, open_capsule: 15, claim_station: 16, set_station: 17,
   // Device passes and controllers (Town Network `accounts`, batch 4; a chain needs launch record 6).
   set_session_key: 18, clear_session_key: 19, set_controllers: 20,
   // Editions (Town Network batch 3; a chain needs launch record 8).
@@ -713,6 +717,20 @@ function encodeEditionTerms(e, t) {
     .optStr(t.l1_ref ?? null);
 }
 
+/** station.rs StationMode: open = 0, crew = 1. */
+export const STATION_MODES = Object.freeze({ open: 0, crew: 1 });
+
+function stationModeByte(m) {
+  if (typeof m !== "string" || !Object.hasOwn(STATION_MODES, m)) throw new Error(`station mode must be "open" or "crew", got ${JSON.stringify(m)}`);
+  return STATION_MODES[m];
+}
+
+/** `u8 0 | u8 1 ‖ 32 bytes` (an optional hash). */
+function optHash32(e, h) {
+  if (h === undefined || h === null) e.u8(0);
+  else e.u8(1).fixed(hash32(h));
+}
+
 function encodeKind(e, tx) {
   switch (tx.type) {
     case "publish_block":
@@ -797,6 +815,34 @@ function encodeKind(e, tx) {
       // types.rs: u8 13 ‖ bytes(new_key) ‖ u64 activate_at.
       e.u8(13).bytes(rotationKeyBytes(tx.new_key)).u64(tx.activate_at);
       break;
+    case "seal_capsule":
+      // types.rs: u8 14 ‖ str channel ‖ commitment 32 ‖ u64 open_at ‖ str label.
+      e.u8(14).str(tx.channel).fixed(hash32(tx.commitment)).u64(tx.open_at).str(tx.label);
+      break;
+    case "open_capsule":
+      // types.rs: u8 15 ‖ capsule 32 ‖ bytes salt ‖ str title ‖ body_hash 32 ‖ opt_str media_uri.
+      e.u8(15)
+        .fixed(hash32(tx.capsule))
+        .bytes(hexField("salt", tx.salt))
+        .str(tx.title)
+        .fixed(hash32(tx.body_hash))
+        .optStr(tx.media_uri ?? null);
+      break;
+    case "claim_station":
+      // types.rs: u8 16 ‖ str code ‖ str name ‖ u8 mode ‖ (u8 0 | u8 1 ‖ pid 32).
+      e.u8(16).str(tx.code).str(tx.name).u8(stationModeByte(tx.mode));
+      optHash32(e, tx.pid);
+      break;
+    case "set_station": {
+      // types.rs: u8 17 ‖ str code ‖ u32 n ‖ str crew × n ‖ (u8 0 | u8 1 ‖ pinned 32) ‖ opt_str owner_to,
+      // the crew in the tx's order (the chain wants it sorted; buildTx sorts for you).
+      const crew = tx.crew || [];
+      e.u8(17).str(tx.code).u32(crew.length);
+      for (const a of crew) e.str(a);
+      optHash32(e, tx.pinned);
+      e.optStr(tx.owner_to ?? null);
+      break;
+    }
     case "set_session_key":
       // types.rs: u8 18 ‖ bytes(key) ‖ str(label) ‖ terms (a mandate's terms
       // shape: spend fields 0 and no payees on any valid pass).
@@ -820,7 +866,7 @@ function encodeKind(e, tx) {
     default: {
       const k = Object.values(KIND_REGISTRY).find((x) => x.name === tx.type);
       throw new Error(
-        k ? `tx kind ${tx.type} is reserved (not live on this chain yet); this SDK encodes live kinds 1-13 and 18-23`
+        k ? `tx kind ${tx.type} is reserved (not live on this chain yet); this SDK encodes live kinds 1-23`
           : `tx kind ${tx.type} is not supported by this SDK (use the node's /tx/digest + the wasm verifier)`,
       );
     }
@@ -936,9 +982,28 @@ export function walletFieldsV2(tx) {
       if (!list.length) return " controllers none (only the address key controls this account; all device passes end)";
       return ` controllers ${list.map((k) => publicKeyToB58(k)).join(",")} (each can take over this account; all device passes end)`;
     }
+    case "seal_capsule":
+      return ` channel ${textChannel("channel", tx.channel)} open_at ${toU64(tx.open_at)}`;
+    case "open_capsule":
+      return ` capsule ${bytesToHex(hash32(tx.capsule))}`;
+    case "claim_station":
+      stationModeByte(tx.mode);
+      return ` station ${textChannel("code", tx.code)} mode ${tx.mode}`;
+    case "set_station": {
+      const crew = tx.crew || [];
+      const shown = crew.length ? crew.map((a) => textAddress("crew", a)).join(",") : "none";
+      const to = tx.owner_to === undefined || tx.owner_to === null ? "none" : textAddress("owner_to", tx.owner_to);
+      return ` station ${textChannel("code", tx.code)} crew ${shown} offer_to ${to}`;
+    }
     default:
       return "";
   }
+}
+
+/** A channel or station code of a v2 text: `[A-Z0-9]{1,16}` (wallet.rs channel_text). */
+function textChannel(name, c) {
+  if (typeof c !== "string" || !/^[A-Z0-9]{1,16}$/.test(c)) throw new Error(`wallet text v2: the ${name} is not [A-Z0-9]{1,16}`);
+  return c;
 }
 
 /** A 32-byte ed25519 device key as `edpk…` (wallet.rs edpk). */
@@ -1244,7 +1309,7 @@ export const LAUNCH_MARKER = 0xf0;
  * paramsHash refuses them rather than hash params the chain would read
  * differently.
  */
-export const LAUNCH_RECORDS = Object.freeze({ presence: 1, keys: 2, accounts: 6, webauthn: 7, editions: 8 });
+export const LAUNCH_RECORDS = Object.freeze({ presence: 1, keys: 2, accounts: 6, webauthn: 7, editions: 8, stations: 13 });
 
 function encodePresenceRecord(pp) {
   if (typeof pp.tap_policy !== "string" || !Object.hasOwn(TAP_POLICY, pp.tap_policy)) throw new Error("unknown presence.tap_policy");
@@ -1294,12 +1359,24 @@ function encodeWebauthnRecord(wp) {
   return e.u32(cap).finish();
 }
 
+/**
+ * Record 13 (station.rs StationsParams): u32 n ‖ str code × n ‖ u32 max_unopened ‖
+ * u64 max_delay_blocks ‖ u32 max_stations ‖ u32 max_capsules ‖ u32 max_account_stations.
+ */
+function encodeStationsRecord(sp) {
+  const codes = sp.house_codes || [];
+  const e = new Enc().u32(codes.length);
+  for (const c of codes) e.str(c);
+  return e.u32(sp.max_unopened).u64(sp.max_delay_blocks).u32(sp.max_stations).u32(sp.max_capsules).u32(sp.max_account_stations).finish();
+}
+
 const LAUNCH_ENCODERS = {
   presence: encodePresenceRecord,
   keys: encodeKeysRecord,
   accounts: encodeAccountsRecord,
   webauthn: encodeWebauthnRecord,
   editions: encodeEditionsRecord,
+  stations: encodeStationsRecord,
 };
 
 /** `[tag, record bytes]` for every present launch record, ascending; throws on unknown records. */
@@ -1551,6 +1628,93 @@ export async function signEditionApproveRequest(domain, req, wallet, { mode = "t
 // ---------------------------------------------------------------- blocks (merkle.rs, types.rs)
 
 /** merkle::root over already-hashed 32-byte leaves (hex); odd nodes are promoted. Hex. */
+// ---------------------------------------------------------------- time capsules (stations, batch 6)
+
+export const CAPSULE_COMMIT_TAG = "pointcast-chain/capsule/v1";
+export const CAPSULE_CONTENT_TAG = "pointcast-chain/capsule-content/v1";
+export const CAPSULE_ID_TAG = "pointcast-chain/capsule-id/v1";
+/** A capsule salt is 16..=64 bytes (capsule.rs MIN_SALT_LEN, MAX_SALT_LEN). */
+export const CAPSULE_SALT_LEN = Object.freeze({ min: 16, max: 64 });
+
+/**
+ * What a capsule's post is (capsule.rs content_hash):
+ * blake2b("pointcast-chain/capsule-content/v1" ‖ str title ‖ body_hash ‖ opt_str media_uri). Hex.
+ */
+export function capsuleContentHash({ title, body_hash, media_uri = null }) {
+  const e = new Enc().str(title).fixed(hash32(body_hash)).optStr(media_uri ?? null);
+  return bytesToHex(blake2b256(utf8(CAPSULE_CONTENT_TAG), e.finish()));
+}
+
+/** The post rules open_capsule (and publish_block) apply (state.rs check_post, MAX_TITLE_LEN, MAX_URI_LEN). */
+export const POST_LIMITS = Object.freeze({ title: 200, media_uri: 512 });
+
+function postText(field, v, max) {
+  if (typeof v !== "string" || v.length === 0) throw new RangeError(`${field}: empty (a capsule with it could never open)`);
+  if (utf8(v).length > max) throw new RangeError(`${field}: too long, over ${max} bytes (a capsule with it could never open)`);
+  if (/\p{Cc}/u.test(v)) throw new RangeError(`${field}: control characters (a capsule with it could never open)`);
+}
+
+/**
+ * Refuse a capsule that could never open (state.rs check_channel / check_post,
+ * the rules seal_capsule and open_capsule apply): a channel that is not
+ * [A-Z0-9]{1,16}; a title that is empty, over 200 bytes or has control
+ * characters; a media URI that is empty, over 512 bytes, has control
+ * characters or no scheme. `post` may be absent when a content hash is given.
+ */
+export function checkCapsulePost(channel, post) {
+  if (typeof channel !== "string" || !/^[A-Z0-9]{1,16}$/.test(channel)) throw new RangeError("channel: must be [A-Z0-9]{1,16} (no seal can use any other)");
+  if (!post) return;
+  postText("title", post.title, POST_LIMITS.title);
+  const uri = post.media_uri ?? null;
+  if (uri !== null) {
+    postText("media_uri", uri, POST_LIMITS.media_uri);
+    if (!uri.includes(":")) throw new RangeError("media_uri: must be a URI with a scheme (a capsule with it could never open)");
+  }
+}
+
+/**
+ * A fresh capsule salt: 32 random bytes from `crypto.getRandomValues`, hex.
+ * Store it: without it the capsule never opens, and anyone who has it before
+ * `open_at` can check a guess at what the capsule holds.
+ */
+export function newCapsuleSalt() {
+  const c = globalThis.crypto;
+  if (!c || typeof c.getRandomValues !== "function") throw new ChainError("newCapsuleSalt: no crypto.getRandomValues here; refusing to make a guessable salt");
+  return bytesToHex(c.getRandomValues(new Uint8Array(32)));
+}
+
+/**
+ * The commitment a seal_capsule carries (capsule.rs commitment):
+ * blake2b("pointcast-chain/capsule/v1" ‖ str chain_id ‖ genesis ‖ str author ‖
+ * str channel ‖ content_hash ‖ bytes salt). `post` is `{title, body_hash,
+ * media_uri}` (or give `content_hash`). The salt defaults to
+ * {@link newCapsuleSalt} (32 random bytes); a given one is 16..=64 bytes of
+ * hex, never all one byte (a constant salt lets anyone test guesses at a
+ * guessable post before it opens). A channel or post the chain would refuse
+ * is refused here ({@link checkCapsulePost}): such a capsule could never
+ * open.
+ *
+ * Returns `{commitment, salt, capsule}` (hex; `capsule` is the id
+ * open_capsule names). **Store the salt: without it the capsule never
+ * opens.** Keep it secret until `open_at`.
+ */
+export function capsuleCommitment(domain, { author, channel, salt, content_hash, ...post }) {
+  checkCapsulePost(channel, content_hash === undefined || content_hash === null ? post : null);
+  const saltHex = salt === undefined || salt === null ? newCapsuleSalt() : salt;
+  const s = hexField("salt", saltHex);
+  if (s.length < CAPSULE_SALT_LEN.min || s.length > CAPSULE_SALT_LEN.max) throw new RangeError("salt: must be 16..=64 bytes");
+  if (s.every((b) => b === s[0])) throw new RangeError("salt: every byte is the same, so anyone can test guesses at the post before it opens; use newCapsuleSalt()");
+  const content = content_hash ?? capsuleContentHash(post);
+  const e = new Enc().str(domain.chain_id).fixed(hash32(domain.genesis)).str(author).str(channel).fixed(hash32(content)).bytes(s);
+  const commitment = bytesToHex(blake2b256(utf8(CAPSULE_COMMIT_TAG), e.finish()));
+  return { commitment, salt: bytesToHex(s), capsule: capsuleId(author, commitment) };
+}
+
+/** A capsule's id, what open_capsule names (capsule.rs capsule_id): blake2b("pointcast-chain/capsule-id/v1" ‖ str author ‖ commitment). Hex. */
+export function capsuleId(author, commitment) {
+  return bytesToHex(blake2b256(utf8(CAPSULE_ID_TAG), new Enc().str(author).fixed(hash32(commitment)).finish()));
+}
+
 export function merkleRoot(leavesHex) {
   if (leavesHex.length === 0) return bytesToHex(blake2b256(utf8("pointcast-chain/merkle/empty")));
   let level = leavesHex.map(hash32);
@@ -2488,9 +2652,36 @@ export class PointcastChain {
     return this._req("/tx/simulate", signedTx);
   }
 
-  /** POST /tx; checks the node reports the locally computed tx hash. */
+  /**
+   * When may an open_capsule for capsule `id` be sent? The node's
+   * `GET /capsule/{id}` (launch record 13). Resolves the capsule view when
+   * the next block may open it; throws a ChainError, sending nothing, when
+   * it opens later, has lapsed, or isn't stored at this node (not sealed
+   * yet, opened, or pruned). An open is the reveal: sent early, to the
+   * mempool, relays and replicas, its salt is burned (stations fix S6).
+   */
+  async capsuleReady(id) {
+    const short = String(id).slice(0, 8);
+    let c;
+    try {
+      c = await this._req(`/capsule/${encodeURIComponent(String(id))}`);
+    } catch {
+      throw new ChainError(`capsule ${short}… is not on chain at this node (not sealed yet, already opened, or pruned): the open is not sent, its salt stays with you`);
+    }
+    const next = BigInt(String(c.height)) + 1n;
+    if (next < BigInt(String(c.open_at))) throw new ChainError(`capsule ${short}… opens at block ${c.open_at} (the next block is ${next}): the open is not sent, so its salt stays secret until then`, c);
+    if (next >= BigInt(String(c.lapses_at))) throw new ChainError(`capsule ${short}… lapsed at block ${c.lapses_at}: it can no longer open`, c);
+    return c;
+  }
+
+  /**
+   * POST /tx; checks the node reports the locally computed tx hash. An
+   * open_capsule is sent only once its capsule may open in the next block
+   * ({@link PointcastChain#capsuleReady}): never early.
+   */
   async submit(signedTx) {
     const local = txHash(signedTx);
+    if (signedTx && signedTx.tx && signedTx.tx.type === "open_capsule") await this.capsuleReady(signedTx.tx.capsule);
     const r = await this._req("/tx", signedTx);
     if (r.tx_hash !== local) throw new ChainError(`node reported tx ${r.tx_hash}, expected ${local}`);
     return { txHash: local, status: r.status };
@@ -2696,9 +2887,9 @@ const field = (name, type, hint, extra = {}) => Object.freeze({ name, type, hint
 
 /**
  * The form fields of every live kind, in canonical order. Types: str, slug,
- * channel, address, addresses, hash32, key, opt_key, keys, pubkeys, hex,
- * bool, u8, u32, u64, opt_str, list, kinds, json. `buildTx` coerces string input from
- * these.
+ * channel, address, addresses, hash32, opt_hash32, key, opt_key, keys,
+ * pubkeys, hex, bool, u8, u32, u64, opt_str, opt_address, mode, list, kinds,
+ * json. `buildTx` coerces string input from these.
  */
 export const KIND_FIELDS = Object.freeze({
   publish_block: [
@@ -2786,6 +2977,31 @@ export const KIND_FIELDS = Object.freeze({
   set_controllers: [
     field("controllers", "pubkeys", "backup keys, edpk/sppk, comma separated (sorted for you); must include the key that signs; empty = the address key alone"),
   ],
+  seal_capsule: [
+    field("channel", "channel", "[A-Z0-9]{1,16}; a crew station takes seals from its owner and crew only"),
+    field("commitment", "hash32", "capsuleCommitment(domain, {author, channel, title, body_hash, media_uri}).commitment; store its salt: without it the capsule never opens"),
+    field("open_at", "u64", "first block height anyone may open it; above this height, at most max_delay_blocks later (launch record 13)"),
+    field("label", "str", "the wax seal's text, 1..64 chars (shown by explorers, never in a prompt)"),
+  ],
+  open_capsule: [
+    field("capsule", "hash32", "capsuleId(author, commitment)"),
+    field("salt", "hex", "the salt it was sealed with, 16..64 bytes"),
+    field("title", "str", "the sealed post's title, 1..200 chars"),
+    field("body_hash", "hash32", "bodyHash(text) of the sealed post"),
+    field("media_uri", "opt_str", "optional; exactly as sealed", { optional: true }),
+  ],
+  claim_station: [
+    field("code", "channel", "the channel code, [A-Z0-9]{1,16}; house codes are the genesis treasury's"),
+    field("name", "str", "what you call the station, 1..32 chars"),
+    field("mode", "mode", "open (anyone posts) or crew (only you and your crew post and seal)"),
+    field("pid", "opt_hash32", "a ticketed chain: your bound presence pid; empty elsewhere and for house codes", { optional: true }),
+  ],
+  set_station: [
+    field("code", "channel", "a station you own"),
+    field("crew", "list", "crew addresses, comma separated (sorted for you; never yourself); empty = nobody else", { optional: true }),
+    field("pinned", "opt_hash32", "the post on air (its tx hash); empty = no pin", { optional: true }),
+    field("owner_to", "opt_address", "offer the station to this person (they take it with claim_station); empty = no offer", { optional: true }),
+  ],
 });
 
 const NESTED_FIELDS = {
@@ -2808,7 +3024,7 @@ function keyHex(name, k) {
 function coerceField(f, raw, sender) {
   const empty = raw === undefined || raw === null || (typeof raw === "string" && raw.trim() === "");
   if (empty && f.optional) {
-    if (f.type === "opt_str" || f.type === "opt_key") return null;
+    if (f.type === "opt_str" || f.type === "opt_key" || f.type === "opt_hash32" || f.type === "opt_address") return null;
     if (f.type === "list") return [];
     if (f.type === "json") return parseJsonExact(f.default);
     if (f.type === "hex") return f.default ?? "";
@@ -2821,6 +3037,15 @@ function coerceField(f, raw, sender) {
       return String(raw);
     case "opt_str":
       return empty ? null : String(raw);
+    case "opt_address":
+      return empty ? null : String(raw).trim();
+    case "opt_hash32":
+      return empty ? null : bytesToHex(hash32(String(raw).trim().toLowerCase()));
+    case "mode": {
+      const m = String(raw).trim().toLowerCase();
+      if (!Object.hasOwn(STATION_MODES, m)) throw new TypeError(`${f.name}: expected open or crew`);
+      return m;
+    }
     case "address":
       return String(raw).trim();
     case "addresses": {
@@ -3012,6 +3237,10 @@ const PLAIN_KIND_LABEL = {
   set_session_key: "approve a device to act for your pass",
   clear_session_key: "turn off a device",
   set_controllers: "change your backup keys",
+  seal_capsule: "seal time capsules",
+  open_capsule: "open time capsules",
+  claim_station: "claim stations",
+  set_station: "change a station's crew, pin or owner",
 };
 
 /**
@@ -3157,7 +3386,7 @@ export function describeTx(tx, { words = "plain", now_height, block_ms = 3000, d
         // Owner-only and non-delegable kinds (8, 9, 11, 12) are summed up below.
         if (!has && !DELEGABLE_TAGS.has(tag)) continue;
         let label = plain ? PLAIN_KIND_LABEL[name] : name;
-        if (has && name === "publish_block") label += (t.channels || []).length ? ` to channel ${list(t.channels)}` : " to any channel";
+        if (has && (name === "publish_block" || name === "seal_capsule")) label += (t.channels || []).length ? ` ${name === "publish_block" ? "to" : "on"} channel ${list(t.channels)}` : ` ${name === "publish_block" ? "to" : "on"} any channel`;
         if (has && name === "tap") label = (plain ? "tap" : name) + rooms;
         if (has && name === "drum_session") label += rooms;
         if (has && name === "spend_allowance") {
@@ -3345,6 +3574,60 @@ export function describeTx(tx, { words = "plain", now_height, block_ms = 3000, d
             lasts: "Until you set new backup keys.",
             undo: `Set ${backup}s again anytime. Every device ${plain ? "approval" : "pass"} ends now, and dropping a ${backup} also pauses every ${V.helper}'s ${V.allowance} until you renew it.`,
           };
+      break;
+    }
+    case "seal_capsule": {
+      // The chain's max delay (launch record 13), when the params are given:
+      // the block it lapses at, as the Rust words say (stations fix S14).
+      const delay = params && params.launch && params.launch.stations ? params.launch.stations.max_delay_blocks : null;
+      const lapse = delay === null || delay === undefined ? "the chain's max delay after that" : until(toU64(tx.open_at ?? 0) + toU64(delay));
+      d = {
+        title: `Seal a time capsule on channel ${visible(tx.channel)} that anyone may open from ${until(tx.open_at ?? 0)}.`,
+        allowed: [
+          "Fixes exactly one post now: when it opens, the chain checks it is what you sealed.",
+          `Keeps what it holds hidden until then; label ${q(tx.label ?? "")} is public.`,
+        ],
+        not_allowed: ["Changing what it holds later.", `Spending ${V.attn}.`, "Opening it before its block."],
+        lasts: `Permanent: sealing can't be undone. If nobody opens it, it lapses at ${lapse} and can never open.`,
+        undo: "Can't be undone.",
+      };
+      break;
+    }
+    case "open_capsule":
+      d = {
+        title: `Open time capsule ${visible(String(tx.capsule ?? "").slice(0, 8))}… and air ${q(tx.title ?? "")}.`,
+        allowed: ["Airs the sealed post, if it is exactly what was sealed (the chain checks)."],
+        not_allowed: ["Airing anything else: a different post or salt is refused.", "Opening it twice.", `Spending ${V.attn}.`],
+        lasts: "Permanent.",
+        undo: "Can't be undone.",
+      };
+      break;
+    case "claim_station": {
+      const crew = tx.mode === "crew";
+      d = {
+        title: `Claim station ${visible(tx.code)} (${q(tx.name ?? "")}) in ${crew ? "crew" : "open"} mode.`,
+        allowed: [
+          crew ? `Only you and the crew you name may post or seal capsules on channel ${visible(tx.code)}.` : `Anyone may still post on channel ${visible(tx.code)}; it carries your name and pin.`,
+          "If it is already yours, this renames it or changes its mode; if it was offered to you, you take it.",
+        ],
+        not_allowed: [`Spending ${V.attn}.`, "Taking a station someone else holds (the house codes included) unless they offered it to you.", "Holding more stations than the chain allows."],
+        lasts: "Yours until you offer it to someone and they claim it.",
+        undo: "A claim itself can't be undone; you can only offer the station on.",
+      };
+      break;
+    }
+    case "set_station": {
+      const crew = tx.crew || [];
+      d = {
+        title: `Set station ${visible(tx.code)}: crew ${crew.length ? crew.map(who).join(", ") : "nobody else"}${tx.owner_to ? `; offer it to ${who(tx.owner_to)}` : ""}.`,
+        allowed: [
+          crew.length ? "The crew may post and seal capsules there (in crew mode)." : "Only you post and seal there (in crew mode).",
+          tx.pinned ? `Pins ${visible(String(tx.pinned).slice(0, 8))}… on air.` : "Clears the pin.",
+        ].concat(tx.owner_to ? ["The station moves only if they claim it; until then it is yours."] : []),
+        not_allowed: [`Spending ${V.attn}.`, "Changing a station you don't own."],
+        lasts: "Until you change it again.",
+        undo: "Send a new crew, pin or offer anytime.",
+      };
       break;
     }
     default:
