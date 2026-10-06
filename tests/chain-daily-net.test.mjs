@@ -583,6 +583,61 @@ test('the Block Yard this site serves has the Witness lens the page links to, pi
   }
 });
 
+// ---------------------------------------------------------------- the launch: block 0695 and the links to it
+
+test('block 0695 files the Daily Net: FD, plain-text body, honest caveats, companions to the page, the panel and the Witness lens', () => {
+  const block = JSON.parse(read('src/content/blocks/0695.json'));
+  assert.equal(block.id, '0695');
+  assert.equal(block.channel, 'FD');
+  assert.equal(block.type, 'LINK');
+  assert.equal(block.author, 'cc');
+  assert.match(page, /^const BLOCK = '0695';$/m);
+  assert.doesNotMatch(block.body, /https?:\/\/|www\./, 'block body is plain text; links live in companions');
+  const ids = block.companions.map((c) => c.id);
+  assert.ok(ids.includes('https://pointcast.xyz/chain/net/'));
+  assert.ok(ids.includes('https://pointcast.xyz/chain/bots/#net'));
+  assert.ok(ids.some((id) => id.startsWith('/chain/yard/?api=') && id.includes(DEVNET_URL) && id.endsWith('&lens=witness')), 'the Witness lens on the devnet');
+  for (const c of block.companions) assert.ok(c.id.length <= 80 && c.label.length <= 80, c.id);
+  // What each tier does, the first witness, and the caveats.
+  for (const phrase of ['Grok', 'ChatGPT', 'Grok via Cursor, Manus, Codex, Claude Code', 'pc-witness.mjs', 'claude-code signed checkpoint 590, included in block 600',
+    'not proof that it did', 'correct means agreed with this server', 'this catches bugs, not a hostile operator', 'counts are keys, not people',
+    'a flag is a signal, not moderation', 'no value, and it may reset', '00:00 UTC'])
+    assert.ok(block.body.includes(phrase), phrase);
+  for (const text of [block.body, block.dek, block.title]) {
+    assert.doesNotMatch(text, /\bverified\b|\bproves?\b|main\s*net|\bworth\b|\binvest|\bprofit|\byield\b/i);
+  }
+  assert.equal(block.meta.genesis, GENESIS);
+  assert.match(block.meta.first_witness, /^claude-code \(tz1YeGv7bZtb5AUEPqTi8kQ4W6UDtSQ8BUaa\): checkpoint 590 in block 600/);
+  assert.ok(existsSync(new URL(`public${block.media.src}`, root)));
+  assert.ok(existsSync(new URL('public/images/og/b/0695.png', root)));
+});
+
+test('block 0695 art is abstract: rings only, no text, images, links or script', () => {
+  const block = JSON.parse(read('src/content/blocks/0695.json'));
+  const svg = read(`public${block.media.src}`);
+  assert.doesNotMatch(svg, /<text|<image|<script|foreignObject|href|\son\w+=/i);
+  assert.match(svg, /prefers-reduced-motion:reduce/);
+  // One ring set per checkpoint, №10 to №600.
+  assert.equal((svg.match(/<g class="rs rs\d+">/g) || []).length, 60);
+});
+
+test('the front door, the homepage chain strip, the /chain hub and the agent indexes point at /chain/net', () => {
+  const news = JSON.parse(read('src/data/front-door-news.json'));
+  assert.equal(news[0].link, '/chain/net');
+  assert.equal(news[0].date, '2026-10-05');
+  assert.doesNotMatch(news[0].line, /\bverified\b|\bproves?\b|\bworth\b/i);
+  const strip = read('src/components/HomeChainStrip.astro');
+  assert.match(strip, /\{ href: '\/chain\/bots', label: 'How bots post' \},\n  \{ href: '\/chain\/net', label: 'The Daily Net' \},/);
+  const hub = read('src/pages/chain.astro');
+  assert.match(hub, /<a href="\/chain\/net">The Daily Net →<\/a>/);
+  assert.match(hub, /k: 'DAILY NET · PUBLIC DEVNET · NO VALUE'/);
+  assert.match(hub, /\{ label: 'Today’s net', href: '\/chain\/net' \}/);
+  const llms = read('public/llms.txt');
+  assert.match(llms, /\[The Daily Net\]\(https:\/\/pointcast\.xyz\/chain\/net\/\)/);
+  assert.equal(llms.split('\n').filter((l) => l.includes('/chain/net')).length, 1, 'one line in llms.txt');
+  assert.match(read('src/pages/for-agents.astro'), /<li><a href="\/chain\/net\/">The Daily Net<\/a>/);
+});
+
 const built = new URL('dist/chain/net/index.html', root);
 test('built page: the live section starts static with no numbers, the snippets are the prompts, links stay on the site or the devnet', { skip: !existsSync(built) && 'no dist/ build' }, () => {
   const doc = new JSDOM(readFileSync(built, 'utf8')).window.document;
