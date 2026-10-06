@@ -84,8 +84,43 @@ test('the panel is self-contained: DEVNET from chain-home, its own colours, one 
   assert.match(panel, /var\(--pc-font-mono\)/);
   assert.match(panel, /var\(--pc-ink/);
   assert.match(panel, /--dn600:\$\{fd\.color600\}/, 'brings the FD ramp, so it needs no .chn root');
-  // bots.astro is another branch's: the panel is mounted there at integration, not here.
-  assert.doesNotMatch(read('src/pages/chain/bots.astro'), /DailyNetPanel/);
+  // Mounted once on /chain/bots, in its own #net section, which the section nav links.
+  const bots = read('src/pages/chain/bots.astro');
+  assert.match(bots, /^import DailyNetPanel from '\.\.\/\.\.\/components\/chain\/DailyNetPanel\.astro';$/m);
+  assert.equal((bots.match(/<DailyNetPanel \/>/g) || []).length, 1);
+  const net = bots.slice(bots.indexOf('<section id="net"'), bots.indexOf('</section>', bots.indexOf('<section id="net"')));
+  assert.ok(net.includes('<DailyNetPanel />'), 'the panel sits in the #net section');
+  assert.match(bots, /<a href="#keyless">keyless<\/a><a href="#net">daily net<\/a><a href="#signed">signed<\/a>/);
+  assert.ok(bots.indexOf('<section id="net"') > bots.indexOf('<section id="keyless"') && bots.indexOf('<section id="net"') < bots.indexOf('<section id="signed"'));
+});
+
+test('who does what: the panel\'s roles name the same duty tools as the /chain/net prompts', () => {
+  // The read tools a prompt uses to do a duty (chain_status, chain_feed, chain_read_block) are not duties.
+  const READS = new Set(['chain_status', 'chain_feed', 'chain_read_block']);
+  const duty = (s) => [...new Set([...s.matchAll(/\bchain_(?!root\b)[a-z_]+/g)].map((m) => m[0]))].filter((t) => !READS.has(t)).sort();
+  const role = (who) => {
+    const m = panel.match(new RegExp(`who: '${who}',[\\s\\S]*?\\n  \\}`));
+    assert.ok(m, `the panel has a ${who} role`);
+    return m[0];
+  };
+  const grok = role('Grok');
+  const chatgpt = role('ChatGPT');
+  const code = role('Code agents');
+  assert.deepEqual(duty(grok), duty(rawConst('grokPrompt')));
+  assert.deepEqual(duty(chatgpt), duty(rawConst('chatgptPrompt')));
+  assert.deepEqual(duty(grok), ['chain_checkin', 'chain_duties', 'chain_observe', 'chain_review', 'chain_signal']);
+  assert.deepEqual(duty(chatgpt), ['chain_checkin', 'chain_crosscheck', 'chain_digest', 'chain_duties']);
+  assert.match(grok, /how: 'chat · MCP'/);
+  assert.match(chatgpt, /how: 'MCP connector'/);
+  assert.match(chatgpt, /pcv\.py offline/);
+  assert.match(rawConst('chatgptPrompt'), /python3 -B pcv\.py --params params\.json --blocks blocks\.json --genesis \$\{G\}/);
+  assert.match(code, /how: 'Grok via Cursor · Manus · Codex · Claude Code'/);
+  assert.match(code, /command: 'node pc-witness\.mjs --name <you> --checkin'/);
+  assert.match(rawConst('witnessQuickstart'), /node pc-witness\.mjs --name <you> --checkin$/);
+  // Both say when the day resets, in UTC and in Pacific time.
+  assert.match(panel, /resets at 00:00 UTC: 5 PM PDT, 4 PM PST from November 1\./);
+  assert.match(page, /^const RESET_PT = '5 PM PDT, 4 PM PST from November 1';$/m);
+  for (const name of ['grokPrompt', 'chatgptPrompt', 'codePrompt']) assert.match(rawConst(name), /resets at 00:00 UTC[ ,(]+\$\{RESET_PT\}/, name);
 });
 
 test('copy: devnet, no value, may reset; a witness is a claim; nothing says verified or promises value', () => {
@@ -123,7 +158,7 @@ test('prompts name only tools the devnet serves, each bot its own role, and the 
   assert.match(grok, /good, unclear or flag/);
   assert.match(grok, /3-6 word reason, 48 characters at most/);
   assert.match(grok, /labeled fact, reported or speculation/);
-  assert.match(grok, /Duties don't spend your 10 posts\. The day is UTC and resets at 00:00 UTC\./);
+  assert.match(grok, /Duties don't spend your 10 posts\. The day is UTC and resets at 00:00 UTC \(\$\{RESET_PT\}\)\./);
   assert.match(chatgpt, /and the 5 blocks before it/);
   assert.match(chatgpt, /of_tx, height, claimed_root, chain_root \(the root you read\), links_checked/);
   assert.match(chatgpt, /result: match or mismatch/);
@@ -557,8 +592,10 @@ test('built page: the live section starts static with no numbers, the snippets a
   assert.equal(live.dataset.api, DEVNET_URL);
   assert.equal(live.querySelectorAll('.dn-row, .dn-count').length, 0, 'no numbers before the browser reads');
   const snippets = [...doc.querySelectorAll('.snip pre code')].map((c) => c.textContent);
+  const RESET_PT = page.match(/^const RESET_PT = '([^']+)';$/m)[1];
   for (const name of ['grokPrompt', 'chatgptPrompt', 'codePrompt', 'witnessQuickstart']) {
-    const want = rawConst(name).replace(/\$\{SITE\}/g, 'https://pointcast.xyz').replace(/\$\{MCP\}/g, `${DEVNET_URL}/mcp`).replace(/\$\{D\}/g, DEVNET_URL);
+    const want = rawConst(name).replace(/\$\{SITE\}/g, 'https://pointcast.xyz').replace(/\$\{MCP\}/g, `${DEVNET_URL}/mcp`).replace(/\$\{D\}/g, DEVNET_URL)
+      .replace(/\$\{G\}/g, GENESIS).replace(/\$\{RESET_PT\}/g, RESET_PT);
     assert.ok(snippets.includes(want), `${name} snippet`);
   }
   assert.ok(doc.querySelector('#witness'));
