@@ -76,13 +76,63 @@ item('upstream', upstream.ok ? upstream.stdout : 'none');
 console.log(status.stdout || status.stderr || '- clean');
 
 console.log('\n## Publishing Config');
-item('site', astroConfig.match(/site:\s*['"]([^'"]+)['"]/)?.[1]);
+// The site line may be a ternary (GitHub Pages preview vs production); the last URL is production.
+const siteLine = astroConfig.match(/^\s*site:.*$/m)?.[0] ?? '';
+item('site', [...siteLine.matchAll(/['"](https?:\/\/[^'"]+)['"]/g)].map((m) => m[1]).at(-1));
 item('Cloudflare Pages project', wrangler.match(/^name\s*=\s*"([^"]+)"/m)?.[1]);
 item('Pages output dir', wrangler.match(/^pages_build_output_dir\s*=\s*"([^"]+)"/m)?.[1]);
 item('build script', packageJson?.scripts?.build);
 item('bare build script', packageJson?.scripts?.['build:bare']);
 item('agent audit script', packageJson?.scripts?.['audit:agents']);
 item('publish script', packageJson?.scripts?.['publish:live']);
+
+// Merged is not live. Main can sit many merges ahead of pointcast.xyz while every
+// PR reads "merged" and every Pages workflow run reads green with its deploy step
+// skipped. Compare the blocks on main with the blocks the live site serves.
+const liveSite = (process.env.PC_LIVE_SITE || 'https://pointcast.xyz').replace(/\/$/, '');
+const mainRef = run('git', ['rev-parse', '--verify', '--quiet', 'origin/main'], { cwd: root }).ok ? 'origin/main' : 'HEAD';
+const mainBlockIds = run('git', ['ls-tree', '--name-only', `${mainRef}:src/content/blocks`], { cwd: root })
+  .stdout.split('\n')
+  .map((name) => name.match(/^(\d{4})\.json$/)?.[1])
+  .filter(Boolean);
+
+async function fetchLiveBlocks() {
+  try {
+    const res = await fetch(`${liveSite}/blocks.json?audit=${Date.now()}`, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'cache-control': 'no-cache' },
+    });
+    if (!res.ok) return { error: `HTTP ${res.status}` };
+    const json = await res.json();
+    return { ids: new Set((json.blocks ?? []).map((b) => b.id)), builtAt: json.updatedAt };
+  } catch (error) {
+    return { error: error.cause?.code || error.message };
+  }
+}
+
+function isDraftOnMain(id) {
+  const file = run('git', ['show', `${mainRef}:src/content/blocks/${id}.json`], { cwd: root });
+  try {
+    return JSON.parse(file.stdout).draft === true;
+  } catch {
+    return false;
+  }
+}
+
+const newest = (ids) => [...ids].sort().at(-1);
+const live = await fetchLiveBlocks();
+const notLive = live.ids ? mainBlockIds.filter((id) => !live.ids.has(id) && !isDraftOnMain(id)) : [];
+
+console.log('\n## Live vs main');
+item('live site', liveSite);
+item(`blocks on ${mainRef}`, `${mainBlockIds.length}, newest ${newest(mainBlockIds)}`);
+if (live.ids) {
+  item('blocks live', `${live.ids.size}, newest ${newest(live.ids)}`);
+  item('live blocks.json built at', live.builtAt);
+  item('on main but not live', notLive.join(', '));
+} else {
+  item('live blocks.json', `unreachable (${live.error})`);
+}
 
 console.log('\n## Verdict');
 check(origin.ok && origin.stdout.includes('mhoydich/pointcast'), 'origin points at mhoydich/pointcast');
@@ -91,6 +141,17 @@ check(includesOriginMain, 'current HEAD includes origin/main');
 check(Boolean(packageJson?.scripts?.['build:bare']), 'build:bare is available');
 check(Boolean(packageJson?.scripts?.['audit:agents']), 'audit:agents is available');
 check(wrangler.includes('name = "pointcast"'), 'Cloudflare Pages project is pointcast');
+if (live.ids) {
+  check(notLive.length === 0, `every published block on ${mainRef} is live`);
+} else {
+  check(false, `live site reachable (${live.error}); live vs main not verified`);
+}
+
+if (notLive.length > 0) {
+  console.log(`\n${notLive.length} merged block(s) are not live yet. Merged is not live.`);
+  console.log('Ship main with scripts/deploy.sh on the deploy machine (see docs/OPERATIONS.md).');
+  console.log('The GitHub Pages workflow skips its deploy step until the CLOUDFLARE_API_TOKEN secret exists.');
+}
 
 if (dirty) {
   console.log('\nDo not publish from this worktree until the local diff is reviewed and intentionally committed.');
