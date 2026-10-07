@@ -244,6 +244,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/paddle-fund', 'weekly', '0.85'],
   ['https://pointcast.xyz/pickleball/home', 'weekly', '0.9'],
   ['https://pointcast.xyz/pickleball/home.json', 'weekly', '0.8'],
+  ['https://pointcast.xyz/pickleball/the-squeeze/', 'weekly', '0.9'],
+  ['https://pointcast.xyz/pickleball/the-squeeze.json', 'weekly', '0.85'],
   ['https://pointcast.xyz/pickleball/articles/cleaner-backhands', 'monthly', '0.85'],
   ['https://pointcast.xyz/pickleball/articles/cleaner-backhands.json', 'monthly', '0.75'],
   ['https://pointcast.xyz/pickleball/articles/smarter-mixed-doubles', 'monthly', '0.85'],
