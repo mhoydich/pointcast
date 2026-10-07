@@ -490,6 +490,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/shop/clerk', 'weekly', '0.90'],
   ['https://pointcast.xyz/shop/wants', 'daily', '0.88'],
   ['https://pointcast.xyz/shop/haggle', 'daily', '0.86'],
+  ['https://pointcast.xyz/shop/haggle/odds', 'weekly', '0.6'],
   ['https://pointcast.xyz/reviews/fans', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/fans.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/fans/history', 'monthly', '0.85'],
