@@ -12,6 +12,17 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'the-squeeze',
+    name: 'The Squeeze',
+    kicker: 'EL SEGUNDO · PTL · MIXED 4.0',
+    description: 'Fall 2026 league desk for The Squeeze: rank, DUPR, season stats, two results, the upcoming Wednesdays, and the Mixed 4.0 table. Transcribed from PTL screenshots. Not an official PTL page.',
+    url: 'https://pointcast.xyz/pickleball/the-squeeze/',
+    path: '/pickleball/the-squeeze/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.CRT',
+    kind: 'pointcast',
+  },
+  {
     slug: 'baseball',
     name: 'A game you can sit inside',
     kicker: 'A LOOK AT BASEBALL · READ & PLAY',

@@ -81,10 +81,10 @@ test('discovery, the Spinning block, and the front door agree', async () => {
     assert.match(file, /No lyric transcription/);
   }
   const strip = JSON.parse(today);
-  assert.equal(strip[0].link, '/steve-miller-band/');
-  assert.equal(strip[0].block, '0698');
-  assert.ok(strip[0].title.length <= 28);
-  assert.ok(strip[0].kicker.length <= 21);
+  const smb = strip.find((item) => item.link === '/steve-miller-band/');
+  assert.equal(smb.block, '0698');
+  assert.ok(smb.title.length <= 28);
+  assert.ok(smb.kicker.length <= 21);
   assert.match(apps, /slug: 'steve-miller-band'/);
   assert.match(surfaces, /steveMillerBand: 'https:\/\/pointcast\.xyz\/steve-miller-band\/'/);
   assert.match(surfaces, /steveMillerBand: 'https:\/\/pointcast\.xyz\/steve-miller-band\.json'/);
