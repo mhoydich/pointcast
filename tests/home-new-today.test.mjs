@@ -8,12 +8,14 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 const at = (iso) => new Date(iso);
 
-test('"New today" sits right under the Shortwave hero, ahead of the drop deck', async () => {
+test('"New today" leads the first screen, under the masthead and ahead of the drop deck', async () => {
   const home = await read('src/pages/index.astro');
-  const hero = home.indexOf('<HomeShortwaveHero demote />');
-  const strip = home.indexOf('<HomeNewToday items={newTodayItems} />');
-  assert.ok(hero > 0 && strip > hero, 'strip follows the hero');
+  const masthead = home.indexOf('</header>', home.indexOf('class="masthead"'));
+  const strip = home.indexOf('<HomeNewToday items={newTodayItems} limit={8} />');
+  assert.ok(masthead > 0 && strip > masthead, 'strip follows the masthead');
+  assert.ok(strip < home.indexOf('<HomeVisitWindow />'), 'strip comes before the curated window');
   assert.ok(strip < home.indexOf('<HomeV2SignalDeck'), 'strip comes before the drop deck');
+  assert.equal(home.split('<HomeNewToday').length - 1, 1, 'one strip on the page');
   assert.match(home, /import newToday from '\.\.\/data\/new-today\.json'/);
   assert.match(home, /frontDoorNewsAll\.filter\(\(item\) => !newTodayLinks\.has\(item\.link\)\)/, 'the register below never repeats a strip item');
   const [heroSource, stripSource] = await Promise.all([read('src/components/HomeShortwaveHero.astro'), read('src/components/HomeNewToday.astro')]);
@@ -44,6 +46,12 @@ test('the strip list is data: dated, linked, and tied to real blocks', async () 
   }
   const component = await read('src/components/HomeNewToday.astro');
   assert.doesNotMatch(component, /06[0-9]{2}/, 'block ids and copy belong to the data file, never the component');
+});
+
+test('the first-screen strip caps its cells and points the rest of the week at the drop deck', async () => {
+  const component = await read('src/components/HomeNewToday.astro');
+  assert.match(component, /const fresh = allFresh\.slice\(0, limit\);/);
+  assert.match(component, /\{more > 0 && <a class="nt__more" href="#new">/);
 });
 
 test('launches age out after seven town days, and `until` retires copy sooner', () => {
