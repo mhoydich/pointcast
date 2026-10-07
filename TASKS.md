@@ -13,6 +13,20 @@ Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh`
 
 ---
 
+## The Desk — paper mode (2026-10-05)
+
+Mike's agents trade Mike's own capped bankroll; paper only. Venue audit: `VENUES.md`. Runbook: `workers/the-desk/README.md`.
+
+- [x] (CC) Phase 0 venue audit: Kalshi, Alpaca go; Polymarket US read-only until confirms; Jupiter no-go (US barred) — `done`
+- [x] (CC) Risk Gate, paper adapters (Kalshi, Alpaca), sealing, 3 strategies, kill switch, `/the-desk`, 29 tests — `done`
+- [ ] (MH) Set the real limits in `src/data/the-desk.json` (bankroll per venue, daily loss, approval threshold, excluded markets) — `waiting-on-mh`
+- [ ] (MH) Apply migration 0029, set the five Worker secrets, deploy `workers/the-desk`, then `scripts/deploy.sh` — `waiting-on-mh`
+- [ ] (MH) Live smoke check of the Kalshi/Alpaca parsers after the first cron run; kill-switch drill in paper — `waiting-on-mh`
+- [ ] (MH) Decide the crypto seat (Coinbase Advanced or none for v1) — `waiting-on-mh`
+- [ ] (M) Polymarket US confirms from Mike's logged-in app: trade-only keys, API terms, sandbox — `queued`
+- [ ] (X) Review the Risk Gate before anything goes live — `queued`
+- [ ] (CC) Day 14: export the paper logs and write the review — `queued`
+
 ## Grok shelf — deploy #1362, then the method canon (2026-10-05)
 
 #1362 squash `10744236` is on `main` (open-build survey, field note, UES philosophy). Later merges, including #1364, are also on `main`. Merge is not live. Deploy is `scripts/deploy.sh` only.
