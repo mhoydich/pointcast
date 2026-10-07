@@ -22,7 +22,7 @@ test('approved wallet-free Coastal Signal and exact static aliases omit session 
 });
 
 test('approved standalone studies and exact static aliases omit account restoration',()=>{
-  for (const study of ['/coastal-signal-wallet','/moon','/sun','/pacific','/air']) {
+  for (const study of ['/coastal-signal-wallet','/moon','/sun','/pacific','/waves','/air']) {
     for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(study+suffix),true,study+suffix);
     for (const suffix of ['.json','ish','/notes','//','/index.html/extra']) assert.equal(isQuietUesStudyPath(study+suffix),false,study+suffix);
   }
