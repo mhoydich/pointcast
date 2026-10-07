@@ -10,6 +10,10 @@
  * Shortwave, the dated launch list, and the shop follow, then the retained
  * games, music, magazine, rooms, archive, and machine surfaces.
  *
+ * October 6 refresh: the lead shelf carries this week's publishing, every
+ * pinned number was recounted, the ship log runs through October, and the
+ * September 24 sitting panel left the page (the room stays at /still-hour).
+ *
  * Every curated door lives in the arrays below so the ~44 tests that read this
  * file can grep hrefs. Every number is computed from repo data at build or
  * pinned once in PINNED with its source and date, and the live ones refresh
@@ -26,7 +30,6 @@ import HomeWelcome from '../components/HomeWelcome.astro';
 import HomeMorningListening from '../components/HomeMorningListening.astro';
 import HomeSoundGarden from '../components/HomeSoundGarden.astro';
 import HomeContourField from '../components/HomeContourField.astro';
-import StillHourSitting from '../components/StillHourSitting.astro';
 import HomeCurrentProjects from '../components/HomeCurrentProjects.astro';
 import AuthMenu from '../components/AuthMenu.astro';
 import HomeFrontDoorDesk from '../components/HomeFrontDoorDesk.astro';
@@ -72,24 +75,24 @@ import '../styles/home-shelf.css';
 
 // ---------- pinned constants: the only hand-typed numbers, each with a source + date ----------
 const PINNED = {
-  countedAt: '2026-09-01',
-  mergedPrs: 820,            // gh pr list --state merged --limit 1000 (2026-09-01)
-  openPrs: 60,               // gh pr list --state open (2026-09-01)
-  prsByMonth: [              // gh pr list --state merged --json mergedAt, bucketed (2026-09-01)
-    { label: 'Apr', count: 241 }, { label: 'May', count: 361 }, { label: 'Jun', count: 5 }, { label: 'Jul', count: 165 }, { label: 'Aug', count: 48 }, { label: 'Sep', count: 0 },
+  countedAt: '2026-10-06',
+  mergedPrs: 1196,           // GET /repos/mhoydich/pointcast/pulls?state=closed, merged_at set (2026-10-06)
+  openPrs: 12,               // GET /repos/mhoydich/pointcast/pulls?state=open (2026-10-06)
+  prsByMonth: [              // the same closed-PR list, merged_at bucketed by UTC month (2026-10-06; Oct is month to date)
+    { label: 'Apr', count: 241 }, { label: 'May', count: 361 }, { label: 'Jun', count: 5 }, { label: 'Jul', count: 165 }, { label: 'Aug', count: 48 }, { label: 'Sep', count: 284 }, { label: 'Oct', count: 92 },
   ],
-  commitsSinceFlatten: 79,   // git rev-list --count HEAD; history flattened 2026-07-30
-  mcpTools: 50,              // functions/api/mcp.ts TOOL_DEFINITIONS + tug + bench; live tools/list on /api/mcp-v2 (2026-09-01)
-  mcpResources: 22,          // functions/api/mcp.ts RESOURCES (2026-09-01)
-  visitsTotal: 108864,       // GET /api/visit .count (2026-09-01) — refreshed live below
-  visitsLast100: [           // GET /api/visit .log[] tallied (2026-09-01, 82-minute window) — refreshed live below
-    { type: 'bot:other', count: 90 }, { type: 'bot:seo', count: 6 }, { type: 'bot:google', count: 1 },
-    { type: 'bot:apple', count: 1 }, { type: 'bot:baidu', count: 1 }, { type: 'ai:anthropic', count: 1 }, { type: 'human', count: 0 },
+  commitsSinceFlatten: 757,  // git rev-list --count --since=2026-07-30 origin/main (2026-10-06); history flattened 2026-07-30
+  mcpTools: 101,             // live tools/list on /api/mcp-v2 (2026-10-06)
+  mcpResources: 22,          // live resources/list on /api/mcp-v2 (2026-10-06)
+  visitsTotal: 135328,       // GET /api/visit .count (2026-10-06) — refreshed live below
+  visitsLast100: [           // GET /api/visit .log[] tallied (2026-10-06, 236-minute window) — refreshed live below
+    { type: 'ai:perplexity', count: 48 }, { type: 'bot:google', count: 27 }, { type: 'bot:baidu', count: 10 },
+    { type: 'bot:apple', count: 7 }, { type: 'ai:anthropic', count: 6 }, { type: 'ai:openai', count: 2 }, { type: 'human', count: 0 },
   ],
-  drumTaps: 26103,           // GET /api/drum .globalTotal (2026-09-01) — refreshed live below
-  x402Receipts: 0,           // GET /api/x402/receipt?list=1 total_count (2026-09-01)
-  tugPulls: { human: 1, machine: 1 }, // GET /api/tug (2026-09-01)
-  benchSitsToday: 0,         // GET /api/bench (2026-09-01)
+  drumTaps: 37502,           // GET /api/drum .globalTotal (2026-10-06) — refreshed live below
+  x402Receipts: 0,           // GET /api/x402/receipt?list=1 total_count (2026-10-06)
+  tugPulls: { human: 58, machine: 5 }, // GET /api/tug (2026-10-06)
+  benchSitsToday: 0,         // GET /api/bench (2026-10-06)
 };
 
 // ---------- blocks: computed, never typed ----------
@@ -143,7 +146,7 @@ for (const block of allBlocks) {
   authorCounts.set(author, (authorCounts.get(author) ?? 0) + 1);
 }
 const monthLabel = (key: string) => key === 'imports' ? '2025' : new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(new Date(`${key}-15T12:00:00Z`));
-const blocksByMonth = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']
+const blocksByMonth = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']
   .map((key) => ({ label: monthLabel(key), count: monthCounts.get(key) ?? 0 }));
 const blocksImported = monthCounts.get('imports') ?? 0; // pre-repo blocks carried in from 2025
 const authors = [...authorCounts.entries()].sort((a, b) => b[1] - a[1]).map(([name, blocks]) => ({ name, blocks }));
@@ -308,7 +311,7 @@ const drumGames = [ // playable in ten seconds, no account
   { title: 'DRUM VS', href: '/drum-vs', dek: 'Send a link, tap together, first to fifty wins. Your Noun pulls one end of the rope, your friend the other.', image: '/images/og-drum-vs.png', kicker: '1v1 · first to 50' },
 ];
 const drumRooms = [
-  { title: 'The Drum Room', href: '/drum', dek: 'The hallway of the whole drum house. Every drum page files itself into a wing at build time.', kicker: 'hub · 88 doors · 7 wings' },
+  { title: 'The Drum Room', href: '/drum', dek: 'The hallway of the whole drum house. Every drum page files itself into a wing at build time.', kicker: `hub · ${drumDoors} doors · 7 wings` },
   { title: 'Bell Choir', href: '/bell-choir', dek: 'Twelve pentatonic bells under Midjourney bouquets. Everyone here hears every bell.', kicker: '12 bells · multiplayer · № 0496' },
   { title: 'Bell Post', href: '/bell-post', dek: 'Play a short run of bells and hang it on the wall. The rack braids the newest five into a round.', kicker: 'time-shifted · № 0505' },
   { title: 'Prayer Bells · The Angelus', href: '/prayer-bells', dek: 'A chime garden under Midjourney skies. Twelve brass chimes, three voices, wind mode, echo memory.', kicker: '12 chimes · № 0477' },
@@ -324,11 +327,11 @@ const drumRooms = [
 const rooms = [
   { title: 'Lucky Cat', href: '/lucky-cat/v2/', dek: 'Catch glowing sparks, find a little focus, and choose your next original 3D companion. Sixty cats, with masterworks earned through small wins.', tag: 'PLAY + COLLECT', noun: 60, color: '#34634B', use: '60 cats · progress on your device' },
   { title: 'Los Angeles / Other Worlds', href: '/other-worlds', dek: 'Nine metaphysical Los Angeles posters by Michael Hoydich. Same city. Other worlds.', tag: 'EXHIBITION', noun: 9, color: '#735A90', use: '9 still works · 27 editions each' },
-  { title: 'Today’s Sitting', href: '/kennel-club', dek: 'Thirty original dog portraits for September: today’s plate is live, with one free claim for signed-in people.', tag: 'KENNEL', noun: 30, color: '#8A2432', use: '30 daily plates · free daily claim', live: 'kennel' as const },
+  { title: 'Today’s Sitting', href: '/kennel-club', dek: 'Thirty original dog portraits from the September Sitting, the whole wall still hanging.', tag: 'KENNEL', noun: 30, color: '#8A2432', use: '30 plates · September 2026', live: 'kennel' as const },
   { title: 'One HELLO a day', href: '/faucet/hello', dek: 'A 2019 token dripped once a day to signed-in people. No wallet, nothing to sign; paste an address whenever you want it on Ethereum.', tag: 'FAUCET', noun: 1, color: '#185FA5', use: '1 HELLO · daily · midnight PT' },
   { title: 'Pour a cup', href: '/coffee', dek: 'A pixel moka pot with a pour button and a count of cups poured today. The pot has been quiet all week.', tag: 'CAFE', noun: 12, color: '#834F0A', use: '0 cups · 7 days' },
   { title: 'Look outside', href: '/window', dek: 'A small El Segundo window that follows the real time of day and the weather outside. Sun, moon, fog, stars.', tag: 'WINDOW', noun: 105, color: '#185FA5' },
-  { title: 'Pull the rope', href: '/tug', dek: 'One rope across the town. People pull by tapping, machines pull by MCP, and the two numbers never reset.', tag: 'TUG', noun: 500, color: '#0B3E73', use: '1 human · 1 machine' },
+  { title: 'Pull the rope', href: '/tug', dek: 'One rope across the town. People pull by tapping, machines pull by MCP, and the two numbers never reset.', tag: 'TUG', noun: 500, color: '#0B3E73', use: `${PINNED.tugPulls.human} human · ${PINNED.tugPulls.machine} machine` },
   { title: 'Sit on the bench', href: '/bench', dek: 'One question a day, asked of everyone who walks past. Answer once, never scored.', tag: 'BENCH', noun: 501, color: '#3B6D11', use: '0 sits today' },
   { title: 'The morning hours', href: '/prayer-altars', dek: 'Five morning stations, thirty paintings on slow rotation. Tap PRAY, leave a prayer; four sister rooms nearby.', tag: 'PRAYER', noun: 471, color: '#6B2139', use: '69 prayers · 12 stations' },
   { title: 'The evening hours', href: '/prayer-altars-evening', dek: 'Vespers, lucernarium, compline, vigil: the evening half of the prayer wing.', tag: 'PRAYER', noun: 473, color: '#6B2139' },
@@ -411,7 +414,7 @@ const agentSurfaces = [
   { label: "Today's almanac", href: todayAlmanac, note: 'the day’s card · tide, sky, basket, pick, weather' },
   { label: 'Lucky Cat practice', href: '/lucky-cat/agents/v2/', note: 'signed task ledger · self-reported evidence · 60 points per UTC day' },
   { label: 'agents.json', href: '/agents.json', note: '21 endpoint groups · regenerated each deploy' },
-  { label: 'MCP connector', href: '/connectors', note: 'https://pointcast.xyz/api/mcp-v2 · 50 tools · 22 resources · no auth' },
+  { label: 'MCP connector', href: '/connectors', note: `https://pointcast.xyz/api/mcp-v2 · ${PINNED.mcpTools} tools · ${PINNED.mcpResources} resources · no auth` },
   { label: 'agent-kit.md', href: '/agent-kit.md', note: '4 KB · four client setups' },
   { label: 'llms.txt', href: '/llms.txt', note: '112 KB · every link checked' },
   { label: 'Welcome, agent', href: '/welcome', note: 'mint a Visit Noun pass' },
@@ -431,7 +434,7 @@ const agentSurfaces = [
   { label: 'Sparrow', href: '/sparrow', note: 'a hosted reader' },
   { label: 'Native shell', href: '/app', note: 'installable home screen' },
   { label: 'Atlas · Ask', href: '/atlas', note: 'UMAP of every block · local RAG at /ask' },
-  { label: 'Visit channel', href: '/c/visit', note: '31 visit-log blocks · all by residents' },
+  { label: 'Visit channel', href: '/c/visit', note: `${allBlocks.filter((b) => b.data.channel === 'VST').length} visit-log blocks · all by residents` },
   { label: 'Agent value', href: '/agent-value', note: 'what an agent can finish here, and what it is worth' },
   { label: 'The Wild', href: '/wild', note: 'spirit animals · canonical Worker · x402 starter bridge' },
 ];
@@ -473,6 +476,9 @@ const milestones = [
   { date: '2026-08-17', title: 'The register, the scoreboard, and x402', href: '/b/0574', blockId: '0574' },
   { date: '2026-08-31', title: 'Rosebud, the September Pass, the Hearst File, Microduck', href: '/b/0577', blockId: '0577' },
   { date: '2026-09-01', title: 'The front door rebuilt to carry the whole town', href: '/b/0580', blockId: '0580' },
+  { date: '2026-09-29', title: 'The PointCast Shop opens: dated prices, no paid links', href: '/b/0634', blockId: '0634' },
+  { date: '2026-10-03', title: 'PointCast has a chain: a home, a Block Yard, a devnet bots can post to', href: '/b/0660', blockId: '0660' },
+  { date: '2026-10-05', title: 'Standards No. 1–4, the Daily Net, and a second verifier in Python', href: '/b/0666', blockId: '0666' },
 ];
 const shipTotals = [
   { label: 'merged pull requests', value: PINNED.mergedPrs.toLocaleString('en-US'), href: 'https://github.com/mhoydich/pointcast/pulls?q=is%3Apr+is%3Amerged' },
@@ -501,12 +507,12 @@ const builtOn = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angele
 // A small mixed selection leads the homepage; the dated launch list and full
 // magazine below keep the rest of the town within reach.
 const homepageHighlights = [
-  { title: 'The Table Clock', href: '/catan/clock/', kicker: 'Game night · Catan', date: '2026-09-30', image: '/images/front-door/hex-harbor-clock.jpg', dek: 'One phone in the middle of the table. Points, fair dice, a turn timer, and a card for the winner.', action: 'Set the clock' },
+  { title: 'A game you can sit inside', href: '/baseball', kicker: 'Baseball · read & play', date: '2026-10-03', image: '/images/baseball/hero-thumb.webp', dek: 'A look at baseball: the field, the pauses, the pencil, and the people beside you.', action: 'Read and play' },
+  { title: 'The best fan for El Segundo', href: '/reviews/fans', kicker: 'Shop · desk review', date: '2026-10-05', image: '/images/fans/hero.jpg', dek: 'Six fans for a coastal house without central air. Dated prices, cited tests, no hands-on, no commission.', action: 'Read the review' },
+  { title: 'The Daily Net', href: '/chain/net/', kicker: 'Chain · devnet', date: '2026-10-05', image: '/images/chain/daily-net.svg', dek: 'Once a UTC day, bots check in and code agents sign a checkpoint with their own key. A claim, not proof. No value.', action: 'Open the Daily Net' },
+  { title: 'First Mints', href: '/chain/mints/', kicker: 'Chain · rehearsal', date: '2026-10-05', image: '/images/chain/first-mints.svg', dek: 'Twenty-four cards minted on a recorded chain rehearsal with public dev keys. No value. Your browser can verify each one.', action: 'Verify a mint' },
   { title: 'The other half of the game', href: '/arcade-remembrance', kicker: 'Essay · read & play', date: '2026-09-29', image: '/images/arcade-remembrance/social.png', dek: 'Wheels, buttons, shared screens, and the people beside the cabinet. An arcade remembrance by Michael Hoydich.', action: 'Read and play' },
   { title: 'The Bountiful Keyboard', href: '/apis', kicker: 'Essay · live labs', date: '2026-09-29', image: '/images/home-highlights/keyboard.jpg', dek: 'What an API is, why it matters to builders with agents, and four little experiments to try.', action: 'Read and experiment' },
-  { title: 'Death Star BBS', href: '/atari-bbs', kicker: 'Museum · computer club', date: '2026-09-29', image: '/images/home-highlights/atari.jpg', dek: 'An Atari desk, a personal archive, a playable terminal tribute, and a new computer club.', action: 'Dial in' },
-  { title: 'The shop that works for you', href: '/shop/agents', kicker: 'Shop · meet the agents', date: '2026-09-30', image: '/images/agent-shop/stub-bell.jpg', dek: 'Meet the Clerk, browse Want Ads, and pull up a seat with Gus at the Haggle Counter.', action: 'Meet the shop’s agents' },
-  { title: 'Field Reports', href: '/r', kicker: 'Courts · out in town', date: '2026-09-28', image: '/images/home-highlights/field-reports.jpg', dek: 'What’s the wait? Is the gate open? Report from the courts, confirm what you see, and collect a stamp.', action: 'See the field reports' },
 ];
 const frontDoorToday = kennelTodayPayload();
 // "New today" under the hero names the last seven town days of launches; the dated
@@ -654,8 +660,6 @@ const alternates = [
 
     {/* 3D art module: the El Segundo contour field (three.js, loaded on approach). */}
     <HomeContourField />
-
-    <StillHourSitting variant="panel" />
 
     <HomeSoundGarden />
 
