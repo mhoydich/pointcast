@@ -121,10 +121,16 @@ export function devnetLaunchGaps(): string[] {
   return gaps;
 }
 
+/** PC_DEVNET_PLACEHOLDER_OK=1, read at run time (a dynamic key, so the bundler cannot inline it). */
+export function placeholderPreview(): boolean {
+  const key = ['PC', 'DEVNET', 'PLACEHOLDER', 'OK'].join('_');
+  return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[key] === '1';
+}
+
 /** Called from every /chain page that shows devnet-2: the build fails while a pin is a placeholder. */
 export function assertDevnetLaunchPinned(): void {
   const gaps = devnetLaunchGaps();
-  if (gaps.length && process.env.PC_DEVNET_PLACEHOLDER_OK !== '1') {
+  if (gaps.length && !placeholderPreview()) {
     throw new Error(
       `devnet-2 launch pins are still placeholders in src/data/chain-home.ts: ${gaps.join(', ')}. ` +
         'Fill them after the reset (or set PC_DEVNET_PLACEHOLDER_OK=1 for a local preview).',

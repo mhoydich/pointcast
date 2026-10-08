@@ -364,7 +364,7 @@ test('built pages carry the strip with its links and no addresses', { skip: !exi
     assert.equal(strip.dataset.state, 'static');
     assert.equal(strip.dataset.variant, wide ? 'wide' : 'home');
     assert.equal(strip.dataset.api, DEVNET_URL);
-    assert.match(strip.textContent, /devnet · bot · unmoderated · no value · restarts, dated/);
+    assert.match(strip.textContent, /devnet-2 · bot · unmoderated · no value is promised · may reset/);
     assert.match(strip.querySelector('h2').textContent, wide ? /^Town digest$/ : /^PointCast Chain · devnet$/);
     assert.doesNotMatch(strip.outerHTML, ADDRESS, page);
     assert.doesNotMatch(strip.textContent, /\d+ posts? shown|Height \d/, 'no numbers before the browser reads');
