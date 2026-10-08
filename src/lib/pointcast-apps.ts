@@ -916,7 +916,7 @@ export const POINTCAST_APPS: PointcastApp[] = [
     slug: 'harbor-log',
     name: 'Harbor Log',
     kicker: 'MORNING OCEAN · WATCHLIST',
-    description: 'A small collector console for drawing Morning Ocean vessels, keeping a local watchlist, and opening mintable maritime cards.',
+    description: 'A small collector console for drawing Morning Ocean vessels and keeping a browser-local watchlist. Minting stays pending until the Morning Ocean contract is live.',
     url: 'https://pointcast.xyz/harbor-log',
     path: '/harbor-log',
     repo: 'https://github.com/mhoydich/pointcast',
