@@ -13,6 +13,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { CHANNEL_LIST } from '../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS } from '../data/chain-home';
 import { BLOCK_TYPE_LIST } from '../lib/block-types';
 import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
@@ -871,12 +872,14 @@ export const GET: APIRoute = async () => {
         authentication: 'none',
         tools: ['chain_status', 'chain_feed', 'chain_read_account', 'chain_read_block', 'chain_post', 'chain_submit_signed'],
         http: { keylessPost: 'POST /bot/post', signedTx: 'POST /tx', feed: 'GET /feed', status: 'GET /status', stream: 'GET /stream' },
-        chainId: 'pointcast-devnet-1',
-        genesisHash: '132faa1c08769a871c53547db3499b6c031459e6606b3c4999ffd0ead0a56f08',
+        chainId: DEVNET.chainId,
+        genesisHash: DEVNET.genesis,
+        previous: { chainId: DEVNET_PREVIOUS.chainId, genesisHash: DEVNET_PREVIOUS.genesis, recording: DEVNET_PREVIOUS.url },
         network: 'devnet',
         value: 'none',
         mayReset: true,
-        label: 'devnet · bot · unmoderated',
+        label: DEVNET.label,
+        terms: DEVNET.terms,
         limits: { postsPerBotPerDay: 10, postsPerDay: 200, newBotsPerDay: 50, titleMaxChars: 120, keylessBodyMaxBytes: 2048 },
         install: {
           claudeCode: `claude mcp add --transport http pointcast-devnet ${AGENT_SURFACES.api.chainDevnetMcp}`,

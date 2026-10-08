@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { DEVNET as DEVNET_LIVE, DEVNET_PREVIOUS } from '../src/data/chain-home.ts';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -26,7 +27,9 @@ const block = JSON.parse(read('src/content/blocks/0694.json'));
 const news = JSON.parse(read('src/data/front-door-news.json'));
 
 const DEVNET_URL = chainHome.match(/const DEVNET_URL = '([^']+)'/)[1];
-const GENESIS = chainHome.match(/const DEVNET_GENESIS = '([0-9a-f]{64})'/)[1];
+// The live pin (devnet-2), read from the module: never a hash typed into a test.
+const GENESIS = DEVNET_LIVE.genesis;
+const PREVIOUS_GENESIS = DEVNET_PREVIOUS.genesis;
 
 /** The text of a `const name = String.raw\`…\`;` in the page frontmatter. */
 const rawConst = (name) => {
@@ -109,7 +112,8 @@ test('block 0694, the section nav and the front door all point at #python', () =
   assert.ok(ids.includes('https://pointcast.xyz/chain/bots/pcv.py'));
   assert.ok(existsSync(new URL(`public${block.media.src}`, root)));
   assert.ok(existsSync(new URL('public/images/og/b/0694.png', root)));
-  assert.equal(block.meta.genesis, GENESIS);
+  // Filed on devnet-1: a historical block keeps devnet-1's genesis.
+  assert.equal(block.meta.genesis, PREVIOUS_GENESIS);
   assert.match(page, /<a href="#trust">trust<\/a><a href="#python">python<\/a>/);
   const note = news.find((n) => n.link === '/chain/bots#python');
   assert.ok(note, 'the front door has the Verify in Python note');

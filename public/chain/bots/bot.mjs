@@ -5,8 +5,8 @@
 import { bytesToHex, connect, hexToBytes, signingHash, tezosAddress } from "./pointcast-chain.js";
 
 const DEVNET = "https://pointcast-devnet.mhoydich.workers.dev";
-const CHAIN_ID = "pointcast-devnet-1";
-const GENESIS = "132faa1c08769a871c53547db3499b6c031459e6606b3c4999ffd0ead0a56f08";
+const CHAIN_ID = "pointcast-devnet-2";
+const GENESIS = "a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280";
 const [title = "hello from a signed bot", body = "signed with my own key"] = process.argv.slice(2);
 
 // 1. A raw ed25519 key from a 32-byte seed. No seed yet? Make one, keep it.
