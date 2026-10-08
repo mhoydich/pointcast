@@ -269,6 +269,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
+  // RFC 0003 is rendered as a page; block 0346 links the old .md form.
+  if ((isGet || request.method === 'HEAD') && /^\/plans\/2026-04-24-rfc-0003-plus-one-agents(\.md)\/?$/.test(url.pathname)) {
+    return Response.redirect(new URL('/plans/2026-04-24-rfc-0003-plus-one-agents', url.origin).toString(), 301);
+  }
+
   const retiredProfileTarget = RETIRED_PROFILE_ROUTES.get(url.pathname);
   if (isGet && retiredProfileTarget) {
     return Response.redirect(new URL(retiredProfileTarget, url.origin).toString(), 301);
