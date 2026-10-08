@@ -110,14 +110,14 @@ export const GET: APIRoute = async () => {
         DRUM: {
           contract: drumTokenKt1 || null,
           status: 'contract-written-awaiting-compile',
-          spec: 'https://pointcast.xyz/docs/pm-briefs/2026-04-17-drum-token-integration.md',
+          spec: 'https://github.com/mhoydich/pointcast/blob/main/docs/pm-briefs/2026-04-17-drum-token-integration.md',
           source: 'contracts/v2/drum_token.py',
           type: 'FA1.2 · signed-voucher claim',
         },
         PrizeCast: {
           contract: prizeCastKt1 || null,
           status: 'contract-written-awaiting-compile',
-          spec: 'https://pointcast.xyz/docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md',
+          spec: 'https://github.com/mhoydich/pointcast/blob/main/docs/pm-briefs/2026-04-17-prize-cast-on-tezos.md',
           source: 'contracts/v2/prize_cast.py',
           type: 'No-loss prize-linked savings (PoolTogether-flavored)',
           drawDay: 'Sunday 18:00 UTC',

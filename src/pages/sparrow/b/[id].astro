@@ -41,12 +41,34 @@ const fmtDate = (d: Date) => d.toISOString().slice(0, 10).replaceAll('-', '.');
 const bodyParas = (block.data.body ?? '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
 // Resolve declared companions, if any, to fuller records.
+//
+// A companion ref is NOT always a block id. BLOCKS.md lets it be a 4-digit
+// block id, a site path (/polls), an absolute URL, a bare slug on another
+// surface (surface: poll), or an app URI (spotify:...). This mirrors the
+// resolution in src/pages/b/[id].astro — only a ref that really is a block in
+// this collection gets Sparrow reader chrome; everything else keeps the href
+// its data gave it. Prefixing every ref with /sparrow/b/ produced 682 dead
+// links (e.g. /sparrow/b/https://pointcast.xyz/25).
 const companionRecords = (block.data.companions ?? []).map((c: any) => {
-  const ref = c.refId || c.id || '';
+  const ref = String(c.refId || c.id || '');
   const match = all.find((b) => b.data.id === ref);
+  const isBlockId = /^\d{4}$/.test(ref);
+  const isAbsolute = ref.startsWith('/') || /^[a-z][a-z0-9+.-]*:/i.test(ref);
+
+  let href = '';
+  if (match) href = `/sparrow/b/${ref}`;
+  else if (isAbsolute) href = ref;
+  else if (isBlockId && c.surface === 'yee') href = `/yee/${ref}`;
+  else if (isBlockId && c.surface === 'clock') href = `/clock/${ref}`;
+  else if (c.surface === 'poll') href = `/poll/${ref}`;
+  else if (isBlockId) href = `/b/${ref}`;
+  // else: a slug with no surface to land on — rendered as plain text below
+  // rather than as a link that 404s.
+
   return {
     id: ref,
-    title: match?.data.title ?? ref,
+    href,
+    title: match?.data.title ?? c.label ?? ref,
     channel: match?.data.channel ?? c.channel ?? null,
     note: c.note ?? null,
   };
@@ -300,10 +322,17 @@ function renderInlineCode(s: string): string {
           <ul class="sp-aside-list">
             {companionRecords.map((c) => (
               <li>
-                <a href={`/sparrow/b/${c.id}`}>
-                  {c.title}
-                  {c.channel && <span class="sp-aside-mono" style="display: block; margin-top: 2px;">{c.channel}</span>}
-                </a>
+                {c.href ? (
+                  <a href={c.href}>
+                    {c.title}
+                    {c.channel && <span class="sp-aside-mono" style="display: block; margin-top: 2px;">{c.channel}</span>}
+                  </a>
+                ) : (
+                  <span>
+                    {c.title}
+                    {c.channel && <span class="sp-aside-mono" style="display: block; margin-top: 2px;">{c.channel}</span>}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
