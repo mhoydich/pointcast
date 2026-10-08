@@ -291,3 +291,11 @@ test('the next free block id was 0700 (no other block file claims it)', () => {
   assert.ok(has('src/content/blocks/0700.json'));
   assert.ok(!has('src/content/blocks/0701.json') || JSON.parse(read('src/content/blocks/0701.json')).id === '0701');
 });
+
+test('#reset stays a live anchor after the notice comes down (front-door news and page copy link to it)', () => {
+  const idAt = notice.indexOf('id="reset"');
+  const showAt = notice.indexOf('{show && (');
+  assert.ok(idAt > -1 && showAt > -1 && idAt < showAt, 'id="reset" is outside the {show && …} conditional');
+  assert.match(notice, /data-reset-after hidden=\{show\}/, 'a permanent recording line takes over after NOTICE_END_DATE');
+  assert.match(notice, /removeAttribute\('hidden'\)/, 'and the browser shows it when it hides an old notice');
+});
