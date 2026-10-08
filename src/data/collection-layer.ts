@@ -124,22 +124,6 @@ export const COLLECTION_SOURCES: readonly CollectionSource[] = [
     color: '#267f78',
   },
   {
-    id: 'referrals',
-    label: 'Invite Ledger',
-    key: 'pc:referral-garden:invites',
-    href: '/referral-garden',
-    empty: 'No invite receipts yet.',
-    color: '#7d6aa8',
-  },
-  {
-    id: 'sats',
-    label: 'Sats Path',
-    key: 'pc:sats-path:checks',
-    href: '/sats-path',
-    empty: 'No readiness checkpoints yet.',
-    color: '#c39b39',
-  },
-  {
     id: 'ocean',
     label: 'Morning Ocean',
     key: 'pc:morning-ocean:collection',
