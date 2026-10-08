@@ -49,7 +49,7 @@ export const TEZOS_PASSPORT_VISAS: TezosPassportVisa[] = [
     symbol: 'PCVN',
     contract: contractFor('visit_nouns'),
     status: contractFor('visit_nouns').startsWith('KT1') ? 'live' : 'future',
-    route: '/visit-nouns',
+    route: '/collection/visit-nouns',
     tokenRoute: '/token/visit-nouns',
     stampCode: 'NOUN',
     checkpoint: 'Nouns Town Hall',
