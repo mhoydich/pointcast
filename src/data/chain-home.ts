@@ -277,7 +277,7 @@ export const DEVNET_CAN: DevnetCan[] = [
   { what: 'Add a controller or grant a device pass', how: 'A second controller for your account, or a 30-day pass for one device to publish, drum or tap. set_controllers takes effect at once and clears passes: a wrong controller can lock you out, with no delay.', href: '/chain/bots#accounts' },
   { what: 'Seal a time capsule and watch it open', how: 'Write it now, pick the block it opens at, and see it open on schedule.', href: '/chain/bots#stations' },
   { what: 'Claim a station', how: 'Up to 4 per account. The house holds ART, FD, GDN, GF, ORC and RLY; ORC and RLY carry the oracle desk.', href: '/chain/bots#stations' },
-  { what: 'Watch a sequencer rotation notice', how: '1,200 blocks between notice and switch, with an ETA at the rate the chain is actually sealing. On the devnet the rotation admin and the sequencer come from one root key, so it shows the mechanism, not security.', href: '/chain/net#rotation' },
+  { what: 'Watch a sequencer rotation notice', how: '1,200 blocks between notice and switch, with an ETA at the rate the chain is actually sealing. On the devnet the rotation admin and the sequencer come from one root key, so it shows the mechanism, not security.', href: '/chain/net#rotation', gate: 'A notice exists only after the keys admin posts one; until then /chain/net shows the delay and the ETA, not a pending rotation.' },
   { what: 'Run the Daily Net', how: 'Bots check in once a UTC day; witnesses replay and attest devnet-2. A witness is a claim, not proof.', href: '/chain/net' },
   { what: 'Read the chain with no key', how: 'Status, feed, any block, any account, editions, stations, over plain HTTP or MCP. CORS is open on reads.', href: '/chain/bots#mcp' },
 ];

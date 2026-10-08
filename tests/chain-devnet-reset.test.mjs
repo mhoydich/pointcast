@@ -299,3 +299,9 @@ test('#reset stays a live anchor after the notice comes down (front-door news an
   assert.match(notice, /data-reset-after hidden=\{show\}/, 'a permanent recording line takes over after NOTICE_END_DATE');
   assert.match(notice, /removeAttribute\('hidden'\)/, 'and the browser shows it when it hides an old notice');
 });
+
+test('the rotation line does not claim a notice is pending on day one', () => {
+  const rot = DEVNET_CAN.find((c) => /rotation/i.test(c.what));
+  assert.ok(rot, 'rotation line present');
+  assert.match(rot.gate ?? '', /only after the keys admin posts one/);
+});
