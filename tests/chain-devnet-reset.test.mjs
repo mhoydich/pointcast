@@ -1,204 +1,293 @@
-// The devnet restart (block 0700): the dated notice on /chain/bots and
-// /chain/net, the devnet-1 recording, the "what you can do now" list, the
-// single genesis pin for the next chain, and the front-door item.
+// The devnet reset (block 0700): devnet-1 → devnet-2.
 //
-// The point of this suite is that the site cannot claim a reset that has not
-// happened, cannot link a recording that is not published, and cannot carry a
-// devnet-2 genesis in more than one place. The recording half SKIPS while
-// public/chain/yard/devnet-1/ is absent, so this file is green before and
-// after the orchestrator fills it in.
+// What this suite holds:
+//   - the launch pins live in ONE place (src/data/chain-home.ts) and every
+//     surface reads them; no test or page types a devnet-2 genesis;
+//   - the site build fails while a pin is a placeholder;
+//   - the notice says the reset happened only with a date, is dated
+//     absolutely, and ends exactly 7 days later;
+//   - the devnet-1 recording is linked only when its files are there (the
+//     recording half SKIPS while public/chain/yard/devnet-1/ is absent);
+//   - the copy is honest: no value is promised, may reset, a witness is a claim,
+//     keyless bots are custodial, the shared root key is said.
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import {
   DEVNET,
-  DEVNET_1_END,
   DEVNET_2_GENESIS,
+  DEVNET_2_PROFILE,
   DEVNET_CAN,
   DEVNET_CANNOT,
+  DEVNET_NEEDS_NODE,
+  DEVNET_PREVIOUS,
+  NOTICE_END_DATE,
+  PLACEHOLDER,
   RESET,
+  RESET_DATE,
+  SHARED_ROOT_LINE,
+  VERIFIER_RECORDS,
+  addDays,
+  assertDevnetLaunchPinned,
   devnet1Recording,
+  devnetLaunchGaps,
+  presenceLine,
+  resetNoticeShown,
 } from '../src/data/chain-home.ts';
+import { etaText, sealRate } from '../src/lib/rotation-eta.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
 const has = (p) => existsSync(new URL(p, root));
+const HEX64 = /^[0-9a-f]{64}$/;
+const launched = devnetLaunchGaps().length === 0;
 
+const home = read('src/data/chain-home.ts');
 const notice = read('src/components/chain/ResetNotice.astro');
 const bots = read('src/pages/chain/bots.astro');
 const net = read('src/pages/chain/net.astro');
-const block = JSON.parse(read('src/content/blocks/0700.json'));
+const yardPage = read('src/pages/chain/yard/devnet-1/index.astro');
+const fm = read('public/chain/first-mints/index.html');
+const live = read('public/chain/first-mints/live.js');
+const blockRaw = read('src/content/blocks/0700.json');
+const block = JSON.parse(blockRaw);
 const strip = JSON.parse(read('src/data/new-today.json'));
 const news = JSON.parse(read('src/data/front-door-news.json'));
-const HEX64 = /^[0-9a-f]{64}$/;
 
-test('both devnet pages carry the one restart notice, and it is reachable', () => {
-  for (const [name, page] of [['bots', bots], ['net', net]]) {
-    assert.match(page, /import ResetNotice from '\.\.\/\.\.\/components\/chain\/ResetNotice\.astro';/, name);
-    assert.match(page, /<ResetNotice \/>/, `${name} renders it`);
-    assert.match(page, /<a href="#reset">/, `${name} links to it from the jump nav or the copy`);
-  }
-  // One component, so the two pages cannot drift apart on what a reset means.
-  assert.match(notice, /id="reset"/);
-  assert.equal((bots.match(/<ResetNotice \/>/g) ?? []).length, 1);
-  assert.equal((net.match(/<ResetNotice \/>/g) ?? []).length, 1);
+test('the live devnet is devnet-2, and devnet-1 is the previous chain', () => {
+  assert.equal(DEVNET.chainId, 'pointcast-devnet-2');
+  assert.equal(DEVNET.epoch, 'devnet-2');
+  assert.equal(DEVNET.label, 'devnet-2 · bot · unmoderated');
+  assert.equal(DEVNET.terms, 'no value is promised · may reset');
+  assert.equal(DEVNET.genesis, DEVNET_2_GENESIS, 'DEVNET reads the one pin');
+  assert.equal(DEVNET_PREVIOUS.chainId, 'pointcast-devnet-1');
+  assert.match(DEVNET_PREVIOUS.genesis, HEX64);
+  assert.notEqual(DEVNET.genesis, DEVNET_PREVIOUS.genesis, 'a new chain cannot carry devnet-1’s genesis');
+  assert.equal(DEVNET_PREVIOUS.url, 'https://pointcast.xyz/chain/yard/devnet-1/');
+  assert.equal(DEVNET_PREVIOUS.startedOn, '2026-10-03');
+  assert.ok(DEVNET.yardHref.includes(`genesis=${DEVNET.genesis}`));
 });
 
-test('the next chain has exactly one genesis pin, and it is not devnet-1’s', () => {
-  // The pin is a single constant. Everything else reads it.
-  assert.match(read('src/data/chain-home.ts'), /export const DEVNET_2_GENESIS: string \| null = /);
-  if (DEVNET_2_GENESIS !== null) {
-    assert.match(DEVNET_2_GENESIS, HEX64, 'a filled pin is a 64-hex genesis hash');
-    assert.notEqual(DEVNET_2_GENESIS, DEVNET.genesis, 'a new chain cannot reuse devnet-1’s genesis');
+test('each launch pin is one constant with a TODO, and nothing else holds a devnet-2 genesis', () => {
+  for (const name of ['DEVNET_2_GENESIS', 'RESET_DATE', 'NOTICE_END_DATE', 'DEVNET_1_TIP', 'DEVNET_1_RECORDED_AT', 'PRESENCE_FLIP']) {
+    assert.equal((home.match(new RegExp(`^export const ${name}\\b`, 'gm')) ?? []).length, 1, `${name} is declared once`);
   }
-  assert.equal(RESET.genesisNext, DEVNET_2_GENESIS, 'RESET reads the pin, it does not hold its own copy');
-  assert.equal(RESET.chainIdNext, 'pointcast-devnet-2');
-  assert.notEqual(RESET.chainIdNext, DEVNET.chainId);
-
-  // No page, component, served file or block may hard-code a devnet-2 genesis:
-  // the only 64-hex genesis any of them may carry is devnet-1's own.
-  const surfaces = [
-    'src/components/chain/ResetNotice.astro',
-    'src/pages/chain/bots.astro',
-    'src/pages/chain/net.astro',
-    'src/content/blocks/0700.json',
-    'public/chain/bots/bot.mjs',
-    'public/chain/bots/verify.mjs',
-  ];
-  for (const p of surfaces) {
-    // Only hashes written as a genesis: a tx hash or a wasm sha256 in the same
-    // file is not a chain pin.
-    for (const [, hex] of read(p).matchAll(/genesis[^0-9a-f]{0,24}([0-9a-f]{64})/gi)) {
-      assert.ok(
-        hex === DEVNET.genesis || hex === DEVNET_2_GENESIS,
-        `${p} pins genesis ${hex.slice(0, 12)}…, which is neither devnet-1’s nor the one pin`,
-      );
+  assert.match(home, /TODO\(orchestrator\): 64-hex genesis_hash/);
+  // This test never types a genesis: it reads both from the module.
+  assert.doesNotMatch(read('tests/chain-devnet-reset.test.mjs'), /\b[0-9a-f]{64}\b/);
+  // Pages and the component print the pin through DEVNET; a hash written as a genesis may only be
+  // devnet-1's (a tx hash elsewhere in a page is not a chain pin).
+  for (const [p, src] of [['notice', notice], ['bots', bots], ['net', net], ['yard', yardPage], ['block', blockRaw], ['live.js', live]]) {
+    for (const [, hex] of src.matchAll(/genesis[^0-9a-f]{0,24}([0-9a-f]{64})/gi)) {
+      assert.ok(hex === DEVNET_PREVIOUS.genesis || hex === DEVNET_2_GENESIS, `${p} carries a stray 64-hex ${hex.slice(0, 12)}`);
     }
   }
-  // And this test must not be the place the old hash is kept alive as if it
-  // were the new one: it reads both from the module.
-  assert.doesNotMatch(read('tests/chain-devnet-reset.test.mjs'), /\b[0-9a-f]{64}\b/);
 });
 
-test('while the restart is planned, nothing on the site says it happened', () => {
-  if (RESET.state !== 'planned') return;
-  assert.equal(DEVNET_2_GENESIS, null, 'planned means the new genesis is not known');
-  assert.equal(DEVNET_1_END, null, 'planned means devnet-1 has not ended');
-  assert.equal(DEVNET.chainId, 'pointcast-devnet-1', 'the live chain id is still devnet-1');
-  // The notice's two branches: one says "will restart", one says "restarted".
-  assert.match(notice, /The devnet will restart as a new chain\./);
-  assert.match(notice, /<b>This has not happened yet\.<\/b>/);
-  assert.match(notice, /RESET\.state === 'planned'/, 'the branch is driven by the pin, not by hand');
-  // The block announces; it does not report.
-  assert.match(block.body, /has not restarted yet/);
-  assert.match(block.meta.status, /has not happened/i);
-  assert.match(String(block.meta.genesis_next), /not known until/);
-});
-
-test('the restart notice says what a restart does, and never softens the value line', () => {
-  assert.equal(RESET.announced, '2026-10-06');
-  assert.ok(RESET.effects.length >= 4);
-  const effects = RESET.effects.map(([k]) => k);
-  for (const k of ['Heights and hashes', 'Streaks, names, balances', 'Pinned links', 'The old chain']) {
-    assert.ok(effects.includes(k), `missing effect: ${k}`);
+test('the build fails while any pin is a placeholder', () => {
+  const gaps = devnetLaunchGaps();
+  const saved = process.env.PC_DEVNET_PLACEHOLDER_OK;
+  delete process.env.PC_DEVNET_PLACEHOLDER_OK;
+  try {
+    if (gaps.length) assert.throws(() => assertDevnetLaunchPinned(), /launch pins are still placeholders/);
+    else assert.doesNotThrow(() => assertDevnetLaunchPinned());
+  } finally {
+    if (saved !== undefined) process.env.PC_DEVNET_PLACEHOLDER_OK = saved;
   }
-  const body = RESET.effects.map(([, v]) => v).join(' ');
-  assert.match(body, /none of it has value after/i, 'the clearing line says the cleared things had no value');
-  assert.match(body, /genesis changed|genesis/i, 'pinned links are named as refusing the new chain');
-  // "no value is promised" is the standing claim; the restart does not get to
-  // quietly imply the next chain is worth something.
-  assert.match(block.body, /No value is promised\./);
-  assert.match(String(block.meta.value), /no value is promised/i);
-  // A witness is a claim, not proof — on the page that collects witnesses.
-  assert.match(block.body, /accountable claim .*not proof|claim rather than an identity/);
-  assert.match(block.meta.witness, /not proof that it did/);
-});
-
-test('"what you can do on the devnet now" is a list the page actually renders', () => {
-  assert.ok(DEVNET_CAN.length >= 8, 'the inventory is the answer to "everything on the devnet"');
-  assert.ok(DEVNET_CANNOT.length >= 4, 'and it is paired with the limits');
-  for (const c of DEVNET_CAN) {
-    assert.ok(c.what.length > 0 && c.how.length > 20, c.what);
-    assert.match(c.href, /^[#/]/, `${c.what}: href is a same-page anchor or a site path`);
-    if (c.href.startsWith('#')) assert.ok(bots.includes(`id="${c.href.slice(1)}"`), `${c.what}: ${c.href} exists on /chain/bots`);
+  // Every page that shows devnet-2 calls the guard.
+  for (const [p, src] of [['bots', bots], ['net', net], ['yard', yardPage], ['chain', read('src/pages/chain.astro')]]) {
+    assert.match(src, /^assertDevnetLaunchPinned\(\);$/m, p);
   }
-  assert.match(bots, /<section id="now"/);
-  assert.match(bots, /DEVNET_CAN\.map/);
-  assert.match(bots, /DEVNET_CANNOT\.map/);
-  assert.match(bots, /<a href="#now">what you can do<\/a>/);
-  const cannot = DEVNET_CANNOT.join(' ');
-  assert.match(cannot, /no value is promised/i);
-  assert.match(cannot, /claim, not an identity/);
 });
 
-test('the stale "may reset" wording is gone from the devnet surfaces it misdescribed', () => {
-  // "may reset" reads as a thing that might quietly happen. The restart is
-  // dated, so these surfaces say so instead. (Published blocks keep their own
-  // words: a block is a record, not a page.)
-  for (const p of [
-    'src/pages/chain/bots.astro',
-    'src/pages/chain/net.astro',
-    'src/pages/chain/dev.astro',
-    'src/components/HomeChainStrip.astro',
-    'src/components/chain/DailyNetPanel.astro',
-  ]) {
-    assert.doesNotMatch(read(p), /may reset/i, p);
-  }
-  assert.doesNotMatch(read('src/data/chain-home.ts').split('// ---')[0], /may reset/i, 'STATUS_LINE');
-  for (const item of news) assert.doesNotMatch(item.line, /may reset/i, item.label);
-});
-
-test('the devnet-1 recording is linked only when it is really published', () => {
-  const rec = devnet1Recording();
-  assert.match(notice, /devnet1Recording\(\)/);
-  assert.match(notice, /rec \?/, 'the recording block is conditional on the files being there');
-
-  if (!has('public/chain/yard/devnet-1/snapshot.json')) {
-    assert.equal(rec, null, 'no files, no recording');
-    assert.match(notice, /is not published yet/, 'the page says so plainly instead of linking nothing');
-    test.skip?.('devnet-1 recording not published yet');
+test('dates are absolute; the notice ends exactly 7 days after the reset and then hides', () => {
+  assert.equal(addDays('2026-10-09', 7), '2026-10-16');
+  assert.equal(addDays('2026-10-30', 7), '2026-11-06');
+  if (RESET_DATE === PLACEHOLDER) {
+    assert.equal(resetNoticeShown('2026-10-08'), false, 'no date, no "was reset" notice');
     return;
   }
-
-  assert.ok(rec, 'the snapshot is there, so it must parse as devnet-1’s own');
-  assert.equal(rec.genesis, DEVNET.genesis, 'the recording is devnet-1, pinned to devnet-1’s genesis');
-  assert.ok(rec.height >= 1 && rec.blocks >= 1);
-  assert.match(rec.tipHash, HEX64);
-  // The link must pin the OLD genesis, or it stops verifying the moment the
-  // live URL serves a different chain.
-  assert.ok(rec.yardHref.includes(`genesis=${DEVNET.genesis}`), rec.yardHref);
-  assert.ok(rec.yardHref.includes('snapshot=./devnet-1/snapshot.json'), rec.yardHref);
-  assert.ok(!rec.yardHref.includes('api='), 'a recording is replayed from the file, never from the live node');
-  assert.ok(has('public/chain/yard/devnet-1/snapshot.json'));
+  assert.match(RESET_DATE, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(NOTICE_END_DATE, addDays(RESET_DATE, 7));
+  assert.equal(resetNoticeShown(RESET_DATE), true);
+  assert.equal(resetNoticeShown(NOTICE_END_DATE), true);
+  assert.equal(resetNoticeShown(addDays(NOTICE_END_DATE, 1)), false);
 });
 
-test('the restart is on the front door: a wire block, the strip and the news list', () => {
+test('the notice: one component on both pages, the exact words, hidden client-side after the end date', () => {
+  for (const [name, page] of [['bots', bots], ['net', net]]) {
+    assert.match(page, /import ResetNotice from '\.\.\/\.\.\/components\/chain\/ResetNotice\.astro';/, name);
+    assert.equal((page.match(/<ResetNotice \/>/g) ?? []).length, 1, name);
+    assert.match(page, /<a href="#reset">/, name);
+  }
+  assert.equal(RESET.headline, `The devnet was reset on ${RESET_DATE}.`);
+  assert.equal(RESET.recordingLine, `devnet-1 (#1–#${DEVNET_PREVIOUS.tip}, 2026-10-03 → ${RESET_DATE}) is recorded and checkable here →`);
+  assert.match(notice, /The devnet was reset on \{notYet\(RESET\.date\)\}\./);
+  assert.match(notice, /is recorded and checkable here →/);
+  assert.match(notice, /data-until=\{RESET\.noticeEnd\}/);
+  assert.match(notice, /el\.hidden = true/);
+  assert.match(notice, /resetNoticeShown\(\)/);
+  for (const [k] of RESET.effects) assert.ok(k.length > 0);
+  assert.ok(RESET.effects.some(([, v]) => /genesis_reset/.test(v)), 'the stale-nonce error is named');
+  assert.ok(RESET.effects.some(([, v]) => /same name/.test(v)), 'keyless bots re-register under the same name');
+});
+
+test('what you can do now: §4, gated where the SPEC gates it', () => {
+  const whats = DEVNET_CAN.map((c) => c.what).join(' | ');
+  for (const need of ['bot', 'passkey wallet', 'First Mint', 'controller', 'time capsule', 'station', 'rotation', 'Daily Net']) {
+    assert.ok(whats.toLowerCase().includes(need.toLowerCase()), need);
+  }
+  const mint = DEVNET_CAN.find((c) => /First Mint/.test(c.what));
+  assert.match(mint.gate, /edition is open and the attestor is set/);
+  assert.match(DEVNET_CAN.find((c) => /passkey/.test(c.what)).how, /only on pointcast\.xyz/);
+  assert.match(DEVNET_CAN.find((c) => /bot/.test(c.what)).how, /custodial/);
+  assert.match(DEVNET_CAN.find((c) => /controller/.test(c.what)).how, /clears passes/);
+  // VERIFY only when CI proved the records decode.
+  assert.ok(!DEVNET_CAN.some((c) => /VERIFY/.test(c.what)));
+  assert.match(bots, /VERIFIER_RECORDS \? \[\.\.\.DEVNET_CAN, DEVNET_CAN_VERIFY\] : DEVNET_CAN/);
+  assert.equal(typeof VERIFIER_RECORDS, 'boolean');
+  assert.equal(DEVNET_NEEDS_NODE.length, 6);
+  assert.ok(DEVNET_CANNOT.some((c) => /No value is promised/.test(c)));
+  assert.ok(DEVNET_CANNOT.some((c) => /may reset/.test(c)));
+});
+
+test('presence copy covers both findings and says which is unknown', () => {
+  assert.match(presenceLine(), /Open on devnet-2/);
+  assert.match(home, /Ticketed later by an admin transaction, with no reset/);
+  assert.match(home, /devnet-2 will be reset again when that happens/);
+});
+
+test('/chain/net: rotation ETA in blocks at the observed rate, and the shared-root line', () => {
+  assert.equal(DEVNET_2_PROFILE.rotationDelayBlocks, 1200);
+  assert.match(net, /id="rotation"/);
+  assert.match(net, /SHARED_ROOT_LINE/);
+  assert.match(SHARED_ROOT_LINE, /all come from one root key that Claude generated\. A rotation demo shows the mechanism, not security\./);
+  assert.doesNotMatch(net, /1 hour/);
+  const r = sealRate(1000, 0, 81.2 * 3_600_000);
+  assert.ok(Math.abs(r - 12.315) < 0.01);
+  assert.equal(etaText(1200, r), '1,200 blocks (≈ 4.1 days at the current rate)');
+  assert.equal(etaText(1200, 1200), '1,200 blocks (≈ 1 h at the current rate)');
+  assert.equal(etaText(1200, null), '1,200 blocks');
+  assert.equal(sealRate(5, 0, 1), null);
+});
+
+test('/chain/bots says keyless bots are custodial', () => {
+  assert.match(bots, /<b>Custodial\.<\/b> The house holds a keyless bot’s controllers\./);
+  assert.match(bots, /id="accounts"/);
+  assert.match(bots, /id="stations"/);
+  assert.match(bots, /takes effect at once and clears every pass/);
+});
+
+test('First Mints: live minter, rp pointcast.xyz, off-origin notice, pinned SDK copies', () => {
+  assert.match(fm, /data-rp="pointcast\.xyz"/);
+  assert.match(fm, /data-origins="https:\/\/pointcast\.xyz"/);
+  assert.match(fm, new RegExp(`data-chain="${DEVNET.chainId}"`));
+  assert.match(fm, new RegExp(`data-genesis="${DEVNET.genesis}"`), 'pinned by scripts/pin-devnet-launch.mjs');
+  assert.match(fm, /Passkeys work only on pointcast\.xyz\./);
+  assert.match(fm, /<script type="module" src="\.\/live\.js"><\/script>/);
+  assert.match(live, /if \(!cfg\.origins\.includes\(location\.origin\)\)/);
+  assert.match(live, /rp: \{ id: cfg\.rpId/);
+  assert.match(live, /confirm: async/);
+  assert.doesNotMatch(live, /localStorage\.setItem\([^)]*secret|privateKey/i);
+  const sha = (p) => createHash('sha256').update(readFileSync(new URL(p, root))).digest('hex');
+  // pointcast-chain sdk/ at main 33a2ba9.
+  assert.equal(sha('public/chain/first-mints/lib/pointcast-chain.js').slice(0, 16), '33bef6b76c98e5e2');
+  assert.equal(sha('public/chain/first-mints/lib/first-mint.js').slice(0, 16), '43aa51b3f3fcb624');
+});
+
+test('bot downloads pin the same chain as the site', () => {
+  assert.ok(read('public/chain/bots/bot.mjs').includes(`const CHAIN_ID = "${DEVNET.chainId}";`));
+  assert.ok(read('public/chain/net/pc-witness.mjs').includes(`const CHAIN_ID = "${DEVNET.chainId}";`));
+  for (const p of ['public/chain/bots/bot.mjs', 'public/chain/bots/verify.mjs', 'public/chain/net/pc-witness.mjs']) {
+    assert.ok(read(p).includes(`const GENESIS = "${DEVNET.genesis}";`), p);
+  }
+});
+
+test('the devnet-1 page is the index; the orchestrator copies only data into public/', () => {
+  assert.ok(!has('public/chain/yard/devnet-1/index.html'), 'a public index.html would collide with src/pages/chain/yard/devnet-1/');
+  assert.match(yardPage, /devnet1Recording\(\)/);
+  assert.match(yardPage, /const title = `devnet-1 · \$\{DEVNET_PREVIOUS\.startedOn\} → \$\{notYet\(RESET\.date\)\}`;/);
+  assert.match(yardPage, /The recording files are not in this build/);
+});
+
+test('devnet1Recording() refuses anything that is not devnet-1', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'd1-'));
+  try {
+    assert.equal(devnet1Recording(dir), null, 'absent');
+    const snap = (genesis) => ({
+      schema: 'pointcast-chain-snapshot/v1',
+      source: { kind: 'devnet-recording', chain_id: 'pointcast-devnet-1', genesis, tip: 2, recorded_at: '2026-10-09T00:00:00Z' },
+      status: { genesis_hash: genesis, height: 2, tip_hash: 'a'.repeat(64), state_root: 'b'.repeat(64) },
+      blocks: [{ txs: [{}] }, { txs: [] }],
+    });
+    writeFileSync(join(dir, 'snapshot.json'), JSON.stringify(snap('c'.repeat(64))));
+    assert.equal(devnet1Recording(dir), null, 'another chain');
+    writeFileSync(join(dir, 'snapshot.json'), JSON.stringify(snap(DEVNET_PREVIOUS.genesis)));
+    writeFileSync(join(dir, 'snapshot.sha256'), `${'d'.repeat(64)}  snapshot.json\n`);
+    const r = devnet1Recording(dir);
+    assert.equal(r.height, 2);
+    assert.equal(r.txs, 1);
+    assert.equal(r.sha256, 'd'.repeat(64));
+    assert.equal(r.recordedAt, '2026-10-09');
+    assert.ok(r.yardHref.endsWith(`&genesis=${DEVNET_PREVIOUS.genesis}`));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const haveRecording = has('public/chain/yard/devnet-1/snapshot.json');
+test('the published devnet-1 recording matches its pins', { skip: !haveRecording && 'public/chain/yard/devnet-1/ not filled yet' }, () => {
+  const rec = devnet1Recording();
+  assert.ok(rec, 'snapshot.json is devnet-1’s own');
+  assert.equal(rec.genesis, DEVNET_PREVIOUS.genesis);
+  const sumFile = read('public/chain/yard/devnet-1/snapshot.sha256');
+  const actual = createHash('sha256').update(readFileSync(new URL('public/chain/yard/devnet-1/snapshot.json', root))).digest('hex');
+  assert.ok(sumFile.includes(actual), 'snapshot.sha256 matches snapshot.json');
+  assert.ok(readFileSync(new URL('public/chain/yard/devnet-1/snapshot.json', root)).length <= 20 * 1024 * 1024, '≤ 20 MiB');
+  const snap = JSON.parse(read('public/chain/yard/devnet-1/snapshot.json'));
+  for (const s of snap.body_shards ?? []) {
+    const buf = readFileSync(new URL(`public/chain/yard/devnet-1/${s.path}`, root));
+    assert.equal(createHash('sha256').update(buf).digest('hex'), s.sha256, s.path);
+    assert.ok(buf.length <= 5 * 1024 * 1024, `${s.path} ≤ 5 MiB`);
+  }
+  if (launched) {
+    assert.equal(rec.height, DEVNET_PREVIOUS.tip, 'DEVNET_1_TIP is the recorded tip');
+  }
+});
+
+test('block 0700 and the front door: one block, honest words, tokens filled at launch', () => {
   assert.equal(block.id, '0700');
   assert.equal(block.channel, 'FD');
-  assert.equal(block.author, 'cc');
-  assert.ok(block.source.length > 40, 'the block says where its facts came from');
-  assert.equal(block.media.src, '/images/chain/devnet-reset.svg');
-  assert.ok(has('public/images/chain/devnet-reset.svg'));
-  assert.ok(has('public/images/og/b/0700.png'));
-  assert.ok(has('scripts/generate-chain-reset-art.py'), 'the art is generated, not hand-drawn');
-
-  const item = strip.find((i) => i.block === '0700');
-  assert.ok(item, 'the strip carries the announcement');
-  assert.equal(item.date, RESET.announced);
-  assert.equal(item.link, '/chain/bots');
-  assert.ok(item.kicker.length <= 21 && item.title.length <= 28, 'one line in a 375 px cell');
-  // The Morning Edition reads front-door-news.json unfiltered, so a fresh
-  // strip link must not also sit there.
-  for (const n of news) assert.notEqual(n.link, item.link, `${n.label} duplicates the fresh strip item`);
+  assert.equal(block.title, 'The devnet reset; devnet-1 is recorded');
+  assert.match(block.body, /No value is promised · may reset\./);
+  assert.match(block.body, /A witness is a claim, not proof\./);
+  assert.match(block.body, /custodial/);
+  assert.doesNotMatch(`${block.title} ${block.dek} ${block.body}`, /\bverified\b|\bproves?\b|main\s*net|\bworth\b|\binvest|\bprofit|\byield\b/i);
+  assert.ok(block.companions.some((c) => c.id === DEVNET_PREVIOUS.url));
+  assert.equal(block.meta.genesis_previous, DEVNET_PREVIOUS.genesis);
+  // Abstract art, no text.
+  const art = read(`public${block.media.src}`);
+  assert.doesNotMatch(art, /<text|<tspan/);
+  const item = strip.find((x) => x.block === '0700');
+  assert.ok(item && item.link === '/chain/yard/devnet-1/');
+  const line = news.find((x) => x.label === 'Devnet reset');
+  assert.equal(line.link, '/chain/bots#reset', 'not the strip’s link: a fresh strip item stays out of front-door-news');
+  assert.ok(line && /No value is promised · may reset\./.test(line.line));
+  if (launched) {
+    for (const s of [blockRaw, JSON.stringify(line)]) assert.doesNotMatch(s, /⟨[A-Z0-9_]+⟩/, 'scripts/pin-devnet-launch.mjs filled every token');
+    assert.equal(block.timestamp.slice(0, 10), RESET_DATE);
+    assert.equal(item.date, RESET_DATE);
+    assert.equal(line.date, RESET_DATE);
+    assert.equal(block.meta.genesis_now, DEVNET.genesis);
+  } else {
+    assert.match(blockRaw, /⟨RESET_DATE⟩/, 'unfilled until launch, never a made-up date');
+  }
 });
 
-test('the block’s art is abstract: no text, no script, no links, no people or places', () => {
-  const svg = read('public/images/chain/devnet-reset.svg');
-  const allowed = new Set(['svg', 'g', 'rect', 'circle', 'path', 'line', 'style']);
-  for (const [, tag] of svg.matchAll(/<([a-zA-Z][\w:-]*)/g)) assert.ok(allowed.has(tag), `<${tag}>`);
-  assert.doesNotMatch(svg, /href|url\(|\son\w+=|<script|<text|<image|foreignObject/i);
-  // The <style> holds animation only, so a rasterizer gets a clean still.
-  const style = svg.slice(svg.indexOf('<style>'), svg.indexOf('</style>'));
-  assert.doesNotMatch(style, /fill:|stroke:/, 'colour stays on the elements');
-  assert.match(style, /prefers-reduced-motion/);
+test('the next free block id was 0700 (no other block file claims it)', () => {
+  assert.ok(has('src/content/blocks/0700.json'));
+  assert.ok(!has('src/content/blocks/0701.json') || JSON.parse(read('src/content/blocks/0701.json')).id === '0701');
 });

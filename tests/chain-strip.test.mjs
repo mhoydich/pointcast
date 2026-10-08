@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { DEVNET as DEVNET_LIVE, DEVNET_PREVIOUS } from '../src/data/chain-home.ts';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -16,7 +17,9 @@ const chainPage = read('src/pages/chain.astro');
 const stripSources = { component, lib };
 
 const DEVNET_URL = chainHome.match(/const DEVNET_URL = '([^']+)'/)[1];
-const GENESIS = chainHome.match(/const DEVNET_GENESIS = '([0-9a-f]{64})'/)[1];
+// The live pin (devnet-2), read from the module: never a hash typed into a test.
+const GENESIS = DEVNET_LIVE.genesis;
+const PREVIOUS_GENESIS = DEVNET_PREVIOUS.genesis;
 const CHAIN_ID = chainHome.match(/chainId: '([^']+)'/)[1];
 // Built from parts so this file carries no address-shaped literal either.
 const ADDRESS = new RegExp(`(?:${['tz[1-4]', 'KT1', 'pc[ap]1'].join('|')})[1-9A-HJ-NP-Za-km-z]{20,}`);
@@ -45,8 +48,9 @@ test('honesty copy: devnet, no value, the restart is dated; no network, mainnet,
     for (const phrase of [/live network/i, /main\s*net/i, /minted on pointcast chain/i, /\bminted\b/i, /\bworth\b/i, /\binvest/i, /\bprofit/i, /\byield\b/i, /\bpublic network\b/i])
       assert.doesNotMatch(src, phrase, `${name}: ${phrase}`);
   }
-  assert.match(component, /\{DEVNET\.label\} · no value · restarts, dated/);
-  assert.match(chainHome, /label: 'devnet · bot · unmoderated'/);
+  assert.match(component, /\{DEVNET\.label\} · \{DEVNET\.terms\}/);
+  assert.match(chainHome, /label: 'devnet-2 · bot · unmoderated'/);
+  assert.match(chainHome, /terms: 'no value is promised · may reset'/);
   assert.match(component, /'PointCast Chain · devnet'/);
   assert.match(component, /devnet/);
   assert.match(lib, /'devnet unreachable'/);
@@ -63,7 +67,7 @@ test('links: /chain, /chain/bots and the Block Yard on the devnet with genesis p
   assert.match(component, /href: '\/chain', label:/);
   assert.match(component, /href: '\/chain\/bots', label:/);
   assert.match(component, /href: DEVNET\.yardHref/);
-  assert.match(chainHome, /yardHref: `\/chain\/yard\/\?api=\$\{DEVNET_URL\}&genesis=\$\{DEVNET_GENESIS\}&verifier=\/chain\/yard\/verifier`/);
+  assert.match(chainHome, /yardHref: `\/chain\/yard\/\?api=\$\{DEVNET_URL\}&genesis=\$\{DEVNET_2_GENESIS\}&verifier=\/chain\/yard\/verifier`/);
   assert.match(component, /import \{ DEVNET \} from '\.\.\/data\/chain-home'/);
   assert.doesNotMatch(component, /workers\.dev|[0-9a-f]{64}/, 'reuses DEVNET instead of duplicating its constants');
 });

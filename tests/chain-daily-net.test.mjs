@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { DEVNET as DEVNET_LIVE, DEVNET_PREVIOUS } from '../src/data/chain-home.ts';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -19,7 +20,9 @@ const page = read('src/pages/chain/net.astro');
 const chainHome = read('src/data/chain-home.ts');
 
 const DEVNET_URL = chainHome.match(/const DEVNET_URL = '([^']+)'/)[1];
-const GENESIS = chainHome.match(/const DEVNET_GENESIS = '([0-9a-f]{64})'/)[1];
+// The live pin (devnet-2), read from the module: never a hash typed into a test.
+const GENESIS = DEVNET_LIVE.genesis;
+const PREVIOUS_GENESIS = DEVNET_PREVIOUS.genesis;
 
 // Strip comments so the rules read code and copy, not the notes about them.
 const code = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
@@ -79,7 +82,7 @@ test('the panel is self-contained: DEVNET from chain-home, its own colours, one 
   assert.match(panel, /querySelectorAll<HTMLElement>\('\[data-daily-net="panel"\]'\)/);
   for (const hook of ['data-dn-clock', 'data-dn-day', 'data-dn-reset', 'data-dn-status', 'data-dn-counts', 'data-dn-roll data-roll-max="12"', 'data-dn-strikes'])
     assert.ok(panel.includes(hook), hook);
-  assert.match(panel, /\{DEVNET\.label\} · no value · restarts, dated/);
+  assert.match(panel, /\{DEVNET\.label\} · \{DEVNET\.terms\}/);
   assert.match(panel, /resets at 00:00 UTC/);
   assert.match(panel, /var\(--pc-font-mono\)/);
   assert.match(panel, /var\(--pc-ink/);
@@ -132,9 +135,9 @@ test('copy: devnet, no value, the restart is dated; a witness is a claim; nothin
   assert.match(lib, /'devnet unreachable/);
   assert.match(panel, /A witness is a claim, not proof of replay/);
   assert.match(panel, /Counts are keys, not\s+people/);
-  for (const phrase of ['NO VALUE · RESTARTS, DATED', 'It is not proof of replay.', 'Copiers never get strikes.', 'agreed with this server',
+  for (const phrase of ['NO VALUE · MAY RESET, NEVER SILENTLY', 'It is not proof of replay.', 'Copiers never get strikes.', 'agreed with this server',
     'This catches bugs, not a hostile operator.', 'Keys are free.', 'Counts are keys, not people.', 'Flags are not moderation.',
-    'Inconsistent is not a strike.', 'No value. It restarts.', 'signed a checkpoint this chain does not have: a wrong replay, or it was shown a different chain.',
+    'Inconsistent is not a strike.', 'No value is promised. It may reset.', 'signed a checkpoint this chain does not have: a wrong replay, or it was shown a different chain.',
     'posts under this name', 'The day is UTC and resets at 00:00 UTC.'])
     assert.ok(page.includes(phrase), phrase);
   assert.match(rawConst('codePrompt'), /A witness is a claim that you replayed the chain, not proof of it; don't call it verified\./);
@@ -187,7 +190,7 @@ test('the witness quickstart fetches the four /chain/net files this site serves,
   assert.match(quick, /&& node pc-witness\.mjs --name <you> --checkin$/);
   assert.match(rawConst('witnessRuns'), /--dry-run/);
   assert.match(page, /\{DEVNET\.chainId\}/);
-  assert.match(page, /\{DEVNET\.genesis\.slice\(0, 12\)\}/);
+  assert.match(page, /\{notYet\(DEVNET\.genesis\)\.slice\(0, 12\)\}/);
   assert.match(page, /const yardWitness = `\$\{DEVNET\.yardHref\}&lens=witness`;/);
 });
 
@@ -606,7 +609,8 @@ test('block 0695 files the Daily Net: FD, plain-text body, honest caveats, compa
   for (const text of [block.body, block.dek, block.title]) {
     assert.doesNotMatch(text, /\bverified\b|\bproves?\b|main\s*net|\bworth\b|\binvest|\bprofit|\byield\b/i);
   }
-  assert.equal(block.meta.genesis, GENESIS);
+  // A historical block: it was filed on devnet-1 and keeps devnet-1's genesis.
+  assert.equal(block.meta.genesis, PREVIOUS_GENESIS);
   assert.match(block.meta.first_witness, /^claude-code \(tz1YeGv7bZtb5AUEPqTi8kQ4W6UDtSQ8BUaa\): checkpoint 590 in block 600/);
   assert.ok(existsSync(new URL(`public${block.media.src}`, root)));
   assert.ok(existsSync(new URL('public/images/og/b/0695.png', root)));
@@ -623,9 +627,10 @@ test('block 0695 art is abstract: rings only, no text, images, links or script',
 
 test('the front door, the homepage chain strip, the /chain hub and the agent indexes point at /chain/net', () => {
   const news = JSON.parse(read('src/data/front-door-news.json'));
-  assert.equal(news[0].link, '/chain/net');
-  assert.equal(news[0].date, '2026-10-05');
-  assert.doesNotMatch(news[0].line, /\bverified\b|\bproves?\b|\bworth\b/i);
+  const dn = news.find((n) => n.link === '/chain/net');
+  assert.ok(dn, 'the Daily Net news item');
+  assert.equal(dn.date, '2026-10-05');
+  assert.doesNotMatch(dn.line, /\bverified\b|\bproves?\b|\bworth\b/i);
   const strip = read('src/components/HomeChainStrip.astro');
   assert.match(strip, /\{ href: '\/chain\/bots', label: 'How bots post' \},\n  \{ href: '\/chain\/net', label: 'The Daily Net' \},/);
   const hub = read('src/pages/chain.astro');
