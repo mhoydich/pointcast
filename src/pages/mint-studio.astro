@@ -1,0 +1,151 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import { FEATURED_COLLECTIBLE_IMAGES } from '../data/collection-layer';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('mint-studio')!;
+const title = app.name;
+const description = app.description;
+const heroImages = FEATURED_COLLECTIBLE_IMAGES.slice(0, 6).map((item) => ({
+  src: item.imageUrl,
+  alt: `${item.title} collectible artwork`,
+}));
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/mint-studio',
+  name: app.name,
+  description,
+  url: app.url,
+  applicationCategory: 'DesignApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <MicroAppShell
+    app={app}
+    headline="Draft the brief before anything mints."
+    dek="A planning desk for collectible ideas: write a short brief, preview the metadata it would carry, and save a mint-pending receipt. This page mints nothing, connects no wallet and holds no keys. Receipts stay on this device."
+    images={heroImages}
+    stats={[
+      { label: 'Wallet', value: 'none' },
+      { label: 'Storage', value: 'local' },
+      { label: 'Status', value: 'draft' },
+      { label: 'Chain', value: 'pending' },
+    ]}
+    links={[
+      { href: '/cabinet', label: 'Cabinet' },
+      { href: '/provenance-ledger', label: 'Ledger' },
+    ]}
+  >
+    <section class="app-section mint-studio" data-mint-studio>
+      <div class="tool-grid">
+        <form class="tool-panel" data-brief>
+          <h2>Art Brief</h2>
+          <div class="field-stack">
+            <label>Title <input name="title" maxlength="80" required placeholder="Morning signal" /></label>
+            <label>Series <input name="series" maxlength="60" placeholder="Morning Ocean" /></label>
+            <label>Edition size <input name="edition" type="number" min="1" max="9999" value="1" /></label>
+            <label>Notes <textarea name="notes" rows="4" maxlength="400" placeholder="Palette, mood, what the piece is about."></textarea></label>
+          </div>
+          <div class="button-row">
+            <button type="submit">Save draft receipt</button>
+          </div>
+        </form>
+
+        <aside class="tool-panel tool-panel--ink">
+          <p class="mono-note">Metadata preview</p>
+          <pre data-preview>{'{}'}</pre>
+          <p class="mono-note">Status is always "mint-pending". Nothing is uploaded or signed.</p>
+        </aside>
+      </div>
+
+      <section class="receipt-ledger" aria-labelledby="receipt-title">
+        <div>
+          <h2 id="receipt-title">Draft Receipts</h2>
+          <p class="mono-note"><span data-count>0</span> drafts saved in this browser. The Cabinet and Provenance Ledger read them too.</p>
+        </div>
+        <button type="button" data-clear>Clear drafts</button>
+        <ol class="receipt-list" data-list></ol>
+      </section>
+    </section>
+  </MicroAppShell>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-mint-studio]');
+    if (!root) return;
+    const key = 'pc:mint-studio:receipts';
+    const form = root.querySelector('[data-brief]');
+    const $ = (s) => root.querySelector(s);
+    const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const read = () => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } };
+    const write = (items) => { try { localStorage.setItem(key, JSON.stringify(items.slice(-50))); } catch {} };
+    const draft = () => {
+      const d = new FormData(form);
+      const t = String(d.get('title') || '').trim();
+      return {
+        name: t || 'Untitled',
+        series: String(d.get('series') || '').trim() || null,
+        editionSize: Math.max(1, Number(d.get('edition')) || 1),
+        description: String(d.get('notes') || '').trim(),
+        status: 'mint-pending',
+      };
+    };
+    const preview = () => { $('[data-preview]').textContent = JSON.stringify(draft(), null, 2); };
+    const render = () => {
+      const items = read();
+      $('[data-count]').textContent = String(items.length);
+      $('[data-list]').innerHTML = items.slice().reverse().map((i) =>
+        `<li><strong>${esc(i.title)}</strong><span>${esc(i.collection || 'No series')} · ed. ${esc(i.editionSize)} · ${esc(i.status)}</span><span>${esc(i.savedAt)}</span></li>`
+      ).join('');
+    };
+    form.addEventListener('input', preview);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const m = draft();
+      const items = read();
+      items.push({
+        id: `draft-${Date.now().toString(36)}`,
+        title: m.name,
+        collection: m.series,
+        editionSize: m.editionSize,
+        notes: m.description,
+        status: m.status,
+        savedAt: new Date().toLocaleDateString(),
+      });
+      write(items);
+      form.reset();
+      preview();
+      render();
+    });
+    $('[data-clear]').addEventListener('click', () => { try { localStorage.removeItem(key); } catch {} render(); });
+    preview();
+    render();
+  })();
+</script>
+
+<style>
+  textarea, input { width: 100%; font: inherit; }
+  pre { white-space: pre-wrap; word-break: break-word; font-family: var(--pc-font-mono); font-size: 12px; margin: 8px 0; }
+  .receipt-ledger {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: start;
+    margin-top: 14px;
+    border: 1px solid var(--pc-rule-soft);
+    padding: 14px;
+  }
+  .receipt-list { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .receipt-list :global(li) { border: 1px solid var(--pc-rule-soft); padding: 10px; display: grid; gap: 4px; }
+  .receipt-list :global(span) { color: var(--pc-ink-muted); font-size: 12px; line-height: 1.35; }
+  @media (max-width: 840px) {
+    .receipt-ledger { grid-template-columns: 1fr; }
+    .receipt-list { grid-template-columns: 1fr; }
+  }
+</style>

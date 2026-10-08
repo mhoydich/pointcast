@@ -817,7 +817,7 @@ export const POINTCAST_APPS: PointcastApp[] = [
     slug: 'mint-studio',
     name: 'Mint Studio',
     kicker: 'ART BRIEF · METADATA · RECEIPTS',
-    description: 'A local mint-planning desk for turning art ideas into clean collectible briefs, metadata notes, and Tezos-ready receipts.',
+    description: 'A local planning desk for turning art ideas into collectible briefs, metadata previews, and mint-pending draft receipts. It mints nothing and holds no keys.',
     url: 'https://pointcast.xyz/mint-studio',
     path: '/mint-studio',
     repo: 'https://github.com/mhoydich/pointcast',
