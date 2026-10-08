@@ -1,0 +1,176 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import MicroAppShell from '../components/MicroAppShell.astro';
+import contracts from '../data/contracts.json';
+import { MORNING_OCEAN_TOKENS } from '../data/morning-ocean';
+import { getPointcastApp } from '../lib/pointcast-apps';
+
+const app = getPointcastApp('harbor-log')!;
+const title = app.name;
+const description = app.description;
+const config = (contracts as any).morning_ocean ?? {};
+const mintLive = String(config.mainnet ?? '').trim().startsWith('KT1');
+const heroImages = [0, 2, 7, 12, 16, 22].map((i) => MORNING_OCEAN_TOKENS[i]).filter(Boolean);
+const vessels = MORNING_OCEAN_TOKENS.map((t) => ({
+  id: t.slug,
+  tokenId: t.tokenId,
+  title: t.title,
+  vessel: t.vessel,
+  celestial: t.celestial,
+  mood: t.mood,
+  rarity: t.rarity,
+  editionSize: t.editionSize,
+  imageUrl: t.imageUrl,
+  palette: t.palette,
+}));
+const first = vessels[0];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/harbor-log',
+  name: app.name,
+  description,
+  url: app.url,
+  applicationCategory: 'LifestyleApplication',
+  operatingSystem: 'Web',
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd}>
+  <MicroAppShell
+    app={app}
+    headline="Draw a vessel. Keep a watchlist."
+    dek={`A small harbor console for the ${MORNING_OCEAN_TOKENS.length} Morning Ocean cards. Your watchlist stays in this browser and shows up in the Cabinet, Observatory, Signal Garden and Ritual Clock. ${mintLive ? 'Cards are mintable from /morning-ocean.' : 'Minting is pending: the Morning Ocean contract is not originated yet, so nothing here is on-chain.'}`}
+    images={heroImages.map((t) => ({ src: t.imageUrl, alt: `${t.title} Morning Ocean card` }))}
+    stats={[
+      { label: 'Vessels', value: MORNING_OCEAN_TOKENS.length },
+      { label: 'Storage', value: 'local' },
+      { label: 'Mint', value: mintLive ? 'live' : 'pending' },
+      { label: 'Mode', value: 'watch' },
+    ]}
+    links={[
+      { href: '/morning-ocean', label: 'Ocean' },
+      { href: '/cabinet', label: 'Cabinet' },
+    ]}
+  >
+    <section class="app-section harbor" data-harbor-log>
+      <div class="tool-grid">
+        <div class="tool-panel">
+          <h2>Harbor Draw</h2>
+          <p class="mono-note">Pull one card from the series, then add it to your watchlist.</p>
+          <div class="button-row">
+            <button type="button" data-draw>Draw vessel</button>
+            <button type="button" data-watch>Add to watchlist</button>
+          </div>
+          <p class="mono-note"><a href="/morning-ocean">See the full series on /morning-ocean</a></p>
+        </div>
+
+        <article class="harbor-card">
+          <img data-art src={first.imageUrl} alt={`${first.title} Morning Ocean card`} width="1024" height="1024" decoding="async" />
+          <div>
+            <p class="mono-note" data-kicker>No. {String(first.tokenId).padStart(2, '0')} · {first.rarity}</p>
+            <h2 data-title>{first.title}</h2>
+            <p data-detail>{first.vessel} under {first.celestial}.</p>
+            <dl>
+              <div><dt>Mood</dt><dd data-mood>{first.mood}</dd></div>
+              <div><dt>Edition</dt><dd data-edition>{first.editionSize}</dd></div>
+            </dl>
+          </div>
+        </article>
+      </div>
+
+      <section class="watch-ledger" aria-labelledby="watch-title">
+        <div>
+          <h2 id="watch-title">Watchlist</h2>
+          <p class="mono-note"><span data-count>0</span> vessels watched in this browser.</p>
+        </div>
+        <button type="button" data-clear>Clear watchlist</button>
+        <ol class="watch-list" data-list></ol>
+      </section>
+    </section>
+  </MicroAppShell>
+  <script id="harbor-log-data" type="application/json" is:inline set:html={JSON.stringify(vessels)}></script>
+</BlockLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-harbor-log]');
+    const dataEl = document.querySelector('#harbor-log-data');
+    if (!root || !dataEl) return;
+    const vessels = JSON.parse(dataEl.textContent || '[]');
+    const key = 'pc:harbor-log:watchlist';
+    let selected = vessels[0];
+    const $ = (s) => root.querySelector(s);
+    const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const read = () => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } };
+    const write = (items) => { try { localStorage.setItem(key, JSON.stringify(items.slice(-50))); } catch {} };
+    const show = (v) => {
+      selected = v;
+      $('[data-art]').src = v.imageUrl;
+      $('[data-art]').alt = `${v.title} Morning Ocean card`;
+      $('[data-kicker]').textContent = `No. ${String(v.tokenId).padStart(2, '0')} · ${v.rarity}`;
+      $('[data-title]').textContent = v.title;
+      $('[data-detail]').textContent = `${v.vessel} under ${v.celestial}.`;
+      $('[data-mood]').textContent = v.mood;
+      $('[data-edition]').textContent = String(v.editionSize);
+    };
+    const render = () => {
+      const items = read();
+      $('[data-count]').textContent = String(items.length);
+      $('[data-list]').innerHTML = items.slice().reverse().map((i) =>
+        `<li><strong>${esc(i.title)}</strong><span>${esc(i.vessel)} · ${esc(i.rarity)}</span><button type="button" data-remove="${esc(i.id)}">Remove</button></li>`
+      ).join('');
+    };
+    $('[data-draw]').addEventListener('click', () => {
+      const pool = vessels.filter((v) => v.id !== selected.id);
+      show(pool[Math.floor(Math.random() * pool.length)] || vessels[0]);
+    });
+    $('[data-watch]').addEventListener('click', () => {
+      const items = read().filter((i) => i.id !== selected.id);
+      const { palette, ...rest } = selected;
+      items.push({ ...rest, savedAt: new Date().toLocaleDateString() });
+      write(items);
+      render();
+    });
+    $('[data-list]').addEventListener('click', (e) => {
+      const id = e.target?.getAttribute?.('data-remove');
+      if (!id) return;
+      write(read().filter((i) => i.id !== id));
+      render();
+    });
+    $('[data-clear]').addEventListener('click', () => { try { localStorage.removeItem(key); } catch {} render(); });
+    render();
+  })();
+</script>
+
+<style>
+  .harbor-card {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.85fr) minmax(0, 1fr);
+    gap: 14px;
+    border: 1px solid var(--pc-rule-soft);
+    padding: 14px;
+  }
+  .harbor-card img { width: 100%; height: auto; display: block; border: 1px solid var(--pc-rule-soft); }
+  dl { display: grid; gap: 8px; margin: 14px 0 0; }
+  dt { color: var(--pc-ink-muted); font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+  dd { margin: 3px 0 0; }
+  .watch-ledger {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: start;
+    margin-top: 14px;
+    border: 1px solid var(--pc-rule-soft);
+    padding: 14px;
+  }
+  .watch-list { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .watch-list :global(li) { border: 1px solid var(--pc-rule-soft); padding: 10px; display: grid; gap: 5px; }
+  .watch-list :global(span) { color: var(--pc-ink-muted); font-size: 12px; line-height: 1.35; }
+  .watch-list :global(button) { justify-self: start; font-size: 11px; }
+  @media (max-width: 840px) {
+    .harbor-card, .watch-ledger { grid-template-columns: 1fr; }
+    .watch-list { grid-template-columns: 1fr; }
+  }
+</style>
