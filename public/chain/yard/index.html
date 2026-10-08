@@ -828,6 +828,9 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       if (cp && typeof cp.body === "string" && cp.body) {
         art.append(h("div", { class: "txbody" }, cp.body),
           h("div", { class: "txmeta" }, "post text is off-chain, as the node reports it; the chain holds its body_hash"));
+      } else if (typeof ctx.bodyOf === "function" && typeof ctx.bodyOf(payload.body_hash) === "string") {
+        art.append(h("div", { class: "txbody" }, ctx.bodyOf(payload.body_hash)),
+          h("div", { class: "txmeta" }, "post text is off-chain, as this recording holds it; the recording's check re-hashed it to the body_hash below"));
       }
       art.append(h("div", { class: "txmeta" }, "body_hash ", copyable(payload.body_hash, 8),
         payload.media_uri ? [" · media ", h("code", null, str(payload.media_uri))] : null));
@@ -1276,6 +1279,10 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
   // ======================================================================
   let MODE = "boot";               // "node" | "snapshot"
   let API = null, SNAP_URL = null, SNAP = null;
+  // A devnet recording's off-chain post bodies (record-devnet.mjs): body_hash
+  // -> text, and the hashes it lists in `hidden` with the devnet's 410 reason.
+  const SNAP_BODIES = new Map();
+  const SNAP_HIDDEN = new Set();
   // The snapshot exactly as served. The page reads it with JSON.parse, which is
   // fine for drawing; VERIFY hands these bytes to the worker, which parses them
   // losslessly (verify.js parseJson), so every u64 reaches the wasm intact.
@@ -1458,6 +1465,39 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     setInterval(refreshNet, 60000);
   }
 
+  // Post bodies are off-chain. A devnet recording carries them in `bodies`, or
+  // in `body_shards` next to the file (bodies/NNN.json, each listed with its
+  // sha256, which is checked here before any of it is used). A shard that is
+  // missing or does not match is skipped: its posts read as a body_hash, the
+  // same as a post with no recorded body. The recorder and
+  // scripts/yard-snapshot.sh --check re-hashed every body to its body_hash.
+  async function loadSnapshotBodies(snap, base) {
+    SNAP_BODIES.clear(); SNAP_HIDDEN.clear();
+    const put = (m) => {
+      if (!m || typeof m !== "object" || Array.isArray(m)) return;
+      for (const [k, v] of Object.entries(m)) if (/^[0-9a-f]{64}$/.test(k) && typeof v === "string") SNAP_BODIES.set(k, v);
+    };
+    put(snap.bodies);
+    for (const x of Array.isArray(snap.hidden) ? snap.hidden : []) {
+      if (x && typeof x.hash === "string" && typeof x.reason === "string" && /hidden by the devnet admin/.test(x.reason)) SNAP_HIDDEN.add(x.hash);
+    }
+    if (!Array.isArray(snap.body_shards) || !(crypto && crypto.subtle)) return;
+    for (const sh of snap.body_shards) {
+      try {
+        if (!sh || typeof sh.path !== "string" || !/^bodies\/[0-9]{3}\.json$/.test(sh.path) || !/^[0-9a-f]{64}$/.test(String(sh.sha256))) continue;
+        const u = new URL(sh.path, base);
+        if (u.origin !== location.origin) continue;
+        const r = await fetch(u.href, { cache: "no-cache" });
+        if (!r.ok) continue;
+        const buf = await r.arrayBuffer();
+        const d = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buf)), (b) => b.toString(16).padStart(2, "0")).join("");
+        if (d !== sh.sha256) continue;
+        const doc = JSON.parse(new TextDecoder().decode(buf));
+        if (doc && doc.format === "pointcast-chain-snapshot-bodies/v1") put(doc.bodies);
+      } catch { /* this shard's posts read as a body_hash */ }
+    }
+  }
+
   async function bootSnapshot(rel, why) {
     const url = httpUrl(rel, location.href);
     if (!url || url.origin !== location.origin) {
@@ -1478,6 +1518,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     if (!snap || snap.format !== "pointcast-chain-snapshot/v1" || !Array.isArray(snap.blocks) || !validStatus(snap.status) || !snap.params) {
       return fatal(`${url.pathname} is not a pointcast-chain-snapshot/v1 file.`, why);
     }
+    await loadSnapshotBodies(snap, url);
     MODE = "snapshot";
     SNAP = snap;
     SNAP_TEXT = text;
@@ -1563,6 +1604,37 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     }
   }
 
+  // What the SNAPSHOT line says about the chain in the file — and it may only
+  // say what the file says. A recording of a live chain carries `source`
+  // (deploy/devnet-worker/scripts/record-devnet.mjs): which chain, from where,
+  // and what that chain said about itself. A file with no `source` is the
+  // pinned --dev --demo recording this page ships beside itself; only that one
+  // may be called a dev chain signed with the public dev keys. Returns text —
+  // `show` writes it with textContent, so nothing here parses as markup.
+  function snapshotSource(snap, { ticketed = false, why = "" } = {}) {
+    const rec = str(snap && snap.recorded_at);
+    const src = obj(snap && snap.source);
+    const taps = ticketed ? " with ticketed taps" : "";
+    const when = rec ? `, recorded ${rec}` : "";
+    const because = why ? ` Showing it because ${why}.` : "";
+    const tail = `${because} VERIFY replays it in your browser.`;
+    if (!str(src.chain_id) && !str(src.network)) {
+      return `Static snapshot: a recorded --dev --demo chain${taps}, signed with the public dev keys${when}.${tail}`;
+    }
+    const net = str(src.network);
+    const id = str(src.chain_id);
+    const what = [id || "a pointcast-chain chain", net && net !== id ? `(${net})` : ""].filter(Boolean).join(" ");
+    const from = str(src.url) ? ` from ${str(src.url)}` : "";
+    const says = [
+      net === "devnet" ? "one sequencer chooses every block" : "",
+      str(src.value) === "none" ? "no value" : "",
+      src.may_reset === true ? "the live chain may reset" : "",
+    ].filter(Boolean);
+    const said = says.join(", ");
+    const caveat = said ? ` ${said[0].toUpperCase()}${said.slice(1)} — nothing here is promised to survive and nothing here has value.` : "";
+    return `Static snapshot: a recording of ${what}${taps}${from}${when}.${caveat}${tail}`;
+  }
+
   function setSource(why) {
     const id = status && status.chain_id;
     $("chain-id").textContent = str(id || "…");
@@ -1580,7 +1652,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       $("s-source-l").textContent = rec ? `rec. ${rec.slice(0, 10)}` : "static";
       $("s-source").title = SNAP_URL || "";
       setLive("snap", "SNAPSHOT");
-      show("v-src", `Static snapshot: a recorded --dev --demo chain${ticketed() ? " with ticketed taps" : ""}, signed with the public dev keys${rec ? `, recorded ${rec}` : ""}.${why ? ` Showing it because ${why}.` : ""} VERIFY replays it in your browser.`);
+      show("v-src", snapshotSource(SNAP, { ticketed: ticketed(), why }));
       $("feed-link").hidden = true;
     }
     $("anchor-every").textContent = fmt(interval);
@@ -1593,17 +1665,37 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
     $("live-tally").textContent = kind === "on" && (live.blocks || live.txs) ? ` +${fmt(live.blocks)} blocks · +${fmt(live.txs)} tx` : "";
   }
 
+  // The anchors tile. A live node may not have served every anchor record
+  // yet, so it counts the anchor heights reached. A snapshot holds every anchor
+  // it will ever have: it counts the sealed records only, so a recording of a
+  // chain that anchors to nothing (a devnet) says 0, not height / interval.
+  function anchorStat({ height, interval, sealed, snapshot }) {
+    const reached = Math.floor(height / interval);
+    if (snapshot) {
+      return {
+        count: sealed,
+        label: sealed ? `Anchors · every ${fmt(interval)}` : "Anchors · none recorded",
+        hint: `${fmt(sealed)} sealed anchor records in this file`,
+      };
+    }
+    return {
+      count: Math.max(sealed, reached),
+      label: `Anchors · every ${fmt(interval)}`,
+      hint: `${fmt(sealed)} sealed anchor records · ${fmt(reached)} anchor heights reached`,
+    };
+  }
+
   function updateStats() {
     if (!status) return;
     $("s-tip").textContent = `№${fmt(status.height)}`;
     $("s-txs").textContent = fmt(totalTx);
     $("s-txs-l").textContent = minH > 1 ? `Txs since №${fmt(minH)}` : "Transactions";
     $("s-accounts").textContent = fmt(status.accounts);
-    const reached = Math.floor(status.height / interval);
     const sealed = [...anchors.keys()].filter((k) => k <= status.height).length;
-    $("s-anchors").textContent = fmt(Math.max(sealed, reached));
-    $("s-anchors-l").textContent = `Anchors · every ${fmt(interval)}`;
-    $("s-anchors").title = `${fmt(sealed)} sealed anchor records · ${fmt(reached)} anchor heights reached`;
+    const a = anchorStat({ height: status.height, interval, sealed, snapshot: MODE === "snapshot" });
+    $("s-anchors").textContent = fmt(a.count);
+    $("s-anchors-l").textContent = a.label;
+    $("s-anchors").title = a.hint;
     const sup = num(status.total_supply), max = num(status.max_supply);
     $("s-supply").textContent = Number.isFinite(sup) ? fmt(sup) : "—";
     $("s-supply-bar").style.width = Number.isFinite(sup) && max > 0 ? `${Math.max(0.5, Math.min(100, (sup / max) * 100))}%` : "0";
@@ -2513,6 +2605,7 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       const mi = mintIndex();
       const ctx = {
         icon: (ix) => kindIcon(ix), snapshot: MODE === "snapshot", ticketed: ticketed(), town: TOWN,
+        bodyOf: (hash) => (MODE === "snapshot" && typeof hash === "string" ? SNAP_BODIES.get(hash) : undefined),
         mintAt: (i) => {
           const name = B.names[i];
           const m = isMintName(name) ? mintOf(name, B.txs[i] && B.txs[i].tx) : null;
@@ -2523,7 +2616,12 @@ footer { color: var(--pc-dim); font: 11px var(--mono); text-align: center; paddi
       };
       const list = h("div");
       B.txs.forEach((t, i) => {
+        // A recording has no node behind it: its own `bodies` and `hidden` say
+        // what the devnet served when it was recorded.
+        const snapMode = MODE === "snapshot";
         const { card, mod } = panelCard(useReplay ? rep.txs[i] : null, servedTxs ? servedTxs[i] : null, !!useReplay, devnet());
+        const bh = t && t.tx && typeof t.tx.body_hash === "string" ? t.tx.body_hash : "";
+        if (snapMode) { mod.withhold = false; if (bh && SNAP_HIDDEN.has(bh)) mod.hidden = true; }
         list.append(txCard(t, card, i, src, !!useReplay, ctx, mod));
       });
       body.append(list);
