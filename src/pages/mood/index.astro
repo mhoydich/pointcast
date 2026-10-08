@@ -1,0 +1,61 @@
+---
+/**
+ * /mood — every mood tag in town, with how many blocks and gallery pieces
+ * carry it. Same two scans as /mood/[slug].astro getStaticPaths.
+ * Added 2026-10-08: /mood/{slug} pages shipped with no parent door.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+
+const blocks = await getCollection('blocks', ({ data }) => !data.draft);
+let gallery: CollectionEntry<'gallery'>[] = [];
+try {
+  gallery = await getCollection('gallery', ({ data }) => !data.draft);
+} catch {
+  gallery = [];
+}
+const tally = new Map<string, { b: number; g: number }>();
+for (const x of blocks) if (x.data.mood) { const t = tally.get(x.data.mood) ?? { b: 0, g: 0 }; t.b++; tally.set(x.data.mood, t); }
+for (const x of gallery) if (x.data.mood) { const t = tally.get(x.data.mood) ?? { b: 0, g: 0 }; t.g++; tally.set(x.data.mood, t); }
+const moods = [...tally.entries()].sort((a, b) => (b[1].b + b[1].g) - (a[1].b + a[1].g) || a[0].localeCompare(b[0]));
+const title = 'Moods';
+const description = `Every mood tag on PointCast — ${moods.length} moods across blocks and the gallery.`;
+---
+
+<BlockLayout title={title} description={description}>
+  <main class="ix">
+    <nav class="ix-crumb mono"><a href="/">Home</a> / mood</nav>
+    <header class="ix-head">
+      <p class="ix-kicker mono">MOODS · {moods.length}</p>
+      <h1>Moods</h1>
+      <p class="ix-deck">Each block and gallery piece can carry one mood tag. Here is every tag in use, most-used first, with its block and gallery counts.</p>
+    </header>
+    <ul class="chips mono">
+      {moods.map(([slug, t]) => (
+        <li><a href={`/mood/${slug}`}>{slug}<span>{t.b}b{t.g ? ` · ${t.g}g` : ''}</span></a></li>
+      ))}
+    </ul>
+  </main>
+</BlockLayout>
+
+<style>
+  .ix { max-width: 760px; margin: 0 auto; padding: 0 20px 88px; color: var(--pc-ink); }
+  .mono { font-family: var(--pc-font-mono); }
+  .ix-crumb { font-size: 12px; margin: 18px 0 0; color: var(--pc-ink-muted); }
+  .ix-crumb a { color: inherit; }
+  .ix-head { border: 1.5px solid var(--pc-accent); border-left-width: 6px; border-radius: 2px; padding: 22px 24px 20px; margin: 14px 0 0; }
+  .ix-kicker { font-size: 11px; letter-spacing: 0.1em; color: var(--pc-accent); margin: 0 0 12px; }
+  .ix-head h1 { font-size: clamp(26px, 4vw, 36px); font-weight: 500; margin: 0 0 10px; }
+  .ix-deck { font-size: 15px; line-height: 1.5; color: var(--pc-ink-soft); margin: 0; }
+  .ix-list { list-style: none; margin: 32px 0 0; padding: 0; border-top: 1.5px solid var(--pc-ink); }
+  .ix-list li { border-bottom: 1px solid var(--pc-rule-soft); }
+  .ix-list a { display: grid; gap: 4px; padding: 14px 6px; text-decoration: none; color: inherit; }
+  .ix-list a:hover { background: var(--pc-rule-soft); }
+  .ix-meta { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pc-ink-muted); }
+  .ix-t { font-size: 17px; font-weight: 500; }
+  .ix-d { font-size: 14px; line-height: 1.45; color: var(--pc-ink-soft); }
+  .chips { list-style: none; margin: 28px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips a { display: inline-flex; gap: 8px; align-items: baseline; padding: 6px 10px; border: 1px solid var(--pc-rule); border-radius: 2px; text-decoration: none; color: inherit; font-size: 13px; }
+  .chips a:hover { border-color: var(--pc-accent); color: var(--pc-accent); }
+  .chips span { font-size: 11px; color: var(--pc-ink-muted); }
+</style>
