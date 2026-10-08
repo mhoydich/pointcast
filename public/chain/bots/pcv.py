@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-DEVNET_GENESIS = 'TODO'
+DEVNET_GENESIS = 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280'
 # The published devnet whose genesis DEVNET_GENESIS pins. Only this exact URL
 # gets the built-in pin in --devnet mode; any other node needs --genesis.
 DEVNET_URL = 'https://pointcast-devnet.mhoydich.workers.dev'

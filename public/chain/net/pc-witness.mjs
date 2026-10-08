@@ -38,7 +38,7 @@ import { fileURLToPath } from "node:url";
 const TOOL = "pc-witness.mjs/1";
 const DEVNET = "https://pointcast-devnet.mhoydich.workers.dev";
 const CHAIN_ID = "pointcast-devnet-2";
-const GENESIS = "TODO";
+const GENESIS = "a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280";
 const VERIFIER_URL = "https://pointcast.xyz/chain/yard/verifier/";
 /**
  * sha256 of every verifier build this script will run (pointcast-chain

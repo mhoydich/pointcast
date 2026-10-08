@@ -63,33 +63,33 @@ export const STATUS_LINE =
 export const PLACEHOLDER = 'TODO' as const;
 
 /** TODO(orchestrator): 64-hex genesis_hash from GET <devnet>/status after the reset (must equal genesis.mjs --profile devnet-2). */
-export const DEVNET_2_GENESIS: string = PLACEHOLDER;
+export const DEVNET_2_GENESIS: string = 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280';
 
 /** TODO(orchestrator): the day the reset ran, YYYY-MM-DD (Pacific). */
-export const RESET_DATE: string = PLACEHOLDER;
+export const RESET_DATE: string = '2026-10-08';
 
 /** TODO(orchestrator): RESET_DATE + 7 days, YYYY-MM-DD. The notice is hidden after this day (tests check it is exactly +7). */
-export const NOTICE_END_DATE: string = PLACEHOLDER;
+export const NOTICE_END_DATE: string = '2026-10-15';
 
 /** TODO(orchestrator): devnet-1's recorded tip height (the frozen /status height = snapshot source.tip). */
-export const DEVNET_1_TIP: number = 0;
+export const DEVNET_1_TIP: number = 1465;
 
 /** TODO(orchestrator): the recording's recorded_at, YYYY-MM-DD. */
-export const DEVNET_1_RECORDED_AT: string = PLACEHOLDER;
+export const DEVNET_1_RECORDED_AT: string = '2026-10-08';
 
 /**
  * TODO(orchestrator, from B1's finding): can a presence admin tx move tap_policy
  * Open → Ticketed on-chain?  'admin-tx' = yes, no reset needed;
  * 'reset' = no, devnet-2 will be reset again when presence moves to Ticketed.
  */
-export const PRESENCE_FLIP: 'admin-tx' | 'reset' | typeof PLACEHOLDER = PLACEHOLDER;
+export const PRESENCE_FLIP: 'admin-tx' | 'reset' | typeof PLACEHOLDER = 'reset';
 
 /**
  * Set true by the integrator ONLY when CI shows the pinned verifier wasm
  * decoding launch records 1, 2, 6, 7, 8 and 13 against the devnet-2 fixture
  * chain. While false, no page says VERIFY works on devnet-2.
  */
-export const VERIFIER_RECORDS = false;
+export const VERIFIER_RECORDS = true;
 
 /** The launch profile, as published (names and numbers only). */
 export const DEVNET_2_PROFILE = {
@@ -239,7 +239,8 @@ export function devnet1Recording(dir: string = D1_DIR): Devnet1Recording | null 
   // It must be devnet-1 itself, pinned to devnet-1's genesis. Anything else is not this recording.
   if (genesis !== DEVNET_1_GENESIS) return null;
   const blocks: { txs?: unknown[] }[] = Array.isArray(snap.blocks) ? snap.blocks : [];
-  const height = Number(source.tip ?? status.height) || 0;
+  const tipObj = source.tip && typeof source.tip === 'object' ? source.tip : null;
+  const height = Number(tipObj ? tipObj.height : source.tip ?? status.height) || 0;
   if (!Number.isInteger(height) || height < 1 || blocks.length === 0) return null;
   let sha256: string | null = null;
   try {
@@ -250,8 +251,8 @@ export function devnet1Recording(dir: string = D1_DIR): Devnet1Recording | null 
   return {
     genesis,
     height,
-    tipHash: String(status.tip_hash ?? ''),
-    stateRoot: String(status.state_root ?? ''),
+    tipHash: String(tipObj?.hash ?? status.tip_hash ?? ''),
+    stateRoot: String(tipObj?.state_root ?? status.state_root ?? ''),
     blocks: blocks.length,
     txs: blocks.reduce((n, b) => n + (Array.isArray(b.txs) ? b.txs.length : 0), 0),
     recordedAt: String(source.recorded_at ?? snap.recorded_at ?? '').slice(0, 10),

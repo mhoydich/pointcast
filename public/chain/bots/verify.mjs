@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { PointcastVerifier, parseJson } from "./verify.js";
 
 const DEVNET = "https://pointcast-devnet.mhoydich.workers.dev";
-const GENESIS = "TODO";
+const GENESIS = "a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280";
 const get = async (path) => {
   const r = await fetch(DEVNET + path);
   if (!r.ok) throw new Error(`${r.status} ${path}`);
