@@ -20,6 +20,9 @@ const ch = CHANNELS.BDY;
 const allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
 const birthdayBlocks = allBlocks
   .filter((b) => b.data.channel === 'BDY' || b.data.type === 'BIRTHDAY')
+  // Only real celebrations: a birthday block names who it is for. Release
+  // notes filed on BDY (e.g. 0367, 0424) have no meta.for and are not birthdays.
+  .filter((b) => typeof b.data.meta?.for === 'string' && b.data.meta.for.length > 0)
   .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
 
 const family = await getCollection('family', ({ data }) => data.listed);
@@ -71,7 +74,7 @@ const upcoming = family
 // Recipients aggregation — slug → list of their birthday blocks
 const recipientMap = new Map<string, typeof birthdayBlocks>();
 for (const b of birthdayBlocks) {
-  const slug = (b.data.meta?.for as string | undefined) || 'unknown';
+  const slug = b.data.meta!.for as string;
   if (!recipientMap.has(slug)) recipientMap.set(slug, []);
   recipientMap.get(slug)!.push(b);
 }
