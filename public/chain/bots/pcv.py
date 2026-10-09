@@ -18,11 +18,17 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-DEVNET_GENESIS = 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280'
+DEVNET_GENESIS = '132faa1c08769a871c53547db3499b6c031459e6606b3c4999ffd0ead0a56f08'
 # The published devnet whose genesis DEVNET_GENESIS pins. Only this exact URL
 # gets the built-in pin in --devnet mode; any other node needs --genesis.
 DEVNET_URL = 'https://pointcast-devnet.mhoydich.workers.dev'
-SUPPORTED_KINDS = {'publish_block', 'register_agent', 'set_mandate'}
+# The chain that URL serves now: devnet-2 since the 2026-10-08 reset (devnet-1, DEVNET_GENESIS,
+# is the recording at https://pointcast.xyz/chain/yard/devnet-1/ and the bundled fixtures).
+LIVE_DEVNET_GENESIS = 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280'
+LAUNCH_TX_TAGS = dict(zip(('seal_capsule', 'open_capsule', 'claim_station', 'set_station',
+                           'set_session_key', 'clear_session_key', 'set_controllers',
+                           'open_edition', 'edition_mint', 'edition_transfer'), range(14, 24)))
+SUPPORTED_KINDS = {'publish_block', 'register_agent', 'set_mandate'} | set(LAUNCH_TX_TAGS)
 
 
 class Unsupported(ValueError):
@@ -257,7 +263,7 @@ def params_hash(p):
     encoded += string(p['drum_attestor_admin']) + sequence(p['drum_attestors_genesis'], lambda k: blob(unhex(k, 32)))
     launch = p.get('launch')
     if launch is not None:
-        unknown = [k for k, v in launch.items() if v is not None and k != 'presence']
+        unknown = [k for k, v in launch.items() if v is not None and k not in ('presence', 'keys', 'accounts', 'webauthn', 'editions', 'stations')]
         if unknown:
             raise Unsupported('params launch records: ' + ', '.join(sorted(unknown)))
         records = []
@@ -268,8 +274,77 @@ def params_hash(p):
                 record += uint(pp[name], size)
             record += string(pp['admin']) + sequence(pp['issuers_genesis'], lambda k: blob(unhex(k, 32)))
             records.append(b'\1' + blob(record))
+        for name, tag in (('keys', 2), ('accounts', 6), ('webauthn', 7), ('editions', 8), ('stations', 13)):
+            r = launch.get(name)
+            if r is None:
+                continue
+            if name == 'keys':
+                record = string(r['sequencer_admin']) + uint(r['rotation_delay_blocks'], 8) + uint(r['wallet_text_version'], 1)
+            elif name == 'accounts':
+                record = numbers(r, [('session_max_blocks', 8), ('max_session_keys', 4), ('max_controllers', 4), ('session_kinds', 8)])
+            elif name == 'webauthn':
+                record = string(r['rp_id']) + sequence(r['origins'], string) + uint(r['max_webauthn_txs_per_block'], 4)
+            elif name == 'editions':
+                record = string(r['admin']) + numbers(r, [(k, 4) for k in ('max_open', 'max_supply', 'max_recipe_len', 'royalty_bps_max')])
+            else:
+                record = sequence(r['house_codes'], string) + numbers(r, [('max_unopened', 4), ('max_delay_blocks', 8),
+                    ('max_stations', 4), ('max_capsules', 4), ('max_account_stations', 4)])
+            records.append(uint(tag, 1) + blob(record))
         encoded += b'\xf0' + uint(len(records), 4) + b''.join(records)
     return digest(b'pointcast-chain/params/v2' if launch is not None else b'pointcast-chain/params/v1', encoded)
+
+
+def numbers(obj, fields):
+    return b''.join(uint(obj[name], size) for name, size in fields)
+
+
+def optional(value, encode):
+    return b'\0' if value is None else b'\1' + encode(value)
+
+
+def hex_blob(value):
+    return blob(unhex(value))
+
+
+def hash32(value):
+    return unhex(value, 32)
+
+
+def edition_bytes(t):
+    if type(t['transferable']) is not bool:
+        raise ValueError('transferable must be boolean')
+    return (string(t['id']) + string(t['title']) + string(t['creator'])
+            + numbers(t, [('supply', 4), ('per_account', 4), ('opens_at', 8), ('closes_at', 8)])
+            + optional(t.get('attestor'), hex_blob) + uint(int(t['transferable']), 1)
+            + numbers(t, [('royalty_bps', 4), ('recipe_schema', 1), ('unique_key_len', 1)])
+            + hash32(t['renderer_hash']) + optional(t.get('l1_ref'), string))
+
+
+def launch_tx_bytes(t):
+    kind = t['type']
+    if kind == 'seal_capsule':
+        payload = string(t['channel']) + hash32(t['commitment']) + uint(t['open_at'], 8) + string(t['label'])
+    elif kind == 'open_capsule':
+        payload = hash32(t['capsule']) + hex_blob(t['salt']) + string(t['title']) + hash32(t['body_hash']) + optional(t.get('media_uri'), string)
+    elif kind == 'claim_station':
+        payload = string(t['code']) + string(t['name']) + uint({'open': 0, 'crew': 1}[t['mode']], 1) + optional(t.get('pid'), hash32)
+    elif kind == 'set_station':
+        payload = string(t['code']) + sequence(t.get('crew', []), string) + optional(t.get('pinned'), hash32) + optional(t.get('owner_to'), string)
+    elif kind == 'set_session_key':
+        payload = hex_blob(t['key']) + string(t['label']) + mandate_bytes(t['terms'])
+    elif kind == 'clear_session_key':
+        payload = hex_blob(t['key'])
+    elif kind == 'set_controllers':
+        if any(isinstance(k, str) for k in t['controllers']):
+            raise Unsupported('base58 controller keys')
+        payload = sequence(t['controllers'], encoded_key)
+    elif kind == 'open_edition':
+        payload = edition_bytes(t['terms'])
+    elif kind == 'edition_mint':
+        payload = string(t['edition']) + string(t['recipient']) + hex_blob(t['recipe']) + uint(t['approval_expires'], 8) + hex_blob(t['approval'])
+    else:  # edition_transfer
+        payload = string(t['edition']) + uint(t['serial'], 4) + string(t['to'])
+    return uint(LAUNCH_TX_TAGS[kind], 1) + payload
 
 
 def mandate_bytes(t):
@@ -295,6 +370,8 @@ def tx_bytes(t):
         encoded += b'\0' if uri is None else b'\1' + string(uri)
     elif kind == 'register_agent':
         encoded += b'\6' + blob(unhex(t['public_key'], 32)) + string(t['name'])
+    elif kind in LAUNCH_TX_TAGS:
+        encoded += launch_tx_bytes(t)
     else:
         encoded += b'\10' + string(checked_address(t['agent'], 'agent')) + mandate_bytes(t['terms'])
     return encoded
@@ -304,6 +381,8 @@ def tx_hash(stx):
     mode = stx.get('sig_mode', 'raw')
     if mode not in ('raw', 'tezos_message', 'webauthn'):
         raise Unsupported('sig_mode: ' + str(mode))
+    if mode == 'webauthn':
+        raise Unsupported('sig_mode: webauthn (P-256 verification and wire normalization)')
     encoded = tx_bytes(stx['tx']) + encoded_key(stx['public_key']) + blob(unhex(stx['signature']))
     encoded += {'raw': b'', 'tezos_message': b'\1', 'webauthn': b'\2'}[mode]
     return digest(b'pointcast-chain/txid/v1', encoded)
@@ -381,6 +460,8 @@ def verify(params, document, pinned_genesis=DEVNET_GENESIS):
     prev_timestamp = 0  # chain-core's genesis tip_timestamp
     headers = {}  # height -> (recomputed hash, header) for every block whose header parsed
     agents = {}
+    accounts = (params.get('launch') or {}).get('accounts') is not None
+    changed_controllers = set()
     nonces = {}  # sender -> next nonce: one per account, from 0, whatever the kind
     seen = {}  # txid -> block index
     for index, block in enumerate(blocks, 1):
@@ -429,7 +510,15 @@ def verify(params, document, pinned_genesis=DEVNET_GENESIS):
                     elif genesis is not None and human_address(key) not in (None, sender):
                         # Only with fully supported params: launch record 6 lets a
                         # controller or device-pass key sign for a tz1/tz2 account.
-                        report.faults.append('sender/key mismatch')
+                        if accounts:
+                            report.unsupported.add('account controller/device-pass authorization')
+                            incomplete = True
+                        else:
+                            report.faults.append('sender/key mismatch')
+                    if accounts and (sender in changed_controllers or t['type'] == 'set_controllers'):
+                        report.unsupported.add('account controller/device-pass authorization')
+                        incomplete = True
+                        changed_controllers.add(sender)
                     # Stateless authorization rules from chain-core's State::authenticate
                     # and its RegisterAgent arm: they depend only on the sender's kind.
                     if mode == 'tezos_message' and (agent or key['scheme'] == 'p256'):
@@ -635,7 +724,7 @@ def genesis_pin(genesis, devnet=None):
     if devnet is None:
         return DEVNET_GENESIS, "pcv.py's built-in devnet pin, the default; pass --genesis for another chain"
     if devnet_base(devnet) == DEVNET_URL:
-        return DEVNET_GENESIS, "pcv.py's built-in pin for %s, not taken from the node" % DEVNET_URL
+        return LIVE_DEVNET_GENESIS, "pcv.py's built-in pin for %s (devnet-2), not taken from the node" % DEVNET_URL
     raise UsageError('--genesis is required with --devnet %s: only %s has a built-in pin, '
                      'and pcv never takes a genesis pin from the node it checks' % (devnet, DEVNET_URL))
 
