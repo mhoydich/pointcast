@@ -372,7 +372,7 @@ async function main() {
   };
   let chain;
   try {
-    chain = await pcc.connect(api, { expect: { chainId: CHAIN_ID, genesisHash: genesis } });
+    chain = await pcc.connect(api, { expect: { chainId: opt.genesis ? undefined : CHAIN_ID, genesisHash: genesis } });
   } catch (e) {
     if (e && e.name === "PointcastChainError") throw new Refusal(`${api}: ${e.message}`);
     throw e;
