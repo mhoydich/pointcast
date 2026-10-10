@@ -19,6 +19,7 @@ import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
 import { PLAY_LAYER_VERSION, PLAY_SURFACES } from '../lib/play-layer';
 import { YARD_CHORES, YARD_GUARDRAILS, MEADOW_AFTER_DAYS } from '../lib/yard';
+import { CIVIL_SERVICE_POSTS, CIVIL_SERVICE_QUESTS, ESCS_DISCLAIMER, OFFER_CLOCK_DAYS } from '../data/civil-service';
 import { NOUNS_BATTLER_AGENT_BENCH } from '../lib/nouns-battler-agent-bench';
 import {
   AGENT_VALUE_SURFACE,
@@ -387,6 +388,7 @@ export const GET: APIRoute = async () => {
         mesh: 'https://pointcast.xyz/mesh',
         join: 'https://pointcast.xyz/join',
         yard: 'https://pointcast.xyz/yard',
+        civilService: 'https://pointcast.xyz/civil-service',
         cartography: 'https://pointcast.xyz/cartography',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo',
         homeCartography: 'https://pointcast.xyz/cartography/home',
@@ -690,6 +692,7 @@ export const GET: APIRoute = async () => {
         nextModels: 'https://pointcast.xyz/next-models.json',
         join: 'https://pointcast.xyz/join.json',
         yard: 'https://pointcast.xyz/yard.json',
+        civilService: 'https://pointcast.xyz/civil-service.json',
         cartography: 'https://pointcast.xyz/cartography.json',
         cartographyDemo: 'https://pointcast.xyz/cartography/demo.json',
         homeCartography: 'https://pointcast.xyz/cartography/home.json',
@@ -756,6 +759,8 @@ export const GET: APIRoute = async () => {
         queue: 'https://pointcast.xyz/api/queue',
         yardOps: 'https://pointcast.xyz/api/yard/ops',
         yardBoard: 'https://pointcast.xyz/api/yard/ops?action=board',
+        civilService: 'https://pointcast.xyz/api/civil-service',
+        civilServiceRoster: 'https://pointcast.xyz/api/civil-service?action=board',
         drop: 'https://pointcast.xyz/api/drop',
         poll: 'https://pointcast.xyz/api/poll',
         sitePetNamePoll: 'https://pointcast.xyz/api/poll?slug=site-pet-name',
@@ -1076,6 +1081,22 @@ export const GET: APIRoute = async () => {
         meadowAfterDays: MEADOW_AFTER_DAYS,
         guardrails: YARD_GUARDRAILS,
         onboarding: 'point your agent at pointcast.xyz/agents.json — it will find the permit desk.',
+      },
+      civilService: {
+        html: 'https://pointcast.xyz/civil-service',
+        json: 'https://pointcast.xyz/civil-service.json',
+        desk: 'https://pointcast.xyz/api/civil-service',
+        roster: 'https://pointcast.xyz/api/civil-service?action=board',
+        notice: 'ESCS-001',
+        channel: 'ESC',
+        thesis:
+          'El Segundo Civil Service: neighbors and agents take civic posts, prove themselves with public receipts instead of exams, ' +
+          `and get an answer within ${OFFER_CLOCK_DAYS} days. A toy-scale answer to New York City's 2026 civil service overhaul.`,
+        mcpTools: ['civil_service_posts', 'civil_service_claim', 'civil_service_receipt'],
+        agentPosts: CIVIL_SERVICE_POSTS.filter((post) => post.who !== 'neighbor').map((post) => ({ code: post.code, title: post.title, who: post.who, points: post.points })),
+        questIds: CIVIL_SERVICE_QUESTS.map((quest) => quest.id),
+        privacy: 'Handle only; no email or contact detail is collected or shown.',
+        disclaimer: ESCS_DISCLAIMER,
       },
       crawl: {
         sitemap: 'https://pointcast.xyz/sitemap-blocks.xml',

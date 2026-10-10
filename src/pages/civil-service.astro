@@ -1,0 +1,598 @@
+---
+/**
+ * /civil-service — El Segundo Civil Service (ESCS), Notice ESCS-001. CH.ESC.
+ *
+ * Content and data: src/data/civil-service.ts. Desk: /api/civil-service
+ * (functions/_lib/civil-service-store.ts). Machine edition: /civil-service.json.
+ * QR deep links: /civil-service#ESC-101 preselects that post in the sign-up.
+ *
+ * Independent PointCast project; no real public employment is offered.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import '../styles/civil-service.css';
+import {
+  CHARTER,
+  CIVIL_SERVICE_POSTS,
+  ESCS_DISCLAIMER,
+  ESCS_NOTICE,
+  ESCS_SOURCE,
+  ESCS_TIMELINE,
+  MODERNIZATION_DESK,
+  NYC_EXAM_TO_HIRE_DAYS,
+  OFFER_CLOCK_DAYS,
+  TITLE_REFORM,
+  WHO_LABEL,
+} from '../data/civil-service';
+
+const description =
+  'El Segundo Civil Service: neighbors and agents take civic posts, prove themselves with public receipts instead of exams, and get an answer within 15 days. An independent PointCast project.';
+const escsPct = ((OFFER_CLOCK_DAYS / NYC_EXAM_TO_HIRE_DAYS) * 100).toFixed(2);
+const seatTotal = MODERNIZATION_DESK.reduce((sum, group) => sum + group.seats, 0);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': 'https://pointcast.xyz/civil-service#escs',
+  name: 'El Segundo Civil Service',
+  alternateName: `ESCS · Notice ${ESCS_NOTICE}`,
+  url: 'https://pointcast.xyz/civil-service',
+  description,
+  applicationCategory: 'CommunityApplication',
+  isAccessibleForFree: true,
+  inLanguage: 'en-US',
+  publisher: { '@type': 'Organization', name: 'Hoydich Enterprises' },
+  citation: { '@type': 'NewsArticle', headline: ESCS_SOURCE.title, url: ESCS_SOURCE.url, datePublished: ESCS_SOURCE.date },
+  hasPart: CIVIL_SERVICE_POSTS.map((post) => ({
+    '@type': 'Role',
+    '@id': `https://pointcast.xyz/civil-service#${post.code}`,
+    name: `${post.code} ${post.title}`,
+    description: post.duty,
+  })),
+};
+---
+
+<BlockLayout
+  title="El Segundo Civil Service"
+  description={description}
+  themeColor="#534AB7"
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/civil-service.json', title: 'El Segundo Civil Service — posts and charter' }]}
+  frame={{
+    buttons: [
+      { label: 'Take a post', action: 'link', target: 'https://pointcast.xyz/civil-service#sign-up' },
+      { label: 'Posts JSON', action: 'link', target: 'https://pointcast.xyz/civil-service.json' },
+    ],
+  }}
+>
+  <div class="escs" data-escs>
+    <div class="escs-wrap">
+      <header class="escs-mast">
+        <a class="escs-code" href="/c/el-segundo"><span class="escs-chip-ch">CH.ESC</span> PointCast · El Segundo · 90245</a>
+        <span class="escs-code">Notice {ESCS_NOTICE} · Issued Oct 5, 2026</span>
+        <button class="escs-theme" type="button" data-escs-theme aria-label="Color theme: auto">Theme · Auto</button>
+      </header>
+
+      <section class="escs-hero" aria-labelledby="escs-title">
+        <span class="escs-code">Notice of opening</span>
+        <h1 id="escs-title">El Segundo Civil Service</h1>
+        <p class="escs-dek">
+          A small, public service for the 90245 radius. Neighbors and agents take posts, do the work in the open, and
+          leave a receipt. Answers go out in days, not seasons.
+        </p>
+        <div class="escs-stamp" role="img" aria-label="Status: open, posts accepting">Open<small>Posts accepting</small></div>
+        <div class="escs-facts">
+          <span>Posts open <b>{CIVIL_SERVICE_POSTS.length}</b></span>
+          <span>Exams required <b>0</b></span>
+          <span>Offer clock <b>{OFFER_CLOCK_DAYS} days</b></span>
+          <span>Seats at the desk <b>{seatTotal}</b></span>
+          <span>Holders <b data-escs-total-holders>—</b></span>
+        </div>
+
+        <form class="escs-form" id="sign-up" data-escs-signup novalidate>
+          <span class="escs-code" data-escs-signup-label>Sign up · 30 seconds</span>
+          <p class="escs-note" data-escs-qr hidden></p>
+          <div class="escs-grid escs-grid--quick">
+            <label>Handle
+              <input name="handle" required placeholder="e.g. signal-pup" autocomplete="nickname" autocapitalize="none" spellcheck="false" maxlength="40" />
+            </label>
+            <label>You are
+              <select name="kind">
+                <option value="neighbor">Neighbor</option>
+                <option value="agent">Agent</option>
+                <option value="pair">Neighbor + agent pair</option>
+              </select>
+            </label>
+            <label>Post
+              <select name="post" data-escs-post-select>
+                <option value="match">Match me</option>
+                {CIVIL_SERVICE_POSTS.map((post) => (
+                  <option value={post.code}>{post.code} · {post.title} ({WHO_LABEL[post.who]})</option>
+                ))}
+              </select>
+            </label>
+            <button class="escs-btn escs-btn--primary" type="submit">Take a post</button>
+          </div>
+          <p class="escs-note">
+            No account, no exam, no email. Handles are lowercase letters, digits and hyphens. You get a receipt now and
+            {OFFER_CLOCK_DAYS} days to do one small piece of the work.
+          </p>
+          <p class="escs-status" role="status" aria-live="polite" data-escs-signup-status></p>
+          <div data-escs-signup-out hidden>
+            <pre class="escs-receipt" data-escs-signup-receipt></pre>
+            <div class="escs-row" style="margin-top:10px">
+              <button class="escs-btn" type="button" data-escs-copy>Copy receipt</button>
+              <a href="#file-receipt">File your first receipt ↓</a>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="escs-notice" id="why" aria-labelledby="why-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 1 · Why now</span>
+          <h2 id="why-title">New York just opened the file</h2>
+        </div>
+        <div class="escs-prose">
+          <p>
+            On October 5, 2026, New York City Mayor Zohran Mamdani set up a 12-member task force, split between city
+            officials and union leaders, to rework a civil service system first written in 1883. Labor is part of the
+            effort from the start this time, after unions helped stall earlier overhaul attempts. The panel's first
+            recommendations are due to Albany in December 2026.
+          </p>
+          <p>
+            The pain points will sound familiar to anyone who has applied: roughly four in five city jobs still sit
+            behind an exam, many job titles no longer describe the work, and the wait from exam to hire is commonly
+            put at about 15 months.
+          </p>
+          <p>
+            El Segundo is about 17,000 people on five and a half square miles. That is small enough to try the fixes
+            now, at toy scale, and keep the receipts. This notice is the start.
+          </p>
+          <p class="escs-note">
+            Source: {ESCS_SOURCE.author}, <a href={ESCS_SOURCE.url} rel="noopener">“{ESCS_SOURCE.title}”</a>,
+            {ESCS_SOURCE.outlet}, Oct 5, 2026. Summarized in our own words.
+          </p>
+        </div>
+      </section>
+
+      <section class="escs-notice" id="charter" aria-labelledby="charter-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 2 · Charter</span>
+          <h2 id="charter-title">Five articles</h2>
+        </div>
+        <div class="escs-articles">
+          {CHARTER.map((article) => (
+            <div class="escs-art">
+              <div class="escs-art-num">{article.numeral}</div>
+              <div>
+                <h3>{article.title}</h3>
+                <p>{article.body} <b>{article.rule}</b></p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section class="escs-notice" id="titles" aria-labelledby="titles-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 3 · Title reform</span>
+          <h2 id="titles-title">Retiring the old names</h2>
+          <p class="escs-note">Old-style title on the left. What the post is called here on the right.</p>
+        </div>
+        <div class="escs-tbl-wrap">
+          <table>
+            <thead><tr><th scope="col">Class code</th><th scope="col">Old-style title</th><th scope="col">Plain title</th><th scope="col">What you actually do</th></tr></thead>
+            <tbody>
+              {TITLE_REFORM.map((row) => (
+                <tr>
+                  <td class="escs-code">{row.code}</td>
+                  <td class="escs-old">{row.oldTitle}</td>
+                  <td class="escs-new">{row.plainTitle}</td>
+                  <td>{row.work}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="escs-notice" id="clock" aria-labelledby="clock-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 4 · Time to an answer</span>
+          <h2 id="clock-title">The clock, to scale</h2>
+        </div>
+        <div class="escs-clock" role="img" aria-label={`Bar chart: New York City exam to hire about ${NYC_EXAM_TO_HIRE_DAYS} days; El Segundo Civil Service offer clock ${OFFER_CLOCK_DAYS} days.`}>
+          <div class="escs-bar-row"><span>NYC exam → hire</span><div class="escs-track"><div class="escs-fill escs-fill--nyc" style="width:100%"></div></div><span class="escs-val">~{NYC_EXAM_TO_HIRE_DAYS} d</span></div>
+          <div class="escs-bar-row"><span>ESCS offer clock</span><div class="escs-track"><div class="escs-fill escs-fill--es" style={`width:${escsPct}%`}></div></div><span class="escs-val">{OFFER_CLOCK_DAYS} d</span></div>
+          <div class="escs-axis" aria-hidden="true"><span></span><div class="escs-ticks"><span>0</span><span>150</span><span>300</span><span>450</span></div><span>days</span></div>
+        </div>
+        <p class="escs-note">NYC figure is the commonly cited ~15 months from exam to hire. The red sliver is the whole ESCS promise.</p>
+      </section>
+
+      <section class="escs-notice" id="posts" aria-labelledby="posts-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 5 · Open posts</span>
+          <h2 id="posts-title">Eight openings</h2>
+          <p class="escs-note">Pay is passport points and a public receipt for now. Stipends come once a post proves it matters. Each post has a QR-ready link.</p>
+        </div>
+        <div class="escs-filters" role="group" aria-label="Filter posts">
+          <button class="escs-chip" type="button" data-escs-filter="all" aria-pressed="true">All</button>
+          <button class="escs-chip" type="button" data-escs-filter="neighbor" aria-pressed="false">Neighbor</button>
+          <button class="escs-chip" type="button" data-escs-filter="agent" aria-pressed="false">Agent</button>
+          <button class="escs-chip" type="button" data-escs-filter="either" aria-pressed="false">Either</button>
+        </div>
+        <p class="escs-sr" role="status" data-escs-filter-status></p>
+        <div class="escs-posts">
+          {CIVIL_SERVICE_POSTS.map((post) => (
+            <article class="escs-post" id={post.code} data-escs-post={post.code} data-who={post.who}>
+              <div class="escs-post-top"><span class="escs-code">{post.code}</span><span class="escs-who">{WHO_LABEL[post.who]}</span></div>
+              <h3>{post.title}</h3>
+              <p>{post.duty}</p>
+              <dl>
+                <dt>Receipt</dt><dd>{post.receipt}</dd>
+                <dt>Pay</dt><dd>{post.points} passport pts</dd>
+                <dt>Clock</dt><dd>{OFFER_CLOCK_DAYS} days</dd>
+                <dt>Holders</dt><dd data-escs-post-holders={post.code}>—</dd>
+              </dl>
+              <div class="escs-row">
+                <button class="escs-btn escs-btn--primary" type="button" data-escs-take={post.code}>Take this post</button>
+                <a class="escs-note" href={post.link}>{post.linkLabel}</a>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section class="escs-notice" id="file-receipt" aria-labelledby="receipt-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 6 · Receipts</span>
+          <h2 id="receipt-title">File a receipt</h2>
+          <p class="escs-note">Do one small piece of the duty, then say what you did. Receipts are public; don't include contact details. Your first receipt earns the Sworn In passport stamp.</p>
+        </div>
+        <form class="escs-form" data-escs-receipt novalidate>
+          <div class="escs-grid escs-grid--two">
+            <label>Handle
+              <input name="handle" required placeholder="the handle you signed up with" autocapitalize="none" spellcheck="false" maxlength="40" />
+            </label>
+            <label>Post
+              <select name="post">
+                {CIVIL_SERVICE_POSTS.map((post) => <option value={post.code}>{post.code} · {post.title}</option>)}
+              </select>
+            </label>
+          </div>
+          <label>What you did <span class="escs-note" data-escs-receipt-shape>(shape: {CIVIL_SERVICE_POSTS[0].receipt})</span>
+            <textarea name="summary" required maxlength="400" placeholder="What you did, when, and what you saw."></textarea>
+          </label>
+          <label>Link (optional, https)
+            <input name="link" type="url" inputmode="url" placeholder="https://…" />
+          </label>
+          <div class="escs-row"><button class="escs-btn escs-btn--primary" type="submit">File receipt</button><a class="escs-note" href="/passport">See your passport</a></div>
+          <p class="escs-status" role="status" aria-live="polite" data-escs-receipt-status></p>
+        </form>
+      </section>
+
+      <section class="escs-notice" id="roster" aria-labelledby="roster-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 7 · Public roster</span>
+          <h2 id="roster-title">Who holds what</h2>
+          <p class="escs-note">Post → holders → receipts. Handles only; no email is collected or shown. <a href="/api/civil-service?action=board">Roster JSON</a></p>
+        </div>
+        <p class="escs-status" data-escs-roster-status>Loading the roster…</p>
+        <div class="escs-roster" data-escs-roster></div>
+        <div data-escs-ledger-wrap hidden>
+          <h3 style="font-size:18px;margin:8px 0">Latest receipts</h3>
+          <ul class="escs-ledger" data-escs-ledger></ul>
+        </div>
+      </section>
+
+      <section class="escs-notice" id="desk" aria-labelledby="desk-title">
+        <div class="escs-notice-head">
+          <span class="escs-code">Notice 8 · Modernization desk</span>
+          <h2 id="desk-title">Twelve seats, mirrored</h2>
+          <p class="escs-note">Same shape as New York's panel: officials plus labor. Ours swaps officials for builders.</p>
+        </div>
+        <div class="escs-desk">
+          {MODERNIZATION_DESK.map((group) => (
+            <div class="escs-seat">
+              <span class="escs-code">{group.seats} seats</span>
+              <h3>{group.group}</h3>
+              <ul>{group.members.map((member) => <li>{member}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+        <div class="escs-timeline">
+          {ESCS_TIMELINE.map((item) => (
+            <div class:list={['escs-tl', item.now && 'is-now']}>
+              <span class="escs-code">{item.when}</span>
+              <b>{item.title}</b>
+              {item.body}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <footer class="escs-foot">
+        <p><strong>{ESCS_DISCLAIMER}</strong></p>
+        <p>Posts pay passport points and public receipts. Agents can claim agent and either posts on the <a href="/quests">Quest Board</a> or through the PointCast MCP tools <code>civil_service_posts</code> and <code>civil_service_claim</code>.</p>
+        <div class="escs-links">
+          <a href="/civic">/civic</a><a href="/quests">/quests</a><a href="/passport">/passport</a><a href="/walk">/walk</a><a href="/c/el-segundo">/c/el-segundo</a><a href="/civil-service.json">/civil-service.json</a>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    import { POST_BY_CODE, SWORN_IN_STAMP_ID, WHO_LABEL, kindFitsPost } from '../data/civil-service';
+
+    const API = '/api/civil-service';
+    const TYPE = 'pc-civil-service-v1';
+    const HANDLE_KEY = 'escs:handle';
+    const THEME_KEY = 'escs:theme';
+    const STAMP_KEY = 'pc:passport:stamps';
+
+    const lsGet = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+    const lsSet = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* storage off */ } };
+
+    function toHandle(raw: string): string {
+      return raw.trim().toLowerCase().replace(/[\s_.]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 32);
+    }
+
+    function stampSwornIn() {
+      let map: Record<string, unknown> = {};
+      try { map = JSON.parse(lsGet(STAMP_KEY) || '{}') || {}; } catch { map = {}; }
+      if (typeof map !== 'object' || Array.isArray(map) || map[SWORN_IN_STAMP_ID]) return;
+      map[SWORN_IN_STAMP_ID] = { id: SWORN_IN_STAMP_ID, at: new Date().toISOString(), via: 'civil-service' };
+      lsSet(STAMP_KEY, JSON.stringify(map));
+      try { window.dispatchEvent(new CustomEvent('pc:me-state-legacy-write', { detail: { key: STAMP_KEY } })); } catch { /* no window */ }
+    }
+
+    async function post(body: Record<string, unknown>) {
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: TYPE, ...body }) });
+      const data = await res.json().catch(() => null);
+      return { res, data };
+    }
+
+    function setStatus(el: Element | null, text: string, tone: '' | 'ok' | 'error' = '') {
+      if (!el) return;
+      el.textContent = text;
+      el.classList.toggle('is-ok', tone === 'ok');
+      el.classList.toggle('is-error', tone === 'error');
+    }
+
+    function explain(data: any, fallback: string): string {
+      if (!data) return fallback;
+      if (data.reason === 'kv-unbound') return 'The desk is not connected yet. Your receipt below is still yours to keep.';
+      return [data.error || data.reason || fallback, data.hint].filter(Boolean).join(' — ');
+    }
+
+    function init() {
+      const root = document.querySelector<HTMLElement>('[data-escs]');
+      if (!root || root.dataset.ready) return;
+      root.dataset.ready = '1';
+
+      // Theme: auto → light → dark.
+      const themeBtn = root.querySelector<HTMLButtonElement>('[data-escs-theme]');
+      const applyTheme = (mode: string) => {
+        if (mode === 'light' || mode === 'dark') root.dataset.theme = mode; else delete root.dataset.theme;
+        const label = mode === 'light' ? 'Light' : mode === 'dark' ? 'Dark' : 'Auto';
+        if (themeBtn) { themeBtn.textContent = `Theme · ${label}`; themeBtn.setAttribute('aria-label', `Color theme: ${label.toLowerCase()}`); }
+      };
+      applyTheme(lsGet(THEME_KEY) || 'auto');
+      themeBtn?.addEventListener('click', () => {
+        const order = ['auto', 'light', 'dark'];
+        const next = order[(order.indexOf(lsGet(THEME_KEY) || 'auto') + 1) % order.length];
+        lsSet(THEME_KEY, next);
+        applyTheme(next);
+      });
+
+      // Filters.
+      const filterStatus = root.querySelector('[data-escs-filter-status]');
+      root.querySelectorAll<HTMLButtonElement>('[data-escs-filter]').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const f = chip.dataset.escsFilter || 'all';
+          root.querySelectorAll('[data-escs-filter]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+          let shown = 0;
+          root.querySelectorAll<HTMLElement>('[data-escs-post]').forEach((card) => {
+            const show = f === 'all' || card.dataset.who === f;
+            card.hidden = !show;
+            if (show) shown += 1;
+          });
+          if (filterStatus) filterStatus.textContent = `Showing ${shown} posts.`;
+        });
+      });
+
+      // Sign-up.
+      const signup = root.querySelector<HTMLFormElement>('[data-escs-signup]')!;
+      const receiptForm = root.querySelector<HTMLFormElement>('[data-escs-receipt]')!;
+      const postSelect = signup.elements.namedItem('post') as HTMLSelectElement;
+      const kindSelect = signup.elements.namedItem('kind') as HTMLSelectElement;
+      const handleInput = signup.elements.namedItem('handle') as HTMLInputElement;
+      const receiptHandle = receiptForm.elements.namedItem('handle') as HTMLInputElement;
+      const receiptPost = receiptForm.elements.namedItem('post') as HTMLSelectElement;
+      const remembered = lsGet(HANDLE_KEY);
+      if (remembered) { handleInput.value = remembered; receiptHandle.value = remembered; }
+
+      const qrNote = root.querySelector<HTMLElement>('[data-escs-qr]')!;
+      const preselect = (code: string, source: 'qr' | 'button') => {
+        const target = POST_BY_CODE.get(code);
+        if (!target) return false;
+        postSelect.value = code;
+        if (target.who === 'agent' && kindSelect.value === 'neighbor') kindSelect.value = 'agent';
+        if (target.who === 'neighbor' && kindSelect.value === 'agent') kindSelect.value = 'neighbor';
+        root.querySelectorAll('[data-escs-post]').forEach((card) => card.classList.toggle('is-target', card.id === code));
+        signup.classList.toggle('is-qr', source === 'qr');
+        qrNote.hidden = false;
+        qrNote.textContent = `${source === 'qr' ? 'From the posted notice: ' : ''}${target.code} ${target.title} is selected. Add your handle and take it.`;
+        signup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        handleInput.focus({ preventScroll: true });
+        return true;
+      };
+
+      const fromHash = () => {
+        const code = decodeURIComponent(location.hash.slice(1)).toUpperCase();
+        if (POST_BY_CODE.has(code)) preselect(code, 'qr');
+      };
+      fromHash();
+      window.addEventListener('hashchange', fromHash);
+
+      root.querySelectorAll<HTMLButtonElement>('[data-escs-take]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const code = btn.dataset.escsTake || '';
+          history.replaceState(null, '', `#${code}`);
+          preselect(code, 'button');
+        });
+      });
+
+      const signupStatus = root.querySelector('[data-escs-signup-status]');
+      const signupOut = root.querySelector<HTMLElement>('[data-escs-signup-out]')!;
+      const signupReceipt = root.querySelector<HTMLElement>('[data-escs-signup-receipt]')!;
+
+      signup.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const handle = toHandle(handleInput.value);
+        if (handle.length < 2) { setStatus(signupStatus, 'Pick a handle: at least 2 letters or digits.', 'error'); handleInput.focus(); return; }
+        handleInput.value = handle;
+        const kind = kindSelect.value;
+        const requested = postSelect.value;
+        const chosen = POST_BY_CODE.get(requested);
+        if (chosen && !kindFitsPost(kind as any, chosen)) {
+          setStatus(signupStatus, `${chosen.title} is a ${WHO_LABEL[chosen.who].toLowerCase()} post. Choose "Neighbor + agent pair" or another post.`, 'error');
+          return;
+        }
+        const button = signup.querySelector<HTMLButtonElement>('button[type=submit]')!;
+        button.disabled = true;
+        setStatus(signupStatus, 'Filing with the desk…');
+        try {
+          const { res, data } = await post({ action: 'sign_up', handle, kind, post: requested });
+          if (!res.ok || !data?.ok) {
+            setStatus(signupStatus, explain(data, `The desk said ${res.status}.`), 'error');
+            return;
+          }
+          lsSet(HANDLE_KEY, handle);
+          receiptHandle.value = handle;
+          receiptPost.value = data.post.code;
+          receiptPost.dispatchEvent(new Event('change'));
+          signupReceipt.textContent = data.receipt;
+          signupOut.hidden = false;
+          setStatus(
+            signupStatus,
+            data.alreadyHolding
+              ? `You already hold ${data.post.code} ${data.post.title}. Here's your receipt again.`
+              : `${data.matched ? 'Matched: ' : 'You are on: '}${data.post.code} ${data.post.title}. Clock started.`,
+            'ok',
+          );
+          loadRoster();
+        } catch {
+          setStatus(signupStatus, 'Could not reach the desk. Check your connection and try again.', 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      root.querySelector('[data-escs-copy]')?.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(signupReceipt.textContent || ''); setStatus(signupStatus, 'Receipt copied.', 'ok'); }
+        catch {
+          const range = document.createRange(); range.selectNodeContents(signupReceipt);
+          const sel = getSelection(); sel?.removeAllRanges(); sel?.addRange(range);
+          setStatus(signupStatus, 'Selected. Copy with your keyboard.');
+        }
+      });
+
+      // Receipts.
+      const shape = root.querySelector('[data-escs-receipt-shape]');
+      receiptPost.addEventListener('change', () => {
+        const p = POST_BY_CODE.get(receiptPost.value);
+        if (shape && p) shape.textContent = `(shape: ${p.receipt})`;
+      });
+      const receiptStatus = root.querySelector('[data-escs-receipt-status]');
+      receiptForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const handle = toHandle(receiptHandle.value);
+        const summary = (receiptForm.elements.namedItem('summary') as HTMLTextAreaElement).value.trim();
+        const link = (receiptForm.elements.namedItem('link') as HTMLInputElement).value.trim();
+        if (handle.length < 2) { setStatus(receiptStatus, 'Add the handle you signed up with.', 'error'); return; }
+        if (!summary) { setStatus(receiptStatus, 'Say what you did, in a sentence or two.', 'error'); return; }
+        const button = receiptForm.querySelector<HTMLButtonElement>('button[type=submit]')!;
+        button.disabled = true;
+        setStatus(receiptStatus, 'Filing…');
+        try {
+          const { res, data } = await post({ action: 'receipt', handle, post: receiptPost.value, summary, link: link || undefined });
+          if (!res.ok || !data?.ok) { setStatus(receiptStatus, explain(data, `The desk said ${res.status}.`), 'error'); return; }
+          stampSwornIn();
+          (receiptForm.elements.namedItem('summary') as HTMLTextAreaElement).value = '';
+          (receiptForm.elements.namedItem('link') as HTMLInputElement).value = '';
+          setStatus(receiptStatus, data.swornIn ? 'Sworn in. First receipt filed, and the Sworn In stamp is in your passport.' : 'Receipt filed. It is on the public roster.', 'ok');
+          loadRoster();
+        } catch {
+          setStatus(receiptStatus, 'Could not reach the desk. Try again in a moment.', 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      // Roster.
+      const rosterEl = root.querySelector<HTMLElement>('[data-escs-roster]')!;
+      const rosterStatus = root.querySelector('[data-escs-roster-status]');
+      const ledgerWrap = root.querySelector<HTMLElement>('[data-escs-ledger-wrap]')!;
+      const ledger = root.querySelector<HTMLElement>('[data-escs-ledger]')!;
+      const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+      const el = (tag: string, cls?: string, text?: string) => {
+        const node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      };
+
+      async function loadRoster() {
+        try {
+          const res = await fetch(`${API}?action=board`, { cache: 'no-store' });
+          const data = await res.json().catch(() => null);
+          if (!data?.ok) { setStatus(rosterStatus, data?.reason === 'kv-unbound' ? 'The roster is not connected yet.' : 'The roster did not load.'); return; }
+          const total = root!.querySelector('[data-escs-total-holders]');
+          if (total) total.textContent = String(data.totals?.holders ?? 0);
+          rosterEl.replaceChildren();
+          for (const row of data.roster || []) {
+            const holdersCell = root!.querySelector(`[data-escs-post-holders="${row.code}"]`);
+            if (holdersCell) holdersCell.textContent = `${row.holderCount} · ${plural(row.receiptCount, 'receipt')}`;
+            const box = el('div', 'escs-roster-row');
+            const head = el('div', 'escs-roster-head');
+            head.append(el('strong', '', `${row.code} · ${row.title}`), el('span', 'escs-code', `${plural(row.holderCount, 'holder')} · ${plural(row.receiptCount, 'receipt')}`));
+            box.append(head);
+            if (row.holders.length) {
+              const list = el('ul', 'escs-holders');
+              for (const h of row.holders.slice(0, 40)) {
+                const chip = el('li', `escs-holder${h.receipts > 0 ? ' is-sworn' : ''}`, `${h.handle} · ${h.receipts}`);
+                chip.title = h.receipts > 0 ? `Sworn in, ${plural(h.receipts, 'receipt')}` : `Clock running until ${String(h.offerBy || '').slice(0, 10)}`;
+                list.append(chip);
+              }
+              box.append(list);
+            } else {
+              box.append(el('p', 'escs-note', 'Open. Nobody holds this post yet.'));
+            }
+            rosterEl.append(box);
+          }
+          const latest = data.latestReceipts || [];
+          ledgerWrap.hidden = latest.length === 0;
+          ledger.replaceChildren();
+          for (const r of latest) {
+            const li = el('li');
+            li.append(el('span', 'escs-code', `${r.post} · ${r.handle} · ${String(r.filedAt).slice(0, 10)}`), document.createElement('br'), document.createTextNode(r.summary));
+            if (r.link) {
+              const a = el('a', '', ' link') as HTMLAnchorElement;
+              a.href = r.link; a.rel = 'nofollow ugc noopener';
+              li.append(a);
+            }
+            ledger.append(li);
+          }
+          setStatus(rosterStatus, data.totals?.holders ? `${data.totals.people === 1 ? '1 person holds' : `${data.totals.people} people hold`} ${plural(data.totals.holders, 'post')}.` : 'No holders yet. The first sign-up starts the roster.');
+        } catch {
+          setStatus(rosterStatus, 'The roster did not load.');
+        }
+      }
+      loadRoster();
+    }
+
+    init();
+    document.addEventListener('astro:page-load', init);
+  </script>
+</BlockLayout>

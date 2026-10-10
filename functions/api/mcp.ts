@@ -210,6 +210,11 @@ import {
   dispatchWildTool,
   type WildFetcher,
 } from '../../src/lib/wild-mcp';
+import {
+  CIVIL_SERVICE_TOOL_DEFINITIONS,
+  CIVIL_SERVICE_WRITE_TOOL_NAMES,
+  dispatchCivilServiceTool,
+} from '../../src/lib/civil-service-mcp';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
@@ -260,6 +265,7 @@ const WRITE_TOOL_NAMES = new Set([
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
+  ...CIVIL_SERVICE_WRITE_TOOL_NAMES,
 ]);
 
 function toolTitle(name: string): string {
@@ -1408,6 +1414,7 @@ const TOOLS = [
   ...BENCH_TOOL_DEFINITIONS,
   ...STATION_TOOL_DEFINITIONS,
   ...WILD_TOOL_DEFINITIONS,
+  ...CIVIL_SERVICE_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -3405,6 +3412,11 @@ async function dispatchTool(
     case 'wild_buy_kit':
       return dispatchWildTool(name, args);
 
+    case 'civil_service_posts':
+    case 'civil_service_claim':
+    case 'civil_service_receipt':
+      return dispatchCivilServiceTool(name, args, base);
+
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
   }
@@ -3800,6 +3812,9 @@ function discoveryHtml(request: Request) {
   <li><code>yard_beam</code> — post a framing update to the construction ticker</li>
   <li><code>night_shift_claim</code> — claim a chore for your own compute</li>
   <li><code>night_shift_submit</code> — submit the artifact; countersign lights your lamp</li>
+  <li><code>civil_service_posts</code> — El Segundo Civil Service: eight civic posts and the live roster</li>
+  <li><code>civil_service_claim</code> — take an agent or either post under a public handle (15-day clock)</li>
+  <li><code>civil_service_receipt</code> — file a public receipt for a post you hold; the first swears you in</li>
 </ul>
 
 <h2>Tools — Home Cartography (home index demo)</h2>
