@@ -1,16 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { getPublishedProjects } from '../src/lib/home-published-projects.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const block = (id) => JSON.parse(read(`src/content/blocks/${id}.json`));
 
-test('homepage leads with Tone Bloom, Tezos, and Standards', () => {
+test('current-projects shelf leads with the three desks and completed publication proof admits them to Latest', () => {
   const latest = JSON.parse(read('src/data/home-latest-projects.json'));
-  assert.deepEqual(latest.slice(0, 3).map((item) => item.href), ['/tone-bloom/', '/tezos/', '/standards/']);
-  for (const item of latest.slice(0, 3)) {
-    assert.ok(existsSync(new URL(`public${item.image}`, root)), item.image);
+  const publishedHrefs = new Set(getPublishedProjects(latest).map((item) => item.href));
+  for (const href of ['/tone-bloom/', '/tezos/', '/standards/']) {
+    const item = latest.find((entry) => entry.href === href);
+    assert.ok(item, href);
+    assert.equal(item.publication.state, 'verified-live', href);
+    assert.equal(publishedHrefs.has(href), true, href);
+    assert.equal(latest.filter((entry) => entry.href === href).length, 1, href);
+    assert.match(item.publication.commit, /^[a-f0-9]{40}$/);
+    assert.equal(item.publication.canonical, 'https://pointcast.xyz' + href);
+    assert.match(item.publication.immutable, /^https:\/\/[a-f0-9]{8}\.pointcast\.pages\.dev$/);
+    assert.ok(Number.isFinite(Date.parse(item.publication.verifiedAt)));
+    assert.ok(item.publication.receipt);
+    assert.ok(item.sources.every((source) => source.checkedAt && Number.isFinite(Date.parse(source.checkedAt))));
+    // Missing or mismatched proof must remove this real admitted row.
+    for (const publication of [
+      { ...item.publication, state: 'pending' },
+      { ...item.publication, verifiedAt: null },
+      { ...item.publication, immutable: null },
+      { ...item.publication, canonical: 'https://pointcast.xyz/not-this-desk/' },
+    ]) {
+      assert.equal(getPublishedProjects([{ ...item, publication }]).length, 0, href);
+    }
   }
   const current = JSON.parse(read('src/data/home-current-projects.json'));
   assert.deepEqual(current.slice(0, 3).map((item) => item.href), ['/tone-bloom', '/tezos', '/standards']);

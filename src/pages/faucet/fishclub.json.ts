@@ -44,7 +44,7 @@ export const GET: APIRoute = () => {
       issuer: program.issuer,
       start: `https://pointcast.xyz/rewards/start?program=${program.id}`,
       minCreditedSeconds: program.minCreditedSeconds,
-      protocol: 'https://pointcast.xyz/docs/plans/2026-09-05-rewards-protocol.md',
+      protocol: 'https://github.com/mhoydich/pointcast/blob/main/docs/plans/2026-09-05-rewards-protocol.md',
     })),
     claim: {
       method: 'POST',

@@ -42,7 +42,34 @@ export interface Door {
   description: string;
   district: string;    // first path segment for grouped display; "" for top-level
   count?: number;      // for dynamic collections when knowable
+  /** Where a dynamic door's link goes: a real index page, or null when no
+   *  page lists the collection (the pattern is then shown unlinked). */
+  index?: string | null;
 }
+
+// Dynamic doors whose parent path has no page of its own, mapped to the
+// page that actually indexes them. Anything not listed here links to its
+// stripped parent only if that parent is a real door; otherwise unlinked.
+const DYNAMIC_INDEX: Record<string, string> = {
+  '/b/{id}': '/archive',
+  '/c/{channel}': '/archive',
+  '/poll/{slug}': '/polls',
+  '/token/{collection}/{tokenId}': '/collection',
+  '/tide/share/{palette}/{scene}': '/tide',
+  '/r/agent/{call}': '/r/desk',
+  '/25/teams/{slug}': '/25',
+  '/paddles/brand/{brand}': '/paddles',
+  '/communications-lab/projects/{slug}': '/communications-lab',
+  '/nouns-open-circuit/match/{id}': '/nouns-open-circuit',
+  '/nouns/drum-club/bandmates/play/{hash}': '/nouns/drum-club/bandmates',
+  '/sparrow/b/{id}': '/sparrow',
+  '/sparrow/ch/{slug}': '/sparrow',
+  '/sparrow/tv/ch/{slug}': '/sparrow/tv',
+};
+
+// Dynamic routes that build zero pages: listing them would advertise a 404.
+// /projects/{slug}: the projects collection dir does not exist on main.
+const EMPTY_DYNAMIC = new Set(['/projects/{slug}']);
 
 /** Quoted string literals only — expressions ("app.name") and interpolated
  *  templates fall through to null so the caller can use a slug fallback. */
@@ -130,6 +157,7 @@ function buildPageDoors(): Door[] {
     const dynamic = /\[[^\]]+\]/.test(route);
     const inDistrict = slug.includes('/');
     const shown = displayRoute(route);
+    if (EMPTY_DYNAMIC.has(shown)) continue;
     doors.push({
       route: shown,
       kind: dynamic ? 'dynamic' : inDistrict ? 'district' : 'room',
@@ -173,7 +201,17 @@ function buildMachineDoors(): Door[] {
 
 const byRoute = (a: Door, b: Door) => a.route.localeCompare(b.route);
 
-export const DOORS: Door[] = [...buildPageDoors(), ...buildMachineDoors()].sort(byRoute);
+function withIndexes(doors: Door[]): Door[] {
+  const real = new Set(doors.filter((d) => d.kind === 'room' || d.kind === 'district').map((d) => d.route));
+  for (const d of doors) {
+    if (d.kind !== 'dynamic') continue;
+    const parent = d.route.replace(/\/\{.*$/, '') || '/';
+    d.index = DYNAMIC_INDEX[d.route] ?? (real.has(parent) ? parent : null);
+  }
+  return doors;
+}
+
+export const DOORS: Door[] = withIndexes([...buildPageDoors(), ...buildMachineDoors()]).sort(byRoute);
 
 export const ROOMS = DOORS.filter((d) => d.kind === 'room');
 export const DISTRICT_DOORS = DOORS.filter((d) => d.kind === 'district');

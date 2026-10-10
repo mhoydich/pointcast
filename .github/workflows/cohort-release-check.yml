@@ -1,0 +1,89 @@
+name: Reviewed public cohort checks
+on:
+  push:
+    branches: [codex/following-release-20261006]
+  pull_request:
+    paths:
+      - 'public/coastal-signal-wallet/**'
+      - 'public/observatory/**'
+      - 'public/moon/**'
+      - 'public/sun/**'
+      - 'public/pacific/**'
+      - 'public/air/**'
+      - 'src/components/AnimationReading*'
+      - 'src/pages/reading/animation/**'
+      - 'src/pages/agents/**'
+      - 'src/pages/ues/prediction-markets.astro'
+      - 'src/lib/observatory/**'
+      - 'src/lib/ues-living-study-boundaries.mjs'
+      - 'functions/agents/**'
+      - 'functions/api/agents/**'
+      - 'functions/api/observatory/**'
+      - 'functions/_middleware.ts'
+      - 'src/lib/agent-notices.mjs'
+      - 'src/lib/agent-noticeboard.mjs'
+      - 'src/lib/forecast-calibration.mjs'
+      - 'src/scripts/forecast-calibration-client.mjs'
+      - 'src/components/Forecast*'
+      - 'src/data/prediction-backtesting-reading.json'
+      - 'src/lib/animation-reading.mjs'
+      - 'src/data/animation-reading/**'
+      - 'src/data/agent-notices.json'
+      - 'public/agents/**'
+      - 'public/moon.json'
+      - 'public/sun.json'
+      - 'public/pacific.json'
+      - 'public/air.json'
+      - 'src/pages/for-agents.astro'
+      - 'src/pages/sitemap-discovery.xml.ts'
+      - 'src/layouts/BlockLayout.astro'
+      - 'scripts/audit-agent-notice-ledger.mjs'
+      - 'tests/observatory.test.mjs'
+      - 'tests/agent-notices.test.mjs'
+      - 'tests/agent-notice-routes.test.mjs'
+      - 'tests/agent-notice-astro.test.mjs'
+      - 'tests/ues-living-study-boundaries.test.mjs'
+      - 'tests/ues-living-study-middleware.test.mjs'
+      - 'src/styles/editorial-review.css'
+      - 'src/styles/prediction-study.css'
+      - 'src/data/prediction-curriculum.json'
+      - 'src/data/prediction-landscape.json'
+      - 'src/scripts/prediction-study-client.ts'
+      - 'astro.config.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/package-cohort-artifact.py'
+      - '.github/workflows/cohort-release-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: public-cohort-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Scoped behavior and actual Pages middleware
+        run: node --test tests/observatory.test.mjs tests/agent-notices.test.mjs tests/agent-notice-routes.test.mjs tests/agent-notice-astro.test.mjs tests/ues-living-study-boundaries.test.mjs tests/ues-living-study-middleware.test.mjs
+      - run: npm run build:bare
+      - name: Retain exact compiled QA inputs
+        run: python3 scripts/package-cohort-artifact.py "$GITHUB_WORKSPACE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pointcast-cohort-${{ github.event.pull_request.head.sha || github.sha }}
+          path: cohort-qa-artifact/
+          if-no-files-found: error
+          retention-days: 7

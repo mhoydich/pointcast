@@ -34,7 +34,7 @@ test('real Pages middleware keeps quiet studies isolated through both HTML deliv
       });
       return {response,bridgeTransforms};
     }
-    for(const study of ['/ues/death','/coastal-signal']) {
+    for(const study of ['/ues/death','/coastal-signal','/coastal-signal-wallet','/moon','/sun','/pacific','/waves','/air','/reading/animation','/reading/animation/avatar-the-last-airbender','/reading/animation/hanna-barbera','/reading/animation/saturday-morning-1980s']) {
       for(const suffix of ['','/','.html','/index.html']) {
         const {response,bridgeTransforms}=await route(`${study}${suffix}`);
         assert.equal(response.status,200);

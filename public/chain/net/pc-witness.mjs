@@ -37,8 +37,8 @@ import { fileURLToPath } from "node:url";
 
 const TOOL = "pc-witness.mjs/1";
 const DEVNET = "https://pointcast-devnet.mhoydich.workers.dev";
-const CHAIN_ID = "pointcast-devnet-1";
-const GENESIS = "132faa1c08769a871c53547db3499b6c031459e6606b3c4999ffd0ead0a56f08";
+const CHAIN_ID = "pointcast-devnet-2";
+const GENESIS = "a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280";
 const VERIFIER_URL = "https://pointcast.xyz/chain/yard/verifier/";
 /**
  * sha256 of every verifier build this script will run (pointcast-chain
@@ -372,7 +372,7 @@ async function main() {
   };
   let chain;
   try {
-    chain = await pcc.connect(api, { expect: { chainId: CHAIN_ID, genesisHash: genesis } });
+    chain = await pcc.connect(api, { expect: { chainId: opt.genesis ? undefined : CHAIN_ID, genesisHash: genesis } });
   } catch (e) {
     if (e && e.name === "PointcastChainError") throw new Refusal(`${api}: ${e.message}`);
     throw e;

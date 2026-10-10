@@ -1,11 +1,83 @@
 ---
-import projects from '../data/home-latest-projects.json';
+import catalog from '../data/home-latest-projects.json';
+import { makeProjectPanels, getPublishedProjects } from '../lib/home-published-projects.mjs';
+
+const projects = getPublishedProjects(catalog);
+const panels = makeProjectPanels(projects, 3);
+const counterWidth = `Set ${panels.length} of ${panels.length}`.length;
 ---
+
 <section class="home-projects-now" aria-labelledby="home-projects-now-title" data-home-latest-projects>
-  <header><div><p class="home-projects-now__kicker">The workshop is open</p><h2 id="home-projects-now-title">Latest from PointCast.</h2></div><a href="/apps/">Browse all projects ↗</a></header>
-  <ol>{projects.map((project,i) => <li><a href={project.href}><div class="home-projects-now__art"><img src={project.image} alt="" width="480" height="240" loading="lazy" decoding="async"/><span aria-hidden="true">0{i+1}</span></div><div class="home-projects-now__copy"><p class="home-projects-now__kicker">{project.group}</p><h3>{project.title}</h3><p>{project.dek}</p><span class="home-projects-now__open">Explore <span aria-hidden="true">↗</span></span></div></a></li>)}</ol>
-  <nav aria-label="Find your part of PointCast"><a href="#magazine">Read the magazine</a><a href="/play">Play something</a><a href="/drum">Make some music</a><a href="/shop/front">Useful buying guides</a><a href="/intern/">The project desk</a><a href="/hoydich/#latest-links">Latest / links & summaries</a><a href="/for-agents">Bring your agent</a></nav>
+  <header>
+    <div><p class="home-projects-now__kicker">The workshop is open</p><h2 id="home-projects-now-title">Latest from PointCast.</h2><p class="home-projects-now__intro">{projects.length} published pages and projects. A few doors at a time.</p></div>
+    <a href="/latest/">Browse Latest <span aria-hidden="true">↗</span></a>
+  </header>
+  {panels.length > 0 ? (
+    <div class="home-projects-now__stack" id="home-project-panels">
+      {panels.map((panel, index) => (
+        <ol class="home-projects-now__panel" data-project-panel data-panel-titles={panel.map((project) => project.title).join(', ')} data-active={String(index === 0)} aria-hidden={String(index !== 0)} inert={index === 0 ? undefined : true} aria-label={`Discovery set ${index + 1} of ${panels.length}`}>
+          {panel.map((project) => <li><a href={project.href} tabindex={index === 0 ? undefined : -1}>
+            <p class="home-projects-now__kicker">{project.group}</p><h3>{project.title}</h3><p class="home-projects-now__description">{project.dek}</p><span class="home-projects-now__open">Explore <span aria-hidden="true">↗</span></span>
+          </a></li>)}
+        </ol>
+      ))}
+    </div>
+  ) : <p class="home-projects-now__intro">Visit the project desk to see what we’re making.</p>}
+  <div class="home-projects-now__control-slot">
+    <div class="home-projects-now__controls" data-project-controls hidden>
+      <button type="button" data-project-previous aria-controls="home-project-panels" aria-label="Previous discovery set">← Previous</button>
+      <span class="home-projects-now__counter" data-project-counter style={`inline-size:${counterWidth}ch`}>Set 1 of {panels.length}</span>
+      <button type="button" data-project-next aria-controls="home-project-panels" aria-label="Next discovery set">Next →</button>
+      <button type="button" data-project-toggle aria-controls="home-project-panels">Pause rotation</button>
+    </div>
+  </div>
+  <p class="home-projects-now__status" role="status" aria-live="polite" data-project-status></p>
+  <nav aria-label="Find your part of PointCast"><a href="/latest/">Latest projects</a><a href="/apps/">Browse all projects</a><a href="#magazine">Read the magazine</a><a href="/play">Play something</a><a href="/drum">Make some music</a><a href="/shop/front">Useful buying guides</a><a href="/intern/">The project desk</a><a href="/hoydich/#latest-links">Latest / links &amp; summaries</a><a href="/for-agents">Bring your agent</a></nav>
+  <noscript><p class="home-projects-now__fallback"><a href="/latest/">Browse all {projects.length} published pages and projects in Latest.</a></p></noscript>
 </section>
+
+<script>
+  import { initializeHomeProjectRotation, type HomeProjectRotationController } from '../lib/home-project-discovery-controller.mjs';
+  const mounted = new Set<HomeProjectRotationController>();
+  const initialize = () => document.querySelectorAll<HTMLElement>('[data-home-latest-projects]').forEach((root) => {
+    const controller = initializeHomeProjectRotation(root);
+    if (controller) mounted.add(controller);
+  });
+  initialize();
+  document.addEventListener('astro:page-load', initialize);
+  document.addEventListener('astro:before-swap', () => { mounted.forEach((controller) => controller.destroy()); mounted.clear(); });
+</script>
+
 <style>
-.home-projects-now{--ink:#23272A;--muted:#4e5c68;--paper:#F5F1E7;color:var(--ink);margin:28px 0 36px}.home-projects-now header{display:flex;justify-content:space-between;gap:16px;align-items:end;margin-bottom:16px}.home-projects-now h2{font-size:clamp(25px,3vw,36px);line-height:1.1;letter-spacing:-.04em;margin:0}.home-projects-now header>a{color:inherit;min-height:44px;display:flex;align-items:center;font-size:13px}.home-projects-now__kicker{font:500 9px/1.5 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;margin:0 0 8px;color:var(--muted)}.home-projects-now ol{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));list-style:none;padding:0;margin:0;gap:10px}.home-projects-now li{min-width:0}.home-projects-now li>a{display:flex;flex-direction:column;height:100%;text-decoration:none;color:inherit;border:1px solid #aeb9c1;background:var(--paper)}.home-projects-now li>a:hover{border-color:#2549DD}.home-projects-now__art{height:100px;position:relative;overflow:hidden;background:#eee8dd}.home-projects-now__art img{display:block;width:100%;height:100%;object-fit:cover}.home-projects-now__art span{position:absolute;left:8px;bottom:8px;background:#F5F1E7;color:#23272A;padding:3px 5px;font:500 9px var(--pc-font-mono)}.home-projects-now__copy{padding:14px;display:flex;flex-direction:column;flex:1}.home-projects-now h3{font-size:20px;line-height:1.15;margin:0;letter-spacing:-.03em}.home-projects-now__copy>p:not(.home-projects-now__kicker){font-size:12px;line-height:1.55;color:var(--muted);margin:10px 0 16px}.home-projects-now__open{margin-top:auto;display:flex;justify-content:space-between;font-size:12px}.home-projects-now nav{display:flex;flex-wrap:wrap;gap:0 22px;border-bottom:1px solid #aeb9c1;margin-top:14px}.home-projects-now nav a{min-height:44px;display:inline-flex;align-items:center;color:inherit;font-size:12px;text-underline-offset:4px}.home-projects-now a:focus-visible{outline:3px solid #E94D34;outline-offset:3px}@media(max-width:1000px){.home-projects-now ol{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:650px){.home-projects-now ol{grid-template-columns:1fr 1fr}.home-projects-now header{align-items:start;flex-direction:column;gap:4px}.home-projects-now__copy{padding:12px}.home-projects-now h3{font-size:19px}}@media(max-width:360px){.home-projects-now ol{grid-template-columns:1fr}}@media(prefers-color-scheme:dark){.home-projects-now{--ink:#F5F1E7;--muted:#b8c6d0;--paper:#1d2633}}
+  .home-projects-now { --ink:#23272a;--muted:#4e5c68;--paper:#f5f1e7;--line:#aeb9c1;color:var(--ink);margin:28px 0 36px; }
+  .home-projects-now header { display:flex;justify-content:space-between;gap:16px;align-items:end;margin-bottom:16px; }
+  .home-projects-now h2 { font-size:clamp(25px,3vw,36px);line-height:1.1;letter-spacing:-.04em;margin:0; }
+  .home-projects-now header>a { color:inherit;min-height:44px;display:flex;align-items:center;gap:12px;font-size:13px;flex-shrink:0; }
+  .home-projects-now__kicker { font:500 9px/1.5 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;margin:0 0 8px;color:var(--muted); }
+  .home-projects-now__intro { font-size:12px;line-height:1.55;color:var(--muted);margin:9px 0 0; }
+  .home-projects-now__stack { display:grid;min-width:0; }
+  .home-projects-now__panel { grid-area:1/1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr;list-style:none;padding:0;margin:0;gap:10px;min-width:0; }
+  .home-projects-now__panel[data-active='false'] { visibility:hidden;pointer-events:none; }
+  .home-projects-now li { min-width:0;display:flex; }
+  .home-projects-now li>a { display:flex;flex-direction:column;min-width:0;width:100%;padding:20px;text-decoration:none;color:inherit;border:1px solid var(--line);background:var(--paper);overflow-wrap:anywhere; }
+  .home-projects-now li>a:hover { border-color:#2549dd; }
+  .home-projects-now li>a:hover h3 { text-decoration:underline;text-underline-offset:3px; }
+  .home-projects-now h3 { font-size:clamp(21px,2.2vw,28px);line-height:1.15;margin:0;letter-spacing:-.03em; }
+  .home-projects-now__description { font-size:13px;line-height:1.55;color:var(--muted);margin:12px 0 22px; }
+  .home-projects-now__open { margin-top:auto;display:flex;justify-content:space-between;font-size:12px; }
+  .home-projects-now__control-slot { min-height:56px; }
+  .home-projects-now__controls { display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding-top:12px;font:500 10px/1.5 var(--pc-font-mono); }
+  .home-projects-now__controls[hidden] { display:none; }
+  .home-projects-now__counter { flex-shrink:0;text-align:center;white-space:nowrap; }
+  .home-projects-now__controls button { appearance:none;box-sizing:border-box;min-height:44px;padding:8px 12px;background:var(--paper);border:1px solid var(--line);border-radius:0;color:inherit;font:inherit;white-space:nowrap;cursor:pointer; }
+  .home-projects-now__controls button:last-child { margin-left:auto;min-inline-size:calc(15ch + 26px); }
+  .home-projects-now__controls button:disabled { cursor:default;color:var(--muted); }
+  .home-projects-now__status { position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
+  .home-projects-now nav { display:flex;flex-wrap:wrap;gap:0 22px;border-bottom:1px solid var(--line);margin-top:14px; }
+  .home-projects-now nav a { min-height:44px;display:inline-flex;align-items:center;color:inherit;font-size:12px;text-underline-offset:4px; }
+  .home-projects-now :is(a,button):focus-visible { outline:3px solid #e94d34;outline-offset:3px; }
+  .home-projects-now__fallback { margin:12px 0 0;font-size:12px;line-height:1.55; }.home-projects-now__fallback a { color:inherit; }
+  @media(max-width:650px) { .home-projects-now__panel { grid-template-columns:1fr; }.home-projects-now header { align-items:start;flex-direction:column;gap:4px; }.home-projects-now li>a { padding:18px; }.home-projects-now h3 { font-size:24px; }.home-projects-now__description { margin-bottom:16px; }.home-projects-now__control-slot { min-height:112px; }.home-projects-now__controls { gap:8px; }.home-projects-now__controls button:last-child { margin-left:0; } }
+  @media(prefers-color-scheme:dark) { .home-projects-now { --ink:#f5f1e7;--muted:#b8c6d0;--paper:#1d2633;--line:#758493; } }
+  @media(prefers-reduced-motion:reduce) { .home-projects-now * { animation:none!important;transition:none!important; } }
 </style>

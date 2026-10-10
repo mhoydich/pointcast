@@ -1,0 +1,71 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import catalog from '../../data/home-latest-projects.json';
+import { getPublishedProjects, groupPublishedProjects } from '../../lib/home-published-projects.mjs';
+
+const projects = getPublishedProjects(catalog);
+const groups = groupPublishedProjects(projects);
+const description = 'Browse the published PointCast pages and projects: art, games, music, local knowledge, useful tools, and ideas for what comes next.';
+const jsonLd = {
+  '@context': 'https://schema.org', '@type': 'CollectionPage',
+  '@id': 'https://pointcast.xyz/latest/', name: 'Latest from PointCast',
+  description, url: 'https://pointcast.xyz/latest/',
+  mainEntity: { '@type': 'ItemList', numberOfItems: projects.length, itemListElement: projects.map((project, index) => ({ '@type': 'ListItem', position: index + 1, name: project.title, url: project.publication.canonical })) },
+};
+---
+
+<BlockLayout title="Latest from PointCast" description={description} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/latest/catalog.json', title: 'Published PointCast catalog' }]}>
+  <article class="latest" data-latest-browser>
+    <nav class="latest__breadcrumb" aria-label="Breadcrumb"><a href="/">PointCast</a><span aria-hidden="true">/</span><span aria-current="page">Latest</span></nav>
+    <header class="latest__header"><p class="latest__kicker">The workshop is open</p><h1>Find your next<br />open door.</h1><p>Art, play, music, useful tools and ideas for what comes next. Browse the published pages and projects at your own pace.</p></header>
+    <nav class="latest__doors" aria-label="More ways to explore"><a href="/apps/">All projects &amp; apps ↗</a><a href="/hoydich/#latest-links">Links &amp; summaries ↗</a><a href="/intern/">The project desk ↗</a><a href="/latest/catalog.json">Catalog JSON ↗</a></nav>
+    <form class="latest__filters" data-latest-filters hidden role="search" aria-label="Find a published page or project">
+      <label for="latest-search">Search pages and projects<input type="search" id="latest-search" data-latest-search placeholder="A title, topic or idea" autocomplete="off" aria-controls="latest-projects" /></label>
+      <label for="latest-group">Topic<select id="latest-group" data-latest-group-filter aria-controls="latest-projects"><option value="">Every topic</option>{groups.map((group) => <option value={group.name}>{group.name}</option>)}</select></label>
+      <button type="button" data-latest-clear>Clear filters</button>
+    </form>
+    <p class="latest__count" data-latest-count role="status" aria-live="polite">{projects.length} published pages and projects.</p>
+    <div id="latest-projects" class="latest__collection">
+      {groups.map((group, groupIndex) => <section class="latest__group" data-latest-group aria-labelledby={`latest-group-${groupIndex}`}>
+        <header><p class="latest__kicker">{String(groupIndex + 1).padStart(2, '0')}</p><h2 id={`latest-group-${groupIndex}`}>{group.name}</h2></header>
+        <ol class="latest__grid">{group.entries.map((project) => <li data-latest-entry data-project-group={project.group} data-latest-text={`${project.title} ${project.group} ${project.dek}`}><article>
+          <h3><a href={project.href}>{project.title}<span aria-hidden="true">↗</span></a></h3><p>{project.dek}</p><a class="latest__open" href={project.href} aria-label={`Explore ${project.title}`}>Explore <span aria-hidden="true">↗</span></a>
+        </article></li>)}</ol>
+      </section>)}
+    </div>
+    <p class="latest__empty" data-latest-empty hidden>No pages or projects match these filters. Try another word or clear the filters.</p>
+    {projects.length === 0 && <p class="latest__empty">The project desk is open. <a href="/apps/">Explore the apps and rooms.</a></p>}
+    <footer class="latest__footer"><a href="/">Back to PointCast ↑</a><a href="/apps/">Keep exploring ↗</a></footer>
+  </article>
+</BlockLayout>
+
+<script>
+  import { initializeLatestProjectBrowser } from '../../lib/home-project-discovery-controller.mjs';
+  const mounted = new Set<{ destroy(): void }>();
+  const initialize = () => document.querySelectorAll<HTMLElement>('[data-latest-browser]').forEach((root) => {
+    const controller = initializeLatestProjectBrowser(root);
+    if (controller) mounted.add(controller);
+  });
+  initialize();
+  document.addEventListener('astro:page-load', initialize);
+  document.addEventListener('astro:before-swap', () => { mounted.forEach((controller) => controller.destroy()); mounted.clear(); });
+</script>
+
+<style>
+  .latest { --ink:#23272a;--muted:#4e5c68;--line:#aeb9c1;--paper:#f5f1e7;max-width:1120px;padding:28px 22px 86px;margin:0 auto;color:var(--ink); }
+  .latest__breadcrumb,.latest__kicker { font:500 10px/1.5 var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase; }
+  .latest__breadcrumb { display:flex;align-items:center;gap:12px;margin-bottom:24px; }.latest a { color:inherit;text-underline-offset:4px; }
+  .latest__header { border-top:2px solid var(--ink);padding:30px 0 28px; }.latest__kicker { color:var(--muted);margin:0 0 12px; }
+  .latest h1 { font-size:clamp(42px,8vw,84px);line-height:1.02;letter-spacing:-.06em;margin:0; }.latest__header>p:last-child { max-width:60ch;font-size:17px;line-height:1.6;margin:22px 0 0;color:var(--muted); }
+  .latest__doors { display:flex;flex-wrap:wrap;gap:4px 24px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 0;margin-bottom:24px; }.latest__doors a { display:flex;align-items:center;min-height:44px;font-size:12px; }
+  .latest__filters { display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto;align-items:end;gap:14px; }.latest [hidden] { display:none!important; }
+  .latest__filters label { min-width:0;display:flex;flex-direction:column;gap:8px;font:500 11px/1.5 var(--pc-font-mono); }.latest__filters :is(input,select,button) { min-width:0;min-height:44px;border:1px solid var(--line);border-radius:0;background:var(--paper);color:var(--ink);padding:10px 12px;font:inherit; }.latest__filters button { cursor:pointer;font:500 11px/1.5 var(--pc-font-mono); }
+  .latest__count { min-height:24px;font:500 11px/1.6 var(--pc-font-mono);color:var(--muted);margin:20px 0; }
+  .latest__group { margin:0 0 34px; }.latest__group>header { display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--ink);padding-bottom:12px; }.latest__group .latest__kicker { margin:0; }.latest h2 { margin:0;font-size:clamp(24px,3vw,34px);line-height:1.2;letter-spacing:-.035em;overflow-wrap:anywhere; }
+  .latest__grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 0;padding:0;list-style:none; }.latest__grid li { min-width:0;display:flex; }.latest__grid article { display:flex;flex-direction:column;min-width:0;width:100%;padding:20px;border:1px solid var(--line);background:var(--paper);overflow-wrap:anywhere; }
+  .latest h3 { font-size:23px;line-height:1.15;letter-spacing:-.025em;margin:0; }.latest h3 a { text-decoration:none;display:flex;justify-content:space-between;gap:14px; }.latest h3 a:hover { text-decoration:underline; }.latest h3 span { flex-shrink:0; }.latest__grid article>p { font-size:13px;line-height:1.65;margin:14px 0 22px;color:var(--muted); }.latest__open { margin-top:auto;display:flex;justify-content:space-between;align-items:center;min-height:44px;font-size:12px; }
+  .latest__empty { font-size:16px;line-height:1.6;padding:24px 0;margin:0; }.latest__footer { display:flex;justify-content:space-between;gap:24px;padding-top:14px;border-top:1px solid var(--line); }.latest__footer a { display:flex;align-items:center;min-height:44px;font-size:12px; }.latest :is(a,input,select,button):focus-visible { outline:3px solid #2549dd;outline-offset:4px; }
+  @media(max-width:850px) { .latest__grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.latest__filters { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }.latest__filters button { justify-self:start; } }
+  @media(max-width:560px) { .latest { padding:22px 16px 72px; }.latest__grid,.latest__filters { grid-template-columns:1fr; }.latest__header>p:last-child { font-size:15px; }.latest__grid article { padding:18px; }.latest__doors { gap:0 18px; } }
+  @media(prefers-color-scheme:dark) { .latest { --ink:#f5f1e7;--muted:#b8c6d0;--line:#758493;--paper:#1d2633; } }
+</style>
