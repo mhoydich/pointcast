@@ -1,0 +1,74 @@
+---
+/**
+ * /nouns-money/note/[serial]: one Nouns Money note on devnet-2 (serials 1-1,100).
+ *
+ * Flag off (NM_CHAIN_ENABLED false): no pages are built. Either way the build
+ * runs assertNmChainReady(): a banned word in the chain copy, or anywhere in
+ * this file or the shelf, fails the build, and with the flag on so does any gap (unpinned renderer hash, banned words on
+ * a chain surface listed below; the list must equal NM_CHAIN_SURFACE_SOURCES).
+ *
+ * The page is a shell: nm-note-page.js reads the serial live from devnet-2 and
+ * shows art, owner and a hash match only after checking all three.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import { NM_CHAIN_ENABLED, NM_DEVNET, NM_EDITION_TERMS, assertNmChainReady, jsonIsland, nmClientConfig } from '../../../data/nouns-money-chain.ts';
+import { NM_COPY, fill } from '../../../lib/nouns-money/chain-copy.mjs';
+import { nm27Label } from '../../../../public/nouns-money/chain/nm-recipe.js';
+
+export function getStaticPaths() {
+  const sources = import.meta.glob(
+    [
+      '/src/pages/nouns-money.astro',
+      '/src/pages/nouns-money/collect.astro',
+      '/src/pages/nouns-money/note/[serial].astro',
+      '/src/components/NounsMoneyChainShelf.astro',
+      '/src/components/NounsMoneyCollection.astro',
+      '/src/pages/nouns-money/catalog.json.ts',
+    ],
+    { query: '?raw', import: 'default', eager: true },
+  );
+  assertNmChainReady(sources);
+  if (!NM_CHAIN_ENABLED) return [];
+  return Array.from({ length: NM_EDITION_TERMS.supply }, (_, i) => ({ params: { serial: String(i + 1) } }));
+}
+
+const serial = Number(Astro.params.serial);
+const label = nm27Label(serial);
+const N = NM_COPY.note;
+const config = { ...nmClientConfig(), serial };
+---
+<BlockLayout title={fill(N.title, { label })} description={`${fill(N.title, { label })}. ${NM_COPY.standardLine}`} noindex>
+  <main class="nmc nmc-note" id="main-content" data-nm-note>
+    <script type="application/json" data-nm-chain-config set:html={jsonIsland(config)}></script>
+    <p class="nmc-kicker">{N.kicker}</p>
+    <h1 class="nmc-title">{fill(N.title, { label })}</h1>
+    <p class="nmc-standard">{NM_COPY.standardLine}</p>
+    <p class="nmc-status" data-nmn-status aria-live="polite">{N.reading}</p>
+    <img data-nmn-art width="1000" height="500" alt="" hidden />
+    <dl class="nmc-facts">
+      <div><dt>{N.owner}</dt><dd data-nmn="owner">—</dd></div>
+      <div><dt>{N.design}</dt><dd data-nmn="design">—</dd></div>
+      <div><dt>{N.copy}</dt><dd data-nmn="copy">—</dd></div>
+      <div><dt>{N.collectedAt}</dt><dd data-nmn="collectedAt">—</dd></div>
+      <div><dt>{N.chainHash}</dt><dd data-nmn="chainHash">—</dd></div>
+      <div><dt>{N.publishedRecipe}</dt><dd data-nmn="publishedRecipe">—</dd></div>
+      <div><dt>{N.artHash}</dt><dd data-nmn="artHash">—</dd></div>
+    </dl>
+    <p class="nmc-fine">{NM_COPY.supporting.join(' ')} {NM_COPY.replacementLine}</p>
+    <p><a href={NM_DEVNET.yardHref}>{N.checkMyNote}</a> · <a href={NM_DEVNET.chainJson}>{N.chainRecord}</a> · <a href="/nouns-money/collect/">{N.backToShelf}</a></p>
+  </main>
+  <style is:inline>
+    .nmc-note{width:min(880px,calc(100% - 32px));margin:24px auto;padding:20px 16px;border:2px solid #111;background:#fbf7e8;color:#16130c;font-family:var(--pc-font-sans,'Inter',sans-serif)}
+    .nmc-note img{display:block;width:100%;height:auto;margin:12px 0;border:1px solid #537662}.nmc-note img[hidden]{display:none}
+    .nmc-note .nmc-kicker{margin:0 0 6px;font:500 .75rem/1.5 var(--pc-font-mono,'JetBrains Mono',monospace);letter-spacing:.08em;color:#155334}
+    .nmc-note .nmc-title{margin:0 0 8px;font:500 clamp(1.5rem,5vw,2.2rem)/1.15 var(--pc-font-sans,'Inter',sans-serif)}
+    .nmc-standard{padding:8px 10px;border-left:4px solid #0b6b3a;background:#edf8f1;font-size:.9rem;line-height:1.45}
+    .nmc-facts{display:grid;gap:8px;margin:12px 0}
+    .nmc-facts dt{font:500 .7rem/1.4 var(--pc-font-mono,'JetBrains Mono',monospace);letter-spacing:.08em;text-transform:uppercase;color:#4b5563}
+    .nmc-facts dd{margin:0;overflow-wrap:anywhere;font:400 .85rem/1.4 var(--pc-font-mono,'JetBrains Mono',monospace)}
+    .nmc-status{font-weight:500;overflow-wrap:anywhere}.nmc-status.is-warn{color:#9a3412}.nmc-status.is-ok{color:#0b6b3a}
+    .nmc-fine{line-height:1.5}
+    .nmc-note a:focus-visible{outline:3px solid #c8412e;outline-offset:3px}
+  </style>
+  <script type="module" is:inline src="/nouns-money/chain/nm-note-page.js"></script>
+</BlockLayout>
