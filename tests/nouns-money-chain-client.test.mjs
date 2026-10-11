@@ -5,18 +5,42 @@
 // - a /nm/claim answer is signed only if its recipe rebuilds from chain.json
 //   (right design, public copy 1-10, same art hashes, honest recipe hash);
 // - the note page's verdicts (not collected, unknown recipe, serial order);
-// - the passkey wallet is First Mints' wallet: same key, same WebAuthn options.
+// - the passkey wallet is First Mints' wallet: same key, same WebAuthn options;
+// - the signed claim (nm-shelf.js requestClaim) against the documented protocol (pointcast-chain
+//   docs/DEVNET.md, "Nouns Money", the claim): GET /nm/challenge, one passkey assertion
+//   over exactly its bytes, POST /nm/claim {sender, design, challenge, public_key,
+//   signature}; a new challenge after nm_challenge_expired or nm_challenge_used.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateKeyPairSync } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { ECDH, createECDH, createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, sign as ecSign, verify as ecVerify } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { encodeRecipeHex, recipeHash, recipeIndex } from '../public/nouns-money/chain/nm-recipe.js';
-import { cardView, confirmText, copiesLeft, fetchAllMints, findByRecipeHash, indexMints, judgeSerial, readClaims, shelfLine, verifyClaim, sha256Hex } from '../public/nouns-money/chain/nm-shelf.js';
+import {
+  CHALLENGE_BYTES,
+  RETRY_CODES,
+  assertionRequest,
+  cardView,
+  challengeUrl,
+  claimBody,
+  confirmText,
+  copiesLeft,
+  fetchAllMints,
+  findByRecipeHash,
+  indexMints,
+  judgeSerial,
+  readChallenge,
+  readClaims,
+  refusalLine,
+  requestClaim,
+  shelfLine,
+  verifyClaim,
+  sha256Hex,
+} from '../public/nouns-money/chain/nm-shelf.js';
 import { WALLET_KEY, createOptions, loadWallet, saveWallet, walletFromCredential } from '../public/nouns-money/chain/nm-wallet.js';
-import { buildTx, describeTx, passkeyAddress } from '../public/chain/first-mints/lib/pointcast-chain.js';
+import { base64url, base64urlDecode, buildTx, describeTx, parseWebauthnEnvelope, passkeyAddress } from '../public/chain/first-mints/lib/pointcast-chain.js';
 import { scanText } from '../src/lib/nouns-money/honest-copy.mjs';
-import { NM_COPY } from '../src/lib/nouns-money/chain-copy.mjs';
-import { NM_DEVNET, nmClientConfig } from '../src/data/nouns-money-chain.ts';
+import { NM_COPY, allCopyStrings, fill } from '../src/lib/nouns-money/chain-copy.mjs';
+import { NM_CLAIM_POLICY, NM_DEVNET, nmClientConfig } from '../src/data/nouns-money-chain.ts';
 import { DEVNET } from '../src/data/chain-home.ts';
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
@@ -329,6 +353,13 @@ test('client config: the devnet-2 pins, the First Mints origin rules, and every 
   assert.match(fm, new RegExp(`data-origins="${cfg.devnet.origins.join(' ')}"`));
   assert.equal(cfg.devnet.edition, 'nouns-money-27');
   assert.equal(cfg.devnet.claimPath, '/nm/claim');
+  assert.equal(cfg.devnet.challengePath, '/nm/challenge');
+  assert.equal(cfg.policy, NM_CLAIM_POLICY);
+  assert.deepEqual(
+    { ...cfg.policy },
+    { claimsPerPasskeyPerUtcDay: 1, passkeyOnly: true, passkeyProof: true, holdBlocks: 24, ipPendingMax: 3, ipClaimsPerDay: 10, challengeTtlMs: 120000 },
+    'the numbers pointcast-chain src/nm.js enforces',
+  );
   assert.ok(cfg.devnet.yardHref.startsWith(DEVNET.yardHref) && cfg.devnet.yardHref.endsWith('&lens=mints'));
   assert.equal(cfg.copy, NM_COPY);
 });
@@ -344,4 +375,271 @@ test('client scripts load nothing from outside this site and carry no copy of th
     assert.match(src, /data-nm-chain-config/, `${f} reads its words from the config island`);
     assert.doesNotMatch(src, /innerHTML|insertAdjacentHTML|document\.write/, `${f} never parses HTML`);
   }
+});
+
+// ------------------------------------------------------------------ the signed claim (nm-shelf.js requestClaim)
+
+const sha256 = (...parts) => {
+  const h = createHash('sha256');
+  for (const p of parts) h.update(p);
+  return h.digest();
+};
+const u32 = (n) => {
+  const b = Buffer.alloc(4);
+  b.writeUInt32BE(n);
+  return b;
+};
+const arrayBuffer = (b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+
+/**
+ * A SOFTWARE passkey shaped like a browser on https://pointcast.xyz: credentials.get()
+ * resolves {response: {authenticatorData, clientDataJSON, signature}} as ArrayBuffers, the
+ * signature DER-encoded as browsers return it. Its key is a public test value.
+ */
+function softPasskey(secretHex = '5a'.repeat(32), { origin = 'https://pointcast.xyz', flags = 0x05 } = {}) {
+  const d = Buffer.from(secretHex, 'hex');
+  const ecdh = createECDH('prime256v1');
+  ecdh.setPrivateKey(d);
+  const pub = ecdh.getPublicKey();
+  const key = createPrivateKey({ format: 'jwk', key: { kty: 'EC', crv: 'P-256', d: d.toString('base64url'), x: pub.subarray(1, 33).toString('base64url'), y: pub.subarray(33).toString('base64url') } });
+  const publicKey = { scheme: 'p256', bytes: ecdh.getPublicKey(null, 'compressed').toString('hex') };
+  const wallet = { address: passkeyAddress(publicKey), publicKey, credentialId: base64url(new Uint8Array([9, 8, 7, 250, 251, 252])) };
+  const gets = [];
+  const credentials = {
+    async get(options) {
+      gets.push(options);
+      const o = options.publicKey;
+      const authenticatorData = Buffer.concat([sha256(o.rpId), Buffer.from([flags]), u32(1)]);
+      const clientDataJSON = Buffer.from(JSON.stringify({ type: 'webauthn.get', challenge: base64url(new Uint8Array(o.challenge)), origin, crossOrigin: false }));
+      const signature = ecSign('sha256', Buffer.concat([authenticatorData, sha256(clientDataJSON)]), { key, dsaEncoding: 'der' });
+      return { response: { authenticatorData: arrayBuffer(authenticatorData), clientDataJSON: arrayBuffer(clientDataJSON), signature: arrayBuffer(signature) } };
+    },
+  };
+  return { wallet, credentials, gets };
+}
+
+/**
+ * A fake devnet that follows the documented claim door (DEVNET.md): challenges bound to one
+ * sender and one design, each good for one claim; POST /nm/claim checks the body has exactly
+ * the five fields and that its assertion is a passkey's over that challenge (key → pcp1
+ * address, rp_id hash, UP|UV, the strict clientDataJSON head, low-S ECDSA P-256).
+ * `answers` overrides the claim replies in order (after the checks ran and the challenge was spent).
+ */
+function fakeDevnet({ answers = [], challengeAnswer = null } = {}) {
+  const issued = new Map();
+  const used = new Set();
+  const log = [];
+  const call = async (path) => {
+    log.push(['GET', path]);
+    if (challengeAnswer) return challengeAnswer;
+    const u = new URL(path, 'https://devnet.test');
+    assert.equal(u.pathname, '/nm/challenge');
+    assert.deepEqual([...u.searchParams.keys()], ['sender', 'design']);
+    const sender = u.searchParams.get('sender');
+    const design = Number(u.searchParams.get('design'));
+    assert.match(u.searchParams.get('design'), /^(0|[1-9][0-9]?)$/, 'design: 0..99, no leading zero');
+    const challenge = base64url(randomBytes(CHALLENGE_BYTES));
+    issued.set(challenge, { sender, design });
+    const at = 1791700000000;
+    return {
+      ok: true,
+      status: 200,
+      j: { network: 'devnet', edition: 'nouns-money-27', sender, design, day: '2026-10-11', challenge, issued_at: at, expires_at: at + 120000, ttl_ms: 120000, rp_id: 'pointcast.xyz', origins: ['https://pointcast.xyz'], user_verification: 'required', claim: 'POST /nm/claim {sender, design, challenge, public_key, signature}' },
+    };
+  };
+  const post = async (path, body) => {
+    log.push(['POST', path, body]);
+    assert.equal(path, '/nm/claim');
+    assert.deepEqual(Object.keys(body).sort(), ['challenge', 'design', 'public_key', 'sender', 'signature'], 'the documented body, nothing else');
+    const refuse = (status, code) => ({ ok: false, status, j: { error: code, code, network: 'devnet' } });
+    if (!body.challenge || !body.public_key || !body.signature) return refuse(401, 'nm_unsigned');
+    const bound = issued.get(body.challenge);
+    if (!bound || bound.sender !== body.sender || bound.design !== body.design) return refuse(401, 'nm_challenge');
+    assert.deepEqual(Object.keys(body.public_key).sort(), ['bytes', 'scheme']);
+    assert.equal(body.public_key.scheme, 'p256');
+    if (passkeyAddress(body.public_key) !== body.sender) return refuse(401, 'nm_key');
+    assert.match(body.signature, /^[0-9a-f]+$/, 'the envelope as lowercase hex');
+    const env = parseWebauthnEnvelope(body.signature);
+    assert.equal(env.normalized, false, 'low-S as sent');
+    assert.equal(env.hex, body.signature, 'canonical');
+    const ad = Buffer.from(env.authenticatorData);
+    assert.deepEqual(ad.subarray(0, 32), sha256('pointcast.xyz'), 'rp_id pointcast.xyz');
+    assert.equal(ad[32] & 0x05, 0x05, 'UP and UV');
+    const cdj = Buffer.from(env.clientDataJSON).toString('utf8');
+    assert.ok(cdj.startsWith(`{"type":"webauthn.get","challenge":"${body.challenge}","origin":"https://pointcast.xyz"`), cdj);
+    const point = ECDH.convertKey(Buffer.from(body.public_key.bytes, 'hex'), 'prime256v1', undefined, undefined, 'uncompressed');
+    const pk = createPublicKey({ format: 'jwk', key: { kty: 'EC', crv: 'P-256', x: point.subarray(1, 33).toString('base64url'), y: point.subarray(33).toString('base64url') } });
+    assert.ok(ecVerify('sha256', Buffer.concat([ad, sha256(env.clientDataJSON)]), { key: pk, dsaEncoding: 'ieee-p1363' }, Buffer.from(env.rs)), 'ECDSA P-256 over authenticatorData ‖ SHA-256(clientDataJSON)');
+    if (used.has(body.challenge)) return refuse(401, 'nm_challenge_used');
+    used.add(body.challenge);
+    if (answers.length) return answers.shift();
+    const recipe = recipeOf(body.design, 1);
+    return { ok: true, status: 200, j: { edition: 'nouns-money-27', sender: body.sender, recipient: body.sender, design: body.design, copy: 1, recipe, recipe_hash: recipeHash(recipe), approval_expires: 1900, approval: 'cd'.repeat(64), day: '2026-10-11', duplicate: false, network: 'devnet' } };
+  };
+  return { call, post, log, used };
+}
+
+const claimRun = (dev, pk, over = {}) => {
+  const events = [];
+  const confirms = [];
+  const credentials = { get: async (o) => (events.push('passkey'), pk.credentials.get(o)) };
+  return requestClaim({
+    call: dev.call,
+    post: dev.post,
+    credentials,
+    confirm: async (attempt) => (events.push('words'), confirms.push(attempt), true),
+    onStep: (s) => events.push(`step:${s}`),
+    devnet: NM_DEVNET,
+    wallet: pk.wallet,
+    design: 42,
+    ...over,
+  }).then((r) => ({ r, events, confirms }));
+};
+
+test('signed claim: GET /nm/challenge, the plain words, one passkey assertion over exactly its bytes, then the documented POST body', async () => {
+  const pk = softPasskey();
+  const dev = fakeDevnet();
+  const { r, events, confirms } = await claimRun(dev, pk);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.j.copy, 1);
+  assert.equal(verifyClaim(r.j, { entry: entries[42], sender: pk.wallet.address }).copy, 1, 'the answer goes on to verifyClaim as before');
+  assert.deepEqual(events, ['step:challenge', 'words', 'step:passkey', 'passkey', 'step:claim'], 'the words come before the passkey sheet');
+  assert.deepEqual(confirms, [0]);
+  assert.deepEqual(dev.log.map(([m, p]) => `${m} ${p}`), [`GET /nm/challenge?sender=${pk.wallet.address}&design=42`, 'POST /nm/claim']);
+  const [, , body] = dev.log[1];
+  assert.equal(body.sender, pk.wallet.address);
+  assert.equal(body.design, 42);
+  assert.deepEqual(body.public_key, pk.wallet.publicKey);
+  assert.equal(body.challenge.length, 75, '56 bytes, unpadded base64url, exactly as served');
+  // the passkey was asked once, for this wallet's credential, with user verification, over the challenge's 56 bytes
+  assert.equal(pk.gets.length, 1);
+  const o = pk.gets[0].publicKey;
+  assert.equal(o.rpId, 'pointcast.xyz');
+  assert.equal(o.rpId, NM_DEVNET.rpId);
+  assert.equal(o.userVerification, 'required');
+  assert.deepEqual([...o.allowCredentials[0].id], [...base64urlDecode(pk.wallet.credentialId)]);
+  assert.equal(o.allowCredentials[0].type, 'public-key');
+  assert.deepEqual([...o.challenge], [...base64urlDecode(body.challenge)]);
+  assert.equal(o.challenge.length, CHALLENGE_BYTES);
+});
+
+test('signed claim: on 401 nm_challenge_expired or nm_challenge_used, a new challenge and the passkey again, once; a used challenge is never re-sent', async () => {
+  for (const code of RETRY_CODES) {
+    const pk = softPasskey('6b'.repeat(32));
+    const dev = fakeDevnet({ answers: [{ ok: false, status: 401, j: { error: 'ask again', code, network: 'devnet' } }] });
+    const { r, events, confirms } = await claimRun(dev, pk);
+    assert.equal(r.ok, true, `${code}: ${JSON.stringify(r)}`);
+    const posts = dev.log.filter(([m]) => m === 'POST').map(([, , b]) => b);
+    assert.equal(posts.length, 2);
+    assert.equal(dev.log.filter(([m]) => m === 'GET').length, 2, 'a second GET /nm/challenge');
+    assert.notEqual(posts[1].challenge, posts[0].challenge, 'the retry carries the new challenge');
+    assert.equal(pk.gets.length, 2, 'and a second passkey assertion');
+    assert.deepEqual(confirms, [0, 1], 'the words again before the second sheet');
+    assert.ok(events.includes('step:retry'));
+  }
+  // At most once more: a second refusal ends the claim with that code.
+  const pk = softPasskey('7c'.repeat(32));
+  const used = { ok: false, status: 401, j: { error: 'challenge already used', code: 'nm_challenge_used', network: 'devnet' } };
+  const dev = fakeDevnet({ answers: [used, { ...used }] });
+  const { r } = await claimRun(dev, pk);
+  assert.deepEqual({ ok: r.ok, stage: r.stage, status: r.status, code: r.code }, { ok: false, stage: 'claim', status: 401, code: 'nm_challenge_used' });
+  assert.equal(dev.log.filter(([m]) => m === 'POST').length, 2);
+  // Other refusals are final: no new challenge.
+  for (const [status, code] of [[409, 'nm_daily'], [429, 'nm_ip_cap'], [429, 'nm_ip_daily'], [401, 'nm_proof'], [403, 'nm_closed']]) {
+    const d = fakeDevnet({ answers: [{ ok: false, status, j: { error: 'no', code, network: 'devnet' } }] });
+    const out = await claimRun(d, softPasskey('7d'.repeat(32)));
+    assert.equal(out.r.code, code);
+    assert.equal(d.log.filter(([m]) => m === 'GET').length, 1, `${code}: no retry`);
+  }
+});
+
+test('signed claim: no passkey without the words, and nothing signed or sent when the challenge is refused or not ours', async () => {
+  const pk = softPasskey('8e'.repeat(32));
+  let dev = fakeDevnet();
+  let out = await claimRun(dev, pk, { confirm: async () => false });
+  assert.deepEqual({ ok: out.r.ok, stage: out.r.stage }, { ok: false, stage: 'declined' });
+  assert.equal(pk.gets.length, 0, 'the passkey was never asked');
+  assert.equal(dev.log.filter(([m]) => m === 'POST').length, 0);
+
+  dev = fakeDevnet({ challengeAnswer: { ok: false, status: 403, j: { error: 'Nouns Money claims are closed on this devnet', code: 'nm_closed', network: 'devnet' } } });
+  out = await claimRun(dev, pk);
+  assert.deepEqual({ stage: out.r.stage, status: out.r.status, code: out.r.code }, { stage: 'challenge', status: 403, code: 'nm_closed' });
+  assert.match(out.r.why, /^nm_closed: /, 'the refusal shows its code');
+  assert.deepEqual(out.events, ['step:challenge'], 'no words, no passkey');
+
+  const good = (await fakeDevnet().call(challengeUrl('/nm/challenge', pk.wallet.address, 42))).j;
+  for (const [over, re] of [
+    [{ sender: softPasskey('9f'.repeat(32)).wallet.address }, /another wallet/],
+    [{ design: 41 }, /design 41, asked for 42/],
+    [{ rp_id: 'evil.example' }, /rp_id evil\.example/],
+    [{ edition: 'first-mints' }, /edition first-mints/],
+    [{ challenge: `${good.challenge}=` }, /56 bytes/],
+    [{ challenge: good.challenge.slice(1) }, /56 bytes/],
+  ]) {
+    dev = fakeDevnet({ challengeAnswer: { ok: true, status: 200, j: { ...good, ...over } } });
+    out = await claimRun(dev, pk);
+    assert.equal(out.r.stage, 'challenge-check');
+    assert.match(out.r.why, re);
+    assert.equal(dev.log.filter(([m]) => m === 'POST').length, 0);
+  }
+  assert.equal(pk.gets.length, 0, 'no assertion for a challenge that is not this wallet’s and this note’s');
+});
+
+test('readChallenge, challengeUrl, assertionRequest and claimBody hold the documented shapes', () => {
+  const pk = softPasskey();
+  assert.equal(challengeUrl('/nm/challenge', 'pcp1abc', 0), '/nm/challenge?sender=pcp1abc&design=0');
+  assert.equal(challengeUrl('/nm/challenge', 'a b&c', 99), '/nm/challenge?sender=a%20b%26c&design=99');
+  for (const bad of [-1, 100, 1.5, '4', NaN]) assert.throws(() => challengeUrl('/nm/challenge', 'pcp1abc', bad), /design/);
+  const bytes = new Uint8Array(randomBytes(CHALLENGE_BYTES));
+  const j = { edition: 'nouns-money-27', sender: pk.wallet.address, design: 7, challenge: base64url(bytes), rp_id: 'pointcast.xyz', expires_at: 5 };
+  const c = readChallenge(j, { sender: pk.wallet.address, design: 7, rpId: 'pointcast.xyz' });
+  assert.deepEqual([...c.bytes], [...bytes]);
+  assert.equal(c.challenge, j.challenge);
+  assert.equal(c.expiresAt, 5);
+  assert.throws(() => readChallenge({ error: 'slow down', code: 'nm_rate' }, { sender: pk.wallet.address, design: 7, rpId: 'pointcast.xyz' }), /nm_rate: slow down/);
+  assert.throws(() => readChallenge(null, {}), /no answer/);
+  assert.throws(() => readChallenge({ ...j, design: '7' }, { sender: pk.wallet.address, design: 7, rpId: 'pointcast.xyz' }), /design/);
+  const o = assertionRequest(bytes, { rpId: 'pointcast.xyz', credentialId: pk.wallet.credentialId }).publicKey;
+  assert.deepEqual(Object.keys(o).sort(), ['allowCredentials', 'challenge', 'rpId', 'timeout', 'userVerification']);
+  assert.equal(o.challenge, bytes);
+  const resp = { authenticatorData: new Uint8Array(37), clientDataJSON: new TextEncoder().encode('{}'), signature: new Uint8Array([...new Uint8Array(31), 1, ...new Uint8Array(31), 1]) };
+  const body = claimBody({ sender: pk.wallet.address, design: 7, challenge: j.challenge, publicKey: pk.wallet.publicKey, response: resp });
+  assert.deepEqual(Object.keys(body), ['sender', 'design', 'challenge', 'public_key', 'signature']);
+  assert.match(body.signature, /^[0-9a-f]+$/);
+  assert.throws(() => claimBody({ sender: 'x', design: 7, challenge: 'c', publicKey: { scheme: 'ed25519', bytes: '00' }, response: resp }), /p256/);
+});
+
+test('refused claims get their own words: the per-IP caps with the policy numbers, a declined prompt, a challenge not ours', () => {
+  const S = NM_COPY.status;
+  const line = (r) => refusalLine(r, S, NM_CLAIM_POLICY, fill);
+  const cap = line({ ok: false, stage: 'claim', status: 429, code: 'nm_ip_cap', why: 'nm_ip_cap: …' });
+  assert.equal(cap, 'Not collected: this connection already has 3 copies set aside. Collect them, or wait about 24 blocks for them to lapse, then try again.');
+  const daily = line({ ok: false, stage: 'claim', status: 429, code: 'nm_ip_daily', why: 'nm_ip_daily: …' });
+  assert.equal(daily, 'Not collected: this connection has made its 10 claims for today (UTC), whatever passkeys it used. It can claim again after 00:00 UTC.');
+  assert.equal(line({ ok: false, stage: 'declined' }), S.declined);
+  assert.equal(line({ ok: false, stage: 'challenge-check', why: 'challenge is for another wallet' }), 'Not collected: devnet-2 sent a claim code that is not for this wallet and note (challenge is for another wallet). Nothing was signed.');
+  assert.equal(line({ ok: false, stage: 'claim', code: 'nm_unsigned', why: 'nm_unsigned: a claim needs the passkey proof' }), 'Not collected: nm_unsigned: a claim needs the passkey proof');
+  for (const t of [cap, daily]) assert.doesNotMatch(t, /\{\w+\}/, 'every placeholder filled');
+  assert.deepEqual(scanText([cap, daily, ...allCopyStrings(NM_COPY.claim)].join('\n')), []);
+  assert.equal(NM_COPY.claim.lines.length, 3);
+  assert.match(NM_COPY.claim.title, /prompt 1 of 2/);
+  assert.match(S.collecting, /prompt 2 of 2/);
+});
+
+test('the page sends the signed claim, never the Phase A body {sender, design}', () => {
+  const collect = read('public/nouns-money/chain/nm-collect.js');
+  assert.doesNotMatch(collect, /post\(devnet\.claimPath/, 'the claim goes through requestClaim');
+  assert.match(collect, /import \{ cardView, confirmText, fetchAllMints, findByRecipeHash, indexMints, readClaims, refusalLine, requestClaim, verifyClaim \} from '\.\/nm-shelf\.js';/);
+  assert.match(collect, /const claim = await requestClaim\(\{/);
+  assert.match(collect, /credentials: navigator\.credentials,/);
+  assert.match(collect, /confirm: async \(\) => window\.confirm\(claimWords\),/);
+  assert.match(collect, /fill\(C\.claim\.title, \{ nounId: entry\.noun_id \}\)/);
+  assert.match(collect, /C\.claim\.lines\.map/);
+  assert.match(collect, /if \(!claim\.ok\) return say\(refusalLine\(claim, C\.status, cfg\.policy, fill\), 'is-warn'\);/);
+  assert.ok(collect.indexOf('requestClaim({') < collect.indexOf('verifyClaim(claim.j'), 'the approval is still checked against chain.json before the edition_mint is signed');
+  const shelf = read('public/nouns-money/chain/nm-shelf.js');
+  assert.match(shelf, /import \{ addressKind, base64urlDecode, webauthnEnvelope \} from '\.\.\/\.\.\/chain\/first-mints\/lib\/pointcast-chain\.js';/);
+  const code = shelf.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /document\.|window\.|localStorage|navigator\.credentials\.get|fetch\(/, 'pure: the page passes the network and the passkey in');
+  assert.ok(!existsSync(new URL('../public/nouns-money/chain/nm-claim.js', import.meta.url)), 'no new public file: /tv/assets and every flag-off page stay byte-identical');
 });

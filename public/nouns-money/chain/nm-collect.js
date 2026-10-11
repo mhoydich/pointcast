@@ -6,13 +6,15 @@
 //
 // Reads:  GET /status (house), GET /edition/nouns-money-27/mints, GET /nm/state (claims
 //         open, copies set aside), GET /account/<addr>, plus connect() (params, genesis pinned).
-// Writes, only after a click and the passkey's own prompt:
-//         POST /nm/claim {sender, design}  → an approval for a server-built recipe,
-//         checked by verifyClaim() against chain.json before anything is signed;
+// Writes, only after a click, the plain words and the passkey's own prompt (two prompts):
+//         GET /nm/challenge, the passkey's assertion over it, then
+//         POST /nm/claim {sender, design, challenge, public_key, signature} (requestClaim)
+//         → an approval for a server-built recipe, checked by verifyClaim() against
+//         chain.json before anything is signed;
 //         POST /tx with the passkey-signed edition_mint.
 import { buildTx, connect, domainOf, signWithPasskey } from '../../chain/first-mints/lib/pointcast-chain.js';
 import { nm27Label, recipeIndex } from './nm-recipe.js';
-import { cardView, confirmText, fetchAllMints, findByRecipeHash, indexMints, readClaims, verifyClaim } from './nm-shelf.js';
+import { cardView, confirmText, fetchAllMints, findByRecipeHash, indexMints, readClaims, refusalLine, requestClaim, verifyClaim } from './nm-shelf.js';
 import { createWallet, loadWallet, saveWallet } from './nm-wallet.js';
 
 const fill = (t, v = {}) => String(t).replace(/\{(\w+)\}/g, (w, k) => (k in v ? String(v[k]) : w));
@@ -169,9 +171,30 @@ async function init(root) {
       if (!wallet || !chain || !entry) return say(C.status.needWallet, 'is-warn');
       lock();
       try {
-        say(fill(C.status.asking, { nounId: entry.noun_id }));
-        const claim = await post(devnet.claimPath, { sender: wallet.address, design });
-        if (!claim.ok) return say(fill(C.status.refused, { why: errText(claim) }), 'is-warn');
+        // The claim: a challenge, the plain words, passkey prompt 1 of 2 over the challenge, POST /nm/claim.
+        const claimWords = [
+          fill(C.claim.title, { nounId: entry.noun_id }),
+          ...C.claim.lines.map((line) => fill(line, { address: wallet.address })),
+          '',
+          C.standardLine,
+        ].join('\n');
+        const steps = {
+          challenge: () => say(fill(C.status.challenge, { nounId: entry.noun_id })),
+          retry: () => say(C.status.retrying),
+          passkey: () => say(C.status.proving),
+          claim: () => say(fill(C.status.asking, { nounId: entry.noun_id })),
+        };
+        const claim = await requestClaim({
+          call,
+          post,
+          credentials: navigator.credentials,
+          confirm: async () => window.confirm(claimWords),
+          onStep: (step) => steps[step] && steps[step](),
+          devnet,
+          wallet,
+          design,
+        });
+        if (!claim.ok) return say(refusalLine(claim, C.status, cfg.policy, fill), 'is-warn');
         // One claim per passkey per UTC day: a repeat returns today's live approval,
         // possibly for another design. It is checked against chain.json all the same.
         let target = entry;
@@ -203,6 +226,7 @@ async function init(root) {
           C.replacementLine,
           C.standardLine,
         ];
+        say(fill(C.status.collecting, { copy: ok.copy, nounId: target.noun_id }));
         const signed = await signWithPasskey(tx, domainOf(devnet.chainId, devnet.genesis), {
           publicKey: wallet.publicKey,
           credentialId: wallet.credentialId,

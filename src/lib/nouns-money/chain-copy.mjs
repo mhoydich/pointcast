@@ -56,7 +56,15 @@ export const NM_COPY = Object.freeze({
     waitingPasskey: 'Waiting for your passkey…',
     walletMade: 'Wallet made. It lives in your passkey; this browser only remembers which one.',
     noWallet: 'No wallet made: {why}',
+    challenge: 'Asking devnet-2 for a one-time claim code for Noun #{nounId}…',
+    retrying: 'That claim code ran out or was already used. Asking devnet-2 for a new one…',
+    proving: 'Waiting for your passkey (prompt 1 of 2): it signs the claim code, nothing else.',
     asking: 'Asking devnet-2 for a copy of Noun #{nounId}…',
+    collecting: 'Waiting for your passkey (prompt 2 of 2): it collects copy {copy} of Noun #{nounId}.',
+    declined: 'Nothing was asked of your passkey. Pick a note when you are ready.',
+    challengeMismatch: 'Not collected: devnet-2 sent a claim code that is not for this wallet and note ({why}). Nothing was signed.',
+    ipCap: 'Not collected: this connection already has {ipPendingMax} copies set aside. Collect them, or wait about {holdBlocks} blocks for them to lapse, then try again.',
+    ipDaily: 'Not collected: this connection has made its {ipClaimsPerDay} claims for today (UTC), whatever passkeys it used. It can claim again after 00:00 UTC.',
     refused: 'Not collected: {why}',
     duplicate: 'Today’s claim is already yours: copy {copy} of Noun #{nounId}, waiting for your passkey. One a day per passkey (UTC days).',
     mismatch: 'Not collected: devnet-2 offered a recipe that does not match the published art record ({why}). Nothing was signed.',
@@ -64,6 +72,15 @@ export const NM_COPY = Object.freeze({
     sent: 'Sent to devnet-2 as tx {tx}. The note is yours once a block includes it.',
     landed: 'Collected: {label}, Noun #{nounId}, copy {copy} of {copies}.',
     pending: 'Not in a block yet. The receipt keeps the tx hash; check again in a minute.',
+  }),
+  /** The plain words before passkey prompt 1 of 2 (the claim code); the sheet itself only names the site. */
+  claim: Object.freeze({
+    title: 'Ask devnet-2 for a copy of Noun #{nounId} (passkey prompt 1 of 2)',
+    lines: Object.freeze([
+      'Your passkey signs a one-time claim code from devnet-2, so devnet-2 knows this claim comes from your wallet {address}.',
+      'Signing the code records nothing on the chain. If a copy is set aside for you, passkey prompt 2 of 2 collects it.',
+      'One claim per passkey wallet a day (UTC). The code is good for 2 minutes and one claim.',
+    ]),
   }),
   confirm: Object.freeze({
     title: 'Collect a Nouns Money note on pointcast-devnet-2',
