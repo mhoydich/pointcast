@@ -36,6 +36,26 @@ Mike then asked for 100 global barter currencies, each with a different Noun and
 
 Every Noun #0–99 appears exactly once, matched to its tradition by head trait where possible (a rock for the Knife River flint trade, a cat for the copper deben of Deir el-Medina, a frog for Sri Lanka's attam paddy exchange). The 100 traditions came from a research pass: six regional researchers produced 144 sourced candidates, a curator chose 100 and assigned Nouns, and adversarial fact-checkers confirmed 69 as written and corrected 31; none were dropped. Afterwards the copy was screened by hand. No note has a business earning or spending credits, nothing is accepted at a shop, and brand names appear only as historical facts on the back. The traditions belong to the people who keep them; the pages say the notes are inspired by them, not issued by or for them.
 
+## Security Edition · v2 (added the same day)
+
+Mike asked for a v2 of the creative closer to real money print, with security features, as collectibles. Then: no standalone noggles, and full Nouns.
+
+| Path | What it is |
+| --- | --- |
+| `/currency-builder/security/` | Showcase: the 12 printed features, how the portraits are made, all 140 notes |
+| `/currency-builder/security/{commons\|barter}/{front\|back}/{slug}.svg` | 280 v2 print faces, 150 × 75 mm, about 80–110 KB each |
+| Detail pages | Every Commons and Global Barter page now shows its v2 faces under the v1 faces (`SecurityFaces.astro`) |
+| `src/lib/currency-builder/security.mjs` | Renderer: lathe underprint, fibers, guilloche bands, rosettes and oval, engraved Noun, watermark, thread, foil, color-shift numeral, latent image, see-through register, microtext, serials |
+| `src/lib/currency-builder/security-edition.mjs` | Adapters from both collections to the renderer, file paths |
+| `src/lib/currency-builder/type.mjs` | Outlined type: measured, fitted and wrapped, with each glyph defined once per file |
+| `src/data/currency-builder/glyphs.json` | Glyph outlines from Cinzel, Bodoni Moda and IBM Plex Mono (all OFL; fonts and licenses in `src/assets/currency-builder/fonts/`) |
+| `scripts/build-currency-builder-glyphs.mjs` | Rebuilds `glyphs.json` when the data gains new characters. It uses `fontkitten`, which comes with Astro |
+| `tests/currency-builder-security.test.mjs` | 140 notes, unique serials, well-formed faces, every `href`/`url()` resolves, size cap, full Noun pixels on the back, no noggle motif |
+
+Every portrait is the full Noun from its on-chain seed. Each one is sized per Noun (`fitNoun`) so no pixel falls outside the oval or the medallion, and it is never masked or faded. Glasses appear only on the Noun itself. The foil stripe carries the Noun's head in silhouette, and the see-through register is a pixel diamond split between the faces. Every security feature is flat-printed art, and the showcase says so.
+
+Raster mockups (photographs of the notes) go through Codex on Mike's machine, per `docs/briefs/2026-10-11-codex-imagegen-security-edition.md`. The cloud session can't reach OpenAI.
+
 ## For Codex: wiring it into currencybuilder.xyz
 
 No Currency Builder branch, PR or repo was visible from this session, so nothing here assumes Codex's structure. Two clean options:

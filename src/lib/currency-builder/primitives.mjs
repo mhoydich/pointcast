@@ -41,11 +41,14 @@ export function wrap(text, maxChars) {
   return lines;
 }
 
-/** Verified seed, traits and rendered pixels for an actual Noun. */
-export function nounArt(nounId) {
+/**
+ * Verified seed, traits and rendered pixels for an actual Noun. `layers`
+ * picks which of its traits to draw (all four by default, in official order).
+ */
+export function nounArt(nounId, { layers } = {}) {
   const proof = PROOFS.get(nounId);
   if (!proof) throw new Error(`Noun #${nounId} is not in the verified #0–99 provenance`);
-  const art = renderSeed(proof.seed);
+  const art = renderSeed(proof.seed, layers ? { layers } : undefined);
   for (const kind of ['body', 'accessory', 'head', 'glasses']) {
     if (art.filenames[kind] !== proof.traits[kind]) {
       throw new Error(`Noun #${nounId} ${kind} mismatch: ${art.filenames[kind]} vs ${proof.traits[kind]}`);

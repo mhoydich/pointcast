@@ -2,14 +2,17 @@
 // Writes the Currency Builder share cards (1200 × 630) from note fronts:
 //   public/images/og/currency-builder-commons.png
 //   public/images/og/currency-builder-barter.png
+//   public/images/og/currency-builder-security.png
 // Run after changing either collection's hero notes.
 import sharp from 'sharp';
 import * as commons from '../src/lib/currency-builder/commons.mjs';
 import * as barter from '../src/lib/currency-builder/barter.mjs';
+import * as security from '../src/lib/currency-builder/security-edition.mjs';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-async function card({ out, notes, render, title, lines, accentLine }) {
+async function card({ out, notes, render, title, lines, accentLine, only = process.argv[2] }) {
+  if (only && !out.includes(only)) return;
   const rendered = await Promise.all(notes.map(async (entry, i) => {
     // Notes declare 150 × 75 mm for print; rasterize them at their 1200 × 600 user size.
     const svg = render(entry).replace('width="150mm" height="75mm"', 'width="1200" height="600"');
@@ -57,5 +60,17 @@ if (barter.BARTER.currencies.length >= 3) {
     title: 'Global Barter.',
     lines: [`${n} currencies inspired by`, 'barter traditions worldwide.'],
     accentLine: `${new Set(barter.BARTER.currencies.map((entry) => entry.nounId)).size} different actual Nouns.`,
+  });
+}
+
+{
+  const pick = (collection, slug) => ({ collection, entry: security.COLLECTIONS[collection].data.currencies.find((e) => e.slug === slug) });
+  await card({
+    out: 'currency-builder-security.png',
+    notes: [pick('commons', 'porch-note'), pick('barter', 'jonbeel-fair'), pick('commons', 'microgrid')],
+    render: ({ collection, entry }) => security.securitySVG(collection, entry, 'front'),
+    title: 'Security Edition.',
+    lines: ['Every note, printed like money:', 'engraved Nouns, guilloche, foil.'],
+    accentLine: 'Full actual Nouns. All printed art.',
   });
 }

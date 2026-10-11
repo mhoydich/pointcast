@@ -93,7 +93,7 @@ export function traitLabel(filename) {
  * Render an actual numbered Noun from its on-chain seed (trait indices into
  * the official image data, in the same order as the Nouns descriptor).
  */
-export function renderSeed(seed) {
+export function renderSeed(seed, { layers = ['body', 'accessory', 'head', 'glasses'] } = {}) {
   const pick = (list, index, kind) => {
     const part = list[index];
     if (!part) throw new Error(`missing official Nouns ${kind} at index ${index}`);
@@ -106,7 +106,7 @@ export function renderSeed(seed) {
   const bg = imageData.bgcolors[seed.background];
   if (!bg) throw new Error(`missing official Nouns background at index ${seed.background}`);
   return {
-    svg: buildSVG([body, accessory, head, glasses], imageData.palette, bg),
+    svg: buildSVG(layers.map((kind) => ({ body, accessory, head, glasses })[kind]), imageData.palette, bg),
     background: `#${bg}`,
     filenames: { body: body.filename, accessory: accessory.filename, head: head.filename, glasses: glasses.filename },
   };
