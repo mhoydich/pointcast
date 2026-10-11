@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { COMMONS, nounArt, noteFrontSVG, noteBackSVG, machineEdition, serial } from '../src/lib/currency-builder/commons.mjs';
+import { SaxesParser } from 'saxes';
+import { COMMONS, nounArt, noteFrontSVG, noteBackSVG, machineEdition, serial, textLines } from '../src/lib/currency-builder/commons.mjs';
+
+function assertWellFormed(xml, label) {
+  const parser = new SaxesParser({ xmlns: true });
+  let error = null;
+  parser.on('error', (e) => { error = e; });
+  parser.write(xml).close();
+  assert.equal(error, null, `${label} is well-formed XML`);
+}
 
 const provenance = JSON.parse(readFileSync(new URL('../public/images/nouns-money/source-100/provenance.json', import.meta.url), 'utf8'));
 const imageData = JSON.parse(readFileSync(new URL('../public/images/nouns-money/source-100/sources/official-image-data.json', import.meta.url), 'utf8'));
@@ -20,7 +29,7 @@ test('forty currencies, ten per system, forty different actual Nouns', () => {
   }
 });
 
-test('every Noun comes from the verified seed and official trait files', () => {
+test('every Noun comes from its recorded seed and the official trait files', () => {
   for (const entry of COMMONS.currencies) {
     const proof = provenance.notes.find((note) => note.noun_id === entry.nounId);
     assert.ok(proof, `Noun #${entry.nounId} has verified provenance`);
@@ -41,11 +50,18 @@ test('note faces embed the exact Noun pixels and the art-only disclaimer', () =>
     const back = noteBackSVG(entry);
     assert.ok(front.includes(pixels), `${entry.slug} front carries the Noun pixels unchanged`);
     assert.ok(back.includes(pixels), `${entry.slug} back carries the Noun pixels unchanged`);
-    for (const face of [front, back]) {
+    assert.ok(front.includes('<svg x="820" y="120" width="320" height="320" viewBox="0 0 320 320"'), `${entry.slug} front places the Noun in its window`);
+    assert.ok(back.includes('<svg x="876" y="80" width="208" height="208" viewBox="0 0 320 320"'), `${entry.slug} back places the Noun in its window`);
+    assert.match(back, /NOT ENDORSED BY NOUNS DAO/);
+    for (const [label, face] of [['front', front], ['back', back]]) {
       assert.match(face, /NOT LEGAL TENDER · NO CASH VALUE/);
-      assert.match(face, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 1200 600"/);
+      assert.match(face, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 1200 600" width="150mm" height="75mm"/);
       assert.doesNotMatch(face, /legal tender of|redeemable|backed by|invest/i);
+      assertWellFormed(face, `${entry.slug} ${label}`);
     }
+    const lines = textLines(entry);
+    assert.ok(lines.line.length <= 3, `${entry.slug} line fits in three lines`);
+    assert.ok(lines.how.length <= 7, `${entry.slug} how fits in seven lines`);
     assert.equal(noteFrontSVG(entry), front, `${entry.slug} renders deterministically`);
   }
 });

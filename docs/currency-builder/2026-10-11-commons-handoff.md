@@ -16,7 +16,7 @@ Mike asked for 40 currencies on rental, mesh, sharing and barter themes, each us
 | `tests/currency-builder-commons.test.mjs` | 40 distinct Nouns, seeds match provenance, the exact pixels are embedded, disclaimer present |
 | `scripts/generate-currency-builder-commons-og.mjs` | Regenerates `public/images/og/currency-builder-commons.png` |
 
-The Nouns are #2, 3, 5, 8, 11, 14, 18, 19, 24–28, 30, 32, 34, 36, 37, 39, 44, 45, 50, 51, 55, 57, 58, 61, 64–66, 68, 75, 76, 80–82, 87, 89, 95 and 96. Each was chosen for its head trait (a house for the Porch Note, a lightning bolt for the Microgrid, a pizza for the Slice, an oyster for the Shell). Seeds come from `public/images/nouns-money/source-100/provenance.json`, which is verified against the official RLE data and nouns.wtf. Only Nouns #0–99 have verified seeds in the repo, and this container could not reach a chain or subgraph to add more.
+The Nouns are #2, 3, 5, 8, 11, 14, 18, 19, 24, 26–28, 30, 32, 34, 36, 37, 39, 44, 45, 50, 51, 55, 57, 58, 61, 64–66, 68, 71, 75, 76, 80–82, 87, 89, 95 and 96. Each was chosen for its head trait (a house for the Porch Note, a road for the Carpool Note, a lightning bolt for the Microgrid, a pizza for the Slice, an oyster for the Shell). Seeds were retrieved from the Nouns subgraph and recorded in `public/images/nouns-money/source-100/sources/provenance.json`; the renders match the official RLE data, and Nouns #0–9 also match the original noun.pics SVGs. Only Nouns #0–99 have verified seeds in the repo, and this container could not reach a chain or subgraph to add more.
 
 ## For Codex: wiring it into currencybuilder.xyz
 
@@ -25,7 +25,7 @@ No Currency Builder branch, PR or repo was visible from this session, so nothing
 1. **Serve from PointCast.** Attach `currencybuilder.xyz` to the Pages project and add a host block to `functions/_middleware.ts`, modeled on the `shop.pointcast.xyz` and `catan.pointcast.xyz` blocks: map `/` and `/commons/` to `/currency-builder/commons/`, pass through `/currency-builder/`, `/_astro/` and `/images/`, and 301 everything else to the apex. DNS and custom-domain changes need Mike's approval.
 2. **Lift into Codex's site.** Copy the data JSON, the renderer and `renderSeed` (plus the provenance and official image data files it imports). The renderer has no PointCast dependencies beyond those.
 
-Wording guardrails used throughout, consistent with existing Nouns Money copy: "design concept", "not legal tender", "no cash value", credit "earned by contributing, spent on the shared thing, never bought, never cashed out". Avoid "backed", "redeemable", "invest" and "shares" in any copy built on this.
+Wording guardrails used throughout, consistent with existing Nouns Money copy: "design concept", "not legal tender", "no cash value", credit "earned by contributing, spent on the shared thing, never sold, never cashed out". Avoid "backed", "redeemable", "invest" and "shares" in any copy built on this. No business pays wages in a note, no credit is sold for money, and nothing regulated (power, fares, sport-caught fish, food sales) changes hands for credit.
 
 ## Generated media (Krea, ChatGPT image model, 2026-10-11)
 
@@ -42,7 +42,7 @@ The cloud container's network policy blocks `app-uploads.krea.ai`, so none of th
 
 ## Eight trailers waiting on Krea credit
 
-Each 15-second Kling 3.0 trailer (std mode, audio) costs about 1,400 Krea units; the account had about 1,068 left. Seedance 2.5 needs a higher Krea plan. All eight use `kling/kling-3.0`, `aspect_ratio: 16:9`, `duration: 15`, `generate_audio: true`, `mode: std` and a five- or six-shot `multi_prompt`. No people, no brand names and one short title card per trailer.
+Each 15-second Kling 3.0 trailer (std mode, audio) costs about 1,400 Krea units; the account had about 1,068 left. Seedance 2.5 needs a higher Krea plan. All eight use `kling/kling-3.0`, `aspect_ratio: 16:9`, `duration: 15`, `generate_audio: true`, `mode: std` and a five- or six-shot `multi_prompt`. No people, no third-party brand names and one short title card per trailer. Every trailer, including the two already made, ends on a card added in post (not in the model prompt): "ART CONCEPT · NOT LEGAL TENDER · NOT FOR SALE · Nouns art is CC0; not affiliated with Nouns DAO." Re-cut trailers 1 and 2 with that card before they are shared.
 
 1. **THE MEDAL**: a blank brass disc drops into a die, a hydraulic press strikes it, the pixel-glasses relief emerges, and the medal spins and flips on slate. VO: "Some things are made to be held."
 2. **NOUNS MONEY WORLD EDITION**: an art stamp blows past an alpine meadow, a Viennese gold-mosaic hall, Nordic harbor rooftops, a tiled courtyard and an Andean textile market, then lands in a California beach town. VO: "One small stamp. A whole wide world."
@@ -56,5 +56,5 @@ Each 15-second Kling 3.0 trailer (std mode, audio) costs about 1,400 Krea units;
 ## Manus follow-up
 
 - Open `/currency-builder/commons/` and three detail pages on iPhone Safari and desktop Chrome after deploy. Capture screenshots and confirm the 80 SVG links download.
-- Print one front/back pair at 100% on Letter. Confirm the 150 mm width with a ruler and check that the pixel art stays crisp.
+- Print one front/back pair at 100% on Letter (the SVGs declare 150 × 75 mm). Confirm the 150 mm width with a ruler and check that the pixel art stays crisp.
 - Write results to `docs/manus-logs/2026-10-1X-currency-builder-commons.md`. No Mike approval is needed for QA. Domain and DNS work needs his approval.

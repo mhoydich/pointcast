@@ -9,7 +9,9 @@ const pick = (slug) => COMMONS.currencies.find((entry) => entry.slug === slug);
 const notes = ['slice', 'microgrid', 'porch-note'].map(pick);
 
 const rendered = await Promise.all(notes.map(async (entry, i) => {
-  const png = await sharp(Buffer.from(noteFrontSVG(entry))).resize(560, 280).png().toBuffer();
+  // Notes declare 150 × 75 mm for print; rasterize them at their 1200 × 600 user size.
+  const svg = noteFrontSVG(entry).replace('width="150mm" height="75mm"', 'width="1200" height="600"');
+  const png = await sharp(Buffer.from(svg)).resize(560, 280).png().toBuffer();
   return sharp(png).rotate([5, -4, 2][i], { background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
 }));
 
