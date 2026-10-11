@@ -5,10 +5,13 @@
 // (this checkout's dist/ is the head build). It compares every file under
 // dist/nouns-money/ and dist/nouns-money.json with origin/main's, normalizing
 // nothing but ISO timestamps; Phase A may only add nouns-money/chain.json and
-// nouns-money/chain/*.js.
+// nouns-money/chain/*.js, and a client update may change those scripts while
+// no flag-off page loads them.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NM_CHAIN_ENABLED, NM_EDITION_TERMS, catalogForFlag } from '../src/data/nouns-money-chain.ts';
 import { SOURCE_CATALOG } from '../src/lib/nouns-money/catalog.ts';
@@ -99,6 +102,53 @@ test('flag-off build: every Nouns Money file equals origin/main’s build (times
   assert.deepEqual(r.changed, [], 'changed files');
   assert.deepEqual(r.removed, [], 'removed files');
   assert.deepEqual(r.unexpectedAdded, [], 'unexpected new files');
-  assert.ok(r.added.includes('nouns-money/chain.json'));
+  assert.deepEqual(r.pagesLoadingScripts, [], 'no flag-off page loads a client script');
+  assert.ok(r.scriptsChanged.every((f) => /^nouns-money\/chain\/nm-[a-z-]+\.js$/.test(f)), 'only client scripts may differ');
+  // Against a pre-Phase-A main chain.json is new; against a main that has it, it must not change.
+  assert.ok(r.added.includes('nouns-money/chain.json') || r.same.includes('nouns-money/chain.json'), 'chain.json: new or unchanged');
   assert.ok(!existsSync(new URL('dist/nouns-money/note/', root)) || readdirSync(new URL('dist/nouns-money/note/', root)).length === 0, 'no note pages built');
+});
+
+test('compareDists: pages must match; client scripts may change only while no page loads them', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'nm-flag-off-'));
+  const put = (dist, rel, text) => {
+    const p = join(tmp, dist, rel);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, text);
+  };
+  try {
+    for (const d of ['base', 'head']) {
+      put(d, 'nouns-money/index.html', '<h1>Nouns Money</h1> built 2026-10-10T00:00:00Z');
+      put(d, 'nouns-money/chain.json', '{"entries":[]}');
+    }
+    put('base', 'nouns-money/chain/nm-collect.js', 'old client');
+    put('head', 'nouns-money/index.html', '<h1>Nouns Money</h1> built 2026-10-11T08:00:00Z');
+    put('head', 'nouns-money/chain/nm-collect.js', 'new client');
+    put('head', 'nouns-money/chain/nm-claim.js', 'new module');
+    let r = compareDists(join(tmp, 'base'), join(tmp, 'head'));
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.deepEqual(r.scriptsChanged, ['nouns-money/chain/nm-collect.js']);
+    assert.deepEqual(r.added, ['nouns-money/chain/nm-claim.js']);
+    assert.deepEqual(r.same, ['nouns-money/chain.json', 'nouns-money/index.html'], 'timestamps aside');
+
+    put('head', 'nouns-money/chain.json', '{"entries":[1]}');
+    r = compareDists(join(tmp, 'base'), join(tmp, 'head'));
+    assert.deepEqual(r.changed, ['nouns-money/chain.json'], 'chain.json is data, not a client script');
+    assert.equal(r.ok, false);
+    put('head', 'nouns-money/chain.json', '{"entries":[]}');
+
+    // A listing (like /tv/assets) names the file and loads nothing.
+    for (const d of ['base', 'head']) put(d, 'nouns-money/files/index.html', '<a href="/nouns-money/chain/nm-collect.js">nm collect</a>');
+    r = compareDists(join(tmp, 'base'), join(tmp, 'head'));
+    assert.deepEqual(r.pagesLoadingScripts, []);
+    assert.equal(r.ok, true);
+
+    put('head', 'nouns-money/collect/index.html', '<script type="module" is:inline src="/nouns-money/chain/nm-collect.js"></script>');
+    put('base', 'nouns-money/collect/index.html', '<p>collect</p>');
+    r = compareDists(join(tmp, 'base'), join(tmp, 'head'));
+    assert.deepEqual(r.pagesLoadingScripts, ['nouns-money/collect/index.html']);
+    assert.equal(r.ok, false, 'a page that loads a client script is a flag-off change');
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 });

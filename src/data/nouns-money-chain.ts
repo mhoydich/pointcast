@@ -43,7 +43,7 @@ export const NM_EDITION_TERMS = Object.freeze({
   /** Printable ASCII ≤ 64 (edition.rs). The plan names none; this matches pointcast-chain sdk/nm-law.js NM_TERMS. */
   title: 'Nouns Money 27',
   supply: NM_SUPPLY, // 1,100 = 100 specimens + 10 copies × 100 designs
-  /** 0 = no chain cap; the Worker allows one claim per passkey per UTC day. */
+  /** 0 = no chain cap; the Worker allows one claim per passkey account per UTC day, and 10 new claims per IP per UTC day. */
   per_account: 0,
   closes_at: 0,
   /** The devnet forces the house as attestor; the key is the devnet's, not ours to type. */
@@ -68,11 +68,22 @@ export const NM_RECIPE = Object.freeze({
   copiesPerDesign: NM_COPIES_PER_DESIGN,
 });
 
-/** What the Worker enforces (pointcast-chain deploy/devnet-worker nm.js, plan §3 step 3). */
+/**
+ * What the Worker enforces (pointcast-chain deploy/devnet-worker src/nm.js; docs/DEVNET.md,
+ * "Nouns Money", the claim). The per-IP numbers count an IPv4 address, or an IPv6 /64, as one.
+ */
 export const NM_CLAIM_POLICY = Object.freeze({
   claimsPerPasskeyPerUtcDay: 1,
   passkeyOnly: true,
+  /** A claim needs the passkey's assertion over a GET /nm/challenge challenge (401 nm_unsigned without it). */
+  passkeyProof: true,
   holdBlocks: 24,
+  /** Copies one IP may have set aside for live claims at once (429 nm_ip_cap). */
+  ipPendingMax: 3,
+  /** New claims one IP may make a UTC day, whatever passkeys it uses (429 nm_ip_daily). */
+  ipClaimsPerDay: 10,
+  /** A claim challenge is good for this long, today (UTC) only, and for one claim. */
+  challengeTtlMs: 120000,
 });
 
 /** Where the shelf and the note page read and write. */
@@ -83,7 +94,9 @@ export const NM_DEVNET = Object.freeze({
   rpId: 'pointcast.xyz',
   origins: ['https://pointcast.xyz'],
   edition: NM_EDITION_ID,
-  /** POST {sender, design} → an approval for a server-built recipe (plan §3 step 3). */
+  /** GET ?sender=&design= → 56 bytes (base64url) for the passkey to sign: one claim, 120 s, today (UTC). */
+  challengePath: '/nm/challenge',
+  /** POST {sender, design, challenge, public_key, signature} → an approval for a server-built recipe. */
   claimPath: '/nm/claim',
   /** Same key as /chain/first-mints/live.js: one passkey wallet for both. */
   walletKey: 'pc-fm-live:devnet-2',
@@ -98,7 +111,7 @@ export const NM_DEVNET = Object.freeze({
  */
 export function nmClientConfig() {
   const never = BANNED.map(([, , re]) => [re.source, re.flags.replace('g', '')]);
-  return { devnet: NM_DEVNET, copies: NM_COPIES_PER_DESIGN, designs: NM_DESIGNS, copy: NM_COPY, never };
+  return { devnet: NM_DEVNET, copies: NM_COPIES_PER_DESIGN, designs: NM_DESIGNS, policy: NM_CLAIM_POLICY, copy: NM_COPY, never };
 }
 
 /** Escape for <script type="application/json">. */

@@ -7,13 +7,21 @@
 // Compares every file under nouns-money/ plus nouns-money.json (with --all:
 // every file in dist). Only ISO-8601 timestamps are normalized. Files Phase A
 // adds on purpose (nouns-money/chain.json, nouns-money/chain/*.js) are listed
-// as "added"; anything else added, removed or changed fails.
+// as "added"; anything else added, removed or changed fails, with one
+// exception: the client scripts (nouns-money/chain/nm-*.js) are served as
+// files and loaded only by a flag-on page, so a client update may change
+// them ("scriptsChanged") as long as no page in scope loads one
+// ("pagesLoadingScripts" must stay empty).
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const PHASE_A_ADDED = /^nouns-money\/(?:chain\.json|chain\/nm-[a-z-]+\.js)$/;
+/** The flagged client scripts: only a flag-on page loads them. */
+export const CLIENT_SCRIPT = /^nouns-money\/chain\/nm-[a-z-]+\.js$/;
+/** A page loads a client script with a script tag (a link or a listing, like /tv/assets, loads nothing). */
+const LOADS_CLIENT_SCRIPT = /<script\b[^>]*\bsrc=["'][^"']*\/nouns-money\/chain\/nm-[a-z-]+\.js["']/i;
 const TIMESTAMP = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/g;
 const TEXT = /\.(?:html|json|xml|txt|js|css|svg|webmanifest)$/;
 
@@ -43,17 +51,18 @@ const digest = (dist, rel) => {
 export function compareDists(baseDist, headDist, { all = false } = {}) {
   const base = new Set(nmScope(baseDist, all));
   const head = new Set(nmScope(headDist, all));
-  const result = { same: [], changed: [], removed: [], added: [], unexpectedAdded: [] };
+  const result = { same: [], changed: [], removed: [], added: [], unexpectedAdded: [], scriptsChanged: [], pagesLoadingScripts: [] };
   for (const rel of base) {
     if (!head.has(rel)) result.removed.push(rel);
     else if (digest(baseDist, rel) === digest(headDist, rel)) result.same.push(rel);
-    else result.changed.push(rel);
+    else (CLIENT_SCRIPT.test(rel) ? result.scriptsChanged : result.changed).push(rel);
   }
   for (const rel of head) {
+    if (/\.html$/.test(rel) && LOADS_CLIENT_SCRIPT.test(readFileSync(join(headDist, rel), 'utf8'))) result.pagesLoadingScripts.push(rel);
     if (base.has(rel)) continue;
     (PHASE_A_ADDED.test(rel) ? result.added : result.unexpectedAdded).push(rel);
   }
-  result.ok = !result.changed.length && !result.removed.length && !result.unexpectedAdded.length;
+  result.ok = !result.changed.length && !result.removed.length && !result.unexpectedAdded.length && !result.pagesLoadingScripts.length;
   return result;
 }
 
@@ -65,7 +74,9 @@ if (isMain) {
     process.exit(2);
   }
   const r = compareDists(baseDist, headDist, { all: process.argv.includes('--all') });
-  console.log(`same ${r.same.length} · changed ${r.changed.length} · removed ${r.removed.length} · added (Phase A) ${r.added.length} · added (unexpected) ${r.unexpectedAdded.length}`);
-  for (const k of ['changed', 'removed', 'unexpectedAdded', 'added']) for (const f of r[k]) console.log(`  ${k}: ${f}`);
+  console.log(
+    `same ${r.same.length} · changed ${r.changed.length} · removed ${r.removed.length} · added (Phase A) ${r.added.length} · added (unexpected) ${r.unexpectedAdded.length} · client scripts changed ${r.scriptsChanged.length} · pages loading a client script ${r.pagesLoadingScripts.length}`,
+  );
+  for (const k of ['changed', 'removed', 'unexpectedAdded', 'pagesLoadingScripts', 'scriptsChanged', 'added']) for (const f of r[k]) console.log(`  ${k}: ${f}`);
   process.exit(r.ok ? 0 : 1);
 }

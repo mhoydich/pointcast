@@ -6,8 +6,11 @@
 //   - recipeIndex(chain.json entries) maps each of the 1,100 possible recipe
 //     hashes back to (design, copy);
 //   - a claim's approval is signed only after verifyClaim() rebuilt its recipe
-//     from chain.json and found the same bytes.
-// No DOM, no network: fetchAllMints takes the GET function.
+//     from chain.json and found the same bytes;
+//   - a claim carries the passkey's proof over a GET /nm/challenge challenge
+//     (requestClaim, below).
+// No DOM, no network: fetchAllMints takes the GET function, requestClaim the
+// GET, the POST and navigator.credentials.
 import {
   NM_COPIES_PER_DESIGN,
   NM_DESIGNS,
@@ -17,7 +20,7 @@ import {
   recipeMatchesEntry,
   specimenSerial,
 } from './nm-recipe.js';
-import { addressKind } from '../../chain/first-mints/lib/pointcast-chain.js';
+import { addressKind, base64urlDecode, webauthnEnvelope } from '../../chain/first-mints/lib/pointcast-chain.js';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const RECIPE_HEX = /^[0-9a-f]{106}$/;
@@ -212,3 +215,117 @@ export async function sha256Hex(bytes) {
 }
 
 export const isHex64 = (s) => HEX64.test(String(s || ''));
+
+// ---------------------------------------------------------------- the signed claim
+//
+// The claim door (pointcast-chain docs/DEVNET.md, "Nouns Money", the claim) takes two requests:
+//   1. GET /nm/challenge?sender=<pcp1…>&design=<0..99>: 56 bytes, base64url, bound to this
+//      sender, this design and today (UTC), good for 120 s and one claim;
+//   2. one passkey assertion over exactly those bytes (rpId pointcast.xyz, user verification
+//      required), then POST /nm/claim {sender, design, challenge, public_key, signature}, the
+//      signature being the chain's webauthn envelope (webauthnEnvelope, the bundled SDK).
+// A claim without the proof answers 401 nm_unsigned. On 401 nm_challenge_expired or
+// nm_challenge_used the page asks for a new challenge and asks the passkey again, at most
+// once more; it never sends a challenge twice. The plain words come before every passkey
+// sheet (the sheet only names the site): confirm() must resolve true first. The network
+// and the passkey are passed in, like fetchAllMints's GET.
+
+/** The challenge's size: u64be issued_at ‖ 16-byte nonce ‖ 32-byte MAC. */
+export const CHALLENGE_BYTES = 56;
+const CHALLENGE_B64URL = /^[A-Za-z0-9_-]{75}$/; // 56 bytes, unpadded
+/** Refusals after which a new challenge (and a new passkey prompt) may fix the claim. */
+export const RETRY_CODES = Object.freeze(['nm_challenge_expired', 'nm_challenge_used']);
+
+/** GET path for a claim challenge. */
+export function challengeUrl(path, sender, design) {
+  if (!Number.isInteger(design) || design < 0 || design >= NM_DESIGNS) throw new Error(`design ${design} is not 0-${NM_DESIGNS - 1}`);
+  return `${path}?sender=${encodeURIComponent(sender)}&design=${design}`;
+}
+
+/**
+ * Check a GET /nm/challenge answer before the passkey is asked: it must be for this
+ * edition, this wallet, this design and this page's rpId, and carry exactly 56 bytes.
+ * Returns {challenge (as served), bytes, expiresAt}. Anything else throws.
+ */
+export function readChallenge(j, { sender, design, rpId }) {
+  if (!j || typeof j !== 'object') throw new Error('no answer');
+  if (j.error !== undefined) throw new Error(String(j.code ? `${j.code}: ${j.error}` : j.error));
+  if (j.edition !== NM_EDITION_ID) throw new Error(`challenge is for edition ${j.edition}`);
+  if (j.sender !== sender) throw new Error('challenge is for another wallet');
+  if (j.design !== design) throw new Error(`challenge is for design ${j.design}, asked for ${design}`);
+  if (j.rp_id !== rpId) throw new Error(`challenge names rp_id ${j.rp_id}, this page uses ${rpId}`);
+  const challenge = String(j.challenge ?? '');
+  if (!CHALLENGE_B64URL.test(challenge)) throw new Error(`challenge is not ${CHALLENGE_BYTES} bytes of unpadded base64url`);
+  const bytes = base64urlDecode(challenge);
+  if (bytes.length !== CHALLENGE_BYTES) throw new Error(`challenge is ${bytes.length} bytes`);
+  const expiresAt = Number(j.expires_at);
+  return { challenge, bytes, expiresAt: Number.isFinite(expiresAt) ? expiresAt : null };
+}
+
+/** navigator.credentials.get options for a claim challenge: the wallet's passkey only, user verification required. */
+export function assertionRequest(bytes, { rpId, credentialId, timeout = 60000 }) {
+  return {
+    publicKey: {
+      challenge: bytes,
+      rpId,
+      userVerification: 'required',
+      allowCredentials: credentialId ? [{ type: 'public-key', id: base64urlDecode(credentialId) }] : [],
+      timeout,
+    },
+  };
+}
+
+/** The POST /nm/claim body: exactly these five fields. `response` is the credential's response (or its toJSON form). */
+export function claimBody({ sender, design, challenge, publicKey, response }) {
+  if (!publicKey || publicKey.scheme !== 'p256' || !/^0[23][0-9a-f]{64}$/.test(String(publicKey.bytes))) throw new Error('the wallet has no p256 passkey key');
+  return { sender, design, challenge, public_key: { scheme: 'p256', bytes: publicKey.bytes }, signature: webauthnEnvelope(response) };
+}
+
+/** "code: error" from a devnet answer, else the HTTP status. */
+export const whyOf = (r) => (r && r.j && (r.j.code ? `${r.j.code}: ${r.j.error || ''}` : r.j.error)) || `HTTP ${r ? r.status : '?'}`;
+
+/**
+ * The whole claim. Passed in:
+ *   call(path)          → {ok, status, j}   GET (the page's fetch wrapper)
+ *   post(path, body)    → {ok, status, j}   POST JSON
+ *   credentials         navigator.credentials
+ *   confirm(attempt)    true once the person has read the plain words; anything else and
+ *                       the passkey is never asked
+ *   onStep(step)        'challenge' | 'retry' | 'passkey' | 'claim', for the status line
+ * Returns {ok: true, status, j} with the claim answer, or {ok: false, stage, status, code, why}:
+ * stage 'challenge' (refused), 'challenge-check' (not for this wallet or note: nothing signed),
+ * 'declined' (the passkey was not asked) or 'claim' (refused).
+ */
+export async function requestClaim({ call, post, credentials, confirm, onStep = () => {}, devnet, wallet, design, retries = 1 }) {
+  const refusal = (stage, r) => ({ ok: false, stage, status: r.status, code: (r.j && r.j.code) || null, why: whyOf(r) });
+  for (let attempt = 0; ; attempt += 1) {
+    onStep(attempt ? 'retry' : 'challenge');
+    const ch = await call(challengeUrl(devnet.challengePath, wallet.address, design));
+    if (!ch.ok || !ch.j) return refusal('challenge', ch);
+    let c;
+    try {
+      c = readChallenge(ch.j, { sender: wallet.address, design, rpId: devnet.rpId });
+    } catch (e) {
+      return { ok: false, stage: 'challenge-check', status: ch.status, code: null, why: e.message };
+    }
+    if ((await confirm(attempt)) !== true) return { ok: false, stage: 'declined', status: 0, code: null, why: 'the passkey was not asked' };
+    onStep('passkey');
+    if (!credentials || typeof credentials.get !== 'function') throw new Error('no WebAuthn here (navigator.credentials)');
+    const cred = await credentials.get(assertionRequest(c.bytes, { rpId: devnet.rpId, credentialId: wallet.credentialId }));
+    if (!cred || !cred.response) throw new Error('the passkey returned no assertion');
+    onStep('claim');
+    const r = await post(devnet.claimPath, claimBody({ sender: wallet.address, design, challenge: c.challenge, publicKey: wallet.publicKey, response: cred.response }));
+    if (r.ok && r.j) return { ok: true, status: r.status, j: r.j };
+    if (r.status === 401 && r.j && RETRY_CODES.includes(r.j.code) && attempt < retries) continue;
+    return refusal('claim', r);
+  }
+}
+
+/** The status line for a refused claim. `S` is NM_COPY.status, `policy` NM_CLAIM_POLICY, `fill` the page's filler. */
+export function refusalLine(result, S, policy, fill) {
+  if (result.stage === 'declined') return S.declined;
+  if (result.stage === 'challenge-check') return fill(S.challengeMismatch, { why: result.why });
+  if (result.code === 'nm_ip_cap') return fill(S.ipCap, policy);
+  if (result.code === 'nm_ip_daily') return fill(S.ipDaily, policy);
+  return fill(S.refused, { why: result.why });
+}
