@@ -34,3 +34,8 @@ test('new isolated animation reading and static aliases omit account restoration
     for (const suffix of ['.json','ish','/notes','//','/index.html/extra']) assert.equal(isQuietUesStudyPath(study+suffix),false);
   }
 });
+
+test('the local-only Nouns Money app and exact static aliases omit account restoration',()=>{
+  for (const suffix of ['', '/', '.html', '/index.html']) assert.equal(isQuietUesStudyPath(`/nouns-money/app${suffix}`),true);
+  for (const pathname of ['/', '/nouns-money', '/nouns-money/', '/nouns-money/collect/', '/nouns-money/pay/', '/api/me/nouns-money', '/api/auth/session', '/nouns-money/app/catalog.json', '/nouns-money/app/manifest.webmanifest', '/nouns-money/appish', '/nouns-money/app/notes', '/nouns-money/app//', '/nouns-money/app/index.html/extra', '/Nouns-money/app']) assert.equal(isQuietUesStudyPath(pathname),false,pathname);
+});
