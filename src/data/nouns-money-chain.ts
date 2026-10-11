@@ -40,8 +40,8 @@ export const NM_CHAIN_ENABLED: boolean = false;
  */
 export const NM_EDITION_TERMS = Object.freeze({
   id: NM_EDITION_ID,
-  /** Printable ASCII ≤ 64 (edition.rs). Proposed; the plan does not name a title. */
-  title: 'Nouns Money NM27',
+  /** Printable ASCII ≤ 64 (edition.rs). The plan names none; this matches pointcast-chain sdk/nm-law.js NM_TERMS. */
+  title: 'Nouns Money 27',
   supply: NM_SUPPLY, // 1,100 = 100 specimens + 10 copies × 100 designs
   /** 0 = no chain cap; the Worker allows one claim per passkey per UTC day. */
   per_account: 0,

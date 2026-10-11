@@ -94,6 +94,21 @@ test('verifyClaim: a recipe that rebuilds from chain.json is accepted', () => {
   assert.equal(verifyClaim(bare, { entry: entries[42], sender: ME }).copy, 3);
 });
 
+test('verifyClaim accepts the reply shape of pointcast-chain nm.js (POST /nm/claim)', () => {
+  // deploy/devnet-worker/src/nm.js reply(): the stored claim plus duplicate/network/sign/note.
+  const rec = {
+    edition: 'nouns-money-27', sender: ME, recipient: ME, design: 42, copy: 3,
+    recipe: recipeOf(42, 3), recipe_hash: hashOf(42, 3), approval_expires: 1900, approval: 'cd'.repeat(64),
+    day: '2026-10-11', at: 1791700000000,
+  };
+  const reply = { ...rec, duplicate: false, network: 'devnet', sign: { type: 'edition_mint', edition: rec.edition, recipient: ME, recipe: rec.recipe, approval_expires: 1900, approval: rec.approval }, note: 'sign an edition_mint with exactly these fields' };
+  assert.equal(verifyClaim(reply, { entry: entries[42], sender: ME }).recipe, rec.recipe);
+  // A same-day repeat for another design returns today's claim; the page checks it against that design's entry.
+  assert.throws(() => verifyClaim({ ...reply, duplicate: true }, { entry: entries[7], sender: ME }), /design 42, asked for 7/);
+  assert.equal(verifyClaim({ ...reply, duplicate: true }, { entry: entries[42], sender: ME }).copy, 3);
+  assert.match(read('public/nouns-money/chain/nm-collect.js'), /claim\.j\.duplicate === true && Number\(claim\.j\.design\) !== design/);
+});
+
 test('verifyClaim: anything else is refused before signing', () => {
   const e = entries[42];
   const refuse = (over, re) => assert.throws(() => verifyClaim(goodClaim(over), { entry: e, sender: ME }), re);

@@ -84,8 +84,8 @@ export function shelfLine(slot, { house, shelf, copies = NM_COPIES_PER_DESIGN })
  * Check a POST /nm/claim answer before anything is signed. Returns the fields
  * edition_mint needs; throws an Error whose message says what did not match.
  *
- * Expected answer (pointcast-chain nm.js, plan §3 step 3; INTEGRATION: the
- * Worker did not exist when this was written):
+ * Expected answer (pointcast-chain deploy/devnet-worker/src/nm.js reply(),
+ * read from its uncommitted working copy on 2026-10-10):
  *   { recipe: hex (53 bytes), approval: hex, approval_expires: height,
  *     recipe_hash?, design?, copy?, sender?, recipient?, edition? }
  */

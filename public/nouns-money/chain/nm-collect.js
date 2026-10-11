@@ -36,18 +36,14 @@ async function init(root) {
   };
   const lock = () => $$('button').forEach((b) => (b.disabled = true));
 
-  if (!devnet.origins.includes(location.origin)) {
-    $('[data-nmc-off]').hidden = false;
-    lock();
-    return say(C.status.offOrigin, 'is-warn');
-  }
+  // Reads need nothing; collecting needs a passkey, and a passkey needs pointcast.xyz.
+  const offOrigin = !devnet.origins.includes(location.origin);
+  const noPasskeys = !window.PublicKeyCredential || !navigator.credentials;
+  const blocked = offOrigin ? C.status.offOrigin : noPasskeys ? C.status.noWebauthn : '';
+  if (offOrigin) $('[data-nmc-off]').hidden = false;
   if (!/^[0-9a-f]{64}$/.test(devnet.genesis || '')) {
     lock();
     return say(C.status.noGenesis, 'is-warn');
-  }
-  if (!window.PublicKeyCredential || !navigator.credentials) {
-    lock();
-    return say(C.status.noWebauthn, 'is-warn');
   }
 
   const call = async (path, init) => {
@@ -75,6 +71,7 @@ async function init(root) {
   const showWallet = () => {
     $('[data-nmc-addr]').textContent = wallet ? wallet.address : C.shelf.walletNone;
     $('[data-nmc-create]').hidden = Boolean(wallet);
+    $('[data-nmc-create]').disabled = Boolean(blocked);
   };
   const paintShelf = () => {
     for (const card of $$('[data-nmc-design]')) {
@@ -88,7 +85,7 @@ async function init(root) {
       }
       const slot = shelf.byDesign.get(design);
       line.textContent = shelfLine(slot, { house, shelf: C.shelf, copies: cfg.copies });
-      btn.disabled = !wallet || copiesLeft(slot, cfg.copies) === 0;
+      btn.disabled = Boolean(blocked) || !wallet || copiesLeft(slot, cfg.copies) === 0;
     }
   };
   const readShelf = async () => {
@@ -117,6 +114,7 @@ async function init(root) {
     lock();
     return say(C.status.notOpen, 'is-warn');
   }
+  if (blocked) return say(blocked, 'is-warn');
   say(wallet ? C.status.ready : C.status.needWallet);
 
   $('[data-nmc-create]').addEventListener('click', async () => {
@@ -146,18 +144,26 @@ async function init(root) {
     btn.addEventListener('click', async () => {
       const design = Number(btn.dataset.nmcCollect);
       const entry = entries.find((e) => e.design === design);
+      if (blocked) return say(blocked, 'is-warn');
       if (!wallet || !chain || !entry) return say(C.status.needWallet, 'is-warn');
       lock();
       try {
         say(fill(C.status.asking, { nounId: entry.noun_id }));
         const claim = await post(devnet.claimPath, { sender: wallet.address, design });
         if (!claim.ok) return say(fill(C.status.refused, { why: errText(claim) }), 'is-warn');
+        // One claim per passkey per UTC day: a repeat returns today's live approval,
+        // possibly for another design. It is checked against chain.json all the same.
+        let target = entry;
+        if (claim.j && claim.j.duplicate === true && Number(claim.j.design) !== design) {
+          target = entries.find((e) => e.design === Number(claim.j.design)) || entry;
+        }
         let ok;
         try {
-          ok = verifyClaim(claim.j, { entry, sender: wallet.address });
+          ok = verifyClaim(claim.j, { entry: target, sender: wallet.address });
         } catch (e) {
           return say(fill(C.status.mismatch, { why: e.message }), 'is-warn');
         }
+        if (target !== entry) say(fill(C.status.duplicate, { copy: ok.copy, nounId: target.noun_id }));
         const acct = await get(`/account/${encodeURIComponent(wallet.address)}`);
         const nonce = acct ? Number(acct.next_nonce ?? 0) : 0;
         const tx = buildTx('edition_mint', {
@@ -171,7 +177,7 @@ async function init(root) {
         });
         const words = [
           C.confirm.title,
-          fill(C.confirm.note, { nounId: entry.noun_id, copy: ok.copy, copies: cfg.copies }),
+          fill(C.confirm.note, { nounId: target.noun_id, copy: ok.copy, copies: cfg.copies }),
           fill(C.confirm.recipe, { hash: `${ok.recipeHash.slice(0, 16)}…` }),
           C.replacementLine,
           C.standardLine,
@@ -188,7 +194,7 @@ async function init(root) {
         if (!sent.ok) return say(fill(C.status.refused, { why: errText(sent) }), 'is-warn');
         const txHash = String(sent.j.tx_hash || sent.j.hash || '');
         receipt({
-          note: `${fill(C.shelf.noun, { nounId: entry.noun_id })} · ${entry.id}`,
+          note: `${fill(C.shelf.noun, { nounId: target.noun_id })} · ${target.id}`,
           copy: `${ok.copy} / ${cfg.copies}`,
           recipeHash: ok.recipeHash,
           tx: txHash,
@@ -206,14 +212,14 @@ async function init(root) {
             const link = box.querySelector('[data-nmc-note-link]');
             link.href = `/nouns-money/note/${Number(token.serial)}/`;
             link.hidden = false;
-            return say(fill(C.status.landed, { label, nounId: entry.noun_id, copy: ok.copy, copies: cfg.copies }), 'is-ok');
+            return say(fill(C.status.landed, { label, nounId: target.noun_id, copy: ok.copy, copies: cfg.copies }), 'is-ok');
           }
         }
         say(C.status.pending);
       } catch (e) {
         say(fill(C.status.refused, { why: e.message }), 'is-warn');
       } finally {
-        $('[data-nmc-create]').disabled = false;
+        showWallet();
         paintShelf();
       }
     });

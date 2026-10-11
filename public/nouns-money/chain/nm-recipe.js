@@ -19,10 +19,13 @@
 // public/images/nouns-money/source-100/provenance.json via
 // scripts/build-nm-chain.mjs → public/nouns-money/chain.json.
 //
-// INTEGRATION: pointcast-chain sdk/nm-note.js is the chain's twin of this
-// codec (encode, decode and the glyph/portrait renderer). It did not exist
-// when this file was written; tests/fixtures/nm-recipe-vectors.json holds
-// the vectors both must produce byte for byte.
+// INTEGRATION: pointcast-chain sdk/nm-note.js (encodeNmRecipe, nmRecipeHash)
+// is the chain's twin of this codec, plus the glyph/portrait renderer. On
+// 2026-10-10 its working copy produced the same bytes for all 1,100 recipes
+// and the same 100 specimen hashes; tests/nouns-money-chain-recipe.test.mjs
+// re-checks it when NM_NOTE_JS=<path to nm-note.js>.
+// tests/fixtures/nm-recipe-vectors.json (generated in Python) is the vector
+// set both must match.
 //
 // Pure ES module: no DOM, no network. Works in browsers and Node.
 import { bytesToHex, editionRecipeHash, hexToBytes } from '../../chain/first-mints/lib/pointcast-chain.js';

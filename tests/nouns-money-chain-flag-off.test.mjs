@@ -25,7 +25,7 @@ test('the flag is off, and the terms are the plan’s', () => {
     { ...NM_EDITION_TERMS },
     {
       id: 'nouns-money-27',
-      title: 'Nouns Money NM27',
+      title: 'Nouns Money 27',
       supply: 1100,
       per_account: 0,
       closes_at: 0,

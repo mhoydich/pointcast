@@ -56,6 +56,7 @@ export const NM_COPY = Object.freeze({
     noWallet: 'No wallet made: {why}',
     asking: 'Asking devnet-2 for a copy of Noun #{nounId}…',
     refused: 'Not collected: {why}',
+    duplicate: 'Today’s claim is already yours: copy {copy} of Noun #{nounId}, waiting for your passkey. One a day per passkey (UTC days).',
     mismatch: 'Not collected: devnet-2 offered a recipe that does not match the published art record ({why}). Nothing was signed.',
     sending: 'Sending…',
     sent: 'Sent to devnet-2 as tx {tx}. The note is yours once a block includes it.',
