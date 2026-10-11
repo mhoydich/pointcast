@@ -137,6 +137,19 @@ export function verifyClaim(resp, { entry, sender }) {
   return { design: decoded.design, copy: decoded.copy, recipe, recipeHash: hash, approval, approval_expires: expires };
 }
 
+/**
+ * The passkey confirm text: the note's own lines first, then the SDK's plain
+ * words for the edition_mint (describeTx: title, allowed, not allowed, lasts,
+ * undo). An SDK line that uses a word from the plan's "Never use" list (today
+ * the edition_mint line about attention) is left out, so the sheet a person reads before
+ * Face ID holds the same honest copy as the page. `never` is a list of RegExp.
+ */
+export function confirmText(lines, words, never = []) {
+  const honest = (line) => !never.some((re) => re.test(line));
+  const sdk = [words.title, ...(words.allowed || []), ...(words.not_allowed || []), `Lasts: ${words.lasts}`, `Undo: ${words.undo}`];
+  return [...lines, '', ...sdk.filter(honest)].join('\n');
+}
+
 /** The token carrying `hash`, if the edition has minted it. */
 export const findByRecipeHash = (mints, hash) => (Array.isArray(mints) ? mints : []).find((m) => m && m.recipe_hash === hash) || null;
 

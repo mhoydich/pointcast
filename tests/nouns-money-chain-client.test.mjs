@@ -11,9 +11,10 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { encodeRecipeHex, recipeHash, recipeIndex } from '../public/nouns-money/chain/nm-recipe.js';
-import { cardView, copiesLeft, fetchAllMints, findByRecipeHash, indexMints, judgeSerial, shelfLine, verifyClaim, sha256Hex } from '../public/nouns-money/chain/nm-shelf.js';
+import { cardView, confirmText, copiesLeft, fetchAllMints, findByRecipeHash, indexMints, judgeSerial, shelfLine, verifyClaim, sha256Hex } from '../public/nouns-money/chain/nm-shelf.js';
 import { WALLET_KEY, createOptions, loadWallet, saveWallet, walletFromCredential } from '../public/nouns-money/chain/nm-wallet.js';
-import { passkeyAddress } from '../public/chain/first-mints/lib/pointcast-chain.js';
+import { buildTx, describeTx, passkeyAddress } from '../public/chain/first-mints/lib/pointcast-chain.js';
+import { scanText } from '../src/lib/nouns-money/honest-copy.mjs';
 import { NM_COPY } from '../src/lib/nouns-money/chain-copy.mjs';
 import { NM_DEVNET, nmClientConfig } from '../src/data/nouns-money-chain.ts';
 import { DEVNET } from '../src/data/chain-home.ts';
@@ -102,6 +103,22 @@ test('a refused or failed read is never an open shelf or a closed edition', asyn
   assert.match(collect, /return fail\(C\.status\.unreadable, e\);/);
   const note = read('public/nouns-money/chain/nm-note-page.js');
   assert.match(note, /if \(!r\.ok \|\| !j \|\| j\.error !== undefined\) throw/);
+});
+
+test('the passkey confirm sheet holds the honest copy: note lines, then the SDK words minus "Never use" lines', () => {
+  const cfg = JSON.parse(JSON.stringify(nmClientConfig())); // as the page reads it from the JSON island
+  const never = cfg.never.map(([source, flags]) => new RegExp(source, flags));
+  const me = 'pcp12oAndhL3CgMYUbYNE2k67192EGyuvBpUu';
+  const tx = buildTx('edition_mint', { sender: me, nonce: 0, edition: 'nouns-money-27', recipient: me, recipe: recipeOf(42, 3), approval_expires: 1900, approval: 'cd'.repeat(64) });
+  const w = describeTx(tx, {});
+  assert.ok(scanText(w.not_allowed.join('\n')).length > 0, 'the SDK words for edition_mint carry a banned word (Spending attention.)');
+  const lines = [NM_COPY.confirm.title, NM_COPY.replacementLine, NM_COPY.standardLine];
+  const text = confirmText(lines, w, never);
+  assert.deepEqual(scanText(text), [], text);
+  assert.ok(text.startsWith(lines.join('\n')), 'note lines first');
+  for (const kept of [w.title, ...w.allowed, 'Changing the card later: the recipe is permanent.', 'Minting the same recipe twice.', 'Lasts: Permanent.', "Undo: Can't be undone."]) assert.ok(text.includes(kept), kept);
+  assert.ok(!/Spending/.test(text));
+  assert.match(read('public/nouns-money/chain/nm-collect.js'), /confirm: async \(w\) => window\.confirm\(confirmText\(words, w, never\)\)/);
 });
 
 const goodClaim = (over = {}) => ({

@@ -28,7 +28,7 @@ import {
 } from '../../public/nouns-money/chain/nm-recipe.js';
 import { DEVNET } from './chain-home.ts';
 import { NM_COPY, allCopyStrings } from '../lib/nouns-money/chain-copy.mjs';
-import { scanSource, scanText } from '../lib/nouns-money/honest-copy.mjs';
+import { BANNED, scanSource, scanText } from '../lib/nouns-money/honest-copy.mjs';
 
 /** THE FLAG. Off until Phase C (edition open on devnet-2, copy signed off). */
 export const NM_CHAIN_ENABLED: boolean = false;
@@ -91,9 +91,14 @@ export const NM_DEVNET = Object.freeze({
   yardHref: `${DEVNET.yardHref}&lens=mints`,
 });
 
-/** The JSON the client scripts read: config + every string they show. */
+/**
+ * The JSON the client scripts read: config, every string they show, and the
+ * "Never use" patterns ([source, flags], no g) the confirm sheet filters the
+ * SDK's plain words through.
+ */
 export function nmClientConfig() {
-  return { devnet: NM_DEVNET, copies: NM_COPIES_PER_DESIGN, designs: NM_DESIGNS, copy: NM_COPY };
+  const never = BANNED.map(([, , re]) => [re.source, re.flags.replace('g', '')]);
+  return { devnet: NM_DEVNET, copies: NM_COPIES_PER_DESIGN, designs: NM_DESIGNS, copy: NM_COPY, never };
 }
 
 /** Escape for <script type="application/json">. */

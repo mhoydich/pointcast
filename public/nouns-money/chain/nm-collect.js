@@ -12,7 +12,7 @@
 //         POST /tx with the passkey-signed edition_mint.
 import { buildTx, connect, domainOf, signWithPasskey } from '../../chain/first-mints/lib/pointcast-chain.js';
 import { nm27Label, recipeIndex } from './nm-recipe.js';
-import { cardView, fetchAllMints, findByRecipeHash, indexMints, verifyClaim } from './nm-shelf.js';
+import { cardView, confirmText, fetchAllMints, findByRecipeHash, indexMints, verifyClaim } from './nm-shelf.js';
 import { createWallet, loadWallet, saveWallet } from './nm-wallet.js';
 
 const fill = (t, v = {}) => String(t).replace(/\{(\w+)\}/g, (w, k) => (k in v ? String(v[k]) : w));
@@ -27,6 +27,8 @@ async function init(root) {
     return;
   }
   const { devnet, copy: C } = cfg;
+  // The plan's "Never use" list, from the build (src/lib/nouns-money/honest-copy.mjs BANNED).
+  const never = (cfg.never || []).map(([source, flags]) => new RegExp(source, flags));
   const $ = (s) => root.querySelector(s);
   const $$ = (s) => [...root.querySelectorAll(s)];
   const say = (text, cls = '') => {
@@ -201,7 +203,7 @@ async function init(root) {
           credentialId: wallet.credentialId,
           rpId: devnet.rpId,
           params: chain.params,
-          confirm: async (w) => window.confirm([...words, '', w.title, ...(w.allowed || []), ...(w.not_allowed || []), `Lasts: ${w.lasts}`, `Undo: ${w.undo}`].join('\n')),
+          confirm: async (w) => window.confirm(confirmText(words, w, never)),
         });
         say(C.status.sending);
         const sent = await post('/tx', signed);
