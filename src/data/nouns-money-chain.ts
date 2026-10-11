@@ -164,8 +164,9 @@ export function assertNmChainReady(sources: Record<string, string> = {}, enabled
 /**
  * /nouns-money/catalog.json: the live catalog while off; while on, its meaning
  * line (the live "No mint, token ownership…") becomes the plan's replacement
- * line. Key order is kept, so the flag-off output is byte-identical.
+ * line, and the standard line is added last, as on every flagged surface.
+ * While off the object is returned untouched, so the output is byte-identical.
  */
-export function catalogForFlag<T extends { meaning: string }>(catalog: T, enabled: boolean = NM_CHAIN_ENABLED): T {
-  return enabled ? { ...catalog, meaning: NM_COPY.replacementLine } : catalog;
+export function catalogForFlag<T extends { meaning: string }>(catalog: T, enabled: boolean = NM_CHAIN_ENABLED): T & { standard_line?: string } {
+  return enabled ? { ...catalog, meaning: NM_COPY.replacementLine, standard_line: NM_COPY.standardLine } : catalog;
 }

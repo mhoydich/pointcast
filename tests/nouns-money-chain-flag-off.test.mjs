@@ -12,7 +12,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { NM_CHAIN_ENABLED, NM_EDITION_TERMS, catalogForFlag } from '../src/data/nouns-money-chain.ts';
 import { SOURCE_CATALOG } from '../src/lib/nouns-money/catalog.ts';
-import { NM_REPLACEMENT_LINE } from '../src/lib/nouns-money/chain-copy.mjs';
+import { NM_REPLACEMENT_LINE, NM_STANDARD_LINE } from '../src/lib/nouns-money/chain-copy.mjs';
 import { compareDists } from '../scripts/compare-nm-flag-off.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -40,14 +40,16 @@ test('the flag is off, and the terms are the plan’s', () => {
   );
 });
 
-test('flag off: catalog.json keeps the live line; on: the plan’s replacement, same key order', () => {
+test('flag off: catalog.json keeps the live line; on: the plan’s replacement and the standard line', () => {
   assert.equal(catalogForFlag(SOURCE_CATALOG, false), SOURCE_CATALOG);
   assert.equal(JSON.stringify(catalogForFlag(SOURCE_CATALOG)), JSON.stringify(SOURCE_CATALOG));
   assert.match(SOURCE_CATALOG.meaning, /^Collected artwork preferences\. No mint, token ownership/);
   const on = catalogForFlag(SOURCE_CATALOG, true);
   assert.equal(on.meaning, NM_REPLACEMENT_LINE);
-  assert.deepEqual(Object.keys(on), Object.keys(SOURCE_CATALOG));
+  assert.equal(on.standard_line, NM_STANDARD_LINE, 'the standard line is on every flagged surface, catalog.json too');
+  assert.deepEqual(Object.keys(on), [...Object.keys(SOURCE_CATALOG), 'standard_line'], 'existing keys keep their order');
   assert.notEqual(SOURCE_CATALOG.meaning, NM_REPLACEMENT_LINE, 'the source catalog is not mutated');
+  assert.equal(SOURCE_CATALOG.standard_line, undefined);
 });
 
 test('flag-off pages render the chain shelf only behind the flag, with nothing bundled', () => {
