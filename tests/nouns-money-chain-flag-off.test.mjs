@@ -55,7 +55,7 @@ test('flag off: catalog.json keeps the live line; on: the plan’s replacement a
 test('flag-off pages render the chain shelf only behind the flag, with nothing bundled', () => {
   const home = read('src/pages/nouns-money.astro');
   const collect = read('src/pages/nouns-money/collect.astro');
-  assert.match(home, /\{NM_CHAIN_ENABLED && <NounsMoneyChainShelf \/>\}/);
+  assert.match(home, /\{NM_CHAIN_ENABLED && <div class="nm-section nm-chain"><NounsMoneyChainShelf \/><\/div>\}/);
   assert.match(collect, /\{NM_CHAIN_ENABLED && <NounsMoneyChainShelf \/>\}/);
   const shelf = read('src/components/NounsMoneyChainShelf.astro');
   assert.match(shelf, /\{NM_CHAIN_ENABLED && \(/, 'the component guards itself too');
@@ -63,6 +63,19 @@ test('flag-off pages render the chain shelf only behind the flag, with nothing b
   assert.doesNotMatch(shelf.replace(/<script type="module" is:inline/g, '').replace(/<script type="application\/json"/g, ''), /<script\b/, 'no bundled script');
   const note = read('src/pages/nouns-money/note/[serial].astro');
   assert.match(note, /if \(!NM_CHAIN_ENABLED\) return \[\];/, 'no note pages while off');
+});
+
+test('flag-on surfaces follow the design law: 400/500 weights, --pc-font-mono, hard corners, light like their host pages', () => {
+  for (const f of ['src/components/NounsMoneyChainShelf.astro', 'src/pages/nouns-money/note/[serial].astro']) {
+    const css = /<style is:inline>([\s\S]*?)<\/style>/.exec(read(f))[1];
+    assert.doesNotMatch(css, /font(?:-weight)?:\s*(?:[6-9]00|bold)/, `${f}: two weights only (BLOCKS.md)`);
+    assert.doesNotMatch(css, /ui-monospace|SFMono|Menlo/, `${f}: never system mono (BLOCKS.md)`);
+    assert.match(css, /var\(--pc-font-mono/, `${f}: metadata in the PointCast mono`);
+    assert.doesNotMatch(css, /border-radius:\s*[3-9]/, `${f}: hard corners`);
+    assert.doesNotMatch(css, /prefers-color-scheme/, `${f}: the Nouns Money pages and BlockLayout tokens are light-only, so no dark island`);
+  }
+  // the home page shelf sits in the page's own section rhythm
+  assert.match(read('src/pages/nouns-money.astro'), /<div class="nm-section nm-chain"><NounsMoneyChainShelf \/><\/div>/);
 });
 
 const BASE = process.env.NM_BASELINE_DIST || '';

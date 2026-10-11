@@ -227,7 +227,7 @@ async function init(root) {
             const box = receipt({ serial: label, owner: String(token.owner) });
             const link = box.querySelector('[data-nmc-note-link]');
             link.href = `/nouns-money/note/${Number(token.serial)}/`;
-            link.hidden = false;
+            box.querySelector('[data-nmc-note-link-wrap]').hidden = false;
             return say(fill(C.status.landed, { label, nounId: target.noun_id, copy: ok.copy, copies: cfg.copies }), 'is-ok');
           }
         }
