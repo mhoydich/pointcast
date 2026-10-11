@@ -60,7 +60,7 @@ async function init(root) {
     if (!Array.isArray(page.mints)) throw new Error('the answer has no mints list');
     const rawMint = page.mints.find((m) => Number(m.serial) === serial) || null;
     const token = rawMint ? indexMints([rawMint], index).bySerial.get(serial) : undefined;
-    const verdict = judgeSerial(serial, { token, rawMint, entries });
+    const verdict = judgeSerial(serial, { token, rawMint, entries, house });
     if (verdict.state === 'not-collected') return say(fill(N.notCollected, { serial }));
     if (verdict.state === 'unknown-recipe') {
       set('chainHash', String(rawMint.recipe_hash || ''));
@@ -89,7 +89,10 @@ async function init(root) {
     const problems = [];
     if (recipeHash(recipe) !== t.recipe_hash) problems.push(N.problemRecipe);
     if (decoded.svgSha256 !== fileHash) problems.push(N.problemArt);
-    if (verdict.state === 'order') problems.push(fill(N.serialOrder, { serial, expected: verdict.expected, design: t.design, copy: t.copy }));
+    if (verdict.state === 'order') {
+      const rule = { 'specimen-order': N.serialOrder, 'specimen-owner': N.specimenOwner, copy: N.serialCopy }[verdict.rule];
+      problems.push(fill(rule, { serial, expected: verdict.expected, design: t.design, copy: t.copy, owner: t.owner }));
+    }
     if (problems.length) return say(fill(N.noMatch, { why: problems.join('; ') }), 'is-warn');
     say(N.match, 'is-ok');
   } catch (e) {

@@ -24,7 +24,7 @@ const chain = JSON.parse(read('public/nouns-money/chain.json'));
 const entries = chain.entries;
 const index = recipeIndex(entries);
 const HOUSE = 'tz1Vt8JkUShtxihYQUBQfnDfvVm3RvDCicpP';
-const ME = 'pcp1examplepasskeyaccount000000000000';
+const ME = 'pcp12oAndhL3CgMYUbYNE2k67192EGyuvBpUu'; // a real passkey address (checksummed)
 const recipeOf = (design, copy) => {
   const e = entries[design];
   return encodeRecipeHex({ design, copy, svgSha256: e.svg_sha256, nativeRgbSha256: e.native_rgb_sha256 });
@@ -54,7 +54,7 @@ test('card states: copies left per design and where the specimen sits', () => {
   const empty = indexMints([], index);
   assert.equal(shelfLine(empty.byDesign.get(3), { house: HOUSE, shelf: S }), '10 of 10 copies left · specimen not on the shelf yet');
   const moved = indexMints([{ serial: 4, owner: ME, recipe_hash: entries[3].recipe_hash, minted_at: 1 }], index);
-  assert.match(shelfLine(moved.byDesign.get(3), { house: HOUSE, shelf: S }), /^10 of 10 copies left · specimen held by pcp1exam…0000$/);
+  assert.match(shelfLine(moved.byDesign.get(3), { house: HOUSE, shelf: S }), /^10 of 10 copies left · specimen held by pcp12oAn…BpUu$/);
 });
 
 test('fetchAllMints follows next_after and reports a closed edition', async () => {
@@ -190,6 +190,25 @@ test('note page verdicts: not collected, unknown recipe, serial order, found', (
   const v = judgeSerial(3, { token: odd.bySerial.get(3), rawMint: null, entries });
   assert.equal(v.state, 'order');
   assert.equal(v.expected, 2);
+  // the chain's replay law (sdk/nm-law.js), as far as a page can see it
+  const PK = ME;
+  const judge = (raw) => {
+    const t = indexMints([raw], index).bySerial.get(raw.serial);
+    return judgeSerial(raw.serial, { token: t, rawMint: raw, entries, house: HOUSE });
+  };
+  assert.equal(judge({ serial: 3, owner: HOUSE, recipe_hash: entries[2].recipe_hash, minted_at: 1 }).state, 'found');
+  assert.deepEqual(
+    (({ state, rule }) => ({ state, rule }))(judge({ serial: 3, owner: PK, recipe_hash: entries[2].recipe_hash, minted_at: 1 })),
+    { state: 'order', rule: 'specimen-owner' },
+    'a specimen the house does not hold',
+  );
+  assert.equal(judge({ serial: 150, owner: HOUSE, recipe_hash: entries[7].recipe_hash, minted_at: 1 }).rule, 'copy', 'a specimen (copy 0) above serial 100');
+  assert.equal(judge({ serial: 101, owner: HOUSE, recipe_hash: hashOf(5, 1), minted_at: 1 }).rule, 'copy', 'a public copy held by a tz1 account');
+  assert.equal(judge({ serial: 101, owner: PK, recipe_hash: hashOf(5, 1), minted_at: 1 }).state, 'found');
+  assert.equal(v.rule, 'specimen-order');
+  const page = read('public/nouns-money/chain/nm-note-page.js');
+  assert.match(page, /judgeSerial\(serial, \{ token, rawMint, entries, house \}\)/);
+  for (const k of ['serialOrder', 'specimenOwner', 'serialCopy']) assert.match(page, new RegExp(`N\\.${k}`));
   assert.equal(findByRecipeHash(mints, hashOf(5, 2)).serial, 102);
   assert.equal(findByRecipeHash(mints, hashOf(5, 9)), null);
 });

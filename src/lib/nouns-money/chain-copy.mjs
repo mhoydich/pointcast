@@ -101,6 +101,8 @@ export const NM_COPY = Object.freeze({
     match: 'Hash match: the chain’s recipe hash, the published recipe and the art file agree.',
     noMatch: 'No match: {why}',
     serialOrder: 'Serial {serial} should be the specimen of design {expected}; devnet-2 records design {design}, copy {copy}.',
+    specimenOwner: 'Serial {serial} is the specimen of design {expected}, which stays on the house shelf; devnet-2 records {owner} as its owner.',
+    serialCopy: 'Serials above 100 are public copies (1 to 10) collected by a passkey account; devnet-2 records copy {copy} of design {design} for {owner}.',
     checkMyNote: 'Check my note in the Block Yard',
     backToShelf: 'Back to the collection',
     chainRecord: 'Published recipes (chain.json)',

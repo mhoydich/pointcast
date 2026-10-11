@@ -17,6 +17,7 @@ import {
   recipeMatchesEntry,
   specimenSerial,
 } from './nm-recipe.js';
+import { addressKind } from '../../chain/first-mints/lib/pointcast-chain.js';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const RECIPE_HEX = /^[0-9a-f]{106}$/;
@@ -155,14 +156,22 @@ export const findByRecipeHash = (mints, hash) => (Array.isArray(mints) ? mints :
 
 /**
  * What the note page says about one serial. `token` is indexMints().bySerial.get(serial)
- * (or undefined); `rawMint` is the chain's record for that serial, if any.
+ * (or undefined); `rawMint` is the chain's record for that serial, if any;
+ * `house` is GET /status house. The rules are the chain's own replay law
+ * (pointcast-chain sdk/nm-law.js) on what a page can see: serials 1..100 are
+ * copy 0 of design serial-1, held by the house ('specimen-order',
+ * 'specimen-owner'); serials above 100 are copies 1..10 held by a passkey
+ * account ('copy'). A break is state 'order', never a hash match.
  */
-export function judgeSerial(serial, { token, rawMint, entries }) {
+export function judgeSerial(serial, { token, rawMint, entries, house = '' }) {
   if (!token && !rawMint) return { state: 'not-collected' };
   if (!token) return { state: 'unknown-recipe', rawMint };
   const entry = entries.find((e) => e.design === token.design);
-  if (serial <= NM_DESIGNS && (token.copy !== 0 || specimenSerial(token.design) !== serial)) {
-    return { state: 'order', token, entry, expected: serial - 1 };
+  if (serial <= NM_DESIGNS) {
+    if (token.copy !== 0 || specimenSerial(token.design) !== serial) return { state: 'order', rule: 'specimen-order', token, entry, expected: serial - 1 };
+    if (house && token.owner !== house) return { state: 'order', rule: 'specimen-owner', token, entry, expected: serial - 1 };
+  } else if (token.copy < 1 || addressKind(token.owner) !== 'passkey') {
+    return { state: 'order', rule: 'copy', token, entry };
   }
   return { state: 'found', token, entry };
 }
