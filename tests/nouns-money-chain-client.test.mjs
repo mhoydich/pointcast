@@ -194,6 +194,16 @@ test('note page verdicts: not collected, unknown recipe, serial order, found', (
   assert.equal(findByRecipeHash(mints, hashOf(5, 9)), null);
 });
 
+test('the note page shows the very SVG bytes it hashed, never the preview image', () => {
+  const src = read('public/nouns-money/chain/nm-note-page.js');
+  assert.doesNotMatch(src, /entry\.preview/, 'the preview webp is not what the hash covers');
+  assert.match(src, /const fileHash = await sha256Hex\(svgBytes\);/);
+  assert.match(src, /art\.src = URL\.createObjectURL\(new Blob\(\[svgBytes\], \{ type: 'image\/svg\+xml' \}\)\);/);
+  assert.ok(src.indexOf('sha256Hex(svgBytes)') < src.indexOf('art.src ='), 'shown only after it is hashed');
+  // the published SVGs are self-contained vector files, so a blob: URL draws them whole
+  for (const e of entries.slice(0, 5)) assert.doesNotMatch(read(`public${e.svg}`), /(?:href|src)="(?!#)|url\((?!#)/);
+});
+
 test('sha256Hex hashes art files the way chain.json does', async () => {
   const e = entries[0];
   const bytes = readFileSync(new URL(`../public${e.svg}`, import.meta.url));

@@ -6,7 +6,8 @@
 //   2. the published recipe whose blake2b hash equals that recipe hash
 //      (rebuilt from /nouns-money/chain.json, all 1,100 possible recipes);
 //   3. the art file whose sha256 equals the svg hash inside that recipe
-//      (the SVG on this site, hashed in the browser).
+//      (the SVG on this site, hashed in the browser, and the art shown is
+//      those same bytes, not a preview image).
 // "Hash match" only when all three agree. Words come from the config island.
 import { connect } from '../../chain/first-mints/lib/pointcast-chain.js';
 import { decodeRecipe, nm27Label, recipeHash, recipeIndex } from './nm-recipe.js';
@@ -67,10 +68,6 @@ async function init(root) {
     }
     const { entry } = verdict;
     const t = verdict.token;
-    const art = $('[data-nmn-art]');
-    art.src = entry.preview;
-    art.alt = fill(N.artAlt, { nounId: entry.noun_id, label: nm27Label(serial) });
-    art.hidden = false;
     set('owner', t.owner === house ? `${t.owner} (${N.house})` : t.owner);
     set('design', fill(N.designValue, { nounId: entry.noun_id, id: entry.id }));
     set('copy', t.copy === 0 ? N.copySpecimen : `${t.copy} / ${cfg.copies}`);
@@ -79,9 +76,16 @@ async function init(root) {
     const recipe = index.get(t.recipe_hash).recipe;
     set('publishedRecipe', recipe);
     const decoded = decodeRecipe(recipe);
-    const svgBytes = new Uint8Array(await (await fetch(entry.svg, { cache: 'no-store' })).arrayBuffer());
+    const svgRes = await fetch(entry.svg, { cache: 'no-store' });
+    if (!svgRes.ok) throw new Error(`${entry.svg}: HTTP ${svgRes.status}`);
+    const svgBytes = new Uint8Array(await svgRes.arrayBuffer());
     const fileHash = await sha256Hex(svgBytes);
     set('artHash', fileHash);
+    // Show exactly the bytes that were hashed, so the art on screen is the file the hash speaks for.
+    const art = $('[data-nmn-art]');
+    art.src = URL.createObjectURL(new Blob([svgBytes], { type: 'image/svg+xml' }));
+    art.alt = fill(N.artAlt, { nounId: entry.noun_id, label: nm27Label(serial) });
+    art.hidden = false;
     const problems = [];
     if (recipeHash(recipe) !== t.recipe_hash) problems.push(N.problemRecipe);
     if (decoded.svgSha256 !== fileHash) problems.push(N.problemArt);
