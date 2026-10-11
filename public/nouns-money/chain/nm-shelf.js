@@ -21,14 +21,22 @@ import {
 const HEX64 = /^[0-9a-f]{64}$/;
 const RECIPE_HEX = /^[0-9a-f]{106}$/;
 
-/** Every token of the edition, following next_after. `get(path)` resolves to the parsed JSON. */
+/**
+ * Every token of the edition, following next_after. `get(path)` resolves to the
+ * parsed JSON. Only the devnet's own "no such edition" answer ({edition: null})
+ * means closed; an error body, a missing mints list or no answer at all throws,
+ * so a refused or failed read is never shown as an open shelf with every copy left.
+ */
 export async function fetchAllMints(get, edition = NM_EDITION_ID, { limit = 200, max = 2000 } = {}) {
   const mints = [];
   let after = 0;
   for (let page = 0; page < Math.ceil(max / limit) + 1; page += 1) {
     const j = await get(`/edition/${encodeURIComponent(edition)}/mints?after=${after}&limit=${limit}`);
-    if (!j || j.edition === null) return { open: false, mints: [] };
-    const batch = Array.isArray(j.mints) ? j.mints : [];
+    if (!j || typeof j !== 'object') throw new Error('no answer');
+    if (j.error !== undefined) throw new Error(String(j.code ? `${j.code}: ${j.error}` : j.error));
+    if (j.edition === null && page === 0) return { open: false, mints: [] };
+    if (!Array.isArray(j.mints)) throw new Error('the answer has no mints list');
+    const batch = j.mints;
     mints.push(...batch);
     const next = Number(j.next_after);
     if (batch.length < limit || !Number.isInteger(next) || next <= after) break;
@@ -78,6 +86,18 @@ export function shelfLine(slot, { house, shelf, copies = NM_COPIES_PER_DESIGN })
   else if (house && slot.specimen.owner === house) second = shelf.specimenHouse;
   else second = fillT(shelf.specimenElsewhere, { owner: shortAddr(slot.specimen.owner) });
   return `${first} · ${second}`;
+}
+
+/**
+ * One shelf card: its line and whether its Collect button may be pressed.
+ * `state` is 'reading' | 'failed' (devnet-2 did not answer) | 'closed' (the
+ * edition is not open) | 'open'. Only an open edition read in full enables a button.
+ */
+export function cardView(state, { slot, house, shelf, copies = NM_COPIES_PER_DESIGN, canCollect = false }) {
+  if (state === 'failed') return { line: shelf.unreadable, enabled: false };
+  if (state === 'closed') return { line: shelf.notOpen, enabled: false };
+  if (state !== 'open' || !slot) return { line: shelf.checking, enabled: false };
+  return { line: shelfLine(slot, { house, shelf, copies }), enabled: Boolean(canCollect) && copiesLeft(slot, copies) > 0 };
 }
 
 /**

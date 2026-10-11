@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { encodeRecipeHex, recipeHash, recipeIndex } from '../public/nouns-money/chain/nm-recipe.js';
-import { copiesLeft, fetchAllMints, findByRecipeHash, indexMints, judgeSerial, shelfLine, verifyClaim, sha256Hex } from '../public/nouns-money/chain/nm-shelf.js';
+import { cardView, copiesLeft, fetchAllMints, findByRecipeHash, indexMints, judgeSerial, shelfLine, verifyClaim, sha256Hex } from '../public/nouns-money/chain/nm-shelf.js';
 import { WALLET_KEY, createOptions, loadWallet, saveWallet, walletFromCredential } from '../public/nouns-money/chain/nm-wallet.js';
 import { passkeyAddress } from '../public/chain/first-mints/lib/pointcast-chain.js';
 import { NM_COPY } from '../src/lib/nouns-money/chain-copy.mjs';
@@ -73,6 +73,35 @@ test('fetchAllMints follows next_after and reports a closed edition', async () =
   assert.deepEqual(calls, ['/edition/nouns-money-27/mints?after=0&limit=200', '/edition/nouns-money-27/mints?after=200&limit=200', '/edition/nouns-money-27/mints?after=400&limit=200']);
   const closed = await fetchAllMints(async () => ({ edition: null, id: 'nouns-money-27', mints: [] }));
   assert.deepEqual(closed, { open: false, mints: [] }, 'the live devnet answer today: {"edition":null,...}');
+});
+
+test('a refused or failed read is never an open shelf or a closed edition', async () => {
+  // devnet error bodies look like {"error": "...", "network": "devnet"} (rate limits, bad ids, 5xx)
+  await assert.rejects(fetchAllMints(async () => ({ error: 'slow down', code: 'rate', network: 'devnet' })), /rate: slow down/);
+  await assert.rejects(fetchAllMints(async () => null), /no answer/);
+  await assert.rejects(fetchAllMints(async () => ({ id: 'nouns-money-27' })), /no mints list/);
+  await assert.rejects(fetchAllMints(async () => { throw new Error('HTTP 503'); }), /HTTP 503/);
+  // a failure on a later page fails the whole read rather than showing part of the shelf
+  let n = 0;
+  const flaky = async () => (n++ === 0 ? { mints: Array.from({ length: 200 }, (_, i) => ({ serial: i + 1 })), next_after: 200 } : { error: 'internal' });
+  await assert.rejects(fetchAllMints(flaky), /internal/);
+  assert.deepEqual(await fetchAllMints(async () => ({ edition: null, id: 'nouns-money-27', mints: [] })), { open: false, mints: [] });
+
+  const S = NM_COPY.shelf;
+  const shelf = indexMints(fakeMints(), index);
+  const at = (state, design, canCollect = true) => cardView(state, { slot: shelf.byDesign.get(design), house: HOUSE, shelf: S, canCollect });
+  assert.deepEqual(at('failed', 5), { line: S.unreadable, enabled: false });
+  assert.deepEqual(at('closed', 5), { line: S.notOpen, enabled: false });
+  assert.deepEqual(at('reading', 5), { line: S.checking, enabled: false });
+  assert.deepEqual(at('open', 5), { line: '3 of 10 copies left · specimen on the house shelf', enabled: true });
+  assert.equal(at('open', 9).enabled, false, 'all copies collected');
+  assert.equal(at('open', 5, false).enabled, false, 'no wallet, or off pointcast.xyz');
+  const collect = read('public/nouns-money/chain/nm-collect.js');
+  assert.match(collect, /if \(!r\.ok \|\| !r\.j\) throw new Error\(errText\(r\)\);/, 'reads throw on a refused answer');
+  assert.match(collect, /cardView\(state, \{/, 'cards are painted from cardView');
+  assert.match(collect, /return fail\(C\.status\.unreadable, e\);/);
+  const note = read('public/nouns-money/chain/nm-note-page.js');
+  assert.match(note, /if \(!r\.ok \|\| !j \|\| j\.error !== undefined\) throw/);
 });
 
 const goodClaim = (over = {}) => ({

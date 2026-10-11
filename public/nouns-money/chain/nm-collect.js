@@ -12,7 +12,7 @@
 //         POST /tx with the passkey-signed edition_mint.
 import { buildTx, connect, domainOf, signWithPasskey } from '../../chain/first-mints/lib/pointcast-chain.js';
 import { nm27Label, recipeIndex } from './nm-recipe.js';
-import { fetchAllMints, findByRecipeHash, indexMints, shelfLine, copiesLeft, verifyClaim } from './nm-shelf.js';
+import { cardView, fetchAllMints, findByRecipeHash, indexMints, verifyClaim } from './nm-shelf.js';
 import { createWallet, loadWallet, saveWallet } from './nm-wallet.js';
 
 const fill = (t, v = {}) => String(t).replace(/\{(\w+)\}/g, (w, k) => (k in v ? String(v[k]) : w));
@@ -56,14 +56,19 @@ async function init(root) {
     }
     return { ok: r.ok, status: r.status, j };
   };
-  const get = async (path) => (await call(path)).j;
+  // A read that is refused or fails throws: it never stands in for "closed" or "nothing minted".
+  const get = async (path) => {
+    const r = await call(path);
+    if (!r.ok || !r.j) throw new Error(errText(r));
+    return r.j;
+  };
   const post = (path, body) => call(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const errText = (r) => (r.j && (r.j.code ? `${r.j.code}: ${r.j.error || ''}` : r.j.error)) || `HTTP ${r.status}`;
 
   let wallet = loadWallet(localStorage, devnet.walletKey);
   let chain = null;
   let house = '';
-  let open = false;
+  let state = 'reading'; // 'reading' | 'failed' | 'closed' | 'open'
   let entries = [];
   let index = new Map();
   let shelf = null;
@@ -76,41 +81,50 @@ async function init(root) {
   const paintShelf = () => {
     for (const card of $$('[data-nmc-design]')) {
       const design = Number(card.dataset.nmcDesign);
-      const line = card.querySelector('[data-nmc-line]');
-      const btn = card.querySelector('[data-nmc-collect]');
-      if (!open || !shelf) {
-        line.textContent = open ? C.shelf.unreadable : C.shelf.notOpen;
-        btn.disabled = true;
-        continue;
-      }
-      const slot = shelf.byDesign.get(design);
-      line.textContent = shelfLine(slot, { house, shelf: C.shelf, copies: cfg.copies });
-      btn.disabled = Boolean(blocked) || !wallet || copiesLeft(slot, cfg.copies) === 0;
+      const view = cardView(state, {
+        slot: shelf ? shelf.byDesign.get(design) : null,
+        house,
+        shelf: C.shelf,
+        copies: cfg.copies,
+        canCollect: !blocked && Boolean(wallet),
+      });
+      card.querySelector('[data-nmc-line]').textContent = view.line;
+      card.querySelector('[data-nmc-collect]').disabled = !view.enabled;
     }
   };
+  // Only a full, successful read changes the shelf; a failed read throws and leaves it as it was.
   const readShelf = async () => {
     const r = await fetchAllMints(get, devnet.edition);
-    open = r.open;
-    shelf = open ? indexMints(r.mints, index) : null;
+    shelf = r.open ? indexMints(r.mints, index) : null;
+    state = r.open ? 'open' : 'closed';
     paintShelf();
     return r;
   };
 
   showWallet();
   say(C.status.loading);
-  try {
-    const doc = await (await fetch(devnet.chainJson, { cache: 'no-store' })).json();
-    entries = doc.entries;
-    index = recipeIndex(entries);
-    chain = await connect(devnet.api, { expect: { chainId: devnet.chainId, genesisHash: devnet.genesis } });
-    house = String((await get('/status'))?.house || '');
-    await readShelf();
-  } catch (e) {
+  const fail = (template, e) => {
+    state = 'failed';
     lock();
     paintShelf();
-    return say(fill(C.status.wrongChain, { why: e.message }), 'is-warn');
+    say(fill(template, { why: e.message }), 'is-warn');
+  };
+  try {
+    chain = await connect(devnet.api, { expect: { chainId: devnet.chainId, genesisHash: devnet.genesis } });
+  } catch (e) {
+    return fail(C.status.wrongChain, e);
   }
-  if (!open) {
+  try {
+    const res = await fetch(devnet.chainJson, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`${devnet.chainJson}: HTTP ${res.status}`);
+    entries = (await res.json()).entries;
+    index = recipeIndex(entries);
+    house = String((await get('/status')).house || '');
+    await readShelf();
+  } catch (e) {
+    return fail(C.status.unreadable, e);
+  }
+  if (state !== 'open') {
     lock();
     return say(C.status.notOpen, 'is-warn');
   }
@@ -165,7 +179,7 @@ async function init(root) {
         }
         if (target !== entry) say(fill(C.status.duplicate, { copy: ok.copy, nounId: target.noun_id }));
         const acct = await get(`/account/${encodeURIComponent(wallet.address)}`);
-        const nonce = acct ? Number(acct.next_nonce ?? 0) : 0;
+        const nonce = Number(acct.next_nonce ?? 0);
         const tx = buildTx('edition_mint', {
           sender: wallet.address,
           nonce,

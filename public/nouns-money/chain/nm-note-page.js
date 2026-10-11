@@ -36,23 +36,28 @@ async function init(root) {
     const el = $(`[data-nmn="${k}"]`);
     if (el) el.textContent = v;
   };
+  // A refused or failed read throws (shown as "did not answer"), never as "not collected".
   const get = async (path) => {
     const r = await fetch(devnet.api + path, { signal: AbortSignal.timeout(10000) });
-    if (!r.ok && r.status !== 404) throw new Error(`HTTP ${r.status}`);
-    return r.json();
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || j.error !== undefined) throw new Error((j && j.error) || `HTTP ${r.status}`);
+    return j;
   };
 
   say(N.reading);
   try {
     if (!/^[0-9a-f]{64}$/.test(devnet.genesis || '')) throw new Error('genesis not pinned');
     await connect(devnet.api, { expect: { chainId: devnet.chainId, genesisHash: devnet.genesis } });
-    const doc = await (await fetch(devnet.chainJson, { cache: 'no-store' })).json();
+    const res = await fetch(devnet.chainJson, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`${devnet.chainJson}: HTTP ${res.status}`);
+    const doc = await res.json();
     const entries = doc.entries;
     const index = recipeIndex(entries);
     const house = String((await get('/status'))?.house || '');
     const page = await get(`/edition/${encodeURIComponent(devnet.edition)}/mints?after=${serial - 1}&limit=1`);
-    if (!page || page.edition === null) return say(fill(N.notOpen, { serial }), 'is-warn');
-    const rawMint = (page.mints || []).find((m) => Number(m.serial) === serial) || null;
+    if (page.edition === null) return say(fill(N.notOpen, { serial }), 'is-warn');
+    if (!Array.isArray(page.mints)) throw new Error('the answer has no mints list');
+    const rawMint = page.mints.find((m) => Number(m.serial) === serial) || null;
     const token = rawMint ? indexMints([rawMint], index).bySerial.get(serial) : undefined;
     const verdict = judgeSerial(serial, { token, rawMint, entries });
     if (verdict.state === 'not-collected') return say(fill(N.notCollected, { serial }));

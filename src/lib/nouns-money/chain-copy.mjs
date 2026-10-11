@@ -48,6 +48,7 @@ export const NM_COPY = Object.freeze({
     noGenesis: 'Not live: the devnet-2 genesis is not pinned in this build.',
     noWebauthn: 'This browser has no passkeys (WebAuthn).',
     wrongChain: 'The devnet is not the chain this page expects ({why}). Nothing will be signed.',
+    unreadable: 'Devnet-2 did not answer ({why}). Nothing will be signed; try again in a minute.',
     notOpen: 'The Nouns Money edition is not open on devnet-2 yet. Nothing will be signed.',
     ready: 'Ready. Pick a note to collect.',
     needWallet: 'Make a passkey wallet to collect a note.',
