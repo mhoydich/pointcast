@@ -82,29 +82,194 @@ export function scanText(text, { approved = NM_APPROVED_LINES } = {}) {
 
 // ---------------------------------------------------------------- copy extraction
 
-/** A single token with path/URL/selector punctuation and no spaces: code, not copy. */
-const isIdentifierLike = (s) => !/\s/.test(s) && /[-/#.:_=?&@]/.test(s);
+/** Hyphenated or dotted forms that are copy even written as one token. */
+const ALWAYS_COPY = /pump\.fun|dex-?screener|dao-backed|legal-tender|cash-out|money-printer/i;
 
-const stripComments = (code) =>
-  code
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/(^|[^:\\'"`])\/\/[^\n]*/g, '$1 ')
-    .replace(/<!--[\s\S]*?-->/g, ' ');
+/**
+ * A single token with path/URL/selector punctuation and no spaces is code
+ * (a class name, a path, a key), not copy. Exceptions, which are copy even as
+ * one token: a money amount or ticker ("$1.00", "€5", "$NOUNS"), a capitalised
+ * word that is not a path or file name ("DAO-backed", "USD-pegged"), and the
+ * ALWAYS_COPY forms ("pump.fun").
+ */
+export function isCodeToken(s) {
+  const t = String(s);
+  if (/\s/.test(t) || !/[-/#.:_=?&@]/.test(t)) return false;
+  if (ALWAYS_COPY.test(t)) return false;
+  if (/[$€£¥]\s?\d|\d\s?[$€£¥]|\$[A-Z]{2,}/.test(t)) return false;
+  const pathLike = /[/#=?&@\\]/.test(t) || /^[.\w-]+\.[a-z0-9]{2,5}$/.test(t);
+  if (/[A-Z]/.test(t) && !pathLike) return false;
+  return true;
+}
 
-/** String literals in JS/TS: '…', "…", and the static parts of `…${…}…`. */
-export function stringLiterals(code) {
-  const out = [];
-  const src = stripComments(code);
-  const re = /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g;
-  for (const m of src.matchAll(re)) {
-    let s = m[1] ?? m[2] ?? m[3] ?? '';
-    if (m[3] !== undefined) s = s.replace(/\$\{[^}]*\}/g, ' ');
-    if (s && !isIdentifierLike(s)) out.push(s);
+const REGEX_AFTER_WORD = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await']);
+const IDENT = /[A-Za-z0-9_$]/;
+
+/** '…' or "…" starting at i: [content, index after the closing quote], or null when the line ends first. */
+function readQuoted(src, i) {
+  const q = src[i];
+  let j = i + 1;
+  while (j < src.length) {
+    const c = src[j];
+    if (c === '\\') j += 2;
+    else if (c === q) return [src.slice(i + 1, j), j + 1];
+    else if (c === '\n') return null;
+    else j += 1;
+  }
+  return null;
+}
+
+/** The index of the "}" closing the "{" just before `j`, skipping strings, templates and comments. */
+function closeBrace(src, j) {
+  let depth = 1;
+  while (j < src.length) {
+    const c = src[j];
+    if (c === '/' && src[j + 1] === '/') {
+      const k = src.indexOf('\n', j);
+      j = k < 0 ? src.length : k;
+    } else if (c === '/' && src[j + 1] === '*') {
+      const k = src.indexOf('*/', j + 2);
+      j = k < 0 ? src.length : k + 2;
+    } else if (c === "'" || c === '"') {
+      const r = readQuoted(src, j);
+      j = r ? r[1] : j + 1;
+    } else if (c === '`') {
+      j = readTemplate(src, j, []);
+    } else {
+      if (c === '{') depth += 1;
+      else if (c === '}' && --depth === 0) return j;
+      j += 1;
+    }
+  }
+  return src.length;
+}
+
+/** A template literal at i: pushes its static text (each ${…} as one space) and the strings inside each ${…}. */
+function readTemplate(src, i, out) {
+  let text = '';
+  let j = i + 1;
+  while (j < src.length) {
+    const c = src[j];
+    if (c === '\\') {
+      text += src.slice(j, j + 2);
+      j += 2;
+    } else if (c === '`') {
+      out.push(text);
+      return j + 1;
+    } else if (c === '$' && src[j + 1] === '{') {
+      const end = closeBrace(src, j + 2);
+      lexStrings(src.slice(j + 2, end), out);
+      text += ' ';
+      j = end + 1;
+    } else {
+      text += c;
+      j += 1;
+    }
+  }
+  out.push(text);
+  return j;
+}
+
+/** Skip a regex literal at i (its "/" already judged to start one). */
+function skipRegex(src, i) {
+  let j = i + 1;
+  let inClass = false;
+  while (j < src.length && src[j] !== '\n') {
+    const c = src[j];
+    if (c === '\\') j += 1;
+    else if (c === '[') inClass = true;
+    else if (c === ']') inClass = false;
+    else if (c === '/' && !inClass) return j + 1;
+    j += 1;
+  }
+  return j;
+}
+
+/** Every string literal in JS/TS source, in order: comments and regex literals are skipped, "//" inside a string is text. */
+function lexStrings(src, out) {
+  let prev = '';
+  let word = '';
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') {
+      const k = src.indexOf('\n', i);
+      i = k < 0 ? src.length : k;
+    } else if (c === '/' && src[i + 1] === '*') {
+      const k = src.indexOf('*/', i + 2);
+      i = k < 0 ? src.length : k + 2;
+    } else if (c === "'" || c === '"') {
+      const r = readQuoted(src, i);
+      if (r) {
+        out.push(r[0]);
+        i = r[1];
+        prev = c;
+        word = '';
+      } else i += 1;
+    } else if (c === '`') {
+      i = readTemplate(src, i, out);
+      prev = '`';
+      word = '';
+    } else if (c === '/' && (!prev || /[(,=:[!&|?{};+\-*%<>~^]/.test(prev) || REGEX_AFTER_WORD.has(word))) {
+      i = skipRegex(src, i);
+      prev = '/';
+      word = '';
+    } else if (IDENT.test(c)) {
+      let k = i;
+      while (k < src.length && IDENT.test(src[k])) k += 1;
+      word = src.slice(i, k);
+      prev = src[k - 1];
+      i = k;
+    } else {
+      if (!/\s/.test(c)) {
+        prev = c;
+        word = '';
+      }
+      i += 1;
+    }
   }
   return out;
 }
 
-const VISIBLE_ATTRS = /\b(?:alt|title|aria-label|aria-description|placeholder|description|content|label|summary)\s*=\s*"([^"]*)"/gi;
+/** String literals in JS/TS: '…', "…", and the static parts of `…${…}…` (plus strings inside ${…}). Code tokens are dropped. */
+export function stringLiterals(code) {
+  return lexStrings(String(code), []).filter((s) => s && !isCodeToken(s));
+}
+
+const VISIBLE_ATTRS = /\b(?:alt|title|aria-label|aria-description|placeholder|description|content|label|summary)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+const TAG = /<[A-Za-z/][^<>]*>/g;
+
+/** Replace each top-level {expression} in Astro markup with a space, handing its text to `onExpr`. Braces are counted plainly. */
+function cutExpressions(markup, onExpr) {
+  let out = '';
+  let i = 0;
+  while (i < markup.length) {
+    const open = markup.indexOf('{', i);
+    if (open < 0) {
+      out += markup.slice(i);
+      break;
+    }
+    out += markup.slice(i, open);
+    let depth = 0;
+    let j = open;
+    for (; j < markup.length; j += 1) {
+      if (markup[j] === '{') depth += 1;
+      else if (markup[j] === '}' && --depth === 0) break;
+    }
+    onExpr(markup.slice(open + 1, j));
+    out += ' ';
+    i = j + 1;
+  }
+  return out;
+}
+
+/** The copy inside one {expression}: JSX text between tags, string literals in the code, and the same for nested expressions. */
+function expressionCopy(expr, parts) {
+  const flat = cutExpressions(expr, (inner) => expressionCopy(inner, parts));
+  for (const m of flat.matchAll(/<[A-Za-z/][^<>]*>([^<>]*)(?=<)/g)) if (m[1].trim()) parts.push(m[1]);
+  const code = flat.replace(/(<[A-Za-z/][^<>]*>)[^<>]*(?=<)/g, '$1').replace(TAG, ' ');
+  parts.push(...stringLiterals(code));
+}
 
 /** The copy a reader can see in an .astro (or .html) file. */
 export function astroCopy(src) {
@@ -122,13 +287,10 @@ export function astroCopy(src) {
     return ' ';
   });
   body = body.replace(/<!--[\s\S]*?-->/g, ' ');
-  for (const m of body.matchAll(VISIBLE_ATTRS)) parts.push(m[1]);
-  // {expressions}: keep their string literals, drop the code.
-  body = body.replace(/\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, (_, expr) => {
-    parts.push(...stringLiterals(expr));
-    return ' ';
-  });
-  body = body.replace(/<[^>]+>/g, ' ');
+  for (const m of body.matchAll(VISIBLE_ATTRS)) parts.push(m[1] ?? m[2]);
+  // {expressions}: their JSX text and string literals are copy, their code is not.
+  body = cutExpressions(body, (expr) => expressionCopy(expr, parts));
+  body = body.replace(TAG, ' ');
   parts.push(body);
   return parts.join('\n');
 }
@@ -138,7 +300,7 @@ export function jsonCopy(src) {
   const out = [];
   const walk = (v) => {
     if (typeof v === 'string') {
-      if (!isIdentifierLike(v)) out.push(v);
+      if (!isCodeToken(v)) out.push(v);
     } else if (Array.isArray(v)) v.forEach(walk);
     else if (v && typeof v === 'object') Object.values(v).forEach(walk);
   };

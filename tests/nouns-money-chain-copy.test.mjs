@@ -74,6 +74,29 @@ test('copy extraction reads what a person sees, not code', () => {
   assert.deepEqual(stringLiterals("const n = Math.floor(x); f('/images/print.png', 'balance-row', `x ${y} floor`)"), ['x   floor'], 'Math.floor, paths and class names are code; template text is copy');
 });
 
+test('copy extraction reaches copy the old extractor dropped (legacy pages and the flag gate read it)', () => {
+  const astro = [
+    '---',
+    "const u = 'https://x.test/a // b'; const label = 'Cash out now';",
+    '---',
+    '<ul>{items.map((n) => <li><a href={n.href}>Spend {n.name} today</a></li>)}</ul>',
+    "{flag && <p>Backed by {x ? 'art' : <b>the reserve</b>}</p>}",
+    "<img alt='A redeemable note' src='/a.png' />",
+    '{list.map((n) => `<li>${n.ok ? `Pay with ${n.id}` : \'\'}</li>`)}',
+    '<p>Don’t worry {name}</p>',
+  ].join('\n');
+  const text = extractCopy(astro, 'x.astro');
+  for (const want of ['Cash out now', 'Spend', 'Backed by', 'the reserve', 'A redeemable note', 'Pay with']) assert.match(text, new RegExp(want), want);
+  const ids = new Set(scanSource(astro, 'x.astro').map((h) => h.id));
+  for (const id of ['cash-out', 'spend', 'backed', 'reserve', 'redeem', 'pay-with']) assert.ok(ids.has(id), id);
+  // one-token copy is copy; one-token code is not
+  assert.deepEqual(stringLiterals("f('Pump.fun', '$1.00', 'DAO-backed', 'USD-pegged', '€5', 'pump.fun')"), ['Pump.fun', '$1.00', 'DAO-backed', 'USD-pegged', '€5', 'pump.fun']);
+  assert.deepEqual(stringLiterals("f('balance-row', 'pay-with', '/images/print.png', 'print.css', 'Math.floor', 'data-nmc-r', '[data-x]')"), []);
+  // "//" inside a string is text, and regex literals with quotes do not open strings
+  assert.deepEqual(stringLiterals("const a = 'x // y'; const r = /['\"]/g; const b = 'tip jar';"), ['x // y', 'tip jar']);
+  assert.ok(scanSource("const a = 'x // y'; say('cash out');", 'x.js').length);
+});
+
 test('STRICT: the Phase A chain surfaces carry zero banned words', () => {
   assert.deepEqual(scanStrict(STRICT_FILES), {});
   assert.deepEqual(scanFiles(STRICT_FILES), {});
