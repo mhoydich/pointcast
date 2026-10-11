@@ -1,0 +1,130 @@
+// Honest copy for Nouns Money (plan §6): the "Never use" list as a test.
+//
+// - the scanner catches every banned group and lets the two approved lines
+//   through (they say "$NOUNS", "redemption" and "balance" on purpose);
+// - STRICT: the Phase A chain surfaces carry zero banned words;
+// - LEGACY: no other Nouns Money source/page gains a banned word beyond
+//   tests/fixtures/nouns-money-banned-baseline.json (a ratchet: down only);
+// - the standard line is on every chain surface, and the "Use these words"
+//   lines are verbatim;
+// - the build gate: assertNmChainReady() throws on banned chain copy, and
+//   refuses the flag while a chain surface still has banned words.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { BANNED, extractCopy, scanSource, scanText, stringLiterals } from '../src/lib/nouns-money/honest-copy.mjs';
+import { NM_APPROVED_LINES, NM_COPY, NM_REPLACEMENT_LINE, NM_STANDARD_LINE, allCopyStrings } from '../src/lib/nouns-money/chain-copy.mjs';
+import { NM_CHAIN_SURFACE_SOURCES, assertNmChainReady, nmChainGaps } from '../src/data/nouns-money-chain.ts';
+import { STRICT_FILES, legacyFiles, ratchetViolations, readBaseline, readRepo, scanFiles } from '../scripts/nm-honest-copy.mjs';
+
+test('the plan’s lines are verbatim', () => {
+  assert.equal(NM_STANDARD_LINE, 'Art on a test chain. No value, no redemption, may reset. Not $NOUNS. Not a claim on the Nouns treasury. No Nouns DAO endorsement. CC0.');
+  assert.equal(NM_REPLACEMENT_LINE, 'A free devnet art record. No price, no balance, no redemption. Not transferable yet.');
+  assert.deepEqual([...NM_COPY.supporting], ['The serial is a catalog number.', 'Money is the title of the artwork.']);
+  assert.equal(NM_COPY.shelf.collectButton, 'Collect on devnet');
+});
+
+test('the scanner catches every "Never use" group', () => {
+  const samples = {
+    'money units': ['Worth $5 today', 'a $NOUNS bag', 'priced in USD', 'ten cents', 'a few dollars', 'legal tender'],
+    printing: ['Print your own', 'printing press', 'the money printer', 'mint money'],
+    banking: ['backed by art', 'fully backing it', 'a reserve', 'a peg', 'stake it', 'redeem it', 'redeemable', 'cash out', 'convert to', 'the bank', 'a deposit', 'your balance', 'proof of reserve'],
+    investment: ['invest now', 'it will appreciate', 'the floor', 'early holders', 'an airdrop', 'your allocation', 'the allowlist'],
+    spending: ['pay with notes', 'spend it', 'leave a tip', 'accepted at shops', 'a merchant'],
+    hype: ['a billion', 'pump it', 'Pump.fun', 'DEX Screener', 'dexscreener'],
+    endorsement: ['official Nouns art', 'DAO-backed', 'endorsed by'],
+    evasive: ['no transfer of value'],
+  };
+  for (const [group, lines] of Object.entries(samples)) {
+    for (const line of lines) {
+      const hits = scanText(line);
+      assert.ok(hits.length, `${group}: "${line}" must be caught`);
+    }
+  }
+  assert.ok(new Set(BANNED.map(([, g]) => g)).size >= 8);
+});
+
+test('the scanner lets honest copy through, including the approved lines', () => {
+  for (const ok of [
+    NM_STANDARD_LINE,
+    NM_REPLACEMENT_LINE,
+    `${NM_STANDARD_LINE} ${NM_REPLACEMENT_LINE}`,
+    'Collect a note. Hold it. Check it.',
+    'The specimen is on the house shelf; 3 of 10 copies left.',
+    'Back to the collection',
+    'A blueprint, a fingerprint and a tooltip are fine.',
+  ]) {
+    assert.deepEqual(scanText(ok), [], ok);
+  }
+  // Only the exact approved line is excused: a paraphrase is not.
+  assert.ok(scanText('No price, no balance.').length);
+  assert.ok(scanText('Not $NOUNS, not redemption.').length);
+});
+
+test('copy extraction reads what a person sees, not code', () => {
+  const astro = `---\nconst a = 'Print it';\n---\n<style>@media print{a{}}</style><p class="pay-with" title="spend it">Hello {x ? 'tip jar' : y}</p><script type="application/ld+json">{"x":"cash out"}</script><!-- bank -->`;
+  const text = extractCopy(astro, 'x.astro');
+  assert.match(text, /Print it/);
+  assert.match(text, /spend it/);
+  assert.match(text, /tip jar/);
+  assert.doesNotMatch(text, /@media print/);
+  assert.doesNotMatch(text, /cash out/, 'JSON-LD islands are data');
+  assert.doesNotMatch(text, /bank/, 'comments are not copy');
+  assert.doesNotMatch(text, /pay-with/, 'class names are not copy');
+  assert.deepEqual(stringLiterals("const n = Math.floor(x); f('/images/print.png', 'balance-row', `x ${y} floor`)"), ['x   floor'], 'Math.floor, paths and class names are code; template text is copy');
+});
+
+test('STRICT: the Phase A chain surfaces carry zero banned words', () => {
+  assert.deepEqual(scanFiles(STRICT_FILES), {});
+  assert.deepEqual(scanText(allCopyStrings().join('\n')), []);
+});
+
+test('LEGACY: no Nouns Money source/page gains a banned word (ratchet against the baseline)', () => {
+  const files = legacyFiles();
+  assert.ok(files.includes('src/pages/nouns-money.astro'));
+  assert.ok(!files.some((f) => STRICT_FILES.includes(f)));
+  const violations = ratchetViolations(scanFiles(files), readBaseline());
+  assert.deepEqual(violations, [], 'a Nouns Money page added a "Never use" word (plan §6); reword it rather than raising the baseline');
+});
+
+test('the ratchet itself: a new word over the baseline is a violation, fewer is fine', () => {
+  const baseline = { 'a.astro': { print: 2 } };
+  assert.deepEqual(ratchetViolations({ 'a.astro': { print: 2 } }, baseline), []);
+  assert.deepEqual(ratchetViolations({ 'a.astro': { print: 1 } }, baseline), []);
+  assert.deepEqual(ratchetViolations({ 'a.astro': { print: 3 } }, baseline), [{ file: 'a.astro', id: 'print', count: 3, allowed: 2 }]);
+  assert.deepEqual(ratchetViolations({ 'b.astro': { spend: 1 } }, baseline), [{ file: 'b.astro', id: 'spend', count: 1, allowed: 0 }]);
+});
+
+test('the standard line is on every chain surface', () => {
+  for (const f of ['src/components/NounsMoneyChainShelf.astro', 'src/pages/nouns-money/note/[serial].astro']) {
+    const src = readRepo(f);
+    assert.match(src, /NM_COPY\.standardLine/, `${f} renders the standard line`);
+  }
+  assert.equal(JSON.parse(readRepo('public/nouns-money/chain.json')).standard_line, NM_STANDARD_LINE);
+  const collect = readRepo('public/nouns-money/chain/nm-collect.js');
+  assert.match(collect, /C\.standardLine/, 'the passkey confirm shows the standard line');
+  assert.match(collect, /C\.replacementLine/, 'and the replacement line');
+});
+
+test('build gate: banned chain copy fails the build; the flag cannot turn on with gaps', () => {
+  assert.doesNotThrow(() => assertNmChainReady({}, false));
+  const sources = Object.fromEntries(NM_CHAIN_SURFACE_SOURCES.map((p) => [p, readRepo(p.slice(1))]));
+  const gaps = nmChainGaps(sources);
+  assert.ok(gaps.some((g) => /renderer_hash is not pinned/.test(g)), 'renderer hash gap');
+  // Today the live /nouns-money/ page itself still carries banned words, so the flag must stay off.
+  assert.ok(gaps.some((g) => g.startsWith('/src/pages/nouns-money.astro uses banned words')), 'legacy page copy gap');
+  assert.throws(() => assertNmChainReady(sources, true), /NM_CHAIN_ENABLED is on but Nouns Money is not ready/);
+  assert.equal(scanSource(readRepo('src/components/NounsMoneyChainShelf.astro'), 'x.astro').length, 0);
+});
+
+test('the note page’s build-time glob lists exactly NM_CHAIN_SURFACE_SOURCES', () => {
+  const page = readRepo('src/pages/nouns-money/note/[serial].astro');
+  const glob = /import\.meta\.glob\(([\s\S]*?)\{ query: '\?raw'/.exec(page)[1];
+  const listed = [...glob.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(listed, [...NM_CHAIN_SURFACE_SOURCES]);
+  assert.match(page, /assertNmChainReady\(sources\)/);
+});
+
+test('approved lines are the only escape hatch', () => {
+  assert.deepEqual([...NM_APPROVED_LINES], [NM_STANDARD_LINE, NM_REPLACEMENT_LINE]);
+});

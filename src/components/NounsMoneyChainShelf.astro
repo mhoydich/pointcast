@@ -1,0 +1,83 @@
+---
+/**
+ * Nouns Money on devnet-2: the shelf (card states, Collect on devnet, receipt).
+ * Rendered only while NM_CHAIN_ENABLED is on; the parent pages guard it, and so
+ * does this file. Nothing is bundled: the style and script are inline and emitted
+ * only when the shelf renders, so a flag-off build is byte-identical.
+ */
+import CHAIN from '../../public/nouns-money/chain.json';
+import { NM_CHAIN_ENABLED, NM_DEVNET, assertNmChainReady, jsonIsland, nmClientConfig } from '../data/nouns-money-chain.ts';
+import { NM_COPY, fill } from '../lib/nouns-money/chain-copy.mjs';
+assertNmChainReady();
+const { headingLevel = 2 } = Astro.props;
+const H = `h${headingLevel}`;
+const S = NM_COPY.shelf;
+const R = NM_COPY.receipt;
+---
+{NM_CHAIN_ENABLED && (
+<section class="nmc" data-nm-chain-shelf aria-labelledby="nmc-title">
+  <script type="application/json" data-nm-chain-config set:html={jsonIsland(nmClientConfig())}></script>
+  <p class="nmc-kicker">{S.kicker}</p>
+  <H id="nmc-title" class="nmc-title">{S.title}</H>
+  <p class="nmc-dek">{S.dek}</p>
+  <p class="nmc-standard">{NM_COPY.standardLine}</p>
+  <p class="nmc-off" data-nmc-off hidden>{NM_COPY.status.offOrigin}</p>
+  <dl class="nmc-facts">
+    <div><dt>{S.walletLabel}</dt><dd data-nmc-addr>{S.walletNone}</dd></div>
+  </dl>
+  <p><button type="button" class="nmc-btn" data-nmc-create>{S.makeWallet}</button></p>
+  <p class="nmc-status" data-nmc-status aria-live="polite">{NM_COPY.status.loading}</p>
+  <ol class="nmc-grid">
+    {CHAIN.entries.map((e) => (
+      <li class="nmc-card" data-nmc-design={e.design}>
+        <img src={e.preview} width="1000" height="500" loading="lazy" alt={fill(NM_COPY.note.artAlt, { nounId: e.noun_id, label: e.specimen_label })} />
+        <p class="nmc-noun">{fill(S.noun, { nounId: e.noun_id })} <span>{e.specimen_label}</span></p>
+        <p class="nmc-line" data-nmc-line>{S.checking}</p>
+        <button type="button" class="nmc-btn" data-nmc-collect={e.design} disabled>{S.collectButton}</button>
+      </li>
+    ))}
+  </ol>
+  <section class="nmc-receipt" data-nmc-receipt hidden aria-live="polite">
+    <p class="nmc-kicker">{R.title}</p>
+    <dl class="nmc-facts">
+      <div><dt>{R.note}</dt><dd data-nmc-r="note"></dd></div>
+      <div><dt>{R.copy}</dt><dd data-nmc-r="copy"></dd></div>
+      <div><dt>{R.serial}</dt><dd data-nmc-r="serial"></dd></div>
+      <div><dt>{R.owner}</dt><dd data-nmc-r="owner"></dd></div>
+      <div><dt>{R.recipeHash}</dt><dd data-nmc-r="recipeHash"></dd></div>
+      <div><dt>{R.tx}</dt><dd data-nmc-r="tx"></dd></div>
+    </dl>
+    <p><a data-nmc-note-link href="/nouns-money/" hidden>{R.openNote}</a> · <a href={NM_DEVNET.yardHref}>{S.checkMyNote}</a></p>
+    <p class="nmc-standard">{NM_COPY.standardLine}</p>
+  </section>
+  <p class="nmc-fine">{NM_COPY.supporting.join(' ')} {NM_COPY.replacementLine} <a href={NM_DEVNET.chainJson}>{NM_COPY.note.chainRecord}</a> · <a href={NM_DEVNET.yardHref}>{S.checkMyNote}</a></p>
+  <style is:inline>
+    .nmc{margin:32px 0;padding:20px 16px;border:2px solid #111;background:#fbf7e8;color:#16130c;box-shadow:6px 6px 0 #0b6b3a}
+    .nmc-kicker{margin:0 0 6px;font:600 .75rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;color:#155334}
+    .nmc-title{margin:0 0 8px;font-size:clamp(1.4rem,4vw,2rem);line-height:1.15}
+    .nmc-dek,.nmc-fine{max-width:70ch;line-height:1.5}
+    .nmc-standard{max-width:70ch;padding:8px 10px;border-left:4px solid #0b6b3a;background:#edf8f1;font-size:.9rem;line-height:1.45}
+    .nmc-off{padding:8px 10px;border-left:4px solid #b45309;background:#fff4e5}
+    .nmc-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:6px 16px;margin:0 0 12px}
+    .nmc-facts dt{font:600 .7rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;color:#4b5563}
+    .nmc-facts dd{margin:0;overflow-wrap:anywhere;font:500 .85rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+    .nmc-btn{min-height:44px;padding:8px 14px;border:2px solid #111;background:#0b6b3a;color:#fff;font:600 .9rem/1 system-ui,sans-serif;cursor:pointer}
+    .nmc-btn:disabled{opacity:.45;cursor:not-allowed}
+    .nmc-btn:focus-visible,.nmc a:focus-visible{outline:3px solid #c8412e;outline-offset:3px}
+    .nmc-status{font-weight:500}.nmc-status.is-warn{color:#9a3412}.nmc-status.is-ok{color:#0b6b3a}
+    .nmc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:12px;margin:16px 0;padding:0;list-style:none}
+    .nmc-card{display:grid;gap:6px;padding:8px;border:1px solid #537662;background:#fff}
+    .nmc-card img{display:block;width:100%;height:auto}
+    .nmc-noun{margin:0;font-weight:600}.nmc-noun span{font:500 .75rem ui-monospace,SFMono-Regular,Menlo,monospace;color:#4b5563}
+    .nmc-line{margin:0;font-size:.85rem;line-height:1.4;min-height:2.8em}
+    .nmc-receipt{margin:16px 0;padding:12px;border:2px dashed #0b6b3a;background:#fff}
+    @media (prefers-color-scheme:dark){
+      .nmc{background:#152b23;color:#edf8f1;border-color:#8ebda3}.nmc-kicker{color:#99d4b4}
+      .nmc-standard{background:#213b2f}.nmc-card,.nmc-receipt{background:#1b3329;border-color:#8ebda3}
+      .nmc-facts dt,.nmc-noun span{color:#b8cbbf}.nmc-off{background:#3b2a12}
+      .nmc-status.is-warn{color:#fdba74}.nmc-status.is-ok{color:#86efac}
+    }
+  </style>
+  <script type="module" is:inline src="/nouns-money/chain/nm-collect.js"></script>
+</section>
+)}
