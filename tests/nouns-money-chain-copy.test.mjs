@@ -26,7 +26,7 @@ test('the plan’s lines are verbatim', () => {
 
 test('the scanner catches every "Never use" group', () => {
   const samples = {
-    'money units': ['Worth $5 today', 'a $NOUNS bag', 'priced in USD', 'ten cents', 'a few dollars', 'legal tender'],
+    'money units': ['Worth $5 today', 'a $NOUNS bag', 'priced in USD', 'ten cents', 'a few dollars', 'legal tender', 'face value €5', '£20 note', '¥1000', '5$', '10 EUR', 'GBP 20', 'five euros', 'pounds sterling', '100 pesos'],
     printing: ['Print your own', 'printing press', 'the money printer', 'mint money'],
     banking: ['backed by art', 'fully backing it', 'a reserve', 'a peg', 'stake it', 'redeem it', 'redeemable', 'cash out', 'convert to', 'the bank', 'a deposit', 'your balance', 'proof of reserve'],
     investment: ['invest now', 'it will appreciate', 'the floor', 'early holders', 'an airdrop', 'your allocation', 'the allowlist'],
@@ -53,6 +53,7 @@ test('the scanner lets honest copy through, including the approved lines', () =>
     'The specimen is on the house shelf; 3 of 10 copies left.',
     'Back to the collection',
     'A blueprint, a fingerprint and a tooltip are fine.',
+    'Serial NM27-000101, 1,100 copies, 150 × 75 mm, 2027.',
   ]) {
     assert.deepEqual(scanText(ok), [], ok);
   }

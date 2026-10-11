@@ -22,6 +22,9 @@ export const BANNED = Object.freeze([
   ['cents', 'money units', /\bcents?\b/gi],
   ['dollars', 'money units', /\bdollars?\b/gi],
   ['legal-tender', 'money units', /\blegal tender\b/gi],
+  // "any face value in a real currency": other currency symbols and codes next to a number, a trailing $
+  ['currency-amount', 'money units', /[€£¥₩₹]\s?\d|\d\s?[€£¥₩₹$]|\b\d[\d,.]*\s?(?:EUR|GBP|JPY|CNY|CAD|AUD|CHF|MXN)\b|\b(?:EUR|GBP|JPY|CNY|CAD|AUD|CHF|MXN)\s?\d/g],
+  ['currency-name', 'money units', /\beuros?\b|\bpounds? sterling\b|\bpesos?\b/gi],
   // printing
   ['print', 'printing', /\bprint(?:s|ed|ing|er|ers)?\b/gi],
   ['mint-money', 'printing', /\bmint(?:ing)? money\b/gi],
