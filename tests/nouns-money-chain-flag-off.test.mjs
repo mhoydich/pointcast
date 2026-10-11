@@ -78,6 +78,15 @@ test('flag-on surfaces follow the design law: 400/500 weights, --pc-font-mono, h
   assert.match(read('src/pages/nouns-money.astro'), /<div class="nm-section nm-chain"><NounsMoneyChainShelf \/><\/div>/);
 });
 
+test('the shelf keeps its spaces: no whitespace-only text between an expression and the next one or a tag', () => {
+  // Rendered flag-on (Astro container, 2026-10-10) the old markup read "the artwork.A free devnet art record"
+  // and "Noun #0NM27-000001": inside {NM_CHAIN_ENABLED && (…)} that whitespace is dropped.
+  const shelf = read('src/components/NounsMoneyChainShelf.astro');
+  const markup = shelf.slice(shelf.indexOf('{NM_CHAIN_ENABLED && ('), shelf.indexOf('<style is:inline>'));
+  assert.deepEqual(markup.match(/\}[ \t]+(?=[{<])/g), null);
+  assert.match(shelf, /const FINE = \[\.\.\.NM_COPY\.supporting, NM_COPY\.replacementLine\]\.join\(' '\);/);
+});
+
 const BASE = process.env.NM_BASELINE_DIST || '';
 const HEAD = fileURLToPath(new URL('dist/', root));
 const haveBuilds = Boolean(BASE) && existsSync(BASE) && existsSync(HEAD);
