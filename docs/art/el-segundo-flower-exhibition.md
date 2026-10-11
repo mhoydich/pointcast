@@ -1,6 +1,6 @@
 # BLOOM SHOP — Flowers Machined in El Segundo
 
-**Status:** Draft concept + prompts. No images generated yet. Checkout inactive until Mike approves prices, editions, fulfillment and terms.
+**Status:** Built at `/bloom-shop` (index, full-screen viewer, 20 artwork pages, `/bloom-shop.json`). Each work has an original vector study rendered from `src/lib/bloom-shop.mjs`; full-resolution print masters still need to be generated from the prompts below. Checkout inactive until Mike approves prices, editions, fulfillment and terms.
 **Label on every work:** *AI-generated digital art. Concept and curation by PointCast, El Segundo.*
 
 ## Visual direction (lead)
