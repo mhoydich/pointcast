@@ -14,8 +14,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BANNED, extractCopy, scanSource, scanText, stringLiterals } from '../src/lib/nouns-money/honest-copy.mjs';
 import { NM_APPROVED_LINES, NM_COPY, NM_REPLACEMENT_LINE, NM_STANDARD_LINE, allCopyStrings } from '../src/lib/nouns-money/chain-copy.mjs';
-import { NM_CHAIN_SURFACE_SOURCES, assertNmChainReady, nmChainGaps } from '../src/data/nouns-money-chain.ts';
-import { STRICT_FILES, legacyFiles, ratchetViolations, readBaseline, readRepo, scanFiles } from '../scripts/nm-honest-copy.mjs';
+import { NM_CHAIN_SURFACE_SOURCES, NM_STRICT_SURFACES, assertNmChainReady, nmChainGaps } from '../src/data/nouns-money-chain.ts';
+import { STRICT_FILES, legacyFiles, ratchetViolations, readBaseline, readRepo, scanFiles, scanStrict } from '../scripts/nm-honest-copy.mjs';
 
 test('the plan’s lines are verbatim', () => {
   assert.equal(NM_STANDARD_LINE, 'Art on a test chain. No value, no redemption, may reset. Not $NOUNS. Not a claim on the Nouns treasury. No Nouns DAO endorsement. CC0.');
@@ -75,8 +75,46 @@ test('copy extraction reads what a person sees, not code', () => {
 });
 
 test('STRICT: the Phase A chain surfaces carry zero banned words', () => {
+  assert.deepEqual(scanStrict(STRICT_FILES), {});
   assert.deepEqual(scanFiles(STRICT_FILES), {});
   assert.deepEqual(scanText(allCopyStrings().join('\n')), []);
+});
+
+// Mutations an author could make to a strict file. Each one hid a banned word
+// from the old copy extractor (JSX inside {…}, one-token strings, a "//" inside
+// a string, single-quoted attributes, comments, CSS); the strict grep sees all.
+const STRICT_MUTATIONS = [
+  ['JSX text inside an expression', (s) => s + '\n{serial > 100 && <em>Backed by art</em>}\n'],
+  ['a single-quoted attribute', (s) => s + "\n<img alt='A redeemable note' />\n"],
+  ['a one-token string with a dot', (s) => s + "\nsay('Pump.fun');\n"],
+  ['a one-token dollar amount', (s) => s + "\nsay('$1.00');\n"],
+  ['a hyphenated one-token string', (s) => s + "\nsay('DAO-backed');\n"],
+  ['a string after "//" in a string', (s) => s + "\nconst u = 'a // b'; say('Cash out now');\n"],
+  ['a comment', (s) => s + '\n// spend it at the merchant\n'],
+  ['a CSS rule', (s) => s + '\n<style>.floor{}</style>\n'],
+  ['a JSON value', (s) => s.replace(/"status": "/, '"status": "Airdrop soon. ')],
+];
+
+test('STRICT is a grep: every mutation of every strict file is caught', () => {
+  for (const f of STRICT_FILES) {
+    const src = readRepo(f);
+    assert.deepEqual(scanText(src), [], `${f} starts clean`);
+    for (const [name, mutate] of STRICT_MUTATIONS) {
+      const out = mutate(src);
+      if (out === src) continue; // the JSON mutation only applies to chain.json
+      assert.ok(scanText(out).length > 0, `${f}: ${name} must be caught`);
+    }
+  }
+  // and the flag gate greps the two Phase A surfaces the same way
+  for (const p of NM_STRICT_SURFACES) {
+    const src = readRepo(p.slice(1));
+    assert.deepEqual(nmChainGaps({ [p]: src }).filter((g) => g.startsWith(p)), [], `${p} starts clean`);
+    const gaps = nmChainGaps({ [p]: STRICT_MUTATIONS[0][1](src) });
+    assert.ok(gaps.some((g) => g.startsWith(`${p} uses banned words`)), `${p}: the gate sees JSX inside an expression`);
+    // the build fails on it even with the flag off
+    assert.doesNotThrow(() => assertNmChainReady({ [p]: src }, false));
+    assert.throws(() => assertNmChainReady({ [p]: STRICT_MUTATIONS[0][1](src) }, false), /uses banned words/);
+  }
 });
 
 test('LEGACY: no Nouns Money source/page gains a banned word (ratchet against the baseline)', () => {

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // Nouns Money honest-copy scan (plan §6 "Never use"), over two scopes:
 //
-//   STRICT  the chain surfaces built for Phase A. Zero banned words, ever.
+//   STRICT  the chain surfaces built for Phase A. Zero banned words, ever,
+//           anywhere in the file: code, comments, attributes, strings. This
+//           scope is a plain grep of the whole text (only the approved lines
+//           are cut out first), so no syntax can hide a word from it.
 //   LEGACY  every other Nouns Money source/page that was live before Phase A.
 //           A ratchet: a file may never gain a banned word beyond
 //           tests/fixtures/nouns-money-banned-baseline.json. The baseline
@@ -12,10 +15,12 @@
 //
 // tests/nouns-money-chain-copy.test.mjs runs the same checks and fails the
 // test run; assertNmChainReady() runs the strict copy check in the Astro build.
+// The LEGACY scope reads only the copy a person sees (extractCopy), because
+// those files are code-heavy pages that still carry live banned words.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { countHits, scanSource } from '../src/lib/nouns-money/honest-copy.mjs';
+import { countHits, scanSource, scanText } from '../src/lib/nouns-money/honest-copy.mjs';
 
 const root = new URL('../', import.meta.url);
 export const BASELINE_PATH = 'tests/fixtures/nouns-money-banned-baseline.json';
@@ -84,6 +89,19 @@ export function readBaseline() {
   }
 }
 
+/**
+ * STRICT: { file: { patternId: count } } over each file's whole text, the way
+ * grep would read it. Nothing is skipped as "code".
+ */
+export function scanStrict(files = STRICT_FILES) {
+  const report = {};
+  for (const f of files) {
+    const hits = scanText(readRepo(f));
+    if (hits.length) report[f] = countHits(hits);
+  }
+  return report;
+}
+
 /** Files whose count for any pattern exceeds the baseline. */
 export function ratchetViolations(report, baseline) {
   const out = [];
@@ -98,7 +116,7 @@ export function ratchetViolations(report, baseline) {
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isMain) {
-  const strict = scanFiles(STRICT_FILES);
+  const strict = scanStrict(STRICT_FILES);
   const legacy = scanFiles(legacyFiles());
   if (process.argv.includes('--baseline')) {
     const doc = {

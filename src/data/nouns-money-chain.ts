@@ -110,6 +110,13 @@ export const NM_CHAIN_SURFACE_SOURCES = Object.freeze([
 ]);
 
 /**
+ * The two surfaces Phase A built: grepped whole, code and comments included,
+ * like scripts/nm-honest-copy.mjs STRICT_FILES. The other surfaces are live
+ * legacy pages; for those only the copy a person sees is read (scanSource).
+ */
+export const NM_STRICT_SURFACES = Object.freeze(['/src/pages/nouns-money/note/[serial].astro', '/src/components/NounsMoneyChainShelf.astro']);
+
+/**
  * Why the flag cannot be on yet. `sources` maps a surface path to its raw text
  * (the build passes import.meta.glob ?raw; tests pass readFileSync).
  */
@@ -122,20 +129,27 @@ export function nmChainGaps(sources: Record<string, string> = {}): string[] {
   for (const path of NM_CHAIN_SURFACE_SOURCES) {
     const src = sources[path];
     if (src === undefined) continue;
-    const hits = scanSource(src, path);
+    const hits = NM_STRICT_SURFACES.includes(path) ? scanText(src) : scanSource(src, path);
     if (hits.length) gaps.push(`${path} uses banned words: ${[...new Set(hits.map((h) => h.match.toLowerCase()))].join(', ')}`);
   }
   return gaps;
 }
 
 /**
- * Called at build time. Always: the chain copy must scan clean (a banned word
- * fails the build). With the flag on: no gap may remain.
+ * Called at build time. Always: the chain copy and the two Phase A surfaces
+ * must scan clean (a banned word fails the build). With the flag on: no gap
+ * may remain.
  */
 export function assertNmChainReady(sources: Record<string, string> = {}, enabled: boolean = NM_CHAIN_ENABLED) {
   const copyHits = scanText(allCopyStrings().join('\n'));
   if (copyHits.length) {
     throw new Error(`Nouns Money chain copy uses banned words (plan §6): ${copyHits.map((h) => h.match).join(', ')}`);
+  }
+  // The Phase A surfaces are grepped whole on every build, flag on or off.
+  for (const path of NM_STRICT_SURFACES) {
+    if (sources[path] === undefined) continue;
+    const hits = scanText(sources[path]);
+    if (hits.length) throw new Error(`${path} uses banned words (plan §6): ${hits.map((h) => h.match).join(', ')}`);
   }
   if (!enabled) return;
   const gaps = nmChainGaps(sources);

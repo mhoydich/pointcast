@@ -16,7 +16,7 @@ export const NM_STANDARD_LINE =
 /** Replaces the live "No mint, token ownership…" line, only while the flag is on. */
 export const NM_REPLACEMENT_LINE = 'A free devnet art record. No price, no balance, no redemption. Not transferable yet.';
 
-/** The approved lines may carry words the scanner otherwise refuses ($NOUNS, balance, redemption). */
+/** The approved lines, verbatim, are the only text the scan excuses (they name what a note is not). */
 export const NM_APPROVED_LINES = Object.freeze([NM_STANDARD_LINE, NM_REPLACEMENT_LINE]);
 
 export const NM_COPY = Object.freeze({
