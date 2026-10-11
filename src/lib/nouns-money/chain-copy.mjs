@@ -50,6 +50,7 @@ export const NM_COPY = Object.freeze({
     wrongChain: 'The devnet is not the chain this page expects ({why}). Nothing will be signed.',
     unreadable: 'Devnet-2 did not answer ({why}). Nothing will be signed; try again in a minute.',
     notOpen: 'The Nouns Money edition is not open on devnet-2 yet. Nothing will be signed.',
+    claimsClosed: 'Collecting is closed on devnet-2 right now. The shelf shows the edition as recorded; nothing will be signed.',
     ready: 'Ready. Pick a note to collect.',
     needWallet: 'Make a passkey wallet to collect a note.',
     waitingPasskey: 'Waiting for your passkey…',

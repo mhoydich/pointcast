@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { encodeRecipeHex, recipeHash, recipeIndex } from '../public/nouns-money/chain/nm-recipe.js';
-import { cardView, confirmText, copiesLeft, fetchAllMints, findByRecipeHash, indexMints, judgeSerial, shelfLine, verifyClaim, sha256Hex } from '../public/nouns-money/chain/nm-shelf.js';
+import { cardView, confirmText, copiesLeft, fetchAllMints, findByRecipeHash, indexMints, judgeSerial, readClaims, shelfLine, verifyClaim, sha256Hex } from '../public/nouns-money/chain/nm-shelf.js';
 import { WALLET_KEY, createOptions, loadWallet, saveWallet, walletFromCredential } from '../public/nouns-money/chain/nm-wallet.js';
 import { buildTx, describeTx, passkeyAddress } from '../public/chain/first-mints/lib/pointcast-chain.js';
 import { scanText } from '../src/lib/nouns-money/honest-copy.mjs';
@@ -103,6 +103,51 @@ test('a refused or failed read is never an open shelf or a closed edition', asyn
   assert.match(collect, /return fail\(C\.status\.unreadable, e\);/);
   const note = read('public/nouns-money/chain/nm-note-page.js');
   assert.match(note, /if \(!r\.ok \|\| !j \|\| j\.error !== undefined\) throw/);
+});
+
+// GET /nm/state as pointcast-chain deploy/devnet-worker/src/nm.js state() answers it (trimmed).
+function nmState({ open, pending = {} }) {
+  return {
+    network: 'devnet',
+    edition: 'nouns-money-27',
+    status: open ? 'open' : 'closed',
+    open,
+    reason: open ? null : 'claims are closed until the house opens them (POST /admin/nm/open)',
+    height: 40,
+    chain: { opened_at: 3, terms_ok: true, minted: 117, specimens: 100, specimens_complete: true, public_copies: 17, violations: 0 },
+    designs: entries.map((e) => ({ design: e.design, noun_id: e.noun_id, copies_collected: 0, copies_pending: pending[e.design] || 0, copies_left: 10 - (pending[e.design] || 0) })),
+  };
+}
+
+test('claims follow GET /nm/state, not the edition existing: closed claims never enable Collect', () => {
+  const S = NM_COPY.shelf;
+  const shelf = indexMints(fakeMints(), index);
+  // The house closed claims (POST /admin/nm/close) while the edition stays open on chain.
+  const closed = readClaims(nmState({ open: false }));
+  assert.equal(closed.open, false);
+  const paused = cardView('paused', { slot: shelf.byDesign.get(5), house: HOUSE, shelf: S, canCollect: true });
+  assert.deepEqual(paused, { line: '3 of 10 copies left · specimen on the house shelf', enabled: false }, 'the shelf still shows what the chain records');
+  // Open: copies set aside for live claims count as taken, as the Worker counts them.
+  const open = readClaims(nmState({ open: true, pending: { 5: 2, 0: 10 } }));
+  assert.equal(open.open, true);
+  assert.equal(open.pending.get(5), 2);
+  const at = (design) => cardView('open', { slot: shelf.byDesign.get(design), house: HOUSE, shelf: S, canCollect: true, pending: open.pending.get(design) || 0 });
+  assert.deepEqual(at(5), { line: '1 of 10 copies left · specimen on the house shelf', enabled: true });
+  assert.deepEqual(at(0), { line: 'All 10 copies collected · specimen on the house shelf', enabled: false }, 'all ten set aside: the Worker would answer nm_design_full');
+  assert.equal(copiesLeft(shelf.byDesign.get(5), 10, 3), 0);
+  assert.equal(copiesLeft(shelf.byDesign.get(5), 10, 99), 0, 'never below zero');
+  // A refused or odd answer is never "open".
+  assert.throws(() => readClaims({ error: 'slow down', code: 'nm_rate', network: 'devnet' }), /nm_rate: slow down/);
+  assert.throws(() => readClaims(null), /no answer/);
+  assert.throws(() => readClaims({ status: 'open' }), /no open flag/);
+  assert.throws(() => readClaims({ open: true }), /no designs list/);
+  // The page wires it: claims come from /nm/state on every shelf read, and a paused shelf says so.
+  const collect = read('public/nouns-money/chain/nm-collect.js');
+  assert.match(collect, /const claims = r\.open \? readClaims\(await get\('\/nm\/state'\)\) : null;/);
+  assert.match(collect, /state = !r\.open \? 'closed' : claims\.open \? 'open' : 'paused';/);
+  assert.match(collect, /pending: pending\.get\(design\) \|\| 0,/);
+  assert.match(collect, /state === 'paused' \? C\.status\.claimsClosed : C\.status\.notOpen/);
+  assert.equal(scanText(NM_COPY.status.claimsClosed).length, 0);
 });
 
 test('the passkey confirm sheet holds the honest copy: note lines, then the SDK words minus "Never use" lines', () => {

@@ -4,15 +4,15 @@
 // Every word it shows comes from the config island (src/lib/nouns-money/chain-copy.mjs);
 // every fact comes from devnet-2 reads checked against /nouns-money/chain.json.
 //
-// Reads:  GET /status (house), GET /edition/nouns-money-27/mints, GET /account/<addr>,
-//         GET /tx/<hash>, plus connect() (params, genesis pinned).
+// Reads:  GET /status (house), GET /edition/nouns-money-27/mints, GET /nm/state (claims
+//         open, copies set aside), GET /account/<addr>, plus connect() (params, genesis pinned).
 // Writes, only after a click and the passkey's own prompt:
 //         POST /nm/claim {sender, design}  → an approval for a server-built recipe,
 //         checked by verifyClaim() against chain.json before anything is signed;
 //         POST /tx with the passkey-signed edition_mint.
 import { buildTx, connect, domainOf, signWithPasskey } from '../../chain/first-mints/lib/pointcast-chain.js';
 import { nm27Label, recipeIndex } from './nm-recipe.js';
-import { cardView, confirmText, fetchAllMints, findByRecipeHash, indexMints, verifyClaim } from './nm-shelf.js';
+import { cardView, confirmText, fetchAllMints, findByRecipeHash, indexMints, readClaims, verifyClaim } from './nm-shelf.js';
 import { createWallet, loadWallet, saveWallet } from './nm-wallet.js';
 
 const fill = (t, v = {}) => String(t).replace(/\{(\w+)\}/g, (w, k) => (k in v ? String(v[k]) : w));
@@ -70,10 +70,11 @@ async function init(root) {
   let wallet = loadWallet(localStorage, devnet.walletKey);
   let chain = null;
   let house = '';
-  let state = 'reading'; // 'reading' | 'failed' | 'closed' | 'open'
+  let state = 'reading'; // 'reading' | 'failed' | 'closed' | 'paused' | 'open'
   let entries = [];
   let index = new Map();
   let shelf = null;
+  let pending = new Map();
 
   const showWallet = () => {
     $('[data-nmc-addr]').textContent = wallet ? wallet.address : C.shelf.walletNone;
@@ -89,16 +90,20 @@ async function init(root) {
         shelf: C.shelf,
         copies: cfg.copies,
         canCollect: !blocked && Boolean(wallet),
+        pending: pending.get(design) || 0,
       });
       card.querySelector('[data-nmc-line]').textContent = view.line;
       card.querySelector('[data-nmc-collect]').disabled = !view.enabled;
     }
   };
   // Only a full, successful read changes the shelf; a failed read throws and leaves it as it was.
+  // The chain says whether the edition is open; GET /nm/state says whether devnet-2 takes claims.
   const readShelf = async () => {
     const r = await fetchAllMints(get, devnet.edition);
+    const claims = r.open ? readClaims(await get('/nm/state')) : null;
     shelf = r.open ? indexMints(r.mints, index) : null;
-    state = r.open ? 'open' : 'closed';
+    pending = claims ? claims.pending : new Map();
+    state = !r.open ? 'closed' : claims.open ? 'open' : 'paused';
     paintShelf();
     return r;
   };
@@ -128,7 +133,7 @@ async function init(root) {
   }
   if (state !== 'open') {
     lock();
-    return say(C.status.notOpen, 'is-warn');
+    return say(state === 'paused' ? C.status.claimsClosed : C.status.notOpen, 'is-warn');
   }
   if (blocked) return say(blocked, 'is-warn');
   say(wallet ? C.status.ready : C.status.needWallet);

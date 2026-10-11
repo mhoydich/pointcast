@@ -72,15 +72,40 @@ export function indexMints(mints, index) {
   return { byDesign, bySerial, unknown };
 }
 
-/** Copies left for one design (public copies 1..10). */
-export const copiesLeft = (slot, copies = NM_COPIES_PER_DESIGN) => Math.max(0, copies - new Set(slot.copies.map((t) => t.copy)).size);
+/**
+ * Whether devnet-2 is taking claims, and the copies it has set aside for live
+ * claims, from GET /nm/state. Claims open only when the house sets the flag
+ * (POST /admin/nm/open) and stop when it clears it, independent of the edition
+ * existing on chain; a claimed copy is set aside for 24 blocks before it lands
+ * or lapses. Neither is a chain fact, so this is the Worker's word, used only to
+ * decide whether a Collect button may be pressed. An error body or a missing
+ * field throws: a failed read is never "open".
+ */
+export function readClaims(j) {
+  if (!j || typeof j !== 'object') throw new Error('no answer');
+  if (j.error !== undefined) throw new Error(String(j.code ? `${j.code}: ${j.error}` : j.error));
+  if (typeof j.open !== 'boolean') throw new Error('the answer has no open flag');
+  const pending = new Map();
+  if (j.open) {
+    if (!Array.isArray(j.designs)) throw new Error('the answer has no designs list');
+    for (const d of j.designs) {
+      const n = Number(d && d.copies_pending);
+      if (Number.isInteger(d && d.design) && Number.isInteger(n) && n > 0) pending.set(d.design, n);
+    }
+  }
+  return { open: j.open, pending };
+}
+
+/** Copies left for one design (public copies 1..10), less the ones set aside for live claims. */
+export const copiesLeft = (slot, copies = NM_COPIES_PER_DESIGN, pending = 0) =>
+  Math.max(0, copies - new Set(slot.copies.map((t) => t.copy)).size - Math.max(0, Number(pending) || 0));
 
 const fillT = (template, values) => String(template).replace(/\{(\w+)\}/g, (w, k) => (k in values ? String(values[k]) : w));
 const shortAddr = (a) => (a.length > 16 ? `${a.slice(0, 8)}…${a.slice(-4)}` : a);
 
 /** "3 of 10 copies left · specimen on the house shelf", from the shelf copy strings. */
-export function shelfLine(slot, { house, shelf, copies = NM_COPIES_PER_DESIGN }) {
-  const left = copiesLeft(slot, copies);
+export function shelfLine(slot, { house, shelf, copies = NM_COPIES_PER_DESIGN, pending = 0 }) {
+  const left = copiesLeft(slot, copies, pending);
   const first = left > 0 ? fillT(shelf.copiesLeft, { left, copies }) : fillT(shelf.allCollected, { copies });
   let second;
   if (!slot.specimen) second = shelf.specimenMissing;
@@ -92,13 +117,17 @@ export function shelfLine(slot, { house, shelf, copies = NM_COPIES_PER_DESIGN })
 /**
  * One shelf card: its line and whether its Collect button may be pressed.
  * `state` is 'reading' | 'failed' (devnet-2 did not answer) | 'closed' (the
- * edition is not open) | 'open'. Only an open edition read in full enables a button.
+ * edition is not open) | 'paused' (the edition is open but devnet-2 is not
+ * taking claims) | 'open'. Only an open edition read in full, with claims
+ * open, enables a button. `pending`: copies of this design set aside for live claims.
  */
-export function cardView(state, { slot, house, shelf, copies = NM_COPIES_PER_DESIGN, canCollect = false }) {
+export function cardView(state, { slot, house, shelf, copies = NM_COPIES_PER_DESIGN, canCollect = false, pending = 0 }) {
   if (state === 'failed') return { line: shelf.unreadable, enabled: false };
   if (state === 'closed') return { line: shelf.notOpen, enabled: false };
-  if (state !== 'open' || !slot) return { line: shelf.checking, enabled: false };
-  return { line: shelfLine(slot, { house, shelf, copies }), enabled: Boolean(canCollect) && copiesLeft(slot, copies) > 0 };
+  if ((state !== 'open' && state !== 'paused') || !slot) return { line: shelf.checking, enabled: false };
+  const line = shelfLine(slot, { house, shelf, copies, pending });
+  if (state === 'paused') return { line, enabled: false };
+  return { line, enabled: Boolean(canCollect) && copiesLeft(slot, copies, pending) > 0 };
 }
 
 /**
