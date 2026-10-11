@@ -14,9 +14,27 @@ Mike asked for 40 currencies on rental, mesh, sharing and barter themes, each us
 | `src/lib/currency-builder/commons.mjs` | Deterministic SVG renderer |
 | `src/lib/nouns-parts.mjs` | New `renderSeed(seed)` export: renders an actual Noun from its on-chain seed with the existing official decoder |
 | `tests/currency-builder-commons.test.mjs` | 40 distinct Nouns, seeds match provenance, the exact pixels are embedded, disclaimer present |
-| `scripts/generate-currency-builder-commons-og.mjs` | Regenerates `public/images/og/currency-builder-commons.png` |
+| `src/lib/currency-builder/primitives.mjs` | Shared note drawing and Noun rendering for every collection |
+| `scripts/generate-currency-builder-og.mjs` | Regenerates the Commons and Global Barter share cards in `public/images/og/` |
 
 The Nouns are #2, 3, 5, 8, 11, 14, 18, 19, 24, 26–28, 30, 32, 34, 36, 37, 39, 44, 45, 50, 51, 55, 57, 58, 61, 64–66, 68, 71, 75, 76, 80–82, 87, 89, 95 and 96. Each was chosen for its head trait (a house for the Porch Note, a road for the Carpool Note, a lightning bolt for the Microgrid, a pizza for the Slice, an oyster for the Shell). Seeds were retrieved from the Nouns subgraph and recorded in `public/images/nouns-money/source-100/sources/provenance.json`; the renders match the official RLE data, and Nouns #0–9 also match the original noun.pics SVGs. Only Nouns #0–99 have verified seeds in the repo, and this container could not reach a chain or subgraph to add more.
+
+## Global Barter · 100 (added the same day)
+
+Mike then asked for 100 global barter currencies, each with a different Noun and each about bartering.
+
+| Path | What it is |
+| --- | --- |
+| `/currency-builder/` | Currency Builder home: both collections |
+| `/currency-builder/barter/` | 100 notes in six regions, rules, sources |
+| `/currency-builder/barter/{slug}/` | 100 detail pages: the real tradition and its source, how a note would work, Noun traits and seed |
+| `/currency-builder/barter/notes/{front,back}/{slug}.svg` | 200 print faces, 150 × 75 mm |
+| `/currency-builder/barter.json` | Machine edition |
+| `src/data/currency-builder/barter-100.json` | Source data, including tradition, era, place, a factual note and a source URL for every currency |
+| `src/lib/currency-builder/barter.mjs` | Renderer (shares `primitives.mjs` with Commons) |
+| `tests/currency-builder-barter.test.mjs` | Nouns #0–99 each exactly once, recorded seeds, exact pixels, text fits, no financial-offer words, https sources |
+
+Every Noun #0–99 appears exactly once, matched to its tradition by head trait where possible (a rock for the Knife River flint trade, a cat for the copper deben of Deir el-Medina, a frog for Sri Lanka's attam paddy exchange). The 100 traditions came from a research pass: six regional researchers produced 144 sourced candidates, a curator chose 100 and assigned Nouns, and adversarial fact-checkers confirmed 69 as written and corrected 31; none were dropped. Afterwards the copy was screened by hand. No note has a business earning or spending credits, nothing is accepted at a shop, and brand names appear only as historical facts on the back. The traditions belong to the people who keep them; the pages say the notes are inspired by them, not issued by or for them.
 
 ## For Codex: wiring it into currencybuilder.xyz
 
