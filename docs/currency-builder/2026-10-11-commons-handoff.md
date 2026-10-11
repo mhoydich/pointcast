@@ -1,6 +1,6 @@
 # Currency Builder · Commons — handoff (2026-10-11)
 
-Mike asked for 40 currencies on rental, mesh, sharing and barter themes, each using a different actual Noun, built as part of currencybuilder.xyz (which Codex owns). This branch adds them as a self-contained section of PointCast that currencybuilder.xyz can serve or lift.
+Mike asked for 40 currencies on rental, mesh, sharing and barter themes, each using a different actual Noun, built as part of currencybuilder.xyz (which Codex is working on). This branch adds them as a self-contained section of PointCast that currencybuilder.xyz can serve or lift.
 
 ## What shipped on this branch
 
@@ -49,9 +49,9 @@ Each 15-second Kling 3.0 trailer (std mode, audio) costs about 1,400 Krea units;
 3. **CURRENCY FLIGHT**: a black cube workstation boots up, then a coastal hangar, a rocket launch and a brass medal turning in orbit. VO: "From the aerospace towns... art takes flight."
 4. **SHARE MORE**: voxel Nouns-style characters on a palm-lined main street trade a surfboard, ladder, bike and guitar for art notes, and notes flutter onto a plaza. VO: "What if the best things in town were shared?"
 5. **THE MESH**: notes taped in night windows link up with light threads; voxel characters pass lanterns along them; a drone pulls back over the glowing town. VO: "Every note connects."
-6. **THE APOTHECARY EDITION**: walnut cabinets, amber jars, botanical brown and sage notes tied with twine, a brass scale, a drawer of notes on linen. VO: "Printed with patience." No medical claims.
+6. **COPENHAGEN HERBARIUM**: walnut cabinets, pressed-botanical folios, brown and sage notes tied with twine, a brass scale, a drawer of notes on linen. VO: "Printed with patience." No medical or health claims, no amber show bottles, and never the words apothecary, pharmacy or remedies.
 7. **NOUNS MONEY TV**: a 1983-style beige computer boots up with a rainbow stripe; pixel notes cycle on the CRT; a floppy goes in; a cozy den. VO: "Tonight, on your screen."
-8. **THE BANKS**: a copper-roofed kiosk, a cantilevered drive-in, a white spiral gallery ramp and a bougainvillea courtyard workshop at golden hour. VO: "Every great idea needs a place to live."
+8. **THE STUDIOS**: a copper-roofed print kiosk, a cantilevered drive-in pavilion, a white spiral gallery ramp and a bougainvillea courtyard workshop at golden hour. VO: "Every great idea needs a place to live." Never the word bank, and no architect or museum names.
 
 ## Manus follow-up
 
