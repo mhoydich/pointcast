@@ -1,3 +1,4 @@
+import { GAME_LIBRARY, gameLanding } from '../lib/game-library';
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isPublicProduct } from '../lib/commerce';
@@ -21,6 +22,8 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/games/', 'weekly', '0.95'],
+  ['https://pointcast.xyz/games.json', 'weekly', '0.85'],
   // Approved public studies include static documents outside Astro route discovery.
   ['https://pointcast.xyz/coastal-signal/', 'monthly', '0.6'],
   ['https://pointcast.xyz/coastal-signal-wallet/', 'monthly', '0.6'],
@@ -630,6 +633,7 @@ export const GET: APIRoute = async () => {
   });
 
   const dynamicUrls: SitemapEntry[] = [
+    ...GAME_LIBRARY.map(game => [`https://pointcast.xyz${gameLanding(game)}`, 'weekly', '0.85'] as SitemapEntry),
     ...products.map(({ data }) => [
       `https://pointcast.xyz/products/${data.slug}`,
       'daily',
