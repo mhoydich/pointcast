@@ -1,0 +1,100 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import Top from '../../../components/currency-builder/Top.astro';
+import { COLLECTIONS, FEATURES, SECURITY_BASE, TYPE_CREDITS, securityFiles } from '../../../lib/currency-builder/security-edition.mjs';
+import { nounArt } from '../../../lib/currency-builder/primitives.mjs';
+import '../../../styles/currency-builder.css';
+
+const groups = Object.values(COLLECTIONS);
+const total = groups.reduce((sum, c) => sum + c.data.currencies.length, 0);
+const pick = (collection: 'commons' | 'barter', slug: string) => {
+  const entry = COLLECTIONS[collection].data.currencies.find((e: { slug: string }) => e.slug === slug);
+  return { collection, entry, files: securityFiles(collection, entry) };
+};
+const hero = [pick('commons', 'porch-note'), pick('barter', 'jonbeel-fair'), pick('commons', 'microgrid')];
+const description = `Security Edition: all ${total} Currency Builder notes set like banknotes, with outlined type, guilloche, an engraved portrait of each full actual Noun, a watermark, thread, foil stripe and microtext. Printed art; not legal tender.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'Currency Builder · Security Edition',
+  url: `https://pointcast.xyz${SECURITY_BASE}/`,
+  description,
+  isAccessibleForFree: true,
+  creator: { '@type': 'Person', name: 'Mike Hoydich' },
+};
+---
+<BlockLayout title={`Security Edition · ${total} notes · Currency Builder`} description={description} image="/images/og/currency-builder-security.png" imageAlt="Three Currency Builder Security Edition notes with engraved Nouns, guilloche and printed security features" themeColor="#f6f1e6" immersive hideAds showNetworkStrip={false} jsonLd={jsonLd}>
+  <div class="cb">
+    <div class="cb-wrap">
+      <Top current="security" />
+
+      <section class="cb-hero" aria-labelledby="cb-title">
+        <div>
+          <p class="cb-kicker">Nouns Money · Security Edition · v2</p>
+          <h1 id="cb-title">Printed like money<em>.</em></h1>
+          <p class="cb-dek">Every Commons and Global Barter note, set the way banknotes are: engraved portrait, guilloche, watermark window, thread, foil stripe and microtext. Each one carries its full actual Noun.</p>
+          <div class="cb-stats">
+            <div><strong>{total}</strong><span>notes</span></div>
+            <div><strong>{total * 2}</strong><span>print faces</span></div>
+            <div><strong>{FEATURES.length}</strong><span>printed features</span></div>
+            <div><strong>{new Set(groups.flatMap((c) => c.data.currencies.map((e: { nounId: number }) => e.nounId))).size}</strong><span>actual Nouns</span></div>
+          </div>
+          <p class="cb-disclose">Collectible art concepts. Every "security feature" is flat-printed art: nothing here is a real security device, legal tender, for sale or redeemable. Nouns art is CC0; not affiliated with or endorsed by Nouns DAO.</p>
+        </div>
+        <div class="cb-stack" aria-hidden="true">
+          {hero.map((h) => <img src={h.files.front} width="1200" height="600" alt="" />)}
+        </div>
+      </section>
+
+      <h2 class="cb-sr" id="features-title">What's printed on a Security Edition note</h2>
+      <section class="cb-legend" aria-labelledby="features-title">
+        {FEATURES.map(([name, body], i) => (
+          <article>
+            <span>{String(i + 1).padStart(2, '0')}</span>
+            <h3>{name}</h3>
+            <p>{body}</p>
+          </article>
+        ))}
+      </section>
+
+      <section class="cb-section cb-two" aria-labelledby="craft-title">
+        <div>
+          <h2 id="craft-title">Full Nouns<em>.</em></h2>
+          <p style="font-size:19px;line-height:1.55">Each portrait is the note's whole actual Noun, drawn from its on-chain seed and sized so nothing is cropped or faded: a house for the Porch Note, a lightning bolt for the Microgrid, the moon for the Jonbeel Fair. The glasses appear only where they belong, on the Noun; there are no standalone noggle motifs.</p>
+          <p style="font-size:19px;line-height:1.55">The engraving is generated from the Noun's pixels: three bowed lines per pixel row, with stroke weight following each pixel's tone, over a pale tint of its own colors. The watermark repeats the full Noun, and the foil stripe carries its head in silhouette.</p>
+        </div>
+        <ul class="cb-list">
+          <li><span>Trim</span><span>150 × 75 mm, front and back SVG</span></li>
+          <li><span>Type</span><span>{TYPE_CREDITS.join(' · ')}, outlined, so files print the same everywhere</span></li>
+          <li><span>Guilloche</span><span>Seeded per note: rosettes, braided border, oval portrait frame</span></li>
+          <li><span>Serials</span><span>GB + code + Noun for Global Barter, CB + code + Noun for Commons</span></li>
+          <li><span>Provenance</span><span><a href="/images/nouns-money/source-100/provenance.json">Nouns #0–99 seeds</a></span></li>
+        </ul>
+      </section>
+
+      {groups.map((c) => (
+        <section class="cb-theme" id={c.id} aria-labelledby={`${c.id}-title`}>
+          <div class="cb-theme-head">
+            <h2 id={`${c.id}-title`}>{c.name}</h2>
+            <p>{c.data.currencies.length} notes · <a href={`${c.base}/`}>the collection</a></p>
+          </div>
+          <div class="cb-grid">
+            {c.data.currencies.map((entry: { slug: string; name: string; code: string; nounId: number }) => (
+              <a class="cb-card" href={`${c.base}/${entry.slug}/#cb-v2-title`}>
+                <img src={securityFiles(c.id, entry).front} width="1200" height="600" loading="lazy" alt={`Security Edition front of ${entry.name}, with an engraved portrait of actual Noun #${entry.nounId}`} />
+                <div>
+                  <p class="cb-code">{entry.code} · Noun #{entry.nounId} · {nounArt(entry.nounId).labels.head}</p>
+                  <h3>{entry.name}</h3>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <footer class="cb-foot">
+        <p>Currency Builder · Security Edition. Faces are at <code>{SECURITY_BASE}/&#123;commons|barter&#125;/&#123;front|back&#125;/&#123;slug&#125;.svg</code>. Fonts are used under the SIL Open Font License. Nouns art is CC0; not affiliated with or endorsed by Nouns DAO.</p>
+      </footer>
+    </div>
+  </div>
+</BlockLayout>
