@@ -107,5 +107,9 @@ origin carried 1,173 branches for 18 open PRs, and every fetch and
   deletion is logged with its sha in `~/.pointcast-prune.log`; restore one
   with `git push origin <sha>:refs/heads/<name>`, or "Restore branch" on the
   merged PR.
+- Once branches are gone from origin, every clone still carries their
+  `refs/remotes/origin/*` until it prunes. Run `git config --global
+  fetch.prune true` once; `npm run prune:branches -- --delete` also prunes
+  the checkout it ran from.
 - The real fix is the repository setting *Automatically delete head branches*
   (Settings → General → Pull Requests). Turning it on is Mike's call.

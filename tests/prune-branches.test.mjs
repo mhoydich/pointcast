@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { classifyBranches, planDeletions, summarize, toTsv } from '../scripts/lib/prune-branches.mjs';
+import { classifyBranches, parsePushPorcelain, planDeletions, summarize, toTsv } from '../scripts/lib/prune-branches.mjs';
 
 const NOW = '2026-10-17T22:00:00Z';
 const daysAgo = (d) => new Date(Date.parse(NOW) - d * 86_400_000).toISOString();
@@ -153,4 +153,20 @@ test('tsv report has one row per branch with the action first', () => {
 test('classifyBranches refuses to run without a clock', () => {
   assert.throws(() => classifyBranches({ branches: [], pulls: [] }), /now is required/);
   assert.throws(() => planDeletions([], {}), /now is required/);
+});
+
+test('push porcelain is read per ref, so a half-failed batch logs only what is gone', () => {
+  const out = [
+    'To github.com:mhoydich/pointcast',
+    '-\t:refs/heads/feat/a\t[deleted]',
+    '!\t:refs/heads/feat/b\t[rejected] (protected branch hook declined)',
+    '-\t:refs/heads/feat/c\t[deleted]',
+    '!\t:refs/heads/feat/d\t[remote rejected] (cannot lock ref)',
+    'Done',
+  ].join('\n');
+  const { ok, failed } = parsePushPorcelain(out);
+  assert.deepEqual(ok, ['feat/a', 'feat/c']);
+  assert.deepEqual(failed.map((f) => f.name), ['feat/b', 'feat/d']);
+  assert.match(failed[0].summary, /protected branch hook/);
+  assert.deepEqual(parsePushPorcelain(''), { ok: [], failed: [] });
 });

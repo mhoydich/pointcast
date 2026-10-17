@@ -40,7 +40,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { classifyBranches, planDeletions, summarize, toTsv } from './lib/prune-branches.mjs';
+import { classifyBranches, parsePushPorcelain, planDeletions, summarize, toTsv } from './lib/prune-branches.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoDir = join(here, '..');
@@ -91,10 +91,12 @@ const gh = (path, jq) => {
   try {
     return execFileSync('gh', ['api', path, ...(jq ? ['--jq', jq] : [])], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (err) {
+    if (err.code === 'ENOENT') throw new Error('gh is not installed; this script needs the GitHub CLI (authenticated) for PR data');
     const msg = String(err.stderr || err.message).trim().split('\n')[0];
     throw new Error(`gh api ${path} failed: ${msg}`);
   }
 };
+process.on('uncaughtException', (err) => { console.error(`prune-branches: ${err.message}`); process.exit(2); });
 const say = (...parts) => console.log(...parts);
 
 function repoSlug() {
@@ -216,22 +218,36 @@ for (const r of toDelete) {
 
 mkdirSync(dirname(flags.log), { recursive: true });
 let deleted = 0;
+const rejected = [];
 const BATCH = 25;
+// Git applies each refspec on its own, so a batch can half-succeed. Read the
+// per-ref porcelain lines (present on stdout even when the exit code is
+// non-zero) and log exactly the refs that are gone.
 for (let i = 0; i < confirmed.length; i += BATCH) {
   const batch = confirmed.slice(i, i + BATCH);
+  const bySha = new Map(batch.map((r) => [r.name, r]));
+  let out = '';
   try {
-    git('push', '--quiet', 'origin', ...batch.map((r) => `:refs/heads/${r.name}`));
+    out = git('push', '--porcelain', 'origin', ...batch.map((r) => `:refs/heads/${r.name}`));
   } catch (err) {
-    say(`push failed for a batch of ${batch.length}; stopping. ${String(err.stderr || err.message).trim().split('\n')[0]}`);
-    say('deleted so far are in the log; re-run to continue.');
-    break;
+    out = String(err.stdout || '');
+    if (!out.trim()) {
+      say(`push failed before any ref was processed; stopping. ${String(err.stderr || err.message).trim().split('\n')[0]}`);
+      say('deleted so far are in the log; re-run to continue.');
+      break;
+    }
   }
-  for (const r of batch) {
+  const { ok, failed } = parsePushPorcelain(out);
+  for (const name of ok) {
+    const r = bySha.get(name);
+    if (!r) continue;
     appendFileSync(flags.log, [now.toISOString(), r.name, r.sha, r.pr ?? '', r.cls].join('\t') + '\n');
     deleted += 1;
   }
-  say(`  deleted ${Math.min(i + BATCH, confirmed.length)}/${confirmed.length}`);
+  for (const f of failed) { rejected.push(f); say(`  rejected: ${f.name} ${f.summary}`); }
+  say(`  deleted ${deleted}/${confirmed.length}`);
+  if (ok.length === 0) { say('nothing in that batch went through; stopping. Re-run to continue.'); break; }
 }
-say(`\ndeleted ${deleted} branch(es). Log: ${flags.log}`);
+say(`\ndeleted ${deleted} branch(es)${rejected.length ? `, ${rejected.length} rejected` : ''}. Log: ${flags.log}`);
 say('restore one with: git push origin <sha>:refs/heads/<name>');
 git('remote', 'prune', 'origin');

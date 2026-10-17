@@ -17,7 +17,7 @@
 #   --root=DIR       where the pc-* worktrees live (default $HOME)
 #   --prefix=STR     worktree folder prefix (default pc-)
 #
-# Never touched: ~/pc-deploy (scripts/deploy.sh owns it and holds its own
+# Never touched: .pointcast/ and .wrangler/ inside a worktree, ~/pc-deploy (scripts/deploy.sh owns it and holds its own
 # lock), the main checkout the worktrees belong to, the worktree this script
 # is running from, any worktree with uncommitted changes or unpushed commits,
 # any worktree a running process has as its working directory, and anything
@@ -47,15 +47,29 @@ case "$IDLE_HOURS" in ''|*[!0-9]*) echo "--idle-hours needs a whole number" >&2;
 
 LOG="${PC_SWEEP_LOG:-$HOME/Library/Logs/pointcast-disk-sweep.log}"
 DEPLOY_DIR="${PC_DEPLOY_DIR:-$HOME/pc-deploy}"
-SELF_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"
+# Resolve $0 through symlinks (bash 3.2 has no realpath), so the documented
+# install, a link from ~/bin, still finds the repo this script lives in.
+resolve_path() {
+  local f="$1" dir
+  while [ -L "$f" ]; do
+    dir="$(cd "$(dirname "$f")" && pwd -P)"
+    f="$(readlink "$f")"
+    case "$f" in /*) ;; *) f="$dir/$f" ;; esac
+  done
+  printf '%s/%s\n' "$(cd "$(dirname "$f")" && pwd -P)" "$(basename "$f")"
+}
+SELF="$(resolve_path "$0")"
+SELF_DIR="$(cd "$(dirname "$SELF")/.." && pwd -P)"
 REPO="$(git -C "$SELF_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+[ -n "$REPO" ] || { echo "disk-sweep: $SELF_DIR is not inside a git checkout; run the copy in the repo" >&2; exit 2; }
 MAIN_CHECKOUT="${REPO%/.git}"
 mkdir -p "$(dirname "$LOG")"
 
 say() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOG"; }
 mode() { [ "$APPLY" = 1 ] && echo "removing" || echo "would remove"; }
 # `du -sk` is the same on macOS and Linux; the human size is for the log only.
-size_of() { [ -e "$1" ] && du -sk "$1" 2>/dev/null | awk '{ printf "%.1fG", $1 / 1048576 }' || echo "0G"; }
+human_kb() { awk -v kb="$1" 'BEGIN { if (kb >= 1048576) printf "%.1fG", kb / 1048576; else printf "%dM", kb / 1024 }'; }
+size_of() { [ -e "$1" ] && human_kb "$(du -sk "$1" 2>/dev/null | cut -f1)" || echo "0M"; }
 
 freed_kb=0
 add_freed() { local kb; kb=$(du -sk "$1" 2>/dev/null | cut -f1 || echo 0); freed_kb=$((freed_kb + kb)); }
@@ -127,11 +141,16 @@ for dir in "$ROOT"/"$PREFIX"*; do
     add_freed "$dir/$sub"
     [ "$APPLY" = 1 ] && rm -rf "$dir/$sub"
   done
-  for stale in "$dir"/dist.stale-*; do
+  for stale in "$dir"/dist.stale-* "$dir"/workers/*/node_modules "$dir"/packages/*/node_modules; do
     [ -d "$stale" ] || continue
     say "$(mode) $stale ($(size_of "$stale"))"
     add_freed "$stale"
     [ "$APPLY" = 1 ] && rm -rf "$stale"
+  done
+  # Local state that is not rebuildable from the repo (the oracle's LanceDB
+  # index, wrangler's local D1/KV) is reported, never removed.
+  for keep in .pointcast .wrangler; do
+    [ -d "$dir/$keep" ] && say "note $dir/$keep ($(size_of "$dir/$keep")) left in place"
   done
 
   # The checkout itself goes only when every commit is safely on origin and
@@ -153,4 +172,4 @@ if [ "$APPLY" = 1 ] && [ -n "$MAIN_CHECKOUT" ]; then
   git -C "$MAIN_CHECKOUT" worktree prune
 fi
 
-say "disk sweep done: $(awk "BEGIN { printf \"%.1fG\", $freed_kb / 1048576 }") $( [ "$APPLY" = 1 ] && echo freed || echo reclaimable )"
+say "disk sweep done: $(human_kb "$freed_kb") $( [ "$APPLY" = 1 ] && echo freed || echo reclaimable )"

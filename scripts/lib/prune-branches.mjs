@@ -236,3 +236,24 @@ export function toTsv(planned) {
   ].join('\t'));
   return [header.join('\t'), ...lines].join('\n') + '\n';
 }
+
+/**
+ * Parse `git push --porcelain` output for a batch of `:refs/heads/<name>`
+ * deletions. Git applies each refspec independently, so one rejected ref
+ * does not undo the others; the caller must log by ref, not by batch.
+ *
+ * Lines look like:  -\t:refs/heads/foo\t[deleted]
+ *                   !\t:refs/heads/bar\t[rejected] (reason)
+ */
+export function parsePushPorcelain(output) {
+  const ok = [];
+  const failed = [];
+  for (const line of String(output).split('\n')) {
+    const [flag, spec, summary = ''] = line.split('\t');
+    if (!spec || !spec.includes(':refs/heads/')) continue;
+    const name = spec.slice(spec.indexOf(':refs/heads/') + ':refs/heads/'.length);
+    if (flag === '!') failed.push({ name, summary: summary.trim() });
+    else ok.push(name);
+  }
+  return { ok, failed };
+}

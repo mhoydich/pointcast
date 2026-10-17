@@ -6,13 +6,15 @@
 
 ## Repo hygiene under load — branches, backups, sweep (2026-10-17)
 
-Audit: `docs/audits/2026-10-17-cleanup-audit.md`. Origin carried 1,173 branches for 18 open PRs because *Automatically delete head branches* is off; 943 of them are exactly the head a merged PR carried into main.
+Audit: `docs/audits/2026-10-17-cleanup-audit.md`. Origin carried 1,173 branches for 18 open PRs because *Automatically delete head branches* is off; 942 of them are exactly the head a merged PR carried into main.
 
-- [x] (CC) Remove 14 tracked backup copies (`*.dataless.bak-20260516*`, `favicon.ico.bak-antrope-a`, `tmp/imagegen/*.jsonl`) and ignore `*.bak`, `*.bak-*`, `*.orig`, `*.rej`, `*~` — `done` — history keeps the old versions
+- [x] (CC) Remove 25 tracked backup copies (12 `*.dataless.bak-20260516*`, `favicon.ico.bak-antrope-a`, `tmp/imagegen/*.jsonl`, 11 byte-identical Finder duplicates `public/images/og/<name> 2.png`) and ignore `*.bak`, `*.bak-*`, `*.orig`, `*.rej`, `*~`, `tmp/` — `done` — history keeps the old versions
 - [x] (CC) Add `scripts/prune-branches.mjs` (dry run by default, `--delete` only removes merged-exact branches, re-checks origin and open PRs before each push) with tests, and `scripts/disk-sweep.sh` as the repo copy of the iMac sweep — `done` — `docs/OPERATIONS.md` §5–6
-- [x] (CC) Drop the push triggers pinned to merged branches in `cohort-release-check.yml` and `home-share-editions-check.yml` — `done`
+- [x] (CC) Drop the push triggers pinned to merged branches in `cohort-release-check.yml` and `home-share-editions-check.yml`; give `next-models-pages.yml` the `timeout-minutes` every other workflow has — `done`
+- [ ] (MH/X) Diff and delete the six `src/components/<Name> 2.astro` Finder forks (`DrumNav`, `HomeFireplace`, `NatureFieldDeskStrip`, `NounsWoodChopStrip`, `SpotifyEmbed`, `WingPulseModule`); nothing imports them but each differs from its sibling by hundreds of lines — `handoff`
+- [ ] (MH) Look at the 21 branches in `docs/audits/2026-10-17-branch-triage.tsv` marked `review`: unmerged work that exists nowhere else (daily email scheduler, two `/mist` rooms, the Bell Labs paper, Kettle contract, Bloom Party, Agent-Web Observatory, and smaller) — `waiting-on-mh`
 - [ ] (MH) Turn on *Automatically delete head branches* (Settings → General → Pull Requests) so this stops accumulating — `waiting-on-mh`
-- [ ] (MH/CC) Approve and run `npm run prune:branches -- --delete` for the 943 merged-exact branches; the plan is in the audit — `waiting-on-mh` — reversible per branch from the PR page or the sha log
+- [ ] (MH/CC) Approve and run `npm run prune:branches -- --delete` for the 942 merged-exact branches; the plan is in the audit — `waiting-on-mh` — reversible per branch from the PR page or the sha log
 - [ ] (MH) Decide what `cloudflare-pages.yml` is for: it runs a full build on every push to main and then skips the deploy step every time (no token, and `scripts/deploy.sh` is the one deploy path) — `waiting-on-mh`
 - [ ] (MH) Install the repo sweep on the iMac: `ln -sf ~/pointcast/scripts/disk-sweep.sh ~/bin/pointcast-disk-sweep.sh`, then run it once by hand — `handoff`
 
