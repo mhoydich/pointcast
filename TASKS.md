@@ -4,6 +4,20 @@
 
 ---
 
+## Repo hygiene under load — branches, backups, sweep (2026-10-17)
+
+Audit: `docs/audits/2026-10-17-cleanup-audit.md`. Origin carried 1,173 branches for 18 open PRs because *Automatically delete head branches* is off; 943 of them are exactly the head a merged PR carried into main.
+
+- [x] (CC) Remove 14 tracked backup copies (`*.dataless.bak-20260516*`, `favicon.ico.bak-antrope-a`, `tmp/imagegen/*.jsonl`) and ignore `*.bak`, `*.bak-*`, `*.orig`, `*.rej`, `*~` — `done` — history keeps the old versions
+- [x] (CC) Add `scripts/prune-branches.mjs` (dry run by default, `--delete` only removes merged-exact branches, re-checks origin and open PRs before each push) with tests, and `scripts/disk-sweep.sh` as the repo copy of the iMac sweep — `done` — `docs/OPERATIONS.md` §5–6
+- [x] (CC) Drop the push triggers pinned to merged branches in `cohort-release-check.yml` and `home-share-editions-check.yml` — `done`
+- [ ] (MH) Turn on *Automatically delete head branches* (Settings → General → Pull Requests) so this stops accumulating — `waiting-on-mh`
+- [ ] (MH/CC) Approve and run `npm run prune:branches -- --delete` for the 943 merged-exact branches; the plan is in the audit — `waiting-on-mh` — reversible per branch from the PR page or the sha log
+- [ ] (MH) Decide what `cloudflare-pages.yml` is for: it runs a full build on every push to main and then skips the deploy step every time (no token, and `scripts/deploy.sh` is the one deploy path) — `waiting-on-mh`
+- [ ] (MH) Install the repo sweep on the iMac: `ln -sf ~/pointcast/scripts/disk-sweep.sh ~/bin/pointcast-disk-sweep.sh`, then run it once by hand — `handoff`
+
+---
+
 ## The Squeeze — PTL Mixed 4.0 (2026-10-06)
 
 - [x] (CC) Publish `/pickleball/the-squeeze/` and `/pickleball/the-squeeze.json` from the PTL screenshots, with Court block 0699 — `done` — transcribed about Oct 6 2026; not an official PTL page; no deploy from this session if `CLOUDFLARE_API_TOKEN` is unset
