@@ -292,6 +292,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(new URL('/games/nouns-nation-battler/posters/', url.origin).toString(), 302);
   }
 
+  // This authored concept is intentionally tracker-free, including bot visit
+  // recording and account/session injection. Match only its exact HTML routes.
+  if ((isGet || request.method === 'HEAD') && ['/el-segundo-motors', '/el-segundo-motors.html', '/el-segundo-motors/index.html'].includes(url.pathname)) {
+    const target = new URL('/el-segundo-motors/', url.origin);
+    target.search = url.search;
+    return Response.redirect(target.toString(), 301);
+  }
+  if (url.pathname === '/el-segundo-motors/') return next();
+
   // Noticeboard reads stay quiet after existing host/canonical redirects.
   // Exact aliases resolve before directory rewriting; resident /agents/* routes
   // retain their existing middleware, identity and FrontDesk behavior.
