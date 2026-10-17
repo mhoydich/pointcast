@@ -10,13 +10,19 @@
  * cell past its `until` drops) without waiting for the next deploy. While the
  * strip shows, the hero's "What's new in town" link lands here; once it hides,
  * the link goes back to the drop deck (#new).
+ *
+ * `limit` keeps the strip to a first screen: the newest cells show and the
+ * rest of the week is one "more" link to the drop deck.
  */
 import { isFresh, shortDay, stripHeading, type NewTodayItem } from '../lib/new-today.ts';
 
-interface Props { items: NewTodayItem[] }
+interface Props { items: NewTodayItem[]; limit?: number }
 
 const now = new Date();
-const fresh = Astro.props.items.filter((item) => isFresh(item, now));
+const { items, limit = Infinity } = Astro.props;
+const allFresh = items.filter((item) => isFresh(item, now));
+const fresh = allFresh.slice(0, limit);
+const more = allFresh.length - fresh.length;
 const newest = fresh.map((item) => item.date).sort().at(-1) ?? '';
 const blocks = [...new Set(fresh.map((item) => item.block).filter((id): id is string => Boolean(id)))];
 ---
@@ -30,6 +36,7 @@ const blocks = [...new Set(fresh.map((item) => item.block).filter((id): id is st
         {blocks.length > 0 && (
           <span class="nt__blocks">Blocks <span class="nt__ids">{blocks.map((id) => <a href={`/b/${id}`}>{id}</a>)}</span></span>
         )}
+        {more > 0 && <a class="nt__more" href="#new">+{more} more this week ↓</a>}
       </p>
     </div>
     <ol class="nt__cells">
@@ -87,6 +94,8 @@ const blocks = [...new Set(fresh.map((item) => item.block).filter((id): id is st
   .nt__blocks a { color: #ffe2b0; text-decoration: underline; text-underline-offset: 3px; }
   .nt__blocks a + a::before { content: '·'; display: inline-block; margin: 0 5px; color: #b9c2a8; text-decoration: none; }
   .nt__blocks a:hover { color: var(--nt-glow); }
+  .nt__more { color: #ffe2b0; text-decoration: underline; text-underline-offset: 3px; }
+  .nt__more:hover { color: var(--nt-glow); }
 
   .nt__cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
   /* Dividers on every cell's right and bottom edge; the section clips the outer ones, so any count lays out clean. */
