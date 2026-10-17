@@ -100,11 +100,11 @@ test('the no-JavaScript view exposes all 87 records and hides enhancement contro
   assert.equal(root.querySelector('[data-map-controls]').hidden, true);
   assert.ok([...root.querySelectorAll('[data-map-theme]')].every((button) => button.hidden));
   assert.ok([...root.querySelectorAll('[data-map-static]')].every((label) => !label.hidden));
-  const source = readFileSync(new URL('../src/pages/books/map.astro', import.meta.url), 'utf8');
-  const rowOpening = source.match(/<li\b[^>]*data-map-record[^>]*>/)?.[0];
+  const source = readFileSync(new URL('../src/components/FullBookshelf.astro', import.meta.url), 'utf8');
+  const rowOpening = source.match(/<li\b[^>]*data-full-record[^>]*>/)?.[0];
   assert.ok(rowOpening, 'The real page renders the same record contract');
   assert.doesNotMatch(rowOpening, /\bhidden\b/, 'The real server template starts with all records visible');
-  assert.match(source, /<div class="map-controls" data-map-controls hidden>/);
+  assert.match(source, /<div class="full-controls" data-full-controls hidden>/);
   assert.match(source, /aria-live="polite"/);
   dom.window.close();
 });
