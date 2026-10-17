@@ -1,4 +1,4 @@
-import { bookCompanions as companions } from './book-companions';
+import { bookCompanions as companions } from './book-companions.ts';
 
 export const shelfThemes = [
   { id: 'all', label: 'Everything' },
