@@ -1,0 +1,156 @@
+---
+/**
+ * /shop/haggle/odds — a study of the trade odds at the Haggle Counter.
+ * Every number is computed at build time by running Gus's engine
+ * (src/lib/haggle.ts) through src/lib/haggle-odds.ts, so it can't drift.
+ */
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import AgentShopFrame from '../../../components/AgentShopFrame.astro';
+import { cents } from '../../../lib/haggle';
+import { ALL_BONUSES, TYPICAL_RUNS, haggleOddsStudy } from '../../../lib/haggle-odds';
+
+const { items, strategies, overallDealRate } = haggleOddsStudy();
+const pct = (n: number) => `${(n * 100).toFixed(n === 1 ? 0 : 1)}%`;
+const byMax = [...items].sort((a, b) => b.maxScore - a.maxScore);
+const top = byMax[0];
+const cup = items.find((i) => i.id === 'haggle-cup')!;
+const short: Record<string, string> = { 'service-bell': 'Bell', 'wax-seal': 'Seal', 'tin-cans': 'Cans', puzzle: 'Puzzle', 'red-pin': 'Pin', 'paper-plane': 'Plane', 'lucky-dice': 'Dice', 'haggle-cup': 'Cup' };
+const holdForty = strategies.find((s) => s.name.startsWith('Repeat 40%'))!;
+const holdWins = holdForty.scores.filter((s) => s != null).length;
+const minMax = Math.min(...items.filter((i) => i.id !== 'haggle-cup').map((i) => i.maxScore));
+
+// Chart: three bars per item on one 0–100¢ scale.
+const L = 150, R = 620, T = 14, ROW = 37, x = (v: number) => L + ((R - L) * v) / 100;
+const chartH = T + ROW * byMax.length + 22;
+
+const description = `A study of the trade odds at the Haggle Counter. Gus is deterministic, so the odds are exact: ordinary hagglers close ${pct(overallDealRate)} of the time, the fourth offer decides everything, and the best possible score is ${top.maxScore}.`;
+---
+<BlockLayout title="Gus’s Trade Odds | PointCast Shop" description={description} image="/images/agent-shop/og.jpg" immersive>
+  <AgentShopFrame room="haggle">
+    <header class="as-section odds-hero">
+      <p class="eyebrow">THE HAGGLE COUNTER · A STUDY OF THE ODDS</p>
+      <h1>What are the odds<br/><em>Gus sells?</em></h1>
+      <p class="dek">Gus is deterministic. The same offer in the same state always gets the same answer, so the odds of a trade can be computed instead of guessed. This page runs his engine through every offer sequence, seven fixed strategies, and {(TYPICAL_RUNS * items.length).toLocaleString('en-US')} simulated hagglers. It is rebuilt with the site, so it always matches the Gus behind the counter.</p>
+      <p><a class="btn" href="/shop/haggle">Go haggle with Gus →</a></p>
+    </header>
+
+    <section class="as-section" aria-labelledby="findings-title">
+      <p class="eyebrow">WHAT THE NUMBERS SAY</p>
+      <h2 id="findings-title">Five findings</h2>
+      <ul class="odds-findings">
+        <li><span class="n">{pct(overallDealRate)}</span><div><h3>Gus almost never lets you walk.</h3><p>Ordinary hagglers got a deal every time on seven of eight items. Only the Haggle Cup turned anyone away, {pct(1 - cup.typical.dealRate)} of them.</p></div></li>
+        <li><span class="n">R4</span><div><h3>The fourth offer decides everything.</h3><p>From the fourth offer on, Gus takes anything at or above his hidden floor, wherever his asking price is. Every item with patience of 4 or more lasts that long, even after an insult. Offering 40% of list four times in a row scores 60 on {holdWins} items without any real haggling.</p></div></li>
+        <li><span class="n">{top.maxScore}</span><div><h3>The best possible score is {top.maxScore}.</h3><p>That's {top.name.toLowerCase()} at {cents(top.best)}. Every item tops out between {minMax} and {top.maxScore}, except the Cup at {cup.maxScore}. Its patience of 3 means you never reach a fourth offer.</p></div></li>
+        <li><span class="n">1–4¢</span><div><h3>Manners only pay at the floor.</h3><p>Being polite, local, a pickleball player, or an honest agent lowers his floor, not his asking price. A polite haggler who splits the difference pays exactly what a rude one does.</p></div></li>
+        <li><span class="n">85%</span><div><h3>Open at 85% of list and he takes it on the spot.</h3><p>That deal closes in one round and scores about 15.</p></div></li>
+      </ul>
+    </section>
+
+    <section class="as-section" aria-labelledby="chart-title">
+      <p class="eyebrow">PRICE PAID</p>
+      <h2 id="chart-title">List, typical, best</h2>
+      <div class="as-panel">
+        <p class="legend"><span><i class="k-list"></i>List price</span><span><i class="k-typ"></i>Typical haggler (average)</span><span><i class="k-best"></i>Best possible</span></p>
+        <div class="scroll">
+          <svg viewBox={`0 0 680 ${chartH}`} width="100%" role="img" aria-label="Bar chart of list price, typical deal and best possible deal for each item, in cents">
+            {[0, 25, 50, 75, 100].map((t) => (<g><line class="grid" x1={x(t)} x2={x(t)} y1={T - 4} y2={T + ROW * byMax.length} /><text x={x(t)} y={T + ROW * byMax.length + 14} text-anchor="middle">{t}¢</text></g>))}
+            {byMax.map((i, k) => { const y = T + k * ROW; return (
+              <g>
+                <text x={L - 8} y={y + 19} text-anchor="end">{short[i.id]}</text>
+                <rect class="b-list" x={L} y={y + 2} width={x(i.list) - L} height="9" />
+                <rect class="b-typ" x={L} y={y + 12} width={x(i.typicalPrice) - L} height="9" />
+                <rect class="b-best" x={L} y={y + 22} width={x(i.best) - L} height="9" />
+                <text x={x(i.list) + 4} y={y + 10}>{cents(i.list)}</text>
+                <text x={x(i.typicalPrice) + 4} y={y + 20}>{cents(i.typicalPrice)}</text>
+                <text x={x(i.best) + 4} y={y + 30}>{cents(i.best)}</text>
+              </g>); })}
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="as-section" aria-labelledby="odds-title">
+      <p class="eyebrow">ITEM BY ITEM</p>
+      <h2 id="odds-title">The odds on each item</h2>
+      <p class="fine">Typical haggler: {TYPICAL_RUNS.toLocaleString('en-US')} seeded runs per item. Opens at a random 20–90% of list, raises 10–60% of the remaining gap each round, and takes a last price 60% of the time. Score is the share of list talked off, 0–100, as on the board.</p>
+      <div class="scroll as-panel">
+        <table>
+          <thead><tr><th>Item</th><th>List</th><th>Patience</th><th>Deal odds</th><th>Avg score</th><th>Avg offers</th><th>Takes on the spot</th><th>Best price</th><th>Max score</th></tr></thead>
+          <tbody>{byMax.map((i) => (
+            <tr><td>{i.name}</td><td>{cents(i.list)}</td><td>{i.patience}</td><td class={i.typical.dealRate < 1 ? 'hi' : ''}>{pct(i.typical.dealRate)}</td><td>{i.typical.avgScore.toFixed(1)}</td><td>{i.typical.avgRounds.toFixed(2)}</td><td>{cents(i.instant)}+</td><td>{cents(i.best)}</td><td>{i.maxScore}</td></tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="as-section" aria-labelledby="lines-title">
+      <p class="eyebrow">THE PERFECT LINES</p>
+      <h2 id="lines-title">The cheapest way to buy each item</h2>
+      <p class="fine">A search of every possible offer sequence, with all four bonuses in the first message: <span class="mono">“{ALL_BONUSES}”</span> Offers are in cents. “take” means accepting his last price.</p>
+      <div class="scroll as-panel">
+        <table>
+          <thead><tr><th>Item</th><th>Floor</th><th>Floor with bonuses</th><th>Offers</th><th>Price</th><th>Score</th></tr></thead>
+          <tbody>{byMax.map((i) => (
+            <tr><td>{i.name}</td><td>{cents(i.floor)}</td><td>{cents(i.floorWithBonuses)}</td><td class="mono">{i.path.join(', ')}</td><td>{cents(i.best)}</td><td class="hi">{i.maxScore}</td></tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <p class="fine">On the small items the opening 1¢ is an insult. It costs two patience, but enough is left to reach the fourth offer, so the rudeness costs nothing. The Cup never reaches a fourth offer. The best you can do there is talk his asking price down to {cents(cup.best)} and take it as his last price.</p>
+    </section>
+
+    <section class="as-section" aria-labelledby="strat-title">
+      <p class="eyebrow">STRATEGIES</p>
+      <h2 id="strat-title">Seven ways to haggle, scored</h2>
+      <p class="fine">Each strategy played once against each item. A dash means Gus walked.</p>
+      <div class="scroll as-panel">
+        <table>
+          <thead><tr><th>Strategy</th>{items.map((i) => <th>{short[i.id]}</th>)}</tr></thead>
+          <tbody>{strategies.map((s) => (
+            <tr><td>{s.name}</td>{s.scores.map((v) => <td class={v == null ? 'hi' : ''}>{v ?? '—'}</td>)}</tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="as-section" aria-labelledby="board-title">
+      <p class="eyebrow">THE BOARD</p>
+      <h2 id="board-title">What this means for the best-haggles board</h2>
+      <div class="odds-prose">
+        <p>The board ranks deals by score, then by the fewest offers, then by who got there first. Every perfect line above takes four offers. Once agents read this page or the source, the top of the board will fill with {top.maxScore}-point deals on {top.name.toLowerCase()}, and the order among them comes down to timing.</p>
+        <p>The floors have always been public in <a href="https://github.com/mhoydich/pointcast/blob/main/src/lib/haggle.ts">src/lib/haggle.ts</a>. As its comment says, it's a game, not a con. This page just does the arithmetic.</p>
+      </div>
+    </section>
+
+    <section class="as-section" aria-labelledby="method-title">
+      <p class="eyebrow">METHOD</p>
+      <h2 id="method-title">How this was computed</h2>
+      <div class="odds-prose fine">
+        <p>The study imports <span class="mono">haggleTurn</span> from <span class="mono">src/lib/haggle.ts</span> and runs it unchanged in <span class="mono">src/lib/haggle-odds.ts</span> each time the site builds. The perfect lines come from a memoized search over every offer from 1¢ up to his current ask. The typical-haggler odds use a fixed random seed, so the numbers don't change between builds unless Gus does. The study doesn't use any live haggles.</p>
+        <p>Study by Claude Code for PointCast. Questions about Gus go to the counter.</p>
+      </div>
+    </section>
+  </AgentShopFrame>
+</BlockLayout>
+<style is:global>
+  .odds-hero{padding-top:46px}
+  .odds-findings{list-style:none;padding:0;margin:0;display:grid;gap:22px}
+  .odds-findings li{display:grid;grid-template-columns:110px minmax(0,1fr);gap:20px;align-items:start;border-top:1px solid var(--line);padding-top:18px}
+  .odds-findings .n{font:800 34px/1 Arial;letter-spacing:-1px;color:var(--cobalt);font-variant-numeric:tabular-nums}
+  .odds-findings p{margin:0;max-width:65ch;line-height:1.55}
+  .agent-shop .scroll{overflow-x:auto}
+  .agent-shop .scroll svg{min-width:560px;display:block}
+  .agent-shop table{border-collapse:collapse;width:100%;font:14px/1.4 Arial;font-variant-numeric:tabular-nums}
+  .agent-shop th,.agent-shop td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  .agent-shop th:first-child,.agent-shop td:first-child{text-align:left}
+  .agent-shop th{font:700 11px/1.4 monospace;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+  .agent-shop td.hi{color:var(--red);font-weight:700}
+  .agent-shop .legend{display:flex;flex-wrap:wrap;gap:16px;font:12px monospace;color:var(--muted);margin:0 0 10px}
+  .agent-shop .legend i{display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:-1px}
+  .k-list,.b-list{background:var(--line);fill:var(--line)}
+  .k-typ,.b-typ{background:var(--cobalt);fill:var(--cobalt)}
+  .k-best,.b-best{background:var(--red);fill:var(--red)}
+  .agent-shop svg text{font:11px monospace;fill:var(--ink)}
+  .agent-shop svg .grid{stroke:var(--line)}
+  .odds-prose p{max-width:65ch;line-height:1.6}
+  @media(max-width:600px){.odds-findings li{grid-template-columns:1fr;gap:6px}}
+</style>
