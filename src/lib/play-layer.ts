@@ -1,9 +1,13 @@
-export const PLAY_LAYER_VERSION = '0.4.0';
+export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
   'PointCast play layer: a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
+  {
+    id: 'games', code: 'PLAY', title: 'PointCast Games', route: '/games/',
+    summary: 'Find every game, learn the controls, download a local game pack or online launch kit, and join a friend. Mossbell adds a little animal town with direct peer visits.',
+  },
   {
     id: 'baseball',
     code: 'BALL',
