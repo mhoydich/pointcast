@@ -16,13 +16,15 @@ export const EDITION_SLOTS = 7;
 export const CONFIRM_TTL_MS = 48 * 3_600_000;
 export const CONFIRM_RESEND_MS = 60_000;
 export const PRUNE_SENT_PENDING_MS = 30 * 86_400_000;
+/** Refused confirm sends before the Worker's sweep stops retrying a pending row (a new signup for it starts over). */
+export const CONFIRM_MAX_ATTEMPTS = 5;
 export const SUB_SOURCES = Object.freeze(['morning', 'receipt', 'card', 'rss', 'other']);
 export const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 export const MAIL_OFF_NOTE = 'No mail sender yet: RESEND_API_KEY is not set, and Cloudflare Email Sending is not onboarded for pointcast.xyz (its DNS is at Namecheap).';
 /** Signup answers, shared by the endpoint and the page. */
 export const SIGNUP_COPY = Object.freeze({
-  'check-email': 'Check your email for a confirmation link.',
-  'on-list': 'You are on the list. We will email a confirmation link when the paper’s mail is switched on. Until then the paper is at /morning every day at 6:45 AM, and at /morning.xml.',
+  'check-email': 'Check your email for a confirmation link. An address already on the list gets no new one.',
+  'on-list': 'You are on the list. The confirmation link goes out by the next morning’s mail run once the paper’s mail is on; an address already on the list gets no new one. Until then the paper is at /morning every day at 6:45 AM, and at /morning.xml.',
 });
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);

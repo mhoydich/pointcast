@@ -56,7 +56,7 @@ test('the real schedule: every court and private entry gets one of the four word
   const by = Object.fromEntries([...schedule.courts, ...schedule.private].map((c) => [c.id, hoursSourceOf(c, schedule.sources)]));
   for (const [id, h] of Object.entries(by)) assert.ok(HOURS_CONFIDENCE.includes(h.confidence), id);
   assert.deepEqual(by.kelly, { url: schedule.sources.HB1.url, checked: '2026-10-18', confidence: 'verified' });
-  assert.deepEqual(by['el-segundo'], { url: schedule.sources.ES2.url, checked: '2026-09-28', confidence: 'verified' });
+  assert.deepEqual(by['el-segundo'], { url: schedule.sources.ES2.url, checked: '2026-10-18', confidence: 'verified' });
   assert.equal(by['manhattan-heights'].confidence, 'reported', 'the city page contradicts itself');
   assert.equal(by['alta-vista'].confidence, 'reported', "the center's hours, with the fee sheet's later slot");
   assert.deepEqual(by.perry, { url: null, checked: null, confidence: 'unknown' }, 'blocks are verified; no hours object');
@@ -69,9 +69,9 @@ test('functions/courts.json.ts adds hours_source to every court and every privat
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../functions/courts.json.ts', import.meta.url), 'utf8');
   assert.match(src, /import \{ hoursSourceOf \} from '\.\/_lib\/courts-feed\.mjs'/);
-  assert.equal((src.match(/hours_source: hoursSourceOf\((c|p), COURT_SOURCES\)/g) ?? []).length, 2);
-  assert.match(src, /hours_source: hoursSourceOf\(c, COURT_SOURCES\),\s+walkOn:/, 'on courts[]');
-  assert.match(src, /hours_source: hoursSourceOf\(p, COURT_SOURCES\),\s+reserve:/, 'on private[]');
+  assert.equal((src.match(/hours_source: hoursSourceOf\((c|p), COURT_SOURCES, now\)/g) ?? []).length, 2);
+  assert.match(src, /hours_source: hoursSourceOf\(c, COURT_SOURCES, now\),\s+walkOn:/, 'on courts[]');
+  assert.match(src, /hours_source: hoursSourceOf\(p, COURT_SOURCES, now\),\s+reserve:/, 'on private[]');
   for (const kept of ['hours: shapeHours(c.hours, now)', 'walkOn: shapeFact(c.walkOn, now)', 'live: live.get(c.id) ?? null', 'sources: COURT_SOURCES', 'hours: shapeHours(p.hours, now)']) assert.ok(src.includes(kept), kept);
   assert.doesNotMatch(src, /pid_hash|ip_hash/);
 });
@@ -115,4 +115,12 @@ test('dropinOccurrences: 14 days counts the build day; bad input gives nothing',
   assert.deepEqual(dropinOccurrences(null, '2026-10-18'), []);
   assert.deepEqual(dropinOccurrences(daily, 'soon'), []);
   assert.deepEqual(dropinOccurrences({ ...daily, start: '8am' }, '2026-10-18'), []);
+});
+
+test('hoursSourceOf: with a clock, hours checked 45+ LA days ago carry stale: true, the board\'s "may have changed" line', () => {
+  const h = { hours: hours({ checked: '2026-09-28' }) };
+  assert.equal(hoursSourceOf(h, SOURCES, Date.parse('2026-11-11T12:00:00-08:00')).stale, undefined, 'day 44');
+  assert.deepEqual(hoursSourceOf(h, SOURCES, Date.parse('2026-11-12T12:00:00-08:00')), { url: 'https://example.gov/hours', checked: '2026-09-28', confidence: 'verified', stale: true }, 'day 45');
+  assert.equal(hoursSourceOf({ hours: hours({ checked: '2026-09-28', confidence: 'unverified' }) }, SOURCES, Date.parse('2027-01-01T12:00:00Z')).stale, undefined, 'unknown is never stale');
+  assert.equal(hoursSourceOf(h, SOURCES).stale, undefined, 'without a clock, as before');
 });

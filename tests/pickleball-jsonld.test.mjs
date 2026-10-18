@@ -23,7 +23,8 @@ test('source: every Event says EventScheduled, and there is no TennisComplex and
   assert.match(page, /const EVENT_SCHEDULED = 'https:\/\/schema\.org\/EventScheduled'/);
   const events = page.match(/'@type': 'Event'/g) ?? [];
   const statuses = page.match(/eventStatus: EVENT_SCHEDULED/g) ?? [];
-  assert.equal(events.length, 2, 'the weekly schedule Event and the dated Event');
+  assert.equal(events.length, 1, 'the dated Event only: a weekly eventSchedule Event has no top-level startDate');
+  assert.doesNotMatch(page, /'@type': 'Schedule'|eventSchedule:/, 'no schedule-form Event for the Rich Results Test to flag');
   assert.equal(statuses.length, events.length, 'eventStatus on every Event');
   assert.doesNotMatch(page, /TennisComplex/);
   assert.match(page, /'@type': 'SportsActivityLocation'/);
@@ -34,7 +35,7 @@ test('source: every Event says EventScheduled, and there is no TennisComplex and
 test('source: dated occurrences come from the shared helper, for verified drop-ins only, over 14 days from the build day', () => {
   assert.match(page, /import \{ dropinOccurrences \} from '\.\.\/\.\.\/functions\/_lib\/courts-feed\.mjs'/);
   assert.match(page, /const OCCURRENCE_DAYS = 14/);
-  assert.match(page, /const dropins = court\.blocks\.filter\(\(b\) => b\.kind === 'dropin' && b\.confidence === 'verified'\)/);
+  assert.match(page, /const dropins = court\.blocks\.filter\(\(b\) => b\.kind === 'dropin' && b\.confidence === 'verified' && sourcedTag\(b, buildDay\)\.tag === null\)/, 'verified and checked under 45 days ago');
   assert.match(page, /dropins\.flatMap\(\(b\) => dropinOccurrences\(b, buildDay, OCCURRENCE_DAYS\)/);
   assert.match(page, /startDate: o\.start,\s+endDate: o\.end,/);
   assert.match(page, /location: postal \? \{ '@type': 'Place', name: court\.name, address: postal \} : \{ '@id': id \}/, 'a Place with the verified address, else the court id');
@@ -108,6 +109,7 @@ test('dist: the rendered JSON-LD has eventStatus on every Event, no TennisComple
   walk(blocks);
   assert.ok(events.length > 0);
   for (const e of events) assert.equal(e.eventStatus, 'https://schema.org/EventScheduled', e.name);
+  for (const e of events) assert.ok(e.startDate && e.endDate, `${e.name}: every Event has a top-level startDate and endDate`);
   const courts = new Map(schedule.courts.map((c) => [c.name, c]));
   for (const e of events.filter((x) => x.startDate)) {
     const cut = e.name.lastIndexOf(' · '); // a label may hold " · " itself ("Drop-in · 7 courts")

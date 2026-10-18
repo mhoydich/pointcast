@@ -50,8 +50,8 @@ const DEV = {
   d: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', e: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', f: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
   g: '99999999-9999-4999-8999-999999999999', boss: '11111111-1111-4111-8111-111111111111',
 };
-const DAY = '2026-10-02';
-const T0 = Date.parse('2026-10-02T14:36:00Z');
+const DAY = '2026-10-01'; // a Thursday: Friday rows are left out of the count
+const T0 = Date.parse('2026-10-01T14:36:00Z');
 const SLOT = 1_800_000;
 const NOW = Date.parse('2026-10-20T20:00:00Z'); // inside the window's last week, before the Oct 24 read
 
@@ -109,7 +109,7 @@ function sqlCount(env) {
   const keep = live.map(([spot, kind]) => `(r.spot = '${spot}' AND r.kind = '${kind}')`).join(' OR ');
   const rows = env.AUTH_DB.rows(`SELECT COUNT(*) AS reports, COUNT(DISTINCT COALESCE(r.user_id, r.pid_hash)) AS people FROM (
       SELECT DISTINCT COALESCE(r.user_id, r.pid_hash) AS who, r.spot, r.kind, r.slot, r.user_id, r.pid_hash FROM air_reports r
-      WHERE r.day >= ? AND r.day <= ? AND r.source = 'page' AND r.status = 'ok' AND r.onsite = 1 AND (${keep})
+      WHERE r.day >= ? AND r.day <= ? AND r.source = 'page' AND r.status = 'ok' AND r.onsite = 1 AND (${keep}) AND strftime('%w', r.day) <> '5'
         AND NOT EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'pid' AND h.value = r.pid_hash)
         AND NOT EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'user' AND h.value = r.user_id)
         AND NOT EXISTS (SELECT 1 FROM users u, json_each(u.payload, '$.roles') j WHERE u.id = r.user_id AND j.value IN ('broadcaster', 'director'))
@@ -173,7 +173,7 @@ test('killtest: the route\'s numbers equal a direct SQL count on a fixture with 
   await put(env, { device: DEV.c, status: 'removed', at: T0 + 8 * SLOT }); // spam
   await put(env, { device: DEV.c, kind: 'parking', value: 'tight', at: T0 + 9 * SLOT });
   await put(env, { device: DEV.c, day: '2026-09-27', at: T0 - 6 * 86_400_000 }); // before the window
-  await put(env, { device: DEV.c, day: '2026-10-24', at: T0 + 22 * 86_400_000 }); // after it
+  await put(env, { device: DEV.c, day: '2026-10-24', at: T0 + 23 * 86_400_000 }); // after it
   await put(env, { device: DEV.c, source: 'agent:sol', onsite: 0, sourceUrl: 'https://example.com/x', at: T0 + 10 * SLOT });
   await put(env, { device: DEV.d, spot: 'beach', kind: 'fog', value: 'clear', at: T0 + 11 * SLOT }); // beach fog is the beach's live kind: counts
   env.AUTH_DB.db.prepare("INSERT INTO air_house (kind, value, note, added_at) VALUES ('pid', ?, 'fixture', 1)").run(await pidHash(DEV.d)); // ...but d is a house phone
@@ -203,6 +203,34 @@ test('killtest: passing needs 10 reports from 3 people, and the route flips pass
   for (let i = 0; i < 10; i += 1) await put(env, { device: [DEV.a, DEV.b, DEV.e][i % 3], at: T0 + i * SLOT });
   const { body } = await getKill(env);
   assert.deepEqual([body.reports, body.people, body.pass], [10, 3, true]);
+});
+
+test('killtest: from 12:16 AM Oct 24 the read is kept as first taken; a later live change shows as a recount', async () => {
+  const env = town();
+  for (let i = 0; i < 9; i += 1) await put(env, { device: [DEV.a, DEV.b, DEV.c][i % 3], at: T0 + i * SLOT });
+  const realNow = Date.now;
+  try {
+    Date.now = () => Date.parse('2026-10-24T07:05:00Z'); // 12:05 AM: not final yet
+    const early = (await getKill(env)).body;
+    assert.equal(early.final, false);
+    assert.equal(env.AUTH_DB.rows('SELECT COUNT(*) AS n FROM air_killtest_reads')[0].n, 0, 'nothing kept before the read');
+
+    Date.now = () => Date.parse('2026-10-24T07:20:00Z');
+    const first = (await getKill(env)).body;
+    assert.deepEqual([first.final, first.reports, first.people, first.pass, first.readAt], [true, 9, 3, false, '2026-10-24T07:20:00Z']);
+    assert.equal(first.recount, undefined);
+
+    // A late Oct 22 row lands after the read: the read stands, the live figure shows beside it.
+    await put(env, { device: DEV.e, day: '2026-10-22', at: T0 + 21 * 86_400_000 });
+    Date.now = () => Date.parse('2026-10-24T09:00:00Z');
+    const later = (await getKill(env)).body;
+    assert.deepEqual([later.reports, later.people, later.pass, later.readAt], [9, 3, false, '2026-10-24T07:20:00Z']);
+    assert.deepEqual(later.recount, { reports: 10, people: 4 });
+    assert.equal(env.AUTH_DB.rows('SELECT COUNT(*) AS n FROM air_killtest_reads')[0].n, 1);
+    await noLeak(env, first, later);
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test('killtest: without migration 0031 (no air_house) or without D1 the answer is 503 store-unavailable', async () => {
@@ -322,9 +350,9 @@ function statements(src) {
 
 test('source: air-count-store.ts is literal prepared statements with bound values, and the kill-test SQL embeds HOUSE_SELECT', async () => {
   const src = await read('functions/_lib/air-count-store.ts');
-  assert.equal((src.match(/\.prepare\(/g) ?? []).length, 5, 'killTestRows, houseState, two inserts, one delete');
+  assert.equal((src.match(/\.prepare\(/g) ?? []).length, 7, 'killTestRows, the kept read (insert, select), houseState, two inserts, one delete');
   const list = statements(src);
-  assert.equal(list.length, 5, 'every .prepare( takes one string literal');
+  assert.equal(list.length, 7, 'every .prepare( takes one string literal');
   for (const s of list) {
     assert.ok(s.bound, `${squash(s.sql).slice(0, 40)}: followed by .bind(`);
     assert.doesNotMatch(s.sql, /\$\{/, 'no interpolation inside SQL');
@@ -333,13 +361,15 @@ test('source: air-count-store.ts is literal prepared statements with bound value
   assert.doesNotMatch(src, /\.exec\(/);
   const kill = squash(list[0].sql);
   assert.ok(kill.includes(HOUSE_SELECT), 'the kill-test SQL contains the three house columns verbatim');
-  assert.ok(kill.includes("COALESCE(r.user_id, r.pid_hash) AS who"));
+  assert.ok(kill.includes("COALESCE(r.user_id, r.pid_hash) AS who, r.pid_hash AS pid, r.user_id AS uid"));
   assert.ok(kill.includes("WHERE r.day >= ? AND r.day <= ? AND r.source = 'page' AND r.status = 'ok' AND r.onsite = 1 ORDER BY r.observed_at LIMIT 5000"));
   assert.match(src, /\.bind\(KILL_TEST\.from, KILL_TEST\.to\)/);
-  assert.equal(squash(list[1].sql), "SELECT 1 AS ok FROM air_house WHERE kind = 'pid' AND value = ?");
-  assert.equal(squash(list[2].sql), "INSERT OR IGNORE INTO air_house (kind, value, note, added_at) VALUES ('pid', ?, 'marked from /r/me', ?)");
-  assert.equal(squash(list[3].sql), "INSERT OR IGNORE INTO air_house (kind, value, note, added_at) VALUES ('user', ?, 'marked from /r/me', ?)");
-  assert.equal(squash(list[4].sql), "DELETE FROM air_house WHERE kind = 'pid' AND value = ?");
+  assert.equal(squash(list[1].sql), 'INSERT OR IGNORE INTO air_killtest_reads (read_on, reports, people, pass, read_at) VALUES (?, ?, ?, ?, ?)', 'the first read wins');
+  assert.equal(squash(list[2].sql), 'SELECT reports, people, pass, read_at FROM air_killtest_reads WHERE read_on = ?');
+  assert.equal(squash(list[3].sql), "SELECT 1 AS ok FROM air_house WHERE kind = 'pid' AND value = ?");
+  assert.equal(squash(list[4].sql), "INSERT OR IGNORE INTO air_house (kind, value, note, added_at) VALUES ('pid', ?, 'marked from /r/me', ?)");
+  assert.equal(squash(list[5].sql), "INSERT OR IGNORE INTO air_house (kind, value, note, added_at) VALUES ('user', ?, 'marked from /r/me', ?)");
+  assert.equal(squash(list[6].sql), "DELETE FROM air_house WHERE kind = 'pid' AND value = ?");
   assert.match(src, /db\.batch\(\[/, 'mark is one batch');
 });
 
@@ -353,7 +383,8 @@ test('source: the routes check D1 first, read the post before anything else, gat
   assert.doesNotMatch(k + h, /pid_hash|ip_hash|user_id|user_payload|\.who\b/);
   assert.match(k, /'Cache-Control': 'public, max-age=60'/);
   assert.match(k, /'Access-Control-Allow-Origin': '\*'/);
-  assert.match(k, /killTestCount\(AIR_CONFIG, await killTestRows\(env\.AUTH_DB\), Date\.now\(\)\)/);
+  assert.match(k, /const now = Date\.now\(\);\s+const count = killTestCount\(AIR_CONFIG, await killTestRows\(env\.AUTH_DB\), now\);/);
+  assert.match(k, /keepKillTestRead\(env\.AUTH_DB, KILL_TEST\.readOn, count, now\)/, 'the final read is kept as first taken');
   const post = h.slice(h.indexOf('export const onRequestPost'));
   assert.match(post, /^export const onRequestPost[^\n]*\n\s+const read = await readPost\(request\);\n\s+if \('refused' in read\) return read\.refused;/, 'readPost first');
   assert.match(post, /hasDirectorDeskAccess\(session\)/);

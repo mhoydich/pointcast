@@ -12,14 +12,22 @@ export const HOURS_CONFIDENCE = Object.freeze(['verified', 'posted-sign', 'repor
 const EVIDENCE = Object.freeze(['posted-sign', 'reported']);
 const has = (obj, key) => obj != null && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key);
 
+/** Days after which a checked fact "may have changed" (the board's showable() and src/lib/court-format.ts STALE_DAYS). */
+export const STALE_DAYS = 45;
+const LA_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' });
+const dayNum = (day) => { const [y, m, d] = String(day).split('-').map(Number); return Date.UTC(y, m - 1, d) / 86_400_000; };
+
 /**
- * court.hours, sources → {url, checked, confidence}:
+ * court.hours, sources[, nowMs] → {url, checked, confidence[, stale]}:
  *  no hours → {url: null, checked: null, confidence: 'unknown'};
  *  confidence 'unverified' → url/checked as sourced, 'unknown';
  *  hours.evidence set → that value; 'verified' → 'verified'; 'partial' → 'reported'.
  *  url = sources[hours.src].url, or null when the source is missing or a label.
+ *  With nowMs, hours we stand behind that were checked STALE_DAYS+ LA days
+ *  before it also carry stale: true, the same line the board's "may have
+ *  changed" tag draws, so an agent never reads them as freshly verified.
  */
-export function hoursSourceOf(court, sources) {
+export function hoursSourceOf(court, sources, nowMs) {
   const hours = court?.hours;
   if (hours == null || typeof hours !== 'object') return { url: null, checked: null, confidence: 'unknown' };
   const url = has(sources, hours.src) && typeof sources[hours.src]?.url === 'string' ? sources[hours.src].url : null;
@@ -29,6 +37,10 @@ export function hoursSourceOf(court, sources) {
   else if (EVIDENCE.includes(hours.evidence)) confidence = hours.evidence;
   else if (hours.confidence === 'verified') confidence = 'verified';
   else if (hours.confidence === 'partial') confidence = 'reported';
+  if (Number.isFinite(nowMs) && confidence !== 'unknown' && checked && /^\d{4}-\d{2}-\d{2}$/.test(checked)
+    && dayNum(LA_DAY.format(new Date(nowMs))) - dayNum(checked) >= STALE_DAYS) {
+    return { url, checked, confidence, stale: true };
+  }
   return { url, checked, confidence };
 }
 

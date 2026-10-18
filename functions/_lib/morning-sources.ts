@@ -473,10 +473,11 @@ export async function readFrozen(db: D1Database | undefined, dates: string[]): P
 
 /**
  * The newest frozen editions, newest first (the store holds frozen copies
- * only). For /morning.xml, which never composes or freezes anything. A
- * missing or failing store is an empty archive.
+ * only). For /morning.xml, which never composes or freezes anything. No
+ * binding is an empty archive ([]); a failing read is null, so the route can
+ * tell "nothing frozen yet" from "the store did not answer".
  */
-export async function readRecentFrozen(db: D1Database | undefined, limit = 30): Promise<Edition[]> {
+export async function readRecentFrozen(db: D1Database | undefined, limit = 30): Promise<Edition[] | null> {
   if (!db) return [];
   const n = Number.isInteger(limit) ? Math.max(1, Math.min(limit, 120)) : 30;
   try {
@@ -484,7 +485,7 @@ export async function readRecentFrozen(db: D1Database | undefined, limit = 30): 
       .bind(n).all<{ date: string; json: string }>();
     return (res.results ?? []).map((row) => asEdition(row.json, row.date)).filter((e): e is Edition => Boolean(e));
   } catch {
-    return [];
+    return null;
   }
 }
 

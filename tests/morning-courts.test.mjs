@@ -262,7 +262,7 @@ test('composeEdition: the source says what the line is made of', () => {
   const both = byId(make({ yesterday: null, lastWeek: week, today: todayFor(SAT, { nws }) }), 'courts');
   assert.equal(both.source, 'schedule+air+nws');
   assert.equal(byId(make({ yesterday: null, lastWeek: week, today: todayFor(SAT) }), 'courts').source, 'schedule+air');
-  assert.equal(both.line, `${todaysCourtsLine(todayFor(SAT, { nws }), SAT)} The week before, Fri 25 Sep 7:38 AM: 5–8 in the rack, 3 agree. ${COURT_CALL}`, 'schedules, week before, Court Call');
+  assert.equal(both.line, `${todaysCourtsLine(todayFor(SAT, { nws }), SAT)} The week before at Manhattan Middle School courts, Fri 25 Sep 7:38 AM: 5–8 in the rack, 3 agree. ${COURT_CALL}`, 'schedules, week before (named, since several courts were just listed), Court Call');
   assert.equal(both.fallback, true);
   assert.deepEqual(both.reportIds, [], 'a week-old summary cites nobody');
   assert.deepEqual(both.bylines, []);
@@ -312,8 +312,10 @@ test('the real schedule: every printed session is a line in courts-schedule.json
       const owner = REAL.find((c) => trim(c.name) === item.court);
       assert.ok(owner, `${date}: ${item.court} is a court in the file`);
       assert.notEqual(owner.status, 'closed', `${date}: ${item.court} is open`);
-      const fromHours = owner.id === 'courts' && item.label === 'open play'
-        && owner.hours.rules.some((rule) => rule.days.includes(weekday) && rule.open === item.start && rule.close === item.end);
+      const dated = (owner.hours?.dated ?? []).find((w) => date >= w.from && date <= w.to);
+      const fromHours = owner.id === 'courts' && (dated
+        ? item.label === 'school-break open play' && dated.open === item.start && dated.close === item.end
+        : item.label === 'open play' && owner.hours.rules.some((rule) => rule.days.includes(weekday) && rule.open === item.start && rule.close === item.end));
       const fromBlock = owner.blocks.some((b) => b.kind === 'dropin' && b.label === item.label && b.start === item.start && b.end === item.end
         && b.fee === item.fee && b.days.includes(weekday) && (!b.from || date >= b.from) && (!b.until || date <= b.until) && b.confidence !== 'unverified');
       assert.ok(fromHours || fromBlock, `${date}: ${JSON.stringify(item)} comes from the schedule`);
@@ -332,6 +334,28 @@ test('the real schedule: every printed session is a line in courts-schedule.json
     if (r.items.length) printedDays++;
   }
   assert.ok(printedDays > 60, 'most days of the quarter have something sourced');
+});
+
+test('the real schedule: MBUSD break weekdays open Manhattan Middle (Nov 11, Thanksgiving week), and a plain weekday does not', () => {
+  for (const date of ['2026-11-11', '2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-12-21', '2026-12-31']) {
+    const mm = todaysSessions(REAL, date).items.find((i) => i.court === 'Manhattan Middle School');
+    assert.ok(mm, `${date}: Manhattan Middle prints`);
+    assert.deepEqual([mm.label, mm.start, mm.end, mm.fee, mm.checked], ['school-break open play', '08:00', 'dusk', 'Free', '2026-10-18'], date);
+  }
+  for (const date of ['2026-11-10', '2026-11-12', '2026-11-30']) {
+    assert.equal(todaysSessions(REAL, date).items.some((i) => i.court === 'Manhattan Middle School'), false, `${date}: a school day`);
+  }
+  assert.match(todaysCourtsLine({ sessions: todaysSessions(REAL, '2026-11-11'), nws: null, sunset: null }, '2026-11-11'), /Manhattan Middle School school-break open play 8 AM to dusk, free;/);
+});
+
+test('the real schedule: re-read facts carry the Oct 18 check, so the paper says checked Oct 18', () => {
+  const es = REAL.find((c) => c.id === 'el-segundo');
+  assert.deepEqual(es.blocks.filter((b) => b.kind === 'dropin').map((b) => b.checked), ['2026-10-18', '2026-10-18', '2026-10-18', '2026-10-18']);
+  assert.equal(es.hours.checked, '2026-10-18');
+  const mh = REAL.find((c) => c.id === 'manhattan-heights');
+  assert.ok(mh.blocks.every((b) => b.checked === '2026-10-18'));
+  assert.equal(REAL.find((c) => c.id === 'torrance-dee').blocks[0].checked, '2026-10-18');
+  assert.match(todaysCourtsLine({ sessions: todaysSessions(REAL, '2026-10-24'), nws: null, sunset: null }, '2026-10-24'), /From the posted schedules, checked Oct 18\./);
 });
 
 test('the real schedule: Sat Oct 24 and Sun Nov 1 2026 read as the paper will print them', () => {

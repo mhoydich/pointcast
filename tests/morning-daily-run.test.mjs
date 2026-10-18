@@ -292,15 +292,16 @@ test('2026-10-02 skips with before-first-edition', () => withWorker(async ({ run
   assert.equal(feed.calls.length, 0);
 }));
 
-test('provisional on every attempt: not-frozen, nothing sent, waits 65/130/260/400 s', () => withWorker(async ({ runMorningDaily }) => {
+test('provisional on every attempt: not-frozen, nothing sent, waits 65/130/240 s (435 s, well under the 15-minute limit)', () => withWorker(async ({ runMorningDaily }) => {
   const db = new SqliteD1(MIGRATIONS);
   standardList(db);
   const sender = fakeSendEmail();
   const feed = feedFetch([feedBody({ frozen: false, provisional: true })]);
   const { sleep, waits } = recorder();
   const result = await runMorningDaily(mailEnv(db, sender), { now: THIRTEEN_45Z, fetch: feed, sleep });
-  assert.equal(feed.calls.length, 5);
-  assert.deepEqual(waits, [65_000, 130_000, 260_000, 400_000]);
+  assert.equal(feed.calls.length, 4);
+  assert.deepEqual(waits, [65_000, 130_000, 240_000]);
+  assert.ok(waits.reduce((a, b) => a + b, 0) <= 450_000, 'the reads leave the send loop most of the invocation');
   assert.equal(result.frozen, false);
   assert.equal(result.reason, 'not-frozen');
   assert.equal(result.sent, 0);
@@ -342,7 +343,7 @@ test('a 6-slot edition never sends', () => withWorker(async ({ runMorningDaily }
   const sender = fakeSendEmail();
   const feed = feedFetch([feedBody({ slotCount: 6 })]);
   const result = await runMorningDaily(mailEnv(db, sender), { now: THIRTEEN_45Z, fetch: feed, sleep: recorder().sleep });
-  assert.equal(feed.calls.length, 5);
+  assert.equal(feed.calls.length, 4);
   assert.equal(result.reason, 'not-frozen');
   assert.equal(sender.sent.length, 0);
   assert.equal(subRow(db, ADA).last_sent_day, null);
@@ -719,7 +720,7 @@ test('/run needs the key, defaults to a dry run, and is forced past the 6 AM gat
   assertNoAddress(logs);
 }));
 
-test('scheduled: sweeps the confirms, then sends the edition; a failing step does not stop the other', () => withWorker(async ({ worker, logs }) => {
+test('scheduled: sends the edition, then sweeps the confirms; a failing step does not stop the other', () => withWorker(async ({ worker, logs }) => {
   const db = new SqliteD1(MIGRATIONS);
   standardList(db);
   seed(db, [{ email: 'eve@example.com', status: 'pending', token: tok('e'), created_at: 9 }]);
@@ -728,7 +729,7 @@ test('scheduled: sweeps the confirms, then sends the edition; a failing step doe
   const kinds = sender.sent.map((m) => m.subject);
   assert.equal(kinds.filter((s) => s === 'Confirm the PointCast Morning Edition').length, 1);
   assert.equal(sender.sent.filter((m) => m.to === ADA || m.to === BOB).length, 2);
-  assert.equal(sender.sent.findIndex((m) => m.subject === 'Confirm the PointCast Morning Edition'), 0, 'the sweep goes first');
+  assert.equal(sender.sent.findIndex((m) => m.subject === 'Confirm the PointCast Morning Edition'), 2, 'the edition goes first, the sweep after');
   assert.equal(runRows(db).length, 1);
 
   // 14:45Z: the sweep runs, the edition step skips.
@@ -745,6 +746,152 @@ test('scheduled: sweeps the confirms, then sends the edition; a failing step doe
   assert.ok(logs.some((l) => l.includes('morning confirm sweep failed')));
   assert.ok(logs.some((l) => l.includes('morning daily failed')));
   assertNoAddress(logs);
+}));
+
+/** A SqliteD1 whose statements throw when `when(sql, args)` says so. */
+function flakyD1(migrations, when) {
+  const db = new SqliteD1(migrations);
+  const prepare = db.prepare.bind(db);
+  db.prepare = (sql) => {
+    const stmt = prepare(sql);
+    let bound = [];
+    const bind = stmt.bind;
+    stmt.bind = (...v) => { bound = v; bind(...v); return stmt; };
+    for (const k of ['run', 'all', 'first']) {
+      const fn = stmt[k];
+      stmt[k] = async () => { if (when(sql, bound)) throw new Error('D1_ERROR: network connection lost for ' + (bound.find((b) => typeof b === 'string' && b.includes('@')) ?? '')); return fn(); };
+    }
+    return stmt;
+  };
+  return db;
+}
+
+test('a D1 error on one subscriber counts as failed and the loop goes on, and the run row is still written', () => withWorker(async ({ runMorningDaily, logs }) => {
+  const db = flakyD1(MIGRATIONS, (sql, args) => /SET last_sent_day = \?/.test(sql) && args.includes(ADA));
+  seed(db, [
+    { email: ADA, status: 'confirmed', token: tok('a'), confirmed_at: 10 },
+    { email: BOB, status: 'confirmed', token: tok('b'), confirmed_at: 20 },
+    { email: CAL, status: 'confirmed', token: tok('c'), confirmed_at: 30 },
+  ]);
+  const sender = fakeSendEmail();
+  const result = await runMorningDaily(mailEnv(db, sender), { now: THIRTEEN_45Z, fetch: feedFetch([feedBody()]), sleep: recorder().sleep });
+  assert.deepEqual([result.attempted, result.sent, result.failed], [3, 2, 1]);
+  assert.deepEqual(sender.sent.map((m) => m.to), [BOB, CAL], 'the subscribers after the failure still get the paper');
+  const [run] = runRows(db);
+  assert.deepEqual([run.reason, run.sent, run.failed, run.frozen], [null, 2, 1, 1]);
+  assert.ok(logs.some((l) => l.includes('morning daily claim failed')));
+  assertNoAddress(logs);
+}));
+
+test('a restore that throws is logged and the loop goes on', () => withWorker(async ({ runMorningDaily, logs }) => {
+  const db = flakyD1(MIGRATIONS, (sql) => /WHERE email = \? AND last_sent_day = \?/.test(sql));
+  seed(db, [
+    { email: ADA, status: 'confirmed', token: tok('a'), confirmed_at: 10 },
+    { email: BOB, status: 'confirmed', token: tok('b'), confirmed_at: 20 },
+  ]);
+  const sender = fakeSendEmail({ failFor: [ADA] });
+  const result = await runMorningDaily(mailEnv(db, sender), { now: THIRTEEN_45Z, fetch: feedFetch([feedBody()]), sleep: recorder().sleep });
+  assert.deepEqual([result.sent, result.failed], [1, 1]);
+  assert.deepEqual(sender.sent.map((m) => m.to), [BOB]);
+  assert.ok(logs.some((l) => l.includes('morning daily restore failed')));
+  assertNoAddress(logs);
+}));
+
+test('a run leaves a started row before it reads, so a run that dies is on record', () => withWorker(async ({ runMorningDaily }) => {
+  const db = new SqliteD1(MIGRATIONS);
+  standardList(db);
+  const dying = async () => { throw new Error('killed'); };
+  await assert.rejects(runMorningDaily(mailEnv(db), { now: THIRTEEN_45Z, fetch: feedFetch([503]), sleep: dying }));
+  const [run] = runRows(db);
+  assert.deepEqual([run.reason, run.finished_at, run.frozen, run.sent], ['started', null, 0, 0]);
+}));
+
+test('the send loop stops at the deadline (out-of-time), and the 14:45Z tick the same day finishes it once', () => withWorker(async ({ runMorningDaily }) => {
+  const db = new SqliteD1(MIGRATIONS);
+  standardList(db);
+  const sender = fakeSendEmail();
+  const first = await runMorningDaily(mailEnv(db, sender), { now: THIRTEEN_45Z, fetch: feedFetch([feedBody()]), sleep: recorder().sleep, deadline: Date.now() - 1 });
+  assert.equal(first.reason, 'out-of-time');
+  assert.equal(sender.sent.length, 0);
+  assert.equal(subRow(db, ADA).last_sent_day, null, 'nobody is claimed past the deadline');
+  assert.equal(runRows(db)[0].reason, 'out-of-time');
+
+  const later = await runMorningDaily(mailEnv(db, sender), { now: FOURTEEN_45Z, fetch: feedFetch([feedBody()]), sleep: recorder().sleep });
+  assert.equal(later.skipped, undefined, 'a cut-short day is finished at 7:45 AM');
+  assert.deepEqual(sender.sent.map((m) => m.to).sort(), [ADA, BOB]);
+  const [run] = runRows(db);
+  assert.deepEqual([run.reason, run.sent, run.frozen], [null, 2, 1]);
+
+  const again = await runMorningDaily(mailEnv(db, sender), { now: FOURTEEN_45Z + 1000, fetch: feedFetch([feedBody()]), sleep: recorder().sleep });
+  assert.equal(again.skipped, 'not-6am', 'a finished day is left alone');
+  assert.equal(sender.sent.length, 2);
+}));
+
+test('the 14:45Z tick retries sends that failed at 6:45 and leaves a good morning alone', () => withWorker(async ({ runMorningDaily }) => {
+  const db = new SqliteD1(MIGRATIONS);
+  standardList(db);
+  await runMorningDaily(mailEnv(db, fakeSendEmail({ failFor: [ADA] })), { now: THIRTEEN_45Z, fetch: feedFetch([feedBody()]), sleep: recorder().sleep });
+  const healthy = fakeSendEmail();
+  const retry = await runMorningDaily(mailEnv(db, healthy), { now: FOURTEEN_45Z, fetch: feedFetch([feedBody()]), sleep: recorder().sleep });
+  assert.deepEqual(healthy.sent.map((m) => m.to), [ADA]);
+  assert.equal(retry.sent, 1);
+  const [run] = runRows(db);
+  assert.deepEqual([run.attempted, run.sent, run.failed, run.reason], [3, 2, 0, null]);
+}));
+
+test('a forced real /run after a good morning keeps the day\'s counts and reason', () => withWorker(async ({ runMorningDaily, mergeRun }) => {
+  const db = new SqliteD1(MIGRATIONS);
+  standardList(db);
+  const deps = { fetch: feedFetch([feedBody()]), sleep: recorder().sleep };
+  await runMorningDaily(mailEnv(db), { now: THIRTEEN_45Z, ...deps });
+  const forced = await runMorningDaily(mailEnv(db), { now: THIRTEEN_45Z + 3_600_000, dryRun: false, force: true, ...deps });
+  assert.equal(forced.reason, 'no-subscribers', 'the run itself reached nobody');
+  let [run] = runRows(db);
+  assert.deepEqual([run.sent, run.attempted, run.reason, run.frozen], [2, 2, null, 1], 'the day still says 2 sent');
+  // A forced run whose read fails does not unfreeze the day.
+  await runMorningDaily(mailEnv(db), { now: THIRTEEN_45Z + 3_600_000, dryRun: false, force: true, fetch: feedFetch([503]), sleep: recorder().sleep });
+  [run] = runRows(db);
+  assert.deepEqual([run.sent, run.reason, run.frozen], [2, null, 1]);
+  // The merge rule on its own.
+  const base = { day: DAY, edition_number: 16, frozen: 1, reason: null, started_at: 5, finished_at: 6, attempted: 10, sent: 8, failed: 2, dry_run: 0, configured: 1 };
+  const retry = { ...base, started_at: 9, finished_at: 10, attempted: 2, sent: 2, failed: 0 };
+  assert.deepEqual(mergeRun(base, retry), { ...base, finished_at: 10, attempted: 12, sent: 10, failed: 0 });
+  assert.equal(mergeRun(base, { ...retry, dry_run: 1 }), null, 'a dry run never touches a real row');
+  assert.deepEqual(mergeRun({ ...base, dry_run: 1 }, retry), retry, 'a real run replaces a dry one');
+}));
+
+test('sweepConfirms: a refused row goes behind newer signups, stops after 5 tries, and is pruned 30 days after its last try', () => withWorker(async ({ sweepConfirms }) => {
+  const db = new SqliteD1(MIGRATIONS);
+  const bad = 'bad@example.com';
+  seed(db, [{ email: bad, status: 'pending', token: tok('x'), created_at: 1 }]);
+  const refusing = fakeSendEmail({ failFor: [bad] });
+  const day = 86_400_000;
+  await sweepConfirms(mailEnv(db, refusing), { now: THIRTEEN_45Z });
+  assert.deepEqual([subRow(db, bad).confirm_attempts, subRow(db, bad).confirm_last_attempt_at], [1, THIRTEEN_45Z]);
+  // A newer signup is mailed before the refused row is tried again.
+  seed(db, [{ email: ADA, status: 'pending', token: tok('a'), created_at: 50 }]);
+  const order = [];
+  const watching = { async send(m) { order.push(m.to); if (m.to === bad) throw new Error('E_SEND_REFUSED'); return { messageId: 'm' }; } };
+  await sweepConfirms(mailEnv(db, watching), { now: THIRTEEN_45Z + day });
+  assert.deepEqual(order, [ADA, bad], 'never-tried rows first');
+  for (let i = 2; i <= 6; i += 1) await sweepConfirms(mailEnv(db, refusing), { now: THIRTEEN_45Z + i * day });
+  assert.equal(subRow(db, bad).confirm_attempts, 5, 'given up after 5');
+  const lastTry = subRow(db, bad).confirm_last_attempt_at;
+  assert.equal((await sweepConfirms(mailEnv(db, refusing), { now: lastTry + day })).failed, 0, 'no sixth try');
+  assert.ok(subRow(db, bad), 'kept for 30 days after the last try');
+  const pruned = await sweepConfirms({ AUTH_DB: db }, { now: lastTry + 31 * day });
+  assert.equal(pruned.pruned, 2, 'the given-up row, and ADA, whose mail went out 30+ days before');
+  assert.equal(subRow(db, bad), null);
+}));
+
+test('sweepConfirms stops at the deadline', () => withWorker(async ({ sweepConfirms }) => {
+  const db = new SqliteD1(MIGRATIONS);
+  seed(db, [{ email: ADA, status: 'pending', token: tok('a') }]);
+  const sender = fakeSendEmail();
+  const out = await sweepConfirms(mailEnv(db, sender), { now: THIRTEEN_45Z, deadline: Date.now() - 1 });
+  assert.equal(out.sent, 0);
+  assert.equal(sender.sent.length, 0);
+  assert.equal(subRow(db, ADA).confirm_sent_at, null);
 }));
 
 test('anything else is a 404', () => withWorker(async ({ worker }) => {

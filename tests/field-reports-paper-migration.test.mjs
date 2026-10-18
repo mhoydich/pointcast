@@ -26,7 +26,7 @@ test('paper migration: exactly one 0031 file', async () => {
 test('paper migration: CREATE ... IF NOT EXISTS only, nothing that changes old data', async () => {
   const sql = await read(FILE);
   const stmts = statements(sql);
-  assert.equal(stmts.length, 6, 'three tables and three indexes');
+  assert.equal(stmts.length, 7, 'four tables and three indexes');
   for (const s of stmts) {
     assert.match(s, /^CREATE (TABLE IF NOT EXISTS|(UNIQUE )?INDEX IF NOT EXISTS) /, s);
   }
@@ -45,7 +45,7 @@ test('paper migration: applies after 0001 + 0023, twice, with the columns of §1
   assert.deepEqual(names(db.prepare('PRAGMA table_info(air_house)')), ['kind', 'value', 'note', 'added_at']);
   assert.deepEqual(names(db.prepare('PRAGMA table_info(edition_subscribers)')), [
     'email', 'status', 'token', 'source', 'user_id', 'created_at', 'confirm_hash', 'confirm_expires_at',
-    'confirm_sent_at', 'confirmed_at', 'unsubscribed_at', 'last_sent_day',
+    'confirm_sent_at', 'confirmed_at', 'unsubscribed_at', 'last_sent_day', 'confirm_attempts', 'confirm_last_attempt_at',
   ]);
   assert.deepEqual(names(db.prepare('PRAGMA table_info(morning_daily_runs)')), [
     'day', 'edition_number', 'frozen', 'reason', 'started_at', 'finished_at', 'attempted', 'sent', 'failed', 'dry_run', 'configured',
@@ -84,6 +84,8 @@ test('paper migration: the constraints hold', async () => {
   run.run('2026-10-19', 'not-frozen', 1, 0, 0, 0);
   run.run('2026-10-20', 'email-not-configured', 1, 1, 0, 0);
   run.run('2026-10-21', 'no-subscribers', 1, 1, 1, 1);
+  run.run('2026-10-24', 'started', 1, 0, 0, 1);
+  run.run('2026-10-25', 'out-of-time', 1, 1, 0, 1);
   assert.throws(() => run.run('2026-10-22', 'because', 1, 0, 0, 0), /CHECK/, 'bad reason');
   assert.throws(() => run.run('2026-10-23', null, 1, 2, 0, 0), /CHECK/, 'frozen is 0/1');
   assert.throws(() => run.run('2026-10-18', null, 1, 0, 0, 0), /UNIQUE|PRIMARY/, 'one row per day');

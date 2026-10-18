@@ -176,7 +176,10 @@ test('page: the #paper section is one email field and one button, with the fine 
   assert.match(section, /id="paper-email"/);
   assert.equal((section.match(/<button\b/g) ?? []).length, 1, 'one button');
   assert.match(section, /type="submit"[^>]*>Send me the paper<\/button>/);
-  assert.match(section, /One email at 6:45 AM with the day's edition, only after you confirm by email\. Unsubscribe in one tap\./);
+  assert.match(section, /<button [^>]*\bdisabled\b[^>]*>Send me the paper<\/button>/, 'disabled until the script mounts');
+  assert.match(section, /<form [^>]*method="post" action="\/api\/morning\/subscribe"/, 'a native submit is never a GET with the address in the URL');
+  assert.match(section, /One email at 6:45 AM with the day's edition, only after you confirm by email\. Unsubscribe any time from any edition\./);
+  assert.doesNotMatch(section, /one tap/i, 'the footer link is a page with a button, so not one tap');
   assert.match(section, /data-me-paper-status role="status"/);
   assert.match(section, /<noscript>[\s\S]*The signup needs JavaScript\. The paper is also at <a href="\/morning\.xml">\/morning\.xml<\/a>\.[\s\S]*<\/noscript>/);
   assert.doesNotMatch(section, /!/, 'no exclamation marks');
@@ -207,6 +210,9 @@ test('signup script: posts {email, source} to /api/morning/subscribe, keeps noth
   assert.match(signup, /'Content-Type': 'application\/json'/);
   assert.match(signup, /button\.disabled = true;\s*say\(UI_COPY\.sending\);/);
   assert.match(signup, /root\.scrollIntoView\(\)/);
+  assert.match(signup, /button\.disabled = false;/, 'mounting enables the button');
+  assert.match(signup, /document\.addEventListener\('me:rendered', \(\) => \{ if \(!moved\) root\.scrollIntoView\(\); \}, \{ once: true \}\)/, 're-scrolls to #paper once the edition has rendered above it');
+  assert.match(client, /root\.dispatchEvent\(new CustomEvent\('me:rendered', \{ bubbles: true \}\)\)/);
   assert.match(signup, /export function mountMorningSignup\(\)/);
   assert.doesNotMatch(signup, /localStorage|sessionStorage|indexedDB|document\.cookie/, 'the address is never stored on the phone');
   assert.doesNotMatch(signup, /innerHTML/);

@@ -10,7 +10,7 @@
  * sends the confirm mail later for rows that have none yet.
  */
 // @ts-ignore — plain module shared with the Worker and the tests
-import { SIGNUP_COPY, TOKEN_RE, escapeHtml, newToken } from './edition-mail.mjs';
+import { CONFIRM_MAX_ATTEMPTS, SIGNUP_COPY, TOKEN_RE, escapeHtml, newToken } from './edition-mail.mjs';
 
 export type MorningMailEnv = {
   AUTH_DB?: D1Database;
@@ -27,19 +27,21 @@ const HANDOFF_TIMEOUT_MS = 8_000;
 
 /* ---------- subscribe ---------- */
 
-type StateRow = { status: string; confirm_expires_at: number | null };
+type StateRow = { status: string; confirm_expires_at: number | null; confirm_sent_at: number | null; confirm_attempts: number | null };
 
 /**
  * The §5.2 step 5 state machine. Throws on any D1 error (the route answers 503).
  * confirmed: nothing. pending: a lapsed confirm link is cleared so the Worker
- * sends a fresh one; a live one stays. unsubscribed: back to pending under a
- * new unsubscribe token. none: a new pending row.
+ * sends a fresh one, and a row the Worker gave up on gets its tries back; a
+ * live one stays. unsubscribed: back to pending under
+ * the same unsubscribe token, so the one-click links in editions mailed before
+ * keep working. none: a new pending row.
  */
 export async function recordSignup(
   db: D1Database,
   o: { email: string; source: string; userId: string | null; now: number },
 ): Promise<SignupOutcome> {
-  const row = await db.prepare('SELECT status, confirm_expires_at FROM edition_subscribers WHERE email = ?')
+  const row = await db.prepare('SELECT status, confirm_expires_at, confirm_sent_at, confirm_attempts FROM edition_subscribers WHERE email = ?')
     .bind(o.email).first<StateRow>();
   if (row?.status === 'confirmed') return 'confirmed';
   if (row?.status === 'pending') {
@@ -47,10 +49,15 @@ export async function recordSignup(
       await db.prepare("UPDATE edition_subscribers SET confirm_hash = NULL, confirm_expires_at = NULL, confirm_sent_at = NULL WHERE email = ? AND status = 'pending'").bind(o.email).run();
       return 'reset';
     }
+    if (row.confirm_sent_at === null && Number(row.confirm_attempts) >= CONFIRM_MAX_ATTEMPTS) {
+      // The Worker gave up on this row after repeated refused sends; asking again earns a fresh set of tries.
+      await db.prepare("UPDATE edition_subscribers SET confirm_attempts = 0, confirm_last_attempt_at = NULL WHERE email = ? AND status = 'pending' AND confirm_sent_at IS NULL").bind(o.email).run();
+      return 'reset';
+    }
     return 'pending';
   }
   if (row?.status === 'unsubscribed') {
-    await db.prepare("UPDATE edition_subscribers SET status = 'pending', token = ?, source = ?, unsubscribed_at = NULL, confirm_hash = NULL, confirm_expires_at = NULL, confirm_sent_at = NULL, confirmed_at = NULL, last_sent_day = NULL WHERE email = ?").bind(newToken(), o.source, o.email).run();
+    await db.prepare("UPDATE edition_subscribers SET status = 'pending', source = ?, unsubscribed_at = NULL, confirm_hash = NULL, confirm_expires_at = NULL, confirm_sent_at = NULL, confirm_attempts = 0, confirm_last_attempt_at = NULL, confirmed_at = NULL, last_sent_day = NULL WHERE email = ?").bind(o.source, o.email).run();
     return 'reopened';
   }
   // OR IGNORE: two signups for one address landing together make one row.
@@ -95,10 +102,31 @@ export const signupBody = (mailOn: boolean) => {
 
 /* ---------- confirm ---------- */
 
-/** True when a pending row held this confirm hash and the link had not lapsed; the row is now confirmed. */
-export async function confirmByHash(db: D1Database, hash: string, now: number): Promise<boolean> {
-  const row = await db.prepare("UPDATE edition_subscribers SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, ?), confirm_hash = NULL, confirm_expires_at = NULL WHERE confirm_hash = ? AND status = 'pending' AND confirm_expires_at > ? RETURNING status").bind(now, hash, now).first<{ status: string }>();
-  return row !== null && row !== undefined;
+export type ConfirmOutcome = 'confirmed' | 'already' | 'expired';
+
+/**
+ * 'confirmed' when a pending row held this confirm hash and the link had not
+ * lapsed (the row is now confirmed); 'already' when the link was used before
+ * and its row is still confirmed; else 'expired'. The hash stays on the row
+ * after a confirm, so a second click (another device, a mail scanner that got
+ * there first) answers "confirmed", not "expired". Unsubscribing clears it.
+ */
+export async function confirmByHash(db: D1Database, hash: string, now: number): Promise<ConfirmOutcome> {
+  const row = await db.prepare("UPDATE edition_subscribers SET status = 'confirmed', confirmed_at = COALESCE(confirmed_at, ?) WHERE confirm_hash = ? AND status = 'pending' AND confirm_expires_at > ? RETURNING status").bind(now, hash, now).first<{ status: string }>();
+  if (row !== null && row !== undefined) return 'confirmed';
+  const used = await db.prepare("SELECT status FROM edition_subscribers WHERE confirm_hash = ? AND status = 'confirmed'").bind(hash).first<{ status: string }>();
+  return used !== null && used !== undefined ? 'already' : 'expired';
+}
+
+/**
+ * The GET page for a confirm link: one POST form, nothing changed. A mail
+ * scanner that fetches the link confirms nobody. The raw token was checked
+ * against TOKEN_RE, so it is safe in an attribute.
+ */
+export function confirmForm(raw: string): Response {
+  const action = `/api/morning/confirm?t=${escapeHtml(raw)}`;
+  const inner = `<p>One tap to start the Morning Edition email at 6:45 AM each day.</p><form method="post" action="${action}"><p><button type="submit" style="font:inherit;padding:10px 16px;border:1.5px solid #171717;background:#fff;cursor:pointer">Confirm the Morning Edition email</button></p></form>`;
+  return unsubscribePage('Confirm the Morning Edition email', 200, inner);
 }
 
 /* ---------- unsubscribe ---------- */

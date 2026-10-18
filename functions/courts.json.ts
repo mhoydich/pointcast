@@ -108,8 +108,8 @@ async function payload(env: AirEnv, now: number) {
       id: c.id, name: c.name, short: c.short, city: c.city, shape: c.shape, air: c.air, status: c.status,
       facts: c.facts.map((f) => shapeFact(f, now)).filter((f): f is NonNullable<typeof f> => f != null),
       hours: shapeHours(c.hours, now),
-      // Where the hours came from and how sure we are: verified, posted-sign, reported or unknown (courts-feed.mjs).
-      hours_source: hoursSourceOf(c, COURT_SOURCES),
+      // Where the hours came from and how sure we are: verified, posted-sign, reported or unknown, plus stale: true past 45 days (courts-feed.mjs).
+      hours_source: hoursSourceOf(c, COURT_SOURCES, now),
       walkOn: shapeFact(c.walkOn, now),
       blocks: c.blocks.map((b) => shapeBlock(b, now)).filter((b): b is NonNullable<typeof b> => b != null),
       reserve: shapeReserve(c.reserve, now),
@@ -119,7 +119,7 @@ async function payload(env: AirEnv, now: number) {
       id: p.id, name: p.name, city: p.city,
       facts: p.facts.map((f) => shapeFact(f, now)).filter((f): f is NonNullable<typeof f> => f != null),
       hours: shapeHours(p.hours, now),
-      hours_source: hoursSourceOf(p, COURT_SOURCES),
+      hours_source: hoursSourceOf(p, COURT_SOURCES, now),
       reserve: shapeReserve(p.reserve, now),
     })),
   };

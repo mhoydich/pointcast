@@ -18,16 +18,33 @@ import { KILL_TEST } from './air-killtest.mjs';
 /** One air_reports row as the kill test counts it. `who`, the house columns and user_payload never leave the server. */
 export type KillTestRow = {
   spot: string; kind: string; day: string; slot: number; onsite: number; source: string; status: string;
-  who: string | null; house_pid: number; house_user: number; user_payload: string | null;
+  who: string | null; pid: string | null; uid: string | null; house_pid: number; house_user: number; user_payload: string | null;
 };
 
 /** Every on-site, page-sourced, ok report in the kill-test window, with the house columns; the count is decided in JS (killTestCount). */
 export async function killTestRows(db: D1Database): Promise<KillTestRow[]> {
-  const res = await db.prepare(`SELECT r.spot, r.kind, r.day, r.slot, r.onsite, r.source, r.status, COALESCE(r.user_id, r.pid_hash) AS who, EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'pid' AND h.value = r.pid_hash) AS house_pid, EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'user' AND h.value = r.user_id) AS house_user, (SELECT u.payload FROM users u WHERE u.id = r.user_id) AS user_payload
+  const res = await db.prepare(`SELECT r.spot, r.kind, r.day, r.slot, r.onsite, r.source, r.status, COALESCE(r.user_id, r.pid_hash) AS who, r.pid_hash AS pid, r.user_id AS uid, EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'pid' AND h.value = r.pid_hash) AS house_pid, EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'user' AND h.value = r.user_id) AS house_user, (SELECT u.payload FROM users u WHERE u.id = r.user_id) AS user_payload
 FROM air_reports r
 WHERE r.day >= ? AND r.day <= ? AND r.source = 'page' AND r.status = 'ok' AND r.onsite = 1
 ORDER BY r.observed_at LIMIT 5000`).bind(KILL_TEST.from, KILL_TEST.to).all<KillTestRow>();
   return res.results ?? [];
+}
+
+/** The Oct 24 read as first taken. A pass is 0/1 in the table. */
+export type KillTestRead = { reports: number; people: number; pass: boolean; readAt: number };
+
+/**
+ * Keep the first final read and return the kept one: INSERT OR IGNORE, then
+ * read it back, so every later request (and a recount after spam removals or
+ * sign-ins) shows the read as it was taken. Throws before 0031 is applied.
+ */
+export async function keepKillTestRead(db: D1Database, readOn: string, c: { reports: number; people: number; pass: boolean }, now: number): Promise<KillTestRead | null> {
+  await db.prepare('INSERT OR IGNORE INTO air_killtest_reads (read_on, reports, people, pass, read_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(readOn, c.reports, c.people, c.pass ? 1 : 0, now).run();
+  const row = await db.prepare('SELECT reports, people, pass, read_at FROM air_killtest_reads WHERE read_on = ?')
+    .bind(readOn).first<{ reports: number; people: number; pass: number; read_at: number }>();
+  if (!row) return null;
+  return { reports: Number(row.reports), people: Number(row.people), pass: Number(row.pass) === 1, readAt: Number(row.read_at) };
 }
 
 /** Whether this phone is on the house list. (The account is house by role, or by the user row markHouse wrote.) */

@@ -44,7 +44,7 @@
 
 import { kindRole, labelOf } from './air-kinds.mjs';
 import { isHouseRow } from './air-house.mjs';
-import { blocksOn } from './court-board.mjs';
+import { blocksOn, datedHours } from './court-board.mjs';
 import { evidence, isoSec, laClock, laDate, laParts, reading } from './air-reading.mjs';
 import { editionSkyLine, editionTideLine } from './air-desk.mjs';
 
@@ -569,12 +569,15 @@ export function todaysSessions(courts, date) {
     if (!isObj(court) || court.status === 'closed') return;
     const name = courtName(court);
     if (court.id === 'courts' && printable(court.hours) && Array.isArray(court.hours.rules)) {
-      const rule = court.hours.rules.find((r) => isObj(r) && Array.isArray(r.days) && r.days.includes(weekday));
+      // A dated window (an MBUSD break day) wins over the weekend rule.
+      const dated = datedHours(court.hours, date);
+      const rule = dated ?? court.hours.rules.find((r) => isObj(r) && Array.isArray(r.days) && r.days.includes(weekday));
       if (rule && HHMM_RE.test(rule.open) && (rule.close === 'dusk' || HHMM_RE.test(rule.close))) {
         const fee = Array.isArray(court.facts) ? court.facts.find((f) => isObj(f) && f.key === 'fee' && f.confidence === 'verified' && typeof f.text === 'string' && f.text.trim()) : null;
+        const checked = dated && typeof dated.checked === 'string' ? dated.checked : court.hours.checked;
         found.push({ order, start: hhmmMinute(rule.open), item: {
-          court: name, label: 'open play', start: rule.open, end: rule.close, fee: fee ? fee.text.trim() : null,
-          unconfirmed: court.hours.confidence === 'partial', checked: typeof court.hours.checked === 'string' ? court.hours.checked : null,
+          court: name, label: dated ? 'school-break open play' : 'open play', start: rule.open, end: rule.close, fee: fee ? fee.text.trim() : null,
+          unconfirmed: court.hours.confidence === 'partial', checked: typeof checked === 'string' ? checked : null,
         } });
       }
     }
@@ -708,7 +711,10 @@ function courtsSlot(base, sources, config, date, spotId) {
     source = 'air';
   } else if (today) {
     // No reading yesterday: the day's posted schedules, then the week before and the Court Call.
-    line = [todaysCourtsLine(today, date), week, call].filter(Boolean).join(' ');
+    // Name the court even for 'courts': the line before lists several courts,
+    // so an unnamed reading would read as any of them.
+    const weekNamed = w && t ? `The week before at ${t.spot.name}, ${whenOf(w.at, date)}: ${tally(w)}.` : week;
+    line = [todaysCourtsLine(today, date), weekNamed, call].filter(Boolean).join(' ');
     source = ['schedule', w ? 'air' : null, nwsSentence(today.nws) ? 'nws' : null].filter(Boolean).join('+');
   } else {
     line = [unavailable ? 'The courts log is not in yet.' : 'No reports from the courts yesterday.', week, call || 'Be the first on the air at pointcast.xyz/court.'].filter(Boolean).join(' ');

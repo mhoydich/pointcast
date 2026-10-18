@@ -2,15 +2,17 @@
 // Spec: docs/plans/2026-10-18-field-reports-v2-paper-spec.md §6.3.
 //
 // Crons: 45 13 * * * and 45 14 * * *. 6:45 AM in El Segundo is one of them,
-// whichever side of the November change it is on; runMorningDaily acts only in
-// the 6 AM LA hour. The confirm sweep runs on both ticks.
+// whichever side of the November change it is on; runMorningDaily sends in the
+// 6 AM LA hour, and a later tick the same LA day only finishes a run that was
+// cut short or left failed sends. The edition goes first, then the confirm
+// sweep, both on one deadline under the 15-minute invocation limit.
 //
 // POST /send-confirm (the Pages signup route asks for a confirm mail) and
 // POST /run (a resident re-run, a dry run by default) sit behind
 // X-Morning-Key = MORNING_INTERNAL_KEY. Nothing here echoes an email address.
 // @ts-ignore — plain module shared with the Pages routes and the tests
 import { normalizeEmail, timingSafeEqual } from '../../../functions/_lib/edition-mail.mjs';
-import { runMorningDaily, safeError, sendConfirm, status, sweepConfirms, type Env } from './run';
+import { RUN_BUDGET_MS, runMorningDaily, safeError, sendConfirm, status, sweepConfirms, type Env } from './run';
 
 export type { Env };
 
@@ -81,15 +83,16 @@ export default {
 
   async scheduled(controller, env): Promise<void> {
     const now = controller.scheduledTime;
+    const deadline = Date.now() + RUN_BUDGET_MS;
     try {
-      await sweepConfirms(env, { now });
-    } catch (error) {
-      console.error(JSON.stringify({ message: 'morning confirm sweep failed', error: safeError(error) }));
-    }
-    try {
-      await runMorningDaily(env, { now });
+      await runMorningDaily(env, { now, deadline });
     } catch (error) {
       console.error(JSON.stringify({ message: 'morning daily failed', error: safeError(error) }));
+    }
+    try {
+      await sweepConfirms(env, { now, deadline });
+    } catch (error) {
+      console.error(JSON.stringify({ message: 'morning confirm sweep failed', error: safeError(error) }));
     }
   },
 } satisfies ExportedHandler<Env>;

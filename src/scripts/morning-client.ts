@@ -216,6 +216,8 @@ function render(root: HTMLElement, item: Item): void {
   root.setAttribute('data-me-frozen', p.frozen ? 'yes' : 'no');
   root.setAttribute('data-me-provisional', p.provisional ? 'yes' : 'no');
   setState(root, 'ready');
+  // The signup (#paper, below) re-scrolls on this when the page was opened at #paper.
+  root.dispatchEvent(new CustomEvent('me:rendered', { bubbles: true }));
 }
 
 function setState(root: HTMLElement, state: State): void {

@@ -145,7 +145,8 @@ test('morning-sources: readRecentFrozen is one bound SELECT, and nothing here re
   const fn = sources.slice(from, sources.indexOf('\n}\n', from) + 3);
   assert.match(fn, /\.prepare\('SELECT date, json FROM morning_editions ORDER BY date DESC LIMIT \?'\)\s*\.bind\(n\)/);
   assert.doesNotMatch(fn, /INSERT|UPDATE|DELETE|REPLACE/);
-  assert.match(fn, /catch \{\s*return \[\];/, 'a failing store is an empty archive');
+  assert.match(fn, /catch \{\s*return null;/, 'a failing store is null, not an empty archive');
+  assert.match(fn, /if \(!db\) return \[\];/, 'no binding is an empty archive');
 });
 
 const server = await createServer({ root: fileURLToPath(root), configFile: false, appType: 'custom', logLevel: 'error' });
@@ -193,18 +194,18 @@ test('GET /morning.xml: RSS from the archive, newest first, with the feed header
   assert.doesNotMatch(body, /pid_hash|ip_hash|dev:|user:/);
 });
 
-test('GET /morning.xml: an archive row that is not an edition is skipped, and a dead or missing store is an empty channel', async () => {
+test('GET /morning.xml: an archive row that is not an edition is skipped, and a missing or empty store is an empty channel', async () => {
   const rows = [stored('2026-10-04'), { date: '2026-10-03', json: 'not json' }, { date: '2026-10-02', json: JSON.stringify({ date: '2026-10-01', slots: [] }) }];
   const some = await get({ AUTH_DB: archive(rows).db }, Date.parse('2026-10-05T16:00:00Z'));
   assert.deepEqual(items(some.body).map((i) => tag(i, 'guid')), ['morning:2026-10-04']);
-  for (const env of [{ AUTH_DB: archive([], { fail: true }).db }, {}, { AUTH_DB: archive([]).db }]) {
+  for (const env of [{}, { AUTH_DB: archive([]).db }]) {
     const empty = await get(env, Date.parse('2026-10-05T16:00:00Z'));
     assert.equal(empty.res.status, 200);
     wellFormed(empty.body);
     assert.equal(items(empty.body).length, 0);
   }
   assert.deepEqual(await lib.readRecentFrozen(undefined), []);
-  assert.deepEqual(await lib.readRecentFrozen(archive([], { fail: true }).db), []);
+  assert.equal(await lib.readRecentFrozen(archive([], { fail: true }).db), null, 'a failing read is not an empty archive');
   assert.equal((await lib.readRecentFrozen(archive([stored('2026-10-04'), stored('2026-10-03')]).db, 1)).length, 1, 'the limit is bound');
 });
 
@@ -243,6 +244,22 @@ test('GET /morning.xml: a hit in caches.default is served as is, and a miss is s
     assert.equal(calls.filter((c) => typeof c === 'string').length, 1, 'the second read never touched the archive');
     assert.equal(second.body, first.body);
     assert.equal(puts.length, 1);
+  } finally {
+    globalThis.caches = realCaches;
+  }
+});
+
+test('GET /morning.xml: a failing archive read is a 503 with no-store, and nothing is cached', async () => {
+  const realCaches = globalThis.caches;
+  const puts = [];
+  globalThis.caches = { default: { async match() { return undefined; }, async put(req) { puts.push(req.url); } } };
+  try {
+    const { res, body } = await get({ AUTH_DB: archive([], { fail: true }).db }, Date.parse('2026-10-05T16:00:00Z'));
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('Cache-Control'), 'no-store');
+    assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
+    assert.doesNotMatch(body, /<rss|<channel/, 'never an empty channel standing in for the archive');
+    assert.deepEqual(puts, [], 'the edge cache is not written');
   } finally {
     globalThis.caches = realCaches;
   }

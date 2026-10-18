@@ -283,6 +283,19 @@ test('subscribe: a pending row whose confirm link lapsed is reset so a fresh lin
   assert.equal(row.source, 'card');
 });
 
+test('subscribe: a pending row the Worker gave up on (5 refused sends) gets its tries back', async () => {
+  const env = mkEnv();
+  seed(env, { status: 'pending' });
+  env.AUTH_DB.db.prepare('UPDATE edition_subscribers SET confirm_attempts = 5, confirm_last_attempt_at = 9').run();
+  assert.equal((await subscribeAs(env, { email: EMAIL })).status, 202);
+  assert.deepEqual([rowOf(env).confirm_attempts, rowOf(env).confirm_last_attempt_at], [0, null]);
+  const fresh = mkEnv();
+  seed(fresh, { status: 'pending' });
+  fresh.AUTH_DB.db.prepare('UPDATE edition_subscribers SET confirm_attempts = 2, confirm_last_attempt_at = 9').run();
+  await subscribeAs(fresh, { email: EMAIL });
+  assert.equal(rowOf(fresh).confirm_attempts, 2, 'a row still being retried is left alone');
+});
+
 test('subscribe: a confirmed address writes nothing and answers the same shape as a new one, on the same mail state', async () => {
   // Mail off: no binding.
   const off = mkEnv();
@@ -314,7 +327,7 @@ test('subscribe: a confirmed address writes nothing and answers the same shape a
   assert.equal((await (await subscribeAs(offWorker, { email: EMAIL })).json()).status, 'on-list');
 });
 
-test('subscribe: an unsubscribed address comes back pending under a new token', async () => {
+test('subscribe: an unsubscribed address comes back pending under its old token', async () => {
   const env = mkEnv();
   const oldToken = newToken();
   seed(env, { status: 'unsubscribed', token: oldToken, source: 'morning', confirmedAt: 3_000, unsubAt: 4_000, lastDay: '2026-10-10', hash: null });
@@ -322,8 +335,7 @@ test('subscribe: an unsubscribed address comes back pending under a new token', 
   assert.equal(res.status, 202);
   const row = rowOf(env);
   assert.equal(row.status, 'pending');
-  assert.notEqual(row.token, oldToken);
-  assert.match(row.token, TOKEN_RE);
+  assert.equal(row.token, oldToken, 'the same token, so one-click links in editions mailed before still work');
   assert.equal(row.source, 'card');
   assert.equal(row.unsubscribed_at, null);
   assert.equal(row.confirmed_at, null);
@@ -435,66 +447,98 @@ test('subscribe: a database error never reaches the Worker', async () => {
   assert.equal(MORNING_DAILY.calls.length, 0);
 });
 
-/* ---------- GET /api/morning/confirm ---------- */
+/* ---------- /api/morning/confirm ---------- */
 
-const getConfirm = (env, t) => confirm.onRequestGet({ request: new Request(`${ORIGIN}/api/morning/confirm${t === undefined ? '' : `?t=${t}`}`), env });
+const confirmUrl = (t) => `${ORIGIN}/api/morning/confirm${t === undefined ? '' : `?t=${t}`}`;
+const getConfirm = (env, t) => confirm.onRequestGet({ request: new Request(confirmUrl(t)), env });
+const postConfirm = (env, t) => confirm.onRequestPost({ request: new Request(confirmUrl(t), { method: 'POST' }), env });
 const where = (res) => res.headers.get('Location');
 
-test('confirm: a live link confirms the row and goes to /morning?paper=confirmed#paper', async () => {
+test('confirm: GET shows one POST button and changes nothing, so a link scanner confirms nobody', async () => {
   const env = mkEnv();
   const raw = newToken();
   seed(env, { status: 'pending', hash: await sha256Hex(raw), expires: Date.now() + 3_600_000, sentAt: Date.now() - 1_000 });
+  const before = rowOf(env);
   const res = await getConfirm(env, raw);
-  assert.equal(res.status, 302);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('Content-Type'), /^text\/html/);
+  assert.equal(res.headers.get('Cache-Control'), 'private, no-store');
+  assert.equal(res.headers.get('Referrer-Policy'), 'no-referrer');
+  const html = await res.text();
+  assert.equal(html.split('<form').length - 1, 1);
+  assert.match(html, new RegExp(`<form method="post" action="/api/morning/confirm\\?t=${raw}">`));
+  assert.deepEqual(rowOf(env), before, 'GET wrote nothing');
+  noEmail(html, headersText(res));
+  const bad = await getConfirm(env, 'short');
+  assert.equal(bad.status, 302);
+  assert.equal(where(bad), '/morning?paper=invalid#paper');
+});
+
+test('confirm: POST on a live link confirms the row and goes to /morning?paper=confirmed#paper', async () => {
+  const env = mkEnv();
+  const raw = newToken();
+  seed(env, { status: 'pending', hash: await sha256Hex(raw), expires: Date.now() + 3_600_000, sentAt: Date.now() - 1_000 });
+  const res = await postConfirm(env, raw);
+  assert.equal(res.status, 303);
   assert.equal(where(res), '/morning?paper=confirmed#paper');
   assert.equal(res.headers.get('Cache-Control'), 'no-store');
   assert.equal(res.headers.get('Referrer-Policy'), 'no-referrer');
   const row = rowOf(env);
   assert.equal(row.status, 'confirmed');
   assert.ok(row.confirmed_at > Date.now() - 60_000);
-  assert.equal(row.confirm_hash, null);
-  assert.equal(row.confirm_expires_at, null);
   noEmail(await res.text(), headersText(res));
 });
 
-test('confirm: reusing a link is expired, and so is a link past its 48 hours', async () => {
+test('confirm: a second use of a link still says confirmed; a link past its 48 hours is expired', async () => {
   const env = mkEnv();
   const raw = newToken();
   seed(env, { status: 'pending', hash: await sha256Hex(raw), expires: Date.now() + 3_600_000, sentAt: Date.now() });
-  assert.equal(where(await getConfirm(env, raw)), '/morning?paper=confirmed#paper');
-  assert.equal(where(await getConfirm(env, raw)), '/morning?paper=expired#paper', 'the hash was cleared on first use');
+  assert.equal(where(await postConfirm(env, raw)), '/morning?paper=confirmed#paper');
+  const firstAt = rowOf(env).confirmed_at;
+  assert.equal(where(await postConfirm(env, raw)), '/morning?paper=confirmed#paper', 'a used link is not "expired"');
   assert.equal(rowOf(env).status, 'confirmed');
+  assert.equal(rowOf(env).confirmed_at, firstAt, 'the second use writes nothing');
 
   const late = mkEnv();
   const old = newToken();
   seed(late, { status: 'pending', hash: await sha256Hex(old), expires: Date.now() - 1, sentAt: Date.now() - 49 * 3_600_000 });
-  assert.equal(where(await getConfirm(late, old)), '/morning?paper=expired#paper');
+  assert.equal(where(await postConfirm(late, old)), '/morning?paper=expired#paper');
   assert.equal(rowOf(late).status, 'pending', 'an expired link confirms nothing');
 });
 
 test('confirm: a link that matches no row is expired; one that is not a token is invalid', async () => {
   const env = mkEnv();
-  assert.equal(where(await getConfirm(env, newToken())), '/morning?paper=expired#paper');
+  assert.equal(where(await postConfirm(env, newToken())), '/morning?paper=expired#paper');
   for (const bad of [undefined, '', 'short', 'x'.repeat(42), 'x'.repeat(44), `${'x'.repeat(42)}!`, '%00']) {
-    const res = await getConfirm(env, bad);
-    assert.equal(res.status, 302, String(bad));
+    const res = await postConfirm(env, bad);
+    assert.equal(res.status, 303, String(bad));
     assert.equal(where(res), '/morning?paper=invalid#paper', String(bad));
     assert.equal(res.headers.get('Referrer-Policy'), 'no-referrer');
   }
 });
 
-test('confirm: an unsubscribed row cannot be confirmed by an old link', async () => {
+test('confirm: an unsubscribed row cannot be confirmed by an old link, and unsubscribing clears a used one', async () => {
   const env = mkEnv();
   const raw = newToken();
   seed(env, { status: 'unsubscribed', hash: null, unsubAt: 1 });
   env.AUTH_DB.db.prepare('UPDATE edition_subscribers SET confirm_hash = ?, confirm_expires_at = ?').run(await sha256Hex(raw), Date.now() + 10_000);
-  assert.equal(where(await getConfirm(env, raw)), '/morning?paper=expired#paper');
+  assert.equal(where(await postConfirm(env, raw)), '/morning?paper=expired#paper');
   assert.equal(rowOf(env).status, 'unsubscribed');
+
+  const used = mkEnv();
+  const link = newToken();
+  const token = newToken();
+  seed(used, { status: 'pending', token, hash: await sha256Hex(link), expires: Date.now() + 3_600_000, sentAt: Date.now() });
+  assert.equal(where(await postConfirm(used, link)), '/morning?paper=confirmed#paper');
+  await unsubscribe.onRequestPost({ request: new Request(`${ORIGIN}/api/morning/unsubscribe?t=${token}`, { method: 'POST' }), env: used });
+  assert.equal(rowOf(used).confirm_hash, null);
+  assert.equal(where(await postConfirm(used, link)), '/morning?paper=expired#paper', 'after unsubscribing the old link confirms nothing');
+  assert.equal(rowOf(used).status, 'unsubscribed');
 });
 
 test('confirm: no database, or a database without 0031, is paper=unavailable', async () => {
-  assert.equal(where(await getConfirm({}, newToken())), '/morning?paper=unavailable#paper');
-  assert.equal(where(await getConfirm({ AUTH_DB: new SqliteD1(WITHOUT_0031) }, newToken())), '/morning?paper=unavailable#paper');
+  assert.equal(where(await postConfirm({}, newToken())), '/morning?paper=unavailable#paper');
+  assert.equal(where(await postConfirm({ AUTH_DB: new SqliteD1(WITHOUT_0031) }, newToken())), '/morning?paper=unavailable#paper');
 });
 
 /* ---------- /api/morning/unsubscribe ---------- */

@@ -5,7 +5,12 @@
  * server's `message` is shown verbatim for 'check-email' and 'on-list'. Also
  * reads ?paper= (the redirect from the confirm link) and prints that result.
  * The address stays in the form field only: nothing is kept on the phone, and
- * the field is cleared once the server has it.
+ * the field is cleared once the server has it. The button is rendered
+ * disabled (and the form is method="post"), so a tap before this script runs,
+ * or with JavaScript off, never sends the address in a URL; mounting enables it.
+ * Arriving at #paper (the receipt link, the confirm redirect), the section is
+ * scrolled to again once the edition renders above it, unless the reader has
+ * scrolled since.
  */
 type Reply = { ok?: boolean; status?: string; message?: string; reason?: string };
 
@@ -56,6 +61,14 @@ export function mountMorningSignup(): void {
     say(PAPER_COPY[result]);
     root.scrollIntoView();
   }
+  if (location.hash === '#paper' || result) {
+    // The edition renders above #paper after a fetch and pushes it down (no scroll anchoring on iOS Safari).
+    let moved = false;
+    const mark = () => { moved = true; };
+    for (const type of ['wheel', 'touchstart', 'keydown']) window.addEventListener(type, mark, { once: true, passive: true });
+    document.addEventListener('me:rendered', () => { if (!moved) root.scrollIntoView(); }, { once: true });
+  }
+  button.disabled = false;
 
   const source = sourceFrom(location.search);
   form.addEventListener('submit', async (event) => {

@@ -6,7 +6,9 @@
  * fetched, so it must never be a line that could still change. The route only
  * reads the archive (readRecentFrozen in functions/_lib/morning-sources.ts); it
  * never composes or freezes an edition, which stays with /morning.json and the
- * page. With nothing frozen the channel is valid and has no items.
+ * page. With nothing frozen the channel is valid and has no items. When the
+ * archive read fails the answer is 503 with no-store and nothing is cached, so
+ * a passing D1 error never reaches readers as an empty feed.
  *
  * Content-Type application/rss+xml. Edge-cached in caches.default under one key
  * (query strings share it): at most 300 s, and never past the next 6:45 AM in
@@ -44,6 +46,12 @@ export const onRequestGet: PagesFunction<MorningEnv> = async ({ request, env, wa
     } catch { /* a miss */ }
   }
   const editions = await readRecentFrozen(env.AUTH_DB, RSS_LIMIT);
+  if (editions === null) {
+    return new Response('The Morning Edition archive did not answer. Try again in a minute.\n', {
+      status: 503,
+      headers: { ...CORS, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '60' },
+    });
+  }
   const response = new Response(toRss(editions), {
     headers: { ...CORS, 'Content-Type': RSS_TYPE, 'Cache-Control': `public, max-age=${ttlFor(now)}` },
   });

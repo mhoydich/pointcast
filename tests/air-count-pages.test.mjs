@@ -24,13 +24,13 @@ const howSrc = await read('src/scripts/air-how.ts');
 test('/r/how: indexable, titled and described, with the rules and the freeze line printed from the one list', () => {
   assert.doesNotMatch(how, /noindex/);
   assert.match(how, /const title = 'How we count · Field Reports'/);
-  assert.match(how, /const description = 'How Field Reports counts on-site reports, who is left out, and the live count for the Oct 23 kill test: 10 reports from 3 people\.'/);
+  assert.match(how, /const description = 'How Field Reports counts on-site reports, who is left out, and the live count for the Oct 23 kill test: 10 non-Friday reports from 3 people\.'/);
   assert.match(how, /<BlockLayout title=\{title\} description=\{description\} jsonLd=\{jsonLd\} hideAds>/);
   assert.match(how, /'@type': 'WebPage'/);
   assert.match(how, /import \{ FREEZE_LINE, KILL_TEST, KILL_TEST_RULES \} from '\.\.\/\.\.\/\.\.\/functions\/_lib\/air-killtest\.mjs'/);
   assert.match(how, /<ol class="rw__rules">\s*\{KILL_TEST_RULES\.map\(\(rule: string\) => <li>\{rule\}<\/li>\)\}\s*<\/ol>/, 'every rule, in order, rendered at build time');
   assert.match(how, /If not, \{FREEZE_LINE\.charAt\(0\)\.toLowerCase\(\) \+ FREEZE_LINE\.slice\(1\)\}<\/p>/, 'the Oct 24 paragraph ends with the freeze line');
-  assert.equal(KILL_TEST_RULES.length, 12);
+  assert.equal(KILL_TEST_RULES.length, 13);
   assert.ok(KILL_TEST_RULES.some((r) => r.toLowerCase().includes(FREEZE_LINE.toLowerCase())), 'the same sentence closes rule 11');
 });
 
@@ -50,7 +50,7 @@ test('/r/how: sections in order, what we never count, and the three links', () =
   assert.match(how, /<a href="\/r">Field Reports<\/a> <span aria-hidden="true">·<\/span> how we count/);
   assert.match(how, /On \{readDay\} this page reads the result\. If it passes, the game layer stays open\./);
   assert.equal(KILL_TEST.readOn, '2026-10-24');
-  for (const never of ['Agents', 'House phones and house accounts', 'Reports filed from away', 'Side questions', 'The count is numbers only']) assert.ok(how.includes(never), never);
+  for (const never of ['Agents', 'House phones and house accounts', 'Reports filed without the spot’s code', 'Friday reports', 'Side questions', 'The count is numbers only']) assert.ok(how.includes(never), never);
   for (const href of ['/r', '/morning', '/api/air/killtest']) assert.ok(how.includes(`<a href="${href}">`), href);
   assert.match(how, /import \{ mountAirHow \} from '\.\.\/\.\.\/scripts\/air-how';\s+mountAirHow\(\);/);
   const markup = how.slice(how.indexOf('</BlockLayout>') > 0 ? how.indexOf('<BlockLayout') : 0, how.indexOf('</BlockLayout>'));
@@ -72,7 +72,7 @@ test('/r/me: a hidden house section, the director only, with the copy from the s
   assert.match(section, /<h2 class="rm__h2 air-mono">House phone<\/h2>/);
   assert.match(section, /<button type="button" class="rm__go" data-air-house-mark hidden>This is a house phone<\/button>/);
   assert.match(section, /<p class="rm__house-marked" data-air-house-marked hidden>House phone\. Its reports never count\. <button type="button" class="rm__link" data-air-house-undo>Undo<\/button><\/p>/);
-  assert.match(section, /House phones are left out of the kill test and the paper's busiest-court pick\. Marking also takes this phone's earlier reports out of the count\./);
+  assert.match(section, /House phones are left out of the kill test and the paper's busiest-court pick\. Marking also takes this browser's earlier reports out of the count\. The mark is kept per browser/);
   assert.match(section, /<a href="\/r\/how">How we count<\/a>/);
   assert.ok(me.indexOf('data-air-me-claim') < me.indexOf('data-air-house'), 'after the claim paragraph');
   assert.ok(me.indexOf('data-air-house') < me.indexOf('<footer class="rm__foot">'), 'before the footer');
@@ -194,7 +194,7 @@ test('air-how.ts: a dash until the API answers, then the count line; final puts 
     await flush();
     assert.equal(calls[0].url, '/api/air/killtest');
     assert.equal(line.textContent, countLine(live));
-    assert.equal(line.textContent, '1 report from 1 person so far. The test needs 10 reports from 3 people, Sep 28 to Oct 23.');
+    assert.equal(line.textContent, '1 report from 1 person so far. The test needs 10 non-Friday reports from 3 people, Sep 28 to Oct 23.');
     assert.equal(readout.hidden, true);
   });
   const final = { ...live, reports: 12, people: 4, pass: true, final: true };
@@ -204,7 +204,7 @@ test('air-how.ts: a dash until the API answers, then the count line; final puts 
     const readout = doc.querySelector('[data-air-how-read]');
     assert.equal(readout.hidden, false);
     assert.equal(readout.textContent, readLine(final));
-    assert.equal(readout.textContent, 'The read, Sat Oct 24: passed, with 12 reports from 4 people.');
+    assert.equal(readout.textContent, 'The read, Sat Oct 24: passed, with 12 non-Friday reports from 4 people.');
     assert.equal(doc.querySelector('[data-air-how-line]').textContent, countLine(final));
   });
   const failed = { ...live, reports: 1, people: 1, pass: false, final: true };
