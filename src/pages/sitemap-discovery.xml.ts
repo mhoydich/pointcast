@@ -153,6 +153,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/currency-builder/commons.json', 'monthly', '0.8'],
   ['https://pointcast.xyz/currency-builder/barter/', 'monthly', '0.8'],
   ['https://pointcast.xyz/currency-builder/barter.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/almanac/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/almanac.json', 'monthly', '0.8'],
   ['https://pointcast.xyz/currency-builder/security/', 'monthly', '0.8'],
   ['https://pointcast.xyz/nouns-money/editions/', 'monthly', '0.85'],
   ['https://pointcast.xyz/nouns-money/editions.json', 'monthly', '0.8'],

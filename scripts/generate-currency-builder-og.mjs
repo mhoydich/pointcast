@@ -2,11 +2,13 @@
 // Writes the Currency Builder share cards (1200 × 630) from note fronts:
 //   public/images/og/currency-builder-commons.png
 //   public/images/og/currency-builder-barter.png
+//   public/images/og/currency-builder-almanac.png
 //   public/images/og/currency-builder-security.png
 // Run after changing either collection's hero notes.
 import sharp from 'sharp';
 import * as commons from '../src/lib/currency-builder/commons.mjs';
 import * as barter from '../src/lib/currency-builder/barter.mjs';
+import * as almanac from '../src/lib/currency-builder/almanac.mjs';
 import * as security from '../src/lib/currency-builder/security-edition.mjs';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -60,6 +62,18 @@ if (barter.BARTER.currencies.length >= 3) {
     title: 'Global Barter.',
     lines: [`${n} currencies inspired by`, 'barter traditions worldwide.'],
     accentLine: `${new Set(barter.BARTER.currencies.map((entry) => entry.nounId)).size} different actual Nouns.`,
+  });
+}
+
+{
+  const pickAlmanac = (slug) => almanac.ALMANAC.currencies.find((entry) => entry.slug === slug);
+  await card({
+    out: 'currency-builder-almanac.png',
+    notes: ['the-perseids', 'el-segundo-blue', 'southbound'].map(pickAlmanac),
+    render: almanac.noteFrontSVG,
+    title: 'Almanac.',
+    lines: ['52 currencies, one for each', 'week of the South Bay year.'],
+    accentLine: '52 different actual Nouns.',
   });
 }
 

@@ -1,0 +1,93 @@
+---
+import BlockLayout from '../../../layouts/BlockLayout.astro';
+import { ALMANAC, BASE, noteFiles, nounArt, serial, quarter as quarterOf } from '../../../lib/currency-builder/almanac.mjs';
+import Top from '../../../components/currency-builder/Top.astro';
+import '../../../styles/currency-builder.css';
+
+export function getStaticPaths() {
+  return ALMANAC.currencies.map((entry, index) => ({ params: { slug: entry.slug }, props: { entry, index } }));
+}
+
+const { entry, index } = Astro.props;
+const quarter = quarterOf(entry.quarter);
+const art = nounArt(entry.nounId);
+const files = noteFiles(entry);
+const total = ALMANAC.currencies.length;
+const prev = ALMANAC.currencies[(index - 1 + total) % total];
+const next = ALMANAC.currencies[(index + 1) % total];
+const description = `${entry.name}, week ${entry.week} of the Almanac: ${entry.line} A currency design with actual Noun #${entry.nounId}. Design concept, not legal tender.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWork',
+  name: `${entry.name} · Almanac`,
+  url: `https://pointcast.xyz${BASE}/${entry.slug}/`,
+  description,
+  image: `https://pointcast.xyz${files.front}`,
+  citation: entry.source_url,
+  isPartOf: { '@type': 'CollectionPage', name: ALMANAC.title, url: `https://pointcast.xyz${BASE}/` },
+  isAccessibleForFree: true,
+};
+---
+<BlockLayout title={`${entry.name} · Almanac · Currency Builder`} description={description} image="/images/og/currency-builder-almanac.png" imageAlt="Three Almanac currency designs from Currency Builder, each with an actual Noun" themeColor="#f6f1e6" immersive hideAds showNetworkStrip={false} jsonLd={jsonLd} alternates={[{ type: 'application/json', href: '/currency-builder/almanac.json', title: 'Almanac · machine edition' }]}>
+  <div class="cb" style={`--accent:${quarter.palette.accent}`}>
+    <div class="cb-wrap">
+      <Top current="almanac" json="/currency-builder/almanac.json" />
+
+      <p class="cb-crumbs"><a href={`${BASE}/`}>Almanac</a> / <a href={`${BASE}/#${quarter.id}`}>{quarter.name}</a> / Week {entry.week}</p>
+
+      <section class="cb-detail-head" aria-labelledby="cb-name">
+        <p class="cb-kicker">{quarter.name} · Week {entry.week} of 52 · {entry.when}</p>
+        <h1 id="cb-name">{entry.name}</h1>
+        <p>{entry.line}</p>
+      </section>
+
+      <section class="cb-faces" aria-label="Note faces">
+        <figure>
+          <a href={files.front}><img src={files.front} width="1200" height="600" alt={`Front of ${entry.name}: week ${entry.week} of 52, actual Noun #${entry.nounId} with ${art.labels.head} head`} /></a>
+          <figcaption>Front · {ALMANAC.trim_mm.join(' × ')} mm</figcaption>
+        </figure>
+        <figure>
+          <a href={files.back}><img src={files.back} width="1200" height="600" loading="lazy" alt={`Back of ${entry.name}: how it is earned, and the traits of Noun #${entry.nounId}`} /></a>
+          <figcaption>Back · how it is earned</figcaption>
+        </figure>
+      </section>
+
+      <section class="cb-two" aria-label="Note details">
+        <div>
+          <p class="cb-kicker">How it is earned</p>
+          <p style="font-size:20px;line-height:1.5">{entry.how}</p>
+          <p class="cb-source">Source: <a href={entry.source_url} rel="noopener">{entry.source_title} ↗</a></p>
+          <p class="cb-disclose">Design concept for a community almanac. Not legal tender, not for sale, no cash value and no redemption. Dates are typical for Southern California and shift from year to year.</p>
+          <div class="cb-actions">
+            <a href={files.front} download>Front SVG ↓</a>
+            <a href={files.back} download>Back SVG ↓</a>
+            <a href="/currency-builder/almanac.json">Machine edition</a>
+          </div>
+        </div>
+        <ul class="cb-list">
+          <li><span>Week</span><span>{entry.week} of 52</span></li>
+          <li><span>When</span><span>{entry.when}</span></li>
+          <li><span>Where</span><span>{entry.where}</span></li>
+          <li><span>Serial</span><span>{serial(entry)}</span></li>
+          <li><span>Quarter</span><span>{quarter.name}</span></li>
+          <li><span>Noun</span><span><a href={art.officialUrl}>Actual Noun #{entry.nounId} ↗</a></span></li>
+          <li><span>Head</span><span>{art.labels.head}</span></li>
+          <li><span>Glasses</span><span>{art.labels.glasses}</span></li>
+          <li><span>Body</span><span>{art.labels.body}</span></li>
+          <li><span>Accessory</span><span>{art.labels.accessory}</span></li>
+          <li><span>Seed</span><span>bg {art.seed.background} · body {art.seed.body} · acc {art.seed.accessory} · head {art.seed.head} · glasses {art.seed.glasses}</span></li>
+        </ul>
+      </section>
+
+      <nav class="cb-pager" aria-label="More Almanac weeks">
+        <a href={`${BASE}/${prev.slug}/`}>← Week {prev.week} {prev.name}</a>
+        <a href={`${BASE}/`}>All 52</a>
+        <a href={`${BASE}/${next.slug}/`}>Week {next.week} {next.name} →</a>
+      </nav>
+
+      <footer class="cb-foot">
+        <p>Currency Builder · Almanac. Nouns art is CC0; the Noun's pixels are drawn from the official trait data using its on-chain seed as recorded in the Nouns #0–99 provenance file. Not affiliated with or endorsed by Nouns DAO.</p>
+      </footer>
+    </div>
+  </div>
+</BlockLayout>
