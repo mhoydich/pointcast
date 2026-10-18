@@ -192,6 +192,13 @@ merged:
   secrets. Git activity (commit, checkout) now counts as busy, locked
   worktrees are skipped, and the freed figure is the df delta rather than
   the apparent `du` size of APFS clones.
+- Two more from exercising the sweep end to end against aged throwaway
+  worktrees: the git-activity check read the commit's author date instead
+  of the reflog entry's own time (now `git reflog show --date=unix`), and
+  the sweep's own `git status` refreshed each index and so marked every
+  worktree busy for the next run (git now runs with `GIT_OPTIONAL_LOCKS=0`
+  inside the sweep). Dry run, apply, and a second idempotent apply now
+  behave as documented.
 - The install line pointed into `~/pointcast`, which §1 says is a stale
   checkout; it now links from `~/pc-deploy`.
 

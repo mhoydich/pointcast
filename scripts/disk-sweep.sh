@@ -39,6 +39,9 @@
 set -euo pipefail
 # cron's PATH is /usr/bin:/bin; lsof lives in /usr/sbin on macOS, gh in Homebrew.
 PATH="$PATH:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
+# The sweep's own `git status` must not refresh a worktree's index: that
+# changes the index mtime, which the idle check reads as activity.
+export GIT_OPTIONAL_LOCKS=0
 
 APPLY=0; REMOVE_MERGED=0; IDLE_HOURS=24
 ROOT="${PC_WORKTREE_ROOT:-$HOME}"
@@ -110,7 +113,9 @@ is_idle() {
     \( -path "$dir/node_modules" -o -path "$dir/dist" -o -path "$dir/dist.stale-*" -o -path "$dir/.astro" -o -path "$dir/.git" \) -prune \
     -o -type f -mmin "-$IDLE_MIN" -print 2>/dev/null | head -1 || true)"
   [ -z "$touched" ] || return 1
-  last_git="$(git -C "$dir" log -g -1 --format=%ct HEAD 2>/dev/null || true)"
+  # The reflog entry's own time (when the commit/checkout happened here), not
+  # the commit's author date: a fresh checkout of an old commit is activity.
+  last_git="$(git -C "$dir" reflog show --date=unix -1 HEAD 2>/dev/null | sed -nE 's/.*@\{([0-9]+)\}.*/\1/p' || true)"
   now="$(date +%s)"
   if [ -n "$last_git" ] && [ $((now - last_git)) -lt $((IDLE_HOURS * 3600)) ]; then return 1; fi
   gitdir="$(git -C "$dir" rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
