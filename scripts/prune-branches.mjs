@@ -7,83 +7,75 @@
 // `git branch -r`, and worktree add paid for the other 1,155.
 //
 // Usage:
-//   node scripts/prune-branches.mjs                     dry run: classify every origin branch, print the plan
-//   node scripts/prune-branches.mjs --report=plan.tsv   also write the plan as TSV
+//   node scripts/prune-branches.mjs                     dry run: classify every origin branch, print the totals
+//   node scripts/prune-branches.mjs --report=plan.tsv   also write every branch with its action as TSV
 //   node scripts/prune-branches.mjs --delete            delete the `merged` class (PR merged into main, tip == merged head)
 //   node scripts/prune-branches.mjs --delete --include-closed --older-than=60
-//                                                       also branches whose PRs were all closed unmerged 60+ days ago
+//                                                       also branches whose PRs were all closed unmerged, idle 60+ days
 //   node scripts/prune-branches.mjs --delete --include-orphans --older-than=90
 //                                                       also branches that never had a PR, idle 90+ days
+//   (through npm the flags go after `--`: npm run prune:branches -- --report=plan.tsv)
 //
 // Flags:
 //   --grace=<hours>       never touch a branch active in the last N hours (default 24):
-//                         an agent may be about to open its PR
+//                         an agent may be about to open its PR. Activity is the latest of
+//                         the PR event, the tip's commit date, and the last push GitHub's
+//                         activity feed shows for the ref (so a restored branch is fresh)
 //   --older-than=<days>   closed/orphan branches must be at least this idle (default 30)
 //   --limit=<n>           delete at most n branches this run
-//   --include-elsewhere   also branches whose PR merged into a non-main base
+//   --include-elsewhere   also branches whose PR merged into a non-main base (tip == merged head)
+//   --no-safety-fetch     skip fetching each branch into refs/pruned/<name> before deleting
 //   --yes                 skip the 5-second countdown before deleting
+//   --log=<path>          deletion log (default ~/.pointcast-prune.log or $PC_PRUNE_LOG)
 //
 // What is never deleted: main, any branch with an open PR, any branch checked
-// out in a local worktree (another agent is on it), and any branch whose
-// merged PR head is not the current tip (commits landed after the merge).
-// Right before deleting, origin is re-read and the open-PR list re-fetched; a
-// branch that moved or gained a PR since the plan was made is skipped. Each
-// deletion is logged with its sha so it can be restored with
-// `git push origin <sha>:refs/heads/<name>` (GitHub's PR page also offers
-// "Restore branch" for merged ones).
+// out in a worktree of THIS clone (another agent is on it), and any branch
+// whose merged PR head is not the current tip (commits landed after the merge).
 //
-// Needs: git with push rights to origin, and `gh` authenticated (REST only;
-// no GraphQL is used).
+// How a deletion is made safe against concurrent pushes: right before deleting,
+// origin and the open-PR list are re-read and anything that moved or gained a
+// PR is dropped; then each batch is pushed with --atomic and one
+// --force-with-lease=refs/heads/<name>:<planned sha> per ref, so the server
+// refuses the whole batch if any branch moved in between. A refused batch is
+// re-checked once and retried without the movers. Before the first push every
+// branch to be deleted is fetched into refs/pruned/<name> in this clone, and
+// every deletion is logged with its sha, so any branch can be put back:
+//   git push origin refs/pruned/<name>:refs/heads/<name>     (from this clone)
+//   git push origin <sha>:refs/heads/<name>                  (anywhere with the objects)
+//   or "Restore branch" on the merged PR's page.
+//
+// Run --delete from the iMac (any ~/pc-* worktree): the worktree guard only
+// sees worktrees of the clone it runs in, and the log and refs/pruned safety
+// copies are only useful on a machine that keeps them.
+//
+// Needs: git >= 2.4 with push rights to origin, and `gh` authenticated (REST
+// only; no GraphQL is used).
 
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { classifyBranches, parsePushPorcelain, planDeletions, summarize, toTsv } from './lib/prune-branches.mjs';
+import {
+  classifyBranches, confirmAgainstOrigin, parseArgs, parsePushPorcelain, planDeletions, summarize, toTsv,
+} from './lib/prune-branches.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoDir = join(here, '..');
 
+process.on('uncaughtException', (err) => { console.error(`prune-branches: ${err.message}`); process.exit(2); });
+
 // --- flags ------------------------------------------------------------------
-const flags = {
-  delete: false,
-  yes: false,
-  includeClosed: false,
-  includeOrphans: false,
-  includeElsewhere: false,
-  graceHours: 24,
-  olderThanDays: 30,
-  limit: Infinity,
-  report: null,
-  log: process.env.PC_PRUNE_LOG || join(homedir(), '.pointcast-prune.log'),
-};
-for (const arg of process.argv.slice(2)) {
-  const [key, value] = arg.includes('=') ? arg.split(/=(.*)/s) : [arg, undefined];
-  switch (key) {
-    case '--delete': flags.delete = true; break;
-    case '--yes': flags.yes = true; break;
-    case '--include-closed': flags.includeClosed = true; break;
-    case '--include-orphans': flags.includeOrphans = true; break;
-    case '--include-elsewhere': flags.includeElsewhere = true; break;
-    case '--grace': flags.graceHours = positive(key, value); break;
-    case '--older-than': flags.olderThanDays = positive(key, value); break;
-    case '--limit': flags.limit = positive(key, value); break;
-    case '--report': flags.report = value; break;
-    case '--log': flags.log = value; break;
-    case '--help': case '-h': usage(0); break;
-    default: console.error(`unknown flag: ${arg}`); usage(2);
-  }
+let flags;
+try {
+  flags = parseArgs(process.argv.slice(2), process.env);
+} catch (err) {
+  console.error(`prune-branches: ${err.message}`);
+  process.exit(2);
 }
-function positive(key, value) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) { console.error(`${key} needs a non-negative number`); process.exit(2); }
-  return n;
-}
-function usage(code) {
-  console.log('see the header of scripts/prune-branches.mjs');
-  process.exit(code);
-}
+if (flags.help) { console.log('see the header of scripts/prune-branches.mjs'); process.exit(0); }
+flags.log ??= join(homedir(), '.pointcast-prune.log');
+const LOCK = process.env.PC_PRUNE_LOCK || join(homedir(), '.pointcast-prune.lock');
 
 // --- helpers ----------------------------------------------------------------
 const git = (...args) => execFileSync('git', ['-C', repoDir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -96,20 +88,19 @@ const gh = (path, jq) => {
     throw new Error(`gh api ${path} failed: ${msg}`);
   }
 };
-process.on('uncaughtException', (err) => { console.error(`prune-branches: ${err.message}`); process.exit(2); });
 const say = (...parts) => console.log(...parts);
 
 function repoSlug() {
   const url = git('remote', 'get-url', 'origin').trim();
-  const m = url.match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?\/?$/);
+  const m = url.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/);
   if (!m) throw new Error(`cannot read owner/repo from origin url ${url}`);
   return `${m[1]}/${m[2]}`;
 }
 
 function remoteHeads() {
-  return git('ls-remote', '--heads', 'origin')
-    .trim().split('\n').filter(Boolean)
-    .map((line) => { const [sha, ref] = line.split('\t'); return { name: ref.replace('refs/heads/', ''), sha }; });
+  const out = git('ls-remote', '--heads', 'origin').trim();
+  if (!out) throw new Error('origin advertised no branches; refusing to continue');
+  return new Map(out.split('\n').map((line) => { const [sha, ref] = line.split('\t'); return [ref.replace('refs/heads/', ''), sha]; }));
 }
 
 function pulls(slug, state) {
@@ -117,7 +108,7 @@ function pulls(slug, state) {
   for (let page = 1; page <= 100; page += 1) {
     const chunk = JSON.parse(gh(
       `repos/${slug}/pulls?state=${state}&per_page=100&page=${page}`,
-      '[.[] | {number, state, merged_at, closed_at, updated_at, head_ref: .head.ref, head_sha: .head.sha, base_ref: .base.ref}]',
+      '[.[] | {number, state, merged_at, closed_at, updated_at, head_ref: .head.ref, head_sha: .head.sha, head_repo: .head.repo.full_name, base_ref: .base.ref}]',
     ));
     out.push(...chunk);
     if (chunk.length < 100) break;
@@ -133,6 +124,29 @@ function worktreeBranches() {
   return set;
 }
 
+// Latest push per ref from GitHub's activity feed. Best effort: the feed is
+// a safety margin on top of commit/PR dates, not the only source.
+function pushedAtMap(slug, period) {
+  const map = new Map();
+  try {
+    for (let page = 1; page <= 50; page += 1) {
+      const chunk = JSON.parse(gh(
+        `repos/${slug}/activity?time_period=${period}&per_page=100&page=${page}`,
+        '[.[] | {ref, timestamp, activity_type}]',
+      ));
+      for (const a of chunk) {
+        if (!a.ref || !a.ref.startsWith('refs/heads/')) continue;
+        const name = a.ref.slice('refs/heads/'.length);
+        if (!map.has(name) || map.get(name) < a.timestamp) map.set(name, a.timestamp);
+      }
+      if (chunk.length < 100) break;
+    }
+  } catch (err) {
+    say(`warning: could not read the activity feed (${err.message}); using commit and PR dates only`);
+  }
+  return map;
+}
+
 function commitDate(slug, sha) {
   try {
     return gh(`repos/${slug}/commits/${sha}`, '.commit.committer.date').trim() || null;
@@ -141,28 +155,53 @@ function commitDate(slug, sha) {
   }
 }
 
+// One run at a time, same mkdir lock pattern as scripts/deploy.sh.
+function takeLock() {
+  try {
+    mkdirSync(LOCK);
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    const holder = Number(readFileSync(join(LOCK, 'pid'), 'utf8').trim() || 0);
+    let alive = false;
+    try { process.kill(holder, 0); alive = true; } catch { alive = false; }
+    if (alive) throw new Error(`another prune is running (pid ${holder}); lock ${LOCK}`);
+    rmSync(LOCK, { recursive: true, force: true });
+    mkdirSync(LOCK);
+  }
+  writeFileSync(join(LOCK, 'pid'), String(process.pid));
+  process.on('exit', () => rmSync(LOCK, { recursive: true, force: true }));
+}
+
 // --- gather -----------------------------------------------------------------
 const now = new Date();
 const slug = repoSlug();
 const defaultBranch = gh(`repos/${slug}`, '.default_branch').trim() || 'main';
 say(`origin ${slug}, default branch ${defaultBranch}`);
 
-const heads = remoteHeads();
+const headMap = remoteHeads();
+const heads = [...headMap].map(([name, sha]) => ({ name, sha }));
 say(`${heads.length} remote branches`);
-const allPulls = pulls(slug, 'all');
-say(`${allPulls.length} pull requests`);
+const everyPull = pulls(slug, 'all');
+const allPulls = everyPull.filter((p) => !p.head_repo || p.head_repo === slug);
+say(`${allPulls.length} pull requests${everyPull.length !== allPulls.length ? ` (${everyPull.length - allPulls.length} from forks ignored)` : ''}`);
 const local = worktreeBranches();
+if (local.size <= 1 && flags.delete) {
+  say('note: this clone has no other worktrees; branches checked out on another machine are not visible to the worktree guard');
+}
+const needsLongWindow = flags.includeClosed || flags.includeOrphans || flags.includeElsewhere || flags.graceHours > 24 * 7;
+const pushed = pushedAtMap(slug, needsLongWindow ? 'month' : 'week');
+if (pushed.size) say(`activity feed: ${pushed.size} branches pushed in the last ${needsLongWindow ? 'month' : 'week'}`);
 
 // Tip dates only matter where the PR record does not already fix the tip in
 // time: anything that is not an open PR head or an exact merged head.
 const fixedShas = new Set(allPulls
-  .filter((p) => p.state === 'open' || (p.merged_at && p.base_ref === defaultBranch))
+  .filter((p) => p.state === 'open' || p.merged_at)
   .map((p) => p.head_sha));
 const needDates = heads.filter((b) => b.name !== defaultBranch && !fixedShas.has(b.sha));
 if (needDates.length) say(`reading tip dates for ${needDates.length} branches without a settled PR`);
 for (const b of needDates) b.committedAt = commitDate(slug, b.sha);
 
-const rows = classifyBranches({ branches: heads, pulls: allPulls, worktreeBranches: local, defaultBranch, now });
+const rows = classifyBranches({ branches: heads, pulls: allPulls, worktreeBranches: local, pushedAt: pushed, defaultBranch, now });
 const planned = planDeletions(rows, { ...flags, now });
 const summary = summarize(planned);
 
@@ -172,6 +211,12 @@ say('by class:');
 for (const cls of Object.keys(summary.byClass).sort()) say(`  ${String(summary.byClass[cls]).padStart(5)}  ${cls}`);
 say(`plan: delete ${summary.byAction.delete}, skip ${summary.byAction.skip}, keep ${summary.byAction.keep}`);
 
+const toDelete = planned.filter((r) => r.action === 'delete');
+if (toDelete.length) {
+  say('');
+  say(`would delete (first ${Math.min(20, toDelete.length)} of ${toDelete.length}; full list with --report=<file>):`);
+  for (const r of toDelete.slice(0, 20)) say(`  ${r.name}  PR #${r.pr}`);
+}
 const skipped = planned.filter((r) => r.action === 'skip');
 if (skipped.length) {
   say('');
@@ -192,62 +237,100 @@ if (flags.report) {
   say(`\nplan written to ${flags.report}`);
 }
 
-const toDelete = planned.filter((r) => r.action === 'delete');
 if (!flags.delete) {
   say(`\ndry run: ${toDelete.length} branch(es) would be deleted. Re-run with --delete to remove them.`);
   process.exit(0);
 }
 if (!toDelete.length) { say('\nnothing to delete'); process.exit(0); }
 
-// --- delete, re-checking origin first ---------------------------------------
+// --- preflight: lock and a writable log before anything is touched ----------
+takeLock();
+mkdirSync(dirname(flags.log), { recursive: true });
+appendFileSync(flags.log, `# ${now.toISOString()} prune run: ${toDelete.length} planned (${process.argv.slice(2).join(' ')})\n`);
+
 if (!flags.yes) {
   say(`\ndeleting ${toDelete.length} branch(es) from origin in 5s (ctrl-c to stop, --yes to skip the wait)`);
   await new Promise((resolve) => setTimeout(resolve, 5000));
 }
 
-const freshHeads = new Map(remoteHeads().map((b) => [b.name, b.sha]));
-const freshOpen = new Set(pulls(slug, 'open').map((p) => p.head_ref));
-const confirmed = [];
-for (const r of toDelete) {
-  const current = freshHeads.get(r.name);
-  if (current === undefined) { say(`  already gone: ${r.name}`); continue; }
-  if (current !== r.sha) { say(`  moved since the plan, skipping: ${r.name} (${r.sha.slice(0, 8)} -> ${current.slice(0, 8)})`); continue; }
-  if (freshOpen.has(r.name)) { say(`  gained an open PR, skipping: ${r.name}`); continue; }
-  confirmed.push(r);
+// --- re-check origin, then keep a local copy of every ref we will delete ----
+function recheck(rowsToCheck) {
+  const freshOpen = new Set(pulls(slug, 'open').map((p) => p.head_ref));
+  const { confirmed, skipped: held } = confirmAgainstOrigin(rowsToCheck, remoteHeads(), freshOpen);
+  for (const s of held) say(`  skipping ${s.name}: ${s.why}`);
+  return confirmed;
 }
+let queue = recheck(toDelete);
 
-mkdirSync(dirname(flags.log), { recursive: true });
-let deleted = 0;
-const rejected = [];
-const BATCH = 25;
-// Git applies each refspec on its own, so a batch can half-succeed. Read the
-// per-ref porcelain lines (present on stdout even when the exit code is
-// non-zero) and log exactly the refs that are gone.
-for (let i = 0; i < confirmed.length; i += BATCH) {
-  const batch = confirmed.slice(i, i + BATCH);
-  const bySha = new Map(batch.map((r) => [r.name, r]));
-  let out = '';
-  try {
-    out = git('push', '--porcelain', 'origin', ...batch.map((r) => `:refs/heads/${r.name}`));
-  } catch (err) {
-    out = String(err.stdout || '');
-    if (!out.trim()) {
-      say(`push failed before any ref was processed; stopping. ${String(err.stderr || err.message).trim().split('\n')[0]}`);
-      say('deleted so far are in the log; re-run to continue.');
-      break;
+if (!flags.noSafetyFetch && queue.length) {
+  say(`fetching ${queue.length} branch(es) into refs/pruned/* as a local safety copy`);
+  for (let i = 0; i < queue.length; i += 100) {
+    const batch = queue.slice(i, i + 100);
+    try {
+      git('fetch', '--quiet', 'origin', ...batch.map((r) => `+refs/heads/${r.name}:refs/pruned/${r.name}`));
+    } catch (err) {
+      say(`warning: safety fetch failed for a batch (${String(err.stderr || err.message).trim().split('\n')[0]}); the log still records every sha`);
     }
   }
-  const { ok, failed } = parsePushPorcelain(out);
-  for (const name of ok) {
-    const r = bySha.get(name);
-    if (!r) continue;
-    appendFileSync(flags.log, [now.toISOString(), r.name, r.sha, r.pr ?? '', r.cls].join('\t') + '\n');
-    deleted += 1;
-  }
-  for (const f of failed) { rejected.push(f); say(`  rejected: ${f.name} ${f.summary}`); }
-  say(`  deleted ${deleted}/${confirmed.length}`);
-  if (ok.length === 0) { say('nothing in that batch went through; stopping. Re-run to continue.'); break; }
 }
-say(`\ndeleted ${deleted} branch(es)${rejected.length ? `, ${rejected.length} rejected` : ''}. Log: ${flags.log}`);
-say('restore one with: git push origin <sha>:refs/heads/<name>');
-git('remote', 'prune', 'origin');
+
+// --- delete: atomic batches, each ref leased to the sha the plan saw --------
+let deleted = 0;
+const rejected = [];
+let consecutiveFailures = 0;
+const BATCH = 25;
+while (queue.length) {
+  const batch = queue.slice(0, BATCH);
+  const args = [
+    'push', '--porcelain', '--atomic', 'origin',
+    ...batch.map((r) => `--force-with-lease=refs/heads/${r.name}:${r.sha}`),
+    ...batch.map((r) => `:refs/heads/${r.name}`),
+  ];
+  let out = '';
+  let failed = false;
+  try {
+    out = git(...args);
+  } catch (err) {
+    failed = true;
+    out = String(err.stdout || '');
+    const reason = String(err.stderr || '').trim().split('\n').filter(Boolean).pop() || err.message;
+    say(`  batch refused: ${reason}`);
+  }
+  const result = parsePushPorcelain(out);
+  if (!failed && result.ok.length) {
+    const byName = new Map(batch.map((r) => [r.name, r]));
+    for (const name of result.ok) {
+      const r = byName.get(name);
+      if (!r) continue;
+      appendFileSync(flags.log, [now.toISOString(), r.name, r.sha, r.pr ?? '', r.cls].join('\t') + '\n');
+      deleted += 1;
+    }
+    queue = queue.slice(batch.length);
+    consecutiveFailures = 0;
+    say(`  deleted ${deleted}/${toDelete.length}`);
+    continue;
+  }
+  // The whole batch was refused (atomic): something moved under us. Re-check
+  // the rest of the queue against origin, drop the movers, retry once.
+  for (const f of result.failed) if (!/atomic push failed|stale info/.test(f.summary)) say(`  ${f.name}: ${f.summary}`);
+  consecutiveFailures += 1;
+  if (consecutiveFailures >= 2) {
+    say('two refused batches in a row; stopping. Deleted branches are in the log; re-run to continue.');
+    rejected.push(...batch.map((r) => r.name));
+    break;
+  }
+  const before = queue.length;
+  queue = recheck(queue);
+  if (queue.length === before) {
+    say('  nothing moved according to origin, retrying the batch once');
+  }
+}
+say(`\ndeleted ${deleted} branch(es)${rejected.length ? `, stopped with ${rejected.length} still queued` : ''}. Log: ${flags.log}`);
+say('restore one with: git push origin refs/pruned/<name>:refs/heads/<name>   (or <sha>:refs/heads/<name>)');
+if (deleted > 0) {
+  try {
+    git('remote', 'prune', 'origin');
+  } catch {
+    say('remote prune failed; run `git fetch --prune origin` later to drop the stale remote-tracking refs');
+  }
+}

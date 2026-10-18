@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { classifyBranches, parsePushPorcelain, planDeletions, summarize, toTsv } from '../scripts/lib/prune-branches.mjs';
+import {
+  classifyBranches, confirmAgainstOrigin, parseArgs, parsePushPorcelain, planDeletions, summarize, toTsv,
+} from '../scripts/lib/prune-branches.mjs';
 
 const NOW = '2026-10-17T22:00:00Z';
 const daysAgo = (d) => new Date(Date.parse(NOW) - d * 86_400_000).toISOString();
@@ -25,6 +27,7 @@ const branches = [
   { name: 'feat/merged-exact', sha: 'e222' },
   { name: 'feat/merged-moved', sha: 'v333', committedAt: daysAgo(100) },
   { name: 'feat/merged-into-feature', sha: 'f444', committedAt: daysAgo(100) },
+  { name: 'feat/merged-into-feature-moved', sha: 'f555', committedAt: daysAgo(100) },
   { name: 'feat/closed-old', sha: 'c555', committedAt: daysAgo(120) },
   { name: 'feat/closed-young', sha: 'c666', committedAt: daysAgo(10) },
   { name: 'feat/orphan-old', sha: 'r777', committedAt: daysAgo(200) },
@@ -32,6 +35,8 @@ const branches = [
   { name: 'feat/merged-fresh', sha: 'g999' },
   { name: 'feat/merged-in-worktree', sha: 'w000' },
   { name: 'feat/merged-then-reopened', sha: 'q111' },
+  { name: 'feat/merged-restored', sha: 's222' },
+  { name: 'feat/orphan-old-commit-new-push', sha: 'r999', committedAt: daysAgo(60) },
 ];
 
 const pulls = [
@@ -39,6 +44,7 @@ const pulls = [
   pr({ number: 11, head_ref: 'feat/merged-exact', head_sha: 'e222', merged_at: daysAgo(60), closed_at: daysAgo(60) }),
   pr({ number: 12, head_ref: 'feat/merged-moved', head_sha: 'old3', merged_at: daysAgo(110), closed_at: daysAgo(110) }),
   pr({ number: 13, head_ref: 'feat/merged-into-feature', head_sha: 'f444', base_ref: 'feat/parent', merged_at: daysAgo(90), closed_at: daysAgo(90) }),
+  pr({ number: 23, head_ref: 'feat/merged-into-feature-moved', head_sha: 'oldf', base_ref: 'feat/parent', merged_at: daysAgo(90), closed_at: daysAgo(90) }),
   pr({ number: 14, head_ref: 'feat/closed-old', head_sha: 'c555', closed_at: daysAgo(100) }),
   pr({ number: 15, head_ref: 'feat/closed-young', head_sha: 'c666', closed_at: daysAgo(5) }),
   pr({ number: 16, head_ref: 'feat/merged-fresh', head_sha: 'g999', merged_at: hoursAgo(2), closed_at: hoursAgo(2) }),
@@ -46,12 +52,20 @@ const pulls = [
   // merged once, then a second PR opened from the same branch and still open
   pr({ number: 18, head_ref: 'feat/merged-then-reopened', head_sha: 'q000', merged_at: daysAgo(30), closed_at: daysAgo(30) }),
   pr({ number: 19, state: 'open', head_ref: 'feat/merged-then-reopened', head_sha: 'q111', updated_at: daysAgo(2) }),
+  // merged long ago, then restored at the same sha an hour ago
+  pr({ number: 20, head_ref: 'feat/merged-restored', head_sha: 's222', merged_at: daysAgo(80), closed_at: daysAgo(80) }),
 ];
+
+const pushedAt = new Map([
+  ['feat/merged-restored', hoursAgo(1)],
+  ['feat/orphan-old-commit-new-push', hoursAgo(3)],
+]);
 
 const rows = classifyBranches({
   branches,
   pulls,
   worktreeBranches: new Set(['feat/merged-in-worktree']),
+  pushedAt,
   defaultBranch: 'main',
   now: NOW,
 });
@@ -71,6 +85,12 @@ test('classifies every branch by its pull request record', () => {
   assert.equal(byName['feat/orphan-undated'].ageDays, null);
 });
 
+test('a merge into another branch whose tip then moved is tip-moved, never deletable', () => {
+  assert.equal(byName['feat/merged-into-feature-moved'].cls, 'merged-tip-moved');
+  const planned = planDeletions(rows, { now: NOW, includeElsewhere: true, includeClosed: true, includeOrphans: true, olderThanDays: 1 });
+  assert.equal(planned.find((r) => r.name === 'feat/merged-into-feature-moved').action, 'keep');
+});
+
 test('an open PR wins over an older merged PR from the same branch', () => {
   assert.equal(byName['feat/merged-then-reopened'].cls, 'open-pr');
   assert.equal(byName['feat/merged-then-reopened'].pr, 19);
@@ -80,6 +100,18 @@ test('merged branches date from the merge; closed ones from the later of close a
   assert.equal(byName['feat/merged-exact'].ageDays, 60);
   assert.equal(byName['feat/closed-old'].ageDays, 100); // closed 100d ago, committed 120d ago
   assert.equal(byName['feat/closed-young'].ageDays, 5);
+});
+
+test('a push seen in the activity feed is activity even at an old sha', () => {
+  assert.equal(byName['feat/merged-restored'].cls, 'merged');
+  assert.equal(byName['feat/merged-restored'].ageDays, 0);
+  const planned = planDeletions(rows, { now: NOW, includeOrphans: true });
+  const restored = planned.find((r) => r.name === 'feat/merged-restored');
+  assert.equal(restored.action, 'skip');
+  assert.match(restored.blockers.join(), /active within the last 24h/);
+  const repushed = planned.find((r) => r.name === 'feat/orphan-old-commit-new-push');
+  assert.equal(repushed.action, 'skip');
+  assert.match(repushed.blockers.join(), /active within the last 24h/);
 });
 
 test('default plan deletes only exact merged branches that are not fresh or checked out', () => {
@@ -102,7 +134,7 @@ test('default plan deletes only exact merged branches that are not fresh or chec
   assert.equal(wt.action, 'skip');
   assert.match(wt.blockers.join(), /local worktree/);
 
-  assert.deepEqual(summarize(planned).byAction, { delete: 1, skip: 2, keep: 9 });
+  assert.deepEqual(summarize(planned).byAction, { delete: 1, skip: 3, keep: 11 });
 });
 
 test('--include-closed and --older-than gate closed branches by idle time', () => {
@@ -141,6 +173,23 @@ test('a longer grace window holds a merge that is only days old', () => {
   assert.equal(planned.find((r) => r.name === 'feat/merged-exact').action, 'skip');
 });
 
+test('the pre-delete re-check drops branches that are gone, moved, or newly have a PR', () => {
+  const toDelete = [
+    { name: 'a', sha: 'a1' },
+    { name: 'b', sha: 'b1' },
+    { name: 'c', sha: 'c1' },
+    { name: 'd', sha: 'd1' },
+  ];
+  const fresh = new Map([['a', 'a1'], ['b', 'b2'], ['d', 'd1']]);
+  const { confirmed, skipped } = confirmAgainstOrigin(toDelete, fresh, new Set(['d']));
+  assert.deepEqual(confirmed.map((r) => r.name), ['a']);
+  assert.deepEqual(skipped.map((s) => [s.name, s.why.split(' (')[0]]), [
+    ['b', 'moved since the plan'],
+    ['c', 'already gone'],
+    ['d', 'gained an open PR'],
+  ]);
+});
+
 test('tsv report has one row per branch with the action first', () => {
   const tsv = toTsv(planDeletions(rows, { now: NOW }));
   const lines = tsv.trim().split('\n');
@@ -155,18 +204,35 @@ test('classifyBranches refuses to run without a clock', () => {
   assert.throws(() => planDeletions([], {}), /now is required/);
 });
 
-test('push porcelain is read per ref, so a half-failed batch logs only what is gone', () => {
+test('push porcelain is read per ref, in the exact (delete): form git prints for refused deletes', () => {
   const out = [
     'To github.com:mhoydich/pointcast',
     '-\t:refs/heads/feat/a\t[deleted]',
-    '!\t:refs/heads/feat/b\t[rejected] (protected branch hook declined)',
+    '!\t(delete):refs/heads/feat/b\t[rejected] (stale info)',
     '-\t:refs/heads/feat/c\t[deleted]',
-    '!\t:refs/heads/feat/d\t[remote rejected] (cannot lock ref)',
+    '!\t(delete):refs/heads/feat/d\t[rejected] (atomic push failed)',
     'Done',
   ].join('\n');
   const { ok, failed } = parsePushPorcelain(out);
   assert.deepEqual(ok, ['feat/a', 'feat/c']);
   assert.deepEqual(failed.map((f) => f.name), ['feat/b', 'feat/d']);
-  assert.match(failed[0].summary, /protected branch hook/);
+  assert.match(failed[0].summary, /stale info/);
   assert.deepEqual(parsePushPorcelain(''), { ok: [], failed: [] });
+});
+
+test('flags: an empty number is an error, booleans take no value, unknown flags fail', () => {
+  const ok = parseArgs(['--delete', '--grace=48', '--older-than=60', '--limit=5', '--report=x.tsv'], {});
+  assert.equal(ok.delete, true);
+  assert.equal(ok.graceHours, 48);
+  assert.equal(ok.olderThanDays, 60);
+  assert.equal(ok.limit, 5);
+  assert.equal(ok.report, 'x.tsv');
+  assert.equal(parseArgs([], {}).graceHours, 24);
+  assert.equal(parseArgs([], { PC_PRUNE_LOG: '/tmp/x.log' }).log, '/tmp/x.log');
+  assert.throws(() => parseArgs(['--grace='], {}), /needs a number/);
+  assert.throws(() => parseArgs(['--grace=abc'], {}), /needs a number/);
+  assert.throws(() => parseArgs(['--older-than'], {}), /needs a number/);
+  assert.throws(() => parseArgs(['--delete=yes'], {}), /takes no value/);
+  assert.throws(() => parseArgs(['--log='], {}), /needs a path/);
+  assert.throws(() => parseArgs(['--prune'], {}), /unknown flag/);
 });

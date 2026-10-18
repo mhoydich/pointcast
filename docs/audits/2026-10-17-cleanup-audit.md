@@ -89,9 +89,9 @@ copies. Diff, then delete.
 strips `node_modules`, `dist`, `dist.stale-*`, `.astro`, and nested
 `workers/*/node_modules` from idle worktrees, reports `.pointcast/` and
 `.wrangler/` sizes without touching them, and with `--remove-merged` removes
-idle, clean, fully pushed worktrees whose PR merged. It never touches
-`~/pc-deploy`, the main checkout, dirty trees, unpushed commits, or a
-directory a process is standing in. Dry run by default.
+idle, clean worktrees whose tip is exactly the head of a PR merged into
+main. It never touches `~/pc-deploy`, the main checkout, locked worktrees,
+dirty trees, or a directory a process is standing in. Dry run by default.
 
 Repository weight that no sweep fixes: the pack is 2.26 GiB (GitHub's own
 size figure) and `public/` is 1.8 G of tracked binaries, led by
@@ -162,7 +162,45 @@ Each is small, reversible, and a candidate for its own PR.
 - Five `.gitkeep` files sit in directories that have other tracked files.
   Harmless.
 
-## 6. What this session did not do
+## 6. Review pass on the new tooling
+
+Four independent reviewers (destructive paths, macOS bash 3.2 portability,
+cron-time concurrency, docs and tests) read the scripts, and each finding was
+then challenged by two refuters. What survived and was fixed before this
+merged:
+
+- The deletion push carried no lease: a branch re-pushed between the plan
+  and its batch would have been deleted at its new tip. Each batch is now
+  pushed with `--atomic` and a per-branch `--force-with-lease` on the planned
+  sha; a refused batch is re-checked against origin and retried once.
+- A restored branch (the documented recovery path, same sha) would have been
+  deleted again on the next run. The last push per ref from GitHub's activity
+  feed now counts as activity for the grace window.
+- `merged-elsewhere` did not require the merged head to be the tip, so
+  `--include-elsewhere` could delete post-merge commits. It does now.
+- Every branch to be deleted is fetched into `refs/pruned/<name>` first; the
+  log is opened and a run lock taken before the first push; `--grace=` with
+  an empty value is an error instead of zero; fork PRs with the same branch
+  name no longer change an origin branch's class.
+- The sweep aborted under `pipefail` on any worktree with a large `git
+  status` (SIGPIPE through `head -1`), ran blind to `lsof` under cron's PATH,
+  could never remove a worktree whose branch was already deleted on origin
+  (its upstream test measured "not on main" rather than "not pushed"), and
+  the documented symlink install resolved to `$HOME`. All four are fixed;
+  removal now relies on the merged-PR head sha equalling the tip, which
+  proves every commit is on origin, plus a clean tree and no ignored
+  secrets. Git activity (commit, checkout) now counts as busy, locked
+  worktrees are skipped, and the freed figure is the df delta rather than
+  the apparent `du` size of APFS clones.
+- The install line pointed into `~/pointcast`, which §1 says is a stale
+  checkout; it now links from `~/pc-deploy`.
+
+Findings refuted or left as documentation: idle time for closed and orphan
+branches is measured by commit, PR and push dates, not by "when I last
+thought about it"; the worktree guard in the prune script only sees the
+clone it runs from, so `--delete` is an iMac step, now stated in §6.
+
+## 7. What this session did not do
 
 - Delete any remote branch. The plan is in this folder; the deletion is one
   approved command.
