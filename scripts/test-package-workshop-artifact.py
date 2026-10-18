@@ -13,6 +13,7 @@ spec = importlib.util.spec_from_file_location('packager', SCRIPT)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 HEAD, TREE = 'a' * 40, 'b' * 40
+REAL_ESCAPED_SELECTOR = r'''.\[\&_\.recharts-dot\[stroke\=\'\#fff\'\]\]\:stroke-transparent .recharts-dot[stroke="#fff"]{stroke:#0000}'''
 
 
 class FixtureRepo:
@@ -259,6 +260,36 @@ class Fixtures(unittest.TestCase):
                       '<meta name="description" name="viewport" content="changed">']:
             with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'attributes'):
                 m.head_only_seo_transform(source, source.replace(b'</head>', (canonical + extra + '</head>').encode()))
+
+    def test_21_real_compiled_selector_keeps_following_font_and_import_edges(self):
+        css = REAL_ESCAPED_SELECTOR + r'''@font-face{src:url("./after-selector.woff2")}@import "./after-selector.css";'''
+        self.assertEqual(m.css_references(css), [('./after-selector.woff2', 'css-url'), ('./after-selector.css', 'css-import')])
+        graph = m.Graph(self.repo.dist)
+        with self.assertRaisesRegex(ValueError, 'Missing local dependency: _astro/after-selector.woff2'):
+            graph.scan_css(css, '_astro/layout.css')
+
+    def test_22_outside_string_escape_parity_and_hex_escape_are_preserved(self):
+        for quote in ["'", '"']:
+            for count in [1, 3]:
+                css = '.selector' + '\\' * count + quote + '{color:red}a{background:url(./after.svg)}'
+                self.assertEqual(m.css_references(css), [('./after.svg', 'css-url')])
+            css = '.selector' + '\\' * 2 + quote + 'genuinely unterminated'
+            with self.assertRaisesRegex(ValueError, 'Unterminated CSS string at offset'):
+                m.css_references(css)
+        self.assertEqual(m.css_references(r'''.\000027 selector{color:red}a{background:url(./hex.svg)}'''),
+                         [('./hex.svg', 'css-url')])
+
+    def test_23_escaped_terminal_backslash_and_genuine_unterminated_string(self):
+        self.assertEqual(m.css_references(r'''a{content:"\\";background:url(./tail.svg)}'''), [('./tail.svg', 'css-url')])
+        self.assertEqual(m.css_references('a{color:red}' + '\\'), [])
+        with self.assertRaisesRegex(ValueError, 'Unterminated CSS string at offset'):
+            m.css_references('a{content:"not closed' + '\\')
+
+    def test_24_parser_failures_name_dependency_and_bounded_offset(self):
+        for css in ['a{content:"not closed}', 'a{background:url("missing.svg"}', 'a{/* not closed', '@import /* not closed']:
+            graph = m.Graph(self.repo.dist)
+            with self.subTest(css=css), self.assertRaisesRegex(ValueError, r'CSS parse error in _astro/diagnostic.css: .*offset \d+'):
+                graph.scan_css(css, '_astro/diagnostic.css')
 
 
 if __name__ == '__main__':

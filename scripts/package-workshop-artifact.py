@@ -34,6 +34,7 @@ FORBIDDEN = {'api', 'functions', 'server', '_server', '_worker.js', 'src', 'docs
 SEO_HEADING_CSS = '.pc-seo-heading{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}'
 CSS_URL = re.compile(r'url\s*\(', re.I)
 CSS_IMPORT = re.compile(r'@import\s*', re.I)
+CSS_ESCAPE = re.compile(r'\\(?:[0-9a-fA-F]{1,6}[ \t\r\n\f]?|\r\n|[\s\S])')
 
 
 def require(ok, message):
@@ -189,10 +190,16 @@ def css_references(text):
                 chars.append(text[at:at + 2]); at += 2
             else:
                 chars.append(char); at += 1
-        raise ValueError('Unterminated CSS string')
+        raise ValueError('Unterminated CSS string at offset ' + str(start))
     while i < len(text):
+        # A delimiter escaped in a selector/identifier is not a string or
+        # comment boundary. Consume one CSS escape, preserving slash parity.
+        if text[i] == '\\':
+            escaped = CSS_ESCAPE.match(text, i)
+            i = escaped.end() if escaped else i + 1
+            continue
         if text.startswith('/*', i):
-            end = text.find('*/', i + 2); require(end >= 0, 'Unterminated CSS comment'); i = end + 2
+            end = text.find('*/', i + 2); require(end >= 0, 'Unterminated CSS comment at offset ' + str(i)); i = end + 2
             continue
         match = CSS_URL.match(text, i)
         if match and (i == 0 or not re.match(r'[\w-]', text[i - 1])):
@@ -201,13 +208,13 @@ def css_references(text):
             if at < len(text) and text[at] in ('"', "'"):
                 value, at = quoted(at)
                 while at < len(text) and text[at].isspace(): at += 1
-                require(at < len(text) and text[at] == ')', 'Malformed CSS url()')
+                require(at < len(text) and text[at] == ')', 'Malformed CSS url() at offset ' + str(at))
             else:
                 chars = []
                 while at < len(text) and text[at] != ')':
                     if text[at] == '\\' and at + 1 < len(text): chars.append(text[at:at + 2]); at += 2
                     else: chars.append(text[at]); at += 1
-                require(at < len(text), 'Unterminated CSS url()')
+                require(at < len(text), 'Unterminated CSS url() at offset ' + str(i))
                 value = ''.join(chars).strip()
             result.append((css_unescape(value), 'css-url')); i = at + 1
             continue
@@ -218,7 +225,7 @@ def css_references(text):
                 if text[at].isspace(): at += 1
                 elif text.startswith('/*', at):
                     end = text.find('*/', at + 2)
-                    require(end >= 0, 'Unterminated CSS import comment')
+                    require(end >= 0, 'Unterminated CSS import comment at offset ' + str(at))
                     at = end + 2
                 else: break
             if at < len(text) and text[at] in ('"', "'"):
@@ -379,7 +386,11 @@ class Graph:
                     self.census_paths.append(relative)
 
     def scan_css(self, text, relative):
-        for value, kind in css_references(text): self.reference(value, relative, kind)
+        try:
+            references = css_references(text)
+        except ValueError as error:
+            raise ValueError('CSS parse error in ' + relative + ': ' + str(error)) from error
+        for value, kind in references: self.reference(value, relative, kind)
 
     def traverse(self):
         while self.queue:
