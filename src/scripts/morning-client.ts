@@ -16,7 +16,7 @@
 import { SLOTS, addDays, editionDate, editionNumber } from '../../functions/_lib/morning.mjs';
 import { spotUrl } from '../lib/air';
 
-type Slot = { id: string; label: string; line: string; source: string; reportIds: string[]; bylines: string[]; fallback: boolean };
+type Slot = { id: string; label: string; line: string; source: string; reportIds: string[]; bylines: string[]; fallback: boolean; spot?: string };
 type Extension = {
   number: number; frozen: boolean; provisional: boolean; missing: string[]; masthead: string;
   reporters: string[]; more: number; reporterLine: string; footer: string; disclosure: string; slots: Slot[];
@@ -45,10 +45,22 @@ const SOURCE_NAMES: Record<string, string> = {
   'paddle-register': 'paddle register',
   'front-door-news': 'front door',
   shortwave: 'Shortwave',
+  schedule: 'posted schedules',
+  nws: 'NWS',
   almanac: 'almanac',
   'band-net': 'the band',
   'today-json': 'today’s block',
 };
+/**
+ * A source id as a reader sees it. A combined id ('schedule+air+nws') reads by
+ * its parts, joined with ' + ', when every part is one we name; anything else
+ * prints as the server wrote it.
+ */
+function sourceName(source: string): string {
+  if (SOURCE_NAMES[source]) return SOURCE_NAMES[source];
+  const parts = source.split('+');
+  return parts.length > 1 && parts.every((p) => SOURCE_NAMES[p]) ? parts.map((p) => SOURCE_NAMES[p]).join(' + ') : source;
+}
 const MISSING_NAMES: Record<string, string> = { klax: 'KLAX', reports: 'the report store' };
 
 const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T | null => root.querySelector<T>(sel);
@@ -89,7 +101,9 @@ function editionParam(): string | null {
 
 /** Where a slot's meta row points. The shop slot never links: "No link, no commission." */
 function sourceHref(slot: Slot): string | null {
-  const spot = SLOTS.find((s) => s.id === slot.id)?.spot;
+  // Today's courts come from the posted schedules, which the Pickleball Board prints.
+  if (slot.id === 'courts' && slot.source.startsWith('schedule')) return '/pickleball';
+  const spot = (slot.id === 'courts' && slot.spot) || SLOTS.find((s) => s.id === slot.id)?.spot;
   if (spot) return spotUrl(spot);
   switch (slot.id) {
     case 'price': return '/paddles';
@@ -141,6 +155,13 @@ function renderSlots(root: HTMLElement, slots: Slot[]): void {
     li.setAttribute('data-me-fallback', slot.fallback ? 'yes' : 'no');
     li.setAttribute('data-me-source', slot.source);
     text(q(li, '[data-me-line]'), slot.line);
+    // The courts row names the court the paper reported on: "courts · 7.600" and that spot's page.
+    const label = q(li, '.me__label');
+    if (slot.id === 'courts' && slot.spot && label) {
+      const name = slot.label.toLowerCase();
+      const link = q<HTMLAnchorElement>(label, 'a');
+      if (link) { text(link, name); link.setAttribute('href', spotUrl(slot.spot)); } else text(label, name);
+    }
     // Names print in one place only: a line that is already signed ("— @jen, Guest 4471 +1")
     // keeps its meta row to the source, so no reader sees a "+1" and then the hidden name under it.
     const by = q(li, '[data-me-by]');
@@ -150,7 +171,7 @@ function renderSlots(root: HTMLElement, slots: Slot[]): void {
     show(by, !signed && names.length > 0);
     const src = q<HTMLAnchorElement>(li, '[data-me-src]');
     if (src) {
-      text(src, SOURCE_NAMES[slot.source] ?? slot.source);
+      text(src, sourceName(slot.source));
       const href = sourceHref(slot);
       if (href) src.setAttribute('href', href); else src.removeAttribute('href');
     }

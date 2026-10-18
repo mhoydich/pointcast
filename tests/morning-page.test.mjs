@@ -11,15 +11,17 @@ import test from 'node:test';
 
 import config from '../src/data/air-spots.json' with { type: 'json' };
 import { FIRST_EDITION, FOOTER_LINE, SHOP_DISCLOSURE, SLOTS } from '../functions/_lib/morning.mjs';
+import { PAPER_COPY, UI_COPY, replyLine, sourceFrom } from '../src/scripts/morning-signup.ts';
 import { isNoindexPath } from '../src/lib/seo-rules.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
-const [page, client, sitemap] = await Promise.all([
+const [page, client, sitemap, signup] = await Promise.all([
   read('src/pages/morning.astro'),
   read('src/scripts/morning-client.ts'),
   read('src/pages/sitemap-discovery.xml.ts'),
+  read('src/scripts/morning-signup.ts'),
 ]);
 
 test('page: a static BlockLayout shell that fetches /morning.json, with the masthead art as og:image', () => {
@@ -159,4 +161,81 @@ test('client: the shop row never links; every other row points at its desk', () 
 test('sitemap: /morning and /morning.json are listed daily', () => {
   assert.match(sitemap, /\['https:\/\/pointcast\.xyz\/morning', 'daily'/);
   assert.match(sitemap, /\['https:\/\/pointcast\.xyz\/morning\.json', 'daily'/);
+});
+
+/* ---------- the paper by email (docs/plans/2026-10-18-field-reports-v2-paper-spec.md §5.5) ---------- */
+
+test('page: the #paper section is one email field and one button, with the fine print and a status line', () => {
+  const section = page.match(/<section class="me__paper" id="paper"[\s\S]*?<\/section>/)?.[0] ?? '';
+  assert.ok(section, 'a section with id="paper"');
+  assert.match(section, /data-me-paper\b/);
+  assert.match(section, /<h2 [^>]*>Get the paper by email<\/h2>/, 'the heading; the masthead stays the only h1');
+  assert.equal((section.match(/<input\b/g) ?? []).length, 1, 'one field');
+  assert.match(section, /<input [^>]*type="email"[^>]*autocomplete="email"[^>]*required|<input [^>]*autocomplete="email"[^>]*type="email"[^>]*required|<input [^>]*type="email"[^>]*required[^>]*autocomplete="email"/);
+  assert.match(section, /<label [^>]*for="paper-email"[^>]*>Email<\/label>/);
+  assert.match(section, /id="paper-email"/);
+  assert.equal((section.match(/<button\b/g) ?? []).length, 1, 'one button');
+  assert.match(section, /type="submit"[^>]*>Send me the paper<\/button>/);
+  assert.match(section, /One email at 6:45 AM with the day's edition, only after you confirm by email\. Unsubscribe in one tap\./);
+  assert.match(section, /data-me-paper-status role="status"/);
+  assert.match(section, /<noscript>[\s\S]*The signup needs JavaScript\. The paper is also at <a href="\/morning\.xml">\/morning\.xml<\/a>\.[\s\S]*<\/noscript>/);
+  assert.doesNotMatch(section, /!/, 'no exclamation marks');
+  assert.ok(page.indexOf('id="paper"') > page.indexOf('data-me-nav') && page.indexOf('id="paper"') < page.indexOf('<footer class="me__foot">'), 'after the editions nav, before the footer');
+  assert.match(page, /\.me__paper \{[^}]*border-top: 1px solid var\(--pc-rule\)/, 'a rule above it');
+});
+
+test('page: the RSS feed is an alternate, a visible footer link and a JSON-LD encoding', () => {
+  assert.match(page, /\{ type: 'application\/rss\+xml', href: '\/morning\.xml', title: 'PointCast Morning Edition · RSS' \}/);
+  assert.match(page, /type: 'application\/feed\+json', href: '\/morning\.json'/, 'the JSON Feed alternate stays');
+  const foot = page.slice(page.indexOf('<footer class="me__foot">'), page.indexOf('</footer>'));
+  assert.match(foot, /<a href="\/morning\.json">\/morning\.json<\/a>[\s\S]*<a href="\/morning\.xml">\/morning\.xml<\/a>/, '/morning.xml sits beside /morning.json');
+  assert.match(page, /\{ '@type': 'MediaObject', encodingFormat: 'application\/rss\+xml', contentUrl: 'https:\/\/pointcast\.xyz\/morning\.xml' \}/);
+  assert.match(page, /encodingFormat: 'application\/feed\+json', contentUrl: 'https:\/\/pointcast\.xyz\/morning\.json'/);
+});
+
+test('page: the signup script is mounted from the existing script block, beside the reader', () => {
+  const block = page.slice(page.lastIndexOf('<script>'), page.indexOf('</script>', page.lastIndexOf('<script>')));
+  assert.match(block, /import \{ mountMorningPage \} from '\.\.\/scripts\/morning-client';/);
+  assert.match(block, /import \{ mountMorningSignup \} from '\.\.\/scripts\/morning-signup';/);
+  assert.match(block, /mountMorningPage\(\);\s*mountMorningSignup\(\);/);
+  assert.equal(page.split('<script>').length - 1, 1, 'one script block');
+});
+
+test('signup script: posts {email, source} to /api/morning/subscribe, keeps nothing on the phone', () => {
+  assert.match(signup, /fetch\('\/api\/morning\/subscribe', \{\s*method: 'POST',/);
+  assert.match(signup, /JSON\.stringify\(\{ email, source \}\)/);
+  assert.match(signup, /'Content-Type': 'application\/json'/);
+  assert.match(signup, /button\.disabled = true;\s*say\(UI_COPY\.sending\);/);
+  assert.match(signup, /root\.scrollIntoView\(\)/);
+  assert.match(signup, /export function mountMorningSignup\(\)/);
+  assert.doesNotMatch(signup, /localStorage|sessionStorage|indexedDB|document\.cookie/, 'the address is never stored on the phone');
+  assert.doesNotMatch(signup, /innerHTML/);
+  assert.doesNotMatch(signup, /console\./);
+});
+
+test('signup script: the copy, the source from ?src= and the ?paper= results', () => {
+  assert.equal(UI_COPY.sending, 'Sending…');
+  assert.equal(UI_COPY.invalid, "That address doesn't look right.");
+  assert.equal(UI_COPY.limited, 'Too many tries. Wait 15 minutes.');
+  assert.equal(UI_COPY.failed, "That didn't go through. Try again.");
+  assert.deepEqual(PAPER_COPY, {
+    confirmed: "You're on the list. The next edition comes by email at 6:45 AM.",
+    expired: 'That link expired. Sign up again for a new one.',
+    invalid: 'That link did not work.',
+    unavailable: "That didn't go through. Try again later.",
+  });
+  for (const src of ['receipt', 'card', 'rss']) assert.equal(sourceFrom(`?src=${src}`), src);
+  for (const search of ['', '?src=', '?src=em', '?src=other', '?src=RECEIPT', '?x=receipt', '?src=receipt%00']) assert.equal(sourceFrom(search), 'morning', search);
+  assert.equal(sourceFrom('?paper=confirmed&src=card'), 'card');
+
+  const ok = (status) => replyLine(202, { ok: true, status, message: `server says ${status}` });
+  assert.equal(ok('check-email'), 'server says check-email', 'the server\'s message, verbatim');
+  assert.equal(ok('on-list'), 'server says on-list');
+  assert.equal(replyLine(400, { ok: false, reason: 'invalid-email' }), UI_COPY.invalid);
+  assert.equal(replyLine(429, { ok: false, reason: 'email-rate-limited' }), UI_COPY.limited);
+  assert.equal(replyLine(429, { ok: false, reason: 'ip-rate-limited' }), UI_COPY.limited);
+  for (const [status, body] of [[503, { ok: false, reason: 'store-unavailable' }], [403, { ok: false, reason: 'bad-origin' }], [500, null], [202, null], [202, { ok: true, status: 'weird', message: 'x' }], [202, { ok: true, status: 'on-list' }]]) {
+    assert.equal(replyLine(status, body), UI_COPY.failed, `${status} ${JSON.stringify(body)}`);
+  }
+  for (const line of [...Object.values(UI_COPY), ...Object.values(PAPER_COPY)]) assert.doesNotMatch(line, /!/);
 });

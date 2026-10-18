@@ -16,6 +16,10 @@
  * (a card @handle, or a "Guest NNNN" that stays the same per phone) stands at
  * a given court.
  *
+ * `hours_source` on every court and private entry says where the hours came
+ * from, when they were checked and how sure we are (verified, posted-sign,
+ * reported or unknown), even when the hours themselves are not shown.
+ *
  * Cached 30 s at the edge (caches.default, same pattern as
  * functions/api/air/board.ts) so an agent crawl never adds D1 load beyond
  * what the board page itself already causes. CORS is open (`*`): this is a
@@ -29,6 +33,8 @@ import { AIR_CONFIG } from '../src/lib/air.ts';
 import { sunsetAt } from './_lib/court-conditions.ts';
 // @ts-ignore — plain module shared with the tests
 import { publicReading, showable } from './_lib/court-board.mjs';
+// @ts-ignore — plain module shared with the tests
+import { hoursSourceOf } from './_lib/courts-feed.mjs';
 
 const HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -102,6 +108,8 @@ async function payload(env: AirEnv, now: number) {
       id: c.id, name: c.name, short: c.short, city: c.city, shape: c.shape, air: c.air, status: c.status,
       facts: c.facts.map((f) => shapeFact(f, now)).filter((f): f is NonNullable<typeof f> => f != null),
       hours: shapeHours(c.hours, now),
+      // Where the hours came from and how sure we are: verified, posted-sign, reported or unknown (courts-feed.mjs).
+      hours_source: hoursSourceOf(c, COURT_SOURCES),
       walkOn: shapeFact(c.walkOn, now),
       blocks: c.blocks.map((b) => shapeBlock(b, now)).filter((b): b is NonNullable<typeof b> => b != null),
       reserve: shapeReserve(c.reserve, now),
@@ -111,6 +119,7 @@ async function payload(env: AirEnv, now: number) {
       id: p.id, name: p.name, city: p.city,
       facts: p.facts.map((f) => shapeFact(f, now)).filter((f): f is NonNullable<typeof f> => f != null),
       hours: shapeHours(p.hours, now),
+      hours_source: hoursSourceOf(p, COURT_SOURCES),
       reserve: shapeReserve(p.reserve, now),
     })),
   };

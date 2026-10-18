@@ -38,6 +38,12 @@ export type Hours = Provenance & {
   else: 'closed' | 'unknown';
   /** The same source says something else too. Show `text`; `rules` is the other reading. */
   conflict?: { text: string; rules: HoursRule[] };
+  /**
+   * Set only when the source is a posted sign or a report, never for a web
+   * page. /courts.json reads it as the hours' evidence (hoursSourceOf in
+   * functions/_lib/courts-feed.mjs).
+   */
+  evidence?: 'posted-sign' | 'reported';
 };
 
 export type BlockKind = 'dropin' | 'priority' | 'closed';
@@ -71,7 +77,7 @@ export type Court = {
   name: string;
   short: string;
   city: string;
-  /** null when the source gives no shape (a closed court). */
+  /** null when the source gives no shape (a closed court, or one whose access rules are unread). */
   shape: CourtShape | null;
   /** 'closed' is a standing closure (renovation), not today's hours. */
   status: 'open' | 'closed';

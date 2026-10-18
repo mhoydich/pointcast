@@ -111,7 +111,7 @@ test('openState: "dusk" resolves to the real sunset, and the 2026-11-01 DST chan
 });
 
 test('openState: a standing closure always reads closed; no hours reads unknown', () => {
-  const kelly = courtById(schedule, 'kelly');
+  const kelly = { ...courtById(schedule, 'kelly'), status: 'closed' };
   assert.equal(kelly.status, 'closed');
   assert.equal(openState(kelly, Date.now(), 1000), 'closed');
   const anderson = courtById(schedule, 'anderson');
@@ -359,9 +359,9 @@ test('publicReading: the open feed keeps the value and its strength, never who (
   assert.doesNotMatch(JSON.stringify(publicReading(r)), /alice|Guest|ar_/);
 });
 
-test('the Perry grid is partial now: its live lines carry the "unconfirmed" confidence through the payload', () => {
+test('the Perry grid is verified now (2026-10-18): its live lines carry the verified confidence through the payload', () => {
   const out = boardSummary({ now: Date.parse('2026-09-28T17:30:00-07:00'), courts: schedule.courts, conditions: CONDITIONS });
   const perry = out.courts.find((c) => c.id === 'perry');
   assert.ok(perry.now.length > 0);
-  for (const s of perry.now) assert.equal(s.block.confidence, 'partial', `${s.block.label} is read off the flyer's image grid`);
+  for (const s of perry.now) assert.equal(s.block.confidence, 'verified', `${s.block.label} is read off the city schedule image`);
 });

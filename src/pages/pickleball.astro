@@ -15,6 +15,12 @@
  * OpeningHoursSpecification and drop-in Events only for `verified` hours and
  * blocks (build spec's CC addendum) — an `unverified` or `partial` schedule
  * never renders as a machine-readable fact any more than it renders as text.
+ * Each verified drop-in block is published twice: as a weekly eventSchedule,
+ * and as dated Events for the next 14 LA days from the build day, each with
+ * its ISO start and end at that date's LA offset (docs/plans/
+ * 2026-10-18-field-reports-v2-paper-spec.md §7.9). Every Event says
+ * EventScheduled. There is no Court Call Event: a Court Call is not a sourced
+ * session. Every fact printed here is also visible text on a court card.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import AirInk from '../components/air/AirInk.astro';
@@ -24,6 +30,7 @@ import CourtCard from '../components/courts/CourtCard.astro';
 import { COURTS, PRIVATE_COURTS, CONFIRM_ITEMS, COURT_SOURCES, provenanceLine } from '../lib/courts';
 import { hoursLine, sourcedTag } from '../lib/court-format';
 import { airSpot } from '../lib/air';
+import { dropinOccurrences } from '../../functions/_lib/courts-feed.mjs';
 
 const title = 'The Pickleball Board';
 const description =
@@ -34,6 +41,11 @@ const ogImage = '/og/pickleball.png';
 const buildDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 /** Source labels for the client's live now/next lines (src/scripts/pickleball-board.ts); urls stay out, only whether one exists. */
 const sourceLabels = JSON.stringify(Object.fromEntries(Object.entries(COURT_SOURCES).map(([id, s]) => [id, { label: s.label, url: Boolean(s.url) }])));
+
+/** schema.org event status for a session the schedule says is on. */
+const EVENT_SCHEDULED = 'https://schema.org/EventScheduled';
+/** How many LA days of dated sessions to publish, counting the build day. */
+const OCCURRENCE_DAYS = 14;
 
 const SCHEMA_DAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => `https://schema.org/${d}`);
 const dayOfWeek = (days: number[]) => days.map((d) => SCHEMA_DAY[d]).filter(Boolean);
@@ -58,11 +70,13 @@ function courtEntity(court: (typeof COURTS)[number]) {
     url: spot ? `https://pointcast.xyz/r/${court.id}` : 'https://pointcast.xyz/pickleball',
     additionalType: 'https://en.wikipedia.org/wiki/Pickleball',
   };
+  let postal: Record<string, unknown> | null = null;
   if (address) {
     const street = address.text.endsWith(`, ${court.city}`) ? address.text.slice(0, -(court.city.length + 2)) : address.text;
-    entity.address = { '@type': 'PostalAddress', streetAddress: street, addressLocality: court.city, addressRegion: 'CA', addressCountry: 'US' };
+    postal = { '@type': 'PostalAddress', streetAddress: street, addressLocality: court.city, addressRegion: 'CA', addressCountry: 'US' };
+    entity.address = postal;
   }
-  // A standing closure (Kelly Courts' renovation) is said in words: nobody should read it as a place to play today.
+  // A standing closure is said in words: nobody should read it as a place to play today.
   if (court.status === 'closed') {
     const closure = court.facts.find((f) => f.key === 'status' && f.confidence === 'verified');
     entity.description = closure ? closure.text : 'Closed';
@@ -79,9 +93,10 @@ function courtEntity(court: (typeof COURTS)[number]) {
   // Drop-in sessions as Event/Schedule, verified only.
   const dropins = court.blocks.filter((b) => b.kind === 'dropin' && b.confidence === 'verified');
   if (dropins.length > 0) {
-    entity.event = dropins.map((b) => ({
+    const schedules = dropins.map((b) => ({
       '@type': 'Event',
       name: `${b.label} · ${court.name}`,
+      eventStatus: EVENT_SCHEDULED,
       eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
       eventSchedule: {
         '@type': 'Schedule',
@@ -95,6 +110,18 @@ function courtEntity(court: (typeof COURTS)[number]) {
       location: { '@id': id },
       ...(b.fee ? { isAccessibleForFree: false, offers: feeOffer(b.fee) } : {}),
     }));
+    // Dated sessions for the next two weeks: only dates inside the block's season, with that date's LA offset.
+    const dated = dropins.flatMap((b) => dropinOccurrences(b, buildDay, OCCURRENCE_DAYS).map((o) => ({
+      '@type': 'Event',
+      name: `${b.label} · ${court.name}`,
+      startDate: o.start,
+      endDate: o.end,
+      eventStatus: EVENT_SCHEDULED,
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      location: postal ? { '@type': 'Place', name: court.name, address: postal } : { '@id': id },
+      ...(b.fee ? { isAccessibleForFree: false, offers: feeOffer(b.fee) } : {}),
+    })));
+    entity.event = [...schedules, ...dated];
   }
   return entity;
 }
