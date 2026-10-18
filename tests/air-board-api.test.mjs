@@ -123,7 +123,7 @@ test('boardData: readings, validatorsToday and vibe come off real Field Reports 
   assert.equal(payload.best.court, 'courts', 'the live 1-4 reading is the bet');
 
   const kelly = payload.courts.find((c) => c.id === 'kelly');
-  assert.equal(kelly.status, 'closed');
+  assert.equal(kelly.status, 'closed', 'Kelly reopened Oct 15 with 9 AM to 7 PM hours; at 7:40 AM it reads closed');
   assert.deepEqual(kelly.readings, { wait: null, parking: null }, 'a listing with no air spot has no readings');
 
   const text = JSON.stringify(payload);
