@@ -2,7 +2,7 @@
 
 This is the current rulebook for Claude Code, Codex, and any other agent
 working on PointCast from Mike's iMac. It replaces older advice in
-`AGENTS.md` and `README.md` wherever they disagree. Last revised 2026-10-01.
+`AGENTS.md` and `README.md` wherever they disagree. Last revised 2026-10-17.
 
 ## 1. Work in a worktree, and remove it when the PR merges
 
@@ -67,7 +67,67 @@ deploy: walk the town"): `npm run inspect:town -- --write`.
 
 ## 5. Disk
 
-`~/bin/pointcast-disk-sweep.sh` runs daily at 03:30. It strips node_modules
-and dist from idle `~/pc-*` worktrees and gzips old Codex transcripts. It is
-a backstop, not permission to leave things behind. Before ending a task,
-remove what you created.
+The sweep lives in the repo as `scripts/disk-sweep.sh` and runs daily at
+03:30 on the iMac. Install it from the deploy worktree, which always sits on
+the tip of `origin/main` (`~/pointcast` itself is a stale checkout, §1):
+
+```sh
+ln -sf ~/pc-deploy/scripts/disk-sweep.sh ~/bin/pointcast-disk-sweep.sh
+# crontab -e
+30 3 * * * $HOME/bin/pointcast-disk-sweep.sh --apply
+```
+
+```sh
+scripts/disk-sweep.sh                         # dry run: what would go
+scripts/disk-sweep.sh --apply                 # strip node_modules, dist, dist.stale-*, .astro, workers/*/node_modules from idle ~/pc-* worktrees
+scripts/disk-sweep.sh --apply --remove-merged # also remove idle, clean worktrees whose tip is exactly a merged PR's head
+```
+
+A worktree is idle when, for 24 hours (`--idle-hours=N`), no file outside
+node_modules/dist/.git changed, git made no commit or checkout there, and no
+process is standing in it. The strip step runs on any idle worktree, dirty
+or not; it only removes what `npm ci` and `npm run build:bare` rebuild. The
+checkout itself is removed only when the tree is clean, no ignored secrets
+are inside, and GitHub shows a PR merged into main whose head sha is exactly
+this tip, so every commit is on origin. It never touches `~/pc-deploy`, the
+main checkout, a locked worktree, or `.pointcast/` and `.wrangler/` inside
+one, and it refuses `--apply` when `lsof` is not on PATH. That is what makes
+it safe while other agents are mid-task. It is a backstop, not permission to
+leave things behind. Before ending a task, remove what you created.
+
+## 6. Branches: delete yours when the PR merges
+
+GitHub does not delete head branches on merge for this repo. By 2026-10-17
+origin carried 1,173 branches for 18 open PRs, and every fetch and
+`worktree add` paid for the rest.
+
+- After your PR merges: `git push origin --delete <branch>` (or the "Delete
+  branch" button on the PR). Removing the worktree (§1) does not remove the
+  branch.
+- Periodic sweep, from the iMac: `npm run prune:branches` is a dry run that
+  classifies every origin branch by its PR record and prints the totals and
+  the first names; `npm run prune:branches -- --report=plan.tsv` writes every
+  branch with its action. `npm run prune:branches -- --delete` removes only
+  the `merged` class: a PR merged into main whose merged head sha is exactly
+  the branch tip, nothing active in the last 24 hours (`--grace`; a push seen
+  in GitHub's activity feed counts, so a restored branch is held), and
+  nothing checked out in a worktree of the clone it runs from. Branches whose
+  PRs were all closed unmerged, or that never had a PR, need
+  `--include-closed` / `--include-orphans` plus `--older-than=<days>`
+  (default 30, measured from the later of the PR event, the tip's commit date
+  and the last push). A branch whose tip moved after its merge is always
+  listed for a human and never auto-deleted.
+- Right before deleting, the script re-reads origin and the open-PR list and
+  drops anything that moved or gained a PR; each batch is then pushed
+  atomically with a per-branch lease on the planned sha, so a branch that
+  moves mid-run is refused by the server rather than deleted. Every branch is
+  first fetched into `refs/pruned/<name>` in that clone and every deletion is
+  logged with its sha in `~/.pointcast-prune.log`. Restore one with
+  `git push origin refs/pruned/<name>:refs/heads/<name>`, with the sha from
+  the log, or with "Restore branch" on the merged PR.
+- Once branches are gone from origin, every clone still carries their
+  `refs/remotes/origin/*` until it prunes. Run `git config --global
+  fetch.prune true` once; the prune script also prunes the checkout it ran
+  from.
+- The real fix is the repository setting *Automatically delete head branches*
+  (Settings → General → Pull Requests). Turning it on is Mike's call.

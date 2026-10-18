@@ -4,6 +4,22 @@
 
 ---
 
+## Repo hygiene under load — branches, backups, sweep (2026-10-17)
+
+Audit: `docs/audits/2026-10-17-cleanup-audit.md`. Origin carried 1,173 branches for 18 open PRs because *Automatically delete head branches* is off; 942 of them are exactly the head a merged PR carried into main.
+
+- [x] (CC) Remove 25 tracked backup copies (12 `*.dataless.bak-20260516*`, `favicon.ico.bak-antrope-a`, `tmp/imagegen/*.jsonl`, 11 byte-identical Finder duplicates `public/images/og/<name> 2.png`) and ignore `*.bak`, `*.bak-*`, `*.orig`, `*.rej`, `*~`, `tmp/` — `done` — history keeps the old versions
+- [x] (CC) Add `scripts/prune-branches.mjs` (dry run by default, `--delete` only removes merged-exact branches, re-checks origin and open PRs before pushing and leases every batch to the planned sha) with tests, and `scripts/disk-sweep.sh` as the repo copy of the iMac sweep — `done` — `docs/OPERATIONS.md` §5–6
+- [x] (CC) Drop the push triggers pinned to merged branches in `cohort-release-check.yml` and `home-share-editions-check.yml`; give `next-models-pages.yml` the `timeout-minutes` every other workflow has — `done`
+- [ ] (MH/X) Diff and delete the six `src/components/<Name> 2.astro` Finder forks (`DrumNav`, `HomeFireplace`, `NatureFieldDeskStrip`, `NounsWoodChopStrip`, `SpotifyEmbed`, `WingPulseModule`); nothing imports them but each differs from its sibling by hundreds of lines — `handoff`
+- [ ] (MH) Look at the 21 branches in `docs/audits/2026-10-17-branch-triage.tsv` marked `review`: unmerged work that exists nowhere else (daily email scheduler, two `/mist` rooms, the Bell Labs paper, Kettle contract, Bloom Party, Agent-Web Observatory, and smaller) — `waiting-on-mh`
+- [ ] (MH) Turn on *Automatically delete head branches* (Settings → General → Pull Requests) so this stops accumulating — `waiting-on-mh`
+- [ ] (MH/CC) Approve and run `npm run prune:branches -- --delete` from the iMac for the 942 merged-exact branches (the snapshot in `docs/audits/2026-10-17-branch-prune-plan.tsv`; the run re-plans live and prints its own count) — `waiting-on-mh` — reversible per branch from the PR page, `refs/pruned/*`, or the sha log
+- [ ] (MH) Decide what `cloudflare-pages.yml` is for: it runs a full build on every push to main and then skips the deploy step every time (no token, and `scripts/deploy.sh` is the one deploy path) — `waiting-on-mh`
+- [ ] (MH) Install the repo sweep on the iMac: `ln -sf ~/pc-deploy/scripts/disk-sweep.sh ~/bin/pointcast-disk-sweep.sh`, run it once by hand as a dry run, then point the 03:30 job at it with `--apply` — `handoff`
+
+---
+
 ## The Squeeze — PTL Mixed 4.0 (2026-10-06)
 
 - [x] (CC) Publish `/pickleball/the-squeeze/` and `/pickleball/the-squeeze.json` from the PTL screenshots, with Court block 0699 — `done` — transcribed about Oct 6 2026; not an official PTL page; no deploy from this session if `CLOUDFLARE_API_TOKEN` is unset
