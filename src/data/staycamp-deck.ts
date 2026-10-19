@@ -98,7 +98,7 @@ export const suits: Suit[] = [
       { title: 'Carry day', text: 'Help whoever can’t move heavy water jugs. Five gallons weighs about forty pounds.' },
       { title: 'Door board', text: 'Tape a sheet to one front door for messages: who needs what, who went where, what the radio said.' },
       { title: 'Four o’clock tea', text: 'One kettle, everyone’s mugs. The street’s best meeting has no agenda.' },
-      { title: 'Window signs up', text: 'Green in the window means all well. Amber means please knock. Check the street at dusk.' },
+      { title: 'Window signs up', text: 'Green records a recent check-in. Amber asks for a knock. Call 911 or your local emergency number for urgent help; do not wait for someone to see a sign.' },
       { title: 'Thank-you notes', text: 'Write one for whoever helped this week. Leave it on their step.' },
     ],
   },
