@@ -5,6 +5,8 @@ export function GET() {
     name: `${BLOOM_META.title} — ${BLOOM_META.subtitle}`,
     url: `https://pointcast.xyz${BLOOM_META.route}`,
     label: BLOOM_META.label,
+    edition: BLOOM_META.edition,
+    printMastersAvailable: BLOOM_META.printMastersAvailable,
     checkoutActive: BLOOM_META.checkoutActive,
     story: BLOOM_META.story,
     families: BLOOM_FAMILIES,

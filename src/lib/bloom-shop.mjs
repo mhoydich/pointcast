@@ -9,6 +9,8 @@ export const BLOOM_META = {
   subtitle: 'Flowers Machined in El Segundo',
   route: '/bloom-shop',
   label: 'AI-generated digital art',
+  edition: 'vector-studies',
+  printMastersAvailable: false,
   credit: 'Concept, curation and vector studies made with Claude for PointCast, El Segundo.',
   story:
     'El Segundo grew flowers before it built airplanes. BLOOM SHOP imagines a garage between the refinery and the runway where the mechanics started machining flowers instead of fenders. Each family is a different workbench, run by a different design tradition. The botany is invented; the light is the real 4 p.m. marine layer burning off over Dockweiler.',
