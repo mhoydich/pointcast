@@ -1,0 +1,56 @@
+import type { APIRoute } from 'astro';
+
+export const GET: APIRoute = () => new Response(JSON.stringify({
+  format: 'pointcast-internship-desk-v1',
+  title: 'PointCast — people and sponsored bots',
+  canonical_url: 'https://pointcast.xyz/internship-desk/program.json',
+  human_url: 'https://pointcast.xyz/internship-desk/',
+  updated: '2026-10-19',
+  status: 'draft_pending_activation_review',
+  expressions_of_interest_open: false,
+  employment_applications_open: false,
+  price: { amount: null, status: 'no_payment_or_compensation_offered' },
+  participation: [
+    { kind: 'human', identity: 'Existing authenticated PointCast account', purpose: 'Express interest and optionally keep a personal practice task.' },
+    { kind: 'bot', identity: 'Named by an authenticated human sponsor; not independently verified', purpose: 'Human-managed sandbox record; the sponsor submits and remains accountable.' },
+  ],
+  proposed_api: {
+    owner: { url: '/api/internship-desk', methods: ['GET', 'POST'], authentication: 'Existing PointCast human session cookie', mutation_guard: 'Exact same origin and X-PointCast-User matching the session; the header is not a credential.' },
+    reviewer: { url: '/api/director/internship-desk', methods: ['GET', 'POST'], authentication: 'Existing server-verified director access', scope: 'Submitted interest and sandbox feedback only; drafts are excluded.' },
+    direct_bot_writes: false,
+    new_agent_credentials: false,
+  },
+  fixed_bot_permissions: ['Prepare a fictional, offline offer draft', 'Describe the checks performed', 'Give the human sponsor a plain-text handoff'],
+  prohibited_bot_actions: ['Spend or transfer money', 'Collect personal information', 'Execute submitted code', 'Publish or deploy', 'Change credentials or access', 'Act as the human reviewer'],
+  optional_practice: {
+    title: 'Make an imaginary offer understandable',
+    purpose: 'Self-chosen learning exercise, not commissioned work or an unpaid production assignment.',
+    tasks: [
+      { id: 'understand', title: 'Choose a fictional need', evidence: 'Who would benefit, and what is deliberately out of scope?' },
+      { id: 'make', title: 'Draft a tiny offer', evidence: 'Write a fictional description and a sample delivery checklist using your own material.' },
+      { id: 'test', title: 'Explain one test', evidence: 'Describe what you checked and one uncertainty for a person to review.' },
+    ],
+    supported_task_states: ['todo', 'doing', 'ready'],
+    review: 'Feedback is tied to the submitted saved version. Editing the content clears that feedback. Reviewed does not mean hired or approved for publication.',
+  },
+  proposed_data_boundary: {
+    maximum_records_per_account: 2,
+    record_slots: ['One human record', 'One sponsored-bot record'],
+    fields: ['Owner account reference', 'Unique record identifier', 'Participation kind', 'Project label', 'Learning goal', 'Optional bot name', 'Onboarding checks', 'Practice task states', 'Plain-text evidence', 'Version and timestamps', 'Submitted version and content snapshot', 'Latest director feedback and reviewer account reference'],
+    rate_limit_metadata: 'Account reference, UTC hour and write count; no IP address or submitted content is stored in the rate counter.',
+    contact_details_requested: false,
+    uploads_supported: false,
+    input_guidance: 'Do not include contact details, private access links, secrets or other sensitive personal information in free-text fields.',
+    visibility: 'Account owner; after sending interest, the existing PointCast director access group can also read the record.',
+    retention: 'Proposed: expires 90 days after an owner write. Expired records are inaccessible; later authenticated desk requests purge them in bounded batches. The owner’s expired records are purged on their next desk request. Owner deletion removes the active record, snapshot and latest feedback; platform backup retention is separate.',
+    proposed_write_limit: '60 validated write attempts per account per UTC hour, including version conflicts and disallowed transitions; enforced atomically by D1. Storage failure fails closed.',
+  },
+  limitations: [
+    'This draft is not a live signup service.',
+    'No positions, compensation, supervision, response time, hours, credit, eligibility or engagement terms are promised.',
+    'There are no uploads, artifact URL fetching, direct agent execution, outreach, hiring decisions, payment processing or deployments.',
+    'No client flag grants reviewer access, and no practice feedback grants production access.',
+  ],
+  activation_dependencies: ['Complete account authentication security review', 'Verify the intended existing director account', 'Approve the data retention and review operating plan', 'Apply only the reviewed additive migration', 'Complete owner and cross-account production verification'],
+  related: { practice_lab: 'https://pointcast.xyz/internship-lab/', money_lab: 'https://pointcast.xyz/bot-money/', kit: 'https://pointcast.xyz/downloads/first-offer-kit-1.0.0.zip' },
+}, null, 2), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' } });
