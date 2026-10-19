@@ -4,6 +4,22 @@
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import { NOUNS_BATTLER_WIKI } from '../lib/nouns-battler-agent-bench';
+import battlerAssets from '../../public/games/nouns-nation-battler/assets/manifest.json';
+
+// The local asset set is noun-0 … noun-59. featuredNouns also names ids that
+// carry meaning elsewhere in the battler (88, 421, 557 — 421 is the agent
+// identity on the bench), and those had no local file, so three <img> tags
+// 404'd. Fall back to noun.pics for ids outside the local set: same CC0 art,
+// seeds 0–1199, which is the house source for Nouns we don't ship ourselves.
+const LOCAL_NOUN_IDS = new Set<number>(
+  (battlerAssets.nouns ?? [])
+    .map((n: { file: string }) => Number(/noun-(\d+)\.svg$/.exec(n.file)?.[1]))
+    .filter((n: number) => Number.isFinite(n)),
+);
+const nounArt = (id: number): string =>
+  LOCAL_NOUN_IDS.has(id)
+    ? `/games/nouns-nation-battler/assets/noun-${id}.svg`
+    : `https://noun.pics/${id}.svg`;
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -68,7 +84,7 @@ const jsonLd = {
         <div class="noun-grid">
           {NOUNS_BATTLER_WIKI.featuredNouns.slice(0, 12).map((noun) => (
             <figure>
-              <img src={`/games/nouns-nation-battler/assets/noun-${noun}.svg`} alt={`Noun ${noun}`} loading="eager" />
+              <img src={nounArt(noun)} alt={`Noun ${noun}`} loading="eager" />
               <figcaption>#{noun}</figcaption>
             </figure>
           ))}

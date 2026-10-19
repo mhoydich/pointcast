@@ -117,6 +117,19 @@ export function nextSession(court, nowMs, sunsetMin, days = 7, kinds = null) {
   return null;
 }
 
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+/**
+ * Pure: the hours.dated window covering LA day `day` ('YYYY-MM-DD'), or null.
+ * A dated window (a school break, from a district calendar) wins over the
+ * weekday rules for that day.
+ */
+export function datedHours(hours, day) {
+  const list = hours && Array.isArray(hours.dated) ? hours.dated : [];
+  return list.find((w) => w && DAY_RE.test(w.from) && DAY_RE.test(w.to) && day >= w.from && day <= w.to
+    && HHMM.test(w.open) && (w.close === 'dusk' || HHMM.test(w.close))) ?? null;
+}
+
 /**
  * Pure: 'closed' for a standing closure (renovation, not today's hours),
  * 'unknown' without verified hours, else whether `nowMs` falls inside today's
@@ -125,14 +138,16 @@ export function nextSession(court, nowMs, sunsetMin, days = 7, kinds = null) {
  * real astronomical time, already DST-correct, so this function needs no DST
  * logic of its own). A day with no rule reads `hours.else`. Unverified hours
  * read 'unknown', and so does any minute where `hours.conflict`'s other
- * reading of the source disagrees.
+ * reading of the source disagrees. A day inside an `hours.dated` window
+ * (datedHours) reads that window instead of the weekday rules.
  */
 export function openState(court, nowMs, sunsetMin) {
   if (court.status === 'closed') return 'closed';
   if (!court.hours || court.hours.confidence === 'unverified') return 'unknown';
-  const { weekday, minuteOfDay } = laParts(nowMs);
+  const { day, weekday, minuteOfDay } = laParts(nowMs);
+  const dated = datedHours(court.hours, day);
   const byRules = (rules) => {
-    const rule = rules.find((r) => r.days.includes(weekday));
+    const rule = dated ?? rules.find((r) => r.days.includes(weekday));
     if (!rule) return court.hours.else === 'closed' ? 'closed' : 'unknown';
     const open = minutesOf(rule.open);
     const close = rule.close === 'dusk' ? sunsetMin : minutesOf(rule.close);

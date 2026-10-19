@@ -22,6 +22,8 @@ for (const book of books) {
   if (book.resourceType === 'reading-room') assert(!html.includes('"@type":"Book"'), 'Unverified historical title must not assert Book metadata');
 }
 for (const file of ['dist/books/index.html', 'dist/books.json', 'dist/books/map/index.html', 'dist/books/map.json', 'dist/images/bookshelf-goodreads/provenance.json']) assert(fs.existsSync(file), `Missing ${file}`);
-const map = fs.readFileSync('dist/books/map.json', 'utf8');
-for (const forbidden of ['user_rating', 'user_review', 'user_name', 'user_shelves', 'user_read_at', 'user_date_added', 'book_description', 'book_image_url', 'review/list_rss', '/review/list/', 'profileUrl', 'sourceUrl']) assert(!map.includes(forbidden), `Private feed metadata leaked: ${forbidden}`);
+for (const file of ['dist/books/map.json', 'dist/books.json']) {
+  const serialized = fs.readFileSync(file, 'utf8');
+  for (const forbidden of ['user_rating', 'user_review', 'user_name', 'user_shelves', 'user_read_at', 'user_date_added', 'book_description', 'book_image_url', 'review/list_rss', '/review/list/', 'profileUrl', 'sourceUrl']) assert(!serialized.includes(forbidden), `${file}: private feed metadata leaked: ${forbidden}`);
+}
 console.log('Eleven companions, original artwork, 87 public title records and privacy/metadata guards passed.');

@@ -1,0 +1,56 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { JSDOM } from 'jsdom';
+import { getPublishedProjects, isVerifiedPublishedProject, makeProjectPanels, publishedCatalog } from '../src/lib/home-published-projects.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const catalog = JSON.parse(fs.readFileSync(path.join(root, 'src/data/home-latest-projects.json'), 'utf8'));
+const projects = getPublishedProjects(catalog);
+assert.ok(projects.length > 0, 'Published discovery cannot ship an empty catalog');
+const claimed = catalog.filter(project => project.publication?.state === 'verified-live');
+assert.ok(claimed.every(isVerifiedPublishedProject), 'Every live claim must pass the shared admission contract');
+assert.equal(projects.length, claimed.length, 'Duplicate IDs or hrefs must fail the build');
+const ids = new Set(projects.map(project => project.id));
+const hrefs = new Set(projects.map(project => project.href));
+assert.equal(ids.size, projects.length);
+assert.equal(hrefs.size, projects.length);
+const home = new JSDOM(fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8'));
+const latest = new JSDOM(fs.readFileSync(path.join(root, 'dist/latest/index.html'), 'utf8'));
+for (const [name, dom] of [['home', home], ['latest', latest]]) {
+  assert.equal(dom.window.document.querySelectorAll('main').length, 1, name + ' has exactly one main');
+  assert.ok(dom.window.document.querySelector('main#main-content'), name + ' retains the shared main landmark');
+  assert.equal(dom.window.document.querySelectorAll('main main').length, 0, name + ' cannot nest main landmarks');
+}
+const doc = home.window.document;
+const panels = [...doc.querySelectorAll('[data-project-panel]')];
+const expectedPanels = makeProjectPanels(projects, 3);
+assert.equal(panels.length, expectedPanels.length);
+const found = new Set();
+panels.forEach((panel, index) => {
+  const links = [...panel.querySelectorAll('a[href]')];
+  assert.deepEqual(links.map(link => link.getAttribute('href')), expectedPanels[index].map(project => project.href));
+  links.forEach(link => found.add(link.getAttribute('href')));
+  assert.equal(panel.getAttribute('data-active'), String(index === 0));
+  assert.equal(panel.getAttribute('aria-hidden'), String(index !== 0));
+  assert.equal(panel.hasAttribute('inert'), index !== 0);
+  if (index !== 0) assert.ok(links.every(link => link.getAttribute('tabindex') === '-1'));
+});
+assert.deepEqual([...found].sort(), [...hrefs].sort(), 'Every admitted project must be in the rotation');
+assert.ok(doc.querySelector('[data-project-controls][hidden]'));
+assert.equal(doc.querySelectorAll('[data-home-visit-view]').length, 6, 'Original art views stay intact');
+assert.equal(new Set([...doc.querySelectorAll('[data-home-visit-view] img')].map(node => node.getAttribute('src'))).size, 6);
+assert.ok(doc.querySelector('[data-home-latest-projects] a[href="/latest/"]'));
+const latestEntries = [...latest.window.document.querySelectorAll('[data-latest-entry]')];
+assert.equal(latestEntries.length, projects.length);
+assert.ok(latestEntries.every(entry => !entry.hasAttribute('hidden')), 'Complete Latest catalog is readable without JavaScript');
+assert.deepEqual(latestEntries.map(entry => entry.querySelector('h3 a').getAttribute('href')).sort(), [...hrefs].sort());
+assert.ok(latest.window.document.querySelector('[data-latest-filters][hidden]'));
+assert.equal(latest.window.document.querySelector('link[rel="canonical"]')?.getAttribute('href'), 'https://pointcast.xyz/latest/');
+const feedBytes = fs.readFileSync(path.join(root, 'dist/latest/catalog.json'));
+const feed = JSON.parse(feedBytes.toString('utf8'));
+assert.deepEqual(feed, publishedCatalog(catalog), 'Feed and page consume exactly the same sanitized catalog');
+assert.ok(!/\/(?:Users\/|private\/var\/)|sediment:\/\/|sediment:\/\/|libfile_|file_0000/.test(feedBytes.toString('utf8')), 'Public feed has no private workspace or Library tracking');
+home.window.close(); latest.window.close();
+console.log(JSON.stringify({ projects: projects.length, panels: panels.length, feedBytes: feedBytes.length, sixArtViewsPreserved: true, exactlyOneMain: true, noJsFullCatalog: true, sharedFeedParity: true }));

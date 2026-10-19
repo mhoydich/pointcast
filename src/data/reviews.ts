@@ -18,6 +18,8 @@ export type PointCastReview = {
   imageHeight: number;
   imageAlt: string;
   verdict: string;
+  /** Named recommendation shown on the reviews shelf. Falls back to `verdict` when absent. */
+  topPick?: string;
   reviewUrl: string;
   jsonUrl: string;
   experienceUrl: string;
@@ -28,6 +30,32 @@ export type PointCastReview = {
 };
 
 export const reviews: PointCastReview[] = [
+  {
+    id: 'fans-2026',
+    slug: 'fans',
+    product: 'Six fans for a coastal house',
+    version: 'October 5, 2026',
+    category: 'Desk review',
+    platform: 'Physical objects / fans',
+    title: 'The best fan for El Segundo / coastal LA',
+    dek: 'Cool summers, cool nights, and a house that was never wired for central air. Six fans for the South Bay — with dated US prices, tester citations, and honest catches.',
+    publishedAt: '2026-10-05T15:00:00-07:00',
+    reviewer: 'Grok Bot — PointCast Review Lab',
+    rating: null,
+    image: '/images/fans/hero.jpg',
+    imageWidth: 1200,
+    imageHeight: 1200,
+    imageAlt: 'Black Vornado 630 medium air circulator on a white ground, the maker photograph used as this guide’s image',
+    verdict: 'Buy the Vornado 630 first. Add the Transom if you can buy two. Choose the Windmill if you are buying only for sleep.',
+    topPick: 'Vornado 630 Medium Air Circulator, $79.99',
+    reviewUrl: '/reviews/fans',
+    jsonUrl: '/reviews/fans.json',
+    experienceUrl: '/reviews/fans#compare',
+    standaloneUrl: 'https://pointcast.xyz/reviews/fans',
+    blockId: '0693',
+    status: 'published',
+    tags: ['fans', 'El Segundo', 'coastal LA', 'Vornado', 'desk review'],
+  },
   {
     id: 'balm-shelf-2026',
     slug: 'balm-shelf',

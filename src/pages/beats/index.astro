@@ -1,14 +1,19 @@
 ---
 // /beats — Noun Beats. An installable mobile web app (PWA) about Nouns and beats:
 // a 16-step, 7-track beat maker played by a band of Noun drummers, live pads,
-// shared rooms on the drum relay (bc-nb<CODE> party frames), a seeded daily
+// private rooms on the drum relay (bc-nb<CODE> party frames), a seeded daily
 // challenge, and beats shared as a URL hash (/beats/#b=...). Its own app identity:
 // /beats/manifest.webmanifest (id + scope /beats/) and /beats/sw.js (offline shell,
 // runtime cache for noun.pics art). Human taps land on the town drum through
 // POST /api/drum/signal (app "/beats"), one tap = one beat.
-// Built 2026-09-28 by Claude on a brief from Mike. Source of truth for the inline
-// script/style lives in this file; no layout, no framework, no external requests
-// besides noun.pics art and the /api/drum endpoints.
+// v2 (2026-10-05): The Floor — seven always-on public rooms (bc-nbpub-<slug>) with
+// house bands and a peak-groove meter, presence from GET /api/beats/floor; the Beat
+// Wall (functions/api/beats.ts: publish, nod, remix); Moments — earned, numbered,
+// holographic cards kept on the phone (serials from /api/beats/moment), shaped like
+// TZIP-21 metadata but never minted; Media Session lock-screen controls.
+// v1 built 2026-09-28, v2 2026-10-05, by Claude on briefs from Mike. Source of truth for
+// the inline script/style lives in this file; no layout, no framework, no external
+// requests besides noun.pics art, /api/drum* and /api/beats*.
 ---
 <!doctype html>
 <html lang="en">
@@ -16,7 +21,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Noun Beats · PointCast</title>
-<meta name="description" content="Tap out a beat with a band of Nouns. A pocket drum machine: make loops, jam live in rooms, play the daily beat, and share it as a link.">
+<meta name="description" content="Tap out a beat with a band of Nouns. Drop into always-on drum rooms, publish to the Beat Wall, earn Moments, play the daily beat.">
 <link rel="canonical" href="https://pointcast.xyz/beats/">
 <link rel="manifest" href="/beats/manifest.webmanifest">
 <meta name="theme-color" content="#FFF3DF" media="(prefers-color-scheme: light)">
@@ -34,7 +39,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="PointCast">
 <meta property="og:title" content="Noun Beats">
-<meta property="og:description" content="Tap out a beat with a band of Nouns. Make it, jam it in a room, share it as a link.">
+<meta property="og:description" content="Tap out a beat with a band of Nouns. Drop into a room on the Floor, put your beat on the Wall, earn Moments.">
 <meta property="og:url" content="https://pointcast.xyz/beats/">
 <meta property="og:image" content="https://pointcast.xyz/beats/og.webp">
 <meta property="og:image:width" content="1200">
@@ -83,7 +88,7 @@ svg{display:block}
 .top-actions{display:flex;gap:8px;align-items:center}
 .top-actions [data-for]{display:none}
 .app[data-tab="make"] .top-actions [data-for~="make"],.app[data-tab="rooms"] .top-actions [data-for~="rooms"],.app[data-tab="me"] .top-actions [data-for~="me"],
-.app[data-tab="daily"] .top-actions [data-for~="daily"],.app[data-tab="share"] .top-actions [data-for~="share"]{display:flex;align-items:center;justify-content:center}
+.app[data-tab="daily"] .top-actions [data-for~="daily"],.app[data-tab="share"] .top-actions [data-for~="share"],.app[data-tab="wall"] .top-actions [data-for~="wall"]{display:flex;align-items:center;justify-content:center}
 .town-pill{align-items:center;gap:6px;font-weight:900;font-variant-numeric:tabular-nums;background:var(--card);border:2.5px solid var(--line);border-radius:999px;padding:5px 10px 5px 8px;box-shadow:0 3px 0 var(--shadow);font-size:14px}
 .town-pill svg{width:18px;height:18px;fill:var(--red);stroke:var(--line);stroke-width:2}
 .town-pill.bump{animation:bump .25s}
@@ -139,8 +144,8 @@ svg{display:block}
 @keyframes enter{from{opacity:0;transform:translateY(6px)}}
 
 /* ---------- tabs ---------- */
-.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));border-top:2.5px solid var(--line);background:var(--bg2)}
-.tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 0 3px;border-radius:14px;font-size:11px;font-weight:900;color:var(--ink2);letter-spacing:.02em}
+.tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:2px;padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));border-top:2.5px solid var(--line);background:var(--bg2)}
+.tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 0 3px;border-radius:14px;font-size:10.5px;min-width:0;font-weight:900;color:var(--ink2);letter-spacing:.02em}
 .tab svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .tab svg .f{fill:currentColor}
 .tab[aria-selected="true"]{color:var(--ink);background:var(--yellow);box-shadow:inset 0 0 0 2.5px var(--line)}
@@ -251,7 +256,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
 .code-chip{font-weight:900;font-size:20px;letter-spacing:.2em;background:var(--yellow);color:#1D1426;border:2.5px solid var(--line);border-radius:12px;padding:4px 10px;box-shadow:0 3px 0 var(--shadow)}
 .room-status{flex:1;font-size:12px;font-weight:800;color:var(--ink2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .room-status.offline{color:var(--red)}
-.circle{position:relative;width:min(100%,calc(100dvh - 420px),360px);min-width:200px;aspect-ratio:1;margin:0 auto;flex:none}
+.circle{position:relative;width:min(100%,calc(100dvh - 452px),360px);min-width:200px;aspect-ratio:1;margin:0 auto;flex:none}
 .bigdrum{position:absolute;left:24%;top:24%;width:52%;height:52%;border-radius:50%;border:3.5px solid var(--line);background:radial-gradient(circle at 50% 42%,#FFF6E6 0 48%,#F1DDBB 49% 58%,var(--red) 59% 100%);box-shadow:0 7px 0 var(--shadow),inset 0 -8px 0 rgba(0,0,0,.15);display:grid;place-items:center;padding:0;touch-action:none}
 .bigdrum .skin{position:absolute;inset:14%;border-radius:50%}
 .bigdrum .drum-count{position:relative;font-weight:900;font-size:22px;color:#1D1426;font-variant-numeric:tabular-nums}
@@ -314,6 +319,128 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast button{margin-left:10px;border:0;background:var(--yellow);color:#1D1426;border-radius:8px;padding:3px 8px;font-weight:900;pointer-events:auto}
 
+/* ---------- v2 · the Floor ---------- */
+.floor-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin:4px 2px 10px}
+.floor-head h2,.wall-head h2{margin:0;font-size:26px;letter-spacing:-.03em;line-height:1}
+.floor-live{font-weight:900;font-size:12px;background:var(--mint);color:#fff;border:2.5px solid var(--line);border-radius:999px;padding:3px 9px;box-shadow:0 2px 0 var(--shadow);white-space:nowrap}
+.floor-off{margin:0 4px 10px!important;font-size:13px}
+.floor-list{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.froom{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;min-height:128px;padding:10px 10px 9px;border:2.5px solid var(--line);border-radius:18px;box-shadow:0 4px 0 var(--shadow);color:#fff;overflow:hidden;
+  background:radial-gradient(120% 90% at 100% 0%,var(--rb) 0 38%,transparent 62%),linear-gradient(160deg,var(--ra),color-mix(in srgb,var(--ra) 70%,#000))}
+.froom:active{transform:translateY(2px);box-shadow:0 2px 0 var(--shadow)}
+.froom .nv{width:46px;border-radius:12px;background:rgba(255,255,255,.3);transform-origin:50% 90%}
+.froom b{font-size:15px;font-weight:900;line-height:1.05;letter-spacing:-.01em;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.froom .vibe{font-size:11px;font-weight:700;opacity:.9;line-height:1.15}
+.froom .meta{margin-top:auto;display:flex;align-items:center;gap:6px;width:100%;font-size:11px;font-weight:900;font-variant-numeric:tabular-nums}
+.froom .here{background:rgba(0,0,0,.35);border-radius:999px;padding:2px 7px;white-space:nowrap}
+.froom .here.live{background:#fff;color:#1D1426}
+.froom .here.live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mint);margin-right:4px;vertical-align:1px;animation:pulse 1.2s infinite}
+.froom .eq{position:absolute;right:10px;top:12px;display:flex;gap:2px;align-items:flex-end;height:18px}
+.froom .eq i{width:4px;background:#fff;border-radius:2px;opacity:.85;animation:eq 1s ease-in-out infinite;height:40%}
+.froom .eq i:nth-child(2){animation-delay:-.3s}.froom .eq i:nth-child(3){animation-delay:-.6s}.froom .eq i:nth-child(4){animation-delay:-.15s}
+@keyframes eq{50%{height:100%}}
+.froom.cur{outline:3px solid var(--yellow);outline-offset:2px}
+.lobby-hero h2{font-size:22px}
+.room.pub .circle::before{content:"";position:absolute;inset:6%;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--rb) 45%,transparent) 0 45%,color-mix(in srgb,var(--ra) 35%,transparent) 46% 70%,transparent 71%);opacity:.9}
+.code-chip.pub{letter-spacing:0;font-size:16px;padding:5px 9px;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--ra);color:#fff}
+.room-host .nv{width:34px;border-radius:10px}
+.groove{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900;color:var(--ink2);height:22px}
+.g-lbl{text-transform:uppercase;letter-spacing:.1em}
+.g-bar{flex:1;height:14px;border:2.5px solid var(--line);border-radius:999px;background:var(--cell);overflow:hidden;position:relative}
+.g-bar i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:999px;background:linear-gradient(90deg,var(--mint),var(--yellow),var(--red));transition:width .25s ease-out}
+.g-k{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
+.groove.peak .g-bar{box-shadow:0 0 0 3px var(--yellow),0 0 18px var(--yellow)}
+.groove.peak .g-bar i{background:repeating-linear-gradient(90deg,#FFD86B 0 12px,#FFF3C4 12px 24px);animation:shine .6s linear infinite}
+.groove.peak .g-k{color:var(--red)}
+@keyframes shine{to{background-position:24px 0}}
+
+/* ---------- v2 · the Beat Wall ---------- */
+.wall-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin:4px 2px 10px}
+.seg{display:flex;gap:6px}
+.wall-list{display:flex;flex-direction:column;gap:10px}
+.bcard{background:var(--card);border:2.5px solid var(--line);border-radius:18px;box-shadow:0 4px 0 var(--shadow);padding:10px;display:grid;grid-template-columns:1fr;gap:8px}
+.bcard.playing{box-shadow:0 4px 0 var(--shadow),0 0 0 3px var(--yellow)}
+.bc-band{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.bc-band .nv{width:100%;border-radius:8px;border-width:2px;transform-origin:50% 90%}
+.bc-thumb{width:100%;height:auto;aspect-ratio:320/84;border-radius:8px;display:block;background:var(--cell)}
+.bc-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bc-meta{flex:1 1 190px;min-width:0;display:flex;flex-direction:column}
+.bc-meta b{font-size:16px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
+.bc-meta span{font-size:11px;font-weight:800;color:var(--ink2)}
+.bc-act{display:flex;gap:6px;margin-left:auto}
+.bc-act .btn{padding:7px 10px;font-size:13px;border-radius:11px}
+.bc-act .nod[aria-pressed="true"]{background:var(--mint);color:#fff}
+.bc-act .play-b{min-width:54px}
+.wall-empty{padding:18px;text-align:center;font-weight:800;color:var(--ink2)}
+.btn.pub{background:var(--yellow);color:#1D1426}
+.pubform{display:flex;flex-direction:column;gap:2px;text-align:left}
+.pubform h2{text-align:center}
+.pubform .lbl{text-align:center}
+.pub-thumb{width:100%;height:auto;border-radius:10px;border:2.5px solid var(--line);background:var(--cell)}
+.pubform .field{border:0;box-shadow:none;padding:6px 0 0;margin:0;background:none}
+.pub-row{display:flex;align-items:flex-end;gap:12px}
+.pub-row .field{flex:1}
+.pub-row .field input{text-transform:uppercase;letter-spacing:.3em;font-weight:900;text-align:center}
+.pub-noun .nv{width:58px}
+.pub-err{min-height:18px;margin:6px 0 0;color:var(--red);font-weight:800;font-size:13px;text-align:center}
+
+/* ---------- v2 · Moments ---------- */
+.moments-head{display:flex;align-items:baseline;justify-content:space-between;margin:18px 4px 8px}
+.moments-head h3{margin:0;font-size:20px;letter-spacing:-.02em}
+.moments{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mcard{--rx:0deg;--ry:0deg;--mx:50%;--my:50%;position:relative;display:block;width:100%;aspect-ratio:4/5;border-radius:18px;border:3px solid var(--line);box-shadow:0 5px 0 var(--shadow);overflow:hidden;padding:0;color:#1D1426;text-align:left;
+  transform:perspective(700px) rotateX(var(--rx)) rotateY(var(--ry));transition:transform .15s ease-out;background:var(--mc-bg);isolation:isolate}
+.mcard.common{--mc-bg:linear-gradient(150deg,#F4F6FA,#C9CED9 45%,#EEF1F6 60%,#AEB5C2);--mc-ink:#3C4252;--mc-band:#7D8597}
+.mcard.rare{--mc-bg:linear-gradient(150deg,#BFE3FF,#8C5CF0 40%,#2F7CF6 62%,#7FF0D8);--mc-ink:#fff;--mc-band:#1D1426}
+.mcard.legendary{--mc-bg:linear-gradient(150deg,#FFF3C4,#E0A100 34%,#FFD86B 52%,#8A5A00 78%,#FFE9A3);--mc-ink:#3A2500;--mc-band:#1D1426}
+.mcard::before{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;mix-blend-mode:color-dodge;opacity:.55;
+  background:repeating-linear-gradient(115deg,transparent 0 6%,rgba(255,80,180,.45) 9%,rgba(80,200,255,.45) 13%,rgba(255,240,120,.45) 17%,transparent 21%),
+  radial-gradient(farthest-corner at var(--mx) var(--my),rgba(255,255,255,.75),transparent 55%);background-size:220% 220%,100% 100%;animation:foil 7s linear infinite}
+.mcard.common::before{opacity:.28}
+.mcard.legendary::before{opacity:.7}
+.mcard::after{content:"";position:absolute;inset:7px;border-radius:12px;border:2px solid rgba(255,255,255,.55);z-index:2;pointer-events:none}
+@keyframes foil{to{background-position:220% 220%,0 0}}
+.mc-top{position:absolute;left:10px;right:10px;top:9px;display:flex;justify-content:space-between;align-items:center;z-index:2;font-weight:900;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mc-ink)}
+.mc-rar{background:var(--mc-band);color:#fff;border-radius:999px;padding:2px 7px}
+.mcard.legendary .mc-rar{background:linear-gradient(90deg,#8A5A00,#E0A100);border:1.5px solid #3A2500}
+.mc-nv{position:absolute;left:22%;right:22%;top:14%;aspect-ratio:1;z-index:1}
+.mc-nv .nv{width:100%;border-radius:16px;border-width:3px;box-shadow:0 4px 0 rgba(0,0,0,.25)}
+.mc-name{position:absolute;left:10px;right:10px;bottom:30px;z-index:2;color:var(--mc-ink)}
+.mc-name b{display:block;font-size:17px;font-weight:900;letter-spacing:-.02em;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.3)}
+.mc-name span{display:block;font-size:10px;font-weight:800;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-grid{position:absolute;left:10px;right:10px;bottom:9px;height:16px;z-index:2;display:grid;grid-template-columns:repeat(16,1fr);gap:1.5px}
+.mc-grid i{border-radius:2px;background:rgba(0,0,0,.18)}
+.mc-grid i.on{background:var(--mc-band)}
+.mcard.locked{--mc-bg:repeating-linear-gradient(135deg,var(--cell) 0 10px,var(--cell2) 10px 20px);box-shadow:none;border-style:dashed;opacity:.8}
+.mcard.locked::before,.mcard.locked::after{display:none}
+.mcard.locked .mc-name{color:var(--ink2)}
+.mcard.locked .mc-nv .nv{filter:grayscale(1) brightness(.4) contrast(1.4);opacity:.35}
+.mcard.big{width:min(78vw,330px);border-radius:24px;box-shadow:0 8px 0 var(--shadow)}
+.mcard.big .mc-top{font-size:12px;left:16px;right:16px;top:14px}
+.mcard.big .mc-name{left:16px;right:16px;bottom:44px}
+.mcard.big .mc-name b{font-size:26px}
+.mcard.big .mc-name span{font-size:12px;white-space:normal}
+.mcard.big .mc-nv{left:18%;right:18%;top:13%}
+.mcard.big .mc-grid{left:16px;right:16px;bottom:14px;height:24px}
+.mcard.playing .mc-nv{animation:bob .42s ease-in-out infinite alternate}
+@keyframes bob{to{transform:translateY(-4px) rotate(2deg)}}
+.moment-ov{background:rgba(20,10,25,.72);align-content:center}
+.mo-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(100%,380px)}
+.mo-kicker{font-weight:900;font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#FFD86B;text-shadow:0 2px 0 #000}
+.moment-ov.reveal .mo-card{animation:slideup .7s cubic-bezier(.2,1.2,.3,1)}
+@keyframes slideup{from{transform:translateY(70vh) rotate(-8deg) scale(.7);opacity:0}}
+.mo-actions{width:100%;margin-top:0}
+.mpeek{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 15vh);width:min(48vw,200px);z-index:45;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px;
+  transform:translate(-50%,85vh) rotate(-6deg) scale(.8);opacity:0;transition:transform .6s cubic-bezier(.2,1.25,.3,1),opacity .35s}
+.mpeek.show{transform:translate(-50%,0) rotate(0) scale(1);opacity:1}
+.mpeek .mp-k{font-weight:900;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#FFD86B;background:#1D1426;border:2px solid #FFD86B;border-radius:999px;padding:4px 11px;white-space:nowrap}
+.mpeek .mcard{box-shadow:0 14px 30px rgba(0,0,0,.35),0 5px 0 var(--shadow)}
+.mpeek.legendary .mcard{box-shadow:0 0 44px 10px rgba(255,200,60,.75),0 5px 0 var(--shadow)}
+.mpeek.rare .mcard{box-shadow:0 0 36px 6px rgba(120,140,255,.6),0 5px 0 var(--shadow)}
+.me-chip,.tab{position:relative}
+.me-chip.dot::after,.tab.dot::after{content:"";position:absolute;top:0;right:2px;width:11px;height:11px;border-radius:50%;background:#FFD86B;border:2px solid var(--line);box-shadow:0 0 0 2px var(--bg2)}
+.tab.dot::after{right:calc(50% - 18px)}
+
 @media (min-height:760px){ .band .drummer .nv{max-width:56px} .transport .play{width:60px;height:60px} }
 @media (min-width:600px){ .app{max-width:520px;margin:0 auto;border-left:2.5px solid var(--line);border-right:2.5px solid var(--line)} body{background:var(--bg2)} }
 @media (prefers-reduced-motion:reduce){ *{animation-duration:.01s!important;transition:none!important} }
@@ -332,7 +459,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       <button class="icon-btn seg" id="padsBtn" type="button" aria-label="Pads mode" aria-pressed="false" data-for="make">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
       </button>
-      <span class="town-pill" id="townPill" data-for="rooms me daily share" title="PointCast town drum — every tap on every drum">
+      <span class="town-pill" id="townPill" data-for="rooms wall me daily share" title="PointCast town drum — every tap on every drum">
         <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="7" rx="8" ry="3"/><path d="M4 7v9c0 1.7 3.6 3 8 3s8-1.3 8-3V7"/></svg><span id="townCount">—</span>
       </span>
     </div>
@@ -365,6 +492,9 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
         <div class="stat"><b id="stRank">—</b><span id="stRankLabel">top-10 drummer rank</span></div>
         <div class="stat"><b id="stLeague">—</b><span id="stLeagueLabel">Noun Beats in the Drum League</span></div>
       </div>
+      <div class="moments-head"><h3>Moments</h3><span class="lbl" id="momentCount">0 earned</span></div>
+      <div class="moments" id="moments"></div>
+      <p class="fine">Moments are earned by playing, never bought. They live on this phone.</p>
       <div class="card install" id="installCard">
         <b id="installTitle">Put Noun Beats on your home screen</b>
         <p id="installText">It opens full-screen and plays offline.</p>
@@ -396,9 +526,15 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     <!-- ===== ROOMS ===== -->
     <section class="view scroll" id="v-rooms" data-view="rooms" hidden>
       <div class="lobby" id="lobby">
+        <div class="floor-head">
+          <div><h2>The Floor</h2><span class="lbl" id="floorSub">always-on rooms · drop in</span></div>
+          <span class="floor-live" id="floorLive">—</span>
+        </div>
+        <p class="offline-note floor-off" id="floorOffline" hidden>You're offline. Floor rooms play with their house band until you're back.</p>
+        <div class="floor-list" id="floorList" role="list"></div>
         <div class="card lobby-hero">
           <div class="lobby-nouns" id="lobbyNouns"></div>
-          <h2>Tap together</h2>
+          <h2>Private room</h2>
           <p>Start a room, send the code, and everyone's Noun drums on one shared loop.</p>
           <button class="btn primary big" id="startRoom" type="button">Start a room</button>
           <form class="join" id="joinForm" autocomplete="off">
@@ -417,12 +553,18 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       <div class="room" id="room" hidden>
         <div class="room-head">
           <span class="code-chip" id="roomCode">----</span>
+          <span class="room-host" id="roomHost" hidden><span class="nv sm" id="roomHostNv"></span></span>
           <span class="room-status" id="roomStatus">connecting…</span>
           <button class="btn sm" id="inviteBtn" type="button">Invite</button>
           <button class="btn sm ghost" id="leaveBtn" type="button">Leave</button>
         </div>
         <div class="circle" id="circle">
           <button class="bigdrum" id="bigDrum" type="button" aria-label="Hit the shared drum"><span class="skin"></span><span class="drum-count" id="roomTaps">0</span></button>
+        </div>
+        <div class="groove" id="groove" aria-label="Peak groove meter">
+          <span class="g-lbl">groove</span>
+          <span class="g-bar"><i id="grooveFill"></i></span>
+          <span class="g-k" id="grooveK">tap on the beat together</span>
         </div>
         <div class="room-loop" id="roomLoop">
           <button class="btn sm" id="roomPlay" type="button">Play loop</button>
@@ -431,6 +573,17 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
         <div class="minipads" id="roomPads"></div>
         <div class="room-foot"><span id="roomHere">here: 1</span><span id="roomSync"></span></div>
       </div>
+    </section>
+
+    <!-- ===== WALL ===== -->
+    <section class="view scroll" id="v-wall" data-view="wall" hidden>
+      <div class="wall-head">
+        <div><h2>The Beat Wall</h2><span class="lbl" id="wallSub">beats from everyone</span></div>
+        <div class="seg" role="tablist" aria-label="Sort the wall"><button type="button" class="chip on" data-sort="new">New</button><button type="button" class="chip" data-sort="top">Top</button></div>
+      </div>
+      <p class="offline-note" id="wallOffline" hidden>You're offline. This is the wall as you last saw it; nods and publishing wait for a connection.</p>
+      <div class="wall-list" id="wallList"></div>
+      <p class="fine" id="wallFoot">Publish from Make or Share. One nod per beat per day.</p>
     </section>
 
     <!-- ===== DAILY ===== -->
@@ -474,16 +627,18 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
         <button class="btn" id="copyBtn" type="button">Copy link</button>
         <button class="btn" id="saveImgBtn" type="button">Save image</button>
       </div>
-      <p class="fine">The whole beat lives in the link. No account, no server.</p>
+      <button class="btn wide pub" id="pubShareBtn" type="button">Publish to the wall</button>
+      <p class="fine">The whole beat lives in the link. Publishing also puts it on the Beat Wall.</p>
     </section>
   </main>
 
   <nav class="tabs" role="tablist" aria-label="Noun Beats">
-    <button class="tab" role="tab" type="button" data-tab="me"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="14" rx="2"/><path d="M3 10h4m0-2h4v4H7zM13 8h4v4h-4zM11 10h2" class="nog"/><path d="M8 21h8"/></svg><span>Me</span></button>
+    <button class="tab" role="tab" type="button" data-tab="rooms"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="8" rx="8" ry="3"/><path d="M4 8v8c0 1.7 3.6 3 8 3s8-1.3 8-3V8M7 10.5v7M12 11v8M17 10.5v7"/></svg><span>Floor</span></button>
     <button class="tab" role="tab" type="button" data-tab="make"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1" class="f"/><rect x="17" y="3" width="4" height="5" rx="1"/><rect x="3" y="10" width="5" height="5" rx="1" class="f"/><rect x="10" y="10" width="5" height="5" rx="1"/><rect x="17" y="10" width="4" height="5" rx="1" class="f"/><rect x="3" y="17" width="5" height="4" rx="1"/><rect x="10" y="17" width="5" height="4" rx="1" class="f"/><rect x="17" y="17" width="4" height="4" rx="1"/></svg><span>Make</span></button>
-    <button class="tab" role="tab" type="button" data-tab="rooms"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="8" rx="8" ry="3"/><path d="M4 8v8c0 1.7 3.6 3 8 3s8-1.3 8-3V8M7 10.5v7M12 11v8M17 10.5v7"/></svg><span>Rooms</span></button>
+    <button class="tab" role="tab" type="button" data-tab="wall"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5" class="f"/><rect x="3" y="13" width="8" height="7" rx="1.5" class="f"/><rect x="13" y="13" width="8" height="7" rx="1.5"/></svg><span>Wall</span></button>
     <button class="tab" role="tab" type="button" data-tab="daily"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M12 12.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4z" class="f"/></svg><span>Daily</span></button>
     <button class="tab" role="tab" type="button" data-tab="share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg><span>Share</span></button>
+    <button class="tab" role="tab" type="button" data-tab="me"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="14" rx="2"/><path d="M3 10h4m0-2h4v4H7zM13 8h4v4h-4zM11 10h2" class="nog"/><path d="M8 21h8"/></svg><span>Me</span></button>
   </nav>
 
   <!-- bottom sheet: presets, tempo, swing, key, takes -->
@@ -497,6 +652,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
         <button class="btn" id="randBtn" type="button">Randomize</button>
         <button class="btn" id="clearBtn" type="button">Clear slot</button>
       </div>
+      <button class="btn wide pub" id="pubBtn" type="button">Publish to the wall</button>
       <h3>Tempo <b id="tempoVal">100</b> bpm</h3>
       <input type="range" id="tempo" min="70" max="160" step="1" aria-label="Tempo">
       <h3>Swing <b id="swingVal">0</b>%</h3>
@@ -523,6 +679,38 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
         <button class="btn primary big" id="scPlay" type="button">Play</button>
         <button class="btn big" id="scRemix" type="button">Remix</button>
       </div>
+    </div>
+  </div>
+
+  <!-- publish to the wall -->
+  <div class="overlay" id="pubCard" hidden role="dialog" aria-label="Publish to the Beat Wall">
+    <form class="sc card pubform" id="pubForm" autocomplete="off">
+      <button class="x" id="pubClose" type="button" aria-label="Close">&#215;</button>
+      <span class="lbl">The Beat Wall</span>
+      <h2>Publish this beat</h2>
+      <canvas class="pub-thumb" id="pubThumb" width="320" height="140" aria-hidden="true"></canvas>
+      <label class="field"><span>Title</span><input id="pubTitle" type="text" maxlength="40" placeholder="e.g. Porch thump" enterkeyhint="next"></label>
+      <div class="pub-row">
+        <label class="field"><span>Initials</span><input id="pubName" type="text" maxlength="3" autocapitalize="characters" spellcheck="false" placeholder="MHO" enterkeyhint="done"></label>
+        <div class="pub-noun"><span class="nv lg" data-me-noun></span></div>
+      </div>
+      <p class="pub-err" id="pubErr" role="alert"></p>
+      <button class="btn primary big wide" id="pubGo" type="submit">Publish</button>
+      <p class="fine">Everyone can play, nod and remix it. One beat a minute.</p>
+    </form>
+  </div>
+
+  <!-- a Moment: reveal + viewer -->
+  <div class="overlay moment-ov" id="momentOv" hidden role="dialog" aria-label="Moment">
+    <div class="mo-wrap">
+      <span class="mo-kicker" id="moKicker">Moment earned</span>
+      <div class="mo-card" id="moCard"></div>
+      <div class="row3 mo-actions">
+        <button class="btn" id="moPlay" type="button">Play beat</button>
+        <button class="btn" id="moSave" type="button">Save image</button>
+        <button class="btn primary" id="moDone" type="button">Collect</button>
+      </div>
+      <canvas id="moCanvas" width="1080" height="1350" hidden></canvas>
     </div>
   </div>
 
@@ -677,7 +865,15 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       '....x.......x...',
       'x...x...x...x...',
       '1...4...1...4...',
-      '1.2.3...3.2.1...'] }
+      '1.2.3...3.2.1...'] },
+    { id: 'night', name: 'Night Market', bpm: 104, swing: 22, key: 3, mode: 0, rows: [
+      'x..x..x...x..x..',
+      '....x.......x...',
+      '.xx.xx.x.xx.xx.x',
+      '..........x.....',
+      'x.....x..x...x..',
+      '1..1..4...3..5..',
+      '8.6.5...6.5.3...'] }
   ];
   function presetById(id) { for (var i = 0; i < PRESETS.length; i++) if (PRESETS[i].id === id) return PRESETS[i]; return null; }
   function presetPattern(id) { var p = presetById(id); return p ? fromRows(p.rows) : emptyPattern(); }
@@ -1131,6 +1327,148 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   function normCode(s) { s = String(s || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4); return s.length === 4 ? s : null; }
   function roomName(code) { return 'bc-nb' + code.toLowerCase(); }
 
+  /* ---------- v2: the Floor (always-on public rooms) ---------- */
+  // Party room `bc-nbpub-<slug>` (≤ 32 chars, passes the DO room regex). The first human in hosts;
+  // alone, the room's house band (host Noun + one bandmate) plays the room's preset so it is never silent.
+  // The server's /api/beats/floor reads presence for exactly these slugs (keep the two lists in step).
+  var FLOOR = [
+    { slug: 'basement', name: 'Boom-Bap Basement', short: 'Basement', vibe: 'dusty kicks, lazy snares', preset: 'boombap', host: 116, hostName: 'Dusty', band: 674, bandName: 'Crate', a: '#3B2A4D', b: '#E8452C' },
+    { slug: 'roof', name: 'House Roof', short: 'Roof', vibe: 'four on the floor at sunset', preset: 'house', host: 302, hostName: 'Rae', band: 845, bandName: 'Tink', a: '#FF8A3D', b: '#FF6FA8' },
+    { slug: 'porch', name: 'Lo-fi Porch', short: 'Porch', vibe: 'slow swing, warm bells', preset: 'lofi', host: 57, hostName: 'Pip', band: 990, bandName: 'Moth', a: '#8C5CF0', b: '#2F7CF6' },
+    { slug: 'stage', name: 'Anthem Stage', short: 'Stage', vibe: 'the Nouns anthem, loud', preset: 'anthem', host: 1, hostName: 'Big Ant', band: 419, bandName: 'Bongo', a: '#E8452C', b: '#FFC93C' },
+    { slug: 'patio', name: 'Reggaeton Patio', short: 'Patio', vibe: 'dembow under string lights', preset: 'reggaeton', host: 777, hostName: 'Luz', band: 233, bandName: 'Coco', a: '#1FB985', b: '#FFC93C' },
+    { slug: 'hall', name: 'March Hall', short: 'Hall', vibe: 'snare lines in a big room', preset: 'march', host: 404, hostName: 'Major', band: 512, bandName: 'Brass', a: '#2F7CF6', b: '#1D1426' },
+    { slug: 'market', name: 'Night Market', short: 'Market', vibe: 'neon, bells, late', preset: 'night', host: 1066, hostName: 'Neon', band: 733, bandName: 'Lantern', a: '#1D1426', b: '#8C5CF0' }
+  ];
+  function floorRoom(slug) { for (var i = 0; i < FLOOR.length; i++) if (FLOOR[i].slug === slug) return FLOOR[i]; return null; }
+  function floorRoomName(slug) { return 'bc-nbpub-' + slug; }
+  function floorSong(slug) {
+    var f = floorRoom(slug); if (!f) return null;
+    var p = presetById(f.preset), nouns = defaultNouns(f.host);
+    nouns[1] = f.band;
+    return { bpm: p.bpm, swing: p.swing, key: p.key, mode: p.mode, slots: [fromRows(p.rows), emptyPattern(), emptyPattern(), emptyPattern()], cur: 0, chain: [], mutes: new Array(TRACKS).fill(false), nouns: nouns };
+  }
+
+  /* ---------- v2: peak groove ---------- */
+  // Each phone bins on-beat hits by shared beat index (the sender stamps it, so every phone bins alike,
+  // whatever the relay latency). When a beat closes, k = distinct humans who hit on it:
+  // k ≥ 2 fills the meter, k = 1 holds it, k = 0 drains it. The house band never counts.
+  var GROOVE_GAIN = [-4, 0, 9, 14, 18];
+  function GrooveMeter() { this.level = 0; this.closed = -1; this.bins = {}; this.cool = 0; this.last = 0; this.peaks = 0; this.peakK = 0; }
+  GrooveMeter.prototype.hit = function (person, beat) {
+    beat = Math.floor(beat);
+    if (!isFinite(beat) || beat < 0 || beat <= this.closed) return false;
+    (this.bins[beat] = this.bins[beat] || {})[person] = 1;
+    return true;
+  };
+  // Close every beat up to and including `upto`. Returns { level, k, peak } (peak = beat index or null).
+  GrooveMeter.prototype.close = function (upto) {
+    upto = Math.floor(upto);
+    var peak = null;
+    // Room step numbers count from the room's epoch, so they can be large: never walk more than 64 beats.
+    if (upto - this.closed > 64) { for (var kk in this.bins) if (+kk <= upto - 64) delete this.bins[kk]; this.closed = upto - 64; }
+    for (var b = this.closed + 1; b <= upto; b++) {
+      var bin = this.bins[b], k = bin ? Object.keys(bin).length : 0;
+      delete this.bins[b];
+      this.last = k;
+      if (this.cool > 0) { this.cool--; if (!this.cool) this.level = 30; continue; }
+      this.level = clamp(this.level + GROOVE_GAIN[Math.min(k, 4)], 0, 100);
+      if (this.level >= 100) { peak = b; this.peakK = k; this.peaks++; this.cool = 8; }
+    }
+    if (upto > this.closed) this.closed = upto;
+    return { level: this.level, k: this.last, peak: peak, cooling: this.cool > 0 };
+  };
+  // Is a tap at audio time `t` on an 8th-note of the shared grid? Returns the beat index or -1.
+  function onBeatIndex(seq, t, tol) {
+    if (!seq || !seq.playing) return -1;
+    tol = tol == null ? 0.075 : tol;
+    var d = stepDur(seq.bpm), n = Math.round((t - seq.anchorTime) / d) + seq.anchorStep, best = -1, bestErr = 1e9;
+    for (var k = n - 1; k <= n + 1; k++) {
+      if (((k % 2) + 2) % 2) continue;
+      var e = Math.abs(seq.gridTime(k) - t);
+      if (e < bestErr) { bestErr = e; best = k; }
+    }
+    return best >= 0 && bestErr <= tol ? Math.floor(best / 4) : -1;
+  }
+
+  /* ---------- v2: Moments (earned, off-chain) ---------- */
+  var MOMENT_TYPES = {
+    'peak-groove': { name: 'Peak Groove', how: 'Hit pads on the beat with others until the room peaks', rarity: 'rare' },
+    'perfect-daily': { name: 'Perfect Daily', how: 'Score 100 on the Daily', rarity: 'rare' },
+    'first-beat': { name: 'First Beat', how: 'Make your first beat', rarity: 'common' },
+    'tenth-beat': { name: 'Tenth Beat', how: 'Make 10 beats', rarity: 'rare' },
+    'hundredth-beat': { name: 'Hundredth Beat', how: 'Make 100 beats', rarity: 'legendary' },
+    'ten-nods': { name: 'Ten Nods', how: 'A beat of yours gets 10 nods on the Wall', rarity: 'rare' },
+    'floor-hopper': { name: 'Floor Hopper', how: 'Play in 3 Floor rooms in one day', rarity: 'common' }
+  };
+  var MOMENT_ORDER = ['peak-groove', 'perfect-daily', 'ten-nods', 'floor-hopper', 'first-beat', 'tenth-beat', 'hundredth-beat'];
+  // Rarity comes from the type, raised by difficulty: a room that peaks with 3+ humans, or a perfect
+  // Keep-the-groove (timed) Daily, is legendary.
+  function momentRarity(type, ctx) {
+    var t = MOMENT_TYPES[type]; if (!t) return 'common';
+    ctx = ctx || {};
+    if (type === 'peak-groove' && ctx.people >= 3) return 'legendary';
+    if (type === 'perfect-daily' && ctx.mode === 'groove') return 'legendary';
+    return t.rarity;
+  }
+  // The Moment record. Shaped so it could later become a TZIP-21 token without reshaping:
+  // `metadata` already uses TZIP-21 field names. Nothing here touches a chain.
+  function makeMoment(o) {
+    var t = MOMENT_TYPES[o.type];
+    var rarity = momentRarity(o.type, o.ctx);
+    var serial = Math.max(1, Math.floor(o.serial || 1));
+    var noun = clamp(Math.floor(o.noun || 0), 0, NOUN_MAX);
+    var at = o.at || new Date().toISOString();
+    var m = {
+      v: 1, id: o.id || ('m' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)),
+      type: o.type, typeName: t.name, serial: serial, serialScope: o.scope === 'global' ? 'global' : 'local',
+      rarity: rarity, earnedAt: at, noun: noun, name: String(o.name || '').slice(0, 16),
+      beat: typeof o.beat === 'string' ? o.beat : '', ctx: o.ctx || {}
+    };
+    m.metadata = momentMetadata(m);
+    return m;
+  }
+  function momentMetadata(m) {
+    var title = m.typeName + ' #' + m.serial;
+    var where = m.ctx && m.ctx.room ? ' in ' + m.ctx.room : '';
+    return {
+      name: title,
+      description: (m.name ? m.name + '’s' : 'Noun ' + m.noun + '’s') + ' Noun Beats Moment: ' + m.typeName + where + '. Earned by playing, never bought.',
+      symbol: 'NBM', decimals: 0, isBooleanAmount: true, shouldPreferSymbol: false,
+      date: m.earnedAt,
+      tags: ['nouns', 'noun-beats', 'pointcast', m.type, m.rarity],
+      creators: ['pointcast.xyz/beats'],
+      minter: null, artifactUri: null, displayUri: null,
+      thumbnailUri: 'https://noun.pics/' + m.noun + '.svg',
+      externalUri: m.beat ? 'https://pointcast.xyz/beats/#b=' + m.beat : 'https://pointcast.xyz/beats/',
+      formats: [],
+      attributes: [
+        { name: 'type', value: m.typeName }, { name: 'rarity', value: m.rarity },
+        { name: 'serial', value: String(m.serial) }, { name: 'serial scope', value: m.serialScope },
+        { name: 'noun', value: String(m.noun) }
+      ].concat(m.ctx && m.ctx.room ? [{ name: 'room', value: String(m.ctx.room) }] : [])
+        .concat(m.ctx && m.ctx.people ? [{ name: 'players', value: String(m.ctx.people) }] : [])
+    };
+  }
+
+  /* ---------- v2: the Rooms blur list (same words + folding as /keyboard/rooms) ---------- */
+  // Stored rot13 so the source reads clean. The server (functions/_lib/beats-wall.ts) holds the same list.
+  var ROT = function (w) { return w.replace(/[a-z]/g, function (c) { return String.fromCharCode((c.charCodeAt(0) - 97 + 13) % 26 + 97); }); };
+  var BLUR_SET = {};
+  ['shpx', 'shpxvat', 'shpxre', 'fuvg', 'ohyyfuvg', 'ovgpu', 'phag', 'nffubyr', 'nff', 'qvpx', 'pbpx', 'chffl', 'onfgneq', 'fyhg', 'juber', 'snt', 'snttbg', 'avttre', 'avttn', 'ergneq', 'jnaxre', 'gjng', 'cevpx', 'qbhpuront', 'zbgureshpxre']
+    .forEach(function (w) { BLUR_SET[ROT(w)] = 1; });
+  function foldLeet(w) { return String(w).toLowerCase().replace(/[@4]/g, 'a').replace(/3/g, 'e').replace(/[1!|]/g, 'i').replace(/0/g, 'o').replace(/[$5]/g, 's').replace(/7/g, 't').replace(/(.)\1+/g, '$1$1'); }
+  function isRudeWord(word) {
+    if (!/[a-z]/i.test(word)) return false; // a bare number ("beat 455") is not leetspeak
+    var f = foldLeet(word).replace(/[^a-z]/g, ''); if (!f) return false;
+    if (BLUR_SET[f] || BLUR_SET[f.replace(/(.)\1/g, '$1')]) return true;
+    return /^(shpx|fuvg|phag)/.test(ROT(f));
+  }
+  function isRude(text) { return String(text || '').split(/[\s_.,\-]+/).some(isRudeWord); }
+  // Three-letter arcade initials get one more list (rot13), same as the server.
+  var INITIALS = {}; ['shx', 'spx', 'shp', 'fug', 'pag', 'qvx', 'xxx', 'avt', 'gvg', 'phz', 'wvm', 'snt', 'nff'].forEach(function (w) { INITIALS[ROT(w)] = 1; });
+  function isRudeInitials(name) { return !!INITIALS[foldLeet(name).replace(/[^a-z]/g, '')] || isRude(name); }
+
   return {
     STEPS: STEPS, TRACKS: TRACKS, SLOTS: SLOTS, TRACK_IDS: TRACK_IDS, TRACK_LABELS: TRACK_LABELS, MELODIC: MELODIC,
     KEYS: KEYS, MODES: MODES, SCALES: SCALES, MAX_DEG: MAX_DEG, BPM_MIN: BPM_MIN, BPM_MAX: BPM_MAX, NOUN_MAX: NOUN_MAX,
@@ -1145,7 +1483,11 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     grade: grade, applyDaily: applyDaily, currentStreak: currentStreak,
     stepDur: stepDur, swingDelay: swingDelay, stepOffset: stepOffset,
     Engine: Engine, Sequencer: Sequencer,
-    newRoomCode: newRoomCode, normCode: normCode, roomName: roomName
+    newRoomCode: newRoomCode, normCode: normCode, roomName: roomName,
+    FLOOR: FLOOR, floorRoom: floorRoom, floorRoomName: floorRoomName, floorSong: floorSong,
+    GrooveMeter: GrooveMeter, onBeatIndex: onBeatIndex,
+    MOMENT_TYPES: MOMENT_TYPES, MOMENT_ORDER: MOMENT_ORDER, momentRarity: momentRarity, makeMoment: makeMoment, momentMetadata: momentMetadata,
+    isRude: isRude, isRudeInitials: isRudeInitials
   };
 });
 
@@ -1163,9 +1505,9 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   };
   var TEST = LS.get('test', 0) === 1;
   var APP = '/beats';
-  var TAB_NAMES = { me: 'you', make: 'make', rooms: 'rooms', daily: 'daily', share: 'share' };
+  var TAB_NAMES = { me: 'you', make: 'make', rooms: 'the floor', wall: 'the wall', daily: 'daily', share: 'share' };
   var app = $('app');
-  var log = { steps: [], heard: [], pads: [], errors: [], bars: [] };
+  var log = { steps: [], heard: [], pads: [], errors: [], bars: [], peaks: [] };
   var cap = function (arr, n) { if (arr.length > n) arr.splice(0, arr.length - n); };
 
   /* ================= identity + persistence ================= */
@@ -1218,12 +1560,13 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     return (fallbackCache[id] = c.toDataURL('image/png'));
   }
   function nounUrl(id) { return 'https://noun.pics/' + id + '.svg'; }
-  function setNoun(el, id) {
+  function setNoun(el, id, lazy) {
     if (!el) return;
     id = NB.clamp(Math.floor(id), 0, 1199);
     var img = el.querySelector('img');
     if (!img) {
       img = document.createElement('img'); img.alt = ''; img.decoding = 'async'; img.draggable = false;
+      if (lazy) img.loading = 'lazy';
       img.addEventListener('error', function () { var n = Number(img.dataset.id); if (img.dataset.fb !== '1') { img.dataset.fb = '1'; img.src = fallbackNoun(n); } });
       el.appendChild(img);
       var l = document.createElement('i'); l.className = 'lid l'; el.appendChild(l);
@@ -1302,11 +1645,46 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   function stopAll() {
     if (seq) seq.stop();
     prog = null; visQ.length = 0; setPlaying(false);
+    if (wall && wall.playingId) { wall.playingId = null; wall.prog = null; markWallPlaying(); }
+    qa('.mcard.playing').forEach(function (c) { c.classList.remove('playing'); });
     if (rec.on) toggleRec();
   }
   var wakeLock = null;
+  /* ---------- v2: Media Session (lock-screen controls) + background playback ---------- */
+  var media = { paused: false, bound: false };
+  function nowTitle() {
+    var k = prog ? prog.kind : 'make';
+    if (k === 'room') return room.pub ? room.pub.name : 'Room ' + room.code;
+    if (k === 'wall' && prog.beat) return prog.beat.title;
+    if (k === 'moment' && prog.moment) return prog.moment.typeName + ' #' + prog.moment.serial;
+    if (k === 'share' && sharedBeat) return (sharedBeat.name ? sharedBeat.name + '’s' : 'Noun ' + sharedBeat.author + '’s') + ' beat';
+    if ((k === 'daily' || k === 'groove') && daily.info) return 'Daily #' + daily.info.number;
+    return (state.name ? state.name + '’s' : 'Your') + ' beat · ' + state.song.bpm + ' bpm';
+  }
+  function updateMedia(on) {
+    var ms = navigator.mediaSession; if (!ms) return;
+    try {
+      if (!media.bound) {
+        media.bound = true;
+        ms.setActionHandler('play', function () { if (media.paused && ctx) { media.paused = false; ctx.resume().catch(function () {}); ms.playbackState = 'playing'; } else if (!state.playing && !room.active) play(makeProgram); });
+        ms.setActionHandler('pause', function () { if (ctx && state.playing) { media.paused = true; ctx.suspend().catch(function () {}); ms.playbackState = 'paused'; } });
+        try { ms.setActionHandler('stop', function () { media.paused = false; if (room.active) leaveRoom(); else stopAll(); if (ctx && ctx.state !== 'running') ctx.resume().catch(function () {}); }); } catch (e) { /* older browsers */ }
+      }
+      if (on) {
+        var album = prog && prog.kind === 'room' ? 'The Floor · PointCast' : 'Noun Beats · PointCast';
+        ms.metadata = new MediaMetadata({ title: nowTitle(), artist: 'Noun Beats · ' + (state.name || 'Noun ' + state.noun), album: album,
+          artwork: [{ src: '/beats/icons/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/beats/icons/icon-512.png', sizes: '512x512', type: 'image/png' }] });
+        media.paused = false;
+      }
+      ms.playbackState = on ? 'playing' : 'none';
+    } catch (e) { /* Media Session is best effort */ }
+  }
+  // Hidden tab / locked screen: timers get throttled to ~1/s, so schedule further ahead to avoid gaps
+  // (Chrome keeps an audible page running; iOS may still suspend the AudioContext when locked).
+  document.addEventListener('visibilitychange', function () { if (seq) seq.lookahead = document.visibilityState === 'hidden' ? 1.5 : 0.12; });
   function setPlaying(on) {
     state.playing = on;
+    updateMedia(on);
     app.classList.toggle('playing', on);
     $('playBtn').setAttribute('aria-label', on ? 'Stop' : 'Play');
     if (on) app.classList.remove('idle-hint');
@@ -1415,8 +1793,9 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       if (on && !noAnim) { v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); }
     });
     qa('.tab').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false'); });
-    $('topSub').textContent = tab === 'rooms' && room.active ? (room.solo ? 'house band' : 'room ' + room.code) : TAB_NAMES[tab];
-    if (tab === 'me') renderMe();
+    $('topSub').textContent = tab === 'rooms' && room.active ? (room.pub ? room.pub.name : room.solo ? 'house band' : 'room ' + room.code) : TAB_NAMES[tab];
+    if (tab === 'me') { renderMe(); $('meChip').classList.remove('dot'); qa('.tab[data-tab="me"]').forEach(function (b) { b.classList.remove('dot'); }); }
+    if (tab === 'wall') renderWall();
     if (tab === 'daily') renderDaily();
     if (tab === 'share') renderShare();
     if (tab === 'rooms') { renderLobby(); if (room.active) layoutSeats(); }
@@ -1592,6 +1971,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     if (ev.kind === 'room') roomStepVisual(ev);
     if (ev.kind === 'daily' || ev.kind === 'groove') dailyStepVisual(ev);
     if (ev.kind === 'share') bandReact(scNouns, ev, sharedBeat ? sharedBeat.slots[NB.slotForBar(sharedBeat, ev.bar)] : null);
+    if (ev.kind === 'wall' && wall.prog) bandReact(wall.prog.nvs, ev, wall.prog.b.slots[NB.slotForBar(wall.prog.b, ev.bar)]);
   }
   // The band is the show: flash on hits, nod on the beat, blink between bars, get hyped on fills.
   function bandReact(nvs, ev, pat) {
@@ -1617,6 +1997,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     var h = NB.patternHash(p);
     if (PRESET_HASHES.indexOf(h) >= 0 || stats.made.indexOf(h) >= 0) return;
     stats.made.push(h); if (stats.made.length > 999) stats.made.shift(); saveStats();
+    checkMilestones(true);
   }
   setInterval(function () {
     if (state.playing) return;
@@ -1626,6 +2007,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
 
   // transport
   $('playBtn').addEventListener('click', function () {
+    if (room.active && room.pub) { toast(room.pub.name + ' keeps playing — leave the room to play your own beat'); return; }
     if (room.active && !room.solo && !room.isHost) { toast('The host runs the room loop'); return; }
     if (room.active) { roomToggleLoop(); return; }
     if (state.playing && prog && prog.kind === 'make') { stopAll(); return; }
@@ -1691,7 +2073,12 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     var padNv = e && e.target.closest('.pad').querySelector('.nv'); hitAnim(padNv);
     var now = performance.now(); recentPad.push(now); recentPad = recentPad.filter(function (x) { return now - x < 650; });
     if (recentPad.length === 5) hypeAnim(drummers[0].nv);
-    if (room.active && !room.solo) sendParty({ t: 'p', p: i, g: deg, n: state.noun, c: stats.taps });
+    if (room.active) {
+      var rb = tapBeat(e);
+      if (rb >= 0) { room.groove.hit(room.me, rb); room.lastOnBeat = Math.max(room.lastOnBeat, rb); }
+      if (room.pub) markFloorRoom(room.pub.slug);
+      if (!room.solo) sendParty({ t: 'p', p: i, g: deg, n: state.noun, c: stats.taps, b: rb });
+    }
     log.pads.push({ i: i, at: at }); cap(log.pads, 200);
   }
   function overdub(i, ns, deg) {
@@ -1858,7 +2245,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     $('stBeats').textContent = stats.made.length.toLocaleString();
     var d = LS.get('daily', null);
     $('stStreak').textContent = NB.currentStreak(d, today()); $('stBest').textContent = d ? d.best : 0;
-    paintYour(); paintInstall();
+    paintYour(); paintInstall(); renderMoments(); refreshMyNods();
     if (Date.now() - meFetched < 20000 || navigator.onLine === false) return;
     meFetched = Date.now();
     Drum.refresh();
@@ -1896,8 +2283,15 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   var room = {
     active: false, solo: false, code: null, ws: null, me: null, people: [], peers: {}, host: null, isHost: false,
     loop: null, offset: 0, bestRtt: 1e9, samples: [], pings: [], map: null, seats: {}, taps: 0, retry: 0, running: false,
-    bots: false, pingTimer: null, dirtyTimer: null, lpTimer: null, reconnectTimer: null, features: []
+    bots: false, pingTimer: null, dirtyTimer: null, lpTimer: null, reconnectTimer: null, features: [],
+    pub: null, pubSong: null, groove: new NB.GrooveMeter(), lastOnBeat: -99, peakUntil: 0, grooveK: 0
   };
+  function roomBots() {
+    if (!room.pub) return BOTS;
+    return [{ id: 'bot-a', noun: room.pub.host, name: room.pub.hostName }, { id: 'bot-b', noun: room.pub.band, name: room.pub.bandName }];
+  }
+  function roomLabel() { return room.pub ? room.pub.name : 'Room ' + room.code; }
+  function roomKey() { return room.pub ? 'pub-' + room.pub.slug : 'room-' + room.code; }
   var BOTS = [{ id: 'bot-a', noun: 419, name: 'Bongo' }, { id: 'bot-b', noun: 733, name: 'Tink' }];
   function serverNow() { return Date.now() + room.offset; }
   function freshMap() { return { audio: ctx.currentTime, server: serverNow() }; }
@@ -1906,6 +2300,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   function paintOnline() {
     var off = navigator.onLine === false;
     $('roomsOffline').hidden = !off; $('startRoom').disabled = off; $('joinBtn').disabled = off;
+    if (floor.built) paintFloor();
     if (room.active && !room.solo && off) setRoomStatus('offline — house band keeps time', true);
   }
   function renderLobby() {
@@ -1914,11 +2309,76 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       [state.noun, BOTS[0].noun, BOTS[1].noun].forEach(function (n) { var s = document.createElement('span'); s.className = 'nv'; ln.appendChild(s); setNoun(s, n); });
     } else setNoun(ln.children[0], state.noun);
     paintOnline();
+    buildFloor(); paintFloor(); if (!room.active) fetchFloor();
     if (navigator.onLine !== false) fetch('/api/drum/live').then(function (r) { return r.json(); }).then(function (res) {
       if (res && typeof res.count === 'number') $('liveNow').textContent = 'drummers here right now: ' + res.count;
     }).catch(function () {});
   }
   function setRoomStatus(txt, bad) { var el = $('roomStatus'); el.textContent = txt; el.classList.toggle('offline', !!bad); }
+  /* ---------- v2: the Floor lobby ---------- */
+  // Presence: GET /api/beats/floor → each public room's DrumRoomV2 `connected` (edge-cached ~8 s server side).
+  // Polled every 12 s while the Floor is on screen, backing off to 2 min on errors; nothing when hidden or offline.
+  var floor = { counts: null, at: 0, fail: 0, timer: null, built: false, cards: {} };
+  function floorKey(f) { return NB.KEYS[NB.presetById(f.preset).key] + ' ' + NB.MODES[NB.presetById(f.preset).mode]; }
+  function buildFloor() {
+    if (floor.built) return;
+    floor.built = true;
+    var list = $('floorList');
+    NB.FLOOR.forEach(function (f) {
+      var pr = NB.presetById(f.preset);
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'froom'; b.dataset.slug = f.slug; b.setAttribute('role', 'listitem');
+      b.style.setProperty('--ra', f.a); b.style.setProperty('--rb', f.b);
+      var nv = document.createElement('span'); nv.className = 'nv'; b.appendChild(nv);
+      var eq = document.createElement('span'); eq.className = 'eq'; eq.innerHTML = '<i></i><i></i><i></i><i></i>'; b.appendChild(eq);
+      var nm = document.createElement('b'); nm.textContent = f.name; b.appendChild(nm);
+      var vb = document.createElement('span'); vb.className = 'vibe'; vb.textContent = f.vibe; b.appendChild(vb);
+      var meta = document.createElement('span'); meta.className = 'meta';
+      var here = document.createElement('span'); here.className = 'here'; here.textContent = 'house band';
+      var bpm = document.createElement('span'); bpm.textContent = pr.bpm + ' bpm · ' + floorKey(f);
+      meta.appendChild(here); meta.appendChild(bpm); b.appendChild(meta);
+      list.appendChild(b); setNoun(nv, f.host);
+      b.setAttribute('aria-label', f.name + ' — ' + f.vibe);
+      b.addEventListener('click', function () { audio(); enterRoom(f.slug, false, f); });
+      floor.cards[f.slug] = { el: b, here: here, nv: nv };
+    });
+  }
+  function floorCount(slug) {
+    if (room.active && room.pub && room.pub.slug === slug && !room.solo) return room.people.length;
+    return floor.counts && typeof floor.counts[slug] === 'number' ? floor.counts[slug] : null;
+  }
+  function paintFloor() {
+    var off = navigator.onLine === false, total = 0, known = false;
+    $('floorOffline').hidden = !off;
+    NB.FLOOR.forEach(function (f) {
+      var c = floor.cards[f.slug]; if (!c) return;
+      var n = off ? null : floorCount(f.slug);
+      if (n != null) { known = true; total += n; }
+      c.here.textContent = n ? n + ' here' : off ? 'offline · house band' : 'house band';
+      c.here.classList.toggle('live', !!n);
+      c.el.classList.toggle('cur', !!(room.active && room.pub && room.pub.slug === f.slug));
+      c.el.dataset.here = n == null ? '' : String(n);
+    });
+    $('floorLive').textContent = off ? 'offline' : !known ? 'house bands on' : total ? total + ' on the Floor' : 'house bands on';
+  }
+  function fetchFloor() {
+    clearTimeout(floor.timer); floor.timer = null;
+    if (navigator.onLine === false) { paintFloor(); return Promise.resolve(); }
+    return fetch('/api/beats/floor', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); }).then(function (res) {
+      floor.counts = res && res.rooms ? res.rooms : null; floor.at = Date.now(); floor.fail = 0; paintFloor();
+    }).catch(function () { floor.fail = Math.min(floor.fail + 1, 4); paintFloor(); }).then(function () {
+      if (state.tab === 'rooms' && document.visibilityState === 'visible') floor.timer = setTimeout(fetchFloor, 12000 * Math.pow(2, floor.fail));
+    });
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && state.tab === 'rooms') fetchFloor(); });
+  // Floor Hopper: the Floor rooms you tapped in today.
+  function markFloorRoom(slug) {
+    var d = today(), fd = LS.get('floorday', null);
+    if (!fd || fd.day !== d) fd = { day: d, rooms: [] };
+    if (fd.rooms.indexOf(slug) >= 0) return;
+    fd.rooms.push(slug); LS.set('floorday', fd);
+    if (fd.rooms.length >= 3) earnMoment('floor-hopper', { room: room.pub ? room.pub.name : '', rooms: fd.rooms.length }, roomLoopEnc(), 'hop:' + d);
+  }
+
   $('startRoom').addEventListener('click', function () { enterRoom(NB.newRoomCode(), false); });
   $('joinForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -1930,41 +2390,60 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   $('soloRoom').addEventListener('click', function () { enterRoom('BAND', true); });
   $('leaveBtn').addEventListener('click', leaveRoom);
   $('inviteBtn').addEventListener('click', function () {
+    if (room.pub) {
+      var fu = location.origin + '/beats/#f=' + room.pub.slug;
+      shareOrCopy({ title: room.pub.name + ' · Noun Beats', text: 'I’m on the Floor in ' + room.pub.name + '. Drop in and drum.', url: fu }, fu, 'Room link copied');
+      return;
+    }
     var url = location.origin + '/beats/#r=' + room.code;
     shareOrCopy({ title: 'Noun Beats room ' + room.code, text: 'Tap drums with me in Noun Beats. Room ' + room.code, url: url }, url, 'Invite link copied');
   });
-  function enterRoom(code, solo) {
+  function enterRoom(code, solo, pub) {
     if (room.active) leaveRoom(true);
     audio(); stopAll();
+    room.pub = pub || null; room.pubSong = pub ? NB.floorSong(pub.slug) : null;
     room.active = true; room.solo = solo || navigator.onLine === false; room.code = code; room.people = []; room.peers = {}; room.taps = 0;
     room.loop = null; room.running = false; room.isHost = !!room.solo; room.host = null; room.me = 'me'; room.map = null;
     room.offset = 0; room.bestRtt = 1e9; room.samples = [];
+    room.groove = new NB.GrooveMeter(); room.lastOnBeat = -99; room.peakUntil = 0; room.grooveK = 0; paintGroove();
     $('lobby').hidden = true; $('room').hidden = false;
-    $('roomCode').textContent = room.solo ? 'BAND' : code; $('inviteBtn').hidden = room.solo;
+    var rv = $('room'); rv.classList.toggle('pub', !!pub);
+    if (pub) { rv.style.setProperty('--ra', pub.a); rv.style.setProperty('--rb', pub.b); } else { rv.style.removeProperty('--ra'); rv.style.removeProperty('--rb'); }
+    $('roomCode').classList.toggle('pub', !!pub);
+    $('roomCode').textContent = pub ? pub.short : room.solo ? 'BAND' : code; $('inviteBtn').hidden = room.solo && !pub;
+    $('roomHost').hidden = !pub; if (pub) setNoun($('roomHostNv'), pub.host);
     $('roomTaps').textContent = '0';
     qa('.seat', $('circle')).forEach(function (s) { s.remove(); }); room.seats = {};
-    if (!solo && location.hash !== '#r=' + code) history.replaceState(null, '', '/beats/#r=' + code);
+    var hash = pub ? '#f=' + pub.slug : '#r=' + code;
+    if ((!solo || pub) && location.hash !== hash) history.replaceState(null, '', '/beats/' + hash);
     setTab('rooms');
     if (room.solo) {
-      setRoomStatus(navigator.onLine === false ? 'offline — just you and the house band' : 'just you and the house band', navigator.onLine === false);
+      var off = navigator.onLine === false;
+      setRoomStatus(off ? 'offline — just you and the house band' : 'just you and the house band', off);
       room.people = [{ id: 'me', joinedAt: 0 }];
       updateHost(); startHostLoop(true); layoutSeats();
     } else {
       setRoomStatus('connecting…'); connect();
       room.people = [{ id: 'me', joinedAt: 0 }]; layoutSeats();
+      // A Floor room is never silent: start its house loop now as a provisional host, and re-pin to the
+      // real host's clock the moment their loop frame arrives.
+      if (pub) updateHost();
     }
     $('makeRoomBanner').hidden = true;
+    if (pub) updateHost();
   }
   function leaveRoom(quiet) {
     if (room.ws) { try { room.ws.onclose = null; sendParty({ t: 'bye' }); room.ws.close(); } catch (e) { /* */ } }
     room.ws = null; room.active = false; clearInterval(room.pingTimer); clearInterval(room.lpTimer); clearTimeout(room.reconnectTimer);
     if (prog && prog.kind === 'room') stopAll();
     $('room').hidden = true; $('lobby').hidden = false; $('makeRoomBanner').hidden = true;
-    if (/^#r=/.test(location.hash)) history.replaceState(null, '', '/beats/');
+    if (/^#[rf]=/.test(location.hash)) history.replaceState(null, '', '/beats/');
+    room.pub = null; room.pubSong = null; $('room').classList.remove('pub');
     if (quiet !== true) setTab('rooms');
   }
   function wsUrl() {
-    return (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/api/drum/room?room=' + NB.roomName(room.code) + '&sid=' + encodeURIComponent(SID);
+    var name = room.pub ? NB.floorRoomName(room.pub.slug) : NB.roomName(room.code);
+    return (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/api/drum/room?room=' + name + '&sid=' + encodeURIComponent(SID);
   }
   function connect() {
     var ws;
@@ -2005,6 +2484,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
         room.people.forEach(function (p) { if (!room.peers[p.id] && p.id !== room.me) room.peers[p.id] = { noun: p.avatar % 1200, name: '', guess: true }; });
         updateHost(); layoutSeats();
         setRoomStatus('live · ' + room.people.length + ' here');
+        if (room.pub && floor.built) paintFloor();
         break;
       case 'pong':
         var t0 = room.pings.shift(); if (t0 == null) break;
@@ -2042,9 +2522,13 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       var t = ctx.currentTime;
       if (prog && prog.kind === 'room') { var ns = seq.nearestStep(t); if (ns.time > t && ns.time - t < 0.03) t = ns.time; }
       playPad(i, t, roomSong(), i === 6 || i === 7 ? NB.clamp(d.g || 3, 1, 8) : 1);
+      if (typeof d.b === 'number' && d.b >= 0) room.groove.hit(from, d.b);
       var seat = room.seats[from]; if (seat) hitAnim(seat.nv);
       if (i === NB.PAD_BOOM) drumThump();
       log.heard.push({ from: from, p: i, at: Date.now(), sent: +d.c || 0 }); cap(log.heard, 300);
+    } else if (d.t === 'pk') {
+      // A peer's meter peaked. If you were on the beat with them, it's your peak too.
+      onPeak(+d.b, NB.clamp(Math.floor(d.k) || 2, 2, 99), true);
     } else if (d.t === 'bye') {
       delete room.peers[from];
     }
@@ -2058,16 +2542,55 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       startHostLoop(!room.loop);
     }
     updateBots(); renderRoomLoop();
-    $('makeRoomBanner').hidden = room.isHost || !room.active;
-    $('makeRoomBanner').textContent = 'In room ' + room.code + ': the room plays the host’s loop. Your pads still count.';
+    $('makeRoomBanner').hidden = !room.active || (room.isHost && !room.pub);
+    $('makeRoomBanner').textContent = room.pub ? 'In ' + room.pub.name + ': the room plays its house loop. Your pads still count.' : 'In room ' + room.code + ': the room plays the host’s loop. Your pads still count.';
   }
-  function roomSong() { return room.isHost ? state.song : (room.loop ? room.loop.song : state.song); }
+  function hostSong() { return room.pub ? room.pubSong : state.song; }
+  function roomSong() { return room.isHost ? hostSong() : (room.loop && room.loop.pattern ? room.loop.song : hostSong()); }
   var roomProgram = {
     kind: 'room', lockTempo: true,
     song: function () { return roomSong(); },
-    pattern: function () { return room.isHost ? state.song.slots[state.song.cur] : (room.loop ? room.loop.pattern : NB.emptyPattern()); },
-    onStep: function (ev) { if (room.bots) botsPlay(ev); logStep(ev); }
+    pattern: function () {
+      if (room.isHost) { var h = hostSong(); return h.slots[h.cur]; }
+      return room.loop && room.loop.pattern ? room.loop.pattern : (room.pub ? room.pubSong.slots[0] : NB.emptyPattern());
+    },
+    onStep: function (ev) { if (room.bots) botsPlay(ev); logStep(ev); if (ev.step % 4 === 0) grooveClose(Math.floor(ev.n / 4) - 2); }
   };
+  /* ---------- v2: peak groove ---------- */
+  // Which beat (if any) a human tap landed on, judged on the tapper's own phone against the shared grid
+  // (what they heard: tap time minus output latency). The beat index rides along in the `p` frame.
+  function tapBeat(e) {
+    if (!ctx || !seq || !prog || prog.kind !== 'room') return -1;
+    var heard = (e && e.timeStamp ? audioTimeOf(e.timeStamp) : ctx.currentTime) - outLat();
+    return NB.onBeatIndex(seq, heard);
+  }
+  function grooveClose(upto) {
+    var r = room.groove.close(upto);
+    room.grooveK = r.k;
+    if (r.peak != null) onPeak(r.peak, room.groove.peakK || r.k, false);
+  }
+  function paintGroove() {
+    var g = room.groove, peak = Date.now() < room.peakUntil;
+    $('grooveFill').style.width = (peak ? 100 : g.level) + '%';
+    $('groove').classList.toggle('peak', peak);
+    var humans = room.solo ? 1 : room.people.length;
+    $('grooveK').textContent = peak ? 'PEAK GROOVE!' : humans < 2 ? 'grooves peak with 2+ people' : room.grooveK >= 2 ? room.grooveK + ' on the beat' : 'tap on the beat together';
+  }
+  function onPeak(b, k, fromPeer) {
+    if (!room.active) return;
+    var fresh = Date.now() > room.peakUntil;
+    room.peakUntil = Date.now() + 4000;
+    paintGroove();
+    if (fresh) Object.keys(room.seats).forEach(function (id, i) { setTimeout(function () { if (room.seats[id]) hypeAnim(room.seats[id].nv); }, i * 60); });
+    if (!fromPeer) sendParty({ t: 'pk', b: b, k: k });
+    // Earned only if you were in it: an on-beat hit of yours within the last 8 beats.
+    if (room.lastOnBeat >= b - 8) earnMoment('peak-groove', { room: roomLabel(), people: k }, roomLoopEnc(), 'peak:' + roomKey() + ':' + today());
+  }
+  function roomLoopEnc() {
+    var s = roomSong(), pat = roomProgram.pattern();
+    var nouns = (s.nouns || state.song.nouns).slice(0, 7);
+    return NB.encodeBeat({ bpm: s.bpm, swing: s.swing, key: s.key, mode: s.mode, nouns: nouns, author: state.noun, slots: [pat], cur: 0, name: roomLabel().slice(0, 16) });
+  }
   // Wall-clock time this step will sound, read from the audio clock (independent of the room's clock model).
   function wallOf(t) {
     try { var ts = ctx.getOutputTimestamp && ctx.getOutputTimestamp(); if (ts && ts.performanceTime > 0) return performance.timeOrigin + ts.performanceTime + (t - ts.contextTime) * 1000; } catch (e) { /* */ }
@@ -2076,7 +2599,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   function logStep(ev) { log.steps.push({ n: ev.n, server: Math.round(serverFor(ev.time) * 10) / 10, wall: Math.round(wallOf(ev.time) * 10) / 10, code: room.code }); cap(log.steps, 400); }
   function startHostLoop(fresh) {
     if (!audio()) return;
-    if (fresh || !room.loop) room.loop = { epoch: Math.round(serverNow() + 250), song: state.song };
+    if (fresh || !room.loop) room.loop = { epoch: Math.round(serverNow() + 250), song: hostSong() };
     room.running = true; lastRoomBpm = state.song.bpm; room.appliedEpoch = null;
     applyLoop(); broadcastLoop();
     clearInterval(room.lpTimer);
@@ -2103,13 +2626,13 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   }
   function broadcastLoop() {
     if (!room.isHost || room.solo || !room.loop) return;
-    var s = state.song;
-    var b = NB.encodeBeat({ bpm: s.bpm, swing: s.swing, key: s.key, mode: s.mode, nouns: s.nouns, author: state.noun, slots: s.slots, cur: s.cur, name: state.name }, { only: s.cur });
+    var s = hostSong();
+    var b = NB.encodeBeat({ bpm: s.bpm, swing: s.swing, key: s.key, mode: s.mode, nouns: s.nouns, author: room.pub ? room.pub.host : state.noun, slots: s.slots, cur: s.cur, name: room.pub ? room.pub.hostName : state.name }, { only: s.cur });
     sendParty({ t: 'lp', b: b, e: room.loop.epoch, r: room.running ? 1 : 0 });
   }
   var lastRoomBpm = null;
   function roomDirty(tempo) {
-    if (!room.active || !room.isHost) return;
+    if (!room.active || !room.isHost || room.pub) return;
     clearTimeout(room.dirtyTimer);
     room.dirtyTimer = setTimeout(function () {
       if (lastRoomBpm !== state.song.bpm && room.loop) {
@@ -2121,7 +2644,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     }, tempo ? 250 : 120);
   }
   function roomToggleLoop() {
-    if (!room.isHost) return;
+    if (!room.isHost || room.pub) return;
     room.running = !room.running;
     if (room.running) room.loop.epoch = Math.round(serverNow() + 200);
     applyLoop(); broadcastLoop();
@@ -2129,14 +2652,14 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   $('roomPlay').addEventListener('click', roomToggleLoop);
   function renderRoomLoop() {
     var s = roomSong();
-    $('roomPlay').hidden = !room.isHost;
+    $('roomPlay').hidden = !room.isHost || !!room.pub;
     $('roomPlay').textContent = room.running ? 'Stop loop' : 'Play loop';
-    var who = room.isHost ? 'your loop · slot ' + 'ABCD'.charAt(state.song.cur) : ((room.loop && room.loop.name) || (room.loop ? 'Noun ' + room.loop.author : 'host')) + '’s loop';
+    var who = room.pub ? room.pub.short + ' house loop · ' + NB.presetById(room.pub.preset).name : room.isHost ? 'your loop · slot ' + 'ABCD'.charAt(state.song.cur) : ((room.loop && room.loop.name) || (room.loop ? 'Noun ' + room.loop.author : 'host')) + '’s loop';
     $('roomLoopText').textContent = room.running ? who + ' · ' + s.bpm + ' bpm' : (room.isHost ? 'loop stopped' : 'waiting for the host’s loop…');
   }
   function updateBots() {
     var want = room.active && (room.solo || room.people.length <= 1);
-    if (want !== room.bots) { room.bots = want; layoutSeats(); if (want) toastOnce('bots', 'The house band sat in to keep you company'); }
+    if (want !== room.bots) { room.bots = want; layoutSeats(); if (want && !room.pub) toastOnce('bots', 'The house band sat in to keep you company'); }
   }
   var toasted = {};
   function toastOnce(k, msg) { if (toasted[k]) return; toasted[k] = 1; toast(msg); }
@@ -2158,7 +2681,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     var host = room.seats[room.host] || room.seats[room.me];
     if (host && ev.hits.length) hitAnim(host.nv);
     (ev.bots || []).forEach(function (id) { if (room.seats[id]) hitAnim(room.seats[id].nv); });
-    if (ev.step % 4 === 0) { nodSign = -nodSign; Object.keys(room.seats).forEach(function (id) { if (room.seats[id] !== host) nodAnim(room.seats[id].nv, nodSign); }); }
+    if (ev.step % 4 === 0) { paintGroove(); nodSign = -nodSign; Object.keys(room.seats).forEach(function (id) { if (room.seats[id] !== host) nodAnim(room.seats[id].nv, nodSign); }); }
     if (ev.step === 15) Object.keys(room.seats).forEach(function (id) { if (Math.random() < 0.3) blink(room.seats[id].nv); });
     if (ev.step === 12 && NB.countHits(pat) > 0) { var n = 0; for (var t = 0; t < 7; t++) for (var s = 12; s < 16; s++) if (pat[t][s]) n++; if (n >= 8) Object.keys(room.seats).forEach(function (id) { hypeAnim(room.seats[id].nv); }); }
   }
@@ -2166,10 +2689,10 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     if (!room.active) return;
     var list = room.people.map(function (p) {
       var me = p.id === room.me, peer = room.peers[p.id];
-      return { id: p.id, noun: me ? state.noun : (peer ? peer.noun : 0), name: me ? (state.name || 'you') : (peer && peer.name) || ('Noun ' + (peer ? peer.noun : '')), me: me, host: p.id === room.host && !room.solo };
+      return { id: p.id, noun: me ? state.noun : (peer ? peer.noun : 0), name: me ? (state.name || 'you') : (peer && peer.name) || ('Noun ' + (peer ? peer.noun : '')), me: me, host: p.id === room.host && !room.solo && !room.pub };
     });
     if (!list.length) list.push({ id: room.me, noun: state.noun, name: state.name || 'you', me: true });
-    if (room.bots) BOTS.forEach(function (b) { list.push({ id: b.id, noun: b.noun, name: b.name, bot: true }); });
+    if (room.bots) roomBots().forEach(function (b) { list.push({ id: b.id, noun: b.noun, name: b.name, bot: true }); });
     var circle = $('circle'), keep = {};
     list.forEach(function (p, i) {
       var seat = room.seats[p.id];
@@ -2183,7 +2706,7 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
       var a = -Math.PI / 2 + (i / list.length) * Math.PI * 2 + (list.length === 1 ? 0 : 0);
       seat.el.style.left = (50 + 40 * Math.cos(a)) + '%'; seat.el.style.top = (50 + 40 * Math.sin(a)) + '%';
       seat.el.classList.toggle('me', !!p.me); seat.el.classList.toggle('bot', !!p.bot); seat.el.classList.toggle('host', !!p.host);
-      seat.tag.textContent = p.bot ? p.name + ' · house band' : p.name;
+      seat.tag.textContent = p.bot ? (room.pub ? p.name : p.name + ' · house band') : p.name;
       setNoun(seat.nv, p.noun);
       keep[p.id] = 1;
     });
@@ -2198,7 +2721,10 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     room.taps++; $('roomTaps').textContent = room.taps.toLocaleString();
     var mine = room.seats[room.me]; if (mine) hitAnim(mine.nv);
     if (i === NB.PAD_BOOM) drumThump();
-    if (!room.solo) sendParty({ t: 'p', p: i, g: deg, n: state.noun, c: room.taps });
+    var b = tapBeat(e);
+    if (b >= 0) { room.groove.hit(room.me, b); room.lastOnBeat = Math.max(room.lastOnBeat, b); }
+    if (room.pub) markFloorRoom(room.pub.slug);
+    if (!room.solo) sendParty({ t: 'p', p: i, g: deg, n: state.noun, c: room.taps, b: b });
     log.pads.push({ i: i, at: at, room: room.code }); cap(log.pads, 200);
   }
   (function bindRoom() {
@@ -2331,6 +2857,11 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     daily.practice = false;
     daily.lastResult = { score: score, line: line };
     showResult(score, line, false);
+    if (score === 100) {
+      var i = daily.info;
+      var enc = NB.encodeBeat({ bpm: i.bpm, swing: i.swing, key: i.key, mode: i.minor, nouns: i.nouns.concat(NB.defaultNouns(state.noun)).slice(0, 7), author: state.noun, slots: [i.pattern], cur: 0, name: 'Daily #' + i.number });
+      earnMoment('perfect-daily', { mode: i.mode, daily: i.number, room: 'Daily #' + i.number }, enc, 'daily:' + day);
+    }
     renderDaily();
   }
   function showResult(score, line, restored) {
@@ -2476,9 +3007,365 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     if (m) { var beat = NB.decodeBeat(m[1]); if (beat) showShareCard(beat); else { toast('That beat link is broken'); history.replaceState(null, '', '/beats/'); } return; }
     m = h.match(/^#r=([A-Za-z]{4})/);
     if (m) { var code = NB.normCode(m[1]); if (code && !(room.active && room.code === code)) { setTab('rooms'); enterRoom(code, false); } return; }
+    m = h.match(/^#f=([a-z]+)/);
+    if (m) { var f = NB.floorRoom(m[1]); if (f && !(room.active && room.pub && room.pub.slug === f.slug)) enterRoom(f.slug, false, f); return; }
     if (/^#d/.test(h)) setTab('daily');
   }
   window.addEventListener('hashchange', routeHash);
+
+  /* ================= v2: THE BEAT WALL ================= */
+  var wall = { sort: 'new', list: [], cards: {}, playingId: null, prog: null, fetchedAt: 0, nodsAt: 0 };
+  var nodded = LS.get('nodded', null) || {};
+  var mine = LS.get('mybeats', null) || [];
+  function relTime(ms) {
+    var sec = Math.max(1, Math.round((Date.now() - ms) / 1000)); if (sec < 60) return 'just now';
+    var m = Math.round(sec / 60); if (m < 60) return m + 'm ago';
+    var h = Math.round(m / 60); return h < 24 ? h + 'h ago' : Math.round(h / 24) + 'd ago';
+  }
+  function cssVar(n, d) { try { return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || d; } catch (e) { return d; } }
+  function drawThumb(cv, beat) {
+    var g = cv.getContext('2d'), W = cv.width, H = cv.height, p = beat.slots[beat.cur || 0];
+    var e1 = cssVar('--cell', '#F4E3C8'), e2 = cssVar('--cell2', '#EAD3AE'), cw = W / 16, rh = H / 7;
+    g.clearRect(0, 0, W, H);
+    for (var t = 0; t < 7; t++) for (var st = 0; st < 16; st++) { g.fillStyle = p[t][st] ? TRACK_COLORS[t] : (st % 4 === 0 ? e2 : e1); rr(g, st * cw + 1, t * rh + 1, cw - 2, rh - 2, Math.min(4, rh / 3)); g.fill(); }
+  }
+  function beatProgram(b, kind) {
+    return { kind: kind, b: b, song: function () { return { bpm: b.bpm, swing: b.swing, key: b.key, mode: b.mode, mutes: [] }; }, pattern: function (bar) { return b.slots[NB.slotForBar(b, bar)]; } };
+  }
+  function renderWall() {
+    qa('.wall-head .chip').forEach(function (c) { c.classList.toggle('on', c.dataset.sort === wall.sort); });
+    var off = navigator.onLine === false;
+    $('wallOffline').hidden = !off;
+    if (!wall.list.length) { var cached = LS.get('wallcache:' + wall.sort, null); if (cached && cached.length) { wall.list = cached; paintWall(); } }
+    if (off) { if (!wall.list.length) paintWall(); return Promise.resolve(); }
+    return fetchWall();
+  }
+  function fetchWall() {
+    var sort = wall.sort;
+    if (!wall.list.length) $('wallList').innerHTML = '<p class="wall-empty">Loading the wall…</p>';
+    return fetch('/api/beats?sort=' + sort + '&limit=40', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('http'); return r.json(); }).then(function (res) {
+      if (sort !== wall.sort) return;
+      wall.list = (res && res.beats) || []; wall.fetchedAt = Date.now();
+      LS.set('wallcache:' + sort, wall.list.slice(0, 40));
+      $('wallOffline').hidden = true;
+      paintWall(); checkMyNods(wall.list);
+    }).catch(function () { $('wallOffline').hidden = navigator.onLine !== false ? true : false; if (!wall.list.length) $('wallList').innerHTML = '<p class="wall-empty">The wall didn’t answer. Pull it up again in a bit.</p>'; });
+  }
+  qa('.wall-head .chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      if (wall.sort === c.dataset.sort) return;
+      wall.sort = c.dataset.sort; wall.list = LS.get('wallcache:' + wall.sort, null) || []; paintWall(); renderWall();
+    });
+  });
+  function wbtn(label, cls) { var b = document.createElement('button'); b.type = 'button'; b.className = 'btn ' + cls; b.textContent = label; return b; }
+  function paintWall() {
+    var el = $('wallList'); el.innerHTML = ''; wall.cards = {};
+    if (!wall.list.length) { el.innerHTML = '<p class="wall-empty">' + (navigator.onLine === false ? 'Nothing saved from the wall yet.' : 'No beats yet. Make one, then Publish to the wall.') + '</p>'; return; }
+    var today0 = today();
+    wall.list.forEach(function (row) {
+      var beat = NB.decodeBeat(row.enc); if (!beat) return;
+      var card = document.createElement('article'); card.className = 'bcard'; card.dataset.id = row.id;
+      var band = document.createElement('div'); band.className = 'bc-band'; var nvs = [];
+      beat.nouns.forEach(function (n, t) { var nv = document.createElement('span'); nv.className = 'nv t' + t; nv.style.background = 'var(--c)'; band.appendChild(nv); setNoun(nv, n, true); nvs.push(nv); });
+      var cv = document.createElement('canvas'); cv.className = 'bc-thumb'; cv.width = 320; cv.height = 84; drawThumb(cv, beat);
+      var line = document.createElement('div'); line.className = 'bc-row';
+      var meta = document.createElement('div'); meta.className = 'bc-meta';
+      var tb = document.createElement('b'); tb.textContent = row.title;
+      var sp = document.createElement('span'); sp.textContent = row.name + ' · Noun ' + row.noun + ' · ' + beat.bpm + ' bpm · ' + relTime(row.createdAt);
+      meta.appendChild(tb); meta.appendChild(sp);
+      var act = document.createElement('div'); act.className = 'bc-act';
+      var pl = wbtn('Play', 'play-b'), nod = wbtn('Nod ' + row.nods, 'nod'), rx = wbtn('Remix', 'remix');
+      nod.setAttribute('aria-pressed', nodded[row.id] === today0 ? 'true' : 'false');
+      if (navigator.onLine === false) nod.disabled = true;
+      pl.addEventListener('click', function () { audio(); toggleWallPlay(row, beat, nvs); });
+      nod.addEventListener('click', function () { nodWall(row, nod, nvs); });
+      rx.addEventListener('click', function () { remixWall(beat); });
+      act.appendChild(pl); act.appendChild(nod); act.appendChild(rx);
+      line.appendChild(meta); line.appendChild(act);
+      card.appendChild(band); card.appendChild(cv); card.appendChild(line);
+      el.appendChild(card);
+      wall.cards[row.id] = { el: card, play: pl, nod: nod };
+    });
+    markWallPlaying();
+  }
+  function markWallPlaying() {
+    Object.keys(wall.cards).forEach(function (id) { var c = wall.cards[id], on = id === wall.playingId; c.el.classList.toggle('playing', on); c.play.textContent = on ? 'Stop' : 'Play'; });
+  }
+  function toggleWallPlay(row, beat, nvs) {
+    if (wall.playingId === row.id && prog && prog.kind === 'wall') { stopAll(); return; }
+    stopAll();
+    var pr = beatProgram(beat, 'wall'); pr.beat = row; pr.nvs = nvs;
+    play(pr); wall.playingId = row.id; wall.prog = pr; markWallPlaying();
+  }
+  function nodWall(row, btn, nvs) {
+    if (navigator.onLine === false) { toast('Nods need a connection'); return; }
+    if (nodded[row.id] === today()) { toast('You nodded this one today'); return; }
+    btn.disabled = true;
+    fetch('/api/beats/' + row.id + '/nod', { method: 'POST' }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); }).then(function (x) {
+      if (x.s === 200 || x.s === 409) {
+        var t = today(); Object.keys(nodded).forEach(function (k) { if (nodded[k] !== t) delete nodded[k]; });
+        nodded[row.id] = t; LS.set('nodded', nodded);
+        if (typeof x.j.nods === 'number') row.nods = x.j.nods;
+        btn.textContent = 'Nod ' + row.nods; btn.setAttribute('aria-pressed', 'true');
+        if (x.s === 200) { vibe(8); if (nvs[0]) hypeAnim(nvs[0]); } else toast('You nodded this one today');
+      } else toast(x.s === 404 ? 'That beat left the wall' : 'Could not nod right now');
+    }).catch(function () { toast('Could not nod right now'); }).then(function () { btn.disabled = false; });
+  }
+  function remixWall(b) {
+    stopAll();
+    var backup = state.song;
+    LS.set('song:backup', backup);
+    state.song = NB.normSong({ bpm: b.bpm, swing: b.swing, key: b.key, mode: b.mode, slots: b.slots, cur: b.cur, chain: b.chain, nouns: b.nouns }, state.noun);
+    LS.set('song', state.song); renderBand(); renderGrid(); setTab('make');
+    if (engine) engine.setMutes(state.song.mutes);
+    play(makeProgram);
+    toast('Remixing — it’s yours now', 'Undo', function () { state.song = backup; saveSong(); renderBand(); renderGrid(); });
+  }
+  function checkMyNods(list) {
+    if (!mine.length) return;
+    var ids = {}; mine.forEach(function (m) { ids[m.id] = 1; });
+    list.forEach(function (r) { if (ids[r.id] && r.nods >= 10) earnMoment('ten-nods', { room: r.title, nods: r.nods }, r.enc, 'nods:' + r.id); });
+  }
+  function refreshMyNods() {
+    if (!mine.length || navigator.onLine === false || Date.now() - wall.nodsAt < 30000) return;
+    wall.nodsAt = Date.now();
+    fetch('/api/beats?ids=' + mine.slice(0, 20).map(function (m) { return m.id; }).join(','), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (res) { checkMyNods((res && res.beats) || []); }).catch(function () {});
+  }
+
+  /* ---------- publish to the wall ---------- */
+  function openPublish() {
+    if (navigator.onLine === false) { toast('Publishing needs a connection'); return; }
+    var b = beatForShare(), hits = 0;
+    b.slots.forEach(function (p) { hits += NB.countHits(p); });
+    if (hits < 3) { toast('Add a few hits first'); return; }
+    closeSheet();
+    $('pubName').value = LS.get('initials', '') || (state.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+    $('pubErr').textContent = ''; $('pubGo').disabled = false;
+    drawThumb($('pubThumb'), NB.decodeBeat(NB.encodeBeat(b)));
+    renderMeNouns();
+    $('pubCard').hidden = false;
+  }
+  function closePublish() { $('pubCard').hidden = true; }
+  $('pubBtn').addEventListener('click', openPublish);
+  $('pubShareBtn').addEventListener('click', openPublish);
+  $('pubClose').addEventListener('click', closePublish);
+  $('pubName').addEventListener('input', function (e) { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 3); });
+  $('pubForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var title = $('pubTitle').value.replace(/\s+/g, ' ').trim().slice(0, 40), name = $('pubName').value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 3);
+    var err = function (m) { $('pubErr').textContent = m; $('pubGo').disabled = false; };
+    if (!name) return err('Add your initials (up to 3 letters)');
+    if (NB.isRude(title)) return err('Let’s keep the wall friendly. Try another title.');
+    if (NB.isRudeInitials(name)) return err('Those initials won’t fly on the wall.');
+    LS.set('initials', name);
+    $('pubGo').disabled = true; $('pubErr').textContent = '';
+    var body = { enc: NB.encodeBeat(beatForShare()), title: title, name: name, noun: state.noun };
+    fetch('/api/beats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (x) {
+        if (x.s === 201 && x.j.beat) {
+          mine.unshift({ id: x.j.beat.id, at: x.j.beat.createdAt }); mine = mine.slice(0, 50); LS.set('mybeats', mine);
+          $('pubTitle').value = '';
+          closePublish(); toast('On the wall: ' + x.j.beat.title);
+          wall.sort = 'new'; wall.list = [x.j.beat].concat(wall.list.filter(function (w) { return w.id !== x.j.beat.id; }));
+          setTab('wall');
+          return;
+        }
+        var f = x.j && x.j.field;
+        err(x.s === 429 ? 'One beat a minute. Try again in a moment.' : f === 'title' ? 'That title won’t fly on the wall.' : f === 'name' ? 'Those initials won’t fly on the wall.' : f === 'enc' ? 'That beat didn’t check out. Add a few hits and try again.' : 'Could not publish right now.');
+      })
+      .catch(function () { err('Could not publish right now.'); });
+  });
+
+  /* ================= v2: MOMENTS ================= */
+  // Earned on the phone, kept in localStorage (nb:moments). A serial comes from /api/beats/moment when
+  // online ("global", best effort); offline it is this phone's own count ("local").
+  var moments = LS.get('moments', null) || [];
+  var mflags = LS.get('mflags', null) || {};
+  var peek = { q: [], on: false, el: null };
+  function claimSerial(type) {
+    if (navigator.onLine === false) return Promise.reject(new Error('offline'));
+    return new Promise(function (res, rej) {
+      var done = false, t = setTimeout(function () { if (!done) { done = true; rej(new Error('timeout')); } }, 2000);
+      fetch('/api/beats/moment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: type }) })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)); })
+        .then(function (j) { if (done) return; done = true; clearTimeout(t); if (j && j.serial > 0) res(j); else rej(new Error('bad')); })
+        .catch(function (e) { if (!done) { done = true; clearTimeout(t); rej(e); } });
+    });
+  }
+  function earnMoment(type, info, beatEnc, key) {
+    if (!NB.MOMENT_TYPES[type] || mflags[key]) return false;
+    mflags[key] = Date.now(); LS.set('mflags', mflags);
+    if (type === 'peak-groove') log.peaks.push({ at: Date.now(), info: info });
+    var local = moments.filter(function (m) { return m.type === type; }).length + 1;
+    var finish = function (serial, scope) {
+      var m = NB.makeMoment({ type: type, serial: serial, scope: scope, noun: state.noun, name: state.name, beat: beatEnc || '', ctx: info || {} });
+      moments.unshift(m); LS.set('moments', moments);
+      queuePeek(m);
+      $('meChip').classList.add('dot'); qa('.tab[data-tab="me"]').forEach(function (b) { b.classList.add('dot'); });
+      if (state.tab === 'me') renderMoments();
+    };
+    claimSerial(type).then(function (r) { finish(r.serial, 'global'); }, function () { finish(local, 'local'); });
+    return true;
+  }
+  function checkMilestones() {
+    var n = stats.made.length;
+    [[1, 'first-beat'], [10, 'tenth-beat'], [100, 'hundredth-beat']].forEach(function (x) {
+      if (n >= x[0]) earnMoment(x[1], { made: x[0] }, NB.encodeBeat(beatForShare()), 'made:' + x[0]);
+    });
+  }
+  // The reveal: the card slides up over whatever you're doing, without blocking a single tap.
+  function queuePeek(m) { peek.q.push(m); if (!peek.on) nextPeek(); }
+  function nextPeek() {
+    var m = peek.q.shift();
+    if (!m) { peek.on = false; return; }
+    peek.on = true;
+    var el = peek.el; el.innerHTML = '';
+    var k = document.createElement('span'); k.className = 'mp-k'; k.textContent = m.rarity === 'legendary' ? 'Legendary Moment' : m.rarity === 'rare' ? 'Rare Moment' : 'Moment earned';
+    el.appendChild(k); el.appendChild(cardEl(m, false));
+    el.className = 'mpeek ' + m.rarity; void el.offsetWidth; el.classList.add('show');
+    vibe(m.rarity === 'legendary' ? [20, 40, 20, 40, 80] : [15, 30, 15]);
+    if (engine && ctx) { var t0 = ctx.currentTime + 0.02; [5, 6, 8].forEach(function (d, i) { engine.hit(6, t0 + i * 0.09, d, { key: 0, mode: 1 }, 0.6); }); }
+    setTimeout(function () { el.classList.remove('show'); setTimeout(nextPeek, 500); }, 4200);
+  }
+  function pad3(n) { return String(n).padStart(3, '0'); }
+  function momentDate(m) { try { return new Date(m.earnedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return m.earnedAt.slice(0, 10); } }
+  function beatRow16(enc) {
+    var b = enc ? NB.decodeBeat(enc) : null, row = new Array(16).fill(0);
+    if (b) { var p = b.slots[b.cur || 0]; for (var st = 0; st < 16; st++) for (var t = 0; t < 4; t++) if (p[t][st]) row[st] = 1; }
+    return row;
+  }
+  function cardEl(m, big, locked) {
+    var c = document.createElement(big ? 'div' : 'button');
+    if (!big) c.type = 'button';
+    c.className = 'mcard ' + (locked ? 'locked' : m.rarity) + (big ? ' big' : '');
+    c.dataset.type = m.type; if (m.id) c.dataset.id = m.id;
+    var top = document.createElement('span'); top.className = 'mc-top';
+    var rar = document.createElement('span'); rar.className = 'mc-rar'; rar.textContent = locked ? 'to earn' : m.rarity;
+    var ser = document.createElement('span'); ser.className = 'mc-ser'; ser.textContent = locked ? NB.MOMENT_TYPES[m.type].rarity : '#' + pad3(m.serial) + (m.serialScope === 'local' ? ' · local' : '');
+    top.appendChild(rar); top.appendChild(ser); c.appendChild(top);
+    var nw = document.createElement('span'); nw.className = 'mc-nv'; var nv = document.createElement('span'); nv.className = 'nv'; nw.appendChild(nv); c.appendChild(nw); setNoun(nv, m.noun);
+    var nm = document.createElement('span'); nm.className = 'mc-name';
+    var b = document.createElement('b'); b.textContent = m.typeName;
+    var sub = document.createElement('span'); sub.textContent = locked ? m.how : momentDate(m) + (m.ctx && m.ctx.room ? ' · ' + m.ctx.room : '') + (m.ctx && m.ctx.people ? ' · ' + m.ctx.people + ' players' : '');
+    nm.appendChild(b); nm.appendChild(sub); c.appendChild(nm);
+    var gr = document.createElement('span'); gr.className = 'mc-grid';
+    (locked ? new Array(16).fill(0) : beatRow16(m.beat)).forEach(function (v) { var i = document.createElement('i'); if (v) i.className = 'on'; gr.appendChild(i); });
+    c.appendChild(gr);
+    if (!locked) {
+      c.addEventListener('pointermove', function (e) {
+        var r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        c.style.setProperty('--ry', ((x - 0.5) * 16).toFixed(1) + 'deg'); c.style.setProperty('--rx', ((0.5 - y) * 16).toFixed(1) + 'deg');
+        c.style.setProperty('--mx', (x * 100).toFixed(0) + '%'); c.style.setProperty('--my', (y * 100).toFixed(0) + '%');
+      });
+      c.addEventListener('pointerleave', function () { c.style.setProperty('--rx', '0deg'); c.style.setProperty('--ry', '0deg'); });
+    }
+    return c;
+  }
+  function renderMoments() {
+    var el = $('moments'); el.innerHTML = '';
+    moments.forEach(function (m) { var c = cardEl(m, false); c.addEventListener('click', function () { openMoment(m); }); el.appendChild(c); });
+    NB.MOMENT_ORDER.forEach(function (t) {
+      if (moments.some(function (m) { return m.type === t; })) return;
+      var T = NB.MOMENT_TYPES[t];
+      var c = cardEl({ type: t, typeName: T.name, how: T.how, noun: state.noun }, false, true);
+      c.addEventListener('click', function () { toast(T.how); });
+      el.appendChild(c);
+    });
+    var leg = moments.filter(function (m) { return m.rarity === 'legendary'; }).length, rare = moments.filter(function (m) { return m.rarity === 'rare'; }).length;
+    $('momentCount').textContent = moments.length + ' earned' + (leg ? ' · ' + leg + ' legendary' : '') + (rare ? ' · ' + rare + ' rare' : '');
+  }
+  var mo = { cur: null };
+  function openMoment(m, reveal) {
+    mo.cur = m;
+    var wrap = $('moCard'); wrap.innerHTML = '';
+    var c = cardEl(m, true); wrap.appendChild(c);
+    c.addEventListener('click', function () { playMoment(m); });
+    $('moKicker').textContent = reveal ? 'Moment earned' : m.typeName + ' · ' + m.rarity;
+    $('moDone').textContent = reveal ? 'Collect' : 'Close';
+    var ov = $('momentOv'); ov.hidden = false; ov.classList.toggle('reveal', !!reveal);
+  }
+  function closeMoment() {
+    if (prog && prog.kind === 'moment') stopAll();
+    $('momentOv').hidden = true; mo.cur = null;
+  }
+  function playMoment(m) {
+    var b = m.beat ? NB.decodeBeat(m.beat) : null;
+    if (!b) { toast('This Moment has no beat attached'); return; }
+    if (prog && prog.kind === 'moment' && prog.moment === m) { stopAll(); return; }
+    stopAll();
+    var pr = beatProgram(b, 'moment'); pr.moment = m; play(pr);
+    qa('#moCard .mcard').forEach(function (c) { c.classList.add('playing'); });
+  }
+  $('moPlay').addEventListener('click', function () { audio(); if (mo.cur) playMoment(mo.cur); });
+  $('moDone').addEventListener('click', closeMoment);
+  $('momentOv').addEventListener('click', function (e) { if (e.target === $('momentOv')) closeMoment(); });
+  $('moSave').addEventListener('click', function () {
+    var m = mo.cur; if (!m) return;
+    var cv = $('moCanvas');
+    drawMomentCanvas(cv, m).then(function () {
+      try {
+        cv.toBlob(function (b) {
+          if (!b) { toast('Could not make the image'); return; }
+          var name = 'noun-beats-' + m.type + '-' + m.serial + '.png', f = new File([b], name, { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [f] })) { navigator.share({ files: [f], title: m.metadata.name, text: m.metadata.description }).catch(function () {}); return; }
+          var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        }, 'image/png');
+      } catch (e) { toast('Image blocked by the browser'); }
+    });
+  });
+  var RARITY_PAL = { common: ['#F4F6FA', '#C9CED9', '#EEF1F6', '#AEB5C2'], rare: ['#BFE3FF', '#8C5CF0', '#2F7CF6', '#7FF0D8'], legendary: ['#FFF3C4', '#E0A100', '#FFD86B', '#8A5A00', '#FFE9A3'] };
+  var RARITY_INK = { common: '#3C4252', rare: '#FFFFFF', legendary: '#3A2500' };
+  // 1080×1350 share image of a Moment card.
+  function drawMomentCanvas(cv, m) {
+    var g = cv.getContext('2d'), W = cv.width, H = cv.height, pal = RARITY_PAL[m.rarity] || RARITY_PAL.common, ink = RARITY_INK[m.rarity] || '#1D1426';
+    var font = '"SF Pro Rounded", ui-rounded, "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    var paint = function (img) {
+      g.save();
+      g.fillStyle = '#1D1426'; g.fillRect(0, 0, W, H);
+      g.translate(W / 2, H / 2);
+      for (var i = 0; i < 24; i++) { g.rotate(Math.PI / 12); g.fillStyle = i % 2 ? 'rgba(255,255,255,.035)' : (m.rarity === 'legendary' ? 'rgba(255,216,107,.08)' : 'rgba(140,92,240,.08)'); g.beginPath(); g.moveTo(0, 0); g.lineTo(1000, -130); g.lineTo(1000, 130); g.closePath(); g.fill(); }
+      g.restore();
+      var x = 110, y = 90, w = 860, h = 1075, r = 56;
+      g.fillStyle = '#000'; rr(g, x, y + 20, w, h, r); g.fill();
+      var gr = g.createLinearGradient(x, y, x + w, y + h);
+      pal.forEach(function (c, k) { gr.addColorStop(k / (pal.length - 1), c); });
+      g.fillStyle = gr; rr(g, x, y, w, h, r); g.fill();
+      // holographic foil: translucent rainbow bands across the card
+      g.save(); rr(g, x, y, w, h, r); g.clip();
+      var bands = ['rgba(255,80,180,.22)', 'rgba(80,200,255,.22)', 'rgba(255,240,120,.24)', 'rgba(255,255,255,.18)'];
+      for (var k = -8; k < 16; k++) { g.fillStyle = bands[((k % 4) + 4) % 4]; g.beginPath(); g.moveTo(x + k * 90, y); g.lineTo(x + k * 90 + 46, y); g.lineTo(x + k * 90 + 46 + 520, y + h); g.lineTo(x + k * 90 + 520, y + h); g.closePath(); g.fill(); }
+      var glow = g.createRadialGradient(x + w * 0.3, y + h * 0.25, 10, x + w * 0.3, y + h * 0.25, 700);
+      glow.addColorStop(0, 'rgba(255,255,255,.55)'); glow.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = glow; g.fillRect(x, y, w, h);
+      g.restore();
+      g.lineWidth = 12; g.strokeStyle = '#1D1426'; rr(g, x, y, w, h, r); g.stroke();
+      g.lineWidth = 5; g.strokeStyle = 'rgba(255,255,255,.65)'; rr(g, x + 24, y + 24, w - 48, h - 48, 36); g.stroke();
+      g.font = '900 34px ' + font; g.textBaseline = 'middle';
+      var rl = m.rarity.toUpperCase(), rw = g.measureText(rl).width + 56;
+      g.fillStyle = m.rarity === 'legendary' ? '#8A5A00' : '#1D1426'; rr(g, x + 56, y + 58, rw, 62, 31); g.fill();
+      g.fillStyle = '#fff'; g.fillText(rl, x + 84, y + 90);
+      g.fillStyle = ink; g.font = '900 60px ' + font; g.textAlign = 'right'; g.fillText('#' + pad3(m.serial), x + w - 60, y + 90);
+      if (m.serialScope === 'local') { g.font = '800 24px ' + font; g.fillText('this phone', x + w - 62, y + 136); }
+      g.textAlign = 'left';
+      var ns = 560, nx = x + (w - ns) / 2, ny = y + 160;
+      g.fillStyle = 'rgba(0,0,0,.28)'; rr(g, nx, ny + 16, ns, ns, 44); g.fill();
+      g.fillStyle = '#D5D7E1'; rr(g, nx, ny, ns, ns, 44); g.fill();
+      if (img) { g.save(); rr(g, nx, ny, ns, ns, 44); g.clip(); g.imageSmoothingEnabled = false; g.drawImage(img, nx, ny, ns, ns); g.restore(); }
+      g.lineWidth = 12; g.strokeStyle = '#1D1426'; rr(g, nx, ny, ns, ns, 44); g.stroke();
+      g.fillStyle = ink; g.textBaseline = 'alphabetic';
+      g.font = '900 92px ' + font; g.fillText(m.typeName, x + 60, y + h - 214);
+      g.font = '800 34px ' + font;
+      var sub = momentDate(m) + (m.ctx && m.ctx.room ? ' · ' + m.ctx.room : '') + (m.ctx && m.ctx.people ? ' · ' + m.ctx.people + ' players' : '');
+      g.fillText(sub, x + 62, y + h - 160);
+      g.fillText((m.name ? m.name + ' · ' : '') + 'Noun ' + m.noun, x + 62, y + h - 116);
+      var row = beatRow16(m.beat), cw = (w - 120) / 16;
+      row.forEach(function (v, st) { g.fillStyle = v ? (m.rarity === 'rare' ? '#1D1426' : '#1D1426') : 'rgba(0,0,0,.16)'; rr(g, x + 60 + st * cw + 3, y + h - 84, cw - 6, 40, 8); g.fill(); });
+      g.font = '900 34px ' + font; g.fillStyle = '#FFD86B'; g.fillText('NOUN BEATS · MOMENT', 110, H - 46);
+      g.textAlign = 'right'; g.fillStyle = '#fff'; g.fillText('pointcast.xyz/beats', W - 110, H - 46); g.textAlign = 'left';
+    };
+    paint(null);
+    return nounBitmap(m.noun).then(paint, function () {});
+  }
 
   /* ================= boot ================= */
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
@@ -2489,7 +3376,9 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
   buildBand(); buildPads($('pads')); bindPads($('pads'), makePadHit); renderBand();
   renderGrid(); renderMeNouns();
   app.classList.add('idle-hint');
-  setTab(LS.get('tab', 'make'), true);
+  peek.el = document.createElement('div'); peek.el.id = 'mPeek'; peek.el.className = 'mpeek'; peek.el.setAttribute('aria-live', 'polite'); app.appendChild(peek.el);
+  // First visit opens on the Floor: there is always a room playing.
+  setTab(LS.get('tab', 'rooms'), true);
   paintTown(false); Drum.refresh(); Drum.flush(); paintOnline();
   routeHash();
   if ('serviceWorker' in navigator) {
@@ -2501,8 +3390,12 @@ input[type=range]{width:100%;height:36px;accent-color:var(--red);touch-action:pa
     NB: NB, state: state, stats: stats, log: log, Drum: Drum, room: room, daily: daily, rec: rec, sid: SID,
     get ctx() { return ctx; }, get seq() { return seq; }, get prog() { return prog; },
     shareUrl: shareUrl, setTab: setTab, enterRoom: enterRoom, leaveRoom: leaveRoom, serverNow: serverNow, today: today,
-    stop: stopAll, playMake: function () { stopAll(); play(makeProgram); }
+    stop: stopAll, playMake: function () { stopAll(); play(makeProgram); },
+    wall: wall, floor: floor, get moments() { return moments; }, earnMoment: earnMoment, fetchFloor: fetchFloor, renderWall: renderWall,
+    openPublish: openPublish, openMoment: openMoment, drawMomentCanvas: drawMomentCanvas, checkMilestones: checkMilestones,
+    enterFloor: function (slug) { enterRoom(slug, false, NB.floorRoom(slug)); }
   };
+  setTimeout(checkMilestones, 2500);
 })();
 
 </script>

@@ -1,0 +1,141 @@
+---
+/**
+ * /collection/wants — Tezos work worth collecting next.
+ *
+ * Picks come from src/data/want-list.json (cc-curated). Each is checked
+ * against Mike's wallet at build time, so a collected piece flips to
+ * "collected" on the next deploy. Prices are observed, not live.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import {
+  COLLECTOR_WALLET,
+  TIER_LABELS,
+  TIER_ORDER,
+  WANT_LIST_CURATED_AT,
+  wantListWithStatus,
+} from '../../lib/want-list';
+import { buildWebPageJsonLd } from '../../lib/seo';
+
+const { picks, checked } = await wantListWithStatus();
+const collectedCount = picks.filter((p) => p.collected).length;
+const groups = TIER_ORDER.map((tier) => ({ tier, label: TIER_LABELS[tier], picks: picks.filter((p) => p.tier === tier) }))
+  .filter((g) => g.picks.length > 0);
+
+function fmtPrice(xtz: number | null): string {
+  if (xtz === null) return 'price n/a';
+  if (xtz === 0) return 'free';
+  return `${xtz < 10 ? xtz.toFixed(2).replace(/\.?0+$/, '') : Math.round(xtz)} ꜩ`;
+}
+
+function shortAddr(a: string): string {
+  return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
+
+const title = 'Want list · Collection';
+const description = `${picks.length} Tezos pieces worth collecting next, from free open editions to stretch picks. ${collectedCount} collected so far.`;
+const jsonLd = buildWebPageJsonLd(title, description, '/collection/wants');
+---
+
+<BlockLayout title={title} description={description} image="/images/og/collection.png" jsonLd={jsonLd}>
+  <div class="page">
+    <nav class="crumb">
+      <a href="/">← Home</a><span aria-hidden="true">/</span>
+      <a href="/collection">collection</a><span aria-hidden="true">/</span>
+      <span>wants</span>
+    </nav>
+
+    <header class="head">
+      <p class="kicker">COLLECTION · WANT LIST</p>
+      <h1>What to collect next</h1>
+      <p class="dek">
+        Tezos work that fits the PointCast shelf: nounish and CC0, on-chain generative, quiet and local.
+        Picks are researched and curated by the site's agents, sorted by price. When a piece lands in
+        <a href="/collection">the collection</a>, it's marked collected on the next deploy.
+      </p>
+      <div class="meta">
+        <p><span>picks</span> <b>{picks.length}</b></p>
+        <p><span>collected</span> <b>{checked ? collectedCount : '—'}</b></p>
+        <p><span>prices seen</span> <b>{WANT_LIST_CURATED_AT}</b></p>
+        <p><span>json</span> <a href="/collection/wants.json">/collection/wants.json</a></p>
+      </div>
+      {!checked && <p class="warn">Couldn't reach TzKT at build, so collected status is unknown on this deploy.</p>}
+    </header>
+
+    {picks.length === 0 && (
+      <p class="empty">The first picks are being checked against live objkt and fxhash prices. Until they land, see <a href="/collection">what's already held</a> or <a href="/collect/shelf">collect from PointCast</a>.</p>
+    )}
+
+    {groups.map((g) => (
+      <section class="tier" aria-labelledby={`tier-${g.tier}`}>
+        <h2 id={`tier-${g.tier}`}>{g.label} <span>{g.picks.length}</span></h2>
+        <ol class="picks">
+          {g.picks.map((p) => (
+            <li class:list={['pick', { 'pick--got': p.collected }]}>
+              <div class="pick__top">
+                <a class="pick__title" href={p.url} target="_blank" rel="noopener">{p.title} ↗</a>
+                <span class="pick__price">{p.collected ? `collected${p.heldCount > 1 ? ` ×${p.heldCount}` : ''}` : fmtPrice(p.priceXtz)}</span>
+              </div>
+              <p class="pick__artist">
+                {p.artist.address
+                  ? <a href={`https://objkt.com/profile/${p.artist.address}`} target="_blank" rel="noopener">{p.artist.alias}</a>
+                  : p.artist.alias}
+                {' · '}<a href={`https://tzkt.io/${p.contract}`} target="_blank" rel="noopener" title={p.contract}>{shortAddr(p.contract)}</a>
+                {p.tokenId !== null && <> №{p.tokenId}</>}
+              </p>
+              <p class="pick__why">{p.why}</p>
+              {p.tags.length > 0 && <p class="pick__tags">{p.tags.map((t) => <span>{t}</span>)}</p>}
+            </li>
+          ))}
+        </ol>
+      </section>
+    ))}
+
+    <aside class="how">
+      <h2>How collecting works</h2>
+      <ol>
+        <li>Use a Tezos wallet (Temple or Kukai) holding the collection wallet, <code>{shortAddr(COLLECTOR_WALLET)}</code>.</li>
+        <li>Open the pick on objkt or fxhash, check the live price (the ones above are as of {WANT_LIST_CURATED_AT}), and collect.</li>
+        <li>The next deploy moves it from wanted to <a href="/collection">held</a>.</li>
+      </ol>
+      <p>PointCast's own pieces are on <a href="/collect/shelf">the shelf</a> and <a href="/editions">/editions</a>.</p>
+    </aside>
+  </div>
+</BlockLayout>
+
+<style>
+  .page { max-width: 1080px; margin: 0 auto; padding: 20px 20px 80px; }
+  .crumb { display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pc-ink-muted); margin-bottom: 16px; }
+  .crumb a { color: var(--pc-accent); }
+  .kicker { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--pc-ink-muted); margin: 0 0 8px; }
+  .head h1 { font-family: var(--pc-font-sans); font-size: clamp(28px, 5vw, 44px); line-height: 1.05; margin: 0 0 10px; }
+  .dek { max-width: 68ch; line-height: 1.55; margin: 0 0 16px; }
+  .dek a, .how a, .meta a { color: var(--pc-accent); }
+  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+  .meta p { margin: 0; padding: 8px 10px; border: 1px solid var(--pc-ink-muted); font-size: 13px; display: grid; gap: 2px; }
+  .meta span { font-family: var(--pc-font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--pc-ink-muted); }
+  .warn { font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-ink-muted); }
+  .empty { margin: 30px 0 0; padding: 14px 16px; border: 1px solid var(--pc-ink-muted); line-height: 1.55; }
+  .empty a { color: var(--pc-accent); }
+  .tier { margin-top: 30px; }
+  .tier h2 { font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; border-bottom: 2px solid currentColor; padding-bottom: 6px; margin: 0 0 12px; }
+  .tier h2 span { color: var(--pc-ink-muted); }
+  .picks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .pick { border: 1px solid var(--pc-ink-muted); padding: 12px 14px; display: grid; gap: 6px; align-content: start; }
+  .pick--got { border-color: var(--pc-accent); border-width: 2px; }
+  .pick__top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .pick__title { font-weight: 700; color: inherit; overflow-wrap: anywhere; }
+  .pick__price { font-family: var(--pc-font-mono); font-size: 12px; white-space: nowrap; color: var(--pc-accent); }
+  .pick__artist { margin: 0; font-family: var(--pc-font-mono); font-size: 11px; color: var(--pc-ink-muted); overflow-wrap: anywhere; }
+  .pick__artist a { color: inherit; }
+  .pick__why { margin: 0; font-size: 14px; line-height: 1.5; }
+  .pick__tags { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+  .pick__tags span { font-family: var(--pc-font-mono); font-size: 10px; padding: 1px 6px; border: 1px solid var(--pc-ink-muted); color: var(--pc-ink-muted); }
+  .how { margin-top: 36px; padding: 14px 16px; border: 1px dashed var(--pc-ink-muted); line-height: 1.55; }
+  .how h2 { font-family: var(--pc-font-mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 8px; }
+  .how ol { margin: 0 0 8px; padding-left: 20px; }
+  .how p { margin: 0; }
+  @media (max-width: 760px) {
+    .picks { grid-template-columns: 1fr; }
+    .meta { grid-template-columns: 1fr 1fr; }
+  }
+</style>

@@ -245,7 +245,9 @@ async function scoreDoc(doc, opts) {
       keySigned: keySigned.ok === true,
       attested: attestation.present === true,
       devnet,
-      keyNote: keySigned.reason,
+      keyNote: keySigned.ok === true
+        ? 'An ed25519 signature matched the canonical passport.'
+        : 'No ed25519 signature was verified.',
     },
   };
 }
@@ -282,7 +284,10 @@ async function prepare(body, when, opts) {
       return fail(400, 'passport must be JSON');
     }
   }
-  if (doc && typeof doc === 'object') return scoreDoc(doc, opts);
+  if (doc && typeof doc === 'object') {
+    if (containsSecret(doc)) return fail(400, 'do not send secrets');
+    return scoreDoc(doc, opts);
+  }
   if (body.name || body.operator || body.purpose) return scoreDoc(minimalPassport(body, when), opts);
   return fail(400, 'send a passport, {name, operator, purpose}, or {handle, kind:"human"}');
 }

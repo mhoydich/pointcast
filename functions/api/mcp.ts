@@ -2371,6 +2371,8 @@ async function dispatchTool(
         watchFor: situation.watchFor,
         skip: situation.skip,
         disclaimer: data.disclaimer,
+        safetyReviewedAt: data.safetyReviewedAt,
+        safetySources: data.safetySources,
       };
       return {
         content: [

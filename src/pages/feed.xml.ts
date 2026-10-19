@@ -14,6 +14,7 @@
  */
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
+import { STANDARDS_FEED } from '../lib/standards-feed.mjs';
 import type { APIRoute } from 'astro';
 
 function xmlEscape(s: string): string {
@@ -28,10 +29,12 @@ export const GET: APIRoute = async () => {
   const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
     .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
 
-  const items = blocks.map((b) => {
+  const blockItems = blocks.map((b) => {
     const ch = CHANNELS[b.data.channel];
     const description = b.data.dek ?? b.data.body?.slice(0, 240) ?? b.data.title;
-    return `
+    return {
+      sort: b.data.timestamp.getTime(),
+      xml: `
     <item>
       <title>${xmlEscape(b.data.title)}</title>
       <link>https://pointcast.xyz/b/${b.data.id}</link>
@@ -41,8 +44,25 @@ export const GET: APIRoute = async () => {
       <category>CH.${ch.code}</category>
       <category>${xmlEscape(ch.name)}</category>
       <category>${b.data.type}</category>
-    </item>`;
-  }).join('\n');
+    </item>`,
+    };
+  });
+  const standardsItems = STANDARDS_FEED.map((entry) => ({
+    sort: Date.parse(entry.date),
+    xml: `
+    <item>
+      <title>${xmlEscape(entry.title)}</title>
+      <link>${entry.url}</link>
+      <guid isPermaLink="true">${entry.id}</guid>
+      <pubDate>${new Date(entry.date).toUTCString()}</pubDate>
+      <description>${xmlEscape(entry.summary)}</description>
+      ${entry.tags.map((tag) => `<category>${xmlEscape(tag)}</category>`).join('\n      ')}
+    </item>`,
+  }));
+  const items = [...blockItems, ...standardsItems]
+    .sort((a, b) => b.sort - a.sort)
+    .map((entry) => entry.xml)
+    .join('\n');
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">

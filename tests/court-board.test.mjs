@@ -111,7 +111,7 @@ test('openState: "dusk" resolves to the real sunset, and the 2026-11-01 DST chan
 });
 
 test('openState: a standing closure always reads closed; no hours reads unknown', () => {
-  const kelly = courtById(schedule, 'kelly');
+  const kelly = { ...courtById(schedule, 'kelly'), status: 'closed' };
   assert.equal(kelly.status, 'closed');
   assert.equal(openState(kelly, Date.now(), 1000), 'closed');
   const anderson = courtById(schedule, 'anderson');
@@ -329,7 +329,7 @@ test('bestBet: a live "No open court" skips the running drop-in there, and a rep
 
   const quiet = boardSummary({ now, courts: schedule.courts, conditions: CONDITIONS });
   assert.equal(quiet.best.line, 'EL SEGUNDO REC · Advanced drop-in now until 7 PM · $5 · no reports yet', 'only an empty board is "no reports yet"');
-  assert.deepEqual(quiet.best.prov, { src: 'ES1', checked: '2026-09-28', confidence: 'verified' }, 'the hero can say where the drop-in came from');
+  assert.deepEqual(quiet.best.prov, { src: 'ES1', checked: '2026-10-18', confidence: 'verified' }, 'the hero can say where the drop-in came from');
 });
 
 test('bestBet: a taken court is skipped by the walk-on and next-session rules too; a partial block carries its tag', () => {
@@ -359,9 +359,25 @@ test('publicReading: the open feed keeps the value and its strength, never who (
   assert.doesNotMatch(JSON.stringify(publicReading(r)), /alice|Guest|ar_/);
 });
 
-test('the Perry grid is partial now: its live lines carry the "unconfirmed" confidence through the payload', () => {
+test('the Perry grid is verified now (2026-10-18): its live lines carry the verified confidence through the payload', () => {
   const out = boardSummary({ now: Date.parse('2026-09-28T17:30:00-07:00'), courts: schedule.courts, conditions: CONDITIONS });
   const perry = out.courts.find((c) => c.id === 'perry');
   assert.ok(perry.now.length > 0);
-  for (const s of perry.now) assert.equal(s.block.confidence, 'partial', `${s.block.label} is read off the flyer's image grid`);
+  for (const s of perry.now) assert.equal(s.block.confidence, 'verified', `${s.block.label} is read off the city schedule image`);
+});
+
+test('openState: an hours.dated window (an MBUSD break day) wins over the weekday rules', async () => {
+  const { datedHours } = await import('../functions/_lib/court-board.mjs');
+  const court = {
+    status: 'open',
+    hours: { rules: [{ days: [0, 6], open: '08:00', close: 'dusk' }], else: 'unknown', confidence: 'verified', checked: '2026-10-18', src: 'MB1',
+      dated: [{ from: '2026-11-23', to: '2026-11-27', open: '08:00', close: 'dusk', label: 'Thanksgiving Recess', src: 'MBUSD1', checked: '2026-10-18' }] },
+  };
+  const sunset = 17 * 60;
+  assert.equal(openState(court, Date.parse('2026-11-24T10:00:00-08:00'), sunset), 'open', 'Tue of Thanksgiving week');
+  assert.equal(openState(court, Date.parse('2026-11-24T18:00:00-08:00'), sunset), 'closed', 'after dusk');
+  assert.equal(openState(court, Date.parse('2026-11-30T10:00:00-08:00'), sunset), 'unknown', 'a school Monday reads hours.else');
+  assert.equal(datedHours(court.hours, '2026-11-27')?.label, 'Thanksgiving Recess');
+  assert.equal(datedHours(court.hours, '2026-11-28'), null);
+  assert.equal(datedHours({ dated: [{ from: 'x', to: 'y', open: '08:00', close: 'dusk' }] }, '2026-11-24'), null, 'a malformed window is ignored');
 });

@@ -22,6 +22,27 @@ const isBespokeSitemapPath = (pathname) => {
   return normalized.startsWith('/b/') || discoveryStaticPaths.has(normalized) || discoveryDynamicPrefixes.some((prefix) => normalized.startsWith(prefix));
 };
 
+// Publication dates for routes that used to live only in sitemap-discovery.xml.
+// sitemap-index.xml lists sitemap-0.xml, so prerendered HTML has to be here.
+const SITEMAP_PUBLISHED = '2026-10-05T12:00:00.000Z';
+const SITEMAP_DATED_PATHS = new Set([
+  '/grok',
+  '/sky-calls',
+  '/prices',
+  '/weather/world',
+  '/case-studies/a-bots-visit',
+  '/front-desk/agents',
+]);
+
+function sitemapLastmod(pageUrl) {
+  const path = new URL(pageUrl).pathname.replace(/\/$/, '') || '/';
+  const card = path.match(/^\/almanac\/(\d{4}-\d{2}-\d{2})$/);
+  if (card) return new Date(`${card[1]}T12:00:00.000Z`);
+  if (path === '/standards' || path.startsWith('/standards/')) return new Date(SITEMAP_PUBLISHED);
+  if (SITEMAP_DATED_PATHS.has(path)) return new Date(SITEMAP_PUBLISHED);
+  return undefined;
+}
+
 // https://astro.build/config
 export default defineConfig({
   site: githubPages ? 'https://mhoydich.github.io' : 'https://pointcast.xyz',
@@ -37,6 +58,14 @@ export default defineConfig({
       filter: (page) => {
         const path = new URL(page).pathname;
         return !isNoindexPath(path) && !isRedirectPath(path) && !isBespokeSitemapPath(path);
+      },
+      // customPages is filtered by the same function, so it cannot resurrect a
+      // path still listed in sitemap-discovery.xml.ts. Those HTML routes were
+      // removed from the discovery list and fall through here as real pages.
+      serialize(item) {
+        const lastmod = sitemapLastmod(item.url);
+        if (lastmod) item.lastmod = lastmod;
+        return item;
       },
     }),
     {

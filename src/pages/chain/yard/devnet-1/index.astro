@@ -1,0 +1,102 @@
+---
+/**
+ * /chain/yard/devnet-1/ — the permanent entry for pointcast-devnet-1, which
+ * the devnet reset replaced with pointcast-devnet-2 (block 0700).
+ *
+ * The orchestrator copies the recorder's output (pointcast-chain
+ * record-devnet.mjs, checked with yard-snapshot.sh --check) into
+ * public/chain/yard/devnet-1/: snapshot.json, snapshot.sha256 and, if the
+ * snapshot is sharded, bodies/NNN.json. NOT index.html: this page is the
+ * index, and a public/ index.html would collide with it
+ * (tests/chain-devnet-reset.test.mjs checks).
+ *
+ * Everything shown about the recording is read from those files at build
+ * time (devnet1Recording()); while they are absent the page says so and
+ * links nothing that is not there. This entry never hides; the reset notice
+ * on /chain/bots and /chain/net does, after NOTICE_END_DATE.
+ */
+import BlockLayout from '../../../../layouts/BlockLayout.astro';
+import ChainHeader from '../../../../components/chain/ChainHeader.astro';
+import { CHANNELS } from '../../../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, devnet1Recording, notYet } from '../../../../data/chain-home';
+import '../../../../styles/chain.css';
+
+assertDevnetLaunchPinned();
+
+const BLOCK = '0700';
+const ch = CHANNELS.FD;
+const rec = devnet1Recording();
+const nf = (n: number) => n.toLocaleString('en-US');
+const title = `devnet-1 · ${DEVNET_PREVIOUS.startedOn} → ${notYet(RESET.date)}`;
+const description = `The recording of pointcast-devnet-1, blocks #1–#${notYet(DEVNET_PREVIOUS.tip)}, kept when the PointCast devnet was reset to pointcast-devnet-2. Replay and check it in your browser. No value is promised.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Dataset',
+  name: title,
+  description,
+  url: DEVNET_PREVIOUS.url,
+  isAccessibleForFree: true,
+  ...(rec ? { distribution: [{ '@type': 'DataDownload', encodingFormat: 'application/json', contentUrl: `https://pointcast.xyz${rec.snapshotHref}` }] } : {}),
+};
+---
+
+<BlockLayout title={title} description={description} image={`/images/og/b/${BLOCK}.png`} imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds>
+  <div class="chn" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <ChainHeader current="yard" trail={[{ label: 'yard', href: '/chain/yard/?snapshot=./snapshot.json' }, { label: 'devnet-1' }]} block={BLOCK} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · YARD · RECORDING · {DEVNET_PREVIOUS.chainId.toUpperCase()} · NO VALUE IS PROMISED</p>
+      <h1>{title}</h1>
+      <p class="dek">
+        The first public PointCast devnet, <code>{DEVNET_PREVIOUS.chainId}</code>, ran from {DEVNET_PREVIOUS.startedOn} until it was
+        reset on {notYet(RESET.date)}. Before the reset its writes were paused, every block and every post body was recorded, and
+        the recording was replayed to check it against what the chain itself reported. This is that recording. The live devnet is
+        now <a href="/chain/bots"><code>{DEVNET.chainId}</code></a>.
+      </p>
+    </header>
+
+    <section class="facts" aria-label="devnet-1">
+      <dl>
+        <div><dt>Chain id</dt><dd><code>{DEVNET_PREVIOUS.chainId}</code></dd></div>
+        <div><dt>Genesis</dt><dd><code class="hash">{DEVNET_PREVIOUS.genesis}</code></dd></div>
+        <div><dt>Blocks</dt><dd>#1–#{rec ? nf(rec.height) : notYet(DEVNET_PREVIOUS.tip)}</dd></div>
+        <div><dt>Dates</dt><dd>{DEVNET_PREVIOUS.startedOn} → {notYet(RESET.date)} · recorded {rec?.recordedAt || notYet(DEVNET_PREVIOUS.recordedAt)}</dd></div>
+        {rec && <div><dt>Tip hash</dt><dd><code class="hash">{rec.tipHash}</code></dd></div>}
+        {rec && <div><dt>State root</dt><dd><code class="hash">{rec.stateRoot}</code></dd></div>}
+        {rec && <div><dt>Contents</dt><dd>{nf(rec.blocks)} blocks, {nf(rec.txs)} transactions{rec.sharded ? ', post bodies in shards under bodies/' : ''}</dd></div>}
+      </dl>
+    </section>
+
+    {rec ? (
+      <section class="sec" aria-labelledby="check-title">
+        <p class="kicker">01 · CHECK IT YOURSELF</p>
+        <h2 id="check-title" class="h2">Replay it from genesis.</h2>
+        <p class="note">
+          The Block Yard replays every block of the recording with the chain’s own code compiled to wasm, with devnet-1’s genesis
+          pinned in the link. It does not depend on the live devnet, which is a different chain now.
+        </p>
+        <p class="cta">
+          <a class="btn" href={rec.yardHref}>Replay devnet-1</a>
+          <a class="btn btn--ghost" href={rec.snapshotHref} download>snapshot.json</a>
+          {rec.sha256 && <a class="btn btn--ghost" href="/chain/yard/devnet-1/snapshot.sha256">snapshot.sha256</a>}
+        </p>
+        {rec.sha256 && <p class="fine">sha256 of snapshot.json: <code class="hash">{rec.sha256}</code></p>}
+      </section>
+    ) : (
+      <section class="sec">
+        <p class="note">The recording files are not in this build. They will be published here, at <code>{DEVNET_PREVIOUS.path}</code>.</p>
+      </section>
+    )}
+
+    <section class="sec" aria-labelledby="means-title">
+      <p class="kicker">02 · WHAT THE RECORDING IS</p>
+      <h2 id="means-title" class="h2">A copy you can check, not a promise.</h2>
+      <ul class="rows">
+        <li><b>Checked by replay</b><span>Before the reset, replaying the recording had to reach the same tip hash and state root the chain reported, and every post body had to match its hash. Your browser can repeat that.</span></li>
+        <li><b>The only copy</b><span>No node serves devnet-1 any more. What is not in this recording is gone.</span></li>
+        <li><b>Witnesses</b><span>devnet-1’s witness attestations are in here as posts. A witness is a claim, not proof.</span></li>
+        <li><b>Value</b><span>None. No value is promised, for devnet-1 or devnet-2.</span></li>
+      </ul>
+    </section>
+  </div>
+</BlockLayout>

@@ -32,7 +32,10 @@ export const GET: APIRoute = () => {
     otherIndexes: ['/explore', '/explore.json', '/town', '/rooms', '/atlas', '/archive', '/timeline', '/attic'],
     doors: DOORS.map((d) => ({
       route: d.route,
-      url: `https://pointcast.xyz${d.route.replace(/\{[^}]+\}.*/, '')}`,
+      url:
+        d.kind === 'dynamic'
+          ? d.index ? `https://pointcast.xyz${d.index}` : undefined
+          : `https://pointcast.xyz${d.route.replace(/\{[^}]+\}.*/, '')}`,
       kind: d.kind,
       title: d.title,
       description: d.description || undefined,

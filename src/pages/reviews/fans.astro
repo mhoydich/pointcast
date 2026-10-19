@@ -1,0 +1,307 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import review from '../../data/fans.json';
+
+const description = review.dek;
+const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
+const groups = review.groups;
+const groupLabel = Object.fromEntries(groups.map((g) => [g.id, g.label]));
+const site = 'https://pointcast.xyz';
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Article',
+      headline: review.title,
+      description,
+      datePublished: review.asOf,
+      dateModified: review.asOf,
+      author: { '@type': 'Organization', name: 'Grok Bot — PointCast Review Lab' },
+      publisher: { '@type': 'Organization', name: 'PointCast' },
+      image: `${site}${review.hero}`,
+      mainEntityOfPage: `${site}/reviews/fans`,
+    },
+    {
+      '@type': 'ItemList',
+      name: review.title,
+      numberOfItems: review.picks.length,
+      itemListElement: review.picks.map((p, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        item: {
+          '@type': 'Product',
+          name: `${p.brand} ${p.name}`,
+          brand: { '@type': 'Brand', name: p.brand },
+          image: `${site}${p.image}`,
+          description: p.review,
+          url: p.url,
+          offers: {
+            '@type': 'Offer',
+            price: p.price.toFixed(2),
+            priceCurrency: 'USD',
+            url: p.url,
+            description: `${p.priceNote} Dated US list price. Not a promise the price still holds.`,
+          },
+        },
+      })),
+    },
+  ],
+};
+---
+<BlockLayout title={`${review.title} | PointCast`} description={description} image={review.hero} jsonLd={jsonLd} immersive>
+  <div class="fan-review">
+    <nav class="mast" aria-label="PointCast">
+      <a href="/">POINTCAST<span> / THE FAN FILE</span></a>
+      <a href="/reviews">All reviews ↗</a>
+      <a href="/reviews/method">How we review</a>
+      <a href="/reviews/fans/history">History</a>
+    </nav>
+    <main>
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">REVIEW LAB · DESK REVIEW · NO HANDS-ON TESTING · {review.picks.length} PICKS</p>
+          <h1>The best fan<br/>for El Segundo<br/><em>and the coast.</em></h1>
+          <p class="dek">{review.dek}</p>
+          <p class="byline">By <strong>{review.byline}</strong>, PointCast Review Lab<br/><time datetime={review.asOf}>October 5, 2026</time> · Desk review; no hands-on testing</p>
+          <a class="jump" href="#picks">See the six picks ↓</a>
+        </div>
+        <figure class="hero-image">
+          <span class="stamp">GROK’S<br/>PICK ↘</span>
+          <img src={review.hero} alt={review.heroAlt} width="1200" height="1200" fetchpriority="high" />
+          <figcaption>{review.heroCredit}</figcaption>
+        </figure>
+      </header>
+
+      <section class="intro">
+        <p>{review.climate.text}</p>
+        <div>
+          <p>July’s mean high at LAX is {review.climate.laxJulyHighF}°F, August {review.climate.laxAugustHighF}°F, September {review.climate.laxSeptemberHighF}°F, from NOAA 1991–2020 normals in the <a href={review.climate.laxNormalsSource}>Weather Atlas</a>. The Almanac for October 5, 2026 logged {review.climate.almanac2026_10_05.tempF}°F and {review.climate.almanac2026_10_05.condition}, with no marine layer. {review.climate.almanac2026_10_05.note}</p>
+          <p class="fine">{review.method}</p>
+        </div>
+      </section>
+      <aside class="disclosure"><strong>Desk review; no hands-on testing</strong><p>{review.disclosure}</p></aside>
+
+      <section class="notes" aria-labelledby="picked-title">
+        <div>
+          <p class="eyebrow">HOW WE PICKED</p>
+          <h2 id="picked-title">Read the tests.<br/>Filter for this coast.</h2>
+          <ol>
+            {review.howWePicked.map((item) => <li><strong>{item.title}.</strong> {item.text}</li>)}
+          </ol>
+        </div>
+        <div>
+          <p class="eyebrow">WHAT TO SKIP</p>
+          <h2>Not the default buy.</h2>
+          <ul>
+            {review.whatToSkip.map((item) => <li><strong>{item.title}.</strong> {item.text}</li>)}
+          </ul>
+        </div>
+      </section>
+
+      <section id="picks" aria-labelledby="picks-title">
+        <div class="section-heading"><p class="eyebrow">SIX FANS</p><h2 id="picks-title">One job<br/>per machine.</h2></div>
+        <ol class="timeline" aria-label="Roles">
+          {groups.map((g) => <li><span class="mono">{g.label}</span><strong>{g.need}</strong></li>)}
+        </ol>
+        <div class="filters" aria-label="Filter by role">
+          <button type="button" data-filter="all" aria-pressed="true">All six</button>
+          {groups.map((g) => <button type="button" data-filter={g.id} aria-pressed="false">{g.label}</button>)}
+          <a href="#compare">Compare all ↓</a>
+        </div>
+        <p id="filter-count" class="fine" aria-live="polite">Showing all {review.picks.length} picks.</p>
+        <div class="cards">
+          {review.picks.map((p, i) => (
+            <article id={p.id} class="card" data-group={p.group}>
+              <figure class="product-image">
+                <a href={p.url} rel="noopener noreferrer" aria-label={`${p.name} at ${p.brand}`}>
+                  <img src={p.image} alt={p.alt} loading="lazy" width="900" height="900" />
+                </a>
+                <figcaption>{p.credit}</figcaption>
+              </figure>
+              <div class="card-copy">
+                <p class="eyebrow">{String(i + 1).padStart(2, '0')} / {groupLabel[p.group]} · {p.award}</p>
+                <h3>{p.brand} {p.name}</h3>
+                <div class="spec"><strong>{money(p.price)}{p.priceNote ? '*' : ''}</strong><span>{p.size}</span></div>
+                <p class="specs">{p.specs}</p>
+                <p>{p.review}</p>
+                <p class="tester">
+                  <a href={p.testerNote.url} rel="noopener noreferrer">{p.testerNote.source} ↗</a>
+                  {' '}{p.testerNote.text}
+                </p>
+                <p>{p.whyElSegundo}</p>
+                <p class="caveat"><strong>The catch.</strong> {p.caveat}</p>
+                {p.budgetAlternative && (
+                  <p class="alt">
+                    <strong>Budget alternative, not a full card.</strong> {p.budgetAlternative.name}. {p.budgetAlternative.note}
+                    {' '}<a href={p.budgetAlternative.testerSource} rel="noopener noreferrer">Wirecutter ceiling guide ↗</a>
+                  </p>
+                )}
+                <p class="verdict">{p.verdict}</p>
+                <a class="buy" href={p.url} rel="noopener noreferrer">{p.cta}</a>
+                <p class="fine">Direct link · no commission{p.priceNote ? ` · * ${p.priceNote}` : ''} · <a href={p.source}>{p.sourceLabel} ↗</a></p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="compare" class="comparison">
+        <p class="eyebrow">THE COMPARISON</p>
+        <h2>Which fan, which room?</h2>
+        <div class="table-scroll" tabindex="0" role="region" aria-label={`Comparison of all ${review.picks.length} fans`}>
+          <table>
+            <caption>US maker list prices · October 5, 2026</caption>
+            <thead>
+              <tr><th scope="col">Fan</th><th scope="col">Role</th><th scope="col">Price</th><th scope="col">Best reason</th><th scope="col">Tester</th></tr>
+            </thead>
+            <tbody>
+              {review.picks.map((p) => (
+                <tr>
+                  <th scope="row"><a href={`#${p.id}`} data-show-all>{p.brand} {p.name}</a></th>
+                  <td>{groupLabel[p.group]}</td>
+                  <td>{money(p.price)}{p.priceNote ? '*' : ''}</td>
+                  <td>{p.award}</td>
+                  <td><a href={p.testerNote.url} rel="noopener noreferrer">{p.testerNote.source}</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="fine">* See the note on that card. Prices exclude tax, shipping, and installation and change often; the maker’s page is the truth.</p>
+      </section>
+
+      <footer class="endnote">
+        <p class="eyebrow">GROK’S PICK</p>
+        <h2>{review.endnoteTitle}</h2>
+        <p>{review.verdict}</p>
+        <p><a href="/reviews/fans/history">From punkahs to bladeless: a short history of the fan →</a></p>
+        <details>
+          <summary>Sources, images & method</summary>
+          <p>{review.method} Desk review; no hands-on testing. Nothing here claims a PointCast anemometer run or a star rating.</p>
+          <p>{review.imageNote} {review.heroCredit} Brand names belong to their owners. This is an independent selection; no maker paid for or reviewed placement.</p>
+          <p>{review.disclosure}</p>
+          <ul>
+            {review.sources.map((s) => <li><a href={s.url} rel="noopener noreferrer">{s.title} ↗</a></li>)}
+          </ul>
+          <ul>
+            {review.doubts.map((d) => <li>{d}</li>)}
+          </ul>
+          <a href="/reviews/fans.json">Read the product and source data as JSON ↗</a>
+        </details>
+        <a class="jump" href="/reviews">More PointCast reviews →</a>
+        <a class="jump" href="/reviews/method">How we review →</a>
+      </footer>
+    </main>
+  </div>
+</BlockLayout>
+<script>
+  const init = () => {
+    const root = document.querySelector('.fan-review');
+    if (!root || root.hasAttribute('data-ready')) return;
+    root.setAttribute('data-ready', 'true');
+    const total = root.querySelectorAll('.card').length;
+    const filter = (value: string) => {
+      let count = 0;
+      root.querySelectorAll<HTMLElement>('.card').forEach((card) => {
+        card.hidden = value !== 'all' && card.dataset.group !== value;
+        if (!card.hidden) count++;
+      });
+      root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.filter === value)));
+      const output = root.querySelector('#filter-count');
+      if (output) output.textContent = value === 'all' ? `Showing all ${total} picks.` : `Showing ${count} of ${total} picks.`;
+    };
+    root.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.addEventListener('click', () => filter(b.dataset.filter || 'all')));
+    root.querySelectorAll('[data-show-all]').forEach((a) => a.addEventListener('click', () => filter('all')));
+  };
+  init();
+  document.addEventListener('astro:page-load', init);
+</script>
+<style>
+  :global(body) { margin: 0; background: #f4f1ea; color: #1a1916; }
+  .fan-review { --ink: #1a1916; --paper: #f4f1ea; --cobalt: #1f3a5f; --sun: #f3d36b; --red: #9d3b2a; --line: #cfc8ba; font-family: Georgia, 'Iowan Old Style', serif; color: var(--ink); background: var(--paper); padding-bottom: 60px; }
+  .fan-review * { box-sizing: border-box; }
+  .fan-review a { color: inherit; }
+  .mast { display: flex; gap: 22px; align-items: center; padding: 18px 5vw; border-bottom: 1px solid var(--ink); font: 700 12px/1 Arial, Helvetica, sans-serif; }
+  .mast a { text-decoration: none; }
+  .mast a:first-child { margin-right: auto; font-size: 16px; letter-spacing: .04em; }
+  .mast span { font-size: 11px; letter-spacing: 1px; margin-left: 10px; color: var(--cobalt); }
+  main { max-width: 1180px; margin: auto; }
+  .hero { display: grid; grid-template-columns: 1.05fr .95fr; min-height: 560px; border-bottom: 1px solid var(--ink); }
+  .hero-copy { padding: 56px 5vw 48px; }
+  .eyebrow { font: 700 11px/1.6 Arial, Helvetica, sans-serif; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 18px; }
+  h1 { font-size: clamp(46px, 5.6vw, 78px); line-height: .96; letter-spacing: -.03em; font-weight: 500; margin: 8px 0 18px; }
+  h1 em { font-style: italic; color: var(--cobalt); }
+  .dek { font-size: 20px; line-height: 1.45; max-width: 36ch; }
+  .byline { font: 13px/1.7 Arial, Helvetica, sans-serif; margin: 22px 0; }
+  .jump { display: inline-block; font: 700 13px/1 Arial, Helvetica, sans-serif; padding: 12px 0; text-underline-offset: 5px; margin-right: 18px; }
+  .hero-image { margin: 0; position: relative; background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 48px 28px 24px; border-left: 1px solid var(--ink); }
+  .hero-image img { width: 100%; height: auto; display: block; }
+  .hero-image figcaption { font: 11px/1.5 Arial, Helvetica, sans-serif; margin-top: 16px; color: #4e4a43; }
+  .stamp { position: absolute; top: 18px; right: 18px; z-index: 1; border-radius: 50%; background: var(--sun); border: 1px solid var(--ink); width: 96px; height: 96px; display: grid; place-content: center; text-align: center; font: 700 11px/1.4 Arial, Helvetica, sans-serif; }
+  .intro { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; padding: 48px 5vw; }
+  .intro > p { font: 28px/1.3 Georgia, serif; margin: 0; }
+  .intro div > p { margin-top: 0; line-height: 1.65; font-size: 17px; }
+  .fine { font: 12px/1.6 Arial, Helvetica, sans-serif; color: #4e4a43; }
+  .disclosure { margin: 0 5vw 48px; padding: 18px 20px; border: 1px solid var(--line); background: #fff; display: flex; gap: 20px; align-items: baseline; font: 14px/1.6 Arial, Helvetica, sans-serif; }
+  .disclosure strong { white-space: nowrap; }
+  .disclosure p { margin: 0; }
+  .notes { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; padding: 0 5vw 20px; }
+  .notes h2 { font-size: clamp(28px, 3vw, 40px); line-height: 1.05; font-weight: 500; margin: 0 0 16px; }
+  .notes ol, .notes ul { margin: 0; padding-left: 18px; }
+  .notes li { margin: 0 0 12px; line-height: 1.55; font-size: 16px; }
+  #picks { padding: 10px 5vw 0; }
+  .section-heading { border-top: 2px solid var(--ink); padding-top: 20px; }
+  h2 { font-size: clamp(32px, 4vw, 52px); line-height: 1.05; font-weight: 500; margin: 0 0 24px; }
+  .timeline { list-style: none; padding: 0; margin: 0 0 18px; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+  .timeline li { padding: 12px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+  .timeline li:nth-child(3n) { border-right: 0; }
+  .timeline span { font: 700 11px/1.3 Arial, Helvetica, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--cobalt); }
+  .timeline strong { font: 15px/1.4 Georgia, serif; font-weight: 500; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 8px; }
+  .filters button { font: 700 12px Arial, Helvetica, sans-serif; cursor: pointer; padding: 10px 14px; border: 1px solid var(--ink); border-radius: 999px; background: transparent; color: var(--ink); min-height: 40px; }
+  .filters button[aria-pressed='true'] { background: var(--ink); color: #fff; }
+  .filters a { margin-left: auto; font: 12px Arial, Helvetica, sans-serif; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 48px 28px; }
+  .card[hidden] { display: none; }
+  .card { border-top: 1px solid var(--ink); padding-top: 16px; min-width: 0; scroll-margin-top: 24px; }
+  .product-image { margin: 0; }
+  .product-image > a { display: block; background: #fff; border: 1px solid var(--line); height: 320px; padding: 16px; }
+  .product-image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .product-image figcaption { font: 11px/1.5 Arial, Helvetica, sans-serif; color: #4e4a43; min-height: 28px; padding: 8px 0; }
+  .card h3 { font-size: 28px; line-height: 1.1; font-weight: 500; margin: 8px 0 12px; }
+  .spec { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .spec strong { font: 600 22px/1 Arial, Helvetica, sans-serif; }
+  .spec span { font: 12px/1.4 Arial, Helvetica, sans-serif; color: #4e4a43; text-align: right; }
+  .specs { display: inline-block; background: #fff; border: 1px solid var(--line); padding: 6px 8px; font: 12px/1.45 Arial, Helvetica, sans-serif; }
+  .card-copy > p { font-size: 16px; line-height: 1.6; }
+  .tester { font: 14px/1.5 Arial, Helvetica, sans-serif; color: #3d3a34; }
+  .caveat, .alt { color: #3d3a34; }
+  .verdict { border-left: 3px solid var(--cobalt); padding-left: 12px; font-weight: 700; }
+  .buy { display: inline-block; padding: 12px 16px; background: var(--sun); border: 1px solid var(--ink); font: 700 13px/1 Arial, Helvetica, sans-serif; text-decoration: none; }
+  .buy:hover { background: #fff; }
+  .comparison { margin: 64px 5vw; padding-top: 24px; border-top: 2px solid var(--ink); }
+  .table-scroll { overflow: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 680px; text-align: left; font: 14px/1.45 Arial, Helvetica, sans-serif; }
+  caption { text-align: left; padding: 0 0 12px; font: 12px Arial, Helvetica, sans-serif; }
+  th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); }
+  thead { background: var(--ink); color: #fff; }
+  td:nth-child(3) { white-space: nowrap; }
+  .endnote { padding: 48px 5vw 56px; background: var(--ink); color: #f4f1ea; }
+  .endnote > p:not(.eyebrow) { font: 20px/1.5 Georgia, serif; max-width: 46ch; }
+  .endnote a { color: var(--sun); }
+  .endnote details { max-width: 760px; padding: 18px 0; margin: 28px 0; border-top: 1px solid #6d675c; border-bottom: 1px solid #6d675c; font: 13px/1.7 Arial, Helvetica, sans-serif; }
+  .endnote summary { cursor: pointer; font-weight: 700; }
+  .endnote li { margin: 0 0 6px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible, .table-scroll:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
+  @media (max-width: 800px) {
+    .hero, .intro, .notes, .cards { grid-template-columns: 1fr; }
+    .hero-image { border-left: 0; border-top: 1px solid var(--ink); }
+    .timeline { grid-template-columns: 1fr 1fr; }
+    .disclosure { display: block; margin-inline: 20px; }
+    .disclosure strong { display: block; margin-bottom: 6px; }
+    .hero-copy, .intro, #picks, .notes { padding-left: 20px; padding-right: 20px; }
+    .comparison, .endnote, .mast { padding-left: 20px; padding-right: 20px; }
+    .filters a { margin-left: 0; }
+  }
+</style>

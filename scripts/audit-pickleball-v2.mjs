@@ -23,7 +23,7 @@ check(new Set(ids).size === ids.length, 'unique home IDs');
 check(home.querySelectorAll('[data-v2-enhanced-only]:not([hidden])').length === 0, 'interactive controls hidden without JS');
 check(home.querySelector('[data-v2-plan] .v2-plan-blocks').children.length > 0, 'ready practice is static');
 check(home.querySelectorAll('.v2-static-grid>div').length === 2, 'two more static practices');
-check(home.querySelectorAll('textarea').length === 1 && home.querySelector('[data-v2-scorecard] button[type="submit"]'), 'scorecard controls remain outside textarea');
+check(home.querySelectorAll('[data-pickleball-v2] textarea').length === 1 && home.querySelector('[data-v2-scorecard] button[type="submit"]'), 'scorecard controls remain outside textarea');
 check(home.querySelector('meta[name="author"]').content === 'PointCast Editorial', 'home editorial attribution');
 check(home.querySelector('link[rel="canonical"]').href === `${base}/pickleball/home/`, 'home canonical');
 check((await read('dist/pickleball/index.html')).includes('THE PICKLEBALL BOARD'), 'original board exists');

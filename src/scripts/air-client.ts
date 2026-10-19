@@ -18,7 +18,7 @@ import * as shortwave from '../lib/shortwave-client';
 // (openState/sessionsNow/nextSession) against this court's facts, which the page
 // embeds at build time; sunset for a 'dusk' close is today's, from the same math
 // the board's conditions use (court-conditions.ts sunsetAt). No courts JSON here.
-import { nextSession, openState, sessionsNow } from '../../functions/_lib/court-board.mjs';
+import { datedHours, nextSession, openState, sessionsNow } from '../../functions/_lib/court-board.mjs';
 import { laParts } from '../../functions/_lib/air-reading.mjs';
 import { priorDayWord } from '../../functions/_lib/air-spot-stats.mjs';
 import { timeText } from '../lib/court-format';
@@ -413,7 +413,7 @@ type HeaderVibe = { label: string; n: number; runnerUp: string | null; chips: st
 type CourtBlock = { kind: string; label: string; days: number[]; start: string; end: string; from: string | null; until: string | null; fee: string | null; confidence: string; prov: string; tag: 'unconfirmed' | 'stale' | null };
 type CourtData = {
   status: 'open' | 'closed';
-  hours: { rules: { days: number[]; open: string; close: string }[]; else: 'closed' | 'unknown'; conflict: { text: string; rules: { days: number[]; open: string; close: string }[] } | null; confidence: string; checked: string; src: string } | null;
+  hours: { rules: { days: number[]; open: string; close: string }[]; else: 'closed' | 'unknown'; conflict: { text: string; rules: { days: number[]; open: string; close: string }[] } | null; dated: { from: string; to: string; open: string; close: string }[]; confidence: string; checked: string; src: string } | null;
   blocks: CourtBlock[];
 };
 type SpotHeader = {
@@ -852,7 +852,7 @@ export function mountAirSpot(root: HTMLElement): void {
     if (state === 'open') word = 'Open';
     else if (state === 'closed') word = 'Closed';
     else if (!courtData.hours) word = 'Hours not listed';
-    else if (!courtData.hours.rules.some((r) => r.days.includes(laParts(now).weekday))) word = `Hours not listed for ${weekdayOf(laDay(now)).slice(0, 3)}`;
+    else if (!datedHours(courtData.hours, laDay(now)) && !courtData.hours.rules.some((r) => r.days.includes(laParts(now).weekday))) word = `Hours not listed for ${weekdayOf(laDay(now)).slice(0, 3)}`;
     else word = 'Hours unclear right now';
     text(els.openState, word);
 

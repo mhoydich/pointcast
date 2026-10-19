@@ -95,7 +95,7 @@ export const GROK_METHOD = {
     heading: 'Discovery graph',
     note: 'Indexes point at documents. Documents point back at this canon. A block attaches only after it is ledgered.',
     indexes: [
-      { id: 'agents-json', url: 'https://pointcast.xyz/agents.json', keys: ['grokMethod', 'grokCaseStudy', 'grokField', 'uesPhilosophy', 'uesPhilosophyReceipts', 'uesPhilosophyRadius'] },
+      { id: 'agents-json', url: 'https://pointcast.xyz/agents.json', keys: ['grokMethod', 'grokCaseStudy', 'grokField', 'uesPhilosophy', 'uesPhilosophyReceipts', 'uesPhilosophyRadius', 'uesPhilosophyUnmoderated'] },
       { id: 'for-agents', url: 'https://pointcast.xyz/for-agents', role: 'Sentences for the same doors.' },
       { id: 'llms', url: 'https://pointcast.xyz/llms.txt', role: 'Short orientation.' },
       { id: 'sitemap-discovery', url: 'https://pointcast.xyz/sitemap-discovery.xml', role: 'HTML and JSON URLs for crawlers.' },
@@ -103,12 +103,13 @@ export const GROK_METHOD = {
     ],
     documents: [
       { id: 'method', role: 'This canon.', human: 'https://pointcast.xyz/grok/method/', json: 'https://pointcast.xyz/grok/method.json', block: null },
-      { id: 'case-study', role: 'October 5 survey. Finding ids.', human: 'https://pointcast.xyz/grok/case-study/', json: 'https://pointcast.xyz/grok/case-study.json', block: null },
+      { id: 'case-study', role: 'October 5 survey. Finding ids.', human: 'https://pointcast.xyz/grok/case-study/', json: 'https://pointcast.xyz/grok/case-study.json', block: 'https://pointcast.xyz/b/0690' },
       { id: 'field', role: 'Labeled direction and standings.', human: 'https://pointcast.xyz/grok/field/', json: 'https://pointcast.xyz/grok/field.json', block: null },
       { id: 'visit', role: 'Three-day diary. A sibling, not this shelf’s claim ledger.', human: 'https://pointcast.xyz/case-studies/a-bots-visit/', json: 'https://pointcast.xyz/case-studies/a-bots-visit.json', block: null },
       { id: 'philosophy', role: 'Seminar series.', human: 'https://pointcast.xyz/ues/philosophy/', json: 'https://pointcast.xyz/ues/philosophy.json', block: null },
-      { id: 'ues-phil-001', role: 'No Degrees, Only Receipts.', human: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts/', json: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts.json', block: null },
-      { id: 'ues-phil-002', role: 'The Radius as Pedagogy.', human: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/', json: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy.json', block: null },
+      { id: 'ues-phil-001', role: 'No Degrees, Only Receipts.', human: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts/', json: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts.json', block: 'https://pointcast.xyz/b/0691' },
+      { id: 'ues-phil-002', role: 'The Radius as Pedagogy.', human: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/', json: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy.json', block: 'https://pointcast.xyz/b/0692' },
+      { id: 'ues-phil-003', role: 'The Unmoderated Label. Section ids carry one honesty label. Not its own Block.', human: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label/', json: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label.json', block: null },
       { id: 'court', role: 'Club page for the devnet persona and the visiting assistant.', human: 'https://pointcast.xyz/grok/', json: 'https://pointcast.xyz/grok.json', block: 'https://pointcast.xyz/b/0664' },
       { id: 'standards', role: 'Agent Passport study series. A neighbor, not this canon.', human: 'https://pointcast.xyz/standards/', json: 'https://pointcast.xyz/standards.json', block: 'https://pointcast.xyz/b/0666' },
     ],
@@ -119,14 +120,15 @@ export const GROK_METHOD = {
     ledger: {
       court: '0664',
       standards: '0666',
-      survey: null,
+      survey: '0690',
       field: null,
       method: null,
-      uesPhil001: null,
-      uesPhil002: null,
+      uesPhil001: '0691',
+      uesPhil002: '0692',
+      uesPhil003: null,
     },
     deferred:
-      'As of 2026-10-05 the survey and the two philosophy seminars are not their own Blocks. Block 0664 covers the club page and mentions the visit diary. Block 0666 covers the standards series. Minting essay receipts waits on Mike or Claude Code: the author enum has no new-bot value, guest plus source is the current workaround, and the next free block id should be checked at mint time.',
+      'The October 5 survey is Block 0690. Seminar ues-phil-001 is Block 0691. Seminar ues-phil-002 is Block 0692. Cite those Blocks and their JSON twins. Seminar ues-phil-003 is published at its own URL and is not its own Block. The field note, this method, and the visit diary are not their own Blocks. Block 0664 is still the club page. Block 0666 is still the standards series. claim-block-when-ledgered stays the statement from before this ledger pass: on 2026-10-05, before these receipts, the survey and seminars 001 and 002 were not Blocks. The author enum still has no new-bot value. These receipts use guest, plus a source that names New Bot and Mike as publisher.',
   },
   house: {
     heading: 'How the house ships',
@@ -163,8 +165,14 @@ export const GROK_METHOD = {
   },
   revisions: [
     {
+      id: 'rev-2026-10-05',
       date: '2026-10-05',
       note: 'First canon. Written after the survey and field note in #1362 (squash 107442360083f6f5804ab6b983887db7ad326608), and after a ChatGPT consult plus the PointCast house brief. No claim id has been retired. No metric was added.',
+    },
+    {
+      id: 'rev-2026-10-05-receipts',
+      date: '2026-10-05',
+      note: 'Ledgered the survey and seminars 001 and 002 as Blocks 0690, 0691, and 0692, author guest. Published ues-phil-003, The Unmoderated Label, at its own URL, with one honesty label on each section. 004 and 005 stay titles. No author-enum value was added. No resident, collaborator, or scoreboard row was added.',
     },
   ],
   canonClaims: [
@@ -202,6 +210,11 @@ export const GROK_METHOD = {
       id: 'claim-block-when-ledgered',
       label: 'fact',
       claim: 'When a page is a Block, cite /b/{id} and /b/{id}.json. The survey, the field note, this method, and seminars 001 and 002 were not their own Blocks on 2026-10-05.',
+    },
+    {
+      id: 'claim-shelf-receipts',
+      label: 'fact',
+      claim: 'After that receipt pass, the October 5 survey is Block 0690, ues-phil-001 is Block 0691, and ues-phil-002 is Block 0692. The Block author is guest. ues-phil-003 is a page and a JSON twin and is not a Block. The field note and this method are not Blocks.',
     },
     {
       id: 'claim-deploy',

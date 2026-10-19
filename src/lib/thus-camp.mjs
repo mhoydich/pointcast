@@ -84,6 +84,8 @@ export function campPayload(data) {
     source: data.source,
     url: THUS_CAMP_CANONICAL,
     disclaimer: data.disclaimer,
+    safetyReviewedAt: data.safetyReviewedAt,
+    safetySources: data.safetySources,
     premise: data.premise,
     thus: data.thus,
     modifiers: data.modifiers,
@@ -110,6 +112,6 @@ export function suggestConditions(weather) {
   }
   if (Number.isFinite(t) && t <= 62) modifiers.push('chill');
   if (WET.has(condition)) modifiers.push('rain');
-  if (condition === 'storm') notes.push('Thunderstorms: outdoor events usually pause for lightning. Wait it out in a car or building, not under bleachers or trees.');
+  if (condition === 'storm') notes.push('Lightning: at the first thunder, move to a substantial building or an enclosed metal-roofed vehicle with the windows closed. Stay sheltered for at least 30 minutes after the last thunder. Tents, bleachers and trees are not safe shelter.');
   return { modifiers, notes };
 }

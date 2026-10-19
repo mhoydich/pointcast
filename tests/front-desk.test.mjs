@@ -265,3 +265,69 @@ test('MCP lists the desk tools with check-in not marked read-only', async (t) =>
   assert.equal(byName.front_desk_checkin.annotations.destructiveHint, false);
   assert.equal(byName.front_desk_checkin.inputSchema.properties.kind, undefined);
 });
+
+
+function privacyFixturePassport(extra = {}) {
+  return {
+    schema: 'pointcast.agent-passport/v0.1',
+    name: 'privacy-fixture',
+    operator: { name: 'Public Operator' },
+    purpose: 'A public visitor check-in.',
+    capabilities: ['visit'],
+    consent: ['label-as-bot'],
+    level: 'self-declared',
+    updated: '2026-10-05T20:00:00Z',
+    ...extra,
+  };
+}
+
+test('secret fields in object and JSON-string passports are both refused before ledger writes', async () => {
+  const doc = privacyFixturePassport({ apiKey: 'fixture-only-never-publish' });
+  for (const passport of [doc, JSON.stringify(doc)]) {
+    const kv = memoryKv();
+    const result = await checkIn(kv, { passport }, { now: NOW, records: [] });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 400);
+    assert.match(result.error, /secrets/);
+    assert.equal(kv.puts, 0);
+    assert.equal(kv.store.size, 0);
+    assert.equal((await publicBoard(kv, '2026-10-05', NOW)).counts.all, 0);
+  }
+});
+
+test('untrusted signature failure text never enters stored or public visit notes', async () => {
+  const marker = 'untrusted-raw-passport-marker-do-not-publish';
+  const passport = privacyFixturePassport({
+    publicKey: { scheme: 'ed25519', key: '00'.repeat(32), status: 'active' },
+    signature: { alg: marker, value: '00'.repeat(64) },
+  });
+  const kv = memoryKv();
+  const result = await checkIn(kv, { passport }, { now: NOW, records: [] });
+  assert.equal(result.ok, true);
+  assert.equal(result.visit.level, 'self-declared');
+  assert.equal(result.visit.checks.keySigned, false);
+  assert.equal(result.visit.checks.keyNote, 'No ed25519 signature was verified.');
+  assert.equal(JSON.stringify(result).includes(marker), false);
+  assert.equal([...kv.store.values()].join('\n').includes(marker), false);
+  const board = await publicBoard(kv, '2026-10-05', NOW);
+  assert.equal(board.counts.agent, 1);
+  assert.equal(JSON.stringify(board).includes(marker), false);
+});
+
+test('ordinary public object and JSON-string passports still receive the same self-declared visit shape', async () => {
+  const doc = privacyFixturePassport();
+  for (const passport of [doc, JSON.stringify(doc)]) {
+    const kv = memoryKv();
+    const result = await checkIn(kv, { passport }, { now: NOW, records: [] });
+    assert.equal(result.ok, true);
+    assert.equal(result.status, 201);
+    assert.equal(result.visit.name, doc.name);
+    assert.equal(result.visit.level, 'self-declared');
+    assert.equal(result.visit.stamp.humanApproved, false);
+    assert.equal(result.visit.receipt.signature.status, 'pending');
+    assert.equal(kv.puts, 2);
+    const board = await publicBoard(kv, '2026-10-05', NOW);
+    assert.equal(board.counts.all, 1);
+    assert.equal(board.visitors[0].name, doc.name);
+  }
+});

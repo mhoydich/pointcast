@@ -1,0 +1,17 @@
+import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {createHash} from 'node:crypto';
+const [site,out]=process.argv.slice(2);
+const allowed=new Set(['pointcast','industrynext','intern','ues','rally']);
+if(!allowed.has(site)||!out)throw new Error('Usage: node scripts/build-opportunities-adapter.mjs SITE OUTPUT_DIRECTORY');
+const source=new URL('../public/opportunities/',import.meta.url);
+const destination=resolve(out);await mkdir(destination,{recursive:true});
+let html=await readFile(new URL('index.html',source),'utf8');
+html=html.replace('data-default-site="pointcast"',`data-default-site="${site}"`);
+if(site==='industrynext')html=html.replace('<a href="/">POINTCAST</a>','<a href="/">INDUSTRYNEXT</a>');
+if(site!=='pointcast')html=html.replaceAll('href="/worklife/open-to-work"','href="https://pointcast.xyz/worklife/open-to-work"').replaceAll('href="/intern/"','href="https://pointcast.xyz/intern/"');
+await writeFile(join(destination,'index.html'),html);
+for(const file of ['board.css','board.mjs','model.mjs','catalog.json'])await copyFile(new URL(file,source),join(destination,file));
+const bytes=await readFile(new URL('catalog.json',source));
+await writeFile(join(destination,'adapter-provenance.json'),JSON.stringify({site,source:'mhoydich/pointcast:public/opportunities/catalog.json',catalogSha256:createHash('sha256').update(bytes).digest('hex'),releaseState:JSON.parse(bytes).releaseState,generatedAt:new Date().toISOString()},null,2)+'\n');
+console.log(`Built ${site} review adapter; shared catalog SHA256 ${createHash('sha256').update(bytes).digest('hex')}`);

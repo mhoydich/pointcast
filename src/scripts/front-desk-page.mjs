@@ -130,6 +130,9 @@ agentForm?.addEventListener('submit', (event) => {
   submit(agentForm, 'agent-status', body);
 });
 
+const agentSubmit = $('agent-submit');
+if (agentForm && agentSubmit) agentSubmit.disabled = false;
+
 const humanForm = $('human-form');
 humanForm?.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -140,5 +143,8 @@ humanForm?.addEventListener('submit', (event) => {
     company: companyOf(humanForm),
   });
 });
+
+const humanSubmit = $('human-submit');
+if (humanForm && humanSubmit) humanSubmit.disabled = false;
 
 load();

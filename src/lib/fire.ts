@@ -60,7 +60,7 @@ export const FIRE_PRACTICES: FirePractice[] = [
 ];
 
 export const FOUR_ELEMENTS = [
-  { element: 'EARTH', track: 'Geology', url: '/geology', paperNumber: 'UES Track 08', sensoryFocus: 'The ground beneath. Stratigraphy, fault, deep-time markers, twelve stones, four field walks, El Segundo Blue habitat.', practice: 'Stone in pocket; sit with stone; read the layer.' },
+  { element: 'EARTH', track: 'Geology', url: '', paperNumber: 'UES Track 08', sensoryFocus: 'The ground beneath. Stratigraphy, fault, deep-time markers, twelve stones, four field walks, El Segundo Blue habitat.', practice: 'Stone in pocket; sit with stone; read the layer.' },
   { element: 'WATER', track: 'Ocean Wing', url: '/ocean-wing', paperNumber: 'UES Track 09', sensoryFocus: 'The Pacific edge. Twelve coastal sites, six tide-and-surf realities, NOAA buoy 46221, the marine-layer fog cycle.', practice: 'Tide-table read; beach walk; cold-water acclimation; tide-pool sit.' },
   { element: 'FIRE', track: 'Fire', url: '/fire', paperNumber: 'UES Track 11 · here', sensoryFocus: 'The chaparral cycle, the Santa Ana season, the indigenous burning tradition, the civic hearth.', practice: 'Saturday-night fire ring; daily Santa Ana check; annual reading arc; quarterly fire-scar walk.' },
   { element: 'AIR', track: 'Marine Layer', url: '/marine-layer', paperNumber: 'UES Track 07', sensoryFocus: 'The atmospheric fog cycle. Eight place-based sittings, breath protocols, the marine layer as bell.', practice: 'Eight-week sit cycle; one artifact per sit.' },

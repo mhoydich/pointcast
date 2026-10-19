@@ -1,3 +1,9 @@
+import cameraGuide from '../data/shop-guides/cameras.json';
+import cameraHistory from '../data/shop-guides/camera-history.json';
+import waterGuide from '../data/shop-guides/water-bottles.json';
+import supplementGuide from '../data/shop-guides/sports-performance-supplements.json';
+import chargingGuide from '../data/shop-guides/charging-supplies.json';
+import headphoneGuide from '../data/shop-guides/headphones.json';
 /**
  * shop.pointcast.xyz — the PointCast Shop front.
  *
@@ -15,10 +21,11 @@ import balms from '../data/balm-shelf.json';
 import video from '../data/ai-video.json';
 import machines from '../data/machine-room.json';
 import aiPlans from '../data/ai-plans.json';
+import fans from '../data/fans.json';
 import { FEEDERS, PICKS as FEEDER_PICKS, DESK_DATE as FEEDER_DATE } from './hummingbird-feeders.mjs';
 import { REGISTER_STATS } from './paddle-register';
 
-export const SHOP_FRONT_VERSION = 'shop-front-v1-2026-09-29';
+export const SHOP_FRONT_VERSION = 'shop-front-v1-2026-10-05';
 export const SHOP_HOST = 'shop.pointcast.xyz';
 export const SHOP_ORIGIN = `https://${SHOP_HOST}`;
 export const SITE = 'https://pointcast.xyz';
@@ -61,6 +68,20 @@ export type ShopPick = {
 };
 
 const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
+
+const fanPicks: ShopPick[] = fans.picks.map((p) => ({
+  id: `fans/${p.id}`,
+  guide: 'fans',
+  name: p.name,
+  brand: p.brand,
+  price: p.price,
+  priceText: money(p.price) + (p.priceNote ? '*' : ''),
+  currency: 'USD',
+  url: p.url,
+  image: p.image,
+  verdict: p.verdict,
+  reviewUrl: `/reviews/fans#${p.id}`,
+}));
 
 const bagPicks: ShopPick[] = bags.picks.map((p) => ({
   id: `bags/${p.id}`,
@@ -236,6 +257,7 @@ const FACT_SOURCES: [string, FactRow[], string[]][] = [
   ['ai-video', video.picks as FactRow[], ['award', 'length', 'resolution', 'audio', 'bestFor', 'whatsNew', 'how', 'caveat']],
   ['home-robots', robots.picks as FactRow[], ['award', 'status', 'talks', 'subscription', 'size', 'specs', 'caveat']],
   ['bags', bags.picks as FactRow[], ['moment', 'award', 'size', 'specs', 'caveat']],
+  ['fans', fans.picks as FactRow[], ['award', 'specs', 'caveat', 'whyElSegundo', 'verdict']],
   ['lego-sets', lego.sets as FactRow[], ['award', 'pieces', 'status', 'caveat']],
   ['playstation-2026', playstation.games as FactRow[], ['award', 'mood', 'players', 'caveat']],
   ['machine-room', machines.items as FactRow[], ['section', 'group', 'status', 'why', 'forWho']],
@@ -245,9 +267,37 @@ export const SHOP_FACTS: Record<string, string> = Object.fromEntries(
   FACT_SOURCES.flatMap(([guide, rows, fields]) => rows.map((r) => [`${guide}/${r.id}`, factLine(r, fields)] as const)),
 );
 
-export const SHOP_PICKS: ShopPick[] = [...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+const cameraBrands: Record<string, string> = { used: 'Sony', r50: 'Canon', xm5: 'Fujifilm', gr: 'Ricoh', x100: 'Fujifilm', om: 'OM SYSTEM', sony: 'Sony', nikon: 'Nikon', s5: 'Panasonic', pocket: 'DJI', gopro: 'GoPro', instax: 'Fujifilm', pentax: 'Pentax' };
+const cameraPicks: ShopPick[] = cameraGuide.sourcePackage.cards.filter((p) => p.buy_url).map((p) => ({
+  id: `cameras/${p.id}`, guide: 'cameras', name: p.model, brand: cameraBrands[p.id] || p.model,
+  price: typeof p.price_usd === 'number' ? p.price_usd : null,
+  priceText: (typeof p.price_usd === 'number' ? money(p.price_usd) : `${money(p.price_usd.min)}–${money(p.price_usd.max)}`) + ` · ${p.price_basis}`,
+  currency: 'USD', url: p.buy_url!, image: null,
+  verdict: `${p.category}. ${p.tradeoffs} Research-date listing: ${p.stock}; no checkout or delivery verification. Ready-to-shoot ${money(p.estimated_ready_to_shoot_usd[0])}–${money(p.estimated_ready_to_shoot_usd[1])} is a planning estimate before tax/shipping; ${p.system_cost_basis}.`,
+  reviewUrl: `/reviews/cameras#camera-${p.id}`,
+}));
+
+const waterPicks: ShopPick[] = waterGuide.sourcePackage.comparison.map((p) => ({
+  id: `water-bottles/${p.id}`, guide: 'water-bottles', name: `${p.brand} ${p.model} / ${p.variant}`,
+  brand: p.brand, price: p.price_usd, priceText: (p.id.startsWith('hydro') ? 'from ' : '') + money(p.price_usd), currency: 'USD',
+  url: p.buy_url, image: null, verdict: `${p.pick}. ${p.tradeoff}`, reviewUrl: '/reviews/water-bottles#comparison',
+}));
+export const SHOP_PICKS: ShopPick[] = [...cameraPicks, ...waterPicks, ...fanPicks, ...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  { id: 'cameras', title: cameraGuide.title, dek: cameraGuide.subtitle, href: '/reviews/cameras', json: '/reviews/cameras.json', kind: 'Desk review', image: cameraGuide.hero.src, imageAlt: cameraGuide.hero.alt, asOf: '2026-10-05', count: 14, countLabel: 'routes' },
+  { id: 'camera-history', title: cameraHistory.title, dek: cameraHistory.subtitle, href: '/camera-history', json: '/camera-history.json', kind: 'Field guide', image: cameraHistory.hero.src, imageAlt: cameraHistory.hero.alt, asOf: '2026-10-05', count: 15, countLabel: 'milestones' },
+  { id: 'water-bottles', title: waterGuide.title, dek: waterGuide.subtitle, href: '/reviews/water-bottles', json: '/reviews/water-bottles.json', kind: 'Buying guide', image: '/images/shop-guides/water-bottles.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 5, countLabel: 'bottles' },
+  { id: 'sports-performance-supplements', title: supplementGuide.title, dek: supplementGuide.subtitle, href: '/reviews/sports-performance-supplements', json: '/reviews/sports-performance-supplements.json', kind: 'Desk review', image: '/images/shop-guides/sports-performance-supplements.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 13, countLabel: 'evidence cards' },
+  { id: 'charging-supplies', title: chargingGuide.title, dek: chargingGuide.subtitle, href: '/reviews/charging-supplies', json: '/reviews/charging-supplies.json', kind: 'Desk review', image: '/images/shop-guides/charging-supplies.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 5, countLabel: 'comparisons' },
+  { id: 'headphones', title: headphoneGuide.title, dek: headphoneGuide.subtitle, href: '/reviews/headphones', json: '/reviews/headphones.json', kind: 'Desk review', image: '/images/shop-guides/headphones.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 5, countLabel: 'comparisons' },
+
+  {id:'puzzles',title:'The puzzle shelf',dek:'Nine official puzzle publishers, choosing guidance, and ten original PointCast concepts clearly marked not for sale.',href:'/shop/puzzles/',json:'/puzzles.json',kind:'Shelf',image:'/images/puzzles/01-tidepool-atlas.webp',imageAlt:'Original Tidepool atlas puzzle concept with colorful coastal pools',asOf:'2026-10-03',count:9,countLabel:'publisher shops'},
+  {
+    id: 'fans', title: fans.title, dek: fans.dek, href: '/reviews/fans', json: '/reviews/fans.json',
+    kind: 'Desk review', image: fans.hero, imageAlt: fans.heroAlt,
+    asOf: fans.asOf, count: fans.picks.length, countLabel: 'fans',
+  },
   {
     id: 'balm-shelf', title: balms.title, dek: balms.dek, href: '/reviews/balm-shelf', json: '/reviews/balm-shelf.json',
     kind: 'Field guide', image: '/images/balm-shelf/hero.jpg', imageAlt: 'Illustrated balm shelf: tin, tube, patch, liniment bottle, mint, chili, wintergreen',
@@ -321,7 +371,8 @@ export const SHOP_LANES = [
   { id: 'court', label: 'Court lane', href: '/shop/court', note: 'Paddles out now and coming soon, from the register.' },
   { id: 'good-feels', label: 'Good Feels', href: '/shop#good-feels', note: 'The house brand’s live mirror: seltzers, gummies, enhancers.' },
   { id: 'takes', label: 'Paddle takes', href: '/reviews/paddles', note: 'Reviews as takes: hours played, who paid, what we’d change.' },
-  { id: 'method', label: 'How we review', href: '/reviews/paddles/method', note: 'Desk vs hands-on, dated prices, and the paid-link rule.' },
+  { id: 'method', label: 'How we review', href: '/reviews/method', note: 'Desk review means no hands-on testing. Dated prices. Non-affiliate links. Unpublished results are not invented.' },
+  { id: 'paddle-method', label: 'How a paddle take gets made', href: '/reviews/paddles/method', note: 'The hour floor, disclosed relationships, and the paid-link rule for paddle takes.' },
 ];
 
 export const SHOP_POLICY = [

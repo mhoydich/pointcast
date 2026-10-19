@@ -2,8 +2,11 @@
  * - App shell: precached on install, network-first for navigations (fresh when online,
  *   cached when offline), stale-while-revalidate for the other shell files.
  * - Noun art from noun.pics: cache-first at runtime (opaque responses are fine for <img>).
- * - /api/*: never cached (drum counts and rooms must be live). */
-var VERSION = 'nb-v1';
+ * - /api/*: never cached (drum counts, rooms, the Beat Wall and Floor presence must be live; the page keeps
+ *   its own last-seen copy of the Wall in localStorage for offline viewing).
+ * v2: the version bump makes installed v1 apps fetch the v2 shell on their next visit and drop nb-shell-nb-v1;
+ *   noun art (nb-nouns-v1) is kept across the update. */
+var VERSION = 'nb-v2';
 var SHELL = 'nb-shell-' + VERSION;
 var NOUNS = 'nb-nouns-v1';
 var MAX_NOUNS = 400;

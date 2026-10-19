@@ -1,0 +1,30 @@
+---
+import {assertAnimationReading,animationReadingMinutes} from '../lib/animation-reading.mjs';
+import '../styles/editorial-review.css';
+import AnimationReadingText from './AnimationReadingText.astro';
+import AnimationReadingMedia from './AnimationReadingMedia.astro';
+import AnimationReadingParagraph from './AnimationReadingParagraph.astro';
+const story=assertAnimationReading(Astro.props.story);
+const sourceMap=new Map(story.sources.map(s=>[s.id,s]));
+const citations=(ids=[])=>ids.map(id=>sourceMap.get(id));
+const related=Astro.props.related||[];
+const media=Astro.props.media;
+---
+<article class="ed animation-reading">
+ <a class="animation-skip" href="#animation-story">Skip to the complete story</a>
+ <header class="mast"><a href="/">POINTCAST</a><nav aria-label="Animation reading navigation"><a href="/reading/animation">Animation reading shelf</a>{related.map(item=><a href={item.href}>{item.label}</a>)}<a href="/ues">UES learning</a></nav></header>
+ <header class="hero"><div><p class="kicker">Animation and television / checked {story.checkedDate}</p><h1>{story.title}</h1><p class="dek">{story.dek}</p>{story.scopeNote&&<p class="note">{story.scopeNote}</p>}</div><aside class="hero-plate"><span>THE COMPLETE LONG READ</span><strong>{animationReadingMinutes(story)} MIN</strong><span>Craft, people, cultural context and the business behind the screen.</span></aside></header>
+ {media&&<p class="note">{media.rightsNote} <a href="/images/hanna-barbera-editorial/image-credits.json">Complete image credits</a></p>}
+ <nav class="jump" aria-label="Story contents">{story.sections.map(section=><a href={`#${section.id}`}>{section.spoiler?'Spoilers: ':''}{section.heading||'Opening'}</a>)}{story.timeline?.length>0&&<a href="#timeline">Timeline</a>}{story.companions?.industrynext&&<a href="#work">Business perspective</a>}{story.companions?.ues&&<a href="#learning">UES exercises</a>}<a href="#sources">Sources</a></nav>
+ <div id="animation-story">{story.sections.map(section=>section.spoiler?<details class="animation-spoiler prose" id={section.id}><summary><strong>Spoilers — {section.heading}</strong><span>Open when you are ready for plot details</span></summary><div>{section.paragraphs.map(p=><AnimationReadingParagraph text={p} />)}{section.sourceIds?.length>0&&<p class="source-ref">Sources: {citations(section.sourceIds).map(s=><a href={s.url}>{s.title} ↗ </a>)}</p>}{section.limitations&&<p class="note">{section.limitations}</p>}</div></details>:<section class="prose" id={section.id}>{section.heading&&<h2>{section.heading}</h2>}{section.paragraphs.map(p=><AnimationReadingParagraph text={p} />)}{section.sourceIds?.length>0&&<p class="source-ref">Sources: {citations(section.sourceIds).map(s=><a href={s.url}>{s.title} ↗ </a>)}</p>}{section.limitations&&<p class="note">{section.limitations}</p>}{media&&<AnimationReadingMedia items={media.sections[section.id]||[]} diagram={media.diagrams[section.id]}/>}</section>)}</div>
+ {story.timeline?.length>0&&<section id="timeline" class="prose"><h2>A dated timeline.</h2><ol class="animation-timeline">{story.timeline.map(event=><li><p class="kicker">{event.date}</p>{event.title&&<h3>{event.title}</h3>}<p><AnimationReadingText text={event.description} /></p>{event.sourceIds?.length>0&&<p class="source-ref">{citations(event.sourceIds).map(s=><a href={s.url}>{s.title} ↗ </a>)}</p>}</li>)}</ol></section>}
+ {story.companions?.industrynext&&<section class="prose" id="work"><p class="kicker">IndustryNext / Craft and business</p><h2>{story.companions.industrynext.title}</h2>{(story.companions.industrynext.paragraphs||[]).map(p=><AnimationReadingParagraph text={p} />)}{story.companions.industrynext.questions?.length>0&&<ul class="checklist">{story.companions.industrynext.questions.map(q=><li>{q}</li>)}</ul>}</section>}
+ {story.companions?.ues&&<section class="prose" id="learning"><p class="kicker">UES / Independent community learning</p><h2>{story.companions.ues.title}</h2>{(story.companions.ues.paragraphs||[]).map(p=><AnimationReadingParagraph text={p} />)}<ol class="checklist">{(story.companions.ues.exercises||[]).map(exercise=><li><h3>{exercise.title}</h3>{exercise.paragraphs?.map(p=><AnimationReadingParagraph text={p} />)}{exercise.steps?.length>0&&<ol>{exercise.steps.map(step=><li>{step}</li>)}</ol>}</li>)}</ol><p class="note">University of El Segundo is an independent community-learning initiative. These exercises are not an accredited course or credential.</p></section>}
+ <section id="sources"><h2>Follow the source trail.</h2><ol class="sources">{story.sources.map(s=><li><a href={s.url}>{s.title} ↗</a><small>{s.publisher} · {s.date||'See source for publication date'} · checked {story.checkedDate}</small>{s.supports&&<p>{s.supports}</p>}{s.limitations&&<p class="note">{s.limitations}</p>}</li>)}</ol>{story.limitations&&<p class="note">{story.limitations}</p>}</section>
+ {story.sections.some(s=>s.id==='ues'||/ues/i.test(s.kind||''))&&<p class="note">University of El Segundo is an independent community-learning initiative. These exercises are not an accredited course or credential.</p>}
+ {story.rightsNote&&<p class="note">{story.rightsNote}</p>}
+ <footer>PointCast / Animation reading · Original editorial research and learning exercises. <a href="#animation-story">Back to the story ↑</a></footer>
+</article>
+<style>
+.animation-skip{display:inline-block;padding:.6rem 0}.animation-spoiler{border-block:1px solid #b8aea0;padding-block:1.2rem}.animation-spoiler summary{cursor:pointer;min-height:44px}.animation-spoiler summary strong{font-size:1.35rem}.animation-spoiler summary span{display:block;font-size:.85rem;margin-top:.4rem}.animation-timeline{list-style:none;padding:0;border-left:2px solid #b8aea0}.animation-timeline>li{padding:0 0 1.5rem 1.5rem}.animation-reading :is(a,summary):focus-visible{outline:3px solid #705042;outline-offset:4px}.animation-reading .mast nav{flex-wrap:wrap}.animation-reading .prose{overflow-wrap:anywhere}
+</style>

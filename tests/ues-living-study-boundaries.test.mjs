@@ -15,3 +15,27 @@ test('ordinary classes, account/API routes, JSON, and neighboring paths retain e
     assert.equal(isQuietUesStudyPath(pathname),false,pathname);
   }
 });
+
+test('approved wallet-free Coastal Signal and exact static aliases omit session restoration',()=>{
+  for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(`/coastal-signal${suffix}`),true);
+  for (const pathname of ['/coastal-signal.json','/coastal-signalish','/coastal-signal/notes','/coastal-signal//','/coastal-signal/index.html/extra']) assert.equal(isQuietUesStudyPath(pathname),false,pathname);
+});
+
+test('approved standalone studies and exact static aliases omit account restoration',()=>{
+  for (const study of ['/coastal-signal-wallet','/moon','/sun','/pacific','/waves','/air']) {
+    for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(study+suffix),true,study+suffix);
+    for (const suffix of ['.json','ish','/notes','//','/index.html/extra']) assert.equal(isQuietUesStudyPath(study+suffix),false,study+suffix);
+  }
+});
+
+test('new isolated animation reading and static aliases omit account restoration',()=>{
+  for (const study of ["/reading/animation", "/reading/animation/avatar-the-last-airbender", "/reading/animation/hanna-barbera", "/reading/animation/saturday-morning-1980s"]) {
+    for (const suffix of ['','/','.html','/index.html']) assert.equal(isQuietUesStudyPath(study+suffix),true);
+    for (const suffix of ['.json','ish','/notes','//','/index.html/extra']) assert.equal(isQuietUesStudyPath(study+suffix),false);
+  }
+});
+
+test('the local-only Nouns Money app and exact static aliases omit account restoration',()=>{
+  for (const suffix of ['', '/', '.html', '/index.html']) assert.equal(isQuietUesStudyPath(`/nouns-money/app${suffix}`),true);
+  for (const pathname of ['/', '/nouns-money', '/nouns-money/', '/nouns-money/collect/', '/nouns-money/pay/', '/api/me/nouns-money', '/api/auth/session', '/nouns-money/app/catalog.json', '/nouns-money/app/manifest.webmanifest', '/nouns-money/appish', '/nouns-money/app/notes', '/nouns-money/app//', '/nouns-money/app/index.html/extra', '/Nouns-money/app']) assert.equal(isQuietUesStudyPath(pathname),false,pathname);
+});

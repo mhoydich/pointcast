@@ -1,0 +1,44 @@
+name: Purple Rain exhibition checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/data/purple-rain.json'
+      - 'src/pages/purple-rain/**'
+      - 'src/pages/purple-rain.json.ts'
+      - 'src/scripts/purple-rain.ts'
+      - 'src/styles/purple-rain.css'
+      - 'public/images/purple-rain/**'
+      - 'tests/purple-rain.test.mjs'
+      - 'scripts/audit-purple-rain.mjs'
+      - '.github/workflows/purple-rain-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: purple-rain-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify sources, rights and publication metadata
+        run: node --test tests/purple-rain.test.mjs
+      - name: Check client TypeScript
+        run: node node_modules/typescript/lib/tsc.js --noEmit --strict --skipLibCheck --target es2022 --lib es2022,dom src/scripts/purple-rain.ts
+      - name: Build all routes remotely
+        run: npm run build:bare
+      - name: Verify compiled exhibition and source inventory
+        run: node scripts/audit-purple-rain.mjs

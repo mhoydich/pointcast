@@ -2,6 +2,18 @@
 
 This is an unsigned preparation release. No contract deployment, mint, listing, operator approval, purchase, signature, broadcast or key generation was performed. The requested collection has no verified minted inventory. Do not describe it as a live sale.
 
+## Gallery recovery and PointCast handoff (2026-10-04)
+
+The stalled-work report is superseded by the completed gallery and commerce releases: gallery PR #1336 and commerce wording PR #1337 merged on October 3. On October 4 the canonical `/art/v2/` page was observed in Chrome with all 50 source/V2 pairs, public provenance, working search and the native artwork viewer. `/art/v2/commerce/` was also observed with purchase disabled. This fresh browser check establishes the current visible routes; the earlier release's source and asset acceptance record is separate historical evidence. The old `~/pc-art-v2` and commerce checkouts were removed after merge. Recover from `origin/main`, not the absent `/private/tmp/art-commerce-source` scratch directory.
+
+The `pointcast-chain` handoff in `docs/ART_MINTING.md` §12 describes a separate **first-collector certificate** using the legacy `drop_mint` mirror. This preparation records its limits in `networks.pointcast.certificate`: not issued or promised, free, nontransferable, does not follow resales, and legacy recipients restricted to tz1/tz2. It leaves node, chain ID, genesis and signer unset. `public_network_not_configured` remains the release status; `local_rehearsal` describes development only. No SDK connection, proof badge, signing path or mirror has been activated. No advertised dev snapshot establishes this collection's public genesis.
+
+For a future reviewed read adapter, connect only to an owner-approved node with a pinned chain ID and genesis. When no node is configured, show the SDK's `no_node` copy. Before displaying a legacy certificate badge, bind the gallery manifest and pinned creator, request the specific drop/holdings, and require `verification.verifiedHolder`. Tezos remains the ownership source. Do not badge dev-key claims, equate a mint sequence with a Tezos edition number, or infer provenance from an ART channel or slug. Owner-side signing and mirroring belong in the owner desk.
+
+The chain has since added editions (`open_edition`, `edition_mint`, `edition_transfer`) in Town Network batch 3, plus later account/passkey work. `docs/TAGS.md` is authoritative and supersedes old tag numbers in `ART_MINTING.md`. Evaluate those edition APIs separately if the desired product is a native PointCast token; they do not silently replace the legacy first-collector certificate, supply a public node, establish artwork rights, or authorize a collection sale. Keep this collection's public adapter unconfigured until its exact product, network and genesis are reviewed.
+
+Validation on current main before this copy update: all 105 existing gallery and commerce tests passed, including decoding all 200 actual WebPs, paired interactions/provenance and disabled commerce. No financial terms, inventory, token IDs, ask IDs or release approvals are selected by this handoff.
+
 ## Verified infrastructure (2026-10-03)
 
 Inspected fresh `origin/main` at `551bd6e62b4126a811cbc5eba7e4ea831c5bc5c0` and public GET endpoints. PointCast's marketplace is a Tezos mainnet contract, `KT1X9LUxV5qaPVLr17uzRfxgRWPdGfRMYxQT`. RPC reports chain ID `NetXdQprcVkpaWU`. Marketplace storage is unpaused, `next_ask_id=0`, asks bigmap `806869`, and active asks are empty. Version 3 `fulfill_ask` takes a bare natural-number ask ID. The existing objkt `collectToken()` helper has a different ABI and is not used.

@@ -20,6 +20,9 @@ const ch = CHANNELS.BDY;
 const allBlocks = await getCollection('blocks', ({ data }) => !data.draft);
 const birthdayBlocks = allBlocks
   .filter((b) => b.data.channel === 'BDY' || b.data.type === 'BIRTHDAY')
+  // Only real celebrations: a birthday block names who it is for. Release
+  // notes filed on BDY (e.g. 0367, 0424) have no meta.for and are not birthdays.
+  .filter((b) => typeof b.data.meta?.for === 'string' && b.data.meta.for.length > 0)
   .sort((a, b) => +new Date(b.data.timestamp) - +new Date(a.data.timestamp));
 
 const family = await getCollection('family', ({ data }) => data.listed);
@@ -71,7 +74,7 @@ const upcoming = family
 // Recipients aggregation — slug → list of their birthday blocks
 const recipientMap = new Map<string, typeof birthdayBlocks>();
 for (const b of birthdayBlocks) {
-  const slug = (b.data.meta?.for as string | undefined) || 'unknown';
+  const slug = b.data.meta!.for as string;
   if (!recipientMap.has(slug)) recipientMap.set(slug, []);
   recipientMap.get(slug)!.push(b);
 }
@@ -215,6 +218,29 @@ const jsonLd = {
       </p>
       <p class="circle-count mono" id="circle-count">· loading the circle…</p>
       <ul class="circle-list" id="circle-list"></ul>
+    </section>
+
+    <section class="section section--rooms" id="rooms">
+      <div class="section__head">
+        <h2 class="section__title mono">Rooms · every birthday surface, live today</h2>
+        <a class="section__cta mono" href="/sing">♪ sing one now →</a>
+      </div>
+      <p class="rooms-lede">
+        The registry is this page. The rest of the birthday wing is a set of
+        small rooms, each one thing to do. Five on the web side, four in the
+        drum house. No signup in any of them.
+      </p>
+      <ul class="rooms-list">
+        <li class="room"><a class="room__route mono" href="/cake/register">/cake/register</a><span class="room__line">Register your birthday. Free, no wallet. You get a permanent /cake/&#123;handle&#125; page.</span></li>
+        <li class="room"><a class="room__route mono" href="/sing">/sing</a><span class="room__line">Tap to sing happy birthday. Six tap-zones, one per syllable, Web Audio.</span></li>
+        <li class="room"><a class="room__route mono" href="/blow">/blow</a><span class="room__line">Blow out the candle. Tap it five times fast, make a wish.</span></li>
+        <li class="room"><a class="room__route mono" href="/card">/card</a><span class="room__line">Send a birthday card via URL. The URL is the card.</span></li>
+        <li class="room"><a class="room__route mono" href="/wrapped">/wrapped</a><span class="room__line">Open a wrapped present. Five clicks to unwrap, a Noun inside.</span></li>
+        <li class="room room--drum"><a class="room__route mono" href="/drum-birthday">/drum-birthday</a><span class="room__line">Birthday drum hub. Tap the big drum, confetti rises as visitors join.</span></li>
+        <li class="room room--drum"><a class="room__route mono" href="/drum-cake">/drum-cake</a><span class="room__line">A virtual birthday cake, lit and blown out together.</span></li>
+        <li class="room room--drum"><a class="room__route mono" href="/drum-card">/drum-card</a><span class="room__line">Sign the birthday card. Your Noun stamps onto the page.</span></li>
+        <li class="room room--drum"><a class="room__route mono" href="/drum-party">/drum-party</a><span class="room__line">Nouns Drum Party. Up to five phones, each one a drum.</span></li>
+      </ul>
     </section>
 
     {recipients.length > 0 && (
@@ -613,6 +639,43 @@ const jsonLd = {
   @media (max-width: 540px) {
     .circle-item { grid-template-columns: 1fr; gap: 4px; }
     .circle-when { justify-self: start; }
+  }
+
+  /* Rooms register (every live birthday surface) */
+  .rooms-lede {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--pc-ink-muted, #5F5E5A);
+    max-width: 64ch;
+    margin: 0 0 12px;
+  }
+  .rooms-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .room {
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    gap: 12px;
+    align-items: baseline;
+    padding: 10px 12px;
+    border: 1px dashed var(--pc-rule, #E5E3DD);
+    background: #fff;
+  }
+  .room--drum { border-style: dotted; }
+  .room__route {
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--ch-800);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    justify-self: start;
+  }
+  .room__route:hover { color: var(--ch-600); }
+  .room__line {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--pc-ink, #1F1E1B);
+  }
+  @media (max-width: 540px) {
+    .room { grid-template-columns: 1fr; gap: 4px; }
   }
 
   /* Upcoming row list */

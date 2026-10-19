@@ -91,7 +91,7 @@ test('weather readings map to condition suggestions', async () => {
   assert.match(suggestConditions({ tempF: 99, condition: 'clear' }).notes[0], /98 degree/);
   assert.deepEqual(suggestConditions({ tempF: 89, condition: 'clear' }).modifiers, []);
   assert.deepEqual(suggestConditions({ tempF: 58, condition: 'showers' }).modifiers, ['chill', 'rain']);
-  assert.match(suggestConditions({ tempF: 75, condition: 'storm' }).notes.join(' '), /lightning/);
+  assert.match(suggestConditions({ tempF: 75, condition: 'storm' }).notes.join(' '), /lightning/i);
   assert.deepEqual(suggestConditions({}).modifiers, []);
   assert.deepEqual(suggestConditions({ tempF: null, condition: 'clear' }).modifiers, []);
   const modIds = new Set(data.modifiers.map((m) => m.id));
@@ -120,4 +120,40 @@ test('the kit logic works against the published JSON payload, as the MCP tool us
   assert.ok(kit.items.some((i) => i.id === 'player-snacks'));
   assert.ok(kit.items.some((i) => i.group === 'rain'));
   assert.equal(kitParams(kit).get('m'), 'rain');
+});
+
+
+test('heat first aid preserves emergency actions and escalation', () => {
+  const heat = data.situations.find((s) => s.slug === 'ninety-eight-degrees');
+  const exhaustion = heat.watchFor.find((w) => /heat exhaustion/i.test(w));
+  const stroke = heat.watchFor.find((w) => /heat stroke/i.test(w));
+  assert.match(exhaustion, /medical help.*vomiting.*worsening.*over an hour/i);
+  assert.match(stroke, /911.*rapid cooling/i);
+  assert.match(stroke, /dry or sweaty/i);
+  assert.match(stroke, /do not give anything to drink/i);
+});
+
+test('lightning advice includes a safe shelter and the full wait', async () => {
+  const { suggestConditions } = await import('../src/lib/thus-camp.mjs');
+  const warnings = ['friday-night-football', 'youth-tournament-sideline'].map((slug) =>
+    data.situations.find((s) => s.slug === slug).watchFor.find((w) => /thunder/i.test(w)));
+  warnings.push(...suggestConditions({ tempF: 75, condition: 'storm' }).notes);
+  for (const warning of warnings) {
+    assert.match(warning, /substantial building.*enclosed metal-roofed vehicle.*windows closed/i);
+    assert.match(warning, /at least 30 minutes.*last thunder/i);
+  }
+});
+
+test('rip-current escape includes a fallback and the sources reach the feed', () => {
+  const beach = data.situations.find((s) => s.slug === 'beach-day');
+  const warning = beach.moves.find((w) => /rip current/i.test(w));
+  assert.match(warning, /do not swim against/i);
+  assert.match(warning, /cannot escape.*float or tread water.*help/i);
+  const payload = campPayload(data);
+  assert.equal(payload.safetyReviewedAt, '2026-10-19');
+  assert.ok(payload.safetySources.length >= 6);
+  for (const source of payload.safetySources) {
+    assert.ok(source.title);
+    assert.match(new URL(source.url).hostname, /(^|\.)(cdc|weather|noaa|fda)\.gov$/);
+  }
 });
