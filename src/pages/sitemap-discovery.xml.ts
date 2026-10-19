@@ -22,6 +22,10 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/bot-money/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/bot-money.json', 'monthly', '0.85'],
+  ['https://pointcast.xyz/internship-lab/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/internship-lab/program.json', 'monthly', '0.75'],
   ['https://pointcast.xyz/games/', 'weekly', '0.95'],
   ['https://pointcast.xyz/games.json', 'weekly', '0.85'],
   // Approved public studies include static documents outside Astro route discovery.
