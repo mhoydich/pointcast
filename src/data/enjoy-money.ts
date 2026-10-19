@@ -7,9 +7,9 @@ export const ENJOY_URL = 'https://pointcast.xyz/nouns-money/enjoy/';
 export const ENJOY_PUBLISHED = '2026-10-19';
 
 export const ENJOY_STATUS = {
-  stage: 'plan',
-  label: 'Published plan · nothing on chain yet',
-  detail: 'No contract is originated, no notes are minted and no claim codes exist. Every phase ships to a Tezos testnet first and stops at its gate before mainnet.',
+  stage: 'phase-1-built',
+  label: 'Phase 1 contract built and tested · nothing on chain yet',
+  detail: 'The enjoy-money FA2 is written and passes its tests, but no contract is originated, no notes are minted and no claim codes exist. Every phase ships to the Shadownet testnet first and stops at its gate before mainnet.',
   contract: null as string | null,
   network: null as string | null,
 };
@@ -35,17 +35,18 @@ export const ENJOY_AGENTS = [
   { name: 'grok', model: 'Grok Bot' },
 ];
 
-export type EnjoyPhase = { n: number; title: string; summary: string; points: string[]; gate: string; state: 'planned' | 'testnet' | 'mainnet' | 'later' };
+export type EnjoyPhase = { n: number; title: string; summary: string; points: string[]; gate: string; state: 'planned' | 'built' | 'testnet' | 'mainnet' | 'later' };
 
 export const ENJOY_PHASES: EnjoyPhase[] = [
   {
-    n: 1, title: 'The contract — enjoy-money', state: 'planned',
+    n: 1, title: 'The contract — enjoy-money', state: 'built',
     summary: 'One multi-asset FA2 (TZIP-12) contract with TZIP-16 metadata. Four token IDs, zero decimals.',
     points: [
       'Notes 0–2: the full print run mints to Treasury, then the series is sealed for good and emits an event.',
       'Bot Note 3: admin mints to Treasury. Agents never mint.',
       'Entrypoints: transfer, balance_of, update_operators, mint (admin, blocked on sealed IDs), seal, two-step set_admin, set_metadata.',
       'Tests: transfers, operators, sealed-mint failure, non-admin mint rejection, admin handoff.',
+      'Built: contracts/enjoy-money (SmartPy source and tests), scripts/enjoy-money.mjs (originate, gate1, status). Waiting on the admin and Treasury addresses for Shadownet.',
     ],
     gate: 'Tests pass; on testnet IDs 0–2 are minted and sealed, ID 3 has a test balance, and the art shows on TzKT, Kukai and objkt.',
   },
