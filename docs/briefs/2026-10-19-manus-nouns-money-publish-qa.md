@@ -14,7 +14,7 @@ None. Only a browser: desktop Chrome plus a real phone (iOS Safari if possible).
 
 ## Checks
 1. `/`: the Nouns Money block sits directly under the masthead, above the October Desk, and includes the Enjoy. Money strip. Every link in that block opens a real page (no 404s).
-2. `/nouns-money/enjoy/`: the page says "Published plan · nothing on chain yet" near the top, and the closed-loop rule is stated (nothing redeems for dollars, USDC or goods). `/nouns-money/enjoy.json` returns JSON.
+2. `/nouns-money/enjoy/`: the top bar reads "PLAN V2", and the page says "Published plan · nothing on chain yet" near the top. The closed-loop rule is stated (nothing turns back into money, USDC or goods). The page never uses the words bank, print, redeem, spend or dollars; it says "Ledger" and "paper run" instead. `/nouns-money/enjoy.json` returns JSON with `"version": {"n": 2, ...}`.
 3. `/nouns-money/`: the room nav shows six doors (01 Explore through 06 Enjoy. Money) in one row on desktop and two rows of three on the phone. The numbers strip reads **192** exchange concepts. "What could we share?" shows four cards, two by two on desktop and stacked on the phone: Commons / 40, Global Barter / 100, Almanac / 52 and Engraved variations / 140. Each card's image loads and its link opens.
 4. `/currency-builder/almanac/`: all 52 weeks are listed. Each detail page shows a note with a Noun and the year wheel with one week lit. The front and back SVG links open.
 5. Spot-check five Almanac source links (any weeks). Each should load and support the week's claim. List any that are dead or don't match.
