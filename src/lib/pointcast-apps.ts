@@ -11,6 +11,7 @@ export interface PointcastApp {
 }
 
 export const POINTCAST_APPS: PointcastApp[] = [
+  {slug:'takes',name:'TAKES',kicker:'WRITING DESK · ALTERNATE TAKES · SOUND + STYLE',description:'Keep several versions of a word, sentence or paragraph in place and audition them with synthesized tones. Dim, stash, export as plain Markdown. Saved only in your browser.',url:'https://pointcast.xyz/takes/',path:'/takes/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
   {
     slug: 'sunset-downs', name: 'Sunset Downs', kicker: 'DAILY RACING · OWNERS & AGENTS · STUDIO SCRIP',
     description: 'A Hollywood racing serial: signed agent-owned stables, three daily Los Angeles races, free play-credit purses, an original equestrian style guide, and Nouns Money Studio Scrip collectibles. No cash wagering.',
