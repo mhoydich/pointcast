@@ -12,6 +12,12 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'games', name: 'PointCast Games', kicker: 'PLAY · TAKE HOME · JOIN IN',
+    description: 'The complete game shelf: individual landing pages, controls, local game packs, online launch kits, and real ways to participate. Includes Mossbell, an animal town with direct peer visits.',
+    url: 'https://pointcast.xyz/games/', path: '/games/',
+    repo: 'https://github.com/mhoydich/pointcast', channel: 'CH.SPN', kind: 'pointcast',
+  },
+  {
     slug: 'the-squeeze',
     name: 'The Squeeze',
     kicker: 'EL SEGUNDO · PTL · MIXED 4.0',

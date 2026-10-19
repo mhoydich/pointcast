@@ -1,0 +1,38 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import GameHeader from './GameHeader.astro';
+import GameCard from './GameCard.astro';
+import { GAME_LIBRARY, gameFamilies, gameLanding } from '../../lib/game-library';
+import '../../styles/game-library.css';
+const featured = GAME_LIBRARY.find(game => game.slug === 'mossbell') ?? GAME_LIBRARY[0];
+const jsonLd = {'@context':'https://schema.org','@type':'CollectionPage',name:'PointCast Games',description:'Games to play, take home, and join together.',url:'https://pointcast.xyz/games/',hasPart:GAME_LIBRARY.map(game=>({'@type':'VideoGame',name:game.name,description:game.description,url:`https://pointcast.xyz${gameLanding(game)}`,gamePlatform:'Web browser'}))};
+---
+<BlockLayout title="Games" author="PointCast" description="Explore PointCast’s games. Find your next round, download a game pack, and discover how to play together." image="/images/games/mossbell-preview.png" jsonLd={jsonLd} immersive isolated showNetworkStrip={false} alternates={[{type:'application/json',href:'/games.json',title:'PointCast game library'}]}>
+  <div class="gp-site"><GameHeader />
+    <div id="main">
+      <section class="gp-directory-hero"><div class="gp-hero-copy"><span class="gp-kicker">POINTCAST GAMES · COME ON IN</span><h1>A good place<br />to <em>play.</em></h1><p>Small worlds, loud little victories, and a seat for a friend. Find a game, take it home, or join the next round.</p><div class="gp-button-row"><a class="gp-button gp-button-dark" href="#library">Find your game <span aria-hidden="true">↓</span></a><a class="gp-text-link" href="#take-home">Take a game home ↗</a></div><div class="gp-hero-count"><strong>{GAME_LIBRARY.length}</strong><span>games & worlds<br />one open door</span></div></div>
+        <a class="gp-featured" href={gameLanding(featured)} style={`--game-accent:${featured.accent}`}><div class="gp-featured-image">{featured.hero && <img src={featured.hero} alt="Mossbell’s animal town, pond, and little houses" width="1280" height="1169" fetchpriority="high" />}</div><div class="gp-featured-note"><span class="gp-sticker">NEW LITTLE WORLD</span><h2>{featured.name}</h2><p>Make a home. Meet three neighbors.<br />Invite a friend straight into your town.</p><span class="gp-featured-link">Come and wander <span aria-hidden="true">↗</span></span></div></a>
+      </section>
+      <section class="gp-invitation" aria-label="Three ways to play"><div><span aria-hidden="true">01</span><h2>Start right here.</h2><p>Open a game in your browser and get to the good part.</p></div><div><span aria-hidden="true">02</span><h2>Take one home.</h2><p>Download local game files or a launch kit for a hosted game.</p></div><div><span aria-hidden="true">03</span><h2>Bring someone in.</h2><p>Find room links, shared challenges, and games for one keyboard.</p></div></section>
+      <section id="library" class="gp-library" aria-labelledby="library-title"><div class="gp-section-head"><div><span class="gp-kicker">THE WHOLE GAME SHELF</span><h2 id="library-title">What sounds fun?</h2></div><p id="game-count" role="status" aria-live="polite">{GAME_LIBRARY.length} games to explore</p></div>
+        <form class="gp-filters" role="search" onsubmit="return false"><label class="gp-search">Find a game<input id="game-search" type="search" placeholder="A name, a mood, a way to play…" autocomplete="off" /></label><label>Game shelf<select id="game-family"><option value="all">Every shelf</option>{gameFamilies.map(family=><option value={family}>{family}</option>)}</select></label><label>Take home<select id="game-download-filter"><option value="all">All downloads</option><option value="local">Local game packs</option><option value="online">Online launch kits</option></select></label><button id="game-reset" type="button" class="gp-reset">Reset</button></form>
+        <div class="gp-game-grid">{GAME_LIBRARY.map((game,index)=><GameCard game={game} index={index} />)}</div><div id="game-empty" class="gp-empty" hidden><h3>No games on this shelf yet.</h3><p>Try a shorter search or choose another shelf.</p></div>
+      </section>
+      <section id="take-home" class="gp-take-home"><div><span class="gp-kicker">YOUR GAME, YOUR PACE</span><h2>A little play<br />to keep.</h2></div><div><p>Each game page tells you what’s in its download. Local packs include the game files and a simple launcher. Online kits keep a shortcut to a game that lives on the web.</p><p>Your browser save stays where you made it. A downloaded copy starts with its own save. Live rooms, shared boards, and optional online services are reached from the web game.</p><a class="gp-text-link" href="/app/">Add PointCast to your home screen ↗</a></div></section>
+    </div><footer class="gp-footer"><a href="/">PointCast</a><span>Play a little. Come back when you feel like it.</span><a href="/games.json">Game library JSON</a></footer>
+  </div>
+</BlockLayout>
+<script>
+  function setupGameDirectory() {
+    const search=document.querySelector<HTMLInputElement>('#game-search');
+    const family=document.querySelector<HTMLSelectElement>('#game-family');
+    const download=document.querySelector<HTMLSelectElement>('#game-download-filter');
+    const reset=document.querySelector<HTMLButtonElement>('#game-reset');
+    if(!search||!family||!download||!reset||search.dataset.bound)return;
+    search.dataset.bound='true';
+    const cards=[...document.querySelectorAll<HTMLElement>('[data-game-card]')];
+    function filter(){let count=0;const words=search!.value.toLowerCase().trim().split(/\s+/).filter(Boolean);for(const card of cards){const visible=words.every(word=>(card.dataset.search??'').includes(word))&&(family!.value==='all'||card.dataset.family===family!.value)&&(download!.value==='all'||card.dataset.download===download!.value);card.hidden=!visible;if(visible)count++;}document.querySelector('#game-count')!.textContent=`${count} ${count===1?'game':'games'} to explore`;document.querySelector<HTMLElement>('#game-empty')!.hidden=count!==0;}
+    search.addEventListener('input',filter);family.addEventListener('change',filter);download.addEventListener('change',filter);reset.addEventListener('click',()=>{search.value='';family.value='all';download.value='all';filter();search.focus();});
+  }
+  setupGameDirectory();document.addEventListener('astro:page-load',setupGameDirectory);
+</script>
