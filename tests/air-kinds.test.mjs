@@ -102,7 +102,7 @@ test('field reports: v1 buckets are frozen and every bucket has a reading label'
 });
 
 test('field reports: no spot id collides with a reserved id, and names stay neutral', () => {
-  assert.deepEqual([...config.reserved].sort(), ['agent', 'assign', 'board', 'claim', 'confirm', 'desk', 'index', 'me'], '/r/agent/[call] and /r/desk are never spots');
+  assert.deepEqual([...config.reserved].sort(), ['agent', 'assign', 'board', 'claim', 'confirm', 'desk', 'house', 'how', 'index', 'killtest', 'me'], '/r/agent/[call], /r/desk and /r/how are never spots');
   const ids = config.spots.map((s) => s.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of ids) {
