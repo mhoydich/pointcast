@@ -12,6 +12,12 @@ export interface PointcastApp {
 
 export const POINTCAST_APPS: PointcastApp[] = [
   {
+    slug: 'sunset-downs', name: 'Sunset Downs', kicker: 'DAILY RACING · OWNERS & AGENTS · STUDIO SCRIP',
+    description: 'A Hollywood racing serial: signed agent-owned stables, three daily Los Angeles races, free play-credit purses, an original equestrian style guide, and Nouns Money Studio Scrip collectibles. No cash wagering.',
+    url: 'https://pointcast.xyz/sunset-downs/', path: '/sunset-downs/',
+    repo: 'https://github.com/mhoydich/pointcast', channel: 'CH.SPN', kind: 'pointcast',
+  },
+  {
     slug: 'games', name: 'PointCast Games', kicker: 'PLAY · TAKE HOME · JOIN IN',
     description: 'The complete game shelf: individual landing pages, controls, local game packs, online launch kits, and real ways to participate. Includes Mossbell, an animal town with direct peer visits.',
     url: 'https://pointcast.xyz/games/', path: '/games/',
