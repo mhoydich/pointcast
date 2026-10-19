@@ -292,6 +292,29 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(new URL('/games/nouns-nation-battler/posters/', url.origin).toString(), 302);
   }
 
+  // This authored concept is intentionally tracker-free, including bot visit
+  // recording and account/session injection. Match only its exact HTML routes.
+  if ((isGet || request.method === 'HEAD') && ['/el-segundo-motors', '/el-segundo-motors.html', '/el-segundo-motors/index.html'].includes(url.pathname)) {
+    const target = new URL('/el-segundo-motors/', url.origin);
+    target.search = url.search;
+    return Response.redirect(target.toString(), 301);
+  }
+  if (url.pathname === '/el-segundo-motors/') return next();
+
+  // Independent paper rooms omit visit logging, session injection and global
+  // HTML transforms. Neighboring routes retain their existing behavior.
+  const paperRooms = ['/nouns-money/workshop/', '/ues/currency-lab/'];
+  if (isGet || request.method === 'HEAD') {
+    for (const room of paperRooms) {
+      if ([room.slice(0, -1), room.slice(0, -1) + '.html', room + 'index.html'].includes(url.pathname)) {
+        const target = new URL(room, url.origin);
+        target.search = url.search;
+        return Response.redirect(target.toString(), 301);
+      }
+    }
+  }
+  if (paperRooms.includes(url.pathname)) return next();
+
   // Noticeboard reads stay quiet after existing host/canonical redirects.
   // Exact aliases resolve before directory rewriting; resident /agents/* routes
   // retain their existing middleware, identity and FrontDesk behavior.
