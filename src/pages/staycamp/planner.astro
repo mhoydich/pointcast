@@ -8,7 +8,7 @@ const description = 'A small Staycamp planner: household size, trip length and s
   <section class="wrap section planner-head">
     <p class="eyebrow">Pack your camp</p>
     <h1>How much camp does your house need?</h1>
-    <p class="intro">Three questions and a few boxes to tick. The numbers come from the Field Book: one gallon of water per person per day, plus one headlamp and one sleeping bag each.</p>
+    <p class="intro">Three questions and a few boxes to tick. Start with at least one gallon of stored water per person per day, plus one headlamp and one sleeping bag each. This is a baseline: heat, illness, pregnancy, pets and other household needs require more.</p>
   </section>
 
   <section class="wrap planner">
@@ -26,7 +26,7 @@ const description = 'A small Staycamp planner: household size, trip length and s
       <fieldset>
         <legend>Trip length</legend>
         <div class="pills">
-          <label><input type="radio" name="days" value="3" /> 3 nights</label>
+          <label><input type="radio" name="days" value="3" /> 3 days</label>
           <label><input type="radio" name="days" value="7" /> A week</label>
           <label><input type="radio" name="days" value="14" checked /> A fortnight</label>
         </div>
@@ -44,7 +44,6 @@ const description = 'A small Staycamp planner: household size, trip length and s
       <fieldset>
         <legend>Tick any that apply</legend>
         <div class="ticks">
-          <label><input type="checkbox" name="tank" checked /> We have a hot-water tank</label>
           <label><input type="checkbox" name="older" /> Someone older, or a baby, lives here</label>
           <label><input type="checkbox" name="insulin" /> Someone uses insulin</label>
           <label><input type="checkbox" name="device" /> Someone relies on a powered medical device</label>
@@ -56,15 +55,15 @@ const description = 'A small Staycamp planner: household size, trip length and s
 
     <div class="results" aria-live="polite">
       <div class="stats">
-        <div class="stat"><span id="r-gal">56</span><small>gallons of water to store</small></div>
+        <div class="stat"><span id="r-gal">56</span><small>minimum gallons to store</small></div>
         <div class="stat"><span id="r-jugs">12</span><small>five-gallon jugs</small></div>
         <div class="stat"><span id="r-lamps">4</span><small>headlamps and sleeping bags</small></div>
       </div>
-      <p id="r-tank" class="tank"></p>
+      <p class="tank">Store safe drinking water before an outage. Household tanks and bathtubs are not included in this calculation. Use food-grade containers and follow local water advisories.</p>
       <div class="rec">
         <p class="eyebrow">Your kit</p>
         <h2 id="r-kit">The Fortnight</h2>
-        <p id="r-kit-note"></p>
+        <p id="r-kit-note">Plus 6 more Canteen jugs on top of the 6 in the concept box.</p>
       </div>
       <div>
         <p class="eyebrow">Sort out ahead of time</p>
@@ -76,6 +75,7 @@ const description = 'A small Staycamp planner: household size, trip length and s
 </StaycampLayout>
 
 <script>
+  import { planWater } from '../../lib/staycamp-planner.mjs';
   const form = document.getElementById('plan') as HTMLFormElement | null;
   const people = document.getElementById('people') as HTMLInputElement | null;
   const peopleOut = document.getElementById('people-out');
@@ -89,34 +89,26 @@ const description = 'A small Staycamp planner: household size, trip length and s
     const season = String(data.get('season'));
     const has = (k: string) => data.get(k) === 'on';
 
-    // One gallon per person per day, stored in five-gallon jugs.
-    const gallons = n * days;
-    const jugs = Math.ceil(gallons / 5);
+    const { gallons, jugs, baseJugs, extraJugs, kit } = planWater(n, days);
     set('people-out', String(n));
     set('r-gal', String(gallons));
     set('r-jugs', String(jugs));
     set('r-lamps', String(n));
-    set('r-tank', has('tank')
-      ? 'Your hot-water tank already holds roughly 30 to 50 gallons. Count it as your reserve: draw it from the drain tap, let it cool, and disinfect it if in doubt.'
-      : 'Without a hot-water tank, the stored jugs are all of it, so fill every pot and bath on day one while the taps still run.');
-
-    const weekender = days <= 3 && n <= 2;
-    const baseJugs = weekender ? 2 : 6;
-    const extra = Math.max(0, jugs - baseJugs);
-    set('r-kit', weekender ? 'The Weekender' : 'The Fortnight');
-    set('r-kit-note', extra > 0
-      ? `Plus ${extra} more Canteen jug${extra === 1 ? '' : 's'} on top of the ${baseJugs} in the box.`
-      : `The ${baseJugs} jugs in the box cover it.`);
+    set('r-kit', kit);
+    set('r-kit-note', extraJugs > 0
+      ? `Plus ${extraJugs} more Canteen jug${extraJugs === 1 ? '' : 's'} on top of the ${baseJugs} in the concept box.`
+      : `The ${baseJugs} filled jugs in the concept box cover this baseline. Allow more for your household’s needs.`);
 
     const notes: string[] = [];
-    if (season !== 'hot') notes.push('Pick one room for the Den and check its door closes well. Sleeping bags rated for your coldest nights.');
-    if (season !== 'cold') notes.push('Choose the coolest room for the hot-weather Den, and plan more water than the gallon a day.');
+    if (season !== 'hot') notes.push('Choose warm layers and sleeping bags for your climate. Keep exits clear; never use a camp stove, grill or generator to heat the room. Leave for a safe warm place if needed.');
+    if (season !== 'cold') notes.push('Plan extra water and an air-conditioned place to go. Fans are for indoor temperatures below 90°F; an indoor tent is not a heat shelter.');
     if (has('older')) notes.push('Heat and cold fall hardest on older people and the very young. Agree who checks on whom, and when.');
-    if (has('insulin')) notes.push('Insulin in use can often stay at room temperature for up to 28 days, depending on the product. Keep unopened supplies cool, never frozen, and ask your clinician what applies to yours.');
+    if (has('insulin')) notes.push('Insulin storage limits depend on the exact product and device. Follow its label, protect it from heat and sunlight, and do not use insulin that has frozen. Ask your pharmacist or clinician for your outage plan.');
     if (has('device')) notes.push('Ask your clinician and the device supplier what backup power the device needs and for how long. Staycamp does not guess at this.');
-    if (has('generator')) notes.push('Generators run outdoors only, never in a garage. Expect half a gallon to a gallon of fuel an hour.');
-    if (has('ev')) notes.push('Keep the car charged when an outage is forecast. With the right equipment a charged car can power a house for days, and without it the car stops when the battery does.');
-    notes.push('Keep a fortnight of every essential prescription in hand, with paper copies in the Pocket folio.');
+    if (has('generator')) notes.push('Run generators outdoors more than 20 feet from doors, windows and vents, never in a garage. Use a battery-backed CO alarm indoors and follow the generator manual for fuel, connections and safe operation.');
+    if (has('ev')) notes.push('Check your vehicle manual: home backup requires compatible equipment and a qualified installer. Plan charging and travel without assuming the car can power the house.');
+    notes.push('Arrange prescription refills and an emergency supply with your pharmacist or clinician; keep a current written medication list.');
+    notes.push('Portable gas camp stoves and charcoal grills stay outdoors. Indoors, use ready-to-eat food or an indoor-rated electric appliance only when safe power is available.');
     notes.push('Put small bills in the Biscuit Tin. Card readers and cash machines share the same network.');
 
     const list = document.getElementById('r-notes');

@@ -1,15 +1,23 @@
 // Staycamp — a home camping kit brand concept.
-// Every figure here comes from the household-outage brief the concept was
-// written against. Keep them in sync with the Field Book on the page; when a
-// number changes, change it here only.
+// Concept by cc. Safety copy checked against the linked public guidance,
+// 2026-10-19; the concept is not a product or an emergency response service.
+
+export const safetySources = [
+  { title: 'CDC: emergency water storage', url: 'https://www.cdc.gov/water-emergency/about/how-to-create-and-store-an-emergency-water-supply.html' },
+  { title: 'CDC: making water safe', url: 'https://www.cdc.gov/water-emergency/about/index.html' },
+  { title: 'CDC: carbon monoxide and generators', url: 'https://www.cdc.gov/carbon-monoxide/about/index.html' },
+  { title: 'FoodSafety.gov: food during an outage', url: 'https://www.foodsafety.gov/food-safety-charts/food-safety-during-power-outage' },
+  { title: 'FDA: insulin storage in an emergency', url: 'https://www.fda.gov/drugs/emergency-preparedness-drugs/information-regarding-insulin-storage-and-switching-between-products-emergency' },
+  { title: 'CDC: heat and your health', url: 'https://www.cdc.gov/heat-health/about/index.html' },
+];
 
 export const brand = {
   name: 'Staycamp',
   tagline: 'Camp in. Lights optional.',
   promise:
-    'A camping kit that lives in your hall closet. On an ordinary weekend it is a living-room campout. When the power takes a long break, it is two calm weeks of water, warmth, light, supper and routine.',
+    'A camping kit concept that lives in your hall closet. On an ordinary weekend it is a living-room campout. When the power takes a long break, it helps you plan for water, warmth, light, supper and routine.',
   idea:
-    'In a long outage the house stays put and the systems wander off. Staycamp packs the small jobs the city usually does for you, so your home becomes the campsite and nothing else has to change.',
+    'In a long outage the house stays put and the systems wander off. Staycamp packs the small jobs the city usually does for you. Home can be the campsite while it is safe to stay; a plan to leave belongs in the kit too.',
 };
 
 export type Essential = {
@@ -26,30 +34,30 @@ export const essentials: Essential[] = [
     id: 'canteen',
     kitName: 'The Canteen',
     need: 'Water',
-    line: 'A gallon a person a day, plus the water you already own.',
+    line: 'At least a gallon a person a day, stored before you need it.',
     packs: [
-      'Stackable 5-gallon jugs with spigots (sized for one person-week each)',
-      'Drain-tap hose for the hot-water tank, which already holds 30 to 50 gallons',
-      'Dropper bottle and a laminated dose card for plain, unscented bleach',
-      'Fill-up checklist for the first day or two, while the taps still run',
+      'Food-grade 5-gallon jugs with spigots (five person-days each at the baseline)',
+      'A storage checklist: fill with safe water before an outage and date each jug',
+      'A printed copy of current CDC water-treatment instructions, matched to the product label',
+      'A household water plan that adds capacity for heat, illness, pregnancy and pets',
     ],
     fieldNote:
-      'The toilet tank (not the bowl) holds about three more gallons, and it is usually fine to drink if no cleaner has been added.',
+      'Use safe bottled or stored water. Household tanks are not part of the baseline supply. Follow local water advisories; boiling or bleach cannot remove fuel or toxic chemicals.',
   },
   {
     id: 'den',
     kitName: 'The Den',
     need: 'Warmth and cool',
-    line: 'Heat one room well instead of the whole house badly.',
+    line: 'A warm place to rest, and somewhere cooler to go.',
     packs: [
       'A freestanding indoor tent that pitches on a rug, no stakes needed',
-      'Sleeping bags rated for your actual climate (chosen by postcode at checkout)',
-      'Wool layers, socks and a door draught snake to close the room off',
-      'A battery fan and cooling towels for the hot-weather version',
-      'A carbon-monoxide alarm, which ships with every Den whether or not you add a heater',
+      'Sleeping bags chosen for your actual climate',
+      'Warm layers and socks, with exits and required ventilation kept clear',
+      'Cooling towels and a battery fan for indoor temperatures below 90°F',
+      'A battery-powered or battery-backed carbon-monoxide alarm',
     ],
     fieldNote:
-      'A tent pitched indoors warms the air around it. Cold works slowly; heat works fast and falls hardest on older people, so the summer Den is not an afterthought.',
+      'A tent is not a heater or a heat shelter. Keep flames outside it. Plan a safe warm or air-conditioned place to go if your home becomes unsafe, and follow evacuation advice.',
   },
   {
     id: 'little-house',
@@ -63,7 +71,7 @@ export const essentials: Essential[] = [
       'A spigot hand-wash station and a bar of soap that does not get skipped',
     ],
     fieldNote:
-      'Hand-washing with stored water matters more than any other single habit, and it is the first one people drop when water feels heavy.',
+      'Wash hands with soap and safe water. Use a temporary toilet only with your local emergency sanitation instructions, including how to contain and dispose of waste.',
   },
   {
     id: 'pocket',
@@ -72,8 +80,8 @@ export const essentials: Essential[] = [
     line: 'Your routine, kept on paper and kept cool.',
     packs: [
       'A water-resistant folio for prescription copies and a written medication list',
-      'An insulated pouch for medicines that dislike heat and sunlight (it never freezes them)',
-      'A refill calendar that keeps a fortnight of buffer on anything essential',
+      'An insulated pouch to support the storage plan agreed with your pharmacist; it does not guarantee temperature control',
+      'A refill calendar for an emergency supply agreed with your pharmacist or clinician',
       'A one-page question sheet to take to your own clinician',
     ],
     fieldNote:
@@ -88,7 +96,7 @@ export const rest: Gear[] = [
   {
     name: 'Camp Kitchen',
     need: 'Cooking',
-    line: 'A two-burner camp stove, fuel canisters and a note on where it is safe to use. A charcoal grill counts, outdoors only.',
+    line: 'Ready-to-eat food for indoors. Portable gas camp stoves and charcoal grills are outdoors only, away from openings; an open window or CO alarm does not make indoor use safe. An indoor-rated electric appliance needs safe power.',
   },
   {
     name: 'Lantern Shelf',
@@ -98,7 +106,7 @@ export const rest: Gear[] = [
   {
     name: 'Camp Radio',
     need: 'News',
-    line: 'A hand-crank radio pre-tuned to the national broadcaster, and a pair of licence-free walkie-talkies for the street. Phone towers run for hours, not days.',
+    line: 'A battery or hand-crank radio tuned to local emergency broadcasts, and walkie-talkies legal for your area. Mobile service may be interrupted; write down a backup way to reach people.',
   },
   {
     name: 'The Biscuit Tin',
@@ -123,7 +131,7 @@ export const rest: Gear[] = [
   {
     name: 'Road Card',
     need: 'Getting around',
-    line: 'Dark signals mean four-way stops. A glovebox card says so, and says what a charged electric car can and cannot do for a house.',
+    line: 'Check local road instructions during an outage. An electric car only supplies home backup when the vehicle and installed equipment support it; check the manuals and a qualified installer.',
   },
 ];
 
@@ -139,7 +147,7 @@ export type Kit = {
 export const kits: Kit[] = [
   {
     name: 'The Weekender',
-    span: '3 nights',
+    span: '3 days',
     forWho: 'Two people, or a first try',
     includes: ['Canteen (2 jugs)', 'Lantern Shelf', 'Camp Radio', 'Biscuit Tin', 'Camp Days deck'],
     price: '$149',
@@ -147,9 +155,9 @@ export const kits: Kit[] = [
   {
     name: 'The Fortnight',
     span: '14 days',
-    forWho: 'A household of four',
+    forWho: 'A household of four, with water capacity added',
     includes: [
-      'Canteen (6 jugs, hose, dose card): 30 gallons stored, plus the 30 to 50 in your tank',
+      'Canteen starter (6 jugs): 30 gallons; four people for 14 days need at least 56 gallons, so add 6 more 5-gallon jugs',
       'The Den',
       'The Little House',
       'The Pocket',
@@ -164,7 +172,7 @@ export const kits: Kit[] = [
     name: 'The Refill',
     span: 'Every 6 months',
     forWho: 'Anyone who already has a kit',
-    includes: ['Fresh bleach (it weakens with age)', 'Batteries', 'Liners and shavings', 'Stove fuel', 'A new pantry list'],
+    includes: ['Water-treatment supplies checked against their labels', 'Batteries', 'Liners and shavings', 'A new pantry list'],
     price: '$39',
   },
 ];
@@ -172,7 +180,7 @@ export const kits: Kit[] = [
 export const campDays = [
   {
     name: 'Porch Cards',
-    line: 'A few cards to swap with the neighbours: name, number, who has a generator, who needs a check-in. Most of the big problems in a long outage get solved by the people on your street.',
+    line: 'A few cards to swap with trusted neighbours: name, number and who would welcome a check-in. Neighbours can help with everyday tasks; emergency and medical needs still need qualified help.',
   },
   {
     name: 'Camp Days deck',
@@ -180,22 +188,21 @@ export const campDays = [
   },
   {
     name: 'The Long Trip rule',
-    line: 'Every Staycamp starts by assuming a fortnight. People who plan for the whole trip have an easier week than people who keep waiting for the lights.',
+    line: 'Try to build a two-week water supply where possible. Plan safe places to go and people to contact as well as supplies to keep at home.',
   },
 ];
 
-export type FieldRow = { topic: string; figure: string; detail: string };
+export type FieldRow = { topic: string; figure: string; detail: string; source: number };
 
 export const fieldBook: FieldRow[] = [
-  { topic: 'Water to store', figure: '1 gal / person / day', detail: 'Drinking and basic washing. A fortnight is 14 gallons a person, 28 for a couple. Plan for more in heat.' },
-  { topic: 'Water you already have', figure: '30 to 50 gal', detail: 'In the hot-water tank. Draw it from the drain tap, let it cool, disinfect it if in doubt.' },
-  { topic: 'Bleach dose', figure: '2 drops / litre', detail: '8 drops a gallon of clear water, using plain unscented bleach at 5 to 6 percent. Double it for cloudy water. Wait 30 minutes.' },
-  { topic: 'Bleach to avoid', figure: 'Scented, thick, "with detergent"', detail: 'Plain only. Concentrated (about 8 percent) needs less. Old bottles are weaker, so check the date.' },
-  { topic: 'Fridge, door shut', figure: '4 hours', detail: 'Perishables that spend more than 2 hours above 4 °C should go.' },
-  { topic: 'Freezer, door shut', figure: '48 h full · 24 h half', detail: 'Refreeze if there are still ice crystals or it stayed at 4 °C or below. Cook what thawed first.' },
-  { topic: 'Insulin in use', figure: 'Up to 28 days', detail: 'At room temperature, depending on the product. Refrigerate unopened supplies where you can. Never freeze. Ask your clinician.' },
-  { topic: 'Generator fuel', figure: '½ to 1 gal / hour', detail: 'A 5-gallon can lasts less than a working day. Stabilised petrol keeps about a year; propane keeps indefinitely.' },
-  { topic: 'Generators', figure: 'Outdoors. Always.', detail: 'Never in a garage, even with the door open. Carbon monoxide has no smell.' },
+  { topic: 'Water to store', figure: 'At least 1 gal / person / day', detail: 'Store at least three days; try for two weeks. Four people for 14 days need 56 gallons: twelve 5-gallon jugs. Allow extra for heat, illness, pregnancy and pets.', source: 0 },
+  { topic: 'Water treatment', figure: 'Follow the current instructions', detail: 'Use safe bottled water when available. Match any treatment to the product label and CDC instructions. Boiling or disinfecting does not remove fuel or toxic chemicals.', source: 1 },
+  { topic: 'Fridge, door shut', figure: 'Up to 4 hours', detail: 'After four hours without power, discard refrigerated perishables unless a safe temperature was maintained. Use the linked food-by-food chart; do not taste-test.', source: 3 },
+  { topic: 'Freezer, door shut', figure: 'About 48 h full · 24 h half', detail: 'Food with ice crystals or at 40°F (4°C) or below can generally be refrozen. Discard thawed perishables held above 40°F for more than two hours. Check the chart for each food.', source: 3 },
+  { topic: 'Insulin storage', figure: 'Check your exact product', detail: 'Storage times and temperatures vary by product and device. Follow its label and your clinician or pharmacist; protect from heat and sunlight. Do not use insulin that has frozen.', source: 4 },
+  { topic: 'Camp stoves and grills', figure: 'Outdoors only', detail: 'Never use portable gas camp stoves or charcoal grills indoors, in a tent or by an open window. A CO alarm is a backup warning, not permission to burn fuel indoors.', source: 2 },
+  { topic: 'Generators', figure: 'More than 20 feet away', detail: 'Operate outdoors, more than 20 feet from doors, windows and vents, never in a garage. Use a battery-powered or battery-backed CO alarm indoors and follow the manufacturer’s instructions.', source: 2 },
+  { topic: 'Hot weather', figure: 'Have a cooling plan', detail: 'Use indoor fans only below 90°F. Find an air-conditioned place if home becomes too hot; check on people at higher risk. An indoor tent is not a heat shelter.', source: 5 },
 ];
 
 export const voice = {
@@ -205,7 +212,7 @@ export const voice = {
     'Explain, do not sell. Every number on a box is one a household can act on.',
     'Lead with the ordinary weekend. The outage is the second use, not the first.',
     'Warmth over drama: no black packaging, no camouflage, no red alert banners.',
-    'Every flame ships with a carbon-monoxide alarm, and the alarm is in the photo.',
+    'Portable gas stoves and grills stay outdoors. Indoor scenes use LED light and no combustion; a CO alarm never makes indoor fuel-burning safe.',
     'Medicine copy always ends with "ask your clinician". We never stand in for one.',
     'Neighbours are the best part of camp. Nothing we make treats them as a threat.',
   ],
