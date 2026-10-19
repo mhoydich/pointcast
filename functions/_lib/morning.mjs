@@ -30,7 +30,10 @@
 //                                        Without KLAX, a Sky desk fact takes its place (editionSkyLine) and
 //                                        klax drops out of `missing`; a Tides fact always adds its own
 //                                        sentence (editionTideLine), whether or not KLAX answered.
-//   sources.courts  { yesterday, lastWeek }   Moments or null; a missing `courts` means the store failed
+//   sources.courts  { spot?, yesterday, lastWeek, today? }   Moments or null; a missing `courts` means the store failed.
+//                                        `spot` is the CRT spot id slot 2 reports on (pickCourtsSpot; absent is 'courts').
+//                                        `today` ({sessions, nws, sunset}, todaysSessions() and friends) fills the line
+//                                        when the spot has no reading from yesterday: the posted schedules for the day.
 //   sources.price   pickPrice() output. sources.localPrice, when set, is a recent
 //                   accepted price-wire report and takes this slot instead.
 //   sources.town    pickTown() output
@@ -39,7 +42,9 @@
 // A Moment is momentOf() output: { value, at, support, bylines, reportIds }.
 // Moments carry public bylines and report ids only, never pid_hash or ip_hash.
 
-import { labelOf } from './air-kinds.mjs';
+import { kindRole, labelOf } from './air-kinds.mjs';
+import { isHouseRow } from './air-house.mjs';
+import { blocksOn, datedHours } from './court-board.mjs';
 import { evidence, isoSec, laClock, laDate, laParts, reading } from './air-reading.mjs';
 import { editionSkyLine, editionTideLine } from './air-desk.mjs';
 
@@ -291,14 +296,16 @@ export function pickShop({ paddles = [], date, exclude = [] }) {
 }
 
 /**
- * Pure: slot 4. A front-door news item 7 days old or less (newest first);
+ * Pure: slot 4. A front-door news item 7 days old or less (newest first), unless
+ * it carries `edition: false` (house notes, such as a launch note, never run
+ * as town news in the paper);
  * else the newest card-verified Shortwave post before the cutoff that is not
  * a station post and not by an owner handle; else the almanac line; else null.
  * Posts are untrusted text: only card posts (with a handle) qualify.
  * → {kind: 'news', label, line, link, date} | {kind: 'shortwave', text, handle, at} | {kind: 'almanac', line} | null
  */
 export function pickTown({ news = [], posts = [], almanac = null, date, ownerHandles = [] }) {
-  const item = news.filter((n) => isObj(n) && isEditionDate(n.date) && plain(n.line, 220)
+  const item = news.filter((n) => isObj(n) && n.edition !== false && isEditionDate(n.date) && plain(n.line, 220)
     && daysBetween(n.date, date) >= 0 && daysBetween(n.date, date) <= NEWS_MAX_AGE_DAYS)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
   if (item) return { kind: 'news', label: plain(item.label, 40), line: plain(item.line, 220), link: typeof item.link === 'string' && item.link.startsWith('/') ? item.link : null, date: item.date };
@@ -311,6 +318,38 @@ export function pickTown({ news = [], posts = [], almanac = null, date, ownerHan
   if (post) return { kind: 'shortwave', text: plain(post.text, 280), handle: post.handle.toLowerCase(), at: isoSec(toMs(post.at)) };
   const line = plain(typeof almanac === 'string' ? almanac : almanac?.line, 220);
   return line ? { kind: 'almanac', line } : null;
+}
+
+/**
+ * Pure: slot 2's spot. The CRT spot (config.spots with channel 'CRT') whose
+ * reports yesterday had the most distinct people, from rows as
+ * busiestCourtSpot() reads them: {spot, kind, who, house_pid, house_user,
+ * user_payload}. A row counts when its kind is that spot's live kind
+ * (kindRole 'live', so parking and ratings never count) and it is not a house
+ * row (isHouseRow). Per spot: people = distinct `who`, n = rows. The highest
+ * people wins; a tie that includes 'courts' goes to 'courts'; otherwise more
+ * rows win, then config order. Nothing counted (or no config) → 'courts'.
+ * `who` is used for counting here and never leaves the function.
+ */
+export function pickCourtsSpot(config, rows) {
+  const spots = isObj(config) && Array.isArray(config.spots) ? config.spots.filter((s) => isObj(s) && s.channel === 'CRT' && isObj(s.kinds)) : [];
+  const order = new Map(spots.map((s, i) => [s.id, i]));
+  const tally = new Map();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!isObj(r) || !order.has(r.spot) || typeof r.who !== 'string' || r.who === '') continue;
+    const cfg = spots[order.get(r.spot)].kinds[r.kind];
+    if (!isObj(cfg) || kindRole(cfg) !== 'live' || isHouseRow(r)) continue;
+    const t = tally.get(r.spot) ?? { id: r.spot, people: new Set(), n: 0 };
+    t.people.add(r.who);
+    t.n += 1;
+    tally.set(r.spot, t);
+  }
+  const counted = [...tally.values()];
+  if (!counted.length) return 'courts';
+  const top = Math.max(...counted.map((t) => t.people.size));
+  const tied = counted.filter((t) => t.people.size === top);
+  if (tied.some((t) => t.id === 'courts')) return 'courts';
+  return tied.sort((a, b) => b.n - a.n || order.get(a.id) - order.get(b.id))[0].id;
 }
 
 /* ---------- reporters ---------- */
@@ -473,6 +512,165 @@ function skySlot(base, sources, config, date) {
   };
 }
 
+/* ---------- Today's courts: the posted schedules, for a morning with no reading ---------- */
+
+/** Drop-ins printed in one line before "+N more". */
+export const COURT_ITEMS_MAX = 4;
+
+const HHMM_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+const hhmmMinute = (s) => { const [h, m] = String(s).split(':').map(Number); return h * 60 + m; };
+const weekdayOf = (date) => { const [y, m, d] = date.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay(); };
+/** A sourced thing that may print: verified, or partial (printed tagged "unconfirmed"). */
+const printable = (p) => isObj(p) && (p.confidence === 'verified' || p.confidence === 'partial');
+/** "El Segundo Recreation Park courts" → "El Segundo Recreation Park". */
+const courtName = (c) => String(c.name ?? c.id ?? '').replace(/ courts?$/, '').trim();
+
+/** 540 → {h12: 9, mm: '', ap: 'AM'}; 750 → {h12: 12, mm: ':30', ap: 'PM'}. */
+function clock12(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return { h12: h % 12 || 12, mm: m ? `:${String(m).padStart(2, '0')}` : '', ap: h < 12 ? 'AM' : 'PM' };
+}
+const minuteLabel = (min) => { const t = clock12(min); return `${t.h12}${t.mm} ${t.ap}`; };
+
+/** "9 AM–12 PM", "3–5 PM" when both share AM/PM, "8 AM to dusk". */
+function timeRange(start, end) {
+  const a = clock12(hhmmMinute(start));
+  if (end === 'dusk') return `${a.h12}${a.mm} ${a.ap} to dusk`;
+  const b = clock12(hhmmMinute(end));
+  return a.ap === b.ap ? `${a.h12}${a.mm}–${b.h12}${b.mm} ${b.ap}` : `${a.h12}${a.mm} ${a.ap}–${b.h12}${b.mm} ${b.ap}`;
+}
+
+/**
+ * Pure: the sourced sessions on edition `date`, from the courts schedule.
+ * courts: COURTS from src/lib/courts.ts (passed in; this module never imports JSON).
+ * Skips status 'closed'. Items, each one a line in the schedule and never a guess:
+ *  - spot 'courts' only (Manhattan Middle's public window): the hours rule whose days
+ *    include the date's weekday, when hours.confidence is 'verified' or 'partial'
+ *    → {court, label: 'open play', start: rule.open, end: rule.close ('dusk' allowed),
+ *    fee: the court's verified 'fee' fact text (e.g. 'Free') or null, unconfirmed: confidence is 'partial'}.
+ *    No rule that day, no item.
+ *  - every court: blocksOn(court, noon of date), kind 'dropin', confidence verified or partial
+ *    → {court, label: block.label, start, end, fee: block.fee, unconfirmed: confidence is 'partial'}.
+ *  court = court.name without a trailing ' courts' or ' court'.
+ * Sorted by start minute, then court order. The first COURT_ITEMS_MAX are `items`; `more` counts the rest.
+ * unpublished: each open court with drop-in blocks, all with a non-null `until`, the latest of
+ *  them before `date` → {court, through} (a schedule that stops: El Segundo after Oct 31).
+ * checked: the oldest `checked` among the printed items and the unpublished courts' blocks, or null.
+ * → {items, more, unpublished, checked}
+ */
+export function todaysSessions(courts, date) {
+  const empty = { items: [], more: 0, unpublished: [], checked: null };
+  if (!isEditionDate(date) || !Array.isArray(courts)) return empty;
+  const noon = laTimeMs(date, 720);
+  const weekday = weekdayOf(date);
+  const found = [];
+  const unpublished = [];
+  courts.forEach((court, order) => {
+    if (!isObj(court) || court.status === 'closed') return;
+    const name = courtName(court);
+    if (court.id === 'courts' && printable(court.hours) && Array.isArray(court.hours.rules)) {
+      // A dated window (an MBUSD break day) wins over the weekend rule.
+      const dated = datedHours(court.hours, date);
+      const rule = dated ?? court.hours.rules.find((r) => isObj(r) && Array.isArray(r.days) && r.days.includes(weekday));
+      if (rule && HHMM_RE.test(rule.open) && (rule.close === 'dusk' || HHMM_RE.test(rule.close))) {
+        const fee = Array.isArray(court.facts) ? court.facts.find((f) => isObj(f) && f.key === 'fee' && f.confidence === 'verified' && typeof f.text === 'string' && f.text.trim()) : null;
+        const checked = dated && typeof dated.checked === 'string' ? dated.checked : court.hours.checked;
+        found.push({ order, start: hhmmMinute(rule.open), item: {
+          court: name, label: dated ? 'school-break open play' : 'open play', start: rule.open, end: rule.close, fee: fee ? fee.text.trim() : null,
+          unconfirmed: court.hours.confidence === 'partial', checked: typeof checked === 'string' ? checked : null,
+        } });
+      }
+    }
+    const dropins = (Array.isArray(court.blocks) ? court.blocks : [])
+      .filter((b) => isObj(b) && b.kind === 'dropin' && printable(b) && Array.isArray(b.days) && HHMM_RE.test(b.start) && HHMM_RE.test(b.end));
+    if (Number.isFinite(noon)) {
+      for (const b of blocksOn({ blocks: dropins }, noon)) {
+        found.push({ order, start: hhmmMinute(b.start), item: {
+          court: name, label: String(b.label ?? 'drop-in'), start: b.start, end: b.end, fee: typeof b.fee === 'string' && b.fee.trim() ? b.fee.trim() : null,
+          unconfirmed: b.confidence === 'partial', checked: typeof b.checked === 'string' ? b.checked : null,
+        } });
+      }
+    }
+    if (dropins.length && dropins.every((b) => isEditionDate(b.until))) {
+      const through = dropins.map((b) => b.until).sort().at(-1);
+      if (through < date) unpublished.push({ court: name, through, checked: dropins.map((b) => b.checked).filter((c) => isEditionDate(c)).sort() });
+    }
+  });
+  found.sort((a, b) => a.start - b.start || a.order - b.order);
+  const printed = found.slice(0, COURT_ITEMS_MAX).map((f) => f.item);
+  const dates = [...printed.map((i) => i.checked), ...unpublished.flatMap((u) => u.checked)].filter((c) => isEditionDate(c)).sort();
+  return {
+    items: printed,
+    more: Math.max(0, found.length - COURT_ITEMS_MAX),
+    unpublished: unpublished.map(({ court, through }) => ({ court, through })),
+    checked: dates[0] ?? null,
+  };
+}
+
+/**
+ * Pure: NWS forecastHourly `periods` → the period with startTime <= atMs <
+ * endTime: {windMph: the largest number in windSpeed ("5 to 10 mph" → 10),
+ * rounded, or null; tempF: the temperature when temperatureUnit is 'F',
+ * rounded, or null}. null when no period covers atMs or both are null.
+ */
+export function nwsAtTime(periods, atMs) {
+  if (!Array.isArray(periods) || !Number.isFinite(atMs)) return null;
+  const p = periods.find((x) => isObj(x) && Date.parse(x.startTime) <= atMs && atMs < Date.parse(x.endTime));
+  if (!p) return null;
+  const nums = typeof p.windSpeed === 'string' ? (p.windSpeed.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter(Number.isFinite) : [];
+  const windMph = nums.length ? Math.round(Math.max(...nums)) : (typeof p.windSpeed === 'number' && Number.isFinite(p.windSpeed) ? Math.round(p.windSpeed) : null);
+  const tempF = p.temperatureUnit === 'F' && typeof p.temperature === 'number' && Number.isFinite(p.temperature) ? Math.round(p.temperature) : null;
+  return windMph == null && tempF == null ? null : { windMph, tempF };
+}
+
+/** "NWS for 9 AM: wind 7 mph, 66°F." with only the values that exist, or ''. */
+function nwsSentence(nws) {
+  if (!isObj(nws) || !Number.isInteger(nws.at) || nws.at < 0 || nws.at >= 1440) return '';
+  const bits = [];
+  if (Number.isFinite(nws.windMph)) bits.push(`wind ${Math.round(nws.windMph)} mph`);
+  if (Number.isFinite(nws.tempF)) bits.push(`${Math.round(nws.tempF)}°F`);
+  return bits.length ? `NWS for ${minuteLabel(nws.at)}: ${bits.join(', ')}.` : '';
+}
+
+function sessionText(i) {
+  if (!isObj(i) || !HHMM_RE.test(i.start) || !(i.end === 'dusk' || HHMM_RE.test(i.end)) || !i.court || !i.label) return '';
+  const fee = typeof i.fee === 'string' && i.fee.trim() ? `, ${lowerFirst(i.fee.trim())}` : '';
+  return `${i.court} ${lowerFirst(String(i.label))} ${timeRange(i.start, i.end)}${fee}${i.unconfirmed ? ' (unconfirmed)' : ''}`;
+}
+
+/**
+ * Pure: the "Today's courts" paragraph for a morning with no reading.
+ * today: {sessions: todaysSessions() output, nws: {at: minuteOfDay, windMph, tempF} | null, sunset: '6:12 PM' | null}.
+ * In order, each part only when it has content:
+ *   "Today's courts: <court> <label> <time>[, <fee>][ (unconfirmed)]; …; +N more at pointcast.xyz/pickleball."
+ *     (no items: "Today's courts: no sourced sessions today.")
+ *   "From the posted schedules, checked Sep 28."        (when items printed and `checked`)
+ *   "<court> has not published drop-ins past Oct 31 yet." (each unpublished court)
+ *   "NWS for 9 AM: wind 7 mph, 66°F."
+ *   "Sunset 6:12 PM."
+ * Every item, time and fee is the schedule's own; nothing is invented.
+ */
+export function todaysCourtsLine(today, date) {
+  const t = isObj(today) ? today : {};
+  const s = isObj(t.sessions) ? t.sessions : {};
+  const printed = (Array.isArray(s.items) ? s.items : []).map(sessionText).filter(Boolean);
+  const more = Number.isInteger(s.more) && s.more > 0 ? s.more : 0;
+  const parts = [];
+  parts.push(printed.length
+    ? `Today's courts: ${printed.join('; ')}${more ? `; +${more} more at pointcast.xyz/pickleball` : ''}.`
+    : "Today's courts: no sourced sessions today.");
+  if (printed.length && isEditionDate(s.checked)) parts.push(`From the posted schedules, checked ${shortDate(s.checked)}.`);
+  for (const u of Array.isArray(s.unpublished) ? s.unpublished : []) {
+    if (isObj(u) && u.court && isEditionDate(u.through) && (!isEditionDate(date) || u.through < date)) {
+      parts.push(`${u.court} has not published drop-ins past ${shortDate(u.through)} yet.`);
+    }
+  }
+  const nws = nwsSentence(t.nws);
+  if (nws) parts.push(nws);
+  if (typeof t.sunset === 'string' && t.sunset.trim() && t.sunset !== '—') parts.push(`Sunset ${t.sunset.trim()}.`);
+  return parts.join(' ');
+}
+
 function courtCallLine(t, date) {
   const cc = t?.spot?.courtCall;
   if (!isObj(cc) || !Number.isInteger(cc.weekday) || typeof cc.time !== 'string') return '';
@@ -487,19 +685,43 @@ function courtCallLine(t, date) {
   return `Next Court Call ${DOW[cc.weekday]} ${at} on ${mhz}.`;
 }
 
-function courtsSlot(base, sources, config, date) {
-  const t = spotCfg(config, 'courts');
+/** The CRT spot slot 2 reports on: sources.courts.spot when the config has it on the courts channel, else 'courts'. */
+function courtsSpotId(courts, config) {
+  const id = isObj(courts) ? courts.spot : null;
+  if (typeof id !== 'string' || id === 'courts') return 'courts';
+  const found = isObj(config) && Array.isArray(config.spots) ? config.spots.find((s) => s?.id === id) : null;
+  return found?.channel === 'CRT' && spotCfg(config, id) ? id : 'courts';
+}
+
+function courtsSlot(base, sources, config, date, spotId) {
+  const t = spotCfg(config, spotId);
   const unavailable = !isObj(sources.courts);
   const c = unavailable ? {} : sources.courts;
   const y = cleanMoment(t, c.yesterday, addDays(date, -1));
   const w = cleanMoment(t, c.lastWeek, addDays(date, -8));
-  const call = courtCallLine(t, date);
-  const week = w ? `${y ? 'A week before' : 'The week before'}, ${whenOf(w.at, date)}: ${tally(w)}.` : '';
-  const line = y
-    ? [`${whenOf(y.at, date)}: ${tally(y)}${signed(y)}.`, week, call].filter(Boolean).join(' ')
-    : [unavailable ? 'The courts log is not in yet.' : 'No reports from the courts yesterday.', week, call || 'Be the first on the air at pointcast.xyz/court.'].filter(Boolean).join(' ');
+  // The Court Call is the station's own, whichever court the paper reports on.
+  const call = courtCallLine(spotCfg(config, 'courts'), date);
+  const named = spotId !== 'courts' && t ? ` at ${t.spot.name}` : '';
+  const week = w ? `${y ? 'A week before' : `The week before${named}`}, ${whenOf(w.at, date)}: ${tally(w)}.` : '';
+  const today = !unavailable && isObj(c.today) && isObj(c.today.sessions) ? c.today : null;
+  let line;
+  let source;
+  if (y) {
+    line = [`${whenOf(y.at, date)}${named}: ${tally(y)}${signed(y)}.`, week, call].filter(Boolean).join(' ');
+    source = 'air';
+  } else if (today) {
+    // No reading yesterday: the day's posted schedules, then the week before and the Court Call.
+    // Name the court even for 'courts': the line before lists several courts,
+    // so an unnamed reading would read as any of them.
+    const weekNamed = w && t ? `The week before at ${t.spot.name}, ${whenOf(w.at, date)}: ${tally(w)}.` : week;
+    line = [todaysCourtsLine(today, date), weekNamed, call].filter(Boolean).join(' ');
+    source = ['schedule', w ? 'air' : null, nwsSentence(today.nws) ? 'nws' : null].filter(Boolean).join('+');
+  } else {
+    line = [unavailable ? 'The courts log is not in yet.' : 'No reports from the courts yesterday.', week, call || 'Be the first on the air at pointcast.xyz/court.'].filter(Boolean).join(' ');
+    source = w ? 'air+template' : 'template';
+  }
   return {
-    slot: { ...base, line, source: y ? 'air' : w ? 'air+template' : 'template', reportIds: y?.reportIds ?? [], bylines: y?.bylines ?? [], fallback: !y },
+    slot: { ...base, spot: spotId, line, source, reportIds: y?.reportIds ?? [], bylines: y?.bylines ?? [], fallback: !y },
     missing: unavailable ? ['reports'] : [],
     moments: y ? [y] : [],
   };
@@ -622,13 +844,14 @@ function shopSlot(base, sources, date) {
 export function composeEdition({ date, sources = {}, config = null } = {}) {
   if (!isEditionDate(date)) throw new TypeError('composeEdition needs a YYYY-MM-DD date');
   const src = isObj(sources) ? sources : {};
+  const courtsSpot = courtsSpotId(src.courts, config);
   const labels = {
     sky: `Sky · ${mhzOf(spotCfg(config, 'beach')?.spot, '6.100')}`,
-    courts: `Courts · ${mhzOf(spotCfg(config, 'courts')?.spot, '7.500')}`,
+    courts: `Courts · ${mhzOf(spotCfg(config, courtsSpot)?.spot, '7.500')}`,
   };
   const base = (s) => ({ id: s.id, label: labels[s.id] ?? s.label });
   const sky = skySlot(base(SLOTS[0]), src, config, date);
-  const courts = courtsSlot(base(SLOTS[1]), src, config, date);
+  const courts = courtsSlot(base(SLOTS[1]), src, config, date, courtsSpot);
   const slots = [
     sky.slot,
     courts.slot,
@@ -737,4 +960,54 @@ export function toJsonFeed(editions, { site = SITE, limit = FEED_SIZE } = {}) {
     authors: [{ name: 'PointCast', url: site }],
     items,
   };
+}
+
+/** RSS items in /morning.xml. */
+export const RSS_LIMIT = 30;
+const XML_INVALID = /[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g;
+/** Text for an XML 1.0 node or attribute: characters XML cannot carry out, the five reserved ones escaped. */
+const xmlEscape = (v) => String(v ?? '').replace(XML_INVALID, '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+/**
+ * RSS 2.0 for /morning.xml: only frozen, non-provisional editions (a feed
+ * reader must never keep a line that later changes), one item per date,
+ * newest first, `limit` at most. Item guids are stable, `morning:<date>`
+ * (not a permalink); links carry `src=rss` so the page can tell readers
+ * from the web. The description is the seven lines as plain text. With no
+ * frozen edition the channel is valid and has no items.
+ */
+export function toRss(editions, { site = SITE, limit = RSS_LIMIT } = {}) {
+  const byDate = new Map();
+  for (const e of Array.isArray(editions) ? editions : []) {
+    if (!isObj(e) || !isEditionDate(e.date) || !Array.isArray(e.slots)) continue;
+    if (e.frozen !== true || e.provisional === true) continue;
+    if (!byDate.has(e.date)) byDate.set(e.date, e);
+  }
+  const max = Number.isInteger(limit) && limit > 0 ? limit : RSS_LIMIT;
+  const kept = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, max);
+  const items = kept.map((e) => [
+    '<item>',
+    `<title>${xmlEscape(editionTitle(e.date))}</title>`,
+    `<link>${xmlEscape(`${site}/morning?d=${e.date}&src=rss`)}</link>`,
+    `<guid isPermaLink="false">${xmlEscape(`morning:${e.date}`)}</guid>`,
+    `<pubDate>${new Date(cutoffMs(e.date)).toUTCString()}</pubDate>`,
+    `<description>${xmlEscape(editionText(e))}</description>`,
+    '</item>',
+  ].join('\n'));
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+    '<channel>',
+    `<title>${xmlEscape(FEED_TITLE)}</title>`,
+    `<link>${xmlEscape(`${site}/morning`)}</link>`,
+    '<description>One screen at 6:45 AM in El Segundo: seven fixed slots, with bylines from Field Reports.</description>',
+    '<language>en-us</language>',
+    `<atom:link href="${xmlEscape(`${site}/morning.xml`)}" rel="self" type="application/rss+xml"/>`,
+    ...(kept.length ? [`<lastBuildDate>${new Date(cutoffMs(kept[0].date)).toUTCString()}</lastBuildDate>`] : []),
+    ...items,
+    '</channel>',
+    '</rss>',
+    '',
+  ].join('\n');
 }

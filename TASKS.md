@@ -2,6 +2,12 @@
 
 **Live coordination queue for pointcast.xyz v2.** Read on every session start. See `AGENTS.md` for owner codes and status vocabulary.
 
+---
+
+## The Squeeze — PTL Mixed 4.0 (2026-10-06)
+
+- [x] (CC) Publish `/pickleball/the-squeeze/` and `/pickleball/the-squeeze.json` from the PTL screenshots, with Court block 0699 — `done` — transcribed about Oct 6 2026; not an official PTL page; no deploy from this session if `CLOUDFLARE_API_TOKEN` is unset
+
 Owners: **CC** (Claude Code) · **M** (Manus) · **X** (Codex) · **MH** (Mike)
 Statuses: `queued` · `in-progress` · `blocked` · `handoff` · `waiting-on-mh` · `done`
 

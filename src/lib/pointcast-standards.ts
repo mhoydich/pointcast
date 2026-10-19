@@ -27,6 +27,11 @@ export const STANDARDS_META = {
   machineEdition: 'https://pointcast.xyz/standards.json',
   checker: 'https://pointcast.xyz/standards/check/',
   registry: 'https://pointcast.xyz/standards/registry/',
+  v2: {
+    block: 'https://pointcast.xyz/b/0667',
+    blockJson: 'https://pointcast.xyz/b/0667.json',
+    note: 'Standards v2 is the passport checker, the registry, and drafts 5–8. Cite block 0667. This catalog does not add a second Block.',
+  },
 } as const;
 
 export const STANDARDS: StandardEntry[] = [

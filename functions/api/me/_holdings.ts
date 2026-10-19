@@ -94,7 +94,7 @@ type CacheLike = Pick<Cache, 'match' | 'put'>;
 type Fetcher = typeof fetch;
 
 const COLLECTION_LABELS: Record<string, { name: string; href: string }> = {
-  visit_nouns: { name: 'Visit Nouns', href: '/visit-nouns' },
+  visit_nouns: { name: 'Visit Nouns', href: '/collection/visit-nouns' },
   coffee_mugs: { name: 'Coffee Mugs', href: '/coffee' },
   kennel_club: { name: 'Kennel Club', href: '/kennel-club' },
   profile_objects: { name: 'Profile Objects', href: '/me' },

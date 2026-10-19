@@ -1,0 +1,20 @@
+---
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {jobsShell} from '../../../lib/opportunities-shell.mjs';
+import {editionIds,editionRoutes} from '../../../../public/opportunities/model.mjs';
+
+export function getStaticPaths(){
+ const catalog=JSON.parse(readFileSync(resolve('public/opportunities/catalog.json'),'utf8'));
+ return editionIds.map(id=>{
+  const edition=(catalog.internshipEditions||[]).find(e=>e.id===id);
+  if(!edition||edition.route!==editionRoutes[id]||!catalog.opportunities.some(r=>Array.isArray(r.editionIds)&&r.editionIds.includes(id)))throw new Error('Internship edition requires admitted source records and its contracted route: '+id);
+  return {params:{edition:edition.route.split('/').filter(Boolean).at(-1)},props:{editionId:id}};
+ });
+}
+const source=resolve('public/opportunities');
+const shell=readFileSync(resolve(source,'index.html'),'utf8');
+const catalog=JSON.parse(readFileSync(resolve(source,'catalog.json'),'utf8'));
+const html=jobsShell(shell,catalog,Astro.props.editionId);
+---
+<Fragment set:html={html} />

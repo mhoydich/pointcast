@@ -1,0 +1,35 @@
+name = "pointcast-morning-daily"
+main = "src/index.ts"
+compatibility_date = "2026-10-18"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+# 6:45 AM in El Segundo is 13:45 UTC under PDT and 14:45 UTC under PST. Both
+# fire every day; the edition step acts only in the 6 AM LA hour, so exactly
+# one of them sends, across the Sun Nov 1 change too. The confirm sweep runs
+# on both ticks.
+crons = ["45 13 * * *", "45 14 * * *"]
+
+[vars]
+MORNING_DAILY_DRY_RUN = "false"
+# "true" only once pointcast.xyz is onboarded to Cloudflare Email Sending
+# (DNS moved to Cloudflare). Until then SEND_EMAIL is bound but never used.
+MORNING_SEND_EMAIL_READY = "false"
+MORNING_EDITION_URL = "https://pointcast.xyz/morning.json"
+
+[[d1_databases]]
+binding = "AUTH_DB"
+database_name = "pointcast-auth"
+database_id = "15de417a-2167-45e6-a7aa-340a7a99331c"
+
+[[send_email]]
+name = "SEND_EMAIL"
+allowed_sender_addresses = ["morning@pointcast.xyz"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Secrets (wrangler secret put <name>), never committed:
+#   MORNING_INTERNAL_KEY — shared with the Pages secret of the same name; unset, /send-confirm and /run answer 503.
+#   RESEND_API_KEY       — the mail sender while DNS stays at Namecheap; sendMail() prefers it.

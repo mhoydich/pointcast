@@ -269,6 +269,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return Response.redirect(target.toString(), 301);
   }
 
+  // RFC 0003 is rendered as a page; block 0346 links the old .md form.
+  if ((isGet || request.method === 'HEAD') && /^\/plans\/2026-04-24-rfc-0003-plus-one-agents(\.md)\/?$/.test(url.pathname)) {
+    return Response.redirect(new URL('/plans/2026-04-24-rfc-0003-plus-one-agents', url.origin).toString(), 301);
+  }
+
   const retiredProfileTarget = RETIRED_PROFILE_ROUTES.get(url.pathname);
   if (isGet && retiredProfileTarget) {
     return Response.redirect(new URL(retiredProfileTarget, url.origin).toString(), 301);
@@ -286,6 +291,47 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (isGet && url.pathname === '/games/nouns-nation-battler/posters/index.html') {
     return Response.redirect(new URL('/games/nouns-nation-battler/posters/', url.origin).toString(), 302);
   }
+
+  // This authored concept is intentionally tracker-free, including bot visit
+  // recording and account/session injection. Match only its exact HTML routes.
+  if ((isGet || request.method === 'HEAD') && ['/el-segundo-motors', '/el-segundo-motors.html', '/el-segundo-motors/index.html'].includes(url.pathname)) {
+    const target = new URL('/el-segundo-motors/', url.origin);
+    target.search = url.search;
+    return Response.redirect(target.toString(), 301);
+  }
+  if (url.pathname === '/el-segundo-motors/') return next();
+
+  // Independent paper rooms omit visit logging, session injection and global
+  // HTML transforms. Neighboring routes retain their existing behavior.
+  const paperRooms = ['/nouns-money/workshop/', '/ues/currency-lab/'];
+  if (isGet || request.method === 'HEAD') {
+    for (const room of paperRooms) {
+      if ([room.slice(0, -1), room.slice(0, -1) + '.html', room + 'index.html'].includes(url.pathname)) {
+        const target = new URL(room, url.origin);
+        target.search = url.search;
+        return Response.redirect(target.toString(), 301);
+      }
+    }
+  }
+  if (paperRooms.includes(url.pathname)) return next();
+
+  // Noticeboard reads stay quiet after existing host/canonical redirects.
+  // Exact aliases resolve before directory rewriting; resident /agents/* routes
+  // retain their existing middleware, identity and FrontDesk behavior.
+  if (isGet || request.method === 'HEAD') {
+    const noticeboardTarget = new Map([
+      ['/agents', '/agents/'],
+      ['/agents/index.html', '/agents/'],
+      ['/agents/spec', '/agents/spec/'],
+      ['/agents/spec/index.html', '/agents/spec/'],
+    ]).get(url.pathname);
+    if (noticeboardTarget) {
+      const target = new URL(noticeboardTarget, url.origin);
+      target.search = url.search;
+      return Response.redirect(target.toString(), 301);
+    }
+  }
+  if (['/agents/', '/agents/spec/'].includes(url.pathname)) return next();
 
   // Generic trailing-slash rewrite — applies to ANY path that
   //   • is a GET asking for HTML

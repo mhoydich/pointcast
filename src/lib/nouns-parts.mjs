@@ -89,6 +89,29 @@ export function traitLabel(filename) {
   return filename.replace(/^(body|accessory|head|glasses)-/, '').replace(/-/g, ' ');
 }
 
+/**
+ * Render an actual numbered Noun from its on-chain seed (trait indices into
+ * the official image data, in the same order as the Nouns descriptor).
+ */
+export function renderSeed(seed, { layers = ['body', 'accessory', 'head', 'glasses'] } = {}) {
+  const pick = (list, index, kind) => {
+    const part = list[index];
+    if (!part) throw new Error(`missing official Nouns ${kind} at index ${index}`);
+    return part;
+  };
+  const body = pick(imageData.images.bodies, seed.body, 'body');
+  const accessory = pick(imageData.images.accessories, seed.accessory, 'accessory');
+  const head = pick(imageData.images.heads, seed.head, 'head');
+  const glasses = pick(imageData.images.glasses, seed.glasses, 'glasses');
+  const bg = imageData.bgcolors[seed.background];
+  if (!bg) throw new Error(`missing official Nouns background at index ${seed.background}`);
+  return {
+    svg: buildSVG(layers.map((kind) => ({ body, accessory, head, glasses })[kind]), imageData.palette, bg),
+    background: `#${bg}`,
+    filenames: { body: body.filename, accessory: accessory.filename, head: head.filename, glasses: glasses.filename },
+  };
+}
+
 export function renderPortrait(parts) {
   if (!parts?.body || !parts?.accessory || !parts?.head || !parts?.glasses || !parts?.background) {
     throw new Error('a portrait needs background, body, accessory, head, and glasses');

@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import { DEVNET as DEVNET_LIVE, DEVNET_PREVIOUS } from '../src/data/chain-home.ts';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -23,7 +24,9 @@ const sdk = read('public/chain/sdk/pointcast-chain.js');
 const verifier = read('public/chain/yard/verifier/verify.js');
 
 const DEVNET_URL = chainHome.match(/const DEVNET_URL = '([^']+)'/)[1];
-const GENESIS = chainHome.match(/const DEVNET_GENESIS = '([0-9a-f]{64})'/)[1];
+// The live pin (devnet-2), read from the module: never a hash typed into a test.
+const GENESIS = DEVNET_LIVE.genesis;
+const PREVIOUS_GENESIS = DEVNET_PREVIOUS.genesis;
 const CHAIN_ID = chainHome.match(/chainId: '([^']+)'/)[1];
 
 /** Names a module exports: `export function|class|const x` and `export { a, b }`. */

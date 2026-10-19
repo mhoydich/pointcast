@@ -1,3 +1,9 @@
+import cameraGuide from '../data/shop-guides/cameras.json';
+import cameraHistory from '../data/shop-guides/camera-history.json';
+import waterGuide from '../data/shop-guides/water-bottles.json';
+import supplementGuide from '../data/shop-guides/sports-performance-supplements.json';
+import chargingGuide from '../data/shop-guides/charging-supplies.json';
+import headphoneGuide from '../data/shop-guides/headphones.json';
 /**
  * shop.pointcast.xyz — the PointCast Shop front.
  *
@@ -261,9 +267,31 @@ export const SHOP_FACTS: Record<string, string> = Object.fromEntries(
   FACT_SOURCES.flatMap(([guide, rows, fields]) => rows.map((r) => [`${guide}/${r.id}`, factLine(r, fields)] as const)),
 );
 
-export const SHOP_PICKS: ShopPick[] = [...fanPicks, ...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
+const cameraBrands: Record<string, string> = { used: 'Sony', r50: 'Canon', xm5: 'Fujifilm', gr: 'Ricoh', x100: 'Fujifilm', om: 'OM SYSTEM', sony: 'Sony', nikon: 'Nikon', s5: 'Panasonic', pocket: 'DJI', gopro: 'GoPro', instax: 'Fujifilm', pentax: 'Pentax' };
+const cameraPicks: ShopPick[] = cameraGuide.sourcePackage.cards.filter((p) => p.buy_url).map((p) => ({
+  id: `cameras/${p.id}`, guide: 'cameras', name: p.model, brand: cameraBrands[p.id] || p.model,
+  price: typeof p.price_usd === 'number' ? p.price_usd : null,
+  priceText: (typeof p.price_usd === 'number' ? money(p.price_usd) : `${money(p.price_usd.min)}–${money(p.price_usd.max)}`) + ` · ${p.price_basis}`,
+  currency: 'USD', url: p.buy_url!, image: null,
+  verdict: `${p.category}. ${p.tradeoffs} Research-date listing: ${p.stock}; no checkout or delivery verification. Ready-to-shoot ${money(p.estimated_ready_to_shoot_usd[0])}–${money(p.estimated_ready_to_shoot_usd[1])} is a planning estimate before tax/shipping; ${p.system_cost_basis}.`,
+  reviewUrl: `/reviews/cameras#camera-${p.id}`,
+}));
+
+const waterPicks: ShopPick[] = waterGuide.sourcePackage.comparison.map((p) => ({
+  id: `water-bottles/${p.id}`, guide: 'water-bottles', name: `${p.brand} ${p.model} / ${p.variant}`,
+  brand: p.brand, price: p.price_usd, priceText: (p.id.startsWith('hydro') ? 'from ' : '') + money(p.price_usd), currency: 'USD',
+  url: p.buy_url, image: null, verdict: `${p.pick}. ${p.tradeoff}`, reviewUrl: '/reviews/water-bottles#comparison',
+}));
+export const SHOP_PICKS: ShopPick[] = [...cameraPicks, ...waterPicks, ...fanPicks, ...balmPicks, ...knifePicks, ...videoPicks, ...aiPicks, ...machinePicks, ...planPicks, ...gamePicks, ...robotPicks, ...bagPicks, ...modularPicks, ...legoPicks, ...feederPicks];
 
 export const SHOP_GUIDES: ShopGuide[] = [
+  { id: 'cameras', title: cameraGuide.title, dek: cameraGuide.subtitle, href: '/reviews/cameras', json: '/reviews/cameras.json', kind: 'Desk review', image: cameraGuide.hero.src, imageAlt: cameraGuide.hero.alt, asOf: '2026-10-05', count: 14, countLabel: 'routes' },
+  { id: 'camera-history', title: cameraHistory.title, dek: cameraHistory.subtitle, href: '/camera-history', json: '/camera-history.json', kind: 'Field guide', image: cameraHistory.hero.src, imageAlt: cameraHistory.hero.alt, asOf: '2026-10-05', count: 15, countLabel: 'milestones' },
+  { id: 'water-bottles', title: waterGuide.title, dek: waterGuide.subtitle, href: '/reviews/water-bottles', json: '/reviews/water-bottles.json', kind: 'Buying guide', image: '/images/shop-guides/water-bottles.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 5, countLabel: 'bottles' },
+  { id: 'sports-performance-supplements', title: supplementGuide.title, dek: supplementGuide.subtitle, href: '/reviews/sports-performance-supplements', json: '/reviews/sports-performance-supplements.json', kind: 'Desk review', image: '/images/shop-guides/sports-performance-supplements.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 13, countLabel: 'evidence cards' },
+  { id: 'charging-supplies', title: chargingGuide.title, dek: chargingGuide.subtitle, href: '/reviews/charging-supplies', json: '/reviews/charging-supplies.json', kind: 'Desk review', image: '/images/shop-guides/charging-supplies.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 5, countLabel: 'comparisons' },
+  { id: 'headphones', title: headphoneGuide.title, dek: headphoneGuide.subtitle, href: '/reviews/headphones', json: '/reviews/headphones.json', kind: 'Desk review', image: '/images/shop-guides/headphones.jpg', imageAlt: 'Original editorial supporting illustration; not product photography or test data.', asOf: '2026-10-05', count: 5, countLabel: 'comparisons' },
+
   {id:'puzzles',title:'The puzzle shelf',dek:'Nine official puzzle publishers, choosing guidance, and ten original PointCast concepts clearly marked not for sale.',href:'/shop/puzzles/',json:'/puzzles.json',kind:'Shelf',image:'/images/puzzles/01-tidepool-atlas.webp',imageAlt:'Original Tidepool atlas puzzle concept with colorful coastal pools',asOf:'2026-10-03',count:9,countLabel:'publisher shops'},
   {
     id: 'fans', title: fans.title, dek: fans.dek, href: '/reviews/fans', json: '/reviews/fans.json',

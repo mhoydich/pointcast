@@ -37,6 +37,20 @@ export const GET: APIRoute = async () => {
       ...b,
       url: `https://pointcast.xyz${b.href}`,
     })),
+    offGrid: [
+      {
+        name: 'Pickleball Board',
+        href: '/pickleball',
+        url: 'https://pointcast.xyz/pickleball',
+        note: 'South Bay courts. Not one of the 12 buildings.',
+      },
+      {
+        name: 'The Squeeze',
+        href: '/pickleball/the-squeeze/',
+        url: 'https://pointcast.xyz/pickleball/the-squeeze/',
+        note: 'PTL Mixed 4.0 desk at El Segundo Rec Park. Transcribed standings, not an official PTL page.',
+      },
+    ],
     presenceSource: 'https://pointcast.xyz/api/presence/snapshot',
     soundsSource:   'https://pointcast.xyz/api/sounds',
     agentDoor:      'https://pointcast.xyz/connectors',

@@ -34,20 +34,20 @@ test('real Pages middleware keeps quiet studies isolated through both HTML deliv
       });
       return {response,bridgeTransforms};
     }
-    for(const slug of ['death']) {
+    for(const study of ['/nouns-money/app','/ues/death','/coastal-signal','/coastal-signal-wallet','/moon','/sun','/pacific','/waves','/air','/reading/animation','/reading/animation/avatar-the-last-airbender','/reading/animation/hanna-barbera','/reading/animation/saturday-morning-1980s']) {
       for(const suffix of ['','/','.html','/index.html']) {
-        const {response,bridgeTransforms}=await route(`/ues/${slug}${suffix}`);
+        const {response,bridgeTransforms}=await route(`${study}${suffix}`);
         assert.equal(response.status,200);
         assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'),null);
-        assert.equal(bridgeTransforms,0,`quiet ${slug}${suffix} does not receive the account bridge`);
+        assert.equal(bridgeTransforms,0,`quiet ${study}${suffix} does not receive the account bridge`);
       }
     }
-    for(const pathname of ['/ues/','/ues/plant-portraits/','/me','/ues/grief/notes','/ues/grief/','/ues/human-energy/','/ues/nature-interaction/','/ues/frequency/','/ues/human-energy/adult-substances/']) {
+    for(const pathname of ['/','/nouns-money','/nouns-money/','/nouns-money/collect/','/nouns-money/pay/','/nouns-money/appish','/nouns-money/app/notes','/nouns-money/app//','/nouns-money/app/index.html/extra','/coastal-signalish','/coastal-signal/notes','/coastal-signal//','/ues/','/ues/plant-portraits/','/me','/ues/grief/notes','/ues/grief/','/ues/human-energy/','/ues/nature-interaction/','/ues/frequency/','/ues/human-energy/adult-substances/']) {
       const {response,bridgeTransforms}=await route(pathname);
       assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'),'1',pathname);
       assert.equal(bridgeTransforms,1,`${pathname} keeps existing session restoration`);
     }
-    for(const pathname of ['/api/auth/session','/ues/grief.json']) {
+    for(const pathname of ['/api/me/nouns-money','/api/auth/session','/nouns-money/app/catalog.json','/nouns-money/app/manifest.webmanifest','/ues/grief.json']) {
       const {response,bridgeTransforms}=await route(pathname,'application/json');
       assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'),null);
       assert.equal(bridgeTransforms,0);

@@ -1,0 +1,89 @@
+---
+/**
+ * The devnet reset notice, shown on /chain/bots and /chain/net.
+ *
+ * One component so the copy lives once (src/data/chain-home.ts RESET) and the
+ * two pages cannot drift. It is shown until NOTICE_END_DATE, inclusive:
+ * omitted from builds after that day, and hidden in the browser after that
+ * day for pages built before it (data-until). The permanent record of the
+ * reset is the devnet-1 entry on /chain/yard/devnet-1/, which never hides.
+ *
+ * The replay button appears only when public/chain/yard/devnet-1/ actually
+ * holds devnet-1's own snapshot (devnet1Recording() is null otherwise).
+ */
+import { DEVNET, DEVNET_PREVIOUS, RESET, devnet1Recording, notYet, placeholderPreview, resetNoticeShown } from '../../data/chain-home';
+
+const rec = devnet1Recording();
+const show = resetNoticeShown() || placeholderPreview();
+---
+
+<section id="reset" class="rst-anchor">
+{show && (
+<div class="rst" role="region" aria-labelledby="reset-title" data-reset-notice data-until={RESET.noticeEnd}>
+  <p class="rst__k">
+    <span class="tag tag--done">Reset</span>
+    <span>{notYet(RESET.date)} · notice up until {notYet(RESET.noticeEnd)}</span>
+  </p>
+  <h2 id="reset-title" class="rst__h">The devnet was reset on {notYet(RESET.date)}.</h2>
+  <p class="rst__p">
+    <a href={DEVNET_PREVIOUS.path}>
+      {DEVNET_PREVIOUS.chainId.replace('pointcast-', '')} (#1–#{notYet(DEVNET_PREVIOUS.tip)}, {DEVNET_PREVIOUS.startedOn} → {notYet(RESET.date)}) is recorded and checkable here →
+    </a>
+  </p>
+  <p class="rst__p">
+    The chain at the devnet URL is now <code>{DEVNET.chainId}</code>, genesis <code class="hash">{notYet(DEVNET.genesis)}</code>.
+    {DEVNET_PREVIOUS.chainId} (genesis <code class="hash">{DEVNET_PREVIOUS.genesis.slice(0, 8)}…</code>) was recorded first and
+    checked by replay before the reset, so it stays readable and verifiable. {DEVNET.terms}.
+  </p>
+  <ul class="rst__rows">
+    {RESET.effects.map(([k, v]) => <li><b>{k}</b><span>{v}</span></li>)}
+  </ul>
+  {rec ? (
+    <p class="cta">
+      <a class="btn" href={rec.yardHref}>Replay devnet-1</a>
+      <a class="btn btn--ghost" href={DEVNET_PREVIOUS.path}>The recording</a>
+    </p>
+  ) : (
+    <p class="rst__fine">The recording files are not in this build yet; the link above goes to their permanent address.</p>
+  )}
+</div>
+)}
+  {/* Permanent: #reset is linked from the front-door news and the page copy, so
+      after the notice comes down the anchor still lands on the record. */}
+  <p class="rst__after" data-reset-after hidden={show}>
+    <a href={DEVNET_PREVIOUS.path}>
+      The devnet was reset on {notYet(RESET.date)}. {DEVNET_PREVIOUS.chainId.replace('pointcast-', '')} (#1–#{notYet(DEVNET_PREVIOUS.tip)}, {DEVNET_PREVIOUS.startedOn} → {notYet(RESET.date)}) is recorded and checkable here →
+    </a>
+  </p>
+</section>
+
+<script>
+  // A page built before NOTICE_END_DATE still hides the notice after it.
+  for (const el of document.querySelectorAll<HTMLElement>('[data-reset-notice]')) {
+    const until = el.dataset.until || '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(until) && new Date().toISOString().slice(0, 10) > until) {
+      el.hidden = true;
+      el.parentElement?.querySelector<HTMLElement>('[data-reset-after]')?.removeAttribute('hidden');
+    }
+  }
+</script>
+
+<style>
+  .rst{margin:24px 0 0;max-width:840px;padding:16px 18px 18px;border:1.5px solid var(--c600);border-left-width:6px;background:var(--c50)}
+  .rst[hidden],.rst__after[hidden]{display:none}
+  .rst__after{margin:24px 0 0;max-width:840px;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rst__after a{font-weight:500;color:var(--pc-ink)}
+  .rst__k{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 10px;font:500 10px/1.6 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .rst__h{margin:0 0 10px;font:500 clamp(20px,2.4vw,26px)/1.2 var(--pc-font-sans);letter-spacing:-.02em;text-wrap:balance}
+  .rst__p{margin:0 0 10px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rst__p a{font-weight:500;color:var(--pc-ink)}
+  .rst__rows{list-style:none;margin:14px 0 0;padding:0;border-top:1px solid var(--pc-rule-soft)}
+  .rst__rows li{display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr);gap:4px 18px;padding:10px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .rst__rows b{font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800)}
+  .rst__fine{margin:14px 0 0;font:400 13px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .rst .hash{word-break:break-all}
+  @media (max-width:560px){
+    .rst{padding:14px 14px 16px}
+    .rst__rows li{grid-template-columns:minmax(0,1fr);gap:2px}
+  }
+</style>

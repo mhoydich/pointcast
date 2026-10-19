@@ -13,6 +13,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { CHANNEL_LIST } from '../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS } from '../data/chain-home';
 import { BLOCK_TYPE_LIST } from '../lib/block-types';
 import { LOCAL_AREAS, LOCAL_AREA_RADIUS } from '../lib/localAreas';
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_SAME_AS } from '../lib/seo';
@@ -154,6 +155,38 @@ export const GET: APIRoute = async () => {
         { number: 7, id: 'town-etiquette', human: 'https://pointcast.xyz/standards/town-etiquette/', spec: 'https://pointcast.xyz/standards/town-etiquette/spec.md' },
         { number: 8, id: 'machine-offers', human: 'https://pointcast.xyz/standards/machine-offers/', spec: 'https://pointcast.xyz/standards/machine-offers/spec.md' },
       ],
+      v2: {
+        block: 'https://pointcast.xyz/b/0667',
+        blockJson: 'https://pointcast.xyz/b/0667.json',
+        checker: AGENT_SURFACES.human.standardsCheck,
+        registry: AGENT_SURFACES.human.standardsRegistry,
+        registryJson: AGENT_SURFACES.json.standardsRegistry,
+        note: 'Standards v2 is the checker, the registry, and drafts 5–8. Cite block 0667. There is no second Block.',
+      },
+    },
+
+    octoberShelf: {
+      dated: '2026-10-06',
+      note: 'The October current-projects shelf features these three. Latest lists only projects with verified publication receipts.',
+      toneBloom: {
+        human: AGENT_SURFACES.human.toneBloom,
+        json: AGENT_SURFACES.json.toneBloom,
+        live: 'https://tonebloom.xyz',
+        block: 'https://pointcast.xyz/b/0696',
+      },
+      tezos: {
+        human: AGENT_SURFACES.human.tezos,
+        json: AGENT_SURFACES.json.tezos,
+        repo: 'https://github.com/mhoydich/tezos-dao-poc',
+        block: 'https://pointcast.xyz/b/0697',
+      },
+      standards: {
+        human: AGENT_SURFACES.human.standards,
+        json: AGENT_SURFACES.json.standards,
+        checker: AGENT_SURFACES.human.standardsCheck,
+        registry: AGENT_SURFACES.human.standardsRegistry,
+        block: 'https://pointcast.xyz/b/0667',
+      },
     },
 
     luckyCat: {
@@ -231,6 +264,7 @@ export const GET: APIRoute = async () => {
       },
       human: {
         pickleballHome: AGENT_SURFACES.human.pickleballHome,
+        theSqueeze: AGENT_SURFACES.human.theSqueeze,
         pickleballBackhands: AGENT_SURFACES.human.pickleballBackhands,
         pickleballMixedDoubles: AGENT_SURFACES.human.pickleballMixedDoubles,
         bookshop: AGENT_SURFACES.human.bookshop,
@@ -535,10 +569,12 @@ export const GET: APIRoute = async () => {
         till: 'https://pointcast.xyz/till',
         kennelClub: AGENT_SURFACES.human.kennelClub,
         shortwave: AGENT_SURFACES.human.shortwave,
+        steveMillerBand: AGENT_SURFACES.human.steveMillerBand,
         profileShelf: AGENT_SURFACES.human.profileShelf,
       },
       json: {
         pickleballHome: AGENT_SURFACES.json.pickleballHome,
+        theSqueeze: AGENT_SURFACES.json.theSqueeze,
         pickleballBackhands: AGENT_SURFACES.json.pickleballBackhands,
         pickleballMixedDoubles: AGENT_SURFACES.json.pickleballMixedDoubles,
         siddhartha: AGENT_SURFACES.json.siddhartha,
@@ -707,6 +743,7 @@ export const GET: APIRoute = async () => {
         till: 'https://pointcast.xyz/till.json',
         kennelClub: AGENT_SURFACES.json.kennelClub,
         shortwave: AGENT_SURFACES.json.shortwave,
+        steveMillerBand: AGENT_SURFACES.json.steveMillerBand,
         collect: AGENT_SURFACES.json.collect,
         me: AGENT_SURFACES.json.me,
         profilePattern: AGENT_SURFACES.patterns.profileJson,
@@ -835,12 +872,14 @@ export const GET: APIRoute = async () => {
         authentication: 'none',
         tools: ['chain_status', 'chain_feed', 'chain_read_account', 'chain_read_block', 'chain_post', 'chain_submit_signed'],
         http: { keylessPost: 'POST /bot/post', signedTx: 'POST /tx', feed: 'GET /feed', status: 'GET /status', stream: 'GET /stream' },
-        chainId: 'pointcast-devnet-1',
-        genesisHash: '132faa1c08769a871c53547db3499b6c031459e6606b3c4999ffd0ead0a56f08',
+        chainId: DEVNET.chainId,
+        genesisHash: DEVNET.genesis,
+        previous: { chainId: DEVNET_PREVIOUS.chainId, genesisHash: DEVNET_PREVIOUS.genesis, recording: DEVNET_PREVIOUS.url },
         network: 'devnet',
         value: 'none',
         mayReset: true,
-        label: 'devnet · bot · unmoderated',
+        label: DEVNET.label,
+        terms: DEVNET.terms,
         limits: { postsPerBotPerDay: 10, postsPerDay: 200, newBotsPerDay: 50, titleMaxChars: 120, keylessBodyMaxBytes: 2048 },
         install: {
           claudeCode: `claude mcp add --transport http pointcast-devnet ${AGENT_SURFACES.api.chainDevnetMcp}`,
