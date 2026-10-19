@@ -13,8 +13,17 @@
  *
  * JSON-LD: one SportsActivityLocation per listed court, with
  * OpeningHoursSpecification and drop-in Events only for `verified` hours and
- * blocks (build spec's CC addendum) — an `unverified` or `partial` schedule
- * never renders as a machine-readable fact any more than it renders as text.
+ * blocks checked under 45 days before the build day (build spec's CC
+ * addendum; the same line CourtCard draws for "may have changed") — an
+ * `unverified`, `partial` or stale schedule never renders as a
+ * machine-readable fact any more than it renders as a settled one in text.
+ * Each such drop-in block is published as dated Events for the next 14 LA
+ * days from the build day, each with its ISO start and end at that date's LA
+ * offset and the court as a Place with its address (docs/plans/
+ * 2026-10-18-field-reports-v2-paper-spec.md §7.9). There is no weekly
+ * eventSchedule Event: Google's Event markup needs a top-level startDate and
+ * does not read eventSchedule. Every Event says EventScheduled. There is no Court Call Event: a Court Call is not a sourced
+ * session. Every fact printed here is also visible text on a court card.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import AirInk from '../components/air/AirInk.astro';
@@ -24,6 +33,7 @@ import CourtCard from '../components/courts/CourtCard.astro';
 import { COURTS, PRIVATE_COURTS, CONFIRM_ITEMS, COURT_SOURCES, provenanceLine } from '../lib/courts';
 import { hoursLine, sourcedTag } from '../lib/court-format';
 import { airSpot } from '../lib/air';
+import { dropinOccurrences } from '../../functions/_lib/courts-feed.mjs';
 
 const title = 'The Pickleball Board';
 const description =
@@ -34,6 +44,11 @@ const ogImage = '/og/pickleball.png';
 const buildDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 /** Source labels for the client's live now/next lines (src/scripts/pickleball-board.ts); urls stay out, only whether one exists. */
 const sourceLabels = JSON.stringify(Object.fromEntries(Object.entries(COURT_SOURCES).map(([id, s]) => [id, { label: s.label, url: Boolean(s.url) }])));
+
+/** schema.org event status for a session the schedule says is on. */
+const EVENT_SCHEDULED = 'https://schema.org/EventScheduled';
+/** How many LA days of dated sessions to publish, counting the build day. */
+const OCCURRENCE_DAYS = 14;
 
 const SCHEMA_DAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => `https://schema.org/${d}`);
 const dayOfWeek = (days: number[]) => days.map((d) => SCHEMA_DAY[d]).filter(Boolean);
@@ -58,17 +73,19 @@ function courtEntity(court: (typeof COURTS)[number]) {
     url: spot ? `https://pointcast.xyz/r/${court.id}` : 'https://pointcast.xyz/pickleball',
     additionalType: 'https://en.wikipedia.org/wiki/Pickleball',
   };
+  let postal: Record<string, unknown> | null = null;
   if (address) {
     const street = address.text.endsWith(`, ${court.city}`) ? address.text.slice(0, -(court.city.length + 2)) : address.text;
-    entity.address = { '@type': 'PostalAddress', streetAddress: street, addressLocality: court.city, addressRegion: 'CA', addressCountry: 'US' };
+    postal = { '@type': 'PostalAddress', streetAddress: street, addressLocality: court.city, addressRegion: 'CA', addressCountry: 'US' };
+    entity.address = postal;
   }
-  // A standing closure (Kelly Courts' renovation) is said in words: nobody should read it as a place to play today.
+  // A standing closure is said in words: nobody should read it as a place to play today.
   if (court.status === 'closed') {
     const closure = court.facts.find((f) => f.key === 'status' && f.confidence === 'verified');
     entity.description = closure ? closure.text : 'Closed';
   }
-  // OpeningHoursSpecification only where verified (build spec §3: unverified never renders as a fact).
-  if (court.hours && court.hours.confidence === 'verified') {
+  // OpeningHoursSpecification only where verified and not stale (build spec §3: unverified never renders as a fact).
+  if (court.hours && court.hours.confidence === 'verified' && sourcedTag(court.hours, buildDay).tag === null) {
     // schema.org `closes` wants a fixed time; a sunset-relative 'dusk' close isn't one, so that rule is left out
     // rather than published with a wrong or missing time.
     const spec = court.hours.rules
@@ -76,25 +93,21 @@ function courtEntity(court: (typeof COURTS)[number]) {
       .map((r) => ({ '@type': 'OpeningHoursSpecification', dayOfWeek: dayOfWeek(r.days), opens: r.open, closes: r.close }));
     if (spec.length > 0) entity.openingHoursSpecification = spec;
   }
-  // Drop-in sessions as Event/Schedule, verified only.
-  const dropins = court.blocks.filter((b) => b.kind === 'dropin' && b.confidence === 'verified');
+  // Drop-in sessions as dated Events, verified and not stale only.
+  const dropins = court.blocks.filter((b) => b.kind === 'dropin' && b.confidence === 'verified' && sourcedTag(b, buildDay).tag === null);
   if (dropins.length > 0) {
-    entity.event = dropins.map((b) => ({
+    // Dated sessions for the next two weeks: only dates inside the block's season, with that date's LA offset.
+    const dated = dropins.flatMap((b) => dropinOccurrences(b, buildDay, OCCURRENCE_DAYS).map((o) => ({
       '@type': 'Event',
       name: `${b.label} · ${court.name}`,
+      startDate: o.start,
+      endDate: o.end,
+      eventStatus: EVENT_SCHEDULED,
       eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-      eventSchedule: {
-        '@type': 'Schedule',
-        byDay: dayOfWeek(b.days),
-        startTime: b.start,
-        endTime: b.end,
-        scheduleTimezone: 'America/Los_Angeles',
-        ...(b.from ? { startDate: b.from } : {}),
-        ...(b.until ? { endDate: b.until } : {}),
-      },
-      location: { '@id': id },
+      location: postal ? { '@type': 'Place', name: court.name, address: postal } : { '@id': id },
       ...(b.fee ? { isAccessibleForFree: false, offers: feeOffer(b.fee) } : {}),
-    }));
+    })));
+    if (dated.length > 0) entity.event = dated;
   }
   return entity;
 }

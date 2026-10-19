@@ -183,7 +183,7 @@ test('spot header (2026-09-28): compact, sourced, 12-hour, and the dial never la
   assert.match(airSpot, /if \(p\.confidence === 'unverified'\) return \{ show: false, tag: null \}/);
   assert.match(airSpot, /<script type="application\/json" data-air-court set:html=\{courtJson\}>/);
   assert.doesNotMatch(client, /from '\.\.\/lib\/courts'/);
-  assert.match(client, /import \{ nextSession, openState, sessionsNow \} from '\.\.\/\.\.\/functions\/_lib\/court-board\.mjs'/);
+  assert.match(client, /import \{ datedHours, nextSession, openState, sessionsNow \} from '\.\.\/\.\.\/functions\/_lib\/court-board\.mjs'/);
   // "Book on Rec" only while the reserve link is verified.
   assert.match(airSpot, /const reserveBookable = court\?\.reserve\?\.confidence === 'verified'/);
   // The leaderboard: days on air, handles only, guests as one number, never a time.

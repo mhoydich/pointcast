@@ -13,6 +13,8 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** Today's LA day: a `checked` date may not be later than this. */
+const LA_TODAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const CONFIDENCE = ['verified', 'partial', 'unverified'];
 const minutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
@@ -123,7 +125,7 @@ test('schedule lint: every fact, hours, walk-on, block and reserve link carries 
   for (const [where, p] of all) {
     assert.ok(Object.prototype.hasOwnProperty.call(schedule.sources, p.src), `${where}: src ${p.src} is a listed source`);
     assert.match(p.checked, DAY_RE, `${where}: checked`);
-    assert.ok(p.checked <= '2026-09-28', `${where}: checked in the future`);
+    assert.ok(p.checked <= LA_TODAY, `${where}: checked in the future`);
     assert.ok(CONFIDENCE.includes(p.confidence), `${where}: confidence`);
     if (p.src === 'MIKE') assert.notEqual(p.confidence, 'verified', `${where}: Mike said is never verified`);
   }
@@ -166,7 +168,7 @@ test('schedule lint: blocks read as days and times, and until >= from', () => {
     ['Advanced drop-in', [5], '09:00', '12:00', '$7', '2026-09-04', '2026-10-30'],
     ['3.0 drop-in', [0, 6], '09:00', '12:00', '$7', '2026-09-05', '2026-10-31'],
     ['3.5 drop-in', [0, 6], '15:00', '17:00', '$5', '2026-09-05', '2026-10-31'],
-  ], 'the rec.us sections as re-checked 2026-09-28');
+  ], 'the rec.us sections as re-checked 2026-09-28; the 2026-10-18 re-read found the same four, none for November');
 });
 
 test('schedule lint: every air id resolves to a spot, and every court spot is listed', () => {
@@ -187,7 +189,7 @@ test('schedule lint: every air id resolves to a spot, and every court spot is li
     assert.ok(['open', 'closed'].includes(c.status));
   }
   for (const s of config.spots.filter((x) => x.channel === 'CRT')) assert.ok(schedule.courts.some((c) => c.id === s.id && c.air), `${s.id} is on the board`);
-  assert.deepEqual(schedule.courts.filter((c) => c.status === 'closed').map((c) => c.id), ['kelly']);
+  assert.deepEqual(schedule.courts.filter((c) => c.status === 'closed').map((c) => c.id), [], 'Kelly Courts reopened by Oct 15 (hermosabeach.gov); no court is on a standing closure');
   const listed = new Set(ids);
   for (const q of schedule.confirm) {
     assert.match(q.id, /^[a-z-]+$/);
@@ -206,9 +208,16 @@ test('the honest bits: partial and conflicting facts stay tagged, "Mike said" st
   assert.match(by['manhattan-heights'].hours.conflict.text, /8 AM–8 PM/);
   assert.equal(by.kelly.air, false);
   assert.ok(schedule.confirm.some((q) => q.id === 'el-segundo' && q.asks.includes('the November schedule')));
-  for (const p of schedule.private.filter((x) => ['love-life', 'westdrift'].includes(x.id))) {
-    for (const f of p.facts) assert.equal(f.confidence, 'partial', `${p.id}: not re-opened today`);
-  }
+  // Westdrift's hotel page is gone (404 on 2026-10-18): it stays listed, tagged "unconfirmed", never settled.
+  const westdrift = schedule.private.find((x) => x.id === 'westdrift');
+  for (const f of westdrift.facts) assert.equal(f.confidence, 'partial', 'westdrift: the cited page 404s, so it stays unconfirmed');
+  assert.match(westdrift.facts[0].text, /pickleball page is gone/);
+  // Love.Life was re-read 2026-10-18: three indoor courts at a membership club, and the page does not say "members only".
+  const love = schedule.private.find((x) => x.id === 'love-life');
+  assert.equal(love.facts.find((f) => f.key === 'courts').text, '3 indoor courts at a membership club');
+  assert.doesNotMatch(JSON.stringify(love), /members only/i);
+  for (const f of love.facts) assert.equal(f.confidence, 'verified');
+  assert.equal(love.hours, null, 'club hours are a fact, not the courts\' hours');
 });
 
 test('src/lib/courts.ts: the loader and the BoardPayload contract other groups build against', async () => {
@@ -222,20 +231,83 @@ test('src/lib/courts.ts: the loader and the BoardPayload contract other groups b
   assert.doesNotMatch(src, /pid_hash|ip_hash/);
 });
 
-test('spec §3 confidence pins: the Perry grid and the Alta Vista address stay "unconfirmed" and stay in Help us confirm', () => {
+test('2026-10-18 refresh: the Perry grid is read off the city schedule; Alta Vista keeps partial hours; Help us confirm follows', () => {
   const by = Object.fromEntries(schedule.courts.map((c) => [c.id, c]));
-  // Perry: "Pickleball 08–14 (partial: the flyer's day grid is an image)". Every block read off that grid is partial;
-  // only the youth-basketball line, printed as text on the flyer, is verified.
+  // Perry: the four blocks read off the image grid are verified against the city's schedule image (RB4); the youth line keeps the flyer (RB2).
   const grid = by.perry.blocks.filter((b) => b.label !== 'Youth basketball priority');
+  assert.equal(grid.length, 4);
   assert.ok(grid.some((b) => b.label === 'Pickleball priority' && b.start === '08:00' && b.end === '14:00'));
-  for (const b of grid) assert.equal(b.confidence, 'partial', `Perry ${b.label} ${b.start}–${b.end}`);
-  assert.equal(by.perry.blocks.find((b) => b.label === 'Youth basketball priority').confidence, 'verified');
-  // Alta Vista: "address and hours" are open questions.
+  for (const b of grid) {
+    assert.deepEqual([b.confidence, b.src, b.checked], ['verified', 'RB4', '2026-10-18'], `Perry ${b.label} ${b.start}–${b.end}`);
+  }
+  assert.equal(by.perry.blocks.find((b) => b.label === 'Youth basketball priority').src, 'RB2');
+  // Alta Vista: the address is verified now; the hours are the center's and stay partial, with the fee sheet's later slot said out loud.
   const address = by['alta-vista'].facts.find((f) => f.key === 'address');
-  assert.notEqual(address?.confidence, 'verified', 'the Alta Vista address never renders (or publishes in JSON-LD) as settled');
-  assert.equal(by['alta-vista'].hours, null);
+  assert.deepEqual([address.text, address.confidence, address.src], ['715 Julia Avenue, Redondo Beach', 'verified', 'RB5']);
+  const hours = by['alta-vista'].hours;
+  assert.equal(hours.confidence, 'partial', 'the fee sheet prices a Sat–Sun slot to 8 PM, past the 7 PM center closing');
+  assert.deepEqual(hours.rules, [
+    { days: [1, 2, 3, 4, 5], open: '08:00', close: '21:00' },
+    { days: [0, 6], open: '08:00', close: '19:00' },
+  ]);
+  assert.match(hours.conflict.text, /fee sheet prices a Sat–Sun court slot until 8 PM/);
   const asks = (id) => schedule.confirm.find((q) => q.id === id)?.asks ?? [];
-  assert.deepEqual(asks('perry'), ['the priority grid']);
-  assert.deepEqual(asks('alta-vista'), ['address', 'hours']);
-  assert.deepEqual(schedule.confirm.map((q) => q.id), ['courts', 'el-segundo', 'manhattan-heights', 'alta-vista', 'perry', 'anderson', 'hawthorne', 'not-covered', 'parking'], 'spec §3 order');
+  assert.deepEqual(asks('alta-vista'), ['hours']);
+  assert.equal(schedule.confirm.some((q) => q.id === 'perry'), false, 'the Perry grid is no longer an open question');
+  assert.ok(!asks('el-segundo').includes('parking'), 'El Segundo parking is sourced now');
+  assert.ok(asks('el-segundo').includes('the November schedule'), 'no November section was posted on 2026-10-18');
+  const es = schedule.confirm.find((q) => q.id === 'el-segundo');
+  assert.match(es.note, /No drop-in sessions after Oct 31 are posted on rec\.us \(checked Oct 18\)/);
+  assert.deepEqual(schedule.confirm.map((q) => q.id), ['courts', 'el-segundo', 'manhattan-heights', 'alta-vista', 'anderson', 'hawthorne', 'kelly', 'not-covered', 'parking']);
+  assert.match(schedule.confirm.find((q) => q.id === 'kelly').note, /use policy is a download we have not read/);
+});
+
+test('2026-10-18 refresh: Kelly Courts is open with the city\'s hours, and its access rules stay a question', () => {
+  const kelly = schedule.courts.find((c) => c.id === 'kelly');
+  assert.equal(kelly.status, 'open');
+  assert.equal(kelly.air, false, 'a listing: no spot to report at');
+  assert.deepEqual(kelly.hours, {
+    rules: [{ days: [0, 1, 2, 3, 4, 5, 6], open: '09:00', close: '19:00' }], else: 'closed', src: 'HB1', checked: '2026-10-18', confidence: 'verified',
+  });
+  const status = kelly.facts.find((f) => f.key === 'status');
+  assert.deepEqual([status.src, status.confidence, status.checked], ['HB2', 'verified', '2026-10-18']);
+  assert.match(status.text, /^Open: reopened for reservations and recreational play by Oct 15, 2026$/);
+  assert.doesNotMatch(JSON.stringify(kelly), /Closed for renovation/);
+  assert.equal(kelly.facts.find((f) => f.key === 'courts').text, '4 pickleball courts, plus 1 tennis court and 2 basketball courts');
+  // The unread use policy: nothing about walk-on, residency, fees or Friday open play is printed as a fact.
+  assert.equal(kelly.walkOn, null);
+  assert.equal(kelly.reserve, null);
+  assert.doesNotMatch(JSON.stringify(kelly.facts), /resident|\$|Friday|free/i);
+});
+
+test('2026-10-18 refresh: the El Segundo, Manhattan Heights and Manhattan Middle facts carry their new sources', () => {
+  const by = Object.fromEntries(schedule.courts.map((c) => [c.id, c]));
+  const fact = (court, key) => court.facts.find((f) => f.key === key);
+  const es = by['el-segundo'];
+  assert.deepEqual(['resident-fee', 'parking', 'staffed'].map((k) => [k, fact(es, k).src, fact(es, k).confidence, fact(es, k).checked]), [
+    ['resident-fee', 'ES3', 'verified', '2026-10-18'], ['parking', 'ES4', 'verified', '2026-10-18'], ['staffed', 'ES4', 'verified', '2026-10-18'],
+  ]);
+  assert.equal(fact(es, 'resident-fee').text, 'Resident ID card holders pay $5 for the $7 drop-ins and $3 for the $5 drop-ins');
+  assert.equal(fact(es, 'parking').text, 'Free parking in the lots on Pine and Sheldon, or Grand and Eucalyptus');
+  assert.equal(fact(es, 'staffed').text, 'Recreation staff are at the Checkout Building 8 AM–6 PM, seven days a week');
+  for (const b of es.blocks) assert.equal(b.fee.startsWith('$'), true, 'the block fees stay the standard prices');
+  assert.equal(by['manhattan-heights'].facts.find((f) => f.key === 'monthly-pass').text, 'Monthly drop-in pass: $20 residents, $25 non-residents, $15 resident seniors');
+  assert.equal(fact(by.courts, 'access').text, 'Also public during MBUSD breaks and holidays, 8 AM to dusk');
+  assert.equal(fact(by.courts, 'access').checked, '2026-10-18');
+  assert.equal(by.courts.hours.checked, '2026-10-18');
+  assert.deepEqual(by.courts.hours.rules, [{ days: [0, 6], open: '08:00', close: 'dusk' }], 'the hours rule is unchanged: the source states weekends 8 AM to dusk');
+  assert.equal(by.courts.hours.else, 'unknown');
+  assert.equal(fact(by.courts, 'queue').src, 'MIKE');
+  for (const id of ['ES3', 'ES4', 'RB4', 'RB5', 'HB2']) {
+    assert.match(schedule.sources[id].url, /^https:\/\//, id);
+    assert.match(schedule.sources[id].note, /^Checked Oct 18\./, id);
+  }
+});
+
+test('hours.evidence is an optional type, set only for a posted sign or a report', async () => {
+  const src = await read('src/lib/courts.ts');
+  assert.match(src, /evidence\?: 'posted-sign' \| 'reported';/);
+  for (const c of [...schedule.courts, ...schedule.private]) {
+    if (c.hours?.evidence !== undefined) assert.ok(['posted-sign', 'reported'].includes(c.hours.evidence), `${c.id} hours.evidence`);
+  }
 });

@@ -206,6 +206,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/almanac', 'daily', '0.7'],
   ['https://pointcast.xyz/almanac.json', 'daily', '0.65'],
   ['https://pointcast.xyz/morning.json', 'daily', '0.92'],
+  ['https://pointcast.xyz/morning.xml', 'daily', '0.90'],
   ['https://pointcast.xyz/agent-field-guide', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-field-guide.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
