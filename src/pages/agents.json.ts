@@ -128,6 +128,26 @@ export const GET: APIRoute = async () => {
       ],
     },
 
+    botMoney: {
+      human: 'https://pointcast.xyz/bot-money/',
+      catalog: 'https://pointcast.xyz/bot-money.json',
+      firstOfferKit: 'https://pointcast.xyz/bot-money/#first-offer-kit',
+      download: 'https://pointcast.xyz/downloads/first-offer-kit-1.0.0.zip',
+      inquiry: 'https://pointcast.xyz/bot-money/#offer-sprint',
+      assistantGuide: 'https://pointcast.xyz/bot-money/#for-assistants',
+      block: 'https://pointcast.xyz/b/0710',
+      learningWorkflow: {
+        human: 'https://pointcast.xyz/internship-lab/',
+        manifest: 'https://pointcast.xyz/internship-lab/program.json',
+        status: 'Educational browser sandbox; applications closed.',
+        storage: 'Current-page memory; no app browser storage or account save. Browser tab restoration may retain state; Clear resets the current draft. Explicit JSON and Markdown downloads retain a local draft.',
+        boundaries: 'No applicant intake, uploads, external submissions, hiring decisions, or deployments. A practice approval record is not authenticated approval or publication authority.',
+      },
+      status: 'First Offer Kit v1 is a free download; Offer Page Sprint is inquiry only.',
+      reading: 'Read the catalog for current contents, version, price status, license, delivery, and limitations. The 2027 and 2028 sections are speculative scenarios.',
+      boundaries: 'The Offer Desk is a browser sandbox with no real funds or paid orders. Human approval is required before sending an inquiry or making any external commitment. No new MCP tools or automatic purchasing are provided.',
+    },
+
     standards: {
       series: AGENT_SURFACES.human.standards,
       catalog: AGENT_SURFACES.json.standards,
@@ -230,6 +250,8 @@ export const GET: APIRoute = async () => {
         agentFieldGuideJson: 'https://pointcast.xyz/agent-field-guide.json',
         agentNativePublishing: 'https://pointcast.xyz/agent-native-publishing',
         agentKit: 'https://pointcast.xyz/agent-kit.md',
+        botMoney: 'https://pointcast.xyz/bot-money/',
+        botMoneyCatalog: 'https://pointcast.xyz/bot-money.json',
         pointcastTonight: 'https://pointcast.xyz/tonight',
         pointcastTonightJson: 'https://pointcast.xyz/tonight.json',
         firecrawlFieldGuide: 'https://pointcast.xyz/firecrawl',
