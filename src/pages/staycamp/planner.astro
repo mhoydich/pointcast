@@ -1,0 +1,164 @@
+---
+import StaycampLayout from '../../layouts/StaycampLayout.astro';
+
+const title = 'Pack your camp · Staycamp';
+const description = 'A small Staycamp planner: household size, trip length and season in; water, jugs, gear and a short list of things to sort out ahead of time out.';
+---
+<StaycampLayout title={title} description={description} path="/staycamp/planner">
+  <section class="wrap section planner-head">
+    <p class="eyebrow">Pack your camp</p>
+    <h1>How much camp does your house need?</h1>
+    <p class="intro">Three questions and a few boxes to tick. The numbers come from the Field Book: one gallon of water per person per day, plus one headlamp and one sleeping bag each.</p>
+  </section>
+
+  <section class="wrap planner">
+    <form id="plan" class="controls" aria-label="Your household">
+      <fieldset>
+        <legend>People at home</legend>
+        <div class="stepper">
+          <button type="button" data-step="-1" aria-label="One fewer person">−</button>
+          <output id="people-out" for="people">4</output>
+          <button type="button" data-step="1" aria-label="One more person">+</button>
+          <input type="hidden" id="people" name="people" value="4" />
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Trip length</legend>
+        <div class="pills">
+          <label><input type="radio" name="days" value="3" /> 3 nights</label>
+          <label><input type="radio" name="days" value="7" /> A week</label>
+          <label><input type="radio" name="days" value="14" checked /> A fortnight</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>The season you plan for</legend>
+        <div class="pills">
+          <label><input type="radio" name="season" value="cold" checked /> Cold</label>
+          <label><input type="radio" name="season" value="hot" /> Hot</label>
+          <label><input type="radio" name="season" value="both" /> Both</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Tick any that apply</legend>
+        <div class="ticks">
+          <label><input type="checkbox" name="tank" checked /> We have a hot-water tank</label>
+          <label><input type="checkbox" name="older" /> Someone older, or a baby, lives here</label>
+          <label><input type="checkbox" name="insulin" /> Someone uses insulin</label>
+          <label><input type="checkbox" name="device" /> Someone relies on a powered medical device</label>
+          <label><input type="checkbox" name="generator" /> We own a generator</label>
+          <label><input type="checkbox" name="ev" /> We drive an electric car</label>
+        </div>
+      </fieldset>
+    </form>
+
+    <div class="results" aria-live="polite">
+      <div class="stats">
+        <div class="stat"><span id="r-gal">56</span><small>gallons of water to store</small></div>
+        <div class="stat"><span id="r-jugs">12</span><small>five-gallon jugs</small></div>
+        <div class="stat"><span id="r-lamps">4</span><small>headlamps and sleeping bags</small></div>
+      </div>
+      <p id="r-tank" class="tank"></p>
+      <div class="rec">
+        <p class="eyebrow">Your kit</p>
+        <h2 id="r-kit">The Fortnight</h2>
+        <p id="r-kit-note"></p>
+      </div>
+      <div>
+        <p class="eyebrow">Sort out ahead of time</p>
+        <ul id="r-notes" class="notes"></ul>
+      </div>
+    </div>
+  </section>
+  <div class="section"></div>
+</StaycampLayout>
+
+<script>
+  const form = document.getElementById('plan') as HTMLFormElement | null;
+  const people = document.getElementById('people') as HTMLInputElement | null;
+  const peopleOut = document.getElementById('people-out');
+  const set = (id: string, text: string) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+  function render() {
+    if (!form || !people) return;
+    const data = new FormData(form);
+    const n = Number(people.value);
+    const days = Number(data.get('days'));
+    const season = String(data.get('season'));
+    const has = (k: string) => data.get(k) === 'on';
+
+    // One gallon per person per day, stored in five-gallon jugs.
+    const gallons = n * days;
+    const jugs = Math.ceil(gallons / 5);
+    set('people-out', String(n));
+    set('r-gal', String(gallons));
+    set('r-jugs', String(jugs));
+    set('r-lamps', String(n));
+    set('r-tank', has('tank')
+      ? 'Your hot-water tank already holds roughly 30 to 50 gallons. Count it as your reserve: draw it from the drain tap, let it cool, and disinfect it if in doubt.'
+      : 'Without a hot-water tank, the stored jugs are all of it, so fill every pot and bath on day one while the taps still run.');
+
+    const weekender = days <= 3 && n <= 2;
+    const baseJugs = weekender ? 2 : 6;
+    const extra = Math.max(0, jugs - baseJugs);
+    set('r-kit', weekender ? 'The Weekender' : 'The Fortnight');
+    set('r-kit-note', extra > 0
+      ? `Plus ${extra} more Canteen jug${extra === 1 ? '' : 's'} on top of the ${baseJugs} in the box.`
+      : `The ${baseJugs} jugs in the box cover it.`);
+
+    const notes: string[] = [];
+    if (season !== 'hot') notes.push('Pick one room for the Den and check its door closes well. Sleeping bags rated for your coldest nights.');
+    if (season !== 'cold') notes.push('Choose the coolest room for the hot-weather Den, and plan more water than the gallon a day.');
+    if (has('older')) notes.push('Heat and cold fall hardest on older people and the very young. Agree who checks on whom, and when.');
+    if (has('insulin')) notes.push('Insulin in use can often stay at room temperature for up to 28 days, depending on the product. Keep unopened supplies cool, never frozen, and ask your clinician what applies to yours.');
+    if (has('device')) notes.push('Ask your clinician and the device supplier what backup power the device needs and for how long. Staycamp does not guess at this.');
+    if (has('generator')) notes.push('Generators run outdoors only, never in a garage. Expect half a gallon to a gallon of fuel an hour.');
+    if (has('ev')) notes.push('Keep the car charged when an outage is forecast. With the right equipment a charged car can power a house for days, and without it the car stops when the battery does.');
+    notes.push('Keep a fortnight of every essential prescription in hand, with paper copies in the Pocket folio.');
+    notes.push('Put small bills in the Biscuit Tin. Card readers and cash machines share the same network.');
+
+    const list = document.getElementById('r-notes');
+    list?.replaceChildren(...notes.map((t) => Object.assign(document.createElement('li'), { textContent: t })));
+  }
+
+  form?.addEventListener('change', render);
+  form?.querySelectorAll<HTMLButtonElement>('[data-step]').forEach((b) => b.addEventListener('click', () => {
+    if (!people) return;
+    people.value = String(Math.min(12, Math.max(1, Number(people.value) + Number(b.dataset.step))));
+    render();
+  }));
+  if (peopleOut) render();
+</script>
+
+<style>
+  .planner-head h1{font-size:clamp(2.4rem,5.6vw,4.2rem);margin-bottom:1rem}
+  .planner-head{padding-bottom:1.5rem}
+  .planner{display:grid;grid-template-columns:1fr 1.2fr;gap:28px;align-items:start}
+  .controls{background:#FBF7F0;border:1px solid var(--line);border-radius:16px;padding:22px}
+  fieldset{border:0;padding:0;margin:0 0 1.4rem}
+  legend{font-weight:700;margin-bottom:.6rem}
+  .stepper{display:flex;align-items:center;gap:14px}
+  .stepper button{width:44px;height:44px;border-radius:50%;border:2px solid var(--pine);background:transparent;color:var(--pine);font-size:1.4rem;cursor:pointer}
+  .stepper output{font-family:"Iowan Old Style",Georgia,serif;font-size:2.4rem;min-width:2ch;text-align:center}
+  .pills{display:flex;flex-wrap:wrap;gap:8px}
+  .pills label{border:1.5px solid var(--pine);border-radius:999px;padding:8px 14px;cursor:pointer;font-size:.9rem}
+  .pills input{position:absolute;opacity:0;pointer-events:none}
+  .pills label:has(input:checked){background:var(--pine);color:var(--canvas)}
+  .pills label:has(input:focus-visible){outline:3px solid var(--ember);outline-offset:2px}
+  .ticks{display:grid;gap:10px;font-size:.92rem}
+  .ticks label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+  .ticks input{accent-color:var(--pine);width:18px;height:18px;margin-top:2px;flex:none}
+  .results{display:grid;gap:22px}
+  .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .stat{background:var(--pine);color:var(--canvas);border-radius:14px;padding:18px}
+  .stat span{display:block;font-family:"Iowan Old Style",Georgia,serif;font-size:2.6rem;line-height:1}
+  .stat small{display:block;margin-top:.4rem;font-size:.8rem}
+  .tank{margin:0;font-size:.92rem;border-left:3px solid var(--lantern);padding-left:14px}
+  .rec{background:#FBF7F0;border:1px solid var(--line);border-radius:14px;padding:18px}
+  .rec h2{font-size:2rem;margin-bottom:.4rem}.rec p:last-child{margin:0}
+  .notes{padding-left:1.1em;margin:0;font-size:.92rem}.notes li{margin-bottom:.6em;line-height:1.45}
+  @media(max-width:860px){.planner{grid-template-columns:1fr}}
+  @media(max-width:480px){.stats{grid-template-columns:1fr}}
+</style>
