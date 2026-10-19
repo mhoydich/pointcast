@@ -29,7 +29,8 @@ test('homepage selects existing live routes, local visuals and keeps all previou
   const home=read('src/pages/index.astro');
   const start=home.indexOf('<HomeEverydayLead />');
   assert.ok(start < home.indexOf('<HomeNounsMoney />'));
-  assert.ok(home.indexOf('<HomeNounsMoney />') < home.indexOf('<HomeLatestProjects />'));
+  const nounsMoneyAt=home.indexOf('<HomeNounsMoney />');
+  assert.ok(nounsMoneyAt > home.indexOf('</header>') && nounsMoneyAt < home.indexOf('<HomeOctoberDesk />'), 'Nouns Money leads the front page');
   assert.ok(home.indexOf('<HomeLatestProjects />') < home.indexOf('<HomeLatestShelf'));
   for(const component of ['HomeShortwaveHero','HomeNewToday','HomeShopShelf','HomeV2SignalDeck','HomeContourField','HomeSoundGarden','HomeMagazineRack','HomeRoomsShelf','HomeAgentDesk','HomeShipLog','HomeWire','HomeBackCatalog']) assert.ok(home.includes('<'+component), component);
   for(const p of JSON.parse(read('src/data/home-latest-projects.json'))) assert.ok(existsSync(new URL('public'+p.image,root)),p.image);
