@@ -1,0 +1,74 @@
+---
+import StaycampLayout from '../../layouts/StaycampLayout.astro';
+import { suits, ranks } from '../../data/staycamp-deck';
+
+const title = 'Camp Days deck · Staycamp';
+const description = 'Fifty-two cards for days three to fourteen of a long outage: a morning job, a supper, something to play and something for the street. Also a real deck of cards.';
+---
+<StaycampLayout title={title} description={description} path="/staycamp/deck">
+  <section class="wrap section deck-head">
+    <p class="eyebrow">In every Weekender and Fortnight</p>
+    <h1>The Camp Days deck</h1>
+    <p class="intro">Days three to fourteen are when improvisation runs out. The deck gives each day a shape: draw a Morning job, a Supper, something to Play and something for the Porch. It is also a full deck of playing cards, because Crazy Eights by lantern is part of the plan.</p>
+    <div class="draw no-print">
+      <button type="button" id="draw" class="button">Draw today’s four</button>
+      <p class="hint">One card from each suit.</p>
+    </div>
+    <div id="today" class="today" aria-live="polite" hidden></div>
+    <nav class="suit-nav no-print" aria-label="Suits">
+      {suits.map((s) => <a href={`#${s.id}`}><span style={`color:${s.colour}`}>{s.symbol}</span> {s.name}</a>)}
+    </nav>
+  </section>
+
+  {suits.map((s) => (
+    <section class="wrap suit" id={s.id}>
+      <div class="heading"><p class="eyebrow" style={`color:${s.colour}`}>{s.symbol} {s.name}</p><p>{s.about}</p></div>
+      <ol class="cards">
+        {s.cards.map((c, i) => (
+          <li class="pc" style={`--suit:${s.colour}`} data-suit={s.id}>
+            <span class="corner">{ranks[i]}<br />{s.symbol}</span>
+            <h3>{c.title}</h3>
+            <p>{c.text}</p>
+            <span class="corner flip">{ranks[i]}<br />{s.symbol}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  ))}
+  <div class="section"></div>
+</StaycampLayout>
+
+<script>
+  const btn = document.getElementById('draw');
+  const out = document.getElementById('today');
+  btn?.addEventListener('click', () => {
+    if (!out) return;
+    out.replaceChildren();
+    for (const id of ['morning', 'supper', 'play', 'porch']) {
+      const cards = document.querySelectorAll(`.pc[data-suit="${id}"]`);
+      const pick = cards[Math.floor(Math.random() * cards.length)];
+      if (pick) out.append(pick.cloneNode(true));
+    }
+    out.hidden = false;
+  });
+</script>
+
+<style>
+  .deck-head h1{font-size:clamp(2.6rem,6vw,4.6rem);margin-bottom:1rem}
+  .deck-head{padding-bottom:1rem}
+  .draw{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:1.4rem}
+  .draw button{border:0;font:inherit;cursor:pointer}.hint{margin:0;font-size:.85rem;opacity:.75}
+  .today{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:1.6rem}
+  .suit-nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:2rem;font-weight:600}
+  .suit{padding-block:28px}
+  .suit .heading{margin-bottom:1.2rem}
+  .cards{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+  :global(.pc){position:relative;background:#FBF7F0;border:1px solid rgba(47,74,58,.22);border-top:6px solid var(--suit);border-radius:12px;padding:18px 18px 40px;min-height:220px;list-style:none}
+  :global(.pc h3){font-size:1.15rem;margin:1.6rem 0 .5rem}
+  :global(.pc p){font-size:.88rem;margin:0}
+  :global(.pc .corner){position:absolute;top:10px;left:12px;font-weight:700;font-size:.8rem;line-height:1.05;text-align:center;color:var(--suit)}
+  :global(.pc .flip){top:auto;left:auto;bottom:10px;right:12px;transform:rotate(180deg)}
+  @media(max-width:860px){.today{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:480px){.today{grid-template-columns:1fr}}
+  @media print{.suit{break-inside:avoid-page}:global(.pc){break-inside:avoid}}
+</style>

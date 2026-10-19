@@ -11,7 +11,7 @@ import { editionSkyLine, editionTideLine } from '../functions/_lib/air-desk.mjs'
 import {
   CUTOFF_MINUTE, EDITION_TTL, FIRST_EDITION, FOOTER_LINE, NIGHTLY_NET, SHOP_DISCLOSURE, SLOTS,
   addDays, canFreeze, composeEdition, cutoffMs, editionDate, editionMasthead, editionNumber, editionText, editionTitle,
-  feedDates, freezeEdition, isEditionDate, isThcItem, momentOf, nameList, parseEditionParam, pickPrice, pickShop, pickTown,
+  feedDates, freezeEdition, isEditionDate, isThcItem, momentOf, nameList, parseEditionParam, pickCourtsSpot, pickPrice, pickShop, pickTown,
   reportersLine, toJsonFeed,
 } from '../functions/_lib/morning.mjs';
 
@@ -31,6 +31,8 @@ const KLAX = { underTheLayerNow: true, observedAt: SAT_553 };
 /** A 5:53 AM KLAX preview on the edition's own morning. */
 const klaxOn = (date) => ({ underTheLayerNow: true, observedAt: new Date(cutoffMs(date) - 52 * MIN).toISOString() });
 const SLOT_KEYS = ['bylines', 'fallback', 'id', 'label', 'line', 'reportIds', 'source'];
+/** The courts slot also names the spot it reports on. */
+const slotKeys = (id) => (id === 'courts' ? [...SLOT_KEYS, 'spot'].sort() : SLOT_KEYS);
 const rid = (n) => `ar_${String(n).padStart(20, '0')}`;
 const moment = (over = {}) => ({ value: '1-4', at: FRI_741, support: 5, bylines: ['@mike', 'Guest 4471', '@sam', '@jen', 'Guest 2210'], reportIds: [rid(1), rid(2), rid(3)], ...over });
 const byId = (edition, id) => edition.slots.find((s) => s.id === id);
@@ -113,7 +115,7 @@ test('composeEdition: always seven slots, in order, with the slot shape', () => 
     assert.deepEqual(e.slots.map((s) => s.id), ['sky', 'courts', 'price', 'town', 'ritual', 'pick', 'shop']);
     assert.deepEqual(e.slots.map((s) => s.label), ['Sky · 6.100', 'Courts · 7.500', 'A price', 'Today in town', 'Daily ritual', 'One pick', 'Shop']);
     for (const s of e.slots) {
-      assert.deepEqual(Object.keys(s).sort(), SLOT_KEYS, `${s.id} has exactly the slot keys`);
+      assert.deepEqual(Object.keys(s).sort(), slotKeys(s.id), `${s.id} has exactly the slot keys`);
       assert.ok(typeof s.line === 'string' && s.line.trim().length > 10, `${s.id} is never empty`);
       assert.equal(typeof s.fallback, 'boolean');
       assert.ok(Array.isArray(s.reportIds) && Array.isArray(s.bylines));
@@ -494,4 +496,104 @@ test('mirrors: the Nightly Net and Court Call match the dial and the spots file'
   assert.match(byId(fri, 'courts').line, /Court Call today, 7:30 AM on 7\.500\.$/);
   const thu = composeEdition({ date: '2026-10-08', config, sources: {} });
   assert.match(byId(thu, 'courts').line, /Court Call tomorrow, 7:30 AM on 7\.500\.$/);
+});
+
+/* ---------- slot 2 picks yesterday's busiest court ---------- */
+
+/** A report row as busiestCourtSpot reads it. */
+const row = (spot, who, over = {}) => ({ spot, kind: 'wait', who, house_pid: 0, house_user: 0, user_payload: null, ...over });
+const ELS = 'el-segundo';
+
+test('pickCourtsSpot: no rows, or none that count, is the Manhattan Middle courts spot', () => {
+  assert.equal(pickCourtsSpot(config, []), 'courts');
+  assert.equal(pickCourtsSpot(config, undefined), 'courts');
+  assert.equal(pickCourtsSpot(null, [row(ELS, 'a')]), 'courts', 'without a config nothing can be picked');
+  assert.equal(pickCourtsSpot(config, [row(ELS, '')]), 'courts', 'a row with no person never counts');
+});
+
+test('pickCourtsSpot: the most people wins, a tie with courts goes to courts, then rows, then config order', () => {
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a'), row(ELS, 'b'), row('courts', 'c')]), ELS, 'two people beat one');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a'), row('courts', 'b')]), 'courts', 'a 1-1 tie with courts is courts');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a'), row(ELS, 'b'), row('courts', 'c'), row('courts', 'd')]), 'courts', 'a 2-2 tie too');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a'), row(ELS, 'b'), row('courts', 'c'), row('courts', 'c'), row('courts', 'c')]), ELS, 'rows do not make people: 1 person, 3 rows');
+  // A tie without courts: more rows first, then config order (el-segundo is listed before perry).
+  const perry2 = [row('perry', 'a'), row('perry', 'b')];
+  assert.equal(pickCourtsSpot(config, [...perry2, row(ELS, 'c'), row(ELS, 'd')]), ELS, '2-2 people, 2-2 rows: config order');
+  assert.equal(pickCourtsSpot(config, [...perry2, row('perry', 'a'), row(ELS, 'c'), row(ELS, 'd')]), 'perry', '2-2 people, 3 rows beat 2');
+  assert.equal(pickCourtsSpot(config, [row('alta-vista', 'a'), row('perry', 'b')]), 'alta-vista', '1-1: config order');
+  assert.equal(pickCourtsSpot(config, [row('perry', 'a'), row('perry', 'b'), row(ELS, 'c'), row('courts', 'd')]), 'perry', 'courts only wins ties it is part of');
+});
+
+test('pickCourtsSpot: house rows drop out by each flag, and only live kinds on CRT spots count', () => {
+  const two = [row(ELS, 'a'), row(ELS, 'b'), row('courts', 'c')];
+  assert.equal(pickCourtsSpot(config, two), ELS);
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a', { house_pid: 1 }), row(ELS, 'b'), row('courts', 'c')]), 'courts', 'a house phone');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a'), row(ELS, 'b', { house_user: 1 }), row('courts', 'c')]), 'courts', 'a house account');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a', { house_pid: true }), row(ELS, 'b', { house_user: '1' }), row('courts', 'c')]), 'courts', 'true and \'1\' are flags too');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a', { user_payload: JSON.stringify({ roles: ['broadcaster'] }) }), row(ELS, 'b'), row('courts', 'c')]), 'courts', 'a broadcaster account');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a', { user_payload: JSON.stringify({ roles: ['director'] }) }), row(ELS, 'b'), row('courts', 'c')]), 'courts', 'a director account');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a', { user_payload: JSON.stringify({ roles: ['member'] }) }), row(ELS, 'b'), row('courts', 'c')]), ELS, 'an ordinary account counts');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a', { user_payload: 'not json' }), row(ELS, 'b'), row('courts', 'c')]), ELS, 'a payload that cannot be read is not house');
+  // Parking and the vibe rating are not the live kind; the beach is not a court.
+  const side = [row(ELS, 'a', { kind: 'parking' }), row(ELS, 'b', { kind: 'vibe' }), row('beach', 'c', { kind: 'fog' }), row('beach', 'd', { kind: 'fog' }), row('courts', 'e')];
+  assert.equal(pickCourtsSpot(config, side), 'courts', 'parking, ratings and beach rows never count');
+  assert.equal(pickCourtsSpot(config, [row('nowhere', 'a'), row('nowhere', 'b'), row('courts', 'c')]), 'courts', 'an unknown spot never counts');
+  assert.equal(pickCourtsSpot(config, [row(ELS, 'a', { kind: 'nope' }), row(ELS, 'b', { kind: 'nope' })]), 'courts', 'an unknown kind never counts');
+});
+
+test('slot 2: an El Segundo pick names the court, takes its frequency and keeps the Court Call from courts', () => {
+  const m = moment({ value: '1-4', at: Date.parse('2026-10-02T14:41:00Z'), support: 1, bylines: ['Guest 3348'], reportIds: [rid(5)] });
+  const sources = { sky: { marine: KLAX }, courts: { spot: ELS, yesterday: m, lastWeek: null } };
+  const e = composeEdition({ date: SAT, config, sources });
+  const c = byId(e, 'courts');
+  assert.equal(c.label, 'Courts · 7.600');
+  assert.equal(c.spot, ELS);
+  assert.equal(c.line, 'Yesterday 7:41 AM at El Segundo Recreation Park courts: 1–4 in the rack, 1 reporter — Guest 3348. Next Court Call Fri 7:30 AM on 7.500.');
+  assert.equal(c.source, 'air');
+  assert.equal(c.fallback, false);
+  assert.deepEqual(c.reportIds, [rid(5)]);
+  assert.deepEqual(c.bylines, ['Guest 3348']);
+  assert.equal(e.provisional, false);
+  assert.ok(canFreeze(e, cutoffMs(SAT)), 'the new slot object still freezes');
+  assert.equal(freezeEdition(e, cutoffMs(SAT) + MIN).slots[1].spot, ELS, 'and the frozen copy keeps its spot');
+  // The week before is for the same court and follows the yesterday sentence.
+  const week = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { spot: ELS, yesterday: m, lastWeek: moment({ value: '5-8', at: Date.parse('2026-09-25T14:38:00Z'), support: 2 }) } } });
+  assert.match(byId(week, 'courts').line, /courts: 1–4 in the rack, 1 reporter — Guest 3348\. A week before, Fri 25 Sep 7:38 AM: 5–8 in the rack, 2 agree\. Next Court Call /);
+  // Bylines print for house rows too: the house rule only decides which spot is picked.
+  const signed = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { spot: ELS, yesterday: moment({ bylines: ['@mike'], support: 1 }) } } });
+  assert.match(byId(signed, 'courts').line, /— @mike\./);
+  // A spot the config does not have, or one that is not a court, falls back to courts, the v1 line and label.
+  for (const spot of ['nowhere', 'beach', 42, null, 'courts']) {
+    const v1 = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { spot, yesterday: m } } });
+    assert.equal(byId(v1, 'courts').spot, 'courts');
+    assert.equal(byId(v1, 'courts').label, 'Courts · 7.500');
+    assert.equal(byId(v1, 'courts').line, 'Yesterday 7:41 AM: 1–4 in the rack, 1 reporter — Guest 3348. Next Court Call Fri 7:30 AM on 7.500.');
+  }
+  // No spot at all (an older caller): exactly v1, plus the spot key.
+  const bare = composeEdition({ date: SAT, config, sources: full() });
+  assert.equal(byId(bare, 'courts').spot, 'courts');
+  assert.equal(byId(bare, 'courts').label, 'Courts · 7.500');
+});
+
+test('slot 2: no reading and no `today` is the v1 line, whichever court was picked', () => {
+  const e = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { spot: ELS, yesterday: null, lastWeek: null } } });
+  assert.equal(byId(e, 'courts').line, 'No reports from the courts yesterday. Next Court Call Fri 7:30 AM on 7.500.');
+  assert.equal(byId(e, 'courts').source, 'template');
+  assert.equal(byId(e, 'courts').fallback, true);
+  assert.equal(byId(e, 'courts').label, 'Courts · 7.600');
+  const noCall = composeEdition({ date: SAT, config: { ...config, spots: config.spots.map((s) => (s.id === 'courts' ? { ...s, courtCall: undefined } : s)) }, sources: { courts: {} } });
+  assert.equal(byId(noCall, 'courts').line, 'No reports from the courts yesterday. Be the first on the air at pointcast.xyz/court.');
+  const week = composeEdition({ date: SAT, config, sources: { sky: { marine: KLAX }, courts: { spot: ELS, yesterday: null, lastWeek: moment({ value: '5-8', at: Date.parse('2026-09-25T14:38:00Z'), support: 1, bylines: [] }) } } });
+  assert.match(byId(week, 'courts').line, /^No reports from the courts yesterday\. The week before at El Segundo Recreation Park courts, Fri 25 Sep 7:38 AM: 5–8 in the rack, 1 reporter\. Next Court Call/);
+  assert.equal(byId(week, 'courts').source, 'air+template');
+});
+
+test('pickTown: a front-door item with edition: false never runs as town news', () => {
+  const launch = { date: '2026-10-02', label: 'The paper', line: 'Morning Edition by email starts today.', link: '/morning', edition: false };
+  const real = { date: '2026-10-01', label: 'Field Reports', line: 'Two stations are on the air.', link: '/r' };
+  assert.equal(pickTown({ news: [launch], date: SAT }), null, 'a house-only item leaves the slot to its fallbacks');
+  assert.deepEqual(pickTown({ news: [launch, real], date: SAT }), { kind: 'news', label: 'Field Reports', line: 'Two stations are on the air.', link: '/r', date: '2026-10-01' }, 'the newest item that may run, not the newest item');
+  assert.equal(pickTown({ news: [{ ...launch, edition: true }, real], date: SAT }).label, 'The paper', 'edition: true (or absent) still runs');
+  assert.equal(pickTown({ news: [launch], posts: [], almanac: 'Sunrise 6:52 AM.', date: SAT }).kind, 'almanac');
+  for (const n of news) assert.ok(n.edition === undefined || typeof n.edition === 'boolean', 'the flag is a boolean when present');
 });

@@ -1,3 +1,4 @@
+import { GAME_LIBRARY, gameLanding } from '../lib/game-library';
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isPublicProduct } from '../lib/commerce';
@@ -21,6 +22,12 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/bot-money/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/bot-money.json', 'monthly', '0.85'],
+  ['https://pointcast.xyz/internship-lab/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/internship-lab/program.json', 'monthly', '0.75'],
+  ['https://pointcast.xyz/games/', 'weekly', '0.95'],
+  ['https://pointcast.xyz/games.json', 'weekly', '0.85'],
   // Approved public studies include static documents outside Astro route discovery.
   ['https://pointcast.xyz/coastal-signal/', 'monthly', '0.6'],
   ['https://pointcast.xyz/coastal-signal-wallet/', 'monthly', '0.6'],
@@ -208,6 +215,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/almanac', 'daily', '0.7'],
   ['https://pointcast.xyz/almanac.json', 'daily', '0.65'],
   ['https://pointcast.xyz/morning.json', 'daily', '0.92'],
+  ['https://pointcast.xyz/morning.xml', 'daily', '0.90'],
   ['https://pointcast.xyz/agent-field-guide', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-field-guide.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
@@ -501,6 +509,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/shop/clerk', 'weekly', '0.90'],
   ['https://pointcast.xyz/shop/wants', 'daily', '0.88'],
   ['https://pointcast.xyz/shop/haggle', 'daily', '0.86'],
+  ['https://pointcast.xyz/shop/haggle/odds', 'weekly', '0.6'],
   ['https://pointcast.xyz/reviews/fans', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/fans.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/fans/history', 'monthly', '0.85'],
@@ -641,6 +650,7 @@ export const GET: APIRoute = async () => {
   });
 
   const dynamicUrls: SitemapEntry[] = [
+    ...GAME_LIBRARY.map(game => [`https://pointcast.xyz${gameLanding(game)}`, 'weekly', '0.85'] as SitemapEntry),
     ...products.map(({ data }) => [
       `https://pointcast.xyz/products/${data.slug}`,
       'daily',

@@ -7,8 +7,12 @@
  *   sky     KLAX through the Marine Layer Oracle: the last hourly report at or
  *           before 6:45 AM on the edition's date (answerMarine observations),
  *           plus the beach reading at its last on-site moment before 6:45 AM
- *   courts  yesterday's last reading with its bylines, and the same weekday a
- *           week before. Court Call comes from the spots file inside
+ *   courts  yesterday's last reading with its bylines at the busiest on-site
+ *           human court spot yesterday (busiestCourtSpot; the Manhattan Middle
+ *           'courts' spot when none), and the same weekday a week before. With
+ *           no reading, the day's posted schedules (today: todaysSessions over
+ *           src/data/courts-schedule.json), the NWS hourly forecast on the
+ *           edition's own day, and sunset. Court Call comes from the spots file inside
  *           composeEdition, not from courtCallState, so a frozen line never
  *           depends on when it was first read
  *   price   a price-wire report filed before 6:45 AM and dated within 7 days,
@@ -40,13 +44,17 @@ import type { OracleEnv } from './oracle-kit.ts';
 import { MARINE_ORACLE } from './oracles/marine-layer.ts';
 import type { AirConfig } from '../../src/lib/air.ts';
 import { ALMANAC_PLACES, buildDay, fmtTime } from '../../src/lib/almanac.ts';
+import { COURTS } from '../../src/lib/courts.ts';
 import { RELEASES } from '../../src/lib/paddle-calendar.ts';
 import { CHANGES, PADDLES } from '../../src/lib/paddle-register.ts';
 import NEWS from '../../src/data/front-door-news.json';
 // @ts-ignore — plain modules shared with the tests
 import { DAILY_CAP, badgeStamp, bylineAwards } from './air-points.mjs';
 // @ts-ignore — plain modules shared with the tests
-import { addDays, composeEdition, cutoffMs, freezeEdition, isEditionDate, momentOf, NEWS_MAX_AGE_DAYS, pickPrice, pickShop, pickTown } from './morning.mjs';
+import { addDays, composeEdition, cutoffMs, freezeEdition, isEditionDate, laTimeMs, momentOf, NEWS_MAX_AGE_DAYS, nwsAtTime, pickCourtsSpot, pickPrice, pickShop, pickTown, todaysSessions } from './morning.mjs';
+// @ts-ignore — plain module shared with the tests
+import { laDate } from './air-reading.mjs';
+import { NWS_GRIDPOINT_URL, defaultConditionsDeps, edgeCached } from './court-conditions.ts';
 // @ts-ignore — plain module shared with the tests
 import { deskFactsByFeed } from './air-desk.mjs';
 // @ts-ignore — plain module shared with the tests
@@ -62,11 +70,13 @@ export type MorningEnv = AuthEnv & {
 export type Edition = {
   v: number; date: string; number: number; preview: boolean; title: string; masthead: string; cutoff: string;
   provisional: boolean; missing: string[]; reporters: string[]; more: number; reporterLine: string;
-  slots: { id: string; label: string; line: string; source: string; reportIds: string[]; bylines: string[]; fallback: boolean }[];
+  slots: { id: string; label: string; line: string; source: string; reportIds: string[]; bylines: string[]; fallback: boolean; spot?: string }[];
   reportIds: string[]; footer: string; disclosure: string; frozen: boolean; frozenAt?: string;
 };
 /** KLAX for an edition date: previewMarine() or answerMarine() output, or null when NOAA is down. */
 export type Klax = (date: string, now: number, env: MorningEnv) => Promise<unknown>;
+/** NWS hourly forecast periods (forecastHourly `properties.periods`) for an edition date, or null when NWS is down. */
+export type Nws = (date: string, now: number, env: MorningEnv) => Promise<unknown[] | null>;
 type Row = Record<string, unknown>;
 type DailyEntry = { date?: unknown; blockId?: unknown; title?: unknown };
 
@@ -119,6 +129,32 @@ export async function klaxFor(date: string, _now: number, env: MorningEnv, budge
   }
 }
 
+/* ---------- slot 2: the busiest court ---------- */
+
+/**
+ * The CRT spot slot 2 reports on: the court with the most distinct on-site
+ * human people yesterday (LA day before `date`). One statement; the rows go
+ * straight into pickCourtsSpot() and are read nowhere else. House rows (the
+ * phones and accounts on air_house, director accounts) are selected with the
+ * three house columns and dropped by the picker, so the paper's busiest court
+ * is the town's, not ours. Any failure, including a database that has not had
+ * migration 0031 applied yet (no air_house), answers 'courts' and never makes
+ * the edition provisional.
+ */
+export async function busiestCourtSpot(env: MorningEnv, config: AirConfig, date: string): Promise<string> {
+  const db = env.AUTH_DB;
+  if (!db || !isEditionDate(date)) return 'courts';
+  try {
+    const res = await db.prepare(`SELECT r.spot, r.kind, COALESCE(r.user_id, r.pid_hash) AS who, EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'pid' AND h.value = r.pid_hash) AS house_pid, EXISTS (SELECT 1 FROM air_house h WHERE h.kind = 'user' AND h.value = r.user_id) AS house_user, (SELECT u.payload FROM users u WHERE u.id = r.user_id) AS user_payload
+      FROM air_reports r
+      WHERE r.day = ? AND r.onsite = 1 AND r.source = 'page' AND r.status = 'ok'
+      LIMIT 2000`).bind(addDays(date, -1)).all<Row>();
+    return pickCourtsSpot(config, res.results ?? []) as string;
+  } catch {
+    return 'courts';
+  }
+}
+
 /* ---------- reports ---------- */
 
 /** One spot's reports filed on an LA day, and the confirms on them, as momentOf() takes them. */
@@ -151,17 +187,18 @@ async function withCardBylines(env: MorningEnv, confirms: Row[]): Promise<Row[]>
 }
 
 type Moment = Record<string, unknown> | null;
-type Moments = { courts: { yesterday: Moment; lastWeek: Moment }; beach: Moment };
+type Moments = { courts: { spot: string; yesterday: Moment; lastWeek: Moment }; beach: Moment };
 
 /**
- * The report moments for `date`'s edition, from one D1 batch: the courts'
- * last reading yesterday, the courts' same weekday a week before that, and the
+ * The report moments for `date`'s edition, from one D1 batch: the chosen court
+ * spot's (`courtsSpot`, busiestCourtSpot(); 'courts' by default) last reading
+ * yesterday, its same weekday a week before that, and the
  * beach's last on-site moment this morning up to 6:45 AM. Null when the store
  * is unbound or fails, which the courts slot reports as 'reports' missing.
  */
-export async function reportMoments(env: MorningEnv, config: AirConfig, date: string): Promise<Moments | null> {
+export async function reportMoments(env: MorningEnv, config: AirConfig, date: string, courtsSpot = 'courts'): Promise<Moments | null> {
   const db = env.AUTH_DB;
-  const courts = targetOf(config, 'courts');
+  const courts = targetOf(config, courtsSpot) ?? targetOf(config, 'courts');
   const beach = targetOf(config, 'beach');
   if (!db || !courts) return null;
   const yesterday = addDays(date, -1);
@@ -176,6 +213,7 @@ export async function reportMoments(env: MorningEnv, config: AirConfig, date: st
     const [yConfirms, wConfirms, bConfirms] = await Promise.all([1, 3, 5].map((i) => withCardBylines(env, rows(i))));
     return {
       courts: {
+        spot: courts.spot.id,
         yesterday: momentOf({ spot: courts.spot.id, cfg: courts.cfg, rows: rows(0), confirms: yConfirms, day: yesterday }),
         lastWeek: momentOf({ spot: courts.spot.id, cfg: courts.cfg, rows: rows(2), confirms: wConfirms, day: weekBefore }),
       },
@@ -309,18 +347,89 @@ export function priceAndShop(date: string) {
   return { price, shop: pickShop({ paddles: PADDLES, date, exclude }) };
 }
 
+/* ---------- today's courts ---------- */
+
+/** The NWS forecast's time budget inside a compose; a slow api.weather.gov never holds the edition. */
+export const NWS_BUDGET_MS = 2500;
+/** The hour the forecast is read for when no session has a start: 9 AM. */
+const NWS_DEFAULT_MINUTE = 9 * 60;
+
+/**
+ * NWS hourly forecast periods for El Segundo (the gridpoint the Pickleball
+ * Board uses), through the same 600 s edge cache. Null on any failure or
+ * after NWS_BUDGET_MS.
+ */
+export async function nwsPeriods(_date: string, _now: number, _env: MorningEnv): Promise<unknown[] | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NWS_BUDGET_MS);
+  try {
+    const deps = defaultConditionsDeps();
+    const text = await edgeCached(NWS_GRIDPOINT_URL, 600, async () => {
+      const res = await deps.fetch(NWS_GRIDPOINT_URL, { headers: { Accept: 'application/geo+json' }, signal: controller.signal });
+      if (!res.ok) throw new Error(`NWS answered HTTP ${res.status}`);
+      return res.text();
+    });
+    const periods = JSON.parse(text)?.properties?.periods;
+    return Array.isArray(periods) ? periods : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Sunset in El Segundo on an LA day, "6:12 PM", from the almanac's own math; null when it cannot say. */
+export function sunsetLabel(date: string): string | null {
+  try {
+    const [y, m, d] = date.split('-').map(Number);
+    const sunset = buildDay(ALMANAC_PLACES[0], new Date(Date.UTC(y, m - 1, d))).sun.sunset;
+    const label = fmtTime(sunset);
+    return label && label !== '—' ? label : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `sources.courts.today` for `date`: the posted schedules for the day
+ * (todaysSessions over the courts file), the NWS hour of the first session
+ * and sunset. The forecast is read only on the edition's own LA day: it
+ * cannot cover a morning that has passed, so a first read on a later day
+ * prints no NWS sentence. Every part fails soft; the schedules are static, so
+ * this is null only if the schedule itself cannot be read.
+ */
+export async function todaySource(env: MorningEnv, date: string, now: number, nws?: Nws) {
+  try {
+    const sessions = todaysSessions(COURTS, date);
+    let forecast: { at: number; windMph: number | null; tempF: number | null } | null = null;
+    if (date === laDate(now)) {
+      const start = sessions.items[0]?.start;
+      const minute = typeof start === 'string' && /^\d{1,2}:\d{2}$/.test(start) ? Number(start.split(':')[0]) * 60 + Number(start.split(':')[1]) : NWS_DEFAULT_MINUTE;
+      const periods = await within((async () => (nws ?? nwsPeriods)(date, now, env))().catch(() => null), NWS_BUDGET_MS);
+      const at = nwsAtTime(periods, laTimeMs(date, minute));
+      forecast = at ? { at: minute, ...at } : null;
+    }
+    return { sessions, nws: forecast, sunset: sunsetLabel(date) };
+  } catch {
+    return null;
+  }
+}
+
 /* ---------- gather ---------- */
 
 /**
  * Everything composeEdition(date, sources, config) takes, fetched in
  * parallel. Each source fails soft; `courts` is left out (not null) when the
  * report store failed, which is how the edition learns it is provisional.
+ * `nws` is injectable beside `klax`, so tests never reach the network.
  */
-export async function gatherSources(env: MorningEnv, o: { config: AirConfig; date: string; now: number; origin: string; klax?: Klax }) {
+export async function gatherSources(env: MorningEnv, o: { config: AirConfig; date: string; now: number; origin: string; klax?: Klax; nws?: Nws }) {
   const { config, date, now, origin } = o;
-  const [marine, moments, town, pick, desk, calls, localPrice] = await Promise.all([
+  const [marine, moments, today, town, pick, desk, calls, localPrice] = await Promise.all([
     (o.klax ?? klaxFor)(date, now, env).catch(() => null),
-    reportMoments(env, config, date),
+    // Slot 2's court first (busiestCourtSpot never throws), then its moments.
+    busiestCourtSpot(env, config, date).then((spot) => reportMoments(env, config, date, spot)),
+    todaySource(env, date, now, o.nws),
     townSource(env, date).catch(() => null),
     dailyPick(env, date, origin),
     deskSkySource(env, config, date).catch(() => ({ sky: null, tides: null })),
@@ -330,7 +439,7 @@ export async function gatherSources(env: MorningEnv, o: { config: AirConfig; dat
   const { price, shop } = priceAndShop(date);
   return {
     sky: { marine, beach: moments?.beach ?? null, desk, calls },
-    ...(moments ? { courts: moments.courts } : {}),
+    ...(moments ? { courts: { ...moments.courts, today } } : {}),
     price, localPrice, town, pick, shop,
   };
 }
@@ -360,6 +469,24 @@ export async function readFrozen(db: D1Database | undefined, dates: string[]): P
     }
   } catch { /* served as composed */ }
   return out;
+}
+
+/**
+ * The newest frozen editions, newest first (the store holds frozen copies
+ * only). For /morning.xml, which never composes or freezes anything. No
+ * binding is an empty archive ([]); a failing read is null, so the route can
+ * tell "nothing frozen yet" from "the store did not answer".
+ */
+export async function readRecentFrozen(db: D1Database | undefined, limit = 30): Promise<Edition[] | null> {
+  if (!db) return [];
+  const n = Number.isInteger(limit) ? Math.max(1, Math.min(limit, 120)) : 30;
+  try {
+    const res = await db.prepare('SELECT date, json FROM morning_editions ORDER BY date DESC LIMIT ?')
+      .bind(n).all<{ date: string; json: string }>();
+    return (res.results ?? []).map((row) => asEdition(row.json, row.date)).filter((e): e is Edition => Boolean(e));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -413,7 +540,7 @@ export async function saveFrozen(db: D1Database, frozen: Edition, now: number): 
  * filled slots, at or after its own 6:45 AM. A preview (before No. 1) and a
  * provisional edition are served as composed, never stored.
  */
-export async function editionFor(env: MorningEnv, o: { config: AirConfig; date: string; now: number; origin: string; klax?: Klax }): Promise<Edition> {
+export async function editionFor(env: MorningEnv, o: { config: AirConfig; date: string; now: number; origin: string; klax?: Klax; nws?: Nws }): Promise<Edition> {
   const kept = (await readFrozen(env.AUTH_DB, [o.date])).get(o.date);
   if (kept) return kept;
   let sources = {};

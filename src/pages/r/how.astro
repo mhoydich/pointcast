@@ -1,0 +1,112 @@
+---
+/**
+ * /r/how — How we count.
+ *
+ * What a Field Report has to be to count in the Oct 23 kill test (10
+ * non-Friday reports from 3 people, Sep 28 to Oct 23), who is left out, and
+ * the live count.
+ * The rules are the one list in functions/_lib/air-killtest.mjs, printed at
+ * build time; the count is read from GET /api/air/killtest by
+ * src/scripts/air-how.ts and shows "—" until the API answers. Indexable.
+ * docs/plans/2026-10-18-field-reports-v2-paper-spec.md §7.5.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import AirInk from '../../components/air/AirInk.astro';
+import { FREEZE_LINE, KILL_TEST, KILL_TEST_RULES } from '../../../functions/_lib/air-killtest.mjs';
+
+const title = 'How we count · Field Reports';
+const description = 'How Field Reports counts on-site reports, who is left out, and the live count for the Oct 23 kill test: 10 non-Friday reports from 3 people.';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** '2026-10-24' -> 'Sat Oct 24'. */
+const readDay = (() => {
+  const [y, m, d] = KILL_TEST.readOn.split('-').map(Number);
+  return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()]} ${MONTHS[m - 1]} ${d}`;
+})();
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': 'https://pointcast.xyz/r/how',
+  name: title,
+  description,
+  url: 'https://pointcast.xyz/r/how',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout title={title} description={description} jsonLd={jsonLd} hideAds>
+  <AirInk />
+  <div class="rw" data-air-how>
+    <header class="rw__head">
+      <p class="rw__kicker air-mono"><a href="/r">Field Reports</a> <span aria-hidden="true">·</span> how we count</p>
+      <h1 class="rw__title">How we count</h1>
+    </header>
+
+    <section class="rw__section">
+      <h2 class="rw__h2 air-mono">The count</h2>
+      <div class="rw__count" data-air-how-count aria-live="polite">
+        <p class="rw__read" data-air-how-read hidden></p>
+        <p class="rw__line" data-air-how-line>—</p>
+      </div>
+      <noscript><p class="rw__note">The live count is at <a href="/api/air/killtest">/api/air/killtest</a>.</p></noscript>
+    </section>
+
+    <section class="rw__section">
+      <h2 class="rw__h2 air-mono">The rules</h2>
+      <ol class="rw__rules">
+        {KILL_TEST_RULES.map((rule: string) => <li>{rule}</li>)}
+      </ol>
+    </section>
+
+    <section class="rw__section">
+      <h2 class="rw__h2 air-mono">What happens {readDay.slice(4)}</h2>
+      <p class="rw__body">On {readDay} this page reads the result. If it passes, the game layer stays open. If not, {FREEZE_LINE.charAt(0).toLowerCase() + FREEZE_LINE.slice(1)}</p>
+    </section>
+
+    <section class="rw__section">
+      <h2 class="rw__h2 air-mono">What we never count or show</h2>
+      <ul class="rw__never">
+        <li>Agents. The early shift files its rows as agents, and they print grey.</li>
+        <li>House phones and house accounts.</li>
+        <li>Reports filed without the spot’s code.</li>
+        <li>Friday reports. Friday is the Court Call.</li>
+        <li>Side questions: parking, the court vibe and desk questions.</li>
+        <li>Names, times and phones. The count is numbers only.</li>
+      </ul>
+    </section>
+
+    <footer class="rw__foot">
+      <p class="air-mono"><a href="/r">All spots</a> <span aria-hidden="true">·</span> <a href="/morning">The paper</a> <span aria-hidden="true">·</span> <a href="/api/air/killtest">/api/air/killtest</a></p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script>
+  import { mountAirHow } from '../../scripts/air-how';
+  mountAirHow();
+</script>
+
+<style>
+  .rw { max-width: 560px; margin: 0 auto; padding: 14px 16px 40px; }
+  .rw [hidden] { display: none !important; }
+  .rw__head { margin-bottom: 16px; }
+  .rw__kicker { margin: 0 0 8px; color: var(--pc-ink-muted); }
+  .rw__title { margin: 0; font: 600 40px/44px var(--pc-font-sans); letter-spacing: -.02em; }
+
+  .rw__section { margin: 0 0 18px; padding-top: 10px; border-top: 2px solid var(--pc-ink); }
+  .rw__h2 { margin: 0 0 10px; font-weight: 600; color: var(--pc-ink-muted); }
+  .rw__count { padding: 12px 14px; border: 1.5px solid var(--pc-ink); }
+  .rw__read { margin: 0 0 8px; font: 600 18px/1.35 var(--pc-font-sans); }
+  .rw__line { margin: 0; font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+  .rw__note { margin: 10px 0 0; font-size: 15px; line-height: 1.4; }
+  .rw__rules, .rw__never { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+  .rw__rules li, .rw__never li { font-size: 16px; line-height: 24px; }
+  .rw__body { margin: 0; font-size: 16px; line-height: 24px; }
+
+  .rw__foot { padding-top: 12px; border-top: 1px solid var(--pc-rule); color: var(--pc-ink-muted); }
+  .rw__foot p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+
+  @media (max-width: 380px) { .rw__title { font-size: 34px; line-height: 38px; } }
+</style>
