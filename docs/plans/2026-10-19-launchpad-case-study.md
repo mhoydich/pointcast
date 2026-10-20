@@ -1,6 +1,6 @@
 # Launchpad case study: build plan v2
 
-**Date:** 2026-10-19 · **Status:** plan; Stage A shipped as PRs #1452–#1455 (§8.2, updated 2026-10-20) · **Replaces:** the 2026-10-11 plan (a session draft, not kept in the repo) · **Checked against:** `origin/main` at `5754e498` (2026-10-19 15:55 PT, #1444); Stage A was re-tested merged onto `00129fd2` (2026-10-20, #1457), which touches no launchpad path
+**Date:** 2026-10-19 · **Status:** plan; Stage A built as PRs #1452–#1455 (§8.2, updated 2026-10-20) · **Replaces:** the 2026-10-11 plan (a session draft, not kept in the repo) · **Checked against:** `origin/main` at `5754e498` (2026-10-19 15:55 PT, #1444); Stage A was re-tested merged onto `00129fd2` (2026-10-20, #1457), which touches no launchpad path
 
 ## 0. Summary
 
@@ -588,8 +588,8 @@ The Stage A draft was this build session's own work in progress (local session, 
 
 **As built (2026-10-20).**
 - PR 1a.1 (`claude/launchpad-engine`): `units`, `prng`, `config`, `curve`, `pool` and `engine`; `launchpad-curve` (7 tests) and `launchpad-engine` (17 tests); `launchpad-honesty` with the purity check only; `launchpad-check.yml` without the post-build step.
-- PR 1a.2 (`claude/launchpad-sim`, stacked on 1a.1): `gate`, `strategies`, `screener`, `sim` and `copy-rules`, the four scenarios; `launchpad-gate` (13), `launchpad-screener` (8, new) and `launchpad-sim` (6, with 16 pinned hashes: four scenarios under each of the four rule sets); the honesty test adds scenario and strategy copy.
-- PR 1b (`claude/launchpad-page`, stacked on 1a.2): the page, the JSON twin, the coin SVG route, `coin-art.mjs`, `exhibits.mjs`, the CSS and the `NOINDEX_PATHS` entry; the rest of the honesty test and the workflow's post-build step. Task A's brief is a PR comment.
+- PR 1a.2 (`claude/launchpad-sim`, stacked on 1a.1): `gate`, `strategies`, `screener`, `sim` and `copy-rules`, the four scenarios; `launchpad-gate` (14), `launchpad-screener` (8, new) and `launchpad-sim` (6, with 16 pinned hashes: four scenarios under each of the four rule sets); the honesty test adds scenario and strategy copy.
+- PR 1b (`claude/launchpad-page`, stacked on 1a.2): the page, the JSON twin, the coin SVG route, `coin-art.mjs`, `exhibits.mjs`, the CSS and the `NOINDEX_PATHS` entry; the `/case-studies/launchpad/` entry in `functions/_middleware.ts` `paperRooms` (its slash-less, `.html`, `/index` and `/index.html` aliases 301 to the page), with its case in `tests/nouns-money-workshop-middleware.test.mjs`; the rest of the honesty test and the workflow's post-build step. Task A's brief is a PR comment.
 
 **Decisions made while building** (each is a choice this plan left open, or a small extension of it):
 - **Auction-order priority fee.** The curve fee on an order is only known when the auction clears, so an order's priority fee is measured on the order itself: `priority = g − floor(g·D/(D + rPriority))` for an accepted gross `g`, and the rest is escrowed. It stays inside the 30 cr cap and goes to the house when the order is placed; a cancel (a kill) refunds both.
@@ -769,11 +769,13 @@ Each test file ships in the PR that ships the code it reads (§8): `launchpad-cu
     - 'src/layouts/BlockLayout.astro'
     - 'tests/launchpad-*.test.mjs'
     - 'tests/seo-discoverability.test.mjs'
+    - 'functions/_middleware.ts'                         # added in 1b
+    - 'tests/nouns-money-workshop-middleware.test.mjs'   # added in 1b
     - '.github/workflows/launchpad-check.yml'
     # from A2: 'src/data/ues-business-cases.json'
   ```
 
-  Steps: `npm ci`, `node --test tests/launchpad-*.test.mjs`, `npm run build:bare`, then `npm run audit:agents`. PR 1b adds, after `build:bare`, the honesty test again on the built page's own content region (§2.4 item 2) and `node --test tests/seo-discoverability.test.mjs`, because 1b edits `seo-rules.mjs`. In 1a.1 and 1a.2 the post-build honesty step is absent, so their CI never looks for a page they don't ship.
+  Steps: `npm ci`, `node --test tests/launchpad-*.test.mjs`, `npm run build:bare`, then `npm run audit:agents`. PR 1b adds, after `build:bare`, the honesty test again on the built page's own content region (§2.4 item 2) and `node --test tests/seo-discoverability.test.mjs`, because 1b edits `seo-rules.mjs`, and, before `build:bare`, `node --test tests/nouns-money-workshop-middleware.test.mjs`, because 1b adds the page to the middleware's paper rooms. In 1a.1 and 1a.2 the post-build honesty step is absent, so their CI never looks for a page they don't ship.
 - Run `npm run build:bare` and `npm run audit:agents` locally before opening each PR. Run `npm run audit:publishing` before recommending any publish path; deploys go only through `scripts/deploy.sh` (`docs/OPERATIONS.md`).
 - **Deploy owner.** `scripts/deploy.sh` deploys from `~/pc-deploy` and logs to `~/Library/Logs/` (macOS paths, `scripts/deploy.sh:42-44`), so Mike, or Claude Code on the iMac, runs it after each merge; it is not run from a cloud session. After the deploy that publishes the page, the same person walks the town with `npm run inspect:town -- --write` and files the report in the next PR (`docs/OPERATIONS.md` §4).
 - **Each PR checklist:** files changed, build and test results, remaining risk and any Manus follow-up, as `CLAUDE.md` asks; and after merge, remove the PR's worktree and delete its `dist/` (§8.1).
