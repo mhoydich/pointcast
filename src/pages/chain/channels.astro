@@ -1,0 +1,425 @@
+---
+/**
+ * /chain/channels: Channels on the PointCast devnet. The chain's broadcast
+ * channels (launch record 13, "stations") as an app. A channel is a code,
+ * [A-Z0-9]{1,16}, that posts are filed under; the first key to claim a code holds
+ * it as a station, and chooses whether anyone may post (open) or only the owner
+ * and a crew of up to 16 addresses (crew). The page shows every channel that has
+ * a station or a post, and lets a visitor claim a free code, switch it open or
+ * crew-only, add and remove crew, and broadcast to a channel they own or crew.
+ * It does the checking, signing and sending in the visitor's browser with a key
+ * made there, and shows the receipt: the transaction, the block, and what the
+ * chain now says about the station.
+ *
+ * It never posts to a house code, and it does not offer a claim on the codes the
+ * devnet's own lanes and the website use: those are the page's guards, and the
+ * rules panel says the chain, called directly, allows more. It says exactly what
+ * moderation exists (a word filter on stored bodies, the house hiding a post,
+ * pausing a keyless bot) and what does not (a station is not taken back, renamed
+ * or hidden). devnet: no value, may reset; a reset takes every claim.
+ *
+ * The logic is public/chain/apps/channels.js (no DOM, importable by node), the DOM
+ * side channels-view.js, the shared key panel key-panel.js, the words
+ * src/data/chain-app-channels.ts. The devnet pins come from src/data/chain-home.ts,
+ * never typed here. ?devnet=http://127.0.0.1:PORT points the page at a local
+ * devnet for end-to-end runs (scripts/e2e-chain-app-channels.mjs); it is honoured
+ * only for the hosts localhost and 127.0.0.1. ?channel=CODE opens that channel.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import KeyPanel from '../../components/chain/KeyPanel.astro';
+import Snippet from '../../components/chain/Snippet.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, HONESTY_LINE, HOW_STEPS, MODERATION, MODE_CARDS, NOT_LIST, RESERVED_LANES, RULES, STATION_FACTS, codeSnippet } from '../../data/chain-app-channels';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const code = codeSnippet(DEVNET.url, DEVNET.genesis);
+const quick = [
+  { label: 'Time Capsules', href: '/chain/capsules' },
+  { label: 'Observatory', href: '/chain/observatory' },
+  { label: 'Block Yard', href: DEVNET.yardHref },
+  { label: 'Bots guide', href: '/chain/bots#stations' },
+];
+const title = APP.title + ': claim a code and broadcast on it';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: APP.title,
+  description: APP.description,
+  url: 'https://pointcast.xyz' + APP.path + '/',
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-20',
+  dateModified: '2026-10-20',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <div class="chn ca-page cc-page" style={ramp}>
+    <ChainHeader current="channels" trail={[{ label: 'channels' }]} block={APP.block} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · APP · CHANNELS · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Claim a channel. Broadcast on it.</h1>
+      <p class="dek">
+        A channel on the devnet is a short code that posts are filed under. The first key to claim a free code holds it, and decides
+        whether anyone can post there or only a crew it names. See who holds what and what is on air, claim a code with a key made
+        in your browser, add crew, and broadcast.
+      </p>
+      <svg class="ca-art" viewBox="0 0 360 72" role="img" aria-label="A mast with signal arcs, then a row of numbered stations, one of them with a crew of three small squares">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M44 62V20M30 62h28M44 20l-10 42M44 20l10 42" />
+          <path d="M30 14a20 20 0 0 1 28 0M22 8a32 32 0 0 1 44 0" />
+          <rect x="112" y="28" width="36" height="28" />
+          <rect x="156" y="28" width="36" height="28" />
+          <rect x="200" y="28" width="36" height="28" stroke-dasharray="3 3" />
+          <rect x="264" y="20" width="84" height="40" />
+          <rect x="274" y="42" width="10" height="10" />
+          <rect x="292" y="42" width="10" height="10" />
+          <rect x="310" y="42" width="10" height="10" />
+          <path d="M274 30h56" stroke-width="2" />
+        </g>
+      </svg>
+      <p class="ca-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> A station is a claim by a key on a chain that may reset, first come, first served. A reset is dated and
+        recorded, never silent: devnet-1 was reset on {notYet(RESET.date)} and its recording is still checkable at
+        <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>, but no claim survived it, and the new chain promises nobody their code
+        back. A channel is a code, not a trademark, and a name on a station carries no endorsement from anyone.
+      </p>
+      <p class="jump"><a href="#directory">channels</a><a href="#claim">claim a code</a><a href="#mode">mode and crew</a><a href="#broadcast">broadcast</a><a href="#how">how it works</a><a href="#rules">the rules</a><a href="#code">in code</a></p>
+    </header>
+
+    <div
+      data-channels-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+    >
+      <section id="directory" class="sec" aria-labelledby="directory-title">
+        <p class="kicker">01 · CHANNELS · EVERY CODE WITH A STATION OR A POST, AND WHAT IS ON AIR</p>
+        <h2 id="directory-title" class="h2">Who holds what.</h2>
+        <noscript><p class="fine">Channels needs JavaScript, because the checking and signing happen in your browser. The steps are also <a href="#code">a short script</a>.</p></noscript>
+        <p class="ca-status" data-cc-status role="status" aria-live="polite">The page reads <code>GET /status</code>, <code>GET /stations</code> and <code>GET /feed</code> once this section is on screen, then every twenty seconds while the tab is visible.</p>
+        <p class="ca-meta" data-cc-meta></p>
+        <p class="ca-banner" data-cc-genesis role="note" hidden></p>
+
+        <div class="ca-controls">
+          <div class="ca-field">
+            <label class="ca-label" for="cc-filter">Show</label>
+            <select id="cc-filter" class="ca-select" data-cc-filter>
+              <option value="all">All channels</option>
+              <option value="mine">Mine (owned or crewed by my key)</option>
+              <option value="open">Open stations</option>
+              <option value="crew">Crew stations</option>
+              <option value="free">Posts but no station</option>
+              <option value="house">The house’s</option>
+            </select>
+          </div>
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="cc-lookup">Look up a code</label>
+            <input id="cc-lookup" class="ca-input ca-input--mono" data-cc-lookup type="text" maxlength="40" autocomplete="off" spellcheck="false" />
+          </div>
+          <button class="btn btn--ghost" type="button" data-cc-lookup-go>Look it up</button>
+          <button class="btn btn--ghost" type="button" data-cc-refresh disabled>Read the devnet again</button>
+        </div>
+        <p class="ca-hint" data-cc-lookup-note role="status" aria-live="polite"></p>
+        <p class="ca-meta" data-cc-count></p>
+        <div class="tbl">
+          <table>
+            <caption>Channels on the devnet: each code that has a station or a post in the blocks read</caption>
+            <thead><tr><th scope="col">Channel</th><th scope="col">Held by</th><th scope="col">Mode</th><th scope="col">Crew</th><th scope="col">Last post</th><th scope="col">Posts read</th></tr></thead>
+            <tbody data-cc-list><tr><td colspan="6">Waiting for the first read.</td></tr></tbody>
+          </table>
+        </div>
+        <p class="fine" data-cc-scan-note></p>
+
+        <div class="ca-card ca-card--tint cc-detail" data-cc-detail hidden>
+          <p class="card__k kicker">CHANNEL</p>
+          <h3 class="cc-detail__t" data-cc-detail-title tabindex="-1"></h3>
+          <div data-cc-detail-facts></div>
+          <p class="note cc-words" data-cc-detail-words></p>
+          <div class="ca-actions" data-cc-detail-actions></div>
+          <h4 class="h3" data-cc-feed-title>On air now</h4>
+          <p class="ca-hint" data-cc-feed-note role="status" aria-live="polite"></p>
+          <ul class="cc-feed" data-cc-feed></ul>
+          <p class="ca-actions"><button class="btn btn--ghost" type="button" data-cc-older disabled>Read older blocks</button></p>
+        </div>
+      </section>
+
+      <section id="claim" class="cc-sec" aria-labelledby="claim-title">
+        <p class="kicker">02 · CLAIM · FIRST COME, FIRST SERVED · NOTHING IS SENT UNTIL YOU PRESS SEND</p>
+        <h2 id="claim-title" class="h2">Claim a code.</h2>
+        <p class="note">
+          A code is 1 to 16 capital letters and digits. The first claim the devnet seals wins it, and every later claim on that code is
+          refused with “someone else holds this station”. The page checks your code against what the devnet holds right now and says in
+          words whether it is free, taken, a house code or one this page does not offer.
+        </p>
+
+        <KeyPanel signs="your claims, crew changes and posts" id="cc-kp" />
+        <p class="ca-hint">The same key as the Daily Mint, the Notary and Time Capsules: tick “Keep it on this device” and all of them load it, so what you claim and post here is linked to the account you bid, stamped and sealed with, and anyone can read that link on the devnet.</p>
+
+        <div class="ca-controls">
+          <div class="ca-field">
+            <label class="ca-label" for="cc-claim-code">Channel code</label>
+            <input id="cc-claim-code" class="ca-input ca-input--mono ca-input--fit cc-code" data-cc-claim-code type="text" maxlength="40" autocomplete="off" spellcheck="false" autocapitalize="characters" />
+          </div>
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="cc-claim-name">Station name (public, up to 32 bytes)</label>
+            <input id="cc-claim-name" class="ca-input" data-cc-claim-name type="text" maxlength="60" autocomplete="off" />
+          </div>
+        </div>
+        <p class="ca-hint" data-cc-claim-hint role="status" aria-live="polite">Type a code. Lower case is made upper case for you.</p>
+        <p class="ca-hint" data-cc-held role="status" aria-live="polite"></p>
+        <fieldset class="cc-modes">
+          <legend class="ca-label">Who can post</legend>
+          <label class="ca-toggle"><input class="ca-checkbox" type="radio" name="cc-claim-mode" value="crew" data-cc-claim-mode checked /> <span>Crew · only you and the crew you list</span></label>
+          <label class="ca-toggle"><input class="ca-checkbox" type="radio" name="cc-claim-mode" value="open" data-cc-claim-mode /> <span>Open · anyone with a devnet key</span></label>
+        </fieldset>
+        <div class="ca-grid">
+          {MODE_CARDS.map((m) => (
+            <div class="ca-card"><h3>{m.title}</h3><p>{m.text}</p></div>
+          ))}
+        </div>
+
+        <p class="ca-actions"><button class="btn" type="button" data-cc-claim-review>Review the claim</button><span class="fine" data-cc-as></span></p>
+        <ul class="ca-confirm cc-errors" data-cc-claim-errors role="alert" hidden></ul>
+        <div class="ca-confirm" data-cc-claim-confirm hidden>
+          <p><b>You are about to send, to the public devnet:</b></p>
+          <ul data-cc-claim-list></ul>
+          <p data-cc-claim-where></p>
+          <p class="ca-actions">
+            <button class="btn" type="button" data-cc-claim-send>Send the claim</button>
+            <button class="btn btn--ghost" type="button" data-cc-claim-cancel>Cancel</button>
+          </p>
+        </div>
+        <div class="ca-result" data-cc-claim-result hidden role="status" aria-live="polite">
+          <h3>Receipt</h3>
+          <p data-cc-claim-result-text></p>
+          <div data-cc-claim-receipt></div>
+        </div>
+      </section>
+
+      <section id="mode" class="cc-sec" aria-labelledby="mode-title">
+        <p class="kicker">03 · MODE AND CREW · FOR A CHANNEL YOU OWN</p>
+        <h2 id="mode-title" class="h2">Who may post.</h2>
+        <p class="note">
+          Pick one of your channels, then change its name, its mode or its crew: at most 16 addresses, never the owner. A change to the
+          crew also sends back the pin and the standing offer the station already has, because set_station replaces all three at once.
+        </p>
+        <div class="ca-controls">
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="cc-mine">Your channel</label>
+            <select id="cc-mine" class="ca-select" data-cc-mine-select><option value="">Choose one of your channels</option></select>
+          </div>
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="cc-set-name">Station name (up to 32 bytes)</label>
+            <input id="cc-set-name" class="ca-input" data-cc-set-name type="text" maxlength="60" autocomplete="off" disabled />
+          </div>
+        </div>
+        <p class="ca-hint" data-cc-mine-note role="status" aria-live="polite"></p>
+        <fieldset class="cc-modes">
+          <legend class="ca-label">Who can post</legend>
+          <label class="ca-toggle"><input class="ca-checkbox" type="radio" name="cc-set-mode" value="crew" data-cc-set-mode disabled /> <span>Crew · only you and the crew below</span></label>
+          <label class="ca-toggle"><input class="ca-checkbox" type="radio" name="cc-set-mode" value="open" data-cc-set-mode checked disabled /> <span>Open · anyone with a devnet key</span></label>
+        </fieldset>
+        <h3 class="h3">Crew</h3>
+        <ul class="cc-crewlist" data-cc-crew aria-live="polite"><li class="ca-empty">Choose a channel to see its crew.</li></ul>
+        <div class="ca-controls">
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="cc-crew-add">Add crew (an address: tz1…, tz2…, pca1… or pcp1…)</label>
+            <input id="cc-crew-add" class="ca-input ca-input--mono" data-cc-crew-add type="text" maxlength="400" autocomplete="off" spellcheck="false" disabled />
+          </div>
+          <button class="btn btn--ghost" type="button" data-cc-crew-add-go disabled>Add to the crew</button>
+        </div>
+        <p class="ca-hint" data-cc-crew-note role="status" aria-live="polite"></p>
+        <p class="note cc-explain" data-cc-set-explain role="status" aria-live="polite">Choose one of your channels to see what each mode means for it.</p>
+        <p class="ca-hint" data-cc-set-note role="status" aria-live="polite"></p>
+        <p class="ca-actions">
+          <button class="btn" type="button" data-cc-set-review disabled>Review the change</button>
+          <button class="btn btn--ghost" type="button" data-cc-set-reset disabled>Back to what the chain has</button>
+          <span class="fine" data-cc-as></span>
+        </p>
+        <ul class="ca-confirm cc-errors" data-cc-set-errors role="alert" hidden></ul>
+        <div class="ca-confirm" data-cc-set-confirm hidden>
+          <p><b>You are about to send, to the public devnet:</b></p>
+          <ul data-cc-set-list></ul>
+          <p data-cc-set-where></p>
+          <p class="ca-actions">
+            <button class="btn" type="button" data-cc-set-send>Send the change</button>
+            <button class="btn btn--ghost" type="button" data-cc-set-cancel>Cancel</button>
+          </p>
+        </div>
+        <div class="ca-result" data-cc-set-result hidden role="status" aria-live="polite">
+          <h3>Receipt</h3>
+          <p data-cc-set-result-text></p>
+          <div data-cc-set-receipt></div>
+        </div>
+      </section>
+
+      <section id="broadcast" class="cc-sec" aria-labelledby="broadcast-title">
+        <p class="kicker">04 · BROADCAST · TO A CHANNEL YOU OWN OR CREW · NEVER A HOUSE CODE</p>
+        <h2 id="broadcast-title" class="h2">Put it on air.</h2>
+        <p class="note">
+          Choose a channel you own or crew, write a title and a body, and check the preview. The body is stored on the devnet by its hash
+          first, where its word filter reads it; if the filter refuses it, you see its words and nothing else is sent.
+        </p>
+        <div class="ca-controls">
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="cc-post-channel">Channel</label>
+            <select id="cc-post-channel" class="ca-select" data-cc-post-channel><option value="">Choose a channel you own or crew</option></select>
+          </div>
+        </div>
+        <p class="ca-hint" data-cc-post-note role="status" aria-live="polite"></p>
+        <div class="ca-field">
+          <label class="ca-label" for="cc-post-title">Title (public, up to 120 characters)</label>
+          <input id="cc-post-title" class="ca-input" data-cc-post-title type="text" maxlength="400" autocomplete="off" />
+        </div>
+        <div class="ca-field">
+          <label class="ca-label" for="cc-post-body">Body (public, up to 4,000 bytes; the word filter reads it)</label>
+          <textarea id="cc-post-body" class="ca-textarea cc-body" data-cc-post-body rows="5" spellcheck="true"></textarea>
+        </div>
+        <p class="ca-hint" data-cc-post-count role="status" aria-live="polite"></p>
+        <article class="cc-preview" data-cc-preview aria-label="Preview of the post, not sent">
+          <p class="kicker">PREVIEW · NOT SENT</p>
+          <p class="cc-preview__c"><span class="tag" data-cc-preview-channel>no channel yet</span></p>
+          <strong class="cc-preview__t" data-cc-preview-title>(a title)</strong>
+          <pre class="cc-preview__b" data-cc-preview-body>(a body)</pre>
+          <p class="fine" data-cc-preview-meta></p>
+        </article>
+        <p class="ca-actions"><button class="btn" type="button" data-cc-post-review>Review the post</button><span class="fine" data-cc-as></span></p>
+        <ul class="ca-confirm cc-errors" data-cc-post-errors role="alert" hidden></ul>
+        <div class="ca-confirm" data-cc-post-confirm hidden>
+          <p><b>You are about to send, to the public devnet:</b></p>
+          <ul data-cc-post-list></ul>
+          <p data-cc-post-where></p>
+          <p class="ca-actions">
+            <button class="btn" type="button" data-cc-post-send>Broadcast it</button>
+            <button class="btn btn--ghost" type="button" data-cc-post-cancel>Cancel</button>
+          </p>
+        </div>
+        <div class="ca-result" data-cc-post-result hidden role="status" aria-live="polite">
+          <h3>Receipt</h3>
+          <p data-cc-post-result-text></p>
+          <div data-cc-post-receipt></div>
+        </div>
+      </section>
+    </div>
+
+    <section id="how" class="sec" aria-labelledby="how-title">
+      <p class="kicker">05 · HOW IT WORKS · AND WHAT IT IS NOT</p>
+      <h2 id="how-title" class="h2">A claim, a crew and a post.</h2>
+      <ol class="ca-steps">
+        {HOW_STEPS.map((s, i) => (
+          <li class="ca-step">
+            <div class="ca-step__h"><span class="ca-step__n" aria-hidden="true">{i + 1}</span><h3 class="ca-step__t">{s.title}</h3></div>
+            <p>{s.text}</p>
+          </li>
+        ))}
+      </ol>
+      <h3 class="h3">What it is not</h3>
+      <ul class="bullets">{NOT_LIST.map((t) => <li>{t}</li>)}</ul>
+    </section>
+
+    <section id="rules" class="sec" aria-labelledby="rules-title">
+      <p class="kicker">06 · THE RULES · AND WHAT MODERATION THERE IS</p>
+      <h2 id="rules-title" class="h2">What you are agreeing to.</h2>
+      <div class="ca-grid">
+        {RULES.map((r) => (
+          <div class="ca-card"><h3>{r.title}</h3><p>{r.text}</p></div>
+        ))}
+      </div>
+      <h3 class="h3">Moderation, exactly</h3>
+      <p class="note">
+        The devnet’s own label is <b>{DEVNET.label}</b>. Here is the moderation there is, as the devnet’s documentation and its source
+        describe it.
+      </p>
+      <div class="ca-grid">
+        {MODERATION.map((r) => (
+          <div class="ca-card"><h3>{r.title}</h3><p>{r.text}</p></div>
+        ))}
+      </div>
+      <h3 class="h3">Codes this page does not offer</h3>
+      <p class="note">
+        The house holds {STATION_FACTS.houseCodes.join(', ')} from block 0, and the chain refuses every other claim on them. The page also
+        leaves these alone, because something already posts there and a claim in crew mode would lock it out:
+      </p>
+      <ul class="bullets">{RESERVED_LANES.map((l) => <li><b>{l.codes.join(', ')}</b>: {l.why}.</li>)}</ul>
+    </section>
+
+    <section id="code" class="sec" aria-labelledby="code-title">
+      <p class="kicker">07 · THE SAME STEPS, IN CODE</p>
+      <h2 id="code-title" class="h2">Claim, crew and post from a terminal.</h2>
+      <p class="note">
+        Keep the SDK (<a href="/chain/first-mints/lib/pointcast-chain.js" download>pointcast-chain.js</a>) beside this file and run it with Node 22 or
+        newer. Any 64-hex seed is a devnet account. Changing the crew reads the station first and sends its pin and offer back unchanged.
+      </p>
+      <Snippet label="channel.mjs · pins this devnet’s genesis" code={code} />
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The directory is GET /stations joined to the posts in GET /feed (the newest blocks that carry transactions, read a page at a time).
+        A claim, a change and a post are ordinary signed transactions (claim_station, set_station, publish_block) built with the chain’s own SDK
+        and sent to {D.replace('https://', '')}; a post’s body is stored by its hash first. Each is checked against a fresh read of the devnet
+        before it is signed, and read back after. The page shows what the devnet sends as plain text only. {HONESTY_LINE}; a reset is dated and
+        recorded. Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded, the browser is idle, the section is near the viewport and the tab is visible.
+  const root = document.querySelector('[data-channels-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/channels-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  .chn .cc-code{width:220px;text-transform:uppercase}
+  .chn .cc-body{min-height:132px}
+  .chn .cc-errors{border-color:var(--ca-bad);border-style:solid}
+  .chn .cc-errors[hidden]{display:none}
+  .chn .cc-sec{padding-top:48px;scroll-margin-top:12px}
+  .chn .cc-sec .ca-hint + .ca-field,.chn .cc-sec .ca-field + .ca-field{margin-top:14px}
+  .chn .cc-modes{margin:16px 0 0;padding:0;border:0;min-width:0}
+  .chn .cc-modes legend{padding:0;margin:0 0 2px}
+  .chn .cc-open{min-height:36px;padding:0 10px;font-size:13px;text-transform:none;letter-spacing:.04em}
+  .chn .cc-open[aria-current="true"]{background:var(--c600);color:var(--pc-bg)}
+  .chn tr[data-selected="yes"] th,.chn tr[data-selected="yes"] td{background:var(--c50)}
+  .chn .cc-detail{margin:18px 0 0}
+  .chn .cc-detail[hidden]{display:none}
+  .chn .cc-detail__t{margin:0;font:500 clamp(24px,4vw,34px)/1.1 var(--pc-font-mono);letter-spacing:.02em;color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .cc-detail__t:focus-visible{outline:2px solid var(--c600);outline-offset:4px}
+  .chn .cc-words{margin:14px 0 0}
+  .chn .cc-feed,.chn .cc-crewlist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px}
+  .chn .cc-post{min-width:0;padding:12px 14px;border:1.5px solid var(--c600);background:var(--pc-bg)}
+  .chn .cc-post[data-state="hidden"]{border-style:dashed}
+  .chn .cc-post__t{display:block;font:500 16px/1.3 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .cc-post__b{margin:8px 0 0;padding:0;border:0;background:transparent;white-space:pre-wrap;overflow-wrap:anywhere;font:400 14px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .cc-crew{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0;padding:8px 12px;border:1.5px solid var(--c600);background:var(--pc-bg)}
+  .chn .cc-crew code{flex:1 1 260px;min-width:0}
+  .chn .cc-explain{margin:14px 0 0;padding:12px 14px;border:1.5px dashed var(--c600);background:var(--pc-bg)}
+  .chn .cc-preview{margin:16px 0 0;padding:14px 16px;border:1.5px solid var(--c600);background:var(--c50);min-width:0}
+  .chn .cc-preview .kicker{margin:0 0 8px}
+  .chn .cc-preview__c{margin:0 0 8px}
+  .chn .cc-preview__t{display:block;font:500 18px/1.3 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .cc-preview__b{margin:8px 0 0;padding:0;border:0;background:transparent;white-space:pre-wrap;overflow-wrap:anywhere;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .cc-preview[data-ok="no"]{border-style:dashed}
+  @media (max-width:760px){
+    .chn .cc-code{width:100%}
+  }
+</style>
