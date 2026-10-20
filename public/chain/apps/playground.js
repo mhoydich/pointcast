@@ -262,8 +262,10 @@ export function parseToolsList(json) {
 
 /**
  * Can this page run the tool? Conservative: a tool is "read" only when its
- * name is on READ_TOOLS, its description does not say it posts, and the
- * devnet does not mark it as not read-only. A known writer is "write"; a tool
+ * name is on READ_TOOLS, the devnet marks it readOnlyHint: true (and not
+ * openWorldHint: true, and not destructive), and its description does not say
+ * it posts. A tool with no annotations, or a changed list that dropped them, is
+ * not run on the strength of its name alone. A known writer is "write"; a tool
  * this page has never heard of is "unknown". Only "read" gets a Run button.
  */
 export function classifyTool(tool) {
@@ -273,8 +275,10 @@ export function classifyTool(tool) {
   if (!READ_TOOLS.includes(name)) return { kind: 'unknown', run: false, why: 'not on this page’s read-only list, so it is treated as a writing tool' };
   const ann = isObj(tool.annotations) ? tool.annotations : {};
   if (ann.readOnlyHint === false || ann.destructiveHint === true) return { kind: 'unknown', run: false, why: 'the devnet does not mark it read-only' };
+  if (ann.readOnlyHint !== true) return { kind: 'unknown', run: false, why: 'the devnet does not mark it readOnlyHint: true, and this page runs a tool only when it does' };
+  if (ann.openWorldHint === true) return { kind: 'unknown', run: false, why: 'the devnet marks it open-world, so it is not run from here' };
   if (POSTS_PATTERN.test(String(tool.description || ''))) return { kind: 'unknown', run: false, why: 'its description says it posts' };
-  return { kind: 'read', run: true, why: 'on the read-only list, and its description and annotations agree' };
+  return { kind: 'read', run: true, why: 'on the read-only list, marked readOnlyHint: true by the devnet, not open-world, and its description does not say it posts' };
 }
 
 const stable = (v) => JSON.stringify(v, (_k, x) => (isObj(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));

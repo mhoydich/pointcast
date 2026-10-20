@@ -143,7 +143,26 @@ test('classification: only a listed reader whose description and annotations agr
   assert.equal(pg.classifyTool({ ...status, description: 'Counts toward today’s Daily Net.' }).run, false);
   assert.equal(pg.classifyTool({ ...status, annotations: { readOnlyHint: false } }).run, false);
   assert.equal(pg.classifyTool({ ...status, annotations: { destructiveHint: true } }).run, false);
-  assert.equal(pg.classifyTool({ ...status, annotations: {} }).run, true, 'no annotations is neutral');
+  // A tool is run only on the devnet's own word that it is read-only: a list that lost its annotations, or marks it open-world, is not run
+  assert.equal(pg.classifyTool({ ...status, annotations: {} }).run, false, 'no annotations: the name alone is not enough');
+  assert.equal(pg.classifyTool({ ...status, annotations: undefined }).run, false);
+  assert.equal(pg.classifyTool({ ...status, annotations: { openWorldHint: false } }).run, false, 'openWorldHint alone says nothing about writing');
+  assert.equal(pg.classifyTool({ ...status, annotations: { readOnlyHint: true, openWorldHint: true } }).run, false, 'open-world is not run from here');
+  assert.equal(pg.classifyTool({ ...status, annotations: { readOnlyHint: true, openWorldHint: false } }).run, true);
+  assert.equal(pg.classifyTool({ ...status, annotations: { readOnlyHint: true } }).run, true);
+  // the finding's changed-list cases: a read-list name whose description now says it records or queues something, with its annotations gone
+  const changed = byName('chain_read_block');
+  for (const description of ['Records a block marker on the chain and bumps a counter.', 'Signs and queues the tx in the mempool for you.']) {
+    const c = pg.classifyTool({ ...changed, description, annotations: undefined });
+    assert.equal(c.run, false, description);
+    assert.equal(c.kind, 'unknown');
+    assert.doesNotMatch(c.why, /annotations agree/, 'the reason does not claim a check that was not made');
+  }
+  const ok = pg.classifyTool(changed);
+  assert.equal(ok.kind, 'read');
+  assert.match(ok.why, /marked readOnlyHint: true by the devnet/);
+  assert.doesNotMatch(ok.why, /annotations agree/);
+  assert.match(page.replace(/\s+/g, ' '), /the devnet marks it read-only \(<code>readOnlyHint: true<\/code>, and not open-world\)\. A tool with no such mark is not run, whatever its name/);
   // A name the page has never seen is never run, however harmless it sounds.
   const stranger = { name: 'chain_peek', description: 'Reads one thing.', inputSchema: { type: 'object', properties: {} }, annotations: { readOnlyHint: true } };
   assert.deepEqual([pg.classifyTool(stranger).kind, pg.classifyTool(stranger).run], ['unknown', false]);
