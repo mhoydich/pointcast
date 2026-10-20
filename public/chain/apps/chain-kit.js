@@ -35,7 +35,9 @@ export const isHex = (s, bytes) => typeof s === 'string' && s.length === bytes *
 export const isHex64 = (s) => isHex(s, 32);
 export const isWhole = (v) => Number.isSafeInteger(v) && v >= 0;
 
-const INVISIBLE = [[0, 31], [127, 159], [173, 173], [0x61c, 0x61c], [0x200b, 0x200f], [0x2028, 0x202e], [0x2060, 0x206f], [0xfeff, 0xfeff]];
+// U+200C and U+200D (the zero-width non-joiner and joiner) are kept: they join emoji sequences and spell Persian, Urdu and Indic text, and they hide nothing a
+// line of text could use that the other invisible characters do not. The zero-width space (200B), the direction marks (200E, 200F, 202A-202E, 2066-2069) and the rest are replaced by spaces.
+const INVISIBLE = [[0, 31], [127, 159], [173, 173], [0x61c, 0x61c], [0x200b, 0x200b], [0x200e, 0x200f], [0x2028, 0x202e], [0x2060, 0x206f], [0xfeff, 0xfeff]];
 const isInvisible = (cp) => INVISIBLE.some(([a, b]) => cp >= a && cp <= b);
 
 /** Hostile text, one safe line of at most `max` characters. Non-strings give ''. */

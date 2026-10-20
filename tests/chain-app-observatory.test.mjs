@@ -29,6 +29,8 @@ import { CHAIN_APPS } from '../src/data/chain-apps.ts';
 import * as O from '../public/chain/apps/observatory.js';
 import * as view from '../public/chain/apps/observatory-view.js';
 import * as K from '../public/chain/apps/chain-kit.js';
+import * as VK from '../public/chain/apps/verify.js';
+import * as PG from '../public/chain/apps/playground.js';
 import { assertNoSinks, assertReadOnly, bannedHits, BANNED, code, currencyHits } from './helpers/chain-app-rules.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -368,6 +370,36 @@ test('a part that cannot be read is named and the rest still draw', async () => 
 });
 
 // ================================================================ chart geometry
+
+test('cleanText keeps the zero-width joiners that spell emoji sequences and Persian text, strips the rest, and its three copies agree', () => {
+  const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}';
+  const persian = 'می\u200Cخواهم';
+  const corpus = [
+    family, persian, 'plain text', '  spaced \n\t out  ', '',
+    'a\u200Bb', 'a\u200Eb\u200Fc', 'a\u202Eb', 'a\u2066b\u2069c', 'a\u061Cb', 'a\u00ADb', 'a\u2060b', 'a\uFEFFb', 'a\u0000b\u0007c\u007Fd\u0085e',
+    'x'.repeat(200), family.repeat(30), '<img src=x onerror=alert(1)>', 'tab\there', 'line\u2028break\u2029para',
+  ];
+  const copies = { kit: K.cleanText, verify: VK.cleanText, playground: PG.cleanText };
+  for (const text of corpus) {
+    const want = K.cleanText(text, 60);
+    for (const [name, fn] of Object.entries(copies)) assert.equal(fn(text, 60), want, name + ' disagrees on ' + JSON.stringify(text.slice(0, 30)));
+  }
+  // the joiners are kept, in every copy
+  for (const [name, fn] of Object.entries(copies)) {
+    assert.equal(fn(family, 60), family, name + ': a family emoji keeps its joiners');
+    assert.equal(fn(persian, 60), persian, name + ': Persian keeps its zero-width non-joiner');
+    assert.equal(fn('a\u200Bb', 60), 'a b', name + ': a zero-width space is still replaced');
+    assert.equal(fn('a\u202Eb', 60), 'a b', name + ': a bidi override is still replaced');
+    assert.equal(fn('a\u200Eb', 60), 'a b', name + ': a direction mark is still replaced');
+  }
+  // the block copy in the playground keeps them too
+  assert.equal(PG.cleanBlock('x\n' + family + '\u200Bz', 100), 'x\n' + family + 'z');
+  // and a hostile sender of family emoji shows as one glyph sequence in the "Who is posting" table
+  const evil = family + ' ' + persian;
+  const sum = O.summarize([{ height: 2, timestamp: 1000, txCount: 1, txs: [{ type: 'post', sender: O.readRawBlock({ header: { height: 2, timestamp: 1000, prev_hash: HEX('1') }, txs: [{ tx: { type: 'post', sender: evil, channel: 'BOT' } }] }).txs[0].sender, channel: 'BOT' }] }]);
+  assert.equal(sum.senders[0].sender, K.cleanText(evil, 80));
+  assert.ok(sum.senders[0].sender.includes('\u200D'), 'the joiners survive reading a block');
+});
 
 test('niceMax and niceTicks give round axes', () => {
   assert.deepEqual([0, 1, 1.2, 2, 3, 7, 11, 99, 101, 5000, 1e6].map(O.niceMax), [1, 1, 2, 2, 5, 10, 20, 100, 200, 5000, 1e6]);
