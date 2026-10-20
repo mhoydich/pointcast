@@ -1495,7 +1495,9 @@ test('the whole flow in the page: replay with a progress bar that counts blocks,
   assert.equal(txt(m.rootEl, '[data-wt-wit-body]'), plan.wit.body);
   assert.equal(txt(m.rootEl, '[data-wt-net-title]'), 'net · checkin · wt-flow');
   assert.deepEqual(W.parseNetBody(txt(m.rootEl, '[data-wt-net-body]')), { schema: W.SCHEMAS.net, day: '2026-10-20', kind: 'checkin', note: 'from a tab', name: 'wt-flow' });
-  assert.match(txt(m.rootEl, '[data-wt-confirm-from]'), new RegExp('^Signed by tz1\\w+ and sent to ' + DEVNET.url.replace(/[.]/g, '\\.') + ' \\(pointcast-devnet-2\\)\\. Your browser has signed the claim; nothing has been sent\\.'));
+  const fromLine = txt(m.rootEl, '[data-wt-confirm-from]');
+  assert.match(fromLine, new RegExp('^Signed in this browser by tz1\\w+\\. If you press Send it goes to ' + DEVNET.url.replace(/[.]/g, '\\.') + ' \\(pointcast-devnet-2\\); nothing has been sent yet\\. It is public, and stays on this devnet until it resets\\.$'));
+  assert.doesNotMatch(fromLine, /\band sent to\b|has signed the claim; nothing has been sent/, 'no clause says it was sent beside one that says it was not');
   assert.deepEqual(posts(m.log), [], 'reviewing sent nothing');
   assert.equal($(m.rootEl, '[data-wt-send]').hidden, false);
   assert.match(txt(m.rootEl, '[data-wt-roll-text]'), /Your key has not attested this checkpoint yet/);
@@ -2020,7 +2022,7 @@ test('a different key than the one that was reviewed cannot send the review; the
   await m.c.send();
   assert.deepEqual(posts(m.log), [], 'the review belongs to the first key');
   await until(() => $(m.rootEl, '[data-wt-confirm]').hidden === false);
-  assert.match(txt(m.rootEl, '[data-wt-confirm-from]'), new RegExp('^Signed by ' + KEY2.sender));
+  assert.match(txt(m.rootEl, '[data-wt-confirm-from]'), new RegExp('^Signed in this browser by ' + KEY2.sender));
   m.c.stop();
 });
 

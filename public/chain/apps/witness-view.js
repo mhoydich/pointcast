@@ -372,8 +372,12 @@ export function mount(root, env = {}) {
     if (plan.wit) { set('[data-wt-wit-title]', plan.wit.title); set('[data-wt-wit-body]', plan.wit.body); }
     if (plan.net) { set('[data-wt-net-title]', plan.net.title); set('[data-wt-net-body]', plan.net.body); }
     set('[data-wt-notes]', plan.notes.join(' '));
+    // Nothing has left this browser: the words say what is signed, what Send would do, and that nothing has been sent yet.
+    const to = net.api + ' (' + (S.status ? S.status.chainId : '') + ')';
     set('[data-wt-confirm-from]', plan.sendable
-      ? 'Signed by ' + plan.sender + ' and sent to ' + net.api + ' (' + (S.status ? S.status.chainId : '') + '). Your browser has signed the claim; nothing has been sent. It is public, and stays on this devnet until it resets.'
+      ? (plan.wit
+        ? 'Signed in this browser by ' + plan.sender + '. If you press Send it goes to ' + to + '; nothing has been sent yet.'
+        : 'The check-in is signed by ' + plan.sender + ' only when you press Send, and then goes to ' + to + '; nothing has been sent yet.') + ' It is public, and stays on this devnet until it resets.'
       : 'Nothing to send.');
     if (send) { send.hidden = !plan.sendable; send.disabled = Boolean(plan.blocked) || S.sending; }
     box('[data-wt-confirm]', true);
