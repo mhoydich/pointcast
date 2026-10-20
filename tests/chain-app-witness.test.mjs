@@ -751,7 +751,7 @@ test('the name rule has teeth: with its test removed from a copy, a reserved-loo
 test('the midnight guard: 23:59:00 to 00:00:59 UTC, as in pc-witness.mjs — and the page uses the same arithmetic', () => {
   const at = (t) => Date.parse('2026-10-20T' + t + 'Z');
   for (const [t, near] of [['23:58:59', false], ['23:59:00', true], ['23:59:59', true], ['00:00:00', true], ['00:00:59', true], ['00:01:00', false], ['12:00:00', false]]) assert.equal(X.nearMidnight(at(t)), near, t);
-  assert.throws(() => X.assertNotNearMidnight(at('23:59:30'), 'the post'), (e) => e.name === 'Midnight' && /between 23:59 and 00:01 UTC could land on either day/.test(e.message) && /Nothing was signed or sent; try again after 00:01 UTC/.test(e.message));
+  assert.throws(() => X.assertNotNearMidnight(at('23:59:30'), 'the post'), (e) => e.name === 'Midnight' && /between 23:59 and 00:01 UTC could land on either day/.test(e.message) && /Nothing was sent; try again after 00:01 UTC/.test(e.message) && !/signed/.test(e.message));
   assert.doesNotThrow(() => X.assertNotNearMidnight(at('12:00:00'), 'the post'));
   const pcw = read('public/chain/net/pc-witness.mjs');
   assert.match(pcw, /return minute >= 1439 \|\| minute < 1;/);
@@ -1047,6 +1047,116 @@ test('a stale nonce is read again and tried once more; "already included" and ot
   const e429 = await X.sendWitness({ chain: chain6, net: K.makeNet('http://127.0.0.1:8799', { fetch: slow }), key: KEY, plan: bare, now: () => NOW, replayedAt: NOW }).catch((e) => e);
   assert.equal(e429.sendState, 'refused');
   assert.equal(K.sendFailureText(e429), 'Not sent: too many posts', 'the SDK carries the devnet’s words, not its status; the page notices a 429 itself');
+});
+
+/** A devnet that takes the attestation and refuses the check-in with these words (a 422 by default). */
+function refusingNet(f, words = 'kept off the devnet by its word filter') {
+  return async (url, init = {}) => {
+    if (init.method === 'POST' && new URL(String(url)).pathname === '/tx' && JSON.parse(init.body).tx.channel === 'NET') return { ok: false, status: 422, headers: { get: () => null }, text: async () => JSON.stringify({ error: words }) };
+    return f(url, init);
+  };
+}
+
+test('when the attestation lands and the check-in then fails, sendWitness hands back what landed on the error, so nothing that is in is lost', async () => {
+  const plan = await planFor({ opts: { checkin: true, note: 'a note' } });
+  // (a) the devnet refuses the check-in
+  const f = miniDevnet();
+  const g = refusingNet(f);
+  const chain = await connectTo(g);
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: g });
+  const e = await X.sendWitness({ chain, net, key: KEY, plan, now: () => NOW, replayedAt: NOW, wait: { timeoutMs: 2000, intervalMs: 5 } }).catch((x) => x);
+  assert.equal(e.sendState, 'refused', 'the check-in was refused');
+  assert.deepEqual(f.sent.map((s) => s.tx.channel), ['WIT'], 'and the attestation is on the devnet');
+  assert.ok(e.partial && e.partial.wit, 'the error carries what landed');
+  assert.deepEqual([e.partial.wit.txHash, e.partial.wit.height, e.partial.net], [K.pcc.txHash(f.sent[0]), 93, null]);
+  // (b) the clock reaches the midnight minute between the two posts: the attestation is in, the check-in is not sent, and the words say both
+  const f2 = miniDevnet();
+  const chain2 = await connectTo(f2);
+  const net2 = K.makeNet('http://127.0.0.1:8799', { fetch: f2 });
+  let clock = NOW;
+  const m = await X.sendWitness({ chain: chain2, net: net2, key: KEY, plan, now: () => clock, replayedAt: NOW, onStage: (which, st) => { if (which === 'wit' && st === 'waiting') clock = Date.parse('2026-10-20T23:59:30Z'); }, wait: { timeoutMs: 2000, intervalMs: 5 } }).catch((x) => x);
+  assert.equal(m.name, 'Midnight');
+  assert.deepEqual(f2.sent.map((s) => s.tx.channel), ['WIT']);
+  assert.equal(m.partial.wit.height, 93);
+  assert.match(m.message, /^the check-in not sent: it is 2026-10-20 23:59:30 UTC/);
+  assert.doesNotMatch(m.message, /Nothing was signed/i, 'something was signed and sent: the attestation');
+  assert.match(m.message, /The attestation is already in; nothing more was sent\. Try the check-in again after 00:01 UTC\.$/);
+  // (c) a failure before anything was sent carries no partial, and the midnight guard says only what is true: nothing was sent
+  const f3 = miniDevnet();
+  const chain3 = await connectTo(f3);
+  const early = await X.sendWitness({ chain: chain3, net: K.makeNet('http://127.0.0.1:8799', { fetch: f3 }), key: KEY, plan, now: () => Date.parse('2026-10-20T23:59:30Z'), replayedAt: Date.parse('2026-10-20T23:59:00Z') }).catch((x) => x);
+  assert.equal(early.name, 'Midnight');
+  assert.equal(early.partial, undefined);
+  assert.match(early.message, /Nothing was sent; try again after 00:01 UTC\.$/);
+  assert.doesNotMatch(early.message, /signed/);
+});
+
+test('a word-filter refusal of the check-in is not blamed on hex-reading: that explanation is for the attestation only', async () => {
+  const bare = await planFor({ opts: { checkin: true, note: 'my own words' } });
+  const f = miniDevnet();
+  const g = refusingNet(f);
+  const e = await X.sendWitness({ chain: await connectTo(g), net: K.makeNet('http://127.0.0.1:8799', { fetch: g }), key: KEY, plan: bare, now: () => NOW, replayedAt: NOW, wait: { timeoutMs: 2000, intervalMs: 5 } }).catch((x) => x);
+  assert.match(e.message, /^NET refused: kept off the devnet by its word filter\./);
+  assert.match(e.message, /your name and your note|name and note/i, 'it points at what the person chose');
+  assert.doesNotMatch(e.message, /hex|Daily Net door|predates/i, 'the infrastructure explanation is the attestation’s');
+  assert.doesNotMatch(e.message, /Nothing else was sent/, 'the attestation was sent');
+  // the attestation refused by the filter keeps its explanation
+  const h = async (url, init = {}) => (init.method === 'POST' && new URL(String(url)).pathname === '/tx' ? { ok: false, status: 422, headers: { get: () => null }, text: async () => JSON.stringify({ error: 'kept off the devnet by its word filter' }) } : f(url, init));
+  const w = await X.sendWitness({ chain: await connectTo(h), net: K.makeNet('http://127.0.0.1:8799', { fetch: h }), key: KEY, plan: bare, now: () => NOW, replayedAt: NOW }).catch((x) => x);
+  assert.match(w.message, /^WIT refused: kept off the devnet by its word filter\. A devnet whose word filter predates the Daily Net reads hex as words/);
+  assert.equal(w.partial, undefined);
+});
+
+test('in the page, an attestation that landed before the check-in failed is said so, the claim file and the roll are offered, and Send again posts only the check-in', async () => {
+  const storage = fakeStorage();
+  let refuse = true;
+  let m = null;
+  const gate = async (u, i = {}) => {
+    const url = String(u).replace(DEVNET.url, 'http://127.0.0.1:8799');
+    return refuse ? refusingNet(m.f)(url, i) : m.f(url, i);
+  };
+  m = mountView({ storage, extra: { fetch: gate } });
+  await m.c.begin();
+  $(m.rootEl, '[data-wt-name]').value = 'wt-part';
+  $(m.rootEl, '[data-wt-name]').dispatchEvent(new m.dom.window.Event('input'));
+  $(m.rootEl, '[data-wt-checkin]').checked = true;
+  $(m.rootEl, '[data-wt-checkin]').dispatchEvent(new m.dom.window.Event('change'));
+  $(m.rootEl, '[data-wt-note]').value = 'a note';
+  await m.c.replay();
+  await m.c.keys.setSeed(SEED);
+  await until(() => $(m.rootEl, '[data-wt-confirm]').hidden === false && m.c.state.plan);
+  assert.ok(m.c.state.plan.wit && m.c.state.plan.net, 'an attestation and a check-in are planned');
+  $(m.rootEl, '[data-wt-send]').click();
+  await until(() => ['ok', 'bad', 'warn'].includes($(m.rootEl, '[data-wt-result]').dataset.state) && m.f.sent.length >= 1 && $(m.rootEl, '[data-wt-roll-state]').textContent === 'CORRECT');
+  assert.deepEqual(m.f.sent.map((s) => s.tx.channel), ['WIT'], 'the attestation is on the devnet; the check-in was refused');
+  // what the page says: the attestation is in, only the check-in failed
+  assert.equal($(m.rootEl, '[data-wt-result]').dataset.state, 'warn');
+  const said = txt(m.rootEl, '[data-wt-result-text]');
+  assert.match(said, /^Attestation in block 93 \(tx [0-9a-f]{64}\), counted for 2026-10-20 by the day rule/);
+  assert.match(said, /Only the check-in failed\. Not sent: NET refused: kept off the devnet by its word filter\. The check-in carries your name and your note/);
+  assert.doesNotMatch(said, /Nothing was sent|Nothing was signed|hex|predates/);
+  // the claim file is offered, the roll was read, and the sent state is kept
+  assert.ok(m.c.state.sent && m.c.state.sent.r.wit && m.c.state.sent.r.net === null);
+  assert.equal($(m.rootEl, '[data-wt-claim-box]').hidden, false);
+  const claim = JSON.parse(txt(m.rootEl, '[data-wt-claim-json]'));
+  assert.equal(claim.tx, K.pcc.txHash(m.f.sent[0]));
+  assert.equal(claim.included.height, 93);
+  assert.equal($(m.rootEl, '[data-wt-roll-state]').textContent, 'CORRECT');
+  // the attestation is not offered again: what is left to send is the check-in alone
+  await until(() => m.c.state.plan && m.c.state.plan.net && !m.c.state.plan.wit);
+  assert.equal($(m.rootEl, '[data-wt-confirm]').hidden, false);
+  assert.equal($(m.rootEl, '[data-wt-wit-box]').hidden, true, 'the attestation is not on offer');
+  assert.equal($(m.rootEl, '[data-wt-net-box]').hidden, false);
+  assert.match(txt(m.rootEl, '[data-wt-skip]'), /You attested №10 already/);
+  // Send again, now that the devnet takes the check-in: only the check-in is posted
+  refuse = false;
+  const before = m.f.sent.length;
+  $(m.rootEl, '[data-wt-send]').click();
+  await until(() => m.f.sent.length === before + 1);
+  assert.deepEqual(m.f.sent.map((s) => s.tx.channel), ['WIT', 'NET'], 'one attestation, one check-in, no second attestation');
+  await until(() => $(m.rootEl, '[data-wt-result]').dataset.state === 'ok');
+  assert.match(txt(m.rootEl, '[data-wt-result-text]'), /^Check-in in block 94 /);
+  m.c.stop();
 });
 
 test('claim files keep what was signed and where it went, and say it is a claim', async () => {
@@ -1667,7 +1777,7 @@ test('the midnight minute: the review says so, Send is off, a press does nothing
   await until(() => $(m1.rootEl, '[data-wt-confirm]').hidden === false);
   await m1.c.send();
   assert.deepEqual(posts(m1.log), []);
-  assert.match(txt(m1.rootEl, '[data-wt-result-text]'), /the post not sent: it is 2026-10-20 23:59:30 UTC[\s\S]*Nothing was signed or sent; try again after 00:01 UTC\./);
+  assert.match(txt(m1.rootEl, '[data-wt-result-text]'), /the post not sent: it is 2026-10-20 23:59:30 UTC[\s\S]*Nothing was sent; try again after 00:01 UTC\./);
   // both removed: the post goes in the midnight minute
   const v2 = await variant({ view: swap('|| plan.blocked ||', '||'), logic: swap('return minute >= 1439 || minute < 1;', 'return false;') });
   const m2 = mountView({ mods: v2, nowMs: late });

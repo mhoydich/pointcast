@@ -104,10 +104,14 @@ export function nearMidnight(ms) {
   return minute >= 1439 || minute < 1;
 }
 
-/** Throws Midnight when `ms` is in that minute. `what` names the post that was not sent. */
-export function assertNotNearMidnight(ms, what) {
+/**
+ * Throws Midnight when `ms` is in that minute. `what` names the post that was not sent. `landed` is true when an earlier
+ * post of the same send is already in a block (the attestation, before the check-in): then the words say that, not "nothing".
+ */
+export function assertNotNearMidnight(ms, what, { landed = false } = {}) {
   if (nearMidnight(ms)) {
-    throw new Midnight(what + ' not sent: it is ' + utcLine(ms) + ', and a post sent between 23:59 and 00:01 UTC could land on either day. Nothing was signed or sent; try again after 00:01 UTC.');
+    throw new Midnight(what + ' not sent: it is ' + utcLine(ms) + ', and a post sent between 23:59 and 00:01 UTC could land on either day. '
+      + (landed ? 'The attestation is already in; nothing more was sent. Try the check-in again after 00:01 UTC.' : 'Nothing was sent; try again after 00:01 UTC.'));
   }
 }
 
@@ -624,7 +628,7 @@ export async function planWitness({ replay, choice, chainId, genesis, key, opts 
     plan.witSkip = { why: 'You attested today already (checkpoint №' + (at ? at[1] : choice.target) + ', tx ' + have.tx + ' in block №' + have.height + '). Nothing new to sign.', tx: have.tx, height: have.height };
     witLanded = true;
   } else if (earlier && earlier.status === 'included') {
-    plan.witSkip = { why: 'You attested №' + choice.target + ' already (your journal’s tx is in block №' + earlier.height + '). Nothing new to sign.', tx: earlier.tx || '', height: earlier.height };
+    plan.witSkip = { why: 'You attested №' + choice.target + ' already (' + (earlier.sentHere ? 'this page sent it, and it is' : 'your journal’s tx is') + ' in block №' + earlier.height + '). Nothing new to sign.', tx: earlier.tx || '', height: earlier.height };
     witLanded = true;
   } else if (earlier && earlier.status === 'pending') {
     plan.witSkip = { why: 'Your attestation of №' + choice.target + ' is still waiting for a block (tx ' + String(earlier.tx || '').slice(0, 12) + '…). Not sending another.', tx: earlier.tx || '', height: null };
@@ -659,16 +663,20 @@ const wordFilter = (e) => /word filter/i.test(String(e && e.message));
 /** The devnet's refusal for a hex-reading word filter, in pc-witness.mjs's words. Keeps the error's tags (sendState, txHash). */
 function explainRefusal(e, channel) {
   if (wordFilter(e)) {
-    e.message = channel + ' refused: ' + cleanText(String(e.message), 160) + '. A devnet whose word filter predates the Daily Net reads hex as words, so a few witness bodies in a hundred trip it; the same claim is refused again until the Daily Net door (which filters only text fields) is live there. Nothing else was sent.';
+    // The hex-reading explanation fits the attestation, whose body is a signed line of hex. A check-in is text the person chose:
+    // its name and its note, so that is what to change.
+    e.message = channel === CHANNEL_WIT
+      ? channel + ' refused: ' + cleanText(String(e.message), 160) + '. A devnet whose word filter predates the Daily Net reads hex as words, so a few witness bodies in a hundred trip it; the same claim is refused again until the Daily Net door (which filters only text fields) is live there. Nothing else was sent.'
+      : channel + ' refused: ' + cleanText(String(e.message), 160) + '. The check-in carries your name and your note: change or clear them and send it again.';
   }
   return e;
 }
 
-async function postOne({ chain, key, channel, title, body, now, label, onStage, wait, onSigned }) {
-  assertNotNearMidnight(now(), label);
+async function postOne({ chain, key, channel, title, body, now, label, onStage, wait, onSigned, landed = false }) {
+  assertNotNearMidnight(now(), label, { landed });
   let tx = await chain.buildPublish({ sender: key.sender, channel, title, body });
   for (let attempt = 0; ; attempt++) {
-    assertNotNearMidnight(now(), label);
+    assertNotNearMidnight(now(), label, { landed });
     try {
       return await signAndSend(chain, key, tx, { onStage, onSigned, ...wait });
     } catch (e) {
@@ -691,6 +699,9 @@ async function postOne({ chain, key, channel, title, body, now, label, onStage, 
  * signed and BEFORE any byte of it leaves, so a journal can keep the claim first.
  * Returns { wit: {txHash, height, timeMs, counted} | null, net: {...} | null }.
  * Throws signAndSend's tagged errors (sendState: refused, maybe, sent, rejected).
+ * If the attestation landed and the check-in then failed, the error carries what
+ * landed as `partial` (the same shape as the return value): the attestation is in
+ * a block, and a page must say so and must not offer it again.
  */
 export async function sendWitness({ chain, net, key, plan, now = () => Date.now(), replayedAt = 0, onStage = () => {}, onSigned = () => {}, wait = {} }) {
   if (!plan || !plan.ok || !plan.sendable) throw new Refusal('there is nothing to send', 'nothing');
@@ -709,15 +720,21 @@ export async function sendWitness({ chain, net, key, plan, now = () => Date.now(
       return null;
     }
   };
-  if (plan.wit) {
-    const done = await postOne({ chain, key, channel: CHANNEL_WIT, title: plan.wit.title, body: plan.wit.body, now, label: 'the attestation', onStage: (s) => onStage('wit', s), wait, onSigned: (info) => onSigned('wit', { ...info, plan }) });
-    const timeMs = await timeOf(done.height);
-    out.wit = { txHash: done.txHash, height: done.height, timeMs, counted: timeMs === null ? '' : W.countedDay({ kind: 'witness', blockTimestamp: timeMs }) };
-  }
-  if (plan.net) {
-    const done = await postOne({ chain, key, channel: CHANNEL_NET, title: plan.net.title, body: plan.net.body, now, label: 'the check-in', onStage: (s) => onStage('net', s), wait, onSigned: (info) => onSigned('net', { ...info, plan }) });
-    const timeMs = await timeOf(done.height);
-    out.net = { txHash: done.txHash, height: done.height, timeMs, counted: timeMs === null ? '' : W.countedDay({ kind: 'net', bodyDay: plan.day, blockTimestamp: timeMs }) };
+  try {
+    if (plan.wit) {
+      const done = await postOne({ chain, key, channel: CHANNEL_WIT, title: plan.wit.title, body: plan.wit.body, now, label: 'the attestation', onStage: (s) => onStage('wit', s), wait, onSigned: (info) => onSigned('wit', { ...info, plan }) });
+      const timeMs = await timeOf(done.height);
+      out.wit = { txHash: done.txHash, height: done.height, timeMs, counted: timeMs === null ? '' : W.countedDay({ kind: 'witness', blockTimestamp: timeMs }) };
+    }
+    if (plan.net) {
+      const done = await postOne({ chain, key, channel: CHANNEL_NET, title: plan.net.title, body: plan.net.body, now, label: 'the check-in', onStage: (s) => onStage('net', s), wait, onSigned: (info) => onSigned('net', { ...info, plan }), landed: Boolean(out.wit) });
+      const timeMs = await timeOf(done.height);
+      out.net = { txHash: done.txHash, height: done.height, timeMs, counted: timeMs === null ? '' : W.countedDay({ kind: 'net', bodyDay: plan.day, blockTimestamp: timeMs }) };
+    }
+  } catch (e) {
+    // what already landed goes with the error: the attestation is in a block even though the check-in after it failed
+    if (e && typeof e === 'object' && (out.wit || out.net)) e.partial = out;
+    throw e;
   }
   return out;
 }

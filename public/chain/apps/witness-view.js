@@ -359,6 +359,9 @@ export function mount(root, env = {}) {
     try {
       if (k) earlier = await lookupEarlier(k.sender);
       if (mine !== S.planning) return null;
+      // An attestation this page sent (even if its journal could not be kept) is in a block: it is never offered a second time.
+      const sent = S.sent && S.sent.r && S.sent.r.wit ? S.sent : null;
+      if (!earlier && k && sent && sent.plan.sender === k.sender && sent.plan.target === S.choice.target && sent.plan.epoch === S.choice.epoch) earlier = { status: 'included', height: sent.r.wit.height, tx: sent.r.wit.txHash, sentHere: true };
       const plan = await X.planWitness({
         replay: S.replay, choice: S.choice, chainId: S.status.chainId, genesis: S.pin, key: k, opts: o, nowMs: now(),
         wasmSha: (S.shas || {})['pointcast_chain.wasm'] || '', journal: X.readJournal(storage), earlier,
@@ -406,6 +409,23 @@ export function mount(root, env = {}) {
     win.setTimeout(() => win.URL.revokeObjectURL(a.href), 4000);
   }
 
+  /** What a send put on chain, in words: the attestation, the check-in. */
+  const landedWords = (r) => {
+    const bits = [];
+    if (r.wit) bits.push('Attestation in block ' + r.wit.height + ' (tx ' + r.wit.txHash + ')' + (r.wit.counted ? ', counted for ' + r.wit.counted + ' by the day rule (an attestation counts on its block’s UTC day; the devnet decides whether it matches)' : '') + '.');
+    if (r.net) bits.push('Check-in in block ' + r.net.height + ' (tx ' + r.net.txHash + ')' + (r.net.counted ? (r.net.counted === 'wrong_day' ? ': it counts for no day, because its day is not its block’s UTC day (wrong_day)' : ', counts for ' + r.net.counted) : '') + '.');
+    return bits.join(' ');
+  };
+
+  /** A send put something on chain: keep it (the claim file, the sent state) and withdraw the plan, so the same post is not offered again. */
+  function settle(plan, r) {
+    S.sent = { plan, r, claim: plan.wit ? X.makeClaimFile({ chainId: S.status.chainId, genesis: S.pin, api: net.api, plan, txHash: r.wit ? r.wit.txHash : '', height: r.wit ? r.wit.height : null, timeMs: r.wit ? r.wit.timeMs : null, createdMs: now() }) : null };
+    S.plan = null;
+    box('[data-wt-confirm]', false);
+    box('[data-wt-claim-box]', Boolean(S.sent.claim));
+    if (S.sent.claim) set('[data-wt-claim-json]', JSON.stringify(S.sent.claim, null, 2));
+  }
+
   async function send() {
     const plan = S.plan;
     const k = key();
@@ -427,18 +447,26 @@ export function mount(root, env = {}) {
         onSigned: (which, info) => { if (which === 'wit' && plan.wit) saveClaim(plan, info); },
         wait: env.wait,
       });
-      S.sent = { plan, r, claim: plan.wit ? X.makeClaimFile({ chainId: S.status.chainId, genesis: S.pin, api: net.api, plan, txHash: r.wit ? r.wit.txHash : '', height: r.wit ? r.wit.height : null, timeMs: r.wit ? r.wit.timeMs : null, createdMs: now() }) : null };
-      S.plan = null;
-      box('[data-wt-confirm]', false);
-      const bits = [];
-      if (r.wit) bits.push('Attestation in block ' + r.wit.height + ' (tx ' + r.wit.txHash + ')' + (r.wit.counted ? ', counted for ' + r.wit.counted + ' by the day rule (an attestation counts on its block’s UTC day; the devnet decides whether it matches)' : '') + '.');
-      if (r.net) bits.push('Check-in in block ' + r.net.height + ' (tx ' + r.net.txHash + ')' + (r.net.counted ? (r.net.counted === 'wrong_day' ? ': it counts for no day, because its day is not its block’s UTC day (wrong_day)' : ', counts for ' + r.net.counted) : '') + '.');
-      say2(bits.join(' ') + ' Keep the claim file: the signature inside it is portable evidence.', 'ok');
-      box('[data-wt-claim-box]', Boolean(S.sent.claim));
-      if (S.sent.claim) set('[data-wt-claim-json]', JSON.stringify(S.sent.claim, null, 2));
+      settle(plan, r);
+      say2(landedWords(r) + ' Keep the claim file: the signature inside it is portable evidence.', 'ok');
       say('Sent. Reading the roll…', 'sent');
       await readRoll({ poll: true });
     } catch (e) {
+      const partial = e && e.partial && e.partial.wit ? e.partial : null;
+      if (partial) {
+        // The attestation is in a block and only the check-in failed: say that, keep the claim file, read the roll.
+        settle(plan, partial);
+        const mayLand = e.sendState === 'sent' || e.sendState === 'maybe';
+        const why = e instanceof X.Refusal ? ' ' + e.message.charAt(0).toUpperCase() + asSentence(e.message).slice(1)
+          : mayLand ? ' The check-in: ' + sendFailureText(e) + (limited.n > limitedBefore ? limitHint() : '')
+            : ' Only the check-in failed. ' + asSentence(sendFailureText(e)) + (limited.n > limitedBefore ? limitHint() : '');
+        say2(landedWords(partial) + why + ' Keep the claim file: the signature inside it is portable evidence.', 'warn');
+        say('The attestation is in; the check-in failed. Reading the roll…', 'sent');
+        await readRoll({ poll: true });
+        // The check-in that did not go can be offered again, alone, unless it may still land (then a replay shows whether it did).
+        if (!mayLand && S.replay && !S.running) await review();
+        return;
+      }
       if (e instanceof X.Refusal) say2(e.message, 'bad');
       else if (e && (e.sendState === 'sent' || e.sendState === 'maybe')) {
         S.plan = null;
@@ -447,7 +475,8 @@ export function mount(root, env = {}) {
       } else say2(asSentence(sendFailureText(e)) + (limited.n > limitedBefore ? limitHint() : ''), 'bad');
     } finally {
       S.sending = false;
-      if (btn) btn.disabled = false;
+      // a plan made while sending (the check-in alone, after a partial send) keeps its own guard: Send stays off in the midnight minute
+      if (btn) btn.disabled = Boolean(S.plan && S.plan.blocked);
       buttons();
     }
   }
