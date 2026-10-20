@@ -1,0 +1,107 @@
+---
+/**
+ * BloomDialog — the large view of one checkpoint bloom on /chain/bloom:
+ * the block height, hash and time, the "witnessed" rings in words, downloads,
+ * the Block Yard link, and the "recompute it yourself" panel with the exact
+ * recipe (read from public/chain/apps/bloom.js at build time) and a copy
+ * button.
+ *
+ * It is a native <dialog>: Escape closes it, focus is trapped while it is
+ * open and goes back to the button that opened it. The markup is static; the
+ * browser fills the empty hooks (data-bl="…") with textContent only, through
+ * public/chain/apps/bloom-view.js, and never turns devnet data into markup, an
+ * href, a src or a style value.
+ */
+import { DEVNET } from '../../data/chain-home';
+import { HONESTY_LINE, HOW_STEPS, recipeParts } from '../../data/chain-app-bloom';
+
+const { text: recipe, lines } = recipeParts();
+const yard = `${DEVNET.yardHref}&lens=witness`;
+---
+
+<dialog class="bl-d" data-bl="dialog" aria-labelledby="bl-d-title">
+  <div class="bl-d__bar">
+    <p class="kicker">CHECKPOINT BLOOM · LARGE VIEW · {HONESTY_LINE}</p>
+    <button type="button" class="btn btn--ghost" data-bl="d-close">Close</button>
+  </div>
+
+  <div class="bl-d__body">
+    <div class="bl-d__art">
+      <img data-bl="d-img" width="640" height="640" alt="" />
+    </div>
+
+    <div class="bl-d__side">
+      <h2 id="bl-d-title" class="h2" data-bl="d-title">Checkpoint</h2>
+      <dl class="bl-facts">
+        <div><dt>Block height</dt><dd data-bl="d-height">…</dd></div>
+        <div><dt>Block hash</dt><dd class="hash"><code data-bl="d-hash">…</code></dd></div>
+        <div><dt>Sealed (UTC)</dt><dd data-bl="d-time">…</dd></div>
+        <div><dt>Your clock</dt><dd data-bl="d-local">…</dd></div>
+        <div><dt>Chain</dt><dd data-bl="d-chain">…</dd></div>
+        <div><dt>Parent link</dt><dd data-bl="d-link">…</dd></div>
+      </dl>
+
+      <p class="fine">
+        The hash is as the devnet reports it (<code>GET /block/&lt;height&gt;</code>); the parent link above is the devnet agreeing with
+        itself. Nothing on this page replays the chain. The Block Yard does, and a witness key is a claim that someone did.
+      </p>
+
+      <h3 class="h3">Witnessed</h3>
+      <p class="note" data-bl="d-witness">…</p>
+      <ol class="bl-keys" data-bl="d-keys"></ol>
+      <p class="fine">
+        A witness is an accountable claim, not proof of truth: a public claim, tied to a free key, that the key replayed the
+        chain and got this block hash. Nothing checks that it did. Counts are keys, not people.
+      </p>
+
+      <p class="cta">
+        <button type="button" class="btn" data-bl="d-save" data-bl-act="d" disabled>Download SVG</button>
+        <button type="button" class="btn btn--ghost" data-bl="d-bare" data-bl-act="d" disabled hidden>Download the bare bloom</button>
+        <button type="button" class="btn btn--ghost" data-bl="d-copy-hash" data-bl-act="d" disabled>Copy the hash</button>
+        <a class="btn btn--ghost" href={yard} data-bl="d-yard">Block Yard, Witness lens</a>
+      </p>
+      <p class="fine">
+        The Block Yard replays the devnet in your browser and rings the checkpoints keys signed. It has no link to a single
+        block, so look for the height above on its track.
+      </p>
+
+      <label class="bl-drift">
+        <input type="checkbox" data-bl="drift" />
+        <span>Slow petal drift <span class="bl-drift__off">(off by default)</span></span>
+      </label>
+      <p class="fine" data-bl="rm-note" hidden>Your system asks for reduced motion, so nothing moves unless you turn this on.</p>
+
+      <p class="bl-d__nav">
+        <button type="button" class="btn btn--ghost" data-bl="d-older" disabled>← Older checkpoint</button>
+        <button type="button" class="btn btn--ghost" data-bl="d-newer" disabled>Newer checkpoint →</button>
+      </p>
+      <p class="fine bl-d__status" data-bl="d-status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <section class="bl-recipe" aria-labelledby="bl-recipe-title">
+    <p class="kicker">RECOMPUTE IT YOURSELF · {lines.length} LINES · SAME HASH, SAME BYTES</p>
+    <h3 id="bl-recipe-title" class="h2">Recompute it yourself</h3>
+    <p class="note">
+      This is the whole recipe: the same {lines.length} lines <code>bloomSvg()</code> in <a href="/chain/apps/bloom.js">/chain/apps/bloom.js</a>
+      runs, plus the one import it needs. Run it as a module (a <code>&lt;script type="module"&gt;</code> on any page works, because the
+      SDK is served with CORS open), or in Node 20 or newer: save the SDK next to your file and change the import path to
+      <code>./pointcast-chain.js</code>. Call it with the block hash above. With no witness keys on the checkpoint, the SVG it returns is
+      the file you can download, byte for byte.
+    </p>
+    <ol class="bl-how">
+      {HOW_STEPS.map((s) => <li><b>{s.k}.</b> {s.v}</li>)}
+    </ol>
+    <pre class="bl-pre" tabindex="0" aria-label="The recipe: twenty lines of JavaScript"><code data-bl="recipe-code">{recipe}</code></pre>
+    <p class="cta">
+      <button type="button" class="btn" data-bl="d-copy-recipe">Copy the recipe</button>
+      <button type="button" class="btn btn--ghost" data-bl="d-copy-call" data-bl-act="d" disabled>Copy the call for this block</button>
+    </p>
+    <ul class="bl-facts bl-facts--plain">
+      <li><span class="bl-k">Call</span> <code class="hash" data-bl="d-call">…</code></li>
+      <li><span class="bl-k">Colours chosen</span> <code class="hash" data-bl="d-palette">…</code></li>
+      <li><span class="bl-k">Read the block yourself</span> <code class="hash" data-bl="d-get">…</code></li>
+    </ul>
+    <p class="fine" data-bl="d-ring-note">…</p>
+  </section>
+</dialog>

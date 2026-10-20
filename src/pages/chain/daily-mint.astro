@@ -1,0 +1,277 @@
+---
+/**
+ * /chain/daily-mint: The Daily Mint, the PointCast devnet's play auction. One
+ * lot a UTC day, bids in devnet play ATTN (no value, never promised, may
+ * reset), the winner's card minted on chain. The page reads the house from the
+ * visitor's browser (lazily, genesis pinned), draws the open lot and the last
+ * seven, lets anyone replay every sealed block through the auction's own law to
+ * check the house against the chain, and lets a visitor bid with a key made in
+ * their browser: faucet, optional card words, a transfer to the auctioneer.
+ * It writes only when the visitor presses a send button after reading, in
+ * plain words, exactly what will be sent.
+ *
+ * The logic is public/chain/apps/daily-mint.js (no DOM, importable by node), the
+ * DOM side daily-mint-view.js, the shared key panel key-panel.js, the words
+ * src/data/chain-app-daily-mint.ts. The settle law is the chain's own
+ * sdk/daily-law.js, copied unchanged to public/chain/first-mints/lib/. The
+ * devnet pins come from src/data/chain-home.ts, never typed here.
+ *
+ * ?devnet=http://127.0.0.1:PORT points the page at a local devnet for
+ * end-to-end runs (scripts/e2e-chain-app-daily-mint.mjs). It is honoured only
+ * for the hosts localhost and 127.0.0.1.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import KeyPanel from '../../components/chain/KeyPanel.astro';
+import Snippet from '../../components/chain/Snippet.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, BID_COPY, CANNOT_SEE, CHECK_COPY, DAY_STEPS, HONESTY_LINE, LAW_PATH, auditSnippet } from '../../data/chain-app-daily-mint';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const quick = [
+  { label: 'Observatory', href: '/chain/observatory' },
+  { label: 'Verify a block', href: '/chain/verify-a-block' },
+  { label: 'Block Yard', href: DEVNET.yardHref },
+  { label: 'Bots guide', href: '/chain/bots' },
+];
+const title = APP.title + ': a play auction on the PointCast devnet';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: APP.title,
+  description: APP.description,
+  url: 'https://pointcast.xyz' + APP.path + '/',
+  applicationCategory: 'GameApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-20',
+  dateModified: '2026-10-20',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <div class="chn ca-page dm-page" style={ramp}>
+    <ChainHeader current="daily-mint" trail={[{ label: 'daily mint' }]} block={APP.block} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · APP · THE DAILY MINT · PLAY AUCTION · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>One card a day, auctioned in play money.</h1>
+      <p class="dek">
+        Every UTC day the devnet opens one lot. Anyone with play ATTN can bid; the highest bid at the close wins that day’s
+        card, minted on chain. Everything the house does, every bid, refund and mint, is a block anyone can read, so this page
+        can replay the auction itself and tell you whether the house kept to its own rules.
+      </p>
+      <svg class="ca-art" viewBox="0 0 360 72" role="img" aria-label="Three concentric rings beside a small card outline and a rising bar">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="44" cy="36" r="10" />
+          <circle cx="44" cy="36" r="20" />
+          <circle cx="44" cy="36" r="30" />
+          <rect x="120" y="10" width="48" height="52" />
+          <path d="M132 24h24M132 34h16M132 44h20" stroke-width="2" />
+          <path d="M210 62V50M236 62V42M262 62V32M288 62V20M314 62V10" stroke-width="6" />
+        </g>
+      </svg>
+      <p class="ca-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> The Daily Mint is a play auction: bids are devnet play ATTN, which has no value and is never
+        promised any, and the devnet may reset and take every card with it. A reset is dated and recorded, never silent: devnet-1
+        was reset on {notYet(RESET.date)} and its recording is still checkable at <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>.
+        Nothing here is a sale and nothing leads to a real market. The house is also the sequencer: it can refuse a bid it sees,
+        and a signature or a bid is an accountable claim by a key, not proof of who holds it.
+      </p>
+      <p class="jump"><a href="#lot">today’s lot</a><a href="#check">check the house</a><a href="#bid">bid</a><a href="#law">the law</a></p>
+    </header>
+
+    <section
+      id="lot"
+      class="sec"
+      aria-labelledby="lot-title"
+      data-daily-mint-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+    >
+      <p class="kicker">01 · TODAY’S LOT · READ LIVE FROM THE DEVNET, IN YOUR BROWSER</p>
+      <h2 id="lot-title" class="h2">The lot on the block, and the last seven.</h2>
+      <noscript><p class="fine">The page needs JavaScript, because it reads the devnet and draws each card in your browser. The same lot is at <a href={D + '/daily'}>GET /daily</a> as JSON.</p></noscript>
+      <p class="ca-status" data-dm-status role="status" aria-live="polite">The page reads <code>GET /status</code> and <code>GET /daily</code> once this section is on screen, then every ten seconds while the tab is visible.</p>
+      <p class="ca-meta" data-dm-meta></p>
+      <p class="ca-banner" data-dm-genesis role="note" hidden></p>
+      <p class="note dm-house" data-dm-house></p>
+
+      <div class="dm-lot">
+        <div class="dm-card" data-dm-card><p class="ca-empty">Waiting for the first read.</p></div>
+        <div class="dm-lotinfo">
+          <p class="card__k">THE OPEN LOT</p>
+          <p class="dm-lotn" data-dm-lot-n>–</p>
+          <p class="fine" data-dm-lot-day></p>
+          <div class="ca-tiles dm-tiles">
+            <div class="ca-tile ca-tile--hero" data-dm-closes-bar><span class="ca-tile__k">Closes in</span><span class="ca-tile__v" data-dm-closes>–</span></div>
+            <div class="ca-tile"><span class="ca-tile__k">Least bid</span><span class="ca-tile__v" data-dm-minbid>–</span></div>
+            <div class="ca-tile"><span class="ca-tile__k">Bids</span><span class="ca-tile__v" data-dm-bids>–</span></div>
+            <div class="ca-tile"><span class="ca-tile__k">Leading</span><span class="ca-tile__v dm-leader" data-dm-leader>–</span></div>
+          </div>
+          <p class="fine" data-dm-card-note></p>
+          <p class="fine" data-dm-tally></p>
+        </div>
+      </div>
+
+      <h3 class="h3">The last seven lots</h3>
+      <div class="tbl">
+        <table>
+          <caption>The most recent lots, newest first, with their cards drawn from the recipes on chain</caption>
+          <thead><tr><th scope="col">Lot</th><th scope="col">Day (UTC)</th><th scope="col">State</th><th scope="col">Bids</th><th scope="col">Minted to</th><th scope="col">Card</th></tr></thead>
+          <tbody data-dm-recent><tr><td colspan="6">Waiting for the first read.</td></tr></tbody>
+        </table>
+      </div>
+
+      <h3 class="h3">How a lot goes</h3>
+      <ol class="ca-steps dm-steps">
+        {DAY_STEPS.map((s, i) => (
+          <li class="ca-step">
+            <div class="ca-step__h"><span class="ca-step__n" aria-hidden="true">{i + 1}</span><h4 class="ca-step__t">{s.title}</h4></div>
+            <p>{s.text}</p>
+          </li>
+        ))}
+      </ol>
+
+      <h3 class="h3">The house, by the numbers</h3>
+      <dl class="ca-kv" data-dm-rules></dl>
+      <dl class="ca-kv">
+        <div><dt>Auctioneer</dt><dd><code class="ca-hash" data-dm-auctioneer>–</code></dd></div>
+        <div><dt>Faucet</dt><dd><code class="ca-hash" data-dm-faucet-addr>–</code></dd></div>
+        <div><dt>Town Shelf</dt><dd><code class="ca-hash" data-dm-shelf>–</code></dd></div>
+        <div><dt>Newest block</dt><dd data-dm-height>–</dd></div>
+      </dl>
+
+      <section id="check" class="dm-sec" aria-labelledby="check-title">
+        <p class="kicker">02 · CHECK THE HOUSE · YOUR BROWSER REPLAYS THE AUCTION</p>
+        <h2 id="check-title" class="h2">Did the house keep to its own rules?</h2>
+        <p class="note">{CHECK_COPY.what}</p>
+        <p class="ca-actions">
+          <button class="btn" type="button" data-dm-audit disabled>{CHECK_COPY.button}</button>
+          <span class="fine">Reads every sealed block in pages of 500 (GET only), then does the sums here. Nothing is written.</span>
+        </p>
+        <p class="ca-result dm-audit" data-dm-audit-summary role="status" aria-live="polite" data-state="idle">Not run yet.</p>
+        <ul class="ca-checks" data-dm-audit-out aria-label="One line per lot"></ul>
+        <h3 class="h3">What the check cannot see</h3>
+        <ul class="bullets">{CANNOT_SEE.map((t) => <li>{t}</li>)}</ul>
+      </section>
+
+      <section id="bid" class="dm-sec" aria-labelledby="bid-title">
+        <p class="kicker">03 · BID · A KEY MADE IN YOUR BROWSER · NOTHING IS SENT UNTIL YOU PRESS SEND</p>
+        <h2 id="bid-title" class="h2">Take the faucet’s 100, bid, win a card.</h2>
+        <p class="note">
+          Three steps: make a key, take the faucet’s 100 play ATTN once, then bid. Before anything is sent the page lists, in plain
+          words, exactly what will go to the devnet. {BID_COPY.warn}
+        </p>
+        <KeyPanel signs="the bid and the card words" id="dm-kp" />
+        <p class="ca-meta">Play ATTN held by this key: <b data-dm-balance>make a key first</b></p>
+        <p class="ca-meta" data-dm-mybid role="status" aria-live="polite"></p>
+        <p class="ca-actions">
+          <button class="btn btn--ghost" type="button" data-dm-faucet disabled>Ask the faucet for 100 play ATTN</button>
+          <span class="fine" data-dm-faucet-out>Once per address; three an address and 300 in all each UTC day.</span>
+        </p>
+
+        <div class="ca-controls">
+          <div class="ca-field">
+            <label class="ca-label" for="dm-amount">Your bid, in play ATTN</label>
+            <input id="dm-amount" class="ca-input ca-input--mono ca-input--fit dm-amount" data-dm-amount type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="12" disabled />
+          </div>
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="dm-gift">Give the card to (optional)</label>
+            <input id="dm-gift" class="ca-input ca-input--mono" data-dm-gift type="text" autocomplete="off" spellcheck="false" maxlength="64" placeholder="a tz1, tz2 or pcp1 address" disabled />
+          </div>
+        </div>
+        <fieldset class="dm-words">
+          <legend>Up to three words for the card (optional)</legend>
+          <div class="dm-words__grid" data-dm-words></div>
+        </fieldset>
+        <p class="ca-actions"><button class="btn" type="button" data-dm-review disabled>Review the bid</button></p>
+        <ul class="ca-confirm dm-errors" data-dm-errors role="alert" hidden></ul>
+        <div class="ca-confirm" data-dm-confirm hidden>
+          <p><b>You are about to send, to the public devnet:</b></p>
+          <ul data-dm-confirm-list></ul>
+          <p data-dm-confirm-where></p>
+          <p>{BID_COPY.warn}</p>
+          <p class="ca-actions">
+            <button class="btn" type="button" data-dm-send>Send the bid</button>
+            <button class="btn btn--ghost" type="button" data-dm-cancel>Cancel</button>
+          </p>
+        </div>
+        <div class="ca-result" data-dm-result hidden role="status" aria-live="polite"><h3>Result</h3><p data-dm-result-text></p></div>
+      </section>
+    </section>
+
+    <section id="law" class="sec" aria-labelledby="law-title">
+      <p class="kicker">04 · THE LAW, IN CODE</p>
+      <h2 id="law-title" class="h2">The same check from a terminal.</h2>
+      <p class="note">
+        The auction’s rules are one pure function of the blocks, <a href={LAW_PATH}>daily-law.js</a>: the house runs it to decide what
+        it owes, and this page and a script run it to check. The code is the chain’s own, copied unchanged.
+      </p>
+      <Snippet label="audit-daily.mjs · from a copy of pointcast-chain" code={auditSnippet(D)} />
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The lot and the history are what {D.replace('https://', '')} sends at GET /daily, checked against the genesis this page was
+        built with. Each card is drawn in your browser from the recipe on chain with the First Mint renderer and audited before it
+        is shown. The check replays every block through daily-law.js and compares with GET /daily/law. {HONESTY_LINE}; a reset is
+        dated and recorded. Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded, the browser is idle, the lot is near the viewport and the tab is visible.
+  const root = document.querySelector('[data-daily-mint-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/daily-mint-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  .chn .dm-house{margin:10px 0 0}
+  .chn .dm-lot{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:20px;align-items:start;margin:18px 0 0}
+  .chn .dm-card{min-width:0;border:1.5px solid var(--c600);background:var(--c50);padding:10px;aspect-ratio:3 / 4;display:grid;place-items:center}
+  .chn .dm-card__img{display:block;width:100%;height:auto;max-height:100%}
+  .chn .dm-lotn{margin:0;font:500 clamp(28px,4vw,40px)/1.1 var(--pc-font-sans);letter-spacing:-.025em;color:var(--pc-ink)}
+  .chn .dm-tiles{margin-top:14px}
+  .chn .dm-tiles .ca-tile--hero .ca-tile__v{font-size:clamp(26px,3.6vw,34px)}
+  .chn .dm-leader{font-size:16px;line-height:1.4}
+  .chn [data-dm-closes-bar][data-low="yes"] .ca-tile__v{color:var(--ca-warn)}
+  .chn .dm-thumb{width:64px}
+  .chn .dm-thumb__img{display:block;width:48px;height:auto;border:1px solid var(--pc-rule-soft)}
+  .chn .dm-lot th.dm-lot{font:500 13px var(--pc-font-mono)}
+  .chn .dm-steps{margin-top:8px}
+  .chn .dm-steps h4{margin:0}
+  .chn .dm-sec{padding-top:48px;scroll-margin-top:12px}
+  .chn .dm-audit{margin-top:6px;border-color:var(--c600);border-left-width:6px}
+  .chn .dm-audit[data-state="ok"]{border-color:var(--ca-ok)}
+  .chn .dm-audit[data-state="bad"]{border-color:var(--ca-bad)}
+  .chn .dm-audit[data-state="idle"],.chn .dm-audit[data-state="busy"]{border-color:var(--c600)}
+  .chn .dm-amount{width:168px}
+  .chn .dm-words{margin:14px 0 0;padding:12px 14px;border:1.5px solid var(--c600);border-radius:0;min-width:0}
+  .chn .dm-words legend{padding:0 6px;font:500 10px/1.5 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .chn .dm-words__grid{display:flex;flex-wrap:wrap;gap:4px 14px}
+  .chn .dm-word{display:inline-flex;align-items:center;gap:8px;min-height:36px;font:500 12px var(--pc-font-mono);letter-spacing:.04em;color:var(--pc-ink);cursor:pointer}
+  .chn .dm-errors{border-color:var(--ca-bad);border-style:solid}
+  .chn .dm-errors[hidden]{display:none}
+  @media (max-width:760px){
+    .chn .dm-lot{grid-template-columns:minmax(0,1fr)}
+    .chn .dm-card{max-width:320px}
+    .chn .dm-amount{width:100%}
+  }
+</style>

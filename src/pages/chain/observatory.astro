@@ -1,0 +1,301 @@
+---
+/**
+ * /chain/observatory: the Chain Observatory, a live dashboard of the PointCast
+ * devnet. It reads the devnet from the visitor's browser (lazily: after load,
+ * idle, near the viewport, in a visible tab), checks the genesis first, and
+ * draws a window of recent blocks: the seal cadence, transactions over time,
+ * what the transactions are, which channels carry the posts, who sends them,
+ * and today's Daily Net, Daily Mint and time capsules. It never writes.
+ *
+ * Grammar follows /chain/verify-a-block: the logic is
+ * public/chain/apps/observatory.js (no DOM, importable by node), the DOM side
+ * public/chain/apps/observatory-view.js (text and SVG shapes only: nothing the
+ * devnet sends becomes markup, an href, a src or a style value), the words
+ * src/data/chain-app-observatory.ts. The devnet pins come from
+ * src/data/chain-home.ts, never typed here.
+ *
+ * ?devnet=http://127.0.0.1:PORT points the dashboard at a local devnet for
+ * end-to-end runs (scripts/e2e-chain-app-observatory.mjs). It is honoured only
+ * for the hosts localhost and 127.0.0.1.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, CHART_NOTES, HONESTY_LINE, NOT_LIST, READS } from '../../data/chain-app-observatory';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const quick = [
+  { label: 'Block Yard', href: DEVNET.yardHref },
+  { label: 'Verify a block', href: '/chain/verify-a-block' },
+  { label: 'Daily Net', href: '/chain/net' },
+  { label: 'API Playground', href: '/chain/playground' },
+];
+const title = APP.title + ' on the PointCast devnet';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: APP.title,
+  description: APP.description,
+  url: 'https://pointcast.xyz' + APP.path + '/',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-20',
+  dateModified: '2026-10-20',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+const tiles = [
+  { id: 'height', k: 'Newest block', hero: true },
+  { id: 'age', k: 'Last sealed' },
+  { id: 'rate', k: 'Seal rate' },
+  { id: 'tx', k: 'Transactions' },
+  { id: 'mempool', k: 'Waiting' },
+  { id: 'accounts', k: 'Accounts' },
+  { id: 'supply', k: 'Play ATTN' },
+];
+const charts = [
+  { id: 'cadence', t: 'The beat: seconds between blocks', note: CHART_NOTES.cadence, wide: true },
+  { id: 'activity', t: 'Transactions over time', note: CHART_NOTES.activity, wide: true },
+  { id: 'kinds', t: 'What the transactions are', note: CHART_NOTES.kinds },
+  { id: 'channels', t: 'Where the posts go', note: CHART_NOTES.channels },
+];
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <div class="chn ca-page ob-page" style={ramp}>
+    <ChainHeader current="observatory" trail={[{ label: 'observatory' }]} block={APP.block} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · DASHBOARD · OBSERVATORY · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Watch the devnet breathe.</h1>
+      <p class="dek">
+        One page that reads the PointCast devnet while you look at it: how fast it is sealing blocks, what the recent
+        transactions are, which channels carry the posts, who is sending them, and where today’s Daily Net, Daily Mint and
+        time capsules stand. It reads. It never writes.
+      </p>
+      <svg class="ca-art" viewBox="0 0 360 72" role="img" aria-label="A row of block columns of different heights above a baseline, with a ring over the newest">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 64H352" />
+          <rect x="18" y="52" width="14" height="12" />
+          <rect x="40" y="58" width="14" height="6" />
+          <rect x="62" y="40" width="14" height="24" />
+          <rect x="84" y="56" width="14" height="8" />
+          <rect x="106" y="30" width="14" height="34" />
+          <rect x="128" y="50" width="14" height="14" />
+          <rect x="150" y="44" width="14" height="20" />
+          <rect x="172" y="58" width="14" height="6" />
+          <rect x="194" y="22" width="14" height="42" />
+          <rect x="216" y="46" width="14" height="18" />
+          <rect x="238" y="54" width="14" height="10" />
+          <rect x="260" y="36" width="14" height="28" />
+          <rect x="282" y="48" width="14" height="16" />
+          <rect x="304" y="14" width="14" height="50" />
+          <circle cx="311" cy="14" r="8" />
+        </g>
+      </svg>
+      <p class="ca-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> This is {DEVNET.chainId}: one server runs it, seals every block and holds its sequencer key. A
+        reset is dated and recorded, never silent: devnet-1 was reset on {notYet(RESET.date)} and its recording is still
+        checkable at <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>. Every number below is what that one server says
+        about a window of its recent blocks. To check the blocks themselves, <a href="/chain/verify-a-block">verify one by hand</a>.
+      </p>
+      <p class="jump"><a href="#dash">the dashboard</a><a href="#today">today</a><a href="#reads">what it reads</a><a href="#limits">what it does not tell you</a></p>
+    </header>
+
+    <section
+      id="dash"
+      class="sec"
+      aria-labelledby="dash-title"
+      data-observatory-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+    >
+      <p class="kicker">01 · NOW · READ LIVE FROM THE DEVNET, IN YOUR BROWSER</p>
+      <h2 id="dash-title" class="h2">The devnet, now.</h2>
+      <noscript><p class="fine">The dashboard needs JavaScript, because it reads the devnet from your browser. The same numbers are at <a href={D + '/status'}>GET /status</a> as JSON.</p></noscript>
+
+      <div class="ca-controls" role="group" aria-label="Dashboard controls">
+        <div class="ca-field">
+          <label class="ca-label" for="ob-window">Window</label>
+          <select id="ob-window" class="ca-select" data-ob-window disabled><option>newest 200 blocks</option></select>
+        </div>
+        <label class="ca-toggle"><input class="ca-checkbox" type="checkbox" data-ob-live disabled checked /> <span>LIVE: look again when a block lands</span></label>
+        <button class="btn btn--ghost" type="button" data-ob-go disabled>Read now</button>
+      </div>
+      <p class="ca-status" data-ob-status role="status" aria-live="polite">The dashboard reads <code>GET /status</code> and the newest blocks once this section is on screen, then looks at <code>/status</code> every fifteen seconds while the tab is visible and Live is on.</p>
+      <p class="ca-meta" data-ob-meta></p>
+      <p class="ca-banner" data-ob-genesis role="note" hidden></p>
+
+      <div class="ca-tiles ob-tiles" aria-label="The devnet in numbers">
+        {tiles.map((t) => (
+          <div class={'ca-tile' + (t.hero ? ' ca-tile--hero' : '')}>
+            <span class="ca-tile__k">{t.k}</span>
+            <span class="ca-tile__v" data-ob-v={t.id}>–</span>
+            {t.id === 'age' && <span class="ob-health"><span class="ob-health__m" data-ob-health-mark aria-hidden="true">·</span> <span data-ob-health-word>UNKNOWN</span></span>}
+            <span class="ca-tile__s" data-ob-s={t.id}></span>
+          </div>
+        ))}
+      </div>
+      <p class="fine" data-ob-window-note>No window read yet.</p>
+
+      <div class="ca-grid ob-charts">
+        {charts.map((c) => (
+          <article class={'ca-card' + (c.wide ? ' ca-card--wide' : '')} aria-labelledby={'ob-t-' + c.id}>
+            <p class="card__k">CHART</p>
+            <h3 id={'ob-t-' + c.id}>{c.t}</h3>
+            <p class="ob-note">{c.note}</p>
+            <div class="ob-chart" data-ob-chart={c.id}><p class="ob-empty">Waiting for the first read.</p></div>
+            <details class="ob-tv"><summary>Table view</summary><div class="tbl" data-ob-table={c.id} tabindex="0" role="region" aria-label={c.t + ', as a table'}></div></details>
+          </article>
+        ))}
+        <article class="ca-card ca-card--wide" aria-labelledby="ob-t-senders">
+          <p class="card__k">TABLE</p>
+          <h3 id="ob-t-senders">Who is posting</h3>
+          <p class="ob-note">{CHART_NOTES.senders}</p>
+          <div class="tbl ob-senders" data-ob-chart="senders" tabindex="0" role="region" aria-label="Who is posting, as a table"><p class="ob-empty">Waiting for the first read.</p></div>
+        </article>
+      </div>
+
+      <section id="today" class="ob-today" aria-labelledby="today-title">
+        <p class="kicker">02 · TODAY · THE DAILY NET, THE DAILY MINT AND TIME CAPSULES</p>
+        <h2 id="today-title" class="h2">What the apps on the devnet are doing.</h2>
+        <div class="ca-grid ca-grid--3">
+          <article class="ca-card ca-card--tint">
+            <p class="card__k">DAILY NET</p>
+            <p class="ca-card__big" data-ob-v="net">–</p>
+            <p data-ob-s="net"></p>
+            <p class="card__links"><a href="/chain/net">The Daily Net →</a></p>
+          </article>
+          <article class="ca-card">
+            <p class="card__k">DAILY MINT · PLAY AUCTION</p>
+            <p class="ca-card__big" data-ob-v="lot">–</p>
+            <p data-ob-v="lot-close"></p>
+            <p data-ob-s="lot"></p>
+            <p class="card__links"><a href="/chain/daily-mint">The Daily Mint →</a></p>
+          </article>
+          <article class="ca-card">
+            <p class="card__k">TIME CAPSULES</p>
+            <p class="ca-card__big" data-ob-v="capsules">–</p>
+            <p data-ob-s="capsules"></p>
+            <p class="card__links"><a href="/chain/capsules">Time Capsules →</a></p>
+          </article>
+          <article class="ca-card">
+            <p class="card__k">EDITIONS AND STATIONS</p>
+            <p class="ca-card__big" data-ob-v="editions">–</p>
+            <p data-ob-s="editions"></p>
+            <p class="card__links"><a href="/chain/first-mints/">First Mints →</a></p>
+          </article>
+          <article class="ca-card">
+            <p class="card__k">KEYLESS BOTS</p>
+            <p class="ca-card__big" data-ob-v="bots">–</p>
+            <p data-ob-s="bots"></p>
+            <p class="card__links"><a href="/chain/bots">How a bot posts →</a></p>
+          </article>
+          <article class="ca-card">
+            <p class="card__k">WITNESSED CHECKPOINTS</p>
+            <ul class="ca-list ob-cps">
+              <li data-ob-cp hidden></li><li data-ob-cp hidden></li><li data-ob-cp hidden></li><li data-ob-cp hidden></li><li data-ob-cp hidden></li>
+            </ul>
+            <p class="ca-empty" data-ob-cp-empty></p>
+            <p class="card__links"><a href="/chain/bloom">Checkpoint Blooms →</a></p>
+          </article>
+        </div>
+      </section>
+    </section>
+
+    <section id="reads" class="sec" aria-labelledby="reads-title">
+      <p class="kicker">03 · WHAT IT READS</p>
+      <h2 id="reads-title" class="h2">Six kinds of read, all plain GET.</h2>
+      <p class="note">
+        The Worker answers reads with CORS open, so this page talks to it straight from your browser: no server of ours in
+        between. A refresh costs about nine requests; the devnet allows 600 a minute from one address. The genesis hash this
+        page was built with is checked on every read, and a mismatch stops it with GENESIS CHANGED.
+      </p>
+      <div class="tbl" tabindex="0" role="region" aria-label="Every route the Observatory reads, as a table">
+        <table>
+          <caption>Every route the Observatory reads</caption>
+          <thead><tr><th scope="col">Route</th><th scope="col">What the page takes from it</th></tr></thead>
+          <tbody>{READS.map((r) => <tr><th scope="row"><code>{r.route}</code></th><td>{r.takes}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="limits" class="sec" aria-labelledby="limits-title">
+      <p class="kicker">04 · WHAT IT DOES NOT TELL YOU</p>
+      <h2 id="limits-title" class="h2">A dashboard is one server’s word.</h2>
+      <ul class="bullets ob-limits">{NOT_LIST.map((t) => <li>{t}</li>)}</ul>
+      <p class="cta">
+        <a class="btn" href="/chain/verify-a-block">Verify a block by hand</a>
+        <a class="btn btn--ghost" href={DEVNET.yardHref}>Replay it all in the Block Yard</a>
+        <span>The Observatory counts; these two check.</span>
+      </p>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The numbers are computed in your browser from what {D.replace('https://', '')} sends, in public/chain/apps/observatory.js,
+        which node runs too (tests/chain-app-observatory.test.mjs). The devnet’s text is shown as plain text only. {HONESTY_LINE};
+        a reset is dated and recorded. Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded, the browser is idle, the dashboard is near the viewport and the tab is visible.
+  const root = document.querySelector('[data-observatory-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/observatory-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  .chn .ob-tiles{margin-top:18px}
+  .chn .ob-health{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:1px 8px;border:1.5px solid currentColor;font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;color:var(--pc-ink-muted)}
+  .chn .ob-page[data-health="live"] .ob-health{color:var(--ca-ok)}
+  .chn .ob-page[data-health="late"] .ob-health{color:var(--ca-warn)}
+  .chn .ob-page[data-health="stalled"] .ob-health{color:var(--ca-bad)}
+  .chn .ob-charts .ca-card{padding-bottom:12px}
+  .chn .ob-note{max-width:760px;font-size:13px;color:var(--pc-ink-muted)}
+  .chn .ob-chart{position:relative;margin:10px 0 0;min-height:60px}
+  .chn .ob-svg{display:block;width:100%;height:auto;overflow:visible}
+  .chn .ob-svg--bars{max-width:560px}
+  .chn .ob-grid{stroke:var(--ca-grid);stroke-width:1}
+  .chn .ob-axis{stroke:var(--ca-axis);stroke-width:1}
+  .chn .ob-ref{stroke:var(--ca-muted);stroke-width:1;stroke-dasharray:2 4;opacity:.7}
+  .chn .ob-refl{fill:var(--ca-muted);font:400 10px var(--pc-font-mono)}
+  .chn .ob-tick{fill:var(--ca-muted);font:400 10px var(--pc-font-mono)}
+  .chn .ob-lab{fill:var(--pc-ink-soft);font:400 12px var(--pc-font-sans)}
+  .chn .ob-val{fill:var(--pc-ink);font:500 12px var(--pc-font-sans)}
+  .chn .ob-bar{fill:var(--ca-s1)}
+  .chn .ob-line{fill:none;stroke:var(--ca-s1);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .chn .ob-dot{fill:var(--ca-s1);stroke:var(--pc-bg);stroke-width:2}
+  .chn .ob-hit{fill:transparent;cursor:crosshair}
+  .chn .ob-hit:hover{fill:var(--ca-s1);fill-opacity:.14}
+  /* The keyboard focus is a clear mark, not a ghost tint: a 2px ink outline and stroke (3:1 against the page in both themes) over a visible fill. */
+  .chn .ob-hit:focus-visible{fill:var(--ca-s1);fill-opacity:.35;stroke:var(--pc-ink);stroke-width:2;outline:2px solid var(--pc-ink);outline-offset:-2px}
+  .chn .ob-tip{position:absolute;z-index:3;pointer-events:none;display:flex;flex-direction:column;gap:2px;max-width:220px;padding:8px 10px;border:1.5px solid var(--c600);background:var(--pc-bg);box-shadow:0 1px 0 var(--ca-grid)}
+  .chn .ob-tip[hidden]{display:none}
+  .chn .ob-tip__v{font:500 14px/1.3 var(--pc-font-sans);color:var(--pc-ink)}
+  .chn .ob-tip__l{font:400 12px/1.4 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .chn .ob-empty{margin:8px 0 0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .chn .ob-tv{margin:10px 0 0}
+  .chn .ob-tv summary{cursor:pointer;font:500 10px/2 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .chn .ob-tv .tbl{margin-top:8px}
+  .chn .ob-today{padding-top:40px}
+  .chn .ob-cps{margin-top:6px}
+  .chn .ob-cps li[hidden]{display:none}
+  .chn .ob-limits li{font-size:15px}
+  .chn .ob-page[data-busy="yes"] .ob-charts{opacity:.7}
+</style>
