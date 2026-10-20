@@ -516,7 +516,7 @@ const GEN = DEVNET.genesis;
 const hashOf = (h) => sha256(`devnet-block-${h}`);
 const tsOf = (h) => T0 + h * 300_000;
 
-function fakeDevnet({ tip = 1507, genesis = GEN, chainId = 'pointcast-devnet-2', witnesses = {}, staleRange = [], hostile = null, down = false, slow = 0 } = {}) {
+function fakeDevnet({ tip = 1507, genesis = GEN, chainId = 'pointcast-devnet-2', witnesses = {}, staleRange = [], hostile = null, down = false, slow = 0, control = {} } = {}) {
   const log = [];
   let inflight = 0;
   let maxInflight = 0;
@@ -524,6 +524,8 @@ function fakeDevnet({ tip = 1507, genesis = GEN, chainId = 'pointcast-devnet-2',
   const route = (u) => {
     const p = u.pathname;
     if (down) throw new TypeError('network down');
+    // a witness list that cannot be read (control.witnessDown) while everything else answers
+    if (control.witnessDown && /^\/checkpoints\/\d+\/witnesses$/.test(p)) return reply(500, { error: 'boom' });
     if (p === '/status') return reply(200, { network: 'devnet', chain_id: hostile?.chainId ?? chainId, genesis_hash: genesis, height: tip, tip_timestamp: tsOf(tip), terms: hostile ? '<b>x</b>' : 'x' });
     let m;
     if ((m = /^\/block\/(\d+)$/.exec(p))) {
@@ -564,7 +566,7 @@ function fakeDevnet({ tip = 1507, genesis = GEN, chainId = 'pointcast-devnet-2',
       inflight -= 1;
     }
   };
-  return { fetch, log, maxInflight: () => maxInflight };
+  return { fetch, log, maxInflight: () => maxInflight, setDown: (v) => { down = v; }, control };
 }
 
 /** The real markup: the page's and the dialog's .astro source with frontmatter, scripts, styles, components and {expressions} stripped. */
@@ -896,6 +898,39 @@ test('the hero keeps the witness count it read in detail when the grid’s range
   const drifting = await t.blobText(t.q('hero-img').src);
   assert.match(drifting, /animateTransform/);
   assert.equal(ringCount(drifting), 1, 'turning the drift on does not lose the ring');
+  t.close();
+});
+
+test('the polite status line is written only when its words change: a refresh that says the same thing says nothing', async () => {
+  const t = await boot({ tip: 1507 });
+  await until(() => t.app.dataset.state === 'live', 'the live state');
+  const status = t.q('status');
+  assert.equal(status.getAttribute('aria-live'), 'polite');
+  const first = status.textContent;
+  assert.match(first, /^Live from pointcast-devnet-2: the latest checkpoint is block 1,500\.$/);
+  const seen = [];
+  const mo = new t.w.MutationObserver((list) => { for (const m of list) seen.push(m.target.textContent); });
+  mo.observe(status, { childList: true, characterData: true, subtree: true });
+  for (let i = 0; i < 3; i++) await t.handle.refresh();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(seen, [], 'three refreshes of an unchanged chain wrote nothing to the live region: ' + JSON.stringify(seen));
+  assert.equal(status.textContent, first);
+  // a real change is announced: the devnet goes away, and the same failure again is not announced twice
+  t.dev.setDown(true);
+  await t.handle.refresh();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.match(status.textContent, /^devnet unreachable/);
+  const afterDown = seen.length;
+  assert.ok(afterDown > 0, 'going down is announced');
+  await t.handle.refresh();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(seen.length, afterDown, 'the same failure on the next try is not announced again');
+  t.dev.setDown(false);
+  await t.handle.refresh();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.match(status.textContent, /^Live from /);
+  assert.ok(seen.length > afterDown, 'coming back is announced');
+  mo.disconnect();
   t.close();
 });
 

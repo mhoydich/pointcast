@@ -129,9 +129,10 @@ export function start(root, env = {}) {
   const hook = (name) => root.querySelector(`[data-bl="${name}"]`);
   const hooks = (name) => Array.from(root.querySelectorAll(`[data-bl="${name}"]`));
   const acts = (group) => Array.from(root.querySelectorAll(`[data-bl-act="${group}"]`));
+  // Written only when the words change: the status line is a polite live region, and the same sentence every refresh would be read out again each time.
   const say = (name, msg) => {
     const n = hook(name);
-    if (n) n.textContent = msg;
+    if (n && n.textContent !== msg) n.textContent = msg;
   };
   const el = (tag, cls, text) => {
     const n = doc.createElement(tag);
