@@ -6,7 +6,7 @@ Real-browser check of the new PointCast Radio Network plan after deploy.
 
 - https://pointcast.xyz/radio-network
 - https://pointcast.xyz/radio-network.json
-- https://pointcast.xyz/b/0717
+- https://pointcast.xyz/b/0718
 
 ## Tools / accounts
 
@@ -19,7 +19,7 @@ None. Public pages, no login.
 3. Nav anchors (Stations, Hour clock, Schedule, Signal, Phases, Take part) jump to their sections.
 4. Dark mode is legible.
 5. `/radio-network.json` returns JSON with `stations` (7), `phases` (4) and `distributionPaths` (4).
-6. Block 0717 renders and its external link opens the plan.
+6. Block 0718 renders and its external link opens the plan.
 
 ## Capture
 
