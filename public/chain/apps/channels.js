@@ -290,7 +290,8 @@ export async function scanFeed(net, scan, { pages = LIMITS.feedPages, limit = LI
  * pages, or the end of the chain). A quiet poll is one small read. Returns how many posts it read.
  */
 export async function refreshNewest(net, scan, { limit = LIMITS.refreshLimit, pages = LIMITS.refreshPages } = {}) {
-  const known = scan.newest;
+  // A scan that read the chain and found no block with a transaction knows of none: every block that turns up is new.
+  const known = scan.newest !== null ? scan.newest : scan.started ? 0 : null;
   let before = null;
   let count = 0;
   let top = null;

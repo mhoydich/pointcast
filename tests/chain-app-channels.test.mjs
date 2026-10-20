@@ -466,6 +466,20 @@ test('the poll reads a few newest blocks, not a hundred, and still misses nothin
   assert.equal(log.length, 1);
   // a poll never moves the older-blocks cursor
   assert.equal(scan.before, cursor);
+  // a chain that had no block with a transaction when it was first read: a burst larger than a page is read whole
+  const empty = stationsDevnet();
+  const emptyNet = K.makeNet('http://127.0.0.1:8799', { fetch: empty.fetch });
+  const emptyScan = C.newScan();
+  await C.scanFeed(emptyNet, emptyScan);
+  assert.equal(emptyScan.posts.size, 0);
+  await K.signAndSend(empty.chain, k, K.pcc.buildTx('claim_station', { sender: k.sender, nonce: 0, code: 'EMPTY1', name: 'Empty one', mode: 'open' }));
+  for (let i = 0; i < 13; i++) {
+    const w = await C.readWorldFresh(emptyNet, empty.chain);
+    await C.sendBroadcast({ chain: empty.chain, net: emptyNet, key: k, plan: C.planBroadcast({ station: w.byCode.get('EMPTY1'), sender: k.sender, title: 'first burst ' + i, body: 'x', world: w }) });
+  }
+  const got2 = await C.refreshNewest(emptyNet, emptyScan, { limit: 5 });
+  assert.equal(got2, 13, 'all thirteen, three pages of five, though the first read found nothing to anchor on');
+  assert.equal(emptyScan.posts.size, 13);
   // in the page: the timer’s read is the small one
   const viewLog = [];
   const m = mountView({ dev: feedDevnet(), log: viewLog });
