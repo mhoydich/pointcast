@@ -547,6 +547,43 @@ test('a chart is one tab stop and the arrow keys walk its marks: 200 blocks is n
   assert.equal(chart.querySelector('.ob-tip').hidden, false);
 });
 
+test('a periodic re-read does not throw keyboard focus out of a chart: unchanged charts are left alone, a changed one puts focus back on the same mark', async () => {
+  const blocks = FIX.local.blocks;
+  let skewLast = 0;
+  const overrides = {
+    '/raw/blocks': async (u) => {
+      const from = Number(u.searchParams.get('from'));
+      const list = blocks.filter((b) => b.header.height >= from).map((b, i, a) => (skewLast && i === a.length - 1 ? { ...b, header: { ...b.header, timestamp: b.header.timestamp + skewLast } } : b));
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ blocks: list }) };
+    },
+  };
+  const { rootEl, c, dom } = mountView({ name: 'local', overrides });
+  await c.begin();
+  c.stop();
+  const win = dom.window;
+  const marks = () => [...rootEl.querySelectorAll('[data-ob-chart="cadence"] .ob-hit')];
+  marks()[5].focus();
+  assert.equal(win.document.activeElement, marks()[5]);
+  const node = marks()[5];
+  const svg = rootEl.querySelector('[data-ob-chart="cadence"] svg');
+  // the same window read again: nothing is rebuilt, so the focus never moves
+  await c.read(null);
+  assert.equal(win.document.activeElement, node, 'the focused mark is still the focused mark');
+  assert.equal(rootEl.querySelector('[data-ob-chart="cadence"] svg'), svg, 'the chart was not rebuilt');
+  assert.notEqual(win.document.activeElement, win.document.body);
+  // the window changed (the newest block's time moved): the chart is redrawn, and focus lands on the mark at the same place
+  skewLast = 7000;
+  await c.read(null);
+  assert.notEqual(rootEl.querySelector('[data-ob-chart="cadence"] svg'), svg, 'a changed chart is rebuilt');
+  assert.equal(win.document.activeElement.classList.contains('ob-hit'), true, 'focus is on a mark, not on <body>');
+  assert.equal(marks().indexOf(win.document.activeElement), 5, 'the same mark');
+  // focus outside the charts is not pulled in by a redraw
+  rootEl.querySelector('[data-ob-go]').focus();
+  skewLast = 9000;
+  await c.read(null);
+  assert.equal(win.document.activeElement, rootEl.querySelector('[data-ob-go]'));
+});
+
 test('hostile text from the devnet is shown as plain text and makes no element', async () => {
   const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
   const blocks = FIX.local.blocks.map((b, i) => (i === 40 ? { header: b.header, txs: [{ tx: { type: evil, sender: 'pca1' + evil, channel: evil } }, { tx: { type: evil, sender: evil, channel: 'BOT' } }] } : b));

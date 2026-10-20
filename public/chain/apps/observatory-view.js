@@ -248,7 +248,7 @@ export function mount(root, env = {}) {
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0 };
+  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {} };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-ob-status]', text); root.dataset.state = state || root.dataset.state; };
 
@@ -286,11 +286,27 @@ export function mount(root, env = {}) {
     set('[data-ob-v="tx"]', groups(sum.txTotal));
     set('[data-ob-s="tx"]', 'transactions in those ' + plural(sum.count, 'block') + ' · ' + plural(sum.busyBlocks, 'block') + ' carried any');
     set('[data-ob-window-note]', 'Window: the newest ' + plural(sum.count, 'block') + ', #' + sum.from + ' to #' + sum.to + (sum.spanMs > 0 ? ', ' + duration(sum.spanMs) + ' of chain time' : '') + '. Block #1 has no timestamp and is left out of every time axis.');
-    drawCadence(doc, q('[data-ob-chart="cadence"]'), q('[data-ob-table="cadence"]'), sum);
-    drawActivity(doc, q('[data-ob-chart="activity"]'), q('[data-ob-table="activity"]'), sum);
-    drawBars(doc, q('[data-ob-chart="kinds"]'), q('[data-ob-table="kinds"]'), sum.kinds, { name: 'kind', word: 'transaction', caption: 'Transactions by kind in this window' });
-    drawBars(doc, q('[data-ob-chart="channels"]'), q('[data-ob-table="channels"]'), sum.channels, { name: 'channel', word: 'post', caption: 'Posts by channel in this window' });
-    drawSenders(doc, q('[data-ob-chart="senders"]'), sum.senders);
+    // A chart is rebuilt only when what it shows changed, and a rebuild puts the keyboard focus back on the same mark: a periodic
+    // re-read of an unchanged window used to throw a keyboard or screen-reader user out of the chart to <body> every minute.
+    redraw('cadence', JSON.stringify(sum.gaps), () => drawCadence(doc, q('[data-ob-chart="cadence"]'), q('[data-ob-table="cadence"]'), sum));
+    redraw('activity', JSON.stringify([sum.buckets, sum.txTotal]), () => drawActivity(doc, q('[data-ob-chart="activity"]'), q('[data-ob-table="activity"]'), sum));
+    redraw('kinds', JSON.stringify(sum.kinds), () => drawBars(doc, q('[data-ob-chart="kinds"]'), q('[data-ob-table="kinds"]'), sum.kinds, { name: 'kind', word: 'transaction', caption: 'Transactions by kind in this window' }));
+    redraw('channels', JSON.stringify(sum.channels), () => drawBars(doc, q('[data-ob-chart="channels"]'), q('[data-ob-table="channels"]'), sum.channels, { name: 'channel', word: 'post', caption: 'Posts by channel in this window' }));
+    redraw('senders', JSON.stringify(sum.senders), () => drawSenders(doc, q('[data-ob-chart="senders"]'), sum.senders));
+  }
+
+  /** Run `draw` for chart `id` unless it already shows `sig`; if the focus was on one of its marks, return it to the mark at the same place. */
+  function redraw(id, sig, draw) {
+    const host = q('[data-ob-chart="' + id + '"]');
+    if (host && S.drawn[id] === sig && host.firstChild) return;
+    const active = doc.activeElement;
+    const was = host && active && host.contains(active) ? [...host.querySelectorAll('.ob-hit')].indexOf(active) : -1;
+    draw();
+    S.drawn[id] = sig;
+    if (was >= 0) {
+      const marks = host.querySelectorAll('.ob-hit');
+      if (marks.length) marks[Math.min(was, marks.length - 1)].focus();
+    }
   }
 
   function paintToday(d) {
