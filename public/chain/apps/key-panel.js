@@ -47,6 +47,8 @@ export function mountKeyPanel(panel, env = {}) {
     if (make) make.disabled = S.supported === false;
     if (use) use.disabled = S.supported === false;
     if (!k && seedBox) { seedBox.value = ''; seedBox.hidden = true; if (copy) copy.hidden = true; if (reveal) reveal.textContent = 'Show the key'; }
+    // A key that is on show must be THIS key: a new key replaces what the open box shows, or backing up what is on screen saves the wrong one.
+    if (k && seedBox && !seedBox.hidden) seedBox.value = k.seedHex;
   }
 
   function emit() { for (const fn of S.listeners) { try { fn(S.key); } catch { /* a listener's failure is its own */ } } }

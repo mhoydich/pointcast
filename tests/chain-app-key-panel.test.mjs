@@ -134,6 +134,35 @@ test('Show the key reveals the 64 characters once, Copy puts them on the clipboa
   assert.equal(b.q('[data-kp-copy]').textContent, 'Press ⌘C');
 });
 
+test('with the key on show, a new key replaces what the open box shows: Show, Copy and the address always agree', async () => {
+  const { c, q, clip } = mountPanel();
+  await c.ready;
+  q('[data-kp-make]').click();
+  await tick(30);
+  const first = c.key();
+  q('[data-kp-reveal]').click();
+  assert.equal(q('[data-kp-seed]').value, first.seedHex);
+  // another key becomes the active one while the box is open (Make a key, or Use this key, both end in setSeed)
+  await c.setSeed('ab'.repeat(32));
+  await tick(30);
+  const second = c.key();
+  assert.notEqual(second.seedHex, first.seedHex);
+  assert.equal(q('[data-kp-address]').textContent, second.sender);
+  assert.equal(q('[data-kp-seed]').hidden, false, 'the box is still open');
+  assert.equal(q('[data-kp-seed]').value, second.seedHex, 'and it shows the key that is active, not the previous one');
+  assert.equal(q('[data-kp-reveal]').textContent, 'Hide the key');
+  q('[data-kp-copy]').click();
+  await tick(10);
+  assert.deepEqual(clip, [second.seedHex], 'what Copy puts on the clipboard is what the box shows');
+  // a hidden box stays empty through a change of key: the seed is never written to it unasked
+  q('[data-kp-reveal]').click();
+  assert.equal(q('[data-kp-seed]').value, '');
+  await c.setSeed('cd'.repeat(32));
+  await tick(30);
+  assert.equal(q('[data-kp-seed]').hidden, true);
+  assert.equal(q('[data-kp-seed]').value, '');
+});
+
 test('Keep it on this device writes the key to one shared slot, and the next visit finds it; Forget removes it', async () => {
   const st = fakeStorage();
   const a = mountPanel({ storage: st });
