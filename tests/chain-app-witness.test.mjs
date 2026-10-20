@@ -1606,6 +1606,54 @@ test('any fault leaves nothing to sign: the fault box, the evidence, no review, 
   assert.equal(mutant.posted, 2, 'with the old plan left standing after a failed replay, Send still goes');
 });
 
+test('a fault’s evidence is shown exactly as the worker made it — no cap, no clean-up — and can be downloaded byte for byte', async () => {
+  // an InvalidTransition-sized evidence file: pretty-printed (indentation, blank lines kept) and far over 6,000 characters
+  const evidence = JSON.stringify({ evidence: { kind: 'InvalidTransition', height: 61, pre_state: { accounts: Object.fromEntries(Array.from({ length: 200 }, (_, i) => ['tz1' + String(i).padStart(30, '0'), { balance: i * 1000, nonce: i, note: 'a  b\t c' }])) }, nonce: 'x'.repeat(40) } }, null, 2) + '\n';
+  assert.ok(evidence.length > 20000 && /\n {4,}/.test(evidence), 'the fixture is large and indented: ' + evidence.length);
+  const fault = new X.ReplayFault({ fault: 'invalid_transition', height: 61, reason: 'a transition the rules refuse', evidenceJson: evidence });
+  const startReplay = (a) => { a.onProgress({ height: 30, tip: 92 }); return { promise: Promise.reject(fault), cancel() {} }; };
+  const m = mountView({ startReplay });
+  const blobs = [];
+  m.dom.window.URL.createObjectURL = (b) => { blobs.push(b); return 'blob:test/' + blobs.length; };
+  const clicked = [];
+  m.dom.window.HTMLAnchorElement.prototype.click = function click() { clicked.push([this.download, this.href]); };
+  await m.c.begin();
+  await m.c.replay();
+  await tick(20);
+  assert.equal(m.rootEl.dataset.state, 'fault');
+  const box = $(m.rootEl, '[data-wt-fault-json]');
+  // it is a text area, not a cut-down preview: the whole file, character for character
+  assert.equal(box.tagName, 'TEXTAREA');
+  assert.equal(box.readOnly, true);
+  assert.equal(box.textContent, evidence, 'verbatim: not cut at 6,000 characters, not collapsed');
+  assert.equal(box.value, evidence);
+  assert.doesNotMatch(box.textContent, /…/);
+  assert.deepEqual(JSON.parse(box.textContent), JSON.parse(evidence), 'it still parses');
+  assert.match(txt(m.rootEl, '[data-wt-fault-size]'), new RegExp('^' + evidence.length.toLocaleString('en-US') + ' characters \\(' + new TextEncoder().encode(evidence).length.toLocaleString('en-US') + ' bytes\\), exactly as the worker made it\\.'));
+  assert.equal($(m.rootEl, '[data-wt-fault-dl]').hidden, false);
+  // the download is the same bytes
+  $(m.rootEl, '[data-wt-fault-btn]').click();
+  assert.equal(clicked.length, 1);
+  assert.match(clicked[0][0], /^witness-fault-evidence-61\.json$/);
+  assert.equal(blobs.length, 1);
+  assert.equal(blobs[0].type, 'application/json');
+  const blobText = (b) => new Promise((resolve, reject) => { const r = new m.dom.window.FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsText(b); });
+  assert.equal(await blobText(blobs[0]), evidence, 'the file is the evidence, byte for byte');
+  // it is text, never markup
+  assert.equal(m.rootEl.querySelectorAll('[data-wt-fault] a, [data-wt-fault] img, [data-wt-fault] script').length, 0);
+  // a fault with no evidence file says so and offers no download
+  const none = new X.ReplayFault({ fault: 'gap', height: 5, reason: 'a block is missing', evidenceJson: '' });
+  const m2 = mountView({ startReplay: (a) => { a.onProgress({ height: 3, tip: 92 }); return { promise: Promise.reject(none), cancel() {} }; } });
+  await m2.c.begin();
+  await m2.c.replay();
+  await tick(20);
+  assert.equal($(m2.rootEl, '[data-wt-fault-details]').hidden, true);
+  assert.equal($(m2.rootEl, '[data-wt-fault-dl]').hidden, true);
+  assert.equal($(m2.rootEl, '[data-wt-fault-btn]').disabled, true);
+  m.c.stop();
+  m2.c.stop();
+});
+
 test('keyboard use: focus follows the work — Replay to Cancel while it runs, then to the review; back to Replay after a failure or a cancel', async () => {
   const m = mountView();
   await m.c.begin();

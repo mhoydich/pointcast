@@ -21,7 +21,7 @@
 
 import * as X from './witness.js';
 import { mountKeyPanel } from './key-panel.js';
-import { asSentence, cleanBlock, cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, resolveApi, sendFailureText, shortAddr, shortHex, whenReady } from './chain-kit.js';
+import { asSentence, cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, resolveApi, sendFailureText, shortAddr, shortHex, whenReady } from './chain-kit.js';
 
 function el(doc, tag, cls, text) {
   const n = doc.createElement(tag);
@@ -60,7 +60,7 @@ export function mount(root, env = {}) {
   const S = {
     begun: false, halted: false, status: null, pin: null, token: 0, running: false, handle: null,
     replay: null, replayedAt: 0, choice: null, plan: null, planning: 0, chain: null, sending: false,
-    sent: null, shas: null, checks: [], reviewTimer: null, lastRoll: null, carried: false,
+    sent: null, shas: null, checks: [], reviewTimer: null, lastRoll: null, carried: false, fault: null,
   };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-wt-status]', text); if (state) root.dataset.state = state; };
@@ -110,6 +110,7 @@ export function mount(root, env = {}) {
   }
 
   function clearOutputs() {
+    S.fault = null;
     S.checks = [];
     S.replay = null;
     S.choice = null;
@@ -119,6 +120,9 @@ export function mount(root, env = {}) {
     paintChecks();
     box('[data-wt-progress]', false);
     box('[data-wt-fault]', false);
+    box('[data-wt-fault-dl]', false);
+    set('[data-wt-fault-json]', '');
+    set('[data-wt-fault-size]', '');
     box('[data-wt-summary]', false);
     box('[data-wt-confirm]', false);
     box('[data-wt-errors]', false);
@@ -168,9 +172,15 @@ export function mount(root, env = {}) {
       check('replay', 'fail', e.message);
       box('[data-wt-fault]', true);
       set('[data-wt-fault-text]', e.message + '. Keep this: a fault is what the net is for. Nothing was signed.');
-      set('[data-wt-fault-json]', e.evidenceJson ? cleanBlock(e.evidenceJson, 6000) : 'The worker made no evidence file for this fault.');
+      // The evidence is the exact JSON to keep: shown whole, character for character (a text area, never markup), and downloadable byte for byte.
+      S.fault = e.evidenceJson ? { json: e.evidenceJson, at: e.at } : null;
+      set('[data-wt-fault-json]', e.evidenceJson || '');
       const det = q('[data-wt-fault-details]');
       if (det) det.hidden = !e.evidenceJson;
+      box('[data-wt-fault-dl]', Boolean(e.evidenceJson));
+      const dlBtn = q('[data-wt-fault-btn]');
+      if (dlBtn) dlBtn.disabled = !e.evidenceJson;
+      set('[data-wt-fault-size]', e.evidenceJson ? groups(Array.from(e.evidenceJson).length) + ' characters (' + groups(new TextEncoder().encode(e.evidenceJson).length) + ' bytes), exactly as the worker made it. Nothing is cut or tidied; download it to keep it.' : '');
       say('FAULT at height ' + e.at + '. Refusing to sign.', 'fault');
     } else if (e && e.name === 'PinError') {
       check('verifier', 'fail', e.message);
@@ -397,16 +407,21 @@ export function mount(root, env = {}) {
     return storage ? X.writeJournal(storage, entry) : false;
   }
 
-  function downloadClaim() {
-    if (!S.sent || !S.sent.claim) return;
-    const blob = new win.Blob([JSON.stringify(S.sent.claim, null, 2) + '\n'], { type: 'application/json' });
+  /** Offer text the page holds as a file: the one Blob link this view makes. Its name is built from numbers and hex, never from what the devnet sent. */
+  function saveFile(name, text) {
+    const blob = new win.Blob([text], { type: 'application/json' });
     const a = doc.createElement('a');
     a.href = win.URL.createObjectURL(blob);
-    a.download = 'witness-claim-' + S.sent.claim.claim.height + '-' + String(S.sent.claim.tx || 'unsent').slice(0, 12) + '.json';
+    a.download = name;
     doc.body.append(a);
     a.click();
     a.remove();
     win.setTimeout(() => win.URL.revokeObjectURL(a.href), 4000);
+  }
+
+  function downloadClaim() {
+    if (!S.sent || !S.sent.claim) return;
+    saveFile('witness-claim-' + S.sent.claim.claim.height + '-' + String(S.sent.claim.tx || 'unsent').slice(0, 12) + '.json', JSON.stringify(S.sent.claim, null, 2) + '\n');
   }
 
   /** What a send put on chain, in words: the attestation, the check-in. */
@@ -424,6 +439,12 @@ export function mount(root, env = {}) {
     box('[data-wt-confirm]', false);
     box('[data-wt-claim-box]', Boolean(S.sent.claim));
     if (S.sent.claim) set('[data-wt-claim-json]', JSON.stringify(S.sent.claim, null, 2));
+  }
+
+  /** The fault's evidence file, as a download: the worker's exact text, no trailing newline added. */
+  function downloadEvidence() {
+    if (!S.fault) return;
+    saveFile('witness-fault-evidence-' + S.fault.at + '.json', S.fault.json);
   }
 
   async function send() {
@@ -584,6 +605,8 @@ export function mount(root, env = {}) {
   if (readBtn) readBtn.addEventListener('click', () => readRoll({ poll: Boolean(S.sent) }));
   const claimBtn = q('[data-wt-claim-btn]');
   if (claimBtn) claimBtn.addEventListener('click', downloadClaim);
+  const evidenceBtn = q('[data-wt-fault-btn]');
+  if (evidenceBtn) evidenceBtn.addEventListener('click', downloadEvidence);
   for (const sel of ['[data-wt-name]', '[data-wt-note]']) { const n = q(sel); if (n) n.addEventListener('input', withdraw); }
   const checkinEl = q('[data-wt-checkin]');
   if (checkinEl) checkinEl.addEventListener('change', withdraw);
@@ -627,6 +650,7 @@ export function mount(root, env = {}) {
     send,
     readRoll,
     downloadClaim,
+    downloadEvidence,
     stop() { if (S.reviewTimer) win.clearTimeout(S.reviewTimer); S.reviewTimer = null; },
   };
 }
