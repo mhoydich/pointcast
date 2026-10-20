@@ -504,6 +504,54 @@ test('stamping in the page: the confirm shows the exact post, nothing is sent un
   assert.match(txt(rootEl, '[data-nt-confirm-body]'), /\nname:secret-plans\.docx/);
 });
 
+test('Send stamps the post the confirm showed, not what the note, the name box or the file hold by then', { timeout: 30000 }, async () => {
+  const fake = await fakeStamping();
+  const sent = [];
+  const gate = { release: null };
+  // the genesis check is slow: that is the window in which the page used to read its boxes
+  const connect = () => new Promise((ok) => { gate.release = () => ok({ ...fake.chain, submit: async (s) => { sent.push(s); return fake.chain.submit(s); } }); });
+  const { rootEl, c, dom } = mountView({ extra: { connect } });
+  await c.begin();
+  $(rootEl, '[data-nt-text]').value = KNOWN_TEXT;
+  $(rootEl, '[data-nt-text-go]').click();
+  await tick(30);
+  await c.keys.setSeed('71'.repeat(32));
+  await tick(30);
+  $(rootEl, '[data-nt-note]').value = 'note A: what I reviewed';
+  $(rootEl, '[data-nt-review]').click();
+  assert.match(txt(rootEl, '[data-nt-confirm-body]'), /note:note A: what I reviewed$/);
+  // 1. editing the note withdraws the confirm: the post it showed no longer matches the box
+  $(rootEl, '[data-nt-note]').value = 'note B: typed after review, never shown';
+  $(rootEl, '[data-nt-note]').dispatchEvent(new dom.window.Event('input'));
+  assert.equal($(rootEl, '[data-nt-confirm]').hidden, true, 'a changed note takes the confirm away');
+  $(rootEl, '[data-nt-send]').click();
+  await tick(30);
+  assert.equal(sent.length, 0, 'with no confirm there is nothing to send');
+  // 2. the confirm is up for A, the person sends, and while the check is slow they change the note and the file
+  $(rootEl, '[data-nt-note]').value = 'note A: what I reviewed';
+  $(rootEl, '[data-nt-review]').click();
+  $(rootEl, '[data-nt-send]').click();
+  await tick(20);
+  $(rootEl, '[data-nt-note]').value = 'note B: typed after review, never shown';
+  $(rootEl, '[data-nt-text]').value = 'a different text entirely';
+  $(rootEl, '[data-nt-text-go]').click();
+  await tick(30);
+  assert.equal(txt(rootEl, '[data-nt-hash]'), sha(KNOWN_TEXT), 'a new text is not taken while a stamp is on its way');
+  assert.match(txt(rootEl, '[data-nt-hash-note]'), /A stamp is being sent/);
+  gate.release();
+  await tick(300);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(fake.stored, [N.stampBody({ sha256: sha(KNOWN_TEXT), bytes: KNOWN_TEXT.length, note: 'note A: what I reviewed' })], 'the body that went out is the one the confirm showed');
+  assert.equal(sent[0].tx.title, 'notary/v1 sha256:' + sha(KNOWN_TEXT));
+  const receipt = JSON.parse(txt(rootEl, '[data-nt-receipt-json]'));
+  assert.equal(receipt.file.note, 'note A: what I reviewed');
+  assert.equal(receipt.file.sha256, sha(KNOWN_TEXT));
+  // once it has landed, the next file can be taken
+  $(rootEl, '[data-nt-text-go]').click();
+  await tick(30);
+  assert.equal(txt(rootEl, '[data-nt-hash]'), sha('a different text entirely'));
+});
+
 test('a refused stamp says what the devnet said and leaves the button usable', async () => {
   const fake = await fakeStamping();
   const connect = async () => ({ ...fake.chain, submit: async () => { throw new K.KitError('slow down: per-IP limit on signed txs', { status: 429 }); } });

@@ -38,9 +38,9 @@ export function mount(root, env = {}) {
   const ds = root.dataset;
   const where = resolveApi(env.search !== undefined ? env.search : win.location.search, { api: String(ds.api || ''), genesis: String(ds.genesis || '') });
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
-  const net = makeNet(where.api, { fetch: env.fetch });
+  const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { begun: false, halted: false, status: null, file: null, plan: null, chain: null, receipt: null, busy: false, check: 0 };
+  const S = { begun: false, halted: false, status: null, file: null, plan: null, chain: null, receipt: null, busy: false, check: 0, sending: false };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-nt-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
@@ -58,6 +58,14 @@ export function mount(root, env = {}) {
     if (nameBox) nameBox.disabled = !f || !f.name;
   }
 
+  /** A stamp is on its way: the file, the text and the hash stay as they are until it lands, so the page never shows one thing and has stamped another. */
+  function holdWhileSending() {
+    if (!S.sending) return false;
+    const out = q('[data-nt-hash-note]');
+    if (out) { out.textContent = 'A stamp is being sent. Wait for it to finish, then choose the next file.'; out.dataset.bad = 'yes'; }
+    return true;
+  }
+
   function setFile(f) {
     S.file = f;
     S.plan = null;
@@ -67,9 +75,11 @@ export function mount(root, env = {}) {
   }
 
   async function takeFile(file) {
+    if (holdWhileSending()) return;
     const out = q('[data-nt-hash-note]');
     try {
       const h = await N.hashFile(file);
+      if (holdWhileSending()) return;
       setFile({ ...h, name: cleanText(String(file.name || ''), N.LIMITS.name) });
       if (out) { out.textContent = 'Hashed in your browser. The file went nowhere.'; out.dataset.bad = 'no'; }
     } catch (e) {
@@ -79,15 +89,18 @@ export function mount(root, env = {}) {
   }
 
   async function takeText() {
+    if (holdWhileSending()) return;
     const t = q('[data-nt-text]');
     const out = q('[data-nt-hash-note]');
     if (!t || !t.value) { if (out) { out.textContent = 'Type or paste some text first.'; out.dataset.bad = 'yes'; } return; }
     const h = await N.hashText(t.value);
+    if (holdWhileSending()) return;
     setFile({ ...h, name: '' });
     if (out) { out.textContent = 'Hashed as UTF-8 text exactly as typed, with no trimming. The text went nowhere.'; out.dataset.bad = 'no'; }
   }
 
   function takePasted() {
+    if (holdWhileSending()) return;
     const t = q('[data-nt-paste]');
     const out = q('[data-nt-hash-note]');
     const h = N.parsePastedHash(t ? t.value : '');
@@ -109,11 +122,13 @@ export function mount(root, env = {}) {
     if (S.halted) errs.push('The devnet was reset; nothing can be sent.');
     const withName = Boolean((q('[data-nt-name-box]') || {}).checked) && f && f.name;
     const note = ((q('[data-nt-note]') || {}).value || '');
+    const name = withName ? f.name : '';
     let body = '';
     if (f) {
-      try { body = N.stampBody({ sha256: f.sha256, bytes: f.bytes, name: withName ? f.name : '', note }); } catch (e) { errs.push(e.message); }
+      try { body = N.stampBody({ sha256: f.sha256, bytes: f.bytes, name, note }); } catch (e) { errs.push(e.message); }
     }
-    return { ok: errs.length === 0, errors: errs, body, title: f ? N.stampTitle(f.sha256) : '', sender: k ? k.sender : '' };
+    // Everything the stamp is made from is copied in here, at Review: Send uses this and nothing else.
+    return { ok: errs.length === 0, errors: errs, body, title: f ? N.stampTitle(f.sha256) : '', sender: k ? k.sender : '', sha256: f ? f.sha256 : '', bytes: f ? f.bytes : 0, name, note };
   }
 
   function showConfirm() {
@@ -153,14 +168,15 @@ export function mount(root, env = {}) {
     const result = q('[data-nt-result]');
     const btn = q('[data-nt-send]');
     if (!plan || !plan.ok || !k || S.halted) return;
+    if (plan.sender !== k.sender) return;
     btn.disabled = true;
+    S.sending = true;
     const say2 = (t, state) => { if (result) { result.hidden = false; result.dataset.state = state || ''; set('[data-nt-result-text]', t); } };
     try {
       say2('Checking the devnet’s genesis…', '');
-      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch } });
-      const f = S.file;
-      const withName = Boolean((q('[data-nt-name-box]') || {}).checked) && f.name;
-      const r = await N.stampHash({ chain: S.chain, net, key: k, sha256: f.sha256, bytes: f.bytes, name: withName ? f.name : '', note: ((q('[data-nt-note]') || {}).value || ''), onStage: (s) => say2('Sending the stamp… (' + s + ')', ''), now });
+      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
+      // The stamp is the plan the person confirmed, not whatever the boxes hold by now.
+      const r = await N.stampHash({ chain: S.chain, net, key: k, sha256: plan.sha256, bytes: plan.bytes, name: plan.name, note: plan.note, onStage: (s) => say2('Sending the stamp… (' + s + ')', ''), now });
       S.receipt = r.receipt;
       const box = q('[data-nt-confirm]');
       if (box) box.hidden = true;
@@ -171,6 +187,7 @@ export function mount(root, env = {}) {
     } catch (e) {
       say2('Not sent, or not confirmed: ' + describeError(e), 'bad');
     } finally {
+      S.sending = false;
       btn.disabled = false;
     }
   }
@@ -284,6 +301,12 @@ export function mount(root, env = {}) {
   if (review) review.addEventListener('click', showConfirm);
   const sendBtn = q('[data-nt-send]');
   if (sendBtn) sendBtn.addEventListener('click', send);
+  // The confirm shows the post word for word; change what goes into it and the confirm is withdrawn, so Review has to be pressed again.
+  const withdraw = () => { if (S.sending) return; const b = q('[data-nt-confirm]'); if (b) b.hidden = true; S.plan = null; };
+  const noteEl = q('[data-nt-note]');
+  if (noteEl) noteEl.addEventListener('input', withdraw);
+  const nameEl = q('[data-nt-name-box]');
+  if (nameEl) nameEl.addEventListener('change', withdraw);
   const cancel = q('[data-nt-cancel]');
   if (cancel) cancel.addEventListener('click', () => { const b = q('[data-nt-confirm]'); if (b) b.hidden = true; S.plan = null; });
   const rc = q('[data-nt-receipt]');
