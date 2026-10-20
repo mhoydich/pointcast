@@ -452,6 +452,39 @@ test('hashing in the page: text, a pasted hash and a file all land in the same p
   assert.equal(txt(rootEl, '[data-nt-hash]'), 'no file or hash yet');
 });
 
+test('multi-line text from a text box is not "exactly as typed": the page says line breaks are LF and shows the byte count; the digest is that of the LF text, not of a CRLF file', async () => {
+  const { rootEl, c, dom } = mountView();
+  await c.begin();
+  // what a Windows text file holds, pasted into a text box: the API value arrives with CR LF already turned into LF
+  const windows = 'line one\r\nline two\r\n';
+  const area = $(rootEl, '[data-nt-text]');
+  area.value = windows;
+  assert.equal(area.value, 'line one\nline two\n', 'the browser itself normalises the box (this is the cause)');
+  $(rootEl, '[data-nt-text-go]').click();
+  await tick(30);
+  const lf = 'line one\nline two\n';
+  assert.equal(txt(rootEl, '[data-nt-hash]'), sha(lf));
+  assert.notEqual(txt(rootEl, '[data-nt-hash]'), sha(windows), 'it can never equal the CRLF file’s sha256sum');
+  assert.equal(txt(rootEl, '[data-nt-size]'), '18 bytes', 'the size is the LF text’s, not the 20 bytes of the file');
+  const note = txt(rootEl, '[data-nt-hash-note]');
+  assert.doesNotMatch(note, /exactly as typed/, 'the claim would be false here');
+  assert.match(note, /18 bytes/);
+  assert.match(note, /Line breaks are counted as LF/);
+  assert.match(note, /CR LF/);
+  assert.match(note, /choose the file instead/);
+  // a single line has no line breaks to change, and keeps its plain note
+  area.value = 'one line';
+  $(rootEl, '[data-nt-text-go]').click();
+  await tick(30);
+  assert.match(txt(rootEl, '[data-nt-hash-note]'), /^Hashed as UTF-8 text exactly as typed, with no trimming\. The text went nowhere\.$/);
+  // a file keeps its CRLF bytes: choosing it is the path that matches sha256sum
+  await c.takeFile(new File([new TextEncoder().encode(windows)], 'win.txt'));
+  assert.equal(txt(rootEl, '[data-nt-hash]'), sha(windows));
+  assert.equal(txt(rootEl, '[data-nt-size]'), '20 bytes · win.txt');
+  assert.ok(dom);
+  assert.doesNotMatch(src.page, /exactly as typed/, 'the page’s placeholder makes no such claim either');
+});
+
 test('stamping in the page: the confirm shows the exact post, nothing is sent until Send, and the receipt can be kept', async () => {
   const fake = await fakeStamping();
   const sent = [];

@@ -96,7 +96,15 @@ export function mount(root, env = {}) {
     const h = await N.hashText(t.value);
     if (holdWhileSending()) return;
     setFile({ ...h, name: '' });
-    if (out) { out.textContent = 'Hashed as UTF-8 text exactly as typed, with no trimming. The text went nowhere.'; out.dataset.bad = 'no'; }
+    // A browser text box hands over its value with every CR LF (and lone CR) already turned into LF, so a multi-line paste is
+    // not "exactly as typed": say so, with the byte count, instead of claiming an exactness this page cannot have.
+    const multi = t.value.includes('\n');
+    if (out) {
+      out.textContent = multi
+        ? 'Hashed as UTF-8 text with no trimming, ' + groups(h.bytes) + ' bytes. Line breaks are counted as LF: a browser text box turns Windows line breaks (CR LF) into LF, so a file saved with them will not match this hash. For such a file, choose the file instead. The text went nowhere.'
+        : 'Hashed as UTF-8 text exactly as typed, with no trimming. The text went nowhere.';
+      out.dataset.bad = 'no';
+    }
   }
 
   function takePasted() {

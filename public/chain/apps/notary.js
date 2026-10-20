@@ -103,7 +103,7 @@ export async function hashFile(input) {
   return { sha256: await sha256Hex(bytes), bytes: bytes.length };
 }
 
-/** SHA-256 of text, as UTF-8 bytes exactly as typed (no trimming, no normalising). */
+/** SHA-256 of text, as UTF-8 bytes exactly as given (no trimming, no normalising). A browser text box gives its value with CR LF already turned into LF: the page says so (notary-view.js takeText). */
 export async function hashText(text) {
   const bytes = new TextEncoder().encode(String(text));
   return { sha256: await sha256Hex(bytes), bytes: bytes.length };
