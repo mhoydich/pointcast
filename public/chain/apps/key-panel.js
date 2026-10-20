@@ -24,7 +24,7 @@ export function mountKeyPanel(panel, env = {}) {
   const win = env.window || doc.defaultView;
   const q = (sel) => panel.querySelector(sel);
   const storage = env.storage !== undefined ? env.storage : (() => { try { return win.localStorage; } catch { return null; } })();
-  const S = { key: null, listeners: [], supported: null, kept: false, armed: '' };
+  const S = { key: null, listeners: [], supported: null, kept: false, armed: '', orphan: false };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const make = q('[data-kp-make]');
   const forget = q('[data-kp-forget]');
@@ -40,9 +40,9 @@ export function mountKeyPanel(panel, env = {}) {
   function paint() {
     const k = S.key;
     panel.dataset.state = k ? 'ready' : 'none';
-    set('[data-kp-status]', k && S.armed ? 'This would replace ' + k.sender + (S.kept ? ', which is kept on this device' : '') + '. If it holds play ATTN, leads a lot or sealed a capsule, you lose it unless you copy it first: it is shown below. Press “Replace it” again to replace it, or keep this key.' : k ? 'Your key signs as ' + k.sender + (S.kept ? ' · kept on this device' : ' · in this tab only: close it and the key is gone') + '.' : S.supported === false ? 'This browser cannot make an ed25519 key (WebCrypto Ed25519). Use a current Chrome, Edge, Safari or Firefox.' : 'No key yet. Make one: it is a new devnet account, free.');
+    set('[data-kp-status]', k && S.armed ? 'This would replace ' + k.sender + (S.kept ? ', which is kept on this device' : '') + '. If it holds play ATTN, leads a lot or sealed a capsule, you lose it unless you copy it first: it is shown below. Press “Replace it” again to replace it, or keep this key.' : k ? 'Your key signs as ' + k.sender + (S.kept ? ' · kept on this device' : ' · in this tab only: close it and the key is gone') + '.' : S.supported === false ? 'This browser cannot make an ed25519 key (WebCrypto Ed25519). Use a current Chrome, Edge, Safari or Firefox.' + (S.orphan ? ' A key is kept on this device and this browser cannot use it: “Forget it” deletes that copy.' : '') : S.orphan ? 'A key is kept on this device but could not be loaded here. “Forget it” deletes that copy.' : 'No key yet. Make one: it is a new devnet account, free.');
     if (addr) addr.textContent = k ? k.sender : '';
-    if (forget) forget.disabled = !k;
+    if (forget) forget.disabled = !k && !S.orphan;
     if (reveal) reveal.disabled = !k;
     if (keep) { keep.disabled = !k || !storage; keep.checked = Boolean(k) && S.kept; }
     if (make) { make.disabled = S.supported === false; make.textContent = S.armed === 'make' ? 'Replace it' : k ? 'Make a new key' : 'Make a key'; }
@@ -79,7 +79,7 @@ export function mountKeyPanel(panel, env = {}) {
 
   if (make) make.addEventListener('click', async () => { if (guardReplace('make')) return; await setSeed(newSeedHex(), { persist: Boolean(keep && keep.checked) }); });
   if (keepOld) keepOld.addEventListener('click', () => { S.armed = ''; paint(); });
-  if (forget) forget.addEventListener('click', () => { S.key = null; S.kept = false; S.armed = ''; if (storage) forgetSeed(storage, KEY_SLOT); paint(); emit(); });
+  if (forget) forget.addEventListener('click', () => { S.key = null; S.kept = false; S.armed = ''; S.orphan = false; if (storage) forgetSeed(storage, KEY_SLOT); paint(); emit(); });
   if (keep) keep.addEventListener('change', () => {
     if (!S.key) return;
     S.armed = '';
@@ -114,6 +114,8 @@ export function mountKeyPanel(panel, env = {}) {
     S.supported = env.supported !== undefined ? env.supported : await ed25519Works();
     const stored = loadStoredSeed(storage, KEY_SLOT);
     if (S.supported && stored) { try { await setSeed(stored, { persist: true }); return; } catch { /* a bad stored seed is ignored */ } }
+    // A kept key this browser cannot load is still on the device: say so, and keep Forget on so the person can delete it.
+    S.orphan = Boolean(stored);
     paint();
   })();
 

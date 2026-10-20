@@ -309,6 +309,26 @@ test('a browser without ed25519 is told so, and nothing is enabled', async () =>
   assert.equal(panel.dataset.state, 'none');
 });
 
+test('in a browser that cannot use ed25519 a kept key is still named and can still be forgotten', async () => {
+  const seed = 'cd'.repeat(32);
+  const st = fakeStorage({ [KEY_SLOT]: seed });
+  const { c, q, panel } = mountPanel({ supported: false, storage: st });
+  await c.ready;
+  assert.equal(c.key(), null, 'it cannot be loaded here');
+  assert.equal(panel.dataset.state, 'none');
+  assert.equal(q('[data-kp-make]').disabled, true);
+  assert.equal(q('[data-kp-forget]').disabled, false, 'Forget stays on: the seed is still on this device');
+  assert.match(q('[data-kp-status]').textContent, /cannot make an ed25519 key[\s\S]*A key is kept on this device and this browser cannot use it: “Forget it” deletes that copy\./);
+  q('[data-kp-forget]').click();
+  assert.equal(st.m.has(KEY_SLOT), false, 'the stored seed is gone');
+  assert.equal(q('[data-kp-forget]').disabled, true, 'nothing left to forget');
+  assert.doesNotMatch(q('[data-kp-status]').textContent, /A key is kept on this device/);
+  // with nothing stored, Forget is off as before
+  const none = mountPanel({ supported: false });
+  await none.c.ready;
+  assert.equal(none.q('[data-kp-forget]').disabled, true);
+});
+
 test('the panel never uses markup or the network, and the component says what the key is and is not', () => {
   assertNoSinks(src.panelJs, 'key-panel.js');
   assert.doesNotMatch(code(src.panelJs), /\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|document\.cookie|sessionStorage|indexedDB/);
