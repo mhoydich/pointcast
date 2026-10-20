@@ -770,6 +770,38 @@ test('with more capsules than one reply holds, a due capsule is not called NOT L
   assert.equal(C.matchFile(file, inside).state, 'due');
 });
 
+test('a capsule file edited in its block or wax seal is accepted (they are not bound) but the card shows the devnet’s numbers and says the file differs; the page no longer claims any edit is refused', async () => {
+  const made = await OPEN_FILE_FOR({ client: { seed: '81'.repeat(32) } });
+  const file = made.file;
+  const forged = { ...made.raw, open_at: 2, label: 'FORGED LABEL' };
+  const accepted = C.readCapsuleFile(forged);
+  assert.equal(accepted.openAt, 2, 'the commitment does not bind open_at, so the file reads');
+  // the devnet's row for this capsule: the real block and label
+  const real = listWith(file, {}, file.openAt - 40);
+  const m = mountView({ fetchOpts: { fx: { ...FX, capsules: real } } });
+  await m.c.begin();
+  m.c.stop();
+  await m.c.importFile(JSON.stringify(forged));
+  const li = m.rootEl.querySelector('[data-cp-mine] li');
+  assert.match(li.querySelector('.cp-mine__m').textContent, new RegExp('^Wax seal “' + file.label + '” · channel BOT · opens at block ' + String(file.openAt).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' · in 39 blocks'));
+  assert.doesNotMatch(li.textContent, /FORGED LABEL(?!” \(the devnet)/);
+  assert.doesNotMatch(li.querySelector('.cp-mine__m').textContent, /block 2 /);
+  assert.match(li.querySelector('.cp-mine__diff').textContent, new RegExp('^The file says it opens at block 2 \\(the devnet lists block ' + file.openAt + '\\); its wax seal is “FORGED LABEL” \\(the devnet lists “' + file.label + '”\\)\\. The devnet’s numbers are shown'));
+  assert.equal(li.dataset.state, 'waiting', 'the state follows the devnet’s block, not the file’s');
+  // an honest file draws no such note
+  m.c.state.mine.length = 0;
+  await m.c.importFile(JSON.stringify(made.raw));
+  assert.equal(m.rootEl.querySelector('[data-cp-mine] .cp-mine__diff'), null);
+  // fileDifferences is empty when they agree and for a capsule the devnet does not list
+  assert.deepEqual(C.fileDifferences(file, C.readCapsules(real).rows[0]), []);
+  assert.deepEqual(C.fileDifferences(file, null), []);
+  // the page says what is bound and what is not
+  const note = src.page.replace(/\s+/g, ' ');
+  assert.doesNotMatch(note, /so a file changed after sealing is refused/);
+  assert.match(note, /author, channel, title, message and salt hash to the capsule id it names/);
+  assert.match(note, /The block it opens at and its wax seal are not part of that hash/);
+});
+
 test('capsule files you hold: an edited file is refused with a reason, a good one is added, and the ones kept on this device come back', async () => {
   const f = fileOf(OPENED[0]);
   const { rootEl, c, dom } = mountView();

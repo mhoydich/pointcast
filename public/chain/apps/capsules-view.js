@@ -130,8 +130,14 @@ export function mount(root, env = {}) {
       const head = el(doc, 'div', 'cp-mine__h');
       head.append(el(doc, 'strong', 'cp-mine__t', m.title), el(doc, 'span', 'ca-badge', STATE_WORD[state]));
       li.append(head);
-      const left = S.list && S.list.height !== null ? Math.max(0, m.openAt - S.list.height - 1) : null;
-      li.append(el(doc, 'p', 'cp-mine__m', 'Wax seal “' + m.label + '” · channel ' + m.channel + ' · opens at block ' + groups(m.openAt) + (state === 'waiting' && left !== null ? ' · in ' + plural(left, 'block') + ': ' + eta(left) : '') + (sameDevnet ? '' : ' · this file is for another devnet (genesis ' + shortHex(m.genesis, 10, 6) + ')')));
+      // The block it opens at and the wax seal are not bound by the capsule id, so where the devnet lists the capsule its numbers are the ones shown.
+      const row = sameDevnet ? match.row : null;
+      const openAt = row ? row.openAt : m.openAt;
+      const label = row ? row.label : m.label;
+      const left = S.list && S.list.height !== null ? Math.max(0, openAt - S.list.height - 1) : null;
+      li.append(el(doc, 'p', 'cp-mine__m', 'Wax seal “' + label + '” · channel ' + m.channel + ' · opens at block ' + groups(openAt) + (state === 'waiting' && left !== null ? ' · in ' + plural(left, 'block') + ': ' + eta(left) : '') + (sameDevnet ? '' : ' · this file is for another devnet (genesis ' + shortHex(m.genesis, 10, 6) + ')')));
+      const differs = C.fileDifferences(m, row);
+      if (differs.length) li.append(el(doc, 'p', 'fine cp-mine__diff', 'The file says ' + differs.join('; ') + '. The devnet’s numbers are shown, and are the ones that count: the block and the wax seal are not part of what the capsule id commits to, so a file can be edited in them.'));
       if (state === 'gone') li.append(el(doc, 'p', 'fine', sameDevnet ? 'The devnet does not list it: already opened, lapsed and pruned, or the devnet was reset.' : 'Nothing to do here: this page reads a different devnet.'));
       if (state === 'unknown') li.append(el(doc, 'p', 'fine', 'The devnet lists only its ' + groups(C.LIMITS.listLimit) + ' capsules that lapse soonest and this one is not among them, so this page cannot tell whether it is due, opened or gone. It does not open it blind.'));
       const actions = el(doc, 'div', 'ca-actions');

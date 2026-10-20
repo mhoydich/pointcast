@@ -116,7 +116,9 @@ export function makeCapsuleFile({ chainId, genesis, api, capsule, author, channe
 /**
  * Read a capsule file strictly, and check it against itself: the capsule id must
  * be the one its own author, channel, title, message and salt hash to, on the
- * devnet the file names. A file edited after sealing does not pass. Returns the
+ * devnet the file names. A file whose author, channel, title, message or salt was
+ * edited does not pass; its open_at, label, sealed_at and seal_tx are not bound
+ * (see fileDifferences). Returns the
  * file's fields or throws a KitError naming the first thing wrong.
  */
 export function readCapsuleFile(input) {
@@ -351,6 +353,21 @@ export async function readWall(net, { maxPages = LIMITS.feedPages, limit = LIMIT
     items.push({ ...o, body: verified ? cleanBlock(text, LIMITS.bodyBytes) : '', bodyVerified: verified, seal: seals.get(o.capsule) || null });
   }
   return { items, scannedBlocks: scanned, complete };
+}
+
+/**
+ * What a capsule file says that the devnet's own row for it does not: [] when they agree. Only the author, channel, title, message
+ * and salt are bound by the capsule id; the block it opens at and the wax-seal label are not, so a file can be edited in those two and
+ * still be accepted. The devnet's row is what a page trusts for them.
+ */
+export function fileDifferences(file, row) {
+  const out = [];
+  if (!row) return out;
+  if (row.openAt !== file.openAt) out.push('it opens at block ' + file.openAt + ' (the devnet lists block ' + row.openAt + ')');
+  if (row.label !== file.label) out.push('its wax seal is “' + file.label + '” (the devnet lists “' + row.label + '”)');
+  if (row.channel !== file.channel) out.push('its channel is ' + file.channel + ' (the devnet lists ' + row.channel + ')');
+  if (row.author !== file.author) out.push('its author is ' + file.author + ' (the devnet lists ' + row.author + ')');
+  return out;
 }
 
 /** The capsule the devnet lists for this file, with its state. `tip` is the devnet's newest block. */
