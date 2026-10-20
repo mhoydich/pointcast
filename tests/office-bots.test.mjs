@@ -54,7 +54,7 @@ test('manifest, block, home feed, llms.txt and sitemap all point at the series',
   const m = officeBotsManifest();
   assert.equal(m.schema, 'pointcast.office-bots/v1');
   assert.equal(m.attribution.kind, 'fiction');
-  const block = JSON.parse(text('src/content/blocks/0716.json'));
+  const block = JSON.parse(text('src/content/blocks/0717.json'));
   assert.equal(block.author, 'cc');
   assert.equal(block.draft, false);
   assert.equal(block.meta.feature_json, '/office-bots.json');

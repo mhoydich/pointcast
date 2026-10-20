@@ -1,0 +1,243 @@
+---
+/**
+ * GuidesMapArt: stylized, block-grid map of El Segundo, CA.
+ * Print-ad art for "Every block needs a Guide." (PointCast Guides).
+ * Pure inline SVG, no external assets, no JS. Not to scale.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+
+// Seeded deterministic PRNG (mulberry32)
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry32(2028);
+const pick = <T,>(arr: T[]): T => arr[Math.floor(rand() * arr.length)];
+
+type Sq = { x: number; y: number; s: number; f: string; o?: number };
+
+const INK = '#16120c';
+const PAPER = '#fbf7ee';
+const MONO = 'JetBrains Mono Variable, monospace';
+const SANS = "'Inter Variable', sans-serif";
+
+// ---- Ocean + beach (pitch 20, 18px squares), 40 cols x 50 rows ----
+const P = 20;
+const oceanBlues = ['#2a6fdb', '#2566cb', '#3379e3', '#2c70d6', '#1f5cb8'];
+const sands = ['#f1dfae', '#e8d29a', '#f6e8c3', '#ebd8a4', '#dfc88d'];
+const ocean: Sq[] = [];
+const waves: Sq[] = [];
+const sand: Sq[] = [];
+for (let r = 0; r < 50; r++) {
+  const oceanCols = 11 + (rand() < 0.35 ? 1 : 0);
+  for (let c = 0; c < oceanCols; c++) {
+    const x = c * P + 1;
+    const y = r * P + 1;
+    if (rand() < 0.11 || (c === oceanCols - 1 && rand() < 0.45)) {
+      waves.push({ x, y, s: 18, f: '#ffffff', o: 0.9 });
+    } else {
+      ocean.push({ x, y, s: 18, f: pick(oceanBlues) });
+    }
+  }
+  for (let c = oceanCols; c < 14; c++) {
+    sand.push({ x: c * P + 1, y: r * P + 1, s: 18, f: pick(sands) });
+  }
+}
+
+// ---- LAX band (x 280..800, y 0..160) ----
+const laxGrays = ['#d9dbde', '#cfd2d6', '#e2e4e6', '#c7cace', '#d4d7da'];
+const lax: Sq[] = [];
+for (let r = 0; r < 8; r++) {
+  for (let c = 0; c < 26; c++) {
+    const runway = r === 2 || r === 5;
+    lax.push({
+      x: 280 + c * P + 1,
+      y: r * P + 1,
+      s: 18,
+      f: runway ? (c % 4 === 1 ? '#9ea3a9' : '#868b92') : pick(laxGrays),
+    });
+  }
+}
+// little square airplane (pitch 12)
+const plane: Sq[] = [];
+{
+  const px = 600, py = 62, u = 12;
+  const cells: [number, number][] = [
+    [0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0], // fuselage
+    [3, -1], [3, -2], [3, 1], [3, 2], // wings
+    [0, -1], [0, 1], // tail
+  ];
+  cells.forEach(([dx, dy]) => plane.push({ x: px + dx * u, y: py + dy * u, s: 11, f: dx === 5 ? '#ff6f3c' : INK }));
+}
+
+// ---- Town: city blocks (pitch 40, 34px squares), cols 0..12, rows 0..18 ----
+const TX = 280, TY = 200, TP = 40, COLS = 13, ROWS = 19;
+const MAIN_C = 4, GRAND_R = 7, SEPULVEDA_C = 11;
+const creams = ['#efe6d2', '#e6ddc8', '#dcd6c7', '#ece8dd', '#d3cdbd', '#e9e1cf'];
+const refineryCols = [0, 1, 2], refineryRows = [14, 15, 16, 17];
+
+type Hi = { c: number; r: number; f: string; label: string };
+const highlights: Hi[] = [
+  { c: 2, r: 3, f: '#ff6f3c', label: 'Guide wanted' },
+  { c: 6, r: 2, f: '#d8ff4f', label: 'pickleball' },
+  { c: 9, r: 4, f: '#2a6fdb', label: 'run club' },
+  { c: 7, r: 10, f: '#ff8fc7', label: 'block party' },
+  { c: 2, r: 11, f: '#d8ff4f', label: 'new in town' },
+  { c: 9, r: 14, f: '#2a6fdb', label: 'team page' },
+  { c: 5, r: 16, f: '#ff6f3c', label: 'Guide wanted' },
+  { c: 8, r: 6, f: '#ff8fc7', label: 'Guide wanted' },
+];
+const hiMap = new Map(highlights.map((h) => [`${h.c},${h.r}`, h]));
+
+const blocks: Sq[] = [];
+const refinery: Sq[] = [];
+const hiBlocks: Sq[] = [];
+for (let r = 0; r < ROWS; r++) {
+  for (let c = 0; c < COLS; c++) {
+    if (c === MAIN_C || r === GRAND_R || c === SEPULVEDA_C) continue;
+    const x = TX + c * TP + 3;
+    const y = TY + r * TP + 3;
+    const hi = hiMap.get(`${c},${r}`);
+    if (hi) {
+      hiBlocks.push({ x, y, s: 34, f: hi.f });
+      continue;
+    }
+    if (refineryCols.includes(c) && refineryRows.includes(r)) {
+      refinery.push({ x, y, s: 34, f: pick(['#8a8f98', '#767c86', '#9aa0a8']) });
+      continue;
+    }
+    if (rand() < 0.05) continue; // a few empty lots
+    blocks.push({ x, y, s: 34, f: pick(creams) });
+  }
+}
+// tiny "tank" squares inside the refinery blocks
+const tanks: Sq[] = refinery.map((b) => ({ x: b.x + 10, y: b.y + 10, s: 14, f: '#5b6068' }));
+
+// tags for highlighted blocks
+const tags = highlights.map((h) => {
+  const w = Math.round(h.label.length * 5.7 + 12);
+  const bx = TX + h.c * TP + 3;
+  const by = TY + h.r * TP + 3;
+  let x = bx + 17 - w / 2;
+  x = Math.max(284, Math.min(x, 794 - w));
+  return { x, y: by + 26, w, label: h.label };
+});
+
+// ---- Compass rose from squares ----
+const compass: Sq[] = [];
+{
+  const cx = 110, cy = 880, u = 17;
+  compass.push({ x: cx - 8, y: cy - 8, s: 16, f: PAPER });
+  for (let i = 1; i <= 3; i++) {
+    compass.push({ x: cx - 8, y: cy - 8 - i * u, s: 15 - i, f: i === 3 ? '#ff6f3c' : PAPER, o: i === 3 ? 1 : 0.95 }); // N
+    compass.push({ x: cx - 8, y: cy - 8 + i * u, s: 15 - i, f: PAPER, o: 0.8 }); // S
+    compass.push({ x: cx - 8 + i * u, y: cy - 8, s: 15 - i, f: PAPER, o: 0.8 }); // E
+    compass.push({ x: cx - 8 - i * u, y: cy - 8, s: 15 - i, f: PAPER, o: 0.8 }); // W
+  }
+}
+---
+
+<svg
+  class={className}
+  viewBox="0 0 800 1000"
+  role="img"
+  aria-label="Stylized block-grid map of El Segundo, California, with the Pacific Ocean to the west, LAX to the north, and a handful of city blocks highlighted in bright colors as open Guide seats."
+  xmlns="http://www.w3.org/2000/svg"
+  preserveAspectRatio="xMidYMid meet"
+  style="width:100%;height:auto;display:block;"
+>
+  <rect x="0" y="0" width="800" height="1000" fill={PAPER} />
+
+  <!-- Pacific Ocean -->
+  <g shape-rendering="crispEdges">
+    {ocean.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} />)}
+    {waves.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} opacity={q.o} />)}
+    {sand.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} />)}
+  </g>
+
+  <!-- Town backdrop and roads -->
+  <rect x="280" y="160" width="520" height="840" fill="#f4eedf" />
+  <g fill="#ddd5c0">
+    <rect x="280" y="164" width="520" height="24" />
+    <rect x="450" y="188" width="20" height="770" />
+    <rect x="280" y="490" width="520" height="20" />
+    <rect x="725" y="188" width="30" height="770" />
+    <rect x="280" y="958" width="520" height="24" />
+  </g>
+
+  <!-- LAX band -->
+  <g shape-rendering="crispEdges">
+    {lax.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} />)}
+    {plane.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} />)}
+  </g>
+  <text x="298" y="44" font-family={MONO} font-size="26" font-weight="700" fill={INK}>LAX ↑</text>
+
+  <!-- City blocks -->
+  <g shape-rendering="crispEdges">
+    {blocks.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} />)}
+    {refinery.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} />)}
+    {tanks.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} />)}
+    {hiBlocks.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} stroke={INK} stroke-width="2" />)}
+  </g>
+
+  <!-- Street labels -->
+  <g font-family={MONO} font-size="10" font-weight="600" fill="#5a5342" letter-spacing="1.5">
+    <text x="540" y="180" text-anchor="middle">IMPERIAL HWY</text>
+    <text x="640" y="504" text-anchor="middle">GRAND AVE</text>
+    <text x="540" y="974" text-anchor="middle">ROSECRANS AVE</text>
+    <text transform="translate(464 330) rotate(-90)" text-anchor="middle">MAIN ST</text>
+    <text transform="translate(744 800) rotate(-90)" text-anchor="middle">SEPULVEDA BLVD</text>
+  </g>
+
+  <!-- Highlight tags -->
+  <g font-family={MONO} font-size="9.5" font-weight="700" fill={INK}>
+    {tags.map((t) => (
+      <>
+        <rect x={t.x} y={t.y} width={t.w} height="15" fill={PAPER} stroke={INK} stroke-width="1.5" />
+        <text x={t.x + t.w / 2} y={t.y + 10.5} text-anchor="middle">{t.label}</text>
+      </>
+    ))}
+  </g>
+
+  <!-- You are here -->
+  <g>
+    <rect x="436" y="472" width="64" height="64" fill={INK} />
+    <rect x="430" y="466" width="64" height="64" fill="#ff6f3c" stroke={INK} stroke-width="4" />
+    <rect x="452" y="488" width="20" height="20" fill={PAPER} stroke={INK} stroke-width="3" />
+    <rect x="392" y="536" width="140" height="22" fill={INK} />
+    <text x="462" y="551" text-anchor="middle" font-family={MONO} font-size="12" font-weight="800" fill="#d8ff4f" letter-spacing="1">YOU ARE HERE</text>
+  </g>
+
+  <!-- Compass rose -->
+  <g shape-rendering="crispEdges">
+    {compass.map((q) => <rect x={q.x} y={q.y} width={q.s} height={q.s} fill={q.f} opacity={q.o} />)}
+  </g>
+  <g font-family={MONO} font-size="13" font-weight="800" fill={PAPER} text-anchor="middle">
+    <text x="110" y="808">N</text>
+    <text x="110" y="962">S</text>
+    <text x="30" y="885">W</text>
+    <text x="190" y="885">E</text>
+  </g>
+
+  <!-- Legend -->
+  <g>
+    <rect x="16" y="196" width="196" height="34" fill={PAPER} stroke={INK} stroke-width="2" />
+    <rect x="26" y="205" width="16" height="16" fill="#d8ff4f" stroke={INK} stroke-width="2" />
+    <text x="52" y="217" font-family={MONO} font-size="12" font-weight="700" fill={INK}>open Guide seat</text>
+  </g>
+
+  <!-- Note -->
+  <g>
+    <rect x="16" y="972" width="170" height="18" fill={PAPER} />
+    <text x="24" y="985" font-family={MONO} font-size="10" fill={INK}>not to scale · stylized</text>
+  </g>
+</svg>
