@@ -248,9 +248,11 @@ export function mount(root, env = {}) {
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {} };
+  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {}, said: '' };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
-  const say = (text, state) => { set('[data-ob-status]', text); root.dataset.state = state || root.dataset.state; };
+  // The status line is a polite live region: it is written only when its words change (a state change: reading, ready, down, genesis
+  // changed, back up). The time of the last read lives in the meta line, which is not live, so a quiet devnet announces nothing.
+  const say = (text, state) => { if (text !== S.said) { set('[data-ob-status]', text); S.said = text; } root.dataset.state = state || root.dataset.state; };
 
   function paintStatic(st) {
     set('[data-ob-v="height"]', '#' + groups(st.height));
@@ -374,7 +376,7 @@ export function mount(root, env = {}) {
       paintToday(d);
       paintHealth();
       paintMeta();
-      say('Updated ' + utcClock(d.readAt + S.skew) + '. ' + (S.live ? 'Live: reading again when a new block lands.' : 'Live is off: press Read now to update.'), 'ready');
+      say('Updated. ' + (S.live ? 'Live: reading again when a new block lands.' : 'Live is off: press Read now to update.') + ' The time of the last read is in the line below.', 'ready');
     } catch (e) {
       if (e && e.name === 'GenesisChanged') { genesisNote(true, e); say('GENESIS CHANGED. Nothing below is read.', 'changed'); S.halted = true; }
       else say('The devnet did not answer: ' + describeError(e) + (S.data ? ' The numbers shown are from the last read.' : ''), 'down');

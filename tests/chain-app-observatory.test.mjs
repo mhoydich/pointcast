@@ -584,6 +584,46 @@ test('a periodic re-read does not throw keyboard focus out of a chart: unchanged
   assert.equal(win.document.activeElement, rootEl.querySelector('[data-ob-go]'));
 });
 
+test('the polite status line is announced only when its words change: a quiet devnet re-read every minute says nothing new', async () => {
+  let clock = FIX.local.status.tip_timestamp + 1000;
+  const live = { down: false };
+  const overrides = { '/status': async () => (live.down ? { ok: false, status: 503, headers: { get: () => null }, text: async () => '{"error":"unavailable"}' } : { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ ...FIX.local.status, network: 'devnet' }) }) };
+  const { rootEl, c, dom } = mountView({ name: 'local', overrides, now: () => clock });
+  await c.begin();
+  c.stop();
+  const status = rootEl.querySelector('[data-ob-status]');
+  const seen = [];
+  const mo = new dom.window.MutationObserver((list) => { for (const m of list) seen.push(m.target.textContent); });
+  mo.observe(status, { childList: true, characterData: true, subtree: true });
+  const first = status.textContent;
+  assert.match(first, /^Updated\. Live: reading again when a new block lands\./);
+  assert.doesNotMatch(first, /\d\d:\d\d:\d\dZ/, 'no clock time in the live region');
+  const meta = () => txt(rootEl, '[data-ob-meta]');
+  const m0 = meta();
+  // three periodic re-reads, a minute apart, nothing changed: no mutation in the live region, and the meta line (not live) carries the new time
+  for (let i = 0; i < 3; i++) { clock += 61000; await c.read(['window', 'daily', 'net', 'capsules', 'editions', 'stations', 'bots']); }
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(seen, [], 'the live region was not rewritten: ' + JSON.stringify(seen));
+  assert.notEqual(meta(), m0, 'the time of the last read moved in the non-live line');
+  assert.match(meta(), /last read \d\d:\d\d:\d\dZ/);
+  // a real change is announced: the devnet goes down, then comes back
+  live.down = true;
+  await c.read(null);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.match(status.textContent, /^The devnet did not answer: /);
+  assert.equal(seen.length > 0, true, 'going down is announced');
+  const afterDown = seen.length;
+  await c.read(null);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(seen.length, afterDown, 'the same failure again is not announced again');
+  live.down = false;
+  await c.read(null);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.match(status.textContent, /^Updated\. Live: /);
+  assert.ok(seen.length > afterDown, 'coming back is announced');
+  mo.disconnect();
+});
+
 test('hostile text from the devnet is shown as plain text and makes no element', async () => {
   const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
   const blocks = FIX.local.blocks.map((b, i) => (i === 40 ? { header: b.header, txs: [{ tx: { type: evil, sender: 'pca1' + evil, channel: evil } }, { tx: { type: evil, sender: evil, channel: 'BOT' } }] } : b));
