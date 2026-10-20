@@ -1263,12 +1263,37 @@ test('what the roll says about a key: correct, strike, pending — and the cases
   assert.deepEqual([st(['duplicate']).state, st(['over_cap']).state, st(['premature']).state, st(['bad_sig']).state, st(['whatever']).state], ['duplicate', 'notcounted', 'notcounted', 'notcounted', 'notcounted']);
   assert.match(st(['premature']).text, /premature/);
   // not on the list: not in a block, the roll has read less far, the roll has read past it, no roll at all
-  assert.deepEqual([st([], { includedAt: null }).state, st([], { includedAt: 95 }, { indexed_height: 90 }).state, st([], { includedAt: 95 }, { indexed_height: 100 }).state], ['pending', 'pending', 'notlisted']);
+  assert.deepEqual([st([], { includedAt: null }).state, st([], { includedAt: 95 }, { indexed_height: 90 }).state, st([], { includedAt: 95 }, { indexed_height: 100, more: 0 }).state], ['pending', 'pending', 'notlisted']);
   assert.match(st([], { includedAt: 95 }, { indexed_height: 90 }).text, /The roll has read to block №90 and your post is in block №95/);
   assert.equal(X.standingOnRoll({ checkpoint: null, address: KEY.sender, includedAt: 95 }).state, 'pending');
   // matched by address or by tx
   assert.equal(X.standingOnRoll({ checkpoint: cp(['correct']), address: KEY2.sender, txHash: HEX('1'), includedAt: 95 }).state, 'correct');
-  assert.equal(X.standingOnRoll({ checkpoint: cp(['correct']), address: KEY2.sender, txHash: HEX('9'), includedAt: 95 }).state, 'notlisted');
+  assert.equal(X.standingOnRoll({ checkpoint: cp(['correct'], { more: 0 }), address: KEY2.sender, txHash: HEX('9'), includedAt: 95 }).state, 'notlisted');
+});
+
+test('a roll that lists up to 64 keys is read whole, and a key that is not among the rows shown is never called NOT LISTED while the devnet says more keys are not listed', () => {
+  // the devnet lists up to 64 witnesses per checkpoint and counts the rest in `more`
+  assert.ok(X.LIMITS.rollRows >= 64, 'the page keeps every row the devnet lists: ' + X.LIMITS.rollRows);
+  const row = (addr, i) => ({ addr, name: 'k' + i, name_bound: true, tier: 'witness', established: false, tx: String(i + 1).padStart(64, '0'), result: 'correct', included_at: 95 });
+  const others = Array.from({ length: 64 }, (_, i) => row('tz1' + String(i).padStart(30, 'a'), i));
+  // the key is the 60th row: with the old cap of 50 it was cut off and the page said NOT LISTED
+  const rows = [...others.slice(0, 59), row(KEY.sender, 59), ...others.slice(59, 63)];
+  assert.equal(rows.length, 64);
+  const cp = X.readCheckpointRoll(rollJson({ witnesses: rows, distinct: 64, correct: 64, strikes: 0, more: 0 }), 10);
+  assert.equal(cp.keys.length, 64, 'all 64 rows are kept');
+  const found = X.standingOnRoll({ checkpoint: cp, address: KEY.sender, includedAt: 95 });
+  assert.deepEqual([found.state, found.label], ['correct', 'CORRECT']);
+  // more than the devnet lists: the key may be among the `more`, so the page says that, not NOT LISTED
+  const withMore = X.readCheckpointRoll(rollJson({ witnesses: others, distinct: 80, correct: 80, strikes: 0, more: 16 }), 10);
+  const maybe = X.standingOnRoll({ checkpoint: withMore, address: KEY.sender, includedAt: 95 });
+  assert.deepEqual([maybe.state, maybe.label], ['maybe', 'NOT IN THE LIST SHOWN']);
+  assert.match(maybe.text, /lists 64 keys for this checkpoint and 16 more it does not list, so your key \(post in block №95\) may be among them\. The roll has read past your post\./);
+  assert.doesNotMatch(maybe.text, /does not list your key/);
+  // with nothing unlisted, being absent is still NOT LISTED; and a roll that has not read that far is still pending
+  const none = X.readCheckpointRoll(rollJson({ witnesses: others, distinct: 64, correct: 64, strikes: 0, more: 0 }), 10);
+  assert.equal(X.standingOnRoll({ checkpoint: none, address: KEY.sender, includedAt: 95 }).state, 'notlisted');
+  const behind = X.readCheckpointRoll(rollJson({ witnesses: others, more: 16, indexed_height: 90 }), 10);
+  assert.equal(X.standingOnRoll({ checkpoint: behind, address: KEY.sender, includedAt: 95 }).state, 'pending');
 });
 
 test('pollRoll reads until the key’s row is there, at most `tries` reads, `everyMs` apart', async () => {
@@ -2042,6 +2067,21 @@ test('the roll says PENDING while the devnet’s index lags, reads again on requ
   $(m.rootEl, '[data-wt-roll-read]').click();
   await until(() => $(m.rootEl, '[data-wt-roll-state]').textContent === 'CORRECT');
   assert.equal($(m.rootEl, '[data-wt-roll-state]').dataset.state, 'ok');
+  m.c.stop();
+});
+
+test('with more keys on a checkpoint than the devnet lists, the page says the key may be among those not listed, never NOT LISTED, and keeps all 64 rows', async () => {
+  const row = (addr, i) => ({ addr, name: 'k' + i, name_bound: true, tier: 'witness', established: false, tx: String(i + 1).padStart(64, '0'), result: 'correct', included_at: 95 });
+  const others = Array.from({ length: 64 }, (_, i) => row('tz1' + String(i).padStart(30, 'a'), i));
+  const override = (u, i, { rep }) => rep(rollJson({ witnesses: others, distinct: 80, correct: 80, strikes: 0, more: 16 }));
+  const m = mountView({ dev: { overrides: { '/checkpoints/10/witnesses': override } } });
+  await m.c.begin();
+  await m.c.keys.setSeed(SEED);
+  await m.c.replay();
+  await until(() => $(m.rootEl, '[data-wt-roll]').hidden === false && txt(m.rootEl, '[data-wt-roll-text]') !== '');
+  assert.equal([...m.rootEl.querySelectorAll('[data-wt-roll-list] li')].length, 64, 'every row the devnet lists is drawn');
+  assert.match(txt(m.rootEl, '[data-wt-roll-text]'), /^Your key is not among the 64 listed for this checkpoint, and the devnet lists no more than that: 16 more signed it, so yours may be one of them\.$/);
+  assert.doesNotMatch(txt(m.rootEl, '[data-wt-roll-text]'), /not attested|NOT LISTED/);
   m.c.stop();
 });
 

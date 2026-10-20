@@ -550,10 +550,12 @@ export function mount(root, env = {}) {
     const badge = q('[data-wt-roll-state]');
     if (badge) {
       badge.textContent = standing ? standing.label : '';
-      badge.dataset.state = standing ? ({ correct: 'ok', strike: 'bad', duplicate: 'warn', notcounted: 'warn', notlisted: 'warn', pending: 'warn' }[standing.state] || '') : '';
+      badge.dataset.state = standing ? ({ correct: 'ok', strike: 'bad', duplicate: 'warn', notcounted: 'warn', notlisted: 'warn', maybe: 'warn', pending: 'warn' }[standing.state] || '') : '';
       badge.hidden = !standing;
     }
-    set('[data-wt-roll-text]', standing ? standing.text : key() ? 'Your key has not attested this checkpoint yet: it is not on this list.' : 'Make a key to see your own row on this list.');
+    set('[data-wt-roll-text]', standing ? standing.text
+      : key() ? (cp && cp.more > 0 ? 'Your key is not among the ' + cp.keys.length + ' listed for this checkpoint, and the devnet lists no more than that: ' + cp.more + ' more signed it, so yours may be one of them.' : 'Your key has not attested this checkpoint yet: it is not on this list.')
+        : 'Make a key to see your own row on this list.');
     const list = q('[data-wt-roll-list]');
     if (list) {
       list.replaceChildren();

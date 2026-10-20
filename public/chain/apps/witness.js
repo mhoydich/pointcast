@@ -44,7 +44,8 @@ export const LIMITS = Object.freeze({
   fetchMs: 60000,
   rollPages: 5,
   rollLimit: 100,
-  rollRows: 50,
+  /** The devnet lists at most 64 keys per checkpoint (CP_WITNESSES_MAX) and counts the rest in `more`: every row it lists is kept. */
+  rollRows: 64,
   pollTries: 8,
   pollMs: 2500,
   journalMax: 50,
@@ -870,6 +871,8 @@ export function standingOnRoll({ checkpoint, address, txHash = '', includedAt = 
     return { state: 'pending', label: 'PENDING', result: '', text: 'The roll has read to block №' + checkpoint.indexedHeight + ' and your post is in block №' + includedAt + '. Read it again in a moment.' };
   }
   if (!checkpoint) return { state: 'pending', label: 'PENDING', result: '', text: 'The devnet has no roll for this checkpoint yet. Read it again in a moment.' };
+  // The devnet lists at most 64 keys and only counts the rest: a key that is not among the rows may be one of those, so it is not said to be missing.
+  if (checkpoint.more > 0) return { state: 'maybe', label: 'NOT IN THE LIST SHOWN', result: '', text: 'The roll lists ' + checkpoint.keys.length + ' keys for this checkpoint and ' + checkpoint.more + ' more it does not list, so your key (post in block №' + includedAt + ') may be among them. The roll has read past your post.' };
   return { state: 'notlisted', label: 'NOT LISTED', result: '', text: 'The roll has read past your post (block №' + includedAt + ') and does not list your key at this checkpoint.' };
 }
 
