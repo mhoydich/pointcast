@@ -51,7 +51,7 @@ export function mount(root, env = {}) {
   function paintHash() {
     const f = S.file;
     set('[data-nt-hash]', f ? f.sha256 : 'no file or hash yet');
-    set('[data-nt-size]', f ? groups(f.bytes) + ' bytes' + (f.name ? ' · ' + f.name : '') : '');
+    set('[data-nt-size]', f ? (f.bytes === null ? 'size not given' : groups(f.bytes) + ' bytes') + (f.name ? ' · ' + f.name : '') : '');
     const review = q('[data-nt-review]');
     if (review) review.disabled = !f || !keys || !keys.key() || S.halted;
     const nameBox = q('[data-nt-name-box]');
@@ -114,9 +114,10 @@ export function mount(root, env = {}) {
     const h = N.parsePastedHash(t ? t.value : '');
     if (!h) { if (out) { out.textContent = 'A SHA-256 is 64 hex characters (from sha256sum or shasum -a 256).'; out.dataset.bad = 'yes'; } return; }
     const size = q('[data-nt-paste-size]');
-    const bytes = size && /^\d{1,15}$/.test(size.value.trim()) ? Number(size.value.trim()) : 0;
+    // A stamp carries the file's size, and a made-up 0 on chain would be false: without a typed size the hash is taken, but not stampable.
+    const bytes = size && /^\d{1,15}$/.test(size.value.trim()) ? Number(size.value.trim()) : null;
     setFile({ sha256: h, bytes, name: '' });
-    if (out) { out.textContent = 'Using that hash.' + (bytes ? '' : ' The size is left at 0; type the file’s size in bytes to include it.'); out.dataset.bad = 'no'; }
+    if (out) { out.textContent = 'Using that hash.' + (bytes === null ? ' To stamp it, type the file’s size in bytes (wc -c; an empty file is 0): a stamp carries the size, and the page will not invent one.' : ''); out.dataset.bad = 'no'; }
   }
 
   // ------------------------------------------------------------ the stamp
@@ -132,7 +133,8 @@ export function mount(root, env = {}) {
     const note = ((q('[data-nt-note]') || {}).value || '');
     const name = withName ? f.name : '';
     let body = '';
-    if (f) {
+    if (f && f.bytes === null) errs.push('A stamp carries the file’s size in bytes, and none was given with the pasted hash. Type it next to the hash (an empty file is 0) and press “Use this hash” again.');
+    else if (f) {
       try { body = N.stampBody({ sha256: f.sha256, bytes: f.bytes, name, note }); } catch (e) { errs.push(e.message); }
     }
     // Everything the stamp is made from is copied in here, at Review: Send uses this and nothing else.
@@ -204,13 +206,16 @@ export function mount(root, env = {}) {
 
   const checkHashes = { file: null };
 
+  // Which of the two boxes the person touched last: when both hold something, that one is what is checked, and the page says so.
+  const checkTouched = { last: 'file' };
+
   async function checkInput() {
     const fileEl = q('[data-nt-c-file]');
     const pasted = q('[data-nt-c-hash]');
     const f = fileEl && fileEl.files && fileEl.files[0];
-    if (f) { const h = await N.hashFile(f); return { sha256: h.sha256, bytes: h.bytes, from: 'the file ' + cleanText(String(f.name || ''), 60) }; }
     const p = N.parsePastedHash(pasted ? pasted.value : '');
-    if (p) return { sha256: p, bytes: null, from: 'the pasted hash' };
+    if (f && (!p || checkTouched.last === 'file')) { const h = await N.hashFile(f); return { sha256: h.sha256, bytes: h.bytes, from: 'the file ' + cleanText(String(f.name || ''), 60) + ' (SHA-256 ' + shortHex(h.sha256, 12, 8) + ')' }; }
+    if (p) return { sha256: p, bytes: null, from: 'the pasted hash ' + shortHex(p, 12, 8) };
     return null;
   }
 
@@ -253,11 +258,13 @@ export function mount(root, env = {}) {
       const link = q('[data-nt-c-link]');
       if (link) link.hidden = true;
     };
+    set('[data-nt-c-from]', '');
     try {
       verdict.textContent = 'Checking…';
       out.dataset.state = 'busy';
       const input = await checkInput();
       if (!input) return finish('NOTHING TO CHECK', 'bad', [], 'Choose the file or paste its SHA-256 first.');
+      set('[data-nt-c-from]', 'Checked against ' + input.from + '.');
       let receipt = null;
       try { receipt = await receiptInput(); } catch (e) { return finish('THAT IS NOT A RECEIPT', 'bad', [], describeError(e)); }
       const st = await pinnedStatus(net, where.genesis || null);
@@ -321,6 +328,10 @@ export function mount(root, env = {}) {
   if (rc) rc.addEventListener('click', downloadReceipt);
   const run = q('[data-nt-c-run]');
   if (run) { run.disabled = false; run.addEventListener('click', runCheck); }
+  const cFile = q('[data-nt-c-file]');
+  if (cFile) cFile.addEventListener('change', () => { checkTouched.last = 'file'; });
+  const cHash = q('[data-nt-c-hash]');
+  if (cHash) cHash.addEventListener('input', () => { checkTouched.last = 'hash'; });
   if (keys) keys.onChange(() => { S.plan = null; const b = q('[data-nt-confirm]'); if (b) b.hidden = true; paintHash(); });
   for (const c of root.querySelectorAll('[data-nt-c-file],[data-nt-c-hash],[data-nt-c-receipt-file],[data-nt-c-receipt-text]')) c.disabled = false;
 

@@ -277,7 +277,10 @@ export async function checkStamp({ api, genesis, pinSource = 'pinned', ref, sha2
     try { text = await makeNet(api, env).getText('/body/' + tx.body_hash); } catch { text = null; }
   }
   let parsed = null;
-  if (typeof text !== 'string') checks.push(skip('body', 'The devnet no longer serves the stamp’s body, so what it said cannot be read here.'));
+  // A transaction that is not a Notary post has no stamp body to read: the kind check already failed, and a second line
+  // calling a transfer or a seal "the stamp" would be wrong.
+  if (!isPost) { /* nothing to read */ }
+  else if (typeof text !== 'string') checks.push(skip('body', 'The devnet no longer serves the stamp’s body, so what it said cannot be read here.'));
   else {
     const same = isPost && pcc.bodyHash(text) === tx.body_hash;
     checks.push(same ? pass('body', 'The body hashes to the body_hash the signed transaction commits to.') : fail('body', 'The body does not hash to the body_hash in the signed transaction.'));

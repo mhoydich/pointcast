@@ -633,6 +633,72 @@ test('checking in the page: a pasted hash finds the stamp and shows STAMPED with
   assert.equal(txt(rootEl, '[data-nt-c-verdict]'), 'NOTHING TO CHECK');
 });
 
+test('a receipt that points at a transaction that is not a stamp is NOT STAMPED without calling that transaction a stamp, and a pasted hash needs a size to be stamped', async () => {
+  // a transfer, a post on another channel and a seal in the recording: none is a Notary post, so there is no stamp body to read
+  const others = [];
+  for (const b of FX.blocks) for (const t of b.txs) if (!(t.tx.type === 'publish_block' && t.tx.channel === 'NOTARY')) others.push({ height: b.header.height, hash: K.pcc.txHash(t), type: t.tx.type });
+  const kinds = new Set(others.map((o) => o.type));
+  assert.ok(kinds.has('transfer') && kinds.size >= 2, 'the recording holds more than one kind of transaction that is not a stamp: ' + [...kinds].join());
+  for (const type of kinds) {
+    const o = others.find((x) => x.type === type);
+    const r = await N.checkStamp({ api: 'http://127.0.0.1:8799', genesis: GENESIS, pinSource: 'pinned', ref: { height: o.height, txHash: o.hash }, sha256: sha(KNOWN_TEXT), env: { fetch: fakeDevnet() } });
+    assert.equal(r.verdict, 'NOT STAMPED', type);
+    assert.equal(states(r).kind, 'fail', type);
+    assert.equal(states(r).body, undefined, type + ': no body check at all for a transaction that has no stamp body');
+    assert.ok(!r.checks.some((c) => /stamp’s body/.test(c.text)), type + ': nothing calls it a stamp');
+    assert.equal(r.stamp, null);
+  }
+  // a pasted hash with no size is taken but cannot be stamped: the page will not put a made-up size on chain
+  const fake = await fakeStamping();
+  const sent = [];
+  const { rootEl, c } = mountView({ extra: { connect: async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); return fake.chain.submit(s); } }) } });
+  await c.begin();
+  await c.keys.setSeed('71'.repeat(32));
+  await tick(30);
+  $(rootEl, '[data-nt-paste]').value = sha('some file');
+  $(rootEl, '[data-nt-paste-go]').click();
+  assert.equal(txt(rootEl, '[data-nt-size]'), 'size not given');
+  assert.match(txt(rootEl, '[data-nt-hash-note]'), /type the file’s size in bytes/);
+  $(rootEl, '[data-nt-review]').click();
+  assert.equal($(rootEl, '[data-nt-confirm]').hidden, true, 'no confirm for a stamp that would carry bytes:0 by default');
+  assert.match(txt(rootEl, '[data-nt-errors]'), /A stamp carries the file’s size in bytes/);
+  $(rootEl, '[data-nt-paste-size]').value = '0';
+  $(rootEl, '[data-nt-paste-go]').click();
+  $(rootEl, '[data-nt-review]').click();
+  assert.equal($(rootEl, '[data-nt-confirm]').hidden, false, 'a typed 0 is a size (an empty file)');
+  assert.match(txt(rootEl, '[data-nt-confirm-body]'), /\nbytes:0$/);
+  assert.equal(sent.length, 0);
+});
+
+test('checking says which input it used, and when a file and a hash are both filled the one touched last wins', async () => {
+  const { rootEl, c, dom } = mountView();
+  await c.begin();
+  const fileEl = $(rootEl, '[data-nt-c-file]');
+  const setFiles = (files) => Object.defineProperty(fileEl, 'files', { value: files, configurable: true });
+  const bytes = new TextEncoder().encode('some other file');
+  setFiles([new File([bytes], 'old-choice.bin')]);
+  fileEl.dispatchEvent(new dom.window.Event('change'));
+  // later the person pastes the hash of the stamped text: that is what they mean
+  $(rootEl, '[data-nt-c-hash]').value = sha(KNOWN_TEXT);
+  $(rootEl, '[data-nt-c-hash]').dispatchEvent(new dom.window.Event('input'));
+  $(rootEl, '[data-nt-c-run]').click();
+  await tick(250);
+  assert.equal(txt(rootEl, '[data-nt-c-verdict]'), 'STAMPED', 'the pasted hash, not the leftover file, was checked');
+  assert.match(txt(rootEl, '[data-nt-c-from]'), new RegExp('^Checked against the pasted hash ' + sha(KNOWN_TEXT).slice(0, 12) + '…'));
+  // pick a file again: now the file wins, and the page names it
+  fileEl.dispatchEvent(new dom.window.Event('change'));
+  $(rootEl, '[data-nt-c-run]').click();
+  await tick(250);
+  assert.match(txt(rootEl, '[data-nt-c-from]'), /^Checked against the file old-choice\.bin \(SHA-256 [0-9a-f]{12}…[0-9a-f]{8}\)\.$/);
+  assert.equal(txt(rootEl, '[data-nt-c-verdict]'), 'NOT FOUND');
+  // nothing to check clears the line
+  setFiles([]);
+  $(rootEl, '[data-nt-c-hash]').value = '';
+  $(rootEl, '[data-nt-c-run]').click();
+  await tick(50);
+  assert.equal(txt(rootEl, '[data-nt-c-from]'), '');
+});
+
 test('checking with a receipt goes straight to the stamp’s block; a receipt for another devnet, or another file, or garbage, is said so', async () => {
   const { rootEl, c, log } = mountView();
   await c.begin();
