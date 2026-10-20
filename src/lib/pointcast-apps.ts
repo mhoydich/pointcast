@@ -662,6 +662,17 @@ export const POINTCAST_APPS: PointcastApp[] = [
     kind: 'pointcast',
   },
   {
+    slug: 'small-shrines',
+    name: 'Small Shrines',
+    kicker: 'FOUR PLACES · ART · ONE QUIET MINUTE',
+    description: 'Ocean, Garden, Night and Memory: four secular art-led pauses with original meditations and optional browser-synthesized sound. Generated artwork and verified Michael Hoydich Midjourney works are credited separately.',
+    url: 'https://pointcast.xyz/small-shrines/',
+    path: '/small-shrines/',
+    repo: 'https://github.com/mhoydich/pointcast',
+    channel: 'CH.GDN',
+    kind: 'pointcast',
+  },
+  {
     slug: 'elemental-shrine',
     name: 'Elemental Shrine',
     kicker: 'STONE · LIGHT · FIRE · WATER',

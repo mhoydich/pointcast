@@ -29,6 +29,7 @@ export const AGENT_SURFACES = {
     uesPhilosophyReceipts: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts/',
     uesPhilosophyRadius: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/',
     uesPhilosophyUnmoderated: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label/',
+    smallShrines: 'https://pointcast.xyz/small-shrines/',
     guides: 'https://pointcast.xyz/guides',
     radioNetwork: 'https://pointcast.xyz/radio-network',
     guidesIntake: 'https://pointcast.xyz/guides/intake',
@@ -163,6 +164,7 @@ export const AGENT_SURFACES = {
     standardsRegistry: 'https://pointcast.xyz/standards/registry/',
   },
   json: {
+    smallShrines: 'https://pointcast.xyz/small-shrines.json',
     guides: 'https://pointcast.xyz/guides.json',
     radioNetwork: 'https://pointcast.xyz/radio-network.json',
     guidesIntake: 'https://pointcast.xyz/guides/intake.json',
