@@ -1,0 +1,279 @@
+---
+/**
+ * /signature — Signature Studio.
+ *
+ * Type a name in an open-licensed script face, draw one, or upload a picture.
+ * Export a transparent PNG, a vector SVG, or an email-signature HTML snippet.
+ * Hash the PNG, sign a statement with an ed25519 key made in the browser, and
+ * optionally record a signature/v1 post on the PointCast devnet (channel ART).
+ *
+ * Logic: public/signature/studio.js. DOM: public/signature/studio-view.js.
+ * Words and the font catalog: src/data/signature-studio.ts.
+ * The key lives in its own localStorage slot. It is never sent to a server.
+ * This page is not a notary and not a legally binding e-signature service.
+ * An edition mint is not offered: see EDITION_GAP.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/signature.css';
+import { DEVNET } from '../../data/chain-home';
+import {
+  BLOCK,
+  EDITION_GAP,
+  FONTS,
+  HISTORY_PATH,
+  HONESTY,
+  MEANINGS,
+  NOT_LEGAL,
+  PATH,
+} from '../../data/signature-studio';
+
+const title = 'Signature Studio: a mark, a hash, and a record on the PointCast devnet';
+const description = `${NOT_LEGAL} Type, draw, or upload a signature, export PNG and SVG, and optionally record a hash on the PointCast devnet. ${HONESTY}.`;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: 'Signature Studio',
+  description,
+  url: 'https://pointcast.xyz' + PATH + '/',
+  applicationCategory: 'DesignApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-20',
+  dateModified: '2026-10-20',
+  isPartOf: { '@type': 'WebSite', name: 'PointCast', url: 'https://pointcast.xyz' },
+};
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  jsonLd={jsonLd}
+  hideAds
+  alternates={[{ type: 'application/json', href: '/signature.json', title: 'Signature Studio JSON' }]}
+>
+  <main class="sig" data-signature data-api={DEVNET.url} data-genesis={DEVNET.genesis}>
+    <p class="sig-kicker">Front Door · block {BLOCK} · {HONESTY}</p>
+    <h1>Signature Studio</h1>
+    <p class="sig-dek">
+      Make a mark. Export it. Hash it. Sign a sentence with a key your browser makes. If you want a time on one public server, record the hash on the PointCast devnet.
+    </p>
+    <p class="sig-banner" role="note">{NOT_LEGAL} {HONESTY}. A PNG is a picture. A hash is a fingerprint of that picture. A key signature shows control of a key. A devnet post is a clock on one server that may reset. None of those is a notarization, and none of them identifies you.</p>
+    <ul class="sig-jump">
+      <li><a href="#make">Make a mark</a></li>
+      <li><a href="#export">Export</a></li>
+      <li><a href="#fonts">Fonts</a></li>
+      <li><a href="#means">What “valid” means</a></li>
+      <li><a href="#check">Sign and check</a></li>
+      <li><a href="#record">Record on the devnet</a></li>
+      <li><a href={HISTORY_PATH}>History of signatures</a></li>
+    </ul>
+
+    <section class="sig-section" id="make" aria-labelledby="make-title">
+      <p class="sig-kicker">01 · The mark stays in your browser until you export or record</p>
+      <h2 id="make-title">Make a mark</h2>
+      <noscript>
+        <p>The studio needs JavaScript. Hashing, drawing, and signing happen in your browser. The history page is readable without it.</p>
+      </noscript>
+      <div class="sig-modes" role="group" aria-label="How to make the mark">
+        <button type="button" data-mode-set="type" aria-pressed="true">Type</button>
+        <button type="button" data-mode-set="draw" aria-pressed="false">Draw</button>
+        <button type="button" data-mode-set="upload" aria-pressed="false">Upload</button>
+      </div>
+
+      <div class="sig-controls">
+        <label>
+          <span class="sig-label">Ink</span>
+          <input data-color type="color" value="#1c140f" />
+        </label>
+        <label class="sig-check">
+          <input data-flourish type="checkbox" checked />
+          <span>Baseline flourish</span>
+        </label>
+      </div>
+
+      <div data-panel="type">
+        <div class="sig-controls">
+          <label>
+            <span class="sig-label">Name</span>
+            <input data-name type="text" maxlength="80" autocomplete="name" placeholder="Your name" />
+          </label>
+          <label>
+            <span class="sig-label">Face</span>
+            <select data-font>
+              {FONTS.map((font) => (
+                <option value={font.id} selected={font.id === 'pointcast-script'}>{font.family}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span class="sig-label">Size</span>
+            <input data-size type="range" min="28" max="220" value="96" />
+          </label>
+          <label>
+            <span class="sig-label">Extra slant</span>
+            <input data-slant type="range" min="-25" max="40" value="0" />
+          </label>
+          <label>
+            <span class="sig-label">Stroke</span>
+            <input data-weight type="range" min="0" max="14" value="0" />
+          </label>
+        </div>
+      </div>
+
+      <div data-panel="draw" hidden>
+        <p class="sig-note">Draw with a mouse or a finger. Fast strokes get thinner. A pen that reports pressure is used when the pressure actually changes. Ink and the flourish above apply to the drawing too.</p>
+        <div class="sig-controls">
+          <label>
+            <span class="sig-label">Pen width</span>
+            <input data-pen type="range" min="2" max="18" value="7" />
+          </label>
+        </div>
+        <div class="sig-pad-wrap">
+          <canvas data-pad class="sig-pad" aria-label="Drawing pad"></canvas>
+        </div>
+        <p><button type="button" data-clear>Clear the pad</button></p>
+      </div>
+
+      <div data-panel="upload" hidden>
+        <p class="sig-note">PNG, JPEG, GIF, or WebP. The studio wraps the picture in an SVG. It does not trace it into paths.</p>
+        <label class="sig-file">
+          <span class="sig-label">Image</span>
+          <input data-file type="file" accept="image/png,image/jpeg,image/gif,image/webp" />
+        </label>
+      </div>
+
+      <div class="sig-stage" data-stage role="img" aria-label="Signature preview"></div>
+      <p class="sig-missing" data-missing role="status"></p>
+      <p class="sig-note" data-note>Typed and drawn marks are vector paths. An upload stays a picture.</p>
+    </section>
+
+    <section class="sig-section" id="export" aria-labelledby="export-title">
+      <p class="sig-kicker">02 · Files you can keep</p>
+      <h2 id="export-title">Export</h2>
+      <div class="sig-actions">
+        <button type="button" data-png>Download PNG</button>
+        <button type="button" data-svg>Download SVG</button>
+        <button type="button" data-copy-svg>Copy SVG</button>
+        <button type="button" data-copy-png>Copy PNG</button>
+        <button type="button" data-copy-html>Copy email HTML</button>
+        <button type="button" data-copy-inline>Copy inline SVG</button>
+      </div>
+      <p class="sig-note">The email HTML points at a file named signature.png. Attach that PNG. Most mail clients strip an image pasted as a data URI. The inline SVG is a bonus, and webmail may remove it.</p>
+    </section>
+
+    <section class="sig-section" id="fonts" aria-labelledby="fonts-title">
+      <p class="sig-kicker">03 · Open licenses, and one face of our own</p>
+      <h2 id="fonts-title">The faces</h2>
+      <p>Outlines are extracted ahead of time, so the page draws paths without loading a font file. The font files are still here, with their licenses. <a href="/signature/fonts/README.md">How to add a face or a glyph</a>.</p>
+      <div class="sig-cards">
+        {FONTS.map((font) => (
+          <article class="sig-card">
+            <h3>{font.family}</h3>
+            <p>{font.note}</p>
+            <p class="sig-note">{font.credit}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="sig-section" id="means" aria-labelledby="means-title">
+      <p class="sig-kicker">04 · Five different jobs, often called by one word</p>
+      <h2 id="means-title">What “validating” a signature can mean</h2>
+      <div class="sig-cards">
+        {MEANINGS.map((item) => (
+          <article class="sig-card">
+            <h3>{item.title}</h3>
+            <p>{item.does}</p>
+          </article>
+        ))}
+      </div>
+      <p>The longer version, with the sources, is the <a href={HISTORY_PATH}>history of signatures</a>.</p>
+    </section>
+
+    <section class="sig-section" id="check" aria-labelledby="check-title">
+      <p class="sig-kicker">05 · A fingerprint, then a key</p>
+      <h2 id="check-title">Hash it, sign a statement, or check someone else’s</h2>
+      <p>The hash is SHA-256 of the exported PNG bytes. The signature is ed25519 over a short canonical text: a header, that hash, and your statement. Anyone can paste the three pieces below and check them. The private key stays in this browser.</p>
+      <div class="sig-actions">
+        <button type="button" data-hash>Hash the PNG</button>
+      </div>
+      <pre class="sig-out" data-hash-out></pre>
+
+      <h3>A key, in this browser</h3>
+      <p class="sig-note">This key is separate from the chain apps. “Keep it on this device” writes the seed to localStorage. Any script on pointcast.xyz can read that. It is a play key. Do not reuse it anywhere that matters. Leave the box unchecked and the key dies with the tab. Nothing here stores a private key on a server.</p>
+      <p data-key-status role="status">Reading whether this browser can make an ed25519 key.</p>
+      <p data-key-address></p>
+      <div class="sig-actions">
+        <button type="button" data-key-make>Make a key</button>
+        <button type="button" data-key-show>Show or hide the seed</button>
+        <button type="button" data-key-forget>Forget the key</button>
+      </div>
+      <label class="sig-check">
+        <input data-key-keep type="checkbox" />
+        <span>Keep it on this device</span>
+      </label>
+      <textarea data-key-seed hidden readonly rows="2" aria-label="Seed, shown only when you ask"></textarea>
+
+      <label>
+        <span class="sig-label">Statement</span>
+        <textarea data-statement maxlength="500" rows="3" placeholder="I made this mark."></textarea>
+      </label>
+      <p><button type="button" data-sign class="sig-primary">Sign the statement</button></p>
+      <pre class="sig-out" data-signed></pre>
+
+      <h3>Check a signature</h3>
+      <p class="sig-note">Paste the canonical text, the 64-character public key, and the 128-character signature. Changing one character of the statement makes the check fail.</p>
+      <label>
+        <span class="sig-label">Canonical text</span>
+        <textarea data-v-text rows="4" spellcheck="false"></textarea>
+      </label>
+      <label>
+        <span class="sig-label">Public key</span>
+        <input data-v-pk type="text" spellcheck="false" autocomplete="off" />
+      </label>
+      <label>
+        <span class="sig-label">Signature</span>
+        <input data-v-sig type="text" spellcheck="false" autocomplete="off" />
+      </label>
+      <p><button type="button" data-verify>Check</button></p>
+      <pre class="sig-out" data-verify-out></pre>
+    </section>
+
+    <section class="sig-section" id="record" aria-labelledby="record-title">
+      <p class="sig-kicker">06 · {HONESTY}</p>
+      <h2 id="record-title">Record the hash on the PointCast devnet</h2>
+      <p>Prepare builds a <code>signature/v1</code> post and shows it here before anything is sent. Sign and send uses the key above. The post goes to channel ART, which the house holds open. The body names the PNG’s SHA-256. A typed or drawn SVG is included when the body stays under the storage limit. An upload is not embedded. A media URI is included only if you supply an https, ipfs, or ar address. This studio does not host images.</p>
+      <p data-chain-status role="status">Reading the public devnet.</p>
+      <label>
+        <span class="sig-label">Label, optional</span>
+        <input data-label type="text" maxlength="60" placeholder="A short name for the post" />
+      </label>
+      <label>
+        <span class="sig-label">Media URI, optional</span>
+        <input data-media type="url" placeholder="https://… or ipfs:… or ar:…" />
+      </label>
+      <div class="sig-actions">
+        <button type="button" data-prepare>Prepare the post</button>
+        <button type="button" data-send class="sig-primary" disabled>Sign and send</button>
+      </div>
+      <pre class="sig-pre" data-body></pre>
+      <pre class="sig-out" data-record-out></pre>
+      <p data-links hidden></p>
+
+      <h3>Why this is a post, not a mint</h3>
+      <p>{EDITION_GAP}</p>
+      <pre class="sig-out" data-editions>Editions load with the devnet status.</pre>
+    </section>
+  </main>
+</BlockLayout>
+
+<script is:inline type="module">
+  const root = document.querySelector('[data-signature]');
+  if (root) {
+    const go = () => import('/signature/studio-view.js').then((m) => m.start(root)).catch(() => {
+      const note = root.querySelector('[data-missing]');
+      if (note) note.textContent = 'The studio script did not start.';
+    });
+    if (document.readyState === 'complete') go();
+    else window.addEventListener('load', go, { once: true });
+  }
+</script>
