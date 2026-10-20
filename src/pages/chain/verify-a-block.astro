@@ -1,0 +1,364 @@
+---
+/**
+ * /chain/verify-a-block: "Verify a block by hand", an interactive lesson on the
+ * PointCast devnet. The reader picks a block (a few behind the tip by default,
+ * a random one, a number, or one that carries transactions) and the page walks
+ * the verifier's own steps in their browser, each with a plain explanation, the
+ * exact bytes in small hex blocks and a pass or fail mark. A TAMPER toggle flips
+ * one byte of the fetched copy in memory and re-runs the steps, so the reader
+ * watches which check catches it.
+ *
+ * Grammar follows /chain/net: the devnet is read live from the visitor's
+ * browser, lazily (load, idle, near the viewport, visible tab), and everything
+ * it sends is written with textContent only. The logic is public/chain/apps/
+ * verify.js (no DOM, importable by node), the DOM side public/chain/apps/
+ * verify-view.js, the words src/data/chain-app-verify.ts. The devnet pins come
+ * from src/data/chain-home.ts, never typed here.
+ *
+ * ?devnet=http://127.0.0.1:PORT points the lesson at a local devnet for
+ * end-to-end runs (scripts/e2e-chain-app-verify.mjs). It is honoured only for
+ * the hosts localhost and 127.0.0.1.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import Snippet from '../../components/chain/Snippet.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, VERIFIER_KIB, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, HONESTY_LINE, NOT_PROVES, PROVES, SDK_PATH, STEPS, TAMPER_COPY, WASM_PATH, WASM_SHA256, snippet } from '../../data/chain-app-verify';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const code = snippet(DEVNET.url, DEVNET.genesis);
+const quick = [
+  { label: 'Yard VERIFY', href: DEVNET.yardHref },
+  { label: 'Trust model', href: '/chain/bots#trust' },
+  { label: 'pcv.py', href: '/chain/bots/pcv.py' },
+  { label: 'verify.mjs', href: '/chain/bots/verify.mjs' },
+];
+const toolRows = [
+  ['1 · Fetch', 'the browser’s fetch', 'It reads one server. Nothing it returns is believed until the steps below.'],
+  ['2 · Links', 'SDK blockHeaderHash', 'Shows three headers hold together, not that they reach genesis (the walk does that).'],
+  ['3 · Seal', 'SDK paramsHash, sealDigest, WebCrypto ed25519', 'Checks the genesis key only; a rotated key needs the Block Yard’s replay.'],
+  ['4 · tx_root', 'SDK encodeTx, txHash, txRoot', 'Names any transaction kind it cannot encode and leaves that block’s tx_root unchecked.'],
+  ['5 · Signatures', 'SDK signingHash, verifyEd25519, tezosAddress; optionally the pinned wasm’s tx.wallet', 'Skips passkey (P-256) signatures and checks no rule or balance.'],
+];
+const title = APP.title + ' on the PointCast devnet';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: APP.title,
+  description: APP.description,
+  url: 'https://pointcast.xyz' + APP.path + '/',
+  datePublished: '2026-10-19',
+  dateModified: '2026-10-19',
+  about: { '@type': 'WebAPI', name: 'PointCast devnet raw blocks', url: D + '/raw/block/1', documentation: 'https://pointcast.xyz' + APP.path + '/' },
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+const ramp = '--vb-l50:' + ch.color50 + ';--vb-l600:' + ch.color600 + ';--vb-l800:' + ch.color800;
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <div class="chn vb-page" style={ramp}>
+    <ChainHeader current="verify-a-block" trail={[{ label: 'verify a block' }]} block={APP.block} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · LESSON · VERIFY A BLOCK · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Verify a block by hand.</h1>
+      <p class="dek">
+        A block on the PointCast devnet is a header and a list of signed transactions. Pick one and your browser walks the same
+        steps the chain’s own verifier walks: recompute the hash, check the link to its neighbours, check the sequencer’s
+        signature, rebuild the transaction tree, check every signature. Then flip one byte and watch exactly which check goes red.
+      </p>
+      <svg class="vb-art" viewBox="0 0 360 72" role="img" aria-label="Three linked blocks, each with a small seal">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="8" y="16" width="64" height="40" />
+          <rect x="148" y="16" width="64" height="40" />
+          <rect x="288" y="16" width="64" height="40" />
+          <path d="M72 36H148M212 36H288" />
+          <circle cx="62" cy="26" r="4" />
+          <circle cx="202" cy="26" r="4" />
+          <circle cx="342" cy="26" r="4" />
+          <path d="M18 34h22M18 41h34M18 48h14M158 34h30M158 41h18M158 48h32M298 34h16M298 41h30M298 48h22" stroke-width="2" />
+        </g>
+      </svg>
+      <p class="vb-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> This is {DEVNET.chainId}: one server runs it and holds its sequencer key. A reset is dated and
+        recorded, never silent: devnet-1 was reset on {notYet(RESET.date)} and its recording is still checkable at
+        <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>. A signature here is an accountable claim by a key, not proof that
+        what it says is true. A witness or a stamp is the same.
+      </p>
+      <p class="jump">
+        <a href="#pick">pick a block</a><a href="#steps">the five steps</a><a href="#proves">what it proves</a><a href="#code">same steps, in code</a>
+      </p>
+    </header>
+
+    <section
+      id="pick"
+      class="sec vb"
+      aria-labelledby="pick-title"
+      data-verify-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+      data-wasm={WASM_PATH}
+      data-wasm-sha256={WASM_SHA256}
+    >
+      <p class="kicker">01 · PICK A BLOCK · READ LIVE FROM THE DEVNET, IN YOUR BROWSER</p>
+      <h2 id="pick-title" class="h2">Which block do you want to check?</h2>
+      <p class="note">
+        The lesson opens on a block a few behind the tip, so both neighbours exist. Type a number, roll a random block, or jump to
+        a block that carries transactions: the signature steps have more to show there.
+      </p>
+      <noscript><p class="fine">The lesson needs JavaScript, because the checks run in your browser. The same steps as a script are <a href="#code">below</a>.</p></noscript>
+
+      <form class="vb-controls" data-vb-form aria-label="Pick a block">
+        <div class="vb-field">
+          <label class="vb-label" for="vb-n">Block number</label>
+          <input id="vb-n" class="vb-input" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="15" data-vb-input disabled />
+        </div>
+        <button class="btn" type="submit" data-vb-go disabled>Check this block</button>
+        <button class="btn btn--ghost" type="button" data-vb-prev disabled aria-label="Previous block">← Previous</button>
+        <button class="btn btn--ghost" type="button" data-vb-next disabled aria-label="Next block">Next →</button>
+        <button class="btn btn--ghost" type="button" data-vb-near disabled>A few behind the tip</button>
+        <button class="btn btn--ghost" type="button" data-vb-random disabled>Random block</button>
+        <button class="btn btn--ghost" type="button" data-vb-txs disabled>A block with transactions</button>
+      </form>
+
+      <p class="vb-status" data-vb-status role="status" aria-live="polite">The lesson reads <code>GET /status</code> and the blocks from the devnet once this section is on screen, then only when you ask.</p>
+      <p class="vb-block" data-vb-block></p>
+      <p class="vb-genesis" data-vb-genesis-note role="note" hidden></p>
+      <dl class="vb-pin">
+        <div><dt>Genesis hash you trust</dt><dd><code class="vb-hash" data-vb-pin-hash>{DEVNET.genesis}</code></dd></div>
+        <div><dt>How it is pinned</dt><dd data-vb-pin-how>pinned in this page’s build, from the same constants as the Block Yard and the Daily Net</dd></div>
+        <div><dt>Devnet read</dt><dd data-vb-net>{D} · {DEVNET.chainId}</dd></div>
+      </dl>
+
+      <section id="steps" class="vb-steps-wrap" aria-labelledby="steps-title">
+        <p class="kicker">02 · THE FIVE STEPS</p>
+        <h2 id="steps-title" class="h2">Five checks, each with its bytes.</h2>
+
+        <fieldset class="vb-tamper">
+          <legend>{TAMPER_COPY.legend}</legend>
+          <label class="vb-toggle"><input class="vb-checkbox" type="checkbox" data-vb-tamper /> <span>{TAMPER_COPY.toggle}</span></label>
+          <div class="vb-field vb-field--kind">
+            <label class="vb-label" for="vb-kind">{TAMPER_COPY.kind}</label>
+            <select id="vb-kind" class="vb-select" data-vb-kind></select>
+          </div>
+          <p class="fine" data-vb-tamper-note>{TAMPER_COPY.note}</p>
+        </fieldset>
+
+        <div class="vb-banner" data-vb-banner role="note" hidden>
+          <p class="kicker">TAMPERED COPY · IN MEMORY ONLY · THE DEVNET WAS NOT TOUCHED</p>
+          <p class="vb-banner__what" data-vb-banner-what></p>
+          <p class="vb-banner__caught" data-vb-banner-caught></p>
+        </div>
+
+        <ol class="vb-steps" data-vb-steps>
+          {STEPS.map((s) => (
+            <li class="vb-step" data-step={s.id} data-state="idle" aria-labelledby={'vb-s-' + s.id}>
+              <div class="vb-step__h">
+                <span class="vb-step__n" aria-hidden="true">{s.n}</span>
+                <h3 id={'vb-s-' + s.id} class="vb-step__t">{s.title}</h3>
+                <span class="vb-step__badge"><span class="vb-mark" data-vb-mark aria-hidden="true">·</span><span data-vb-state>WAITING</span></span>
+              </div>
+              <p class="vb-what">{s.what}</p>
+              <p class="vb-tool" data-vb-tool>{s.tool}</p>
+              {s.id === 'sigs' && (
+                <p class="vb-wasm">
+                  <button class="btn btn--ghost" type="button" data-vb-wasm>Also ask the chain’s own code (wasm, {VERIFIER_KIB} KiB)</button>
+                  <span class="fine">Loads the Block Yard’s verifier, only if its sha256 is <code class="hash">{WASM_SHA256.slice(0, 12)}…</code>, and has it compute each signing digest with the chain’s own Rust code.</span>
+                </p>
+              )}
+              <ul class="vb-checks" data-vb-checks aria-label={'Checks in step ' + s.n}></ul>
+              <div class="vb-groups" data-vb-groups></div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section id="proves" class="vb-proves" aria-labelledby="proves-title">
+        <p class="kicker">03 · STEP SIX: WHAT THIS PROVES, AND WHAT IT DOES NOT</p>
+        <h2 id="proves-title" class="h2">What a green run means.</h2>
+        <p class="note">
+          A green run shows this one copy of this one block is a sealed link, correctly signed, as far as these five checks go. It
+          says nothing about the rest of the chain until you walk it, and nothing about state at all.
+        </p>
+        <div class="cards cards--2">
+          <article class="card card--tint">
+            <p class="card__k">It proves</p>
+            <ul class="bullets">{PROVES.map((t) => <li>{t}</li>)}</ul>
+          </article>
+          <article class="card">
+            <p class="card__k">It does not prove</p>
+            <ul class="bullets">{NOT_PROVES.map((t) => <li>{t}</li>)}</ul>
+          </article>
+        </div>
+        <h3 class="h3">Connect it to genesis</h3>
+        <p class="note">
+          The five steps hold three headers together. This walks every header from block 1 to the block you picked: each prev_hash
+          against the hash before it, each seal under the genesis key, each tx_root rebuilt where the page can encode the
+          transactions. It reads the blocks in pages of 500 and replays no state.
+        </p>
+        <p class="cta">
+          <button class="btn" type="button" data-vb-walk disabled>Walk the headers from block 1</button>
+          <span>One read per 500 blocks; nothing is written.</span>
+        </p>
+        <p class="vb-walk" data-vb-walk-result role="status" aria-live="polite"></p>
+        <p class="cta">
+          <a class="btn" href={DEVNET.yardHref}>Replay it all: VERIFY in the Block Yard</a>
+          <a class="btn btn--ghost" href="/chain/bots/pcv.py" download>pcv.py</a>
+          <a class="btn btn--ghost" href="/chain/bots/verify.mjs" download>verify.mjs</a>
+          <span>The Yard replays every block through the chain’s own rules, state root included. pcv.py checks the same commitments in plain Python; verify.mjs replays with the wasm.</span>
+        </p>
+      </section>
+    </section>
+
+    <section id="code" class="sec" aria-labelledby="code-title">
+      <p class="kicker">04 · SAME STEPS, IN CODE</p>
+      <h2 id="code-title" class="h2">The same checks in fifteen lines.</h2>
+      <p class="note">
+        This file does steps 2 to 5 for raw ed25519 transactions and prints one line per check. Keep the SDK beside it
+        (<a href={SDK_PATH} download>pointcast-chain.js</a>; the older file at /chain/sdk/ has no blockHeaderHash, sealDigest or txRoot) and run it with Node 22 or newer.
+        For the whole chain and its state, <a href="/chain/bots/verify.mjs">verify.mjs</a> replays from genesis with the pinned wasm.
+      </p>
+      <Snippet label="verify-a-block.mjs · pins this devnet’s genesis" code={code} />
+      <div class="tbl">
+        <table>
+          <caption>Which tool did which step, and what it cannot do</caption>
+          <thead><tr><th scope="col">Step</th><th scope="col">Tool</th><th scope="col">Limit</th></tr></thead>
+          <tbody>{toolRows.map((r) => <tr><th scope="row">{r[0]}</th><td>{r[1]}</td><td>{r[2]}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The domain names and byte layouts come from pointcast-chain, crates/chain-core (types.rs and merkle.rs) and
+        tools/pcv-py/README.md. On 2026-10-19 the five steps on this page ran on all 3,326 blocks {DEVNET.chainId} had: 23,439
+        checks, none failed, and the newest block had no next block to link back to it yet. The page reads the devnet from your
+        browser and shows what it sends as plain text. {HONESTY_LINE}; a reset is dated and recorded. Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded and the browser is idle.
+  const root = document.querySelector('[data-verify-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/verify-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  /* The FD ramp arrives as --vb-l50/600/800 on the root; dark mode swaps the tokens, nothing else. */
+  .chn.vb-page{--c50:var(--vb-l50);--c600:var(--vb-l600);--c800:var(--vb-l800);--vb-ok:#17743a;--vb-bad:#b3001b}
+  @media (prefers-color-scheme: dark){
+    :root{--pc-bg:#12110e;--pc-ink:#f2efe8;--pc-ink-soft:#d6d2c8;--pc-ink-muted:#a9a59a;--pc-rule:#4b4841;--pc-rule-soft:#2c2a25;--pc-accent:#7db8f2}
+    .chn.vb-page{--c50:#13233a;--c600:#5ea5ec;--c800:#b9d9f8;--vb-ok:#52d17f;--vb-bad:#ff8294}
+  }
+  .chn.vb-page{overflow-x:clip}
+  .chn .vb-art{display:block;width:100%;max-width:420px;height:auto;margin:22px 0 0;color:var(--c600)}
+  .chn .vb-honest{margin:22px 0 0;max-width:840px;padding:14px 16px;border:1.5px solid var(--c600);border-left-width:6px;background:var(--c50);font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .vb-honest b{font-weight:500;color:var(--pc-ink)}
+  .chn .vb-honest a{color:var(--c800);font-weight:500;text-decoration:underline}
+  .chn .vb-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:16px 0 0}
+  .chn .vb-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .chn .vb-label{font:500 10px/1.5 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .chn .vb-input,.chn .vb-select{min-height:44px;max-width:100%;padding:0 12px;border:1.5px solid var(--c600);border-radius:0;background:var(--pc-bg);color:var(--pc-ink);font:400 16px var(--pc-font-mono)}
+  .chn .vb-input{width:168px}
+  .chn .vb-select{width:100%;min-width:0;font-size:14px;font-family:var(--pc-font-sans)}
+  .chn .vb-input:focus-visible,.chn .vb-select:focus-visible,.chn .vb-checkbox:focus-visible,.chn .vb-group__t:focus-visible{outline:2px solid var(--c600);outline-offset:2px}
+  .chn button.btn{cursor:pointer;border-radius:0;font-family:var(--pc-font-mono)}
+  .chn button.btn:disabled{opacity:.45;cursor:not-allowed}
+  .chn .vb-status{margin:14px 0 0;max-width:780px;min-height:24px;font:400 14px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .vb[data-state="down"] .vb-status{color:var(--vb-bad)}
+  .chn .vb-block{margin:6px 0 0;font:500 12px/1.6 var(--pc-font-mono);letter-spacing:.04em;color:var(--c800);overflow-wrap:anywhere}
+  .chn .vb-genesis{margin:10px 0 0;max-width:780px;padding:12px 14px;border:1.5px solid var(--vb-bad);border-left-width:6px;font:400 14px/1.6 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .vb-genesis[hidden]{display:none}
+  .chn .vb-pin{display:grid;gap:0;margin:16px 0 0;border:1.5px solid var(--c600)}
+  .chn .vb-pin>div{display:grid;grid-template-columns:minmax(0,200px) minmax(0,1fr);gap:4px 16px;padding:9px 12px;border-bottom:1px solid var(--pc-rule-soft)}
+  .chn .vb-pin>div:last-child{border-bottom:0}
+  .chn .vb-pin dt{font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .chn .vb-pin dd{margin:0;min-width:0;font:400 13px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .vb-hash{word-break:break-all;font-size:12px}
+  .chn .vb-steps-wrap,.chn .vb-proves{padding-top:48px;scroll-margin-top:12px}
+  .chn .vb-tamper{margin:6px 0 0;padding:12px 14px 14px;border:1.5px solid var(--c600);border-radius:0;min-width:0;background:var(--c50)}
+  .chn .vb-tamper legend{padding:0 6px;font:500 10px/1.5 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .chn .vb-toggle{display:flex;align-items:center;gap:10px;min-height:44px;font:500 13px/1.4 var(--pc-font-mono);letter-spacing:.04em;color:var(--pc-ink);cursor:pointer}
+  .chn .vb-checkbox{width:22px;height:22px;margin:0;accent-color:var(--c600);flex:0 0 auto}
+  .chn .vb-field--kind{margin:8px 0 0;max-width:640px}
+  .chn .vb-tamper .fine{margin-top:10px}
+  .chn .vb-banner{margin:12px 0 0;padding:12px 14px;border:1.5px solid var(--vb-bad);border-left-width:6px;background:var(--pc-bg)}
+  .chn .vb-banner[hidden]{display:none}
+  .chn .vb-banner .kicker{color:var(--vb-bad);margin-bottom:8px}
+  .chn .vb-banner p{margin:0 0 6px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .vb-steps{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+  .chn .vb-step{min-width:0;padding:16px;border:1.5px solid var(--c600);background:var(--pc-bg)}
+  .chn .vb-step[data-state="pass"]{border-left:6px solid var(--vb-ok)}
+  .chn .vb-step[data-state="fail"]{border-color:var(--vb-bad);border-left-width:6px}
+  .chn .vb-step[data-state="skip"]{border-style:dashed}
+  .chn .vb-step__h{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 12px;align-items:center}
+  .chn .vb-step__n{display:grid;place-items:center;width:28px;height:28px;background:var(--c600);color:var(--pc-bg);font:500 12px var(--pc-font-mono)}
+  .chn .vb-step__t{margin:0;font:500 19px/1.3 var(--pc-font-sans);letter-spacing:-.01em;color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .vb-step__badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border:1.5px solid currentColor;font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--pc-ink-muted);white-space:nowrap}
+  .chn .vb-step[data-state="pass"] .vb-step__badge{color:var(--vb-ok)}
+  .chn .vb-step[data-state="fail"] .vb-step__badge{color:var(--vb-bad)}
+  .chn .vb-mark{font:500 14px/1 var(--pc-font-mono)}
+  .chn .vb-what{margin:12px 0 0;max-width:780px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .vb-tool{margin:8px 0 0;font:400 12px/1.6 var(--pc-font-mono);letter-spacing:.02em;color:var(--pc-ink-muted);overflow-wrap:anywhere}
+  .chn .vb-wasm{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:12px 0 0}
+  .chn .vb-wasm .fine{margin:0;max-width:560px}
+  .chn .vb-checks{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--pc-rule-soft)}
+  .chn .vb-checks:empty{display:none}
+  .chn .vb-ck{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:2px 10px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .vb-ck__m{font:500 14px/1 var(--pc-font-mono)}
+  .chn .vb-ck__s{font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.1em;white-space:nowrap}
+  .chn .vb-ck__t{min-width:0;overflow-wrap:anywhere}
+  .chn .vb-ck[data-state="pass"] .vb-ck__m,.chn .vb-ck[data-state="pass"] .vb-ck__s{color:var(--vb-ok)}
+  .chn .vb-ck[data-state="fail"] .vb-ck__m,.chn .vb-ck[data-state="fail"] .vb-ck__s{color:var(--vb-bad)}
+  .chn .vb-ck[data-state="fail"] .vb-ck__t{color:var(--pc-ink)}
+  .chn .vb-ck[data-state="skip"] .vb-ck__m,.chn .vb-ck[data-state="skip"] .vb-ck__s{color:var(--pc-ink-muted)}
+  .chn .vb-groups{margin:10px 0 0;display:grid;gap:8px}
+  .chn .vb-group{min-width:0;border:1.5px solid var(--c600);background:var(--pc-bg)}
+  .chn .vb-group__t{padding:8px 12px;font:500 10px/1.6 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800);background:var(--c50);cursor:pointer;overflow-wrap:anywhere}
+  .chn .vb-rows{display:block}
+  .chn .vb-r{display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr);gap:2px 14px;padding:8px 12px;border-top:1px solid var(--pc-rule-soft);min-width:0}
+  .chn .vb-r__k{font:400 10px/1.8 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted);overflow-wrap:anywhere}
+  .chn .vb-r__v{min-width:0;font:400 12px/1.65 var(--pc-font-mono);color:var(--pc-ink);overflow-wrap:anywhere;word-break:break-all}
+  .chn .vb-r__w,.chn .vb-r__n{grid-column:2;min-width:0;font:400 11px/1.6 var(--pc-font-mono);color:var(--pc-ink-muted);overflow-wrap:anywhere;word-break:break-all}
+  .chn .vb-r--strong .vb-r__v{font-weight:500}
+  .chn .vb-r--ok .vb-r__v{color:var(--vb-ok)}
+  .chn .vb-r--bad .vb-r__v{color:var(--vb-bad)}
+  .chn .vb-r--bad .vb-r__w{color:var(--pc-ink)}
+  .chn .vb-r--changed{border-left:4px solid var(--vb-bad);padding-left:8px}
+  .chn .vb-r--changed .vb-r__n{color:var(--vb-bad)}
+  .chn .vb-diff{background:var(--vb-bad);color:var(--pc-bg)}
+  .chn .vb-walk{margin:10px 0 0;max-width:780px;min-height:24px;padding-left:0;font:400 14px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .vb-walk[data-state="pass"]{color:var(--vb-ok)}
+  .chn .vb-walk[data-state="fail"]{color:var(--vb-bad)}
+  .chn .vb-proves .bullets{padding-left:1.1em}
+  .chn .vb-proves .bullets li{font-size:14px}
+  .chn .vb-proves .cards{margin-top:6px}
+  @media (max-width:640px){
+    .chn .vb-pin>div{grid-template-columns:minmax(0,1fr)}
+    .chn .vb-step{padding:14px 12px}
+    .chn .vb-step__h{grid-template-columns:auto minmax(0,1fr)}
+    .chn .vb-step__badge{grid-column:1 / -1;justify-self:start}
+    .chn .vb-r{grid-template-columns:minmax(0,1fr);gap:0}
+    .chn .vb-r__w,.chn .vb-r__n{grid-column:1}
+    .chn .vb-controls .btn{flex:1 1 auto}
+    .chn .vb-input{width:100%}
+    .chn .vb-field:not(.vb-field--kind){flex:1 1 100%}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .chn *{animation:none !important;transition:none !important;scroll-behavior:auto !important}
+  }
+</style>
