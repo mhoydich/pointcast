@@ -133,7 +133,7 @@ async function lessonInJsdom(label, apiUrl, genesis, isLocal, tip) {
   rootEl.querySelector('[data-vb-walk]').click();
   check(await until(() => /^Walked blocks 1 to |^The walk/.test(rootEl.querySelector('[data-vb-walk-result]').textContent)), label + ': ' + rootEl.querySelector('[data-vb-walk-result]').textContent);
   const shown = rootEl.querySelectorAll('[data-vb-groups] *').length;
-  check(shown > 100 && rootEl.querySelectorAll('img,script,iframe,svg [onload]').length >= 0, label + ': ' + shown + ' elements drawn, all by text nodes');
+  check(shown > 100 && rootEl.querySelectorAll('[data-vb-groups] img, [data-vb-groups] script, [data-vb-groups] iframe, [data-vb-groups] a, [data-vb-checks] a').length === 0, label + ': ' + shown + ' elements drawn in the steps, none of them an image, script, frame or link');
 }
 
 function runSnippet(label, apiUrl, genesis, n) {

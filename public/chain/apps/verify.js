@@ -321,9 +321,11 @@ export function diffRuns(got, want) {
 }
 
 const clip = (h, max = LIMITS.bytesShown) => (h.length > max * 2 ? h.slice(0, max * 2) + '…' : h);
-const isoOf = (ts) => {
-  try { return Number(ts) > 0 ? new Date(Number(ts)).toISOString().replace('.000Z', 'Z') : 'timestamp 0'; } catch { return ''; }
-};
+/** A block time as "2026-10-20 06:25:00 UTC" (the genesis block's timestamp 0 is said as such). */
+export function formatTime(ts) {
+  try { return Number(ts) > 0 ? new Date(Number(ts)).toISOString().slice(0, 19).replace('T', ' ') + ' UTC' : 'timestamp 0'; } catch { return ''; }
+}
+const isoOf = formatTime;
 
 // ---------------------------------------------------------------- tampering (in memory only)
 
@@ -368,10 +370,11 @@ export function tamperSet(set, kind) {
     chars[ci] = String.fromCharCode(before.charCodeAt(0) ^ 0x20);
     b.txs[at].tx[f] = chars.join('');
     const byteIndex = te.encode(chars.slice(0, ci).join('')).length;
-    note = { kind, field: f, txIndex: at, where: 'transaction ' + at + ' · ' + b.txs[at].tx.type + ' · ' + f, index: byteIndex, from: before.charCodeAt(0).toString(16), to: chars[ci].charCodeAt(0).toString(16), text: 'Flipped the case bit of one letter in the ' + f + ' of transaction ' + at + ': “' + cleanText(chars.slice(0, ci).join('') + before, 40) + '” became “' + cleanText(chars.slice(0, ci + 1).join(''), 40) + '”.' };
+    note = { kind, field: f, txIndex: at, where: 'transaction ' + at + ' · ' + b.txs[at].tx.type + ' · ' + f, index: byteIndex, from: before.charCodeAt(0).toString(16), to: chars[ci].charCodeAt(0).toString(16), text: 'Flipped the case bit of one letter (byte ' + byteIndex + ') in the ' + f + ' of transaction ' + at + ': “' + cleanText(s, 36) + '” became “' + cleanText(chars.join(''), 36) + '”.' };
   } else if (kind === 'tx_signature') {
     if (!b.txs.length) throw new Error('this block has no transactions');
-    const f = flipHexByte(pcc.parseSignature(b.txs[0].signature).bytes, 0);
+    const raw = String(b.txs[0].signature);
+    const f = flipHexByte(raw.length % 2 === 0 && !/[^0-9a-fA-F]/.test(raw) ? raw.toLowerCase() : pcc.parseSignature(raw).bytes, 0);
     b.txs[0].signature = f.hex;
     note = { kind, field: 'signature', txIndex: 0, where: 'transaction 0 · signature', index: f.index, from: f.from, to: f.to, text: 'Flipped the lowest bit of byte 0 of transaction 0’s signature: 0x' + f.from + ' became 0x' + f.to + '.' };
   } else if (kind === 'tx_drop') {
@@ -743,6 +746,18 @@ export async function runSteps(input) {
     summary,
     height: Number(H.height),
   };
+}
+
+/** The checks to list for one step: every one that is not a pass, and the passes up to `max`; `hidden` counts the passes left out. */
+export function listChecks(checks, max = 24) {
+  const shown = [];
+  let passes = 0;
+  let hidden = 0;
+  for (const c of checks) {
+    if (c.state !== 'pass') shown.push(c);
+    else if (passes < max) { shown.push(c); passes += 1; } else hidden += 1;
+  }
+  return { shown, hidden };
 }
 
 /** One sentence on which steps caught a tampered copy and which still passed. '' when nothing was changed. */

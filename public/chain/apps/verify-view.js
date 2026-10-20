@@ -58,7 +58,9 @@ export function renderGroup(doc, g) {
 function renderCheck(doc, c) {
   const li = el(doc, 'li', 'vb-ck');
   li.dataset.state = c.state;
-  li.append(el(doc, 'span', 'vb-ck__m', MARK[c.state]), el(doc, 'span', 'vb-ck__s', CHECK_WORD[c.state]), el(doc, 'span', 'vb-ck__t', c.text));
+  const mark = el(doc, 'span', 'vb-ck__m', MARK[c.state]);
+  mark.ariaHidden = 'true'; // the word beside it says the same
+  li.append(mark, el(doc, 'span', 'vb-ck__s', CHECK_WORD[c.state]), el(doc, 'span', 'vb-ck__t', c.text));
   return li;
 }
 
@@ -151,7 +153,12 @@ export function mount(root, env = {}) {
     set('[data-step="' + step.id + '"] [data-vb-state]', WORD[step.state]);
     set('[data-step="' + step.id + '"] [data-vb-tool]', step.tool ? 'Tool used here: ' + step.tool : '');
     const checks = li.querySelector('[data-vb-checks]');
-    if (checks) checks.replaceChildren(...step.checks.map((c) => renderCheck(doc, c)));
+    if (checks) {
+      const { shown, hidden } = V.listChecks(step.checks);
+      const items = shown.map((c) => renderCheck(doc, c));
+      if (hidden) items.push(renderCheck(doc, { state: 'pass', text: '+ ' + hidden + ' more checks passed, not listed here.' }));
+      checks.replaceChildren(...items);
+    }
     const groups = li.querySelector('[data-vb-groups]');
     if (groups) groups.replaceChildren(...step.groups.map((g) => renderGroup(doc, g)));
   }
@@ -169,7 +176,7 @@ export function mount(root, env = {}) {
   function paintSummary() {
     if (!S.set) return;
     const h = S.set.block.header;
-    const when = Number(h.timestamp) > 0 ? new Date(Number(h.timestamp)).toISOString().replace('.000Z', 'Z') : 'timestamp 0';
+    const when = V.formatTime(h.timestamp);
     set('[data-vb-block]', 'Block ' + S.n + ' · ' + when + ' · ' + S.set.block.txs.length + (S.set.block.txs.length === 1 ? ' transaction' : ' transactions') + ' · tip ' + S.tip);
     if (prevBtn) prevBtn.disabled = S.busy || S.n <= 1;
     if (nextBtn) nextBtn.disabled = S.busy || S.n >= S.tip;
@@ -201,7 +208,7 @@ export function mount(root, env = {}) {
       set('[data-vb-banner-what]', note ? note.text : '');
       set('[data-vb-banner-caught]', note ? V.caughtBy(report) : '');
     }
-    if (announce === 'run') say(report.summary);
+    if (announce === 'run') say(report.summary + (copy.block.txs.length ? '' : ' It holds no transactions, so steps 4 and 5 have little to check: “A block with transactions” shows more.'));
     else if (announce === 'tamper') say(note ? note.text + ' ' + V.caughtBy(report) : 'Tamper is off. ' + report.summary);
     else if (announce === 'wasm') say('The chain’s own wasm is on. ' + report.summary);
     return report;

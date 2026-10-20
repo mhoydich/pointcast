@@ -75,6 +75,13 @@ test('devnet data never becomes markup, an href, a src or a style', () => {
   for (const m of page.matchAll(/href=\{([^}]+)\}/g)) assert.match(m[1], /^(DEVNET\.yardHref|DEVNET_PREVIOUS\.path|SDK_PATH)/, m[1]);
 });
 
+test('verify.js has no DOM access: it runs the same in a page and in node', () => {
+  const body = logicSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*/gm, '');
+  assert.doesNotMatch(body, /\b(document|window|navigator|localStorage|sessionStorage|location|history|alert)\b/);
+  assert.doesNotMatch(body, /\.querySelector|createElement|addEventListener/);
+  assert.match(viewSrc, /createElement/, 'the DOM is the view’s job');
+});
+
 test('the sink test catches a mutated source (one escape turned into innerHTML)', () => {
   // 1. the text-setting helper in the view, mutated
   const mutated = viewSrc.replace('if (text !== undefined) n.textContent = text;', 'if (text !== undefined) n.innerHTML = text;');
@@ -222,6 +229,13 @@ test('the ?devnet= override takes localhost and 127.0.0.1 only', () => {
   ]) assert.equal(V.devnetOverride(bad), null, bad);
 });
 
+test('block times read as UTC, and the genesis block says timestamp 0', () => {
+  assert.equal(V.formatTime(1792475413880), '2026-10-20 05:50:13 UTC');
+  assert.equal(V.formatTime(0), 'timestamp 0');
+  assert.equal(V.formatTime(10n), '1970-01-01 00:00:00 UTC');
+  assert.equal(V.formatTime('nonsense'), 'timestamp 0');
+});
+
 test('block numbers: parse, default, fragment', () => {
   assert.equal(V.parseBlockNumber('3318', 4000), 3318);
   assert.equal(V.parseBlockNumber(' #12 ', 4000), 12);
@@ -268,6 +282,15 @@ test('merkle levels: the empty root, one leaf, an odd node moving up unchanged, 
   assert.deepEqual(three.map((l) => l.length), [3, 2, 1]);
   assert.equal(three[1][1], three[0][2], 'the odd leaf moves up unchanged');
   assert.equal(V.merkleLevels(['11'.repeat(32)])[0].length, 1);
+});
+
+test('long check lists show every failure and cap the passes', () => {
+  const many = Array.from({ length: 60 }, (_, i) => ({ id: 'c' + i, state: i === 40 ? 'fail' : i === 50 ? 'skip' : 'pass' }));
+  const { shown, hidden } = V.listChecks(many, 10);
+  assert.equal(shown.length, 12, '10 passes, the failure and the skip');
+  assert.equal(hidden, 48);
+  assert.ok(shown.some((c) => c.id === 'c40') && shown.some((c) => c.id === 'c50'));
+  assert.deepEqual(V.listChecks(many.slice(0, 5), 10), { shown: many.slice(0, 5), hidden: 0 });
 });
 
 test('the laid-out bytes are the bytes hashed: header hash, seal digest, tx id', () => {
@@ -632,8 +655,8 @@ test('begin() opens the default block, a few behind the tip, and every step pass
   assert.deepEqual(states(rootEl), ['idle', 'idle', 'idle', 'idle', 'idle']);
   await c.begin();
   assert.deepEqual(states(rootEl), ['pass', 'pass', 'pass', 'pass', 'pass']);
-  assert.match(text(rootEl, '[data-vb-block]'), /^Block 3318 · 20\d\d-\d\d-\d\dT[0-9:.]+Z · 0 transactions · tip 3321/);
-  assert.match(text(rootEl, '[data-vb-status]'), /^Block 3318: all \d+ checks passed\./);
+  assert.match(text(rootEl, '[data-vb-block]'), /^Block 3318 · 20\d\d-\d\d-\d\d \d\d:\d\d:\d\d UTC · 0 transactions · tip 3321/);
+  assert.match(text(rootEl, '[data-vb-status]'), /^Block 3318: all \d+ checks passed\. It holds no transactions, so steps 4 and 5 have little to check/);
   assert.equal(rootEl.dataset.state, 'live');
   assert.equal(rootEl.dataset.verdict, 'pass');
   assert.equal(rootEl.querySelector('[data-vb-input]').value, '3318');
@@ -644,6 +667,7 @@ test('begin() opens the default block, a few behind the tip, and every step pass
   assert.ok(rootEl.querySelectorAll('.vb-group').length >= 6);
   assert.ok(rootEl.querySelectorAll('.vb-ck').length >= 5);
   for (const m of rootEl.querySelectorAll('[data-vb-mark]')) assert.equal(m.textContent, '✓');
+  for (const m of rootEl.querySelectorAll('.vb-ck__m')) assert.equal(m.ariaHidden, 'true', 'the mark is decorative: the word beside it is read');
   for (const m of rootEl.querySelectorAll('[data-vb-state]')) assert.equal(m.textContent, 'PASS');
 });
 
@@ -1036,8 +1060,6 @@ for (const [name, chainOf, pinOf, apiOf] of [
       copyFileSync(new URL('public/chain/first-mints/lib/pointcast-chain.js', root), join(dir, 'pointcast-chain.js'));
       writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
       writeFileSync(join(dir, 'verify-a-block.mjs'), snippet(api, chain.status.genesis) + '\n');
-      const lines = snippet('X', 'Y').split('\n').filter((l) => !l.startsWith('//')).length;
-      assert.ok(lines <= 16, 'about fifteen lines of code: ' + lines);
       for (const n of [V.defaultBlock(tip), txBlock].filter(Boolean)) {
         const r = spawnSync(process.execPath, [join(dir, 'verify-a-block.mjs'), String(n)], { cwd: dir, encoding: 'utf8', timeout: 60000 });
         assert.equal(r.status, 0, r.stderr);
@@ -1058,12 +1080,49 @@ for (const [name, chainOf, pinOf, apiOf] of [
   });
 }
 
+// ---------------------------------------------------------------- the built page (skips while dist/ is absent)
+
+const builtPath = new URL('dist/chain/verify-a-block/index.html', root);
+test('the built page: one h1, the honesty paragraph, every control, the pins and the snippet as served',
+  { skip: !existsSync(builtPath) && 'dist/ is absent: run npm run build:bare to check the built page' }, () => {
+    const dom = new JSDOM(readFileSync(builtPath, 'utf8'));
+    const doc = dom.window.document;
+    assert.equal(doc.querySelectorAll('h1').length, 1);
+    assert.equal(doc.querySelector('h1').textContent, 'Verify a block by hand.');
+    assert.match(doc.title, /^Verify a block by hand on the PointCast devnet/);
+    const honest = doc.querySelector('#honesty').textContent.replace(/\s+/g, ' ');
+    for (const phrase of [HONESTY_LINE, DEVNET.chainId, 'A reset is dated and recorded, never silent', DEVNET_PREVIOUS.path, 'an accountable claim by a key, not proof that what it says is true', 'A witness or a stamp is the same.']) assert.ok(honest.includes(phrase), phrase);
+    assert.equal(doc.querySelector('#honesty a').getAttribute('href'), DEVNET_PREVIOUS.path);
+    const app = doc.querySelector('[data-verify-app]');
+    assert.equal(app.dataset.api, DEVNET.url);
+    assert.equal(app.dataset.genesis, DEVNET.genesis);
+    assert.equal(app.dataset.chainId, DEVNET.chainId);
+    assert.equal(app.dataset.wasmSha256, WASM_SHA256);
+    for (const hook of ['data-vb-form', 'data-vb-input', 'data-vb-go', 'data-vb-near', 'data-vb-random', 'data-vb-txs', 'data-vb-prev', 'data-vb-next', 'data-vb-tamper', 'data-vb-kind', 'data-vb-banner', 'data-vb-wasm', 'data-vb-walk', 'data-vb-walk-result', 'data-vb-status'])
+      assert.equal(app.querySelectorAll('[' + hook + ']').length, 1, hook);
+    assert.equal(app.querySelectorAll('[data-step]').length, 5);
+    assert.equal(doc.querySelector('[data-vb-status]').getAttribute('aria-live'), 'polite');
+    assert.equal(doc.querySelector('[data-vb-walk-result]').getAttribute('aria-live'), 'polite');
+    for (const b of app.querySelectorAll('button[data-vb-go], button[data-vb-near], button[data-vb-random], button[data-vb-txs], button[data-vb-walk]')) assert.ok(b.disabled, 'controls wait for the script');
+    // the code block the page shows is exactly the file the tests run
+    const shown = [...doc.querySelectorAll('.snip code')].map((c) => c.textContent).find((t) => t.includes('verify-a-block.mjs'));
+    assert.equal(shown, snippet(DEVNET.url, DEVNET.genesis));
+    // the hash links go to the Yard with the genesis pinned
+    assert.ok([...doc.querySelectorAll('a')].some((a) => a.getAttribute('href') === DEVNET.yardHref));
+    // the bootstrap is lazy, inline and imports only the view
+    const boot = [...doc.querySelectorAll('script[type="module"]')].map((x) => x.textContent).find((t) => t.includes('verify-view.js'));
+    assert.ok(boot && boot.includes("import('/chain/apps/verify-view.js')"));
+    assert.doesNotMatch(boot, /fetch\(/);
+    // no text in the art, no people, no places
+    assert.equal(doc.querySelectorAll('.vb-art text, .vb-art image').length, 0);
+  });
+
 test('the snippet is plain strings: no template literals, no dollar sign, and it pins the genesis it is given', () => {
   const code = snippet('https://example.test', 'ab'.repeat(32));
   assert.ok(!code.includes(CURRENCY_SIGN));
   assert.ok(!code.includes(String.fromCharCode(96)));
-  assert.ok(code.includes('const DEVNET = "https://example.test";'));
-  assert.ok(code.includes('const GENESIS = "' + 'ab'.repeat(32) + '";'));
+  assert.ok(code.includes('const DEVNET = "https://example.test", GENESIS = "' + 'ab'.repeat(32) + '";'));
+  assert.equal(code.split('\n').length, 15, 'fifteen lines, the header comment included');
   for (const name of ['paramsHash', 'blockHeaderHash', 'sealDigest', 'txRoot', 'signingHash', 'txHash', 'verifyEd25519', 'domainOf', 'parseJsonExact', 'hexToBytes']) {
     assert.ok(code.includes('pcc.' + name), name);
     assert.equal(typeof pcc[name], 'function', name);

@@ -115,8 +115,7 @@ export function snippet(devnet: string, genesis: string): string {
   return [
     '// verify-a-block.mjs · Node 22+ · keep pointcast-chain.js (the SDK) beside this file',
     'import * as pcc from "./pointcast-chain.js";',
-    'const DEVNET = "' + devnet + '";',
-    'const GENESIS = "' + genesis + '";',
+    'const DEVNET = "' + devnet + '", GENESIS = "' + genesis + '";',
     'const N = Number(process.argv[2] ?? 100); // 2 or more, and at least one block behind the tip',
     'const get = async (path) => pcc.parseJsonExact(await (await fetch(DEVNET + path)).text());',
     'const params = await get("/params");',
