@@ -16,7 +16,7 @@
 
 import * as D from './daily-mint.js';
 import { mountKeyPanel } from './key-panel.js';
-import { connectPinned, describeError, duration, groups, makeNet, plural, pinnedStatus, resolveApi, shortAddr, utcClock, whenReady } from './chain-kit.js';
+import { asSentence, connectPinned, describeError, duration, groups, makeNet, plural, pinnedStatus, resolveApi, sendFailureText, shortAddr, utcClock, whenReady } from './chain-kit.js';
 
 const POLL_MS = 10000;
 
@@ -50,7 +50,7 @@ export function mount(root, env = {}) {
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { daily: null, cardKey: '', readAt: 0, begun: false, halted: false, busy: false, chain: null, balance: null, plan: null, timer: 0, tick: 0, audit: null, words: new Set(), myBid: null };
+  const S = { daily: null, cardKey: '', readAt: 0, begun: false, halted: false, busy: false, chain: null, balance: null, plan: null, timer: 0, tick: 0, audit: null, words: new Set(), myBid: null, unsettled: null };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-dm-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
@@ -345,6 +345,26 @@ export function mount(root, env = {}) {
     if (box) box.hidden = true;
   }
 
+  /**
+   * A bid whose transfer was sent but not seen to confirm is not "not sent": it may land, and a second one would lock more play
+   * ATTN (and the next nonce counts the first while it waits). Ask the devnet about it. Returns null when nothing is open, else
+   * { state: 'landed' | 'pending' | 'gone' | 'unclear', height }. 'landed' and 'gone' close it; 'pending' and 'unclear' keep Send shut.
+   */
+  async function checkUnsettled() {
+    const u = S.unsettled;
+    if (!u) return null;
+    let st = { status: 'unreachable', height: null };
+    try { st = await D.txStatus(net, u.tx); } catch { /* the devnet did not answer: unclear */ }
+    try { await refreshFresh({ cards: false }); } catch { /* read what can be read */ }
+    const k = keys && keys.key();
+    const lot = S.daily && S.daily.lot;
+    const leads = Boolean(k && lot && lot.n === u.lot && lot.leader && lot.leader.sender === k.sender && lot.leader.amount === u.amount);
+    if (st.status === 'included' || leads) { S.unsettled = null; return { state: 'landed', height: st.height }; }
+    if (st.status === 'pending') return { state: 'pending', height: null };
+    if (st.status === 'rejected' || st.status === 'unknown') { S.unsettled = null; return { state: 'gone', height: null }; }
+    return { state: 'unclear', height: null };
+  }
+
   async function send() {
     const k = keys && keys.key();
     const plan = S.plan;
@@ -354,8 +374,14 @@ export function mount(root, env = {}) {
     sendBtn.disabled = true;
     const say2 = (t, state) => { if (result) { result.hidden = false; result.dataset.state = state || ''; set('[data-dm-result-text]', t); } };
     try {
+      if (S.unsettled) {
+        const u = S.unsettled;
+        const v = await checkUnsettled();
+        if (v && v.state === 'landed') { withdrawPlan(); say2('Your earlier bid landed' + (v.height ? ' in block ' + v.height : '') + ' (transaction ' + u.tx + '): you lead lot ' + String(u.lot).padStart(4, '0') + ' at ' + u.amount + ' play ATTN. Nothing more was sent.', 'ok'); return; }
+        if (v && (v.state === 'pending' || v.state === 'unclear')) { say2('Your earlier bid (transaction ' + u.tx + ') has not settled' + (v.state === 'pending' ? ': the devnet still holds it, waiting for a block.' : ': the devnet did not say whether it landed.') + ' Sending another now could lock more play ATTN. Wait and press Send again.', 'warn'); return; }
+      }
       say2('Checking the devnet’s genesis…', '');
-      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch } });
+      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
       await refreshFresh({ cards: false });
       // A bid confirmed for lot N must not land in lot N+1: the lot is part of what was confirmed.
       const now = S.daily && S.daily.lot ? S.daily.lot.n : null;
@@ -365,7 +391,7 @@ export function mount(root, env = {}) {
       await loadBalance();
       const fresh = D.planBid({ daily: S.daily, sender: k.sender, amount: plan.amount, words: plan.words, gift: plan.gift || '', balance: S.balance });
       if (!fresh.ok) { say2((fresh.errors[0].startsWith('You hold ') ? '' : 'The lot changed while you read: ') + fresh.errors[0], 'bad'); return; }
-      const r = await D.sendBid({ chain: S.chain, net, key: k, daily: S.daily, plan: fresh, onStage: (s) => say2(s.startsWith('post') ? 'Sending the card words… (' + s.slice(5) + ')' : 'Sending the bid… (' + s.slice(4) + ')', '') });
+      const r = await D.sendBid({ chain: S.chain, net, key: k, daily: S.daily, plan: fresh, wait: env.wait, onStage: (s) => say2(s.startsWith('post') ? 'Sending the card words… (' + s.slice(5) + ')' : 'Sending the bid… (' + s.slice(4) + ')', '') });
       const box = q('[data-dm-confirm]');
       if (box) box.hidden = true;
       S.plan = null;
@@ -375,7 +401,17 @@ export function mount(root, env = {}) {
       S.myBid = { lot: fresh.lot, amount: fresh.amount, tx: r.bidTx, balanceAfter: S.balance };
       paintMyBid();
     } catch (e) {
-      say2('Not sent, or not confirmed: ' + describeError(e), 'bad');
+      if (e && e.stage === 'bid' && (e.sendState === 'sent' || e.sendState === 'maybe')) {
+        // The transfer may be on its way. Close the confirm (a second Send needs a new Review), remember it, and ask the devnet.
+        S.unsettled = { tx: e.txHash, amount: plan.amount, lot: plan.lot };
+        withdrawPlan();
+        const v = await checkUnsettled();
+        if (v && v.state === 'landed') say2('Your bid landed' + (v.height ? ' in block ' + v.height : '') + ' (transaction ' + e.txHash + '), though this page did not see it confirm (' + describeError(e) + '): you lead lot ' + String(plan.lot).padStart(4, '0') + ' at ' + plan.amount + ' play ATTN. Nothing more was sent.', 'ok');
+        else if (v && v.state === 'gone') say2('Not sent: ' + asSentence(describeError(e)) + ' The devnet has no record of transaction ' + e.txHash + ', so it never arrived. You can review and send again.', 'bad');
+        else say2(sendFailureText(e) + ' Send stays shut until the devnet says whether it landed: wait, then review and press Send again.', 'warn');
+      } else {
+        say2(sendFailureText(e), 'bad');
+      }
     } finally {
       sendBtn.disabled = false;
     }

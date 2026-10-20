@@ -613,7 +613,7 @@ test('a seal whose confirmation fails keeps the capsule file, says "sent, not co
   assert.ok(seen.length > 1, 'a failed poll is tried again before giving up: ' + seen.length);
   const text = txt(rootEl, '[data-cp-result-text]');
   assert.doesNotMatch(text, /^Not sent/, 'the devnet holds this seal, so "Not sent" would be false: ' + text);
-  assert.match(text, /^Sent, not confirmed yet: the devnet answered 502 for \/tx\/[0-9a-f]{4,}…? Transaction [0-9a-f]{64}\./);
+  assert.match(text, /^Sent, not confirmed yet: the devnet answered 502 for \/tx\/<hash>\. Transaction [0-9a-f]{64}\./);
   assert.match(text, /DOWNLOAD THE CAPSULE FILE NOW/);
   assert.equal($(rootEl, '[data-cp-result]').dataset.state, 'warn');
   // the file exists, holds the message and the salt, and hashes to the capsule id the seal committed to

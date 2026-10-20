@@ -445,6 +445,9 @@ export async function signAndSend(chain, key, tx, { wait = true, onStage = () =>
   }
 }
 
+/** A sentence: `text` with a full stop unless it already ends in one (or ! or ?). */
+export const asSentence = (text) => (/[.!?]$/.test(text) ? text : text + '.');
+
 /**
  * What to tell a person after a send threw (see signAndSend): "Not sent" only
  * when nothing was, and "sent, not confirmed" when the devnet may hold it. `unsent`
@@ -452,11 +455,12 @@ export async function signAndSend(chain, key, tx, { wait = true, onStage = () =>
  */
 export function sendFailureText(e, { unsent = 'Not sent: ' } = {}) {
   const words = describeError(e);
+  const said = asSentence(words);
   const tx = e && e.txHash ? ' Transaction ' + e.txHash + '.' : '';
   switch (e && e.sendState) {
-    case 'sent': return 'Sent, not confirmed yet: ' + words + tx + ' The devnet accepted it, so it may still land: check before sending again.';
-    case 'maybe': return 'Not confirmed: ' + words + tx + ' The request may have reached the devnet: check before sending again.';
-    case 'rejected': return 'The devnet accepted it and then rejected it: ' + words + tx;
+    case 'sent': return 'Sent, not confirmed yet: ' + said + tx + ' The devnet accepted it, so it may still land: check before sending again.';
+    case 'maybe': return 'Not confirmed: ' + said + tx + ' The request may have reached the devnet: check before sending again.';
+    case 'rejected': return 'The devnet accepted it and then rejected it: ' + said + tx;
     default: return unsent + words;
   }
 }
@@ -467,7 +471,7 @@ export function describeError(e) {
   let msg = e && e.message ? String(e.message) : 'something went wrong';
   // The SDK's own words for a reply with no error body are "502 /tx/<hash>": say what that is.
   const raw = /^(\d{3}) (\/[^\s]*)$/.exec(msg);
-  if (raw) msg = 'the devnet answered ' + raw[1] + ' for ' + (raw[2].length > 24 ? raw[2].slice(0, 14) + '…' : raw[2]);
+  if (raw) msg = 'the devnet answered ' + raw[1] + ' for ' + cleanText(raw[2].replace(/[0-9a-f]{64}/gi, '<hash>'), 40);
   if (e && e.status === 429) {
     // A retry hint only where one is true: the devnet said how long (Retry-After) or its own words name a per-minute
     // window. A per-day cap (the faucet's 3 claims per IP per UTC day) is not cured by trying again in a minute.

@@ -334,6 +334,14 @@ export async function claimFaucet(net, address) {
   return { txHash: isHex64(r && r.tx_hash) ? r.tx_hash : '', amount: isWhole(r && r.amount) ? r.amount : null, note: cleanText(String((r && r.note) || ''), 200) };
 }
 
+/** The status of a transaction: GET /tx/HASH -> { status ('included', 'pending', 'rejected' or 'unknown'), height }. */
+export async function txStatus(net, txHash) {
+  if (!isHex64(txHash)) throw new KitError('a transaction id is 64 hex characters', { code: 'bad_tx' });
+  const r = await net.get('/tx/' + txHash);
+  if (!isObj(r)) return { status: 'unknown', height: null };
+  return { status: cleanText(String(r.status || ''), 20), height: isWhole(r.height) ? r.height : null };
+}
+
 /** An account's play ATTN and next nonce, from GET /account/ADDR (a new key has 0 and nonce 0). */
 export async function readAccount(net, address) {
   const a = await net.get('/account/' + encodeURIComponent(address));
@@ -347,19 +355,29 @@ export async function readAccount(net, address) {
  * genesis, `net` a reader, `key` from keyFromSeed. Returns { postTx, bidTx, height }.
  * Throws the devnet's own words, e.g. { code: 'daily_bid_refused' } when the door refuses.
  */
-export async function sendBid({ chain, net, key, daily, plan, onStage = () => {} }) {
+export async function sendBid({ chain, net, key, daily, plan, onStage = () => {}, wait = {} }) {
   if (!plan.ok) throw new KitError(plan.errors[0] || 'this bid is not valid', { code: 'plan' });
   const acct = await readAccount(net, key.sender);
   let nonce = acct.nonce;
   let postTx = '';
+  // A failure says which of the two transactions it was, so a page can word it by what is known about each.
+  const at = (stage, e) => { if (e && typeof e === 'object') e.stage = stage; return e; };
+  let postHeight = null;
   if (plan.words.length || plan.gift) {
     const post = await chain.buildPublish({ sender: key.sender, channel: 'DLY', title: plan.title, bodyHash: NO_BODY, nonce });
-    const a = await signAndSend(chain, key, post, { onStage: (s) => onStage('post:' + s) });
+    let a;
+    try { a = await signAndSend(chain, key, post, { ...wait, onStage: (s) => onStage('post:' + s) }); } catch (e) { throw at('post', e); }
     postTx = a.txHash;
+    postHeight = a.height;
     nonce += 1;
   }
   const tx = pcc.buildTx('transfer', { sender: key.sender, nonce, to: daily.addresses.auctioneer, amount: plan.amount });
-  const b = await signAndSend(chain, key, tx, { onStage: (s) => onStage('bid:' + s) });
+  let b;
+  try { b = await signAndSend(chain, key, tx, { ...wait, onStage: (s) => onStage('bid:' + s) }); } catch (e) {
+    at('bid', e);
+    if (postTx) e.partial = { postTx, postHeight };
+    throw e;
+  }
   return { postTx, bidTx: b.txHash, height: b.height };
 }
 

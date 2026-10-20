@@ -886,8 +886,66 @@ test('a bid the door refuses is shown in the devnet’s own words and nothing is
   await tick(400);
   const res = rootEl.querySelector('[data-dm-result]');
   assert.equal(res.dataset.state, 'bad');
-  assert.match(txt(rootEl, '[data-dm-result-text]'), /^Not sent, or not confirmed: that transfer would not be a valid bid now: the least valid bid is 99 play ATTN$/);
+  assert.match(txt(rootEl, '[data-dm-result-text]'), /^Not sent: that transfer would not be a valid bid now: the least valid bid is 99 play ATTN$/, 'the door refused it, so "Not sent" is exactly true');
   assert.equal(rootEl.querySelector('[data-dm-send]').disabled, false, 'the button comes back');
+});
+
+test('a bid that was sent but not seen to confirm says so, looks the transaction up, and keeps Send shut while it may land: no second bid on top of the first', { timeout: 40000 }, async () => {
+  const key = await K.keyFromSeed('68'.repeat(32));
+  const accounts = { [key.sender]: { balance: 100, next_nonce: 0 } };
+  const run = async ({ failure, txState, leader }) => {
+    const fake = await fakeSend();
+    const sent = [];
+    let daily = clone(FX.daily);
+    const connect = async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); if (s.tx.type === 'transfer') { if (leader) { daily = clone(FX.daily); daily.lot.leader = { sender: key.sender, amount: s.tx.amount, words: [], to: null, height: 90 }; } if (failure === 'dropped') throw new TypeError('Failed to fetch'); } return fake.chain.submit(s); }, waitForTx: async () => { throw Object.assign(new Error('502 /tx/x'), { details: null }); } });
+    const status = { current: txState };
+    const overrides = new Proxy({}, { get: (_, p) => (typeof p === 'string' && p.startsWith('/tx/') ? async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(status.current === 'included' ? { status: 'included', height: 91, index: 0 } : { status: status.current }) }) : undefined) });
+    const m = mountView({ fetchOpts: { accounts: { ...accounts }, overrides, fx: { ...FX, get daily() { return daily; } } }, extra: { connect, supported: true, storage: null, wait: { timeoutMs: 120, intervalMs: 5 } } });
+    await m.c.begin();
+    m.c.stop();
+    await m.c.keys.setSeed('68'.repeat(32));
+    await tick(30);
+    const amount = D.leastBid(D.readDaily(FX.daily)) + 1;
+    m.rootEl.querySelector('[data-dm-amount]').value = String(amount);
+    m.rootEl.querySelector('[data-dm-review]').click();
+    await tick(20);
+    m.rootEl.querySelector('[data-dm-send]').click();
+    await tick(600);
+    return { ...m, sent, amount, status, setDaily: (d) => { daily = d; } };
+  };
+  const text = (m) => txt(m.rootEl, '[data-dm-result-text]');
+  const press = async (m) => { m.rootEl.querySelector('[data-dm-review]').click(); await tick(30); m.rootEl.querySelector('[data-dm-send]').click(); await tick(500); };
+  // 1. the reply was lost after the devnet accepted the bid, which now leads: "landed", never "Not sent"
+  const landed = await run({ failure: 'dropped', txState: 'included', leader: true });
+  assert.doesNotMatch(text(landed), /^Not sent/);
+  assert.match(text(landed), new RegExp('^Your bid landed in block 91 \\(transaction [0-9a-f]{64}\\), though this page did not see it confirm \\(Failed to fetch\\): you lead lot \\d{4} at ' + landed.amount + ' play ATTN\\. Nothing more was sent\\.$'));
+  assert.equal(landed.rootEl.querySelector('[data-dm-result]').dataset.state, 'ok');
+  assert.equal(landed.sent.length, 1);
+  assert.equal(landed.rootEl.querySelector('[data-dm-confirm]').hidden, true, 'the confirm is closed: a second Send needs a new Review');
+  // 2. the devnet holds it but it is not in a block yet: "not confirmed", Send is shut, and pressing it again sends nothing
+  const pending = await run({ failure: 'dropped', txState: 'pending', leader: false });
+  assert.match(text(pending), /^Not confirmed: Failed to fetch\. Transaction [0-9a-f]{64}\. The request may have reached the devnet: check before sending again\. Send stays shut until/);
+  assert.doesNotMatch(text(pending), /^Not sent/);
+  assert.equal(pending.rootEl.querySelector('[data-dm-result]').dataset.state, 'warn');
+  assert.equal(pending.sent.length, 1);
+  await press(pending);
+  assert.equal(pending.sent.length, 1, 'no second transfer while the first may land (the nonce already counts it)');
+  assert.match(text(pending), /^Your earlier bid \(transaction [0-9a-f]{64}\) has not settled: the devnet still holds it, waiting for a block\. Sending another now could lock more play ATTN\./);
+  // once it is in a block, the next press says so and still sends nothing
+  pending.status.current = 'included';
+  await press(pending);
+  assert.equal(pending.sent.length, 1);
+  assert.match(text(pending), /^Your earlier bid landed in block 91 \(transaction [0-9a-f]{64}\)/);
+  // 3. the devnet never got it: it says "Not sent", names the transaction it has no record of, and a new bid is allowed
+  const gone = await run({ failure: 'dropped', txState: 'unknown', leader: false });
+  assert.match(text(gone), /^Not sent: Failed to fetch\. The devnet has no record of transaction [0-9a-f]{64}, so it never arrived\. You can review and send again\.$/);
+  assert.equal(gone.rootEl.querySelector('[data-dm-result]').dataset.state, 'bad');
+  await press(gone);
+  assert.equal(gone.sent.length, 2, 'a transaction the devnet never saw may be sent again');
+  // 4. the devnet accepted it and only the wait for a block failed: "sent, not confirmed yet"
+  const waited = await run({ failure: 'wait', txState: 'pending', leader: false });
+  assert.match(text(waited), /^Sent, not confirmed yet: the devnet answered 502 for \/tx\/x\. Transaction [0-9a-f]{64}\. The devnet accepted it, so it may still land: check before sending again\./);
+  assert.equal(waited.sent.length, 1);
 });
 
 test('the faucet button asks once for the key’s address and says so in words', async () => {
@@ -939,7 +997,9 @@ test('the page writes on two routes only (the faucet and a signed transaction), 
   // every read route is a fixed path or numbers
   const reads = callArgs(src.logic, 'net.get(');
   assert.ok(reads.length >= 6, 'found ' + reads.length + ' reads');
-  for (const arg of reads) assert.ok(/^'\/[a-z/\-]+'$|^'\/raw\/block\/' \+ opened\.openedHeight$|^'\/raw\/blocks\?from=' \+ from \+ '&limit=' \+ AUDIT_PAGE$|^'\/account\/' \+ encodeURIComponent\(address\)$/.test(arg), arg);
+  for (const arg of reads) assert.ok(/^'\/[a-z/\-]+'$|^'\/raw\/block\/' \+ opened\.openedHeight$|^'\/raw\/blocks\?from=' \+ from \+ '&limit=' \+ AUDIT_PAGE$|^'\/account\/' \+ encodeURIComponent\(address\)$|^'\/tx\/' \+ txHash$/.test(arg), arg);
+  // the one added read, a transaction's status, is only ever asked of a 64-hex id this page computed itself
+  assert.match(code(src.logic), /if \(!isHex64\(txHash\)\) throw new KitError\('a transaction id is 64 hex characters'/);
 });
 
 test('the page and the view agree on every hook, the key panel is in the page, and the page uses the registry', () => {
