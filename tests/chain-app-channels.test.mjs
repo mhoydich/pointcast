@@ -429,6 +429,50 @@ test('a post the devnet’s keeper hides after it was read is hidden by the next
   assert.ok(!shown().join('\n').includes('\none'), 'and its body is withheld');
 });
 
+test('the poll reads a few newest blocks, not a hundred, and still misses nothing when more blocks arrive between two polls than one small page holds', async () => {
+  assert.ok(C.LIMITS.refreshLimit <= 10 && C.LIMITS.refreshLimit >= 5, 'the poll asks for a small page: ' + C.LIMITS.refreshLimit);
+  assert.equal(C.LIMITS.feedLimit, 100, 'the first scan and “Read older blocks” still read pages of 100');
+  const dev = feedDevnet();
+  const log = [];
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: async (u, i) => { log.push(String(u).replace('http://127.0.0.1:8799', '')); return dev.fetch(u, i); } });
+  const scan = C.newScan();
+  await C.scanFeed(net, scan);
+  assert.equal(log.find((l) => l.startsWith('/feed')), '/feed?limit=100', 'the first scan reads a page of 100');
+  assert.ok(log.filter((l) => l.startsWith('/feed')).every((l) => l.startsWith('/feed?limit=100')), 'and only pages of 100');
+  const cursor = scan.before;
+  const k = await keyOf('owner');
+  const world = () => C.readWorldFresh(net, dev.chain);
+  const post = async (title) => { const w = await world(); await C.sendBroadcast({ chain: dev.chain, net, key: k, plan: C.planBroadcast({ station: w.byCode.get('MYCH'), sender: k.sender, title, body: 'x', world: w }) }); };
+  // a quiet poll is one small read
+  log.length = 0;
+  await C.refreshNewest(net, scan);
+  assert.deepEqual(log, ['/feed?limit=' + C.LIMITS.refreshLimit]);
+  // more new blocks than one page holds: the poll goes on to older pages until it reaches blocks it has read
+  const many = C.LIMITS.refreshLimit * 2 + 3;
+  for (let i = 0; i < many; i++) await post('burst ' + i);
+  log.length = 0;
+  const got = await C.refreshNewest(net, scan);
+  assert.ok(got >= many, 'it read all the new posts: ' + got);
+  assert.deepEqual(C.postsOf(scan, 'MYCH', 100).filter((p) => p.title.startsWith('burst ')).map((p) => p.title).sort(), Array.from({ length: many }, (_, i) => 'burst ' + i).sort(), 'not one of the new posts is missing');
+  const feedReads = log.filter((l) => l.startsWith('/feed'));
+  assert.equal(feedReads.length, 3, 'three small pages, no more than needed: ' + feedReads.join(' '));
+  assert.ok(feedReads.slice(1).every((l) => l.includes('&before=')));
+  // the next quiet poll is one read again
+  log.length = 0;
+  await C.refreshNewest(net, scan);
+  assert.equal(log.length, 1);
+  // a poll never moves the older-blocks cursor
+  assert.equal(scan.before, cursor);
+  // in the page: the timer’s read is the small one
+  const viewLog = [];
+  const m = mountView({ dev: feedDevnet(), log: viewLog });
+  await m.c.begin();
+  m.c.stop();
+  viewLog.length = 0;
+  await m.c.refresh({ feed: true });
+  assert.deepEqual(viewLog.filter((l) => l.startsWith('GET /feed')), ['GET /feed?limit=' + C.LIMITS.refreshLimit]);
+});
+
 test('a feed in a shape this page does not read is an error, not an empty directory', async () => {
   const net = { async get() { return { nope: true }; } };
   await assert.rejects(() => C.scanFeed(net, C.newScan()), /\/feed is not the shape this page reads/);
@@ -1628,7 +1672,7 @@ test('the page writes only the SDK’s signed transactions and a body by its has
   assert.equal((code(src.logic).match(/signAndSend\(/g) || []).length, 3, 'a claim, each step of a change, the post');
   assert.doesNotMatch(code(src.view), /\.post\(|method\s*:\s*['"]POST|\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
   assert.doesNotMatch(code(src.logic), /\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
-  for (const arg of callArgs(src.logic, 'net.get(')) assert.ok(/^'\/(?:stations|params)'$|^'\/account\/' \+ encodeURIComponent\(sender\)$|^'\/station\/' \+ encodeURIComponent\(code\)$|^'\/feed\?limit=' \+ limit \+ \(scan\.before === null \? '' : '&before=' \+ scan\.before\)$|^'\/feed\?limit=' \+ limit$/.test(arg), arg);
+  for (const arg of callArgs(src.logic, 'net.get(')) assert.ok(/^'\/(?:stations|params)'$|^'\/account\/' \+ encodeURIComponent\(sender\)$|^'\/station\/' \+ encodeURIComponent\(code\)$|^'\/feed\?limit=' \+ limit \+ \(scan\.before === null \? '' : '&before=' \+ scan\.before\)$|^'\/feed\?limit=' \+ limit \+ \(before === null \? '' : '&before=' \+ before\)$/.test(arg), arg);
   for (const arg of callArgs(src.view, 'net.get(')) assert.ok(/^'\/(?:stations|params)'$/.test(arg), arg);
   // every write is checked against a fresh read first, and the plan is checked again
   for (const fn of ['sendClaim', 'sendMode', 'sendBroadcast']) {

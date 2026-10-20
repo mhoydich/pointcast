@@ -45,6 +45,9 @@ export const LIMITS = Object.freeze({
   feedPages: 4,
   morePages: 4,
   feedLimit: 100,
+  /** The poll asks for this many of the newest blocks; it reads older pages of the same size only while the page is all new. */
+  refreshLimit: 10,
+  refreshPages: 12,
   maxPosts: 3000,
   shown: 20,
   rows: 400,
@@ -232,10 +235,19 @@ export function readFeedPage(json) {
       if (p) posts.push(p);
     }
   }
-  return { tip: isWhole(json.tip) ? json.tip : null, posts, blockCount: blocks, nextBefore: isWhole(json.next_before) && json.next_before >= 1 && json.blocks.length ? json.next_before : null };
+  const heights = json.blocks.filter((b) => isObj(b) && isWhole(b.height) && Array.isArray(b.txs)).map((b) => b.height);
+  return {
+    tip: isWhole(json.tip) ? json.tip : null,
+    posts,
+    blockCount: blocks,
+    // the highest and the lowest block on the page
+    top: heights.length ? Math.max(...heights) : null,
+    bottom: heights.length ? Math.min(...heights) : null,
+    nextBefore: isWhole(json.next_before) && json.next_before >= 1 && json.blocks.length ? json.next_before : null,
+  };
 }
 
-export const newScan = () => ({ before: null, complete: false, pages: 0, blocks: 0, posts: new Map(), tip: null, started: false });
+export const newScan = () => ({ before: null, complete: false, pages: 0, blocks: 0, posts: new Map(), tip: null, newest: null, started: false });
 
 /** Put what was just read into the scan. The newest read of a post wins: the keeper may have hidden (or unhidden) one that was read before. */
 function merge(scan, posts) {
@@ -258,6 +270,7 @@ export async function scanFeed(net, scan, { pages = LIMITS.feedPages, limit = LI
     scan.pages += 1;
     scan.blocks += page.blockCount;
     scan.started = true;
+    if (page.top !== null && (scan.newest === null || page.top > scan.newest)) scan.newest = page.top;
     if (scan.tip === null || (page.tip !== null && page.tip > scan.tip)) scan.tip = page.tip;
     merge(scan, page.posts);
     if (page.nextBefore === null || (scan.before !== null && page.nextBefore >= scan.before)) scan.complete = true;
@@ -266,13 +279,30 @@ export async function scanFeed(net, scan, { pages = LIMITS.feedPages, limit = LI
   return scan;
 }
 
-/** The newest page again, merged in: new posts appear, the older cursor is not moved. */
-export async function refreshNewest(net, scan, { limit = LIMITS.feedLimit } = {}) {
-  const page = readFeedPage(await net.get('/feed?limit=' + limit));
-  if (!page) throw new KitError('the devnet’s /feed is not the shape this page reads', { code: 'shape' });
-  if (page.tip !== null) scan.tip = page.tip;
-  merge(scan, page.posts);
-  return page.posts.length;
+/**
+ * The newest blocks again, merged in: new posts appear (and a post the keeper has hidden since is hidden), the older cursor is not
+ * moved. It asks for a small page, `limit` blocks. If that page is all newer than the newest block the scan had read, there may be
+ * more unread blocks under it, so it asks for the next older page too, and so on until it meets a block already read (or `pages`
+ * pages, or the end of the chain). A quiet poll is one small read. Returns how many posts it read.
+ */
+export async function refreshNewest(net, scan, { limit = LIMITS.refreshLimit, pages = LIMITS.refreshPages } = {}) {
+  const known = scan.newest;
+  let before = null;
+  let count = 0;
+  let top = null;
+  for (let i = 0; i < pages; i++) {
+    const page = readFeedPage(await net.get('/feed?limit=' + limit + (before === null ? '' : '&before=' + before)));
+    if (!page) throw new KitError('the devnet’s /feed is not the shape this page reads', { code: 'shape' });
+    if (i === 0 && page.tip !== null) scan.tip = page.tip;
+    if (page.top !== null && (top === null || page.top > top)) top = page.top;
+    merge(scan, page.posts);
+    count += page.posts.length;
+    const metKnown = known === null || page.bottom === null || page.bottom <= known;
+    if (metKnown || page.nextBefore === null) break;
+    before = page.nextBefore;
+  }
+  if (top !== null && (scan.newest === null || top > scan.newest)) scan.newest = top;
+  return count;
 }
 
 /** The posts of one channel, newest first, at most `max`. */
