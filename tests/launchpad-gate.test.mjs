@@ -11,7 +11,7 @@ const ctx = (over = {}) => ({ tick: 10, credits: units('1000'), held: 0n, estOut
 const buyIntent = (over = {}) => ({ side: 'buy', coin: 'c1', quoteIn: units('10'), maxSlippageBps: 300, priorityFeeBps: 0, ...over });
 const SNIPER_POLICY = { maxPerTrade: '100', maxPositionBps: 350, maxSlippageBps: 3000, approvalAbove: '100' };
 
-test('every reason code fires, in the documented order', () => {
+test('every reason code fires on its own', () => {
   const fired = new Set();
   const cases = [
     ['KILLED', loadPolicy({ killed: true }), buyIntent(), ctx()],
@@ -53,6 +53,39 @@ test('every reason code fires, in the documented order', () => {
   assert.equal(check(loadPolicy({ killed: true, expiresAtTick: 1, blockedCoins: ['c1'] }), newGateState(), buyIntent({ quoteIn: units('999'), priorityFeeBps: 999 }), ctx({ credits: 0n })), 'KILLED', 'the first failing check wins');
   assert.equal(check(loadPolicy(), newGateState(), buyIntent({ quoteIn: units('25') }), ctx()), null, '“above” is strictly greater: 25 cr needs no approval');
   assert.equal(check(loadPolicy(), newGateState(), buyIntent({ quoteIn: units('30') }), ctx({ approved: true })), null, 'an approved intent skips NEEDS_APPROVAL');
+});
+
+test('the gate reports the first failing check, in GATE_REASONS order', () => {
+  // One buy that fails every check at once. Relaxing the checks one at a time, in the
+  // documented order, must surface each reason in turn and then let the buy through.
+  const relax = [
+    (s) => { s.policy.killed = false; s.ctx.killed = false; },
+    (s) => { s.policy.expiresAtTick = 86_400; },
+    (s) => { s.policy.blockedCoins = []; },
+    (s) => { s.policy.permittedCoins = null; },
+    (s) => { s.policy.cooldownTicks = 0; },
+    (s) => { s.policy.maxTradesPerWindow = 120; },
+    (s) => { s.policy.maxPerTrade = '100'; },
+    (s) => { s.policy.windowCap = { amount: '500' }; },
+    (s) => { s.ctx.held = 0n; },
+    (s) => { s.intent.maxSlippageBps = 300; },
+    (s) => { s.intent.priorityFeeBps = 0; },
+    (s) => { s.ctx.credits = units('1000'); },
+    (s) => { s.ctx.approved = true; },
+  ];
+  assert.equal(relax.length, GATE_REASONS.length);
+  for (let n = 0; n <= relax.length; n++) {
+    const s = {
+      policy: { killed: true, expiresAtTick: 10, blockedCoins: ['c1'], permittedCoins: ['c2'], cooldownTicks: 5, maxTradesPerWindow: 1, maxPerTrade: '50', windowCap: { amount: '100' } },
+      intent: buyIntent({ quoteIn: units('60'), maxSlippageBps: 801, priorityFeeBps: 51 }),
+      ctx: ctx({ killed: true, held: SUPPLY / 50n, credits: units('59') }),
+    };
+    for (const r of relax.slice(0, n)) r(s);
+    const policy = loadPolicy(s.policy);
+    const state = newGateState();
+    record(policy, state, 8, units('50'));
+    assert.equal(check(policy, state, s.intent, s.ctx), GATE_REASONS[n] ?? null, `with the first ${n} checks relaxed`);
+  }
 });
 
 test('defaults follow the plan: approval at 25 cr under a 50 cr trade cap, and buys are valued at their gross', () => {
