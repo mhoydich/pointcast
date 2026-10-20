@@ -315,7 +315,7 @@ export function mount(root, env = {}) {
     const k = keys.key();
     list.replaceChildren();
     if (plan.words.length || plan.gift) list.append(el(doc, 'li', '', 'A post on channel DLY, titled “' + plan.title + '”. It is how your words and gift address reach the card.'));
-    list.append(el(doc, 'li', '', 'A transfer of ' + plan.amount + ' play ATTN from ' + k.sender + ' to the auctioneer ' + S.daily.addresses.auctioneer + '.'));
+    list.append(el(doc, 'li', '', 'A transfer of ' + plan.amount + ' play ATTN from ' + k.sender + ' to the auctioneer ' + S.daily.addresses.auctioneer + ', for lot ' + String(plan.lot).padStart(4, '0') + '.'));
     set('[data-dm-confirm-where]', 'Sent to ' + net.api + ' (' + S.status.chainId + ').');
     box.hidden = false;
     S.plan = plan;
@@ -357,6 +357,9 @@ export function mount(root, env = {}) {
       say2('Checking the devnet’s genesis…', '');
       if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch } });
       await refreshFresh({ cards: false });
+      // A bid confirmed for lot N must not land in lot N+1: the lot is part of what was confirmed.
+      const now = S.daily && S.daily.lot ? S.daily.lot.n : null;
+      if (now !== plan.lot) { withdrawPlan(); say2((now === null ? 'Lot ' + String(plan.lot).padStart(4, '0') + ' closed while you read and no lot is open now.' : 'Lot ' + String(plan.lot).padStart(4, '0') + ' closed while you read; lot ' + String(now).padStart(4, '0') + ' is open now, with its own least bid and leader.') + ' Nothing was sent. Review the bid again.', 'bad'); return; }
       const unbound = await bindingProblem(plan);
       if (unbound) { withdrawPlan(); say2(unbound, 'bad'); return; }
       await loadBalance();

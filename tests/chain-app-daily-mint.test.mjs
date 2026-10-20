@@ -816,6 +816,61 @@ test('the transfer goes to the auctioneer the confirm named, and only if the edi
   assert.match(txt(fine.rootEl, '[data-dm-result-text]'), /^Your bid is in block/);
 });
 
+test('a bid confirmed for lot N is not sent into lot N+1 when the lot rolls over between Review and Send, and a poll in flight does not stand in for the fresh read', async () => {
+  const key = await K.keyFromSeed('67'.repeat(32));
+  const accounts = { [key.sender]: { balance: 100, next_nonce: 0 } };
+  const fake = await fakeSend();
+  const sent = [];
+  let daily = clone(FX.daily);
+  let held = null;
+  let dailyReads = 0;
+  const connect = async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); return fake.chain.submit(s); } });
+  // GET /daily is counted, and while `held` is a promise the next read waits on it (a slow poll)
+  const overrides = { '/daily': async () => { dailyReads += 1; const reply = JSON.stringify(daily); if (held) { const gate = held; held = null; await gate; } return { ok: true, status: 200, headers: { get: () => null }, text: async () => reply }; } };
+  const { rootEl, c } = mountView({ fetchOpts: { accounts, overrides }, extra: { connect, supported: true, storage: null } });
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed('67'.repeat(32));
+  await tick(30);
+  const lotN = FX.daily.lot.n;
+  rootEl.querySelector('[data-dm-amount]').value = '61';
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(20);
+  assert.equal(rootEl.querySelector('[data-dm-confirm]').hidden, false);
+  assert.match(txt(rootEl, '[data-dm-confirm-list]'), new RegExp('A transfer of 61 play ATTN from ' + key.sender + ' to the auctioneer \\w+, for lot ' + String(lotN).padStart(4, '0') + '\\.'));
+  // the lot rolls over after Review: lot N+1, nobody leads, the least bid is the reserve
+  daily = clone(FX.daily);
+  daily.lot = { ...daily.lot, n: lotN + 1, bids: 0, leader: null, min_bid: 1 };
+  rootEl.querySelector('[data-dm-send]').click();
+  await tick(250);
+  assert.equal(sent.length, 0, 'nothing is sent into a lot that was never confirmed');
+  assert.equal(rootEl.querySelector('[data-dm-result]').dataset.state, 'bad');
+  assert.match(txt(rootEl, '[data-dm-result-text]'), new RegExp('^Lot ' + String(lotN).padStart(4, '0') + ' closed while you read; lot ' + String(lotN + 1).padStart(4, '0') + ' is open now, with its own least bid and leader\\. Nothing was sent\\. Review the bid again\\.$'));
+  assert.equal(rootEl.querySelector('[data-dm-confirm]').hidden, true);
+  // a poll is in flight, reading the OLD lot, when Send is pressed: Send waits for it and then reads again, so the roll-over is seen
+  daily = clone(FX.daily);
+  await c.refresh({ cards: false });
+  assert.equal(c.state.daily.lot.n, lotN, 'the page is back on lot N');
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(20);
+  assert.equal(rootEl.querySelector('[data-dm-confirm]').hidden, false);
+  let release;
+  held = new Promise((r) => { release = r; });
+  const poll = c.refresh({ cards: false });
+  await tick(20);
+  rootEl.querySelector('[data-dm-send]').click();
+  await tick(20);
+  daily = clone(FX.daily);
+  daily.lot = { ...daily.lot, n: lotN + 1, bids: 0, leader: null, min_bid: 1 };
+  const readsBefore = dailyReads;
+  release();
+  await poll;
+  await tick(300);
+  assert.ok(dailyReads > readsBefore, 'a second read was made after the poll: the fresh read started after Send');
+  assert.equal(sent.length, 0, 'the in-flight poll’s old lot did not stand in for the fresh read');
+  assert.match(txt(rootEl, '[data-dm-result-text]'), /closed while you read; lot \d{4} is open now/);
+});
+
 test('a bid the door refuses is shown in the devnet’s own words and nothing is claimed', async () => {
   const fake = await fakeSend();
   const connect = async () => ({ ...fake.chain, submit: async () => { throw Object.assign(new K.KitError('that transfer would not be a valid bid now: the least valid bid is 99 play ATTN', { status: 400, code: 'daily_bid_refused' })); } });
