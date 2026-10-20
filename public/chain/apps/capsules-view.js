@@ -31,7 +31,7 @@ function el(doc, tag, cls, text) {
   return n;
 }
 
-const STATE_WORD = { waiting: 'SEALED · WAITING', due: 'DUE · MAY BE OPENED NOW', lapsed: 'LAPSED', gone: 'NOT LISTED' };
+const STATE_WORD = { waiting: 'SEALED · WAITING', due: 'DUE · MAY BE OPENED NOW', lapsed: 'LAPSED', gone: 'NOT LISTED', unknown: 'NOT IN THE LIST SHOWN' };
 
 export function mount(root, env = {}) {
   const doc = root.ownerDocument;
@@ -97,7 +97,7 @@ export function mount(root, env = {}) {
     const l = S.list;
     if (!l) { host.append(rowMsg('Waiting for the first read.')); return; }
     if (!l.enabled) { host.append(rowMsg('This devnet has no capsules (launch record 13 is off).')); return; }
-    set('[data-cp-count]', plural(l.rows.length, 'capsule') + ' sealed · ' + l.rows.filter((r) => r.due).length + ' may be opened now · newest block #' + groups(l.height || 0));
+    set('[data-cp-count]', plural(l.rows.length, 'capsule') + ' sealed · ' + l.rows.filter((r) => r.due).length + ' may be opened now · newest block #' + groups(l.height || 0) + (l.capped ? ' · the devnet cuts this list at ' + groups(C.LIMITS.listLimit) + ' (the ones that lapse soonest), so more may exist' : ''));
     if (!l.rows.length) { host.append(rowMsg('No capsules are sealed on this devnet right now. Seal the first one above.')); return; }
     for (const r of l.rows.slice(0, 50)) {
       const st = C.stateOf(r, l.height || 0);
@@ -133,6 +133,7 @@ export function mount(root, env = {}) {
       const left = S.list && S.list.height !== null ? Math.max(0, m.openAt - S.list.height - 1) : null;
       li.append(el(doc, 'p', 'cp-mine__m', 'Wax seal “' + m.label + '” · channel ' + m.channel + ' · opens at block ' + groups(m.openAt) + (state === 'waiting' && left !== null ? ' · in ' + plural(left, 'block') + ': ' + eta(left) : '') + (sameDevnet ? '' : ' · this file is for another devnet (genesis ' + shortHex(m.genesis, 10, 6) + ')')));
       if (state === 'gone') li.append(el(doc, 'p', 'fine', sameDevnet ? 'The devnet does not list it: already opened, lapsed and pruned, or the devnet was reset.' : 'Nothing to do here: this page reads a different devnet.'));
+      if (state === 'unknown') li.append(el(doc, 'p', 'fine', 'The devnet lists only its ' + groups(C.LIMITS.listLimit) + ' capsules that lapse soonest and this one is not among them, so this page cannot tell whether it is due, opened or gone. It does not open it blind.'));
       const actions = el(doc, 'div', 'ca-actions');
       const open = el(doc, 'button', 'btn', 'Open it');
       open.type = 'button';
@@ -175,7 +176,7 @@ export function mount(root, env = {}) {
   async function readAll() {
     const st = await pinnedStatus(net, where.genesis || null);
     S.status = st;
-    S.list = C.readCapsules(await net.get('/capsules'));
+    S.list = C.readCapsules(await net.get(C.CAPSULES_PATH));
     try { S.rate = await C.readRate(net, st.height); } catch { /* the heartbeat rate is the fallback */ }
     set('[data-cp-rate]', 'The devnet has been sealing about ' + (Math.round(S.rate * 10) / 10) + ' blocks an hour (a block every ' + (S.rate > 0 ? Math.round(3600 / S.rate) : '?') + ' s on average).');
     set('[data-cp-meta]', net.api + ' · ' + st.chainId + ' · newest block #' + groups(st.height) + (where.override ? ' · local override' : '') + ' · read ' + plural(net.count, 'request') + ' so far');

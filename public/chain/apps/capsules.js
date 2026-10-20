@@ -28,7 +28,7 @@ import { pcc, cleanBlock, cleanText, isHex64, isObj, isWhole, KitError, blocksPe
 
 export const FORMAT = 'pointcast-capsule/v1';
 export const CHANNELS = Object.freeze(['BOT', 'GDN']);
-export const LIMITS = Object.freeze({ title: 120, bodyBytes: 4000, label: 64, minDelay: 3, maxDelay: 1000000, fileChars: 40000, feedPages: 20, feedLimit: 100, wall: 12 });
+export const LIMITS = Object.freeze({ title: 120, bodyBytes: 4000, label: 64, minDelay: 3, maxDelay: 1000000, fileChars: 40000, listLimit: 500, feedPages: 20, feedLimit: 100, wall: 12 });
 
 const BIDI = new RegExp('[\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]');
 const FORMAT_CHARS = new RegExp('\\p{Cf}', 'u');
@@ -182,11 +182,17 @@ export function readCapsules(json) {
   return {
     enabled: json.enabled === true,
     height: isWhole(json.height) ? json.height : null,
-    rows: json.capsules.map(readCapsuleRow).filter(Boolean).slice(0, 500),
+    rows: json.capsules.map(readCapsuleRow).filter(Boolean).slice(0, LIMITS.listLimit),
+    // The devnet serves the capsules that lapse soonest, at most `limit` of them (its own default is 100, its ceiling 500):
+    // a list this long may be cut, and a capsule missing from it is then not known to be gone.
+    capped: json.capsules.length >= LIMITS.listLimit,
   };
 }
 
-/** Where a capsule stands now: 'waiting' (before open_at), 'due' (the next block may open it), 'lapsed', or 'gone' (not stored: opened, pruned, or the devnet was reset). */
+/** GET /capsules at the most the devnet will give in one reply. */
+export const CAPSULES_PATH = '/capsules?limit=' + LIMITS.listLimit;
+
+/** Where a capsule stands now: 'waiting' (before open_at), 'due' (the next block may open it), 'lapsed', 'gone' (not stored: opened, pruned, or the devnet was reset), or 'unknown' (see matchFile). */
 export function stateOf(row, tip) {
   if (!row) return 'gone';
   const next = tip + 1;
@@ -263,10 +269,11 @@ export async function sealCapsule({ chain, net, key, plan, onStage = () => {}, o
  * Returns { txHash, height }.
  */
 export async function openCapsule({ chain, net, key, file, onStage = () => {}, wait = {} }) {
-  const list = readCapsules(await net.get('/capsules'));
+  const list = readCapsules(await net.get(CAPSULES_PATH));
   const row = list && list.rows.find((r) => r.id === file.capsule);
   const tip = list ? list.height : null;
-  const st = row && tip !== null ? stateOf(row, tip) : 'gone';
+  const st = row && tip !== null ? stateOf(row, tip) : list && list.capped ? 'unknown' : 'gone';
+  if (st === 'unknown') throw new KitError('The devnet lists only its ' + LIMITS.listLimit + ' capsules that lapse soonest, and this one is not among them, so this page cannot tell whether it is due. Nothing was sent, and the salt stays secret.', { code: 'capped' });
   if (st === 'gone') throw new KitError('The devnet does not list this capsule: it was never sealed here, has been opened, has lapsed and been pruned, or the devnet was reset. Nothing was sent, and the salt stays secret.', { code: 'gone' });
   if (st === 'waiting') throw new KitError('It opens at block ' + row.openAt + ' and the devnet is at ' + tip + '. Nothing was sent, so the message stays secret until then.', { code: 'early' });
   if (st === 'lapsed') throw new KitError('This capsule lapsed at block ' + row.lapsesAt + ' and can no longer open.', { code: 'lapsed' });
@@ -349,5 +356,6 @@ export async function readWall(net, { maxPages = LIMITS.feedPages, limit = LIMIT
 /** The capsule the devnet lists for this file, with its state. `tip` is the devnet's newest block. */
 export function matchFile(file, list) {
   const row = list ? list.rows.find((r) => r.id === file.capsule) || null : null;
-  return { row, state: row && list.height !== null ? stateOf(row, list.height) : 'gone', agrees: Boolean(row) && row.author === file.author && row.openAt === file.openAt && row.channel === file.channel && row.label === file.label };
+  // A capsule missing from a list that was cut at its limit is not known to be gone: it may simply be past the cut.
+  return { row, state: row && list.height !== null ? stateOf(row, list.height) : list && list.capped ? 'unknown' : 'gone', agrees: Boolean(row) && row.author === file.author && row.openAt === file.openAt && row.channel === file.channel && row.label === file.label };
 }

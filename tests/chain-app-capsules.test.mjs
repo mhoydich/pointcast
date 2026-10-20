@@ -323,7 +323,7 @@ async function fakeClient({ list = FX.capsules, seed = '81'.repeat(32) } = {}) {
   const net = {
     api: 'http://127.0.0.1:8799',
     count: 0,
-    async get(p) { if (p === '/capsules') return list; if (p.startsWith('/account/')) return { next_nonce: 6, balance: 0, exists: true }; return null; },
+    async get(p) { if (p.split('?')[0] === '/capsules') return list; if (p.startsWith('/account/')) return { next_nonce: 6, balance: 0, exists: true }; return null; },
     async post(p, body) {
       posts.push([p, body]);
       if (p === '/body') return { body_hash: K.pcc.bodyHash(body.body) };
@@ -380,7 +380,7 @@ const listWith = (file, over = {}, height = 1000) => ({ enabled: true, height, c
 test('openCapsule stores the message by its hash, signs open_capsule with the opener’s own key, and the signature verifies', async () => {
   const c = await OPEN_FILE_FOR();
   const list = listWith(c.file, {}, c.file.openAt + 2);
-  const net = { ...c.net, get: async (p) => (p === '/capsules' ? list : c.net.get(p)) };
+  const net = { ...c.net, get: async (p) => (p.split('?')[0] === '/capsules' ? list : c.net.get(p)) };
   const opener = await K.keyFromSeed('82'.repeat(32));
   const stages = [];
   const r = await C.openCapsule({ chain: c.chain, net, key: opener, file: c.file, onStage: (s) => stages.push(s) });
@@ -402,7 +402,7 @@ test('openCapsule stores the message by its hash, signs open_capsule with the op
 test('an open is refused, nothing sent and the salt unspoken, while the capsule waits, is not listed, or has lapsed', async () => {
   const c = await OPEN_FILE_FOR();
   const opener = await K.keyFromSeed('83'.repeat(32));
-  const run = (list) => C.openCapsule({ chain: c.chain, net: { ...c.net, get: async (p) => (p === '/capsules' ? list : null) }, key: opener, file: c.file });
+  const run = (list) => C.openCapsule({ chain: c.chain, net: { ...c.net, get: async (p) => (p.split('?')[0] === '/capsules' ? list : null) }, key: opener, file: c.file });
   // before open_at: one block short, and far away
   await assert.rejects(() => run(listWith(c.file, {}, c.file.openAt - 2)), (e) => e.code === 'early' && /opens at block \d+ and the devnet is at \d+\. Nothing was sent, so the message stays secret until then/.test(e.message));
   await assert.rejects(() => run(listWith(c.file, {}, c.file.openAt - 100)), (e) => e.code === 'early');
@@ -424,9 +424,9 @@ test('an open that the devnet answers oddly is an error, not a success: a differ
   const c = await OPEN_FILE_FOR();
   const opener = await K.keyFromSeed('84'.repeat(32));
   const list = listWith(c.file, {}, c.file.openAt + 1);
-  const bad1 = { ...c.net, get: async (p) => (p === '/capsules' ? list : { next_nonce: 0 }), post: async (p) => (p === '/body' ? { body_hash: HEX('7') } : {}) };
+  const bad1 = { ...c.net, get: async (p) => (p.split('?')[0] === '/capsules' ? list : { next_nonce: 0 }), post: async (p) => (p === '/body' ? { body_hash: HEX('7') } : {}) };
   await assert.rejects(() => C.openCapsule({ chain: c.chain, net: bad1, key: opener, file: c.file }), /stored the message under a different hash/);
-  const bad2 = { ...c.net, get: async (p) => (p === '/capsules' ? list : { next_nonce: 0 }), post: async (p, b) => (p === '/body' ? { body_hash: K.pcc.bodyHash(b.body) } : { tx_hash: HEX('8') }) };
+  const bad2 = { ...c.net, get: async (p) => (p.split('?')[0] === '/capsules' ? list : { next_nonce: 0 }), post: async (p, b) => (p === '/body' ? { body_hash: K.pcc.bodyHash(b.body) } : { tx_hash: HEX('8') }) };
   await assert.rejects(() => C.openCapsule({ chain: c.chain, net: bad2, key: opener, file: c.file }), /reported a different transaction from the one signed/);
 });
 
@@ -726,6 +726,50 @@ test('a capsule file is refused by its size before any of it is read into memory
   assert.equal(c.state.mine.length, 1);
 });
 
+test('with more capsules than one reply holds, a due capsule is not called NOT LISTED: the list is asked for at its ceiling, and a cut list says so', { timeout: 30000 }, async () => {
+  const c0 = await fakeClient();
+  const made = await OPEN_FILE_FOR({ client: { seed: '81'.repeat(32) } });
+  const file = made.file;
+  const rawText = JSON.stringify(made.raw);
+  // 500 other capsules that lapse sooner crowd the victim out of the 500 the devnet serves
+  const rows = (n) => Array.from({ length: n }, (_, i) => ({ id: K.pcc.bytesToHex(K.pcc.sha256(new TextEncoder().encode('spam' + i))), author: c0.key.sender, blocks_until_open: 0, channel: 'BOT', due: true, label: 'spam ' + i, lapses_at: 10000 + i, open_at: 3 + i, sealed_at: 1 }));
+  const victimRow = listWith(file, {}, file.openAt + 1).capsules.find((r) => r.id === file.capsule);
+  assert.ok(victimRow, 'the victim is in the plain list');
+  const listOf = (n, withVictim) => ({ ...listWith(file, {}, file.openAt + 1), capsules: [...rows(n), ...(withVictim ? [victimRow] : [])] });
+  // the request asks for the ceiling
+  const log = [];
+  const full = mountView({ fetchOpts: { log, fx: { ...FX, capsules: listOf(500, false) } } });
+  await full.c.begin();
+  full.c.stop();
+  assert.ok(log.includes('GET /capsules?limit=500'), 'the list is read with limit=500: ' + log.filter((p) => p.includes('capsules')).join());
+  assert.equal(full.c.state.list.capped, true);
+  assert.match(txt(full.rootEl, '[data-cp-count]'), /500 capsules sealed · .* · the devnet cuts this list at 500 \(the ones that lapse soonest\), so more may exist$/);
+  // the victim's file: missing from a cut list is "not in the list shown", not "gone", and Open is refused for the true reason
+  await full.c.importFile(rawText);
+  const li = full.rootEl.querySelector('[data-cp-mine] li');
+  assert.equal(li.dataset.state, 'unknown');
+  assert.match(li.textContent, /NOT IN THE LIST SHOWN/);
+  assert.doesNotMatch(li.textContent, /NOT LISTED|does not list it/);
+  assert.match(li.textContent, /cannot tell whether it is due, opened or gone/);
+  assert.equal([...li.querySelectorAll('button')].find((b) => b.textContent === 'Open it').disabled, true);
+  const posts = [];
+  const net = { ...c0.net, get: async (p) => (p.split('?')[0] === '/capsules' ? listOf(500, false) : c0.net.get(p)), post: async (p, b) => { posts.push(p); return {}; } };
+  await assert.rejects(() => C.openCapsule({ chain: c0.chain, net, key: c0.key, file }), (e) => e.code === 'capped' && /lists only its 500 capsules that lapse soonest, and this one is not among them[\s\S]*Nothing was sent, and the salt stays secret/.test(e.message) && !/never sealed here/.test(e.message));
+  assert.deepEqual(posts, [], 'nothing was posted');
+  // a list that is NOT cut and lacks the capsule really is "gone"
+  const short = mountView({ fetchOpts: { fx: { ...FX, capsules: listOf(499, false) } } });
+  await short.c.begin();
+  short.c.stop();
+  await short.c.importFile(rawText);
+  assert.equal(short.rootEl.querySelector('[data-cp-mine] li').dataset.state, 'gone');
+  assert.equal(C.matchFile(file, C.readCapsules(listOf(499, false))).state, 'gone');
+  assert.equal(C.matchFile(file, C.readCapsules(listOf(500, false))).state, 'unknown');
+  // and with the victim inside the 500 it is found and due
+  const inside = C.readCapsules(listOf(499, true));
+  assert.equal(inside.capped, true);
+  assert.equal(C.matchFile(file, inside).state, 'due');
+});
+
 test('capsule files you hold: an edited file is refused with a reason, a good one is added, and the ones kept on this device come back', async () => {
   const f = fileOf(OPENED[0]);
   const { rootEl, c, dom } = mountView();
@@ -904,12 +948,14 @@ test('the page writes only the SDK’s signed transactions and, to open, a messa
   assert.deepEqual(posts, ["'/body'", "'/tx'"], 'the message store and the signed open');
   assert.doesNotMatch(code(src.view), /\.post\(|method\s*:\s*['"]POST|\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
   assert.doesNotMatch(code(src.logic), /\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
-  for (const arg of callArgs(src.logic, 'net.get(')) assert.ok(/^'\/[a-z]+'$|^'\/account\/' \+ encodeURIComponent\(key\.sender\)$|^'\/raw\/blocks\?from=' \+ from \+ '&limit=' \+ count$|^'\/feed\?limit=' \+ limit \+ \(before === null \? '' : '&before=' \+ before\)$|^'\/body\/' \+ o\.bodyHash$/.test(arg), arg);
+  for (const arg of callArgs(src.logic, 'net.get(')) assert.ok(/^'\/[a-z]+'$|^CAPSULES_PATH$|^'\/account\/' \+ encodeURIComponent\(key\.sender\)$|^'\/raw\/blocks\?from=' \+ from \+ '&limit=' \+ count$|^'\/feed\?limit=' \+ limit \+ \(before === null \? '' : '&before=' \+ before\)$|^'\/body\/' \+ o\.bodyHash$/.test(arg), arg);
   // the order inside openCapsule: the readiness check, then the message, then the signed open
   const open = code(src.logic).slice(code(src.logic).indexOf('export async function openCapsule'));
-  assert.ok(open.indexOf("net.get('/capsules')") < open.indexOf("net.post('/body'") && open.indexOf("net.post('/body'") < open.indexOf("net.post('/tx'"));
+  assert.ok(open.indexOf('net.get(CAPSULES_PATH)') < open.indexOf("net.post('/body'") && open.indexOf("net.post('/body'") < open.indexOf("net.post('/tx'"));
   assert.match(open, /st === 'waiting'\) throw/);
   assert.match(open, /st === 'gone'\) throw/);
+  assert.match(open, /st === 'unknown'\) throw/);
+  assert.equal(C.CAPSULES_PATH, '/capsules?limit=500', 'the list is asked for at the devnet’s ceiling, not its default of 100');
   assert.match(open, /st === 'lapsed'\) throw/);
   // the view reaches every write through a button and a confirm
   assert.match(code(src.view), /send\.addEventListener\('click', sendSeal\)/);
