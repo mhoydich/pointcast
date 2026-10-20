@@ -400,7 +400,14 @@ export async function signAndSend(chain, key, tx, { wait = true, onStage = () =>
 export function describeError(e) {
   if (e && e.name === 'GenesisChanged') return 'GENESIS CHANGED. The devnet reports genesis ' + e.got + ', this page pins ' + e.want + '. The devnet was probably reset; a reset is dated and recorded. Nothing was sent.';
   const msg = e && e.message ? String(e.message) : 'something went wrong';
-  if (e && e.status === 429) return cleanText(msg, 240) + (e.retryAfter ? ' Try again in ' + e.retryAfter + ' s.' : ' Try again in a minute.');
+  if (e && e.status === 429) {
+    // A retry hint only where one is true: the devnet said how long (Retry-After) or its own words name a per-minute
+    // window. A per-day cap (the faucet's 3 claims per IP per UTC day) is not cured by trying again in a minute.
+    const words = cleanText(msg, 240);
+    if (e.retryAfter) return words + ' Try again in ' + e.retryAfter + ' s.';
+    if (/\b(?:per|each|every|a) minute\b|\bper[- ]minute\b/i.test(words)) return words + ' Try again in a minute.';
+    return words;
+  }
   return cleanText(msg, 280);
 }
 

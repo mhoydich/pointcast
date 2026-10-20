@@ -424,6 +424,21 @@ test('claimFaucet posts the address and nothing else; the devnet’s refusal com
   assert.match(K.describeError(Object.assign(new K.KitError('slow down', { status: 429 }), { retryAfter: 30 })), /Try again in 30 s/);
 });
 
+test('a daily cap is not told to try again in a minute: only a Retry-After or a per-minute window gets a retry hint', () => {
+  const e429 = (msg, extra = {}) => Object.assign(new K.KitError(msg, { status: 429 }), extra);
+  // the faucet's own words for its per-UTC-day caps stand alone
+  assert.equal(K.describeError(e429('3 faucet claims per IP per UTC day')), '3 faucet claims per IP per UTC day');
+  assert.equal(K.describeError(e429('the 300-a-day global faucet cap is taken (UTC)')), 'the 300-a-day global faucet cap is taken (UTC)');
+  assert.doesNotMatch(K.describeError(e429('3 faucet claims per IP per UTC day')), /minute/);
+  // a per-minute window, or a Retry-After, still says when
+  assert.match(K.describeError(e429('60 requests per minute from one address')), /Try again in a minute\.$/);
+  assert.match(K.describeError(e429('slow down', { retryAfter: 45 })), /Try again in 45 s\.$/);
+  // a plain 429 with no words of its own gets no invented timing
+  assert.doesNotMatch(K.describeError(e429('the devnet answered 429')), /minute/);
+  // the faucet button shows the Worker's sentence
+  assert.match(src.view, /describeError\(e\)/);
+});
+
 test('readAccount takes a new key as 0 play ATTN and nonce 0', async () => {
   assert.deepEqual(await D.readAccount({ get: async () => ({ address: ME, balance: 0, exists: false, next_nonce: 0, nonce: 0 }) }, ME), { balance: 0, nonce: 0, exists: false });
   assert.deepEqual(await D.readAccount({ get: async () => ({ balance: 91, next_nonce: 3, exists: true }) }, ME), { balance: 91, nonce: 3, exists: true });

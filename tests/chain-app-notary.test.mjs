@@ -516,7 +516,8 @@ test('a refused stamp says what the devnet said and leaves the button usable', a
   $(rootEl, '[data-nt-send]').click();
   await tick(300);
   assert.equal($(rootEl, '[data-nt-result]').dataset.state, 'bad');
-  assert.match(txt(rootEl, '[data-nt-result-text]'), /^Not sent, or not confirmed: slow down: per-IP limit on signed txs Try again in a minute\.$/);
+  // the devnet gave no Retry-After and no per-minute window, so no retry time is invented
+  assert.match(txt(rootEl, '[data-nt-result-text]'), /^Not sent, or not confirmed: slow down: per-IP limit on signed txs$/);
   assert.equal($(rootEl, '[data-nt-send]').disabled, false);
   assert.equal($(rootEl, '[data-nt-receipt]').hidden, true);
 });
