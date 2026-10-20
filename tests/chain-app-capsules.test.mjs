@@ -770,6 +770,82 @@ test('with more capsules than one reply holds, a due capsule is not called NOT L
   assert.equal(C.matchFile(file, inside).state, 'due');
 });
 
+test('the capsule file’s safety net: removing needs a second press and says what is lost, a device that refuses the copy is said so, leaving warns while a file is undownloaded, and an entry that cannot be read is never deleted', { timeout: 30000 }, async () => {
+  const c0 = await fakeClient();
+  const accounts = { [c0.key.sender]: { balance: 0, next_nonce: 3 } };
+  // a storage that refuses writes (a private window, a full disk), with an entry this page cannot read already in the slot
+  const unreadable = { format: 'pointcast-capsule/v2', from: 'a newer page' };
+  const real = fakeStorage({ [view.MY_SLOT]: JSON.stringify([unreadable]) });
+  let refuse = false;
+  const storage = { m: real.m, getItem: (k) => real.getItem(k), setItem: (k, v) => { if (refuse) throw new Error('QuotaExceededError'); real.setItem(k, v); }, removeItem: (k) => real.removeItem(k) };
+  const connect = async () => c0.chain;
+  const m = mountView({ storage, fetchOpts: { accounts }, extra: { connect, wait: { timeoutMs: 200, intervalMs: 5 } } });
+  const { rootEl, c, dom } = m;
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed('81'.repeat(32));
+  await tick(30);
+  const seal = async (title) => {
+    $(rootEl, '[data-cp-title]').value = title;
+    $(rootEl, '[data-cp-body]').value = 'message of ' + title;
+    $(rootEl, '[data-cp-label]').value = 'wax';
+    $(rootEl, '[data-cp-delay]').value = '4';
+    $(rootEl, '[data-cp-review]').click();
+    $(rootEl, '[data-cp-send]').click();
+    await tick(300);
+  };
+  const beforeUnload = () => { const ev = new dom.window.Event('beforeunload', { cancelable: true }); dom.window.dispatchEvent(ev); return ev; };
+  assert.equal(beforeUnload().defaultPrevented, false, 'nothing made here: nothing to warn about');
+  // 1. Keep is ticked but the device refuses: the page says the file is NOT kept there, and unticks the box
+  assert.equal(c.state.mine.length, 0, 'the unreadable entry is not shown');
+  $(rootEl, '[data-cp-keep]').checked = true;
+  refuse = true;
+  await seal('first');
+  assert.equal($(rootEl, '[data-cp-keep]').checked, false, 'a copy that could not be kept is not shown as kept');
+  assert.match(txt(rootEl, '[data-cp-keep-note]'), /would not keep the capsule file on this device .* NOT kept there\. Download the file instead\./);
+  assert.equal(c.state.mine.length, 1);
+  // 2. the file is not downloaded and not on the device: leaving warns
+  assert.equal(beforeUnload().defaultPrevented, true, 'leaving would lose the only copy');
+  // downloading clears the warning
+  dom.window.URL.createObjectURL = () => 'blob:test/1';
+  dom.window.URL.revokeObjectURL = () => {};
+  $(rootEl, '[data-cp-download]').click();
+  assert.equal(beforeUnload().defaultPrevented, false, 'downloaded: nothing at risk');
+  // a second sealed file, kept on the device this time: leaving does not warn either
+  refuse = false;
+  $(rootEl, '[data-cp-keep]').checked = true;
+  $(rootEl, '[data-cp-keep]').dispatchEvent(new dom.window.Event('change'));
+  assert.equal(JSON.parse(storage.getItem(view.MY_SLOT)).length, 2, 'the readable file and the unreadable entry are both written');
+  await seal('second');
+  assert.equal(c.state.mine.length, 2);
+  assert.equal(beforeUnload().defaultPrevented, false, 'it is safe on the device');
+  // 3. the unreadable entry survives every write, and unticking the box
+  assert.deepEqual(JSON.parse(storage.getItem(view.MY_SLOT)).filter((e) => e.format === 'pointcast-capsule/v2'), [unreadable]);
+  $(rootEl, '[data-cp-keep]').checked = false;
+  $(rootEl, '[data-cp-keep]').dispatchEvent(new dom.window.Event('change'));
+  assert.deepEqual(JSON.parse(storage.getItem(view.MY_SLOT)), [unreadable], 'unticking takes my files off the device and leaves what is not mine to delete');
+  await seal('third');
+  assert.deepEqual(JSON.parse(storage.getItem(view.MY_SLOT)), [unreadable], 'sealing with the box unticked writes nothing and removes nothing');
+  // 4. Remove asks twice, names what is lost (and that it was never downloaded), and Keep it backs out
+  const mineLi = () => [...rootEl.querySelectorAll('[data-cp-mine] li')].find((li) => li.textContent.includes('third'));
+  const btn = (name) => [...mineLi().querySelectorAll('button')].find((b) => b.textContent === name);
+  const before = c.state.mine.length;
+  btn('Remove from this page and device').click();
+  assert.equal(c.state.mine.length, before, 'the first press only asks');
+  assert.match(mineLi().querySelector('.cp-mine__warn').textContent, /^You have not downloaded this capsule file\. Deleting it removes the message and the salt from this page for good\. Without them the capsule can never open\./);
+  btn('Keep it').click();
+  assert.equal(c.state.mine.length, before);
+  assert.equal(mineLi().querySelector('.cp-mine__warn'), null);
+  btn('Remove from this page and device').click();
+  btn('Delete it for good').click();
+  assert.equal(c.state.mine.length, before - 1);
+  // the deleted file is no longer at risk; 'second' was kept on the device only until the box was unticked, so it still is
+  assert.equal(beforeUnload().defaultPrevented, true, 'the second file was never downloaded and is no longer on the device');
+  const secondLi = [...rootEl.querySelectorAll('[data-cp-mine] li')].find((li) => li.textContent.includes('second'));
+  [...secondLi.querySelectorAll('button')].find((b) => b.textContent === 'Download the file again').click();
+  assert.equal(beforeUnload().defaultPrevented, false, 'every file made here is downloaded or kept: leaving is safe');
+});
+
 test('a capsule file edited in its block or wax seal is accepted (they are not bound) but the card shows the devnet’s numbers and says the file differs; the page no longer claims any edit is refused', async () => {
   const made = await OPEN_FILE_FOR({ client: { seed: '81'.repeat(32) } });
   const file = made.file;
@@ -829,9 +905,13 @@ test('capsule files you hold: an edited file is refused with a reason, a good on
   assert.equal(again.c.state.mine.length, 1);
   assert.equal(again.c.state.mine[0].capsule, f.capsule);
   assert.equal($(again.rootEl, '[data-cp-keep]').checked, true);
-  // remove from this page
-  const rm = [...li.querySelectorAll('button')].find((b) => b.textContent === 'Remove from this page');
-  rm.click();
+  // remove: it takes two presses (the file is the only copy), and the first one changes nothing
+  const rmBtn = () => [...rootEl.querySelectorAll('[data-cp-mine] button')].find((b) => /^Remove from this page and device$|^Delete it for good$/.test(b.textContent));
+  assert.equal(rmBtn().textContent, 'Remove from this page and device');
+  rmBtn().click();
+  assert.equal(c.state.mine.length, 1, 'one press only asks');
+  assert.equal(rmBtn().textContent, 'Delete it for good');
+  rmBtn().click();
   assert.equal(c.state.mine.length, 0);
   assert.ok(dom);
 });

@@ -43,7 +43,7 @@ export function mount(root, env = {}) {
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
   const storage = env.storage !== undefined ? env.storage : (() => { try { return win.localStorage; } catch { return null; } })();
-  const S = { begun: false, halted: false, status: null, list: null, rate: 12, mine: [], plan: null, chain: null, openPlan: null, openSender: '', lastFile: null, timer: 0, busy: false };
+  const S = { begun: false, halted: false, status: null, list: null, rate: 12, mine: [], plan: null, chain: null, openPlan: null, openSender: '', lastFile: null, timer: 0, busy: false, unreadable: [], undownloaded: new Set(), deviceOk: false, armed: '' };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-cp-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
@@ -55,27 +55,58 @@ export function mount(root, env = {}) {
     try {
       const raw = storage && storage.getItem(MY_SLOT);
       const list = raw ? JSON.parse(raw) : [];
-      return (Array.isArray(list) ? list : []).map((f) => { try { return C.readCapsuleFile(f); } catch { return null; } }).filter(Boolean);
+      const entries = Array.isArray(list) ? list : [];
+      const mine = [];
+      // An entry this page cannot read (a newer format, a damaged one) is kept as it is: it is not this page's to delete.
+      S.unreadable = [];
+      for (const f of entries) { try { mine.push(C.readCapsuleFile(f)); } catch { S.unreadable.push(f); } }
+      return mine;
     } catch { return []; }
   }
   const keepBox = () => q('[data-cp-keep]');
+  /** Write my capsule files to this device when the box is ticked. Returns true only if they are there now. */
   function saveMine() {
     const box = keepBox();
+    if (!storage || !box || !box.checked) { S.deviceOk = false; return false; }
+    try { storage.setItem(MY_SLOT, JSON.stringify([...S.mine.map(toFile), ...S.unreadable])); S.deviceOk = true; return true; } catch { S.deviceOk = false; return false; }
+  }
+  /** Take my files off this device (unticking the box). Entries this page could not read stay where they are. */
+  function eraseDeviceCopy() {
+    S.deviceOk = false;
     try {
-      if (!storage) return false;
-      if (box && box.checked) { storage.setItem(MY_SLOT, JSON.stringify(S.mine.map(toFile))); return true; }
-      storage.removeItem(MY_SLOT);
-    } catch { return false; }
-    return false;
+      if (!storage) return;
+      if (S.unreadable.length) storage.setItem(MY_SLOT, JSON.stringify(S.unreadable)); else storage.removeItem(MY_SLOT);
+    } catch { /* a browser that refuses storage has nothing of mine to erase */ }
+  }
+  /** Save, and say so when the device refused: the box is unticked and the note says the file is not kept there. */
+  function trySaveMine() {
+    const box = keepBox();
+    const ok = saveMine();
+    const note = q('[data-cp-keep-note]');
+    if (box && box.checked && !ok) {
+      box.checked = false;
+      if (note) note.textContent = 'This browser would not keep the capsule file on this device (storage is blocked or full), so it is NOT kept there. Download the file instead.';
+    } else if (ok && note) note.textContent = '';
+    return ok;
   }
   const toFile = (m) => C.makeCapsuleFile({ chainId: m.chainId, genesis: m.genesis, api: m.api, capsule: m.capsule, author: m.author, channel: m.channel, title: m.title, body: m.body, salt: m.salt, label: m.label, openAt: m.openAt, sealedAt: m.sealedAt, sealTx: m.sealTx });
   function addMine(m) {
     S.mine = [m, ...S.mine.filter((x) => x.capsule !== m.capsule)].slice(0, 32);
-    saveMine();
+    trySaveMine();
     paintMine();
   }
 
+  /** A file made here that has not been downloaded, and is not safe on this device either, exists only in this tab. */
+  const atRisk = () => S.undownloaded.size > 0 && !S.deviceOk;
+  win.addEventListener('beforeunload', (ev) => {
+    if (!atRisk()) return undefined;
+    ev.preventDefault();
+    ev.returnValue = 'A capsule file you made here has not been downloaded. It holds the message and the salt; leave and the capsule can never open.';
+    return ev.returnValue;
+  });
+
   function download(m) {
+    S.undownloaded.delete(m.capsule);
     const blob = new win.Blob([JSON.stringify(toFile(m), null, 2) + '\n'], { type: 'application/json' });
     const a = doc.createElement('a');
     a.href = win.URL.createObjectURL(blob);
@@ -148,10 +179,26 @@ export function mount(root, env = {}) {
       const dl = el(doc, 'button', 'btn btn--ghost', 'Download the file again');
       dl.type = 'button';
       dl.addEventListener('click', () => download(m));
-      const rm = el(doc, 'button', 'btn btn--ghost', 'Remove from this page');
+      // Removing deletes the only copy this page holds (on the page and, if kept, on this device): it takes two presses, and says if it was never downloaded.
+      const armed = S.armed === m.capsule;
+      const rm = el(doc, 'button', 'btn btn--ghost', armed ? 'Delete it for good' : 'Remove from this page and device');
       rm.type = 'button';
-      rm.addEventListener('click', () => { S.mine = S.mine.filter((x) => x.capsule !== m.capsule); saveMine(); paintMine(); });
+      rm.addEventListener('click', () => {
+        if (S.armed !== m.capsule) { S.armed = m.capsule; paintMine(); return; }
+        S.armed = '';
+        S.mine = S.mine.filter((x) => x.capsule !== m.capsule);
+        S.undownloaded.delete(m.capsule);
+        trySaveMine();
+        paintMine();
+      });
       actions.append(open, dl, rm);
+      if (armed) {
+        const keep = el(doc, 'button', 'btn btn--ghost', 'Keep it');
+        keep.type = 'button';
+        keep.addEventListener('click', () => { S.armed = ''; paintMine(); });
+        actions.append(keep);
+        li.append(el(doc, 'p', 'fine cp-mine__warn', (S.undownloaded.has(m.capsule) ? 'You have not downloaded this capsule file. ' : '') + 'Deleting it removes the message and the salt from this page' + (S.deviceOk ? ' and from this device' : '') + ' for good. Without them the capsule can never open. Press “Download the file again” first if you want a copy.'));
+      }
       if (state === 'due' && !(keys && keys.key())) actions.append(el(doc, 'span', 'fine', 'Make a key above to open it.'));
       li.append(actions);
       host.append(li);
@@ -261,6 +308,7 @@ export function mount(root, env = {}) {
   function keepFile(file) {
     S.lastFile = file;
     const m = C.readCapsuleFile(file);
+    S.undownloaded.add(m.capsule);
     addMine(m);
     const dl = q('[data-cp-download]');
     if (dl) dl.hidden = false;
@@ -269,7 +317,8 @@ export function mount(root, env = {}) {
   }
   function dropFile(capsule, previous) {
     S.mine = S.mine.filter((x) => x.capsule !== capsule);
-    saveMine();
+    S.undownloaded.delete(capsule);
+    trySaveMine();
     paintMine();
     S.lastFile = previous;
     const dl = q('[data-cp-download]');
@@ -388,7 +437,12 @@ export function mount(root, env = {}) {
 
   S.mine = loadMine();
   const keepEl = keepBox();
-  if (keepEl) { keepEl.checked = S.mine.length > 0; keepEl.disabled = !storage; keepEl.addEventListener('change', () => { saveMine(); }); }
+  if (keepEl) {
+    keepEl.checked = S.mine.length > 0;
+    keepEl.disabled = !storage;
+    S.deviceOk = keepEl.checked;
+    keepEl.addEventListener('change', () => { if (keepEl.checked) trySaveMine(); else { eraseDeviceCopy(); const n = q('[data-cp-keep-note]'); if (n) n.textContent = ''; } });
+  }
   const review = q('[data-cp-review]');
   if (review) review.addEventListener('click', showSealConfirm);
   const send = q('[data-cp-send]');
