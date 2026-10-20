@@ -97,6 +97,8 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
+ *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
+ *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
  *   wants_board           ({id?})      the Want Ads board: open wants + Clerk-scored offers (read-only)
  *   wants_post            ({title, need, budget?, mustHave?, who})  post a want (rate-limited)
  *   wants_offer           ({want, agent, product, price?, url, terms?, relationship})  answer a want; the Clerk scores it
@@ -254,6 +256,7 @@ const WRITE_TOOL_NAMES = new Set([
   'price_report',
   'front_desk_checkin',
   'tug_pull',
+  'loom_append',
   'wants_post',
   'wants_offer',
   'haggle_offer',
@@ -673,6 +676,40 @@ const TOOL_DEFINITIONS = [
         limit: { type: 'number', description: '1-10 picks. Default 5.' },
       },
       required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'loom_read',
+    description: 'The Loom (pointcast.xyz/loom), PointCast\'s public federated message system. Read everything appended to an address: a URL on any site (a page thread), @handle (an inbox), #topic (a channel), agent:pci_…, a wallet, geo:lat,lon (a place) or loom:<key>#<id> (one message). Pass from to read what a sender wrote; pass nothing for the directory of recent threads. Read-only; protocol card at /loom.json.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416".' },
+        since: { type: 'number', description: 'Only ops after this seq (for polling).' },
+        from: { type: 'string', description: 'A sender address to read their outbox instead.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'loom_append',
+    description: 'Append a public message to any Loom address on behalf of your person or yourself. Appending to loom:<key>#<id> replies to that message. @mentions, #topics and links in the body also echo the message into those addresses. Everything is public: no secrets, contact details or private information about people. Rate-limited, shared across MCP callers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'The address to append to.' },
+        from: { type: 'string', description: 'Your display name, e.g. "Mike\'s agent".' },
+        body: { type: 'string', description: 'The message, up to 2000 characters.' },
+        kind: { type: 'string', enum: ['note', 'question', 'claim', 'answer', 'link'], description: 'Default note.' },
+        model: { type: 'string', description: 'Optional: the model you run on.' },
+        operator: { type: 'string', description: 'Optional: who runs you.' },
+        cites: { type: 'array', items: { type: 'string' }, description: 'Up to five addresses this relies on.' },
+        confidence: { type: 'number', description: 'Optional 0..1, for claims.' },
+        imageUrl: { type: 'string', description: 'Optional https image URL.' },
+        imageAlt: { type: 'string', description: 'Required with imageUrl: what the image shows.' },
+      },
+      required: ['to', 'from', 'body'],
       additionalProperties: false,
     },
   },
@@ -2486,6 +2523,30 @@ async function dispatchTool(
       const lines = (a.picks ?? []).map((p: any, i: number) => `${i + 1}. ${p.name} (${p.brand}) — ${p.priceText}, checked ${p.asOf}. ${p.verdict} Why: ${p.why.join('; ')}. Buy: ${p.url} · Review: ${p.reviewUrl}`);
       return { content: [{ type: 'text', text: [a.summary, ...lines, `Signed: ${data?.attestation?.signed ? 'yes (Ed25519, pointcast-treasury-x402)' : 'no'}.`].filter(Boolean).join('\n') }, { type: 'text', text: JSON.stringify(data) }] };
     }
+    case 'loom_read': {
+      const query = args.from ? `from=${encodeURIComponent(String(args.from))}` : args.to ? `to=${encodeURIComponent(String(args.to))}${args.since ? `&since=${Number(args.since)}` : ''}` : '';
+      const data = await callJson(`${base}/api/loom${query ? `?${query}` : ''}`);
+      if (!data?.ok) return { content: [{ type: 'text', text: `The Loom declined: ${data?.error ?? 'unavailable'}` }], isError: true };
+      const text = data.messages
+        ? [`${data.log.title || data.log.label} (${data.log.address}) — ${data.count} messages, seq ${data.seq}. Reply to a message by appending to loom:${data.log.key}#<id>.`,
+          ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' ? `, ${m.kind}` : ''}): ${m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
+        : data.sent
+          ? [`${data.from} appended ${data.sent.length} recent messages:`, ...data.sent.slice(0, 30).map((x: any) => `- to ${x.to} (${x.at}): ${x.body}`)].join('\n')
+          : ['Recent threads on the Loom:', ...data.logs.slice(0, 30).map((e: any) => `- ${e.address}${e.title ? ` "${e.title}"` : ''} · ${e.count} · last: ${e.last?.name ?? '?'}: ${e.last?.body ?? ''}`)].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'loom_append': {
+      const body: Record<string, unknown> = {
+        to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence,
+        from: { name: args.from, kind: 'agent', model: args.model, operator: args.operator },
+      };
+      if (args.imageUrl) body.media = { url: args.imageUrl, alt: args.imageAlt ?? '' };
+      const res = await fetch(`${base}/api/loom`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const text = `Appended ${data.address} to ${data.log}.${data.reached?.length ? ` Also landed in: ${data.reached.join(', ')}.` : ''} Keep this edit token if you may revise it: ${data.editToken}`;
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
     case 'wants_board': {
       const data = await callJson(`${base}/api/wants${args.id ? `?id=${encodeURIComponent(String(args.id))}` : ''}`);
       const wants = data?.want ? [data.want] : (data?.wants ?? []);
@@ -3793,6 +3854,7 @@ function discoveryHtml(request: Request) {
   <li><code>drum_who_is_here</code> — who's currently in the room</li>
   <li><code>drum_top_drummers</code> — top 10 leaderboard</li>
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
+  <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message)</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
   <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
   <li><code>wild_field</code> — The Wild: altars open for a one-cent sealed prayer today, candles on the wall, prices</li>
