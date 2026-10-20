@@ -16,7 +16,8 @@
 //   with a key made in this browser, to the devnet the page points at.
 // - Refuse, never guess: a pin that does not match, a genesis that changed, any
 //   fault, a stall, the midnight guard, an old replay, a changed UTC day: the page
-//   signs nothing and says which.
+//   sends nothing and says which (a fault or a bad pin means it signs nothing at all;
+//   in the midnight minute the claim is signed for review and Send stays off).
 // - devnet: no value, may reset. A witness attestation is a claim, not proof.
 
 import * as X from './witness.js';

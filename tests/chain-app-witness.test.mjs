@@ -909,6 +909,27 @@ test('at the midnight minute the plan is made but blocked, and says so; the page
   assert.equal(fine.blocked, '');
 });
 
+test('the midnight copy is true: in that minute the claim is signed for review and nothing is sent, so no line says the page signs nothing', async () => {
+  // the facts: a plan made inside the minute carries a signature, and is blocked from being sent
+  for (const t of ['23:59:00', '23:59:30', '00:00:30', '00:00:59']) {
+    const plan = await planFor({ nowMs: Date.parse('2026-10-20T' + t + 'Z') });
+    assert.equal(plan.blocked, 'midnight', t);
+    assert.match(plan.wit.signature, /^[0-9a-f]{128}$/, t + ': the claim is already signed when the review is drawn');
+  }
+  assert.equal((await planFor({ nowMs: Date.parse('2026-10-20T23:58:59Z') })).blocked, '');
+  // so the copy says what is true: it sends nothing; it does not say it signs nothing
+  assert.doesNotMatch(D.MIDNIGHT_LINE, /sign(s|ed)? nothing|nothing (is|was) signed/i);
+  assert.match(D.MIDNIGHT_LINE, /In that minute it sends nothing and says so; the claim is still signed in your browser for you to read, and Send stays off until 00:01 UTC\./);
+  assert.match(src.page, /\{MIDNIGHT_LINE\}/, 'the page prints that line');
+  // and no message of the guard says anything was signed
+  for (const what of ['the post', 'the attestation', 'the check-in']) {
+    for (const landed of [false, true]) {
+      assert.throws(() => X.assertNotNearMidnight(Date.parse('2026-10-20T23:59:30Z'), what, { landed }), (e) => e.name === 'Midnight' && !/signed/i.test(e.message) && /nothing/i.test(e.message));
+    }
+  }
+  assert.doesNotMatch(src.view, /the page signs nothing and says which/, 'the view’s own header does not claim it either');
+});
+
 // ================================================================ sending
 
 function connectTo(f) {

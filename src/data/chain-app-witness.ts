@@ -88,7 +88,7 @@ export const STRIKE_COPY = 'signed a checkpoint this chain does not have: a wron
 
 /** The guard against a post that could land on either UTC day, in the words pc-witness.mjs uses. */
 export const MIDNIGHT_LINE =
-  'The page never sends between 23:59 and 00:01 UTC: a post sent then could land on either day. In that minute it signs nothing, sends nothing and says so.';
+  'The page never sends between 23:59 and 00:01 UTC: a post sent then could land on either day. In that minute it sends nothing and says so; the claim is still signed in your browser for you to read, and Send stays off until 00:01 UTC.';
 
 export const MEANS: string[] = [
   'A public claim, tied to one free key: “I replayed this chain from genesis with the pinned verifier and got this block hash and state root at height h.” The block hash and the state root in it come from the replay your browser just ran, not from /status.',
