@@ -2193,6 +2193,44 @@ test('the logic has no DOM and no storage of its own, reads with the fetch it is
   assert.doesNotMatch(c.slice(c.indexOf('export function makeClaimFile')), /seedHex/);
 });
 
+test('the page loads the SDK once: its two import paths meet at one URL through an import map, the two files are the same bytes, and without the map there would be two', () => {
+  // the modules the page runs, walked from the view the page imports, resolved the way a browser resolves a static import
+  const urlOf = (from, spec) => new URL(spec, 'https://pointcast.xyz' + from).pathname;
+  const graph = (entry, map = {}) => {
+    const seen = new Set();
+    const queue = [entry];
+    while (queue.length) {
+      const at = queue.pop();
+      if (seen.has(at)) continue;
+      seen.add(at);
+      const file = new URL('public' + at, root);
+      if (!existsSync(file)) continue;
+      for (const m of readFileSync(file, 'utf8').matchAll(/^(?:import|export)\b[^;]*?\bfrom\s+(['"])(.+?)\1/gm)) {
+        const resolved = urlOf(at, m[2]);
+        queue.push(map[resolved] || resolved);
+      }
+    }
+    return seen;
+  };
+  const sdkUrls = (set) => [...set].filter((u) => /\/pointcast-chain\.js$/.test(u)).sort();
+  // without a map the page's graph holds two copies: chain-kit's, and the Daily Net helper's
+  assert.deepEqual(sdkUrls(graph('/chain/apps/witness-view.js')), ['/chain/first-mints/lib/pointcast-chain.js', '/chain/net/pointcast-chain.js']);
+  // the page's own import map, in the head, before any module
+  const m = src.page.match(/<script slot="head" is:inline type="importmap">([\s\S]*?)<\/script>/);
+  assert.ok(m, 'an import map in the head slot, which comes before every module script the page has');
+  const map = JSON.parse(m[1]).imports;
+  assert.deepEqual(map, { '/chain/net/pointcast-chain.js': '/chain/first-mints/lib/pointcast-chain.js' });
+  assert.ok(src.page.indexOf('type="importmap"') < src.page.indexOf('<script is:inline type="module">'), 'it comes before the page’s own module script');
+  assert.deepEqual(sdkUrls(graph('/chain/apps/witness-view.js', map)), ['/chain/first-mints/lib/pointcast-chain.js'], 'with the map the page fetches one SDK');
+  // it is safe because the two files are one file (scripts/sync-chain-sdk.mjs keeps it so)
+  const a = readFileSync(new URL('public/chain/first-mints/lib/pointcast-chain.js', root));
+  const b = readFileSync(new URL('public/chain/net/pointcast-chain.js', root));
+  assert.equal(a.length > 100000, true);
+  assert.equal(sha(a), sha(b), 'the same bytes at both URLs');
+  // the other apps are not touched: only the Witness page carries a map
+  for (const f of ['channels', 'observatory', 'verify-a-block', 'net']) if (existsSync(new URL('src/pages/chain/' + f + '.astro', root))) assert.doesNotMatch(read('src/pages/chain/' + f + '.astro'), /type="importmap"/, f);
+});
+
 test('the page and the view agree on every hook, the key panel is in the page, and the page keeps the pins and the lazy start', () => {
   const viewHooks = new Set(src.view.match(/data-wt-[a-z-]+/g));
   for (const h of viewHooks) assert.ok(src.page.includes(h), h + ' is in the page');
