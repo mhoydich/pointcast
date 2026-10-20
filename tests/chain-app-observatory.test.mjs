@@ -480,8 +480,15 @@ test('every chart mark can be reached by keyboard and says its value in words', 
   const hits = $$(rootEl, '.ob-hit');
   assert.ok(hits.length > 30);
   for (const h of hits) {
-    assert.equal(h.getAttribute('tabindex'), '0');
+    // every mark can take focus (tabindex 0 or -1) and has a role that allows a name; only one per chart is in the tab order
+    assert.ok(['0', '-1'].includes(h.getAttribute('tabindex')), 'focusable');
+    assert.equal(h.getAttribute('role'), 'img');
     assert.ok((h.getAttribute('aria-label') || '').length > 5, 'a label');
+  }
+  for (const id of ['cadence', 'activity', 'kinds', 'channels']) {
+    const marks = $$(rootEl, '[data-ob-chart="' + id + '"] .ob-hit');
+    assert.ok(marks.length > 0, id);
+    assert.equal(marks.filter((m) => m.getAttribute('tabindex') === '0').length, 1, id + ' is one tab stop, not ' + marks.length);
   }
   for (const svg of $$(rootEl, 'svg.ob-svg')) {
     assert.equal(svg.getAttribute('role'), 'img');
@@ -496,6 +503,48 @@ test('every chart mark can be reached by keyboard and says its value in words', 
   first.dispatchEvent(new rootEl.ownerDocument.defaultView.Event('blur'));
   assert.equal(rootEl.querySelector('[data-ob-chart="kinds"] .ob-tip').hidden, true);
   assert.ok(tip);
+});
+
+test('a chart is one tab stop and the arrow keys walk its marks: 200 blocks is not 221 stops', async () => {
+  const { rootEl, c, dom } = mountView({ name: 'local' });
+  await c.begin();
+  c.stop();
+  const win = dom.window;
+  const all = $$(rootEl, '.ob-hit[tabindex="0"]');
+  const marks = $$(rootEl, '.ob-hit');
+  assert.ok(marks.length > 30, 'there are many marks: ' + marks.length);
+  assert.equal(all.length, 4, 'four charts, four tab stops (not ' + marks.length + ')');
+  const chart = rootEl.querySelector('[data-ob-chart="cadence"]');
+  const cm = [...chart.querySelectorAll('.ob-hit')];
+  assert.ok(cm.length > 20);
+  const key = (el, k) => { const ev = new win.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }); el.dispatchEvent(ev); return ev; };
+  cm[0].focus();
+  assert.equal(win.document.activeElement, cm[0]);
+  const ev = key(cm[0], 'ArrowRight');
+  assert.equal(ev.defaultPrevented, true, 'an arrow key does not scroll the page');
+  assert.equal(win.document.activeElement, cm[1], 'ArrowRight moves to the next mark');
+  assert.equal(cm[1].getAttribute('tabindex'), '0', 'the tab stop follows the focus');
+  assert.equal(cm[0].getAttribute('tabindex'), '-1');
+  assert.equal(chart.querySelectorAll('.ob-hit[tabindex="0"]').length, 1);
+  key(cm[1], 'ArrowLeft');
+  assert.equal(win.document.activeElement, cm[0]);
+  key(cm[0], 'ArrowLeft');
+  assert.equal(win.document.activeElement, cm[0], 'it stops at the first mark');
+  key(cm[0], 'End');
+  assert.equal(win.document.activeElement, cm[cm.length - 1]);
+  key(cm[cm.length - 1], 'ArrowDown');
+  assert.equal(win.document.activeElement, cm[cm.length - 1], 'and at the last');
+  key(cm[cm.length - 1], 'Home');
+  assert.equal(win.document.activeElement, cm[0]);
+  // every mark can be reached, one after the other
+  let n = 0;
+  for (let i = 0; i < cm.length - 1; i++) { key(win.document.activeElement, 'ArrowRight'); n += 1; }
+  assert.equal(win.document.activeElement, cm[cm.length - 1]);
+  assert.equal(n, cm.length - 1);
+  // other keys are left alone
+  assert.equal(key(cm[cm.length - 1], 'Tab').defaultPrevented, false);
+  // the tooltip follows the focus, as before
+  assert.equal(chart.querySelector('.ob-tip').hidden, false);
 });
 
 test('hostile text from the devnet is shown as plain text and makes no element', async () => {

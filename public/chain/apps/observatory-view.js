@@ -86,6 +86,34 @@ function wireHit(rect, tip, lines, host) {
   rect.addEventListener('blur', () => tip.hide());
 }
 
+/**
+ * One tab stop for a chart, not one per mark: the first mark is in the tab order, the rest are focusable but not tabbable, and
+ * the arrow keys (and Home and End) move between marks. A 200-block window has 221 marks and a 500-block one 526: a keyboard
+ * user used to tab through every one of them before reaching anything below the charts.
+ */
+function rove(hits) {
+  if (!hits.length) return;
+  let cur = 0;
+  hits.forEach((h, i) => h.setAttribute('tabindex', i === 0 ? '0' : '-1'));
+  const move = (to) => {
+    const next = Math.max(0, Math.min(hits.length - 1, to));
+    hits[cur].setAttribute('tabindex', '-1');
+    cur = next;
+    hits[next].setAttribute('tabindex', '0');
+    hits[next].focus();
+  };
+  hits.forEach((h, i) => {
+    h.addEventListener('focus', () => { if (cur !== i) { hits[cur].setAttribute('tabindex', '-1'); cur = i; h.setAttribute('tabindex', '0'); } });
+    h.addEventListener('keydown', (ev) => {
+      const k = ev.key;
+      const to = k === 'ArrowRight' || k === 'ArrowDown' ? i + 1 : k === 'ArrowLeft' || k === 'ArrowUp' ? i - 1 : k === 'Home' ? 0 : k === 'End' ? hits.length - 1 : null;
+      if (to === null) return;
+      ev.preventDefault();
+      move(to);
+    });
+  });
+}
+
 function tableOf(doc, caption, head, rows) {
   const t = el(doc, 'table', 'ob-table');
   t.append(el(doc, 'caption', '', caption));
@@ -130,11 +158,14 @@ export function drawCadence(doc, host, tableHost, sum) {
   svg.append(sv(doc, 'text', { x: g.plot.x + g.plot.w, y: H - 4, class: 'ob-tick', 'text-anchor': 'end' }, '#' + sum.gaps[sum.gaps.length - 1].height));
   const tip = makeTip(doc, host);
   const slot = g.plot.w / Math.max(1, g.points.length - 1);
+  const hits = [];
   g.points.forEach((p, i) => {
-    const hit = sv(doc, 'rect', { x: Math.max(g.plot.x, p.x - slot / 2), y: g.plot.y, width: Math.max(4, slot), height: g.plot.h, class: 'ob-hit', tabindex: 0, 'aria-label': 'block ' + sum.gaps[i].height + ', ' + duration(sum.gaps[i].ms) + ' after the one before' });
+    const hit = sv(doc, 'rect', { x: Math.max(g.plot.x, p.x - slot / 2), y: g.plot.y, width: Math.max(4, slot), height: g.plot.h, class: 'ob-hit', role: 'img', tabindex: 0, 'aria-label': 'block ' + sum.gaps[i].height + ', ' + duration(sum.gaps[i].ms) + ' after the one before' });
     wireHit(hit, tip, [duration(sum.gaps[i].ms), 'block #' + sum.gaps[i].height, 'after the block before it'], host);
     svg.append(hit);
+    hits.push(hit);
   });
+  rove(hits);
   host.prepend(svg);
   const rows = sum.gaps.slice(-12).map((x) => ['#' + x.height, duration(x.ms)]);
   tableHost.append(tableOf(doc, 'The twelve newest gaps between blocks', ['Block', 'Gap after the block before'], rows));
@@ -154,13 +185,16 @@ export function drawActivity(doc, host, tableHost, sum) {
     svg.append(sv(doc, 'text', { x: g.plot.x - 6, y: t.y + 4, class: 'ob-tick', 'text-anchor': 'end' }, t.label));
   }
   const tip = makeTip(doc, host);
+  const hits = [];
   g.bars.forEach((b, i) => {
     if (b.h > 0) svg.append(sv(doc, 'rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 2, class: 'ob-bar' }));
     const words = [plural(b.v, 'transaction'), bucketLabel(items[i].at, sum.buckets.ms) + ' UTC', plural(items[i].blocks, 'block') + ' sealed'];
-    const hit = sv(doc, 'rect', { x: b.hit.x, y: g.plot.y, width: b.hit.w, height: g.plot.h, class: 'ob-hit', tabindex: 0, 'aria-label': words.join(', ') });
+    const hit = sv(doc, 'rect', { x: b.hit.x, y: g.plot.y, width: b.hit.w, height: g.plot.h, class: 'ob-hit', role: 'img', tabindex: 0, 'aria-label': words.join(', ') });
     wireHit(hit, tip, words, host);
     svg.append(hit);
+    hits.push(hit);
   });
+  rove(hits);
   svg.append(sv(doc, 'line', { x1: g.plot.x, x2: g.plot.x + g.plot.w, y1: g.plot.y + g.plot.h, y2: g.plot.y + g.plot.h, class: 'ob-axis' }));
   svg.append(sv(doc, 'text', { x: g.plot.x, y: H - 4, class: 'ob-tick' }, bucketLabel(items[0].at, sum.buckets.ms)));
   svg.append(sv(doc, 'text', { x: g.plot.x + g.plot.w, y: H - 4, class: 'ob-tick', 'text-anchor': 'end' }, bucketLabel(items[items.length - 1].at, sum.buckets.ms)));
@@ -177,6 +211,7 @@ export function drawBars(doc, host, tableHost, rows, { name, word, caption }) {
   const g = O.hbarsGeom(rows.map((r) => ({ n: r.n })), { width: W - labelW, valueW });
   const svg = sv(doc, 'svg', { viewBox: '0 0 ' + W + ' ' + g.height, class: 'ob-svg ob-svg--bars', role: 'img', 'aria-label': caption + ': ' + rows.map((r) => r[name] + ' ' + r.n).join(', ') });
   const tip = makeTip(doc, host);
+  const hits = [];
   rows.forEach((r, i) => {
     const b = g.bars[i];
     const label = r[name] === 'other' && r.folded ? 'other (' + r.folded + ')' : r[name];
@@ -184,10 +219,12 @@ export function drawBars(doc, host, tableHost, rows, { name, word, caption }) {
     svg.append(sv(doc, 'rect', { x: labelW, y: b.y, width: b.w, height: b.h, rx: 2, class: 'ob-bar' }));
     svg.append(sv(doc, 'text', { x: labelW + b.w + 6, y: b.textY + 4, class: 'ob-val' }, String(r.n)));
     const words = [plural(r.n, word), label];
-    const hit = sv(doc, 'rect', { x: 0, y: i * 28, width: W, height: 28, class: 'ob-hit', tabindex: 0, 'aria-label': words.join(', ') });
+    const hit = sv(doc, 'rect', { x: 0, y: i * 28, width: W, height: 28, class: 'ob-hit', role: 'img', tabindex: 0, 'aria-label': words.join(', ') });
     wireHit(hit, tip, words, host);
     svg.append(hit);
+    hits.push(hit);
   });
+  rove(hits);
   host.prepend(svg);
   tableHost.append(tableOf(doc, caption, [name === 'kind' ? 'Kind' : 'Channel', 'Count'], rows.map((r) => [r[name], String(r.n)])));
 }
