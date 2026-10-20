@@ -333,6 +333,26 @@ test('a reset stops it at the pin: GENESIS CHANGED, one request, no numbers', as
   assert.match(K.describeError(new K.GenesisChanged('a'.repeat(64), 'b'.repeat(64))), /GENESIS CHANGED[\s\S]*reset[\s\S]*Nothing was sent/);
 });
 
+test('a failed /checkpoints read says "not readable now", never "No witnessed checkpoints"; a real empty list still says none', async () => {
+  const bad = mountView({ name: 'live', overrides: { '/checkpoints': async () => ({ ok: false, status: 500, headers: { get: () => null }, text: async () => '{"error":"boom"}' }) } });
+  await bad.c.begin();
+  bad.c.stop();
+  assert.equal(txt(bad.rootEl, '[data-ob-cp-empty]'), 'Checkpoints are not readable now.');
+  assert.doesNotMatch(bad.rootEl.textContent, /No witnessed checkpoints/);
+  assert.match(txt(bad.rootEl, '[data-ob-meta]'), /not readable: checkpoints/);
+  assert.equal(bad.rootEl.querySelectorAll('[data-ob-cp]:not([hidden])').length, 0);
+  // a devnet that answers with an empty list: that IS "none"
+  const none = mountView({ name: 'live', overrides: { '/checkpoints': async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ checkpoints: [] }) }) } });
+  await none.c.begin();
+  none.c.stop();
+  assert.equal(txt(none.rootEl, '[data-ob-cp-empty]'), 'No witnessed checkpoints in the last 1,000 blocks.');
+  // and the real list shows them, with no message
+  const real = mountView({ name: 'live' });
+  await real.c.begin();
+  real.c.stop();
+  assert.equal(txt(real.rootEl, '[data-ob-cp-empty]'), FIX.live.checkpoints.checkpoints.length ? '' : 'No witnessed checkpoints in the last 1,000 blocks.');
+});
+
 test('a part that cannot be read is named and the rest still draw', async () => {
   const down = async () => { throw new Error('boom'); };
   const net = netFor('local', { overrides: { '/daily': down, '/capsules': async () => ({ ok: false, status: 500, headers: { get: () => null }, text: async () => '{"error":"no"}' }) } });

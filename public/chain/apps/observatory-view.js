@@ -344,7 +344,8 @@ export function mount(root, env = {}) {
       n2.hidden = !c2;
       if (c2) n2.textContent = '#' + c2.height + ': ' + plural(c2.distinct, 'key') + (c2.strikes ? ', ' + plural(c2.strikes, 'strike') : '');
     });
-    set('[data-ob-cp-empty]', list.length ? '' : 'No witnessed checkpoints in the last 1,000 blocks.');
+    // A failed read is not an empty one: "none witnessed" is a claim about the chain, "not readable now" is a claim about this read.
+    set('[data-ob-cp-empty]', list.length ? '' : d.missing.includes('checkpoints') ? 'Checkpoints are not readable now.' : 'No witnessed checkpoints in the last 1,000 blocks.');
   }
 
   function paintMeta() {
