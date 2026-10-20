@@ -1484,7 +1484,7 @@ test('the whole flow in the page: replay with a progress bar that counts blocks,
   assert.equal(m.rootEl.dataset.state, 'replayed');
   // no key yet: the review says so, and the roll is read without a row for anyone
   assert.equal($(m.rootEl, '[data-wt-confirm]').hidden, true);
-  assert.match(txt(m.rootEl, '[data-wt-errors]'), /Make a key first: the claim is signed by it\./);
+  assert.equal(txt(m.rootEl, '[data-wt-needkey]'), 'Make a key first: the claim is signed by it.');
   assert.equal($(m.rootEl, '[data-wt-roll]').hidden, false);
   assert.match(txt(m.rootEl, '[data-wt-roll-text]'), /Make a key to see your own row on this list\./);
   // a key arrives: the post is shown, word for word, and nothing is sent
@@ -1694,6 +1694,67 @@ test('a fault’s evidence is shown exactly as the worker made it — no cap, no
   assert.equal($(m2.rootEl, '[data-wt-fault-btn]').disabled, true);
   m.c.stop();
   m2.c.stop();
+});
+
+/** Every write to a live region under the root (aria-live, role status or alert), counted even when the words are the same. */
+function watchLive(dom, rootEl) {
+  const nodes = [...rootEl.querySelectorAll('[aria-live], [role="status"], [role="alert"]')];
+  assert.ok(nodes.length >= 6, 'the page has its live regions: ' + nodes.length);
+  const seen = nodes.map((node) => {
+    const hits = [];
+    const obs = new dom.window.MutationObserver((records) => hits.push(...records));
+    obs.observe(node, { subtree: true, childList: true, characterData: true });
+    return { node, obs, hits };
+  });
+  return async () => {
+    await tick(0);
+    return seen.filter((x) => x.hits.length || x.obs.takeRecords().length).map((x) => [...x.node.attributes].filter((a) => /^data-wt-/.test(a.name)).map((a) => a.name)[0] || x.node.tagName);
+  };
+}
+
+test('typing a name or a note speaks nothing: the roll status and the review are not written again with the same words, and “make a key first” is a polite line, not an alert', async () => {
+  const m = mountView();
+  await m.c.begin();
+  await m.c.replay();
+  await until(() => txt(m.rootEl, '[data-wt-needkey]') !== '');
+  // no key: the missing-key line is a polite status of its own; the alert list holds real errors only
+  const needKey = $(m.rootEl, '[data-wt-needkey]');
+  assert.equal(needKey.getAttribute('role'), 'status');
+  assert.equal(needKey.getAttribute('aria-live'), 'polite');
+  assert.equal(needKey.hidden, false);
+  assert.equal(needKey.textContent, 'Make a key first: the claim is signed by it.');
+  assert.equal(needKey.closest('[role="alert"]'), null);
+  assert.equal($(m.rootEl, '[data-wt-errors]').getAttribute('role'), 'alert');
+  assert.equal($(m.rootEl, '[data-wt-errors]').hidden, true);
+  assert.equal(txt(m.rootEl, '[data-wt-errors]'), '', 'nothing is an error yet');
+  assert.equal(txt(m.rootEl, '[data-wt-roll-text]'), 'Make a key to see your own row on this list.');
+  // six keystrokes in the name box, five in the note, a pause after each: no live region is written at all
+  $(m.rootEl, '[data-wt-checkin]').checked = true;
+  $(m.rootEl, '[data-wt-checkin]').dispatchEvent(new m.dom.window.Event('change'));
+  await tick(300);
+  const changed = watchLive(m.dom, m.rootEl);
+  let name = '';
+  for (const ch of 'wt-abc') { name += ch; $(m.rootEl, '[data-wt-name]').value = name; $(m.rootEl, '[data-wt-name]').dispatchEvent(new m.dom.window.Event('input')); await tick(20); }
+  let note = '';
+  for (const ch of 'hello') { note += ch; $(m.rootEl, '[data-wt-note]').value = note; $(m.rootEl, '[data-wt-note]').dispatchEvent(new m.dom.window.Event('input')); await tick(20); }
+  await tick(400);
+  const writes = await changed();
+  assert.deepEqual(writes.filter((w) => w !== 'data-wt-name-note'), [], 'only the name hint (which says something new as you type) may change; no status, alert or roll line is rewritten');
+  // a real error is still an alert, and it is rebuilt only when its words change
+  const alerts = $(m.rootEl, '[data-wt-errors]');
+  $(m.rootEl, '[data-wt-name]').value = 'house';
+  $(m.rootEl, '[data-wt-name]').dispatchEvent(new m.dom.window.Event('input'));
+  await tick(400);
+  assert.equal(alerts.hidden, false);
+  assert.match(alerts.textContent, /“house” is reserved for the house/);
+  const li = alerts.firstElementChild;
+  const again = watchLive(m.dom, m.rootEl);
+  $(m.rootEl, '[data-wt-note]').value = 'another note';
+  $(m.rootEl, '[data-wt-note]').dispatchEvent(new m.dom.window.Event('input'));
+  await tick(400);
+  assert.equal(alerts.firstElementChild, li, 'the same error is not rebuilt');
+  assert.deepEqual((await again()).filter((w) => w !== 'data-wt-name-note'), []);
+  m.c.stop();
 });
 
 test('keyboard use: focus follows the work — Replay to Cancel while it runs, then to the review; back to Replay after a failure or a cancel', async () => {

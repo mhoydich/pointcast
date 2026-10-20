@@ -61,9 +61,11 @@ export function mount(root, env = {}) {
   const S = {
     begun: false, halted: false, status: null, pin: null, token: 0, running: false, handle: null,
     replay: null, replayedAt: 0, choice: null, plan: null, planning: 0, chain: null, sending: false,
-    sent: null, shas: null, checks: [], reviewTimer: null, lastRoll: null, carried: false, fault: null,
+    sent: null, shas: null, checks: [], reviewTimer: null, lastRoll: null, rollId: 0, rollSig: '', errSig: '', carried: false, fault: null,
   };
-  const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
+  // A line that has not changed is left alone: a live region is never rewritten with the words it already has, so a screen reader
+  // is not read the same status again on every keystroke or poll.
+  const set = (sel, text) => { const n = q(sel); if (n && n.textContent !== text) n.textContent = text; };
   const say = (text, state) => { set('[data-wt-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
   const keys = panel ? mountKeyPanel(panel, { window: win, storage: env.storage, supported: env.supported }) : null;
@@ -118,6 +120,8 @@ export function mount(root, env = {}) {
     S.plan = null;
     S.sent = null;
     S.lastRoll = null;
+    S.rollSig = '';
+    S.errSig = '';
     paintChecks();
     box('[data-wt-progress]', false);
     box('[data-wt-fault]', false);
@@ -127,6 +131,10 @@ export function mount(root, env = {}) {
     box('[data-wt-summary]', false);
     box('[data-wt-confirm]', false);
     box('[data-wt-errors]', false);
+    const errList = q('[data-wt-errors]');
+    if (errList) errList.replaceChildren();
+    set('[data-wt-needkey]', '');
+    box('[data-wt-needkey]', false);
     box('[data-wt-result]', false);
     box('[data-wt-roll]', false);
     for (const n of root.querySelectorAll('[data-wt-sum]')) n.textContent = '';
@@ -334,14 +342,30 @@ export function mount(root, env = {}) {
 
   function paintReview(plan) {
     const errs = q('[data-wt-errors]');
-    if (errs) errs.replaceChildren();
     const send = q('[data-wt-send]');
     if (!plan.ok) {
       box('[data-wt-confirm]', false);
-      if (errs) { for (const e of plan.errors) errs.append(el(doc, 'li', '', e)); errs.hidden = plan.errors.length === 0; }
+      // "Make a key first" is what to do next, not a fault: a polite line of its own. The alert list holds real errors, and is
+      // rebuilt only when its words change, so the same alert is not announced again every time the review is made again.
+      const real = plan.errors.filter((e) => e !== X.NEED_KEY);
+      const needsKey = real.length !== plan.errors.length;
+      const sig = real.join('\n');
+      if (errs && sig !== S.errSig) {
+        S.errSig = sig;
+        errs.replaceChildren();
+        for (const e of real) errs.append(el(doc, 'li', '', e));
+      }
+      if (errs) errs.hidden = real.length === 0;
+      set('[data-wt-needkey]', needsKey ? X.NEED_KEY : '');
+      box('[data-wt-needkey]', needsKey);
       return;
     }
-    if (errs) errs.hidden = true;
+    if (errs) {
+      errs.hidden = true;
+      if (S.errSig !== '') { S.errSig = ''; errs.replaceChildren(); }
+    }
+    set('[data-wt-needkey]', '');
+    box('[data-wt-needkey]', false);
     set('[data-wt-skip]', [plan.witSkip ? plan.witSkip.why : '', plan.netSkip].filter(Boolean).join(' '));
     box('[data-wt-wit-box]', Boolean(plan.wit));
     box('[data-wt-net-box]', Boolean(plan.net));
@@ -553,7 +577,14 @@ export function mount(root, env = {}) {
   function renderRoll() {
     if (!S.lastRoll) return null;
     const standing = standingFor(S.lastRoll.roll);
-    paintRoll(S.lastRoll.roll, standing);
+    // Drawn again only when something it shows has changed (a new read, another key, a new standing): typing in the name or the
+    // note asks for it on every keystroke.
+    const k = key();
+    const sig = JSON.stringify([S.rollId, k ? k.sender : '', S.choice ? S.choice.target : '', standing ? [standing.state, standing.text] : null]);
+    if (sig !== S.rollSig) {
+      S.rollSig = sig;
+      paintRoll(S.lastRoll.roll, standing);
+    }
     return standing;
   }
 
@@ -569,7 +600,7 @@ export function mount(root, env = {}) {
       const sent = S.sent && S.sent.r && S.sent.r.wit ? S.sent.r.wit : null;
       const address = k ? k.sender : '';
       if (poll && sent) {
-        await X.pollRoll({ net, target: c.target, address, txHash: sent.txHash, includedAt: sent.height, sleep, onRead: (r) => { if (tok === S.token) { S.lastRoll = r; renderRoll(); } } });
+        await X.pollRoll({ net, target: c.target, address, txHash: sent.txHash, includedAt: sent.height, sleep, onRead: (r) => { if (tok === S.token) { S.lastRoll = r; S.rollId += 1; renderRoll(); } } });
         if (tok !== S.token) return null;
         const standing = renderRoll();
         say(standing.state === 'correct' ? 'Sent, and the roll counts it: CORRECT.' : standing.state === 'strike' ? 'Sent, and the roll gives it a strike.' : standing.state === 'pending' ? 'Sent. The roll has not listed it yet: press “Read the roll again” in a moment.' : 'Sent. The roll says: ' + standing.label + '.', 'sent');
@@ -578,11 +609,13 @@ export function mount(root, env = {}) {
       const roll = await X.fetchRoll(net, { target: c.target, address });
       if (tok !== S.token) return null;
       S.lastRoll = { roll };
+      S.rollId += 1;
       renderRoll();
       return S.lastRoll;
     } catch (e) {
       if (tok !== S.token) return null;
       box('[data-wt-roll]', true);
+      S.rollSig = '';
       set('[data-wt-roll-text]', 'The roll could not be read: ' + asSentence(describeError(e)) + (S.sent ? ' Your post is sent; read the roll again in a moment.' : ''));
       const badge = q('[data-wt-roll-state]');
       if (badge) badge.hidden = true;

@@ -587,6 +587,9 @@ export function journalConflict(entries, cps) {
 
 const utf8 = (s) => new TextEncoder().encode(s).length;
 
+/** What a plan says when there is no key. It is the next step, not a fault: the page shows it as a polite line, not an alert. */
+export const NEED_KEY = 'Make a key first: the claim is signed by it.';
+
 /** The words under the claim's line one: what it says in plain text. Parsers ignore everything after the first newline. */
 export function humanLine({ chainId, wasmSha, target }) {
   return 'I replayed ' + chainId + ' from genesis with the pinned verifier (wasm ' + String(wasmSha).slice(0, 12) + ') in a browser tab and got this block hash and state root at height ' + target + '. A public claim tied to this key, not proof of replay. Devnet: no value, may reset.';
@@ -619,7 +622,7 @@ export async function planWitness({ replay, choice, chainId, genesis, key, opts 
     return plan;
   }
   if (!key) {
-    plan.errors.push('Make a key first: the claim is signed by it.');
+    plan.errors.push(NEED_KEY);
     return plan;
   }
   const conflict = journalConflict(journalFor(journal, { genesis, epoch: choice.epoch, address: key.sender }), replay.cps);
