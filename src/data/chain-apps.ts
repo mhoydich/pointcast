@@ -1,6 +1,6 @@
 /**
- * The seven apps on the PointCast devnet, once. The /chain hub, the section
- * nav, the wire block, public/llms*.txt, /for-agents and the sitemap all read
+ * The nine apps on the PointCast devnet, once. The /chain hub, the section
+ * nav, the wire blocks, public/llms*.txt, /for-agents and the sitemap all read
  * their names, paths and one-line descriptions from here, so they cannot drift
  * apart (tests/chain-apps-registry.test.mjs checks each place against this).
  *
@@ -9,8 +9,14 @@
  * does so only when the visitor clicks, with a key the visitor holds.
  */
 
-/** The wire block (FD) that announces the seven apps. */
+/** The wire block (FD) that announces the first seven apps. */
 export const APPS_BLOCK = '0721';
+
+/** The wire block (FD) that announces the next two apps, Witness and Channels, and the SDK fix. */
+export const APPS_2_BLOCK = '0722';
+
+/** The seven apps block 0721 announces, in order. The two after them are announced by APPS_2_BLOCK. */
+export const FIRST_SEVEN = ['observatory', 'daily-mint', 'notary', 'capsules', 'verify-a-block', 'playground', 'bloom'] as const;
 
 export type ChainApp = {
   /** The key the page passes to ChainHeader `current`. */
@@ -88,9 +94,27 @@ export const CHAIN_APPS: ChainApp[] = [
     blurb:
       'Generative art drawn from the devnet’s checkpoint hashes, one bloom each, with a gold ring for every key that witnessed it. The same hash always draws the same bloom.',
   },
+  {
+    key: 'witness',
+    href: '/chain/witness',
+    label: 'Witness in your browser',
+    short: 'Witness',
+    mode: 'write',
+    blurb:
+      'Replay the devnet from block 1 in a worker with the Block Yard’s pinned verifier, then sign what you got at one checkpoint with a free key. A witness is a claim tied to a key, not proof that you replayed.',
+  },
+  {
+    key: 'channels',
+    href: '/chain/channels',
+    label: 'Channels',
+    short: 'Channels',
+    mode: 'write',
+    blurb:
+      'Every broadcast channel on the devnet: who holds each code and what is on air. Claim a free code, set it open or crew-only, add crew and broadcast. First come, first served; a reset drops every claim.',
+  },
 ];
 
-export const APPS_HEADLINE = 'Seven apps on the devnet';
+export const APPS_HEADLINE = 'Nine apps on the devnet';
 
 /** The honesty line every app page carries, verbatim. */
 export const HONESTY = 'devnet · no value · may reset';

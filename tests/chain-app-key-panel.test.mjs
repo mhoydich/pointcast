@@ -1,6 +1,6 @@
 // The shared "your devnet key" panel (src/components/chain/KeyPanel.astro and
-// public/chain/apps/key-panel.js) used by The Daily Mint, the Notary and Time
-// Capsules, and the key helpers in chain-kit.js.
+// public/chain/apps/key-panel.js) used by The Daily Mint, the Notary, Time
+// Capsules, Witness and Channels, and the key helpers in chain-kit.js.
 //
 // What this suite holds: a key is made in the browser and signs real ed25519
 // signatures that the SDK verifies; it lives in memory unless the person ticks
@@ -176,7 +176,7 @@ test('Keep it on this device writes the key to one shared slot, and the next vis
   assert.equal(st.m.get(KEY_SLOT), k.seedHex);
   assert.match(a.q('[data-kp-status]').textContent, /kept on this device/);
   assert.equal(KEY_SLOT, 'pointcast-chain-apps/devnet-key/v1');
-  // another page of the three apps, same origin: the key is there
+  // another page of the five apps, same origin: the key is there
   const b = mountPanel({ storage: st });
   await b.c.ready;
   assert.equal(b.c.key().sender, k.sender);
@@ -263,6 +263,76 @@ test('a key that exists is not replaced by one press: Make a key and Use this ke
   assert.ok(fresh.c.key());
 });
 
+/** Another tab's write reaches this one as a storage event, as a browser delivers it (the writing tab never gets its own). */
+const storageEvent = (dom, newValue, oldValue = null) => dom.window.dispatchEvent(new dom.window.StorageEvent('storage', { key: KEY_SLOT, newValue, oldValue }));
+
+test('two tabs on one device: a key another tab replaced or forgot is no longer called kept here, and Forget in one tab never deletes the key another tab keeps', async () => {
+  const shared = fakeStorage();
+  // tab A keeps a key
+  const a = mountPanel({ storage: shared });
+  await a.c.ready;
+  a.q('[data-kp-keep]').checked = true;
+  a.q('[data-kp-make]').click();
+  await tick();
+  const k1 = a.c.key();
+  assert.match(a.q('[data-kp-status]').textContent, /kept on this device/);
+  assert.equal(shared.m.get(KEY_SLOT), k1.seedHex);
+  // tab B opens, finds K1 kept, and replaces it with a new kept key (two presses: the first shows what would go)
+  const b = mountPanel({ storage: shared });
+  await b.c.ready;
+  assert.equal(b.c.key().sender, k1.sender);
+  b.q('[data-kp-make]').click();
+  b.q('[data-kp-make]').click();
+  await tick();
+  const k2 = b.c.key();
+  assert.notEqual(k2.sender, k1.sender);
+  assert.equal(shared.m.get(KEY_SLOT), k2.seedHex, 'the device now keeps K2');
+  assert.match(b.q('[data-kp-status]').textContent, /Your key signs as .* · kept on this device/);
+  // tab A is told: it still holds K1 in memory, but the device no longer keeps it
+  storageEvent(a.dom, k2.seedHex, k1.seedHex);
+  const said = a.q('[data-kp-status]').textContent;
+  assert.match(said, new RegExp('^Your key signs as ' + k1.sender));
+  assert.doesNotMatch(said, /kept on this device/, 'not “kept”: the device keeps another key');
+  assert.match(said, /in this tab only/);
+  assert.match(said, /another tab keeps a different key on this device/);
+  assert.equal(a.q('[data-kp-keep]').checked, false, 'and the box no longer says it is kept');
+  assert.equal(a.c.key().sender, k1.sender, 'the key this tab signs with is not swapped under the person');
+  // Forget in tab A removes nothing the other tab keeps
+  a.q('[data-kp-forget]').click();
+  assert.equal(shared.m.get(KEY_SLOT), k2.seedHex, 'K2 is still kept: A forgot its own key, not B’s');
+  assert.equal(a.c.key(), null);
+  assert.match(b.q('[data-kp-status]').textContent, /kept on this device/, 'B still says what is true');
+  assert.equal(b.c.key().sender, k2.sender);
+  // the other way: B forgets its kept key; a tab that holds that same key learns it is no longer kept
+  const c = mountPanel({ storage: shared });
+  await c.c.ready;
+  assert.equal(c.c.key().sender, k2.sender);
+  assert.match(c.q('[data-kp-status]').textContent, /kept on this device/);
+  b.q('[data-kp-forget]').click();
+  assert.equal(shared.m.get(KEY_SLOT), undefined, 'B’s Forget removed the key it was keeping');
+  storageEvent(c.dom, null, k2.seedHex);
+  assert.match(c.q('[data-kp-status]').textContent, /in this tab only: close it and the key is gone/);
+  assert.equal(c.q('[data-kp-keep]').checked, false);
+  // another tab keeping the very same key: this tab says kept again
+  const d = mountPanel({ storage: shared });
+  await d.c.ready;
+  await d.c.setSeed(k1.seedHex);
+  assert.doesNotMatch(d.q('[data-kp-status]').textContent, /kept on this device/);
+  storageEvent(d.dom, k1.seedHex);
+  shared.m.set(KEY_SLOT, k1.seedHex);
+  storageEvent(d.dom, k1.seedHex);
+  assert.match(d.q('[data-kp-status]').textContent, /Your key signs as .* · kept on this device/);
+  // unticking Keep removes the slot only while it still holds this tab's key
+  shared.m.set(KEY_SLOT, k2.seedHex);
+  d.q('[data-kp-keep]').checked = false;
+  d.q('[data-kp-keep]').dispatchEvent(new d.dom.window.Event('change'));
+  assert.equal(shared.m.get(KEY_SLOT), k2.seedHex, 'unticking Keep does not delete another tab’s key either');
+  // a storage event for some other slot changes nothing
+  const before = d.q('[data-kp-status]').textContent;
+  d.dom.window.dispatchEvent(new d.dom.window.StorageEvent('storage', { key: 'something-else', newValue: 'x' }));
+  assert.equal(d.q('[data-kp-status]').textContent, before);
+});
+
 test('a stored value that is not a key is ignored, and a browser without storage still makes keys in memory', async () => {
   const bad = mountPanel({ storage: fakeStorage({ [KEY_SLOT]: 'not a key' }) });
   await bad.c.ready;
@@ -309,10 +379,10 @@ test('a browser without ed25519 is told so, and nothing is enabled', async () =>
   assert.equal(panel.dataset.state, 'none');
 });
 
-test('the panel says the kept key is one key for three apps, readable by every script on the origin, and the field for a key you already have hides what is typed', () => {
+test('the panel says the kept key is one key for five apps, readable by every script on the origin, and the field for a key you already have hides what is typed', () => {
   const c = src.component.replace(/\s+/g, ' ');
-  assert.match(c, /if you tick “Keep it on this device”, the Daily Mint, the Notary and Time Capsules all load this same key/);
-  assert.match(c, /a stamp, a bid and a capsule signed here are linked to one account/);
+  assert.match(c, /if you tick “Keep it on this device”, the Daily Mint, the Notary, Time Capsules, Witness and Channels all load this same key/);
+  assert.match(c, /a stamp, a bid, a capsule, a witness claim and a channel signed here are linked to one account/);
   assert.match(c, /local storage, which every script on pointcast\.xyz can read/);
   assert.match(c, /Leave it unticked and the key lives in this tab only/);
   // a real wallet seed pasted into that field must not show on screen
@@ -320,8 +390,8 @@ test('the panel says the kept key is one key for three apps, readable by every s
   assert.match(own, /type="password"/);
   assert.match(own, /autocomplete="off"/);
   assert.doesNotMatch(own, /type="text"/);
-  // the three apps mount this same panel on the one slot
-  for (const page of ['src/pages/chain/daily-mint.astro', 'src/pages/chain/notary.astro', 'src/pages/chain/capsules.astro']) assert.match(read(page), /<KeyPanel signs=/, page);
+  // the five apps mount this same panel on the one slot
+  for (const page of ['src/pages/chain/daily-mint.astro', 'src/pages/chain/notary.astro', 'src/pages/chain/capsules.astro', 'src/pages/chain/witness.astro', 'src/pages/chain/channels.astro']) assert.match(read(page), /<KeyPanel signs=/, page);
   assert.equal(KEY_SLOT, 'pointcast-chain-apps/devnet-key/v1');
   // the panel still works with a hidden field: a key typed there is taken
   const run = async () => {

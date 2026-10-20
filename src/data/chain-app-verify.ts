@@ -26,7 +26,7 @@ export const APP = {
 /** The honesty line the page carries verbatim (and a test looks for). */
 export const HONESTY_LINE = 'devnet · no value · may reset';
 
-/** The SDK file with blockHeaderHash, sealDigest and txRoot. /chain/sdk/pointcast-chain.js is the older v0.1 file without them. */
+/** The SDK file with blockHeaderHash, sealDigest and txRoot. /chain/sdk/pointcast-chain.js and /chain/net/pointcast-chain.js are the same bytes (scripts/sync-chain-sdk.mjs keeps the three equal). */
 export const SDK_PATH = '/chain/first-mints/lib/pointcast-chain.js';
 
 export const WASM_PATH = '/chain/yard/verifier/pointcast_chain.wasm';

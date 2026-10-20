@@ -122,7 +122,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/chain/first-mints/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/mixtape/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/sanctuary/', 'monthly', '0.6'],
-  // The seven apps on the devnet (src/data/chain-apps.ts).
+  // The nine apps on the devnet (src/data/chain-apps.ts).
   ['https://pointcast.xyz/chain/observatory/', 'weekly', '0.8'],
   ['https://pointcast.xyz/chain/daily-mint/', 'weekly', '0.7'],
   ['https://pointcast.xyz/chain/notary/', 'monthly', '0.7'],
@@ -130,6 +130,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/chain/verify-a-block/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/playground/', 'monthly', '0.7'],
   ['https://pointcast.xyz/chain/bloom/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/chain/witness/', 'weekly', '0.7'],
+  ['https://pointcast.xyz/chain/channels/', 'weekly', '0.7'],
   ['https://pointcast.xyz/object-library/', 'monthly', '0.9'],
   ['https://pointcast.xyz/object-library.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/weather-atlas/', 'monthly', '0.9'],
