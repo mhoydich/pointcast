@@ -85,8 +85,9 @@ export function mount(root, env = {}) {
         ['Refund within', plural(d.rules.refund_blocks, 'block')],
         ['Settle within', plural(d.rules.settle_blocks, 'block') + ' of the close'],
         ['Words on a card', 'up to ' + d.rules.max_words],
-        ['Length of a lot day', duration(d.rules.day_ms) + (d.standard ? '' : ' (a local test, not the standard day)')],
+        ['Length of a lot day', duration(d.rules.day_ms) + (d.rules.day_ms === D.DAILY_RULES.day_ms ? '' : ' (a local test, not the standard day)')],
       ];
+      if (d.ruleDifferences.length) rows.push(['Not the published rules', d.ruleDifferences.map((x) => x.field + ' ' + x.house + ' (published ' + x.published + ')').join(', ') + '. The steps above describe the published rules.']);
       for (const [k, v] of rows) { const row = el(doc, 'div'); row.append(el(doc, 'dt', '', k), el(doc, 'dd', '', v)); rules.append(row); }
     }
     paintCountdown();
@@ -199,7 +200,8 @@ export function mount(root, env = {}) {
       S.audit = r;
       if (sum) {
         sum.dataset.state = r.ok ? 'ok' : 'bad';
-        sum.textContent = (r.ok ? 'AGREES. ' : 'DISAGREES. ') + groups(r.blocks) + ' blocks replayed, ' + plural(r.lots, 'lot') + ', ' + plural(r.refunds, 'refund') + ' paid (' + r.refunded + ' play ATTN), ' + r.owed + ' owed, ' + plural(r.violations.length, 'violation') + '. ' + (r.agree ? 'The replay equals the devnet’s own report.' : 'The replay differs from the devnet’s own report.');
+        // "AGREES" with the published rules only if the house runs them: a house with changed rules is checked against its own.
+        sum.textContent = (r.ok ? (r.ruleDifferences.length ? 'AGREES WITH ITS OWN CHANGED RULES. ' : 'AGREES. ') : 'DISAGREES. ') + groups(r.blocks) + ' blocks replayed, ' + plural(r.lots, 'lot') + ', ' + plural(r.refunds, 'refund') + ' paid (' + r.refunded + ' play ATTN), ' + r.owed + ' owed, ' + plural(r.violations.length, 'violation') + '. ' + (r.agree ? 'The replay equals the devnet’s own report.' : 'The replay differs from the devnet’s own report.');
       }
       for (const l of r.lines) {
         const li = el(doc, 'li', 'ca-ck');
@@ -395,7 +397,7 @@ export function mount(root, env = {}) {
       const box = q('[data-dm-confirm]');
       if (box) box.hidden = true;
       S.plan = null;
-      say2('Your bid is in block ' + r.height + '. Bid transaction ' + r.bidTx + (r.postTx ? ' · words post ' + r.postTx : '') + '. If someone outbids you, the house sends your play ATTN back within three blocks.', 'ok');
+      say2('Your bid is in block ' + r.height + '. Bid transaction ' + r.bidTx + (r.postTx ? ' · words post ' + r.postTx : '') + '. If someone outbids you, the house sends your play ATTN back within ' + plural(S.daily.rules ? S.daily.rules.refund_blocks : D.DAILY_RULES.refund_blocks, 'block') + '.', 'ok');
       await refresh({ cards: true });
       await loadBalance();
       S.myBid = { lot: fresh.lot, amount: fresh.amount, tx: r.bidTx, balanceAfter: S.balance };

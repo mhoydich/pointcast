@@ -624,7 +624,7 @@ test('the house check button runs the replay, paints AGREES with a line per lot,
   await a.c.runAudit();
   const sum = a.rootEl.querySelector('[data-dm-audit-summary]');
   assert.equal(sum.dataset.state, 'ok');
-  assert.match(sum.textContent, /^AGREES\. 92 blocks replayed, 9 lots, 1 refund paid \(7 play ATTN\), 0 owed, 0 violations\. The replay equals the devnet’s own report\.$/);
+  assert.match(sum.textContent, /^AGREES WITH ITS OWN CHANGED RULES\. 92 blocks replayed, 9 lots, 1 refund paid \(7 play ATTN\), 0 owed, 0 violations\. The replay equals the devnet’s own report\.$/);
   const lines = [...a.rootEl.querySelectorAll('[data-dm-audit-out] li')];
   assert.equal(lines.length, 10, 'a note about the test day and nine lots');
   assert.ok(lines.filter((l) => l.dataset.state === 'pass').length === 9);
@@ -646,6 +646,41 @@ test('the house check button runs the replay, paints AGREES with a line per lot,
   await off.c.runAudit();
   assert.match(txt(off.rootEl, '[data-dm-audit-summary]'), /^The check could not run: down/);
   assert.equal(off.rootEl.querySelector('[data-dm-audit]').disabled, false);
+});
+
+test('a house that changes ANY of its nine rule numbers is not "standard" and does not simply AGREE: every difference is named', async () => {
+  const published = law.DAILY_RULES;
+  const standardRules = { ...FX.daily.rules, day_ms: published.day_ms, snipe_ms: published.snipe_ms, snipe_cap_ms: published.snipe_cap_ms };
+  assert.deepEqual(D.ruleDifferences(standardRules), [], 'the published rules differ from themselves in nothing');
+  assert.equal(D.readDaily({ ...clone(FX.daily), rules: standardRules }).standard, true);
+  // each of the other six fields, changed alone, makes the rules non-standard (the flag used to look only at day and snipe)
+  for (const [field, house] of [['reserve', 50], ['increment_bps', 1], ['max_bids_per_sender', 99], ['refund_blocks', 600], ['settle_blocks', 600], ['max_words', 9]]) {
+    const rules = { ...standardRules, [field]: house };
+    const d = D.readDaily({ ...clone(FX.daily), rules });
+    assert.equal(d.standard, false, field);
+    assert.deepEqual(d.ruleDifferences, [{ field, house, published: published[field] }], field);
+  }
+  // the audit: the recorded chain replays cleanly, but a house reporting changed refund/settle/increment rules is checked against its OWN
+  const worker = clone(FX.dailyLaw);
+  const tampered = { ...worker, rules: { ...worker.rules, refund_blocks: 600, settle_blocks: 600, increment_bps: 1 } };
+  const lawReply = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(tampered) });
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: fakeDevnet({ overrides: { '/daily/law': lawReply } }) });
+  const r = await D.auditHouse(net);
+  const fields = r.ruleDifferences.map((x) => x.field);
+  for (const f of ['refund_blocks', 'settle_blocks', 'increment_bps']) assert.ok(fields.includes(f), f + ' is listed: ' + fields.join());
+  assert.equal(r.nonStandard, true);
+  assert.match(r.lines[0].text, /refund_blocks 600 \(published: 3\), settle_blocks 600 \(published: 3\)/);
+  assert.match(r.lines[0].text, /can agree with them without agreeing with the published ones/);
+  // the page's verdict for it never reads as a plain AGREES, and the rules table names what differs
+  const m = mountView({ fetchOpts: { fx: { ...FX, dailyLaw: tampered, daily: { ...FX.daily, rules: { ...FX.daily.rules, refund_blocks: 600, settle_blocks: 600, increment_bps: 1 } } } } });
+  await m.c.begin();
+  m.c.stop();
+  await m.c.runAudit();
+  const sum = m.rootEl.querySelector('[data-dm-audit-summary]');
+  if (sum.dataset.state === 'ok') assert.match(sum.textContent, /^AGREES WITH ITS OWN CHANGED RULES\./);
+  assert.doesNotMatch(sum.textContent, /^AGREES\. /);
+  const rows = [...m.rootEl.querySelectorAll('[data-dm-rules] div')].map((x) => x.textContent);
+  assert.ok(rows.some((x) => /^Not the published rulesreserve|^Not the published rules.*refund_blocks 600 \(published 3\)/.test(x)) || rows.some((x) => /Not the published rules/.test(x) && /refund_blocks 600 \(published 3\)/.test(x)), rows.join(' | '));
 });
 
 test('bidding in the page: nothing is sent until Send, the confirm lists exactly what will go, and a refusal is shown before anything is signed', async () => {

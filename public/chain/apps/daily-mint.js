@@ -42,6 +42,15 @@ const giftOk = (a) => ['tz1', 'tz2', 'pcp1'].includes(pcc.addressKind(a));
 
 const num = (v) => (Number.isFinite(v) ? v : null);
 
+/** The nine numbers that make the house's rules. A devnet that changes any of them is not running the published law. */
+export const RULE_FIELDS = Object.freeze(['reserve', 'increment_bps', 'snipe_ms', 'snipe_cap_ms', 'max_bids_per_sender', 'refund_blocks', 'settle_blocks', 'max_words', 'day_ms']);
+
+/** Every rule field where the house's rules differ from the published ones this page runs: [{ field, house, published }]. */
+export function ruleDifferences(rules) {
+  if (!isObj(rules)) return [];
+  return RULE_FIELDS.filter((k) => rules[k] !== DAILY_RULES[k]).map((k) => ({ field: k, house: rules[k], published: DAILY_RULES[k] }));
+}
+
 function readRules(r) {
   if (!isObj(r)) return null;
   const out = {};
@@ -110,7 +119,8 @@ export function readDaily(json) {
     reason: typeof json.reason === 'string' ? cleanText(json.reason, 240) : '',
     addresses,
     rules,
-    standard: Boolean(rules) && rules.day_ms === DAILY_RULES.day_ms && rules.snipe_ms === DAILY_RULES.snipe_ms && rules.snipe_cap_ms === DAILY_RULES.snipe_cap_ms,
+    standard: Boolean(rules) && ruleDifferences(rules).length === 0,
+    ruleDifferences: ruleDifferences(rules),
     height: isWhole(json.height) ? json.height : null,
     lot,
     recent,
@@ -234,7 +244,8 @@ export async function auditHouse(net, { onProgress = () => {} } = {}) {
   const mismatches = [];
   if (worker.law !== LAW_VERSION) mismatches.push('law version: the devnet says ' + cleanText(String(worker.law), 40) + ', this page runs ' + LAW_VERSION);
   const rules = readRules(worker.rules) || DAILY_RULES;
-  const nonStandard = rules.day_ms !== DAILY_RULES.day_ms || rules.snipe_ms !== DAILY_RULES.snipe_ms || rules.snipe_cap_ms !== DAILY_RULES.snipe_cap_ms;
+  const differences = ruleDifferences(rules);
+  const nonStandard = differences.length > 0;
   const cfg = { genesis: status.genesis, ...daily.addresses, rules: { ...DAILY_RULES, ...rules } };
   const edition = await net.get('/edition/daily-mint');
   const creator = isObj(edition) && isObj(edition.terms) ? edition.terms.creator : null;
@@ -245,7 +256,10 @@ export async function auditHouse(net, { onProgress = () => {} } = {}) {
   const blocks = await readAllBlocks(net, worker.height, onProgress);
   const mine = JSON.parse(JSON.stringify(report(fold(cfg, blocks))));
   const lines = [];
-  if (nonStandard) lines.push({ kind: 'note', text: 'Not the standard rules: this devnet runs a ' + Math.round(rules.day_ms / 1000) + '-second lot day, a local test.' });
+  if (nonStandard) {
+    const bits = [...differences].sort((a, b) => (a.field === 'day_ms' ? -1 : b.field === 'day_ms' ? 1 : 0)).map((d) => (d.field === 'day_ms' ? 'a ' + Math.round(d.house / 1000) + '-second lot day, a local test' : d.field + ' ' + d.house + ' (published: ' + d.published + ')'));
+    lines.push({ kind: 'note', text: 'Not the standard rules: this devnet runs ' + bits.join(', ') + '. The replay uses the house’s own rules, so it can agree with them without agreeing with the published ones.' });
+  }
   for (const l of mine.lots) {
     const bad = mine.violations.filter((v) => v.lot === l.n || v.n === l.n);
     const state = l.settled_height !== null ? 'settled at block ' + l.settled_height : l.closed_height !== null ? 'closed at block ' + l.closed_height : 'open';
@@ -269,6 +283,7 @@ export async function auditHouse(net, { onProgress = () => {} } = {}) {
     blocks: blocks.length,
     height: mine.height,
     nonStandard,
+    ruleDifferences: differences,
     report: mine,
     worker,
   };
