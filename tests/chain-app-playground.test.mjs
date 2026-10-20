@@ -791,6 +791,27 @@ test('page script: nothing is read before the load event; then one pinned-list r
   assert.equal(g.calls.filter((c) => c.path === '/mcp').length, 1);
 });
 
+test('page script: a malformed #tool- fragment does not stop the page: the cards draw, the first reader opens, and the genesis line is still read', async () => {
+  for (const hash of ['#tool-%E0%A4%A', '#tool-%', '#tool-%zz', '#tool-%C3%28']) {
+    const f = liveDevnet(fixture.tools, pinnedRoute);
+    const p = await openPage({ fetch: f, search: hash });
+    await p.ready();
+    assert.equal(p.cards().length, fixture.tools.length, hash + ': every tool card is drawn');
+    await waitFor(() => p.doc.querySelector('[data-pg-chain]').textContent !== '', hash + ': the chain line');
+    assert.match(p.doc.querySelector('[data-pg-chain]').textContent, /devnet/, hash);
+    assert.equal(p.cards().filter((li) => li.querySelector('details').open).length, 1, hash + ': one card is open by default');
+    assert.equal(p.cards().find((li) => li.querySelector('details').open).dataset.kind, 'read');
+  }
+  // a well-formed fragment still links to its tool
+  const f = liveDevnet(fixture.tools, pinnedRoute);
+  const ok = await openPage({ fetch: f, search: '#tool-station_get' });
+  await ok.ready();
+  assert.equal(ok.card('station_get').querySelector('details').open, true);
+  await waitFor(() => ok.doc.querySelector('[data-pg-chain]').textContent !== '', 'the chain line');
+  // and the chain line is read even if drawing the cards throws
+  assert.match(PAGE_SCRIPT, /try \{\s*renderTools\(d\.tools, d\.diff\);\s*\} finally \{\s*await readChain\(\);/);
+});
+
 test('page script: waits for the section to be near the viewport, and reads anyway if the window never says so', async () => {
   const observed = [];
   let fire;

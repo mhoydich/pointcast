@@ -607,7 +607,13 @@ const jsonLd = {
       listEl.dataset.live = 'yes';
       filterEl.hidden = false;
       applyFilter();
-      const wanted = decodeURIComponent((window.location.hash || '').replace(/^#tool-/, ''));
+      // A fragment like #tool-%E0%A4%A is not valid percent-encoding and decodeURIComponent throws on it: a crafted link must not stop the page.
+      let wanted = '';
+      try {
+        wanted = decodeURIComponent((window.location.hash || '').replace(/^#tool-/, ''));
+      } catch {
+        wanted = '';
+      }
       const linked = cards.find((c) => c.li.id === `tool-${wanted}`);
       const target = linked || cards.find((c) => c.li.dataset.kind === 'read');
       if (target) {
@@ -729,8 +735,12 @@ const jsonLd = {
       root.dataset.state = d.mode === 'live' ? 'live' : d.reason === 'blocked' ? 'rest' : 'down';
       root.dataset.transport = client.transport;
       retryEl.hidden = d.mode === 'live';
-      renderTools(d.tools, d.diff);
-      await readChain();
+      // The genesis line is the only place this page says GENESIS CHANGED: it is read whatever happens while the cards are drawn.
+      try {
+        renderTools(d.tools, d.diff);
+      } finally {
+        await readChain();
+      }
     }
 
     retryEl.addEventListener('click', () => {
