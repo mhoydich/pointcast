@@ -1,0 +1,393 @@
+---
+/**
+ * /guides/intake — the human room for sending material to PointCast Guides.
+ * Talks to /api/guides/intake (spec: docs/specs/guides-intake.md).
+ * All dynamic content is rendered with textContent, never innerHTML.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/guides.css';
+import { GUIDES, INTERN_ASSIGNMENTS } from '../../data/guides';
+import { INTAKE_KINDS } from '../../data/guides/intake';
+
+const curlExample = `curl -X POST https://pointcast.xyz/api/guides/intake \\
+  -H 'Content-Type: application/json' \\
+  -d '{"action":"submit","guide":"network","kind":"resource",
+       "title":"City special events page",
+       "body":"Official city page for special event permits, checked today.",
+       "sourceUrls":["https://example.gov/special-events"],
+       "contributor":{"name":"Example Agent","kind":"agent","model":"model-name"},
+       "consent":{"noPrivateInfo":true,"humanReview":true}}'
+
+# then, with the receipt from the response:
+curl 'https://pointcast.xyz/api/guides/intake?receipt=RECEIPT'`;
+const title = 'Send material to PointCast Guides';
+const description =
+  'Send tips, corrections, resources, schedules, results and datasets to PointCast Guides. Everything is human-reviewed with written feedback.';
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="PointCast Guides"
+  alternates={[{ type: 'application/json', href: '/guides/intake.json', title: 'Guides intake task feed' }]}
+>
+  <div class="gd">
+    <div class="gd-wrap">
+      <header class="gd-mast">
+        <a class="logo" href="/guides">PointCast <b>Guides</b></a>
+        <nav>
+          <a href="#how">How it works</a>
+          <a href="#submit">Submit</a>
+          <a href="#mine">My submissions</a>
+          <a href="#public">Accepted</a>
+          <a href="#reviewer">Reviewer desk</a>
+          <a href="#agents">For agents</a>
+          <a href="/guides">All guides</a>
+        </nav>
+      </header>
+
+      <p class="gd-kicker">Guides intake · everything is human-reviewed</p>
+      <h1>Send material. Get written feedback.</h1>
+      <p class="lede">
+        Tips, corrections, links, schedules, results and datasets for a guide. Every submission waits for a human
+        reviewer, who writes back. You get a private receipt to check on it.
+      </p>
+
+      <p class="gd-offline" id="offline" hidden>Intake offline: the intake service is not reachable right now. Your text is still in the form; try again in a minute.</p>
+
+      <section id="how">
+        <h2>How it works</h2>
+        <ol class="rules">
+          <li><b>Submit</b> your material and keep the receipt.</li>
+          <li>It is <b>pending</b> until a human reviewer reads it.</li>
+          <li>The reviewer writes <b>feedback</b> and picks: accepted, needs changes, or declined.</li>
+          <li>If it needs changes, <b>revise</b> it with your receipt. It goes back to pending.</li>
+          <li><b>Accepted</b> items become public on the guide, credited by the name you gave.</li>
+        </ol>
+        <div class="gd-scroll">
+          <table>
+            <thead><tr><th>Who</th><th>Can</th><th>Cannot</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Agents</th><td>Draft tips, corrections, resources, schedules, results and datasets via the API or MCP, with sources.</td><td>Publish, contact people, review, or submit assignment work.</td></tr>
+              <tr><th scope="row">Interns</th><td>Submit assignment work against a GA number and get a written rubric.</td><td>Publish or self-approve.</td></tr>
+              <tr><th scope="row">Readers</th><td>Send corrections and tips; check feedback with a receipt.</td><td>Review others' submissions.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="submit">
+        <h2>Submit material</h2>
+        <div id="receipt-box" class="gd-receipt" hidden tabindex="-1">
+          <h3>Submitted. Save this receipt.</h3>
+          <p>It is shown once. Anyone with it can see feedback and revise this item.</p>
+          <code id="receipt-code"></code>
+          <p class="gd-meta">Item <span id="receipt-id"></span>. It is also saved in this browser under My submissions.</p>
+        </div>
+        <form id="submit-form" class="gd-form" novalidate>
+          <label>Guide
+            <select name="guide" required>
+              {GUIDES.map((g) => <option value={g.slug}>{g.title}</option>)}
+              <option value="network">Whole network (no single guide)</option>
+            </select>
+          </label>
+          <label>Intern assignment (optional)
+            <select name="assignment">
+              <option value="">None</option>
+              {INTERN_ASSIGNMENTS.map((a) => <option value={a.id}>{a.id} · {a.title}</option>)}
+            </select>
+          </label>
+          <label>Kind
+            <select name="kind" required>
+              {INTAKE_KINDS.map((k) => <option value={k}>{k}</option>)}
+            </select>
+          </label>
+          <label>Title (4 to 120 characters)
+            <input name="title" type="text" maxlength="120" required />
+          </label>
+          <label>Body (20 to 2000 characters)
+            <textarea name="body" rows="7" maxlength="2000" required></textarea>
+          </label>
+          <fieldset>
+            <legend>Source URLs (https, up to 3; required for corrections, resources, schedules, results, datasets)</legend>
+            <input name="src1" type="url" placeholder="https://" />
+            <input name="src2" type="url" placeholder="https://" />
+            <input name="src3" type="url" placeholder="https://" />
+          </fieldset>
+          <label>Your name (credited if accepted; first name is fine)
+            <input name="name" type="text" maxlength="60" required />
+          </label>
+          <label>I am a
+            <select name="ckind">
+              <option value="reader">reader</option>
+              <option value="contributor">contributor</option>
+              <option value="intern">intern</option>
+            </select>
+          </label>
+          <p class="gd-meta">Agents: use the API or MCP instead of this form (see For agents).</p>
+          <label class="chk"><input type="checkbox" name="c1" /> This contains no private information (no emails, phone numbers or details about private people).</label>
+          <label class="chk"><input type="checkbox" name="c2" /> I understand a human will review this and may decline it or ask for changes.</label>
+          <button type="submit" class="gd-btn">Send for review</button>
+          <p id="submit-msg" class="gd-msg" role="status"></p>
+        </form>
+      </section>
+
+      <section id="mine">
+        <h2>My submissions</h2>
+        <p class="gd-meta">Receipts saved in this browser. <button type="button" class="gd-btn ghost" id="mine-refresh">Refresh</button></p>
+        <div id="mine-list"></div>
+      </section>
+
+      <section id="public">
+        <h2>Accepted material</h2>
+        <p id="public-counts" class="gd-meta">Loading.</p>
+        <div id="public-list" class="gd-grid"></div>
+      </section>
+
+      <section id="reviewer">
+        <h2>Reviewer desk</h2>
+        <p class="gd-meta">Reviewers only. The key stays in this tab (sessionStorage) and is sent as the X-Guides-Admin header.</p>
+        <form id="admin-form" class="gd-form">
+          <label>Admin key <input id="admin-key" type="password" autocomplete="off" /></label>
+          <button type="submit" class="gd-btn">Load queue</button>
+        </form>
+        <p id="admin-msg" class="gd-msg" role="status"></p>
+        <div id="queue"></div>
+      </section>
+
+      <section id="agents">
+        <h2>For agents</h2>
+        <ul class="tight">
+          <li>Task feed: <a href="/guides/intake.json">/guides/intake.json</a> (one task per wanted item, flagged agent-friendly or not).</li>
+          <li>MCP tools at <a href="/api/mcp">/api/mcp</a>: <code>guides_intake_tasks</code>, <code>guides_intake_submit</code>, <code>guides_intake_status</code>.</li>
+          <li>Rules: draft only, never publish or contact people, sources required for factual kinds, no private info.</li>
+        </ul>
+<pre class="gd-pre" set:text={curlExample}></pre>
+      </section>
+
+      <footer class="gd-foot">
+        Spec <code>pointcast.guides-intake/v1</code>. Back to <a href="/guides">PointCast Guides</a>.
+      </footer>
+    </div>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  .gd-form{display:grid;gap:12px;max-width:640px}
+  .gd-form label{display:grid;gap:4px;font-size:.92rem;font-weight:600}
+  .gd-form label.chk{display:flex;gap:8px;align-items:flex-start;font-weight:400}
+  .gd-form input[type=text],.gd-form input[type=url],.gd-form input[type=password],.gd-form select,.gd-form textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink);width:100%}
+  .gd-form fieldset{border:1px solid var(--line);border-radius:6px;display:grid;gap:6px;padding:10px}
+  .gd-form legend{font-size:.85rem;font-weight:600}
+  .gd-btn{font:inherit;font-weight:700;padding:9px 16px;border:0;border-radius:6px;background:var(--blue);color:#fff;cursor:pointer;justify-self:start}
+  .gd-btn.ghost{background:transparent;color:var(--blue);border:1px solid var(--blue);padding:3px 10px;font-weight:500}
+  .gd-btn.ok{background:var(--green)} .gd-btn.warn{background:var(--orange)} .gd-btn.no{background:var(--muted)}
+  .gd-btn:disabled{opacity:.5;cursor:wait}
+  .gd-msg{font-size:.9rem;min-height:1.2em}
+  .gd-msg.err,.gd-offline{color:var(--orange)}
+  .gd-receipt{border:2px solid var(--green);border-radius:10px;padding:14px 16px;background:var(--card);margin-bottom:18px;max-width:640px}
+  .gd-receipt code{display:block;font-size:1.4rem;letter-spacing:.06em;word-break:break-all;margin:8px 0;user-select:all}
+  .gd-pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font-size:.82rem}
+  .gd-item{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0 0 12px}
+  .gd-item h3{margin:0 0 4px}
+  .gd-item .st{font-family:'JetBrains Mono Variable',monospace;font-size:.72rem;border:1px solid var(--blue);border-radius:99px;padding:1px 8px;margin-left:6px}
+  .gd-item .st.accepted{border-color:var(--green);color:var(--green)} .gd-item .st.needs-changes{border-color:var(--orange);color:var(--orange)} .gd-item .st.declined{border-color:var(--muted);color:var(--muted)}
+  .gd-item pre{white-space:pre-wrap;font:inherit;margin:.4em 0}
+  .gd-item .fb{border-left:3px solid var(--line);padding-left:10px;margin:8px 0;font-size:.9rem}
+  .gd-item form{display:grid;gap:8px;margin-top:10px;max-width:640px}
+  .gd-item input,.gd-item textarea{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--ink);width:100%}
+  .gd-item .rub{display:flex;flex-wrap:wrap;gap:10px;font-size:.85rem}
+  .gd-item .rub input{width:4.5em}
+  .gd-item .acts{display:flex;flex-wrap:wrap;gap:8px}
+</style>
+
+<script is:inline>
+(function () {
+  var API = '/api/guides/intake';
+  var KEY = 'pc:guides-intake:receipts';
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function offline(on) { $('offline').hidden = !on; }
+  function api(url, opts) {
+    return fetch(url, opts).then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, body: j }; }); })
+      .catch(function () { offline(true); return { status: 0, body: null }; });
+  }
+  function post(payload, headers) {
+    var h = { 'Content-Type': 'application/json' };
+    if (headers) for (var k in headers) h[k] = headers[k];
+    return api(API, { method: 'POST', headers: h, body: JSON.stringify(payload) });
+  }
+  function errText(res) {
+    if (res.status === 0) return 'Intake offline.';
+    var e = res.body && res.body.error ? res.body.error : 'http_' + res.status;
+    var map = { privacy: 'It looks like it contains an email or phone number. Remove it and try again.', source_required: 'Add at least one source URL for this kind.', consent_required: 'Both checkboxes are required.', rate_limited: 'Too many tries. Wait a few minutes.', admin_required: 'Wrong or missing admin key.' };
+    return map[e] || ('Declined: ' + e);
+  }
+  function getReceipts() { try { var v = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+  function saveReceipt(r) { try { var l = getReceipts(); l.unshift(r); localStorage.setItem(KEY, JSON.stringify(l.slice(0, 50))); } catch (e) {} }
+
+  // ---- submit
+  $('submit-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var f = ev.target, msg = $('submit-msg'), btn = f.querySelector('button[type=submit]');
+    msg.className = 'gd-msg'; msg.textContent = '';
+    if (!f.c1.checked || !f.c2.checked) { msg.className = 'gd-msg err'; msg.textContent = 'Please tick both boxes.'; return; }
+    var urls = [f.src1.value, f.src2.value, f.src3.value].map(function (s) { return s.trim(); }).filter(Boolean);
+    var payload = { action: 'submit', guide: f.guide.value, assignment: f.assignment.value || null, kind: f.kind.value, title: f.title.value.trim(), body: f.body.value.trim(), sourceUrls: urls, contributor: { name: f.name.value.trim(), kind: f.ckind.value }, consent: { noPrivateInfo: true, humanReview: true } };
+    btn.disabled = true; offline(false);
+    post(payload).then(function (res) {
+      btn.disabled = false;
+      if (res.body && res.body.ok) {
+        saveReceipt({ receipt: res.body.receipt, id: res.body.id, title: payload.title, at: new Date().toISOString() });
+        $('receipt-code').textContent = res.body.receipt; $('receipt-id').textContent = res.body.id;
+        $('receipt-box').hidden = false; $('receipt-box').focus();
+        f.reset(); msg.textContent = ''; loadMine();
+      } else { msg.className = 'gd-msg err'; msg.textContent = errText(res); }
+    });
+  });
+
+  // ---- shared item rendering
+  function renderFeedback(parent, list) {
+    (list || []).forEach(function (fb) {
+      var d = el('div', 'fb');
+      d.appendChild(el('div', 'gd-meta', (fb.status || '') + ' · ' + (fb.at || '')));
+      d.appendChild(el('div', null, fb.note || ''));
+      if (fb.rubric) d.appendChild(el('div', 'gd-meta', 'Rubric: ' + Object.keys(fb.rubric).map(function (k) { return k + ' ' + fb.rubric[k] + '/5'; }).join(', ')));
+      parent.appendChild(d);
+    });
+  }
+  function head(item) {
+    var h = el('h3', null, item.title || '(untitled)');
+    h.appendChild(el('span', 'st ' + item.status, item.status));
+    return h;
+  }
+  function metaLine(item) {
+    var c = item.contributor || {};
+    return el('p', 'gd-meta', [item.guide, item.kind, item.assignment, c.name ? 'by ' + c.name : null].filter(Boolean).join(' · '));
+  }
+  function srcList(parent, urls) {
+    (urls || []).forEach(function (u) {
+      if (!/^https:\/\//.test(u)) return;
+      var p = el('p', 'gd-meta'); var a = el('a', null, u); a.href = u; a.rel = 'noopener nofollow'; p.appendChild(a); parent.appendChild(p);
+    });
+  }
+
+  // ---- my submissions
+  function reviseForm(r, item) {
+    var f = el('form');
+    var t = el('input'); t.type = 'text'; t.value = item.title || ''; t.maxLength = 120;
+    var b = el('textarea'); b.rows = 6; b.maxLength = 2000; b.value = item.body || '';
+    var s = el('input'); s.type = 'text'; s.value = (item.sourceUrls || []).join(' '); s.placeholder = 'Source URLs, space separated';
+    var btn = el('button', 'gd-btn', 'Send revision'); btn.type = 'submit';
+    var m = el('p', 'gd-msg');
+    f.appendChild(el('strong', null, 'Revise and resubmit'));
+    f.appendChild(t); f.appendChild(b); f.appendChild(s); f.appendChild(btn); f.appendChild(m);
+    f.addEventListener('submit', function (ev) {
+      ev.preventDefault(); btn.disabled = true;
+      post({ action: 'revise', receipt: r.receipt, title: t.value.trim(), body: b.value.trim(), sourceUrls: s.value.split(/\s+/).filter(Boolean) }).then(function (res) {
+        btn.disabled = false;
+        if (res.body && res.body.ok) loadMine(); else { m.className = 'gd-msg err'; m.textContent = errText(res); }
+      });
+    });
+    return f;
+  }
+  function loadMine() {
+    var box = $('mine-list'); var rs = getReceipts();
+    box.textContent = '';
+    if (!rs.length) { box.appendChild(el('p', 'gd-meta', 'Nothing saved in this browser yet.')); return; }
+    rs.forEach(function (r) {
+      var card = el('div', 'gd-item'); box.appendChild(card);
+      card.appendChild(el('h3', null, r.title || r.id));
+      var holder = el('div'); card.appendChild(holder);
+      holder.appendChild(el('p', 'gd-meta', 'Checking.'));
+      api(API + '?receipt=' + encodeURIComponent(r.receipt)).then(function (res) {
+        holder.textContent = '';
+        if (!res.body || !res.body.ok) { holder.appendChild(el('p', 'gd-meta', res.status === 0 ? 'Intake offline.' : 'Could not load this receipt (' + (res.body && res.body.error || res.status) + ').')); return; }
+        var item = res.body.item;
+        card.replaceChild(head(item), card.firstChild);
+        holder.appendChild(metaLine(item));
+        holder.appendChild(el('p', 'gd-meta', 'Receipt ' + r.receipt));
+        renderFeedback(holder, item.feedback);
+        if (!(item.feedback || []).length) holder.appendChild(el('p', 'gd-meta', 'No feedback yet. A reviewer will write back.'));
+        if (item.status === 'needs-changes') holder.appendChild(reviseForm(r, item));
+      });
+    });
+  }
+  $('mine-refresh').addEventListener('click', loadMine);
+
+  // ---- public feed
+  function loadPublic() {
+    api(API).then(function (res) {
+      var counts = $('public-counts'), list = $('public-list');
+      list.textContent = '';
+      if (!res.body || !res.body.ok) { counts.textContent = res.status === 0 ? 'Intake offline: accepted material cannot be loaded right now.' : 'Accepted feed unavailable.'; return; }
+      offline(false);
+      var c = res.body.counts || {};
+      counts.textContent = (c.accepted || 0) + ' accepted · ' + (c.pending || 0) + ' pending · ' + (c.needsChanges || 0) + ' needing changes · ' + (c.declined || 0) + ' declined';
+      var acc = res.body.accepted || [];
+      if (!acc.length) list.appendChild(el('p', 'gd-meta', 'Nothing accepted yet. Be the first.'));
+      acc.forEach(function (item) {
+        var card = el('article', 'gd-card');
+        card.appendChild(el('h3', null, item.title));
+        card.appendChild(metaLine(item));
+        card.appendChild(el('p', null, item.body));
+        srcList(card, item.sourceUrls);
+        list.appendChild(card);
+      });
+    });
+  }
+
+  // ---- reviewer desk
+  function adminKey() { try { return sessionStorage.getItem('pc:guides-admin') || ''; } catch (e) { return ''; } }
+  try { $('admin-key').value = adminKey(); } catch (e) {}
+  function reviewCard(item) {
+    var card = el('div', 'gd-item');
+    card.appendChild(head(item)); card.appendChild(metaLine(item));
+    card.appendChild(el('pre', null, item.body));
+    srcList(card, item.sourceUrls);
+    if (item.data) card.appendChild(el('pre', 'gd-meta', JSON.stringify(item.data, null, 2)));
+    renderFeedback(card, item.feedback);
+    var f = el('form');
+    var note = el('textarea'); note.rows = 3; note.placeholder = 'Written feedback (required, at least 10 characters)';
+    var rub = el('div', 'rub'); var inputs = {};
+    ['useful', 'sourced', 'clear', 'safe'].forEach(function (k) {
+      var l = el('label', null, k + ' '); var i = el('input'); i.type = 'number'; i.min = 1; i.max = 5; inputs[k] = i; l.appendChild(i); rub.appendChild(l);
+    });
+    var acts = el('div', 'acts'); var m = el('p', 'gd-msg');
+    [['accepted', 'ok'], ['needs-changes', 'warn'], ['declined', 'no']].forEach(function (p) {
+      var b = el('button', 'gd-btn ' + p[1], p[0]); b.type = 'button';
+      b.addEventListener('click', function () {
+        if (note.value.trim().length < 10) { m.className = 'gd-msg err'; m.textContent = 'Write a note first (10+ characters).'; return; }
+        var rubric = {}, any = false;
+        Object.keys(inputs).forEach(function (k) { var v = parseInt(inputs[k].value, 10); if (v >= 1 && v <= 5) { rubric[k] = v; any = true; } });
+        if (any && Object.keys(rubric).length < 4) { m.className = 'gd-msg err'; m.textContent = 'Score all four rubric lines (1–5) or leave them all blank.'; return; }
+        var payload = { action: 'review', id: item.id, status: p[0], note: note.value.trim() };
+        if (any) payload.rubric = rubric;
+        b.disabled = true;
+        post(payload, { 'X-Guides-Admin': adminKey() }).then(function (res) {
+          b.disabled = false;
+          if (res.body && res.body.ok) { card.remove(); loadPublic(); } else { m.className = 'gd-msg err'; m.textContent = errText(res); }
+        });
+      });
+      acts.appendChild(b);
+    });
+    f.appendChild(note); f.appendChild(rub); f.appendChild(acts); f.appendChild(m);
+    card.appendChild(f);
+    return card;
+  }
+  $('admin-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var k = $('admin-key').value.trim();
+    try { sessionStorage.setItem('pc:guides-admin', k); } catch (e) {}
+    var msg = $('admin-msg'), q = $('queue'); msg.className = 'gd-msg'; msg.textContent = 'Loading.'; q.textContent = '';
+    api(API + '?queue=1', { headers: { 'X-Guides-Admin': k } }).then(function (res) {
+      if (!res.body || !res.body.ok) { msg.className = 'gd-msg err'; msg.textContent = errText(res); return; }
+      var items = res.body.items || [];
+      msg.textContent = items.length + ' in the queue, oldest first.';
+      items.forEach(function (it) { q.appendChild(reviewCard(it)); });
+    });
+  });
+
+  loadMine(); loadPublic();
+})();
+</script>

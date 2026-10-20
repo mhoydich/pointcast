@@ -39,11 +39,16 @@ test('future almanac cards are noindex and today is not', () => {
   const now = new Date(`${today}T20:00:00.000Z`);
   assert.equal(isFutureAlmanacCard('/almanac/2026-10-05', now), false);
   assert.equal(isFutureAlmanacCard('/almanac/2026-10-06/', now), true);
-  assert.equal(isNoindexPath('/almanac/2026-10-06'), true);
+  assert.equal(isNoindexPath('/almanac/2026-10-06', now), true);
   assert.equal(isFutureAlmanacCard('/almanac/el-segundo', now), false);
   assert.equal(almanacCardPath(now), '/almanac/2026-10-05');
   assert.equal(cardSeo(today, now).upcoming, false);
   assert.equal(cardSeo('2026-10-06', now).upcoming, true);
+});
+
+test('the launchpad case study stays out of the sitemaps until its case-06 entry ships', () => {
+  assert.equal(isNoindexPath('/case-studies/launchpad/'), true);
+  assert.equal(isNoindexPath('/case-studies/launchpad'), true);
 });
 
 test('every almanac card title and description fits the SEO window', () => {

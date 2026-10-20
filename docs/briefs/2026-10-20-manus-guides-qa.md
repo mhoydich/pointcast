@@ -31,3 +31,15 @@ A desktop browser and a phone-width viewport. No login needed.
 ## Approval
 
 No action needs Mike's approval. Do not contact anyone or post anywhere.
+
+## Addendum: Guides Intake + jobs board (same day)
+
+After deploy and after Mike sets `GUIDES_ADMIN_KEY`:
+
+- Open https://pointcast.xyz/guides/intake, submit one test tip as an intern, save the receipt.
+- In the reviewer desk (Mike provides the key out of band), mark it needs-changes with a note; confirm the note shows under My submissions; revise; accept; confirm it appears under Accepted.
+- Open https://pointcast.xyz/guides/intake.json and confirm it parses.
+- Open https://pointcast.xyz/jobs/?project=guides (12 rows) and ?project=light-works (12 rows).
+- Label test submissions "QA test"; do not touch real submissions.
+
+Write results to `docs/manus-logs/2026-10-20-guides-intake-qa.md`. Setting the secret requires Mike.

@@ -17,6 +17,8 @@ export const NOINDEX_PATHS = new Set([
   '/r/assign/',
   // The reserved /r/board id only redirects to /pickleball (the page to index).
   '/r/board/',
+  // The launchpad case study stays unlisted until its case-06 entry ships.
+  '/case-studies/launchpad/',
 ]);
 
 // Sources with permanent redirects in public/_redirects or Pages middleware.
@@ -32,9 +34,9 @@ export const REDIRECT_PATHS = new Set([
   '/sitemap.xml',
 ]);
 
-export function isNoindexPath(pathname) {
+export function isNoindexPath(pathname, now = new Date()) {
   const path = pathname.endsWith('/') ? pathname : `${pathname}/`;
-  return NOINDEX_PATHS.has(path) || isFutureAlmanacCard(pathname);
+  return NOINDEX_PATHS.has(path) || isFutureAlmanacCard(pathname, now);
 }
 
 export function isRedirectPath(pathname) {
