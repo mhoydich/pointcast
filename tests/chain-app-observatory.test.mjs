@@ -209,8 +209,43 @@ test('summarize of nothing, of one block and of junk does not throw and says zer
   }
   const one = O.summarize([{ height: 5, timestamp: 1000, txCount: 2, txs: [{ type: 'tap', sender: 'tz1a', channel: '' }, { type: 'tap', sender: 'tz1a', channel: '' }] }]);
   assert.equal(one.txTotal, 2);
-  assert.equal(one.perHour, 12, 'one block has no rate: the heartbeat is the fallback');
+  assert.equal(one.perHour, null, 'one block has no rate: nothing is invented');
   assert.deepEqual(one.kinds, [{ kind: 'tap', n: 2, folded: 0 }]);
+});
+
+test('a young devnet shows no invented 12 an hour, and the transaction total accounts for the untimed block #1 the bars leave out', async () => {
+  // two blocks: block 1 (no time, 12 transactions, like the real genesis setup) and block 2 (timed)
+  const blocks = [
+    { height: 1, timestamp: 0, txCount: 12, txs: [] },
+    { height: 2, timestamp: 1_000_000, txCount: 3, txs: [] },
+  ];
+  const s = O.summarize(blocks);
+  assert.equal(s.perHour, null, 'one timed block makes no rate');
+  assert.equal(s.untimedTx, 12);
+  assert.equal(s.txTotal, 15);
+  assert.equal(s.buckets.items.reduce((n, b) => n + b.tx, 0), 3, 'the bars hold only the timed block’s transactions');
+  assert.equal(O.paceWords(s.perHour), 'pace unknown');
+  // two timed blocks a second apart do make a rate
+  assert.ok(O.summarize([{ height: 2, timestamp: 1_000_000, txCount: 0, txs: [] }, { height: 3, timestamp: 1_300_000, txCount: 0, txs: [] }]).perHour > 0);
+  // the recorded local devnet: block 1 has the setup transactions, and the sum of the bars plus the untimed block is the total
+  const local = O.summarize(blocksOf('local'));
+  const b1 = FIX.local.blocks.find((b) => b.header.height === 1);
+  assert.equal(local.untimedTx, b1.txs.length);
+  assert.ok(local.untimedTx > 0, 'the recording has an untimed block with transactions');
+  assert.equal(local.buckets.items.reduce((n, b) => n + b.tx, 0) + local.untimedTx, local.txTotal, 'bars + untimed = the total, nothing unaccounted for');
+  // the page
+  const young = mountView({ name: 'local', overrides: { '/raw/blocks': async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ blocks: [FIX.local.blocks[0], FIX.local.blocks[1]] }) }) } });
+  await young.c.begin();
+  young.c.stop();
+  assert.equal(txt(young.rootEl, '[data-ob-v="rate"]'), '–');
+  assert.match(txt(young.rootEl, '[data-ob-s="rate"]'), /^not enough timed blocks to measure a rate, in blocks #1 to #2$/);
+  assert.doesNotMatch(young.rootEl.textContent, /12 \/ h/);
+  const full = mountView({ name: 'local' });
+  await full.c.begin();
+  full.c.stop();
+  assert.match(txt(full.rootEl, '[data-ob-s="tx"]'), new RegExp('of them in block #1, which has no time and is not in the bars$'));
+  assert.match(full.rootEl.querySelector('[data-ob-chart="activity"] svg').getAttribute('aria-label'), new RegExp(local.txTotal + ' in all \\(' + local.untimedTx + ' of them in block #1, which has no time and is left out of the bars\\)\\.$'));
+  assert.match(txt(full.rootEl, '[data-ob-v="rate"]'), /^[\d.]+ \/ h$/);
 });
 
 test('tally ranks by count then name, and folds a long tail into one honest "other" row that keeps the total', () => {

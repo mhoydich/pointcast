@@ -179,7 +179,7 @@ export function drawActivity(doc, host, tableHost, sum) {
   if (!items.length) { host.append(el(doc, 'p', 'ob-empty', 'No timed blocks in this window.')); return; }
   const W = 640, H = 210;
   const g = O.columnsGeom(items.map((b) => b.tx), { width: W, height: H });
-  const svg = sv(doc, 'svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'ob-svg', role: 'img', 'aria-label': 'Transactions per ' + bucketWord(sum.buckets.ms) + ' across the window: ' + sum.txTotal + ' in all.' });
+  const svg = sv(doc, 'svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'ob-svg', role: 'img', 'aria-label': 'Transactions per ' + bucketWord(sum.buckets.ms) + ' across the window: ' + sum.txTotal + ' in all' + (sum.untimedTx ? ' (' + sum.untimedTx + ' of them in block #1, which has no time and is left out of the bars)' : '') + '.' });
   for (const t of g.ticks) {
     svg.append(sv(doc, 'line', { x1: g.plot.x, x2: g.plot.x + g.plot.w, y1: t.y, y2: t.y, class: 'ob-grid' }));
     svg.append(sv(doc, 'text', { x: g.plot.x - 6, y: t.y + 4, class: 'ob-tick', 'text-anchor': 'end' }, t.label));
@@ -293,10 +293,11 @@ export function mount(root, env = {}) {
 
   function paintWindow(sum) {
     if (!sum || !sum.count) return;
-    set('[data-ob-v="rate"]', num(Math.round(sum.perHour * 10) / 10) + ' / h');
-    set('[data-ob-s="rate"]', 'blocks sealed per hour, over blocks #' + sum.from + ' to #' + sum.to + ' · ' + O.paceWords(sum.perHour));
+    // A rate needs two timed blocks at least a second apart; a young devnet has fewer, and "12 an hour" would be invented.
+    set('[data-ob-v="rate"]', sum.perHour === null ? '–' : num(Math.round(sum.perHour * 10) / 10) + ' / h');
+    set('[data-ob-s="rate"]', sum.perHour === null ? 'not enough timed blocks to measure a rate, in blocks #' + sum.from + ' to #' + sum.to : 'blocks sealed per hour, over blocks #' + sum.from + ' to #' + sum.to + ' · ' + O.paceWords(sum.perHour));
     set('[data-ob-v="tx"]', groups(sum.txTotal));
-    set('[data-ob-s="tx"]', 'transactions in those ' + plural(sum.count, 'block') + ' · ' + plural(sum.busyBlocks, 'block') + ' carried any');
+    set('[data-ob-s="tx"]', 'transactions in those ' + plural(sum.count, 'block') + ' · ' + plural(sum.busyBlocks, 'block') + ' carried any' + (sum.untimedTx ? ' · ' + groups(sum.untimedTx) + ' of them in block #1, which has no time and is not in the bars' : ''));
     set('[data-ob-window-note]', 'Window: the newest ' + plural(sum.count, 'block') + ', #' + sum.from + ' to #' + sum.to + (sum.spanMs > 0 ? ', ' + duration(sum.spanMs) + ' of chain time' : '') + '. Block #1 has no timestamp and is left out of every time axis.');
     // A chart is rebuilt only when what it shows changed, and a rebuild puts the keyboard focus back on the same mark: a periodic
     // re-read of an unchanged window used to throw a keyboard or screen-reader user out of the chart to <body> every minute.

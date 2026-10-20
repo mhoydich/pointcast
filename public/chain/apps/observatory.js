@@ -102,7 +102,9 @@ export function summarize(blocks, { bucketMs = null } = {}) {
     busyBlocks: 0,
     emptyBlocks: 0,
     gaps: [],
-    perHour: 12,
+    // null until two timed blocks a second or more apart make a rate: a made-up 12 an hour is not a measurement.
+    perHour: null,
+    untimedTx: 0,
     txPerHour: 0,
     busiest: null,
     kinds: [],
@@ -132,7 +134,8 @@ export function summarize(blocks, { bucketMs = null } = {}) {
     }
   }
   if (out.busiest && out.busiest.n === 0) out.busiest = null;
-  out.perHour = blocksPerHour(timed.map((b) => b.timestamp));
+  out.perHour = blocksPerHour(timed.map((b) => b.timestamp), null);
+  out.untimedTx = list.filter((b) => b.timestamp === 0).reduce((n, b) => n + (Number.isInteger(b.txCount) ? b.txCount : (b.txs || []).length), 0);
   const timedTx = timed.reduce((s, b) => s + (Number.isInteger(b.txCount) ? b.txCount : (b.txs || []).length), 0);
   out.txPerHour = out.spanMs >= 60000 ? (timedTx * 3600000) / out.spanMs : timedTx;
   const g = out.gaps.map((x) => x.ms).sort((a, b) => a - b);
