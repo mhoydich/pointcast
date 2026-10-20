@@ -1,0 +1,33 @@
+# Manus brief — PointCast Guides real-user QA (2026-10-20)
+
+PointCast Guides (`/guides`) is About.com rebuilt for 2028: 12 guides for local
+communities, pickleball teams and sports teams, a participation ladder and 12
+intern assignments. It was built in a cloud session and has not been walked in
+a real browser on prod.
+
+## URLs to open (after deploy)
+
+- https://pointcast.xyz/guides
+- https://pointcast.xyz/guides/start-a-pickleball-team
+- https://pointcast.xyz/guides/youth-team-parent-guide
+- https://pointcast.xyz/guides/new-in-town
+- https://pointcast.xyz/guides.json and one per-guide `.json`
+- https://pointcast.xyz/b/0716
+
+## Tools / accounts
+
+A desktop browser and a phone-width viewport. No login needed.
+
+## Capture
+
+- Screenshots of `/guides` at desktop and 390px wide, light and dark mode.
+- Any horizontal scroll, broken links (every `related` link and `#GA-xx` anchor), or JSON that fails to parse.
+- Whether the intern section reads clearly as educational briefs (no pay/hiring implied).
+
+## Write results to
+
+`docs/manus-logs/2026-10-20-guides-qa.md`
+
+## Approval
+
+No action needs Mike's approval. Do not contact anyone or post anywhere.
