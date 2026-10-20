@@ -1,0 +1,101 @@
+---
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/guides.css';
+import { CATEGORIES, GUIDES, assignmentsForGuide, guideBySlug } from '../../data/guides';
+
+export function getStaticPaths() {
+  return GUIDES.map((g) => ({ params: { slug: g.slug } }));
+}
+
+const guide = guideBySlug(String(Astro.params.slug))!;
+const category = CATEGORIES.find((c) => c.id === guide.category)!;
+const assignments = assignmentsForGuide(guide.slug);
+const siblings = GUIDES.filter((g) => g.category === guide.category && g.slug !== guide.slug);
+const url = `https://pointcast.xyz/guides/${guide.slug}`;
+---
+
+<BlockLayout
+  title={`${guide.title} — PointCast Guides`}
+  description={guide.dek}
+  author="PointCast Guides"
+  alternates={[{ type: 'application/json', href: `/guides/${guide.slug}.json`, title: guide.title }]}
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name: guide.title,
+    description: guide.dek,
+    url,
+    totalTime: `PT${guide.minutes}M`,
+    step: guide.checklist.map((c) => ({ '@type': 'HowToStep', name: c.label, text: c.detail })),
+  }}
+>
+  <div class="gd">
+    <div class="gd-wrap">
+      <header class="gd-mast">
+        <a class="logo" href="/guides">PointCast <b>Guides</b></a>
+        <nav>
+          <a href={`/guides#${category.id}`}>{category.label}</a>
+          <a href="/guides#participate">Participate</a>
+          <a href="/guides#interns">Intern assignments</a>
+          <a href={`/guides/${guide.slug}.json`}>JSON</a>
+        </nav>
+      </header>
+
+      <p class="gd-kicker">{category.label} · {guide.minutes} min read</p>
+      <h1>{guide.title}</h1>
+      <p class="lede">{guide.dek}</p>
+      <p class="gd-meta">For {guide.audience}.</p>
+
+      <div class="gd-article">
+        <div>
+          {guide.sections.map((s) => (
+            <section>
+              <h2>{s.heading}</h2>
+              {s.body.map((p) => <p>{p}</p>)}
+            </section>
+          ))}
+
+          <h2>Checklist</h2>
+          <ul class="gd-check">
+            {guide.checklist.map((c) => <li><strong>{c.label}.</strong> {c.detail}</li>)}
+          </ul>
+        </div>
+
+        <aside class="gd-side">
+          <div class="gd-card">
+            <h3>Guide seat: {guide.seat.replace('-', ' ')}</h3>
+            <p>This topic does not have a human Guide yet. Send a month of useful corrections and additions and the seat can be yours.</p>
+            <p><a href="/guides#participate">How the seat works</a></p>
+          </div>
+          <div class="gd-card">
+            <h3>Wanted from contributors</h3>
+            <ul class="tight">{guide.wanted.map((w) => <li>{w}</li>)}</ul>
+          </div>
+          {assignments.length > 0 && (
+            <div class="gd-card">
+              <h3>Intern assignments</h3>
+              <ul class="tight">
+                {assignments.map((a) => <li><a href={`/guides#${a.id}`}>{a.id}</a> {a.title}</li>)}
+              </ul>
+            </div>
+          )}
+          <div class="gd-card">
+            <h3>Related</h3>
+            <ul class="tight">{guide.related.map((r) => <li><a href={r.href}>{r.label}</a></li>)}</ul>
+          </div>
+          {siblings.length > 0 && (
+            <div class="gd-card">
+              <h3>More in {category.label}</h3>
+              <ul class="tight">{siblings.map((g) => <li><a href={`/guides/${g.slug}`}>{g.title}</a></li>)}</ul>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      <footer class="gd-foot">
+        Drafted with AI collaborators (Claude) as a starting point for a human Guide. It describes practices, not
+        facts about specific people, clubs or venues; check local rules where they apply. Tags: {guide.tags.join(', ')}.
+      </footer>
+    </div>
+  </div>
+</BlockLayout>

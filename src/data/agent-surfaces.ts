@@ -29,6 +29,8 @@ export const AGENT_SURFACES = {
     uesPhilosophyReceipts: 'https://pointcast.xyz/ues/philosophy/no-degrees-only-receipts/',
     uesPhilosophyRadius: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/',
     uesPhilosophyUnmoderated: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label/',
+    guides: 'https://pointcast.xyz/guides',
+    guidesIntake: 'https://pointcast.xyz/guides/intake',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',
     theSqueeze: 'https://pointcast.xyz/pickleball/the-squeeze/',
     pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands/',
@@ -160,6 +162,8 @@ export const AGENT_SURFACES = {
     standardsRegistry: 'https://pointcast.xyz/standards/registry/',
   },
   json: {
+    guides: 'https://pointcast.xyz/guides.json',
+    guidesIntake: 'https://pointcast.xyz/guides/intake.json',
     pickleballHome: 'https://pointcast.xyz/pickleball/home.json',
     theSqueeze: 'https://pointcast.xyz/pickleball/the-squeeze.json',
     pickleballBackhands: 'https://pointcast.xyz/pickleball/articles/cleaner-backhands.json',

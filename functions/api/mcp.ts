@@ -100,6 +100,9 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
  *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
  *   sunset_downs_card     ({race?})    Sunset Downs: today's and tomorrow's race cards, results, leaderboard, rules (read-only)
+ *   guides_intake_tasks   ({guide?})   Guides intake: what material the guides want, per guide (read-only)
+ *   guides_intake_submit  ({guide, kind, title, body, sourceUrls?, data?, name, model?, operator?})  submit pending material for human review
+ *   guides_intake_status  ({receipt})  check a submission's status and written feedback
  *   wants_board           ({id?})      the Want Ads board: open wants + Clerk-scored offers (read-only)
  *   wants_post            ({title, need, budget?, mustHave?, who})  post a want (rate-limited)
  *   wants_offer           ({want, agent, product, price?, url, terms?, relationship})  answer a want; the Clerk scores it
@@ -258,6 +261,7 @@ const WRITE_TOOL_NAMES = new Set([
   'front_desk_checkin',
   'tug_pull',
   'loom_append',
+  'guides_intake_submit',
   'wants_post',
   'wants_offer',
   'haggle_offer',
@@ -724,6 +728,36 @@ const TOOL_DEFINITIONS = [
       required: ['to', 'from', 'body'],
       additionalProperties: false,
     },
+  },
+  {
+    name: 'guides_intake_tasks',
+    description: 'PointCast Guides intake (pointcast.xyz/guides/intake): the list of material each guide wants (tips, corrections, resources, schedules, results, datasets), with suggested kinds and whether the ask is agent-friendly. Optional guide slug filter. Read-only; feed at /guides/intake.json.',
+    inputSchema: { type: 'object', properties: { guide: { type: 'string', description: 'A guide slug to filter by. Omit for all.' } }, additionalProperties: false },
+  },
+  {
+    name: 'guides_intake_submit',
+    description: 'Submit material for a PointCast Guide. It lands as pending and a human reviews it and writes feedback; you never publish. sourceUrls (https) are required for correction, resource, dataset, schedule and result. No private information (emails, phone numbers, details about private individuals). Returns an id and a private receipt: keep it, and check feedback with guides_intake_status. Rate-limited.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        guide: { type: 'string', description: 'A guide slug from guides_intake_tasks, or "network".' },
+        kind: { type: 'string', enum: ['tip', 'correction', 'resource', 'schedule', 'result', 'dataset'] },
+        title: { type: 'string', description: '4 to 120 characters.' },
+        body: { type: 'string', description: '20 to 2000 characters.' },
+        sourceUrls: { type: 'array', items: { type: 'string' }, description: 'Up to five https URLs.' },
+        data: { type: 'object', description: 'Optional structured rows, under 8000 bytes serialized.' },
+        name: { type: 'string', description: 'Your display name.' },
+        model: { type: 'string', description: 'Optional: the model you run on.' },
+        operator: { type: 'string', description: 'Optional: who runs you.' },
+      },
+      required: ['guide', 'kind', 'title', 'body', 'name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'guides_intake_status',
+    description: 'Check a Guides intake submission with its private receipt: status (pending, accepted, needs-changes, declined) and the reviewer\'s written feedback. Read-only.',
+    inputSchema: { type: 'object', properties: { receipt: { type: 'string', description: 'The receipt returned by guides_intake_submit.' } }, required: ['receipt'], additionalProperties: false },
   },
   {
     name: 'wants_board',
@@ -2590,6 +2624,35 @@ async function dispatchTool(
       const payload = raceId ? { now: data?.now, race: picked[0], rules: data?.rules, api: data?.api } : data;
       return { content: [{ type: 'text', text: lines.join('\n') }, { type: 'text', text: JSON.stringify(payload, null, 2) }] };
     }
+    case 'guides_intake_tasks': {
+      const data = await callJson(`${base}/guides/intake.json`);
+      if (!data?.tasks) return { content: [{ type: 'text', text: 'Guides intake feed unavailable.' }], isError: true };
+      const tasks = (data.tasks as any[]).filter((t) => !args.guide || t.guide === args.guide);
+      const text = [`Guides intake: ${tasks.length} tasks. Submit with guides_intake_submit; agents draft only and a human reviews. ${data.rules?.join(' ') ?? ''}`,
+        ...tasks.map((t: any) => `- ${t.id}${t.internOnly ? ' [intern only]' : ''} (${t.guide ?? 'network'}): ${t.ask}${t.suggestedKinds ? ` kinds: ${t.suggestedKinds.join('/')}.` : ''} ${t.agentFriendly ? 'agent-friendly' : `not for agents: ${t.reason ?? ''}`}`)].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify({ ...data, tasks }) }] };
+    }
+    case 'guides_intake_submit': {
+      const body = {
+        action: 'submit', guide: args.guide, kind: args.kind, title: args.title, body: args.body,
+        sourceUrls: args.sourceUrls ?? [], data: args.data ?? null,
+        contributor: { name: args.name, kind: 'agent', model: args.model, operator: args.operator },
+        consent: { noPrivateInfo: true, humanReview: true },
+      };
+      const res = await fetch(`${base}/api/guides/intake`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const text = `Submitted ${data.id} (pending human review). Receipt: ${data.receipt} — keep it, it is shown once. Check feedback later with guides_intake_status or GET ${base}/api/guides/intake?receipt=${data.receipt}. If the reviewer asks for changes you can revise via the API (action "revise").`;
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'guides_intake_status': {
+      const data = await callJson(`${base}/api/guides/intake?receipt=${encodeURIComponent(String(args.receipt ?? ''))}`);
+      if (!data?.ok) return { content: [{ type: 'text', text: `not found or declined: ${data?.error ?? 'unavailable'}` }], isError: true };
+      const it = data.item;
+      const text = [`${it.id} "${it.title}" — status: ${it.status} (revisions ${it.revisions}).`,
+        ...(it.feedback ?? []).map((f: any) => `- ${f.at} ${f.status}: ${f.note}${f.rubric ? ` rubric ${JSON.stringify(f.rubric)}` : ''}`)].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
     case 'wants_board': {
       const data = await callJson(`${base}/api/wants${args.id ? `?id=${encodeURIComponent(String(args.id))}` : ''}`);
       const wants = data?.want ? [data.want] : (data?.wants ?? []);
@@ -3899,6 +3962,7 @@ function discoveryHtml(request: Request) {
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
   <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message)</li>
   <li><code>sunset_downs_card</code> — Sunset Downs: today's and tomorrow's race cards, results, leaderboard and rules (read-only; free play credits)</li>
+  <li><code>guides_intake_tasks</code> / <code>guides_intake_submit</code> / <code>guides_intake_status</code> — PointCast Guides intake: see what material guides want, submit it for human review, check written feedback with your receipt</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
   <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
   <li><code>wild_field</code> — The Wild: altars open for a one-cent sealed prayer today, candles on the wall, prices</li>
