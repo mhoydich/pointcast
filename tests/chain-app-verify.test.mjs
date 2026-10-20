@@ -990,7 +990,9 @@ async function realRun(api, chain, pin, n, kind) {
   let blocks = await V.fetchBlockSet(api, n, NET_ENV);
   let note = null;
   if (kind) { const t = V.tamperSet(blocks, kind); blocks = t.set; note = t.note; }
-  return V.runSteps({ n, params: chain.params, genesis: pin, pinSource: 'pinned', chain, paths: blocks.paths, ...blocks, tamper: note });
+  const report = await V.runSteps({ n, params: chain.params, genesis: pin, pinSource: 'pinned', chain, paths: blocks.paths, ...blocks, tamper: note });
+  report.tamperNote = note;
+  return report;
 }
 
 for (const [name, chainOf, pinOf, apiOf] of [
@@ -1016,7 +1018,10 @@ for (const [name, chainOf, pinOf, apiOf] of [
     for (const kind of Object.keys(EXPECT)) {
       const only = ok.verdict === 'partial' ? null : await realRun(api, chain, pin, target, kind);
       if (!only) continue;
-      const want = EXPECT[kind].failed.filter((x) => x !== 'link_forward' || only.checks.some((c) => c.id === 'link_forward' && c.state !== 'skip'));
+      // "title" flips a letter of the first transaction that HAS text; on a block whose first transaction is a transfer that is not transaction 0
+      const want = EXPECT[kind].failed
+        .filter((x) => x !== 'link_forward' || only.checks.some((c) => c.id === 'link_forward' && c.state !== 'skip'))
+        .map((x) => (kind === 'title' && x === 'sig:0' && only.tamperNote ? 'sig:' + only.tamperNote.txIndex : x));
       assert.deepEqual(ids(only), want.sort(), name + ' · block ' + target + ' · ' + kind);
     }
     // an empty block, if the default one is empty: the header tampers
