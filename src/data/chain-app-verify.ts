@@ -17,8 +17,8 @@ import { readFileSync } from 'node:fs';
 export const APP = {
   path: '/chain/verify-a-block',
   title: 'Verify a block by hand',
-  /** The wire block for this page does not exist yet; the integrator sets it. ChainHeader links it. */
-  block: '0660',
+  /** The wire block (FD) that announces the seven apps, src/data/chain-apps.ts APPS_BLOCK. ChainHeader links it. */
+  block: '0721',
   description:
     'Pick any block on the PointCast devnet and check it yourself, in your browser: the hash link to its neighbours, the sequencer’s signature, every transaction id and the tx_root, every transaction signature. Then flip one byte and watch which check catches it. devnet: no value, may reset.',
 } as const;

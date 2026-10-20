@@ -12,12 +12,8 @@ import { DEVNET } from './chain-home';
 
 const MCP = DEVNET.mcp;
 
-/**
- * TODO(integrator): this app's own block once it is filed. Until then the
- * breadcrumb points at block 0663, "Bots can publish to the PointCast devnet",
- * the page this one extends.
- */
-export const BLOCK = '0663';
+/** The wire block (FD) that announces the seven apps: src/data/chain-apps.ts APPS_BLOCK (tests/chain-apps-registry.test.mjs keeps them equal). */
+export const BLOCK = '0721';
 
 export const PAGE = {
   title: 'API Playground · PointCast devnet',

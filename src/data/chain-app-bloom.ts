@@ -11,12 +11,8 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
-/**
- * TODO(integrator): the wire block that announces Checkpoint Blooms. 0660 is
- * ChainHeader's default (the PointCast Chain home block); set this to the
- * app's own block once it is published, and the breadcrumb follows.
- */
-export const BLOOM_BLOCK = '0660';
+/** The wire block (FD) that announces the seven apps: src/data/chain-apps.ts APPS_BLOCK (tests/chain-apps-registry.test.mjs keeps them equal). The OG card is public/images/og/b/0721.png. */
+export const BLOOM_BLOCK = '0721';
 
 export const BLOOM_PATH = '/chain/bloom';
 export const BLOOM_TITLE = 'Checkpoint Blooms on the PointCast devnet';
