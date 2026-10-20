@@ -45,3 +45,5 @@ node --test --test-reporter=tap tests/beach-commons-v3.test.mjs tests/kennel-clu
 Evidence is retained in the task's `evidence/` folder: `full-tests.log`, `full-tests-failure-summary.json`, `baseline-sha.txt`, `discovery-baseline-tests.tap`, `discovery-current-tests.tap`, `other-baseline-tests.tap`, and `small-shrines-baseline-comparison.json`. No new failing source test was identified in this scoped comparison. Final built-page verification and production checks remain separate release gates.
 
 Post-build rerun: all eight previously output-dependent suites now pass, **40/40 tests**, with no failures, skips or cancellations. Evidence: `evidence/postbuild-tests.log`.
+
+A separate Co Games UI rerun after the parallel build load cleared passed **27/27 tests**, with no failures or cancellations (`evidence/co-games-rerun.log`). The shrine branch then rebased cleanly onto fresh main `8680e479` (including Guides Intake, Sunset Downs and Radio Network releases), retaining Block 0719. Focused shrine plus New Today checks passed **28/28** on the reconciled branch.
