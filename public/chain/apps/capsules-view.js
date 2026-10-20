@@ -43,7 +43,7 @@ export function mount(root, env = {}) {
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
   const storage = env.storage !== undefined ? env.storage : (() => { try { return win.localStorage; } catch { return null; } })();
-  const S = { begun: false, halted: false, status: null, list: null, rate: 12, mine: [], plan: null, chain: null, openPlan: null, lastFile: null, timer: 0, busy: false };
+  const S = { begun: false, halted: false, status: null, list: null, rate: 12, mine: [], plan: null, chain: null, openPlan: null, openSender: '', lastFile: null, timer: 0, busy: false };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-cp-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
@@ -323,14 +323,24 @@ export function mount(root, env = {}) {
     }
   }
 
+  function closeOpenConfirm() {
+    S.openPlan = null;
+    S.openSender = '';
+    const b = q('[data-cp-open-confirm]');
+    if (b) b.hidden = true;
+  }
+
   function showOpenConfirm(m) {
     const box = q('[data-cp-open-confirm]');
     const k = keys && keys.key();
     if (!box || !k) return;
     S.openPlan = m;
+    S.openSender = k.sender;
     const list = q('[data-cp-open-list]');
     list.replaceChildren();
-    list.append(el(doc, 'li', '', 'Your message, stored on the devnet by its hash (POST /body). It becomes public.'));
+    // "Your message" is true of a capsule this key sealed; a file someone else gave you holds their message, and it is shown here word for word.
+    list.append(el(doc, 'li', '', (m.author === k.sender ? 'Your message' : 'The message in this capsule file, sealed by ' + m.author) + ', stored on the devnet by its hash (POST /body). It becomes public.'));
+    set('[data-cp-open-message]', m.body);
     list.append(el(doc, 'li', '', 'One open_capsule transaction signed by YOUR key ' + k.sender + ', revealing the salt. It airs as a post by the capsule’s author ' + m.author + ' on channel ' + m.channel + ', titled “' + m.title + '”.'));
     set('[data-cp-open-where]', 'Sent to ' + net.api + ' (' + (S.status ? S.status.chainId : '') + '). The page checks first that the devnet lists the capsule and its next block may open it.');
     box.hidden = false;
@@ -342,23 +352,21 @@ export function mount(root, env = {}) {
     const result = q('[data-cp-open-result]');
     const btn = q('[data-cp-open-send]');
     if (!m || !k || S.halted) return;
+    // The confirm names the key that will sign: only that key signs.
+    if (k.sender !== S.openSender) { closeOpenConfirm(); return; }
     btn.disabled = true;
     const say2 = (t, state) => { if (result) { result.hidden = false; result.dataset.state = state || ''; set('[data-cp-open-result-text]', t); } };
     try {
       say2('Checking the devnet’s genesis…', '');
       if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
       const r = await C.openCapsule({ chain: S.chain, net, key: k, file: m, wait: env.wait, onStage: (s) => say2('Opening… (' + s + ')', '') });
-      const box = q('[data-cp-open-confirm]');
-      if (box) box.hidden = true;
-      S.openPlan = null;
+      closeOpenConfirm();
       say2('Opened in block ' + r.height + '. Transaction ' + r.txHash + '. The message is now public on the wall below.', 'ok');
       await refresh({ wall: true });
     } catch (e) {
       if (e && (e.sendState === 'sent' || e.sendState === 'maybe')) {
         // The open may be on chain, and then the message is public. Close the confirm, read the devnet again, and say what it shows.
-        S.openPlan = null;
-        const box = q('[data-cp-open-confirm]');
-        if (box) box.hidden = true;
+        closeOpenConfirm();
         await refresh({ wall: true });
         const stillListed = Boolean(S.list && S.list.rows.some((x) => x.id === m.capsule));
         say2(stillListed ? sendFailureText(e, { unsent: 'Not opened: ' }) + ' The capsule is still listed, so it has not opened yet; if it does, its message becomes public.' : 'The devnet no longer lists this capsule, so the open landed and its message is public on the wall below, though this page did not see it confirm (' + describeError(e) + ').', stillListed ? 'warn' : 'ok');
@@ -405,12 +413,12 @@ export function mount(root, env = {}) {
   const openSend = q('[data-cp-open-send]');
   if (openSend) openSend.addEventListener('click', sendOpen);
   const openCancel = q('[data-cp-open-cancel]');
-  if (openCancel) openCancel.addEventListener('click', () => { const b = q('[data-cp-open-confirm]'); if (b) b.hidden = true; S.openPlan = null; });
+  if (openCancel) openCancel.addEventListener('click', closeOpenConfirm);
   const refreshBtn = q('[data-cp-refresh]');
   if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.addEventListener('click', () => refresh({ wall: true })); }
   const delay = q('[data-cp-delay]');
   if (delay) delay.addEventListener('input', paintSealHint);
-  if (keys) keys.onChange(() => { S.plan = null; const b = q('[data-cp-confirm]'); if (b) b.hidden = true; paintMine(); });
+  if (keys) keys.onChange(() => { S.plan = null; const b = q('[data-cp-confirm]'); if (b) b.hidden = true; closeOpenConfirm(); paintMine(); });
 
   return {
     state: S,

@@ -896,6 +896,53 @@ test('an open that was sent but not seen to confirm is not "Not opened": the pag
   assert.equal($(gone.rootEl, '[data-cp-open-result]').dataset.state, 'ok');
 });
 
+test('the Open confirm names the key that will sign and is withdrawn when the key changes; it shows the message, and does not call someone else’s message yours', { timeout: 30000 }, async () => {
+  const c0 = await fakeClient();
+  const made = await OPEN_FILE_FOR({ client: { seed: '81'.repeat(32) } });
+  const file = made.file;
+  const posts = [];
+  const accepted = { ok: true, status: 200, headers: { get: () => null } };
+  const m = mountView({ fetchOpts: { fx: { ...FX, capsules: listWith(file, {}, file.openAt + 1) }, overrides: { '/body': async (u, init) => { posts.push('/body'); return { ...accepted, text: async () => JSON.stringify({ body_hash: K.pcc.bodyHash(JSON.parse(init.body).body) }) }; }, '/tx': async (u, init) => { posts.push('/tx'); const b = JSON.parse(init.body); return { ...accepted, text: async () => JSON.stringify({ tx_hash: K.pcc.txHash(b), status: 'pending' }) }; } }, accounts: { [c0.key.sender]: { balance: 0, next_nonce: 0 } } }, extra: { connect: async () => ({ ...c0.chain, waitForTx: async () => ({ height: 777 }) }) } });
+  await m.c.begin();
+  m.c.stop();
+  await m.c.importFile(JSON.stringify(made.raw));
+  const pressOpen = () => [...m.rootEl.querySelectorAll('[data-cp-mine] button')].find((b) => b.textContent === 'Open it').click();
+  await m.c.keys.setSeed('81'.repeat(32));
+  await tick(30);
+  const mine = m.c.keys.key().sender;
+  pressOpen();
+  assert.equal($(m.rootEl, '[data-cp-open-confirm]').hidden, false);
+  assert.match(txt(m.rootEl, '[data-cp-open-list]'), /^Your message, stored on the devnet by its hash/);
+  assert.match(txt(m.rootEl, '[data-cp-open-list]'), new RegExp('signed by YOUR key ' + mine));
+  assert.equal(txt(m.rootEl, '[data-cp-open-message]'), 'Open me.', 'the message that will become public is shown, word for word');
+  // another key is made while the confirm is open: it is withdrawn, so Send cannot sign with a key it never named
+  await m.c.keys.setSeed('82'.repeat(32));
+  await tick(30);
+  assert.equal($(m.rootEl, '[data-cp-open-confirm]').hidden, true, 'the confirm for the old key is gone');
+  assert.equal(m.c.state.openPlan, null);
+  $(m.rootEl, '[data-cp-open-send]').click();
+  await tick(100);
+  assert.deepEqual(posts, [], 'nothing was signed or sent');
+  // the same file opened by another key: its message is not "yours"
+  pressOpen();
+  assert.match(txt(m.rootEl, '[data-cp-open-list]'), new RegExp('^The message in this capsule file, sealed by ' + file.author + ', stored on the devnet by its hash'));
+  assert.doesNotMatch(txt(m.rootEl, '[data-cp-open-list]'), /^Your message/);
+  assert.match(txt(m.rootEl, '[data-cp-open-list]'), new RegExp('signed by YOUR key ' + m.c.keys.key().sender));
+  // Forget: the confirm goes with the key, instead of staying up and silently doing nothing
+  $(m.rootEl, '[data-kp-forget]').click();
+  await tick(30);
+  assert.equal($(m.rootEl, '[data-cp-open-confirm]').hidden, true);
+  assert.equal(m.c.state.openSender, '');
+  // and a confirm for the current key still opens the capsule
+  await m.c.keys.setSeed('82'.repeat(32));
+  await tick(30);
+  pressOpen();
+  $(m.rootEl, '[data-cp-open-send]').click();
+  await tick(400);
+  assert.deepEqual(posts, ['/body', '/tx']);
+  assert.match(txt(m.rootEl, '[data-cp-open-result-text]'), /^Opened in block 777\./);
+});
+
 test('a reset shows GENESIS CHANGED, reads nothing else and cannot send', async () => {
   const log = [];
   const { rootEl, c } = mountView({ fetchOpts: { log, status: { ...FX.status, genesis_hash: HEX('9') } } });
