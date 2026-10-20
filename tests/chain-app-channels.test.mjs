@@ -1335,6 +1335,44 @@ test('a poll leaves a list a keyboard user has open and a live region alone, and
   assert.equal($(rootEl, '[data-cc-feed]').getAttribute('aria-live'), null, 'the list itself is not a live region');
 });
 
+/** Watch every live region under the app (aria-live, role status or alert) for any write at all, even of the same words. */
+function watchLive(dom, rootEl) {
+  const nodes = $$(rootEl, '[aria-live], [role="status"], [role="alert"]');
+  assert.ok(nodes.length >= 8, 'the page has its live regions: ' + nodes.length);
+  // the observer's callback runs in a microtask and empties its queue, so the records are kept as they are delivered
+  const seen = nodes.map((node) => {
+    const hits = [];
+    const obs = new dom.window.MutationObserver((records) => hits.push(...records));
+    obs.observe(node, { subtree: true, childList: true, characterData: true });
+    return { node, obs, hits };
+  });
+  return async () => {
+    await tick(0);
+    return seen.filter((s) => s.hits.length || s.obs.takeRecords().length).map((s) => (s.node.hasAttribute('data-cc-claim-hint') ? 'claim-hint' : s.node.hasAttribute('data-cc-post-count') ? 'post-count' : s.node.hasAttribute('data-wt-roll-text') ? 'roll-text' : (s.node.className || s.node.tagName) + ' [' + [...s.node.attributes].map((a) => a.name).join(' ') + ']'));
+  };
+}
+
+test('a poll that finds nothing new writes to no live region at all, even with the same words: with and without a key, a channel open and a claim typed', async () => {
+  const { rootEl, c, dom } = mountView();
+  await c.begin();
+  c.stop();
+  const quiet = async (label) => {
+    const changed = watchLive(dom, rootEl);
+    await c.refresh({ feed: true });
+    await c.refresh({ feed: true });
+    assert.deepEqual(await changed(), [], label + ': a polite or assertive region was rewritten by a poll that changed nothing');
+  };
+  await quiet('no key, nothing typed');
+  type(dom, $(rootEl, '[data-cc-claim-code]'), 'brandnew');
+  await quiet('a code typed in the claim form');
+  await c.keys.setSeed(SEEDS.owner);
+  await tick(30);
+  c.select('MYCH');
+  type(dom, $(rootEl, '[data-cc-post-channel]'), 'MYCH', 'change');
+  type(dom, $(rootEl, '[data-cc-post-title]'), 'a title');
+  await quiet('a key, a channel open, a post being written');
+});
+
 test('the Enter key does what the button next to it does, and a new key clears the form for the channel that was open', async () => {
   const { rootEl, c, dom } = mountView({ dev: stationsDevnet({ stations: [{ code: 'MYCH', owner: OWNER_ADDR, name: 'My channel', mode: 'open', crew: [] }] }) });
   await c.begin();

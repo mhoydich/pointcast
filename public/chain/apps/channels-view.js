@@ -62,7 +62,8 @@ export function mount(root, env = {}) {
     claim: { plan: null }, mode: { code: '', name: '', modeValue: 'open', crew: [], base: '', plan: null }, post: { plan: null }, more: false, dirSig: '', detailSig: '', feedSig: '', crewSig: '', feedCode: '', feedTop: '',
   };
   // A line that has not changed is left alone, so a live region does not announce the same words again on every poll.
-  const set = (sel, text) => { const n = q(sel); if (n && n.textContent !== text) n.textContent = text; };
+  const put = (n, text) => { if (n && n.textContent !== text) n.textContent = text; };
+  const set = (sel, text) => put(q(sel), text);
   const say = (text, state) => { set('[data-cc-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
   const keys = panel ? mountKeyPanel(panel, { window: win, storage: env.storage, supported: env.supported }) : null;
@@ -271,10 +272,10 @@ export function mount(root, env = {}) {
     const hint = q('[data-cc-claim-hint]');
     const input = q('[data-cc-claim-code]');
     if (!hint || !input) return;
-    if (!input.value.trim()) { hint.textContent = 'Type a code. Lower case is made upper case for you.'; hint.dataset.bad = 'no'; return; }
-    if (!S.world || !S.world.list) { hint.textContent = 'Reading the devnet…'; hint.dataset.bad = 'no'; return; }
+    if (!input.value.trim()) { put(hint, 'Type a code. Lower case is made upper case for you.'); hint.dataset.bad = 'no'; return; }
+    if (!S.world || !S.world.list) { put(hint, 'Reading the devnet…'); hint.dataset.bad = 'no'; return; }
     const c = C.checkClaimable(input.value, me(), S.world);
-    hint.textContent = c.message;
+    put(hint, c.message);
     hint.dataset.bad = c.ok ? 'no' : 'yes';
     const held = me() ? C.heldBy(S.world, me()) : 0;
     set('[data-cc-held]', me() && S.world.max ? 'This key holds ' + held + ' of the ' + S.world.max + ' stations one account may hold.' : S.world.max ? 'One account may hold ' + S.world.max + ' stations; the house’s own codes count against nobody.' : '');
