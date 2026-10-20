@@ -317,7 +317,14 @@ export function planBid({ daily, sender, amount, words = [], gift = '', balance 
   const g = String(gift || '').trim();
   if (g && !(isAddress(g) && giftOk(g))) errors.push('A gift goes to a tz1, tz2 or pcp1 address.');
   const title = lot ? bidTitle(lot.n, ws, g || null) : '';
-  return { ok: errors.length === 0, errors, title, words: ws, amount: n, gift: g || null, lot: lot ? lot.n : null };
+  // `auctioneer` and `lot` are what the confirm names: send() holds the transfer to exactly these.
+  return { ok: errors.length === 0, errors, title, words: ws, amount: n, gift: g || null, lot: lot ? lot.n : null, auctioneer: daily && daily.addresses ? daily.addresses.auctioneer : null, sender: isAddress(sender) ? sender : '' };
+}
+
+/** GET /edition/daily-mint -> the creator its own terms name (the address the house must be bidding as), or null when it cannot be read. */
+export async function readEditionCreator(net) {
+  const edition = await net.get('/edition/daily-mint');
+  return isObj(edition) && isObj(edition.terms) && typeof edition.terms.creator === 'string' ? edition.terms.creator : null;
 }
 
 /** POST /daily/faucet {address}: 100 play ATTN once per address (CORS open). Returns the devnet's answer. */

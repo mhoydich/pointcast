@@ -770,6 +770,52 @@ test('the key’s balance is read on every poll, so an outbid and its refund sho
   assert.match(txt(rootEl, '[data-dm-errors]'), /You hold 20 play ATTN; this bid is 95\./);
 });
 
+test('the transfer goes to the auctioneer the confirm named, and only if the edition’s own terms name it too', async () => {
+  const stranger = (await K.keyFromSeed('66'.repeat(32))).sender;
+  const key = await K.keyFromSeed('65'.repeat(32));
+  const run = async ({ at, edition }) => {
+    const fake = await fakeSend();
+    const sent = [];
+    let daily = clone(FX.daily);
+    let ed = FX.edition;
+    const accounts = { [key.sender]: { balance: 100, next_nonce: 0 } };
+    const connect = async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); return fake.chain.submit(s); } });
+    const m = mountView({ fetchOpts: { accounts, fx: { ...FX, get daily() { return daily; }, get edition() { return ed; } } }, extra: { connect, supported: true, storage: null } });
+    await m.c.begin();
+    m.c.stop();
+    await m.c.keys.setSeed('65'.repeat(32));
+    await tick(30);
+    m.rootEl.querySelector('[data-dm-amount]').value = String(D.leastBid(D.readDaily(FX.daily)) + 1);
+    m.rootEl.querySelector('[data-dm-review]').click();
+    assert.equal(m.rootEl.querySelector('[data-dm-confirm]').hidden, false);
+    assert.match(txt(m.rootEl, '[data-dm-confirm-list]'), new RegExp('to the auctioneer ' + FX.daily.addresses.auctioneer));
+    if (at) { daily = clone(FX.daily); daily.addresses.auctioneer = stranger; }
+    if (edition === null) ed = null;
+    else if (edition) { ed = clone(FX.edition); ed.terms.creator = edition; }
+    m.rootEl.querySelector('[data-dm-send]').click();
+    await tick(300);
+    return { ...m, sent };
+  };
+  // the house moves the auctioneer after Review: nothing is signed, the confirm is withdrawn, both addresses are named
+  const moved = await run({ at: true });
+  assert.equal(moved.sent.length, 0, 'no transfer to an address nobody confirmed');
+  assert.equal(moved.rootEl.querySelector('[data-dm-result]').dataset.state, 'bad');
+  assert.match(txt(moved.rootEl, '[data-dm-result-text]'), new RegExp('^The auctioneer changed while you read: the house now names ' + stranger + ', not ' + FX.daily.addresses.auctioneer + '\\. Nothing was sent\\. Review the bid again\\.$'));
+  assert.equal(moved.rootEl.querySelector('[data-dm-confirm]').hidden, true);
+  // the house names a different auctioneer from the edition's creator: even a consistent answer is not trusted
+  const liar = await run({ edition: stranger });
+  assert.equal(liar.sent.length, 0);
+  assert.match(txt(liar.rootEl, '[data-dm-result-text]'), new RegExp('^The house names ' + FX.daily.addresses.auctioneer + ' as the auctioneer, but the daily-mint edition’s own terms name ' + stranger + '\\. Nothing was sent'));
+  // an edition that cannot be read is not a pass
+  const none = await run({ edition: null });
+  assert.equal(none.sent.length, 0);
+  // the untouched case still sends, to the confirmed address
+  const fine = await run({});
+  assert.equal(fine.sent.length, 1);
+  assert.equal(fine.sent[0].tx.to, FX.daily.addresses.auctioneer);
+  assert.match(txt(fine.rootEl, '[data-dm-result-text]'), /^Your bid is in block/);
+});
+
 test('a bid the door refuses is shown in the devnet’s own words and nothing is claimed', async () => {
   const fake = await fakeSend();
   const connect = async () => ({ ...fake.chain, submit: async () => { throw Object.assign(new K.KitError('that transfer would not be a valid bid now: the least valid bid is 99 play ATTN', { status: 400, code: 'daily_bid_refused' })); } });

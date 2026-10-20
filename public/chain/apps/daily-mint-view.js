@@ -321,6 +321,30 @@ export function mount(root, env = {}) {
     S.plan = plan;
   }
 
+  /** A read that starts now: a poll already in flight began before Send was pressed, so it is waited out and then a new read is made. */
+  async function refreshFresh(opts) {
+    while (S.busy) await new Promise((r) => win.setTimeout(r, 10));
+    await refresh(opts);
+  }
+
+  /**
+   * What the person confirmed is what is sent. Returns '' when the house still names the auctioneer the confirm named and the
+   * daily-mint edition's own terms (an independent read) name it too; otherwise the words for why nothing is sent.
+   */
+  async function bindingProblem(plan) {
+    const auctioneer = S.daily && S.daily.addresses ? S.daily.addresses.auctioneer : null;
+    if (!auctioneer || auctioneer !== plan.auctioneer) return 'The auctioneer changed while you read: the house now names ' + (auctioneer || 'no one') + ', not ' + plan.auctioneer + '. Nothing was sent. Review the bid again.';
+    let creator = null;
+    try { creator = await D.readEditionCreator(net); } catch { creator = null; }
+    if (creator !== auctioneer) return 'The house names ' + auctioneer + ' as the auctioneer, but the daily-mint edition’s own terms name ' + (creator || 'no creator that could be read') + '. Nothing was sent: a bid goes only to the address the edition names.';
+    return '';
+  }
+  function withdrawPlan() {
+    S.plan = null;
+    const box = q('[data-dm-confirm]');
+    if (box) box.hidden = true;
+  }
+
   async function send() {
     const k = keys && keys.key();
     const plan = S.plan;
@@ -332,7 +356,9 @@ export function mount(root, env = {}) {
     try {
       say2('Checking the devnet’s genesis…', '');
       if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch } });
-      await refresh({ cards: false });
+      await refreshFresh({ cards: false });
+      const unbound = await bindingProblem(plan);
+      if (unbound) { withdrawPlan(); say2(unbound, 'bad'); return; }
       await loadBalance();
       const fresh = D.planBid({ daily: S.daily, sender: k.sender, amount: plan.amount, words: plan.words, gift: plan.gift || '', balance: S.balance });
       if (!fresh.ok) { say2((fresh.errors[0].startsWith('You hold ') ? '' : 'The lot changed while you read: ') + fresh.errors[0], 'bad'); return; }
