@@ -708,6 +708,44 @@ test('a reset shows GENESIS CHANGED and reads nothing else', async () => {
   assert.equal(txt(rootEl, '[data-ob-v="height"]'), '', 'no number was painted');
 });
 
+test('a reset while the page is open clears every number and chart from the old chain, and the badge no longer says LIVE', async () => {
+  let clock = FIX.local.status.tip_timestamp + 1000;
+  const live = { genesis: FIX.local.status.genesis_hash };
+  const overrides = { '/status': async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ ...FIX.local.status, genesis_hash: live.genesis, network: 'devnet' }) }) };
+  const { rootEl, c } = mountView({ name: 'local', overrides, now: () => clock });
+  await c.begin();
+  c.stop();
+  assert.equal(txt(rootEl, '[data-ob-health-word]'), 'LIVE');
+  assert.match(txt(rootEl, '[data-ob-v="height"]'), /^#/);
+  assert.ok(rootEl.querySelector('[data-ob-chart="cadence"] svg'));
+  assert.ok(rootEl.querySelectorAll('[data-ob-table="kinds"] tbody tr').length > 0);
+  // the devnet is reset under the open page: the next poll sees another genesis
+  live.genesis = HEX('9');
+  clock += 20000;
+  await c.poll();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(rootEl.dataset.state, 'changed');
+  assert.equal(rootEl.querySelector('[data-ob-genesis]').hidden, false);
+  assert.match(txt(rootEl, '[data-ob-status]'), /GENESIS CHANGED/);
+  // nothing of the old chain is still painted
+  for (const id of ['height', 'mempool', 'accounts', 'supply', 'age', 'rate', 'tx', 'net', 'lot', 'capsules', 'editions', 'bots']) assert.equal(txt(rootEl, '[data-ob-v="' + id + '"]'), '–', id + ' is back to a dash');
+  for (const n of rootEl.querySelectorAll('[data-ob-s]')) assert.equal(n.textContent, '', 'no caption from the old chain');
+  assert.equal(rootEl.querySelectorAll('svg').length, 0, 'no chart');
+  assert.equal(rootEl.querySelectorAll('table').length, 0, 'no table');
+  assert.match(txt(rootEl, '[data-ob-chart="cadence"]'), /^Not shown: the devnet was reset/);
+  assert.equal(txt(rootEl, '[data-ob-window-note]'), 'No window read: the devnet was reset.');
+  assert.equal(txt(rootEl, '[data-ob-meta]'), '');
+  assert.equal(rootEl.dataset.health, 'unknown');
+  assert.equal(txt(rootEl, '[data-ob-health-word]'), 'UNKNOWN');
+  assert.ok(!/LIVE/.test(rootEl.textContent.replace(/LIVE: look again/g, '')), 'the page does not say LIVE');
+  assert.equal(c.state.data, null);
+  // and the one-second repaint does not bring an age back
+  clock += 600000;
+  assert.equal(txt(rootEl, '[data-ob-v="age"]'), '–');
+  assert.equal(c.state.halted, true);
+  assert.equal(rootEl.querySelectorAll('[data-ob-cp]:not([hidden])').length, 0);
+});
+
 test('an unreachable devnet is said so, once, and the page does not throw', async () => {
   const { rootEl, c } = mountView({ overrides: { '/status': async () => { throw new TypeError('Failed to fetch'); } } });
   await c.begin();

@@ -353,6 +353,27 @@ export function mount(root, env = {}) {
     set('[data-ob-meta]', 'Read ' + plural(net.count, 'request') + ' so far · last read ' + utcClock(d.readAt + S.skew) + (d.missing.length ? ' · not readable: ' + d.missing.join(', ') : '') + ' · ' + net.api + ' · ' + d.status.chainId + (where.override ? ' · local override' : ''));
   }
 
+  /**
+   * The devnet was reset while the page was open: nothing painted from the old chain may stay on screen as if it were current.
+   * Tiles go back to their dashes, charts and tables are emptied with a sentence, the badge reads UNKNOWN and the old read is dropped
+   * (so the one-second repaint has nothing to age).
+   */
+  function clearAll() {
+    S.data = null;
+    S.drawn = {};
+    for (const n of qa('[data-ob-v]')) n.textContent = '–';
+    for (const n of qa('[data-ob-s]')) n.textContent = '';
+    for (const n of qa('[data-ob-chart]')) n.replaceChildren(el(doc, 'p', 'ob-empty', 'Not shown: the devnet was reset, and nothing from before the reset is current.'));
+    for (const n of qa('[data-ob-table]')) n.replaceChildren();
+    for (const n of qa('[data-ob-cp]')) { n.hidden = true; n.textContent = ''; }
+    set('[data-ob-cp-empty]', '');
+    set('[data-ob-window-note]', 'No window read: the devnet was reset.');
+    set('[data-ob-meta]', '');
+    root.dataset.health = 'unknown';
+    set('[data-ob-health-mark]', HEALTH_MARK.unknown);
+    set('[data-ob-health-word]', HEALTH_WORD.unknown);
+  }
+
   function genesisNote(on, e) {
     const n = q('[data-ob-genesis]');
     if (!n) return;
@@ -388,7 +409,7 @@ export function mount(root, env = {}) {
       paintMeta();
       say('Updated. ' + (S.live ? 'Live: reading again when a new block lands.' : 'Live is off: press Read now to update.') + ' The time of the last read is in the line below.', 'ready');
     } catch (e) {
-      if (e && e.name === 'GenesisChanged') { genesisNote(true, e); say('GENESIS CHANGED. Nothing below is read.', 'changed'); S.halted = true; }
+      if (e && e.name === 'GenesisChanged') { if (S.data) clearAll(); genesisNote(true, e); say('GENESIS CHANGED. Nothing below is read.', 'changed'); S.halted = true; }
       else {
         S.failures += 1;
         say('The devnet did not answer: ' + describeError(e) + (S.data ? ' The numbers shown are from the last read.' : ''), 'down');
