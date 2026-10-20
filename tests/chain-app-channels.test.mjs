@@ -1431,6 +1431,50 @@ test('typing speaks nothing per keystroke: the counters and the claim hint are p
   assert.equal(await hintWrites(), 1);
 });
 
+test('a poll that finds new data rebuilds the table and the actions, and a keyboard user keeps their place: focus goes back to the same button', async () => {
+  const dev = feedDevnet();
+  const { rootEl, c, dom } = mountView({ dev });
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed(SEEDS.owner);
+  await tick(30);
+  const doc = dom.window.document;
+  const rowButton = (code) => $$(rootEl, '[data-cc-list] button').find((b) => b.textContent === code);
+  // someone posts on another channel while the keyboard user sits on the GDN row
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: dev.fetch });
+  const ownerKey = await keyOf('owner');
+  const post = async (title) => { const w = await C.readWorldFresh(net, dev.chain); await C.sendBroadcast({ chain: dev.chain, net, key: ownerKey, plan: C.planBroadcast({ station: w.byCode.get('MYCH'), sender: ownerKey.sender, title, body: 'x', world: w }) }); };
+  const gdn = rowButton('GDN');
+  gdn.focus();
+  assert.equal(doc.activeElement, gdn);
+  await post('a new post while GDN has focus');
+  await c.refresh({ feed: true });
+  const again = rowButton('GDN');
+  assert.notEqual(again, gdn, 'the table really was rebuilt by the poll');
+  assert.equal(gdn.isConnected, false);
+  assert.equal(doc.activeElement, again, 'focus went to the rebuilt GDN button, not to the page');
+  // the detail's action buttons: a station that changes on the chain rebuilds them, and the focused one keeps focus
+  c.select('MYCH');
+  const acts = () => $$(rootEl, '[data-cc-detail-actions] button');
+  const labels = acts().map((b) => b.textContent);
+  assert.ok(labels.length >= 2, 'the owner of MYCH has two actions: ' + labels.join(' | '));
+  const second = acts()[1];
+  second.focus();
+  assert.equal(doc.activeElement, second);
+  dev.st.stations.get('MYCH').name = 'Renamed on chain';
+  await c.refresh({ feed: true });
+  assert.equal(second.isConnected, false, 'the actions were rebuilt');
+  assert.equal(doc.activeElement.textContent, labels[1], 'focus is on the same action again');
+  assert.equal(doc.activeElement.isConnected, true);
+  assert.equal(doc.activeElement.closest('[data-cc-detail-actions]') !== null, true);
+  // a focus elsewhere is left alone
+  const filter = $(rootEl, '[data-cc-filter]');
+  filter.focus();
+  await post('and another');
+  await c.refresh({ feed: true });
+  assert.equal(doc.activeElement, filter);
+});
+
 test('the Enter key does what the button next to it does, and a new key clears the form for the channel that was open', async () => {
   const { rootEl, c, dom } = mountView({ dev: stationsDevnet({ stations: [{ code: 'MYCH', owner: OWNER_ADDR, name: 'My channel', mode: 'open', crew: [] }] }) });
   await c.begin();

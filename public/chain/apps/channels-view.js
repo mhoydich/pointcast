@@ -100,6 +100,20 @@ export function mount(root, env = {}) {
   const station = (code) => (S.world ? S.world.byCode.get(code) || null : null);
   const myStations = () => (S.world && S.world.list && me() ? S.world.list.rows.filter((s) => s.owner === me()) : []);
 
+  /**
+   * A list that is rebuilt (a poll found something new) drops the focus of whoever sat on one of its buttons. Call this before the
+   * rebuild; call what it returns after: focus goes back to the button with the same label (a code, an action), without scrolling.
+   */
+  function keepFocus(host) {
+    const a = doc.activeElement;
+    const was = a && a !== host && host.contains(a) && a.tagName === 'BUTTON' ? a.textContent : null;
+    return () => {
+      if (was === null) return;
+      const again = [...host.querySelectorAll('button')].find((b) => b.textContent === was);
+      if (again && typeof again.focus === 'function') { try { again.focus({ preventScroll: true }); } catch { /* a detached node cannot take focus */ } }
+    };
+  }
+
   /** Fill a select with `options` ([value, text]), keeping the chosen value when it is still there. */
   function fillSelect(sel, options, keep) {
     const n = q(sel);
@@ -134,6 +148,7 @@ export function mount(root, env = {}) {
     const sig = JSON.stringify([S.filter, S.selected, me(), S.world.enabled, shown.map((r) => [r.code, r.held, r.mode, r.crew.length, r.last ? r.last.height : 0, r.seen, r.station ? r.station.name : ''])]);
     if (sig === S.dirSig && host.childElementCount) return;
     S.dirSig = sig;
+    const refocus = keepFocus(host);
     host.replaceChildren();
     if (!S.world.enabled) host.append(rowMsg('This devnet has no stations (launch record 13 is off). Posts are still listed by channel when it has any.'));
     if (!shown.length) { host.append(rowMsg(S.filter === 'all' ? 'No channel has a station or a post yet.' : 'No channel matches that filter.')); return; }
@@ -154,6 +169,7 @@ export function mount(root, env = {}) {
       host.append(tr);
     }
     if (shown.length > C.LIMITS.rows) host.append(rowMsg('Showing the first ' + C.LIMITS.rows + ' of ' + shown.length + '.'));
+    refocus();
   }
   function rowMsg(text) {
     const tr = el(doc, 'tr');
@@ -211,6 +227,7 @@ export function mount(root, env = {}) {
       set('[data-cc-detail-words]', 'Nobody has claimed ' + code + '. The chain lets anyone post on an unclaimed code; this page broadcasts only to a channel you own or crew.');
     }
     const acts = q('[data-cc-detail-actions]');
+    const refocus = keepFocus(acts);
     acts.replaceChildren();
     const mk = (label, fn, cls = 'btn btn--ghost') => { const b = el(doc, 'button', cls, label); b.type = 'button'; b.addEventListener('click', fn); acts.append(b); return b; };
     if (!st) {
@@ -221,6 +238,7 @@ export function mount(root, env = {}) {
       if (C.roleOf(st, me()) && !C.isHouse(st, S.world)) mk('Broadcast on it', () => broadcastOn(code));
       if (st.offer === me() && me()) mk('Use this code in Claim', () => useInClaim(code));
     }
+    refocus();
     set('[data-cc-feed-title]', 'On air now on ' + code);
     paintFeed();
   }
