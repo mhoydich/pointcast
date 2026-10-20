@@ -672,9 +672,16 @@ export async function planWitness({ replay, choice, chainId, genesis, key, opts 
 // ---------------------------------------------------------------- sending
 
 const wordFilter = (e) => /word filter/i.test(String(e && e.message));
+const notCrew = (e) => /owner and crew post or seal here/i.test(String(e && e.message));
 
 /** The devnet's refusal for a hex-reading word filter, in pc-witness.mjs's words. Keeps the error's tags (sendState, txHash). */
 function explainRefusal(e, channel) {
+  // A lane (WIT, NET) that another key claimed in crew mode refuses everyone else, and a claimed station cannot be taken back.
+  if (notCrew(e)) {
+    e.message = channel + ' refused: ' + cleanText(String(e.message), 160) + '. Another key has claimed the ' + channel + ' station in crew mode, and nobody can take a station back, so no '
+      + (channel === CHANNEL_WIT ? 'attestation' : 'check-in') + ' can be posted on this devnet until it resets.' + (channel === CHANNEL_WIT ? ' Nothing was sent.' : '');
+    return e;
+  }
   if (wordFilter(e)) {
     // The hex-reading explanation fits the attestation, whose body is a signed line of hex. A check-in is text the person chose:
     // its name and its note, so that is what to change.

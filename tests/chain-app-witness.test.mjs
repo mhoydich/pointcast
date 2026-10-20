@@ -1201,6 +1201,30 @@ test('in the page, an attestation that landed before the check-in failed is said
   m.c.stop();
 });
 
+test('a Daily Net lane that someone claimed in crew mode is said plainly: the chain’s refusal, then what it means — no attestation or check-in can be posted until a reset', async () => {
+  const words = "only this station's owner and crew post or seal here";
+  const plan = await planFor({ opts: { checkin: true } });
+  const only = (channel, f) => async (url, init = {}) => (init.method === 'POST' && new URL(String(url)).pathname === '/tx' && JSON.parse(init.body).tx.channel === channel ? { ok: false, status: 400, headers: { get: () => null }, text: async () => JSON.stringify({ error: words }) } : f(url, init));
+  // WIT locked: nothing is sent
+  const f1 = miniDevnet();
+  const g1 = only('WIT', f1);
+  const e1 = await X.sendWitness({ chain: await connectTo(g1), net: K.makeNet('http://127.0.0.1:8799', { fetch: g1 }), key: KEY, plan, now: () => NOW, replayedAt: NOW, wait: { timeoutMs: 1000, intervalMs: 5 } }).catch((x) => x);
+  assert.equal(e1.sendState, 'refused');
+  assert.equal(e1.message, 'WIT refused: ' + words + '. Another key has claimed the WIT station in crew mode, and nobody can take a station back, so no attestation can be posted on this devnet until it resets. Nothing was sent.');
+  assert.deepEqual(f1.sent, []);
+  // NET locked after the attestation landed: it does not say nothing was sent
+  const f2 = miniDevnet();
+  const g2 = only('NET', f2);
+  const e2 = await X.sendWitness({ chain: await connectTo(g2), net: K.makeNet('http://127.0.0.1:8799', { fetch: g2 }), key: KEY, plan, now: () => NOW, replayedAt: NOW, wait: { timeoutMs: 1000, intervalMs: 5 } }).catch((x) => x);
+  assert.equal(e2.message, 'NET refused: ' + words + '. Another key has claimed the NET station in crew mode, and nobody can take a station back, so no check-in can be posted on this devnet until it resets.');
+  assert.ok(e2.partial && e2.partial.wit, 'and the attestation that landed is kept');
+  assert.deepEqual(f2.sent.map((s) => s.tx.channel), ['WIT']);
+  // any other refusal is left in the devnet’s own words
+  const other = async (url, init = {}) => (init.method === 'POST' && new URL(String(url)).pathname === '/tx' ? { ok: false, status: 400, headers: { get: () => null }, text: async () => JSON.stringify({ error: 'bad signature' }) } : f1(url, init));
+  const e3 = await X.sendWitness({ chain: await connectTo(other), net: K.makeNet('http://127.0.0.1:8799', { fetch: other }), key: KEY, plan, now: () => NOW, replayedAt: NOW }).catch((x) => x);
+  assert.equal(e3.message, 'bad signature');
+});
+
 test('claim files keep what was signed and where it went, and say it is a claim', async () => {
   const plan = await planFor({ opts: { name: 'wt-claim' } });
   const c = X.makeClaimFile({ chainId: FX.status.chain_id, genesis: GENESIS, api: 'http://127.0.0.1:8799', plan, txHash: HEX('5'), height: 93, timeMs: NOW, createdMs: NOW });
