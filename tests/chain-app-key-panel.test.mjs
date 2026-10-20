@@ -309,6 +309,33 @@ test('a browser without ed25519 is told so, and nothing is enabled', async () =>
   assert.equal(panel.dataset.state, 'none');
 });
 
+test('the panel says the kept key is one key for three apps, readable by every script on the origin, and the field for a key you already have hides what is typed', () => {
+  const c = src.component.replace(/\s+/g, ' ');
+  assert.match(c, /if you tick “Keep it on this device”, the Daily Mint, the Notary and Time Capsules all load this same key/);
+  assert.match(c, /a stamp, a bid and a capsule signed here are linked to one account/);
+  assert.match(c, /local storage, which every script on pointcast\.xyz can read/);
+  assert.match(c, /Leave it unticked and the key lives in this tab only/);
+  // a real wallet seed pasted into that field must not show on screen
+  const own = (src.component.match(/<input[^>]*data-kp-own[^>]*>/) || [''])[0];
+  assert.match(own, /type="password"/);
+  assert.match(own, /autocomplete="off"/);
+  assert.doesNotMatch(own, /type="text"/);
+  // the three apps mount this same panel on the one slot
+  for (const page of ['src/pages/chain/daily-mint.astro', 'src/pages/chain/notary.astro', 'src/pages/chain/capsules.astro']) assert.match(read(page), /<KeyPanel signs=/, page);
+  assert.equal(KEY_SLOT, 'pointcast-chain-apps/devnet-key/v1');
+  // the panel still works with a hidden field: a key typed there is taken
+  const run = async () => {
+    const { c: ctl, q } = mountPanel();
+    await ctl.ready;
+    assert.equal(q('[data-kp-own]').type, 'password');
+    q('[data-kp-own]').value = 'ef'.repeat(32);
+    q('[data-kp-use]').click();
+    await tick(30);
+    assert.equal(ctl.key().seedHex, 'ef'.repeat(32));
+  };
+  return run();
+});
+
 test('in a browser that cannot use ed25519 a kept key is still named and can still be forgotten', async () => {
   const seed = 'cd'.repeat(32);
   const st = fakeStorage({ [KEY_SLOT]: seed });
