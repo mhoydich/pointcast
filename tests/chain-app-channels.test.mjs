@@ -1827,6 +1827,7 @@ test('the controls are real controls and the page is usable from the keyboard al
   for (const sel of ['[data-cc-claim-hint]', '[data-cc-post-count]']) {
     assert.equal(doc.querySelector(sel).getAttribute('aria-live'), null, sel + ' is not a live region');
     assert.equal(doc.querySelector(sel).getAttribute('role'), null, sel + ' has no live role');
+    assert.equal(doc.querySelector(sel).getAttribute('aria-hidden'), 'true', sel + ' is left to its polite twin, so a screen reader reads the words once');
   }
   for (const sel of ['[data-cc-claim-errors]', '[data-cc-set-errors]', '[data-cc-post-errors]']) assert.equal(doc.querySelector(sel).getAttribute('role'), 'alert', sel);
   assert.ok(doc.querySelector('table caption'));
