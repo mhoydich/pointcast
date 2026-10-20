@@ -1,0 +1,284 @@
+---
+/**
+ * /chain/notary: the Notary. Stamp a file's SHA-256 on the PointCast devnet
+ * and check a stamp later. The file is read in the visitor's browser and goes
+ * nowhere; only its hash goes on chain, inside a post the visitor signs with a
+ * key made in the browser, on channel NOTARY. Checking a stamp runs the same
+ * five steps as "Verify a block by hand" on the stamp's block, then the
+ * Notary's own: the transaction is a post on NOTARY, its body hashes to the
+ * body_hash it commits to, and the body names the file's SHA-256.
+ *
+ * A stamp is one server's accountable claim on a devnet that may reset and
+ * anchors nowhere. The page says so, says what a stamp does and does not show,
+ * and asks the visitor to keep the receipt it hands back.
+ *
+ * The logic is public/chain/apps/notary.js (no DOM, importable by node), the DOM
+ * side notary-view.js, the shared key panel key-panel.js, the words
+ * src/data/chain-app-notary.ts. The devnet pins come from src/data/chain-home.ts,
+ * never typed here. ?devnet=http://127.0.0.1:PORT points the page at a local
+ * devnet for end-to-end runs (scripts/e2e-chain-app-notary.mjs); it is honoured
+ * only for the hosts localhost and 127.0.0.1.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import KeyPanel from '../../components/chain/KeyPanel.astro';
+import Snippet from '../../components/chain/Snippet.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, CHANNEL, HONESTY_LINE, NOT_ANCHORED, NOT_PROVES, PROVES, STAMP_LINES, checkSnippet } from '../../data/chain-app-notary';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const checkCode = checkSnippet(DEVNET.url, DEVNET.genesis);
+const quick = [
+  { label: 'Verify a block', href: '/chain/verify-a-block' },
+  { label: 'Time Capsules', href: '/chain/capsules' },
+  { label: 'Block Yard', href: DEVNET.yardHref },
+  { label: 'Bots guide', href: '/chain/bots' },
+];
+const title = APP.title + ': stamp a file’s fingerprint on the PointCast devnet';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: APP.title,
+  description: APP.description,
+  url: 'https://pointcast.xyz' + APP.path + '/',
+  applicationCategory: 'SecurityApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-20',
+  dateModified: '2026-10-20',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <div class="chn ca-page nt-page" style={ramp}>
+    <ChainHeader current="notary" trail={[{ label: 'notary' }]} block={APP.block} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · APP · NOTARY · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Stamp a file’s fingerprint. Check one later.</h1>
+      <p class="dek">
+        Pick a file and your browser works out its SHA-256, a fingerprint of its bytes. Sign that fingerprint with a key you make
+        here and the devnet seals it into a block with a time. The file never leaves your browser. Later, anyone with the file
+        can find the stamp and check the block it sits in, step by step.
+      </p>
+      <svg class="ca-art" viewBox="0 0 360 72" role="img" aria-label="A sheet with a folded corner, an arrow to a block, and a small seal ring on the block">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M20 8h40l16 16v40H20z" />
+          <path d="M60 8v16h16" />
+          <path d="M30 36h36M30 44h36M30 52h24" stroke-width="2" />
+          <path d="M110 36h96M196 28l10 8-10 8" />
+          <rect x="236" y="14" width="96" height="44" />
+          <path d="M236 36h96" />
+          <circle cx="300" cy="25" r="7" />
+        </g>
+      </svg>
+      <p class="ca-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> {NOT_ANCHORED} A stamp shows that a key signed a hash and this one server sealed it at a time: an
+        accountable claim, not proof of who wrote the file or when it was made. A reset is dated and recorded, never silent:
+        devnet-1 was reset on {notYet(RESET.date)} and its recording is still checkable at
+        <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>, but its stamps are not on the new chain. Keep the receipt.
+      </p>
+      <p class="jump"><a href="#stamp">stamp a file</a><a href="#check">check a stamp</a><a href="#means">what a stamp means</a><a href="#code">same check, in code</a></p>
+    </header>
+
+    <section
+      id="stamp"
+      class="sec"
+      aria-labelledby="stamp-title"
+      data-notary-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+    >
+      <p class="kicker">01 · STAMP · THE FILE STAYS IN YOUR BROWSER · NOTHING IS SENT UNTIL YOU PRESS SEND</p>
+      <h2 id="stamp-title" class="h2">Which file?</h2>
+      <noscript><p class="fine">The Notary needs JavaScript, because the hashing and the signing happen in your browser. The check is also <a href="#code">a short script</a>.</p></noscript>
+      <p class="ca-status" data-nt-status role="status" aria-live="polite">The page reads <code>GET /status</code> once this section is on screen. Hashing a file needs no network at all.</p>
+      <p class="ca-meta" data-nt-meta></p>
+      <p class="ca-banner" data-nt-genesis role="note" hidden></p>
+
+      <div class="nt-drop" data-nt-drop data-over="no">
+        <div class="ca-field">
+          <label class="ca-label" for="nt-file">Choose a file (up to 64 MiB), or drop one here</label>
+          <input id="nt-file" class="ca-input ca-file" data-nt-file type="file" disabled />
+        </div>
+      </div>
+      <div class="nt-or">
+        <div class="ca-field ca-field--grow">
+          <label class="ca-label" for="nt-text">Or type or paste text</label>
+          <textarea id="nt-text" class="ca-textarea" data-nt-text rows="3" spellcheck="false" placeholder="Hashed as UTF-8, exactly as typed"></textarea>
+        </div>
+        <button class="btn btn--ghost" type="button" data-nt-text-go disabled>Hash this text</button>
+      </div>
+      <div class="ca-controls">
+        <div class="ca-field ca-field--grow">
+          <label class="ca-label" for="nt-paste">Or paste a SHA-256 you already have</label>
+          <input id="nt-paste" class="ca-input ca-input--mono" data-nt-paste type="text" autocomplete="off" spellcheck="false" maxlength="80" placeholder="64 hex characters" />
+        </div>
+        <div class="ca-field">
+          <label class="ca-label" for="nt-paste-size">Its size in bytes (optional)</label>
+          <input id="nt-paste-size" class="ca-input ca-input--mono ca-input--fit nt-size" data-nt-paste-size type="text" inputmode="numeric" autocomplete="off" maxlength="15" />
+        </div>
+        <button class="btn btn--ghost" type="button" data-nt-paste-go disabled>Use this hash</button>
+      </div>
+
+      <dl class="ca-kv">
+        <div><dt>SHA-256</dt><dd><code class="ca-hash" data-nt-hash>no file or hash yet</code></dd></div>
+        <div><dt>Size</dt><dd data-nt-size></dd></div>
+      </dl>
+      <p class="ca-hint" data-nt-hash-note></p>
+
+      <div class="ca-controls">
+        <label class="ca-toggle"><input class="ca-checkbox" type="checkbox" data-nt-name-box disabled /> <span>Put the file’s name in the stamp (public)</span></label>
+        <div class="ca-field ca-field--grow">
+          <label class="ca-label" for="nt-note">A note for the stamp (optional, up to 140 characters, public)</label>
+          <input id="nt-note" class="ca-input" data-nt-note type="text" maxlength="140" autocomplete="off" />
+        </div>
+      </div>
+
+      <KeyPanel signs="the stamp" id="nt-kp" />
+
+      <p class="ca-actions"><button class="btn" type="button" data-nt-review disabled>Review the stamp</button><span class="fine">Nothing is sent yet.</span></p>
+      <ul class="ca-confirm nt-errors" data-nt-errors role="alert" hidden></ul>
+      <div class="ca-confirm" data-nt-confirm hidden>
+        <p><b>You are about to send, to the public devnet, one post on channel {CHANNEL}:</b></p>
+        <p>Title: <code class="ca-hash" data-nt-confirm-title></code></p>
+        <p>Body, word for word:</p>
+        <pre class="nt-body"><code data-nt-confirm-body></code></pre>
+        <p data-nt-confirm-from></p>
+        <p>It is public and stays on this devnet until it resets. Only the hash and size, and the name and note if you added them, go on chain; the file does not.</p>
+        <p class="ca-actions">
+          <button class="btn" type="button" data-nt-send>Send the stamp</button>
+          <button class="btn btn--ghost" type="button" data-nt-cancel>Cancel</button>
+        </p>
+      </div>
+      <div class="ca-result" data-nt-result hidden role="status" aria-live="polite">
+        <h3>Result</h3>
+        <p data-nt-result-text></p>
+        <p class="ca-actions"><button class="btn" type="button" data-nt-receipt hidden>Download the receipt</button></p>
+        <details class="nt-receipt"><summary>The receipt as text</summary><pre><code data-nt-receipt-json></code></pre></details>
+      </div>
+
+      <section id="check" class="nt-sec" aria-labelledby="check-title">
+        <p class="kicker">02 · CHECK · FIND A STAMP, THEN CHECK THE BLOCK IT SITS IN</p>
+        <h2 id="check-title" class="h2">Is this file stamped, and does the stamp hold?</h2>
+        <p class="note">
+          Give the file, or its SHA-256. With the receipt the page goes straight to the stamp’s block. Without it, the page scans the
+          newest blocks for a stamp of that hash. It then runs the five Verify a block steps on the stamp’s block and the Notary’s own checks.
+        </p>
+        <div class="ca-controls">
+          <div class="ca-field">
+            <label class="ca-label" for="nt-c-file">The file</label>
+            <input id="nt-c-file" class="ca-input ca-file" data-nt-c-file type="file" disabled />
+          </div>
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="nt-c-hash">Or its SHA-256</label>
+            <input id="nt-c-hash" class="ca-input ca-input--mono" data-nt-c-hash type="text" autocomplete="off" spellcheck="false" maxlength="80" disabled />
+          </div>
+        </div>
+        <div class="ca-controls">
+          <div class="ca-field">
+            <label class="ca-label" for="nt-c-rf">The receipt (optional)</label>
+            <input id="nt-c-rf" class="ca-input ca-file" data-nt-c-receipt-file type="file" accept="application/json,.json" disabled />
+          </div>
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="nt-c-rt">Or paste the receipt text</label>
+            <textarea id="nt-c-rt" class="ca-textarea nt-rt" data-nt-c-receipt-text rows="2" spellcheck="false" disabled></textarea>
+          </div>
+        </div>
+        <p class="ca-actions"><button class="btn" type="button" data-nt-c-run disabled>Check this file</button><span class="fine">Reads the blocks it needs (GET only). Nothing is written.</span></p>
+        <div class="ca-result nt-out" data-nt-c-out hidden role="status" aria-live="polite" data-state="idle">
+          <h3 data-nt-c-verdict>Not run yet.</h3>
+          <ul class="ca-checks" data-nt-c-checks aria-label="The checks"></ul>
+          <p data-nt-c-detail></p>
+          <p class="card__links"><a data-nt-c-link href="/chain/verify-a-block" hidden>Open the block in Verify a block →</a></p>
+        </div>
+      </section>
+    </section>
+
+    <section id="means" class="sec" aria-labelledby="means-title">
+      <p class="kicker">03 · WHAT A STAMP MEANS</p>
+      <h2 id="means-title" class="h2">A claim by a key, sealed by a server.</h2>
+      <div class="cards cards--2">
+        <article class="card card--tint">
+          <p class="card__k">It shows</p>
+          <ul class="bullets">{PROVES.map((t) => <li>{t}</li>)}</ul>
+        </article>
+        <article class="card">
+          <p class="card__k">It does not show</p>
+          <ul class="bullets">{NOT_PROVES.map((t) => <li>{t}</li>)}</ul>
+        </article>
+      </div>
+      <h3 class="h3">The five lines of a stamp</h3>
+      <div class="tbl">
+        <table>
+          <caption>The body of the post on channel {CHANNEL}, in order</caption>
+          <thead><tr><th scope="col">Line</th><th scope="col">What it is</th></tr></thead>
+          <tbody>{STAMP_LINES.map((r) => <tr><th scope="row"><code>{r.line}</code></th><td>{r.what}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="code" class="sec" aria-labelledby="code-title">
+      <p class="kicker">04 · SAME CHECK, IN CODE</p>
+      <h2 id="code-title" class="h2">Check a stamp without this page.</h2>
+      <p class="note">
+        Keep the SDK (<a href="/chain/first-mints/lib/pointcast-chain.js" download>pointcast-chain.js</a>) beside this file and run it with Node 22 or
+        newer, giving the file, the stamp’s block and its transaction id (both are in the receipt).
+      </p>
+      <Snippet label="notary-check.mjs · pins this devnet’s genesis" code={checkCode} />
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The hash is worked out in your browser with WebCrypto. The post is signed with an ed25519 key made in your browser and
+        sent as a signed transaction to {D.replace('https://', '')}. Checking reuses the Verify a block steps from
+        public/chain/apps/verify.js, then reads the stamp strictly: five lines, in order, nothing extra. {HONESTY_LINE}; a reset is
+        dated and recorded. Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded, the browser is idle, the section is near the viewport and the tab is visible.
+  const root = document.querySelector('[data-notary-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/notary-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  .chn .nt-drop{margin:16px 0 0;padding:14px 16px;border:1.5px dashed var(--c600);background:var(--c50)}
+  .chn .nt-drop[data-over="yes"]{border-style:solid;background:var(--pc-bg)}
+  .chn .nt-or{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end;margin:14px 0 0}
+  .chn .nt-size{width:168px}
+  .chn .nt-body{margin:6px 0 10px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all}
+  .chn .nt-errors{border-color:var(--ca-bad);border-style:solid}
+  .chn .nt-errors[hidden]{display:none}
+  .chn .nt-sec{padding-top:48px;scroll-margin-top:12px}
+  .chn .nt-out{border-color:var(--c600);border-left-width:6px}
+  .chn .nt-out[data-state="ok"]{border-color:var(--ca-ok)}
+  .chn .nt-out[data-state="bad"]{border-color:var(--ca-bad)}
+  .chn .nt-out[data-state="warn"]{border-color:var(--ca-warn)}
+  .chn .nt-out h3{font:500 22px/1.2 var(--pc-font-sans);letter-spacing:-.01em}
+  .chn .nt-out .ca-checks{margin-top:10px}
+  .chn .nt-rt{min-height:68px;font-family:var(--pc-font-mono);font-size:13px}
+  .chn .nt-receipt{margin:10px 0 0}
+  .chn .nt-receipt summary{cursor:pointer;font:500 10px/2 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  @media (max-width:760px){
+    .chn .nt-size{width:100%}
+    .chn .nt-or .btn{flex:1 1 auto}
+  }
+</style>
