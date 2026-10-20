@@ -398,6 +398,37 @@ test('within one block the newest card comes first, and a feed scan pages with b
   assert.equal(C.postsOf(scan, 'MYCH', 2).length, 2);
 });
 
+test('a post the devnet’s keeper hides after it was read is hidden by the next poll, in the logic and in an open page; the keeper unhiding it shows it again', async () => {
+  const card = (hidden) => ({ hash: 'a'.repeat(64), kind: 'publish_block', ...(hidden ? { hidden: true } : {}), payload: { channel: 'MYCH', title: hidden ? '[hidden by the devnet admin]' : 'visible title', ...(hidden ? {} : { body: 'ok' }), body_hash: K.pcc.bodyHash('ok') }, sender: A1 });
+  const page = (hidden) => ({ tip: 9, blocks: [{ height: 9, timestamp: 1792480000000, txs: [card(hidden)] }], next_before: 9 });
+  let hidden = false;
+  const net = { async get() { return page(hidden); } };
+  const scan = C.newScan();
+  await C.scanFeed(net, scan, { pages: 1 });
+  const shape = () => C.postsOf(scan, 'MYCH').map((p) => [p.title, p.bodyState, p.hidden, p.body]);
+  assert.deepEqual(shape(), [['visible title', 'ok', false, 'ok']]);
+  hidden = true;
+  await C.refreshNewest(net, scan);
+  assert.deepEqual(shape(), [['[hidden by the devnet admin]', 'hidden', true, '']], 'the poll replaced the held card: no title, no body');
+  assert.equal(scan.posts.size, 1, 'still one post');
+  hidden = false;
+  await C.refreshNewest(net, scan);
+  assert.deepEqual(shape(), [['visible title', 'ok', false, 'ok']], 'unhidden again');
+  // in an open page
+  const dev = feedDevnet();
+  const { rootEl, c } = mountView({ dev, search: '?channel=MYCH' });
+  await c.begin();
+  c.stop();
+  const shown = () => $$(rootEl, '[data-cc-feed] li').map((l) => l.textContent);
+  assert.ok(shown().some((t) => t.includes('first on MYCH') && t.includes('one')), 'the first read shows the post and its body');
+  const mine = [...c.state.scan.posts.values()].find((p) => p.title === 'first on MYCH');
+  dev.hide(mine.hash);
+  await c.refresh({ feed: true });
+  assert.ok(!shown().some((t) => t.includes('first on MYCH')), 'the hidden post’s title is gone from the open page');
+  assert.equal(shown().filter((t) => /hid this post/.test(t)).length, 2, 'it is marked as hidden, like the one that was hidden from the start');
+  assert.ok(!shown().join('\n').includes('\none'), 'and its body is withheld');
+});
+
 test('a feed in a shape this page does not read is an error, not an empty directory', async () => {
   const net = { async get() { return { nope: true }; } };
   await assert.rejects(() => C.scanFeed(net, C.newScan()), /\/feed is not the shape this page reads/);

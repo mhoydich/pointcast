@@ -237,8 +237,9 @@ export function readFeedPage(json) {
 
 export const newScan = () => ({ before: null, complete: false, pages: 0, blocks: 0, posts: new Map(), tip: null, started: false });
 
+/** Put what was just read into the scan. The newest read of a post wins: the keeper may have hidden (or unhidden) one that was read before. */
 function merge(scan, posts) {
-  for (const p of posts) if (!scan.posts.has(p.hash)) scan.posts.set(p.hash, p);
+  for (const p of posts) scan.posts.set(p.hash, p);
   if (scan.posts.size > LIMITS.maxPosts) {
     const keep = [...scan.posts.values()].sort(newestFirst).slice(0, LIMITS.maxPosts);
     scan.posts = new Map(keep.map((p) => [p.hash, p]));
