@@ -850,6 +850,48 @@ test('Live polls /status alone while the height holds, reads the window again wh
   assert.equal(rootEl.dataset.state, 'ready');
 });
 
+test('a window picked (or Read now pressed) while a read is in flight is not dropped: one more read follows, for the window now chosen', { timeout: 20000 }, async () => {
+  const log = [];
+  let gate = null;
+  let first = true;
+  const raw = async (u) => {
+    log.push('raw ' + u.searchParams.get('limit'));
+    if (first) { first = false; await new Promise((r) => { gate = r; }); }
+    const from = Number(u.searchParams.get('from'));
+    return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ tip: FIX.live.status.height, from, blocks: FIX.live.blocks.filter((b) => b.header.height >= from).slice(0, Number(u.searchParams.get('limit'))) }) };
+  };
+  const { rootEl, c, dom } = mountView({ name: 'live', overrides: { '/raw/blocks': raw }, now: () => FIX.live.status.tip_timestamp + 1000 });
+  const begun = c.begin();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(c.state.busy, true, 'the first read is in flight (its blocks have not arrived)');
+  // the person picks 500 blocks meanwhile
+  const sel = rootEl.querySelector('[data-ob-window]');
+  sel.value = '500';
+  sel.dispatchEvent(new dom.window.Event('change'));
+  assert.equal(c.state.windowSize, 500);
+  assert.match(txt(rootEl, '[data-ob-window-note]'), /^Reading the newest 500 blocks…$/, 'the select does not sit on stale data without saying so');
+  gate();
+  await begun;
+  await new Promise((r) => setTimeout(r, 150));
+  c.stop();
+  assert.equal(log.filter((x) => x === 'raw 200').length, 1);
+  assert.ok(log.includes('raw 500'), 'a read for 500 blocks followed: ' + log.join());
+  assert.equal(c.state.busy, false);
+  assert.match(txt(rootEl, '[data-ob-window-note]'), /^Window: the newest \d+ blocks/, 'the note is the drawn window again');
+  assert.equal(rootEl.dataset.state, 'ready');
+  // Read now pressed twice while busy makes one more read, not a stack of them
+  first = true;
+  const before = log.length;
+  const p1 = c.read(null);
+  await new Promise((r) => setTimeout(r, 20));
+  c.read(null);
+  c.read(null);
+  gate();
+  await p1;
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(log.length - before, 2, 'the read in flight plus exactly one more: ' + log.slice(before).join());
+});
+
 test('the window selector and Read now each read again, and the selector offers 50, 200 and 500', async () => {
   const log = [];
   const { c, rootEl, dom } = mountView({ name: 'local', log });

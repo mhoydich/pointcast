@@ -248,7 +248,7 @@ export function mount(root, env = {}) {
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {}, said: '', failures: 0 };
+  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {}, said: '', failures: 0, queued: false };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   // The status line is a polite live region: it is written only when its words change (a state change: reading, ready, down, genesis
   // changed, back up). The time of the last read lives in the meta line, which is not live, so a quiet devnet announces nothing.
@@ -382,7 +382,10 @@ export function mount(root, env = {}) {
   }
 
   async function read(parts) {
-    if (S.busy || S.halted) return;
+    if (S.halted) return;
+    // A read is in flight: remember to read once more when it ends, so a window picked (or Read now pressed) meanwhile is not dropped
+    // and the select never disagrees with the data for a minute.
+    if (S.busy) { S.queued = true; return; }
     S.busy = true;
     root.dataset.busy = 'yes';
     try {
@@ -419,6 +422,8 @@ export function mount(root, env = {}) {
       S.busy = false;
       root.dataset.busy = 'no';
     }
+    if (S.queued && !S.halted) { S.queued = false; return read(null); }
+    S.queued = false;
   }
 
   async function poll() {
@@ -449,7 +454,7 @@ export function mount(root, env = {}) {
   if (sel) {
     sel.replaceChildren(...O.WINDOWS.map((n) => { const o = el(doc, 'option', '', 'newest ' + n + ' blocks'); o.value = String(n); o.selected = n === S.windowSize; return o; }));
     sel.disabled = false;
-    sel.addEventListener('change', () => { const n = Number(sel.value); if (O.WINDOWS.includes(n)) { S.windowSize = n; read(null); } });
+    sel.addEventListener('change', () => { const n = Number(sel.value); if (O.WINDOWS.includes(n)) { S.windowSize = n; set('[data-ob-window-note]', 'Reading the newest ' + n + ' blocks…'); read(null); } });
   }
   if (live) { live.disabled = false; live.checked = true; live.addEventListener('change', () => { S.live = live.checked; say(S.live ? 'Live is on.' : 'Live is off: press Read now to update.', root.dataset.state); }); }
   if (go) { go.disabled = false; go.addEventListener('click', () => read(null)); }
