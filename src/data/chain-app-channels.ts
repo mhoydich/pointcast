@@ -114,12 +114,12 @@ export const MODERATION: { title: string; text: string }[] = [
     text: 'The devnet reads the body of a post when it is stored (POST /body) and refuses what matches a small, best-effort list, answering “kept off the devnet by its word filter”. Expect misses and the odd false alarm. The page shows that answer word for word and sends nothing else.',
   },
   {
-    title: 'What the word filter does not read',
-    text: 'It does not read a post’s title, a station’s code or a station’s name: those go onto the chain exactly as you sign them. A title or a name that would have been refused in a body can still be sealed.',
+    title: 'What the word filter also reads',
+    text: 'Since 2026-10-20 the same list also reads a station’s name and the title of a signed post (hex digests in a title are masked first), and refuses with 422, “kept off the devnet by its word filter”. It does not read a station’s code, which is capital letters and digits you choose. The list is small: a title or name can still slip past it, and the odd harmless one is held back.',
   },
   {
     title: 'What this page does about names and titles',
-    text: 'Because the devnet does not read them, this page keeps a short word list of its own (the same one as the first-mints handle filter). It will not seal a station name or a post title that is on it, and it shows a name or a title it reads from the devnet that is on it as “[held back by this page’s word list]”. That is the page’s rule, not the chain’s: the chain still holds the real text, the devnet’s own views show it, and anyone who calls the chain directly can still seal one. The list is short and best-effort: expect a miss, and the odd harmless name held back.',
+    text: 'On top of the devnet’s filter, this page keeps a short word list of its own (the same one as the first-mints handle filter). It will not seal a station name or a post title that is on it, and it shows a name or a title it reads from the devnet that is on it as “[held back by this page’s word list]”. That is the page’s rule, not the chain’s: the chain still holds the real text, the devnet’s own views show it, and a word the devnet’s list does not know can still be sealed. The list is short and best-effort: expect a miss, and the odd harmless name held back.',
   },
   {
     title: 'The house can hide a post',
@@ -135,7 +135,7 @@ export const MODERATION: { title: string; text: string }[] = [
   },
   {
     title: 'The page’s own guards',
-    text: 'The page broadcasts only to a channel you own or crew, never to a house code or a code the house holds, and does not offer a claim on a code the devnet’s own lanes use. These are guards in the page. The chain, called directly, allows more.',
+    text: 'The page broadcasts only to a channel you own or crew, never to a house code or a code the house holds, and does not offer a claim on a code the devnet’s own lanes use. For six of those (BOT, DLY, NET, NOTARY, OBS, WIT) the devnet’s door also refuses a claim, with 403 station_reserved. The other guards are the page’s own: the chain, called directly, allows more.',
   },
 ];
 
@@ -153,8 +153,8 @@ export const NOT_LIST: string[] = [
  * pin or a standing offer already on the station is sent back unchanged, and it
  * stores a body by its hash before it posts. It refuses to claim a code that
  * something else posts to (RESERVED_LANES), as the page does, before it reads or
- * sends anything: the chain would take such a claim, and a crew-mode claim would
- * lock that lane out for good. Plain strings, no template literals.
+ * sends anything: the devnet’s door refuses such a claim (403 station_reserved), and a
+ * crew-mode claim would otherwise lock that lane out for good. Plain strings, no template literals.
  */
 export function codeSnippet(devnet: string, genesis: string): string {
   return [
