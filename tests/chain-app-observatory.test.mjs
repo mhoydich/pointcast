@@ -1045,6 +1045,22 @@ test('no banned word and no currency sign anywhere in the app’s files, and the
   assert.deepEqual(currencyHits('a template ' + String.fromCharCode(36) + '{x} and a regex /a' + String.fromCharCode(36) + '/'), []);
 });
 
+test('a focused chart mark is clearly marked: an ink outline and stroke over a visible fill, never a 14% tint with the outline removed', () => {
+  const css = src.page.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rule = (sel) => (css.match(new RegExp(sel.replace(/[.:()]/g, '\\$&') + '\\{([^}]*)\\}')) || [])[1] || '';
+  const focus = rule('.chn .ob-hit:focus-visible');
+  assert.ok(focus, 'there is a focus-visible rule for the marks');
+  assert.doesNotMatch(focus, /outline\s*:\s*none|outline\s*:\s*0\b/, 'the outline is not removed');
+  assert.match(focus, /outline\s*:\s*2px solid var\(--pc-ink\)/, 'a 2px ink outline');
+  assert.match(focus, /stroke\s*:\s*var\(--pc-ink\)/);
+  assert.match(focus, /stroke-width\s*:\s*2\b/);
+  const opacity = Number((focus.match(/fill-opacity\s*:\s*([0-9.]+)/) || [])[1]);
+  assert.ok(opacity >= 0.3, 'the fill is at least 30%, was 14%: ' + opacity);
+  // hover keeps its light tint; it is not the keyboard cue
+  assert.match(rule('.chn .ob-hit:hover'), /fill-opacity\s*:\s*\.14/);
+  assert.doesNotMatch(css, /\.ob-hit:hover,\.chn \.ob-hit:focus-visible/, 'hover and focus are no longer one rule');
+});
+
 test('the page is accessible and responsive by construction: labelled controls, status regions, a table view for every chart, no fixed widths', () => {
   assert.match(src.page, /<label class="ca-label" for="ob-window">/);
   assert.match(src.page, /data-ob-status role="status" aria-live="polite"/);
