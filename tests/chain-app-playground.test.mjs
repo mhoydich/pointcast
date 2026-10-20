@@ -1385,6 +1385,22 @@ test('the three setup blocks are /chain/bots’ own lines, character for charact
   assert.doesNotMatch(page + dataSrc + lib, /workers\.dev|[0-9a-f]{64}/, 'no devnet constant is retyped here');
 });
 
+test('--pg-bad is defined on the page root itself: error text, invalid borders and bad results get their red', () => {
+  const css = code(PAGE_STYLE);
+  // the root element carries both classes on one node, so the rule that defines the colour must match that node (a descendant selector cannot)
+  assert.match(page, /<div\s+class="chn pg"/, 'the root is class="chn pg"');
+  const dom = new JSDOM('<!doctype html><div class="chn pg" data-pg><p class="pg-err"></p><ul><li class="pg-out" data-bad="yes"><span class="pg-out__line"></span></li></ul></div>');
+  const rootEl = dom.window.document.querySelector('[data-pg]');
+  const definers = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => /--pg-bad\s*:/.test(m[2])).flatMap((m) => m[1].split(',').map((x) => x.trim()));
+  assert.ok(definers.length >= 1, 'something defines --pg-bad');
+  assert.ok(definers.some((sel) => rootEl.matches(sel)), '--pg-bad is set on the root, which its users inherit from: ' + definers.join(' | '));
+  assert.ok(!definers.includes('.chn .pg'), 'not by a descendant selector, which can never match the root');
+  // every use of the variable (outside the one fallback) is on the root or inside it, where the root's value is inherited
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*var\(--pg-bad[^{}]*)\}/g)) for (const sel of m[1].split(',').map((x) => x.trim())) assert.ok(/^\.chn /.test(sel) || /^\.chn\.pg/.test(sel), sel);
+  // a value is defined, not just referenced
+  assert.match(css, /--pg-bad:#b3001b/);
+});
+
 test('the page keeps the BLOCKS grammar: square corners, 1.5px borders, weights 400 and 500, tokens, focus, reduced motion', () => {
   const css = code(PAGE_STYLE);
   assert.doesNotMatch(css, /border-radius\s*:\s*(?!0\b)[1-9]/, 'no rounded corners');
