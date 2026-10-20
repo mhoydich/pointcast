@@ -248,7 +248,7 @@ export function mount(root, env = {}) {
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {}, said: '', failures: 0, queued: false };
+  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {}, said: '', failures: 0, queued: false, clockChecked: false, watch: { height: -1, at: 0 } };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   // The status line is a polite live region: it is written only when its words change (a state change: reading, ready, down, genesis
   // changed, back up). The time of the last read lives in the meta line, which is not live, so a quiet devnet announces nothing.
@@ -277,7 +277,8 @@ export function mount(root, env = {}) {
       set('[data-ob-s="age"]', 'The devnet did not answer the last ' + plural(S.failures, 'check') + '. These numbers are from the last read, ' + utcClock(S.data.readAt + S.skew) + '.');
       return;
     }
-    const h = O.healthOf(st.tipTimestamp, now() + S.skew);
+    if (S.watch.height !== st.height) S.watch = { height: st.height, at: now() };
+    const h = O.healthOf(st.tipTimestamp, now() + S.skew, O.HEARTBEAT_MS, { clockChecked: S.clockChecked, stillMs: now() - S.watch.at });
     root.dataset.health = h.state;
     set('[data-ob-v="age"]', h.ageMs === null ? '–' : duration(h.ageMs) + ' ago');
     set('[data-ob-health-mark]', HEALTH_MARK[h.state]);
@@ -403,6 +404,8 @@ export function mount(root, env = {}) {
       S.data = d;
       S.failures = 0;
       S.skew = d.daily ? O.clockSkew(d.daily, d.readAt) || S.skew : S.skew;
+      // `d.daily` is null when /daily could not be read (the last skew stands, but it is not a fresh check); a lot that is closed says nothing.
+      S.clockChecked = d.daily ? O.clockChecked(d.daily, d.readAt) : S.clockChecked;
       S.lastHeight = d.status.height;
       if (d.window) S.lastWindowAt = now();
       genesisNote(false);

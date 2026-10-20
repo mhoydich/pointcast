@@ -185,12 +185,31 @@ export function paceWords(perHour) {
  * five minutes otherwise, so a tip older than about six minutes is "late" and
  * older than fifteen is "stalled". `now` and `tipTs` are in ms.
  */
-export function healthOf(tipTs, now, heartbeatMs = HEARTBEAT_MS) {
+export function healthOf(tipTs, now, heartbeatMs = HEARTBEAT_MS, { clockChecked = true, stillMs = null } = {}) {
   if (!Number.isFinite(tipTs) || tipTs <= 0 || !Number.isFinite(now)) return { state: 'unknown', ageMs: null, words: 'The age of the newest block is not known.' };
   const ageMs = Math.max(0, now - tipTs);
-  if (ageMs <= heartbeatMs * 1.2) return { state: 'live', ageMs, words: 'Sealing on schedule: an idle devnet seals one heartbeat block every five minutes, a busy one every three seconds.' };
-  if (ageMs <= heartbeatMs * 3) return { state: 'late', ageMs, words: 'The newest block is older than a heartbeat. The sequencer may be restarting.' };
-  return { state: 'stalled', ageMs, words: 'No block for a long while. The devnet may be paused or down; it is a single server and may reset.' };
+  const state = ageMs <= heartbeatMs * 1.2 ? 'live' : ageMs <= heartbeatMs * 3 ? 'late' : 'stalled';
+  const words = {
+    live: 'Sealing on schedule: an idle devnet seals one heartbeat block every five minutes, a busy one every three seconds.',
+    late: 'The newest block is older than a heartbeat. The sequencer may be restarting.',
+    stalled: 'No block for a long while. The devnet may be paused or down; it is a single server and may reset.',
+  };
+  if (clockChecked) return { state, ageMs, words: words[state] };
+  // No open lot, so this browser's clock cannot be checked against the devnet's (clockSkew has nothing to work from). A visitor
+  // clock minutes fast would turn a live devnet LATE. LATE and STALLED are claimed only if the page's own reads agree: it has watched
+  // the same newest block stand for as long as that state needs (a span on one clock, so an offset cancels out).
+  const note = ' This is judged by your own clock, which cannot be checked against the devnet’s while no lot is open.';
+  if (state === 'live') return { state, ageMs, words: words.live + note };
+  const needed = heartbeatMs * (state === 'late' ? 1.2 : 3);
+  if (Number.isFinite(stillMs) && stillMs > needed) return { state, ageMs, words: words[state] + note + ' This page has also watched the same newest block stand still for ' + Math.round(stillMs / 60000) + ' min.' };
+  return { state: 'unknown', ageMs, words: 'By your clock the newest block is old, but that clock cannot be checked against the devnet’s while no lot is open, and this page has not watched the newest block stand still long enough to say the devnet is ' + state + '. No claim is made.' };
+}
+
+/** Can this browser's clock be checked against the devnet's? Only through the open lot's close time (see clockSkew). */
+export function clockChecked(daily, readAtClient) {
+  const lot = daily && daily.lot;
+  if (!lot || !Number.isFinite(lot.closeAt) || !Number.isFinite(lot.closesInMs) || !Number.isFinite(readAtClient)) return false;
+  return Math.abs(lot.closeAt - lot.closesInMs - readAtClient) < 7 * 86400000;
 }
 
 // ---------------------------------------------------------------- the other reads
@@ -324,9 +343,11 @@ export async function refresh(net, { pinned = null, windowSize = DEFAULT_WINDOW,
     try { return await f(); } catch { missing.push(name); return fallback; }
   };
   const want = (k) => !parts || parts.includes(k);
+  // The clock probe is the lot's close time against the moment GET /daily was answered, not the moment the last of nine reads ended.
+  let dailyAt = null;
   const [win, daily, netj, cps, caps, eds, sts, bots] = await Promise.all([
     want('window') ? guard('blocks', () => readWindow(net, st.height, windowSize)) : null,
-    want('daily') ? guard('daily', async () => readDaily(await net.get('/daily'))) : null,
+    want('daily') ? guard('daily', async () => { const j = await net.get('/daily'); dailyAt = now(); return readDaily(j); }) : null,
     want('net') ? guard('net', async () => readNet(await net.get('/net'))) : null,
     want('net') ? guard('checkpoints', async () => readCheckpoints(await net.get('/checkpoints'))) : null,
     want('capsules') ? guard('capsules', async () => readCapsules(await net.get('/capsules'))) : null,
@@ -347,7 +368,7 @@ export async function refresh(net, { pinned = null, windowSize = DEFAULT_WINDOW,
     bots,
     missing,
     requests: net.count - startedAt,
-    readAt: now(),
+    readAt: dailyAt !== null ? dailyAt : now(),
   };
 }
 

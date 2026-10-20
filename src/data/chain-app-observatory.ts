@@ -36,7 +36,7 @@ export const NOT_LIST: string[] = [
   'It does not check anything. Use Verify a block to recompute hashes and seals, or the Block Yard to replay every block. A number here is what one server says.',
   'The seal rate is measured, not promised. The Worker seals when there is traffic and otherwise once every five minutes, so a quiet devnet shows about 12 blocks an hour.',
   'Keys are not people. A sender is an address; a busy sender may be one script. Keyless bots post through house keys under a name that is a claim, not an identity.',
-  'The devnet’s clock reaches this page by one route only, the open lot’s close time, so the “age” of the newest block is worked out against that and may be a second or two off.',
+  'The devnet’s clock reaches this page by one route only, the open lot’s close time. While a lot is open the “age” of the newest block is worked out against that and may be a second or two off. When no lot is open (the Daily Mint is off, or between lots) the badge uses your own clock, which cannot be checked: it then says so, and says LATE or STALLED only if this page has itself watched the newest block stand still that long.',
   'devnet: no value, may reset. A reset starts every count at zero and is dated and recorded, never silent.',
 ];
 

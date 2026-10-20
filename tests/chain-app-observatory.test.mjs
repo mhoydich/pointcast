@@ -261,6 +261,77 @@ test('healthOf: live, late, stalled and unknown, on the heartbeat the devnet kee
   assert.match(O.healthOf(t, t + 1).words, /heartbeat/);
 });
 
+test('with no open lot the badge says it uses the visitor’s clock, and claims LATE or STALLED only if the page itself watched the tip stand still', () => {
+  const t = 1_000_000;
+  const tipAge = 30_000;
+  // a visitor clock nine minutes fast, tip 30 s old: with no lot the page cannot know (it used to say LATE)
+  const fast = t + tipAge + 9 * 60000;
+  assert.equal(O.healthOf(t, fast).state, 'late', 'trusting that clock gives LATE (the default path, used when the clock is checked)');
+  const unchecked = O.healthOf(t, fast, 300000, { clockChecked: false, stillMs: 0 });
+  assert.equal(unchecked.state, 'unknown', 'an unchecked clock alone does not make a devnet LATE');
+  assert.match(unchecked.words, /By your clock the newest block is old, but that clock cannot be checked against the devnet’s while no lot is open/);
+  assert.match(unchecked.words, /No claim is made\./);
+  // when the page has watched the same newest block stand still past a heartbeat (a span on one clock), LATE stands, with the caveat
+  const watched = O.healthOf(t, t + 400000, 300000, { clockChecked: false, stillMs: 400000 });
+  assert.equal(watched.state, 'late');
+  assert.match(watched.words, /judged by your own clock, which cannot be checked against the devnet’s while no lot is open\. This page has also watched the same newest block stand still for 7 min\./);
+  assert.equal(O.healthOf(t, t + 1000000, 300000, { clockChecked: false, stillMs: 400000 }).state, 'unknown', 'stalled needs more watching than late');
+  assert.equal(O.healthOf(t, t + 1000000, 300000, { clockChecked: false, stillMs: 1000000 }).state, 'stalled');
+  // live on an unchecked clock is still live, and says by whose clock
+  const live = O.healthOf(t, t + 10000, 300000, { clockChecked: false, stillMs: 0 });
+  assert.equal(live.state, 'live');
+  assert.match(live.words, /judged by your own clock/);
+  // a checked clock is judged as before, with no caveat
+  assert.doesNotMatch(O.healthOf(t, t + 10000, 300000, { clockChecked: true }).words, /your own clock/);
+  // the probe: only an open lot with both numbers lets the clock be checked, readAt being when /daily was answered
+  const daily = { lot: { closeAt: 2_000_000, closesInMs: 600_000 } };
+  assert.equal(O.clockChecked(daily, 1_400_000), true);
+  for (const bad of [null, {}, { lot: null }, { lot: { closeAt: 1 } }, { lot: { closeAt: 2_000_000, closesInMs: null } }]) assert.equal(O.clockChecked(bad, 1_400_000), false);
+  assert.equal(O.clockChecked(daily, NaN), false);
+  assert.equal(O.clockChecked(daily, 1_400_000_000_000), false, 'a skew over a week is not believed, as in clockSkew');
+  // the copy says it
+  assert.ok(NOT_LIST.some((x) => /When no lot is open[\s\S]*the badge uses your own clock, which cannot be checked/.test(x)));
+  assert.ok(!NOT_LIST.some((x) => /may be a second or two off\.$/.test(x)), 'the copy no longer promises a second or two for every case');
+});
+
+test('the clock probe is taken when GET /daily is answered, not when the last of the nine reads ends', async () => {
+  let clock = 1000;
+  const slowRest = (path) => async () => { await new Promise((r) => setTimeout(r, 30)); clock += 5000; const fx = FIX.local; const bodies = { '/net': fx.net, '/checkpoints': fx.checkpoints, '/capsules': fx.capsules, '/editions': fx.editions, '/stations': fx.stations, '/bots': fx.bots }; return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(bodies[path]) }; };
+  const overrides = { '/daily': async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(FIX.local.daily) }), '/net': slowRest('/net'), '/checkpoints': slowRest('/checkpoints'), '/capsules': slowRest('/capsules'), '/editions': slowRest('/editions'), '/stations': slowRest('/stations'), '/bots': slowRest('/bots') };
+  const stamps = [];
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: async (u, i) => { const base = fakeFetch('local', { overrides }); stamps.push(new URL(String(u)).pathname + '@' + clock); return base(u, i); } });
+  const d = await O.refresh(net, { pinned: FIX.local.status.genesis_hash, now: () => clock });
+  const dailyAt = Number(stamps.find((x) => x.startsWith('/daily@')).split('@')[1]);
+  const lastAt = clock;
+  assert.ok(lastAt > dailyAt, 'the other reads ended later: ' + stamps.join(' '));
+  assert.equal(d.readAt, dailyAt, 'readAt is when /daily answered');
+  assert.notEqual(d.readAt, lastAt);
+  // with /daily unreadable, readAt falls back to the end of the read
+  const noDaily = await O.refresh(net, { pinned: FIX.local.status.genesis_hash, now: () => clock, parts: ['net'] });
+  assert.equal(noDaily.readAt, clock);
+});
+
+test('the badge with no open lot: the page names whose clock it used and does not call a live devnet LATE', async () => {
+  const noLot = { ...FIX.local.daily, lot: null };
+  const overrides = { '/daily': async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(noLot) }) };
+  // the visitor's clock is nine minutes fast; the newest block is 30 s old in the devnet's own time
+  const tip = FIX.local.status.tip_timestamp;
+  const { rootEl, c } = mountView({ name: 'local', overrides, now: () => tip + 30000 + 9 * 60000 });
+  await c.begin();
+  c.stop();
+  assert.equal(c.state.clockChecked, false);
+  assert.equal(rootEl.dataset.health, 'unknown', 'not LATE: the clock cannot be checked');
+  assert.equal(txt(rootEl, '[data-ob-health-word]'), 'UNKNOWN');
+  assert.match(txt(rootEl, '[data-ob-s="age"]'), /cannot be checked against the devnet’s while no lot is open/);
+  // with an open lot the clock IS checked, and the page judges by the devnet's time as before
+  const open = mountView({ name: 'local' });
+  await open.c.begin();
+  open.c.stop();
+  assert.equal(open.c.state.clockChecked, true);
+  assert.equal(open.rootEl.dataset.health, 'live');
+  assert.doesNotMatch(txt(open.rootEl, '[data-ob-s="age"]'), /your own clock/);
+});
+
 test('paceWords says busy, mixed or quiet without claiming more than the number shows', () => {
   assert.match(O.paceWords(1200), /busy/);
   assert.match(O.paceWords(42), /bursts/);
