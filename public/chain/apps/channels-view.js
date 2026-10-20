@@ -21,6 +21,8 @@ import { mountKeyPanel } from './key-panel.js';
 import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, resolveApi, sendFailureText, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
 
 const POLL_MS = 20000;
+/** How long typing must pause before a polite line says what the plain-text counter or hint now says. */
+const TYPING_MS = 800;
 
 function el(doc, tag, cls, text) {
   const n = doc.createElement(tag);
@@ -59,11 +61,29 @@ export function mount(root, env = {}) {
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const S = {
     begun: false, halted: false, status: null, list: null, launch: null, world: null, scan: C.newScan(), rows: [], selected: '', filter: 'all', chain: null, timer: 0, busy: false,
-    claim: { plan: null }, mode: { code: '', name: '', modeValue: 'open', crew: [], base: '', plan: null }, post: { plan: null }, more: false, dirSig: '', detailSig: '', feedSig: '', crewSig: '', feedCode: '', feedTop: '',
+    claim: { plan: null }, mode: { code: '', name: '', modeValue: 'open', crew: [], base: '', plan: null }, post: { plan: null }, over: false, more: false, dirSig: '', detailSig: '', feedSig: '', crewSig: '', feedCode: '', feedTop: '',
   };
   // A line that has not changed is left alone, so a live region does not announce the same words again on every poll.
   const put = (n, text) => { if (n && n.textContent !== text) n.textContent = text; };
   const set = (sel, text) => put(q(sel), text);
+  // A counter or a hint that changes on every key is plain text; a separate polite line follows it, so a screen reader is not read
+  // a counter over its own typing echo. The line is written once typing pauses (or at once for a limit crossed or a poll).
+  const typingMs = env.typingMs !== undefined ? env.typingMs : TYPING_MS;
+  const pausing = new Map();
+  function speak(sel, compute, { typing = false, now = false } = {}) {
+    const n = q(sel);
+    if (!n) return;
+    const pending = pausing.get(sel);
+    if (now || !typing) {
+      // a pause already on its way will say the latest words; a poll or a crossed limit must not jump the queue unless it is urgent
+      if (pending && !now) return;
+      if (pending) { win.clearTimeout(pending); pausing.delete(sel); }
+      put(n, compute());
+      return;
+    }
+    if (pending) win.clearTimeout(pending);
+    pausing.set(sel, win.setTimeout(() => { pausing.delete(sel); put(n, compute()); }, typingMs));
+  }
   const say = (text, state) => { set('[data-cc-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
   const keys = panel ? mountKeyPanel(panel, { window: win, storage: env.storage, supported: env.supported }) : null;
@@ -268,15 +288,17 @@ export function mount(root, env = {}) {
     if (c) { c.value = code; withdrawClaim(); paintClaimHint(); try { c.focus(); } catch { /* a detached node cannot take focus */ } }
   }
 
-  function paintClaimHint() {
+  function paintClaimHint({ typing = false } = {}) {
     const hint = q('[data-cc-claim-hint]');
     const input = q('[data-cc-claim-code]');
     if (!hint || !input) return;
-    if (!input.value.trim()) { put(hint, 'Type a code. Lower case is made upper case for you.'); hint.dataset.bad = 'no'; return; }
-    if (!S.world || !S.world.list) { put(hint, 'Reading the devnet…'); hint.dataset.bad = 'no'; return; }
+    const say = () => speak('[data-cc-claim-hint-live]', () => hint.textContent, { typing });
+    if (!input.value.trim()) { put(hint, 'Type a code. Lower case is made upper case for you.'); hint.dataset.bad = 'no'; say(); return; }
+    if (!S.world || !S.world.list) { put(hint, 'Reading the devnet…'); hint.dataset.bad = 'no'; say(); return; }
     const c = C.checkClaimable(input.value, me(), S.world);
     put(hint, c.message);
     hint.dataset.bad = c.ok ? 'no' : 'yes';
+    say();
     const held = me() ? C.heldBy(S.world, me()) : 0;
     set('[data-cc-held]', me() && S.world.max ? 'This key holds ' + held + ' of the ' + S.world.max + ' stations one account may hold.' : S.world.max ? 'One account may hold ' + S.world.max + ' stations; the house’s own codes count against nobody.' : '');
   }
@@ -541,7 +563,7 @@ export function mount(root, env = {}) {
     return C.planBroadcast({ station: code ? station(code) : null, sender: me(), title: (q('[data-cc-post-title]') || {}).value || '', body: (q('[data-cc-post-body]') || {}).value || '', world: S.world || C.makeWorld() });
   }
 
-  function paintPreview() {
+  function paintPreview({ typing = false } = {}) {
     const p = readPost();
     const host = q('[data-cc-preview]');
     if (!host) return;
@@ -553,7 +575,14 @@ export function mount(root, env = {}) {
     set('[data-cc-preview-body]', b.trim() || '(a body)');
     set('[data-cc-preview-meta]', 'Not sent · signed by ' + (me() || 'no key yet') + ' · ' + (S.status ? S.status.chainId : 'devnet') + ' · no value · may reset');
     const tb = new TextEncoder().encode(b.replace(/\r\n?/g, '\n').trim()).length;
-    set('[data-cc-post-count]', Array.from(t.trim()).length + ' of ' + C.LIMITS.title + ' characters in the title · ' + groups(tb) + ' of ' + groups(C.LIMITS.bodyBytes) + ' bytes in the body');
+    const chars = Array.from(t.trim()).length;
+    const countText = chars + ' of ' + C.LIMITS.title + ' characters in the title · ' + groups(tb) + ' of ' + groups(C.LIMITS.bodyBytes) + ' bytes in the body';
+    set('[data-cc-post-count]', countText);
+    // the polite line is written only after typing, at the pause, or at once when a limit has just been crossed
+    const over = chars > C.LIMITS.title || tb > C.LIMITS.bodyBytes;
+    const crossed = over && !S.over;
+    S.over = over;
+    if (typing) speak('[data-cc-post-count-live]', () => countText, { typing: true, now: crossed });
     host.dataset.ok = p.ok ? 'yes' : 'no';
   }
 
@@ -682,7 +711,7 @@ export function mount(root, env = {}) {
   on('[data-cc-lookup]', 'keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); const b = q('[data-cc-lookup-go]'); if (b) b.click(); } });
   on('[data-cc-refresh]', 'click', () => refresh({ feed: true }));
   on('[data-cc-older]', 'click', readOlder);
-  on('[data-cc-claim-code]', 'input', () => { withdrawClaim(); paintClaimHint(); });
+  on('[data-cc-claim-code]', 'input', () => { withdrawClaim(); paintClaimHint({ typing: true }); });
   on('[data-cc-claim-name]', 'input', withdrawClaim);
   on('[data-cc-claim-mode]', 'change', withdrawClaim);
   on('[data-cc-claim-review]', 'click', showClaimConfirm);
@@ -698,8 +727,8 @@ export function mount(root, env = {}) {
   on('[data-cc-set-send]', 'click', sendMode);
   on('[data-cc-set-cancel]', 'click', () => { show('[data-cc-set-confirm]', false); S.mode.plan = null; });
   on('[data-cc-post-channel]', 'change', () => { show('[data-cc-post-confirm]', false); S.post.plan = null; paintPreview(); });
-  on('[data-cc-post-title]', 'input', () => { show('[data-cc-post-confirm]', false); S.post.plan = null; paintPreview(); });
-  on('[data-cc-post-body]', 'input', () => { show('[data-cc-post-confirm]', false); S.post.plan = null; paintPreview(); });
+  on('[data-cc-post-title]', 'input', () => { show('[data-cc-post-confirm]', false); S.post.plan = null; paintPreview({ typing: true }); });
+  on('[data-cc-post-body]', 'input', () => { show('[data-cc-post-confirm]', false); S.post.plan = null; paintPreview({ typing: true }); });
   on('[data-cc-post-review]', 'click', showPostConfirm);
   on('[data-cc-post-send]', 'click', sendPost);
   on('[data-cc-post-cancel]', 'click', () => { show('[data-cc-post-confirm]', false); S.post.plan = null; });
@@ -742,7 +771,7 @@ export function mount(root, env = {}) {
     sendPost,
     loadMine,
     paintPreview,
-    stop() { win.clearInterval(S.timer); },
+    stop() { win.clearInterval(S.timer); for (const t of pausing.values()) win.clearTimeout(t); pausing.clear(); },
   };
 }
 

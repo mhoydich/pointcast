@@ -1373,6 +1373,64 @@ test('a poll that finds nothing new writes to no live region at all, even with t
   await quiet('a key, a channel open, a post being written');
 });
 
+/** Count the writes to one node (a text node replaced counts), counting even a write of the same words. */
+function writesTo(dom, node) {
+  const hits = [];
+  new dom.window.MutationObserver((records) => hits.push(...records)).observe(node, { subtree: true, childList: true, characterData: true });
+  return async () => { await tick(0); return hits.length; };
+}
+
+test('typing speaks nothing per keystroke: the counters and the claim hint are plain text while you type, and a polite line follows once you pause or cross a limit', async () => {
+  const { rootEl, c, dom } = mountView({ extra: { typingMs: 40 } });
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed(SEEDS.owner);
+  await tick(30);
+  const liveRegion = (node) => node.closest('[aria-live], [role="status"], [role="alert"]');
+  // the visible counter and hint are not live regions; a separate polite line is
+  const countLive = $(rootEl, '[data-cc-post-count-live]');
+  const hintLive = $(rootEl, '[data-cc-claim-hint-live]');
+  assert.ok(countLive && hintLive, 'the page has a polite line for each');
+  for (const sel of ['[data-cc-post-count]', '[data-cc-claim-hint]']) {
+    assert.equal(liveRegion($(rootEl, sel)), null, sel + ' is not a live region');
+    assert.equal($(rootEl, sel).getAttribute('aria-live'), null);
+    assert.equal($(rootEl, sel).getAttribute('role'), null);
+  }
+  for (const n of [countLive, hintLive]) assert.equal(n.getAttribute('aria-live'), 'polite');
+  // (a) eleven characters in the body: the visible count follows each key, the polite line is not written until a pause
+  type(dom, $(rootEl, '[data-cc-post-channel]'), 'MYCH', 'change');
+  const countWrites = writesTo(dom, countLive);
+  const body = $(rootEl, '[data-cc-post-body]');
+  let text = '';
+  const seen = new Set();
+  for (const ch of 'hello-world') { text += ch; type(dom, body, text); seen.add(txt(rootEl, '[data-cc-post-count]')); }
+  assert.equal(seen.size, 11, 'the visible counter changed on every key');
+  assert.equal(await countWrites(), 0, 'no polite line while typing');
+  await tick(150);
+  assert.equal(await countWrites(), 1, 'one polite line once typing stopped');
+  assert.equal(countLive.textContent, txt(rootEl, '[data-cc-post-count]'));
+  assert.match(countLive.textContent, /0 of 120 characters in the title · 11 of 4,000 bytes in the body/);
+  // (b) crossing a limit is said at once, not after a pause
+  const before = await countWrites();
+  type(dom, $(rootEl, '[data-cc-post-title]'), 'x'.repeat(121));
+  assert.equal(await countWrites(), before + 1, 'crossing the title limit is announced straight away');
+  assert.match(countLive.textContent, /^121 of 120 characters in the title/);
+  // (c) four characters in the claim code
+  const hintWrites = writesTo(dom, hintLive);
+  const code = $(rootEl, '[data-cc-claim-code]');
+  const hints = new Set();
+  let typed = '';
+  for (const ch of 'newx') { typed += ch; type(dom, code, typed); hints.add(txt(rootEl, '[data-cc-claim-hint]')); }
+  assert.equal(hints.size, 4, 'the visible hint followed every key');
+  assert.equal(await hintWrites(), 0, 'no polite line while typing a code');
+  await tick(150);
+  assert.equal(await hintWrites(), 1);
+  assert.equal(hintLive.textContent, '“NEWX” is free. First come, first served: the first claim the devnet seals wins it.');
+  // a poll afterwards leaves both polite lines alone
+  await c.refresh({ feed: true });
+  assert.equal(await hintWrites(), 1);
+});
+
 test('the Enter key does what the button next to it does, and a new key clears the form for the channel that was open', async () => {
   const { rootEl, c, dom } = mountView({ dev: stationsDevnet({ stations: [{ code: 'MYCH', owner: OWNER_ADDR, name: 'My channel', mode: 'open', crew: [] }] }) });
   await c.begin();
@@ -1448,8 +1506,13 @@ test('the controls are real controls and the page is usable from the keyboard al
   }
   assert.equal(doc.querySelectorAll('fieldset legend').length, 2, 'each radio group has a legend');
   for (const r of doc.querySelectorAll('input[type="radio"]')) assert.ok(r.closest('label'), 'a radio is inside its label');
-  for (const sel of ['[data-cc-status]', '[data-cc-claim-hint]', '[data-cc-held]', '[data-cc-mine-note]', '[data-cc-crew-note]', '[data-cc-set-explain]', '[data-cc-post-note]', '[data-cc-post-count]', '[data-cc-lookup-note]', '[data-cc-feed-note]', '[data-cc-claim-result]', '[data-cc-set-result]', '[data-cc-post-result]']) {
+  for (const sel of ['[data-cc-status]', '[data-cc-claim-hint-live]', '[data-cc-held]', '[data-cc-mine-note]', '[data-cc-crew-note]', '[data-cc-set-explain]', '[data-cc-post-note]', '[data-cc-post-count-live]', '[data-cc-lookup-note]', '[data-cc-feed-note]', '[data-cc-claim-result]', '[data-cc-set-result]', '[data-cc-post-result]']) {
     assert.match(doc.querySelector(sel).getAttribute('aria-live') || '', /polite/, sel + ' is a polite live region');
+  }
+  // what changes on every key is plain text, with a hidden polite twin that is written once typing pauses
+  for (const sel of ['[data-cc-claim-hint]', '[data-cc-post-count]']) {
+    assert.equal(doc.querySelector(sel).getAttribute('aria-live'), null, sel + ' is not a live region');
+    assert.equal(doc.querySelector(sel).getAttribute('role'), null, sel + ' has no live role');
   }
   for (const sel of ['[data-cc-claim-errors]', '[data-cc-set-errors]', '[data-cc-post-errors]']) assert.equal(doc.querySelector(sel).getAttribute('role'), 'alert', sel);
   assert.ok(doc.querySelector('table caption'));
