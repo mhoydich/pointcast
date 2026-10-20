@@ -303,10 +303,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   // Independent paper rooms omit visit logging, session injection and global
   // HTML transforms. Neighboring routes retain their existing behavior.
-  const paperRooms = ['/nouns-money/workshop/', '/ues/currency-lab/'];
+  const paperRooms = ['/nouns-money/workshop/', '/ues/currency-lab/', '/case-studies/launchpad/'];
   if (isGet || request.method === 'HEAD') {
     for (const room of paperRooms) {
-      if ([room.slice(0, -1), room.slice(0, -1) + '.html', room + 'index.html'].includes(url.pathname)) {
+      if ([room.slice(0, -1), room.slice(0, -1) + '.html', room + 'index', room + 'index.html'].includes(url.pathname)) {
         const target = new URL(room, url.origin);
         target.search = url.search;
         return Response.redirect(target.toString(), 301);
