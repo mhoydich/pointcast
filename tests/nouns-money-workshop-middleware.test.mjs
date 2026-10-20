@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 
-for (const room of ['/nouns-money/workshop', '/ues/currency-lab']) test(room+' canonical reads remain quiet and byte-preserving without affecting neighbors', async () => {
+for (const room of ['/nouns-money/workshop', '/ues/currency-lab', '/case-studies/launchpad']) test(room+' canonical reads remain quiet and byte-preserving without affecting neighbors', async () => {
   const server = await createServer({configFile:false,appType:'custom',logLevel:'error',optimizeDeps:{noDiscovery:true,entries:[],include:[]},server:{middlewareMode:true,hmr:false,ws:false}});
   const previousRewriter = globalThis.HTMLRewriter;
   let transforms = 0;

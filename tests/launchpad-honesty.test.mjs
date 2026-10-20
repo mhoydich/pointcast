@@ -139,7 +139,7 @@ test('when a build exists, the built page passes too: its own content, isolated 
   assertClean(text, 'built page');
   for (const phrase of ['Play credits only', 'No value, may reset', 'Not a Nouns token']) assert.ok(text.includes(phrase), `built page says “${phrase}”`);
   assert.deepEqual(copyProblems(visible(sources), { approved: SOURCES.flatMap((s) => [s.title, s.url]) }), [], 'built Sources list');
-  for (const s of ['/api/analytics', '/api/room', '/api/wire-events', 'pc-layers.js', 'rel="manifest"']) assert.ok(!html.includes(s), `isolated layout: no ${s}`);
+  for (const s of ['data-pointcast-tezos-session-bridge', '/api/auth/session', '/api/analytics', '/api/room', '/api/wire-events', 'pc-layers.js', 'rel="manifest"']) assert.ok(!html.includes(s), `isolated layout: no ${s}`);
   assert.match(html, /<meta name="author" content="Claude Code for PointCast"/);
   assert.doesNotMatch(html, /<meta name="author" content="Mike Hoydich"/);
   assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
