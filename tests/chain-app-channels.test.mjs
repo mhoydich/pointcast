@@ -975,6 +975,49 @@ test('the claim form checks the code as you type, review lists what goes on chai
   assert.equal($(rootEl, '[data-cc-mine-select]').value, 'BRANDNEW');
 });
 
+test('editing the claim form after Review withdraws the review: a changed code, name or mode leaves no confirm box and no plan to send', async () => {
+  const { rootEl, c, dom, dev } = mountView();
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed(SEEDS.owner);
+  await tick(30);
+  const review = () => {
+    type(dom, $(rootEl, '[data-cc-claim-code]'), 'revchk');
+    type(dom, $(rootEl, '[data-cc-claim-name]'), 'first name');
+    pick(dom, rootEl, 'data-cc-claim-mode', 'crew');
+    $(rootEl, '[data-cc-claim-review]').click();
+    assert.equal($(rootEl, '[data-cc-claim-confirm]').hidden, false, 'the review is up');
+    assert.ok(c.state.claim.plan, 'with a plan');
+  };
+  const withdrawn = (why) => {
+    assert.equal($(rootEl, '[data-cc-claim-confirm]').hidden, true, why + ': the confirm box is gone');
+    assert.equal(c.state.claim.plan, null, why + ': so is the plan');
+  };
+  review();
+  type(dom, $(rootEl, '[data-cc-claim-name]'), 'SECOND NAME');
+  withdrawn('a changed name');
+  review();
+  pick(dom, rootEl, 'data-cc-claim-mode', 'open');
+  withdrawn('a changed mode');
+  review();
+  type(dom, $(rootEl, '[data-cc-claim-code]'), 'revchk2');
+  withdrawn('a changed code');
+  // the stale Send button sends nothing, and the form is what a person sees
+  $(rootEl, '[data-cc-claim-send]').click();
+  await tick(100);
+  assert.equal(dev.st.sent.length, 0);
+  // a review made again from the changed form is the one that is sent
+  type(dom, $(rootEl, '[data-cc-claim-code]'), 'revchk');
+  type(dom, $(rootEl, '[data-cc-claim-name]'), 'SECOND NAME');
+  pick(dom, rootEl, 'data-cc-claim-mode', 'open');
+  $(rootEl, '[data-cc-claim-review]').click();
+  assert.match(txt(rootEl, '[data-cc-claim-list]'), /code REVCHK, name “SECOND NAME”, mode open\./);
+  $(rootEl, '[data-cc-claim-send]').click();
+  await tick(400);
+  assert.equal(dev.st.sent.length, 1);
+  assert.deepEqual([dev.st.sent[0].tx.code, dev.st.sent[0].tx.name, dev.st.sent[0].tx.mode], ['REVCHK', 'SECOND NAME', 'open']);
+});
+
 test('the claim form says a taken code, a fifth station and a refusal from the chain in words, and a stale view does not send', async () => {
   const dev = stationsDevnet({ stations: ['K1', 'K2', 'K3', 'K4'].map((code) => ({ code, owner: OWNER_ADDR, name: code, mode: 'open' })) });
   const { rootEl, c, dom } = mountView({ dev });

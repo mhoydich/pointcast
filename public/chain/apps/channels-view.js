@@ -256,9 +256,15 @@ export function mount(root, env = {}) {
 
   // ------------------------------------------------------------ claiming
 
+  /** The claim form changed after Review: what the confirm box said is withdrawn, so form and box never disagree. */
+  function withdrawClaim() {
+    S.claim.plan = null;
+    show('[data-cc-claim-confirm]', false);
+  }
+
   function useInClaim(code) {
     const c = q('[data-cc-claim-code]');
-    if (c) { c.value = code; paintClaimHint(); try { c.focus(); } catch { /* a detached node cannot take focus */ } }
+    if (c) { c.value = code; withdrawClaim(); paintClaimHint(); try { c.focus(); } catch { /* a detached node cannot take focus */ } }
   }
 
   function paintClaimHint() {
@@ -675,10 +681,12 @@ export function mount(root, env = {}) {
   on('[data-cc-lookup]', 'keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); const b = q('[data-cc-lookup-go]'); if (b) b.click(); } });
   on('[data-cc-refresh]', 'click', () => refresh({ feed: true }));
   on('[data-cc-older]', 'click', readOlder);
-  on('[data-cc-claim-code]', 'input', paintClaimHint);
+  on('[data-cc-claim-code]', 'input', () => { withdrawClaim(); paintClaimHint(); });
+  on('[data-cc-claim-name]', 'input', withdrawClaim);
+  on('[data-cc-claim-mode]', 'change', withdrawClaim);
   on('[data-cc-claim-review]', 'click', showClaimConfirm);
   on('[data-cc-claim-send]', 'click', sendClaim);
-  on('[data-cc-claim-cancel]', 'click', () => { show('[data-cc-claim-confirm]', false); S.claim.plan = null; });
+  on('[data-cc-claim-cancel]', 'click', withdrawClaim);
   on('[data-cc-mine-select]', 'change', (ev) => { if (ev.target.value) loadMine(ev.target.value); else { clearMode(); paintMode(); } show('[data-cc-set-confirm]', false); });
   on('[data-cc-set-mode]', 'change', () => { S.mode.plan = null; show('[data-cc-set-confirm]', false); paintMode(); });
   on('[data-cc-set-name]', 'input', () => { S.mode.plan = null; show('[data-cc-set-confirm]', false); });
