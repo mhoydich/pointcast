@@ -26,7 +26,7 @@
 //     ?devnet= only for localhost and 127.0.0.1, writes only on button presses
 //     after a confirm box, and says what moderation exists and what does not.
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1871,6 +1871,33 @@ test('the snippet on the page is real JavaScript, pins the genesis, reads the st
   assert.doesNotMatch(text, /`|\$\{/);
   assert.ok(text.split('\n').length <= 32);
   assert.ok(text.includes(DEVNET.url) && text.includes(DEVNET.genesis));
+});
+
+test('the snippet on the page refuses to claim a code something else posts to, as the page does, before it reads or sends anything', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'channel-snippet-lanes-'));
+  try {
+    // an address nothing listens on: a run that gets past the guard fails on the network, one that does not never tries
+    writeFileSync(join(dir, 'channel.mjs'), codeSnippet('http://127.0.0.1:9', GENESIS));
+    copyFileSync(new URL('public/chain/first-mints/lib/pointcast-chain.js', root), join(dir, 'pointcast-chain.js'));
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
+    const run = (...a) => spawnSync(process.execPath, [join(dir, 'channel.mjs'), ...a], { encoding: 'utf8', cwd: dir, env: { ...process.env, SEED: '45'.repeat(32) }, timeout: 20000 });
+    const lanes = Object.keys(C.RESERVED);
+    assert.ok(lanes.length >= 14);
+    for (const lane of lanes) {
+      const r = run('claim', lane, 'A name', 'crew');
+      assert.notEqual(r.status, 0, lane);
+      assert.match(r.stderr, new RegExp(lane + ' is a code something else posts to: a crew-mode claim would lock it out for good'), lane);
+      assert.doesNotMatch(r.stderr, /ECONNREFUSED|fetch failed|ENOTFOUND/, lane + ': it stopped before any request');
+    }
+    // a free code gets past the guard (and then meets the unreachable address); reading and posting a lane are not claims
+    const free = run('claim', 'FREEONE', 'A name', 'crew');
+    assert.notEqual(free.status, 0);
+    assert.doesNotMatch(free.stderr, /something else posts to/);
+    assert.match(free.stderr, /ECONNREFUSED|fetch failed|ENOTFOUND|connect/i);
+    assert.doesNotMatch(run('read', 'BOT').stderr, /something else posts to/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ================================================================ the built page (skips while dist/ is absent)

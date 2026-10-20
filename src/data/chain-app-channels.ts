@@ -151,7 +151,10 @@ export const NOT_LIST: string[] = [
  * The page prints exactly this text; scripts/e2e-chain-app-channels.mjs runs it
  * against a local devnet. It reads the station before it changes the crew, so a
  * pin or a standing offer already on the station is sent back unchanged, and it
- * stores a body by its hash before it posts. Plain strings, no template literals.
+ * stores a body by its hash before it posts. It refuses to claim a code that
+ * something else posts to (RESERVED_LANES), as the page does, before it reads or
+ * sends anything: the chain would take such a claim, and a crew-mode claim would
+ * lock that lane out for good. Plain strings, no template literals.
  */
 export function codeSnippet(devnet: string, genesis: string): string {
   return [
@@ -163,6 +166,8 @@ export function codeSnippet(devnet: string, genesis: string): string {
     'import * as pcc from "./pointcast-chain.js";',
     'const DEVNET = "' + devnet + '", GENESIS = "' + genesis + '"; // any ed25519 seed is a tz1 account',
     'const [cmd, code, a, b] = process.argv.slice(2);',
+    'const LANES = ' + JSON.stringify(RESERVED_LANES.flatMap((l) => l.codes)) + '; // codes something else posts to: the page never claims them',
+    'if (cmd === "claim" && LANES.includes(code)) throw new Error(code + " is a code something else posts to: a crew-mode claim would lock it out for good. Pick another code.");',
     'const get = (p) => fetch(DEVNET + p).then((r) => r.json());',
     'const post = (p, body) => fetch(DEVNET + p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());',
     'if (cmd === "read") {',
