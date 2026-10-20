@@ -20,6 +20,24 @@ const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
 const KEYS = ['observatory', 'daily-mint', 'notary', 'capsules', 'verify-a-block', 'playground', 'bloom'];
 
+test('on an app page exactly one link is aria-current="page": the Apps item in the section nav is the section ("true"), not a second page', () => {
+  const header = read('src/components/chain/ChainHeader.astro');
+  assert.match(header, /aria-current=\{n\.key === current \? 'page' : n\.key === 'apps' && onApp \? 'true' : undefined\}/);
+  assert.doesNotMatch(header, /\(n\.key === 'apps' && onApp\) \? 'page'/, 'the Apps item is no longer a second "page"');
+  assert.match(header, /aria-current=\{a\.key === current \? 'page' : undefined\}/, 'the app’s own link, in the apps row, is the page');
+  // the item stays lit: the style covers both values
+  assert.match(read('src/styles/chain.css'), /\.chn \.subnav a\[aria-current="page"\],\.chn \.subnav a\[aria-current="true"\]\{background:var\(--c600\)/);
+  // the rendered page, when dist/ is there: each app has one "page" link in each of the two navs at most, and no two links to different places both "page"
+  for (const a of CHAIN_APPS) {
+    const built = new URL('dist/chain/' + a.key + '/index.html', root);
+    if (!existsSync(built)) continue;
+    const html = readFileSync(built, 'utf8');
+    const links = [...html.matchAll(/<a href="([^"]+)"[^>]*aria-current="page"[^>]*>([^<]*)</g)].map((m) => m[1]);
+    assert.deepEqual(links, [a.href], a.key + ': the one link that is the current page is the app itself: ' + links.join(' '));
+    assert.match(html, /<a href="\/chain#apps"[^>]*aria-current="true"[^>]*>Apps</, a.key + ': the Apps item is the current section');
+  }
+});
+
 test('the registry names seven apps, each with a page, a key, a path and one honest line', () => {
   assert.deepEqual(CHAIN_APPS.map((a) => a.key), KEYS);
   assert.equal(APPS_HEADLINE, 'Seven apps on the devnet');
