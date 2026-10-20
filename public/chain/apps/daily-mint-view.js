@@ -163,7 +163,7 @@ export function mount(root, env = {}) {
     say('GENESIS CHANGED. Nothing below is read, and nothing can be sent.', 'changed');
   }
 
-  async function refresh({ cards = true } = {}) {
+  async function refresh({ cards = true, settle = true } = {}) {
     if (S.busy || S.halted) return;
     S.busy = true;
     root.dataset.busy = 'yes';
@@ -180,6 +180,7 @@ export function mount(root, env = {}) {
       if (cards || key !== S.cardKey) { S.cardKey = key; await paintCards(); }
       // Money moves without the person doing anything (an outbid sends the house's refund): read the account on every poll while a key exists.
       if (keys && keys.key()) await loadBalance(); else paintBidState();
+      if (settle) await settleOnPoll();
     } catch (e) {
       if (e && e.name === 'GenesisChanged') halt(e);
       else say('The devnet did not answer: ' + describeError(e) + (S.daily ? ' The lot shown is from the last read.' : ''), 'down');
@@ -358,19 +359,42 @@ export function mount(root, env = {}) {
    * { state: 'landed' | 'pending' | 'gone' | 'unclear', height }. 'landed' and 'gone' close it; 'pending' and 'unclear' keep Send shut.
    */
   async function checkUnsettled() {
+    if (!S.unsettled) return null;
+    try { await refreshFresh({ cards: false, settle: false }); } catch { /* read what can be read */ }
+    return unsettledVerdict();
+  }
+
+  /** What the devnet says about the open bid, from GET /tx/HASH and the lot as last read (no new lot read: the poll calls this from inside refresh). */
+  async function unsettledVerdict() {
     const u = S.unsettled;
     if (!u) return null;
     let st = { status: 'unreachable', height: null };
     try { st = await D.txStatus(net, u.tx); } catch { /* the devnet did not answer: unclear */ }
-    try { await refreshFresh({ cards: false }); } catch { /* read what can be read */ }
     const k = keys && keys.key();
     const lot = S.daily && S.daily.lot;
     const leads = Boolean(k && lot && lot.n === u.lot && lot.leader && lot.leader.sender === k.sender && lot.leader.amount === u.amount);
     if (st.status === 'included' || leads) { S.unsettled = null; return { state: 'landed', height: st.height }; }
     if (st.status === 'pending') return { state: 'pending', height: null };
-    if (st.status === 'rejected' || st.status === 'unknown') { S.unsettled = null; return { state: 'gone', height: null }; }
+    if (st.status === 'rejected') { S.unsettled = null; return { state: 'rejected', height: null }; }
+    if (st.status === 'unknown') { S.unsettled = null; return { state: 'gone', height: null }; }
     return { state: 'unclear', height: null };
   }
+
+  /** On each poll: a bid that was sent but not seen to confirm is asked about again, and the result box is updated when the devnet has settled it. */
+  async function settleOnPoll() {
+    const u = S.unsettled;
+    if (!u) return;
+    const v = await unsettledVerdict();
+    if (!v) return;
+    if (v.state === 'landed') showResult('Your earlier bid landed' + (v.height ? ' in block ' + v.height : '') + ' (transaction ' + u.tx + '): you lead lot ' + String(u.lot).padStart(4, '0') + ' at ' + u.amount + ' play ATTN. Nothing more was sent.', 'ok');
+    else if (v.state === 'rejected') showResult('The devnet rejected your earlier bid (transaction ' + u.tx + '), so it did not count and no play ATTN is locked by it. You can review and send again.', 'bad');
+    else if (v.state === 'gone') showResult('Your earlier bid never arrived: the devnet has no record of transaction ' + u.tx + '. You can review and send again.', 'bad');
+  }
+
+  const showResult = (t, state) => {
+    const r = q('[data-dm-result]');
+    if (r) { r.hidden = false; r.dataset.state = state || ''; set('[data-dm-result-text]', t); }
+  };
 
   async function send() {
     const k = keys && keys.key();
@@ -379,7 +403,7 @@ export function mount(root, env = {}) {
     const sendBtn = q('[data-dm-send]');
     if (!k || !plan || !plan.ok || S.halted) return;
     sendBtn.disabled = true;
-    const say2 = (t, state) => { if (result) { result.hidden = false; result.dataset.state = state || ''; set('[data-dm-result-text]', t); } };
+    const say2 = showResult;
     try {
       if (S.unsettled) {
         const u = S.unsettled;
@@ -419,6 +443,7 @@ export function mount(root, env = {}) {
         const v = await checkUnsettled();
         if (v && v.state === 'landed') say2(part + 'Your bid landed' + (v.height ? ' in block ' + v.height : '') + ' (transaction ' + e.txHash + '), though this page did not see it confirm (' + describeError(e) + '): you lead lot ' + String(plan.lot).padStart(4, '0') + ' at ' + plan.amount + ' play ATTN. Nothing more was sent.', 'ok');
         else if (v && v.state === 'gone') say2(part + 'Not sent: ' + asSentence(describeError(e)) + ' The devnet has no record of transaction ' + e.txHash + ', so it never arrived. You can review and send again.', 'bad');
+        else if (v && v.state === 'rejected') say2(part + 'The devnet rejected transaction ' + e.txHash + ' (' + describeError(e) + '), so it did not count. You can review and send again.', 'bad');
         else say2(part + sendFailureText(e) + ' Send stays shut until the devnet says whether it landed: wait, then review and press Send again.', 'warn');
       } else {
         say2(part + sendFailureText(e), 'bad');

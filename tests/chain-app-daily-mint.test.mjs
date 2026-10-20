@@ -983,6 +983,54 @@ test('a bid that was sent but not seen to confirm says so, looks the transaction
   assert.equal(waited.sent.length, 1);
 });
 
+test('an unsettled bid is asked about again on the next poll, and the result box updates itself when the devnet has settled it', { timeout: 40000 }, async () => {
+  const key = await K.keyFromSeed('6b'.repeat(32));
+  const run = async () => {
+    const fake = await fakeSend();
+    const sent = [];
+    const status = { current: 'pending' };
+    const connect = async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); if (s.tx.type === 'transfer') throw new TypeError('Failed to fetch'); return fake.chain.submit(s); } });
+    const overrides = new Proxy({}, { get: (_, p) => (typeof p === 'string' && p.startsWith('/tx/') ? async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(status.current === 'included' ? { status: 'included', height: 91, index: 0 } : { status: status.current }) }) : undefined) });
+    const m = mountView({ fetchOpts: { accounts: { [key.sender]: { balance: 100, next_nonce: 0 } }, overrides }, extra: { connect, supported: true, storage: null } });
+    await m.c.begin();
+    m.c.stop();
+    await m.c.keys.setSeed('6b'.repeat(32));
+    await tick(30);
+    m.rootEl.querySelector('[data-dm-amount]').value = String(D.leastBid(D.readDaily(FX.daily)) + 1);
+    m.rootEl.querySelector('[data-dm-review]').click();
+    await tick(20);
+    m.rootEl.querySelector('[data-dm-send]').click();
+    await tick(500);
+    return { ...m, sent, status };
+  };
+  const text = (m) => txt(m.rootEl, '[data-dm-result-text]');
+  // still pending: the poll leaves the message alone
+  const a = await run();
+  assert.match(text(a), /^Not confirmed: /);
+  await a.c.refresh({ cards: false });
+  assert.match(text(a), /^Not confirmed: /, 'nothing new to say while it is pending');
+  assert.ok(a.c.state.unsettled, 'still open');
+  // it lands: the next poll says so, without the person pressing anything, and closes the question
+  a.status.current = 'included';
+  await a.c.refresh({ cards: false });
+  assert.match(text(a), /^Your earlier bid landed in block 91 \(transaction [0-9a-f]{64}\): you lead lot \d{4} at \d+ play ATTN\. Nothing more was sent\.$/);
+  assert.equal(a.rootEl.querySelector('[data-dm-result]').dataset.state, 'ok');
+  assert.equal(a.c.state.unsettled, null);
+  assert.equal(a.sent.length, 1, 'and nothing was sent in the meantime');
+  // the devnet never had it: the poll says so and the question is closed
+  const b = await run();
+  b.status.current = 'unknown';
+  await b.c.refresh({ cards: false });
+  assert.match(text(b), /^Your earlier bid never arrived: the devnet has no record of transaction [0-9a-f]{64}\. You can review and send again\.$/);
+  assert.equal(b.c.state.unsettled, null);
+  // the devnet rejected it
+  const c2 = await run();
+  c2.status.current = 'rejected';
+  await c2.c.refresh({ cards: false });
+  assert.match(text(c2), /^The devnet rejected your earlier bid \(transaction [0-9a-f]{64}\), so it did not count and no play ATTN is locked by it\./);
+  assert.equal(c2.rootEl.querySelector('[data-dm-result]').dataset.state, 'bad');
+});
+
 test('if the words post lands and the transfer is refused, the page says the post is already public and the bid was not accepted', { timeout: 30000 }, async () => {
   const key = await K.keyFromSeed('69'.repeat(32));
   const accounts = { [key.sender]: { balance: 100, next_nonce: 0 } };
