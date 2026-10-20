@@ -316,6 +316,81 @@ function regexOf(pattern) {
   }
 }
 
+/**
+ * Is a regular expression from the devnet's schema safe to run on what a person types? A pattern can take exponential time on
+ * the wrong input (^(a+)+$ on 28 letters and a bang took 1.2 s, and each extra letter doubles it), and the page runs it on every
+ * keystroke. Returns { tame, unbounded }: not tame if it has a backreference or a lookaround, a group that is repeated and itself
+ * holds a repeat or an alternation (nested quantifiers: (a+)+, (a|a)*, (.*)*), or more than three unbounded repeats (a*a*a*a*b is
+ * polynomial of a high degree). `unbounded` is how many + * and {n,} it has: one is linear in the text, more are polynomial.
+ */
+export function analysePattern(pattern) {
+  const no = { tame: false, unbounded: 0 };
+  if (typeof pattern !== 'string' || pattern.length > 400) return no;
+  const quant = (j) => {
+    const c = pattern[j];
+    if (c === '+' || c === '*') return { len: 1, repeat: true, unbounded: true };
+    if (c === '?') return { len: 1, repeat: false, unbounded: false };
+    if (c === '{') {
+      const m = /^\{(\d+)(?:,(\d*))?\}/.exec(pattern.slice(j, j + 24));
+      if (!m) return null;
+      const hi = m[2] === undefined ? Number(m[1]) : m[2] === '' ? Infinity : Number(m[2]);
+      return { len: m[0].length, repeat: hi > 1, unbounded: hi === Infinity };
+    }
+    return null;
+  };
+  const stack = [];
+  let unbounded = 0;
+  const mark = () => { if (stack.length) stack[stack.length - 1].inner = true; };
+  for (let i = 0; i < pattern.length;) {
+    const c = pattern[i];
+    if (c === '\\') {
+      if (/[1-9k]/.test(pattern[i + 1] || '')) return no;
+      i += 2;
+    } else if (c === '[') {
+      i += 1;
+      while (i < pattern.length && pattern[i] !== ']') i += pattern[i] === '\\' ? 2 : 1;
+      i += 1;
+    } else if (c === '(') {
+      if (pattern[i + 1] === '?' && (pattern[i + 2] === '=' || pattern[i + 2] === '!' || (pattern[i + 2] === '<' && (pattern[i + 3] === '=' || pattern[i + 3] === '!')))) return no;
+      stack.push({ inner: false });
+      i += 1;
+    } else if (c === ')') {
+      const g = stack.pop();
+      if (!g) return no;
+      const q = quant(i + 1);
+      if (q && q.repeat && g.inner) return no;
+      if (g.inner || (q && q.repeat)) mark();
+      i += 1;
+    } else if (c === '|') {
+      mark();
+      i += 1;
+    } else if (c === '+' || c === '*' || c === '{') {
+      const q = quant(i);
+      if (!q) { i += 1; continue; }
+      if (q.unbounded) unbounded += 1;
+      if (q.repeat) mark();
+      i += q.len;
+    } else {
+      i += 1;
+    }
+  }
+  if (stack.length) return no;
+  return { tame: unbounded <= 3, unbounded };
+}
+
+/**
+ * Test `s` against a pattern from the devnet, as a hint and never as a hazard: a pattern that is not tame is not run (the field
+ * still shows it), and text longer than a polynomial pattern can take is not run either. Returns true when it did not run.
+ */
+export function safeMatch(pattern, s) {
+  const re = regexOf(pattern);
+  if (!re) return true;
+  const a = analysePattern(pattern);
+  if (!a.tame) return true;
+  if (a.unbounded > 1 && s.length > 256) return true;
+  return re.test(s);
+}
+
 /** A short example for a schema, shown as a placeholder or used to fill a snippet. Never a real value. */
 export function exampleFor(schema, name = 'value', depth = 0) {
   if (!isObj(schema) || depth > 5) return `<${name}>`;
@@ -466,7 +541,7 @@ function checkString(s, c) {
   const len = Array.from(s).length;
   if (c.minLength !== undefined && len < c.minLength) return `at least ${c.minLength} characters`;
   if (c.maxLength !== undefined && len > c.maxLength) return `up to ${c.maxLength} characters (this is ${len})`;
-  if (c.pattern && !matches(regexOf(c.pattern), s)) return `must match ${c.pattern}`;
+  if (c.pattern && !safeMatch(c.pattern, s)) return `must match ${c.pattern}`;
   return '';
 }
 
@@ -559,7 +634,6 @@ function parseField(f, raw) {
       if (f.maxItems !== undefined && items.length > f.maxItems) return { error: `at most ${f.maxItems} items (this is ${items.length})` };
       if (f.minItems !== undefined && items.length < f.minItems) return { error: `at least ${f.minItems} items` };
       const out = [];
-      const re = regexOf(f.itemPattern);
       for (const [i, it] of items.entries()) {
         if (f.itemType === 'integer' || f.itemType === 'number') {
           if (!(f.itemType === 'integer' ? INT_RE : NUM_RE).test(it)) return { error: `line ${i + 1}: ${f.itemType === 'integer' ? 'a whole number' : 'a number'}` };
@@ -569,7 +643,7 @@ function parseField(f, raw) {
           out.push(n);
         } else {
           if (f.itemMaxLength !== undefined && Array.from(it).length > f.itemMaxLength) return { error: `line ${i + 1}: up to ${f.itemMaxLength} characters` };
-          if (!matches(re, it)) return { error: `line ${i + 1}: must match ${f.itemPattern}` };
+          if (f.itemPattern && !safeMatch(f.itemPattern, it)) return { error: `line ${i + 1}: must match ${f.itemPattern}` };
           out.push(it);
         }
       }

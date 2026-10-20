@@ -1420,6 +1420,42 @@ test('--pg-bad is defined on the page root itself: error text, invalid borders a
   assert.match(css, /--pg-bad:#b3001b/);
 });
 
+test('a schema pattern from the devnet is a hint, not a hazard: a pattern that can run for ever is not run on what a person types', () => {
+  // every pattern the real tools carry is tame, so real validation is unchanged
+  const real = [];
+  const walk = (x) => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') { if (typeof x.pattern === 'string') real.push(x.pattern); Object.values(x).forEach(walk); } };
+  walk(PINNED.map((t) => t.inputSchema));
+  assert.ok(real.length >= 3, 'the tools carry patterns: ' + real.join(' '));
+  for (const p of real) assert.equal(pg.analysePattern(p).tame, true, p);
+  for (const p of ['^[a-z0-9-]{2,24}$', '^https://\\S+$', '^(?:tz1|tz2)[1-9A-HJ-NP-Za-km-z]{33}$', '^(?:ab)+$', '^\\d{1,3}(?:,\\d{3})?$']) assert.equal(pg.analysePattern(p).tame, true, p);
+  // the shapes that blow up, and the ones that cannot be told from them
+  for (const p of ['^(a+)+$', '^(a|a)*$', '^(.*)*$', '(a|aa)+$', '^(\\w+\\s?)*$', '^((a+)b)+$', '(a)\\1', '(?=a)a', '(?<!a)b', 'a*a*a*a*b', 'x'.repeat(401), '(unclosed', 'unopened)']) assert.equal(pg.analysePattern(p).tame, false, p);
+  assert.equal(pg.analysePattern(5).tame, false);
+  // the finding's repro: ^(a+)+$ on 28 letters and a bang took 1.2 s each time (twice per keystroke); now it is not run and takes no time
+  const t0 = Date.now();
+  assert.equal(pg.safeMatch('^(a+)+$', 'a'.repeat(28) + '!'), true, 'not run: no verdict is claimed');
+  assert.equal(pg.safeMatch('^(a+)+$', 'a'.repeat(5000) + '!'), true);
+  assert.ok(Date.now() - t0 < 100, 'took ' + (Date.now() - t0) + ' ms');
+  // through the form: typing into a field whose schema pattern is hostile builds arguments instantly and raises no pattern error
+  const schema = pg.cloneSchema({ type: 'object', properties: { s: { type: 'string', pattern: '^(a+)+$' }, list: { type: 'array', items: { type: 'string', pattern: '^(a|a)*$' } } } });
+  const { fields } = pg.fieldsFromSchema(schema);
+  const t1 = Date.now();
+  for (const n of [22, 26, 28, 30]) {
+    const r = pg.buildArguments(fields, { s: 'a'.repeat(n) + '!', list: 'a'.repeat(n) + '!\n' + 'a'.repeat(n) + '!' });
+    assert.deepEqual(r.errors, {}, 'no pattern error is invented for a pattern that was not run');
+    assert.equal(r.args.s, 'a'.repeat(n) + '!');
+  }
+  assert.ok(Date.now() - t1 < 200, 'four keystrokes took ' + (Date.now() - t1) + ' ms');
+  assert.deepEqual(pg.validateJson('a'.repeat(30) + '!', { type: 'string', pattern: '^(a+)+$' }), []);
+  // a tame pattern still validates, and a long text against a polynomial one is not run
+  assert.equal(pg.safeMatch('^[a-z0-9-]{2,24}$', 'My Bot'), false);
+  assert.equal(pg.safeMatch('^[a-z0-9-]{2,24}$', 'my-bot'), true);
+  assert.equal(pg.safeMatch('^\\w*-\\w*$', 'x'.repeat(5000)), true, 'two unbounded repeats on a long text: not run');
+  assert.equal(pg.safeMatch('^\\w+$', 'x'.repeat(5000) + '!'), false, 'one unbounded repeat is linear and still runs');
+  assert.equal(pg.safeMatch('([unclosed', 'x'), true, 'an invalid pattern is ignored, as before');
+  assert.match(lib, /export function safeMatch/);
+});
+
 test('the page keeps the BLOCKS grammar: square corners, 1.5px borders, weights 400 and 500, tokens, focus, reduced motion', () => {
   const css = code(PAGE_STYLE);
   assert.doesNotMatch(css, /border-radius\s*:\s*(?!0\b)[1-9]/, 'no rounded corners');
