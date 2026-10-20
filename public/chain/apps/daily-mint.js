@@ -24,7 +24,7 @@
 // devnet: no value, may reset. The house is also the sequencer: it can refuse a
 // bid, and it can keep one out of every block.
 
-import { pcc, cleanText, isObj, isWhole, isHex64, KitError, readStatus, signAndSend } from './chain-kit.js';
+import { pcc, cleanText, isObj, isWhole, isHex64, GenesisChanged, KitError, readStatus, signAndSend } from './chain-kit.js';
 import { DAILY_LEXICON, DAILY_RULES, LAW_VERSION, bidTitle, fold, lotSeed, minBid, recipeHex, report } from '../first-mints/lib/daily-law.js';
 import { auditSvg, renderCard } from '../first-mints/lib/first-mint.js';
 
@@ -230,13 +230,16 @@ export async function readAllBlocks(net, upTo, onProgress = () => {}) {
 
 /**
  * Replay the Daily Mint from the chain and compare it with the house. `net` is
- * a makeNet reader. Returns { ok, lines, lots, violations, mismatches, blocks,
+ * a makeNet reader; `pinned`, when given, is the genesis this page was built for:
+ * a status that reports another one throws GenesisChanged before any block is read. Returns { ok, lines, lots, violations, mismatches, blocks,
  * report, worker, nonStandard }. It takes blocks as served: check them with
  * Verify a block or the Block Yard when the server itself is in doubt.
  */
-export async function auditHouse(net, { onProgress = () => {} } = {}) {
+export async function auditHouse(net, { onProgress = () => {}, pinned = null } = {}) {
   const rawStatus = await net.get('/status');
   const status = readStatus(rawStatus);
+  // Replaying a reset chain against the pinned one would prove nothing about the devnet this page was built for.
+  if (pinned && status.genesis !== pinned) throw new GenesisChanged(pinned, status.genesis);
   const daily = readDaily(await net.get('/daily'));
   if (!daily || !daily.addresses || daily.status === 'off') throw new KitError('the Daily Mint is off: ' + ((daily && daily.reason) || 'no reason given'), { code: 'off' });
   const worker = await net.get('/daily/law');

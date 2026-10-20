@@ -155,6 +155,14 @@ export function mount(root, env = {}) {
     return d;
   }
 
+  /** The devnet reports a genesis other than the pinned one: stop reading and sending, and say so. */
+  function halt(e) {
+    S.halted = true;
+    const banner = q('[data-dm-genesis]');
+    if (banner) { banner.hidden = false; banner.textContent = describeError(e); }
+    say('GENESIS CHANGED. Nothing below is read, and nothing can be sent.', 'changed');
+  }
+
   async function refresh({ cards = true } = {}) {
     if (S.busy || S.halted) return;
     S.busy = true;
@@ -173,12 +181,8 @@ export function mount(root, env = {}) {
       // Money moves without the person doing anything (an outbid sends the house's refund): read the account on every poll while a key exists.
       if (keys && keys.key()) await loadBalance(); else paintBidState();
     } catch (e) {
-      if (e && e.name === 'GenesisChanged') {
-        S.halted = true;
-        const banner = q('[data-dm-genesis]');
-        if (banner) { banner.hidden = false; banner.textContent = describeError(e); }
-        say('GENESIS CHANGED. Nothing below is read, and nothing can be sent.', 'changed');
-      } else say('The devnet did not answer: ' + describeError(e) + (S.daily ? ' The lot shown is from the last read.' : ''), 'down');
+      if (e && e.name === 'GenesisChanged') halt(e);
+      else say('The devnet did not answer: ' + describeError(e) + (S.daily ? ' The lot shown is from the last read.' : ''), 'down');
     } finally {
       S.busy = false;
       root.dataset.busy = 'no';
@@ -196,7 +200,7 @@ export function mount(root, env = {}) {
     out.replaceChildren();
     if (sum) { sum.textContent = 'Reading the blocks…'; sum.dataset.state = 'busy'; }
     try {
-      const r = await D.auditHouse(net, { onProgress: (n, total) => { if (sum) sum.textContent = 'Read ' + groups(n) + ' of ' + groups(total) + ' blocks…'; } });
+      const r = await D.auditHouse(net, { pinned: where.genesis || null, onProgress: (n, total) => { if (sum) sum.textContent = 'Read ' + groups(n) + ' of ' + groups(total) + ' blocks…'; } });
       S.audit = r;
       if (sum) {
         sum.dataset.state = r.ok ? 'ok' : 'bad';
@@ -218,6 +222,7 @@ export function mount(root, env = {}) {
         out.append(li);
       }
     } catch (e) {
+      if (e && e.name === 'GenesisChanged') halt(e);
       if (sum) { sum.dataset.state = 'bad'; sum.textContent = 'The check could not run: ' + describeError(e); }
     } finally {
       btn.disabled = false;
@@ -385,6 +390,8 @@ export function mount(root, env = {}) {
       say2('Checking the devnet’s genesis…', '');
       if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
       await refreshFresh({ cards: false });
+      // The refresh pins the genesis: a reset since the last send halts the page, and a halted page sends nothing.
+      if (S.halted) { withdrawPlan(); say2('GENESIS CHANGED while you read: the devnet no longer reports the genesis this page pins. Nothing was sent.', 'bad'); return; }
       // A bid confirmed for lot N must not land in lot N+1: the lot is part of what was confirmed.
       const now = S.daily && S.daily.lot ? S.daily.lot.n : null;
       if (now !== plan.lot) { withdrawPlan(); say2((now === null ? 'Lot ' + String(plan.lot).padStart(4, '0') + ' closed while you read and no lot is open now.' : 'Lot ' + String(plan.lot).padStart(4, '0') + ' closed while you read; lot ' + String(now).padStart(4, '0') + ' is open now, with its own least bid and leader.') + ' Nothing was sent. Review the bid again.', 'bad'); return; }

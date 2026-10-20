@@ -1014,6 +1014,54 @@ test('if the words post lands and the transfer is refused, the page says the pos
   assert.match(txt(rootEl, '[data-dm-result-text]'), /^Not sent: not a valid bid/);
 });
 
+test('GENESIS CHANGED stops a send that is already past Review, and the house check refuses a chain that is not the pinned one', { timeout: 30000 }, async () => {
+  const key = await K.keyFromSeed('6a'.repeat(32));
+  const accounts = { [key.sender]: { balance: 100, next_nonce: 0 } };
+  const fake = await fakeSend();
+  const sent = [];
+  const live = { genesis: GENESIS };
+  const connect = async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); return fake.chain.submit(s); } });
+  const overrides = { '/status': async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ ...FX.status, genesis_hash: live.genesis }) }) };
+  const { rootEl, c } = mountView({ fetchOpts: { accounts, overrides }, extra: { connect, supported: true, storage: null } });
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed('6a'.repeat(32));
+  await tick(30);
+  const bid = async (amount) => { rootEl.querySelector('[data-dm-amount]').value = String(amount); rootEl.querySelector('[data-dm-review]').click(); await tick(20); rootEl.querySelector('[data-dm-send]').click(); await tick(300); };
+  await bid(D.leastBid(D.readDaily(FX.daily)) + 1);
+  assert.equal(sent.length, 1, 'the first send is fine: the chain client is now cached');
+  // the devnet is reset between two sends
+  live.genesis = HEX('9');
+  rootEl.querySelector('[data-dm-amount]').value = '50';
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(20);
+  rootEl.querySelector('[data-dm-send]').click();
+  await tick(300);
+  assert.equal(c.state.halted, true);
+  assert.equal(sent.length, 1, 'a page that says "nothing can be sent" sends nothing');
+  assert.match(txt(rootEl, '[data-dm-result-text]'), /^GENESIS CHANGED while you read: the devnet no longer reports the genesis this page pins\. Nothing was sent\.$/);
+  assert.equal(rootEl.dataset.state, 'changed');
+  assert.equal(rootEl.querySelector('[data-dm-genesis]').hidden, false);
+  // the house check against a chain that is not the pinned one is refused before any block is read
+  const log = [];
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: fakeDevnet({ log, status: { ...FX.status, genesis_hash: HEX('9') } }) });
+  await assert.rejects(() => D.auditHouse(net, { pinned: GENESIS }), (e) => e.name === 'GenesisChanged' && e.got === HEX('9') && e.want === GENESIS);
+  assert.deepEqual(log, ['GET /status'], 'nothing else was read');
+  // and the page's button says so instead of AGREES: a check started between polls cannot replay a reset chain
+  live.genesis = GENESIS;
+  const m = mountView({ fetchOpts: { overrides } });
+  await m.c.begin();
+  m.c.stop();
+  assert.equal(m.c.state.halted, false);
+  live.genesis = HEX('8');
+  await m.c.runAudit();
+  const sum = m.rootEl.querySelector('[data-dm-audit-summary]');
+  assert.equal(sum.dataset.state, 'bad');
+  assert.match(sum.textContent, /^The check could not run: GENESIS CHANGED/);
+  assert.doesNotMatch(sum.textContent, /AGREES/);
+  assert.equal(m.c.state.halted, true);
+});
+
 test('the faucet button asks once for the key’s address and says so in words', async () => {
   const posts = [];
   const { rootEl, c } = mountView({ fetchOpts: { overrides: { '/daily/faucet': async (u, init) => { posts.push(JSON.parse(init.body)); return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ tx_hash: HEX('c'), amount: 100, note: 'ok' }) }; } } }, extra: { supported: true, storage: null } });
