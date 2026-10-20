@@ -551,6 +551,46 @@ test('raw and wallet-signed ed25519 signatures check; a key that does not derive
   assert.ok(!r.failed.includes('sender:0'));
 });
 
+test('a passkey transaction (P-256 in a WebAuthn envelope) is named and left unchecked, never passed or failed, and nothing throws', async () => {
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const key = pcc.p256PublicKey(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)));
+  const tx = { sender: pcc.passkeyAddress(key), nonce: 0, type: 'publish_block', channel: 'FD', title: 'a passkey test line', body_hash: '00'.repeat(32), media_uri: null };
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, kp.privateKey, new Uint8Array([1, 2, 3])));
+  const envelope = pcc.webauthnEnvelope({ authenticatorData: new Uint8Array(37), clientDataJSON: new TextEncoder().encode('{}'), signature: sig });
+  const s = set(3318);
+  s.block.txs = [{ tx, sig_mode: 'webauthn', public_key: key, signature: envelope }];
+  const r = await V.runSteps(baseOf(s));
+  const c = (id) => r.checks.find((x) => x.id === id);
+  assert.equal(c('sig:0').state, 'skip');
+  assert.match(c('sig:0').text, /^Not checked: a passkey signs with P-256 inside a WebAuthn envelope/);
+  assert.equal(c('sender:0').state, 'pass', 'the pcp1 address still derives from the passkey’s key');
+  assert.equal(c('tx_root').state, 'fail', 'the id is computed (the SDK’s txHash), and this hand-made block’s root is not the header’s');
+  const groupRows = r.steps.find((x) => x.id === 'txroot').groups.flatMap((g) => g.rows);
+  assert.ok(groupRows.some((x) => x.k === 'signature mode' && /passkey envelope/.test(x.v)));
+  const t = V.tamperSet(s, 'tx_signature');
+  assert.notEqual(t.set.block.txs[0].signature, envelope);
+  assert.equal(t.set.block.txs[0].signature.length, envelope.length);
+  await assert.doesNotReject(V.runSteps(baseOf(t.set, { tamper: t.note })));
+});
+
+test('a browser without ed25519 in WebCrypto: the seal and the signatures are "not checked", nothing fails and nothing is claimed', async () => {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true });
+  let r;
+  try {
+    r = await V.runSteps(baseOf(set(3247)));
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', saved);
+  }
+  assert.deepEqual(r.failed, []);
+  assert.equal(r.verdict, 'partial');
+  assert.deepEqual(r.skipped.sort(), ['seal', 'sig:0', 'sig:1', 'sig:2']);
+  assert.deepEqual(stateOf(r), { fetch: 'pass', link: 'pass', seal: 'skip', txroot: 'pass', sigs: 'skip' });
+  assert.match(r.checks.find((c) => c.id === 'seal').text, /no ed25519/);
+  assert.match(r.summary, /^Block 3247: nothing failed, but 4 checks could not run/);
+  assert.equal((await V.runSteps(baseOf(set(3247)))).verdict, 'pass', 'and WebCrypto is back');
+});
+
 test('a transaction kind the page cannot encode leaves the tx_root and its signature unchecked and says which', async () => {
   const s = set(3247);
   s.block.txs[0].tx.type = 'a_kind_from_the_future';
