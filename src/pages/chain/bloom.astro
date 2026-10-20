@@ -1,0 +1,319 @@
+---
+/**
+ * /chain/bloom — Checkpoint Blooms: generative art made from the PointCast
+ * devnet itself. Every 10th block is a checkpoint (the Daily Net's witnesses
+ * attest them). A bloom is a deterministic abstract SVG drawn from a
+ * checkpoint block's hash (public/chain/apps/bloom.js): same hash, same bytes,
+ * recomputable in twenty lines. The page reads the devnet live, in the
+ * visitor's browser, lazily: today's bloom (the latest checkpoint), then a
+ * grid of the last 120 checkpoints grouped by UTC day, then a large view with
+ * the exact recipe, a download, and one thin ring per witness key.
+ *
+ * The page owns the markup; public/chain/apps/bloom-view.js fills it with
+ * textContent only. A ?devnet= address is honoured only for localhost and
+ * 127.0.0.1 (local end-to-end runs).
+ *
+ * The blooms are free, have no price and are not tokens: drawings of the
+ * chain's own checkpoints. Devnet · no value · may reset.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import ResetNotice from '../../components/chain/ResetNotice.astro';
+import BloomDialog from '../../components/chain/BloomDialog.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import {
+  BLOOM_BLOCK,
+  BLOOM_DESCRIPTION,
+  BLOOM_PATH,
+  BLOOM_TITLE,
+  HONESTY_LINE,
+  HOW_STEPS,
+  NOT_LIST,
+  genesisBloomDataUri,
+} from '../../data/chain-app-bloom';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+
+const ch = CHANNELS.FD;
+const genesisBloom = await genesisBloomDataUri(DEVNET.genesis);
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: BLOOM_TITLE,
+  description: BLOOM_DESCRIPTION,
+  url: `https://pointcast.xyz${BLOOM_PATH}`,
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+---
+
+<BlockLayout title={BLOOM_TITLE} description={BLOOM_DESCRIPTION} image={`/images/og/b/${BLOOM_BLOCK}.png`} imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds>
+  <div class="bl-page" style={`--c50:${ch.color50};--c600:${ch.color600};--c800:${ch.color800}`}>
+    <div
+      class="chn bl"
+      data-bloom="app"
+      data-state="static"
+      data-api={DEVNET.url}
+      data-genesis={DEVNET.genesis}
+      data-chain={DEVNET.chainId}
+    >
+      <ChainHeader current="bloom" trail={[{ label: 'bloom' }]} block={BLOOM_BLOCK} />
+
+      <header class="hero">
+        <p class="kicker">CHAIN · CHECKPOINT BLOOMS · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+        <h1>Checkpoint Blooms: the chain, drawn.</h1>
+        <p class="dek">
+          Every tenth block of the PointCast devnet is a checkpoint, and witness keys sign them. A bloom is an abstract drawing of
+          one checkpoint’s hash: the same hash always draws the same SVG, to the byte, and you can recompute it yourself in twenty
+          lines. Where keys have signed, thin rings outside the bloom count them.
+        </p>
+        <p class="bl-honest" data-honesty>
+          <b>{HONESTY_LINE}.</b>
+          This is <code>{DEVNET.chainId}</code>. One server runs it and it can reset; a reset is dated and recorded, never silent. The
+          last one was on {notYet(RESET.date)}, and devnet-1 is kept as a recording you can replay at
+          <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>. Blooms are free to look at, have no price and are not tokens.
+        </p>
+        <p class="jump">
+          <a href="#today">today’s bloom</a><a href="#grid">the grid</a><a href="#how">how it is drawn</a><a href="#not">what it is not</a><a href="#dev">for developers</a>
+        </p>
+      </header>
+
+      <ResetNotice />
+
+      <section id="today" class="sec" aria-labelledby="today-title">
+        <p class="kicker">01 · TODAY’S BLOOM · THE LATEST CHECKPOINT · READ LIVE FROM THE DEVNET, IN YOUR BROWSER</p>
+        <h2 id="today-title" class="h2">Today’s bloom</h2>
+        <p class="bl-status" data-bl="status" aria-live="polite">
+          This section reads the devnet from your browser after the page loads. Until it answers, the picture is the genesis
+          bloom, drawn from {DEVNET.chainId}’s genesis hash. It is not a checkpoint.
+        </p>
+        <noscript><p class="fine">The live bloom needs JavaScript. The latest block is at <a href={`${DEVNET.url}/status`} rel="noopener">{DEVNET.url}/status</a>.</p></noscript>
+
+        <div class="bl-hero">
+          <button type="button" class="bl-hero__art" data-bl="hero-open" disabled>
+            <img
+              data-bl="hero-img"
+              src={genesisBloom || undefined}
+              width="640"
+              height="640"
+              alt="Genesis bloom: an abstract drawing of the devnet’s genesis hash, shown until the latest checkpoint is read"
+            />
+            <span class="bl-sr">Open the large view of today’s bloom</span>
+          </button>
+
+          <div class="bl-hero__side">
+            <p class="kicker" data-bl="hero-kicker">GENESIS BLOOM · NOT A CHECKPOINT</p>
+            <p class="bl-cap" data-bl="hero-caption">
+              Genesis bloom: drawn from the hash of {DEVNET.chainId}’s first state, shown until the latest checkpoint is read.
+            </p>
+            <dl class="bl-facts">
+              <div><dt>Checkpoint</dt><dd data-bl="hero-height">—</dd></div>
+              <div><dt>Block hash</dt><dd class="hash"><code data-bl="hero-hash">—</code></dd></div>
+              <div><dt>Sealed (UTC)</dt><dd data-bl="hero-time">—</dd></div>
+              <div><dt>Your clock</dt><dd data-bl="hero-local">—</dd></div>
+              <div><dt>Witnessed</dt><dd data-bl="hero-witness">—</dd></div>
+            </dl>
+            <p class="cta">
+              <button type="button" class="btn" data-bl="hero-large" data-bl-act="hero" disabled>Large view and recipe</button>
+              <button type="button" class="btn btn--ghost" data-bl="hero-save" data-bl-act="hero" disabled>Download SVG</button>
+              <button type="button" class="btn btn--ghost" data-bl="hero-copy" data-bl-act="hero" disabled>Copy the hash</button>
+            </p>
+            <label class="bl-drift">
+              <input type="checkbox" data-bl="drift" />
+              <span>Slow petal drift <span class="bl-drift__off">(off by default)</span></span>
+            </label>
+            <p class="fine" data-bl="rm-note" hidden>Your system asks for reduced motion, so nothing moves unless you turn this on.</p>
+            <p class="fine bl-livenote" data-bl="hero-status" aria-live="polite"></p>
+            <p class="bl-clock" data-bl="clock">not read yet</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="grid" class="sec" aria-labelledby="grid-title">
+        <p class="kicker">02 · THE LAST 120 CHECKPOINTS · GROUPED BY UTC DAY · READ AS YOU SCROLL</p>
+        <h2 id="grid-title" class="h2">Every tenth block, drawn.</h2>
+        <p class="note">
+          Each tile is one checkpoint, newest first, grouped by the UTC day its block was sealed. A thin gold ring outside a bloom
+          means a witness key signed that checkpoint; the number says how many distinct keys. Press a tile for the large view.
+        </p>
+        <p class="bl-status" data-bl="grid-status" aria-live="polite">
+          Checkpoints load as this section nears the screen, 24 at a time and six requests at a time, from the devnet.
+        </p>
+        <div class="bl-grid" data-bl="grid"></div>
+        <p class="cta">
+          <button type="button" class="btn btn--ghost" data-bl="more" hidden>Load older checkpoints</button>
+          <button type="button" class="btn btn--ghost" data-bl="retry" hidden>Retry the ones not read</button>
+        </p>
+        <div class="bl-sentinel" data-bl="sentinel"></div>
+      </section>
+
+      <section id="how" class="sec" aria-labelledby="how-title">
+        <p class="kicker">03 · HOW A BLOOM IS DRAWN · NOTHING HIDDEN</p>
+        <h2 id="how-title" class="h2">A hash goes in; a drawing comes out.</h2>
+        <p class="note">
+          The block hash is the only input. There is no random number, no clock and no server in the drawing: only the hash, the
+          chain’s own blake2b, and arithmetic. Open any bloom for the exact twenty lines and a copy button.
+        </p>
+        <ol class="bl-how">
+          {HOW_STEPS.map((s) => <li><b>{s.k}.</b> {s.v}</li>)}
+        </ol>
+        <p class="fine">
+          The SVG has no text, no image, no script and no link of any kind: only rect, circle, path and g. The page checks that for
+          every SVG it shows or offers, and its tests run the same audit on a thousand different hashes.
+        </p>
+      </section>
+
+      <section id="not" class="sec" aria-labelledby="not-title">
+        <p class="kicker">04 · WHAT A BLOOM IS NOT</p>
+        <h2 id="not-title" class="h2">A drawing, not a promise.</h2>
+        <ul class="bullets">
+          {NOT_LIST.map((t) => <li>{t}</li>)}
+        </ul>
+        <p class="bl-honest bl-honest--foot" data-honesty>
+          <b>{HONESTY_LINE}.</b> {DEVNET.chainId} may reset; a reset is dated and recorded, as devnet-1’s was on {notYet(RESET.date)}
+          (<a href={DEVNET_PREVIOUS.path}>the recording</a>).
+        </p>
+      </section>
+
+      <section id="dev" class="sec" aria-labelledby="dev-title">
+        <p class="kicker">05 · FOR DEVELOPERS</p>
+        <h2 id="dev-title" class="h2">Import it, draw it, audit it.</h2>
+        <p class="note">
+          <a href="/chain/apps/bloom.js">/chain/apps/bloom.js</a> is a plain ES module with no DOM and no network. It exports
+          <code>bloomSvg(hash, {'{ witnesses, drift }'})</code>, <code>bloomOgSvg(hash)</code> (a 1200 × 630 variant for cards, with the
+          whole bloom centred and three faint halo rings), <code>auditSvg(svg)</code> and <code>geometryFingerprint(svg)</code>. Block hashes
+          come from <code>GET {DEVNET.url}/block/&lt;height&gt;</code>; the witness list for a checkpoint is
+          <code>GET {DEVNET.url}/checkpoints/&lt;height&gt;/witnesses</code>.
+        </p>
+      </section>
+
+      <footer class="method">
+        <p class="kicker">METHOD</p>
+        <p>
+          Checkpoints are every 10th block of {DEVNET.chainId}; their hashes, times and witness lists are read from the devnet in your
+          browser, and names, notes and addresses are shown as plain text. The drawing itself never touches the devnet. The recipe
+          printed in the large view is read from the shipped file at build time, and a test runs it against the module for two hundred
+          hashes. Filed by Claude Code.
+        </p>
+      </footer>
+
+      <BloomDialog />
+    </div>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  import { start } from '/chain/apps/bloom-view.js';
+
+  document.querySelectorAll('[data-bloom="app"]').forEach((root) => start(root));
+</script>
+
+<style is:global>
+  /* Tokens: the --pc-* set from BlockLayout, restated on .bl-page so dark mode can change them in one place.
+     The FD ramp (--c50/600/800) arrives as an inline style, so the dark values are !important to win over it. */
+  .bl-page{--pc-bg:#fff;--pc-ink:#12110E;--pc-ink-soft:#38373A;--pc-ink-muted:#5F5E5A;--pc-rule:#C4C2BC;--pc-rule-soft:#E5E3DE;--pc-accent:#185FA5;
+    background:var(--pc-bg);color:var(--pc-ink)}
+  @media (prefers-color-scheme: dark){
+    .bl-page{--pc-bg:#0e1116;--pc-ink:#ece9e2;--pc-ink-soft:#c8c5be;--pc-ink-muted:#a09d95;--pc-rule:#444850;--pc-rule-soft:#2a2e36;--pc-accent:#7db4ec;
+      --c50:#14202e !important;--c600:#5da3e6 !important;--c800:#a9d0f5 !important}
+  }
+  .bl-page a{color:var(--pc-accent)}
+  .bl.chn{padding-bottom:96px}
+  .bl .hash{word-break:break-all;overflow-wrap:anywhere}
+  .bl code{background:var(--c50);color:var(--pc-ink)}
+  .bl [hidden]{display:none !important}
+  .bl .btn{cursor:pointer}
+  .bl .btn:disabled{cursor:default;opacity:.55}
+  .bl .btn--ghost{background:var(--pc-bg);color:var(--c800)}
+  .bl input[type="checkbox"]:focus-visible,.bl .bl-pre:focus-visible,.bl .bl-hero__art:focus-visible,.bl .bl-tile:focus-visible{outline:2px solid var(--c600);outline-offset:2px}
+
+  .bl .bl-honest{margin:22px 0 0;max-width:780px;padding:12px 14px;border:1.5px solid var(--c600);border-left-width:6px;background:var(--c50);font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .bl .bl-honest b{font-weight:500;color:var(--pc-ink);letter-spacing:.02em}
+  .bl .bl-honest--foot{margin-top:20px}
+  .bl .bl-status{margin:10px 0 0;max-width:780px;min-height:24px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .bl[data-state="live"] .bl-status{font:400 12px/1.5 var(--pc-font-mono);letter-spacing:.04em;color:var(--pc-ink-muted)}
+  .bl[data-state="down"] .bl-status,.bl[data-state="pin"] .bl-status,.bl[data-state="odd"] .bl-status,.bl[data-state="none"] .bl-status{color:var(--c800)}
+  .bl .bl-clock{margin:10px 0 0;font:400 10px/1.5 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .bl .bl-livenote{min-height:20px}
+  .bl .bl-cap{margin:0 0 14px;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+
+  /* hero */
+  .bl .bl-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:28px;margin-top:18px;align-items:start}
+  .bl .bl-hero__art{display:block;width:100%;aspect-ratio:1;padding:0;border:1.5px solid var(--c600);background:#1a1420;cursor:pointer;overflow:hidden}
+  .bl .bl-hero__art:disabled{cursor:default}
+  .bl .bl-hero__art img{width:100%;height:100%;object-fit:contain}
+  .bl .bl-facts{margin:0 0 4px;padding:0;border-top:1.5px solid var(--c600)}
+  .bl .bl-facts div{display:grid;grid-template-columns:minmax(0,130px) minmax(0,1fr);gap:4px 14px;padding:9px 0;border-bottom:1px solid var(--pc-rule-soft)}
+  .bl .bl-facts dt{font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800)}
+  .bl .bl-facts dd{margin:0;min-width:0;font:400 15px/1.5 var(--pc-font-sans);color:var(--pc-ink)}
+  .bl .bl-facts dd code{font-size:.82em}
+  .bl .bl-facts--plain{list-style:none;border-top:1.5px solid var(--c600)}
+  .bl .bl-facts--plain li{display:grid;grid-template-columns:minmax(0,160px) minmax(0,1fr);gap:4px 14px;padding:9px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 14px/1.5 var(--pc-font-sans)}
+  .bl .bl-k{font:500 10px/1.8 var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--c800)}
+  .bl .bl-drift{display:flex;align-items:center;gap:10px;min-height:44px;margin:12px 0 0;font:400 14px/1.4 var(--pc-font-sans);color:var(--pc-ink-soft);cursor:pointer}
+  .bl .bl-drift input{width:20px;height:20px;margin:0;accent-color:var(--c600)}
+  .bl .bl-drift__off{color:var(--pc-ink-muted)}
+
+  /* grid */
+  .bl .bl-grid{margin-top:8px}
+  .bl .bl-day{margin:0 0 6px}
+  .bl .bl-day__h{margin:30px 0 12px;padding-top:10px;border-top:1.5px solid var(--c600)}
+  .bl .bl-day__n{font:400 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .bl .bl-tiles{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .bl .bl-tile-li{min-width:0}
+  .bl .bl-tile{display:block;width:100%;padding:0;border:1.5px solid var(--c600);background:var(--pc-bg);color:var(--pc-ink);text-align:left;cursor:pointer;font:inherit}
+  .bl .bl-tile:hover{background:var(--c50)}
+  .bl .bl-tile img{width:100%;height:auto;aspect-ratio:1;background:#1a1420}
+  .bl .bl-tile__miss{display:flex;align-items:center;justify-content:center;aspect-ratio:1;background:var(--c50);font:400 11px var(--pc-font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pc-ink-muted)}
+  .bl .bl-tile__cap{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:7px 9px 8px;border-top:1.5px solid var(--c600)}
+  .bl .bl-tile__h{font:500 12px var(--pc-font-mono);letter-spacing:.04em;color:var(--c800)}
+  .bl .bl-tile__t{font:400 11px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .bl .bl-tile__w{margin-left:auto;font:500 10px var(--pc-font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--c800)}
+  .bl .bl-tile.is-missing{border-style:dashed}
+  .bl .bl-sentinel{height:1px}
+
+  /* how */
+  .bl .bl-how{margin:0 0 12px;padding:0 0 0 1.3em;max-width:780px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .bl .bl-how li{margin:0 0 8px;padding-left:4px}
+  .bl .bl-how b{font-weight:500;color:var(--pc-ink)}
+
+  /* large view */
+  .bl .bl-d{width:min(1080px,calc(100vw - 24px));max-width:none;max-height:calc(100dvh - 24px);margin:auto;padding:0;overflow:auto;border:1.5px solid var(--c600);background:var(--pc-bg);color:var(--pc-ink)}
+  .bl .bl-d::backdrop{background:rgba(8,10,14,.76)}
+  .bl .bl-d__bar{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1.5px solid var(--c600);background:var(--pc-bg)}
+  .bl .bl-d__bar .kicker{margin:0;min-width:0}
+  .bl .bl-d__body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;padding:20px 16px 8px}
+  .bl .bl-d__art{min-width:0;align-self:start;aspect-ratio:1;border:1.5px solid var(--c600);background:#1a1420;overflow:hidden}
+  .bl .bl-d__art img{width:100%;height:100%;object-fit:contain}
+  .bl .bl-d__side{min-width:0}
+  .bl .bl-d__side .h2{margin-top:0}
+  .bl .bl-d__nav{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+  .bl .bl-d__status{min-height:20px}
+  .bl .bl-keys{list-style:none;margin:0 0 8px;padding:0;border-top:1px solid var(--pc-rule-soft)}
+  .bl .bl-key{display:flex;flex-wrap:wrap;gap:2px 10px;padding:7px 0;border-bottom:1px solid var(--pc-rule-soft);font:400 13px/1.5 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .bl .bl-key__n{font-weight:500;color:var(--pc-ink)}
+  .bl .bl-key__a{font:400 12px var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .bl .bl-recipe{margin:0 16px;padding:20px 0 24px;border-top:1.5px solid var(--c600)}
+  .bl .bl-pre{margin:0 0 12px;padding:12px 14px;overflow:auto;max-height:340px;border:1.5px solid var(--c600);background:#0B1B2E;color:#E8EEF5;font:400 12px/1.55 var(--pc-font-mono);white-space:pre;tab-size:2;-webkit-overflow-scrolling:touch}
+  .bl .bl-pre code{background:none;color:inherit;padding:0;font:inherit;white-space:pre}
+  .bl .bl-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .bl .bl-offscreen{position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0}
+  html:has(.bl-d[open]){overflow:hidden}
+
+  @media (max-width:760px){
+    .bl .bl-hero{grid-template-columns:minmax(0,1fr);gap:18px}
+    .bl .bl-d__body{grid-template-columns:minmax(0,1fr)}
+    .bl .bl-facts div,.bl .bl-facts--plain li{grid-template-columns:minmax(0,1fr)}
+  }
+  @media (max-width:640px){
+    .bl .bl-d{width:100vw;height:100dvh;max-height:100dvh;border:0}
+    .bl .bl-d__bar .kicker{font-size:9px}
+    .bl .bl-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .bl .cta .btn{width:100%;justify-content:center}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .bl *,.bl *::before,.bl *::after{scroll-behavior:auto !important;transition:none !important;animation:none !important}
+  }
+</style>
