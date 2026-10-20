@@ -1160,6 +1160,46 @@ test('the word filter’s refusal is shown verbatim, nothing is sent, and a refu
   assert.equal(dev.st.sent.length, 0, 'the chain took nothing');
 });
 
+test('after a send that may have landed the page does not say no post names the body: that sentence is for a refusal only', async () => {
+  // (a) the devnet accepted the post and the wait for its block gave only a pending verdict
+  const a = mountView();
+  await a.c.begin();
+  a.c.stop();
+  await a.c.keys.setSeed(SEEDS.owner);
+  await tick(30);
+  a.dev.chain.waitForTx = async () => { throw Object.assign(new Error('the transaction is pending'), { details: { status: 'pending' } }); };
+  type(a.dom, $(a.rootEl, '[data-cc-post-channel]'), 'MYCH', 'change');
+  type(a.dom, $(a.rootEl, '[data-cc-post-title]'), 'It may still land');
+  type(a.dom, $(a.rootEl, '[data-cc-post-body]'), 'a body');
+  $(a.rootEl, '[data-cc-post-review]').click();
+  $(a.rootEl, '[data-cc-post-send]').click();
+  await tick(400);
+  assert.equal(a.dev.st.sent.length, 1, 'the devnet accepted it');
+  assert.equal($(a.rootEl, '[data-cc-post-result]').dataset.state, 'warn');
+  const sent = txt(a.rootEl, '[data-cc-post-result-text]');
+  assert.match(sent, /^Sent, not confirmed yet: /);
+  assert.doesNotMatch(sent, /no post names it/);
+  assert.match(sent, /Its body was already stored by its hash; the post may still appear\./);
+  // (b) the request left and no answer came back: it may have arrived
+  const b = mountView();
+  await b.c.begin();
+  b.c.stop();
+  await b.c.keys.setSeed(SEEDS.owner);
+  await tick(30);
+  b.dev.chain.submit = async () => { throw new TypeError('Failed to fetch'); };
+  type(b.dom, $(b.rootEl, '[data-cc-post-channel]'), 'MYCH', 'change');
+  type(b.dom, $(b.rootEl, '[data-cc-post-title]'), 'Did it arrive');
+  type(b.dom, $(b.rootEl, '[data-cc-post-body]'), 'a body');
+  $(b.rootEl, '[data-cc-post-review]').click();
+  $(b.rootEl, '[data-cc-post-send]').click();
+  await tick(400);
+  assert.equal($(b.rootEl, '[data-cc-post-result]').dataset.state, 'warn');
+  const maybe = txt(b.rootEl, '[data-cc-post-result-text]');
+  assert.match(maybe, /^Not confirmed: /);
+  assert.doesNotMatch(maybe, /no post names it/);
+  assert.match(maybe, /the post may still appear\./);
+});
+
 test('a reset shows GENESIS CHANGED, reads nothing else and cannot send; an unreachable devnet is said so; ?devnet= is honoured only for localhost and 127.0.0.1; the page starts lazily', async () => {
   const log = [];
   const reset = mountView({ dev: stationsDevnet({ genesis: HEX('9') }), log });

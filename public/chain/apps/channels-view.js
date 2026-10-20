@@ -355,8 +355,10 @@ export function mount(root, env = {}) {
     if (maybe) await refresh({ feed: true });
     const text = e && e.code === 'gate' ? 'Not sent: ' + e.message : sendFailureText(e, { unsent });
     const partial = e && Array.isArray(e.results) && e.results.length ? ' Already sealed before this failed: ' + e.results.map((x) => x.type + ' in block ' + x.height).join(', ') + '.' : '';
-    // a post that got as far as signing had its body stored by its hash first
-    const stored = prefix === 'post' && e && e.sendState && e.sendState !== 'rejected' ? ' Its body was already stored by its hash; no post names it.' : '';
+    // a post that got as far as signing had its body stored by its hash first. "No post names it" is true only when the devnet
+    // refused the send; after a send that may have landed (sent, maybe) the post may still appear.
+    const stored = prefix === 'post' && e && e.sendState === 'refused' ? ' Its body was already stored by its hash; no post names it.'
+      : prefix === 'post' && e && (e.sendState === 'sent' || e.sendState === 'maybe') ? ' Its body was already stored by its hash; the post may still appear.' : '';
     paintResult(prefix, text + partial + stored + (maybe ? ' The devnet’s stations were read again: check the directory before you send again.' : ''), maybe ? 'warn' : 'bad');
   }
 
