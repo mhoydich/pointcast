@@ -31,7 +31,7 @@ for (const room of ['/nouns-money/workshop', '/ues/currency-lab', '/case-studies
         assert.equal(response.headers.get('x-pointcast-tezos-session-bridge'),null);
         assert.equal(await response.text(),method==='HEAD'?'':source);
       }
-      for (const path of [room,room+'.html',room+'/index.html']) {
+      for (const path of [room,room+'.html',room+'/index',room+'/index.html']) {
         const response = await onRequest({
           request:new Request('https://pointcast.xyz'+path+'?source=case',{method}),env:{},
           next:()=>assert.fail('Alias should redirect'),waitUntil:()=>assert.fail('Alias should not log'),
