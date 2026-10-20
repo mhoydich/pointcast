@@ -248,7 +248,7 @@ export function mount(root, env = {}) {
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
   const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {}, said: '' };
+  const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0, drawn: {}, said: '', failures: 0 };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   // The status line is a polite live region: it is written only when its words change (a state change: reading, ready, down, genesis
   // changed, back up). The time of the last read lives in the meta line, which is not live, so a quiet devnet announces nothing.
@@ -268,6 +268,15 @@ export function mount(root, env = {}) {
   function paintHealth() {
     const st = S.data && S.data.status;
     if (!st) return;
+    // The devnet is not answering: the badge must not go on saying LIVE about numbers that are getting older.
+    if (S.failures > 0) {
+      root.dataset.health = 'unknown';
+      set('[data-ob-v="age"]', 'last read ' + duration(Math.max(0, now() - S.data.readAt)) + ' ago');
+      set('[data-ob-health-mark]', HEALTH_MARK.unknown);
+      set('[data-ob-health-word]', 'NO ANSWER');
+      set('[data-ob-s="age"]', 'The devnet did not answer the last ' + plural(S.failures, 'check') + '. These numbers are from the last read, ' + utcClock(S.data.readAt + S.skew) + '.');
+      return;
+    }
     const h = O.healthOf(st.tipTimestamp, now() + S.skew);
     root.dataset.health = h.state;
     set('[data-ob-v="age"]', h.ageMs === null ? '–' : duration(h.ageMs) + ' ago');
@@ -367,6 +376,7 @@ export function mount(root, env = {}) {
         if (!d.checkpoints.length) d.checkpoints = prev.checkpoints;
       }
       S.data = d;
+      S.failures = 0;
       S.skew = d.daily ? O.clockSkew(d.daily, d.readAt) || S.skew : S.skew;
       S.lastHeight = d.status.height;
       if (d.window) S.lastWindowAt = now();
@@ -379,7 +389,11 @@ export function mount(root, env = {}) {
       say('Updated. ' + (S.live ? 'Live: reading again when a new block lands.' : 'Live is off: press Read now to update.') + ' The time of the last read is in the line below.', 'ready');
     } catch (e) {
       if (e && e.name === 'GenesisChanged') { genesisNote(true, e); say('GENESIS CHANGED. Nothing below is read.', 'changed'); S.halted = true; }
-      else say('The devnet did not answer: ' + describeError(e) + (S.data ? ' The numbers shown are from the last read.' : ''), 'down');
+      else {
+        S.failures += 1;
+        say('The devnet did not answer: ' + describeError(e) + (S.data ? ' The numbers shown are from the last read.' : ''), 'down');
+        paintHealth();
+      }
     } finally {
       S.busy = false;
       root.dataset.busy = 'no';
@@ -391,9 +405,16 @@ export function mount(root, env = {}) {
     try {
       const st = readStatus(await net.get('/status'));
       if (where.genesis && st.genesis !== where.genesis) return read(null);
-      if (st.height !== S.lastHeight || now() - S.lastWindowAt > WINDOW_MS) return read(['window', 'daily', 'net', 'capsules', 'editions', 'stations', 'bots']);
+      const back = S.failures > 0;
+      S.failures = 0;
+      if (st.height !== S.lastHeight || now() - S.lastWindowAt > WINDOW_MS || back) return read(['window', 'daily', 'net', 'capsules', 'editions', 'stations', 'bots']);
       if (S.data) { S.data.status = st; paintStatic(st); paintHealth(); paintMeta(); }
-    } catch { /* the next poll tries again; the page keeps its last numbers */ }
+    } catch (e) {
+      // The next poll tries again and the page keeps its last numbers, but it says so: LIVE is not true of a devnet that is not answering.
+      S.failures += 1;
+      say('The devnet did not answer the last check (' + describeError(e) + '). The numbers shown are from the last read and are getting older.', 'down');
+      paintHealth();
+    }
   }
 
   function startTimers() {

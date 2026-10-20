@@ -624,6 +624,51 @@ test('the polite status line is announced only when its words change: a quiet de
   mo.disconnect();
 });
 
+test('when every poll fails the page stops saying LIVE: it says the devnet did not answer, once, and recovers when it does', async () => {
+  let clock = FIX.local.status.tip_timestamp + 1000;
+  const live = { down: false };
+  const dead = async () => ({ ok: false, status: 503, headers: { get: () => null }, text: async () => '{"error":"unavailable"}' });
+  const overrides = new Proxy({}, { get: (_, p) => (live.down && typeof p === 'string' && p.startsWith('/') ? dead : undefined) });
+  const { rootEl, c, dom } = mountView({ name: 'local', overrides, now: () => clock });
+  await c.begin();
+  c.stop();
+  assert.equal(txt(rootEl, '[data-ob-health-word]'), 'LIVE');
+  assert.equal(rootEl.dataset.health, 'live');
+  const status = rootEl.querySelector('[data-ob-status]');
+  const seen = [];
+  const mo = new dom.window.MutationObserver((list) => { for (const m of list) seen.push(m.target.textContent); });
+  mo.observe(status, { childList: true, characterData: true, subtree: true });
+  // the devnet goes away: two polls fail
+  live.down = true;
+  clock += 20000;
+  await c.poll();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.match(txt(rootEl, '[data-ob-status]'), /^The devnet did not answer the last check \(unavailable\)\. The numbers shown are from the last read and are getting older\.$/);
+  assert.equal(rootEl.dataset.state, 'down');
+  assert.equal(txt(rootEl, '[data-ob-health-word]'), 'NO ANSWER');
+  assert.equal(rootEl.dataset.health, 'unknown');
+  assert.notEqual(txt(rootEl, '[data-ob-health-word]'), 'LIVE');
+  assert.match(txt(rootEl, '[data-ob-v="age"]'), /^last read \d+ s ago$|^last read \d+ min/);
+  assert.match(txt(rootEl, '[data-ob-s="age"]'), /^The devnet did not answer the last 1 check\. These numbers are from the last read, \d\d:\d\d:\d\dZ\.$/);
+  assert.equal(seen.length, 1, 'announced once');
+  clock += 15000;
+  await c.poll();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.match(txt(rootEl, '[data-ob-s="age"]'), /the last 2 checks\./, 'the count grows in the line that is not live');
+  assert.equal(seen.length, 1, 'the same failure is not announced again');
+  assert.doesNotMatch(txt(rootEl, '[data-ob-health-word]'), /LIVE/);
+  // the devnet is back: the next poll reads again and the badge returns
+  live.down = false;
+  clock += 15000;
+  await c.poll();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(c.state.failures, 0);
+  assert.equal(txt(rootEl, '[data-ob-health-word]'), 'LIVE');
+  assert.equal(rootEl.dataset.state, 'ready');
+  assert.match(txt(rootEl, '[data-ob-status]'), /^Updated\. Live: /);
+  mo.disconnect();
+});
+
 test('hostile text from the devnet is shown as plain text and makes no element', async () => {
   const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
   const blocks = FIX.local.blocks.map((b, i) => (i === 40 ? { header: b.header, txs: [{ tx: { type: evil, sender: 'pca1' + evil, channel: evil } }, { tx: { type: evil, sender: evil, channel: 'BOT' } }] } : b));
