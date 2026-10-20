@@ -1045,6 +1045,20 @@ test('no banned word and no currency sign anywhere in the app’s files, and the
   assert.deepEqual(currencyHits('a template ' + String.fromCharCode(36) + '{x} and a regex /a' + String.fromCharCode(36) + '/'), []);
 });
 
+test('every table wrapper that can scroll sideways is a labelled region a keyboard can focus and scroll', () => {
+  const wrappers = [...src.page.matchAll(/<div class="tbl[^"]*"([^>]*)>/g)].map((m) => m[0]);
+  assert.ok(wrappers.length >= 3, 'the chart table views, the senders table and the reads table: ' + wrappers.length);
+  for (const w of wrappers) {
+    assert.match(w, /tabindex="0"/, w);
+    assert.match(w, /role="region"/, w);
+    assert.match(w, /aria-label=/, w);
+  }
+  // the CSS that makes them scroll is the reason: a scrollable region with nothing focusable inside cannot be scrolled by keyboard
+  assert.match(read('src/styles/chain.css'), /\.chn \.tbl\{[^}]*overflow-x:auto/);
+  // and the view itself still builds the tables inside them, never wrappers of its own
+  assert.doesNotMatch(code(src.view), /className = 'tbl/);
+});
+
 test('a focused chart mark is clearly marked: an ink outline and stroke over a visible fill, never a 14% tint with the outline removed', () => {
   const css = src.page.replace(/\/\*[\s\S]*?\*\//g, '');
   const rule = (sel) => (css.match(new RegExp(sel.replace(/[.:()]/g, '\\$&') + '\\{([^}]*)\\}')) || [])[1] || '';
