@@ -41,7 +41,9 @@ export const WORDS = Object.freeze({
 
 /**
  * The model. `opts.stations` seeds extra stations ({code, owner, name, mode, crew, pinned, offer}),
- * `opts.posts` seeds posts ({channel, title, body, sender}), `opts.max` is max_stations.
+ * `opts.posts` seeds posts ({channel, title, body, sender, bot, senderKind}), `opts.max` is max_stations.
+ * `opts.label` and `opts.statusChainId` are what GET /status says for its label and its chain_id (for the
+ * suites that feed the page hostile text); a bot or a sender kind on a post is what its card says.
  */
 export function stationsDevnet(opts = {}) {
   const max = opts.max ?? 4;
@@ -74,7 +76,7 @@ export function stationsDevnet(opts = {}) {
     return { height: st.height, index: 0 };
   }
 
-  function cardOf(tx, signed, hash = pcc.txHash(signed)) {
+  function cardOf(tx, signed, hash = pcc.txHash(signed), meta = {}) {
     const { sender, nonce, ...rest } = tx;
     const hidden = st.hidden.has(hash);
     const payload = { ...rest };
@@ -83,9 +85,9 @@ export function stationsDevnet(opts = {}) {
       if (hidden) payload.title = '[hidden by the devnet admin]';
       else if (st.bodies.has(tx.body_hash)) payload.body = st.bodies.get(tx.body_hash);
     }
-    return { hash, kind: tx.type, ...(tx.type === 'publish_block' ? { label: 'devnet-2 · bot · unmoderated' } : {}), ...(hidden ? { hidden: true } : {}), nonce, payload, sender, sender_info: { kind: 'human' }, sig_mode: 'raw' };
+    return { hash, kind: tx.type, ...(tx.type === 'publish_block' ? { label: 'devnet-2 · bot · unmoderated' } : {}), ...(hidden ? { hidden: true } : {}), ...(meta.bot ? { bot: meta.bot } : {}), nonce, payload, sender, sender_info: { kind: meta.senderKind || 'human' }, sig_mode: 'raw' };
   }
-  const render = (e) => cardOf(e.tx, e.signed, e.hash);
+  const render = (e) => cardOf(e.tx, e.signed, e.hash, e.meta);
 
   function refuse(message, status = 400) {
     return Object.assign(new Error(message), { status, details: { error: message, network: 'devnet' } });
@@ -148,7 +150,7 @@ export function stationsDevnet(opts = {}) {
     const tx = { type: 'publish_block', sender: p.sender || HOUSE, nonce: 0, channel: p.channel, title: p.title, body_hash, media_uri: null };
     if (p.hidden) st.hidden.add(hash);
     st.height += 1;
-    st.blocks.push({ height: st.height, timestamp: 1792480000000 + st.height * 3000, entries: [{ tx, signed: null, hash }] });
+    st.blocks.push({ height: st.height, timestamp: 1792480000000 + st.height * 3000, entries: [{ tx, signed: null, hash, meta: { bot: p.bot, senderKind: p.senderKind } }] });
   }
 
   const feed = ({ limit = 20, before = null } = {}) => {
@@ -160,8 +162,8 @@ export function stationsDevnet(opts = {}) {
   };
 
   const statusJson = () => ({
-    chain_id: CHAIN_ID, genesis_hash: st.genesis, height: st.height, tip_hash: HEX('a'), tip_timestamp: 1792480000000 + st.height * 3000, state_root: HEX('c'), mempool: 0, accounts: 3, agents: 0, bots: 0, drops: 0,
-    total_supply: 1000000, max_supply: 1000000000, label: 'devnet-2 · bot · unmoderated', may_reset: true, network: 'devnet', value: 'none', anchors: 'none: the devnet does not anchor to Tezos', house: st.house,
+    chain_id: opts.statusChainId || CHAIN_ID, genesis_hash: st.genesis, height: st.height, tip_hash: HEX('a'), tip_timestamp: 1792480000000 + st.height * 3000, state_root: HEX('c'), mempool: 0, accounts: 3, agents: 0, bots: 0, drops: 0,
+    total_supply: 1000000, max_supply: 1000000000, label: opts.label || 'devnet-2 · bot · unmoderated', may_reset: true, network: 'devnet', value: 'none', anchors: 'none: the devnet does not anchor to Tezos', house: st.house,
   });
   const paramsJson = () => ({
     chain_id: CHAIN_ID,

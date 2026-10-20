@@ -26,12 +26,12 @@
 //     ?devnet= only for localhost and 127.0.0.1, writes only on button presses
 //     after a confirm box, and says what moderation exists and what does not.
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { DEVNET, DEVNET_PREVIOUS, RESET } from '../src/data/chain-home.ts';
 import { APP, HONESTY_LINE, HOW_STEPS, MODERATION, MODE_CARDS, NOT_LIST, RESERVED_LANES, RULES, STATION_FACTS, codeSnippet } from '../src/data/chain-app-channels.ts';
@@ -935,11 +935,11 @@ function fakeStorage(init = {}) {
   const m = new Map(Object.entries(init));
   return { m, getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
 }
-function mountView({ search = '', dev = feedDevnet(), extra = {}, storage = fakeStorage(), log = null } = {}) {
+function mountView({ search = '', dev = feedDevnet(), extra = {}, storage = fakeStorage(), log = null, mod = view } = {}) {
   const dom = new JSDOM('<!doctype html><html><body>' + appMarkup() + '</body></html>', { url: 'http://localhost/chain/channels/' + search });
   const rootEl = dom.window.document.querySelector('[data-channels-app]');
   const fetchFn = async (u, i) => { if (log) log.push((i && i.method ? i.method : 'GET') + ' ' + String(u).replace(DEVNET.url, '').replace('http://127.0.0.1:8799', '')); return dev.fetch(u, i); };
-  const c = view.mount(rootEl, { window: dom.window, fetch: fetchFn, storage, supported: true, connect: async () => dev.chain, wait: { timeoutMs: 3000, intervalMs: 10 }, ...extra });
+  const c = mod.mount(rootEl, { window: dom.window, fetch: fetchFn, storage, supported: true, connect: async () => dev.chain, wait: { timeoutMs: 3000, intervalMs: 10 }, ...extra });
   return { dom, rootEl, c, dev, storage };
 }
 const $ = (rootEl, sel) => rootEl.querySelector(sel);
@@ -1005,6 +1005,105 @@ test('hostile text from the devnet is shown as plain text and makes no element',
   assert.ok(rootEl.textContent.includes('alert(1)'), 'it is on the page, as text');
   assert.ok(![...rootEl.textContent].some((ch) => ch === '\u202e'), 'a direction override is not carried to the page');
   for (const el of rootEl.querySelectorAll('*')) if (!el.closest('noscript')) for (const a of el.attributes) assert.ok(!/^(on|href|src|srcdoc|style|action|formaction)/i.test(a.name), a.name);
+});
+
+// ---- every field the devnet sends is text, in every place it is shown — and the suite fails when any one of them is not
+const EVIL = '<img src=x onerror=alert(1)><script>alert(2)</script>';
+const PLAIN = 'plain words here';
+/** Every element under the root by tag and attribute names, so an element made from text shows up as a difference from plain text. */
+const shapeOf = (rootEl) => [...rootEl.querySelectorAll('*')].filter((n) => !n.closest('noscript')).map((n) => n.tagName + '[' + [...n.attributes].map((a) => a.name).sort().join(',') + ']').sort();
+
+/** A copy of the page's view with edits to its source, in its own module graph, for the mutation proofs. */
+const viewDirs = [];
+after(() => { for (const d of viewDirs) rmSync(d, { recursive: true, force: true }); });
+async function viewVariant(edits) {
+  const dir = mkdtempSync(join(tmpdir(), 'channels-view-mut-'));
+  viewDirs.push(dir);
+  const put = (rel, from, edit) => {
+    let s = read(from);
+    if (edit) { for (const [a, b] of edit) { assert.equal(s.split(a).length - 1, 1, 'the line to mutate appears exactly once: ' + a); s = s.replace(a, () => b); } }
+    mkdirSync(join(dir, rel, '..'), { recursive: true });
+    writeFileSync(join(dir, rel), s);
+  };
+  put('chain/apps/channels-view.js', FILES.view, edits);
+  for (const f of ['channels.js', 'kind-words.js', 'chain-kit.js', 'key-panel.js']) put('chain/apps/' + f, 'public/chain/apps/' + f);
+  put('chain/first-mints/lib/pointcast-chain.js', 'public/chain/first-mints/lib/pointcast-chain.js');
+  return import(pathToFileURL(join(dir, 'chain/apps/channels-view.js')).href);
+}
+
+/** The page over a devnet whose every text field (status label, chain id, station name, post title, body, bot, sender kind, a refusal) is `text`. */
+async function hostileScene(text, mod = view) {
+  const dev = stationsDevnet({
+    label: text,
+    statusChainId: text,
+    stations: [{ code: 'EVIL', owner: OWNER_ADDR, name: text, mode: 'open', crew: [CREW_ADDR] }, { code: 'OPEN1', owner: A1, name: text, mode: 'open' }],
+    posts: [{ channel: 'EVIL', title: text, body: text, sender: OWNER_ADDR, bot: text, senderKind: text }, { channel: 'OPEN1', title: text, body: text, sender: A1 }],
+  });
+  const { rootEl, c } = mountView({ dev, search: '?channel=EVIL', mod });
+  const out = { shapes: [], text: {} };
+  await c.begin();
+  c.stop();
+  out.shapes.push(shapeOf(rootEl)); // the first read: the table, the detail, the feed with its bot, the meta line
+  out.text.meta = txt(rootEl, '[data-cc-meta]');
+  out.text.feed = rootEl.querySelector('[data-cc-feed]').textContent;
+  // a second poll brings a new post, titled `text`, on the channel in view
+  c.select('OPEN1');
+  const k = await keyOf('out');
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: dev.fetch });
+  await net.post('/body', { body: text });
+  await K.signAndSend(dev.chain, k, K.pcc.buildTx('publish_block', { sender: k.sender, nonce: 0, channel: 'OPEN1', title: text, body_hash: K.pcc.bodyHash(text) }));
+  await c.refresh({ feed: true });
+  out.shapes.push(shapeOf(rootEl));
+  out.text.note = txt(rootEl, '[data-cc-feed-note]');
+  // the owner broadcasts, and the devnet refuses in its own (hostile) words
+  await c.keys.setSeed(SEEDS.owner);
+  await tick(30);
+  dev.chain.submit = async () => { throw Object.assign(new Error(text), { status: 400, details: { error: text } }); };
+  const dom = rootEl.ownerDocument.defaultView;
+  const typeIn = (sel, v, ev = 'input') => { const n = rootEl.querySelector(sel); n.value = v; n.dispatchEvent(new dom.Event(ev, { bubbles: true })); };
+  typeIn('[data-cc-post-channel]', 'EVIL', 'change');
+  typeIn('[data-cc-post-title]', 'a fine title');
+  typeIn('[data-cc-post-body]', 'a fine body');
+  rootEl.querySelector('[data-cc-post-review]').click();
+  rootEl.querySelector('[data-cc-post-send]').click();
+  await tick(400);
+  out.shapes.push(shapeOf(rootEl));
+  out.text.result = txt(rootEl, '[data-cc-post-result-text]');
+  out.all = rootEl.textContent;
+  return out;
+}
+
+test('every text field the devnet sends is shown as text in every place it appears: with hostile markup in all of them the page has exactly the elements it has with plain words', async () => {
+  const hostile = await hostileScene(EVIL);
+  const plain = await hostileScene(PLAIN);
+  assert.equal(hostile.shapes.length, 3);
+  assert.deepEqual(hostile.shapes, plain.shapes, 'not one element more or less, with any attribute, at any step');
+  // and the words are on the page, as words
+  assert.ok(hostile.text.meta.includes(EVIL.slice(0, 40)), 'the status label and chain id: ' + hostile.text.meta);
+  assert.ok(hostile.text.feed.includes('<img src=x'), 'a title and a body');
+  assert.ok(hostile.text.feed.includes('bot <img src=x'), 'the bot');
+  assert.equal(hostile.text.note, 'A new post on OPEN1: ' + EVIL, 'the new post’s title, announced');
+  assert.ok(hostile.text.result.includes(EVIL.slice(0, 30)), 'the devnet’s refusal: ' + hostile.text.result);
+  assert.ok(hostile.all.includes('alert(1)'));
+});
+
+test('that check has teeth: each place a devnet field could be turned into markup is made one in a copy of the view, and the hostile page then differs from the plain one — mutation', async () => {
+  const caught = async (edits, what) => {
+    const mod = await viewVariant(edits);
+    const hostile = await hostileScene(EVIL, mod);
+    const plain = await hostileScene(PLAIN, mod);
+    assert.notDeepEqual(hostile.shapes, plain.shapes, what + ': the hostile page grew an element');
+  };
+  // the guarded writer every status line, note and meta line goes through: the feed note (a new post’s title) and the meta line (the status label)
+  await caught([["if (n && n.textContent !== text) n.textContent = text;", "if (n && n.textContent !== text) n['innerHTML'] = text;"]], 'put() written as innerHTML by a quoted key');
+  await caught([["if (n && n.textContent !== text) n.textContent = text;", "if (n && n.textContent !== text) Reflect.set(n, 'inner' + 'HTML', text);"]], 'put() written with Reflect.set and a key in two halves');
+  // the post meta line, which carries the bot
+  await caught([
+    ["li.append(el(doc, 'p', 'fine', 'Block #' + groups(p.height)", "li.append(elAsHtml(doc, 'p', 'fine', 'Block #' + groups(p.height)"],
+    ["function el(doc, tag, cls, text) {", "function elAsHtml(doc, tag, cls, text) { const n = doc.createElement(tag); n.className = cls; n['innerHTML'] = text; return n; }\nfunction el(doc, tag, cls, text) {"],
+  ], 'the post meta line written as innerHTML');
+  // the devnet's refusal in the result line, and a station name in the table
+  await caught([["if (n && n.textContent !== text) n.textContent = text;", "if (n && n.textContent !== text) n.insertAdjacentHTML('beforeend', text);"]], 'put() written with insertAdjacentHTML');
 });
 
 test('choosing a channel shows its station and its live feed; a hidden post is marked; the buttons offer only what the key may do', async () => {
@@ -1738,6 +1837,7 @@ test('nothing from the devnet becomes markup, a link or a style, and this page m
   assertNoSinks(src.view, 'channels-view.js');
   assertNoSinks(src.logic, 'channels.js');
   assertNoSinks(src.keys, 'key-panel.js');
+  assertNoSinks(src.words, 'kind-words.js');
   const inline = (src.page.match(/<script is:inline[\s\S]*?<\/script>/) || [''])[0];
   assertNoSinks(inline, 'the page script');
   assert.equal((code(src.view).match(/\.href\s*=/g) || []).length, 0);
@@ -1746,6 +1846,18 @@ test('nothing from the devnet becomes markup, a link or a style, and this page m
   assert.throws(() => assertNoSinks(src.view + '\nn.innerHTML = x;', 'view'), /an HTML sink/);
   assert.throws(() => assertNoSinks(src.view + "\nn.setAttribute('onclick', x);", 'view'), /a link, source or style sink/);
   assert.throws(() => assertNoSinks(src.logic + '\nn.insertAdjacentHTML("beforeend", x);', 'logic'), /an HTML sink/);
+  // a sink written to dodge the plain `.innerHTML =`: a quoted key, a key in two halves, Reflect.set, the writers the view really has
+  const other = /a sink reached another way/;
+  for (const evil of ["\nn['innerHTML'] = x;", '\nn["outerHTML"] = x;', '\nn[`innerHTML`] = x;', "\nn['inner' + 'HTML'] = x;", "\nn[\"inner\"+\"HTML\"] = x;", "\nn['outer' + 'HTML'] = x;", "\nReflect.set(n, k, x);", "\nObject.defineProperty(n, 'innerHTML', { value: x });", "\nn['href'] = x;", "\nn['onclick'] = x;"]) {
+    assert.throws(() => assertNoSinks(src.view + evil, 'view'), other, evil.trim());
+  }
+  // the exact writes the view makes, with the sink put in by a computed key: the guarded writer, the post meta line, a table cell
+  const writer = "if (n && n.textContent !== text) n.textContent = text;";
+  assert.ok(src.view.includes(writer));
+  assert.throws(() => assertNoSinks(src.view.replace(writer, "if (n && n.textContent !== text) n['innerHTML'] = text;"), 'view'), other);
+  assert.throws(() => assertNoSinks(src.view.replace(writer, "if (n && n.textContent !== text) n['inner' + 'HTML'] = text;"), 'view'), other);
+  assert.throws(() => assertNoSinks(src.view.replace("li.append(el(doc, 'p', 'fine', 'Block #'", "li.append(Object.assign(el(doc, 'p'), { ['innerHTML']: 'Block #'"), 'view'), other);
+  assert.throws(() => assertNoSinks(src.view.replace("td.colSpan = 6;", "td.colSpan = 6; td['innerHTML'] = text;"), 'view'), other);
 });
 
 test('the page writes only the SDK’s signed transactions and a body by its hash: two routes, each behind a button and a confirm, after the page has checked again', () => {

@@ -2140,6 +2140,86 @@ test('a roll that cannot be read does not lose the post, and says what to do', a
   m.c.stop();
 });
 
+// ---- every field that can carry text into the page is text, in every place it is shown — and the suite fails when any one of them is not
+const EVIL = '<img src=x onerror=alert(1)><script>alert(2)</script>';
+const PLAIN = 'plain words here';
+/** Every element under the root by tag and attribute names, so an element made from text shows up as a difference from plain words. */
+const shapeOf = (rootEl) => [...rootEl.querySelectorAll('*')].filter((n) => !n.closest('noscript')).map((n) => n.tagName + '[' + [...n.attributes].map((a) => a.name).sort().join(',') + ']').sort();
+
+/**
+ * The page when the text in a replay fault (its name and its reason, in the check line, the fault box and the status), the devnet’s
+ * chain id in the status line, a refusal of the post, and a journal entry’s date and tx (the plan’s error list) are all `text`.
+ */
+async function hostileScene(text, mods = REAL) {
+  const out = { shapes: [], text: {} };
+  // (1) a fault: the check line, the fault box, the status, the evidence
+  const fault = new X.ReplayFault({ fault: text, height: 61, reason: text, evidenceJson: '{"evidence":"' + text.replace(/"/g, '\\"') + '"}' });
+  const f = mountView({ mods, startReplay: (a) => { a.onProgress({ height: 30, tip: 92 }); return { promise: Promise.reject(fault), cancel() {} }; }, dev: { overrides: { '/status': (u, i, { rep }) => rep({ ...FX.status, chain_id: text }) } } });
+  await f.c.begin();
+  out.shapes.push(shapeOf(f.rootEl));
+  out.text.meta = txt(f.rootEl, '[data-wt-meta]');
+  await f.c.replay();
+  await tick(20);
+  out.shapes.push(shapeOf(f.rootEl));
+  out.text.fault = txt(f.rootEl, '[data-wt-fault-text]');
+  out.text.check = txt(f.rootEl, '[data-wt-checks]');
+  out.text.evidence = txt(f.rootEl, '[data-wt-fault-json]');
+  f.c.stop();
+  // (2) a journal that disagrees with this replay (its date and tx are text), then a send the devnet refuses in its own words
+  const storage = fakeStorage();
+  storage.setItem(X.JOURNAL_SLOT, JSON.stringify({ v: 1, entries: [{ genesis: GENESIS, epoch: EPOCH, address: KEY.sender, height: 10, block_hash: HEX('9'), state_root: HEX('9'), signed_at: text, tx: text }] }));
+  const j = mountView({ mods, storage });
+  await j.c.begin();
+  await j.c.keys.setSeed(SEED);
+  await j.c.replay();
+  await tick(400);
+  out.shapes.push(shapeOf(j.rootEl));
+  out.text.plan = txt(j.rootEl, '[data-wt-errors]');
+  j.c.stop();
+  const r = mountView({ mods, dev: { overrides: { '/tx': (u, i, { rep }) => rep({ error: text }, 400) } } });
+  await r.c.begin();
+  await r.c.keys.setSeed(SEED);
+  await r.c.replay();
+  await until(() => $(r.rootEl, '[data-wt-confirm]').hidden === false);
+  $(r.rootEl, '[data-wt-send]').click();
+  await until(() => ['ok', 'bad', 'warn'].includes($(r.rootEl, '[data-wt-result]').dataset.state));
+  out.shapes.push(shapeOf(r.rootEl));
+  out.text.result = txt(r.rootEl, '[data-wt-result-text]');
+  out.text.status = txt(r.rootEl, '[data-wt-status]');
+  r.c.stop();
+  return out;
+}
+
+test('every field that carries text into the page is shown as text in every place it appears: with hostile markup in all of them the page has exactly the elements it has with plain words', async () => {
+  const hostile = await hostileScene(EVIL);
+  const plain = await hostileScene(PLAIN);
+  assert.equal(hostile.shapes.length, 4);
+  assert.deepEqual(hostile.shapes, plain.shapes, 'not one element more or less, with any attribute, at any step');
+  // the words are on the page, as words
+  assert.ok(hostile.text.meta.includes(EVIL.slice(0, 40)), 'the chain id in the status line: ' + hostile.text.meta);
+  assert.ok(hostile.text.fault.includes('<img src=x'), 'the fault in the fault box: ' + hostile.text.fault);
+  assert.ok(hostile.text.check.includes('<img src=x'), 'and in the check line');
+  assert.equal(hostile.text.evidence, '{"evidence":"' + EVIL.replace(/"/g, '\\"') + '"}', 'the evidence is verbatim');
+  assert.ok(hostile.text.plan.includes('<img src=x'), 'the plan’s error list: ' + hostile.text.plan);
+  assert.ok(hostile.text.result.includes(EVIL.slice(0, 30)), 'the devnet’s refusal: ' + hostile.text.result);
+});
+
+test('that check has teeth: each place a field could be turned into markup is made one in a copy of the view, and the hostile page then differs from the plain one — mutation', async () => {
+  const caught = async (edits, what) => {
+    const mods = await variant({ view: (s) => edits.reduce((acc, [a, b]) => { assert.equal(acc.split(a).length - 1, 1, 'the line to mutate appears exactly once: ' + a); return acc.replace(a, () => b); }, s) });
+    const hostile = await hostileScene(EVIL, mods);
+    const plain = await hostileScene(PLAIN, mods);
+    assert.notDeepEqual(hostile.shapes, plain.shapes, what + ': the hostile page grew an element');
+  };
+  // the writer every status, fault and result line goes through
+  await caught([["if (n && n.textContent !== text) n.textContent = text;", "if (n && n.textContent !== text) n['innerHTML'] = text;"]], 'set() written as innerHTML by a quoted key');
+  await caught([["if (n && n.textContent !== text) n.textContent = text;", "if (n && n.textContent !== text) n['inner' + 'HTML'] = text;"]], 'set() written with a key in two halves');
+  // the check line, which carries the fault and error text
+  await caught([["li.append(m, el(doc, 'span', 'ca-ck__s', WORD[c.state]), el(doc, 'span', 'ca-ck__t', c.text));", "const t = el(doc, 'span', 'ca-ck__t'); t['innerHTML'] = c.text; li.append(m, el(doc, 'span', 'ca-ck__s', WORD[c.state]), t);"]], 'the check line');
+  // the plan's error list
+  await caught([["for (const e of real) errs.append(el(doc, 'li', '', e));", "for (const e of real) { const li = el(doc, 'li', ''); li['innerHTML'] = e; errs.append(li); }"]], 'the plan’s error list');
+});
+
 test('hostile text from the devnet stays text: names, addresses, results and tx ids in the roll make no element — and the walls are two, proven by mutation', async () => {
   const hostile = (u, i, { rep }) => rep(rollJson());
   const scene = async (mods) => {
@@ -2187,6 +2267,17 @@ test('nothing from the devnet becomes markup, a link or a style: the only link i
   assert.throws(() => assertNoSinks(src.view + '\nn.setAttribute("src", x);', 'view', { allow }), /a link, source or style sink/);
   assert.throws(() => assertNoSinks(src.view.replace("if (text !== undefined) n.textContent = text;", "if (text !== undefined) n.innerHTML = text;"), 'view', { allow }), /an HTML sink/);
   assert.throws(() => assertNoSinks(src.shim + '\nself.document.write(x);', 'shim'), /an HTML sink/);
+  // a sink written to dodge the plain `.innerHTML =`: a quoted key, a key in two halves, Reflect.set, and the writers the view really has
+  const other = /a sink reached another way/;
+  for (const evil of ["\nn['innerHTML'] = x;", '\nn["outerHTML"] = x;', "\nn['inner' + 'HTML'] = x;", "\nReflect.set(n, k, x);", "\nObject.defineProperty(n, 'innerHTML', { value: x });", "\nn['href'] = x;"]) {
+    assert.throws(() => assertNoSinks(src.view + evil, 'view', { allow }), other, evil.trim());
+    assert.throws(() => assertNoSinks(src.logic + evil, 'logic'), other, evil.trim());
+  }
+  const writer = "if (n && n.textContent !== text) n.textContent = text;";
+  assert.ok(src.view.includes(writer));
+  assert.throws(() => assertNoSinks(src.view.replace(writer, "if (n && n.textContent !== text) n['innerHTML'] = text;"), 'view', { allow }), other);
+  assert.throws(() => assertNoSinks(src.view.replace("el(doc, 'span', 'ca-ck__t', c.text)", "Object.assign(el(doc, 'span', 'ca-ck__t'), { ['innerHTML']: c.text })"), 'view', { allow }), other);
+  assert.throws(() => assertNoSinks(src.view.replace("errs.append(el(doc, 'li', '', e))", "errs.append(Object.assign(el(doc, 'li', ''), { ['inner' + 'HTML']: e }))"), 'view', { allow }), other);
   assert.equal((code(src.view).match(/\.href\s*=/g) || []).length, 1, 'exactly the one allowed');
   assert.equal((code(src.view).match(/\.style\./g) || []).length, 1, 'one style, the bar’s width');
   assert.match(code(src.view), /fill\.style\.width = \(total > 0 \? Math\.min\(100, Math\.floor\(\(done \/ total\) \* 100\)\) : 0\) \+ '%'/);

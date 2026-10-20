@@ -42,6 +42,11 @@ export function assertNoSinks(src, label, { allow = [] } = {}) {
   const m2 = link.exec(c);
   if (m2) throw new Error(label + ': a link, source or style sink (' + m2[0] + ')');
   if (/\son[a-z]+\s*=\s*["']/i.test(c)) throw new Error(label + ': an inline event handler');
+  // A sink reached another way, written to dodge the checks above: a quoted or computed key (n['innerHTML'] = x), a key spelled in two
+  // halves ('inner' + 'HTML'), Reflect.set or Object.defineProperty. None has a use in these pages, so none is allowed.
+  const other = /\[\s*(['"`])(?:innerHTML|outerHTML|insertAdjacentHTML|srcdoc|href|src|action|formAction|cssText|on[a-z]+)\1\s*\]|(['"`])(?:inner|outer)\2\s*\+|\+\s*(['"`])(?:inner|outer)?HTML\3|\bReflect\.(?:set|defineProperty|apply)\s*\(|\bObject\.defineProperty\s*\(|\bObject\.(?:assign|setPrototypeOf)\s*\(\s*(?:n|el|node|li|td|th|span|host|box|a)\b/i;
+  const m3 = other.exec(c);
+  if (m3) throw new Error(label + ': a sink reached another way (' + m3[0] + ')');
 }
 
 /** The reads of a read-only app are GETs: no POST, no method override, no XHR. */
