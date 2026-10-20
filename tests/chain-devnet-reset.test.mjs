@@ -16,6 +16,7 @@ import { existsSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { SDK_SOURCE } from '../src/data/chain-sdk-source.ts';
 import {
   DEVNET,
   DEVNET_2_GENESIS,
@@ -193,8 +194,9 @@ test('First Mints: live minter, rp pointcast.xyz, off-origin notice, pinned SDK 
   assert.match(live, /confirm: async/);
   assert.doesNotMatch(live, /localStorage\.setItem\([^)]*secret|privateKey/i);
   const sha = (p) => createHash('sha256').update(readFileSync(new URL(p, root))).digest('hex');
-  // pointcast-chain sdk/ at main 33a2ba9.
-  assert.equal(sha('public/chain/first-mints/lib/pointcast-chain.js').slice(0, 16), '33bef6b76c98e5e2');
+  // The SDK is pinned once, in src/data/chain-sdk-source.ts (written by scripts/sync-chain-sdk.mjs);
+  // tests/chain-app-sdksync.test.mjs holds the three served copies to it.
+  assert.equal(sha('public/chain/first-mints/lib/pointcast-chain.js'), SDK_SOURCE.sha256);
   assert.equal(sha('public/chain/first-mints/lib/first-mint.js').slice(0, 16), '43aa51b3f3fcb624');
 });
 

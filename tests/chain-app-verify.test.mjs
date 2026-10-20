@@ -205,10 +205,10 @@ test('the SDK this app imports exports every name it uses, and the wasm pin is t
   const used = new Set([...logicSrc.matchAll(/\bpcc\.([A-Za-z0-9_]+)/g)].map((m) => m[1]));
   assert.ok(used.size >= 15, [...used].join(' '));
   for (const name of used) assert.ok(exported.has(name), 'the SDK exports ' + name);
-  // the older SDK at /chain/sdk/ lacks the three helpers this lesson is built on
-  const old = read('public/chain/sdk/pointcast-chain.js');
-  for (const name of ['blockHeaderHash', 'sealDigest', 'txRoot']) assert.ok(sdk.includes('export function ' + name), name + ' is in the v0.2 SDK');
-  assert.equal(old.includes('export function blockHeaderHash'), false, 'if this fails, /chain/sdk/ was updated: the app may import it instead');
+  // the three helpers this lesson is built on are in the SDK, and /chain/sdk/ now serves the same bytes
+  // (it was the older v0.1 file until scripts/sync-chain-sdk.mjs; tests/chain-app-sdksync.test.mjs holds that line)
+  for (const name of ['blockHeaderHash', 'sealDigest', 'txRoot']) assert.ok(sdk.includes('export function ' + name), name + ' is in the SDK');
+  assert.equal(read('public/chain/sdk/pointcast-chain.js'), sdk, '/chain/sdk/ serves the same SDK as ' + SDK_PATH);
   const wasmFile = createHash('sha256').update(readFileSync(new URL('public/chain/yard/verifier/pointcast_chain.wasm', root))).digest('hex');
   assert.equal(WASM_SHA256, wasmFile);
   assert.match(read('public/chain/yard/verifier/pointcast_chain.wasm.sha256'), new RegExp(wasmFile));

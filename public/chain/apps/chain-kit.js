@@ -17,8 +17,8 @@
 //   - a key made in the browser lives in memory unless the person asks to
 //     keep it on this device. It signs on a devnet only: no value, may reset.
 //
-// The SDK is the v0.2 copy at /chain/first-mints/lib/ (the file at /chain/sdk/
-// is the older v0.1 one without the block, capsule and tx-form helpers).
+// The SDK is the copy at /chain/first-mints/lib/. /chain/sdk/ and /chain/net/
+// serve the same bytes (scripts/sync-chain-sdk.mjs keeps the three equal).
 
 import * as pcc from '../first-mints/lib/pointcast-chain.js';
 
