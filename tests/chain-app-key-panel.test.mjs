@@ -199,6 +199,70 @@ test('Keep it on this device writes the key to one shared slot, and the next vis
   assert.equal(b.panel.dataset.state, 'none');
 });
 
+test('a key that exists is not replaced by one press: Make a key and Use this key show the old key and ask first, and the kept copy is untouched until the second press', async () => {
+  const st = fakeStorage();
+  const { c, q, clip } = mountPanel({ storage: st });
+  await c.ready;
+  q('[data-kp-keep]').checked = true;
+  q('[data-kp-make]').click();
+  await tick(30);
+  const key1 = c.key();
+  assert.equal(st.m.get(KEY_SLOT), key1.seedHex, 'kept');
+  assert.equal(q('[data-kp-make]').textContent, 'Make a new key', 'the button no longer says it only makes a key');
+  // one press: asks. The key, the stored slot and the listeners are unchanged, and the old key is on show so it can be copied
+  const seen = [];
+  c.onChange((k) => seen.push(k && k.sender));
+  seen.length = 0;
+  q('[data-kp-make]').click();
+  await tick(30);
+  assert.equal(c.key().seedHex, key1.seedHex, 'still the old key');
+  assert.equal(st.m.get(KEY_SLOT), key1.seedHex, 'the kept copy is not overwritten');
+  assert.deepEqual(seen, [], 'no listener was told of a change');
+  assert.equal(q('[data-kp-seed]').hidden, false);
+  assert.equal(q('[data-kp-seed]').value, key1.seedHex, 'the key that would go is shown');
+  assert.equal(q('[data-kp-make]').textContent, 'Replace it');
+  assert.equal(q('[data-kp-keepold]').hidden, false);
+  assert.match(q('[data-kp-status]').textContent, new RegExp('^This would replace ' + key1.sender + ', which is kept on this device\\. If it holds play ATTN, leads a lot or sealed a capsule, you lose it unless you copy it first'));
+  q('[data-kp-copy]').click();
+  await tick(10);
+  assert.deepEqual(clip, [key1.seedHex]);
+  // "Keep this key" backs out
+  q('[data-kp-keepold]').click();
+  assert.equal(q('[data-kp-make]').textContent, 'Make a new key');
+  assert.equal(q('[data-kp-keepold]').hidden, true);
+  assert.match(q('[data-kp-status]').textContent, /^Your key signs as /);
+  // two presses replace it, and the stored slot follows
+  q('[data-kp-make]').click();
+  q('[data-kp-make]').click();
+  await tick(30);
+  const key2 = c.key();
+  assert.notEqual(key2.seedHex, key1.seedHex);
+  assert.equal(st.m.get(KEY_SLOT), key2.seedHex);
+  assert.equal(q('[data-kp-keepold]').hidden, true);
+  assert.equal(seen.at(-1), key2.sender);
+  // Use this key asks the same way, and a malformed key does not arm anything
+  q('[data-kp-own]').value = 'nope';
+  q('[data-kp-use]').click();
+  await tick(10);
+  assert.equal(q('[data-kp-keepold]').hidden, true, 'a refusal is not a question');
+  q('[data-kp-own]').value = 'ab'.repeat(32);
+  q('[data-kp-use]').click();
+  await tick(30);
+  assert.equal(c.key().seedHex, key2.seedHex, 'one press only asks');
+  assert.equal(st.m.get(KEY_SLOT), key2.seedHex);
+  assert.match(q('[data-kp-own-note]').textContent, /press the button again to replace it/);
+  q('[data-kp-use]').click();
+  await tick(30);
+  assert.equal(c.key().seedHex, 'ab'.repeat(32));
+  assert.equal(st.m.get(KEY_SLOT), 'ab'.repeat(32));
+  // with no key yet there is nothing to lose: the first press makes one
+  const fresh = mountPanel();
+  await fresh.c.ready;
+  fresh.q('[data-kp-make]').click();
+  await tick(30);
+  assert.ok(fresh.c.key());
+});
+
 test('a stored value that is not a key is ignored, and a browser without storage still makes keys in memory', async () => {
   const bad = mountPanel({ storage: fakeStorage({ [KEY_SLOT]: 'not a key' }) });
   await bad.c.ready;
