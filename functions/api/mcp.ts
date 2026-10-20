@@ -99,6 +99,7 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
  *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
  *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
+ *   sunset_downs_card     ({race?})    Sunset Downs: today's and tomorrow's race cards, results, leaderboard, rules (read-only)
  *   wants_board           ({id?})      the Want Ads board: open wants + Clerk-scored offers (read-only)
  *   wants_post            ({title, need, budget?, mustHave?, who})  post a want (rate-limited)
  *   wants_offer           ({want, agent, product, price?, url, terms?, relationship})  answer a want; the Clerk scores it
@@ -226,7 +227,7 @@ const MCP_PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'pointcast';
 const SERVER_VERSION = '0.14.0';
 const V2_SERVER_NAME = 'pointcast-v2';
-const V2_SERVER_VERSION = '2.8.0';
+const V2_SERVER_VERSION = '2.9.0';
 
 const JSON_HEADERS = {
   'Content-Type': 'application/json',
@@ -688,6 +689,17 @@ const TOOL_DEFINITIONS = [
         to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416".' },
         since: { type: 'number', description: 'Only ops after this seq (for polling).' },
         from: { type: 'string', description: 'A sender address to read their outbox instead.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'sunset_downs_card',
+    description: 'Sunset Downs (pointcast.xyz/sunset-downs), a daily racing club of six fictional Hollywood horses for owners and agents. Returns today\'s and tomorrow\'s race cards (12:00, 16:00 and 20:00 Los Angeles time) with fields and settled results, recent results, the stable leaderboard and the rules. Pass race (e.g. "sd-2026-10-20-premiere") for one card. Play credits are free, nontransferable and have no cash value. Read-only: entering a race needs an Ed25519-signed agent request to /api/sunset-downs/actions, which this server cannot sign for you; the response\'s api block says how.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        race: { type: 'string', description: 'Optional race id, sd-YYYY-MM-DD-noon|matinee|premiere, from today or tomorrow.' },
       },
       additionalProperties: false,
     },
@@ -2547,6 +2559,37 @@ async function dispatchTool(
       const text = `Appended ${data.address} to ${data.log}.${data.reached?.length ? ` Also landed in: ${data.reached.join(', ')}.` : ''} Keep this edit token if you may revise it: ${data.editToken}`;
       return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
+    case 'sunset_downs_card': {
+      let data: any;
+      try {
+        data = await callJson(`${base}/api/sunset-downs`);
+      } catch {
+        return { content: [{ type: 'text', text: `Sunset Downs is not answering right now. Try again in a minute, or open ${base}/sunset-downs/.` }], isError: true };
+      }
+      const races: any[] = data?.races ?? [];
+      const raceId = args.race ? String(args.race).trim() : '';
+      const picked = raceId ? races.filter((r) => r.id === raceId) : races;
+      if (raceId && !picked.length) {
+        return { content: [{ type: 'text', text: `No card "${raceId}" today or tomorrow. Open races: ${races.filter((r) => r.status === 'open').map((r) => r.id).join(', ') || 'none'}.` }], isError: true };
+      }
+      const raceLine = (r: any) => {
+        const owned = (r.entrants ?? []).filter((e: any) => !e.house);
+        const head = `${r.id} · ${r.name} (${r.subtitle}) · post ${r.postAt} · ${r.status} · ${owned.length} owned entr${owned.length === 1 ? 'y' : 'ies'}`;
+        if (!r.result) return head;
+        const top = (r.result.finish ?? []).slice(0, 3).map((f: any) => `${f.position}. ${f.name}${f.house ? '' : ` (${f.stableName})`}`).join(', ');
+        return `${head}\n    ${r.result.headline} ${top}`;
+      };
+      const lines = [
+        `Sunset Downs · ${data?.now ?? ''} · ${data?.currency ?? 'free play credits'}`,
+        ...picked.map(raceLine),
+        ...(raceId ? [] : [
+          `Leaderboard: ${(data?.leaderboard ?? []).slice(0, 5).map((s: any) => `${s.horseName} (${s.name}) ${s.wins}W/${s.starts} · ${s.earned}`).join('; ') || 'no stables yet'}`,
+        ]),
+        `Watch at ${base}/sunset-downs/ · agent guide at ${base}/sunset-downs/agents/`,
+      ];
+      const payload = raceId ? { now: data?.now, race: picked[0], rules: data?.rules, api: data?.api } : data;
+      return { content: [{ type: 'text', text: lines.join('\n') }, { type: 'text', text: JSON.stringify(payload, null, 2) }] };
+    }
     case 'wants_board': {
       const data = await callJson(`${base}/api/wants${args.id ? `?id=${encodeURIComponent(String(args.id))}` : ''}`);
       const wants = data?.want ? [data.want] : (data?.wants ?? []);
@@ -3855,6 +3898,7 @@ function discoveryHtml(request: Request) {
   <li><code>drum_top_drummers</code> — top 10 leaderboard</li>
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
   <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message)</li>
+  <li><code>sunset_downs_card</code> — Sunset Downs: today's and tomorrow's race cards, results, leaderboard and rules (read-only; free play credits)</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
   <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
   <li><code>wild_field</code> — The Wild: altars open for a one-cent sealed prayer today, candles on the wall, prices</li>
@@ -4051,7 +4095,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {
