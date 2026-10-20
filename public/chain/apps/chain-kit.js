@@ -378,28 +378,96 @@ export function forgetSeed(storage, slot) {
 // ---------------------------------------------------------------- signing and sending
 
 /**
+ * Wait for `txHash` to be sealed, riding out a failed poll. The SDK's waitForTx
+ * throws on the first reply that is not a 2xx (a gateway blip, a dropped
+ * connection), but the transaction is already in the devnet by then: a poll that
+ * fails with no verdict from the devnet is tried again (up to `retries` times in
+ * a row, inside `timeoutMs`). A rejection or a still-pending verdict is the
+ * devnet's own answer and is thrown at once.
+ */
+export async function waitIncluded(chain, txHash, { timeoutMs = LIMITS.waitMs, intervalMs = 800, retries = 3 } = {}) {
+  const end = Date.now() + timeoutMs;
+  let misses = 0;
+  for (;;) {
+    try {
+      return await chain.waitForTx(txHash, { timeoutMs: Math.max(0, end - Date.now()), intervalMs });
+    } catch (e) {
+      const verdict = e && e.details && typeof e.details.status === 'string';
+      misses += 1;
+      if (verdict || misses > retries || Date.now() >= end) throw e;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+}
+
+/** Did the devnet answer a send with a refusal of its own (a 4xx, or an error body)? Then nothing was sent. */
+const isRefusal = (e) => Boolean(e) && ((Number.isFinite(e.status) && e.status >= 400 && e.status < 500) || (e.details && typeof e.details.error === 'string') || /\bthe open is not sent\b/.test(String(e.message)));
+
+/**
  * Sign `tx` (an unsigned tx object from buildTx or chain.buildPublish) with the
  * key over the digest the SDK computes locally, send it, and wait for the block.
  * Returns { txHash, height, index, receipt }. `onStage('signed'|'sent'|'waiting')`
- * lets a page narrate. Throws the SDK's ChainError (the devnet's own words).
+ * lets a page narrate. `onSigned({ txHash, signed })` runs after signing and
+ * BEFORE any byte leaves the page, so a page can keep what it must (a capsule's
+ * salt) before the devnet can hold the transaction.
+ *
+ * Throws the SDK's ChainError (the devnet's own words), tagged with the facts a
+ * page needs to word it honestly: `txHash`, and `sendState`, one of
+ *   'refused'  the devnet answered the send with a refusal: nothing was sent
+ *   'maybe'    the send failed without an answer: it may or may not have arrived
+ *   'sent'     the devnet accepted it; only the wait for a block failed
+ *   'rejected' the devnet accepted it and then rejected it in a block
+ * A failure before the send (no key, no nonce) carries no sendState.
  */
-export async function signAndSend(chain, key, tx, { wait = true, onStage = () => {}, timeoutMs = LIMITS.waitMs } = {}) {
+export async function signAndSend(chain, key, tx, { wait = true, onStage = () => {}, onSigned = () => {}, timeoutMs = LIMITS.waitMs, intervalMs = 800 } = {}) {
   const digest = pcc.signingHash(tx, chain.domain);
   const signature = await key.sign(digest);
-  onStage('signed');
   const signed = { tx, public_key: key.publicKey, signature };
-  const { txHash } = await chain.submit(signed);
-  onStage('sent');
-  if (!wait) return { txHash, height: null, index: null, receipt: null };
-  onStage('waiting');
-  const done = await chain.waitForTx(txHash, { timeoutMs, intervalMs: 800 });
-  return { txHash, height: done.height, index: done.index, receipt: done.receipt || null };
+  const txHash = pcc.txHash(signed);
+  onSigned({ txHash, signed });
+  onStage('signed');
+  let state = 'maybe';
+  try {
+    await chain.submit(signed);
+    state = 'sent';
+    onStage('sent');
+    if (!wait) return { txHash, height: null, index: null, receipt: null };
+    onStage('waiting');
+    const done = await waitIncluded(chain, txHash, { timeoutMs, intervalMs });
+    return { txHash, height: done.height, index: done.index, receipt: done.receipt || null };
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    if (state === 'maybe' && isRefusal(err)) state = 'refused';
+    if (state === 'sent' && err.details && err.details.status === 'rejected') state = 'rejected';
+    err.txHash = txHash;
+    err.sendState = state;
+    throw err;
+  }
+}
+
+/**
+ * What to tell a person after a send threw (see signAndSend): "Not sent" only
+ * when nothing was, and "sent, not confirmed" when the devnet may hold it. `unsent`
+ * is the page's own prefix for the nothing-was-sent case.
+ */
+export function sendFailureText(e, { unsent = 'Not sent: ' } = {}) {
+  const words = describeError(e);
+  const tx = e && e.txHash ? ' Transaction ' + e.txHash + '.' : '';
+  switch (e && e.sendState) {
+    case 'sent': return 'Sent, not confirmed yet: ' + words + tx + ' The devnet accepted it, so it may still land: check before sending again.';
+    case 'maybe': return 'Not confirmed: ' + words + tx + ' The request may have reached the devnet: check before sending again.';
+    case 'rejected': return 'The devnet accepted it and then rejected it: ' + words + tx;
+    default: return unsent + words;
+  }
 }
 
 /** The devnet's words for a failure, cut to one safe line. */
 export function describeError(e) {
   if (e && e.name === 'GenesisChanged') return 'GENESIS CHANGED. The devnet reports genesis ' + e.got + ', this page pins ' + e.want + '. The devnet was probably reset; a reset is dated and recorded. Nothing was sent.';
-  const msg = e && e.message ? String(e.message) : 'something went wrong';
+  let msg = e && e.message ? String(e.message) : 'something went wrong';
+  // The SDK's own words for a reply with no error body are "502 /tx/<hash>": say what that is.
+  const raw = /^(\d{3}) (\/[^\s]*)$/.exec(msg);
+  if (raw) msg = 'the devnet answered ' + raw[1] + ' for ' + (raw[2].length > 24 ? raw[2].slice(0, 14) + '…' : raw[2]);
   if (e && e.status === 429) {
     // A retry hint only where one is true: the devnet said how long (Retry-After) or its own words name a per-minute
     // window. A per-day cap (the faucet's 3 claims per IP per UTC day) is not cured by trying again in a minute.

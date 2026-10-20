@@ -228,16 +228,30 @@ export async function readRate(net, tip, count = 50) {
  * `key` from keyFromSeed, `plan` from planSeal. Returns { file, txHash, height }:
  * the capsule file the author must keep, and where the seal landed. Nothing but the
  * commitment, the channel, open_at and the label goes on chain.
+ *
+ * The salt exists only here, so the capsule file is handed to `onFile` the moment
+ * the seal is signed and BEFORE it is sent (sealed_at is 0 in that first copy;
+ * it is replaced, same capsule id, once a block holds the seal). If the send or the
+ * wait then fails, the error carries `file` and `capsule` as well as signAndSend's
+ * `txHash` and `sendState`: a capsule the devnet may hold is never left without its file.
  */
-export async function sealCapsule({ chain, net, key, plan, onStage = () => {} }) {
+export async function sealCapsule({ chain, net, key, plan, onStage = () => {}, onFile = () => {}, wait = {} }) {
   if (!plan.ok) throw new KitError(plan.errors[0] || 'this seal is not valid', { code: 'plan' });
   const f = plan.fields;
   const c = commit(chain.domain, { author: key.sender, channel: f.channel, title: f.title, body: f.body });
   const acct = await net.get('/account/' + encodeURIComponent(key.sender));
   const nonce = isObj(acct) && isWhole(acct.next_nonce) ? acct.next_nonce : 0;
   const tx = pcc.buildTx('seal_capsule', { sender: key.sender, nonce, channel: f.channel, commitment: c.commitment, open_at: f.openAt, label: f.label });
-  const done = await signAndSend(chain, key, tx, { onStage });
-  const file = makeCapsuleFile({ chainId: chain.chainId, genesis: chain.genesisHash, api: net.api, capsule: c.capsule, author: key.sender, channel: f.channel, title: f.title, body: f.body, salt: c.salt, label: f.label, openAt: f.openAt, sealedAt: done.height, sealTx: done.txHash });
+  const fileFor = (sealedAt, sealTx) => makeCapsuleFile({ chainId: chain.chainId, genesis: chain.genesisHash, api: net.api, capsule: c.capsule, author: key.sender, channel: f.channel, title: f.title, body: f.body, salt: c.salt, label: f.label, openAt: f.openAt, sealedAt, sealTx });
+  let done;
+  try {
+    done = await signAndSend(chain, key, tx, { onStage, ...wait, onSigned: ({ txHash }) => onFile(fileFor(0, txHash)) });
+  } catch (e) {
+    if (e && typeof e === 'object') { e.capsule = c.capsule; e.file = fileFor(0, e.txHash || ''); }
+    throw e;
+  }
+  const file = fileFor(done.height, done.txHash);
+  onFile(file);
   return { file, txHash: done.txHash, height: done.height };
 }
 

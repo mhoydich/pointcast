@@ -589,6 +589,117 @@ test('sealing in the page: the confirm lists what goes on chain and what does no
   assert.equal(storage.m.has(view.MY_SLOT), false);
 });
 
+test('a seal whose confirmation fails keeps the capsule file, says "sent, not confirmed" and never "Not sent": the salt exists nowhere else', { timeout: 30000 }, async () => {
+  const c0 = await fakeClient();
+  const sent = [];
+  const seen = [];
+  // the devnet accepts the seal; every poll for its block then fails (a gateway error with no verdict)
+  const gateway = Object.assign(new Error('502 /tx/' + HEX('a')), { name: 'PointcastChainError', details: null });
+  const connect = async () => ({ ...c0.chain, submit: async (s) => { sent.push(s); return c0.chain.submit(s); }, waitForTx: async () => { seen.push('poll'); throw gateway; } });
+  const accounts = { [c0.key.sender]: { balance: 0, next_nonce: 3 } };
+  const { rootEl, c, storage } = mountView({ fetchOpts: { accounts }, extra: { connect, wait: { timeoutMs: 400, intervalMs: 5 } } });
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed('81'.repeat(32));
+  await tick(30);
+  $(rootEl, '[data-cp-title]').value = 'to my future self';
+  $(rootEl, '[data-cp-body]').value = 'the secret message I will never get back';
+  $(rootEl, '[data-cp-label]').value = 'lost-test';
+  $(rootEl, '[data-cp-delay]').value = '4';
+  $(rootEl, '[data-cp-review]').click();
+  $(rootEl, '[data-cp-send]').click();
+  await tick(600);
+  assert.equal(sent.length, 1, 'the seal went out once');
+  assert.ok(seen.length > 1, 'a failed poll is tried again before giving up: ' + seen.length);
+  const text = txt(rootEl, '[data-cp-result-text]');
+  assert.doesNotMatch(text, /^Not sent/, 'the devnet holds this seal, so "Not sent" would be false: ' + text);
+  assert.match(text, /^Sent, not confirmed yet: the devnet answered 502 for \/tx\/[0-9a-f]{4,}…? Transaction [0-9a-f]{64}\./);
+  assert.match(text, /DOWNLOAD THE CAPSULE FILE NOW/);
+  assert.equal($(rootEl, '[data-cp-result]').dataset.state, 'warn');
+  // the file exists, holds the message and the salt, and hashes to the capsule id the seal committed to
+  assert.equal($(rootEl, '[data-cp-download]').hidden, false);
+  assert.equal(c.state.mine.length, 1);
+  assert.ok(c.state.lastFile, 'the page holds the file for the download button');
+  const file = C.readCapsuleFile(c.state.lastFile);
+  assert.equal(file.body, 'the secret message I will never get back');
+  assert.match(file.salt, /^[0-9a-f]{64}$/);
+  assert.equal(K.pcc.capsuleId(c0.key.sender, sent[0].tx.commitment), file.capsule, 'the id on the seal that was sent is the file’s');
+  assert.equal(file.sealTx, K.pcc.txHash(sent[0]), 'the file names the seal transaction that was sent');
+  assert.match(txt(rootEl, '[data-cp-seal-id]'), /^[0-9a-f]{64}$/);
+  // a second Send would seal a second capsule with a fresh salt: the confirm is closed
+  assert.equal($(rootEl, '[data-cp-confirm]').hidden, true);
+  $(rootEl, '[data-cp-send]').click();
+  await tick(60);
+  assert.equal(sent.length, 1, 'nothing more was sent');
+  assert.equal(storage.m.size, 0, 'and nothing was stored on the device that the person did not ask for');
+});
+
+test('one transient failed poll after the seal is ridden out; a refusal at the send keeps no file and says Not sent', { timeout: 30000 }, async () => {
+  const c0 = await fakeClient();
+  // a single 502 on the first poll: the seal still confirms
+  let polls = 0;
+  const connect = async () => ({ ...c0.chain, waitForTx: async (h) => { polls += 1; if (polls === 1) throw Object.assign(new Error('502 /tx/' + h), { details: null }); return { height: 6001, index: 0, status: 'included' }; } });
+  const accounts = { [c0.key.sender]: { balance: 0, next_nonce: 3 } };
+  const a = mountView({ fetchOpts: { accounts }, extra: { connect, wait: { timeoutMs: 2000, intervalMs: 5 } } });
+  await a.c.begin();
+  a.c.stop();
+  await a.c.keys.setSeed('81'.repeat(32));
+  await tick(30);
+  $(a.rootEl, '[data-cp-title]').value = 'T';
+  $(a.rootEl, '[data-cp-body]').value = 'B';
+  $(a.rootEl, '[data-cp-label]').value = 'L';
+  $(a.rootEl, '[data-cp-delay]').value = '4';
+  $(a.rootEl, '[data-cp-review]').click();
+  $(a.rootEl, '[data-cp-send]').click();
+  await tick(400);
+  assert.equal(polls, 2);
+  assert.match(txt(a.rootEl, '[data-cp-result-text]'), /^Sealed in block 6001\./);
+  assert.equal($(a.rootEl, '[data-cp-result]').dataset.state, 'ok');
+  // the devnet refuses the seal outright: nothing is on chain, so no file is kept and "Not sent" is true
+  const refuse = async () => ({ ...c0.chain, submit: async () => { throw Object.assign(new Error('seal refused: too many unopened capsules'), { name: 'PointcastChainError', details: { error: 'seal refused: too many unopened capsules' } }); } });
+  const b = mountView({ fetchOpts: { accounts }, extra: { connect: refuse } });
+  await b.c.begin();
+  b.c.stop();
+  await b.c.keys.setSeed('81'.repeat(32));
+  await tick(30);
+  $(b.rootEl, '[data-cp-title]').value = 'T';
+  $(b.rootEl, '[data-cp-body]').value = 'B';
+  $(b.rootEl, '[data-cp-label]').value = 'L';
+  $(b.rootEl, '[data-cp-delay]').value = '4';
+  $(b.rootEl, '[data-cp-review]').click();
+  $(b.rootEl, '[data-cp-send]').click();
+  await tick(300);
+  assert.match(txt(b.rootEl, '[data-cp-result-text]'), /^Not sent: seal refused: too many unopened capsules$/);
+  assert.equal(b.c.state.mine.length, 0, 'a seal that never left leaves no capsule file behind');
+  assert.equal($(b.rootEl, '[data-cp-download]').hidden, true);
+  assert.equal(b.c.state.lastFile, null);
+});
+
+test('sealCapsule hands the file over before the seal is sent, and a failure carries it', async () => {
+  const c0 = await fakeClient();
+  const order = [];
+  const chain = { ...c0.chain, submit: async (s) => { order.push('submit'); throw Object.assign(new Error('503 /tx'), { details: null }); } };
+  const key = c0.key;
+  const p = C.planSeal({ channel: 'BOT', title: 'T', body: 'B', label: 'L', delay: 5, tip: 100, sender: key.sender });
+  await assert.rejects(() => C.sealCapsule({ chain, net: c0.net, key, plan: p, onFile: (f) => order.push('file:' + f.sealed_at) }), (e) => {
+    assert.equal(e.sendState, 'maybe', 'a send that got no answer may or may not have arrived');
+    assert.equal(e.file.salt.length, 64);
+    assert.equal(e.capsule, e.file.capsule);
+    assert.match(e.txHash, /^[0-9a-f]{64}$/);
+    assert.equal(e.file.seal_tx, e.txHash);
+    return true;
+  });
+  assert.deepEqual(order, ['file:0', 'submit'], 'the file was kept before the first byte left');
+  // the second copy, after the block, carries the height and replaces the first (same capsule id)
+  const got = [];
+  const r = await C.sealCapsule({ chain: c0.chain, net: c0.net, key, plan: p, onFile: (f) => got.push(f) });
+  assert.equal(got.length, 2);
+  assert.equal(got[0].capsule, got[1].capsule);
+  assert.equal(got[0].salt, got[1].salt);
+  assert.equal(got[0].sealed_at, 0);
+  assert.equal(got[1].sealed_at, r.height);
+});
+
 test('capsule files you hold: an edited file is refused with a reason, a good one is added, and the ones kept on this device come back', async () => {
   const f = fileOf(OPENED[0]);
   const { rootEl, c, dom } = mountView();

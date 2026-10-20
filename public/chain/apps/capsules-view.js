@@ -19,7 +19,7 @@
 
 import * as C from './capsules.js';
 import { mountKeyPanel } from './key-panel.js';
-import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, resolveApi, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
+import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, resolveApi, sendFailureText, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
 
 export const MY_SLOT = 'pointcast-chain-apps/capsules/v1';
 const POLL_MS = 20000;
@@ -40,7 +40,7 @@ export function mount(root, env = {}) {
   const ds = root.dataset;
   const where = resolveApi(env.search !== undefined ? env.search : win.location.search, { api: String(ds.api || ''), genesis: String(ds.genesis || '') });
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
-  const net = makeNet(where.api, { fetch: env.fetch });
+  const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
   const storage = env.storage !== undefined ? env.storage : (() => { try { return win.localStorage; } catch { return null; } })();
   const S = { begun: false, halted: false, status: null, list: null, rate: 12, mine: [], plan: null, chain: null, openPlan: null, lastFile: null, timer: 0, busy: false };
@@ -250,6 +250,25 @@ export function mount(root, env = {}) {
     return plan;
   }
 
+  /** Keep a capsule file the moment it exists: under "your capsules", with the download button and the id shown. */
+  function keepFile(file) {
+    S.lastFile = file;
+    const m = C.readCapsuleFile(file);
+    addMine(m);
+    const dl = q('[data-cp-download]');
+    if (dl) dl.hidden = false;
+    set('[data-cp-seal-id]', m.capsule);
+    return m;
+  }
+  function dropFile(capsule, previous) {
+    S.mine = S.mine.filter((x) => x.capsule !== capsule);
+    saveMine();
+    paintMine();
+    S.lastFile = previous;
+    const dl = q('[data-cp-download]');
+    if (dl && !previous) dl.hidden = true;
+  }
+
   async function sendSeal() {
     const plan = S.plan;
     const k = keys && keys.key();
@@ -258,25 +277,33 @@ export function mount(root, env = {}) {
     if (!plan || !plan.ok || !k || S.halted) return;
     btn.disabled = true;
     const say2 = (t, state) => { if (result) { result.hidden = false; result.dataset.state = state || ''; set('[data-cp-result-text]', t); } };
+    const previous = S.lastFile;
     try {
       say2('Checking the devnet’s genesis…', '');
-      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch } });
+      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
       await readAll();
       const fresh = C.planSeal({ ...plan.fields, delay: plan.fields.delay, tip: S.status.height, sender: k.sender });
       if (!fresh.ok) { say2(fresh.errors[0], 'bad'); return; }
-      const r = await C.sealCapsule({ chain: S.chain, net, key: k, plan: fresh, onStage: (s) => say2('Sealing… (' + s + ')', '') });
-      S.lastFile = r.file;
+      // The capsule file is kept the moment the seal is signed, before it is sent: the salt exists nowhere else.
+      const r = await C.sealCapsule({ chain: S.chain, net, key: k, plan: fresh, wait: env.wait, onStage: (s) => say2('Sealing… (' + s + ')', ''), onFile: (file) => { keepFile(file); } });
       const m = C.readCapsuleFile(r.file);
-      addMine(m);
       const box = q('[data-cp-confirm]');
       if (box) box.hidden = true;
       say2('Sealed in block ' + r.height + '. The capsule opens at block ' + groups(m.openAt) + '. DOWNLOAD THE CAPSULE FILE NOW: it holds your message and the salt, and without it the capsule never opens.', 'ok');
-      const dl = q('[data-cp-download]');
-      if (dl) dl.hidden = false;
-      set('[data-cp-seal-id]', m.capsule);
       await refresh({ wall: false });
     } catch (e) {
-      say2('Not sent, or not confirmed: ' + describeError(e), 'bad');
+      if (e && e.file && (e.sendState === 'sent' || e.sendState === 'maybe')) {
+        // The devnet may hold this capsule. Its file stays, and a second Send would seal a second capsule with a fresh salt: close the confirm.
+        S.plan = null;
+        const box = q('[data-cp-confirm]');
+        if (box) box.hidden = true;
+        await refresh({ wall: false });
+        const listed = Boolean(S.list && S.list.rows.some((x) => x.id === e.capsule));
+        say2((listed ? 'The devnet lists this capsule, so it is sealed, though this page did not see the block confirm (' + describeError(e) + ') ' : sendFailureText(e) + ' It is not in the devnet’s list yet. Press “Read the devnet again” to look, and do not seal another until it shows. ') + 'DOWNLOAD THE CAPSULE FILE NOW: it is kept below with your message and the salt, and without it the capsule never opens.', listed ? 'ok' : 'warn');
+      } else {
+        if (e && e.file) dropFile(e.capsule, previous);
+        say2(sendFailureText(e), 'bad');
+      }
     } finally {
       btn.disabled = false;
     }
@@ -318,7 +345,7 @@ export function mount(root, env = {}) {
     const say2 = (t, state) => { if (result) { result.hidden = false; result.dataset.state = state || ''; set('[data-cp-open-result-text]', t); } };
     try {
       say2('Checking the devnet’s genesis…', '');
-      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch } });
+      if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
       const r = await C.openCapsule({ chain: S.chain, net, key: k, file: m, onStage: (s) => say2('Opening… (' + s + ')', '') });
       const box = q('[data-cp-open-confirm]');
       if (box) box.hidden = true;
