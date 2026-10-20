@@ -381,15 +381,20 @@ export function start(root, env = {}) {
   const idle = (fn) => (typeof win.requestIdleCallback === 'function' ? win.requestIdleCallback(fn, { timeout: 4000 }) : win.setTimeout(fn, 1200));
   let near = false;
   let began = false;
+  let fallback = 0;
   const tryBegin = () => {
     if (began || !near || !visible()) return;
     began = true;
+    win.clearTimeout(fallback);
     idle(() => c.begin());
   };
   const arm = () => {
     if (typeof win.IntersectionObserver === 'function') {
       const io = new win.IntersectionObserver((entries) => { near = entries.some((e) => e.isIntersecting); tryBegin(); }, { rootMargin: '400px 0px' });
       io.observe(root);
+      // An embedded or unusual webview may never report (the Browser pane never does for an element that starts off-screen), which
+      // left every control disabled for good. The other apps (whenReady in chain-kit.js) start after 2.5 s regardless: so does this.
+      fallback = win.setTimeout(() => { near = true; tryBegin(); }, env.observerFallbackMs !== undefined ? env.observerFallbackMs : 2500);
     } else {
       near = true;
       tryBegin();

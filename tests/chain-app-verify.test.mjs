@@ -1040,6 +1040,38 @@ test('the lazy start: nothing is read at import or mount, only after load, idle,
   assert.ok(b.net.calls.length >= 3, 'visible again: read');
 });
 
+test('an IntersectionObserver that never reports does not leave the lesson disabled: it starts after the fallback, in a visible tab only, and not before', async () => {
+  const build = (visible) => {
+    const dom = new JSDOM('<!doctype html><html><body>' + SKELETON + '</body></html>', { url: 'http://localhost/' });
+    const w = dom.window;
+    w.requestIdleCallback = (fn) => setTimeout(fn, 0);
+    w.IntersectionObserver = class { observe() {} disconnect() {} };
+    Object.defineProperty(w.document, 'visibilityState', { get: () => (visible.now ? 'visible' : 'hidden'), configurable: true });
+    const net = fakeDevnet();
+    const rootEl = w.document.querySelector('[data-verify-app]');
+    view.start(rootEl, { window: w, fetch: net.fetch, observerFallbackMs: 120 });
+    return { w, net, rootEl };
+  };
+  const vis = { now: true };
+  const a = build(vis);
+  await settle(); await settle();
+  assert.equal(a.net.calls.length, 0, 'before the fallback nothing is read: the page is still lazy');
+  assert.equal(a.rootEl.querySelector('[data-vb-go]').disabled, true, 'the controls are off until the lesson starts');
+  await new Promise((r) => setTimeout(r, 260));
+  await until(() => a.net.calls.length >= 3, 'the fallback start');
+  assert.equal(a.rootEl.querySelector('[data-vb-go]').disabled, false, 'the controls come on');
+  await until(() => a.rootEl.dataset.state === 'live', 'the first block drawn');
+  // a hidden tab still waits: the fallback never reads for a tab nobody can see
+  const hid = { now: false };
+  const b = build(hid);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(b.net.calls.length, 0, 'a hidden tab reads nothing, fallback or not');
+  hid.now = true;
+  b.w.document.dispatchEvent(new b.w.Event('visibilitychange'));
+  await until(() => b.net.calls.length >= 3, 'visible again: read');
+  assert.match(viewSrc, /observerFallbackMs !== undefined \? env\.observerFallbackMs : 2500/, 'the default wait is 2.5 s, as in the other apps');
+});
+
 test('the wasm button loads the pinned verifier and step 5 gains a second opinion', async () => {
   const bytes = readFileSync(new URL('public/chain/yard/verifier/pointcast_chain.wasm', root));
   let asked = null;
