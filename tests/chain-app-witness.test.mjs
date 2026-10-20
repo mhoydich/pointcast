@@ -2050,7 +2050,7 @@ test('the built page carries the hooks, the honesty line, the pins, the pinned g
   assert.ok(!/<script[^>]+src="https?:\/\/(?!pointcast\.xyz)/.test(html));
   assert.ok(!html.includes('innerHTML'));
   // the live ChainHeader leaves the Apps item for the integrator’s registry edit: the page itself still names its own section
-  assert.match(html, /BLOCK 0721/);
+  assert.match(html, /BLOCK 0722/);
 });
 
 // ================================================================ the real devnets (GET only; skipped when unreachable)

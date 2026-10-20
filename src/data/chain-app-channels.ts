@@ -14,14 +14,14 @@
  * the devnet may reset; a reset takes every claim with it.
  */
 
-import { APPS_BLOCK, HONESTY } from './chain-apps.ts';
+import { APPS_2_BLOCK, HONESTY } from './chain-apps.ts';
 import { DEVNET_2_PROFILE } from './chain-home.ts';
 
 export const APP = {
   path: '/chain/channels',
   key: 'channels',
   title: 'Channels',
-  block: APPS_BLOCK,
+  block: APPS_2_BLOCK,
   description:
     'Every broadcast channel on the PointCast devnet as an app: see who holds each code and what is on air, claim a free code, set it open or crew-only, add crew, and broadcast to a channel you own or crew. First come, first served. devnet: no value, may reset.',
 } as const;

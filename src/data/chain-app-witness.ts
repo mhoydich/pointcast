@@ -17,13 +17,13 @@
  * witness.js, and tests/chain-app-witness.test.mjs keeps them equal.
  */
 
-import { APPS_BLOCK, HONESTY } from './chain-apps.ts';
+import { APPS_2_BLOCK, HONESTY } from './chain-apps.ts';
 
 export const APP = {
   path: '/chain/witness',
   key: 'witness',
   title: 'Witness in your browser',
-  block: APPS_BLOCK,
+  block: APPS_2_BLOCK,
   description:
     'Replay the PointCast devnet from block 1 in your browser, with the Block Yard’s pinned verifier, then sign what you got at one checkpoint with a free key and post it as a witness. A witness is a claim, not proof of replay. devnet: no value, may reset.',
 } as const;
@@ -31,9 +31,10 @@ export const APP = {
 export const HONESTY_LINE = HONESTY;
 
 /**
- * The entry the integrator adds to src/data/chain-apps.ts (CHAIN_APPS). Kept
- * here so the blurb is written once and tested for honesty and length; the
- * registry file itself is shared and is not edited by this page's branch.
+ * This page's entry in src/data/chain-apps.ts (CHAIN_APPS). The registry cannot
+ * import this file (this file imports the registry for its block and honesty
+ * line), so the entry is written in both places and
+ * tests/chain-apps-registry.test.mjs checks that they are equal.
  */
 export const REGISTRY_ENTRY = {
   key: 'witness',

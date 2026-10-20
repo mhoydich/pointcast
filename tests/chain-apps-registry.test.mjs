@@ -1,24 +1,31 @@
-// The seven apps on the devnet, as one registry (src/data/chain-apps.ts) and
+// The nine apps on the devnet, as one registry (src/data/chain-apps.ts) and
 // the places that read it: the /chain hub, the section nav and the apps row,
 // the sitemap, the front door, public/llms.txt, public/llms-full.txt,
-// /for-agents, the homepage chain strip and the wire block 0721 with its art.
+// /for-agents, the homepage chain strip and the wire blocks 0721 (the first
+// seven) and 0722 (Witness and Channels) with their art.
 //
 // What this suite holds: every app has a page, a nav key, a path and one honest
-// line; every place that lists the apps lists all seven with the same paths; the
-// three apps that were merged in carry the same wire block as the four built
-// here; llms.txt keeps its line count (the seven are one extra sentence on the
-// existing chain line); the block is plain text with its links in companions;
-// and the art has no text and no people.
+// line; every place that lists the apps lists all nine with the same paths; the
+// first seven carry the wire block 0721 and the two after them carry 0722;
+// llms.txt keeps its line count (the nine are one sentence on the existing
+// chain line); the blocks are plain text with their links in companions; and
+// the art has no text and no people.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import test from 'node:test';
-import { APPS_BLOCK, APPS_HEADLINE, CHAIN_APPS, HONESTY, appByKey } from '../src/data/chain-apps.ts';
+import { APPS_2_BLOCK, APPS_BLOCK, APPS_HEADLINE, CHAIN_APPS, FIRST_SEVEN, HONESTY, appByKey } from '../src/data/chain-apps.ts';
+import { REGISTRY_ENTRY as WITNESS_ENTRY } from '../src/data/chain-app-witness.ts';
+import { APP as CHANNELS_APP } from '../src/data/chain-app-channels.ts';
+import { APP as WITNESS_APP } from '../src/data/chain-app-witness.ts';
 import { CHAIN_NAV } from '../src/data/chain-home.ts';
+import { SDK_SOURCE } from '../src/data/chain-sdk-source.ts';
 import { bannedHits, currencyHits } from './helpers/chain-app-rules.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
-const KEYS = ['observatory', 'daily-mint', 'notary', 'capsules', 'verify-a-block', 'playground', 'bloom'];
+const KEYS = ['observatory', 'daily-mint', 'notary', 'capsules', 'verify-a-block', 'playground', 'bloom', 'witness', 'channels'];
+const SEVEN = ['observatory', 'daily-mint', 'notary', 'capsules', 'verify-a-block', 'playground', 'bloom'];
 
 test('on an app page exactly one link is aria-current="page": the Apps item in the section nav is the section ("true"), not a second page', () => {
   const header = read('src/components/chain/ChainHeader.astro');
@@ -38,11 +45,15 @@ test('on an app page exactly one link is aria-current="page": the Apps item in t
   }
 });
 
-test('the registry names seven apps, each with a page, a key, a path and one honest line', () => {
+test('the registry names nine apps, each with a page, a key, a path and one honest line', () => {
   assert.deepEqual(CHAIN_APPS.map((a) => a.key), KEYS);
-  assert.equal(APPS_HEADLINE, 'Seven apps on the devnet');
+  assert.deepEqual([...FIRST_SEVEN], SEVEN, 'the seven block 0721 announces, in order');
+  assert.equal(APPS_HEADLINE, 'Nine apps on the devnet');
   assert.equal(HONESTY, 'devnet · no value · may reset');
   assert.match(APPS_BLOCK, /^\d{4}$/);
+  assert.match(APPS_2_BLOCK, /^\d{4}$/);
+  assert.equal(APPS_BLOCK, '0721');
+  assert.equal(APPS_2_BLOCK, '0722');
   for (const a of CHAIN_APPS) {
     assert.equal(a.href, '/chain/' + a.key, a.key);
     assert.ok(existsSync(new URL('src/pages/chain/' + a.key + '.astro', root)), a.key + ' has a page');
@@ -55,16 +66,24 @@ test('the registry names seven apps, each with a page, a key, a path and one hon
     assert.equal(appByKey(a.key), a);
   }
   // exactly the apps that can post say so
-  assert.deepEqual(CHAIN_APPS.filter((a) => a.mode === 'write').map((a) => a.key), ['daily-mint', 'notary', 'capsules']);
+  assert.deepEqual(CHAIN_APPS.filter((a) => a.mode === 'write').map((a) => a.key), ['daily-mint', 'notary', 'capsules', 'witness', 'channels']);
   assert.equal(appByKey('nope'), undefined);
   // the honest claims in the blurbs
   assert.match(appByKey('daily-mint').blurb, /Play ATTN, no value\./);
   assert.match(appByKey('notary').blurb, /not anchored anywhere/);
   assert.match(appByKey('capsules').blurb, /lose the capsule file and it never opens/);
   assert.match(appByKey('observatory').blurb, /It only reads\./);
+  assert.match(appByKey('witness').blurb, /claim tied to a key, not proof that you replayed/);
+  assert.match(appByKey('channels').blurb, /a reset drops every claim/);
+  // the two apps built after the first seven: the registry entry is the page's own, written in two places and kept equal
+  assert.deepEqual({ ...appByKey('witness') }, { ...WITNESS_ENTRY }, 'the registry entry is the one witness data exports');
+  assert.equal(WITNESS_APP.path, appByKey('witness').href);
+  assert.equal(CHANNELS_APP.path, appByKey('channels').href);
+  assert.equal(CHANNELS_APP.key, 'channels');
+  assert.equal(WITNESS_APP.key, 'witness');
 });
 
-test('every app carries the wire block the registry names, and the three merged apps match the four built here', () => {
+test('every app carries the wire block the registry names: the first seven 0721, Witness and Channels 0722', () => {
   const data = {
     observatory: ['src/data/chain-app-observatory.ts', /block: APPS_BLOCK/],
     'daily-mint': ['src/data/chain-app-daily-mint.ts', /block: APPS_BLOCK/],
@@ -73,16 +92,28 @@ test('every app carries the wire block the registry names, and the three merged 
     'verify-a-block': ['src/data/chain-app-verify.ts', new RegExp("block: '" + APPS_BLOCK + "'")],
     playground: ['src/data/chain-app-playground.ts', new RegExp("export const BLOCK = '" + APPS_BLOCK + "'")],
     bloom: ['src/data/chain-app-bloom.ts', new RegExp("export const BLOOM_BLOCK = '" + APPS_BLOCK + "'")],
+    witness: ['src/data/chain-app-witness.ts', /block: APPS_2_BLOCK/],
+    channels: ['src/data/chain-app-channels.ts', /block: APPS_2_BLOCK/],
   };
+  assert.deepEqual(Object.keys(data), KEYS, 'one entry per app');
   for (const [k, [file, re]] of Object.entries(data)) assert.match(read(file), re, k);
-  assert.ok(existsSync(new URL('src/content/blocks/' + APPS_BLOCK + '.json', root)), 'the block exists');
-  assert.ok(existsSync(new URL('public/images/og/b/' + APPS_BLOCK + '.png', root)), 'and its OG card');
-  assert.ok(existsSync(new URL('public/images/chain/apps.svg', root)), 'and its art');
+  for (const k of ['witness', 'channels']) assert.equal((k === 'witness' ? WITNESS_APP : CHANNELS_APP).block, APPS_2_BLOCK, k);
+  for (const id of [APPS_BLOCK, APPS_2_BLOCK]) {
+    assert.ok(existsSync(new URL('src/content/blocks/' + id + '.json', root)), id + ' exists');
+    assert.ok(existsSync(new URL('public/images/og/b/' + id + '.png', root)), id + ' has its OG card');
+  }
+  // the built pages, when dist/ is there, carry the crumb of the block that announces them
+  for (const [k, id] of Object.entries({ witness: APPS_2_BLOCK, channels: APPS_2_BLOCK, notary: APPS_BLOCK, capsules: APPS_BLOCK })) {
+    const built = new URL('dist/chain/' + k + '/index.html', root);
+    if (existsSync(built)) assert.match(readFileSync(built, 'utf8'), new RegExp('href="/b/' + id + '"[^>]*>BLOCK ' + id), k + ' crumb names block ' + id);
+  }
+  assert.ok(existsSync(new URL('public/images/chain/apps.svg', root)), 'the art of 0721');
+  assert.ok(existsSync(new URL('public/images/chain/apps-2.svg', root)), 'the art of 0722');
   // no app page is left pointing at a placeholder block
   for (const a of CHAIN_APPS) for (const f of ['src/data/chain-app-' + a.key + '.ts']) if (existsSync(new URL(f, root))) assert.doesNotMatch(read(f), /TODO\(integrator\)|does not exist yet; the integrator sets it/, f);
 });
 
-test('the section nav has an Apps item, the apps row names all seven on an app page, and each app page lights both', () => {
+test('the section nav has an Apps item, the apps row names all nine on an app page, and each app page lights both', () => {
   const nav = CHAIN_NAV.find((n) => n.key === 'apps');
   assert.deepEqual(nav, { key: 'apps', href: '/chain#apps', label: 'Apps' });
   const header = read('src/components/chain/ChainHeader.astro');
@@ -94,7 +125,7 @@ test('the section nav has an Apps item, the apps row names all seven on an app p
   assert.match(read('src/styles/chain.css'), /\.chn \.subnav--apps\{/);
 });
 
-test('the /chain hub has an Apps section with all seven, links them in its JSON-LD, and the jump bar points at it', () => {
+test('the /chain hub has an Apps section with all nine, links them in its JSON-LD, and the jump bar points at it', () => {
   const hub = read('src/pages/chain.astro');
   assert.match(hub, /import \{ APPS_HEADLINE, CHAIN_APPS, HONESTY \} from '\.\.\/data\/chain-apps'/);
   assert.match(hub, /<section id="apps" class="sec" aria-labelledby="apps-title">/);
@@ -107,7 +138,7 @@ test('the /chain hub has an Apps section with all seven, links them in its JSON-
   assert.match(hub, /never silent\. The apps that write do so only when you press a button after reading what will be sent/);
 });
 
-test('the sitemap lists all seven pages, once, with absolute trailing-slash URLs', () => {
+test('the sitemap lists all nine pages, once, with absolute trailing-slash URLs', () => {
   const sm = read('src/pages/sitemap-discovery.xml.ts');
   for (const a of CHAIN_APPS) {
     const url = 'https://pointcast.xyz' + a.href + '/';
@@ -115,40 +146,84 @@ test('the sitemap lists all seven pages, once, with absolute trailing-slash URLs
   }
 });
 
-test('the front door has the new item first, dated 2026-10-19, linking the Observatory, with the honesty words', () => {
+test('the front door has the Witness and Channels item first, dated 2026-10-20, then the seven apps item, dated 2026-10-19, with the honesty words', () => {
   const news = JSON.parse(read('src/data/front-door-news.json'));
   assert.deepEqual(news[0], {
+    label: 'Be a witness from your browser · claim a channel',
+    line: 'Replay the devnet from block 1 in your browser and sign a checkpoint with a free key, or claim a channel and broadcast on it. A claim, not proof. No value is promised · may reset.',
+    link: '/chain/witness',
+    date: '2026-10-20',
+  });
+  assert.deepEqual(news[1], {
     label: 'Seven apps on the devnet',
     line: 'A live dashboard, a play auction, a notary, time capsules, a block-by-hand lesson, an API playground and checkpoint art, all read from your browser. No value is promised · may reset.',
     link: '/chain/observatory',
     date: '2026-10-19',
   });
   assert.equal(news.filter((n) => n.link === '/chain/observatory').length, 1);
-  assert.deepEqual(bannedHits(news[0].line), []);
+  assert.equal(news.filter((n) => n.link === '/chain/witness').length, 1);
+  for (const n of [news[0], news[1]]) { assert.deepEqual(bannedHits(n.line + ' ' + n.label), []); assert.deepEqual(currencyHits(n.line), []); assert.match(n.line, /No value is promised · may reset\./); }
+  assert.doesNotMatch(news[0].line, /\bverified\b|\bproves?\b|\bworth\b/i, 'a claim, not proof');
 });
 
-test('llms.txt mentions all seven on its one chain line and keeps its line count; llms-full.txt and /for-agents each carry one entry', () => {
+test('llms.txt mentions all nine on its one chain line and keeps its line count; llms-full.txt and /for-agents each carry one entry for the first seven and one for the two after them', () => {
   const llms = read('public/llms.txt');
   const lines = llms.split('\n');
   const chain = lines.filter((l) => l.startsWith('- [PointCast Chain](https://pointcast.xyz/chain/)'));
   assert.equal(chain.length, 1);
   for (const a of CHAIN_APPS) assert.ok(chain[0].includes('](https://pointcast.xyz' + a.href + '/)'), a.key + ' on the chain line');
+  assert.match(chain[0], /Nine apps run on the devnet from your browser \(no value, may reset; anything that posts is signed with a key made in the page\)/);
   assert.equal(lines.filter((l) => l.includes('/chain/observatory')).length, 1, 'one line');
+  assert.equal(lines.filter((l) => l.includes('/chain/witness')).length, 1, 'one line');
   assert.equal(lines.length, 334, 'the file ends with a newline and has the 333 lines it had before this change');
   for (const m of llms.matchAll(/\]\(([^)\s]+)\)/g)) assert.match(m[1], /^https?:\/\//, m[1] + ' is absolute');
   const full = read('public/llms-full.txt').split('\n');
   const para = full.filter((l) => l.startsWith('[Seven apps on the devnet](https://pointcast.xyz/chain/observatory/)'));
   assert.equal(para.length, 1);
-  for (const a of CHAIN_APPS) assert.ok(para[0].includes('https://pointcast.xyz' + a.href + '/'), a.key);
+  for (const k of SEVEN) assert.ok(para[0].includes('https://pointcast.xyz' + appByKey(k).href + '/'), k);
   assert.match(para[0], /no value, may reset, a reset dated and recorded/);
   assert.match(para[0], /one server's accountable claim on a chain that may reset, not proof of authorship, and is not anchored anywhere/);
   assert.match(para[0], /lose it and the capsule never opens/);
+  const para2 = full.filter((l) => l.startsWith('[Two more apps on the devnet](https://pointcast.xyz/chain/witness/)'));
+  assert.equal(para2.length, 1);
+  assert.equal(full.indexOf(para2[0]), full.indexOf(para[0]) + 1, 'it sits right under the first seven');
+  for (const k of ['witness', 'channels']) assert.ok(para2[0].includes('https://pointcast.xyz' + appByKey(k).href + '/'), k);
+  assert.match(para2[0], /devnet, no value, may reset, a reset dated and recorded/);
+  assert.match(para2[0], /a witness is a claim tied to a key, not proof that anyone replayed, and counts are keys, not people/);
+  assert.match(para2[0], /first come, first served; the house holds six codes; a reset drops every claim/);
+  assert.match(para2[0], /no take-back, rename or hiding of a station/);
   const agents = read('src/pages/for-agents.astro');
   const li = agents.split('\n').filter((l) => l.includes('<li><a href="/chain/observatory/">Seven apps on the devnet</a>'));
   assert.equal(li.length, 1);
-  for (const a of CHAIN_APPS) assert.ok(li[0].includes('href="' + a.href + '/"'), a.key);
+  for (const k of SEVEN) assert.ok(li[0].includes('href="' + appByKey(k).href + '/"'), k);
   assert.match(li[0], /Writes happen only on a button press, signed with a key made in the page\./);
-  for (const text of [chain[0], para[0], li[0]]) { assert.deepEqual(bannedHits(text), []); assert.deepEqual(currencyHits(text), []); }
+  const li2 = agents.split('\n').filter((l) => l.includes('<li><a href="/chain/witness/">Two more apps on the devnet</a>'));
+  assert.equal(li2.length, 1);
+  for (const k of ['witness', 'channels']) assert.ok(li2[0].includes('href="' + appByKey(k).href + '/"'), k);
+  assert.match(li2[0], /a claim tied to a key, not proof of replay/);
+  assert.match(li2[0], /a reset drops every claim/);
+  assert.match(li2[0], /Writes happen only on a button press, signed with a key made in the page\./);
+  assert.equal(agents.split('\n').indexOf(li2[0]), agents.split('\n').indexOf(li[0]) + 1);
+  for (const text of [chain[0], para[0], para2[0], li[0], li2[0]]) { assert.deepEqual(bannedHits(text), []); assert.deepEqual(currencyHits(text), []); }
+});
+
+test('the Daily Net page points to Witness in your browser, and the Observatory points to Channels, once each', () => {
+  const net = read('src/pages/chain/net.astro');
+  assert.equal(net.split('<a href="/chain/witness">Witness in your browser</a>').length - 1, 1);
+  assert.match(net.replace(/\s+/g, ' '), /No code to run\? <a href="\/chain\/witness">Witness in your browser<\/a> does the same replay in a worker, shows the post word for word, and signs with a free key made in the page\./);
+  const ob = read('src/pages/chain/observatory.astro');
+  assert.equal(ob.split('href="/chain/channels"').length - 1, 1);
+  assert.match(ob, /<p class="card__links"><a href="\/chain\/channels">Channels: who holds each code, and how to claim one →<\/a><\/p>/);
+});
+
+test('the shared key panel names five apps, and the shared stylesheet keeps a hidden button hidden', () => {
+  const panel = read('src/components/chain/KeyPanel.astro').replace(/\s+/g, ' ');
+  assert.match(panel, /One key, five apps/);
+  assert.doesNotMatch(panel, /three apps/);
+  for (const page of ['daily-mint', 'notary', 'capsules', 'witness', 'channels']) assert.match(read('src/pages/chain/' + page + '.astro'), /<KeyPanel signs=/, page);
+  // .chn .btn sets display and so beats the hidden attribute: the shared sheet puts it back, for every page that uses the panel
+  assert.match(read('src/styles/chain-apps.css'), /\.chn \.btn\[hidden\],\.chn \.ca-actions \[hidden\]\{display:none\}/);
+  assert.match(read('src/styles/chain.css'), /\.chn \.btn\{display:inline-flex/);
 });
 
 test('the homepage chain strip links the Observatory after the Daily Net, and the existing links are untouched', () => {
@@ -178,7 +253,7 @@ test('block 0721 is an FD LINK block in plain text: what exists, what writes, wh
   assert.deepEqual(currencyHits(b.body + ' ' + b.dek), []);
   // companions: one per page, plus the Daily Net and the reset blocks and the chain home
   const ids = b.companions.map((c) => c.id);
-  for (const a of CHAIN_APPS) assert.ok(ids.includes('https://pointcast.xyz' + a.href + '/'), a.key);
+  for (const k of SEVEN) assert.ok(ids.includes('https://pointcast.xyz' + appByKey(k).href + '/'), k);
   assert.ok(ids.includes('0695') && ids.includes('0700') && ids.includes('https://pointcast.xyz/chain/'));
   for (const id of ids.filter((i) => /^\d{4}$/.test(i))) assert.ok(existsSync(new URL('src/content/blocks/' + id + '.json', root)), id + ' exists');
   assert.equal(b.meta.genesis, 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280');
@@ -206,4 +281,62 @@ test('the art is abstract: shapes only, no text, no images, no scripts, no links
   assert.match(gen, /generate-chain-apps-art\.py og > \/tmp\/apps-og\.svg/);
   assert.match(gen, /GENESIS = 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280'/);
   assert.equal(read('src/data/chain-home.ts').includes("DEVNET_2_GENESIS: string = 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280'"), true, 'the art uses the pinned genesis');
+});
+
+test('block 0722 is an FD LINK block in plain text: what the two pages do, what writes, what a claim is not; its links are companions, and its media and OG card exist', () => {
+  const b = JSON.parse(read('src/content/blocks/' + APPS_2_BLOCK + '.json'));
+  assert.equal(b.id, APPS_2_BLOCK);
+  assert.equal(b.channel, 'FD');
+  assert.equal(b.type, 'LINK');
+  assert.equal(b.title, 'Be a witness from your browser, or claim a channel');
+  assert.equal(b.author, 'cc');
+  assert.equal(b.size, '2x1');
+  assert.match(b.timestamp, /^2026-10-20T/);
+  assert.ok(Date.parse(b.timestamp) > Date.parse(JSON.parse(read('src/content/blocks/' + APPS_BLOCK + '.json')).timestamp), 'after 0721');
+  assert.match(b.dek, /devnet · no value · may reset\.$/);
+  assert.equal(b.media.src, '/images/chain/apps-2.svg');
+  assert.equal(b.external.url, 'https://pointcast.xyz/chain/witness/');
+  assert.doesNotMatch(b.body, /https?:\/\/|<[a-z]|\]\(|www\./i, 'plain text: links go in companions');
+  assert.ok(b.body.length > 1500 && b.body.length < 4000, 'body length ' + b.body.length);
+  for (const word of ['Witness in your browser', 'Channels', 'pc-witness.mjs', 'WIT', 'GENESIS CHANGED']) assert.ok(b.body.includes(word), word);
+  for (const claim of ['no value is promised', 'it may reset', 'dated and recorded, never silent', 'sends nothing until you press Send', 'refuses to sign', 'It is not proof that you replayed', 'counts are keys, not people', 'first come, first served', 'a reset drops every claim', 'crew-only', 'up to sixteen addresses', "word filter", 'The house can hide a post', 'a code is not a trademark', 'node params do not hash to its genesis_hash', 'byte for byte', 'only with a key your browser made', 'with no value', 'not proof']) assert.ok(b.body.includes(claim), claim);
+  assert.deepEqual(bannedHits(b.body + ' ' + b.dek + ' ' + b.title), []);
+  assert.deepEqual(currencyHits(b.body + ' ' + b.dek), []);
+  const ids = b.companions.map((c) => c.id);
+  for (const k of ['witness', 'channels']) assert.ok(ids.includes('https://pointcast.xyz' + appByKey(k).href + '/'), k);
+  for (const link of ['https://pointcast.xyz/chain/net/', 'https://pointcast.xyz/chain/bots/', 'https://pointcast.xyz/chain/']) assert.ok(ids.includes(link), link);
+  assert.ok(ids.includes('0721') && ids.includes('0695') && ids.includes('0700'));
+  for (const id of ids.filter((i) => /^\d{4}$/.test(i))) assert.ok(existsSync(new URL('src/content/blocks/' + id + '.json', root)), id + ' exists');
+  assert.equal(b.meta.genesis, 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280');
+  assert.match(b.meta.writes, /only on a button press, after the confirm box, with a key made in the browser/);
+  assert.match(b.meta.sdk, /sha256 33bef6b76c98e5e2090fb7b7d87a4b8324807503c4ea9d2fc65052ac6eb2bde9/, 'the SDK sha is the pin');
+  assert.match(b.meta.sdk, new RegExp('at ' + SDK_SOURCE.commit));
+  assert.ok(b.meta.sdk.includes(SDK_SOURCE.sha256));
+  assert.equal(b.meta.value, 'none; no value is promised');
+  const og = readFileSync(new URL('public/images/og/b/' + APPS_2_BLOCK + '.png', root));
+  assert.equal(og.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  assert.equal(og.readUInt32BE(16), 1200);
+  assert.equal(og.readUInt32BE(20), 630);
+  assert.ok(statSync(new URL('public/images/chain/apps-2.svg', root)).size < 40000);
+  // no other block already holds the id, and the ids around it are in order
+  assert.ok(Number(APPS_2_BLOCK) === Number(APPS_BLOCK) + 1);
+});
+
+test('the art of 0722 is abstract: shapes only, no text, no images, no scripts, no links, three rail nodes, and it respects reduced motion', () => {
+  const svg = read('public/images/chain/apps-2.svg');
+  assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 1200 630"/);
+  assert.doesNotMatch(svg, /<text|<tspan|<image|<script|foreignObject|href|\son\w+=|<use|<filter|url\(/i);
+  assert.match(svg, /prefers-reduced-motion:reduce/);
+  const tags = new Set([...svg.matchAll(/<([a-z]+)[\s>\/]/g)].map((m) => m[1]));
+  for (const t of tags) assert.ok(['svg', 'style', 'rect', 'g', 'line', 'circle', 'path', 'ellipse', 'polygon'].includes(t), t);
+  assert.equal((svg.match(/class="node n\d"/g) || []).length, 3, 'one rail node for each of the three marks: Witness, Channels, the SDK');
+  const gen = read('scripts/generate-chain-apps-2-art.py');
+  assert.match(gen, /No people, no\nplaces, no type of any kind\./);
+  assert.match(gen, /generate-chain-apps-2-art\.py og > \/tmp\/apps-2-og\.svg/);
+  assert.match(gen, /GENESIS = 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280'/);
+  assert.match(gen, /toFile\('public\/images\/og\/b\/0722\.png'\)/);
+  // the committed svg is exactly what the committed generator makes
+  const out = spawnSync('python3', ['scripts/generate-chain-apps-2-art.py', 'media'], { cwd: new URL('./', root), encoding: 'utf8' });
+  assert.equal(out.status, 0, out.stderr);
+  assert.equal(out.stdout, svg, 'the art is reproducible from the generator');
 });

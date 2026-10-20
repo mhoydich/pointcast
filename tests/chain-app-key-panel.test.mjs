@@ -1,6 +1,6 @@
 // The shared "your devnet key" panel (src/components/chain/KeyPanel.astro and
-// public/chain/apps/key-panel.js) used by The Daily Mint, the Notary and Time
-// Capsules, and the key helpers in chain-kit.js.
+// public/chain/apps/key-panel.js) used by The Daily Mint, the Notary, Time
+// Capsules, Witness and Channels, and the key helpers in chain-kit.js.
 //
 // What this suite holds: a key is made in the browser and signs real ed25519
 // signatures that the SDK verifies; it lives in memory unless the person ticks
@@ -176,7 +176,7 @@ test('Keep it on this device writes the key to one shared slot, and the next vis
   assert.equal(st.m.get(KEY_SLOT), k.seedHex);
   assert.match(a.q('[data-kp-status]').textContent, /kept on this device/);
   assert.equal(KEY_SLOT, 'pointcast-chain-apps/devnet-key/v1');
-  // another page of the three apps, same origin: the key is there
+  // another page of the five apps, same origin: the key is there
   const b = mountPanel({ storage: st });
   await b.c.ready;
   assert.equal(b.c.key().sender, k.sender);
@@ -309,10 +309,10 @@ test('a browser without ed25519 is told so, and nothing is enabled', async () =>
   assert.equal(panel.dataset.state, 'none');
 });
 
-test('the panel says the kept key is one key for three apps, readable by every script on the origin, and the field for a key you already have hides what is typed', () => {
+test('the panel says the kept key is one key for five apps, readable by every script on the origin, and the field for a key you already have hides what is typed', () => {
   const c = src.component.replace(/\s+/g, ' ');
-  assert.match(c, /if you tick “Keep it on this device”, the Daily Mint, the Notary and Time Capsules all load this same key/);
-  assert.match(c, /a stamp, a bid and a capsule signed here are linked to one account/);
+  assert.match(c, /if you tick “Keep it on this device”, the Daily Mint, the Notary, Time Capsules, Witness and Channels all load this same key/);
+  assert.match(c, /a stamp, a bid, a capsule, a witness claim and a channel signed here are linked to one account/);
   assert.match(c, /local storage, which every script on pointcast\.xyz can read/);
   assert.match(c, /Leave it unticked and the key lives in this tab only/);
   // a real wallet seed pasted into that field must not show on screen
@@ -320,8 +320,8 @@ test('the panel says the kept key is one key for three apps, readable by every s
   assert.match(own, /type="password"/);
   assert.match(own, /autocomplete="off"/);
   assert.doesNotMatch(own, /type="text"/);
-  // the three apps mount this same panel on the one slot
-  for (const page of ['src/pages/chain/daily-mint.astro', 'src/pages/chain/notary.astro', 'src/pages/chain/capsules.astro']) assert.match(read(page), /<KeyPanel signs=/, page);
+  // the five apps mount this same panel on the one slot
+  for (const page of ['src/pages/chain/daily-mint.astro', 'src/pages/chain/notary.astro', 'src/pages/chain/capsules.astro', 'src/pages/chain/witness.astro', 'src/pages/chain/channels.astro']) assert.match(read(page), /<KeyPanel signs=/, page);
   assert.equal(KEY_SLOT, 'pointcast-chain-apps/devnet-key/v1');
   // the panel still works with a hidden field: a key typed there is taken
   const run = async () => {

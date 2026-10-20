@@ -1,5 +1,5 @@
 // key-panel.js: the "your devnet key" panel the writing apps share (The Daily
-// Mint, the Notary, Time Capsules). It wires up the skeleton rendered by
+// Mint, the Notary, Time Capsules, Witness, Channels). It wires up the skeleton rendered by
 // src/components/chain/KeyPanel.astro.
 //
 // What a key here is: 32 random bytes from the browser, used as an ed25519 key.
