@@ -948,6 +948,37 @@ test('a bid that was sent but not seen to confirm says so, looks the transaction
   assert.equal(waited.sent.length, 1);
 });
 
+test('if the words post lands and the transfer is refused, the page says the post is already public and the bid was not accepted', { timeout: 30000 }, async () => {
+  const key = await K.keyFromSeed('69'.repeat(32));
+  const accounts = { [key.sender]: { balance: 100, next_nonce: 0 } };
+  const fake = await fakeSend();
+  const sent = [];
+  const refusal = 'not a valid bid: the least valid bid is 99 play ATTN (it would only be refunded)';
+  const connect = async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); if (s.tx.type === 'transfer') throw new K.KitError(refusal, { status: 400, code: 'daily_bid_refused' }); return fake.chain.submit(s); } });
+  const { rootEl, c } = mountView({ fetchOpts: { accounts }, extra: { connect, supported: true, storage: null } });
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed('69'.repeat(32));
+  await tick(30);
+  for (const w of ['DRUM', 'WAVE']) [...rootEl.querySelectorAll('[data-dm-word]')].find((b) => b.value === w).click();
+  rootEl.querySelector('[data-dm-amount]').value = String(D.leastBid(D.readDaily(FX.daily)) + 1);
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(20);
+  rootEl.querySelector('[data-dm-send]').click();
+  await tick(400);
+  assert.deepEqual(sent.map((s) => s.tx.type), ['publish_block', 'transfer']);
+  const text = txt(rootEl, '[data-dm-result-text]');
+  assert.match(text, /^Your words post is already on chain \(block \d+, transaction [0-9a-f]{64}\) and cannot be taken back\. The bid: Not sent: not a valid bid: the least valid bid is 99 play ATTN \(it would only be refunded\)$/);
+  assert.equal(rootEl.querySelector('[data-dm-result]').dataset.state, 'bad');
+  // a bid with no words has no post to speak of
+  for (const w of ['DRUM', 'WAVE']) [...rootEl.querySelectorAll('[data-dm-word]')].find((b) => b.value === w).click();
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(20);
+  rootEl.querySelector('[data-dm-send]').click();
+  await tick(400);
+  assert.match(txt(rootEl, '[data-dm-result-text]'), /^Not sent: not a valid bid/);
+});
+
 test('the faucet button asks once for the key’s address and says so in words', async () => {
   const posts = [];
   const { rootEl, c } = mountView({ fetchOpts: { overrides: { '/daily/faucet': async (u, init) => { posts.push(JSON.parse(init.body)); return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ tx_hash: HEX('c'), amount: 100, note: 'ok' }) }; } } }, extra: { supported: true, storage: null } });

@@ -401,16 +401,18 @@ export function mount(root, env = {}) {
       S.myBid = { lot: fresh.lot, amount: fresh.amount, tx: r.bidTx, balanceAfter: S.balance };
       paintMyBid();
     } catch (e) {
+      // When the words post already landed it is public for good, whatever happened to the bid after it: say so first.
+      const part = e && e.partial ? 'Your words post is already on chain (block ' + e.partial.postHeight + ', transaction ' + e.partial.postTx + ') and cannot be taken back. The bid: ' : '';
       if (e && e.stage === 'bid' && (e.sendState === 'sent' || e.sendState === 'maybe')) {
         // The transfer may be on its way. Close the confirm (a second Send needs a new Review), remember it, and ask the devnet.
         S.unsettled = { tx: e.txHash, amount: plan.amount, lot: plan.lot };
         withdrawPlan();
         const v = await checkUnsettled();
-        if (v && v.state === 'landed') say2('Your bid landed' + (v.height ? ' in block ' + v.height : '') + ' (transaction ' + e.txHash + '), though this page did not see it confirm (' + describeError(e) + '): you lead lot ' + String(plan.lot).padStart(4, '0') + ' at ' + plan.amount + ' play ATTN. Nothing more was sent.', 'ok');
-        else if (v && v.state === 'gone') say2('Not sent: ' + asSentence(describeError(e)) + ' The devnet has no record of transaction ' + e.txHash + ', so it never arrived. You can review and send again.', 'bad');
-        else say2(sendFailureText(e) + ' Send stays shut until the devnet says whether it landed: wait, then review and press Send again.', 'warn');
+        if (v && v.state === 'landed') say2(part + 'Your bid landed' + (v.height ? ' in block ' + v.height : '') + ' (transaction ' + e.txHash + '), though this page did not see it confirm (' + describeError(e) + '): you lead lot ' + String(plan.lot).padStart(4, '0') + ' at ' + plan.amount + ' play ATTN. Nothing more was sent.', 'ok');
+        else if (v && v.state === 'gone') say2(part + 'Not sent: ' + asSentence(describeError(e)) + ' The devnet has no record of transaction ' + e.txHash + ', so it never arrived. You can review and send again.', 'bad');
+        else say2(part + sendFailureText(e) + ' Send stays shut until the devnet says whether it landed: wait, then review and press Send again.', 'warn');
       } else {
-        say2(sendFailureText(e), 'bad');
+        say2(part + sendFailureText(e), 'bad');
       }
     } finally {
       sendBtn.disabled = false;
