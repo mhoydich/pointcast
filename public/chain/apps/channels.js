@@ -23,7 +23,10 @@
 //                  station's owner and crew post or seal here".
 // A post is a publish_block: a title on chain and a body stored by its hash
 // (POST /body), where the devnet's word filter reads it. The filter reads
-// stored bodies; it does not read a title, a station's code or its name.
+// stored bodies; it does not read a title, a station's code or its name. So the
+// page keeps a short word list of its own for the name and the title (kind-words.js):
+// it will not seal one that is on it, and it shows one the devnet sends that is on it
+// as held back. The chain still holds the real text; that is the page's rule, not the chain's.
 //
 // The page's own guards, on top of the chain's: it broadcasts only to a channel
 // you own or crew, never to a house code or a code the house holds, and it does
@@ -32,6 +35,7 @@
 // a reset takes every claim.
 
 import { pcc, cleanBlock, cleanText, isHex64, isObj, isWhole, KitError, pinnedStatus, shortAddr, signAndSend } from './chain-kit.js';
+import { isBlocked, shownText } from './kind-words.js';
 
 export const CODE_RE = /^[A-Z0-9]{1,16}$/;
 export const MODES = Object.freeze(['open', 'crew']);
@@ -111,7 +115,7 @@ export function readStation(json) {
   return {
     code: s.code,
     nameRaw: typeof s.name === 'string' ? s.name : '',
-    name: typeof s.name === 'string' ? cleanText(s.name, 64) : '',
+    name: typeof s.name === 'string' ? shownText(cleanText(s.name, 64)) : '',
     owner: s.owner,
     mode: s.mode,
     crew,
@@ -208,7 +212,7 @@ export function readPostCard(card, block) {
   return {
     hash: card.hash,
     channel: p.channel,
-    title: typeof p.title === 'string' ? cleanText(p.title, 200) : '',
+    title: typeof p.title === 'string' ? shownText(cleanText(p.title, 200)) : '',
     body,
     bodyState,
     bodyHash,
@@ -384,6 +388,7 @@ export function checkName(raw, current = null) {
   if (!s) return { ok: false, name: '', error: 'Give the station a name, 1 to 32 bytes.' };
   const n = utf8(s).length;
   if (n > LIMITS.name) return { ok: false, name: s, error: 'A station name is at most ' + LIMITS.name + ' bytes (letters with accents and emoji take 2 to 4 each); this one is ' + n + '.' };
+  if (isBlocked(s)) return { ok: false, name: s, error: 'The name is on this page’s short word list, so the page will not seal it (the devnet’s own filter does not read a station’s name). Pick another.' };
   return { ok: true, name: s, error: '' };
 }
 
@@ -533,7 +538,9 @@ export function planBroadcast({ station, sender, title, body, world }) {
   else if (isHouse(station, world)) errors.push(quote(station.code) + ' is a house channel, held by the devnet’s house. This page never posts to the house’s channels.');
   else if (sender && !roleOf(station, sender)) errors.push('This key is not the owner or on the crew of ' + quote(station.code) + '. ' + (station.mode === 'open' ? 'The chain lets anyone post to an open station, but this page broadcasts only to a channel you own or crew.' : 'The chain would refuse the post: “only this station’s owner and crew post or seal here”.'));
   const t = plainLine(title, LIMITS.title, LIMITS.titleBytes, 'The title');
-  if (t.error) errors.push(t.error); else fields.title = t.value;
+  if (t.error) errors.push(t.error);
+  else if (isBlocked(t.value)) errors.push('The title is on this page’s short word list, so the page will not seal it (the devnet’s word filter reads a body, not a title). Change the title.');
+  else fields.title = t.value;
   const b = messageBody(body);
   if (b.error) errors.push(b.error); else { fields.body = b.value; fields.bodyHash = pcc.bodyHash(b.value); }
   return { ok: errors.length === 0, errors, fields, input };

@@ -39,6 +39,7 @@ import { CHAIN_APPS } from '../src/data/chain-apps.ts';
 import { CHANNELS } from '../src/lib/channels.ts';
 import * as C from '../public/chain/apps/channels.js';
 import * as view from '../public/chain/apps/channels-view.js';
+import * as KW from '../public/chain/apps/kind-words.js';
 import * as K from '../public/chain/apps/chain-kit.js';
 import { BAD_WORD, CHAIN_ID, DOMAIN, GENESIS, HOUSE, HOUSE_CODES, WORDS, stationsDevnet } from './helpers/fake-stations.mjs';
 import { assertNoSinks, bannedHits, BANNED, callArgs, code, currencyHits } from './helpers/chain-app-rules.mjs';
@@ -49,6 +50,7 @@ const FILES = {
   logic: 'public/chain/apps/channels.js',
   view: 'public/chain/apps/channels-view.js',
   keys: 'public/chain/apps/key-panel.js',
+  words: 'public/chain/apps/kind-words.js',
   page: 'src/pages/chain/channels.astro',
   data: 'src/data/chain-app-channels.ts',
 };
@@ -91,6 +93,7 @@ async function mutant(edits, file = FILES.logic) {
     text = text.replace(from, () => to);
   }
   text = text.replace("from './chain-kit.js'", "from '" + pathToFileURL(new URL('public/chain/apps/chain-kit.js', root).pathname).href + "'");
+  text = text.replace("from './kind-words.js'", "from '" + pathToFileURL(new URL('public/chain/apps/kind-words.js', root).pathname).href + "'");
   const dir = mkdtempSync(join(tmpdir(), 'channels-mutant-'));
   const f = join(dir, 'channels-mutant-' + (mutantSeq += 1) + '.mjs');
   writeFileSync(f, text);
@@ -471,6 +474,85 @@ test('the poll reads a few newest blocks, not a hundred, and still misses nothin
   viewLog.length = 0;
   await m.c.refresh({ feed: true });
   assert.deepEqual(viewLog.filter((l) => l.startsWith('GET /feed')), ['GET /feed?limit=' + C.LIMITS.refreshLimit]);
+});
+
+// ---- names and titles: the devnet’s filter reads neither, so the page keeps a short list of its own for both
+// (the terms are ROT13 in the source; here they are decoded from the list, never written out)
+const SUB_TERMS = KW.BLOCK_SUB.map(rot13);
+const TOK_TERMS = KW.BLOCK_TOK.map(rot13);
+const BAD = SUB_TERMS[1];
+
+test('the word list is the first-mints handle list, and it holds back a term however it is dressed — and nothing in an ordinary title, name or number', () => {
+  const page = read('public/chain/first-mints/index.html');
+  const listOf = (name) => JSON.parse(page.match(new RegExp('const ' + name + ' = (\\[[^\\]]*\\]);'))[1]);
+  assert.deepEqual(KW.BLOCK_SUB, listOf('BLOCK_SUB'), 'the same substring terms as the first-mints handle filter');
+  assert.deepEqual(KW.BLOCK_TOK, listOf('BLOCK_TOK'), 'the same whole-word terms');
+  assert.ok(SUB_TERMS.length >= 20 && TOK_TERMS.length >= 20);
+  for (const t of SUB_TERMS) {
+    for (const dressed of [t, t.toUpperCase(), 'my ' + t + ' club', t.split('').map((c) => c + c).join(''), t.split('').join(' '), t.split('').join('_')]) assert.equal(KW.isBlocked(dressed), true, dressed);
+  }
+  for (const t of TOK_TERMS) {
+    assert.equal(KW.isBlocked(t), true, t);
+    assert.equal(KW.isBlocked('a few ' + t.toUpperCase() + ' here'), true, t + ' as a word in a title');
+  }
+  for (const ok of ['Block 455', 'Height 1488', 'Plan A or B', 'a b', 'the Morning Net', 'Q1 report', 'first on MYCH', 'Broadcast title', 'My channel', 'tz1abc…xyz9', '', '   ', 'Station 51', 'Café Bleu ☕']) assert.equal(KW.isBlocked(ok), false, JSON.stringify(ok));
+  assert.equal(KW.shownText(BAD), KW.HELD_BACK);
+  assert.equal(KW.shownText('Morning Net'), 'Morning Net');
+  assert.doesNotMatch(KW.HELD_BACK, /<|>/);
+  assert.ok(MODERATION.some((m) => m.text.includes(KW.HELD_BACK)), 'the page’s copy shows the words a held-back name is replaced by, exactly');
+});
+
+test('the page will not seal a station name or a post title on its list, a name already on chain is kept exactly, and a name from the devnet is shown held back', async () => {
+  assert.equal(C.checkName(BAD).ok, false);
+  assert.match(C.checkName('my ' + BAD).error, /word list/);
+  assert.equal(C.checkName('Morning Net').ok, true);
+  // unchanged on chain: kept exactly (the owner can still change the mode of a station whose name the page would refuse)
+  assert.deepEqual(C.checkName('My ' + BAD, 'My ' + BAD), { ok: true, name: 'My ' + BAD, error: '' });
+  const w = worldOf();
+  const claim = C.planClaim({ code: 'NEWONE', name: BAD, mode: 'open', sender: OWNER_ADDR, world: w });
+  assert.equal(claim.ok, false);
+  assert.match(claim.errors.join(' '), /word list/);
+  const row = stn({ code: 'MYCH', name: 'My ' + BAD, mode: 'open' });
+  const st = C.readStation(row);
+  const change = C.planMode({ station: st, sender: OWNER_ADDR, name: 'My ' + BAD, mode: 'crew', crew: [], world: worldOf([row]) });
+  assert.equal(change.ok, true, change.errors.join(' '));
+  assert.equal(change.steps[0].name, 'My ' + BAD, 'a mode change keeps the name exactly as it is on chain');
+  assert.equal(C.planMode({ station: st, sender: OWNER_ADDR, name: 'Another ' + BAD, mode: 'crew', crew: [], world: worldOf([row]) }).ok, false, 'but a new name on the list is refused');
+  const mych = C.readStation(stn({ code: 'MYCH', mode: 'open' }));
+  const post = C.planBroadcast({ station: mych, sender: OWNER_ADDR, title: 'a ' + BAD + ' title', body: 'fine', world: worldOf([stn({ code: 'MYCH', mode: 'open' })]) });
+  assert.equal(post.ok, false);
+  assert.match(post.errors.join(' '), /title.*word list/);
+  assert.equal(C.planBroadcast({ station: mych, sender: OWNER_ADDR, title: 'a fine title', body: 'fine', world: worldOf([stn({ code: 'MYCH', mode: 'open' })]) }).ok, true);
+  // what the devnet sends is held back in what this page reads
+  const read = C.readStation({ code: 'EVIL', owner: OWNER_ADDR, name: 'x ' + BAD + ' y', mode: 'open', crew: [] });
+  assert.equal(read.name, KW.HELD_BACK);
+  assert.equal(read.nameRaw, 'x ' + BAD + ' y', 'the raw name is kept for the owner’s own form and an exact re-claim');
+  const p = C.readPostCard({ hash: 'a'.repeat(64), kind: 'publish_block', sender: A1, payload: { channel: 'EVIL', title: 'hi ' + BAD, body_hash: '0'.repeat(64) } }, { height: 3, timestamp: 1 });
+  assert.equal(p.title, KW.HELD_BACK);
+});
+
+test('the page shows a station name or a post title that is on its list as held back, everywhere: the table, the detail, the feed and the new-post line', async () => {
+  const dev = stationsDevnet({
+    stations: [{ code: 'RUDE', owner: A1, name: 'x ' + BAD, mode: 'open', crew: [] }, { code: 'MYCH', owner: OWNER_ADDR, name: 'My channel', mode: 'open', crew: [] }],
+    posts: [{ channel: 'RUDE', title: 'title ' + BAD, body: 'a body', sender: A1 }, { channel: 'MYCH', title: 'a fine title', body: 'fine', sender: OWNER_ADDR }],
+  });
+  const { rootEl, c } = mountView({ dev, search: '?channel=RUDE' });
+  await c.begin();
+  c.stop();
+  const everything = () => rootEl.textContent;
+  assert.ok(!everything().includes(BAD), 'the term is nowhere on the page');
+  assert.match($$(rootEl, '[data-cc-list] tr').find((r) => r.querySelector('button').textContent === 'RUDE').textContent, new RegExp('OPEN · ' + KW.HELD_BACK.replace(/[[\]]/g, '\\$&')));
+  assert.ok(txt(rootEl, '[data-cc-detail-facts]').includes(KW.HELD_BACK));
+  assert.ok($$(rootEl, '[data-cc-feed] li')[0].querySelector('strong').textContent === KW.HELD_BACK);
+  // a new post with such a title, on the channel in view: announced held back
+  const k = await keyOf('owner');
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: dev.fetch });
+  await net.post('/body', { body: 'x' });
+  const tx = K.pcc.buildTx('publish_block', { sender: k.sender, nonce: 0, channel: 'RUDE', title: 'late ' + BAD, body_hash: K.pcc.bodyHash('x') });
+  await K.signAndSend(dev.chain, k, tx);
+  await c.refresh({ feed: true });
+  assert.ok(!everything().includes(BAD));
+  assert.equal(txt(rootEl, '[data-cc-feed-note]'), 'A new post on RUDE: ' + KW.HELD_BACK);
 });
 
 test('a feed in a shape this page does not read is an error, not an empty directory', async () => {
@@ -1735,6 +1817,9 @@ test('the page is honest: first come first served, a reset takes every claim, no
   const mod = Object.fromEntries(MODERATION.map((r) => [r.title, r.text]));
   assert.match(mod['The word filter'], /POST \/body.*best-effort list, answering “kept off the devnet by its word filter”/);
   assert.match(mod['What the word filter does not read'], /does not read a post’s title, a station’s code or a station’s name: those go onto the chain exactly as you sign them/);
+  assert.match(mod['What this page does about names and titles'], /It will not seal a station name or a post title that is on it, and it shows a name or a title it reads from the devnet that is on it as “\[held back by this page’s word list\]”/);
+  assert.match(mod['What this page does about names and titles'], /the page’s rule, not the chain’s: the chain still holds the real text/);
+  assert.match(mod['What this page does about names and titles'], /best-effort: expect a miss, and the odd harmless name held back/);
   assert.match(mod['The house can hide a post'], /“\[hidden by the devnet admin\]”.*The block is unchanged and still verifies, and anyone who replays the chain still sees the post/);
   assert.match(mod['The house can pause a keyless bot'], /pausing one of the keyless bots/);
   assert.match(mod['What the house cannot do'], /no route that takes a station back, renames it or hides its name, and none that removes a crew member for the owner/);

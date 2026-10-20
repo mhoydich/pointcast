@@ -118,6 +118,10 @@ export const MODERATION: { title: string; text: string }[] = [
     text: 'It does not read a post’s title, a station’s code or a station’s name: those go onto the chain exactly as you sign them. A title or a name that would have been refused in a body can still be sealed.',
   },
   {
+    title: 'What this page does about names and titles',
+    text: 'Because the devnet does not read them, this page keeps a short word list of its own (the same one as the first-mints handle filter). It will not seal a station name or a post title that is on it, and it shows a name or a title it reads from the devnet that is on it as “[held back by this page’s word list]”. That is the page’s rule, not the chain’s: the chain still holds the real text, the devnet’s own views show it, and anyone who calls the chain directly can still seal one. The list is short and best-effort: expect a miss, and the odd harmless name held back.',
+  },
+  {
     title: 'The house can hide a post',
     text: 'The devnet’s keeper can hide a post. The devnet’s own views then show “[hidden by the devnet admin]” and hold back the body and any media link. The block is unchanged and still verifies, and anyone who replays the chain still sees the post. A hidden post is marked in the feed here.',
   },
