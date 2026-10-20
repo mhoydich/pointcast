@@ -24,7 +24,8 @@ export function mountKeyPanel(panel, env = {}) {
   const win = env.window || doc.defaultView;
   const q = (sel) => panel.querySelector(sel);
   const storage = env.storage !== undefined ? env.storage : (() => { try { return win.localStorage; } catch { return null; } })();
-  const S = { key: null, listeners: [], supported: null, kept: false, armed: '', orphan: false };
+  // `other`: another tab keeps a different key on this device than the one this tab holds in memory.
+  const S = { key: null, listeners: [], supported: null, kept: false, armed: '', orphan: false, other: false };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const make = q('[data-kp-make]');
   const forget = q('[data-kp-forget]');
@@ -40,7 +41,7 @@ export function mountKeyPanel(panel, env = {}) {
   function paint() {
     const k = S.key;
     panel.dataset.state = k ? 'ready' : 'none';
-    set('[data-kp-status]', k && S.armed ? 'This would replace ' + k.sender + (S.kept ? ', which is kept on this device' : '') + '. If it holds play ATTN, leads a lot or sealed a capsule, you lose it unless you copy it first: it is shown below. Press “Replace it” again to replace it, or keep this key.' : k ? 'Your key signs as ' + k.sender + (S.kept ? ' · kept on this device' : ' · in this tab only: close it and the key is gone') + '.' : S.supported === false ? 'This browser cannot make an ed25519 key (WebCrypto Ed25519). Use a current Chrome, Edge, Safari or Firefox.' + (S.orphan ? ' A key is kept on this device and this browser cannot use it: “Forget it” deletes that copy.' : '') : S.orphan ? 'A key is kept on this device but could not be loaded here. “Forget it” deletes that copy.' : 'No key yet. Make one: it is a new devnet account, free.');
+    set('[data-kp-status]', k && S.armed ? 'This would replace ' + k.sender + (S.kept ? ', which is kept on this device' : '') + '. If it holds play ATTN, leads a lot or sealed a capsule, you lose it unless you copy it first: it is shown below. Press “Replace it” again to replace it, or keep this key.' : k ? 'Your key signs as ' + k.sender + (S.kept ? ' · kept on this device' : S.other ? ' · in this tab only (another tab keeps a different key on this device): close this tab and this key is gone' : ' · in this tab only: close it and the key is gone') + '.' : S.supported === false ? 'This browser cannot make an ed25519 key (WebCrypto Ed25519). Use a current Chrome, Edge, Safari or Firefox.' + (S.orphan ? ' A key is kept on this device and this browser cannot use it: “Forget it” deletes that copy.' : '') : S.orphan ? 'A key is kept on this device but could not be loaded here. “Forget it” deletes that copy.' : 'No key yet. Make one: it is a new devnet account, free.');
     if (addr) addr.textContent = k ? k.sender : '';
     if (forget) forget.disabled = !k && !S.orphan;
     if (reveal) reveal.disabled = !k;
@@ -52,6 +53,18 @@ export function mountKeyPanel(panel, env = {}) {
     // A key that is on show must be THIS key: a new key replaces what the open box shows, or backing up what is on screen saves the wrong one.
     if (k && seedBox && !seedBox.hidden) seedBox.value = k.seedHex;
   }
+
+  /**
+   * What the device keeps is what the slot holds NOW, and another tab may have changed it: a tab that forgot its key, or kept a new one.
+   * This tab's key is kept only while the slot still holds its own seed. It is never swapped for the other tab's: a page may be mid-send.
+   */
+  function syncKept() {
+    const now = storage ? loadStoredSeed(storage, KEY_SLOT) : null;
+    if (S.key) { S.kept = now === S.key.seedHex; S.other = Boolean(now) && !S.kept; } else { S.other = false; S.orphan = S.orphan && Boolean(now); }
+    S.armed = S.armed && S.key ? S.armed : '';
+    paint();
+  }
+  if (typeof win.addEventListener === 'function') win.addEventListener('storage', (ev) => { if (ev && ev.key !== null && ev.key !== undefined && ev.key !== KEY_SLOT) return; syncKept(); });
 
   function emit() { for (const fn of S.listeners) { try { fn(S.key); } catch { /* a listener's failure is its own */ } } }
 
@@ -79,13 +92,21 @@ export function mountKeyPanel(panel, env = {}) {
 
   if (make) make.addEventListener('click', async () => { if (guardReplace('make')) return; await setSeed(newSeedHex(), { persist: Boolean(keep && keep.checked) }); });
   if (keepOld) keepOld.addEventListener('click', () => { S.armed = ''; paint(); });
-  if (forget) forget.addEventListener('click', () => { S.key = null; S.kept = false; S.armed = ''; S.orphan = false; if (storage) forgetSeed(storage, KEY_SLOT); paint(); emit(); });
+  if (forget) forget.addEventListener('click', () => {
+    const had = S.key;
+    S.key = null; S.kept = false; S.armed = ''; S.orphan = false; S.other = false;
+    // The copy this tab holds, not whatever the slot holds now: another tab may have kept its own key there since. With no key in
+    // this tab (a kept copy that could not be loaded) the slot's copy is the one Forget is for.
+    if (storage && (!had || loadStoredSeed(storage, KEY_SLOT) === had.seedHex)) forgetSeed(storage, KEY_SLOT);
+    paint();
+    emit();
+  });
   if (keep) keep.addEventListener('change', () => {
     if (!S.key) return;
     S.armed = '';
     if (keep.checked) S.kept = Boolean(storage) && storeSeed(storage, KEY_SLOT, S.key.seedHex);
-    else { S.kept = false; if (storage) forgetSeed(storage, KEY_SLOT); }
-    paint();
+    else { S.kept = false; if (storage && loadStoredSeed(storage, KEY_SLOT) === S.key.seedHex) forgetSeed(storage, KEY_SLOT); }
+    syncKept();
   });
   if (reveal) reveal.addEventListener('click', () => {
     if (!S.key || !seedBox) return;

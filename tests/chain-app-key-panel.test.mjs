@@ -263,6 +263,76 @@ test('a key that exists is not replaced by one press: Make a key and Use this ke
   assert.ok(fresh.c.key());
 });
 
+/** Another tab's write reaches this one as a storage event, as a browser delivers it (the writing tab never gets its own). */
+const storageEvent = (dom, newValue, oldValue = null) => dom.window.dispatchEvent(new dom.window.StorageEvent('storage', { key: KEY_SLOT, newValue, oldValue }));
+
+test('two tabs on one device: a key another tab replaced or forgot is no longer called kept here, and Forget in one tab never deletes the key another tab keeps', async () => {
+  const shared = fakeStorage();
+  // tab A keeps a key
+  const a = mountPanel({ storage: shared });
+  await a.c.ready;
+  a.q('[data-kp-keep]').checked = true;
+  a.q('[data-kp-make]').click();
+  await tick();
+  const k1 = a.c.key();
+  assert.match(a.q('[data-kp-status]').textContent, /kept on this device/);
+  assert.equal(shared.m.get(KEY_SLOT), k1.seedHex);
+  // tab B opens, finds K1 kept, and replaces it with a new kept key (two presses: the first shows what would go)
+  const b = mountPanel({ storage: shared });
+  await b.c.ready;
+  assert.equal(b.c.key().sender, k1.sender);
+  b.q('[data-kp-make]').click();
+  b.q('[data-kp-make]').click();
+  await tick();
+  const k2 = b.c.key();
+  assert.notEqual(k2.sender, k1.sender);
+  assert.equal(shared.m.get(KEY_SLOT), k2.seedHex, 'the device now keeps K2');
+  assert.match(b.q('[data-kp-status]').textContent, /Your key signs as .* · kept on this device/);
+  // tab A is told: it still holds K1 in memory, but the device no longer keeps it
+  storageEvent(a.dom, k2.seedHex, k1.seedHex);
+  const said = a.q('[data-kp-status]').textContent;
+  assert.match(said, new RegExp('^Your key signs as ' + k1.sender));
+  assert.doesNotMatch(said, /kept on this device/, 'not “kept”: the device keeps another key');
+  assert.match(said, /in this tab only/);
+  assert.match(said, /another tab keeps a different key on this device/);
+  assert.equal(a.q('[data-kp-keep]').checked, false, 'and the box no longer says it is kept');
+  assert.equal(a.c.key().sender, k1.sender, 'the key this tab signs with is not swapped under the person');
+  // Forget in tab A removes nothing the other tab keeps
+  a.q('[data-kp-forget]').click();
+  assert.equal(shared.m.get(KEY_SLOT), k2.seedHex, 'K2 is still kept: A forgot its own key, not B’s');
+  assert.equal(a.c.key(), null);
+  assert.match(b.q('[data-kp-status]').textContent, /kept on this device/, 'B still says what is true');
+  assert.equal(b.c.key().sender, k2.sender);
+  // the other way: B forgets its kept key; a tab that holds that same key learns it is no longer kept
+  const c = mountPanel({ storage: shared });
+  await c.c.ready;
+  assert.equal(c.c.key().sender, k2.sender);
+  assert.match(c.q('[data-kp-status]').textContent, /kept on this device/);
+  b.q('[data-kp-forget]').click();
+  assert.equal(shared.m.get(KEY_SLOT), undefined, 'B’s Forget removed the key it was keeping');
+  storageEvent(c.dom, null, k2.seedHex);
+  assert.match(c.q('[data-kp-status]').textContent, /in this tab only: close it and the key is gone/);
+  assert.equal(c.q('[data-kp-keep]').checked, false);
+  // another tab keeping the very same key: this tab says kept again
+  const d = mountPanel({ storage: shared });
+  await d.c.ready;
+  await d.c.setSeed(k1.seedHex);
+  assert.doesNotMatch(d.q('[data-kp-status]').textContent, /kept on this device/);
+  storageEvent(d.dom, k1.seedHex);
+  shared.m.set(KEY_SLOT, k1.seedHex);
+  storageEvent(d.dom, k1.seedHex);
+  assert.match(d.q('[data-kp-status]').textContent, /Your key signs as .* · kept on this device/);
+  // unticking Keep removes the slot only while it still holds this tab's key
+  shared.m.set(KEY_SLOT, k2.seedHex);
+  d.q('[data-kp-keep]').checked = false;
+  d.q('[data-kp-keep]').dispatchEvent(new d.dom.window.Event('change'));
+  assert.equal(shared.m.get(KEY_SLOT), k2.seedHex, 'unticking Keep does not delete another tab’s key either');
+  // a storage event for some other slot changes nothing
+  const before = d.q('[data-kp-status]').textContent;
+  d.dom.window.dispatchEvent(new d.dom.window.StorageEvent('storage', { key: 'something-else', newValue: 'x' }));
+  assert.equal(d.q('[data-kp-status]').textContent, before);
+});
+
 test('a stored value that is not a key is ignored, and a browser without storage still makes keys in memory', async () => {
   const bad = mountPanel({ storage: fakeStorage({ [KEY_SLOT]: 'not a key' }) });
   await bad.c.ready;
