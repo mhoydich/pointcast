@@ -30,6 +30,7 @@ export const AGENT_SURFACES = {
     uesPhilosophyRadius: 'https://pointcast.xyz/ues/philosophy/the-radius-as-pedagogy/',
     uesPhilosophyUnmoderated: 'https://pointcast.xyz/ues/philosophy/the-unmoderated-label/',
     guides: 'https://pointcast.xyz/guides',
+    radioNetwork: 'https://pointcast.xyz/radio-network',
     guidesIntake: 'https://pointcast.xyz/guides/intake',
     pickleballHome: 'https://pointcast.xyz/pickleball/home/',
     theSqueeze: 'https://pointcast.xyz/pickleball/the-squeeze/',
@@ -163,6 +164,7 @@ export const AGENT_SURFACES = {
   },
   json: {
     guides: 'https://pointcast.xyz/guides.json',
+    radioNetwork: 'https://pointcast.xyz/radio-network.json',
     guidesIntake: 'https://pointcast.xyz/guides/intake.json',
     pickleballHome: 'https://pointcast.xyz/pickleball/home.json',
     theSqueeze: 'https://pointcast.xyz/pickleball/the-squeeze.json',
