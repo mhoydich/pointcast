@@ -117,12 +117,21 @@ export function assertNotNearMidnight(ms, what, { landed = false } = {}) {
 
 // ---------------------------------------------------------------- names and notes
 
-/** A witness name: 2 to 24 of a-z, 0-9 and hyphen, not reserved. '' is fine (no name). Returns { ok, name, reason }. */
+/**
+ * Names that start like the house's or the keyless bots' (the house runner is house-runner-1; the bots are claude, grok, chatgpt,
+ * frog and sparrow). The devnet binds none of them to a visitor's key, but it does not bind a lookalike such as house-runner-9
+ * to anyone either, so on the public roll it would read as the house runner. This page does not offer one. It is the page's rule,
+ * on top of the Daily Net's own list of seven (W.RESERVED_NAMES).
+ */
+export const RESERVED_PREFIXES = Object.freeze(['house-', 'claude', 'grok', 'chatgpt', 'frog', 'sparrow', 'pointcast']);
+
+/** A witness name: 2 to 24 of a-z, 0-9 and hyphen, not reserved and not starting like a reserved one. '' is fine (no name). Returns { ok, name, reason }. */
 export function checkName(raw) {
   const name = String(raw === undefined || raw === null ? '' : raw).trim();
   if (!name) return { ok: true, name: '', reason: '' };
   if (!W.NAME_RE.test(name)) return { ok: false, name, reason: 'A name is 2 to 24 of a–z, 0–9 and hyphen (lower case).' };
   if (W.RESERVED_NAMES.includes(name)) return { ok: false, name, reason: '“' + name + '” is reserved for the house. Pick another.' };
+  if (RESERVED_PREFIXES.some((p) => name.startsWith(p))) return { ok: false, name, reason: '“' + name + '” starts like a name reserved for the house or the bots (' + RESERVED_PREFIXES.join(', ') + '). Pick another.' };
   return { ok: true, name, reason: '' };
 }
 

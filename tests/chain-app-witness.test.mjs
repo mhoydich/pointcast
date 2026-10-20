@@ -742,6 +742,27 @@ test('names and notes: the same rules the Daily Net has, said plainly', () => {
   assert.equal(X.checkNote('‮evil').ok, false);
 });
 
+test('a name that starts like the house’s or a bot’s is refused: house-runner-9 does not bind to a visitor’s key, and a name that merely contains a reserved word is fine', async () => {
+  assert.deepEqual([...X.RESERVED_PREFIXES], ['house-', 'claude', 'grok', 'chatgpt', 'frog', 'sparrow', 'pointcast']);
+  for (const bad of ['house-runner-9', 'house-runner-1', 'house-x', 'claude', 'claude-code', 'claudette', 'grok', 'grok-fan', 'chatgpt-2', 'frog', 'frog-7', 'frogger', 'sparrow', 'sparrow-reader', 'pointcast-news', 'pointcastfan']) {
+    const c = X.checkName(bad);
+    assert.equal(c.ok, false, bad);
+    assert.match(c.reason, /starts like a name reserved for the house or the bots \(house-, claude, grok, chatgpt, frog, sparrow, pointcast\)\. Pick another\./, bad);
+  }
+  // the exact reserved names keep their own words
+  assert.match(X.checkName('house').reason, /^“house” is reserved for the house\. Pick another\.$/);
+  // a name that only contains one, or starts a different way, is a name
+  for (const ok of ['my-frog', 'treefrog', 'housewarming', 'warehouse-9', 'my-house-runner', 'clau', 'parrowhawk', 'chat-gpt', 'point-cast', 'bird-7']) assert.equal(X.checkName(ok).ok, true, ok);
+  // the plan says it, and signs nothing for it
+  const plan = await planFor({ opts: { name: 'house-runner-9' } });
+  assert.equal(plan.ok, false);
+  assert.match(plan.errors[0], /^“house-runner-9” starts like a name reserved for the house or the bots/);
+  assert.equal(plan.wit, null);
+  // the copy says a few names are reserved, not only the house’s
+  assert.match(src.page, /A few names are reserved: the house’s, the five keyless bots’, and any name that starts the way they do \(house-, claude, grok, chatgpt, frog, sparrow, pointcast\)\./);
+  assert.doesNotMatch(src.page, /The house’s names are reserved\./);
+});
+
 test('the name rule has teeth: with its test removed from a copy, a reserved-looking junk name is accepted — mutation', async () => {
   const m = await variant({ logic: swap('if (!W.NAME_RE.test(name)) return {', 'if (false) return {') });
   assert.equal(REAL.X.checkName('<script>').ok, false);
