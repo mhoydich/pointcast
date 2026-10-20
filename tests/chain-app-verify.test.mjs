@@ -833,6 +833,71 @@ test('the transaction kinds row of step 1 is cut to one safe line each: a short 
   assert.ok(!shown.includes(long), 'the full 60 characters are not shown');
 });
 
+/** A browser drops the focus to <body> when the focused control becomes disabled; jsdom does not, so this does what Chrome does. */
+function dropFocusWhenDisabled(win) {
+  for (const proto of [win.HTMLButtonElement.prototype, win.HTMLInputElement.prototype]) {
+    const d = Object.getOwnPropertyDescriptor(proto, 'disabled');
+    Object.defineProperty(proto, 'disabled', { configurable: true, get: d.get, set(v) { if (v && this.ownerDocument.activeElement === this) this.blur(); d.set.call(this, v); } });
+  }
+}
+
+test('keyboard focus survives a block change: Next, Previous and the number field keep (or get back) the focus when the run disables them', async () => {
+  const { rootEl, c, dom } = lesson();
+  dropFocusWhenDisabled(dom.window);
+  const doc = dom.window.document;
+  await c.begin();
+  const next = rootEl.querySelector('[data-vb-next]');
+  const prev = rootEl.querySelector('[data-vb-prev]');
+  const input = rootEl.querySelector('[data-vb-input]');
+  const n0 = c.state.n;
+  assert.equal(n0, 3318, 'the default block is a few behind the tip of 3321');
+  // Enter on Next: the block changes and the focus is still on Next (it was <body> before)
+  next.focus();
+  assert.equal(doc.activeElement, next);
+  next.click();
+  await until(onBlock(rootEl, n0 + 1), 'the next block');
+  assert.equal(doc.activeElement, next, 'focus is on Next again, so Enter can step on');
+  prev.focus();
+  prev.click();
+  await until(onBlock(rootEl, n0), 'the previous block');
+  assert.equal(doc.activeElement, prev);
+  // Enter in the number field
+  input.focus();
+  input.value = '3247';
+  rootEl.querySelector('[data-vb-form]').dispatchEvent(new dom.window.Event('submit', { cancelable: true, bubbles: true }));
+  await until(onBlock(rootEl, 3247), 'the typed block');
+  assert.equal(doc.activeElement, input, 'the field keeps the focus after Enter');
+  // focus that was elsewhere is not pulled onto a control by a run
+  doc.activeElement.blur();
+  input.value = String(n0);
+  rootEl.querySelector('[data-vb-form]').dispatchEvent(new dom.window.Event('submit', { cancelable: true, bubbles: true }));
+  await until(onBlock(rootEl, n0), 'back to the first block');
+  assert.equal(doc.activeElement, doc.body, 'nothing had the focus, nothing is given it');
+});
+
+test('a control a run leaves off (Next at the tip) hands the focus to the line that names the block, not to <body>', async () => {
+  const { rootEl, c, dom } = lesson({ tip: 3319, env: { hash: '#b=3318' } });
+  dropFocusWhenDisabled(dom.window);
+  const doc = dom.window.document;
+  await c.begin();
+  const next = rootEl.querySelector('[data-vb-next]');
+  assert.equal(c.state.n, 3318);
+  assert.equal(c.state.tip, 3319);
+  next.focus();
+  next.click();
+  await until(onBlock(rootEl, 3319), 'the tip');
+  assert.equal(next.disabled, true, 'Next is off at the tip');
+  assert.notEqual(doc.activeElement, doc.body, 'focus is not thrown to <body>');
+  assert.equal(doc.activeElement, rootEl.querySelector('[data-vb-block]'), 'it goes to the line that names the block');
+  // and Previous is back on, with the keyboard able to step the other way
+  const prev = rootEl.querySelector('[data-vb-prev]');
+  assert.equal(prev.disabled, false);
+  prev.focus();
+  prev.click();
+  await until(onBlock(rootEl, 3318), 'back one');
+  assert.equal(doc.activeElement, prev);
+});
+
 test('the genesis pin: a devnet that was reset reports another genesis, is called out, and the steps fail at the pin', async () => {
   const net = fakeDevnet();
   const reset = clone(fixture.params);

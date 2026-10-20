@@ -82,7 +82,7 @@ export function mount(root, env = {}) {
   const netEnv = { fetch: env.fetch };
   const random = env.random || (() => Math.random());
 
-  const S = { chain: null, set: null, n: null, tip: null, tamperOn: false, kind: 'prev_hash', verifier: null, run: 0, paint: 0, busy: false, report: null, begun: null };
+  const S = { chain: null, set: null, n: null, tip: null, tamperOn: false, kind: 'prev_hash', verifier: null, run: 0, paint: 0, busy: false, report: null, begun: null, refocus: null };
   const input = q('[data-vb-input]');
   const goBtn = q('[data-vb-go]');
   const nearBtn = q('[data-vb-near]');
@@ -100,10 +100,22 @@ export function mount(root, env = {}) {
   const say = (text) => set('[data-vb-status]', text);
 
   function setBusy(b) {
+    // Disabling a control that has the focus drops the focus to <body>: remember which one it was and give it back when the run ends.
+    if (b && !S.busy) S.refocus = [...buttons, input].find((x) => x && x === doc.activeElement) || null;
     S.busy = b;
     root.dataset.busy = b ? 'yes' : 'no';
     for (const x of buttons) x.disabled = b;
     if (input) input.disabled = b;
+  }
+
+  /** Put the keyboard focus back where it was (the control a run disabled), or, if that control stays off (Next at the tip), on the block line. */
+  function restoreFocus() {
+    const want = S.refocus;
+    S.refocus = null;
+    if (!want) return;
+    if (!want.disabled) { want.focus(); return; }
+    const heading = q('[data-vb-block]');
+    if (heading) { heading.tabIndex = -1; heading.focus(); }
   }
 
   function genesisInfo() {
@@ -250,7 +262,7 @@ export function mount(root, env = {}) {
           : 'The devnet is unreachable. It may be restarting or paused; press “Check this block” to try again.');
       }
     } finally {
-      if (token === S.run) { setBusy(false); paintSummary(); }
+      if (token === S.run) { setBusy(false); paintSummary(); restoreFocus(); }
     }
   }
 
