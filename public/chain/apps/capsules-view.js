@@ -19,7 +19,7 @@
 
 import * as C from './capsules.js';
 import { mountKeyPanel } from './key-panel.js';
-import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, resolveApi, sendFailureText, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
+import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, readFileText, resolveApi, sendFailureText, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
 
 export const MY_SLOT = 'pointcast-chain-apps/capsules/v1';
 const POLL_MS = 20000;
@@ -373,7 +373,20 @@ export function mount(root, env = {}) {
   const dlBtn = q('[data-cp-download]');
   if (dlBtn) dlBtn.addEventListener('click', () => { if (S.lastFile) download(C.readCapsuleFile(S.lastFile)); });
   const imp = q('[data-cp-import-file]');
-  if (imp) { imp.disabled = false; imp.addEventListener('change', async () => { const f = imp.files && imp.files[0]; if (f) importFile(await f.text()); }); }
+  if (imp) {
+    imp.disabled = false;
+    imp.addEventListener('change', async () => {
+      const f = imp.files && imp.files[0];
+      if (!f) return;
+      let text;
+      try { text = await readFileText(f, C.LIMITS.fileChars, 'that is too large to be a capsule file'); } catch (e) {
+        const note = q('[data-cp-import-note]');
+        if (note) { note.textContent = describeError(e); note.dataset.bad = 'yes'; }
+        return;
+      }
+      importFile(text);
+    });
+  }
   const impText = q('[data-cp-import-text]');
   const impBtn = q('[data-cp-import-go]');
   if (impText) impText.disabled = false;

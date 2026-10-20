@@ -34,7 +34,7 @@ import * as V from './verify.js';
 export const CHANNEL = 'NOTARY';
 export const FORMAT = 'notary/v1';
 export const RECEIPT_FORMAT = 'pointcast-notary-receipt/v1';
-export const LIMITS = Object.freeze({ name: 60, note: 140, fileBytes: 64 * 1024 * 1024, feedPages: 20, feedLimit: 100 });
+export const LIMITS = Object.freeze({ name: 60, note: 140, fileBytes: 64 * 1024 * 1024, receiptChars: 20000, feedPages: 20, feedLimit: 100 });
 
 const BIDI = new RegExp('[\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]');
 const CONTROL = new RegExp('[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]');
@@ -133,7 +133,7 @@ export function makeReceipt({ chainId, genesis, api, txHash, height, blockHash =
 export function readReceipt(input) {
   let r = input;
   if (typeof input === 'string') {
-    if (input.length > 20000) throw new KitError('that is too large to be a receipt', { code: 'bad_receipt' });
+    if (input.length > LIMITS.receiptChars) throw new KitError('that is too large to be a receipt', { code: 'bad_receipt' });
     try { r = JSON.parse(input); } catch { throw new KitError('that is not JSON', { code: 'bad_receipt' }); }
   }
   const bad = (why) => new KitError('not a Notary receipt: ' + why, { code: 'bad_receipt' });

@@ -699,6 +699,29 @@ test('checking says which input it used, and when a file and a hash are both fil
   assert.equal(txt(rootEl, '[data-nt-c-from]'), '');
 });
 
+test('a receipt file is refused by its size before any of it is read into memory', async () => {
+  const { rootEl, c } = mountView();
+  await c.begin();
+  const reads = [];
+  const huge = { name: 'huge.json', size: 900 * 1048576, text: async () => { reads.push('huge'); return 'x'; } };
+  const rf = $(rootEl, '[data-nt-c-receipt-file]');
+  Object.defineProperty(rf, 'files', { value: [huge], configurable: true });
+  $(rootEl, '[data-nt-c-hash]').value = sha(KNOWN_TEXT);
+  $(rootEl, '[data-nt-c-run]').click();
+  await tick(60);
+  assert.deepEqual(reads, [], 'text() was never called on a 900 MiB file');
+  assert.equal(txt(rootEl, '[data-nt-c-verdict]'), 'THAT IS NOT A RECEIPT');
+  assert.match(txt(rootEl, '[data-nt-c-detail]'), /too large to be a receipt/);
+  // a receipt-sized file is still read and judged by its content
+  const small = { name: 'r.json', size: 30, text: async () => { reads.push('small'); return '{}'; } };
+  Object.defineProperty(rf, 'files', { value: [small], configurable: true });
+  $(rootEl, '[data-nt-c-run]').click();
+  await tick(60);
+  assert.deepEqual(reads, ['small']);
+  assert.match(txt(rootEl, '[data-nt-c-detail]'), /not a Notary receipt/);
+  assert.match(read('public/chain/apps/chain-kit.js'), /export async function readFileText/);
+});
+
 test('checking with a receipt goes straight to the stamp’s block; a receipt for another devnet, or another file, or garbage, is said so', async () => {
   const { rootEl, c, log } = mountView();
   await c.begin();

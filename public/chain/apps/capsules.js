@@ -28,7 +28,7 @@ import { pcc, cleanBlock, cleanText, isHex64, isObj, isWhole, KitError, blocksPe
 
 export const FORMAT = 'pointcast-capsule/v1';
 export const CHANNELS = Object.freeze(['BOT', 'GDN']);
-export const LIMITS = Object.freeze({ title: 120, bodyBytes: 4000, label: 64, minDelay: 3, maxDelay: 1000000, feedPages: 20, feedLimit: 100, wall: 12 });
+export const LIMITS = Object.freeze({ title: 120, bodyBytes: 4000, label: 64, minDelay: 3, maxDelay: 1000000, fileChars: 40000, feedPages: 20, feedLimit: 100, wall: 12 });
 
 const BIDI = new RegExp('[\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]');
 const FORMAT_CHARS = new RegExp('\\p{Cf}', 'u');
@@ -122,7 +122,7 @@ export function makeCapsuleFile({ chainId, genesis, api, capsule, author, channe
 export function readCapsuleFile(input) {
   let f = input;
   if (typeof input === 'string') {
-    if (input.length > 40000) throw new KitError('that is too large to be a capsule file', { code: 'bad_file' });
+    if (input.length > LIMITS.fileChars) throw new KitError('that is too large to be a capsule file', { code: 'bad_file' });
     try { f = JSON.parse(input); } catch { throw new KitError('that is not JSON', { code: 'bad_file' }); }
   }
   const bad = (why) => new KitError('not a capsule file: ' + why, { code: 'bad_file' });

@@ -700,6 +700,32 @@ test('sealCapsule hands the file over before the seal is sent, and a failure car
   assert.equal(got[1].sealed_at, r.height);
 });
 
+test('a capsule file is refused by its size before any of it is read into memory', async () => {
+  const { rootEl, c, dom } = mountView();
+  await c.begin();
+  c.stop();
+  const reads = [];
+  const imp = $(rootEl, '[data-cp-import-file]');
+  const pick = (f) => { Object.defineProperty(imp, 'files', { value: [f], configurable: true }); imp.dispatchEvent(new dom.window.Event('change')); };
+  pick({ name: 'huge.json', size: 900 * 1048576, text: async () => { reads.push('huge'); return 'x'; } });
+  await tick(30);
+  assert.deepEqual(reads, [], 'text() was never called on a 900 MiB file');
+  assert.match(txt(rootEl, '[data-cp-import-note]'), /too large to be a capsule file/);
+  assert.equal($(rootEl, '[data-cp-import-note]').dataset.bad, 'yes');
+  assert.equal(c.state.mine.length, 0);
+  // a file of the right size is read and judged by its content
+  pick({ name: 'f.json', size: 20, text: async () => { reads.push('small'); return '{"nope":1}'; } });
+  await tick(30);
+  assert.deepEqual(reads, ['small']);
+  assert.match(txt(rootEl, '[data-cp-import-note]'), /not a capsule file/);
+  // and a real one is added
+  const f = fileOf(OPENED[0]);
+  const body = JSON.stringify(f);
+  pick({ name: 'real.json', size: body.length, text: async () => body });
+  await tick(30);
+  assert.equal(c.state.mine.length, 1);
+});
+
 test('capsule files you hold: an edited file is refused with a reason, a good one is added, and the ones kept on this device come back', async () => {
   const f = fileOf(OPENED[0]);
   const { rootEl, c, dom } = mountView();

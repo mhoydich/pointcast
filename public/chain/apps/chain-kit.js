@@ -490,6 +490,17 @@ export async function sha256Hex(bytes) {
   return pcc.bytesToHex(pcc.sha256(bytes));
 }
 
+/**
+ * The text of a chosen file, read only when its size could fit in `maxChars`
+ * characters (a character is at most four bytes of UTF-8). A file the person
+ * picked is hostile input too: a 900 MiB "receipt" is refused from its size
+ * alone, without being read into memory first.
+ */
+export async function readFileText(file, maxChars, tooLarge) {
+  if (Number.isFinite(file && file.size) && file.size > maxChars * 4) throw new KitError(tooLarge, { code: 'too_large' });
+  return file.text();
+}
+
 // ---------------------------------------------------------------- the block rate
 
 /**

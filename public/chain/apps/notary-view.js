@@ -19,7 +19,7 @@
 
 import * as N from './notary.js';
 import { mountKeyPanel } from './key-panel.js';
-import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, resolveApi, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
+import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, readFileText, resolveApi, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
 
 function el(doc, tag, cls, text) {
   const n = doc.createElement(tag);
@@ -223,7 +223,7 @@ export function mount(root, env = {}) {
     const rf = q('[data-nt-c-receipt-file]');
     const rt = q('[data-nt-c-receipt-text]');
     const f = rf && rf.files && rf.files[0];
-    if (f) return N.readReceipt(await f.text());
+    if (f) return N.readReceipt(await readFileText(f, N.LIMITS.receiptChars, 'that is too large to be a receipt'));
     if (rt && rt.value.trim()) return N.readReceipt(rt.value.trim());
     return null;
   }
