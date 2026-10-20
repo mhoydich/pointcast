@@ -703,6 +703,73 @@ test('bidding in the page: nothing is sent until Send, the confirm lists exactly
   assert.ok(dom);
 });
 
+test('the key’s balance is read on every poll, so an outbid and its refund show: leading, outbid with the refund owed, outbid and refunded', async () => {
+  const fake = await fakeSend();
+  const key = await K.keyFromSeed('64'.repeat(32));
+  const accounts = { [key.sender]: { balance: 100, next_nonce: 0 } };
+  let daily = clone(FX.daily);
+  const rival = FX.daily.addresses.faucet;
+  const connect = async () => ({ ...fake.chain, submit: async (s) => { if (s.tx.type === 'transfer') { accounts[key.sender].balance -= s.tx.amount; daily = clone(FX.daily); daily.lot.leader = { sender: key.sender, amount: s.tx.amount, words: [], to: null, height: 90 }; daily.lot.bids += 1; } return fake.chain.submit(s); } });
+  const { rootEl, c } = mountView({ fetchOpts: { accounts, fx: { ...FX, get daily() { return daily; } } }, extra: { connect, supported: true, storage: null } });
+  await c.begin();
+  c.stop();
+  await c.keys.setSeed('64'.repeat(32));
+  await tick(30);
+  assert.equal(txt(rootEl, '[data-dm-balance]'), '100 play ATTN');
+  // a poll alone moves the balance: nothing the person did
+  accounts[key.sender].balance = 83;
+  await c.refresh({ cards: false });
+  assert.equal(txt(rootEl, '[data-dm-balance]'), '83 play ATTN', 'a poll reads the account again');
+  accounts[key.sender].balance = 100;
+  await c.refresh({ cards: false });
+  assert.equal(txt(rootEl, '[data-dm-balance]'), '100 play ATTN');
+  assert.equal(txt(rootEl, '[data-dm-mybid]'), '', 'no bid yet, nothing to say');
+  // bid: the key leads
+  const amount = D.leastBid(D.readDaily(FX.daily)) + 2;
+  rootEl.querySelector('[data-dm-amount]').value = String(amount);
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(20);
+  rootEl.querySelector('[data-dm-send]').click();
+  await tick(500);
+  assert.equal(txt(rootEl, '[data-dm-balance]'), (100 - amount) + ' play ATTN');
+  assert.match(txt(rootEl, '[data-dm-mybid]'), new RegExp('^You lead lot \\d{4} at ' + amount + ' play ATTN\\. Bid transaction [0-9a-f]{64}\\.$'));
+  // a rival outbids: the leader tile changes, and the page says the key was outbid and the refund is owed
+  daily = clone(FX.daily);
+  daily.lot.leader = { sender: rival, amount: amount + 5, words: [], to: null, height: 95 };
+  await c.refresh({ cards: false });
+  const owed = txt(rootEl, '[data-dm-mybid]');
+  assert.match(owed, /^You were outbid on lot \d{4}: tz1\w+…\w+ leads at \d+ play ATTN\. Your \d+ play ATTN is owed back: the house sends refunds within 3 blocks\. Bid transaction [0-9a-f]{64}\.$/);
+  assert.equal(txt(rootEl, '[data-dm-balance]'), (100 - amount) + ' play ATTN');
+  // the house pays the refund: the balance comes back by itself and the line says so
+  accounts[key.sender].balance = 100;
+  await c.refresh({ cards: false });
+  assert.equal(txt(rootEl, '[data-dm-balance]'), '100 play ATTN', 'the refund shows without the person doing anything');
+  assert.match(txt(rootEl, '[data-dm-mybid]'), /Your \d+ play ATTN came back \(this key now holds 100\)\./);
+  // a stale low balance does not block a bid: the page last read 83, the refund has since landed (100), nothing polled in between
+  accounts[key.sender].balance = 83;
+  await c.refresh({ cards: false });
+  assert.equal(txt(rootEl, '[data-dm-balance]'), '83 play ATTN');
+  accounts[key.sender].balance = 100;
+  daily = clone(FX.daily);
+  rootEl.querySelector('[data-dm-amount]').value = '95';
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(60);
+  assert.equal(rootEl.querySelector('[data-dm-confirm]').hidden, false, 'the account was read again before the bid was refused');
+  assert.equal(rootEl.querySelector('[data-dm-errors]').hidden, true);
+  assert.equal(txt(rootEl, '[data-dm-balance]'), '100 play ATTN');
+  // the other way round: the page still thinks 100, the key now holds 20. Send reads the account first and refuses with the number just read
+  accounts[key.sender].balance = 20;
+  rootEl.querySelector('[data-dm-send]').click();
+  await tick(200);
+  assert.match(txt(rootEl, '[data-dm-result-text]'), /^You hold 20 play ATTN; this bid is 95\.$/, 'a balance problem is not blamed on the lot');
+  assert.equal(rootEl.querySelector('[data-dm-result]').dataset.state, 'bad');
+  // and a bid the key truly cannot afford is still refused at Review, with the number just read
+  rootEl.querySelector('[data-dm-review]').click();
+  await tick(60);
+  assert.equal(rootEl.querySelector('[data-dm-confirm]').hidden, true);
+  assert.match(txt(rootEl, '[data-dm-errors]'), /You hold 20 play ATTN; this bid is 95\./);
+});
+
 test('a bid the door refuses is shown in the devnet’s own words and nothing is claimed', async () => {
   const fake = await fakeSend();
   const connect = async () => ({ ...fake.chain, submit: async () => { throw Object.assign(new K.KitError('that transfer would not be a valid bid now: the least valid bid is 99 play ATTN', { status: 400, code: 'daily_bid_refused' })); } });

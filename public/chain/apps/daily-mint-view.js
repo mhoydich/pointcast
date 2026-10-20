@@ -48,9 +48,9 @@ export function mount(root, env = {}) {
   const ds = root.dataset;
   const where = resolveApi(env.search !== undefined ? env.search : win.location.search, { api: String(ds.api || ''), genesis: String(ds.genesis || '') });
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
-  const net = makeNet(where.api, { fetch: env.fetch });
+  const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
-  const S = { daily: null, cardKey: '', readAt: 0, begun: false, halted: false, busy: false, chain: null, balance: null, plan: null, timer: 0, tick: 0, audit: null, words: new Set() };
+  const S = { daily: null, cardKey: '', readAt: 0, begun: false, halted: false, busy: false, chain: null, balance: null, plan: null, timer: 0, tick: 0, audit: null, words: new Set(), myBid: null };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-dm-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
@@ -169,7 +169,8 @@ export function mount(root, env = {}) {
       // The open lot's card is spelled with the leader's words, so it is drawn again when the lot or its leader changes.
       const key = S.daily.lot ? S.daily.lot.n + ':' + (S.daily.lot.leader ? S.daily.lot.leader.sender + ':' + S.daily.lot.leader.words.join(' ') : '') : '';
       if (cards || key !== S.cardKey) { S.cardKey = key; await paintCards(); }
-      paintBidState();
+      // Money moves without the person doing anything (an outbid sends the house's refund): read the account on every poll while a key exists.
+      if (keys && keys.key()) await loadBalance(); else paintBidState();
     } catch (e) {
       if (e && e.name === 'GenesisChanged') {
         S.halted = true;
@@ -223,6 +224,26 @@ export function mount(root, env = {}) {
 
   // ------------------------------------------------------------ bidding
 
+  /** Where this key stands in the open lot, in words: leading, outbid with the refund owed, or outbid and refunded. Written only when it changes (it is a live region). */
+  function myBidWords() {
+    const k = keys && keys.key();
+    const lot = S.daily && S.daily.lot;
+    const mine = S.myBid;
+    if (!k || !lot) return '';
+    const n = String(lot.n).padStart(4, '0');
+    const tx = mine && mine.lot === lot.n && mine.tx ? ' Bid transaction ' + mine.tx + '.' : '';
+    if (lot.leader && lot.leader.sender === k.sender) return 'You lead lot ' + n + ' at ' + (lot.leader.amount === null ? '?' : lot.leader.amount) + ' play ATTN.' + tx;
+    if (!mine || mine.lot !== lot.n) return '';
+    const back = S.daily.rules ? S.daily.rules.refund_blocks : D.DAILY_RULES.refund_blocks;
+    const refunded = S.balance !== null && mine.balanceAfter !== null && S.balance >= mine.balanceAfter + mine.amount;
+    return 'You were outbid on lot ' + n + ': ' + (lot.leader ? shortAddr(lot.leader.sender) + ' leads at ' + (lot.leader.amount === null ? '?' : lot.leader.amount) + ' play ATTN. ' : '') + (refunded ? 'Your ' + mine.amount + ' play ATTN came back (this key now holds ' + S.balance + ').' : 'Your ' + mine.amount + ' play ATTN is owed back: the house sends refunds within ' + plural(back, 'block') + '.') + tx;
+  }
+  function paintMyBid() {
+    const n = q('[data-dm-mybid]');
+    const words = myBidWords();
+    if (n && n.textContent !== words) n.textContent = words;
+  }
+
   function paintBidState() {
     const k = keys && keys.key();
     const d = S.daily;
@@ -232,6 +253,7 @@ export function mount(root, env = {}) {
     if (faucet) faucet.disabled = !k || !open;
     if (review) review.disabled = !k || !open;
     set('[data-dm-balance]', k ? (S.balance === null ? 'reading…' : S.balance + ' play ATTN') : 'make a key first');
+    paintMyBid();
     const amount = q('[data-dm-amount]');
     if (amount) {
       amount.disabled = !k || !open;
@@ -311,8 +333,9 @@ export function mount(root, env = {}) {
       say2('Checking the devnet’s genesis…', '');
       if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch } });
       await refresh({ cards: false });
+      await loadBalance();
       const fresh = D.planBid({ daily: S.daily, sender: k.sender, amount: plan.amount, words: plan.words, gift: plan.gift || '', balance: S.balance });
-      if (!fresh.ok) { say2('The lot changed while you read: ' + fresh.errors[0], 'bad'); return; }
+      if (!fresh.ok) { say2((fresh.errors[0].startsWith('You hold ') ? '' : 'The lot changed while you read: ') + fresh.errors[0], 'bad'); return; }
       const r = await D.sendBid({ chain: S.chain, net, key: k, daily: S.daily, plan: fresh, onStage: (s) => say2(s.startsWith('post') ? 'Sending the card words… (' + s.slice(5) + ')' : 'Sending the bid… (' + s.slice(4) + ')', '') });
       const box = q('[data-dm-confirm]');
       if (box) box.hidden = true;
@@ -320,6 +343,8 @@ export function mount(root, env = {}) {
       say2('Your bid is in block ' + r.height + '. Bid transaction ' + r.bidTx + (r.postTx ? ' · words post ' + r.postTx : '') + '. If someone outbids you, the house sends your play ATTN back within three blocks.', 'ok');
       await refresh({ cards: true });
       await loadBalance();
+      S.myBid = { lot: fresh.lot, amount: fresh.amount, tx: r.bidTx, balanceAfter: S.balance };
+      paintMyBid();
     } catch (e) {
       say2('Not sent, or not confirmed: ' + describeError(e), 'bad');
     } finally {
@@ -355,7 +380,14 @@ export function mount(root, env = {}) {
   const faucetBtn = q('[data-dm-faucet]');
   if (faucetBtn) faucetBtn.addEventListener('click', faucet);
   const reviewBtn = q('[data-dm-review]');
-  if (reviewBtn) reviewBtn.addEventListener('click', () => showConfirm(readPlan()));
+  if (reviewBtn) {
+    reviewBtn.addEventListener('click', async () => {
+      let plan = readPlan();
+      // A bid is refused here for want of play ATTN only on the last number read, which can be a poll old: read the account again before saying so.
+      if (!plan.ok && plan.errors.some((e) => e.startsWith('You hold '))) { await loadBalance(); plan = readPlan(); }
+      showConfirm(plan);
+    });
+  }
   const sendBtn = q('[data-dm-send]');
   if (sendBtn) sendBtn.addEventListener('click', send);
   const cancel = q('[data-dm-cancel]');
