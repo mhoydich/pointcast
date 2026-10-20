@@ -598,9 +598,32 @@ test('a refused stamp says what the devnet said and leaves the button usable', a
   await tick(300);
   assert.equal($(rootEl, '[data-nt-result]').dataset.state, 'bad');
   // the devnet gave no Retry-After and no per-minute window, so no retry time is invented
-  assert.match(txt(rootEl, '[data-nt-result-text]'), /^Not sent, or not confirmed: slow down: per-IP limit on signed txs$/);
+  assert.match(txt(rootEl, '[data-nt-result-text]'), /^Not sent: slow down: per-IP limit on signed txs$/, 'the devnet refused it: "Not sent" is exactly true');
   assert.equal($(rootEl, '[data-nt-send]').disabled, false);
   assert.equal($(rootEl, '[data-nt-receipt]').hidden, true);
+});
+
+test('a stamp that was sent but not seen to confirm says so, never "Not sent", and tells how to find it', { timeout: 30000 }, async () => {
+  const fake = await fakeStamping();
+  const sent = [];
+  const gateway = Object.assign(new Error('502 /tx/' + HEX('a')), { details: null });
+  const connect = async () => ({ ...fake.chain, submit: async (s) => { sent.push(s); return fake.chain.submit(s); }, waitForTx: async () => { throw gateway; } });
+  const { rootEl, c } = mountView({ extra: { connect, wait: { timeoutMs: 300, intervalMs: 5 } } });
+  await c.begin();
+  await c.takeFile(new File([new Uint8Array([4, 2])], 'x.bin'));
+  await c.keys.setSeed('72'.repeat(32));
+  await tick(30);
+  $(rootEl, '[data-nt-review]').click();
+  $(rootEl, '[data-nt-send]').click();
+  await tick(500);
+  assert.equal(sent.length, 1);
+  const text = txt(rootEl, '[data-nt-result-text]');
+  assert.doesNotMatch(text, /^Not sent/);
+  assert.match(text, /^Sent, not confirmed yet: the devnet answered 502 for \/tx\/<hash>\. Transaction [0-9a-f]{64}\. The devnet accepted it, so it may still land: check before sending again\. A stamp is found by its hash: paste the file’s SHA-256 in step 02 below/);
+  assert.equal($(rootEl, '[data-nt-result]').dataset.state, 'warn');
+  assert.equal($(rootEl, '[data-nt-confirm]').hidden, true, 'a second Send needs a new Review');
+  assert.equal($(rootEl, '[data-nt-receipt]').hidden, true, 'no receipt: its block is not known');
+  assert.equal($(rootEl, '[data-nt-send]').disabled, false);
 });
 
 test('checking in the page: a pasted hash finds the stamp and shows STAMPED with the block, the time and the sender; the link goes to that block', async () => {

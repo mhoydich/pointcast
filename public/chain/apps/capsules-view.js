@@ -346,14 +346,24 @@ export function mount(root, env = {}) {
     try {
       say2('Checking the devnet’s genesis…', '');
       if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
-      const r = await C.openCapsule({ chain: S.chain, net, key: k, file: m, onStage: (s) => say2('Opening… (' + s + ')', '') });
+      const r = await C.openCapsule({ chain: S.chain, net, key: k, file: m, wait: env.wait, onStage: (s) => say2('Opening… (' + s + ')', '') });
       const box = q('[data-cp-open-confirm]');
       if (box) box.hidden = true;
       S.openPlan = null;
       say2('Opened in block ' + r.height + '. Transaction ' + r.txHash + '. The message is now public on the wall below.', 'ok');
       await refresh({ wall: true });
     } catch (e) {
-      say2('Not opened: ' + describeError(e), 'bad');
+      if (e && (e.sendState === 'sent' || e.sendState === 'maybe')) {
+        // The open may be on chain, and then the message is public. Close the confirm, read the devnet again, and say what it shows.
+        S.openPlan = null;
+        const box = q('[data-cp-open-confirm]');
+        if (box) box.hidden = true;
+        await refresh({ wall: true });
+        const stillListed = Boolean(S.list && S.list.rows.some((x) => x.id === m.capsule));
+        say2(stillListed ? sendFailureText(e, { unsent: 'Not opened: ' }) + ' The capsule is still listed, so it has not opened yet; if it does, its message becomes public.' : 'The devnet no longer lists this capsule, so the open landed and its message is public on the wall below, though this page did not see it confirm (' + describeError(e) + ').', stillListed ? 'warn' : 'ok');
+      } else {
+        say2(sendFailureText(e, { unsent: 'Not opened: ' }), 'bad');
+      }
     } finally {
       btn.disabled = false;
     }

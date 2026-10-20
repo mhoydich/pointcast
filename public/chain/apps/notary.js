@@ -166,10 +166,10 @@ export function readReceipt(input) {
  * nonce; the post is signed here and sent to POST /tx; this waits for the block.
  * Returns { txHash, height, bodyHash, receipt }.
  */
-export async function stampHash({ chain, net, key, sha256, bytes, name = '', note = '', onStage = () => {}, now = () => Date.now() }) {
+export async function stampHash({ chain, net, key, sha256, bytes, name = '', note = '', onStage = () => {}, now = () => Date.now(), wait = {} }) {
   const body = stampBody({ sha256, bytes, name, note });
   const tx = await chain.buildPublish({ sender: key.sender, channel: CHANNEL, title: stampTitle(sha256), body });
-  const done = await signAndSend(chain, key, tx, { onStage });
+  const done = await signAndSend(chain, key, tx, { onStage, ...wait });
   let blockHash = '';
   let timeMs = 0;
   try {

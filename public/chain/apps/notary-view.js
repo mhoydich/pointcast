@@ -19,7 +19,7 @@
 
 import * as N from './notary.js';
 import { mountKeyPanel } from './key-panel.js';
-import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, readFileText, resolveApi, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
+import { cleanText, connectPinned, describeError, groups, makeNet, pinnedStatus, plural, readFileText, resolveApi, sendFailureText, shortAddr, shortHex, utc, whenReady } from './chain-kit.js';
 
 function el(doc, tag, cls, text) {
   const n = doc.createElement(tag);
@@ -186,7 +186,7 @@ export function mount(root, env = {}) {
       say2('Checking the devnet’s genesis…', '');
       if (!S.chain) S.chain = await (env.connect || connectPinned)(net.api, { pinned: where.genesis || null, env: { fetch: env.fetch, timeoutMs: env.timeoutMs } });
       // The stamp is the plan the person confirmed, not whatever the boxes hold by now.
-      const r = await N.stampHash({ chain: S.chain, net, key: k, sha256: plan.sha256, bytes: plan.bytes, name: plan.name, note: plan.note, onStage: (s) => say2('Sending the stamp… (' + s + ')', ''), now });
+      const r = await N.stampHash({ chain: S.chain, net, key: k, sha256: plan.sha256, bytes: plan.bytes, name: plan.name, note: plan.note, wait: env.wait, onStage: (s) => say2('Sending the stamp… (' + s + ')', ''), now });
       S.receipt = r.receipt;
       const box = q('[data-nt-confirm]');
       if (box) box.hidden = true;
@@ -195,7 +195,15 @@ export function mount(root, env = {}) {
       if (rc) rc.hidden = false;
       set('[data-nt-receipt-json]', JSON.stringify(r.receipt, null, 2));
     } catch (e) {
-      say2('Not sent, or not confirmed: ' + describeError(e), 'bad');
+      if (e && (e.sendState === 'sent' || e.sendState === 'maybe')) {
+        // The stamp may be on chain. No receipt can be made without its block, so say how to find it, and close the confirm.
+        S.plan = null;
+        const box = q('[data-nt-confirm]');
+        if (box) box.hidden = true;
+        say2(sendFailureText(e) + ' A stamp is found by its hash: paste the file’s SHA-256 in step 02 below to see whether it landed.', 'warn');
+      } else {
+        say2(sendFailureText(e), 'bad');
+      }
     } finally {
       S.sending = false;
       btn.disabled = false;

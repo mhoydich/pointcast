@@ -813,6 +813,45 @@ test('opening in the page: the Open button is off until the capsule is due, the 
   assert.ok(tipNow > 0);
 });
 
+test('an open that was sent but not seen to confirm is not "Not opened": the page reads the list again and says whether it landed', { timeout: 30000 }, async () => {
+  const c0 = await fakeClient();
+  const made = await OPEN_FILE_FOR({ client: { seed: '81'.repeat(32) } });
+  const file = made.file;
+  const rawText = JSON.stringify(made.raw);
+  const posts = [];
+  const gateway = Object.assign(new Error('502 /tx/' + HEX('b')), { details: null });
+  const open = async (list) => {
+    posts.length = 0;
+    list.current = () => (list.vanishes && posts.includes('/tx') ? { ...listWith(file, {}, file.openAt + 1), capsules: [] } : listWith(file, {}, file.openAt + 1));
+    const accepted = { ok: true, status: 200, headers: { get: () => null } };
+    const m = mountView({ fetchOpts: { fx: { ...FX, get capsules() { return list.current(); } }, overrides: { '/body': async (u, init) => { posts.push('/body'); return { ...accepted, text: async () => JSON.stringify({ body_hash: K.pcc.bodyHash(JSON.parse(init.body).body) }) }; }, '/tx': async (u, init) => { const b = JSON.parse(init.body); posts.push('/tx'); return { ...accepted, text: async () => JSON.stringify({ tx_hash: K.pcc.txHash(b), status: 'pending' }) }; } }, accounts: { [c0.key.sender]: { balance: 0, next_nonce: 0 } } }, extra: { connect: async () => ({ ...c0.chain, waitForTx: async () => { throw gateway; } }), wait: { timeoutMs: 200, intervalMs: 5 } } });
+    await m.c.begin();
+    m.c.stop();
+    await m.c.importFile(rawText);
+    await m.c.keys.setSeed('81'.repeat(32));
+    await tick(30);
+    [...m.rootEl.querySelectorAll('[data-cp-mine] button')].find((b) => b.textContent === 'Open it').click();
+    m.rootEl.querySelector('[data-cp-open-send]').click();
+    await tick(500);
+    return m;
+  };
+  // the open was accepted, then the poll for its block failed; the devnet's list no longer holds the capsule: it opened
+  const list = { vanishes: false };
+  const m = await open(list);
+  assert.deepEqual(posts, ['/body', '/tx']);
+  const text = txt(m.rootEl, '[data-cp-open-result-text]');
+  assert.doesNotMatch(text, /^Not opened/, text);
+  assert.equal($(m.rootEl, '[data-cp-open-confirm]').hidden, true, 'the confirm is closed');
+  // the list still holds it (this fake never removes it): not opened yet, so the page says "sent, not confirmed", and that it may still open
+  assert.match(text, /^Sent, not confirmed yet: the devnet answered 502 for \/tx\/<hash>\. Transaction [0-9a-f]{64}\. The devnet accepted it, so it may still land: check before sending again\. The capsule is still listed, so it has not opened yet; if it does, its message becomes public\.$/);
+  assert.equal($(m.rootEl, '[data-cp-open-result]').dataset.state, 'warn');
+  // the same failure when the capsule has left the list: the open landed, and the message is public
+  list.vanishes = true;
+  const gone = await open(list);
+  assert.match(txt(gone.rootEl, '[data-cp-open-result-text]'), /^The devnet no longer lists this capsule, so the open landed and its message is public on the wall below, though this page did not see it confirm \(the devnet answered 502 for \/tx\/<hash>\)\.$/);
+  assert.equal($(gone.rootEl, '[data-cp-open-result]').dataset.state, 'ok');
+});
+
 test('a reset shows GENESIS CHANGED, reads nothing else and cannot send', async () => {
   const log = [];
   const { rootEl, c } = mountView({ fetchOpts: { log, status: { ...FX.status, genesis_hash: HEX('9') } } });

@@ -24,7 +24,7 @@
 // anywhere from five minutes to eight hours. devnet: no value, may reset; a reset
 // erases every sealed capsule.
 
-import { pcc, cleanBlock, cleanText, isHex64, isObj, isWhole, KitError, blocksPerHour, signAndSend } from './chain-kit.js';
+import { pcc, cleanBlock, cleanText, isHex64, isObj, isWhole, KitError, blocksPerHour, signAndSend, tagSendFailure, waitIncluded } from './chain-kit.js';
 
 export const FORMAT = 'pointcast-capsule/v1';
 export const CHANNELS = Object.freeze(['BOT', 'GDN']);
@@ -262,7 +262,7 @@ export async function sealCapsule({ chain, net, key, plan, onStage = () => {}, o
  * addressed), signs open_capsule with `key` (anyone's key will do) and sends it.
  * Returns { txHash, height }.
  */
-export async function openCapsule({ chain, net, key, file, onStage = () => {} }) {
+export async function openCapsule({ chain, net, key, file, onStage = () => {}, wait = {} }) {
   const list = readCapsules(await net.get('/capsules'));
   const row = list && list.rows.find((r) => r.id === file.capsule);
   const tip = list ? list.height : null;
@@ -281,11 +281,19 @@ export async function openCapsule({ chain, net, key, file, onStage = () => {} })
   const signed = { tx, public_key: key.publicKey, signature };
   onStage('signed');
   const local = pcc.txHash(signed);
-  const r = await net.post('/tx', signed);
-  if (!isObj(r) || r.tx_hash !== local) throw new KitError('the devnet reported a different transaction from the one signed', { code: 'hash' });
-  onStage('sent');
-  const done = await chain.waitForTx(local, { timeoutMs: 45000, intervalMs: 800 });
-  return { txHash: local, height: done.height };
+  // From here the salt is in a request: a failure carries txHash and sendState (see signAndSend), so a page does not say "not
+  // opened" about an open the devnet may hold, whose message is then public.
+  let state = 'maybe';
+  try {
+    const r = await net.post('/tx', signed);
+    if (!isObj(r) || r.tx_hash !== local) throw new KitError('the devnet reported a different transaction from the one signed', { code: 'hash' });
+    state = 'sent';
+    onStage('sent');
+    const done = await waitIncluded(chain, local, { timeoutMs: 45000, intervalMs: 800, ...wait });
+    return { txHash: local, height: done.height };
+  } catch (e) {
+    throw tagSendFailure(e, local, state);
+  }
 }
 
 // ---------------------------------------------------------------- the wall of opened capsules

@@ -436,13 +436,22 @@ export async function signAndSend(chain, key, tx, { wait = true, onStage = () =>
     const done = await waitIncluded(chain, txHash, { timeoutMs, intervalMs });
     return { txHash, height: done.height, index: done.index, receipt: done.receipt || null };
   } catch (e) {
-    const err = e instanceof Error ? e : new Error(String(e));
-    if (state === 'maybe' && isRefusal(err)) state = 'refused';
-    if (state === 'sent' && err.details && err.details.status === 'rejected') state = 'rejected';
-    err.txHash = txHash;
-    err.sendState = state;
-    throw err;
+    throw tagSendFailure(e, txHash, state);
   }
+}
+
+/**
+ * Tag a failure with what is known about the transaction (txHash, sendState: see signAndSend). `state` is how far the send had
+ * got: 'maybe' (the request was about to leave or had left) or 'sent' (the devnet accepted it). Returns the error, to throw.
+ */
+export function tagSendFailure(e, txHash, state) {
+  const err = e instanceof Error ? e : new Error(String(e));
+  let s = state;
+  if (s === 'maybe' && isRefusal(err)) s = 'refused';
+  if (s === 'sent' && err.details && err.details.status === 'rejected') s = 'rejected';
+  err.txHash = txHash;
+  err.sendState = s;
+  return err;
 }
 
 /** A sentence: `text` with a full stop unless it already ends in one (or ! or ?). */
