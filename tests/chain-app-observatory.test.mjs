@@ -20,7 +20,10 @@
 //   - against a local devnet-2 and the live devnet (both GET), the dashboard's
 //     own counts match a recount of the raw blocks (skipped when unreachable).
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { DEVNET, DEVNET_PREVIOUS, RESET } from '../src/data/chain-home.ts';
@@ -505,6 +508,64 @@ test('cleanText keeps the zero-width joiners that spell emoji sequences and Pers
   const sum = O.summarize([{ height: 2, timestamp: 1000, txCount: 1, txs: [{ type: 'post', sender: O.readRawBlock({ header: { height: 2, timestamp: 1000, prev_hash: HEX('1') }, txs: [{ tx: { type: 'post', sender: evil, channel: 'BOT' } }] }).txs[0].sender, channel: 'BOT' }] }]);
   assert.equal(sum.senders[0].sender, K.cleanText(evil, 80));
   assert.ok(sum.senders[0].sender.includes('\u200D'), 'the joiners survive reading a block');
+});
+
+test('the block rate is an independent recount, not just "above zero": (timed blocks - 1) per elapsed hour', () => {
+  for (const name of ['local', 'live']) {
+    const timed = FIX[name].blocks.filter((b) => b.header.timestamp > 0).map((b) => b.header.timestamp);
+    const want = ((timed.length - 1) * 3600000) / (timed[timed.length - 1] - timed[0]);
+    const got = O.summarize(blocksOf(name)).perHour;
+    assert.ok(Math.abs(got - want) < 1e-9, name + ': ' + got + ' vs ' + want);
+  }
+  // a hand-made window: five blocks 60 s apart is four intervals in 240 s, 60 an hour (not five, which would say 75)
+  const five = [1, 2, 3, 4, 5].map((i) => ({ height: i, timestamp: 1_000_000 + i * 60_000, txCount: 0, txs: [] }));
+  assert.equal(O.summarize(five).perHour, 60);
+  assert.equal(K.blocksPerHour([0, 60000, 120000].map((x) => x + 1000)), 60);
+});
+
+test('every edition id, however hostile, is cut to one safe line when read', () => {
+  const evil = 'ed\u202Eit\u0007ion' + 'x'.repeat(100);
+  const e = O.readEditions({ editions: [{ id: evil, minted: 2, terms: { supply: 5 } }, { id: '\u200Bspaced\u2028id', minted: 0 }] });
+  assert.equal(e.length, 2);
+  assert.equal(e[0].id, K.cleanText(evil, 64));
+  assert.ok(e[0].id.length <= 64, 'cut to 64 characters');
+  assert.ok(!/[\u202E\u0007\u200B\u2028]/.test(e[0].id + e[1].id), 'no bidi, control or zero-width character survives');
+  assert.equal(e[0].id.startsWith('ed it'), true, 'the override and the bell became spaces: ' + JSON.stringify(e[0].id.slice(0, 12)));
+  assert.equal(e[1].id, 'spaced id');
+});
+
+test('SVG labels are text nodes: a short hostile kind (under the 15-character cut) makes no element, and the test would catch an obfuscated sink', async () => {
+  const evil = '<b>x</b>';
+  const blocks = FIX.local.blocks.map((b, i) => (i === 40 ? { header: b.header, txs: [{ tx: { type: evil, sender: 'tz1' + evil, channel: '<i>c</i>' } }, { tx: { type: evil, sender: 'tz1x', channel: 'BOT' } }] } : b));
+  const overrides = { '/raw/blocks': async (u) => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ blocks: blocks.filter((b) => b.header.height >= Number(u.searchParams.get('from'))) }) }) };
+  const check = (rootEl) => ({ svgForeign: [...rootEl.querySelectorAll('svg *')].filter((n) => !['svg', 'line', 'text', 'path', 'circle', 'rect'].includes(n.localName)).map((n) => n.localName), html: rootEl.querySelectorAll('b, i, img, script').length });
+  const real = mountView({ overrides });
+  await real.c.begin();
+  real.c.stop();
+  const labels = [...real.rootEl.querySelectorAll('[data-ob-chart="kinds"] .ob-lab')].map((n) => n.textContent);
+  assert.ok(labels.includes(evil), 'the hostile kind is drawn, as characters: ' + labels.join(' | '));
+  assert.deepEqual(check(real.rootEl), { svgForeign: [], html: 0 });
+  // prove the check has teeth: the same page with sv() writing text through an obfuscated innerHTML (which a source scan cannot see)
+  const dir = mkdtempSync(join(tmpdir(), 'ob-mutant-'));
+  try {
+    const base = new URL('../public/chain/apps/', import.meta.url);
+    const swap = (s) => s.replace(/from '\.\/([a-z-]+\.js)'/g, (_, f) => "from '" + pathToFileURL(join(base.pathname, f)).href + "'");
+    const mutated = swap(src.view).replace("if (text !== undefined) n.textContent = text;\n  return n;\n}\n\nconst HEALTH_WORD", "if (text !== undefined) n['inner' + 'HTML'] = text;\n  return n;\n}\n\nconst HEALTH_WORD");
+    assert.notEqual(mutated, swap(src.view), 'the mutation was applied to sv()');
+    const file = join(dir, 'observatory-view-mutant.mjs');
+    writeFileSync(file, mutated);
+    const mutant = await import(pathToFileURL(file).href);
+    const dom = new JSDOM('<!doctype html><html><body><section data-observatory-app data-state="static" data-api="' + DEVNET.url + '" data-genesis="' + FIX.local.status.genesis_hash + '" data-chain-id="x">' + skeleton() + '</section></body></html>', { url: 'http://localhost/chain/observatory/' });
+    const rootEl = dom.window.document.querySelector('[data-observatory-app]');
+    const base2 = fakeFetch('local', { overrides });
+    const c = mutant.mount(rootEl, { window: dom.window, fetch: async (u) => base2(String(u).replace(DEVNET.url, 'http://127.0.0.1:8799')), now: () => FIX.local.status.tip_timestamp + 1000 });
+    await c.begin();
+    c.stop();
+    const bad = check(rootEl);
+    assert.ok(bad.svgForeign.length > 0 || bad.html > 0, 'the mutant sink makes elements, so the check above sees it: ' + JSON.stringify(bad));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('niceMax and niceTicks give round axes', () => {

@@ -809,6 +809,30 @@ test('hostile text from the devnet becomes text: no element, no attribute, no sc
   assert.equal(rootEl.dataset.verdict, 'fail');
 });
 
+test('the transaction kinds row of step 1 is cut to one safe line each: a short hostile kind with a bidi override and a long one are cleaned', async () => {
+  const long = 'K'.repeat(60);
+  const { rootEl, c, dom } = lesson({
+    mutate: (n, b) => {
+      if (n !== 3247) return b;
+      const x = clone(b);
+      x.txs[0].tx.type = 'ty\u202Epe\u0007';
+      x.txs[1].tx.type = long;
+      return x;
+    },
+  });
+  await c.begin();
+  rootEl.querySelector('[data-vb-input]').value = '3247';
+  rootEl.querySelector('[data-vb-form]').dispatchEvent(new dom.window.Event('submit', { cancelable: true, bubbles: true }));
+  await until(onBlock(rootEl, 3247), 'block 3247 with hostile kinds');
+  const rows = [...rootEl.querySelectorAll('.vb-r')].filter((r) => r.querySelector('.vb-r__k') && r.querySelector('.vb-r__k').textContent === 'transactions');
+  assert.ok(rows.length > 0, 'the transactions row is on screen');
+  const shown = rows.map((r) => r.querySelector('.vb-r__v').textContent).join(' || ');
+  assert.ok(!/[\u202E\u0007]/.test(shown), 'no bidi override or bell reaches the page: ' + JSON.stringify(shown));
+  assert.ok(shown.includes('ty pe'), 'the override and the bell became spaces: ' + JSON.stringify(shown));
+  assert.ok(shown.includes('K'.repeat(31) + '…'), 'a long kind is cut at 32 characters with an ellipsis: ' + JSON.stringify(shown));
+  assert.ok(!shown.includes(long), 'the full 60 characters are not shown');
+});
+
 test('the genesis pin: a devnet that was reset reports another genesis, is called out, and the steps fail at the pin', async () => {
   const net = fakeDevnet();
   const reset = clone(fixture.params);
