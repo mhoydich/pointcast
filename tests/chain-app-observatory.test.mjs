@@ -546,6 +546,28 @@ test('an unreachable devnet is said so, once, and the page does not throw', asyn
   assert.equal(rootEl.dataset.busy, 'no');
 });
 
+test('a reply whose body stalls is cut by the same timer as a silent server: the reader fails and the dashboard does not hang', { timeout: 20000 }, async () => {
+  const stall = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: () => new Promise(() => {}) });
+  const net = K.makeNet('http://127.0.0.1:8799', { fetch: stall, timeoutMs: 30 });
+  await assert.rejects(() => net.get('/status'), (e) => e.code === 'unreachable' && /timed out/.test(e.message));
+  // the header-only stall (a fetch that never resolves) is still cut
+  const silent = K.makeNet('http://127.0.0.1:8799', { fetch: () => new Promise(() => {}), timeoutMs: 30 });
+  await assert.rejects(() => silent.get('/status'), /timed out/);
+  // a normal reply is not cut, and its timer does not outlive it
+  const ok = K.makeNet('http://127.0.0.1:8799', { fetch: async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => '{"a":1}' }), timeoutMs: 30 });
+  assert.deepEqual(await ok.get('/x'), { a: 1 });
+  // in the page: the window's body stalls, the read still finishes, the part is named as not readable and the rest draws
+  const { rootEl, c } = mountView({ name: 'local', overrides: { '/raw/blocks': stall }, extra: { timeoutMs: 40 } });
+  const done = await Promise.race([c.begin().then(() => 'done'), new Promise((r) => setTimeout(() => r('hung'), 3000))]);
+  c.stop();
+  assert.equal(done, 'done', 'the first read must end even when one body never finishes');
+  assert.equal(rootEl.dataset.state, 'ready');
+  assert.match(txt(rootEl, '[data-ob-meta]'), /not readable: blocks/);
+  assert.equal(rootEl.dataset.busy, 'no');
+  // the SDK client the writing pages use is bounded the same way
+  assert.match(src.kit, /timedFetch\(/, 'connectPinned and makeNet both use the bounded fetch');
+});
+
 test('?devnet= is honoured only for localhost and 127.0.0.1, and the page says when it ignored one', () => {
   assert.deepEqual(K.devnetOverride('?devnet=http://127.0.0.1:8799'), { api: 'http://127.0.0.1:8799', genesis: null });
   assert.deepEqual(K.devnetOverride('?devnet=http://localhost:8799&genesis=' + HEX('a')), { api: 'http://localhost:8799', genesis: HEX('a') });

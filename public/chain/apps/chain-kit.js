@@ -158,10 +158,51 @@ export class KitError extends Error {
 }
 
 /**
- * A reader of one devnet: every read is a GET with a timeout, a size cap, no
- * credentials and no referrer. A 404 is a normal answer (null) for get(); every
- * other failure throws a KitError carrying the devnet's own words. `count` is
- * how many requests this reader has made, so a page can say so.
+ * A fetch that keeps its timer until the BODY has been read, not just until the
+ * headers arrive: a server that sends headers and then stalls would otherwise
+ * hold a page (and the SDK client, which has no timer of its own) forever. The
+ * request is aborted when the timer fires, and the wait is raced against it as
+ * well, for a fetch that ignores its signal. Returns a fetch-shaped function
+ * whose response carries ok, status, headers and text().
+ */
+export function timedFetch(f, ms = LIMITS.timeoutMs) {
+  const base = f || ((...a) => globalThis.fetch(...a));
+  return async (url, init = {}) => {
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    let timer = null;
+    const clock = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        if (ctrl) ctrl.abort();
+        reject(Object.assign(new Error('timed out'), { name: 'AbortError', timedOut: true }));
+      }, ms);
+    });
+    clock.catch(() => {});
+    const stop = () => clearTimeout(timer);
+    let res;
+    try {
+      res = await Promise.race([base(url, { ...init, signal: ctrl ? ctrl.signal : init.signal }), clock]);
+    } catch (e) {
+      stop();
+      throw e;
+    }
+    if (!res || typeof res.text !== 'function') { stop(); return res; }
+    return {
+      ok: res.ok,
+      status: res.status,
+      headers: res.headers,
+      async text() {
+        try { return await Promise.race([res.text(), clock]); } finally { stop(); }
+      },
+    };
+  };
+}
+
+/**
+ * A reader of one devnet: every read is a GET with a timeout (kept through the
+ * body), a size cap, no credentials and no referrer. A 404 is a normal answer
+ * (null) for get(); every other failure throws a KitError carrying the devnet's
+ * own words. `count` is how many requests this reader has made, so a page can
+ * say so.
  */
 export function makeNet(api, env = {}) {
   const f = env.fetch || ((...a) => globalThis.fetch(...a));
@@ -169,19 +210,16 @@ export function makeNet(api, env = {}) {
     api,
     count: 0,
     async request(path, init = {}, { allow404 = false } = {}) {
-      const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
-      const timer = setTimeout(() => ctrl && ctrl.abort(), env.timeoutMs || LIMITS.timeoutMs);
       net.count += 1;
       let res;
+      let text;
       try {
-        res = await f(api + path, { ...init, signal: ctrl ? ctrl.signal : undefined, credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
+        res = await timedFetch(f, env.timeoutMs || LIMITS.timeoutMs)(api + path, { ...init, credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
+        if (res) text = await res.text();
       } catch (e) {
-        throw new KitError('the devnet did not answer (' + (e && e.name === 'AbortError' ? 'timed out' : 'unreachable') + ')', { code: 'unreachable' });
-      } finally {
-        clearTimeout(timer);
+        throw new KitError('the devnet did not answer (' + (e && (e.name === 'AbortError' || e.timedOut) ? 'timed out' : 'unreachable') + ')', { code: 'unreachable' });
       }
       if (!res) throw new KitError('the devnet did not answer', { code: 'unreachable' });
-      const text = await res.text();
       if (text.length > LIMITS.maxChars) throw new KitError('the reply to ' + path + ' is too large to read here', { status: res.status, code: 'too_large' });
       let json = null;
       try { json = JSON.parse(text); } catch { json = null; }
@@ -263,7 +301,9 @@ export async function pinnedStatus(net, pinned) {
  * page trusts (the node's own, labelled as such, under a local ?devnet=).
  */
 export async function connectPinned(api, { pinned = null, env = {} } = {}) {
-  const f = env.fetch || ((...a) => globalThis.fetch(...a));
+  // The SDK client has no timer of its own: every request it makes (and the
+  // polling that waits for a block) goes through the bounded fetch.
+  const f = timedFetch(env.fetch, env.timeoutMs || LIMITS.timeoutMs);
   const st = readStatus(await (async () => {
     const r = await f(api + '/status', { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
     if (!r.ok) throw new KitError('the devnet answered ' + r.status + ' for /status', { status: r.status });

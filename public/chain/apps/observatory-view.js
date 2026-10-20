@@ -209,7 +209,7 @@ export function mount(root, env = {}) {
   const ds = root.dataset;
   const where = resolveApi(env.search !== undefined ? env.search : win.location.search, { api: String(ds.api || ''), genesis: String(ds.genesis || '') });
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
-  const net = makeNet(where.api, { fetch: env.fetch });
+  const net = makeNet(where.api, { fetch: env.fetch, timeoutMs: env.timeoutMs });
   const now = env.now || (() => Date.now());
   const S = { windowSize: O.DEFAULT_WINDOW, live: true, data: null, skew: 0, timer: 0, tick: 0, busy: false, lastWindowAt: 0, lastHeight: -1, halted: false, begun: false, requests: 0 };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
