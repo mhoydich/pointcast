@@ -20,6 +20,11 @@ the `GUIDES_ADMIN_KEY` Pages secret sent as header `X-Guides-Admin`.
 - `gi:item:<id>` — the full item (never includes the raw receipt)
 - `gi:index` — array of ids, newest first, capped at 1000
 - `gi:receipt:<sha256(receipt)>` — id
+- `gi:summary` — `{ id: [status, guide] }` for counts and the review queue
+- `gi:accepted` — public view of accepted items, newest first, capped at 100
+
+Public reads cost two KV gets. To turn review on, set the Pages secret:
+`npx wrangler pages secret put GUIDES_ADMIN_KEY`.
 
 ## Item shape
 
