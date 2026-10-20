@@ -400,6 +400,33 @@ test('dev, docs and bots say where the SDK came from and how big it is from the 
   assert.equal(unpinnedByteClaim(dev), false);
 });
 
+test('the bot quickstart checks the SDK it downloads against the pinned sha256 before node runs it, and /chain/bots and /chain/dev print that hash from the pin', (t) => {
+  const bots = read('src/pages/chain/bots.astro');
+  const dev = read('src/pages/chain/dev.astro');
+  const quick = bots.match(/const signedQuickstart = String\.raw`([\s\S]*?)`;/)[1];
+  // curl, then the check, then node: && stops node when the check fails
+  assert.match(quick, /\\\n  \$\{SITE\}\/chain\/sdk\/pointcast-chain\.js \\\n  && echo "\$\{SDK_SOURCE\.sha256\}  pointcast-chain\.js" \| shasum -a 256 -c \\\n  && node bot\.mjs "[^"]+"$/);
+  assert.ok(quick.indexOf('curl') < quick.indexOf('shasum') && quick.indexOf('shasum') < quick.indexOf('node bot.mjs'));
+  // the hash in it is the pin, which is the served file
+  assert.equal(SDK_SOURCE.sha256, sha(bytes(SERVED)));
+  // the printed hash and the printed check
+  assert.match(bots, /SHA-256 <code>\{SDK_SOURCE\.sha256\}<\/code>/, 'bots prints the hash from the pin');
+  assert.match(dev, /SHA-256 <code>\{SDK_SOURCE\.sha256\}<\/code>/, 'dev prints the hash from the pin');
+  assert.match(dev, /<code>shasum -a 256 pointcast-chain\.js<\/code>/, 'and how to check a download');
+  for (const [name, src] of [['bots', bots], ['dev', dev]]) assert.ok(!src.includes(SDK_SOURCE.sha256), name + ' reads the hash from the pin, never types it');
+  // run the check for real
+  if (spawnSync('shasum', ['-v'], { encoding: 'utf8' }).error) { t.diagnostic('shasum is not installed here: the check line is not run'); return; }
+  const dir = tmp('sdksync-quick-');
+  const line = quick.match(/&& (echo "\$\{SDK_SOURCE\.sha256\}  pointcast-chain\.js" \| shasum -a 256 -c)/)[1].replace('${SDK_SOURCE.sha256}', SDK_SOURCE.sha256);
+  writeFileSync(join(dir, 'pointcast-chain.js'), bytes(SERVED));
+  const run = () => spawnSync('sh', ['-c', line], { cwd: dir, encoding: 'utf8' });
+  assert.equal(run().status, 0, 'the served file passes');
+  writeFileSync(join(dir, 'pointcast-chain.js'), Buffer.concat([bytes(SERVED), Buffer.from('\n')]));
+  assert.notEqual(run().status, 0, 'one extra byte fails the check, so && would not run node');
+  // the quickstart's own shape: with the check line taken out the order test above would have caught it
+  assert.equal(/shasum/.test(quick.replace(/&& echo "\$\{SDK_SOURCE\.sha256\}  pointcast-chain\.js" \| shasum -a 256 -c \\\n  /, '')), false);
+});
+
 const built = (p) => new URL('dist/' + p, root);
 test('built pages: dev prints the size and commit from the pin; docs and bots name the commit; none calls the SDK older', { skip: !existsSync(built('chain/dev/index.html')) && 'no dist/ build' }, () => {
   const text = (p) => read('dist/' + p).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
