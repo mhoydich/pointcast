@@ -1,0 +1,285 @@
+---
+/**
+ * /chain/capsules: Time Capsules on the PointCast devnet. Seal a message now,
+ * open it at a block you pick. It is the chain's own commit and reveal
+ * (launch record 13): seal_capsule stores a commitment and a block height;
+ * open_capsule, from anyone, at or after that height, reveals the salt and the
+ * post and airs it as its author's. The page does the hashing, signing and
+ * sending in the visitor's browser with a key made there, hands back a capsule
+ * file the author must keep (it holds the message and the salt), lists the
+ * capsules sealed on the devnet, and shows a wall of the ones that have opened.
+ *
+ * A capsule waits in blocks, not minutes: the devnet seals within seconds when
+ * something is posted and once every five minutes otherwise. The page says what a
+ * wait looks like at the rate the devnet is keeping and at both extremes. It
+ * refuses to send an open before its block, because an early open would put the
+ * salt in the mempool in the clear. devnet: no value, may reset.
+ *
+ * The logic is public/chain/apps/capsules.js (no DOM, importable by node), the DOM
+ * side capsules-view.js, the shared key panel key-panel.js, the words
+ * src/data/chain-app-capsules.ts. The devnet pins come from src/data/chain-home.ts,
+ * never typed here. ?devnet=http://127.0.0.1:PORT points the page at a local
+ * devnet for end-to-end runs (scripts/e2e-chain-app-capsules.mjs); it is
+ * honoured only for the hosts localhost and 127.0.0.1.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import KeyPanel from '../../components/chain/KeyPanel.astro';
+import Snippet from '../../components/chain/Snippet.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, HONESTY_LINE, HOW_STEPS, KEEP_COPY, NOT_LIST, WAIT_COPY, codeSnippet } from '../../data/chain-app-capsules';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const code = codeSnippet(DEVNET.url, DEVNET.genesis);
+const quick = [
+  { label: 'Notary', href: '/chain/notary' },
+  { label: 'Observatory', href: '/chain/observatory' },
+  { label: 'Block Yard', href: DEVNET.yardHref },
+  { label: 'Bots guide', href: '/chain/bots#stations' },
+];
+const title = APP.title + ': seal a message and open it at a block you pick';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: APP.title,
+  description: APP.description,
+  url: 'https://pointcast.xyz' + APP.path + '/',
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-20',
+  dateModified: '2026-10-20',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <div class="chn ca-page cp-page" style={ramp}>
+    <ChainHeader current="capsules" trail={[{ label: 'time capsules' }]} block={APP.block} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · APP · TIME CAPSULES · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Seal it now. Open it at a block you pick.</h1>
+      <p class="dek">
+        Write a message, choose how many blocks to wait, and seal it. The chain keeps only a commitment: a hash that fits your
+        message and a secret salt, and nothing it could be read from. When the block comes, anyone holding your capsule file can
+        reveal it, and it airs as a post of yours. Lose the file and it never opens.
+      </p>
+      <svg class="ca-art" viewBox="0 0 360 72" role="img" aria-label="A sealed envelope with a wax ring, then a row of blocks counting down, then the same envelope open">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="12" y="18" width="64" height="40" />
+          <path d="M12 18l32 24 32-24" />
+          <circle cx="44" cy="42" r="6" />
+          <rect x="112" y="30" width="20" height="16" />
+          <rect x="140" y="30" width="20" height="16" />
+          <rect x="168" y="30" width="20" height="16" />
+          <rect x="196" y="30" width="20" height="16" stroke-dasharray="3 3" />
+          <rect x="224" y="30" width="20" height="16" stroke-dasharray="3 3" />
+          <rect x="284" y="26" width="64" height="32" />
+          <path d="M284 26l32-18 32 18" />
+          <path d="M296 40h40M296 48h28" stroke-width="2" />
+        </g>
+      </svg>
+      <p class="ca-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> {KEEP_COPY.reset} A reset is dated and recorded, never silent: devnet-1 was reset on
+        {notYet(RESET.date)} and its recording is still checkable at <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>, but no
+        capsule survived it. A capsule is a commitment signed by a key, an accountable claim, not a promise that anyone will
+        open it or that this devnet will last until it is due.
+      </p>
+      <p class="jump"><a href="#seal">seal one</a><a href="#mine">your capsules</a><a href="#sealed">on the devnet</a><a href="#how">how it works</a><a href="#code">in code</a></p>
+    </header>
+
+    <section
+      id="seal"
+      class="sec"
+      aria-labelledby="seal-title"
+      data-capsules-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+    >
+      <p class="kicker">01 · SEAL · YOUR MESSAGE STAYS IN YOUR BROWSER · NOTHING IS SENT UNTIL YOU PRESS SEND</p>
+      <h2 id="seal-title" class="h2">What should wait?</h2>
+      <noscript><p class="fine">Time Capsules needs JavaScript, because the hashing and signing happen in your browser. The steps are also <a href="#code">a short script</a>.</p></noscript>
+      <p class="ca-status" data-cp-status role="status" aria-live="polite">The page reads <code>GET /status</code> and <code>GET /capsules</code> once this section is on screen, then every twenty seconds while the tab is visible.</p>
+      <p class="ca-meta" data-cp-meta></p>
+      <p class="ca-meta" data-cp-rate></p>
+      <p class="ca-banner" data-cp-genesis role="note" hidden></p>
+      <p class="note cp-wait">{WAIT_COPY}</p>
+
+      <div class="ca-controls">
+        <div class="ca-field ca-field--grow">
+          <label class="ca-label" for="cp-title">Title (public once opened, up to 120 characters)</label>
+          <input id="cp-title" class="ca-input" data-cp-title type="text" maxlength="120" autocomplete="off" />
+        </div>
+        <div class="ca-field">
+          <label class="ca-label" for="cp-channel">It airs on channel</label>
+          <select id="cp-channel" class="ca-select" data-cp-channel><option value="BOT">BOT (the bots’ lane)</option><option value="GDN">GDN (the gardens)</option></select>
+        </div>
+      </div>
+      <div class="ca-field">
+        <label class="ca-label" for="cp-body">Message (secret until it opens, up to 4,000 bytes)</label>
+        <textarea id="cp-body" class="ca-textarea cp-body" data-cp-body rows="5" spellcheck="true"></textarea>
+      </div>
+      <div class="ca-controls">
+        <div class="ca-field ca-field--grow">
+          <label class="ca-label" for="cp-label">Wax seal label (public now, up to 64 characters)</label>
+          <input id="cp-label" class="ca-input" data-cp-label type="text" maxlength="64" autocomplete="off" />
+        </div>
+        <div class="ca-field">
+          <label class="ca-label" for="cp-delay">Open after how many blocks?</label>
+          <input id="cp-delay" class="ca-input ca-input--mono ca-input--fit cp-delay" data-cp-delay type="text" inputmode="numeric" autocomplete="off" maxlength="8" value="20" />
+        </div>
+      </div>
+      <p class="ca-hint" data-cp-delay-hint>Reading the devnet…</p>
+
+      <KeyPanel signs="the seal" id="cp-kp" />
+
+      <p class="ca-actions"><button class="btn" type="button" data-cp-review>Review the seal</button><span class="fine">Nothing is sent yet.</span></p>
+      <ul class="ca-confirm cp-errors" data-cp-errors role="alert" hidden></ul>
+      <div class="ca-confirm" data-cp-confirm hidden>
+        <p><b>You are about to send, to the public devnet:</b></p>
+        <ul data-cp-confirm-list></ul>
+        <p data-cp-confirm-eta></p>
+        <p>{KEEP_COPY.lose} {KEEP_COPY.leak}</p>
+        <p class="ca-actions">
+          <button class="btn" type="button" data-cp-send>Send the seal</button>
+          <button class="btn btn--ghost" type="button" data-cp-cancel>Cancel</button>
+        </p>
+      </div>
+      <div class="ca-result" data-cp-result hidden role="status" aria-live="polite">
+        <h3>Result</h3>
+        <p data-cp-result-text></p>
+        <p>Capsule id: <code class="ca-hash" data-cp-seal-id></code></p>
+        <p class="ca-actions"><button class="btn" type="button" data-cp-download hidden>Download the capsule file</button></p>
+      </div>
+
+      <section id="mine" class="cp-sec" aria-labelledby="mine-title">
+        <p class="kicker">02 · YOUR CAPSULES · THE FILES YOU HOLD</p>
+        <h2 id="mine-title" class="h2">Capsules you can open.</h2>
+        <p class="note">
+          A capsule you seal appears here. A capsule file someone gave you, or one you saved, can be added: the page checks that the
+          file’s contents hash to the capsule id it names, so a file changed after sealing is refused.
+        </p>
+        <p class="ca-meta" data-cp-mine-count></p>
+        <ul class="cp-minelist" data-cp-mine></ul>
+        <div class="ca-controls">
+          <div class="ca-field">
+            <label class="ca-label" for="cp-import-file">Add a capsule file</label>
+            <input id="cp-import-file" class="ca-input ca-file" data-cp-import-file type="file" accept="application/json,.json" disabled />
+          </div>
+          <div class="ca-field ca-field--grow">
+            <label class="ca-label" for="cp-import-text">Or paste its text</label>
+            <textarea id="cp-import-text" class="ca-textarea cp-import" data-cp-import-text rows="2" spellcheck="false" disabled></textarea>
+          </div>
+          <button class="btn btn--ghost" type="button" data-cp-import-go disabled>Add it</button>
+        </div>
+        <p class="ca-hint" data-cp-import-note></p>
+        <label class="ca-toggle"><input class="ca-checkbox" type="checkbox" data-cp-keep /> <span>Keep my capsule files on this device (they hold your messages)</span></label>
+
+        <div class="ca-confirm" data-cp-open-confirm hidden>
+          <p><b>You are about to send, to the public devnet:</b></p>
+          <ul data-cp-open-list></ul>
+          <p data-cp-open-where></p>
+          <p>{KEEP_COPY.open}</p>
+          <p class="ca-actions">
+            <button class="btn" type="button" data-cp-open-send>Open the capsule</button>
+            <button class="btn btn--ghost" type="button" data-cp-open-cancel>Cancel</button>
+          </p>
+        </div>
+        <div class="ca-result" data-cp-open-result hidden role="status" aria-live="polite"><h3>Result</h3><p data-cp-open-result-text></p></div>
+      </section>
+
+      <section id="sealed" class="cp-sec" aria-labelledby="sealed-title">
+        <p class="kicker">03 · ON THE DEVNET · EVERY CAPSULE STILL SEALED, AND THE ONES THAT HAVE OPENED</p>
+        <h2 id="sealed-title" class="h2">What the devnet holds.</h2>
+        <p class="ca-actions"><button class="btn btn--ghost" type="button" data-cp-refresh disabled>Read the devnet again</button><span class="fine" data-cp-count></span></p>
+        <div class="tbl">
+          <table>
+            <caption>Capsules sealed and not yet opened (the devnet never sends a message, a salt or a commitment)</caption>
+            <thead><tr><th scope="col">Capsule</th><th scope="col">Wax seal</th><th scope="col">Channel</th><th scope="col">Sealed by</th><th scope="col">Opens at</th><th scope="col">State</th></tr></thead>
+            <tbody data-cp-list><tr><td colspan="6">Waiting for the first read.</td></tr></tbody>
+          </table>
+        </div>
+        <h3 class="h3">Opened capsules</h3>
+        <p class="ca-meta" data-cp-wall-note></p>
+        <ul class="cp-wallist" data-cp-wall><li class="ca-empty">Waiting for the first read.</li></ul>
+      </section>
+    </section>
+
+    <section id="how" class="sec" aria-labelledby="how-title">
+      <p class="kicker">04 · HOW IT WORKS · AND WHAT IT IS NOT</p>
+      <h2 id="how-title" class="h2">A commit and a reveal.</h2>
+      <ol class="ca-steps">
+        {HOW_STEPS.map((s, i) => (
+          <li class="ca-step">
+            <div class="ca-step__h"><span class="ca-step__n" aria-hidden="true">{i + 1}</span><h3 class="ca-step__t">{s.title}</h3></div>
+            <p>{s.text}</p>
+          </li>
+        ))}
+      </ol>
+      <h3 class="h3">What it is not</h3>
+      <ul class="bullets">{NOT_LIST.map((t) => <li>{t}</li>)}</ul>
+    </section>
+
+    <section id="code" class="sec" aria-labelledby="code-title">
+      <p class="kicker">05 · THE SAME STEPS, IN CODE</p>
+      <h2 id="code-title" class="h2">Seal and open from a terminal.</h2>
+      <p class="note">
+        Keep the SDK (<a href="/chain/first-mints/lib/pointcast-chain.js" download>pointcast-chain.js</a>) beside this file and run it with Node 22 or
+        newer. Any 64-hex seed is a devnet account. The open checks that the capsule is due before it sends anything.
+      </p>
+      <Snippet label="capsule.mjs · pins this devnet’s genesis" code={code} />
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        The commitment, the capsule id and the salt come from the chain’s own SDK (capsuleCommitment, which refuses a post that could
+        never open). The seal and the open are ordinary signed transactions sent to {D.replace('https://', '')}. The list is
+        GET /capsules; the wall joins each open_capsule card to its seal by computing capsuleId(author, commitment). The page
+        shows what the devnet sends as plain text only. {HONESTY_LINE}; a reset is dated and recorded. Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded, the browser is idle, the section is near the viewport and the tab is visible.
+  const root = document.querySelector('[data-capsules-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/capsules-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  .chn .cp-wait{margin-top:12px}
+  .chn .cp-body{min-height:132px}
+  .chn .cp-delay{width:148px}
+  .chn .cp-import{min-height:68px;font-family:var(--pc-font-mono);font-size:13px}
+  .chn .cp-errors{border-color:var(--ca-bad);border-style:solid}
+  .chn .cp-errors[hidden]{display:none}
+  .chn .cp-sec{padding-top:48px;scroll-margin-top:12px}
+  .chn .cp-minelist,.chn .cp-wallist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px}
+  .chn .cp-mine{min-width:0;padding:14px 16px;border:1.5px solid var(--c600);background:var(--pc-bg)}
+  .chn .cp-mine[data-state="due"]{border-left:6px solid var(--ca-ok)}
+  .chn .cp-mine[data-state="lapsed"],.chn .cp-mine[data-state="gone"]{border-style:dashed}
+  .chn .cp-mine__h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+  .chn .cp-mine__t{font:500 17px/1.3 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .cp-mine__m{margin:8px 0 0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .cp-wall{min-width:0;padding:14px 16px;border:1.5px solid var(--c600);background:var(--c50)}
+  .chn .cp-wall__t{display:block;font:500 17px/1.3 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .cp-wall__b{margin:8px 0 0;padding:0;border:0;background:transparent;white-space:pre-wrap;overflow-wrap:anywhere;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  @media (max-width:760px){
+    .chn .cp-delay{width:100%}
+  }
+</style>
