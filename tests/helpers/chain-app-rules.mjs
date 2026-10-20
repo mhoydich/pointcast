@@ -50,7 +50,6 @@ export function assertReadOnly(src, label) {
   assert.doesNotMatch(c, /method\s*:\s*['"]POST['"]|\.post\(|XMLHttpRequest|sendBeacon|method\s*:\s*['"](PUT|PATCH|DELETE)['"]/, label + ' writes');
 }
 
-export const FILE_LIST = (files, exists) => files.filter((f) => exists(f));
 
 /** The argument text of every call of `callee` (e.g. "net.get("), parentheses balanced, comments stripped. */
 export function callArgs(src, callee) {

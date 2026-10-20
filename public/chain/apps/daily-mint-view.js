@@ -50,7 +50,7 @@ export function mount(root, env = {}) {
   if (!/^https?:\/\/[a-z0-9.:-]+$/i.test(where.api)) return null;
   const net = makeNet(where.api, { fetch: env.fetch });
   const now = env.now || (() => Date.now());
-  const S = { daily: null, readAt: 0, begun: false, halted: false, busy: false, chain: null, balance: null, plan: null, timer: 0, tick: 0, audit: null, words: new Set() };
+  const S = { daily: null, cardKey: '', readAt: 0, begun: false, halted: false, busy: false, chain: null, balance: null, plan: null, timer: 0, tick: 0, audit: null, words: new Set() };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-dm-status]', text); if (state) root.dataset.state = state; };
   const panel = q('[data-key-panel]');
@@ -166,7 +166,9 @@ export function mount(root, env = {}) {
       paintRecent();
       set('[data-dm-meta]', 'Read ' + plural(net.count, 'request') + ' so far · last read ' + utcClock(S.readAt) + ' · ' + net.api + ' · ' + S.status.chainId + (where.override ? ' · local override' : ''));
       say('Updated ' + utcClock(S.readAt) + '.', 'ready');
-      if (cards) await paintCards();
+      // The open lot's card is spelled with the leader's words, so it is drawn again when the lot or its leader changes.
+      const key = S.daily.lot ? S.daily.lot.n + ':' + (S.daily.lot.leader ? S.daily.lot.leader.sender + ':' + S.daily.lot.leader.words.join(' ') : '') : '';
+      if (cards || key !== S.cardKey) { S.cardKey = key; await paintCards(); }
       paintBidState();
     } catch (e) {
       if (e && e.name === 'GenesisChanged') {

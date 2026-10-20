@@ -541,6 +541,26 @@ test('hostile text from the house is shown as plain text and makes no element', 
   }
 });
 
+test('the open lot’s card is drawn again when someone else’s bid changes the leader, and not otherwise', async () => {
+  let daily = clone(FX.daily);
+  const { rootEl, c, log } = mountView({ fetchOpts: { fx: { ...FX, get daily() { return daily; } } } });
+  await c.begin();
+  c.stop();
+  const first = rootEl.querySelector('[data-dm-card] img').src;
+  const rawReads = () => log.filter((p) => p.startsWith('GET /raw/block/')).length;
+  const n0 = rawReads();
+  await c.refresh({ cards: false });
+  assert.equal(rawReads(), n0, 'an unchanged lot does not redraw its card');
+  daily = clone(FX.daily);
+  daily.lot.leader = { sender: FX.daily.addresses.faucet, amount: 99, words: ['HELLO', 'MINT'], to: null, height: 5 };
+  daily.lot.bids += 1;
+  await c.refresh({ cards: false });
+  assert.equal(rawReads(), n0 + 1, 'a new leader reads the opening block again');
+  const second = rootEl.querySelector('[data-dm-card] img').src;
+  assert.notEqual(second, first, 'the card is spelled with the new leader’s words');
+  assert.match(rootEl.querySelector('[data-dm-card] img').alt, /HELLO MINT/);
+});
+
 test('a reset shows GENESIS CHANGED, reads nothing else and cannot send', async () => {
   const log = [];
   const { rootEl, c } = mountView({ fetchOpts: { log, status: { ...FX.status, genesis_hash: HEX('9') } } });
