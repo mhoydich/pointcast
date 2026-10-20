@@ -934,6 +934,44 @@ test('the polite status line is written only when its words change: a refresh th
   t.close();
 });
 
+test('one failed witness-list read keeps the last list: the hero does not fall back to "No witness key has signed" and drop its rings', async () => {
+  const keys = [
+    { addr: 'tz1YKK6yoBTVgyrttF9HaA6yfkeRkbgB5No2', name: 'house-runner-1', result: 'correct' },
+    { addr: 'tz1bLEsiTQ2vQx8znZnuahFfKEf98xicMX35', name: 'house-runner-2', result: 'correct' },
+    { addr: 'tz1WspKrkkKjHhXeWPJEZJusB7dEjFgJ3uME', name: 'house-runner-3', result: 'correct' },
+  ];
+  const witnesses = {};
+  const control = { witnessDown: false };
+  // the grid is read while checkpoint 1500 has no keys (the range read says 0), then the keys arrive
+  const t = await boot({ tip: 1507, witnesses, control });
+  await until(() => t.app.dataset.hero === 'live' && /^24 of 120/.test(t.text('grid-status')), 'the hero and the first chunk');
+  assert.match(t.text('hero-witness'), /No witness key has signed this checkpoint/, 'no keys yet: that is true');
+  witnesses[1500] = keys;
+  await t.handle.refresh();
+  assert.match(t.text('hero-witness'), /^3 distinct witness keys/, t.text('hero-witness'));
+  assert.equal(ringCount(await t.blobText(t.q('hero-img').src)), 3, 'three rings');
+  // the witness list now fails (everything else answers)
+  control.witnessDown = true;
+  await t.handle.refresh();
+  assert.doesNotMatch(t.text('hero-witness'), /No witness key has signed/, 'a failed read is not "nobody signed"');
+  assert.match(t.text('hero-witness'), /^3 distinct witness keys/, 'the last count stands');
+  assert.equal(ringCount(await t.blobText(t.q('hero-img').src)), 3, 'the rings stand');
+  assert.match(t.text('hero-status'), /^The witness list could not be read just now, so the count and the rings are from the last read\.$/);
+  assert.equal(t.app.dataset.state, 'live', 'and the page still reads the chain');
+  // the large view keeps its key list too
+  t.q('hero-open').click();
+  await until(() => /^3 distinct witness keys/.test(t.text('d-witness')), 'the large view');
+  const keyRows = t.app.querySelectorAll('[data-bl="d-keys"] li, [data-bl="d-witnesses"] li, .bl-keys li');
+  assert.ok(keyRows.length === 0 || keyRows.length === 3, 'the key list, if drawn, is the three keys: ' + keyRows.length);
+  // the lists come back: the page reads them again and the status line clears itself with the next real change
+  control.witnessDown = false;
+  witnesses[1500] = keys.slice(0, 2);
+  await t.handle.refresh();
+  assert.match(t.text('hero-witness'), /^2 distinct witness keys/);
+  assert.equal(ringCount(await t.blobText(t.q('hero-img').src)), 2);
+  t.close();
+});
+
 test('the reduced-motion note appears only when the system asks for reduced motion', async () => {
   const dev = fakeDevnet();
   for (const [matches, hidden] of [[true, false], [false, true]]) {

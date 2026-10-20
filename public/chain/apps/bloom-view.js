@@ -223,15 +223,17 @@ export function start(root, env = {}) {
   async function loadEntry(h, { detail = false } = {}) {
     const block = await getBlock(h);
     let wit = S.entries.get(h)?.wit ?? null;
+    let unreadable = false;
     if (detail && !wit) {
       try {
         wit = await getWit(h);
       } catch {
         wit = null;
+        unreadable = true;
       }
     }
     if (wit && wit.blockHash && wit.blockHash !== block.hash) throw new Error('bloom: the devnet gave two different hashes for one height');
-    const entry = { height: h, block, wit, counts: wit ? { distinct: wit.distinct, correct: wit.correct, strikes: wit.strikes } : rangeCounts(h) };
+    const entry = { height: h, block, wit, counts: wit ? { distinct: wit.distinct, correct: wit.correct, strikes: wit.strikes } : rangeCounts(h), witnessUnreadable: unreadable };
     S.entries.set(h, entry);
     return entry;
   }
@@ -638,6 +640,13 @@ export function start(root, env = {}) {
     S.wits.delete(h);
     if (before) S.entries.set(h, { ...before, wit: null });
     const entry = await loadEntry(h, { detail: true });
+    // A witness list that cannot be read now is not an empty one: keep the last list that was read (its count, its rings, the key list in the
+    // large view) and say the read failed, instead of falling back to the older range read's zero and printing "No witness key has signed".
+    if (entry.witnessUnreadable && before && before.wit) {
+      S.entries.set(h, before);
+      say('hero-status', 'The witness list could not be read just now, so the count and the rings are from the last read.');
+      return;
+    }
     if (!before || !before.counts || !entry.counts || before.counts.distinct !== entry.counts.distinct) {
       showHero(entry);
       if (entry.counts && entry.counts.distinct) say('hero-status', `${witnessSentence(entry.counts)} Today’s bloom now draws the rings.`);
