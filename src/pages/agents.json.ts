@@ -286,6 +286,7 @@ export const GET: APIRoute = async () => {
       },
       human: {
         guides: AGENT_SURFACES.human.guides,
+        guidesIntake: AGENT_SURFACES.human.guidesIntake,
         pickleballHome: AGENT_SURFACES.human.pickleballHome,
         theSqueeze: AGENT_SURFACES.human.theSqueeze,
         pickleballBackhands: AGENT_SURFACES.human.pickleballBackhands,
@@ -603,6 +604,7 @@ export const GET: APIRoute = async () => {
       },
       json: {
         guides: AGENT_SURFACES.json.guides,
+        guidesIntake: AGENT_SURFACES.json.guidesIntake,
         pickleballHome: AGENT_SURFACES.json.pickleballHome,
         theSqueeze: AGENT_SURFACES.json.theSqueeze,
         pickleballBackhands: AGENT_SURFACES.json.pickleballBackhands,
