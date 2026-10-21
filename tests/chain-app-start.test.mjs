@@ -31,6 +31,7 @@ import { DEVNET } from '../src/data/chain-home.ts';
 import { APP, CAPSULE_DEFAULTS, CHOICE_COPY, HONESTY_LINE, NOT_LIST, PASSKEY_NOTE, REGISTRY_ENTRY, START_BLOCK, STEP_COPY } from '../src/data/chain-app-start.ts';
 import { APPS_2_BLOCK, CHAIN_APPS, HONESTY, appByKey } from '../src/data/chain-apps.ts';
 import { KEEP_COPY } from '../src/data/chain-app-capsules.ts';
+import { DAY_STEPS } from '../src/data/chain-app-daily-mint.ts';
 import * as S0 from '../public/chain/apps/start.js';
 import * as view from '../public/chain/apps/start-view.js';
 import * as K from '../public/chain/apps/chain-kit.js';
@@ -950,6 +951,12 @@ test('the words: honest about value, resets, claims and passkeys, with none of t
   assert.match(KEEP_COPY.open, /^Opening is public and permanent on this devnet/);
   assert.match(page, /Title \(hidden until it opens, then public\)/);
   assert.match(CHOICE_COPY.find((c) => c.key === 'bid').line, /1 play ATTN while nobody has bid/);
+  // Regression (review 10-21, integration): the Daily Mint's law moves the close five minutes past a late bid
+  // (snipe_ms, up to two hours: DAY_STEPS on /chain/daily-mint), so the card goes to the highest bid at the
+  // close, not at 00:00 UTC. The line once said "highest bid at 00:00 UTC gets the card".
+  assert.match(DAY_STEPS.find((s) => s.title === 'The close, and the card').text, /A bid in the last five minutes moves the close/);
+  assert.match(CHOICE_COPY.find((c) => c.key === 'bid').line, /the highest bid at the close \(00:00 UTC, later if someone bids in its last five minutes\) gets the card/);
+  assert.doesNotMatch(CHOICE_COPY.find((c) => c.key === 'bid').line, /bid at 00:00 UTC gets/);
   assert.deepEqual(CHOICE_COPY.map((c) => c.key), [...S0.CHOICES]);
   assert.deepEqual(STEP_COPY.map((s) => s.key), [...S0.STEPS]);
   for (const c of CHOICE_COPY) assert.ok(existsSync(new URL('src/pages' + c.app + '.astro', root)), c.app);

@@ -75,7 +75,7 @@ export const CHOICE_COPY: { key: 'bid' | 'stamp' | 'capsule'; title: string; lin
   {
     key: 'bid',
     title: 'Bid on today’s card',
-    line: 'Bid the least the open lot takes (1 play ATTN while nobody has bid) on today’s Daily Mint card. Outbid, and the house sends it back within 3 blocks; highest bid at 00:00 UTC gets the card, minted on chain.',
+    line: 'Bid the least the open lot takes (1 play ATTN while nobody has bid) on today’s Daily Mint card. Outbid, and the house sends it back within 3 blocks; the highest bid at the close (00:00 UTC, later if someone bids in its last five minutes) gets the card, minted on chain.',
     costs: 'Uses play ATTN from step 2.',
     app: '/chain/daily-mint',
     appLabel: 'The Daily Mint',
