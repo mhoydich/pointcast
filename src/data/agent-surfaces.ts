@@ -229,6 +229,8 @@ export const AGENT_SURFACES = {
     shortwave: 'https://pointcast.xyz/shortwave.json',
     loom: 'https://pointcast.xyz/loom.json',
     loomApi: 'https://pointcast.xyz/api/loom',
+    loomLive: 'wss://pointcast.xyz/api/loom/live?to={address}',
+    loomNode: 'https://pointcast.xyz/.well-known/loom.json',
     connect: 'https://pointcast.xyz/connect.json',
     station: 'https://pointcast.xyz/station.json',
     charts: 'https://pointcast.xyz/charts.json',
