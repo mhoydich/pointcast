@@ -385,7 +385,7 @@ export function mount(root, env = {}) {
     } catch (e) {
       closeCard();
       if (S.pending) { S.pending.resolve(false); S.pending = null; }
-      if (e && e.code === 'declined') progress(choice === 'stamp' ? 'Not signed: you pressed Cancel. Nothing was signed or sent. (The stamp’s three lines sit unsigned in the devnet’s body store, tied to no key.)' : 'Not signed: you pressed Cancel' + (choice === 'bid' ? ', or the lot was about to close' : '') + '. Nothing was signed or sent.', 'bad');
+      if (e && e.code === 'declined') progress(choice === 'stamp' ? 'Not signed: you pressed Cancel. Nothing was signed, and no transaction was sent. (The stamp’s three lines, stored when you pressed Review, sit unsigned in the devnet’s body store, tied to no key.)' : 'Not signed: you pressed Cancel' + (choice === 'bid' ? ', or the lot was about to close' : '') + '. Nothing was signed or sent.', 'bad');
       else if (e && e.name === 'GenesisChanged') { halt(e); progress('GENESIS CHANGED: nothing was sent.', 'bad'); }
       else if (e && (e.sendState === 'sent' || e.sendState === 'maybe')) progress(sendFailureText(e) + (S.file ? ' The capsule file is below: download it now.' : ''), 'warn');
       else progress(sendFailureText(e), 'bad');

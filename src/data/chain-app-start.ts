@@ -61,7 +61,7 @@ export const STEP_COPY: { key: 'key' | 'attn' | 'act' | 'see'; title: string; te
   {
     key: 'act',
     title: 'Do one thing that is yours',
-    text: 'Pick one. Before anything is signed, the page shows you the exact transaction: every field, and the digest your key signs. Nothing is sent until you press Sign.',
+    text: 'Pick one. Before anything is signed, the page shows you the exact transaction: every field, and the digest your key signs. Nothing is signed, and no transaction is sent, until you press Sign. Reviewing a stamp first stores its three Notary lines (the format, the fingerprint, the length) on the devnet, unsigned, so the post can name them.',
   },
   {
     key: 'see',

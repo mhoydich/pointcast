@@ -523,7 +523,7 @@ test('stamp: Review shows the exact post (every field, the digest), nothing is s
   // Cancel, from the keyboard: Escape on the card
   $(rootEl, '[data-st-card]').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await until(() => $(rootEl, '[data-st-progress]').dataset.state === 'bad');
-  assert.match(txt(rootEl, '[data-st-progress-text]'), /^Not signed: you pressed Cancel\. Nothing was signed or sent\./);
+  assert.match(txt(rootEl, '[data-st-progress-text]'), /^Not signed: you pressed Cancel\. Nothing was signed, and no transaction was sent\. \(The stamp’s three lines, stored when you pressed Review, sit unsigned in the devnet’s body store, tied to no key\.\)$/);
   assert.equal(w.sent.length, 0);
   assert.equal($(rootEl, '[data-st-card]').hidden, true);
   assert.equal(stateOf(rootEl, 'act'), 'now');
@@ -551,6 +551,39 @@ test('stamp: Review shows the exact post (every field, the digest), nothing is s
   assert.equal(N.readReceipt(txt(rootEl, '[data-st-keep-pre]')).sha256, sha('I was here first.'));
   assert.equal(txt(rootEl, '[data-st-download]'), 'Download the receipt');
   assert.ok([...rootEl.querySelectorAll('[data-st-choice]')].every((r) => r.disabled), 'one thing: the choices close once it is done');
+});
+
+test('a stamp’s Review stores its three Notary lines before Sign, with the real SDK client, and the page says so before Review: no copy claims nothing is sent until Sign', async () => {
+  // Regression (review 10-21): the act step said "Nothing is sent until you press Sign", but the SDK's buildPublish
+  // stores a post's body (POST /body) when Review builds the stamp, before any key signs.
+  const stored = [];
+  const log = [];
+  const overrides = { '/body': async (u, init) => { const b = JSON.parse(init.body).body; stored.push(b); return reply({ body_hash: K.pcc.bodyHash(b) }); } };
+  const m = mountView({ fetchOpts: { overrides, log } }); // no stand-in connect: the page's own pinned SDK client
+  await m.c.begin();
+  m.c.stop();
+  $(m.rootEl, '[data-kp-make]').click();
+  await until(() => m.c.keys.key());
+  await tick(30);
+  $(m.rootEl, '[data-st-skip]').click();
+  const r = $(m.rootEl, '[data-st-choice][value="stamp"]');
+  r.checked = true;
+  r.dispatchEvent(new m.dom.window.Event('change'));
+  $(m.rootEl, '[data-st-sentence]').value = 'I was here first.';
+  $(m.rootEl, '[data-st-review]').click();
+  await until(() => !$(m.rootEl, '[data-st-card]').hidden);
+  assert.equal($(m.rootEl, '[data-st-card]').hidden, false, txt(m.rootEl, '[data-st-progress-text]'));
+  assert.deepEqual(log.filter((l) => !l.startsWith('GET ')), ['POST /body'], 'Review stores the body, and writes nothing else');
+  assert.deepEqual(stored, ['notary/v1\nsha256:' + sha('I was here first.') + '\nbytes:17']);
+  // the page says so where the person reads it before pressing Review, and nothing claims otherwise
+  assert.match(STEP_COPY.find((s) => s.key === 'act').text, /Nothing is signed, and no transaction is sent, until you press Sign\. Reviewing a stamp first stores its three Notary lines \(the format, the fingerprint, the length\) on the devnet, unsigned/);
+  assert.match(src.page.replace(/\s+/g, ' '), /data-st-sentence-note>[^<]*Review stores the three Notary lines \(the format, the fingerprint, the length\) on the devnet, unsigned, before you sign/);
+  for (const f of MY_FILES.filter((p) => !p.startsWith('tests/'))) assert.doesNotMatch(read(f).replace(/\s+/g, ' '), /Nothing is sent until you press Sign/, f);
+  // Cancel: no transaction, and the stored lines are named
+  $(m.rootEl, '[data-st-cancel]').click();
+  await until(() => $(m.rootEl, '[data-st-progress]').dataset.state === 'bad');
+  assert.match(txt(m.rootEl, '[data-st-progress-text]'), /^Not signed: you pressed Cancel\. Nothing was signed, and no transaction was sent\. \(The stamp’s three lines, stored when you pressed Review, sit unsigned/);
+  assert.ok(!log.includes('POST /tx'), 'no transaction was sent');
 });
 
 test('bid: the card is the transfer of the least bid to the auctioneer the edition names; a house that names another auctioneer gets nothing', async () => {
@@ -784,7 +817,7 @@ test('the words: honest about value, resets, claims and passkeys, with none of t
   assert.match(page, /PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY/);
   assert.match(NOT_LIST.join(' '), /Not money\. Play ATTN has no value, is never promised any, and cannot be bought, sold or taken off the devnet\./);
   assert.match(NOT_LIST.join(' '), /One server runs this devnet and seals every block; it can refuse what it is sent\./);
-  assert.match(STEP_COPY.find((s) => s.key === 'act').text, /the page shows you the exact transaction: every field, and the digest your key signs\. Nothing is sent until you press Sign\./);
+  assert.match(STEP_COPY.find((s) => s.key === 'act').text, /the page shows you the exact transaction: every field, and the digest your key signs\. Nothing is signed, and no transaction is sent, until you press Sign\. Reviewing a stamp first stores its three Notary lines/);
   assert.match(CHOICE_COPY.find((c) => c.key === 'stamp').line, /Only its fingerprint \(its SHA-256\) and its length go on chain/);
   assert.match(CHOICE_COPY.find((c) => c.key === 'capsule').line, /without it the capsule never opens/);
   assert.match(CHOICE_COPY.find((c) => c.key === 'bid').line, /1 play ATTN while nobody has bid/);
