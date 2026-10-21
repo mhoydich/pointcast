@@ -162,6 +162,21 @@ test('readNet, readDaily and summarize: house keys, outside keys, hostile text, 
   assert.equal(summarize({ height: 5, net: readNet(null), daily: readDaily(null) }).witnesses, 'No witness key has signed today yet.');
 });
 
+test('the milestone line never claims more than the strip read: a bid is not called “still open”', () => {
+  const house = P.HOUSE_WITNESSES;
+  const onlyHouse = readNet({ day: '2026-10-21', witnesses: [{ addr: 'tz1YKK6yoBTVgyrttF9HaA6yfkeRkbgB5No2', name: 'house-runner-1' }] }, house);
+  // a bid on today's lot, from a key this strip does not check: it may be the milestone, so the line must not say it is still open
+  const bid = summarize({ height: 3800, net: onlyHouse, daily: readDaily({ status: 'on', lot: { n: 13, bids: 2 } }) });
+  assert.equal(bid.lot, 'Today’s Daily Mint lot, #13: 2 bids so far.');
+  assert.equal(bid.milestone, 'No witness key from outside the house today. Today’s lot has 2 bids: one from a key the house did not make would meet the milestone, and this strip does not check who bid.');
+  // nothing seen: it says what it read, and that it does not read every transaction
+  const quiet = summarize({ height: 3800, net: onlyHouse, daily: readDaily({ status: 'on', lot: { n: 13, bids: 0 } }) });
+  assert.equal(quiet.milestone, 'No witness key from outside the house today, and no bid on today’s lot. Those are the only two signs this strip reads, not every transaction.');
+  const closed = summarize({ height: 3800, net: readNet(null), daily: readDaily({ status: 'off' }) });
+  assert.match(closed.milestone, /not every transaction\.$/);
+  for (const l of [bid, quiet, closed]) assert.doesNotMatch(l.milestone, /still open/, 'the strip cannot know the milestone is still open');
+});
+
 // ---------------------------------------------------------------- the strip end to end, on a fake page and a fake devnet
 
 function fakePage(dataset) {

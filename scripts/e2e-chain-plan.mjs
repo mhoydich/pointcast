@@ -57,8 +57,17 @@ async function compare(base, search, label, pinnedHouse) {
     check(got.witnesses.startsWith(ws.length + ' witness key' + (ws.length === 1 ? '' : 's') + ' today'), label + ': ' + ws.length + ' witness key(s): "' + got.witnesses + '"');
     for (const w of ws) check(got.witnesses.includes((w.name || w.addr) + (pinnedHouse[w.addr] ? ' (house)' : '')), label + ': names ' + (w.name || w.addr) + (pinnedHouse[w.addr] ? ' as the house’s' : ' with no house tag'));
   }
-  check(outside.length ? /^A witness key the house does not run has signed today/.test(got.milestone) : /^No witness key from outside the house today/.test(got.milestone), label + ': milestone line "' + got.milestone + '"');
   const lot = daily && daily.status === 'on' && daily.lot ? daily.lot : null;
+  const bids = lot && Number.isSafeInteger(lot.bids) && lot.n > 0 ? lot.bids : 0;
+  check(
+    outside.length
+      ? /^A witness key the house does not run has signed today/.test(got.milestone)
+      : bids > 0
+        ? /^No witness key from outside the house today\. Today’s lot has \d+ bids?: .*does not check who bid\.$/.test(got.milestone)
+        : /^No witness key from outside the house today, and no bid on today’s lot\. .*not every transaction\.$/.test(got.milestone),
+    label + ': milestone line "' + got.milestone + '"',
+  );
+  check(!/still open/.test(got.milestone), label + ': the milestone line does not claim the milestone is still open');
   check(lot ? got.lot === 'Today’s Daily Mint lot, #' + lot.n + ': ' + lot.bids + ' bid' + (lot.bids === 1 ? '' : 's') + ' so far.' : /no open lot/.test(got.lot), label + ': lot line "' + got.lot + '"');
   say(label + ': status "' + got.status + '"');
 }

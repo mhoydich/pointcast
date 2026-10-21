@@ -74,9 +74,14 @@ export function summarize({ height, net, daily }, written = {}) {
   lines.lot = daily.on
     ? 'Today’s Daily Mint lot, #' + daily.n + ': ' + plural(daily.bids, 'bid') + ' so far.'
     : 'The Daily Mint has no open lot right now.';
+  // The milestone is any signed transaction from a key the house did not make. This strip reads only
+  // today's witnesses and today's bid count, so it never says the milestone is still open: it says
+  // what it saw, and that it does not read every transaction or check who bid.
   lines.milestone = outside.length
     ? 'A witness key the house does not run has signed today. Whether a person stands behind it, this page cannot tell.'
-    : 'No witness key from outside the house today. The milestone is still open.';
+    : daily.bids > 0
+      ? 'No witness key from outside the house today. Today’s lot has ' + plural(daily.bids, 'bid') + ': one from a key the house did not make would meet the milestone, and this strip does not check who bid.'
+      : 'No witness key from outside the house today, and no bid on today’s lot. Those are the only two signs this strip reads, not every transaction.';
   return lines;
 }
 
