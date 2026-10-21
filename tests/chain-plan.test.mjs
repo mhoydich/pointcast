@@ -46,6 +46,12 @@ test('the copy: no fundraising word and no price anywhere in the plan, its page 
 test('the plan is dated, honest and in the shape it promises', () => {
   assert.equal(P.PLAN.written, '2026-10-21');
   assert.match(P.PLAN.readAt, /^2026-10-21 \d{2}:\d{2} UTC$/);
+  // Regression (integration review): the page said READ 17:40 UTC over numbers taken at tip 3,769, a block
+  // devnet-2 sealed at 17:49:58 UTC (header timestamp 1792604998637; block 3,770 followed at 1792605298638).
+  // The read time has to fall while the tip it reports was the tip.
+  const readMs = Date.parse(P.PLAN.readAt.replace(' ', 'T').replace(' UTC', ':00Z'));
+  assert.equal(P.STANDING.blocks, 3769, 'the tip below is block 3,769’s; re-read both if the numbers change');
+  assert.ok(readMs >= Math.floor(1792604998637 / 60000) * 60000 && readMs < 1792605298638, `read at ${P.PLAN.readAt}, while 3,769 was not the tip`);
   assert.equal(P.PLAN.path, '/chain/plan');
   assert.match(P.PLAN_BLOCK, /^\d{4}$/);
   assert.equal(P.PLAN_BLOCK, '0724', 'the block that announces the plan with Start here, the house/outside split and the pcv replay');

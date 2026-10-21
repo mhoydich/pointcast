@@ -29,8 +29,11 @@ export const PLAN = {
   key: 'plan',
   title: 'The plan for PointCast Chain',
   written: '2026-10-21',
-  /** When the numbers in STANDING were read from the devnet. */
-  readAt: '2026-10-21 17:40 UTC',
+  /**
+   * When the numbers in STANDING were read from the devnet: while block 3,769 was its tip, which it was
+   * from 17:49:58 to 17:54:58 UTC (the header timestamps of blocks 3,769 and 3,770).
+   */
+  readAt: '2026-10-21 17:50 UTC',
   /** The pointcast-chain commit the plan was read against. */
   chainCommit: '906c745',
   description:
