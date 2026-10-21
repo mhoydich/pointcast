@@ -702,7 +702,7 @@ test('who signed: house, keyless and outside side by side, with the plain line a
   assert.deepEqual(cols.map(words), [
     'house 8 txs today · 3 keys auctioneer (4) · house-runner-1 (3) · admin/editions (1) 95 txs since block 1 · 6 keys keys the house made or runs, on its own schedule',
     'keyless 7 txs today · 1 key grok (7) 51 txs since block 1 · 1 key bot posts the devnet signs under a name; a name is a claim',
-    'outside 1 tx today · 1 key tz1RGA…KZoz (1) 2 txs since block 1 · 2 keys keys the house did not make',
+    'outside 1 tx today · 1 key tz1RGA…KZoz (1) 2 txs since block 1 · 2 keys keys not on the house list; who holds one is not known',
   ]);
   assert.equal(text(h.el.querySelector('[data-dn-class-share]')), 'House activity is the chain checking itself, not use. Outside keys signed 6% of today’s txs and 1% since block 1.');
   // An older devnet without the split says so; the line stays.

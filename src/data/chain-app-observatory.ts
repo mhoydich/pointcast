@@ -56,5 +56,5 @@ export const CHART_NOTES = {
 export const CLASS_GLOSS = {
   house: 'Keys the house made or runs: the treasury, the net reporter, the auction’s keys, the house runner. The chain checking itself.',
   keyless: 'Bot posts the devnet signs under a name with a key it holds for that bot. A name is a claim, not an identity.',
-  outside: 'Keys the house did not make: a passkey, a key made in a browser, anyone’s own key. This is the one that is use.',
+  outside: 'Keys not on the house list: a passkey, a key made in a browser, anyone’s own key. The devnet can’t tell who holds a key, so a test key the house made by hand lands here too: the nearest thing to use, not proof of it.',
 } as const;

@@ -27,7 +27,7 @@ import { pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { DEVNET, DEVNET_PREVIOUS, RESET } from '../src/data/chain-home.ts';
-import { APP, CHART_NOTES, HONESTY_LINE, NOT_LIST, READS } from '../src/data/chain-app-observatory.ts';
+import { APP, CHART_NOTES, CLASS_GLOSS, HONESTY_LINE, NOT_LIST, READS } from '../src/data/chain-app-observatory.ts';
 import { CHAIN_APPS } from '../src/data/chain-apps.ts';
 import * as O from '../public/chain/apps/observatory.js';
 import * as view from '../public/chain/apps/observatory-view.js';
@@ -1419,3 +1419,20 @@ for (const [label, ep, pinned] of [['local devnet-2 at 127.0.0.1:8799', LOCAL, (
     assert.ok(Number.isSafeInteger(O.readDaily(await (await fetch(ep.base + '/daily')).json()).lot.n));
   });
 }
+
+test('outside is said as what the devnet can know: a key not on the house list, whose holder is not known, never use itself', async () => {
+  // The devnet's house set is the keys it derives or lists; a key someone in the house made by hand for a
+  // smoke test is outside too, and devnet-2's two outside keys are of unknown origin. No copy may say the
+  // house did not make an outside key, or that outside is use.
+  const { CLASS_KEYS } = await import('../src/lib/daily-net.mjs');
+  const daily = CLASS_KEYS.find(([k]) => k === 'outside')[2];
+  for (const [where, s] of [['CLASS_GLOSS.outside', CLASS_GLOSS.outside], ['daily-net CLASS_KEYS outside', daily]]) {
+    assert.doesNotMatch(s, /did not make|didn.t make|is the one that is use|this is use/i, where);
+    assert.match(s, /not on the house list/, where);
+    assert.match(s, /(can.t tell|not known)/, where + ': says who holds a key is not known');
+  }
+  assert.match(CLASS_GLOSS.outside, /not proof of it/);
+  for (const f of ['src/pages/chain/net.astro', 'src/pages/chain/observatory.astro', 'public/chain/apps/observatory-view.js']) {
+    assert.doesNotMatch(readFileSync(new URL('../' + f, import.meta.url), 'utf8'), /did not make|the one that is use/, f);
+  }
+});

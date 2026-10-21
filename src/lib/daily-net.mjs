@@ -47,14 +47,15 @@ export const STRIKE_COPY = 'signed a checkpoint this chain does not have: a wron
 /**
  * Who signed the day's txs (GET /net `classes`, pointcast-chain
  * docs/DEVNET.md#house-keyless-and-outside): house keys on the house's own
- * schedule, keyless bot posts the devnet signs, and keys the house did not
- * make. The line is this site's own copy, the same words the devnet uses.
+ * schedule, keyless bot posts the devnet signs, and keys not on the house
+ * list (the devnet can't tell who holds a key). The line is this site's own
+ * copy, the same words the devnet uses.
  */
 export const CLASS_LINE = 'House activity is the chain checking itself, not use.';
 export const CLASS_KEYS = Object.freeze([
   ['house', 'house', 'keys the house made or runs, on its own schedule'],
   ['keyless', 'keyless', 'bot posts the devnet signs under a name; a name is a claim'],
-  ['outside', 'outside', 'keys the house did not make'],
+  ['outside', 'outside', 'keys not on the house list; who holds one is not known'],
 ]);
 
 // Tezos implicit + originated accounts and pointcast-chain agent / passkey
