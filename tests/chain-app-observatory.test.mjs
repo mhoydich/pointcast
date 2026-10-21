@@ -1290,6 +1290,80 @@ test('the page is accessible and responsive by construction: labelled controls, 
 
 // ================================================================ the built page (skips while dist/ is absent)
 
+// ================================================================ who signed: house, keyless, outside
+
+// GET /net `classes`, as the devnet sends it (pointcast-chain docs/DEVNET.md#house-keyless-and-outside).
+const T1 = 'tz1' + 'RGAjxFWb7GdJTHeqyDs8CpnntciypKZoz';
+const PCA = 'pca1' + 'D8Q1A5hG3ApBpcywDu5GefrwKxyz12';
+const CLASSES = {
+  day: {
+    house: { txs: 8, keys: 3, kinds: {}, who: [{ addr: T1, label: 'auctioneer', txs: 4 }, { addr: T1, label: 'house-runner-1', txs: 3 }, { addr: T1, label: 'net-reporter', txs: 1 }], more: 0 },
+    keyless: { txs: 7, keys: 1, kinds: {}, who: [{ addr: PCA, label: 'grok', txs: 7 }], more: 0 },
+    outside: { txs: 1, keys: 1, kinds: {}, who: [{ addr: T1, label: null, txs: 1 }], more: 0 },
+  },
+  chain: { house: { txs: 95, keys: 6 }, keyless: { txs: 51, keys: 1 }, outside: { txs: 2, keys: 2 } },
+  outside_share: { day: 0.0625, chain: 0.0135 },
+  line: 'house activity is the chain checking itself, not use',
+};
+const netWith = (classes) => ({ '/net': async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ ...FIX.local.net, classes }) }) });
+
+test('readClasses takes the devnet’s split, checks every label against its own alphabet, and is null when the devnet has none', () => {
+  const c = O.readClasses(CLASSES);
+  assert.deepEqual(O.CLASSES, ['house', 'keyless', 'outside']);
+  assert.deepEqual(c.day.house, { txs: 8, keys: 3, who: [{ label: 'auctioneer', txs: 4 }, { label: 'house-runner-1', txs: 3 }, { label: 'net-reporter', txs: 1 }] });
+  assert.deepEqual(c.day.outside.who, [{ label: T1, txs: 1 }]);
+  assert.deepEqual(c.chain, { house: { txs: 95, keys: 6 }, keyless: { txs: 51, keys: 1 }, outside: { txs: 2, keys: 2 } });
+  assert.deepEqual(c.share, { day: 0.0625, chain: 0.0135 });
+  assert.equal(O.readNet(FIX.local.net).classes, null, 'the recorded devnet predates the split');
+  assert.equal(O.readNet({ ...FIX.local.net, classes: CLASSES }).classes.day.keyless.txs, 7);
+  for (const junk of [null, 7, 'x', [], {}, { day: {} }, { chain: {} }]) assert.equal(O.readClasses(junk), null);
+  const evil = '<img src=x onerror=alert(1)>';
+  const h = O.readClasses({ ...CLASSES, day: { house: { txs: -1, keys: 1.5, who: [{ label: evil, txs: 'x' }, { label: 'Treasury' }] }, keyless: { who: [{ label: 'grok ' + evil }] }, outside: { who: [{ addr: 'javascript:' + T1 }] } }, outside_share: { day: 2, chain: -1 } });
+  assert.deepEqual(h.day.house, { txs: 0, keys: 0, who: [{ label: 'a house key', txs: 0 }, { label: 'a house key', txs: 0 }] });
+  assert.equal(h.day.keyless.who[0].label, 'a keyless bot');
+  assert.equal(h.day.outside.who[0].label, 'a key');
+  assert.deepEqual(h.share, { day: null, chain: null });
+});
+
+test('the view shows house, keyless and outside side by side with the plain line, and says so when the devnet does not split them', async () => {
+  const { rootEl, c } = mountView({ name: 'local', overrides: netWith(CLASSES) });
+  await c.begin();
+  c.stop();
+  assert.equal(txt(rootEl, '[data-ob-v="class-house"]'), '8 txs');
+  assert.equal(txt(rootEl, '[data-ob-s="class-house"]'), 'today, from 3 keys: auctioneer (4), house-runner-1 (3), net-reporter (1) · 95 txs since block 1');
+  assert.equal(txt(rootEl, '[data-ob-v="class-keyless"]'), '7 txs');
+  assert.equal(txt(rootEl, '[data-ob-s="class-keyless"]'), 'today, from 1 key: grok (7) · 51 txs since block 1');
+  assert.equal(txt(rootEl, '[data-ob-v="class-outside"]'), '1 tx');
+  assert.equal(txt(rootEl, '[data-ob-s="class-outside"]'), 'today, from 1 key: tz1RGAjx…ypKZoz (1) · 2 txs since block 1');
+  assert.equal(txt(rootEl, '[data-ob-s="classes"]'), 'House activity is the chain checking itself, not use. Outside keys signed 6% of today’s txs and 1% since block 1.');
+  // the recorded devnet has no split: the tiles and the line say so instead of a zero
+  const old = mountView({ name: 'local' });
+  await old.c.begin();
+  old.c.stop();
+  assert.equal(txt(old.rootEl, '[data-ob-v="class-outside"]'), 'not split yet');
+  assert.equal(txt(old.rootEl, '[data-ob-s="classes"]'), 'This devnet does not count house, keyless and outside txs separately yet.');
+  // hostile labels stay words
+  const evil = '<img src=x onerror="globalThis.pwnedObs=1">';
+  const bad = mountView({ name: 'local', overrides: netWith({ ...CLASSES, day: { ...CLASSES.day, house: { txs: 1, keys: 1, who: [{ label: evil, txs: 1 }] } } }) });
+  await bad.c.begin();
+  bad.c.stop();
+  assert.equal(txt(bad.rootEl, '[data-ob-s="class-house"]'), 'today, from 1 key: a house key (1) · 95 txs since block 1');
+  assert.equal(bad.rootEl.querySelectorAll('img, script, [onerror]').length, 0);
+  assert.equal(globalThis.pwnedObs, undefined);
+});
+
+test('the page puts Who signed in today, tiles in the devnet’s order, with the line in the page’s own words', () => {
+  const p = src.page;
+  const today = p.slice(p.indexOf('<section id="today"'), p.indexOf('</section>', p.indexOf('<section id="today"')));
+  assert.match(today, /<h3 id="who-signed" class="ob-classes__h">Who signed today’s txs<\/h3>/);
+  assert.match(today, /<b>House activity is the chain checking itself, not use\.<\/b>/);
+  assert.match(today, /data-ob-s="classes"/);
+  assert.ok(p.indexOf("id: 'class-house'") < p.indexOf("id: 'class-keyless'") && p.indexOf("id: 'class-keyless'") < p.indexOf("id: 'class-outside'"));
+  assert.equal(O.CLASS_LINE, 'House activity is the chain checking itself, not use.');
+  assert.match(READS.find((r) => r.route === 'GET /net and /checkpoints').takes, /house, keyless or outside/);
+  assert.ok(NOT_LIST.some((t) => t.startsWith('House activity is the chain checking itself, not use.')));
+});
+
 const builtPath = new URL('dist/chain/observatory/index.html', root);
 test('the built page carries the hooks, the honesty line and the pinned genesis, and loads no outside script', { skip: !existsSync(builtPath) && 'dist/ is absent: run npm run build:bare to check the built page' }, () => {
   const html = readFileSync(builtPath, 'utf8');
