@@ -13,6 +13,7 @@
  */
 
 import { pcc, isHex64, isObj, KitError, sha256Hex, signAndSend } from '../chain/apps/chain-kit.js';
+import { BLOCK_SUB, BLOCK_TOK } from '../chain/apps/kind-words.js';
 
 export const FORMAT = 'signature/v1';
 export const STATEMENT_FORMAT = 'pointcast-signature/statement/v1';
@@ -23,7 +24,13 @@ export const LIMITS = Object.freeze({
   text: 80,
   label: 60,
   statement: 500,
-  svgChars: 60000,
+  /**
+   * The public devnet rejects a publish whose stored body is over 8,192 bytes
+   * ("body over 8192 bytes", measured 2026-10-20). A much larger POST /body is
+   * refused earlier, at 17,408 bytes of JSON. The chain docs say 64 KiB. The
+   * live cap that matters for a signature post is 8,192 bytes of body text.
+   */
+  storeBytes: 8192,
   media: 512,
   drawPoints: 8000,
 });
@@ -304,9 +311,30 @@ export function cleanMedia(v) {
   return s;
 }
 
+/** UTF-8 bytes of the text POST /body stores. The devnet caps this at 8,192. */
+export function storeRequestBytes(text) {
+  return new TextEncoder().encode(String(text)).length;
+}
+
+const rot13 = (s) => s.replace(/[a-z]/g, (c) => String.fromCharCode(((c.charCodeAt(0) - 97 + 13) % 26) + 97));
+const FILTER_STEMS = [...BLOCK_SUB, ...BLOCK_TOK].map(rot13);
+const LEET_DIGIT = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', 8: 'b', 9: 'g' };
+
 /**
- * The post body. `svg` is included only when the whole body stays small
- * enough to store; otherwise the line is `svg:omitted` and the hash still is.
+ * The devnet's word filter reads a stored body with digits folded into letters
+ * and separators removed, so a run of coordinates is a run of letters. A real
+ * glyph path trips that. A hash of only a–f and digits sometimes does too.
+ */
+export function tripsWordFilter(text) {
+  const flat = String(text).toLowerCase().split('').map((c) => LEET_DIGIT[c] || c).join('').replace(/[^a-z]/g, '');
+  return FILTER_STEMS.some((stem) => flat.includes(stem));
+}
+
+/**
+ * The post body. A real outline is left out: the devnet word filter folds
+ * digits into letters, and glyph coordinates trip it. A picture is embedded
+ * only when it fits in 8,192 bytes and does not trip that reading. The hash
+ * is always there.
  */
 export function signatureBody({ sha256, kind, font = '', bytes, label = '', svg = '', media = null }) {
   if (!isHex64(sha256)) throw new KitError('a SHA-256 is 64 lowercase hex characters', { code: 'bad_hash' });
@@ -320,7 +348,8 @@ export function signatureBody({ sha256, kind, font = '', bytes, label = '', svg 
   if (media) lines.push(`media:${cleanMedia(media)}`);
   const picture = typeof svg === 'string' ? svg.replace(/\s+/g, ' ').trim() : '';
   const withSvg = picture ? [...lines, `svg:${picture}`] : lines;
-  if (picture && withSvg.join('\n').length <= LIMITS.svgChars && !CONTROL.test(picture)) return withSvg.join('\n');
+  const joined = withSvg.join('\n');
+  if (picture && !CONTROL.test(picture) && storeRequestBytes(joined) <= LIMITS.storeBytes && !tripsWordFilter(joined)) return joined;
   if (picture) lines.push('svg:omitted');
   return lines.join('\n');
 }
@@ -331,7 +360,7 @@ export function signatureTitle(sha256) {
 }
 
 export function parseSignature(body) {
-  if (typeof body !== 'string' || body.length > LIMITS.svgChars) return null;
+  if (typeof body !== 'string' || storeRequestBytes(body) > LIMITS.storeBytes) return null;
   const lines = body.split('\n');
   if (lines[0] !== FORMAT) return null;
   const got = {};

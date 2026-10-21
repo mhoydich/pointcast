@@ -225,7 +225,7 @@ export function start(root) {
 
   if (pad) {
     pad.addEventListener('pointerdown', (ev) => {
-      pad.setPointerCapture(ev.pointerId);
+      try { pad.setPointerCapture(ev.pointerId); } catch { /* some browsers refuse capture on this event */ }
       S.drawing = true;
       S.points = [pointFrom(ev)];
       paintPad();
@@ -415,7 +415,9 @@ export function start(root) {
       text(bodyOut, 'Channel ' + S.plan.channel + '\nTitle ' + S.plan.title + '\n\n' + S.plan.body);
       bodyOut.dataset.state = 'ok';
       if (sendBtn) sendBtn.disabled = false;
-      text(recordOut, 'Nothing has been sent. Read the post above. Sign and send posts it to the public devnet with your key.');
+      text(recordOut, (S.plan.body.includes('\nsvg:omitted')
+        ? 'The SVG stays on this page. The devnet’s word filter reads digits as letters, and a real outline trips it. The post keeps the hash. '
+        : '') + 'Nothing has been sent. Read the post above. Sign and send posts it to the public devnet with your key.');
     } catch (e) {
       S.plan = null;
       if (sendBtn) sendBtn.disabled = true;
@@ -432,7 +434,8 @@ export function start(root) {
       if (!S.chain) {
         text(chainStatus, 'Reading the devnet…');
         const net = makeNet(where.api);
-        await pinnedStatus(net, where.genesis);
+        const st = await pinnedStatus(net, where.genesis);
+        text(chainStatus, 'Public devnet ' + st.chainId + ', height ' + st.height + '. It may reset.');
         S.chain = await connectPinned(where.api, { pinned: where.genesis });
       }
       const done = await recordSignature({

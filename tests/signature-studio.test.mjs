@@ -19,6 +19,8 @@ import {
   planRecord,
   signStatement,
   signatureBody,
+  storeRequestBytes,
+  tripsWordFilter,
   verifyStatement,
 } from '../public/signature/studio.js';
 import { HISTORY, HISTORY_LINKS } from '../src/data/signature-history.ts';
@@ -70,7 +72,6 @@ test('a typed name becomes vector paths, with and without a flourish', () => {
   assert.deepEqual(laid.missing, []);
   assert.ok(laid.svg.includes('<path d="M'));
   assert.ok(laid.svg.length > 1000);
-  assert.ok(laid.svg.length < LIMITS.svgChars);
   assert.doesNotMatch(laid.svg, /<script/i);
   assertSafeSvg(laid.svg);
   const plain = layoutTyped({ font, text: 'Michael Hoydich', flourish: false, slant: 12, weight: 2, color: '#112233' });
@@ -108,20 +109,24 @@ test('an upload stays a picture, and a hostile SVG is refused', () => {
   assert.throws(() => assertSafeSvg('<svg xmlns="http://www.w3.org/2000/svg" ><script></script></svg>'), /not safe/);
 });
 
-test('the post names the hash, embeds a modest SVG, and drops a huge one', () => {
+test('the post names the hash, and leaves out an outline the word filter would misread', () => {
   const font = JSON.parse(read('public/signature/paths/pointcast-script.json'));
-  const laid = layoutTyped({ font, text: 'Michael Hoydich' });
-  const body = signatureBody({ sha256: HASH, kind: 'typed', font: 'pointcast-script', bytes: 1200, label: 'Michael', svg: laid.svg });
-  assert.ok(body.length <= LIMITS.svgChars);
-  assert.match(body, /^signature\/v1\nsha256:abab/);
-  assert.match(body, /svg:<svg /);
+  const letter = layoutTyped({ font, text: 'M', flourish: true, size: 96 });
+  assert.equal(tripsWordFilter(letter.svg), true);
+  const body = signatureBody({ sha256: HASH, kind: 'typed', font: 'pointcast-script', bytes: 1200, label: 'M', svg: letter.svg });
+  assert.match(body, /svg:omitted/);
+  assert.equal(tripsWordFilter(body), false);
+  assert.ok(storeRequestBytes(body) <= LIMITS.storeBytes);
   const parsed = parseSignature(body);
   assert.equal(parsed.kind, 'typed');
-  assert.equal(parsed.font, 'pointcast-script');
-  assert.equal(parsed.svgOmitted, false);
-  const huge = signatureBody({ sha256: HASH, kind: 'drawn', bytes: 10, svg: 'M'.repeat(LIMITS.svgChars) });
+  assert.equal(parsed.svgOmitted, true);
+  const safe = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><path d="M 2 2 L 6 6"/></svg>';
+  assert.equal(tripsWordFilter(safe), false);
+  const embedded = signatureBody({ sha256: HASH, kind: 'drawn', bytes: 10, svg: safe });
+  assert.match(embedded, /svg:<svg /);
+  assert.equal(tripsWordFilter(embedded), false);
+  const huge = signatureBody({ sha256: HASH, kind: 'drawn', bytes: 10, svg: 'M 2 2 '.repeat(2000) });
   assert.match(huge, /svg:omitted/);
-  assert.equal(parseSignature(huge).svgOmitted, true);
   const plan = planRecord({ sha256: HASH, kind: 'typed', font: 'pointcast-script', bytes: 12, label: '', svg: '', media: '' });
   assert.equal(plan.channel, CHANNEL);
   assert.equal(plan.channel, 'ART');
