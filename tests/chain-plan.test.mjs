@@ -224,6 +224,35 @@ test('readNet, readDaily and summarize: house keys, outside keys, hostile text, 
   assert.equal(summarize({ height: 5, net: readNet(null), daily: readDaily(null) }).witnesses, 'No witness key has signed today yet.');
 });
 
+test('house or not is decided by the exact address, never by a name: fixtures both ways', () => {
+  const house = P.HOUSE_WITNESSES;
+  const net = readNet({ day: '2026-10-21', witnesses: [
+    // an outside key wearing a house name, and one wearing a house-like prefix
+    { addr: 'tz1Outside000000000000000000000000000', name: 'house-runner-1' },
+    { addr: 'tz1Another000000000000000000000000000', name: 'house-runner-2' },
+    // a house address with a near-miss (one character changed) is outside
+    { addr: 'tz1YKK6yoBTVgyrttF9HaA6yfkeRkbgB5No3', name: 'claude-code' },
+    // the two house keys under any name are the house's
+    { addr: 'tz1W5HN6PoFW8YvDCcrPtQmQwYLWYTWf8Rkd', name: 'renamed' },
+    { addr: 'tz1YKK6yoBTVgyrttF9HaA6yfkeRkbgB5No2', name: '' },
+  ] }, house);
+  assert.deepEqual(net.witnesses.map((w) => [w.name || w.addr, w.house]), [
+    ['house-runner-1', false],
+    ['house-runner-2', false],
+    ['claude-code', false],
+    ['renamed', true],
+    ['tz1YKK6yoBTVgyrttF9HaA6yfkeRkbgB5No2', true],
+  ]);
+  // a padded, zero-width-laced address is cleaned first; the label follows the cleaned address, never the name
+  const padded = readNet({ witnesses: [{ addr: ' tz1W5HN6PoFW8YvDCcrPtQmQwYLWYTWf8Rkd​', name: 'house-runner-1' }, { addr: 'tz1W5HN6PoFW8YvDCcrPtQmQwYLWYTWf8Rk​d', name: 'claude-code' }] }, house);
+  assert.deepEqual(padded.witnesses.map((w) => [w.addr, w.house]), [['tz1W5HN6PoFW8YvDCcrPtQmQwYLWYTWf8Rkd', true], ['tz1W5HN6PoFW8YvDCcrPtQmQwYLWYTWf8Rk d', false]]);
+  const l = summarize({ height: 1, net, daily: readDaily(null) });
+  assert.match(l.witnesses, /keys? this page does not know as the house’s/);
+  assert.match(l.milestone, /^A witness key the house does not run has signed today/);
+  // the proto chain is not a house list
+  assert.equal(readNet({ witnesses: [{ addr: '__proto__', name: 'x' }, { addr: 'constructor', name: 'y' }] }, house).witnesses.every((w) => !w.house), true);
+});
+
 test('the milestone line never claims more than the strip read: a bid is not called “still open”', () => {
   const house = P.HOUSE_WITNESSES;
   const onlyHouse = readNet({ day: '2026-10-21', witnesses: [{ addr: 'tz1YKK6yoBTVgyrttF9HaA6yfkeRkbgB5No2', name: 'house-runner-1' }] }, house);
