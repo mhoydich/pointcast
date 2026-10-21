@@ -257,13 +257,64 @@ export function clockSkew(daily, readAtClient) {
   return Math.abs(skew) < 7 * 86400000 ? skew : 0;
 }
 
-/** GET /net -> today's Daily Net counts and the newest checkpoint. */
+/** The three classes of who signed a tx, in the order every view shows them (GET /net `classes`). */
+export const CLASSES = Object.freeze(['house', 'keyless', 'outside']);
+/** This site's own copy of the devnet's line about them. */
+export const CLASS_LINE = 'House activity is the chain checking itself, not use.';
+const ROLE_RE = /^[a-z0-9][a-z0-9/-]{1,31}$/;
+const BOT_RE = /^[a-z0-9-]{2,24}$/;
+const ADDR_RE = /^(?:tz[1-4]|pc[ap]1)[1-9A-HJ-NP-Za-km-z]{20,60}$/;
+
+/**
+ * GET /net `classes` -> { day, chain, share } or null when the devnet does not
+ * send it. Each class is { txs, keys }; today's also names up to five keys as
+ * { label, txs }: a house role, a bot name, or an address, each checked
+ * against its own alphabet (anything else becomes a plain word).
+ */
+export function readClasses(c) {
+  if (!isObj(c) || !isObj(c.day) || !isObj(c.chain)) return null;
+  const num = (v) => (isWhole(v) ? v : 0);
+  const label = (cls, w) => {
+    if (cls === 'house') return typeof w.label === 'string' && ROLE_RE.test(w.label) ? w.label : 'a house key';
+    if (cls === 'keyless') return typeof w.label === 'string' && BOT_RE.test(w.label) ? w.label : 'a keyless bot';
+    return typeof w.addr === 'string' && ADDR_RE.test(w.addr) ? cleanText(w.addr, 64) : 'a key';
+  };
+  const one = (o, cls, who) => {
+    const x = isObj(o) ? o : {};
+    const out = { txs: num(x.txs), keys: num(x.keys) };
+    if (who) out.who = (Array.isArray(x.who) ? x.who : []).filter(isObj).slice(0, 5).map((w) => ({ label: label(cls, w), txs: num(w.txs) }));
+    return out;
+  };
+  const share = (v) => (Number.isFinite(v) && v >= 0 && v <= 1 ? v : null);
+  const s = isObj(c.outside_share) ? c.outside_share : {};
+  return {
+    day: Object.fromEntries(CLASSES.map((k) => [k, one(c.day[k], k, true)])),
+    chain: Object.fromEntries(CLASSES.map((k) => [k, one(c.chain[k], k, false)])),
+    share: { day: share(s.day), chain: share(s.chain) },
+  };
+}
+
+/**
+ * The outside share 0..1 as words: "6%", or "under 1%" when it rounds to 0%
+ * but outside keys signed `part` of the `all` txs, or "over 99%" when it
+ * rounds to 100% but someone else signed too; null when there is no share.
+ */
+export function sharePct(v, part = 0, all = 0) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) return null;
+  const r = Math.round(v * 100);
+  if (r === 0 && part > 0) return 'under 1%';
+  if (r === 100 && part < all) return 'over 99%';
+  return r + '%';
+}
+
+/** GET /net -> today's Daily Net counts, the newest checkpoint, and who signed today's txs. */
 export function readNet(json) {
   if (!isObj(json) || !isObj(json.counts)) return null;
   const c = json.counts;
   const num = (v) => (isWhole(v) ? v : 0);
   const cp = isObj(json.checkpoint) && isObj(json.checkpoint.latest) && isWhole(json.checkpoint.latest.height) ? json.checkpoint.latest.height : null;
   return {
+    classes: readClasses(json.classes),
     day: cleanText(String(json.day || ''), 10),
     resetsAt: cleanText(String(json.resets_at || ''), 24),
     checkins: num(c.checkins),

@@ -27,6 +27,7 @@ import Snippet from '../../components/chain/Snippet.astro';
 import ResetNotice from '../../components/chain/ResetNotice.astro';
 import { CHANNELS } from '../../lib/channels';
 import { DEVNET, DEVNET_2_PROFILE, DEVNET_PREVIOUS, SHARED_ROOT_LINE, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { CLASS_LINE } from '../../lib/daily-net.mjs';
 
 assertDevnetLaunchPinned();
 import '../../styles/chain.css';
@@ -110,8 +111,9 @@ const keylessDuty = String.raw`curl -s ${D}/bot/duty -H 'content-type: applicati
 const witnessLine = `{"schema":"pointcast-devnet/witness/v1","epoch":"<64 hex>","height":570,"block_hash":"<64 hex>","state_root":"<64 hex>","replayed_from":1,"tool":"pc-witness.mjs/1","name":"codex","public_key":"<64 hex>","signature":"<128 hex>"}`;
 
 const endpoints = [
-  ['GET /net', 'Today: counts, the roll, witness keys, flags, strikes, inconsistent observations and the last 7 net reports.'],
+  ['GET /net', 'Today: counts, the roll, witness keys, flags, strikes, inconsistent observations, the last 7 net reports, and who signed the day’s txs (house, keyless, outside).'],
   ['GET /net/{YYYY-MM-DD}', 'A past day, back 90 days.'],
+  ['GET /stats/classes?days=', 'House, keyless and outside txs for each of the last 1 to 90 UTC days (14 by default), the whole chain, the outside keys and the house keys.'],
   ['GET /duties?bot= | address=', 'Today’s duties for one bot or key (MCP chain_duties).'],
   ['POST /bot/duty', 'A keyless duty: bot, kind and its fields. Refused from browser pages (any Origin header).'],
   ['GET /witnesses?limit=&after=', 'Every witness key, by address, 100 at a time.'],
@@ -174,6 +176,9 @@ const jsonLd = {
       <noscript><p class="fine">The live roll needs JavaScript. The raw day is at <a href={`${D}/net`}>{D}/net</a>.</p></noscript>
       <div class="dn-live">
         <ol class="dn-counts" data-dn-counts></ol>
+        <h3 class="h3 dn-classes-h" id="who-signed">Who signed today’s txs</h3>
+        <p class="dn-class-line" data-dn-class-share>{CLASS_LINE}</p>
+        <ol class="dn-classes" data-dn-classes aria-labelledby="who-signed"></ol>
         <div class="dn-grid">
           <div>
             <h3 class="h3">The roll</h3>
@@ -377,7 +382,8 @@ const jsonLd = {
       <p class="fine">
         Every reply names its schema (<code>pointcast-devnet/net-api/v1</code>), the network, the epoch, the tip, the height the
         index has reached, the day and when it resets. <code>/status</code> adds <code>net</code>, <code>epoch</code>, the house
-        owners, the house reporter and the duty limits. A net report is posted on NET after each UTC day closes.
+        owners, the house reporter and the duty limits. A net report is posted on NET after each UTC day closes; its body also
+        counts that day’s txs as house, keyless and outside. House activity is the chain checking itself, not use.
       </p>
     </section>
 
@@ -469,6 +475,24 @@ const jsonLd = {
   .chn .dn-note{margin:4px 0 0;font:400 14px/1.5 var(--pc-font-sans);color:var(--pc-ink)}
   .chn .dn-row--strike .dn-who,.chn .dn-strike{color:var(--dn-strike);font-weight:500}
   .chn .dn-empty,.chn .dn-more{padding:10px 0;font:400 13px/1.5 var(--pc-font-mono);color:var(--pc-ink-muted)}
+  /* Who signed today's txs: three classes side by side, house first, outside last (the nearest thing to use, not proof of it). */
+  .chn .dn-classes-h{margin-top:22px}
+  .chn .dn-class-line{margin:4px 0 0;max-width:780px;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn .dn-classes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:10px 0 0;padding:0;list-style:none;border:1.5px solid var(--c600)}
+  .chn .dn-class{padding:12px 14px;border-right:1px solid var(--pc-rule-soft);min-width:0}
+  .chn .dn-class:last-child{border-right:0}
+  .chn .dn-class--outside{background:var(--c50)}
+  .chn .dn-class__k{display:block;font:500 10px/1.4 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .chn .dn-class b{display:block;margin-top:4px;font:500 26px/1.05 var(--pc-font-sans);letter-spacing:-.02em;color:var(--pc-ink);font-variant-numeric:tabular-nums}
+  .chn .dn-class__s{display:block;margin-top:4px;font:400 11px/1.4 var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .chn .dn-class__who,.chn .dn-class__chain,.chn .dn-class__gloss{margin:6px 0 0;font:400 12px/1.45 var(--pc-font-mono);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .dn-class__gloss{font-family:var(--pc-font-sans);color:var(--pc-ink-muted)}
+  .chn .dn-classes .dn-empty{grid-column:1/-1;padding:10px 14px}
+  @media (max-width:640px){
+    .chn .dn-class{padding:10px 8px}
+    .chn .dn-class b{font-size:20px}
+    .chn .dn-class__who,.chn .dn-class__chain,.chn .dn-class__gloss{font-size:11px}
+  }
   @media (max-width:900px){
     .chn .dn-counts{grid-template-columns:repeat(3,minmax(0,1fr))}
     .chn .dn-count:nth-child(6n){border-right:1px solid var(--pc-rule-soft)}
