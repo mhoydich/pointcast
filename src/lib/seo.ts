@@ -137,16 +137,24 @@ export function buildBreadcrumbJsonLd(pathname: string, currentName: string) {
   return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement };
 }
 
-export function buildArticleJsonLd({ id, title, description, datePublished, channel, url }: {
+export function buildArticleJsonLd({ id, title, description, datePublished, dateModified, image, channel, url }: {
   id: string;
   title: string;
   description: string;
   datePublished: string;
+  /** Defaults to datePublished; crawlers and answer engines weigh freshness. */
+  dateModified?: string;
+  /** Absolute URL of the block's social card. */
+  image?: string;
   channel: { name: string; url: string };
   url: string;
 }) {
   return {
     '@type': 'Article', '@id': url, identifier: id, headline: title, description, datePublished,
+    dateModified: dateModified ?? datePublished,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+    articleSection: channel.name,
+    ...(image ? { image: [image] } : {}),
     inLanguage: 'en-US', author: { '@id': `${SITE_ORIGIN}/#person` }, publisher: { '@id': `${SITE_ORIGIN}/#org` },
     isPartOf: { '@type': 'Collection', name: channel.name, url: channel.url },
   };
