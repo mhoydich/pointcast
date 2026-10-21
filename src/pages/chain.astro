@@ -16,12 +16,18 @@
  * crates/chain-sim/FINDINGS.md, docs/reviews/*), plus docs/TOWN_NETWORK.md at
  * main 50015e4 (docs only) for the roadmap. Shared numbers live in
  * src/data/chain-home.ts. Filed as block 0660 (cc).
+ *
+ * 2026-10-21 drift pass: the status numbers now come from main 906c745
+ * (CHAIN_MAIN, TESTS_NOW, CRATES_SINCE, each dated on the page); the wallet
+ * cards and the roadmap say what has since been built; the eleven claims stay
+ * as checked at da7bc09. The plan for the next six months is /chain/plan.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import ChainHeader from '../components/chain/ChainHeader.astro';
 import HomeChainStrip from '../components/HomeChainStrip.astro';
 import { CHANNELS } from '../lib/channels';
-import { CRATES, DEVNET, DEVNET_PREVIOUS, SOURCE, TESTS, assertDevnetLaunchPinned, firstMints, yardStats } from '../data/chain-home';
+import { CHAIN_MAIN, CRATES, CRATES_SINCE, DEVNET, DEVNET_PREVIOUS, SOURCE, TESTS_NOW, assertDevnetLaunchPinned, firstMints, yardStats } from '../data/chain-home';
+import { PLAN } from '../data/chain-plan';
 import { APPS_HEADLINE, CHAIN_APPS, HONESTY } from '../data/chain-apps';
 
 assertDevnetLaunchPinned();
@@ -33,13 +39,13 @@ const yard = yardStats();
 const mints = firstMints();
 const title = 'PointCast Chain';
 const description =
-  'The home of pointcast-chain, a broadcast chain where every block is a PointCast Block. Watch a recorded dev chain in the Block Yard and verify it in your browser, then read the dev tools, the docs, a University of El Segundo case study and ten intern assignments. Built and tested locally; not yet a public network.';
+  'The home of pointcast-chain, a broadcast chain where every block is a PointCast Block. Watch it in the Block Yard and verify it in your browser, use nine apps on the public devnet, read the six-month plan, the dev tools, the docs, a University of El Segundo case study and ten intern assignments. The launch chain is not public yet; the devnet has no value and may reset.';
 const ch = CHANNELS.FD;
 
 const stats = [
   { value: String(yard.blocks), label: 'Blocks in the yard', note: `A recorded dev chain: ${yard.txs} transactions, ${yard.anchors} anchors, ${yard.accounts} accounts.` },
   { value: `${yard.verifierKiB} KiB`, label: 'Verifier, in your browser', note: 'The consensus code compiled to wasm, pinned by sha256.' },
-  { value: String(TESTS.total), label: 'Tests passing', note: `Rust, rollup kernel and JS suites at ${SOURCE.commit}. None failed.` },
+  { value: TESTS_NOW.total.toLocaleString('en-US'), label: 'Tests passing', note: `Rust, rollup kernel, JS and Python suites at ${TESTS_NOW.commit}, run ${TESTS_NOW.ranOn}. None failed.` },
   { value: '66% → 10.1%', label: 'Farming, measured', note: 'Sybil share of issuance with room_only plus one tap an hour.' },
 ];
 
@@ -77,10 +83,12 @@ const buildCounts = [
   { n: '13', l: 'CLI subcommands, plus pc-sim' },
 ];
 
+// 2026-10-21: passkeys (batch 5) and device passes with backup keys (batch 4) are built and switched on in devnet-2
+// (launch records 7 and 6); one profile is still a plan. pointcast-chain docs/WALLETS.md has the dated status.
 const wallets = [
-  { k: 'A PASS · NO EXTENSION', title: 'Face ID would be your pass.', body: 'A passkey would become your pass. pointcast-chain would learn a webauthn signing mode and pcp1 addresses for passkey accounts. It can verify the WebAuthn envelope; Tezos L1 tz3 cannot.' },
-  { k: 'DEVICE PASSES', title: 'One approval, then quiet.', body: 'A device pass would be a session key that can tap, drum and post for up to 30 days, and can never spend, mint or change keys. Anything permanent would ask every time and say what it does first.' },
-  { k: 'ONE PROFILE', title: 'One person, one profile.', body: 'The PointCast account is canonical. Logins, the town card and chain accounts hang off it, and nothing merges automatically. The address-to-person link is shown only when the member opts in.' },
+  { k: 'A PASS · NO EXTENSION', tag: 'devnet-2', title: 'Face ID is your pass.', body: 'A passkey signs chain transactions: a webauthn signing mode and pcp1 addresses for passkey accounts, which the chain can verify and Tezos L1 tz3 cannot. On devnet-2 only pages on pointcast.xyz may ask. No one has made a passkey account there yet.' },
+  { k: 'DEVICE PASSES · BACKUP KEYS', tag: 'devnet-2', title: 'One approval, then quiet.', body: 'A device pass lets one device post, drum and tap for up to 864,000 blocks (30 days at three-second blocks; devnet-2 seals a block only for traffic or every five minutes, so there it can last far longer), and can never spend, mint or change keys. An account can list up to four keys with full power, counting the one that makes the change, so a lost phone need not lose it. A backup-key change takes effect at once, with no delay yet.' },
+  { k: 'ONE PROFILE', tag: 'plan', title: 'One person, one profile.', body: 'The PointCast account would be canonical. Logins, the town card and chain accounts would hang off it, and nothing would merge automatically. The address-to-person link would show only when the member opts in.' },
 ];
 
 type Fact = { n: string; tag: string; claim: string; proof: string; today?: boolean; refs?: { label: string; href: string }[] };
@@ -153,16 +161,17 @@ const merged = [
   { b: 'Night Shift', s: '/metrics, /healthz and /readyz; `doctor` prints READY or NOT READY with a reason for each failure; backups proven by replay; a runbook.' },
 ];
 // The Town Network plan of record: docs/TOWN_NETWORK.md, pointcast-chain main 50015e4 (2026-10-03 13:06 PT),
-// which replaces docs/V2.md's batch 2–7 list with batches 2–13. Every row is a plan.
-const townNetwork = [
-  { b: 'Syncing', when: 'Batches 3–5', s: 'Replicas that replay every block and serve the explorer, VERIFY and balance proofs from their own address; checkpoint sync from a sealed anchor snapshot; offline-first browsers that resume VERIFY from their own checkpoint.' },
-  { b: 'Peer to peer', when: 'Batch 5', s: 'Replicas keep syncing from each other when the sequencer is unreachable; signed transactions reach it through any replica, deduplicated and rate-limited; peer discovery and anti-spam.' },
-  { b: 'Exchange and marketplaces', when: 'Batch 7', s: 'Escrow-free offers and trades in ATTN for certificates and cards, settled in one transaction with the creator’s royalty; edition pages link out read-only to Tezos markets.' },
-  { b: 'Requests', when: 'Batch 5', s: 'Signed asks between accounts (pay me, co-sign tonight’s drum circle, mint a certificate, play something), an inbox, an expiry, and “done” only when an included transaction proves it.' },
-  { b: 'Oracles', when: 'Batches 6–7', s: 'Signed El Segundo feeds on a channel of their own, such as the marine layer at KLAX and the Santa Monica tide; then an on-chain registry with k-of-n reports and automatic strikes, no stake.' },
-  { b: 'Prediction markets', when: 'Batch 8', s: 'Play money by construction: local questions as parimutuel markets in attention, resolved from finalized oracle rounds, with exact integer payouts and a one-day dispute window.' },
-  { b: 'Broadcast to other networks', when: 'Batches 6, 9, 10', s: 'Tezos already takes anchors. A dry-run-first courier prepares an exact payload, a cost cap and the key it waits on for each network; then Etherlink and Solana anchors, OpenTimestamps and Nostr, and gated X and Bluesky senders.' },
-  { b: 'The trust floor', when: 'Batches 10–13', s: 'A sparse-Merkle state root and a launch ceremony, forced inclusion through the Tezos inbox, light clients from anchors, lazy rollup-kernel state, and an ATTN bridge that ships off by default.' },
+// which replaces docs/V2.md's batch 2–7 list with batches 2–13. Every row was a plan on 3 October.
+// 2026-10-21: batches 2–6 are merged on pointcast-chain main (status 'built'); 7–13 are designed and paused (docs/PLAN.md).
+const townNetwork: { b: string; when: string; status: 'built' | 'part' | 'paused'; s: string }[] = [
+  { b: 'Syncing', when: 'Batches 3–5', status: 'built', s: 'Replicas that replay every block and serve the explorer, VERIFY and balance proofs from their own address; checkpoint sync from a sealed anchor snapshot; offline-first browsers that resume VERIFY from their own checkpoint.' },
+  { b: 'Peer to peer', when: 'Batch 5', status: 'built', s: 'Replicas keep syncing from each other when the sequencer is unreachable; signed transactions reach it through any replica, deduplicated and rate-limited; peer discovery and anti-spam.' },
+  { b: 'Exchange and marketplaces', when: 'Batch 7', status: 'paused', s: 'Escrow-free offers and trades in ATTN for certificates and cards, settled in one transaction with the creator’s royalty; edition pages link out read-only to Tezos markets.' },
+  { b: 'Requests', when: 'Batch 5', status: 'built', s: 'Signed asks between accounts (pay me, co-sign tonight’s drum circle, mint a certificate, play something), an inbox, an expiry, and “done” only when an included transaction proves it.' },
+  { b: 'Oracles', when: 'Batches 6–7', status: 'part', s: 'Signed El Segundo feeds on a channel of their own, such as the marine layer at KLAX and the Santa Monica tide; then an on-chain registry with k-of-n reports and automatic strikes, no stake.' },
+  { b: 'Prediction markets', when: 'Batch 8', status: 'paused', s: 'Play money by construction: local questions as parimutuel markets in attention, resolved from finalized oracle rounds, with exact integer payouts and a one-day dispute window.' },
+  { b: 'Broadcast to other networks', when: 'Batches 6, 9, 10', status: 'part', s: 'Tezos already takes anchors. A dry-run-first courier prepares an exact payload, a cost cap and the key it waits on for each network; then Etherlink and Solana anchors, OpenTimestamps and Nostr, and gated X and Bluesky senders.' },
+  { b: 'The trust floor', when: 'Batches 10–13', status: 'paused', s: 'A sparse-Merkle state root and a launch ceremony, forced inclusion through the Tezos inbox, light clients from anchors, lazy rollup-kernel state, and an ATTN bridge that ships off by default.' },
 ];
 
 const jsonLd = {
@@ -172,7 +181,7 @@ const jsonLd = {
   name: 'PointCast Chain: a chain where every block is a broadcast',
   description,
   url: URL_SELF,
-  dateModified: '2026-10-03',
+  dateModified: '2026-10-21',
   about: {
     '@type': 'SoftwareApplication',
     name: 'pointcast-chain',
@@ -184,6 +193,7 @@ const jsonLd = {
     { '@type': 'WebPage', name: 'Block Yard', url: 'https://pointcast.xyz/chain/yard/' },
     { '@type': 'WebPage', name: 'Bots on the devnet', url: 'https://pointcast.xyz/chain/bots/' },
     { '@type': 'WebPage', name: 'The Daily Net (devnet)', url: 'https://pointcast.xyz/chain/net/' },
+    { '@type': 'Article', name: 'The plan for PointCast Chain (written 2026-10-21)', url: 'https://pointcast.xyz/chain/plan/' },
     ...CHAIN_APPS.map((a) => ({ '@type': 'WebApplication', name: a.label, url: 'https://pointcast.xyz' + a.href + '/' })),
     { '@type': 'WebPage', name: 'Dev tools', url: 'https://pointcast.xyz/chain/dev/' },
     { '@type': 'WebPage', name: 'Docs', url: 'https://pointcast.xyz/chain/docs/' },
@@ -210,7 +220,7 @@ const jsonLd = {
     ]} />
 
     <header class="hero">
-      <p class="kicker">CHAIN · HOME · LOCAL BUILD · NOT YET PUBLIC</p>
+      <p class="kicker">CHAIN · HOME · PUBLIC DEVNET-2 · NO VALUE · THE LAUNCH CHAIN IS NOT PUBLIC YET</p>
       <h1>A chain where every block is a broadcast.</h1>
       <p class="dek">
         pointcast-chain is written in Rust. Every block is a PointCast Block. Humans sign with Tezos keys,
@@ -218,14 +228,15 @@ const jsonLd = {
         and playing, under hard caps. This is its home. Watch it, check it, build on it, learn from it.
       </p>
       <p class="jump">
-        <a href="#apps">apps</a><a href="#explore">explore</a><a href="#build">build</a><a href="#wallets">wallets</a><a href="#art">art</a><a href="#roadmap">roadmap</a><a href="#learn">learn</a><a href="#works">what works</a><a href="#status">status</a>
+        <a href="#apps">apps</a><a href="/chain/plan">the plan</a><a href="#explore">explore</a><a href="#build">build</a><a href="#wallets">wallets</a><a href="#art">art</a><a href="#roadmap">roadmap</a><a href="#learn">learn</a><a href="#works">what works</a><a href="#status">status</a>
       </p>
     </header>
 
     <aside class="live" aria-labelledby="live-title">
       <p class="kicker">LIVE DEVNET-2 · NO VALUE IS PROMISED · MAY RESET · UNMODERATED</p>
-      <p id="live-title" class="live__t">The devnet is pointcast-devnet-2: bots post, passkey wallets, First Mints, stations and capsules. devnet-1 is recorded.</p>
+      <p id="live-title" class="live__t">The devnet is pointcast-devnet-2: bots post and the Daily Mint runs; passkey wallets, stations and capsules are switched on, though no passkey account or capsule exists there yet; the First Mints edition is not open yet. devnet-1 is recorded.</p>
       <p class="live__links">
+        <a href="/chain/plan">The plan, and the wallets verdict →</a>
         <a href="/chain/bots">How a bot posts →</a>
         <a href="/chain/net">The Daily Net →</a>
         <a href={DEVNET.yardHref}>Watch the devnet live →</a>
@@ -303,9 +314,10 @@ const jsonLd = {
 cargo run -p pointcast-town -- --node http://127.0.0.1:8545   # Town Hall at http://127.0.0.1:8550/
 
 scripts/town-demo.sh    # or, alone: a fresh dev node plus Town Hall, on throwaway databases</code></pre>
-      <section class="stats" aria-label="Dev surface">
+      <section class="stats" aria-label={`Dev surface at ${SOURCE.commit}, ${SOURCE.date}`}>
         {buildCounts.map((s) => <div><strong>{s.n}</strong><span>{s.l}</span></div>)}
       </section>
+      <p class="fine">Counted at {SOURCE.commit} ({SOURCE.date}), the snapshot the dev tools page describes. Main has grown since ({CHAIN_MAIN.commits} commits by {CHAIN_MAIN.readOn}); the public devnet’s own routes and MCP tools are in <a href="/chain/playground">the API Playground</a>.</p>
       <p class="cta">
         <a class="btn" href="/chain/dev">Open the dev tools</a>
         <a class="btn btn--ghost" href="/chain/docs/">Read the docs</a>
@@ -314,19 +326,19 @@ scripts/town-demo.sh    # or, alone: a fresh dev node plus Town Hall, on throwaw
     </section>
 
     <section id="wallets" class="sec" aria-labelledby="wallets-title">
-      <p class="kicker">03 · WALLETS + FIRST MINTS · PASSKEY WALLETS ON DEVNET-2 · FIRST MINTS REHEARSED AND LIVE ON DEVNET-2</p>
+      <p class="kicker">03 · WALLETS + FIRST MINTS · PASSKEYS AND DEVICE PASSES ON DEVNET-2 · FIRST MINTS REHEARSED · EDITION NOT OPEN YET</p>
       <h2 id="wallets-title" class="h2">A pass, not a wallet.</h2>
       <p class="note">
-        Wallets that are easy to use and easy to explain. Scoped on 3 October as a research and design document.
-        The scope planned it for v2 batch 2. The Town Network plan of record, committed later that day, spreads it
-        out: the First Mint art kit in batch 2, editions in batch 3, device passes in batch 4 and passkeys in batch 5.
-        The wallet cards below describe that plan. First Mints has gone further: {mints.mints.length} were minted
-        on a recorded rehearsal chain, sealed by public dev keys, with no value.
+        Wallets that are easy to use and easy to explain. Scoped on 3 October as a research and design document, then
+        built in the Town Network batches: editions in batch 3, device passes and backup keys in batch 4, passkeys in
+        batch 5. devnet-2 switched them on when it started on 8 October; the PointCast-side single profile is still a plan.
+        First Mints were minted on a recorded rehearsal chain ({mints.mints.length}, sealed by public dev keys, with no
+        value); on devnet-2 the edition is not open yet. Peer-to-peer wallets: <a href="/chain/plan#wallets">the verdict</a>.
       </p>
       <ul class="cards">
         {wallets.map((w) => (
           <li class="card">
-            <p class="card__k">{w.k} <span class="tag tag--plan">plan</span></p>
+            <p class="card__k">{w.k} <span class={`tag${w.tag === 'plan' ? ' tag--plan' : ' tag--done'}`}>{w.tag}</span></p>
             <h3>{w.title}</h3>
             <p>{w.body}</p>
           </li>
@@ -379,25 +391,30 @@ scripts/town-demo.sh    # or, alone: a fresh dev node plus Town Hall, on throwaw
     </section>
 
     <section id="roadmap" class="sec" aria-labelledby="roadmap-title">
-      <p class="kicker">05 · ROADMAP · EVERYTHING MARKED PLAN IS A PLAN</p>
-      <h2 id="roadmap-title" class="h2">v2 is Present Company. Next comes the Town Network.</h2>
+      <p class="kicker">05 · ROADMAP · BATCHES 1–6 BUILT · 7–13 DESIGNED AND PAUSED · STATUS AS OF {CHAIN_MAIN.readOn}</p>
+      <h2 id="roadmap-title" class="h2">v2 is Present Company. The Town Network is half built.</h2>
       <p class="note">
-        v2 is the version where ATTN could carry value. Its first batch is merged on main and tested locally. On
-        3 October the plan for everything after it was rewritten as the Town Network: v2 batches 2 to 13. All of it
-        is a plan.
+        v2 is the version designed so that ATTN could one day carry value; no value is promised. Its first batch merged
+        on 3 October. That day the plan for everything after it was rewritten as the Town Network, v2 batches 2 to 13.
+        Batches 2 to 6 have since been built and merged in the pointcast-chain repository, and devnet-2 runs much of
+        them. Batches 7 to 13, the markets and the trust floor, are designed and paused. What comes next, and what
+        stays parked, is <a href="/chain/plan">the six-month plan</a> (written {PLAN.written}).
       </p>
       <h3 class="h3">v2 “Present Company” · batch 1 <span class="tag tag--done">merged · local</span></h3>
       <ul class="rows">
         {merged.map((r) => <li><b>{r.b}</b><span set:html={r.s.replace(/`([^`]+)`/g, '<code>$1</code>')} /></li>)}
       </ul>
-      <h3 class="h3">Next · “Town Network” · v2 batches 2–13 <span class="tag tag--plan">plan</span></h3>
+      <h3 class="h3">“Town Network” · v2 batches 2–13</h3>
       <ul class="rows">
-        {townNetwork.map((r) => <li><b>{r.b} <span class="tag tag--plan">plan · {r.when}</span></b><span>{r.s}</span></li>)}
+        {townNetwork.map((r) => <li><b>{r.b} <span class={`tag${r.status === 'built' ? ' tag--done' : ' tag--plan'}`}>{r.status === 'built' ? 'built' : r.status === 'part' ? 'part built' : 'paused'} · {r.when}</span></b><span>{r.s}</span></li>)}
       </ul>
       <p class="fine">
-        Nothing in the Town Network is built. It is <code>docs/TOWN_NETWORK.md</code> on pointcast-chain main
-        (<code>50015e4</code>), which replaces the batch 2–7 list in <a href="/chain/docs/v2/">the v2 plan</a>; batch 1
-        is as that plan describes.
+        The rows are <code>docs/TOWN_NETWORK.md</code> as planned at <code>50015e4</code> (3 October), which replaced the
+        batch 2–7 list in <a href="/chain/docs/v2/">the v2 plan</a>. The status tags are pointcast-chain main
+        <code>{CHAIN_MAIN.commit}</code> on {CHAIN_MAIN.readOn}. Built means merged and tested in the repository, not
+        that it runs in public: only the devnet does, and the relay sends nothing. Oracles: the desk is built, the
+        on-chain registry is not. Broadcast: Tezos anchors and the dry-run courier are built, the other networks are not.
+        Peer to peer: replicas gossip; browser-to-browser sharing is not built.
       </p>
     </section>
 
@@ -447,18 +464,18 @@ scripts/town-demo.sh    # or, alone: a fresh dev node plus Town Hall, on throwaw
     </section>
 
     <section id="status" class="sec" aria-labelledby="status-title">
-      <p class="kicker">08 · STATUS AND NUMBERS · AS OF {SOURCE.date} · SOURCE {SOURCE.commit}</p>
-      <h2 id="status-title" class="h2">Built and tested locally. Not yet a public network.</h2>
+      <p class="kicker">08 · STATUS AND NUMBERS · AS OF {CHAIN_MAIN.readOn} · MAIN {CHAIN_MAIN.commit}</p>
+      <h2 id="status-title" class="h2">The launch chain is built and tested. Only the devnet is public.</h2>
       <section class="stats" aria-label="Repository numbers">
-        <div><strong>{TESTS.total}</strong><span>Tests passing</span><small>{TESTS.workspace.passed} Rust workspace, {TESTS.kernel.passed} rollup kernel, {TESTS.js.passed} JS. 0 failed. {TESTS.workspace.ignored + TESTS.kernel.ignored} more run on demand: vector writers and wasm rebuilds.</small></div>
-        <div><strong>{SOURCE.commits}</strong><span>Commits</span><small>From {SOURCE.firstAt} to {SOURCE.lastAt}.</small></div>
-        <div><strong>{CRATES.length}</strong><span>Crates</span><small>Eight in one Cargo workspace; the rollup kernel in its own.</small></div>
-        <div><strong>{SOURCE.rustLines.toLocaleString('en-US')}</strong><span>Lines of Rust</span><small>Everything under crates/, tests included.</small></div>
+        <div><strong>{TESTS_NOW.total.toLocaleString('en-US')}</strong><span>Tests passing</span><small>{TESTS_NOW.workspace.passed.toLocaleString('en-US')} Rust workspace, {TESTS_NOW.kernel.passed} rollup kernel, {TESTS_NOW.js.passed} JS, {TESTS_NOW.python.passed} Python. 0 failed. {TESTS_NOW.workspace.ignored + TESTS_NOW.kernel.ignored + TESTS_NOW.js.skipped} more run on demand: vector writers and wasm rebuilds.</small></div>
+        <div><strong>{CHAIN_MAIN.commits}</strong><span>Commits</span><small>From {CHAIN_MAIN.firstAt} to {CHAIN_MAIN.committedAt}.</small></div>
+        <div><strong>{CRATES.length + CRATES_SINCE.length}</strong><span>Crates</span><small>Twelve in one Cargo workspace; the rollup kernel in its own.</small></div>
+        <div><strong>{CHAIN_MAIN.rustLines.toLocaleString('en-US')}</strong><span>Lines of Rust</span><small>Everything under crates/, tests included.</small></div>
       </section>
       <dl class="status">
-        <div><dt>Runs</dt><dd>On one machine: a single sequencer, 3-second blocks, sqlite. There is no public node to connect to. A separate public devnet, pointcast-devnet-2, runs as one Cloudflare Worker: no value is promised, it may reset, and a reset is dated and recorded.</dd></div>
+        <div><dt>Runs</dt><dd>The native node runs on one machine: a single sequencer, 3-second blocks, sqlite. There is no public node to connect to. The public devnet, pointcast-devnet-2, runs as one Cloudflare Worker with keys Claude generated, and a second Worker, the house runner, witnesses it daily: no value is promised, it may reset, and a reset is dated and recorded.</dd></div>
         <div><dt>Value</dt><dd>None. The yard is a dev chain signed with public keys, and ATTN carries no value today.</dd></div>
-        <div><dt>Mainnet</dt><dd>Anchoring to Tezos mainnet waits on a funded anchor key, about 10 ꜩ for six days of hourly anchors, and a redeploy of the tez-cast and stampz feeds.</dd></div>
+        <div><dt>Mainnet</dt><dd>Anchoring to Tezos mainnet waits on a funded anchor key and a redeploy of the tez-cast and stampz feeds. About 10 ꜩ covers six days of hourly anchors or about five months of daily ones; <a href="/chain/plan#calls">the plan</a> recommends daily, on a fresh pointcast-1 with Mike’s keys.</dd></div>
         <div><dt>Trust</dt><dd>One sequencer can censor, reorder and pick timestamps. It cannot forge your transactions, mint past the caps, or sign a state root that does not match its transactions without a replay catching it.</dd></div>
       </dl>
       <div class="tbl">
@@ -466,19 +483,21 @@ scripts/town-demo.sh    # or, alone: a fresh dev node plus Town Hall, on throwaw
           <caption>The crates</caption>
           <thead><tr><th scope="col">Crate</th><th scope="col">What it is</th></tr></thead>
           <tbody>
-            {CRATES.map((c) => <tr><th scope="row"><code>{c.name}</code>{c.bin && <> · <code>{c.bin}</code></>}</th><td>{c.role}</td></tr>)}
+            {[...CRATES, ...CRATES_SINCE].map((c) => <tr><th scope="row"><code>{c.name}</code>{c.bin && <> · <code>{c.bin}</code></>}</th><td>{c.role}</td></tr>)}
           </tbody>
         </table>
       </div>
-      <p class="fine">Tests run by Claude Code on {TESTS.ranOn} against a clean export of {SOURCE.commit}: <code>cargo test --workspace</code>, the kernel’s own <code>cargo test</code>, and five <code>node --test</code> suites ({TESTS.js.suites}).</p>
+      <p class="fine">Tests run by Claude Code on {TESTS_NOW.ranOn} in a worktree of main at {TESTS_NOW.commit}: <code>cargo test --workspace</code>, the kernel’s own <code>cargo test</code>, six <code>node --test</code> suites ({TESTS_NOW.js.suites}) and {TESTS_NOW.python.note}. On 3 October, at {SOURCE.commit}, the count was 449; the <a href="/chain/case-study">case study</a> measures that snapshot.</p>
     </section>
 
     <footer class="method">
       <p class="kicker">METHOD</p>
       <p>
-        Facts on this page come from the pointcast-chain repository at {SOURCE.commit}: the README, DESIGN.md, the v2 plan,
-        the wallet scope, the art minting plan, the simulator’s findings and the two review reports. The roadmap’s Town
-        Network rows come from <code>docs/TOWN_NETWORK.md</code> at <code>50015e4</code>, a docs-only commit after it. The yard’s counts are
+        The eleven claims, the build counts and the docs come from the pointcast-chain repository at {SOURCE.commit}
+        (3 October): the README, DESIGN.md, the v2 plan, the wallet scope, the art minting plan, the simulator’s findings
+        and the two review reports. The roadmap’s Town Network rows come from <code>docs/TOWN_NETWORK.md</code> at
+        <code>50015e4</code>; their status tags, the status numbers and the wallet cards come from main
+        <code>{CHAIN_MAIN.commit}</code>, read on {CHAIN_MAIN.readOn}. The yard’s counts are
         read from its recording at build time. The yard and its verifier are static copies of the chain’s own explorer files,
         and the recording holds raw blocks with every signature. Filed by Claude Code as <a href={`/b/${BLOCK}`}>block {BLOCK}</a>.
       </p>
