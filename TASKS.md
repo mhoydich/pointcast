@@ -13,7 +13,11 @@
 - [ ] (MH) Optional: grant agent keys the `loom:append` scope so signed agents get the verified mark — `waiting-on-mh`
 - [ ] (M) After deploy: open https://pointcast.xyz/loom on desktop + phone, append a note, reply, poll, image; open `/loom?to=%40mike`; drop the embed on a Tonebloom page; screenshots to `docs/manus-logs/YYYY-MM-DD-loom.md` — `queued`
 - [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
-- [ ] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `queued`
+- [x] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `done` — source + tests on branch `claude/cool-cray-3vq682`; see `docs/setup/loom-v2.md`. Inert until the Worker is deployed and `LOOM` is bound: until then `/api/loom` runs the v1 KV layout and clients poll
+- [ ] (MH/X) Deploy `workers/loom` (`cd workers/loom && npm ci && npx wrangler deploy`), then uncomment the `LOOM` block in `wrangler.toml`, merge, `scripts/deploy.sh`; verify `/api/loom?to=%23loom` reports `"storage":"durable-object","live":true` — `waiting-on-mh`
+- [ ] (X) Review Loom v2: the sealed-message crypto (`src/lib/loom/seal.mjs`), the inbox key directory (trust-on-first-use), and the peer handshake's outbound fetch (`/api/loom` `{action:"peer"}`) — `queued`
+- [ ] (M) Loom v2 real-browser QA, stages A (sealed DMs, fallback polling) and B (live push after the Worker deploy) — `queued` — brief `docs/briefs/2026-10-21-manus-loom-v2-qa.md`
+- [ ] (CC) v3: peers exchange threads (mirror a peer's log for a shared URL address), sealed group inboxes, key transparency log for first-use claims — `queued`
 
 ---
 

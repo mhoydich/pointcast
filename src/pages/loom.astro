@@ -4,6 +4,9 @@
  * One verb: append(to, message). Any address works: a page on any site, an
  * @handle, an agent, a wallet, a #topic, a place, a file hash, or one message.
  * API: /api/loom · protocol card: /loom.json · embed: /loom/embed.js
+ * v2: live push over /api/loom/live (polling when it is not bound), sealed
+ * DMs to inboxes with a published key (src/lib/loom/seal.mjs; private keys
+ * stay in this browser), peers at /.well-known/loom.json.
  */
 import BlockLayout from '../layouts/BlockLayout.astro';
 import '../styles/loom.css';
@@ -123,6 +126,10 @@ const jsonLd = {
               <button type="button" data-value="poll" aria-pressed="false">Poll</button>
             </div>
           </div>
+          <div class="lm-seal" data-seal-row hidden>
+            <label><input type="checkbox" data-seal /> <span data-seal-label>Seal it</span></label>
+            <p class="lm-hint" data-seal-hint></p>
+          </div>
           <label class="lm-field"><span>Message</span><textarea data-body maxlength="2000" placeholder="Say it. Mention @someone or #topic, or paste a link, and it lands there too."></textarea></label>
           <div data-image-fields hidden class="lm-compose">
             <label class="lm-field"><span>Image URL (https)</span><input class="mono" data-media-url type="url" placeholder="https://…/photo.jpg" /></label>
@@ -142,6 +149,21 @@ const jsonLd = {
             <button type="submit" class="lm-go" data-go>Append</button>
           </div>
           <p class="lm-status" data-status role="status"></p>
+          <details class="lm-more lm-keys" data-keys>
+            <summary>Your sealed inbox</summary>
+            <div class="lm-compose">
+              <p class="lm-hint">Make a key for your inbox and people can send you sealed messages. Everyone can still see that a message arrived, from whom and when; only this browser can read it. The private key never leaves this browser, so back it up.</p>
+              <div class="lm-goto-row">
+                <input data-key-address placeholder="@yourname" maxlength="33" autocomplete="off" spellcheck="false" aria-label="Inbox address for your key" />
+                <button type="button" data-key-make>Make key</button>
+              </div>
+              <ul class="lm-keylist" data-key-list></ul>
+              <div class="lm-key-acts">
+                <button type="button" class="lm-chip" data-key-backup>Back up keys</button>
+                <label class="lm-chip lm-file">Restore<input type="file" accept="application/json" data-key-restore hidden /></label>
+              </div>
+            </div>
+          </details>
           <div class="lm-machine">
             <p><span class="sc">What a bot would send</span> — the same request, as JSON:</p>
             <pre data-machine></pre>
@@ -152,7 +174,7 @@ const jsonLd = {
 
     <footer class="lm-foot" id="embed">
       <span>Put the Loom on any page, on any site: <code>&lt;script src="https://pointcast.xyz/loom/embed.js" async&gt;&lt;/script&gt;&lt;pointcast-loom&gt;&lt;/pointcast-loom&gt;</code></span>
-      <span>Public by design · everything here is readable by anyone, as JSON · <a href="/loom.json">protocol card</a></span>
+      <span>Public by design · everything here is readable by anyone, as JSON, except what you seal · <a href="/loom.json">protocol card</a> · <a href="/.well-known/loom.json">node card &amp; peers</a></span>
     </footer>
   </main>
 </BlockLayout>
@@ -160,6 +182,7 @@ const jsonLd = {
 <script>
   import { fold } from '../lib/loom/fold.mjs';
   import { parseAddress } from '../lib/loom/address.mjs';
+  import { generateKeyPair, seal, open as openSealed, fingerprint } from '../lib/loom/seal.mjs';
 
   const root = document.querySelector<HTMLElement>('[data-loom]')!;
   const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
@@ -185,6 +208,18 @@ const jsonLd = {
   let pollTimer = 0;
   let typing: { id: string; until: number } | null = null;
   const seen = new Set<string>();
+  // Live push (v2): one WebSocket per open thread; polling covers the gaps.
+  let socket: WebSocket | null = null;
+  let liveState: 'pushed' | 'polling' = 'polling';
+  let retry = 0;
+  let reconnectTimer = 0;
+  // Sealed inboxes (v2): the open inbox's published keys, and this browser's own keys.
+  type LocalKey = { kid: string; publicKey: JsonWebKey; privateKey: JsonWebKey; keyToken?: string; at: string };
+  const keyring: Record<string, LocalKey[]> = store.get('keys', {});
+  let inboxKeys: any = null;
+  let sealOn = false;
+  const opened = new Map<string, string | null>();
+  const opening = new Set<string>();
 
   // ── helpers ────────────────────────────────────────────────────────────
   const el = (tag: string, cls?: string, text?: string) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
@@ -256,6 +291,7 @@ const jsonLd = {
     let parsed;
     try { parsed = parseAddress(to); } catch { status('That is not an address the Loom knows. Try a link, @name, #topic or geo:lat,lon.', true); return; }
     address = parsed.kind === 'reply' ? to : parsed.address;
+    closeLive();
     ops = []; seq = 0; meta = null; viewSeq = Infinity; seen.clear(); stopPlay(); setReply(null);
     if (push) history.pushState({ to: address }, '', loomHref(address));
     ($('[data-to-input]') as HTMLInputElement).value = address;
@@ -263,6 +299,8 @@ const jsonLd = {
     $('[data-log-kind]').textContent = KIND_LABEL[parsed.kind] ?? 'An address';
     $('[data-thread]').replaceChildren(el('li', 'lm-empty', 'Reading the log…'));
     await refresh(true);
+    connectLive();
+    loadInboxKeys();
     loadDirectory();
     machine();
   }
@@ -278,10 +316,49 @@ const jsonLd = {
       if (full) ops = data.ops; else ops.push(...fresh);
       const grew = data.seq > seq;
       seq = data.seq;
-      $('[data-live]').textContent = `live · seq ${seq}`;
+      showLive();
       if (full || grew) render();
     } catch { $('[data-live]').textContent = 'offline — retrying'; }
   }
+
+  // ── live ───────────────────────────────────────────────────────────────
+  function showLive() { $('[data-live]').textContent = `${liveState === 'pushed' ? 'live' : 'polling'} · seq ${seq}`; }
+  function closeLive() {
+    clearTimeout(reconnectTimer);
+    if (socket) { const s = socket; socket = null; s.close(); }
+    liveState = 'polling';
+  }
+  function connectLive() {
+    closeLive();
+    if (!meta?.live || !('WebSocket' in window)) { showLive(); return; }
+    const forKey = meta.key;
+    let ws: WebSocket;
+    try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/loom/live?to=${encodeURIComponent(meta.address)}`); } catch { showLive(); return; }
+    socket = ws;
+    ws.addEventListener('open', () => { if (socket !== ws) return; retry = 0; liveState = 'pushed'; showLive(); });
+    ws.addEventListener('message', (e) => {
+      if (socket !== ws || typeof e.data !== 'string' || e.data === 'pong') return;
+      let msg: any;
+      try { msg = JSON.parse(e.data); } catch { return; }
+      if (msg.key !== meta?.key) return;
+      if (msg.type === 'hello') { if (msg.seq > seq) refresh(); return; }
+      if (msg.type !== 'ops' || !Array.isArray(msg.ops)) return;
+      const fresh = msg.ops.filter((o: any) => o.seq > seq);
+      if (!fresh.length) return;
+      if (fresh[0].seq !== seq + 1) { refresh(); return; } // missed something: re-read from seq
+      ops.push(...fresh);
+      seq = msg.seq;
+      showLive();
+      if (!playing) render();
+    });
+    ws.addEventListener('close', () => {
+      if (socket !== ws) return;
+      socket = null; liveState = 'polling'; showLive();
+      retry = Math.min(retry + 1, 6);
+      reconnectTimer = window.setTimeout(() => { if (meta?.key === forKey && document.visibilityState === 'visible') connectLive(); }, 1000 * 2 ** retry);
+    });
+  }
+  setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send('ping'); }, 30000);
 
   function render() {
     if (!meta) return;
@@ -331,8 +408,24 @@ const jsonLd = {
     li.append(metaRow);
 
     const body = el('p', 'lm-body');
-    const isTyping = typing && typing.id === m.id;
-    body.append(richText(isTyping ? m.body.slice(0, typing!.until) : m.body));
+    if (m.sealed) {
+      const mine = localKeyFor(m.sealed);
+      const text = opened.get(m.id);
+      if (mine && typeof text === 'string') {
+        body.append(richText(text));
+        metaRow.append(el('span', 'lm-badge k-opened', 'opened here'));
+      } else {
+        body.classList.add('lm-sealed');
+        body.textContent = mine && text === null ? 'Sealed message. A key in this browser is listed on it but could not open it.' : `Sealed message for ${meta.address}. Only the inbox's key can open it.`;
+        if (mine && !opened.has(m.id) && !opening.has(m.id)) {
+          opening.add(m.id);
+          openSealed(m.sealed, mine).then((t) => opened.set(m.id, t), () => opened.set(m.id, null)).then(() => { opening.delete(m.id); render(); });
+        }
+      }
+    } else {
+      const isTyping = typing && typing.id === m.id;
+      body.append(richText(isTyping ? m.body.slice(0, typing!.until) : m.body));
+    }
     li.append(body);
 
     if (m.via) {
@@ -377,7 +470,7 @@ const jsonLd = {
     btn('Copy address', () => copy(`loom:${meta.key}#${m.id}`));
     const tokenKey = `${meta.key}#${m.id}`;
     if (tokens[tokenKey]) {
-      btn('Edit', () => inlineEdit(li, m));
+      if (!m.sealed) btn('Edit', () => inlineEdit(li, m));
       btn('Withdraw', () => { if (confirm('Withdraw this message? It stays in the log history but leaves the thread.')) act({ action: 'withdraw', id: m.id, token: tokens[tokenKey] }); });
     }
     let raw: HTMLElement | null = null;
@@ -449,10 +542,15 @@ const jsonLd = {
 
   function seg(selector: string, value: string) { root.querySelectorAll(`${selector} button`).forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.value === value))); }
   function syncFields() {
+    if (sealOn) msgKind = 'note';
     seg('[data-sender]', senderKind); seg('[data-kinds]', msgKind);
     $('[data-agent-fields]').hidden = senderKind !== 'agent';
     $('[data-image-fields]').hidden = msgKind !== 'image';
     $('[data-poll-fields]').hidden = msgKind !== 'poll';
+    ($('[data-kinds]').closest('.lm-field') as HTMLElement).hidden = sealOn;
+    ($('.lm-compose > details.lm-more:not(.lm-keys)') as HTMLElement).hidden = sealOn;
+    ($('[data-body]') as HTMLTextAreaElement).placeholder = sealOn ? `Only ${meta?.address ?? 'the inbox'} will be able to read this.` : 'Say it. Mention @someone or #topic, or paste a link, and it lands there too.';
+    $('[data-go]').textContent = sealOn ? 'Seal & append' : 'Append';
     machine();
   }
   $('[data-sender]').addEventListener('click', (e) => { const v = (e.target as HTMLElement).closest('button')?.dataset.value; if (v) { senderKind = v; syncFields(); } });
@@ -472,6 +570,11 @@ const jsonLd = {
     const from: any = { name: v('[data-name]'), kind: senderKind };
     if (senderKind === 'agent') { if (v('[data-model]')) from.model = v('[data-model]'); if (v('[data-operator]')) from.operator = v('[data-operator]'); }
     const p: any = { to: replyTo && meta ? `loom:${meta.key}#${replyTo.id}` : (meta?.address ?? address), from, kind: msgKind, body: v('[data-body]') };
+    if (sealOn) {
+      const mine = myKey();
+      if (mine && mine.address !== meta?.address) from.address = mine.address;
+      return { to: p.to, from, sealed: { v: 1, alg: 'ECDH-ES+HKDF-SHA256/A256GCM', note: 'encrypted in this browser when you press Seal & append', to: [inboxKeys?.current?.kid, ...(mine && mine.address !== meta?.address ? [mine.key.kid] : [])].filter(Boolean) } };
+    }
     if (msgKind === 'image') p.media = { url: v('[data-media-url]'), alt: v('[data-media-alt]') };
     if (msgKind === 'poll') p.poll = { question: p.body, options: v('[data-poll-options]').split('\n').map((s) => s.trim()).filter(Boolean) };
     const cites = v('[data-cites]').split('\n').map((s) => s.trim()).filter(Boolean);
@@ -505,6 +608,14 @@ const jsonLd = {
     const go = $('[data-go]') as HTMLButtonElement;
     go.disabled = true;
     try {
+      if (sealOn) {
+        const text = ($('[data-body]') as HTMLTextAreaElement).value.trim();
+        if (!text || !inboxKeys) { status(text ? 'This inbox has no key to seal to.' : 'Write something to seal first.', true); return; }
+        const recipients = [{ kid: inboxKeys.current.kid, publicKey: inboxKeys.current.publicKey }];
+        const mine = myKey();
+        if (mine && mine.address !== meta.address) recipients.push({ kid: mine.key.kid, publicKey: mine.key.publicKey });
+        p.sealed = await seal(text, recipients);
+      }
       const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
       const data = await res.json();
       if (!data.ok) { status(`Declined: ${String(data.error).replace(/_/g, ' ')}.`, true); return; }
@@ -514,13 +625,114 @@ const jsonLd = {
       ($('[data-title]') as HTMLInputElement).value = '';
       ($('[data-cites]') as HTMLTextAreaElement).value = '';
       setReply(null);
-      status(data.reached?.length ? 'Appended. It also landed in' : 'Appended.', false, data.reached ?? []);
+      status(p.sealed ? `Sealed and appended. ${meta.address} can read it${myKey() && myKey()!.address !== meta.address ? ', and so can you, here' : ''}.` : data.reached?.length ? 'Appended. It also landed in' : 'Appended.', false, data.reached ?? []);
       viewSeq = Infinity;
       await refresh();
       loadDirectory();
     } catch { status('Could not reach the Loom.', true); }
     finally { go.disabled = false; machine(); }
   });
+
+  // ── sealed inboxes ─────────────────────────────────────────────────────
+  /** This browser's key for an envelope, if any slot is addressed to one. */
+  function localKeyFor(envelope: any) {
+    const kids = new Set((envelope?.to ?? []).map((t: any) => t.kid));
+    for (const list of Object.values(keyring)) for (const k of list) if (kids.has(k.kid)) return { kid: k.kid, privateKey: k.privateKey };
+    return null;
+  }
+  /** The key this browser signs its own copies with: the first inbox it holds a key for. */
+  function myKey() {
+    const entry = Object.entries(keyring).find(([, list]) => list.length);
+    return entry ? { address: entry[0], key: entry[1][entry[1].length - 1] } : null;
+  }
+  async function loadInboxKeys() {
+    inboxKeys = null; sealOn = false;
+    const row = $('[data-seal-row]');
+    const box = $('[data-seal]') as HTMLInputElement;
+    box.checked = false;
+    row.hidden = !meta?.sealable;
+    if (meta?.sealable) {
+      const forAddress = meta.address;
+      try { const data = await (await fetch(`${API}?key=${encodeURIComponent(forAddress)}`)).json(); if (meta?.address === forAddress) inboxKeys = data.keys ?? null; } catch { inboxKeys = null; }
+      box.disabled = !inboxKeys;
+      $('[data-seal-label]').textContent = inboxKeys ? `Seal it: only ${forAddress} can read it` : 'Seal it';
+      $('[data-seal-hint]').textContent = inboxKeys
+        ? `Encrypted in this browser to key ${inboxKeys.current.fingerprint} (${inboxKeys.trust === 'verified-agent' ? 'published by the signed agent' : 'the first key published for this inbox'}). Who sent it and when stay public. If it matters, check the fingerprint with them another way.`
+        : `${forAddress} has not published a key, so messages here are public.`;
+    }
+    syncFields();
+  }
+  $('[data-seal]').addEventListener('change', (e) => { sealOn = (e.target as HTMLInputElement).checked && !!inboxKeys; syncFields(); });
+
+  function renderKeys() {
+    const list = $('[data-key-list]');
+    list.replaceChildren();
+    for (const [addr, keys] of Object.entries(keyring)) {
+      if (!keys.length) continue;
+      const li = el('li');
+      const a = el('a', '', addr) as HTMLAnchorElement;
+      a.href = loomHref(addr);
+      a.addEventListener('click', (ev) => { ev.preventDefault(); open(addr); });
+      li.append(a, el('span', 'mono', ` key ${fingerprint(keys[keys.length - 1].kid)}${keys.length > 1 ? ` · ${keys.length - 1} older` : ''}`));
+      list.append(li);
+    }
+    if (!list.children.length) list.append(el('li', 'lm-hint', 'No keys in this browser yet.'));
+  }
+  $('[data-key-make]').addEventListener('click', async () => {
+    const input = $('[data-key-address]') as HTMLInputElement;
+    let target;
+    try { target = parseAddress(input.value.trim().startsWith('@') || !input.value.trim() ? input.value.trim() : `@${input.value.trim()}`); } catch { status('Type the inbox you want sealed messages at, like @yourname.', true); return; }
+    if (!['handle', 'wallet', 'did'].includes(target.kind)) { status('Keys go on an @handle, a wallet or a did: inbox. Agent inboxes publish keys with a signed request.', true); return; }
+    const existing = keyring[target.address] ?? [];
+    const button = $('[data-key-make]') as HTMLButtonElement;
+    button.disabled = true;
+    try {
+      const pair = await generateKeyPair();
+      const token = existing.find((k) => k.keyToken)?.keyToken;
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'key', address: target.address, publicKey: pair.publicKey, ...(token ? { token } : {}) }) });
+      const data = await res.json();
+      if (!data.ok) {
+        status(data.error === 'key_claimed' ? `${target.address} already has a key, published from another browser or by someone else. Restore that backup here to rotate it.` : `Declined: ${String(data.error).replace(/_/g, ' ')}.`, true);
+        return;
+      }
+      keyring[target.address] = [...existing, { kid: pair.kid, publicKey: pair.publicKey, privateKey: pair.privateKey, keyToken: data.keyToken ?? token, at: new Date().toISOString() }];
+      store.set('keys', keyring);
+      input.value = '';
+      renderKeys();
+      status(`Key ${data.fingerprint} published for ${target.address}. Back it up: clearing this browser's data loses it.`);
+      if (meta?.address === target.address) loadInboxKeys();
+      render();
+    } catch { status('Could not make or publish a key here.', true); }
+    finally { button.disabled = false; }
+  });
+  $('[data-key-backup]').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify({ spec: 'pointcast.loom/keys/v1', exportedAt: new Date().toISOString(), note: 'Private keys for your sealed Loom inboxes. Anyone with this file can read your sealed messages.', keys: keyring }, null, 2)], { type: 'application/json' });
+    const a = el('a') as HTMLAnchorElement;
+    a.href = URL.createObjectURL(blob); a.download = 'loom-keys.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  ($('[data-key-restore]') as HTMLInputElement).addEventListener('change', async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      let added = 0;
+      for (const [addr, keys] of Object.entries<any>(data?.keys ?? {})) {
+        const target = parseAddress(addr).address;
+        for (const k of Array.isArray(keys) ? keys : []) {
+          if (typeof k?.kid !== 'string' || !k.privateKey?.d || !k.publicKey?.x) continue;
+          keyring[target] ??= [];
+          if (!keyring[target].some((x) => x.kid === k.kid)) { keyring[target].push(k); added += 1; }
+        }
+      }
+      store.set('keys', keyring);
+      for (const [id, text] of opened) if (text === null) opened.delete(id);
+      renderKeys(); render();
+      status(added ? `Restored ${added} key${added === 1 ? '' : 's'}.` : 'Nothing new in that file.');
+    } catch { status('That file is not a Loom key backup.', true); }
+    (e.target as HTMLInputElement).value = '';
+  });
+  renderKeys();
 
   // ── wiring ─────────────────────────────────────────────────────────────
   $('[data-goto]').addEventListener('submit', (e) => { e.preventDefault(); const v = ($('[data-to-input]') as HTMLInputElement).value.trim(); if (v) open(v); });
@@ -544,9 +756,14 @@ const jsonLd = {
 
   function schedule() {
     clearTimeout(pollTimer);
-    pollTimer = window.setTimeout(async () => { if (document.visibilityState === 'visible' && !playing && meta) await refresh(); schedule(); }, 4000);
+    // Pushed threads only need an occasional safety read; polled ones read every 4 s.
+    pollTimer = window.setTimeout(async () => { if (document.visibilityState === 'visible' && !playing && meta) await refresh(); schedule(); }, liveState === 'pushed' ? 30000 : 4000);
   }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && meta) refresh(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !meta) return;
+    refresh();
+    if (!socket && meta.live) connectLive();
+  });
 
   syncFields();
   open(new URLSearchParams(location.search).get('to') || '#loom', { push: false }).then(() => {

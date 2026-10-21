@@ -16,7 +16,6 @@
   if (customElements.get('pointcast-loom')) return;
   const ORIGIN = 'https://pointcast.xyz';
   const API = `${ORIGIN}/api/loom`;
-  const LIVE = 'wss://pointcast.xyz/api/loom/live';
   const CSS = `
     :host{display:block;font:16px/1.4 'EB Garamond','Times New Roman',serif;color:#141311;--a:#d23c1e}
     .w{border:2px solid #141311;background:#fbf8f0;box-shadow:4px 4px 0 #141311;max-width:720px}
@@ -63,7 +62,7 @@
       form.addEventListener('submit', (e) => { e.preventDefault(); this.send(go); });
       w.append(head, this.list, form);
       root.append(style, w);
-      this.load().then(() => this.watch());
+      this.load();
       // Polling is the fallback: it only fetches while the live socket is not open.
       this.timer = setInterval(() => { if (document.visibilityState === 'visible' && !this.isLive()) this.load(); }, 15000);
     }
@@ -76,9 +75,10 @@
     }
     isLive() { return !!this.socket && this.socket.readyState === WebSocket.OPEN; }
     watch() {
-      if (this.gone || this.socket || typeof WebSocket === 'undefined') return;
+      // Only when the read said this node pushes (log.live); otherwise the poll is the whole story.
+      if (this.gone || this.socket || !this.live || typeof WebSocket === 'undefined') return;
       let ws;
-      try { ws = new WebSocket(`${LIVE}?to=${encodeURIComponent(this.address || this.to)}`); } catch { return; }
+      try { ws = new WebSocket(this.live); } catch { return; }
       this.socket = ws;
       ws.onmessage = (e) => { if (e.data === 'pong') return; try { if (JSON.parse(e.data).type === 'ops') this.load(); } catch { /* not ours */ } };
       ws.onopen = () => { this.fails = 0; this.pinger = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 30000); };
@@ -95,6 +95,8 @@
         const data = await (await fetch(`${API}?to=${encodeURIComponent(this.to)}`)).json();
         if (!data.ok) throw new Error(data.error);
         this.address = data.log.address;
+        this.live = typeof data.log.live === 'string' && data.log.live.startsWith('wss://pointcast.xyz/') ? data.log.live : null;
+        if (this.live && !this.socket && !this.gone && !this.retry) this.watch();
         this.label.textContent = `The Loom · ${data.count} on ${data.log.label}`;
         const items = data.messages.slice(-this.limit);
         this.list.replaceChildren(...(items.length ? items.map((m) => {
