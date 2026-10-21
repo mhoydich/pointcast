@@ -96,6 +96,18 @@ test('the wallets verdict: what exists, the verdict, why not first, and when', (
   assert.match(P.WALLET_NEVER, /no value and none is promised/);
 });
 
+test('backup keys: a set of up to four keys that includes the one making the change, never “four more”', () => {
+  // pointcast-chain crates/chain-core/src/state.rs SetControllers: the signer must be in the new set
+  // (SignerNotInControllerSet), and keys.rs caps the set at accounts.max_controllers, 4 on devnet-2.
+  const piece = P.WALLET_PIECES.find((p) => p.piece === 'Backup keys');
+  assert.match(piece.what, /^Up to four keys with full power over one account, counting the key that makes the change/);
+  const hub = read('src/pages/chain.astro');
+  assert.match(hub, /up to four keys with full power, counting the one that makes the change/);
+  for (const text of [piece.what, hub]) {
+    assert.doesNotMatch(text, /four more keys|Up to four backup keys|up to 4 more/i);
+  }
+});
+
 test('the October record is told as it is: the panel’s scores and the roadmap were kept; what never happened is delivery', () => {
   // The 4 October panel (workflow run wf_19db1db6-bad) finished with three judges' scores and a decision, and the
   // six-month roadmap (wf_70622de2-c61) was drafted the same day; Mike saw a one-line summary of each on 5 October.
