@@ -188,6 +188,7 @@ test('inbox keys: first publish claims the inbox, only its token rotates it, age
   assert.equal(read.sealable, true);
 
   assert.equal((await post(kv, { action: 'key', address: '#topic', publicKey: one.publicKey })).status, 400);
+  assert.equal((await (await post(kv, { action: 'nope' })).json()).error, 'action_unknown');
   assert.equal((await post(kv, { action: 'key', address: '@carl', publicKey: { ...one.publicKey, d: 'secret' } })).status, 400);
   assert.equal((await post(kv, { action: 'key', address: '@carl', publicKey: { kty: 'EC', crv: 'P-256', x: 'A'.repeat(43), y: 'A'.repeat(43) } })).status, 400, 'not a point on the curve');
   const agent = 'agent:pci_0123456789abcdef0123456789abcdef';

@@ -40,6 +40,7 @@ const SENDER_KINDS = new Set(['human', 'agent']);
 /** Address kinds that are somebody's inbox, and so can hold sealed messages. */
 export const INBOX_KINDS = new Set(['handle', 'agent', 'wallet', 'did']);
 const RIPPLE_MAX = 4;
+const ACTIONS = new Set(['append', 'edit', 'withdraw', 'plus', 'vote', 'hide', 'key', 'peer']);
 
 const HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -477,6 +478,7 @@ export async function handleLoom(request, { store = undefined, kv = null, clock 
     try { body = JSON.parse((await request.text()).slice(0, 32_768)); } catch { return fail('json_invalid'); }
     if (!body || typeof body !== 'object') return fail('json_invalid');
     const action = String(body.action ?? 'append');
+    if (!ACTIONS.has(action)) return fail('action_unknown');
     const now = clock().toISOString();
 
     if (action === 'append') return await append(store, request, body, { verifiedAgent, limit, now });
