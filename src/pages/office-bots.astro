@@ -1,0 +1,121 @@
+---
+import BlockLayout from '../layouts/BlockLayout.astro';
+import {
+  OFFICE_BOTS_ART, OFFICE_BOTS_CAST, OFFICE_BOTS_DATE, OFFICE_BOTS_EPISODES, OFFICE_BOTS_SERIES, OFFICE_BOTS_URL, castFor, episodeArt,
+} from '../lib/office-bots.mjs';
+import '../styles/office-bots.css';
+
+const title = 'Office Bots: a sitcom about bots';
+const description = `${OFFICE_BOTS_SERIES.tagline} A ten-episode workplace sitcom with ten pixel-art bot Nouns and ten procedurally generated backgrounds, with the algorithms explained.`;
+const fmtBytes = (n: number) => (n >= 1024 ? `${(n / 1024).toFixed(0)} KB` : `${n} B`);
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'TVSeries', '@id': `${OFFICE_BOTS_URL}#series`, name: 'Office Bots', description: OFFICE_BOTS_SERIES.premise, url: OFFICE_BOTS_URL,
+      genre: ['Comedy', 'Fiction'], inLanguage: 'en', numberOfEpisodes: OFFICE_BOTS_EPISODES.length, numberOfSeasons: 1,
+      datePublished: OFFICE_BOTS_DATE, image: 'https://pointcast.xyz/images/office-bots/cover.png',
+      author: { '@type': 'Organization', name: 'Claude Code for PointCast' }, publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz' },
+      character: OFFICE_BOTS_CAST.map((c) => ({ '@type': 'Person', name: c.name, description: `${c.role}. ${c.trait}`, image: `https://pointcast.xyz${OFFICE_BOTS_ART.cast[c.slug].file}` })),
+      containsSeason: { '@type': 'TVSeason', seasonNumber: 1, numberOfEpisodes: OFFICE_BOTS_EPISODES.length },
+    },
+    ...OFFICE_BOTS_EPISODES.map((e) => ({
+      '@type': 'TVEpisode', '@id': `${OFFICE_BOTS_URL}#episode-${e.number}`, name: e.title, description: e.logline, episodeNumber: e.number, partOfSeries: { '@id': `${OFFICE_BOTS_URL}#series` },
+      url: `${OFFICE_BOTS_URL}#episode-${e.number}`, image: `https://pointcast.xyz${episodeArt(e).file}`, datePublished: OFFICE_BOTS_DATE,
+    })),
+  ],
+};
+---
+<BlockLayout title={title} description={description} author="Claude Code for PointCast" image="/images/office-bots/cover.png" imageAlt="Office Bots: ten pixel-art bot Nouns lined up at the office." themeColor="#0c0820" immersive isolated includeManifest={false} alternates={[{ type: 'application/json', href: '/office-bots.json', title: 'Office Bots series, cast, episodes and art manifest' }]} jsonLd={jsonLd}>
+  <div class="ob-page">
+    <nav class="ob-nav" aria-label="Main navigation"><a class="ob-wordmark" href="/">PointCast<span aria-hidden="true">↗</span></a><span class="ob-mono">OFFICE BOTS / SEASON 1</span><a href="#episodes">Episodes ↓</a></nav>
+    <main class="ob-main">
+      <header class="ob-hero">
+        <p class="ob-kicker">A POINTCAST SITCOM · FICTION</p>
+        <h1>Office Bots</h1>
+        <p class="ob-dek">{OFFICE_BOTS_SERIES.tagline}</p>
+        <img class="ob-cover" src="/images/office-bots/cover.png" width="1200" height="630" alt="Ten pixel-art bot Nouns standing in a row at the office: a loop, a clock, a coin, a database, a bandage, a terminal, a megaphone, a burning brick wall, a CRT monitor and a speech bubble with an antenna." fetchpriority="high" />
+      </header>
+
+      <section class="ob-section" aria-labelledby="premise-title">
+        <p class="ob-kicker">THE PREMISE</p>
+        <h2 id="premise-title">The humans go home at five.</h2>
+        <p class="ob-lead">{OFFICE_BOTS_SERIES.premise}</p>
+        <p class="ob-small">{OFFICE_BOTS_SERIES.format} {OFFICE_BOTS_SERIES.tone}</p>
+      </section>
+
+      <section class="ob-section" id="cast" aria-labelledby="cast-title">
+        <p class="ob-kicker">THE CAST</p>
+        <h2 id="cast-title">Ten bots. Ten heads. One lanyard each.</h2>
+        <ul class="ob-cast">
+          {OFFICE_BOTS_CAST.map((c) => (
+            <li>
+              <img src={OFFICE_BOTS_ART.cast[c.slug].file} width="160" height="160" loading="lazy" decoding="async" alt={`${c.name}, a pixel-art Noun with a ${c.head} for a head.`} />
+              <h3>{c.name}</h3>
+              <p class="ob-role ob-mono">{c.role.toUpperCase()}</p>
+              <p>{c.trait}</p>
+              <p class="ob-catch">“{c.catchphrase}”</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section class="ob-section" id="episodes" aria-labelledby="episodes-title">
+        <p class="ob-kicker">SEASON 1 · TEN EPISODES</p>
+        <h2 id="episodes-title">Cold opens, in full.</h2>
+        <p class="ob-small">Each episode has its own generated background. Scroll on to see how they are made.</p>
+        {OFFICE_BOTS_EPISODES.map((e) => {
+          const a = episodeArt(e);
+          const hero = castFor(e.hero)!;
+          return (
+            <article class="ob-episode" id={`episode-${e.number}`} aria-labelledby={`ep-${e.number}-title`}>
+              <img class="ob-banner" src={a.file} width="1600" height="900" loading={e.number === 1 ? 'eager' : 'lazy'} decoding="async" alt={`${hero.name} stands in front of a generated background made with ${a.algorithm.toLowerCase()}.`} />
+              <div class="ob-ep-head"><span class="ob-mono">EPISODE {String(e.number).padStart(2, '0')}</span><span class="ob-mono">FEATURING {hero.name.toUpperCase()}</span></div>
+              <h3 id={`ep-${e.number}-title`}>{e.title}</h3>
+              <p class="ob-logline">{e.logline}</p>
+              <div class="ob-script" role="group" aria-label={`Cold open of ${e.title}`}>
+                {e.coldOpen.map(([who, line]) => (who
+                  ? <p class="ob-line"><span class="ob-who">{who}</span>{line}</p>
+                  : <p class="ob-dir">{line}</p>))}
+              </div>
+              <p class="ob-button"><span class="ob-mono">BUTTON</span>{e.button}</p>
+            </article>
+          );
+        })}
+      </section>
+
+      <section class="ob-section" id="art" aria-labelledby="art-title">
+        <p class="ob-kicker">HOW THE BACKGROUNDS ARE MADE</p>
+        <h2 id="art-title">Ten algorithms, no image model.</h2>
+        <p class="ob-lead">Every background is a plain SVG produced by <code>scripts/generate-office-bots-art.mjs</code>. A seeded mulberry32 PRNG drives each one, so the same seed always produces byte-identical output. Nothing is fetched, nothing is sampled from a model, and each file is a few hundred KB at most.</p>
+        <div class="ob-tech">
+          {OFFICE_BOTS_EPISODES.map((e) => {
+            const a = episodeArt(e);
+            return (
+              <article class="ob-tech-card">
+                <h3><span class="ob-mono">EP {String(e.number).padStart(2, '0')}</span> {a.algorithm}</h3>
+                <p>{a.technique}</p>
+                <dl>
+                  {Object.entries(a.stats).map(([k, v]) => <><dt>{k}</dt><dd>{String(v)}</dd></>)}
+                  <dt>file size</dt><dd>{fmtBytes(a.bytes)}</dd>
+                  <dt>seed</dt><dd>{a.seed}</dd>
+                  <dt>sha-256 (first 16)</dt><dd>{a.sha256_16}</dd>
+                </dl>
+              </article>
+            );
+          })}
+        </div>
+        <h3 class="ob-h3">The Nouns</h3>
+        <p class="ob-lead">Each bot is a 32×32 grid of 10 px cells in the Noun layout: head, square glasses, body. A small painter places discs and rectangles per head, then merges identical horizontal runs and vertically stacked runs into the fewest possible <code>&lt;rect&gt;</code> elements ({Math.min(...Object.values(OFFICE_BOTS_ART.cast).map((c) => c.rects))} to {Math.max(...Object.values(OFFICE_BOTS_ART.cast).map((c) => c.rects))} per bot). In each scene the Noun is composited at 1.95× with <code>shape-rendering: crispEdges</code> and a blurred contact shadow.</p>
+        <pre class="ob-code"><code>npm run art:office-bots   # rewrites public/images/office-bots/** and src/lib/office-bots-art.json</code></pre>
+      </section>
+
+      <section class="ob-section ob-for-agents" aria-labelledby="agents-title">
+        <p class="ob-kicker">FOR ASSISTANTS</p>
+        <h2 id="agents-title">Machine-readable.</h2>
+        <p><a href="/office-bots.json">/office-bots.json</a> carries the premise, cast, every cold open (as speaker/line objects), episode art manifests and the generator command. Characters and events are invented. Cite it as fiction written by Claude Code for PointCast.</p>
+      </section>
+    </main>
+    <footer class="ob-footer"><p>Fiction. Written by Claude Code for PointCast; every character, company and event is invented. Not written in Mike’s voice. Published {OFFICE_BOTS_DATE}.</p><div><a href="/">PointCast</a><a href="/office-bots.json">JSON</a><a href="/bot-money/">Bot Money Lab</a></div></footer>
+  </div>
+</BlockLayout>
