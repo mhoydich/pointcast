@@ -10,6 +10,9 @@
  *   plus    +1 from someone
  *   vote    a choice on a poll gadget
  *   hide    moderation; the message stays in the log but is folded away
+ *
+ * A sealed append (kind "sealed") carries an encrypted envelope instead of a
+ * body; folding passes it through untouched and readers open it themselves.
  */
 export function fold(ops, { until = Infinity } = {}) {
   const byId = new Map();
@@ -24,7 +27,7 @@ export function fold(ops, { until = Infinity } = {}) {
         media: op.media ?? null, cites: op.cites ?? [], parent: op.parent ?? null,
         confidence: op.confidence ?? null, via: op.via ?? null, links: op.links ?? null,
         poll: op.poll ? { question: op.poll.question, options: op.poll.options.map((label) => ({ label, votes: 0 })) } : null,
-        tags: op.tags ?? [], mentions: op.mentions ?? [],
+        tags: op.tags ?? [], mentions: op.mentions ?? [], sealed: op.sealed ?? null,
         edits: 0, editedAt: null, plus: 0, plusBy: [], hidden: false, depth: 0, replies: 0,
       };
       if (message.parent && byId.has(message.parent)) {

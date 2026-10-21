@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAddress, extractAddresses, addressKey } from '../src/lib/loom/address.mjs';
 import { fold } from '../src/lib/loom/fold.mjs';
-import { handleLoom } from '../src/lib/loom/service.mjs';
+import { handleLoom, nodeCard } from '../src/lib/loom/service.mjs';
+import { generateKeyPair, seal, open, checkEnvelope, fingerprint } from '../src/lib/loom/seal.mjs';
+import { upsertFront, stampOps } from '../src/lib/loom/log.mjs';
 
 function memoryKv() {
   const map = new Map();
@@ -144,4 +146,136 @@ test('ActivityStreams export', async () => {
   assert.equal(as2.type, 'OrderedCollection');
   assert.equal(as2.orderedItems[0].object.content, 'hello #t');
   assert.equal(typeof (await addressKey('#t')), 'string');
+});
+
+// ── v2: sealed inboxes and peers ────────────────────────────────────────────
+
+test('seal and open: each recipient key opens the envelope, any other key cannot, tampering fails', async () => {
+  const bob = await generateKeyPair(), ana = await generateKeyPair(), eve = await generateKeyPair();
+  const envelope = await seal('court 3 at 7 ✓', [{ kid: bob.kid, publicKey: bob.publicKey }, { kid: ana.kid, publicKey: ana.publicKey }]);
+  assert.equal(await open(envelope, { kid: bob.kid, privateKey: bob.privateKey }), 'court 3 at 7 ✓');
+  assert.equal(await open(envelope, { kid: ana.kid, privateKey: ana.privateKey }), 'court 3 at 7 ✓');
+  await assert.rejects(open(envelope, { kid: eve.kid, privateKey: eve.privateKey }), /seal_not_for_this_key/);
+  // A slot relabelled with another kid fails: the kid is bound into the wrap.
+  const relabelled = { ...envelope, to: [{ ...envelope.to[0], kid: eve.kid }] };
+  await assert.rejects(open(relabelled, { kid: eve.kid, privateKey: eve.privateKey }));
+  const flipped = { ...envelope, ct: `${envelope.ct.slice(0, -2)}${envelope.ct.endsWith('A') ? 'B' : 'A'}${envelope.ct.slice(-1)}` };
+  await assert.rejects(open(flipped, { kid: bob.kid, privateKey: bob.privateKey }));
+  assert.deepEqual(checkEnvelope(envelope), envelope);
+  assert.throws(() => checkEnvelope({ ...envelope, v: 2 }), /sealed_version/);
+  assert.throws(() => checkEnvelope({ ...envelope, to: [] }), /sealed_recipients/);
+  assert.match(fingerprint(bob.kid), /^[0-9a-f]{4}( [0-9a-f]{4}){3}$/);
+});
+
+test('inbox keys: first publish claims the inbox, only its token rotates it, agents need a signature', async () => {
+  const kv = memoryKv();
+  const one = await generateKeyPair(), two = await generateKeyPair(), squat = await generateKeyPair();
+  const made = await post(kv, { action: 'key', address: '@Bob', publicKey: one.publicKey });
+  assert.equal(made.status, 201);
+  const claim = await made.json();
+  assert.equal(claim.address, '@bob');
+  assert.equal(claim.kid, one.kid);
+  assert.ok(claim.keyToken);
+  assert.equal(claim.keys.trust, 'first-use');
+  assert.equal((await post(kv, { action: 'key', address: '@bob', publicKey: squat.publicKey })).status, 403);
+  assert.equal((await post(kv, { action: 'key', address: '@bob', publicKey: two.publicKey, token: 'wrong' })).status, 403);
+  const rotated = await (await post(kv, { action: 'key', address: '@bob', publicKey: two.publicKey, token: claim.keyToken })).json();
+  assert.equal(rotated.keys.current.kid, two.kid);
+  assert.deepEqual(rotated.keys.keys.map((k) => k.kid), [one.kid, two.kid]);
+  const read = await get(kv, '?key=%40bob');
+  assert.equal(read.keys.current.kid, two.kid);
+  assert.ok(!JSON.stringify(read).includes('tokenHash'));
+  assert.equal(read.sealable, true);
+
+  assert.equal((await post(kv, { action: 'key', address: '#topic', publicKey: one.publicKey })).status, 400);
+  assert.equal((await post(kv, { action: 'key', address: '@carl', publicKey: { ...one.publicKey, d: 'secret' } })).status, 400);
+  assert.equal((await post(kv, { action: 'key', address: '@carl', publicKey: { kty: 'EC', crv: 'P-256', x: 'A'.repeat(43), y: 'A'.repeat(43) } })).status, 400, 'not a point on the curve');
+  const agent = 'agent:pci_0123456789abcdef0123456789abcdef';
+  assert.equal((await post(kv, { action: 'key', address: agent, publicKey: one.publicKey })).status, 403);
+  const signed = await (await post(kv, { action: 'key', address: agent, publicKey: one.publicKey }, { verifiedAgent: 'pci_0123456789abcdef0123456789abcdef' })).json();
+  assert.equal(signed.keys.trust, 'verified-agent');
+  assert.equal(signed.keyToken, undefined);
+});
+
+test('sealed DMs: ciphertext only, addressed to the inbox key, no ripple, no edits, sender copy allowed', async () => {
+  const kv = memoryKv();
+  const bob = await generateKeyPair(), ana = await generateKeyPair(), stranger = await generateKeyPair();
+  await post(kv, { action: 'key', address: '@bob', publicKey: bob.publicKey });
+  await post(kv, { action: 'key', address: '@ana', publicKey: ana.publicKey });
+  const to = (...keys) => keys.map((k) => ({ kid: k.kid, publicKey: k.publicKey }));
+
+  const envelope = await seal('see @carol about #secret https://example.com/x', to(bob, ana));
+  const res = await post(kv, { to: '@bob', from: { name: 'Ana', kind: 'human', address: '@ana' }, sealed: envelope });
+  assert.equal(res.status, 201);
+  const made = await res.json();
+  assert.deepEqual(made.reached, [], 'a sealed message never ripples');
+  assert.equal(made.message.kind, 'sealed');
+  const inbox = await get(kv, '?to=%40bob');
+  assert.equal(inbox.log.sealable, true);
+  assert.equal(inbox.messages[0].body, '');
+  assert.equal(await open(inbox.messages[0].sealed, { kid: bob.kid, privateKey: bob.privateKey }), 'see @carol about #secret https://example.com/x');
+  assert.equal(await open(inbox.messages[0].sealed, { kid: ana.kid, privateKey: ana.privateKey }), 'see @carol about #secret https://example.com/x');
+  assert.equal((await get(kv, '?to=%40carol')).count, 0);
+  const directory = await get(kv, '');
+  assert.equal(directory.logs.find((e) => e.address === '@bob').last.body, 'sealed message');
+  assert.equal((await get(kv, '?from=%40ana')).sent[0].body, 'sealed message');
+  const as2 = await (await handleLoom(new Request(`${base}?to=%40bob&format=as2`), { kv })).json();
+  assert.equal(as2.orderedItems[0].object.content, undefined);
+
+  const status = async (body) => (await post(kv, body)).status;
+  const from = { name: 'Ana', kind: 'human', address: '@ana' };
+  assert.equal(await status({ to: '#open', from, sealed: envelope }), 400, 'only inboxes take sealed messages');
+  assert.equal(await status({ to: '@nokey', from, sealed: envelope }), 400, 'the inbox needs a published key');
+  assert.equal(await status({ to: '@bob', from, sealed: envelope, body: 'oops, plaintext' }), 400, 'plaintext alongside a seal is refused');
+  assert.equal(await status({ to: '@bob', from, sealed: await seal('x', to(ana)) }), 400, 'must be readable by the inbox');
+  assert.equal(await status({ to: '@bob', from, sealed: await seal('x', to(bob, stranger)) }), 400, 'every kid must be published');
+  assert.equal(await status({ to: '@bob', from, sealed: { ...envelope, ct: 'not base64url!' } }), 400);
+  assert.equal((await post(kv, { action: 'edit', to: made.address, token: made.editToken, body: 'plain' })).status, 400);
+  assert.equal((await post(kv, { action: 'withdraw', to: made.address, token: made.editToken })).status, 200);
+  assert.equal((await get(kv, '?to=%40bob')).count, 0);
+});
+
+test('peer handshake: fetch the card, check it names the same origin, list the peer', async () => {
+  const kv = memoryKv();
+  const cards = {
+    'https://friend.example/.well-known/loom.json': { spec: 'pointcast.loom/v2', node: 'https://friend.example', name: 'Friend', api: 'https://friend.example/api/loom' },
+    'https://liar.example/.well-known/loom.json': { spec: 'pointcast.loom/v2', node: 'https://friend.example', api: 'https://friend.example/api/loom' },
+    'https://other.example/.well-known/loom.json': { spec: 'activitypub', node: 'https://other.example', api: '/api' },
+  };
+  const fetched = [];
+  const fetcher = async (url, init) => {
+    fetched.push(url);
+    assert.equal(init.redirect, 'manual');
+    return cards[url] ? new Response(JSON.stringify(cards[url]), { status: 200 }) : new Response('nope', { status: 404 });
+  };
+  const peer = (node) => post(kv, { action: 'peer', node }, { fetcher });
+  const ok = await peer('https://Friend.example/some/path');
+  assert.equal(ok.status, 201);
+  const made = await ok.json();
+  assert.equal(made.peer.node, 'https://friend.example');
+  assert.equal(made.card.node, 'https://pointcast.xyz');
+  assert.equal((await peer('https://friend.example')).status, 200, 'a repeat handshake refreshes');
+  assert.equal((await peer('https://liar.example')).status, 502);
+  assert.equal((await peer('https://other.example')).status, 502);
+  assert.equal((await peer('https://missing.example')).status, 502);
+  for (const bad of ['http://friend.example', 'https://127.0.0.1', 'https://localhost', 'https://box.local', 'https://friend.example:8443', 'https://pointcast.xyz', 'nonsense']) {
+    assert.equal((await peer(bad)).status, 400, bad);
+  }
+  assert.ok(!fetched.some((u) => /127\.0\.0\.1|localhost|\.local\/|8443|pointcast\.xyz/.test(u)), 'refused nodes are never fetched');
+  const listed = await get(kv, '?peers=1');
+  assert.deepEqual(listed.peers.map((p) => p.node), ['https://friend.example']);
+  const card = nodeCard({ peers: listed.peers });
+  assert.equal(card.spec, 'pointcast.loom/v2');
+  assert.equal(card.peers[0].name, 'Friend');
+});
+
+test('log helpers: stamping trims to the cap, lists upsert by key', () => {
+  const log = { seq: 0, ops: [], title: null };
+  stampOps(log, [{ op: 'append', id: 'a' }], 'now', { title: 'first' });
+  stampOps(log, [{ op: 'append', id: 'b' }, { op: 'append', id: 'c' }], 'later', { title: 'ignored', maxOps: 2 });
+  assert.equal(log.title, 'first');
+  assert.deepEqual(log.ops.map((o) => o.seq), [2, 3]);
+  assert.equal(log.trimmedBefore, 2);
+  assert.deepEqual(upsertFront([{ k: 1 }, { k: 2 }], { k: 2, n: 'new' }, { keyField: 'k' }), [{ k: 2, n: 'new' }, { k: 1 }]);
+  assert.deepEqual(upsertFront([1, 2, 3], 0, { cap: 3 }), [0, 1, 2]);
 });
