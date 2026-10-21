@@ -134,6 +134,13 @@ test('the /chain home does not say passkey wallets or capsules work on devnet-2,
   assert.equal(P.STANDING.passkeyAccounts, 0);
 });
 
+test('the QR piece says what pointcast-chain’s cross-check does: Apple’s reader reads, Apple’s generator matches bit for bit', () => {
+  // pointcast-chain scripts/qr-crosscheck.swift: CIDetector decodes our PNGs; CIQRCodeGenerator's module matrix equals ours.
+  const qr = P.WALLET_PIECES.find((p) => p.piece === 'QR codes');
+  assert.doesNotMatch(qr.where, /bit for bit against Apple’s own QR reader/);
+  assert.match(qr.where, /Apple’s own QR reader reads them, and Apple’s own QR generator draws the same symbols bit for bit/);
+});
+
 test('the October record is told as it is: the panel’s scores and the roadmap were kept; what never happened is delivery', () => {
   // The 4 October panel (workflow run wf_19db1db6-bad) finished with three judges' scores and a decision, and the
   // six-month roadmap (wf_70622de2-c61) was drafted the same day; Mike saw a one-line summary of each on 5 October.

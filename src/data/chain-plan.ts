@@ -224,7 +224,7 @@ export const WALLET_PIECES: Piece[] = [
   { piece: 'Backup keys', what: 'Up to four keys with full power over one account, counting the key that makes the change, for a lost phone or a second ecosystem.', built: 'batch 4', where: 'Live on devnet-2. A change takes effect at once, with no delay: one stolen backup key is a permanent takeover.', live: true },
   { piece: 'Gossip', what: 'Replicas sync from each other and pass each signed transaction on once, with rate limits.', built: 'batch 5', where: 'Runs on a laptop, not in public. A follower matched the live devnet block for block on 9 October.', live: false },
   { piece: 'Offline sync', what: 'A browser keeps its own verified checkpoint, shares it between tabs while re-checking every block, and holds signed transactions in an outbox until it is back online.', built: 'batch 5', where: 'In the explorer and the SDK.', live: false },
-  { piece: 'QR codes', what: 'Plaques, receipts and a verify page whose QR carries a checkpoint in the link itself.', built: 'batch 4', where: 'Files only. Checked bit for bit against Apple’s own QR reader.', live: false },
+  { piece: 'QR codes', what: 'Plaques, receipts and a verify page whose QR carries a checkpoint in the link itself.', built: 'batch 4', where: 'Files only. Apple’s own QR reader reads them, and Apple’s own QR generator draws the same symbols bit for bit.', live: false },
   { piece: 'WebRTC', what: 'A mailbox where two browsers could arrange a direct connection.', built: 'batch 5', where: 'Off by default. Sharing blocks browser to browser is not built.', live: false },
 ];
 
