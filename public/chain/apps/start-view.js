@@ -49,7 +49,7 @@ export function mount(root, env = {}) {
   const S = {
     begun: false, halted: false, status: null, chain: null, daily: null, readAt: 0, rate: 12, balance: null, skipped: false,
     choice: '', mode: 'play', passkey: null, place: null, pending: null, acting: false, done: null, file: null, receipt: null,
-    sentence: '', undownloaded: false, kept: false, timer: 0, lastStep: '',
+    sentence: '', undownloaded: false, kept: false, timer: 0, lastStep: '', looked: false, looking: false,
   };
   const set = (sel, text) => { const n = q(sel); if (n) n.textContent = text; };
   const say = (text, state) => { set('[data-st-status]', text); if (state) root.dataset.state = state; };
@@ -163,6 +163,7 @@ export function mount(root, env = {}) {
     const banner = q('[data-st-genesis]');
     if (banner) { banner.hidden = false; banner.textContent = describeError(e); }
     say('GENESIS CHANGED. Nothing below is read, and nothing can be sent.', 'changed');
+    set('[data-st-pk-why]', 'The devnet was reset: nothing can be signed.');
     paintControls();
   }
 
@@ -190,9 +191,27 @@ export function mount(root, env = {}) {
       if (root.dataset.state !== 'ready') say(where.override ? 'Ready. A local devnet: the page reads its own genesis, not a pinned one.' : 'Ready. The devnet answered, and its genesis is the one this page pins.', 'ready');
       paintChoice();
       paintSteps();
+      await firstLook();
     } catch (e) {
       if (e && e.name === 'GenesisChanged') halt(e);
       else say('The devnet did not answer: ' + describeError(e), 'down');
+    }
+  }
+
+  /**
+   * Once, after the first read the devnet answers (at load, or on a later poll when the first read failed):
+   * the seal rate a capsule is planned at, and whether passkeys work here. Tried again on the next poll
+   * while the devnet's passkey rules could not be read.
+   */
+  async function firstLook() {
+    if (S.looked || S.looking || S.halted || !S.status) return;
+    S.looking = true;
+    try {
+      S.rate = await S0.dayRate(net, S.status.height);
+      paintCapsuleWhen();
+      S.looked = await checkPasskeys();
+    } finally {
+      S.looking = false;
     }
   }
 
@@ -203,19 +222,23 @@ export function mount(root, env = {}) {
 
   // ------------------------------------------------------------ step 1: passkeys
 
+  /** Read the chain's passkey rules (launch record 7) and say what they mean here. True when there is an answer to keep. */
   async function checkPasskeys() {
     const why = q('[data-st-pk-why]');
+    let answered = true;
     try {
       const chain = await connect();
       S.place = S0.passkeyPlace({ params: chain.params, origin, webauthn: Boolean(credentials && typeof credentials.create === 'function' && (env.credentials || win.PublicKeyCredential)) });
     } catch (e) {
-      S.place = { ok: false, rpId: '', origins: [], reason: e && e.name === 'GenesisChanged' ? 'The devnet was reset: nothing can be signed.' : 'The devnet’s passkey rules could not be read: ' + describeError(e) };
+      answered = Boolean(e && e.name === 'GenesisChanged');
+      S.place = { ok: false, rpId: '', origins: [], reason: e && e.name === 'GenesisChanged' ? 'The devnet was reset: nothing can be signed.' : 'The devnet’s passkey rules could not be read, so the passkey button is off for now; the page tries again shortly. (' + describeError(e) + ')' };
     }
     if (S.place.ok) S.passkey = S0.loadPasskey(storage);
     // Off because of the site: the note above already says where passkeys work, so say only what that means here.
     const offSite = !S.place.ok && S.place.origins.length && !S.place.origins.includes(origin);
     if (why) why.textContent = S.place.ok ? (S.passkey ? 'This browser remembers a passkey account, ' + S.passkey.address + '. You can sign with it instead.' : 'Passkeys work here: the chain names ' + S.place.origins.join(' and ') + '. Making one asks your device; nothing is signed or sent to the devnet.') : offSite ? 'Not on this copy of the page (' + cleanOrigin(origin) + '), so the passkey button is off. The play key works anywhere.' : S.place.reason;
     paintWho();
+    return answered;
   }
 
   async function makePasskey() {
@@ -520,12 +543,7 @@ export function mount(root, env = {}) {
       root.dataset.state = 'reading';
       say('Reading the devnet…', 'reading');
       if (keys) await keys.ready;
-      await refresh();
-      if (!S.halted && S.status) {
-        S.rate = await S0.dayRate(net, S.status.height);
-        paintCapsuleWhen();
-        await checkPasskeys();
-      }
+      await refresh(); // the first read that answers, now or on a later poll, also reads the seal rate and the passkey rules
       S.timer = win.setInterval(() => { if (doc.visibilityState !== 'hidden' && !S.halted && !S.acting && !S.done) refresh(); }, POLL_MS);
     },
     refresh,

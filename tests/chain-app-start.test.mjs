@@ -768,6 +768,44 @@ test('an account that already asked the faucet and holds nothing is not told the
   assert.equal($(m.rootEl, '[data-st-skip]').disabled, false, 'Skip stays open');
 });
 
+test('a first read that fails does not leave the passkey check and the seal rate undone: the next read that answers does both', async () => {
+  // Regression (review 10-21): begin() read the rate and the passkey rules only when its own first read answered.
+  // A devnet that was down at load left "Checking whether this devnet takes passkeys here…" up for good, the
+  // passkey button off on pointcast.xyz, and capsules planned at the idle floor.
+  let down = true;
+  let paramsDown = true;
+  const w = world();
+  const status = { ...FX.status, height: FX.blocks.at(-1).header.height };
+  w.overrides['/status'] = async () => (down ? reply({ error: 'down' }, 503) : reply(status));
+  let calls = 0;
+  const connect = async () => { calls += 1; if (paramsDown) throw new Error('the devnet answered 503 for /params'); return w.chain; };
+  const soft = softPasskey();
+  const m = mountView({ fetchOpts: { accounts: w.accounts, overrides: w.overrides }, extra: { connect, origin: 'https://pointcast.xyz', credentials: soft } });
+  $(m.rootEl, '[data-st-pk-why]').textContent = 'Checking whether this devnet takes passkeys here…';
+  await m.c.begin();
+  m.c.stop();
+  assert.equal(m.rootEl.dataset.state, 'down');
+  assert.equal(m.c.state.place, null, 'nothing to check against yet');
+  assert.equal(calls, 0);
+  // the devnet answers on a later poll, but its passkey rules do not yet: the page says so, and keeps trying
+  down = false;
+  await m.c.refresh();
+  assert.equal(m.rootEl.dataset.state, 'ready');
+  assert.equal(calls, 1);
+  assert.equal(m.c.state.rate, FX_RATE, 'the seal rate is read once the devnet answers');
+  assert.match(txt(m.rootEl, '[data-st-pk-why]'), /^The devnet’s passkey rules could not be read, so the passkey button is off for now; the page tries again shortly\. \(/);
+  assert.equal($(m.rootEl, '[data-st-pk-make]').disabled, true);
+  // the next poll reads them
+  paramsDown = false;
+  await m.c.refresh();
+  assert.equal(calls, 2);
+  assert.equal(txt(m.rootEl, '[data-st-pk-why]'), 'Passkeys work here: the chain names https://pointcast.xyz. Making one asks your device; nothing is signed or sent to the devnet.');
+  assert.equal($(m.rootEl, '[data-st-pk-make]').disabled, false);
+  // and only once: later polls read neither again
+  await m.c.refresh();
+  assert.equal(calls, 2);
+});
+
 test('GENESIS CHANGED stops the page: nothing is read on, nothing can be sent', async () => {
   const w = world();
   const overrides = { ...w.overrides, '/status': async () => reply({ ...FX.status, genesis_hash: HEX('9') }) };
@@ -777,6 +815,7 @@ test('GENESIS CHANGED stops the page: nothing is read on, nothing can be sent', 
   assert.equal(rootEl.dataset.state, 'changed');
   assert.equal($(rootEl, '[data-st-genesis]').hidden, false);
   assert.match(txt(rootEl, '[data-st-genesis]'), /^GENESIS CHANGED\. The devnet reports genesis 9{64}, this page pins /);
+  assert.equal(txt(rootEl, '[data-st-pk-why]'), 'The devnet was reset: nothing can be signed.', 'no passkey check left waiting');
   $(rootEl, '[data-kp-make]').click();
   await until(() => c.keys.key());
   await tick(30);
