@@ -359,16 +359,24 @@ test('a capsule opens about 7 days of blocks on, from the rate of the last day a
   assert.equal(await S0.dayRate(net, 2), 12);
 });
 
-test('a capsule file is kept where Time Capsules finds it: newest first, one per capsule, at most 32, other entries left alone', () => {
+test('a capsule file is kept where Time Capsules finds it: newest first, one per capsule, and no other entry is ever dropped', () => {
   assert.equal(MY_SLOT, 'pointcast-chain-apps/capsules/v1');
   const st = fakeStorage({ [MY_SLOT]: JSON.stringify([{ format: 'something-newer' }, { capsule: HEX('1'), old: true }]) });
   assert.equal(S0.keepCapsuleFile(st, MY_SLOT, { capsule: HEX('1'), v: 2 }), true);
   assert.deepEqual(JSON.parse(st.m.get(MY_SLOT)), [{ capsule: HEX('1'), v: 2 }, { format: 'something-newer' }]);
+  // Regression (review 10-21): the list was cut to 32, which deleted the oldest capsule files on this device (each the
+  // only copy of its salt) and the entries this page cannot read. Time Capsules keeps no cap; neither does this page.
   for (let i = 0; i < 40; i++) S0.keepCapsuleFile(st, MY_SLOT, { capsule: String(i).padStart(64, '0') });
-  assert.equal(JSON.parse(st.m.get(MY_SLOT)).length, 32);
-  assert.equal(JSON.parse(st.m.get(MY_SLOT))[0].capsule, '39'.padStart(64, '0'));
+  const kept = JSON.parse(st.m.get(MY_SLOT));
+  assert.equal(kept.length, 42, 'all 40 new files, the replaced one and the entry this page cannot read');
+  assert.equal(kept[0].capsule, '39'.padStart(64, '0'), 'newest first');
+  assert.deepEqual(kept.at(-1), { format: 'something-newer' }, 'an entry this page cannot read stays');
+  for (let i = 0; i < 40; i++) assert.ok(kept.some((f) => f.capsule === String(i).padStart(64, '0')), 'file ' + i + ' is still kept');
   assert.equal(S0.keepCapsuleFile({ getItem: () => null, setItem: () => { throw new Error('full'); } }, MY_SLOT, { capsule: HEX('2') }), false);
   assert.equal(S0.keepCapsuleFile(fakeStorage({ [MY_SLOT]: 'not json' }), MY_SLOT, { capsule: HEX('2') }), false);
+  const notList = fakeStorage({ [MY_SLOT]: JSON.stringify({ capsule: HEX('3') }) });
+  assert.equal(S0.keepCapsuleFile(notList, MY_SLOT, { capsule: HEX('2') }), false, 'a slot that is not a list is not overwritten');
+  assert.deepEqual(JSON.parse(notList.m.get(MY_SLOT)), { capsule: HEX('3') });
 });
 
 test('step 4’s links are same-site paths built from the block number; under a local override they read that same local devnet, and nothing else gets in', () => {

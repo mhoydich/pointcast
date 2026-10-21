@@ -308,15 +308,19 @@ export function capsulePlan({ message, title, label, tip, perHour, sender }) {
 
 /**
  * Keep a capsule file where Time Capsules (/chain/capsules) finds it: the list in
- * `slot` (capsules-view.js MY_SLOT), newest first, one per capsule, at most 32,
- * entries this page cannot read left as they are. Returns true when it is there.
+ * `slot` (capsules-view.js MY_SLOT), newest first, one per capsule. Every other
+ * entry stays as it is, those this page cannot read included: a capsule file
+ * holds the only copy of its salt, so nothing here drops one (Time Capsules
+ * keeps no cap either). A browser that refuses the write (full, private) gives
+ * false, and the page asks for the download. Returns true when it is there.
  */
 export function keepCapsuleFile(storage, slot, file) {
   try {
     const raw = storage.getItem(slot);
     const list = raw ? JSON.parse(raw) : [];
-    const rest = (Array.isArray(list) ? list : []).filter((f) => !(isObj(f) && f.capsule === file.capsule));
-    storage.setItem(slot, JSON.stringify([file, ...rest].slice(0, 32)));
+    if (raw && !Array.isArray(list)) return false;
+    const rest = list.filter((f) => !(isObj(f) && f.capsule === file.capsule));
+    storage.setItem(slot, JSON.stringify([file, ...rest]));
     return true;
   } catch { return false; }
 }
