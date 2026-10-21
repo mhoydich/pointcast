@@ -308,7 +308,7 @@ export function mount(root, env = {}) {
   function cardNote(card) {
     if (card.kind === 'transfer') return 'If someone outbids you, the house sends your ' + card.fields.find((f) => f[0] === 'amount')[1] + ' play ATTN back within 3 blocks. A transfer cannot be taken back.';
     if (card.kind === 'publish_block' && card.context.sentence !== undefined) return 'The body is the three Notary lines: the format, your sentence’s SHA-256 (' + card.context.sha256 + '), its length in bytes, nothing else. They were stored in the devnet’s body store when you pressed Review, unsigned, as every post’s body is; your sentence itself was not sent.';
-    if (card.kind === 'seal_capsule') return 'The commitment is a fingerprint of your title, your message and a fresh random salt. Your message and the salt go in the capsule file you keep, not to the devnet, until it opens.';
+    if (card.kind === 'seal_capsule') return 'The commitment is a fingerprint of your title, your message and a fresh random salt. Your message and the salt go in the capsule file you keep, not to the devnet, until it opens. Whoever opens it, from that block on, airs the title and the message in public, as your post on ' + (card.fields.find((f) => f[0] === 'channel') || [])[1] + '.';
     return '';
   }
 

@@ -30,6 +30,7 @@ import { JSDOM } from 'jsdom';
 import { DEVNET } from '../src/data/chain-home.ts';
 import { APP, CAPSULE_DEFAULTS, CHOICE_COPY, HONESTY_LINE, NOT_LIST, PASSKEY_NOTE, REGISTRY_ENTRY, START_BLOCK, STEP_COPY } from '../src/data/chain-app-start.ts';
 import { APPS_2_BLOCK, CHAIN_APPS, HONESTY, appByKey } from '../src/data/chain-apps.ts';
+import { KEEP_COPY } from '../src/data/chain-app-capsules.ts';
 import * as S0 from '../public/chain/apps/start.js';
 import * as view from '../public/chain/apps/start-view.js';
 import * as K from '../public/chain/apps/chain-kit.js';
@@ -653,6 +654,8 @@ test('capsule: the card is the seal (commitment, open_at about 7 days on, wax se
   assert.ok(FX_DELAY > 2016, 'the recording sealed faster than the heartbeat: ' + FX_RATE.toFixed(1) + ' blocks an hour');
   assert.ok(!Object.values(fields).some((v) => v.includes('Hello')), 'the message is not in the transaction');
   assert.match(txt(m.rootEl, '[data-st-card-note]'), /Your message and the salt go in the capsule file you keep/);
+  // Regression (review 10-21): opening a capsule airs it as a public post (Time Capsules says so); this page did not.
+  assert.match(txt(m.rootEl, '[data-st-card-note]'), /Whoever opens it, from that block on, airs the title and the message in public, as your post on GDN\.$/);
   assert.equal(storage.m.get(MY_SLOT), undefined, 'no file before the key signs');
   $(m.rootEl, '[data-st-sign]').click();
   await until(() => stateOf(m.rootEl, 'see') === 'done');
@@ -820,6 +823,13 @@ test('the words: honest about value, resets, claims and passkeys, with none of t
   assert.match(STEP_COPY.find((s) => s.key === 'act').text, /the page shows you the exact transaction: every field, and the digest your key signs\. Nothing is signed, and no transaction is sent, until you press Sign\. Reviewing a stamp first stores its three Notary lines/);
   assert.match(CHOICE_COPY.find((c) => c.key === 'stamp').line, /Only its fingerprint \(its SHA-256\) and its length go on chain/);
   assert.match(CHOICE_COPY.find((c) => c.key === 'capsule').line, /without it the capsule never opens/);
+  // Regression (review 10-21): a capsule's message is public once it is opened, and the chain does not open it by itself.
+  assert.match(CHOICE_COPY.find((c) => c.key === 'capsule').line, /the capsule can be opened from a block about 7 days on; opening airs the title and the message in public, as your post on GDN\./);
+  assert.doesNotMatch(CHOICE_COPY.find((c) => c.key === 'capsule').line, /chain [^.]*opens it/);
+  assert.match(page, /<p class="ca-hint" id="st-message-public" data-st-capsule-public>\{KEEP_COPY\.open\}<\/p>/, 'Time Capsules’ own warning, under the message');
+  assert.match(page, /aria-describedby="st-message-public"/);
+  assert.match(KEEP_COPY.open, /^Opening is public and permanent on this devnet/);
+  assert.match(page, /Title \(hidden until it opens, then public\)/);
   assert.match(CHOICE_COPY.find((c) => c.key === 'bid').line, /1 play ATTN while nobody has bid/);
   assert.deepEqual(CHOICE_COPY.map((c) => c.key), [...S0.CHOICES]);
   assert.deepEqual(STEP_COPY.map((s) => s.key), [...S0.STEPS]);

@@ -91,7 +91,7 @@ export const CHOICE_COPY: { key: 'bid' | 'stamp' | 'capsule'; title: string; lin
   {
     key: 'capsule',
     title: 'Seal a 7-day time capsule',
-    line: 'Write a message. The chain holds only a commitment to it and opens it at a block about 7 days on. You keep the capsule file: it holds the message and the salt, and without it the capsule never opens.',
+    line: 'Write a message. The chain holds only a commitment to it, and the capsule can be opened from a block about 7 days on; opening airs the title and the message in public, as your post on GDN. You keep the capsule file: it holds the message and the salt, and without it the capsule never opens.',
     costs: 'Costs nothing.',
     app: '/chain/capsules',
     appLabel: 'Time Capsules',
