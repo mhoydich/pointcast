@@ -108,6 +108,21 @@ test('backup keys: a set of up to four keys that includes the one making the cha
   }
 });
 
+test('device passes are bounded in blocks, and the copy does not promise 30 days on devnet-2', () => {
+  // pointcast-chain keys.rs: a pass expires at most session_max_blocks after it is granted; devnet-2's profile
+  // sets 864,000, and its Worker seals a block only for traffic or a five-minute heartbeat (GET /status).
+  const piece = P.WALLET_PIECES.find((p) => p.piece === 'Device passes');
+  assert.ok(piece.live, 'listed as live on devnet-2');
+  const hub = read('src/pages/chain.astro');
+  const card = /A device pass lets one device[^']*/.exec(hub)[0];
+  for (const text of [piece.what, card]) {
+    assert.match(text, /864,000 blocks/);
+    assert.match(text, /30 days at three-second blocks/);
+    assert.match(text, /devnet-2[^.]*every five minutes/);
+    assert.doesNotMatch(text, /for up to 30 days/);
+  }
+});
+
 test('the October record is told as it is: the panel’s scores and the roadmap were kept; what never happened is delivery', () => {
   // The 4 October panel (workflow run wf_19db1db6-bad) finished with three judges' scores and a decision, and the
   // six-month roadmap (wf_70622de2-c61) was drafted the same day; Mike saw a one-line summary of each on 5 October.
