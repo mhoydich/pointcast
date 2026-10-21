@@ -123,6 +123,17 @@ test('device passes are bounded in blocks, and the copy does not promise 30 days
   }
 });
 
+test('the /chain home does not say passkey wallets or capsules work on devnet-2, where none has been made', () => {
+  // Every block of devnet-2 to 3,769 (GET /raw/blocks, 2026-10-21): no pcp1 sender and no seal_capsule tx.
+  // The features are switched on (launch records 7 and 13); that is all the home may say of them.
+  const hub = read('src/pages/chain.astro');
+  const aside = /<p id="live-title" class="live__t">([^<]*)<\/p>/.exec(hub)[1];
+  assert.doesNotMatch(aside, /capsules work|wallets[^.;]*work/);
+  assert.match(aside, /passkey wallets, stations and capsules are switched on, though no passkey account or capsule exists there yet/);
+  assert.match(aside, /the First Mints edition is not open yet/);
+  assert.equal(P.STANDING.passkeyAccounts, 0);
+});
+
 test('the October record is told as it is: the panel’s scores and the roadmap were kept; what never happened is delivery', () => {
   // The 4 October panel (workflow run wf_19db1db6-bad) finished with three judges' scores and a decision, and the
   // six-month roadmap (wf_70622de2-c61) was drafted the same day; Mike saw a one-line summary of each on 5 October.
