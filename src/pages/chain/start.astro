@@ -1,0 +1,373 @@
+---
+/**
+ * /chain/start: "Start here", one guided minute on the PointCast devnet for a
+ * stranger on a phone. Four steps: make a key (the shared play key, or a passkey
+ * where the chain allows one), take the Daily Mint faucet's 100 play ATTN, do ONE
+ * thing (bid on today's lot, stamp a sentence, or seal a 7-day time capsule),
+ * then see that transaction in a block and check it.
+ *
+ * Nothing here re-implements an app: the bid is daily-mint.js, the stamp
+ * notary.js, the capsule capsules.js, the key panel key-panel.js, all called as
+ * their own pages call them. public/chain/apps/start.js adds the review (the
+ * exact transaction, every field and the digest, shown before the key signs) and
+ * the passkey option; start-view.js is the DOM side; the words are
+ * src/data/chain-app-start.ts. The devnet pins come from src/data/chain-home.ts.
+ *
+ * ?devnet=http://127.0.0.1:PORT points the page at a local devnet for
+ * end-to-end runs (scripts/e2e-chain-app-start.mjs). It is honoured only for the
+ * hosts localhost and 127.0.0.1.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, DEVNET_PREVIOUS, RESET, assertDevnetLaunchPinned, notYet } from '../../data/chain-home';
+import { APP, CAPSULE_DEFAULTS, CHOICE_COPY, HONESTY_LINE, NOT_LIST, PASSKEY_NOTE, STEP_COPY } from '../../data/chain-app-start';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const D = DEVNET.url;
+const quick = [
+  { label: 'Daily Mint', href: '/chain/daily-mint' },
+  { label: 'Notary', href: '/chain/notary' },
+  { label: 'Time Capsules', href: '/chain/capsules' },
+  { label: 'Block Yard', href: DEVNET.yardHref },
+];
+const title = APP.title + ': your first minute on the PointCast devnet';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: APP.title,
+  description: APP.description,
+  url: 'https://pointcast.xyz' + APP.path + '/',
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'Any modern browser',
+  datePublished: '2026-10-21',
+  dateModified: '2026-10-21',
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+const step = (k: string) => STEP_COPY.find((s) => s.key === k)!;
+---
+
+<BlockLayout title={title} description={APP.description} jsonLd={jsonLd} hideAds>
+  <div class="chn ca-page st-page" style={ramp}>
+    <ChainHeader current="start" trail={[{ label: 'start here' }]} block={APP.block} quick={quick} />
+
+    <header class="hero st-hero">
+      <p class="kicker">CHAIN · START HERE · ONE MINUTE · PUBLIC DEVNET-2 · NO VALUE · MAY RESET, NEVER SILENTLY</p>
+      <h1>Your first minute on the chain.</h1>
+      <p class="dek">
+        Four steps, about a minute on a phone: make a key, take 100 play ATTN, do one thing that is yours, then watch it land in a
+        block you can check yourself. You read every field before anything is signed.
+      </p>
+      <!-- The one retro nod: a 1995 setup-wizard progress bar, in chunky blocks. The steps below carry the words; this is decoration. -->
+      <div class="st-bar" data-st-bar aria-hidden="true">
+        <span data-seg="key"></span><span data-seg="attn"></span><span data-seg="act"></span><span data-seg="see"></span>
+      </div>
+      <p class="st-bar__k" data-st-bar-text>SETUP · STEP 1 OF 4 · {step('key').title.toUpperCase()}</p>
+      <p class="ca-honest" role="note" id="honesty">
+        <b>{HONESTY_LINE}.</b> This is a public test chain run by one server. Play ATTN has no value and is never promised any; a
+        stamp, a bid or a capsule is a claim by a free key, not proof of who you are. The devnet may reset and take everything with it:
+        a reset is dated and recorded, never silent. devnet-1 was reset on {notYet(RESET.date)} and its recording is still checkable at
+        <a href={DEVNET_PREVIOUS.path}>{DEVNET_PREVIOUS.path}</a>.
+      </p>
+    </header>
+
+    <section
+      id="go"
+      class="sec st-app"
+      aria-labelledby="go-title"
+      data-start-app
+      data-state="static"
+      data-api={D}
+      data-genesis={DEVNET.genesis}
+      data-chain-id={DEVNET.chainId}
+      data-yard={DEVNET.yardHref}
+    >
+      <h2 id="go-title" class="ca-sr">The four steps</h2>
+      <noscript><p class="fine">This page needs JavaScript: your key is made, and everything is signed, in your browser. The devnet itself is at <a href={D + '/status'}>GET /status</a>.</p></noscript>
+      <p class="ca-status" data-st-status role="status" aria-live="polite">The page reads <code>GET /status</code>, <code>GET /params</code> and <code>GET /daily</code> once it has loaded. Nothing is written until you press a button.</p>
+      <p class="ca-meta" data-st-meta></p>
+      <p class="ca-banner" data-st-genesis role="note" hidden></p>
+
+      <ol class="st-steps">
+        <li class="st-step" data-st-step="key" data-state="now">
+          <div class="st-step__h"><span class="st-step__n" aria-hidden="true">1</span><h3 class="st-step__t" tabindex="-1" data-st-h="key">{step('key').title}</h3><span class="ca-badge" data-st-badge="key">NOW</span></div>
+          <p class="st-step__p">{step('key').text}</p>
+
+          <div class="ca-key st-key" data-key-panel data-state="none">
+            <p class="ca-status" data-kp-status role="status" aria-live="polite">No key yet. Make one: it is a new devnet account, free.</p>
+            <code class="ca-hash st-addr" data-kp-address></code>
+            <div class="ca-actions">
+              <button class="btn st-go" type="button" data-kp-make disabled>Make a key</button>
+              <button class="btn btn--ghost" type="button" data-kp-keepold hidden>Keep this key</button>
+              <label class="ca-toggle"><input class="ca-checkbox" type="checkbox" data-kp-keep disabled /> <span>Keep it on this device</span></label>
+            </div>
+            <div class="ca-actions">
+              <button class="btn btn--ghost" type="button" data-kp-reveal disabled>Show the key</button>
+              <button class="btn btn--ghost" type="button" data-kp-copy hidden>Copy</button>
+              <button class="btn btn--ghost" type="button" data-kp-forget disabled>Forget it</button>
+            </div>
+            <input class="ca-input ca-input--mono st-seed" data-kp-seed type="text" readonly hidden aria-label="Your key, 64 hex characters" spellcheck="false" autocomplete="off" />
+            <p class="ca-hint">It is a play key with no value: anyone who sees its 64 characters can sign as it, so never reuse a key you hold anywhere else.</p>
+            <details class="ca-own">
+              <summary>What “Keep it on this device” does</summary>
+              <p class="ca-hint">
+                It puts those 64 characters in this browser’s local storage, which every script on pointcast.xyz can read. The Daily
+                Mint, the Notary, Time Capsules, Witness and Channels then load the same key, so what it signs is linked to one account
+                anyone can read. Leave it unticked and the key lives in this tab only.
+              </p>
+            </details>
+            <details class="ca-own">
+              <summary>Use a key you already have</summary>
+              <div class="ca-controls">
+                <div class="ca-field ca-field--grow">
+                  <label class="ca-label" for="st-own">A 64-character hex seed</label>
+                  <input id="st-own" class="ca-input ca-input--mono" data-kp-own type="password" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" maxlength="64" />
+                  <p class="ca-hint" data-kp-own-note>Only a devnet key. It stays in this tab unless you tick “Keep it on this device”.</p>
+                </div>
+                <button class="btn btn--ghost" type="button" data-kp-use disabled>Use this key</button>
+              </div>
+            </details>
+          </div>
+
+          <div class="st-pk" data-st-pk>
+            <p class="ca-actions">
+              <button class="btn btn--ghost" type="button" data-st-pk-make disabled>Use a passkey instead</button>
+              <button class="btn btn--ghost" type="button" data-st-pk-use hidden>Sign with my passkey account</button>
+              <button class="btn btn--ghost" type="button" data-st-pk-off hidden>Back to the play key</button>
+            </p>
+            <p class="ca-hint">{PASSKEY_NOTE}</p>
+            <p class="ca-hint" data-st-pk-why role="status" aria-live="polite">Checking whether this devnet takes passkeys here…</p>
+          </div>
+          <p class="st-who" data-st-who>No key yet.</p>
+        </li>
+
+        <li class="st-step" data-st-step="attn" data-state="todo">
+          <div class="st-step__h"><span class="st-step__n" aria-hidden="true">2</span><h3 class="st-step__t" tabindex="-1" data-st-h="attn">{step('attn').title}</h3><span class="ca-badge" data-st-badge="attn">NEXT</span></div>
+          <p class="st-step__p">{step('attn').text}</p>
+          <dl class="ca-kv st-sends">
+            <div><dt>What is sent</dt><dd><code>POST /daily/faucet</code> with your account’s name, and nothing else.</dd></div>
+            <div><dt>What you sign</dt><dd>Nothing. The faucet’s own key signs the transfer of 100 play ATTN to you.</dd></div>
+            <div><dt>Your play ATTN</dt><dd><b data-st-balance>make a key first</b></dd></div>
+          </dl>
+          <div class="ca-actions">
+            <button class="btn st-go" type="button" data-st-faucet disabled>Ask the faucet for 100 play ATTN</button>
+            <button class="btn btn--ghost" type="button" data-st-skip disabled>Skip: I will stamp or seal</button>
+          </div>
+          <p class="ca-status" data-st-faucet-out role="status" aria-live="polite">Once per account; three a day from one connection and 300 in all each UTC day. The stamp and the capsule need none.</p>
+        </li>
+
+        <li class="st-step" data-st-step="act" data-state="todo">
+          <div class="st-step__h"><span class="st-step__n" aria-hidden="true">3</span><h3 class="st-step__t" tabindex="-1" data-st-h="act">{step('act').title}</h3><span class="ca-badge" data-st-badge="act">NEXT</span></div>
+          <p class="st-step__p">{step('act').text}</p>
+          <fieldset class="st-choices">
+            <legend class="ca-label">Pick one</legend>
+            {CHOICE_COPY.map((c) => (
+              <label class="st-choice">
+                <input class="ca-checkbox" type="radio" name="st-choice" value={c.key} data-st-choice disabled aria-labelledby={'st-c-' + c.key} aria-describedby={'st-c-' + c.key + '-l'} />
+                <span class="st-choice__b">
+                  <span class="st-choice__t" id={'st-c-' + c.key}>{c.title}</span>
+                  <span class="st-choice__l" id={'st-c-' + c.key + '-l'}>{c.line}</span>
+                  <span class="st-choice__c">{c.costs} The full app: <a href={c.app}>{c.appLabel}</a>.</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <div class="st-panel" data-st-panel="bid" hidden>
+            <dl class="ca-kv">
+              <div><dt>Lot</dt><dd data-st-lot>–</dd></div>
+              <div><dt>Your bid</dt><dd data-st-least>–</dd></div>
+              <div><dt>Closes in</dt><dd data-st-closes>–</dd></div>
+              <div><dt>Leading now</dt><dd data-st-leader>–</dd></div>
+            </dl>
+          </div>
+          <div class="st-panel" data-st-panel="stamp" hidden>
+            <div class="ca-field">
+              <label class="ca-label" for="st-sentence">Your sentence</label>
+              <input id="st-sentence" class="ca-input" data-st-sentence type="text" maxlength="280" autocomplete="off" placeholder="I was here on the first day I tried this." />
+              <p class="ca-hint" data-st-sentence-note>It stays in your browser. Keep it word for word: the stamp holds only its fingerprint, and only the same sentence matches it later.</p>
+            </div>
+          </div>
+          <div class="st-panel" data-st-panel="capsule" hidden>
+            <div class="ca-field">
+              <label class="ca-label" for="st-message">Your message, for 7 days from now</label>
+              <textarea id="st-message" class="ca-textarea" data-st-message maxlength="4000" rows="4"></textarea>
+            </div>
+            <details class="ca-own">
+              <summary>Title and wax seal</summary>
+              <div class="ca-controls">
+                <div class="ca-field ca-field--grow">
+                  <label class="ca-label" for="st-ctitle">Title (hidden until it opens)</label>
+                  <input id="st-ctitle" class="ca-input" data-st-ctitle type="text" maxlength="120" autocomplete="off" value={CAPSULE_DEFAULTS.title} />
+                </div>
+                <div class="ca-field ca-field--grow">
+                  <label class="ca-label" for="st-clabel">Wax seal (public now)</label>
+                  <input id="st-clabel" class="ca-input" data-st-clabel type="text" maxlength="64" autocomplete="off" value={CAPSULE_DEFAULTS.label} />
+                </div>
+              </div>
+            </details>
+            <p class="ca-hint" data-st-capsule-when>It opens at a block about 7 days on, at the rate the devnet keeps.</p>
+            <label class="ca-toggle"><input class="ca-checkbox" type="checkbox" data-st-capsule-keep /> <span>Also keep the capsule file on this device, where Time Capsules finds it</span></label>
+          </div>
+
+          <p class="ca-actions"><button class="btn st-go" type="button" data-st-review disabled>Review what you will sign</button></p>
+          <ul class="ca-confirm st-errors" data-st-errors role="alert" hidden></ul>
+
+          <div class="ca-confirm st-card" data-st-card hidden>
+            <h4 class="st-card__h" tabindex="-1" data-st-card-h>You are about to sign</h4>
+            <p class="st-card__head" data-st-card-head></p>
+            <p class="card__k">EVERY FIELD, EXACTLY AS IT WILL BE SIGNED</p>
+            <dl class="ca-kv st-fields" data-st-card-fields></dl>
+            <p class="ca-meta">The digest your key signs: <code class="ca-hash" data-st-card-digest></code></p>
+            <details class="ca-own st-sdk" data-st-card-sdk>
+              <summary>The chain’s own description of it</summary>
+              <p class="st-sdk__t" data-st-card-sdk-title></p>
+              <ul class="bullets" data-st-card-sdk-list></ul>
+            </details>
+            <p class="fine" data-st-card-note></p>
+            <p class="fine" data-st-card-where></p>
+            <p class="ca-actions">
+              <button class="btn st-go" type="button" data-st-sign>Sign and send</button>
+              <button class="btn btn--ghost" type="button" data-st-cancel>Cancel</button>
+            </p>
+          </div>
+          <div class="ca-result" data-st-progress hidden role="status" aria-live="polite"><p data-st-progress-text></p></div>
+        </li>
+
+        <li class="st-step" data-st-step="see" data-state="todo">
+          <div class="st-step__h"><span class="st-step__n" aria-hidden="true">4</span><h3 class="st-step__t" tabindex="-1" data-st-h="see">{step('see').title}</h3><span class="ca-badge" data-st-badge="see">NEXT</span></div>
+          <p class="st-step__p">{step('see').text}</p>
+          <p class="ca-empty" data-st-see-wait>Your transaction shows here once a block holds it.</p>
+          <div class="st-done" data-st-done hidden>
+            <div class="ca-tiles st-tiles">
+              <div class="ca-tile ca-tile--hero"><span class="ca-tile__k">In block</span><span class="ca-tile__v" data-st-done-height>–</span></div>
+              <div class="ca-tile"><span class="ca-tile__k">Sealed at</span><span class="ca-tile__v st-small" data-st-done-time>–</span></div>
+              <div class="ca-tile"><span class="ca-tile__k">Signed by</span><span class="ca-tile__v st-small" data-st-done-who>–</span></div>
+            </div>
+            <p class="st-done__line" data-st-done-line></p>
+            <dl class="ca-kv">
+              <div><dt>Transaction</dt><dd><code class="ca-hash" data-st-done-tx></code></dd></div>
+              <div><dt>Block hash</dt><dd><code class="ca-hash" data-st-done-hash></code></dd></div>
+              <div><dt>Status</dt><dd data-st-done-status></dd></div>
+            </dl>
+            <p class="st-links">
+              <a data-st-link-verify href="/chain/verify-a-block">Verify this block by hand →</a>
+              <a data-st-link-yard href={DEVNET.yardHref}>Replay the whole chain in the Block Yard →</a>
+              <a data-st-link-obs href="/chain/observatory">Watch the devnet in the Observatory →</a>
+            </p>
+            <div class="st-keep" data-st-keep hidden>
+              <p class="st-keep__p" data-st-keep-text></p>
+              <p class="ca-actions"><button class="btn st-go" type="button" data-st-download>Download</button></p>
+              <pre class="st-pre" data-st-keep-pre hidden></pre>
+            </div>
+            <p class="fine" data-st-next></p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section id="not" class="sec" aria-labelledby="not-title">
+      <p class="kicker">WHAT THIS IS NOT</p>
+      <h2 id="not-title" class="h2">Plain about the limits.</h2>
+      <ul class="bullets">{NOT_LIST.map((t) => <li>{t}</li>)}</ul>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <p>
+        Everything here runs in your browser against {D.replace('https://', '')}, checked against the genesis this page was built with:
+        a reset stops the page with GENESIS CHANGED instead of carrying on. The bid, the stamp and the capsule are the Daily Mint’s, the
+        Notary’s and Time Capsules’ own code; this page only shows you each transaction before your key signs it. {HONESTY_LINE}.
+        Filed by Claude Code.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded and the browser is idle.
+  const root = document.querySelector('[data-start-app]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/start-view.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style is:global>
+  .chn .st-hero h1{max-width:760px}
+  .chn .st-app{padding-top:4px}
+  /* the setup-wizard bar: four chunky segments, filled block by block as the steps are done */
+  .chn .st-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;max-width:520px;margin:22px 0 0}
+  .chn .st-bar span{display:block;height:20px;border:1.5px solid var(--c600);background:var(--pc-bg)}
+  .chn .st-bar span[data-on="yes"]{background:repeating-linear-gradient(90deg,var(--c600) 0 9px,transparent 9px 12px);background-origin:content-box;padding:2px}
+  .chn .st-bar span[data-on="now"]{background:repeating-linear-gradient(90deg,var(--c600) 0 9px,transparent 9px 12px) 0 0 / 34% 100% no-repeat;background-origin:content-box;padding:2px}
+  .chn .st-bar__k{margin:8px 0 0;font:500 11px/1.5 var(--pc-font-mono);letter-spacing:.1em;color:var(--c800)}
+  .chn .st-steps{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:8px}
+  .chn .st-step{min-width:0;padding:16px;border:1.5px solid var(--c600);background:var(--pc-bg)}
+  .chn .st-step[data-state="now"]{border-left:6px solid var(--c600);background:var(--c50)}
+  .chn .st-step[data-state="done"]{border-left:6px solid var(--ca-ok)}
+  .chn .st-step[data-state="todo"]{border-style:dashed}
+  .chn .st-step__h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+  .chn .st-step__n{display:grid;place-items:center;width:32px;height:32px;background:var(--c600);color:var(--pc-bg);font:500 14px var(--pc-font-mono)}
+  .chn .st-step[data-state="done"] .st-step__n{background:var(--ca-ok)}
+  .chn .st-step__t{margin:0;flex:1 1 200px;font:500 clamp(20px,4.6vw,24px)/1.25 var(--pc-font-sans);letter-spacing:-.015em;color:var(--pc-ink)}
+  .chn .st-step__t:focus-visible{outline:2px solid var(--c600);outline-offset:4px}
+  .chn .st-step__p{margin:10px 0 0;max-width:760px;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .chn [data-st-badge][data-state="ok"]{color:var(--ca-ok)}
+  .chn [data-st-badge][data-state="now"]{color:var(--c800)}
+  .chn .st-go{min-height:48px;padding:0 20px;font-size:14px}
+  .chn .st-key{background:var(--pc-bg)}
+  .chn .st-addr{font-size:13px}
+  .chn .st-seed{width:100%;margin-top:10px}
+  .chn .st-pk{margin:6px 0 0}
+  .chn .st-pk .ca-hint{max-width:760px}
+  .chn .st-who{margin:12px 0 0;font:500 12px/1.6 var(--pc-font-mono);letter-spacing:.02em;color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .st-sends dd code{font:400 12px var(--pc-font-mono)}
+  .chn .st-choices{margin:14px 0 0;padding:0;border:0;min-width:0;display:grid;gap:8px}
+  .chn .st-choices legend{margin:0 0 8px;padding:0}
+  .chn .st-choice{display:flex;gap:12px;align-items:flex-start;min-width:0;padding:14px;border:1.5px solid var(--c600);background:var(--pc-bg);cursor:pointer}
+  .chn .st-choice:has(input:checked){background:var(--c50);border-left-width:6px}
+  .chn .st-choice:has(input:disabled){cursor:not-allowed;opacity:.7}
+  .chn .st-choice:has(input:focus-visible){outline:2px solid var(--c600);outline-offset:2px}
+  .chn .st-choice input{margin-top:2px}
+  .chn .st-choice__b{display:grid;gap:4px;min-width:0}
+  .chn .st-choice__t{font:500 17px/1.3 var(--pc-font-sans);color:var(--pc-ink)}
+  .chn .st-choice__l{font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .st-choice__c{font:400 12px/1.5 var(--pc-font-mono);color:var(--pc-ink-muted)}
+  .chn .st-choice__c a{color:var(--c800);text-decoration:underline}
+  .chn .st-panel{margin:12px 0 0}
+  .chn .st-panel[hidden]{display:none}
+  .chn .st-panel .ca-input{width:100%}
+  .chn .st-errors{border-color:var(--ca-bad);border-style:solid}
+  .chn .st-errors[hidden],.chn .st-card[hidden],.chn .st-done[hidden],.chn .st-keep[hidden]{display:none}
+  .chn .st-card{border-style:solid;border-width:1.5px;border-left-width:6px;padding:14px 16px}
+  .chn .st-card__h{margin:0;font:500 19px/1.3 var(--pc-font-sans);color:var(--pc-ink)}
+  .chn .st-card__head{margin:8px 0 0;font:400 16px/1.55 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .st-card .card__k{margin:14px 0 0}
+  .chn .st-fields dd{font:400 12px/1.55 var(--pc-font-mono);word-break:break-all}
+  .chn .st-sdk__t{margin:6px 0 0;font:400 14px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft);overflow-wrap:anywhere}
+  .chn .st-tiles{margin-top:12px}
+  .chn .st-small{font-size:16px;line-height:1.35;font-family:var(--pc-font-mono);letter-spacing:0}
+  .chn .st-done__line{margin:12px 0 0;max-width:760px;font:400 16px/1.6 var(--pc-font-sans);color:var(--pc-ink)}
+  .chn .st-links{display:grid;gap:6px;margin:14px 0 0}
+  .chn .st-links a{display:flex;align-items:center;min-height:44px;padding:0 12px;border:1.5px solid var(--c600);font:500 13px/1.4 var(--pc-font-mono);color:var(--c800);text-decoration:none;overflow-wrap:anywhere}
+  .chn .st-links a:hover,.chn .st-links a:focus-visible{background:var(--c50)}
+  .chn .st-keep{margin:14px 0 0;padding:12px 14px;border:1.5px solid var(--ca-warn);border-left-width:6px}
+  .chn .st-keep__p{margin:0;font:400 15px/1.6 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .chn .st-pre{margin:10px 0 0;max-height:220px;overflow:auto;padding:10px;border:1px solid var(--pc-rule-soft);font:400 11px/1.5 var(--pc-font-mono);white-space:pre-wrap;word-break:break-all}
+  .chn .st-pre[hidden]{display:none}
+  @media (max-width:560px){
+    .chn .st-go{width:100%;justify-content:center}
+    .chn .st-step{padding:14px 12px}
+    .chn .st-choice{padding:12px}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .chn .st-bar span{transition:background-color .2s}
+  }
+</style>
