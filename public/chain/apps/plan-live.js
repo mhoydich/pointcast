@@ -98,7 +98,10 @@ function mount(root, env = {}) {
   const state = root.querySelector('[data-live-state]');
   const again = root.querySelector('[data-live-again]');
   if (!state || FIELDS.some((f) => !out[f])) return null;
-  const say = (t) => { state.textContent = t; };
+  // A ?devnet= the page would not honour is said once at mount and again after every read, so the
+  // reader never takes the public devnet's numbers for the address they typed.
+  const IGNORED = 'The ?devnet= in the address was ignored: only localhost and 127.0.0.1 are honoured.';
+  const say = (t) => { state.textContent = where.ignored && t !== IGNORED ? t + ' ' + IGNORED : t; };
   let busy = false;
 
   async function read() {
@@ -126,7 +129,7 @@ function mount(root, env = {}) {
     }
   }
 
-  if (where.ignored) say('The ?devnet= in the address was ignored: only localhost and 127.0.0.1 are honoured.');
+  if (where.ignored) say(IGNORED);
   if (again) again.addEventListener('click', () => { read(); });
   return { read };
 }

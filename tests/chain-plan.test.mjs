@@ -255,8 +255,24 @@ test('?devnet= is honoured for 127.0.0.1 only; another host is ignored and said 
   assert.equal(a.root.dataset.state, 'live');
   assert.match(a.els.state.textContent, /the local devnet you named/);
   const b = fakePage(DATA);
-  start(b.root, { fetch: fakeDevnet().f, search: '?devnet=https://evil.example' });
+  const pub = fakeDevnet();
+  const cb = start(b.root, { fetch: pub.f, search: '?devnet=https://evil.example' });
   assert.match(b.els.state.textContent, /was ignored: only localhost and 127\.0\.0\.1 are honoured/);
+  // after the read the notice is still there: the numbers are the public devnet's, not the typed address's
+  await cb.read();
+  assert.equal(b.root.dataset.state, 'live');
+  assert.ok(pub.calls.every((x) => x.url.startsWith(DEVNET.url)), 'the ignored address is never read');
+  assert.match(b.els.state.textContent, /^Read just now from the devnet, in your browser\. 3 requests, all GET\. The \?devnet= in the address was ignored: only localhost and 127\.0\.0\.1 are honoured\.$/);
+  // and when the read fails
+  const d = fakePage(DATA);
+  const cd = start(d.root, { fetch: fakeDevnet({ down: true }).f, search: '?devnet=https://evil.example' });
+  await cd.read();
+  assert.match(d.els.state.textContent, /^Could not read the devnet: .* The \?devnet= in the address was ignored/);
+  // a honoured or absent override adds nothing
+  const e = fakePage(DATA);
+  const ce = start(e.root, { fetch: fakeDevnet().f, search: '' });
+  await ce.read();
+  assert.doesNotMatch(e.els.state.textContent, /ignored/);
 });
 
 test('the block art is abstract: shapes only, no text, no images, no links, and it respects reduced motion', () => {
