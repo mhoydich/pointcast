@@ -408,6 +408,11 @@ test('block 0724 is an FD LINK block in plain text: Start here, the plan, house 
   assert.equal(b.meta.genesis, 'a720735b473383057ee11e885b2d32e1565470612364f13c0265c1a1c66f4280');
   assert.match(b.meta.classes, /house 95 txs from 6 keys, keyless 51 from 1, outside 2 from 2/);
   assert.match(b.meta.pcv, /verified 3790 blocks, tip e3f57b4e[0-9a-f]{56}, state_root \(replayed\), faults 0/);
+  // A block is filed after what it reports: it was once stamped 19:30, before the 19:35 pcv run it cites
+  // (devnet block 3,790, the height its counts were read at, was sealed at 19:35:01 UTC).
+  const ran = b.meta.pcv.match(/live run (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) UTC/);
+  assert.ok(ran, 'meta.pcv names when the run was');
+  assert.ok(Date.parse(b.timestamp) >= Date.parse(`${ran[1]}T${ran[2]}:00Z`), `filed ${b.timestamp}, before the run it reports`);
   assert.equal(b.meta.value, 'none; no value is promised');
   const og = readFileSync(new URL('public/images/og/b/0724.png', root));
   assert.equal(og.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
