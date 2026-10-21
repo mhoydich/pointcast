@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -83,11 +83,53 @@ test('the one-command run, the sha check and the offline rerun use the real flag
   assert.match(page, /^const pcvCheck = `echo "\$\{PCV_SHA256\}  pcv\.py" \| shasum -a 256 -c`;$/m);
   const offline = rawConst('pcvOffline');
   assert.match(offline, /^python3 pcv\.py --devnet \$\{D\} --save pc-devnet /m);
-  assert.match(offline, /^python3 pcv\.py --params pc-devnet\/params\.json --blocks pc-devnet\/blocks\.json /m);
+  // pcv.py's file default pin is devnet-1; only --devnet with the published URL gets devnet-2's.
+  // So the offline rerun has to pass the live pin, from chain-home's DEVNET like the sandbox line.
+  assert.match(offline, /^python3 pcv\.py --params pc-devnet\/params\.json --blocks pc-devnet\/blocks\.json --genesis \$\{DEVNET\.genesis\} /m);
   // The sandbox line takes its pin from the page (chain-home's DEVNET), not from the uploaded files.
   assert.match(page, /^const pcvSandbox = `python3 -B pcv\.py --params params\.json --blocks blocks\.json --genesis \$\{DEVNET\.genesis\}`;$/m);
   assert.ok(existsSync(new URL(PCV, root)));
   assert.ok(section.includes('href="/chain/bots/pcv.py" download>'), 'download button');
+});
+
+// Every offline command the page prints, run as printed on saved devnet-2 files (blocks 1 and 2 and the
+// /params of the live devnet, from tests/fixtures/chain-app-verify.json): each must end exit 0 with every
+// state root replayed. The page's offline line once left out --genesis, so pcv.py fell back to its
+// devnet-1 default and the rerun ended "verification FAILED", exit 1.
+test('the offline reruns the page prints pass on saved devnet-2 files, as printed', () => {
+  const fx = JSON.parse(read('tests/fixtures/chain-app-verify.json'));
+  assert.equal(fx.genesis, GENESIS, 'the fixture is the live devnet');
+  assert.equal(fx.sets['1'].block.header.height, 1);
+  const dir = mkdtempSync(join(tmpdir(), 'pcv-offline-'));
+  try {
+    const files = { params: join(dir, 'params.json'), blocks: join(dir, 'blocks.json') };
+    writeFileSync(files.params, JSON.stringify(fx.params));
+    writeFileSync(files.blocks, JSON.stringify([fx.sets['1'].block, fx.sets['1'].next]));
+    // The default pin in the served file is not the live one: that is why the flag is needed.
+    const fileDefault = pcv.match(/^DEVNET_GENESIS = '([0-9a-f]{64})'$/m)[1];
+    assert.notEqual(fileDefault, GENESIS);
+    const lines = [
+      rawConst('pcvOffline').split('\n').find((l) => l.includes('--params')),
+      page.match(/^const pcvSandbox = `([^`]+)`;$/m)[1],
+    ];
+    for (const line of lines) {
+      const argv = line.split('#')[0].trim().replaceAll('${DEVNET.genesis}', GENESIS).split(/\s+/)
+        .map((a) => (/params\.json$/.test(a) ? files.params : /blocks\.json$/.test(a) ? files.blocks : a));
+      assert.equal(argv[0], 'python3', line);
+      const script = argv.findIndex((a) => a === 'pcv.py');
+      argv[script] = fileURLToPath(new URL(PCV, root));
+      const run = spawnSync('python3', ['-B', ...argv.slice(1).filter((a) => a !== '-B')], { encoding: 'utf8' });
+      assert.equal(run.status, 0, line + '\n' + run.stdout.split('\n').slice(-4).join('\n'));
+      assert.match(run.stdout, /state_root: recomputed by replay for all 2 blocks; every one matches its header/, line);
+      assert.match(run.stdout, /state_root \(replayed\) · faults: 0\n$/, line);
+    }
+    // and without the pin, the same files fail: the flag is load-bearing, not decoration
+    const bare = spawnSync('python3', ['-B', fileURLToPath(new URL(PCV, root)), '--params', files.params, '--blocks', files.blocks], { encoding: 'utf8' });
+    assert.equal(bare.status, 1);
+    assert.match(bare.stdout, /FAULT: genesis: params do not match pinned genesis/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('honest copy: who wrote it, who reviewed it, who added the replay, and what it still does not check', () => {
@@ -164,4 +206,5 @@ test('built page: the sha256 shown is the served file\'s', { skip: !existsSync(b
   assert.ok(snippets.includes(`curl -fsS -O https://pointcast.xyz/chain/bots/pcv.py && python3 pcv.py --devnet ${DEVNET_URL}`));
   assert.ok(snippets.includes(`echo "${SHA}  pcv.py" | shasum -a 256 -c`));
   assert.ok(snippets.includes(`python3 -B pcv.py --params params.json --blocks blocks.json --genesis ${GENESIS}`));
+  assert.ok(snippets.some((s) => s.includes(`python3 pcv.py --params pc-devnet/params.json --blocks pc-devnet/blocks.json --genesis ${GENESIS}   # rerun offline`)), 'the offline rerun carries the live pin');
 });
