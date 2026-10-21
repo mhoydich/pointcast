@@ -1,0 +1,174 @@
+---
+import { NEIGHBORHOODS } from '../lib/neighborhoods';
+import league from '../data/squeeze-league.json';
+import { nearbyNeighborhoods, upcomingLocalMatch } from '../lib/home-local-dashboard.mjs';
+
+const places = nearbyNeighborhoods(NEIGHBORHOODS);
+const nextMatch = upcomingLocalMatch(league.upcoming);
+const opponent = nextMatch ? (nextMatch.home.name === league.team.name ? nextMatch.away.name : nextMatch.home.name) : '';
+// Official schedule doors verified 2026-10-20. Scores are not inferred here.
+const teams = [
+  { name: 'Lakers', league: 'NBA', url: 'https://www.nba.com/lakers/schedule?SeasonType=002' },
+  { name: 'Clippers', league: 'NBA', url: 'https://www.nba.com/clippers/schedule' },
+  { name: 'Dodgers', league: 'MLB', url: 'https://www.mlb.com/dodgers/schedule' },
+  { name: 'Kings', league: 'NHL', url: 'https://www.nhl.com/kings/schedule' },
+  { name: 'Rams', league: 'NFL', url: 'https://www.therams.com/schedule/' },
+  { name: 'Chargers', league: 'NFL', url: 'https://www.chargers.com/schedule/' },
+];
+---
+
+<section class="local-dash" data-local-dashboard aria-labelledby="local-dashboard-title">
+  <header class="local-dash__head"><div><p class="local-dash__eyebrow">The local layer / El Segundo, California</p><h2 id="local-dashboard-title">Look out. Join in.</h2></div><a href="/beacon">The 25-mile field ↗</a></header>
+  <div class="local-dash__grid">
+    <article class="local-dash__card local-dash__weather" aria-labelledby="local-weather-title">
+      <div class="local-dash__card-head"><h3 id="local-weather-title">Weather nearby</h3><button type="button" data-local-weather-refresh>Refresh ↻</button></div>
+      <div class="local-dash__weather-values" aria-live="polite" aria-atomic="true" data-local-weather-values>
+        <strong data-local-temperature>—<small>°F</small></strong><dl><div><dt>Wind</dt><dd data-local-wind>— mph</dd></div><div><dt>Humidity</dt><dd data-local-humidity>—%</dd></div></dl>
+      </div>
+      <p class="local-dash__source" data-local-weather-status role="status">Checking the latest airport observation…</p>
+      <p class="local-dash__note">National Weather Service · KLAX. Conditions can differ around town.</p>
+      <nav class="local-dash__links" aria-label="Weather and coast"><a href="/air/">Air & weather ↗</a><a href="/pacific/">Ocean conditions ↗</a></nav>
+      <noscript><p class="local-dash__note">Open the weather report to read current source observations.</p></noscript>
+    </article>
+    <article class="local-dash__card" aria-labelledby="local-sports-title">
+      <div class="local-dash__card-head"><h3 id="local-sports-title">Sports desk</h3><a href="/pickleball">Find a court ↗</a></div>
+      <div class="local-dash__tabs" role="tablist" aria-label="Sports view">
+        <button type="button" role="tab" aria-selected="true" aria-controls="local-play-panel" id="local-play-tab" data-local-sports="play">Local play</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="local-follow-panel" id="local-follow-tab" tabindex="-1" data-local-sports="follow">LA teams</button>
+      </div>
+      <div role="tabpanel" id="local-play-panel" aria-labelledby="local-play-tab" data-local-sports-panel="play">
+        <a class="local-dash__team" href="/pickleball/the-squeeze/"><span>{league.team.name}<small>PTL · {league.league.division}</small></span><strong>{league.stats.matchups.wins.total}–{league.stats.matchups.losses.total}</strong></a>
+        <p class="local-dash__source">Record from PTL screenshots · {league.transcribedAbout}</p>
+        <p class="local-dash__fixture" data-local-match data-matches={JSON.stringify(league.upcoming)} data-team={league.team.name}>{nextMatch ? <>On the schedule: <b>{nextMatch.dateDisplay}</b> · vs {opponent} · {nextMatch.time}</> : 'No later matchup in this snapshot. Open the league desk.'}</p>
+        <p class="local-dash__note">Schedule snapshot; confirm changes with the league.</p>
+      </div>
+      <div role="tabpanel" id="local-follow-panel" aria-labelledby="local-follow-tab" data-local-sports-panel="follow" hidden>
+        <nav class="local-dash__teams" aria-label="Official Los Angeles team schedules">{teams.map(team => <a href={team.url}><span>{team.name}</span><small>{team.league} ↗</small></a>)}</nav>
+        <p class="local-dash__source">Official team schedules · home and away games</p>
+      </div>
+    </article>
+    <article class="local-dash__card" aria-labelledby="local-radius-title">
+      <div class="local-dash__card-head"><h3 id="local-radius-title">Within reach</h3><label class="local-dash__radius-label">Radius<select data-local-radius aria-label="Neighborhood radius"><option value="5">5 mi</option><option value="10">10 mi</option><option value="25" selected>25 mi</option></select></label></div>
+      <p class="local-dash__radius-total"><strong data-local-place-count>{places.length}</strong><span>neighborhoods in the field</span></p>
+      <p class="local-dash__note">From Main & Grand, El Segundo. Approximate straight-line distances.</p>
+      <ul class="local-dash__places" aria-label="Nearby neighborhoods" data-local-places>{places.map(place => <li data-local-distance={place.distance}><a href={`/search?q=${encodeURIComponent(place.name)}`}><span>{place.name}</span><small>{place.distance} mi {place.bearing}</small></a></li>)}</ul>
+      <p class="local-dash__source" aria-live="polite" data-local-radius-status>Showing the 25-mile neighborhood register.</p>
+    </article>
+  </div>
+  <nav class="local-dash__participate" aria-label="Participate around PointCast"><span class="local-dash__eyebrow">Leave a useful signal</span><a href="/r">Report court or beach conditions ↗</a><a href="/shortwave">Talk on Shortwave ↗</a><a href="/opportunities/">Find a way to help ↗</a><a href="/meetups">Meetup ideas ↗</a></nav>
+</section>
+
+<script>
+  import { localWeatherSummary, upcomingLocalMatch } from '../lib/home-local-dashboard.mjs';
+
+  function mountLocalDashboard() {
+    const root = document.querySelector<HTMLElement>('[data-local-dashboard]');
+    if (!root || root.dataset.mounted) return;
+    root.dataset.mounted = 'true';
+    const lifetime = new AbortController();
+    let weatherRequest: AbortController | null = null;
+    const refresh = root.querySelector<HTMLButtonElement>('[data-local-weather-refresh]')!;
+    const status = root.querySelector<HTMLElement>('[data-local-weather-status]')!;
+    const temperature = root.querySelector<HTMLElement>('[data-local-temperature]')!;
+    const wind = root.querySelector<HTMLElement>('[data-local-wind]')!;
+    const humidity = root.querySelector<HTMLElement>('[data-local-humidity]')!;
+    const weatherValues = root.querySelector<HTMLElement>('[data-local-weather-values]')!;
+    const clock = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+    async function loadWeather() {
+      weatherRequest?.abort();
+      weatherRequest = new AbortController();
+      const request = weatherRequest;
+      const timer = window.setTimeout(() => request.abort(), 12_000);
+      refresh.disabled = true;
+      weatherValues.setAttribute('aria-busy', 'true');
+      status.textContent = 'Checking the latest airport observation…';
+      try {
+        const response = await fetch('/api/observatory/air', { headers: { accept: 'application/json' }, signal: request.signal });
+        if (!response.ok) throw new Error('unavailable');
+        const summary = localWeatherSummary(await response.json());
+        temperature.replaceChildren(document.createTextNode(summary.temperatureF === null ? '—' : String(summary.temperatureF)));
+        const unit = document.createElement('small'); unit.textContent = '°F'; temperature.append(unit);
+        wind.textContent = summary.windMph === null ? '— mph' : `${summary.windMph} mph`;
+        humidity.textContent = summary.humidity === null ? '—%' : `${summary.humidity}%`;
+        status.textContent = summary.observedAt ? `${summary.status === 'stale' ? 'Older observation · ' : summary.status === 'partial' ? 'Partial observation · ' : 'Observed · '}${clock.format(new Date(summary.observedAt))}` : 'Weather unavailable. Open the source report below.';
+      } catch {
+        if (lifetime.signal.aborted) return;
+        temperature.replaceChildren(document.createTextNode('—'));
+        const unit = document.createElement('small'); unit.textContent = '°F'; temperature.append(unit);
+        wind.textContent = '— mph'; humidity.textContent = '—%';
+        status.textContent = 'Weather unavailable. Try refresh or open the report.';
+      } finally {
+        window.clearTimeout(timer);
+        refresh.disabled = false;
+        weatherValues.removeAttribute('aria-busy');
+      }
+    }
+    refresh.addEventListener('click', loadWeather, { signal: lifetime.signal });
+    loadWeather();
+
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-local-sports]'));
+    function chooseSports(tab: HTMLButtonElement) {
+      tabs.forEach(button => { const active = button === tab; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
+      root.querySelectorAll<HTMLElement>('[data-local-sports-panel]').forEach(panel => { panel.hidden = panel.dataset.localSportsPanel !== tab.dataset.localSports; });
+    }
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => chooseSports(tab), { signal: lifetime.signal });
+      tab.addEventListener('keydown', event => {
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : ['ArrowLeft', 'ArrowRight'].includes(event.key) ? (index + 1) % tabs.length : null;
+        if (next === null) return;
+        event.preventDefault(); chooseSports(tabs[next]); tabs[next].focus();
+      }, { signal: lifetime.signal });
+    });
+
+    const radius = root.querySelector<HTMLSelectElement>('[data-local-radius]')!;
+    radius.addEventListener('change', () => {
+      let count = 0;
+      root.querySelectorAll<HTMLElement>('[data-local-distance]').forEach(item => { item.hidden = Number(item.dataset.localDistance) > Number(radius.value); if (!item.hidden) count++; });
+      root.querySelector('[data-local-place-count]')!.textContent = String(count);
+      root.querySelector('[data-local-radius-status]')!.textContent = `Showing ${count} neighborhoods within approximately ${radius.value} miles.`;
+    }, { signal: lifetime.signal });
+    const fixture = root.querySelector<HTMLElement>('[data-local-match]')!;
+    try {
+      const next = upcomingLocalMatch(JSON.parse(fixture.dataset.matches || '[]'));
+      fixture.textContent = next ? `On the schedule: ${next.dateDisplay} · vs ${next.home.name === fixture.dataset.team ? next.away.name : next.home.name} · ${next.time}` : 'No later matchup in this snapshot. Open the league desk.';
+    } catch { fixture.textContent = 'Open the league desk for the schedule snapshot.'; }
+    document.addEventListener('astro:before-swap', () => { lifetime.abort(); weatherRequest?.abort(); }, { once: true, signal: lifetime.signal });
+  }
+  mountLocalDashboard();
+  document.addEventListener('astro:page-load', mountLocalDashboard);
+</script>
+
+<style>
+  .local-dash { margin:0 0 32px; border:1px solid #172337; background:#fffdf7; color:#172337; }
+  .local-dash__head { padding:18px 24px; display:flex; justify-content:space-between; align-items:end; gap:16px; background:#eaf0f5; border-bottom:1px solid #c8cdd1; }
+  .local-dash__eyebrow { margin:0 0 6px; font:500 9px/1.5 var(--pc-font-mono); letter-spacing:.1em; text-transform:uppercase; color:#526477; }
+  .local-dash h2 { margin:0; font-size:26px; line-height:1.15; font-weight:500; letter-spacing:-.04em; }
+  .local-dash a { color:inherit; text-decoration:none; }.local-dash a:hover { text-decoration:underline; text-underline-offset:3px; }
+  .local-dash__head>a { font-size:12px; padding:8px 0; }
+  .local-dash__grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .local-dash__card { padding:17px 20px; min-width:0; border-right:1px solid #c8cdd1; }.local-dash__card:last-child { border:0; }
+  .local-dash__card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:32px; margin-bottom:12px; }
+  .local-dash h3 { margin:0; font-size:16px; font-weight:500; letter-spacing:-.02em; }
+  .local-dash__card-head>a { font-size:10px; }
+  .local-dash button { color:#185fa5; border:1px solid #b8c5d0; background:#fff; padding:8px 10px; font:500 10px var(--pc-font-mono); cursor:pointer; }
+  .local-dash button:disabled { opacity:.55; cursor:wait; }
+  .local-dash :is(a,button,select):focus-visible { outline:3px solid #c46c17; outline-offset:3px; }
+  .local-dash__weather-values { display:flex; align-items:center; gap:22px; padding:12px 0 8px; }
+  .local-dash__weather-values>strong { white-space:nowrap; font:500 48px/1.1 var(--pc-font-mono); letter-spacing:-.08em; }
+  .local-dash__weather-values>strong :global(small) { font-size:18px; vertical-align:top; letter-spacing:-.02em; line-height:1.6; }
+  .local-dash dl { margin:0; font-size:11px; line-height:1.7; }.local-dash dl>div { display:flex; gap:14px; justify-content:space-between; }.local-dash dt { color:#526477; }.local-dash dd { margin:0; font-family:var(--pc-font-mono); }
+  .local-dash__source { font:400 9px/1.6 var(--pc-font-mono); color:#526477; margin:10px 0 0; }
+  .local-dash__note { font-size:11px; color:#526477; line-height:1.55; margin:9px 0; }
+  .local-dash__links { display:flex; flex-wrap:wrap; gap:10px 18px; margin-top:17px; font-size:11px; color:#185fa5; }
+  .local-dash__tabs { display:flex; margin-bottom:10px; gap:6px; }.local-dash__tabs button[aria-selected='true'] { background:#172337; border-color:#172337; color:#fffdf7; }
+  .local-dash__team { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:5px 0; }.local-dash__team>span { font-size:18px; }.local-dash__team small { display:block; color:#526477; font:400 9px/1.7 var(--pc-font-mono); }.local-dash__team>strong { font:500 25px var(--pc-font-mono); }
+  .local-dash__fixture { font-size:12px; line-height:1.6; margin:10px 0 0; }.local-dash__fixture b { font-weight:500; }
+  .local-dash__teams { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }.local-dash__teams a { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #d8dde1; padding:10px 0; font-size:12px; }.local-dash__teams small { font:400 9px var(--pc-font-mono); color:#526477; }
+  .local-dash__radius-label { display:flex; align-items:center; gap:7px; font-size:10px; }.local-dash select { padding:6px 8px; background:#fff; color:#172337; border:1px solid #b8c5d0; border-radius:0; font:400 12px var(--pc-font-mono); }
+  .local-dash__radius-total { display:flex; gap:10px; align-items:baseline; margin:8px 0 0; }.local-dash__radius-total strong { font:500 27px var(--pc-font-mono); }.local-dash__radius-total span { font-size:12px; }
+  .local-dash__places { margin:9px 0 0; padding:0; list-style:none; max-height:90px; overflow-y:auto; scrollbar-width:thin; border-top:1px solid #d8dde1; }.local-dash__places a { display:flex; justify-content:space-between; gap:10px; padding:6px 2px; border-bottom:1px solid #d8dde1; font-size:11px; }.local-dash__places small { font:400 9px var(--pc-font-mono); color:#526477; white-space:nowrap; }
+  .local-dash__participate { display:flex; align-items:center; flex-wrap:wrap; gap:10px 22px; border-top:1px solid #c8cdd1; padding:14px 24px; font-size:11px; }.local-dash__participate .local-dash__eyebrow { margin:0; }
+  .local-dash [hidden] { display:none!important; }
+  @media(max-width:900px) { .local-dash__card { padding:15px 13px; }.local-dash__weather-values { gap:12px; }.local-dash__weather-values>strong { font-size:40px; }.local-dash__card-head { align-items:start; }.local-dash__card-head>a { max-width:62px; } }
+  @media(max-width:680px) { .local-dash__grid { grid-template-columns:1fr; }.local-dash__card { padding:16px; border-right:0; border-bottom:1px solid #c8cdd1; }.local-dash__head { padding:16px; }.local-dash__head>a { font-size:10px; }.local-dash__weather-values { padding:0; gap:25px; }.local-dash__weather-values>strong { font-size:46px; }.local-dash__card-head>a { max-width:none; }.local-dash__participate { padding:14px 16px; gap:12px 18px; }.local-dash__participate>.local-dash__eyebrow { flex-basis:100%; }.local-dash__places { max-height:115px; } }
+</style>

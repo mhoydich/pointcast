@@ -1,6 +1,6 @@
 ---
 /**
- * /search — client-side search over every PointCast Block.
+ * /search — client-side search across public PointCast pages and content.
  *
  * Ships an index of blocks (id, channel, type, title, dek, timestamp) as
  * JSON baked into the page at build time. The script filters in-place as
@@ -13,6 +13,11 @@ import BlockLayout from '../layouts/BlockLayout.astro';
 import { getCollection } from 'astro:content';
 import { CHANNELS } from '../lib/channels';
 import { isPublicProduct } from '../lib/commerce';
+import { POINTCAST_APPS } from '../lib/pointcast-apps';
+import { FEATURES } from '../lib/explore';
+import newToday from '../data/new-today.json';
+import { projectSearchRows } from '../lib/pointcast-search.mjs';
+import { isNoindexPath, isRedirectPath } from '../lib/seo-rules.mjs';
 
 const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
   .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
@@ -24,11 +29,11 @@ const products = (await getCollection('products', ({ data }) => isPublicProduct(
   .sort((a, b) => b.data.addedAt.getTime() - a.data.addedAt.getTime());
 
 // Index shape consumed by the client-side filter. Lightweight — strings
-// only, no body. Three document kinds share one result stream so you can
+// only, no body. Four document kinds share one result stream so you can
 // type "el segundo" and find the block, the poll, and any products that
 // match with one query.
 type IndexRow = {
-  kind: 'BLOCK' | 'POLL' | 'PRODUCT';
+  kind: 'BLOCK' | 'POLL' | 'PRODUCT' | 'PROJECT';
   id: string;
   url: string;
   label: string;        // short type/kind chip (channel code, POLL, PROD)
@@ -116,7 +121,9 @@ const productRows: IndexRow[] = products.map((pr) => ({
   ].join(' ').toLowerCase(),
 }));
 
-const INDEX: IndexRow[] = [...blockRows, ...pollRows, ...productRows];
+const projectRows: IndexRow[] = projectSearchRows(POINTCAST_APPS, newToday, FEATURES)
+  .filter(row => !row.url.startsWith('/') || (!isNoindexPath(row.url) && !isRedirectPath(row.url)));
+const INDEX: IndexRow[] = [...projectRows, ...blockRows, ...pollRows, ...productRows];
 const TOTAL_COUNT = INDEX.length;
 
 const jsonLd = {
@@ -138,7 +145,7 @@ const jsonLd = {
 
 <BlockLayout
   title="Search"
-  description={`Search every PointCast block, poll, and product by title, channel, option, or id. ${TOTAL_COUNT} items indexed across 3 kinds, fully client-side.`}
+  description={`Search ${TOTAL_COUNT} PointCast projects, pages, blocks, polls and products. Find an artwork, tool, listening room or local destination.`}
   image="/images/og/search.png"
   jsonLd={jsonLd}
 >
@@ -150,23 +157,23 @@ const jsonLd = {
     </nav>
 
     <header class="hero">
-      <p class="kicker">SEARCH · {blocks.length} BLOCKS · {polls.length} POLLS · {products.length} PRODUCTS</p>
-      <h1 class="display">Find any block, poll, or product.</h1>
+      <p class="kicker">SEARCH · {projectRows.length} PROJECTS & PAGES · {blocks.length} BLOCKS · {polls.length} POLLS · {products.length} PRODUCTS</p>
+      <h1 class="display">Find your way through PointCast.</h1>
       <p class="dek">
-        Client-side search across every title, dek, body, channel code, poll
-        option, and product effect. Starts filtering the moment you type.
-        Hit enter to open the top result. No network, no rate limit.
+        Art, tools, music, local places and the archive. Search a name, an idea,
+        or a channel code. The closest title matches come first.
       </p>
     </header>
 
-    <form class="form" role="search" id="search-form" autocomplete="off">
+    <form class="form" role="search" id="search-form" autocomplete="off" action="/search" method="get">
       <label class="form__field">
         <span class="sr-only">Search query</span>
         <input
           type="search"
           id="q"
           name="q"
-          placeholder="el segundo, zeitgeist, mallorca, CH.FD, POLL, PROD…"
+          placeholder="Nouns Money, pickleball, music, El Segundo…"
+          maxlength="240"
           autocomplete="off"
           autocorrect="off"
           autocapitalize="off"
@@ -175,13 +182,14 @@ const jsonLd = {
         />
       </label>
       <div class="form__filters mono" role="group" aria-label="Filter by kind">
-        <button type="button" class="kind-filter kind-filter--active" data-kind="ALL">ALL</button>
-        <button type="button" class="kind-filter" data-kind="BLOCK">BLOCKS</button>
-        <button type="button" class="kind-filter" data-kind="POLL">POLLS</button>
-        <button type="button" class="kind-filter" data-kind="PRODUCT">PRODUCTS</button>
+        <button type="button" class="kind-filter kind-filter--active" data-kind="ALL" aria-pressed="true">ALL</button>
+        <button type="button" class="kind-filter" data-kind="PROJECT" aria-pressed="false">PROJECTS & PAGES</button>
+        <button type="button" class="kind-filter" data-kind="BLOCK" aria-pressed="false">BLOCKS</button>
+        <button type="button" class="kind-filter" data-kind="POLL" aria-pressed="false">POLLS</button>
+        <button type="button" class="kind-filter" data-kind="PRODUCT" aria-pressed="false">PRODUCTS</button>
       </div>
       <p class="form__meta mono">
-        <span id="count">— of {TOTAL_COUNT}</span>
+        <span id="count" role="status">{TOTAL_COUNT} searchable items</span>
         <span class="sep" aria-hidden="true">·</span>
         <span>TRY · <button type="button" class="q-hint" data-q="el segundo">el segundo</button>, <button type="button" class="q-hint" data-q="zeitgeist">zeitgeist</button>, <button type="button" class="q-hint" data-q="CH.FD">CH.FD</button></span>
       </p>
@@ -190,6 +198,8 @@ const jsonLd = {
     <section class="results" id="results" aria-live="polite" aria-label="Search results">
       {/* rendered by the script below */}
     </section>
+    <button class="more-results" id="search-more" type="button" hidden>Show more results</button>
+    <noscript><p>Search needs JavaScript. Browse the <a href="/apps">project directory</a> or the <a href="/archive">block archive</a>.</p></noscript>
 
     <aside class="surfaces">
       <p class="kicker">AGENT SURFACES</p>
@@ -204,105 +214,8 @@ const jsonLd = {
     </aside>
   </div>
 
-  <script is:inline define:vars={{ INDEX }}>
-    (function () {
-      const input = document.getElementById('q');
-      const countEl = document.getElementById('count');
-      const out = document.getElementById('results');
-      const form = document.getElementById('search-form');
-      const kindButtons = Array.from(document.querySelectorAll('.kind-filter'));
-
-      let activeKind = 'ALL';
-
-      function idLabel(row) {
-        if (row.kind === 'BLOCK') return '№' + row.id;
-        if (row.kind === 'POLL') return '/' + row.id;
-        if (row.kind === 'PRODUCT') return '/' + row.id;
-        return row.id;
-      }
-
-      function render(list) {
-        if (list.length === 0) {
-          out.innerHTML = '<p class="empty">No matches. Try a looser query, a channel code like <code>CH.FD</code>, a kind like <code>POLL</code>, or a term like <code>zeitgeist</code>.</p>';
-          return;
-        }
-        out.innerHTML = list.slice(0, 80).map(function (row) {
-          const dateShort = new Date(row.timestamp).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: '2-digit' }).toUpperCase();
-          const dekSafe = row.dek ? row.dek.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-          const titleSafe = row.title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          return (
-            '<a class="hit hit--' + row.kind.toLowerCase() + '" href="' + row.url + '"'
-              + ' style="--row-c50: ' + row.labelBg + '; --row-c8: ' + row.labelFg + '">'
-              + '<span class="hit__ch" style="background:' + row.labelBg + '; color:' + row.labelFg + '; border-color:' + row.labelFg + '">' + row.label + '</span>'
-              + '<span class="hit__id mono">' + idLabel(row) + '</span>'
-              + '<span class="hit__type mono">' + row.type + '</span>'
-              + '<span class="hit__date mono">' + dateShort + '</span>'
-              + '<span class="hit__title">' + titleSafe + '</span>'
-              + (dekSafe ? '<span class="hit__dek">' + dekSafe + '</span>' : '')
-            + '</a>'
-          );
-        }).join('');
-      }
-
-      function runQuery(q) {
-        const needle = q.trim().toLowerCase();
-        const byKind = activeKind === 'ALL' ? INDEX : INDEX.filter(function (r) { return r.kind === activeKind; });
-        if (!needle) {
-          const top = byKind.slice(0, 24);
-          countEl.textContent = 'Showing latest ' + Math.min(24, byKind.length) + ' of ' + byKind.length + (activeKind !== 'ALL' ? ' ' + activeKind.toLowerCase() + 's' : '');
-          render(top);
-          return;
-        }
-        const hits = byKind.filter(function (r) {
-          return r.haystack.indexOf(needle) !== -1;
-        });
-        countEl.textContent = hits.length + ' of ' + byKind.length + (activeKind !== 'ALL' ? ' ' + activeKind.toLowerCase() + 's' : '');
-        render(hits);
-      }
-
-      // Kind filter toggle
-      kindButtons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          activeKind = btn.getAttribute('data-kind') || 'ALL';
-          kindButtons.forEach(function (b) { b.classList.toggle('kind-filter--active', b === btn); });
-          runQuery(input.value || '');
-        });
-      });
-
-      // Initial state (honor ?q= and ?kind= on load)
-      const params = new URLSearchParams(window.location.search);
-      const initial = params.get('q') || '';
-      const kindParam = (params.get('kind') || 'ALL').toUpperCase();
-      if (['ALL','BLOCK','POLL','PRODUCT'].indexOf(kindParam) !== -1) {
-        activeKind = kindParam;
-        kindButtons.forEach(function (b) { b.classList.toggle('kind-filter--active', (b.getAttribute('data-kind') || 'ALL') === activeKind); });
-      }
-      if (initial) input.value = initial;
-      runQuery(initial);
-
-      input.addEventListener('input', function () {
-        runQuery(input.value || '');
-      });
-
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const first = out.querySelector('.hit');
-        if (first) window.location.href = first.getAttribute('href');
-      });
-
-      document.querySelectorAll('.q-hint').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          input.value = btn.getAttribute('data-q') || '';
-          runQuery(input.value);
-          input.focus();
-        });
-      });
-
-      if (window.matchMedia && window.matchMedia('(min-width: 720px)').matches) {
-        input.focus();
-      }
-    })();
-  </script>
+  <script type="application/json" id="pointcast-search-index" set:html={JSON.stringify(INDEX).replaceAll('<', '\\u003c')} />
+  <script src="../scripts/pointcast-search.mjs"></script>
 </BlockLayout>
 
 <style>
@@ -405,7 +318,8 @@ const jsonLd = {
     border: 1px solid var(--pc-rule, #d6d4cd);
     background: transparent;
     color: var(--pc-ink-muted, #5F5E5A);
-    padding: 4px 10px;
+    padding: 10px 12px;
+    min-height: 44px;
     font-family: var(--pc-font-mono);
     font-size: 10px;
     letter-spacing: 0.14em;
@@ -452,6 +366,8 @@ const jsonLd = {
     border-bottom-color: var(--pc-ink);
   }
 
+  .more-results { margin:20px 0; padding:12px 18px; min-height:44px; border:1px solid #172337; background:#fff; color:#172337; cursor:pointer; }
+  .more-results[hidden] { display:none; }
   /* ══════ RESULTS ══════ */
   .results {
     display: flex;
@@ -481,7 +397,7 @@ const jsonLd = {
      carry Astro's scoping attribute. Mark them :global so the styles apply. */
   :global(.hit) {
     display: grid;
-    grid-template-columns: auto 56px 54px 64px 1fr;
+    grid-template-columns: 92px minmax(60px, 120px) 70px 90px 1fr;
     grid-template-areas: "ch id type date title";
     gap: 6px 12px;
     padding: 10px 4px;
