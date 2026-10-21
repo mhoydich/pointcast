@@ -756,3 +756,27 @@ test('/chain/net: the split sits in the live section with its own line, and the 
     assert.doesNotMatch(live, banned);
   }
 });
+
+test('who signed: a share that rounds to 0% while outside keys signed any reads "under 1%", never none', async () => {
+  const { start, readNet, sharePct } = await import('../src/lib/daily-net.mjs');
+  // 1 outside tx of 250 today, 2 of 450 since block 1 (the house signs ~10 a day, so devnet-2 gets here in weeks).
+  const small = {
+    ...CLASSES,
+    day: { house: { txs: 249, keys: 3, who: [] }, keyless: { txs: 0, keys: 0, who: [] }, outside: { txs: 1, keys: 1, who: [] } },
+    chain: { house: { txs: 400, keys: 6 }, keyless: { txs: 48, keys: 1 }, outside: { txs: 2, keys: 2 } },
+    outside_share: { day: 0.004, chain: 0.004 },
+  };
+  assert.deepEqual(readNet(net({ classes: small })).classes.share, { day: 'under 1%', chain: 'under 1%' });
+  const h = harness({ fixture: classFixture, respond: () => ({ status: 200, body: net({ classes: small }) }) });
+  start(h.el, h.env);
+  h.intersect(true);
+  await h.runIdle();
+  assert.equal(text(h.el.querySelector('[data-dn-class-share]')), 'House activity is the chain checking itself, not use. Outside keys signed under 1% of today’s txs and under 1% since block 1.');
+  // The Worker rounds to 3 places, so 1 of 3,000 arrives as 0: still not none.
+  assert.equal(sharePct(0, 1, 3000), 'under 1%');
+  assert.equal(sharePct(0, 0, 3000), '0%');
+  assert.equal(sharePct(1, 2999, 3000), 'over 99%');
+  assert.equal(sharePct(1, 5, 5), '100%');
+  assert.equal(sharePct(0.0625, 1, 16), '6%');
+  for (const junk of [null, -0.1, 1.1, NaN, '0.5']) assert.equal(sharePct(junk, 1, 2), null);
+});

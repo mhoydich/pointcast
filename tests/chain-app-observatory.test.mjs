@@ -1436,3 +1436,23 @@ test('outside is said as what the devnet can know: a key not on the house list, 
     assert.doesNotMatch(readFileSync(new URL('../' + f, import.meta.url), 'utf8'), /did not make|the one that is use/, f);
   }
 });
+
+test('the outside share never reads 0% while outside keys signed any, nor 100% while anyone else did', async () => {
+  assert.equal(O.sharePct(0.004, 1, 250), 'under 1%');
+  assert.equal(O.sharePct(0, 1, 3000), 'under 1%', 'the devnet rounds to 3 places');
+  assert.equal(O.sharePct(0, 0, 10), '0%');
+  assert.equal(O.sharePct(0.998, 499, 500), 'over 99%');
+  assert.equal(O.sharePct(1, 3, 3), '100%');
+  assert.equal(O.sharePct(0.0625, 1, 16), '6%');
+  for (const junk of [null, -1, 2, NaN, '0.5']) assert.equal(O.sharePct(junk, 1, 2), null);
+  const small = {
+    ...CLASSES,
+    day: { house: { txs: 249, keys: 3, who: [] }, keyless: { txs: 0, keys: 0, who: [] }, outside: { txs: 1, keys: 1, who: [] } },
+    chain: { house: { txs: 400, keys: 6 }, keyless: { txs: 48, keys: 1 }, outside: { txs: 2, keys: 2 } },
+    outside_share: { day: 0.004, chain: 0.004 },
+  };
+  const { rootEl, c } = mountView({ name: 'local', overrides: netWith(small) });
+  await c.begin();
+  c.stop();
+  assert.equal(txt(rootEl, '[data-ob-s="classes"]'), 'House activity is the chain checking itself, not use. Outside keys signed under 1% of today’s txs and under 1% since block 1.');
+});

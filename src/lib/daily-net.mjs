@@ -92,8 +92,19 @@ const hex = (v) => (typeof v === 'string' && HEX64_RE.test(v) ? v : '');
 const hex12 = (v) => (hex(v) ? v.slice(0, 12) : '');
 const fmt = (n) => nat(n).toLocaleString('en-US');
 
-/** A share 0..1 → "3%" (null when there were no txs). */
-const pct = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? `${Math.round(v * 100)}%` : null);
+/**
+ * A share 0..1 → "3%" (null when there were no txs). `part` of `all` txs are
+ * the outside ones: a share that rounds to 0% while outside keys signed any
+ * says "under 1%", and one that rounds to 100% while anyone else signed says
+ * "over 99%", so the line never reads none or all when that is not so.
+ */
+export function sharePct(v, part = 0, all = 0) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) return null;
+  const r = Math.round(v * 100);
+  if (r === 0 && part > 0) return 'under 1%';
+  if (r === 100 && part < all) return 'over 99%';
+  return `${r}%`;
+}
 
 /**
  * GET /net `classes` → { day, chain, share } or null when the devnet does not
@@ -120,7 +131,8 @@ export function readClasses(c) {
   const day = Object.fromEntries(CLASS_KEYS.map(([k]) => [k, one(c.day[k], k, true)]));
   const chain = Object.fromEntries(CLASS_KEYS.map(([k]) => [k, one(c.chain[k], k, false)]));
   const s = isObj(c.outside_share) ? c.outside_share : {};
-  return { day, chain, share: { day: pct(s.day), chain: pct(s.chain) } };
+  const all = (o) => CLASS_KEYS.reduce((n, [k]) => n + o[k].txs, 0);
+  return { day, chain, share: { day: sharePct(s.day, day.outside.txs, all(day)), chain: sharePct(s.chain, chain.outside.txs, all(chain)) } };
 }
 
 function author(o) {

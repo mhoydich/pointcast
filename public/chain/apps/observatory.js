@@ -294,6 +294,19 @@ export function readClasses(c) {
   };
 }
 
+/**
+ * The outside share 0..1 as words: "6%", or "under 1%" when it rounds to 0%
+ * but outside keys signed `part` of the `all` txs, or "over 99%" when it
+ * rounds to 100% but someone else signed too; null when there is no share.
+ */
+export function sharePct(v, part = 0, all = 0) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) return null;
+  const r = Math.round(v * 100);
+  if (r === 0 && part > 0) return 'under 1%';
+  if (r === 100 && part < all) return 'over 99%';
+  return r + '%';
+}
+
 /** GET /net -> today's Daily Net counts, the newest checkpoint, and who signed today's txs. */
 export function readNet(json) {
   if (!isObj(json) || !isObj(json.counts)) return null;

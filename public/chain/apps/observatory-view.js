@@ -334,9 +334,10 @@ export function mount(root, env = {}) {
       set(v, plural(day.txs, 'tx', 'txs'));
       set(s, 'today, from ' + plural(day.keys, 'key') + (who ? ': ' + who : '') + ' · ' + plural(cl.chain[k].txs, 'tx', 'txs') + ' since block 1');
     }
-    const pct = (x) => Math.round(x * 100) + '%';
+    const all = (o) => O.CLASSES.reduce((t, k) => t + o[k].txs, 0);
+    const pct = (x, o) => O.sharePct(x, o.outside.txs, all(o));
     set('[data-ob-s="classes"]', cl
-      ? O.CLASS_LINE + ' Outside keys signed ' + (cl.share.day === null ? 'none' : pct(cl.share.day)) + ' of today’s txs' + (cl.share.chain === null ? '' : ' and ' + pct(cl.share.chain) + ' since block 1') + '.'
+      ? O.CLASS_LINE + ' Outside keys signed ' + (cl.share.day === null ? 'none' : pct(cl.share.day, cl.day)) + ' of today’s txs' + (cl.share.chain === null ? '' : ' and ' + pct(cl.share.chain, cl.chain) + ' since block 1') + '.'
       : n ? 'This devnet does not count house, keyless and outside txs separately yet.' : '');
   }
 
