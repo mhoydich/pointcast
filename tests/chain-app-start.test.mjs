@@ -806,6 +806,60 @@ test('a first read that fails does not leave the passkey check and the seal rate
   assert.equal(calls, 2);
 });
 
+/**
+ * jsdom keeps the focus on a control that is disabled or hidden; a browser does not (the HTML focus fixup rule:
+ * Chromium moves it to <body>). This puts the browser's behaviour into a jsdom window.
+ */
+function browserFocusFixup(win) {
+  const doc = win.document;
+  new win.MutationObserver(() => {
+    const a = doc.activeElement;
+    if (a && a !== doc.body && (a.disabled || a.closest('[hidden]'))) a.blur();
+  }).observe(doc.body, { attributes: true, subtree: true, attributeFilter: ['disabled', 'hidden'] });
+}
+
+test('the keyboard keeps its place: Cancel, Escape and a failed faucet put the focus back on the control to try again, not on the top of the page', async () => {
+  // Regression (review 10-21): Cancel hid the card under the focused button and the faucet disabled itself while
+  // it worked; in a browser the focus then fell to <body>, so the next Tab started from the top of the page.
+  const w = world();
+  w.overrides['/daily/faucet'] = async () => reply({ error: "the faucet's 300 claims for today are taken (UTC)" }, 429);
+  const m = mountView({ fetchOpts: { accounts: w.accounts, overrides: w.overrides }, extra: { connect: w.connect } });
+  browserFocusFixup(m.dom.window);
+  const doc = m.dom.window.document;
+  await m.c.begin();
+  m.c.stop();
+  $(m.rootEl, '[data-kp-make]').click();
+  await until(() => m.c.keys.key());
+  await tick(30);
+  // the faucet refuses: the focus is on the faucet button again, not the page top
+  $(m.rootEl, '[data-st-faucet]').focus();
+  $(m.rootEl, '[data-st-faucet]').click();
+  await until(() => $(m.rootEl, '[data-st-faucet-out]').dataset.state === 'down' && !m.c.state.acting);
+  await tick(10);
+  assert.equal(doc.activeElement, $(m.rootEl, '[data-st-faucet]'), 'after a refused faucet: ' + doc.activeElement.tagName);
+  // skip, pick the stamp, review, then Cancel with the button and with Escape
+  $(m.rootEl, '[data-st-skip]').click();
+  const r = $(m.rootEl, '[data-st-choice][value="stamp"]');
+  r.checked = true;
+  r.dispatchEvent(new m.dom.window.Event('change'));
+  $(m.rootEl, '[data-st-sentence]').value = 'Where was I?';
+  for (const how of ['button', 'escape']) {
+    $(m.rootEl, '[data-st-review]').focus();
+    $(m.rootEl, '[data-st-review]').click();
+    await until(() => !$(m.rootEl, '[data-st-card]').hidden);
+    assert.equal(doc.activeElement, $(m.rootEl, '[data-st-card-h]'), 'the card takes the focus');
+    $(m.rootEl, '[data-st-cancel]').focus();
+    if (how === 'button') $(m.rootEl, '[data-st-cancel]').click();
+    else $(m.rootEl, '[data-st-card]').dispatchEvent(new m.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await until(() => $(m.rootEl, '[data-st-progress]').dataset.state === 'bad' && !m.c.state.acting);
+    await tick(10);
+    assert.equal($(m.rootEl, '[data-st-card]').hidden, true);
+    assert.equal(doc.activeElement, $(m.rootEl, '[data-st-review]'), 'after Cancel (' + how + '): ' + doc.activeElement.tagName);
+    $(m.rootEl, '[data-st-progress]').dataset.state = '';
+  }
+  assert.equal(w.sent.length, 0);
+});
+
 test('GENESIS CHANGED stops the page: nothing is read on, nothing can be sent', async () => {
   const w = world();
   const overrides = { ...w.overrides, '/status': async () => reply({ ...FX.status, genesis_hash: HEX('9') }) };

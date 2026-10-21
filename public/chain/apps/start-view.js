@@ -254,6 +254,7 @@ export function mount(root, env = {}) {
       if (why) why.textContent = 'Passkey account made: ' + w.address + '. It lives in your passkey; this browser ' + (kept ? 'remembers which one (its public key, nothing secret).' : 'could not remember which one, so keep this tab open.');
       await loadBalance();
       paintSteps();
+      keepFocus(q('[data-st-pk-off]'));
     } catch (e) {
       if (why) why.textContent = 'No passkey made: ' + describeError(e);
     }
@@ -284,10 +285,24 @@ export function mount(root, env = {}) {
     } finally {
       S.acting = false;
       paintSteps();
+      if (stepNow() === 'attn') keepFocus(q('[data-st-faucet]'), q('[data-st-skip]'));
     }
   }
 
   // ------------------------------------------------------------ step 3: review, sign, send
+
+  /**
+   * A browser drops the focus to the top of the page when the control holding it is disabled or hidden (the
+   * card's Sign and Cancel, Review and the faucet while they work, a passkey button that swaps). When that
+   * happened, put it on the first of `targets` that can take it, so a keyboard stays where the words are.
+   */
+  function keepFocus(...targets) {
+    const a = doc.activeElement;
+    const lost = !a || a === doc.body || a.disabled === true || a.hidden === true || Boolean(a.closest && a.closest('[hidden]'));
+    if (!lost) return;
+    const t = targets.find((n) => n && !n.disabled && !n.hidden && typeof n.focus === 'function');
+    if (t) t.focus();
+  }
 
   const progress = (t, state) => { const p = q('[data-st-progress]'); if (p) { p.hidden = false; p.dataset.state = state || ''; } set('[data-st-progress-text]', t); };
   function errors(list) {
@@ -418,6 +433,8 @@ export function mount(root, env = {}) {
     } finally {
       S.acting = false;
       paintSteps();
+      // Cancel, Escape, a refusal or a failed send closed the card (or Review went off) under the keyboard: back to Review.
+      if (!S.done) keepFocus(q('[data-st-review]'));
     }
   }
 
@@ -518,8 +535,8 @@ export function mount(root, env = {}) {
 
   const on = (sel, ev, fn) => { const n = q(sel); if (n) n.addEventListener(ev, fn); };
   on('[data-st-pk-make]', 'click', makePasskey);
-  on('[data-st-pk-use]', 'click', async () => { if (S.acting) return; S.mode = 'passkey'; S.balance = null; await loadBalance(); paintSteps(); });
-  on('[data-st-pk-off]', 'click', async () => { if (S.acting) return; S.mode = 'play'; S.balance = null; await loadBalance(); paintSteps(); });
+  on('[data-st-pk-use]', 'click', async () => { if (S.acting) return; S.mode = 'passkey'; S.balance = null; await loadBalance(); paintSteps(); keepFocus(q('[data-st-pk-off]')); });
+  on('[data-st-pk-off]', 'click', async () => { if (S.acting) return; S.mode = 'play'; S.balance = null; await loadBalance(); paintSteps(); keepFocus(q('[data-st-pk-use]'), q('[data-st-pk-make]')); });
   on('[data-st-faucet]', 'click', faucet);
   on('[data-st-skip]', 'click', () => { S.skipped = true; const out = q('[data-st-faucet-out]'); if (out) out.textContent = 'Skipped. The stamp and the capsule cost nothing; the bid needs play ATTN.'; paintSteps(); });
   on('[data-st-review]', 'click', review);
