@@ -314,7 +314,7 @@ test('the bid is the least the open lot takes, with no words and no gift, and a 
   assert.equal(S0.lotStillOpen(lot, 1000, 1000 + lot.closesInMs + 5), false);
 });
 
-test('a sentence is one line of at most 280 characters, and its stamp is the Notary’s five lines of its SHA-256: the sentence itself goes nowhere', async () => {
+test('a sentence is one line of at most 280 characters, and its stamp is the Notary’s three lines of its SHA-256: the sentence itself goes nowhere', async () => {
   assert.deepEqual(S0.checkSentence('I was here.'), { ok: true, error: '', text: 'I was here.' });
   assert.equal(S0.checkSentence('  spaced  ').text, '  spaced  ', 'taken exactly as typed, as the Notary hashes text');
   for (const [bad, why] of [['', /Type a sentence/], ['   ', /Type a sentence/], ['two\nlines', /One line/], ['x'.repeat(281), /At most 280/], [null, /Type a sentence/]]) assert.match(S0.checkSentence(bad).error, why);
@@ -326,6 +326,11 @@ test('a sentence is one line of at most 280 characters, and its stamp is the Not
   assert.equal(s.body, 'notary/v1\nsha256:' + sha('I was here.') + '\nbytes:11');
   assert.equal(s.title, N.stampTitle(sha('I was here.')));
   assert.ok(!s.body.includes('I was here'));
+  // Regression (review 10-21): the page called this body "the five Notary lines". With no name and no note it is three,
+  // and every place that counts its lines says three.
+  assert.equal(s.body.split('\n').length, 3);
+  for (const f of [FILES.logic, FILES.view, FILES.data, FILES.page]) assert.doesNotMatch(read(f), /\bfive(?:[- ]line| Notary lines| lines)\b/, f + ' counts the stamp’s lines as five');
+  assert.match(src.view, /The body is the three Notary lines: the format, your sentence’s SHA-256/);
 });
 
 test('a capsule opens about 7 days of blocks on, from the rate of the last day and never sooner than 7 days of heartbeats, on GDN', async () => {
@@ -505,7 +510,7 @@ test('stamp: Review shows the exact post (every field, the digest), nothing is s
   assert.equal(fields.channel, 'NOTARY');
   assert.equal(fields.title, 'notary/v1 sha256:' + sha('I was here first.'));
   assert.equal(fields.sender, c.keys.key().sender);
-  assert.equal(w.stored[0], 'notary/v1\nsha256:' + sha('I was here first.') + '\nbytes:17', 'the five lines, without the sentence');
+  assert.equal(w.stored[0], 'notary/v1\nsha256:' + sha('I was here first.') + '\nbytes:17', 'the three lines, without the sentence');
   assert.equal(fields.body_hash, K.pcc.bodyHash(w.stored[0]));
   const tx = { sender: fields.sender, nonce: 0, type: 'publish_block', channel: 'NOTARY', title: fields.title, body_hash: fields.body_hash, media_uri: null };
   assert.equal(txt(rootEl, '[data-st-card-digest]'), K.pcc.signingHash(tx, DOMAIN));

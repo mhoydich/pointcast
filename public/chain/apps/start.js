@@ -264,7 +264,7 @@ export function checkSentence(raw) {
   return { ok: true, error: '', text };
 }
 
-/** What a stamp of `sentence` puts on chain: its SHA-256 and byte count, and the five-line body (name and note left out). */
+/** What a stamp of `sentence` puts on chain: its SHA-256 and byte count, and the three-line body (the format, the hash, the length; name and note left out). */
 export async function stampOf(sentence) {
   const h = await N.hashText(sentence);
   return { sha256: h.sha256, bytes: h.bytes, body: N.stampBody({ sha256: h.sha256, bytes: h.bytes }), title: N.stampTitle(h.sha256) };

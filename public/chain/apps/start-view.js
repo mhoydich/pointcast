@@ -12,7 +12,7 @@
 //   the load event and an idle callback, then reads the devnet (GET only).
 // - Writes happen only on a button: the faucet on "Ask the faucet", the bid, the
 //   stamp or the capsule on "Sign and send", after the card has shown the exact
-//   transaction. The stamp's five lines are stored (unsigned, as every post's
+//   transaction. The stamp's three lines are stored (unsigned, as every post's
 //   body is) when "Review" builds the post; the card says so.
 // - devnet: no value, may reset. Play ATTN is never promised any.
 
@@ -307,7 +307,7 @@ export function mount(root, env = {}) {
 
   function cardNote(card) {
     if (card.kind === 'transfer') return 'If someone outbids you, the house sends your ' + card.fields.find((f) => f[0] === 'amount')[1] + ' play ATTN back within 3 blocks. A transfer cannot be taken back.';
-    if (card.kind === 'publish_block' && card.context.sentence !== undefined) return 'The body is the five Notary lines: the format, your sentence’s SHA-256 (' + card.context.sha256 + '), its length in bytes, nothing else. They were stored in the devnet’s body store when you pressed Review, unsigned, as every post’s body is; your sentence itself was not sent.';
+    if (card.kind === 'publish_block' && card.context.sentence !== undefined) return 'The body is the three Notary lines: the format, your sentence’s SHA-256 (' + card.context.sha256 + '), its length in bytes, nothing else. They were stored in the devnet’s body store when you pressed Review, unsigned, as every post’s body is; your sentence itself was not sent.';
     if (card.kind === 'seal_capsule') return 'The commitment is a fingerprint of your title, your message and a fresh random salt. Your message and the salt go in the capsule file you keep, not to the devnet, until it opens.';
     return '';
   }
@@ -385,7 +385,7 @@ export function mount(root, env = {}) {
     } catch (e) {
       closeCard();
       if (S.pending) { S.pending.resolve(false); S.pending = null; }
-      if (e && e.code === 'declined') progress(choice === 'stamp' ? 'Not signed: you pressed Cancel. Nothing was signed or sent. (The stamp’s five lines sit unsigned in the devnet’s body store, tied to no key.)' : 'Not signed: you pressed Cancel' + (choice === 'bid' ? ', or the lot was about to close' : '') + '. Nothing was signed or sent.', 'bad');
+      if (e && e.code === 'declined') progress(choice === 'stamp' ? 'Not signed: you pressed Cancel. Nothing was signed or sent. (The stamp’s three lines sit unsigned in the devnet’s body store, tied to no key.)' : 'Not signed: you pressed Cancel' + (choice === 'bid' ? ', or the lot was about to close' : '') + '. Nothing was signed or sent.', 'bad');
       else if (e && e.name === 'GenesisChanged') { halt(e); progress('GENESIS CHANGED: nothing was sent.', 'bad'); }
       else if (e && (e.sendState === 'sent' || e.sendState === 'maybe')) progress(sendFailureText(e) + (S.file ? ' The capsule file is below: download it now.' : ''), 'warn');
       else progress(sendFailureText(e), 'bad');
