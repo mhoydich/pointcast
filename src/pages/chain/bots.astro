@@ -183,8 +183,10 @@ const PCV_SOURCE = { branch: 'main', commit: 'a1df59e' };
 // the live devnet-2, every block and every state root.
 const PCV_RERUN = { at: '19:35 UTC on October 21', blocks: 3790, tip: 'e3f57b4e21c79cb86fe6598bb478f7a569254f2ca21f5f4c1748ca4258fcfdd3' };
 // The record: blocks and state roots from that run; tests from tools/pcv-py on Python 3.9.6 the same day;
-// the 21 review gaps and 375 signature cases from the review of October 5, 2026.
-const PCV_RECORD = { blocks: 3790, tipHeight: 3790, tip: 'e3f57b4e21c79cb86fe6598bb478f7a569254f2ca21f5f4c1748ca4258fcfdd3', stateRoots: 3790, replayedKinds: 18, kinds: 23, sigCases: 375, gaps: 21, tests: 106 };
+// the 21 review gaps and 375 signature cases from the review of October 5, 2026. carriedKinds: the tx kinds
+// in those 3,790 blocks (publish_block, register_agent, set_mandate, open_edition, edition_mint, transfer,
+// claim_station), all of them among the 18 pcv replays.
+const PCV_RECORD = { blocks: 3790, tipHeight: 3790, tip: 'e3f57b4e21c79cb86fe6598bb478f7a569254f2ca21f5f4c1748ca4258fcfdd3', stateRoots: 3790, replayedKinds: 18, carriedKinds: 7, kinds: 23, sigCases: 375, gaps: 21, tests: 106 };
 
 const pcvLive = String.raw`curl -fsS -O ${SITE}/chain/bots/pcv.py && python3 pcv.py --devnet ${D}`;
 
@@ -204,7 +206,7 @@ const pcvChecks = [
   ['Transactions', `Each txid and the block’s tx_root, with chain-core’s Merkle construction, for all ${PCV_RECORD.kinds} transaction kinds.`],
   ['Seals', 'Each sequencer seal, an ed25519 signature by the key in the genesis params.'],
   ['Signatures', `Raw ed25519 transaction signatures, with a small pure-Python RFC 8032 verifier that follows ed25519-dalek’s verify_strict (on ${PCV_RECORD.sigCases} differential cases it agreed with dalek every time), and passkey (P-256) signatures as the chain checks them: the exact envelope, low S, the site the passkey belongs to and the challenge the browser signed.`],
-  ['State root', `Recomputed by replay. pcv keeps its own copy of the chain’s state from genesis, applies each transaction as chain-core does (one chain-core would refuse is a fault), and after every block compares its root with the header’s. It replays the ${PCV_RECORD.replayedKinds} kinds the devnet has carried so far: posts, transfers, agents and mandates, capsules, stations, editions and the Daily Mint.`],
+  ['State root', `Recomputed by replay. pcv keeps its own copy of the chain’s state from genesis, applies each transaction as chain-core does (one chain-core would refuse is a fault), and after every block compares its root with the header’s. It replays ${PCV_RECORD.replayedKinds} of the ${PCV_RECORD.kinds} kinds. By October 21 the devnet had carried ${PCV_RECORD.carriedKinds} of them, all replayed: posts, agents and mandates, the Daily Mint’s edition and its mints, one transfer and one station claim. The other ${PCV_RECORD.replayedKinds - PCV_RECORD.carriedKinds}, capsules among them, it has not yet met on the devnet.`],
   ['Senders', 'That each sender address derives from its key, that an agent key was registered before it signs, and that each sender’s nonces run 0, 1, 2 in order.'],
 ];
 

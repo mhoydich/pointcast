@@ -148,7 +148,18 @@ test('honest copy: who wrote it, who reviewed it, who added the replay, and what
   assert.match(page, /\['Wallet text', 'Wallet-text \(tezos_message\) and secp256k1 signatures are hashed but not verified\./);
   // today's run, by the served file (GET only, then offline): every block, every state root
   assert.match(page, /const PCV_RERUN = \{ at: '19:35 UTC on October 21', blocks: 3790, tip: 'e3f57b4e[0-9a-f]{56}' \};/);
-  assert.match(page, /const PCV_RECORD = \{ blocks: 3790, tipHeight: 3790, tip: 'e3f57b4e[0-9a-f]{56}', stateRoots: 3790, replayedKinds: 18, kinds: 23, sigCases: 375, gaps: 21, tests: 106 \};/);
+  assert.match(page, /const PCV_RECORD = \{ blocks: 3790, tipHeight: 3790, tip: 'e3f57b4e[0-9a-f]{56}', stateRoots: 3790, replayedKinds: 18, carriedKinds: 7, kinds: 23, sigCases: 375, gaps: 21, tests: 106 \};/);
+  // pcv replays 18 kinds; the devnet had carried 7 of them (no capsule, tap or drop yet), so no surface may say
+  // the 18 are what the devnet has carried.
+  const stateRow = page.match(/\['State root', `([^`]+)`\]/)[1];
+  assert.match(stateRow, /It replays \$\{PCV_RECORD\.replayedKinds\} of the \$\{PCV_RECORD\.kinds\} kinds\. By October 21 the devnet had carried \$\{PCV_RECORD\.carriedKinds\} of them, all replayed:/);
+  assert.match(stateRow, /The other \$\{PCV_RECORD\.replayedKinds - PCV_RECORD\.carriedKinds\}, capsules among them, it has not yet met on the devnet\./);
+  const llmsFull = read('public/llms-full.txt');
+  assert.match(llmsFull, /replays the state machine for 18 of the 23 tx kinds \(the 7 the devnet had carried by then among them\)/);
+  for (const [name, text] of [['bots.astro', page], ['llms-full.txt', llmsFull], ['llms.txt', read('public/llms.txt')], ['for-agents', read('src/pages/for-agents.astro')], ['0724', block724.body]]) {
+    assert.doesNotMatch(text, /(?:18|\$\{PCV_RECORD\.replayedKinds\}) (?:tx )?kinds the devnet has carried/, name);
+    assert.doesNotMatch(text, /kinds the devnet has carried so far: [^.]*capsules/, name);
+  }
   // the old claim is gone from the page (block 0694 keeps it, dated)
   for (const text of [section, page.slice(page.indexOf('const pcvChecks'), page.indexOf('const limits'))]) {
     assert.doesNotMatch(text, /does not recompute|Not recomputed\.|state_root: not checked \(v1\)|pcv does\s+not rebuild/i);
