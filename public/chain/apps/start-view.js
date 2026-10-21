@@ -251,7 +251,9 @@ export function mount(root, env = {}) {
       if (out) {
         out.textContent = r.balance > 0
           ? (r.already ? 'This account already took its play ATTN from the faucet. ' : 'The faucet sent ' + (r.amount === null ? 'play ATTN' : r.amount + ' play ATTN') + ' and it landed. ') + 'You hold ' + r.balance + ' play ATTN.'
-          : 'The faucet took the request, but the play ATTN has not landed yet. Wait a few seconds; the page reads it again.';
+          : r.already
+            ? 'This account already asked the faucet (once per account) and holds no play ATTN now: it is still on its way, or it was spent. The page reads it again; meanwhile you can stamp a sentence or seal a capsule: press Skip.'
+            : 'The faucet took the request, but the play ATTN has not landed yet. Wait a few seconds; the page reads it again.';
         out.dataset.state = r.balance > 0 ? 'ok' : '';
       }
     } catch (e) {

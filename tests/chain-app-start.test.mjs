@@ -750,6 +750,24 @@ test('passkeys in the page: off on any other site with the reason; on pointcast.
   assert.equal(stateOf(again.rootEl, 'attn'), 'done', 'its play ATTN is already there');
 });
 
+test('an account that already asked the faucet and holds nothing is not told the faucet took the request', async () => {
+  // Regression (review 10-21): a 409 (this address already took its play ATTN) with a balance of 0 read
+  // "The faucet took the request, but the play ATTN has not landed yet", which the faucet had not done.
+  const w = world();
+  w.overrides['/daily/faucet'] = async () => reply({ error: 'this address already took its play ATTN from the faucet (once per address)' }, 409);
+  const m = mountView({ fetchOpts: { accounts: w.accounts, overrides: w.overrides }, extra: { connect: w.connect, fundWaitMs: 60 } });
+  await m.c.begin();
+  m.c.stop();
+  $(m.rootEl, '[data-kp-make]').click();
+  await until(() => m.c.keys.key());
+  await tick(30);
+  $(m.rootEl, '[data-st-faucet]').click();
+  await until(() => !m.c.state.acting && /once per account/.test(txt(m.rootEl, '[data-st-faucet-out]')));
+  assert.equal(txt(m.rootEl, '[data-st-faucet-out]'), 'This account already asked the faucet (once per account) and holds no play ATTN now: it is still on its way, or it was spent. The page reads it again; meanwhile you can stamp a sentence or seal a capsule: press Skip.');
+  assert.equal(stateOf(m.rootEl, 'attn'), 'now');
+  assert.equal($(m.rootEl, '[data-st-skip]').disabled, false, 'Skip stays open');
+});
+
 test('GENESIS CHANGED stops the page: nothing is read on, nothing can be sent', async () => {
   const w = world();
   const overrides = { ...w.overrides, '/status': async () => reply({ ...FX.status, genesis_hash: HEX('9') }) };
