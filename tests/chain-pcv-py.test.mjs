@@ -156,6 +156,13 @@ test('honest copy: who wrote it, who reviewed it, who added the replay, and what
   assert.match(stateRow, /The other \$\{PCV_RECORD\.replayedKinds - PCV_RECORD\.carriedKinds\}, capsules among them, it has not yet met on the devnet\./);
   const llmsFull = read('public/llms-full.txt');
   assert.match(llmsFull, /replays the state machine for 18 of the 23 tx kinds \(the 7 the devnet had carried by then among them\)/);
+  // pcv is not the Yard: it replays 18 of 23 kinds and is not every consensus rule, so no page may say it
+  // "does the same" as the Yard's full replay (Verify a block once did).
+  const vab = read('src/pages/chain/verify-a-block.astro');
+  assert.match(vab, /pcv\.py replays the state in plain Python too, its own rewrite of those rules, and names the ones it does not check;/);
+  for (const [name, text] of [['verify-a-block', vab], ['bots.astro', page], ['net.astro', read('src/pages/chain/net.astro')]]) {
+    assert.doesNotMatch(text, /pcv\.py does the same/, name);
+  }
   for (const [name, text] of [['bots.astro', page], ['llms-full.txt', llmsFull], ['llms.txt', read('public/llms.txt')], ['for-agents', read('src/pages/for-agents.astro')], ['0724', block724.body]]) {
     assert.doesNotMatch(text, /(?:18|\$\{PCV_RECORD\.replayedKinds\}) (?:tx )?kinds the devnet has carried/, name);
     assert.doesNotMatch(text, /kinds the devnet has carried so far: [^.]*capsules/, name);
