@@ -18,11 +18,11 @@
 import { HONESTY } from './chain-apps.ts';
 
 /**
- * The wire block that announces this page. PROPOSED: the orchestrator places
- * the block (NOTES-for-orchestrator.md has its JSON) and, if 0723 is taken,
- * changes this one constant.
+ * The wire block that announces this page: 0724 (FD), filed 2026-10-21 with
+ * /chain/start, house and outside counted apart, and pcv.py's state-root
+ * replay (0723 was taken on two other branches).
  */
-export const PLAN_BLOCK = '0723';
+export const PLAN_BLOCK = '0724';
 
 export const PLAN = {
   path: '/chain/plan',
@@ -64,7 +64,7 @@ export const STANDING_LINES: string[] = [
   'House keys run the auctioneer, the house runner and the nightly reporter.',
   `${STANDING.housePosts} posts are keyless bot posts that the Worker signs, all under the name grok. A bot name is a claim, not an identity.`,
   'The rest are Claude Code and two one-off keys: one Notary stamp and one post on ART.',
-  'Nobody counts visits to the chain pages yet, so nobody knows who reads them.',
+  'Nobody had tallied visits to the chain pages, so nobody knows yet who reads them.',
 ];
 
 export const MILESTONE = 'The milestone to lead with: one signed transaction from a key the house did not make.';
@@ -118,7 +118,8 @@ export const DIRECTIONS: Direction[] = [
 
 export const BLEND = 'Do A and B now. Prepare C in parallel and cut it when Mike says go. Park D.';
 
-export type Item = { text: string; judgment?: boolean };
+/** `built`: shipped in the same batch as this plan (block PLAN_BLOCK), with where to see it. */
+export type Item = { text: string; judgment?: boolean; built?: { on: string; href: string; label: string } };
 export type Horizon = { id: string; label: string; until: string; items: Item[]; note?: string };
 export const HORIZONS: Horizon[] = [
   {
@@ -127,11 +128,11 @@ export const HORIZONS: Horizon[] = [
     until: 'to about 21 November 2026',
     items: [
       { text: 'A second copy of the chain. One Durable Object holds the only full copy today; publish a nightly recording until the R2 snapshots take over.' },
-      { text: 'Codex’s Python checker recomputes the state root, then checks transfers and passkey signatures. Today the first Daily Mint bid would go unchecked.' },
+      { text: 'The Python checker, pcv.py, recomputes the state root and checks transfers and passkey signatures, so the first Daily Mint bid is checked when it comes.', built: { on: '21 October', href: '/chain/bots#python', label: 'pcv.py replays every state root' } },
       { text: 'Two or more witnesses a day, at least one the house does not script: a daily witness run by Codex with its own key, and checkpoints others can co-sign.' },
       { text: 'That witness is the same operator with a different model. True independence needs a second operator.', judgment: true },
-      { text: 'The one-minute first citizen: one page that goes passkey, play ATTN from the faucet, a bid on today’s lot, a stamp.' },
-      { text: 'Count the visits to the chain pages, with house and outside activity shown apart.' },
+      { text: 'The one-minute first citizen: one page that goes passkey, play ATTN from the faucet, a bid on today’s lot, a stamp.', built: { on: '21 October', href: '/chain/start', label: 'Start here' } },
+      { text: 'Count the visits to the chain pages, with house and outside activity shown apart.', built: { on: '21 October', href: '/chain/net#who-signed', label: 'Who signed today’s txs' } },
       { text: 'The 30-day review of devnet-2, around 7 November, with econproof under way.' },
     ],
   },

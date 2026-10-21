@@ -122,7 +122,9 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/chain/first-mints/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/mixtape/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/sanctuary/', 'monthly', '0.6'],
-  // The nine apps on the devnet (src/data/chain-apps.ts).
+  ['https://pointcast.xyz/chain/plan/', 'weekly', '0.7'],
+  // The ten apps on the devnet (src/data/chain-apps.ts).
+  ['https://pointcast.xyz/chain/start/', 'weekly', '0.8'],
   ['https://pointcast.xyz/chain/observatory/', 'weekly', '0.8'],
   ['https://pointcast.xyz/chain/daily-mint/', 'weekly', '0.7'],
   ['https://pointcast.xyz/chain/notary/', 'monthly', '0.7'],

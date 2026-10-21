@@ -1,9 +1,13 @@
-// /chain/bots#python — pcv.py, the independent Python verifier (block 0694).
-// public/chain/bots/pcv.py is a copy of tools/pcv-py/pcv.py from the
-// pointcast-chain repo. The page shows its sha256, computed from the file
-// when the page is built; nothing here or there types the hash in. The copy
-// must say what pcv does not check: it does not recompute the state root,
-// and it is not full consensus validation.
+// /chain/bots#python — pcv.py, the second, Python verifier (block 0694; its
+// state-root replay, block 0724). public/chain/bots/pcv.py is a copy of
+// tools/pcv-py/pcv.py from the pointcast-chain repo (main at a1df59e). The
+// page shows its sha256, computed from the file when the page is built;
+// nothing here or there types the hash in. Since 2026-10-21 pcv replays the
+// state machine and recomputes every state root, and the copy says so, and
+// says who wrote the replay (Claude Code, not a second lab) and what pcv
+// still does not check: five tx kinds it does not replay, wallet-text and
+// secp256k1 signatures, and it is not every consensus rule. Block 0694 is a
+// dated historical block and keeps its own words.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -24,6 +28,7 @@ const SHA = createHash('sha256').update(pcvBytes).digest('hex');
 const page = read('src/pages/chain/bots.astro');
 const chainHome = read('src/data/chain-home.ts');
 const block = JSON.parse(read('src/content/blocks/0694.json'));
+const block724 = JSON.parse(read('src/content/blocks/0724.json'));
 const news = JSON.parse(read('src/data/front-door-news.json'));
 
 const DEVNET_URL = chainHome.match(/const DEVNET_URL = '([^']+)'/)[1];
@@ -85,21 +90,45 @@ test('the one-command run, the sha check and the offline rerun use the real flag
   assert.ok(section.includes('href="/chain/bots/pcv.py" download>'), 'download button');
 });
 
-test('honest copy: who wrote it, who reviewed it, and what it does not check', () => {
+test('honest copy: who wrote it, who reviewed it, who added the replay, and what it still does not check', () => {
   for (const phrase of [/Codex \(OpenAI, gpt-6-astra\)/, /without\s+porting the Rust/, /Three Claude reviewers/, /every one on pcv’s side and none in the Rust/,
-    /implementation\s+diversity/, /A bug in a rule both of them check shows up as a disagreement\. The state, which pcv does\s+not rebuild, is outside that\./, /ChatGPT’s code\s+tool/, /no network/])
+    /implementation\s+diversity/, /A bug in a rule both of them check shows up as a disagreement\. Since October 21 that includes the state:/,
+    /On October 21 Claude Code taught it the rest of the chain/, /The replay is Claude Code’s, written from chain-core’s rules and pinned to\s+vectors chain-core builds itself, so for the state it is a second implementation, not a second lab\./,
+    /ChatGPT’s code\s+tool/, /no network/, /a state root the replay could not reach/])
     assert.match(section, phrase);
-  assert.match(page, /\['State root', 'Not recomputed\./);
-  assert.match(page, /\['Consensus', 'Not full consensus validation\./);
-  assert.match(page, /const PCV_RECORD = \{ blocks: 572, tipHeight: 572, tip: '916a739a[0-9a-f]{56}', sigCases: 375, gaps: 21, tests: 74 \};/);
+  // the served file is the replaying version: its success line names the replay
+  assert.match(pcv, /state_root \(replayed\)/);
+  assert.match(pcv, /chain-core would refuse this/);
+  assert.match(page, /const PCV_SOURCE = \{ branch: 'main', commit: 'a1df59e' \};/);
+  assert.match(page, /\['State root', `Recomputed by replay\./);
+  assert.match(page, /\['Five kinds', `Not replayed: drum sessions, sequencer rotations, session keys and controllers/);
+  assert.match(page, /\['Consensus', 'Not every consensus rule, and not a node\./);
+  assert.match(page, /\['Wallet text', 'Wallet-text \(tezos_message\) and secp256k1 signatures are hashed but not verified\./);
+  // today's run, by the served file (GET only, then offline): every block, every state root
+  assert.match(page, /const PCV_RERUN = \{ at: '19:35 UTC on October 21', blocks: 3790, tip: 'e3f57b4e[0-9a-f]{56}' \};/);
+  assert.match(page, /const PCV_RECORD = \{ blocks: 3790, tipHeight: 3790, tip: 'e3f57b4e[0-9a-f]{56}', stateRoots: 3790, replayedKinds: 18, kinds: 23, sigCases: 375, gaps: 21, tests: 106 \};/);
+  // the old claim is gone from the page (block 0694 keeps it, dated)
+  for (const text of [section, page.slice(page.indexOf('const pcvChecks'), page.indexOf('const limits'))]) {
+    assert.doesNotMatch(text, /does not recompute|Not recomputed\.|state_root: not checked \(v1\)|pcv does\s+not rebuild/i);
+  }
   assert.match(block.body, /It does not recompute the state root/);
   // Agreement covers only what both implementations check; never claim it catches every bug.
   assert.match(block.body, /a bug in a rule both of them check shows up as a disagreement\. The state, which pcv does not rebuild, is outside that\./);
   for (const text of [section, block.body]) assert.doesNotMatch(text, /bug in either one/i);
   assert.match(block.body, /it is not full consensus validation/);
-  for (const text of [section, block.body, block.dek]) {
+  for (const text of [block.body, block.dek]) {
     assert.doesNotMatch(text, /recomputes the state root|(?<!not )full consensus validation|validates consensus|main\s*net|\bworth\b|\binvest|\bprofit/i);
   }
+  for (const text of [section, block724.body, block724.dek]) {
+    assert.doesNotMatch(text, /(?<!not )full consensus validation|validates consensus|main\s*net|\bworth\b|\binvest|\bprofit|(?<!not )every consensus rule/i);
+  }
+  // block 0724 says it the same way: a replay that agreed on every block, Claude Code's, and what it still does not cover
+  assert.match(block724.body, /recomputes every state root/);
+  assert.match(block724.body, /not a second lab/);
+  assert.match(block724.body, /does not replay drum sessions, sequencer rotations, session keys or controllers/);
+  assert.match(block724.body, /block 0694 said it did not recompute the state root/);
+  assert.ok(block724.companions.some((c) => c.id === 'https://pointcast.xyz/chain/bots/#python'));
+  assert.ok(block724.companions.some((c) => c.id === '0694'));
   assert.match(block.body, /no value and may reset/);
   assert.doesNotMatch(block.body, /https?:\/\//, 'block body is plain text; links live in companions');
 });

@@ -10,14 +10,14 @@
  * here.
  */
 
-import { APPS_2_BLOCK, HONESTY } from './chain-apps.ts';
+import { HONESTY } from './chain-apps.ts';
 
 /**
- * The wire block the crumb names. No block announces this page yet, so it names
- * 0722, the newest apps block; when the orchestrator files the block that
- * announces /chain/start, it changes this line to that id.
+ * The wire block the crumb names: 0724 (FD), filed 2026-10-21, which announces
+ * /chain/start with /chain/plan, house and outside counted apart, and pcv.py's
+ * state-root replay.
  */
-export const START_BLOCK: string = APPS_2_BLOCK;
+export const START_BLOCK: string = '0724';
 
 export const APP = {
   path: '/chain/start',

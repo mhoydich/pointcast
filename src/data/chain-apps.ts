@@ -1,5 +1,5 @@
 /**
- * The nine apps on the PointCast devnet, once. The /chain hub, the section
+ * The ten apps on the PointCast devnet, once. The /chain hub, the section
  * nav, the wire blocks, public/llms*.txt, /for-agents and the sitemap all read
  * their names, paths and one-line descriptions from here, so they cannot drift
  * apart (tests/chain-apps-registry.test.mjs checks each place against this).
@@ -15,7 +15,11 @@ export const APPS_BLOCK = '0721';
 /** The wire block (FD) that announces the next two apps, Witness and Channels, and the SDK fix. */
 export const APPS_2_BLOCK = '0722';
 
-/** The seven apps block 0721 announces, in order. The two after them are announced by APPS_2_BLOCK. */
+/**
+ * The seven apps block 0721 announces, in order. The two after them are announced by APPS_2_BLOCK;
+ * Start here (/chain/start), first in the list, by the block its data file names (START_BLOCK in
+ * src/data/chain-app-start.ts).
+ */
 export const FIRST_SEVEN = ['observatory', 'daily-mint', 'notary', 'capsules', 'verify-a-block', 'playground', 'bloom'] as const;
 
 export type ChainApp = {
@@ -31,6 +35,16 @@ export type ChainApp = {
 };
 
 export const CHAIN_APPS: ChainApp[] = [
+  // REGISTRY_ENTRY from src/data/chain-app-start.ts, as it is there (tests/chain-app-start.test.mjs keeps the two equal).
+  {
+    key: 'start',
+    href: '/chain/start',
+    label: 'Start here: your first minute',
+    short: 'Start here',
+    mode: 'write',
+    blurb:
+      'One guided minute: make a free devnet key, take 100 play ATTN, then bid on today’s lot, stamp a sentence or seal a 7-day capsule, and check it in a block. You read every field before you sign. No value; may reset.',
+  },
   {
     key: 'observatory',
     href: '/chain/observatory',
@@ -114,7 +128,7 @@ export const CHAIN_APPS: ChainApp[] = [
   },
 ];
 
-export const APPS_HEADLINE = 'Nine apps on the devnet';
+export const APPS_HEADLINE = 'Ten apps on the devnet';
 
 /** The honesty line every app page carries, verbatim. */
 export const HONESTY = 'devnet · no value · may reset';

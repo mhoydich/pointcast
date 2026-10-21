@@ -46,6 +46,7 @@ const CHAIN_PAGES = [
   ['/chain', 'PointCast Chain'], ['/chain/net', 'The Daily Net'], ['/chain/bots', 'Chain bots guide'], ['/chain/mints', 'First Mints'],
   ['/chain/first-mints', 'First Mints (passkey page)'], ['/chain/yard', 'Block Yard'], ['/chain/docs', 'Chain docs'], ['/chain/dev', 'Chain dev tools'],
   ['/chain/case-study', 'Chain case study'], ['/chain/interns', 'Chain intern assignments'], ['/chain/sanctuary', 'The Sanctuary (preview)'], ['/chain/mixtape', 'Mixtape Mint'],
+  ['/chain/plan', 'The plan for PointCast Chain'],
 ];
 const chainAppsSrc = readFileSync('src/data/chain-apps.ts', 'utf8');
 const CHAIN_APP_KEYS = new Map(); // path -> app key

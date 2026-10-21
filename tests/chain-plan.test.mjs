@@ -48,6 +48,15 @@ test('the plan is dated, honest and in the shape it promises', () => {
   assert.match(P.PLAN.readAt, /^2026-10-21 \d{2}:\d{2} UTC$/);
   assert.equal(P.PLAN.path, '/chain/plan');
   assert.match(P.PLAN_BLOCK, /^\d{4}$/);
+  assert.equal(P.PLAN_BLOCK, '0724', 'the block that announces the plan with Start here, the house/outside split and the pcv replay');
+  assert.ok(existsSync(new URL('src/content/blocks/' + P.PLAN_BLOCK + '.json', root)), 'the block exists');
+  assert.ok(existsSync(new URL('public/images/og/b/' + P.PLAN_BLOCK + '.png', root)), 'and its OG card, so the page uses it');
+  // the next-month items shipped in the same batch say so, and link where to see them
+  const built = P.HORIZONS[0].items.filter((i) => i.built);
+  assert.deepEqual(built.map((i) => i.built.href), ['/chain/bots#python', '/chain/start', '/chain/net#who-signed']);
+  for (const i of built) assert.equal(i.built.on, '21 October');
+  assert.doesNotMatch(P.HORIZONS[0].items.map((i) => i.text).join(' '), /would go unchecked/);
+  assert.match(read('src/pages/chain/plan.astro'), /\{it\.built && <> <span class="tag tag--done">built \{it\.built\.on\}<\/span> <a href=\{it\.built\.href\}>\{it\.built\.label\} →<\/a><\/>\}/);
   assert.equal(P.PLAN_HONESTY, HONESTY);
   assert.match(P.PLAN.description, /devnet · no value · may reset\.$/);
   // where it stands: the four numbers agree with the counts they come from

@@ -28,12 +28,14 @@
  * in, observe, review, signal; ChatGPT: check in, cross-check, digest; code
  * agents: witness). Full prompts live on /chain/net.
  *
- * #python (block 0694, cc): pcv.py, the independent Python verifier, served
- * as public/chain/bots/pcv.py, a copy of tools/pcv-py/pcv.py from the
- * pointcast-chain repo (PCV_SOURCE below). Its sha256 is computed from that
- * file when the page is built, never typed in. tests/chain-pcv-py.test.mjs
- * checks the file compiles, pins the same devnet, and that the copy says
- * what pcv does not check (the state root; it is not full consensus).
+ * #python (block 0694, cc; the state-root replay, block 0724): pcv.py, the
+ * second, Python verifier, served as public/chain/bots/pcv.py, a copy of
+ * tools/pcv-py/pcv.py from the pointcast-chain repo (PCV_SOURCE below). Its
+ * sha256 is computed from that file when the page is built, never typed in.
+ * tests/chain-pcv-py.test.mjs checks the file compiles, pins the same devnet,
+ * and that the copy says what pcv checks (since 2026-10-21 the state root, by
+ * replay) and what it still does not (five tx kinds, two signature schemes;
+ * it is not every consensus rule).
  */
 import { createHash } from 'node:crypto';
 import BlockLayout from '../../layouts/BlockLayout.astro';
@@ -173,13 +175,16 @@ const verifyFetch = String.raw`mkdir pc-verify && cd pc-verify && curl -fsS --fa
 const FIRST_LIVE_SIGNED = { who: 'Manus', height: 564, on: 'October 5', tx: 'b7e9cbc7be827da2352a045f719254c28fa7c86d7a9a751bf6af0df0908bb92b' };
 
 // pcv.py: the served file is the source of truth; its sha256 is computed here
-// at build. PCV_SOURCE names the pointcast-chain commit it was copied from.
+// at build. PCV_SOURCE names the pointcast-chain commit it was copied from:
+// main, where the state-root replay landed on 2026-10-21 (04cc24e, then a1df59e).
 const PCV_SHA256 = createHash('sha256').update(pcvPy, 'utf8').digest('hex');
-const PCV_SOURCE = { branch: 'feat/pcv-live', commit: '397cd51' };
-// The agreement record, as of October 5, 2026 (pointcast-chain tools/pcv-py).
-// Claude Code's own run of the served file before publishing (GET only, then the saved files offline).
-const PCV_RERUN = { at: '23:46 UTC on October 5', blocks: 593, tip: '0aa1437b8b141c4ab37b4b50ec679aedefa321bd60146804ee3f2e54f2c6ca8a' };
-const PCV_RECORD = { blocks: 572, tipHeight: 572, tip: '916a739af74ac5929e8dd4aabea8b0385e5e9ffed104beeff6a94ab6c056d166', sigCases: 375, gaps: 21, tests: 74 };
+const PCV_SOURCE = { branch: 'main', commit: 'a1df59e' };
+// Claude Code's own run of the served file before publishing (GET only, then the saved files offline):
+// the live devnet-2, every block and every state root.
+const PCV_RERUN = { at: '19:35 UTC on October 21', blocks: 3790, tip: 'e3f57b4e21c79cb86fe6598bb478f7a569254f2ca21f5f4c1748ca4258fcfdd3' };
+// The record: blocks and state roots from that run; tests from tools/pcv-py on Python 3.9.6 the same day;
+// the 21 review gaps and 375 signature cases from the review of October 5, 2026.
+const PCV_RECORD = { blocks: 3790, tipHeight: 3790, tip: 'e3f57b4e21c79cb86fe6598bb478f7a569254f2ca21f5f4c1748ca4258fcfdd3', stateRoots: 3790, replayedKinds: 18, kinds: 23, sigCases: 375, gaps: 21, tests: 106 };
 
 const pcvLive = String.raw`curl -fsS -O ${SITE}/chain/bots/pcv.py && python3 pcv.py --devnet ${D}`;
 
@@ -192,20 +197,21 @@ python3 pcv.py --params pc-devnet/params.json --blocks pc-devnet/blocks.json   #
 const pcvSandbox = `python3 -B pcv.py --params params.json --blocks blocks.json --genesis ${DEVNET.genesis}`;
 
 const pcvChecks = [
-  ['Genesis', 'The genesis hash, recomputed from the devnet’s /params, against the devnet genesis pinned in the file.'],
+  ['Genesis', 'The genesis hash, recomputed from the devnet’s /params and its launch records (1, 2, 6, 7, 8 and 13 on devnet-2), against the devnet genesis pinned in the file.'],
   ['Links and headers', 'Heights from 1 with no gaps, every prev_hash link, and each header hash recomputed from its fields.'],
-  ['Transactions', 'Each txid and the block’s tx_root, with chain-core’s Merkle construction.'],
+  ['Transactions', `Each txid and the block’s tx_root, with chain-core’s Merkle construction, for all ${PCV_RECORD.kinds} transaction kinds.`],
   ['Seals', 'Each sequencer seal, an ed25519 signature by the key in the genesis params.'],
-  ['Signatures', `Raw ed25519 transaction signatures, with a small pure-Python RFC 8032 verifier that follows ed25519-dalek’s verify_strict. On ${PCV_RECORD.sigCases} differential cases it agreed with dalek every time.`],
+  ['Signatures', `Raw ed25519 transaction signatures, with a small pure-Python RFC 8032 verifier that follows ed25519-dalek’s verify_strict (on ${PCV_RECORD.sigCases} differential cases it agreed with dalek every time), and passkey (P-256) signatures as the chain checks them: the exact envelope, low S, the site the passkey belongs to and the challenge the browser signed.`],
+  ['State root', `Recomputed by replay. pcv keeps its own copy of the chain’s state from genesis, applies each transaction as chain-core does (one chain-core would refuse is a fault), and after every block compares its root with the header’s. It replays the ${PCV_RECORD.replayedKinds} kinds the devnet has carried so far: posts, transfers, agents and mandates, capsules, stations, editions and the Daily Mint.`],
   ['Senders', 'That each sender address derives from its key, that an agent key was registered before it signs, and that each sender’s nonces run 0, 1, 2 in order.'],
 ];
 
 const pcvLimits = [
-  ['State root', 'Not recomputed. It is bound by each header and seal, but the state behind it is never rebuilt, and every run prints state_root: not checked (v1).'],
-  ['Consensus', 'Not full consensus validation. Balances, ownership, mandate limits, issuance and the other state-machine rules are not replayed.'],
+  ['Five kinds', `Not replayed: drum sessions, sequencer rotations, session keys and controllers, ${PCV_RECORD.kinds - PCV_RECORD.replayedKinds} of the ${PCV_RECORD.kinds} kinds. The first one stops the replay: every state root from that block on is marked not checked, and the run ends INCOMPLETE. The devnet has carried none of them so far.`],
+  ['Consensus', 'Not every consensus rule, and not a node. Seals are checked against the genesis sequencer key, not a replayed key schedule, and device passes and controllers are not followed.'],
   ['Freshness', 'It cannot prove the devnet sent every block or the newest one. A valid shorter chain is still valid, so the result names the tip it reached.'],
-  ['Coverage', 'Three transaction kinds (publish_block, register_agent, set_mandate) and raw ed25519 signatures. Anything else is named, and the run ends INCOMPLETE, never ok.'],
-  ['devnet-2', 'Since 2026-10-09 pcv reads devnet-2\'s launch records (1, 2, 6, 7, 8, 13) and the station, capsule, account and edition tx kinds. Still not checked, and named as UNSUPPORTED so the run ends INCOMPLETE: passkey (WebAuthn) signatures, controller and device-pass authorization, and the Daily Mint\'s transfers. verify.mjs and the Block Yard check everything.'],
+  ['Wallet text', 'Wallet-text (tezos_message) and secp256k1 signatures are hashed but not verified. They are named UNSUPPORTED, and the run ends INCOMPLETE, never ok.'],
+  ['Unknown records', 'A launch record other than 1, 2, 6, 7, 8 and 13 is named UNSUPPORTED, and the checks that depend on it, the replay among them, are skipped. verify.mjs and the Block Yard check everything with the chain’s own wasm.'],
 ];
 
 const limits = [
@@ -507,26 +513,30 @@ const jsonLd = {
 
     <section id="python" class="sec" aria-labelledby="python-title">
       <p class="kicker">08 · PCV.PY · A SECOND VERIFIER · PYTHON · STANDARD LIBRARY ONLY</p>
-      <h2 id="python-title" class="h2">Verify in Python, an independent implementation.</h2>
+      <h2 id="python-title" class="h2">Verify in Python, a second implementation, state root included.</h2>
       <p class="note">
         <code>pcv.py</code> is a second verifier for the devnet: one Python file, Python 3.9 or newer, nothing to install.
         Codex (OpenAI, gpt-6-astra) wrote it from pointcast-chain’s encoding, the byte layouts the Rust code defines, without
         porting the Rust. Three Claude reviewers then tried to make it pass what it shouldn’t. They found
         {PCV_RECORD.gaps} gaps, every one on pcv’s side and none in the Rust, and all {PCV_RECORD.gaps} are fixed.
+        On October 21 Claude Code taught it the rest of the chain: all {PCV_RECORD.kinds} transaction kinds, passkey
+        signatures, and a replay of the chain’s state machine that recomputes every block’s state root.
       </p>
       <p class="callout">
         <b>Why a second one.</b> Two implementations by two different AI labs agreeing on every block is implementation
-        diversity. A bug in a rule both of them check shows up as a disagreement. The state, which pcv does
-        not rebuild, is outside that.
+        diversity. A bug in a rule both of them check shows up as a disagreement. Since October 21 that includes the state:
+        pcv rebuilds it in Python and recomputes each state root, and that day all {PCV_RECORD.stateRoots.toLocaleString('en-US')}
+        matched the headers the devnet sealed. The replay is Claude Code’s, written from chain-core’s rules and pinned to
+        vectors chain-core builds itself, so for the state it is a second implementation, not a second lab.
       </p>
 
       <div class="stats pcv-stats">
-        <div><strong>{PCV_RECORD.blocks}</strong><span>live devnet blocks</span><small>0 faults · tip {PCV_RECORD.tip.slice(0, 8)}… at height {PCV_RECORD.tipHeight}</small></div>
+        <div><strong>{PCV_RECORD.blocks.toLocaleString('en-US')}</strong><span>live devnet blocks</span><small>0 faults · tip {PCV_RECORD.tip.slice(0, 8)}… at height {PCV_RECORD.tipHeight.toLocaleString('en-US')}</small></div>
+        <div><strong>{PCV_RECORD.stateRoots.toLocaleString('en-US')}</strong><span>state roots recomputed</span><small>by replay in Python; every one matches its header</small></div>
         <div><strong>{PCV_RECORD.sigCases}</strong><span>signature cases vs dalek</span><small>0 disagreements with ed25519-dalek verify_strict</small></div>
-        <div><strong>{PCV_RECORD.gaps}</strong><span>review gaps, all fixed</span><small>all on pcv’s side; none in the Rust</small></div>
-        <div><strong>{PCV_RECORD.tests}</strong><span>tests</span><small>mutations, forgeries, vectors chain-core generated</small></div>
+        <div><strong>{PCV_RECORD.tests}</strong><span>tests</span><small>mutations, forgeries, vectors and state chain-core built</small></div>
       </div>
-      <p class="fine">The record as of October 5, 2026. The devnet keeps adding blocks, so a run today covers more.</p>
+      <p class="fine">The live run as of {PCV_RERUN.at}, 2026; the review record ({PCV_RECORD.gaps} gaps, {PCV_RECORD.sigCases} signature cases) is from October 5. The devnet keeps adding blocks, so a run today covers more.</p>
 
       <h3 class="h3">Run it against the live devnet</h3>
       <p class="cta">
@@ -536,8 +546,9 @@ const jsonLd = {
       <Snippet label="One command · Python 3.9 or newer · reads the devnet with GET only" code={pcvLive} />
       <Snippet label="Check the download against this page first (optional)" code={pcvCheck} />
       <p class="fine">
-        Exit code <code>0</code>: every check passed. <code>1</code>: a fault, a bad input or a failed fetch. <code>2</code>: incomplete, because
-        something it doesn’t support turned up or there were no blocks. It prints a line per block, then the tip it reached.
+        Exit code <code>0</code>: every check passed, every state root included. <code>1</code>: a fault, a bad input or a failed fetch.
+        <code>2</code>: incomplete, because something it doesn’t support turned up, a state root the replay could not reach, or
+        there were no blocks. It prints a line per block, then how far the state roots were recomputed, then the tip it reached.
       </p>
 
       <h3 class="h3">Save the blocks, rerun offline</h3>
@@ -624,10 +635,11 @@ const jsonLd = {
         <code>pcv.py</code> is copied unchanged from <code>tools/pcv-py/pcv.py</code> in the pointcast-chain repo
         (<code>{PCV_SOURCE.branch}</code> at <code>{PCV_SOURCE.commit}</code>), and the sha256 above is computed from the
         served file when this page is built. Its agreement record comes from that repo’s review and test runs. Before
-        publishing, Claude Code ran the served file with the one command above at {PCV_RERUN.at}: {PCV_RERUN.blocks} blocks,
-        0 faults, tip <code>{PCV_RERUN.tip.slice(0, 8)}…</code> at height {PCV_RERUN.blocks}. The saved files, rerun offline
-        with no network, reached the same tip. The Python section was filed as
-        <a href="/b/0694">block 0694</a>, and the Daily Net section as <a href="/b/0695">block 0695</a>.
+        publishing, Claude Code ran the served file with the one command above at {PCV_RERUN.at}: {PCV_RERUN.blocks.toLocaleString('en-US')} blocks,
+        0 faults, every state root recomputed and matching, tip <code>{PCV_RERUN.tip.slice(0, 8)}…</code> at height
+        {PCV_RERUN.blocks.toLocaleString('en-US')}. The saved files, rerun offline with no network, reached the same tip. The Python section was filed as
+        <a href="/b/0694">block 0694</a>, its state-root replay as <a href="/b/0724">block 0724</a>, and the Daily Net
+        section as <a href="/b/0695">block 0695</a>.
       </p>
     </footer>
   </div>
