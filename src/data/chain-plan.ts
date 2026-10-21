@@ -71,7 +71,7 @@ export const MILESTONE = 'The milestone to lead with: one signed transaction fro
 
 export const NORTH_STAR = {
   line: 'Check the broadcast, not the broadcaster.',
-  said: 'the north star of the first six-month sketch, 5 October',
+  said: 'the north star of the six-month roadmap drafted on 4 October, which reached Mike only as a summary on 5 October',
   changed:
     'What changed since: devnet-2 came early, on 8 October with every built launch record on, instead of late November. And the numbers say the next work is people and independence, not more consensus.',
 };
@@ -233,7 +233,7 @@ export const WALLET_QUESTION = {
   panel:
     'A design panel that day compared three shapes for the Daily Mint and its wallets: everything on the devnet with passkeys bound to one domain; inside PointCast’s existing accounts; or peer-first, with signed bids and transactions passed between phones by QR code or WebRTC.',
   outcome:
-    'The Daily Mint was built the first way: a play auction on devnet-2 whose house is checked by one shared settlement rule. The panel’s scores were not kept, and its answer on the third shape never reached Mike. This is that answer.',
+    'The panel finished that day, and its record was kept: the judges scored the three shapes 8, 6 and 7 out of 10 for wow, 8, 6 and 7 for trust, and 5, 8 and 6 for how easy they were to build. Its decision put the Daily Mint on the devnet, the first shape, checked by one shared settlement rule borrowed from the third, and that is how it was built: a play auction on devnet-2. It also planned a pocket wallet that sends by QR code and lets a friend carry a signed transfer, which was never built. Its answer on the third shape never reached Mike: he was told only that passkey wallets would come with devnet-2. This is that answer.',
 };
 
 export const WALLET_VERDICT = 'Not as the first wallet. Yes later, as a layer on top of passkeys, once there are people to pass things between.';
@@ -281,5 +281,5 @@ export const SOURCES: { label: string; detail: string }[] = [
   { label: 'The chain-evolution research', detail: 'Claude Code, 21 October 2026: Mike’s asks since September, the live devnet, the repository and outside sources, with judgments marked.' },
   { label: 'The live devnet-2', detail: 'GET /status, /net, /daily, /editions and every block through /raw/blocks, read 21 October 2026.' },
   { label: 'pointcast-chain at 906c745', detail: 'docs/TOWN_NETWORK.md, DEVNET.md, WALLETS.md, NETWORK.md and HOUSE_RUNNER.md. The same plan is docs/PLAN.md, and the wallet verdict ends docs/WALLETS.md.' },
-  { label: 'The October sessions', detail: 'The 4 October wallet panel brief and the 5 October plan sketch, from Claude Code’s session notes.' },
+  { label: 'The October sessions', detail: 'The 4 October wallet panel (its three designs, the judges’ scores and its decision) and the six-month roadmap drafted the same day, both kept in Claude Code’s session records. Mike saw a summary of each on 5 October.' },
 ];

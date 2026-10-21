@@ -96,6 +96,23 @@ test('the wallets verdict: what exists, the verdict, why not first, and when', (
   assert.match(P.WALLET_NEVER, /no value and none is promised/);
 });
 
+test('the October record is told as it is: the panel’s scores and the roadmap were kept; what never happened is delivery', () => {
+  // The 4 October panel (workflow run wf_19db1db6-bad) finished with three judges' scores and a decision, and the
+  // six-month roadmap (wf_70622de2-c61) was drafted the same day; Mike saw a one-line summary of each on 5 October.
+  const o = P.WALLET_QUESTION.outcome;
+  assert.doesNotMatch(o, /scores were not kept|not kept|never saved/);
+  assert.match(o, /its record was kept: the judges scored the three shapes 8, 6 and 7 out of 10 for wow, 8, 6 and 7 for trust, and 5, 8 and 6/);
+  assert.match(o, /never built/, 'the panel’s own wallet plan was not built, and the page says so');
+  assert.match(o, /never reached Mike/);
+  assert.match(P.NORTH_STAR.said, /roadmap drafted on 4 October/);
+  assert.doesNotMatch(P.NORTH_STAR.said, /sketch/);
+  const page = read('src/pages/chain/plan.astro');
+  assert.doesNotMatch(page, /never written down/, 'the verdict was promised and never delivered; the panel did write its decision down');
+  assert.match(page, /promised on 4 October and never delivered\./);
+  const october = P.SOURCES.find((s) => s.label === 'The October sessions');
+  assert.match(october.detail, /judges’ scores/);
+});
+
 test('the page: its nav key, its sections, the live strip wired read-only, every app linked', () => {
   const page = read('src/pages/chain/plan.astro');
   assert.match(page, /<ChainHeader current="plan"/);
