@@ -1,5 +1,11 @@
 import type { APIRoute } from 'astro';
 import board from '../data/scoreboard.json';
+import chainBoard from '../data/scoreboard-chain.json';
+
+const rowOut = (r: (typeof chainBoard.rows)[number]) => ({
+  name: r.name, path: r.path, url: `https://pointcast.xyz${r.path}`, score: r.total,
+  use: r.use, craft: r.craft, reach: r.reach, loc: r.loc, files: r.files, tests: r.tests, inbound: r.inbound, blocks: r.blockRefs, onHome: r.onHome,
+});
 
 export const prerender = true;
 
@@ -23,6 +29,14 @@ export const GET: APIRoute = () =>
           name: r.name, path: r.path, url: `https://pointcast.xyz${r.path}`, score: r.total,
           use: r.use, completion: r.completion ?? null, sevenDayReturn: r.sevenDayReturn ?? null, craft: r.craft, reach: r.reach, loc: r.loc, files: r.files, tests: r.tests, inbound: r.inbound, blocks: r.blockRefs, onHome: r.onHome,
         })).map((r, i) => ({ ...r, rank: i + 1 })),
+        // The /chain pages, scored the same way in their own snapshot; a path the main board has is left to it.
+        chain: {
+          generatedAt: chainBoard.generatedAt,
+          human: 'https://pointcast.xyz/register#chain',
+          pageviewsPulled: chainBoard.useSource.pageviews,
+          note: 'visits to pages about the devnet, not use of the chain; on the chain, house activity is the chain checking itself, not use (GET /stats/classes on the devnet splits house, keyless and outside)',
+          rows: chainBoard.rows.filter((r) => !board.rows.some((m) => m.path === r.path)).map((r, i) => ({ rank: i + 1, ...rowOut(r) })),
+        },
       },
       null,
       2,

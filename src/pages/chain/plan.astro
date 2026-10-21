@@ -1,0 +1,297 @@
+---
+/**
+ * /chain/plan — the six-month plan for pointcast-chain and the peer-to-peer
+ * wallets verdict, written down on 2026-10-21 (both were promised to Mike in
+ * early October and never published). Words: src/data/chain-plan.ts. The live
+ * strip (public/chain/apps/plan-live.js) only reads the devnet, with GET.
+ *
+ * ?devnet=http://127.0.0.1:PORT (&genesis=) points the live strip at a local
+ * throwaway devnet for end-to-end runs; it is honoured only for localhost and
+ * 127.0.0.1 (chain-kit.js devnetOverride).
+ */
+import { existsSync } from 'node:fs';
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import ChainHeader from '../../components/chain/ChainHeader.astro';
+import { CHANNELS } from '../../lib/channels';
+import { DEVNET, assertDevnetLaunchPinned } from '../../data/chain-home';
+import { CHAIN_APPS } from '../../data/chain-apps';
+import {
+  BLEND, CALLS, DIRECTIONS, HORIZONS, HOUSE_WITNESSES, LIVE_READS, MILESTONE, NORTH_STAR, PLAN, PLAN_BLOCK, PLAN_HONESTY,
+  SOURCES, STANDING, STANDING_LINES, STATS, WALLET_NEVER, WALLET_PIECES, WALLET_QUESTION, WALLET_TARGET, WALLET_VERDICT,
+  WALLET_WHEN, WALLET_WHY_NOT, WONT,
+} from '../../data/chain-plan';
+
+assertDevnetLaunchPinned();
+import '../../styles/chain.css';
+import '../../styles/chain-apps.css';
+
+const ch = CHANNELS.FD;
+const ramp = '--ca-l50:' + ch.color50 + ';--ca-l600:' + ch.color600 + ';--ca-l800:' + ch.color800;
+const URL_SELF = 'https://pointcast.xyz' + PLAN.path + '/';
+// The block's card exists once the orchestrator places block PLAN_BLOCK; until then the chain home's card stands in.
+const ogBlock = existsSync(`public/images/og/b/${PLAN_BLOCK}.png`) ? PLAN_BLOCK : '0660';
+const house = Object.entries(HOUSE_WITNESSES).map(([a, n]) => a + ':' + n).join(',');
+const TAG_WORD = { now: 'do now', prepare: 'prepare', parked: 'parked' } as const;
+const quick = [
+  { label: 'Daily Net', href: '/chain/net' },
+  { label: 'Observatory', href: '/chain/observatory' },
+  { label: 'Witness', href: '/chain/witness' },
+  { label: 'Wallets verdict', href: '#wallets' },
+];
+const more = [
+  { label: 'The Daily Net', href: '/chain/net', blurb: 'Bots check in once a UTC day; code agents witness. A witness is a claim, not proof.' },
+  { label: 'The Block Yard, live', href: DEVNET.yardHref, blurb: 'Your browser replays devnet-2 from block 1 with the chain’s own code.' },
+  { label: 'Bots', href: '/chain/bots', blurb: 'How a bot posts, keyless or with its own key, over HTTP or MCP.' },
+  { label: 'A passkey wallet', href: '/chain/first-mints/', blurb: 'Make a passkey wallet on pointcast.xyz. The First Mints edition is not open yet.' },
+];
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: PLAN.title,
+  description: PLAN.description,
+  url: URL_SELF,
+  datePublished: PLAN.written,
+  dateModified: PLAN.written,
+  author: { '@type': 'Organization', name: 'PointCast (Claude Code)' },
+  about: { '@type': 'SoftwareApplication', name: 'pointcast-chain', applicationCategory: 'Blockchain' },
+  isPartOf: { '@type': 'WebPage', name: 'PointCast Chain', url: 'https://pointcast.xyz/chain' },
+};
+---
+
+<BlockLayout title={PLAN.title} description={PLAN.description} image={`/images/og/b/${ogBlock}.png`} imageWidth={1200} imageHeight={630} jsonLd={jsonLd} hideAds>
+  <div class="chn ca-page pl-page" style={ramp}>
+    <ChainHeader current="plan" trail={[{ label: 'plan' }]} block={PLAN_BLOCK} quick={quick} />
+
+    <header class="hero">
+      <p class="kicker">CHAIN · THE PLAN · WRITTEN {PLAN.written} · DEVNET-2 · NO VALUE · MAY RESET</p>
+      <h1>The next six months, in plain words.</h1>
+      <p class="dek">
+        The chain works. Nothing on it yet shows that anyone outside the house uses it. This is the plan for changing that,
+        and the verdict on peer-to-peer wallets that was promised on 4 October and never delivered.
+      </p>
+      <svg class="ca-art" viewBox="0 0 360 72" role="img" aria-label="Three horizontal bars of growing length, each ending in a ring, above a baseline">
+        <g fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 66H352" />
+          <rect x="8" y="10" width="96" height="10" />
+          <circle cx="116" cy="15" r="5" />
+          <rect x="8" y="28" width="176" height="10" />
+          <circle cx="196" cy="33" r="5" />
+          <rect x="8" y="46" width="290" height="10" />
+          <circle cx="310" cy="51" r="5" />
+        </g>
+      </svg>
+      <p class="ca-honest" role="note">
+        <b>{PLAN_HONESTY}.</b> A plan, not a promise: dates are targets, and every call marked as Mike’s waits on Mike.
+        Written by Claude Code on {PLAN.written} from the live {DEVNET.chainId} and the pointcast-chain repository at
+        <code>{PLAN.chainCommit}</code>. Lines tagged <span class="tag pl-j">judgment</span> are judgment, not record.
+      </p>
+      <p class="jump">
+        <a href="#now">where it stands</a><a href="#shape">the shape</a><a href="#horizons">horizons</a><a href="#calls">Mike’s calls</a><a href="#wont">what we won’t do</a><a href="#wallets">wallets</a><a href="#apps">live apps</a>
+      </p>
+    </header>
+
+    <section id="now" class="sec" aria-labelledby="now-title">
+      <p class="kicker">01 · WHERE IT STANDS · READ {PLAN.readAt}</p>
+      <h2 id="now-title" class="h2">It is mostly a clock.</h2>
+      <section class="stats" aria-label="Four numbers, as written">
+        {STATS.map((s) => <div><strong>{s.value}</strong><span>{s.label}</span><small>{s.note}</small></div>)}
+      </section>
+      <ul class="bullets">{STANDING_LINES.map((l) => <li>{l}</li>)}</ul>
+      <p class="pl-milestone">{MILESTONE}</p>
+
+      <aside
+        class="pl-live"
+        aria-labelledby="live-title"
+        data-plan-live
+        data-state="static"
+        data-api={DEVNET.url}
+        data-genesis={DEVNET.genesis}
+        data-house={house}
+        data-written-blocks={STANDING.blocks}
+      >
+        <p class="kicker" id="live-title">NOW · READ LIVE FROM THE DEVNET, IN YOUR BROWSER · GET ONLY</p>
+        <dl class="pl-live__list" aria-live="polite">
+          <div><dt>Height</dt><dd data-live-height>Not read yet. It was block {STANDING.blocks.toLocaleString('en-US')} when the plan was written.</dd></div>
+          <div><dt>Witnesses today</dt><dd data-live-witnesses>Not read yet.</dd></div>
+          <div><dt>Daily Mint</dt><dd data-live-lot>Not read yet.</dd></div>
+          <div><dt>The milestone</dt><dd data-live-milestone>Not read yet.</dd></div>
+        </dl>
+        <div class="ca-actions">
+          <button type="button" class="btn btn--ghost" data-live-again>Read again</button>
+          <p class="ca-status" data-live-state role="status">The strip reads the devnet once the page has loaded.</p>
+        </div>
+        <noscript><p class="fine">The live strip needs JavaScript. The same numbers are at <a href={DEVNET.url + '/status'}>GET /status</a>, <a href={DEVNET.url + '/net'}>/net</a> and <a href={DEVNET.url + '/daily'}>/daily</a>.</p></noscript>
+        <p class="fine">It reads {LIVE_READS.map((r) => r.route).join(', ')}. A witness key is a claim tied to a key, and a key is not a person.</p>
+      </aside>
+    </section>
+
+    <section id="shape" class="sec" aria-labelledby="shape-title">
+      <p class="kicker">02 · THE SHAPE · FOUR DIRECTIONS · ONE BLEND</p>
+      <h2 id="shape-title" class="h2">{BLEND}</h2>
+      <p class="note">“{NORTH_STAR.line}” was {NORTH_STAR.said}, and it still holds. {NORTH_STAR.changed}</p>
+      <ul class="cards cards--2">
+        {DIRECTIONS.map((d) => (
+          <li class={`card${d.tag === 'now' ? ' card--tint' : ''}`}>
+            <p class="card__k">{d.id} · <span class={`tag${d.tag === 'parked' ? ' tag--plan' : d.tag === 'now' ? ' tag--done' : ''}`}>{TAG_WORD[d.tag]}</span></p>
+            <h3>{d.title}.</h3>
+            <p>{d.what}</p>
+            <p><b>{d.verdict}.</b> {d.why}</p>
+            <p class="pl-never"><b>Never:</b> {d.never}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section id="horizons" class="sec" aria-labelledby="horizons-title">
+      <p class="kicker">03 · HORIZONS · NEXT MONTH · NEXT QUARTER · BY SPRING 2027</p>
+      <h2 id="horizons-title" class="h2">Trust first, then one easy door, then a real chain.</h2>
+      <ol class="pl-horizons">
+        {HORIZONS.map((h) => (
+          <li id={`h-${h.id}`} class="pl-h">
+            <p class="card__k">{h.label.toUpperCase()} · {h.until.toUpperCase()}</p>
+            <h3>{h.label}.</h3>
+            <ul class="bullets">
+              {h.items.map((it) => <li>{it.text}{it.judgment && <> <span class="tag pl-j">judgment</span></>}{it.built && <> <span class="tag tag--done">built {it.built.on}</span> <a href={it.built.href}>{it.built.label} →</a></>}</li>)}
+            </ul>
+            {h.note && <p class="fine">{h.note}</p>}
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section id="calls" class="sec" aria-labelledby="calls-title">
+      <p class="kicker">04 · THE CALLS ONLY MIKE MAKES · EACH WITH A RECOMMENDATION</p>
+      <h2 id="calls-title" class="h2">Seven decisions. Nothing here happens without a yes.</h2>
+      <ol class="pl-calls">
+        {CALLS.map((c, i) => (
+          <li class="pl-call">
+            <p class="card__k">CALL {String(i + 1).padStart(2, '0')}{c.judgment && <> · <span class="tag pl-j">judgment</span></>}</p>
+            <h3>{c.q}</h3>
+            <p><b>Recommended:</b> {c.rec}</p>
+            <p class="pl-why">{c.why}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section id="wont" class="sec" aria-labelledby="wont-title">
+      <p class="kicker">05 · WHAT WE WILL NOT DO</p>
+      <h2 id="wont-title" class="h2">The things this plan rules out.</h2>
+      <ul class="bullets">{WONT.map((w) => <li>{w}</li>)}</ul>
+    </section>
+
+    <section id="wallets" class="sec" aria-labelledby="wallets-title">
+      <p class="kicker">06 · WALLETS · THE PEER-TO-PEER VERDICT · WRITTEN {PLAN.written}</p>
+      <h2 id="wallets-title" class="h2">Peer-to-peer wallets: not first. Later, on top of passkeys.</h2>
+      <p class="note">{WALLET_QUESTION.asked} {WALLET_QUESTION.panel}</p>
+      <p class="note">{WALLET_QUESTION.outcome}</p>
+
+      <h3 class="h3">What exists</h3>
+      <ul class="pl-pieces" aria-label="The wallet pieces pointcast-chain has built, and where each one runs">
+        {WALLET_PIECES.map((p) => (
+          <li class="pl-piece">
+            <p class="pl-piece__k"><b>{p.piece}</b> <span class="tag">built in {p.built}</span>{p.live && <> <span class="tag tag--done">on devnet-2</span></>}</p>
+            <div>
+              <p>{p.what}</p>
+              <p class="pl-piece__where"><b>Where it runs:</b> {p.where}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <p class="pl-verdict"><span class="kicker">THE VERDICT</span> {WALLET_VERDICT}</p>
+
+      <h3 class="h3">Why not first</h3>
+      <ol class="steps">
+        {WALLET_WHY_NOT.map((r) => <li><b>{r.head}</b> {r.body}{r.judgment && <> <span class="tag pl-j">judgment</span></>}</li>)}
+      </ol>
+
+      <h3 class="h3">When it becomes right</h3>
+      <ul class="bullets">
+        {WALLET_WHEN.map((w) => <li>{w.text}{w.judgment && <> <span class="tag pl-j">judgment</span></>}</li>)}
+      </ul>
+      <p class="note">{WALLET_TARGET} {WALLET_NEVER}</p>
+      <p class="fine">The scope these pieces came from is <a href="/chain/docs/wallets/">the wallet scope</a> (a copy from 3 October, when none of it was built). The repository’s own copy of this verdict ends <code>docs/WALLETS.md</code>, beside a table of the passkey settings in every place they are set.</p>
+    </section>
+
+    <section id="apps" class="sec" aria-labelledby="apps-title">
+      <p class="kicker">07 · WHAT RUNS TODAY · {PLAN_HONESTY.toUpperCase()}</p>
+      <h2 id="apps-title" class="h2">Everything this plan builds on, live.</h2>
+      <ul class="cards">
+        {CHAIN_APPS.map((a) => (
+          <li class="card">
+            <p class="card__k">{a.mode === 'write' ? 'READS AND WRITES · ON YOUR CLICK' : 'READS ONLY'}</p>
+            <h3>{a.label}</h3>
+            <p>{a.blurb}</p>
+            <p class="card__links"><a href={a.href}>Open {a.short} →</a></p>
+          </li>
+        ))}
+        {more.map((m) => (
+          <li class="card">
+            <p class="card__k">ALSO</p>
+            <h3>{m.label}</h3>
+            <p>{m.blurb}</p>
+            <p class="card__links"><a href={m.href}>Open →</a></p>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <footer class="method">
+      <p class="kicker">METHOD</p>
+      <ul class="bullets">
+        {SOURCES.map((s) => <li><b>{s.label}.</b> {s.detail}</li>)}
+      </ul>
+      <p>
+        Counts are keys and transactions, not people. Written by Claude Code on {PLAN.written}. Filed as
+        <a href={`/b/${PLAN_BLOCK}`}>block {PLAN_BLOCK}</a>.
+      </p>
+    </footer>
+  </div>
+</BlockLayout>
+
+<script is:inline type="module">
+  // Lazy: nothing is imported or read until the page has loaded, the browser is idle, the strip is near the viewport and the tab is visible.
+  const root = document.querySelector('[data-plan-live]');
+  if (root) {
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 1200));
+    const go = () => idle(() => import('/chain/apps/plan-live.js').then((m) => m.start(root)).catch(() => { root.dataset.state = 'down'; }));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
+</script>
+
+<style>
+  .pl-page .pl-milestone{margin:16px 0 0;max-width:840px;padding:14px 16px;border:1.5px solid var(--c600);font:500 18px/1.4 var(--pc-font-sans);letter-spacing:-.01em;color:var(--pc-ink)}
+  .pl-page .pl-live{margin:16px 0 0;padding:14px 16px;border:1.5px solid var(--c600);border-left-width:6px;background:var(--c50);min-width:0}
+  .pl-page .pl-live .kicker{margin:0}
+  .pl-page .pl-live__list{margin:10px 0 0;display:grid;gap:8px}
+  .pl-page .pl-live__list div{display:grid;grid-template-columns:150px minmax(0,1fr);gap:4px 14px;min-width:0}
+  .pl-page .pl-live__list dt{font:500 10px/1.9 var(--pc-font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c800)}
+  .pl-page .pl-live__list dd{margin:0;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink);overflow-wrap:anywhere}
+  .pl-page .pl-live[data-state="genesis-changed"],.pl-page .pl-live[data-state="down"]{border-color:var(--ca-bad)}
+  .pl-page .pl-live[data-state="genesis-changed"] .ca-status,.pl-page .pl-live[data-state="down"] .ca-status{color:var(--ca-bad)}
+  .pl-page .tag.pl-j{border-style:dashed}
+  .pl-page .pl-never{font-size:14px}
+  .pl-page .pl-horizons,.pl-page .pl-calls{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:8px}
+  .pl-page .pl-horizons{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pl-page .pl-h,.pl-page .pl-call{min-width:0;border:1.5px solid var(--c600);padding:16px;overflow-wrap:anywhere}
+  .pl-page .pl-h:first-child{background:var(--c50)}
+  .pl-page .pl-h h3,.pl-page .pl-call h3{margin:0 0 8px;font:500 19px/1.3 var(--pc-font-sans);letter-spacing:-.01em;color:var(--pc-ink)}
+  .pl-page .pl-call p:not(.card__k){margin:6px 0 0;max-width:840px;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .pl-page .pl-call p b{color:var(--pc-ink);font-weight:500}
+  .pl-page .pl-call .card__k{margin:0 0 6px}
+  .pl-page .pl-why{font-size:14px}
+  .pl-page .pl-verdict{margin:18px 0 0;max-width:840px;padding:16px;border:1.5px solid var(--c600);border-left-width:6px;font:500 clamp(19px,2.4vw,23px)/1.35 var(--pc-font-sans);letter-spacing:-.01em;color:var(--pc-ink)}
+  .pl-page .pl-verdict .kicker{display:block;margin:0 0 6px}
+  .pl-page .pl-pieces{list-style:none;margin:12px 0 0;padding:0;border:1.5px solid var(--c600)}
+  .pl-page .pl-piece{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:6px 20px;padding:14px 16px;border-bottom:1px solid var(--pc-rule-soft);min-width:0;overflow-wrap:anywhere}
+  .pl-page .pl-piece:last-child{border-bottom:0}
+  .pl-page .pl-piece p{margin:0;font:400 15px/1.55 var(--pc-font-sans);color:var(--pc-ink-soft)}
+  .pl-page .pl-piece .pl-piece__k{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;color:var(--pc-ink)}
+  .pl-page .pl-piece .pl-piece__k b{font-weight:500;font-size:17px;width:100%}
+  .pl-page .pl-piece .pl-piece__where{margin-top:6px;font-size:14px}
+  .pl-page .pl-piece .pl-piece__where b{font-weight:500;color:var(--pc-ink)}
+  @media (max-width:900px){.pl-page .pl-horizons{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:640px){.pl-page .pl-piece{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:520px){.pl-page .pl-live__list div{grid-template-columns:minmax(0,1fr)}}
+</style>
