@@ -44,10 +44,20 @@ async function listProfilesForBuild() {
 export function listPublicCollectors(): Promise<PublicCollector[]> {
   if (collectorsPromise) return collectorsPromise;
   collectorsPromise = (async () => {
-    const profiles = await listProfilesForBuild();
+    let profiles: Awaited<ReturnType<typeof listProfilesForBuild>>;
+    try {
+      profiles = await listProfilesForBuild();
+    } catch (error) {
+      // Offline builds (no route to TzKT) still complete; CI and deploys have network.
+      console.warn(`[collect-public] indexer unreachable, building with no public collectors: ${(error as Error).message}`);
+      return [];
+    }
     const today = collectSitting();
     return Promise.all(profiles.map(async (profile) => {
-      const wallet = await getWalletHoldings(profile.owner, { cache: null });
+      const wallet = await getWalletHoldings(profile.owner, { cache: null }).catch((error: Error) => {
+        console.warn(`[collect-public] holdings unavailable for @${profile.handle}: ${error.message}`);
+        return { collections: [] } as Awaited<ReturnType<typeof getWalletHoldings>>;
+      });
       const tokens = (slug: string) => wallet.collections
         .filter((collection) => collection.slug === slug)
         .flatMap((collection) => collection.tokens.map((token) => token.tokenId));
