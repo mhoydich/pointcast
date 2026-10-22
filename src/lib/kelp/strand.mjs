@@ -83,19 +83,25 @@ export function placePlankton(g, rng = Math.random) {
 export function createGame({ stage = 0, machineId = 'xl', density = 1, startLength = START_LENGTH, lives = 3, unlimited = false, rng = Math.random } = {}) {
   const g = {
     stage, machineId, rocks: rocksFor(stage, machineId, density), strand: freshStrand(startLength), dir: START.dir, queue: [],
-    startLength, target: targetLength(stage), plankton: null, golden: null, score: 0, lives, unlimited, streak: 0,
+    startLength, density, target: targetLength(stage), plankton: null, golden: null, score: 0, lives, unlimited, streak: 0,
     eaten: 0, totalEaten: 0, ticks: 0, grow: 0, boost: 0, phase: 'ready', lastEvent: null, best: 0,
   };
   g.plankton = placePlankton(g, rng);
   return g;
 }
 
-/** Queue a turn. Rejects reversals and repeats of the pending direction. */
+/**
+ * Queue a turn. Rejects reversals and repeats of the direction it would
+ * follow. A full queue replaces its last slot, so that check runs against
+ * the slot before it: left, down, right inside one tick must not leave
+ * [left, right], a 180 into the neck.
+ */
 export function setDirection(g, dir) {
   if (!DIRS[dir]) return false;
-  const last = g.queue.length ? g.queue[g.queue.length - 1] : g.dir;
-  if (dir === last || dir === OPPOSITE[last]) return false;
-  if (g.queue.length >= MAX_QUEUE) g.queue[g.queue.length - 1] = dir; else g.queue.push(dir);
+  const full = g.queue.length >= MAX_QUEUE;
+  const after = full ? (g.queue.length >= 2 ? g.queue[g.queue.length - 2] : g.dir) : g.queue.length ? g.queue[g.queue.length - 1] : g.dir;
+  if (dir === after || dir === OPPOSITE[after]) return false;
+  if (full) g.queue[g.queue.length - 1] = dir; else g.queue.push(dir);
   return true;
 }
 
@@ -181,6 +187,7 @@ export function respawn(g, { startLength = g.startLength, rng = Math.random } = 
 /** After a clear: the next stage's rocks, a fresh strand, an extra life every third stage. */
 export function nextStage(g, { density = 1, startLength = g.startLength, rng = Math.random } = {}) {
   g.stage += 1;
+  g.density = density;
   g.rocks = rocksFor(g.stage, g.machineId, density);
   g.target = targetLength(g.stage);
   g.eaten = 0;
@@ -191,10 +198,14 @@ export function nextStage(g, { density = 1, startLength = g.startLength, rng = M
   return extra;
 }
 
-/** Swap the machine mid-game: same pattern index and density, so only a nameplate stage changes shape. */
+/**
+ * Swap the machine mid-game. The stage keeps the density it was built with
+ * (the mood's density drifts during play), so only a nameplate stage changes
+ * shape. `density` is a fallback for a game made before `g.density` existed.
+ */
 export function setMachine(g, machineId, density = 1) {
   g.machineId = machineId;
-  const next = rocksFor(g.stage, machineId, density);
+  const next = rocksFor(g.stage, machineId, typeof g.density === 'number' ? g.density : density);
   // Never drop a rock onto the strand or the plankton.
   for (const s of g.strand) next.set.delete(cellKey(s.c, s.r));
   if (g.plankton) next.set.delete(cellKey(g.plankton.c, g.plankton.r));

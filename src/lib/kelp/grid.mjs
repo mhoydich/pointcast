@@ -149,15 +149,19 @@ export function openPockets(cells) {
 
 /**
  * Rocks for stage `n`. `density` 0..1 comes from the mood response: at 1 the
- * whole pattern stands, lower values dither rocks away. Removing rocks only
- * adds open water, so a pattern that is connected at full density stays
- * connected at any density.
+ * whole pattern stands, lower values dither rocks away. Dithering a thick
+ * glyph stroke can leave a lone open cell with rock on all four sides, which
+ * plankton could land in and never be reached; any such sealed cell stays
+ * rock. So every open cell is reachable at any density, and a thinned
+ * pattern is always a subset of the full one.
  */
 export function rocksFor(n, machineId = 'xl', density = 1) {
   const { pattern, cells } = patternCells(n, machineId);
   const keep = 0.55 + 0.45 * Math.min(1, Math.max(0, density));
-  const kept = cells.filter(([c, r]) => cellRank(c, r) <= keep);
-  const set = new Set(kept.map(([c, r]) => cellKey(c, r)));
+  const set = new Set(cells.filter(([c, r]) => cellRank(c, r) <= keep).map(([c, r]) => cellKey(c, r)));
+  const water = reachable(set);
+  for (const [c, r] of cells) { const k = cellKey(c, r); if (!set.has(k) && !water.has(k)) set.add(k); }
+  const kept = cells.filter(([c, r]) => set.has(cellKey(c, r)));
   return { index: n, pattern, cells: kept, set, total: cells.length };
 }
 

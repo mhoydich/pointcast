@@ -91,9 +91,11 @@ test('strand: turns queue, reversals are refused, and the queue drains one per t
   assert.equal(setDirection(g, 'left'), true);
   assert.equal(setDirection(g, 'right'), false, 'reverse of the queued turn');
   assert.equal(setDirection(g, 'up'), true);
-  assert.equal(setDirection(g, 'down'), false);
-  assert.equal(setDirection(g, 'left'), true, 'a third turn replaces the second');
-  assert.deepEqual(g.queue, ['left', 'left']);
+  assert.equal(setDirection(g, 'down'), true, 'a third turn replaces the second when it is legal after the first');
+  assert.deepEqual(g.queue, ['left', 'down']);
+  assert.equal(setDirection(g, 'left'), false, 'a repeat of the first queued turn is refused');
+  assert.equal(setDirection(g, 'right'), false, 'a reversal of the first queued turn is refused');
+  assert.deepEqual(g.queue, ['left', 'down']);
   g.queue = ['left', 'up'];
   tick(g, { rng: seeded(3) });
   assert.equal(g.dir, 'left');
@@ -269,6 +271,51 @@ test('strand: switching machines mid-stage never drops a rock on the strand or t
   assert.notEqual(g.rocks.set.size, before);
   assert.equal(g.rocks.cells.length, g.rocks.set.size);
   assert.ok(placePlankton(g, seeded(28)));
+});
+
+test('grid: at every mood density, every open cell stays reachable and thinning only removes rocks', () => {
+  for (let n = 0; n < PATTERNS.length * 3; n += 1) {
+    for (const id of MACHINE_IDS) {
+      const full = rocksFor(n, id, 1);
+      for (let d = 0; d <= 1.0001; d += 0.01) {
+        const rocks = rocksFor(n, id, d);
+        const water = reachable(rocks.set);
+        assert.equal(water.size, COLS * ROWS - rocks.set.size, `${rocks.pattern} stage ${n} on ${id} at density ${d.toFixed(2)}: no sealed cell`);
+        for (const k of rocks.set) assert.ok(full.set.has(k), 'never a rock the full pattern lacks');
+        assert.equal(rocks.cells.length, rocks.set.size);
+      }
+    }
+  }
+  // The reported case: the XL nameplate at 0.56 used to seal [2,4] and others.
+  const r = rocksFor(3, 'xl', 0.56);
+  assert.ok(reachable(r.set).has(cellKey(2, 4)) || r.set.has(cellKey(2, 4)));
+});
+
+test('strand: a full turn queue never queues a 180 into the neck', () => {
+  const g = createGame({ rng: seeded(30) });
+  start(g);
+  g.plankton = { c: 0, r: 0 };
+  assert.equal(setDirection(g, 'left'), true);
+  assert.equal(setDirection(g, 'down'), true);
+  assert.equal(setDirection(g, 'right'), false, 'right would reverse the queued left');
+  assert.deepEqual(g.queue, ['left', 'down']);
+  assert.equal(setDirection(g, 'up'), true, 'up after left is a legal turn and replaces down');
+  assert.deepEqual(g.queue, ['left', 'up']);
+  // Whatever lands in the queue, the strand never reverses into itself over the next two ticks.
+  tick(g, { rng: seeded(33) }); tick(g, { rng: seeded(33) });
+  assert.equal(g.phase, 'play');
+});
+
+test('strand: switching machines keeps the density the stage was built with', () => {
+  for (const stage of [1, 2, 4, 5]) {
+    const g = createGame({ stage, density: 0.3, rng: seeded(31) });
+    g.strand = [{ c: 11, r: 22 }, { c: 11, r: 23 }];
+    const before = new Set(g.rocks.set);
+    setMachine(g, 'c64', 1);
+    assert.deepEqual([...g.rocks.set].sort(), [...before].sort(), `stage ${stage} (${g.rocks.pattern}) did not change shape`);
+    nextStage(g, { density: 0.9, rng: seeded(32) });
+    assert.equal(g.density, 0.9);
+  }
 });
 
 test('simulated run: the autopilot eats a dozen plankton on an open stage and survives a rock stage for a while', () => {
