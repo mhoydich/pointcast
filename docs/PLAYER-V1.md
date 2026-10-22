@@ -6,7 +6,7 @@ existing Layers button, authentication implementation or deployment workflow.
 
 ## Routes and files
 
-- `/player-v1`: Astro host, isolated player iframe and existing AI review UI.
+- `/player-v1`: Astro host with an isolated player iframe and export-only AI brief instructions.
 - `/player-v1/app.html`: dependency-free player, without an account requirement.
 - `/player-v1.json`: machine-readable capabilities and validation boundaries.
 - `public/player-v1/{player.css,player.js,host-bridge.js}`: static assets.
@@ -52,22 +52,24 @@ There are no external fonts, framework imports, trackers or microphone access.
 Skin imports use a fixed allowlist; no executable CSS, scripts or remote URLs.
 A skin preset exports appearance only. Workspace exports contain settings only.
 
-## AI handoff, not automatic execution
+## AI brief export — public-beta fallback
 
-The host reuses `BlockLayout`, `AuthMenu` and `AiRuntime`. The player previews
-exact selected text. Track title and checked notes are excluded unless the user
-separately opts in. Audio and credentials are never included.
+The public beta offers **Prepare/export AI brief**. Live handoff is disabled in
+both the player and host, and the JSON twin reports `prepare-and-export-only`.
+The host does not load the player companion bridge or embed a player-specific
+AI review form. Shared site tools remain independent of the player.
 
-After an explicit handoff, the host verifies the exact iframe window, same
-origin, protocol version and 1–4,000-character prompt. It clears previous optional
-context, fills the companion review form and opens a dialog. It never clicks Run
-or submits a task. A host-ready acknowledgement means only that the review UI is
-available; sign-in, pairing, provider readiness and running are separate steps.
+The player previews the exact exported text. Track title and checked notes are
+excluded unless separately selected. Audio and credentials are never included.
+No provider call or task runs from the player. Existing host-bridge source and
+its security tests remain for a later reviewed integration; passing those unit
+tests does not enable the public feature.
 
-Opening the host companion can use the existing site's auth/status endpoints.
-That is separate from the network-blocked standalone player. A live, signed-in
-companion task was not executed during this build. The instructions ask for a
-draft; they are not a new provider-side authorization or sandbox mechanism.
+Enabling handoff later requires actual staging-origin verification of sign-out,
+unpaired, offline, timeout and ready states, plus one harmless authorized draft
+through the real companion. The sequence must remain prepare, preview, explicit
+handoff, companion review, then explicit Run. Validate the final companion prompt
+including its wrapper against the runtime limit before enabling handoff.
 
 ## Reproduce tests
 
