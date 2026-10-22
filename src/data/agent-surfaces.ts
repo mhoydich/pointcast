@@ -78,6 +78,9 @@ export const AGENT_SURFACES = {
     nounsMoneyEditions: 'https://pointcast.xyz/nouns-money/editions/',
     nounsMoneyCommunity: 'https://pointcast.xyz/nouns-money/community/',
     nounsMoneyMarketplace: 'https://pointcast.xyz/nouns-money/marketplace/',
+    nounsMessenger: 'https://pointcast.xyz/nouns-messenger/',
+    pmm: 'https://pointcast.xyz/pmm/',
+    pmmBrand: 'https://pointcast.xyz/pmm/brand/',
     luckyCat: 'https://pointcast.xyz/lucky-cat/',
     luckyCatAgents: 'https://pointcast.xyz/lucky-cat/agents/',
     luckyCatArt: 'https://pointcast.xyz/lucky-cat/art/',
@@ -282,6 +285,8 @@ export const AGENT_SURFACES = {
     frontDesk: 'https://pointcast.xyz/api/front-desk',
     mcp: 'https://pointcast.xyz/api/mcp',
     mcpV2: 'https://pointcast.xyz/api/mcp-v2',
+    // PMM handshake note. GET → { bound, ttlSeconds }: a ten-minute WebRTC offer/answer store, not a message store.
+    pmmSignal: 'https://pointcast.xyz/api/pmm/signal',
     // The public pointcast-chain devnet (its own Worker, not pointcast.xyz): no value, may reset. Guide: /chain/bots/.
     chainDevnet: 'https://pointcast-devnet.mhoydich.workers.dev',
     chainDevnetMcp: 'https://pointcast-devnet.mhoydich.workers.dev/mcp',
