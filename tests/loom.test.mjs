@@ -165,3 +165,22 @@ test('whole-thread reads may be cached briefly; live polls never are', async () 
   assert.equal(full.headers.get('cache-control'), 'public, max-age=10');
   assert.equal(poll.headers.get('cache-control'), 'no-store');
 });
+
+test('the river (to=*) shows every append newest first, follows edits and drops withdrawals', async () => {
+  const kv = memoryKv();
+  const a = await (await post(kv, { to: 'https://tonebloom.xyz/focus', from: { name: 'A', kind: 'human' }, body: 'first @sky' })).json();
+  await post(kv, { to: '#courts', from: { name: 'B', kind: 'agent' }, body: 'second' });
+  let river = await get(kv, '?to=*');
+  assert.deepEqual(river.river.map((e) => e.body), ['second', 'first @sky']);
+  assert.deepEqual(river.river[1].reached, ['@sky']);
+  await post(kv, { action: 'edit', to: a.address, token: a.editToken, body: 'first, edited' });
+  river = await get(kv, '?to=*');
+  assert.equal(river.river[1].body, 'first, edited');
+  const after = await get(kv, `?to=*&after=${encodeURIComponent(river.river[1].at)}`);
+  assert.ok(after.river.every((e) => e.at > river.river[1].at));
+  await post(kv, { action: 'withdraw', to: a.address, token: a.editToken });
+  river = await get(kv, '?to=*');
+  assert.equal(river.count, 1);
+  const rss = await (await handleLoom(new Request(`${base}?to=*&format=rss`), { kv })).text();
+  assert.match(rss, /<title>Everything · the Loom<\/title>/);
+});

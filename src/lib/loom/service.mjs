@@ -25,6 +25,7 @@ export const SPEC = 'pointcast.loom/v1';
 export const MAX_OPS = 600;
 export const MAX_INDEX = 300;
 export const MAX_OUTBOX = 200;
+export const MAX_RIVER = 200;
 export const BODY_MAX = 2000;
 const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link']);
 const SENDER_KINDS = new Set(['human', 'agent']);
@@ -121,6 +122,37 @@ async function touchIndex(kv, log, op) {
     last: { name: op.from?.name, kind: op.from?.kind, body: excerpt(op.body, 120) } };
   const next = [entry, ...index.filter((e) => e.key !== log.key)].slice(0, MAX_INDEX);
   await writeJson(kv, 'loom:index', next);
+}
+
+/** The river: every message appended anywhere, newest first. GET ?to=* reads it. */
+async function touchRiver(kv, log, op) {
+  const river = await readJson(kv, 'loom:river', []);
+  const entry = { address: log.address, key: log.key, label: log.label, title: log.title, id: op.id, at: op.at, from: op.from, kind: op.kind,
+    body: excerpt(op.body, 280), media: op.media ?? null, parent: op.parent ?? null, reached: op.reached ?? [] };
+  await writeJson(kv, 'loom:river', [entry, ...river.filter((e) => !(e.key === log.key && e.id === op.id))].slice(0, MAX_RIVER));
+}
+async function dropFromRiver(kv, key, id) {
+  const river = await readJson(kv, 'loom:river', []);
+  if (river.some((e) => e.key === key && e.id === id)) await writeJson(kv, 'loom:river', river.filter((e) => !(e.key === key && e.id === id)));
+}
+function riverRss(river) {
+  const items = river.slice(0, 50).map((e) => `    <item>
+      <title>${xml(`${e.from.name} → ${e.label}: ${excerpt(e.body, 80)}`)}</title>
+      <link>${xml(`${SITE}/loom?to=${encodeURIComponent(e.address)}#${e.id}`)}</link>
+      <guid isPermaLink="false">${xml(`loom:${e.key}#${e.id}`)}</guid>
+      <pubDate>${new Date(e.at).toUTCString()}</pubDate>
+      <description>${xml(e.body)}</description>
+    </item>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Everything · the Loom</title>
+    <link>${SITE}/loom?to=*</link>
+    <description>Every message appended anywhere on the PointCast Loom, newest first.</description>
+${items}
+  </channel>
+</rss>
+`;
 }
 
 async function touchOutbox(kv, from, record) {
@@ -291,6 +323,13 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     if (request.method === 'GET' || request.method === 'HEAD') {
       const to = url.searchParams.get('to');
       const from = url.searchParams.get('from');
+      if (to === '*') {
+        const river = await readJson(kv, 'loom:river', []);
+        if (url.searchParams.get('format') === 'rss') return new Response(riverRss(river), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
+        const after = url.searchParams.get('after');
+        const items = after ? river.filter((e) => e.at > after) : river;
+        return json({ ok: true, spec: SPEC, kvBound: !!kv, river: items, count: items.length, newest: river[0]?.at ?? null }, 200, after ? {} : { 'Cache-Control': READ_CACHE });
+      }
       if (to) {
         const target = parseAddress(to);
         const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
@@ -348,6 +387,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
       await saveLog(kv, log);
       await touchIndex(kv, log, op);
       await touchOutbox(kv, from, { to: log.address, key: log.key, id: op.id, at: now, body: excerpt(op.body, 120) });
+      await touchRiver(kv, log, { ...op, reached });
       const { tokenHash, ...publicOp } = op;
       return json({ ok: true, spec: SPEC, message: publicOp, address: `loom:${log.key}#${op.id}`, log: log.address, editToken: token, reached }, 201);
     }
@@ -364,7 +404,10 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         const text = clean(body.body, BODY_MAX);
         if (!text) return fail('body_required');
         pushOp(log, { op: 'edit', id, body: text }, now);
-      } else pushOp(log, { op: 'hide', id, reason: 'withdrawn' }, now);
+        const river = await readJson(kv, 'loom:river', []);
+        const hit = river.find((e) => e.key === log.key && e.id === id);
+        if (hit) { hit.body = excerpt(text, 280); hit.edited = true; await writeJson(kv, 'loom:river', river); }
+      } else { pushOp(log, { op: 'hide', id, reason: 'withdrawn' }, now); await dropFromRiver(kv, log.key, id); }
     } else if (action === 'plus') {
       if (!await limit('loom:plus')) return fail('rate_limited', 429);
       pushOp(log, { op: 'plus', id, by: await clientTag(request, body) }, now);
@@ -376,6 +419,7 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
     } else if (action === 'hide') {
       if (!adminKey || !safeEqual(request.headers.get('X-Loom-Admin') ?? '', adminKey)) return fail('admin_required', 403);
       pushOp(log, { op: 'hide', id, reason: clean(body.reason, 80) || 'moderated' }, now);
+      await dropFromRiver(kv, log.key, id);
     } else return fail('action_unknown');
     await saveLog(kv, log);
     const view = publicView(log);

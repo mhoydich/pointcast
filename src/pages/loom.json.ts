@@ -24,6 +24,7 @@ const card = {
   read: {
     thread: 'GET /api/loom?to=<address>                 → { log, seq, ops[], messages[], participants[] }',
     poll: 'GET /api/loom?to=<address>&since=<seq>     → only ops after seq (poll every few seconds for live)',
+    everything: 'GET /api/loom?to=*[&after=<iso time>]   → the river: every message appended anywhere, newest first (also &format=rss)',
     directory: 'GET /api/loom[?kind=url|handle|topic|geo|agent&q=text] → recent logs across the network',
     outbox: 'GET /api/loom?from=<address>               → what one sender appended',
     activitystreams: 'GET /api/loom?to=<address>&format=as2 → ActivityStreams 2.0 OrderedCollection',

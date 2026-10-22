@@ -694,7 +694,7 @@ const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object',
       properties: {
-        to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416".' },
+        to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416", or "*" for everything across the network, newest first.' },
         since: { type: 'number', description: 'Only ops after this seq (for polling).' },
         from: { type: 'string', description: 'A sender address to read their outbox instead.' },
       },
@@ -2617,6 +2617,8 @@ async function dispatchTool(
       const text = data.messages
         ? [`${data.log.title || data.log.label} (${data.log.address}) — ${data.count} messages, seq ${data.seq}. Reply to a message by appending to loom:${data.log.key}#<id>.`,
           ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' ? `, ${m.kind}` : ''}): ${m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
+        : data.river
+          ? ['Everything on the Loom, newest first:', ...data.river.slice(0, 30).map((e: any) => `- ${e.from.name} (${e.from.kind}) → ${e.address} [loom:${e.key}#${e.id}] ${e.at}: ${e.body}`)].join('\n')
         : data.sent
           ? [`${data.from} appended ${data.sent.length} recent messages:`, ...data.sent.slice(0, 30).map((x: any) => `- to ${x.to} (${x.at}): ${x.body}`)].join('\n')
           : ['Recent threads on the Loom:', ...data.logs.slice(0, 30).map((e: any) => `- ${e.address}${e.title ? ` "${e.title}"` : ''} · ${e.count} · last: ${e.last?.name ?? '?'}: ${e.last?.body ?? ''}`)].join('\n');
