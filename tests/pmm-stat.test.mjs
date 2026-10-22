@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { onRequestPost, onRequestGet, parseOutcome, summarize, keyFor, limiterId, PREFIX } from '../functions/api/pmm/stat.ts';
+import { onRequestPost, onRequestGet, parseOutcome, summarize, keyFor, limiterId, expandV6, monthsBack, PREFIX } from '../functions/api/pmm/stat.ts';
 
 // A KV fake with put metadata and prefix listing, like the real namespace.
 function fakeKv() {
   const m = new Map();
   return {
     m, lists: 0,
+    async get(k) { return m.has(k) ? m.get(k).v : null; },
     async put(k, v, o = {}) { m.set(k, { v, metadata: o.metadata }); },
     async list({ prefix = '', limit = 1000, cursor } = {}) {
       this.lists++;
@@ -99,6 +100,9 @@ test('the rate limit keys on a salted hash of the address, one bucket per IPv6 /
   const at = (ip, day = '2026-10-22') => limiterId(new Request('https://pointcast.xyz/api/pmm/stat', { headers: { 'CF-Connecting-IP': ip } }), day);
   const a = await at('2001:db8:1:2:aaaa::1'), b = await at('2001:db8:1:2:bbbb::9'), c = await at('2001:db8:1:3::1');
   assert.equal(a, b, 'the same /64 shares a bucket');
+  assert.equal(await at('2001:db8::1'), await at('2001:db8::9:2:3:4'), 'a compressed /64 shares a bucket too');
+  assert.equal(await at('2001:db8::1'), await at('2001:DB8:0:0:1:2:3:4'));
+  assert.notEqual(await at('2001:db8::1'), await at('2001:db8:0:1::1'));
   assert.notEqual(a, c);
   assert.match(a, /^h:[0-9a-f]{16}$/);
   assert.notEqual(await at('203.0.113.7'), await at('203.0.113.8'));
@@ -107,7 +111,8 @@ test('the rate limit keys on a salted hash of the address, one bucket per IPv6 /
   await onRequestPost({ env: { PC_ANALYTICS_KV: kv, PC_RATES_KV: rates }, params: {}, request: new Request('https://pointcast.xyz/api/pmm/stat', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': '203.0.113.7' }, body: JSON.stringify(run()) }) });
   assert.equal(kv.m.size, 1);
-  assert.ok([...rates.m.keys()].every((k) => !k.includes('203.0.113.7')), 'no raw address in the limiter keys');
+  assert.equal(rates.m.size, 1, 'the limiter wrote its counter');
+  assert.match([...rates.m.keys()][0], /^rl:pmm:stat:h:[0-9a-f]{16}:\d+$/, 'the limiter key is the hash, not the address');
 });
 
 test('GET lists the whole prefix once while it is small, and day by day newest first only past the cap', async () => {
@@ -119,12 +124,38 @@ test('GET lists the whole prefix once while it is small, and day by day newest f
   assert.equal(kv.lists, 1, 'one list operation for a small store, whatever the window');
 });
 
-test('past the cap the report falls back to the window, newest day first', async () => {
+test('expandV6 and monthsBack', () => {
+  assert.deepEqual(expandV6('2001:db8::1'), ['2001', 'db8', '0', '0', '0', '0', '0', '1']);
+  assert.deepEqual(expandV6('::1'), ['0', '0', '0', '0', '0', '0', '0', '1']);
+  assert.deepEqual(expandV6('fe80::1%eth0'), ['fe80', '0', '0', '0', '0', '0', '0', '1']);
+  assert.deepEqual(expandV6('2001:0DB8:0000:0001:0:0:0:1'), ['2001', 'db8', '0', '1', '0', '0', '0', '1']);
+  const at = Date.parse('2026-10-22T12:00:00Z');
+  assert.deepEqual(monthsBack(1, at), ['2026-10']);
+  assert.deepEqual(monthsBack(90, at), ['2026-10', '2026-09', '2026-08', '2026-07']);
+});
+
+test('one edge-cached snapshot serves every window; the response is cacheable for a minute', async () => {
+  const store = new Map();
+  globalThis.caches = { default: { async match(r) { const v = store.get(r.url); return v ? v.clone() : undefined; }, async put(r, res) { store.set(r.url, res); } } };
+  try {
+    const kv = fakeKv(); const env = { PC_ANALYTICS_KV: kv };
+    for (let i = 0; i < 4; i++) await post(env, run());
+    kv.lists = 0;
+    const r1 = await get(env, '?days=1');
+    assert.equal(r1.headers.get('Cache-Control'), 'public, max-age=60');
+    await new Promise((r) => setTimeout(r, 0));
+    for (const d of [7, 30, 90, 2, 3]) assert.equal((await (await get(env, '?days=' + d)).json()).attempts, 4);
+    assert.equal(kv.lists, 1, 'six windows, one listing');
+    assert.equal(store.size, 1);
+  } finally { delete globalThis.caches; }
+});
+
+test('past the cap, listing goes month by month newest first and says it was truncated', async () => {
   const kv = fakeKv(); const env = { PC_ANALYTICS_KV: kv };
-  const old = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+  const old = new Date(Date.now() - 60 * 86400_000).toISOString().slice(0, 10);
   for (let i = 0; i < 10_001; i++) kv.m.set(keyFor(parseOutcome(run()), old), { v: '', metadata: { ms: 5 } });
   for (let i = 0; i < 3; i++) await post(env, run());
   const j = await (await get(env, '?days=7')).json();
-  assert.equal(j.attempts, 3, 'today is reported even though older keys fill the cap');
-  assert.equal(j.truncated, false);
+  assert.equal(j.attempts, 3, 'today survives the cap');
+  assert.equal(j.truncated, true, 'the old month did not fit');
 });

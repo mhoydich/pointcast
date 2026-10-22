@@ -22,7 +22,8 @@
  * Anyone can forge reports: the site-only check is header based and the rate
  * limit is per address. The GET says so. The account's KV is on the free plan
  * (1,000 writes a day), so a POST costs two writes and the GET lists the prefix
- * once (one operation per 1,000 keys) behind a 60-second edge cache.
+ * once (one operation per 1,000 keys) into one edge-cached snapshot that every
+ * window is computed from, refreshed at most every five minutes per data center.
  */
 import { fromSite } from './turn.ts';
 import { rateLimit, rateLimitResponse } from '../../_rate-limit.ts';
@@ -67,11 +68,20 @@ export function parseOutcome(body: unknown): Outcome | null {
 
 export const keyFor = (o: Outcome, day: string) => `${PREFIX}${day}:${o.outcome}:${o.flow}:${o.via}:${o.path}:${o.reason}:${o.id}`;
 
+/** The eight groups of an IPv6 address, '::' expanded and leading zeros dropped. */
+export function expandV6(ip: string): string[] {
+  const [head, tail] = ip.toLowerCase().split('%')[0].split('::');
+  const a = head ? head.split(':') : [];
+  const b = tail === undefined ? [] : tail ? tail.split(':') : [];
+  const groups = tail === undefined ? a : [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill('0'), ...b];
+  return groups.map((g) => g.replace(/^0+(?=.)/, ''));
+}
+
 /** A salted, day-scoped hash of the reporter's address for the rate limit: the /64 for IPv6, the whole address for IPv4. */
 export async function limiterId(request: Request, day: string): Promise<string | undefined> {
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for')?.split(',')[0].trim();
   if (!ip) return undefined;
-  const net = ip.includes(':') ? ip.split(':').slice(0, 4).join(':') : ip;
+  const net = ip.includes(':') ? expandV6(ip).slice(0, 4).join(':') : ip;
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`pmm-stat|${day}|${net}`));
   return 'h:' + Array.from(new Uint8Array(digest).slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -134,6 +144,7 @@ export function summarize(keys: { name: string; metadata?: unknown }[], since: s
 }
 
 type Key = { name: string; metadata?: unknown };
+const SNAPSHOT_SECONDS = 300;
 async function listPrefix(kv: KVNamespace, prefix: string, cap: number, into: Key[]): Promise<boolean> {
   let cursor: string | undefined;
   do {
@@ -146,6 +157,25 @@ async function listPrefix(kv: KVNamespace, prefix: string, cap: number, into: Ke
   return true;
 }
 
+/** The months (YYYY-MM) the retention window touches, newest first. */
+export function monthsBack(days: number, nowMs = Date.now()): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < days; i++) { const m = new Date(nowMs - i * 86400_000).toISOString().slice(0, 7); if (!out.includes(m)) out.push(m); }
+  return out;
+}
+
+/** Every key the report can use. One listing of the whole prefix while it is under the cap; past it, month by month,
+ *  newest first, so the cap drops the oldest days and not today. */
+export async function snapshot(kv: KVNamespace): Promise<{ keys: Key[]; truncated: boolean }> {
+  let keys: Key[] = [];
+  if (await listPrefix(kv, PREFIX, REPORT_LIMIT, keys)) return { keys, truncated: false };
+  keys = [];
+  for (const month of monthsBack(90)) {
+    if (!(await listPrefix(kv, `${PREFIX}${month}`, REPORT_LIMIT, keys))) return { keys, truncated: true };
+  }
+  return { keys, truncated: false };
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
   const url = new URL(request.url);
   const n = Number(url.searchParams.get('days'));
@@ -153,28 +183,23 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil
   const since = new Date(Date.now() - (windowDays - 1) * 86400_000).toISOString().slice(0, 10);
   const base = {
     windowDays, since,
-    measurement: 'One report per handshake that reached FOUND, sent by the phone that pressed LOAD. RUN means the signed hello arrived. FAIL means no line within 30 seconds (timeout), the path failed (ice), the person gave up after FOUND (abandoned), or the line opened without a verified hello (hello). Handshakes abandoned before FOUND are not counted. Browsers sending DNT or Global Privacy Control are not counted. Reports are anonymous and unauthenticated, so forged reports can skew the numbers; each address is rate limited. KV listings are eventually consistent, and this report is cached for 60 seconds.',
+    measurement: 'One report per handshake that reached FOUND, sent by the phone that pressed LOAD. RUN means the signed hello arrived. FAIL means no line within 30 seconds (timeout), the path failed (ice), the person gave up after FOUND (abandoned), or the line opened without a verified hello (hello). Handshakes abandoned before FOUND are not counted. Browsers sending DNT or Global Privacy Control are not counted. Reports are anonymous and unauthenticated, so forged reports can skew the numbers; each address is rate limited. KV listings are eventually consistent, and the numbers can be up to five minutes old.',
   };
   if (!env.PC_ANALYTICS_KV) return json({ ...base, status: 'unavailable', attempts: null }, 503);
+  // One cached snapshot serves every window, so asking for many windows costs no more than asking for one.
   const cache = typeof caches === 'undefined' ? null : (caches as unknown as { default: Cache }).default;
-  const cacheKey = new Request(`${url.origin}/api/pmm/stat?days=${windowDays}`);
+  const cacheKey = new Request(`${url.origin}/api/pmm/stat/snapshot`);
+  let snap: { keys: Key[]; truncated: boolean; listedAt: string } | null = null;
   const hit = cache ? await cache.match(cacheKey).catch(() => undefined) : undefined;
-  if (hit) return hit;
-  // One listing of the whole prefix costs one operation per 1,000 keys. Only when that passes the cap does the
-  // report list day by day, newest first, so the cap drops the oldest days and not today.
-  let keys: Key[] = [];
-  let truncated = false;
-  try {
-    if (!(await listPrefix(env.PC_ANALYTICS_KV, PREFIX, REPORT_LIMIT, keys))) {
-      keys = [];
-      for (let i = 0; i < windowDays && !truncated; i++) {
-        const day = new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10);
-        truncated = !(await listPrefix(env.PC_ANALYTICS_KV, `${PREFIX}${day}:`, REPORT_LIMIT, keys));
-      }
+  if (hit) { try { snap = await hit.json(); } catch { snap = null; } }
+  if (!snap) {
+    try { snap = { ...(await snapshot(env.PC_ANALYTICS_KV)), listedAt: new Date().toISOString() }; }
+    catch { return json({ ...base, status: 'unavailable', attempts: null }, 503); }
+    if (cache) {
+      const put = cache.put(cacheKey, new Response(JSON.stringify(snap), { headers: { 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${SNAPSHOT_SECONDS}` } })).catch(() => {});
+      if (waitUntil) waitUntil(put);
     }
-  } catch { return json({ ...base, status: 'unavailable', attempts: null }, 503); }
-  const res = new Response(JSON.stringify({ ...base, status: 'available', ...summarize(keys, since), truncated, generatedAt: new Date().toISOString() }),
+  }
+  return new Response(JSON.stringify({ ...base, status: 'available', ...summarize(snap.keys, since), truncated: snap.truncated, listedAt: snap.listedAt, generatedAt: new Date().toISOString() }),
     { status: 200, headers: { ...HEADERS, 'Cache-Control': 'public, max-age=60' } });
-  if (cache) { const put = cache.put(cacheKey, res.clone()).catch(() => {}); if (waitUntil) waitUntil(put); }
-  return res;
 };

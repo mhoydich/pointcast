@@ -253,7 +253,9 @@
   function armWatchdog(pc, ms) { if (pending?.pc !== pc) return; clearTimeout(pending.watchdog); pending.watchdog = setTimeout(() => { if (pending?.pc === pc) { report(pending, 'fail', 'none', 'timeout'); screen(null, '?LINE FAILED ERROR', 'no connection in 30 seconds. both phones LOAD again.'); cancelPending(); } }, ms); }
   // Did the line open? One anonymous outcome per handshake that reached FOUND, sent only by the phone that pressed LOAD,
   // so each connection counts once. No sigil, name, code or message goes with it. DNT and GPC browsers send nothing.
-  addEventListener('pagehide', () => report(pending, 'fail', 'none', 'abandoned'));
+  const pathKind = (p) => (/^RELAY/.test(p) ? 'relay' : /^DIRECT/.test(p) ? 'direct' : 'unknown');
+  // Leaving the page settles the outcome: an open handshake or an unverified line was abandoned; a verified line still owed its RUN.
+  addEventListener('pagehide', () => { report(pending, 'fail', 'none', 'abandoned'); const a = peer?.attempt; if (a) report(a, a.verified ? 'run' : 'fail', a.verified ? pathKind(peer.path) : 'none', a.verified ? '-' : 'abandoned'); });
   function report(p, outcome, path, reason = '-', at = now()) {
     if (!p || p.role !== 'host' || !p.foundAt || p.reported) return; p.reported = true;
     if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl || !crypto.randomUUID) return;
@@ -500,7 +502,7 @@
         if (!fr) { fr = { id, name: 'FRIEND', pub: m.pub, created: now(), messages: [], ledger: [], trusted: false, unread: 0 }; state.friends.push(fr); }
         fr.name = str(m.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.place = str(m.place, 32); fr.lastSeen = now();
         const first = !peer.friend; peer.friend = fr; if (peer.attempt) peer.attempt.verified = true; save();
-        if (first) { openChat(fr.id); pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); flushQueue(fr); send({ t: 'ping', ts: now() }); const pr = peer, ranAt = now(); setTimeout(() => statPath().then(() => report(pr.attempt, 'run', /^RELAY/.test(pr.path) ? 'relay' : /^DIRECT/.test(pr.path) ? 'direct' : 'unknown', '-', ranAt)), 300); }
+        if (first) { openChat(fr.id); pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); flushQueue(fr); send({ t: 'ping', ts: now() }); const pr = peer, ranAt = now(); setTimeout(() => statPath().then(() => report(pr.attempt, 'run', pathKind(pr.path), '-', ranAt)), 300); }
         else if (current === fr) renderChat();
         renderFriends(); renderChatHead(); renderAtmo();
         if (first && currentFriendTarget && currentFriendTarget !== fr.id) toast('A DIFFERENT FRIEND ANSWERED');
