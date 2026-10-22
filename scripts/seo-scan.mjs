@@ -19,6 +19,12 @@ function walk(directory) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return walk(path);
     if (/^google[a-z0-9]+\.html$/i.test(entry.name)) return [];
+    // Banner creatives (public/ads/**/name-WxH.html, network-demo.html) are
+    // not pages: they ship behind X-Robots-Tag: noindex and are not scanned.
+    if (/\/ads\//.test(path) && entry.name !== 'index.html') return [];
+    // Astro writes a meta-refresh stub (already noindex) for routes that return
+    // Astro.redirect() in a static build; it is a redirect, not a page.
+    if (entry.name === 'index.html' && /http-equiv=["']refresh["']/i.test(readFileSync(path, 'utf8')) && /name=["']robots["'][^>]*noindex/i.test(readFileSync(path, 'utf8'))) return [];
     return entry.name.endsWith('.html') ? [path] : [];
   });
 }

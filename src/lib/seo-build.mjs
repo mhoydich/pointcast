@@ -47,8 +47,8 @@ function titleFor(head, html) {
     // This is the sole existing-title edit: repair a literal accidental double.
     return { title: raw.replace(/ — PointCast — PointCast$/i, ' — PointCast'), existing: true };
   }
-  const h1 = tag(html, 'h1')[0]?.[0] ?? '';
-  const raw = text(h1.replace(/^<h1[^>]*>|<\/h1>$/gi, '')) || 'PointCast';
+  const h1 = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? '';
+  const raw = text(h1) || 'PointCast';
   const plain = raw.replace(/(?:\s*[—|·]\s*PointCast(?:\s+reader)?)+$/i, '').trim() || 'PointCast';
   const suffix = plain === 'PointCast' ? '' : ' — PointCast';
   return { title: `${clip(plain, 60 - suffix.length)}${suffix}`, existing: false };
@@ -125,11 +125,40 @@ function normalizePage(html, path, roots) {
   const inserted = `${titleInfo.existing ? '' : `<title>${titleInfo.title}</title>`}<meta name="description" content="${description.replace(/"/g, '&quot;')}"><link rel="canonical" href="${canonical}">`;
   head = `${inserted}${head}`;
   if (!validOg) head += `<meta property="og:image" content="${FALLBACK_IMAGE}"><meta property="og:image:type" content="image/png">`;
+  // Social cards need a title and description of their own; pages that only
+  // set <title>/<meta description> (raw heads, legacy templates) get the same
+  // values mirrored. Added only when absent, so the pass stays idempotent.
+  // An authored tag with empty content is as good as absent; mirror over it.
+  const hasMeta = (kind, name) => tag(head, 'meta').some((entry) => attr(entry[0], kind).toLowerCase() === name && attr(entry[0], 'content').trim() !== '');
+  const dropEmpty = (kind, name) => { head = removeMeta(head, (value) => attr(value, kind).toLowerCase() === name && attr(value, 'content').trim() === ''); };
+  const ogTitle = titleInfo.title.replace(/ — PointCast$/, '');
+  const esc = (value) => value.replace(/&(?!(?:amp|quot|#\d+|[a-z]+);)/g, '&amp;').replace(/"/g, '&quot;');
+  if (!hasMeta('property', 'og:title')) { dropEmpty('property', 'og:title'); head += `<meta property="og:title" content="${esc(ogTitle)}">`; }
+  if (!hasMeta('property', 'og:description')) { dropEmpty('property', 'og:description'); head += `<meta property="og:description" content="${esc(description)}">`; }
+  if (!hasMeta('name', 'twitter:card')) head += '<meta name="twitter:card" content="summary_large_image">';
   html = html.replace(parts.match[0], `${parts.open}${head}${parts.close}`);
 
   if (!/\blang=/i.test(tag(html, 'html')[0]?.[0] ?? '')) html = html.replace(/<html(\b[^>]*)>/i, '<html$1 lang="en">');
   // Never demote authored H1s: intentional secondary H1s carry JS/style hooks.
   if (!tag(html, 'h1').length) html = html.replace(/<body(\b[^>]*)>/i, `<body$1><h1 class="pc-seo-heading">${titleInfo.title.replace(/ — PointCast$/, '')}</h1>`);
+  // Article-type JSON-LD without an image is a rich-result warning; the page's
+  // og:image (always present after the pass above) is the honest value.
+  html = html.replace(/(<script[^>]*application\/ld\+json[^>]*>)([\s\S]*?)(<\/script>)/gi, (whole, open, body, close) => {
+    let data;
+    try { data = JSON.parse(body); } catch { return whole; }
+    const image = attr(tag(html, 'meta').find((entry) => attr(entry[0], 'property').toLowerCase() === 'og:image')?.[0] ?? '', 'content');
+    if (!image) return whole;
+    let changed = false;
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) return node.forEach(visit);
+      const type = Array.isArray(node['@type']) ? node['@type'] : [node['@type']];
+      if ((type.includes('Article') || type.includes('BlogPosting') || type.includes('NewsArticle')) && !node.image) { node.image = image; changed = true; }
+      if (node['@graph']) visit(node['@graph']);
+    };
+    visit(data);
+    return changed ? `${open}${JSON.stringify(data).replaceAll('<', '\\u003c')}${close}` : whole;
+  });
   if (!/application\/ld\+json/i.test(html)) {
     const data = breadcrumb(path, titleInfo.title, roots) ?? { '@context': 'https://schema.org', '@type': 'WebPage', name: titleInfo.title.replace(/ — PointCast$/, ''), url: canonical, description, inLanguage: 'en' };
     html = html.replace(/<\/head>/i, `<script type="application/ld+json">${JSON.stringify(data)}</script></head>`);

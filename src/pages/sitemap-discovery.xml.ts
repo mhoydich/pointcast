@@ -8,6 +8,11 @@ import { POINTCAST_2029_IDENTITIES } from '../lib/pointcast-2029';
 import afterimageExamples from '../data/afterimage-examples.json';
 import { CABINET_PROFILES } from '../data/agent-cabinet';
 import { isNoindexPath } from '../lib/seo-rules.mjs';
+import { listPublicIndexPages } from '../lib/public-pages.mjs';
+
+// Absolute public dir injected by astro.config.mjs (vite define); import.meta.url
+// points into the prerender bundle at build time, not at src/.
+declare const __PC_PUBLIC_DIR__: string;
 import { BRANDS, PADDLES } from '../lib/paddle-register';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
@@ -26,6 +31,12 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/sunset-downs/money/', 'monthly', '0.7'],
   ['https://pointcast.xyz/sunset-downs/agents/', 'weekly', '0.7'],
   ['https://pointcast.xyz/sunset-downs/style/', 'monthly', '0.65'],
+  // /agents/ and /paddles/ are dynamic-page prefixes for the auto sitemap, so
+  // their non-id pages must be listed here or they reach no sitemap at all.
+  ['https://pointcast.xyz/agents/spec/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/paddles/oracle/', 'weekly', '0.6'],
+  ['https://pointcast.xyz/sister-sites/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/sister-sites.json', 'monthly', '0.7'],
   ['https://pointcast.xyz/bot-money/', 'monthly', '0.9'],
   ['https://pointcast.xyz/bot-money.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/internship-lab/', 'monthly', '0.8'],
@@ -690,8 +701,13 @@ export const GET: APIRoute = async () => {
       '0.65',
     ] as SitemapEntry),
   ];
+  // Static public/ pages that no Astro route produces (23 on 2026-10-22).
+  const listed = new Set([...staticUrls, ...dynamicUrls].map(([loc]) => canonicalSitemapUrl(loc)));
+  const publicUrls: SitemapEntry[] = listPublicIndexPages(typeof __PC_PUBLIC_DIR__ === 'string' ? __PC_PUBLIC_DIR__ : `${process.cwd()}/public`)
+    .map((route) => [`https://pointcast.xyz${route}`, 'monthly', '0.5'] as SitemapEntry)
+    .filter(([loc]) => !listed.has(canonicalSitemapUrl(loc)));
   // Keep this bespoke sitemap and @astrojs/sitemap on one noindex policy.
-  const urls = [...staticUrls, ...dynamicUrls]
+  const urls = [...staticUrls, ...dynamicUrls, ...publicUrls]
     .map(([loc, changefreq, priority]) => [canonicalSitemapUrl(loc), changefreq, priority] as SitemapEntry)
     .filter(([loc]) => !isNoindexPath(new URL(loc).pathname));
   const today = new Date().toISOString().slice(0, 10);

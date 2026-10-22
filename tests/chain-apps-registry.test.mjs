@@ -193,7 +193,9 @@ test('llms.txt mentions all ten on its one chain line and keeps its line count; 
   assert.equal(lines.filter((l) => l.includes('/chain/start')).length, 1, 'one line');
   assert.equal(lines.filter((l) => l.includes('/chain/observatory')).length, 1, 'one line');
   assert.equal(lines.filter((l) => l.includes('/chain/witness')).length, 1, 'one line');
-  assert.equal(lines.length, 334, 'the file ends with a newline and has the 333 lines it had before this change');
+  // agent-surfaces.test.mjs caps llms.txt below 320 lines; an exact pin here contradicted it (the file was 333 lines on 2026-10-21).
+  assert.ok(lines.length < 320, `llms.txt stays a short index (${lines.length} lines, cap 320)`);
+  assert.equal(lines.at(-1), '', 'the file ends with a newline');
   for (const m of llms.matchAll(/\]\(([^)\s]+)\)/g)) assert.match(m[1], /^https?:\/\//, m[1] + ' is absolute');
   const full = read('public/llms-full.txt').split('\n');
   const para = full.filter((l) => l.startsWith('[Seven apps on the devnet](https://pointcast.xyz/chain/observatory/)'));
