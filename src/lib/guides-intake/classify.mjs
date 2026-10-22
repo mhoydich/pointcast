@@ -23,7 +23,7 @@ const RULES = [
   [/photo|picture|image/, 'Involves photos; needs a human who took them and consent from anyone pictured.'],
   [/interview|consent|permission|approved|agreed/, "Involves interviews or people's consent; a human must ask and confirm."],
   [/reach out|\bcontact(ing)? (the|them|someone|people|organizers?|captains?|coaches)\b|\bcall (the|a|an|your)\b|\bask (the|your) (organizer|captain|coach|league)/, 'Involves contacting someone; agents never contact people.'],
-  [/\byour (own |first )?(team|group|club|league|block|street|neighborhood|season|event|newsletter|kids?|family)\b|\byou(?:'ve| have)? (used|tried|run|kept|found|learned)\b|\bstories\b|\b(what|that) (has )?worked\b|\bworked (for|well)\b|\blessons?\b|\bfirst-hand\b|\bhow you (have )?(handle|handled|run|keep|kept)\b|\byou (organized|ran|took|keep|are willing to share)\b|\bfrom people who\b|\bnewcomer's\b/,
+  [/^your (?!city|county|area|state|town|local|school district)|\byour (own |first )?(team|group|club|league|block|street|neighborhood|season|event|newsletter|kids?|family)\b|\byou(?:'ve| have)? (used|tried|run|kept|found|learned)\b|\bstories\b|\b(what|that) (has )?worked\b|\bworked (for|well)\b|\blessons?\b|\bfirst-hand\b|\bhow you (have )?(handle|handled|run|keep|kept)\b|\byou (organized|ran|took|keep|are willing to share)\b|\bfrom people who\b|\bnewcomer's\b/,
     'Asks for first-hand experience; a person who lived it should send it.'],
 ];
 
