@@ -14,7 +14,7 @@ page can spend, mint or post.
 - https://pointcast.xyz/driftwood.json (must return JSON with `name: "Driftwood"`)
 - https://pointcast.xyz/games/ (the catalog should list Driftwood under Retro arcade, next to Breakwater)
 - https://pointcast.xyz/play (the play layer should list Driftwood after Breakwater)
-- https://pointcast.xyz/b/0730 (the Block receipt)
+- https://pointcast.xyz/b/0731 (the Block receipt)
 
 ## Devices and browsers
 
