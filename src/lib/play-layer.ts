@@ -1,7 +1,7 @@
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Cabinet Row, Breakwater, Soft Landing, Crosswalk, Kelp, Tideline, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Cabinet Row, Breakwater, Tideline, Kelp, Soft Landing, Crosswalk, Driftwood, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
