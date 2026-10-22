@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { onRequestPost, onRequestGet, parseOutcome, summarize, keyFor, PREFIX } from '../functions/api/pmm/stat.ts';
+import { onRequestPost, onRequestGet, parseOutcome, summarize, keyFor, limiterId, PREFIX } from '../functions/api/pmm/stat.ts';
 
 // A KV fake with put metadata and prefix listing, like the real namespace.
 function fakeKv() {
   const m = new Map();
   return {
-    m,
+    m, lists: 0,
     async put(k, v, o = {}) { m.set(k, { v, metadata: o.metadata }); },
     async list({ prefix = '', limit = 1000, cursor } = {}) {
+      this.lists++;
       const all = [...m.keys()].filter((k) => k.startsWith(prefix)).sort();
       const start = cursor ? Number(cursor) : 0; const page = all.slice(start, start + limit);
       const done = start + limit >= all.length;
@@ -25,6 +26,7 @@ const get = (env, q = '') => onRequestGet({ env, params: {}, request: new Reques
 test('parseOutcome takes only allowlisted values and a v4 uuid', () => {
   assert.ok(parseOutcome(run()));
   assert.ok(parseOutcome(run({ outcome: 'fail', path: 'none', reason: 'timeout', flow: 'paste', via: 'scan' })));
+  for (const reason of ['ice', 'abandoned', 'hello']) assert.ok(parseOutcome(run({ outcome: 'fail', path: 'none', reason })), reason);
   for (const bad of [run({ v: 2 }), run({ flow: 'carrier-pigeon' }), run({ via: 'x' }), run({ id: 'not-a-uuid' }), run({ reason: 'ice' }), run({ path: 'none' }),
     run({ outcome: 'fail', path: 'direct', reason: 'ice' }), run({ outcome: 'fail', path: 'none', reason: '-' }), null, 'run', run({ id: 'a:b' })]) {
     assert.equal(parseOutcome(bad), null, JSON.stringify(bad));
@@ -73,7 +75,7 @@ test('summarize rolls up success rate, goal, flows, paths, reasons and timing', 
   assert.deepEqual(s.byFlow.paste, { run: 1, fail: 0 });
   assert.deepEqual(s.byVia.scan, { run: 1, fail: 0 });
   assert.deepEqual(s.byPath, { direct: 3, relay: 1, unknown: 0 });
-  assert.deepEqual(s.failReasons, { timeout: 1, ice: 0 });
+  assert.deepEqual(s.failReasons, { timeout: 1, ice: 0, abandoned: 0, hello: 0 });
   assert.equal(s.medianMs, 2000); assert.equal(s.p90Ms, 9000);
   assert.deepEqual(s.days, [{ day, run: 4, fail: 1 }]);
   assert.equal(summarize([], '2026-10-16').successRate, null);
@@ -91,4 +93,38 @@ test('GET reports today from posted events and answers 503 when unbound', async 
   assert.equal(j.truncated, false);
   assert.equal((await get({})).status, 503);
   assert.equal((await (await get(env, '?days=500')).json()).windowDays, 7, 'an out-of-range window falls back to 7');
+});
+
+test('the rate limit keys on a salted hash of the address, one bucket per IPv6 /64, never the raw address', async () => {
+  const at = (ip, day = '2026-10-22') => limiterId(new Request('https://pointcast.xyz/api/pmm/stat', { headers: { 'CF-Connecting-IP': ip } }), day);
+  const a = await at('2001:db8:1:2:aaaa::1'), b = await at('2001:db8:1:2:bbbb::9'), c = await at('2001:db8:1:3::1');
+  assert.equal(a, b, 'the same /64 shares a bucket');
+  assert.notEqual(a, c);
+  assert.match(a, /^h:[0-9a-f]{16}$/);
+  assert.notEqual(await at('203.0.113.7'), await at('203.0.113.8'));
+  assert.notEqual(await at('203.0.113.7'), await at('203.0.113.7', '2026-10-23'), 'the salt changes daily');
+  const rates = fakeKv(); const kv = fakeKv();
+  await onRequestPost({ env: { PC_ANALYTICS_KV: kv, PC_RATES_KV: rates }, params: {}, request: new Request('https://pointcast.xyz/api/pmm/stat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': '203.0.113.7' }, body: JSON.stringify(run()) }) });
+  assert.equal(kv.m.size, 1);
+  assert.ok([...rates.m.keys()].every((k) => !k.includes('203.0.113.7')), 'no raw address in the limiter keys');
+});
+
+test('GET lists the whole prefix once while it is small, and day by day newest first only past the cap', async () => {
+  const kv = fakeKv(); const env = { PC_ANALYTICS_KV: kv };
+  for (let i = 0; i < 5; i++) await post(env, run());
+  kv.lists = 0;
+  const j = await (await get(env, '?days=90')).json();
+  assert.equal(j.attempts, 5);
+  assert.equal(kv.lists, 1, 'one list operation for a small store, whatever the window');
+});
+
+test('past the cap the report falls back to the window, newest day first', async () => {
+  const kv = fakeKv(); const env = { PC_ANALYTICS_KV: kv };
+  const old = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+  for (let i = 0; i < 10_001; i++) kv.m.set(keyFor(parseOutcome(run()), old), { v: '', metadata: { ms: 5 } });
+  for (let i = 0; i < 3; i++) await post(env, run());
+  const j = await (await get(env, '?days=7')).json();
+  assert.equal(j.attempts, 3, 'today is reported even though older keys fill the cap');
+  assert.equal(j.truncated, false);
 });

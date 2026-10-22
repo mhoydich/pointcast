@@ -143,7 +143,7 @@ as the SI line:
 - v0.2 (shipped, off until configured): TURN via Cloudflare Calls; friends ride along in the key export.
 - v0.2.1 (shipped): QR on every link, an in-app scanner where the browser has
   BarcodeDetector, and answer links that go to the waiting tab.
-- v0.2.2 (shipped): `/api/pmm/stat` measures the connect goal. It records one anonymous RUN or FAIL per handshake that reached FOUND, sent only by the phone that pressed LOAD, along with the flow, how the answer arrived (store, paste, scan, tab, link), the path (direct or relay) and the time to RUN. Nothing identifying is stored. DNT and GPC browsers send nothing.
+- v0.2.2 (shipped): `/api/pmm/stat` measures the connect goal. It records one anonymous RUN or FAIL per handshake that reached FOUND, sent only by the phone that pressed LOAD, along with the flow, how the answer arrived (store, paste, scan, tab, link), the path (direct or relay) and the time to RUN. A FAIL carries its reason: timeout, ice, abandoned (the person gave up after FOUND) or hello (the line opened without a verified hello). Nothing identifying is stored with an outcome. The rate limit holds a salted hash of the address for about a minute. DNT and GPC browsers send nothing. Reports are unauthenticated, so the numbers are a guide, not an audit.
 - v0.3: three to five person mesh.
 - v0.4: Tezos settle for TAB, reusing `/messages` wallet code.
 - v0.5: thin push relay for "your friend is on".

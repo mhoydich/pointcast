@@ -253,6 +253,7 @@
   function armWatchdog(pc, ms) { if (pending?.pc !== pc) return; clearTimeout(pending.watchdog); pending.watchdog = setTimeout(() => { if (pending?.pc === pc) { report(pending, 'fail', 'none', 'timeout'); screen(null, '?LINE FAILED ERROR', 'no connection in 30 seconds. both phones LOAD again.'); cancelPending(); } }, ms); }
   // Did the line open? One anonymous outcome per handshake that reached FOUND, sent only by the phone that pressed LOAD,
   // so each connection counts once. No sigil, name, code or message goes with it. DNT and GPC browsers send nothing.
+  addEventListener('pagehide', () => report(pending, 'fail', 'none', 'abandoned'));
   function report(p, outcome, path, reason = '-', at = now()) {
     if (!p || p.role !== 'host' || !p.foundAt || p.reported) return; p.reported = true;
     if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl || !crypto.randomUUID) return;
@@ -263,8 +264,8 @@
   const code6 = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => ALPHABET[b % ALPHABET.length]).join('');
   async function signalBound() { try { const r = await fetch(SIGNAL, { cache: 'no-store' }); if (!r.ok) return false; return Boolean((await r.json()).bound); } catch (_) { return false; } }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  function cancelPending() { attempt++; currentFriendTarget = null; if (scanStream) stopScan(); if (pending) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
-  function hangup() { if (peer) { try { peer.dc.close(); peer.pc.close(); } catch (_) {} peer = null; } clearInterval(pingTimer); renderFriends(); renderChatHead(); }
+  function cancelPending() { attempt++; currentFriendTarget = null; if (scanStream) stopScan(); if (pending) { report(pending, 'fail', 'none', 'abandoned'); clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
+  function hangup() { if (peer) { if (peer.attempt && !peer.attempt.verified) report(peer.attempt, 'fail', 'none', 'hello'); try { peer.dc.close(); peer.pc.close(); } catch (_) {} peer = null; } clearInterval(pingTimer); renderFriends(); renderChatHead(); }
   function screen(l1, l2, l3) { $('load-line1').textContent = l1 ?? $('load-line1').textContent; $('load-line2').textContent = l2 ?? ''; $('load-line3').textContent = l3 ?? ''; }
   const linkFor = (hash) => location.origin + location.pathname + '#' + hash;
 
@@ -352,7 +353,7 @@
     const code = code6(); p.code = code;
     let r; try { r = await fetch(SIGNAL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: code, role: 'offer', sdp }) }); } catch (_) { r = null; }
     if (pending !== p) return;
-    if (!r || !r.ok) { screen(null, '?DEVICE NOT PRESENT ERROR', 'falling back to paste mode'); return hostPaste(p, sdp); }
+    if (!r || !r.ok) { p.code = undefined; screen(null, '?DEVICE NOT PRESENT ERROR', 'falling back to paste mode'); return hostPaste(p, sdp); }
     $('load-code').textContent = code; $('load-code').hidden = false;
     screen('LOAD "FRIEND",8,1', 'SEARCHING FOR FRIEND', 'tell them the code, or send the link. ten minutes.');
     p.link = linkFor('join=' + code); p.until = now() + 600000;
@@ -498,7 +499,7 @@
         let fr = friendById(id);
         if (!fr) { fr = { id, name: 'FRIEND', pub: m.pub, created: now(), messages: [], ledger: [], trusted: false, unread: 0 }; state.friends.push(fr); }
         fr.name = str(m.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.place = str(m.place, 32); fr.lastSeen = now();
-        const first = !peer.friend; peer.friend = fr; save();
+        const first = !peer.friend; peer.friend = fr; if (peer.attempt) peer.attempt.verified = true; save();
         if (first) { openChat(fr.id); pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); flushQueue(fr); send({ t: 'ping', ts: now() }); const pr = peer, ranAt = now(); setTimeout(() => statPath().then(() => report(pr.attempt, 'run', /^RELAY/.test(pr.path) ? 'relay' : /^DIRECT/.test(pr.path) ? 'direct' : 'unknown', '-', ranAt)), 300); }
         else if (current === fr) renderChat();
         renderFriends(); renderChatHead(); renderAtmo();

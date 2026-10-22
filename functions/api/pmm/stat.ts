@@ -15,7 +15,14 @@
  * Each outcome is one immutable KV key in PC_ANALYTICS_KV, kept 90 days:
  *   pmm:v1:{day}:{outcome}:{flow}:{via}:{path}:{reason}:{id}   metadata { ms }
  * `id` is a random UUID made for that one handshake. No IP, user agent,
- * cookie, sigil, name, friend, code or message is written.
+ * cookie, sigil, name, friend, code or message is written to the outcome.
+ * The per-minute rate limit keys on a salted hash of the address (the /64 for
+ * IPv6), kept about a minute and never joined to an outcome.
+ *
+ * Anyone can forge reports: the site-only check is header based and the rate
+ * limit is per address. The GET says so. The account's KV is on the free plan
+ * (1,000 writes a day), so a POST costs two writes and the GET lists the prefix
+ * once (one operation per 1,000 keys) behind a 60-second edge cache.
  */
 import { fromSite } from './turn.ts';
 import { rateLimit, rateLimitResponse } from '../../_rate-limit.ts';
@@ -34,7 +41,7 @@ export const VALUES = {
   flow: ['code', 'paste'],
   via: ['store', 'paste', 'scan', 'tab', 'link'],
   path: ['direct', 'relay', 'unknown', 'none'],
-  reason: ['-', 'timeout', 'ice'],
+  reason: ['-', 'timeout', 'ice', 'abandoned', 'hello'],
 } as const;
 type Field = keyof typeof VALUES;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -60,6 +67,15 @@ export function parseOutcome(body: unknown): Outcome | null {
 
 export const keyFor = (o: Outcome, day: string) => `${PREFIX}${day}:${o.outcome}:${o.flow}:${o.via}:${o.path}:${o.reason}:${o.id}`;
 
+/** A salted, day-scoped hash of the reporter's address for the rate limit: the /64 for IPv6, the whole address for IPv4. */
+export async function limiterId(request: Request, day: string): Promise<string | undefined> {
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for')?.split(',')[0].trim();
+  if (!ip) return undefined;
+  const net = ip.includes(':') ? ip.split(':').slice(0, 4).join(':') : ip;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`pmm-stat|${day}|${net}`));
+  return 'h:' + Array.from(new Uint8Array(digest).slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!fromSite(request)) return json({ error: 'site-only' }, 403);
   if (request.headers.get('DNT') === '1' || request.headers.get('Sec-GPC') === '1') return new Response(null, { status: 204 });
@@ -70,11 +86,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   let body: unknown; try { body = JSON.parse(raw); } catch { return json({ error: 'invalid-body' }, 400); }
   const o = parseOutcome(body);
   if (!o) return json({ error: 'invalid-event' }, 400);
-  const rl = await rateLimit(request, env, { bucket: 'pmm:stat', windowSec: 60, maxRequests: 12 });
+  const day = new Date().toISOString().slice(0, 10);
+  const rl = await rateLimit(request, env, { bucket: 'pmm:stat', windowSec: 60, maxRequests: 12, clientId: await limiterId(request, day) });
   if (!rl.allowed) return rateLimitResponse(rl, 'Too many reports. Wait a minute.');
   try {
     // One immutable key per handshake: a retry with the same id overwrites itself, and nothing is lost to racing increments.
-    await env.PC_ANALYTICS_KV.put(keyFor(o, new Date().toISOString().slice(0, 10)), '', { expirationTtl: RETENTION_SECONDS, metadata: { ms: o.ms } });
+    await env.PC_ANALYTICS_KV.put(keyFor(o, day), '', { expirationTtl: RETENTION_SECONDS, metadata: { ms: o.ms } });
     return json({ recorded: true }, 201);
   } catch { return json({ error: 'stats-unavailable' }, 503); }
 };
@@ -86,7 +103,7 @@ const tally = (fields: readonly string[]) => Object.fromEntries(fields.map((f) =
 export function summarize(keys: { name: string; metadata?: unknown }[], since: string) {
   const byFlow = tally(VALUES.flow), byVia = tally(VALUES.via);
   const byPath: Record<string, number> = { direct: 0, relay: 0, unknown: 0 };
-  const failReasons: Record<string, number> = { timeout: 0, ice: 0 };
+  const failReasons: Record<string, number> = { timeout: 0, ice: 0, abandoned: 0, hello: 0 };
   const days: Record<string, { run: number; fail: number }> = {};
   const runMs: number[] = [];
   let run = 0, fail = 0;
@@ -116,30 +133,48 @@ export function summarize(keys: { name: string; metadata?: unknown }[], since: s
   };
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  const n = Number(new URL(request.url).searchParams.get('days'));
+type Key = { name: string; metadata?: unknown };
+async function listPrefix(kv: KVNamespace, prefix: string, cap: number, into: Key[]): Promise<boolean> {
+  let cursor: string | undefined;
+  do {
+    if (into.length >= cap) return false;
+    const page = await kv.list({ prefix, limit: Math.min(1000, cap - into.length), ...(cursor ? { cursor } : {}) });
+    into.push(...page.keys);
+    if (page.list_complete) return true;
+    cursor = 'cursor' in page ? page.cursor : undefined;
+  } while (cursor);
+  return true;
+}
+
+export const onRequestGet: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
+  const url = new URL(request.url);
+  const n = Number(url.searchParams.get('days'));
   const windowDays = Number.isInteger(n) && n >= 1 && n <= 90 ? n : 7;
   const since = new Date(Date.now() - (windowDays - 1) * 86400_000).toISOString().slice(0, 10);
   const base = {
     windowDays, since,
-    measurement: 'One report per handshake that reached FOUND, sent by the phone that pressed LOAD. RUN means the signed hello arrived; FAIL means no line within 30 seconds or the path failed. Handshakes abandoned before FOUND are not counted. Browsers sending DNT or Global Privacy Control are not counted. KV listings are eventually consistent.',
+    measurement: 'One report per handshake that reached FOUND, sent by the phone that pressed LOAD. RUN means the signed hello arrived. FAIL means no line within 30 seconds (timeout), the path failed (ice), the person gave up after FOUND (abandoned), or the line opened without a verified hello (hello). Handshakes abandoned before FOUND are not counted. Browsers sending DNT or Global Privacy Control are not counted. Reports are anonymous and unauthenticated, so forged reports can skew the numbers; each address is rate limited. KV listings are eventually consistent, and this report is cached for 60 seconds.',
   };
   if (!env.PC_ANALYTICS_KV) return json({ ...base, status: 'unavailable', attempts: null }, 503);
-  // One listing per day, newest first, so a report that hits the cap drops the oldest days, not today.
-  const keys: { name: string; metadata?: unknown }[] = [];
+  const cache = typeof caches === 'undefined' ? null : (caches as unknown as { default: Cache }).default;
+  const cacheKey = new Request(`${url.origin}/api/pmm/stat?days=${windowDays}`);
+  const hit = cache ? await cache.match(cacheKey).catch(() => undefined) : undefined;
+  if (hit) return hit;
+  // One listing of the whole prefix costs one operation per 1,000 keys. Only when that passes the cap does the
+  // report list day by day, newest first, so the cap drops the oldest days and not today.
+  let keys: Key[] = [];
   let truncated = false;
   try {
-    for (let i = 0; i < windowDays && !truncated; i++) {
-      const prefix = `${PREFIX}${new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10)}:`;
-      let cursor: string | undefined; let complete = false;
-      do {
-        if (keys.length >= REPORT_LIMIT) { truncated = true; break; }
-        const page = await env.PC_ANALYTICS_KV.list({ prefix, limit: Math.min(1000, REPORT_LIMIT - keys.length), ...(cursor ? { cursor } : {}) });
-        keys.push(...page.keys);
-        complete = page.list_complete;
-        cursor = 'cursor' in page ? page.cursor : undefined;
-      } while (!complete);
+    if (!(await listPrefix(env.PC_ANALYTICS_KV, PREFIX, REPORT_LIMIT, keys))) {
+      keys = [];
+      for (let i = 0; i < windowDays && !truncated; i++) {
+        const day = new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10);
+        truncated = !(await listPrefix(env.PC_ANALYTICS_KV, `${PREFIX}${day}:`, REPORT_LIMIT, keys));
+      }
     }
   } catch { return json({ ...base, status: 'unavailable', attempts: null }, 503); }
-  return json({ ...base, status: 'available', ...summarize(keys, since), truncated, generatedAt: new Date().toISOString() });
+  const res = new Response(JSON.stringify({ ...base, status: 'available', ...summarize(keys, since), truncated, generatedAt: new Date().toISOString() }),
+    { status: 200, headers: { ...HEADERS, 'Cache-Control': 'public, max-age=60' } });
+  if (cache) { const put = cache.put(cacheKey, res.clone()).catch(() => {}); if (waitUntil) waitUntil(put); }
+  return res;
 };

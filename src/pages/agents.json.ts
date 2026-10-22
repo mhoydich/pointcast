@@ -895,8 +895,8 @@ export const GET: APIRoute = async () => {
         },
         pmmStat: AGENT_SURFACES.api.pmmStat,
         pmmStatProtocol: {
-          purpose: 'Does PMM connect? Anonymous outcomes measured against the PRD goal of connect success over 90%. Only the phone that pressed LOAD reports, once per handshake that reached FOUND. No sigil, name, code, message, IP or user agent is stored; DNT and GPC browsers send nothing.',
-          read: 'GET /api/pmm/stat?days=7 (1 to 90) → { attempts, run, fail, successRate, goal: { target: 0.9, met }, byFlow, byVia, byPath, failReasons, medianMs, p90Ms, days }.',
+          purpose: 'Does PMM connect? Anonymous outcomes measured against the PRD goal of connect success over 90%. Only the phone that pressed LOAD reports, once per handshake that reached FOUND: RUN, or FAIL with a reason (timeout, ice, abandoned, hello). No sigil, name, code, message, IP or user agent is stored with an outcome; the rate limit holds a salted hash of the address for about a minute. DNT and GPC browsers send nothing. Reports are unauthenticated, so forged reports can skew the numbers.',
+          read: 'GET /api/pmm/stat?days=7 (1 to 90) → { attempts, run, fail, successRate, goal: { target: 0.9, met }, byFlow, byVia, byPath, failReasons, medianMs, p90Ms, days }. Cached for 60 seconds.',
           write: 'Site pages only: POST { v: 1, outcome, flow, via, path, reason, ms, id } → 201. Kept 90 days.',
         },
         agentBench: AGENT_SURFACES.api.agentBench,
