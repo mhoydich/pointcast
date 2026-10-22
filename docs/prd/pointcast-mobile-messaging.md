@@ -33,7 +33,7 @@ something much smarter than a person.
 | easy auth | No account. First run mints a keypair on the phone. Your sigil is your ID. | Zero sign-up fields. Time from first open to first message under 30 s. |
 | file sharing | Photos and files over the data channel, chunked, with progress. | A 5 MB photo lands in under 10 s on the same Wi-Fi. |
 | streaming | Live typing: your friend watches the sentence form. Voice notes record and send. | Draft updates under 100 ms behind the keystroke. |
-| transact | TAB: a shared ledger between two friends. Running balance, settle button. No money moves yet. | Every tab shows on both phones with the same balance. |
+| transact | TAB: a shared ledger between two friends. Running balance, and SETTLE IN TEZ: one transfer from your own wallet, confirmed on chain before the tab closes. PointCast never holds the money. | Every tab shows on both phones with the same balance. A tab closes only on an applied operation to the payee. |
 | trust | The hello that opens a line is signed over the line's own DTLS fingerprint, so a replayed public key cannot pose as a friend. Text and tabs are signed to the recipient; files, reactions and moods ride the authenticated line unsigned. Sigils are compared out of band, then marked VERIFIED. | 0 forged hellos accepted; 0 unverified texts or tabs shown as signed. |
 | emotion, mood | Eight moods. Yours and theirs blend into the room's atmosphere. | Mood on 100% of messages. |
 | informative, current | A ticker from `/now.json` in the lobby: what is new in town right now. | Ticker shows the latest four blocks within 60 s of publish. |
@@ -81,8 +81,8 @@ Paste mode link for a full offer: 621 characters. Real-device numbers come from 
   Until the two secrets are set on the Pages project (Manus brief, step 1b) the
   app is STUN-only and two phones behind strict carrier NAT cannot connect.
 - **Group chats.** Two people first. Mesh for three to five is v0.3.
-- **Money.** TAB is a ledger, not a payment. Tezos settle is v0.4, after the
-  wallet code in `/messages` is reused rather than copied.
+- **Money beyond settling a tab.** TAB settles in tez from your own wallet
+  (v0.4). There is no balance held anywhere, no fiat, and no group settle yet.
 - **Push notifications.** Peer to peer means nobody is awake to push. Needs a
   thin relay. v0.5.
 - **Message history sync.** Each phone keeps its own copy. That is the point.
@@ -145,7 +145,7 @@ as the SI line:
   BarcodeDetector, and answer links that go to the waiting tab.
 - v0.2.2 (shipped): `/api/pmm/stat` measures the connect goal. It records one anonymous RUN or FAIL per handshake that reached FOUND, sent only by the phone that pressed LOAD, along with the flow, how the answer arrived (store, paste, scan, tab, link), the path (direct or relay) and the time to RUN. A FAIL carries its reason: timeout, ice, abandoned (the person gave up after FOUND) or hello (the line opened without a verified hello). Nothing identifying is stored with an outcome. The rate limit holds a salted hash of the address for about a minute. DNT and GPC browsers send nothing. Reports are unauthenticated, so the numbers are a guide, not an audit.
 - v0.3: three to five person mesh.
-- v0.4: Tezos settle for TAB, reusing `/messages` wallet code.
+- v0.4 (shipped): Tezos settle for TAB. When you owe a friend who shared a tz address, the TAB card offers SETTLE IN TEZ. It opens `/pmm/settle` in a new tab, which loads the shared PointCast Beacon wallet (`src/lib/tezos.ts`, the same code `/messages` and the rest of the site use) only when you press SEND. The wallet's own confirm screen is the only way funds move. The send result returns to the PMM tab still connected to that friend, which sends a signed claim with the operation hash. Each phone looks the operation up on TzKT and closes the tab only if it was applied, paid the payee's current address, and paid at least the claimed amount. The tez amount is yours to choose: TAB amounts carry no currency, so there is no conversion. The logic lives in `public/pmm/settle.js`, loaded only when used.
 - v0.5: thin push relay for "your friend is on".
 
 ## Manus follow-up

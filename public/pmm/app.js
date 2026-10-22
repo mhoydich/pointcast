@@ -47,6 +47,8 @@
   const iceWithTimeout = (ms) => Promise.race([refreshIce(false), new Promise((r) => setTimeout(() => r(ice), ms))]);
   const CHUNK = 16 * 1024;
   const $ = (id) => document.getElementById(id);
+  // A Tezos implicit account (tz1 to tz4). The friend's rides in the hello as xtz; tz there is the time zone.
+  const TEZ_RE = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const now = () => Date.now();
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -218,7 +220,7 @@
         for (const fr of state.friends) for (const m of fr.messages) {
           if (m.from !== 'me' || m.status !== 'queued') continue;
           if (!m.kind) m.sig = await sign({ t: 'msg', id: m.id, to: m.to || fr.id, ts: m.ts, text: m.text });
-          else if (m.kind === 'tab' && m.wire) { const { sig, ...rest } = m.wire; m.wire = { ...rest, sig: await sign(rest) }; }
+          else if ((m.kind === 'tab' || m.kind === 'paid') && m.wire) { const { sig, ...rest } = m.wire; m.wire = { ...rest, sig: await sign(rest) }; }
         }
       }
       let restored = 0;
@@ -326,6 +328,10 @@
     if (m.t === 'answer' && typeof m.a === 'string' && /^[A-Za-z0-9_-]+$/.test(m.a) && pending?.role === 'host' && !pending.answered) {
       bc.postMessage({ t: 'answer-ok', id: m.id }); pending.via = 'tab'; $('answer-input').value = m.a; $('form-answer').requestSubmit(); try { window.focus(); } catch (_) {}
     }
+    // A finished /pmm/settle tab (or a fresh PMM tab it opened): only the tab that pressed SETTLE, which
+    // holds that nonce in memory, takes it. acceptReturn() then checks it against the saved pending settle.
+    const sn = m.t === 'settled' && typeof m.h === 'string' && /(?:^|&)n=([0-9a-f]{16})(?:&|$)/.exec(m.h);
+    if (sn && settleHere.has(sn[1])) { bc.postMessage({ t: 'settled-ok', id: m.id }); paidReturn(m.h); try { window.focus(); } catch (_) {} }
   });
   function handOff(a) {
     return new Promise((resolve) => {
@@ -454,7 +460,7 @@
     dc.addEventListener('close', closed);
     pc.addEventListener('connectionstatechange', () => { if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) closed(); });
   }
-  function helloBody() { return { name: myName(), pub: state.me.pub, id: state.me.id, mood: state.me.mood, tz: tzName(), place: state.me.place || '', ts: now() }; }
+  function helloBody() { return { name: myName(), pub: state.me.pub, id: state.me.id, mood: state.me.mood, tz: tzName(), xtz: TEZ_RE.test(state.me.tzAddr || '') ? state.me.tzAddr : '', place: state.me.place || '', ts: now() }; }
   // The hello is signed over the other side's DTLS fingerprint, so it only proves identity for this one connection.
   async function sendHello() {
     if (!peer || peer.dc.readyState !== 'open') return false;
@@ -500,7 +506,7 @@
         if (!peer || !proven) { toast('HELLO NOT SIGNED. LINE CLOSED.'); return hangup(); }
         let fr = friendById(id);
         if (!fr) { fr = { id, name: 'FRIEND', pub: m.pub, created: now(), messages: [], ledger: [], trusted: false, unread: 0 }; state.friends.push(fr); }
-        fr.name = str(m.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.place = str(m.place, 32); fr.lastSeen = now();
+        fr.name = str(m.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.xtz = TEZ_RE.test(m.xtz || '') ? m.xtz : ''; fr.place = str(m.place, 32); fr.lastSeen = now();
         const first = !peer.friend; peer.friend = fr; if (peer.attempt) peer.attempt.verified = true; save();
         if (first) { openChat(fr.id); pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); flushQueue(fr); send({ t: 'ping', ts: now() }); const pr = peer, ranAt = now(); setTimeout(() => statPath().then(() => report(pr.attempt, 'run', pathKind(pr.path), '-', ranAt)), 300); }
         else if (current === fr) renderChat();
@@ -536,7 +542,40 @@
         if (current !== f) f.unread = (f.unread || 0) + 1; save(); if (current === f) renderChat(); renderFriends(); blip(false);
         break;
       }
-      case 'settle': { (f.ledger || []).forEach((x) => (x.settled = true)); f.messages.push({ id: uid(), from: 'them', kind: 'sys', text: 'TAB SETTLED', ts: now() }); save(); if (current === f) renderChat(); break; }
+      case 'paid': {
+        const id = str(m.id, 40); if (!id || (f.paid || []).some((x) => x.id === id)) return;
+        const ok = m.to === state.me.id && await verify(f, m);
+        if (!peer || peer.friend !== f) return;
+        if (!ok) { pushSys(f, 'A PAYMENT CLAIM ARRIVED UNSIGNED. IGNORED.'); return; }
+        let s; try { s = await settleJs(); } catch (_) { return; }
+        // The signed claim: dir = payer address, note = payee, amount = mutez, text = "<op> <tab>,<tab>… <since>".
+        const j = s.judgeClaim({ claim: { to: m.to, note: m.note, dir: m.dir, amount: m.amount, text: str(m.text, 2400), ts: Number(m.ts) }, friend: f, myId: state.me.id, myAddr: state.me.tzAddr, seenOps: seenOps() });
+        if (!j.ok) { pushSys(f, `A PAYMENT CLAIM WAS NOT COUNTED: ${CLAIM_WHY[j.reason] || j.reason.toUpperCase()}.`); return; }
+        f.paid = f.paid || []; f.paid.push({ id, op: j.op, tabs: j.tabs, to: j.to, from: j.from, mutez: j.mutez, notBefore: j.notBefore, state: 'checking' });
+        markPending(f, j.tabs, j.op);
+        f.messages.push({ id: 'paid-' + id, from: 'them', kind: 'paid', paidOp: j.op, text: `${f.name.toUpperCase()} SAYS THEY PAID ${s.formatTez(j.mutez)} TEZ FOR ${tabsWord(j.tabs.length)} (${netLine(f, j.tabs)}) · CHECKING THE CHAIN`, ts: Number(m.ts) || now(), verified: true, status: 'read' });
+        if (current !== f) f.unread = (f.unread || 0) + 1;
+        save(); if (current === f) renderChat(); renderFriends(); checkPaid(f);
+        break;
+      }
+      case 'paid-ok': case 'paid-no': {
+        // The payee's answer to my claim. Only their signed ACCEPT closes tabs on my phone.
+        const ok = m.to === state.me.id && await verify(f, m);
+        if (!peer || peer.friend !== f || !ok) return;
+        const p = (f.paid || []).find((x) => x.mine && x.op === m.text && ['checking', 'confirmed', 'unconfirmed'].includes(x.state));
+        if (!p) return;
+        let s; try { s = await settleJs(); } catch (_) { return; }
+        if (m.t === 'paid-ok') {
+          const closing = closeTabs(f, p.tabs, p.op); p.state = 'ok';
+          pushSys(f, `${f.name.toUpperCase()} ACCEPTED ${s.formatTez(p.mutez)} TEZ · ${tabsWord(closing.length)} SETTLED (${netLine(f, closing.map((x) => x.id), true)})`);
+        } else {
+          p.state = 'declined'; unmarkPending(f, p.op);
+          pushSys(f, `${f.name.toUpperCase()} SAYS ${s.formatTez(p.mutez)} TEZ IS NOT ENOUGH · THOSE TABS STAY OPEN`);
+        }
+        save(); renderFriends();
+        break;
+      }
+      // There is no unsigned 'settle': a tab closes only through a 'paid' claim the chain confirms.
       case 'file': {
         const size = Number(m.size) || 0; if (size > MAX_FILE) { incoming = null; toast('FILE TOO BIG. DROPPED.'); return; }
         incoming = { id: str(m.id, 40), name: str(m.name, 80).replace(/[\\/]/g, '_') || 'file', size, mime: SAFE_MIME.test(m.mime) ? String(m.mime) : 'application/octet-stream', parts: [], got: 0, ts: now() };
@@ -641,7 +680,7 @@
       const d = fmtDay(m.ts); if (d !== day) { day = d; const li = document.createElement('li'); li.className = 'day'; li.textContent = d; ol.append(li); }
       const li = document.createElement('li'); li.dataset.id = m.id;
       if (m.kind === 'sys') { li.className = 'msg sys'; li.innerHTML = `<div class="bubble"></div>`; li.querySelector('.bubble').textContent = m.text; ol.append(li); continue; }
-      li.className = `msg ${m.from}${m.kind === 'tab' ? ' tab' : ''}${m.reaction ? ' has-react' : ''}`;
+      li.className = `msg ${m.from}${m.kind === 'tab' || m.kind === 'paid' ? ' tab' : ''}${m.reaction ? ' has-react' : ''}`;
       const bubble = document.createElement('div'); bubble.className = 'bubble';
       if (m.kind === 'file') {
         const file = files.get(m.fileId);
@@ -650,6 +689,15 @@
         else if (file.mime.startsWith('audio/')) { const a = document.createElement('audio'); a.controls = true; a.src = file.url; bubble.append(a); }
         else { const a = document.createElement('a'); a.className = 'dl'; a.href = file.url; a.download = file.name; a.textContent = m.label; bubble.append(a); }
       } else bubble.textContent = m.text;
+      if (m.kind === 'paid' && m.card) {
+        const p = (f.paid || []).find((x) => x.op === m.paidOp);
+        const acts = p && !p.mine && p.state === 'awaiting' ? [['accept', 'ACCEPT'], ['decline', 'NOT ENOUGH']] : p && p.state === 'unconfirmed' ? [['recheck', 'RE-CHECK']] : [];
+        if (acts.length && m === [...f.messages].reverse().find((x) => x.card && x.paidOp === m.paidOp)) {
+          const row = document.createElement('div'); row.className = 'paid-acts';
+          for (const [act, label] of acts) { const b = document.createElement('button'); b.type = 'button'; b.className = 'key' + (act === 'decline' ? ' ghost' : ''); b.dataset.paid = act; b.dataset.op = p.op; b.textContent = label; row.append(b); }
+          bubble.append(row);
+        }
+      }
       if (reduced) bubble.style.animation = 'none';
       li.append(bubble);
       if (m.reaction) { const r = document.createElement('span'); r.className = 'react'; r.textContent = m.reaction; li.append(r); }
@@ -679,7 +727,7 @@
     for (const m of f.messages) {
       if (m.from !== 'me' || m.status !== 'queued') continue;
       if (!m.kind) { if (send({ t: 'msg', id: m.id, to: m.to || f.id, ts: m.ts, text: m.text, mood: m.mood, lt: m.lt, sig: m.sig })) m.status = 'sent'; }
-      else if (m.kind === 'tab' && m.wire) { if (send(m.wire)) m.status = 'sent'; }
+      else if ((m.kind === 'tab' || m.kind === 'paid') && m.wire) { if (send(m.wire)) m.status = 'sent'; }
     }
     send({ t: 'draft', text: '' }); save(); if (current === f) renderChat();
   }
@@ -704,8 +752,19 @@
   });
 
   // TAB ledger
-  $('btn-tab').addEventListener('click', () => { if (!current) return; $('tab-balance').textContent = balanceLine(current); openSheet('sheet-tab'); setTimeout(() => $('tab-amount').focus(), 50); });
-  const balanceLine = (f) => { const b = balanceOf(f); return b === 0 ? 'EVEN.' : b > 0 ? `${f.name.toUpperCase()} OWES YOU ${b.toFixed(2)}` : `YOU OWE ${f.name.toUpperCase()} ${(-b).toFixed(2)}`; };
+  // Balances compare in cents, so float residue never shows a SETTLE key on an even tab.
+  const cents = (b) => Math.round(b * 100);
+  const openTabs = (f) => (f.ledger || []).filter((x) => !x.settled && !x.pending);
+  const pendingTabs = (f) => (f.ledger || []).filter((x) => !x.settled && x.pending);
+  $('btn-tab').addEventListener('click', () => {
+    if (!current) return; const f = current; const waiting = pendingTabs(f).length;
+    $('tab-balance').textContent = balanceLine(f) + (waiting ? ` · ${tabsWord(waiting)} PENDING A TEZ PAYMENT` : '');
+    $('btn-settle').hidden = !(cents(balanceOf({ ledger: openTabs(f) })) < 0 && TEZ_RE.test(f.xtz || ''));
+    openSheet('sheet-tab'); setTimeout(() => $('tab-amount').focus(), 50);
+  });
+  const tabsWord = (n) => `${n} TAB${n === 1 ? '' : 'S'}`;
+  const netLine = (f, ids, done) => { const c = cents(balanceOf({ ledger: (f.ledger || []).filter((x) => ids.includes(x.id)).map((x) => ({ ...x, settled: false })) })); return c === 0 ? 'EVEN' : c > 0 ? `THEY OWE${done ? 'D' : ''} ${(c / 100).toFixed(2)}` : `YOU OWE${done ? 'D' : ''} ${(-c / 100).toFixed(2)}`; };
+  const balanceLine = (f) => { const c = cents(balanceOf(f)); return c === 0 ? 'EVEN.' : c > 0 ? `${f.name.toUpperCase()} OWES YOU ${(c / 100).toFixed(2)}` : `YOU OWE ${f.name.toUpperCase()} ${(-c / 100).toFixed(2)}`; };
   $('form-tab').addEventListener('submit', async (e) => {
     e.preventDefault(); if (!current) return; const f = current; const amount = Math.round(Number($('tab-amount').value) * 100) / 100; if (!(amount > 0)) return;
     const t = { id: uid(), by: 'me', amount, dir: $('tab-dir').value, note: $('tab-note').value.trim().slice(0, 60), ts: now() };
@@ -768,10 +827,108 @@
     setInterval(() => { if (ice.relay) refreshIce(false); }, 240000);
     if (wide.matches) show('lobby');
     route();
+    state.friends.forEach((fr) => { if ((fr.paid || []).some((x) => x.state === 'checking')) checkPaid(fr); });
     setInterval(() => { if (current) renderAtmo(); if (app.dataset.view === 'si') renderSi(); }, 30000);
+  }
+  // v0.4 TAB settle in tez. The logic lives in settle.js (loaded only when used); the wallet runs on
+  // /pmm/settle. Order of trust: a pending settle this tab started, a signed claim, the chain (TzKT),
+  // then the payee's own ACCEPT. Only that ACCEPT closes tabs, on both phones.
+  const settleJs = () => import('/pmm/settle.js');
+  const settleHere = new Set(); // nonces of settles started in this tab
+  const CLAIM_WHY = { 'not-for-me': 'IT WAS NOT ADDRESSED TO YOU', 'not-my-address': 'IT PAID AN ADDRESS THAT IS NOT YOURS ON THIS PHONE', 'unshared-payer': 'IT CAME FROM AN ADDRESS THEY NEVER SHARED WITH YOU', 'bad-amount': 'THE AMOUNT IS NOT A WHOLE NUMBER OF MUTEZ ABOVE ZERO', 'bad-claim': 'IT WAS MALFORMED', replay: 'THAT PAYMENT WAS ALREADY COUNTED', 'tabs-not-open': 'IT NAMED TABS THAT ARE NOT OPEN HERE', 'from-the-future': 'ITS TIMES DO NOT ADD UP' };
+  const CHAIN_WHY = { 'wrong-payee': 'IT DID NOT PAY YOUR ADDRESS', 'wrong-payer': 'IT CAME FROM SOMEONE ELSE', 'not-applied': 'THE TRANSFER FAILED', 'too-old': 'IT WAS MADE BEFORE THESE TABS OR BEFORE SETTLE', short: 'IT PAID LESS THAN CLAIMED', 'bad-op': 'THE OPERATION HASH IS INVALID' };
+  const RETURN_WHY = { 'bad-link': 'THAT SETTLE LINK IS BROKEN', 'no-pending-settle': 'THIS PHONE DID NOT START THAT SETTLE. NOTHING SENT', 'wrong-payee': 'IT PAID A DIFFERENT ADDRESS THAN YOUR FRIEND SHARED. NOTHING SENT', 'wrong-payer': 'IT CAME FROM AN ADDRESS YOU HAVE NOT SHARED. NOTHING SENT', 'no-open-tabs': 'NO OPEN TAB IS WAITING ON IT. NOTHING SENT' };
+  const seenOps = () => new Set(state.friends.flatMap((x) => (x.paid || []).filter((p) => !['failed', 'declined'].includes(p.state)).map((p) => p.op)));
+  const markPending = (f, ids, op) => (f.ledger || []).forEach((x) => { if (ids.includes(x.id) && !x.settled) x.pending = op; });
+  const unmarkPending = (f, op) => (f.ledger || []).forEach((x) => { if (x.pending === op) delete x.pending; });
+  const closeTabs = (f, ids, op) => { const c = (f.ledger || []).filter((x) => ids.includes(x.id) && !x.settled); c.forEach((x) => { x.settled = true; x.settledBy = op; delete x.pending; }); return c; };
+  $('btn-settle').addEventListener('click', async () => {
+    const f = current; if (!f) return;
+    if (!TEZ_RE.test(state.me.tzAddr || '')) { toast('SET YOUR OWN TEZ ADDRESS FIRST. THEY ONLY COUNT A PAYMENT FROM IT.'); return; }
+    try {
+      const s = await settleJs();
+      const tabs = openTabs(f).map((x) => x.id).slice(-s.MAX_TABS);
+      const nonce = s.newNonce();
+      // Tabs added after this press are not covered by this payment; the nonce makes the return one-time.
+      f.settling = { nonce, to: f.xtz, tabs, ts: now() }; settleHere.add(nonce); save();
+      const link = s.settleLink({ to: f.xtz, note: `PMM TAB · ${netLine(f, tabs)}`, friend: f.id.slice(0, 16), me: state.me.tzAddr, nonce });
+      closeSheets(); if (!window.open(link, '_blank')) location.href = link; // a new tab keeps this line open
+    } catch (_) { toast('?SETTLE ERROR'); }
+  });
+  async function paidReturn(h) {
+    let s; try { s = await settleJs(); } catch (_) { return toast('?SETTLE ERROR'); }
+    const r = s.parseReturn(h);
+    const f = r && state.friends.find((x) => x.id.startsWith(r.friend));
+    if (!f) return toast(r ? 'PAID, BUT THAT FRIEND IS NOT ON THIS PHONE' : '?SETTLE LINK ERROR');
+    if ((f.paid || []).some((x) => x.op === r.op)) return openChat(f.id);
+    const j = s.acceptReturn(r, f, state.me.tzAddr);
+    if (!j.ok) return toast(RETURN_WHY[j.reason] || '?SETTLE ERROR');
+    delete f.settling; settleHere.delete(r.nonce);
+    const wire = { t: 'paid', id: uid(), to: f.id, ts: now(), text: s.claimText({ op: r.op, tabs: j.tabs, since: j.since }), amount: r.mutez, note: r.to, dir: r.from }; wire.sig = await sign(wire);
+    const notBefore = Math.max(j.since, ...(f.ledger || []).filter((x) => j.tabs.includes(x.id)).map((x) => Number(x.ts) || 0)) - s.SKEW_MS;
+    f.paid = f.paid || []; f.paid.push({ id: wire.id, op: r.op, tabs: j.tabs, to: r.to, from: r.from, mutez: r.mutez, notBefore, state: 'checking', mine: true });
+    markPending(f, j.tabs, r.op);
+    f.messages.push({ id: 'paid-' + wire.id, from: 'me', kind: 'paid', paidOp: r.op, wire, text: `YOU PAID ${s.formatTez(r.mutez)} TEZ FOR ${tabsWord(j.tabs.length)} (${netLine(f, j.tabs)}) · ${r.op.slice(0, 10)}… · CHECKING THE CHAIN`, ts: wire.ts, status: sendTo(f, wire) ? 'sent' : 'queued', mood: state.me.mood });
+    save(); openChat(f.id); checkPaid(f);
+  }
+  // One lookup in flight and one retry timer per operation; after the retries run out, RE-CHECK.
+  const paidTries = new Map(), paidBusy = new Set(), paidTimers = new Map();
+  async function checkPaid(f) {
+    let s; try { s = await settleJs(); } catch (_) { return; }
+    for (const p of (f.paid || []).filter((x) => x.state === 'checking')) {
+      if (paidBusy.has(p.op)) continue;
+      paidBusy.add(p.op);
+      const v = await s.verifyOnChain(p.op, { to: p.to, mutez: p.mutez, from: p.from, notBefore: p.notBefore || 0 });
+      paidBusy.delete(p.op);
+      if (p.state !== 'checking') continue;
+      if (v.ok) {
+        p.state = p.mine ? 'confirmed' : 'awaiting';
+        if (p.mine) pushSys(f, `ON CHAIN · ${s.formatTez(v.mutez)} TEZ · BLOCK ${v.level ?? '?'} · WAITING FOR ${f.name.toUpperCase()} TO ACCEPT`);
+        else pushPaidCard(f, p, `ON CHAIN: ${f.name.toUpperCase()} PAID YOU ${s.formatTez(v.mutez)} TEZ FOR ${tabsWord(p.tabs.length)} WORTH ${netLine(f, p.tabs).replace(/^THEY OWE /, '')}. ENOUGH?`);
+      } else if (v.reason === 'offline' || v.reason === 'not-found') {
+        const n = (paidTries.get(p.op) || 0) + 1; paidTries.set(p.op, n); // new operations take a block or two to index
+        if (n < 12) { if (!paidTimers.has(p.op)) paidTimers.set(p.op, setTimeout(() => { paidTimers.delete(p.op); checkPaid(f); }, Math.min(60000, 5000 * n))); }
+        else { p.state = 'unconfirmed'; pushPaidCard(f, p, `${s.formatTez(p.mutez)} TEZ IS NOT ON CHAIN YET. TABS STAY PENDING.`); }
+      } else {
+        p.state = 'failed'; unmarkPending(f, p.op);
+        pushSys(f, `PAYMENT NOT CONFIRMED ON CHAIN: ${CHAIN_WHY[v.reason] || v.reason.toUpperCase()}. TABS STAY OPEN.`);
+      }
+    }
+    save(); renderFriends(); if (current === f) renderChat();
+  }
+  function pushPaidCard(f, p, text) { f.messages.push({ id: 'card-' + uid(), from: 'them', kind: 'paid', paidOp: p.op, card: true, text, ts: now(), status: 'read' }); if (current !== f) f.unread = (f.unread || 0) + 1; }
+  // ACCEPT / NOT ENOUGH on the payee's phone, RE-CHECK on either.
+  $('messages').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-paid]'); const f = current; if (!b || !f) return;
+    e.stopPropagation();
+    const p = (f.paid || []).find((x) => x.op === b.dataset.op); if (!p) return;
+    if (b.dataset.paid === 'recheck' && p.state === 'unconfirmed') { p.state = 'checking'; paidTries.delete(p.op); save(); renderChat(); return checkPaid(f); }
+    if (p.mine || p.state !== 'awaiting') return;
+    const yes = b.dataset.paid === 'accept';
+    const wire = { t: yes ? 'paid-ok' : 'paid-no', id: uid(), to: f.id, ts: now(), text: p.op }; wire.sig = await sign(wire);
+    let closing = [];
+    if (yes) { closing = closeTabs(f, p.tabs, p.op); p.state = 'ok'; } else { p.state = 'declined'; unmarkPending(f, p.op); }
+    f.messages.push({ id: 'paid-' + wire.id, from: 'me', kind: 'paid', wire, text: yes ? `YOU ACCEPTED · ${tabsWord(closing.length)} SETTLED (${netLine(f, closing.map((x) => x.id), true)})` : 'YOU SAID NOT ENOUGH · THOSE TABS STAY OPEN', ts: wire.ts, status: sendTo(f, wire) ? 'sent' : 'queued' });
+    save(); renderChat(); renderFriends(); blip(true);
+  });
+  // Another PMM tab wrote state: pick it up while this tab is idle, so neither overwrites the other.
+  addEventListener('storage', (e) => {
+    if (e.key !== KEY || !e.newValue || peer || pending) return;
+    const id = current && current.id; state = load(); current = id ? friendById(id) || null : null;
+    renderMe(); renderFriends(); if (current) renderChat();
+  });
+  // A #settled= link opened in a fresh PMM tab: hand it to the tab that pressed SETTLE if one is open.
+  function settledHandOff(h) {
+    if (!bc) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const id = uid(); const on = (e) => { if (e.data && e.data.t === 'settled-ok' && e.data.id === id) { clearTimeout(t); bc.removeEventListener('message', on); resolve(true); } };
+      const t = setTimeout(() => { bc.removeEventListener('message', on); resolve(false); }, 900);
+      bc.addEventListener('message', on); bc.postMessage({ t: 'settled', h, id });
+    });
   }
   function route() {
     const h = location.hash.slice(1);
+    if (/(^|&)settled=/.test(h)) { history.replaceState(null, '', location.pathname); settledHandOff(h).then((ok) => (ok ? toast('HANDED TO YOUR OTHER PMM TAB. YOU CAN CLOSE THIS ONE.') : paidReturn(h))); return; }
     const o = /offer=([A-Za-z0-9_-]+)/.exec(h), a = /answer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h), f = /f=([0-9a-f]{16})/.exec(h);
     if (o) { history.replaceState(null, '', location.pathname); joinOffer(o[1]); }
     else if (a) {

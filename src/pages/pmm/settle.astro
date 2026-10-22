@@ -1,0 +1,122 @@
+---
+// PMM v0.4: settle a TAB in tez. PMM links here with the payee and amount in the URL fragment,
+// which never reaches a server. The wallet library loads only when SEND is pressed, so PMM
+// itself stays small. See docs/prd/pointcast-mobile-messaging.md.
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PMM — settle a tab in tez</title>
+<meta name="description" content="Settle a PMM tab with one tez transfer from your own wallet. PointCast never holds the money.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#7869C4">
+<link rel="icon" href="/pmm/icon.svg" type="image/svg+xml">
+<style>
+  :root { --border: #7869C4; --field: #40318D; --panel: #4a3a9c; --ink: #F2F0FF; --ink-2: #BDB4F0; --line: rgba(242,240,255,.18); --bad: #F5D142;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--border); color: var(--ink); font: 16px/1.45 var(--mono); padding: 16px; display: grid; place-items: start center; }
+  main { width: 100%; max-width: 480px; background: var(--field); border-radius: 6px; padding: 20px 18px; }
+  h1 { font-size: 16px; letter-spacing: .06em; margin: 0 0 4px; }
+  .fuji { display: flex; gap: 3px; margin: 0 0 14px; } .fuji i { height: 6px; flex: 1; border-radius: 2px; }
+  .fuji i:nth-child(1){background:#E8453C}.fuji i:nth-child(2){background:#F28C28}.fuji i:nth-child(3){background:#F5D142}.fuji i:nth-child(4){background:#58B947}.fuji i:nth-child(5){background:#2F86D8}.fuji i:nth-child(6){background:#7E57B5}
+  label { display: block; font-size: 12px; letter-spacing: .08em; color: var(--ink-2); margin: 14px 0 4px; }
+  .val { word-break: break-all; padding: 10px; background: var(--panel); border-radius: 4px; }
+  input { width: 100%; font: inherit; font-size: 18px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px; }
+  button { font: inherit; letter-spacing: .06em; color: var(--field); background: var(--ink); border: 0; border-radius: 4px; padding: 12px 16px; margin-top: 18px; width: 100%; cursor: pointer; }
+  button[disabled] { opacity: .5; cursor: default; }
+  a { color: var(--ink); }
+  .hint { font-size: 13px; color: var(--ink-2); }
+  .err { color: var(--bad); }
+  .prompt { min-height: 1.4em; margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SETTLE A TAB IN TEZ</h1>
+  <div class="fuji" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <p class="hint">One transfer from your wallet to your friend's. PointCast never holds the money and cannot reverse it. Check the address with your friend before you send.</p>
+  <label>PAY TO</label>
+  <div class="val" id="to">—</div>
+  <label id="note-label" hidden>FOR</label>
+  <div class="val" id="note" hidden></div>
+  <form id="form" novalidate>
+    <label for="tez">AMOUNT IN TEZ</label>
+    <input id="tez" inputmode="decimal" autocomplete="off" placeholder="1.5" required>
+    <button id="send" type="submit" disabled>CONNECT WALLET AND SEND</button>
+  </form>
+  <p class="prompt" id="prompt" role="status" aria-live="polite"></p>
+  <p class="hint" id="back"><a href="/pmm/">BACK TO PMM</a></p>
+</main>
+<script>
+  // The pure settle logic lives in public/pmm/settle.js, shared with PMM. Vite cannot bundle files
+  // from public/, so it loads at runtime from its published path. An absolute URL keeps Vite's dev
+  // server from rewriting the import (it appends ?import to root-relative paths, which public/ refuses).
+  const SETTLE_JS = new URL('/pmm/settle.js', location.origin).href;
+  main();
+  async function main() {
+  const { parseSettleHash, pendingSettleFor, toMutez, formatTez, returnLink } = await import(/* @vite-ignore */ SETTLE_JS);
+  const $ = (id) => document.getElementById(id);
+  const tellPmm = (h) => new Promise((resolve) => {
+    if (!('BroadcastChannel' in window)) return resolve(false);
+    const bc = new BroadcastChannel('pmm'), id = Math.random().toString(36).slice(2);
+    const done = (ok) => { clearTimeout(t); bc.close(); resolve(ok); };
+    const t = setTimeout(() => done(false), 900);
+    bc.addEventListener('message', (e) => { if (e.data && e.data.t === 'settled-ok' && e.data.id === id) done(true); });
+    bc.postMessage({ t: 'settled', h, id });
+  });
+  const req = parseSettleHash(location.hash);
+  const say = (text, bad = false) => { $('prompt').textContent = text; $('prompt').classList.toggle('err', bad); };
+
+  // Only a settle this browser's PMM is waiting on: a friend, their shared address, your shared
+  // address, and the one-time nonce PMM saved when you pressed SETTLE. Anything else stays disabled.
+  let saved = null; try { saved = JSON.parse(localStorage.getItem('pmm/v1') || 'null'); } catch (_) {}
+  const gate = pendingSettleFor(req, saved);
+  const WHY = { 'bad-link': 'open this page from SETTLE IN TEZ in a PMM chat.', 'not-a-friend': 'that is not one of your PMM friends.', 'not-their-address': 'this is not your PMM friend\'s address.', 'not-your-address': 'this is not the tez address you shared in PMM.', 'no-pending-settle': 'PMM is not waiting on this settle. press SETTLE IN TEZ again.' };
+  if (req.to) $('to').textContent = req.to;
+  if (!gate.ok) {
+    say('?NOT YOUR PMM FRIEND ERROR. ' + (WHY[gate.reason] || ''), true);
+  } else {
+    $('to').textContent = `${req.to} (${gate.name})`;
+    if (req.note) { $('note').textContent = req.note; $('note').hidden = false; $('note-label').hidden = false; }
+    const check = () => { $('send').disabled = toMutez($('tez').value) === null; };
+    $('tez').addEventListener('input', check); check();
+  }
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mutez = toMutez($('tez').value);
+    if (!gate.ok || mutez === null) return;
+    $('send').disabled = true; $('tez').disabled = true;
+    try {
+      say('LOADING WALLET…');
+      const [{ validateAddress, ValidationResult }, tezos] = await Promise.all([import('@taquito/utils'), import('../../lib/tezos')]);
+      if (validateAddress(req.to) !== ValidationResult.VALID) throw new Error('that payee address fails its checksum');
+      say('APPROVE IN YOUR WALLET…');
+      const from = await tezos.connectKukaiForSigning();
+      if (from === req.to) throw new Error('that is your own address');
+      // Your friend only counts a payment from the address you shared with them in PMM.
+      if (from !== req.me) throw new Error(`connect the wallet for ${req.me}, the address you shared in PMM (this one is ${from})`);
+      const toolkit = await tezos.tezosClient();
+      const op = await toolkit.wallet.transfer({ to: req.to, amount: mutez, mutez: true }).send();
+      const back = returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to, from, nonce: req.nonce });
+      say(`SENT ${formatTez(mutez)} TEZ. WAITING FOR THE BLOCK…`);
+      $('back').innerHTML = '';
+      // Hand the result to the PMM tab that pressed SETTLE. Only when none answers, link into PMM.
+      const told = await tellPmm(back.split('#')[1]);
+      if (told) { const p = document.createElement('span'); p.textContent = 'PMM HAS IT. RETURN TO YOUR PMM TAB AND CLOSE THIS ONE.'; $('back').append(p); }
+      else { const a = document.createElement('a'); a.href = back; a.textContent = 'RUN: BACK TO PMM AND TELL YOUR FRIEND'; $('back').append(a); }
+      const tzkt = document.createElement('a'); tzkt.href = `https://tzkt.io/${op.opHash}`; tzkt.textContent = 'see it on tzkt'; tzkt.rel = 'noopener'; tzkt.target = '_blank';
+      $('back').append(document.createElement('br'), tzkt);
+      op.confirmation(1).then(() => say(`READY. ${formatTez(mutez)} TEZ LANDED.`)).catch(() => say('SENT. THE BLOCK IS SLOW; PMM CHECKS IT AGAIN LATER.'));
+    } catch (err) {
+      say('?SEND ERROR. ' + String(err?.message || err).slice(0, 140), true);
+      $('send').disabled = false; $('tez').disabled = false;
+    }
+  });
+  }
+</script>
+</body>
+</html>
