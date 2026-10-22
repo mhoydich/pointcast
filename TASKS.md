@@ -68,6 +68,14 @@
 - [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737, one cloud session each, draft PRs based on `claude/epic-albattani-j8tb06`: Lighthouse (Simon, `claude/lighthouse-20261022`, session_01PEDK4795RE7nBmVM7yeaJC), Low Tide (Kaboom!, `claude/low-tide-20261022`, session_016rpwV276Uk53dyNtHncrzz), Morning Route (Paperboy, `claude/morning-route-20261022`, session_01SDvFBq3oSr9SEfkD32XwZx), Sea Glass (Q*bert, `claude/sea-glass-20261022`, session_01QCPxosyU53LGtzQjrG99Fv), Sandcastle (Missile Command, `claude/sandcastle-20261022`, session_01FtckgMyrwsT8mZSzswKh4Q); each lights its own cabinet when published; their discovery entries sit after Cabinet Row's, wave one's after Breakwater's — `in-progress`
 - [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
 
+## Lighthouse — Simon as a lighthouse lens at night (2026-10-22)
+
+`/lighthouse`, `/lighthouse.json`, Block 0745 (moved from 0733 as the ids before it were taken on main and by open PRs). Wave-two game in the Breakwater family: four compass lamps in the machine palette's band colors, tones of an A major chord after Simon's, playback faster after the 5th, 9th and 13th step, CALM replays a miss, FREE play instrument. Rules in `src/lib/lighthouse/{lens,game}.mjs`, tests in `tests/lighthouse.test.mjs`, research note `docs/notes/2026-10-22-lighthouse-notes.md`. Branch `claude/lighthouse-20261022`, PR #1508 against `main`.
+
+- [x] (CC) Build the game, JSON twin, Block, cover art, catalog entry and discovery wiring; lights its cabinet on Cabinet Row — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-lighthouse-qa.md`, log to `docs/manus-logs/2026-10-22-lighthouse.md` — `queued`
+- [ ] (MH/X) Review and merge #1508 — `waiting-on-mh`
+
 ---
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)

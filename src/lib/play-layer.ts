@@ -16,6 +16,13 @@ export const PLAY_SURFACES = [
     summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
   },
   {
+    id: 'lighthouse',
+    code: 'LITE',
+    title: 'Lighthouse',
+    route: '/lighthouse',
+    summary: 'Simon as a lighthouse lens at night: watch four lamps play a growing sequence of light and tone, then play it back. A free-play mode turns the lens into an instrument.',
+  },
+  {
     id: 'breakwater',
     code: 'BRK',
     title: 'Breakwater',

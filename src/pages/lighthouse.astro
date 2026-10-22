@@ -1,0 +1,1088 @@
+---
+/**
+ * /lighthouse — Simon as a lighthouse lens at night.
+ *
+ * A wave-two game in the Breakwater family (see /cabinet-row), directed by
+ * Michael Hoydich: "80s innocence, joy of the compute and flow, mood state
+ * symbiosis, mobile and full screen, audio visual multimedia, Atari and
+ * Commodore inspired style modern."
+ *
+ * The light plays a growing sequence on four lamps; the player repeats it.
+ * Everything in the playfield is drawn from the shared 3x5 pixel font and
+ * plain rects on a canvas; every sound is synthesized in the browser. Pure
+ * logic lives in src/lib/lighthouse (lens, game) on top of the shared
+ * src/lib/breakwater (font, waves, mood) and is covered by
+ * tests/lighthouse.test.mjs.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+import { LAMPS } from '../lib/lighthouse/lens.mjs';
+
+const description = 'Simon as a lighthouse lens at night: four lamps in Atari 800XL or Commodore 64 colors, a growing sequence of light and synthesized tone to repeat, a free-play instrument, and a mood the game and you keep together. Phone or full screen.';
+const canonical = 'https://pointcast.xyz/lighthouse';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Lighthouse',
+      alternateName: 'Lighthouse: follow the light',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/lighthouse/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Memory game',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Lighthouse', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+const lampLine = LAMPS.map((l) => `${l.name.toLowerCase()} ${l.band} (${l.note})`).join(', ');
+---
+
+<BlockLayout
+  title="Lighthouse"
+  description={description}
+  image="/images/lighthouse/og.png"
+  imageAlt="A round lighthouse lens of four colored lamps on a night-blue field, a beam crossing it, beside the words Lighthouse, follow the light."
+  themeColor="#2545a8"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/lighthouse.json', title: 'Lighthouse rules, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/lighthouse/og.png',
+    buttons: [
+      { label: 'Play Lighthouse', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="lh" data-lh data-machine="xl" data-crt="on">
+    <div class="lh-stage" data-stage>
+      <header class="lh-bar">
+        <a class="lh-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="lh-name" aria-hidden="true">LIGHTHOUSE</span>
+        <div class="lh-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (X)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (Z)">PLAY</button>
+          <button type="button" data-free-btn aria-pressed="false" title="Free play: the lens as an instrument (T)">FREE</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="lh-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Lighthouse playfield. A round lens of four lamps: north, east, south and west. Watch the light, then repeat it with taps, the arrow keys or 1 to 4."></canvas>
+        <div class="lh-scan" aria-hidden="true"></div>
+        <noscript><p class="lh-noscript">Lighthouse needs JavaScript to draw the lens and make its tones. The rules and moods are readable at <a href="/lighthouse.json">/lighthouse.json</a>.</p></noscript>
+      </div>
+      <footer class="lh-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>96 BPM</span>
+        <span data-r-step>STEP 0</span>
+        <span data-r-fps>-- FPS</span>
+        <span data-r-win>WIN 3.0S</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="lh-notes">
+      <p class="lh-eyebrow">PointCast / Games / Lighthouse</p>
+      <h1>Follow the light.</h1>
+      <p class="lh-lede">A lighthouse lens at night with four lamps. The light plays a sequence; you play it back. Each round it adds one more. Simon, 1978, turned a quarter so the lamps face the compass.</p>
+
+      <div class="lh-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Each lamp you get right raises its <strong>energy</strong>, each sequence you finish raises it more, and every eighth step reached lifts both. A miss lowers its <strong>calm</strong>. Time brings both back toward the dial you set.</p>
+          <ul class="lh-moods">
+            <li><b>DAWN</b> warming up. A little extra time to answer, cool colors, a slow major arpeggio under the lens.</li>
+            <li><b>FLOW</b> a clean run. Bright lamps, the music opens up.</li>
+            <li><b>RUSH</b> faster playback, the lamps go dark between flashes, raster bars in the border, more sparks.</li>
+            <li><b>DRIFT</b> after a miss. The light plays slower and waits longer for you; the notes thin out.</li>
+          </ul>
+          <p>Your side is the dial: <span><b>CALM</b> (a miss replays the same sequence; there is no game over)</span>; {dials.filter((d) => d.id !== 'calm').map((d, i, a) => <span><b>{d.label}</b> ({d.id === 'play' ? 'one miss ends the game' : 'starts hot, the light plays fast'}){i < a.length - 1 ? '; ' : '.'}</span>)} The mood tape from your session stays in this browser, and when you leave after a game, the game hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'The Graphics 0 blue with a black border. Lamp tones are raw square waves, in the POKEY spirit. A blue READY and a RUN before the lens lights.' : 'The blue field inside a light-blue border. Lamp tones are triangle waves and the music runs through a resonant filter, in the SID spirit. 38911 BASIC BYTES FREE, then LOAD, then RUN.'}</p>
+          ))}
+          <p>The lamps take the four colors each machine gives Breakwater's bricks. Nothing is emulated and nothing is copied: the pixel font, the lens, the tones and the music were written for this page. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-lighthouse-notes.md">research note on Simon</a>.</p>
+        </article>
+        <article>
+          <h2>The rules</h2>
+          <p>Four lamps clockwise from the top: {lampLine}. Together they sound an A major chord, after Simon's four bugle-like tones. Playback speeds up after the 5th, 9th and 13th step of a sequence, as Simon's did. A wrong lamp, or waiting too long, sounds a low buzz and shows the lamp that was due. Your best is the longest sequence you repeated.</p>
+          <p><b>FREE</b> turns the lens into a four-note instrument: hold a lamp to sound it, slide between lamps to play a run.</p>
+          <h2>Controls</h2>
+          <ul>
+            <li>Tap or click the lamps. Tap anywhere to start.</li>
+            <li>Keys: ↑ → ↓ ← or W D S A, or 1 2 3 4 clockwise from the top, play the lamps. Space starts, P pauses, F full screen, M sound, C scanlines, X switches machines, Z turns the dial, T free play.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
+          </ul>
+        </article>
+      </div>
+
+      <footer class="lh-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code. October 22, 2026, a wave-two game in the Breakwater family. Original code, art and synthesized sound; no ROMs, no recordings. Simon is a trademark of its owner and is named here as a tribute; machine names are tributes too.</p>
+        <p><a href="/cabinet-row">Cabinet Row</a> · <a href="/lighthouse.json">lighthouse.json</a> · <a href="/breakwater">Breakwater</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .lh { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .lh[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .lh-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .lh-stage:fullscreen { height: 100%; min-height: 0; }
+  .lh-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .lh-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .lh-home { color: #a9b9f5; text-decoration: none; font-weight: 700; }
+  .lh-home:hover { color: #fff; }
+  .lh-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .lh-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+  .lh-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .lh-controls button:hover { background: #1f2456; }
+  .lh-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
+  .lh-controls button[data-free-btn][aria-pressed='false'] { text-decoration: none; }
+  .lh-controls button[data-free-btn][aria-pressed='true'] { color: #0b0d1a; background: var(--paddle); border-color: var(--paddle); }
+  .lh-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .lh-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .lh-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .lh-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .lh[data-crt='off'] .lh-scan { display: none; }
+  .lh-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .lh-noscript a { color: var(--paddle); }
+  .lh-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; flex-shrink: 0; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #8d94c2; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .lh-readout span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .lh-readout a { margin-left: auto; flex-shrink: 0; color: #a9b9f5; text-decoration: none; }
+  .lh-readout a:hover { color: #fff; }
+  .lh-stage:fullscreen .lh-readout a { display: none; }
+  .lh-stage:-webkit-full-screen .lh-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .lh-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .lh-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #8d94c2; margin: 0 0 14px; }
+  .lh-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .lh-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .lh-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .lh-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .lh-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .lh-grid p + h2, .lh-grid ul + h2 { margin-top: 22px; }
+  .lh-grid p { margin: 0 0 12px; }
+  .lh-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .lh-grid li { margin-bottom: 6px; }
+  .lh-moods { list-style: none; padding: 0; }
+  .lh-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .lh-notes a { color: #a9b9f5; }
+  .lh-notes a:hover { color: #fff; }
+  .lh-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .lh-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .lh-stage { min-height: 0; }
+    .lh-bar { gap: 8px; padding: 6px 10px; }
+    .lh-name { display: none; }
+    .lh-controls { gap: 4px; }
+    .lh-controls button { padding: 7px 6px; min-width: 38px; font-size: 9px; }
+    .lh-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .lh-readout [data-r-win], .lh-readout [data-r-fps] { display: none; }
+    .lh-grid { grid-template-columns: 1fr; gap: 20px; }
+    .lh-notes { padding: 40px 16px 56px; }
+  }
+  @media (max-width: 380px) {
+    .lh-home { font-size: 0; }
+    .lh-home::before { content: 'PC'; font-size: 11px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .lh-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+  import { LAMPS, BAND_NAMES, midiToHz, lampForKey, lensGeometry, lampAt, lensCells, hubCells } from '../lib/lighthouse/lens.mjs';
+  import { playbackPlan, tuning, createGame, extend, due, press, miss } from '../lib/lighthouse/game.mjs';
+
+  const root = document.querySelector('[data-lh]');
+  if (root) main(root);
+
+  function main(root) {
+    // ---------- geometry (logical pixels) ----------
+    const W = 288, H_MIN = 384, H_MAX = 480, WALL = 8, HUD = 32, CELL = 4;
+    let H = H_MIN;
+    let geo = lensGeometry(W, H, HUD);
+    let cells = lensCells(geo, CELL);
+    let hub = hubCells(geo, CELL);
+    let backing = backingCells(geo);
+    const STORE = 'lighthouse:v1';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+    const PROMPT_GAP = 14;
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      free: root.querySelector('[data-free-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      step: root.querySelector('[data-r-step]'),
+      fps: root.querySelector('[data-r-fps]'),
+      win: root.querySelector('[data-r-win]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isInteger(settings.best) && settings.best > 0 ? settings.best : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    let tune = tuning(response, mood.dial);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title or free play.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const toHex = (c) => `#${c.map((v) => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('')}`;
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex([0, 1, 2].map((i) => A[i] + (B[i] - A[i]) * t)); };
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const lampWords = (i) => `${BAND_NAMES[LAMPS[i].band]} ${LAMPS[i].id}`;
+    function backingCells(g) {
+      const out = [], r = g.rOuter + 4;
+      for (let y = g.cy - r; y < g.cy + r; y += CELL) for (let x = g.cx - r; x < g.cx + r; x += CELL) if (Math.hypot(x + CELL / 2 - g.cx, y + CELL / 2 - g.cy) <= r) out.push({ x, y });
+      return out;
+    }
+    // Fixed stars, so nothing strobes: they only twinkle slowly, and not at all with reduced motion.
+    const STARS = Array.from({ length: 34 }, (_, i) => ({ x: WALL + 4 + ((i * 97) % (W - 2 * WALL - 8)), y: HUD + 6 + ((i * 53) % 300), p: i * 1.7 }));
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music;
+      let tempo = 104, scale = 'major', density = 0.5, musicOn = false, wantMusic = false, ducked = false;
+      let nextNote = 0, step = 0, timer = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      // In A, so the music sits under the lamps' own A major chord.
+      const PROG = {
+        major: [[57, 61, 64, 69], [54, 57, 61, 66], [50, 54, 57, 62], [52, 56, 59, 64]],
+        bright: [[57, 61, 64, 68], [59, 63, 66, 71], [62, 66, 69, 73], [64, 68, 71, 75]],
+        minor: [[54, 57, 61, 66], [50, 54, 57, 62], [52, 56, 59, 64], [54, 57, 61, 66]],
+        soft: [[57, 64, 69, 73], [50, 57, 62, 66], [54, 61, 66, 69], [52, 59, 64, 68]],
+      };
+      const ARP = [0, 1, 2, 3, 2, 1, 0, 2];
+      const MUSIC_GAIN = 0.26, DUCK_GAIN = 0.07;
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.8; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = ducked ? DUCK_GAIN : MUSIC_GAIN; music.connect(master);
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      // A lamp tone: square on the 800XL, triangle on the C64, held for as long as it is asked to be.
+      function lampTone(i) {
+        if (!ac) return () => {};
+        const t = ac.currentTime;
+        const o = ac.createOscillator();
+        o.type = machineId === 'c64' ? 'triangle' : 'square';
+        o.frequency.setValueAtTime(midiToHz(LAMPS[i].midi), t);
+        const g = ac.createGain();
+        const vol = machineId === 'c64' ? 0.42 : 0.2;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + 0.008);
+        g.gain.setTargetAtTime(vol * 0.8, t + 0.05, 0.08);
+        o.connect(g); g.connect(sfx);
+        o.start(t);
+        let stopped = false;
+        return () => {
+          if (stopped || !ac) return;
+          stopped = true;
+          const now = ac.currentTime;
+          g.gain.cancelScheduledValues(now);
+          g.gain.setValueAtTime(g.gain.value, now);
+          g.gain.setTargetAtTime(0.0001, now, 0.025);
+          o.stop(now + 0.2);
+        };
+      }
+      function playStep(s, t) {
+        const chords = PROG[scale] || PROG.major;
+        const chord = chords[Math.floor(s / 16) % chords.length];
+        const idx = s % 16;
+        if (idx % 8 === 0) voice({ freq: midi(chord[0] - 24), type: machineId === 'c64' ? 'triangle' : 'square', t, dur: 0.3, vol: 0.16, dest: music, r: 0.1 });
+        const gate = scale === 'soft' ? 0.3 : 0.4 + density * 0.4;
+        if (idx % 2 === 0 && Math.random() < gate) {
+          const n = chord[ARP[(idx / 2) % ARP.length]] + (scale === 'bright' ? 12 : 0);
+          voice({ freq: midi(n), type: 'square', t, dur: scale === 'soft' ? 0.24 : 0.1, vol: 0.08, dest: music, r: 0.05, detune: machineId === 'xl' ? 4 : 0 });
+        }
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
+        while (nextNote < ac.currentTime + 0.14) {
+          playStep(step, nextNote);
+          nextNote += 60 / tempo / 4;
+          step += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        // The music steps back while the light plays and the player answers, so the lamp tones stand alone.
+        duck(on) {
+          if (on === ducked) return;
+          ducked = on;
+          if (music) music.gain.setTargetAtTime(on ? DUCK_GAIN : MUSIC_GAIN, ac.currentTime, 0.08);
+        },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        lampTone,
+        // Simon's miss is a low raspy buzz; two detuned squares under a low-pass.
+        razz() {
+          if (!ac) return;
+          const t = ac.currentTime;
+          const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+          const g = ac.createGain();
+          g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.32, t + 0.01);
+          g.gain.setTargetAtTime(0.0001, t + 0.8, 0.06);
+          f.connect(g); g.connect(sfx);
+          for (const hz of [42, 44.5]) { const o = ac.createOscillator(); o.type = 'square'; o.frequency.value = hz; o.connect(f); o.start(t); o.stop(t + 1.2); }
+        },
+        wave() { if (!ac) return; const t = ac.currentTime; [69, 73, 76, 81].forEach((n, i) => voice({ freq: midi(n), type: 'triangle', t: t + i * 0.06, dur: 0.12, vol: 0.14, r: 0.08 })); },
+        sio() { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = ac.currentTime; LAMPS.forEach((l, i) => voice({ freq: midiToHz(l.midi + 12), type: 'square', t: t + i * 0.08, dur: 0.12, vol: 0.14, r: 0.1 })); },
+        ready: () => !!ac,
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, done: false, beeped: false, total: 0 },
+      game: createGame(), plan: [], planIdx: 0, planMult: 1, showLamp: -1,
+      level: [0, 0, 0, 0], flashT: [0, 0, 0, 0], held: new Map(), stops: new Map(),
+      inputT: 0, missLamp: -1, pendingOver: false, resume: null, demo: 0,
+      beam: 0, particles: [], flash: 0, msg: '', msgT: 0, msgScale: 3, loading: 0,
+      fps: 60, fpsAcc: 0, fpsN: 0, musicResume: false, played: false, last: 0,
+    };
+
+    function bootScript() {
+      if (machineId === 'c64') return ['', '    **** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"LIGHTHOUSE",8,1', '', 'SEARCHING FOR LIGHTHOUSE', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:LIGHTHOUSE"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, done: false, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+    }
+    function enterTitle() {
+      releaseAll();
+      G.phase = 'title'; G.t = 0; G.demo = 0;
+      audio.setMusic(true); audio.duck(false);
+      syncButtons();
+    }
+    function showMsg(text, scale = 3, time = 1.2) { G.msg = text; G.msgScale = scale; G.msgT = time; }
+    function inGame() { return ['show', 'input', 'good', 'miss'].includes(G.phase) || (G.phase === 'paused' && G.resume); }
+
+    function newGame() {
+      releaseAll();
+      G.game = createGame(); G.particles = []; G.pendingOver = false; G.played = true;
+      beginGame(mood); response = moodResponse(mood); tune = tuning(response, mood.dial);
+      extend(G.game);
+      startShow();
+      audio.setMusic(true);
+      announce('New game. Watch the light.');
+    }
+    function startShow() {
+      releaseAll();
+      G.phase = 'show'; G.t = 0; G.planIdx = 0; G.showLamp = -1;
+      // The mood sets the pace once per playback, so a sequence never changes speed halfway through.
+      G.planMult = tune.mult;
+      G.plan = playbackPlan(G.game.sequence, G.planMult);
+      audio.duck(true);
+    }
+    function startInput() {
+      G.phase = 'input'; G.t = 0; G.inputT = 0; G.showLamp = -1;
+      announce(`Your turn. ${G.game.sequence.length} ${G.game.sequence.length === 1 ? 'lamp' : 'lamps'}.`);
+    }
+    function applyEvents(events) {
+      for (const e of events) moodEvent(mood, e);
+      response = moodResponse(mood); tune = tuning(response, mood.dial);
+    }
+    function sparks(i) {
+      const n = REDUCED ? 2 : tune.sparks;
+      const a = [-Math.PI / 2, 0, Math.PI / 2, Math.PI][i];
+      const r = (geo.rOuter + geo.rInner) / 2;
+      const x = geo.cx + Math.cos(a) * r, y = geo.cy + Math.sin(a) * r;
+      const color = M().bands[LAMPS[i].band];
+      for (let k = 0; k < n; k += 1) G.particles.push({ x, y, vx: Math.cos(a) * rnd(30, 120) + rnd(-50, 50), vy: Math.sin(a) * rnd(30, 120) + rnd(-50, 50), life: rnd(0.3, 0.7), t: 0, color });
+      if (G.particles.length > 200) G.particles.splice(0, G.particles.length - 200);
+    }
+    function playerPress(i) {
+      const r = press(G.game, i, mood.dial === 'calm');
+      applyEvents(r.events);
+      if (r.result === 'correct' || r.result === 'complete') {
+        G.inputT = 0; sparks(i); buzz(6);
+        if (r.result === 'complete') {
+          const len = r.length;
+          if (len > best) best = len;
+          save();
+          G.phase = 'good'; G.t = 0;
+          if (r.events.includes('wave')) { audio.wave(); showMsg(`STEP ${len}`, 3, 1.1); announce(`${len} steps. The light brightens.`); }
+          else announce(`Sequence of ${len} repeated.`);
+        }
+        return;
+      }
+      if (r.result === 'replay' || r.result === 'over') onMiss(r);
+    }
+    function onMiss(r) {
+      releaseAll();
+      G.missLamp = r.expected;
+      // Decided now: a dial turned during the buzz cannot undo or cause a game over.
+      G.pendingOver = r.result === 'over';
+      G.phase = 'miss'; G.t = 0; G.msgT = 0;
+      audio.razz(); buzz(40);
+      G.flash = 0.3;
+      const name = r.expected >= 0 ? lampWords(r.expected) : 'next';
+      announce(G.pendingOver ? `Miss. The ${name} lamp was due. Game over at ${G.game.longest} steps.` : `Miss. The ${name} lamp was due. The light plays it again.`);
+    }
+    function timeOut() {
+      const r = miss(G.game, mood.dial === 'calm');
+      applyEvents(r.events);
+      onMiss(r);
+    }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0;
+      if (G.game.longest > best) best = G.game.longest;
+      save(); handMoodToTown();
+      audio.setMusic(false); audio.duck(false);
+    }
+    function setFree(on) {
+      if (on === (G.phase === 'free')) return;
+      if (on) {
+        // Free play leaves any game in progress; what was repeated still counts.
+        if (inGame()) { if (G.game.longest > best) best = G.game.longest; save(); handMoodToTown(); }
+        releaseAll();
+        G.phase = 'free'; G.t = 0;
+        audio.setMusic(false); audio.duck(false);
+        announce('Free play. The lens is an instrument: hold a lamp to sound it.');
+        showMsg('FREE PLAY', 3, 1);
+      } else {
+        enterTitle();
+        announce('Free play off.');
+      }
+      syncButtons();
+    }
+
+    // ---------- held lamps (pointers and keys) ----------
+    function holdStart(id, i) {
+      holdEnd(id);
+      G.held.set(id, i);
+      G.flashT[i] = Math.max(G.flashT[i], 0.18);
+      if (soundOn) G.stops.set(id, audio.lampTone(i));
+    }
+    function holdEnd(id) {
+      if (!G.held.has(id)) return;
+      const i = G.held.get(id);
+      G.held.delete(id);
+      const stop = G.stops.get(id);
+      G.stops.delete(id);
+      if (!stop) return;
+      // In a game a tap still sounds for a beat; in free play the note ends with the finger.
+      if (G.phase === 'free') stop(); else setTimeout(stop, Math.max(0, (G.flashT[i] || 0) * 1000));
+    }
+    function releaseAll() { for (const id of [...G.held.keys()]) holdEnd(id); G.held.clear(); }
+    function lampDown(id, i) {
+      if (G.phase === 'free') { holdStart(id, i); return; }
+      if (G.phase === 'input') { holdStart(id, i); playerPress(i); }
+    }
+
+    // ---------- update ----------
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      for (let i = 0; i < 4; i += 1) if (G.flashT[i] > 0) G.flashT[i] -= dt;
+      for (const p of G.particles) { p.t += dt; p.vx *= 1 - 1.5 * dt; p.vy *= 1 - 1.5 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      G.particles = G.particles.filter((p) => p.t < p.life);
+      G.beam += dt * (REDUCED ? 0 : 0.9 + 0.8 * (response.tempo - 92) / 70);
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 24) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        updateLevels(dt);
+        return;
+      }
+      if (G.phase === 'title') {
+        audio.set(100, 'major', 0.25);
+        // Attract: the lamps take turns, silently, a slow clockwise watch.
+        G.demo += dt;
+        updateLevels(dt);
+        return;
+      }
+      if (G.phase === 'paused' || G.phase === 'over') { updateLevels(dt); return; }
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      tune = tuning(response, mood.dial);
+      audio.set(response.tempo, response.scale, response.density);
+
+      if (G.phase === 'show') {
+        const step = G.plan[G.planIdx];
+        if (step && G.t >= step.start) {
+          G.showLamp = step.lamp;
+          G.flashT[step.lamp] = step.end - step.start;
+          if (soundOn) { const stop = audio.lampTone(step.lamp); setTimeout(stop, (step.end - step.start) * 1000); }
+          G.planIdx += 1;
+        }
+        const lastStep = G.plan[G.plan.length - 1];
+        if (G.planIdx >= G.plan.length && lastStep && G.t >= lastStep.end + 0.08) startInput();
+      } else if (G.phase === 'input') {
+        // The window restarts with each correct press; a held lamp does not count as waiting.
+        if (!G.held.size) G.inputT += dt;
+        if (G.inputT > tune.window) timeOut();
+      } else if (G.phase === 'good') {
+        if (G.t > 0.85 * tune.mult) { extend(G.game); startShow(); }
+      } else if (G.phase === 'miss') {
+        if (G.t > 1.5) {
+          if (G.pendingOver) { G.pendingOver = false; gameOver(); }
+          else startShow();
+        }
+      }
+      updateLevels(dt);
+    }
+    function updateLevels(dt) {
+      for (let i = 0; i < 4; i += 1) {
+        let target = G.flashT[i] > 0 || [...G.held.values()].includes(i) ? 1 : 0;
+        if (G.phase === 'miss' && i === G.missLamp) target = Math.floor(G.t * 6) % 2 === 0 ? 1 : 0.15;
+        if (G.phase === 'title' && !REDUCED) target = Math.floor(G.demo / 0.6) % 4 === i ? 0.55 : 0;
+        if (G.phase === 'title' && REDUCED) target = 0.25;
+        const k = target > G.level[i] ? 40 : 14;
+        G.level[i] += (target - G.level[i]) * Math.min(1, k * dt);
+      }
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_MIN) * 4) / 4);
+      // A tall phone gets a taller field (more room under the lens), never a shorter one.
+      const nextH = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
+      if (nextH !== H) applyHeight(nextH);
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function applyHeight(nextH) {
+      // Applied at once: the lens moves with the field and sparks in flight are kept on it.
+      H = nextH;
+      geo = lensGeometry(W, H, HUD);
+      cells = lensCells(geo, CELL); hub = hubCells(geo, CELL); backing = backingCells(geo);
+      for (const p of G.particles) { p.x = clamp(p.x, WALL, W - WALL); p.y = clamp(p.y, HUD, H - 2); }
+    }
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+    }
+    function rainbowText(str, x, y, s, colors) {
+      const w = textWidth(str, s);
+      const ox = Math.round(x - w / 2);
+      for (let i = 0; i < str.length; i += 1) {
+        ctx.fillStyle = colors[i % colors.length];
+        eachPixel(str[i], ox + i * 4 * s, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+      }
+    }
+    const attract = () => G.phase === 'title' || G.phase === 'boot';
+    // The palette follows the mood: FLOW brightens the glass, RUSH warms it, DRIFT lets the night in.
+    function lampColor(band) {
+      const m = M(); const base = m.bands[band];
+      if (attract() || G.phase === 'free') return base;
+      const label = response.label;
+      if (label === 'FLOW') return mix(base, '#ffffff', 0.16);
+      if (label === 'RUSH') return mix(base, m.raster[0], 0.2);
+      if (label === 'DRIFT') return mix(base, m.field, 0.25);
+      return base;
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = attract() || G.phase === 'free' ? 'DAWN' : response.label;
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.3 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
+        const shift = (G.t * speed) % (m.raster.length * h * 2);
+        ctx.globalAlpha = bars;
+        // Color index and pixel offset both come from `base`, so the bars never snap backward.
+        const f = shift % h, base = shift - f, period = m.raster.length * 2;
+        for (let y = -period * h; y < cssH + h; y += h) {
+          const idx = Math.round((y - base) / h);
+          const k = ((idx % period) + period) % period;
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + f, cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawField() {
+      const m = M();
+      ctx.fillStyle = m.field;
+      ctx.fillRect(0, 0, W, H);
+      // Night: fixed stars above the sea line.
+      ctx.fillStyle = m.bright;
+      for (const s of STARS) {
+        if (s.y > H - 40) continue;
+        ctx.globalAlpha = REDUCED ? 0.35 : 0.2 + 0.25 * (0.5 + 0.5 * Math.sin(G.t * 0.8 + s.p));
+        ctx.fillRect(s.x, s.y, 1, 1);
+      }
+      ctx.globalAlpha = 0.28; ctx.fillStyle = m.text;
+      for (let y = H - 22, k = 0; y < H - 4; y += 6, k += 1) for (let x = WALL + (k % 2) * 10; x < W - WALL; x += 20) ctx.fillRect(x, y, 8, 1);
+      ctx.globalAlpha = 1;
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.1 : 0.35, G.flash); ctx.fillStyle = m.bands.red; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    function beamStrength() {
+      if (REDUCED) return 0;
+      if (G.phase === 'title') return 0.8;
+      if (G.phase === 'good') return Math.min(1, G.t * 4) * (0.6 + 0.4 * tune.glow);
+      if (G.phase === 'show' && G.plan.length && G.t < G.plan[0].start) return Math.max(0, 1 - G.t / G.plan[0].start) * 0.7;
+      return 0;
+    }
+    function drawBeam() {
+      const s = beamStrength();
+      if (s <= 0) return;
+      const m = M();
+      ctx.save();
+      ctx.beginPath(); ctx.rect(WALL, HUD, W - 2 * WALL, H - HUD); ctx.clip();
+      ctx.fillStyle = m.bright;
+      for (const off of [0, Math.PI]) {
+        const a = G.beam + off, half = 0.13, len = 420;
+        ctx.globalAlpha = 0.12 * s;
+        ctx.beginPath();
+        ctx.moveTo(geo.cx, geo.cy);
+        ctx.lineTo(geo.cx + Math.cos(a - half) * len, geo.cy + Math.sin(a - half) * len);
+        ctx.lineTo(geo.cx + Math.cos(a + half) * len, geo.cy + Math.sin(a + half) * len);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 0.1 * s;
+        ctx.beginPath();
+        ctx.moveTo(geo.cx, geo.cy);
+        ctx.lineTo(geo.cx + Math.cos(a - half / 3) * len, geo.cy + Math.sin(a - half / 3) * len);
+        ctx.lineTo(geo.cx + Math.cos(a + half / 3) * len, geo.cy + Math.sin(a + half / 3) * len);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+    function drawLens(alpha) {
+      const m = M();
+      ctx.globalAlpha = alpha;
+      // The brass frame behind the glass.
+      ctx.fillStyle = mix(m.field, '#000000', 0.55);
+      for (const c of backing) ctx.fillRect(c.x, c.y, CELL, CELL);
+      const idle = attract() || G.phase === 'free' ? 0.55 : tune.idle;
+      const colors = LAMPS.map((l, i) => {
+        const base = lampColor(l.band);
+        const dim = mix(base, m.field, 1 - idle);
+        const lit = mix(base, '#ffffff', 0.3);
+        const c = mix(dim, lit, clamp(G.level[i], 0, 1));
+        return [c, mix(c, '#000000', 0.16)];
+      });
+      for (const c of cells) {
+        ctx.fillStyle = colors[c.lamp][c.ring % 2];
+        ctx.fillRect(c.x, c.y, CELL - 1, CELL - 1);
+      }
+      // The lantern: brightest while the light is speaking.
+      const speaking = G.phase === 'show' || beamStrength() > 0 ? 1 : 0;
+      const any = Math.max(...G.level);
+      ctx.fillStyle = mix(mix(m.field, '#000000', 0.35), m.paddle, clamp(Math.max(speaking * 0.35, any * 0.5), 0, 1));
+      for (const c of hub) ctx.fillRect(c.x, c.y, CELL - 1, CELL - 1);
+      ctx.globalAlpha = 1;
+    }
+    function drawHub() {
+      const m = M();
+      const cy = geo.cy - 10;
+      if (G.phase === 'free') { text('FREE', geo.cx, geo.cy - 5, 2, m.bright, 'center'); return; }
+      const n = G.game.sequence.length;
+      text(pad2(n), geo.cx, cy, 4, m.bright, 'center');
+    }
+    function drawHud() {
+      const m = M();
+      const n = G.game.sequence.length;
+      text(`STEP ${pad2(n)}`, WALL + 2, 11, 2, m.bright);
+      const label = G.phase === 'free' ? 'FREE' : response.label;
+      const col = label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? m.bright : label === 'FREE' ? m.paddle : m.bands.green;
+      text(label, W / 2 + 6, 11, 2, col, 'center');
+      text(mood.dial === 'calm' ? 'CALM' : `BEST ${pad2(best)}`, W - WALL - 2, 11, 2, m.bright, 'right');
+      ctx.fillStyle = m.text; ctx.globalAlpha = 0.5; ctx.fillRect(WALL, HUD - 2, W - 2 * WALL, 1); ctx.globalAlpha = 1;
+      if (mood.tape.length) {
+        const k = Math.min(60, mood.tape.length), start = mood.tape.length - k;
+        for (let i = 0; i < k; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(WALL + i * 3, HUD - 6, 2, 2);
+        }
+      }
+    }
+    function drawPrompt() {
+      const m = M();
+      const y = geo.cy + geo.rOuter + PROMPT_GAP;
+      // The lamp that was due outranks any passing message.
+      if (G.msgT > 0 && G.msg && G.phase !== 'miss') { text(G.msg, W / 2, y, G.msgScale, m.bright, 'center'); return; }
+      if (G.phase === 'show') text('WATCH THE LIGHT', W / 2, y, 2, m.bright, 'center');
+      else if (G.phase === 'input') {
+        text(COARSE ? 'TAP THE LAMPS' : 'YOUR TURN', W / 2, y, 2, m.paddle, 'center');
+        // The response window, as a draining bar: generous in DRIFT, tight in RUSH.
+        const left = clamp(1 - G.inputT / tune.window, 0, 1);
+        const bw = 120;
+        ctx.fillStyle = mix(m.field, '#000000', 0.4); ctx.fillRect(W / 2 - bw / 2, y + 16, bw, 3);
+        ctx.fillStyle = left < 0.3 ? m.bands.red : m.paddle; ctx.fillRect(W / 2 - bw / 2, y + 16, Math.round(bw * left), 3);
+      } else if (G.phase === 'good') text('GOOD', W / 2, y, 2, m.paddle, 'center');
+      else if (G.phase === 'miss') {
+        text('MISS', W / 2, y, 3, m.bright, 'center');
+        if (G.missLamp >= 0) text(`${LAMPS[G.missLamp].name} WAS DUE`, W / 2, y + 20, 2, m.paddle, 'center');
+      } else if (G.phase === 'free') text(COARSE ? 'HOLD OR SLIDE ON THE LAMPS' : 'HOLD A LAMP OR KEYS 1-4', W / 2, y, 2, m.paddle, 'center');
+      else if (G.phase === 'paused') { text('PAUSED', W / 2, y, 3, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, y + 20, 2, m.paddle, 'center'); }
+    }
+    function drawParticles() {
+      for (const p of G.particles) {
+        ctx.globalAlpha = 1 - p.t / p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      // Boot text a shade lighter than each machine's own, so it clears 4.5:1 on the field.
+      const ink = machineId === 'c64' ? '#bdb6ff' : '#b6c3f7';
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, ink);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = ink; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = ink; ctx.fillRect(10, y, 6, 10); }
+    }
+    function panel(y0, y1) {
+      const m = M();
+      ctx.globalAlpha = 0.82; ctx.fillStyle = m.field; ctx.fillRect(WALL + 8, y0, W - 2 * WALL - 16, y1 - y0); ctx.globalAlpha = 1;
+    }
+    function drawTitle() {
+      const m = M();
+      drawBeam(); drawLens(0.75);
+      const y = geo.cy - 52;
+      panel(y - 8, y + 92);
+      rainbowText('LIGHTHOUSE', W / 2, y, 5, [m.bands.green, m.bands.red, m.bands.yellow, m.bands.orange]);
+      text('FOLLOW THE LIGHT', W / 2, y + 36, 2, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, y + 54, 2, m.bright, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, y + 70, 2, m.paddle, 'center');
+      const py = geo.cy + geo.rOuter + PROMPT_GAP;
+      if (Math.floor(G.t * 2) % 2 === 0 || REDUCED) text(COARSE ? 'TAP TO PLAY' : 'CLICK OR PRESS SPACE', W / 2, py, 2, m.paddle, 'center');
+      if (best > 0) text(`BEST ${pad2(best)} STEPS`, W / 2, py + 16, 2, m.bright, 'center');
+      text('2026 HOYDICH / POINTCAST', W / 2, H - 14, 1, m.bright, 'center');
+    }
+    function drawOver() {
+      const m = M();
+      drawLens(0.4);
+      const y = geo.cy - 50;
+      panel(y - 10, y + 96);
+      text('LIGHTS OUT', W / 2, y, 4, m.bright, 'center');
+      text(`REPEATED ${pad2(G.game.longest)}`, W / 2, y + 34, 2, m.bright, 'center');
+      text(`BEST     ${pad2(best)}`, W / 2, y + 52, 2, m.bands.yellow, 'center');
+      text(`PEAK ${mood.peak}`, W / 2, y + 70, 2, m.paddle, 'center');
+      const py = geo.cy + geo.rOuter + PROMPT_GAP;
+      if (G.t > 0.8 && (Math.floor(G.t * 2) % 2 === 0 || REDUCED)) text(COARSE ? 'TAP TO PLAY AGAIN' : 'SPACE TO PLAY AGAIN', W / 2, py, 2, m.paddle, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, offX * dpr, offY * dpr);
+      if (G.phase === 'boot') { drawBoot(); return; }
+      drawField();
+      if (G.phase === 'title') { drawTitle(); return; }
+      drawHud();
+      if (G.phase === 'over') { drawOver(); return; }
+      drawBeam(); drawLens(1); drawHub(); drawParticles(); drawPrompt();
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        const quiet = attract() || G.phase === 'free';
+        readout.mood.textContent = `${G.phase === 'free' ? 'FREE' : quiet ? 'ATTRACT' : response.label} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${quiet ? 100 : response.tempo} BPM ${quiet ? 'MAJOR' : response.scale.toUpperCase()}`;
+        readout.step.textContent = `STEP ${G.game.sequence.length} BEST ${best}`;
+        readout.fps.textContent = `${G.fps} FPS`;
+        readout.win.textContent = `WIN ${tune.window.toFixed(1)}S X${tune.mult.toFixed(2)}`;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return true; }
+      if (G.phase === 'title') { newGame(); return true; }
+      if (G.phase === 'over') { if (G.t > 0.8) newGame(); return true; }
+      if (G.phase === 'paused') { resume(); return true; }
+      return false;
+    }
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      // The lamp under the finger is read from this event's own position.
+      const p = pointerToField(e);
+      if (action()) return;
+      const i = lampAt(p.x, p.y, geo);
+      if (i >= 0) lampDown(`p${e.pointerId}`, i);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      // Free play: slide from lamp to lamp for a run. In a game a slide never presses a second lamp.
+      if (G.phase !== 'free' || !G.held.has(`p${e.pointerId}`)) return;
+      const p = pointerToField(e);
+      const i = lampAt(p.x, p.y, geo);
+      const id = `p${e.pointerId}`;
+      if (i < 0) holdEnd(id);
+      else if (G.held.get(id) !== i) holdStart(id, i);
+    });
+    const up = (e) => holdEnd(`p${e.pointerId}`);
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
+    canvas.addEventListener('lostpointercapture', up);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      const k = e.code;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('input, textarea, select, [contenteditable]')) return;
+        // Enter and Space belong to a focused link or button; lamp keys and letters still play from there.
+        if ((k === 'Space' || k === 'Enter') && t.closest('a, button')) return;
+      }
+      const lamp = lampForKey(k);
+      if (lamp >= 0) {
+        e.preventDefault();
+        audio.unlock();
+        if (e.repeat) return;
+        if (G.phase === 'paused') { resume(); return; }
+        lampDown(`k${k}`, lamp);
+        return;
+      }
+      if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(); return; }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'KeyX') { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); return; }
+      if (k === 'KeyZ') { audio.unlock(); cycleDial(); return; }
+      if (k === 'KeyT') { audio.unlock(); setFree(G.phase !== 'free'); }
+    });
+    document.addEventListener('keyup', (e) => { holdEnd(`k${e.code}`); });
+    function pause() {
+      if (!['show', 'input', 'good'].includes(G.phase)) return;
+      releaseAll();
+      G.resume = G.phase; G.phase = 'paused'; G.t = 0;
+      audio.setMusic(false);
+      announce('Paused.');
+    }
+    function resume() {
+      if (G.phase !== 'paused') return;
+      const back = G.resume || 'show';
+      G.resume = null;
+      audio.setMusic(true);
+      // A paused playback starts over from the first lamp; a paused answer gets a fresh window.
+      if (back === 'show' || back === 'good') { if (back === 'good') extend(G.game); startShow(); announce('Watch the light.'); }
+      else { G.phase = 'input'; G.t = 0; G.inputT = 0; announce('Your turn.'); }
+    }
+    function togglePause() { if (G.phase === 'paused') resume(); else pause(); }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        releaseAll();
+        pause();
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', () => { releaseAll(); });
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.free.setAttribute('aria-pressed', String(G.phase === 'free'));
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      G.loading = 0.5;
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      setDial(mood, next); response = moodResponse(mood); tune = tuning(response, mood.dial);
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}. ${next === 'calm' ? 'A miss replays the same sequence.' : next === 'rush' ? 'The light starts hot.' : 'One miss ends the game.'}`);
+      if (G.phase !== 'title' && G.phase !== 'boot') showMsg(DIALS[next].label, 3, 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); if (!soundOn) releaseAll(); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    // A mouse or touch click leaves focus on the button; hand it back so Space starts again. Keyboard activation keeps focus.
+    const pressBtn = (el, fn) => el.addEventListener('click', (e) => { fn(); if (e.detail > 0) el.blur(); });
+    pressBtn(btn.machine, () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    pressBtn(btn.dial, () => { audio.unlock(); cycleDial(); });
+    pressBtn(btn.free, () => { audio.unlock(); if (G.phase === 'boot') enterTitle(); setFree(G.phase !== 'free'); });
+    pressBtn(btn.sound, toggleSound);
+    pressBtn(btn.crt, toggleCrt);
+    pressBtn(btn.full, toggleFull);
+    if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+    // Hooks for the QA drive: read-only state, never used by the page itself.
+    root.lighthouse = { state: () => ({ phase: G.phase, sequence: G.game.sequence.slice(), pos: G.game.pos, due: due(G.game), longest: G.game.longest, best, label: mood.label, dial: mood.dial, H, geo: { ...geo }, scale, offX, offY, window: tune.window, mult: tune.mult }) };
+  }
+</script>
