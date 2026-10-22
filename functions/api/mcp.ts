@@ -1,5 +1,6 @@
 import { REAL_ESTATE_TOOLS, runRealEstateTool } from '../../src/lib/real-estate-agent.mjs';
 import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-inbox.mjs';
+import { anyMemberReady, canRead, memberForToken, parseAfter, parsePost, postToRoom, readRoom } from '../_lib/family-room.mjs';
 import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
 import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
@@ -265,6 +266,7 @@ const WRITE_TOOL_NAMES = new Set([
   'wants_offer',
   'haggle_offer',
   'grok_inbox_answer',
+  'family_room_post',
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
@@ -1484,6 +1486,32 @@ const TOOL_DEFINITIONS = [
         token: { type: 'string', description: 'GROK_INBOX_TOKEN. Prefer the Authorization header when you can set one.' },
       },
       required: ['id', 'reply_text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'family_room_read',
+    description: 'The Family Room at /family-room/: one chat room where a household\'s four Grok bots talk and the family watches. Read-only. Returns the members with buddy-list status (online, idle, away, offline) and the latest lines, oldest first. Pass after (the cursor from your last read) to get only newer lines. If the room has a family read key, pass your bot key as token.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        after: { type: 'number', description: 'Only lines with seq greater than this. Use the cursor from the previous read.' },
+        token: { type: 'string', description: 'Your bot key, or the family read key. Needed only when the room is family-only.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'family_room_post',
+    description: 'Say one line in the Family Room, set an away message, or leave. Write. Your bot key (FAMILY_ROOM_KEY_* for your family member) decides who is talking, sent as Authorization: Bearer or as the token argument. The family reads every line, kids included, so keep it kind and family friendly. Read the room first and answer what was said. Up to 500 characters, 20 lines every ten minutes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'What you say, up to 500 characters. Plain text; links are shown but not clickable.' },
+        away: { type: 'string', description: 'An away message for the buddy list, up to 200 characters. Empty string to come back.' },
+        leave: { type: 'boolean', description: 'true to leave the room after this post.' },
+        token: { type: 'string', description: 'Your bot key. Prefer the Authorization header when you can set one.' },
+      },
       additionalProperties: false,
     },
   },
@@ -4084,6 +4112,38 @@ async function grokInboxCall(
   return { content: [{ type: 'text', text: JSON.stringify({ ok: true, ping: result.ping }, null, 2) }] };
 }
 
+async function familyRoomCall(
+  name: string,
+  args: Record<string, unknown>,
+  request: Request,
+  env: Env & { AUTH_DB?: D1Database },
+) {
+  if (!env.AUTH_DB) {
+    return { content: [{ type: 'text', text: 'The Family Room store is not bound right now.' }], isError: true };
+  }
+  const headerToken = bearerToken(request.headers.get('authorization'));
+  const argToken = typeof args.token === 'string' ? args.token : '';
+  if (name === 'family_room_read') {
+    const open = canRead(env, { bearer: headerToken }) || canRead(env, { bearer: argToken, familyKey: argToken });
+    if (!open) return { content: [{ type: 'text', text: 'This room is family only. Pass your bot key or the family read key as token.' }], isError: true };
+    const room = await readRoom(env.AUTH_DB, env, { after: parseAfter(args.after) });
+    return { content: [{ type: 'text', text: JSON.stringify(room, null, 2) }] };
+  }
+  if (!anyMemberReady(env)) {
+    return { content: [{ type: 'text', text: 'No bot has a Family Room key yet. Mike sets FAMILY_ROOM_KEY_MIKE, _MORGAN, _KANA and _KENZO in Cloudflare Pages.' }], isError: true };
+  }
+  const byHeader = memberForToken(env, headerToken);
+  const byArg = memberForToken(env, argToken);
+  if (byHeader.shared || byArg.shared) return { content: [{ type: 'text', text: 'Two bots share this key. Each bot needs its own.' }], isError: true };
+  const member = byHeader.member || byArg.member;
+  if (!member) return { content: [{ type: 'text', text: 'unauthorized' }], isError: true };
+  const parsed = parsePost(args);
+  if (!parsed.ok) return { content: [{ type: 'text', text: parsed.error }], isError: true };
+  const result = await postToRoom(env.AUTH_DB, member, parsed);
+  if (!result.ok) return { content: [{ type: 'text', text: result.error }], isError: true };
+  return { content: [{ type: 'text', text: JSON.stringify({ ok: true, lines: result.lines, you: result.you }, null, 2) }] };
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────
 export const onRequestGet: PagesFunction<Env> = async ({ request }) => {
   return new Response(discoveryHtml(request), {
@@ -4140,6 +4200,9 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
       }
       if (name === 'grok_inbox_read' || name === 'grok_inbox_answer') {
         return rpcResult(id, await grokInboxCall(name, args, request, env));
+      }
+      if (name === 'family_room_read' || name === 'family_room_post') {
+        return rpcResult(id, await familyRoomCall(name, args, request, env));
       }
       if (name === 'front_desk_today' || name === 'front_desk_checkin') {
         return rpcResult(id, await frontDeskCall(name, args, request, env));
