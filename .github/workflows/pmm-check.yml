@@ -1,37 +1,56 @@
 name: PMM and Nouns Messenger checks
 # The two phone messengers are plain files under public/, so no other workflow sees them.
-# This runs their unit tests (service workers, offline digest, signal and TURN endpoints)
-# on any PR that touches them. Fast: no site build.
+# Runs their unit and static tests and syntax-checks the app scripts and workers. No site build.
+
 on:
   pull_request:
-    branches: [main]
     paths:
-      - '.github/workflows/pmm-check.yml'
       - 'public/pmm/**'
       - 'public/nouns-messenger/**'
       - 'functions/api/pmm/**'
+      - 'functions/_rate-limit.ts'
       - 'tests/pmm-*.test.mjs'
       - 'tests/nouns-messenger*.test.mjs'
       - 'tests/fixtures/pmm-offline/**'
+      - 'docs/prd/pointcast-mobile-messaging.md'
+      - '.github/workflows/pmm-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/pmm/**'
+      - 'public/nouns-messenger/**'
+      - 'functions/api/pmm/**'
+      - 'functions/_rate-limit.ts'
+      - 'tests/pmm-*.test.mjs'
+      - 'tests/nouns-messenger*.test.mjs'
+      - 'tests/fixtures/pmm-offline/**'
+      - 'docs/prd/pointcast-mobile-messaging.md'
+      - '.github/workflows/pmm-check.yml'
+  workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
-  group: pmm-check-${{ github.event.pull_request.number }}
+  group: pmm-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: Syntax check the app scripts and workers
-        run: for f in public/pmm/*.js public/nouns-messenger/*.js; do node --check "$f"; done
-      - name: Unit tests
-        run: node --test tests/pmm-*.test.mjs $(ls tests/nouns-messenger*.test.mjs 2>/dev/null) tests/home-new-today.test.mjs
+      - run: npm ci
+      - name: PMM unit and static tests
+        run: npm run test:pmm
+      - name: Syntax-check app and service worker scripts
+        run: |
+          node --check public/pmm/app.js
+          node --check public/pmm/sw.js
+          node --check public/nouns-messenger/app.js
+          node --check public/nouns-messenger/sw.js
