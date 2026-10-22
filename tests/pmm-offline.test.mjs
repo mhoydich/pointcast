@@ -18,14 +18,14 @@ const list = (src) => [...(/const FILES = \[([^\]]*)\]/.exec(src)?.[1] || '').ma
 const version = (src) => /const VERSION = '([^']+)'/.exec(src)?.[1];
 
 // Run a worker inside a sandbox with a fake Cache Storage and fake network, and hand back its handlers.
-function boot(src) {
-  const store = new Map();
+// Two workers can share one `store` (an upgrade); `deploy` labels what the network serves (a release).
+function boot(src, { store = new Map(), deploy = null } = {}) {
   const cacheFor = (name) => {
     if (!store.has(name)) store.set(name, new Map());
     const m = store.get(name);
     const key = (r) => new URL(typeof r === 'string' ? r : r.url, 'https://pointcast.xyz').href;
     return {
-      async addAll(reqs) { for (const r of reqs) m.set(key(r), new Response('precached ' + key(r))); },
+      async addAll(reqs) { for (const r of reqs) m.set(key(r), new Response((deploy || 'precached') + ' ' + key(r))); },
       async match(r) { return m.get(key(r))?.clone(); },
       async put(r, res) { m.set(key(r), res); },
     };
@@ -43,7 +43,7 @@ function boot(src) {
   const ctx = {
     self, URL, Request: SwRequest, Response, console,
     caches: { open: async (n) => cacheFor(n), keys: async () => [...store.keys()], delete: async (n) => store.delete(n), store },
-    fetch: async (req) => { fetched.push(req.url); return new Response('network ' + req.url); },
+    fetch: async (req) => { fetched.push(req.url); return new Response((deploy || 'network') + ' ' + req.url); },
   };
   vm.runInNewContext(src, ctx, { filename: 'sw.js' });
   const route = async (url, init = {}) => {
@@ -114,5 +114,42 @@ for (const app of APPS) {
     w.store.set('other-app-v1', new Map());
     await new Promise((done) => w.handlers.activate({ waitUntil: (p) => p.then(done) }));
     assert.deepEqual([...w.store.keys()].sort(), [v, 'other-app-v1'].sort());
+  });
+}
+
+// A phone that installed the 10-22a cache-first worker (#1489) meets the current worker on its next
+// online visit. The new worker must precache the current deploy into its own cache, drop the old
+// cache on activate, and from then on answer from the new copy, refreshing it in the background.
+const FIXTURES = resolve(import.meta.dirname, 'fixtures/pmm-offline');
+const settle = () => new Promise((r) => setTimeout(r, 0));
+const run = (handlers, type) => new Promise((done) => handlers[type]({ waitUntil: (p) => p.then(done) }));
+for (const app of APPS) {
+  test(`${app.dir}: upgrading from the 10-22a cache-first worker drops its cache and serves the new deploy`, async () => {
+    const oldSrc = readFileSync(resolve(FIXTURES, `${app.dir}-sw-2026-10-22a.js`), 'utf8');
+    const newSrc = read(`${app.dir}/sw.js`);
+    assert.equal(version(oldSrc), `${app.prefix}2026-10-22a`);
+    assert.notEqual(version(newSrc), version(oldSrc), 'the current worker uses a new cache name');
+    const store = new Map();
+    const before = boot(oldSrc, { store, deploy: 'deploy1' });
+    await run(before.handlers, 'install'); await run(before.handlers, 'activate');
+    assert.equal(await before.route(`/${app.dir}/app.js`), `deploy1 https://pointcast.xyz/${app.dir}/app.js`);
+    assert.equal(before.fetched.length, 0, 'the old worker never refreshes: cache-first only');
+
+    const after = boot(newSrc, { store, deploy: 'deploy2' });
+    await run(after.handlers, 'install');
+    assert.deepEqual([...store.keys()].sort(), [version(oldSrc), version(newSrc)].sort(), 'both caches exist while the new worker waits to activate');
+    await run(after.handlers, 'activate');
+    assert.deepEqual([...store.keys()], [version(newSrc)], 'activate dropped the 10-22a cache');
+    for (const f of list(newSrc)) assert.ok(store.get(version(newSrc)).has(`https://pointcast.xyz${f}`), `${f} is precached from the new deploy`);
+    assert.equal(await after.route(`/${app.dir}/app.js`), `deploy2 https://pointcast.xyz/${app.dir}/app.js`, 'the first request after the upgrade is the new deploy');
+    assert.equal(await after.route(`/${app.dir}/`, { mode: 'navigate' }), `deploy2 https://pointcast.xyz/${app.dir}/`);
+    await settle();
+
+    // A later deploy with no VERSION bump: the next open answers from cache, the one after gets it.
+    const later = boot(newSrc, { store, deploy: 'deploy3' });
+    assert.equal(await later.route(`/${app.dir}/app.js`), `deploy2 https://pointcast.xyz/${app.dir}/app.js`, 'answered from the cache at once');
+    await settle();
+    assert.equal(await later.route(`/${app.dir}/app.js`), `deploy3 https://pointcast.xyz/${app.dir}/app.js`, 'the background refresh landed for the next open');
+    assert.ok(later.fetched.every((u) => u.startsWith(`https://pointcast.xyz/${app.dir}/`)), 'refreshes only touch the app\'s own files');
   });
 }
