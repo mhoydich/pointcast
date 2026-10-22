@@ -62,9 +62,9 @@
       this.timer = setInterval(() => { if (document.visibilityState === 'visible') this.load(); }, 15000);
     }
     disconnectedCallback() { clearInterval(this.timer); }
-    async load() {
+    async load(fresh = false) {
       try {
-        const data = await (await fetch(`${API}?to=${encodeURIComponent(this.to)}`)).json();
+        const data = await (await fetch(`${API}?to=${encodeURIComponent(this.to)}`, fresh ? { cache: 'no-cache' } : undefined)).json();
         if (!data.ok) throw new Error(data.error);
         this.address = data.log.address;
         this.label.textContent = `The Loom · ${data.count} on ${data.log.label}`;
@@ -84,7 +84,7 @@
         const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: this.address || this.to, from: { name: this.name.value.trim(), kind: 'human' }, body: this.body.value }) });
         const data = await res.json();
         this.status.textContent = data.ok ? 'Appended.' : `Declined: ${String(data.error).replace(/_/g, ' ')}.`;
-        if (data.ok) { this.body.value = ''; this.load(); }
+        if (data.ok) { this.body.value = ''; this.load(true); }
       } catch { this.status.textContent = 'Could not reach the Loom.'; }
       go.disabled = false;
     }
