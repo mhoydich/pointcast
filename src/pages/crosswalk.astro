@@ -436,7 +436,7 @@ const dials = Object.values(DIALS);
     function showMsg(text, scale = 3, time = 1.2) { G.msg = text; G.msgScale = scale; G.msgT = time; }
     function newSeed() { return Math.floor(Math.random() * 1e9) + 1; }
     function newGame() {
-      G.attract = false; G.particles = []; G.played = true; G.pendingOver = false; G.hitAt = null;
+      G.attract = false; G.particles = []; G.played = true; G.pendingOver = false; G.hitAt = null; G.livesBeforeCalm = null;
       beginGame(mood); response = moodResponse(mood);
       G.seed = newSeed();
       G.run = createRun({ seed: G.seed, unlimited: response.unlimitedBalls });
@@ -475,7 +475,11 @@ const dials = Object.values(DIALS);
       if (r.type === 'blocked') { audio.blocked(); if (r.reason === 'full') { showMsg('TOWER FULL', 2, 0.6); } return; }
       if (r.type === 'hop') {
         audio.hop(r.row, r.forward);
-        if (r.forward) { moodEvent(mood, 'paddle'); buzz(4); }
+        if (r.forward) {
+          moodEvent(mood, 'paddle'); buzz(4);
+          // The score can pass a threshold on a hop, not only at a tower.
+          if (checkExtraLife(G.run)) { audio.extra(); showMsg('EXTRA', 2, 0.8); announce('Extra beach-goer.'); }
+        }
         if (r.laneCleared) moodEvent(mood, 'brick');
         if (r.pickedBall) { audio.ball(); showMsg('BEACH BALL', 2, 0.8); announce('Beach ball picked up. Carry it to a tower.'); spawnParticles(p.col * CELL + CELL / 2, rowY(1) + rowHeight(1) / 2, M().bands.red, 8); }
         readout.lane.textContent = laneName(r.row);
@@ -906,6 +910,8 @@ const dials = Object.values(DIALS);
     function action() {
       audio.unlock();
       if (G.phase === 'boot') { audio.jingle(); enterTitle(); return true; }
+      // Players are still pressing hop when the last life goes; let the score show before a new game.
+      if (G.phase === 'over' && G.t < 1) return true;
       if (G.phase === 'title' || G.phase === 'over') { newGame(); return true; }
       if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); return true; }
       return false;
@@ -948,7 +954,7 @@ const dials = Object.values(DIALS);
       }
       if (HOP_KEYS[k]) {
         e.preventDefault(); audio.unlock();
-        if (!e.repeat) { G.keys[k] = true; if (G.phase === 'play') { tryHop(HOP_KEYS[k]); G.keys.held = false; setTimeout(() => { if (G.keys[k]) G.keys.held = true; }, 220); } else if (G.phase === 'title' || G.phase === 'over' || G.phase === 'boot') action(); }
+        if (!e.repeat) { G.keys[k] = true; if (G.phase === 'play') { tryHop(HOP_KEYS[k]); G.keys.held = false; const id = (G.pressId = (G.pressId || 0) + 1); setTimeout(() => { if (G.keys[k] && G.pressId === id) G.keys.held = true; }, 220); } else if (G.phase === 'title' || G.phase === 'over' || G.phase === 'boot') action(); }
         return;
       }
       if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(); return; }
@@ -968,7 +974,8 @@ const dials = Object.values(DIALS);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         G.keys = {}; down = null;
-        if (G.phase === 'play') { G.resume = G.phase; G.phase = 'paused'; }
+        // A hit, a tower or a stage clear in progress pauses too, and resumes into that moment.
+        if (['play', 'lost', 'home', 'stage'].includes(G.phase)) { G.resume = G.phase; G.phase = 'paused'; }
         G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
         audio.setMusic(false);
         save(); handMoodToTown();
@@ -1001,8 +1008,14 @@ const dials = Object.values(DIALS);
       const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
       setDial(mood, next); response = moodResponse(mood);
       if (G.run && !G.attract) {
-        if (response.unlimitedBalls) G.run.lives = Infinity;
-        else if (G.run.lives === Infinity) G.run.lives = 3;
+        if (response.unlimitedBalls) {
+          // CALM: remember the count, and a loss already counting down to game over becomes a plain reset.
+          if (G.run.lives !== Infinity) G.livesBeforeCalm = G.run.lives;
+          G.run.lives = Infinity; G.pendingOver = false;
+        } else if (G.run.lives === Infinity) {
+          G.run.lives = Math.max(1, G.livesBeforeCalm ?? 3);
+          G.livesBeforeCalm = null;
+        }
         traffic = trafficFromResponse(response, G.run.pace);
       }
       syncButtons(); save();

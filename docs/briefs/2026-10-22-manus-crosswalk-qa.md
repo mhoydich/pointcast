@@ -13,7 +13,7 @@ needed for QA itself; nothing on the page can spend, mint or post.
 - https://pointcast.xyz/crosswalk.json (must return JSON with `name: "Crosswalk"`)
 - https://pointcast.xyz/games/ (the catalog should list Crosswalk under Retro arcade, next to Breakwater)
 - https://pointcast.xyz/play (the play layer should list Crosswalk after Breakwater)
-- https://pointcast.xyz/b/0729 (the Block receipt)
+- https://pointcast.xyz/b/0730 (the Block receipt)
 
 ## Devices and browsers
 

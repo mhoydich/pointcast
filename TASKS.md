@@ -6,7 +6,7 @@
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
 
-`/breakwater`, `/breakwater.json`, Block 0725. Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
+`/breakwater`, `/breakwater.json`, Block 0726 (moved from 0725 when the messenger release took that id on main). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
 
 - [x] (CC) Build the game: canvas playfield from a 3x5 pixel font, Atari 800XL and Commodore 64 modes with boot screens, Web Audio chip voices and a generative arpeggiator, four-state mood model with a CALM/PLAY/RUSH dial, phone drag and desktop fullscreen, browser-local best score and mood tape, `tests/breakwater.test.mjs` — `done`
 - [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt`, `llms-full.txt`, OG card from the game's own palette — `done`
@@ -14,14 +14,14 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-breakwater-qa.md`, log to `docs/manus-logs/2026-10-22-breakwater.md` — `queued`
 - [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
-- [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0726–0730: Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
+- [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
 - [ ] (MH/X) Review and merge #1478, then the five stacked PRs in any order (#1480, #1481, #1482, #1483, #1484), resolving the discovery-file conflicts as they come; deploy once with `scripts/deploy.sh` — `waiting-on-mh`
 
 ---
 
 ## Crosswalk — five lanes to the sand (2026-10-22)
 
-`/crosswalk`, `/crosswalk.json`, Block 0729. Thread 4 of 5 from Michael Hoydich's "set up 5 new threads to create more", stacked on Breakwater (`claude/crosswalk-20261022` on `claude/epic-albattani-j8tb06`). Frogger's shape set in El Segundo: sidewalk, five lanes of traffic, median, bike path, sand, four lifeguard towers. Research note: `docs/notes/2026-10-22-crosswalk-notes.md`.
+`/crosswalk`, `/crosswalk.json`, Block 0730 (renumbered from 0729 when main took 0725). Thread 4 of 5 from Michael Hoydich's "set up 5 new threads to create more", stacked on Breakwater (`claude/crosswalk-20261022` on `claude/epic-albattani-j8tb06`). Frogger's shape set in El Segundo: sidewalk, five lanes of traffic, median, bike path, sand, four lifeguard towers. Research note: `docs/notes/2026-10-22-crosswalk-notes.md`.
 
 - [x] (CC) Build the game: `src/lib/crosswalk/{field,rules,sprites}.mjs` (lanes on a wrapping track, slot density, hop and collision rules, the crossing clock, scoring, 8x8 rect sprites), the page on the shared font, palettes and mood model from `src/lib/breakwater`, swipe or tap zones on touch, arrows or WASD on keys, a hop blip that rises per row, a horn on a hit, a four-note fanfare at a tower, `tests/crosswalk.test.mjs` with a simulated crossing — `done`
 - [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause, still 334 lines), `llms-full.txt`, OG card from the game's own palette and sprites — `done`
