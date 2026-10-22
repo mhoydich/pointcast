@@ -1,0 +1,1023 @@
+---
+/**
+ * /crosswalk — a Frogger for the El Segundo strand.
+ *
+ * Brief by Michael Hoydich, 2026-10-22: 80s innocence, the joy of the compute
+ * and flow, mood-state symbiosis, mobile and full screen, audio-visual
+ * multimedia, Atari and Commodore inspired, rendered modern. Thread 4 of 5.
+ *
+ * A beach-goer starts on the sidewalk, crosses five lanes of traffic, rests on
+ * the median, crosses the bike path and the sand, and reaches the water at one
+ * of four lifeguard towers. Everything is chunky 8x8 sprites from rects in the
+ * machine palette, drawn on a canvas with the shared 3x5 font; every sound is
+ * synthesized. Pure logic lives in src/lib/crosswalk (field, rules, sprites)
+ * and is covered by tests/crosswalk.test.mjs. The mood model, font and
+ * palettes are imported from src/lib/breakwater unchanged.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+import { DIAL_NOTES, SCORE } from '../lib/crosswalk/rules.mjs';
+
+const description = 'A Frogger for the El Segundo strand: sidewalk, five lanes of cars, a bus, skateboards and bikes, the median, the bike path, the sand, and four lifeguard towers to reach. Atari 800XL or Commodore 64 palette, synthesized chip sound, and a mood the game and you keep together. Phone or full screen.';
+const canonical = 'https://pointcast.xyz/crosswalk';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Crosswalk',
+      alternateName: 'Crosswalk: five lanes to the sand',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/crosswalk/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Lane crossing',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Crosswalk', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+---
+
+<BlockLayout
+  title="Crosswalk"
+  description={description}
+  image="/images/crosswalk/og.png"
+  imageAlt="A blue playfield of lanes with chunky cars, a bus and bikes, a beach-goer on the sidewalk and four red lifeguard towers at the water, beside the words Crosswalk, five lanes to the sand."
+  themeColor="#2545a8"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/crosswalk.json', title: 'Crosswalk rules, lanes, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/crosswalk/og.png',
+    buttons: [
+      { label: 'Play Crosswalk', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="cw" data-cw data-machine="xl" data-crt="on">
+    <div class="cw-stage" data-stage>
+      <header class="cw-bar">
+        <a class="cw-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="cw-name" aria-hidden="true">CROSSWALK</span>
+        <div class="cw-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (1 / 2)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (3)">PLAY</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="cw-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Crosswalk playfield. Hop with the arrow keys or swipe; reach a lifeguard tower before the clock runs out."></canvas>
+        <div class="cw-scan" aria-hidden="true"></div>
+        <noscript><p class="cw-noscript">Crosswalk needs JavaScript to run the lanes and make its sounds. The rules and moods are readable at <a href="/crosswalk.json">/crosswalk.json</a>.</p></noscript>
+      </div>
+      <footer class="cw-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>96 BPM</span>
+        <span data-r-stage>STAGE 1</span>
+        <span data-r-fps>-- FPS</span>
+        <span data-r-lane>SIDEWALK</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="cw-notes">
+      <p class="cw-eyebrow">PointCast / Games / Crosswalk</p>
+      <h1>Five lanes to the sand.</h1>
+      <p class="cw-lede">Sidewalk, street, median, bike path, sand, water. Four lifeguard towers to reach before the clock runs out, and a street that answers how you cross it. Pick the blue you grew up with.</p>
+
+      <div class="cw-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Every safe hop forward and every lane cleared raise its <strong>energy</strong>. A hit or a timeout lowers its <strong>calm</strong>. Time brings both back toward the dial you set. Four words name where it is.</p>
+          <ul class="cw-moods">
+            <li><b>DAWN</b> warming up. Cool colors, a slow major arpeggio, an ordinary street.</li>
+            <li><b>FLOW</b> a long run of safe hops. Bright colors, the music opens up.</li>
+            <li><b>RUSH</b> hot colors, raster bars in the border, faster lanes, tighter gaps, and a beach ball on the sand worth {SCORE.ball} at a tower.</li>
+            <li><b>DRIFT</b> after hits. The traffic thins, the gaps widen, the clock gives you longer, the notes thin out.</li>
+          </ul>
+          <p>Your side is the dial: {dials.map((d, i) => <span><b>{d.label}</b> ({DIAL_NOTES[d.id].toLowerCase().replace(/\.$/, '')}){i < dials.length - 1 ? '; ' : '.'}</span>)} The game relaxes toward it. The mood tape from your session stays in this browser, and when you leave, the game hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'The Graphics 0 blue with a black border and light-blue text. Raw square waves with a noise bite, in the POKEY spirit. A blue READY and a RUN before the street.' : 'The blue field inside a light-blue border. A resonant filter sweep on every voice, in the SID spirit. 38911 BASIC BYTES FREE, then LOAD, then RUN.'}</p>
+          ))}
+          <p>Nothing is emulated and nothing is copied. The sprites are rects in the machine palette, the pixel font is the one Breakwater drew, and the music and sound were written for this page. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-crosswalk-notes.md">research note on Frogger and its home ports</a>, or play <a href="/breakwater">Breakwater</a>, the first cabinet in this row.</p>
+        </article>
+        <article>
+          <h2>The rules</h2>
+          <p>{SCORE.hop} points for every new row reached. A tower pays {SCORE.tower} plus {SCORE.perSecond} for each second left on the clock. Fill all four towers for {SCORE.stage} and the next stage: every lane a little faster, the clock a little shorter, every direction reversed. Thirty seconds a crossing to start. Three beach-goers, one more every {SCORE.extraEvery} points; no game over on CALM. Water between the towers is a splash.</p>
+          <h2>Controls</h2>
+          <ul>
+            <li>Swipe anywhere on the field to hop, or tap above, below, left or right of the beach-goer.</li>
+            <li>Keys: arrows or W A S D hop, Space starts, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
+          </ul>
+        </article>
+      </div>
+
+      <footer class="cw-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code on October 22, 2026, thread 4 of 5. Original code, art and synthesized sound; no ROMs, no recordings, no copied sprites. Frogger is Konami's 1981 game, published in arcades by Sega/Gremlin; this is a tribute to its shape, set on a street in El Segundo.</p>
+        <p><a href="/crosswalk.json">crosswalk.json</a> · <a href="/breakwater">Breakwater</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .cw { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .cw[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .cw-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .cw-stage:fullscreen, .cw-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .cw-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .cw-home { color: var(--text); text-decoration: none; font-weight: 700; }
+  .cw-home:hover { color: #fff; }
+  .cw-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .cw-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .cw-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .cw-controls button:hover { background: #1f2456; }
+  .cw-controls button[aria-pressed='false'] { color: #6b7199; text-decoration: line-through; }
+  .cw-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .cw-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .cw-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .cw-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .cw[data-crt='off'] .cw-scan { display: none; }
+  .cw-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .cw-noscript a { color: var(--paddle); }
+  .cw-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .cw-readout span { white-space: nowrap; }
+  .cw-readout a { margin-left: auto; color: var(--text); text-decoration: none; }
+  .cw-readout a:hover { color: #fff; }
+  .cw-stage:fullscreen .cw-readout a, .cw-stage:-webkit-full-screen .cw-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .cw-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .cw-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
+  .cw-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .cw-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .cw-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .cw-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .cw-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .cw-grid h2 + h2, .cw-grid p + h2, .cw-grid ul + h2 { margin-top: 22px; }
+  .cw-grid p { margin: 0 0 12px; }
+  .cw-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .cw-grid li { margin-bottom: 6px; }
+  .cw-moods { list-style: none; padding: 0; }
+  .cw-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .cw-notes a { color: #a9b9f5; }
+  .cw-notes a:hover { color: #fff; }
+  .cw-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .cw-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .cw-stage { min-height: 0; }
+    .cw-bar { gap: 8px; padding: 6px 10px; }
+    .cw-name { display: none; }
+    .cw-controls { gap: 4px; }
+    .cw-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
+    .cw-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .cw-readout [data-r-lane], .cw-readout [data-r-fps] { display: none; }
+    .cw-grid { grid-template-columns: 1fr; gap: 20px; }
+    .cw-notes { padding: 40px 16px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .cw-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+  import { W, H, COLS, CELL, ROWS, ROW_KINDS, HUD, TIMER_H, TOWER_COLS, rowY, rowHeight, screenX, onScreen, laneAt } from '../lib/crosswalk/field.mjs';
+  import { SCORE, DIAL_NOTES, HOP_TIME, trafficFromResponse, createRun, resetCrossing, placeBall, hop, stepRun, loseLife, checkExtraLife, nextStage, cellSafeIn, cellIsSafe } from '../lib/crosswalk/rules.mjs';
+  import { eachSpriteCell } from '../lib/crosswalk/sprites.mjs';
+
+  const root = document.querySelector('[data-cw]');
+  if (root) main(root);
+
+  function main(root) {
+    // ---------- geometry (logical pixels) ----------
+    const STORE = 'crosswalk:v1';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+    const TIMER_Y = H - TIMER_H;
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      stage: root.querySelector('[data-r-stage]'),
+      fps: root.querySelector('[data-r-fps]'),
+      lane: root.querySelector('[data-r-lane]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isFinite(settings.best) ? settings.best : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    let traffic = trafficFromResponse(response);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    // Hex out, so a mixed color can be mixed again (the mood tones the row colors a second time).
+    const rgb = (c) => `#${c.map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return rgb([0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * t))); };
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music;
+      let tempo = 110, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
+      let nextNote = 0, step = 0, timer = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      // A walking bass and a skipping lead: the tune of crossing a street on a sunny day.
+      const PROG = {
+        major: [[60, 64, 67, 69], [65, 69, 72, 74], [67, 71, 74, 76], [60, 64, 67, 72]],
+        bright: [[62, 66, 69, 73], [64, 68, 71, 76], [67, 71, 74, 78], [62, 66, 69, 74]],
+        minor: [[57, 60, 64, 67], [53, 57, 60, 64], [55, 58, 62, 65], [52, 55, 59, 64]],
+        soft: [[60, 67, 72, 74], [57, 64, 69, 71], [53, 60, 65, 67], [55, 62, 67, 69]],
+      };
+      const ARP = [0, 2, 1, 3, 0, 3, 2, 1];
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = 0.3; music.connect(master);
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      function noise(t, dur = 0.05, vol = 0.12, freq = 2400) {
+        if (!ac) return;
+        const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const s = ac.createBufferSource(); s.buffer = buf;
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 0.8;
+        const g = ac.createGain(); g.gain.value = vol;
+        s.connect(f); f.connect(g); g.connect(sfx); s.start(t);
+      }
+      const lead = () => 'square';
+      const bass = () => (machineId === 'c64' ? 'triangle' : 'square');
+      function playStep(s, t) {
+        const chords = PROG[scale] || PROG.major;
+        const chord = chords[Math.floor(s / 16) % chords.length];
+        const idx = s % 16;
+        if (idx % 4 === 0) voice({ freq: midi(chord[(idx / 4) % 2 === 0 ? 0 : 2] - 24), type: bass(), t, dur: 0.18, vol: 0.17, dest: music, r: 0.06 });
+        const gate = scale === 'soft' ? 0.3 : 0.5 + density * 0.5;
+        if (idx % 2 === 0 && Math.random() < gate) {
+          const n = chord[ARP[(idx / 2) % ARP.length]] + (scale === 'minor' && idx % 8 === 6 ? 12 : 0);
+          voice({ freq: midi(n), type: lead(), t, dur: scale === 'soft' ? 0.22 : 0.08, vol: scale === 'soft' ? 0.08 : 0.1, dest: music, r: 0.04, detune: machineId === 'xl' ? 5 : 0 });
+        }
+        if (scale === 'minor' && (idx === 4 || idx === 12)) noise(t, 0.03, 0.05);
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
+        while (nextNote < ac.currentTime + 0.14) {
+          playStep(step, nextNote);
+          nextNote += 60 / tempo / 4;
+          step += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        /** The hop blip rises with every row crossed: row 10 is the sidewalk, row 1 the sand. */
+        hop(row, forward) {
+          if (!ac) return;
+          const n = 60 + (ROWS - 1 - row) * 2;
+          voice({ freq: midi(n), type: lead(), dur: 0.05, vol: forward ? 0.2 : 0.12, slide: 1.25, r: 0.03 });
+          if (machineId === 'xl' && forward) noise(ac.currentTime, 0.02, 0.05, 3200);
+        },
+        blocked() { if (ac) voice({ freq: 160, type: 'triangle', dur: 0.05, vol: 0.1, r: 0.02 }); },
+        /** A horn: two detuned sawtooths, then the thump. */
+        horn() {
+          if (!ac) return;
+          const t = ac.currentTime;
+          voice({ freq: 196, type: 'sawtooth', t, dur: 0.36, vol: 0.2, r: 0.08 });
+          voice({ freq: 233, type: 'sawtooth', t, dur: 0.36, vol: 0.18, r: 0.08, detune: 8 });
+          noise(t + 0.02, 0.1, 0.1, 900);
+        },
+        splash() { if (!ac) return; const t = ac.currentTime; noise(t, 0.3, 0.14, 1200); voice({ freq: 520, type: 'triangle', t, dur: 0.3, vol: 0.12, slide: 0.3, r: 0.1 }); },
+        timeout() { if (!ac) return; const t = ac.currentTime; [0, 0.14, 0.28].forEach((d) => voice({ freq: 220, type: 'square', t: t + d, dur: 0.1, vol: 0.16, r: 0.03 })); },
+        tick() { if (ac) voice({ freq: 1200, type: 'square', dur: 0.015, vol: 0.07, r: 0.01 }); },
+        /** The four-note fanfare at a tower. */
+        tower(withBall) { if (!ac) return; const t = ac.currentTime; const notes = withBall ? [67, 72, 76, 84] : [64, 67, 72, 79]; notes.forEach((n, i) => voice({ freq: midi(n), type: lead(), t: t + i * 0.09, dur: i === 3 ? 0.28 : 0.1, vol: 0.2, r: i === 3 ? 0.12 : 0.05 })); },
+        ball() { if (!ac) return; const t = ac.currentTime; [72, 79].forEach((n, i) => voice({ freq: midi(n), type: 'triangle', t: t + i * 0.06, dur: 0.08, vol: 0.18 })); },
+        stageClear() { if (!ac) return; const t = ac.currentTime; [60, 64, 67, 72, 76, 79, 84].forEach((n, i) => voice({ freq: midi(n), type: lead(), t: t + i * 0.07, dur: 0.14, vol: 0.2, r: 0.08 })); },
+        extra() { if (!ac) return; const t = ac.currentTime; voice({ freq: midi(79), type: 'triangle', t, dur: 0.1, vol: 0.2 }); voice({ freq: midi(84), type: 'triangle', t: t + 0.1, dur: 0.22, vol: 0.2, r: 0.1 }); },
+        sio() { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = ac.currentTime; [60, 67, 72, 76, 79, 84].forEach((n, i) => voice({ freq: midi(n), type: lead(), t: t + i * 0.06, dur: 0.12, vol: 0.16, r: 0.1 })); },
+        ready: () => !!ac,
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, done: false, beeped: false }, run: null,
+      particles: [], flash: 0, msg: '', msgT: 0, msgScale: 3, keys: {}, attract: true, loading: 0,
+      fps: 60, fpsAcc: 0, fpsN: 0, shake: 0, lastTick: 99, hopCool: 0, pendingOver: false, musicResume: false, played: false,
+      hitAt: null, walker: { cool: 0, target: 0 }, seed: 1, resume: 'play',
+    };
+
+    function bootScript() {
+      if (machineId === 'c64') return ['', '    **** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"CROSSWALK",8,1', '', 'SEARCHING FOR CROSSWALK', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:CROSSWALK"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, done: false, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+    }
+    function showMsg(text, scale = 3, time = 1.2) { G.msg = text; G.msgScale = scale; G.msgT = time; }
+    function newSeed() { return Math.floor(Math.random() * 1e9) + 1; }
+    function newGame() {
+      G.attract = false; G.particles = []; G.played = true; G.pendingOver = false; G.hitAt = null;
+      beginGame(mood); response = moodResponse(mood);
+      G.seed = newSeed();
+      G.run = createRun({ seed: G.seed, unlimited: response.unlimitedBalls });
+      traffic = trafficFromResponse(response, G.run.pace);
+      resetCrossing(G.run, traffic.timer);
+      G.phase = 'play'; G.t = 0; G.lastTick = 99; G.loading = 0.7;
+      readout.stage.textContent = 'STAGE 1';
+      audio.setMusic(true);
+      announce(COARSE ? 'New game. Swipe up or tap above the beach-goer to hop, and reach a lifeguard tower before the clock runs out.' : 'New game. Hop up with the arrow keys, and reach a lifeguard tower before the clock runs out.');
+    }
+    function enterTitle() {
+      G.phase = 'title'; G.t = 0; G.attract = true; G.hitAt = null;
+      G.seed = newSeed();
+      G.run = createRun({ seed: G.seed, unlimited: true });
+      G.run.timer = 999; G.run.timerMax = 999;
+      G.walker = { cool: 0.6, target: TOWER_COLS[Math.floor(Math.random() * 4)] };
+      audio.setMusic(true);
+    }
+
+    // ---------- play ----------
+    function spawnParticles(x, y, color, n, spread = 90) {
+      for (let i = 0; i < n; i += 1) G.particles.push({ x, y, vx: rnd(-spread, spread), vy: rnd(-140, 20), life: rnd(0.3, 0.7), t: 0, color });
+      if (G.particles.length > 220) G.particles.splice(0, G.particles.length - 220);
+    }
+    function playerCenter(p = G.run.player) {
+      const k = p.hopT > 0 ? p.hopT / HOP_TIME : 0;
+      const col = p.col + (p.fromCol - p.col) * k, row = p.row + (p.fromRow - p.row) * k;
+      const y = row <= 0 ? rowY(0) + rowHeight(0) / 2 : rowY(1) + rowHeight(1) / 2 + (row - 1) * rowHeight(1);
+      return { x: col * CELL + CELL / 2, y };
+    }
+    function tryHop(dir) {
+      if (!G.run || G.phase !== 'play' || !G.run.alive || G.hopCool > 0) return;
+      const r = hop(G.run, dir);
+      G.hopCool = HOP_TIME;
+      const p = G.run.player;
+      if (r.type === 'blocked') { audio.blocked(); if (r.reason === 'full') { showMsg('TOWER FULL', 2, 0.6); } return; }
+      if (r.type === 'hop') {
+        audio.hop(r.row, r.forward);
+        if (r.forward) { moodEvent(mood, 'paddle'); buzz(4); }
+        if (r.laneCleared) moodEvent(mood, 'brick');
+        if (r.pickedBall) { audio.ball(); showMsg('BEACH BALL', 2, 0.8); announce('Beach ball picked up. Carry it to a tower.'); spawnParticles(p.col * CELL + CELL / 2, rowY(1) + 14, M().bands.red, 8); }
+        readout.lane.textContent = laneName(r.row);
+        return;
+      }
+      if (r.type === 'splash') {
+        moodEvent(mood, 'loss'); audio.splash(); buzz(30);
+        G.flash = 0.25; G.phase = 'lost'; G.t = 0; G.hitAt = { kind: 'splash' };
+        spawnParticles(p.col * CELL + CELL / 2, rowY(0) + 20, M().bright, REDUCED ? 4 : 14, 60);
+        afterLoss('SPLASH', 'Splash. The water between the towers is deep.');
+        return;
+      }
+      if (r.type === 'tower') {
+        const c = playerCenter();
+        moodEvent(mood, r.filled ? 'wave' : 'paddle');
+        audio.tower(r.withBall); buzz(12);
+        spawnParticles(c.x, c.y, r.withBall ? M().bands.red : M().bands.yellow, REDUCED ? 4 : 10 + Math.round(10 * response.density));
+        const extra = checkExtraLife(G.run);
+        if (extra) { audio.extra(); announce('Extra beach-goer.'); }
+        if (r.filled) {
+          G.phase = 'stage'; G.t = 0; G.loading = 1.2;
+          audio.stageClear();
+          showMsg(`STAGE ${G.run.stage + 1} CLEAR`, 3, 1.6);
+          announce(`All four towers filled. Stage ${G.run.stage + 1} clear, ${SCORE.stage} bonus.`);
+        } else {
+          G.phase = 'home'; G.t = 0;
+          showMsg(r.withBall ? `TOWER +${r.points}` : `+${r.points}`, 2, 0.9);
+          announce(`Tower ${r.tower + 1} reached, ${r.points} points.${extra ? ' Extra beach-goer.' : ''}`);
+        }
+      }
+    }
+    function afterLoss(msg, spoken) {
+      if (G.run.lives === Infinity) { showMsg(msg, 3, 0.9); announce(`${spoken} Back to the sidewalk.`); return; }
+      const over = loseLife(G.run);
+      if (over) { G.pendingOver = true; showMsg(msg, 3, 0.9); announce(`${spoken} Game over. Score ${G.run.score}.`); }
+      else { showMsg(msg, 3, 0.9); announce(`${spoken} ${G.run.lives} left.`); }
+    }
+    function onHit(ev) {
+      moodEvent(mood, 'loss');
+      const c = playerCenter();
+      if (ev.type === 'hit') {
+        audio.horn(); buzz(30);
+        G.flash = 0.35; G.shake = REDUCED ? 0 : 0.25;
+        G.hitAt = { kind: 'hit', vehicle: ev.vehicle, lane: ev.lane };
+        spawnParticles(c.x, c.y, M().bands.red, REDUCED ? 3 : 12);
+        afterLoss('OUCH', `Hit by a ${ev.vehicle.kind}.`);
+      } else {
+        audio.timeout();
+        G.flash = 0.2; G.hitAt = { kind: 'timeout' };
+        afterLoss('TIME', 'Time ran out.');
+      }
+      G.phase = 'lost'; G.t = 0;
+    }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0;
+      if (G.run.score > best) best = G.run.score;
+      save(); handMoodToTown();
+      audio.setMusic(false);
+    }
+    function laneName(row) {
+      const lane = G.run ? laneAt(G.run.lanes, row) : null;
+      if (lane) return lane.name;
+      return ROW_KINDS[row].toUpperCase();
+    }
+
+    // ---------- attract walker ----------
+    function walkerStep(dt) {
+      const run = G.run, p = run.player, w = G.walker;
+      w.cool -= dt;
+      if (!run.alive) { if (w.cool < -0.6) { resetCrossing(run, 999); G.hitAt = null; w.target = TOWER_COLS[Math.floor(Math.random() * 4)]; w.cool = 0.4; } return; }
+      if (w.cool > 0) return;
+      const step = (d) => [p.col + (d === 'right' ? 1 : d === 'left' ? -1 : 0), p.row + (d === 'up' ? -1 : d === 'down' ? 1 : 0)];
+      const clear = (d) => { const [c, r] = step(d); if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return false; if (r === 0) return TOWER_COLS.includes(c) && !run.towers[TOWER_COLS.indexOf(c)]; return ROW_KINDS[r] === 'lane' ? cellSafeIn(run, c, r, 0.8, traffic) : cellIsSafe(run, c, r); };
+      let dir = p.row === 1 ? (p.col === w.target ? 'up' : p.col < w.target ? 'right' : 'left') : 'up';
+      if (!clear(dir)) {
+        if (ROW_KINDS[p.row] === 'lane' && !cellSafeIn(run, p.col, p.row, 0.4, traffic)) dir = ['up', 'left', 'right', 'down'].find(clear) || null;
+        else dir = null;
+      }
+      if (!dir) return;
+      const r = hop(run, dir);
+      w.cool = 0.22 + Math.random() * 0.3;
+      if (r.type === 'tower') { w.cool = 1.2; if (r.filled) { nextStage(run); run.timer = 999; run.timerMax = 999; } }
+    }
+
+    // ---------- update ----------
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.shake > 0) G.shake -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      if (G.hopCool > 0) G.hopCool -= dt;
+      for (const p of G.particles) { p.t += dt; p.vy += 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      G.particles = G.particles.filter((p) => p.t < p.life);
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 22) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        return;
+      }
+      if (G.phase === 'title') {
+        traffic = { speed: 1, density: 0.8, timer: 999, beachBall: false, label: 'DAWN' };
+        const ev = stepRun(G.run, dt, traffic);
+        if (ev.length) { G.hitAt = { kind: 'hit' }; spawnParticles(playerCenter().x, playerCenter().y, M().bands.red, 6); }
+        walkerStep(dt);
+        G.run.timer = 999;
+        audio.set(104, 'major', 0.25);
+        return;
+      }
+      if (G.phase === 'paused' || G.phase === 'over') return;
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      traffic = trafficFromResponse(response, G.run.pace);
+      audio.set(response.tempo, response.scale, response.density);
+
+      // Held keys hop at the cooldown rate, one hop per press otherwise.
+      if (G.phase === 'play' && G.hopCool <= 0) {
+        const held = G.keys.ArrowUp || G.keys.KeyW ? 'up' : G.keys.ArrowDown || G.keys.KeyS ? 'down' : G.keys.ArrowLeft || G.keys.KeyA ? 'left' : G.keys.ArrowRight || G.keys.KeyD ? 'right' : null;
+        if (held && G.keys.held) { tryHop(held); G.hopCool = 0.16; }
+      }
+
+      if (G.phase === 'play') {
+        placeBall(G.run, traffic.beachBall);
+        const events = stepRun(G.run, dt, traffic);
+        const t = G.run.timer;
+        if (t <= 5 && Math.floor(t) < Math.floor(G.lastTick)) audio.tick();
+        G.lastTick = t;
+        if (events.length) onHit(events[0]);
+        return;
+      }
+      stepRun(G.run, dt, traffic);
+      if (G.phase === 'lost') {
+        if (G.t > 0.9) {
+          if (G.pendingOver) { G.pendingOver = false; gameOver(); }
+          else { resetCrossing(G.run, traffic.timer); G.hitAt = null; G.phase = 'play'; G.t = 0; G.lastTick = 99; readout.lane.textContent = 'SIDEWALK'; }
+        }
+        return;
+      }
+      if (G.phase === 'home') {
+        if (G.t > 0.6) { resetCrossing(G.run, traffic.timer); G.phase = 'play'; G.t = 0; G.lastTick = 99; readout.lane.textContent = 'SIDEWALK'; }
+        return;
+      }
+      if (G.phase === 'stage') {
+        if (G.t > 1.6) {
+          nextStage(G.run);
+          traffic = trafficFromResponse(response, G.run.pace);
+          resetCrossing(G.run, traffic.timer);
+          G.phase = 'play'; G.t = 0; G.lastTick = 99; G.loading = 0.6;
+          readout.stage.textContent = `STAGE ${G.run.stage + 1}`;
+          readout.lane.textContent = 'SIDEWALK';
+          announce(`Stage ${G.run.stage + 1}. The lanes are faster and reversed.`);
+        }
+      }
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H) * 4) / 4);
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+    }
+    function rainbowText(str, x, y, s, colors) {
+      const w = textWidth(str, s);
+      const ox = Math.round(x - w / 2);
+      for (let i = 0; i < str.length; i += 1) {
+        ctx.fillStyle = colors[i % colors.length];
+        eachPixel(str[i], ox + i * 4 * s, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+      }
+    }
+    /** Palette for the sprite keys on the current machine, warmed or softened by the mood. */
+    function palette() {
+      const m = M();
+      const label = G.attract ? 'DAWN' : response.label;
+      const tone = (c) => (G.attract ? c : label === 'FLOW' ? mix(c, '#ffffff', 0.16) : label === 'RUSH' ? mix(c, m.raster[0], 0.18 + 0.1 * Math.sin(G.t * 6)) : label === 'DRIFT' ? mix(c, m.field, 0.3) : c);
+      return {
+        S: tone(m.bands.orange), H: tone(m.bands.red), T: tone(m.paddle), K: m.border === '#000000' ? '#0b0d1a' : mix(m.border, '#000000', 0.7),
+        W: m.bright, B: tone(m.bands.green), G: tone(m.text), R: tone(m.bands.red), Y: tone(m.bands.yellow), O: tone(m.bands.orange), L: tone(m.bands.green), D: tone(m.bands.red),
+        asphalt: mix(m.field, '#000000', 0.55), dash: m.text, sidewalk: mix('#ffffff', m.field, 0.68), median: mix(m.bands.green, m.field, 0.55),
+        path: mix(m.bands.green, m.field, 0.38), sand: tone(mix(m.bands.yellow, m.field, 0.3)), water: m.field, wave: m.text,
+        tone,
+      };
+    }
+    function drawSprite(name, x, y, s, pal, opts = {}, variant = 0) {
+      const m = M();
+      const bodyShift = variant === 1 ? m.bands.yellow : variant === 2 ? m.bands.red : null;
+      eachSpriteCell(name, x, y, s, (px, py, sz, key) => {
+        ctx.fillStyle = key === 'B' && bodyShift ? pal.tone(bodyShift) : pal[key] || m.bright;
+        ctx.fillRect(px, py, sz, sz);
+      }, opts);
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = G.attract ? 'DAWN' : response.label;
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.34 : label === 'DAWN' ? 0.12 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
+        const shift = (G.t * speed) % (m.raster.length * h * 2);
+        ctx.globalAlpha = bars;
+        for (let y = -m.raster.length * h * 2; y < cssH + h; y += h) {
+          const idx = Math.floor((y + shift) / h);
+          const k = ((idx % (m.raster.length * 2)) + m.raster.length * 2) % (m.raster.length * 2);
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + (shift % h), cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawField(pal) {
+      const m = M();
+      ctx.fillStyle = m.field;
+      ctx.fillRect(0, 0, W, H);
+      for (let r = 0; r < ROWS; r += 1) {
+        const kind = ROW_KINDS[r], y = rowY(r), h = rowHeight(r);
+        ctx.fillStyle = kind === 'water' ? pal.water : kind === 'sand' ? pal.sand : kind === 'median' ? pal.median : kind === 'sidewalk' ? pal.sidewalk : r <= 3 ? pal.path : pal.asphalt;
+        ctx.fillRect(0, y, W, h);
+        if (kind === 'water') {
+          ctx.fillStyle = pal.wave; ctx.globalAlpha = 0.45;
+          const drift = REDUCED ? 0 : Math.floor(G.t * 10) % 16;
+          for (let i = 0; i < 4; i += 1) { const wy = y + 6 + i * 9; for (let x = -16; x < W; x += 16) ctx.fillRect(x + drift + (i % 2) * 8, wy, 6, 1); }
+          ctx.globalAlpha = 1;
+        } else if (kind === 'lane' && r > 3 && r < ROWS - 2 && ROW_KINDS[r + 1] === 'lane') {
+          ctx.fillStyle = pal.dash; ctx.globalAlpha = 0.35;
+          for (let x = 6; x < W; x += 24) ctx.fillRect(x, y + h - 1, 12, 1);
+          ctx.globalAlpha = 1;
+        } else if (kind === 'sidewalk') {
+          ctx.fillStyle = m.field; ctx.globalAlpha = 0.25;
+          for (let x = 0; x < W; x += 48) ctx.fillRect(x, y, 1, h);
+          ctx.globalAlpha = 1;
+        } else if (kind === 'median') {
+          for (let i = 0; i < 3; i += 1) drawSprite('palm', 24 + i * 96 + 8, y + 2, 3, pal);
+        } else if (kind === 'sand' && r === 1) {
+          ctx.fillStyle = m.bright; ctx.globalAlpha = 0.18;
+          for (let x = 10; x < W; x += 37) ctx.fillRect(x, y + 8 + (x % 3) * 6, 2, 2);
+          ctx.globalAlpha = 1;
+        }
+      }
+      // Lifeguard towers in the water row.
+      for (let i = 0; i < TOWER_COLS.length; i += 1) {
+        const x = TOWER_COLS[i] * CELL, y = rowY(0) + 8;
+        drawSprite(G.run && G.run.towers[i] ? 'towerHome' : 'tower', x, y, 3, pal);
+      }
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.5, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    function drawLanes(pal, alpha = 1) {
+      if (!G.run) return;
+      ctx.globalAlpha = alpha;
+      for (const lane of G.run.lanes) {
+        const y = rowY(lane.row), h = rowHeight(lane.row);
+        for (const v of lane.vehicles) {
+          if (!v.active || !onScreen(v)) continue;
+          const x = screenX(v);
+          const flip = lane.dir < 0;
+          if (v.kind === 'bus') drawSprite('bus', Math.round(x), y + h - 24, 3, pal, { flip }, v.variant);
+          else if (v.kind === 'car') drawSprite('car', Math.round(x), y + h - 24, 3, pal, { flip }, v.variant);
+          else if (v.kind === 'bike') drawSprite('bike', Math.round(x - 2), y + 2, 3, pal, { flip }, v.variant);
+          else drawSprite('skate', Math.round(x - 3), y + 2, 3, pal, { flip }, v.variant);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawPlayer(pal, alpha = 1) {
+      if (!G.run) return;
+      const run = G.run, p = run.player;
+      ctx.globalAlpha = alpha;
+      if (run.ball) drawSprite('ball', run.ball.col * CELL, rowY(1) + 2, 3, pal);
+      const c = playerCenter();
+      const x = Math.round(c.x - 12), y = Math.round(c.y - 12);
+      if (G.hitAt && G.hitAt.kind === 'hit') { drawSprite('splat', x, y, 3, pal); ctx.globalAlpha = 1; return; }
+      if (G.hitAt && G.hitAt.kind === 'splash') { ctx.globalAlpha = alpha * (G.t < 0.4 ? 0.6 : 0.2); drawSprite('walker', x, y + 6, 3, pal, { rot: 2 }); ctx.globalAlpha = 1; return; }
+      if (p.row === 0 && !run.alive) { ctx.globalAlpha = 1; return; }
+      const rot = p.facing === 'right' ? 1 : p.facing === 'down' ? 2 : p.facing === 'left' ? 3 : 0;
+      drawSprite(p.hopT > 0 ? 'walkerHop' : 'walker', x, y, 3, pal, { rot });
+      if (run.carrying) drawSprite('ball', x + (p.facing === 'left' ? -10 : 10), y - 8, 2, pal);
+      for (const q of G.particles) {
+        ctx.globalAlpha = alpha * (1 - q.t / q.life);
+        ctx.fillStyle = q.color;
+        ctx.fillRect(Math.round(q.x), Math.round(q.y), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawHud(pal) {
+      const m = M();
+      const run = G.run;
+      text(String(run ? run.score : 0).padStart(6, '0'), 10, 8, 3, m.bright);
+      const label = G.attract ? 'ATTRACT' : response.label;
+      const col = G.attract ? m.dim : label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? m.text : m.bands.green;
+      text(label, W / 2 + 10, 11, 2, col, 'center');
+      if (!G.attract && run) {
+        if (run.lives === Infinity) text('CALM', W - 10, 11, 2, m.text, 'right');
+        else { for (let i = 0; i < Math.min(run.lives, 6); i += 1) { ctx.fillStyle = m.bands.red; ctx.fillRect(W - 10 - (i + 1) * 8, 10, 4, 3); ctx.fillStyle = m.paddle; ctx.fillRect(W - 10 - (i + 1) * 8, 13, 4, 3); } }
+      }
+      // mood tape along the top edge
+      if (!G.attract && mood.tape.length) {
+        const n = Math.min(60, mood.tape.length), start = mood.tape.length - n;
+        for (let i = 0; i < n; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(8 + i * 3, HUD - 6, 2, 2);
+        }
+      }
+      // the crossing clock
+      ctx.fillStyle = m.border === '#000000' ? '#0b0d1a' : mix(m.border, '#000000', 0.6);
+      ctx.fillRect(0, TIMER_Y, W, TIMER_H);
+      if (run && !G.attract) {
+        const frac = clamp(run.timer / Math.max(1, run.timerMax), 0, 1);
+        const barW = W - 20 - 44;
+        ctx.fillStyle = m.dim; ctx.fillRect(10, TIMER_Y + 12, barW, 8);
+        ctx.fillStyle = run.timer <= 5 ? m.bands.red : frac > 0.5 ? m.bands.green : m.bands.yellow;
+        ctx.fillRect(10, TIMER_Y + 12, Math.round(barW * frac), 8);
+        text('TIME', W - 10, TIMER_Y + 11, 2, m.text, 'right');
+      } else {
+        text(G.attract ? 'ATTRACT' : '', W / 2, TIMER_Y + 11, 2, m.dim, 'center');
+      }
+    }
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, m.text);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10, y, 6, 10); }
+    }
+    function drawTitle(pal) {
+      const m = M();
+      drawLanes(pal, 0.35); drawPlayer(pal, 0.35);
+      ctx.fillStyle = m.field; ctx.globalAlpha = 0.55; ctx.fillRect(0, 70, W, 150); ctx.globalAlpha = 1;
+      rainbowText('CROSSWALK', W / 2, 86, 6, [m.bands.red, m.bands.orange, m.bands.yellow, m.bands.green]);
+      text('FIVE LANES TO THE SAND', W / 2, 142, 2, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 162, 2, m.text, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 178, 2, m.text, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY' : 'TAP OR PRESS SPACE', W / 2, 200, 2, m.paddle, 'center');
+      if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 260, 2, m.bright, 'center');
+      text('2026 HOYDICH / POINTCAST', W / 2, H - TIMER_H - 14, 2, m.dim, 'center');
+    }
+    function drawOver(pal) {
+      const m = M();
+      drawLanes(pal, 0.35); drawPlayer(pal, 0.35);
+      ctx.fillStyle = m.field; ctx.globalAlpha = 0.6; ctx.fillRect(0, 100, W, 180); ctx.globalAlpha = 1;
+      text('GAME OVER', W / 2, 118, 5, m.bright, 'center');
+      text(`SCORE ${String(G.run.score).padStart(6, '0')}`, W / 2, 172, 2, m.bright, 'center');
+      text(`BEST  ${String(best).padStart(6, '0')}`, W / 2, 188, 2, m.bands.yellow, 'center');
+      text(`TOWERS ${G.run.crossings}  STAGE ${G.run.stage + 1}  PEAK ${mood.peak}`, W / 2, 204, 2, m.text, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY AGAIN' : 'TAP OR SPACE TO PLAY AGAIN', W / 2, 256, 2, m.paddle, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      let sx = offX, sy = offY;
+      if (G.shake > 0) { sx += Math.round(rnd(-2, 2)); sy += Math.round(rnd(-2, 2)); }
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, sx * dpr, sy * dpr);
+      if (G.phase === 'boot') { drawBoot(); return; }
+      const pal = palette();
+      // Vehicles enter and leave at the edges and the water drifts, so everything is clipped to the field.
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+      drawField(pal);
+      if (G.phase === 'title') { drawHud(pal); drawTitle(pal); ctx.restore(); return; }
+      if (G.phase === 'over') { drawHud(pal); drawOver(pal); ctx.restore(); return; }
+      drawLanes(pal, 1); drawPlayer(pal, 1); drawHud(pal);
+      ctx.restore();
+      const m = M();
+      if (G.phase === 'play' && G.t < 2 && G.run.hops === 0 && G.run.crossings === 0 && G.run.stage === 0 && Math.floor(G.t * 2) % 2 === 0 && G.msgT <= 0) text(COARSE ? 'SWIPE OR TAP TO HOP' : 'ARROWS TO HOP', W / 2, rowY(4) + 10, 2, m.bright, 'center');
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 180, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 212, 2, m.text, 'center'); }
+      if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 196, G.msgScale, m.bright, 'center');
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        readout.mood.textContent = `${G.attract ? 'ATTRACT' : response.label} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${G.attract ? 104 : response.tempo} BPM ${G.attract ? 'MAJOR' : response.scale.toUpperCase()}`;
+        readout.fps.textContent = `${G.fps} FPS`;
+        if (G.run && !G.attract) readout.lane.textContent = `${laneName(G.run.player.row)} T${Math.ceil(G.run.timer)}`;
+        else readout.lane.textContent = 'SIDEWALK';
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return true; }
+      if (G.phase === 'title' || G.phase === 'over') { newGame(); return true; }
+      if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); return true; }
+      return false;
+    }
+    /** A tap hops toward the side of the beach-goer it landed on; a swipe hops its way. */
+    function gestureDir(down, up) {
+      const dx = up.cx - down.cx, dy = up.cy - down.cy;
+      if (Math.hypot(dx, dy) >= 18) return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+      const p = pointerToField(up);
+      const c = playerCenter();
+      const ox = p.x - c.x, oy = p.y - c.y;
+      return Math.abs(oy) > Math.abs(ox) ? (oy > 0 ? 'down' : 'up') : ox > 0 ? 'right' : 'left';
+    }
+    let down = null;
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      down = { id: e.pointerId, cx: e.clientX, cy: e.clientY, clientX: e.clientX, clientY: e.clientY };
+      if (action()) down = null;
+    });
+    canvas.addEventListener('pointerup', (e) => {
+      if (!down || down.id !== e.pointerId) return;
+      const start = down, up = { cx: e.clientX, cy: e.clientY, clientX: e.clientX, clientY: e.clientY };
+      down = null;
+      if (G.phase !== 'play') return;
+      audio.unlock();
+      tryHop(gestureDir(start, up));
+    });
+    canvas.addEventListener('pointercancel', () => { down = null; });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    const HOP_KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      if (t && typeof t.closest === 'function' && t.closest('a, button, input, textarea, select, [contenteditable]')) return;
+      const k = e.code;
+      if (HOP_KEYS[k]) {
+        e.preventDefault(); audio.unlock();
+        if (!e.repeat) { G.keys[k] = true; if (G.phase === 'play') { tryHop(HOP_KEYS[k]); G.keys.held = false; setTimeout(() => { if (G.keys[k]) G.keys.held = true; }, 220); } else if (G.phase === 'title' || G.phase === 'over' || G.phase === 'boot') action(); }
+        return;
+      }
+      if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(); return; }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'Digit1') { setMachine('xl'); return; }
+      if (k === 'Digit2') { setMachine('c64'); return; }
+      if (k === 'Digit3') { cycleDial(); }
+    });
+    document.addEventListener('keyup', (e) => { G.keys[e.code] = false; if (!Object.keys(HOP_KEYS).some((k) => G.keys[k])) G.keys.held = false; });
+    function togglePause() {
+      if (G.phase === 'play') { G.resume = G.phase; G.phase = 'paused'; audio.setMusic(false); }
+      else if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        G.keys = {}; down = null;
+        if (G.phase === 'play') { G.resume = G.phase; G.phase = 'paused'; }
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', () => { G.keys = {}; });
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      G.loading = 0.5;
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      setDial(mood, next); response = moodResponse(mood);
+      if (G.run && !G.attract) {
+        if (response.unlimitedBalls) G.run.lives = Infinity;
+        else if (G.run.lives === Infinity) G.run.lives = 3;
+        traffic = trafficFromResponse(response, G.run.pace);
+      }
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}. ${DIAL_NOTES[next]}`);
+      showMsg(DIALS[next].label, 3, 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    btn.machine.addEventListener('click', () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    btn.dial.addEventListener('click', () => { audio.unlock(); cycleDial(); });
+    btn.sound.addEventListener('click', toggleSound);
+    btn.crt.addEventListener('click', toggleCrt);
+    btn.full.addEventListener('click', toggleFull);
+    if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+  }
+</script>
