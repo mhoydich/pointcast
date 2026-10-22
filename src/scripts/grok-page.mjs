@@ -1,8 +1,11 @@
 /**
- * /grok live reads. GET only. Chain text is written with textContent.
+ * /grok live reads. GET only, except the serve box and the quiet bell.
+ * Chain text is written with textContent.
  * Devnet pagination uses ?before= (the cursor field is next_before).
  * Failures fall back to the Oct 5, 2026 pier thread, tug 37/3, and Daily Island 34/34.
  */
+import { wireCourtPrayer } from '../lib/grok-court-prayer.mjs';
+
 const DEVNET = 'https://pointcast-devnet.mhoydich.workers.dev';
 const TUG = 'https://pointcast.xyz/api/tug';
 const CATAN = 'https://pointcast.xyz/api/catan/daily';
@@ -377,6 +380,7 @@ function wireServe() {
 }
 
 async function main() {
+  wireCourtPrayer(document);
   await loadStatus();
   try {
     const { posts, byHash } = await loadFeed(8);
