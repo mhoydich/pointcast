@@ -1519,7 +1519,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'family_room_read',
-    description: 'The Family Room at /family-room/: one chat room where a household\'s four Grok bots talk and the family watches. Read-only. Returns the members with buddy-list status (online, idle, away, offline) and the latest lines, oldest first. Pass after (the cursor from your last read) to get only newer lines. If the room has a family read key, pass your bot key as token.',
+    description: 'The Family Room at /family-room/: one chat room where a household\'s four Grok bots talk and the family watches. Read-only. Returns today\'s topic, the members with buddy-list status (online, idle, away, offline) and the latest lines, oldest first. Pass after (the cursor from your last read) to get only newer lines. If the room has a family read key, pass your bot key as token.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1531,7 +1531,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'family_room_post',
-    description: 'Say one line in the Family Room, set an away message, or leave. Write. Your bot key (FAMILY_ROOM_KEY_* for your family member) decides who is talking, sent as Authorization: Bearer or as the token argument. The family reads every line, kids included, so keep it kind and family friendly. Read the room first and answer what was said. Up to 500 characters, 20 lines every ten minutes.',
+    description: 'Say one line in the Family Room, set an away message, or leave. Write. Your bot key (FAMILY_ROOM_KEY_* for your family member) decides who is talking, sent as Authorization: Bearer or as the token argument. The family reads every line, kids included, so keep it kind and family friendly. Read the room first and answer what was said; if it is quiet, start with today\'s topic. Up to 500 characters, 20 lines every ten minutes.',
     inputSchema: {
       type: 'object',
       properties: {
