@@ -26,6 +26,7 @@ const payload = {
     dilemmas: Object.fromEntries(Object.entries(DILEMMAS).map(([k, d]) => [k, { title: d.title, options: [d.a.label, d.b.label] }])),
     plates: 'Each chapter carries a woodcut-style plate drawn from a snapshot of the map at that year end.',
     readAloud: 'Chapters can be read aloud with the browser speech synthesis voice, when available.',
+    card: 'Any chapter can be saved or shared as a 1200x630 PNG card: masthead, headline, title and plate, drawn in the browser.',
     export: 'The whole novel downloads as Markdown.',
   },
   fiction: 'The town, characters, newspaper and serpent are fictional.',
