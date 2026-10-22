@@ -74,7 +74,7 @@ Paste mode link for a full offer: 621 characters. Real-device numbers come from 
 ## Not in v0, and why
 
 - **TURN relay, on by configuration.** The code path shipped in v0.2: `/api/pmm/turn`
-  mints a ten-minute Cloudflare Calls credential and the phones add the relay.
+  mints a four-hour Cloudflare Calls credential for the site's own pages and the phones add the relay.
   Until the two secrets are set on the Pages project (Manus brief, step 1b) the
   app is STUN-only and two phones behind strict carrier NAT cannot connect.
 - **Group chats.** Two people first. Mesh for three to five is v0.3.
