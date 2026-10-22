@@ -16,6 +16,13 @@ export const PLAY_SURFACES = [
     summary: 'A breakout for the 8-bit heart: Atari 800XL or Commodore 64 blue, synthesized chip sound, and a mood the game and you keep together. Phone or full screen.',
   },
   {
+    id: 'driftwood',
+    code: 'DRFT',
+    title: 'Driftwood',
+    route: '/driftwood',
+    summary: 'Asteroids on the water: a small boat, driftwood logs that split and wrap, no friction, a limited flare rate, a tide bird, and the same mood model as Breakwater. Phone touch zones or full screen.',
+  },
+  {
     id: 'baseball',
     code: 'BALL',
     title: 'A game you can sit inside',

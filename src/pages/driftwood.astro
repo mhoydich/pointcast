@@ -1,0 +1,986 @@
+---
+/**
+ * /driftwood — Asteroids on the water.
+ *
+ * Brief by Michael Hoydich, 2026-10-22: 80s innocence, the joy of the compute
+ * and flow, mood-state symbiosis, mobile and full screen, audio-visual
+ * multimedia, Atari and Commodore inspired, rendered modern. Thread 5 of the
+ * five sibling games that followed Breakwater.
+ *
+ * A small boat in the middle of a dark field, driftwood logs instead of rocks
+ * that split big to medium to small, wrap at every edge, inertia with no
+ * friction, a limited rate of flare shots, a tide bird for bonus points.
+ * Drawn vector style: stroked polygons in the machine's text color. Every
+ * sound is synthesized. Pure logic lives in src/lib/driftwood (field, sim),
+ * the mood model and the pixel font are shared with Breakwater, and
+ * tests/driftwood.test.mjs plays a whole field headless.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+
+const description = 'Asteroids on the water: a small boat on a dark field, driftwood logs that split big to medium to small, screen wrap, no friction, a limited flare rate and a tide bird for bonus points. Atari 800XL or Commodore 64 colors, synthesized sound, and a mood the game and you keep together.';
+const canonical = 'https://pointcast.xyz/driftwood';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Driftwood',
+      alternateName: 'Driftwood: Asteroids on the water',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/driftwood/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Multidirectional shooter',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Driftwood', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+---
+
+<BlockLayout
+  title="Driftwood"
+  description={description}
+  image="/images/driftwood/og.png"
+  imageAlt="A dark blue field with jagged outlined driftwood logs, a small outlined boat and flare dots beside the words Driftwood, Asteroids on the water."
+  themeColor="#0e1a40"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/driftwood.json', title: 'Driftwood rules, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/driftwood/og.png',
+    buttons: [
+      { label: 'Play Driftwood', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="dw" data-dw data-machine="xl" data-crt="on">
+    <div class="dw-stage" data-stage>
+      <header class="dw-bar">
+        <a class="dw-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="dw-name" aria-hidden="true">DRIFTWOOD</span>
+        <div class="dw-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (1 / 2)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (3)">PLAY</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="dw-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Driftwood field. Turn the boat, push, and fire flares at the logs. Tap or press space to start."></canvas>
+        <div class="dw-scan" aria-hidden="true"></div>
+        <noscript><p class="dw-noscript">Driftwood needs JavaScript to draw the water and make its sounds. The rules and moods are readable at <a href="/driftwood.json">/driftwood.json</a>.</p></noscript>
+      </div>
+      <footer class="dw-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>96 BPM</span>
+        <span data-r-wave>FIELD 1</span>
+        <span data-r-fps>-- FPS</span>
+        <span data-r-vec>V 0,0</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="dw-notes">
+      <p class="dw-eyebrow">PointCast / Games / Driftwood</p>
+      <h1>Asteroids on the water.</h1>
+      <p class="dw-lede">A small boat in the middle of a dark field. Logs drift in from every side, split when a flare hits them, and come back around the edge you watched them leave by. Nothing slows down unless you make it.</p>
+
+      <div class="dw-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Hits raise its <strong>energy</strong>. A collision lowers its <strong>calm</strong>. Time brings both back toward the dial you set. Four words name where it is.</p>
+          <ul class="dw-moods">
+            <li><b>DAWN</b> warming up. Cool colors, the heartbeat slow, four logs.</li>
+            <li><b>FLOW</b> a long run of hits. Brighter lines, the heartbeat opens up.</li>
+            <li><b>RUSH</b> glow on every line, a faster heartbeat, more logs on the next field, and the tide bird comes often.</li>
+            <li><b>DRIFT</b> after a loss. The logs slow, the shield lasts longer, flares come faster, the sound thins out.</li>
+          </ul>
+          <p>Your side is the dial: {dials.map((d, i) => <span><b>{d.label}</b> ({d.id === 'calm' ? 'no game over; a collision resets you with a shield' : d.id === 'play' ? 'three boats, an extra boat every 2000 points' : 'starts hot, leans into the bird and the extra logs'}){i < dials.length - 1 ? '; ' : '.'}</span>)} The game relaxes toward it. The mood tape from your session stays in this browser, and when you leave after a game, the game hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'Lines in the Graphics 0 light blue on a night version of its blue field, a black border. Raw square and noise voices, in the POKEY spirit. A blue READY and a RUN before the water.' : 'Lines in the C64 light blue on a night version of its blue field, inside a light-blue border. A resonant filter sweep on every voice, in the SID spirit. 38911 BASIC BYTES FREE, then LOAD, then RUN.'}</p>
+          ))}
+          <p>Nothing is emulated and nothing is copied. The pixel font, the log outlines, the heartbeat and the palettes were written for this page. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-driftwood-notes.md">research note on Asteroids and its home ports</a>, play <a href="/breakwater">Breakwater</a>, the first game in this row, or visit the <a href="/atari-bbs">Death Star BBS</a>, Mike's own Atari 8-bit history.</p>
+        </article>
+        <article>
+          <h2>The rules</h2>
+          <p>A big log is 20, a medium 50, a small 100, the tide bird 200, the arcade's own numbers. Big splits into two medium, medium into two small, small is gone. Clear the field for 100 and the next one brings a log more. Up to five flares in the air, four shots a second at most. Three boats; an extra boat every 2000 points; no game over on CALM.</p>
+          <h2>Controls</h2>
+          <ul>
+            <li>Touch: the left third of the water turns the boat left, the right third turns it right, the lower middle pushes, and a tap in the upper middle fires. The field names the zones the first time you play.</li>
+            <li>Keys: ← → or A D turn, ↑ or W pushes, Space fires, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
+          </ul>
+        </article>
+      </div>
+
+      <footer class="dw-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code on October 22, 2026, thread 5 of 5. Original code, art and synthesized sound; no ROMs, no recordings. Machine names are tributes.</p>
+        <p><a href="/driftwood.json">driftwood.json</a> · <a href="/breakwater">Breakwater</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .dw { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .dw[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .dw-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .dw-stage:fullscreen, .dw-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .dw-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .dw-home { color: var(--text); text-decoration: none; font-weight: 700; }
+  .dw-home:hover { color: #fff; }
+  .dw-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .dw-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .dw-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .dw-controls button:hover { background: #1f2456; }
+  .dw-controls button[aria-pressed='false'] { color: #6b7199; text-decoration: line-through; }
+  .dw-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .dw-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .dw-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .dw-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .dw[data-crt='off'] .dw-scan { display: none; }
+  .dw-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .dw-noscript a { color: var(--paddle); }
+  .dw-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .dw-readout span { white-space: nowrap; }
+  .dw-readout a { margin-left: auto; color: var(--text); text-decoration: none; }
+  .dw-readout a:hover { color: #fff; }
+  .dw-stage:fullscreen .dw-readout a, .dw-stage:-webkit-full-screen .dw-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .dw-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .dw-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
+  .dw-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .dw-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .dw-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .dw-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .dw-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .dw-grid h2 + h2, .dw-grid p + h2, .dw-grid ul + h2 { margin-top: 22px; }
+  .dw-grid p { margin: 0 0 12px; }
+  .dw-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .dw-grid li { margin-bottom: 6px; }
+  .dw-moods { list-style: none; padding: 0; }
+  .dw-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .dw-notes a { color: #a9b9f5; }
+  .dw-notes a:hover { color: #fff; }
+  .dw-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .dw-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .dw-stage { min-height: 0; }
+    .dw-bar { gap: 8px; padding: 6px 10px; }
+    .dw-name { display: none; }
+    .dw-controls { gap: 4px; }
+    .dw-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
+    .dw-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .dw-readout [data-r-vec], .dw-readout [data-r-fps] { display: none; }
+    .dw-grid { grid-template-columns: 1fr; gap: 20px; }
+    .dw-notes { padding: 40px 16px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .dw-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+  import { FIELD_W, FIELD_TOP, FIELD_H_MIN, FIELD_H_MAX, BOAT_POLY, worldPoly, makeRng, buildField, makeBoat, integrate, wrap } from '../lib/driftwood/field.mjs';
+  import { createSim, stepSim, resizeSim, simSummary } from '../lib/driftwood/sim.mjs';
+
+  const root = document.querySelector('[data-dw]');
+  if (root) main(root);
+
+  function main(root) {
+    // ---------- geometry (logical pixels) ----------
+    const W = FIELD_W, H_MIN = FIELD_H_MIN, H_MAX = FIELD_H_MAX, HUD = FIELD_TOP, WALL = 8;
+    let H = H_MIN;
+    const STORE = 'driftwood:v1';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      wave: root.querySelector('[data-r-wave]'),
+      fps: root.querySelector('[data-r-fps]'),
+      vec: root.querySelector('[data-r-vec]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isFinite(settings.best) ? settings.best : 0;
+    let hintsSeen = Number.isFinite(settings.hints) ? settings.hints : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, hints: hintsSeen, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return rgb([0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * t))); };
+    const night = () => mix(M().field, '#000000', 0.66);
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music, thrustGain = null, thrustSrc = null, birdOsc = null, birdGain = null;
+      let tempo = 110, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
+      let nextBeat = 0, beat = 0, timer = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      // The two-note heartbeat: a low thump and a lower one. The interval is the mood tempo in half notes.
+      const BEATS = { major: [45, 40], bright: [47, 42], minor: [44, 38], soft: [43, 40] };
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = 0.4; music.connect(master);
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      let noiseBuf = null;
+      function noiseBuffer() {
+        if (noiseBuf) return noiseBuf;
+        const len = ac.sampleRate;
+        noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = Math.random() * 2 - 1;
+        return noiseBuf;
+      }
+      function noise(t, dur = 0.05, vol = 0.12, { freq = 2400, q = 0.8, type = 'bandpass', slide = 0, dest = sfx } = {}) {
+        if (!ac) return;
+        const s = ac.createBufferSource(); s.buffer = noiseBuffer(); s.loop = true;
+        const f = ac.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+        if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(40, freq * slide), t + dur);
+        const g = ac.createGain();
+        g.gain.setValueAtTime(vol, t);
+        g.gain.linearRampToValueAtTime(0.0001, t + dur);
+        s.connect(f); f.connect(g); g.connect(dest); s.start(t); s.stop(t + dur + 0.02);
+      }
+      function playBeat(k, t) {
+        const notes = BEATS[scale] || BEATS.major;
+        const n = notes[k % 2];
+        const vol = scale === 'soft' ? 0.16 : 0.22 + 0.1 * density;
+        voice({ freq: midi(n), type: machineId === 'c64' ? 'triangle' : 'square', t, dur: 0.11, vol, slide: 0.7, dest: music, r: 0.06 });
+        if (machineId === 'xl') noise(t, 0.03, 0.04, { freq: 180, q: 1.2, type: 'lowpass', dest: music });
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed beat as one burst.
+        if (nextBeat < ac.currentTime - 0.1) { nextBeat = ac.currentTime + 0.05; beat += 1; }
+        while (nextBeat < ac.currentTime + 0.14) {
+          playBeat(beat, nextBeat);
+          nextBeat += (60 / tempo) * 2;
+          beat += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextBeat = ac.currentTime + 0.05; beat = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+        if (!on) { thrust(false); bird(false); }
+      }
+      function thrust(on) {
+        if (!ac) return;
+        if (on && !thrustSrc) {
+          thrustSrc = ac.createBufferSource(); thrustSrc.buffer = noiseBuffer(); thrustSrc.loop = true;
+          const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = machineId === 'c64' ? 320 : 520; f.Q.value = 0.7;
+          thrustGain = ac.createGain(); thrustGain.gain.setValueAtTime(0.0001, ac.currentTime); thrustGain.gain.linearRampToValueAtTime(0.12, ac.currentTime + 0.06);
+          thrustSrc.connect(f); f.connect(thrustGain); thrustGain.connect(sfx); thrustSrc.start();
+        } else if (!on && thrustSrc) {
+          const src = thrustSrc, g = thrustGain; thrustSrc = null; thrustGain = null;
+          g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.04);
+          try { src.stop(ac.currentTime + 0.25); } catch {}
+        }
+      }
+      function bird(on) {
+        if (!ac) return;
+        if (on && !birdOsc) {
+          birdOsc = ac.createOscillator(); birdOsc.type = machineId === 'c64' ? 'triangle' : 'square';
+          birdGain = ac.createGain(); birdGain.gain.value = 0.0001; birdGain.gain.linearRampToValueAtTime(0.06, ac.currentTime + 0.1);
+          const lfo = ac.createOscillator(); lfo.frequency.value = 7; const lg = ac.createGain(); lg.gain.value = 180;
+          lfo.connect(lg); lg.connect(birdOsc.frequency); birdOsc.frequency.value = 760;
+          birdOsc.connect(birdGain); birdGain.connect(sfx); birdOsc.start(); lfo.start(); birdOsc.lfo = lfo;
+        } else if (!on && birdOsc) {
+          const o = birdOsc, g = birdGain; birdOsc = null; birdGain = null;
+          g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.05);
+          try { o.stop(ac.currentTime + 0.3); o.lfo.stop(ac.currentTime + 0.3); } catch {}
+        }
+      }
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        thrust,
+        bird,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        /** A short noise burst per shot. */
+        shot() { if (!ac) return; noise(ac.currentTime, 0.07, 0.16, { freq: 3200, q: 1.1, slide: 0.35 }); },
+        /** A low crunch per split: filtered noise over a falling saw. */
+        split(size) {
+          if (!ac) return;
+          const t = ac.currentTime;
+          const base = size === 'big' ? 70 : size === 'medium' ? 100 : 150;
+          voice({ freq: base, type: 'sawtooth', t, dur: size === 'big' ? 0.26 : 0.16, vol: 0.2, slide: 0.5, r: 0.08 });
+          noise(t, size === 'big' ? 0.22 : 0.14, 0.14, { freq: size === 'big' ? 420 : 700, q: 0.9, type: 'lowpass', slide: 0.3 });
+        },
+        /** A small log cleared: a short bright tick. */
+        small() { if (ac) voice({ freq: midi(84), type: machineId === 'c64' ? 'triangle' : 'square', dur: 0.05, vol: 0.14, r: 0.03 }); },
+        birdHit() { if (!ac) return; const t = ac.currentTime; [72, 79, 84, 91].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.05, dur: 0.09, vol: 0.18, r: 0.05 })); },
+        loss() { if (!ac) return; const t = ac.currentTime; voice({ freq: 220, type: 'sawtooth', t, dur: 0.5, vol: 0.22, slide: 0.12, r: 0.12 }); noise(t, 0.4, 0.16, { freq: 900, q: 0.6, type: 'lowpass', slide: 0.15 }); },
+        clear() { if (!ac) return; const t = ac.currentTime; [60, 64, 67, 72, 76].forEach((n, i) => voice({ freq: midi(n), type: machineId === 'c64' ? 'triangle' : 'square', t: t + i * 0.07, dur: 0.14, vol: 0.2, r: 0.08 })); },
+        extra() { if (!ac) return; const t = ac.currentTime; voice({ freq: midi(79), type: 'triangle', t, dur: 0.1, vol: 0.2 }); voice({ freq: midi(84), type: 'triangle', t: t + 0.1, dur: 0.22, vol: 0.2, r: 0.1 }); },
+        shield() { if (ac) voice({ freq: midi(67), type: 'triangle', dur: 0.18, vol: 0.14, slide: 1.5, r: 0.08 }); },
+        sio() { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = ac.currentTime; [60, 67, 72, 76, 79, 84].forEach((n, i) => voice({ freq: midi(n), type: machineId === 'c64' ? 'triangle' : 'square', t: t + i * 0.06, dur: 0.12, vol: 0.16, r: 0.1 })); },
+        ready: () => !!ac,
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, done: false, beeped: false }, sim: null,
+      attract: { logs: [], boat: null, rng: makeRng(Date.now() >>> 0) },
+      keys: {}, touches: new Map(), fireTap: 0, fps: 60, fpsAcc: 0, fpsN: 0, loading: 0, flash: 0, shake: 0,
+      msg: '', msgT: 0, msgScale: 3, hintT: 0, played: false, over: false, musicResume: false, resume: null, pendingH: 0, lastFieldIndex: 0,
+    };
+
+    const bounds = () => ({ x0: 0, y0: HUD, x1: W, y1: H });
+    function bootScript() {
+      if (machineId === 'c64') return ['', '    **** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"DRIFTWOOD",8,1', '', 'SEARCHING FOR DRIFTWOOD', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:DRIFTWOOD"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, done: false, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+    }
+    function enterTitle() {
+      G.phase = 'title'; G.t = 0; G.over = false;
+      const a = G.attract;
+      a.boat = makeBoat(W / 2, (HUD + H) / 2);
+      a.boat.heading = -Math.PI / 2 + 0.6;
+      a.logs = buildField(2, bounds(), a.boat, a.rng, { clearance: 50 });
+      audio.setMusic(true);
+    }
+    /** What the mood hands the water this frame. */
+    function tuning() {
+      const label = response.label;
+      const calm = DIALS[mood.dial].unlimitedBalls;
+      return {
+        logSpeed: response.speed,
+        fireRate: label === 'DRIFT' ? 1.8 : response.paddle >= 1.1 ? 1.25 : 1,
+        shield: label === 'DRIFT' ? 4 : 1.4 + 0.6 * response.paddle,
+        extraLogs: label === 'RUSH' ? 2 : label === 'FLOW' ? 1 : 0,
+        bird: calm && label !== 'RUSH' ? 0 : label === 'RUSH' ? 7 : label === 'FLOW' ? 12 : label === 'DAWN' ? 18 : 0,
+      };
+    }
+    function newGame() {
+      G.over = false; G.played = true;
+      beginGame(mood); response = moodResponse(mood);
+      G.sim = createSim({ width: W, top: HUD, height: H, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, lives: DIALS[mood.dial].unlimitedBalls ? Infinity : 3 });
+      G.lastFieldIndex = 0;
+      G.phase = 'play'; G.t = 0;
+      G.hintT = hintsSeen < 3 ? 5 : 0;
+      if (G.hintT) { hintsSeen += 1; save(); }
+      readout.wave.textContent = 'FIELD 1';
+      audio.setMusic(true);
+      announce(COARSE ? 'New game. Left and right thirds turn, lower middle pushes, tap the upper middle to fire.' : 'New game. Arrows or WASD turn and push, space fires.');
+    }
+    function showMsg(text, scale = 3, time = 1.2) { G.msg = text; G.msgScale = scale; G.msgT = time; }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0; G.over = true;
+      if (G.sim.score > best) best = G.sim.score;
+      save(); handMoodToTown();
+      audio.setMusic(false);
+    }
+
+    // ---------- input state ----------
+    function zoneOf(x, y) {
+      // Field thirds: left turns left, right turns right, lower middle pushes, upper middle fires.
+      if (x < W / 3) return 'left';
+      if (x > (2 * W) / 3) return 'right';
+      return y > HUD + (H - HUD) * 0.5 ? 'thrust' : 'fire';
+    }
+    function inputNow() {
+      const held = { left: false, right: false, thrust: false, fire: false };
+      for (const z of G.touches.values()) held[z] = true;
+      const k = G.keys;
+      if (k.ArrowLeft || k.KeyA) held.left = true;
+      if (k.ArrowRight || k.KeyD) held.right = true;
+      if (k.ArrowUp || k.KeyW) held.thrust = true;
+      if (k.Space) held.fire = true;
+      if (G.fireTap > 0) { held.fire = true; }
+      if (G.forced) for (const key of Object.keys(G.forced)) held[key] = !!G.forced[key];
+      return held;
+    }
+
+    // ---------- update ----------
+    function handleEvents(events) {
+      const sim = G.sim;
+      for (const e of events) {
+        switch (e.type) {
+          case 'fire': audio.shot(); break;
+          case 'hit': moodEvent(mood, 'paddle'); buzz(6); break;
+          case 'split': audio.split(e.size); break;
+          case 'small': moodEvent(mood, 'brick'); audio.small(); break;
+          case 'bird':
+            if (e.reason === 'enter') { audio.bird(true); announce('A tide bird crosses.'); }
+            else { audio.bird(false); if (e.reason === 'hit') { moodEvent(mood, 'brick'); audio.birdHit(); showMsg('TIDE BIRD 200', 2, 1); announce('Tide bird, 200.'); } }
+            break;
+          case 'loss':
+            moodEvent(mood, 'loss'); audio.loss(); audio.thrust(false); audio.bird(false); buzz(30);
+            G.flash = 0.35; G.shake = REDUCED ? 0 : 0.25;
+            if (!Number.isFinite(sim.lives)) { showMsg('AGAIN', 3, 0.9); announce('Collision. Back with a shield.'); }
+            else if (sim.lives <= 0) { showMsg('', 3, 0); announce(`Game over. Score ${sim.score}.`); }
+            else { showMsg('BOAT LOST', 3, 0.9); announce(`Collision. ${sim.lives} left.`); }
+            break;
+          case 'again': audio.shield(); break;
+          case 'clear':
+            moodEvent(mood, 'wave'); audio.clear(); audio.bird(false);
+            showMsg(`FIELD ${e.index + 1} CLEAR`, 3, 1.4); announce(`Field ${e.index + 1} clear.`);
+            break;
+          case 'field':
+            if (e.index !== G.lastFieldIndex) { G.lastFieldIndex = e.index; G.loading = 0.6; readout.wave.textContent = `FIELD ${e.index + 1}`; }
+            break;
+          case 'extra': audio.extra(); showMsg('EXTRA BOAT', 3, 1); announce('Extra boat.'); break;
+          case 'over': gameOver(); break;
+          default: break;
+        }
+      }
+    }
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.shake > 0) G.shake -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      if (G.hintT > 0) G.hintT -= dt;
+      if (G.fireTap > 0) G.fireTap -= dt;
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 22) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        return;
+      }
+      if (G.phase === 'title' || G.phase === 'over') {
+        const a = G.attract;
+        for (const l of a.logs) { integrate(l, dt); wrap(l, bounds()); }
+        if (a.boat) { a.boat.heading += 0.35 * dt; }
+        audio.set(96, 'major', 0.2);
+        return;
+      }
+      if (G.phase === 'paused') return;
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      audio.set(response.tempo, response.scale, response.density);
+
+      if (G.phase === 'play' && G.sim) {
+        if (G.pendingH && !G.sim.boat.alive) { applyHeight(G.pendingH); G.pendingH = 0; }
+        const input = inputNow();
+        const events = stepSim(G.sim, dt, input, tuning());
+        audio.thrust(G.sim.boat.alive && input.thrust && G.phase === 'play');
+        handleEvents(events);
+      }
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_MIN) * 4) / 4);
+      // A tall phone gets a taller field, never a shorter one.
+      const nextH = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
+      if (nextH !== H) {
+        // Never shrink the water under a boat in flight; the change lands at the next boat.
+        if (G.phase === 'play' && G.sim && G.sim.boat.alive && nextH < H) G.pendingH = nextH; else { G.pendingH = 0; applyHeight(nextH); }
+      }
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function applyHeight(nextH) {
+      H = nextH;
+      if (G.sim) resizeSim(G.sim, H);
+      for (const l of G.attract.logs) wrap(l, bounds());
+    }
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+    }
+    function lineColor() {
+      const m = M();
+      const label = G.phase === 'play' ? response.label : 'DAWN';
+      if (label === 'FLOW') return mix(m.text, '#ffffff', 0.3);
+      if (label === 'RUSH') return mix(m.text, m.bands.yellow, 0.25 + 0.15 * Math.sin(G.t * 5));
+      if (label === 'DRIFT') return mix(m.text, m.field, 0.3);
+      return m.text;
+    }
+    function glowOn(color, strength) {
+      if (strength <= 0) return;
+      ctx.shadowColor = color; ctx.shadowBlur = strength;
+    }
+    function glowOff() { ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; }
+    function strokePoly(body, color, width = 1) {
+      const pts = worldPoly(body);
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i += 1) { if (i === 0) ctx.moveTo(pts[i][0], pts[i][1]); else ctx.lineTo(pts[i][0], pts[i][1]); }
+      ctx.closePath(); ctx.stroke();
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = G.phase === 'play' ? response.label : 'DAWN';
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.55 : label === 'FLOW' ? 0.28 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
+        const shift = (G.t * speed) % (m.raster.length * h * 2);
+        ctx.globalAlpha = bars;
+        for (let y = -m.raster.length * h * 2; y < cssH + h; y += h) {
+          const idx = Math.floor((y + shift) / h);
+          const k = ((idx % (m.raster.length * 2)) + m.raster.length * 2) % (m.raster.length * 2);
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + (shift % h), cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawWater() {
+      const m = M();
+      ctx.fillStyle = night();
+      ctx.fillRect(0, 0, W, H);
+      // Faint swell lines, slow and dim; still under reduced motion.
+      ctx.strokeStyle = m.text; ctx.globalAlpha = 0.07; ctx.lineWidth = 1;
+      const drift = REDUCED ? 0 : (G.t * 6) % 28;
+      for (let y = HUD + 10 - drift; y < H; y += 28) {
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 12) { const yy = y + Math.sin((x / W) * Math.PI * 4 + (REDUCED ? 0 : G.t * 0.6)) * 2; if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy); }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.45, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    function drawHud() {
+      const m = M();
+      const sim = G.sim;
+      const playing = G.phase === 'play' || G.phase === 'paused' || G.phase === 'over';
+      text(String(playing && sim ? sim.score : 0).padStart(6, '0'), WALL + 2, 8, 3, m.bright);
+      const label = playing ? response.label : 'ATTRACT';
+      const col = !playing ? m.dim : label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? m.text : m.bands.green;
+      text(label, W / 2 + 10, 11, 2, col, 'center');
+      if (playing && sim) {
+        if (!Number.isFinite(sim.lives)) text('CALM', W - WALL - 2, 11, 2, m.text, 'right');
+        else {
+          // Boats in reserve, drawn as tiny outlined hulls.
+          ctx.strokeStyle = m.paddle; ctx.lineWidth = 1;
+          for (let i = 0; i < Math.min(sim.lives, 8); i += 1) {
+            const x = W - WALL - 6 - i * 10, y = 14;
+            ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + 3, y + 3); ctx.lineTo(x - 3, y + 3); ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      ctx.fillStyle = m.text; ctx.globalAlpha = 0.5; ctx.fillRect(WALL, HUD - 2, W - 2 * WALL, 1); ctx.globalAlpha = 1;
+      // mood tape along the top edge
+      if (playing && mood.tape.length) {
+        const n = Math.min(60, mood.tape.length), start = mood.tape.length - n;
+        for (let i = 0; i < n; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(WALL + i * 3, HUD - 6, 2, 2);
+        }
+      }
+    }
+    function drawBoat(boat, color, alpha = 1) {
+      if (!boat || !boat.alive) return;
+      const m = M();
+      ctx.globalAlpha = alpha;
+      strokePoly({ x: boat.x, y: boat.y, angle: boat.heading, poly: BOAT_POLY }, color, 1.2);
+      if (boat.thrusting && !(REDUCED && Math.floor(G.t * 10) % 2)) {
+        // A wake: two short lines off the stern, flickering.
+        const c = Math.cos(boat.heading), s = Math.sin(boat.heading);
+        const len = REDUCED ? 6 : 5 + Math.random() * 5;
+        ctx.strokeStyle = m.paddle; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(boat.x - c * 8 - s * 2, boat.y - s * 8 + c * 2); ctx.lineTo(boat.x - c * (8 + len) - s * 2, boat.y - s * (8 + len) + c * 2);
+        ctx.moveTo(boat.x - c * 8 + s * 2, boat.y - s * 8 - c * 2); ctx.lineTo(boat.x - c * (8 + len) + s * 2, boat.y - s * (8 + len) - c * 2);
+        ctx.stroke();
+      }
+      if (boat.shield > 0) {
+        const blink = boat.shield < 1 && !REDUCED ? (Math.floor(G.t * 8) % 2 === 0) : true;
+        if (blink) { ctx.strokeStyle = m.paddle; ctx.globalAlpha = alpha * 0.7; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(boat.x, boat.y, 12, 0, Math.PI * 2); ctx.stroke(); }
+      }
+      ctx.globalAlpha = 1;
+    }
+    function clipWater() { ctx.save(); ctx.beginPath(); ctx.rect(0, HUD, W, H - HUD); ctx.clip(); }
+    function drawField(alpha) {
+      const m = M();
+      const sim = G.sim;
+      const color = lineColor();
+      clipWater();
+      const glow = G.phase === 'play' && response.label === 'RUSH' ? 6 + 6 * response.glow : 0;
+      ctx.globalAlpha = alpha;
+      if (glow) glowOn(color, glow * scale);
+      for (const log of sim.logs) strokePoly(log, color, log.size === 'big' ? 1.3 : 1);
+      if (sim.bird) {
+        // The bird flaps: its wing vertices move with time.
+        const flap = Math.sin(sim.bird.t * 10) * 3;
+        const poly = sim.bird.poly.map(([x, y], i) => (i === 2 || i === 6 ? [x, y + (y < 0 ? -flap : flap)] : [x, y]));
+        strokePoly({ x: sim.bird.x, y: sim.bird.y, angle: sim.bird.angle, poly }, m.bands.yellow, 1);
+      }
+      glowOff();
+      drawBoat(sim.boat, m.bright, alpha);
+      ctx.fillStyle = m.bright;
+      for (const f of sim.flares) ctx.fillRect(Math.round(f.x) - 1, Math.round(f.y) - 1, 2, 2);
+      for (const p of sim.sparks) {
+        ctx.globalAlpha = alpha * (1 - p.t / p.life) * (REDUCED ? 0.5 : 1);
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), 1.5, 1.5);
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+    function drawAttract(alpha) {
+      const m = M();
+      clipWater();
+      ctx.globalAlpha = alpha;
+      for (const log of G.attract.logs) strokePoly(log, m.text, log.size === 'big' ? 1.3 : 1);
+      ctx.globalAlpha = 1;
+      drawBoat(G.attract.boat, m.bright, alpha);
+      ctx.restore();
+    }
+    function drawHints() {
+      if (G.hintT <= 0 || !G.sim) return;
+      const m = M();
+      const a = Math.min(0.75, G.hintT / 1.5);
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = m.text; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(W / 3, HUD); ctx.lineTo(W / 3, H); ctx.moveTo((2 * W) / 3, HUD); ctx.lineTo((2 * W) / 3, H); ctx.moveTo(W / 3, HUD + (H - HUD) * 0.5); ctx.lineTo((2 * W) / 3, HUD + (H - HUD) * 0.5); ctx.stroke();
+      ctx.setLineDash([]);
+      const mid = HUD + (H - HUD) / 2;
+      if (COARSE) {
+        text('TURN', W / 6, mid - 12, 2, m.text, 'center'); text('LEFT', W / 6, mid + 2, 2, m.text, 'center');
+        text('TURN', (5 * W) / 6, mid - 12, 2, m.text, 'center'); text('RIGHT', (5 * W) / 6, mid + 2, 2, m.text, 'center');
+        text('TAP TO FIRE', W / 2, HUD + 30, 2, m.paddle, 'center');
+        text('HOLD TO PUSH', W / 2, H - 40, 2, m.paddle, 'center');
+      } else {
+        text('ARROWS OR WASD', W / 2, HUD + 30, 2, m.text, 'center');
+        text('TURN AND PUSH', W / 2, HUD + 44, 2, m.text, 'center');
+        text('SPACE FIRES', W / 2, H - 40, 2, m.paddle, 'center');
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, m.text);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10, y, 6, 10); }
+    }
+    function drawTitle() {
+      const m = M();
+      drawAttract(0.35);
+      // The name in the machine's own light blue, outlined pixel by pixel.
+      text('DRIFTWOOD', W / 2, 92, 6, m.text, 'center');
+      text('ASTEROIDS ON THE WATER', W / 2, 150, 2, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 170, 2, m.text, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 186, 2, m.text, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY' : 'TAP OR PRESS SPACE', W / 2, 250, 2, m.paddle, 'center');
+      if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 280, 2, m.bright, 'center');
+      text('2026 HOYDICH / POINTCAST', W / 2, H - 26, 2, m.dim, 'center');
+    }
+    function drawOver() {
+      const m = M();
+      const sim = G.sim;
+      drawAttract(0.3);
+      text('GAME OVER', W / 2, 118, 5, m.bright, 'center');
+      text(`SCORE ${String(sim.score).padStart(6, '0')}`, W / 2, 172, 2, m.bright, 'center');
+      text(`BEST  ${String(best).padStart(6, '0')}`, W / 2, 188, 2, m.bands.yellow, 'center');
+      text(`FIELDS ${sim.fieldIndex + 1}  PEAK ${mood.peak}`, W / 2, 204, 2, m.text, 'center');
+      text(`LOGS ${sim.hits}  SPLITS ${sim.splits}`, W / 2, 220, 2, m.text, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY AGAIN' : 'TAP OR SPACE TO PLAY AGAIN', W / 2, 262, 2, m.paddle, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      let sx = offX, sy = offY;
+      if (G.shake > 0) { sx += Math.round(rnd(-2, 2)); sy += Math.round(rnd(-2, 2)); }
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, sx * dpr, sy * dpr);
+      if (G.phase === 'boot') { drawBoot(); return; }
+      drawWater();
+      if (G.phase === 'title') { drawTitle(); return; }
+      if (G.phase === 'over') { drawHud(); drawOver(); return; }
+      drawHud();
+      if (G.sim) drawField(1);
+      drawHints();
+      const m = M();
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 200, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 232, 2, m.text, 'center'); }
+      if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 196, G.msgScale, m.bright, 'center');
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        const playing = G.phase === 'play' || G.phase === 'paused';
+        const s = G.sim ? simSummary(G.sim) : null;
+        readout.mood.textContent = `${playing ? response.label : 'ATTRACT'} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${playing ? response.tempo : 96} BPM ${playing ? response.scale.toUpperCase() : 'MAJOR'}`;
+        readout.fps.textContent = `${G.fps} FPS`;
+        readout.vec.textContent = s && playing ? `V ${Math.round(G.sim.boat.vx)},${Math.round(G.sim.boat.vy)} LOGS ${s.logs}` : 'V 0,0';
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return true; }
+      if (G.phase === 'title' || G.phase === 'over') { newGame(); return true; }
+      if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); return true; }
+      return false;
+    }
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      if (action()) return;
+      if (G.phase !== 'play') return;
+      const p = pointerToField(e);
+      const zone = zoneOf(clamp(p.x, 0, W), clamp(p.y, HUD, H));
+      G.touches.set(e.pointerId, zone);
+      // A tap in the fire zone fires at once; held, it keeps firing at the limited rate.
+      if (zone === 'fire') G.fireTap = 0.05;
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!G.touches.has(e.pointerId) || G.phase !== 'play') return;
+      const p = pointerToField(e);
+      G.touches.set(e.pointerId, zoneOf(clamp(p.x, 0, W), clamp(p.y, HUD, H)));
+    });
+    const release = (e) => { G.touches.delete(e.pointerId); };
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('lostpointercapture', release);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      if (t && typeof t.closest === 'function' && t.closest('a, button, input, textarea, select, [contenteditable]')) return;
+      const k = e.code;
+      if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown' || k === 'KeyA' || k === 'KeyD' || k === 'KeyW' || k === 'KeyS') { G.keys[k] = true; e.preventDefault(); audio.unlock(); return; }
+      if (k === 'Space' || k === 'Enter') { e.preventDefault(); if (!action() && k === 'Space' && !e.repeat) { G.keys.Space = true; G.fireTap = 0.05; } return; }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'Digit1') { setMachine('xl'); return; }
+      if (k === 'Digit2') { setMachine('c64'); return; }
+      if (k === 'Digit3') { cycleDial(); }
+    });
+    document.addEventListener('keyup', (e) => { G.keys[e.code] = false; });
+    function clearHeld() { G.keys = {}; G.touches.clear(); G.fireTap = 0; audio.thrust(false); }
+    function togglePause() {
+      if (G.phase === 'play') { G.resume = G.phase; G.phase = 'paused'; clearHeld(); audio.setMusic(false); }
+      else if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearHeld();
+        if (G.phase === 'play') { G.resume = G.phase; G.phase = 'paused'; }
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', clearHeld);
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      G.loading = 0.5;
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      setDial(mood, next); response = moodResponse(mood);
+      if (G.sim && !G.over) {
+        // CALM mid-game lifts the boat count; leaving CALM gives three boats to go on with.
+        if (DIALS[next].unlimitedBalls) G.sim.lives = Infinity;
+        else if (!Number.isFinite(G.sim.lives) || G.sim.lives <= 0) G.sim.lives = 3;
+      }
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}. ${DIALS[next].blurb}`);
+      showMsg(DIALS[next].label, 3, 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    btn.machine.addEventListener('click', () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    btn.dial.addEventListener('click', () => { audio.unlock(); cycleDial(); });
+    btn.sound.addEventListener('click', toggleSound);
+    btn.crt.addEventListener('click', toggleCrt);
+    btn.full.addEventListener('click', toggleFull);
+    if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+    // ?debug exposes the state for the headless smoke check and for QA; it changes nothing on its own.
+    if (new URLSearchParams(location.search).has('debug')) {
+      window.__driftwood = { G, mood, action, cycleDial, setMachine, force: (input) => { G.forced = input; }, response: () => response, dial: () => mood.dial };
+    }
+  }
+</script>
