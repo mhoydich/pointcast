@@ -135,7 +135,7 @@ const dials = Object.values(DIALS);
           <h2>Controls</h2>
           <ul>
             <li>Move the mouse or drag anywhere on the field. Tap or click to serve.</li>
-            <li>Keys: ← → or A D steer, Space serves, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial, 4 toggles 2UP.</li>
+            <li>Keys: ← → or A D steer, Space serves, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial, 4 toggles 2UP; in 2UP the top player steers with J and L and serves with I.</li>
             <li>2UP hands the top paddle to a second person: touch or mouse in the top half of the field steers it, and the house brain steps aside.</li>
             <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
           </ul>
@@ -544,6 +544,8 @@ const dials = Object.values(DIALS);
       // your paddle from keys (pointer sets youX directly)
       const kx = (G.keys.ArrowRight || G.keys.KeyD ? 1 : 0) - (G.keys.ArrowLeft || G.keys.KeyA ? 1 : 0);
       if (kx) { G.youX += kx * 260 * dt; G.pointerDir = kx; }
+      const tx = (G.keys.KeyL ? 1 : 0) - (G.keys.KeyJ ? 1 : 0);
+      if (twoUp && tx) G.house.x += tx * 260 * dt;
       G.youTarget = G.attract ? PADDLE_W : PADDLE_W * response.paddle;
       G.youW += (G.youTarget - G.youW) * Math.min(1, 3 * dt);
       G.youX = clamp(G.youX, WALL + G.youW / 2, W - WALL - G.youW / 2);
@@ -860,9 +862,11 @@ const dials = Object.values(DIALS);
     }
     function steer(e, p) {
       if (G.attract && G.phase === 'title') return;
-      if (topHalf(p)) { G.pointers.set(e.pointerId, 'top'); G.house.x = p.x; return; }
-      if (G.pointers.get(e.pointerId) === 'top') { G.house.x = p.x; return; }
-      G.pointers.set(e.pointerId, 'you');
+      // A held touch or button keeps the paddle it started on; a hovering mouse just follows its half.
+      const held = e.pointerType === 'touch' || e.buttons > 0;
+      const side = held && G.pointers.has(e.pointerId) ? G.pointers.get(e.pointerId) : topHalf(p) ? 'top' : 'you';
+      if (held) G.pointers.set(e.pointerId, side);
+      if (side === 'top') { if (twoUp) G.house.x = p.x; return; }
       if (G.pointerX != null) G.pointerDir = p.x > G.pointerX ? 1 : p.x < G.pointerX ? -1 : G.pointerDir;
       G.pointerX = p.x;
       G.youX = p.x;
@@ -886,6 +890,8 @@ const dials = Object.values(DIALS);
       if (t && typeof t.closest === 'function' && t.closest('a, button, input, textarea, select, [contenteditable]')) return;
       const k = e.code;
       if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'KeyA' || k === 'KeyD') { G.keys[k] = true; e.preventDefault(); audio.unlock(); return; }
+      if (twoUp && (k === 'KeyJ' || k === 'KeyL')) { G.keys[k] = true; audio.unlock(); return; }
+      if (twoUp && k === 'KeyI') { action(true); return; }
       if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(false); return; }
       if (k === 'KeyP') { togglePause(); return; }
       if (k === 'KeyF') { toggleFull(); return; }

@@ -63,7 +63,7 @@ const payload = {
   },
   controls: {
     pointer: 'Move the mouse or drag anywhere on the field to steer your paddle. Tap or click to serve when it is your serve.',
-    keyboard: 'Left/Right or A/D steer, Space serves, P pauses, F toggles full screen, M toggles sound, C toggles the CRT overlay, 1 and 2 switch machines, 3 cycles the dial, 4 toggles 2UP.',
+    keyboard: 'Left/Right or A/D steer, Space serves, P pauses, F toggles full screen, M toggles sound, C toggles the CRT overlay, 1 and 2 switch machines, 3 cycles the dial, 4 toggles 2UP. In 2UP the top player steers with J/L and serves with I.',
     fullscreen: 'The FULL button uses the Fullscreen API on the stage element. iOS Safari lacks it for pages, so the stage fills the viewport instead.',
     mobile: 'Portrait first, 100dvh stage, touch-action none on the field, pauses when the tab is hidden.',
   },
