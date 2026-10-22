@@ -76,6 +76,8 @@
   const tzName = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (_) { return ''; } };
   const localTime = (tz) => { try { return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz || undefined }); } catch (_) { return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } };
   const moodColor = (m) => (MOODS.find(([k]) => k === m) || MOODS[0])[1];
+  const validMood = (m) => (MOODS.some(([k]) => k === m) ? m : 'calm');
+  const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
   const friendById = (id) => state.friends.find((f) => f.id === id);
   const lastMsg = (f) => f.messages[f.messages.length - 1];
   const myName = () => state.me.name || 'NOUN';
@@ -316,7 +318,7 @@
         const id = await fingerprint(m.pub); if (id !== m.id) { toast('SIGIL MISMATCH. LINE CLOSED.'); return hangup(); }
         let fr = friendById(id);
         if (!fr) { fr = { id, name: String(m.name || 'FRIEND').slice(0, 24), pub: m.pub, created: now(), messages: [], ledger: [], trusted: false, unread: 0 }; state.friends.push(fr); }
-        fr.name = String(m.name || fr.name).slice(0, 24); fr.mood = m.mood; fr.tz = m.tz; fr.place = String(m.place || '').slice(0, 32); fr.lastSeen = now();
+        fr.name = str(m.name, 24) || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.place = str(m.place, 32); fr.lastSeen = now();
         peer.friend = fr; save();
         if (!current || current.id !== fr.id) openChat(fr.id); else renderChat();
         pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`);
@@ -328,7 +330,7 @@
       case 'msg': {
         if (!f) return; const ok = await verify(f, m);
         if (f.messages.some((x) => x.id === m.id)) return;
-        f.messages.push({ id: m.id, from: 'them', text: String(m.text || '').slice(0, 4000), ts: Number(m.ts) || now(), mood: m.mood, lt: m.lt, verified: ok, status: 'read' });
+        f.messages.push({ id: String(m.id).slice(0, 40), from: 'them', text: str(m.text, 4000), ts: Number(m.ts) || now(), mood: validMood(m.mood), lt: str(m.lt, 16), verified: ok, status: 'read' });
         if (current !== f) f.unread = (f.unread || 0) + 1; save();
         send({ t: 'ack', id: m.id }); $('draft').hidden = true;
         if (current === f) renderChat(); renderFriends(); blip(false); buzz(12);
@@ -337,7 +339,7 @@
       case 'ack': { if (!f) return; const x = f.messages.find((y) => y.id === m.id); if (x) { x.status = 'read'; save(); if (current === f) renderChat(); } break; }
       case 'react': { if (!f) return; const x = f.messages.find((y) => y.id === m.id); if (x) { x.reaction = String(m.r || '').slice(0, 2); save(); if (current === f) renderChat(); } break; }
       case 'draft': { if (!f || current !== f) return; const d = $('draft'); if (m.text) { d.querySelector('p').textContent = String(m.text).slice(0, 400); d.hidden = false; scrollBottom(); } else d.hidden = true; break; }
-      case 'mood': { if (!f) return; f.mood = String(m.mood || 'calm'); save(); renderAtmo(); renderFriends(); break; }
+      case 'mood': { if (!f) return; f.mood = validMood(m.mood); save(); renderAtmo(); renderFriends(); break; }
       case 'ping': send({ t: 'pong', ts: m.ts }); break;
       case 'pong': peer.rtt = now() - Number(m.ts); renderChatHead(); break;
       case 'tab': {
