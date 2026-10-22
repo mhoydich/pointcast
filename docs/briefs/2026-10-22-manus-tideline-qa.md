@@ -13,7 +13,7 @@ on the page can spend, mint or post.
 - https://pointcast.xyz/tideline.json (must return JSON with `name: "Tideline"`)
 - https://pointcast.xyz/games/ (the catalog should list Tideline under Retro arcade, next to Breakwater)
 - https://pointcast.xyz/play (the play layer should list Tideline)
-- https://pointcast.xyz/b/0726 (the Block receipt)
+- https://pointcast.xyz/b/0727 (the Block receipt)
 
 ## Devices and browsers
 
