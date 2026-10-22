@@ -380,7 +380,11 @@ function wireServe() {
 }
 
 async function main() {
-  wireCourtPrayer(document);
+  try {
+    wireCourtPrayer(document);
+  } catch {
+    /* a blocked browser store must not stop the rest of the page */
+  }
   await loadStatus();
   try {
     const { posts, byHash } = await loadFeed(8);
