@@ -207,8 +207,8 @@ test('cabinet: Lighthouse is in the row, the catalog and the discovery files', (
   assert.equal(catalog[i].family, 'Retro arcade');
   assert.ok(fs.existsSync(path.join(root, 'public/images/lighthouse/og.png')));
   assert.ok(fs.existsSync(path.join(root, 'public/images/lighthouse/cover.svg')));
-  const block = JSON.parse(fs.readFileSync(path.join(root, 'src/content/blocks/0740.json'), 'utf8'));
-  assert.equal(block.id, '0740');
+  const block = JSON.parse(fs.readFileSync(path.join(root, 'src/content/blocks/0745.json'), 'utf8'));
+  assert.equal(block.id, '0745');
   assert.equal(block.channel, 'FD');
   assert.equal(block.media.src, '/images/lighthouse/cover.svg');
   const page = fs.readFileSync(path.join(root, 'src/pages/lighthouse.astro'), 'utf8');
