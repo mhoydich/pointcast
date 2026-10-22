@@ -12,6 +12,14 @@
 - [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737: Lighthouse (Simon), Low Tide (Kaboom!), Morning Route (Paperboy), Sea Glass (Q*bert), Sandcastle (Missile Command); each lights its own cabinet when published — `in-progress`
 - [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
 
+### Sandcastle — hold back the tide (wave two, 2026-10-22)
+
+`/sandcastle`, `/sandcastle.json`, Block 0737, branch `claude/sandcastle-20261022` stacked on #1478. After Missile Command (Atari, 1980, Dave Theurer): six sandcastles, three bucket brigades, wave lines that split, sand bursts that open and close. Rules in `src/lib/sandcastle/shore.mjs`, tests in `tests/sandcastle.test.mjs`. Research note: `docs/notes/2026-10-22-sandcastle-notes.md`.
+
+- [x] (CC) Build the game on the shared font, palettes and mood model: vector beach, throws by tap or by brigade key, ten sand per brigade, bonus per castle and sand, a castle every 10,000, splits and RUSH rogue waves, CALM rebuilds every round and never ends; JSON twin, Block, cover art, discovery, lights its Cabinet Row cabinet — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-sandcastle-qa.md`, log to `docs/manus-logs/2026-10-22-sandcastle.md` — `queued`
+- [ ] (MH/X) Review and merge after #1478; expect small conflicts in the discovery files with the other wave-two PRs — `waiting-on-mh`
+
 ---
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
