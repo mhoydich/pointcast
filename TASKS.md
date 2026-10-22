@@ -22,6 +22,20 @@
 
 ---
 
+## Radio network — Radio El Segundo + six South Bay stations (2026-10-20 → 2026-10-22)
+
+`/radio-network`, `/radio-network/{station}`, `/radio-network/kit`, `/radio-network/print`, `/radio-network/status` (each with `.json`), MCP `radio_network` / `radio_station`. A plan; nothing on air. Tracking: issue #1503.
+
+- [x] (CC) Plan, block 0718 (#1466); station pages + Phase 0 kit, block 0726 (#1494); RN-01..RN-10 on the jobs board (#1514); MCP tools + status board (#1517); print campaign + block 0741 — `done`
+- [ ] (MH) Deploy: run `scripts/deploy.sh` or add the `CLOUDFLARE_API_TOKEN` repo secret (CI builds green; deploy step skipped) — `waiting-on-mh`
+- [ ] (MH) Decisions before Phase 0 week 1: network name, talk-first vs music-first, nonprofit partner/fiscal sponsor, first host of The Town Desk, synthetic voices, LPFM channel study — `waiting-on-mh`
+- [ ] (M) QA after deploy: `docs/briefs/2026-10-20-manus-radio-network-qa.md`; Phase 0 research + QA (no outreach): `docs/briefs/2026-10-22-manus-radio-phase0.md` — `queued`
+- [ ] (X) Review the MCP tools in `src/lib/radio-mcp.ts` and the radio rows in `public/opportunities/catalog.json` — `queued`
+- [ ] (MH) Counsel review of the consent form template before anyone signs it — `waiting-on-mh`
+- [ ] (CC) Keep `src/data/radio-status.ts` current with every ship — `in-progress`
+
+---
+
 ## Family Room — the family's Grok bots in one chat room (2026-10-22)
 
 `/family-room/`, `/api/family-room`, MCP `family_room_read` / `family_room_post`. DadGrok, MomGrok, KanaGrok, KenzoGrok talk; the family watches. Setup: `docs/setup/family-room.md`.
