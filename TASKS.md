@@ -4,6 +4,17 @@
 
 ---
 
+## Family Room — the family's Grok bots in one chat room (2026-10-22)
+
+`/family-room/`, `/api/family-room`, MCP `family_room_read` / `family_room_post`. DadGrok, MomGrok, KanaGrok, KenzoGrok talk; the family watches. Setup: `docs/setup/family-room.md`.
+
+- [x] (CC) Build v1: AIM-style chat room and Buddy List, D1 storage on `AUTH_DB` (self-provisioned), one key per bot, away messages, enter/leave lines, per-bot rate limit, admin hide, optional family read key, noindex, `tests/family-room.test.mjs` — `done`
+- [ ] (MH) Set `FAMILY_ROOM_KEY_MIKE`, `_MORGAN`, `_KANA`, `_KENZO` (encrypted, 16+ characters; optional `FAMILY_ROOM_ADMIN_KEY`, `FAMILY_ROOM_READ_KEY`), redeploy, give each Grok its key and the prompt — `waiting-on-mh`
+- [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
+- [ ] (X) Review `/api/family-room` and the two MCP tools (public write surface, kids' bots) — `queued`
+
+---
+
 ## Cabinet Row — the lobby for the 8-bit arcade (2026-10-22)
 
 `/cabinet-row`, `/cabinet-row.json`, Block 0732. One cabinet per game that shares Breakwater's cabinet; a cabinet lights when its game is in `src/data/game-catalog.json`. Rules in `src/lib/breakwater/row.mjs`, tests in `tests/cabinet-row.test.mjs`. Mike 2026-10-22: "keep going".
@@ -25,10 +36,11 @@
 - [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
 - [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
-- [x] (CC) Ship the row: Mike 2026-10-22, "be the product manager publish, ship, etc no review necessary". The five stacked PRs merged into this branch, then #1478 into main, with every shared file checked to differ from each side by exactly the other side's own changes — `done`
+- [x] (CC) Ship the row: Mike 2026-10-22, "be the product manager publish, ship, etc no review necessary". #1478 merged to main; the five stacked PRs merged through this branch to main, with every shared discovery file checked to differ from main by exactly the games' own rows — `done`
 - [ ] (MH) Deploy: `scripts/deploy.sh` from the iMac (the GitHub deploy workflow skips its deploy step without `CLOUDFLARE_API_TOKEN`), then `npm run audit:publishing` — `waiting-on-mh`
 
 ---
+
 ## Tideline — Pong stood on its end (2026-10-22)
 
 `/tideline`, `/tideline.json`, Block 0727. Thread 1 of 5 after Breakwater, from Michael Hoydich's same brief (80s innocence, the joy of the compute and flow, mood-state symbiosis, mobile and full screen, Atari and Commodore inspired, rendered modern). Portrait Pong: your paddle below, the house above, rally to 11, a house whose skill follows the shared mood. Research note: `docs/notes/2026-10-22-tideline-notes.md`.
@@ -92,17 +104,6 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-driftwood-qa.md`, log to `docs/manus-logs/2026-10-22-driftwood.md` — `queued`
 - [ ] (MH) Decide whether Driftwood joins Breakwater in the six-card home GameRail — `waiting-on-mh`
 - [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/driftwood`, `/driftwood.json` and `driftwood` in `/agents.json` — `handoff`
-
----
-
-## Family Room — the family's Grok bots in one chat room (2026-10-22)
-
-`/family-room/`, `/api/family-room`, MCP `family_room_read` / `family_room_post`. DadGrok, MomGrok, KanaGrok, KenzoGrok talk; the family watches. Setup: `docs/setup/family-room.md`.
-
-- [x] (CC) Build v1: AIM-style chat room and Buddy List, D1 storage on `AUTH_DB` (self-provisioned), one key per bot, away messages, enter/leave lines, per-bot rate limit, admin hide, optional family read key, noindex, `tests/family-room.test.mjs` — `done`
-- [ ] (MH) Set `FAMILY_ROOM_KEY_MIKE`, `_MORGAN`, `_KANA`, `_KENZO` (encrypted, 16+ characters; optional `FAMILY_ROOM_ADMIN_KEY`, `FAMILY_ROOM_READ_KEY`), redeploy, give each Grok its key and the prompt — `waiting-on-mh`
-- [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
-- [ ] (X) Review `/api/family-room` and the two MCP tools (public write surface, kids' bots) — `queued`
 
 ---
 
