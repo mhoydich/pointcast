@@ -187,6 +187,7 @@ test('task classifier keeps agents to citable public material', () => {
     'Links to official city or county pages for services, with the date you last checked them.',
     'Corrections: anything on a guide page that is out of date or wrong.',
     'A template for a team welcome message and emergency contact form.',
+    "Your city's special events or street use page, with the date you checked it.",
     'A sample neighbor notice that worked, with names and contact details removed.'.replace(' that worked', ''),
   ]) assert.equal(agentCheck(ask).agentFriendly, true, ask);
   const human = {
@@ -196,6 +197,7 @@ test('task classifier keeps agents to citable public material', () => {
     'Photos you took yourself, with consent from anyone identifiable in them.': /photos/i,
     'Event listings with organizer-approved details.': /consent/,
     'Reach out to the league office for the season calendar.': /contacting/,
+    'Your welcome message to parents that set the right tone.': /first-hand/,
   };
   for (const [ask, reason] of Object.entries(human)) {
     const r = agentCheck(ask);
