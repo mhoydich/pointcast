@@ -321,13 +321,13 @@ function startCourtPrayer(doc, deps) {
       paint();
       mode = book.pending.length ? 'local' : 'shared';
       setNote(sharedNote(latest));
-      if (!live?.textContent) setLive(`${shown()} prayers offered.`);
+      if (!live?.textContent && shown() > 0) setLive(`${shown()} prayers offered.`);
     } catch {
       if (ticket !== generation) return;
       mode = 'local';
       paint();
       setNote(LOCAL_NOTE);
-      if (!live?.textContent) setLive(`${shown()} prayers offered.`);
+      if (!live?.textContent && shown() > 0) setLive(`${shown()} prayers offered.`);
     }
   }
 

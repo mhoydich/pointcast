@@ -617,6 +617,24 @@ test('a waiting prayer survives a lower server tally until the replay lands', as
   assert.equal(savedBook(storage).server, 1);
 });
 
+test('an empty tally stays quiet until a prayer is offered', async () => {
+  const storage = memoryStorage();
+  const fetchImpl = async () => { throw new Error('offline'); };
+  const { doc, live } = courtDom();
+  wireCourtPrayer(doc, { fetchImpl, storage, AudioContext: null, now: () => 3_000, reducedMotion: true });
+  await waitFor(() => doc.getElementById('pray-note').textContent.includes('browser'));
+  assert.equal(live.textContent, '');
+  assert.equal(digits(doc), '0');
+
+  const storage2 = memoryStorage();
+  const fetchOk = async () => jsonResponse({ ok: true, total: 0, storage: 'd1', approximate: false });
+  const second = courtDom();
+  wireCourtPrayer(second.doc, { fetchImpl: fetchOk, storage: storage2, AudioContext: null, now: () => 3_000, reducedMotion: true });
+  await waitFor(() => second.doc.getElementById('pray-note').textContent.includes('does not reset'));
+  assert.equal(second.live.textContent, '');
+  assert.equal(digits(second.doc), '0');
+});
+
 test('blocked storage does not throw or stop the button', async () => {
   const storage = {
     getItem() { throw new Error('blocked'); },
