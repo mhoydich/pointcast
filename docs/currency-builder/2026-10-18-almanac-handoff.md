@@ -30,10 +30,12 @@ The Nouns are 52 of #0–99, matched by head or accessory: whale (#92) and whale
 - Wildlife notes are earned from outside fences (plovers, least terns), from the path (monarchs) or through public walks and workdays (El Segundo blue, which is federally endangered). Grunion are watched, never taken.
 - Every note carries "design concept · not legal tender · no cash value". No note is sold or redeemed, and none of these words appear: backed, redeemable, invest.
 
+## Security Edition (added 2026-10-19)
+
+The Almanac is now in the Security Edition: 52 more engraved notes, 104 faces at `/currency-builder/security/almanac/{front,back}/{slug}.svg`, also shown on each week's detail page. The serial is `AL` + week + Noun, and the value reads "TWENTY-FOUR OF FIFTY-TWO". Almanac lines run longer than Commons and Barter lines, so `securityFront` now drops a line that needs more than two lines to 16.5 px and lets it take a third. The 280 Commons and Barter faces are byte-identical. `/nouns-money/` and `/nouns-money.json` now count 192 engraved variations.
+
 ## Not done
 
-- The Almanac is not in the Security Edition yet. Adding it means an adapter in `security-edition.mjs`, about 104 more engraved faces.
-- `/nouns-money/` still describes "140 concepts" across Commons and Barter. Add the Almanac there when the photos land.
 - ChatGPT photographs: run `node scripts/almanac-codex-imagegen.mjs` on the Mac.
 
 ## Manus follow-up
