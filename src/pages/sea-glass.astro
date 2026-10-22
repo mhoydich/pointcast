@@ -1,0 +1,1085 @@
+---
+/**
+ * /sea-glass — turn every stone. A cube-hopping pyramid game for PointCast's
+ * cabinet row, after Gottlieb's 1982 Q*bert (Warren Davis and Jeff Lee).
+ *
+ * Directed by Michael Hoydich (2026-10-22): 80s innocence, the joy of the
+ * compute and flow, mood-state symbiosis, mobile and full screen, audio-visual
+ * multimedia, Atari and Commodore inspired, rendered modern. A wave-two thread.
+ *
+ * The playfield is drawn on a canvas from the shared 3x5 pixel font, plain
+ * rects and original sprites; every sound is synthesized in the browser.
+ * Pure logic lives in src/lib/sea-glass (pyramid, sprites) and the shared
+ * src/lib/breakwater modules, covered by tests/sea-glass.test.mjs.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+
+const description = 'A cube-hopping pyramid game with 1980s innocence: a hermit crab turns twenty-eight cubes from sand to sea glass in Atari 800XL or Commodore 64 colors, with bubbles, a gull, two lifebuoys, synthesized chip sound and a mood the game and you keep together. Phone or full screen.';
+const canonical = 'https://pointcast.xyz/sea-glass';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Sea Glass',
+      alternateName: 'Sea Glass: turn every stone',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/sea-glass/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Action puzzle',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Sea Glass', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+---
+
+<BlockLayout
+  title="Sea Glass"
+  description={description}
+  image="/images/sea-glass/og.png"
+  imageAlt="A pyramid of isometric cubes on a blue field, some tops sand and some sea-glass green, with a small hermit crab hopping on top beside the words Sea Glass, turn every stone."
+  themeColor="#2545a8"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/sea-glass.json', title: 'Sea Glass rules, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/sea-glass/og.png',
+    buttons: [
+      { label: 'Play Sea Glass', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="sg" data-sg data-machine="xl" data-crt="on">
+    <div class="sg-stage" data-stage>
+      <header class="sg-bar">
+        <a class="sg-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="sg-name" aria-hidden="true">SEA GLASS</span>
+        <div class="sg-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (1 / 2)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (3)">PLAY</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="sg-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Sea Glass playfield. Tap a corner of the field, or press Q, E, A or D, to hop the crab that way."></canvas>
+        <div class="sg-scan" aria-hidden="true"></div>
+        <noscript><p class="sg-noscript">Sea Glass needs JavaScript to draw the pyramid and make its sounds. The rules and moods are readable at <a href="/sea-glass.json">/sea-glass.json</a>.</p></noscript>
+      </div>
+      <footer class="sg-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>96 BPM</span>
+        <span data-r-wave>PYRAMID 1</span>
+        <span data-r-fps>-- FPS</span>
+        <span data-r-vec>GLASS 0/28</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="sg-notes">
+      <p class="sg-eyebrow">PointCast / Games / Sea Glass</p>
+      <h1>Turn every stone.</h1>
+      <p class="sg-lede">Twenty-eight cubes stacked seven rows high, a hermit crab on top, and every landing turns a cube from sand to sea glass. Turn them all and the shore builds another.</p>
+
+      <div class="sg-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Every cube you turn raises its <strong>energy</strong>, and every full row raises it more. A fall or a hazard lowers its <strong>calm</strong>. Time brings both back toward the dial you set. Four words name where it is.</p>
+          <ul class="sg-moods">
+            <li><b>DAWN</b> warming up. Cool sea glass, a slow major arpeggio, a little more room between bubbles.</li>
+            <li><b>FLOW</b> a run of cubes without a slip. Brighter glass, the music opens up.</li>
+            <li><b>RUSH</b> hot colors, raster bars in the border, a faster tempo, quicker hazards, and in a long run one more bubble.</li>
+            <li><b>DRIFT</b> after losses. The bubbles slow, the gull flies off and stays away, the notes thin out.</li>
+          </ul>
+          <p>Your side is the dial: {dials.map((d, i) => <span><b>{d.label}</b> ({d.id === 'calm' ? 'no game over; a fall puts the crab back on top' : d.id === 'rush' ? 'more bubbles, and two landings per cube sooner' : 'three crabs, an extra crab every 6000 points'}){i < dials.length - 1 ? '; ' : '.'}</span>)} The game relaxes toward it. The mood tape from your session stays in this browser, and when you leave after playing, the game hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'The Graphics 0 blue with a black border and light-blue text. Raw square waves with a noise bite, in the POKEY spirit. A blue READY and a RUN before the pyramid.' : 'The blue field inside a light-blue border. A resonant filter sweep on every voice, in the SID spirit. 38911 BASIC BYTES FREE, then LOAD, then RUN.'}</p>
+          ))}
+          <p>Nothing is emulated and nothing is copied. The crab, the bubble, the gull, the lifebuoys, the music and the palettes were made for this page; there is no arcade character, no speech balloon and no Gottlieb art. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-sea-glass-notes.md">research note on the 1982 original</a>.</p>
+        </article>
+        <article>
+          <h2>The rules</h2>
+          <p>Each landing turns a cube's top: 25 points for sea glass, 15 for the frosted step between. The first pyramids need one landing per cube; later ones need two; later still, landing on finished glass turns it back to sand. Clearing a pyramid scores 1000 plus 250 for each pyramid before it (up to eight), and 50 for each lifebuoy left floating. Bubbles drop in at the top and bounce down at random. The gull follows you; take a lifebuoy with the gull close behind and it follows you off the edge for 500. Hopping off the pyramid, or touching a bubble or the gull, costs a crab.</p>
+          <h2>Controls</h2>
+          <ul>
+            <li>Touch or mouse: tap the quadrant of the field you want to hop toward (top-left is up-left, bottom-right is down-right). Hold to keep hopping.</li>
+            <li>Keys: Q up-left, E up-right, A down-left, D down-right. Arrows turned 45 degrees, as the 1983 home ports did: ↑ up-right, ← up-left, ↓ down-left, → down-right. Hold a key to keep hopping.</li>
+            <li>Space starts, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
+          </ul>
+        </article>
+      </div>
+
+      <footer class="sg-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code on October 22, 2026. Original code, art and synthesized sound; no ROMs, no recordings. Q*bert, Gottlieb and the machine names are mentioned as history and tribute.</p>
+        <p><a href="/cabinet-row">Cabinet Row</a> · <a href="/sea-glass.json">sea-glass.json</a> · <a href="/breakwater">Breakwater</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .sg { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .sg[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .sg-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .sg-stage:fullscreen { height: 100%; min-height: 0; }
+  .sg-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .sg-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .sg-home { color: var(--text); text-decoration: none; font-weight: 700; }
+  .sg-home:hover { color: #fff; }
+  .sg-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .sg-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .sg-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .sg-controls button:hover { background: #1f2456; }
+  .sg-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
+  .sg-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .sg-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .sg-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .sg-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .sg[data-crt='off'] .sg-scan { display: none; }
+  .sg-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .sg-noscript a { color: var(--paddle); }
+  .sg-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .sg-readout span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .sg-readout a { margin-left: auto; flex-shrink: 0; color: var(--text); text-decoration: none; }
+  .sg-readout a:hover { color: #fff; }
+  .sg-stage:fullscreen .sg-readout a { display: none; }
+  .sg-stage:-webkit-full-screen .sg-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .sg-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .sg-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
+  .sg-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .sg-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .sg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .sg-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .sg-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .sg-grid h2 + h2, .sg-grid p + h2, .sg-grid ul + h2 { margin-top: 22px; }
+  .sg-grid p { margin: 0 0 12px; }
+  .sg-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .sg-grid li { margin-bottom: 6px; }
+  .sg-moods { list-style: none; padding: 0; }
+  .sg-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .sg-notes a { color: #a9b9f5; }
+  .sg-notes a:hover { color: #fff; }
+  .sg-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .sg-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .sg-stage { min-height: 0; }
+    .sg-bar { gap: 8px; padding: 6px 10px; }
+    .sg-name { display: none; }
+    .sg-controls { gap: 4px; }
+    .sg-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
+    .sg-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .sg-readout [data-r-vec], .sg-readout [data-r-fps] { display: none; }
+    .sg-grid { grid-template-columns: 1fr; gap: 20px; }
+    .sg-notes { padding: 40px 16px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .sg-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+  import { ROWS, CUBES, KEYMAP, RULES, onPyramid, cubeIndex, screenOf, quadrantDir, createGame, queueHop, stepGame, respawn, nextPyramid, setGameDial, autoDir, posOf, remaining } from '../lib/sea-glass/pyramid.mjs';
+  import { CRAB, BUBBLE, GULL, GULL_FLAP, eachSpritePixel, eachBuoyPixel } from '../lib/sea-glass/sprites.mjs';
+
+  const root = document.querySelector('[data-sg]');
+  if (root) main(root);
+
+  function main(root) {
+    // ---------- geometry (logical pixels) ----------
+    const W = 288, H_MIN = 384, H_MAX = 480, WALL = 8, HUD = 32;
+    let H = H_MIN;
+    // One cube: an 18-pixel half width, a 9-pixel half-height top, 20-pixel sides; one row down is 29.
+    const CW = 18, TH = 9, SH = 20, RY = TH + SH;
+    let X0 = W / 2, Y0 = 84;
+    const LIVES = 3;
+    const STORE = 'sea-glass:v1';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      wave: root.querySelector('[data-r-wave]'),
+      fps: root.querySelector('[data-r-fps]'),
+      vec: root.querySelector('[data-r-vec]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isFinite(settings.best) && settings.best > 0 ? Math.floor(settings.best) : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const toHex = (c) => `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex([0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * t))); };
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+    const unlimited = () => DIALS[mood.dial].unlimitedBalls;
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music;
+      let tempo = 110, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
+      let nextNote = 0, step = 0, timer = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      // A shoreline loop: the same four-chord shapes as the cabinet, voiced a little higher and wider.
+      const PROG = {
+        major: [[62, 66, 69, 74], [59, 62, 66, 71], [55, 59, 62, 67], [57, 61, 64, 69]],
+        bright: [[62, 66, 69, 73], [64, 68, 71, 76], [67, 71, 74, 78], [69, 73, 76, 81]],
+        minor: [[59, 62, 66, 71], [55, 59, 62, 67], [57, 61, 64, 69], [59, 62, 66, 71]],
+        soft: [[62, 69, 74, 78], [55, 62, 67, 71], [59, 66, 71, 74], [57, 64, 69, 73]],
+      };
+      const ARP = [0, 2, 1, 3, 2, 1, 3, 2];
+      const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33, 36];
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = 0.3; music.connect(master);
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      function noise(t, dur = 0.05, vol = 0.12, band = 2400) {
+        if (!ac) return;
+        const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const s = ac.createBufferSource(); s.buffer = buf;
+        const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = band; f.Q.value = 0.8;
+        const g = ac.createGain(); g.gain.value = vol;
+        s.connect(f); f.connect(g); g.connect(sfx); s.start(t);
+      }
+      const bass = () => (machineId === 'c64' ? 'triangle' : 'square');
+      function playStep(s, t) {
+        const chords = PROG[scale] || PROG.major;
+        const chord = chords[Math.floor(s / 16) % chords.length];
+        const idx = s % 16;
+        if (idx % 8 === 0) voice({ freq: midi(chord[0] - 24), type: bass(), t, dur: 0.24, vol: 0.17, dest: music, r: 0.09 });
+        const gate = scale === 'soft' ? 0.32 : 0.5 + density * 0.45;
+        if (idx % 2 === 0 || Math.random() < gate * 0.6) {
+          if (Math.random() < gate) {
+            const n = chord[ARP[idx % ARP.length]] + (scale === 'bright' && idx % 8 === 6 ? 12 : 0);
+            voice({ freq: midi(n), type: machineId === 'c64' ? 'square' : 'triangle', t, dur: scale === 'soft' ? 0.22 : 0.1, vol: scale === 'soft' ? 0.08 : 0.1, dest: music, r: 0.05, detune: machineId === 'xl' ? 5 : 0 });
+          }
+        }
+        if (scale === 'minor' && (idx === 4 || idx === 12)) noise(t, 0.03, 0.05);
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
+        while (nextNote < ac.currentTime + 0.14) {
+          playStep(step, nextNote);
+          nextNote += 60 / tempo / 4;
+          step += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        hop(row) { if (ac) voice({ freq: midi(76 - row * 2), type: machineId === 'c64' ? 'triangle' : 'square', dur: 0.06, vol: 0.12, slide: 1.5, r: 0.03 }); },
+        glass(done, filled) {
+          if (!ac) return;
+          const t = ac.currentTime, n = 62 + PENTA[Math.min(PENTA.length - 1, Math.floor(filled / 2))];
+          voice({ freq: midi(done ? n + 12 : n), type: 'triangle', t, dur: 0.14, vol: 0.2, r: 0.1 });
+          if (done) voice({ freq: midi(n + 19), type: 'square', t: t + 0.03, dur: 0.06, vol: 0.06, r: 0.06 });
+        },
+        revert() { if (ac) voice({ freq: midi(64), type: 'square', dur: 0.12, vol: 0.14, slide: 0.6, r: 0.05 }); },
+        row(r) { if (!ac) return; const t = ac.currentTime, base = 62 + (6 - r) * 2; [0, 4, 7, 12].forEach((d, i) => voice({ freq: midi(base + d), type: 'square', t: t + i * 0.045, dur: 0.08, vol: 0.12, r: 0.05 })); },
+        fall() { if (!ac) return; voice({ freq: 1400, type: 'square', dur: 0.85, vol: 0.16, slide: 0.12, r: 0.1 }); noise(ac.currentTime + 0.8, 0.25, 0.12, 900); },
+        hit(kind) { if (!ac) return; const t = ac.currentTime; noise(t, kind === 'gull' ? 0.14 : 0.06, 0.16, kind === 'gull' ? 1800 : 3200); voice({ freq: kind === 'gull' ? 520 : 300, type: 'sawtooth', t, dur: 0.3, vol: 0.2, slide: 0.3, r: 0.08 }); },
+        bounce() { if (ac) voice({ freq: 1320, type: 'triangle', dur: 0.03, vol: 0.05, slide: 0.7, r: 0.02 }); },
+        spawn(kind) { if (!ac) return; if (kind === 'gull') { const t = ac.currentTime; voice({ freq: 900, type: 'square', t, dur: 0.12, vol: 0.1, slide: 0.6 }); voice({ freq: 980, type: 'square', t: t + 0.16, dur: 0.16, vol: 0.1, slide: 0.55 }); } else voice({ freq: 600, type: 'triangle', dur: 0.08, vol: 0.08, slide: 1.8, r: 0.03 }); },
+        buoy() { if (!ac) return; const t = ac.currentTime; [60, 64, 67, 72, 76, 79, 84].forEach((n, i) => voice({ freq: midi(n), type: 'triangle', t: t + i * 0.09, dur: 0.1, vol: 0.13, r: 0.05 })); },
+        lure() { if (!ac) return; const t = ac.currentTime; voice({ freq: 900, type: 'square', t, dur: 0.6, vol: 0.12, slide: 0.2 }); [79, 84, 88].forEach((n, i) => voice({ freq: midi(n), type: 'triangle', t: t + 0.4 + i * 0.08, dur: 0.12, vol: 0.16 })); },
+        clear() { if (!ac) return; const t = ac.currentTime; [62, 66, 69, 74, 78, 81, 86].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.07, dur: 0.14, vol: 0.16, r: 0.08 })); },
+        extra() { if (!ac) return; const t = ac.currentTime; voice({ freq: midi(79), type: 'triangle', t, dur: 0.1, vol: 0.2 }); voice({ freq: midi(86), type: 'triangle', t: t + 0.1, dur: 0.22, vol: 0.2, r: 0.1 }); },
+        key() { if (ac) voice({ freq: 1800, type: 'square', dur: 0.012, vol: 0.05, r: 0.01 }); },
+        sio() { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = ac.currentTime; [62, 69, 74, 78, 81, 86].forEach((n, i) => voice({ freq: midi(n), type: 'triangle', t: t + i * 0.06, dur: 0.12, vol: 0.16, r: 0.1 })); },
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, total: 0, beeped: false }, game: null, attract: true,
+      score: 0, lives: LIVES, particles: [], flash: 0, shake: 0, msg: '', msg2: '', msgT: 0, loading: 0,
+      keys: {}, keyOrder: [], hold: null, cause: null, pendingOver: false, resume: null, musicResume: false, played: false,
+      fps: 60, fpsAcc: 0, fpsN: 0, attractClock: 0,
+    };
+
+    function bootScript() {
+      if (machineId === 'c64') return ['', '**** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"SEA GLASS",8,1', '', 'SEARCHING FOR SEA GLASS', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:SEAGLASS"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+    }
+    function enterTitle() {
+      G.phase = 'title'; G.t = 0; G.attract = true; G.attractClock = 0;
+      G.game = createGame({ dial: 'play' });
+      G.hold = null;
+      audio.setMusic(true);
+    }
+    function newGame() {
+      G.attract = false; G.played = true; G.pendingOver = false; G.particles = [];
+      G.lives = LIVES;
+      beginGame(mood); response = moodResponse(mood);
+      G.game = createGame({ dial: mood.dial });
+      G.phase = 'play'; G.t = 0;
+      showMsg('PYRAMID 1', RULES[G.game.pyr.rule].label, 1.4);
+      syncWave();
+      audio.setMusic(true);
+      announce(`New game. ${COARSE ? 'Tap a corner of the field' : 'Press Q, E, A or D'} to hop.`);
+    }
+    function showMsg(text, sub = '', time = 1.2) { G.msg = text; G.msg2 = sub; G.msgT = time; }
+    function syncWave() {
+      const g = G.game;
+      if (!g) return;
+      readout.wave.textContent = `PYRAMID ${g.level + 1} ${RULES[g.pyr.rule].label}`;
+    }
+
+    // ---------- the mood steers the hazards ----------
+    function tune() {
+      const g = G.game;
+      return {
+        speed: response.speed * (response.label === 'DRIFT' ? 0.8 : 1) * (1 + 0.04 * Math.min(g.level, 10)),
+        generosity: response.paddle,
+        gull: response.label !== 'DRIFT',
+        bubbleCap: Math.min(4, 1 + Math.floor(g.level / 3) + (mood.dial === 'rush' ? 1 : 0) + (response.label === 'RUSH' ? 1 : 0) + (response.multiball ? 1 : 0)),
+      };
+    }
+
+    function spawnParticles(x, y, colors, n) {
+      for (let i = 0; i < n; i += 1) G.particles.push({ x, y, vx: rnd(-70, 70), vy: rnd(-120, -20), life: rnd(0.35, 0.8), t: 0, color: colors[i % colors.length] });
+      if (G.particles.length > 220) G.particles.splice(0, G.particles.length - 220);
+    }
+
+    function handle(ev) {
+      const g = G.game, m = M();
+      for (const e of ev) {
+        switch (e.type) {
+          case 'color': {
+            if (e.delta > 0) {
+              if (!G.attract) { moodEvent(mood, 'paddle'); buzz(6); }
+              audio.glass(e.done, CUBES - remaining(g.pyr));
+              spawnParticles(px(screenOf(e.r, e.c).x), py(e.r), e.done ? [m.bands.green, glassAlt(), m.bright] : [m.bright, m.text], REDUCED ? 2 : 2 + Math.round(8 * response.density));
+            } else audio.revert();
+            break;
+          }
+          case 'row':
+            if (!G.attract) moodEvent(mood, 'brick');
+            audio.row(e.r);
+            break;
+          case 'land': audio.hop(e.r); break;
+          case 'bounce': audio.bounce(); break;
+          case 'spawn': audio.spawn(e.kind); break;
+          case 'buoy': audio.buoy(); announce('Lifebuoy. Back to the top.'); break;
+          case 'lure': audio.lure(); showMsg('GULL LURED', '+500', 1.1); announce('The gull followed you off the edge. 500 points.'); break;
+          case 'gull-away': announce('The gull flies off.'); break;
+          case 'extra':
+            if (!G.attract && !unlimited()) { G.lives += 1; audio.extra(); showMsg('EXTRA CRAB', '', 1); announce('Extra crab.'); }
+            break;
+          case 'clear':
+            if (G.attract) { G.phase = 'title'; G.attractClock = -1.2; break; }
+            moodEvent(mood, 'wave'); audio.clear(); G.phase = 'clear'; G.t = 0;
+            showMsg(`PYRAMID ${g.level + 1} CLEAR`, `BONUS ${e.bonus}`, 1.7);
+            announce(`Pyramid ${g.level + 1} clear. Bonus ${e.bonus}.`);
+            break;
+          case 'fall':
+          case 'hit':
+            if (G.attract) break;
+            loseCrab(e.type === 'fall' ? 'fall' : e.kind);
+            break;
+          default: break;
+        }
+      }
+    }
+
+    function loseCrab(cause) {
+      moodEvent(mood, 'loss');
+      G.cause = cause; G.phase = 'lost'; G.t = 0; G.hold = null;
+      G.flash = cause === 'fall' ? 0 : 0.3; G.shake = REDUCED || cause === 'fall' ? 0 : 0.22;
+      buzz(30);
+      if (cause === 'fall') audio.fall(); else audio.hit(cause);
+      const word = cause === 'fall' ? 'SPLASH' : cause === 'gull' ? 'SQUAWK' : 'POP';
+      if (unlimited()) { showMsg(word, 'AGAIN', 1.1); announce(`${word.toLowerCase()}. Again.`); return; }
+      G.lives -= 1;
+      // Decided now, so a dial change during the pause cannot undo a final loss.
+      if (G.lives <= 0) { G.pendingOver = true; showMsg(word, '', 1.1); announce(`Game over. Score ${G.game.score}.`); }
+      else { showMsg(word, `${G.lives} ${G.lives === 1 ? 'CRAB' : 'CRABS'} LEFT`, 1.1); announce(`Crab lost. ${G.lives} left.`); }
+    }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0;
+      if (G.game.score > best) best = G.game.score;
+      save(); handMoodToTown();
+      audio.setMusic(false);
+    }
+
+    // ---------- update ----------
+    function heldDir() {
+      for (let i = G.keyOrder.length - 1; i >= 0; i -= 1) if (G.keys[G.keyOrder[i]]) return KEYMAP[G.keyOrder[i]];
+      if (G.hold && G.hold.t > 0.32) return G.hold.dir;
+      return null;
+    }
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.shake > 0) G.shake -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      if (G.hold) G.hold.t += dt;
+      for (const p of G.particles) { p.t += dt; p.vy += 260 * dt; p.x += p.vx * dt; p.y = Math.min(H, p.y + p.vy * dt); }
+      G.particles = G.particles.filter((p) => p.t < p.life);
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 16) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        return;
+      }
+      if (G.phase === 'title') {
+        // Attract: the autopilot hops a quiet pyramid with no hazards, and starts another when it is done.
+        G.attractClock += dt;
+        audio.set(100, 'major', 0.25);
+        if (G.attractClock < 0) return;
+        if (G.game.cleared) { G.game = createGame({ dial: 'play', level: (G.game.level + 1) % 3 }); }
+        const k = G.game.crab;
+        if (k.state === 'idle' && k.rest <= 0 && G.attractClock > 0.6) { const d = autoDir(G.game); if (d) queueHop(G.game, d); G.attractClock = 0.3; }
+        handle(stepGame(G.game, dt, { gull: false, bubbleCap: 0 }));
+        return;
+      }
+      if (G.phase === 'paused' || G.phase === 'over') return;
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      audio.set(response.tempo, response.scale, response.density);
+
+      if (G.phase === 'lost') {
+        if (G.t > 1.1) {
+          if (G.pendingOver) { G.pendingOver = false; gameOver(); return; }
+          respawn(G.game, { top: G.cause === 'fall', generosity: response.paddle });
+          G.phase = 'play'; G.t = 0;
+        }
+        return;
+      }
+      if (G.phase === 'clear') {
+        if (G.t > 1.7) {
+          nextPyramid(G.game, response.paddle);
+          G.phase = 'play'; G.t = 0;
+          showMsg(`PYRAMID ${G.game.level + 1}`, RULES[G.game.pyr.rule].label, 1.4);
+          syncWave();
+        }
+        return;
+      }
+      if (G.phase === 'play') {
+        const k = G.game.crab;
+        const d = heldDir();
+        if (d && k.state === 'idle' && k.rest <= 0) queueHop(G.game, d);
+        handle(stepGame(G.game, dt, tune()));
+      }
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    const px = (x) => X0 + x * 2 * CW;
+    const py = (y) => Y0 + y * RY;
+    function layout() {
+      // Room for the HUD and the "change to" row above, and the messages below; a tall field centers the pyramid.
+      Y0 = 84 + Math.floor((H - H_MIN) * 0.45);
+      for (const p of G.particles) p.y = Math.min(p.y, H);
+    }
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_MIN) * 4) / 4);
+      // A tall phone gets a taller field, never a shorter one. Applied at once: the pyramid lives in cube units.
+      H = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
+      layout();
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (qx, qy, sz) => ctx.fillRect(qx, qy, sz, sz));
+    }
+    function rainbowText(str, x, y, s, colors) {
+      const w = textWidth(str, s);
+      const ox = Math.round(x - w / 2);
+      for (let i = 0; i < str.length; i += 1) {
+        ctx.fillStyle = colors[i % colors.length];
+        eachPixel(str[i], ox + i * 4 * s, y, s, (qx, qy, sz) => ctx.fillRect(qx, qy, sz, sz));
+      }
+    }
+    const glassAlt = () => M().raster[4];
+    // In-field words: the machine's text color lifted halfway to white, at least 4.5:1 on both fields.
+    const soft = () => mix(M().text, '#ffffff', 0.5);
+    function moodTint(base) {
+      const m = M();
+      if (G.attract) return base;
+      const label = response.label;
+      if (label === 'FLOW') return mix(base, '#ffffff', 0.2);
+      if (label === 'RUSH') return mix(base, m.raster[0], REDUCED ? 0.25 : 0.2 + 0.12 * (1 + Math.sin(G.t * 6)));
+      if (label === 'DRIFT') return mix(base, m.field, 0.3);
+      return base;
+    }
+    function topColor(state, target, r, c) {
+      const m = M();
+      const glass = (r + c) % 2 ? m.bands.green : glassAlt();
+      if (state >= target) {
+        if (G.phase === 'clear' && !REDUCED) return m.raster[(Math.floor(G.t * 10) + r + c) % m.raster.length];
+        return moodTint(glass);
+      }
+      if (state > 0) return mix(m.bright, glass, 0.35);
+      return m.bands.yellow;
+    }
+    function diamond(cx, cy, color) {
+      ctx.fillStyle = color;
+      for (let dy = -TH; dy < TH; dy += 1) {
+        const half = Math.round(CW * (1 - Math.abs(dy + 0.5) / TH));
+        if (half > 0) ctx.fillRect(cx - half, cy + dy, half * 2, 1);
+      }
+    }
+    function drawCube(r, c, state, target) {
+      const m = M();
+      const cx = Math.round(px(screenOf(r, c).x)), cy = Math.round(py(r));
+      ctx.fillStyle = mix(m.text, m.field, 0.35);
+      for (let i = 0; i < CW; i += 1) ctx.fillRect(cx - CW + i, cy + Math.round((TH * i) / CW), 1, SH);
+      ctx.fillStyle = mix(m.field, '#000000', 0.5);
+      for (let i = 0; i < CW; i += 1) ctx.fillRect(cx + i, cy + Math.round(TH * (1 - i / CW)), 1, SH);
+      diamond(cx, cy, topColor(state, target, r, c));
+      if (state >= target) {
+        // A glint on finished glass, brighter with the mood's glow.
+        const a0 = ctx.globalAlpha;
+        ctx.globalAlpha = a0 * (0.45 + 0.5 * (G.attract ? 0.4 : response.glow));
+        ctx.fillStyle = m.bright;
+        ctx.fillRect(cx - 7, cy - 2, 3, 1); ctx.fillRect(cx - 5, cy - 3, 2, 1);
+        ctx.globalAlpha = a0;
+      }
+    }
+    function drawPyramid(alpha = 1) {
+      const p = G.game.pyr;
+      const a0 = ctx.globalAlpha;
+      ctx.globalAlpha = alpha;
+      for (let r = 0; r < ROWS; r += 1) for (let c = 0; c <= r; c += 1) drawCube(r, c, p.cubes[cubeIndex(r, c)], p.target);
+      ctx.globalAlpha = a0;
+    }
+    // Sprites are drawn two logical pixels to the art pixel, so the crab reads on a phone.
+    const SP = 2;
+    function sprite(rows, x, y, colors, flip, alpha = 1) {
+      const a0 = ctx.globalAlpha;
+      const ox = Math.round(x), oy = Math.round(y);
+      for (const [ch, col] of Object.entries(colors)) {
+        if (!col) continue;
+        ctx.globalAlpha = a0 * alpha * (ch === 'f' ? 0.3 : 1);
+        ctx.fillStyle = col;
+        eachSpritePixel(rows, 0, 0, (qx, qy, k) => { if (k === ch) ctx.fillRect(ox + qx * SP, oy + qy * SP, SP, SP); }, flip);
+      }
+      ctx.globalAlpha = a0;
+    }
+    const crabColors = () => { const m = M(); return { S: mix(m.bands.orange, '#000000', 0.25), s: m.paddle, B: m.bands.red, k: mix(m.bands.red, '#ffffff', 0.3), '|': m.bands.red, e: '#101018' }; };
+    function drawCrab(x, y, face, alpha = 1) { sprite(CRAB, x - 14, y - 18, crabColors(), face < 0, alpha); }
+    function drawBubble(x, y, alpha = 1) { const m = M(); sprite(BUBBLE, x - 8, y - 15, { o: m.ball, h: m.bright, f: m.raster[4] }, false, alpha); }
+    function drawGull(x, y, face, flap, alpha = 1) { const m = M(); sprite(flap ? GULL_FLAP : GULL, x - 12, y - 19, { H: m.bright, w: mix(m.bright, m.field, 0.25), g: mix(m.bright, '#000000', 0.55), e: '#101018', y: m.bands.orange }, face < 0, alpha); }
+    function drawBuoy(x, y) {
+      const m = M();
+      const bob = REDUCED ? 0 : Math.round(Math.sin(G.t * 2.4 + x) * 1.2);
+      eachBuoyPixel(Math.round(x) - 12, Math.round(y) - 6 + bob, (qx, qy, seg) => { ctx.fillStyle = seg ? m.bands.red : m.bright; ctx.fillRect(qx, qy, 1, 1); }, 24, 12);
+    }
+    function drawBuoys() {
+      for (const b of G.game.pyr.buoys) if (!b.used) { const s = screenOf(b.r, b.c); drawBuoy(px(s.x), py(s.y) + 2); }
+    }
+    function entityXY(e) {
+      const p = posOf(e);
+      return { x: px(p.x), y: py(p.y) - p.lift * 10, p };
+    }
+    function drawHazards(behind) {
+      for (const h of G.game.hazards) {
+        const fell = h.state === 'fall';
+        if (behind !== (fell && h.kind === 'gull')) continue;
+        let { x, y } = entityXY(h);
+        let alpha = 1;
+        const c = h.clock || 0;
+        if (fell) { y += c * c * 260; alpha = Math.max(0, 1 - c / 1.2); }
+        if (h.state === 'away') { y -= c * 120; x += c * 60 * (h.face || 1); alpha = Math.max(0, 1 - c / 1.2); }
+        if (h.state === 'drop' && h.kind === 'bubble') alpha = Math.min(1, 0.4 + h.t / h.dur);
+        if (h.kind === 'bubble') drawBubble(x, y, alpha);
+        else drawGull(x, y, h.face, h.state === 'hop' || h.state === 'away' || h.state === 'drop' || (h.state === 'fall' && Math.floor(c * 10) % 2 === 0), alpha);
+      }
+    }
+    function drawCrabNow(behind) {
+      const k = G.game.crab;
+      if (k.state === 'ride' && k.ride) {
+        if (behind) return;
+        const s = screenOf(k.ride.r, k.ride.c);
+        const q = Math.min(1, k.ride.t / k.ride.dur), e = q * q * (3 - 2 * q);
+        const x = px(s.x + (0 - s.x) * e), y = py(s.y + (-1.4 - s.y) * e) + 2;
+        drawBuoy(x, y);
+        drawCrab(x, y - 2, k.face);
+        return;
+      }
+      const fellBack = k.state === 'fall' && (k.dir === 'ul' || k.dir === 'ur');
+      if (behind !== fellBack) return;
+      let { x, y } = entityXY(k);
+      if (k.state === 'fall') y += G.t * G.t * 300;
+      const blink = G.phase === 'lost' && G.cause !== 'fall' && Math.floor(G.t * 8) % 2 === 1;
+      if (blink && !REDUCED) return;
+      drawCrab(x, Math.min(y, H + 20), k.face, blink ? 0.5 : 1);
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = G.attract ? 'DAWN' : response.label;
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.34 : label === 'DAWN' ? 0.12 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
+        const shift = (G.t * speed) % (m.raster.length * h * 2);
+        ctx.globalAlpha = bars;
+        // Color index and pixel offset both come from `base` and `f`, so the bars never snap backward.
+        const f = shift % h, base = shift - f, period = m.raster.length * 2;
+        for (let y = -period * h; y < cssH + h; y += h) {
+          const idx = Math.round((y - base) / h);
+          const k = ((idx % period) + period) % period;
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + f, cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawField() {
+      const m = M();
+      ctx.fillStyle = m.field;
+      ctx.fillRect(0, 0, W, H);
+      // The shore below the pyramid: foam dashes drifting one way, one color, offset from a single value.
+      const foam = py(ROWS) + 14;
+      if (foam < H - 6) {
+        const drift = REDUCED ? 0 : (G.t * 9) % 24;
+        ctx.fillStyle = m.dim;
+        for (let row = 0; row < 3; row += 1) {
+          const y = foam + row * 9;
+          if (y > H - 4) break;
+          for (let x = -24 + ((drift + row * 8) % 24); x < W; x += 24) {
+            const x0 = Math.max(0, Math.round(x)), x1 = Math.min(W, Math.round(x) + 10);
+            if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, 1);
+          }
+        }
+      }
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.45, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    function drawHud() {
+      const m = M();
+      const g = G.game;
+      text(String(g.score).padStart(6, '0'), WALL + 2, 8, 3, m.bright);
+      const label = response.label;
+      const col = label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? soft() : m.bands.green;
+      text(label, W / 2 + 10, 11, 2, col, 'center');
+      if (unlimited()) text('CALM', W - WALL - 2, 11, 2, soft(), 'right');
+      else {
+        ctx.fillStyle = m.bands.red;
+        for (let i = 0; i < Math.min(G.lives, 6); i += 1) { const x = W - WALL - 2 - (i + 1) * 9; ctx.fillRect(x, 13, 7, 3); ctx.fillStyle = m.paddle; ctx.fillRect(x + 1, 10, 4, 3); ctx.fillStyle = m.bands.red; }
+      }
+      ctx.fillStyle = m.text; ctx.globalAlpha = 0.5; ctx.fillRect(WALL, HUD - 2, W - 2 * WALL, 1); ctx.globalAlpha = 1;
+      if (mood.tape.length) {
+        const n = Math.min(60, mood.tape.length), start = mood.tape.length - n;
+        for (let i = 0; i < n; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(WALL + i * 3, HUD - 6, 2, 2);
+        }
+      }
+      // "Change to": the target top, and the rule.
+      text('TO', WALL + 2, HUD + 8, 2, soft());
+      const tx = WALL + 2 + textWidth('TO', 2) + 16;
+      const tcy = HUD + 13;
+      ctx.fillStyle = m.bands.green;
+      for (let dy = -5; dy < 5; dy += 1) { const half = Math.round(10 * (1 - Math.abs(dy + 0.5) / 5)); if (half > 0) ctx.fillRect(tx - half, tcy + dy, half * 2, 1); }
+      text(RULES[g.pyr.rule].label, W - WALL - 2, HUD + 8, 2, soft(), 'right');
+    }
+    function drawTouchGuides() {
+      // Faint corner chevrons: the four quadrants a tap can pick.
+      if (!COARSE || G.phase !== 'play') return;
+      const m = M();
+      ctx.globalAlpha = 0.4; ctx.fillStyle = m.text;
+      const corners = [[WALL + 6, HUD + 30, -1, -1], [W - WALL - 6, HUD + 30, 1, -1], [WALL + 6, H - 12, -1, 1], [W - WALL - 6, H - 12, 1, 1]];
+      for (const [x, y, sx, sy] of corners) {
+        for (let i = 0; i < 6; i += 1) { ctx.fillRect(x - sx * i, y, 2, 2); ctx.fillRect(x, y - sy * i, 2, 2); }
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawPlay() {
+      drawHud();
+      drawCrabNow(true); drawHazards(true);
+      drawPyramid(1);
+      drawBuoys();
+      drawHazards(false); drawCrabNow(false);
+      for (const p of G.particles) {
+        ctx.globalAlpha = 1 - p.t / p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+      drawTouchGuides();
+      const m = M();
+      const my = Math.min(H - 40, py(ROWS) + 6);
+      if (G.phase === 'paused') {
+        text('PAUSED', W / 2, my, 4, m.bright, 'center');
+        text(COARSE ? 'TAP TO RESUME' : 'P OR SPACE TO RESUME', W / 2, my + 26, 2, m.paddle, 'center');
+      } else if (G.msgT > 0 && G.msg) {
+        text(G.msg, W / 2, my, 3, m.bright, 'center');
+        if (G.msg2) text(G.msg2, W / 2, my + 22, 2, m.paddle, 'center');
+      }
+    }
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, m.text);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10, y, 6, 10); }
+    }
+    function drawControlsCard(y) {
+      const m = M();
+      // A little cube with the four hops at its corners.
+      const cx = W / 2, cy = y + 20;
+      diamond(cx, cy, m.bands.yellow);
+      ctx.fillStyle = m.bright;
+      for (let i = 0; i < 8; i += 1) { ctx.fillRect(cx - 24 - i * 2, cy - 12 - i, 2, 1); ctx.fillRect(cx + 22 + i * 2, cy - 12 - i, 2, 1); ctx.fillRect(cx - 24 - i * 2, cy + 12 + i, 2, 1); ctx.fillRect(cx + 22 + i * 2, cy + 12 + i, 2, 1); }
+      if (COARSE) {
+        text('TAP A CORNER', W / 2, y - 12, 2, m.bright, 'center');
+        text('UP-LEFT', WALL + 4, y - 4, 2, m.bright); text('UP-RIGHT', W - WALL - 4, y - 4, 2, m.bright, 'right');
+        text('DOWN-LEFT', WALL + 4, y + 36, 2, m.bright); text('DOWN-RIGHT', W - WALL - 4, y + 36, 2, m.bright, 'right');
+        text('HOLD TO KEEP HOPPING', W / 2, y + 54, 2, soft(), 'center');
+      } else {
+        text('Q OR LEFT', WALL + 4, y - 4, 2, m.bright); text('E OR UP', W - WALL - 4, y - 4, 2, m.bright, 'right');
+        text('A OR DOWN', WALL + 4, y + 36, 2, m.bright); text('D OR RIGHT', W - WALL - 4, y + 36, 2, m.bright, 'right');
+        text('OR CLICK A CORNER', W / 2, y + 54, 2, soft(), 'center');
+      }
+    }
+    function drawTitle() {
+      const m = M();
+      ctx.globalAlpha = 0.22; drawPyramid(0.22); drawBuoys(); drawCrabNow(false); ctx.globalAlpha = 1;
+      const top = 36 + Math.floor((H - H_MIN) * 0.3);
+      rainbowText('SEA GLASS', W / 2, top, 6, [m.bands.green, m.raster[4], m.bands.yellow, m.bright]);
+      text('TURN EVERY STONE', W / 2, top + 40, 2, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}  DIAL ${DIALS[mood.dial].label}`, W / 2, top + 56, 2, m.bright, 'center');
+      drawControlsCard(top + 98);
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY' : 'CLICK OR PRESS SPACE', W / 2, top + 182, 2, m.paddle, 'center');
+      if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, top + 202, 2, m.bright, 'center');
+      text('2026 HOYDICH / POINTCAST', W / 2, H - 20, 2, soft(), 'center');
+    }
+    function drawOver() {
+      const m = M();
+      drawHud();
+      drawPyramid(0.3);
+      text('GAME OVER', W / 2, 118, 5, m.bright, 'center');
+      text(`SCORE ${String(G.game.score).padStart(6, '0')}`, W / 2, 172, 2, m.bright, 'center');
+      text(`BEST  ${String(best).padStart(6, '0')}`, W / 2, 188, 2, m.bands.yellow, 'center');
+      text(`PYRAMIDS ${G.game.level}  PEAK ${mood.peak}`, W / 2, 204, 2, soft(), 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY AGAIN' : 'CLICK OR SPACE TO PLAY AGAIN', W / 2, 256, 2, m.paddle, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      let sx = offX, sy = offY;
+      if (G.shake > 0) { sx += Math.round(rnd(-2, 2)); sy += Math.round(rnd(-2, 2)); }
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, sx * dpr, sy * dpr);
+      if (G.phase === 'boot') { drawBoot(); return; }
+      drawField();
+      if (G.phase === 'title') { drawTitle(); return; }
+      if (G.phase === 'over') { drawOver(); return; }
+      drawPlay();
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        const g = G.game;
+        readout.mood.textContent = `${G.attract ? 'ATTRACT' : response.label} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${G.attract ? 100 : response.tempo} BPM ${G.attract ? 'MAJOR' : response.scale.toUpperCase()}`;
+        readout.fps.textContent = `${G.fps} FPS`;
+        readout.vec.textContent = g ? `GLASS ${CUBES - remaining(g.pyr)}/${CUBES}` : 'GLASS 0/28';
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    /** Start, skip or resume. Returns true when it consumed the press. */
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return true; }
+      if (G.phase === 'title' || G.phase === 'over') { newGame(); return true; }
+      if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); return true; }
+      return false;
+    }
+    function hop(dir) {
+      if (G.phase !== 'play' || !G.game) return;
+      queueHop(G.game, dir);
+    }
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      if (action()) return;
+      const p = pointerToField(e);
+      const dir = quadrantDir(p.x, p.y, W / 2, H / 2);
+      G.hold = { dir, t: 0, id: e.pointerId };
+      hop(dir);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      // Sliding a held finger into another quadrant turns the held hop that way.
+      if (!G.hold || G.hold.id !== e.pointerId) return;
+      const p = pointerToField(e);
+      G.hold.dir = quadrantDir(p.x, p.y, W / 2, H / 2);
+    });
+    const release = (e) => { if (G.hold && G.hold.id === e.pointerId) G.hold = null; };
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('lostpointercapture', release);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      const k = e.code;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('input, textarea, select, [contenteditable]')) return;
+        // Enter and Space belong to a focused link or button; hop keys and letters still reach the game from there.
+        if ((k === 'Space' || k === 'Enter') && t.closest('a, button')) return;
+      }
+      if (KEYMAP[k]) {
+        e.preventDefault();
+        if (e.repeat) return;
+        audio.unlock();
+        if (G.phase === 'boot' || G.phase === 'title' || G.phase === 'over' || G.phase === 'paused') { action(); return; }
+        G.keys[k] = true;
+        G.keyOrder = G.keyOrder.filter((x) => x !== k).concat(k);
+        hop(KEYMAP[k]);
+        return;
+      }
+      if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(); return; }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'Digit1') { setMachine('xl'); return; }
+      if (k === 'Digit2') { setMachine('c64'); return; }
+      if (k === 'Digit3') { cycleDial(); }
+    });
+    document.addEventListener('keyup', (e) => { G.keys[e.code] = false; G.keyOrder = G.keyOrder.filter((x) => x !== e.code); });
+    function releaseAll() { G.keys = {}; G.keyOrder = []; G.hold = null; }
+    function togglePause() {
+      if (G.phase === 'play') { G.resume = 'play'; G.phase = 'paused'; releaseAll(); audio.setMusic(false); }
+      else if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        releaseAll();
+        if (G.phase === 'play') { G.resume = 'play'; G.phase = 'paused'; }
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', releaseAll);
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      G.loading = 0.5;
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      setDial(mood, next); response = moodResponse(mood);
+      // The new dial shapes the pyramids still to come; the current one keeps its rule.
+      if (G.game && !G.attract) setGameDial(G.game, next);
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}.`);
+      if (G.phase === 'play' || G.phase === 'title') showMsg(DIALS[next].label, '', 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    // A mouse or touch click leaves focus on the button; hand it back so Space plays again. Keyboard activation keeps focus.
+    const press = (el, fn) => el.addEventListener('click', (e) => { fn(); if (e.detail > 0) el.blur(); });
+    press(btn.machine, () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    press(btn.dial, () => { audio.unlock(); cycleDial(); });
+    press(btn.sound, toggleSound);
+    press(btn.crt, toggleCrt);
+    press(btn.full, toggleFull);
+    if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+  }
+</script>

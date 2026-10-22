@@ -12,6 +12,14 @@
 - [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737: Lighthouse (Simon), Low Tide (Kaboom!), Morning Route (Paperboy), Sea Glass (Q*bert), Sandcastle (Missile Command); each lights its own cabinet when published — `in-progress`
 - [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
 
+### Sea Glass — turn every stone (wave two, 2026-10-22)
+
+`/sea-glass`, `/sea-glass.json`, Block 0736, branch `claude/sea-glass-20261022` stacked on #1478. A cube-hopping pyramid after Gottlieb's 1982 Q*bert, on the shore: 28 cubes from sand to sea glass, bubbles, a gull, two lifebuoys. Logic in `src/lib/sea-glass/{pyramid,sprites}.mjs`, tests in `tests/sea-glass.test.mjs` (including a simulated full game). Research note: `docs/notes/2026-10-22-sea-glass-notes.md`.
+
+- [x] (CC) Build the game on the shared cabinet (font, machines, mood), JSON twin, Block, cover art, catalog entry that lights its cabinet, discovery — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-sea-glass-qa.md`, log to `docs/manus-logs/2026-10-22-sea-glass.md` — `queued`
+- [ ] (X) Review the quadrant tap mapping on small phones and the hazard pacing at pyramid 8 and beyond — `queued`
+
 ---
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
