@@ -42,6 +42,19 @@
 
 ---
 
+## Crosswalk — five lanes to the sand (2026-10-22)
+
+`/crosswalk`, `/crosswalk.json`, Block 0730 (renumbered from 0729 when main took 0725). Thread 4 of 5 from Michael Hoydich's "set up 5 new threads to create more", stacked on Breakwater (`claude/crosswalk-20261022` on `claude/epic-albattani-j8tb06`). Frogger's shape set in El Segundo: sidewalk, five lanes of traffic, median, bike path, sand, four lifeguard towers. Research note: `docs/notes/2026-10-22-crosswalk-notes.md`.
+
+- [x] (CC) Build the game: `src/lib/crosswalk/{field,rules,sprites}.mjs` (lanes on a wrapping track, slot density, hop and collision rules, the crossing clock, scoring, 8x8 rect sprites), the page on the shared font, palettes and mood model from `src/lib/breakwater`, swipe or tap zones on touch, arrows or WASD on keys, a hop blip that rises per row, a horn on a hit, a four-note fanfare at a tower, `tests/crosswalk.test.mjs` with a simulated crossing — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause, still 334 lines), `llms-full.txt`, OG card from the game's own palette and sprites — `done`
+- [ ] (X) Review the traffic density switch (slots only change off screen), the hit box inset, and whether the splash between towers is too harsh for CALM — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-crosswalk-qa.md`, log to `docs/manus-logs/2026-10-22-crosswalk.md` — `queued`
+- [ ] (MH) Decide whether the five sibling cabinets get a shared `/arcade` row or stay as separate pages — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/crosswalk`, `/crosswalk.json` and `crosswalk` in `/agents.json` — `handoff`
+
+---
+
 ## The Loom — append to anything (2026-10-20)
 
 `/loom`, `/api/loom`, `/loom.json`, `/loom/embed.js`, MCP `loom_read` / `loom_append`. Public federated message system: one verb, append(to, message), any address.

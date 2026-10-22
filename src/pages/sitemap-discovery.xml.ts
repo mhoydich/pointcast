@@ -195,6 +195,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/breakwater.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/soft-landing', 'monthly', '0.9'],
   ['https://pointcast.xyz/soft-landing.json', 'monthly', '0.85'],
+  ['https://pointcast.xyz/crosswalk', 'monthly', '0.9'],
+  ['https://pointcast.xyz/crosswalk.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/pmm/', 'weekly', '0.9'],
   ['https://pointcast.xyz/pmm/brand/', 'monthly', '0.7'],
   ['https://pointcast.xyz/nouns-messenger/', 'weekly', '0.9'],

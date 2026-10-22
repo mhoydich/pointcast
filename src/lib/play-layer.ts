@@ -1,7 +1,7 @@
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Cabinet Row, Breakwater, Soft Landing, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Cabinet Row, Breakwater, Soft Landing, Crosswalk, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -28,6 +28,13 @@ export const PLAY_SURFACES = [
     title: 'Soft Landing',
     route: '/soft-landing',
     summary: 'A lunar lander for the 8-bit heart: a vector skyline in Atari 800XL or Commodore 64 blue, a little fuel, pads that pay more the narrower they are, and the same mood Breakwater keeps. Phone or full screen.',
+  },
+  {
+    id: 'crosswalk',
+    code: 'XWK',
+    title: 'Crosswalk',
+    route: '/crosswalk',
+    summary: 'Five lanes to the sand: a Frogger for the El Segundo strand in Atari 800XL or Commodore 64 blue, synthesized chip sound, and the same mood Breakwater keeps. Swipe or arrows.',
   },
   {
     id: 'baseball',
