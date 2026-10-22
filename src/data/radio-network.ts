@@ -8,6 +8,8 @@
  * general and must be checked with an engineer or counsel before acting.
  */
 
+import { RADIO_ASSIGNMENTS, RADIO_ASSIGNMENTS_STATUS } from './radio-roles';
+
 export const RADIO_BASE = 'https://pointcast.xyz/radio-network';
 export const RADIO_PUBLISHED = '2026-10-20';
 export const RADIO_STATUS = 'plan published; nothing on air; every seat open';
@@ -308,6 +310,12 @@ export function buildRadioManifest() {
     revenue: MONEY,
     openDecisions: DECISIONS,
     connections: CONNECTIONS,
+    projectAssignments: {
+      url: `${RADIO_BASE}#assignments`,
+      status: RADIO_ASSIGNMENTS_STATUS,
+      jobsBoard: 'https://pointcast.xyz/jobs/?project=radio',
+      assignments: RADIO_ASSIGNMENTS.map((a) => ({ ...a, url: `${RADIO_BASE}#${a.id}` })),
+    },
     disclaimer:
       'A plan. Nothing is on air, no frequency is held, no host is appointed. Regulatory notes are general; check with a broadcast engineer or counsel before acting.',
     agentProtocol: {
