@@ -179,3 +179,42 @@ test('verified agents are marked, rate limit and unbound store handled', async (
   assert.equal((await post(kv, valid(), { kv: null })).status, 503);
   assert.equal((await call(kv, new Request(base, { method: 'OPTIONS' }))).status, 204);
 });
+
+import { agentCheck, suggestKinds } from '../src/lib/guides-intake/classify.mjs';
+
+test('task classifier keeps agents to citable public material', () => {
+  for (const ask of [
+    'Links to official city or county pages for services, with the date you last checked them.',
+    'Corrections: anything on a guide page that is out of date or wrong.',
+    'A template for a team welcome message and emergency contact form.',
+    'A sample neighbor notice that worked, with names and contact details removed.'.replace(' that worked', ''),
+  ]) assert.equal(agentCheck(ask).agentFriendly, true, ask);
+  const human = {
+    'A sample one-page team agreement (purpose, dues, attendance, captain duties) you have used.': /first-hand/,
+    'Stories of what made your first season succeed or fall apart.': /first-hand/,
+    'How your team handles mixed skill levels and what rotation formats worked.': /first-hand/,
+    'Photos you took yourself, with consent from anyone identifiable in them.': /photos/i,
+    'Event listings with organizer-approved details.': /consent/,
+    'Reach out to the league office for the season calendar.': /contacting/,
+  };
+  for (const [ask, reason] of Object.entries(human)) {
+    const r = agentCheck(ask);
+    assert.equal(r.agentFriendly, false, ask);
+    assert.match(r.reason, reason, ask);
+  }
+  assert.deepEqual(suggestKinds('Public meeting calendars and agenda links'), ['schedule', 'resource']);
+  assert.deepEqual(suggestKinds('Something else entirely'), ['tip', 'resource']);
+});
+
+test('public counts track intern assignment progress', async () => {
+  const kv = memoryKv();
+  const opts = { kv, adminKey: 'k-admin-123', guides: ['new-in-town'], assignments: ['GA-02'] };
+  const call = (body, headers = {}) => handleGuidesIntake(new Request('https://pointcast.xyz/api/guides/intake', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }), opts);
+  const sub = await (await call({ action: 'submit', guide: 'new-in-town', assignment: 'GA-02', kind: 'assignment-work', title: 'Resource links checked', body: 'Checked library, transit and school district links for the newcomer guide.', contributor: { name: 'Ana', kind: 'intern' }, consent: { noPrivateInfo: true, humanReview: true } })).json();
+  let pub = await (await handleGuidesIntake(new Request('https://pointcast.xyz/api/guides/intake'), opts)).json();
+  assert.deepEqual(pub.counts.byAssignment['GA-02'], { accepted: 0, inReview: 1 });
+  await call({ action: 'review', id: sub.id, status: 'accepted', note: 'Thorough and well sourced, thank you.' }, { 'X-Guides-Admin': 'k-admin-123' });
+  pub = await (await handleGuidesIntake(new Request('https://pointcast.xyz/api/guides/intake?guide=new-in-town'), opts)).json();
+  assert.deepEqual(pub.counts.byAssignment['GA-02'], { accepted: 1, inReview: 0 });
+  assert.equal(pub.accepted[0].assignment, 'GA-02');
+});

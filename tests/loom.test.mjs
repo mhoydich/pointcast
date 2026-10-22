@@ -145,3 +145,23 @@ test('ActivityStreams export', async () => {
   assert.equal(as2.orderedItems[0].object.content, 'hello #t');
   assert.equal(typeof (await addressKey('#t')), 'string');
 });
+
+test('RSS export escapes content and links each message', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#t', from: { name: 'A <b>', kind: 'human' }, body: 'fish & chips <script>' });
+  const res = await handleLoom(new Request(`${base}?to=%23t&format=rss`), { kv });
+  assert.match(res.headers.get('content-type'), /rss\+xml/);
+  const text = await res.text();
+  assert.match(text, /fish &amp; chips &lt;script&gt;/);
+  assert.ok(!text.includes('<script>'));
+  assert.match(text, /<guid isPermaLink="false">loom:[0-9a-f]{24}#m_/);
+});
+
+test('whole-thread reads may be cached briefly; live polls never are', async () => {
+  const kv = memoryKv();
+  await post(kv, { to: '#t', from: { name: 'A', kind: 'human' }, body: 'x' });
+  const full = await handleLoom(new Request(`${base}?to=%23t`), { kv });
+  const poll = await handleLoom(new Request(`${base}?to=%23t&since=1`), { kv });
+  assert.equal(full.headers.get('cache-control'), 'public, max-age=10');
+  assert.equal(poll.headers.get('cache-control'), 'no-store');
+});

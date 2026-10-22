@@ -1,0 +1,96 @@
+---
+/**
+ * LoomMargin — every PointCast page carries its own thread on the Loom.
+ *
+ * A thin tab on the right edge of the page. Opening it slides out a margin
+ * with this page's thread (the <pointcast-loom> embed, loaded on first open)
+ * and a link to the full room. Nothing is fetched until someone opens it, so
+ * the tab costs one small inline script per page view and no network.
+ */
+---
+<aside class="pc-loom-margin" data-loom-margin aria-label="The Loom thread for this page">
+  <button type="button" class="pc-loom-tab" data-loom-tab aria-expanded="false" aria-controls="pc-loom-panel">
+    <span aria-hidden="true">◫</span> Loom
+  </button>
+  <div class="pc-loom-panel" id="pc-loom-panel" data-loom-panel hidden>
+    <div class="pc-loom-head">
+      <strong>This page, on the Loom</strong>
+      <button type="button" data-loom-close aria-label="Close the Loom margin">×</button>
+    </div>
+    <p class="pc-loom-dek">Every page has a thread. Append a note here, or open the full room for replies, images, polls and playback.</p>
+    <div data-loom-slot></div>
+    <a class="pc-loom-full" data-loom-full href="/loom">Open the full thread ↗</a>
+  </div>
+</aside>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-loom-margin]');
+    if (!root || root.dataset.ready) return;
+    root.dataset.ready = '1';
+    const tab = root.querySelector('[data-loom-tab]');
+    const panel = root.querySelector('[data-loom-panel]');
+    const here = () => {
+      const c = document.querySelector('link[rel="canonical"]');
+      return (c && c.href) || location.href.split('#')[0];
+    };
+    let loaded = false;
+    const setOpen = (open) => {
+      panel.hidden = !open;
+      tab.setAttribute('aria-expanded', String(open));
+      root.classList.toggle('is-open', open);
+      if (!open) return;
+      root.querySelector('[data-loom-full]').href = '/loom?to=' + encodeURIComponent(here());
+      if (!loaded) {
+        loaded = true;
+        const slot = root.querySelector('[data-loom-slot]');
+        const el = document.createElement('pointcast-loom');
+        el.setAttribute('to', here());
+        el.setAttribute('limit', '6');
+        slot.append(el);
+        if (!customElements.get('pointcast-loom')) {
+          const s = document.createElement('script');
+          s.src = '/loom/embed.js';
+          s.async = true;
+          document.head.append(s);
+        }
+      }
+    };
+    tab.addEventListener('click', () => setOpen(panel.hidden));
+    root.querySelector('[data-loom-close]').addEventListener('click', () => { setOpen(false); tab.focus(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { setOpen(false); tab.focus(); } });
+  })();
+</script>
+
+<style>
+  .pc-loom-margin { position: fixed; right: 0; top: 38vh; z-index: 60; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+  .pc-loom-tab {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    border: 2px solid #141311; border-right: 0; background: #f3eee2; color: #141311;
+    padding: 12px 5px; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    box-shadow: -3px 3px 0 #141311; min-width: 30px;
+  }
+  .pc-loom-tab span { color: #d23c1e; }
+  .pc-loom-tab:focus-visible, .pc-loom-panel button:focus-visible, .pc-loom-full:focus-visible { outline: 2px solid #d23c1e; outline-offset: 2px; }
+  .pc-loom-margin.is-open .pc-loom-tab { display: none; }
+  .pc-loom-panel {
+    position: fixed; top: 12px; right: 12px; bottom: calc(var(--pc-chrome-h, 66px) + 12px);
+    width: min(380px, calc(100vw - 24px)); overflow: auto;
+    background: #fbf8f0; color: #141311; border: 2px solid #141311; box-shadow: 5px 5px 0 #141311; padding: 12px;
+  }
+  .pc-loom-panel[hidden] { display: none; }
+  .pc-loom-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 2px solid #141311; padding-bottom: 6px; }
+  .pc-loom-head strong { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+  .pc-loom-head button { border: 0; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: inherit; min-width: 32px; min-height: 32px; }
+  .pc-loom-dek { font: italic 15px/1.4 'EB Garamond', 'Times New Roman', serif; margin: 8px 0 10px; color: #4a463d; }
+  .pc-loom-full { display: inline-block; margin-top: 10px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #141311; }
+  @media (prefers-color-scheme: dark) {
+    .pc-loom-tab { background: #141411; color: #ece6d6; border-color: #ece6d6; box-shadow: -3px 3px 0 #ece6d6; }
+    .pc-loom-panel { background: #141411; color: #ece6d6; border-color: #ece6d6; box-shadow: 5px 5px 0 #ece6d6; }
+    .pc-loom-head { border-color: #ece6d6; }
+    .pc-loom-dek { color: #bdb6a4; }
+    .pc-loom-full { color: #ece6d6; }
+  }
+  @media (max-width: 640px) { .pc-loom-margin { top: 46vh; } .pc-loom-tab { padding: 9px 3px; font-size: 10px; } }
+  @media print { .pc-loom-margin { display: none; } }
+</style>
