@@ -3,7 +3,10 @@ import contracts from '../../../data/contracts.json';
 import { listProfilePages } from '../../../lib/profile-object.mjs';
 
 export async function getStaticPaths() {
-  const profiles = await listProfilePages(contracts.profile_objects.mainnet);
+  const profiles = await listProfilePages(contracts.profile_objects.mainnet).catch((error) => {
+    console.warn(`[profile cards] indexer unreachable, building with no profile cards: ${error.message}`);
+    return [];
+  });
   return profiles.map((profile) => ({ params: { handle: profile.handle }, props: { profile } }));
 }
 
