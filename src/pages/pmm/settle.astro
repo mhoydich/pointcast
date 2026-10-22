@@ -52,11 +52,12 @@
 </main>
 <script>
   // The pure settle logic lives in public/pmm/settle.js, shared with PMM. Vite cannot bundle files
-  // from public/, so it loads at runtime from its published path.
-  const SETTLE_JS = '/pmm/settle.js';
+  // from public/, so it loads at runtime from its published path. An absolute URL keeps Vite's dev
+  // server from rewriting the import (it appends ?import to root-relative paths, which public/ refuses).
+  const SETTLE_JS = new URL('/pmm/settle.js', location.origin).href;
   main();
   async function main() {
-  const { parseSettleHash, toMutez, formatTez, returnLink } = await import(/* @vite-ignore */ SETTLE_JS);
+  const { parseSettleHash, pendingSettleFor, toMutez, formatTez, returnLink } = await import(/* @vite-ignore */ SETTLE_JS);
   const $ = (id) => document.getElementById(id);
   const tellPmm = (h) => new Promise((resolve) => {
     if (!('BroadcastChannel' in window)) return resolve(false);
@@ -69,12 +70,17 @@
   const req = parseSettleHash(location.hash);
   const say = (text, bad = false) => { $('prompt').textContent = text; $('prompt').classList.toggle('err', bad); };
 
-  if (!req.to) {
-    say('?NO PAYEE ERROR. open this page from a tab in PMM; it needs your friend\'s tz address.', true);
+  // Only a settle this browser's PMM is waiting on: a friend, their shared address, your shared
+  // address, and the one-time nonce PMM saved when you pressed SETTLE. Anything else stays disabled.
+  let saved = null; try { saved = JSON.parse(localStorage.getItem('pmm/v1') || 'null'); } catch (_) {}
+  const gate = pendingSettleFor(req, saved);
+  const WHY = { 'bad-link': 'open this page from SETTLE IN TEZ in a PMM chat.', 'not-a-friend': 'that is not one of your PMM friends.', 'not-their-address': 'this is not your PMM friend\'s address.', 'not-your-address': 'this is not the tez address you shared in PMM.', 'no-pending-settle': 'PMM is not waiting on this settle. press SETTLE IN TEZ again.' };
+  if (req.to) $('to').textContent = req.to;
+  if (!gate.ok) {
+    say('?NOT YOUR PMM FRIEND ERROR. ' + (WHY[gate.reason] || ''), true);
   } else {
-    $('to').textContent = req.to;
+    $('to').textContent = `${req.to} (${gate.name})`;
     if (req.note) { $('note').textContent = req.note; $('note').hidden = false; $('note-label').hidden = false; }
-    if (req.mutez) $('tez').value = formatTez(req.mutez);
     const check = () => { $('send').disabled = toMutez($('tez').value) === null; };
     $('tez').addEventListener('input', check); check();
   }
@@ -82,7 +88,7 @@
   $('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const mutez = toMutez($('tez').value);
-    if (!req.to || mutez === null) return;
+    if (!gate.ok || mutez === null) return;
     $('send').disabled = true; $('tez').disabled = true;
     try {
       say('LOADING WALLET…');
@@ -92,15 +98,16 @@
       const from = await tezos.connectKukaiForSigning();
       if (from === req.to) throw new Error('that is your own address');
       // Your friend only counts a payment from the address you shared with them in PMM.
-      if (req.me && from !== req.me) throw new Error(`connect the wallet for ${req.me}, the address you shared in PMM (this one is ${from})`);
+      if (from !== req.me) throw new Error(`connect the wallet for ${req.me}, the address you shared in PMM (this one is ${from})`);
       const toolkit = await tezos.tezosClient();
       const op = await toolkit.wallet.transfer({ to: req.to, amount: mutez, mutez: true }).send();
-      const back = returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to, from });
+      const back = returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to, from, nonce: req.nonce });
       say(`SENT ${formatTez(mutez)} TEZ. WAITING FOR THE BLOCK…`);
       $('back').innerHTML = '';
-      // Hand the result to the PMM tab still connected to this friend; fall back to a link into PMM.
+      // Hand the result to the PMM tab that pressed SETTLE. Only when none answers, link into PMM.
       const told = await tellPmm(back.split('#')[1]);
-      const a = document.createElement('a'); a.href = back; a.textContent = told ? 'PMM HAS IT. YOU CAN CLOSE THIS TAB.' : 'RUN: BACK TO PMM AND TELL YOUR FRIEND'; $('back').append(a);
+      if (told) { const p = document.createElement('span'); p.textContent = 'PMM HAS IT. RETURN TO YOUR PMM TAB AND CLOSE THIS ONE.'; $('back').append(p); }
+      else { const a = document.createElement('a'); a.href = back; a.textContent = 'RUN: BACK TO PMM AND TELL YOUR FRIEND'; $('back').append(a); }
       const tzkt = document.createElement('a'); tzkt.href = `https://tzkt.io/${op.opHash}`; tzkt.textContent = 'see it on tzkt'; tzkt.rel = 'noopener'; tzkt.target = '_blank';
       $('back').append(document.createElement('br'), tzkt);
       op.confirmation(1).then(() => say(`READY. ${formatTez(mutez)} TEZ LANDED.`)).catch(() => say('SENT. THE BLOCK IS SLOW; PMM CHECKS IT AGAIN LATER.'));
