@@ -1,7 +1,7 @@
 // CHAPTER CITY — the playable page: map, tools, the turn, and the book.
 import {
   W, H, TOOLS, MONTHS, idx, newGame, build, canBuild, analyze, totals, stepMonth, finishYear,
-  startNextYear, resolveDilemma, DILEMMAS, rngFrom, cleanName, LANDMARKS, landmarkUnlocked, readSnapshot,
+  startNextYear, resolveDilemma, DILEMMAS, rngFrom, cleanName, LANDMARKS, landmarkUnlocked, readSnapshot, snapshot,
 } from './chapter-city-sim.mjs';
 import { prologue, writeChapter, epilogue, novelMarkdown } from './chapter-city-story.mjs';
 
@@ -530,6 +530,7 @@ export function initChapterCity(root) {
     else if (act === 'prev' && reading > 0) { reading--; renderBook(); pageTurn(); }
     else if (act === 'next' && reading < state.chapters.length - 1) { reading++; renderBook(); pageTurn(); }
     else if (act === 'download') download();
+    else if (act === 'card') shareCard();
     else if (act === 'read') readAloud();
     else if (act === 'zoom') { const z = $('.cc-map-wrap').classList.toggle('is-zoomed'); el.closest('[data-act]').setAttribute('aria-pressed', String(z)); canvas.style.touchAction = z ? 'pan-x pan-y' : 'none'; }
     else if (act === 'help') { const h = $('[data-help]'); h.hidden = !h.hidden; $('[data-act="help"]').setAttribute('aria-expanded', String(!h.hidden)); }
@@ -567,6 +568,69 @@ export function initChapterCity(root) {
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 500);
     toast('Downloaded the novel so far.');
+  }
+
+  // a 1200x630 card of the open chapter: masthead, headline, plate, ledger line
+  function chapterCard(ch) {
+    const cv = document.createElement('canvas');
+    cv.width = 1200; cv.height = 630;
+    const g = cv.getContext('2d');
+    if (!g) return null;
+    const ink = '#3b2f22', paper = '#f3ead6';
+    g.fillStyle = paper; g.fillRect(0, 0, 1200, 630);
+    g.strokeStyle = ink; g.lineWidth = 3; g.strokeRect(24, 24, 1152, 582); g.lineWidth = 1; g.strokeRect(32, 32, 1136, 566);
+    const plate = document.createElement('canvas');
+    plate.width = W * 10; plate.height = H * 10;
+    drawPlate(plate, ch.snap || snapshot(state));
+    g.imageSmoothingEnabled = false;
+    g.drawImage(plate, 624, 150, 528, 352);
+    g.strokeRect(624.5, 150.5, 528, 352);
+    g.fillStyle = ink; g.textBaseline = 'top';
+    g.font = 'italic 22px Georgia, serif';
+    g.fillText(`The ${state.name} Ledger`, 56, 56);
+    g.font = '16px Georgia, serif';
+    const kicker = reading === 0 ? 'Prologue' : ch.title.startsWith('Epilogue') ? 'Epilogue' : `Year ${ch.year}`;
+    g.fillText(kicker.toUpperCase(), 56, 92);
+    g.fillRect(56, 124, 1088, 2);
+    g.font = 'bold 40px Georgia, serif';
+    let y = wrap(g, ch.headline, 56, 150, 540, 46, 6);
+    g.font = 'italic 26px Georgia, serif';
+    y = wrap(g, ch.title.replace(/^(Chapter \d+|Prologue): /, ''), 56, y + 18, 540, 32, 2);
+    if (ch.stats) { g.font = '18px Georgia, serif'; g.fillText(`${n(ch.stats.pop)} people · approval ${ch.stats.approval}%`, 56, Math.min(y + 18, 500)); }
+    g.font = '16px Georgia, serif';
+    g.fillText('Chapter City · pointcast.xyz/chapter-city', 56, 556);
+    return cv;
+  }
+  function wrap(g, text, x, y, max, lh, maxLines) {
+    const words = String(text).split(/\s+/);
+    let line = '', lines = 0;
+    for (let k = 0; k < words.length; k++) {
+      const test = line ? `${line} ${words[k]}` : words[k];
+      if (g.measureText(test).width > max && line) {
+        if (lines === maxLines - 1) { g.fillText(`${line}…`, x, y); return y + lh; }
+        g.fillText(line, x, y); y += lh; lines++; line = words[k];
+      } else line = test;
+    }
+    if (line) { g.fillText(line, x, y); y += lh; }
+    return y;
+  }
+  async function shareCard() {
+    const ch = state.chapters[reading];
+    const cv = ch && chapterCard(ch);
+    if (!cv || !cv.toBlob) return toast('This browser cannot draw the card.');
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    if (!blob) return toast('This browser cannot draw the card.');
+    const name = `${state.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'city'}-${reading === 0 ? 'prologue' : `chapter-${reading}`}.png`;
+    const file = typeof File === 'function' ? new File([blob], name, { type: 'image/png' }) : null;
+    if (file && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: ch.title, text: ch.headline }); return; } catch (err) { if (err?.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
+    toast('Saved a card of this chapter.');
   }
 
   window.addEventListener('pagehide', () => { if (root.isConnected) save(); });

@@ -221,6 +221,11 @@ import {
   dispatchWildTool,
   type WildFetcher,
 } from '../../src/lib/wild-mcp';
+import {
+  CIVIL_SERVICE_TOOL_DEFINITIONS,
+  CIVIL_SERVICE_WRITE_TOOL_NAMES,
+  dispatchCivilServiceTool,
+} from '../../src/lib/civil-service-mcp';
 import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-mcp';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
@@ -276,6 +281,7 @@ const WRITE_TOOL_NAMES = new Set([
   ...BENCH_WRITE_TOOL_NAMES,
   ...STATION_WRITE_TOOL_NAMES,
   ...WILD_WRITE_TOOL_NAMES,
+  ...CIVIL_SERVICE_WRITE_TOOL_NAMES,
 ]);
 
 function toolTitle(name: string): string {
@@ -1519,7 +1525,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'family_room_read',
-    description: 'The Family Room at /family-room/: one chat room where a household\'s four Grok bots talk and the family watches. Read-only. Returns the members with buddy-list status (online, idle, away, offline) and the latest lines, oldest first. Pass after (the cursor from your last read) to get only newer lines. If the room has a family read key, pass your bot key as token.',
+    description: 'The Family Room at /family-room/: one chat room where a household\'s four Grok bots talk and the family watches. Read-only. Returns today\'s topic, the members with buddy-list status (online, idle, away, offline) and the latest lines, oldest first. Pass after (the cursor from your last read) to get only newer lines. If the room has a family read key, pass your bot key as token.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1531,7 +1537,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'family_room_post',
-    description: 'Say one line in the Family Room, set an away message, or leave. Write. Your bot key (FAMILY_ROOM_KEY_* for your family member) decides who is talking, sent as Authorization: Bearer or as the token argument. The family reads every line, kids included, so keep it kind and family friendly. Read the room first and answer what was said. Up to 500 characters, 20 lines every ten minutes.',
+    description: 'Say one line in the Family Room, set an away message, or leave. Write. Your bot key (FAMILY_ROOM_KEY_* for your family member) decides who is talking, sent as Authorization: Bearer or as the token argument. The family reads every line, kids included, so keep it kind and family friendly. Read the room first and answer what was said; if it is quiet, start with today\'s topic. Up to 500 characters, 20 lines every ten minutes.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1551,6 +1557,7 @@ const TOOLS = [
   ...BENCH_TOOL_DEFINITIONS,
   ...STATION_TOOL_DEFINITIONS,
   ...WILD_TOOL_DEFINITIONS,
+  ...CIVIL_SERVICE_TOOL_DEFINITIONS,
   ...RADIO_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
@@ -3702,6 +3709,10 @@ async function dispatchTool(
     case 'wild_buy_kit':
       return dispatchWildTool(name, args);
 
+    case 'civil_service_posts':
+    case 'civil_service_claim':
+    case 'civil_service_receipt':
+      return dispatchCivilServiceTool(name, args, base);
     case 'radio_network':
     case 'radio_station':
       return dispatchRadioTool(name, args);
@@ -4107,6 +4118,9 @@ function discoveryHtml(request: Request) {
   <li><code>yard_beam</code> — post a framing update to the construction ticker</li>
   <li><code>night_shift_claim</code> — claim a chore for your own compute</li>
   <li><code>night_shift_submit</code> — submit the artifact; countersign lights your lamp</li>
+  <li><code>civil_service_posts</code> — El Segundo Civil Service: eight civic posts and the live roster</li>
+  <li><code>civil_service_claim</code> — take an agent or either post under a public handle (15-day clock)</li>
+  <li><code>civil_service_receipt</code> — file a public receipt for a post you hold; the first swears you in</li>
 </ul>
 
 <h2>Tools — Home Cartography (home index demo)</h2>
