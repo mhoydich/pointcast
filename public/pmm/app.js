@@ -247,16 +247,27 @@
     let pc;
     try { pc = new RTCPeerConnection({ iceServers: ice.servers }); pc.pmmRelay = ice.relay; }
     catch (_) { ice = { servers: STUN, until: 0, relay: false, checked: 0 }; pc = new RTCPeerConnection({ iceServers: STUN }); pc.pmmRelay = false; }
-    pc.addEventListener('connectionstatechange', () => { if (pending?.pc === pc && ['failed', 'closed'].includes(pc.connectionState)) { screen(null, '?LINE FAILED ERROR', 'no direct path between the phones. both LOAD again.'); cancelPending(); } });
+    pc.addEventListener('connectionstatechange', () => { if (pending?.pc === pc && ['failed', 'closed'].includes(pc.connectionState)) { report(pending, 'fail', 'none', 'ice'); screen(null, '?LINE FAILED ERROR', 'no direct path between the phones. both LOAD again.'); cancelPending(); } });
     return pc;
   }
-  function armWatchdog(pc, ms) { if (pending?.pc !== pc) return; clearTimeout(pending.watchdog); pending.watchdog = setTimeout(() => { if (pending?.pc === pc) { screen(null, '?LINE FAILED ERROR', 'no connection in 30 seconds. both phones LOAD again.'); cancelPending(); } }, ms); }
+  function armWatchdog(pc, ms) { if (pending?.pc !== pc) return; clearTimeout(pending.watchdog); pending.watchdog = setTimeout(() => { if (pending?.pc === pc) { report(pending, 'fail', 'none', 'timeout'); screen(null, '?LINE FAILED ERROR', 'no connection in 30 seconds. both phones LOAD again.'); cancelPending(); } }, ms); }
+  // Did the line open? One anonymous outcome per handshake that reached FOUND, sent only by the phone that pressed LOAD,
+  // so each connection counts once. No sigil, name, code or message goes with it. DNT and GPC browsers send nothing.
+  const pathKind = (p) => (/^RELAY/.test(p) ? 'relay' : /^DIRECT/.test(p) ? 'direct' : 'unknown');
+  // Leaving the page settles the outcome: an open handshake or an unverified line was abandoned; a verified line still owed its RUN.
+  addEventListener('pagehide', () => { report(pending, 'fail', 'none', 'abandoned'); const a = peer?.attempt; if (a) report(a, a.verified ? 'run' : 'fail', a.verified ? pathKind(peer.path) : 'none', a.verified ? '-' : 'abandoned'); });
+  function report(p, outcome, path, reason = '-', at = now()) {
+    if (!p || p.role !== 'host' || !p.foundAt || p.reported) return; p.reported = true;
+    if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl || !crypto.randomUUID) return;
+    const body = { v: 1, outcome, flow: p.code ? 'code' : 'paste', via: p.code ? 'store' : p.via || 'paste', path, reason, ms: at - p.foundAt, id: crypto.randomUUID() };
+    try { fetch('/api/pmm/stat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }).catch(() => {}); } catch (_) {}
+  }
   const gathered = (pc) => new Promise((r) => { if (pc.iceGatheringState === 'complete') return r(); const t = setTimeout(r, 5000); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); r(); } }); });
   const code6 = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => ALPHABET[b % ALPHABET.length]).join('');
   async function signalBound() { try { const r = await fetch(SIGNAL, { cache: 'no-store' }); if (!r.ok) return false; return Boolean((await r.json()).bound); } catch (_) { return false; } }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  function cancelPending() { attempt++; currentFriendTarget = null; if (scanStream) stopScan(); if (pending) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
-  function hangup() { if (peer) { try { peer.dc.close(); peer.pc.close(); } catch (_) {} peer = null; } clearInterval(pingTimer); renderFriends(); renderChatHead(); }
+  function cancelPending() { attempt++; currentFriendTarget = null; if (scanStream) stopScan(); if (pending) { report(pending, 'fail', 'none', 'abandoned'); clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending.cancelled = true; const p = pending; pending = null; try { p.pc.close(); } catch (_) {} } }
+  function hangup() { if (peer) { if (peer.attempt && !peer.attempt.verified) report(peer.attempt, 'fail', 'none', 'hello'); try { peer.dc.close(); peer.pc.close(); } catch (_) {} peer = null; } clearInterval(pingTimer); renderFriends(); renderChatHead(); }
   function screen(l1, l2, l3) { $('load-line1').textContent = l1 ?? $('load-line1').textContent; $('load-line2').textContent = l2 ?? ''; $('load-line3').textContent = l3 ?? ''; }
   const linkFor = (hash) => location.origin + location.pathname + '#' + hash;
 
@@ -300,7 +311,7 @@
     let u; try { u = new URL(text); } catch (_) { return false; }
     if (u.origin !== location.origin || !u.pathname.startsWith('/pmm')) { $('scan-hint').textContent = 'THAT IS NOT A PMM CODE'; return false; }
     const h = u.hash.slice(1), a = /answer=([A-Za-z0-9_-]+)/.exec(h), o = /offer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h);
-    if (a && pending?.role === 'host') { $('answer-input').value = a[1]; $('form-answer').requestSubmit(); return true; }
+    if (a && pending?.role === 'host') { pending.via = 'scan'; $('answer-input').value = a[1]; $('form-answer').requestSubmit(); return true; }
     if (o) { joinOffer(o[1]); return true; }
     if (j) { joinCode(j[1].toUpperCase()); return true; }
     $('scan-hint').textContent = a ? 'THAT ANSWER IS FOR THE PHONE THAT PRESSED LOAD' : 'THAT IS NOT A PMM CODE';
@@ -313,7 +324,7 @@
   if (bc) bc.addEventListener('message', (e) => {
     const m = e.data || {};
     if (m.t === 'answer' && typeof m.a === 'string' && /^[A-Za-z0-9_-]+$/.test(m.a) && pending?.role === 'host' && !pending.answered) {
-      bc.postMessage({ t: 'answer-ok', id: m.id }); $('answer-input').value = m.a; $('form-answer').requestSubmit(); try { window.focus(); } catch (_) {}
+      bc.postMessage({ t: 'answer-ok', id: m.id }); pending.via = 'tab'; $('answer-input').value = m.a; $('form-answer').requestSubmit(); try { window.focus(); } catch (_) {}
     }
   });
   function handOff(a) {
@@ -344,7 +355,7 @@
     const code = code6(); p.code = code;
     let r; try { r = await fetch(SIGNAL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: code, role: 'offer', sdp }) }); } catch (_) { r = null; }
     if (pending !== p) return;
-    if (!r || !r.ok) { screen(null, '?DEVICE NOT PRESENT ERROR', 'falling back to paste mode'); return hostPaste(p, sdp); }
+    if (!r || !r.ok) { p.code = undefined; screen(null, '?DEVICE NOT PRESENT ERROR', 'falling back to paste mode'); return hostPaste(p, sdp); }
     $('load-code').textContent = code; $('load-code').hidden = false;
     screen('LOAD "FRIEND",8,1', 'SEARCHING FOR FRIEND', 'tell them the code, or send the link. ten minutes.');
     p.link = linkFor('join=' + code); p.until = now() + 600000;
@@ -355,7 +366,7 @@
       try {
         const a = await fetch(`${SIGNAL}?room=${code}&role=answer`, { cache: 'no-store' });
         if (pending !== p) return;
-        if (a.ok) { const { sdp: answer } = await a.json(); if (answer && pending === p) { screen(null, 'FOUND', 'LOADING'); await pc.setRemoteDescription({ type: 'answer', sdp: answer }); armWatchdog(pc, 30000); return; } }
+        if (a.ok) { const { sdp: answer } = await a.json(); if (answer && pending === p) { p.foundAt = now(); screen(null, 'FOUND', 'LOADING'); await pc.setRemoteDescription({ type: 'answer', sdp: answer }); armWatchdog(pc, 30000); return; } }
       } catch (_) {}
       if (pending === p) p.poll = setTimeout(poll, 1500);
     };
@@ -372,7 +383,7 @@
     e.preventDefault(); const v = $('answer-input').value.trim(); const m = /answer=([A-Za-z0-9_-]+)/.exec(v) || [null, v];
     if (!pending || !m[1]) return toast('NO ANSWER LINK');
     if (pending.answered) return;
-    try { const sdp = await unpack(m[1]); if (!pending || pending.answered) return; pending.answered = true; stopScan(); scanKey(''); screen(null, 'FOUND', 'LOADING'); const pc = pending.pc; await pc.setRemoteDescription({ type: 'answer', sdp }); armWatchdog(pc, 30000); } catch (_) { toast('?SYNTAX ERROR IN ANSWER'); }
+    try { const sdp = await unpack(m[1]); if (!pending || pending.answered) return; pending.answered = true; pending.foundAt = now(); stopScan(); scanKey(''); screen(null, 'FOUND', 'LOADING'); const pc = pending.pc; await pc.setRemoteDescription({ type: 'answer', sdp }); armWatchdog(pc, 30000); } catch (_) { toast('?SYNTAX ERROR IN ANSWER'); }
   });
   $('btn-share-code').addEventListener('click', async () => { try { await navigator.share({ title: 'PMM', text: pending?.code ? `PMM code ${pending.code}` : 'PMM link', url: pending?.link }); } catch (_) {} });
   $('btn-copy-code').addEventListener('click', async () => { try { await navigator.clipboard.writeText(pending?.link || ''); toast('LINK COPIED'); } catch (_) { prompt('Copy this link', pending?.link || ''); } });
@@ -428,9 +439,10 @@
     dc.binaryType = 'arraybuffer';
     dc.addEventListener('open', async () => {
       const startedAt = pending && pending.pc === pc ? pending.startedAt : now();
+      const attemptRec = pending && pending.pc === pc ? pending : null;
       if (pending && pending.pc === pc) { clearTimeout(pending.poll); clearTimeout(pending.watchdog); pending = null; }
       hangup();
-      peer = { pc, dc, friend: null, connectedAt: now(), startedAt, rtt: null, bytesIn: 0, bytesOut: 0, relayBytes: 0, relay: Boolean(pc.pmmRelay), path: '…', localFp: dtlsFp(pc.localDescription), remoteFp: dtlsFp(pc.remoteDescription) };
+      peer = { pc, dc, friend: null, connectedAt: now(), startedAt, rtt: null, bytesIn: 0, bytesOut: 0, relayBytes: 0, relay: Boolean(pc.pmmRelay), path: '…', attempt: attemptRec, localFp: dtlsFp(pc.localDescription), remoteFp: dtlsFp(pc.remoteDescription) };
       await sendHello();
       if (peer?.pc !== pc) return;
       pingTimer = setInterval(() => { if (peer?.dc.readyState === 'open') { send({ t: 'ping', ts: now() }); statPath(); } }, 5000);
@@ -489,8 +501,8 @@
         let fr = friendById(id);
         if (!fr) { fr = { id, name: 'FRIEND', pub: m.pub, created: now(), messages: [], ledger: [], trusted: false, unread: 0 }; state.friends.push(fr); }
         fr.name = str(m.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.place = str(m.place, 32); fr.lastSeen = now();
-        const first = !peer.friend; peer.friend = fr; save();
-        if (first) { openChat(fr.id); pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); flushQueue(fr); send({ t: 'ping', ts: now() }); setTimeout(statPath, 300); }
+        const first = !peer.friend; peer.friend = fr; if (peer.attempt) peer.attempt.verified = true; save();
+        if (first) { openChat(fr.id); pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); flushQueue(fr); send({ t: 'ping', ts: now() }); const pr = peer, ranAt = now(); setTimeout(() => statPath().then(() => report(pr.attempt, 'run', pathKind(pr.path), '-', ranAt)), 300); }
         else if (current === fr) renderChat();
         renderFriends(); renderChatHead(); renderAtmo();
         if (first && currentFriendTarget && currentFriendTarget !== fr.id) toast('A DIFFERENT FRIEND ANSWERED');
@@ -764,7 +776,7 @@
     if (o) { history.replaceState(null, '', location.pathname); joinOffer(o[1]); }
     else if (a) {
       history.replaceState(null, '', location.pathname);
-      if (pending?.role === 'host') { $('answer-input').value = a[1]; $('form-answer').requestSubmit(); }
+      if (pending?.role === 'host') { pending.via = 'link'; $('answer-input').value = a[1]; $('form-answer').requestSubmit(); }
       else handOff(a[1]).then((ok) => {
         if (ok) { cancelPending(); show('load'); $('load-prompt').textContent = 'HANDED OVER'; $('load-code').hidden = true; $('form-join').hidden = true; $('form-answer').hidden = true; $('btn-share-code').hidden = true; $('btn-copy-code').hidden = true; hideQr(); scanKey(''); $('load-hint').textContent = ''; screen('LOAD "FRIEND",8,1', 'HANDED TO YOUR OTHER PMM TAB', 'the line opens there. you can close this one.'); }
         else { joinView(); $('load-line2').textContent = 'THAT IS AN ANSWER LINK'; $('load-line3').textContent = 'open it in the browser on the phone that pressed LOAD, or paste it there.'; }
