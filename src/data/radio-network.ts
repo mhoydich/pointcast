@@ -8,7 +8,7 @@
  * general and must be checked with an engineer or counsel before acting.
  */
 
-import { RADIO_ASSIGNMENTS, RADIO_ASSIGNMENTS_STATUS } from './radio-roles';
+import { RADIO_ASSIGNMENTS, RADIO_ASSIGNMENTS_STATUS } from './radio-roles.ts';
 
 export const RADIO_BASE = 'https://pointcast.xyz/radio-network';
 export const RADIO_PUBLISHED = '2026-10-20';

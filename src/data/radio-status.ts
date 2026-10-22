@@ -60,9 +60,9 @@ const PUBLISHING: Milestone[] = [
     id: 'project-assignments',
     track: 'Publishing',
     title: 'Project assignments on the jobs board',
-    status: 'in progress',
+    status: 'done',
     owner: 'Build agents',
-    note: 'Turning the open seats and Phase 0 tasks into assignments people can pick up. Being built today.',
+    note: 'RN-01 to RN-10 on /radio-network#assignments and /jobs/?project=radio. Educational briefs; applications are not open.',
   },
   {
     id: 'print-campaign',
@@ -167,6 +167,7 @@ export const RISKS = [
 
 export const CHANGELOG = [
   { date: '2026-10-22', shipped: 'Merged to main; CI build green; deploy step skipped (no CLOUDFLARE_API_TOKEN secret), so not yet live.', ref: null },
+  { date: '2026-10-22', shipped: 'Ten project assignments, RN-01 to RN-10, on the plan and the jobs board.', ref: PR(1514) },
   { date: '2026-10-22', shipped: 'Seven station pages, JSON twins and the Phase 0 launch kit.', ref: { block: '0726', ...PR(1494) } },
   { date: '2026-10-20', shipped: 'Network plan published at /radio-network with /radio-network.json.', ref: { block: '0718', ...PR(1466) } },
 ];
