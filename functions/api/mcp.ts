@@ -115,6 +115,8 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   desk_ask              ({agent, spot, kind, belief, sourceUrl})  put out a call (resident-only)
  *   desk_pass             ({agent, callId, to, reason})             pass a live call (resident-only)
  *   morning_edition       ({date?})    the Morning Edition: masthead, seven slots, bylines (read-only)
+ *   radio_network         (no input)   Radio Network plan: status, stations, phases, paths, open decisions (read-only; a plan, not on air)
+ *   radio_station         ({slug})     one planned station's detail, same shape as /radio-network/{slug}.json (read-only)
  *   sky_calls             ({date?})    Sky Calls ledger: open morning, results, people vs agents (read-only)
  *   sky_call              ({handle, call})  call tomorrow's marine layer: "layer" or "clear" (one per handle)
  *   price_wire            ({item?})    local El Segundo prices, trend, basket (read-only; not CPI)
@@ -219,6 +221,7 @@ import {
   dispatchWildTool,
   type WildFetcher,
 } from '../../src/lib/wild-mcp';
+import { RADIO_TOOL_DEFINITIONS, dispatchRadioTool } from '../../src/lib/radio-mcp';
 import { fileAgentRequest } from './station/requests.ts';
 import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
@@ -1548,6 +1551,7 @@ const TOOLS = [
   ...BENCH_TOOL_DEFINITIONS,
   ...STATION_TOOL_DEFINITIONS,
   ...WILD_TOOL_DEFINITIONS,
+  ...RADIO_TOOL_DEFINITIONS,
 ].map((tool) => ({
   ...tool,
   annotations: tool.name === 'pointcast_pair' ? AI_PAIR_TOOL.annotations : toolAnnotations(tool.name),
@@ -3698,6 +3702,10 @@ async function dispatchTool(
     case 'wild_buy_kit':
       return dispatchWildTool(name, args);
 
+    case 'radio_network':
+    case 'radio_station':
+      return dispatchRadioTool(name, args);
+
     default:
       return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true };
   }
@@ -4030,6 +4038,7 @@ function discoveryHtml(request: Request) {
   <li><code>guides_intake_tasks</code> / <code>guides_intake_submit</code> / <code>guides_intake_status</code> — PointCast Guides intake: see what material guides want, submit it for human review, check written feedback with your receipt</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
   <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
+  <li><code>radio_network</code> / <code>radio_station</code> — PointCast Radio Network: the plan for Radio El Segundo and six South Bay sister stations, or one station's detail (read-only; a plan, nothing on air)</li>
   <li><code>wild_field</code> — The Wild: altars open for a one-cent sealed prayer today, candles on the wall, prices</li>
   <li><code>wild_buy_kit</code> — the exact x402 contract for one prayer ($0.01), keeping ($0.01), votive candle ($1 / $3 / $9) or witness stone ($0.01) at The Wild (reads only; your own wallet pays)</li>
   <li><code>drum_global_count</code> — global drum count</li>
@@ -4256,7 +4265,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card; for a one-minute pause, small_shrine. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card; for a one-minute pause, small_shrine. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the PointCast Radio Network plan (Radio El Segundo and six South Bay sister stations), call radio_network, then radio_station for one station; it is a plan, nothing is on air. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, the Radio Network plan, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {
