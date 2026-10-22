@@ -51,6 +51,13 @@ export const PLAY_SURFACES = [
     summary: 'Pong stood on its end: your paddle below, the house above, rally to 11. The house gets sharper or softer with the mood you keep together. Phone or full screen.',
   },
   {
+    id: 'driftwood',
+    code: 'DRFT',
+    title: 'Driftwood',
+    route: '/driftwood',
+    summary: 'Asteroids on the water: a small boat, driftwood logs that split and wrap, no friction, a limited flare rate, a tide bird, and the same mood model as Breakwater. Phone touch zones or full screen.',
+  },
+  {
     id: 'baseball',
     code: 'BALL',
     title: 'A game you can sit inside',

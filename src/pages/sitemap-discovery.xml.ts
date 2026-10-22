@@ -201,6 +201,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/kelp.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/tideline', 'monthly', '0.9'],
   ['https://pointcast.xyz/tideline.json', 'monthly', '0.85'],
+  ['https://pointcast.xyz/driftwood', 'monthly', '0.9'],
+  ['https://pointcast.xyz/driftwood.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/pmm/', 'weekly', '0.9'],
   ['https://pointcast.xyz/pmm/brand/', 'monthly', '0.7'],
   ['https://pointcast.xyz/nouns-messenger/', 'weekly', '0.9'],
