@@ -1,12 +1,61 @@
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Cabinet Row, Breakwater, Soft Landing, Crosswalk, Kelp, Tideline, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
     id: 'games', code: 'PLAY', title: 'PointCast Games', route: '/games/',
     summary: 'Find every game, learn the controls, download a local game pack or online launch kit, and join a friend. Mossbell adds a little animal town with direct peer visits.',
+  },
+  {
+    id: 'cabinet-row',
+    code: 'ROW',
+    title: 'Cabinet Row',
+    route: '/cabinet-row',
+    summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
+  },
+  {
+    id: 'breakwater',
+    code: 'BRK',
+    title: 'Breakwater',
+    route: '/breakwater',
+    summary: 'A breakout for the 8-bit heart: Atari 800XL or Commodore 64 blue, synthesized chip sound, and a mood the game and you keep together. Phone or full screen.',
+  },
+  {
+    id: 'soft-landing',
+    code: 'LAND',
+    title: 'Soft Landing',
+    route: '/soft-landing',
+    summary: 'A lunar lander for the 8-bit heart: a vector skyline in Atari 800XL or Commodore 64 blue, a little fuel, pads that pay more the narrower they are, and the same mood Breakwater keeps. Phone or full screen.',
+  },
+  {
+    id: 'crosswalk',
+    code: 'XWK',
+    title: 'Crosswalk',
+    route: '/crosswalk',
+    summary: 'Five lanes to the sand: a Frogger for the El Segundo strand in Atari 800XL or Commodore 64 blue, synthesized chip sound, and the same mood Breakwater keeps. Swipe or arrows.',
+  },
+  {
+    id: 'kelp',
+    code: 'KELP',
+    title: 'Kelp',
+    route: '/kelp',
+    summary: 'A snake for the 8-bit heart: a strand grows on a 24 by 32 grid between rocks spelled from a pixel font, one note per plankton, the same two machines and the same mood. Swipe or arrows, full screen.',
+  },
+  {
+    id: 'tideline',
+    code: 'TIDE',
+    title: 'Tideline',
+    route: '/tideline',
+    summary: 'Pong stood on its end: your paddle below, the house above, rally to 11. The house gets sharper or softer with the mood you keep together. Phone or full screen.',
+  },
+  {
+    id: 'driftwood',
+    code: 'DRFT',
+    title: 'Driftwood',
+    route: '/driftwood',
+    summary: 'Asteroids on the water: a small boat, driftwood logs that split and wrap, no friction, a limited flare rate, a tide bird, and the same mood model as Breakwater. Phone touch zones or full screen.',
   },
   {
     id: 'baseball',

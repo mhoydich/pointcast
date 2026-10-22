@@ -1,9 +1,10 @@
 /**
- * Security Edition (v2) for every Currency Builder collection: adapts Commons
- * and Global Barter entries to the banknote renderer in ./security.mjs.
+ * Security Edition (v2) for every Currency Builder collection: adapts Commons,
+ * Global Barter and Almanac entries to the banknote renderer in ./security.mjs.
  */
 import { BARTER, region } from './barter.mjs';
 import { COMMONS, theme } from './commons.mjs';
+import { ALMANAC, quarter } from './almanac.mjs';
 import { pad } from './primitives.mjs';
 import { securityFront, securityBack, FEATURES } from './security.mjs';
 import { TYPE_CREDITS } from './type.mjs';
@@ -13,6 +14,7 @@ export const SECURITY_BASE = '/currency-builder/security';
 export const COLLECTIONS = {
   commons: { id: 'commons', name: 'Commons', data: COMMONS, base: '/currency-builder/commons' },
   barter: { id: 'barter', name: 'Global Barter', data: BARTER, base: '/currency-builder/barter' },
+  almanac: { id: 'almanac', name: 'Almanac', data: ALMANAC, base: '/currency-builder/almanac' },
 };
 
 const host = (url) => {
@@ -59,6 +61,26 @@ export function securityNote(collection, entry) {
         heading: `${t.name} · ${trim(t.motto)}`,
         title: entry.name,
         paragraphs: [{ body: entry.line }, { label: 'How it would work', body: entry.how }],
+      },
+    };
+  }
+  if (collection === 'almanac') {
+    const q = quarter(entry.quarter);
+    return {
+      name: entry.name,
+      kicker: `Almanac · ${q.name} · Week ${entry.week}`,
+      line: entry.line,
+      place: entry.when,
+      value: entry.week,
+      unitWord: 'of fifty-two',
+      serial: `AL${entry.code.slice(1)}${pad(entry.nounId, 4)}`,
+      nounId: entry.nounId,
+      palette: q.palette,
+      back: {
+        heading: `${q.name} · ${entry.when}`,
+        title: entry.name,
+        paragraphs: [{ body: entry.line }, { label: 'How it is earned', body: entry.how }],
+        source: host(entry.source_url),
       },
     };
   }
