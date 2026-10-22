@@ -25,7 +25,8 @@
 - [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
 - [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
-- [ ] (MH/X) Review and merge #1478, then the five stacked PRs in any order (#1480, #1481, #1482, #1483, #1484), resolving the discovery-file conflicts as they come; deploy once with `scripts/deploy.sh` — `waiting-on-mh`
+- [x] (CC) Ship the row: Mike 2026-10-22, "be the product manager publish, ship, etc no review necessary". The five stacked PRs merged into this branch, then #1478 into main, with every shared file checked to differ from each side by exactly the other side's own changes — `done`
+- [ ] (MH) Deploy: `scripts/deploy.sh` from the iMac (the GitHub deploy workflow skips its deploy step without `CLOUDFLARE_API_TOKEN`), then `npm run audit:publishing` — `waiting-on-mh`
 
 ---
 ## Tideline — Pong stood on its end (2026-10-22)
