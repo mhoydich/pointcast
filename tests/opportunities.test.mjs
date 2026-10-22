@@ -6,11 +6,14 @@ const data=JSON.parse(readFileSync(new URL('../public/opportunities/catalog.json
 // Keep the original 24 proposals and reviewed xAI snapshot under regression coverage.
 // Additive edition records have their own scope, evidence and rendering suite.
 // Projects added 2026-10-20 (Guides, Light Works, Internship Lab) have their own test below.
+// Radio Network assignments (2026-10-22) also have their own test below.
 const ADDED_PROJECTS=['guides','light-works','internship-lab'];
+const LATER_PROJECTS=['radio','civil-service'];
 const added=data.opportunities.filter(r=>ADDED_PROJECTS.includes(r.project));
 // El Segundo Civil Service posts (2026-10-22) are projected from src/data/civil-service.ts and tested below.
 const civil=data.opportunities.filter(r=>r.project==='civil-service');
-const rows=data.opportunities.filter(r=>!ADDED_PROJECTS.includes(r.project)&&r.project!=='civil-service'&&(r.origin!=='external'||r.id==='external-xai-grok-imagine-5244173007'));
+const radio=data.opportunities.filter(r=>r.project==='radio');
+const rows=data.opportunities.filter(r=>![...ADDED_PROJECTS,...LATER_PROJECTS].includes(r.project)&&(r.origin!=='external'||r.id==='external-xai-grok-imagine-5244173007'));
 const internal=rows.filter(r=>r.origin!=='external');
 const external=rows.find(r=>r.origin==='external');
 import {jobsShell} from '../src/lib/opportunities-shell.mjs';
@@ -142,4 +145,16 @@ test('civil-service posts stay closed here, unpaid, and point at their own sign-
  }
  assert.equal(selectRows(data.opportunities,readState('?project=civil-service')).length,CIVIL_SERVICE_POSTS.length);
  assert.equal(readState('?project=civil-service').project,'civil-service');
+});
+test('2026-10-22 radio network assignments stay proposed, closed to applications and linked to /radio-network',()=>{
+ assert.equal(radio.length,10);
+ assert.deepEqual(radio.map(r=>r.id),Array.from({length:10},(_,i)=>`radio-rn-${String(i+1).padStart(2,'0')}`));
+ for(const r of radio){
+  assert.equal(r.origin,undefined);assert.equal(r.status,'proposed');assert.equal(r.applicationsEnabled,false);
+  assert.equal(r.availabilityVerifiedAt,null);assert.equal(r.compensationKind,'unresolved');assert.equal(canApply(r),false);
+  assert.equal(r.sourceUrl,'https://pointcast.xyz/radio-network#assignments');assert.equal(externalApplicationLink(r),null);
+  assert.match(r.title,/^RN-\d{2} · /);assert.match(r.terms,/Applications are not open/);assert.match(r.terms,/hiring entity/);
+ }
+ assert.equal(selectRows(data.opportunities,readState('?project=radio')).length,10);
+ assert.equal(selectRows(data.opportunities,readState('?site=intern&project=radio')).length,10);
 });
