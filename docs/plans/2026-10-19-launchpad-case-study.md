@@ -1,13 +1,13 @@
 # Launchpad case study: build plan v2
 
-**Date:** 2026-10-19 · **Status:** plan; Stage A built as PRs #1452–#1455 (§8.2, updated 2026-10-20) · **Replaces:** the 2026-10-11 plan (a session draft, not kept in the repo) · **Checked against:** `origin/main` at `5754e498` (2026-10-19 15:55 PT, #1444); Stage A was re-tested merged onto `00129fd2` (2026-10-20, #1457), which touches no launchpad path
+**Date:** 2026-10-19 · **Status:** plan; Stage A merged as PRs #1452–#1455 (§8.2); A1 built (§8.8, updated 2026-10-20) · **Replaces:** the 2026-10-11 plan (a session draft, not kept in the repo) · **Checked against:** `origin/main` at `5754e498` (2026-10-19 15:55 PT, #1444); Stage A was re-tested merged onto `00129fd2` (2026-10-20, #1457), which touches no launchpad path
 
 ## 0. Summary
 
 - **What.** A simulated coin launchpad in the Pump.fun pattern, written up as a UES business case study (case 06), separate from Currency Builder and Nouns Money. Anyone in the simulation can launch a coin in one step. The coin trades on a constant-product bonding curve over virtual liquidity. When the curve sells out, the coin graduates: its liquidity moves into a constant-product pool and the LP is burned. Around the curve sit a screener, a portfolio view, a creator view and a console for bots that trade only through a policy gate. Everything runs on play credits: no value, may reset.
 - **Where.** `/case-studies/launchpad/` with a `/case-studies/launchpad.json` twin, listed as case 06 in `src/data/ues-business-cases.json` once the route ships. The code goes in `src/lib/launchpad/`. The page is not under `/currency-builder/` and not linked from the Currency Builder masthead unless Mike decides otherwise (§2, §10).
 - **Stages.** Stage A is an in-browser deterministic simulator with no backend; it can ship first. Stage B is an optional shared play market on devnet-2 and waits on Mike's yes. Stage C is described as teaching material and is not scheduled.
-- **Build status.** Stage A merges to `main` as four PRs: this plan (#1452), then 1a.1 engine (#1453), 1a.2 simulation (#1454) and 1b page (#1455). A merge alone does not put it on pointcast.xyz; that takes a `scripts/deploy.sh` run (`docs/OPERATIONS.md`). §8.2 records what changed from this plan while building it.
+- **Build status.** Stage A merged to `main` on 2026-10-20 as four PRs: this plan (#1452), then 1a.1 engine (#1453), 1a.2 simulation (#1454) and 1b page (#1455). A1, the full board, follows in its own PR (§8.8). A merge alone does not put anything on pointcast.xyz; that takes a `scripts/deploy.sh` run (`docs/OPERATIONS.md`). §8.2 and §8.8 record what changed from this plan while building it.
 - **Main changes from v1:**
   1. PR 1 branches from a fresh `origin/main`. Currency Builder, the Security Edition (creative v2) and `nounArt(id, { layers })` have been on main since #1416 (2026-10-14). The `gracious-fermi` branch is superseded.
   2. The page leaves the Nouns Money brand. Coins show plain Noun portraits marked SIMULATED, not Nouns Money note faces (they are the same 100 Nouns as the Nouns Money designs, so Mike decides that overlap, §2.3, open question 3). There is no graduation certificate by default. Public copy passes the Nouns Money "Never use" list.
@@ -757,6 +757,8 @@ Each test file ships in the PR that ships the code it reads (§8): `launchpad-cu
     - 'src/pages/case-studies/launchpad/**'
     - 'src/components/launchpad/**'
     - 'src/styles/launchpad.css'
+    - 'src/styles/launchpad/**'                         # added in A1
+    - 'src/scripts/launchpad/**'                        # added in A1
     - 'src/lib/nouns-money/honest-copy.mjs'
     - 'src/lib/nouns-money/chain-copy.mjs'        # NM_STANDARD_LINE / NM_REPLACEMENT_LINE
     - 'src/lib/currency-builder/primitives.mjs'   # coin art: nounArt
@@ -779,6 +781,62 @@ Each test file ships in the PR that ships the code it reads (§8): `launchpad-cu
 - Run `npm run build:bare` and `npm run audit:agents` locally before opening each PR. Run `npm run audit:publishing` before recommending any publish path; deploys go only through `scripts/deploy.sh` (`docs/OPERATIONS.md`).
 - **Deploy owner.** `scripts/deploy.sh` deploys from `~/pc-deploy` and logs to `~/Library/Logs/` (macOS paths, `scripts/deploy.sh:42-44`), so Mike, or Claude Code on the iMac, runs it after each merge; it is not run from a cloud session. After the deploy that publishes the page, the same person walks the town with `npm run inspect:town -- --write` and files the report in the next PR (`docs/OPERATIONS.md` §4).
 - **Each PR checklist:** files changed, build and test results, remaining risk and any Manus follow-up, as `CLAUDE.md` asks; and after merge, remove the PR's worktree and delete its `dist/` (§8.1).
+
+### 8.8 A1 as built (2026-10-20)
+
+The full board replaces PR 1b's live board. The exhibits above it do not change.
+
+- **Shell** (`src/scripts/launchpad/app.mjs`):
+  - Owns one run, its clock and its settings. The settings are run, rules, approvals and speed (1×, 10×, 100× or 1,000×). The defaults are Snipe war, naked rules, Ask me and 10×.
+  - Repaints every 150 ms while playing.
+  - Routes `#/c/<coin>` and `#/replay/<payload>`, including a link pasted into an open tab.
+  - Mounts six views, each with its own module and stylesheet: screener, coin drawer with trade panel, Create, Portfolio, Bots & approvals, and Creator.
+  - Every viewer action goes through `ctx.actions.record` into the human action log (§8.4) and applies at the next tick. A pending line names what the next Step applies.
+- **Records** (§8.4):
+  - `trade` gains an optional `priorityFeeBps`: whole bps, up to `LIMITS.maxPriorityFeeBps`.
+  - `split` sets a coin's creator payout split once: up to 10 recipients, summing to 10,000 bps.
+  - `checkRecord` accepts a `policy` patch only with primitive values and only with the keys the console edits: `maxPerTrade`, `approvalAbove`, `maxPositionBps`, `cooldownTicks`, `maxSlippageBps` and `windowCap.amount`/`ticks`.
+  - It accepts a `launch` preset or rules only as an own key of the config.
+- **Replay links** (`src/lib/launchpad/replay.mjs`):
+  - The payload is base64url JSON `{ v: 1, scenario, seed, rules, approvals, configHash, log }`, at most 120,000 characters and 2,000 records. The log is stable-sorted by tick.
+  - Decoding refuses with a code: `BAD_LINK`, `TOO_LONG`, `VERSION`, `SCENARIO`, `RULES`, `APPROVALS`, `CONFIG` or `RECORD`.
+  - Each record is checked against the scenario: bot ids, and the intent id shape `${botId}:${tick}:${n}`.
+  - A replayed run ends on the original's event hash. Play at the end of a replay runs it again.
+- **Approvals** (§6.3): the live page runs `'queue'`. The console lists the oldest 8 queued intents with the full count, and refuses a decision on an intent's void tick.
+- **Watchlist:**
+  - Kept in `localStorage`, wrapped in try/catch, in the shell only.
+  - Scenario coins are saved by symbol, because coin ids are reused across runs. Coins launched on the board are starred for the run only.
+  - The twin's storage flag reads "simulation in memory; watchlist only in this browser's local storage".
+- **Viewer text:**
+  - Names and symbols pass `copyProblems` after NFKC, with invisible characters (format and default-ignorable) dropped, and control characters and underscores read as spaces.
+  - Launch refuses control and text-direction characters outright, and the Create form says why.
+- **Library:**
+  - `previewBuy` and `previewSell` equal the fill in every venue: curve, sniper-fee window, opening auction, crossing, and pool.
+  - `src/lib/launchpad/portfolio.mjs` checks `credits + Σcost + escrow = started + realized + feesReceived` to the micro-credit for every wallet.
+  - Candles include the opening-auction clear and open at the launch price.
+  - A net-zero auction order is refused.
+  - `risk()` is computed once per coin per tick.
+- **Accessibility:**
+  - The tabs follow the APG pattern.
+  - A control that a run's end or a fill makes unavailable stays focusable (`aria-disabled`). A control the run's end disables hands focus to the clock, never to Play.
+  - The approval queue keeps focus when a row leaves.
+  - Scrolling tables are named, focusable regions.
+  - Trade inputs are tied to their error text.
+  - Input borders meet 3:1.
+- **Performance** (A1 criterion b, graduation-run at 100×, headless Chromium with a frame probe):
+  - At CPU ×1, every paint's script time is under 10 ms: Bots panel p50 3.4 ms, max 9.2 ms. A full paint is p50 11 ms.
+  - Under a ×4 CPU throttle, a paint covers about 15 ticks. It takes 10 to 17 ms of script at p50 and 31 to 57 ms including style, layout and paint. That is about 2 to 4 ms per tick.
+  - Playback kept time, about 800 ticks in 8 s, with no ticks dropped.
+  - On a slow phone the Bots panel therefore repaints less smoothly than a per-tick reading of the criterion suggests. Real-device numbers come from Manus.
+- **Tests:**
+  - `launchpad-board` (13 tests) covers previews, screener tabs, holders, candles under every rule set, the ledger identity, splits, replay round trips (acting during a replay included), replay refusals, priority-fee trades, invisible-character names and the compute budget.
+  - The honesty test scans `src/scripts/launchpad/*.mjs`, and bans `innerHTML` everywhere and network calls and storage outside the shell.
+  - `launchpad-check.yml` also watches `src/scripts/launchpad/**` and `src/styles/launchpad/**`.
+- **Review:** a five-area review (library, replay and untrusted input, browser end to end, accessibility, copy and performance) had a skeptic check every finding. It confirmed 25 of 34, and all 25 were fixed. Separate verifiers then checked each fix.
+- **Not done in A1:**
+  - Codex review: the Codex CLI was not available to the building session.
+  - Real-device QA: Manus, after deploy.
+  - A practical 1× for long scenarios: graduation-run takes 40 minutes at 1×.
 
 ## 9. Reviews and handoffs
 

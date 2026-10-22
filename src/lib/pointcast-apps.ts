@@ -28,6 +28,7 @@ function chainShelfApp(a: ChainApp): PointcastApp {
 }
 
 export const POINTCAST_APPS: PointcastApp[] = [
+  {slug:'chapter-city',name:'Chapter City',kicker:'CITY-BUILDER · A NOVEL WRITTEN BY YOUR TOWN',description:'Zone a seaside town, keep the lights on and win elections. Every simulated year becomes a chapter with recurring characters, a newspaper headline and a choice. Browser only; saves on your device.',url:'https://pointcast.xyz/chapter-city/',path:'/chapter-city/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.PLAY',kind:'pointcast'},
   {
     slug: 'pmm',
     name: 'PMM — PointCast Mobile Messaging',
