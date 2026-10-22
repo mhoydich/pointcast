@@ -6,7 +6,7 @@
 
 ## Gridtown — a browser-first city builder (2026-10-22)
 
-`/gridtown`, `/gridtown.json`, Block 0741 (0725–0740 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
+`/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
 
 - [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
 - [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
@@ -14,6 +14,20 @@
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-gridtown-qa.md` (swipe vs hold-to-paint, inspector, city links, keyboard-only play); results to `docs/manus-logs/2026-10-22-gridtown-qa.md` — `queued`
 - [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
 - [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
+
+---
+
+## Radio network — Radio El Segundo + six South Bay stations (2026-10-20 → 2026-10-22)
+
+`/radio-network`, `/radio-network/{station}`, `/radio-network/kit`, `/radio-network/print`, `/radio-network/status` (each with `.json`), MCP `radio_network` / `radio_station`. A plan; nothing on air. Tracking: issue #1503.
+
+- [x] (CC) Plan, block 0718 (#1466); station pages + Phase 0 kit, block 0726 (#1494); RN-01..RN-10 on the jobs board (#1514); MCP tools + status board (#1517); print campaign + block 0741 — `done`
+- [ ] (MH) Deploy: run `scripts/deploy.sh` or add the `CLOUDFLARE_API_TOKEN` repo secret (CI builds green; deploy step skipped) — `waiting-on-mh`
+- [ ] (MH) Decisions before Phase 0 week 1: network name, talk-first vs music-first, nonprofit partner/fiscal sponsor, first host of The Town Desk, synthetic voices, LPFM channel study — `waiting-on-mh`
+- [ ] (M) QA after deploy: `docs/briefs/2026-10-20-manus-radio-network-qa.md`; Phase 0 research + QA (no outreach): `docs/briefs/2026-10-22-manus-radio-phase0.md` — `queued`
+- [ ] (X) Review the MCP tools in `src/lib/radio-mcp.ts` and the radio rows in `public/opportunities/catalog.json` — `queued`
+- [ ] (MH) Counsel review of the consent form template before anyone signs it — `waiting-on-mh`
+- [ ] (CC) Keep `src/data/radio-status.ts` current with every ship — `in-progress`
 
 ---
 
