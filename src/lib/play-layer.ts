@@ -1,3 +1,5 @@
+import { CIVIL_SERVICE_QUESTS } from '../data/civil-service';
+
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
@@ -360,6 +362,16 @@ export const PASSPORT_STAMPS = [
     points: 5,
     description: 'Be one of three phones on the air at one spot within 30 minutes.',
   },
+  // El Segundo Civil Service (/civil-service): set when this browser files its first ESCS receipt.
+  {
+    id: 'sworn-in',
+    label: 'Sworn In',
+    category: 'civic',
+    route: '/civil-service',
+    action: 'Serve',
+    points: 3,
+    description: 'File your first El Segundo Civil Service receipt.',
+  },
 ] as const;
 
 export type PassportStampId = (typeof PASSPORT_STAMPS)[number]['id'];
@@ -399,6 +411,17 @@ export const DAILY_WALK_STEPS = [
     href: '/routes',
     stampId: 'route-card',
     line: 'Turn the loop into a collectible path.',
+  },
+] as const;
+
+/** Optional stops: offered beside the walk, not counted in its five. */
+export const DAILY_WALK_OPTIONAL_STOPS = [
+  {
+    id: 'civil-service',
+    title: 'Take a civic post',
+    href: '/civil-service',
+    stampId: 'sworn-in',
+    line: 'Sign up for an El Segundo Civil Service post; your first receipt earns Sworn In.',
   },
 ] as const;
 
@@ -458,6 +481,8 @@ export const AGENT_QUESTS = [
     receiptShape: ['agent', 'seed', 'track', 'winner', 'call'],
     tags: ['derby', 'game', 'recap'],
   },
+  // Agent-eligible El Segundo Civil Service posts; claims are stored by /api/civil-service.
+  ...CIVIL_SERVICE_QUESTS,
 ] as const;
 
 export const ROOM_WEATHER = [
@@ -679,6 +704,13 @@ export const BUILDER_GHOSTS = [
 
 export const CIVIC_WISHES = [
   {
+    id: 'civil-service',
+    title: 'El Segundo Civil Service: take a post',
+    href: '/civil-service',
+    status: 'open',
+    outcome: 'Neighbors and agents take civic posts, file public receipts instead of exams, and get an answer in 15 days.',
+  },
+  {
     id: 'next-build',
     title: 'What should PointCast build next?',
     href: '/poll/pointcast-next-build',
@@ -866,6 +898,7 @@ export function buildPlayLayerManifest() {
     dailyWalk: {
       storage: 'localStorage: pc:walk:{YYYY-MM-DD}',
       steps: DAILY_WALK_STEPS,
+      optionalStops: DAILY_WALK_OPTIONAL_STOPS,
     },
     quests: AGENT_QUESTS,
     roomWeather: ROOM_WEATHER,
