@@ -87,27 +87,29 @@ for (const app of APPS) {
     await new Promise((done) => w.handlers.install({ waitUntil: (p) => p.then(done) }));
     const files = list(src);
     assert.equal(await w.route(`/${app.dir}/style.css`), `precached https://pointcast.xyz/${app.dir}/style.css`);
-    assert.equal(await w.route(`/${app.dir}/index.html?utm=x`, { mode: 'navigate' }), `precached https://pointcast.xyz/${app.dir}/`);
-    assert.equal(await w.route(`/${app.dir}/`, { mode: 'navigate' }), `precached https://pointcast.xyz/${app.dir}/`);
-    for (const p of app.pages) assert.equal(await w.route(p, { mode: 'navigate' }), `precached https://pointcast.xyz${p}`);
+    assert.equal(await w.route(`/${app.dir}/index.html?utm=x`, { mode: 'navigate' }), `precached https://pointcast.xyz/${app.dir}/`, 'answered from the cache at once');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(await w.route(`/${app.dir}/`, { mode: 'navigate' }), `network https://pointcast.xyz/${app.dir}/index.html?utm=x`, 'the one page copy was refreshed in the background by the previous navigation');
+    for (const p of app.pages) assert.ok((await w.route(p, { mode: 'navigate' })).includes(`https://pointcast.xyz${p}`), `${p} is served under its own key`);
     assert.equal(await w.route('/api/pmm/signal'), null, 'the signal note is never handled');
     assert.equal(await w.route('/api/ping'), null, 'the SI packet is never handled');
     assert.equal(await w.route('/now.json'), null, 'the ticker is never handled');
     assert.equal(await w.route(`/${app.dir}/card.png`), null, 'files outside the list are not handled');
     assert.equal(await w.route(`/${app.dir}/sw.js`), null, 'the worker itself is not handled');
     assert.equal(await w.route(`/${app.dir}/app.js`, { method: 'POST' }), null, 'only GET is handled');
-    assert.equal(w.fetched.length, 0, 'nothing went to the network while every file was cached');
+    assert.ok(w.fetched.every((u) => u.includes(`/${app.dir}/`)), 'background refreshes only touch the app\'s own files');
     assert.ok(files.includes(`/${app.dir}/app.js`));
   });
 
-  test(`${app.dir}: a file missing from the cache is fetched once and kept; activate sweeps only this app's older caches`, async () => {
+  test(`${app.dir}: a cache miss is fetched and kept; a hit answers from the cache and refreshes in the background; activate sweeps only this app's older caches`, async () => {
     const w = boot(src);
     const v = version(src);
     w.store.set(v, new Map()); // installed, but the cache came up empty
     assert.equal(await w.route(`/${app.dir}/app.js`), `network https://pointcast.xyz/${app.dir}/app.js`);
     assert.deepEqual(w.fetched, [`https://pointcast.xyz/${app.dir}/app.js`]);
-    assert.equal(await w.route(`/${app.dir}/app.js`), `network https://pointcast.xyz/${app.dir}/app.js`);
-    assert.equal(w.fetched.length, 1, 'the second request came from the cache');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(await w.route(`/${app.dir}/app.js`), `network https://pointcast.xyz/${app.dir}/app.js`, 'the second request is answered from the cache');
+    assert.equal(w.fetched.length, 2, 'and the same file is refreshed in the background');
     w.store.set(`${app.prefix}2020-01-01`, new Map());
     w.store.set('other-app-v1', new Map());
     await new Promise((done) => w.handlers.activate({ waitUntil: (p) => p.then(done) }));
