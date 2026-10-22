@@ -29,6 +29,7 @@
   let lastDay = '';
   let familyKey = store.get(KEY_STORE) || '';
   let members = [];
+  const log = new Map();
   const lastStatus = new Map();
   const baseTitle = document.title;
 
@@ -152,6 +153,7 @@
     let said = 0;
     for (const m of list) {
       if (transcript.querySelector(`[data-seq="${m.seq}"]`)) continue;
+      log.set(m.seq, m);
       transcript.append(...lineFor(m));
       if (m.kind === 'say') said += 1;
     }
@@ -166,8 +168,34 @@
   }
 
   function dropHidden(seqs) {
-    for (const seq of seqs || []) transcript.querySelector(`[data-seq="${seq}"]`)?.remove();
+    for (const seq of seqs || []) {
+      log.delete(seq);
+      transcript.querySelector(`[data-seq="${seq}"]`)?.remove();
+    }
   }
+
+  /* ---------- Save chat: the lines this page has, as a dated text file ---------- */
+  const pad = (n) => String(n).padStart(2, '0');
+  function saveChat() {
+    const lines = [...log.values()].sort((a, b) => a.seq - b.seq);
+    if (!lines.length) { statusLine.textContent = 'Nothing to save yet.'; return; }
+    const stamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const body = [`${baseTitle}, saved ${stamp(new Date())}`, ''];
+    for (const m of lines) {
+      const at = stamp(new Date(m.at));
+      body.push(m.kind === 'say' ? `[${at}] ${m.screenName}: ${m.text}` : `[${at}] ${m.text}`);
+    }
+    const now = new Date();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' }));
+    a.download = `family-room-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.txt`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    statusLine.textContent = `Saved ${lines.length} lines.`;
+  }
+  $('btn-save').addEventListener('click', saveChat);
 
   /* ---------- Buddy list and the room's member list ---------- */
   function buddyRow(m) {
