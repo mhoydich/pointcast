@@ -39,6 +39,49 @@ const hand = [
 for (const [p, n] of hand) add(p, n, 'room');
 projects.set('/', { path: '/', name: 'Front door', kind: 'journey' });
 
+// ---- the chain: the /chain hub, the apps in src/data/chain-apps.ts, and the other pages under /chain/
+// (Astro pages mount the beacon through BlockLayout; the static pages under public/chain/ load
+// public/js/pc-pageview.js). Pageviews are keyed by path without a trailing slash, as these are.
+const CHAIN_PAGES = [
+  ['/chain', 'PointCast Chain'], ['/chain/net', 'The Daily Net'], ['/chain/bots', 'Chain bots guide'], ['/chain/mints', 'First Mints'],
+  ['/chain/first-mints', 'First Mints (passkey page)'], ['/chain/yard', 'Block Yard'], ['/chain/docs', 'Chain docs'], ['/chain/dev', 'Chain dev tools'],
+  ['/chain/case-study', 'Chain case study'], ['/chain/interns', 'Chain intern assignments'], ['/chain/sanctuary', 'The Sanctuary (preview)'], ['/chain/mixtape', 'Mixtape Mint'],
+  ['/chain/plan', 'The plan for PointCast Chain'],
+];
+const chainAppsSrc = readFileSync('src/data/chain-apps.ts', 'utf8');
+const CHAIN_APP_KEYS = new Map(); // path -> app key
+for (const m of chainAppsSrc.matchAll(/key: '([a-z0-9-]+)',\s*href: '(\/chain\/[a-z0-9-]+)',\s*label: '([^']+)'/g)) {
+  CHAIN_APP_KEYS.set(m[2], m[1]);
+  projects.set(m[2], { path: m[2], name: m[3], kind: 'chain' });
+}
+for (const [p, n] of CHAIN_PAGES) if (!projects.has(p) || projects.get(p).kind !== 'chain') projects.set(p, { path: p, name: n, kind: 'chain' });
+/** A chain app's file stem in public/chain/apps/ and src/data/chain-app-*.ts (verify-a-block's is verify). */
+const chainStem = (key) => (key === 'verify-a-block' ? 'verify' : key);
+/** The source of one /chain page: its own page, app files and data, never every file that says "Chain". */
+const chainFiles = (p) => {
+  if (p === '/chain') return ['src/pages/chain.astro', 'src/data/chain-home.ts', 'src/data/chain-apps.ts', 'src/lib/chain-strip.mjs'].filter(existsSync);
+  const leaf = p.slice('/chain/'.length);
+  const key = CHAIN_APP_KEYS.get(p);
+  const out = [`src/pages/chain/${leaf}.astro`, `src/pages/chain/${leaf}/`, `public/chain/${leaf}/`, `src/data/chain-${leaf}.ts`, `src/data/chain-${leaf}/`];
+  if (key) out.push(`public/chain/apps/${chainStem(key)}.js`, `public/chain/apps/${chainStem(key)}-view.js`, `src/data/chain-app-${chainStem(key)}.ts`);
+  if (leaf === 'net') out.push('src/lib/daily-net.mjs', 'src/components/chain/DailyNetPanel.astro');
+  return [...new Set(out)].filter(existsSync);
+};
+/** Tests that name one /chain page: chain-app-<stem>, chain-<leaf>, and the Daily Net's own suite. */
+const chainTests = (p) => {
+  if (p === '/chain') return readdirSync('tests').filter((f) => /^chain-(apps-registry|strip)\./.test(f)).length;
+  const leaf = p.slice('/chain/'.length);
+  const key = CHAIN_APP_KEYS.get(p);
+  const names = [`chain-${leaf}.`, key ? `chain-app-${chainStem(key)}.` : null, leaf === 'net' ? 'chain-daily-net.' : null].filter(Boolean);
+  return readdirSync('tests').filter((f) => names.some((n) => f.startsWith(n))).length;
+};
+
+// `--kind chain` scores only that kind (src/data/scoreboard-chain.json is made this way).
+const argv = process.argv.slice(2);
+const kindAt = argv.indexOf('--kind');
+const onlyKind = kindAt >= 0 ? argv[kindAt + 1] : null;
+const outArg = argv.filter((a, i) => !a.startsWith('--') && (kindAt < 0 || i !== kindAt + 1))[0];
+
 // ---- live counters (fetched once, best effort)
 let live = {};
 try { live = JSON.parse(readFileSync('.score-live.json', 'utf8')); } catch { console.error('no .score-live.json — run scripts/score-live.mjs first; scoring without USE'); }
@@ -55,6 +98,7 @@ const text = (f) => { if (!fileText.has(f)) { try { fileText.set(f, readFileSync
 
 const slugOf = (p) => p.replace(/^\//, '').replace(/\//g, '-');
 const filesFor = (p) => {
+  if (p === '/chain' || p.startsWith('/chain/')) return chainFiles(p);
   if (p === '/') return ['src/pages/index.astro', 'src/components/HomeFrontDoorDesk.astro', 'src/components/HomeFrontDoorNews.astro', 'src/lib/front-door-next-door.ts'].filter(existsSync);
   if (p === '/dock') return [
     'src/components/FooterBar.astro', 'src/components/DockBurstTicker.astro',
@@ -77,6 +121,7 @@ const filesFor = (p) => {
 const now = Date.now();
 const rows = [];
 for (const proj of projects.values()) {
+  if (onlyKind && proj.kind !== onlyKind) continue;
   const files = filesFor(proj.path);
   if (!files.length) continue;
   const log = sh(`git log --format=%an%x09%ad --date=short -- ${files.map(f => `'${f}'`).join(' ')}`).trim().split('\n').filter(Boolean);
@@ -90,7 +135,7 @@ for (const proj of projects.values()) {
   const ageDays = last ? Math.round((now - Date.parse(last)) / 864e5) : 999;
   const lifeDays = first && last ? Math.max(1, Math.round((Date.parse(last) - Date.parse(first)) / 864e5)) : 0;
   const slug = proj.path.replace(/^\//, '').split('/')[0];
-  const tests = readdirSync('tests').filter(f => f.includes(slug)).length;
+  const tests = proj.kind === 'chain' ? chainTests(proj.path) : readdirSync('tests').filter(f => f.includes(slug)).length;
   const hrefRe = new RegExp(`href=["'\`]${proj.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(["'\`/?#])`);
   let inbound = 0;
   for (const f of pageFiles) { if (files.some(o => f.startsWith(o))) continue; if (hrefRe.test(text(f))) inbound++; }
@@ -118,8 +163,14 @@ for (const proj of projects.values()) {
   rows.push({ ...proj, files: srcFiles.length, loc, commits, authors, first, last, ageDays, lifeDays, tests, inbound, blockRefs, onHome, use, completion, sevenDayReturn, craft: +craft.toFixed(2), reach: +reach.toFixed(2), fresh: +fresh.toFixed(2), useScore: useScore == null ? null : +useScore.toFixed(2), total });
 }
 rows.sort((a, b) => b.total - a.total);
-const out = process.argv[2] || '.score-projects.json';
-writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), rows }, null, 2));
+const out = outArg || '.score-projects.json';
+// Where USE came from, so a page can say what this snapshot did and did not measure.
+const useSource = {
+  pageviews: Object.keys(outcomes.pageviews || {}).length > 0,
+  counters: Object.keys(outcomes.counters || {}).length > 0,
+  liveFile: Object.keys(live).length > 0,
+};
+writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), ...(onlyKind ? { kind: onlyKind, useSource } : {}), rows }, null, 2));
 const md = ['| # | project | path | score | use | completion | 7-day return | LOC | files | tests | inbound | blocks | home |', '|--|--|--|--|--|--|--|--|--|--|--|--|--|'];
 rows.forEach((r, i) => md.push(`| ${i + 1} | ${r.name} | ${r.path} | **${r.total}** | ${r.use ?? '—'} | ${r.completion ? `${r.completion.completed}/${r.completion.shown}` : '—'} | ${r.sevenDayReturn ? `${r.sevenDayReturn.returned}/${r.sevenDayReturn.eligible}` : '—'} | ${r.loc} | ${r.files} | ${r.tests} | ${r.inbound} | ${r.blockRefs} | ${r.onHome ? '●' : ''} |`));
 writeFileSync(out.replace(/\.json$/, '.md'), md.join('\n'));

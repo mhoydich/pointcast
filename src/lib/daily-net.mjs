@@ -44,6 +44,19 @@ export const COUNT_KEYS = Object.freeze([
   ['strikes', 'strike', 'strikes'],
 ]);
 export const STRIKE_COPY = 'signed a checkpoint this chain does not have: a wrong replay, or it was shown a different chain.';
+/**
+ * Who signed the day's txs (GET /net `classes`, pointcast-chain
+ * docs/DEVNET.md#house-keyless-and-outside): house keys on the house's own
+ * schedule, keyless bot posts the devnet signs, and keys not on the house
+ * list (the devnet can't tell who holds a key). The line is this site's own
+ * copy, the same words the devnet uses.
+ */
+export const CLASS_LINE = 'House activity is the chain checking itself, not use.';
+export const CLASS_KEYS = Object.freeze([
+  ['house', 'house', 'keys the house made or runs, on its own schedule'],
+  ['keyless', 'keyless', 'bot posts the devnet signs under a name; a name is a claim'],
+  ['outside', 'outside', 'keys not on the house list; who holds one is not known'],
+]);
 
 // Tezos implicit + originated accounts and pointcast-chain agent / passkey
 // accounts, written as character classes so this source carries no address
@@ -52,6 +65,8 @@ const ADDRESS_RE = /^(?:tz[1-4]|KT1|pc[ap]1)[1-9A-HJ-NP-Za-km-z]{20,60}$/;
 const ADDRESS_ANY_RE = /(?:tz[1-4]|KT1|pc[ap]1)[1-9A-HJ-NP-Za-km-z]{20,}/g;
 const INVISIBLE_RE = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200c\u200e\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g;
 const NAME_RE = /^[a-z0-9-]{2,24}$/;
+// A house role as the devnet names it (treasury, auctioneer, admin/editions, house-runner-1).
+const ROLE_RE = /^[a-z0-9][a-z0-9/-]{1,31}$/;
 const HEX64_RE = /^[0-9a-f]{64}$/;
 const DAY_RE = /^\d{4}-\d\d-\d\d$/;
 
@@ -76,6 +91,49 @@ export const netName = (v) => (typeof v === 'string' && NAME_RE.test(v) ? v : ''
 const hex = (v) => (typeof v === 'string' && HEX64_RE.test(v) ? v : '');
 const hex12 = (v) => (hex(v) ? v.slice(0, 12) : '');
 const fmt = (n) => nat(n).toLocaleString('en-US');
+
+/**
+ * A share 0..1 → "3%" (null when there were no txs). `part` of `all` txs are
+ * the outside ones: a share that rounds to 0% while outside keys signed any
+ * says "under 1%", and one that rounds to 100% while anyone else signed says
+ * "over 99%", so the line never reads none or all when that is not so.
+ */
+export function sharePct(v, part = 0, all = 0) {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) return null;
+  const r = Math.round(v * 100);
+  if (r === 0 && part > 0) return 'under 1%';
+  if (r === 100 && part < all) return 'over 99%';
+  return `${r}%`;
+}
+
+/**
+ * GET /net `classes` → { day, chain, share } or null when the devnet does not
+ * send it (a Worker from before the split). Each class: { txs, keys, who }
+ * where who is up to 12 { label, txs }: a house role, a bot name or a short
+ * address, each checked against its own alphabet.
+ */
+export function readClasses(c) {
+  if (!isObj(c) || !isObj(c.day) || !isObj(c.chain)) return null;
+  const one = (o, cls, withWho) => {
+    const x = isObj(o) ? o : {};
+    const out = { txs: nat(x.txs), keys: nat(x.keys) };
+    if (withWho) {
+      out.who = arr(x.who).filter(isObj).slice(0, 12).map((w) => ({
+        label: cls === 'house' ? (typeof w.label === 'string' && ROLE_RE.test(w.label) ? w.label : 'a house key')
+          : cls === 'keyless' ? netName(w.label) || 'a keyless bot'
+            : shortAddr(w.addr) || 'a key',
+        txs: nat(w.txs),
+      }));
+      out.more = nat(x.more);
+    }
+    return out;
+  };
+  const day = Object.fromEntries(CLASS_KEYS.map(([k]) => [k, one(c.day[k], k, true)]));
+  const chain = Object.fromEntries(CLASS_KEYS.map(([k]) => [k, one(c.chain[k], k, false)]));
+  const s = isObj(c.outside_share) ? c.outside_share : {};
+  const all = (o) => CLASS_KEYS.reduce((n, [k]) => n + o[k].txs, 0);
+  return { day, chain, share: { day: sharePct(s.day, day.outside.txs, all(day)), chain: sharePct(s.chain, chain.outside.txs, all(chain)) } };
+}
 
 function author(o) {
   const custody = o.custody === 'custodial' ? 'custodial' : o.custody === 'own_key' ? 'own_key' : '';
@@ -134,6 +192,7 @@ export function readNet(json, opts = {}) {
     strikes,
     reports,
     more: { roll: nat(m.roll), strikes: nat(m.strikes) },
+    classes: readClasses(json.classes),
     checkpoint: {
       latest: natOrNull(latest.height),
       day: natOrNull(cp.day_checkpoint),
@@ -212,6 +271,29 @@ export function render(root, model, env = {}) {
       return li;
     }));
   }
+
+  const classes = q(root, 'classes');
+  if (classes) {
+    const c = model.classes;
+    classes.replaceChildren(...(c
+      ? CLASS_KEYS.map(([k, word, gloss]) => {
+        const d = c.day[k];
+        const li = el(doc, 'li', `dn-class dn-class--${k}`);
+        li.append(
+          el(doc, 'span', 'dn-class__k', word),
+          el(doc, 'b', '', fmt(d.txs)),
+          el(doc, 'span', 'dn-class__s', `${d.txs === 1 ? 'tx' : 'txs'} today · ${plural(d.keys, 'key', 'keys')}`),
+          el(doc, 'p', 'dn-class__who', d.who.length ? d.who.map((w) => `${w.label} (${fmt(w.txs)})`).join(' · ') + (d.more ? ` · +${fmt(d.more)} more` : '') : 'none today'),
+          el(doc, 'p', 'dn-class__chain', `${plural(c.chain[k].txs, 'tx', 'txs')} since block 1 · ${plural(c.chain[k].keys, 'key', 'keys')}`),
+          el(doc, 'p', 'dn-class__gloss', gloss),
+        );
+        return li;
+      })
+      : [el(doc, 'li', 'dn-empty', 'This devnet does not count house, keyless and outside txs separately yet.')]));
+  }
+  set('class-share', model.classes
+    ? `${CLASS_LINE} Outside keys signed ${model.classes.share.day ?? 'none'} of today’s txs${model.classes.share.chain ? ` and ${model.classes.share.chain} since block 1` : ''}.`
+    : CLASS_LINE);
 
   const roll = q(root, 'roll');
   if (roll) {
