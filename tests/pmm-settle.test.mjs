@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toMutez, formatTez, parseSettleHash, returnLink, judgeTransfer, TZ_RE, OP_RE } from '../src/lib/pmm-settle-core.mjs';
+import { toMutez, formatTez, parseSettleHash, returnLink, judgeTransfer, settleLink, parseReturn, verifyOnChain, TZKT, TZ_RE, OP_RE } from '../public/pmm/settle.js';
 
 const TZ = 'tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb';
 const TZ2 = 'tz1aSkwEot3L2kmUvcoxzjMomb9mvBNuzFK6';
@@ -44,4 +44,24 @@ test('judgeTransfer checks payee, status and amount across a batch', () => {
   assert.deepEqual(judgeTransfer([row(TZ, 1_000_000)], { to: TZ, mutez: 2_000_000 }), { ok: false, reason: 'short', paid: 1_000_000 });
   assert.equal(judgeTransfer([row(TZ, 1_000_000), row(TZ, 1_000_000)], { to: TZ, mutez: 2_000_000 }).ok, true, 'a batch paying in two parts adds up');
   assert.equal(judgeTransfer({ not: 'an array' }, { to: TZ, mutez: 1 }).reason, 'not-found');
+});
+
+test('settleLink and parseReturn are the two ends of the round trip through /pmm/settle', () => {
+  assert.equal(settleLink({ to: TZ, note: 'tacos', friend: '0123456789abcdef' }), `/pmm/settle#to=${TZ}&note=tacos&f=0123456789abcdef`);
+  assert.throws(() => settleLink({ to: 'KT1nope' }));
+  const back = returnLink({ opHash: OP, friend: '0123456789abcdef', mutez: 2_500_000, to: TZ });
+  assert.deepEqual(parseReturn(back.split('#')[1]), { op: OP, to: TZ, mutez: 2_500_000, friend: '0123456789abcdef' });
+  for (const bad of [`settled=nope&mutez=1&to=${TZ}`, `settled=${OP}&mutez=0&to=${TZ}`, `settled=${OP}&mutez=1&to=KT1x`, `settled=${OP}&mutez=1e99&to=${TZ}`, '']) assert.equal(parseReturn(bad), null, bad);
+});
+
+test('verifyOnChain asks TzKT for the one operation and never throws', async () => {
+  const seen = [];
+  const answer = (status, body) => async (url) => { seen.push(url); return { ok: status === 200, status, json: async () => body }; };
+  const rows = [{ target: { address: TZ }, sender: { address: TZ2 }, amount: 3_000_000, status: 'applied', level: 7 }];
+  assert.deepEqual(await verifyOnChain(OP, { to: TZ, mutez: 3_000_000 }, answer(200, rows)), { ok: true, from: TZ2, mutez: 3_000_000, level: 7 });
+  assert.ok(seen[0].startsWith(TZKT + OP));
+  assert.equal((await verifyOnChain(OP, { to: TZ, mutez: 1 }, answer(404, null))).reason, 'not-found');
+  assert.equal((await verifyOnChain(OP, { to: TZ, mutez: 1 }, answer(502, null))).reason, 'offline');
+  assert.equal((await verifyOnChain(OP, { to: TZ, mutez: 1 }, async () => { throw new Error('down'); })).reason, 'offline');
+  assert.equal((await verifyOnChain('../../x', { to: TZ, mutez: 1 }, answer(200, rows))).reason, 'bad-op');
 });

@@ -1,5 +1,5 @@
-// PMM v0.4: settle a TAB in tez. Pure helpers shared by the /pmm/settle page and PMM itself,
-// kept free of DOM and wallet code so node tests can cover them.
+// PMM v0.4: settle a TAB in tez. One ES module shared by PMM (lazy-loaded from app.js) and the
+// /pmm/settle page (imported at runtime), with no DOM and no wallet code so node tests cover it.
 //
 // The payer's PMM opens /pmm/settle with the payee's address and an amount in the URL
 // fragment (never sent to a server). The page sends one plain tez transfer through the
@@ -68,4 +68,36 @@ export function judgeTransfer(tzktRows, { to, mutez }) {
   const paid = applied.reduce((n, r) => n + (Number.isSafeInteger(r.amount) ? r.amount : 0), 0);
   if (paid < mutez) return { ok: false, reason: 'short', paid };
   return { ok: true, from: applied[0].sender?.address || null, mutez: paid, level: applied[0].level ?? null };
+}
+
+/** The payer's link from a PMM chat to the settle page. Amount is left for the payer to type. */
+export function settleLink({ to, note = '', friend = '' }) {
+  if (!TZ_RE.test(to || '')) throw new Error('no-payee');
+  const p = new URLSearchParams({ to });
+  if (note) p.set('note', String(note).slice(0, 60));
+  if (FRIEND_RE.test(friend)) p.set('f', friend);
+  return '/pmm/settle#' + p.toString();
+}
+
+/** PMM's side of returnLink: read #settled=...&mutez=...&to=...&f=... or return null. */
+export function parseReturn(hash) {
+  const p = new URLSearchParams(String(hash || '').replace(/^#/, ''));
+  const op = p.get('settled') || '', to = p.get('to') || '', mutez = Number(p.get('mutez'));
+  if (!OP_RE.test(op) || !TZ_RE.test(to) || !Number.isSafeInteger(mutez) || mutez <= 0 || mutez > MAX_TEZ * 1_000_000) return null;
+  const friend = p.get('f') || '';
+  return { op, to, mutez, friend: FRIEND_RE.test(friend) ? friend : null };
+}
+
+export const TZKT = 'https://api.tzkt.io/v1/operations/transactions/';
+
+/** Ask TzKT about one operation and judge it. A network failure is { ok: false, reason: 'offline' }. */
+export async function verifyOnChain(op, claim, fetchImpl = globalThis.fetch) {
+  if (!OP_RE.test(op || '')) return { ok: false, reason: 'bad-op' };
+  try {
+    const r = await fetchImpl(TZKT + op + '?select=target,sender,amount,status,level', { cache: 'no-store' });
+    if (!r.ok) return { ok: false, reason: r.status === 404 ? 'not-found' : 'offline' };
+    return judgeTransfer(await r.json(), claim);
+  } catch (_) {
+    return { ok: false, reason: 'offline' };
+  }
 }

@@ -218,7 +218,7 @@
         for (const fr of state.friends) for (const m of fr.messages) {
           if (m.from !== 'me' || m.status !== 'queued') continue;
           if (!m.kind) m.sig = await sign({ t: 'msg', id: m.id, to: m.to || fr.id, ts: m.ts, text: m.text });
-          else if (m.kind === 'tab' && m.wire) { const { sig, ...rest } = m.wire; m.wire = { ...rest, sig: await sign(rest) }; }
+          else if ((m.kind === 'tab' || m.kind === 'paid') && m.wire) { const { sig, ...rest } = m.wire; m.wire = { ...rest, sig: await sign(rest) }; }
         }
       }
       let restored = 0;
@@ -524,6 +524,17 @@
         if (current !== f) f.unread = (f.unread || 0) + 1; save(); if (current === f) renderChat(); renderFriends(); blip(false);
         break;
       }
+      case 'paid': {
+        const id = str(m.id, 40); if (!id || (f.paid || []).some((x) => x.id === id)) return;
+        const ok = m.to === state.me.id && await verify(f, m);
+        if (!peer || peer.friend !== f) return;
+        if (!ok) { pushSys(f, 'A PAYMENT CLAIM ARRIVED UNSIGNED. IGNORED.'); return; }
+        if (!state.me.tzAddr || m.note !== state.me.tzAddr) { pushSys(f, 'THEY PAID A TEZ ADDRESS THAT IS NOT YOURS ON THIS PHONE. NOT COUNTED.'); return; }
+        f.paid = f.paid || []; f.paid.push({ id, op: str(m.text, 51), to: m.note, mutez: Number(m.amount) || 0, state: 'checking' });
+        f.messages.push({ id: 'paid-' + id, from: 'them', kind: 'paid', text: 'THEY SAY THEY PAID IN TEZ · CHECKING THE CHAIN', ts: Number(m.ts) || now(), verified: true, status: 'read' });
+        save(); if (current === f) renderChat(); checkPaid(f);
+        break;
+      }
       case 'settle': { (f.ledger || []).forEach((x) => (x.settled = true)); f.messages.push({ id: uid(), from: 'them', kind: 'sys', text: 'TAB SETTLED', ts: now() }); save(); if (current === f) renderChat(); break; }
       case 'file': {
         const size = Number(m.size) || 0; if (size > MAX_FILE) { incoming = null; toast('FILE TOO BIG. DROPPED.'); return; }
@@ -629,7 +640,7 @@
       const d = fmtDay(m.ts); if (d !== day) { day = d; const li = document.createElement('li'); li.className = 'day'; li.textContent = d; ol.append(li); }
       const li = document.createElement('li'); li.dataset.id = m.id;
       if (m.kind === 'sys') { li.className = 'msg sys'; li.innerHTML = `<div class="bubble"></div>`; li.querySelector('.bubble').textContent = m.text; ol.append(li); continue; }
-      li.className = `msg ${m.from}${m.kind === 'tab' ? ' tab' : ''}${m.reaction ? ' has-react' : ''}`;
+      li.className = `msg ${m.from}${m.kind === 'tab' || m.kind === 'paid' ? ' tab' : ''}${m.reaction ? ' has-react' : ''}`;
       const bubble = document.createElement('div'); bubble.className = 'bubble';
       if (m.kind === 'file') {
         const file = files.get(m.fileId);
@@ -667,7 +678,7 @@
     for (const m of f.messages) {
       if (m.from !== 'me' || m.status !== 'queued') continue;
       if (!m.kind) { if (send({ t: 'msg', id: m.id, to: m.to || f.id, ts: m.ts, text: m.text, mood: m.mood, lt: m.lt, sig: m.sig })) m.status = 'sent'; }
-      else if (m.kind === 'tab' && m.wire) { if (send(m.wire)) m.status = 'sent'; }
+      else if ((m.kind === 'tab' || m.kind === 'paid') && m.wire) { if (send(m.wire)) m.status = 'sent'; }
     }
     send({ t: 'draft', text: '' }); save(); if (current === f) renderChat();
   }
@@ -692,7 +703,7 @@
   });
 
   // TAB ledger
-  $('btn-tab').addEventListener('click', () => { if (!current) return; $('tab-balance').textContent = balanceLine(current); openSheet('sheet-tab'); setTimeout(() => $('tab-amount').focus(), 50); });
+  $('btn-tab').addEventListener('click', () => { if (!current) return; $('tab-balance').textContent = balanceLine(current); $('btn-settle').hidden = !(balanceOf(current) < 0 && /^tz[1-4]\w{33}$/.test(current.tz || '')); openSheet('sheet-tab'); setTimeout(() => $('tab-amount').focus(), 50); });
   const balanceLine = (f) => { const b = balanceOf(f); return b === 0 ? 'EVEN.' : b > 0 ? `${f.name.toUpperCase()} OWES YOU ${b.toFixed(2)}` : `YOU OWE ${f.name.toUpperCase()} ${(-b).toFixed(2)}`; };
   $('form-tab').addEventListener('submit', async (e) => {
     e.preventDefault(); if (!current) return; const f = current; const amount = Math.round(Number($('tab-amount').value) * 100) / 100; if (!(amount > 0)) return;
@@ -756,10 +767,47 @@
     setInterval(() => { if (ice.relay) refreshIce(false); }, 240000);
     if (wide.matches) show('lobby');
     route();
+    state.friends.forEach((fr) => { if ((fr.paid || []).some((x) => x.state === 'checking')) checkPaid(fr); });
     setInterval(() => { if (current) renderAtmo(); if (app.dataset.view === 'si') renderSi(); }, 30000);
+  }
+  // v0.4 TAB settle in tez. The logic lives in settle.js, loaded only when used; the wallet runs on
+  // /pmm/settle. A payment counts only after this phone finds it on chain (TzKT).
+  const settleJs = () => import('/pmm/settle.js');
+  $('btn-settle').addEventListener('click', async () => {
+    const f = current; if (!f) return;
+    try { const s = await settleJs(); location.href = s.settleLink({ to: f.tz, note: 'PMM TAB', friend: f.id.slice(0, 16) }); } catch (_) { toast('?SETTLE ERROR'); }
+  });
+  async function paidReturn(h) {
+    let s; try { s = await settleJs(); } catch (_) { return toast('?SETTLE ERROR'); }
+    const r = s.parseReturn(h); if (!r) return toast('?SETTLE LINK ERROR');
+    const f = r.friend && state.friends.find((x) => x.id.startsWith(r.friend));
+    if (!f) return toast('PAID, BUT THAT FRIEND IS NOT ON THIS PHONE');
+    f.paid = f.paid || []; if (f.paid.some((x) => x.op === r.op)) return openChat(f.id);
+    const wire = { t: 'paid', id: uid(), to: f.id, ts: now(), text: r.op, amount: r.mutez, note: r.to }; wire.sig = await sign(wire);
+    f.paid.push({ id: wire.id, op: r.op, to: r.to, mutez: r.mutez, state: 'checking', mine: true });
+    f.messages.push({ id: 'paid-' + wire.id, from: 'me', kind: 'paid', wire, text: `PAID ${s.formatTez(r.mutez)} TEZ · ${r.op.slice(0, 10)}… · CHECKING THE CHAIN`, ts: wire.ts, status: sendTo(f, wire) ? 'sent' : 'queued', mood: state.me.mood });
+    save(); openChat(f.id); checkPaid(f);
+  }
+  const paidTries = new Map();
+  async function checkPaid(f) {
+    let s; try { s = await settleJs(); } catch (_) { return; }
+    for (const p of (f.paid || []).filter((x) => x.state === 'checking')) {
+      const v = await s.verifyOnChain(p.op, { to: p.to, mutez: p.mutez });
+      if (v.ok) {
+        p.state = 'ok'; (f.ledger || []).forEach((x) => (x.settled = true));
+        pushSys(f, `TAB SETTLED ON CHAIN · ${s.formatTez(v.mutez)} TEZ · BLOCK ${v.level ?? '?'}`);
+      } else if (v.reason === 'offline' || v.reason === 'not-found') {
+        const n = (paidTries.get(p.op) || 0) + 1; paidTries.set(p.op, n); // new operations take a block or two to index
+        if (n < 12) setTimeout(() => checkPaid(f), Math.min(60000, 5000 * n));
+      } else {
+        p.state = 'failed'; pushSys(f, `PAYMENT NOT CONFIRMED ON CHAIN (${v.reason.toUpperCase()}). TAB STAYS OPEN.`);
+      }
+    }
+    save(); renderFriends();
   }
   function route() {
     const h = location.hash.slice(1);
+    if (/(^|&)settled=/.test(h)) { history.replaceState(null, '', location.pathname); paidReturn(h); return; }
     const o = /offer=([A-Za-z0-9_-]+)/.exec(h), a = /answer=([A-Za-z0-9_-]+)/.exec(h), j = /join=([A-Z2-9]{6})/i.exec(h), f = /f=([0-9a-f]{16})/.exec(h);
     if (o) { history.replaceState(null, '', location.pathname); joinOffer(o[1]); }
     else if (a) {
