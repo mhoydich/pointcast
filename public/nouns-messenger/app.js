@@ -57,19 +57,32 @@
   ];
 
   /* ---------- State ---------- */
+  const SEED_TIP = 'Tap the + up top to meet the others, or ' + NOG + ' at the left for the about card.';
   let state = load();
   function load() {
     try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && Array.isArray(s.threads)) return s; } catch (_) {}
     return { me: { name: '', color: 'red' }, threads: [], seeded: false };
   }
   let storageWarned = false;
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { if (!storageWarned) { storageWarned = true; setTimeout(() => toast('Storage is off in this browser. Nothing will be kept.'), 300); } } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { if (!storageWarned) { storageWarned = true; setTimeout(() => toast('Storage is off in this browser. Nothing will be kept.'), 300); } } updateBadge(); }
+  // The installed icon shows the total unread count (Badging API, where the browser has it). Every
+  // unread change is saved, so save() is the one place that checks; the API is only called on a change.
+  let badgeShown = null;
+  function updateBadge() {
+    const n = state.threads.reduce((k, t) => k + (t.unread || 0), 0);
+    if (n === badgeShown) return;
+    badgeShown = n;
+    try {
+      const p = n ? (navigator.setAppBadge && navigator.setAppBadge(n)) : (navigator.clearAppBadge && navigator.clearAppBadge());
+      if (p && p.catch) p.catch(() => {});
+    } catch (_) {}
+  }
   function seed() {
     if (state.seeded) return;
     const desk = COMPANIONS[0];
     const t = ensureThread({ id: 'c-desk', name: desk.name, kind: 'bot', color: desk.color, bot: desk.id, tag: desk.tag });
     t.messages.push(msg('them', desk.hello, now() - 60000));
-    t.messages.push(msg('them', 'Tap the + up top to meet the others, or ' + NOG + ' at the left for the about card.', now() - 30000));
+    t.messages.push(msg('them', SEED_TIP, now() - 30000));
     t.unread = 2;
     ensureThread({ id: 'self', name: 'Note to self', kind: 'self', color: 'cool', tag: 'only you, only here' }).created = now() - 120000;
     state.seeded = true; save();
@@ -301,9 +314,118 @@
   $('btn-about').addEventListener('click', () => { $('me-name').value = state.me.name; renderSwatches(); openSheet('sheet-about'); });
   $('btn-about-done').addEventListener('click', () => { state.me.name = $('me-name').value.trim().slice(0, 24); save(); closeSheets(); });
   $('btn-clear').addEventListener('click', () => {
-    if (!confirm('Clear every chat on this phone? There is no undo and no backup.')) return;
+    if (!confirm('Clear every chat on this phone? There is no undo. Save a backup first if you want to keep them.')) return;
     state = { me: state.me, threads: [], seeded: false }; save(); seed(); current = null; back(); closeSheets(); toast('Cleared. Fresh noggles.');
   });
+  /* ---------- Backups: one JSON file, checked field by field before anything touches state ---------- */
+  /* backup-validator:start (pure: tests/nouns-messenger.test.mjs runs this block on its own) */
+  const BACKUP_VERSION = 1, MAX_THREADS = 200, MAX_THREAD_MESSAGES = 2000, MAX_MESSAGES = 10000, MAX_TEXT = 2000;
+  // Returns { me, threads } built only from the fields it checked, or throws an Error whose message
+  // says what was wrong. Nothing from the file is copied across unchecked, so no stray key survives.
+  function validateBackup(data, known) {
+    const fail = (why) => { throw new Error(why); };
+    const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+    const isTs = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 8.64e15;
+    const str = (v, max, what, min = 0) => { if (typeof v !== 'string') fail('Something in that backup is not text where text belongs.'); if (v.length < min || v.length > max) fail(what); return v; };
+    if (!isObj(data) || data.app !== 'nouns-messenger') fail('That file is not a Nouns Messenger backup.');
+    if (data.version !== BACKUP_VERSION) fail('That backup is from a newer or unknown version.');
+    if (!Array.isArray(data.threads)) fail('That backup has no chats in it.');
+    if (data.threads.length > MAX_THREADS) fail('That backup has too many chats.');
+    let me = null;
+    if (data.me !== undefined) {
+      if (!isObj(data.me)) fail('The name in that backup is not readable.');
+      me = { name: str(data.me.name ?? '', 24, 'The name in that backup is too long.').trim(), color: known.colors.includes(data.me.color) ? data.me.color : '' };
+    }
+    const ids = new Set(); let total = 0;
+    const threads = data.threads.map((t) => {
+      if (!isObj(t)) fail('A chat in that backup is not readable.');
+      const kind = t.kind;
+      if (kind !== 'bot' && kind !== 'self' && kind !== 'peer') fail('A chat in that backup has an unknown kind.');
+      const id = str(t.id, 300, 'A chat in that backup has a bad id.', 1);
+      if (!/^[A-Za-z0-9_.!~*'()%-]+$/.test(id) || ids.has(id)) fail('A chat in that backup has a bad id.');
+      ids.add(id);
+      let bot;
+      if (kind === 'bot') { bot = t.bot; if (!known.bots.includes(bot) || id !== 'c-' + bot) fail('A companion in that backup is not one we know.'); }
+      if (kind === 'self' && id !== 'self') fail('A chat in that backup has a bad id.');
+      if (kind === 'peer' && !id.startsWith('p-')) fail('A chat in that backup has a bad id.');
+      const name = str(t.name, 40, 'A chat name in that backup is too long or missing.', 1).trim();
+      if (!name) fail('A chat name in that backup is too long or missing.');
+      const tag = t.tag === undefined ? '' : str(t.tag, 80, 'A chat note in that backup is too long.');
+      if (!Array.isArray(t.messages) || t.messages.length > MAX_THREAD_MESSAGES) fail(`The chat “${name.slice(0, 24)}” has too many messages.`);
+      total += t.messages.length; if (total > MAX_MESSAGES) fail('That backup has too many messages.');
+      const mids = new Set();
+      const messages = t.messages.map((m) => {
+        if (!isObj(m)) fail('A message in that backup is not readable.');
+        const mid = str(m.id, 40, 'A message in that backup has a bad id.', 1);
+        if (!/^[a-z0-9]+$/i.test(mid) || mids.has(mid)) fail('A message in that backup has a bad id.');
+        mids.add(mid);
+        if (m.from !== 'me' && m.from !== 'them') fail('A message in that backup has no sender.');
+        const text = str(m.text, MAX_TEXT, `A message in that backup is longer than ${MAX_TEXT} characters.`, 1);
+        if (!isTs(m.ts)) fail('A message in that backup has a bad time.');
+        const out = { id: mid, from: m.from, text, ts: m.ts, status: m.status === 'sent' ? 'sent' : 'read' };
+        if (m.reaction !== undefined && m.reaction !== '') out.reaction = str(m.reaction, 16, 'A reaction in that backup is too long.');
+        return out;
+      });
+      const unread = Number.isInteger(t.unread) && t.unread >= 0 ? Math.min(t.unread, messages.length) : 0;
+      const out = { id, name, kind, color: known.colors.includes(t.color) ? t.color : (kind === 'self' ? 'cool' : 'yellow'), tag, messages, unread, created: isTs(t.created) ? t.created : (messages[0]?.ts || 0) };
+      if (bot) out.bot = bot;
+      return out;
+    });
+    return { me, threads };
+  }
+  /* backup-validator:end */
+  const MAX_BACKUP_BYTES = 8 * 1024 * 1024;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  function backupDate() { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+  function saveBackup() {
+    const body = { app: 'nouns-messenger', version: BACKUP_VERSION, exported: new Date().toISOString(), me: { name: state.me.name, color: state.me.color }, threads: state.threads };
+    try {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 1)], { type: 'application/json' }));
+      const a = document.createElement('a'); a.href = url; a.download = `nouns-messenger-backup-${backupDate()}.json`;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+      const n = state.threads.reduce((k, t) => k + t.messages.length, 0);
+      toast(`Backup saved: ${plural(state.threads.length, 'chat', 'chats')}, ${plural(n, 'message', 'messages')}`);
+    } catch (_) { toast('This browser would not save the file.'); }
+  }
+  // The lines a fresh install writes on its own. After "Clear all chats" they come back with new ids,
+  // so a restore skips the old copies instead of showing every hello twice.
+  const SEED_TEXTS = new Set([SEED_TIP, ...COMPANIONS.map((c) => c.hello)]);
+  // Merge: a chat we do not have is added whole; a chat we have gains only the messages whose ids it
+  // does not already hold. Nothing on the phone is overwritten or removed.
+  function mergeBackup(b) {
+    let chats = 0, added = 0;
+    for (const inc of b.threads) {
+      const have = state.threads.find((x) => x.id === inc.id);
+      if (!have) { state.threads.push(inc); chats++; added += inc.messages.length; continue; }
+      const ids = new Set(have.messages.map((m) => m.id)), texts = new Set(have.messages.map((m) => m.text));
+      const fresh = inc.messages.filter((m) => !ids.has(m.id) && !(m.from === 'them' && have.kind === 'bot' && SEED_TEXTS.has(m.text) && texts.has(m.text)));
+      if (!fresh.length) continue;
+      have.messages = have.messages.concat(fresh).sort((x, y) => x.ts - y.ts);
+      chats++; added += fresh.length;
+    }
+    if (b.me && !state.me.name && b.me.name) { state.me.name = b.me.name; if (b.me.color) state.me.color = b.me.color; }
+    return { chats, added };
+  }
+  function restoreBackup(file) {
+    if (!file) return;
+    if (file.size > MAX_BACKUP_BYTES) { toast('That file is too big to be a Nouns Messenger backup.'); return; }
+    const r = new FileReader();
+    r.onerror = () => toast('Could not read that file.');
+    r.onload = () => {
+      let b;
+      try { b = validateBackup(JSON.parse(String(r.result)), { colors: Object.keys(COLORS), bots: COMPANIONS.map((c) => c.id) }); }
+      catch (e) { toast(e instanceof SyntaxError ? 'That file is not a Nouns Messenger backup.' : e.message); return; }
+      const { chats, added } = mergeBackup(b);
+      if (!chats) { toast('Nothing new in that backup. Every chat is already here.'); return; }
+      save(); applyMe(); closeSheets();
+      if (current) open(current.id); else renderList();
+      toast(`Restored ${plural(chats, 'chat', 'chats')}, ${plural(added, 'message', 'messages')}`);
+    };
+    r.readAsText(file);
+  }
+  $('btn-backup').addEventListener('click', saveBackup);
+  $('btn-restore').addEventListener('click', () => { const f = $('restore-file'); f.value = ''; f.click(); });
+  $('restore-file').addEventListener('change', (e) => restoreBackup(e.target.files && e.target.files[0]));
   function renderSwatches() {
     const el = $('swatches'); el.replaceChildren();
     for (const [k, v] of Object.entries(COLORS)) {
@@ -368,6 +490,28 @@
     } catch (_) { return false; }
   }
 
+  // Share into Nouns Messenger: the installed app is a share target (manifest share_target, GET), so
+  // the phone's share sheet opens /nouns-messenger/?title=…&text=…&url=…. The shared bits land in
+  // Note to self as a message from you, and the query is taken off the address so a reload does not
+  // file it twice. The worker serves this page from cache with any query, so it works offline too.
+  const SHARE_KEYS = ['title', 'text', 'url'];
+  function importShare() {
+    const q = new URLSearchParams(location.search);
+    if (!SHARE_KEYS.some((k) => q.has(k))) return false;
+    const parts = SHARE_KEYS.map((k) => (q.get(k) || '').trim()).filter(Boolean);
+    SHARE_KEYS.forEach((k) => q.delete(k));
+    const rest = q.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : ''));
+    // Share sheets often repeat themselves (the link inside the text, the title inside the text): keep
+    // a part only if no other part already carries it.
+    const keep = parts.filter((p, i) => !parts.some((o, j) => j !== i && o.includes(p) && (o.length > p.length || j < i)));
+    if (!keep.length) return false;
+    const t = ensureThread({ id: 'self', name: 'Note to self', kind: 'self', color: 'cool', tag: 'only you, only here' });
+    t.messages.push(msg('me', keep.join('\n').slice(0, MAX_TEXT)));
+    save(); open(t.id); toast('Saved to Note to self'); buzz(12);
+    return true;
+  }
+
   /* ---------- Misc ---------- */
   let toastTimer;
   function toast(text) { toastEl.textContent = text; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastEl.hidden = true), 2200); }
@@ -381,9 +525,9 @@
   if (location.search.includes('theme=dark')) document.documentElement.dataset.theme = 'dark';
 
   /* ---------- Boot ---------- */
-  seed(); applyMe();
+  seed(); applyMe(); updateBadge();
   if (wide.matches) { paneChat.hidden = false; paneChat.classList.add('idle'); }
   renderList();
-  if (!importNote()) { const id = location.hash.slice(1); if (id && state.threads.some((t) => t.id === id)) open(id); }
+  if (!importShare() && !importNote()) { const id = location.hash.slice(1); if (id && state.threads.some((t) => t.id === id)) open(id); }
   window.addEventListener('hashchange', () => { importNote(); });
 })();
