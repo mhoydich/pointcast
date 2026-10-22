@@ -12,6 +12,13 @@
 - [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737: Lighthouse (Simon), Low Tide (Kaboom!), Morning Route (Paperboy), Sea Glass (Q*bert), Sandcastle (Missile Command); each lights its own cabinet when published — `in-progress`
 - [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
 
+### Low Tide — catch what the gull drops (wave two, Block 0734)
+
+`/low-tide`, `/low-tide.json`, Block 0734, branch `claude/low-tide-20261022` stacked on #1478. Kaboom! (Activision, 1981) made gentle. Rules in `src/lib/low-tide/tide.mjs`, tests in `tests/low-tide.test.mjs`, research note `docs/notes/2026-10-22-low-tide-notes.md`.
+
+- [x] (CC) Build the game: gull, shells and a three-bucket stack with paddle-style absolute control, fixed-count waves that speed up, a rising catch run, a tide wash for a miss, a bucket back every 1000 points, golden shells in RUSH, shared mood and machines, JSON twin, Block, cover art, discovery — `done`
+- [ ] (Manus) Real-device QA per `docs/briefs/2026-10-22-manus-low-tide-qa.md` after deploy — `queued`
+
 ---
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)

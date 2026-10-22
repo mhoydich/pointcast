@@ -1,0 +1,899 @@
+---
+/**
+ * /low-tide — catch what the gull drops.
+ *
+ * Kaboom! (Activision, 1981, designed by Larry Kaplan for the Atari 2600
+ * paddle) made gentle, as one of the wave-two cabinets on Cabinet Row.
+ * Directed by Michael Hoydich, 2026-10-22: 80s innocence, the joy of the
+ * compute and flow, mood-state symbiosis, mobile and full screen, Atari and
+ * Commodore inspired, rendered modern.
+ *
+ * The playfield is drawn from the shared 3x5 pixel font and plain rects on a
+ * canvas; every sound is synthesized. Game rules live in src/lib/low-tide
+ * (tests/low-tide.test.mjs); font, machines and mood are the shared
+ * Breakwater modules, imported unchanged.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+import { WAVE_COUNTS } from '../lib/low-tide/tide.mjs';
+
+const description = 'A Kaboom!-style catching game made gentle: a gull drops shells, you catch them in a stack of three buckets that follow your finger. Atari 800XL or Commodore 64 blue, a rising run of synthesized notes, and a mood the game and you keep together.';
+const canonical = 'https://pointcast.xyz/low-tide';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Low Tide',
+      alternateName: 'Low Tide: catch what the gull drops',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/low-tide/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Catching game',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Low Tide', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+---
+
+<BlockLayout
+  title="Low Tide"
+  description={description}
+  image="/images/low-tide/og.png"
+  imageAlt="A blue playfield with a white pixel gull at the top, orange shells falling, and a stack of three gold buckets above a strip of sand and sea, beside the words Low Tide, catch what the gull drops."
+  themeColor="#2545a8"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/low-tide.json', title: 'Low Tide rules, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/low-tide/og.png',
+    buttons: [
+      { label: 'Play Low Tide', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="lt" data-lt data-machine="xl" data-crt="on">
+    <div class="lt-stage" data-stage>
+      <header class="lt-bar">
+        <a class="lt-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="lt-name" aria-hidden="true">LOW TIDE</span>
+        <div class="lt-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (1 / 2)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (3)">PLAY</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="lt-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Low Tide playfield. Move the buckets under the falling shells; tap or press space to start a wave."></canvas>
+        <div class="lt-scan" aria-hidden="true"></div>
+        <noscript><p class="lt-noscript">Low Tide needs JavaScript to draw the gull and make its sounds. The rules and moods are readable at <a href="/low-tide.json">/low-tide.json</a>.</p></noscript>
+      </div>
+      <footer class="lt-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>96 BPM</span>
+        <span data-r-wave>WAVE 1</span>
+        <span data-r-fps>-- FPS</span>
+        <span data-r-run>RUN 0</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="lt-notes">
+      <p class="lt-eyebrow">PointCast / Games / Cabinet Row / Low Tide</p>
+      <h1>Catch what the gull drops.</h1>
+      <p class="lt-lede">A gull glides along the top of the screen and lets shells go. You hold a stack of three buckets on the sand. It is Kaboom! with the bombs taken out: the same climb, the same rising run of notes, and a tide instead of an explosion.</p>
+
+      <div class="lt-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Every catch raises its <strong>energy</strong>. A shell lost to the tide lowers its <strong>calm</strong>. Time brings both back toward the dial you set. Four words name where it is.</p>
+          <ul class="lt-moods">
+            <li><b>DAWN</b> warming up. Cool shells, a slow major arpeggio, slightly wide buckets.</li>
+            <li><b>FLOW</b> a long run of catches. Bright shells, the music opens up.</li>
+            <li><b>RUSH</b> the gull flies faster, raster bars fill the border, and now and then a golden shell worth five times as much.</li>
+            <li><b>DRIFT</b> after the tide takes one. The shells fall slower, the buckets widen, the notes thin out.</li>
+          </ul>
+          <p>Your side is the dial: {dials.map((d, i) => <span><b>{d.label}</b> ({d.id === 'calm' ? 'no bucket is ever lost and the game never ends' : d.id === 'play' ? 'three buckets, one back every 1000 points' : 'starts hot, leans into golden shells'}){i < dials.length - 1 ? '; ' : '.'}</span>)} The game relaxes toward it, and when you leave after a game, it hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'Graphics 0 blue with a black border and light-blue text. Raw square waves, in the POKEY spirit. READY, then RUN "D:LOWTIDE".' : 'The blue field inside a light-blue border. A resonant filter sweep on every voice, in the SID spirit. The banner, then LOAD"LOW TIDE",8,1.'}</p>
+          ))}
+          <p>Nothing is emulated and nothing is copied: no Activision art, names or characters. The gull, the shells, the music and the palettes were made for this page. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-low-tide-notes.md">note on Kaboom!</a> that it grew from.</p>
+        </article>
+        <article>
+          <h2>The rules</h2>
+          <p>Waves drop {WAVE_COUNTS.join(', ')} shells, then {WAVE_COUNTS[WAVE_COUNTS.length - 1]} from then on, each wave faster than the last. A catch is worth the wave number, one point up to eight. Miss one and the tide washes the rest of that wave away, takes the bottom bucket, and the gull starts the wave before again. A bucket comes back every 1000 points.</p>
+          <h2>Controls</h2>
+          <ul>
+            <li>The buckets follow the mouse or your finger across the field, like a paddle. Tap or click to start a wave.</li>
+            <li>Keys: ← → or A D move, Space starts a wave, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead.</li>
+          </ul>
+        </article>
+      </div>
+
+      <footer class="lt-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code on October 22, 2026, after Kaboom! (Activision, 1981, designed by Larry Kaplan). Original code, art and synthesized sound; machine names are tributes.</p>
+        <p><a href="/cabinet-row">Cabinet Row</a> · <a href="/low-tide.json">low-tide.json</a> · <a href="/breakwater">Breakwater</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .lt { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .lt[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .lt-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .lt-stage:fullscreen { height: 100%; min-height: 0; }
+  .lt-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .lt-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .lt-home { color: var(--text); text-decoration: none; font-weight: 700; }
+  .lt-home:hover { color: #fff; }
+  .lt-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .lt-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+  .lt-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .lt-controls button:hover { background: #1f2456; }
+  .lt-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
+  .lt-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .lt-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .lt-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .lt-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .lt[data-crt='off'] .lt-scan { display: none; }
+  .lt-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .lt-noscript a { color: var(--paddle); }
+  .lt-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .lt-readout span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .lt-readout a { margin-left: auto; flex-shrink: 0; color: var(--text); text-decoration: none; }
+  .lt-readout a:hover { color: #fff; }
+  .lt-stage:fullscreen .lt-readout a { display: none; }
+  .lt-stage:-webkit-full-screen .lt-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .lt-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .lt-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
+  .lt-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .lt-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .lt-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .lt-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .lt-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .lt-grid p + h2, .lt-grid ul + h2 { margin-top: 22px; }
+  .lt-grid p { margin: 0 0 12px; }
+  .lt-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .lt-grid li { margin-bottom: 6px; }
+  .lt-moods { list-style: none; padding: 0; }
+  .lt-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .lt-notes a { color: #a9b9f5; }
+  .lt-notes a:hover { color: #fff; }
+  .lt-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .lt-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .lt-stage { min-height: 0; }
+    .lt-bar { gap: 8px; padding: 6px 10px; }
+    .lt-name { display: none; }
+    .lt-controls { gap: 4px; }
+    .lt-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
+    .lt-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .lt-readout [data-r-run], .lt-readout [data-r-fps] { display: none; }
+    .lt-grid { grid-template-columns: 1fr; gap: 20px; }
+    .lt-notes { padding: 40px 16px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .lt-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+  import {
+    W, WALL, HUD, H_MIN, H_MAX, GULL_Y, SHELL_W, SHELL_H, BUCKET_H, GULL, SHELL,
+    bucketTop, sandY, catchNote, createTide, startWave, setBucketX, setHeight, tideStep, applyCalm, lowestShell,
+  } from '../lib/low-tide/tide.mjs';
+
+  const root = document.querySelector('[data-lt]');
+  if (root) main(root);
+
+  function main(root) {
+    const STORE = 'low-tide:v1';
+    const KEY_SPEED = 300;
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+    let H = H_MIN;
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      wave: root.querySelector('[data-r-wave]'),
+      fps: root.querySelector('[data-r-fps]'),
+      run: root.querySelector('[data-r-run]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isFinite(settings.best) && settings.best > 0 ? Math.floor(settings.best) : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return rgb([0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * t))); };
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music;
+      let tempo = 104, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
+      let nextNote = 0, step = 0, timer = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      const PROG = {
+        major: [[60, 64, 67, 72], [57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67]],
+        bright: [[60, 64, 67, 71], [62, 66, 69, 74], [65, 69, 72, 76], [67, 71, 74, 78]],
+        minor: [[57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67], [57, 60, 64, 69]],
+        soft: [[60, 67, 72, 76], [53, 60, 65, 69], [57, 64, 69, 72], [55, 62, 67, 71]],
+      };
+      const ARP = [0, 2, 1, 3, 2, 1, 3, 2];
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = 0.28; music.connect(master);
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      function noiseBuffer(dur) {
+        const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = Math.random() * 2 - 1;
+        return buf;
+      }
+      const bass = () => (machineId === 'c64' ? 'triangle' : 'square');
+      function playStep(s, t) {
+        const chords = PROG[scale] || PROG.major;
+        const chord = chords[Math.floor(s / 16) % chords.length];
+        const idx = s % 16;
+        if (idx % 8 === 0) voice({ freq: midi(chord[0] - 24), type: bass(), t, dur: 0.22, vol: 0.16, dest: music, r: 0.08 });
+        const gate = scale === 'soft' ? 0.3 : 0.45 + density * 0.4;
+        if (idx % 2 === 0 || Math.random() < gate * 0.5) {
+          if (Math.random() < gate) voice({ freq: midi(chord[ARP[idx % ARP.length]]), type: 'square', t, dur: scale === 'soft' ? 0.2 : 0.09, vol: scale === 'soft' ? 0.08 : 0.1, dest: music, r: 0.04, detune: machineId === 'xl' ? 4 : 0 });
+        }
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
+        while (nextNote < ac.currentTime + 0.14) {
+          playStep(step, nextNote);
+          nextNote += 60 / tempo / 4;
+          step += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        // Kaboom!'s signature: every catch in a wave plays the next note of a rising run.
+        catch(run, sc, golden) {
+          if (!ac) return;
+          const t = ac.currentTime;
+          const n = catchNote(run, sc);
+          voice({ freq: midi(n), type: machineId === 'c64' ? 'square' : 'square', t, dur: 0.1, vol: 0.22, r: 0.06 });
+          voice({ freq: midi(n + 12), type: 'triangle', t: t + 0.03, dur: 0.06, vol: 0.08, r: 0.04 });
+          if (golden) [7, 12, 19].forEach((k, i) => voice({ freq: midi(n + k), type: 'triangle', t: t + 0.07 + i * 0.05, dur: 0.08, vol: 0.14, r: 0.06 }));
+        },
+        drop() { if (ac) voice({ freq: 1560, type: 'triangle', dur: 0.025, vol: 0.035, slide: 0.8, r: 0.02 }); },
+        // A soft wash of filtered noise: the tide coming in and going out.
+        wash() {
+          if (!ac) return;
+          const t = ac.currentTime, dur = 1.6;
+          const s = ac.createBufferSource(); s.buffer = noiseBuffer(dur);
+          const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 0.7;
+          f.frequency.setValueAtTime(380, t);
+          f.frequency.exponentialRampToValueAtTime(2200, t + 0.45);
+          f.frequency.exponentialRampToValueAtTime(240, t + dur);
+          const g = ac.createGain();
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(0.32, t + 0.35);
+          g.gain.setTargetAtTime(0.0001, t + 0.6, 0.3);
+          s.connect(f); f.connect(g); g.connect(sfx); s.start(t); s.stop(t + dur);
+        },
+        clear() { if (!ac) return; const t = ac.currentTime; [60, 64, 67, 72, 76].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.07, dur: 0.14, vol: 0.18, r: 0.08 })); },
+        extra() { if (!ac) return; const t = ac.currentTime; voice({ freq: midi(79), type: 'triangle', t, dur: 0.1, vol: 0.2 }); voice({ freq: midi(84), type: 'triangle', t: t + 0.1, dur: 0.22, vol: 0.2, r: 0.1 }); },
+        sio() { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = ac.currentTime; [60, 67, 72, 76, 79, 84].forEach((n, i) => voice({ freq: midi(n), type: 'square', t: t + i * 0.06, dur: 0.12, vol: 0.15, r: 0.1 })); },
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, beeped: false, total: 0 },
+      attract: true, played: false, paused: false, resume: null, musicResume: false,
+      keys: {}, dragId: null, particles: [], washed: [], washT: 0, flash: 0,
+      msg: '', msgT: 0, msgScale: 3, loading: 0, fps: 60, fpsAcc: 0, fpsN: 0,
+    };
+    let T = createTide({ height: H });
+
+    function bootScript() {
+      if (machineId === 'c64') return ['', '    **** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"LOW TIDE",8,1', '', 'SEARCHING FOR LOW TIDE', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:LOWTIDE"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+    }
+    function enterTitle() {
+      G.phase = 'title'; G.t = 0; G.attract = true; G.particles = []; G.washed = [];
+      T = createTide({ height: H });
+      audio.setMusic(true);
+    }
+    function newGame() {
+      G.attract = false; G.played = true; G.particles = []; G.washed = [];
+      const x = T.bucketX;
+      T = createTide({ height: H });
+      setBucketX(T, x);
+      beginGame(mood); response = moodResponse(mood);
+      G.phase = 'play'; G.t = 0;
+      audio.setMusic(true);
+      readout.wave.textContent = waveLabel();
+      announce(`New game. Wave 1, ${T.spec.count} shells. ${COARSE ? 'Tap' : 'Tap or press space'} to start.`);
+    }
+    function showMsg(text, scale = 3, time = 1.2) { G.msg = text; G.msgScale = scale; G.msgT = time; }
+    const waveLabel = () => `WAVE ${T.wave + 1} ${Math.min(T.dropped, T.spec.count)}/${T.spec.count}`;
+
+    function spawn(x, y, color, n, up = 1) {
+      for (let i = 0; i < n; i += 1) G.particles.push({ x, y, vx: rnd(-70, 70), vy: rnd(-150, -30) * up, life: rnd(0.3, 0.7), t: 0, color });
+      if (G.particles.length > 220) G.particles.splice(0, G.particles.length - 220);
+    }
+
+    function tideOpts() {
+      if (G.attract) return { speed: 1, widen: 1.1 };
+      return { speed: response.speed, widen: response.paddle, rush: response.label === 'RUSH', calm: response.unlimitedBalls };
+    }
+
+    function handle(events) {
+      const m = M();
+      for (const e of events) {
+        if (e.type === 'drop') { if (!G.attract) audio.drop(); }
+        else if (e.type === 'catch') {
+          spawn(e.x, bucketTop(e.bucket, H), e.golden ? m.bands.yellow : m.raster[4], REDUCED ? 2 : 2 + Math.round(8 * (G.attract ? 0.3 : response.density)));
+          if (G.attract) continue;
+          moodEvent(mood, 'paddle');
+          audio.catch(e.run, response.scale, e.golden);
+          if (e.golden) { showMsg(`GOLD +${e.points}`, 2, 0.8); }
+          buzz(e.golden ? 12 : 5);
+        } else if (e.type === 'extra') {
+          if (G.attract) continue;
+          audio.extra(); showMsg('BUCKET BACK', 3, 1.1); announce(`A bucket comes back. ${e.buckets} buckets.`);
+        } else if (e.type === 'miss') {
+          G.washT = 1.1; G.washed = e.washed.concat([{ x: e.x, y: sandY(H) - SHELL_H, golden: false }]);
+          G.flash = 0.3;
+          if (G.attract) continue;
+          moodEvent(mood, 'loss');
+          audio.wash(); buzz(30);
+          if (e.final) { showMsg('', 3, 0); announce(`The tide took the last bucket. Game over. Score ${T.score}.`); }
+          else if (e.bucketLost) { showMsg('THE TIDE TOOK ONE', 2, 1.1); announce(`Missed. The tide took a bucket. ${e.buckets} left.`); }
+          else { showMsg('WASHED AWAY', 2, 1.1); announce('Missed. The tide washed the wave away.'); }
+        } else if (e.type === 'wave') {
+          if (G.attract) continue;
+          moodEvent(mood, 'brick');
+          if (e.clean) moodEvent(mood, 'wave');
+          audio.clear();
+          showMsg(e.clean ? `WAVE ${e.index + 1} CLEAN` : `WAVE ${e.index + 1} DONE`, 3, 1.2);
+          announce(`Wave ${e.index + 1} ${e.clean ? 'caught clean' : 'done'}.`);
+        } else if (e.type === 'open') {
+          if (!G.attract) announce(`Wave ${e.wave + 1}, ${T.spec.count} shells.`);
+        } else if (e.type === 'over') {
+          if (G.attract) { T = createTide({ height: H }); continue; }
+          gameOver();
+        }
+      }
+    }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0;
+      if (T.score > best) best = T.score;
+      save(); handMoodToTown();
+      audio.setMusic(false);
+    }
+
+    // ---------- update ----------
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.washT > 0) G.washT -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      for (const p of G.particles) { p.t += dt; p.vy += 320 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      G.particles = G.particles.filter((p) => p.t < p.life);
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 22) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        return;
+      }
+
+      if (G.phase === 'title') {
+        // Attract mode: the buckets steer themselves, a little late, so the tide gets one now and then.
+        if (T.phase === 'ready') startWave(T);
+        const sh = lowestShell(T);
+        if (sh) setBucketX(T, T.bucketX + (sh.x + Math.sin(G.t * 1.3) * 10 - T.bucketX) * Math.min(1, 4.5 * dt));
+        handle(tideStep(T, dt, tideOpts()));
+        audio.set(104, 'major', 0.25);
+        return;
+      }
+      if (G.phase === 'paused' || G.phase === 'over') return;
+
+      const kx = (G.keys.ArrowRight || G.keys.KeyD ? 1 : 0) - (G.keys.ArrowLeft || G.keys.KeyA ? 1 : 0);
+      if (kx) setBucketX(T, T.bucketX + kx * KEY_SPEED * dt);
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      audio.set(response.tempo, response.scale, response.density);
+      handle(tideStep(T, dt, tideOpts()));
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_MIN) * 4) / 4);
+      // A tall phone gets a taller field (more fall under the gull), never a shorter one; applied at once.
+      H = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
+      if (T.h !== H) setHeight(T, H);
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+    }
+    function rainbowText(str, x, y, s, colors) {
+      const w = textWidth(str, s);
+      const ox = Math.round(x - w / 2);
+      for (let i = 0; i < str.length; i += 1) {
+        ctx.fillStyle = colors[i % colors.length];
+        eachPixel(str[i], ox + i * 4 * s, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+      }
+    }
+    function bitmap(rows, x, y, color, flip = false, px = 1) {
+      ctx.fillStyle = color;
+      const w = rows[0].length;
+      for (let r = 0; r < rows.length; r += 1) {
+        for (let c = 0; c < w; c += 1) if (rows[r][flip ? w - 1 - c : c] === '1') ctx.fillRect(x + c * px, y + r * px, px, px);
+      }
+    }
+    // The mood colors the shells: cool at DAWN, bright in FLOW, warm in RUSH, washed out in DRIFT.
+    function shellColor() {
+      const m = M();
+      if (G.attract) return m.bands.orange;
+      const label = response.label;
+      if (label === 'FLOW') return mix(m.bands.orange, '#ffffff', 0.25);
+      if (label === 'RUSH') return m.bands.red;
+      if (label === 'DRIFT') return mix(m.bands.orange, m.field, 0.35);
+      return mix(m.bands.orange, m.raster[4], 0.2);
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = G.attract ? 'DAWN' : response.label;
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.3 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        // Color index and pixel offset both come from `shift`, so the bars never snap backward.
+        const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
+        const shift = (G.t * speed) % (m.raster.length * h * 2);
+        ctx.globalAlpha = bars;
+        const f = shift % h, base = shift - f, period = m.raster.length * 2;
+        for (let y = -period * h; y < cssH + h; y += h) {
+          const idx = Math.round((y - base) / h);
+          const k = ((idx % period) + period) % period;
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + f, cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawField() {
+      const m = M();
+      ctx.fillStyle = m.field;
+      ctx.fillRect(0, 0, W, H);
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.1 : 0.3, G.flash); ctx.fillStyle = m.raster[4]; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    function drawShore() {
+      const m = M();
+      const sand = sandY(H);
+      // The tide rises over the sand on a miss, then falls back.
+      const surge = G.washT > 0 ? Math.sin((1 - G.washT / 1.1) * Math.PI) * 14 : 0;
+      ctx.fillStyle = mix(m.bands.yellow, m.field, 0.3);
+      ctx.fillRect(0, sand, W, H - sand);
+      const waterY = sand + 7 - Math.round(surge);
+      ctx.fillStyle = mix(m.field, '#000000', 0.3);
+      ctx.fillRect(0, waterY, W, H - waterY);
+      // Ripples: each row's dash pattern and its offset come from one base value, so they glide and never jump.
+      const period = 12;
+      const base = REDUCED ? 0 : G.t * 14;
+      for (let r = 0; r < 3; r += 1) {
+        const y = waterY + 2 + r * 4;
+        if (y >= H) break;
+        const off = Math.floor(((r % 2 ? -base : base) + r * 5) % period + period) % period;
+        ctx.fillStyle = r === 0 ? m.bright : m.raster[4];
+        ctx.globalAlpha = r === 0 ? 0.8 : 0.6;
+        for (let x = -period + off; x < W; x += period) { const x0 = Math.max(0, x), x1 = Math.min(W, x + 6 - r); if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, 1); }
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawHud() {
+      const m = M();
+      text(String(T.score).padStart(6, '0'), WALL + 2, 8, 3, m.bright);
+      const label = G.attract ? 'ATTRACT' : response.label;
+      const col = G.attract ? m.text : label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? mix(m.text, m.bright, 0.5) : m.bands.green;
+      text(label, W / 2 + 10, 11, 2, col, 'center');
+      if (!G.attract) {
+        if (response.unlimitedBalls) text('CALM', W - WALL - 2, 11, 2, m.text, 'right');
+        else { ctx.fillStyle = m.paddle; for (let i = 0; i < T.buckets; i += 1) ctx.fillRect(W - WALL - 2 - (i + 1) * 10, 11, 8, 6); }
+      }
+      ctx.fillStyle = m.text; ctx.globalAlpha = 0.5; ctx.fillRect(WALL, HUD - 2, W - 2 * WALL, 1); ctx.globalAlpha = 1;
+      if (!G.attract && mood.tape.length) {
+        const n = Math.min(60, mood.tape.length), start = mood.tape.length - n;
+        for (let i = 0; i < n; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(WALL + i * 3, HUD - 6, 2, 2);
+        }
+      }
+    }
+    function drawPlay(alpha) {
+      const m = M();
+      ctx.globalAlpha = alpha;
+      // The gull
+      const g = T.gull;
+      const frame = GULL[Math.floor(g.flap) % 2];
+      bitmap(frame, Math.round(g.x - frame[0].length), GULL_Y - 9, m.bright, g.dir < 0, 2);
+      // Shells in the air
+      const sc = shellColor();
+      for (const sh of T.shells) {
+        const x = Math.round(sh.x - SHELL_W / 2), y = Math.round(sh.y);
+        bitmap(SHELL, x, y, sh.golden ? m.bands.yellow : sc);
+        if (sh.golden && !REDUCED && Math.floor(G.t * 8 + sh.id) % 2 === 0) { ctx.fillStyle = m.bright; ctx.fillRect(x + 3, y - 2, 1, 1); }
+      }
+      // Shells the tide took, fading
+      if (G.washT > 0) {
+        ctx.globalAlpha = alpha * Math.max(0, G.washT / 1.1) * 0.8;
+        for (const sh of G.washed) bitmap(SHELL, Math.round(sh.x - SHELL_W / 2), Math.round(sh.y + (1.1 - G.washT) * 10), sc);
+        ctx.globalAlpha = alpha;
+      }
+      // The buckets
+      const bw = Math.round(T.bucketW), bx = Math.round(T.bucketX - T.bucketW / 2);
+      for (let i = 0; i < T.buckets; i += 1) {
+        const y = bucketTop(i, H);
+        ctx.fillStyle = m.paddle; ctx.fillRect(bx, y, bw, BUCKET_H);
+        ctx.fillStyle = m.bright; ctx.fillRect(bx, y, bw, 1);
+        ctx.fillStyle = mix(m.paddle, '#000000', 0.35); ctx.fillRect(bx + 2, y + BUCKET_H - 2, bw - 4, 1);
+      }
+      for (const p of G.particles) {
+        ctx.globalAlpha = alpha * (1 - p.t / p.life);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, m.text);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10, y, 6, 10); }
+    }
+    const blink = () => REDUCED || Math.floor(G.t * 2) % 2 === 0;
+    function drawTitle() {
+      const m = M();
+      drawPlay(0.35);
+      rainbowText('LOW TIDE', W / 2, 92, 7, [m.bands.yellow, m.bands.orange, m.raster[4], m.bands.green]);
+      text('CATCH WHAT THE GULL DROPS', W / 2, 150, 2, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 170, 2, m.bright, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 186, 2, m.bright, 'center');
+      if (blink()) text(COARSE ? 'TAP TO PLAY' : 'TAP OR PRESS SPACE', W / 2, 230, 2, m.paddle, 'center');
+      text(COARSE ? 'DRAG TO MOVE THE BUCKETS' : 'MOUSE OR ARROWS MOVE', W / 2, 248, 2, m.bright, 'center');
+      if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 274, 2, m.bright, 'center');
+    }
+    function drawReady() {
+      const m = M();
+      text(`WAVE ${T.wave + 1}`, W / 2, 120, 4, m.bright, 'center');
+      text(`${T.spec.count} SHELLS  ${T.spec.points} EACH`, W / 2, 148, 2, m.bright, 'center');
+      if (blink()) text(COARSE ? 'TAP TO START' : 'TAP OR SPACE TO START', W / 2, 172, 2, m.paddle, 'center');
+    }
+    function drawOver() {
+      const m = M();
+      text('LOW TIDE', W / 2, 108, 5, m.bright, 'center');
+      text(`SCORE ${String(T.score).padStart(6, '0')}`, W / 2, 152, 2, m.bright, 'center');
+      text(`BEST  ${String(best).padStart(6, '0')}`, W / 2, 168, 2, m.bands.yellow, 'center');
+      text(`CAUGHT ${T.totalCaught}  PEAK ${mood.peak}`, W / 2, 184, 2, m.bright, 'center');
+      if (blink()) text(COARSE ? 'TAP TO PLAY AGAIN' : 'TAP OR SPACE TO PLAY AGAIN', W / 2, 216, 2, m.paddle, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, offX * dpr, offY * dpr);
+      if (G.phase === 'boot') { drawBoot(); return; }
+      drawField();
+      drawShore();
+      if (G.phase === 'title') { drawTitle(); return; }
+      drawHud();
+      if (G.phase === 'over') { drawPlay(0.35); drawOver(); return; }
+      drawPlay(1);
+      const m = M();
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 150, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P OR SPACE TO RESUME', W / 2, 182, 2, m.paddle, 'center'); return; }
+      if (T.phase === 'ready' && G.msgT <= 0) drawReady();
+      if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 150, G.msgScale, m.bright, 'center');
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        readout.mood.textContent = `${G.attract ? 'ATTRACT' : response.label} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${G.attract ? 104 : response.tempo} BPM ${G.attract ? 'MAJOR' : response.scale.toUpperCase()}`;
+        readout.wave.textContent = G.attract ? 'ATTRACT' : waveLabel();
+        readout.fps.textContent = `${G.fps} FPS`;
+        readout.run.textContent = `RUN ${G.attract ? 0 : T.run}`;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return; }
+      if (G.phase === 'title' || G.phase === 'over') { newGame(); return; }
+      if (G.phase === 'paused') { G.phase = 'play'; audio.setMusic(true); return; }
+      if (G.phase === 'play' && startWave(T)) { announce(`Wave ${T.wave + 1}. ${T.spec.count} shells.`); }
+    }
+    canvas.addEventListener('pointermove', (e) => {
+      if (G.phase !== 'play') return;
+      if (e.pointerType !== 'mouse' && G.dragId !== e.pointerId) return;
+      setBucketX(T, pointerToField(e).x);
+    });
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      G.dragId = e.pointerId;
+      // The tap that starts a wave also moves the buckets; the wave starts from the new spot.
+      if (G.phase === 'play') setBucketX(T, pointerToField(e).x);
+      if (G.phase === 'title' || G.phase === 'over') { action(); setBucketX(T, pointerToField(e).x); return; }
+      action();
+    });
+    const endDrag = (e) => { if (G.dragId === e.pointerId) G.dragId = null; };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      const k = e.code;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('input, textarea, select, [contenteditable]')) return;
+        // Enter and Space belong to a focused link or button; arrows and letters still steer from there.
+        if ((k === 'Space' || k === 'Enter') && t.closest('a, button')) return;
+      }
+      if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'KeyA' || k === 'KeyD') { G.keys[k] = true; e.preventDefault(); audio.unlock(); return; }
+      if (k === 'Space' || k === 'Enter') { e.preventDefault(); action(); return; }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'Digit1') { setMachine('xl'); return; }
+      if (k === 'Digit2') { setMachine('c64'); return; }
+      if (k === 'Digit3') { cycleDial(); }
+    });
+    document.addEventListener('keyup', (e) => { G.keys[e.code] = false; });
+    function togglePause() {
+      if (G.phase === 'play') { G.phase = 'paused'; audio.setMusic(false); announce('Paused.'); }
+      else if (G.phase === 'paused') { G.phase = 'play'; audio.setMusic(true); }
+    }
+    const releaseHeld = () => { G.keys = {}; G.dragId = null; };
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        releaseHeld();
+        if (G.phase === 'play') G.phase = 'paused';
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', releaseHeld);
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      G.loading = 0.5;
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    const DIAL_NOTE = { calm: 'No bucket is ever lost and the game never ends.', play: 'Three buckets, one back every 1000 points.', rush: 'Starts hot. Leans into golden shells.' };
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      setDial(mood, next); response = moodResponse(mood);
+      // CALM fills the stack back up, but a final loss already washing in still ends the game.
+      if (response.unlimitedBalls && !G.attract) applyCalm(T);
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}. ${DIAL_NOTE[next]}`);
+      showMsg(DIALS[next].label, 3, 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    // A mouse or touch click leaves focus on the button; hand it back so Space plays again. Keyboard activation keeps focus.
+    const press = (el, fn) => el.addEventListener('click', (e) => { fn(); if (e.detail > 0) el.blur(); });
+    press(btn.machine, () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    press(btn.dial, () => { audio.unlock(); cycleDial(); });
+    press(btn.sound, toggleSound);
+    press(btn.crt, toggleCrt);
+    press(btn.full, toggleFull);
+    if (!document.fullscreenEnabled && !document.webkitFullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+  }
+</script>
