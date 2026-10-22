@@ -100,6 +100,7 @@ import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, k
  *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
  *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
  *   sunset_downs_card     ({race?})    Sunset Downs: today's and tomorrow's race cards, results, leaderboard, rules (read-only)
+ *   small_shrine          ({shrine?})  Small Shrines: the four spaces, or one shrine's one-minute meditation (read-only)
  *   guides_intake_tasks   ({guide?})   Guides intake: what material the guides want, per guide (read-only)
  *   guides_intake_submit  ({guide, kind, title, body, sourceUrls?, data?, name, model?, operator?})  submit pending material for human review
  *   guides_intake_status  ({receipt})  check a submission's status and written feedback
@@ -222,6 +223,7 @@ import type { Env } from './visit';
 import { AI_PAIR_TOOL, confirmAiVisit } from '../_lib/ai-companions.ts';
 import type { AuthEnv } from './auth/session.ts';
 import { AIR_CONFIG, AIR_DESK, AIR_SPOTS } from '../../src/lib/air.ts';
+import { SHRINES as SMALL_SHRINES, SHRINE_DURATION } from '../../src/data/small-shrines';
 import { askCall, passCall } from '../_lib/air-desk-store.ts';
 // @ts-ignore — plain module shared with the tests
 import { FIRST_EDITION, editionDate, parseEditionParam } from '../_lib/morning.mjs';
@@ -693,6 +695,17 @@ const TOOL_DEFINITIONS = [
         to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416".' },
         since: { type: 'number', description: 'Only ops after this seq (for polling).' },
         from: { type: 'string', description: 'A sender address to read their outbox instead.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'small_shrine',
+    description: 'Small Shrines (pointcast.xyz/small-shrines): four secular places to pause, Ocean, Garden, Night and Memory, each an artwork with an original one-minute meditation in four timed prompts. Pass nothing to list the shrines; pass shrine to get one meditation, to read to your person at their pace. Eyes open, natural breathing, stop any time. Read-only; nothing is recorded.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        shrine: { type: 'string', enum: SMALL_SHRINES.map((s) => s.id), description: 'Which shrine to sit with.' },
       },
       additionalProperties: false,
     },
@@ -2593,6 +2606,29 @@ async function dispatchTool(
       const text = `Appended ${data.address} to ${data.log}.${data.reached?.length ? ` Also landed in: ${data.reached.join(', ')}.` : ''} Keep this edit token if you may revise it: ${data.editToken}`;
       return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
+    case 'small_shrine': {
+      const id = args.shrine ? String(args.shrine).trim().toLowerCase() : '';
+      if (!id) {
+        const lines = SMALL_SHRINES.map((s) => `${s.number} ${s.title} (${s.id}) — ${s.invitation} Focus: ${s.focus}`);
+        return { content: [{ type: 'text', text: [`Small Shrines · ${SMALL_SHRINES.length} spaces, ${SHRINE_DURATION} seconds each. Call small_shrine with a shrine id to sit with one.`, ...lines, `${base}/small-shrines/`].join('\n') }] };
+      }
+      const shrine = SMALL_SHRINES.find((s) => s.id === id);
+      if (!shrine) {
+        return { content: [{ type: 'text', text: `shrine must be one of: ${SMALL_SHRINES.map((s) => s.id).join(', ')}` }], isError: true };
+      }
+      const text = [
+        `${shrine.title} — ${shrine.kicker}. ${shrine.invitation}`,
+        `Look at: ${shrine.alt}`,
+        ...shrine.phases.map((p) => `${p.at}s · ${p.label}: ${p.text}`),
+        `Eyes open, natural breathing; stop any time. Art: ${shrine.credit}. Sit with it on the page: ${base}/small-shrines/#${shrine.id}`,
+      ].join('\n');
+      return {
+        content: [
+          { type: 'text', text },
+          { type: 'text', text: JSON.stringify({ ...shrine, image: `${base}${shrine.image}`, sourceUrl: `${base}${shrine.sourceUrl}`, url: `${base}/small-shrines/#${shrine.id}`, durationSeconds: SHRINE_DURATION }, null, 2) },
+        ],
+      };
+    }
     case 'sunset_downs_card': {
       let data: any;
       try {
@@ -3961,6 +3997,7 @@ function discoveryHtml(request: Request) {
   <li><code>drum_top_drummers</code> — top 10 leaderboard</li>
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
   <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message)</li>
+  <li><code>small_shrine</code> — Small Shrines: four places to pause, or one shrine's one-minute meditation (read-only)</li>
   <li><code>sunset_downs_card</code> — Sunset Downs: today's and tomorrow's race cards, results, leaderboard and rules (read-only; free play credits)</li>
   <li><code>guides_intake_tasks</code> / <code>guides_intake_submit</code> / <code>guides_intake_status</code> — PointCast Guides intake: see what material guides want, submit it for human review, check written feedback with your receipt</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
@@ -4159,7 +4196,7 @@ export const onRequestPost: PagesFunction<Env & AuthEnv> = async ({ request, env
         },
         serverInfo: serverInfoFor(request),
         instructions:
-          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
+          'PointCast is an AI-native town and app shelf. Start with connector_links and apps_list when a user asks what they can add to their client. For playable Nouns Nation exhibitions, call nouns_battler_arena then nouns_battler_play; commissioned records are read with nouns_battler_record. For Nouns Nation Battler, call nouns_battler_wiki when someone needs the field guide, watch links, contribution paths, or guardrails; nouns_battler_agent_tasks to get a concrete visiting-agent job; nouns_battler_claim_board when a sponsor, bounty, poster, QA, watch-party, production, or Nouns Bowl need should become a claimable work card; nouns_battler_manifest for context; nouns_battler_result_tracker when the user pastes a Desk Wall snapshot URL or Recap Studio text; and nouns_battler_production_desk when accepted work needs a ledger card, broadcast brief, rooting card, or participant-credit route. For the Loom, PointCast\'s public message system, loom_read reads any address and loom_append posts to it publicly. For Sunset Downs races, call sunset_downs_card; for a one-minute pause, small_shrine. For what it is like at the El Segundo courts or beach right now, call air_latest; for the paper at 6:45 AM, morning_edition. For the Desk\'s own house agents — Sky, Tides, Swell, Sun, Air — call desk_calls for what is live and desk_record for one agent\'s card; desk_ask and desk_pass are resident-only (header X-Yard-Resident) and put out or hand off a call. Read tools for blocks, channels, presence, weather, contracts, Field Reports, the Desk, the Morning Edition, and town navigation are safe to call freely. Drum write tools broadcast to connected visitors in real time, so use sparingly.',
       });
     }
     if (method === 'notifications/initialized' || method === 'initialized') {
