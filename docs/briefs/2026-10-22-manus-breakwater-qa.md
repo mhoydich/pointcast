@@ -12,7 +12,7 @@ needed for QA itself; nothing on the page can spend, mint or post.
 - https://pointcast.xyz/breakwater.json (must return JSON with `name: "Breakwater"`)
 - https://pointcast.xyz/games/ (the catalog should list Breakwater under Retro arcade)
 - https://pointcast.xyz/play (the play layer should list Breakwater)
-- https://pointcast.xyz/b/0725 (the Block receipt)
+- https://pointcast.xyz/b/0726 (the Block receipt)
 
 ## Devices and browsers
 

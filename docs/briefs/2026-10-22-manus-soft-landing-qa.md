@@ -14,7 +14,7 @@ spend, mint or post.
 - https://pointcast.xyz/soft-landing.json (must return JSON with `name: "Soft Landing"`)
 - https://pointcast.xyz/games/ (the catalog should list Soft Landing under Retro arcade, next to Breakwater)
 - https://pointcast.xyz/play (the play layer should list Soft Landing after Breakwater)
-- https://pointcast.xyz/b/0728 (the Block receipt)
+- https://pointcast.xyz/b/0729 (the Block receipt)
 
 ## Devices and browsers
 
