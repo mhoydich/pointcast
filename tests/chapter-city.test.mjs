@@ -5,6 +5,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { JSDOM } from 'jsdom';
 import {
   W, H, idx, newGame, build, canBuild, stepMonth, finishYear, startNextYear, resolveDilemma, totals, analyze, DILEMMAS, cleanName,
+  LANDMARKS, snapshot, readSnapshot,
 } from '../src/scripts/chapter-city-sim.mjs';
 import { prologue, writeChapter, epilogue, novelMarkdown, CAST } from '../src/scripts/chapter-city-story.mjs';
 
@@ -146,6 +147,43 @@ test('losing an election or going broke ends the book with an epilogue', () => {
   assert.match(md, /## Prologue/);
 });
 
+test('landmarks unlock with population, come one at a time, and the coastal ones need the sea', () => {
+  const s = newGame({ seed: 21 });
+  s.funds = 50000;
+  assert.deepEqual(LANDMARKS, ['lighthouse', 'pier', 'college', 'stadium']);
+  const inland = idx(18, 4); s.tiles[inland].terrain = 'grass';
+  assert.match(canBuild(s, 'college', inland).why, /unlocks at 1,300/);
+  s.stats.pop = 1400;
+  assert.equal(build(s, 'college', inland).ok, true);
+  const second = idx(19, 4); s.tiles[second].terrain = 'grass';
+  assert.match(canBuild(s, 'college', second).why, /already has/);
+  assert.match(canBuild(s, 'lighthouse', second).why, /touch the sea/);
+  const shore = s.tiles.findIndex((t, i) => t.terrain !== 'water' && !t.t && [i - 1, i + 1].some(n => s.tiles[n]?.terrain === 'water' && Math.floor(n / W) === Math.floor(i / W)));
+  assert.equal(build(s, 'lighthouse', shore).ok, true);
+  const cover = analyze(s).cover.school;
+  assert.ok(cover[idx(18, 10)] > 0.5, 'the college counts as schooling over a wide radius');
+  s.stats.pop = 0;
+  const later = newGame({ seed: 22 });
+  later.stats.pop = 900;
+  const rec = finishYear(later);
+  assert.ok(Array.isArray(rec.unlocked));
+});
+
+test('every chapter carries a one-character-per-tile snapshot that reads back', () => {
+  const s = newGame({ seed: 31 });
+  starter(s);
+  const snap = snapshot(s);
+  assert.equal(snap.length, W * H);
+  const back = readSnapshot(snap);
+  assert.equal(back.length, W * H);
+  assert.equal(back[idx(0, 0)].terrain, 'water');
+  assert.ok(back.some(t => t.t === 'power'));
+  assert.ok(back.some(t => t.t === 'road'));
+  const { chapter } = playYear(s);
+  assert.equal(chapter.snap.length, W * H);
+  assert.equal(prologue(newGame({ seed: 31 })).snap.length, W * H);
+});
+
 test('town names are cleaned and the cast is fictional', () => {
   assert.equal(cleanName('<b>Port</b> "Gull"'), 'bPortb Gull');
   assert.equal(cleanName(''), 'Halcyon');
@@ -189,6 +227,7 @@ test('the page boots, builds, writes a chapter and offers the dilemma', async t 
   for (let k = 0; k < 50 && game.state.chapters.length < 2; k++) await wait(10);
   assert.equal(game.state.chapters.length, 2);
   assert.match(root.querySelector('[data-page] h2').textContent, /\w/);
+  assert.ok(root.querySelector('[data-page] [data-plate]'), 'the chapter has a plate of the town');
   assert.ok(JSON.parse(window.localStorage.getItem(SAVE_KEY)).chapters.length === 2, 'saved after the chapter');
   const dilemma = root.querySelector('[data-dilemma]');
   if (game.state.pending) {

@@ -1,7 +1,7 @@
 // CHAPTER CITY — the playable page: map, tools, the turn, and the book.
 import {
   W, H, TOOLS, MONTHS, idx, newGame, build, canBuild, analyze, totals, stepMonth, finishYear,
-  startNextYear, resolveDilemma, DILEMMAS, rngFrom, cleanName,
+  startNextYear, resolveDilemma, DILEMMAS, rngFrom, cleanName, LANDMARKS, landmarkUnlocked, readSnapshot,
 } from './chapter-city-sim.mjs';
 import { prologue, writeChapter, epilogue, novelMarkdown } from './chapter-city-story.mjs';
 
@@ -163,8 +163,33 @@ export function initChapterCity(root) {
   function roof(x, y, w, color) {
     const g = ctx; g.fillStyle = color; g.beginPath(); g.moveTo(x, y + 1); g.lineTo(x + w / 2, y - 7); g.lineTo(x + w, y + 1); g.closePath(); g.fill();
   }
+  function drawLandmark(t, x, y, time) {
+    const g = ctx;
+    if (t === 'lighthouse') {
+      g.fillStyle = COLORS.shadow; g.fillRect(x + 14, y + 6, 8, 24);
+      g.fillStyle = '#f4f1ea'; g.beginPath(); g.moveTo(x + 11, y + 28); g.lineTo(x + 13, y + 8); g.lineTo(x + 19, y + 8); g.lineTo(x + 21, y + 28); g.fill();
+      g.fillStyle = '#c0392b'; g.fillRect(x + 12, y + 14, 8.5, 3); g.fillRect(x + 11.5, y + 21, 9, 3);
+      g.fillStyle = '#ffd23f'; g.fillRect(x + 13, y + 4, 6, 4);
+      const a = (time / 900) % (Math.PI * 2);
+      g.fillStyle = 'rgba(255,230,120,.35)'; g.beginPath(); g.moveTo(x + 16, y + 6); g.arc(x + 16, y + 6, 22, a, a + 0.5); g.fill();
+    } else if (t === 'pier') {
+      g.fillStyle = '#8a6a48'; g.fillRect(x + 2, y + 12, T - 4, 8);
+      g.fillStyle = '#6b4f33'; for (let k = 0; k < 4; k++) g.fillRect(x + 4 + k * 7, y + 20, 2, 8);
+      g.fillStyle = '#f4f1ea'; g.fillRect(x + 8, y + 4, 16, 7); g.fillStyle = '#2b6c8f'; g.fillRect(x + 8, y + 8, 16, 3);
+    } else if (t === 'college') {
+      box(x + 3, y + 10, T - 6, T - 13, 4, '#d9cbb0', '#b8a888');
+      g.fillStyle = '#8a3b2b'; g.beginPath(); g.moveTo(x + 2, y + 11); g.lineTo(x + T / 2, y + 3); g.lineTo(x + T - 2, y + 11); g.fill();
+      g.fillStyle = '#efe6d0'; for (let k = 0; k < 4; k++) g.fillRect(x + 6 + k * 6, y + 14, 2.5, 12);
+    } else if (t === 'stadium') {
+      g.fillStyle = COLORS.shadow; g.beginPath(); g.ellipse(x + 18, y + 18, 14, 11, 0, 0, 7); g.fill();
+      g.fillStyle = '#b8bec4'; g.beginPath(); g.ellipse(x + 16, y + 16, 14, 11, 0, 0, 7); g.fill();
+      g.fillStyle = '#5fa14a'; g.beginPath(); g.ellipse(x + 16, y + 16, 9, 6.5, 0, 0, 7); g.fill();
+      g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 16, y + 10); g.lineTo(x + 16, y + 22); g.stroke();
+    }
+  }
   function drawService(t, x, y, time, i) {
     const g = ctx;
+    if (TOOLS[t].landmark) { drawLandmark(t, x, y, time); return; }
     if (t === 'park') {
       g.fillStyle = '#6fae55'; g.fillRect(x + 1, y + 1, T - 2, T - 2);
       g.fillStyle = '#e3d6a8'; g.fillRect(x + 4, y + T / 2 - 1, T - 8, 3);
@@ -257,6 +282,15 @@ export function initChapterCity(root) {
     }
     $('[data-tax]').value = String(state.tax);
     $('[data-tax-out]').textContent = `${state.tax}%`;
+    for (const k of LANDMARKS) {
+      const btn = root.querySelector(`[data-tool="${k}"]`);
+      if (!btn) continue;
+      const built = state.tiles.some(t => t.t === k);
+      const open = landmarkUnlocked(state, k);
+      btn.classList.toggle('is-locked', !open);
+      btn.classList.toggle('is-built', built);
+      btn.title = built ? `${TOOLS[k].label}: built` : open ? `${TOOLS[k].label} · ${TOOLS[k].cost}${TOOLS[k].coastal ? ' · must touch the sea' : ''}` : `${TOOLS[k].label}: unlocks at ${n(TOOLS[k].unlock)} people`;
+    }
     const turn = $('[data-act="turn"]');
     turn.textContent = state.over ? 'The book is finished' : state.pending ? 'Decide first ↓' : `Write Chapter ${state.year} →`;
     turn.disabled = !!state.over || !!state.pending || busy;
@@ -288,11 +322,68 @@ export function initChapterCity(root) {
       <h2>${esc(ch.title.replace(/^(Chapter \d+|Prologue): /, ''))}</h2>
       <figure class="cc-clip"><figcaption>The ${esc(state.name)} Ledger</figcaption><blockquote>${esc(ch.headline)}</blockquote></figure>
       ${ch.paras.map(p => `<p>${esc(p)}</p>`).join('')}
-      ${ch.stats ? `<p class="cc-ledgerline">Ledger, end of year: ${n(ch.stats.pop)} people · treasury ${n(ch.stats.funds)} · approval ${ch.stats.approval}%</p>` : ''}`;
+      ${ch.stats ? `<p class="cc-ledgerline">Ledger, end of year: ${n(ch.stats.pop)} people · treasury ${n(ch.stats.funds)} · approval ${ch.stats.approval}%</p>` : ''}
+      ${ch.snap ? `<figure class="cc-plate"><canvas width="${W * 10}" height="${H * 10}" data-plate aria-hidden="true"></canvas><figcaption>Plate ${reading}. ${esc(state.name)}, ${reading === 0 ? 'before the first road' : ch.title.startsWith('Epilogue') ? 'at the end' : `end of Year ${ch.year}`}.</figcaption></figure>` : ''}`;
+    const plate = page.querySelector('[data-plate]');
+    if (plate) drawPlate(plate, ch.snap);
+    stopReading();
     $('[data-act="prev"]').disabled = reading <= 0;
     $('[data-act="next"]').disabled = reading >= state.chapters.length - 1;
     renderDilemma();
   }
+  // a woodcut-style plate of the town, drawn from the chapter's snapshot
+  function drawPlate(cv, snap) {
+    const g = cv.getContext('2d');
+    if (!g) return;
+    const S = 10, ink = '#3b2f22', paper = '#f3ead6';
+    g.fillStyle = paper; g.fillRect(0, 0, cv.width, cv.height);
+    readSnapshot(snap).forEach((t, i) => {
+      const x = (i % W) * S, y = Math.floor(i / W) * S;
+      g.fillStyle = ink; g.strokeStyle = ink; g.lineWidth = 1;
+      if (t.terrain === 'water') { for (let k = 2; k < S; k += 3) { g.beginPath(); g.moveTo(x, y + k + 0.5); g.lineTo(x + S, y + k + 0.5); g.stroke(); } return; }
+      if (t.terrain === 'sand') { g.fillRect(x + 2, y + 3, 1, 1); g.fillRect(x + 6, y + 7, 1, 1); return; }
+      if (t.terrain === 'trees') { g.beginPath(); g.arc(x + 5, y + 5, 3, 0, 7); g.fill(); return; }
+      if (!t.t) return;
+      if (t.t === 'road') { g.fillRect(x, y + 4, S, 2); g.fillRect(x + 4, y, 2, S); g.fillStyle = paper; g.fillRect(x, y, 4, 4); g.fillRect(x + 6, y, 4, 4); g.fillRect(x, y + 6, 4, 4); g.fillRect(x + 6, y + 6, 4, 4); return; }
+      if (t.t === 'park') { g.beginPath(); g.arc(x + 3, y + 3, 2, 0, 7); g.arc(x + 7, y + 7, 2, 0, 7); g.fill(); return; }
+      if (t.t === 'res' || t.t === 'com' || t.t === 'ind') {
+        if (!t.lvl) { g.strokeRect(x + 2.5, y + 2.5, 5, 5); return; }
+        const sz = 2 + t.lvl * 2;
+        g.fillRect(x + (S - sz) / 2, y + (S - sz) / 2, sz, sz);
+        if (t.t === 'ind') g.fillRect(x + 7, y + 1, 1.5, 3);
+        return;
+      }
+      g.fillRect(x + 1, y + 1, S - 2, S - 2);
+      g.fillStyle = paper; g.fillRect(x + 3, y + 3, S - 6, S - 6);
+    });
+  }
+
+  // ---------- read aloud ----------
+  let speaking = false;
+  function stopReading() {
+    if (speaking && window.speechSynthesis) window.speechSynthesis.cancel();
+    speaking = false;
+    const b = $('[data-act="read"]');
+    if (b) { b.setAttribute('aria-pressed', 'false'); b.textContent = '▶ Read'; }
+  }
+  function readAloud() {
+    const synth = window.speechSynthesis;
+    if (!synth || typeof window.SpeechSynthesisUtterance !== 'function') return toast('This browser cannot read aloud.');
+    if (speaking) return stopReading();
+    const ch = state.chapters[reading];
+    if (!ch) return;
+    const parts = [ch.title.replace(/^Chapter (\d+):/, 'Chapter $1.'), ch.headline.toLowerCase(), ...ch.paras];
+    speaking = true;
+    const b = $('[data-act="read"]');
+    b.setAttribute('aria-pressed', 'true'); b.textContent = '■ Stop';
+    parts.forEach((text, k) => {
+      const u = new window.SpeechSynthesisUtterance(text);
+      u.rate = 0.98; u.pitch = 1;
+      if (k === parts.length - 1) u.onend = () => stopReading();
+      synth.speak(u);
+    });
+  }
+
   function renderDilemma() {
     const box = $('[data-dilemma]');
     const d = state.pending && DILEMMAS[state.pending];
@@ -346,16 +437,25 @@ export function initChapterCity(root) {
     const x = Math.floor(((e.clientX - r.left) / r.width) * W), y = Math.floor(((e.clientY - r.top) / r.height) * H);
     return x >= 0 && y >= 0 && x < W && y < H ? idx(x, y) : -1;
   };
+  // When zoomed on a touch screen, one finger pans the map and a tap builds.
+  const zoomedTouch = e => e.pointerType === 'touch' && $('.cc-map-wrap').classList.contains('is-zoomed');
+  let tapStart = null;
   canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
+    if (zoomedTouch(e)) { tapStart = { x: e.clientX, y: e.clientY, i: tileAt(e) }; return; }
     painting = true; canvas.setPointerCapture?.(e.pointerId);
     const i = tileAt(e); cursor = i; apply(i);
   });
+  canvas.addEventListener('pointerup', e => {
+    if (tapStart && Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y) < 10) { cursor = tapStart.i; apply(tapStart.i); }
+    tapStart = null;
+  });
+  canvas.addEventListener('pointercancel', () => { tapStart = null; painting = false; });
   canvas.addEventListener('pointermove', e => {
     const i = tileAt(e);
     hover = i;
     showTip(i, e);
-    if (painting && (tool === 'road' || TOOLS[tool].zone || tool === 'doze' || tool === 'park') && i >= 0) apply(i, true);
+    if (painting && !zoomedTouch(e) && (tool === 'road' || TOOLS[tool].zone || tool === 'doze' || tool === 'park') && i >= 0) apply(i, true);
   });
   canvas.addEventListener('pointerup', () => { painting = false; });
   canvas.addEventListener('pointerleave', () => { hover = -1; $('[data-tip]').hidden = true; if (reduced) draw(); });
@@ -430,6 +530,8 @@ export function initChapterCity(root) {
     else if (act === 'prev' && reading > 0) { reading--; renderBook(); pageTurn(); }
     else if (act === 'next' && reading < state.chapters.length - 1) { reading++; renderBook(); pageTurn(); }
     else if (act === 'download') download();
+    else if (act === 'read') readAloud();
+    else if (act === 'zoom') { const z = $('.cc-map-wrap').classList.toggle('is-zoomed'); el.closest('[data-act]').setAttribute('aria-pressed', String(z)); canvas.style.touchAction = z ? 'pan-x pan-y' : 'none'; }
     else if (act === 'help') { const h = $('[data-help]'); h.hidden = !h.hidden; $('[data-act="help"]').setAttribute('aria-expanded', String(!h.hidden)); }
     else if (act === 'new') { const f = $('[data-newgame]'); f.hidden = false; f.querySelector('input').focus(); }
     else if (act === 'cancel-new') $('[data-newgame]').hidden = true;

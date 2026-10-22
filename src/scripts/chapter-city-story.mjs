@@ -1,6 +1,6 @@
 // CHAPTER CITY — the novelist. Turns a simulated year into a chapter.
 // Deterministic for a given seed and year, so a reload rewrites nothing.
-import { rngFrom, pick, MONTHS, DILEMMAS, TOOLS } from './chapter-city-sim.mjs';
+import { rngFrom, pick, MONTHS, DILEMMAS, TOOLS, snapshot } from './chapter-city-sim.mjs';
 
 const n = v => Math.round(v).toLocaleString('en-US');
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
@@ -48,7 +48,7 @@ export function prologue(state) {
     'Down at the edge of the grass, a nine-year-old named Juniper Bell was already drawing streets in the sand with a stick, which was more planning than anyone else had done.',
     'Every road, every house, every bad decision would go into the ledger. Some of it would go into this book.',
   ];
-  return { n: 0, year: 0, title: `Prologue: A Coast, a Creek, a Clerk`, headline: `${town} Founded; Gulls Unimpressed`, paras, dilemma: null };
+  return { n: 0, year: 0, title: `Prologue: A Coast, a Creek, a Clerk`, headline: `${town} Founded; Gulls Unimpressed`, paras, dilemma: null, snap: snapshot(state) };
 }
 
 // ---------- chapter ----------
@@ -108,6 +108,15 @@ export function writeChapter(state, record) {
   const openKey = pop === 0 ? 'empty' : prevPop === 0 ? 'first' : growth < -10 ? 'shrinking' : pop < 300 ? 'tiny' : pop > 3000 ? 'big' : 'growing';
   paras.push(fill(fresh(openers[openKey], `open-${openKey}`), { ...ctx, season: openSeason }));
 
+  // the town outgrows itself: landmarks become possible
+  const unlockLines = {
+    lighthouse: 'Somewhere around then, {town} became big enough to want a lighthouse. It was raised at a council meeting by a fisherman who said he was tired of finding the harbour by smell.',
+    pier: 'The town was now large enough that people started asking about a ferry. Mei Okafor ran a poll. The ferry won, and so, narrowly, did “a bigger ferry.”',
+    college: 'With {pop} people, {town} could finally think about a college. Juniper Bell wrote a four-page letter on the subject; it was the first of many.',
+    stadium: 'At {pop} people, {town} had enough fans to fill a stadium, if it had one, and enough opinions to argue about where it would go.',
+  };
+  for (const k of record.unlocked || []) if (unlockLines[k]) paras.push(fill(unlockLines[k], ctx));
+
   // the mayor's choice from the start of the year
   if (record.lastChoice) {
     const c = record.lastChoice, d = DILEMMAS[c.key];
@@ -136,8 +145,8 @@ export function writeChapter(state, record) {
   if (b.com) builtParts.push(b.com > 8 ? 'a long run of shopfronts' : 'room for a few shops');
   if (b.ind) builtParts.push(b.ind > 8 ? 'an industrial district' : 'a few lots for workshops and sheds');
   if (b.park) builtParts.push(plural(b.park, 'park'));
-  const services = ['power', 'water', 'school', 'clinic', 'fire', 'police'].filter(k => b[k]);
-  const serviceNames = { power: 'a power plant', water: 'a water tower', school: 'a school', clinic: 'a clinic', fire: 'a fire station', police: 'a watch house' };
+  const services = ['power', 'water', 'school', 'clinic', 'fire', 'police', 'lighthouse', 'pier', 'college', 'stadium'].filter(k => b[k]);
+  const serviceNames = { power: 'a power plant', water: 'a water tower', school: 'a school', clinic: 'a clinic', fire: 'a fire station', police: 'a watch house', lighthouse: 'a lighthouse', pier: 'a ferry pier', college: 'a college', stadium: 'a stadium' };
   const firsts = services.filter(k => state.flags[`first_${k}`] === record.year);
   if (builtParts.length || services.length) {
     let s = `That year the Mayor ${pick(rng, ['laid down', 'ordered', 'signed off on', 'paid for'])} ${listJoin([...builtParts, ...services.map(k => serviceNames[k])])}.`;
@@ -149,6 +158,10 @@ export function writeChapter(state, record) {
         clinic: 'The clinic’s first patient was a fisherman with a hook in his thumb, who recommended it to everyone.',
         fire: 'The fire station got a red truck and a dog that nobody admitted to adopting.',
         police: 'The watch house opened with two constables and a lost-property box that filled up by Friday.',
+        lighthouse: 'The lighthouse was lit for the first time on a foggy night. Its beam swept the bay once, twice, and on the third pass the whole town on the beach cheered as if it had done something clever.',
+        pier: 'The first ferry tied up at the new pier with eleven passengers, two bicycles and a goat. The goat was the only one who had booked.',
+        college: `The college opened with a library, a lecture hall and a motto in Latin that nobody could translate. Juniper Bell, ${juniperAge(record.year)}, was at the front of the queue on the first day.`,
+        stadium: 'The stadium hosted its first home game in the autumn. The home side lost by four, and the town celebrated anyway, because it was the first game and they had never lost at home before.',
       };
       s += ' ' + firsts.map(k => firstLines[k]).join(' ');
     }
@@ -229,7 +242,7 @@ export function writeChapter(state, record) {
   // characters
   const beats = [];
   const age = juniperAge(record.year);
-  const edu = (record.stats.count?.school || 0) + (state.flags.library ? 1 : 0);
+  const edu = (record.stats.count?.school || 0) + (state.flags.library ? 1 : 0) + (record.stats.count?.college ? 2 : 0);
   if (age <= 17) {
     beats.push(fresh(age < 13 ? [
       `Juniper Bell, ${age}, was caught measuring the width of ${ctx.res} with a ball of string. Asked why, she said, “Somebody has to.”`,
@@ -382,7 +395,7 @@ export function writeChapter(state, record) {
 
   const headline = pickHeadline(rng, record, town, ctx);
   const title = `Chapter ${record.year}: ${pickTitle(rng, record, shown, ctx)}`;
-  return { n: record.year, year: record.year, title, headline, paras, dilemma: state.over ? null : state.pending, stats: { pop: record.pop, approval: Math.round(record.approval), funds: record.funds } };
+  return { n: record.year, year: record.year, title, headline, paras, dilemma: state.over ? null : state.pending, snap: record.snap, stats: { pop: record.pop, approval: Math.round(record.approval), funds: record.funds } };
 }
 
 function pickTitle(rng, record, shown, ctx) {
@@ -390,6 +403,8 @@ function pickTitle(rng, record, shown, ctx) {
   const k = shown.map(e => e.kind);
   if (k.includes('serpent')) return pick(rng, ['Something in the Bay', 'Wendell', 'Long as a Street']);
   if (k.includes('fire')) return pick(rng, [`Smoke Over ${ctx.res}`, 'The Bucket Line', 'Ash']);
+  const lm = ['stadium', 'college', 'pier', 'lighthouse'].find(x => record.built[x]);
+  if (lm) return { stadium: 'Home Game', college: 'The Motto', pier: 'A Goat on the Ferry', lighthouse: 'The Beam' }[lm];
   if (k.includes('blackout')) return pick(rng, ['The Dark Weeks', 'Candles', 'Cold Dinners']);
   if (k.includes('boom')) return pick(rng, ['Cranes', 'Signs on Every Lot', 'Rush']);
   if (k.includes('festival')) return pick(rng, ['Paper Lanterns', 'Almond Buns', 'Midsummer']);
@@ -406,6 +421,8 @@ function pickHeadline(rng, record, town, ctx) {
   const k = record.log.map(e => e.kind);
   if (record.election) return record.won ? `MAYOR RE-ELECTED; WEXLEY “DELIGHTED”` : `MAYOR OUT; ${town.toUpperCase()} TURNS THE PAGE`;
   if (k.includes('serpent')) return 'SERPENT SIGHTED; NAMED BY CHILDREN BEFORE TEA';
+  const lm = ['stadium', 'college', 'pier', 'lighthouse'].find(x => record.built[x]);
+  if (lm) return { stadium: 'STADIUM OPENS; HOME SIDE LOSES; NOBODY MINDS', college: `${town.toUpperCase()} GETS A COLLEGE; MOTTO UNTRANSLATED`, pier: 'FERRY ARRIVES WITH GOAT', lighthouse: 'LIGHTHOUSE LIT; HARBOUR FOUND “WITHOUT SMELLING”' }[lm];
   if (k.includes('fire')) return `FIRE TAKES HOMES; “WHERE WAS THE STATION?” ASK NEIGHBOURS`;
   if (k.includes('blackout')) return 'LIGHTS OUT AGAIN; CANDLE SALES AT RECORD';
   if (k.includes('boom')) return `BOOM TIMES: CRANES OVER ${ctx.res.toUpperCase()}`;

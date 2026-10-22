@@ -17,7 +17,22 @@ export const TOOLS = {
   fire:   { label: 'Fire station', short: 'Fire',  cost: 320, upkeep: 12,  key: '0', service: true },
   police: { label: 'Watch house', short: 'Watch',   cost: 320, upkeep: 12,  key: '-', service: true },
   doze:   { label: 'Bulldoze', short: 'Clear',      cost: 5,   upkeep: 0,   key: 'x' },
+  // landmarks: one of each, unlocked when the town is big enough
+  lighthouse: { label: 'Lighthouse', short: 'Light', cost: 900,  upkeep: 6,  key: 'q', landmark: true, unlock: 300,  coastal: true },
+  pier:       { label: 'Ferry pier', short: 'Pier',  cost: 1400, upkeep: 10, key: 'w', landmark: true, unlock: 800,  coastal: true },
+  college:    { label: 'College',    short: 'Uni',     cost: 2500, upkeep: 28, key: 'e', landmark: true, unlock: 1300 },
+  stadium:    { label: 'Stadium',    short: 'Arena',   cost: 3000, upkeep: 24, key: 'r', landmark: true, unlock: 2000 },
 };
+
+export const LANDMARKS = Object.keys(TOOLS).filter(k => TOOLS[k].landmark);
+const touchesSea = (state, i) => {
+  const x = i % W, y = Math.floor(i / W);
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
+    const nx = x + dx, ny = y + dy;
+    return nx >= 0 && ny >= 0 && nx < W && ny < H && state.tiles[ny * W + nx].terrain === 'water';
+  });
+};
+export const landmarkUnlocked = (state, k) => !!state.flags[`unlocked_${k}`] || (state.stats?.pop || 0) >= TOOLS[k].unlock;
 
 export const POP = [0, 30, 95, 250];
 export const JOBS_C = [0, 14, 45, 120];
@@ -113,6 +128,11 @@ export function canBuild(state, tool, i) {
   if (tile.terrain === 'water') return { ok: false, why: 'That is the sea.' };
   if (tile.t === tool) return { ok: false, why: 'Already there.' };
   if (tile.t) return { ok: false, why: 'Bulldoze it first.' };
+  if (def.landmark) {
+    if (!landmarkUnlocked(state, tool)) return { ok: false, why: `${def.label} unlocks at ${def.unlock.toLocaleString('en-US')} people.` };
+    if (state.tiles.some(t => t.t === tool)) return { ok: false, why: `${state.name} already has a ${def.label.toLowerCase()}.` };
+    if (def.coastal && !touchesSea(state, i)) return { ok: false, why: `A ${def.label.toLowerCase()} has to touch the sea.` };
+  }
   const cost = def.cost + (tile.terrain === 'trees' ? 8 : 0);
   if (state.funds < cost) return { ok: false, why: 'Not enough money in the treasury.' };
   return { ok: true, cost };
@@ -175,6 +195,8 @@ export function analyze(state) {
   }
   const cover = {};
   for (const s of ['school', 'clinic', 'fire', 'police']) cover[s] = field(state, of(s), RADIUS, () => 1);
+  const college = field(state, of('college'), 10, () => 1.5);
+  for (let i = 0; i < W * H; i++) cover.school[i] += college[i];
   const parkField = field(state, of('park'), 3, () => 1);
   const pollution = field(state, tiles.map((t, i) => (t.t === 'ind' || t.t === 'power' ? i : -1)).filter(i => i >= 0), 3,
     i => (tiles[i].t === 'power' ? 7 : 1.5 + tiles[i].lvl * 1.5));
@@ -211,7 +233,7 @@ export function totals(state) {
     if (t.t === 'com') jobsC += JOBS_C[t.lvl];
     if (t.t === 'ind') jobsI += JOBS_I[t.lvl];
     if (TOOLS[t.t].zone) zones += t.lvl;
-    if (TOOLS[t.t].service) services++;
+    if (TOOLS[t.t].service || TOOLS[t.t].landmark) services++;
   }
   return { pop, jobsC, jobsI, zones, services, count };
 }
@@ -234,10 +256,11 @@ export function stepMonth(state) {
   const workers = before.pop * 0.55;
   const jobs = before.jobsC + before.jobsI;
   const taxDrag = (state.tax - 7) * 0.07;
-  const lure = (state.approval - 50) / 120 + modifier(state, 'demand');
+  const has = k => (before.count[k] || 0) > 0;
+  const lure = (state.approval - 50) / 120 + modifier(state, 'demand') + (has('pier') ? 0.08 : 0);
   const d = {
     r: clamp((jobs * 1.25 + 40 - workers) / (workers + 60) + lure - taxDrag, -1, 1),
-    c: clamp((before.pop * 0.24 - before.jobsC) / (before.jobsC + 30) + modifier(state, 'demand') - taxDrag, -1, 1),
+    c: clamp((before.pop * 0.24 - before.jobsC) / (before.jobsC + 30) + modifier(state, 'demand') + (has('stadium') ? 0.1 : 0) + (has('pier') ? 0.05 : 0) - taxDrag, -1, 1),
     i: clamp((before.pop * 0.3 + 70 - before.jobsI) / (before.jobsI + 60) + modifier(state, 'demand') + modifier(state, 'industry') - taxDrag, -1, 1),
   };
 
@@ -280,7 +303,7 @@ export function stepMonth(state) {
   if (waterUse > 0 && waterRatio < 1 && rng() < 0.3) log({ kind: 'drought', ratio: waterRatio });
   if ((month >= 9 || month <= 1) && rng() < 0.05) {
     const coast = state.tiles.map((t, i) => (t.t && neighbors4(i).some(n => state.tiles[n].terrain === 'water') ? i : -1)).filter(i => i >= 0);
-    coast.forEach(i => { if (state.tiles[i].lvl > 0 && rng() < 0.5) state.tiles[i].lvl--; });
+    coast.forEach(i => { if (state.tiles[i].lvl > 0 && rng() < (has('lighthouse') ? 0.2 : 0.5)) state.tiles[i].lvl--; });
     log({ kind: 'storm', hit: coast.length });
   }
   const avgCrime = lit.length ? lit.reduce((s, i) => s + a.crime[i], 0) / lit.length : 0;
@@ -302,7 +325,7 @@ export function stepMonth(state) {
 
   // money
   const after = totals(state);
-  const income = state.tax * (after.pop * 0.012 + (after.jobsC + after.jobsI) * 0.009) + (state.flags.museum ? 25 : 0) + (state.flags.casino ? 40 : 0) + modifier(state, 'income');
+  const income = state.tax * (after.pop * 0.012 + (after.jobsC + after.jobsI) * 0.009) + (state.flags.museum ? 25 : 0) + (state.flags.casino ? 40 : 0) + (after.count.lighthouse ? 12 : 0) + (after.count.pier ? 30 : 0) + (after.count.stadium ? 45 : 0) + modifier(state, 'income');
   let expenses = 0;
   for (const t of state.tiles) if (t.t) expenses += TOOLS[t.t].upkeep;
   expenses *= 1 + modifier(state, 'upkeep');
@@ -319,6 +342,7 @@ export function stepMonth(state) {
     + Math.min(1, avg(a.parkField)) * 8
     - polRes * 3.5 - avgCrime * 2.5 - (state.tax - 7) * 3.2 - unemployment * 22
     - (powerRatio < 1 ? 8 : 0) - (waterRatio < 1 ? 5 : 0)
+    + (after.count.stadium ? 4 : 0) + (after.count.lighthouse ? 1 : 0) + (after.count.college ? 2 : 0)
     + modifier(state, 'approval'), 0, 100);
   state.approval = Math.round(clamp(state.approval + (happiness - state.approval) * 0.18, 0, 100) * 10) / 10;
 
@@ -480,12 +504,29 @@ export function resolveDilemma(state, option) {
   return true;
 }
 
+// ---------- snapshots ----------
+// One character per tile, so every chapter can carry a picture of the town.
+const SNAP_TERRAIN = { water: '~', sand: ':', grass: '.', trees: 't' };
+const SNAP_BUILT = { road: '#', park: 'p', power: 'P', water: 'W', school: 'S', clinic: 'C', fire: 'F', police: 'K', lighthouse: 'L', pier: 'J', college: 'U', stadium: 'D' };
+const SNAP_ZONE = { res: 'abcd', com: 'efgh', ind: 'ijkl' };
+export function snapshot(state) {
+  return state.tiles.map(t => (!t.t ? SNAP_TERRAIN[t.terrain] : SNAP_ZONE[t.t] ? SNAP_ZONE[t.t][t.lvl] : SNAP_BUILT[t.t] || '.')).join('');
+}
+export function readSnapshot(snap) {
+  const zone = Object.fromEntries(Object.entries(SNAP_ZONE).flatMap(([k, s]) => [...s].map((c, lvl) => [c, { t: k, lvl }])));
+  const built = Object.fromEntries(Object.entries(SNAP_BUILT).map(([k, c]) => [c, k]));
+  const terrain = Object.fromEntries(Object.entries(SNAP_TERRAIN).map(([k, c]) => [c, k]));
+  return [...String(snap || '')].slice(0, W * H).map(c => zone[c] || (built[c] ? { t: built[c], lvl: 0 } : { terrain: terrain[c] || 'grass' }));
+}
+
 // ---------- the year ----------
 // Runs whatever months remain in the year, names districts and returns the
 // year's record. The story module turns that record into a chapter.
 export function finishYear(state) {
   while (state.month < 12) stepMonth(state);
   nameDistricts(state);
+  const unlockedNow = LANDMARKS.filter(k => !state.flags[`unlocked_${k}`] && state.stats.pop >= TOOLS[k].unlock);
+  unlockedNow.forEach(k => { state.flags[`unlocked_${k}`] = state.year; });
   const prev = state.history[state.history.length - 1] || { pop: 0, funds: 6000, approval: 58, jobs: 0 };
   const record = {
     year: state.year,
@@ -500,6 +541,8 @@ export function finishYear(state) {
     built: { ...state.built },
     lastChoice: state.choices.find(c => c.year === state.year) || null,
     election: state.year % 4 === 0,
+    unlocked: unlockedNow,
+    snap: snapshot(state),
     districts: districtsByKind(state),
   };
   if (record.election) {
