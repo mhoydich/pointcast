@@ -1,0 +1,1046 @@
+---
+/**
+ * /soft-landing — a lunar lander for the 8-bit heart.
+ *
+ * Brief by Michael Hoydich, 2026-10-22: 80s innocence, the joy of the compute
+ * and flow, mood-state symbiosis, mobile and full screen, audio-visual
+ * multimedia, Atari and Commodore inspired, rendered modern. Thread 3 of the
+ * five games that followed Breakwater; it shares Breakwater's font, palettes
+ * and mood model (src/lib/breakwater) and adds its own physics, skylines and
+ * landing judgement in src/lib/soft-landing, covered by tests/soft-landing.test.mjs.
+ *
+ * Everything in the playfield is stroked lines and 3x5 pixel digits on a
+ * canvas; every sound is synthesized in the browser.
+ */
+import BlockLayout from '../layouts/BlockLayout.astro';
+import { MACHINES } from '../lib/breakwater/waves.mjs';
+import { DIALS } from '../lib/breakwater/mood.mjs';
+import { LIMITS } from '../lib/soft-landing/landing.mjs';
+import { PAD_KINDS, RUSH_PAD } from '../lib/soft-landing/skyline.mjs';
+
+const description = 'A lunar lander with 1980s innocence: a vector skyline in Atari 800XL or Commodore 64 blue, a main engine and two side jets, pads worth more the narrower they are, a synthesized engine roar, and a mood the game and you keep together. Phone or full screen.';
+const canonical = 'https://pointcast.xyz/soft-landing';
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'VideoGame',
+      '@id': `${canonical}#game`,
+      name: 'Soft Landing',
+      alternateName: 'Soft Landing: a lunar lander for the 8-bit heart',
+      description,
+      url: canonical,
+      image: 'https://pointcast.xyz/images/soft-landing/og.png',
+      gamePlatform: 'Web browser',
+      genre: 'Lunar lander',
+      playMode: 'SinglePlayer',
+      inLanguage: 'en-US',
+      isAccessibleForFree: true,
+      author: { '@type': 'Person', name: 'Michael Hoydich' },
+      contributor: { '@type': 'Organization', name: 'Claude Code' },
+      publisher: { '@type': 'Organization', name: 'PointCast', url: 'https://pointcast.xyz/' },
+      datePublished: '2026-10-22',
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${canonical}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://pointcast.xyz/' },
+        { '@type': 'ListItem', position: 2, name: 'Games', item: 'https://pointcast.xyz/games/' },
+        { '@type': 'ListItem', position: 3, name: 'Soft Landing', item: canonical },
+      ],
+    },
+  ],
+};
+const machines = Object.values(MACHINES);
+const dials = Object.values(DIALS);
+const pads = [...PAD_KINDS, RUSH_PAD];
+---
+
+<BlockLayout
+  title="Soft Landing"
+  description={description}
+  image="/images/soft-landing/og.png"
+  imageAlt="A blue playfield with a jagged white vector skyline, three landing pads marked 1X, 2X and 4X, and a small lander with a flame beside the words Soft Landing, a lunar lander for the 8-bit heart."
+  themeColor="#2545a8"
+  immersive
+  isolated
+  jsonLd={jsonLd}
+  alternates={[{ type: 'application/json', href: '/soft-landing.json', title: 'Soft Landing rules, moods and machines (JSON)' }]}
+  frame={{
+    image: 'https://pointcast.xyz/images/soft-landing/og.png',
+    buttons: [
+      { label: 'Play Soft Landing', action: 'link', target: canonical },
+      { label: 'Game JSON', action: 'link', target: `${canonical}.json` },
+    ],
+  }}
+>
+  <div class="sl" data-sl data-machine="xl" data-crt="on">
+    <div class="sl-stage" data-stage>
+      <header class="sl-bar">
+        <a class="sl-home" href="/" aria-label="PointCast home">POINTCAST</a>
+        <span class="sl-name" aria-hidden="true">SOFT LANDING</span>
+        <div class="sl-controls" role="group" aria-label="Game settings">
+          <button type="button" data-machine-btn title="Switch machine (1 / 2)">800XL</button>
+          <button type="button" data-dial-btn title="Mood dial (3)">PLAY</button>
+          <button type="button" data-sound-btn aria-pressed="true" title="Sound (M)">SND</button>
+          <button type="button" data-crt-btn aria-pressed="true" title="CRT scanlines (C)">CRT</button>
+          <button type="button" data-full-btn title="Full screen (F)">FULL</button>
+        </div>
+      </header>
+      <div class="sl-screen" data-screen>
+        <canvas data-canvas role="img" aria-label="Soft Landing playfield. Hold the engine to slow your fall, tilt with the side jets, and set down level on a pad."></canvas>
+        <div class="sl-scan" aria-hidden="true"></div>
+        <noscript><p class="sl-noscript">Soft Landing needs JavaScript to fly the lander and make its sounds. The rules and moods are readable at <a href="/soft-landing.json">/soft-landing.json</a>.</p></noscript>
+      </div>
+      <footer class="sl-readout" aria-label="Live readout">
+        <span data-r-mood>DAWN</span>
+        <span data-r-tempo>80 BPM</span>
+        <span data-r-land>LAND 1</span>
+        <span data-r-fps>-- FPS</span>
+        <span data-r-vec>ALT 0 VS 0</span>
+        <a href="#notes" data-notes-link>notes ↓</a>
+      </footer>
+      <p class="sr-only" data-live role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <section id="notes" class="sl-notes">
+      <p class="sl-eyebrow">PointCast / Games / Soft Landing</p>
+      <h1>A lunar lander for the 8-bit heart.</h1>
+      <p class="sl-lede">A small ship, a little fuel, a wobbly skyline drawn in lines, and three pads that pay more the narrower they are. Set down slow, straight and level. Pick the blue you grew up with.</p>
+
+      <div class="sl-grid">
+        <article>
+          <h2>Mood, both ways</h2>
+          <p>The game keeps two numbers with you. Controlled burns and every hundred units of safe descent raise its <strong>energy</strong>. A crash lowers its <strong>calm</strong>. Time brings both back toward the dial you set. Four words name where it is.</p>
+          <ul class="sl-moods">
+            <li><b>DAWN</b> warming up. Cool colors, a slow major arpeggio, slightly wide pads.</li>
+            <li><b>FLOW</b> a run of good landings. Bright colors, the music opens up, a breath of wind.</li>
+            <li><b>RUSH</b> hot colors, raster bars in the border, a crosswind, and a narrow pad worth five.</li>
+            <li><b>DRIFT</b> after a crash. Gravity softens, the pads widen, the notes thin out.</li>
+          </ul>
+          <p>Your side is the dial: {dials.map((d, i) => <span><b>{d.label}</b> ({d.id === 'calm' ? 'unlimited fuel and a crash never ends the game' : d.id === 'play' ? 'three landers and a tank of 1200' : 'starts hot with a tank of 900'}){i < dials.length - 1 ? '; ' : '.'}</span>)} The game relaxes toward it. The mood tape from your session stays in this browser, and when you leave after a game, the game hands its mood to the town.</p>
+        </article>
+        <article>
+          <h2>Two machines</h2>
+          {machines.map((m) => (
+            <p><b style={`color:${m.bands.yellow}`}>{m.name}</b> ({m.year}, {m.chip}). {m.id === 'xl' ? 'The Graphics 0 blue with a black border and light-blue lines. A raw filtered-noise roar and square-wave cues, in the POKEY spirit. A blue READY and a RUN before the skyline.' : 'The blue field inside a light-blue border. A resonant filter on the roar and a sweep on every cue, in the SID spirit. 38911 BASIC BYTES FREE, then LOAD, then RUN.'}</p>
+          ))}
+          <p>Nothing is emulated and nothing is copied. The pixel font, the palettes and the mood model are shared with <a href="/breakwater">Breakwater</a>; the physics, the skylines, the lander and the sounds were written for this page. Read the <a href="https://github.com/mhoydich/pointcast/blob/main/docs/notes/2026-10-22-soft-landing-notes.md">research note on Lunar Lander and its home-computer descendants</a>.</p>
+        </article>
+        <article>
+          <h2>The rules</h2>
+          <p>Gravity pulls, the main engine pushes along the ship's axis, the side jets tilt it. A landing is safe when it is on a pad with both feet, falling slower than {LIMITS.vy} units a second, drifting slower than {LIMITS.vx}, and within about {Math.round((LIMITS.angle * 180) / Math.PI)} degrees of level. Pads: {pads.map((p, i) => <span>{p.width} wide pays {p.mult}×{i < pads.length - 1 ? ', ' : ''}</span>)} (the last only in RUSH). Points are the multiplier times 50, plus 25 more for a truly soft touch, plus fuel left over ten. A landing refunds fuel by the multiplier and brings a new skyline. Three landers; a crash on CALM costs nothing.</p>
+          <h2>Controls</h2>
+          <ul>
+            <li>Touch: hold the middle of the field to burn, the left and right thirds to tilt.</li>
+            <li>Keys: ↑ or Space burns, ← → or A D tilt, P pauses, F full screen, M sound, C scanlines, 1 and 2 switch machines, 3 turns the dial.</li>
+            <li>FULL uses the Fullscreen API. iOS Safari has none for pages, so the stage fills the screen instead; add to Home Screen for the whole display.</li>
+          </ul>
+        </article>
+      </div>
+
+      <footer class="sl-credits">
+        <p>Directed by Michael Hoydich. Designed and built by Claude Code on October 22, 2026. Original code, art and synthesized sound; no ROMs, no recordings. Machine names are tributes.</p>
+        <p><a href="/soft-landing.json">soft-landing.json</a> · <a href="/breakwater">Breakwater</a> · <a href="/games/">All games</a> · <a href="/play">The play layer</a> · <a href="/">PointCast</a></p>
+      </footer>
+    </section>
+  </div>
+</BlockLayout>
+
+<style is:global>
+  html[data-pc-layout='block'] body.pc-block-shell { padding-bottom: 0; background: #0b0d1a; }
+</style>
+
+<style>
+  .sl { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
+  .sl[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
+  .sl-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
+  .sl-stage:fullscreen, .sl-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .sl-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
+  .sl-home { color: var(--text); text-decoration: none; font-weight: 700; }
+  .sl-home:hover { color: #fff; }
+  .sl-name { color: #fff; font-weight: 700; margin-right: auto; }
+  .sl-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .sl-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
+  .sl-controls button:hover { background: #1f2456; }
+  .sl-controls button[aria-pressed='false'] { color: #6b7199; text-decoration: line-through; }
+  .sl-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
+  .sl-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
+  .sl-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .sl-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px); mix-blend-mode: multiply; opacity: 0.55; }
+  .sl[data-crt='off'] .sl-scan { display: none; }
+  .sl-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
+  .sl-noscript a { color: var(--paddle); }
+  .sl-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
+  .sl-readout span { white-space: nowrap; }
+  .sl-readout a { margin-left: auto; color: var(--text); text-decoration: none; }
+  .sl-readout a:hover { color: #fff; }
+  .sl-stage:fullscreen .sl-readout a, .sl-stage:-webkit-full-screen .sl-readout a { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .sl-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
+  .sl-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
+  .sl-notes h1 { font-size: clamp(32px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; margin: 0 0 16px; color: #fff; }
+  .sl-lede { font-size: 18px; line-height: 1.5; max-width: 60ch; color: #c9cfee; margin: 0 0 36px; }
+  .sl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+  .sl-grid article { border-top: 2px solid #2b3070; padding-top: 18px; font-size: 14px; line-height: 1.55; }
+  .sl-grid h2 { font: 700 12px/1.4 var(--pc-font-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paddle); margin: 0 0 10px; }
+  .sl-grid h2 + h2, .sl-grid p + h2, .sl-grid ul + h2 { margin-top: 22px; }
+  .sl-grid p { margin: 0 0 12px; }
+  .sl-grid ul { margin: 0 0 12px; padding-left: 18px; }
+  .sl-grid li { margin-bottom: 6px; }
+  .sl-moods { list-style: none; padding: 0; }
+  .sl-moods b { display: inline-block; min-width: 54px; font-family: var(--pc-font-mono); font-size: 11px; letter-spacing: 0.1em; color: #fff; }
+  .sl-notes a { color: #a9b9f5; }
+  .sl-notes a:hover { color: #fff; }
+  .sl-credits { margin-top: 44px; border-top: 1px solid #2b3070; padding-top: 18px; font-size: 13px; line-height: 1.6; color: #9aa1cc; }
+  .sl-credits p { margin: 0 0 8px; }
+  @media (max-width: 760px) {
+    .sl-stage { min-height: 0; }
+    .sl-bar { gap: 8px; padding: 6px 10px; }
+    .sl-name { display: none; }
+    .sl-controls { gap: 4px; }
+    .sl-controls button { padding: 7px 7px; min-width: 40px; font-size: 9px; }
+    .sl-readout { gap: 10px; font-size: 9px; height: 26px; }
+    .sl-readout [data-r-vec], .sl-readout [data-r-fps] { display: none; }
+    .sl-grid { grid-template-columns: 1fr; gap: 20px; }
+    .sl-notes { padding: 40px 16px 56px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .sl-scan { opacity: 0.35; } }
+</style>
+
+<script>
+  import { MACHINES } from '../lib/breakwater/waves.mjs';
+  import { DIALS, DIAL_IDS, createMood, moodEvent, moodStep, moodResponse, setDial, beginGame, serializeMood, restoreMood, dialFromSiteMood, siteMoodFromLabel } from '../lib/breakwater/mood.mjs';
+  import { eachPixel, textWidth } from '../lib/breakwater/font.mjs';
+  import { LANDER, FUEL_START, FUEL_REFUND, createLander, stepLander, wrapX, ceiling, createBurnTracker } from '../lib/soft-landing/physics.mjs';
+  import { generateSkyline, mulberry32, widestPad } from '../lib/soft-landing/skyline.mjs';
+  import { LIMITS, REASON_TEXT, altitudeOf, touchedDown, judgeLanding, landingScore, descentMarks, envFor, autopilot } from '../lib/soft-landing/landing.mjs';
+
+  const root = document.querySelector('[data-sl]');
+  if (root) main(root);
+
+  function main(root) {
+    // ---------- geometry (logical pixels) ----------
+    const W = 288, H_MIN = 384, H_MAX = 480, WALL = 8, HUD = 32;
+    let H = H_MIN;
+    const LANDERS = 3;
+    const STORE = 'soft-landing:v1';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+
+    const stage = root.querySelector('[data-stage]');
+    const screen = root.querySelector('[data-screen]');
+    const canvas = root.querySelector('[data-canvas]');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const live = root.querySelector('[data-live]');
+    const btn = {
+      machine: root.querySelector('[data-machine-btn]'),
+      dial: root.querySelector('[data-dial-btn]'),
+      sound: root.querySelector('[data-sound-btn]'),
+      crt: root.querySelector('[data-crt-btn]'),
+      full: root.querySelector('[data-full-btn]'),
+    };
+    const readout = {
+      mood: root.querySelector('[data-r-mood]'),
+      tempo: root.querySelector('[data-r-tempo]'),
+      land: root.querySelector('[data-r-land]'),
+      fps: root.querySelector('[data-r-fps]'),
+      vec: root.querySelector('[data-r-vec]'),
+    };
+
+    // ---------- settings ----------
+    const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch { return {}; } };
+    const readSiteMood = () => { try { return localStorage.getItem('pc:mood'); } catch { return null; } };
+    const settings = load();
+    let machineId = MACHINES[settings.machine] ? settings.machine : 'xl';
+    let soundOn = settings.sound !== false;
+    let crtOn = settings.crt !== false;
+    let best = Number.isFinite(settings.best) ? settings.best : 0;
+    let mood = restoreMood(settings.mood, DIALS[settings.dial] ? settings.dial : dialFromSiteMood(readSiteMood()));
+    let response = moodResponse(mood);
+    const save = () => {
+      try { localStorage.setItem(STORE, JSON.stringify({ best, machine: machineId, dial: mood.dial, sound: soundOn, crt: crtOn, mood: serializeMood(mood) })); } catch {}
+    };
+    // The town only inherits a mood from a game that was actually played, never from a glance at the title.
+    const handMoodToTown = () => { if (!G.played) return; try { localStorage.setItem('pc:mood', siteMoodFromLabel(mood.label)); } catch {} };
+
+    // ---------- helpers ----------
+    const M = () => MACHINES[machineId];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+    const mix = (a, b, t) => { const A = hex(a), B = hex(b); return rgb([0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * t))); };
+    const announce = (text) => { if (live) live.textContent = text; };
+    const buzz = (ms) => { if (COARSE && navigator.vibrate) { try { navigator.vibrate(ms); } catch {} } };
+    const signed = (v, w = 3) => (v < 0 ? '-' : '+') + String(Math.min(999, Math.round(Math.abs(v)))).padStart(w, '0');
+
+    // ---------- audio ----------
+    const audio = (() => {
+      let ac = null, master, sfx, music, roarGain, roarFilter;
+      let tempo = 80, scale = 'major', density = 0.5, musicOn = false, wantMusic = false;
+      let nextNote = 0, step = 0, timer = 0, roarLevel = 0;
+      const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+      const PROG = {
+        major: [[60, 64, 67, 72], [57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67]],
+        bright: [[60, 64, 67, 71], [62, 66, 69, 74], [65, 69, 72, 76], [67, 71, 74, 78]],
+        minor: [[57, 60, 64, 69], [53, 57, 60, 65], [55, 59, 62, 67], [57, 60, 64, 69]],
+        soft: [[60, 67, 72, 76], [53, 60, 65, 69], [57, 64, 69, 72], [55, 62, 67, 71]],
+      };
+      const ARP = [0, 2, 1, 3, 2, 0, 3, 1];
+      function ensure() {
+        if (ac) { if (ac.state === 'suspended') ac.resume().catch(() => {}); return ac; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        const comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 6;
+        master = ac.createGain(); master.gain.value = soundOn ? 0.55 : 0;
+        master.connect(comp); comp.connect(ac.destination);
+        sfx = ac.createGain(); sfx.gain.value = 0.7; sfx.connect(master);
+        music = ac.createGain(); music.gain.value = 0.3; music.connect(master);
+        // The engine: a looping noise bed through a low-pass filter; its gain follows the throttle.
+        const len = ac.sampleRate * 2;
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = Math.random() * 2 - 1;
+        const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+        roarFilter = ac.createBiquadFilter(); roarFilter.type = 'lowpass'; roarFilter.frequency.value = 420; roarFilter.Q.value = machineId === 'c64' ? 5 : 0.9;
+        roarGain = ac.createGain(); roarGain.gain.value = 0;
+        src.connect(roarFilter); roarFilter.connect(roarGain); roarGain.connect(sfx);
+        src.start();
+        return ac;
+      }
+      function voice({ freq, type = 'square', t = ac.currentTime, dur = 0.12, vol = 0.3, slide = 0, dest = sfx, a = 0.004, r = 0.05, detune = 0 }) {
+        if (!ac) return;
+        const o = ac.createOscillator();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
+        o.detune.value = detune;
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + a);
+        g.gain.setTargetAtTime(vol * 0.55, t + a + dur * 0.25, Math.max(0.01, dur * 0.25));
+        g.gain.setTargetAtTime(0.0001, t + dur, r);
+        o.connect(g);
+        let out = g;
+        if (machineId === 'c64') {
+          const f = ac.createBiquadFilter();
+          f.type = 'lowpass'; f.Q.value = 4;
+          f.frequency.setValueAtTime(Math.min(12000, freq * 7), t);
+          f.frequency.exponentialRampToValueAtTime(Math.max(120, freq * 1.3), t + dur + 0.05);
+          g.connect(f); out = f;
+        }
+        out.connect(dest);
+        o.start(t); o.stop(t + dur + r * 5 + 0.05);
+      }
+      function noise(t, dur = 0.05, vol = 0.12, freq = 2400, type = 'bandpass') {
+        if (!ac) return;
+        const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+        const buf = ac.createBuffer(1, len, ac.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const s = ac.createBufferSource(); s.buffer = buf;
+        const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = 0.8;
+        const g = ac.createGain(); g.gain.value = vol;
+        s.connect(f); f.connect(g); g.connect(sfx); s.start(t);
+      }
+      const lead = () => (machineId === 'c64' ? 'triangle' : 'square');
+      const bass = () => (machineId === 'c64' ? 'triangle' : 'square');
+      function playStep(s, t) {
+        const chords = PROG[scale] || PROG.major;
+        const chord = chords[Math.floor(s / 16) % chords.length];
+        const idx = s % 16;
+        if (idx % 8 === 0) voice({ freq: midi(chord[0] - 24), type: bass(), t, dur: 0.3, vol: 0.16, dest: music, r: 0.1 });
+        const gate = scale === 'soft' ? 0.3 : 0.4 + density * 0.45;
+        if (idx % 2 === 0 && Math.random() < gate) {
+          const n = chord[ARP[(idx / 2) % ARP.length]] + (scale === 'minor' && idx % 4 === 2 ? 12 : 0);
+          voice({ freq: midi(n), type: lead(), t, dur: scale === 'soft' ? 0.26 : 0.14, vol: scale === 'soft' ? 0.08 : 0.1, dest: music, r: 0.06, detune: machineId === 'xl' ? 4 : 0 });
+        }
+        if (scale === 'minor' && (idx === 4 || idx === 12)) noise(t, 0.03, 0.04);
+      }
+      function schedule() {
+        if (!ac || !musicOn) return;
+        // A throttled interval (hidden tab) must not replay every missed step as one burst.
+        if (nextNote < ac.currentTime - 0.1) { nextNote = ac.currentTime + 0.05; step += 1; }
+        while (nextNote < ac.currentTime + 0.14) {
+          playStep(step, nextNote);
+          nextNote += 60 / tempo / 4;
+          step += 1;
+        }
+      }
+      function setMusic(on) {
+        wantMusic = on;
+        if (!ac) return;
+        if (on && !musicOn) { musicOn = true; nextNote = ac.currentTime + 0.05; step = 0; clearInterval(timer); timer = setInterval(schedule, 30); }
+        else if (!on && musicOn) { musicOn = false; clearInterval(timer); }
+      }
+      return {
+        unlock() {
+          ensure();
+          if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+          // Music asked for before the first gesture (the title screen) starts now.
+          if (ac && wantMusic && !musicOn) setMusic(true);
+        },
+        setMusic,
+        wantsMusic: () => wantMusic,
+        set(t, sc, d) { tempo = t; scale = sc; density = d; },
+        mute(off) { if (master) master.gain.setTargetAtTime(off ? 0 : 0.55, ac.currentTime, 0.02); },
+        /** Throttle 0..1: the roar's level and brightness follow it. */
+        roar(level) {
+          if (!ac || level === roarLevel) return;
+          roarLevel = level;
+          const t = ac.currentTime;
+          roarGain.gain.setTargetAtTime(level * 0.34, t, level > 0 ? 0.04 : 0.09);
+          roarFilter.frequency.setTargetAtTime(380 + level * 900, t, 0.08);
+          roarFilter.Q.value = machineId === 'c64' ? 5 : 0.9;
+        },
+        jet() { if (ac) noise(ac.currentTime, 0.04, 0.07, 1600, 'highpass'); },
+        mark(n) { if (ac) voice({ freq: midi(72 + Math.min(12, n * 2)), type: lead(), dur: 0.08, vol: 0.14, r: 0.05 }); },
+        burn() { if (ac) voice({ freq: 330, type: 'triangle', dur: 0.06, vol: 0.1, slide: 1.25, r: 0.03 }); },
+        rumble() {
+          if (!ac) return;
+          const t = ac.currentTime;
+          voice({ freq: 52, type: 'sine', t, dur: 0.5, vol: 0.5, slide: 0.7, r: 0.2, a: 0.01 });
+          noise(t, 0.3, 0.16, 220, 'lowpass');
+        },
+        landed(mult) { if (!ac) return; const t = ac.currentTime + 0.25; [60, 64, 67, 72].slice(0, 2 + Math.min(2, mult)).forEach((n, i) => voice({ freq: midi(n), type: lead(), t: t + i * 0.09, dur: 0.16, vol: 0.18, r: 0.1 })); },
+        crash() {
+          if (!ac) return;
+          const t = ac.currentTime;
+          voice({ freq: 320, type: 'sawtooth', t, dur: 0.7, vol: 0.24, slide: 0.12, r: 0.15 });
+          noise(t, 0.35, 0.16, 900, 'lowpass');
+          noise(t + 0.02, 0.12, 0.1);
+        },
+        extra() { if (!ac) return; const t = ac.currentTime; voice({ freq: midi(79), type: 'triangle', t, dur: 0.1, vol: 0.2 }); voice({ freq: midi(84), type: 'triangle', t: t + 0.1, dur: 0.22, vol: 0.2, r: 0.1 }); },
+        key() { if (ac) voice({ freq: 1800, type: 'square', dur: 0.012, vol: 0.05, r: 0.01 }); },
+        sio() { if (!ac) return; const t = ac.currentTime; for (let i = 0; i < 4; i += 1) voice({ freq: i % 2 ? 1046 : 1318, type: 'square', t: t + i * 0.12, dur: 0.07, vol: 0.14, r: 0.02 }); },
+        jingle() { if (!ac) return; const t = ac.currentTime; [60, 67, 72, 76, 79, 84].forEach((n, i) => voice({ freq: midi(n), type: lead(), t: t + i * 0.06, dur: 0.12, vol: 0.16, r: 0.1 })); },
+        ready: () => !!ac,
+      };
+    })();
+
+    // ---------- game state ----------
+    const G = {
+      phase: 'boot', t: 0, boot: { lines: [], chars: 0, done: false, beeped: false }, sky: null, seed: 1, descent: 0,
+      lander: null, env: envFor(response, 0), wind: 0, score: 0, landers: LANDERS, landings: 0, fuel: FUEL_START.play,
+      lastAlt: 0, marks: 0, particles: [], flash: 0, msg: '', msgT: 0, msgScale: 3, msgColor: null,
+      keys: {}, touches: new Map(), attract: true, loading: 0, fps: 60, fpsAcc: 0, fpsN: 0, hint: 0,
+      shake: 0, lastTouch: 0, over: false, pendingOver: false, pendingH: 0, musicResume: false, played: false,
+      burn: createBurnTracker(), jetWas: 0, stars: [], judgement: null, points: 0, outOfFuel: false,
+    };
+
+    function bootScript() {
+      if (machineId === 'c64') return ['', '    **** POINTCAST 64 BASIC V2 ****', '', ' 64K RAM SYSTEM', ' 38911 BASIC BYTES FREE', '', 'READY.', 'LOAD"SOFT LANDING",8,1', '', 'SEARCHING FOR SOFT LANDING', 'LOADING', 'READY.', 'RUN'];
+      return ['READY', 'RUN "D:SOFTLAND"', '', 'LOADING', 'READY', 'RUN'];
+    }
+    function beginBoot() {
+      G.phase = 'boot'; G.t = 0;
+      G.boot = { lines: bootScript(), chars: 0, done: false, beeped: false, total: 0 };
+      G.boot.total = G.boot.lines.reduce((n, l) => n + l.length + 1, 0);
+      audio.setMusic(false);
+      audio.roar(0);
+    }
+    function makeStars(seed) {
+      const r = mulberry32(seed * 7 + 3);
+      const out = [];
+      for (let i = 0; i < 26; i += 1) out.push([Math.floor(r() * W), HUD + 6 + Math.floor(r() * (H * 0.5)), r() < 0.3 ? 2 : 1]);
+      return out;
+    }
+    function buildSky(seed) {
+      G.seed = seed;
+      G.sky = generateSkyline(seed, { width: W, height: H, padScale: G.attract ? 1 : response.paddle, rush: !G.attract && response.label === 'RUSH' });
+      G.stars = makeStars(seed);
+    }
+    function spawnLander() {
+      const fromLeft = G.descent % 2 === 0;
+      const x = fromLeft ? 26 + rnd(0, 30) : W - 26 - rnd(0, 30);
+      G.lander = createLander(x, HUD + 22, G.fuel, (fromLeft ? 1 : -1) * rnd(9, 16), 0);
+      G.lastAlt = altitudeOf(G.lander, G.sky);
+      G.burn.reset(); G.judgement = null; G.points = 0; G.jetWas = 0;
+      G.hint = 3.2;
+    }
+    function startDescent(seed) {
+      if (G.pendingH) { applyHeight(G.pendingH); G.pendingH = 0; }
+      // The wind for this skyline: a side, or none, chosen once so the player can learn it.
+      G.wind = Math.random() < 0.5 ? -1 : 1;
+      buildSky(seed);
+      spawnLander();
+      G.loading = 0.6;
+      G.phase = 'play';
+      G.t = 0;
+      readout.land.textContent = `LAND ${G.landings + 1}`;
+    }
+    function newGame() {
+      G.score = 0; G.landers = LANDERS; G.landings = 0; G.descent = 0; G.attract = false; G.over = false; G.pendingOver = false; G.particles = []; G.played = true; G.outOfFuel = false;
+      beginGame(mood); response = moodResponse(mood);
+      G.fuel = FUEL_START[mood.dial] ?? FUEL_START.play;
+      startDescent(1 + Math.floor(Math.random() * 100000));
+      audio.setMusic(true);
+      announce(COARSE ? 'New game. Hold the middle to burn, the sides to tilt.' : 'New game. Up or Space burns, Left and Right tilt.');
+    }
+    function enterTitle() {
+      G.phase = 'title'; G.t = 0; G.attract = true; G.score = 0; G.descent = 0;
+      G.fuel = Infinity;
+      buildSky(1 + Math.floor(Math.random() * 100000));
+      G.wind = 0;
+      spawnLander();
+      audio.setMusic(true);
+      audio.roar(0);
+    }
+    function showMsg(text, scale = 3, time = 1.2, color = null) { G.msg = text; G.msgScale = scale; G.msgT = time; G.msgColor = color; }
+
+    // ---------- input resolution ----------
+    function zoneOf(x) { return x < W / 3 ? 'left' : x > (2 * W) / 3 ? 'right' : 'thrust'; }
+    function currentInput() {
+      let thrust = !!(G.keys.ArrowUp || G.keys.Space || G.keys.KeyW);
+      let left = !!(G.keys.ArrowLeft || G.keys.KeyA);
+      let right = !!(G.keys.ArrowRight || G.keys.KeyD);
+      for (const z of G.touches.values()) { if (z === 'thrust') thrust = true; else if (z === 'left') left = true; else if (z === 'right') right = true; }
+      return { thrust, left, right };
+    }
+
+    // ---------- particles ----------
+    function spawnParticles(x, y, color, n, spread = 90, up = -140) {
+      for (let i = 0; i < n; i += 1) G.particles.push({ x, y, vx: rnd(-spread, spread), vy: rnd(up, 20), life: rnd(0.3, 0.7), t: 0, color, g: 120 });
+      if (G.particles.length > 220) G.particles.splice(0, G.particles.length - 220);
+    }
+    function exhaust(l, dt) {
+      const per = (REDUCED ? 14 : 24 + 36 * response.density) * dt;
+      const n = Math.floor(per) + (Math.random() < per % 1 ? 1 : 0);
+      const dx = -Math.sin(l.angle), dy = Math.cos(l.angle);
+      for (let i = 0; i < n; i += 1) {
+        const sp = rnd(50, 90);
+        G.particles.push({ x: l.x + dx * 6, y: l.y + dy * 6, vx: l.vx * 0.3 + dx * sp + rnd(-14, 14), vy: l.vy * 0.3 + dy * sp + rnd(-14, 14), life: rnd(0.18, 0.4), t: 0, color: M().paddle, g: 0 });
+      }
+      if (G.particles.length > 220) G.particles.splice(0, G.particles.length - 220);
+    }
+
+    // ---------- the descent ----------
+    function settle(l) {
+      // Feet on the ground: the touchdown frame decides, the picture then rests there.
+      l.y += Math.min(0, altitudeOf(l, G.sky));
+      l.burning = false;
+    }
+    function touchdown() {
+      const l = G.lander;
+      const j = judgeLanding(l, G.sky);
+      G.judgement = j;
+      settle(l);
+      audio.roar(0);
+      if (G.attract) { G.phase = 'landed'; G.t = 0; audio.rumble(); return; }
+      if (j.landed) {
+        const { points, mult } = landingScore(j, l);
+        G.score += points; G.points = points; G.landings += 1;
+        if (Number.isFinite(G.fuel)) G.fuel = l.fuel + FUEL_REFUND * mult;
+        moodEvent(mood, 'wave');
+        audio.rumble(); audio.landed(mult); buzz(20);
+        showMsg(j.soft ? `SOFT X${mult} +${points}` : `DOWN X${mult} +${points}`, 2, 1.8, M().bands.green);
+        announce(`${j.soft ? 'Soft landing' : 'Landed'} on the ${mult} times pad for ${points} points.`);
+        if (G.score > best) best = G.score;
+        G.phase = 'landed'; G.t = 0;
+        return;
+      }
+      // A crash.
+      moodEvent(mood, 'loss');
+      audio.crash(); buzz(40);
+      G.flash = 0.35; G.shake = REDUCED ? 0 : 0.3;
+      spawnParticles(l.x, l.y, M().bright, REDUCED ? 6 : 18, 110, -160);
+      spawnParticles(l.x, l.y, M().bands.orange, REDUCED ? 4 : 10, 70, -120);
+      l.alive = false;
+      G.fuel = l.fuel;
+      const why = j.reasons.map((r) => REASON_TEXT[r]).slice(0, 2).join(' ');
+      G.phase = 'crash'; G.t = 0;
+      if (response.unlimitedBalls || DIALS[mood.dial].unlimitedBalls) { showMsg(why, 2, 1.3, M().bands.red); announce(`Crash: ${why.toLowerCase()}. Again.`); return; }
+      G.landers -= 1;
+      if (Number.isFinite(G.fuel) && G.fuel <= 0) { G.outOfFuel = true; G.landers = 0; }
+      if (G.landers <= 0) { G.pendingOver = true; showMsg(G.outOfFuel ? 'OUT OF FUEL' : why, 2, 1.3, M().bands.red); announce(`Game over. Score ${G.score}.`); }
+      else { showMsg(why, 2, 1.3, M().bands.red); announce(`Crash: ${why.toLowerCase()}. ${G.landers} left.`); }
+    }
+    function gameOver() {
+      G.phase = 'over'; G.t = 0; G.over = true;
+      if (G.score > best) best = G.score;
+      save(); handMoodToTown();
+      audio.setMusic(false); audio.roar(0);
+    }
+
+    // ---------- update ----------
+    function update(dt) {
+      G.t += dt;
+      if (G.msgT > 0) G.msgT -= dt;
+      if (G.flash > 0) G.flash -= dt;
+      if (G.shake > 0) G.shake -= dt;
+      if (G.loading > 0) G.loading -= dt;
+      if (G.hint > 0) G.hint -= dt;
+      for (const p of G.particles) { p.t += dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      G.particles = G.particles.filter((p) => p.t < p.life);
+
+      if (G.phase === 'boot') {
+        const rate = machineId === 'c64' ? 48 : 30;
+        G.boot.chars += rate * dt;
+        if (machineId === 'xl' && !G.boot.beeped && G.boot.chars > 22) { G.boot.beeped = true; audio.sio(); }
+        if (machineId === 'c64' && !G.boot.beeped && G.boot.chars > 80) { G.boot.beeped = true; G.loading = 1.4; }
+        if (G.boot.chars >= G.boot.total + 20) { audio.jingle(); enterTitle(); }
+        return;
+      }
+
+      if (G.phase === 'title') {
+        // The attract mode flies itself to the widest pad, then starts over.
+        audio.set(84, 'major', 0.25);
+        const l = G.lander;
+        if (l && l.alive) {
+          const env = { ...G.env, gravity: 16, wind: 0, unlimitedFuel: true };
+          stepLander(l, autopilot(l, G.sky, env, widestPad(G.sky)), dt, env); wrapX(l, W); ceiling(l, HUD);
+          if (l.burning) exhaust(l, dt);
+          if (touchedDown(l, G.sky)) { settle(l); l.alive = false; G.t = 0; }
+        } else if (G.t > 2.2) { buildSky(1 + Math.floor(Math.random() * 100000)); spawnLander(); }
+        return;
+      }
+      if (G.phase === 'paused' || G.phase === 'over') return;
+
+      moodStep(mood, dt);
+      response = moodResponse(mood);
+      audio.set(Math.max(60, response.tempo - 24), response.scale, response.density);
+      G.env = envFor(response, G.wind);
+
+      if (G.phase === 'landed') {
+        if (G.t > 1.9) { G.descent += 1; startDescent(G.seed + 1 + Math.floor(Math.random() * 7)); }
+        return;
+      }
+      if (G.phase === 'crash') {
+        if (G.t > 1.5) {
+          if (G.pendingOver) { G.pendingOver = false; gameOver(); }
+          else { G.descent += 1; buildSky(G.seed); spawnLander(); G.phase = 'play'; G.t = 0; }
+        }
+        return;
+      }
+      if (G.phase === 'play') {
+        const l = G.lander;
+        const input = G.pilot ? autopilot(l, G.sky, G.env) : currentInput();
+        const tilt = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+        if (tilt && tilt !== G.jetWas) audio.jet();
+        G.jetWas = tilt;
+        stepLander(l, input, dt, G.env); wrapX(l, W); ceiling(l, HUD);
+        audio.roar(l.burning ? 1 : 0);
+        if (l.burning) exhaust(l, dt);
+        if (G.burn.step(l, dt)) { moodEvent(mood, 'paddle'); audio.burn(); }
+        const alt = altitudeOf(l, G.sky);
+        const marks = descentMarks(G.lastAlt, alt);
+        if (marks > 0) { for (let i = 0; i < marks; i += 1) moodEvent(mood, 'brick'); G.marks += marks; audio.mark(G.marks % 6); }
+        if (alt < G.lastAlt) G.lastAlt = alt; else if (alt > G.lastAlt + 100) G.lastAlt = alt;
+        if (touchedDown(l, G.sky)) touchdown();
+      }
+    }
+
+    // ---------- rendering ----------
+    let dpr = 1, cssW = 0, cssH = 0, scale = 1, offX = 0, offY = 0;
+    function resize() {
+      const r = screen.getBoundingClientRect();
+      cssW = Math.max(1, r.width); cssH = Math.max(1, r.height);
+      dpr = Math.min(window.devicePixelRatio || 1, 3);
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      scale = Math.max(0.5, Math.floor(Math.min(cssW / W, cssH / H_MIN) * 4) / 4);
+      // A tall phone gets a taller field (more sky to fall through), never a shorter one.
+      const nextH = clamp(Math.floor(cssH / scale), H_MIN, H_MAX);
+      if (nextH !== H) {
+        // Never move the ground under a lander in flight; the change lands at the next descent.
+        if (G.phase === 'play') G.pendingH = nextH; else { G.pendingH = 0; applyHeight(nextH); }
+      }
+      offX = Math.round((cssW - W * scale) / 2); offY = Math.round((cssH - H * scale) / 2);
+    }
+    function applyHeight(nextH) {
+      H = nextH;
+      if (G.sky) buildSky(G.seed);
+      if (G.lander && G.phase !== 'play') { G.lander.alive = false; G.t = 9; }
+    }
+    function text(str, x, y, s, color, align = 'left') {
+      if (!str) return;
+      const w = textWidth(str, s);
+      const ox = align === 'center' ? Math.round(x - w / 2) : align === 'right' ? Math.round(x - w) : x;
+      ctx.fillStyle = color;
+      eachPixel(str, ox, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+    }
+    function rainbowText(str, x, y, s, colors) {
+      const w = textWidth(str, s);
+      const ox = Math.round(x - w / 2);
+      for (let i = 0; i < str.length; i += 1) {
+        ctx.fillStyle = colors[i % colors.length];
+        eachPixel(str[i], ox + i * 4 * s, y, s, (px, py, sz) => ctx.fillRect(px, py, sz, sz));
+      }
+    }
+    function lineColor() {
+      const m = M(); const base = m.text;
+      if (G.attract) return base;
+      const label = response.label;
+      if (label === 'FLOW') return mix(base, '#ffffff', 0.35);
+      if (label === 'RUSH') return mix(base, m.bands.red, 0.3 + 0.1 * Math.sin(G.t * 5));
+      if (label === 'DRIFT') return mix(base, m.field, 0.3);
+      return base;
+    }
+    function drawBorder() {
+      const m = M();
+      ctx.fillStyle = m.border;
+      ctx.fillRect(0, 0, cssW, cssH);
+      const label = G.attract ? 'DAWN' : response.label;
+      const bars = G.loading > 0 ? 'load' : label === 'RUSH' ? 0.62 : label === 'FLOW' ? 0.34 : label === 'DAWN' ? 0.12 : 0;
+      if (bars === 'load') {
+        ctx.globalAlpha = REDUCED ? 0.5 : 0.9;
+        for (let y = 0; y < cssH; y += 3) {
+          // Reduced motion: a still, striped border instead of a per-frame strobe.
+          const k = REDUCED ? Math.floor(y / 12) % m.raster.length : Math.floor(Math.random() * m.raster.length);
+          ctx.fillStyle = m.raster[k]; ctx.fillRect(0, y, cssW, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else if (bars > 0) {
+        const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
+        const shift = (G.t * speed) % (m.raster.length * h * 2);
+        ctx.globalAlpha = bars;
+        for (let y = -m.raster.length * h * 2; y < cssH + h; y += h) {
+          const idx = Math.floor((y + shift) / h);
+          const k = ((idx % (m.raster.length * 2)) + m.raster.length * 2) % (m.raster.length * 2);
+          if (k >= m.raster.length) continue;
+          ctx.fillStyle = m.raster[k];
+          ctx.fillRect(0, y + (shift % h), cssW, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    function drawField() {
+      const m = M();
+      ctx.fillStyle = m.field;
+      ctx.fillRect(0, 0, W, H);
+      if (G.flash > 0) { ctx.globalAlpha = Math.min(REDUCED ? 0.12 : 0.5, G.flash); ctx.fillStyle = m.bright; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+    }
+    function drawStars(alpha) {
+      const m = M();
+      ctx.globalAlpha = alpha * 0.7;
+      ctx.fillStyle = m.text;
+      for (const [x, y, s] of G.stars) ctx.fillRect(x, y, s, s);
+      ctx.globalAlpha = 1;
+    }
+    function drawSky(alpha) {
+      if (!G.sky) return;
+      const m = M();
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 1; ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
+      ctx.strokeStyle = lineColor();
+      ctx.beginPath();
+      for (let i = 0; i < G.sky.points.length; i += 1) { const [x, y] = G.sky.points[i]; if (i === 0) ctx.moveTo(x, y + 0.5); else ctx.lineTo(x, y + 0.5); }
+      ctx.stroke();
+      for (const pad of G.sky.pads) {
+        ctx.fillStyle = m.bright;
+        ctx.fillRect(pad.x0, pad.y, pad.width, 2);
+        const label = `${pad.mult}X`;
+        text(label, (pad.x0 + pad.x1) / 2, pad.y + 5, 1, pad.mult >= 4 ? m.bands.yellow : m.paddle, 'center');
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawLander(l, alpha) {
+      const m = M();
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(l.x, l.y);
+      ctx.rotate(l.angle);
+      ctx.lineWidth = 1; ctx.lineJoin = 'round';
+      const safe = G.phase === 'play' && !G.attract && l.vy <= LIMITS.vy && Math.abs(l.vx) <= LIMITS.vx && Math.abs(l.angle) <= LIMITS.angle;
+      ctx.strokeStyle = safe ? m.bright : m.text === '#000000' ? m.bright : mix(m.text, m.bright, 0.55);
+      ctx.beginPath();
+      ctx.moveTo(-3, -5); ctx.lineTo(3, -5); ctx.lineTo(5, -2); ctx.lineTo(5, 2); ctx.lineTo(3, 3); ctx.lineTo(-3, 3); ctx.lineTo(-5, 2); ctx.lineTo(-5, -2); ctx.closePath();
+      ctx.stroke();
+      // Legs and feet.
+      ctx.strokeStyle = safe ? m.paddle : ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.moveTo(-4, 3); ctx.lineTo(-5.5, 6); ctx.moveTo(-7, 6); ctx.lineTo(-4, 6);
+      ctx.moveTo(4, 3); ctx.lineTo(5.5, 6); ctx.moveTo(7, 6); ctx.lineTo(4, 6);
+      ctx.moveTo(-2, 3); ctx.lineTo(-3, 5.5); ctx.lineTo(3, 5.5); ctx.lineTo(2, 3);
+      ctx.stroke();
+      if (l.burning) {
+        const len = REDUCED ? 8 : 6 + Math.random() * 6;
+        ctx.strokeStyle = m.paddle;
+        ctx.beginPath(); ctx.moveTo(-2, 5.5); ctx.lineTo(0, 5.5 + len); ctx.lineTo(2, 5.5); ctx.stroke();
+        ctx.fillStyle = m.bright; ctx.fillRect(-0.5, 5.5, 1, Math.max(2, len * 0.4));
+      }
+      ctx.restore();
+    }
+    function drawHud() {
+      const m = M();
+      text(String(G.score).padStart(6, '0'), WALL + 2, 8, 3, m.bright);
+      const label = G.attract ? 'ATTRACT' : response.label;
+      const col = G.attract ? m.dim : label === 'RUSH' ? m.bands.red : label === 'FLOW' ? m.bands.yellow : label === 'DRIFT' ? m.text : m.bands.green;
+      text(label, W / 2 + 10, 11, 2, col, 'center');
+      if (!G.attract) {
+        if (response.unlimitedBalls) text('CALM', W - WALL - 2, 11, 2, m.text, 'right');
+        else {
+          // One little lander per ship in reserve.
+          ctx.strokeStyle = m.paddle; ctx.lineWidth = 1;
+          for (let i = 0; i < Math.min(G.landers, 6); i += 1) {
+            const x = W - WALL - 4 - (i + 1) * 10, y = 10;
+            ctx.beginPath(); ctx.moveTo(x, y + 4); ctx.lineTo(x + 2, y); ctx.lineTo(x + 5, y); ctx.lineTo(x + 7, y + 4); ctx.lineTo(x + 5, y + 6); ctx.lineTo(x + 2, y + 6); ctx.closePath(); ctx.stroke();
+          }
+        }
+      }
+      ctx.fillStyle = m.text; ctx.globalAlpha = 0.5; ctx.fillRect(WALL, HUD - 2, W - 2 * WALL, 1); ctx.globalAlpha = 1;
+      // mood tape along the top edge
+      if (!G.attract && mood.tape.length) {
+        const n = Math.min(60, mood.tape.length), start = mood.tape.length - n;
+        for (let i = 0; i < n; i += 1) {
+          const v = mood.tape[start + i];
+          ctx.fillStyle = v === 2 ? m.bands.red : v === 1 ? m.bands.yellow : v === 3 ? m.text : m.bands.green;
+          ctx.fillRect(WALL + i * 3, HUD - 6, 2, 2);
+        }
+      }
+    }
+    function drawInstruments() {
+      const l = G.lander;
+      if (!l || G.attract) return;
+      const m = M();
+      const alt = Math.max(0, altitudeOf(l, G.sky));
+      const vsOk = l.vy <= LIMITS.vy, hsOk = Math.abs(l.vx) <= LIMITS.vx;
+      const warn = m.bands.red, good = m.text;
+      const x = W - WALL - 2, y0 = HUD + 6;
+      text(`ALT ${String(Math.round(Math.min(999, alt))).padStart(3, '0')}`, x, y0, 2, good, 'right');
+      text(`HS ${signed(l.vx)}`, x, y0 + 12, 2, hsOk ? good : warn, 'right');
+      text(`VS ${signed(-l.vy)}`, x, y0 + 24, 2, vsOk ? good : warn, 'right');
+      const fuel = Number.isFinite(l.fuel) ? String(Math.round(l.fuel)).padStart(4, '0') : 'CALM';
+      text(`FUEL ${fuel}`, x, y0 + 36, 2, Number.isFinite(l.fuel) && l.fuel < 150 ? warn : good, 'right');
+      // Attitude: a short bar that tilts with the ship, level when it is level.
+      const ax = x - 14, ay = y0 + 54;
+      ctx.strokeStyle = Math.abs(l.angle) <= LIMITS.angle ? good : warn; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ax - Math.cos(l.angle) * 10, ay - Math.sin(l.angle) * 10); ctx.lineTo(ax + Math.cos(l.angle) * 10, ay + Math.sin(l.angle) * 10); ctx.stroke();
+      ctx.fillStyle = m.dim; ctx.fillRect(ax - 12, ay + 4, 24, 1);
+      if (G.wind && response.label === 'RUSH') text(G.wind < 0 ? '<WIND' : 'WIND>', x, y0 + 64, 1, m.bands.orange, 'right');
+    }
+    function drawParticles(alpha) {
+      for (const p of G.particles) {
+        ctx.globalAlpha = alpha * (1 - p.t / p.life);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawHints() {
+      const m = M();
+      if (G.hint <= 0 || G.descent > 0 || G.landings > 0) return;
+      ctx.globalAlpha = Math.min(1, G.hint);
+      if (COARSE) {
+        text('TILT', W / 6, H - 22, 2, m.text, 'center');
+        text('HOLD BURN', W / 2, H - 22, 2, m.paddle, 'center');
+        text('TILT', (5 * W) / 6, H - 22, 2, m.text, 'center');
+        ctx.fillStyle = m.text; ctx.globalAlpha *= 0.35;
+        ctx.fillRect(W / 3, H - 40, 1, 36); ctx.fillRect((2 * W) / 3, H - 40, 1, 36);
+      } else {
+        text('UP OR SPACE BURNS', W / 2, H - 34, 2, m.paddle, 'center');
+        text('LEFT RIGHT TILT', W / 2, H - 22, 2, m.text, 'center');
+      }
+      ctx.globalAlpha = 1;
+    }
+    function drawBoot() {
+      const m = M();
+      ctx.fillStyle = m.field; ctx.fillRect(0, 0, W, H);
+      let left = Math.floor(G.boot.chars);
+      let y = 12;
+      for (const line of G.boot.lines) {
+        if (left <= 0) break;
+        const shown = line.slice(0, Math.min(line.length, left));
+        text(shown, 10, y, 2, m.text);
+        left -= line.length + 1;
+        if (left <= 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10 + textWidth(shown, 2) + (shown ? 2 : 0), y, 6, 10); }
+        y += 12;
+      }
+      if (G.boot.lines.length && left > 0 && Math.floor(G.t * 2.5) % 2 === 0) { ctx.fillStyle = m.text; ctx.fillRect(10, y, 6, 10); }
+    }
+    function drawTitle() {
+      const m = M();
+      drawStars(0.5); drawSky(0.45); drawParticles(0.5); if (G.lander) drawLander(G.lander, 0.6);
+      rainbowText('SOFT', W / 2, 78, 7, [m.bands.red, m.bands.orange, m.bands.yellow, m.bands.green]);
+      rainbowText('LANDING', W / 2, 120, 6, [m.bands.green, m.bands.yellow, m.bands.orange, m.bands.red, m.bands.yellow, m.bands.green, m.bands.orange]);
+      text('A LUNAR LANDER FOR THE 8-BIT HEART', W / 2, 160, 1, m.bright, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 176, 2, m.text, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 192, 2, m.text, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY' : 'TAP OR PRESS SPACE', W / 2, 232, 2, m.paddle, 'center');
+      if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 262, 2, m.bright, 'center');
+      text('2026 HOYDICH / POINTCAST', W / 2, H - 26, 2, m.dim, 'center');
+    }
+    function drawOver() {
+      const m = M();
+      drawStars(0.5); drawSky(0.4); drawParticles(0.4);
+      text('GAME OVER', W / 2, 108, 5, m.bright, 'center');
+      text(`SCORE ${String(G.score).padStart(6, '0')}`, W / 2, 162, 2, m.bright, 'center');
+      text(`BEST  ${String(best).padStart(6, '0')}`, W / 2, 178, 2, m.bands.yellow, 'center');
+      text(`LANDINGS ${G.landings}  PEAK ${mood.peak}`, W / 2, 194, 2, m.text, 'center');
+      if (G.outOfFuel) text('OUT OF FUEL', W / 2, 212, 2, m.bands.red, 'center');
+      if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO FLY AGAIN' : 'TAP OR SPACE TO FLY AGAIN', W / 2, 250, 2, m.paddle, 'center');
+    }
+    function render() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBorder();
+      let sx = offX, sy = offY;
+      if (G.shake > 0) { sx += Math.round(rnd(-2, 2)); sy += Math.round(rnd(-2, 2)); }
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, sx * dpr, sy * dpr);
+      if (G.phase === 'boot') { drawBoot(); return; }
+      drawField();
+      if (G.phase === 'title') { drawTitle(); return; }
+      if (G.phase === 'over') { drawHud(); drawOver(); return; }
+      drawStars(1); drawSky(1); drawHud(); drawInstruments();
+      if (G.lander && (G.lander.alive || G.phase === 'landed')) drawLander(G.lander, 1);
+      drawParticles(1);
+      drawHints();
+      const m = M();
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 200, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 232, 2, m.text, 'center'); }
+      if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 196, G.msgScale, G.msgColor || m.bright, 'center');
+    }
+
+    // ---------- loop ----------
+    let last = performance.now(), readoutClock = 0;
+    function frame(now) {
+      const dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000));
+      last = now;
+      G.fpsAcc += dt; G.fpsN += 1;
+      if (G.fpsAcc >= 0.5) { G.fps = Math.round(G.fpsN / G.fpsAcc); G.fpsAcc = 0; G.fpsN = 0; }
+      update(dt);
+      render();
+      readoutClock += dt;
+      if (readoutClock > 0.25) {
+        readoutClock = 0;
+        const l = G.lander;
+        readout.mood.textContent = `${G.attract ? 'ATTRACT' : response.label} E${mood.energy.toFixed(2)} C${mood.calm.toFixed(2)}`;
+        readout.tempo.textContent = `${G.attract ? 84 : Math.max(60, response.tempo - 24)} BPM ${G.attract ? 'MAJOR' : response.scale.toUpperCase()}`;
+        readout.fps.textContent = `${G.fps} FPS`;
+        readout.vec.textContent = l && G.sky ? `ALT ${Math.max(0, Math.round(altitudeOf(l, G.sky)))} VS ${Math.round(-l.vy)} G ${G.env.gravity}` : 'ALT 0 VS 0';
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ---------- input ----------
+    function pointerToField(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
+    }
+    function action() {
+      audio.unlock();
+      if (G.phase === 'boot') { audio.jingle(); enterTitle(); return; }
+      if (G.phase === 'title' || G.phase === 'over') { newGame(); return; }
+      if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
+    }
+    canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      const p = pointerToField(e);
+      const playing = G.phase === 'play';
+      // A touch that starts a game is held from its own position: the same frame reads it as a control.
+      G.touches.set(e.pointerId, zoneOf(p.x));
+      if (!playing) action();
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!G.touches.has(e.pointerId)) return;
+      const p = pointerToField(e);
+      G.touches.set(e.pointerId, zoneOf(p.x));
+    });
+    const release = (e) => { G.touches.delete(e.pointerId); };
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+    canvas.addEventListener('lostpointercapture', release);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const t = e.target;
+      if (t && typeof t.closest === 'function' && t.closest('a, button, input, textarea, select, [contenteditable]')) return;
+      const k = e.code;
+      if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'KeyA' || k === 'KeyD' || k === 'ArrowUp' || k === 'KeyW') { G.keys[k] = true; e.preventDefault(); audio.unlock(); return; }
+      if (k === 'Space' || k === 'Enter') {
+        e.preventDefault();
+        if (G.phase === 'play') { G.keys.Space = true; audio.unlock(); return; }
+        if (!e.repeat) action();
+        return;
+      }
+      if (k === 'KeyP') { togglePause(); return; }
+      if (k === 'KeyF') { toggleFull(); return; }
+      if (k === 'KeyM') { toggleSound(); return; }
+      if (k === 'KeyC') { toggleCrt(); return; }
+      if (k === 'Digit1') { setMachine('xl'); return; }
+      if (k === 'Digit2') { setMachine('c64'); return; }
+      if (k === 'Digit3') { cycleDial(); }
+    });
+    document.addEventListener('keyup', (e) => { G.keys[e.code] = false; });
+    function dropInputs() { G.keys = {}; G.touches.clear(); audio.roar(0); }
+    function togglePause() {
+      if (G.phase === 'play') { G.resume = G.phase; G.phase = 'paused'; dropInputs(); audio.setMusic(false); }
+      else if (G.phase === 'paused') { G.phase = G.resume || 'play'; audio.setMusic(true); }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        dropInputs();
+        if (G.phase === 'play') { G.resume = G.phase; G.phase = 'paused'; }
+        G.musicResume = audio.wantsMusic() && G.phase !== 'paused';
+        audio.setMusic(false);
+        save(); handMoodToTown();
+      } else {
+        last = performance.now();
+        if (G.musicResume) { G.musicResume = false; audio.setMusic(true); }
+      }
+    });
+    window.addEventListener('blur', dropInputs);
+    window.addEventListener('pagehide', () => { save(); handMoodToTown(); });
+
+    // ---------- settings UI ----------
+    function syncButtons() {
+      btn.machine.textContent = M().label;
+      btn.dial.textContent = DIALS[mood.dial].label;
+      btn.sound.setAttribute('aria-pressed', String(soundOn));
+      btn.crt.setAttribute('aria-pressed', String(crtOn));
+      root.dataset.machine = machineId;
+      root.dataset.crt = crtOn ? 'on' : 'off';
+      btn.full.textContent = fullscreenEl() ? 'EXIT' : 'FULL';
+    }
+    function setMachine(id) {
+      if (!MACHINES[id] || id === machineId) return;
+      machineId = id;
+      G.loading = 0.5;
+      audio.roar(0);
+      syncButtons(); save();
+      announce(`${M().name} mode.`);
+    }
+    function cycleDial() {
+      const next = DIAL_IDS[(DIAL_IDS.indexOf(mood.dial) + 1) % DIAL_IDS.length];
+      setDial(mood, next); response = moodResponse(mood);
+      if (!G.attract) {
+        if (response.unlimitedBalls) { G.fuel = Infinity; if (G.lander) G.lander.fuel = Infinity; }
+        else {
+          if (!Number.isFinite(G.fuel)) { G.fuel = FUEL_START[next]; if (G.lander) G.lander.fuel = G.fuel; }
+          if (G.landers <= 0) G.landers = 1;
+        }
+      }
+      syncButtons(); save();
+      announce(`Dial ${DIALS[next].label}.`);
+      showMsg(DIALS[next].label, 3, 0.8);
+    }
+    function toggleSound() { soundOn = !soundOn; audio.unlock(); audio.mute(!soundOn); syncButtons(); save(); }
+    function toggleCrt() { crtOn = !crtOn; syncButtons(); save(); }
+    const fullscreenEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    function toggleFull() {
+      if (fullscreenEl()) { const exit = document.exitFullscreen || document.webkitExitFullscreen; if (exit) { try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch {} } return; }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
+    }
+    btn.machine.addEventListener('click', () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    btn.dial.addEventListener('click', () => { audio.unlock(); cycleDial(); });
+    btn.sound.addEventListener('click', toggleSound);
+    btn.crt.addEventListener('click', toggleCrt);
+    btn.full.addEventListener('click', toggleFull);
+    if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
+    document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
+    document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
+
+    // ---------- go ----------
+    // QA hook, opt-in by URL: ?debug exposes the state read-only and lets a test fly the autopilot.
+    if (new URLSearchParams(location.search).has('debug')) window.__softLanding = { G, mood, response: () => response };
+    syncButtons();
+    resize();
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(screen); else window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    beginBoot();
+    requestAnimationFrame(frame);
+  }
+</script>

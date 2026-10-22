@@ -17,6 +17,19 @@
 
 ---
 
+## Soft Landing — a lunar lander for the 8-bit heart (2026-10-22)
+
+`/soft-landing`, `/soft-landing.json`, Block 0728. Thread 3 of the five games Michael Hoydich asked for after Breakwater (siblings: Tideline, Kelp, Crosswalk, Driftwood). Same brief; Lunar Lander. Shares Breakwater's font, palettes and mood model; its own physics, skylines, landing judgement and sounds. Stacks on the Breakwater PR. Research note: `docs/notes/2026-10-22-soft-landing-notes.md`.
+
+- [x] (CC) Build the game: vector skyline with 1x / 2x / 4x pads (5x in RUSH), gravity, main engine, side jets, fuel, landing judgement (speed, drift, attitude, pad), scoring by multiplier and fuel, a new skyline per landing, the mood dial and tape, filtered-noise engine roar, rumble and crash slide, boot screens for both machines, touch thirds and keys, `tests/soft-landing.test.mjs` with a simulated descent — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (same line count), `llms-full.txt`, OG card from the game's own palette and skyline generator — `done`
+- [ ] (X) Review the landing limits and fuel economy (1200 on PLAY, 900 on RUSH, +100 per multiplier on a landing), the crosswind strength in RUSH, and the `?debug` QA hook that exposes read-only state and the autopilot — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-soft-landing-qa.md`, log to `docs/manus-logs/2026-10-22-soft-landing.md` — `queued`
+- [ ] (MH) Decide whether the five games share one cabinet row on `/games` and the home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/soft-landing`, `/soft-landing.json` and `softLanding` in `/agents.json` — `handoff`
+
+---
+
 ## The Loom — append to anything (2026-10-20)
 
 `/loom`, `/api/loom`, `/loom.json`, `/loom/embed.js`, MCP `loom_read` / `loom_append`. Public federated message system: one verb, append(to, message), any address.

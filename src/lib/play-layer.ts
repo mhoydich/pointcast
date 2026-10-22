@@ -1,7 +1,7 @@
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Breakwater, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Breakwater, Soft Landing, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -14,6 +14,13 @@ export const PLAY_SURFACES = [
     title: 'Breakwater',
     route: '/breakwater',
     summary: 'A breakout for the 8-bit heart: Atari 800XL or Commodore 64 blue, synthesized chip sound, and a mood the game and you keep together. Phone or full screen.',
+  },
+  {
+    id: 'soft-landing',
+    code: 'LAND',
+    title: 'Soft Landing',
+    route: '/soft-landing',
+    summary: 'A lunar lander for the 8-bit heart: a vector skyline in Atari 800XL or Commodore 64 blue, a little fuel, pads that pay more the narrower they are, and the same mood Breakwater keeps. Phone or full screen.',
   },
   {
     id: 'baseball',
