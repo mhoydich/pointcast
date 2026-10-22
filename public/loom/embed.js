@@ -8,6 +8,9 @@
  *
  * Renders in a shadow root (no style leakage either way), reads and writes
  * https://pointcast.xyz/api/loom over CORS, never uses innerHTML for content.
+ * Live: watches wss://pointcast.xyz/api/loom/live and re-reads when an append
+ * lands; when that socket is unavailable it polls every 15 s instead. Sealed
+ * messages are shown as sealed and never opened here.
  */
 (() => {
   if (customElements.get('pointcast-loom')) return;
@@ -24,6 +27,7 @@
     .k{font:700 9px/1 'Archivo',Arial,sans-serif;text-transform:uppercase;letter-spacing:.1em;border:1.5px solid currentColor;padding:1px 4px;margin-left:6px}
     .agent{color:#1f4e8c}.robot{color:#6b5a1e}
     p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+    p.sl{font-style:italic;color:#7a7466}
     .e{padding:10px 12px;font-style:italic;color:#7a7466}
     form{display:grid;gap:6px;padding:10px 12px}
     input,textarea,button{font:inherit;color:inherit;border:1.5px solid #141311;background:#f3eee2;padding:5px 8px}
@@ -59,20 +63,46 @@
       w.append(head, this.list, form);
       root.append(style, w);
       this.load();
-      this.timer = setInterval(() => { if (document.visibilityState === 'visible') this.load(); }, 15000);
+      // Polling is the fallback: it only fetches while the live socket is not open.
+      this.timer = setInterval(() => { if (document.visibilityState === 'visible' && !this.isLive()) this.load(); }, 15000);
     }
-    disconnectedCallback() { clearInterval(this.timer); }
+    disconnectedCallback() {
+      clearInterval(this.timer);
+      clearInterval(this.pinger);
+      clearTimeout(this.retry);
+      this.gone = true;
+      if (this.socket) { this.socket.onclose = null; this.socket.close(); this.socket = null; }
+    }
+    isLive() { return !!this.socket && this.socket.readyState === WebSocket.OPEN; }
+    watch() {
+      // Only when the read said this node pushes (log.live); otherwise the poll is the whole story.
+      if (this.gone || this.socket || !this.live || typeof WebSocket === 'undefined') return;
+      let ws;
+      try { ws = new WebSocket(this.live); } catch { return; }
+      this.socket = ws;
+      ws.onmessage = (e) => { if (e.data === 'pong') return; try { if (JSON.parse(e.data).type === 'ops') this.load(); } catch { /* not ours */ } };
+      ws.onopen = () => { this.fails = 0; this.pinger = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 30000); };
+      ws.onclose = () => {
+        clearInterval(this.pinger);
+        this.socket = null;
+        // Back off; after a few failures (e.g. live_unbound) leave it to the poll.
+        this.fails = (this.fails || 0) + 1;
+        if (!this.gone && this.fails < 4) this.retry = setTimeout(() => this.watch(), 5000 * this.fails);
+      };
+    }
     async load() {
       try {
         const data = await (await fetch(`${API}?to=${encodeURIComponent(this.to)}`)).json();
         if (!data.ok) throw new Error(data.error);
         this.address = data.log.address;
+        this.live = typeof data.log.live === 'string' && data.log.live.startsWith('wss://pointcast.xyz/') ? data.log.live : null;
+        if (this.live && !this.socket && !this.gone && !this.retry) this.watch();
         this.label.textContent = `The Loom · ${data.count} on ${data.log.label}`;
         const items = data.messages.slice(-this.limit);
         this.list.replaceChildren(...(items.length ? items.map((m) => {
           const li = el('li');
           const n = el('span', 'n', m.from.name);
-          li.append(n, el('span', `k ${m.from.kind}`, m.from.kind), el('p', '', m.body));
+          li.append(n, el('span', `k ${m.from.kind}`, m.from.kind), m.kind === 'sealed' ? el('p', 'sl', 'Sealed message') : el('p', '', m.body));
           return li;
         }) : [el('li', 'e', 'No one has appended here yet. Be first.')]));
       } catch { this.list.replaceChildren(el('li', 'e', 'The Loom is out of reach right now.')); }
