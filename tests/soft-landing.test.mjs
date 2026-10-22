@@ -95,6 +95,18 @@ test('skyline: seeded, sorted, inside the field, with distinct pads that sit on 
   const r = mulberry32(1); const v = r(); assert.ok(v >= 0 && v < 1); assert.notEqual(v, r());
 });
 
+test('skyline: a resize rebuilds the same ground, only taller or shorter, so pads keep their x', () => {
+  for (const seed of [1, 7, 42, 1979]) {
+    for (const opts of [{}, { padScale: 1.35 }, { padScale: 0.9, rush: true }]) {
+      const a = generateSkyline(seed, { width: W, height: 384, ...opts });
+      const b = generateSkyline(seed, { width: W, height: 480, ...opts });
+      assert.deepEqual(a.points.map(([x]) => x), b.points.map(([x]) => x), `seed ${seed} point x`);
+      assert.deepEqual(a.pads.map((p) => [p.x0, p.x1, p.mult]), b.pads.map((p) => [p.x0, p.x1, p.mult]), `seed ${seed} pads`);
+      for (const [, y] of b.points) assert.ok(y <= 480 - 20 && y >= 480 * 0.5);
+    }
+  }
+});
+
 test('skyline: groundAt interpolates between points and clamps at the edges', () => {
   const sky = { width: 100, points: [[0, 100], [50, 200], [100, 100]], pads: [] };
   assert.equal(groundAt(sky, 25), 150);
