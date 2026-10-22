@@ -7,7 +7,7 @@ Real-browser and real-phone check of Gridtown, the browser city builder, after i
 - https://pointcast.xyz/gridtown/
 - https://pointcast.xyz/gridtown/?seed=7
 - https://pointcast.xyz/gridtown.json
-- https://pointcast.xyz/b/0727
+- https://pointcast.xyz/b/0740
 - https://pointcast.xyz/play/games/gridtown/
 
 ## Tools / accounts

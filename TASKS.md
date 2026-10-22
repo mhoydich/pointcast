@@ -6,7 +6,7 @@
 
 ## Gridtown — a browser-first city builder (2026-10-22)
 
-`/gridtown`, `/gridtown.json`, Block 0727 (0725 and 0726 were taken on main while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
+`/gridtown`, `/gridtown.json`, Block 0740 (0725 and 0726 went to main's messenger and radio releases, and 0727–0739 are the 8-bit arcade's). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
 
 - [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
 - [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
@@ -25,6 +25,31 @@
 - [ ] (MH) Set `FAMILY_ROOM_KEY_MIKE`, `_MORGAN`, `_KANA`, `_KENZO` (encrypted, 16+ characters; optional `FAMILY_ROOM_ADMIN_KEY`, `FAMILY_ROOM_READ_KEY`), redeploy, give each Grok its key and the prompt — `waiting-on-mh`
 - [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
 - [ ] (X) Review `/api/family-room` and the two MCP tools (public write surface, kids' bots) — `queued`
+
+---
+
+## Cabinet Row — the lobby for the 8-bit arcade (2026-10-22)
+
+`/cabinet-row`, `/cabinet-row.json`, Block 0732. One cabinet per game that shares Breakwater's cabinet; a cabinet lights when its game is in `src/data/game-catalog.json`. Rules in `src/lib/breakwater/row.mjs`, tests in `tests/cabinet-row.test.mjs`. Mike 2026-10-22: "keep going".
+
+- [x] (CC) Build the lobby: lit and dark cabinets from the catalog, per-game best and last mood from each game's browser save, the row's mood from `pc:mood` or the tapes, a mood ribbon, the next cabinet for the mood, an optional hum, machine colors, JSON twin, Block, cover art, discovery — `done`
+- [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737, one cloud session each, draft PRs based on `claude/epic-albattani-j8tb06`: Lighthouse (Simon, `claude/lighthouse-20261022`, session_01PEDK4795RE7nBmVM7yeaJC), Low Tide (Kaboom!, `claude/low-tide-20261022`, session_016rpwV276Uk53dyNtHncrzz), Morning Route (Paperboy, `claude/morning-route-20261022`, session_01SDvFBq3oSr9SEfkD32XwZx), Sea Glass (Q*bert, `claude/sea-glass-20261022`, session_01QCPxosyU53LGtzQjrG99Fv), Sandcastle (Missile Command, `claude/sandcastle-20261022`, session_01FtckgMyrwsT8mZSzswKh4Q); each lights its own cabinet when published; their discovery entries sit after Cabinet Row's, wave one's after Breakwater's — `in-progress`
+- [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
+
+---
+
+## Breakwater — a breakout for the 8-bit heart (2026-10-22)
+
+`/breakwater`, `/breakwater.json`, Block 0739 (moved from 0725, then 0726, when main's messenger and radio releases took those ids). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
+
+- [x] (CC) Build the game: canvas playfield from a 3x5 pixel font, Atari 800XL and Commodore 64 modes with boot screens, Web Audio chip voices and a generative arpeggiator, four-state mood model with a CALM/PLAY/RUSH dial, phone drag and desktop fullscreen, browser-local best score and mood tape, `tests/breakwater.test.mjs` — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt`, `llms-full.txt`, OG card from the game's own palette — `done`
+- [ ] (X) Review the mood response ranges and the audio scheduler on a slow phone; the page is isolated (no chrome, no beacon), so check that is the right call — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-breakwater-qa.md`, log to `docs/manus-logs/2026-10-22-breakwater.md` — `queued`
+- [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
+- [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
+- [ ] (MH/X) Review and merge #1478, then the five stacked PRs in any order (#1480, #1481, #1482, #1483, #1484), resolving the discovery-file conflicts as they come; deploy once with `scripts/deploy.sh` — `waiting-on-mh`
 
 ---
 
