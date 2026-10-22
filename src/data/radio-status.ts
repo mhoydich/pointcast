@@ -68,25 +68,25 @@ const PUBLISHING: Milestone[] = [
     id: 'print-campaign',
     track: 'Publishing',
     title: 'Print campaign',
-    status: 'in progress',
+    status: 'done',
     owner: 'Build agents',
-    note: 'Printable pieces for Main Street. Posting anything in town still needs permission from each place. Being built today.',
+    note: 'Eight concept sheets at /radio-network/print: poster, schedule card, neighbor-voice flyer, underwriting one-pager, network map, tuning guide, stickers, door hangers. Posting anything in town still needs permission from each place.',
   },
   {
     id: 'mcp-tools',
     track: 'Publishing',
     title: 'MCP read tools: radio_network and radio_station',
-    status: 'in progress',
+    status: 'done',
     owner: 'Build agents',
-    note: 'Read-only tools on /api/mcp so agents can read the plan and any station. Being built today.',
+    note: 'Read-only tools on /api/mcp so agents can read the plan and any station. Live once deployed.',
   },
   {
     id: 'status-board',
     track: 'Publishing',
     title: 'This status board',
-    status: 'in progress',
+    status: 'done',
     owner: 'Product manager',
-    note: 'Dated board with milestones, blockers, decisions, risks and a changelog. Being built today.',
+    note: 'Dated board with milestones, blockers, decisions, risks and a changelog. Updated with each ship; tracking issue #1503.',
   },
 ];
 
@@ -167,6 +167,8 @@ export const RISKS = [
 
 export const CHANGELOG = [
   { date: '2026-10-22', shipped: 'Merged to main; CI build green; deploy step skipped (no CLOUDFLARE_API_TOKEN secret), so not yet live.', ref: null },
+  { date: '2026-10-22', shipped: 'Eight-sheet concept print campaign at /radio-network/print.', ref: { block: '0741', label: 'Block 0741', url: 'https://pointcast.xyz/b/0741' } },
+  { date: '2026-10-22', shipped: 'MCP read tools radio_network and radio_station, and this status board.', ref: PR(1517) },
   { date: '2026-10-22', shipped: 'Ten project assignments, RN-01 to RN-10, on the plan and the jobs board.', ref: PR(1514) },
   { date: '2026-10-22', shipped: 'Seven station pages, JSON twins and the Phase 0 launch kit.', ref: { block: '0726', ...PR(1494) } },
   { date: '2026-10-20', shipped: 'Network plan published at /radio-network with /radio-network.json.', ref: { block: '0718', ...PR(1466) } },
