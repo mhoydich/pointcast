@@ -8,8 +8,10 @@ const data=JSON.parse(readFileSync(new URL('../public/opportunities/catalog.json
 // Projects added 2026-10-20 (Guides, Light Works, Internship Lab) have their own test below.
 // Radio Network assignments (2026-10-22) also have their own test below.
 const ADDED_PROJECTS=['guides','light-works','internship-lab'];
-const LATER_PROJECTS=['radio'];
+const LATER_PROJECTS=['radio','civil-service'];
 const added=data.opportunities.filter(r=>ADDED_PROJECTS.includes(r.project));
+// El Segundo Civil Service posts (2026-10-22) are projected from src/data/civil-service.ts and tested below.
+const civil=data.opportunities.filter(r=>r.project==='civil-service');
 const radio=data.opportunities.filter(r=>r.project==='radio');
 const rows=data.opportunities.filter(r=>![...ADDED_PROJECTS,...LATER_PROJECTS].includes(r.project)&&(r.origin!=='external'||r.id==='external-xai-grok-imagine-5244173007'));
 const internal=rows.filter(r=>r.origin!=='external');
@@ -129,6 +131,21 @@ test('2026-10-20 additions stay proposed, closed to applications and linked to t
  assert.equal(selectRows(data.opportunities,readState('?site=intern&project=guides')).length,12);
 });
 
+test('civil-service posts stay closed here, unpaid, and point at their own sign-up deep link',async()=>{
+ const {CIVIL_SERVICE_POSTS}=await import('../src/data/civil-service.ts');
+ assert.equal(civil.length,CIVIL_SERVICE_POSTS.length);
+ assert.deepEqual(civil.map(r=>r.id),CIVIL_SERVICE_POSTS.map(p=>'civil-service-'+p.code.toLowerCase()));
+ for(const r of civil){
+  assert.equal(r.owner,'pointcast');assert.deepEqual(r.sites,['pointcast']);
+  assert.equal(r.status,'proposed');assert.equal(r.kind,'volunteer-field-task');assert.equal(r.compensationKind,'unpaid');
+  assert.equal(r.applicationsEnabled,false);assert.equal(r.availabilityVerifiedAt,null);assert.equal(canApply(r),false);assert.equal(externalApplicationLink(r),null);
+  assert.match(r.sourceUrl,/^https:\/\/pointcast\.xyz\/civil-service#ESC-\d{3}$/);
+  assert.match(r.compensation,/not money or wages/);
+  assert.match(r.terms,/Not an application and not employment/);assert.match(r.terms,/No real public employment is offered/);
+ }
+ assert.equal(selectRows(data.opportunities,readState('?project=civil-service')).length,CIVIL_SERVICE_POSTS.length);
+ assert.equal(readState('?project=civil-service').project,'civil-service');
+});
 test('2026-10-22 radio network assignments stay proposed, closed to applications and linked to /radio-network',()=>{
  assert.equal(radio.length,10);
  assert.deepEqual(radio.map(r=>r.id),Array.from({length:10},(_,i)=>`radio-rn-${String(i+1).padStart(2,'0')}`));

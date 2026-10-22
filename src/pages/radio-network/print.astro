@@ -1,0 +1,660 @@
+---
+/**
+ * /radio-network/print — a printable promo kit for Radio El Segundo's Phase 0
+ * pilot. Eight concept sheets, one per printed letter page: a Main Street
+ * poster, a two-up pocket schedule card, a neighbor-voice flyer with tear-off
+ * tabs, an underwriting one-pager, a network map, a tuning guide, a bumper
+ * sticker sheet and two door hangers.
+ *
+ * Concept art for a planned station. Nothing is on air: no frequency, phone
+ * number, email or launch date appears anywhere, on purpose. Copy is pulled
+ * from src/data/radio-network.ts and src/data/radio-kit.ts where it exists,
+ * and is written in a neutral station voice, not Mike Hoydich's.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/radio-network.css';
+import { CLOCK, PATHS, PHASES, RADIO_BASE, RULES, STATIONS, WEEK, stationBySlug, MONEY } from '../../data/radio-network';
+import { CONSENT, CREDIT_RULES, CREDIT_TEMPLATE, NEIGHBOR_QUESTIONS, RUNDOWN, STATION_IDS } from '../../data/radio-kit';
+
+const flagship = stationBySlug('el-segundo')!;
+const hubUrl = RADIO_BASE.replace(/^https?:\/\//, '');
+const kitUrl = `${hubUrl}/kit`;
+const CONCEPT = 'Concept print campaign for a planned station. Not on air.';
+
+// "This is Radio El Segundo. Local first, from 90245." -> "Local first, from 90245."
+const tagline = STATION_IDS[0].text.replace(/^This is [^.]+\.\s*/, '');
+// Last sentence of the closing ID: "Tell us what we missed."
+const missed = STATION_IDS[1].text.split(/(?<=\.)\s+/).pop() ?? '';
+const [showName, showWhat] = flagship.firstShow.split(' — ');
+const neighborClock = CLOCK.find((c) => c.what.startsWith('Neighbor voice'))!;
+const neighborLine = neighborClock.what.split(' — ')[1] ?? '';
+const neighborRundown = RUNDOWN.find((r) => r.item === 'Neighbor voice');
+const creditClock = CLOCK.find((c) => c.what.startsWith('Underwriting'))!;
+const creditRundown = RUNDOWN.find((r) => r.item.startsWith('Underwriting'))!;
+const creditRule = RULES.find((r) => r.startsWith('Underwriting'))!;
+const firstSentence = (s: string) => s.split(/(?<=\.)\s+/)[0];
+const pilot = PHASES[0];
+// The blanks in the credit template: [business], [what it is ...], [street].
+const draftFields = [...CREDIT_TEMPLATE.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1].charAt(0).toUpperCase() + m[1].slice(1));
+
+// Geographic order, north to south then inland, for the dial and the map.
+const geo: Record<string, { x: number; y: number; dx: number; dy: number; anchor: 'start' | 'middle' }> = {
+  'playa-del-rey': { x: 262, y: 150, dx: 24, dy: 0, anchor: 'start' },
+  'el-segundo': { x: 268, y: 290, dx: 30, dy: 0, anchor: 'start' },
+  'hawthorne-lawndale': { x: 460, y: 322, dx: 0, dy: 38, anchor: 'middle' },
+  'manhattan-beach': { x: 284, y: 420, dx: 24, dy: 0, anchor: 'start' },
+  'hermosa-beach': { x: 292, y: 505, dx: 24, dy: 0, anchor: 'start' },
+  'redondo-beach': { x: 300, y: 590, dx: 24, dy: 0, anchor: 'start' },
+  torrance: { x: 470, y: 660, dx: 0, dy: 38, anchor: 'middle' },
+};
+const dialOrder = ['playa-del-rey', 'el-segundo', 'hawthorne-lawndale', 'manhattan-beach', 'hermosa-beach', 'redondo-beach', 'torrance'];
+const shortTown = (t: string) => t.split(' and ')[0].replace(' Beach', '');
+
+// Poster dial: a half-circle scale with the seven towns, needle on El Segundo.
+const DCX = 300, DCY = 320, DR = 215;
+const pt = (deg: number, r: number) => {
+  const a = (deg * Math.PI) / 180;
+  return { x: +(DCX + r * Math.cos(a)).toFixed(1), y: +(DCY + r * Math.sin(a)).toFixed(1) };
+};
+const ticks = Array.from({ length: 61 }, (_, i) => {
+  const deg = 190 + i * (160 / 60);
+  const long = i % 10 === 0;
+  return { a: pt(deg, DR), b: pt(deg, DR - (long ? 26 : i % 5 === 0 ? 18 : 10)), long };
+});
+const dialMarks = dialOrder.map((slug, i) => {
+  const deg = 206 + i * (128 / (dialOrder.length - 1));
+  const s = stationBySlug(slug)!;
+  return { slug, deg, label: shortTown(s.town), p: pt(deg, DR + 46), dot: pt(deg, DR + 14), flag: s.role === 'flagship' };
+});
+const needleDeg = dialMarks.find((m) => m.flag)!.deg;
+const needleTip = pt(needleDeg, DR + 2);
+
+// Hour clock wheel for the pocket card.
+const toMin = (s: string) => parseInt(s.replace(/\D/g, ''), 10);
+const arcPath = (cx: number, cy: number, r1: number, r2: number, m0: number, m1: number) => {
+  const a0 = (m0 / 60) * 2 * Math.PI - Math.PI / 2;
+  const a1 = (m1 / 60) * 2 * Math.PI - Math.PI / 2;
+  const large = m1 - m0 > 30 ? 1 : 0;
+  const p = (r: number, a: number) => `${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`;
+  return `M${p(r2, a0)} A${r2} ${r2} 0 ${large} 1 ${p(r2, a1)} L${p(r1, a1)} A${r1} ${r1} 0 ${large} 0 ${p(r1, a0)} Z`;
+};
+const clockSegs = CLOCK.map((c) => {
+  const m0 = toMin(c.at);
+  const m1 = m0 + toMin(c.len);
+  const kind = c.who.startsWith('Local or') ? 'mix' : c.who.startsWith('Local') ? 'local' : 'net';
+  const mid = ((m0 + m1) / 2 / 60) * 2 * Math.PI - Math.PI / 2;
+  return { d: arcPath(100, 100, 52, 92, m0, m1), kind, at: c.at, lx: +(100 + 72 * Math.cos(mid)).toFixed(1), ly: +(100 + 72 * Math.sin(mid)).toFixed(1), short: m1 - m0 < 4 };
+});
+
+// Network map: stylized coast, ocean to the west.
+const coast =
+  'M-400 0 L205 0 C215 60 232 110 240 150 C248 200 250 240 252 290 C254 340 262 380 268 420 C274 460 278 500 284 590 C286 620 270 650 238 680 C205 712 182 742 188 780 L-400 780 Z';
+const phaseColor = ['var(--pr-red)', 'var(--pr-amber)', 'var(--pr-teal)', 'var(--pr-ink)'];
+
+const stickers = [
+  { cls: 'st-red', big: tagline, small: flagship.name },
+  { cls: 'st-ink', big: missed, small: `${flagship.name} · ${hubUrl}` },
+  { cls: 'st-amber', big: firstSentence(RULES[1]), small: 'Agents draft. A named person approves anything broadcast.' },
+  { cls: 'st-teal', big: firstSentence(RULES[2]), small: `${flagship.name} station rules` },
+];
+
+const sheets = [
+  { id: 'poster', name: 'Main Street poster' },
+  { id: 'card', name: 'Pocket schedule card, two-up' },
+  { id: 'neighbor', name: 'Neighbor voice flyer with tear-off tabs' },
+  { id: 'underwriting', name: 'Underwriting one-pager' },
+  { id: 'map', name: 'Network map' },
+  { id: 'tuning', name: 'Tuning guide' },
+  { id: 'stickers', name: 'Bumper sticker sheet' },
+  { id: 'hangers', name: 'Door hangers, two-up' },
+];
+const n = (id: string) => sheets.findIndex((s) => s.id === id) + 1;
+
+const title = 'Radio El Segundo print kit — PointCast Radio Network';
+const description =
+  'Concept print campaign for Radio El Segundo’s Phase 0 pilot: a Main Street poster, pocket schedule card, neighbor-voice flyer, underwriting one-pager, network map, tuning guide, bumper stickers and door hangers. One sheet per page. Not on air.';
+---
+
+<BlockLayout title={title} description={description} author="PointCast">
+  <div class="rn pr">
+    <div class="rn-wrap">
+      <header class="rn-mast pr-noprint">
+        <a class="logo" href="/radio-network">PointCast <b>Radio Network</b></a>
+        <nav>
+          <a href="/radio-network">The plan</a>
+          <a href="/radio-network/el-segundo">Radio El Segundo</a>
+          <a href="/radio-network/kit">Launch kit</a>
+          <a href="/radio-network/print" aria-current="page">Print kit</a>
+        </nav>
+      </header>
+
+      <div class="pr-head pr-noprint">
+        <p class="rn-kicker">Phase 0 · concept print campaign · nothing on air</p>
+        <h1>Paper for a station that isn’t on yet.</h1>
+        <p class="lede">
+          {sheets.length} sheets for Main Street, the library board and the coffee shop corkboard, for when the Radio El
+          Segundo pilot is ready to be talked about. Each prints on its own letter page. No frequency, phone number or
+          launch date anywhere: the station does not have them yet.
+        </p>
+        <p class="pr-actions">
+          <button type="button" data-print-all>Print all {sheets.length} sheets</button>
+          <span class="rn-meta">Letter paper, portrait, “background graphics” on. Ask before you post anything.</span>
+        </p>
+        <ol class="pr-index">
+          {sheets.map((s, i) => <li><a href={`#sheet-${s.id}`}><span class="mono">{String(i + 1).padStart(2, '0')}</span> {s.name}</a></li>)}
+        </ol>
+      </div>
+
+      <div class="pr-wall">
+
+        <!-- 01 POSTER -->
+        <figure class="pr-fig" id="sheet-poster">
+          <section class="sheet s-poster" aria-label="Main Street poster">
+            <p class="p-top"><span>PointCast Radio Network</span><span>Phase 0 · pilot in progress</span></p>
+            <svg class="p-dial" viewBox="0 0 600 360" role="img" aria-label={`A radio dial tuned to ${flagship.town}`}>
+              <path d={`M${pt(184, DR + 78).x} ${pt(184, DR + 78).y} A${DR + 78} ${DR + 78} 0 0 1 ${pt(356, DR + 78).x} ${pt(356, DR + 78).y}`} class="d-rim" />
+              <path d={`M${pt(188, DR - 40).x} ${pt(188, DR - 40).y} A${DR - 40} ${DR - 40} 0 0 1 ${pt(352, DR - 40).x} ${pt(352, DR - 40).y}`} class="d-rim thin" />
+              {ticks.map((t) => <line x1={t.a.x} y1={t.a.y} x2={t.b.x} y2={t.b.y} class={t.long ? 'd-tick long' : 'd-tick'} />)}
+              {dialMarks.map((m) => (
+                <g>
+                  <circle cx={m.dot.x} cy={m.dot.y} r={m.flag ? 9 : 5} class={m.flag ? 'd-dot on' : 'd-dot'} />
+                  <text x={m.p.x} y={m.p.y} class={m.flag ? 'd-lab on' : 'd-lab'} text-anchor="middle">{m.label}</text>
+                </g>
+              ))}
+              <line x1={DCX} y1={DCY} x2={needleTip.x} y2={needleTip.y} class="d-needle" />
+              <circle cx={DCX} cy={DCY} r="34" class="d-knob" />
+              <circle cx={DCX} cy={DCY} r="12" class="d-cap" />
+              <rect x="215" y="200" width="170" height="46" rx="6" class="d-win" />
+              <text x={DCX} y="233" text-anchor="middle" class="d-read">{flagship.zip}</text>
+            </svg>
+            <h2 class="p-name">{flagship.name}</h2>
+            <p class="p-tag">{tagline}</p>
+            <div class="p-show">
+              <p class="p-k">First show</p>
+              <p class="p-show-name">{showName}</p>
+              <p class="p-show-what">A weekly half hour. <b>Coming soon.</b></p>
+            </div>
+            <div class="p-ask">
+              <p class="p-ask-h">{missed}</p>
+              <p class="p-url">{hubUrl}</p>
+            </div>
+            <p class="foot"><span>{CONCEPT}</span><span>{n('poster')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>01 · Main Street poster. The dial is marked with towns, not frequencies: the station holds none.</figcaption>
+        </figure>
+
+        <!-- 02 POCKET CARD -->
+        <figure class="pr-fig" id="sheet-card">
+          <section class="sheet s-card" aria-label="Pocket schedule card, two-up">
+            {[0, 1].map(() => (
+              <div class="card">
+                <div class="c-main">
+                  <p class="c-k">{flagship.name} · the week</p>
+                  <table class="c-grid">
+                    <tbody>{WEEK.map((w) => <tr><th>{w.block}</th><td>{w.show}</td></tr>)}</tbody>
+                  </table>
+                </div>
+                <div class="c-side">
+                  <svg viewBox="0 0 200 200" class="c-clock" role="img" aria-label="The hour clock">
+                    {clockSegs.map((s) => <path d={s.d} class={`seg ${s.kind}`} />)}
+                    {clockSegs.filter((s) => !s.short).map((s) => <text x={s.lx} y={s.ly + 3} text-anchor="middle" class="seg-t">{s.at}</text>)}
+                    <text x="100" y="98" text-anchor="middle" class="c-hr">every</text>
+                    <text x="100" y="114" text-anchor="middle" class="c-hr">hour</text>
+                  </svg>
+                  <ul class="c-key">
+                    <li><i class="local"></i>Local</li>
+                    <li><i class="mix"></i>Local or network</li>
+                    <li><i class="net"></i>Network desk</li>
+                  </ul>
+                  <p class="c-note">A planned schedule. Not on air yet.</p>
+                  <p class="c-url">{hubUrl}</p>
+                </div>
+              </div>
+            ))}
+            <p class="foot"><span>{CONCEPT} Cut on the dashed lines.</span><span>{n('card')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>02 · Pocket schedule card, two to a sheet, from the weekly grid and the hour clock in the plan.</figcaption>
+        </figure>
+
+        <!-- 03 NEIGHBOR VOICE -->
+        <figure class="pr-fig" id="sheet-neighbor">
+          <section class="sheet s-neighbor" aria-label="Neighbor voice flyer">
+            <p class="p-top"><span>{flagship.name}</span><span>Volunteers wanted</span></p>
+            <div class="nv-hero">
+              <svg viewBox="0 0 120 200" class="nv-mic" aria-hidden="true">
+                <rect x="30" y="8" width="60" height="96" rx="30" class="mic-head" />
+                {[26, 40, 54, 68, 82].map((y) => <line x1="34" y1={y} x2="86" y2={y} class="mic-grille" />)}
+                <path d="M18 70 v12 a42 42 0 0 0 84 0 v-12" class="mic-yoke" />
+                <line x1="60" y1="124" x2="60" y2="170" class="mic-yoke" />
+                <rect x="30" y="170" width="60" height="12" rx="4" class="mic-base" />
+              </svg>
+              <div>
+                <h2 class="nv-h">Neighbor<br />voice.</h2>
+                <p class="nv-sub">{neighborLine.charAt(0).toUpperCase() + neighborLine.slice(1)}.</p>
+              </div>
+            </div>
+            <p class="nv-body">
+              Every hour of {flagship.name} keeps {neighborClock.len} for one neighbor and one story{neighborRundown && <>, and {showName} gives it {neighborRundown.len.replace(':00', '')} minutes</>}.
+              Tell us yours, or tell us who to ask. We will ask things like:
+            </p>
+            <ol class="nv-q">{NEIGHBOR_QUESTIONS.map((q) => <li>{q}</li>)}</ol>
+            <p class="nv-fine">{CONSENT.lines[2]}</p>
+            <div class="tabs" aria-label="Tear-off tabs">
+              {Array.from({ length: 8 }).map(() => (
+                <div class="tab"><b>Neighbor voice</b><span>{kitUrl}</span></div>
+              ))}
+            </div>
+            <p class="foot"><span>{CONCEPT}</span><span>{n('neighbor')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>03 · Recruiting flyer. Questions and consent language come from the launch kit.</figcaption>
+        </figure>
+
+        <!-- 04 UNDERWRITING -->
+        <figure class="pr-fig" id="sheet-underwriting">
+          <section class="sheet s-under" aria-label="Underwriting one-pager">
+            <p class="p-top"><span>{flagship.name} · for local businesses</span><span>No prices on this page</span></p>
+            <h2 class="u-h">Underwrite<br />{showName}.</h2>
+            <p class="u-sub">{MONEY[0]}</p>
+            <div class="u-cols">
+              <div>
+                <p class="u-k">What a credit sounds like</p>
+                <blockquote class="u-quote">“{CREDIT_TEMPLATE}”</blockquote>
+                <p class="u-k">Where it runs</p>
+                <ul class="u-where">
+                  <li><b class="mono">{creditRundown.at}</b> in {showName}, {firstSentence(creditRundown.note).toLowerCase()}</li>
+                  <li><b class="mono">{creditClock.at}</b> of the hour, once the station runs around the clock: {creditClock.what.toLowerCase()}.</li>
+                </ul>
+                <p class="u-k">The short version</p>
+                <p class="u-short">{creditRule}</p>
+              </div>
+              <div>
+                <p class="u-k">The rules</p>
+                <ol class="u-rules">{CREDIT_RULES.map((r) => <li>{r}</li>)}</ol>
+              </div>
+            </div>
+            <div class="u-draft">
+              <p class="u-k">Draft yours</p>
+              <div class="u-fill">
+                {draftFields.map((f) => <p><i></i><span>{f}</span></p>)}
+              </div>
+              <p class="u-note">Same length every time, read as written. Nothing else gets added.</p>
+            </div>
+            <p class="u-cta">
+              The pilot is in progress and terms are not set. If you would like your business on the list, start at
+              <b>{hubUrl}</b>.
+            </p>
+            <p class="foot"><span>{CONCEPT}</span><span>{n('underwriting')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>04 · Underwriting one-pager. Credit rules and template are the kit’s, word for word.</figcaption>
+        </figure>
+
+        <!-- 05 MAP -->
+        <figure class="pr-fig" id="sheet-map">
+          <section class="sheet s-map" aria-label="Network map">
+            <p class="p-top"><span>PointCast Radio Network</span><span>Not to scale</span></p>
+            <h2 class="m-h">Seven towns, one dial.</h2>
+            <svg viewBox="0 0 600 780" class="m-svg" role="img" aria-label="Stylized map of the seven South Bay towns in the planned network, not to scale">
+              <rect x="-400" width="1400" height="780" class="m-land" />
+              <path d={coast} class="m-sea" />
+              {[120, 260, 400, 540, 680].map((y) => (
+                <path d={`M30 ${y} q15 -10 30 0 t30 0 t30 0`} class="m-wave" />
+              ))}
+              <text x="70" y="330" class="m-sea-t" transform="rotate(-80 70 330)">Santa Monica Bay</text>
+              <g class="m-lax" transform="translate(320 205) rotate(-4)">
+                <rect x="0" y="0" width="150" height="46" rx="4" />
+                <line x1="12" y1="14" x2="138" y2="14" /><line x1="12" y1="32" x2="138" y2="32" />
+                <text x="75" y="64" text-anchor="middle">LAX</text>
+              </g>
+              <g class="m-compass" transform="translate(540 60)">
+                <path d="M0 -26 L9 6 L0 0 L-9 6 Z" /><text y="22" text-anchor="middle">N</text>
+              </g>
+              {STATIONS.map((s) => {
+                const g = geo[s.slug];
+                const flag = s.role === 'flagship';
+                return (
+                  <g transform={`translate(${g.x} ${g.y})`}>
+                    {flag && [70, 50, 32].map((r) => <circle r={r} class="m-ring" />)}
+                    <circle r={flag ? 18 : 13} class="m-knob" style={`fill:${phaseColor[s.phase]}`} />
+                    <line x1="0" y1="0" x2="0" y2={flag ? -14 : -10} class="m-pointer" transform={`rotate(${30 + s.phase * 45})`} />
+                    <text x={g.dx} y={g.dy - 4} text-anchor={g.anchor} class="m-name">{s.name}</text>
+                    <text x={g.dx} y={g.dy + 16} text-anchor={g.anchor} class="m-zip">{s.zip} · phase {s.phase}</text>
+                  </g>
+                );
+              })}
+            </svg>
+            <ul class="m-key">
+              {[0, 1, 2, 3].map((p) => (
+                <li><i style={`background:${phaseColor[p]}`}></i><b>Phase {p}</b> {PHASES[p].name.toLowerCase()} · {PHASES[p].span}</li>
+              ))}
+            </ul>
+            <p class="foot"><span>{CONCEPT} Stylized; not to scale.</span><span>{n('map')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>05 · Network map. Abstract coastline, towns as dial knobs colored by phase.</figcaption>
+        </figure>
+
+        <!-- 06 TUNING GUIDE -->
+        <figure class="pr-fig" id="sheet-tuning">
+          <section class="sheet s-tune" aria-label="Tuning guide">
+            <p class="p-top"><span>{flagship.name}</span><span>Owner’s manual, page 1</span></p>
+            <h2 class="t-h">How to tune in.</h2>
+            <p class="t-sub">A tuning guide for a station that is still on the workbench. Turn the knobs in order.</p>
+            <ol class="t-knobs">
+              {PATHS.map((p, i) => (
+                <li>
+                  <svg viewBox="0 0 80 80" class="t-knob" aria-hidden="true">
+                    <circle cx="40" cy="40" r="34" />
+                    {Array.from({ length: 12 }).map((_, k) => {
+                      const a = (k / 12) * 2 * Math.PI;
+                      return <line x1={40 + 30 * Math.cos(a)} y1={40 + 30 * Math.sin(a)} x2={40 + 36 * Math.cos(a)} y2={40 + 36 * Math.sin(a)} />;
+                    })}
+                    <line x1="40" y1="40" x2="40" y2="12" class="t-ptr" transform={`rotate(${-60 + i * 50} 40 40)`} />
+                  </svg>
+                  <div>
+                    <p class="t-n">Knob {i + 1} · {p.when}</p>
+                    <h3>{p.name}</h3>
+                    <p>{p.reach}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <div class="t-trouble">
+              <p class="u-k">Troubleshooting</p>
+              <dl>
+                <dt>I hear static.</dt><dd>Correct. Nothing is on air yet.</dd>
+                <dt>My car can’t find it.</dt><dd>Neither can anyone’s. There is no frequency to find.</dd>
+                <dt>What is happening now?</dt><dd>{pilot.goal}</dd>
+              </dl>
+            </div>
+            <p class="foot"><span>{CONCEPT}</span><span>{n('tuning')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>06 · Tuning guide. The four ways the signal could get out, in the plan’s order.</figcaption>
+        </figure>
+
+        <!-- 07 STICKERS -->
+        <figure class="pr-fig" id="sheet-stickers">
+          <section class="sheet s-stick" aria-label="Bumper sticker sheet">
+            {stickers.map((s) => (
+              <div class:list={['sticker', s.cls]}>
+                <svg viewBox="0 0 60 60" class="st-ico" aria-hidden="true">
+                  <circle cx="30" cy="30" r="26" /><circle cx="30" cy="30" r="16" /><circle cx="30" cy="30" r="5" class="fill" />
+                </svg>
+                <div><p class="st-big">{s.big}</p><p class="st-small">{s.small}</p></div>
+              </div>
+            ))}
+            <p class="foot"><span>{CONCEPT} Cut on the dashed lines.</span><span>{n('stickers')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>07 · Bumper stickers, from the station IDs and the station rules.</figcaption>
+        </figure>
+
+        <!-- 08 DOOR HANGERS -->
+        <figure class="pr-fig" id="sheet-hangers">
+          <section class="sheet s-hang" aria-label="Door hangers">
+            <div class="hanger h-on">
+              <span class="h-hole" aria-hidden="true"></span>
+              <p class="h-lamp">On air</p>
+              <p class="h-big">Recording a neighbor voice.</p>
+              <p class="h-small">Please knock softly, or come back in fifteen minutes.</p>
+              <svg viewBox="0 0 60 60" class="h-ico" aria-hidden="true"><circle cx="30" cy="30" r="26" /><circle cx="30" cy="30" r="16" /><circle cx="30" cy="30" r="5" class="fill" /></svg>
+              <p class="h-foot">{flagship.name}<br />{tagline}</p>
+            </div>
+            <div class="hanger h-off">
+              <span class="h-hole" aria-hidden="true"></span>
+              <p class="h-lamp">Off air</p>
+              <p class="h-big">Come in. {missed}</p>
+              <p class="h-small">Or tell us online:</p>
+              <p class="h-url">{hubUrl}</p>
+              <svg viewBox="0 0 60 60" class="h-ico" aria-hidden="true"><circle cx="30" cy="30" r="26" /><circle cx="30" cy="30" r="16" /><circle cx="30" cy="30" r="5" class="fill" /></svg>
+              <p class="h-foot">{flagship.name}<br />{showName} · coming soon</p>
+            </div>
+            <p class="foot"><span>{CONCEPT} Cut around the outline.</span><span>{n('hangers')}/{sheets.length}</span></p>
+          </section>
+          <figcaption>08 · Door hangers for the recording room: one on air, one off air.</figcaption>
+        </figure>
+      </div>
+
+      <footer class="rn-foot pr-noprint">
+        Concept art drafted by Claude Code at Mike Hoydich’s request, in a neutral station voice, not Mike’s. The station
+        is a plan: nothing is on air, and nothing here should be posted without permission from the place it goes. Back to
+        <a href="/radio-network">the network plan</a> or <a href="/radio-network/kit">the launch kit</a>.
+      </footer>
+    </div>
+  </div>
+</BlockLayout>
+
+<script>
+  document.querySelector('[data-print-all]')?.addEventListener('click', () => window.print());
+</script>
+
+<style>
+  .pr {
+    --pr-ink: #17140f; --pr-paper: #fbf7ee; --pr-red: #c2361f; --pr-amber: #d08a12; --pr-teal: #1f6f6b;
+    --pr-line: #ddd3bf; --pr-muted: #665f54;
+  }
+  .pr .mono { font-family: 'JetBrains Mono Variable', monospace; }
+  .pr-head h1 { max-width: 20ch; }
+  .pr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 18px 0; }
+  .pr-actions button { font-weight: 700; background: var(--red); color: #fff; border-color: var(--red); }
+  .pr-index { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 4px 18px; padding: 0; list-style: none; font-size: .92rem; }
+  .pr-index .mono { color: var(--amber); font-size: .78rem; }
+  .pr-wall { display: grid; gap: 40px; margin-top: 32px; justify-items: center; }
+  .pr-fig { margin: 0; width: min(100%, 780px); }
+  .pr-fig figcaption { font-size: .84rem; color: var(--muted); margin-top: 10px; }
+
+  /* A sheet is a letter page minus .4in margins: 7.7in × 10.2in. Everything inside scales with its width. */
+  .sheet {
+    container-type: inline-size; position: relative; width: 100%; aspect-ratio: 7.7 / 10.2; overflow: hidden;
+    background: var(--pr-paper); color: var(--pr-ink); box-shadow: 0 2px 0 var(--line), 0 12px 32px rgba(0,0,0,.18);
+    padding: 5cqw 5.5cqw 4cqw; display: flex; flex-direction: column; font-size: 2cqw; line-height: 1.4;
+    font-family: 'Inter Variable', system-ui, sans-serif;
+  }
+  .sheet p { margin: 0; }
+  .sheet .foot {
+    margin-top: auto; display: flex; justify-content: space-between; gap: 2cqw; padding-top: 1.4cqw;
+    border-top: .2cqw solid var(--pr-line); font-family: 'JetBrains Mono Variable', monospace; font-size: 1.25cqw;
+    letter-spacing: .04em; color: var(--pr-muted); text-transform: uppercase;
+  }
+  .p-top {
+    display: flex; justify-content: space-between; gap: 2cqw; font-family: 'JetBrains Mono Variable', monospace;
+    font-size: 1.5cqw; text-transform: uppercase; letter-spacing: .08em; border-bottom: .5cqw solid var(--pr-ink); padding-bottom: 1.2cqw;
+  }
+  .p-top span:last-child { color: var(--pr-red); }
+  .u-k, .p-k { font-family: 'JetBrains Mono Variable', monospace; font-size: 1.4cqw; text-transform: uppercase; letter-spacing: .08em; color: var(--pr-amber); margin: 2.2cqw 0 .8cqw !important; }
+
+  /* 01 poster */
+  .s-poster { background: var(--pr-paper); }
+  .p-dial { width: 100%; margin: 3cqw 0 0; }
+  .d-rim { fill: none; stroke: var(--pr-ink); stroke-width: 6; }
+  .d-rim.thin { stroke-width: 2; }
+  .d-tick { stroke: var(--pr-ink); stroke-width: 2; }
+  .d-tick.long { stroke-width: 4; }
+  .d-dot { fill: var(--pr-ink); }
+  .d-dot.on { fill: var(--pr-red); }
+  .d-lab { font: 600 16px 'Inter Variable', sans-serif; fill: var(--pr-muted); }
+  .d-lab.on { fill: var(--pr-red); font-weight: 800; font-size: 20px; }
+  .d-needle { stroke: var(--pr-red); stroke-width: 6; stroke-linecap: round; }
+  .d-knob { fill: var(--pr-ink); }
+  .d-cap { fill: var(--pr-red); }
+  .d-win { fill: var(--pr-ink); }
+  .d-read { font: 700 30px 'JetBrains Mono Variable', monospace; fill: var(--pr-amber); letter-spacing: .12em; }
+  .p-name { font-size: 11.5cqw; line-height: .92; letter-spacing: -.045em; font-weight: 900; margin: 1cqw 0 0; color: var(--pr-ink); }
+  .p-tag { font-size: 4.4cqw; font-weight: 700; color: var(--pr-red); letter-spacing: -.02em; margin-top: 1.2cqw !important; }
+  .p-show { margin-top: 3.4cqw !important; border: .5cqw solid var(--pr-ink); border-radius: 1.6cqw; padding: 1.4cqw 3cqw 2.4cqw; background: #fff; }
+  .p-show-name { font-size: 6cqw; font-weight: 900; letter-spacing: -.03em; line-height: 1.05; }
+  .p-show-what { font-size: 3.2cqw; margin-top: .6cqw !important; }
+  .p-show-what b { color: var(--pr-red); }
+  .p-ask { margin-top: 3.4cqw !important; background: var(--pr-ink); color: var(--pr-paper); border-radius: 1.6cqw; padding: 2.6cqw 3cqw; }
+  .p-ask-h { font-size: 5.2cqw; font-weight: 800; letter-spacing: -.02em; }
+  .p-url { font-family: 'JetBrains Mono Variable', monospace; font-size: 3.6cqw; color: var(--pr-amber); margin-top: .6cqw !important; word-break: break-all; }
+  .s-poster .foot { margin-top: auto; border: 0; }
+
+  /* 02 pocket card */
+  .s-card { padding: 3cqw; gap: 0; }
+  .card {
+    flex: 1; display: grid; grid-template-columns: 1fr 30%; gap: 3cqw; padding: 3.4cqw; position: relative;
+    border: .3cqw dashed var(--pr-muted); background: #fff;
+  }
+  .card + .card { border-top: 0; }
+  .card::before { content: '✂'; position: absolute; left: -.6cqw; top: -1.9cqw; font-size: 2.6cqw; color: var(--pr-muted); }
+  .c-k { font-weight: 900; font-size: 3cqw; letter-spacing: -.02em; border-bottom: .5cqw solid var(--pr-red); padding-bottom: .8cqw; margin-bottom: 1.2cqw !important; }
+  .c-grid { width: 100%; border-collapse: collapse; font-size: 1.62cqw; }
+  .c-grid th, .c-grid td { text-align: left; vertical-align: top; padding: .6cqw .8cqw .6cqw 0; border-bottom: .15cqw solid var(--pr-line); }
+  .c-grid th { font-family: 'JetBrains Mono Variable', monospace; font-weight: 600; color: var(--pr-muted); width: 38%; font-size: 1.4cqw; }
+  .c-grid td { font-weight: 700; }
+  .c-side { display: flex; flex-direction: column; gap: 1.2cqw; }
+  .c-clock { width: 100%; }
+  .seg { stroke: #fff; stroke-width: 1.5; }
+  .seg.local { fill: var(--pr-red); }
+  .seg.mix { fill: var(--pr-amber); }
+  .seg.net { fill: var(--pr-teal); }
+  .seg-t { font: 700 10px 'JetBrains Mono Variable', monospace; fill: #fff; }
+  .c-hr { font: 700 13px 'Inter Variable', sans-serif; fill: var(--pr-ink); }
+  .c-key { list-style: none; padding: 0; margin: 0; font-size: 1.4cqw; }
+  .c-key li { display: flex; align-items: center; gap: .8cqw; }
+  .c-key i { width: 1.6cqw; height: 1.6cqw; border-radius: 50%; display: inline-block; }
+  .c-key i.local { background: var(--pr-red); } .c-key i.mix { background: var(--pr-amber); } .c-key i.net { background: var(--pr-teal); }
+  .c-note { font-size: 1.4cqw; color: var(--pr-red); font-weight: 700; }
+  .c-url { margin-top: auto !important; font-family: 'JetBrains Mono Variable', monospace; font-size: 1.3cqw; word-break: break-all; }
+  .s-card .foot { margin-top: 1.6cqw; border: 0; padding-top: 0; }
+
+  /* 03 neighbor voice */
+  .nv-hero { display: grid; grid-template-columns: 18% 1fr; gap: 4cqw; align-items: center; margin-top: 4cqw; }
+  .nv-mic { width: 100%; }
+  .mic-head { fill: var(--pr-ink); }
+  .mic-grille { stroke: var(--pr-paper); stroke-width: 3; opacity: .55; }
+  .mic-yoke { fill: none; stroke: var(--pr-ink); stroke-width: 7; stroke-linecap: round; }
+  .mic-base { fill: var(--pr-red); }
+  .nv-h { font-size: 12cqw; font-weight: 900; line-height: .9; letter-spacing: -.05em; margin: 0; color: var(--pr-ink); }
+  .nv-sub { font-size: 3.4cqw; font-weight: 700; color: var(--pr-red); margin-top: 1.6cqw !important; }
+  .nv-body { font-size: 2.3cqw; margin-top: 4cqw !important; max-width: 60ch; }
+  .nv-q { font-size: 2.3cqw; margin: 1.6cqw 0 0; padding-left: 4cqw; }
+  .nv-q li { margin: .8cqw 0; font-weight: 600; }
+  .nv-fine { font-size: 1.6cqw; color: var(--pr-muted); margin-top: 2.4cqw !important; }
+  .tabs {
+    margin: auto -5.5cqw 0; display: grid; grid-template-columns: repeat(8, 1fr); height: 33cqw;
+    border-top: .3cqw dashed var(--pr-muted);
+  }
+  .tab {
+    writing-mode: vertical-rl; transform: rotate(180deg); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: .6cqw; overflow: hidden;
+    padding: 2cqw .6cqw; border-left: .2cqw dashed var(--pr-muted); font-size: 1.4cqw; line-height: 1.25; white-space: nowrap;
+  }
+  .tab b { font-size: 1.9cqw; color: var(--pr-red); }
+  .tab span { font-family: 'JetBrains Mono Variable', monospace; }
+  .s-neighbor .foot { margin-top: 1.4cqw; }
+
+  /* 04 underwriting */
+  .u-h { font-size: 8.4cqw; font-weight: 900; line-height: .95; letter-spacing: -.045em; margin: 4cqw 0 0; color: var(--pr-ink); }
+  .u-sub { font-size: 2.8cqw; color: var(--pr-teal); font-weight: 700; margin-top: 1.6cqw !important; max-width: 40ch; }
+  .u-cols { display: grid; grid-template-columns: 1.1fr 1fr; gap: 5cqw; margin-top: 2cqw; }
+  .u-quote { margin: 0; font-size: 2.6cqw; font-weight: 600; line-height: 1.35; background: #fff; border-left: 1cqw solid var(--pr-red); padding: 2cqw 2.4cqw; }
+  .u-where { margin: 0; padding-left: 2.6cqw; font-size: 1.85cqw; }
+  .u-where li { margin: .7cqw 0; }
+  .u-short { font-size: 2cqw; font-weight: 700; }
+  .u-rules { margin: 0; padding-left: 3cqw; font-size: 2cqw; }
+  .u-rules li { margin: 0 0 1.6cqw; padding-bottom: 1.6cqw; border-bottom: .15cqw solid var(--pr-line); }
+  .u-draft { margin-top: 3cqw; border-top: .4cqw solid var(--pr-ink); }
+  .u-fill { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 3cqw; margin-top: 1.4cqw; }
+  .u-fill p { display: flex; flex-direction: column; gap: .8cqw; }
+  .u-fill i { display: block; height: 5cqw; border-bottom: .25cqw solid var(--pr-ink); }
+  .u-fill span { font-size: 1.5cqw; color: var(--pr-muted); }
+  .u-note { font-size: 1.6cqw; color: var(--pr-muted); margin-top: 1.6cqw !important; }
+  .u-cta { margin-top: auto !important; margin-bottom: 2cqw !important; background: var(--pr-ink); color: var(--pr-paper); padding: 2.4cqw 3cqw; border-radius: 1.4cqw; font-size: 2.1cqw; }
+  .u-cta b { color: var(--pr-amber); font-family: 'JetBrains Mono Variable', monospace; }
+  .s-under .foot { margin-top: 0; }
+
+  /* 05 map */
+  .m-h { font-size: 6.4cqw; font-weight: 900; letter-spacing: -.04em; margin: 2.4cqw 0 1.4cqw; color: var(--pr-ink); }
+  .m-svg { width: 100%; flex: 1; min-height: 0; border: .3cqw solid var(--pr-ink); border-radius: 1cqw; background: #f1e6cf; }
+  .m-land { fill: #f1e6cf; }
+  .m-sea { fill: #cfe2df; stroke: var(--pr-teal); stroke-width: 3; }
+  .m-wave { fill: none; stroke: var(--pr-teal); stroke-width: 2; opacity: .5; }
+  .m-sea-t { font: italic 600 20px 'Inter Variable', sans-serif; fill: var(--pr-teal); letter-spacing: .08em; }
+  .m-lax rect { fill: #e2d6bd; stroke: var(--pr-muted); stroke-width: 2; }
+  .m-lax line { stroke: var(--pr-muted); stroke-width: 3; stroke-dasharray: 10 6; }
+  .m-lax text { font: 700 14px 'JetBrains Mono Variable', monospace; fill: var(--pr-muted); letter-spacing: .15em; }
+  .m-compass path { fill: var(--pr-ink); }
+  .m-compass text { font: 700 16px 'Inter Variable', sans-serif; fill: var(--pr-ink); }
+  .m-ring { fill: none; stroke: var(--pr-red); stroke-width: 2; opacity: .45; }
+  .m-knob { stroke: var(--pr-ink); stroke-width: 3; }
+  .m-pointer { stroke: #fff; stroke-width: 3.5; stroke-linecap: round; }
+  .m-name { font: 800 19px 'Inter Variable', sans-serif; fill: var(--pr-ink); paint-order: stroke; stroke: #f1e6cf; stroke-width: 5; }
+  .m-zip { font: 600 13px 'JetBrains Mono Variable', monospace; fill: var(--pr-muted); paint-order: stroke; stroke: #f1e6cf; stroke-width: 4; }
+  .m-key { list-style: none; padding: 0; margin: 1.8cqw 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: .8cqw 3cqw; font-size: 1.7cqw; }
+  .m-key li { display: flex; align-items: center; gap: 1cqw; }
+  .m-key i { width: 2cqw; height: 2cqw; border-radius: 50%; border: .3cqw solid var(--pr-ink); flex: none; }
+  .s-map .foot { margin-top: 1.6cqw; }
+
+  /* 06 tuning guide */
+  .t-h { font-size: 10cqw; font-weight: 900; letter-spacing: -.05em; line-height: .95; margin: 4cqw 0 0; color: var(--pr-ink); }
+  .t-sub { font-size: 2.6cqw; color: var(--pr-muted); margin-top: 1.2cqw !important; }
+  .t-knobs { list-style: none; padding: 0; margin: 4cqw 0 0; display: grid; gap: 4cqw; }
+  .t-knobs li { display: grid; grid-template-columns: 14cqw 1fr; gap: 3.4cqw; align-items: center; }
+  .t-knob { width: 100%; }
+  .t-knob circle { fill: var(--pr-ink); }
+  .t-knob line { stroke: var(--pr-ink); stroke-width: 2.5; }
+  .t-knob .t-ptr { stroke: var(--pr-amber); stroke-width: 5; stroke-linecap: round; }
+  .t-n { font-family: 'JetBrains Mono Variable', monospace; font-size: 1.55cqw; text-transform: uppercase; letter-spacing: .06em; color: var(--pr-red); }
+  .t-knobs h3 { font-size: 3.5cqw; margin: .3cqw 0; letter-spacing: -.02em; }
+  .t-knobs li p:last-child { font-size: 2.2cqw; }
+  .t-trouble { margin-top: auto; margin-bottom: 2cqw; border: .4cqw solid var(--pr-ink); border-radius: 1.4cqw; padding: .4cqw 3cqw 2cqw; background: #fff; }
+  .t-trouble dl { margin: 0; display: grid; grid-template-columns: 34% 1fr; gap: 1cqw 2cqw; font-size: 1.95cqw; }
+  .t-trouble dt { font-weight: 800; }
+  .t-trouble dd { margin: 0; }
+  .s-tune .foot { margin-top: 0; }
+
+  /* 07 stickers */
+  .s-stick { padding: 3cqw; gap: 2.4cqw; }
+  .sticker {
+    flex: 1; display: grid; grid-template-columns: 18cqw 1fr; gap: 3cqw; align-items: center; padding: 2cqw 4cqw;
+    border-radius: 2cqw; outline: .3cqw dashed var(--pr-muted); outline-offset: 1cqw;
+  }
+  .st-ico { width: 100%; }
+  .st-ico circle { fill: none; stroke: currentColor; stroke-width: 4; }
+  .st-ico .fill { fill: currentColor; }
+  .st-big { font-size: 6cqw; font-weight: 900; line-height: 1; letter-spacing: -.04em; }
+  .st-small { font-family: 'JetBrains Mono Variable', monospace; font-size: 1.6cqw; text-transform: uppercase; letter-spacing: .06em; margin-top: 1.4cqw !important; opacity: .85; }
+  .st-red { background: var(--pr-red); color: #fff; }
+  .st-ink { background: var(--pr-ink); color: var(--pr-paper); }
+  .st-ink .st-ico { color: var(--pr-amber); }
+  .st-amber { background: var(--pr-amber); color: var(--pr-ink); }
+  .st-teal { background: var(--pr-teal); color: #fff; }
+  .s-stick .foot { margin-top: 0; }
+
+  /* 08 door hangers */
+  .s-hang { padding: 3cqw 5cqw; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr auto; gap: 5cqw 7cqw; }
+  .s-hang .foot { grid-column: 1 / -1; margin-top: 0; }
+  .hanger {
+    position: relative; display: flex; flex-direction: column; padding: 26cqw 4cqw 5cqw; border-radius: 6cqw 6cqw 2cqw 2cqw;
+    outline: .3cqw dashed var(--pr-muted); outline-offset: 1.2cqw;
+  }
+  .h-hole { position: absolute; top: 5cqw; left: 50%; width: 14cqw; height: 14cqw; transform: translateX(-50%); border-radius: 50%; background: var(--pr-paper); border: .3cqw dashed var(--pr-muted); }
+  .h-hole::after { content: ''; position: absolute; top: 100%; left: 50%; width: .3cqw; height: 5cqw; background: var(--pr-muted); }
+  .h-on { background: var(--pr-red); color: #fff; }
+  .h-off { background: var(--pr-ink); color: var(--pr-paper); }
+  .h-lamp {
+    align-self: flex-start; font-family: 'JetBrains Mono Variable', monospace; font-weight: 800; text-transform: uppercase; letter-spacing: .14em;
+    font-size: 3cqw; padding: 1cqw 2.4cqw; border: .5cqw solid currentColor; border-radius: 1cqw;
+  }
+  .h-on .h-lamp { background: #fff; color: var(--pr-red); border-color: #fff; box-shadow: 0 0 0 1cqw rgba(255,255,255,.25); }
+  .h-off .h-lamp { color: var(--pr-muted); border-color: var(--pr-muted); }
+  .h-big { font-size: 7cqw; font-weight: 900; line-height: 1; letter-spacing: -.04em; margin-top: 5cqw !important; }
+  .h-small { font-size: 2.3cqw; margin-top: 3cqw !important; }
+  .h-url { font-family: 'JetBrains Mono Variable', monospace; font-size: 2.1cqw; color: var(--pr-amber); margin-top: .8cqw !important; }
+  .h-ico { width: 20cqw; margin: auto auto 4cqw; opacity: .9; }
+  .h-ico circle { fill: none; stroke: currentColor; stroke-width: 3; }
+  .h-ico .fill { fill: currentColor; }
+  .h-on .h-ico { color: #fff; } .h-off .h-ico { color: var(--pr-amber); }
+  .h-foot { font-family: 'JetBrains Mono Variable', monospace; font-size: 1.5cqw; text-transform: uppercase; letter-spacing: .06em; opacity: .85; }
+
+  @media print {
+    @page { size: letter; margin: .4in; }
+    :global(body > *:not(main)) { display: none !important; }
+    :global(body.pc-block-shell), :global(body) { padding: 0 !important; background: #fff !important; min-height: 0 !important; }
+    .pr-noprint, .pr-fig figcaption { display: none !important; }
+    .pr, .pr .rn-wrap { background: #fff; padding: 0; margin: 0; max-width: none; }
+    .pr-wall { display: block; margin: 0; }
+    .pr-fig { width: 7.7in; margin: 0; break-after: page; page-break-after: always; }
+    .pr-fig:last-child { break-after: auto; page-break-after: auto; }
+    .sheet { width: 7.7in; height: 10.2in; aspect-ratio: auto; box-shadow: none; break-inside: avoid; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>

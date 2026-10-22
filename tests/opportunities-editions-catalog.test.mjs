@@ -13,7 +13,7 @@ const sourceText=value=>value===null||value===undefined||value===''?'Not stated'
 const leaves=value=>Array.isArray(value)?value.flatMap(leaves):value&&typeof value==='object'?Object.values(value).flatMap(leaves):[sourceText(value)];
 
 test('the admitted catalog provides all five nonempty shared edition projections',()=>{
- assert.equal(catalog.opportunities.filter(r=>r.origin!=='external'&&!['guides','light-works','internship-lab','radio'].includes(r.project)).length,24);
+ assert.equal(catalog.opportunities.filter(r=>r.origin!=='external'&&!['guides','light-works','internship-lab','radio','civil-service'].includes(r.project)).length,24);
  const projectState=readState('?project=internship-editions');
  assert.equal(projectState.project,'internship-editions');
  assert.deepEqual(selectRows(catalog.opportunities,projectState).map(r=>r.id).sort(),catalog.opportunities.filter(r=>r.project==='internship-editions').map(r=>r.id).sort());

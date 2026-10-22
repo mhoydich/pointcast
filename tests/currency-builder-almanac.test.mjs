@@ -74,3 +74,16 @@ test('machine edition lists files, serials, sources and Noun provenance', () => 
     assert.equal(item.noun.official_url, `https://nouns.wtf/noun/${item.nounId}`);
   }
 });
+
+test('the Wheel and KALM Radio pages load the real note files and link each other', () => {
+  for (const [page, other] of [['wheel', 'radio'], ['radio', 'wheel']]) {
+    const src = readFileSync(new URL(`../src/pages/currency-builder/almanac/${page}.astro`, import.meta.url), 'utf8');
+    assert.match(src, /noteFiles\(e\)\.front/, `${page} points each week at its print SVG`);
+    assert.match(src, /<script is:inline set:html=\{data\}>/, `${page} gets its data from the Almanac module`);
+    assert.ok(src.includes(`/currency-builder/almanac/${other}/`), `${page} links to ${other}`);
+    assert.match(src, /NOT LEGAL TENDER|not legal tender/i, `${page} carries the disclaimer`);
+    assert.doesNotMatch(src, /redeemable|backed by|invest/i);
+  }
+  const index = readFileSync(new URL('../src/pages/currency-builder/almanac/index.astro', import.meta.url), 'utf8');
+  assert.ok(index.includes('/currency-builder/almanac/radio/') && index.includes('/currency-builder/almanac/wheel/'));
+});
