@@ -31,6 +31,10 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/sunset-downs/money/', 'monthly', '0.7'],
   ['https://pointcast.xyz/sunset-downs/agents/', 'weekly', '0.7'],
   ['https://pointcast.xyz/sunset-downs/style/', 'monthly', '0.65'],
+  // /agents/ and /paddles/ are dynamic-page prefixes for the auto sitemap, so
+  // their non-id pages must be listed here or they reach no sitemap at all.
+  ['https://pointcast.xyz/agents/spec/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/paddles/oracle/', 'weekly', '0.6'],
   ['https://pointcast.xyz/sister-sites/', 'monthly', '0.8'],
   ['https://pointcast.xyz/sister-sites.json', 'monthly', '0.7'],
   ['https://pointcast.xyz/bot-money/', 'monthly', '0.9'],

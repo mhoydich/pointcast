@@ -14,8 +14,10 @@ const githubPages = process.env.POINTCAST_GITHUB_PAGES === '1';
 // literal portion from their source keeps the auto sitemap disjoint without
 // maintaining a second 300-entry hand list here.
 const discoverySitemapSource = readFileSync(new URL('./src/pages/sitemap-discovery.xml.ts', import.meta.url), 'utf8');
-const discoveryStaticPaths = new Set([...discoverySitemapSource.matchAll(/\['https:\/\/pointcast\.xyz([^']+)'/g)]
-  .map((match) => match[1].replace(/\/$/, '')));
+// Entries are written with either quote style; both must be recognised or the
+// auto sitemap lists the page a second time (seo-onpage: cross-file duplicate).
+const discoveryStaticPaths = new Set([...discoverySitemapSource.matchAll(/\[(['"])https:\/\/pointcast\.xyz([^'"]+)\1/g)]
+  .map((match) => match[2].replace(/\/$/, '')));
 const discoveryDynamicPrefixes = ['/play/games/', '/paddles/', '/afterimage/', '/agents/', '/pairings/', '/products/', '/25/teams/', '/25/2029/', '/mascot-battler/'];
 const isBespokeSitemapPath = (pathname) => {
   const normalized = pathname.replace(/\/$/, '');

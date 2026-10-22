@@ -128,11 +128,13 @@ function normalizePage(html, path, roots) {
   // Social cards need a title and description of their own; pages that only
   // set <title>/<meta description> (raw heads, legacy templates) get the same
   // values mirrored. Added only when absent, so the pass stays idempotent.
-  const hasMeta = (kind, name) => tag(head, 'meta').some((entry) => attr(entry[0], kind).toLowerCase() === name);
+  // An authored tag with empty content is as good as absent; mirror over it.
+  const hasMeta = (kind, name) => tag(head, 'meta').some((entry) => attr(entry[0], kind).toLowerCase() === name && attr(entry[0], 'content').trim() !== '');
+  const dropEmpty = (kind, name) => { head = removeMeta(head, (value) => attr(value, kind).toLowerCase() === name && attr(value, 'content').trim() === ''); };
   const ogTitle = titleInfo.title.replace(/ — PointCast$/, '');
   const esc = (value) => value.replace(/&(?!(?:amp|quot|#\d+|[a-z]+);)/g, '&amp;').replace(/"/g, '&quot;');
-  if (!hasMeta('property', 'og:title')) head += `<meta property="og:title" content="${esc(ogTitle)}">`;
-  if (!hasMeta('property', 'og:description')) head += `<meta property="og:description" content="${esc(description)}">`;
+  if (!hasMeta('property', 'og:title')) { dropEmpty('property', 'og:title'); head += `<meta property="og:title" content="${esc(ogTitle)}">`; }
+  if (!hasMeta('property', 'og:description')) { dropEmpty('property', 'og:description'); head += `<meta property="og:description" content="${esc(description)}">`; }
   if (!hasMeta('name', 'twitter:card')) head += '<meta name="twitter:card" content="summary_large_image">';
   html = html.replace(parts.match[0], `${parts.open}${head}${parts.close}`);
 
