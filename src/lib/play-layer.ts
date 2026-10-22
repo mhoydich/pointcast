@@ -16,6 +16,13 @@ export const PLAY_SURFACES = [
     summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
   },
   {
+    id: 'sandcastle',
+    code: 'SAND',
+    title: 'Sandcastle',
+    route: '/sandcastle',
+    summary: 'Hold back the tide: six sandcastles, three bucket brigades and sand bursts against wave lines from the sea, in 8-bit blue with a mood the game and you keep together.',
+  },
+  {
     id: 'breakwater',
     code: 'BRK',
     title: 'Breakwater',
