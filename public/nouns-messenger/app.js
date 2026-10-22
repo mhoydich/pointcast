@@ -1,4 +1,4 @@
-/* Nouns Messenger — local-first instant messenger. Nothing leaves the phone.
+/* Nouns Messenger — local-first instant messenger. Nothing you type leaves the phone.
    Made in El Segundo by Mike, October 2026. */
 (() => {
   'use strict';
@@ -13,11 +13,15 @@
   ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, () => { gestured = true; }, { once: true, passive: true }));
   const buzz = (ms = 8) => { if (!gestured) return; try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} };
 
-  /* ---------- Companions: scripted, run on the phone, never a person ---------- */
+  /* ---------- Companions: scripted, run on the phone, never a person ----------
+     `live` topics answer from the town's public JSON (LIVE, below); `replies` are the scripted
+     lines, and the offline fallback when that data does not answer or is over a day old. */
   const COMPANIONS = [
     { id: 'desk', name: 'Noggles Desk', color: 'yellow', tag: 'the front desk of the town',
       hello: 'gm. This is the Desk. Ask me where things are in town, or just say hi.',
+      live: [[/\b(new|newest|latest|news|happening|today|now)\b/i, 'desk']],
       replies: [
+        [/\b(new|newest|latest|news|happening|today|now)\b/i, ['New things land on pointcast.xyz/now/ all day. Start there.']],
         [/\b(gm|good morning|morning)\b/i, ['gm gm ⌐◨-◨', 'gm. Coffee is on at the Desk. What are we doing today?']],
         [/\b(hi|hello|hey|yo)\b/i, ['hey. Desk here. What do you need?', 'hi! Say "map" and I will point you around.']],
         [/\b(map|where|town|around)\b/i, ['Town map: pointcast.xyz/town/ \nThe Desk, the courts, the beach, the Yard. Pick one and I will walk you over.']],
@@ -29,8 +33,9 @@
       fallback: ['noted.', 'ok ⌐◨-◨', 'I wrote that on the Desk pad. Anything else?', 'say "map" if you get lost.'] },
     { id: 'tides', name: 'Tide Noun', color: 'blue', tag: 'lives at the bottom of Grand Ave',
       hello: 'Tide Noun. I sit where Grand Ave meets the sand. Ask about the water.',
+      live: [[/\b(sunset|golden)\b/i, 'sunset'], [/\b(surf|waves?|swell|tides?|water|beach|ocean|cold|wetsuit|temp)\b/i, 'water']],
       replies: [
-        [/\b(surf|wave|swell|tide|water|beach|ocean)\b/i, ['Live water is on the Air page: pointcast.xyz/air/ \nMy own report: it looks like the ocean. It usually does.', 'Low tide is the best walking tide. Go south toward the jetty and back.']],
+        [/\b(surf|waves?|swell|tides?|water|beach|ocean)\b/i, ['Live water is on the Air page: pointcast.xyz/air/ \nMy own report: it looks like the ocean. It usually does.', 'Low tide is the best walking tide. Go south toward the jetty and back.']],
         [/\b(cold|wetsuit|temp)\b/i, ['Bring the 3/2 in October. The water does not care that it is still sunny.']],
         [/\b(gm|hi|hello|hey)\b/i, ['gm from the sand 🌊', 'hey. The sand is cold until about eleven.']],
         [/\b(sunset|golden)\b/i, ['Sunset from the top of the dune, not the bottom. Trust me on this one.']],
@@ -38,8 +43,9 @@
       fallback: ['🌊', 'the water heard that.', 'I will tell the pelicans.', 'come down later, the light gets good.'] },
     { id: 'courts', name: 'Court Noun', color: 'green', tag: 'rec park pickleball, paddle in hand',
       hello: 'Court Noun checking in from Rec Park. Games to eleven, win by two.',
+      live: [[/\b(pickle|pickleball|courts?|wait|busy|crowded|open play)\b/i, 'courts']],
       replies: [
-        [/\b(pickle|pickleball|court|paddle|dink|game)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.']],
+        [/\b(pickle|pickleball|courts?|paddle|dink|game|wait|busy|crowded)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.']],
         [/\b(score|win|lost|lose)\b/i, ['Nobody remembers the score. Everybody remembers who called the line.']],
         [/\b(gm|hi|hello|hey)\b/i, ['hey hey. Paddle up?', 'gm. Courts are dry.']],
         [/\b(tired|sore|hurt)\b/i, ['Stretch the calves. Walk the lot once. Then one more game.']],
@@ -47,7 +53,10 @@
       fallback: ['got it. see you at the fence.', '🏓', 'next game is yours.', 'dinks only until you say otherwise.'] },
     { id: 'night', name: 'Night Shift', color: 'pink', tag: 'quiet hours, after the town closes',
       hello: 'Night Shift. Everyone else is asleep. Leave the thing you were going to forget.',
+      live: [[/\b(moon|stars?|sky|dark)\b/i, 'moon'], [/\b(sun|sunrise|dawn|daylight)\b/i, 'sun']],
       replies: [
+        [/\b(moon|stars?|sky|dark)\b/i, ['Step outside and look up. That is the whole moon app.']],
+        [/\b(sun|sunrise|dawn|daylight)\b/i, ['The sun comes up over the hill whether you watch or not. Sleep until it does.']],
         [/\b(remember|remind|forget|todo|note)\b/i, ['Written down. I keep it here on your phone, nowhere else.', 'Saved. I do not sync, so it is only here, which is the point.']],
         [/\b(tired|sleep|late|night)\b/i, ['Go to bed. The town will still be here.', 'The marine layer is already coming in. Good sign to stop.']],
         [/\b(idea|what if|maybe)\b/i, ['That is a morning idea wearing night clothes. Leave it and look again at 7.']],
@@ -55,6 +64,124 @@
       ],
       fallback: ['…', 'kept.', 'ok. anything else before lights out?', 'noted, quietly.'] },
   ];
+
+  /* ---------- Live town data ----------
+     Fixed, same-origin GETs to pointcast.xyz's public JSON: no query, no cookies, nothing the
+     visitor typed. Every live answer names its endpoint and its age; numbers are only ever
+     quoted from the response. A failed fetch, or data over a day old, throws Offline and the
+     companion says its scripted line instead. The service worker never caches /api/ or /now.json. */
+  const DAY = 86400000, LA = 'America/Los_Angeles';
+  class Offline extends Error {}
+  const site = (u) => String(u).replace(/^https:\/\//, '');
+  const clock = (iso) => new Date(iso).toLocaleTimeString('en-US', { timeZone: LA, hour: 'numeric', minute: '2-digit' });
+  function ago(ms) {
+    const m = Math.round(Math.max(0, ms) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    const h = Math.round(m / 60); return h < 48 ? h + ' h ago' : Math.round(h / 24) + ' days ago';
+  }
+  // Age of an ISO stamp, or Offline when it is missing or more than a day old.
+  function ageOf(iso, path) {
+    const at = Date.parse(iso || '');
+    if (!at) throw new Offline(path + ' had no timestamp');
+    const age = now() - at;
+    if (age > DAY) throw new Offline(path + ' was last updated ' + ago(age));
+    return age;
+  }
+  async function getJSON(path) {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 5000);
+    try {
+      const res = await fetch(path, { cache: 'no-store', credentials: 'omit', signal: ctl.signal, headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Offline(path + ' answered ' + res.status);
+      return await res.json();
+    } catch (e) { throw e instanceof Offline ? e : new Offline(path + ' did not answer'); } finally { clearTimeout(timer); }
+  }
+  // An observatory report's quotable metrics by id: a value, status available or stale, under a day old.
+  // Observations age from their own valid_at; daily calculations from when the report was put together.
+  async function observatory(topic) {
+    const path = '/api/observatory/' + topic, r = await getJSON(path);
+    const built = ageOf(r && r.generated_at, path), out = {};
+    for (const m of Array.isArray(r.metrics) ? r.metrics : []) {
+      if (m.value === null || m.value === undefined || (m.status !== 'available' && m.status !== 'stale')) continue;
+      const at = m.kind === 'astronomical_calculation' ? null : Date.parse(m.valid_at || '');
+      if (at === 0 || Number.isNaN(at) || (at && now() - at > DAY)) continue;
+      out[m.id] = Object.assign({}, m, { age: at ? now() - at : built });
+    }
+    return { path, built, m: out };
+  }
+  const num = (v) => String(Math.round(Number(v) * 10) / 10);
+  // "Wave height 1.2 m (12 min ago)" — the observatory's own label and unit, its own number.
+  const reading = (m) => `${m.label}: ${num(m.value)} ${m.unit}${m.status === 'stale' ? ', stale' : ''} (${ago(m.age)})`;
+  // Today's date in Los Angeles as "YYYY-MM-DD HH:MM", the same shape as NOAA's lst_ldt prediction times.
+  function laNow() {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: LA, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+  }
+  const hhmm = (s) => { const [h, m] = s.slice(11, 16).split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+
+  const LIVE = {
+    // Noggles Desk: the newest blocks, from the snapshot the site builds on every deploy.
+    async desk() {
+      const d = await getJSON('/now.json'), age = ageOf(d && d.generatedAt, '/now.json');
+      const items = (Array.isArray(d.latest) ? d.latest : []).filter((b) => b && b.title && b.url).slice(0, 3);
+      if (!items.length) throw new Offline('/now.json had no blocks');
+      const lines = items.map((b) => `• ${b.title}${Date.parse(b.timestamp) ? ' (' + ago(now() - Date.parse(b.timestamp)) + ')' : ''}\n  ${site(b.url)}`);
+      return `Newest in town:\n${lines.join('\n')}\nfrom /now.json, built ${ago(age)}`;
+    },
+    // Tide Noun: NOAA's tide predictions, plus the measured water level and buoy readings.
+    async water() {
+      const [tide, sea] = await Promise.allSettled([getJSON('/api/tide'), observatory('pacific')]);
+      const parts = [];
+      const t = tide.status === 'fulfilled' ? tide.value : null;
+      if (t && t.ok && Array.isArray(t.predictions) && Date.parse(t.fetchedAt) && now() - Date.parse(t.fetchedAt) <= DAY) {
+        const at = laNow(), next = t.predictions.filter((p) => p && typeof p.time === 'string' && p.time > at && Number.isFinite(p.heightFt)).slice(0, 2);
+        if (next.length) parts.push(next.map((p, i) => `${i ? 'then ' : 'Next '}${p.kind} ${num(p.heightFt)} ft at ${hhmm(p.time)}`).join(', ') + `.\nfrom /api/tide (NOAA predictions, ${t.stationName}), ${ago(now() - Date.parse(t.fetchedAt))}`);
+      }
+      if (sea.status === 'fulfilled') {
+        const m = sea.value.m, got = ['water-level', 'wave-height', 'wave-period', 'water-temperature'].filter((id) => m[id]).map((id) => reading(m[id]));
+        if (got.length) parts.push(got.join('\n') + '\nfrom ' + sea.value.path + ' (NOAA, buoy 46221)');
+      }
+      if (!parts.length) throw new Offline(sea.status === 'rejected' && tide.status === 'rejected' ? '/api/tide and /api/observatory/pacific did not answer' : 'the water data had nothing fresh');
+      return parts.join('\n\n');
+    },
+    async sunset() {
+      const s = await observatory('sun');
+      if (!s.m.set) throw new Offline('/api/observatory/sun had no sunset');
+      return `Sunset today: ${clock(s.m.set.value)}. Watch it from the top of the dune, not the bottom.\nfrom ${s.path} (US Naval Observatory calculation), ${ago(s.built)}`;
+    },
+    // Court Noun: Field Reports filed on site at the courts, and whether Court Call is on.
+    async courts() {
+      const d = await getJSON('/api/air'), age = ageOf(d && d.serverTime, '/api/air');
+      const spots = (Array.isArray(d.spots) ? d.spots : []).filter((s) => s && s.id !== 'beach');
+      const heard = spots.filter((s) => s.reading && s.reading.label && Number.isFinite(s.reading.ageMin) && s.reading.ageMin * 60000 <= DAY)
+        .sort((a, b) => (b.id === 'el-segundo') - (a.id === 'el-segundo') || a.reading.ageMin - b.reading.ageMin).slice(0, 3);
+      const lines = heard.map((s) => `• ${s.name}: ${s.reading.label} (${ago(s.reading.ageMin * 60000)}, ${s.reading.status === 'agree' ? 'more than one report agrees' : 'one report'})`);
+      if (!lines.length) lines.push('Nobody on site has filed a live court report right now. File one at pointcast.xyz/r/el-segundo');
+      const c = d.courtCall || {};
+      if (c.live === true) lines.push(`Court Call is on${Number.isFinite(c.minutesLeft) ? ', ' + c.minutesLeft + ' min left' : ''}.`);
+      else if (Number.isFinite(c.minutesUntil)) lines.push(`Next Court Call in ${c.minutesUntil < 120 ? c.minutesUntil + ' min' : Math.round(c.minutesUntil / 60) + ' h'}.`);
+      return `${lines.join('\n')}\nfrom /api/air (Field Reports), ${ago(age)}`;
+    },
+    // Night Shift: the moon tonight, and the sun's day, both USNO calculations.
+    async moon() {
+      const s = await observatory('moon'), m = s.m, bits = [];
+      if (m.phase) bits.push(`${m.phase.value}${m.illumination ? ', ' + Math.round(Number(m.illumination.value)) + '% lit at noon' : ''}.`);
+      else if (m.illumination) bits.push(`${Math.round(Number(m.illumination.value))}% lit at noon.`);
+      if (m.rise) bits.push(`Moonrise ${clock(m.rise.value)}.`);
+      if (m.set) bits.push(`Moonset ${clock(m.set.value)}.`);
+      if (m['next-phase']) bits.push(`${m['next-phase'].label.replace('Next primary phase: ', 'Next ')} ${new Date(m['next-phase'].value).toLocaleDateString('en-US', { timeZone: LA, weekday: 'short', month: 'short', day: 'numeric' })}.`);
+      if (!bits.length) throw new Offline(s.path + ' had nothing for tonight');
+      return `${bits.join(' ')}\nfrom ${s.path} (US Naval Observatory), ${ago(s.built)}`;
+    },
+    async sun() {
+      const s = await observatory('sun'), m = s.m, bits = [];
+      if (m.rise) bits.push(`Sunrise today ${clock(m.rise.value)}.`);
+      if (m.set) bits.push(`Sunset ${clock(m.set.value)}.`);
+      if (m.daylight) bits.push(`${Math.floor(m.daylight.value / 60)} h ${m.daylight.value % 60} min of daylight.`);
+      if (!bits.length) throw new Offline(s.path + ' had no sunrise or sunset');
+      return `${bits.join(' ')}\nfrom ${s.path} (US Naval Observatory calculation), ${ago(s.built)}`;
+    },
+  };
 
   /* ---------- State ---------- */
   let state = load();
@@ -248,17 +375,21 @@
     const bot = COMPANIONS.find((b) => b.id === t.bot); if (!bot) return;
     const hit = bot.replies.find(([re]) => re.test(m.text));
     const pool = hit ? hit[1] : bot.fallback;
-    const text = pool[Math.floor(Math.random() * pool.length)];
+    const scripted = pool[Math.floor(Math.random() * pool.length)];
+    const live = (bot.live || []).find(([re]) => re.test(m.text));
+    // A live topic starts its fetch now, while the companion "reads"; it says the scripted line if that fails.
+    const answer = live ? LIVE[live[1]]().catch((e) => `${scripted}\n(offline: ${e instanceof Offline ? e.message : 'the town data did not make sense'}, so that is my scripted line.)`) : Promise.resolve(scripted);
     clearTimeout(timers.get(t.id));
-    const readAt = 500 + Math.random() * 600, typeAt = readAt + 400, doneAt = typeAt + Math.min(2600, 500 + text.length * 25);
+    const readAt = 500 + Math.random() * 600, typeAt = readAt + 400;
     timers.set(t.id, setTimeout(() => {
       m.status = 'read'; save(); if (current === t) markRead(m);
+      const readTs = now();
       setTimeout(() => { if (current === t) { typingEl.hidden = false; scrollBottom(); } }, typeAt - readAt);
-      setTimeout(() => {
+      answer.then((text) => setTimeout(() => {
         typingEl.hidden = true;
         const r = msg('them', text); t.messages.push(r); if (current !== t) t.unread = (t.unread || 0) + 1; save(); $('announce').textContent = `${t.name}: ${text}`;
         if (current === t) { appendMessage(t, r); buzz(12); } renderList();
-      }, doneAt - readAt);
+      }, Math.max(0, typeAt - readAt + Math.min(2600, 500 + text.length * 25) - (now() - readTs))));
     }, readAt));
   }
 
@@ -372,7 +503,7 @@
   let toastTimer;
   function toast(text) { toastEl.textContent = text; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastEl.hidden = true), 2200); }
   $('search').addEventListener('input', renderList);
-  $('peer-head').addEventListener('click', () => { if (current && current.kind === 'bot') toast(`${current.name}: a scripted companion. Replies are written on your phone.`); else if (current) toast(current.tag || current.name); });
+  $('peer-head').addEventListener('click', () => { if (current && current.kind === 'bot') toast(`${current.name}: a scripted companion, not a person. Replies are written on your phone, some from the town's public data.`); else if (current) toast(current.tag || current.name); });
   if (window.visualViewport) {
     const vv = window.visualViewport; let lastH = vv.height;
     vv.addEventListener('resize', () => { if (vv.height < lastH - 80) scrollBottom(true); lastH = vv.height; });
