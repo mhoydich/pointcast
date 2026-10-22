@@ -8,6 +8,8 @@ import { POINTCAST_2029_IDENTITIES } from '../lib/pointcast-2029';
 import afterimageExamples from '../data/afterimage-examples.json';
 import { CABINET_PROFILES } from '../data/agent-cabinet';
 import { isNoindexPath } from '../lib/seo-rules.mjs';
+import { listPublicIndexPages } from '../lib/public-pages.mjs';
+import { fileURLToPath } from 'node:url';
 import { BRANDS, PADDLES } from '../lib/paddle-register';
 
 type SitemapEntry = [loc: string, changefreq: string, priority: string];
@@ -692,8 +694,13 @@ export const GET: APIRoute = async () => {
       '0.65',
     ] as SitemapEntry),
   ];
+  // Static public/ pages that no Astro route produces (23 on 2026-10-22).
+  const listed = new Set([...staticUrls, ...dynamicUrls].map(([loc]) => canonicalSitemapUrl(loc)));
+  const publicUrls: SitemapEntry[] = listPublicIndexPages(fileURLToPath(new URL('../../public', import.meta.url)))
+    .map((route) => [`https://pointcast.xyz${route}`, 'monthly', '0.5'] as SitemapEntry)
+    .filter(([loc]) => !listed.has(canonicalSitemapUrl(loc)));
   // Keep this bespoke sitemap and @astrojs/sitemap on one noindex policy.
-  const urls = [...staticUrls, ...dynamicUrls]
+  const urls = [...staticUrls, ...dynamicUrls, ...publicUrls]
     .map(([loc, changefreq, priority]) => [canonicalSitemapUrl(loc), changefreq, priority] as SitemapEntry)
     .filter(([loc]) => !isNoindexPath(new URL(loc).pathname));
   const today = new Date().toISOString().slice(0, 10);

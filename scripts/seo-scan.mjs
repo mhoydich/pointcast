@@ -19,6 +19,9 @@ function walk(directory) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return walk(path);
     if (/^google[a-z0-9]+\.html$/i.test(entry.name)) return [];
+    // Banner creatives (public/ads/**/name-WxH.html, network-demo.html) are
+    // not pages: they ship behind X-Robots-Tag: noindex and are not scanned.
+    if (/\/ads\//.test(path) && entry.name !== 'index.html') return [];
     return entry.name.endsWith('.html') ? [path] : [];
   });
 }

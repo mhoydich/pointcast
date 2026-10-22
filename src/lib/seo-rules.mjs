@@ -27,7 +27,19 @@ export const NOINDEX_PATHS = new Set([
   '/nouns/drum-club/bandmates/launch/',
   '/rewards/start/',
   '/station/party/',
+  // Also noindex by their own meta; listed so no sitemap submits them.
+  '/art/v2/',
+  '/brick-choir/home-join/',
+  '/brick-choir/join/',
+  '/brick-choir/lanes-join/',
+  '/brick-choir/park-join/',
+  '/brick-choir/rally-join/',
+  '/ues/plugin-field-guide/',
 ]);
+
+/** Whole trees that are never indexed: admin desks (robots.txt already
+ *  disallows them) and the shared-beat permalinks, which only redirect. */
+export const NOINDEX_PREFIXES = ['/admin/', '/nouns/drum-club/bandmates/play/'];
 
 // Sources with permanent redirects in public/_redirects or Pages middleware.
 // Keep the slash variants together so sitemap producers cannot re-list them.
@@ -44,7 +56,7 @@ export const REDIRECT_PATHS = new Set([
 
 export function isNoindexPath(pathname, now = new Date()) {
   const path = pathname.endsWith('/') ? pathname : `${pathname}/`;
-  return NOINDEX_PATHS.has(path) || isFutureAlmanacCard(pathname, now);
+  return NOINDEX_PATHS.has(path) || NOINDEX_PREFIXES.some((prefix) => path.startsWith(prefix)) || isFutureAlmanacCard(pathname, now);
 }
 
 export function isRedirectPath(pathname) {
