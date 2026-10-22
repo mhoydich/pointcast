@@ -299,3 +299,141 @@ test('prototype keys are not tile ids', () => {
   assert.deepEqual(city.tiles.slice(0, 3), [{ id: 'grass', level: 0 }, { id: 'grass', level: 0 }, { id: 'grass', level: 0 }]);
   assert.match(cityToText(city), /^[.~t#RCIP*\n]+$/);
 });
+
+/** v1.1 (2026-10-22): demand from real jobs, the tile inspector, city links and town titles. */
+import { explainTile, encodeCity, decodeCity, cityTitle, CITY_TITLES, computeDemand, generateTerrain } from '../src/lib/gridtown.mjs';
+
+test('demand counts jobs that exist, so painting a long row of shops never freezes a town', () => {
+  assert.deepEqual(computeDemand(0, 0, 0), { res: 30, com: 20, ind: 20 });
+  let city = createCity(7);
+  const place = (tool, x, y) => { city = build(city, tool, x, y).city; };
+  for (let x = 0; x < GRID_SIZE; x += 1) place('road', x, 8);
+  for (let x = 0; x < 8; x += 1) place('res', x, 7);
+  for (let x = 0; x < GRID_SIZE; x += 1) place('com', x, 9);
+  place('power', 15, 10);
+  assert.ok(count(city, 'com') >= 12, 'a long row of shops');
+  for (let i = 0; i < 12; i += 1) city = tick(city);
+  assert.ok(city.stats.population >= 96, `homes keep filling: ${city.stats.population}`);
+  assert.ok(city.stats.comJobs > 0, 'shops open once there are customers');
+  // Homes and shops never point at each other: a stalled tile names something the player can actually do.
+  const home = explainTile(city, 0, 7);
+  const shop = explainTile(city, 15, 9);
+  assert.ok(!(/zone shops or workshops/.test(home.blocker ?? '') && /zone more homes/.test(shop.blocker ?? '')) || city.stats.indJobs === 0);
+});
+
+test('a dense planned town can reach every title, Metropolis included', () => {
+  let city = { ...createCity(0), funds: 1e7 };
+  const place = (tool, x, y) => { const r = build(city, tool, x, y); if (r.ok) city = r.city; return r.ok; };
+  for (let y = 1; y < GRID_SIZE; y += 3) for (let x = 0; x < GRID_SIZE; x += 1) place('road', x, y);
+  for (let y = 0; y < GRID_SIZE; y += 1) for (let x = 0; x < GRID_SIZE; x += 1) {
+    const id = city.tiles[index(x, y)].id;
+    if ((id !== 'grass' && id !== 'trees') || y % 3 === 1) continue;
+    if (x >= 13) place('ind', x, y); else if (x >= 10) place('com', x, y); else if ((x + y) % 7 === 0) place('park', x, y); else place('res', x, y);
+  }
+  const zones = count(city, 'res') + count(city, 'com') + count(city, 'ind');
+  let plants = 0;
+  for (let y = GRID_SIZE - 1; y >= 0 && plants < Math.ceil(zones / 24) + 1; y -= 1) for (let x = GRID_SIZE - 1; x >= 12 && plants < Math.ceil(zones / 24) + 1; x -= 1) {
+    if (['ind', 'com'].includes(city.tiles[index(x, y)].id)) { city = build(city, 'bulldoze', x, y).city; if (place('power', x, y)) plants += 1; }
+  }
+  for (let i = 0; i < 80; i += 1) city = tick({ ...city, funds: 1e7 });
+  assert.equal(cityTitle(city.stats.population), 'Metropolis', `final ${city.stats.population}`);
+  assert.ok(city.stats.population >= CITY_TITLES.at(-1).min);
+  assert.equal(city.stats.unpowered, 0);
+  assert.equal(city.stats.pollutedHomes, 0);
+});
+
+test('town titles step up at fixed populations', () => {
+  assert.deepEqual(CITY_TITLES.map((t) => t.min), [0, 1, 50, 200, 500, 1000]);
+  assert.equal(cityTitle(0), 'Open country');
+  assert.equal(cityTitle(8), 'Hamlet');
+  assert.equal(cityTitle(49), 'Hamlet');
+  assert.equal(cityTitle(50), 'Village');
+  assert.equal(cityTitle(999), 'City');
+  assert.equal(cityTitle(1000), 'Metropolis');
+  assert.equal(cityTitle(-5), 'Open country');
+  assert.equal(cityTitle('x'), 'Open country');
+  assert.equal(summarizeCity(scriptedTown()).title, 'Open country');
+});
+
+test('the inspector names the one thing standing in a tile\'s way', () => {
+  let city = createCity(7);
+  const place = (tool, x, y) => { const r = build(city, tool, x, y); assert.ok(r.ok, `${tool} at ${x},${y}: ${r.reason}`); city = r.city; };
+  // A grass tile with grass below it, so a home and its road both fit.
+  const spot = city.tiles.findIndex((t, i) => t.id === 'grass' && i + GRID_SIZE < city.tiles.length && city.tiles[i + GRID_SIZE].id === 'grass');
+  const hx = spot % GRID_SIZE; const hy = Math.floor(spot / GRID_SIZE);
+  place('res', hx, hy);
+  assert.match(explainTile(city, hx, hy).blocker, /road/i);
+  place('road', hx, hy + 1);
+  assert.match(explainTile(city, hx, hy).blocker, /power plant/i);
+  assert.equal(explainTile(city, hx, hy).facts.find((f) => f.label === 'Power').ok, false);
+  let town = scriptedTown();
+  for (let i = 0; i < 12; i += 1) town = tick(town);
+  const grown = town.tiles.findIndex((t) => t.id === 'res' && t.level === 3);
+  assert.notEqual(grown, -1);
+  const full = explainTile(town, grown % GRID_SIZE, Math.floor(grown / GRID_SIZE));
+  assert.equal(full.blocker, null);
+  assert.equal(full.tip, 'Fully grown.');
+  assert.equal(full.facts.find((f) => f.label === 'People').text, '24 living here.');
+  const water = town.tiles.findIndex((t) => t.id === 'water');
+  const w = explainTile(town, water % GRID_SIZE, Math.floor(water / GRID_SIZE));
+  assert.equal(w.facts[0].ok, false);
+  assert.match(w.facts[0].text, /water/);
+  const park = explainTile(town, 3, 9);
+  assert.equal(park.id, 'park');
+  assert.ok(park.facts[0].ok, 'the scripted park sits beside homes');
+  const plant = explainTile(town, 0, 9);
+  assert.match(plant.facts[0].text, /of 24 zone tiles/);
+  const road = explainTile(town, 5, 8);
+  assert.equal(road.id, 'road');
+  assert.ok(road.facts[0].ok);
+  assert.equal(explainTile(town, -1, 0), null);
+  assert.equal(explainTile(town, 0, GRID_SIZE), null);
+  for (const t of [explainTile(city, hx, hy), full, w, park, plant, road]) {
+    assert.ok(t.headline.length > 0);
+    for (const f of t.facts) assert.ok(typeof f.ok === 'boolean' && f.text.length > 0 && !/[<>]/.test(f.text));
+  }
+});
+
+test('a city link carries the whole town and nothing else', () => {
+  let city = renameCity(scriptedTown(), 'El Segundo. Jr & Co #1');
+  for (let i = 0; i < 9; i += 1) city = tick(city);
+  city = setTaxRate({ ...city, funds: -1234 }, 0);
+  const code = encodeCity(city);
+  assert.match(code, /^g1\.[0-9a-z]+\.[0-9a-z]+\.-?[0-9a-z]+\.[0-9a-z]+\.[a-z]{256}\.[A-Za-z0-9%._~!*'()-]+$/);
+  assert.ok(code.length < 400, `${code.length} characters`);
+  const back = decodeCity(code);
+  assert.deepEqual(back.tiles, city.tiles);
+  assert.equal(back.name, city.name);
+  assert.equal(back.seed, city.seed);
+  assert.equal(back.month, city.month);
+  assert.equal(back.funds, -1234);
+  assert.equal(back.taxRate, 0);
+  assert.equal(back.stats.population, city.stats.population);
+  assert.deepEqual(back.log, []);
+  assert.deepEqual(decodeCity(encodeCity(createCity(4294967295))).tiles, createCity(4294967295).tiles);
+});
+
+test('damaged, oversized or impossible city links are refused', () => {
+  const good = encodeCity(scriptedTown());
+  const parts = good.split('.');
+  const swap = (k, v) => { const p = [...parts]; p[k] = v; return p.join('.'); };
+  for (const bad of [
+    null, undefined, 42, '', 'g1', good.replace(/^g1/, 'g2'), good + 'x'.repeat(1200),
+    swap(1, '-1'), swap(1, 'zzzzzzzzz'), swap(1, '1z141z4'),
+    swap(2, 'zzzzzz'), swap(3, 'zzzzzz'), swap(4, 'l'), swap(4, '-1'),
+    swap(5, parts[5].slice(1)), swap(5, parts[5].slice(0, -1) + 'Z'), swap(5, parts[5].replace(/[a-dh-kmnoq]/, 'x')),
+    swap(6, '%E0%A4%A'),
+  ]) assert.equal(decodeCity(bad), null, String(bad).slice(0, 60));
+  // Moving the river is impossible: water must sit exactly where the seed puts it.
+  const terrain = generateTerrain(scriptedTown().seed);
+  const wi = terrain.findIndex((t) => t.id === 'water');
+  const dry = parts[5].slice(0, wi) + 'g' + parts[5].slice(wi + 1);
+  assert.equal(decodeCity(swap(5, dry)), null);
+  const gi = terrain.findIndex((t) => t.id === 'grass');
+  const wet = parts[5].slice(0, gi) + 'w' + parts[5].slice(gi + 1);
+  assert.equal(decodeCity(swap(5, wet)), null);
+  // Names are cleaned the same way as a rename.
+  assert.equal(decodeCity(swap(6, encodeURIComponent('  A\u0001B  '))).name, 'AB');
+  assert.equal(decodeCity(swap(6, '')).name, 'Gridtown');
+  assert.equal(decodeCity(swap(6, encodeURIComponent('x'.repeat(90)))).name.length, 40);
+});

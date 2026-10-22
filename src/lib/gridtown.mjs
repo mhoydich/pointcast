@@ -6,7 +6,7 @@
  * the same file runs in the page, in node:test, and in an agent.
  */
 
-export const GRIDTOWN_VERSION = '1.0.0';
+export const GRIDTOWN_VERSION = '1.1.0';
 export const GRIDTOWN_TITLE = 'Gridtown';
 export const GRIDTOWN_DESCRIPTION =
   'A small city you can hold in a browser. Lay roads, zone homes, shops and workshops, power them, plant parks, and keep the budget honest. Twelve lessons, one tap at a time, saved on your device.';
@@ -45,6 +45,8 @@ export const POWER_CAPACITY = 24;
 export const UPKEEP = Object.freeze({ road: 2, park: 2, power: 25 });
 export const RESIDENTS_PER_LEVEL = 8;
 export const JOBS = Object.freeze({ com: 6, ind: 10 });
+/** The share of residents a town wants working in shops and in workshops. Together they make one job per person. */
+export const JOB_MIX = Object.freeze({ com: 0.3, ind: 0.7 });
 
 /** Twelve lessons. Each is a predicate over the city, checked after every change and every month. */
 export const LESSONS = Object.freeze([
@@ -61,6 +63,23 @@ export const LESSONS = Object.freeze([
   { id: 'happy', title: 'Reach 80% happiness with 100 residents', text: 'Jobs for everyone, clean air, parks per person and a fair tax rate.', done: (c) => c.stats.happiness >= 80 && c.stats.population >= 100 },
   { id: 'year', title: 'Run the town for a year', text: 'Twelve months without going broke. Then it is your city.', done: (c) => c.month >= 12 && c.funds > 0 },
 ]);
+
+/** What a town is called as it grows. The page announces each step up. */
+export const CITY_TITLES = Object.freeze([
+  { min: 0, title: 'Open country' },
+  { min: 1, title: 'Hamlet' },
+  { min: 50, title: 'Village' },
+  { min: 200, title: 'Town' },
+  { min: 500, title: 'City' },
+  { min: 1000, title: 'Metropolis' },
+]);
+
+export function cityTitle(population) {
+  const people = Math.max(0, Number(population) || 0);
+  let title = CITY_TITLES[0].title;
+  for (const step of CITY_TITLES) if (people >= step.min) title = step.title;
+  return title;
+}
 
 /* ----------------------------- helpers ----------------------------- */
 
@@ -145,7 +164,7 @@ export function createCity(seed = 20261022, name = 'Gridtown') {
 
 function emptyStats() {
   return {
-    population: 0, jobs: 0, capacity: 0, powered: 0, unpowered: 0, unroaded: 0,
+    population: 0, jobs: 0, comJobs: 0, indJobs: 0, capacity: 0, powered: 0, unpowered: 0, unroaded: 0,
     pollutedHomes: 0, parkedHomes: 0, happiness: 50,
     demand: { res: 0, com: 0, ind: 0 },
     employment: 1,
@@ -221,7 +240,7 @@ export function analyze(city) {
     if (!TILES[tiles[i].id].zone) continue;
     if (served < capacity) { powered[i] = true; served += 1; }
   }
-  let population = 0; let jobs = 0; let unpowered = 0; let unroaded = 0; let pollutedHomes = 0; let parkedHomes = 0;
+  let population = 0; let jobs = 0; let comJobs = 0; let indJobs = 0; let unpowered = 0; let unroaded = 0; let pollutedHomes = 0; let parkedHomes = 0;
   let homes = 0; let homeValue = 0; let homePollution = 0;
   for (let i = 0; i < tiles.length; i += 1) {
     const tile = tiles[i];
@@ -237,16 +256,17 @@ export function analyze(city) {
       if (parkValue[i] > 0) parkedHomes += 1;
     } else {
       jobs += tile.level * JOBS[tile.id];
+      if (tile.id === 'com') comJobs += tile.level * JOBS.com; else indJobs += tile.level * JOBS.ind;
     }
   }
   const employment = population === 0 ? 1 : Math.min(1, jobs / population);
   const parks = count(city, 'park');
-  const demand = computeDemand(population, jobs, count(city, 'res'), count(city, 'com'), count(city, 'ind'));
+  const demand = computeDemand(population, comJobs, indJobs);
   const happiness = computeHappiness({ population, employment, parks, taxRate: city.taxRate, homes, homePollution, homeValue });
   return {
     roaded, powered, pollution, value, parkValue,
     stats: {
-      population, jobs, capacity, powered: Math.min(served, capacity), unpowered, unroaded,
+      population, jobs, comJobs, indJobs, capacity, powered: Math.min(served, capacity), unpowered, unroaded,
       pollutedHomes, parkedHomes, happiness, demand, employment,
     },
   };
@@ -260,14 +280,20 @@ function spread(field, cx, cy, radius, amount) {
   }
 }
 
-/** RCI demand in -100..100. Positive means the town wants more of that zone. */
-export function computeDemand(population, jobs, resTiles, comTiles, indTiles) {
+/**
+ * RCI demand in -100..100. Positive means the town wants more of that zone.
+ *
+ * Every term counts people and jobs that exist, never tiles that are merely
+ * zoned, so painting a long row of shops early can never freeze a town:
+ * empty zoning simply waits until the town needs it.
+ */
+export function computeDemand(population, comJobs, indJobs) {
+  const jobs = comJobs + indJobs;
   // Pioneers always want a few homes; after that, homes follow jobs.
   const res = clamp(30 + Math.round((jobs - population) * 0.5), -100, 100);
-  // Each shop tile serves about 12 people, each workshop tile about 20.
-  const com = clamp(20 + Math.round((population - comTiles * JOBS.com * 2) * 2), -100, 100);
-  const ind = clamp(20 + Math.round((population - indTiles * JOBS.ind * 2) * 1.5), -100, 100);
-  void resTiles;
+  // Shops want about three jobs for every ten residents, workshops about seven, plus a little room to start.
+  const com = clamp(20 + Math.round((Math.round(population * JOB_MIX.com) - comJobs) * 2), -100, 100);
+  const ind = clamp(20 + Math.round((Math.round(population * JOB_MIX.ind) - indJobs) * 1.5), -100, 100);
   return { res, com, ind };
 }
 
@@ -308,8 +334,8 @@ export function refresh(city) {
 export function tick(city) {
   const before = analyze(city);
   let population = before.stats.population;
-  let jobs = before.stats.jobs;
-  const resTiles = count(city, 'res'); const comTiles = count(city, 'com'); const indTiles = count(city, 'ind');
+  let comJobs = before.stats.comJobs;
+  let indJobs = before.stats.indJobs;
   const tiles = city.tiles.map((tile, i) => {
     if (!TILES[tile.id].zone) return tile;
     const alive = before.powered[i] && before.roaded[i];
@@ -318,14 +344,15 @@ export function tick(city) {
     if (!alive) level = Math.max(0, level - 1);
     else if (smoky && level > 1) level -= 1;                       // a home in the smoke loses a level a month, down to one
     else {
-      const demand = computeDemand(population, jobs, resTiles, comTiles, indTiles)[tile.id];
+      const demand = computeDemand(population, comJobs, indJobs)[tile.id];
       if (demand > 0 && level < MAX_LEVEL && !(smoky && level >= 1)) level += 1;
       else if (demand < -40 && level > 0) level -= 1;
     }
     const delta = level - tile.level;
     if (delta !== 0) {
       if (tile.id === 'res') population += delta * RESIDENTS_PER_LEVEL;
-      else jobs += delta * JOBS[tile.id];
+      else if (tile.id === 'com') comJobs += delta * JOBS.com;
+      else indJobs += delta * JOBS.ind;
     }
     return level === tile.level ? tile : { id: tile.id, level };
   });
@@ -346,8 +373,9 @@ export function describeMonth(before, after, stats, net) {
   else if (delta < 0) parts.push(`${-delta} moved out`);
   else parts.push('no one moved');
   parts.push(net >= 0 ? `+${net} in the bank` : `${net} in the bank`);
-  if (stats.unpowered > 0) parts.push(`${stats.unpowered} zones in the dark`);
-  if (stats.unroaded > 0) parts.push(`${stats.unroaded} zones without a road`);
+  const zones = (n) => `${n} zone${n === 1 ? '' : 's'}`;
+  if (stats.unpowered > 0) parts.push(`${zones(stats.unpowered)} in the dark`);
+  if (stats.unroaded > 0) parts.push(`${zones(stats.unroaded)} without a road`);
   return parts.join(' · ');
 }
 
@@ -411,8 +439,154 @@ export function cityToText(city) {
 export function summarizeCity(city) {
   return {
     name: city.name, seed: city.seed, month: city.month, date: monthLabel(city.month), funds: city.funds, taxRate: city.taxRate,
-    population: city.stats.population, jobs: city.stats.jobs, happiness: city.stats.happiness,
+    population: city.stats.population, jobs: city.stats.jobs, happiness: city.stats.happiness, title: cityTitle(city.stats.population),
     lessons: `${city.lessons.length}/${LESSONS.length}`,
     tiles: { road: count(city, 'road'), res: count(city, 'res'), com: count(city, 'com'), ind: count(city, 'ind'), park: count(city, 'park'), power: count(city, 'power') },
   };
+}
+
+/* ------------------------------ inspect ------------------------------ */
+
+const ZONE_NOUN = { res: 'homes', com: 'shops', ind: 'workshops' };
+
+/**
+ * Explain one tile in plain words: what it is, what it needs, and the one
+ * thing standing in its way. Pure; the page shows it in the inspector.
+ */
+export function explainTile(city, x, y) {
+  if (!inBounds(x, y)) return null;
+  const a = analyze(city);
+  const i = index(x, y);
+  const tile = city.tiles[i];
+  const kind = TILES[tile.id];
+  const smoke = Math.max(0, a.pollution[i]);
+  const value = Math.max(0, a.value[i]);
+  const nearPark = a.parkValue[i] > 0;
+  const facts = [];
+  let blocker = null;
+  let tip = '';
+  let headline = kind.label;
+
+  if (kind.zone) {
+    const noun = ZONE_NOUN[tile.id];
+    const demand = a.stats.demand[tile.id];
+    headline = `${kind.label}, level ${tile.level} of ${MAX_LEVEL}`;
+    facts.push({ label: 'Road', ok: a.roaded[i], text: a.roaded[i] ? 'Touches a road.' : 'No road on any of its four sides.' });
+    facts.push({ label: 'Power', ok: a.powered[i], text: a.powered[i] ? 'Powered.' : a.stats.capacity === 0 ? 'Dark: there is no power plant.' : `Dark: the plants are full (${a.stats.capacity} zone tiles).` });
+    facts.push({
+      label: 'Demand', ok: demand > 0,
+      text: demand > 0 ? `The town wants more ${noun} (${demand}).` : demand < -40 ? `Too many ${noun} (${demand}); it will shrink.` : `Balanced for ${noun} (${demand}); it holds.`,
+    });
+    if (tile.id === 'res') {
+      facts.push({ label: 'Air', ok: smoke === 0, text: smoke === 0 ? 'Clean air.' : `Smoke ${smoke}: it cannot grow past level 1.` });
+      facts.push({ label: 'Value', ok: value > 0, text: value > 0 ? `Land value ${value}${nearPark ? ', with a park nearby' : ''}.` : 'No park, water or trees nearby.' });
+      facts.push({ label: 'People', ok: tile.level > 0, text: `${tile.level * RESIDENTS_PER_LEVEL} living here.` });
+    } else {
+      facts.push({ label: 'Jobs', ok: tile.level > 0, text: `${tile.level * JOBS[tile.id]} jobs here.` });
+      if (tile.id === 'ind') facts.push({ label: 'Smoke', ok: false, text: 'Puts smoke on every tile within two steps.' });
+    }
+    if (!a.roaded[i]) blocker = 'Lay a road on one of its four sides.';
+    else if (!a.powered[i]) blocker = a.stats.capacity === 0 ? 'Build a power plant anywhere in town.' : 'Build another power plant; each one powers 24 zone tiles.';
+    else if (tile.id === 'res' && smoke > 0 && tile.level >= 1) blocker = 'Smoke: move it three steps from workshops and plants, or plant a park within two steps.';
+    else if (tile.level >= MAX_LEVEL) tip = 'Fully grown.';
+    else if (demand <= 0) {
+      blocker = tile.id === 'res' ? 'Homes follow jobs: zone shops or workshops.' : tile.id === 'com' ? 'Shops need customers: zone more homes.' : 'Workshops need workers: zone more homes.';
+    } else tip = 'It will grow next month.';
+  } else if (tile.id === 'road') {
+    let served = 0;
+    for (const [dx, dy] of NEIGHBORS) if (inBounds(x + dx, y + dy) && TILES[city.tiles[index(x + dx, y + dy)].id].zone) served += 1;
+    facts.push({ label: 'Serves', ok: served > 0, text: served ? `${served} zone tile${served === 1 ? '' : 's'} beside it.` : 'No zones beside it yet.' });
+    facts.push({ label: 'Upkeep', ok: true, text: `${UPKEEP.road} a month.` });
+    tip = served ? '' : 'Zone homes, shops or workshops beside it.';
+  } else if (tile.id === 'power') {
+    facts.push({ label: 'Grid', ok: a.stats.unpowered === 0, text: `${a.stats.powered} of ${a.stats.capacity} zone tiles in use town-wide.` });
+    facts.push({ label: 'Upkeep', ok: true, text: `${UPKEEP.power} a month.` });
+    facts.push({ label: 'Smoke', ok: false, text: 'Puts smoke on every tile within two steps.' });
+    if (a.stats.unpowered > 0) blocker = `${a.stats.unpowered} zone tile${a.stats.unpowered === 1 ? ' is' : 's are'} dark. Build another plant.`;
+  } else if (tile.id === 'park') {
+    let homes = 0;
+    for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) {
+      if (Math.abs(dx) + Math.abs(dy) > 2 || !inBounds(x + dx, y + dy)) continue;
+      if (city.tiles[index(x + dx, y + dy)].id === 'res') homes += 1;
+    }
+    facts.push({ label: 'Homes', ok: homes > 0, text: homes ? `Raises value and clears smoke for ${homes} home tile${homes === 1 ? '' : 's'} within two steps.` : 'No homes within two steps.' });
+    facts.push({ label: 'Upkeep', ok: true, text: `${UPKEEP.park} a month.` });
+    if (!homes) tip = 'Parks help homes within two steps.';
+  } else if (tile.id === 'water') {
+    facts.push({ label: 'Build', ok: false, text: 'Nothing can be built on water.' });
+    facts.push({ label: 'Value', ok: true, text: 'Raises the value of homes beside it.' });
+  } else {
+    facts.push({ label: 'Build', ok: true, text: tile.id === 'trees' ? 'Buildable; building clears the trees.' : 'Buildable.' });
+    if (tile.id === 'trees') facts.push({ label: 'Value', ok: true, text: 'Raises the value of homes beside it.' });
+    if (smoke > 0) facts.push({ label: 'Smoke', ok: false, text: `Smoke ${smoke}: a home here would stop at level 1.` });
+    else if (value > 0) facts.push({ label: 'Value', ok: true, text: `Land value ${value}: a good spot for homes.` });
+  }
+  return { x, y, id: tile.id, label: kind.label, level: tile.level, headline, facts, blocker, tip };
+}
+
+/* ------------------------------ city links ------------------------------ */
+
+const CODE_VERSION = 'g1';
+const PLAIN_CODE = Object.freeze({ grass: 'g', water: 'w', trees: 't', road: 'r', park: 'p', power: 'e' });
+const ZONE_CODE = Object.freeze({ res: 'abcd', com: 'hijk', ind: 'mnoq' });
+const DECODE = (() => {
+  const map = new Map();
+  for (const [id, ch] of Object.entries(PLAIN_CODE)) map.set(ch, { id, level: 0 });
+  for (const [id, chars] of Object.entries(ZONE_CODE)) [...chars].forEach((ch, level) => map.set(ch, { id, level }));
+  return map;
+})();
+const MAX_MONTH = 120000;
+const MAX_FUNDS = 1e9;
+
+/**
+ * A whole city in one URL-safe string: version, seed, month, funds, tax,
+ * one letter per tile, then the name. About 290 characters for a 16 x 16 map.
+ * The log and lessons are not carried; lessons are recomputed on arrival.
+ */
+export function encodeCity(city) {
+  let tiles = '';
+  for (const t of city.tiles) tiles += TILES[t.id].zone ? ZONE_CODE[t.id][t.level] : PLAIN_CODE[t.id];
+  const funds = Math.round(city.funds);
+  return [
+    CODE_VERSION,
+    city.seed.toString(36),
+    city.month.toString(36),
+    (funds < 0 ? '-' : '') + Math.abs(funds).toString(36),
+    city.taxRate.toString(36),
+    tiles,
+    encodeURIComponent(city.name),
+  ].join('.');
+}
+
+/** Read a city link. Anything malformed, out of range or not matching its own seed's river returns null. */
+export function decodeCity(code) {
+  if (typeof code !== 'string' || code.length > 1200) return null;
+  const parts = code.split('.');
+  if (parts.length < 7 || parts[0] !== CODE_VERSION) return null;
+  const int36 = (text, signed = false) => ((signed ? /^-?[0-9a-z]{1,8}$/ : /^[0-9a-z]{1,8}$/).test(text) ? parseInt(text, 36) : NaN);
+  const seed = int36(parts[1]);
+  const month = int36(parts[2]);
+  const funds = int36(parts[3], true);
+  const taxRate = int36(parts[4]);
+  if (!(seed >= 0 && seed <= 4294967295)) return null;
+  if (!(month >= 0 && month <= MAX_MONTH)) return null;
+  if (!(Math.abs(funds) <= MAX_FUNDS)) return null;
+  if (!(taxRate >= 0 && taxRate <= 20)) return null;
+  const letters = parts[5];
+  if (letters.length !== GRID_SIZE * GRID_SIZE) return null;
+  const terrain = generateTerrain(seed);
+  const tiles = [];
+  for (let i = 0; i < letters.length; i += 1) {
+    const tile = DECODE.get(letters[i]);
+    if (!tile) return null;
+    if ((tile.id === 'water') !== (terrain[i].id === 'water')) return null; // rivers are fixed by the seed
+    tiles.push({ id: tile.id, level: tile.level });
+  }
+  let name;
+  try { name = decodeURIComponent(parts.slice(6).join('.')); } catch { return null; }
+  name = name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) || 'Gridtown';
+  return refresh({
+    version: 1, name, seed, month, funds, taxRate, tiles,
+    ledger: { income: 0, upkeep: 0, net: 0 }, stats: emptyStats(), lessons: [], log: [],
+  });
 }

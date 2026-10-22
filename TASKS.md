@@ -10,8 +10,9 @@
 
 - [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
 - [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
-- [ ] (M) After deploy: open https://pointcast.xyz/gridtown/ on a phone and desktop, play through lesson 6 by touch and by keyboard only, reload to confirm the save, export and re-import, open a `?seed=` link in a private window; screenshots to `docs/manus-logs/YYYY-MM-DD-gridtown.md` — `queued`
-- [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds) and the canvas input on iOS Safari — `queued`
+- [x] (CC) v1.1: tile inspector, town titles, `#city=` whole-city links with a read-only visit mode, phone share sheet, one-row phone tool strip, game-library entry with offline download — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-gridtown-qa.md` (swipe vs hold-to-paint, inspector, city links, keyboard-only play); results to `docs/manus-logs/2026-10-22-gridtown-qa.md` — `queued`
+- [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
 - [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
 
 ---

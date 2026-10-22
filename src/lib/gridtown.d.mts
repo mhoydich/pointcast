@@ -23,7 +23,7 @@ export const TOOLS: readonly Tool[];
 
 export interface Tile { id: TileId; level: number }
 export interface Stats {
-  population: number; jobs: number; capacity: number; powered: number; unpowered: number; unroaded: number;
+  population: number; jobs: number; comJobs: number; indJobs: number; capacity: number; powered: number; unpowered: number; unroaded: number;
   pollutedHomes: number; parkedHomes: number; happiness: number; demand: Record<ZoneId, number>; employment: number;
 }
 export interface LogEntry { month: number; text: string }
@@ -45,8 +45,9 @@ export function canBuild(city: City, toolId: string, x: number, y: number): { ok
 export function build(city: City, toolId: string, x: number, y: number): { city: City; ok: boolean; reason?: string; cost?: number };
 export function setTaxRate(city: City, rate: number): City;
 export function renameCity(city: City, name: string): City;
-export function analyze(city: City): { roaded: boolean[]; powered: boolean[]; pollution: number[]; value: number[]; stats: Stats };
-export function computeDemand(population: number, jobs: number, resTiles: number, comTiles: number, indTiles: number): Record<ZoneId, number>;
+export function analyze(city: City): { roaded: boolean[]; powered: boolean[]; pollution: number[]; value: number[]; parkValue: number[]; stats: Stats };
+export const JOB_MIX: Readonly<{ com: number; ind: number }>;
+export function computeDemand(population: number, comJobs: number, indJobs: number): Record<ZoneId, number>;
 export function computeHappiness(input: { population: number; employment: number; parks: number; taxRate: number; homes: number; homePollution: number; homeValue: number }): number;
 export function refresh(city: City): City;
 export function tick(city: City): City;
@@ -56,3 +57,14 @@ export function readCity(raw: unknown): City | null;
 export function serializeCity(city: City): string;
 export function cityToText(city: City): string;
 export function summarizeCity(city: City): Record<string, unknown>;
+
+export interface CityTitle { min: number; title: string }
+export const CITY_TITLES: readonly CityTitle[];
+export function cityTitle(population: number): string;
+
+export interface TileFact { label: string; ok: boolean; text: string }
+export interface TileExplanation { x: number; y: number; id: TileId; label: string; level: number; headline: string; facts: TileFact[]; blocker: string | null; tip: string }
+export function explainTile(city: City, x: number, y: number): TileExplanation | null;
+
+export function encodeCity(city: City): string;
+export function decodeCity(code: unknown): City | null;
