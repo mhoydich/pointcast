@@ -51,7 +51,10 @@ something much smarter than a person.
   receipt. Received files are typed from an allowlist, never from the sender.
 - Connect: `LOAD "FRIEND"` makes a code and a link. Friend opens the link.
   Handshake goes through `/api/pmm/signal` when the `PMM_KV` binding exists;
-  otherwise paste mode (two links, no server) does the same job.
+  otherwise paste mode (two links, no server) does the same job. Every link
+  also shows as a QR code, so a phone in the same room can point its camera at
+  it. On Android Chrome, SCAN THEIR CODE reads the code in the app. An answer
+  link opened in a second tab of the same browser goes to the waiting tab.
 - Chat: text, live typing, photos and files, voice notes, reactions, mood,
   TAB ledger, LINK panel.
 - SI line: a local thread addressed to the Desk. SEND posts the packet to
@@ -73,9 +76,10 @@ Paste mode link for a full offer: 621 characters. Real-device numbers come from 
 
 ## Not in v0, and why
 
-- **TURN relay.** Without one, two phones behind strict carrier NAT cannot
-  connect. STUN only in v0. Measure the failure rate first, then decide on a
-  Cloudflare TURN key. Target v0.2.
+- **TURN relay, on by configuration.** The code path shipped in v0.2: `/api/pmm/turn`
+  mints a four-hour Cloudflare Calls credential for the site's own pages and the phones add the relay.
+  Until the two secrets are set on the Pages project (Manus brief, step 1b) the
+  app is STUN-only and two phones behind strict carrier NAT cannot connect.
 - **Group chats.** Two people first. Mesh for three to five is v0.3.
 - **Money.** TAB is a ledger, not a payment. Tezos settle is v0.4, after the
   wallet code in `/messages` is reused rather than copied.
@@ -135,8 +139,10 @@ as the SI line:
 
 ## Roadmap
 
-- v0.1: key export and import, friend list persistence across reinstall.
-- v0.2: TURN via Cloudflare Calls after measuring failures.
+- v0.1 (shipped): key export and import; the export now carries friends (names, keys, trust), never messages.
+- v0.2 (shipped, off until configured): TURN via Cloudflare Calls; friends ride along in the key export.
+- v0.2.1 (shipped): QR on every link, an in-app scanner where the browser has
+  BarcodeDetector, and answer links that go to the waiting tab.
 - v0.3: three to five person mesh.
 - v0.4: Tezos settle for TAB, reusing `/messages` wallet code.
 - v0.5: thin push relay for "your friend is on".

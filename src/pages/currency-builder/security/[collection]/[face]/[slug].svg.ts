@@ -1,5 +1,5 @@
 /**
- * /currency-builder/security/{commons|barter}/{front|back}/{slug}.svg — Security
+ * /currency-builder/security/{commons|barter|almanac}/{front|back}/{slug}.svg — Security
  * Edition (v2) print faces, 150 × 75 mm, for every Currency Builder note.
  */
 import type { APIRoute } from 'astro';

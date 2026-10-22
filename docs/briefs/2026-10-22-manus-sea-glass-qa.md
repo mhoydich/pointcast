@@ -14,7 +14,7 @@ needed for QA itself; nothing on the page can spend, mint or post.
 - https://pointcast.xyz/cabinet-row (the Sea Glass cabinet should be lit, and show your best score after a game)
 - https://pointcast.xyz/games/ (the catalog should list Sea Glass under Retro arcade)
 - https://pointcast.xyz/play (the play layer should list Sea Glass)
-- https://pointcast.xyz/b/0736 (the Block receipt)
+- https://pointcast.xyz/b/0743 (the Block receipt)
 
 ## Devices and browsers
 

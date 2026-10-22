@@ -5,16 +5,20 @@
    again with no signal, because a paste-mode handshake on a bad connection needs the
    app itself before it needs anything else.
 
-   How: the app's own files are precached on install and served cache-first.
+   How: the app's own files are precached on install and served from the cache first,
+   with a background refresh of each file on every use (stale while revalidate), so a
+   new deploy reaches an installed phone on its second open without a VERSION bump.
    Anything under /api/ and /now.json is never handled here, so the handshake note,
    the SI packet and the ticker always go to the network and are never served stale.
 
-   VERSION: bump it whenever any file in FILES changes. The cache is keyed by it and
-   activate() drops every older PMM cache. Until it is bumped, installed phones keep
-   serving the files they already have. */
+   VERSION: bump it when FILES changes shape (a file added or removed). The cache is
+   keyed by it and activate() drops every older PMM cache. */
 'use strict';
 
-const VERSION = 'pmm-2026-10-22a';
+const VERSION = 'pmm-2026-10-22b';
+// Hash of the files in FILES, kept current by tests/pmm-offline-digest.test.mjs. Any change to it
+// changes this file's bytes, so browsers reinstall the worker and re-precache at once. No VERSION bump needed.
+const DIGEST = 'cf0d9688ebbaa2b4';
 const FILES = [
   '/pmm/',
   '/pmm/style.css',
@@ -26,6 +30,7 @@ const FILES = [
   '/pmm/apple-touch-icon.png',
   '/pmm/brand/',
   '/pmm/brand/wordmark.svg',
+  '/pmm/vendor/qrcode.js',
 ];
 
 self.addEventListener('install', (event) => {
@@ -65,12 +70,16 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(cacheFirst(key, req));
 });
 
+// Stale while revalidate: answer from the cache at once, then refresh that one file in the
+// background so the next open has the newer copy. VERSION still drops whole old caches.
 async function cacheFirst(key, req) {
   const cache = await caches.open(VERSION);
   const hit = await cache.match(key);
-  if (hit) return hit;
-  const res = await fetch(req);
-  // A redirected response cannot be replayed to a navigation, so only keep direct hits.
-  if (res && res.ok && !res.redirected) cache.put(key, res.clone()).catch(() => {});
-  return res;
+  const refresh = fetch(req).then((res) => {
+    // A redirected response cannot be replayed to a navigation, so only keep direct hits.
+    if (res && res.ok && !res.redirected) cache.put(key, res.clone()).catch(() => {});
+    return res;
+  });
+  if (hit) { refresh.catch(() => {}); return hit; }
+  return refresh;
 }
