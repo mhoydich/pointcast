@@ -203,6 +203,36 @@ test('reduced motion still rings, and a quiet store stays on this browser', asyn
   }
 });
 
+test('a stalled tone still records the prayer', async () => {
+  const dom = courtDom();
+  const { window } = dom;
+  class HungAudio {
+    constructor() { this.state = 'suspended'; this.currentTime = 0; this.destination = {}; }
+    resume() { return new Promise(() => {}); }
+    createOscillator() { throw new Error('should not schedule'); }
+    createGain() { throw new Error('should not schedule'); }
+  }
+  const storage = memoryStorage();
+  const fetchImpl = async () => { throw new Error('offline'); };
+  try {
+    wireCourtPrayer(window.document, {
+      fetchImpl,
+      storage,
+      AudioContext: HungAudio,
+      audioWaitMs: 30,
+      coolMs: 0,
+    });
+    await new Promise((r) => setImmediate(r));
+    window.document.getElementById('pray-button').click();
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(window.document.getElementById('pray-digits').getAttribute('aria-label'), '1');
+    assert.match(window.document.getElementById('pray-status').textContent, /tone did not start/);
+    assert.equal(storage.getItem('pc-grok-prayer-total'), '1');
+  } finally {
+    window.close();
+  }
+});
+
 test('a rate limit puts the shared total back', async () => {
   const dom = courtDom();
   const { window } = dom;

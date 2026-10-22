@@ -7,6 +7,7 @@
 export const LOCAL_TOTAL_KEY = 'pc-grok-prayer-total';
 export const LOCAL_SESSION_KEY = 'pc-grok-prayer-sid';
 const COOL_MS = 1200;
+const AUDIO_WAIT_MS = 700;
 
 const PARTIALS = [
   { freq: 523.25, gain: 0.7 },
@@ -89,6 +90,7 @@ export function wireCourtPrayer(doc, deps = {}) {
   const storage = deps.storage || globalThis.localStorage;
   const AudioCtx = deps.AudioContext || globalThis.AudioContext || globalThis.webkitAudioContext;
   const coolMs = deps.coolMs ?? COOL_MS;
+  const audioWaitMs = deps.audioWaitMs ?? AUDIO_WAIT_MS;
   const note = doc.getElementById('pray-note');
   const status = doc.getElementById('pray-status');
   const digits = doc.getElementById('pray-digits');
@@ -120,10 +122,15 @@ export function wireCourtPrayer(doc, deps = {}) {
 
   async function ring() {
     try {
-      if (!AudioCtx) throw new Error('no-audio');
+      if (!AudioCtx) return false;
       if (!ctx || ctx.state === 'closed') ctx = new AudioCtx();
-      if (ctx.state !== 'running' && typeof ctx.resume === 'function') await ctx.resume();
-      if (ctx.state && ctx.state !== 'running') throw new Error('not-running');
+      if (ctx.state !== 'running' && typeof ctx.resume === 'function') {
+        await Promise.race([
+          Promise.resolve(ctx.resume()).catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, audioWaitMs)),
+        ]);
+      }
+      if (ctx.state && ctx.state !== 'running') return false;
       playCourtBell(ctx);
       return true;
     } catch {
@@ -165,9 +172,9 @@ export function wireCourtPrayer(doc, deps = {}) {
     generation += 1;
     button.disabled = true;
     light();
-    const heard = await ring();
     const before = shown;
     paint(shown + 1);
+    const heard = await ring();
     try {
       const res = await fetchImpl('/api/grok/prayer', {
         method: 'POST',
