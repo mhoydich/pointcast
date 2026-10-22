@@ -16,34 +16,37 @@
   /* ---------- Companions: scripted, run on the phone, never a person ----------
      The first matching line in `replies` answers, so order is precedence. A third element names a
      LIVE reader (below): that topic answers from the town's public JSON, and its scripted lines are
-     the offline fallback when the data does not answer or is too old. */
+     the offline fallback when the data does not answer or is too old. Live triggers stay narrow
+     (a question about that topic), so notes and small talk keep their scripted lines.
+     tests/pmm-nouns-routing.test.mjs cuts this block out and checks a routing table against it. */
+  /* companions:start */
   const COMPANIONS = [
     { id: 'desk', name: 'Noggles Desk', color: 'yellow', tag: 'the front desk of the town',
       hello: 'gm. This is the Desk. Ask me where things are in town, or just say hi.',
       replies: [
+        [/\b(?:what(?:['’]?s| is) (?:new|happening|up)|newest|latest|news)\b/i, ['New things land on pointcast.xyz/now/ all day. Start there.'], 'desk'],
         [/\b(gm|good morning|morning)\b/i, ['gm gm ⌐◨-◨', 'gm. Coffee is on at the Desk. What are we doing today?']],
         [/\b(hi|hello|hey|yo)\b/i, ['hey. Desk here. What do you need?', 'hi! Say "map" and I will point you around.']],
         [/\b(map|where|town|around)\b/i, ['Town map: pointcast.xyz/town/ \nThe Desk, the courts, the beach, the Yard. Pick one and I will walk you over.']],
         [/\b(weather|sky|sun|rain|fog)\b/i, ['For the real sky over El Segundo, the Air page has it live: pointcast.xyz/air/ \nI only know what I was told this morning: marine layer till ten, then blue.']],
         [/\b(noun|nouns|noggles)\b/i, ['Nouns are one per day, forever. Noggles are the glasses. You are wearing them right now, in a way.', 'Nouns Money is down the hall: pointcast.xyz/nouns-money/']],
         [/\b(thanks|thank you|ty)\b/i, ['any time ⌐◨-◨', 'that is what a Desk is for.']],
-        [/\b(?:what(?:['’]?s| is) (?:new|happening|up)|newest|latest|news)\b/i, ['New things land on pointcast.xyz/now/ all day. Start there.'], 'desk'],
         [/\?$/, ['Good question. I would try the Desk page: pointcast.xyz/desk/ \nThe house agents there answer with real numbers.', 'I am a scripted Noun, so I will answer like one: probably yes, check the town.']],
       ],
       fallback: ['noted.', 'ok ⌐◨-◨', 'I wrote that on the Desk pad. Anything else?', 'say "map" if you get lost.'] },
     { id: 'tides', name: 'Tide Noun', color: 'blue', tag: 'lives at the bottom of Grand Ave',
       hello: 'Tide Noun. I sit where Grand Ave meets the sand. Ask about the water.',
       replies: [
+        [/\b(sunset|golden)\b/i, ['Sunset from the top of the dune, not the bottom. Trust me on this one.'], 'sunset'],
         [/\b(surf|waves?|swell|tides?|water|beach|ocean)\b/i, ['Live water is on the Air page: pointcast.xyz/air/ \nMy own report: it looks like the ocean. It usually does.', 'Low tide is the best walking tide. Go south toward the jetty and back.'], 'water'],
         [/\b(cold|wetsuit|temp)\b/i, ['Bring the 3/2 in October. The water does not care that it is still sunny.'], 'water'],
         [/\b(gm|hi|hello|hey)\b/i, ['gm from the sand 🌊', 'hey. The sand is cold until about eleven.']],
-        [/\b(sunset|golden)\b/i, ['Sunset from the top of the dune, not the bottom. Trust me on this one.'], 'sunset'],
       ],
       fallback: ['🌊', 'the water heard that.', 'I will tell the pelicans.', 'come down later, the light gets good.'] },
     { id: 'courts', name: 'Court Noun', color: 'green', tag: 'rec park pickleball, paddle in hand',
       hello: 'Court Noun checking in from Rec Park. Games to eleven, win by two.',
       replies: [
-        [/\b(pickle|pickleball|courts?|wait|busy|crowded|open play)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.'], 'courts'],
+        [/\bwait(?:ing)? time\b|\bhow long\b.*\bwait\b|\b(?:pickle|pickleball|courts?|open play)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.'], 'courts'],
         [/\b(paddle|dink|game)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.']],
         [/\b(score|win|lost|lose)\b/i, ['Nobody remembers the score. Everybody remembers who called the line.']],
         [/\b(gm|hi|hello|hey)\b/i, ['hey hey. Paddle up?', 'gm. Courts are dry.']],
@@ -54,14 +57,21 @@
       hello: 'Night Shift. Everyone else is asleep. Leave the thing you were going to forget.',
       replies: [
         [/\b(remember|remind|forget|todo|note)\b/i, ['Written down. I keep it here on your phone, nowhere else.', 'Saved. I do not sync, so it is only here, which is the point.']],
-        [/\b(moon|stars?|sky)\b/i, ['Step outside and look up. That is the whole moon app.'], 'moon'],
-        [/\b(sun|sunrise|daylight)\b/i, ['The sun comes up over the hill whether you watch or not. Sleep until it does.'], 'sun'],
         [/\b(tired|sleep|late|night)\b/i, ['Go to bed. The town will still be here.', 'The marine layer is already coming in. Good sign to stop.']],
         [/\b(idea|what if|maybe)\b/i, ['That is a morning idea wearing night clothes. Leave it and look again at 7.']],
         [/\b(gm|hi|hello|hey)\b/i, ['hey. quiet in here.', 'hi. I am mostly just a lamp that listens.']],
+        [/\b(?:moon|stars?)\b.*\?$|\bmoon ?(?:rise|set|phase)\b|\bwhat(?:['’]?s| is) the moon\b/i, ['Step outside and look up. That is the whole moon app.'], 'moon'],
+        [/\b(?:sunrise|sunset|daylight)\b.*\?$|\bwhen\b.*\bsun\b/i, ['The sun comes up over the hill whether you watch or not. Sleep until it does.'], 'sun'],
       ],
       fallback: ['…', 'kept.', 'ok. anything else before lights out?', 'noted, quietly.'] },
   ];
+  // What a companion does with a message: the first matching reply (its lines, and a LIVE reader
+  // name or null), else its fallback lines.
+  function route(bot, text) {
+    const hit = bot.replies.find(([re]) => re.test(text));
+    return hit ? { lines: hit[1], live: hit[2] || null } : { lines: bot.fallback, live: null };
+  }
+  /* companions:end */
 
   /* ---------- Live town data ----------
      Fixed, same-origin GETs to pointcast.xyz's public JSON: no query, no cookies, nothing the
@@ -393,11 +403,10 @@
   const timers = new Map();
   function reply(t, m) {
     const bot = COMPANIONS.find((b) => b.id === t.bot); if (!bot) return;
-    const hit = bot.replies.find(([re]) => re.test(m.text));
-    const pool = hit ? hit[1] : bot.fallback;
-    const scripted = pool[Math.floor(Math.random() * pool.length)];
+    const { lines, live } = route(bot, m.text);
+    const scripted = lines[Math.floor(Math.random() * lines.length)];
     // A live topic starts its fetch now, while the companion "reads"; it says the scripted line if that fails.
-    const answer = hit && hit[2] ? LIVE[hit[2]]().catch((e) => `${scripted}\n(offline: ${e instanceof Offline ? e.message : 'the town data did not make sense'}, so that is my scripted line.)`) : Promise.resolve(scripted);
+    const answer = live ? LIVE[live]().catch((e) => `${scripted}\n(offline: ${e instanceof Offline ? e.message : 'the town data did not make sense'}, so that is my scripted line.)`) : Promise.resolve(scripted);
     clearTimeout(timers.get(t.id));
     const readAt = 500 + Math.random() * 600, typeAt = readAt + 400;
     timers.set(t.id, setTimeout(() => {
