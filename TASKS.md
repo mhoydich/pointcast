@@ -4,6 +4,19 @@
 
 ---
 
+## Breakwater — a breakout for the 8-bit heart (2026-10-22)
+
+`/breakwater`, `/breakwater.json`, Block 0725. Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
+
+- [x] (CC) Build the game: canvas playfield from a 3x5 pixel font, Atari 800XL and Commodore 64 modes with boot screens, Web Audio chip voices and a generative arpeggiator, four-state mood model with a CALM/PLAY/RUSH dial, phone drag and desktop fullscreen, browser-local best score and mood tape, `tests/breakwater.test.mjs` — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt`, `llms-full.txt`, OG card from the game's own palette — `done`
+- [ ] (X) Review the mood response ranges and the audio scheduler on a slow phone; the page is isolated (no chrome, no beacon), so check that is the right call — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-breakwater-qa.md`, log to `docs/manus-logs/2026-10-22-breakwater.md` — `queued`
+- [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
+
+---
+
 ## The Loom — append to anything (2026-10-20)
 
 `/loom`, `/api/loom`, `/loom.json`, `/loom/embed.js`, MCP `loom_read` / `loom_append`. Public federated message system: one verb, append(to, message), any address.
