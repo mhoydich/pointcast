@@ -13,6 +13,8 @@
 - [ ] (MH) Optional: grant agent keys the `loom:append` scope so signed agents get the verified mark — `waiting-on-mh`
 - [ ] (M) After deploy: open https://pointcast.xyz/loom on desktop + phone, append a note, reply, poll, image; open `/loom?to=%40mike`; drop the embed on a Tonebloom page; screenshots to `docs/manus-logs/YYYY-MM-DD-loom.md` — `queued`
 - [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
+- [x] (CC) v1 live: production read/write verified 2026-10-22 over MCP (`loom_append` to `#loom`, seq 4) — `done`
+- [x] (CC) v1.1: Loom margin tab on every BlockLayout page (lazy, no fetch until opened), RSS for any address (`&format=rss`), `/.well-known/loom.json`, 10s cache on whole-thread reads — `done`
 - [ ] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `queued`
 
 ---

@@ -29,6 +29,7 @@ export const BODY_MAX = 2000;
 const KINDS = new Set(['note', 'question', 'claim', 'answer', 'image', 'poll', 'link']);
 const SENDER_KINDS = new Set(['human', 'agent']);
 const RIPPLE_MAX = 4;
+const READ_CACHE = 'public, max-age=10';
 
 const HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -156,6 +157,30 @@ function asActivityStreams(log) {
   };
 }
 
+const xml = (s) => String(s ?? '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
+/** RSS 2.0 for any address: subscribe to a page thread, an inbox or a channel in any reader. */
+function asRss(log) {
+  const view = publicView(log);
+  const link = `${SITE}/loom?to=${encodeURIComponent(log.address)}`;
+  const items = view.messages.slice(-50).reverse().map((m) => `    <item>
+      <title>${xml(`${m.from.name}${m.from.kind === 'human' ? '' : ` (${m.from.kind})`}: ${excerpt(m.body, 80)}`)}</title>
+      <link>${xml(`${link}#${m.id}`)}</link>
+      <guid isPermaLink="false">${xml(`loom:${log.key}#${m.id}`)}</guid>
+      <pubDate>${new Date(m.at).toUTCString()}</pubDate>
+      <description>${xml(m.body + (m.media ? `\n\n[image] ${m.media.url}${m.media.alt ? ` — ${m.media.alt}` : ''}` : '') + (m.via ? `\n\nfrom ${m.via.address}` : ''))}</description>
+    </item>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${xml(`${log.title || log.label} · the Loom`)}</title>
+    <link>${xml(link)}</link>
+    <description>${xml(`Everything appended to ${log.address} on the PointCast Loom.`)}</description>
+${items}
+  </channel>
+</rss>
+`;
+}
+
 function validateFrom(raw, verifiedAgent) {
   const from = raw && typeof raw === 'object' ? raw : {};
   const name = clean(from.name, 40);
@@ -270,9 +295,12 @@ export async function handleLoom(request, { kv = null, clock = () => new Date(),
         const target = parseAddress(to);
         const log = target.kind === 'reply' ? await loadLogByKey(kv, target.logKey) : await loadLog(kv, target.address);
         if (!log) return fail('log_not_found', 404);
-        if (url.searchParams.get('format') === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8' });
+        const format = url.searchParams.get('format');
+        if (format === 'as2') return json(asActivityStreams(log), 200, { 'Content-Type': 'application/activity+json; charset=utf-8', 'Cache-Control': READ_CACHE });
+        if (format === 'rss') return new Response(asRss(log), { headers: { ...HEADERS, 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': READ_CACHE } });
         const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
-        return json({ ok: true, spec: SPEC, kvBound: !!kv, ...publicView(log, { since }) });
+        // Live polls (since=) stay uncached; whole-thread reads can ride a short edge cache.
+        return json({ ok: true, spec: SPEC, kvBound: !!kv, ...publicView(log, { since }) }, 200, since ? {} : { 'Cache-Control': READ_CACHE });
       }
       if (from) {
         const sender = parseAddress(from);
