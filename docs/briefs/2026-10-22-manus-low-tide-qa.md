@@ -14,7 +14,7 @@ can spend, mint or post.
 - https://pointcast.xyz/cabinet-row (the Low Tide cabinet should be lit, and show your best score after a game)
 - https://pointcast.xyz/games/ (the catalog should list Low Tide under Retro arcade, before Breakwater)
 - https://pointcast.xyz/play (the play layer should list Low Tide)
-- https://pointcast.xyz/b/0746 (the Block receipt)
+- https://pointcast.xyz/b/0750 (the Block receipt)
 
 ## Devices and browsers
 
