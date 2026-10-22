@@ -137,6 +137,8 @@ const tracks = [...new Set(INTERN_ASSIGNMENTS.map((a) => a.track))];
               <ul>{a.acceptance.map((d) => <li>{d}</li>)}</ul>
               <p class="gd-meta">Learns: {a.learns.join(', ')}</p>
               {a.needsApproval && <p class="gd-approve">Approval: {a.needsApproval}</p>}
+              <p class="gd-meta" data-ga-progress={a.id}></p>
+              <p><a href={`/guides/intake?assignment=${a.id}&guide=${a.guide ?? 'network'}`}>Submit work for {a.id}</a></p>
             </article>
           ))}
         </div>
@@ -150,3 +152,25 @@ const tracks = [...new Set(INTERN_ASSIGNMENTS.map((a) => a.track))];
     </div>
   </div>
 </BlockLayout>
+
+<script>
+  // Live progress per intern assignment from the Guides Intake public counts.
+  function progress() {
+    const slots = document.querySelectorAll<HTMLElement>('[data-ga-progress]');
+    if (!slots.length) return;
+    fetch('/api/guides/intake')
+      .then((r) => r.json())
+      .then((data) => {
+        const by = data?.ok ? data.counts?.byAssignment ?? {} : null;
+        if (!by) return;
+        slots.forEach((slot) => {
+          const c = by[slot.dataset.gaProgress ?? ''];
+          slot.textContent = c && (c.accepted || c.inReview)
+            ? `Progress: ${c.accepted} accepted · ${c.inReview} in review`
+            : 'Progress: no work submitted yet. Submit at /guides/intake.';
+        });
+      })
+      .catch(() => {});
+  }
+  progress();
+</script>
