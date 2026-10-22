@@ -90,7 +90,7 @@ export const PROVES: string[] = [
 ];
 
 export const NOT_PROVES: string[] = [
-  'The state root is not recomputed. A balance, an owner or a count follows only from replaying every block through the chain’s rules. That is what VERIFY in the Block Yard does, in your browser, and what pcv.py and verify.mjs do from a terminal.',
+  'The state root is not recomputed here. A balance, an owner or a count follows only from replaying every block through the chain’s rules. That is what VERIFY in the Block Yard does, in your browser, and what pcv.py and verify.mjs do from a terminal: verify.mjs with the chain’s own wasm, and pcv.py, since 21 October, in plain Python.',
   'No rule is checked: nonces, who may do what, mandates, limits. A correctly signed transaction can still be one the chain’s rules would refuse.',
   'A seal is one server’s accountable claim. A sequencer that wanted to could seal two different versions of a block for two readers, and this page sees only the one it was served. Witnesses compare notes on the Daily Net, and a witness is a claim, not proof.',
   'The seal is checked against the key in the genesis parameters. After a sequencer rotation takes effect, later blocks carry the new key’s seal, and following that needs the key schedule the Block Yard replays.',

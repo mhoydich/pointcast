@@ -74,6 +74,29 @@ else {
   check(txt('[data-ob-v="tx"]') === K.groups(r1.summary.txTotal), 'the transactions tile shows ' + r1.summary.txTotal);
   check(sec.section.querySelectorAll('svg.ob-svg').length >= 3 || r1.summary.txTotal === 0, 'the charts are drawn: ' + sec.section.querySelectorAll('svg.ob-svg').length + ' of five (a quiet window draws fewer)');
   check(sec.section.querySelectorAll('[data-ob-chart] :is(script, iframe, img, a, [onerror]), [data-ob-table] :is(script, iframe, img, a, [onerror]), [data-ob-cp] :is(script, iframe, img, a, [onerror])').length === 0, 'everything drawn from devnet text (the charts, their tables, the checkpoints) holds no script, frame, image or link');
+  // 2b. who signed today's txs: the tiles show the devnet's split, and the split is a recount of today's raw blocks
+  const nj = await (await sturdyFetch(h.api + '/net')).json();
+  if (!nj.classes) say('note this devnet does not split house, keyless and outside yet: the tiles say "not split yet"');
+  else {
+    const sc = await (await sturdyFetch(h.api + '/stats/classes?days=1')).json();
+    const house = new Set(sc.house_keys.map((k) => k.address));
+    const bots = new Set((await (await sturdyFetch(h.api + '/bots')).json()).bots.map((b) => b.agent));
+    const per = { house: [0, new Set()], keyless: [0, new Set()], outside: [0, new Set()] };
+    const tipNow = (await (await sturdyFetch(h.api + '/status')).json()).height;
+    for (let at = 1; at <= tipNow; ) {
+      const page = await (await sturdyFetch(h.api + '/raw/blocks?from=' + at + '&limit=500')).json();
+      for (const b of page.blocks) {
+        if (new Date(b.header.timestamp).toISOString().slice(0, 10) !== nj.day || b.header.height > nj.indexed_height) continue;
+        for (const t of b.txs) { const k = house.has(t.tx.sender) ? 'house' : bots.has(t.tx.sender) ? 'keyless' : 'outside'; per[k][0] += 1; per[k][1].add(t.tx.sender); }
+      }
+      at = page.blocks.at(-1).header.height + 1;
+    }
+    for (const k of O.CLASSES) {
+      check(nj.classes.day[k].txs === per[k][0] && nj.classes.day[k].keys === per[k][1].size, k + ': the devnet says ' + nj.classes.day[k].txs + ' txs from ' + nj.classes.day[k].keys + ' keys today; a recount of the raw blocks says ' + per[k][0] + ' from ' + per[k][1].size);
+      check(txt('[data-ob-v="class-' + k + '"]') === K.plural(nj.classes.day[k].txs, 'tx', 'txs'), 'the ' + k + ' tile shows ' + txt('[data-ob-v="class-' + k + '"]'));
+    }
+    check(/^House activity is the chain checking itself, not use\. Outside keys signed /.test(txt('[data-ob-s="classes"]') || ''), 'the line under the tiles: ' + txt('[data-ob-s="classes"]'));
+  }
   // 3. Live: seal a block on the local devnet and watch it land
   if (h.api.startsWith('http://127.0.0.1')) {
     const c2 = view.mount(sec.section, { window: sec.dom.window, fetch: sturdyFetch, now: () => Date.now() });

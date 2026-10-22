@@ -122,7 +122,9 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/chain/first-mints/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/mixtape/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/sanctuary/', 'monthly', '0.6'],
-  // The nine apps on the devnet (src/data/chain-apps.ts).
+  ['https://pointcast.xyz/chain/plan/', 'weekly', '0.7'],
+  // The ten apps on the devnet (src/data/chain-apps.ts).
+  ['https://pointcast.xyz/chain/start/', 'weekly', '0.8'],
   ['https://pointcast.xyz/chain/observatory/', 'weekly', '0.8'],
   ['https://pointcast.xyz/chain/daily-mint/', 'weekly', '0.7'],
   ['https://pointcast.xyz/chain/notary/', 'monthly', '0.7'],
@@ -187,6 +189,9 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/nouns-money/marketplace.json', 'monthly', '0.75'],
   ['https://pointcast.xyz/rocks/', 'weekly', '0.9'],
   ['https://pointcast.xyz/rocks.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/pmm/', 'weekly', '0.9'],
+  ['https://pointcast.xyz/pmm/brand/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/nouns-messenger/', 'weekly', '0.9'],
   ["https://pointcast.xyz/arcade-remembrance", "monthly", "0.9"],
   ["https://pointcast.xyz/arcade-remembrance.json", "monthly", "0.85"],
   ['https://pointcast.xyz/ai-grand-prix/', 'weekly', '0.9'],
