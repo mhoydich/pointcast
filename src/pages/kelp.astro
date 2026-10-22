@@ -157,7 +157,8 @@ const patternWords = PATTERNS.join(', ');
   .kp { --field: #2545a8; --border: #000000; --text: #a9b9f5; --paddle: #f4d27a; --bright: #ffffff; background: #0b0d1a; color: #dfe3f5; font-family: var(--pc-font-mono); min-height: 100vh; min-height: 100dvh; }
   .kp[data-machine='c64'] { --field: #3e31a2; --border: #7c70da; --text: #7c70da; --paddle: #75cec8; }
   .kp-stage { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 320px; background: var(--border); }
-  .kp-stage:fullscreen, .kp-stage:-webkit-full-screen { height: 100%; min-height: 0; }
+  .kp-stage:fullscreen { height: 100%; min-height: 0; }
+  .kp-stage:-webkit-full-screen { height: 100%; min-height: 0; }
   .kp-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #0b0d1a; border-bottom: 1px solid #1d2140; font-size: 11px; letter-spacing: 0.12em; }
   .kp-home { color: var(--text); text-decoration: none; font-weight: 700; }
   .kp-home:hover { color: #fff; }
@@ -165,7 +166,7 @@ const patternWords = PATTERNS.join(', ');
   .kp-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .kp-controls button { font: 700 10px/1 var(--pc-font-mono); letter-spacing: 0.1em; color: #dfe3f5; background: #15183a; border: 1px solid #2b3070; border-radius: 3px; padding: 7px 9px; cursor: pointer; min-width: 44px; min-height: 30px; touch-action: manipulation; }
   .kp-controls button:hover { background: #1f2456; }
-  .kp-controls button[aria-pressed='false'] { color: #6b7199; text-decoration: line-through; }
+  .kp-controls button[aria-pressed='false'] { color: #9aa1cc; text-decoration: line-through; }
   .kp-controls button:focus-visible { outline: 2px solid var(--paddle); outline-offset: 2px; }
   .kp-screen { position: relative; flex: 1; min-height: 0; background: var(--border); overflow: hidden; }
   .kp-screen canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -174,10 +175,11 @@ const patternWords = PATTERNS.join(', ');
   .kp-noscript { position: absolute; inset: 0; margin: 0; padding: 24px; color: #fff; background: var(--field); font-size: 14px; line-height: 1.5; }
   .kp-noscript a { color: var(--paddle); }
   .kp-readout { display: flex; gap: 14px; flex-wrap: nowrap; align-items: center; height: 28px; overflow: hidden; white-space: nowrap; padding: 0 12px; font-size: 10px; letter-spacing: 0.1em; color: #7f86b5; background: #0b0d1a; border-top: 1px solid #1d2140; }
-  .kp-readout span { white-space: nowrap; }
-  .kp-readout a { margin-left: auto; color: var(--text); text-decoration: none; }
+  .kp-readout span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .kp-readout a { margin-left: auto; flex-shrink: 0; color: var(--text); text-decoration: none; }
   .kp-readout a:hover { color: #fff; }
-  .kp-stage:fullscreen .kp-readout a, .kp-stage:-webkit-full-screen .kp-readout a { display: none; }
+  .kp-stage:fullscreen .kp-readout a { display: none; }
+  .kp-stage:-webkit-full-screen .kp-readout a { display: none; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .kp-notes { max-width: 1080px; margin: 0 auto; padding: 56px 20px 72px; font-family: var(--pc-font-sans); color: #dfe3f5; }
   .kp-eyebrow { font: 700 11px/1.4 var(--pc-font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #7f86b5; margin: 0 0 14px; }
@@ -621,12 +623,13 @@ const patternWords = PATTERNS.join(', ');
         const h = 6, speed = REDUCED ? 0 : (response.tempo / 60) * 40;
         const shift = (G.t * speed) % (m.raster.length * h * 2);
         ctx.globalAlpha = bars;
-        for (let y = -m.raster.length * h * 2; y < cssH + h; y += h) {
-          const idx = Math.floor((y + shift) / h);
-          const k = ((idx % (m.raster.length * 2)) + m.raster.length * 2) % (m.raster.length * 2);
+        const f = shift % h, base = shift - f, period = m.raster.length * 2;
+        for (let y = -period * h; y < cssH + h; y += h) {
+          const idx = Math.round((y - base) / h);
+          const k = ((idx % period) + period) % period;
           if (k >= m.raster.length) continue;
           ctx.fillStyle = m.raster[k];
-          ctx.fillRect(0, y + (shift % h), cssW, h);
+          ctx.fillRect(0, y + f, cssW, h);
         }
         ctx.globalAlpha = 1;
       }
@@ -758,8 +761,8 @@ const patternWords = PATTERNS.join(', ');
       drawWall(0.3); drawRocks(G.attract, 0.3); drawPlankton(G.attract, 0.3); drawStrand(G.attract, 0.3);
       rainbowText('KELP', W / 2, 86, 9, [m.bands.green, m.bands.yellow, m.bands.orange, m.bands.red]);
       text('A SNAKE FOR THE 8-BIT HEART', W / 2, 150, 2, m.bright, 'center');
-      text(`${m.label} MODE / ${m.chip}`, W / 2, 170, 2, m.text, 'center');
-      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 186, 2, m.text, 'center');
+      text(`${m.label} MODE / ${m.chip}`, W / 2, 170, 2, m.bright, 'center');
+      text(`DIAL ${DIALS[mood.dial].label}`, W / 2, 186, 2, m.bright, 'center');
       if (Math.floor(G.t * 2) % 2 === 0) text(COARSE ? 'TAP TO PLAY' : 'TAP OR PRESS SPACE', W / 2, 256, 2, m.paddle, 'center');
       if (best > 0) text(`BEST ${String(best).padStart(6, '0')}`, W / 2, 286, 2, m.bright, 'center');
       text('2026 HOYDICH / POINTCAST', W / 2, H - 26, 2, m.dim, 'center');
@@ -788,8 +791,8 @@ const patternWords = PATTERNS.join(', ');
       const g = G.game;
       drawHud(); drawWall(1); drawRocks(g, 1); drawPlankton(g, 1); drawStrand(g, 1); drawParticles(1);
       const m = M();
-      if (G.phase === 'ready' && Math.floor(G.t * 2) % 2 === 0 && G.msgT <= 0) text(COARSE ? 'SWIPE TO SWIM' : 'ARROWS OR SPACE TO SWIM', W / 2, 150, 2, m.text, 'center');
-      if (G.phase === 'paused') { text('PAUSED', W / 2, 140, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 172, 2, m.text, 'center'); }
+      if (G.phase === 'ready' && Math.floor(G.t * 2) % 2 === 0 && G.msgT <= 0) text(COARSE ? 'SWIPE TO SWIM' : 'ARROWS OR SPACE TO SWIM', W / 2, 150, 2, m.paddle, 'center');
+      if (G.phase === 'paused') { text('PAUSED', W / 2, 140, 4, m.bright, 'center'); text(COARSE ? 'TAP TO RESUME' : 'P TO RESUME', W / 2, 172, 2, m.paddle, 'center'); }
       if (G.msgT > 0 && G.msg) text(G.msg, W / 2, 136, G.msgScale, m.bright, 'center');
     }
 
@@ -858,8 +861,12 @@ const patternWords = PATTERNS.join(', ');
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
       const t = e.target;
-      if (t && typeof t.closest === 'function' && t.closest('a, button, input, textarea, select, [contenteditable]')) return;
       const k = e.code;
+      if (t && typeof t.closest === 'function') {
+        if (t.closest('input, textarea, select, [contenteditable]')) return;
+        // Enter and Space belong to a focused link or button; arrows and letters still steer from there.
+        if ((k === 'Space' || k === 'Enter') && t.closest('a, button')) return;
+      }
       if (KEY_DIRS[k]) {
         e.preventDefault();
         if (e.repeat) return;
@@ -936,11 +943,13 @@ const patternWords = PATTERNS.join(', ');
       const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
       if (req) { try { const p = req.call(stage); if (p && p.catch) p.catch(() => {}); } catch {} }
     }
-    btn.machine.addEventListener('click', () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
-    btn.dial.addEventListener('click', () => { audio.unlock(); cycleDial(); });
-    btn.sound.addEventListener('click', toggleSound);
-    btn.crt.addEventListener('click', toggleCrt);
-    btn.full.addEventListener('click', toggleFull);
+    // A mouse or touch click leaves focus on the button; hand it back so Space starts again. Keyboard activation keeps focus.
+    const press = (el, fn) => el.addEventListener('click', (e) => { fn(); if (e.detail > 0) el.blur(); });
+    press(btn.machine, () => { audio.unlock(); setMachine(machineId === 'xl' ? 'c64' : 'xl'); });
+    press(btn.dial, () => { audio.unlock(); cycleDial(); });
+    press(btn.sound, toggleSound);
+    press(btn.crt, toggleCrt);
+    press(btn.full, toggleFull);
     if (!document.fullscreenEnabled && !stage.webkitRequestFullscreen) btn.full.hidden = true;
     document.addEventListener('fullscreenchange', () => { syncButtons(); resize(); });
     document.addEventListener('webkitfullscreenchange', () => { syncButtons(); resize(); });
