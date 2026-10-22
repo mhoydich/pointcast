@@ -36,7 +36,74 @@
 - [ ] (MH) Decide whether Breakwater rotates into the six-card home GameRail — `waiting-on-mh`
 - [ ] (MH/CC) Merge, then `scripts/deploy.sh`, then verify `/breakwater`, `/breakwater.json` and `breakwater` in `/agents.json` — `handoff`
 - [ ] (CC) Five parallel threads, each a sibling game stacked on this branch with its own draft PR (base `claude/epic-albattani-j8tb06`, retargets to main when #1478 merges), Blocks 0727–0731 after the renumber (main took 0725): Tideline (Pong, `claude/tideline-20261022`, PR #1483), Kelp (Snake, `claude/kelp-20261022`, PR #1482), Soft Landing (Lunar Lander, `claude/soft-landing-20261022`, PR #1480), Crosswalk (Frogger, `claude/crosswalk-20261022`, PR #1481), Driftwood (Asteroids, `claude/driftwood-20261022`, PR #1484) — `done` — Mike 2026-10-22: "set up 5 new threads to create more"; all five opened as drafts with CI green by 03:52 UTC; all share `src/lib/breakwater/{font,waves,mood}.mjs`; expect small conflicts in the discovery files when merging in sequence after #1478
-- [ ] (MH/X) Review and merge #1478, then the five stacked PRs in any order (#1480, #1481, #1482, #1483, #1484), resolving the discovery-file conflicts as they come; deploy once with `scripts/deploy.sh` — `waiting-on-mh`
+- [x] (CC) Ship the row: Mike 2026-10-22, "be the product manager publish, ship, etc no review necessary". #1478 merged to main; the five stacked PRs merged through this branch to main, with every shared discovery file checked to differ from main by exactly the games' own rows — `done`
+- [ ] (MH) Deploy: `scripts/deploy.sh` from the iMac (the GitHub deploy workflow skips its deploy step without `CLOUDFLARE_API_TOKEN`), then `npm run audit:publishing` — `waiting-on-mh`
+
+---
+
+## Tideline — Pong stood on its end (2026-10-22)
+
+`/tideline`, `/tideline.json`, Block 0727. Thread 1 of 5 after Breakwater, from Michael Hoydich's same brief (80s innocence, the joy of the compute and flow, mood-state symbiosis, mobile and full screen, Atari and Commodore inspired, rendered modern). Portrait Pong: your paddle below, the house above, rally to 11, a house whose skill follows the shared mood. Research note: `docs/notes/2026-10-22-tideline-notes.md`.
+
+- [x] (CC) Build the game: shared 3x5 font, palettes and mood model from `src/lib/breakwater`, new pure physics and rules in `src/lib/tideline` (eight-segment return angle, per-volley speed, alternating serve, predictive house paddle), Web Audio square-wave pok, CALM/PLAY/RUSH dial, 2UP second paddle by touch, browser-local longest rally and wins, `tests/tideline.test.mjs` with a simulated rally — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (games line, no new line), `llms-full.txt`, OG card from the game's own palette — `done`
+- [ ] (X) Review the house skill curve (`houseSkill`, `houseTraits`) for fairness on PLAY, and the two-ball point rule — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-tideline-qa.md`, log to `docs/manus-logs/2026-10-22-tideline.md` — `queued`
+- [ ] (MH) Decide whether Tideline joins Breakwater in the home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/tideline`, `/tideline.json` and `tideline` in `/agents.json` — `handoff`
+
+---
+
+
+## Soft Landing — a lunar lander for the 8-bit heart (2026-10-22)
+
+`/soft-landing`, `/soft-landing.json`, Block 0729. Thread 3 of the five games Michael Hoydich asked for after Breakwater (siblings: Tideline, Kelp, Crosswalk, Driftwood). Same brief; Lunar Lander. Shares Breakwater's font, palettes and mood model; its own physics, skylines, landing judgement and sounds. Stacks on the Breakwater PR. Research note: `docs/notes/2026-10-22-soft-landing-notes.md`.
+
+- [x] (CC) Build the game: vector skyline with 1x / 2x / 4x pads (5x in RUSH), gravity, main engine, side jets, fuel, landing judgement (speed, drift, attitude, pad), scoring by multiplier and fuel, a new skyline per landing, the mood dial and tape, filtered-noise engine roar, rumble and crash slide, boot screens for both machines, touch thirds and keys, `tests/soft-landing.test.mjs` with a simulated descent — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (same line count), `llms-full.txt`, OG card from the game's own palette and skyline generator — `done`
+- [ ] (X) Review the landing limits and fuel economy (1200 on PLAY, 900 on RUSH, +100 per multiplier on a landing), the crosswind strength in RUSH, and the `?debug` QA hook that exposes read-only state and the autopilot — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-soft-landing-qa.md`, log to `docs/manus-logs/2026-10-22-soft-landing.md` — `queued`
+- [ ] (MH) Decide whether the five games share one cabinet row on `/games` and the home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/soft-landing`, `/soft-landing.json` and `softLanding` in `/agents.json` — `handoff`
+
+---
+
+## Crosswalk — five lanes to the sand (2026-10-22)
+
+`/crosswalk`, `/crosswalk.json`, Block 0730 (renumbered from 0729 when main took 0725). Thread 4 of 5 from Michael Hoydich's "set up 5 new threads to create more", stacked on Breakwater (`claude/crosswalk-20261022` on `claude/epic-albattani-j8tb06`). Frogger's shape set in El Segundo: sidewalk, five lanes of traffic, median, bike path, sand, four lifeguard towers. Research note: `docs/notes/2026-10-22-crosswalk-notes.md`.
+
+- [x] (CC) Build the game: `src/lib/crosswalk/{field,rules,sprites}.mjs` (lanes on a wrapping track, slot density, hop and collision rules, the crossing clock, scoring, 8x8 rect sprites), the page on the shared font, palettes and mood model from `src/lib/breakwater`, swipe or tap zones on touch, arrows or WASD on keys, a hop blip that rises per row, a horn on a hit, a four-note fanfare at a tower, `tests/crosswalk.test.mjs` with a simulated crossing — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause, still 334 lines), `llms-full.txt`, OG card from the game's own palette and sprites — `done`
+- [ ] (X) Review the traffic density switch (slots only change off screen), the hit box inset, and whether the splash between towers is too harsh for CALM — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-crosswalk-qa.md`, log to `docs/manus-logs/2026-10-22-crosswalk.md` — `queued`
+- [ ] (MH) Decide whether the five sibling cabinets get a shared `/arcade` row or stay as separate pages — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/crosswalk`, `/crosswalk.json` and `crosswalk` in `/agents.json` — `handoff`
+
+---
+
+## Kelp — a snake for the 8-bit heart (2026-10-22)
+
+`/kelp`, `/kelp.json`, Block 0728 (was 0727 before main took 0725 and the games shifted up one). Thread 2 of 5 on Michael Hoydich's games brief after Breakwater (siblings: Tideline, Soft Landing, Crosswalk, Driftwood). Snake the way Nibbler (1982) and the home-computer listings did it: a 24 x 32 portrait grid, the frame is the wall, rocks spelled from the 3x5 font, a stage cleared at a target length. Shares Breakwater's font, palettes and mood model; new logic in `src/lib/kelp`. Research note: `docs/notes/2026-10-22-kelp-notes.md`. Stacks on #1478.
+
+- [x] (CC) Build the game: grid, strand, growth, collision and seven stage patterns in `src/lib/kelp/{grid,strand}.mjs` with `tests/kelp.test.mjs` (including a seeded autopilot run), canvas playfield from the 3x5 font, 800XL and C64 modes with boot screens, one pentatonic note per plankton and a thud on collision, a slow swell arpeggiator, mood driving tick rate, plankton value, rock density, start length, tempo, scale, palette and a golden plankton in RUSH, CALM with no lives, swipe and arrows, fullscreen, browser-local best score and mood tape under `kelp:v1` — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause on the games line), `llms-full.txt`, OG card from the game's own palette (`scripts/generate-kelp-og.mjs`) — `done`
+- [ ] (X) Review the swipe handler (continuous drag turns) and the fixed tick clock on a slow phone; check the glyph-rock doorway rule reads as intended on the `64` nameplate — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-kelp-qa.md`, log to `docs/manus-logs/2026-10-22-kelp.md` — `queued`
+- [ ] (MH) Decide whether the games-brief cabinets (Breakwater, Kelp and the three siblings) get a row of their own on `/games` — `waiting-on-mh`
+- [ ] (MH/CC) Merge #1478, then this PR, then `scripts/deploy.sh`, then verify `/kelp`, `/kelp.json` and `kelp` in `/agents.json` — `handoff`
+
+---
+
+## Driftwood — Asteroids on the water (2026-10-22)
+
+`/driftwood`, `/driftwood.json`, Block 0731. Thread 5 of 5 after Breakwater, branch `claude/driftwood-20261022`, stacked on `claude/epic-albattani-j8tb06`. A small boat on a dark field, driftwood logs that split big to medium to small, wrap at every edge, no friction, a limited flare rate, a tide bird. Research note: `docs/notes/2026-10-22-driftwood-notes.md`.
+
+- [x] (CC) Build the game: stroked-polygon vector look in the machine's text color on a night field, the shared 3x5 font, both machines and boot screens, a two-note heartbeat that quickens with the mood plus noise shot and crunch split, the shared mood model (hit = paddle, small log = brick, collision = loss, field clear = wave) driving log speed, shield and flare rate, tempo and scale, glow and palette, sparks, log count and the bird; touch zones with an on-canvas hint, keys on desktop; `src/lib/driftwood/{field,sim}.mjs` headless, `tests/driftwood.test.mjs` with a simulated field clear — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause, line count held), `llms-full.txt`, OG card from the game's own palette and log generator — `done`
+- [ ] (X) Review the RUSH glow latch (off after three slow readings), the seam-aware torus (fixed period, nearest-image collisions, drawn on both sides), and the `?debug` hook — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-driftwood-qa.md`, log to `docs/manus-logs/2026-10-22-driftwood.md` — `queued`
+- [ ] (MH) Decide whether Driftwood joins Breakwater in the six-card home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/driftwood`, `/driftwood.json` and `driftwood` in `/agents.json` — `handoff`
 
 ---
 
