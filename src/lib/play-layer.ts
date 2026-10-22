@@ -1,12 +1,19 @@
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Breakwater, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Cabinet Row, Breakwater, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
     id: 'games', code: 'PLAY', title: 'PointCast Games', route: '/games/',
     summary: 'Find every game, learn the controls, download a local game pack or online launch kit, and join a friend. Mossbell adds a little animal town with direct peer visits.',
+  },
+  {
+    id: 'cabinet-row',
+    code: 'ROW',
+    title: 'Cabinet Row',
+    route: '/cabinet-row',
+    summary: 'The lobby for the 8-bit arcade: one cabinet per game, the mood you left the last one in, and the next cabinet for that mood.',
   },
   {
     id: 'breakwater',

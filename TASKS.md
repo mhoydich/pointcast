@@ -4,6 +4,16 @@
 
 ---
 
+## Cabinet Row — the lobby for the 8-bit arcade (2026-10-22)
+
+`/cabinet-row`, `/cabinet-row.json`, Block 0732. One cabinet per game that shares Breakwater's cabinet; a cabinet lights when its game is in `src/data/game-catalog.json`. Rules in `src/lib/breakwater/row.mjs`, tests in `tests/cabinet-row.test.mjs`. Mike 2026-10-22: "keep going".
+
+- [x] (CC) Build the lobby: lit and dark cabinets from the catalog, per-game best and last mood from each game's browser save, the row's mood from `pc:mood` or the tapes, a mood ribbon, the next cabinet for the mood, an optional hum, machine colors, JSON twin, Block, cover art, discovery — `done`
+- [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737: Lighthouse (Simon), Low Tide (Kaboom!), Morning Route (Paperboy), Sea Glass (Q*bert), Sandcastle (Missile Command); each lights its own cabinet when published — `in-progress`
+- [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
+
+---
+
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
 
 `/breakwater`, `/breakwater.json`, Block 0726 (moved from 0725 when the messenger release took that id on main). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
