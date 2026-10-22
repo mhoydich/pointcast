@@ -35,10 +35,10 @@ export const TOOLS = Object.freeze([
   { id: 'road', label: 'Road', cost: 10, key: '1', hint: 'Every zone needs a road touching one of its four sides.' },
   { id: 'res', label: 'Homes', cost: 50, key: '2', hint: 'People move in when there are jobs, power and a road. Parks and water raise the value.' },
   { id: 'com', label: 'Shops', cost: 60, key: '3', hint: 'Shops need customers. They grow with population.' },
-  { id: 'ind', label: 'Workshops', cost: 70, key: '4', hint: 'The most jobs per tile, and the only thing that pollutes. Keep them two tiles from homes.' },
+  { id: 'ind', label: 'Workshops', cost: 70, key: '4', hint: 'The most jobs per tile. Smoke covers every tile within two steps, so keep homes three away.' },
   { id: 'park', label: 'Park', cost: 40, key: '5', hint: 'Cleans the air two tiles around it and raises land value for homes.' },
   { id: 'power', label: 'Power plant', cost: 400, key: '6', hint: 'Powers 24 zone tiles anywhere in town. Costs 25 a month to run. Pollutes like a workshop.' },
-  { id: 'bulldoze', label: 'Bulldoze', cost: 5, key: '0', hint: 'Return a tile to grass. Trees come back as grass too.' },
+  { id: 'bulldoze', label: 'Bulldoze', cost: 5, key: '0', hint: 'Return a tile to grass. Always allowed, even when the town is broke.' },
 ]);
 
 export const POWER_CAPACITY = 24;
@@ -51,14 +51,14 @@ export const LESSONS = Object.freeze([
   { id: 'road', title: 'Lay a road', text: 'Pick the Road tool and tap three tiles in a row. Drag to paint.', done: (c) => count(c, 'road') >= 3 },
   { id: 'homes', title: 'Zone four homes', text: 'Homes go next to a road. Tap four grass tiles touching your road.', done: (c) => count(c, 'res') >= 4 },
   { id: 'power', title: 'Build a power plant', text: 'Nothing grows in the dark. A plant powers 24 zone tiles anywhere in town.', done: (c) => count(c, 'power') >= 1 },
-  { id: 'jobs', title: 'Zone two shops and two workshops', text: 'People only move in when there is work. Shops sell, workshops make.', done: (c) => count(c, 'com') >= 2 && count(c, 'ind') >= 2 },
+  { id: 'jobs', title: 'Zone two shops and two workshops', text: 'The first few dozen move in on their own. After that, homes follow jobs. Shops sell, workshops make.', done: (c) => count(c, 'com') >= 2 && count(c, 'ind') >= 2 },
   { id: 'month', title: 'Let a month pass', text: 'Press Next month, or turn on Auto. Watch the ledger.', done: (c) => c.month >= 1 },
   { id: 'fifty', title: 'Reach 50 residents', text: 'Zones fill in one level at a time when they have power, a road and demand.', done: (c) => c.stats.population >= 50 },
   { id: 'park', title: 'Plant a park near homes', text: 'A park within two tiles of a home raises its value and cleans the air.', done: (c) => c.stats.parkedHomes >= 1 },
-  { id: 'clean', title: 'Keep every home out of the smoke', text: 'Workshops and plants pollute two tiles around them. Move homes away or add parks.', done: (c) => c.stats.population >= 50 && c.stats.pollutedHomes === 0 },
+  { id: 'clean', title: 'Keep every home out of the smoke', text: 'Workshops and plants put smoke on every tile within two steps. Keep homes three away, or add parks.', done: (c) => c.stats.population >= 50 && c.stats.pollutedHomes === 0 },
   { id: 'black', title: 'Finish a month in the black', text: 'Roads, parks and plants cost upkeep. Taxes from people and jobs pay for them.', done: (c) => c.month >= 1 && c.ledger.net > 0 },
   { id: 'twohundred', title: 'Reach 200 residents', text: 'Balance homes against jobs. The RCI bars show what the town is asking for.', done: (c) => c.stats.population >= 200 },
-  { id: 'happy', title: 'Reach 80% happiness', text: 'Jobs for everyone, clean air, parks per person and a fair tax rate.', done: (c) => c.stats.happiness >= 80 && c.stats.population >= 100 },
+  { id: 'happy', title: 'Reach 80% happiness with 100 residents', text: 'Jobs for everyone, clean air, parks per person and a fair tax rate.', done: (c) => c.stats.happiness >= 80 && c.stats.population >= 100 },
   { id: 'year', title: 'Run the town for a year', text: 'Twelve months without going broke. Then it is your city.', done: (c) => c.month >= 12 && c.funds > 0 },
 ]);
 
@@ -167,7 +167,7 @@ export function canBuild(city, toolId, x, y) {
     if (tile.id === toolId) return { ok: false, reason: `Already ${tool.label.toLowerCase()}.` };
     if (!TILES[tile.id].terrain) return { ok: false, reason: 'Bulldoze it first.' };
   }
-  if (city.funds < tool.cost) return { ok: false, reason: `Not enough funds. ${tool.label} costs ${tool.cost}.` };
+  if (toolId !== 'bulldoze' && city.funds < tool.cost) return { ok: false, reason: `Not enough funds. ${tool.label} costs ${tool.cost}.` };
   return { ok: true, cost: tool.cost };
 }
 
@@ -201,11 +201,12 @@ export function analyze(city) {
   const roaded = new Array(tiles.length).fill(false);
   const pollution = new Array(tiles.length).fill(0);
   const value = new Array(tiles.length).fill(0);
+  const parkValue = new Array(tiles.length).fill(0);
   for (let y = 0; y < GRID_SIZE; y += 1) for (let x = 0; x < GRID_SIZE; x += 1) {
     const i = index(x, y);
     const tile = tiles[i];
     if (tile.id === 'ind' || tile.id === 'power') spread(pollution, x, y, 2, tile.id === 'power' ? 3 : 1 + tile.level);
-    if (tile.id === 'park') { spread(pollution, x, y, 2, -2); spread(value, x, y, 2, 2); }
+    if (tile.id === 'park') { spread(pollution, x, y, 2, -2); spread(value, x, y, 2, 2); spread(parkValue, x, y, 2, 1); }
     if (tile.id === 'water') spread(value, x, y, 1, 1);
     if (tile.id === 'trees') spread(value, x, y, 1, 1);
     if (TILES[tile.id].zone) {
@@ -233,7 +234,7 @@ export function analyze(city) {
       homeValue += value[i];
       homePollution += Math.max(0, pollution[i]);
       if (pollution[i] > 0) pollutedHomes += 1;
-      if (value[i] >= 2) parkedHomes += 1;
+      if (parkValue[i] > 0) parkedHomes += 1;
     } else {
       jobs += tile.level * JOBS[tile.id];
     }
@@ -243,7 +244,7 @@ export function analyze(city) {
   const demand = computeDemand(population, jobs, count(city, 'res'), count(city, 'com'), count(city, 'ind'));
   const happiness = computeHappiness({ population, employment, parks, taxRate: city.taxRate, homes, homePollution, homeValue });
   return {
-    roaded, powered, pollution, value,
+    roaded, powered, pollution, value, parkValue,
     stats: {
       population, jobs, capacity, powered: Math.min(served, capacity), unpowered, unroaded,
       pollutedHomes, parkedHomes, happiness, demand, employment,
@@ -276,7 +277,7 @@ export function computeHappiness({ population, employment, parks, taxRate, homes
   h += Math.round(employment * 25);                           // up to +25 when everyone has a job
   h += Math.min(15, Math.round((parks / Math.max(1, population / 40)) * 5)); // parks per 40 residents
   h -= Math.max(0, taxRate - 7) * 3;                           // every point over 7% costs 3
-  h += Math.min(3, 7 - taxRate);                               // a little love for low taxes
+  h += Math.max(0, Math.min(3, 7 - taxRate));                  // a little love for low taxes, never a second penalty
   h -= Math.min(30, Math.round((homePollution / Math.max(1, homes)) * 10));
   h += Math.min(10, Math.round((homeValue / Math.max(1, homes)) * 3));
   return clamp(h, 0, 100);
@@ -296,20 +297,36 @@ export function refresh(city) {
 
 /* ------------------------------ time ------------------------------ */
 
-/** Advance one month: zones grow or shrink, the ledger settles, lessons update. */
+/**
+ * Advance one month: zones grow or shrink, the ledger settles, lessons update.
+ *
+ * Demand is re-read after every tile changes, in reading order, so growth
+ * stops the moment the town has what it asked for. One shared pre-month
+ * demand applied to every tile at once made large towns swing between
+ * two populations forever.
+ */
 export function tick(city) {
   const before = analyze(city);
+  let population = before.stats.population;
+  let jobs = before.stats.jobs;
+  const resTiles = count(city, 'res'); const comTiles = count(city, 'com'); const indTiles = count(city, 'ind');
   const tiles = city.tiles.map((tile, i) => {
     if (!TILES[tile.id].zone) return tile;
     const alive = before.powered[i] && before.roaded[i];
-    const demand = before.stats.demand[tile.id];
+    const smoky = tile.id === 'res' && before.pollution[i] > 0;
     let level = tile.level;
     if (!alive) level = Math.max(0, level - 1);
-    else if (demand > 0 && level < MAX_LEVEL) {
-      // Homes also need breathable air; smoke caps them at level 1.
-      if (tile.id === 'res' && before.pollution[i] > 0 && level >= 1) level = Math.min(level, 1);
-      else level += 1;
-    } else if (demand < -40 && level > 0) level -= 1;
+    else if (smoky && level > 1) level -= 1;                       // a home in the smoke loses a level a month, down to one
+    else {
+      const demand = computeDemand(population, jobs, resTiles, comTiles, indTiles)[tile.id];
+      if (demand > 0 && level < MAX_LEVEL && !(smoky && level >= 1)) level += 1;
+      else if (demand < -40 && level > 0) level -= 1;
+    }
+    const delta = level - tile.level;
+    if (delta !== 0) {
+      if (tile.id === 'res') population += delta * RESIDENTS_PER_LEVEL;
+      else jobs += delta * JOBS[tile.id];
+    }
     return level === tile.level ? tile : { id: tile.id, level };
   });
   const grown = { ...city, tiles };
@@ -348,7 +365,7 @@ export function readCity(raw) {
   if (!data || typeof data !== 'object' || data.version !== 1) return null;
   if (!Array.isArray(data.tiles) || data.tiles.length !== GRID_SIZE * GRID_SIZE) return null;
   const tiles = data.tiles.map((t) => {
-    const id = t && TILES[t.id] ? t.id : 'grass';
+    const id = t && typeof t.id === 'string' && Object.hasOwn(TILES, t.id) ? t.id : 'grass';
     const level = TILES[id].zone ? clamp(Math.floor(Number(t.level) || 0), 0, MAX_LEVEL) : 0;
     return { id, level };
   });
@@ -358,7 +375,7 @@ export function readCity(raw) {
     seed: normalizeSeed(data.seed),
     month: Math.max(0, Math.floor(Number(data.month) || 0)),
     funds: Number.isFinite(Number(data.funds)) ? Math.round(Number(data.funds)) : STARTING_FUNDS,
-    taxRate: clamp(Math.round(Number(data.taxRate) || 7), 0, 20),
+    taxRate: clamp(Number.isFinite(Number(data.taxRate)) && data.taxRate !== null && data.taxRate !== '' ? Math.round(Number(data.taxRate)) : 7, 0, 20),
     tiles,
     ledger: {
       income: Math.round(Number(data.ledger?.income) || 0),

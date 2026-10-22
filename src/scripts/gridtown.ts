@@ -2,13 +2,16 @@ import {
   GRID_SIZE, LESSONS, TOOLS, STORAGE_KEY, TILES,
   analyze, build, canBuild, createCity, cityToText, monthLabel, readCity, renameCity, serializeCity, setTaxRate, tick, index,
 } from '../lib/gridtown.mjs';
-
 import type { City, TileId, ToolId } from '../lib/gridtown.mjs';
 
 const COLORS: Record<string, string> = {
   grass: '#b9cf8e', water: '#7fb3d5', trees: '#6f9a5a', road: '#8f8f86',
   res: '#e6b85c', com: '#6c8fd6', ind: '#b37a5a', park: '#7cc27a', power: '#5a5a6e',
 };
+/** A touch must rest this long before it paints; a shorter touch is a tap or a scroll. */
+const HOLD_MS = 200;
+/** Finger travel, in CSS pixels, beyond which a touch is a swipe rather than a tap. */
+const SLOP = 8;
 
 let cleanUp: (() => void) | undefined;
 let mountedPage: HTMLElement | undefined;
@@ -22,12 +25,13 @@ function boot() {
   const root: HTMLElement = page;
   const controller = new AbortController();
   const { signal } = controller;
-  const get = <T extends HTMLElement = HTMLElement>(selector: string) => page.querySelector<T>(selector)!;
+  const get = <T extends HTMLElement = HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const canvas = get<HTMLCanvasElement>('[data-map]');
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const status = get('[data-status]');
   const hint = get('[data-hint]');
+  const mapHelp = get('[data-map-help]');
   const say = (message: string) => { status.textContent = message; };
 
   /* ----------------------------- state ----------------------------- */
@@ -40,18 +44,26 @@ function boot() {
   } catch { persistent = false; }
   const params = new URLSearchParams(location.search);
   const urlSeed = params.get('seed');
+  /** A map link that could not replace a saved city; New city offers it first. */
+  let pendingSeed: number | undefined;
   if (urlSeed !== null && (!city || String(city.seed) !== urlSeed)) {
-    if (!city || city.month === 0 && city.tiles.every((t) => TILES[t.id].terrain)) city = createCity(Number(urlSeed));
-    else say(`This link is for map ${urlSeed}. Your saved city is loaded; use New city to start that map.`);
+    const untouched = !city || (city.month === 0 && city.tiles.every((t) => TILES[t.id].terrain));
+    if (untouched) city = createCity(Number(urlSeed));
+    else { pendingSeed = Number(urlSeed); say(`This link is for map ${urlSeed}. Your saved city is loaded; New city will offer that map.`); }
   }
   if (!city) city = createCity(Math.floor(Math.random() * 4294967296));
   let tool: ToolId = 'road';
   let cursor = { x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) };
+  let lastInput: 'pointer' | 'keyboard' = 'pointer';
   let showSmoke = false;
   let auto: number | undefined;
   let painting = false;
   let lastPainted = -1;
   let hover = -1;
+  /** The city before the last build, for one step of undo. Cleared by a month, an import or a new city. */
+  let undoCity: City | null = null;
+  /** A touch that has started on the map and not yet decided whether it is a tap, a hold or a swipe. */
+  let press: { x: number; y: number; tileX: number; tileY: number; id: number; moved: boolean; timer?: number } | null = null;
 
   const storageNote = get('[data-storage-note]');
   if (!persistent) storageNote.textContent = 'This browser is not keeping storage, so the city lives only on this page. Export it to keep it.';
@@ -61,16 +73,17 @@ function boot() {
     try { localStorage.setItem(STORAGE_KEY, serializeCity(city)); } catch { persistent = false; storageNote.textContent = 'Saving stopped working in this browser. Export the city to keep it.'; }
   }
 
-  function commit(next: City, message?: string) {
+  /** Replace the city. Lessons are announced only for play actions, never for loads. */
+  function commit(next: City, message?: string, { announce = true } = {}) {
     const before = city;
     city = next;
     save();
     render();
-    if (message) say(message);
-    if (before) for (const id of next.lessons) if (!before.lessons.includes(id)) {
-      const lesson = LESSONS.find((l) => l.id === id)!;
-      say(`Lesson done: ${lesson.title}. ${next.lessons.length === LESSONS.length ? 'That is every lesson. It is your city now.' : ''}`.trim());
-    }
+    const fresh = announce && before ? next.lessons.filter((id) => !before.lessons.includes(id)) : [];
+    const lessonText = fresh.map((id) => `Lesson done: ${LESSONS.find((l) => l.id === id)!.title}.`).join(' ');
+    const finale = fresh.length && next.lessons.length === LESSONS.length ? ' That is every lesson. It is your city now.' : '';
+    const text = [message, lessonText].filter(Boolean).join(' ') + finale;
+    if (text) say(text);
   }
 
   /* ----------------------------- drawing ----------------------------- */
@@ -106,7 +119,7 @@ function boot() {
       ctx!.beginPath(); ctx!.moveTo(k * px, 0); ctx!.lineTo(k * px, canvas.height); ctx!.stroke();
       ctx!.beginPath(); ctx!.moveTo(0, k * px); ctx!.lineTo(canvas.width, k * px); ctx!.stroke();
     }
-    const focusTile = document.activeElement === canvas || hover < 0 ? index(cursor.x, cursor.y) : hover;
+    const focusTile = lastInput === 'keyboard' || hover < 0 ? index(cursor.x, cursor.y) : hover;
     const fx = focusTile % GRID_SIZE; const fy = Math.floor(focusTile / GRID_SIZE);
     const ok = canBuild(city, tool, fx, fy).ok;
     ctx!.strokeStyle = ok ? '#1f2a1f' : '#d94c3d'; ctx!.lineWidth = Math.max(2, px * 0.08);
@@ -194,6 +207,7 @@ function boot() {
   const taxInput = get<HTMLInputElement>('[data-tax]');
   const taxOut = get('[data-tax-out]');
   const autoButton = get<HTMLButtonElement>('[data-auto]');
+  const undoButton = get<HTMLButtonElement>('[data-undo]');
   const lessonCount = get('[data-lesson-count]');
   const logList = get('[data-log]');
 
@@ -214,10 +228,10 @@ function boot() {
       bar.style.width = `${Math.abs(d) / 2}%`;
       bar.style.left = d < 0 ? `${50 - Math.abs(d) / 2}%` : '50%';
       bar.classList.toggle('is-negative', d < 0);
-      bar.parentElement!.setAttribute('aria-label', `${id} demand ${d}`);
+      bar.parentElement!.setAttribute('aria-valuenow', String(d));
+      bar.parentElement!.setAttribute('aria-valuetext', `${d > 0 ? 'wanted' : d < 0 ? 'too many' : 'balanced'}, ${d}`);
     }
-    if (document.activeElement !== taxInput) taxInput.value = String(city.taxRate);
-    taxOut.textContent = String(city.taxRate);
+    if (document.activeElement !== taxInput) { taxInput.value = String(city.taxRate); taxOut.textContent = String(city.taxRate); }
     lessonCount.textContent = `${city.lessons.length} / ${LESSONS.length}`;
     let currentMarked = false;
     for (const lesson of LESSONS) {
@@ -240,8 +254,9 @@ function boot() {
     for (const button of root.querySelectorAll<HTMLButtonElement>('[data-tool]')) {
       const t = TOOLS.find((x) => x.id === button.dataset.tool)!;
       button.setAttribute('aria-pressed', t.id === tool ? 'true' : 'false');
-      button.classList.toggle('is-unaffordable', city.funds < t.cost);
+      button.classList.toggle('is-unaffordable', t.id !== 'bulldoze' && city.funds < t.cost);
     }
+    undoButton.disabled = !undoCity;
     draw();
   }
 
@@ -264,7 +279,9 @@ function boot() {
     if (!city) return;
     const result = build(city, tool, x, y);
     if (result.ok) {
-      commit(result.city);
+      undoCity = city;
+      const label = TOOLS.find((t) => t.id === tool)!.label;
+      commit(result.city, fromDrag ? undefined : `${tool === 'bulldoze' ? 'Cleared' : `${label} built at`} ${x + 1}, ${y + 1}. Funds ${result.city.funds}.`);
       return;
     }
     if (!fromDrag) say(result.reason ?? 'Cannot build there.');
@@ -274,23 +291,52 @@ function boot() {
 
   canvas.addEventListener('pointerdown', (event) => {
     const t = tileAt(event); if (!t) return;
-    event.preventDefault();
+    lastInput = 'pointer';
     canvas.focus({ preventScroll: true });
-    cursor = t; lastPainted = index(t.x, t.y);
+    cursor = t;
+    if (event.pointerType === 'touch') {
+      // A touch builds on release (a tap) or after a short hold (then it paints). A quick swipe scrolls the page.
+      if (press?.timer) window.clearTimeout(press.timer);
+      press = { x: event.clientX, y: event.clientY, tileX: t.x, tileY: t.y, id: event.pointerId, moved: false };
+      if (paintable()) press.timer = window.setTimeout(() => {
+        if (!press || press.moved) return;
+        painting = true; lastPainted = index(press.tileX, press.tileY);
+        try { canvas.setPointerCapture(press.id); } catch { /* capture is a nicety */ }
+        if (navigator.vibrate) navigator.vibrate(8);
+        place(press.tileX, press.tileY, false);
+      }, HOLD_MS);
+      return;
+    }
+    event.preventDefault();
+    lastPainted = index(t.x, t.y);
     painting = paintable();
     if (painting) canvas.setPointerCapture(event.pointerId);
     place(t.x, t.y, false);
   }, { signal });
   canvas.addEventListener('pointermove', (event) => {
+    if (press && !painting) {
+      if (!press.moved && Math.hypot(event.clientX - press.x, event.clientY - press.y) > SLOP) { press.moved = true; window.clearTimeout(press.timer); }
+      return;
+    }
     const t = tileAt(event);
     if (!t) return;
     const i = index(t.x, t.y);
     if (painting && i !== lastPainted) { lastPainted = i; cursor = t; place(t.x, t.y, true); return; }
-    if (i !== hover) { hover = i; draw(); }
+    if (event.pointerType !== 'touch') { lastInput = 'pointer'; if (i !== hover) { hover = i; draw(); } }
   }, { signal });
-  const stopPaint = (event: PointerEvent) => { painting = false; if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId); };
-  canvas.addEventListener('pointerup', stopPaint, { signal });
-  canvas.addEventListener('pointercancel', stopPaint, { signal });
+  // Once a held touch is painting, keep the browser from turning the drag into a scroll.
+  canvas.addEventListener('touchmove', (event) => { if (painting) event.preventDefault(); }, { passive: false, signal });
+  const endPress = (event: PointerEvent, cancelled: boolean) => {
+    if (press && event.pointerId === press.id) {
+      window.clearTimeout(press.timer);
+      if (!cancelled && !painting && !press.moved) place(press.tileX, press.tileY, false);
+      press = null;
+    }
+    painting = false;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  };
+  canvas.addEventListener('pointerup', (event) => endPress(event, false), { signal });
+  canvas.addEventListener('pointercancel', (event) => endPress(event, true), { signal });
   canvas.addEventListener('pointerleave', () => { hover = -1; draw(); }, { signal });
   canvas.addEventListener('contextmenu', (event) => event.preventDefault(), { signal });
 
@@ -298,28 +344,40 @@ function boot() {
     const moves: Record<string, [number, number]> = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
     if (moves[event.key]) {
       event.preventDefault();
+      lastInput = 'keyboard';
       cursor = { x: Math.max(0, Math.min(GRID_SIZE - 1, cursor.x + moves[event.key][0])), y: Math.max(0, Math.min(GRID_SIZE - 1, cursor.y + moves[event.key][1])) };
-      hover = -1; draw();
+      draw();
       const tile = city!.tiles[index(cursor.x, cursor.y)];
-      get('[data-map-help]').textContent = `${cursor.x + 1}, ${cursor.y + 1}: ${TILES[tile.id].label}${tile.level ? ` level ${tile.level}` : ''}`;
+      const verdict = canBuild(city!, tool, cursor.x, cursor.y);
+      mapHelp.textContent = `${cursor.x + 1}, ${cursor.y + 1}: ${TILES[tile.id].label}${tile.level ? ` level ${tile.level}` : ''}. ${verdict.ok ? `Enter builds ${TOOLS.find((t) => t.id === tool)!.label.toLowerCase()}.` : verdict.reason}`;
       return;
     }
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); place(cursor.x, cursor.y, false); return; }
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); lastInput = 'keyboard'; place(cursor.x, cursor.y, false); return; }
     if (event.key === 'n' || event.key === 'N') { event.preventDefault(); advance(); return; }
+    if ((event.key === 'z' || event.key === 'Z') && !event.metaKey && !event.ctrlKey) { event.preventDefault(); undo(); return; }
     const byKey = TOOLS.find((t) => t.key === event.key);
     if (byKey) { event.preventDefault(); selectTool(byKey.id); say(`${byKey.label} selected.`); }
   }, { signal });
   canvas.addEventListener('focus', () => draw(), { signal });
   canvas.addEventListener('blur', () => draw(), { signal });
 
-  for (const button of page.querySelectorAll<HTMLButtonElement>('[data-tool]')) {
+  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-tool]')) {
     button.addEventListener('click', () => selectTool(button.dataset.tool as ToolId), { signal });
   }
+
+  function undo() {
+    if (!undoCity) { say('Nothing to undo.'); return; }
+    const previous = undoCity;
+    undoCity = null;
+    commit(previous, `Undid the last build. Funds ${previous.funds}.`, { announce: false });
+  }
+  undoButton.addEventListener('click', undo, { signal });
 
   /* ----------------------------- time ----------------------------- */
   function advance() {
     if (!city) return;
     const next = tick(city);
+    undoCity = null;
     commit(next, `${monthLabel(next.month)}: ${next.log[0]?.text ?? ''}`);
   }
   get('[data-next]').addEventListener('click', advance, { signal });
@@ -339,6 +397,7 @@ function boot() {
   /* ----------------------------- ship ----------------------------- */
   const shareFallback = get('[data-share-fallback]');
   const shareUrl = () => `${location.origin}/gridtown/?seed=${city!.seed}`;
+  const setUrlSeed = (seed: number) => { try { history.replaceState(null, '', `${location.pathname}?seed=${seed}`); } catch { /* history may be unavailable */ } };
   get('[data-share]').addEventListener('click', async () => {
     const url = shareUrl();
     try { await navigator.clipboard.writeText(url); say('Map link copied. Anyone who opens it starts on the same terrain.'); }
@@ -365,20 +424,29 @@ function boot() {
     const loaded = readCity(await file.text().catch(() => null));
     if (!loaded) { say('That file is not a Gridtown city.'); return; }
     stopAuto();
-    commit(loaded, `Loaded ${loaded.name}, ${monthLabel(loaded.month)}.`);
+    undoCity = null;
+    pendingSeed = undefined;
+    setUrlSeed(loaded.seed);
+    commit(loaded, `Loaded ${loaded.name}, ${monthLabel(loaded.month)}.`, { announce: false });
   }, { signal });
 
   const newForm = get<HTMLFormElement>('[data-new-form]');
   const seedInput = get<HTMLInputElement>('[data-seed]');
-  get('[data-new]').addEventListener('click', () => { newForm.hidden = false; seedInput.value = String(Math.floor(Math.random() * 4294967296)); seedInput.focus(); }, { signal });
+  get('[data-new]').addEventListener('click', () => {
+    newForm.hidden = false;
+    seedInput.value = String(pendingSeed ?? Math.floor(Math.random() * 4294967296));
+    seedInput.focus({ preventScroll: true });
+  }, { signal });
   get('[data-cancel-new]').addEventListener('click', () => { newForm.hidden = true; }, { signal });
   newForm.addEventListener('submit', (event) => {
     event.preventDefault();
     stopAuto();
     newForm.hidden = true;
+    undoCity = null;
+    pendingSeed = undefined;
     selectTool('road');
-    commit(createCity(Number(seedInput.value)), 'New map. Lay a road.');
-    history.replaceState(null, '', `${location.pathname}?seed=${city!.seed}`);
+    commit(createCity(Number(seedInput.value)), 'New map. Lay a road.', { announce: false });
+    setUrlSeed(city!.seed);
   }, { signal });
 
   /* ----------------------------- go ----------------------------- */
@@ -387,7 +455,7 @@ function boot() {
   fit();
   render();
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); }, { signal });
-  cleanUp = () => { stopAuto(); resize.disconnect(); controller.abort(); cleanUp = undefined; mountedPage = undefined; };
+  cleanUp = () => { stopAuto(); if (press?.timer) window.clearTimeout(press.timer); resize.disconnect(); controller.abort(); cleanUp = undefined; mountedPage = undefined; };
 }
 
 document.addEventListener('astro:page-load', boot);

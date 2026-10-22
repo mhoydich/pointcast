@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   GRID_SIZE, LESSONS, TOOLS, STARTING_FUNDS, POWER_CAPACITY,
-  createCity, build, canBuild, tick, setTaxRate, renameCity, readCity, serializeCity, cityToText, summarizeCity, count, index, analyze,
+  createCity, build, canBuild, tick, setTaxRate, renameCity, readCity, serializeCity, cityToText, summarizeCity, count, index, analyze, inBounds, computeHappiness,
 } from '../src/lib/gridtown.mjs';
 
 /** A straight road across row 8 with homes above it and jobs below. Water tiles are skipped by the engine. */
@@ -188,4 +188,114 @@ test('the toolbar is small, numbered, and every tool has a one-line lesson', () 
   const text = cityToText(createCity(7));
   assert.equal(text.split('\n').length, GRID_SIZE);
   assert.match(text, /^[.~t#RCIP*\n]+$/);
+});
+
+/** Review follow-ups (2026-10-22): each test below pins a defect two independent reviewers reproduced. */
+
+function roadTown(seed, { homes, shops, works }) {
+  let city = createCity(seed);
+  const place = (tool, x, y) => { city = build(city, tool, x, y).city; };
+  for (const rx of [4, 11]) for (let y = 0; y < GRID_SIZE; y += 1) if (city.tiles[index(rx, y)].id !== 'water') place('road', rx, y);
+  let h = 0; let s = 0; let w = 0;
+  for (let y = 0; y < GRID_SIZE; y += 1) for (const [x, rx] of [[3, 4], [5, 4], [10, 11], [12, 11]]) {
+    if (city.tiles[index(x, y)].id !== 'grass' || city.tiles[index(rx, y)].id !== 'road') continue;
+    if (h < homes) { place('res', x, y); h += 1; } else if (s < shops) { place('com', x, y); s += 1; } else if (w < works) { place('ind', x, y); w += 1; }
+  }
+  for (let y = GRID_SIZE - 1; y >= 0; y -= 1) if (city.tiles[index(0, y)].id === 'grass') { place('power', 0, y); break; }
+  assert.equal(count(city, 'res'), homes); assert.equal(count(city, 'com'), shops); assert.equal(count(city, 'ind'), works);
+  assert.equal(count(city, 'power'), 1);
+  return city;
+}
+
+test('a saved tax rate of zero is restored as zero, not the default', () => {
+  const free = setTaxRate(scriptedTown(), 0);
+  assert.equal(free.taxRate, 0);
+  assert.equal(readCity(serializeCity(free)).taxRate, 0);
+  assert.equal(readCity(JSON.stringify({ ...JSON.parse(serializeCity(free)), taxRate: null })).taxRate, 7, 'missing still means the default');
+  assert.equal(readCity(JSON.stringify({ ...JSON.parse(serializeCity(free)), taxRate: 'x' })).taxRate, 7);
+});
+
+test('large towns settle instead of swinging between two populations every month', () => {
+  for (const seed of [0, 7, 20261022]) {
+    let city = roadTown(seed, { homes: 16, shops: 2, works: 2 });
+    const series = [];
+    for (let i = 0; i < 48; i += 1) { city = tick(city); series.push(city.stats.population); }
+    const tail = series.slice(-12);
+    assert.ok(tail.every((p) => p === tail[0]), `seed ${seed} settles: ${series.join(',')}`);
+    assert.ok(tail[0] > 0, `seed ${seed} keeps its people`);
+    assert.ok(series.every((p, i) => i === 0 || p >= series[i - 1] || tail.includes(p)), `seed ${seed} never dumps its people: ${series.join(',')}`);
+  }
+  let jobless = roadTown(0, { homes: 18, shops: 0, works: 0 });
+  const series = [];
+  for (let i = 0; i < 24; i += 1) { jobless = tick(jobless); series.push(jobless.stats.population); }
+  assert.deepEqual(series.slice(-6), Array(6).fill(series.at(-1)), `a jobless town finds a level: ${series.join(',')}`);
+  assert.ok(series.at(-1) > 0 && series.at(-1) <= 72, 'pioneers stop at the first few dozen');
+});
+
+test('smoke pulls a built-out home back down to level one', () => {
+  let city = scriptedTown();
+  for (let i = 0; i < 8; i += 1) city = tick(city);
+  const { pollution } = analyze(city);
+  // Find a clean level-3 home and a grass tile exactly two steps away whose workshop smoke actually reaches it
+  // (a park within two steps of the home would cancel one workshop's smoke).
+  let clean = -1; let smoked = null;
+  for (let i = 0; i < city.tiles.length && !smoked; i += 1) {
+    const t = city.tiles[i];
+    if (t.id !== 'res' || pollution[i] > 0 || t.level !== 3) continue;
+    const cx = i % GRID_SIZE; const cy = Math.floor(i / GRID_SIZE);
+    for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const x = cx + dx; const y = cy + dy;
+      if (!inBounds(x, y) || city.tiles[index(x, y)].id !== 'grass') continue;
+      const candidate = build(city, 'ind', x, y).city;
+      if (analyze(candidate).pollution[i] > 0) { clean = i; smoked = candidate; break; }
+    }
+  }
+  assert.ok(smoked, 'found a clean level-3 home with a grass tile two steps away');
+  assert.ok(analyze(smoked).pollution[clean] > 0);
+  const after1 = tick(smoked); const after2 = tick(after1); const after3 = tick(after2);
+  assert.equal(after1.tiles[clean].level, 2);
+  assert.equal(after2.tiles[clean].level, 1);
+  assert.equal(after3.tiles[clean].level, 1, 'stops at one, never zero');
+});
+
+test('only a real park satisfies the park lesson; water and trees raise value but do not count', () => {
+  for (const seed of [0, 7, 20261022]) {
+    let city = createCity(seed);
+    for (let i = 0; i < city.tiles.length; i += 1) {
+      if (city.tiles[i].id !== 'grass') continue;
+      const built = build(city, 'res', i % GRID_SIZE, Math.floor(i / GRID_SIZE)).city;
+      assert.equal(built.stats.parkedHomes, 0, `seed ${seed} tile ${i}`);
+      assert.ok(!built.lessons.includes('park'));
+    }
+  }
+  const city = scriptedTown();
+  assert.ok(city.stats.parkedHomes >= 1 && city.lessons.includes('park'), 'the scripted park beside homes still counts');
+});
+
+test('happiness charges exactly 3 per tax point over 7 and gives at most 3 for low taxes', () => {
+  const base = { population: 100, employment: 1, parks: 0, homes: 10, homePollution: 0, homeValue: 0 };
+  const at = (taxRate) => computeHappiness({ ...base, taxRate });
+  assert.equal(at(7) - at(8), 3);
+  assert.equal(at(7) - at(10), 9);
+  assert.equal(at(7) - at(20), 39);
+  assert.equal(at(4) - at(7), 3);
+  assert.equal(at(0) - at(7), 3);
+});
+
+test('a broke town can still bulldoze', () => {
+  let city = scriptedTown();
+  city = { ...city, funds: -300 };
+  assert.equal(canBuild(city, 'road', 15, 0).ok, false);
+  const cleared = build(city, 'bulldoze', 5, 8);
+  assert.equal(cleared.ok, true);
+  assert.equal(cleared.city.tiles[index(5, 8)].id, 'grass');
+  assert.equal(cleared.city.funds, -305);
+});
+
+test('prototype keys are not tile ids', () => {
+  const raw = JSON.parse(serializeCity(scriptedTown()));
+  raw.tiles[0] = { id: '__proto__', level: 1 }; raw.tiles[1] = { id: 'constructor', level: 1 }; raw.tiles[2] = { id: 'toString', level: 0 };
+  const city = readCity(JSON.stringify(raw));
+  assert.deepEqual(city.tiles.slice(0, 3), [{ id: 'grass', level: 0 }, { id: 'grass', level: 0 }, { id: 'grass', level: 0 }]);
+  assert.match(cityToText(city), /^[.~t#RCIP*\n]+$/);
 });
