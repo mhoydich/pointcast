@@ -478,6 +478,28 @@
     } catch (_) { return false; }
   }
 
+  // Share into Nouns Messenger: the installed app is a share target (manifest share_target, GET), so
+  // the phone's share sheet opens /nouns-messenger/?title=…&text=…&url=…. The shared bits land in
+  // Note to self as a message from you, and the query is taken off the address so a reload does not
+  // file it twice. The worker serves this page from cache with any query, so it works offline too.
+  const SHARE_KEYS = ['title', 'text', 'url'];
+  function importShare() {
+    const q = new URLSearchParams(location.search);
+    if (!SHARE_KEYS.some((k) => q.has(k))) return false;
+    const parts = SHARE_KEYS.map((k) => (q.get(k) || '').trim()).filter(Boolean);
+    SHARE_KEYS.forEach((k) => q.delete(k));
+    const rest = q.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : ''));
+    // Share sheets often repeat themselves (the link inside the text, the title inside the text): keep
+    // a part only if no other part already carries it.
+    const keep = parts.filter((p, i) => !parts.some((o, j) => j !== i && o.includes(p) && (o.length > p.length || j < i)));
+    if (!keep.length) return false;
+    const t = ensureThread({ id: 'self', name: 'Note to self', kind: 'self', color: 'cool', tag: 'only you, only here' });
+    t.messages.push(msg('me', keep.join('\n').slice(0, MAX_TEXT)));
+    save(); open(t.id); toast('Saved to Note to self'); buzz(12);
+    return true;
+  }
+
   /* ---------- Misc ---------- */
   let toastTimer;
   function toast(text) { toastEl.textContent = text; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastEl.hidden = true), 2200); }
@@ -494,6 +516,6 @@
   seed(); applyMe();
   if (wide.matches) { paneChat.hidden = false; paneChat.classList.add('idle'); }
   renderList();
-  if (!importNote()) { const id = location.hash.slice(1); if (id && state.threads.some((t) => t.id === id)) open(id); }
+  if (!importShare() && !importNote()) { const id = location.hash.slice(1); if (id && state.threads.some((t) => t.id === id)) open(id); }
   window.addEventListener('hashchange', () => { importNote(); });
 })();
