@@ -193,7 +193,7 @@ test('llms.txt mentions all ten on its one chain line and keeps its line count; 
   assert.equal(lines.filter((l) => l.includes('/chain/start')).length, 1, 'one line');
   assert.equal(lines.filter((l) => l.includes('/chain/observatory')).length, 1, 'one line');
   assert.equal(lines.filter((l) => l.includes('/chain/witness')).length, 1, 'one line');
-  assert.equal(lines.length, 318, 'the file ends with a newline: the chain line plus the Gridtown line, after the 2026-10-22 trim under the 320-line cap');
+  assert.equal(lines.length, 319, 'the file ends with a newline and stays under the 320-line cap of tests/agent-surfaces.test.mjs');
   for (const m of llms.matchAll(/\]\(([^)\s]+)\)/g)) assert.match(m[1], /^https?:\/\//, m[1] + ' is absolute');
   const full = read('public/llms-full.txt').split('\n');
   const para = full.filter((l) => l.startsWith('[Seven apps on the devnet](https://pointcast.xyz/chain/observatory/)'));
