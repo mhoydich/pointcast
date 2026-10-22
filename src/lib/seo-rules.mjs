@@ -19,6 +19,8 @@ export const NOINDEX_PATHS = new Set([
   '/r/board/',
   // The launchpad case study stays unlisted until its case-06 entry ships.
   '/case-studies/launchpad/',
+  // /battle-log reads one browser's localStorage; the indexable archive is /battle.
+  '/battle-log/',
 ]);
 
 // Sources with permanent redirects in public/_redirects or Pages middleware.
