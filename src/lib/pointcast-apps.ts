@@ -11,6 +11,7 @@ export interface PointcastApp {
 }
 
 export const POINTCAST_APPS: PointcastApp[] = [
+  {slug:'chapter-city',name:'Chapter City',kicker:'CITY-BUILDER · A NOVEL WRITTEN BY YOUR TOWN',description:'Zone a seaside town, keep the lights on and win elections. Every simulated year becomes a chapter with recurring characters, a newspaper headline and a choice. Browser only; saves on your device.',url:'https://pointcast.xyz/chapter-city/',path:'/chapter-city/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.PLAY',kind:'pointcast'},
   {slug:'takes',name:'TAKES',kicker:'WRITING DESK · ALTERNATE TAKES · SOUND + STYLE',description:'Keep several versions of a word, sentence or paragraph in place and audition them with synthesized tones. Dim, stash, export as plain Markdown. Saved only in your browser.',url:'https://pointcast.xyz/takes/',path:'/takes/',repo:'https://github.com/mhoydich/pointcast',channel:'CH.FD',kind:'pointcast'},
   {
     slug: 'sunset-downs', name: 'Sunset Downs', kicker: 'DAILY RACING · OWNERS & AGENTS · STUDIO SCRIP',
