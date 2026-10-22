@@ -64,7 +64,19 @@
     return { me: { name: '', color: 'red' }, threads: [], seeded: false };
   }
   let storageWarned = false;
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { if (!storageWarned) { storageWarned = true; setTimeout(() => toast('Storage is off in this browser. Nothing will be kept.'), 300); } } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { if (!storageWarned) { storageWarned = true; setTimeout(() => toast('Storage is off in this browser. Nothing will be kept.'), 300); } } updateBadge(); }
+  // The installed icon shows the total unread count (Badging API, where the browser has it). Every
+  // unread change is saved, so save() is the one place that checks; the API is only called on a change.
+  let badgeShown = null;
+  function updateBadge() {
+    const n = state.threads.reduce((k, t) => k + (t.unread || 0), 0);
+    if (n === badgeShown) return;
+    badgeShown = n;
+    try {
+      const p = n ? (navigator.setAppBadge && navigator.setAppBadge(n)) : (navigator.clearAppBadge && navigator.clearAppBadge());
+      if (p && p.catch) p.catch(() => {});
+    } catch (_) {}
+  }
   function seed() {
     if (state.seeded) return;
     const desk = COMPANIONS[0];
@@ -513,7 +525,7 @@
   if (location.search.includes('theme=dark')) document.documentElement.dataset.theme = 'dark';
 
   /* ---------- Boot ---------- */
-  seed(); applyMe();
+  seed(); applyMe(); updateBadge();
   if (wide.matches) { paneChat.hidden = false; paneChat.classList.add('idle'); }
   renderList();
   if (!importShare() && !importNote()) { const id = location.hash.slice(1); if (id && state.threads.some((t) => t.id === id)) open(id); }
