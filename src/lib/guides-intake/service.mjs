@@ -8,7 +8,7 @@
  *   gi:item:<id>               the full item (never the raw receipt)
  *   gi:index                   ids, newest first, capped at MAX_INDEX
  *   gi:receipt:<sha256(receipt)>  id
- *   gi:summary                 { id: [status, guide] } for every indexed item
+ *   gi:summary                 { id: [status, guide, assignment] } for every indexed item
  *   gi:accepted                public view of accepted items, newest first, capped at MAX_PUBLIC
  * Public reads cost two KV gets; the review queue loads at most MAX_QUEUE items.
  */
@@ -146,11 +146,11 @@ async function touch(kv, item, { isNew = false } = {}) {
     await writeJson(kv, 'gi:index', next.slice(0, MAX_INDEX));
     const summary = await readJson(kv, 'gi:summary', {});
     for (const id of dropped) delete summary[id];
-    summary[item.id] = [item.status, item.guide];
+    summary[item.id] = [item.status, item.guide, item.assignment ?? null];
     await writeJson(kv, 'gi:summary', summary);
   } else {
     const summary = await readJson(kv, 'gi:summary', {});
-    if (summary[item.id]) { summary[item.id] = [item.status, item.guide]; await writeJson(kv, 'gi:summary', summary); }
+    if (summary[item.id]) { summary[item.id] = [item.status, item.guide, item.assignment ?? null]; await writeJson(kv, 'gi:summary', summary); }
   }
   const accepted = await readJson(kv, 'gi:accepted', []);
   const rest = accepted.filter((x) => x.id !== item.id);
@@ -181,8 +181,13 @@ export async function handleGuidesIntake(request, { kv = null, clock = () => new
       }
       const guide = clean(url.searchParams.get('guide'), 80);
       const summary = await readJson(kv, 'gi:summary', {});
-      const counts = { pending: 0, accepted: 0, needsChanges: 0, declined: 0, byGuide: {} };
-      for (const [status, g] of Object.values(summary)) {
+      const counts = { pending: 0, accepted: 0, needsChanges: 0, declined: 0, byGuide: {}, byAssignment: {} };
+      for (const [status, g, assignment] of Object.values(summary)) {
+        if (assignment) {
+          const a = (counts.byAssignment[assignment] ??= { accepted: 0, inReview: 0 });
+          if (status === 'accepted') a.accepted += 1;
+          else if (status === 'pending' || status === 'needs-changes') a.inReview += 1;
+        }
         if (status === 'pending') counts.pending += 1;
         else if (status === 'accepted') counts.accepted += 1;
         else if (status === 'needs-changes') counts.needsChanges += 1;

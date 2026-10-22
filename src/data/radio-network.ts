@@ -8,6 +8,8 @@
  * general and must be checked with an engineer or counsel before acting.
  */
 
+import { RADIO_ASSIGNMENTS, RADIO_ASSIGNMENTS_STATUS } from './radio-roles';
+
 export const RADIO_BASE = 'https://pointcast.xyz/radio-network';
 export const RADIO_PUBLISHED = '2026-10-20';
 export const RADIO_STATUS = 'plan published; nothing on air; every seat open';
@@ -261,6 +263,25 @@ export const DECISIONS = [
   'Whether to pay for an LPFM channel study now or wait for an FCC window.',
 ];
 
+export function stationBySlug(slug: string) {
+  return STATIONS.find((s) => s.slug === slug);
+}
+
+/** Seats every station needs filled. All open. */
+export const STATION_SEATS = [
+  { seat: 'Station desk lead', does: 'Runs the station: schedule, sources, local underwriters, the corrections log.' },
+  { seat: 'Host of the first show', does: 'Owns the first local show and records the pilot episodes.' },
+  { seat: 'Producer', does: 'Books guests, keeps the story list, edits and publishes.' },
+  { seat: 'Volunteers', does: 'Board operation, neighbor voices, calendar, game scores.' },
+];
+
+export function stationLaunch(phase: number) {
+  if (phase === 0) return 'Launches first, as a weekly show and stream, with the Phase 0 kit.';
+  if (phase === 1) return 'Starts as local windows on the Radio El Segundo stream, then gets its own stream in Phase 2.';
+  if (phase === 2) return 'Gets its own stream when the shared newsroom and automation are running.';
+  return 'Joins in year two, once the network is on at least one real radio signal.';
+}
+
 export const CONNECTIONS = [
   { label: 'Mike Hoydich Radio', url: 'https://pointcast.xyz/station', note: 'The existing one-listener station. Its log and sleeves can become a Listener Shift show.' },
   { label: 'Morning Edition', url: 'https://pointcast.xyz/morning', note: 'The 6:45 AM paper becomes the morning drive script.' },
@@ -276,7 +297,9 @@ export function buildRadioManifest() {
     published: RADIO_PUBLISHED,
     url: RADIO_BASE,
     json: `${RADIO_BASE}.json`,
-    stations: STATIONS,
+    stations: STATIONS.map((s) => ({ ...s, url: `${RADIO_BASE}/${s.slug}`, json: `${RADIO_BASE}/${s.slug}.json` })),
+    stationSeats: STATION_SEATS,
+    launchKit: { url: `${RADIO_BASE}/kit`, json: `${RADIO_BASE}/kit.json` },
     hourClock: CLOCK,
     weeklySchedule: WEEK,
     distributionPaths: PATHS,
@@ -287,6 +310,12 @@ export function buildRadioManifest() {
     revenue: MONEY,
     openDecisions: DECISIONS,
     connections: CONNECTIONS,
+    projectAssignments: {
+      url: `${RADIO_BASE}#assignments`,
+      status: RADIO_ASSIGNMENTS_STATUS,
+      jobsBoard: 'https://pointcast.xyz/jobs/?project=radio',
+      assignments: RADIO_ASSIGNMENTS.map((a) => ({ ...a, url: `${RADIO_BASE}#${a.id}` })),
+    },
     disclaimer:
       'A plan. Nothing is on air, no frequency is held, no host is appointed. Regulatory notes are general; check with a broadcast engineer or counsel before acting.',
     agentProtocol: {

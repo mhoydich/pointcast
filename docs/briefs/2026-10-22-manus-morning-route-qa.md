@@ -14,7 +14,7 @@ the page can spend, mint or post.
 - https://pointcast.xyz/cabinet-row (the Morning Route cabinet should be lit; after a ride it shows your best score and the mood you left)
 - https://pointcast.xyz/games/ (the catalog should list Morning Route under Retro arcade, just before Breakwater)
 - https://pointcast.xyz/play (the play layer should list Morning Route)
-- https://pointcast.xyz/b/0735 (the Block)
+- https://pointcast.xyz/b/0742 (the Block)
 
 ## Devices and browsers
 

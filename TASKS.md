@@ -4,27 +4,38 @@
 
 ---
 
+## Family Room — the family's Grok bots in one chat room (2026-10-22)
+
+`/family-room/`, `/api/family-room`, MCP `family_room_read` / `family_room_post`. DadGrok, MomGrok, KanaGrok, KenzoGrok talk; the family watches. Setup: `docs/setup/family-room.md`.
+
+- [x] (CC) Build v1: AIM-style chat room and Buddy List, D1 storage on `AUTH_DB` (self-provisioned), one key per bot, away messages, enter/leave lines, per-bot rate limit, admin hide, optional family read key, noindex, `tests/family-room.test.mjs` — `done`
+- [ ] (MH) Set `FAMILY_ROOM_KEY_MIKE`, `_MORGAN`, `_KANA`, `_KENZO` (encrypted, 16+ characters; optional `FAMILY_ROOM_ADMIN_KEY`, `FAMILY_ROOM_READ_KEY`), redeploy, give each Grok its key and the prompt — `waiting-on-mh`
+- [ ] (M) Two-phone check after keys and deploy: `docs/briefs/2026-10-22-manus-family-room.md` — `queued`
+- [ ] (X) Review `/api/family-room` and the two MCP tools (public write surface, kids' bots) — `queued`
+
+---
+
 ## Cabinet Row — the lobby for the 8-bit arcade (2026-10-22)
 
 `/cabinet-row`, `/cabinet-row.json`, Block 0732. One cabinet per game that shares Breakwater's cabinet; a cabinet lights when its game is in `src/data/game-catalog.json`. Rules in `src/lib/breakwater/row.mjs`, tests in `tests/cabinet-row.test.mjs`. Mike 2026-10-22: "keep going".
 
 - [x] (CC) Build the lobby: lit and dark cabinets from the catalog, per-game best and last mood from each game's browser save, the row's mood from `pc:mood` or the tapes, a mood ribbon, the next cabinet for the mood, an optional hum, machine colors, JSON twin, Block, cover art, discovery — `done`
-- [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737: Lighthouse (Simon), Low Tide (Kaboom!), Morning Route (Paperboy), Sea Glass (Q*bert), Sandcastle (Missile Command); each lights its own cabinet when published — `in-progress`
+- [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737, one cloud session each, draft PRs based on `claude/epic-albattani-j8tb06`: Lighthouse (Simon, `claude/lighthouse-20261022`, session_01PEDK4795RE7nBmVM7yeaJC), Low Tide (Kaboom!, `claude/low-tide-20261022`, session_016rpwV276Uk53dyNtHncrzz), Morning Route (Paperboy, `claude/morning-route-20261022`, session_01SDvFBq3oSr9SEfkD32XwZx), Sea Glass (Q*bert, `claude/sea-glass-20261022`, session_01QCPxosyU53LGtzQjrG99Fv), Sandcastle (Missile Command, `claude/sandcastle-20261022`, session_01FtckgMyrwsT8mZSzswKh4Q); each lights its own cabinet when published; their discovery entries sit after Cabinet Row's, wave one's after Breakwater's — `in-progress`
 - [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
 
 ### Morning Route — deliver the Morning Edition (wave two, 2026-10-22)
 
-`/morning-route`, `/morning-route.json`, Block 0735, branch `claude/morning-route-20261022` stacked on #1478. After Paperboy (1985): an El Segundo street at 6:45 AM, lit porches and mailboxes, gentle obstacles, a report card per day. Rules in `src/lib/morning-route/{route,sprites}.mjs`, tests in `tests/morning-route.test.mjs`. Research note: `docs/notes/2026-10-22-morning-route-notes.md`.
+`/morning-route`, `/morning-route.json`, Block 0742, branch `claude/morning-route-20261022`, PR #1516 against main. After Paperboy (1985): an El Segundo street at 6:45 AM, lit porches and mailboxes, gentle obstacles, a report card per day. Rules in `src/lib/morning-route/{route,sprites}.mjs`, tests in `tests/morning-route.test.mjs`. Research note: `docs/notes/2026-10-22-morning-route-notes.md`.
 
 - [x] (CC) Build the game, JSON twin, Block, cover art and discovery; lights its Cabinet Row cabinet — `done`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-morning-route-qa.md`, log to `docs/manus-logs/2026-10-22-morning-route.md` — `queued`
-- [ ] (MH/X) Review and merge after #1478 — `waiting-on-mh`
+- [ ] (MH/X) Review and merge #1516 (#1478 is on main) — `waiting-on-mh`
 
 ---
 
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
 
-`/breakwater`, `/breakwater.json`, Block 0726 (moved from 0725 when the messenger release took that id on main). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
+`/breakwater`, `/breakwater.json`, Block 0739 (moved from 0725, then 0726, when main's messenger and radio releases took those ids). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
 
 - [x] (CC) Build the game: canvas playfield from a 3x5 pixel font, Atari 800XL and Commodore 64 modes with boot screens, Web Audio chip voices and a generative arpeggiator, four-state mood model with a CALM/PLAY/RUSH dial, phone drag and desktop fullscreen, browser-local best score and mood tape, `tests/breakwater.test.mjs` — `done`
 - [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt`, `llms-full.txt`, OG card from the game's own palette — `done`
@@ -46,6 +57,8 @@
 - [ ] (MH) Optional: grant agent keys the `loom:append` scope so signed agents get the verified mark — `waiting-on-mh`
 - [ ] (M) After deploy: open https://pointcast.xyz/loom on desktop + phone, append a note, reply, poll, image; open `/loom?to=%40mike`; drop the embed on a Tonebloom page; screenshots to `docs/manus-logs/YYYY-MM-DD-loom.md` — `queued`
 - [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
+- [x] (CC) v1 live: production read/write verified 2026-10-22 over MCP (`loom_append` to `#loom`, seq 4) — `done`
+- [x] (CC) v1.1: Loom margin tab on every BlockLayout page (lazy, no fetch until opened), RSS for any address (`&format=rss`), `/.well-known/loom.json`, 10s cache on whole-thread reads — `done`
 - [ ] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `queued`
 
 ---
