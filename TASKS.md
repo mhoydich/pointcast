@@ -4,6 +4,19 @@
 
 ---
 
+## Gridtown — a browser-first city builder (2026-10-22)
+
+`/gridtown`, `/gridtown.json`, Block 0742 (0725–0741 went to the messengers, radio, the 8-bit arcade and Guides while this was open). Mike's directive: "a mobile first, web first, well, nah, browser first, sim city, learn, ship, build."
+
+- [x] (CC) Build v1: pure engine `src/lib/gridtown.mjs` (seeded terrain, seven tools, RCI demand, power capacity, smoke and land value, monthly ledger, happiness, twelve lessons, save repair), canvas page with touch, drag and keyboard, browser-local save, JSON export/import, `?seed=` map links, JSON twin, `tests/gridtown.test.mjs` — `done`
+- [x] (CC) Wire Apps shelf, Play layer, `agents.json`, sitemap-discovery, `llms.txt`, `llms-full.txt` — `done`
+- [x] (CC) v1.1: tile inspector, town titles, `#city=` whole-city links with a read-only visit mode, phone share sheet, one-row phone tool strip, game-library entry with offline download — `done`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-gridtown-qa.md` (swipe vs hold-to-paint, inspector, city links, keyboard-only play); results to `docs/manus-logs/2026-10-22-gridtown-qa.md` — `queued`
+- [ ] (X) Review the demand and happiness formulas for degenerate loops (oscillation, runaway funds), the `decodeCity` parser (public input from links) and the canvas input on iOS Safari — `queued`
+- [ ] (MH) Decide whether Gridtown gets a homepage registry card after it is verified live — `waiting-on-mh`
+
+---
+
 ## PMM (PointCast Mobile Messaging) and Nouns Messenger (2026-10-22)
 
 `/pmm/`, `/pmm/brand/`, `/nouns-messenger/`, `/api/pmm/signal`, `/api/pmm/turn`, `/api/pmm/stat`. Brief: `docs/prd/pointcast-mobile-messaging.md`. Mike 2026-10-22: "make pointcast mobile messaging, pmm ... you are now assigned as product manager, set goals", then "keep going, multitasking be the product manager publish, ship". CI: `.github/workflows/pmm-check.yml` (`npm run test:pmm`).
