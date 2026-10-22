@@ -58,6 +58,14 @@
   async function main() {
   const { parseSettleHash, toMutez, formatTez, returnLink } = await import(/* @vite-ignore */ SETTLE_JS);
   const $ = (id) => document.getElementById(id);
+  const tellPmm = (h) => new Promise((resolve) => {
+    if (!('BroadcastChannel' in window)) return resolve(false);
+    const bc = new BroadcastChannel('pmm'), id = Math.random().toString(36).slice(2);
+    const done = (ok) => { clearTimeout(t); bc.close(); resolve(ok); };
+    const t = setTimeout(() => done(false), 900);
+    bc.addEventListener('message', (e) => { if (e.data && e.data.t === 'settled-ok' && e.data.id === id) done(true); });
+    bc.postMessage({ t: 'settled', h, id });
+  });
   const req = parseSettleHash(location.hash);
   const say = (text, bad = false) => { $('prompt').textContent = text; $('prompt').classList.toggle('err', bad); };
 
@@ -88,7 +96,9 @@
       const back = returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to });
       say(`SENT ${formatTez(mutez)} TEZ. WAITING FOR THE BLOCK…`);
       $('back').innerHTML = '';
-      const a = document.createElement('a'); a.href = back; a.textContent = 'RUN: BACK TO PMM AND TELL YOUR FRIEND'; $('back').append(a);
+      // Hand the result to the PMM tab still connected to this friend; fall back to a link into PMM.
+      const told = await tellPmm(back.split('#')[1]);
+      const a = document.createElement('a'); a.href = back; a.textContent = told ? 'PMM HAS IT. YOU CAN CLOSE THIS TAB.' : 'RUN: BACK TO PMM AND TELL YOUR FRIEND'; $('back').append(a);
       const tzkt = document.createElement('a'); tzkt.href = `https://tzkt.io/${op.opHash}`; tzkt.textContent = 'see it on tzkt'; tzkt.rel = 'noopener'; tzkt.target = '_blank';
       $('back').append(document.createElement('br'), tzkt);
       op.confirmation(1).then(() => say(`READY. ${formatTez(mutez)} TEZ LANDED.`)).catch(() => say('SENT. THE BLOCK IS SLOW; PMM CHECKS IT AGAIN LATER.'));

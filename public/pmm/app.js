@@ -47,6 +47,8 @@
   const iceWithTimeout = (ms) => Promise.race([refreshIce(false), new Promise((r) => setTimeout(() => r(ice), ms))]);
   const CHUNK = 16 * 1024;
   const $ = (id) => document.getElementById(id);
+  // A Tezos implicit account (tz1 to tz4). The friend's rides in the hello as xtz; tz there is the time zone.
+  const TEZ_RE = /^tz[1-4][1-9A-HJ-NP-Za-km-z]{33}$/;
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   const now = () => Date.now();
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -315,6 +317,11 @@
     if (m.t === 'answer' && typeof m.a === 'string' && /^[A-Za-z0-9_-]+$/.test(m.a) && pending?.role === 'host' && !pending.answered) {
       bc.postMessage({ t: 'answer-ok', id: m.id }); $('answer-input').value = m.a; $('form-answer').requestSubmit(); try { window.focus(); } catch (_) {}
     }
+    // A finished /pmm/settle tab: only the tab holding a live line to that friend takes it, so the claim is sent once.
+    const fp = typeof m.h === 'string' && /(?:^|&)f=([0-9a-f]{16})/.exec(m.h);
+    if (m.t === 'settled' && fp && peer && peer.friend && peer.friend.id.startsWith(fp[1])) {
+      bc.postMessage({ t: 'settled-ok', id: m.id }); paidReturn(m.h); try { window.focus(); } catch (_) {}
+    }
   });
   function handOff(a) {
     return new Promise((resolve) => {
@@ -442,7 +449,7 @@
     dc.addEventListener('close', closed);
     pc.addEventListener('connectionstatechange', () => { if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) closed(); });
   }
-  function helloBody() { return { name: myName(), pub: state.me.pub, id: state.me.id, mood: state.me.mood, tz: tzName(), place: state.me.place || '', ts: now() }; }
+  function helloBody() { return { name: myName(), pub: state.me.pub, id: state.me.id, mood: state.me.mood, tz: tzName(), xtz: TEZ_RE.test(state.me.tzAddr || '') ? state.me.tzAddr : '', place: state.me.place || '', ts: now() }; }
   // The hello is signed over the other side's DTLS fingerprint, so it only proves identity for this one connection.
   async function sendHello() {
     if (!peer || peer.dc.readyState !== 'open') return false;
@@ -488,7 +495,7 @@
         if (!peer || !proven) { toast('HELLO NOT SIGNED. LINE CLOSED.'); return hangup(); }
         let fr = friendById(id);
         if (!fr) { fr = { id, name: 'FRIEND', pub: m.pub, created: now(), messages: [], ledger: [], trusted: false, unread: 0 }; state.friends.push(fr); }
-        fr.name = str(m.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.place = str(m.place, 32); fr.lastSeen = now();
+        fr.name = str(m.name, 24).replace(/[✓✔☑✅]/g, '').trim() || fr.name; fr.mood = validMood(m.mood); fr.tz = str(m.tz, 64); fr.xtz = TEZ_RE.test(m.xtz || '') ? m.xtz : ''; fr.place = str(m.place, 32); fr.lastSeen = now();
         const first = !peer.friend; peer.friend = fr; save();
         if (first) { openChat(fr.id); pushSys(fr, `RUN · connected ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`); flushQueue(fr); send({ t: 'ping', ts: now() }); setTimeout(statPath, 300); }
         else if (current === fr) renderChat();
@@ -703,7 +710,7 @@
   });
 
   // TAB ledger
-  $('btn-tab').addEventListener('click', () => { if (!current) return; $('tab-balance').textContent = balanceLine(current); $('btn-settle').hidden = !(balanceOf(current) < 0 && /^tz[1-4]\w{33}$/.test(current.tz || '')); openSheet('sheet-tab'); setTimeout(() => $('tab-amount').focus(), 50); });
+  $('btn-tab').addEventListener('click', () => { if (!current) return; $('tab-balance').textContent = balanceLine(current); $('btn-settle').hidden = !(balanceOf(current) < 0 && TEZ_RE.test(current.xtz || '')); openSheet('sheet-tab'); setTimeout(() => $('tab-amount').focus(), 50); });
   const balanceLine = (f) => { const b = balanceOf(f); return b === 0 ? 'EVEN.' : b > 0 ? `${f.name.toUpperCase()} OWES YOU ${b.toFixed(2)}` : `YOU OWE ${f.name.toUpperCase()} ${(-b).toFixed(2)}`; };
   $('form-tab').addEventListener('submit', async (e) => {
     e.preventDefault(); if (!current) return; const f = current; const amount = Math.round(Number($('tab-amount').value) * 100) / 100; if (!(amount > 0)) return;
@@ -775,7 +782,7 @@
   const settleJs = () => import('/pmm/settle.js');
   $('btn-settle').addEventListener('click', async () => {
     const f = current; if (!f) return;
-    try { const s = await settleJs(); location.href = s.settleLink({ to: f.tz, note: 'PMM TAB', friend: f.id.slice(0, 16) }); } catch (_) { toast('?SETTLE ERROR'); }
+    try { const s = await settleJs(); const link = s.settleLink({ to: f.xtz, note: 'PMM TAB', friend: f.id.slice(0, 16) }); closeSheets(); if (!window.open(link, '_blank')) location.href = link; } catch (_) { toast('?SETTLE ERROR'); } // a new tab keeps this line open
   });
   async function paidReturn(h) {
     let s; try { s = await settleJs(); } catch (_) { return toast('?SETTLE ERROR'); }
