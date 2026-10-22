@@ -62,7 +62,8 @@
     try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && Array.isArray(s.threads)) return s; } catch (_) {}
     return { me: { name: '', color: 'red' }, threads: [], seeded: false };
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {} }
+  let storageWarned = false;
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) { if (!storageWarned) { storageWarned = true; setTimeout(() => toast('Storage is off in this browser. Nothing will be kept.'), 300); } } }
   function seed() {
     if (state.seeded) return;
     const desk = COMPANIONS[0];
@@ -80,7 +81,7 @@
     return t;
   }
   function peerThread(name) {
-    const id = 'p-' + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const id = 'p-' + encodeURIComponent(name.trim().toLowerCase().replace(/\s+/g, ' '));
     const palette = ['blue', 'green', 'yellow', 'pink'];
     return ensureThread({ id, name: name.trim(), kind: 'peer', color: palette[name.length % palette.length], tag: 'notes passed by link' });
   }
@@ -165,7 +166,7 @@
   /* ---------- Navigation ---------- */
   function open(id) {
     current = state.threads.find((t) => t.id === id); if (!current) return;
-    current.unread = 0; save();
+    current.unread = 0; save(); typingEl.hidden = true;
     app.dataset.view = 'chat'; paneChat.hidden = false; paneChat.classList.remove('idle');
     if (!wide.matches) paneList.hidden = true;
     renderThread(); renderList();
@@ -173,9 +174,9 @@
     if (wide.matches) input.focus({ preventScroll: true });
   }
   function back() {
-    current = null; app.dataset.view = 'list'; paneList.hidden = false;
+    current = null; typingEl.hidden = true; app.dataset.view = 'list'; paneList.hidden = false;
     if (wide.matches) paneChat.classList.add('idle'); else paneChat.hidden = true;
-    history.replaceState(null, '', location.pathname);
+    history.replaceState(null, '', location.pathname + location.search);
     renderList();
   }
   $('btn-back').addEventListener('click', back);
@@ -210,7 +211,7 @@
       setTimeout(() => { if (current === t) { typingEl.hidden = false; scrollBottom(); } }, typeAt - readAt);
       setTimeout(() => {
         typingEl.hidden = true;
-        t.messages.push(msg('them', text)); if (current !== t) t.unread = (t.unread || 0) + 1; save();
+        t.messages.push(msg('them', text)); if (current !== t) t.unread = (t.unread || 0) + 1; save(); $('announce').textContent = `${t.name}: ${text}`;
         if (current === t) { renderThread(); buzz(12); } renderList();
       }, doneAt - readAt);
     }, readAt));
@@ -219,10 +220,12 @@
   /* ---------- Reactions: long-press or right-click ---------- */
   let pressTimer = null, trayTarget = null;
   function attachPress(li, m) {
-    const start = (e) => { clearTimeout(pressTimer); pressTimer = setTimeout(() => { buzz(15); showTray(li, m); }, 420); };
+    let x0 = 0, y0 = 0;
+    const start = (e) => { x0 = e.clientX; y0 = e.clientY; clearTimeout(pressTimer); pressTimer = setTimeout(() => { buzz(15); showTray(li, m); }, 420); };
     const cancel = () => clearTimeout(pressTimer);
     li.addEventListener('pointerdown', start);
-    ['pointerup', 'pointerleave', 'pointercancel', 'pointermove'].forEach((ev) => li.addEventListener(ev, cancel));
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => li.addEventListener(ev, cancel));
+    li.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); });
     li.addEventListener('contextmenu', (e) => { e.preventDefault(); showTray(li, m); });
   }
   function showTray(li, m) {
@@ -243,7 +246,7 @@
   scrollEl.addEventListener('scroll', hideTray, { passive: true });
 
   /* ---------- Sheets ---------- */
-  function openSheet(id) { sheetWrap.hidden = false; for (const s of sheetWrap.querySelectorAll('.sheet')) s.hidden = s.id !== id; const f = $(id).querySelector('input, button'); f && setTimeout(() => f.focus({ preventScroll: true }), 50); }
+  function openSheet(id) { sheetWrap.hidden = false; for (const s of sheetWrap.querySelectorAll('.sheet')) s.hidden = s.id !== id; const f = $(id).querySelector('button'); f && setTimeout(() => f.focus({ preventScroll: true }), 50); }
   function closeSheets() { sheetWrap.hidden = true; }
   $('scrim').addEventListener('click', closeSheets);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeSheets(); hideTray(); } });
@@ -314,7 +317,7 @@
       if (p.color && COLORS[p.color]) t.color = p.color;
       const text = p.text.slice(0, 2000);
       if (!t.messages.some((x) => x.text === text && Math.abs(x.ts - (p.ts || 0)) < 1000)) { t.messages.push(msg('them', text, Number(p.ts) || now())); t.unread = (t.unread || 0) + 1; }
-      save(); history.replaceState(null, '', location.pathname); open(t.id); toast(`Note from ${t.name}`); buzz(20);
+      save(); history.replaceState(null, '', location.pathname + location.search); open(t.id); toast(`Note from ${t.name}`); buzz(20);
       return true;
     } catch (_) { return false; }
   }

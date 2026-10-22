@@ -4,6 +4,7 @@
 **Director:** Mike, El Segundo.
 **Status:** v0 shipping in this PR at `/pmm/`. Brand at `/pmm/brand/`.
 **Review:** Mike asked for no review round on this one. Codex is not requested.
+**Source:** Mike, in chat, 2026-10-22, early morning Pacific: "peer to peer, fast, easy load, easy auth, file sharing, streaming, transact, trust, emotion, mood, informative, current, style, leading, researched, intelligent, measured, easy to connect with friends, make pointcast mobile messaging, pmm, create a brand very atari commodore, and no review you are now assigned as product manager, set goals", and earlier the same morning, "signed mike in el segundo". The goal column below quotes those words; the sign-off on the pages is what he asked for.
 
 ## One line
 
@@ -22,18 +23,18 @@ when they sent it. That is the part AIM never carried and the part worth
 carrying when the reader on the other end might be a person, or might be
 something much smarter than a person.
 
-## Goals, in Mike's words, with how we measure them
+## Goals, in Mike's words (quoted from the source above), with how we measure them
 
 | Mike said | What PMM does | Measure (v0 target) |
 | --- | --- | --- |
-| peer to peer | WebRTC data channels, phone to phone. The server only passes the handshake, then leaves. | 100% of message bytes travel peer to peer. Verified in the LINK panel. |
+| peer to peer | WebRTC data channels, phone to phone. The server only passes the handshake, then leaves. Both phones also ask a public STUN server for their address during the handshake. | No relay is configured in v0, so there is no server path for message bytes. The LINK panel shows the ICE path and any relayed bytes (none until a TURN relay exists). |
 | fast | No framework, no bundle, no fonts. One HTML, one CSS, one JS. | First paint under 1 s on 4G. Message round trip shown live; target under 150 ms on the same Wi-Fi. |
 | easy load | Open the link. That is the install. Add to Home Screen is optional. | Under 60 KB on the wire for the whole app. |
 | easy auth | No account. First run mints a keypair on the phone. Your sigil is your ID. | Zero sign-up fields. Time from first open to first message under 30 s. |
 | file sharing | Photos and files over the data channel, chunked, with progress. | A 5 MB photo lands in under 10 s on the same Wi-Fi. |
 | streaming | Live typing: your friend watches the sentence form. Voice notes record and send. | Draft updates under 100 ms behind the keystroke. |
 | transact | TAB: a shared ledger between two friends. Running balance, settle button. No money moves yet. | Every tab shows on both phones with the same balance. |
-| trust | Every message is signed. Sigils are compared out of band, then marked VERIFIED. Forged or replayed messages show UNVERIFIED. | 0 unverified messages shown as verified. |
+| trust | The hello that opens a line is signed over the line's own DTLS fingerprint, so a replayed public key cannot pose as a friend. Text and tabs are signed to the recipient; files, reactions and moods ride the authenticated line unsigned. Sigils are compared out of band, then marked VERIFIED. | 0 forged hellos accepted; 0 unverified texts or tabs shown as signed. |
 | emotion, mood | Eight moods. Yours and theirs blend into the room's atmosphere. | Mood on 100% of messages. |
 | informative, current | A ticker from `/now.json` in the lobby: what is new in town right now. | Ticker shows the latest four blocks within 60 s of publish. |
 | style, leading | The Atari and Commodore brand. READY. prompts, Fuji stripes, PETSCII sigils. | A stranger can name the two references unprompted. |
@@ -45,7 +46,9 @@ something much smarter than a person.
 
 - `/pmm/`: lobby, friends, chat, SI line, settings. Mobile-first, installable.
 - Identity: ECDSA P-256 keypair in the browser. Sigil = four PETSCII glyphs and
-  eight hex from the public key hash. Messages signed, verified on receipt.
+  eight hex from the public key hash. The hello is signed over the connection's
+  DTLS fingerprint; texts and tabs are signed to the recipient and verified on
+  receipt. Received files are typed from an allowlist, never from the sender.
 - Connect: `LOAD "FRIEND"` makes a code and a link. Friend opens the link.
   Handshake goes through `/api/pmm/signal` when the `PMM_KV` binding exists;
   otherwise paste mode (two links, no server) does the same job.
@@ -63,7 +66,7 @@ something much smarter than a person.
 | Setup, LOAD pressed to RUN, code flow | 0.3 to 1.7 s |
 | Round trip over the data channel | 1 ms (same machine) |
 | 2 MB file, phone to phone | under 3 s |
-| Bytes through a server after the handshake | 0 |
+| Relayed bytes after the handshake | 0 (no relay configured) |
 | Console errors across the full run, both modes | 0 |
 
 Paste mode link for a full offer: 621 characters. Real-device numbers come from the Manus brief.
@@ -106,8 +109,9 @@ as the SI line:
 
 1. **Send atmosphere, not just text.** A superintelligence can infer a great
    deal from very little, so give it the little that matters: the words, the
-   mood you chose, the hour where you are, the place, who you are (the sigil)
-   and proof it was you (the signature). The packet is the message.
+   mood you chose, the hour where you are, the place, who you are (the sigil,
+   with the public key in the packet) and a signature the reader can check
+   against it. The packet is the message.
 2. **Say the true small thing.** The Desk inbox already carries Mike's pings.
    The SI line adds the atmosphere and keeps the habit: one honest line, sent
    from the phone, at the moment it is true.
