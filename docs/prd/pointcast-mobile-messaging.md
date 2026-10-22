@@ -73,9 +73,10 @@ Paste mode link for a full offer: 621 characters. Real-device numbers come from 
 
 ## Not in v0, and why
 
-- **TURN relay.** Without one, two phones behind strict carrier NAT cannot
-  connect. STUN only in v0. Measure the failure rate first, then decide on a
-  Cloudflare TURN key. Target v0.2.
+- **TURN relay, on by configuration.** The code path shipped in v0.2: `/api/pmm/turn`
+  mints a four-hour Cloudflare Calls credential for the site's own pages and the phones add the relay.
+  Until the two secrets are set on the Pages project (Manus brief, step 1b) the
+  app is STUN-only and two phones behind strict carrier NAT cannot connect.
 - **Group chats.** Two people first. Mesh for three to five is v0.3.
 - **Money.** TAB is a ledger, not a payment. Tezos settle is v0.4, after the
   wallet code in `/messages` is reused rather than copied.
@@ -135,8 +136,8 @@ as the SI line:
 
 ## Roadmap
 
-- v0.1: key export and import, friend list persistence across reinstall.
-- v0.2: TURN via Cloudflare Calls after measuring failures.
+- v0.1 (shipped): key export and import; the export now carries friends (names, keys, trust), never messages.
+- v0.2 (shipped, off until configured): TURN via Cloudflare Calls; friends ride along in the key export.
 - v0.3: three to five person mesh.
 - v0.4: Tezos settle for TAB, reusing `/messages` wallet code.
 - v0.5: thin push relay for "your friend is on".
