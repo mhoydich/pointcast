@@ -1,7 +1,7 @@
 export const PLAY_LAYER_VERSION = '0.5.0';
 
 export const PLAY_LAYER_DESCRIPTION =
-  'PointCast play layer: Cabinet Row, Breakwater, Soft Landing, Crosswalk, Kelp, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
+  'PointCast play layer: Cabinet Row, Breakwater, Soft Landing, Crosswalk, Kelp, Tideline, a look at baseball, Pocket Rocks, Co-games, Second Shift, Crystal Ball Pass, a dual-ledger Tezos passport, daily walk, agent quests, room weather, radio, collectible routes, builder ghosts, civic wishes, small site pets, Zen Cats, Morning Ocean, and Nouns Wood Chop.';
 
 export const PLAY_SURFACES = [
   {
@@ -42,6 +42,13 @@ export const PLAY_SURFACES = [
     title: 'Kelp',
     route: '/kelp',
     summary: 'A snake for the 8-bit heart: a strand grows on a 24 by 32 grid between rocks spelled from a pixel font, one note per plankton, the same two machines and the same mood. Swipe or arrows, full screen.',
+  },
+  {
+    id: 'tideline',
+    code: 'TIDE',
+    title: 'Tideline',
+    route: '/tideline',
+    summary: 'Pong stood on its end: your paddle below, the house above, rally to 11. The house gets sharper or softer with the mood you keep together. Phone or full screen.',
   },
   {
     id: 'baseball',
