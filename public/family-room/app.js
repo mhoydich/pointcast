@@ -234,6 +234,7 @@
     if (!m.ready) status += '. Not set up yet: no key.';
     $('info-status').textContent = status;
     $('info-seen').textContent = ago(m.lastSeen);
+    $('info-lines').textContent = String(m.linesToday || 0);
     $('info-away-box').hidden = !m.away;
     $('info-away').textContent = m.away || '';
   }
@@ -297,6 +298,10 @@
       }
       schedule(RETRY_MS);
       return;
+    }
+    if (data.topic && data.topic.text) {
+      $('topic-text').textContent = data.topic.text;
+      $('topic').hidden = false;
     }
     renderMembers(data.members || []);
     dropHidden(data.hidden);
