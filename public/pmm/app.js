@@ -537,7 +537,11 @@
         if (!peer || peer.friend !== f) return;
         if (!ok) { pushSys(f, 'A PAYMENT CLAIM ARRIVED UNSIGNED. IGNORED.'); return; }
         if (!state.me.tzAddr || m.note !== state.me.tzAddr) { pushSys(f, 'THEY PAID A TEZ ADDRESS THAT IS NOT YOURS ON THIS PHONE. NOT COUNTED.'); return; }
-        f.paid = f.paid || []; f.paid.push({ id, op: str(m.text, 51), to: m.note, mutez: Number(m.amount) || 0, state: 'checking' });
+        // The paying address rides in the signed dir slot and must be the one this friend shared with you.
+        if (!f.xtz || m.dir !== f.xtz) { pushSys(f, 'THEY PAID FROM AN ADDRESS THEY NEVER SHARED WITH YOU. NOT COUNTED.'); return; }
+        const op = str(m.text, 51);
+        if (state.friends.some((x) => (x.paid || []).some((y) => y.op === op && y.state !== 'failed'))) { pushSys(f, 'THAT PAYMENT WAS ALREADY COUNTED. NOT COUNTED AGAIN.'); return; }
+        f.paid = f.paid || []; f.paid.push({ id, op, to: m.note, from: m.dir, mutez: Number(m.amount) || 0, state: 'checking' });
         f.messages.push({ id: 'paid-' + id, from: 'them', kind: 'paid', text: 'THEY SAY THEY PAID IN TEZ · CHECKING THE CHAIN', ts: Number(m.ts) || now(), verified: true, status: 'read' });
         save(); if (current === f) renderChat(); checkPaid(f);
         break;
@@ -782,7 +786,8 @@
   const settleJs = () => import('/pmm/settle.js');
   $('btn-settle').addEventListener('click', async () => {
     const f = current; if (!f) return;
-    try { const s = await settleJs(); const link = s.settleLink({ to: f.xtz, note: 'PMM TAB', friend: f.id.slice(0, 16) }); closeSheets(); if (!window.open(link, '_blank')) location.href = link; } catch (_) { toast('?SETTLE ERROR'); } // a new tab keeps this line open
+    if (!TEZ_RE.test(state.me.tzAddr || '')) { toast('SET YOUR OWN TEZ ADDRESS FIRST. THEY ONLY COUNT A PAYMENT FROM IT.'); return; }
+    try { const s = await settleJs(); const link = s.settleLink({ to: f.xtz, note: 'PMM TAB', friend: f.id.slice(0, 16), me: state.me.tzAddr }); closeSheets(); if (!window.open(link, '_blank')) location.href = link; } catch (_) { toast('?SETTLE ERROR'); } // a new tab keeps this line open
   });
   async function paidReturn(h) {
     let s; try { s = await settleJs(); } catch (_) { return toast('?SETTLE ERROR'); }
@@ -790,8 +795,9 @@
     const f = r.friend && state.friends.find((x) => x.id.startsWith(r.friend));
     if (!f) return toast('PAID, BUT THAT FRIEND IS NOT ON THIS PHONE');
     f.paid = f.paid || []; if (f.paid.some((x) => x.op === r.op)) return openChat(f.id);
-    const wire = { t: 'paid', id: uid(), to: f.id, ts: now(), text: r.op, amount: r.mutez, note: r.to }; wire.sig = await sign(wire);
-    f.paid.push({ id: wire.id, op: r.op, to: r.to, mutez: r.mutez, state: 'checking', mine: true });
+    if (r.from !== state.me.tzAddr) return toast('THAT PAYMENT CAME FROM AN ADDRESS YOU HAVE NOT SHARED. SET IT FIRST.');
+    const wire = { t: 'paid', id: uid(), to: f.id, ts: now(), text: r.op, amount: r.mutez, note: r.to, dir: r.from }; wire.sig = await sign(wire);
+    f.paid.push({ id: wire.id, op: r.op, to: r.to, from: r.from, mutez: r.mutez, state: 'checking', mine: true });
     f.messages.push({ id: 'paid-' + wire.id, from: 'me', kind: 'paid', wire, text: `PAID ${s.formatTez(r.mutez)} TEZ · ${r.op.slice(0, 10)}… · CHECKING THE CHAIN`, ts: wire.ts, status: sendTo(f, wire) ? 'sent' : 'queued', mood: state.me.mood });
     save(); openChat(f.id); checkPaid(f);
   }
@@ -799,7 +805,7 @@
   async function checkPaid(f) {
     let s; try { s = await settleJs(); } catch (_) { return; }
     for (const p of (f.paid || []).filter((x) => x.state === 'checking')) {
-      const v = await s.verifyOnChain(p.op, { to: p.to, mutez: p.mutez });
+      const v = await s.verifyOnChain(p.op, { to: p.to, mutez: p.mutez, from: p.from });
       if (v.ok) {
         p.state = 'ok'; (f.ledger || []).forEach((x) => (x.settled = true));
         pushSys(f, `TAB SETTLED ON CHAIN · ${s.formatTez(v.mutez)} TEZ · BLOCK ${v.level ?? '?'}`);

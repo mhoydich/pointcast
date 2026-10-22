@@ -91,9 +91,11 @@
       say('APPROVE IN YOUR WALLET…');
       const from = await tezos.connectKukaiForSigning();
       if (from === req.to) throw new Error('that is your own address');
+      // Your friend only counts a payment from the address you shared with them in PMM.
+      if (req.me && from !== req.me) throw new Error(`connect the wallet for ${req.me}, the address you shared in PMM (this one is ${from})`);
       const toolkit = await tezos.tezosClient();
       const op = await toolkit.wallet.transfer({ to: req.to, amount: mutez, mutez: true }).send();
-      const back = returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to });
+      const back = returnLink({ opHash: op.opHash, friend: req.friend, mutez, to: req.to, from });
       say(`SENT ${formatTez(mutez)} TEZ. WAITING FOR THE BLOCK…`);
       $('back').innerHTML = '';
       // Hand the result to the PMM tab still connected to this friend; fall back to a link into PMM.
