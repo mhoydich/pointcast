@@ -17,7 +17,7 @@
 const VERSION = 'nouns-messenger-2026-10-22b';
 // Hash of the files in FILES, kept current by tests/pmm-offline-digest.test.mjs. Any change to it
 // changes this file's bytes, so browsers reinstall the worker and re-precache at once. No VERSION bump needed.
-const DIGEST = '48d02b8b2c6af41d';
+const DIGEST = '8208a557b307512e';
 const FILES = [
   '/nouns-messenger/',
   '/nouns-messenger/style.css',

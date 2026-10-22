@@ -14,38 +14,37 @@
   const buzz = (ms = 8) => { if (!gestured) return; try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} };
 
   /* ---------- Companions: scripted, run on the phone, never a person ----------
-     `live` topics answer from the town's public JSON (LIVE, below); `replies` are the scripted
-     lines, and the offline fallback when that data does not answer or is over a day old. */
+     The first matching line in `replies` answers, so order is precedence. A third element names a
+     LIVE reader (below): that topic answers from the town's public JSON, and its scripted lines are
+     the offline fallback when the data does not answer or is too old. */
   const COMPANIONS = [
     { id: 'desk', name: 'Noggles Desk', color: 'yellow', tag: 'the front desk of the town',
       hello: 'gm. This is the Desk. Ask me where things are in town, or just say hi.',
-      live: [[/\b(new|newest|latest|news|happening|today|now)\b/i, 'desk']],
       replies: [
-        [/\b(new|newest|latest|news|happening|today|now)\b/i, ['New things land on pointcast.xyz/now/ all day. Start there.']],
         [/\b(gm|good morning|morning)\b/i, ['gm gm ⌐◨-◨', 'gm. Coffee is on at the Desk. What are we doing today?']],
         [/\b(hi|hello|hey|yo)\b/i, ['hey. Desk here. What do you need?', 'hi! Say "map" and I will point you around.']],
         [/\b(map|where|town|around)\b/i, ['Town map: pointcast.xyz/town/ \nThe Desk, the courts, the beach, the Yard. Pick one and I will walk you over.']],
         [/\b(weather|sky|sun|rain|fog)\b/i, ['For the real sky over El Segundo, the Air page has it live: pointcast.xyz/air/ \nI only know what I was told this morning: marine layer till ten, then blue.']],
         [/\b(noun|nouns|noggles)\b/i, ['Nouns are one per day, forever. Noggles are the glasses. You are wearing them right now, in a way.', 'Nouns Money is down the hall: pointcast.xyz/nouns-money/']],
         [/\b(thanks|thank you|ty)\b/i, ['any time ⌐◨-◨', 'that is what a Desk is for.']],
+        [/\b(?:what(?:['’]?s| is) (?:new|happening|up)|newest|latest|news)\b/i, ['New things land on pointcast.xyz/now/ all day. Start there.'], 'desk'],
         [/\?$/, ['Good question. I would try the Desk page: pointcast.xyz/desk/ \nThe house agents there answer with real numbers.', 'I am a scripted Noun, so I will answer like one: probably yes, check the town.']],
       ],
       fallback: ['noted.', 'ok ⌐◨-◨', 'I wrote that on the Desk pad. Anything else?', 'say "map" if you get lost.'] },
     { id: 'tides', name: 'Tide Noun', color: 'blue', tag: 'lives at the bottom of Grand Ave',
       hello: 'Tide Noun. I sit where Grand Ave meets the sand. Ask about the water.',
-      live: [[/\b(sunset|golden)\b/i, 'sunset'], [/\b(surf|waves?|swell|tides?|water|beach|ocean|cold|wetsuit|temp)\b/i, 'water']],
       replies: [
-        [/\b(surf|waves?|swell|tides?|water|beach|ocean)\b/i, ['Live water is on the Air page: pointcast.xyz/air/ \nMy own report: it looks like the ocean. It usually does.', 'Low tide is the best walking tide. Go south toward the jetty and back.']],
-        [/\b(cold|wetsuit|temp)\b/i, ['Bring the 3/2 in October. The water does not care that it is still sunny.']],
+        [/\b(surf|waves?|swell|tides?|water|beach|ocean)\b/i, ['Live water is on the Air page: pointcast.xyz/air/ \nMy own report: it looks like the ocean. It usually does.', 'Low tide is the best walking tide. Go south toward the jetty and back.'], 'water'],
+        [/\b(cold|wetsuit|temp)\b/i, ['Bring the 3/2 in October. The water does not care that it is still sunny.'], 'water'],
         [/\b(gm|hi|hello|hey)\b/i, ['gm from the sand 🌊', 'hey. The sand is cold until about eleven.']],
-        [/\b(sunset|golden)\b/i, ['Sunset from the top of the dune, not the bottom. Trust me on this one.']],
+        [/\b(sunset|golden)\b/i, ['Sunset from the top of the dune, not the bottom. Trust me on this one.'], 'sunset'],
       ],
       fallback: ['🌊', 'the water heard that.', 'I will tell the pelicans.', 'come down later, the light gets good.'] },
     { id: 'courts', name: 'Court Noun', color: 'green', tag: 'rec park pickleball, paddle in hand',
       hello: 'Court Noun checking in from Rec Park. Games to eleven, win by two.',
-      live: [[/\b(pickle|pickleball|courts?|wait|busy|crowded|open play)\b/i, 'courts']],
       replies: [
-        [/\b(pickle|pickleball|courts?|paddle|dink|game|wait|busy|crowded)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.']],
+        [/\b(pickle|pickleball|courts?|wait|busy|crowded|open play)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.'], 'courts'],
+        [/\b(paddle|dink|game)\b/i, ['Courts: pointcast.xyz/pickleball/home/ \nOpen play fills by 8. Bring your own balls and a good attitude.', 'Third shot drop. Then be patient. That is the whole sport.']],
         [/\b(score|win|lost|lose)\b/i, ['Nobody remembers the score. Everybody remembers who called the line.']],
         [/\b(gm|hi|hello|hey)\b/i, ['hey hey. Paddle up?', 'gm. Courts are dry.']],
         [/\b(tired|sore|hurt)\b/i, ['Stretch the calves. Walk the lot once. Then one more game.']],
@@ -53,11 +52,10 @@
       fallback: ['got it. see you at the fence.', '🏓', 'next game is yours.', 'dinks only until you say otherwise.'] },
     { id: 'night', name: 'Night Shift', color: 'pink', tag: 'quiet hours, after the town closes',
       hello: 'Night Shift. Everyone else is asleep. Leave the thing you were going to forget.',
-      live: [[/\b(moon|stars?|sky|dark)\b/i, 'moon'], [/\b(sun|sunrise|dawn|daylight)\b/i, 'sun']],
       replies: [
-        [/\b(moon|stars?|sky|dark)\b/i, ['Step outside and look up. That is the whole moon app.']],
-        [/\b(sun|sunrise|dawn|daylight)\b/i, ['The sun comes up over the hill whether you watch or not. Sleep until it does.']],
         [/\b(remember|remind|forget|todo|note)\b/i, ['Written down. I keep it here on your phone, nowhere else.', 'Saved. I do not sync, so it is only here, which is the point.']],
+        [/\b(moon|stars?|sky)\b/i, ['Step outside and look up. That is the whole moon app.'], 'moon'],
+        [/\b(sun|sunrise|daylight)\b/i, ['The sun comes up over the hill whether you watch or not. Sleep until it does.'], 'sun'],
         [/\b(tired|sleep|late|night)\b/i, ['Go to bed. The town will still be here.', 'The marine layer is already coming in. Good sign to stop.']],
         [/\b(idea|what if|maybe)\b/i, ['That is a morning idea wearing night clothes. Leave it and look again at 7.']],
         [/\b(gm|hi|hello|hey)\b/i, ['hey. quiet in here.', 'hi. I am mostly just a lamp that listens.']],
@@ -68,8 +66,8 @@
   /* ---------- Live town data ----------
      Fixed, same-origin GETs to pointcast.xyz's public JSON: no query, no cookies, nothing the
      visitor typed. Every live answer names its endpoint and its age; numbers are only ever
-     quoted from the response. A failed fetch, or data over a day old, throws Offline and the
-     companion says its scripted line instead. The service worker never caches /api/ or /now.json. */
+     quoted from the response. A failed fetch, or /api/ data over a day old, throws Offline and
+     the companion says its scripted line instead. The service worker never caches /api/ or /now.json. */
   const DAY = 86400000, LA = 'America/Los_Angeles';
   class Offline extends Error {}
   const site = (u) => String(u).replace(/^https:\/\//, '');
@@ -122,7 +120,10 @@
   const LIVE = {
     // Noggles Desk: the newest blocks, from the snapshot the site builds on every deploy.
     async desk() {
-      const d = await getJSON('/now.json'), age = ageOf(d && d.generatedAt, '/now.json');
+      // /now.json is built on each deploy, so its age is the age of what the site serves: said, never cut off.
+      const d = await getJSON('/now.json'), built = Date.parse((d && d.generatedAt) || '');
+      if (!built) throw new Offline('/now.json had no timestamp');
+      const age = now() - built;
       const items = (Array.isArray(d.latest) ? d.latest : []).filter((b) => b && b.title && b.url).slice(0, 3);
       if (!items.length) throw new Offline('/now.json had no blocks');
       const lines = items.map((b) => `• ${b.title}${Date.parse(b.timestamp) ? ' (' + ago(now() - Date.parse(b.timestamp)) + ')' : ''}\n  ${site(b.url)}`);
@@ -138,8 +139,14 @@
         if (next.length) parts.push(next.map((p, i) => `${i ? 'then ' : 'Next '}${p.kind} ${num(p.heightFt)} ft at ${hhmm(p.time)}`).join(', ') + `.\nfrom /api/tide (NOAA predictions, ${t.stationName}), ${ago(now() - Date.parse(t.fetchedAt))}`);
       }
       if (sea.status === 'fulfilled') {
-        const m = sea.value.m, got = ['water-level', 'wave-height', 'wave-period', 'water-temperature'].filter((id) => m[id]).map((id) => reading(m[id]));
-        if (got.length) parts.push(got.join('\n') + '\nfrom ' + sea.value.path + ' (NOAA, buoy 46221)');
+        // Each reading under the station it came from (the tide gauge and the buoy are different places).
+        const byPlace = new Map();
+        for (const id of ['water-level', 'wave-height', 'wave-period', 'water-temperature']) {
+          const r = sea.value.m[id]; if (!r) continue;
+          const place = r.location || r.source || 'unnamed station';
+          byPlace.set(place, (byPlace.get(place) || []).concat(reading(r)));
+        }
+        if (byPlace.size) parts.push([...byPlace].map(([place, lines]) => `${place}:\n${lines.join('\n')}`).join('\n') + '\nfrom ' + sea.value.path + ' (NOAA)');
       }
       if (!parts.length) throw new Offline(sea.status === 'rejected' && tide.status === 'rejected' ? '/api/tide and /api/observatory/pacific did not answer' : 'the water data had nothing fresh');
       return parts.join('\n\n');
@@ -389,9 +396,8 @@
     const hit = bot.replies.find(([re]) => re.test(m.text));
     const pool = hit ? hit[1] : bot.fallback;
     const scripted = pool[Math.floor(Math.random() * pool.length)];
-    const live = (bot.live || []).find(([re]) => re.test(m.text));
     // A live topic starts its fetch now, while the companion "reads"; it says the scripted line if that fails.
-    const answer = live ? LIVE[live[1]]().catch((e) => `${scripted}\n(offline: ${e instanceof Offline ? e.message : 'the town data did not make sense'}, so that is my scripted line.)`) : Promise.resolve(scripted);
+    const answer = hit && hit[2] ? LIVE[hit[2]]().catch((e) => `${scripted}\n(offline: ${e instanceof Offline ? e.message : 'the town data did not make sense'}, so that is my scripted line.)`) : Promise.resolve(scripted);
     clearTimeout(timers.get(t.id));
     const readAt = 500 + Math.random() * 600, typeAt = readAt + 400;
     timers.set(t.id, setTimeout(() => {
