@@ -25,7 +25,7 @@
 
 - [x] (CC) Build the game: stroked-polygon vector look in the machine's text color on a night field, the shared 3x5 font, both machines and boot screens, a two-note heartbeat that quickens with the mood plus noise shot and crunch split, the shared mood model (hit = paddle, small log = brick, collision = loss, field clear = wave) driving log speed, shield and flare rate, tempo and scale, glow and palette, sparks, log count and the bird; touch zones with an on-canvas hint, keys on desktop; `src/lib/driftwood/{field,sim}.mjs` headless, `tests/driftwood.test.mjs` with a simulated field clear — `done`
 - [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (one clause, line count held), `llms-full.txt`, OG card from the game's own palette and log generator — `done`
-- [ ] (X) Review the shadow-blur glow cost in RUSH on a slow phone, the torus collision approximation at the edges, and the `?debug` hook — `queued`
+- [ ] (X) Review the RUSH glow latch (off after three slow readings), the seam-aware torus (fixed period, nearest-image collisions, drawn on both sides), and the `?debug` hook — `queued`
 - [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-driftwood-qa.md`, log to `docs/manus-logs/2026-10-22-driftwood.md` — `queued`
 - [ ] (MH) Decide whether Driftwood joins Breakwater in the six-card home GameRail — `waiting-on-mh`
 - [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/driftwood`, `/driftwood.json` and `driftwood` in `/agents.json` — `handoff`

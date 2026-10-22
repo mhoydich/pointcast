@@ -101,18 +101,49 @@ export function integrate(body, dt) {
   return body;
 }
 
+const mod = (v, n) => ((v % n) + n) % n;
+
 /**
- * Torus wrap: a body that has left the rectangle by more than its own radius
- * comes back in on the other side. Returns true when it wrapped.
+ * Torus wrap with one fixed period for every body, so the seam lines up for
+ * everything on the water: a center that leaves on one side comes back on
+ * the other. A body near an edge is drawn on both sides (see `images`), and
+ * collisions test the nearest wrapped image (see `nearestImage`). Returns
+ * true when it wrapped.
  */
 export function wrap(body, bounds) {
-  const r = body.radius || 0;
-  const w = bounds.x1 - bounds.x0 + 2 * r;
-  const h = bounds.y1 - bounds.y0 + 2 * r;
-  let did = false;
-  if (body.x < bounds.x0 - r) { body.x += w; did = true; } else if (body.x > bounds.x1 + r) { body.x -= w; did = true; }
-  if (body.y < bounds.y0 - r) { body.y += h; did = true; } else if (body.y > bounds.y1 + r) { body.y -= h; did = true; }
+  const w = bounds.x1 - bounds.x0, h = bounds.y1 - bounds.y0;
+  const x = bounds.x0 + mod(body.x - bounds.x0, w);
+  const y = bounds.y0 + mod(body.y - bounds.y0, h);
+  const did = x !== body.x || y !== body.y;
+  body.x = x; body.y = y;
   return did;
+}
+
+/** Shortest offset from (ax, ay) to (bx, by) on the torus. */
+export function torusDelta(ax, ay, bx, by, bounds) {
+  const w = bounds.x1 - bounds.x0, h = bounds.y1 - bounds.y0;
+  let dx = bx - ax, dy = by - ay;
+  dx -= w * Math.round(dx / w);
+  dy -= h * Math.round(dy / h);
+  return { dx, dy };
+}
+
+/** The wrapped copy of point (px, py) nearest to `body`, for collision tests across the seam. */
+export function nearestImage(px, py, body, bounds) {
+  if (!bounds) return [px, py];
+  const { dx, dy } = torusDelta(body.x, body.y, px, py, bounds);
+  return [body.x + dx, body.y + dy];
+}
+
+/** Offsets at which a body of radius `r` must be drawn so it shows on both sides of a seam. */
+export function images(body, bounds, r = body.radius || 0) {
+  const w = bounds.x1 - bounds.x0, h = bounds.y1 - bounds.y0;
+  const xs = [0], ys = [0];
+  if (body.x - r < bounds.x0) xs.push(w); else if (body.x + r > bounds.x1) xs.push(-w);
+  if (body.y - r < bounds.y0) ys.push(h); else if (body.y + r > bounds.y1) ys.push(-h);
+  const out = [];
+  for (const ox of xs) for (const oy of ys) out.push([ox, oy]);
+  return out;
 }
 
 export function rotateBoat(boat, dir, dt, rate = BOAT.turnRate) {
@@ -228,7 +259,9 @@ export function buildField(n, bounds, boat, rng, { extra = 0, clearance = 70 } =
     for (let tries = 0; tries < 24; tries += 1) {
       x = lerp(bounds.x0, bounds.x1, rng());
       y = lerp(bounds.y0, bounds.y1, rng());
-      if (!boat || Math.hypot(x - boat.x, y - boat.y) >= clearance) break;
+      if (!boat) break;
+      const { dx, dy } = torusDelta(boat.x, boat.y, x, y, bounds);
+      if (Math.hypot(dx, dy) >= clearance) break;
     }
     const a = rng() * TAU;
     const sp = speed * (0.7 + rng() * 0.6);

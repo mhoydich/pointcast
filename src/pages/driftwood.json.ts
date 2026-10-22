@@ -24,7 +24,7 @@ const payload = {
   },
   game: {
     genre: 'multidirectional shooter / asteroids',
-    field: { width: FIELD_W, top: FIELD_TOP, height: [FIELD_H_MIN, FIELD_H_MAX], wraps: 'every edge', friction: 0 },
+    field: { width: FIELD_W, top: FIELD_TOP, height: [FIELD_H_MIN, FIELD_H_MAX], wraps: 'every edge, one period for every body; bodies near an edge are drawn on both sides and collide across the seam', friction: 0 },
     scoring: {
       big: SIZES.big.points, medium: SIZES.medium.points, small: SIZES.small.points, tideBird: BIRD_POINTS, fieldClear: FIELD_CLEAR_POINTS,
       rule: 'The arcade numbers: 20, 50, 100 for the three log sizes, 200 for the bird. Big splits into two medium, medium into two small, small is cleared.',
@@ -71,7 +71,7 @@ const payload = {
     'Scores, settings and the mood tape are browser-local only.',
     'The machine palettes are tributes chosen to read on modern displays, not chip-accurate output.',
     'The boot screens are affectionate tributes with PointCast wording, not copies of the original ROM text.',
-    'Objects wrap only once fully off the water, so a collision across an edge is approximate.',
+    'The RUSH glow turns itself off for the session after three slow frame-rate readings in a row, so a slow phone keeps its frame rate.',
   ],
   links: {
     human: 'https://pointcast.xyz/driftwood',

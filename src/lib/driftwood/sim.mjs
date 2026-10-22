@@ -28,7 +28,7 @@
 import {
   FIELD_W, FIELD_TOP, FIELD_H_MIN, SIZES, BOAT, FLARE, FIELD_CLEAR_POINTS,
   makeRng, makeBoat, makeFlare, makeBird, buildField, splitLog, scoreFor, fieldSpeed,
-  integrate, wrap, rotateBoat, thrustBoat, circleHitsPolygon, circlesTouch, pointInPolygon, worldPoly,
+  integrate, wrap, rotateBoat, thrustBoat, circleHitsPolygon, circlesTouch, pointInPolygon, worldPoly, nearestImage, torusDelta,
 } from './field.mjs';
 
 export const DEFAULT_TUNING = Object.freeze({ logSpeed: 1, fireRate: 1, shield: 1.6, extraLogs: 0, bird: 14 });
@@ -82,10 +82,16 @@ function layField(sim, index, extra) {
   emit(sim, 'field', { index, count: sim.logs.length });
 }
 
-/** The page calls this when the stage grows or shrinks; the water keeps everything on it. */
+/**
+ * The page calls this when the stage grows or shrinks (a rotation, fullscreen).
+ * Everything is wrapped back onto the water at once; a shrink that may have
+ * moved a log onto the boat gives the boat a moment of shield.
+ */
 export function resizeSim(sim, height) {
+  const before = sim.bounds.y1;
   sim.bounds.y1 = Math.max(sim.bounds.y0 + 120, height);
   for (const b of [sim.boat, ...sim.logs, ...sim.flares]) wrap(b, sim.bounds);
+  if (sim.bounds.y1 < before && sim.boat.alive) sim.boat.shield = Math.max(sim.boat.shield, 1);
 }
 
 function spawnSparks(sim, x, y, n, speed) {
@@ -191,8 +197,10 @@ export function stepSim(sim, dt, input = {}, tuning = DEFAULT_TUNING) {
     wrap(f, bounds);
     for (const log of sim.logs) {
       if (!log.alive) continue;
-      if (Math.hypot(f.x - log.x, f.y - log.y) > log.radius + 1) continue;
-      if (pointInPolygon(f.x, f.y, worldPoly(log))) { f.alive = false; breakLog(sim, log, f, t); break; }
+      // Test the flare's wrapped copy nearest the log, so a hit across the seam counts.
+      const [fx, fy] = nearestImage(f.x, f.y, log, bounds);
+      if (Math.hypot(fx - log.x, fy - log.y) > log.radius + 1) continue;
+      if (pointInPolygon(fx, fy, worldPoly(log))) { f.alive = false; breakLog(sim, log, f, t); break; }
     }
     if (f.alive && sim.bird && sim.bird.alive && circlesTouch(f, sim.bird)) {
       f.alive = false; sim.bird.alive = false; sim.hits += 1;
@@ -225,9 +233,15 @@ export function stepSim(sim, dt, input = {}, tuning = DEFAULT_TUNING) {
   // ---- collisions with the boat ----
   if (boat.alive && boat.shield <= 0) {
     let struck = null;
-    for (const log of sim.logs) { if (circleHitsPolygon(boat.x, boat.y, boat.radius, log)) { struck = log; break; } }
+    for (const log of sim.logs) {
+      const [bx, by] = nearestImage(boat.x, boat.y, log, bounds);
+      if (circleHitsPolygon(bx, by, boat.radius, log)) { struck = log; break; }
+    }
     if (struck) { breakLog(sim, struck, null, t); sim.logs = sim.logs.filter((l) => l.alive); loseBoat(sim, 'log'); }
-    else if (sim.bird && circlesTouch(boat, sim.bird)) { sim.bird = null; loseBoat(sim, 'bird'); }
+    else if (sim.bird) {
+      const { dx, dy } = torusDelta(sim.bird.x, sim.bird.y, boat.x, boat.y, bounds);
+      if (Math.hypot(dx, dy) < boat.radius + sim.bird.radius) { sim.bird = null; loseBoat(sim, 'bird'); }
+    }
   }
 
   // ---- sparks ----

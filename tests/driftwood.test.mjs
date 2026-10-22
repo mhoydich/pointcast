@@ -4,6 +4,7 @@ import {
   FIELD_W, FIELD_TOP, SIZES, SIZE_IDS, BIRD_POINTS, BOAT_POLY, BIRD_POLY, BOAT, FLARE,
   makeRng, logPolygon, makeLog, makeBoat, integrate, wrap, rotateBoat, thrustBoat, makeFlare,
   worldPoly, pointInPolygon, circleHitsPolygon, scoreFor, fieldSpeed, fieldCount, splitLog, buildField, makeBird,
+  torusDelta, nearestImage, images,
 } from '../src/lib/driftwood/field.mjs';
 import { createSim, stepSim, resizeSim, simSummary, DEFAULT_TUNING, EXTRA_BOAT_EVERY } from '../src/lib/driftwood/sim.mjs';
 
@@ -42,10 +43,12 @@ test('motion: no friction, and the field wraps at every edge', () => {
   integrate(log, 1); integrate(log, 1);
   assert.equal(log.x, 70); assert.equal(log.y, 20);
   assert.equal(log.vx, 30); assert.equal(log.vy, -40);
-  log.x = -log.radius - 1; assert.ok(wrap(log, BOUNDS)); assert.ok(log.x > FIELD_W);
-  log.x = FIELD_W + log.radius + 1; assert.ok(wrap(log, BOUNDS)); assert.ok(log.x < 0);
-  log.y = FIELD_TOP - log.radius - 1; assert.ok(wrap(log, BOUNDS)); assert.ok(log.y > 384);
-  log.y = 384 + log.radius + 1; assert.ok(wrap(log, BOUNDS)); assert.ok(log.y < FIELD_TOP);
+  // One fixed period for every body: the seam lines up for everything on the water.
+  log.x = -1; assert.ok(wrap(log, BOUNDS)); assert.equal(log.x, FIELD_W - 1);
+  log.x = FIELD_W + 1; assert.ok(wrap(log, BOUNDS)); assert.equal(log.x, 1);
+  log.x = 100; log.y = FIELD_TOP - 2; assert.ok(wrap(log, BOUNDS)); assert.equal(log.y, 382);
+  log.y = 386; assert.ok(wrap(log, BOUNDS)); assert.equal(log.y, FIELD_TOP + 2);
+  log.x = -FIELD_W * 2 - 5; wrap(log, BOUNDS); assert.equal(log.x, FIELD_W - 5, 'even a long step lands on the water');
   log.x = 100; log.y = 100; assert.equal(wrap(log, BOUNDS), false);
   const boat = makeBoat(144, 200);
   thrustBoat(boat, 0.5);
@@ -78,7 +81,6 @@ test('collision: point and circle against a transformed polygon', () => {
   assert.ok(pointInPolygon(100, 100, poly), 'the center is inside');
   assert.equal(pointInPolygon(100 + SIZES.big.radius + 2, 100, poly), false);
   assert.ok(circleHitsPolygon(100, 100, 5, log));
-  assert.ok(circleHitsPolygon(100 + SIZES.big.radius + 2, 100, 5, log) === false || true, 'edge cases depend on the outline');
   assert.equal(circleHitsPolygon(100 + SIZES.big.radius + 30, 100, 5, log), false, 'well clear');
   const bird = makeBird(BOUNDS, rng);
   assert.ok(bird.x < 0 || bird.x > FIELD_W, 'the bird enters from off the field');
@@ -274,4 +276,48 @@ test('sim: DRIFT slows the logs live and RUSH adds logs to the next field; resiz
   assert.equal(s.logs, rush.logs.length);
   assert.equal(s.big + s.medium + s.small, s.logs);
   assert.equal(EXTRA_BOAT_EVERY, 2000);
+});
+
+test('seam: offsets, images and collisions work across the wrap', () => {
+  assert.deepEqual(torusDelta(2, 100, FIELD_W - 2, 100, BOUNDS), { dx: -4, dy: 0 });
+  assert.deepEqual(torusDelta(100, FIELD_TOP + 1, 100, 383, BOUNDS), { dx: 0, dy: -2 });
+  const rng = makeRng(13);
+  const log = makeLog('big', FIELD_W - 4, 200, 0, 0, rng);
+  log.angle = 0;
+  assert.equal(images(log, BOUNDS).length, 2, 'a log on the right edge is also drawn on the left');
+  const corner = makeLog('small', 2, FIELD_TOP + 2, 0, 0, rng);
+  assert.equal(images(corner, BOUNDS).length, 4, 'a corner log is drawn four times');
+  assert.equal(images(makeLog('small', 144, 200, 0, 0, rng), BOUNDS).length, 1);
+  assert.deepEqual(nearestImage(1, 200, log, BOUNDS), [FIELD_W + 1, 200]);
+  // A flare just past the left edge hits a log centered on the right edge.
+  const sim = createSim({ seed: 13 });
+  sim.logs = [log];
+  sim.boat.x = 144; sim.boat.y = 300;
+  sim.flares = [{ kind: 'flare', x: 1, y: 200, vx: 0, vy: 0, life: 1, radius: 1, alive: true }];
+  assert.ok(stepSim(sim, 1 / 60).some((e) => e.type === 'hit' && e.size === 'big'), 'the hit counts across the seam');
+  // A boat just inside the left edge collides with a log centered on the right edge.
+  const crash = createSim({ seed: 14 });
+  const edgeLog = makeLog('big', FIELD_W - 3, 200, 0, 0, crash.rng);
+  crash.logs = [edgeLog];
+  crash.boat.x = 3; crash.boat.y = 200; crash.boat.shield = 0;
+  assert.ok(stepSim(crash, 1 / 60).some((e) => e.type === 'loss'), 'the collision counts across the seam');
+  // Field layout clearance is measured on the torus too.
+  const boat = makeBoat(2, FIELD_TOP + 2);
+  for (const l of buildField(5, BOUNDS, boat, makeRng(77))) {
+    const { dx, dy } = torusDelta(boat.x, boat.y, l.x, l.y, BOUNDS);
+    assert.ok(Math.hypot(dx, dy) >= 70);
+  }
+});
+
+test('sim: a shrink mid-field wraps everything back and shields the boat for a moment', () => {
+  const sim = createSim({ seed: 41, height: 480 });
+  sim.boat.shield = 0;
+  for (const l of sim.logs) l.y = 470;
+  resizeSim(sim, 384);
+  for (const l of sim.logs) assert.ok(l.y >= FIELD_TOP && l.y < 384);
+  assert.ok(sim.boat.shield >= 1);
+  const grow = createSim({ seed: 41 });
+  grow.boat.shield = 0;
+  resizeSim(grow, 480);
+  assert.equal(grow.boat.shield, 0, 'growing the water costs nothing');
 });
