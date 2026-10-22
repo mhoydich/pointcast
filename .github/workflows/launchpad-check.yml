@@ -1,0 +1,53 @@
+name: Launchpad case study checks
+on:
+  pull_request:
+    paths:
+      - 'src/lib/launchpad/**'
+      - 'src/data/launchpad/**'
+      - 'src/pages/case-studies/launchpad.astro'
+      - 'src/pages/case-studies/launchpad.json.ts'
+      - 'src/pages/case-studies/launchpad/**'
+      - 'src/components/launchpad/**'
+      - 'src/styles/launchpad.css'
+      - 'src/lib/nouns-money/honest-copy.mjs'
+      - 'src/lib/nouns-money/chain-copy.mjs'
+      - 'src/lib/currency-builder/primitives.mjs'
+      - 'src/lib/currency-builder/type.mjs'
+      - 'src/data/currency-builder/glyphs.json'
+      - 'src/lib/nouns-parts.mjs'
+      - 'public/images/nouns-money/source-100/provenance.json'
+      - 'public/images/nouns-money/source-100/sources/official-image-data.json'
+      - 'src/lib/seo-rules.mjs'
+      - 'src/layouts/BlockLayout.astro'
+      - 'functions/_middleware.ts'
+      - 'tests/nouns-money-workshop-middleware.test.mjs'
+      - 'tests/launchpad-*.test.mjs'
+      - 'tests/seo-discoverability.test.mjs'
+      - '.github/workflows/launchpad-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: launchpad-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/launchpad-*.test.mjs
+      - name: The page is a paper room at the edge (no session bridge or global transforms)
+        run: node --test tests/nouns-money-workshop-middleware.test.mjs
+      - run: npm run build:bare
+      - name: Copy checks on the built page
+        run: node --test tests/launchpad-honesty.test.mjs
+      - run: node --test tests/seo-discoverability.test.mjs
+      - run: npm run audit:agents

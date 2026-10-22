@@ -4,6 +4,19 @@
 
 ---
 
+## The Loom — append to anything (2026-10-20)
+
+`/loom`, `/api/loom`, `/loom.json`, `/loom/embed.js`, MCP `loom_read` / `loom_append`. Public federated message system: one verb, append(to, message), any address.
+
+- [x] (CC) Build v1: address grammar, op-log fold with playback, KV service, ripple into @inboxes/#topics/cited URLs, Collator cross-site stitching, Alto-style room, embed web component, protocol card, MCP tools, `tests/loom.test.mjs` — `done`
+- [ ] (MH) Optional: create a dedicated KV namespace and bind it as `PC_LOOM_KV` (falls back to `VISITS` under `loom:`), and set the `LOOM_ADMIN_KEY` Pages secret for moderation hides — `waiting-on-mh`
+- [ ] (MH) Optional: grant agent keys the `loom:append` scope so signed agents get the verified mark — `waiting-on-mh`
+- [ ] (M) After deploy: open https://pointcast.xyz/loom on desktop + phone, append a note, reply, poll, image; open `/loom?to=%40mike`; drop the embed on a Tonebloom page; screenshots to `docs/manus-logs/YYYY-MM-DD-loom.md` — `queued`
+- [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
+- [ ] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `queued`
+
+---
+
 ## The Squeeze — PTL Mixed 4.0 (2026-10-06)
 
 - [x] (CC) Publish `/pickleball/the-squeeze/` and `/pickleball/the-squeeze.json` from the PTL screenshots, with Court block 0699 — `done` — transcribed about Oct 6 2026; not an official PTL page; no deploy from this session if `CLOUDFLARE_API_TOKEN` is unset

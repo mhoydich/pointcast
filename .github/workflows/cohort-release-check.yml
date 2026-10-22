@@ -4,6 +4,17 @@ on:
     branches: [codex/following-release-20261006]
   pull_request:
     paths:
+      - 'public/nouns-money/workshop/**'
+      - 'public/assets/ues-currency-lab/**'
+      - 'src/pages/ues/currency-lab.astro'
+      - 'src/pages/ues/index.astro'
+      - 'src/pages/nouns-money.astro'
+      - 'src/components/ues-currency-lab/**'
+      - 'tests/nouns-money-workshop-*'
+      - 'tests/ues-currency-lab*'
+      - 'scripts/package-workshop-artifact.py'
+      - 'scripts/check-workshop-build.mjs'
+      - 'scripts/test-package-workshop-artifact.py'
       - 'public/coastal-signal-wallet/**'
       - 'public/observatory/**'
       - 'public/moon/**'
@@ -78,7 +89,24 @@ jobs:
       - run: npm ci
       - name: Scoped behavior and actual Pages middleware
         run: node --test tests/observatory.test.mjs tests/agent-notices.test.mjs tests/agent-notice-routes.test.mjs tests/agent-notice-astro.test.mjs tests/ues-living-study-boundaries.test.mjs tests/ues-living-study-middleware.test.mjs
+      - name: Shared paper-workshop behavior and exact quiet middleware
+        env:
+          NMW_EXISTING_TOOLING: ${{ github.workspace }}
+          POINTCAST_PACKAGE: ${{ github.workspace }}/package.json
+        run: node --test tests/nouns-money-workshop-*.test.mjs tests/ues-currency-lab*.test.mjs
+      - name: Verify bounded compiled-artifact packager
+        run: python3 scripts/test-package-workshop-artifact.py
       - run: npm run build:bare
+      - name: Verify actual compiled lab and default layout behavior
+        run: node scripts/check-workshop-build.mjs
+      - name: Package exact-head paper workshop and compiled learning lab
+        run: python3 scripts/package-workshop-artifact.py "$GITHUB_WORKSPACE" --expected-head "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nouns-money-workshop-${{ github.event.pull_request.head.sha || github.sha }}
+          path: workshop-qa-artifact/
+          if-no-files-found: error
+          retention-days: 7
       - name: Retain exact compiled QA inputs
         run: python3 scripts/package-cohort-artifact.py "$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@v4

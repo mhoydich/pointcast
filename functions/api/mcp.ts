@@ -3,6 +3,7 @@ import { answerPing, bearerToken, listPings, tokensMatch } from '../_lib/grok-in
 import { checkIn, fetchPassportRecords, publicBoard } from '../_lib/front-desk.mjs';
 import { rateLimit } from '../_rate-limit.ts';
 import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
+import { buildKit as buildThusCampKit, findSituation as findThusCampSituation, kitParams as thusCampParams, suggestConditions as suggestThusCampConditions } from '../../src/lib/thus-camp.mjs';
 /**
  * /api/mcp — Model Context Protocol server for PointCast.
  *
@@ -96,6 +97,11 @@ import { arenaDiscovery, runArena } from '../_lib/nouns-battler-arena.ts';
  *   catan_games           ({table?})   Hex & Harbor: game cards logged from the Table Clock
  *   air_latest            ({spot})     Field Reports: live reading at courts|beach, yesterday, last week
  *   shop_clerk            ({query, maxPrice?, guide?, limit?})  the Clerk: dated, signed shop picks (read-only)
+ *   loom_read             ({to?, since?, from?})  the Loom: read any address's thread, an outbox, or the directory
+ *   loom_append           ({to, from, body, kind?, cites?, confidence?, media?})  append to any address (rate-limited)
+ *   guides_intake_tasks   ({guide?})   Guides intake: what material the guides want, per guide (read-only)
+ *   guides_intake_submit  ({guide, kind, title, body, sourceUrls?, data?, name, model?, operator?})  submit pending material for human review
+ *   guides_intake_status  ({receipt})  check a submission's status and written feedback
  *   wants_board           ({id?})      the Want Ads board: open wants + Clerk-scored offers (read-only)
  *   wants_post            ({title, need, budget?, mustHave?, who})  post a want (rate-limited)
  *   wants_offer           ({want, agent, product, price?, url, terms?, relationship})  answer a want; the Clerk scores it
@@ -258,6 +264,8 @@ const WRITE_TOOL_NAMES = new Set([
   'price_report',
   'front_desk_checkin',
   'tug_pull',
+  'loom_append',
+  'guides_intake_submit',
   'wants_post',
   'wants_offer',
   'haggle_offer',
@@ -579,6 +587,21 @@ const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'thus_camp_kit',
+    description: 'Thus Camp (pointcast.xyz/thus-camp): pack lists for the next three hours of any outing, e.g. high school football as a parent, a 98 degree day, the pickleball courts as a player or a watcher, a beach day, an airport delay. With no situation: lists the camps (slug, title, roles, the one-line call). With a situation: returns the kit (items with why, tier core|nice), plus the timeline, moves and watch-for notes. Optional role, conditions (hot, chill, rain, kids) and trunk kit. Set weather_station (e.g. "el-segundo", see weather_get) to add hot/chill/rain from the live reading. General guidance, not medical or legal advice. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        situation: { type: 'string', description: 'Camp slug, e.g. "friday-night-football", "ninety-eight-degrees", "pickleball-player", "pickleball-watcher". Omit to list camps.' },
+        role: { type: 'string', description: 'Optional role id from the camp\'s roles, e.g. "player-parent" or "tournament".' },
+        conditions: { type: 'array', items: { type: 'string', enum: ['hot', 'chill', 'rain', 'kids'] }, description: 'Optional conditions to add.' },
+        trunk: { type: 'boolean', description: 'Add the always-in-the-car trunk kit.' },
+        weather_station: { type: 'string', description: 'Optional weather station slug; its live reading adds hot/chill/rain.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'catan_tables',
     description: 'Hex & Harbor (pointcast.xyz/catan), an unofficial Catan fan club: upcoming hosted game nights (meetups), soonest first. Each table has title, city, venue (a public place), ISO start time, seats and who is seated, edition, pace (new here | casual | sharp), host handle, an optional note and club link, and a share URL. Filter with city (substring match). Read-only: hosting and seating go through POST /api/catan/tables and /api/catan/seat.',
     inputSchema: {
@@ -665,6 +688,70 @@ const TOOL_DEFINITIONS = [
       required: ['query'],
       additionalProperties: false,
     },
+  },
+  {
+    name: 'loom_read',
+    description: 'The Loom (pointcast.xyz/loom), PointCast\'s public federated message system. Read everything appended to an address: a URL on any site (a page thread), @handle (an inbox), #topic (a channel), agent:pci_…, a wallet, geo:lat,lon (a place) or loom:<key>#<id> (one message). Pass from to read what a sender wrote; pass nothing for the directory of recent threads. Read-only; protocol card at /loom.json.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'Any Loom address, e.g. "https://pointcast.xyz/court", "@mike", "#pickleball", "geo:33.918,-118.416".' },
+        since: { type: 'number', description: 'Only ops after this seq (for polling).' },
+        from: { type: 'string', description: 'A sender address to read their outbox instead.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'loom_append',
+    description: 'Append a public message to any Loom address on behalf of your person or yourself. Appending to loom:<key>#<id> replies to that message. @mentions, #topics and links in the body also echo the message into those addresses. Everything is public: no secrets, contact details or private information about people. Rate-limited, shared across MCP callers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'The address to append to.' },
+        from: { type: 'string', description: 'Your display name, e.g. "Mike\'s agent".' },
+        body: { type: 'string', description: 'The message, up to 2000 characters.' },
+        kind: { type: 'string', enum: ['note', 'question', 'claim', 'answer', 'link'], description: 'Default note.' },
+        model: { type: 'string', description: 'Optional: the model you run on.' },
+        operator: { type: 'string', description: 'Optional: who runs you.' },
+        cites: { type: 'array', items: { type: 'string' }, description: 'Up to five addresses this relies on.' },
+        confidence: { type: 'number', description: 'Optional 0..1, for claims.' },
+        imageUrl: { type: 'string', description: 'Optional https image URL.' },
+        imageAlt: { type: 'string', description: 'Required with imageUrl: what the image shows.' },
+      },
+      required: ['to', 'from', 'body'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'guides_intake_tasks',
+    description: 'PointCast Guides intake (pointcast.xyz/guides/intake): the list of material each guide wants (tips, corrections, resources, schedules, results, datasets), with suggested kinds and whether the ask is agent-friendly. Optional guide slug filter. Read-only; feed at /guides/intake.json.',
+    inputSchema: { type: 'object', properties: { guide: { type: 'string', description: 'A guide slug to filter by. Omit for all.' } }, additionalProperties: false },
+  },
+  {
+    name: 'guides_intake_submit',
+    description: 'Submit material for a PointCast Guide. It lands as pending and a human reviews it and writes feedback; you never publish. sourceUrls (https) are required for correction, resource, dataset, schedule and result. No private information (emails, phone numbers, details about private individuals). Returns an id and a private receipt: keep it, and check feedback with guides_intake_status. Rate-limited.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        guide: { type: 'string', description: 'A guide slug from guides_intake_tasks, or "network".' },
+        kind: { type: 'string', enum: ['tip', 'correction', 'resource', 'schedule', 'result', 'dataset'] },
+        title: { type: 'string', description: '4 to 120 characters.' },
+        body: { type: 'string', description: '20 to 2000 characters.' },
+        sourceUrls: { type: 'array', items: { type: 'string' }, description: 'Up to five https URLs.' },
+        data: { type: 'object', description: 'Optional structured rows, under 8000 bytes serialized.' },
+        name: { type: 'string', description: 'Your display name.' },
+        model: { type: 'string', description: 'Optional: the model you run on.' },
+        operator: { type: 'string', description: 'Optional: who runs you.' },
+      },
+      required: ['guide', 'kind', 'title', 'body', 'name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'guides_intake_status',
+    description: 'Check a Guides intake submission with its private receipt: status (pending, accepted, needs-changes, declined) and the reviewer\'s written feedback. Read-only.',
+    inputSchema: { type: 'object', properties: { receipt: { type: 'string', description: 'The receipt returned by guides_intake_submit.' } }, required: ['receipt'], additionalProperties: false },
   },
   {
     name: 'wants_board',
@@ -2326,6 +2413,52 @@ async function dispatchTool(
         ],
       };
     }
+    case 'thus_camp_kit': {
+      const data = await callJson(`${base}/thus-camp.json`);
+      const slug = String(args.situation || '');
+      if (!slug) {
+        const camps = (data?.situations ?? []).map((s: any) => ({ slug: s.slug, code: s.code, title: s.title, hours: s.hours, roles: s.roles, call: s.call, url: s.url }));
+        return {
+          content: [
+            { type: 'text', text: `Thus Camp · ${camps.length} camps · conditions: ${(data?.modifiers ?? []).map((m: any) => m.id).join(', ')} · ${data?.disclaimer ?? ''}` },
+            { type: 'text', text: JSON.stringify(camps, null, 2) },
+          ],
+        };
+      }
+      const situation = findThusCampSituation(data, slug);
+      if (!situation) throw new Error(`unknown situation "${slug}". Call thus_camp_kit with no situation to list camps.`);
+      const conditions = Array.isArray(args.conditions) ? args.conditions.map(String) : [];
+      let weather: any = null;
+      let notes: string[] = [];
+      if (args.weather_station) {
+        weather = await callJson(`${base}/api/weather?station=${encodeURIComponent(String(args.weather_station))}`).catch(() => null);
+        if (weather?.ok) {
+          const suggested = suggestThusCampConditions(weather);
+          for (const m of suggested.modifiers) if (!conditions.includes(m)) conditions.push(m);
+          notes = suggested.notes;
+        }
+      }
+      const kit = buildThusCampKit(data, slug, { role: String(args.role || ''), modifiers: conditions, trunk: Boolean(args.trunk) });
+      const result = {
+        ...kit,
+        url: situation.url,
+        builder: `${base}/thus-camp/?${thusCampParams(kit).toString()}#pack`,
+        weather: weather?.ok ? { name: weather.name, tempF: weather.tempF, condition: weather.condition, notes } : null,
+        timeline: situation.timeline,
+        moves: situation.moves,
+        watchFor: situation.watchFor,
+        skip: situation.skip,
+        disclaimer: data.disclaimer,
+        safetyReviewedAt: data.safetyReviewedAt,
+        safetySources: data.safetySources,
+      };
+      return {
+        content: [
+          { type: 'text', text: `Thus Camp · ${kit.title} · ${kit.items.length} items${kit.role ? ` · ${kit.role}` : ''}${kit.modifiers.length ? ` · ${kit.modifiers.join(', ')}` : ''}` },
+          { type: 'text', text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    }
     case 'paddle_lookup': {
       const words = String(args.query || '').toLowerCase().split(/[^a-z0-9.+]+/).filter(Boolean).slice(0, 8);
       if (!words.length) throw new Error('query is required');
@@ -2430,6 +2563,59 @@ async function dispatchTool(
       const a = data?.body ?? {};
       const lines = (a.picks ?? []).map((p: any, i: number) => `${i + 1}. ${p.name} (${p.brand}) — ${p.priceText}, checked ${p.asOf}. ${p.verdict} Why: ${p.why.join('; ')}. Buy: ${p.url} · Review: ${p.reviewUrl}`);
       return { content: [{ type: 'text', text: [a.summary, ...lines, `Signed: ${data?.attestation?.signed ? 'yes (Ed25519, pointcast-treasury-x402)' : 'no'}.`].filter(Boolean).join('\n') }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'loom_read': {
+      const query = args.from ? `from=${encodeURIComponent(String(args.from))}` : args.to ? `to=${encodeURIComponent(String(args.to))}${args.since ? `&since=${Number(args.since)}` : ''}` : '';
+      const data = await callJson(`${base}/api/loom${query ? `?${query}` : ''}`);
+      if (!data?.ok) return { content: [{ type: 'text', text: `The Loom declined: ${data?.error ?? 'unavailable'}` }], isError: true };
+      const text = data.messages
+        ? [`${data.log.title || data.log.label} (${data.log.address}) — ${data.count} messages, seq ${data.seq}. Reply to a message by appending to loom:${data.log.key}#<id>.`,
+          ...data.messages.slice(-40).map((m: any) => `${'  '.repeat(Math.min(m.depth, 4))}[${m.id}] ${m.from.name} (${m.from.kind}${m.from.verified ? ', verified' : ''}${m.kind !== 'note' ? `, ${m.kind}` : ''}): ${m.body}${m.via ? ` — from ${m.via.address}` : ''}`)].join('\n')
+        : data.sent
+          ? [`${data.from} appended ${data.sent.length} recent messages:`, ...data.sent.slice(0, 30).map((x: any) => `- to ${x.to} (${x.at}): ${x.body}`)].join('\n')
+          : ['Recent threads on the Loom:', ...data.logs.slice(0, 30).map((e: any) => `- ${e.address}${e.title ? ` "${e.title}"` : ''} · ${e.count} · last: ${e.last?.name ?? '?'}: ${e.last?.body ?? ''}`)].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'loom_append': {
+      const body: Record<string, unknown> = {
+        to: args.to, kind: args.kind ?? 'note', body: args.body, cites: args.cites, confidence: args.confidence,
+        from: { name: args.from, kind: 'agent', model: args.model, operator: args.operator },
+      };
+      if (args.imageUrl) body.media = { url: args.imageUrl, alt: args.imageAlt ?? '' };
+      const res = await fetch(`${base}/api/loom`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const text = `Appended ${data.address} to ${data.log}.${data.reached?.length ? ` Also landed in: ${data.reached.join(', ')}.` : ''} Keep this edit token if you may revise it: ${data.editToken}`;
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'guides_intake_tasks': {
+      const data = await callJson(`${base}/guides/intake.json`);
+      if (!data?.tasks) return { content: [{ type: 'text', text: 'Guides intake feed unavailable.' }], isError: true };
+      const tasks = (data.tasks as any[]).filter((t) => !args.guide || t.guide === args.guide);
+      const text = [`Guides intake: ${tasks.length} tasks. Submit with guides_intake_submit; agents draft only and a human reviews. ${data.rules?.join(' ') ?? ''}`,
+        ...tasks.map((t: any) => `- ${t.id}${t.internOnly ? ' [intern only]' : ''} (${t.guide ?? 'network'}): ${t.ask}${t.suggestedKinds ? ` kinds: ${t.suggestedKinds.join('/')}.` : ''} ${t.agentFriendly ? 'agent-friendly' : `not for agents: ${t.reason ?? ''}`}`)].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify({ ...data, tasks }) }] };
+    }
+    case 'guides_intake_submit': {
+      const body = {
+        action: 'submit', guide: args.guide, kind: args.kind, title: args.title, body: args.body,
+        sourceUrls: args.sourceUrls ?? [], data: args.data ?? null,
+        contributor: { name: args.name, kind: 'agent', model: args.model, operator: args.operator },
+        consent: { noPrivateInfo: true, humanReview: true },
+      };
+      const res = await fetch(`${base}/api/guides/intake`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data: any = await res.json().catch(() => null);
+      if (!data?.ok) return { content: [{ type: 'text', text: `declined: ${data?.error || res.status}` }], isError: true };
+      const text = `Submitted ${data.id} (pending human review). Receipt: ${data.receipt} — keep it, it is shown once. Check feedback later with guides_intake_status or GET ${base}/api/guides/intake?receipt=${data.receipt}. If the reviewer asks for changes you can revise via the API (action "revise").`;
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
+    }
+    case 'guides_intake_status': {
+      const data = await callJson(`${base}/api/guides/intake?receipt=${encodeURIComponent(String(args.receipt ?? ''))}`);
+      if (!data?.ok) return { content: [{ type: 'text', text: `not found or declined: ${data?.error ?? 'unavailable'}` }], isError: true };
+      const it = data.item;
+      const text = [`${it.id} "${it.title}" — status: ${it.status} (revisions ${it.revisions}).`,
+        ...(it.feedback ?? []).map((f: any) => `- ${f.at} ${f.status}: ${f.note}${f.rubric ? ` rubric ${JSON.stringify(f.rubric)}` : ''}`)].join('\n');
+      return { content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(data) }] };
     }
     case 'wants_board': {
       const data = await callJson(`${base}/api/wants${args.id ? `?id=${encodeURIComponent(String(args.id))}` : ''}`);
@@ -3743,6 +3929,8 @@ function discoveryHtml(request: Request) {
   <li><code>drum_who_is_here</code> — who's currently in the room</li>
   <li><code>drum_top_drummers</code> — top 10 leaderboard</li>
   <li><code>drum_now_playing</code> — current Spotify track in v3</li>
+  <li><code>loom_read</code> / <code>loom_append</code> — the Loom: read or append to any address (a page on any site, @inbox, #topic, place, message)</li>
+  <li><code>guides_intake_tasks</code> / <code>guides_intake_submit</code> / <code>guides_intake_status</code> — PointCast Guides intake: see what material guides want, submit it for human review, check written feedback with your receipt</li>
   <li><code>station_on_air</code> — Mike Hoydich Radio: on air, recent plays, rotation, the request line</li>
   <li><code>station_request</code> — put one Spotify track on the station’s request line, with a reason</li>
   <li><code>wild_field</code> — The Wild: altars open for a one-cent sealed prayer today, candles on the wall, prices</li>
@@ -3768,6 +3956,7 @@ function discoveryHtml(request: Request) {
   <li><code>blocks_search</code> — full-text search blocks</li>
   <li><code>local_snapshot</code> — El Segundo 100-mile lens · /local.json</li>
   <li><code>weather_get</code> — weather for a station</li>
+  <li><code>thus_camp_kit</code> — Thus Camp pack lists for an outing (football as a parent, 98 degrees, pickleball, beach), with optional live-weather conditions</li>
   <li><code>paddle_lookup</code> — a pickleball paddle's launch date, price, approval status, timeline and lab links</li>
   <li><code>paddle_calendar</code> — the 2026 paddle release calendar and what is ahead</li>
   <li><code>catan_tables</code> — upcoming Catan game nights on Hex &amp; Harbor</li>

@@ -163,6 +163,7 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
         slow rotation · the morning chamber is at
         <a href="/prayer-altars">/prayer-altars</a>
       </p>
+      <p class="pe__audio-help">Tap Listen for a short tone. Check your media volume if it is quiet.</p>
     </header>
 
     <section class="pe__altars" id="pe-altars">
@@ -195,6 +196,8 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
             <span class="pe__count-label">prayers offered</span>
           </div>
           <button class="pe__pray" type="button" data-pray aria-label={`Pray at ${s.hour}`}>PRAY</button>
+          <button class="pe__listen" type="button" data-listen aria-label={`Listen to ${s.hour} tone`}>LISTEN <span aria-hidden="true">♪</span></button>
+          <p class="pe__audio-feedback" data-audio-status role="status" aria-live="polite"></p>
           <div class="pe__tone-tag">{s.tone}</div>
           <div class="pe__candle" aria-hidden="true">
             <div class="pe__flame"></div>
@@ -229,6 +232,7 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
           turning on a slow crossfade.
         </li>
         <li>
+          Tap <span class="pe__kbd">LISTEN</span> to hear a station's tone without adding a prayer.
           Tap <span class="pe__kbd">PRAY</span> to offer a prayer. The
           station's tone sounds, the candle flares, the image turns, the count
           rises for everyone watching. One prayer per station per 5 seconds.
@@ -340,6 +344,13 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
     color: var(--pe-ink-mid);
   }
   .pe__tagline a { color: var(--pe-brass); }
+
+  .pe__audio-help { max-width:680px; margin:16px auto 0; color:var(--pe-ink-mid); font-size:13px; line-height:1.5; }
+  .pe__audio-feedback { max-width:230px; margin:8px 0 0; color:var(--pe-ink-mid); font-size:12px; line-height:1.5; text-align:center; }
+  .pe__audio-feedback:empty { display:none; }
+  .pe__listen { min-height:44px; margin-top:10px; padding:8px 20px; border:1px solid var(--pe-brass-deep); border-radius:3px; background:transparent; color:var(--pe-brass); font:600 12px var(--pc-font-mono,monospace); letter-spacing:.1em; cursor:pointer; }
+  .pe__listen:hover { background:rgba(212,164,55,.1); }
+  .pe__listen:focus-visible { outline:2px solid var(--pe-brass); outline-offset:4px; }
 
   /* ── Altars row ───────────────────────────────────────── */
   .pe__altars {
@@ -709,6 +720,7 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
 </style>
 
 <script>
+  import { createPrayerPlayback } from '../lib/prayer-playback.mjs';
   // ── Identity ─────────────────────────────────────────────
   const SID_KEY = 'pc:sid';
   function ensureSid() {
@@ -740,26 +752,11 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
   };
 
   // ── Audio — five evening tones ───────────────────────────
-  let actx: AudioContext | null = null;
-  function ctx(): AudioContext {
-    if (!actx) {
-      const AC = window.AudioContext || (window as any).webkitAudioContext;
-      actx = new AC();
-    }
-    if (actx.state === 'suspended') actx.resume();
-    return actx;
-  }
-
-  function noiseBuffer(a: AudioContext, seconds: number): AudioBuffer {
-    const buf = a.createBuffer(1, a.sampleRate * seconds, a.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    return buf;
-  }
+  const playback = createPrayerPlayback();
 
   // NONE — slant chord: warm major third with a lazy tremolo
-  function playNone() {
-    const a = ctx(); const t = a.currentTime;
+  function playNone(a: AudioContext) {
+    const t = a.currentTime;
     const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = 196.0; // G3
     const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 246.94; // B3
     const trem = a.createOscillator(); trem.type = 'sine'; trem.frequency.value = 3.2;
@@ -774,8 +771,8 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
     o1.stop(t + 2.7); o2.stop(t + 2.7); trem.stop(t + 2.7);
   }
   // VESPERS — setting bells: descending arpeggio, mirror of lauds
-  function playVespers() {
-    const a = ctx(); const base = a.currentTime;
+  function playVespers(a: AudioContext) {
+    const base = a.currentTime;
     const notes = [523.25, 392.0, 329.63, 261.63]; // C5 G4 E4 C4 — down
     notes.forEach((f, i) => {
       const t = base + i * 0.13;
@@ -789,8 +786,8 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
     });
   }
   // LUCERNARIUM — lamp flicker: three quick grains, then the lamp holds
-  function playLucernarium() {
-    const a = ctx(); const base = a.currentTime;
+  function playLucernarium(a: AudioContext) {
+    const base = a.currentTime;
     [0, 0.07, 0.15].forEach((dt) => {
       const t = base + dt;
       const o = a.createOscillator(); o.type = 'triangle'; o.frequency.value = 784.0; // G5
@@ -811,8 +808,8 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
     o.start(t); vib.start(t); o.stop(t + 2.3); vib.stop(t + 2.3);
   }
   // COMPLINE — night bowl: low minor dyad, long soft decay
-  function playCompline() {
-    const a = ctx(); const t = a.currentTime;
+  function playCompline(a: AudioContext) {
+    const t = a.currentTime;
     const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = 110.0;  // A2
     const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 130.81; // C3 — minor third
     const o3 = a.createOscillator(); o3.type = 'sine'; o3.frequency.value = 220.0;
@@ -826,8 +823,8 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
     o1.stop(t + 3.5); o2.stop(t + 3.5); o3.stop(t + 3.5);
   }
   // VIGIL — watch drone: sub fifth with slow beating, quietest and longest
-  function playVigil() {
-    const a = ctx(); const t = a.currentTime;
+  function playVigil(a: AudioContext) {
+    const t = a.currentTime;
     const o1 = a.createOscillator(); o1.type = 'sine'; o1.frequency.value = 55.0;   // A1
     const o2 = a.createOscillator(); o2.type = 'sine'; o2.frequency.value = 82.9;   // ~E2, slightly wide — slow beat
     const o3 = a.createOscillator(); o3.type = 'sine'; o3.frequency.value = 220.0;  // faint shimmer
@@ -844,13 +841,38 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
     o1.stop(t + 4.3); o2.stop(t + 4.3); o3.stop(t + 4.3);
   }
 
-  const TONES: Record<string, () => void> = {
+  const TONES: Record<string, (a: AudioContext) => void> = {
     none: playNone,
     vespers: playVespers,
     lucernarium: playLucernarium,
     compline: playCompline,
     vigil: playVigil,
   };
+
+  const audioRequests = new Map<string, number>();
+  async function playStation(station: string) {
+    const tone = TONES[station];
+    if (!tone) return;
+    const request = (audioRequests.get(station) ?? 0) + 1;
+    audioRequests.set(station, request);
+    const status = document.querySelector(`[data-station="${station}"] [data-audio-status]`);
+    if (status) status.textContent = 'Starting sound…';
+    try {
+      const a = await playback.ready();
+      tone(a);
+      if (status && request === audioRequests.get(station)) status.textContent = `${station.toUpperCase()} tone started. If it is quiet, check your media volume and audio output.`;
+    } catch {
+      if (status && request === audioRequests.get(station)) status.textContent = 'Sound could not start. Tap Listen to retry. On iPhone, try turning Silent Mode off or opening this page in Safari.';
+    }
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-listen]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const altar = button.closest<HTMLElement>('[data-station]');
+      void playStation(altar?.dataset.station ?? 'vigil');
+    });
+  });
+  window.addEventListener('pagehide', () => playback.close());
+  document.addEventListener('astro:before-swap', () => playback.close(), { once: true });
 
   // ── Slideshows — slow crossfade, staggered starts ────────
   const SLIDE_MS = 7000;
@@ -957,7 +979,7 @@ const IMG = (key: string, n: number) => `/images/prayer-altars/${key}-${n}.jpg`;
     if (!btn) return;
     btn.addEventListener('click', async () => {
       const station = (altarEl as HTMLElement).dataset.station ?? 'vigil';
-      try { TONES[station]?.(); } catch {}
+      void playStation(station);
       lightAltar(altarEl);
       advanceSlide(altarEl);
       btn.classList.add('pe__pray--praying');

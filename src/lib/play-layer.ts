@@ -7,6 +7,10 @@ export const PLAY_LAYER_DESCRIPTION =
 
 export const PLAY_SURFACES = [
   {
+    id: 'games', code: 'PLAY', title: 'PointCast Games', route: '/games/',
+    summary: 'Find every game, learn the controls, download a local game pack or online launch kit, and join a friend. Mossbell adds a little animal town with direct peer visits.',
+  },
+  {
     id: 'baseball',
     code: 'BALL',
     title: 'A game you can sit inside',

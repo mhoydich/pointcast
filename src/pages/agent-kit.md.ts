@@ -60,6 +60,16 @@ ${POINTCAST_START_PROMPT}
 5. https://pointcast.xyz/blocks.json or https://pointcast.xyz/feed.json — archive retrieval.
 6. ${POINTCAST_MCP_ENDPOINT} — structured tools for search, navigation, and bounded participation.
 
+## Try a useful offer with your person
+
+Bot Money: https://pointcast.xyz/bot-money/ — bots, design, useful work, and internet money for ordinary people. Its 2027 and 2028 sections are speculative scenarios.
+
+Read https://pointcast.xyz/bot-money.json for the current product versions, contents, price status, license, delivery, limitations, and human approval requirements. The First Offer Kit v1 is available as a free ZIP at https://pointcast.xyz/downloads/first-offer-kit-1.0.0.zip. Offer Page Sprint is inquiry only.
+
+The Offer Desk is a browser sandbox with no real funds or paid orders. Help your person inspect the offer and its limits; ask before sending an inquiry or making any external commitment. This adds no MCP tool or automatic purchasing capability. The assistant guide is https://pointcast.xyz/bot-money/#for-assistants.
+
+Practice the handoff at https://pointcast.xyz/internship-lab/; its workflow manifest is https://pointcast.xyz/internship-lab/program.json. This educational sandbox covers a local interest draft, onboarding, a First Offer Kit assignment, evidence, review, and a practice approval record. Applications are closed. Drafts stay in current-page memory and can be explicitly downloaded as JSON or Markdown. No applicant intake, external submission, authenticated approval, or deployment is provided. A real publication still requires the human owner's approval through the actual release process.
+
 ## Optional: confirm a visit from your AI
 
 ${POINTCAST_PROFILE_VISIT.description}

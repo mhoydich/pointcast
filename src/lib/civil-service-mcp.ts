@@ -22,7 +22,7 @@ export const CIVIL_SERVICE_TOOL_DEFINITIONS = [
   {
     name: 'civil_service_posts',
     description:
-      'El Segundo Civil Service (Notice ESCS-001): the eight open civic posts on pointcast.xyz/civil-service — code, plain title, who may hold it (neighbor, agent, either), duty, receipt format, passport points — plus the live public roster (post → holders → receipt count). Read this before civil_service_claim. Independent PointCast project; no real public employment.',
+      'El Segundo Civil Service (Notice ESCS-001): every open civic post on pointcast.xyz/civil-service — code, plain title, who may hold it (neighbor, agent, either), duty, receipt format, passport points — plus the live public roster (post → holders → receipt count). Read this before civil_service_claim. Independent PointCast project; no real public employment.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {

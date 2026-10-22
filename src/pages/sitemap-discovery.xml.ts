@@ -1,3 +1,4 @@
+import { GAME_LIBRARY, gameLanding } from '../lib/game-library';
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isPublicProduct } from '../lib/commerce';
@@ -21,6 +22,16 @@ function canonicalSitemapUrl(loc: string) {
 }
 
 const staticUrls: SitemapEntry[] = [
+  ['https://pointcast.xyz/sunset-downs/', 'daily', '0.85'],
+  ['https://pointcast.xyz/sunset-downs/money/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/sunset-downs/agents/', 'weekly', '0.7'],
+  ['https://pointcast.xyz/sunset-downs/style/', 'monthly', '0.65'],
+  ['https://pointcast.xyz/bot-money/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/bot-money.json', 'monthly', '0.85'],
+  ['https://pointcast.xyz/internship-lab/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/internship-lab/program.json', 'monthly', '0.75'],
+  ['https://pointcast.xyz/games/', 'weekly', '0.95'],
+  ['https://pointcast.xyz/games.json', 'weekly', '0.85'],
   // Approved public studies include static documents outside Astro route discovery.
   ['https://pointcast.xyz/coastal-signal/', 'monthly', '0.6'],
   ['https://pointcast.xyz/coastal-signal-wallet/', 'monthly', '0.6'],
@@ -96,6 +107,8 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/fila/', 'monthly', '0.9'],
   ['https://pointcast.xyz/fila/2027/', 'monthly', '0.85'],
   ['https://pointcast.xyz/fila.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/takes/', 'monthly', '0.9'],
+  ['https://pointcast.xyz/takes.json', 'monthly', '0.8'],
   ['https://pointcast.xyz/fila/el-segundo/', 'monthly', '0.9'],
   ['https://pointcast.xyz/fila/el-segundo.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/chain/', 'monthly', '0.9'],
@@ -109,6 +122,18 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/chain/first-mints/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/mixtape/', 'monthly', '0.6'],
   ['https://pointcast.xyz/chain/sanctuary/', 'monthly', '0.6'],
+  ['https://pointcast.xyz/chain/plan/', 'weekly', '0.7'],
+  // The ten apps on the devnet (src/data/chain-apps.ts).
+  ['https://pointcast.xyz/chain/start/', 'weekly', '0.8'],
+  ['https://pointcast.xyz/chain/observatory/', 'weekly', '0.8'],
+  ['https://pointcast.xyz/chain/daily-mint/', 'weekly', '0.7'],
+  ['https://pointcast.xyz/chain/notary/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/chain/capsules/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/chain/verify-a-block/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/chain/playground/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/chain/bloom/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/chain/witness/', 'weekly', '0.7'],
+  ['https://pointcast.xyz/chain/channels/', 'weekly', '0.7'],
   ['https://pointcast.xyz/object-library/', 'monthly', '0.9'],
   ['https://pointcast.xyz/object-library.json', 'monthly', '0.85'],
   ['https://pointcast.xyz/weather-atlas/', 'monthly', '0.9'],
@@ -145,6 +170,17 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/manufacturing.json', 'monthly', '0.9'],
   ['https://pointcast.xyz/nouns-money/', 'weekly', '0.9'],
   ['https://pointcast.xyz/nouns-money.json', 'weekly', '0.8'],
+  ['https://pointcast.xyz/nouns-money/gallery/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/nouns-money/music/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/nouns-money/collected/manifest.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/commons/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/commons.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/barter/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/barter.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/almanac/', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/almanac.json', 'monthly', '0.8'],
+  ['https://pointcast.xyz/currency-builder/security/', 'monthly', '0.8'],
   ['https://pointcast.xyz/nouns-money/editions/', 'monthly', '0.85'],
   ['https://pointcast.xyz/nouns-money/editions.json', 'monthly', '0.8'],
   ['https://pointcast.xyz/nouns-money/community/', 'monthly', '0.8'],
@@ -153,6 +189,9 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/nouns-money/marketplace.json', 'monthly', '0.75'],
   ['https://pointcast.xyz/rocks/', 'weekly', '0.9'],
   ['https://pointcast.xyz/rocks.json', 'weekly', '0.85'],
+  ['https://pointcast.xyz/pmm/', 'weekly', '0.9'],
+  ['https://pointcast.xyz/pmm/brand/', 'monthly', '0.7'],
+  ['https://pointcast.xyz/nouns-messenger/', 'weekly', '0.9'],
   ["https://pointcast.xyz/arcade-remembrance", "monthly", "0.9"],
   ["https://pointcast.xyz/arcade-remembrance.json", "monthly", "0.85"],
   ['https://pointcast.xyz/ai-grand-prix/', 'weekly', '0.9'],
@@ -197,6 +236,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/almanac', 'daily', '0.7'],
   ['https://pointcast.xyz/almanac.json', 'daily', '0.65'],
   ['https://pointcast.xyz/morning.json', 'daily', '0.92'],
+  ['https://pointcast.xyz/morning.xml', 'daily', '0.90'],
   ['https://pointcast.xyz/agent-field-guide', 'weekly', '0.95'],
   ['https://pointcast.xyz/agent-field-guide.json', 'weekly', '0.9'],
   ['https://pointcast.xyz/agent-native-publishing', 'weekly', '0.95'],
@@ -490,6 +530,7 @@ const staticUrls: SitemapEntry[] = [
   ['https://pointcast.xyz/shop/clerk', 'weekly', '0.90'],
   ['https://pointcast.xyz/shop/wants', 'daily', '0.88'],
   ['https://pointcast.xyz/shop/haggle', 'daily', '0.86'],
+  ['https://pointcast.xyz/shop/haggle/odds', 'weekly', '0.6'],
   ['https://pointcast.xyz/reviews/fans', 'monthly', '0.90'],
   ['https://pointcast.xyz/reviews/fans.json', 'monthly', '0.86'],
   ['https://pointcast.xyz/reviews/fans/history', 'monthly', '0.85'],
@@ -630,6 +671,7 @@ export const GET: APIRoute = async () => {
   });
 
   const dynamicUrls: SitemapEntry[] = [
+    ...GAME_LIBRARY.map(game => [`https://pointcast.xyz${gameLanding(game)}`, 'weekly', '0.85'] as SitemapEntry),
     ...products.map(({ data }) => [
       `https://pointcast.xyz/products/${data.slug}`,
       'daily',

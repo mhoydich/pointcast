@@ -1,0 +1,101 @@
+---
+import { getCollection } from 'astro:content';
+import { CHANNEL_LIST } from '../lib/channels';
+import { POINTCAST_APPS } from '../lib/pointcast-apps';
+import newToday from '../data/new-today.json';
+import { isFresh } from '../lib/new-today';
+import { townDate } from '../lib/band';
+import searchPerformance from '../data/search-performance.json';
+import { rankPages } from '../lib/search-performance.mjs';
+
+const builtAt = new Date();
+const builtLabel = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', year: 'numeric' }).format(builtAt);
+const milestoneLabel = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${searchPerformance.milestone.reachedOn}T12:00:00Z`));
+const measuredPages = rankPages(searchPerformance);
+const blocks = (await getCollection('blocks', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.timestamp.getTime() - a.data.timestamp.getTime());
+const fresh = newToday.filter(item => isFresh(item, builtAt));
+const apps = new Set(POINTCAST_APPS.map(app => app.url.replace(/\/$/, ''))).size;
+const numbers = [
+  { value: blocks.length, label: 'Published blocks', detail: 'Read the archive', href: '/archive' },
+  { value: apps, label: 'Apps & projects', detail: 'Find a useful tool', href: '/apps' },
+  { value: fresh.length, label: 'Recent launches', detail: 'Last seven town days', href: '#new-today' },
+  { value: CHANNEL_LIST.length, label: 'Channels', detail: 'Choose your subject', href: '#channels' },
+];
+const directions = [
+  { title: 'Explore art', detail: 'Galleries & editions', href: '/nouns-money/gallery/', color: '#993556' },
+  { title: 'Make something', detail: 'Studios & tools', href: '/apps', color: '#185FA5' },
+  { title: 'Listen', detail: 'Music & radio', href: '/station', color: '#993C1D' },
+  { title: 'Shop', detail: 'Finds & buying guides', href: '/shop/front', color: '#0F6E56' },
+  { title: 'Go local', detail: 'El Segundo & courts', href: '/el-segundo', color: '#534AB7' },
+  { title: 'Bring your AI', detail: 'Tools for agents', href: '/for-agents', color: '#5F5E5A' },
+];
+const latest = newToday.filter(item => item.date <= townDate(builtAt))
+  .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+---
+
+<section class="pc-now" aria-labelledby="pc-now-title" id="pointcast-now">
+  <div class="pc-now__heading">
+    <div><p class="pc-now__eyebrow">PointCast now / Your way into the town</p><h1 id="pc-now-title">Find your next direction.</h1></div>
+    <a class="pc-now__index" href="/explore">Every destination <span aria-hidden="true">↗</span></a>
+  </div>
+  <form class="pc-now__search" action="/search" method="get" role="search">
+    <label for="pointcast-query">Search PointCast</label>
+    <div><input id="pointcast-query" type="search" name="q" placeholder="Projects, art, music, places, ideas…" maxlength="240" /><button type="submit">Search <span aria-hidden="true">→</span></button></div>
+  </form>
+  <nav class="pc-now__numbers" aria-label="PointCast in numbers">
+    {numbers.map(n => <a href={n.value === 0 && n.href === '#new-today' ? '/archive' : n.href} data-swh-new={n.href === '#new-today' && n.value > 0 ? '' : undefined}><strong>{n.value.toLocaleString('en-US')}</strong><span>{n.label}</span><small>{n.detail} <b aria-hidden="true">↗</b></small></a>)}
+  </nav>
+  <nav class="pc-now__directions" aria-label="Choose a direction">
+    {directions.map(d => <a href={d.href} style={`--direction:${d.color}`}><strong>{d.title}<span aria-hidden="true">↗</span></strong><small>{d.detail}</small></a>)}
+  </nav>
+  <div class="pc-now__latest">
+    <span class="pc-now__eyebrow">Latest on the desk</span>
+    {latest.map(item => <a href={item.link}><time datetime={item.date}>{item.date.slice(5).replace('-', '/')}</time>{item.title}<span aria-hidden="true">↗</span></a>)}
+  </div>
+  <footer class="pc-now__footer"><span>Catalog snapshot · <time datetime={builtAt.toISOString()}>{builtLabel}</time> PT</span><a href="/search-performance">Google Search <span>{measuredPages.length ? 'View top pages' : `${searchPerformance.milestone.value}-click milestone · ${milestoneLabel}`} ↗</span></a></footer>
+</section>
+
+<style>
+  .pc-now { margin:18px 0 32px; border:1px solid #172337; background:#fffdf7; color:#172337; }
+  .pc-now__heading { display:flex; justify-content:space-between; align-items:end; gap:16px; padding:22px 24px 16px; }
+  .pc-now__eyebrow { margin:0 0 8px; font:500 10px/1.5 var(--pc-font-mono); letter-spacing:.1em; text-transform:uppercase; color:#526477; }
+  .pc-now h1 { margin:0; font-size:clamp(28px,3.2vw,44px); font-weight:500; line-height:1.08; letter-spacing:-.05em; }
+  .pc-now__index { flex-shrink:0; font-size:12px; padding:10px 0; }
+  .pc-now__search { margin:0 24px 20px; }
+  .pc-now__search label { display:block; margin:0 0 7px; font-size:12px; }
+  .pc-now__search>div { display:flex; border:1px solid #172337; }
+  .pc-now input { width:100%; min-width:0; border:0; border-radius:0; padding:14px; color:#172337; background:#fff; font:400 18px/1.3 var(--pc-font-sans); }
+  .pc-now button { min-height:50px; padding:0 24px; border:0; border-radius:0; background:#185fa5; color:#fff; font:500 14px var(--pc-font-sans); cursor:pointer; }
+  .pc-now button span { margin-left:14px; }
+  .pc-now__numbers { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid #c8cdd1; border-bottom:1px solid #c8cdd1; }
+  .pc-now__numbers a { display:flex; flex-direction:column; gap:4px; padding:14px 24px; border-right:1px solid #c8cdd1; }
+  .pc-now__numbers a:last-child { border:0; }
+  .pc-now__numbers strong { font:500 35px/1.1 var(--pc-font-mono); letter-spacing:-.05em; }
+  .pc-now__numbers span { font-size:13px; }
+  .pc-now__numbers small { margin-top:6px; color:#526477; font-size:11px; }
+  .pc-now__numbers b { font-weight:400; }
+  .pc-now__directions { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:1px; background:#c8cdd1; border-bottom:1px solid #c8cdd1; }
+  .pc-now__directions a { border-top:3px solid var(--direction); padding:14px 16px; background:#fffdf7; }
+  .pc-now__directions strong { display:flex; justify-content:space-between; gap:4px; font-size:14px; font-weight:500; }
+  .pc-now__directions small { display:block; margin-top:7px; font-size:11px; color:#526477; }
+  .pc-now a { color:inherit; text-decoration:none; }
+  .pc-now a:hover { background:#edf3fa; }
+  .pc-now :is(a,input,button):focus-visible { outline:3px solid #c46c17; outline-offset:3px; position:relative; z-index:1; }
+  .pc-now__latest { display:grid; grid-template-columns:160px repeat(3,minmax(0,1fr)); gap:16px; align-items:center; padding:15px 24px; }
+  .pc-now__latest>.pc-now__eyebrow { margin:0; }
+  .pc-now__latest a { display:flex; align-items:center; gap:8px; font-size:12px; line-height:1.5; }
+  .pc-now__latest time { font:400 10px var(--pc-font-mono); color:#526477; }
+  .pc-now__footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 20px; padding:10px 24px; background:#eaf0f5; font:400 11px/1.6 var(--pc-font-mono); color:#425369; }
+  .pc-now__footer a { text-decoration:underline; text-underline-offset:3px; }
+  .pc-now__footer a span { margin-left:9px; }
+  @media(max-width:900px) { .pc-now__directions { grid-template-columns:repeat(3,minmax(0,1fr)); }.pc-now__latest { grid-template-columns:1fr 1fr; }.pc-now__numbers a { padding:14px; } }
+  @media(max-width:560px) {
+    .pc-now { margin-top:12px; }.pc-now__heading { padding:16px 14px 14px; }.pc-now__index { display:none; }
+    .pc-now__eyebrow { font-size:9px; }.pc-now__search { margin:0 14px 14px; }.pc-now input { padding:12px 10px; font-size:16px; }.pc-now button { padding:0 13px; }.pc-now button span { display:none; }
+    .pc-now__numbers { grid-template-columns:repeat(2,minmax(0,1fr)); }.pc-now__numbers a { padding:12px 14px; }.pc-now__numbers a:nth-child(2) { border-right:0; }.pc-now__numbers a:nth-child(-n+2) { border-bottom:1px solid #c8cdd1; }
+    .pc-now__numbers strong { font-size:29px; }.pc-now__numbers small { margin:0; font-size:10px; }
+    .pc-now__directions a { padding:12px 9px; }.pc-now__directions strong { font-size:12px; }.pc-now__directions small { font-size:10px; line-height:1.5; }
+    .pc-now__latest { grid-template-columns:1fr; gap:9px; padding:14px; }.pc-now__footer { padding:10px 14px; }
+  }
+</style>

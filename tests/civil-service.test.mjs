@@ -27,19 +27,20 @@ class FakeKV {
 
 const NOW = new Date('2026-10-06T17:00:00Z');
 
-test('eight posts with the fields the page, JSON, and MCP rely on', () => {
-  assert.equal(CIVIL_SERVICE_POSTS.length, 8);
+test('25 posts across two notices with the fields the page, JSON, MCP and jobs board rely on', () => {
+  assert.equal(CIVIL_SERVICE_POSTS.length, 25);
+  assert.equal(CIVIL_SERVICE_POSTS.filter((p) => p.notice === 'ESCS-002').length, 17);
   for (const post of CIVIL_SERVICE_POSTS) {
     assert.match(post.code, /^ESC-\d{3}$/);
     assert.ok(['neighbor', 'agent', 'either'].includes(post.who));
     for (const field of ['title', 'duty', 'receipt', 'link']) assert.ok(post[field], `${post.code} ${field}`);
     assert.ok(post.points > 0);
   }
-  assert.equal(new Set(CIVIL_SERVICE_POSTS.map((p) => p.code)).size, 8);
+  assert.equal(new Set(CIVIL_SERVICE_POSTS.map((p) => p.code)).size, 25);
   const agentish = CIVIL_SERVICE_POSTS.filter((p) => p.who !== 'neighbor').length;
   assert.equal(CIVIL_SERVICE_QUESTS.length, agentish);
   const manifest = buildCivilServiceManifest();
-  assert.equal(manifest.posts.length, 8);
+  assert.equal(manifest.posts.length, 25);
   assert.equal(manifest.disclaimer, ESCS_DISCLAIMER);
   assert.ok(manifest.posts.every((p) => p.deepLink.endsWith(`#${p.code}`)));
 });
@@ -120,7 +121,7 @@ test('surfaces are wired: page, footer disclaimer, deep links, agents.json, llms
     read('functions/api/mcp.ts'),
     read('src/lib/play-layer.ts'),
     read('src/pages/c/[channel].astro'),
-    read('src/content/blocks/0701.json'),
+    read('src/content/blocks/0726.json'),
   ]);
   assert.match(page, /ESCS_DISCLAIMER/);
   assert.match(page, /location\.hash/);
@@ -135,4 +136,14 @@ test('surfaces are wired: page, footer disclaimer, deep links, agents.json, llms
   const parsed = JSON.parse(block);
   assert.equal(parsed.channel, 'ESC');
   assert.match(parsed.body, /No real public employment is offered/);
+});
+
+test('jobs catalog carries every post, in sync with the data file', async () => {
+  const catalog = JSON.parse(await read('public/opportunities/catalog.json'));
+  const rows = catalog.opportunities.filter((r) => r.project === 'civil-service');
+  assert.deepEqual(rows.map((r) => r.title), CIVIL_SERVICE_POSTS.map((p) => `${p.code} · ${p.title}`));
+  for (const [i, r] of rows.entries()) {
+    assert.equal(r.description, CIVIL_SERVICE_POSTS[i].duty, `${r.id} is stale: run node scripts/sync-civil-service-jobs.mjs`);
+    assert.equal(r.applicationsEnabled, false);
+  }
 });

@@ -1,0 +1,152 @@
+---
+/**
+ * /guides — PointCast Guides, the About.com idea rebuilt for 2028.
+ * Hub: categories, participation ladder, open Guide seats, intern board.
+ * Data lives in src/data/guides so /guides.json shares one source.
+ */
+import BlockLayout from '../../layouts/BlockLayout.astro';
+import '../../styles/guides.css';
+import {
+  CATEGORIES,
+  GUIDES,
+  INTERN_ASSIGNMENTS,
+  LADDER,
+  RULES,
+  THEN_AND_NOW,
+  guidesInCategory,
+} from '../../data/guides';
+
+const title = 'PointCast Guides — About.com, rebuilt for 2028';
+const description =
+  'Practical guides for local communities, pickleball teams and sports teams. One human Guide per topic, a contributor ladder, open seats and intern assignments.';
+const openSeats = GUIDES.filter((g) => g.seat === 'open').length;
+const tracks = [...new Set(INTERN_ASSIGNMENTS.map((a) => a.track))];
+---
+
+<BlockLayout
+  title={title}
+  description={description}
+  author="PointCast Guides"
+  alternates={[{ type: 'application/json', href: '/guides.json', title: 'PointCast Guides manifest' }]}
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'PointCast Guides',
+    url: 'https://pointcast.xyz/guides',
+    description,
+    hasPart: GUIDES.map((g) => ({ '@type': 'HowTo', name: g.title, url: `https://pointcast.xyz/guides/${g.slug}` })),
+  }}
+>
+  <div class="gd">
+    <div class="gd-wrap">
+      <header class="gd-mast">
+        <a class="logo" href="/guides">PointCast <b>Guides</b></a>
+        <nav>
+          {CATEGORIES.map((c) => <a href={`#${c.id}`}>{c.label}</a>)}
+          <a href="#participate">Participate</a>
+          <a href="#interns">Intern assignments</a>
+          <a href="/guides/intake">Send material</a>
+          <a href="/guides/ads">Print ads</a>
+          <a href="/guides.json">JSON</a>
+        </nav>
+      </header>
+
+      <p class="gd-kicker">The About.com idea · 2028 edition · El Segundo first</p>
+      <h1>Guides for the people who show up on Tuesday.</h1>
+      <p class="lede">
+        About.com had a simple bet: put one knowledgeable human in charge of each topic. PointCast Guides keeps that
+        bet and points it at the small groups that keep a place running: neighborhoods, community groups, pickleball
+        teams, rec leagues and youth sports. {GUIDES.length} guides are up. {openSeats} Guide seats are open.
+      </p>
+
+      {CATEGORIES.map((c) => (
+        <section id={c.id}>
+          <h2>{c.label}</h2>
+          <p class="gd-meta">{c.blurb}</p>
+          <div class="gd-grid">
+            {guidesInCategory(c.id).map((g) => (
+              <article class="gd-card">
+                <h3><a class="t" href={`/guides/${g.slug}`}>{g.title}</a></h3>
+                <p>{g.dek}</p>
+                <p class="gd-meta">{g.minutes} min · for {g.audience}</p>
+                <span class="gd-seat">Guide seat: {g.seat.replace('-', ' ')}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <section id="participate">
+        <h2>The participation model</h2>
+        <p class="lede">
+          A ring around one human. Anyone can move up the ladder; nobody needs to sign up to read or correct.
+        </p>
+        <div class="gd-scroll">
+          <table>
+            <thead><tr><th>Role</th><th>Does</th><th>How</th><th>Gets</th></tr></thead>
+            <tbody>
+              {LADDER.map((r) => (
+                <tr><th scope="row">{r.role}</th><td>{r.does}</td><td>{r.how}</td><td>{r.earns}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <h2>House rules</h2>
+        <ol class="rules">{RULES.map((r) => <li>{r}</li>)}</ol>
+
+        <h2>Then and now</h2>
+        <div class="gd-scroll">
+          <table>
+            <tbody>
+              {THEN_AND_NOW.map((r, i) => i === 0
+                ? <tr><th>{r.then}</th><th>{r.now}</th></tr>
+                : <tr><td>{r.then}</td><td>{r.now}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Claim a Guide seat</h2>
+        <p>
+          Seats are claimed by doing the work: pick a guide, send a month of corrections and additions from its wanted
+          list, and the editor appoints a Guide. Start a team or neighborhood guide that is not here yet the same way.
+          Send material at <a href="/guides/intake">/guides/intake</a> (you get a receipt and written feedback), or through the <a href="/communications-lab">Communications Lab</a> or the
+          <a href="/intern">intern desk</a>. No Guide has been appointed yet.
+        </p>
+      </section>
+
+      <section id="interns">
+        <h2>Intern assignments</h2>
+        <p class="lede">
+          {INTERN_ASSIGNMENTS.length} numbered assignments across {tracks.length} tracks. Each one ends in something
+          shipped. These are educational project briefs: applications are not open and pay, hours and hiring entity
+          are not set (<a href="/intern.json">intern.json</a>).
+        </p>
+        <div class="gd-grid">
+          {INTERN_ASSIGNMENTS.map((a) => (
+            <article class="gd-task" id={a.id}>
+              <h3><span>{a.id}</span>{a.title}</h3>
+              <p class="gd-meta">
+                {a.track.replace('-', ' ')} · {a.weeks} {a.weeks === 1 ? 'week' : 'weeks'}
+                {a.guide && <> · feeds <a href={`/guides/${a.guide}`}>{a.guide}</a></>}
+              </p>
+              <p>{a.brief}</p>
+              <div class="lbl">Deliver</div>
+              <ul>{a.deliverables.map((d) => <li>{d}</li>)}</ul>
+              <div class="lbl">Done when</div>
+              <ul>{a.acceptance.map((d) => <li>{d}</li>)}</ul>
+              <p class="gd-meta">Learns: {a.learns.join(', ')}</p>
+              {a.needsApproval && <p class="gd-approve">Approval: {a.needsApproval}</p>}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <footer class="gd-foot">
+        PointCast Guides launched 2026-10-20, written ahead for 2028. Guides drafted with AI collaborators (Claude)
+        for human Guides to take over; they describe practices, not facts about specific people or venues.
+        Machine-readable: <a href="/guides.json">/guides.json</a>. Agents may draft for review; they do not publish.
+      </footer>
+    </div>
+  </div>
+</BlockLayout>

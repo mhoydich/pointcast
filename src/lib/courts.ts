@@ -32,12 +32,25 @@ export type Fact = Provenance & { key: string; text: string };
 
 /** Weekdays 0-6 (Sun 0), LA "HH:MM"; `close` may be 'dusk' (sunset that day). Open inclusive, close exclusive. */
 export type HoursRule = { days: number[]; open: string; close: string };
+/** One dated window: LA days `from`..`to` inclusive, open/close as in HoursRule, with its own source. */
+export type DatedHours = { from: string; to: string; open: string; close: string; label: string; src: SourceId; checked: string };
 export type Hours = Provenance & {
   rules: HoursRule[];
   /** Days no rule covers: 'closed', or 'unknown' when the source says nothing. */
   else: 'closed' | 'unknown';
   /** The same source says something else too. Show `text`; `rules` is the other reading. */
   conflict?: { text: string; rules: HoursRule[] };
+  /**
+   * Dated open windows that win over `rules` on those LA days (school breaks:
+   * MBUSD's calendar opens Manhattan Middle on weekdays). Inclusive from/to.
+   */
+  dated?: DatedHours[];
+  /**
+   * Set only when the source is a posted sign or a report, never for a web
+   * page. /courts.json reads it as the hours' evidence (hoursSourceOf in
+   * functions/_lib/courts-feed.mjs).
+   */
+  evidence?: 'posted-sign' | 'reported';
 };
 
 export type BlockKind = 'dropin' | 'priority' | 'closed';
@@ -71,7 +84,7 @@ export type Court = {
   name: string;
   short: string;
   city: string;
-  /** null when the source gives no shape (a closed court). */
+  /** null when the source gives no shape (a closed court, or one whose access rules are unread). */
   shape: CourtShape | null;
   /** 'closed' is a standing closure (renovation), not today's hours. */
   status: 'open' | 'closed';

@@ -111,11 +111,11 @@ test('page: hideAds, og:image /og/pickleball.png, and a non-null jsonLd (the CC 
 test('JSON-LD: one SportsActivityLocation per court; hours and drop-in Events render only when verified', () => {
   assert.match(page, /'@type': 'SportsActivityLocation'/);
   assert.match(page, /additionalType: 'https:\/\/en\.wikipedia\.org\/wiki\/Pickleball'/);
-  assert.match(page, /if \(court\.hours && court\.hours\.confidence === 'verified'\)/, 'OpeningHoursSpecification only where verified');
-  assert.match(page, /const dropins = court\.blocks\.filter\(\(b\) => b\.kind === 'dropin' && b\.confidence === 'verified'\)/, 'Event/Schedule only for verified drop-ins');
+  assert.match(page, /if \(court\.hours && court\.hours\.confidence === 'verified' && sourcedTag\(court\.hours, buildDay\)\.tag === null\)/, 'OpeningHoursSpecification only where verified and not stale');
+  assert.match(page, /const dropins = court\.blocks\.filter\(\(b\) => b\.kind === 'dropin' && b\.confidence === 'verified' && sourcedTag\(b, buildDay\)\.tag === null\)/, 'dated Events only for verified drop-ins checked under 45 days ago');
   assert.match(page, /if \(spec\.length > 0\) entity\.openingHoursSpecification = spec/, 'never an empty [] when every rule is dusk-close');
   assert.match(page, /'@type': 'Event'/);
-  assert.match(page, /'@type': 'Schedule'/);
+  assert.doesNotMatch(page, /'@type': 'Schedule'/, 'no weekly schedule Event: it has no top-level startDate');
 });
 
 test('showable(): verified renders, partial is tagged "unconfirmed", unverified never renders, 45+ days reads "may have changed"', () => {
@@ -235,8 +235,8 @@ test('page: Private and paid runs every fact, hours line and link through the sa
   assert.doesNotMatch(page, /f\.confidence !== 'unverified'\)\.map/, 'no bare unverified-only filter');
 });
 
-test('JSON-LD: schedules carry their time zone, and a closed court says it is closed', () => {
-  assert.match(page, /scheduleTimezone: 'America\/Los_Angeles'/);
+test('JSON-LD: dated sessions carry the LA offset, and a closed court says it is closed', () => {
+  assert.match(page, /dropinOccurrences\(b, buildDay, OCCURRENCE_DAYS\)/);
   assert.match(page, /if \(court\.status === 'closed'\) \{/);
   assert.match(page, /entity\.description = closure \? closure\.text : 'Closed'/);
 });

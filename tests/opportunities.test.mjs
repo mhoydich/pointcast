@@ -5,7 +5,12 @@ import {readState,queryState,selectRows,counts,canApply,externalApplicationLink}
 const data=JSON.parse(readFileSync(new URL('../public/opportunities/catalog.json',import.meta.url)));
 // Keep the original 24 proposals and reviewed xAI snapshot under regression coverage.
 // Additive edition records have their own scope, evidence and rendering suite.
-const rows=data.opportunities.filter(r=>r.origin!=='external'||r.id==='external-xai-grok-imagine-5244173007');
+// Projects added 2026-10-20 (Guides, Light Works, Internship Lab) have their own test below.
+const ADDED_PROJECTS=['guides','light-works','internship-lab'];
+const added=data.opportunities.filter(r=>ADDED_PROJECTS.includes(r.project));
+// El Segundo Civil Service posts (2026-10-22) are projected from src/data/civil-service.ts and tested below.
+const civil=data.opportunities.filter(r=>r.project==='civil-service');
+const rows=data.opportunities.filter(r=>!ADDED_PROJECTS.includes(r.project)&&r.project!=='civil-service'&&(r.origin!=='external'||r.id==='external-xai-grok-imagine-5244173007'));
 const internal=rows.filter(r=>r.origin!=='external');
 const external=rows.find(r=>r.origin==='external');
 import {jobsShell} from '../src/lib/opportunities-shell.mjs';
@@ -104,4 +109,37 @@ test('jobs projection reuses the shared catalog/assets and gives no-JS readers a
  assert.ok(!jobsShell(shell,{opportunities:[]}).includes('fallback-jobs'));
  const escaped=jobsShell(shell,{opportunities:[{...external,title:'<img src=x onerror=alert(1)>',employer:'"bad"'}]});
  assert.ok(escaped.includes('&lt;img'));assert.doesNotMatch(escaped,/<img src=x/);
+});
+
+test('2026-10-20 additions stay proposed, closed to applications and linked to their public sources',()=>{
+ assert.equal(added.length,25);
+ assert.equal(added.filter(r=>r.project==='guides').length,12);
+ assert.equal(added.filter(r=>r.project==='light-works').length,12);
+ assert.equal(added.filter(r=>r.project==='internship-lab').length,1);
+ assert.equal(new Set(data.opportunities.map(r=>r.id)).size,data.opportunities.length);
+ for(const r of added){
+  assert.equal(r.origin,undefined);assert.equal(r.status,'proposed');assert.equal(r.applicationsEnabled,false);
+  assert.equal(r.availabilityVerifiedAt,null);assert.equal(r.compensationKind,'unresolved');assert.equal(canApply(r),false);
+  assert.match(r.sourceUrl,/^https:\/\/pointcast\.xyz\//);assert.equal(externalApplicationLink(r),null);
+ }
+ for(const r of added.filter(r=>r.project!=='light-works'))assert.match(r.terms,/not open|Not an application/);
+ assert.equal(selectRows(data.opportunities,readState('?project=guides')).length,12);
+ assert.equal(selectRows(data.opportunities,readState('?project=light-works')).length,12);
+ assert.equal(selectRows(data.opportunities,readState('?site=intern&project=guides')).length,12);
+});
+
+test('civil-service posts stay closed here, unpaid, and point at their own sign-up deep link',async()=>{
+ const {CIVIL_SERVICE_POSTS}=await import('../src/data/civil-service.ts');
+ assert.equal(civil.length,CIVIL_SERVICE_POSTS.length);
+ assert.deepEqual(civil.map(r=>r.id),CIVIL_SERVICE_POSTS.map(p=>'civil-service-'+p.code.toLowerCase()));
+ for(const r of civil){
+  assert.equal(r.owner,'pointcast');assert.deepEqual(r.sites,['pointcast']);
+  assert.equal(r.status,'proposed');assert.equal(r.kind,'volunteer-field-task');assert.equal(r.compensationKind,'unpaid');
+  assert.equal(r.applicationsEnabled,false);assert.equal(r.availabilityVerifiedAt,null);assert.equal(canApply(r),false);assert.equal(externalApplicationLink(r),null);
+  assert.match(r.sourceUrl,/^https:\/\/pointcast\.xyz\/civil-service#ESC-\d{3}$/);
+  assert.match(r.compensation,/not money or wages/);
+  assert.match(r.terms,/Not an application and not employment/);assert.match(r.terms,/No real public employment is offered/);
+ }
+ assert.equal(selectRows(data.opportunities,readState('?project=civil-service')).length,CIVIL_SERVICE_POSTS.length);
+ assert.equal(readState('?project=civil-service').project,'civil-service');
 });
