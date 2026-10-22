@@ -4,9 +4,19 @@
 
 ---
 
+## Cabinet Row — the lobby for the 8-bit arcade (2026-10-22)
+
+`/cabinet-row`, `/cabinet-row.json`, Block 0732. One cabinet per game that shares Breakwater's cabinet; a cabinet lights when its game is in `src/data/game-catalog.json`. Rules in `src/lib/breakwater/row.mjs`, tests in `tests/cabinet-row.test.mjs`. Mike 2026-10-22: "keep going".
+
+- [x] (CC) Build the lobby: lit and dark cabinets from the catalog, per-game best and last mood from each game's browser save, the row's mood from `pc:mood` or the tapes, a mood ribbon, the next cabinet for the mood, an optional hum, machine colors, JSON twin, Block, cover art, discovery — `done`
+- [ ] (CC) Second wave of five games stacked on the Breakwater branch, Blocks 0733–0737, one cloud session each, draft PRs based on `claude/epic-albattani-j8tb06`: Lighthouse (Simon, `claude/lighthouse-20261022`, session_01PEDK4795RE7nBmVM7yeaJC), Low Tide (Kaboom!, `claude/low-tide-20261022`, session_016rpwV276Uk53dyNtHncrzz), Morning Route (Paperboy, `claude/morning-route-20261022`, session_01SDvFBq3oSr9SEfkD32XwZx), Sea Glass (Q*bert, `claude/sea-glass-20261022`, session_01QCPxosyU53LGtzQjrG99Fv), Sandcastle (Missile Command, `claude/sandcastle-20261022`, session_01FtckgMyrwsT8mZSzswKh4Q); each lights its own cabinet when published; their discovery entries sit after Cabinet Row's, wave one's after Breakwater's — `in-progress`
+- [ ] (M) After deploy: walk `/cabinet-row` on a phone after playing two games; the headline mood should match the last game left, and the suggested cabinet should change — `queued`
+
+---
+
 ## Breakwater — a breakout for the 8-bit heart (2026-10-22)
 
-`/breakwater`, `/breakwater.json`, Block 0726 (moved from 0725 when the messenger release took that id on main). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
+`/breakwater`, `/breakwater.json`, Block 0739 (moved from 0725, then 0726, when main's messenger and radio releases took those ids). Michael Hoydich's brief: 80s innocence, the joy of the compute and flow, very breakout to start, mood-state symbiosis, mobile and full screen, audio-visual multimedia, Atari and Commodore inspired, rendered modern. Research note: `docs/notes/2026-10-22-breakwater-c64-atari-800xl.md`.
 
 - [x] (CC) Build the game: canvas playfield from a 3x5 pixel font, Atari 800XL and Commodore 64 modes with boot screens, Web Audio chip voices and a generative arpeggiator, four-state mood model with a CALM/PLAY/RUSH dial, phone drag and desktop fullscreen, browser-local best score and mood tape, `tests/breakwater.test.mjs` — `done`
 - [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt`, `llms-full.txt`, OG card from the game's own palette — `done`
@@ -18,6 +28,19 @@
 - [ ] (MH/X) Review and merge #1478, then the five stacked PRs in any order (#1480, #1481, #1482, #1483, #1484), resolving the discovery-file conflicts as they come; deploy once with `scripts/deploy.sh` — `waiting-on-mh`
 
 ---
+## Tideline — Pong stood on its end (2026-10-22)
+
+`/tideline`, `/tideline.json`, Block 0727. Thread 1 of 5 after Breakwater, from Michael Hoydich's same brief (80s innocence, the joy of the compute and flow, mood-state symbiosis, mobile and full screen, Atari and Commodore inspired, rendered modern). Portrait Pong: your paddle below, the house above, rally to 11, a house whose skill follows the shared mood. Research note: `docs/notes/2026-10-22-tideline-notes.md`.
+
+- [x] (CC) Build the game: shared 3x5 font, palettes and mood model from `src/lib/breakwater`, new pure physics and rules in `src/lib/tideline` (eight-segment return angle, per-volley speed, alternating serve, predictive house paddle), Web Audio square-wave pok, CALM/PLAY/RUSH dial, 2UP second paddle by touch, browser-local longest rally and wins, `tests/tideline.test.mjs` with a simulated rally — `done`
+- [x] (CC) Wire discovery: `agents.json`, `/for-agents`, `sitemap-discovery`, `/play`, `/games` catalog, footer, `llms.txt` (games line, no new line), `llms-full.txt`, OG card from the game's own palette — `done`
+- [ ] (X) Review the house skill curve (`houseSkill`, `houseTraits`) for fairness on PLAY, and the two-ball point rule — `queued`
+- [ ] (M) After deploy: real-device QA per `docs/briefs/2026-10-22-manus-tideline-qa.md`, log to `docs/manus-logs/2026-10-22-tideline.md` — `queued`
+- [ ] (MH) Decide whether Tideline joins Breakwater in the home GameRail — `waiting-on-mh`
+- [ ] (MH/CC) Merge after #1478, then `scripts/deploy.sh`, then verify `/tideline`, `/tideline.json` and `tideline` in `/agents.json` — `handoff`
+
+---
+
 
 ## Kelp — a snake for the 8-bit heart (2026-10-22)
 
@@ -41,6 +64,8 @@
 - [ ] (MH) Optional: grant agent keys the `loom:append` scope so signed agents get the verified mark — `waiting-on-mh`
 - [ ] (M) After deploy: open https://pointcast.xyz/loom on desktop + phone, append a note, reply, poll, image; open `/loom?to=%40mike`; drop the embed on a Tonebloom page; screenshots to `docs/manus-logs/YYYY-MM-DD-loom.md` — `queued`
 - [ ] (X) Review `/api/loom` (public write surface) and the MCP additions — `queued`
+- [x] (CC) v1 live: production read/write verified 2026-10-22 over MCP (`loom_append` to `#loom`, seq 4) — `done`
+- [x] (CC) v1.1: Loom margin tab on every BlockLayout page (lazy, no fetch until opened), RSS for any address (`&format=rss`), `/.well-known/loom.json`, 10s cache on whole-thread reads — `done`
 - [ ] (CC) v2: Durable Object per log (no KV write races, live push instead of 4s polling), `/.well-known/loom.json` peer handshake, sealed DMs — `queued`
 
 ---
