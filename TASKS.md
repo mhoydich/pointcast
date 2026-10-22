@@ -11,7 +11,7 @@
 - [x] (CC) `sunset_downs_card` (read-only race cards, results, leaderboard, rules) and `small_shrine` (one-minute meditations from `src/data/small-shrines.ts`); server instructions point at the Loom tools; llms files updated — `done` — merged in #1460
 - [x] (CC) `tests/mcp-tool-coverage.test.mjs`: every tool in `tools/list` on both endpoints has a dispatcher, names are unique — `done`
 - [ ] (MH) Run `scripts/deploy.sh` so the live connector gets `sunset_downs_card` and `small_shrine` (Actions builds main but skips deploy: no `CLOUDFLARE_API_TOKEN` secret) — `waiting-on-mh`
-- [ ] (CC) Bring `public/llms.txt` back under its 320-line test cap (moves long-tail entries to `llms-full.txt`) — `in-progress`
+- [x] (CC) `public/llms.txt` back under its 320-line test cap (303 lines: related short lines joined, nothing dropped); `chain-apps-registry` checks the same cap instead of a frozen 334 — `done`
 - Skipped on purpose: PMM (phone-to-phone WebRTC handshake), Chapter City and TAKES (browser-only, no shared state; `apps_list` covers them).
 
 ## The Loom — append to anything (2026-10-20)
